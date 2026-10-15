@@ -2,7 +2,8 @@
 // gets a site named and cited in AI answers, not only measured. Per site with AI visibility and the growth loop on:
 //   * key pages to check this week (can an assistant read and quote them: the AI Readiness step) — pages AI cited, the targets' pages, written and
 //     ladder pages, the pages Search Console shows most, the homepage; each page about once a month, never-checked ones first;
-//   * pages to send to Bing (ChatGPT search, Copilot) and IndexNow (Bing, Yandex, Naver, Seznam …): new or updated pages, and key pages Bing has not crawled;
+//   * pages to send to Bing (the index Bing and Microsoft Copilot answer from) and to notify through IndexNow (Bing, Yandex, Naver, Seznam, Yep, Amazon — not
+//     Google): new or updated pages, and key pages Bing has not crawled — plus (B9-2) the pages submitted in earlier runs whose outcome nobody ever looked up;
 //   * the questions to win (seo_ai_targets): every lost question of the latest AI visibility run becomes a target — a new answer page, or a
 //     refresh of the page the site already has for it — which the Content Cadence writes (ai_pages_month, default 2);
 //   * the earned-media list: the exact third-party pages AI cited in answers that did not name the business (articles, lists, reviews, threads),
@@ -499,6 +500,7 @@ const FITR = {
   }
 };
 const CONFIG = { audit_per_week: 12, recheck_days: 25, max_key_pages: 40, submit_max: 50, resubmit_days: 30, recent_days: 8, earned_fetch: 10, max_targets: 6, refresh_after_days: 90,
+  win_min_answers: 2, follow_up_days: 45, follow_up_max: 15, decay_runs: 3, stale_writing_days: 14,   // B9-2 / B9-4 / B9-5 / B9-6 (benchmark area 9): what became of a submission, what a win needs, a page AI has stopped citing, and a page run that never produced a page
   stage_weight: { decision: 1, consideration: 0.8, awareness: 0.6 } };
 const { list, on_demand, want, total } = monitorSites('ai');
 const sites = on_demand ? list : list.filter(s => s.settings.ai_visibility && s.settings.growth);
@@ -535,7 +537,24 @@ for (const s of sites) {
   const site_model = SM.stored(s) || SM.from({ site_id: s.site_id, domain: dom }, { seen_hosts });
   const site_host = site_model.canonical_host || dom;
   const normU = (u) => { const k = keyOf(u); return k ? SM.siteUrl(site_model, pathOfU(u)) : ''; };
-  const v = vis.filter(x => x.site_id === s.site_id).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)))[0] || null;
+  const visMine = vis.filter(x => x.site_id === s.site_id).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)));
+  const v = visMine[0] || null;
+  // B9-4 (2026-10-15, benchmark area 9): a win used to be "the question is not in the latest run's gap list" — one observation, and
+  // brand lists come back the same less than 1% of the time (SparkToro, in CRITERIA 4A). The answers of the last 8 days (the weekly
+  // run AND the daily pulse write them) are what a win is measured on: how many answers named the business, out of how many answered.
+  const myAns = answers.filter(a => a.site_id === s.site_id);
+  const obsOf = (pid) => { const rows = myAns.filter(a => String(a.prompt_id || '') === String(pid || '') && (a.answered === true || a.answered === 'true'));
+    const named = rows.filter(a => a.mentioned === true || a.mentioned === 'true');
+    return { answers: rows.length, named: named.length, engines: [...new Set(rows.map(a => a.engine))], named_engines: [...new Set(named.map(a => a.engine))],
+      last: rows.reduce((m, a) => String(a.checked_at || '') > m ? String(a.checked_at || '') : m, '') }; };
+  const obsLine = (o) => o.answers ? 'named in ' + o.named + ' of ' + o.answers + ' answers in the last 8 days' + (o.named_engines.length ? ' (' + o.named_engines.join(', ') + ')' : '') : 'not asked in the last 8 days';
+  // B9-5: a page AI used to cite and has stopped citing is the best refresh there is — measured from our own stored weekly runs.
+  const citedRuns = visMine.slice(0, 6).map(r => ({ at: r.checked_at, set: new Set((parse(r.pages_json, []) || []).map(x => keyOf(x && (x.url || x.u) || ''))) }));
+  const decayOf = (url) => { const k = keyOf(url); if (citedRuns.length < CONFIG.decay_runs || !k) return null;
+    const hit = citedRuns.map(r => r.set.has(k)); if (hit[0] || hit[1]) return null;   // still cited in one of the last two checks: nothing to say
+    const earlier = hit.slice(2).filter(Boolean).length; if (earlier < 2) return null;
+    const last = citedRuns.slice(2).find(r => r.set.has(k));
+    return { runs: citedRuns.length, cited_in: earlier, missed: 2, last_cited: last ? String(last.at || '').slice(0, 10) : '' }; };
   const gaps = v ? parse(v.gaps_json, []) : []; const cited = v ? parse(v.pages_json, []) : []; const compRows = v ? parse(v.competitors_json, []) : [];
   const comps = [...new Set([...s.settings.competitors, ...compRows.filter(c => c && /\./.test(c.domain || '')).map(c => c.domain)])];
   const myPrompts = prompts.filter(p => p.site_id === s.site_id); const promptOf = new Map(myPrompts.map(p => [p.prompt_id, p]));
@@ -572,7 +591,8 @@ for (const s of sites) {
   const wcover = (kw, text) => { const K = [...new Set(toks(kw))], T = new Set(toks(text)); if (!K.length) return 0; const tot = K.reduce((t, w) => t + wgt(w), 0); return tot ? K.filter(w => T.has(w)).reduce((t, w) => t + wgt(w), 0) / tot : 0; };
   const usedPages = new Set();   // one refresh per page: a page matched to a question is not offered for the next one
   const existing = new Map(targetsStored.filter(t => t.site_id === s.site_id).map(t => [t.target_id, t]));
-  const targets = [];
+  const logByReq = new Map(slog.filter(l => l.request_id).map(l => [String(l.request_id), l]));   // B9-6: the run a target claims to be written by
+  const targets = []; const won_lost = []; const won_now = []; const stalled_targets = [];   // B9-4: what was won this run, with its evidence, and what was won before and is lost again
   for (const g of gaps.filter(g => g && g.prompt && g.kind !== 'brand').slice(0, 10)) {
     const p0 = promptOf.get(g.prompt_id || '') || myPrompts.find(x => String(x.prompt || '').trim() === String(g.prompt).trim()) || {}; const pid = g.prompt_id || p0.prompt_id || qid(g.prompt); const keyword = String(p0.keyword || g.topic || '').toLowerCase().trim() || toks(g.prompt).slice(0, 5).join(' ');
     const target_id = 'ait_' + s.site_id.replace(/^site_/, '') + '_' + pid; const old = existing.get(target_id) || {};
@@ -586,20 +606,45 @@ for (const s of sites) {
     const engines = Object.entries(g.engines || {}).filter(([, st]) => st === 'absent').map(([e]) => e);
     const vol = Number(g.volume) || 0; const value = Math.round(100 * (1 + Math.log10(1 + vol) / 2) * (CONFIG.stage_weight[g.stage] || 0.7) * (1 + Math.min(4, (g.competitors || []).length) / 4) * (1 + engines.length / 7)) / 100;
     const PT = { compare: 'Comparison Page', recommend: 'Guide', choose: 'Guide', cost: 'Guide', problem: 'Guide' };
-    const status = ['writing', 'written', 'won'].includes(old.status) ? old.status : (kind === 'refresh' && !stale && !weak) ? 'skipped' : (old.status === 'skipped' && old.reason === 'kept by you') ? 'skipped' : 'queued';
+    // B9-4: this question is LOST — so a row that says 'won' is out of date, whatever it said last week. It goes back in the queue
+    // with the date it was won and the date it was lost again, and the report raises it; nothing stays won because it once was.
+    const wasWon = old.status === 'won';
+    // B9-6 (INVARIANTS rules 2 and 4): the Content Cadence marks a target `writing` and stamps written_at when it STARTS a page
+    // run, and nothing writes the row back if that run is refused or fails — so a question could sit "being written" for ever and
+    // never be queued again. The read path checks the evidence: a content-log row for the same run that really says written or
+    // published. Without one, after two weeks the question goes back in the queue and says why. (The write-side release belongs
+    // to the cadence — registered as B9-6 for area 4.)
+    const stalled = (() => { if (old.status !== 'writing') return null;
+      const l = logByReq.get(String(old.request_id || ''));
+      if (l && ['written', 'published'].includes(String(l.status))) return null;
+      const since = old.written_at || old.updated_at || '';
+      if (days(since) < CONFIG.stale_writing_days) return null;
+      return { since: String(since).slice(0, 10), log: l ? 'the page run is still "' + l.status + '"' : 'no page run on record' }; })();
+    const status = wasWon ? 'queued' : stalled ? 'queued' : ['writing', 'written'].includes(old.status) ? old.status : (kind === 'refresh' && !stale && !weak) ? 'skipped' : (old.status === 'skipped' && old.reason === 'kept by you') ? 'skipped' : 'queued';
+    if (stalled) stalled_targets.push({ target_id, question: g.prompt, since: stalled.since, detail: stalled.log });
+    const lostAgain = wasWon ? { target_id, question: g.prompt, won_at: String(old.won_at || '').slice(0, 10), lost_at: String((v && v.checked_at) || iso).slice(0, 10), observed: obsLine(obsOf(pid)) } : null;
+    if (lostAgain) won_lost.push(lostAgain);
     targets.push({ target_id, site_id: s.site_id, domain: dom, prompt_id: pid, question: g.prompt, keyword, kind, page_url: page ? page.url : '', page_type: kind === 'refresh' ? '' : (PT[g.kind] || 'Guide'),
       fanout: (g.fanout || []).slice(0, 8).join(' | '), sources_json: JSON.stringify((g.cited_urls || []).slice(0, 6).map(c => ({ u: c.u, t: c.t || '', n: c.n || 1 }))), competitors: (g.competitors || []).slice(0, 8).join(', '),
       engines: engines.join(', '), stage: g.stage || '', value, status,
-      reason: ladderPage ? 'written as the keyword ladder page "' + ladderPage.keyword + '" (one search, one page)' : status === 'skipped' && kind === 'refresh' ? 'the page is fresh (updated ' + String(pr && pr.updated_on || '').slice(0, 10) + ') and AI-ready (' + (pr && pr.score) + '/100)' : page ? 'refresh ' + page.url + ' (' + page.how + (stale ? '; not updated in 90+ days' : '') + (weak ? '; AI-readiness ' + (pr ? pr.score + '/100' : 'not checked yet') : '') + ')' : 'no page answers it yet',
+      reason: (stalled ? 'the page run started on ' + stalled.since + ' never produced a page (' + stalled.log + '): queued again. ' : '') + (lostAgain ? 'AI named you for this question and has stopped (won ' + (lostAgain.won_at || 'earlier') + ', lost again in the check of ' + lostAgain.lost_at + '; ' + lostAgain.observed + '). ' : '') + (ladderPage ? 'written as the keyword ladder page "' + ladderPage.keyword + '" (one search, one page)' : status === 'skipped' && kind === 'refresh' ? 'the page is fresh (updated ' + String(pr && pr.updated_on || '').slice(0, 10) + ') and AI-ready (' + (pr && pr.score) + '/100)' : page ? 'refresh ' + page.url + ' (' + page.how + (stale ? '; not updated in 90+ days' : '') + (weak ? '; AI-readiness ' + (pr ? pr.score + '/100' : 'not checked yet') : '') + ')' : 'no page answers it yet'),
       created_at: old.created_at || iso, updated_at: iso, request_id: old.request_id || '', written_at: old.written_at || '', won_at: old.won_at || '' });
     if (page) addPage(page.url, 'target', 'answers "' + g.prompt.slice(0, 80) + '"', { question: g.prompt });
   }
   // targets no longer lost: won (if written) or no longer needed
   const lostIds = new Set(targets.map(t => t.target_id));
-  for (const [id, t] of existing) if (!lostIds.has(id) && !['won', 'skipped'].includes(t.status) && v) { const won = ['writing', 'written'].includes(t.status);
+  for (const [id, t] of existing) if (!lostIds.has(id) && !['won', 'skipped'].includes(t.status) && v) {
+    // B9-4: absent from the gap list is not the same as named. It can also mean the question was not asked this run (the panel
+    // rotates, a request can fail), so the answers of the window decide: at least win_min_answers of them must name the business.
+    const o = obsOf(t.prompt_id || ''); const written = ['writing', 'written'].includes(t.status);
+    const won = written && o.named >= CONFIG.win_min_answers;
+    const keep = !won && (written || o.answers === 0);   // still being written, or nothing was asked: the row waits rather than lying either way
+    const why = won ? 'AI names you for this question: ' + obsLine(o) : o.answers === 0 ? 'not asked in the last 8 days: nothing to judge a win on (kept)'
+      : written ? obsLine(o) + ' — too few to call it won (at least ' + CONFIG.win_min_answers + ' needed)' : 'no longer lost in the latest AI check';
     targets.push({ target_id: id, site_id: s.site_id, domain: dom, prompt_id: t.prompt_id || '', question: t.question || '', keyword: t.keyword || '', kind: t.kind || 'answer', page_url: t.page_url || '', page_type: t.page_type || '', fanout: t.fanout || '', sources_json: t.sources_json || '[]',
-      competitors: t.competitors || '', engines: t.engines || '', stage: t.stage || '', value: Number(t.value) || 0, status: won ? 'won' : 'skipped', reason: won ? 'AI now names the business for this question' : 'no longer lost in the latest AI check',
-      created_at: t.created_at || iso, updated_at: iso, request_id: t.request_id || '', written_at: t.written_at || '', won_at: won ? iso : (t.won_at || '') }); }
+      competitors: t.competitors || '', engines: t.engines || '', stage: t.stage || '', value: Number(t.value) || 0, status: won ? 'won' : keep ? t.status : 'skipped', reason: why,
+      created_at: t.created_at || iso, updated_at: iso, request_id: t.request_id || '', written_at: t.written_at || '', won_at: won ? iso : (t.won_at || '') });
+    if (won) won_now.push({ target_id: id, question: t.question || '', observed: obsLine(o) }); }
   const queued = targets.filter(t => t.status === 'queued').sort((a, b) => b.value - a.value);
   queued.slice(CONFIG.max_targets).forEach(t => { t.status = 'skipped'; t.reason = 'lower value than the ' + CONFIG.max_targets + ' queued questions (checked again next week)'; });
   // ---- pages to audit this week (rotating) ----
@@ -607,6 +652,14 @@ for (const s of sites) {
   const rank = { cited: 0, target: 1, content: 2, ladder: 3, search: 4, home: 5 };
   const audit = keyPages.filter(p => { const st = stored.get(keyOf(p.url)); return !st || days(st.checked_at) >= CONFIG.recheck_days || on_demand; })
     .sort((a, b) => (stored.has(keyOf(a.url)) ? 1 : 0) - (stored.has(keyOf(b.url)) ? 1 : 0) || rank[a.kind] - rank[b.kind]).slice(0, CONFIG.audit_per_week);
+  for (const kp of key.values()) { const d = decayOf(kp.url); if (d) kp.decay = d; }   // B9-5
+  // B9-2 (INVARIANTS rule 4): a page SENT to Bing is not a page Bing has crawled, and nothing ever went back to look. Every page
+  // submitted in the last 45 days that Bing has not crawled is asked about again (GetUrlInfo, free) so the run can report what
+  // became of the submissions instead of counting them as work done.
+  const follow_up = [...stored.values()].filter(st => st.submitted_at && days(st.submitted_at) <= CONFIG.follow_up_days && !st.bing_crawled_at)
+    .filter(st => !audit.some(a => keyOf(a.url) === keyOf(st.url)))
+    .sort((a, b) => String(a.submitted_at).localeCompare(String(b.submitted_at))).slice(0, CONFIG.follow_up_max)
+    .map(st => ({ url: normU(st.url), submitted_at: st.submitted_at, submitted_via: st.submitted_via || '', days: Math.round(days(st.submitted_at)) }));
   // ---- pages to submit (Bing / IndexNow): new or updated, and key pages Bing has not crawled ----
   const submit = new Map(); const addSub = (u, why) => { if (!ours(u)) return; const k = keyOf(u), x = normU(u); if (k && x && ![...submit.keys()].some(y => keyOf(y) === k)) submit.set(x, why); };   // one entry per page (www / slash variants)
   for (const l of slog.filter(l => l.published_url && days(l.published_at) <= CONFIG.recent_days)) addSub(l.published_url, 'published this week');
@@ -643,7 +696,8 @@ for (const s of sites) {
     // B-G2: what the gate refused, with its reason, so the report names it instead of printing a shorter list (INVARIANTS rule 1)
     set_aside, set_aside_note: FITR.line(set_aside, 'turned into a question to win or a page to write'),
     brand_names, competitors: comps.slice(0, 12), ai_pages_month: s.settings.ai_pages_month, run_id: 'grow_' + iso.slice(0, 10).replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, ''), checked_at: iso,
-    vis_checked_at: v ? v.checked_at : '', key_pages: keyPages, audit, submit: [...submit.entries()].slice(0, CONFIG.submit_max).map(([url, why]) => ({ url, why })), targets, earned, earned_fetch: earned.filter(e => e.kind !== 'competitor').slice(0, CONFIG.earned_fetch).map(e => e.url),
+    vis_checked_at: v ? v.checked_at : '', win_min_answers: CONFIG.win_min_answers, won_lost, won_now, stalled_targets, follow_up, follow_up_days: CONFIG.follow_up_days,
+    key_pages: keyPages, audit, submit: [...submit.entries()].slice(0, CONFIG.submit_max).map(([url, why]) => ({ url, why })), targets, earned, earned_fetch: earned.filter(e => e.kind !== 'competitor').slice(0, CONFIG.earned_fetch).map(e => e.url),
     indexnow_key, indexnow_new: !kRow, indexnow_verified_at: kv.verified_at || '', entity_due, previous_entity: prevEntity, previous: prevG ? { checked_at: prevG.checked_at, avg_score: Number(prevG.avg_score) || null, earned: parse(prevG.earned_json, []) } : null,
     stored_pages: [...stored.values()].map(p => ({ url: normU(p.url), key: keyOf(p.url), score: Number(p.score) || 0, checked_at: p.checked_at, updated_on: p.updated_on, submitted_at: p.submitted_at, submitted_via: p.submitted_via, bing_crawled_at: p.bing_crawled_at, bing_status: Number(p.bing_status) || 0, kind: p.kind })) } });
 }

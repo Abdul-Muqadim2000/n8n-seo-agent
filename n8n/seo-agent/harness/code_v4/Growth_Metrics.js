@@ -227,12 +227,17 @@ const all = (n) => { try { return $(n).all().map(i => i.json); } catch (e) { ret
 const ready = all('AI Readiness').filter(x => !x.skip), earnedAll = all('Earned Media').filter(x => !x.skip);
 const oIn = all('AI Outreach Input').filter(x => !x.skip), oOut = all('AI Outreach Writer');
 const bSub = all('Bing Submit Requests').filter(x => !x.skip), bRes = all('Submit to Bing'), bReq = all('Bing Growth Requests').filter(x => !x.skip);
+// B9-2 / B9-3 (2026-10-15, benchmark area 9): the answers Bing gave about the pages we submitted in earlier runs, the pages a
+// submission was refused for, and what the AI search fetchers are allowed to read at all.
+const bReqAll = all('Bing Growth Requests'), bInfo = all('Fetch Bing Growth'), bSubAll = all('Bing Submit Requests'), iReqAll = all('IndexNow Requests');
+const robots = all('Robots Verdicts (Growth)').filter(x => !x.skip);
 const kReq = all('IndexNow Key Requests').filter(x => !x.skip), kRes = all('Fetch IndexNow Key'), iReq = all('IndexNow Requests').filter(x => !x.skip), iRes = all('Submit IndexNow');
 const eReq = all('Entity Requests').filter(x => !x.skip), eRes = all('Fetch Wikidata');
 const BING = true;
 const jsonOf = (r) => { if (!r) return {}; if (r.d !== undefined || r.ErrorCode !== undefined || r.search || r.query) return r; const b = r.body ?? r.data; if (b && typeof b === 'object') return b; try { return JSON.parse(b || '{}'); } catch (e) { return {}; } };
 const parseJ = (raw) => { if (raw && typeof raw === 'object') return raw; try { return JSON.parse(String(raw || '').replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '')); } catch (e) { return {}; } };
 const keyOf = (u) => { const m = String(u || '').trim().match(/^https?:\/\/(?:www\.)?([^\/?#]+)([^?#]*)/i); if (!m) return ''; return m[1].toLowerCase() + ((m[2] || '/').replace(/\/+$/, '') || '/'); };
+const dateOfMs = (v) => { const m = String(v || '').match(/Date\((-?\d+)/); if (!m) return ''; const t = Number(m[1]); return t > 946684800000 ? new Date(t).toISOString() : ''; };   // "/Date(…)/"; year 1 = never crawled
 const J = (o) => JSON.stringify(o);
 const out = [];
 for (const p of plans) {
@@ -258,8 +263,35 @@ for (const p of plans) {
   // submitted pages not checked this week and never stored: a first row so the next run knows they were sent
   for (const [k, via] of subVia) if (!pages.some(r => keyOf(r.url) === k) && !(p.stored_pages || []).some(x => x.key === k)) { const kp = keyInfo.get(k); const url = (kp && kp.url) || 'https://' + k;
     page_rows.push({ site_id: p.site_id, domain: p.domain, url, kind: (kp && kp.kind) || 'page', checked_at: '', status: 0, score: null, checks_json: '', issues: '', words_raw: 0, title: '', updated_on: '', bing_crawled_at: '', bing_status: 0, submitted_at: now, submitted_via: via, cited_by: '', questions: '' }); }
-  const scored = pages.filter(r => r.status);
+  // B9-3: a page no AI search fetcher may read has NO readiness score, so it is not in the average either — a withheld score is
+  // not a zero and not a silent omission: it is reported as "not scored" with the rule that withheld it.
+  const scored = pages.filter(r => r.status && r.score != null);
+  const withheld = pages.filter(r => r.score == null && r.score_withheld);
   const avg_score = scored.length ? Math.round(scored.reduce((t, r) => t + r.score, 0) / scored.length) : null;
+  const robots_site = robots.find(x => x.site_id === p.site_id) || null;
+  // ---- B9-2 (INVARIANTS rule 4): what became of the pages we submitted. A submission is a notification; Bing's own answer
+  // (GetUrlInfo: LastCrawledDate) is the only evidence that one became a crawl, and when it cannot be asked the figure is not
+  // estimated — it says it is not available, and why.
+  const daysAgo = (d) => d ? (new Date(now) - new Date(d)) / 864e5 : Infinity;
+  const infoByKey = new Map();
+  bReqAll.forEach((q, i) => { if (q && q.kind === 'info' && q.site_id === p.site_id) { const d = (jsonOf(bInfo[i]) || {}).d; infoByKey.set(keyOf(q.page), d || null); } });
+  const crawlOf = (st) => { const d = infoByKey.get(keyOf(st.url)); const fresh = d ? dateOfMs(d.LastCrawledDate) : ''; return fresh || st.bing_crawled_at || ''; };
+  const subWindow = Number(p.follow_up_days) || 45;
+  const outcome = (() => {
+    if (!BING) return { basis: 'not available', reason: 'Bing submission is off for this installation (no Bing Webmaster key)' };
+    if (!inAccount) return { basis: 'not available', reason: 'the site is not in the Bing Webmaster account, so Bing cannot be asked what it has crawled' };
+    const rows = (p.stored_pages || []).filter(st => st.submitted_at && daysAgo(st.submitted_at) <= subWindow)
+      .map(st => ({ url: st.url, submitted_at: st.submitted_at, via: st.submitted_via || '', crawled_at: crawlOf(st), asked: infoByKey.has(keyOf(st.url)) }));
+    for (const [k, via] of subVia) if (!rows.some(r => keyOf(r.url) === k)) rows.push({ url: (keyInfo.get(k) || {}).url || k, submitted_at: now, via, crawled_at: '', asked: false, sent_now: true });
+    const earlier = rows.filter(r => !r.sent_now); const crawled = earlier.filter(r => r.crawled_at);
+    const waiting = earlier.filter(r => !r.crawled_at);
+    return { basis: earlier.length ? 'measured' : 'none', source: 'Bing Webmaster Tools (GetUrlInfo)', window_days: subWindow, submitted: earlier.length, crawled: crawled.length,
+      sent_now: rows.length - earlier.length, checked_now: earlier.filter(r => r.asked).length, not_checked: waiting.filter(r => !r.asked).length,
+      waiting: waiting.map(r => ({ url: r.url, days: Math.round(daysAgo(r.submitted_at)), asked: r.asked })).sort((a, b) => b.days - a.days).slice(0, 8),
+      reason: earlier.length ? '' : 'nothing had been submitted in the last ' + subWindow + ' days before this run' };
+  })();
+  const refusedSub = [...((bSubAll.find(x => x.site_id === p.site_id) || {}).refused || []), ...((iReqAll.find(x => x.site_id === p.site_id) || {}).refused || [])]
+    .filter((r, i, a) => a.findIndex(x => x.url === r.url) === i);
   // ---- earned media (+ drafts) ----
   const em = earnedAll.find(x => x.site_id === p.site_id) || { earned: [], prospect_rows: [], outreach_jobs: [] };
   const oi = oIn.findIndex(x => x.site_id === p.site_id); const drafts = oi >= 0 && oOut[oi] && !oOut[oi].error ? ((parseJ(oOut[oi].output).drafts) || []) : [];
@@ -290,23 +322,40 @@ for (const p of plans) {
     if (['cited', 'target', 'ladder', 'content', 'home'].includes(r.kind)) alerts.push({ level: 'high', text: 'Key page ' + r.url + ' cannot be used by AI: ' + (r.issues[0] || 'error ' + r.status) });
   }
   for (const r of pages.filter(r => r.checks.some(c => c.key === 'raw_text' && c.ok === false))) actions.push({ priority: 1, type: 'render', action: 'Serve the text of ' + r.url + ' in the HTML', why: 'Only ' + r.words_raw + ' words without JavaScript; ChatGPT, Claude, Perplexity and Gemini do not run JavaScript.' });
+  // B9-3: robots.txt decides this before anything on the page does — a blocked page is the first thing to fix, and a key page
+  // no assistant may read at all is an alert, not a low score.
+  for (const r of pages.filter(r => (r.robots_blocked || []).length)) {
+    actions.push({ priority: 1, type: 'robots', action: 'Let the AI search fetchers read ' + r.url + ' (robots.txt)', why: r.issues[0] || ('robots.txt blocks ' + r.robots_blocked.join(', ') + ' (' + r.robots_rule + ').') });
+    if (r.score_withheld && ['cited', 'target', 'ladder', 'content', 'home'].includes(r.kind)) alerts.push({ level: 'high', text: 'No AI search fetcher may read ' + r.url + ': ' + r.robots_rule + ' in robots.txt. It cannot be quoted whatever is on it.' });
+  }
+  // B9-5: a page AI used to cite and has stopped citing — measured from our own stored weekly checks, and the best refresh there is
+  for (const kp of (p.key_pages || []).filter(k => k.decay).slice(0, 2)) actions.push({ priority: 2, type: 'decay', action: 'Refresh ' + kp.url + ' — AI has stopped citing it',
+    why: 'It was cited in ' + kp.decay.cited_in + ' of the last ' + kp.decay.runs + ' weekly AI checks and in neither of the last two (last cited ' + (kp.decay.last_cited || 'earlier') + '). Update it with new facts and show the new date.', url: kp.url });
   for (const e of earned.filter(e => e.draft || e.action_type === 'reply').slice(0, 3)) actions.push({ priority: 1, type: 'earned', action: e.action, why: 'AI cited "' + (e.title || e.url) + '" ' + e.citations + 'x (' + e.engines.join(', ') + ') for "' + (e.questions[0] || '') + '"' + (e.competitors_named.length ? '; it names ' + e.competitors_named.join(', ') + ' and not you' : '') + (e.draft ? '. A draft is ready.' : ''), url: e.url, draft: e.draft });
-  if (!verified) actions.push({ priority: 2, type: 'indexnow', action: 'Put one file on the website: ' + indexnow.key_url, why: 'The file contains just ' + p.indexnow_key + '. Then every new or updated page is sent the same day to Bing (ChatGPT search, Copilot), Yandex, Naver and the other IndexNow engines.', key: p.indexnow_key, key_url: indexnow.key_url });
+  if (!verified) actions.push({ priority: 2, type: 'indexnow', action: 'Put one file on the website: ' + indexnow.key_url, why: 'The file contains just ' + p.indexnow_key + '. Then every new or updated page is notified the same day to the IndexNow engines — Bing (which Microsoft Copilot answers from), Yandex, Naver, Seznam, Yep and Amazon; Google does not take part, and a notification is not an indexing.', key: p.indexnow_key, key_url: indexnow.key_url });
   if (BING && !inAccount) actions.push({ priority: 2, type: 'bing', action: 'Add ' + p.site_host + ' to Bing Webmaster Tools', why: 'Import it from Google Search Console (one click) in the account the agent reads: new pages are then submitted to Bing every week and Bing\'s crawl of each key page is checked.' });
   for (const t of queued.slice(0, 2)) actions.push({ priority: 2, type: t.kind === 'refresh' ? 'refresh' : 'content', action: (t.kind === 'refresh' ? 'Refresh ' + t.page_url + ' to answer "' : 'Write an answer page for "') + t.question + '"', why: t.reason + (p.ai_pages_month > 0 ? '. Queued: the Monday content run writes it (' + p.ai_pages_month + ' AI pages a month).' : '. AI pages are off for this site: write it from the AI visibility page.'), target_id: t.target_id,
     api_body: { mode: 'keyword', keyword: t.keyword, country: p.country, domain: p.domain, page_type: t.page_type || 'Guide', existing_page_url: t.kind === 'refresh' ? t.page_url : '', receive: ['Keyword Report', 'Page Content'], ai_target: { question: t.question, kind: t.kind, fanout: t.fanout.split(' | ').filter(Boolean), sources: JSON.parse(t.sources_json || '[]'), competitors: t.competitors.split(', ').filter(Boolean), target_id: t.target_id } } });
-  for (const r of pages.filter(r => ['cited', 'target', 'ladder', 'content'].includes(r.kind) && r.checks.some(c => (c.key === 'fresh' || c.key === 'answer_first') && c.ok !== true)).slice(0, 3)) actions.push({ priority: 3, type: 'page', action: 'Improve ' + r.url + ' (AI-readiness ' + r.score + '/100)', why: r.issues.slice(0, 2).join(' ') });
+  for (const r of pages.filter(r => ['cited', 'target', 'ladder', 'content'].includes(r.kind) && r.score != null && r.checks.some(c => (c.key === 'fresh' || c.key === 'answer_first') && c.ok !== true)).slice(0, 3)) actions.push({ priority: 3, type: 'page', action: 'Improve ' + r.url + ' (AI-readiness ' + r.score + '/100)', why: r.issues.slice(0, 2).join(' ') });
   if (entity && !entity.found) actions.push({ priority: 3, type: 'entity', action: 'Become a recognised entity', why: 'No Wikidata item has ' + p.domain + ' as its official website. Wikidata accepts organisations with independent sources (press, registries): once covered, create the item with the website (P856), the founding date and the location — knowledge graphs feed AI answers.' });
   for (const w of newlyWon) alerts.push({ level: 'good', text: 'You are now named on ' + w.source_url + ', a page AI cites for your topic.' });
-  for (const t of wonT) alerts.push({ level: 'good', text: 'AI now names you for "' + t.question + '" (an AI target written for it).' });
-  const growth_row = { site_id: p.site_id, domain: p.domain, run_id: p.run_id, checked_at: now, submitted: bing.submitted + indexnow.submitted, submitted_json: J({ bing, indexnow: { ...indexnow, key: undefined } }), indexnow: verified ? 'verified' : 'key_missing',
+  // B9-4: a win carries the evidence it was called on, and a win that has gone is said out loud instead of standing for ever
+  for (const t of wonT) alerts.push({ level: 'good', text: 'AI now names you for "' + t.question + '" — ' + (((p.won_now || []).find(w => w.target_id === t.target_id) || {}).observed || 'measured on the answers of the last 8 days') + ' (an AI target written for it).' });
+  for (const w of (p.won_lost || [])) alerts.push({ level: 'medium', text: 'AI has stopped naming you for "' + w.question + '" (won ' + (w.won_at || 'earlier') + ', lost again ' + w.lost_at + '; ' + w.observed + '). It is back in the queue.' });
+  // B9-6: a question whose page run was started and never produced a page would otherwise sit "being written" for ever
+  for (const st of (p.stalled_targets || [])) alerts.push({ level: 'medium', text: 'The page for "' + st.question + '" was started on ' + st.since + ' and never arrived (' + st.detail + '): the question is back in the queue.' });
+  const growth_row = { site_id: p.site_id, domain: p.domain, run_id: p.run_id, checked_at: now, submitted: bing.submitted + indexnow.submitted,
+    // B9-2: the run row keeps what became of the submissions, so next week can compare like with like
+    submitted_json: J({ bing, indexnow: { ...indexnow, key: undefined }, outcome, refused: refusedSub.slice(0, 10), robots: robots_site ? { found: robots_site.found, unavailable: robots_site.unavailable, reason: robots_site.reason, blocked_pages: (robots_site.blocked_pages || []).length } : null }),
+    indexnow: verified ? 'verified' : 'key_missing',
     pages_checked: scored.length, avg_score, pages_json: J(pages.map(r => ({ url: r.url, kind: r.kind, score: r.score, status: r.status, issues: r.issues.slice(0, 3), updated_on: r.updated_on, words_raw: r.words_raw, bing_crawled_at: r.bing_crawled_at, submitted: r.submitted_now }))),
     targets_json: J({ queued: queued.length, writing: targets.filter(t => t.status === 'writing').length, written: targets.filter(t => t.status === 'written').length, won: targets.filter(t => t.status === 'won').length, top: queued.slice(0, 5).map(t => ({ target_id: t.target_id, question: t.question, kind: t.kind, page_url: t.page_url, value: t.value })) }),
     earned_json: J(earned.slice(0, 12).map(e => ({ url: e.url, title: e.title, host: e.host, kind: e.kind, citations: e.citations, engines: e.engines, questions: e.questions, mentions_us: e.mentions_us, competitors_named: e.competitors_named, action: e.action, status: e.status, drafted: !!e.draft }))),
     entity_json: entity ? J(entity) : '', actions_json: J(actions.map(({ api_body, draft, ...a }) => a).slice(0, 12)), alerts: alerts.map(a => a.level + ': ' + a.text).join(' | ').slice(0, 2000), cost_usd: oi >= 0 ? 0.03 : 0 };
   const cache_rows = (p.indexnow_new || (verified && !p.indexnow_verified_at)) ? [{ key: 'indexnow:' + p.site_id, kind: 'ai', site_id: p.site_id, value: J({ key: p.indexnow_key, verified_at: verified ? now : '', created_at: now }), updated_at: now }] : [];
   out.push({ json: { site_id: p.site_id, domain: p.domain, site_host: p.site_host, business_name: p.business_name, email: p.email, callback_url: p.callback_url, request_id: p.request_id, on_demand: p.on_demand, run_id: p.run_id, checked_at: now, ai_pages_month: p.ai_pages_month,
-    submitted: { bing, indexnow }, pages: pages.map(({ checks, ...r }) => ({ ...r, checks: checks.map(c => ({ key: c.key, ok: c.ok, label: c.label })) })), avg_score, previous_avg_score: p.previous ? p.previous.avg_score : null,
+    submitted: { bing, indexnow }, outcome, refused_submissions: refusedSub, robots: robots_site, withheld_scores: withheld.length, key_pages: p.key_pages || [], won_lost: p.won_lost || [], win_min_answers: p.win_min_answers || 2,
+    pages: pages.map(({ checks, ...r }) => ({ ...r, checks: checks.map(c => ({ key: c.key, ok: c.ok, label: c.label })) })), avg_score, previous_avg_score: p.previous ? p.previous.avg_score : null,
     targets: targets.map(t => ({ target_id: t.target_id, question: t.question, kind: t.kind, page_url: t.page_url, status: t.status, value: t.value, reason: t.reason, engines: t.engines, competitors: t.competitors })),
     // B-G2 (2026-10-15): the rungs the read-path fit gate set aside, with the reason, so the report says why the list is shorter
     set_aside: p.set_aside || [], set_aside_note: p.set_aside_note || '',

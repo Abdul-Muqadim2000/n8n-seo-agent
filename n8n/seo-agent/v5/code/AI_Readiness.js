@@ -5,6 +5,11 @@
 // figures, lists / tables, an author. Schema and llms.txt are reported but not scored (no measurable effect on AI citations), and an FAQ block
 // is neither looked for nor scored since 2026-10-11 (FIX_PLAN G2: no FAQ rich results since 2026-05-07).
 // Bing's crawl state of each page comes from Bing Webmaster Tools (GetUrlInfo) when the site is in the Bing account.
+// B9-3 (2026-10-15, benchmark area 9): the page is fetched with a browser User-Agent, so what it says about an AI assistant only
+// holds while the AI fetchers are allowed to read it. *Robots Verdicts (Growth)* decides that per page: blocked for every answer
+// fetcher and there is NO score (the question "can AI read and quote it" has an answer, and it is "it may not read it at all");
+// blocked for some, the score is capped and the block is the first thing to fix; robots.txt unread = not checked, never "allowed".
+const robots = (() => { try { return $('Robots Verdicts (Growth)').all().map(i => i.json).filter(x => x && !x.skip); } catch (e) { return []; } })();
 const reqs = (() => { try { return $('Page Requests (Growth)').all().map(i => i.json); } catch (e) { return []; } })();
 const res = (() => { try { return $('Fetch Key Pages').all().map(i => i.json); } catch (e) { return []; } })();
 const plans = $('Growth Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
@@ -28,6 +33,7 @@ reqs.forEach((q, i) => {
   const r = res[i] || {}; const status = Number(r.statusCode) || 0; const html = String(r.body ?? r.data ?? ''); const H = (r.headers || {});
   const hdr = (k) => String(H[k] || H[k.toLowerCase()] || '');
   const checks = []; const add = (key, ok, weight, label, fix, detail) => checks.push({ key, ok: ok === true ? true : ok === 'partial' ? 'partial' : false, weight, label, fix, detail: detail || '' });
+  const issuesFirst = [];   // B9-3: what no assistant may read comes before anything on the page itself
   const reachable = status >= 200 && status < 300 && html.length > 200;
   const noindex = /<meta[^>]+name=["'](?:robots|googlebot|bingbot)["'][^>]*content=["'][^"']*noindex/i.test(html) || /noindex/i.test(hdr('x-robots-tag'));
   const canon = (html.match(/<link[^>]+rel=["']canonical["'][^>]*href=["']([^"']+)["']/i) || html.match(/<link[^>]+href=["']([^"']+)["'][^>]*rel=["']canonical["']/i) || [])[1] || '';
@@ -80,10 +86,29 @@ reqs.forEach((q, i) => {
   const total = checks.reduce((t, c) => t + c.weight, 0) || 100;
   score = reachable ? Math.round(100 * checks.reduce((t, c) => t + (c.ok === true ? c.weight : c.ok === 'partial' ? c.weight / 2 : 0), 0) / total) : 0;
   if (reachable && (noindex || canonElsewhere)) score = Math.min(score, 40);
+  // ---- B9-3: what the AI fetchers may read ----
+  const rv = robots.find(x => x.site_id === q.site_id) || null;
+  const vd = rv && rv.verdicts ? rv.verdicts[keyOf(q.url)] : null;
+  const robots_checked = !!(vd && vd.checked); const robots_blocked = (vd && vd.blocked) || []; const robots_rule = (vd && vd.rule) || '';
+  const robots_note = rv && rv.unavailable ? rv.reason : '';
+  let score_withheld = '';
+  if (robots_checked && vd.blocked_all) {
+    score_withheld = 'robots.txt forbids every AI search fetcher to read this page (' + robots_rule + ')';
+    checks.push({ key: 'ai_fetchable', ok: false, weight: 0, label: 'No AI search fetcher may read it (robots.txt)', fix: 'Allow OAI-SearchBot, PerplexityBot, Claude-SearchBot, Googlebot and Bingbot to read this page in robots.txt — until then no assistant can quote it, whatever is on it.', detail: robots_rule });
+    issuesFirst.push('robots.txt blocks ' + robots_blocked.join(', ') + ' from this page (' + robots_rule + '): no assistant can read or quote it. Allow the AI search fetchers in robots.txt.');
+    score = null;
+  } else if (robots_checked && robots_blocked.length) {
+    checks.push({ key: 'ai_fetchable', ok: 'partial', weight: 0, label: robots_blocked.length + ' of ' + vd.answer_bots + ' AI search fetchers blocked (robots.txt)', fix: 'Allow ' + robots_blocked.join(', ') + ' to read this page in robots.txt.', detail: robots_rule });
+    issuesFirst.push('robots.txt blocks ' + robots_blocked.join(', ') + ' (' + (vd.blocked_owners || []).join(', ') + ') from this page (' + robots_rule + '): those assistants cannot quote it.');
+    score = Math.min(score, 60);
+  } else if (robots_note) {
+    checks.push({ key: 'ai_fetchable', ok: 'partial', weight: 0, label: 'Not checked: ' + robots_note, fix: 'Make /robots.txt answer 200 (or 404 when there are no rules) so what the AI fetchers may read can be checked.', detail: '' });
+  }
   const bi = bq.findIndex(x => x && x.kind === 'info' && x.site_id === q.site_id && keyOf(x.page) === keyOf(q.url)); const bd = bi >= 0 ? (jsonOf(br[bi]).d || null) : null;
   const pr = (p.stored_pages || []).find(x => x.key === keyOf(q.url)) || {};
-  const issues = checks.filter(c => c.ok !== true && c.weight > 0).sort((a, b) => b.weight - a.weight).map(c => c.fix);
+  const issues = [...issuesFirst, ...checks.filter(c => c.ok !== true && c.weight > 0).sort((a, b) => b.weight - a.weight).map(c => c.fix)];
   out.push({ json: { site_id: q.site_id, domain: p.domain, url: q.url, kind: q.kind, checked_at: iso, status, score, checks, issues, words_raw, title, h1, updated_on, updated_visible,
+    robots_checked, robots_blocked, robots_rule, robots_note, score_withheld,   // B9-3: a score is withheld, never guessed, when no AI fetcher may read the page
     bing_known: !!bd, bing_crawled_at: bd ? dateOfMs(bd.LastCrawledDate) : (pr.bing_crawled_at || ''), bing_status: bd ? (Number(bd.HttpStatus) || 0) : (Number(pr.bing_status) || 0), bing_discovered_at: bd ? dateOfMs(bd.DiscoveryDate) : '' } });
 });
 return out.length ? out : [{ json: { skip: true } }];

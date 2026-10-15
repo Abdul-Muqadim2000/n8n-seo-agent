@@ -2609,7 +2609,10 @@ await guard('ai growth', async () => {
   check('plan: the site\'s real host (www) from Search Console, key pages by kind, the homepage, at most 12 to check', G.site_host === 'www.' + D && G.key_pages.every(k => k.url.startsWith(WWW)) && ['cited', 'content', 'search', 'home'].every(k => G.key_pages.some(x => x.kind === k)) && G.audit.length >= 4 && G.audit.length <= 12, JSON.stringify(G.key_pages.map(k => k.kind)));
   check('plan: new / never-submitted pages to Bing + IndexNow on the site\'s host (the page published 2 days ago first)', G.submit[0].url === WWW + '/peppol-uae/' && /published this week/.test(G.submit[0].why) && G.submit.every(x => x.url.startsWith(WWW)), JSON.stringify(G.submit));
   const tRefresh = G.targets.find(t => t.prompt_id === 'p_0'), tAnswer = G.targets.find(t => t.prompt_id === 'p_3'), tWon = G.targets.find(t => t.target_id === 'ait_northwind-erp-com_p_9');
-  check('questions to win: a refresh of the stale page AI cited (200 days, 55/100) and a new answer page; the written target no longer lost = won', tRefresh.kind === 'refresh' && tRefresh.page_url === WWW + '/e-invoicing-uae/' && tRefresh.status === 'queued' && /not updated in 90\+ days/.test(tRefresh.reason) && tAnswer.kind === 'answer' && tAnswer.page_type === 'Comparison Page' && tAnswer.status === 'queued' && tWon.status === 'won' && !!tWon.won_at && tRefresh.value > tAnswer.value && JSON.parse(tRefresh.sources_json)[0].u.includes('gulfnews') && /deadline 2027/.test(tRefresh.fanout), JSON.stringify(G.targets.map(t => [t.target_id, t.kind, t.status, t.value, t.reason])));
+  // B9-4 (2026-10-15, benchmark area 9): this used to assert that a written target absent from the gap list is WON. It is not —
+  // no answer in this fixture even asks that question, and "absent from the gaps" also covers a question nobody asked. The row
+  // now waits with the reason; S92 proves the win itself, on answers that name the business.
+  check('questions to win: a refresh of the stale page AI cited (200 days, 55/100) and a new answer page; a written target with no answers behind it is NOT called won', tRefresh.kind === 'refresh' && tRefresh.page_url === WWW + '/e-invoicing-uae/' && tRefresh.status === 'queued' && /not updated in 90\+ days/.test(tRefresh.reason) && tAnswer.kind === 'answer' && tAnswer.page_type === 'Comparison Page' && tAnswer.status === 'queued' && tWon.status === 'writing' && /not asked in the last 8 days/.test(tWon.reason) && tRefresh.value > tAnswer.value && JSON.parse(tRefresh.sources_json)[0].u.includes('gulfnews') && /deadline 2027/.test(tRefresh.fanout), JSON.stringify(G.targets.map(t => [t.target_id, t.kind, t.status, t.value, t.reason])));
   check('target rows: exact seo_ai_targets columns', G.targets.filter(t => !t.id).every(t => same2(Object.keys(t), L.AI_TARGETS)), JSON.stringify(Object.keys(tRefresh)));
   const kinds = Object.fromEntries(G.earned.map(e => [e.host, e.kind]));
   check('earned media: exact cited pages ranked (the list cited by 3 engines first), kinds (list, forum, official, video, competitor), competitors\' own pages never fetched', G.earned[0].host === 'gulfnews.com' && G.earned[0].citations === 3 && kinds['gulfnews.com'] === 'list' && kinds['reddit.com'] === 'forum' && kinds['mof.gov.ae'] === 'official' && kinds['youtube.com'] === 'video' && kinds['cleartax.com'] === 'competitor' && !G.earned_fetch.some(u => /cleartax/.test(u)), JSON.stringify(kinds));
@@ -13530,6 +13533,210 @@ await guard('S90 B7 site tracking', async () => {
   const REPfail = (await run('Site Report', await run('Brief Input', [{ json: Mfail }])))[0].json;
   check('B7-1: a change that could not be read keeps its row in the report as "Not measured" with the reason — a shorter table would read as "nothing was tried"',
     /Not measured/.test(REPfail.html) && /did not answer the window before/.test(REPfail.html), (REPfail.html.match(/Not measured[\s\S]{0,200}/) || [''])[0]);
+  reset();
+});
+
+// S92 AI growth, benchmark area 9 (docs/system-review-2026-10-14/BENCH_AREA9_ai_growth.md): what a submission actually reaches and
+// what became of it (B9-1 / B9-2), a readiness score that is withheld when no AI fetcher may read the page (B9-3), a win that is
+// measured and a win that can be lost again (B9-4), and a page AI has stopped citing (B9-5).
+// ===================================================================================
+await guard('ai growth benchmark (area 9)', async () => {
+  reset(); const SN = 'S92 B9-1…B9-5 — a submission is a notification and its outcome is measured, a page no AI fetcher may read has no score, a win carries its count and can be lost again, and a page AI has stopped citing is raised';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const M92 = require('./fixtures_monitors'); const fs92 = require('fs'), path92 = require('path');
+  const D92 = M92.DOMAIN, SITE92 = M92.SITE, WWW92 = 'https://www.' + D92;
+  const ago92 = (d) => new Date(Date.now() - d * 864e5).toISOString();
+  // the Bing key is baked in at build time: a build without n8n/.env has it off, so the nodes that branch on it run from a copy
+  // with it on (the trick S29 and S28 already use)
+  const CD92 = process.env.CODE_DIR || path92.join(__dirname, 'code');
+  const bingOn = (base) => { const src = fs92.readFileSync(path92.join(CD92, base + '.js'), 'utf8');
+    if (!src.includes('const BING = false;')) return null;
+    fs92.writeFileSync(path92.join(CD92, base + '__on92.js'), src.replace('const BING = false;', 'const BING = true;')); return base + '__on92'; };
+  const drop92 = (name) => { if (name) { try { fs92.unlinkSync(path92.join(CD92, name + '.js')); } catch (e) {} } };
+  // ---------- the site: three key pages, two of them behind robots.txt rules, and three pages submitted in earlier runs ----------
+  const PAGE_HOME = WWW92 + '/', PAGE_INS = WWW92 + '/insights/ai-answers/', PAGE_PRIV = WWW92 + '/private/pricing/';
+  const PAGE_EINV = WWW92 + '/guides/einvoicing/', PAGE_PEPPOL = WWW92 + '/guides/peppol/', PAGE_OLD = WWW92 + '/guides/old/', PAGE_VAT = WWW92 + '/guides/vat/';
+  const gaps92 = [
+    { prompt_id: 'p_win_lost', prompt: 'Which companies help UAE businesses with e-invoicing?', kind: 'recommend', topic: 'e invoicing in uae', competitors: ['zoho.com'], volume: 900, stage: 'decision', cluster: 'e invoicing', fanout: [], cited_urls: [], engines: { chatgpt: 'absent' } },
+    { prompt_id: 'p_new', prompt: 'What does UAE e-invoicing cost a mid-size distributor?', kind: 'cost', topic: 'e invoicing in uae', competitors: [], volume: 200, stage: 'consideration', cluster: 'e invoicing', fanout: [], cited_urls: [], engines: { chatgpt: 'absent' } },
+    { prompt_id: 'p_stalled', prompt: 'Who are the best ERP partners in Dubai?', kind: 'recommend', topic: 'erp implementation services', competitors: [], volume: 400, stage: 'consideration', cluster: 'erp', fanout: [], cited_urls: [], engines: { chatgpt: 'absent' } }];
+  const citedIn = (urls) => JSON.stringify(urls.map(u => ({ url: u, citations: 2, engines: ['chatgpt'] })));
+  // five weekly runs: /guides/einvoicing/ was cited in the three oldest and in neither of the last two (B9-5)
+  const visRows92 = [[1, []], [8, []], [15, [PAGE_EINV]], [22, [PAGE_EINV]], [29, [PAGE_EINV]]].map(([d, pages], i) => ({ json: {
+    site_id: SITE92, domain: D92, run_id: 'ai_' + i, checked_at: ago92(d), gaps_json: i === 0 ? JSON.stringify(gaps92) : '[]', pages_json: citedIn(pages), competitors_json: '[]' } }));
+  const ansRow92 = (pid, engine, mentioned, kind) => ({ json: { site_id: SITE92, domain: D92, run_id: 'ai_0', checked_at: ago92(2), prompt_id: pid, prompt: pid, kind: kind || 'recommend', engine, answered: true, mentioned, cited: false, our_urls: '', cited_urls: '[]', run_kind: 'weekly' } });
+  const answers92 = [ansRow92('p_strong', 'chatgpt', true), ansRow92('p_strong', 'gemini', true), ansRow92('p_strong', 'ai_mode', false),
+    ansRow92('p_weak', 'chatgpt', true), ansRow92('p_weak', 'gemini', false),
+    ansRow92('p_win_lost', 'chatgpt', false), ansRow92('p_win_lost', 'gemini', false)];
+  const target92 = (pid, status, o = {}) => ({ json: { target_id: 'ait_northwind-erp-com_' + pid, site_id: SITE92, domain: D92, prompt_id: pid, question: 'question ' + pid, keyword: 'kw ' + pid, kind: 'answer', page_url: '', page_type: 'Guide', fanout: '', sources_json: '[]', competitors: '', engines: '', stage: 'decision', value: 2, status, reason: '', created_at: ago92(30), updated_at: ago92(7), request_id: '', written_at: ago92(10), won_at: o.won_at || '' } });
+  const storedPage92 = (url, o) => ({ json: { site_id: SITE92, domain: D92, url, kind: o.kind || 'page', checked_at: ago92(o.checked || 30), status: 200, score: o.score == null ? 70 : o.score, issues: '', words_raw: 800, title: 't', updated_on: ago92(200).slice(0, 10), bing_crawled_at: o.crawled || '', bing_status: o.crawled ? 200 : 0, submitted_at: o.submitted == null ? '' : ago92(o.submitted), submitted_via: o.submitted == null ? '' : 'bing', cited_by: '', questions: '' } });
+  const loadG92 = (o = {}) => {
+    mock('Load Sites', M92.sites()); mock('Load Ladders', M92.ladders()); mock('Load Monitors', M92.monitors()); mock('Load Profiles', M92.profiles());
+    mock('Load AI Visibility', visRows92); mock('Load AI Prompts', [{ json: { prompt_id: 'p_win_lost', site_id: SITE92, prompt: gaps92[0].prompt, kind: 'recommend', keyword: 'e invoicing in uae', status: 'active' } }]);
+    mock('Load Content Log', [{ json: { site_id: SITE92, domain: D92, keyword: 'ai answers', source: 'ai_answer', status: 'published', published_url: PAGE_INS, published_at: ago92(3), started_at: ago92(6) } },
+      { json: { site_id: SITE92, domain: D92, keyword: 'pricing', source: 'cadence', status: 'published', published_url: PAGE_PRIV, published_at: ago92(2), started_at: ago92(5) } }]);
+    mock('Load Query History', [[PAGE_EINV, 1200], [PAGE_HOME, 400]].map(([page, imp]) => ({ json: { site_id: SITE92, domain: D92, period_end: '2026-10-04', query: 'e invoicing uae', page, impressions: imp, clicks: 5, position: 9 } })));
+    mock('Load AI Pages', o.pages || [storedPage92(PAGE_EINV, { checked: 35, kind: 'search' }), storedPage92(PAGE_VAT, { submitted: 40, checked: 39 }), storedPage92(PAGE_PEPPOL, { submitted: 10, checked: 9 }), storedPage92(PAGE_OLD, { submitted: 20, checked: 19, crawled: ago92(12) })]);
+    mock('Load AI Targets', [target92('p_win_lost', 'won', { won_at: ago92(20) }), target92('p_strong', 'writing'), target92('p_weak', 'writing'), target92('p_silent', 'queued'),
+      { json: { ...target92('p_stalled', 'writing').json, request_id: 'cad_20260915_x', written_at: ago92(30), updated_at: ago92(30) } }]);
+    mock('Load AI Growth', [{ json: {} }]); mock('Load Link Prospects (Growth)', [{ json: {} }]); mock('Load AI Answers', answers92); mock('Load Cache (Growth)', o.cache || [{ json: {} }]);
+  };
+  loadG92();
+  const gp92 = await run('Growth Plan', store['Load Cache (Growth)']); const G92 = gp92[0].json;
+  console.log('   plan ->', JSON.stringify({ host: G92.site_host, submit: G92.submit.map(x => x.url.replace(WWW92, '')), follow_up: G92.follow_up.map(f => f.url.replace(WWW92, '') + ':' + f.days), targets: G92.targets.map(t => [t.prompt_id, t.status]) }));
+
+  // ---------- B9-4: a win is measured on the answers, and a win can be lost again ----------
+  const tWinLost = G92.targets.find(t => t.prompt_id === 'p_win_lost'), tStrong = G92.targets.find(t => t.prompt_id === 'p_strong'),
+    tWeak = G92.targets.find(t => t.prompt_id === 'p_weak'), tSilent = G92.targets.find(t => t.prompt_id === 'p_silent');
+  check('B9-4: a written target is won only when the answers say so — 2 of 3 answers named the business, and the count travels with the status',
+    tStrong.status === 'won' && !!tStrong.won_at && /named in 2 of 3 answers in the last 8 days/.test(tStrong.reason) && /chatgpt/.test(tStrong.reason) && (G92.won_now || []).some(w => w.target_id === tStrong.target_id),
+    JSON.stringify([tStrong.status, tStrong.reason]));
+  check('B9-4: one naming answer of two is not a win — the row stays as it was and says how far it is from the bar, instead of flipping on a single observation',
+    tWeak.status === 'writing' && /named in 1 of 2 answers/.test(tWeak.reason) && /too few to call it won \(at least 2 needed\)/.test(tWeak.reason) && !tWeak.won_at,
+    JSON.stringify([tWeak.status, tWeak.reason]));
+  check('B9-4: a question nobody asked is not a win and not a dropped row — absent from the gap list also covers "not asked", and the row waits with that reason',
+    tSilent.status === 'queued' && /not asked in the last 8 days/.test(tSilent.reason), JSON.stringify([tSilent.status, tSilent.reason]));
+  check('B9-4: a question that was won and is lost again goes back in the queue with both dates and the observation — nothing stays won because it once was',
+    tWinLost.status === 'queued' && /AI named you for this question and has stopped/.test(tWinLost.reason) && /lost again in the check of/.test(tWinLost.reason) && /named in 0 of 2 answers/.test(tWinLost.reason) && tWinLost.won_at && (G92.won_lost || []).length === 1,
+    JSON.stringify([tWinLost.status, tWinLost.reason]));
+
+  const tStalled = G92.targets.find(t => t.prompt_id === 'p_stalled');
+  check('B9-6 (INVARIANTS rules 2 and 4): a target the cadence marked "writing" 30 days ago with no page to show for it is queued again with the reason — the evidence is a content-log row for that run, not the fact that a run was started',
+    tStalled.status === 'queued' && /never produced a page \(no page run on record\)/.test(tStalled.reason) && (G92.stalled_targets || []).length === 1,
+    JSON.stringify([tStalled.status, tStalled.reason]));
+  // ---------- B9-2: the pages submitted in earlier runs that nobody ever followed up ----------
+  check('B9-2: every page submitted in the last 45 days that Bing has not crawled is queued to be asked about again — and the one Bing already crawled is not',
+    G92.follow_up.length === 2 && G92.follow_up.some(f => f.url === PAGE_VAT && f.days >= 39) && G92.follow_up.some(f => f.url === PAGE_PEPPOL) && !G92.follow_up.some(f => f.url === PAGE_OLD),
+    JSON.stringify(G92.follow_up));
+  // ---------- B9-5: a page AI used to cite and has stopped citing ----------
+  const kEinv = (G92.key_pages || []).find(k => k.url === PAGE_EINV);
+  check('B9-5: a page cited in three of the last five weekly checks and in neither of the last two is flagged as decaying, with the counts and the date it was last cited',
+    !!(kEinv && kEinv.decay) && kEinv.decay.cited_in === 3 && kEinv.decay.runs === 5 && !!kEinv.decay.last_cited, JSON.stringify(kEinv && kEinv.decay));
+
+  // ---------- B9-3: robots.txt, read before anything is scored or submitted ----------
+  const rr92 = await run('Robots Requests (Growth)', gp92);
+  check('B9-3: robots.txt is asked for once per site, on the host the site really serves', rr92.length === 1 && rr92[0].json.url === WWW92 + '/robots.txt', JSON.stringify(rr92.map(r => r.json.url)));
+  const ROBOTS = 'User-agent: *\nDisallow: /private/\n\nUser-agent: OAI-SearchBot\nDisallow: /private/\nDisallow: /insights/\n';
+  mock('Fetch Robots (Growth)', [{ json: { statusCode: 200, headers: {}, data: ROBOTS } }]);
+  const rv92 = (await run('Robots Verdicts (Growth)', store['Fetch Robots (Growth)']))[0].json;
+  const vOf = (u) => rv92.verdicts[u.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '') || ''] || rv92.verdicts[u.replace(/^https?:\/\/(www\.)?/, '')];
+  const vPriv = vOf(PAGE_PRIV), vIns = vOf(PAGE_INS), vHome = rv92.verdicts[D92 + '/'];
+  console.log('   robots ->', JSON.stringify({ found: rv92.found, blocked: rv92.blocked_pages.map(b => b.url.replace(WWW92, '') + ':' + b.bots.join('+')) }));
+  check('B9-3: the group for a named fetcher wins over the * group, the longest matching rule decides, and the verdict is per page — /private/ is closed to all six, /insights/ only to ChatGPT search, the homepage to nobody',
+    rv92.found === true && vPriv.blocked_all === true && vPriv.blocked.length === 6 && vIns.blocked.join() === 'OAI-SearchBot' && vIns.blocked_all === false && vIns.blocked_owners[0] === 'ChatGPT search' && vHome.blocked.length === 0 && vPriv.bing_ok === false && vIns.bing_ok === true,
+    JSON.stringify([vPriv && vPriv.blocked, vIns && vIns.blocked, vHome && vHome.blocked]));
+
+  // ---------- the pages are fetched and scored with that verdict in hand ----------
+  const pr92 = await run('Page Requests (Growth)', gp92);
+  const goodHtml = (h1) => '<!doctype html><html><head><title>' + h1 + '</title></head><body><main><h1>' + h1 + '</h1>'
+    + '<p>Last updated: ' + new Date(Date.now() - 5 * 864e5).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) + '</p>'
+    + '<p>UAE e-invoicing becomes mandatory in phases from 2027, so a distributor needs an accredited provider and a connector to its ERP before the first wave.</p>'
+    + '<h2>Which businesses must use e-invoicing?</h2><p>' + 'Businesses above AED 50 million in revenue start first, per the <a href="https://mof.gov.ae/e-invoicing">Ministry of Finance</a>, and 70% of firms pick a provider that connects to their ERP. '.repeat(14) + '</p>'
+    + '<h2>How do you choose a provider?</h2><table><tr><td>Criteria</td></tr></table><p>' + 'Compare connectors, PINT AE support and support hours (<a href="https://www.pwc.com/ae/einvoicing">PwC</a>). '.repeat(10) + '</p>'
+    + '<p class="byline">By Sara Khan, ERP lead</p></main></body></html>';
+  mock('Fetch Key Pages', pr92.map(r => ({ json: { statusCode: 200, headers: {}, data: goodHtml(r.json.url.replace(WWW92, '') || 'Home') } })));
+  mock('Bing Growth Requests', [{ json: { skip: true } }]); mock('Fetch Bing Growth', []);
+  const rd92 = (await run('AI Readiness', store['Fetch Key Pages'])).map(r => r.json);
+  const rPriv = rd92.find(r => r.url === PAGE_PRIV), rIns = rd92.find(r => r.url === PAGE_INS), rHome = rd92.find(r => r.url === PAGE_HOME);
+  console.log('   readiness ->', JSON.stringify(rd92.map(r => [r.url.replace(WWW92, ''), r.score, r.score_withheld || '', (r.robots_blocked || []).join('+')])));
+  check('B9-3: a page robots.txt closes to every AI fetcher gets NO readiness score — the question has an answer and it is not a number — while the same HTML on an open path scores normally',
+    rPriv.score === null && /robots\.txt forbids every AI search fetcher/.test(rPriv.score_withheld) && /Disallow: \/private\//.test(rPriv.robots_rule) && rHome.score > 60 && !rHome.score_withheld && (rHome.robots_blocked || []).length === 0,
+    JSON.stringify([rPriv.score, rPriv.score_withheld, rHome.score]));
+  check('B9-3: a page closed to one fetcher keeps a score, capped, with that block as the first thing to fix (and the check is weightless, so the 100 points still add up)',
+    rIns.score != null && rIns.score <= 60 && rIns.robots_blocked.join() === 'OAI-SearchBot' && /robots\.txt blocks OAI-SearchBot/.test(rIns.issues[0]) && rIns.checks.filter(c => c.weight > 0).reduce((t, c) => t + c.weight, 0) === 100,
+    JSON.stringify([rIns.score, rIns.issues[0]]));
+  // a robots.txt that could not be read is NOT read as "allowed"
+  mock('Fetch Robots (Growth)', [{ json: { statusCode: 503, headers: {}, data: 'service unavailable' } }]);
+  const rv503 = (await run('Robots Verdicts (Growth)', store['Fetch Robots (Growth)']))[0].json;
+  const rd503 = (await run('AI Readiness', store['Fetch Key Pages'])).map(r => r.json);
+  check('B9-3 (INVARIANTS rule 3): robots.txt answering 503 is "not checked" — nothing is blocked, nothing is withheld, and no page is quietly called readable by assistants that were never asked about',
+    rv503.unavailable === true && /503/.test(rv503.reason) && rv503.blocked_pages.length === 0 && Object.values(rv503.verdicts).every(v => v.checked === false && v.allowed_bots === null)
+    && rd503.every(r => !r.score_withheld && (r.robots_blocked || []).length === 0) && rd503.some(r => r.checks.some(c => c.key === 'ai_fetchable' && /Not checked/.test(c.label))),
+    JSON.stringify([rv503.unavailable, rv503.reason]));
+  mock('Fetch Robots (Growth)', [{ json: { statusCode: 404, headers: {}, data: '' } }]);
+  const rv404 = (await run('Robots Verdicts (Growth)', store['Fetch Robots (Growth)']))[0].json;
+  check('B9-3: no robots.txt at all is a measurement, not a failure — no rule forbids any fetcher', rv404.unavailable === false && rv404.basis === 'measured' && /no robots\.txt on the site/.test(rv404.note) && rv404.blocked_pages.length === 0, JSON.stringify([rv404.basis, rv404.note]));
+  mock('Fetch Robots (Growth)', [{ json: { statusCode: 200, headers: {}, data: ROBOTS } }]);
+  await run('Robots Verdicts (Growth)', store['Fetch Robots (Growth)']);
+  await run('AI Readiness', store['Fetch Key Pages']);
+
+  // ---------- Bing: the quota, the crawl state of this week's pages AND of the pages submitted before ----------
+  const bsOn92 = bingOn('Bing_Sites_Growth_');
+  const bs92 = await run('Bing Sites (Growth)', gp92, bsOn92 ? { code: bsOn92 } : {}); drop92(bsOn92);
+  mock('Fetch Bing Sites (Growth)', [{ json: { d: [{ Url: WWW92 + '/', IsVerified: true }] } }]);
+  const br92 = await run('Bing Growth Requests', store['Fetch Bing Sites (Growth)']); const BR92 = br92.map(r => r.json);
+  check('B9-2: Bing is asked about the pages checked this week AND about every page submitted earlier that it has not crawled, each one saying why it is being asked',
+    BR92.filter(r => r.kind === 'info' && r.why === 'checked this week').length === G92.audit.length
+    && BR92.some(r => r.page === PAGE_VAT && /submitted 4\d day\(s\) ago/.test(r.why) && r.submitted_days >= 39)
+    && BR92.some(r => r.page === PAGE_PEPPOL && r.submitted_days === 10) && bs92.length === 1,
+    JSON.stringify(BR92.map(r => [r.kind, (r.page || '').replace(WWW92, ''), r.why])));
+  mock('Fetch Bing Growth', BR92.map(r => ({ json: r.kind === 'quota' ? { d: { DailyQuota: 10, MonthlyQuota: 300 } }
+    : { d: { Url: r.page, HttpStatus: 200, LastCrawledDate: r.page === PAGE_PEPPOL ? '/Date(' + (Date.now() - 2 * 864e5) + ')/' : '/Date(-62135596800000)/', DiscoveryDate: '/Date(-62135596800000)/' } } })));
+  const bsub92 = (await run('Bing Submit Requests', store['Fetch Bing Growth']))[0].json;
+  console.log('   bing submit ->', JSON.stringify({ urls: (bsub92.urls || []).map(u => u.replace(WWW92, '')), refused: (bsub92.refused || []).map(r => r.url.replace(WWW92, '')) }));
+  check('B9-3: the page robots.txt closes to Bingbot is not sent to Bing, and the refusal is kept with its reason instead of being silently dropped',
+    !(bsub92.urls || []).includes(PAGE_PRIV) && (bsub92.refused || []).some(r => r.url === PAGE_PRIV && /robots\.txt blocks Bingbot/.test(r.reason)) && bsub92.urls.includes(PAGE_INS),
+    JSON.stringify([bsub92.urls, bsub92.refused]));
+  check('B9-2: a page still uncrawled 40 days after it was submitted is sent again; one submitted 10 days ago is left alone (asking is free, re-sending is not noise)',
+    bsub92.urls.includes(PAGE_VAT) && !bsub92.urls.includes(PAGE_PEPPOL), JSON.stringify(bsub92.urls.map(u => u.replace(WWW92, ''))));
+  mock('Submit to Bing', [{ json: { d: null } }]);
+  const ik92 = await run('IndexNow Key Requests', gp92);
+  mock('Fetch IndexNow Key', [{ json: { statusCode: 200, headers: {}, data: G92.indexnow_key } }]);
+  const in92 = (await run('IndexNow Requests', store['Fetch IndexNow Key']))[0].json;
+  check('B9-3: IndexNow is not told about a page no AI fetcher may read either — the engines it notifies could not fetch it',
+    !in92.body.urlList.includes(PAGE_PRIV) && (in92.refused || []).some(r => r.url === PAGE_PRIV) && in92.body.urlList.includes(PAGE_INS) && ik92.length === 1,
+    JSON.stringify([in92.body.urlList, in92.refused]));
+
+  // ---------- the week's summary and the report ----------
+  mock('Earned Media', [{ json: { site_id: SITE92, domain: D92, business: 'Northwind ERP', earned: [], prospect_rows: [], outreach_jobs: [] } }]);
+  mock('AI Outreach Input', [{ json: { skip: true } }]); mock('Entity Requests', [{ json: { skip: true } }]); mock('Fetch Wikidata', []);
+  const gmOn92 = bingOn('Growth_Metrics');
+  const gm92 = (await run('Growth Metrics', store['AI Readiness'], gmOn92 ? { code: gmOn92 } : {}))[0].json;
+  console.log('   outcome ->', JSON.stringify(gm92.outcome));
+  check('B9-2 (INVARIANTS rule 4): the run reports what became of the submissions — measured from Bing\'s own answer, with the pages still waiting and how long they have waited, and the pages sent in this run counted apart',
+    gm92.outcome.basis === 'measured' && gm92.outcome.source === 'Bing Webmaster Tools (GetUrlInfo)' && gm92.outcome.submitted === 3 && gm92.outcome.crawled === 2
+    && gm92.outcome.waiting.some(w => w.url === PAGE_VAT && w.days >= 39 && w.asked === true) && gm92.outcome.window_days === 45,
+    JSON.stringify(gm92.outcome));
+  check('B9-3 / B9-4: the summary carries the withheld score, the refused submissions and the lost win — a high alert for a key page no assistant may read, and a medium one for the question AI has stopped answering with your name',
+    gm92.withheld_scores === 1 && gm92.refused_submissions.length === 1 && gm92.alerts.some(a => a.level === 'high' && /No AI search fetcher may read/.test(a.text))
+    && gm92.alerts.some(a => a.level === 'medium' && /has stopped naming you/.test(a.text)) && gm92.alerts.some(a => a.level === 'good' && /named in 2 of 3 answers/.test(a.text))
+    && gm92.alerts.some(a => a.level === 'medium' && /never arrived/.test(a.text))
+    && gm92.actions.some(a => a.type === 'robots') && gm92.actions.some(a => a.type === 'decay' && /cited in 3 of the last 5/.test(a.why)),
+    JSON.stringify({ withheld: gm92.withheld_scores, alerts: gm92.alerts.map(a => a.level), actions: gm92.actions.map(a => a.type) }));
+  check('B9-3: the withheld score is out of the average rather than counted as a zero (which would read as "a bad page" instead of "a page nobody may read")',
+    gm92.avg_score != null && gm92.avg_score > 0 && gm92.pages.filter(p => p.score != null).length === gm92.pages.length - 1,
+    JSON.stringify([gm92.avg_score, gm92.pages.map(p => [p.url.replace(WWW92, ''), p.score])]));
+  const gRow92 = (await run('AI Growth Row', [{ json: gm92 }])).map(r => r.json);
+  const sub92 = JSON.parse(gRow92[0].submitted_json);
+  check('B9-2: the run row keeps the outcome, the refusals and the robots reading, so next week compares like with like (and the row still has the exact seo_ai_growth columns)',
+    gRow92.length === 1 && sub92.outcome.crawled === 2 && sub92.refused.length === 1 && sub92.robots.blocked_pages === 2
+    && JSON.stringify(Object.keys(gRow92[0])) === JSON.stringify(require('./table_cols.json').AI_GROWTH), JSON.stringify(Object.keys(gRow92[0])));
+  mock('Growth Metrics', [{ json: gm92 }]);
+  const rep92 = (await run('Growth Report', [{ json: { id: 1, site_id: SITE92 } }]))[0].json; const html92 = rep92.html;
+  save('ai-growth-area9-report.html', html92); const def92 = scanHtml('ai growth (area 9)', html92);
+  check('B9-1: the report says what a submission reaches in the words the sources use — Bing and Copilot read that index, IndexNow notifies Bing / Yandex / Naver / Seznam / Yep and not Google, OpenAI documents OAI-SearchBot for ChatGPT search, and a submission is a notification and not indexing',
+    /a submission is a notification, not indexing/.test(html92) && /Bing, Yandex, Naver, Seznam, Yep/.test(html92) && /OAI-SearchBot/.test(html92)
+    && /does not guarantee immediate indexing/.test(html92) && !/sent to Bing \(ChatGPT search, Copilot\)/.test(html92) && !def92.length,
+    JSON.stringify(def92));
+  check('B9-2 / B9-3 / B9-4 reach the reader: how many submitted pages Bing has since crawled, the page printed as "not scored" with the rule that withheld it, and every question\'s status beside the count it was decided on',
+    /have since been crawled by Bing/.test(html92) && /not scored/.test(html92) && /forbids every AI search fetcher/.test(html92) && /named in 2 of 3 answers/.test(html92),
+    html92.slice(0, 200));
+  const lin92 = rep92.lineage || [];
+  check('B9-2 / B9-3: both new figures carry their own lineage — Bing\'s crawl of the pages we submitted is measured, and what the AI fetchers may read is measured from the site\'s own robots.txt',
+    lin92.some(l => /crawled by Bing after we submitted/.test(l.figure) && l.basis === 'measured' && /GetUrlInfo/.test(l.note))
+    && lin92.some(l => /What the AI search fetchers may read/.test(l.figure) && l.basis === 'measured'),
+    JSON.stringify(lin92.map(l => [l.figure, l.basis])));
+  // ---------- and the honest refusal: no Bing account, no outcome figure ----------
+  mock('Bing Growth Requests', [{ json: { skip: true } }]); mock('Fetch Bing Growth', []); mock('Bing Submit Requests', [{ json: { skip: true } }]);
+  const gmNo92 = (await run('Growth Metrics', store['AI Readiness'], gmOn92 ? { code: gmOn92 } : {}))[0].json;
+  mock('Growth Metrics', [{ json: gmNo92 }]);
+  const repNo92 = (await run('Growth Report', [{ json: { id: 2, site_id: SITE92 } }]))[0].json;
+  check('B9-2 (INVARIANTS rule 1): with the site outside the Bing Webmaster account the outcome is not estimated from the submissions — it says it is not available and why, in the report and in the lineage',
+    gmNo92.outcome.basis === 'not available' && /not in the Bing Webmaster account/.test(gmNo92.outcome.reason)
+    && /What became of earlier submissions: not available/.test(repNo92.html) && (repNo92.lineage || []).some(l => /crawled by Bing after we submitted/.test(l.figure) && l.basis === 'unknown'),
+    JSON.stringify(gmNo92.outcome));
+  drop92(gmOn92);
   reset();
 });
 

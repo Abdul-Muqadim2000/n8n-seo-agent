@@ -916,6 +916,13 @@
    {
     "allowed": false,
     "maxTries": 3,
+    "name": "Fetch Robots (Growth)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
     "name": "Fetch Key Pages",
     "retryOnFail": true,
     "waitBetweenTries": 5000
