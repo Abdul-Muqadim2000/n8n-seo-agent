@@ -692,6 +692,40 @@
           "dataTableId": {
             "__rl": true,
             "mode": "name",
+            "value": "seo_ai_targets"
+          },
+          "returnAll": true,
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "status",
+                "condition": "eq",
+                "keyValue": "writing"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "a60aec9c-f77d-577d-a006-ebb19aa7742b",
+        "name": "Load AI Targets Writing (Cadence)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          2420,
+          660
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
             "value": "seo_monitors"
           },
           "returnAll": true,
@@ -1499,7 +1533,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// v4.12: the AI targets written this week -> status writing (the AI Growth loop marks them won once AI names the business for the question).\nconst now = new Date().toISOString();\nconst rows = $('Cadence Plan').all().map(i => i.json).filter(p => !p.nothing_to_do && !p.dry_run && p.target_id).map(p => ({ json: { target_id: p.target_id, request_id: (p.body && p.body.request_id) || '', at: now } }));\nreturn rows.length ? rows : [{ json: { skip: true } }];"
+          "jsCode": "// v4.12: the AI targets whose page run was started this week -> status `writing` (the AI Growth loop marks them `won` once AI\n// names the business for the question).\n//\n// B9-6 (2026-10-15, benchmark area 9 / INVARIANTS rule 4 — the WRITE half; the read half landed in build section 82):\n// `writing` was a promise nobody kept. This node marked every planned target `writing` whatever the spawn did, and nothing ever\n// wrote the row forward again, so a question could sit \"being written\" for ever and never be queued a second time — R1's class\n// in the one table R1 did not cover. Two things change here, and both are evidence, not optimism:\n//   * a target whose content run could NOT BE STARTED goes back to `queued` with the reason, so the next run picks it up. That is\n//     the way back check B of `state_lint.py` now requires of every table a run moves to `writing`.\n//   * the row that IS marked says in its own `reason` that nothing has been written yet. `written_at` is the moment the attempt\n//     was made — it is what the read half (`Growth_Plan.js`) measures its 14-day staleness from, and the only thing that moves\n//     this row to `written` is *AI Target Settle*, against a `seo_content_log` row for the same run.\n// What this node CANNOT see: a run that starts and is then refused inside the main workflow (the budget guard, a failed step).\n// `Start Content Runs` is an Execute Workflow node with `waitForSubWorkflow: false`, so the outcome never comes back here. That\n// gap is exactly what the read half's evidence rule is for; it is not papered over with a guess.\nconst now = new Date().toISOString();\n// the plan items that really went to *Start Content Runs*: `Any Pages?` drops `nothing_to_do` and `Dry Run?` drops a dry run,\n// in this order, so index i here is item i there (the node runs in `each` mode).\nconst items = $('Cadence Plan').all().map(i => i.json).filter(p => p && !p.nothing_to_do && !p.dry_run);\nlet spawned = null;\ntry { spawned = $('Start Content Runs').all(); } catch (e) { spawned = null; }\n// only trust the index when the two lists line up — a length that differs means something filtered in between, and guessing\n// which page failed would be worse than marking as before\nconst aligned = Array.isArray(spawned) && spawned.length === items.length;\nconst errOf = (it) => { if (!it) return ''; const e = it.error || (it.json && it.json.error); if (!e) return '';\n  return String((e && (e.message || e.description)) || e).slice(0, 160); };\nconst rows = [];\nitems.forEach((p, i) => {\n  if (!p.target_id) return;\n  const rid = (p.body && p.body.request_id) || p.request_id || '';\n  const err = aligned ? errOf(spawned[i]) : '';\n  if (err) {\n    rows.push({ json: { target_id: p.target_id, status: 'queued', request_id: '', written_at: '', at: now,\n      reason: 'the page run could not be started on ' + now.slice(0, 10) + ' (' + err + '): the question is queued again rather than left saying \"being written\"' } });\n    return;\n  }\n  rows.push({ json: { target_id: p.target_id, status: 'writing', request_id: rid, written_at: now, at: now,\n    reason: 'a page run (' + rid + ') was started on ' + now.slice(0, 10) + '; nothing has been written yet — this row moves to \"written\" only against a seo_content_log row for that run' } });\n});\nreturn rows.length ? rows : [{ json: { skip: true } }];\n"
         },
         "id": "f0ad92e3-81a4-56ed-b0e2-75c2ff557fc5",
         "name": "AI Target Marks",
@@ -1567,10 +1601,11 @@
           "columns": {
             "mappingMode": "defineBelow",
             "value": {
-              "status": "writing",
+              "status": "={{ $json.status }}",
               "request_id": "={{ $json.request_id }}",
-              "written_at": "={{ $json.at }}",
-              "updated_at": "={{ $json.at }}"
+              "written_at": "={{ $json.written_at }}",
+              "updated_at": "={{ $json.at }}",
+              "reason": "={{ $json.reason }}"
             },
             "matchingColumns": [],
             "schema": [
@@ -1813,6 +1848,320 @@
       },
       {
         "parameters": {
+          "jsCode": "// B9-6 (2026-10-15, benchmark area 9 / INVARIANTS rule 4 — the WRITE half): the state `writing` had no exit. Nothing in the\n// system ever set an AI target to `written`, so `Growth_Metrics` counted `written: 0` every week of its life, a win was decided\n// on a row that still claimed to be in progress, and a question whose page had been written months ago was never counted as\n// answered.\n//\n// This node is the exit, and it follows R1's precedent exactly: **a page counts as written only on a `written` content-log\n// row**. The row is advanced for one reason only — the `seo_content_log` row for the very run this target started says the page\n// exists (`written`, or `published` once the owner reported the link). *Content Log Row* in the main workflow writes that status\n// from the page text itself, so the proof is the artefact, one hop away.\n//\n// What it deliberately does NOT do: time out a row. A `writing` row with no content-log row is left exactly as it is, and the\n// read half (`Growth_Plan.js`, build section 82) queues the question again after 14 days with its reason and a medium alert.\n// One rule, one place: a second timeout here would be a second answer to the same question.\nconst now = new Date().toISOString();\n// Each node is read by name and not through a helper that hides it: `state_lint.py` asks of a node's OWN code which other node\n// it took its evidence from, and a `$(name)` behind a variable is evidence nothing can see (INVARIANTS rule 4, check A).\nconst itemsOf = (get) => { try { return get().all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error); } catch (e) { return []; } };\nconst writing = itemsOf(() => $('Load AI Targets Writing (Cadence)')).filter(t => t.target_id && String(t.status || '') === 'writing');\nconst logs = itemsOf(() => $('Load Content Log'));\n// the strongest evidence on record per run: published beats written beats started (a run can leave more than one row over time)\nconst RANK = { started: 1, written: 2, published: 3 };\nconst byReq = new Map();\nfor (const l of logs) {\n  const rid = String(l.request_id || ''); if (!rid) continue;\n  const cur = byReq.get(rid);\n  if (!cur || (RANK[String(l.status || '')] || 0) > (RANK[String(cur.status || '')] || 0)) byReq.set(rid, l);\n}\nconst out = [];\nfor (const t of writing) {\n  const rid = String(t.request_id || '');\n  const l = rid ? byReq.get(rid) : null;\n  const st = l ? String(l.status || '') : '';\n  if (st !== 'written' && st !== 'published') continue;   // no page on record: the row stays `writing` and says so\n  out.push({ json: { target_id: t.target_id, status: 'written', at: now,\n    // the moment the page existed is the moment its run was logged, not the moment we read the row back\n    written_at: String(l.started_at || t.written_at || now),\n    reason: 'the page exists: the seo_content_log row for run ' + rid + ' says \"' + st + '\"'\n      + (l.published_url ? ' (' + String(l.published_url).slice(0, 120) + ')' : '') + ', read on ' + now.slice(0, 10) } });\n}\nreturn out.length ? out : [{ json: { skip: true } }];\n"
+        },
+        "id": "7ee2b005-f4ac-5057-95c8-3e62a989ab04",
+        "name": "AI Target Settle",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3960,
+          880
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "05bcdb92-a8af-53f5-94af-33c5feb5eac7",
+                "leftValue": "={{ !$json.skip }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "6eeb761b-3a92-5129-a32e-a423d779e542",
+        "name": "Any AI Settles?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          3960,
+          1100
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "update",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_ai_targets"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "target_id",
+                "condition": "eq",
+                "keyValue": "={{ $json.target_id }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "status": "={{ $json.status }}",
+              "written_at": "={{ $json.written_at }}",
+              "updated_at": "={{ $json.at }}",
+              "reason": "={{ $json.reason }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "target_id",
+                "displayName": "target_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "site_id",
+                "displayName": "site_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "domain",
+                "displayName": "domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "prompt_id",
+                "displayName": "prompt_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "question",
+                "displayName": "question",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "keyword",
+                "displayName": "keyword",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "kind",
+                "displayName": "kind",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "page_url",
+                "displayName": "page_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "page_type",
+                "displayName": "page_type",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "fanout",
+                "displayName": "fanout",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "sources_json",
+                "displayName": "sources_json",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "competitors",
+                "displayName": "competitors",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "engines",
+                "displayName": "engines",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "stage",
+                "displayName": "stage",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "value",
+                "displayName": "value",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "status",
+                "displayName": "status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "reason",
+                "displayName": "reason",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "created_at",
+                "displayName": "created_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "updated_at",
+                "displayName": "updated_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "request_id",
+                "displayName": "request_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "written_at",
+                "displayName": "written_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "won_at",
+                "displayName": "won_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "22a847ef-83d7-5aa5-9979-a8de1f72fdd5",
+        "name": "Settle AI Targets",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          3960,
+          1320
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
           "jsCode": "// One note per site: this week's page(s) and why, what comes next, and pages still waiting for a publish link.\n// v4.8: plus the pipeline facts from the plan (Manual ladders' next pages, suggestions, queued / won ladders, main pages waiting for support).\nconst FORM_URL = 'http://localhost:5678/form/54f85234-172e-43e6-a84d-b5ecaa140e7d', API_URL = 'http://localhost:5678/webhook/seo-keyword-check';\nconst plan = $('Cadence Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);\nconst esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst path = (u) => String(u || '').replace(/^https?:\\/\\/[^\\/]+/, '') || '/';\nconst arr = (v) => Array.isArray(v) ? v : [];\n// R16 (2026-10-13, FIX_PLAN §3.11): planned rungs the fit gate set aside, with the reason — a competitor's brand or a government\n// portal planned before the rule existed is named here instead of being written in silence.\nconst asideHtml = (s) => { const a = arr(s.set_aside); if (!a.length) return '';\n  return '<p style=\"color:#b45309\"><b>Set aside</b> (planned before this rule existed, not written): ' + a.map(x => esc(x.note || x.keyword)).join(' | ')\n    + '. These rows are now marked <code>set_aside</code>; if one is right for you after all, start it by hand through the form or the app.</p>'; };\nconst pipelineHtml = (s) => asideHtml(s) + (arr(s.awaiting_approval).length ? '<p><b>Ready for your approval</b> (Manual ladders, about $1.20 each): ' + arr(s.awaiting_approval).map(a => esc(a.keyword) + ' (ladder \"' + esc(a.head) + '\", ' + (Number(a.rung) === 4 ? 'main page' : 'rung ' + esc(a.rung)) + ')').join(', ') + '. Start one through the <a href=\"' + esc(FORM_URL) + '\">form</a> or the app.</p>' : '') +\n  (arr(s.suggestions).length ? '<p><b>Suggested posts</b> (opportunity posts are set to Manual): ' + arr(s.suggestions).map(u => esc(u.keyword) + ' (' + esc(u.source) + ')').join(', ') + '</p>' : '') +\n  (arr(s.waiting_for_support).length ? '<p style=\"color:#64748b\"><b>Main pages waiting for support:</b> ' + arr(s.waiting_for_support).map(w => esc(w.head) + ' (' + w.published + ' of ' + w.supporting + ' supporting pages published, ' + w.needed + ' needed)').join(', ') + '</p>' : '') +\n  (arr(s.queued_ladders).length ? '<p style=\"color:#64748b\"><b>Queued ladders</b> (start when an active one is won, fully written or paused): ' + arr(s.queued_ladders).map(q => esc(q.head)).join(', ') + '</p>' : '') +\n  (arr(s.won_ladders).length ? '<p style=\"color:#15803d\"><b>Won</b> (main keyword in the top 3 for 4 checks, no more pages): ' + arr(s.won_ladders).map(w => esc(w.head)).join(', ') + '</p>' : '');\nconst facts = (s) => ({ set_aside: arr(s.set_aside), paused_reason: s.paused_reason || '', waiting_publish: Number(s.waiting_publish) || 0, waiting_keywords: arr(s.waiting_keywords), max_waiting: Number(s.max_waiting) || 0, awaiting_approval: arr(s.awaiting_approval), suggestions: arr(s.suggestions), queued_ladders: arr(s.queued_ladders), won_ladders: arr(s.won_ladders), waiting_for_support: arr(s.waiting_for_support) });\nconst bySite = new Map(); for (const p of plan) { if (!bySite.has(p.site_id)) bySite.set(p.site_id, []); bySite.get(p.site_id).push(p); }\nreturn [...bySite.values()].map(items => { const s = items[0];\n  const html = '<p>Hi,</p><p>This week\\'s content for <b>' + esc(s.domain) + '</b> (' + items.length + ' of ' + s.pages_per_week + ' per week):</p><ol>' + items.map(p => '<li><b>' + esc(p.keyword) + '</b> (' + esc(p.page_type) + ') — ' + esc(p.why) + (p.existing_page_url ? '; improves <a href=\"' + esc(p.existing_page_url) + '\">' + esc(path(p.existing_page_url)) + '</a>' : '') + '</li>').join('') + '</ol>' +\n    '<p>Each page arrives in its own e-mail within 10-15 minutes as HTML, Markdown and meta.json next to the PDF report. Publish it in your CMS, then report the link through the <a href=\"' + esc(FORM_URL) + '\">form</a> (\"I published a page\") or the API (' + esc(API_URL) + ', <code>mode: published</code>) so the trackers check indexing and positions.</p>' +\n    (s.upcoming.length ? '<p><b>Coming next:</b> ' + s.upcoming.map(u => esc(u.keyword) + ' (' + esc(u.source) + ')').join(', ') + '</p>' : '') +\n    (s.pending_publish.length ? '<p style=\"color:#b45309\"><b>Still waiting for your publish link:</b> ' + s.pending_publish.map(p => esc(p.keyword) + ' (written ' + p.days + ' days ago)').join(', ') + '</p>' : '') +\n    pipelineHtml(s) +\n    '<p style=\"color:#64748b;font-size:12px\">Change the posts per week through \"Track my site\" (form, or API field blogs_per_week) or the Site Admin workflow. About $1.20 of AI cost per page.</p>';\n  return { json: { site_id: s.site_id, domain: s.domain, email: s.email, callback_url: s.callback_url, request_id: s.request_id, subject: '[Content] ' + s.domain + ': ' + items.map(p => p.keyword).join(', '), html, status: 'progress', stage: 'content_cadence', week: s.week,\n    pages: items.map(p => ({ keyword: p.keyword, source: p.source, page_type: p.page_type, existing_page_url: p.existing_page_url, request_id: p.request_id, why: p.why })), upcoming: s.upcoming, pending_publish: s.pending_publish, candidates: s.candidates, ...facts(s) } }; });\n"
         },
         "id": "55e95910-8bd3-5ae3-afcc-877ce2509a48",
@@ -1947,7 +2296,7 @@
       },
       {
         "parameters": {
-          "content": "## SEO Agent — Content Cadence (v4.3, pipeline rules v4.8)\nRuns **every Monday 10:00** (after the trackers) and on demand through *Manual Run* (`{ site_id | domain, pages?, dry_run?, force? }`). For every site with a cadence in `seo_cadence` (set by \"Track my site\" / API `blogs_per_week`, or Site Admin `cadence`; 1-3 per week) it picks the week's topics in this order: the keyword ladder's next **planned** pages (rung order, with the ladder's internal links), **striking-distance** queries from `seo_query_history` (positions 4-20 with impressions: the page that already ranks gets strengthened), **rising** related searches from `seo_trends`. Keywords written in the last 90 days, written/published ladder pages, brand queries and paused sites are skipped.\nEach pick starts a content run in SEO Agent v4 (`mode: keyword`, `force_content`, internal rate-limit key `cadence:<site>`) that delivers the PDF/Word report **plus the blog package** (article HTML, Markdown, meta.json) by e-mail / callback (`stage: content`). The run is logged in `seo_content_log` (status started), ladder rows go to *writing*, and one note per site goes out (`stage: content_cadence`): this week's pages and why, what comes next, pages still waiting for a publish link.\n**Pipeline rules (v4.8)** from `seo_ladder_settings` (written by the web app; one row per ladder + a `_site` row with the website defaults; no row = the site's default mode or Auto, active, priority by start date): only **Auto** ladders with status active / queued are written, at most `max_active` (default 2) at a time in **priority** order (ladder 1's pages before ladder 2's; plan type *direct* writes the main page first); the **main page waits** until half of the supporting pages are published or the main keyword ranks 1-30; a ladder whose main keyword held the **top 3 for 4 checks** gets no more pages; with `max_waiting` (default 3) pages written but not published the site is **paused** (`paused_reason: pileup`; on demand `force: true` bypasses it); opportunity posts only when `opportunities` is Auto (else listed as `suggestions`); **Manual** ladders' next pages are listed in `awaiting_approval`. Sites without a page but with news get a *Cadence Status* note (same callback stage).\nThe owner publishes in any CMS and reports the URL (\"I published a page\" in the form, or API `mode: published`): the page is checked live, logged as published, the ladder row gets the real URL, and the Site Tracker inspects indexing and positions from the next Monday. `dry_run: true` only plans. Cost: about $1.20 of AI per page.\nForm: http://localhost:5678/form/54f85234-172e-43e6-a84d-b5ecaa140e7d · API: http://localhost:5678/webhook/seo-keyword-check",
+          "content": "## SEO Agent — Content Cadence (v4.3, pipeline rules v4.8)\nRuns **every Monday 10:00** (after the trackers) and on demand through *Manual Run* (`{ site_id | domain, pages?, dry_run?, force? }`). For every site with a cadence in `seo_cadence` (set by \"Track my site\" / API `blogs_per_week`, or Site Admin `cadence`; 1-3 per week) it picks the week's topics in this order: the keyword ladder's next **planned** pages (rung order, with the ladder's internal links), **striking-distance** queries from `seo_query_history` (positions 4-20 with impressions: the page that already ranks gets strengthened), **rising** related searches from `seo_trends`. Keywords written in the last 90 days, written/published ladder pages, brand queries and paused sites are skipped.\nEach pick starts a content run in SEO Agent v4 (`mode: keyword`, `force_content`, internal rate-limit key `cadence:<site>`) that delivers the PDF/Word report **plus the blog package** (article HTML, Markdown, meta.json) by e-mail / callback (`stage: content`). The run is logged in `seo_content_log` (status started), ladder rows go to *writing*, and one note per site goes out (`stage: content_cadence`): this week's pages and why, what comes next, pages still waiting for a publish link.\n**An AI target says `writing` only while a run is on record, and `written` only when a page is (B9-6, INVARIANTS rule 4).** *AI Target Marks* marks a `seo_ai_targets` row `writing` with the run's id and the plain reason that nothing exists yet; a spawn that **failed** puts the row back to `queued` with its error, so the question is picked again instead of claiming work in progress for ever. *AI Target Settle* is the only exit: a row moves to `written` against a `seo_content_log` row for that same run saying `written` or `published` — R1's rule, in the one table R1 did not cover. A row with no such log row is left alone; AI Growth queues the question again after 14 days with its reason and a medium alert.\n**Pipeline rules (v4.8)** from `seo_ladder_settings` (written by the web app; one row per ladder + a `_site` row with the website defaults; no row = the site's default mode or Auto, active, priority by start date): only **Auto** ladders with status active / queued are written, at most `max_active` (default 2) at a time in **priority** order (ladder 1's pages before ladder 2's; plan type *direct* writes the main page first); the **main page waits** until half of the supporting pages are published or the main keyword ranks 1-30; a ladder whose main keyword held the **top 3 for 4 checks** gets no more pages; with `max_waiting` (default 3) pages written but not published the site is **paused** (`paused_reason: pileup`; on demand `force: true` bypasses it); opportunity posts only when `opportunities` is Auto (else listed as `suggestions`); **Manual** ladders' next pages are listed in `awaiting_approval`. Sites without a page but with news get a *Cadence Status* note (same callback stage).\nThe owner publishes in any CMS and reports the URL (\"I published a page\" in the form, or API `mode: published`): the page is checked live, logged as published, the ladder row gets the real URL, and the Site Tracker inspects indexing and positions from the next Monday. `dry_run: true` only plans. Cost: about $1.20 of AI per page.\nForm: http://localhost:5678/form/54f85234-172e-43e6-a84d-b5ecaa140e7d · API: http://localhost:5678/webhook/seo-keyword-check",
           "height": 560,
           "width": 1180,
           "color": 5
@@ -3660,6 +4009,17 @@
         "main": [
           [
             {
+              "node": "Load AI Targets Writing (Cadence)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load AI Targets Writing (Cadence)": {
+        "main": [
+          [
+            {
               "node": "Load Monitors (Cadence)",
               "type": "main",
               "index": 0
@@ -3778,6 +4138,28 @@
         ]
       },
       "Mark AI Target Writing": {
+        "main": [
+          [
+            {
+              "node": "AI Target Settle",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Target Settle": {
+        "main": [
+          [
+            {
+              "node": "Any AI Settles?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Settle AI Targets": {
         "main": [
           [
             {
@@ -3902,6 +4284,24 @@
           [
             {
               "node": "Mark AI Target Writing",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "AI Target Settle",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Any AI Settles?": {
+        "main": [
+          [
+            {
+              "node": "Settle AI Targets",
               "type": "main",
               "index": 0
             }

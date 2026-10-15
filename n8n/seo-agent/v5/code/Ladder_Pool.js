@@ -1,4 +1,8 @@
 /*__FIT_GATE__*/
+// B6-9 (2026-10-15, benchmark area 6): the SERP click-loss table this node kept for itself is gone -- the one measured
+// copy in the discovery kit is used instead (`KWI.calibrate` / `KWI.lossApplied`), so the AI Overview figure is corrected
+// in one place for discovery, for the rank tracker and for the ladder.
+/*__KW_INPUTS__*/
 // Ladder mode: merges the research pulls into one pool around the head term, keeps only keywords that share its
 // topic, scores opportunity (same formula as discovery) and records where the client's site ranks today.
 // 2026-10-11 (FIX_PLAN D8): the shared fit gate refuses other companies' brands (a competitor, a domain on the results page — facts.ae ↔ "facts" —,
@@ -56,20 +60,28 @@ const addItem = (raw, source) => {
   if (e.cpc == null && info.cpc != null) e.cpc = info.cpc;
 };
 reqs.forEach((r, i) => { const items = res[i]?.tasks?.[0]?.result?.[0]?.items || []; for (const it of items) addItem(it, r.kind); });
+// B6-9 (2026-10-15, benchmark area 6 -- FIX_PLAN §3.16): until today this node carried its OWN copy of the click-loss
+// table, with the APRIL 2025 AI Overview figure (`ctr *= 0.65`, a flat 35% loss) that B1-3 had already removed from the
+// discovery kit and B6-1 from the rank kit. Three copies of one measurement is how three answers start.
+// Which of the two kits belongs here was the question B6-1 raises: a flat factor applied to every position CANCELS OUT of
+// a share, so `RS.keepAt`'s per-position table is what a share of voice needs. This is not a share. `traffic_potential` is
+// an absolute monthly estimate -- "what a page in the top three would get" -- and only the keywords whose results page
+// HAS an AI Overview carry the factor, so the stale number both inflated the printed estimate (by 1.35x on those
+// keywords) and decided which rungs were planned through `pre_score`. The figure for a top-three estimate is the kit's
+// measured top-three average (Ahrefs, 300,000 keywords, December 2025 data, published 2026-02-04), which is exactly what
+// `KWI.calibrate` applies -- so this is now the same call the discovery twin `Collect_Research.js` makes, and the number
+// carries its basis (INVARIANTS rule 1) instead of arriving bare.
 const score = (e) => {
-  let ctr = 1; const t = e.serp_types || [];
-  if (t.includes('ai_overview')) ctr *= 0.65;
-  if (t.includes('featured_snippet')) ctr *= 0.85;
-  if (t.includes('video') || t.includes('short_videos')) ctr *= 0.92;
-  if (t.includes('local_pack') || t.includes('map')) ctr *= 0.85;
-  if (t.includes('shopping') || t.includes('popular_products')) ctr *= 0.9;
-  const traffic_potential = Math.round(e.volume * ctr * 0.3);
+  const cal = KWI.calibrate(e, {});                 // no Search Console row on a ladder pool entry: `modelled`, labelled as such
+  const traffic_potential = cal.traffic_potential == null ? 0 : cal.traffic_potential;
   let win = Math.min(1, Math.max(0.05, (100 - (e.kd ?? 50)) / 100));
   if (e.avg_rd != null && e.avg_rd > 300) win *= 0.5; else if (e.avg_rd != null && e.avg_rd > 100) win *= 0.7;
   const value = 1 + Math.log10(1 + (e.cpc || 0));
   const iw = W[e.intent] ?? 1;
   const tr = 1 + Math.min(0.3, Math.max(-0.3, (e.trend_yearly || 0) / 100));
-  return { traffic_potential, winnability: +win.toFixed(2), value_factor: +value.toFixed(2), pre_score: +(traffic_potential * win * value * iw * tr).toFixed(1) };
+  return { traffic_potential, traffic_basis: cal.traffic_basis, traffic_note: cal.traffic_note, modelled_traffic_potential: cal.modelled_traffic_potential,
+    click_loss: KWI.lossApplied(e.serp_types).map(f => ({ key: f.key, factor: f.factor, basis: f.basis, source: f.source })),
+    winnability: +win.toFixed(2), value_factor: +value.toFixed(2), pre_score: +(traffic_potential * win * value * iw * tr).toFixed(1) };
 };
 const all = [...pool.values()].map(e => {
   if (brand.length > 3 && e.keyword.includes(brand)) e.intent = 'navigational';
