@@ -1,0 +1,460 @@
+{
+ "counts": {
+  "evidence": {
+   "pass": 1,
+   "subject": 2
+  },
+  "like_for_like": {
+   "pass": 4,
+   "subject": 6
+  },
+  "lineage": {
+   "pass": 10,
+   "subject": 16
+  },
+  "withheld": {
+   "pass": 3,
+   "subject": 4
+  }
+ },
+ "nodes": {
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Analyze Probes": {
+   "evidence": false,
+   "fails": [
+    "evidence"
+   ],
+   "markup": 1,
+   "node": "Analyze Probes",
+   "subject": [
+    "evidence"
+   ],
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Audit Diff": {
+   "fails": [],
+   "like_for_like": {
+    "report_type": true,
+    "sample": true
+   },
+   "markup": 0,
+   "node": "Audit Diff",
+   "subject": [
+    "like_for_like"
+   ],
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Blog Package": {
+   "fails": [
+    "lineage",
+    "withheld"
+   ],
+   "lineage": {
+    "calls": false,
+    "kit": false,
+    "travels": false
+   },
+   "markup": 25,
+   "node": "Blog Package",
+   "subject": [
+    "lineage",
+    "withheld"
+   ],
+   "withheld": false,
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Build Audit Report": {
+   "fails": [],
+   "lineage": {
+    "calls": true,
+    "kit": true,
+    "travels": true
+   },
+   "markup": 262,
+   "node": "Build Audit Report",
+   "subject": [
+    "lineage",
+    "withheld"
+   ],
+   "withheld": true,
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Build Full Report": {
+   "fails": [],
+   "lineage": {
+    "calls": true,
+    "kit": true,
+    "travels": true
+   },
+   "markup": 454,
+   "node": "Build Full Report",
+   "subject": [
+    "lineage",
+    "withheld"
+   ],
+   "withheld": true,
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Build Keyword Strategy": {
+   "fails": [
+    "lineage"
+   ],
+   "lineage": {
+    "calls": false,
+    "kit": false,
+    "travels": false
+   },
+   "markup": 44,
+   "node": "Build Keyword Strategy",
+   "subject": [
+    "lineage"
+   ],
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Build Ladder Report": {
+   "fails": [],
+   "lineage": {
+    "calls": true,
+    "kit": true,
+    "travels": true
+   },
+   "markup": 93,
+   "node": "Build Ladder Report",
+   "subject": [
+    "lineage"
+   ],
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Build Site Issues": {
+   "evidence": true,
+   "fails": [],
+   "markup": 0,
+   "node": "Build Site Issues",
+   "subject": [
+    "evidence"
+   ],
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Build Word File": {
+   "fails": [
+    "lineage"
+   ],
+   "lineage": {
+    "calls": false,
+    "kit": false,
+    "travels": false
+   },
+   "markup": 96,
+   "node": "Build Word File",
+   "subject": [
+    "lineage",
+    "withheld"
+   ],
+   "withheld": true,
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent \u2014 AI Growth / Growth Report": {
+   "fails": [],
+   "lineage": {
+    "calls": true,
+    "kit": true,
+    "travels": true
+   },
+   "markup": 20,
+   "node": "Growth Report",
+   "subject": [
+    "lineage"
+   ],
+   "workflow": "SEO Agent \u2014 AI Growth"
+  },
+  "SEO Agent \u2014 AI Visibility Tracker / AI Metrics": {
+   "fails": [
+    "like_for_like"
+   ],
+   "like_for_like": {
+    "report_type": false,
+    "sample": false
+   },
+   "markup": 0,
+   "node": "AI Metrics",
+   "subject": [
+    "like_for_like"
+   ],
+   "workflow": "SEO Agent \u2014 AI Visibility Tracker"
+  },
+  "SEO Agent \u2014 AI Visibility Tracker / AI Report": {
+   "fails": [],
+   "lineage": {
+    "calls": true,
+    "kit": true,
+    "travels": true
+   },
+   "markup": 21,
+   "node": "AI Report",
+   "subject": [
+    "lineage"
+   ],
+   "workflow": "SEO Agent \u2014 AI Visibility Tracker"
+  },
+  "SEO Agent \u2014 Backlink Monitor / BL Report": {
+   "fails": [],
+   "lineage": {
+    "calls": true,
+    "kit": true,
+    "travels": true
+   },
+   "markup": 21,
+   "node": "BL Report",
+   "subject": [
+    "lineage"
+   ],
+   "workflow": "SEO Agent \u2014 Backlink Monitor"
+  },
+  "SEO Agent \u2014 Backlink Monitor / Parse Backlinks": {
+   "fails": [
+    "like_for_like"
+   ],
+   "like_for_like": {
+    "report_type": false,
+    "sample": false
+   },
+   "markup": 0,
+   "node": "Parse Backlinks",
+   "subject": [
+    "like_for_like"
+   ],
+   "workflow": "SEO Agent \u2014 Backlink Monitor"
+  },
+  "SEO Agent \u2014 Console Alerts / Alert Target": {
+   "fails": [
+    "lineage"
+   ],
+   "lineage": {
+    "calls": false,
+    "kit": false,
+    "travels": false
+   },
+   "markup": 6,
+   "node": "Alert Target",
+   "subject": [
+    "lineage"
+   ],
+   "workflow": "SEO Agent \u2014 Console Alerts"
+  },
+  "SEO Agent \u2014 Content Cadence / Cadence Note": {
+   "fails": [
+    "lineage"
+   ],
+   "lineage": {
+    "calls": false,
+    "kit": false,
+    "travels": false
+   },
+   "markup": 7,
+   "node": "Cadence Note",
+   "subject": [
+    "lineage"
+   ],
+   "workflow": "SEO Agent \u2014 Content Cadence"
+  },
+  "SEO Agent \u2014 Content Cadence / Cadence Status": {
+   "fails": [
+    "lineage"
+   ],
+   "lineage": {
+    "calls": false,
+    "kit": false,
+    "travels": false
+   },
+   "markup": 7,
+   "node": "Cadence Status",
+   "subject": [
+    "lineage"
+   ],
+   "workflow": "SEO Agent \u2014 Content Cadence"
+  },
+  "SEO Agent \u2014 Link Builder / LB Doc": {
+   "fails": [],
+   "lineage": {
+    "calls": true,
+    "kit": true,
+    "travels": true
+   },
+   "markup": 29,
+   "node": "LB Doc",
+   "subject": [
+    "lineage"
+   ],
+   "workflow": "SEO Agent \u2014 Link Builder"
+  },
+  "SEO Agent \u2014 Link Builder / LB Report": {
+   "fails": [],
+   "lineage": {
+    "calls": true,
+    "kit": true,
+    "travels": true
+   },
+   "markup": 23,
+   "node": "LB Report",
+   "subject": [
+    "lineage"
+   ],
+   "workflow": "SEO Agent \u2014 Link Builder"
+  },
+  "SEO Agent \u2014 Rank Tracker / Tracker Report": {
+   "fails": [],
+   "like_for_like": {
+    "report_type": true,
+    "sample": true
+   },
+   "lineage": {
+    "calls": true,
+    "kit": true,
+    "travels": true
+   },
+   "markup": 23,
+   "node": "Tracker Report",
+   "subject": [
+    "lineage",
+    "like_for_like"
+   ],
+   "workflow": "SEO Agent \u2014 Rank Tracker"
+  },
+  "SEO Agent \u2014 Site Tracker / Site Metrics": {
+   "fails": [],
+   "like_for_like": {
+    "report_type": true,
+    "sample": true
+   },
+   "markup": 0,
+   "node": "Site Metrics",
+   "subject": [
+    "like_for_like"
+   ],
+   "workflow": "SEO Agent \u2014 Site Tracker"
+  },
+  "SEO Agent \u2014 Site Tracker / Site Report": {
+   "fails": [],
+   "like_for_like": {
+    "report_type": true,
+    "sample": true
+   },
+   "lineage": {
+    "calls": true,
+    "kit": true,
+    "travels": true
+   },
+   "markup": 36,
+   "node": "Site Report",
+   "subject": [
+    "lineage",
+    "like_for_like"
+   ],
+   "workflow": "SEO Agent \u2014 Site Tracker"
+  }
+ },
+ "selftest": {
+  "a_delta_against_an_unlike_previous_report": {
+   "caught": true,
+   "fails": [
+    "like_for_like"
+   ],
+   "subject": [
+    "lineage",
+    "like_for_like"
+   ]
+  },
+  "a_delta_that_compares_like_with_like": {
+   "caught": true,
+   "fails": [],
+   "subject": [
+    "lineage",
+    "like_for_like"
+   ]
+  },
+  "a_report_with_lineage_passes": {
+   "caught": true,
+   "fails": [],
+   "subject": [
+    "lineage"
+   ]
+  },
+  "a_score_that_can_be_withheld": {
+   "caught": true,
+   "fails": [],
+   "subject": [
+    "lineage",
+    "withheld"
+   ]
+  },
+  "a_score_that_cannot_be_withheld": {
+   "caught": true,
+   "fails": [
+    "withheld"
+   ],
+   "subject": [
+    "lineage",
+    "withheld"
+   ]
+  },
+  "findings_run_through_the_guard": {
+   "caught": true,
+   "fails": [],
+   "subject": [
+    "lineage",
+    "evidence"
+   ]
+  },
+  "findings_with_no_evidence_guard": {
+   "caught": true,
+   "fails": [
+    "evidence"
+   ],
+   "subject": [
+    "lineage",
+    "evidence"
+   ]
+  },
+  "the_kit_renames_its_entry_point": {
+   "caught": true
+  },
+  "the_report_loses_its_lineage": {
+   "caught": true,
+   "fails": [
+    "lineage"
+   ],
+   "subject": [
+    "lineage"
+   ]
+  }
+ },
+ "unpaid": {
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Analyze Probes": [
+   "evidence"
+  ],
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Blog Package": [
+   "lineage",
+   "withheld"
+  ],
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Build Keyword Strategy": [
+   "lineage"
+  ],
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Build Word File": [
+   "lineage"
+  ],
+  "SEO Agent \u2014 AI Visibility Tracker / AI Metrics": [
+   "like_for_like"
+  ],
+  "SEO Agent \u2014 Backlink Monitor / Parse Backlinks": [
+   "like_for_like"
+  ],
+  "SEO Agent \u2014 Console Alerts / Alert Target": [
+   "lineage"
+  ],
+  "SEO Agent \u2014 Content Cadence / Cadence Note": [
+   "lineage"
+  ],
+  "SEO Agent \u2014 Content Cadence / Cadence Status": [
+   "lineage"
+  ]
+ }
+}

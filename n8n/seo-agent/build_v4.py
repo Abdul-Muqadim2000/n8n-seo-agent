@@ -6767,6 +6767,139 @@ sticky("""### One search, one page — decided by the results page, not by a lab
     pos('Ladder Cluster Requests')[0] - 60, pos('Ladder Cluster Requests')[1] + 240, 1160, 280, 4)
 log('One search, one page, decided by the results page and not by a label (2026-10-15, benchmark area 2, rows B2-4 / B2-5 with B2-6 as its convention; BENCH_AREA2_ladders.md gaps 5 and 6). B2-4: the ladder now buys ONE DataForSEO results page per rung candidate (Ladder Cluster Requests -> Cluster SERP Wanted? -> Run Ladder Cluster SERP -> Ladder Cluster Retry -> Any Cluster Retries? -> Wait Before Cluster Retry -> Run Ladder Cluster SERP (Retry) -> Ladder Clusters, on the main path between the pool and the relevance screen) and groups the rungs with KWI.serpClusters on the TOP 7 at a 40% shared-URL threshold - Keyword Insights own current numbers, approved by the owner as B2-6 - instead of on the AI topic label, so two searches Google answers with the same pages become one page; every member of a cluster takes its head keyword\'s rung, a group built on shared results pages is never split by the topic-label cap, and the plan, the report and the callback print the groups, what they merged, the cap (24 keywords, about $0.048 at $0.002 a call), what was really spent (counted once by task id, R28) and - INVARIANTS rule 1 - every keyword whose results page could not be read twice, with the provider\'s own reason, uncompared and unmerged rather than silently dropped; a free_only run, ladder_serp_checks 0 or a pool with fewer than two on-topic candidates buys nothing. The in-200 retry gate (_dfs_retry.js, R18) covers both new calls and the build proves it against harness/in200_baseline.json. B2-5: the destination\'s results page is counted for distinct REGISTRABLE domains (LK.regDomain, the helper the competitor gate has used since R21, so a rival on a subdomain is not a second site) and that moves the feasibility score by a stated rule - 6 points at five domains or fewer, 3 at six or seven, nothing at eight or more - with the count labelled measured, the adjustment labelled a stated rule and both printed in the plan notes, the feasibility section and the callback. The per-mode DataForSEO estimate for a ladder goes 0.16 -> 0.21 (exec 495 measured $0.1162 plus 24 calls at $0.002) in v5/code/_cost_cal.js and in app/shared/src/cost.ts')
 
+# =============================================================================
+# 72. A NUMBER WE REPORT IS MEASURED, OR IT SAYS WHAT IT IS (2026-10-15, docs/system-review-2026-10-14/INVARIANTS.md rule 1).
+#     The third of the four lints the INVARIANTS note argues for, and the one that covers the most defects: ~19 of the 81, among
+#     them every one that made the system state something untrue with a straight face — a High finding on 45 of 47 pages from a
+#     field Google no longer answers (R10); an impact basis of 22,860 impressions for a property that measured 5,295 (R10); "no
+#     page of yours answers this search" beside the page ranking #6.2 for it (R12); 19,579 citing AI answers from a four-character
+#     name match (R14); "winnable 68" from two SERP calls that both failed (R18 / R23); a health score chained across unlike
+#     report types (R20); a crawl settled at the price quoted for 200 pages when 47 were crawled (R32).
+#
+#     Each of those was fixed where it was found. `lineage_lint.py` walks the GENERATED workflows — the way section 55 walks the
+#     ledger ordering and `gate_lint.py` walks the gate pairs — and asks the four questions of the class instead:
+#       A. **lineage**      a node that composes a document a customer receives carries `_lineage.js`, calls it, and lets the
+#                           result travel out. G29 built the kit; this is what makes it the rule rather than a habit.
+#       B. **evidence**     no finding ships with an empty evidence string (R10, promoted from one finding to every finding).
+#       C. **like-for-like** no delta is computed across differing `report_type` or differing sample sizes (R20 + R19).
+#       D. **withheld**     a node that puts a score in front of a customer carries a way of not showing it (R18 / R23).
+#
+#     **What it proves and what it only ratchets**, because a lint that claims more than it proves is the failure mode this rule
+#     exists to stop. It PROVES that no new node can join any of the four classes without its guard: the survey is over the
+#     generated JSON, the four questions are structural, and a node that fails one and is not on the baseline fails the build. It
+#     RATCHETS `harness/lineage_baseline.json` — today's unpaid debt, named node by node — and it does NOT prove that every
+#     individual figure inside a node that passes carries its own lineage: `LN.of()` says the node was built to say where a number
+#     came from, not that the number beside it did. The detector reads each node's OWN code with the shared kits stripped out,
+#     because judging a node on text it did not write is how a lint starts lying (inlining `_lineage.js` would otherwise make any
+#     node a "report builder", and `_page_watch.js` made eleven nodes "delta" nodes before that was fixed).
+#
+#     Two of the debts are paid here rather than listed, because the inventory found them and they are small:
+#       * **the audit shipped seven findings with no evidence at all.** `addDomain` defaulted `evidence` to `''`, so "Invalid SSL
+#         certificate", "HTTP does not redirect to HTTPS", "No XML sitemap found", "No robots.txt file", "Missing pages do not
+#         return a real 404", "Directory browsing is enabled" and "HTTP/2 not enabled" were raised, scored and ranked with nothing
+#         a reader could check — exactly R10's shape, still live. Each now states the site-wide check that produced it. And the
+#         guard runs at the sink: `Build Site Issues` merges every module's findings, so `LN.evidenced` there covers the probe,
+#         the Search Console findings and the AI content review in one place, before anything is scored — and says in the report's
+#         notes what it held back, rather than letting it vanish.
+#       * **the technical site audit had no lineage at all.** The full report has carried its "Where these numbers come from"
+#         table since G29; the audit — 260 pieces of markup, the same crawl, the same Search Console, the same Lighthouse numbers
+#         — had none. It has one now, and it travels in the callback.
+# =============================================================================
+import lineage_lint as _ll72
+
+# ---------- A. no finding ships with an empty evidence string (R10, as the class) ----------
+# A1. the seven site-wide findings say what was checked. The flag is inserted after the condition, whatever the condition is.
+patch('Build Site Issues',
+      "const addDomain = (cond, cat, sev, title, why, fix, evidence) => {\n"
+      "  if (cond) findings.push({ category: cat, severity: sev, title, why, fix, evidence: evidence || '', affected_count: null, affected_pct: 100, sample_urls: [], scope: 'site' });",
+      "const addDomain = (cond, flag, cat, sev, title, why, fix, evidence) => {\n"
+      "  // INVARIANTS rule 1 (2026-10-15): these seven findings shipped with an EMPTY evidence string — raised, scored and ranked\n"
+      "  // with nothing a reader could check, which is R10's shape. The evidence is the check that produced them: which site-wide\n"
+      "  // test ran, what it answered, and that it is one answer for the whole site and not a count of pages.\n"
+      "  if (cond) findings.push({ category: cat, severity: sev, title, why, fix, evidence: evidence || (\"the crawler's site-wide check \" + flag + ' answered \"failed\" for ' + String(base.domain || di.name || 'this site') + ' — one answer for the whole site, not a count of pages'), affected_count: null, affected_pct: 100, sample_urls: [], scope: 'site' });")
+
+
+def _flag72(m):
+    cond, cat0 = m.group(1), m.group(2)
+    fm = re.search(r'dc\.(\w+)', cond)
+    assert fm, 'rule 1: an addDomain condition with no dc.<check> to name as its evidence: ' + cond[:90]
+    return "addDomain(%s, '%s', '%s" % (cond, fm.group(1), cat0)
+
+
+_bsi72, _nflag72 = re.subn(r"addDomain\((.+?), '([A-Z])", _flag72, code('Build Site Issues'))
+assert _nflag72 == 7, 'rule 1: expected 7 addDomain call sites to name their check, found %d' % _nflag72
+setcode('Build Site Issues', _bsi72)
+# A2. the guard at the sink: after every module's findings are merged and deduplicated, before anything is scored or ranked
+setcode('Build Site Issues', LINEAGE_SRC47 + '\n' + code('Build Site Issues'))
+patch('Build Site Issues', "  findings.splice(0, findings.length, ...kept); }\n",
+      "  findings.splice(0, findings.length, ...kept); }\n\n"
+      "// ===== 4c. INVARIANTS rule 1 (2026-10-15, lineage_lint.py): a finding is a figure — it may not be shown without the thing\n"
+      "// that shows it. R10 shipped a High finding on 45 of 47 pages whose evidence string was \"/:  | /whatwedo/ai-automation: \" —\n"
+      "// separators and nothing else. The guard runs HERE, where every module's findings (the probe, Search Console, the AI content\n"
+      "// review, the render diff) have been merged, and BEFORE scoring, so an unevidenced finding neither deducts a point nor\n"
+      "// reaches the report. What it held back is said out loud in the notes: held back, never vanished. =====\n"
+      "const evidence_withheld = LN.unevidenced(findings);\n"
+      "if (evidence_withheld.length) findings.splice(0, findings.length, ...LN.evidenced(findings));\n")
+patch('Build Site Issues', "      not_assessed,\n", "      not_assessed,\n      evidence_withheld,\n")
+patch('Build Site Issues', "      notes: [probe.note,", "      notes: [LN.evidenceNote(evidence_withheld), probe.note,")
+
+# ---------- B. the technical site audit says where its numbers come from (G29, finished) ----------
+setcode('Build Audit Report', LINEAGE_SRC47 + '\n' + code('Build Audit Report'))
+_LIN72 = """// INVARIANTS rule 1 (2026-10-15): the figure groups of a technical audit with their source, period and sample (LN, v5/code/_lineage.js).
+// G29 gave the full report this table and left the audit without one, so the same crawl, the same Search Console numbers and the
+// same Lighthouse scores were printed here with nothing to tell them apart.
+const _sc72 = a.search_console || {};
+const _ins72 = _sc72.inspection_stats || {};
+const lineage = [
+  LN.of('Health score, the grade and the category scores', 'crawl', { basis: 'modelled', period: LN.asOf(a.audited_at || today), sample: LN.sample(a.pages_crawled, 'pages crawled'),
+    note: 'our own 0-100 score: points off per finding by severity (section 7), not a Google figure' }),
+  LN.of('The findings and how many pages each one affects', 'crawl', { basis: 'measured', period: LN.asOf(a.audited_at || today), sample: LN.sample(a.pages_crawled, 'pages crawled'),
+    note: 'each finding states the pages it was measured on; a finding with nothing to show for it is left out and named in the notes' }),
+  _sc72.connected
+    ? LN.of('Clicks, impressions and index coverage', 'gsc', { basis: 'measured', period: 'the last 28 days', sample: LN.sample((_sc72.totals || {}).impressions, 'impressions'), note: 'property ' + String(_sc72.property || '') })
+    : LN.unknown('Clicks, impressions and index coverage', String(_sc72.error || 'Search Console is not connected for this site')),
+  _ins72.asked
+    ? LN.of('What Google says about each key page', 'inspection', { basis: 'measured', period: LN.asOf(today), sample: LN.sample(_ins72.checked, 'of ' + _ins72.asked + ' pages Google answered for'), note: String(_ins72.note || '') })
+    : LN.unknown('What Google says about each key page', 'no URL inspection ran for this audit'),
+  (a.crux && a.crux.available !== false)
+    ? LN.of('Core Web Vitals (real users)', 'crux', { basis: 'measured', period: 'the last 28 days of Chrome visits', sample: 'all Chrome visitors Google could aggregate' })
+    : LN.unknown('Core Web Vitals (real users)', String(((a.crux || {}).note) || 'too few Chrome visits for Google to report field data')),
+  LN.of('Lighthouse scores and speed savings', 'pagespeed', { basis: 'one_sample', period: LN.asOf(today), sample: 'one simulated mobile load per page tested' }),
+  LN.of('Crawler access for search and AI bots', 'own_check', { basis: 'measured', period: LN.asOf(today), sample: '11 user agents requested', note: 'what the live robots.txt and the server answered us' }),
+];
+html += `<h2>6a. Where these numbers come from</h2>` + LN.block(lineage, { title: '' });
+"""
+patch('Build Audit Report', "// ---------- 7. Methodology ----------\n", _LIN72 + "\n// ---------- 7. Methodology ----------\n")
+patch('Build Audit Report', "<li>Not Assessed in This Audit</li><li>Methodology</li></ol>`;",
+      "<li>Not Assessed in This Audit</li><li>Where these numbers come from (6a)</li><li>Methodology</li></ol>`;")
+patch('Build Audit Report', "    health_score: a.health_score,\n", "    health_score: a.health_score,\n    lineage,\n")
+
+# ---------- C. what the paid items must keep ----------
+assert "LN.unevidenced(findings)" in code('Build Site Issues') and "LN.evidenced(findings)" in code('Build Site Issues'), \
+    'rule 1: the audit findings no longer run through the evidence guard'
+assert "evidence: evidence || (\"the crawler's site-wide check \"" in code('Build Site Issues'), \
+    'rule 1: addDomain can ship an empty evidence string again'
+assert 'Where these numbers come from' in code('Build Audit Report') and 'const LN = (() => {' in code('Build Audit Report'), \
+    'rule 1: the technical site audit has no lineage'
+
+
+def _b72_checks():
+    """INVARIANTS rule 1 over every generated workflow. Runs after the four sub-builds, next to section 55's ordering proof."""
+    _sv72, _unpaid72 = _ll72.check()
+    _c72 = _ll72.counts(_sv72)
+    print('INVARIANTS rule 1 (lineage): ' + ', '.join(
+        '%s %d/%d' % (k, v['pass'], v['subject']) for k, v in sorted(_c72.items()))
+        + '; %d node(s) on the ratchet baseline' % len(_unpaid72))
+
+
+sticky("""### A number we report is measured, or it says what it is (INVARIANTS rule 1)
+`lineage_lint.py` walks the **generated** workflows at build time and fails the build on four things, so none of them can be reintroduced: a node that composes a document a customer receives without carrying `_lineage.js`; a **finding with an empty evidence string**; a **delta** computed across a different `report_type` or a sample that moved; a **score** with no way of being withheld when its inputs are unavailable.
+**Paid here:** the audit's seven site-wide findings (SSL, HTTPS redirect, sitemap, robots.txt, 404, directory browsing, HTTP/2) stated **nothing** a reader could check - they now name the check that produced them; `LN.evidenced` runs at the sink (*Build Site Issues*, after every module's findings are merged, before scoring) and the report's notes say what it held back; and the **technical site audit** gained the "Where these numbers come from" table the full report has had since G29.
+**Ratcheted, not proven:** `harness/lineage_baseline.json` names today's unpaid debt. The lint proves no NEW node can join a class; it does not prove that every figure inside a passing node carries its own lineage.""",
+    pos('Build Site Issues')[0] - 60, pos('Build Site Issues')[1] + 300, 1140, 290, 4)
+log('A number we report is measured, or it says what it is (2026-10-15, INVARIANTS.md rule 1 - the class behind ~19 of the 81 defects). lineage_lint.py walks the GENERATED workflows the way section 55 walks the ledger ordering and gate_lint.py walks the gate pairs, and fails the build on four things: a node that composes a document a customer receives and does not carry v5/code/_lineage.js (carry it, call it, let it travel); a finding that ships with an empty evidence string (R10, promoted from one finding to every finding); a delta computed against a stored earlier report of a different report_type or over a sample that moved (R20 + R19, promoted from the chart marks and the URL inspections to every node that subtracts a stored figure, with the annotation kit itself in the class); and a score put in front of a customer with no path that withholds it when an input is unavailable (R18 / R23). Each node reads with the SHARED KITS STRIPPED OUT, because judging a node on text it did not write is how a lint starts lying - inlining _lineage.js would otherwise make any node a report builder, and _page_watch.js made eleven nodes delta nodes. Two debts the inventory found are paid rather than listed: the audit raised SEVEN site-wide findings (invalid SSL, no HTTPS redirect, no sitemap, no robots.txt, no real 404, directory browsing, no HTTP/2) with an EMPTY evidence string - scored and ranked with nothing a reader could check, R10 still live - and each now names the site-wide check that produced it, with LN.evidenced running at the sink (Build Site Issues, after every module merges and before anything is scored) and the held-back findings named in the report notes instead of vanishing; and the technical site audit, which had no lineage at all while the full report has had its "Where these numbers come from" table since G29, now carries one (health score modelled from the crawl, Search Console measured over 28 days or unavailable with Google\'s reason, URL inspection with how many pages Google answered for, CrUX measured or unavailable with why, Lighthouse as one simulated load, crawler access from our own fetch) and it travels in the callback. Everything the lint cannot yet prove is a ratchet in harness/lineage_baseline.json, named node by node, exactly as retry_lint.check_in200 and gate_lint keep theirs: the debt is visible, cannot grow, and a node that gains its guard leaves the list for ever')
+
+
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:
 #     "two fixes have never come back and both are enforced by the build".
@@ -6895,6 +7028,8 @@ _r31_checks()
 _b64_checks()
 # section 67 (B4-1 / B4-2 / B4-3): the decay test, what stores it and what acts on it, in the Site Tracker and the Cadence
 _b67_checks()
+# section 72 (INVARIANTS rule 1): lineage, evidence, like-for-like deltas and withheld scores over every generated workflow
+_b72_checks()
 # section 69 (B-F5 + INVARIANTS rule 2): deterministic node ids over every generated workflow, the settings refusal's self-test,
 # and the gate-pair lint. Last, because the id freeze rewrites the files the checks above have just finished reading.
 _b69_checks()
