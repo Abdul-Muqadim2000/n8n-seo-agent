@@ -6491,6 +6491,62 @@ log('A ladder plan measured on its own topic, with the inventory it starts from 
 
 
 # =============================================================================
+# 68. THE NUMBER A SOURCE STATES, AND A GATE THAT HAS TO REFUSE (2026-10-15, benchmark programme area 3 —
+#     docs/system-review-2026-10-14/BENCH_AREA3_content.md; rows B3-1, B3-2, B3-3)
+# =============================================================================
+# Two things were proven by running the node code, not read off a register.
+#
+# B3-1 / B3-2 — the money mask was the strictest check in the system and the least informed one. It ran at §3, before anything else,
+# and rewrote `md` irreversibly; its evidence was `prev.facts` plus the customer's own text. Forty lines later §9b checked every OTHER
+# figure against the full source corpus this run had fetched — `facts` (text + claim + title), the brief's evidence plan and the
+# competitor pages — and kept whatever a cited source stated. So the two checks disagreed about the same sentence of the same page:
+# a probe on the shipped code put "AED 5,000", "AED 500" and "AED 10,000" and the percentage "42%" in one paragraph, every one of them
+# verbatim in the cited mof.gov.ae text the run had read. The percentage survived. All seven currency amounts became `[Price]`.
+# The delivered "uae e invoicing penalties" page is the live proof: **43 × [Price]**, including the Fine column of its own comparison
+# table, under a correct citation of the Ministry of Finance decision that states every one of those fines. Those 43 tokens then put
+# `placeholder_count` over `PH_MAX` (5), so the page was refused as not publishable — the mask manufactured the refusal.
+# And the classifier let a price VERB decide a statutory subject: the guard was `(big || OTHER_WORDS) && !PRICE_WORDS`, and "costs"
+# is a PRICE_WORD, so "the penalty costs AED 5,000 per month" was treated as our own pricing and the number was destroyed rather than
+# put in front of the reviewer as `[Confirm: AED 5,000]`.
+# Both checks now read one corpus, built once in §2b above the mask, and an amount is kept when a source cited IN THAT SENTENCE states
+# it — exactly §9b's rule. A fine, penalty, threshold, levy, duty, violation or sanction is never our price, so it is flagged for
+# review, never erased. What the mask does remove is now named with its sentence: `[Price] x43` is nothing the owner can answer, while
+# "AED 5,000" in the sentence it came from is a question they can settle in one reading.
+#
+# B3-3 — *Content QA* finalises the delivery gate (`quality`, `not_ready`, `quality_label`, `publishable`, the reasons) and
+# *Originality Check* runs AFTER it, flipping only `passed` / `passed_copy` / `editor_needed`. On any round but the last the editor
+# loop still fired, so it was invisible. On the LAST round it was not: a probe fed the real node a draft 100% identical to a
+# competitor page with `rounds_left: 0`, and it came back `publishable: true`, `not_ready: false`,
+# `quality.label: "passed the quality check"`, reasons empty. Those exact fields drive the Word file's status line, the `-DRAFT` file
+# name, the package's "DID NOT PASS" banner, `meta.json`, the callback and the app — so a plagiarised page was delivered labelled as
+# having passed its quality check. The check now re-decides the gate it invalidated. A gate that fails must refuse, never only label.
+assert 'const srcText = new Map();' in code('Content QA').split('// 3. Prices become')[0], \
+    'B3-1: the source corpus is not built above the money mask, so the mask still reads less than the figure check'
+assert 'amountInCitedSource' in code('Content QA') and 'STATUTORY_WORDS' in code('Content QA'), \
+    'B3-1 / B3-2: the money mask does not consult the cited source, or still lets a price verb erase a statutory amount'
+assert code('Content QA').count('const srcText = new Map();') == 1, 'B3-1: the source corpus is built twice'
+assert 'masked_amounts, flagged_amounts, sourced_amounts,' in code('Content QA') and 'The amount(s) removed:' in code('Content QA'), \
+    'B3-2: the amounts the mask removed never reach the owner'
+assert 'qa.not_ready = !roundsLeft;' in code('Originality Check') and 'qa.publishable = false;' in code('Originality Check'), \
+    'B3-3: an originality failure still leaves the delivery gate saying the page passed'
+# the owner is told what happened to the money in the copy, next to the figures that were masked
+patch('Build Word File', """    ...(qa.placeholder_note && !qa.not_ready ? [['Figures still masked', '<span class="bad">' + esc(qa.placeholder_note) + '</span>']] : []),   // R25 (2026-10-14): a masked figure in the body is named even when the page is otherwise deliverable""",
+      """    ...(qa.placeholder_note && !qa.not_ready ? [['Figures still masked', '<span class="bad">' + esc(qa.placeholder_note) + '</span>']] : []),   // R25 (2026-10-14): a masked figure in the body is named even when the page is otherwise deliverable
+    ...((qa.sourced_amounts || []).length ? [['Amounts kept', esc((qa.sourced_amounts || []).slice(0, 6).map(a => a.amount + ' (' + a.source + ')').join(', ')) + ' \\u2014 each one is stated by the source cited in the same sentence']] : []),   // B3-1 (2026-10-15)""")
+patch('Build Word File', "    qa_placeholder_note: (qa.quality || {}).placeholder_note || '',   // R25 (2026-10-14): the app and the callback name the masked figures too",
+      "    qa_placeholder_note: (qa.quality || {}).placeholder_note || '',   // R25 (2026-10-14): the app and the callback name the masked figures too\n"
+      "    qa_amounts: { removed: qa.masked_amounts || [], for_review: qa.flagged_amounts || [], kept_from_source: qa.sourced_amounts || [] },   // B3-1 / B3-2 (2026-10-15)")
+assert 'qa_amounts' in code('Build Word File'), 'B3-1: the money the mask touched never reaches the callback'
+sticky("""### The number a source states, and a gate that has to refuse (B3-1 · B3-2 · B3-3, 2026-10-15)
+**The money mask knew less than the figure check beside it.** It ran first and rewrote the draft for good, judging an amount only against the facts on file — while the check forty lines later kept any other figure a cited source stated. So one sentence of one fetched page kept its "42%" and lost "AED 5,000", "AED 500" and "AED 10,000". The delivered penalties page shows it: **43 × [Price]**, its own Fine column included, under a correct citation of the decision that states every fine — and those 43 tokens are what put the page over the placeholder limit and had it refused. Both checks now read **one** corpus, and an amount a source cited **in that sentence** states is kept, with the source named.
+**A fine is never our price.** "costs" is a price word, so "the penalty costs AED 5,000 per month" was erased instead of being put in front of the reviewer. A fine, penalty, threshold, levy, duty or violation now always keeps its number as `[Confirm: …]`.
+**And what the mask does remove is named**, with the sentence it came from: `[Price] x43` is nothing an owner can answer.
+**A gate that fails must refuse, not label.** *Originality Check* runs after *Content QA* has already finalised the delivery gate, and flipped only `passed`. On the last round a draft **100% identical to a competitor page** came out `publishable: true`, `not_ready: false`, *"passed the quality check"* — which is what the file name, the package banner, meta.json, the callback and the app all read. It now re-decides the gate it invalidated.""",
+    pos('Content QA')[0] - 40, pos('Content QA')[1] + 420, 1120, 300, 3)
+log('The number a source states, and a gate that has to refuse (2026-10-15, benchmark area 3, rows B3-1 / B3-2 / B3-3; BENCH_AREA3_content.md). B3-1: Content QA\'s money mask ran before everything else and judged an amount only against the facts on file, while the figure check forty lines later kept any figure a cited source stated - so a probe on the node code kept "42%" and destroyed "AED 5,000", "AED 500" and "AED 10,000" from the same sentence of the same fetched page, and the delivered penalties page carries 43 x [Price] (its own Fine column included) under a correct citation of the decision that states every fine, which is what put it over the placeholder limit and had it refused; the source corpus is now built once above the mask and an amount a source cited in that sentence states is kept with the source named. B3-2: "costs" is a price word, so a statutory penalty was erased as if it were our own pricing - a fine, penalty, threshold, levy, duty, violation or sanction now always keeps its number as [Confirm: ...], and every amount the mask does remove is reported with the sentence it came from. B3-3: Originality Check runs after Content QA has finalised the delivery gate and flipped only `passed`, so on the last round a draft 100% identical to a competitor page was delivered with publishable: true, not_ready: false and the label "passed the quality check" - the fields the file name, the package banner, meta.json, the callback and the app all read; it now re-decides the gate it invalidated')
+
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 w['nodes'] = list(nodes.values())
