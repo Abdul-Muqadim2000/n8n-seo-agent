@@ -22,7 +22,9 @@ was inlined into. Four checks:
                    the state without it (a rule, no baseline), and a node that mints a forward state inline must carry the
                    evidence tokens for that state (a ratchet).
   B. **reversal**  a state that promises work in progress must have a way back: some node writes the row back to `planned` WITH a
-                   reason, so a refused run cannot leave a row claiming a page nobody wrote (R1).
+                   reason, so a refused run cannot leave a row claiming a page nobody wrote (R1). And -- B9-6 -- the list of
+                   tables this is asked of is DERIVED from the workflows, not hand-written: a table a run moves to `writing`
+                   with no declared way back fails the build, which is the hole `seo_ai_targets` sat in for three releases.
   C. **delivery**  a node may not write `delivered` to a value that means "somebody has it" without judging a status code, and an
                    HTTP node it reads may not be `neverError` without `fullResponse` -- that combination is literally how a 404
                    was recorded as a delivery (B-F2). A workflow that OPENS a delivery record must also contain the node that
@@ -102,7 +104,13 @@ def own_code(js):
 # is covered by check B instead (its failure mode is a row that never comes back, which is R1).
 PROMISES = [
     {'state': 'written',
-     'evidence': ('article_html', 'page_markdown', "$('Blog Package')", "$('Build Word File')"),
+     # B9-6 (2026-10-15): the artefact itself, OR the content-log row that was written FROM the artefact. *Content Log Row*
+     # sets `seo_content_log.status = 'written'` only when the page text exists, so R1's own rule -- "a page counts as written
+     # only on a `written` content-log row" -- is proof one hop away, and the nodes that follow it (the cadence's AI-target
+     # settle) must be allowed to say so. The limit is stated rather than implied: this token says the node READ the log, not
+     # that it required the row's status to be `written`; the harness scenario is what proves that half.
+     'evidence': ('article_html', 'page_markdown', "$('Blog Package')", "$('Build Word File')",
+                  "$('Load Content Log')", "$('Load Content Log (Run)')"),
      'why': 'D10 / R1: a row saying a page was written while no page was written is read by the ladder plan, the Rank Tracker and '
             "the Content Cadence as a page that exists -- the cadence paused itself on pages nobody had",
      'how': "read the artefact itself -- the page text from the node that produced it -- and emit no row when it is empty "
@@ -149,7 +157,34 @@ REVERSALS = [
             'promised the page, the Rank Tracker said "already written -- publish it" and the cadence counted it among the '
             'pages waiting for publication and paused itself. fix_phantom_pages.py exists because of this.',
      'how': 'keep a node that writes the row back to `planned` with its reason in `status_note` (*Refused Ladder Row*)'},
+    {'table': 'seo_ai_targets', 'forward': 'writing', 'back': 'queued', 'reason': 'reason',
+     'why': 'B9-6: the Content Cadence marked an AI target `writing` and stamped `written_at` the moment it STARTED a page '
+            'run, and nothing ever wrote the row forward or back -- so a refused or failed run left the question claiming '
+            'work in progress for ever and it was never queued again. R1\'s class, in the one table R1 did not cover.',
+     'how': 'keep a node that writes the row back to `queued` with its reason in `reason` (*AI Target Marks*, when the '
+            'content run could not be started), and settle the forward state against the evidence (*AI Target Settle*)'},
 ]
+
+# ---- B2. and the registry may not go stale: a table a run moves to a work-in-progress state must be DECLARED above --------
+# This is the hole B9-6 fell through. Check B is a rule, but it was only ever asked of the tables somebody had listed, and the
+# list was written from R1's one instance. `seo_ai_targets` was moved to `writing` by the Content Cadence from v4.12 on and no
+# lint ever asked the question, because no line of this file named the table. The registry is now DERIVED from the generated
+# workflows and only its answers are declared: a new table that mints a work-in-progress state fails the build until someone
+# says what its way back is and proves it exists.
+WIP_STATES = ('writing',)
+WIP_WHY = ('a state that means "being done" with no declared way back is how R1 and B9-6 both happened: the row outlives the '
+           'run that made the promise, and a reader that tests for the state believes it')
+WIP_HOW = ('add the table to state_lint.REVERSALS with the state it comes back to and the field that carries the reason, then '
+           'build the node that writes it back -- the declaration alone does not pass, check B still has to find the writer')
+# A state nothing reads back is not this defect, and the derived registry proved it on its first run: `seo_case_studies` rows
+# also start at `writing`, but there the ROW is the artefact (the proof the owner typed in), and both readers already refuse
+# anything unpublished -- *Brief Context* hands a later page `url: ''` unless `status === 'published'`, and the Link Builder
+# takes a case study only when it has a `page_url`. What R1 and B9-6 share is a reader that TESTS for the state and changes
+# what the system does, so that is the question, and a table with no such reader is recorded with that reason, not passed in
+# silence. A Code node names the loader it takes rows from -- directly or through a helper, so the quoted NODE NAME is the
+# signal, not `$(` -- and tests the state in a comparison or a membership check (a mention in a comment is not a reader).
+_READS_STATE = (r"""(?:===|!==|==|!=)\s*['"]%s['"]""", r"""['"]%s['"]\s*(?:===|!==|==|!=)""",
+                r"""\[[^\]\n]*['"]%s['"]""", r"""includes\(\s*['"]%s['"]""")
 
 # ---- C. a delivery is recorded only on an acknowledgement -------------------------------------------------------------------
 # What opens a delivery record, and what settles one. Both are kit entry points, so a rename breaks the build rather than the rule.
@@ -247,8 +282,10 @@ def survey(workflows=None):
     """-> {'promise': [...], 'builders': [...], 'reversal': [...], 'delivery': [...], 'verdict': [...]} over the generated
     workflows. Every row carries `ok` and, when it is False, `fail` in words."""
     wfs = list(workflows if workflows is not None else _workflows())
-    out = {'promise': [], 'builders': [], 'stored': [], 'reversal': [], 'delivery': [], 'verdict': []}
+    out = {'promise': [], 'builders': [], 'stored': [], 'reversal': [], 'declared': [], 'delivery': [], 'verdict': []}
     back_seen = {}
+    wip_seen = {}            # B2: (table, state) -> the nodes that move a row INTO it
+    wip_read = {}            # B2: (table, state) -> the nodes that test for the state afterwards and act on it
     for _f, w in wfs:
         wname = w.get('name') or ''
         nodes = {n['name']: n for n in (w.get('nodes') or [])}
@@ -327,6 +364,33 @@ def survey(workflows=None):
                                                          % (', '.join('%s="%s"' % (k, (cols.get('value') or {})[k]) for k in minted),
                                                             writes[nm], ', '.join(sorted(set(unproven))[:3]) or 'the trigger',
                                                             ', '.join(PROOF_WORDS)))})
+
+        # ---------- B2. which tables are moved to a work-in-progress state at all (the registry, derived) ----------
+        # Both ways a row reaches that state: a Code node that builds it and a Data Table node that writes the literal itself.
+        loads = {nm: _table(n) for nm, n in nodes.items()
+                 if n.get('type') == DT_TYPE and ((n.get('parameters') or {}).get('operation') == 'get')}
+        for st in WIP_STATES:
+            for nm, raw in code.items():
+                js = own_code(raw)
+                if not any(re.search(pat % re.escape(st), js) for pat in _READS_STATE):
+                    continue
+                for ldr, tbl in loads.items():
+                    if tbl and ("'" + ldr + "'") in js:
+                        wip_read.setdefault(tbl + '|' + st, []).append(wname + ' / ' + nm)
+        for st in WIP_STATES:
+            for nm, raw in code.items():
+                if not re.search(r"""status\s*:\s*['"]%s['"]""" % st, own_code(raw)):
+                    continue
+                for tbl in (_own_writes(nm, down, nodes, writes) or {writes[r] for r in (_reach([nm], down) & set(writes))}):
+                    wip_seen.setdefault(tbl + '|' + st, []).append(wname + ' / ' + nm)
+            for nm, n in nodes.items():
+                if nm not in writes:
+                    continue
+                cols = ((n.get('parameters') or {}).get('columns') or {})
+                if cols.get('mappingMode') != 'defineBelow':
+                    continue
+                if (cols.get('value') or {}).get('status') == st:
+                    wip_seen.setdefault(writes[nm] + '|' + st, []).append(wname + ' / ' + nm)
 
         # ---------- B. the way back (collected across workflows: the refusal may live in another one) ----------
         for r in REVERSALS:
@@ -414,6 +478,18 @@ def survey(workflows=None):
                                            'banner, meta.json, the callback and the app read keep saying the page passed'
                                            % (v['verdict_node'], ', '.join(touched), ', '.join(missing)))})
 
+    declared = {r['table'] + '|' + r['forward'] for r in REVERSALS}
+    for key, writers in sorted(wip_seen.items()):
+        tbl, st = key.split('|', 1)
+        readers = sorted(set(wip_read.get(key) or []))
+        ok = key in declared or not readers
+        out['declared'].append({'table': tbl, 'forward': st, 'writers': sorted(set(writers)), 'readers': readers,
+                                'is_declared': key in declared, 'ok': ok,
+                                'node': sorted(set(writers))[0] if writers else '', 'why': WIP_WHY, 'how': WIP_HOW,
+                                'fail': '' if ok else (
+                                    '%s is moved to "%s" by %s, the state is read back and acted on by %s, and '
+                                    'state_lint.REVERSALS declares no way back'
+                                    % (tbl, st, ', '.join(sorted(set(writers))[:3]), ', '.join(readers[:3])))})
     for r in REVERSALS:
         key = r['table'] + '|' + r['forward']
         out['reversal'].append({'table': r['table'], 'forward': r['forward'], 'back': r['back'],
@@ -637,6 +713,28 @@ def selftest():
         sv = survey(wf([js('Marks', src), ladders], {'Marks': {'main': [[{'node': 'Save Ladder'}]]}}))
         row = (sv['reversal'] or [{}])[0]
         res[name] = {'ok': row.get('ok'), 'caught': row.get('ok') is expect, 'fail': row.get('fail', '')}
+
+    # ---- 3b. a NEW table moved to "writing" that nobody declared a way back for (B9-6: the hole check B itself had) ----
+    NEW = 'seo_a_table_nobody_declared'
+    targets = dt('Save Target', NEW)
+    loader = {'name': 'Load Targets', 'type': DT_TYPE,
+              'parameters': {'operation': 'get', 'dataTableId': {'__rl': True, 'mode': 'name', 'value': NEW}}}
+    reader = js('Plan', "const rows = rowsOf('Load Targets');\nconst stuck = rows.filter(r => r.status === 'writing');")
+    mark = js('Marks', "return [{ json: { status: 'writing' } }];")
+    conn3b = {'Marks': {'main': [[{'node': 'Save Target'}]]}}
+    sv = survey(wf([mark, targets, loader, reader], conn3b))
+    row = next((r for r in sv['declared'] if r['table'] == NEW), {})
+    res['a_new_table_moved_to_writing_that_nobody_declared'] = {'ok': row.get('ok'), 'caught': row.get('ok') is False,
+                                                                'readers': row.get('readers', []), 'fail': row.get('fail', '')}
+    # the same table with nothing that tests the state: the row IS the artefact (seo_case_studies), so it is not this defect
+    sv = survey(wf([mark, targets, loader], conn3b))
+    row = next((r for r in sv['declared'] if r['table'] == NEW), {})
+    res['a_table_moved_to_writing_that_nothing_reads_back'] = {'ok': row.get('ok'), 'caught': row.get('ok') is True,
+                                                               'readers': row.get('readers', []), 'fail': row.get('fail', '')}
+    sv = survey(wf([mark, ladders], {'Marks': {'main': [[{'node': 'Save Ladder'}]]}}))
+    row = next((r for r in sv['declared'] if r['table'] == 'seo_ladders'), {})
+    res['a_declared_table_moved_to_writing'] = {'ok': row.get('ok'), 'caught': row.get('ok') is True,
+                                                'fail': row.get('fail', '')}
 
     # ---- 4. a delivery recorded from a status code, and one recorded from a blind POST (B-F2) ----
     ops = dt('Save Alert', 'seo_ops_alerts')

@@ -13741,5 +13741,120 @@ await guard('ai growth benchmark (area 9)', async () => {
 });
 
 
+// S95 (2026-10-15, FIX_PLAN §3.16 rows B6-9 and B9-6 — build section 85) — one AI Overview figure in one place, and a state
+// that advances only on evidence. Both items exist because an earlier fix reached some paths and not all of them: B1-3 and
+// B6-1 replaced April 2025's flat AI Overview factor in two kits and left the third (`Ladder_Pool.js`), and B9-6's read half
+// landed while the Content Cadence went on marking an AI target `writing` the moment a page run STARTED, with nothing in the
+// system ever setting `written`.
+// ===================================================================================
+await guard('B6-9 / B9-6 — one measured AI Overview figure, and a page counted only when a page exists', async () => {
+  reset(); const SN = 'S95 B6-9 / B9-6 — the ladder prices an AI Overview from the measured table, and an AI target advances only against a content-log row';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+
+  // ---------- 1. B6-9: the ladder pool stops pricing an AI Overview on its own ----------
+  const D95 = 'northwind-erp.com', SITE95 = 'site_northwind-erp-com';
+  // two keywords alike in every way the score touches, except that one results page carries an AI Overview
+  const kw95 = (keyword, types) => ({ se_type: 'google', keyword, keyword_info: { search_volume: 1000, cpc: 0, competition: 0.4, search_volume_trend: { yearly: 0 } },
+    keyword_properties: { keyword_difficulty: 50, words_count: keyword.split(' ').length }, search_intent_info: { main_intent: 'commercial' },
+    serp_info: { serp_item_types: types, se_results_count: 1000000 }, avg_backlinks_info: { referring_domains: 20 } });
+  mock('Parse Verdict', [{ json: { keyword: 'erp software uae', domain: D95, country: 'United Arab Emirates', location_code: 2784, language_code: 'en', goal: 'leads',
+    competitors: [], competitors_summary: [], business: 'ERP implementation partner in the UAE', services: ['ERP implementation'],
+    site_description: { business_description: 'ERP implementation partner in the UAE', products_or_services: ['ERP implementation'] },
+    keyword_data: { search_volume: 480, keyword_difficulty: 20 }, verdict: 'GO_WITH_CHANGES', secondary_keywords: [] } }]);
+  mock('Ladder Requests', [{ json: { kind: 'suggestions', label: 'suggestions', body: [{ keyword: 'erp software uae' }] } }]);
+  mock('Load Site Cache', [{ json: {} }]);
+  const pool95 = (await run('Ladder Pool', [V.task({ seed_keyword: 'erp software uae',
+    items: [kw95('erp software uae guide', ['organic', 'ai_overview']), kw95('erp software uae checklist', ['organic'])] })]))[0].json;
+  const byKw95 = (k) => (pool95.research.candidates || []).find(c => c.keyword === k) || {};
+  const aio95 = byKw95('erp software uae guide'), plain95 = byKw95('erp software uae checklist');
+  console.log('   ladder pool ->', JSON.stringify([aio95, plain95].map(c => [c.keyword, c.traffic_potential, c.traffic_basis, (c.click_loss || []).map(f => f.key + ':' + f.factor)])));
+  check('B6-9: an AI Overview costs the measured share of the clicks (Ahrefs, 300,000 keywords, December 2025 data), not April 2025\'s flat 35% — 145 visits a month and not the 195 the stale factor gave',
+    aio95.traffic_potential === 145 && plain95.traffic_potential === 300,
+    JSON.stringify([aio95.traffic_potential, plain95.traffic_potential]));
+  check('B6-9: it is the same kit discovery uses, so the figure says what it is — modelled, with the click loss named and the study behind it',
+    aio95.traffic_basis === 'modelled' && /Modelled, not measured/.test(aio95.traffic_note || '') && /AI Overview/.test(aio95.traffic_note || '')
+    && (aio95.click_loss || []).length === 1 && aio95.click_loss[0].key === 'ai_overview' && aio95.click_loss[0].basis === 'measured'
+    && /Ahrefs/.test(aio95.click_loss[0].source) && /December 2025/.test(aio95.click_loss[0].source)
+    && (plain95.click_loss || []).length === 0,
+    JSON.stringify([aio95.traffic_note, aio95.click_loss]));
+  check('B6-9: it is not a share, so the correction really moves the order the rungs are planned in — the AI Overview keyword now scores 0.483 of its twin, where the stale factor scored it 0.65',
+    aio95.pre_score < plain95.pre_score && Math.abs(aio95.pre_score / plain95.pre_score - 0.483) < 0.005,
+    JSON.stringify([aio95.pre_score, plain95.pre_score, aio95.pre_score / plain95.pre_score]));
+  // the class: the generated node carries the one kit and no flat factor of its own
+  const LPJS95 = require('fs').readFileSync((process.env.CODE_DIR || './code_v4') + '/Ladder_Pool.js', 'utf8');
+  const codeOnly95 = LPJS95.replace(/https:\/\//g, 'https_').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
+  check('B6-9 (the class): the generated Ladder Pool inlines the shared click-loss kit and carries no flat AI Overview factor of its own in executable code — the build refuses a fourth copy, while the comments that record the retired number survive',
+    /const KWI = \(\(/.test(LPJS95) && /KWI\.calibrate\(e, \{\}\)/.test(codeOnly95) && !/0\.65/.test(codeOnly95) && /0\.65/.test(LPJS95),
+    JSON.stringify({ kit: /const KWI = \(\(/.test(LPJS95), flat_in_code: /0\.65/.test(codeOnly95), kept_in_comment: /0\.65/.test(LPJS95) }));
+
+  // ---------- 2. B9-6: a spawn that failed does not leave a question "being written" ----------
+  reset();
+  const plan95 = (o) => ({ json: { site_id: SITE95, domain: D95, keyword: o.k, source: 'ai_answer', target_id: o.t, request_id: o.r, body: { request_id: o.r }, dry_run: !!o.dry, nothing_to_do: !!o.none } });
+  mock('Cadence Plan', [plan95({ k: 'what is peppol', t: 'ait_1', r: 'cad_1' }), plan95({ k: 'uae e-invoicing deadline', t: 'ait_2', r: 'cad_2' })]);
+  mock('Start Content Runs', [{ json: { ok: true } }, { json: { error: { message: 'Workflow is not active' } } }]);
+  const marks95 = (await run('AI Target Marks', [{ json: {} }])).map(r => r.json);
+  console.log('   ai target marks ->', JSON.stringify(marks95.map(m => [m.target_id, m.status, (m.reason || '').slice(0, 60)])));
+  check('B9-6 (INVARIANTS rule 4): the target whose page run started is `writing`; the one whose spawn FAILED goes back to `queued` with the error, so the question is picked again instead of claiming work in progress for ever',
+    marks95.length === 2 && marks95[0].status === 'writing' && marks95[0].request_id === 'cad_1'
+    && marks95[1].status === 'queued' && marks95[1].request_id === '' && marks95[1].written_at === ''
+    && /could not be started/.test(marks95[1].reason) && /Workflow is not active/.test(marks95[1].reason),
+    JSON.stringify(marks95));
+  check('B9-6: the row that IS marked says in its own words that nothing has been written yet, and names what would prove it',
+    /nothing has been written yet/.test(marks95[0].reason) && /seo_content_log/.test(marks95[0].reason) && marks95[0].written_at,
+    marks95[0].reason);
+  delete store['Start Content Runs'];
+  const marksNo95 = (await run('AI Target Marks', [{ json: {} }])).map(r => r.json);
+  check('B9-6: with no spawn output to read, both rows are marked as before — a lint that guessed which page failed would be worse than one that does not guess',
+    marksNo95.length === 2 && marksNo95.every(m => m.status === 'writing'), JSON.stringify(marksNo95.map(m => m.status)));
+  mock('Cadence Plan', [plan95({ k: 'x', t: 'ait_1', r: 'cad_1', dry: true })]);
+  check('B9-6: a dry run marks nothing', (await run('AI Target Marks', [{ json: {} }]))[0].json.skip === true, 'dry run wrote a row');
+
+  // ---------- 3. B9-6: `written` only against the content-log row of that same run ----------
+  const tgt95 = (id, rid) => ({ json: { target_id: id, site_id: SITE95, domain: D95, question: 'q ' + id, status: 'writing', request_id: rid, written_at: '2026-09-20T10:00:00.000Z' } });
+  const log95 = (rid, status, url) => ({ json: { site_id: SITE95, domain: D95, keyword: 'k ' + rid, request_id: rid, status, published_url: url || '', started_at: '2026-09-20T10:00:00.000Z' } });
+  mock('Load AI Targets Writing (Cadence)', [tgt95('ait_written', 'cad_1'), tgt95('ait_started', 'cad_2'), tgt95('ait_nolog', 'cad_3'), tgt95('ait_published', 'cad_4')]);
+  mock('Load Content Log', [log95('cad_1', 'written'), log95('cad_2', 'started'), log95('cad_4', 'published', 'https://www.' + D95 + '/peppol-uae/')]);
+  const settle95 = (await run('AI Target Settle', [{ json: {} }])).map(r => r.json);
+  console.log('   ai target settle ->', JSON.stringify(settle95.map(s => [s.target_id, s.status, (s.reason || '').slice(0, 70)])));
+  check('B9-6 (R1\'s rule, in the table R1 did not cover): only the runs whose content-log row says the page EXISTS advance — a run still "started" and a run with no row at all are left exactly as they were',
+    settle95.length === 2 && settle95.map(s => s.target_id).join(',') === 'ait_written,ait_published'
+    && settle95.every(s => s.status === 'written'),
+    JSON.stringify(settle95.map(s => [s.target_id, s.status])));
+  check('B9-6: each advanced row names the evidence and the run it came from, and takes the date the page run was logged rather than the date we read it back',
+    /seo_content_log row for run cad_1/.test(settle95[0].reason) && /says "written"/.test(settle95[0].reason)
+    && settle95[0].written_at === '2026-09-20T10:00:00.000Z'
+    && /peppol-uae/.test(settle95[1].reason) && /says "published"/.test(settle95[1].reason),
+    JSON.stringify(settle95.map(s => s.reason)));
+  mock('Load AI Targets Writing (Cadence)', [{ json: {} }]);
+  check('B9-6: nothing waiting, nothing written', (await run('AI Target Settle', [{ json: {} }]))[0].json.skip === true, 'the settle invented a row');
+  mock('Load AI Targets Writing (Cadence)', [tgt95('ait_nolog', 'cad_3')]); mock('Load Content Log', [{ json: {} }]);
+  check('B9-6: the settle never times a row out — the 14-day requeue and its alert stay in AI Growth, so there is one rule in one place',
+    (await run('AI Target Settle', [{ json: {} }]))[0].json.skip === true, 'the settle requeued a row of its own accord');
+
+  // ---------- 4. the class: state_lint's "way back" registry is derived, not hand-written ----------
+  const R95 = require('./rule4.json'), ST95 = R95.selftest;
+  const dec95 = (t) => (R95.rows.declared || []).find(r => r.table === t) || {};
+  check('B9-6 (the class): the registry is derived from the generated workflows — every table a run moves to `writing` is found, and seo_ai_targets, which sat outside the hand-written list for three releases, now declares its way back and has it',
+    (R95.rows.declared || []).length >= 3 && (R95.rows.declared || []).every(r => r.ok)
+    && dec95('seo_ai_targets').is_declared === true && (dec95('seo_ai_targets').readers || []).length > 0
+    && (R95.rows.reversal || []).some(r => r.table === 'seo_ai_targets' && r.ok && (r.writers || []).some(w => /AI Target Marks/.test(w))),
+    JSON.stringify((R95.rows.declared || []).map(r => [r.table, r.is_declared, (r.readers || []).length])));
+  check('B9-6 (the class): the third table the derived registry found on its first run is answered honestly — nothing tests a seo_case_studies row for `writing` (both readers already require a published page), so it is recorded as not this defect instead of being passed in silence',
+    dec95('seo_case_studies').forward === 'writing' && (dec95('seo_case_studies').readers || []).length === 0 && dec95('seo_case_studies').ok === true && dec95('seo_case_studies').is_declared === false,
+    JSON.stringify(dec95('seo_case_studies')));
+  check('B9-6 (the class): the lint catches a NEW table moved to `writing` with a reader and no declared way back, and does not cry wolf over one nothing reads back',
+    ST95.a_new_table_moved_to_writing_that_nobody_declared.caught === true && ST95.a_new_table_moved_to_writing_that_nobody_declared.ok === false
+    && (ST95.a_new_table_moved_to_writing_that_nobody_declared.readers || []).length === 1
+    && ST95.a_table_moved_to_writing_that_nothing_reads_back.caught === true && ST95.a_table_moved_to_writing_that_nothing_reads_back.ok === true
+    && ST95.a_declared_table_moved_to_writing.ok === true,
+    JSON.stringify([ST95.a_new_table_moved_to_writing_that_nobody_declared, ST95.a_table_moved_to_writing_that_nothing_reads_back]));
+  check('B9-6: *AI Target Settle* passes check A on its own merits — it mints `written` and the evidence it reads is the content-log row, named in its code rather than hidden behind a helper',
+    (R95.rows.promise || []).some(r => /AI Target Settle/.test(r.node) && r.state === 'written' && r.ok && (r.evidence_found || []).some(e => /Load Content Log/.test(e))),
+    JSON.stringify((R95.rows.promise || []).map(r => [r.node, r.state, r.ok, r.evidence_found])));
+  reset();
+});
+
+
 H.report();
 })();

@@ -8520,6 +8520,163 @@ def _b80_checks():
 log('A method we published and a test we never ran (2026-10-15, benchmark area 7, rows B7-1 / B7-2 / B7-3; BENCH_AREA7_site_tracking.md). B7-1: since G12 the Site Tracker has inlined the change-test kit and shipped its METHOD sentence in every weekly callback (change_method) while running no test at all - CT.compare was called by the Link Builder and by nobody else - which is INVARIANTS rule 4 in the one place criterion 3.4 is scored (control group or counterfactual, capped at links only); every dated change now buys its OWN two windows, the 28 complete days after it and the 28 before it over the whole site, because the report\'s 28-vs-28 both sit after a change made three months ago and would measure nothing, and the page under test and the control group of every other page are read from the same two free requests - the clicks with the rate ratio (expected = prev x the control group\'s ratio, 95% range carrying the control group\'s own sampling error) and the position with CT.compare, with five refusals so that a lift computed on nothing is never printed as no effect, and a Google update inside the window named rather than refused because it moves the control group too. B7-2: the Search Analytics API has answered device and country since it existed and we asked for neither, so a site whose phone clicks halved while desktop held read as one flat site-wide figure - four tiny free requests, every device and country tested on the same statistical bar as the other alerts, and a split Google did not ANSWER marked unavailable while a split it answered with no rows is a measured zero. B7-3: cannibalisation (criterion 2.10, a report of its own at SEOTesting and a tab at Semrush) was computed by nobody although the query x page rows have been read in full since G9 - two of the site\'s own pages shown for one non-brand search are now named with the share of impressions each takes, the page Google shows most often beside the page that ranks better when it is shown, and the action merges or differentiates them and never asks for a third page')
 
 
+# =============================================================================
+# 85. ONE AI OVERVIEW FIGURE IN ONE PLACE, AND A STATE THAT ADVANCES ONLY ON EVIDENCE (2026-10-15, FIX_PLAN.md §3.16 rows
+#     B6-9 and B9-6; docs/system-review-2026-10-14/INVARIANTS.md rules 1 and 4).
+#
+#     Both items exist because an earlier fix reached some paths and not all of them — the pattern INVARIANTS.md was written
+#     about (R28: one of four settle paths; B1-3: one of three files; B-L4: the Tracker and not the Pulse). This section
+#     finishes two of them, and in each case makes the CLASS impossible rather than the instance.
+#
+#     * **B6-9 — the third copy of a stale constant.** `v5/code/Ladder_Pool.js` line 61 still multiplied the click-through
+#       rate by **0.65** when a results page carried an AI Overview: Ahrefs' APRIL 2025 figure ("AI Overviews reduced clicks
+#       to top-ranking content by 34.5%"). B1-3 replaced it in `_kw_inputs.js` with the December 2025 study — 300,000
+#       keywords, published 2026-02-04, measured PER POSITION: -58.0% at #1, -50.8% at #2, -46.4% at #3 — and B6-1 replaced
+#       it in `_rank_serp.js`. Nothing replaced it here, and three copies of one measurement is how three answers start.
+#       B6-1's reasoning decides WHICH kit belongs here. A flat factor applied to every position all but cancels out of a
+#       *share*, which is why the share of voice needed `RS.keepAt`'s per-position table. This is not a share:
+#       `traffic_potential` is an absolute monthly estimate — "what a page in the top three would get" — and only the
+#       keywords whose results page HAS an AI Overview carried the factor, so the stale number inflated the printed estimate
+#       by 1.35x on exactly those keywords **and moved them up the `pre_score` order that decides which rungs are planned**.
+#       The figure for a top-three estimate is the kit's measured top-three average, so *Ladder Pool* now makes the same
+#       `KWI.calibrate` call the discovery twin `Collect_Research.js` makes, and the number arrives with its basis.
+#       **The class:** a build-time scan refuses the literal `0.65` anywhere near an AI Overview in any kit, in the sources
+#       and in the generated nodes, with comments stripped first — so the comments that record WHY the figure was retired
+#       survive, and a fourth copy fails the build instead of surviving two fixes.
+#
+#     * **B9-6 — the write half of a promise nobody kept.** The read half landed in section 82. The Content Cadence marked an
+#       AI target `writing` and stamped `written_at` when a page run *started*, whatever the spawn did, and **nothing in the
+#       system ever set `written`** — so `Growth_Metrics` counted `written: 0` every week of its life, and a refused or
+#       failed run left the question claiming work in progress for ever. That is INVARIANTS rule 4, and the same class as R1,
+#       where a budget-refused run left a ladder row promising a page nobody wrote (`fix_phantom_pages.py` exists because of
+#       it). R1's precedent is followed exactly: **a page counts as written only on a `written` content-log row.**
+#       *AI Target Marks* now writes the row back to `queued` with the error when the content run could not be started, and
+#       says in the row's own `reason` that nothing exists yet; *AI Target Settle* is the only exit from `writing`, and it
+#       advances the row only against the `seo_content_log` row for that same run. It deliberately does not time a row out:
+#       the 14-day requeue and its alert stay in the read half, so there is one rule in one place.
+#       **The class, and what it found:** `state_lint.py` check B (a work-in-progress state must have a way back) was a rule
+#       asked only of the tables somebody had listed, and the list was written from R1's one instance — which is exactly how
+#       `seo_ai_targets` sat in it for three releases. The registry is now DERIVED from the generated workflows: every table
+#       a run moves to `writing` **and whose state is read back and acted on** must declare its way back, and check B then
+#       has to find the node that writes it. On its first run it found a third table, `seo_case_studies`, and the honest
+#       answer there is recorded rather than assumed: nothing tests that row's state (both readers already require
+#       `published` / a `page_url`, and the row IS the artefact), so it is not this defect, and the lint says so in words.
+# =============================================================================
+# ---------- B6-9: the ladder pool uses the one measured copy ----------
+_LP85 = rd('code/Ladder_Pool.js')
+assert 'KWI.calibrate(e, {})' in _LP85 and 'KWI.lossApplied(e.serp_types)' in _LP85, \
+    'B6-9: Ladder Pool no longer applies the shared click-loss kit — the ladder would price an AI Overview on its own again'
+assert 'traffic_basis: cal.traffic_basis' in _LP85, 'B6-9 (INVARIANTS rule 1): the ladder\'s traffic estimate lost the label that says it is modelled'
+assert "const KWI = ((" in code('Ladder Pool'), 'B6-9: the discovery-input kit was not inlined into Ladder Pool'
+# (the stale factor itself is refused by the scan below, over every kit and every node — and over this file's CODE only, so
+#  the comment above `score()` may go on naming the number it retired. An assert on the raw text could not tell the two apart:
+#  it fired on the comment the moment it was written.)
+
+# ---------- B6-9, the class: 0.65 may never again sit beside an AI Overview, in any kit or any node ----------
+_AIO85 = re.compile(r'ai[ _-]?overview|\bAIO', re.I)   # `AIO_KEEP`, `aioPool`: the name the per-position table goes by
+_F85 = re.compile(r'(?<![\d.])0\.65(?![\d])')
+
+
+def _strip_js_comments_85(js):
+    """Code only. A URL inside a string is protected first (`https://` is not a comment), then `//` to end of line and every
+    /* ... */ block comes out. The comments are where this figure is allowed to live: `_kw_inputs.js` and `_rank_serp.js` both
+    record 0.65 as the number they retired, and a scan that could not tell a comment from a factor would delete that history."""
+    js = js.replace('https://', 'https\x01').replace('http://', 'http\x01')
+    js = re.sub(r'/\*.*?\*/', ' ', js, flags=re.S)
+    return re.sub(r'//[^\n]*', ' ', js)
+
+
+def _aio_factor_hits_85(js, window=200):
+    """Every place the retired flat factor sits within `window` characters of an AI Overview, in executable code."""
+    src = _strip_js_comments_85(js)
+    out = []
+    for m in _AIO85.finditer(src):
+        seg = src[max(0, m.start() - window):m.end() + window]
+        if _F85.search(seg):
+            out.append(' '.join(seg.split())[:200])
+    return out
+
+
+_scanned85 = 0
+_hits85 = []
+for _f85 in sorted(os.listdir(os.path.join(HERE0, 'v5', 'code'))):
+    if not _f85.endswith('.js'):
+        continue
+    _scanned85 += 1
+    for _h85 in _aio_factor_hits_85(open(os.path.join(HERE0, 'v5', 'code', _f85), encoding='utf-8').read()):
+        _hits85.append('v5/code/' + _f85 + ': ' + _h85)
+for _n85, _nd85 in sorted(nodes.items()):
+    for _h85 in _aio_factor_hits_85((_nd85.get('parameters') or {}).get('jsCode') or ''):
+        _hits85.append('node "' + _n85 + '": ' + _h85)
+assert not _hits85, (
+    'B6-9: the April 2025 AI Overview click-loss factor (0.65 = a flat 35%% loss) is back beside an AI Overview in %d place(s).\n  '
+    % len(_hits85) + '\n  '.join(_hits85[:6])
+    + '\n  The measured figure is per position (Ahrefs, 300,000 keywords, December 2025 data, published 2026-02-04): use '
+      '`RS.keepAt` where a position is known and `KWI.CLICK_LOSS` / `KWI.calibrate` for a top-three estimate. A comment '
+      'recording the retired number is fine — this scan reads code only.')
+
+# ---------- B9-6: the write half, on the sources the cadence builder inlines ----------
+_AM85 = rd('code/AI_Target_Marks.js')
+_AS85 = rd('code/AI_Target_Settle.js')
+assert "status: 'queued'" in _AM85 and 'reason:' in _AM85, \
+    'B9-6: AI Target Marks has no way back — a spawn that failed would leave the question saying "being written" for ever'
+assert "$('Start Content Runs')" in _AM85, 'B9-6: AI Target Marks no longer reads what the spawn actually did'
+assert "$('Load Content Log')" in _AS85 and "st !== 'written' && st !== 'published'" in _AS85, \
+    'B9-6 (R1\'s rule): AI Target Settle advances a row without the content-log row that proves the page exists'
+assert 'rowsOf(' not in _AS85, 'B9-6: AI Target Settle hides the node it reads behind a helper, so no lint can see its evidence'
+from ladder_common import AI_TARGETS_COLS as _ATC85
+assert ('reason', 'string') in _ATC85 and ('written_at', 'string') in _ATC85, \
+    'B9-6: seo_ai_targets has no reason / written_at column (run sync_tables.py after deploying)'
+# the read half of section 82 must stay, or the two halves would disagree about what a `writing` row means
+assert "if (l && ['written', 'published'].includes(String(l.status))) return null;" in rd('code/Growth_Plan.js'), \
+    'B9-6: the read half no longer checks the content-log row, so nothing would requeue a question whose run died'
+# the derived registry must know this table, and check B must be able to find the writer of the way back
+assert any(r['table'] == 'seo_ai_targets' and r['forward'] == 'writing' for r in _sl74.REVERSALS), \
+    'B9-6: state_lint.REVERSALS no longer declares the way back for seo_ai_targets'
+assert _sl74.WIP_STATES and _sl74._READS_STATE, 'B9-6: the derived work-in-progress registry was removed from state_lint.py'
+
+
+def _b85_checks():
+    """B9-6 on the GENERATED Content Cadence: the two new nodes exist, they sit on the main path in the right order, and the
+    settle is reachable whether or not anything was marked this week. R17's lesson is that the code can be right while the
+    wiring is not, so the walk is of the built workflow's own connections."""
+    import json as _j85
+    _p85 = os.path.join(HERE0, 'workflows', 'SEO_Agent_Content_Cadence.json')
+    assert os.path.exists(_p85), 'SEO_Agent_Content_Cadence.json was not generated'
+    _wf85 = _j85.load(open(_p85, encoding='utf-8'))[0]
+    _nd85 = {n['name']: n for n in (_wf85.get('nodes') or [])}
+    for _n85 in ('Load AI Targets Writing (Cadence)', 'AI Target Marks', 'Mark AI Target Writing',
+                 'AI Target Settle', 'Any AI Settles?', 'Settle AI Targets'):
+        assert _n85 in _nd85, 'B9-6: %s is missing from the Content Cadence' % _n85
+    _down85 = {}
+    for _s85, _o85 in (_wf85.get('connections') or {}).items():
+        for _lst85 in (_o85.get('main') or []):
+            for _t85 in (_lst85 or []):
+                _down85.setdefault(_s85, []).append(_t85['node'])
+    for _a85, _b85 in (('Mark AI Target Writing', 'AI Target Settle'), ('Any AI Marks?', 'AI Target Settle'),
+                       ('AI Target Settle', 'Any AI Settles?'), ('Any AI Settles?', 'Settle AI Targets'),
+                       ('Any AI Settles?', 'Cadence Note'), ('Settle AI Targets', 'Cadence Note'),
+                       ('Load AI Targets Writing (Cadence)', 'Load Monitors (Cadence)')):
+        assert _b85 in (_down85.get(_a85) or []), 'B9-6: %s does not feed %s in the Content Cadence' % (_a85, _b85)
+    # the settle must not be able to write anything but `written`, and only from the item it built
+    _vals85 = ((_nd85['Settle AI Targets'].get('parameters') or {}).get('columns') or {}).get('value') or {}
+    assert _vals85.get('status') == '={{ $json.status }}' and _vals85.get('reason') == '={{ $json.reason }}', \
+        'B9-6: Settle AI Targets writes a literal state instead of the one the Code node could refuse'
+    _mk85 = ((_nd85['Mark AI Target Writing'].get('parameters') or {}).get('columns') or {}).get('value') or {}
+    assert _mk85.get('status') == '={{ $json.status }}', \
+        'B9-6: Mark AI Target Writing mints "writing" in its own parameters again — a failed spawn could not be refused'
+    print('B6-9 / B9-6: %d kit source(s) and %d node(s) carry no flat AI Overview factor; the Content Cadence settles an AI '
+          'target only against a content-log row' % (_scanned85, len(nodes)))
+
+
+sticky("""### One AI Overview figure in one place, and a state that advances only on evidence (B6-9 / B9-6)
+**B6-9 (INVARIANTS rule 1).** *Ladder Pool* kept its own copy of the SERP click-loss table, with the **April 2025** AI Overview figure (a flat 35% loss) that B1-3 had removed from the discovery kit and B6-1 from the rank kit. A flat factor cancels out of a *share* — which is why the share of voice needed a per-position table — but this is an absolute estimate, and only the keywords whose results page has an AI Overview carried it, so it inflated those estimates by 1.35x **and moved them up the order that decides which rungs are planned**. The ladder now makes the same `KWI.calibrate` call discovery makes, and the number carries its basis. A **build-time scan** refuses `0.65` beside an AI Overview in any kit or node, with comments stripped first, so the fourth copy fails the build.
+**B9-6 (INVARIANTS rule 4).** An AI target was marked `writing` when a page run *started*, and **nothing ever set `written`** — a refused or failed run left the question claiming work in progress for ever, R1's class in the one table R1 did not cover. *AI Target Marks* now puts the row back to `queued` with the error when the spawn fails; **AI Target Settle** is the only exit, and it advances a row only against the `seo_content_log` row for that same run (R1's rule: a page counts as written only on a `written` content-log row). The 14-day requeue stays in AI Growth, so there is one rule in one place.
+**And the class:** `state_lint.py`'s "a work-in-progress state needs a way back" was asked only of the tables someone had listed — which is how `seo_ai_targets` sat outside it for three releases. The list is now **derived from the generated workflows**, and a table whose `writing` state is read back and acted on fails the build until its way back is declared *and* built. It found a third table on its first run, `seo_case_studies`, and records the honest answer: nothing tests that row's state, so it is not this defect.""",
+       -2600, -3800, 1180, 420, 3)
+log('One AI Overview figure in one place, and a state that advances only on evidence (2026-10-15, FIX_PLAN §3.16 rows B6-9 and B9-6). B6-9: v5/code/Ladder_Pool.js still multiplied the click-through rate by 0.65 when a results page carried an AI Overview - Ahrefs\' APRIL 2025 figure - after B1-3 had replaced it in _kw_inputs.js with the December 2025 per-position study (300,000 keywords, published 2026-02-04: -58.0% at position 1, -50.8% at 2, -46.4% at 3) and B6-1 in _rank_serp.js. Which kit belongs where is B6-1\'s own reasoning: a flat factor all but cancels out of a SHARE, so the share of voice needed the per-position table, while the ladder\'s traffic_potential is an ABSOLUTE top-three estimate and only the keywords whose results page has an AI Overview carried the factor - so the stale number inflated those estimates by 1.35x and moved them up the pre_score order that decides which rungs are planned. Ladder Pool now makes the same KWI.calibrate call the discovery twin Collect_Research.js makes, and the estimate carries traffic_basis / traffic_note / click_loss instead of arriving bare. The class is closed by a build-time scan that refuses the literal 0.65 within 200 characters of an AI Overview in every v5/code kit and every generated Code node, with comments stripped first so the two comments that record WHY the figure was retired survive. B9-6: the write half of "writing was a promise nobody kept" - the Content Cadence marked an AI target writing and stamped written_at when a page run STARTED, whatever the spawn did, and nothing in the system ever set written, so Growth Metrics counted written: 0 every week of its life and a refused or failed run left the question claiming work in progress for ever (R1\'s class in the one table R1 did not cover). AI Target Marks now writes the row back to queued with the error when the content run could not be started and says in the row\'s own reason that nothing exists yet; the new AI Target Settle is the only exit from writing and advances a row only against the seo_content_log row for that same run, which is R1\'s rule exactly (a page counts as written only on a written content-log row); it deliberately does not time a row out, because the 14-day requeue and its alert belong to the read half in AI Growth. The class is closed by deriving state_lint.py\'s work-in-progress registry from the generated workflows instead of hand-writing it from R1\'s one instance: every table a run moves to writing whose state is read back and acted on must declare its way back, and check B then has to find the node that writes it. On its first run the derived registry found a third table, seo_case_studies, and the honest answer is recorded rather than assumed - nothing tests that row\'s state (Brief Context hands a later page url: \'\' unless the status is published, and the Link Builder takes a case study only when it has a page_url), so it is not this defect')
+
+
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:
 #     "two fixes have never come back and both are enforced by the build".
@@ -8680,5 +8837,7 @@ _b79_checks()
 # section 83 (B11-2): benchmark area 11, on the generated Link Builder - the won links are read again, and a reading
 # that failed is not a loss
 _b83_checks()
+# section 85 (B6-9 + B9-6): one AI Overview figure in one place, and a state that advances only on evidence
+_b85_checks()
 _b69_checks()
 
