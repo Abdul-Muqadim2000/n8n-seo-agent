@@ -57,7 +57,50 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-10-15, the benchmark fix batch and what it found — latest)
+## Status (2026-10-15 afternoon, four benchmark areas, two invariant lints, and everything deployed — latest)
+**Seven agents, two at a time, every merge rebuilt in the main worktree and deployed three times. The instance is current for the first
+time since 2026-10-14: main workflow 516 nodes, 21 published, 18 Data Table columns synced.** Harness **4750 passed, 0 failed** (4505 at
+the start of the day); build exit 0; app typecheck clean in all three workspaces (web, server, shared) and 254 + 243 tests.
+**The queue was verified against the code before any agent ran**, because the owner asked whether four rounds of fixes had already closed
+it. Every open item was still open; what *was* stale was the evidence — areas 5/2/4/3 carried 2026-10-13 scores from before 21 fixes
+inside those same areas, so each agent was briefed with that closed list and the 2026-10-14 run instead of the scorecard (FIX_PLAN §3.15).
+**Four areas benchmarked (4 of 13 now done), 46 register rows added** (`docs/system-review-2026-10-14/BENCH_AREA{5,2,4,3}_*.md`,
+FIX_PLAN §3.16). **Area 5:** the crawl reads the first response, so a client-rendered site got "missing H1", "thin content" and "orphan
+pages" as three findings with three deductions while the render check beside it knew the cause — now one finding, one deduction; plus the
+links a crawler cannot follow. Both desktop leaders shipped an agent layer in 2026, so the comparison is judgement, not crawler size.
+**Area 2:** one cached reach per *website* decided every topic's plan (exec 494 planned an ERP ladder against a reach measured during
+e-invoicing research); `reachTopic()` measures the ladder's own topic and says so when it cannot. **Area 3:** a draft **identical to a
+competitor page** came out `publishable: true` because the originality gate ran after Content QA had finalised the delivery fields and
+flipped only an internal flag — Rule 4 in the worst place; and the money mask judged amounts against a narrower corpus than the figure
+check, so seven amounts quoted verbatim from the cited source became `[Price]` (the shipped page carries 43) and *that* is what pushed it
+past the placeholder limit and had it refused. **No tool on the market gates on verified fact; we do** — Surfer, Clearscope, Ahrefs,
+Semrush, Frase, Jasper and Writer all refuse nothing. **Area 4:** `GSC_Requests.js` had asked for the year-ago range since v4.3 at
+`rowLimit: 1`, site totals only; the per-page comparison cost one more free request. Decay is now a Poisson test (seasonal is called
+seasonal, low volume is called too small) and the cadence writes the refresh first. That agent also **marked its own area down**: C15 was
+scored 6 but nothing could act on the verdict — honest figure 4.
+**Three invariant lints now fail the build** (INVARIANTS.md): rule 3 was already a ratchet; **rule 2** (`gate_lint.py`: 4 gate/table
+pairs, 13 read paths gated, 26 ratcheted) and **rule 1** (`lineage_lint.py`: lineage 10/16, evidence 1/2, like-for-like 4/6, withheld 3/4,
+9 ratcheted) landed today, each proved to bite by being broken on purpose — six ways for rule 1. **B-F5 is closed both halves**: the build
+refuses a missing `n8n/.env` (`env_settings.require_settings`, `--no-env` opts out loudly) and node ids are `uuid5(workflow:node)`, so two
+builds of unchanged sources are **byte-identical** — the uuid4 churn was what made "the rebuild produced no diff" useless as a check.
+**The lints paid for themselves the same day.** Rule 2 found **B-G1/B-G2/B-G3** — the AI question panel, AI Growth's questions to win and
+the Site Tracker's tracked keywords all built from stored rungs with no gate, so a competitor's brand became a question we asked ChatGPT
+and scored ourselves against; all three fixed through one shared `FITR`, refusals printed with reasons. Rule 1 found **seven audit
+findings shipping with literally `evidence: ''`**, scored and ranked (fixed at the sink), and **B-L4 / B-L5**, both still open and both
+wrong numbers: AI visibility deltas subtracted across question panels of different sizes, and a backlink spam alert comparing a
+`free_only` snapshot with a full one — R19 and R20 in new places.
+**Owner decisions taken today:** B2-4 built on the **direct route** (one SERP call per rung keyword, top 7 at 40%, capped at 24 =
+$0.048 a ladder, cost counted once by task id); B2-5 built (SERP domain diversity moves feasibility −6/−3/0, as a *share* of the results
+read); **B2-6 re-baselined K7** to "≥ 40% shared top-7 URLs" with the old statement kept in the row — the only change to a frozen
+criterion, and it is annotated.
+**Still open and owned by the owner:** **D25a** — the AI Pulse's scheduled runs fired at 14:51 and 10:54 UTC on consecutive days instead
+of its configured 06:30 America/New_York, because the Mac sleeps (`pmset`: asleep 07:10–11:06 PKT today). "Daily" is really "whenever the
+laptop is awake", and three criteria are capped on it. Also **B2-7** (discovery still clusters 3-of-top-10 while the ladder now uses top
+7 / 40% — two code paths, one question), **B-L1..B-L5**, G13, G16, G17, G20, O1–O12, and topping up DataForSEO (**$13.79**).
+**Next:** benchmark areas 1, 6, 7, 8, 9, 10, 11 (seven left); INVARIANTS rule 4 (the state machine) is the last lint; then B-A10 (48
+ungated DataForSEO nodes), B-R2, the Sonnet half of B-F1, and the re-rating (FIX_PLAN §5.2, ≈ $4–6 — the DataForSEO balance binds first).
+
+## Status (2026-10-15, the benchmark fix batch and what it found — previous)
 **Seven benchmark items closed, nine new problems found while closing them, nothing deployed.** Four worktree agents, two at a time.
 Harness **4505 passed, 0 failed** (4315 at the start of the day); app typecheck clean, **493** tests (254 shared + 239 server); smoke ALL
 PASSED; build exit 0. Register: `docs/system-review-2026-10-11/FIX_PLAN.md` §3.14 (statuses) and **§3.15 (B-F1…B-F9, what the batch found)**.
