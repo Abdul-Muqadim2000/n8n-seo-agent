@@ -108,7 +108,8 @@ v4.8: the callback carries display-only flags per ladder for the web app (the e-
 **v4.16 (G6, 2026-10-12 system review): the whole results page, from the same call.** Every check now stores what the page showed — AI Overview (shown, and whether it cites us), featured snippet, People Also Ask, local pack, video, shopping —, the **top-10 domains with their positions**, the **tracked competitors' positions** (`{MONITORS_TABLE}` + the `{SITES_TABLE}` model column, merged by the one site model), a **share of voice** modelled on a published CTR curve, and a compact **snapshot of the top 10** (URLs + trimmed titles) as proof of the reading (`v5/code/_rank_serp.js`; columns `device` / `features_json` / `competitors_json` / `snapshot_json` / `share_of_voice`). All of it is free: it comes out of the SERP answer the check already pays for.
 The only new spend is the **mobile check** of the ladder's main keywords (top rung + main page, at most 2 a ladder, once a week; a run started by hand inside 6 days reuses the last one): one more depth-50 call each, the measured **$0.015**, so about **$0.13 a month** for a ladder next to the ~$0.60 it costs today. Only 13% of sites hold the same position on both devices (Semrush, 50k keywords), so a desktop-only position is one most visitors never see. A **won** ladder's mobile check follows its monthly rhythm.
 Wording rules: a call that failed stores `unavailable` and leaves every flag null — "check again", exactly as position -1, never "no AI Overview"; an AI Overview Google loads asynchronously comes back without its sources (loading them costs extra, which we do not buy), so "cites you" is then **unknown**, never "no"; the share of voice always travels with the sentence that says it is modelled, not measured clicks.
-Form: {FORM_URL} · API: {API_URL}""", [-40, -560], 1000, 520))
+**v4.17 (B6-7, 2026-10-15): the keywords YOU named are watched too.** `{SITES_TABLE}.keywords` - the list from the tracking form or "Track my site" - is a second source beside the ladders, reported as its own weekly mail ("[Tracked keywords] ...") with the same depth: position, the reading's date, share of voice, how much the results page itself moved, who is above you. **Read first, buy second:** a results page the weekly site check already read less than 10 days ago is read, not bought again, and a keyword that is also a ladder rung is checked once, with the ladder. What is bought is capped at **10 a website and 30 a run**, oldest reading first (the measured $0.015 each, so at most ~$0.15 a website a week), and every keyword the cap did not reach is named with the cap and its last reading. The same keyword rule that guards the stored rungs runs over the list, so a competitor's brand typed into a form is set aside with its reason instead of being tracked. Its readings are stored under `watch_<site_id>`.
+Form: {FORM_URL} · API: {API_URL}""", [-40, -560], 1000, 600))
 for a, b in [('Weekly Schedule', 'Ensure Ladder Table'), ('Manual Run', 'Ensure Ladder Table'), ('Ensure Ladder Table', 'Ensure History Table'), ('Ensure History Table', 'Load Ladders'), ('Load Ladders', 'Load History'), ('Load History', 'Load Content Log (Tracker)'), ('Load Content Log (Tracker)', 'Ensure Pages Table (Tracker)'), ('Ensure Pages Table (Tracker)', 'Load Pages (Tracker)'),
                  ('Load Pages (Tracker)', 'Ensure Sites Table (Tracker)'), ('Ensure Sites Table (Tracker)', 'Load Sites (Tracker)'),
                  ('Load Sites (Tracker)', 'Ensure Monitors Table (Tracker)'), ('Ensure Monitors Table (Tracker)', 'Load Monitors (Tracker)'),
@@ -137,7 +138,13 @@ for _c, _t in HISTORY_COLS:
     assert _c + ':' in _tracker_nodes['Parse Positions'], 'Parse Positions does not write the seo_rank_history column ' + _c
 # ---- R9 (2026-10-13, re-rating): the Rank Tracker reserves and settles a seo_run_ledger row too (exec 505 had none, although the week's SERP
 # checks are paid DataForSEO calls). Hung BESIDE *Tracker Plan*: a Data Table node answers with the row it wrote, not with its input. ----
-_lrr, _lrs = monitor_ledger_js(V5, 'rank_tracker', 'Tracker Plan', 'Run Ledger Row (Tracker)', '')
+# B6-7 (2026-10-15): the settle takes the figure the in-200 gate MEASURED for exactly these calls instead of the reservation it made.
+# *Tracker Report* carries it on its first item as `cost_usd` (Monitor_Ledger_Settle's costOf reads that key); a run whose evidence
+# block could not be read carries none, so `measured` stays null and the settle says so rather than inventing a figure.
+_lrr, _lrs = monitor_ledger_js(V5, 'rank_tracker', 'Tracker Plan', 'Run Ledger Row (Tracker)', 'Tracker Report')
+# the reservation counts CHECKS, not sites, so its own sentence has to say so (INVARIANTS rule 1: a figure carries its basis)
+_lrr = _lrr.replace("' site(s) x the per-site figure), DataForSEO $'", "' keyword check(s) x the measured per-check price), DataForSEO $'")
+assert 'keyword check(s) x the measured per-check price' in _lrr, 'B6-7: the Rank Tracker ledger row still calls its checks sites'
 N.append(node('Ensure Run Ledger (Tracker)', DT_TYPE, DT_VERSION, dt_create_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS), [1230, 480], onError='continueRegularOutput', executeOnce=True))
 N.append(node('Run Ledger Row (Tracker)', 'n8n-nodes-base.code', 2, {'jsCode': _lrr}, [1450, 480], executeOnce=True))
 N.append(node('Reserve Run Ledger (Tracker)', DT_TYPE, DT_VERSION, dt_insert_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS), [1670, 480], onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True))
@@ -154,7 +161,7 @@ for a, b in [('Tracker Plan', 'Ensure Run Ledger (Tracker)'), ('Ensure Run Ledge
              ('Tracker Report', 'Ledger Settle (Tracker)'), ('Ledger Settle (Tracker)', 'Settle Run Ledger (Tracker)')]:
     link(C, a, b)
 LEDGER_WIRING['SEO Agent — Rank Tracker'] = {'mode': 'rank_tracker', 'plan': 'Tracker Plan', 'reserve': 'Run Ledger Row (Tracker)',
-                                             'settle': 'Settle Run Ledger (Tracker)', 'settle_from': ['Tracker Report'], 'measured': '', 'est': LEDGER_EST['rank_tracker'],
+                                             'settle': 'Settle Run Ledger (Tracker)', 'settle_from': ['Tracker Report'], 'measured': 'Tracker Report', 'est': LEDGER_EST['rank_tracker'],
                                              'resume': 'After Run Ledger (Tracker)'}   # R17 (2026-10-14): hands Tracker Plan's items back
 # ---- B-A10 (2026-10-15, INVARIANTS rule 3): the week's rank checks go through the in-200 retry gate ----
 # The reading side was already honest (RS.read counts a task error inside a 200 as failed, position -1 is "check again" and never
@@ -206,6 +213,34 @@ for _a6, _m6 in (("const changes = new Map(rowsK.map(r => [r.keyword,", 'B6-2: t
     assert _a6 in _tr6, _m6
 assert "page_movement: { compared:" in _tr6 and "labels_basis: RS.CHURN.labels_basis" in _tr6, 'B6-2: the ladder summary carries no movement figure with its basis'
 assert 'The provider reported no cost for these calls' in _tr6, 'B6-5: a cost the provider did not report must not be invented'
+# ---- B6-7 (2026-10-15, benchmark area 6 - BENCH_AREA6_rank_tracking.md gap G6-8 / section 7, register row B6-7) ----
+# A rank tracker tracks whatever keyword list you give it. Ours tracked `seo_ladders` and nothing else, so the thirty searches a
+# business names when it sets tracking up were not watched by the tracker bought for exactly that. `seo_sites.keywords` is now a
+# second source with its own cap, its own cost line and the same read-path gate; the ladder series is untouched.
+_tp7 = next(n for n in _wf_tracker['nodes'] if n['name'] == 'Tracker Plan')['parameters']['jsCode']
+_tr7 = next(n for n in _wf_tracker['nodes'] if n['name'] == 'Tracker Report')['parameters']['jsCode']
+for _a7, _m7 in (("const kwList = (v) =>", 'B6-7: the plan does not read the keywords the customer named'),
+                 ("FITR.rungs(kws.map(k =>", 'B6-7 (INVARIANTS rule 2): a stored keyword reaches a paid check without the fit gate'),
+                 ("const wid = 'watch_' + sid;", 'B6-7: a reading of ours cannot be told from the weekly site check\'s'),
+                 ("LIMITS.watch_site_days", 'B6-7: the plan would buy a results page the weekly site check already bought'),
+                 ("already.has(d + '|' + k)", 'B6-7: a keyword that is both a rung and on the list would be bought twice'),
+                 ("max_watch_per_site", 'B6-7: the customer\'s list is unbounded'),
+                 ("watchHeld.push(", 'B6-7: a keyword the cap did not reach is dropped without a reason'),
+                 ("max_watch_per_run", 'B6-7: one run\'s spend on the customer lists is unbounded')):
+    assert _a7 in _tp7, _m7
+assert 'protect' not in _tp7.split('FITR.ctx({ own_domain: d')[1].split('})')[0], \
+    'B6-7: the customer\'s own keywords are protected from the gate, so the gate can never judge them'
+for _a7, _m7 in (("const watchMeta = ((plan[0] || {}).watch) || null;", 'B6-7: the report never sees the customer\'s keyword list'),
+                 ("watchlist: true", 'B6-7: the watched keywords are not reported'),
+                 ("RS.churnNone('no live reading of this results page is stored", 'B6-7: a keyword nobody read must not come back as no movement'),
+                 ("Not checked this week", 'B6-7: the keywords the cap did not reach are not named'),
+                 ("Set aside by the keyword rule", 'B6-7: a set-aside keyword is not shown with its reason'),
+                 ("No check was bought for your keyword list this week", 'B6-7: a week that bought nothing must say so, not invent a cost'),
+                 ("The provider reported no cost for these calls, so none is shown.", 'B6-7: a cost nobody reported must not be invented'),
+                 ("out[0].json.cost_usd = Number(ev.cost_usd)", 'B6-7 / R28: the run settles its reservation instead of what it measured')):
+    assert _a7 in _tr7, _m7
+assert "'check again', not \"not ranking\"" in _tr7 or 'that is "check again", not "not ranking"' in _tr7, \
+    'B6-7 (INVARIANTS rule 1 / R18): a keyword whose results page could not be read must not read as "not ranking"'
 retry_lint.check_in200(_wf_tracker)
 write(_wf_tracker, 'SEO_Agent_Rank_Tracker.json')
 # R31 (2026-10-14): written AFTER the workflow, because ledger_mainline() fills `ai_nodes` (the Claude nodes the settle checks) and

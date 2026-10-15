@@ -13741,5 +13741,218 @@ await guard('ai growth benchmark (area 9)', async () => {
 });
 
 
+
+
+
+// ===================================================================================
+// S96 B6-7 (2026-10-15, benchmark programme area 6 — docs/system-review-2026-10-14/BENCH_AREA6_rank_tracking.md gap G6-8 §7)
+// "A tracker tracks whatever keyword list you give it." Ours read `seo_ladders` and nothing else, so a business that named thirty
+// searches when it set tracking up had none of them in the rank tracker it is paying for — the benchmark calls this the structural
+// gap of the area and the one change that would most improve the customer's outcome. The list has been stored all along
+// (`seo_sites.keywords`) and the weekly site check already BUYS a live reading of much of it an hour later, into this very table.
+// Every check below fails against the code of the 2026-10-14 run, where a keyword that was not a rung did not exist.
+// ===================================================================================
+await guard('S96 B6-7 the customer\'s own keyword list', async () => {
+  const SN = 'S96 B6-7 — the tracker watches the keywords the customer named: their own series beside the ladders, the same keyword never bought twice, a bounded week with its reason printed, the fit gate over a stored list, and a reading nobody could take reported as "check again"';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const D96 = 'techand.ai', SITE96 = 'site_techand-ai', WID96 = 'watch_site_techand-ai', HEAD96 = 'peppol uae';
+  const EMPTY96 = [{ json: {} }];
+  const ago96 = (n) => new Date(Date.now() - n * 864e5).toISOString();
+  const TEN96 = ['cleartax.com', 'tax.gov.ae', 'zoho.com', 'complyance.io', 'finline.ae', 'grantthornton.ae', 'hawksford.com', 'pwc.com', 'kpmg.com', 'deloitte.com'];
+  const snap96 = (doms, at, kw) => JSON.stringify({ at, device: 'desktop', results: 1420000, unavailable: false, error: '', features: [],
+    top: doms.map((d, i) => ({ p: i + 1, u: 'https://' + d + '/' + String(kw || HEAD96).replace(/\s+/g, '-') + '/', t: 'A page about ' + (kw || HEAD96) + ' (' + d + ')' })) });
+  const lrow96 = (rung, page_no, keyword) => ({ json: { id: rung * 10 + page_no, createdAt: 'x', updatedAt: 'x', ladder_id: 'lad_B67', domain: D96, head_keyword: HEAD96, rung, page_no, keyword,
+    supporting: '', page_type: rung === 4 ? 'Pillar Page' : 'Guide', target_url: 'https://' + D96 + '/' + keyword.replace(/\s+/g, '-') + '/', page_exists: true, status: 'published', months: '',
+    start_date: ago96(120), country: 'United Arab Emirates', location_code: 2784, language_code: 'en', email: 'owner@techand.ai', callback_url: 'https://hooks.example.com/x', request_id: 'r-B67' } });
+  const LADDER96 = [lrow96(4, 1, HEAD96), lrow96(1, 2, 'peppol access point uae')];
+  // a stored reading of one results page, written by whoever bought it (ladder_id tells them apart — that is what makes
+  // "somebody already buys this one weekly" a measurement and not a guess)
+  const hrow96 = (who, keyword, position, at, doms) => ({ json: { ladder_id: who, keyword, checked_at: at, position, url: position > 0 ? 'https://' + D96 + '/' + keyword.replace(/\s+/g, '-') + '/' : '',
+    serp_features: '', domain: D96, rung: 0, device: 'desktop',
+    features_json: JSON.stringify({ unavailable: false, types: [], ai_overview: { shown: false, cites_us: false, content_loaded: true, cited_domains: [], seen_at: at }, featured_snippet: { shown: false, ours: false, domain: '' }, people_also_ask: { shown: false, count: 0, questions: [] }, local_pack: { shown: false, ours: null }, video: { shown: false }, shopping: { shown: false }, checked_at: at }),
+    competitors_json: JSON.stringify({ our_position: position > 0 ? position : null, above: (doms || TEN96).slice(0, 3).map((d, i) => ({ d, p: i + 1, t: d === 'cleartax.com' })), competitors: [], shares: [], tracked: ['cleartax.com'], method: 'x' }),
+    snapshot_json: snap96(doms || TEN96, at, keyword), share_of_voice: position > 0 ? 12 : 0 } });
+  const siteRow96 = (o = {}) => [{ json: { id: 1, site_id: SITE96, domain: D96, country: 'United Arab Emirates', language_code: 'en', status: 'active',
+    email: 'owner@techand.ai', callback_url: 'https://hooks.example.com/x', request_id: 'r-site', competitors: 'cleartax.com',
+    location_code: o.location_code === undefined ? 2784 : o.location_code, keywords: o.keywords || '' } }];
+  const planOf = async (o = {}) => {
+    reset();
+    mock('Load Ladders', o.ladders === null ? EMPTY96 : (o.ladders || LADDER96)); mock('Load Content Log (Tracker)', EMPTY96); mock('Load Pages (Tracker)', EMPTY96);
+    mock('Load Sites (Tracker)', siteRow96(o)); mock('Load Monitors (Tracker)', o.monitors || EMPTY96);
+    mock('Load History', (o.history && o.history.length) ? o.history : EMPTY96);
+    return (await run('Tracker Plan', store['Load History'])).map(x => x.json);
+  };
+
+  // ---------- 1. the list is watched at all ----------
+  const LIST = 'e invoicing uae, vat software dubai, corporate tax uae';
+  const P1 = await planOf({ keywords: LIST });
+  const w1 = P1.filter(c => c.watch_keyword);
+  console.log('   plan ->', JSON.stringify(P1.map(c => [c.keyword, c.watch_keyword ? 'list' : 'ladder', c.device])));
+  check('B6-7: the keywords the customer named are checked by the rank tracker, as their own series beside the ladders — before today a keyword that was not a rung did not exist to this workflow',
+    w1.length === 3 && w1.map(c => c.keyword).join(' | ') === 'corporate tax uae | e invoicing uae | vat software dubai'
+    && w1.every(c => c.ladder_id === WID96 && c.site_id === SITE96 && c.rung === 0 && c.device === 'desktop'
+      && c.body[0].depth === 50 && c.body[0].location_code === 2784 && c.body[0].device === 'desktop'), JSON.stringify(w1.map(c => [c.keyword, c.ladder_id, c.rung])));
+  check('B6-7: the ladder series is untouched — its checks are planned first and keep the whole per-run cap ahead of the list',
+    P1.filter(c => !c.watch_keyword).length === 3 && P1.findIndex(c => c.watch_keyword) === 3
+    && P1.filter(c => !c.watch_keyword).map(c => c.keyword + ':' + c.device).join(' | ') === 'peppol access point uae:desktop | ' + HEAD96 + ':desktop | ' + HEAD96 + ':mobile',
+    JSON.stringify(P1.map(c => [c.keyword, c.device, !!c.watch_keyword])));
+  check('B6-7: every check the plan emits carries the customer\'s list and its counts, so the report can name what was checked, carried, held and set aside',
+    P1.every(c => c.watch && c.watch.sites && c.watch.limits) && P1[0].watch.sites[0].total === 3 && P1[0].watch.sites[0].checked === 3
+    && P1[0].watch.limits.per_site === 10 && P1[0].watch.limits.per_run === 30, JSON.stringify(P1[0].watch.sites));
+  const Pnone = await planOf({ keywords: '' });
+  check('B6-7: a website that named no keywords plans exactly what it planned before — nothing about the ladders changes',
+    Pnone.length === 3 && !Pnone.some(c => c.watch_keyword) && Pnone[0].watch.sites.length === 0, JSON.stringify(Pnone.map(c => c.keyword)));
+
+  // ---------- 2. a keyword is never bought twice ----------
+  const Pboth = await planOf({ keywords: HEAD96 + ', e invoicing uae' });
+  const carriedLadder = (Pboth[0].watch.carried || []).find(c => c.keyword === HEAD96);
+  console.log('   both ->', JSON.stringify((Pboth[0].watch.carried || []).map(c => [c.keyword, c.source])));
+  check('B6-7: a keyword that is BOTH a ladder rung and on the customer\'s list is checked once, with the ladder — it is carried with the reason, not bought a second time',
+    Pboth.filter(c => c.watch_keyword).length === 1 && Pboth.filter(c => c.watch_keyword)[0].keyword === 'e invoicing uae'
+    && !!carriedLadder && carriedLadder.source === 'ladder' && /never bought twice/.test(carriedLadder.reason), JSON.stringify(carriedLadder));
+  const theirs = [hrow96(SITE96, 'vat software dubai', 6, ago96(3), TEN96)];
+  const Ptheirs = await planOf({ keywords: LIST, history: theirs });
+  const cTheirs = (Ptheirs[0].watch.carried || []).find(c => c.keyword === 'vat software dubai');
+  check('B6-7 (R28, money counted once because it is spent once): a results page the WEEKLY SITE CHECK read three days ago is read, not bought again — the two workflows share one series instead of paying twice for the same page on the same morning',
+    !Ptheirs.some(c => c.watch_keyword && c.keyword === 'vat software dubai') && !!cTheirs && cTheirs.source === 'site_check'
+    && /the weekly site check already read this results page on /.test(cTheirs.reason), JSON.stringify(cTheirs));
+  const Pstale = await planOf({ keywords: LIST, history: [hrow96(SITE96, 'vat software dubai', 6, ago96(14), TEN96)] });
+  check('B6-7: once that reading is older than the site check\'s own rhythm the tracker buys it itself — a keyword nobody is reading any more does not quietly stop being watched',
+    Pstale.some(c => c.watch_keyword && c.keyword === 'vat software dubai'), JSON.stringify(Pstale.filter(c => c.watch_keyword).map(c => c.keyword)));
+  const Pown = await planOf({ keywords: LIST, history: [hrow96(WID96, 'corporate tax uae', 11, ago96(2), TEN96)] });
+  const cOwn = (Pown[0].watch.carried || []).find(c => c.keyword === 'corporate tax uae');
+  check('B6-7: our own reading of two days ago is not bought again either — a position is checked once a week, not once a run (the same rule the mobile check uses)',
+    !Pown.some(c => c.watch_keyword && c.keyword === 'corporate tax uae') && !!cOwn && cOwn.source === 'own'
+    && /once a week, not once a run/.test(cOwn.reason), JSON.stringify(cOwn));
+  const Pweek = await planOf({ keywords: LIST, history: [hrow96(WID96, 'corporate tax uae', 11, ago96(7), TEN96)] });
+  check('B6-7: and a week later it IS bought — a reading of ours from last Monday is exactly seven days old, so the series stays weekly instead of slipping to a fortnight',
+    Pweek.some(c => c.watch_keyword && c.keyword === 'corporate tax uae'), JSON.stringify(Pweek.filter(c => c.watch_keyword).map(c => c.keyword)));
+
+  // ---------- 3. INVARIANTS rule 2: the gate runs over a stored list ----------
+  const Pgate = await planOf({ keywords: 'e invoicing uae, cleartax pricing, ministry of finance uae portal',
+    monitors: [{ json: { site_id: SITE96, domain: D96, competitors: 'cleartax.com', brand_names: 'Tech&' } }] });
+  const aside96 = Pgate[0].watch.set_aside || [];
+  console.log('   gate ->', JSON.stringify(aside96.map(a => [a.keyword, a.reason])));
+  check('B6-7 (INVARIANTS rule 2): a competitor\'s brand typed into a tracking form is still a competitor\'s brand — no check is bought for it, whoever stored it',
+    !Pgate.some(c => c.watch_keyword && c.keyword === 'cleartax pricing') && aside96.some(a => a.keyword === 'cleartax pricing' && a.dropped === true), JSON.stringify(aside96));
+  check('B6-7 (INVARIANTS rule 1): a set-aside keyword is NAMED with its reason and what to do about it — a list that is shorter because a gate ran has to say so',
+    aside96.every(a => /is on your tracking list, but no position is checked for it/.test(a.note) && /Take it off the list, or tell us it is deliberate/.test(a.note))
+    && aside96.length >= 1, JSON.stringify(aside96.map(a => a.note)));
+  check('B6-7: the keywords the gate kept are still bought, so the gate narrows the list and never empties it',
+    Pgate.some(c => c.watch_keyword && c.keyword === 'e invoicing uae'), JSON.stringify(Pgate.filter(c => c.watch_keyword).map(c => c.keyword)));
+
+  // ---------- 4. a bounded week, with the bound printed ----------
+  const TWELVE = Array.from({ length: 12 }, (_, i) => 'uae tax keyword ' + String(i + 1).padStart(2, '0')).join(', ');
+  const Pcap = await planOf({ keywords: TWELVE });
+  const held96 = Pcap[0].watch.held || [];
+  console.log('   cap ->', JSON.stringify({ bought: Pcap.filter(c => c.watch_keyword).length, held: held96.length }));
+  check('B6-7: a list longer than the week\'s budget is bounded at the cap, not bought whole — 12 keywords, 10 checks (the measured $0.015 each, so at most about $0.15 a website a week)',
+    Pcap.filter(c => c.watch_keyword).length === 10 && held96.length === 2 && Pcap[0].watch.sites[0].total === 12 && Pcap[0].watch.sites[0].held === 2,
+    JSON.stringify({ bought: Pcap.filter(c => c.watch_keyword).length, held: held96.length }));
+  check('B6-7 (INVARIANTS rule 1): the two the cap did not reach are named WITH the cap and the rule that chose, never silently missing',
+    held96.every(h => /at most 10 checks a week for your own keyword list \(oldest reading first/.test(h.reason)), JSON.stringify(held96.map(h => h.reason)));
+  const Porder = await planOf({ keywords: TWELVE, history: [1, 2, 3].map(i => hrow96(WID96, 'uae tax keyword 0' + i, 20, ago96(10 + i), TEN96)) });
+  const boughtOrder = Porder.filter(c => c.watch_keyword).map(c => c.keyword);
+  check('B6-7: the cap is spent oldest-reading-first, and a keyword nobody has ever checked comes before all of them — the checks go where the readings are missing most',
+    boughtOrder.length === 10 && boughtOrder.slice(0, 9).every(k => !/keyword 0[123]$/.test(k)) && boughtOrder[9] === 'uae tax keyword 03'
+    && (Porder[0].watch.held || []).map(h => h.keyword).join(',') === 'uae tax keyword 02,uae tax keyword 01',
+    boughtOrder.join(' | ') + ' || held ' + (Porder[0].watch.held || []).map(h => h.keyword).join(','));
+  const Ploc = await planOf({ keywords: LIST, location_code: 0 });
+  check('B6-7: a website with no market stored buys nothing at all, and every keyword says why rather than disappearing from the report',
+    !Ploc.some(c => c.watch_keyword) && (Ploc[0].watch.held || []).length === 3
+    && (Ploc[0].watch.held || []).every(h => /no market \(country\) is stored for this website/.test(h.reason)), JSON.stringify((Ploc[0].watch.held || []).map(h => h.reason)));
+
+  // ---------- 5. the report the customer reads ----------
+  const report96 = async (o = {}) => {
+    const pl = (await (async () => { reset();
+      mock('Load Ladders', o.ladders === null ? EMPTY96 : (o.ladders || LADDER96)); mock('Load Content Log (Tracker)', EMPTY96); mock('Load Pages (Tracker)', EMPTY96);
+      mock('Load Sites (Tracker)', siteRow96(o)); mock('Load Monitors (Tracker)', o.monitors || EMPTY96);
+      mock('Load History', (o.history && o.history.length) ? o.history : EMPTY96);
+      return await run('Tracker Plan', store['Load History']); })());
+    mock('SERP Check', pl.map(c => c.json.keyword === o.failed
+      ? { tasks: [{ id: 't', status_code: 50000, status_message: 'Internal Server Error.', cost: 0, result: null }], status_code: 20000 }
+      : V.serpRich({ keyword: c.json.keyword, domain: D96, device: c.json.device, position: (o.positions || {})[c.json.keyword] == null ? 0 : o.positions[c.json.keyword], top: TEN96 })));
+    const asked = pl.length;
+    mock('SERP Check Answers', [{ json: { __dfs: { asked, checked: asked, failed: 0, retried: 0, retry_answered: 0, unavailable: 0, note: '',
+      cost_usd: o.cost === undefined ? +(0.015 * asked).toFixed(4) : o.cost, cost_basis: 'measured: the provider\'s own cost for these calls' } } }]);
+    const pp = await run('Parse Positions', store['SERP Check']); mock('Save History', pp);
+    const all = (await run('Tracker Report', pp)).map(x => x.json);
+    return { all, watch: all.find(x => x.watchlist) || null, ladder: all.find(x => !x.watchlist) || null };
+  };
+  const R1 = await report96({ keywords: LIST, history: [hrow96(WID96, 'e invoicing uae', 4, ago96(7), TEN96)], positions: { 'e invoicing uae': 20, 'vat software dubai': 8, 'corporate tax uae': 0 } });
+  const W = R1.watch;
+  console.log('   report ->', JSON.stringify({ subject: W.subject, positions: W.positions.map(p => [p.keyword, p.position, p.source]), drops: W.drops }));
+  check('B6-7: the customer\'s list gets its own weekly report, separate from the ladders, and says so in the subject and the first line',
+    !!W && !!R1.ladder && W.stage === 'rank_tracker' && W.watchlist === true && W.site_id === SITE96 && W.ladder_id === ''
+    && W.subject === '[Tracked keywords] techand.ai — 3 of 3 read · 1 in the top 10 · 1 drop(s)'
+    && /3 keywords you asked us to watch/.test(W.html) && /reported separately/.test(W.html), JSON.stringify({ subject: W.subject, ladder: !!R1.ladder }));
+  check('B6-7 + B6-2: a keyword on the list gets the SAME depth a rung gets — position, the previous reading with its date, how much the results page itself moved, the share of voice and who is above it',
+    (() => { const p = W.positions.find(x => x.keyword === 'e invoicing uae');
+      return p && p.position === 20 && p.previous === 4 && p.delta === -16 && p.serp_change && p.serp_change.available === true
+        && p.serp_change.basis === 'measured' && /this move is your page/.test(p.move_note) && p.share_of_voice != null && p.above.length > 0; })(),
+    JSON.stringify((() => { const p = W.positions.find(x => x.keyword === 'e invoicing uae') || {}; return { position: p.position, previous: p.previous, delta: p.delta, change: p.serp_change && p.serp_change.available, basis: p.serp_change && p.serp_change.basis, note: p.move_note, sov: p.share_of_voice, above: (p.above || []).length }; })()));
+  check('B6-7 (INVARIANTS rule 1, found while doing this): a stored reading is never cut mid-string any more — `competitors_json` overflows its column on any results page with a full top ten, and a sliced JSON string is not JSON, so RS.unpack threw the WHOLE reading away and "Above you" was empty with nothing said',
+    (() => { const p = W.positions.find(x => x.keyword === 'e invoicing uae') || {};
+      return (p.above || []).length === 10 && p.above[0].domain === 'cleartax.com' && p.above[0].position === 1 && (p.competitors || []).length > 0; })(),
+    JSON.stringify(((W.positions.find(x => x.keyword === 'e invoicing uae') || {}).above || []).slice(0, 3)));
+  check('B6-7: the fall is printed as a drop with the clause that says whether it was the page or the day — the whole point of watching a keyword at all',
+    (W.drops || []).length === 1 && /e invoicing uae \(#4 → #20; the rest of the results page barely moved/.test((W.drops || [])[0]), JSON.stringify(W.drops));
+  check('B6-7: every row says where its reading came from, so a reading somebody else paid for is never passed off as a check of this week',
+    /<th[^>]*>Where this reading came from<\/th>/.test(W.html) && W.positions.every(p => p.source && p.source_note)
+    && W.positions.filter(p => p.source === 'bought').length === 3, JSON.stringify(W.positions.map(p => [p.keyword, p.source_note])));
+  check('B6-7 (criterion 2.14): the report says what the list cost this week, from the provider\'s own measured figure for exactly these calls, and what a keyword costs a month at this frequency',
+    /3 live checks bought for your keyword list this week: about \$0\.0450 \(measured — \$0\.0900 for this run’s 6 checks, \$0\.0150 each\)\. At this rate a keyword costs about \$0\.065 a month to watch weekly\./.test(W.html),
+    (W.html.match(/live checks? bought[^<]+/) || [''])[0]);
+  check('B6-7: and every figure in it carries its lineage — the positions, the modelled share, the measured movement and the measured cost',
+    ['Position per keyword', 'Share of voice', 'How much the results page itself moved', 'What the checks cost'].every(f => (W.lineage || []).some(l => l.figure === f))
+    && (W.lineage || []).find(l => l.figure === 'What the checks cost').basis === 'measured'
+    && (W.lineage || []).find(l => l.figure === 'Share of voice').basis === 'modelled', JSON.stringify((W.lineage || []).map(l => [l.figure, l.basis])));
+  // INVARIANTS rule 1 / R18: a results page nobody could read is "check again", never "not ranking"
+  const Rfail = await report96({ keywords: LIST, failed: 'vat software dubai', positions: { 'e invoicing uae': 9, 'corporate tax uae': 0 } });
+  const pFail = Rfail.watch.positions.find(p => p.keyword === 'vat software dubai');
+  console.log('   failed ->', JSON.stringify({ position: pFail.position, sov: pFail.share_of_voice, change: pFail.serp_change.available }));
+  check('B6-7 (INVARIANTS rule 1 / R18): a keyword whose results page could not be read is -1 — "check again" — with no share of voice, no movement and a line in the report that says it, never "not ranking"',
+    pFail.position === -1 && pFail.share_of_voice === null && pFail.serp_change.available === false
+    && Rfail.watch.serp_summary.could_not_be_read === 1 && /could not be read this week .*that is "check again", not "not ranking"/.test(Rfail.watch.html)
+    && !/not ranking<\/td>/.test(Rfail.watch.html), JSON.stringify(pFail));
+  check('B6-7: a keyword that could not be read is left out of the counts it would distort — it is neither in the top ten nor "within reach"',
+    Rfail.watch.serp_summary.top10 === 1 && Rfail.watch.serp_summary.striking === 1 && Rfail.watch.serp_summary.read === 3,
+    JSON.stringify(Rfail.watch.serp_summary));
+  // the held and the set-aside reach the reader
+  const Rcap = await report96({ keywords: TWELVE, monitors: [{ json: { site_id: SITE96, domain: D96, competitors: 'cleartax.com' } }] });
+  check('B6-7: the keywords the cap held back are printed with the cap, so a customer can see the whole list and what it would take to watch all of it',
+    /<b>Not checked this week \(2\):<\/b>/.test(Rcap.watch.html) && /at most 10 checks a week for your own keyword list/.test(Rcap.watch.html)
+    && (Rcap.watch.not_checked || []).length === 2, (Rcap.watch.html.match(/Not checked this week[\s\S]{0,200}/) || [''])[0]);
+  const Raside = await report96({ keywords: 'e invoicing uae, cleartax pricing', monitors: [{ json: { site_id: SITE96, domain: D96, competitors: 'cleartax.com' } }], positions: { 'e invoicing uae': 5 } });
+  check('B6-7: and the one the keyword rule set aside is printed with its reason, so nothing is quietly missing from the customer\'s own list',
+    /Set aside by the keyword rule:/.test(Raside.watch.html) && /cleartax pricing/.test(Raside.watch.html)
+    && (Raside.watch.set_aside || []).length === 1 && Raside.watch.serp_summary.set_aside === 1, (Raside.watch.html.match(/Set aside by the keyword rule[\s\S]{0,220}/) || [''])[0]);
+  check('B6-7: the next step comes out of the readings and nothing else — a fall the page around it did not share first, then the nearest win',
+    W.next_step.action === 'look_at_drop' && W.next_step.keyword === 'e invoicing uae'
+    && Raside.watch.next_step.action === 'nearest_win' && Raside.watch.next_step.keyword === 'e invoicing uae'
+    && /nearest win on your list/.test(Raside.watch.next_step.text), JSON.stringify([W.next_step, Raside.watch.next_step]));
+  // a week where nothing had to be bought, and a site with no ladder at all
+  const Rcarried = await report96({ keywords: LIST, history: ['e invoicing uae', 'vat software dubai', 'corporate tax uae'].map(k => hrow96(SITE96, k, 7, ago96(3), TEN96)) });
+  check('B6-7: a week in which the site check had already read every keyword buys nothing for the list and says exactly that, instead of inventing a cost',
+    /No check was bought for your keyword list this week: every keyword above was read from a results page somebody had already paid for\./.test(Rcarried.watch.html)
+    && Rcarried.watch.serp_summary.checked === 0 && Rcarried.watch.serp_summary.carried === 3 && Rcarried.watch.serp_summary.read === 3
+    && Rcarried.watch.positions.every(p => p.source === 'site_check' && p.position === 7), (Rcarried.watch.html.match(/No check was bought[^<]+/) || [''])[0]);
+  const Rnoladder = await report96({ keywords: LIST, ladders: null, positions: { 'e invoicing uae': 3 } });
+  check('B6-7: a website with no keyword ladder at all still gets its list watched — the whole point of the row: the tracker no longer needs a ladder to have something to track',
+    Rnoladder.all.length === 1 && !!Rnoladder.watch && Rnoladder.watch.positions.length === 3
+    && Rnoladder.watch.positions.find(p => p.keyword === 'e invoicing uae').position === 3, JSON.stringify(Rnoladder.all.map(x => x.watchlist)));
+  // R28 / R31: the run settles what it measured, not what it reserved
+  check('B6-7 (R28 / R31): the report hands the ledger the figure the provider MEASURED for these calls — each task counted once by its id — instead of the reservation, now that a run buys a variable number of checks',
+    R1.all[0].cost_usd === 0.09 && /measured: the provider/.test(R1.all[0].cost_basis)
+    && R1.all.slice(1).every(x => x.cost_usd === undefined), JSON.stringify({ first: R1.all[0].cost_usd, rest: R1.all.slice(1).map(x => x.cost_usd) }));
+  const Rnocost = await report96({ keywords: LIST, cost: null, positions: { 'e invoicing uae': 5 } });
+  check('B6-7 (INVARIANTS rule 1): a run whose cost the provider did not report settles nothing of its own and says so, rather than passing its reservation off as a measurement',
+    Rnocost.all[0].cost_usd === undefined && /The provider reported no cost for these calls, so none is shown\./.test(Rnocost.watch.html),
+    (Rnocost.watch.html.match(/live checks? bought[^<]+/) || [''])[0]);
+  save('rank-tracker-watchlist-b67.html', W.html); scanHtml('the customer\'s own tracked keywords (B6-7)', W.html);
+  reset();
+});
+
 H.report();
 })();
