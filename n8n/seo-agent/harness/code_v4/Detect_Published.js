@@ -7,13 +7,28 @@
 //   log_row    seo_content_log, upsert by site_id + keyword, exactly the table columns: the written page's row (source, page type, rung, ladder,
 //              request id and start date kept) with status published, the live URL and now; without a written row, a new one (source ladder / manual)
 //   ladder_row seo_ladders, update by ladder_id + keyword: status published, target_url = the live URL, page_exists true (null when no ladder row)
-// o: { site_id, domain, keyword, url, log (content-log row or null), ladder (ladder row or null), request_id, now (ISO) }
+// INVARIANTS rule 4 (2026-10-15, state_lint.py): `o.live` is what PROVED the page is there, and the builder refuses to advance the state
+// without it. *Detect Published* only ever called this for a page that had answered 200 (or that the site's own sitemap declares), but
+// *Publish Check* called it unconditionally: an owner clicking "I published a page" for a URL that answered 404 still got
+// `status: 'published'`, a `published_url` and `page_exists: true` written into seo_content_log and seo_ladders -- while the very same run
+// told them, in words, that the page could not be fetched. Every reader of those two tables (the ladder plan, the Rank Tracker, the Content
+// Cadence's pile-up guard, the Site Tracker, the app) then treated a page nobody could reach as live. A record says a thing exists only
+// when the thing exists.
+// Without the proof the row keeps the state it already had, records no URL and no date -- there is nothing to claim -- and the ladder row is
+// left alone entirely rather than being moved backwards. The run still answers the owner (the page could not be fetched; the Site Tracker
+// looks again on Monday), and Monday's publish detection, which does prove it, is what closes the row.
+// o: { site_id, domain, keyword, url, live (what proved the page is there), log (content-log row or null), ladder (ladder row or null), request_id, now (ISO) }
 function publishedRows(o) {
   const log = o.log || null, ladder = o.ladder || null, now = o.now;
+  const live = o.live === true;
   const log_row = { site_id: o.site_id, domain: o.domain, keyword: o.keyword, source: (log || {}).source || (ladder ? 'ladder' : 'manual'), page_type: (log || {}).page_type || (ladder ? (ladder.page_type || '') : ''), existing_page_url: (log || {}).existing_page_url || '', rung: Number((log || ladder || {}).rung) || 0,
-    ladder_id: (log || ladder || {}).ladder_id || '', request_id: (log || {}).request_id || o.request_id || '', started_at: (log || {}).started_at || now, status: 'published', published_url: o.url, published_at: now, week: now.slice(0, 10) };
-  const ladder_row = ladder ? { ladder_id: ladder.ladder_id, keyword: ladder.keyword, status: 'published', target_url: o.url, page_exists: true } : null;
-  return { log_row, ladder_row };
+    ladder_id: (log || ladder || {}).ladder_id || '', request_id: (log || {}).request_id || o.request_id || '', started_at: (log || {}).started_at || now,
+    status: live ? 'published' : ((log || {}).status || 'reported'),
+    published_url: live ? o.url : ((log || {}).published_url || ''),
+    published_at: live ? now : ((log || {}).published_at || ''),
+    week: live ? now.slice(0, 10) : ((log || {}).week || now.slice(0, 10)) };
+  const ladder_row = (ladder && live) ? { ladder_id: ladder.ladder_id, keyword: ladder.keyword, status: 'published', target_url: o.url, page_exists: true } : null;
+  return { log_row, ladder_row, live, not_live_reason: live ? '' : 'nothing confirmed the page is there, so no row says it is' };
 }
 // rule R1 "one search, one page" — the same words as the web app (app/shared/src/ladders.ts): lower case, one-letter and stop words out, a light
 // stem, place names kept; two keywords are the same search when their word sets are equal or 75%+ the same (Jaccard)
@@ -54,7 +69,12 @@ const out = state.map(st => {
     const p = matched.get(c.key); if (!p) continue;
     const keyword = (c.log || c.ladder || {}).keyword || c.keyword;
     // the content-log row keeps its own site_id: the upsert (site_id + keyword) must hit the row the Content Cadence wrote
-    const { log_row, ladder_row } = publishedRows({ site_id: (c.log && c.log.site_id) || st.site_id, domain: st.domain, keyword, url: p.url, log: c.log, ladder: c.ladder, request_id: '', now });
+    // INVARIANTS rule 4: what proves this page is there — HTTP 200 for the pages this run fetched (a title match), and the site's own
+    // sitemap for a slug match, which is the site declaring the page exists. Either way it is evidence from outside this run.
+    const pgLive = pages.get(p.url);
+    const live = pgLive ? !!pgLive.ok : true;
+    const { log_row, ladder_row } = publishedRows({ site_id: (c.log && c.log.site_id) || st.site_id, domain: st.domain, keyword, url: p.url, log: c.log, ladder: c.ladder, request_id: '', now, live });
+    if (!live) continue;
     log_rows.push(log_row); if (ladder_row) ladder_rows.push(ladder_row);
     if (log_row.source === 'case_study' || /case stud/i.test(log_row.page_type)) case_rows.push({ site_id: log_row.site_id, keyword: log_row.keyword, page_url: p.url });
     detected.push({ keyword, url: p.url, ladder_id: log_row.ladder_id || (c.ladder ? c.ladder.ladder_id : ''), matched_by: p.matched_by, source: c.source });

@@ -1229,6 +1229,30 @@ The empty-string defect was real but lived elsewhere, in the seven findings abov
 The other four baseline entries are small or already covered at their sink (*Analyze Probes* delivers only through *Build Site Issues*;
 three cadence / Console Alert e-mails state counts with no source line). They stay listed rather than excused.
 
+**INVARIANTS rule 4 is enforced — all four rules now fail the build (2026-10-15, build section 74, `state_lint.py`, S84).** Unlike
+rules 1, 2 and 3 it needs **no ratchet**: six classes, all fully passing (builders 2/2, delivery 15/15, promise 4/4, reversal 1/1,
+stored 2/2, verdict 1/1, 0 rows on the baseline). It proves over the generated JSON that every caller of the shared published-row
+builder hands it the proof and the builder refuses without it; that no Data Table node mints a forward state with an ungated path into
+it; that no node records `delivered` without judging a status code; that no delivery POST is `neverError` without `fullResponse`
+(B-F2's shape); that a workflow which opens a delivery record settles it (B-F3's shape); and that **no node after a verdict touches one
+verdict field without setting all five** — the class B3-3 belonged to, where a copied draft was labelled publishable because the failing
+gate reached a different field than the one the filename, banner, `meta.json`, callback and app read. What it does not prove is written
+into its baseline note: that the row a node wrote is the row its evidence covers, and the app-side half of B-R1 is unreachable from the
+engine's JSON.
+
+It was broken ten ways and each was caught by name — and **four of those breaks exposed holes in the lint itself first**, including
+`gate_lint.py`'s exact hole (evidence found in an inlined kit counting as the node's own), one proof IF upstream counting for every path,
+`status_note` matching inside `status_noteX`, and a POST read through `$input` not being counted. 18 self-test cases, all caught.
+
+| ID | Title | Impact | Where | Fix | Status |
+|---|---|---|---|---|---|
+| B-S1 | **A page that answers 404 was recorded as published.** "I published a page" (*Publish Check*) called `publishedRows()` **unconditionally**: `live` was computed at line 34 and never reached line 127, so a URL that could not be fetched was written `status: published`, `published_url` and `page_exists: true` into `seo_content_log` **and** `seo_ladders` — while the same run told the owner it could not be fetched. Its twin *Detect Published* never had the bug. Verified in the pre-merge source by the orchestrator | **High** (the state machine's own rule, broken at the one node whose whole job is to check) | `v5/code/Publish_Check.js` | the builder refuses without the proof, and every caller hands it over; with no earlier row the claim is recorded as **reported**, never as published | fixed 2026-10-15 (build section 74, S84); not deployed |
+| B-S2 | **A case study was marked published with no gate at all** — *Mark Case Study Published* wrote `published` into `seo_case_studies` on nothing but the run having reached that node | Medium | the case-study path | behind a new *Page Live? (Published)* IF | fixed 2026-10-15 (build section 74, S84); not deployed |
+
+**All four INVARIANTS rules now enforce at build time**: rule 1 `lineage_lint.py` (ratcheted, 9 nodes), rule 2 `gate_lint.py` (ratcheted,
+26), rule 3 `retry_lint.py` (ratcheted, 48 for B-A10), rule 4 `state_lint.py` (**no ratchet**). Every one of them found a live defect on
+the day it landed: rule 2 found B-G1..B-G3, rule 1 found seven findings with empty evidence plus B-L4 / B-L5, rule 4 found B-S1 / B-S2.
+
 **A process defect this batch found (B-P1).** `isolation: "worktree"` cut both agents' worktrees from `edca460` — the last merge to
 `main` — which is **47 commits behind** the branch tip: no build sections 55–66, no S67–S74, and `docs/system-review-2026-10-14/` did
 not exist, so the brief's own required reading was missing. Both agents detected it independently and merged the tip before starting,
