@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { compose, parseIncoming, stripQuoted } from '../src/services/mail';
+import { authCheckStale, compose, mailAuthGate, MAIL_AUTH_TTL_DAYS, parseIncoming, stripQuoted } from '../src/services/mail';
+import type { DnsCheck } from '@seo/shared';
 import type { MailboxRow } from '../src/db/schema';
 
 const mb = { fromName: 'Sara Khan', fromEmail: 'sara@techand.ai', signatureName: 'Sara Khan', signatureTitle: 'Head of Finance Systems', company: 'Techand Systems', postalAddress: 'Office 1204, Bay Square, Dubai, UAE' } as unknown as MailboxRow;
@@ -10,9 +11,11 @@ describe('composing a sequence e-mail (v4.13)', () => {
     expect(m.subject).toBe('A dead link in your guide'); expect(m.text).toContain('Bay Square'); expect(m.text).toMatch(/reply "no"/); expect(m.text).not.toContain('I found your address');   // not an EU / UK recipient
     expect(m.headers['List-Unsubscribe']).toBe('<mailto:sara@techand.ai?subject=unsubscribe>'); expect(m.messageId).toMatch(/^<lb\.0f3c2a9b\.0\.[\w-]+@techand\.ai>$/); expect(m.inReplyTo).toBeUndefined();
   });
-  it('follow-up: same thread (Re:, In-Reply-To / References), no postal address again', () => {
+  // B11-3 (2026-10-15, benchmark area 11): CAN-SPAM asks for the postal address in every commercial message, so the follow-ups
+  // carry it too. Only the GDPR Art. 14 source line is first-contact-only.
+  it('follow-up: same thread (Re:, In-Reply-To / References), and the postal address again', () => {
     const m = compose(mb, { sequenceId: '0f3c2a9b-1111-2222-3333-444455556666', step: 1, to: 'editor@erpdaily.ae', subject: '', body: 'One more detail.', firstSubject: 'A dead link in your guide', country: 'AE', foundOn: '', previousIds: ['<lb.0f3c2a9b.0.abc@techand.ai>'] });
-    expect(m.subject).toBe('Re: A dead link in your guide'); expect(m.inReplyTo).toBe('<lb.0f3c2a9b.0.abc@techand.ai>'); expect(m.references).toEqual(['<lb.0f3c2a9b.0.abc@techand.ai>']); expect(m.text).not.toContain('Bay Square');
+    expect(m.subject).toBe('Re: A dead link in your guide'); expect(m.inReplyTo).toBe('<lb.0f3c2a9b.0.abc@techand.ai>'); expect(m.references).toEqual(['<lb.0f3c2a9b.0.abc@techand.ai>']); expect(m.text).toContain('Bay Square'); expect(m.text).not.toContain('I found your address');
   });
 });
 
@@ -38,5 +41,36 @@ describe('reading incoming mail (v4.13)', () => {
   it('a policy block (5.7.x) is told apart from an unknown address', async () => {
     const src = ['From: postmaster@outlook.com', 'To: sara@techand.ai', 'Subject: Undeliverable: A dead link', 'Content-Type: multipart/report; report-type=delivery-status; boundary="CC"', '', '--CC', 'Content-Type: message/delivery-status', '', 'Final-Recipient: rfc822; editor@x.com', 'Action: failed', 'Status: 5.7.1', '', '--CC--', ''].join('\r\n');
     const m = await parseIncoming(src); expect(m.kind).toBe('bounce'); expect(m.policyBlock).toBe(true);
+  });
+});
+
+// ---- B11-4 (2026-10-15, benchmark area 11): the authentication gate runs on the read path too -------------------------------
+// SPF / DKIM / DMARC used to be read once, when the mailbox was connected, stored on the row and never looked at again — and no
+// path refused a send over the answer. These prove the refusal and, just as importantly, what it does NOT refuse.
+describe('B11-4 the sending domain is checked before a new conversation', () => {
+  const dns = (o: Partial<DnsCheck>): DnsCheck => ({ spf: 'pass', dmarc: 'pass', dkim: 'found', checkedAt: new Date().toISOString(), notes: [], ...o });
+  it('a reading younger than the window is used as it stands, and nothing is looked up', async () => {
+    const g = await mailAuthGate('sara@techand.ai', dns({}));
+    expect(g.ok).toBe(true); expect(g.rechecked).toBe(false);
+  });
+  it('neither SPF nor DKIM on the From domain stops a new conversation, and says why', async () => {
+    const g = await mailAuthGate('sara@techand.ai', dns({ spf: 'missing', dkim: 'unknown', dmarc: 'missing' }));
+    expect(g.ok).toBe(false);
+    expect(g.why).toContain('techand.ai');
+    expect(g.why).toMatch(/SPF/); expect(g.why).toMatch(/DKIM/);
+    expect(g.why).toMatch(/follow-ups/);   // an open conversation is never left hanging
+  });
+  it('DKIM alone is enough: a missing SPF is a note, not a refusal', async () => {
+    expect((await mailAuthGate('sara@techand.ai', dns({ spf: 'missing', dkim: 'found' }))).ok).toBe(true);
+  });
+  it('a weak SPF or a p=none DMARC is never a refusal — only the total absence of authentication is', async () => {
+    expect((await mailAuthGate('sara@techand.ai', dns({ spf: 'weak', dmarc: 'none' }))).ok).toBe(true);
+  });
+  it('a reading older than the window, or one that was never taken, is re-read before it is trusted', () => {
+    const old = new Date(Date.now() - (MAIL_AUTH_TTL_DAYS + 1) * 864e5).toISOString();
+    expect(authCheckStale(dns({ checkedAt: old }))).toBe(true);
+    expect(authCheckStale(null)).toBe(true);
+    expect(authCheckStale(dns({ checkedAt: 'not a date' }))).toBe(true);
+    expect(authCheckStale(dns({}))).toBe(false);
   });
 });

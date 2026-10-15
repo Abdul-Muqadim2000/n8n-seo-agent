@@ -8200,6 +8200,98 @@ def _b81_checks():
 
 _b81_log = lambda _b81_n: log('A rate without its sample, and a change without a test (2026-10-15, benchmark area 8, rows B8-1 / B8-2 / B8-3 / B8-4 / B8-5; BENCH_AREA8_ai_visibility.md). The signal is non-deterministic by construction - SparkToro and Gumshoe measured an identical brand list coming back under 1% of the time over 2,961 runs - and not one tool in this market puts a sample size or an interval beside a rate: Profound ran ~989,000 AI responses to decompose the variance (V(Mn) = S/n + D, Wald and bootstrap SDs) and its v2 visibility endpoint returns three floats with no denominator and no standard error; Semrush, now an Adobe subsidiary, defines its whole change method as "the change in your brand mentions since the last update"; Ahrefs Brand Radar never uses the word variance; Evertune publishes +/-44 points for one prompt asked once and sells "statistical significance" as an $800 tier. B8-1: three of our four headline tiles printed an untested arrow beside a tested one, and the subject line printed the points with no word about the test - all four now go through one shared two-proportion z-test, the share of voice on its own denominator, the visibility score (a weighted mean, not a proportion) with the standard error of that mean over Kish\'s effective sample size and no change called inside its own band, and the competitor-share alert off its fixed 10-point rule. B8-2: the daily pulse pooled seven days of baseline with no check that they measured the same thing - B-L4 guarded the weekly run the same day and left this one, so raising the panel 8 to 20 or adding an engine would have fired a 99% "real drop" at a site whose visibility had not moved; a morning is pooled only when the same engines answered it on a comparable number of answers, every day left out is named with its reason, and with no comparable day there is no test. B8-3: a morning nobody could read sent nothing at all, which looked exactly like a quiet one - today\'s readability is its own evidence block, an unreadable morning always reaches a human, and the weekly report says how many of its answers came from a pulse day that did not reach every engine. B8-4: a per-question rate had no floor and picked the actions, so a question asked once and lost once became a gap, an action and a ready-to-send API body - four answers now, or it is listed as undecided and picks nothing. B8-5: skipped_by_cap was written by AI Requests and read by nobody; it is counted per engine, printed, and recorded as evidence nobody gathered. proved against the generated workflows, with the ordering of both new guards walked: ' + str(_b81_n) + ' node group(s) checked')
 
+# =============================================================================
+# 83. A LINK WON ONCE IS NOT A LINK YOU STILL HAVE (2026-10-15, benchmark programme area 11 —
+#     docs/system-review-2026-10-14/BENCH_AREA11_link_building.md; register rows B11-1 / B11-2 / B11-3 / B11-4)
+#
+#     The rubric names Pitchbox / Respona as the leaders here. Opened on 2026-10-15, two of the three names in the area's
+#     research are no longer what they were: **Respona no longer sells outreach software at all** - it is a done-for-you,
+#     pay-per-placement guest-post service, $100-$500 per placement by the host's Ahrefs DR, writing the article itself and
+#     placing the customer's chosen anchor, exact-match offered (https://respona.com/pricing/,
+#     https://help.respona.com/en/articles/13575093-our-link-building-process) - and **Postaga is gone** (postaga.com answers 404
+#     from a WP Engine holding page). Semrush has withdrawn its Link Building Tool documentation
+#     (semrush.com/features/link-building/ 301s to /features/backlink-analysis/). **Pitchbox is the one leader still alive,
+#     selling and publishing its mechanism**, so it is the comparison that counts.
+#
+#     Three things Pitchbox does that we did not, and one it does that we will not:
+#       * it monitors every connected mailbox's authentication continuously - "all active email accounts are automatically
+#         monitored by MXRight", covering DNS, SMTP, SPAM and DKIM (https://help.pitchbox.com/article/246-mxright). We read SPF /
+#         DKIM / DMARC once, when the mailbox was connected, and never again.
+#       * it re-checks won links, monthly, for the top 100 (https://help.pitchbox.com/article/34-what-is-link-monitoring). We
+#         re-checked a link won through outreach exactly **never**.
+#       * it refuses open-tracking pixels outright - "we've made a deliberate decision not to include open rate tracking in
+#         outreach campaigns" (https://help.pitchbox.com/article/257-open-rates-vs-response-rates). So do we, and Hunter's own
+#         2026 data says why: 7.4% reply with tracking off against 4.4% with it on (https://hunter.io/the-state-of-cold-email).
+#       * its AI Agents send replies with no human in the loop and will "Negotiate pricing within your defined limits"
+#         (https://help.pitchbox.com/article/275-ai-agents-in-pitchbox). We will not: a paid link must carry rel="sponsored" and
+#         then earns no ranking credit anyway (Google's spam policies, last updated 2026-08-28).
+#
+#     * B11-2 - **a link won through outreach was proven once and never looked at again.** The Reply Reader fetches the page a
+#       reply names, finds the link, and the prospect becomes `won`; from then on "Links won" counted it for ever. A page no
+#       crawler indexes - the normal case for a small site's first links - never enters `seo_backlinks` either, so the Backlink
+#       Monitor's weekly re-check never reached it: the link the customer worked hardest for was the one link nobody verified
+#       twice. Criterion 4C.7 is "confirmed live by our own check, THEN monitored", and about a third of monitored links are gone
+#       within a year (Linkody, 865,000 backlinks, June 2026, https://blog.linkody.com/seo/link-building-statistics-2026-2).
+#       *LB Page Requests* now queues every won link the ledger does NOT carry (oldest reading first, a row that already missed
+#       once first, 12 a run, free GETs, and never a page the Backlink Monitor is already fetching); *LB Assemble* reads it with
+#       the same LK.verify the monitor uses and runs the state machine: found -> `live` and the miss count back to 0; missing or
+#       gone -> a miss, where ONE miss is `at_risk` and never a loss (the peppol.org rule) and two in a row are `lost`; blocked,
+#       JavaScript-only or a fetch error -> `not_checked` with the miss count UNTOUCHED (INVARIANTS rule 3 - a reading we could
+#       not take is not evidence that the link went). Only a confirmed loss takes the prospect off `won`, carrying the date it
+#       was won and what we found (INVARIANTS rule 4). The reading rides `checks_json`, so no Data Table column is added and
+#       nothing needs `sync_tables.py`. The report prints the four states apart from each other, says the refusal rule out loud,
+#       and puts the measured decay base rate beside a loss so nobody reads one as a failure.
+#
+#     The other three rows of this pass are in app/ and have no node to walk, so they are proved by the app's own tests rather
+#     than here: B11-1 (every outreach rate was printed from whatever sample existed - 33.3% off one reply in three, a red
+#     "50.0% bounced" badge off one bounce in two - on the same screen as a subject-line test that refuses a verdict under 30
+#     sends; the floors are now derived, the bounce one from the 2% limit it is judged against, which cannot be measured under 50
+#     sends); B11-3 (the postal address went out on the first e-mail only, while CAN-SPAM's requirements are per message and each
+#     one carries a maximum penalty of $53,088 - https://www.ftc.gov/business-guidance/resources/can-spam-act-compliance-guide-business);
+#     and B11-4 (SPF / DKIM / DMARC were a gate on the way in and nothing on the way out - re-read when the stored reading is a
+#     week old, and a From domain with neither SPF nor DKIM cannot START a conversation, which is Google's own rule for every
+#     sender: "Set up SPF or DKIM email authentication for your sending domains", https://support.google.com/a/answer/81126).
+# =============================================================================
+def _b83_checks():
+    """Area 11 over the generated Link Builder: the won links are queued, verified, counted apart and reported - walked on the
+    built workflow, so a change that never reaches a node cannot pass."""
+    import json as _j83
+    _p83 = os.path.join(HERE0, 'workflows', 'SEO_Agent_Link_Builder.json')
+    assert os.path.exists(_p83), 'SEO_Agent_Link_Builder.json was not generated'
+    _code83 = {}
+    for _w83 in _j83.load(open(_p83, encoding='utf-8')):
+        for _n83 in (_w83.get('nodes') or []):
+            if (_n83.get('parameters') or {}).get('jsCode'):
+                _code83[_n83['name']] = _n83['parameters']['jsCode']
+    _want83 = {
+        'LB Page Requests': ('B11-2', ("const wonQueue = [];", "String(y.status || '') === 'won'", "if (!key || linking.has(key)) continue;",
+                                       "wonQueue.sort((a, b) => (b.misses - a.misses) || (b.age - a.age));", "LB_WON_MAX")),
+        'LB Assemble': ('B11-2', ("const won_checks = [];", "o.r.kind === 'won'", "LK.verify(x, p.domain", "won_live:", "won_unchecked:")),
+        'LB Report': ('B11-2', ("const WON_STATE = {", 'Links you won', 'missing twice running', '865,000 links tracked by Linkody',
+                                "Whether the links you won are still on the page", 'won_checks: wonChecks.map')),
+    }
+    for _node83, (_row83, _needs83) in _want83.items():
+        _js83 = _code83.get(_node83) or ''
+        assert _js83, 'area 11: node %s not found in the Link Builder' % _node83
+        for _t83 in _needs83:
+            assert _t83 in _js83, '%s: %s no longer carries %r' % (_row83, _node83, _t83)
+    _as83 = _code83['LB Assemble']
+    # the state machine, both halves. A reading we could not take may never advance the miss count, and one miss may never be a loss.
+    assert "const readable = ['found', 'missing', 'gone'].includes(v.verify);" in _as83, \
+        'B11-2: nothing decides whether the reading could be taken at all'
+    assert "misses = v.verify === 'found' ? 0 : readable ? (Number(before.misses) || 0) + 1 : (Number(before.misses) || 0);" in _as83, \
+        'B11-2 (INVARIANTS rule 3): a blocked or unreadable page is counting as a miss again - that is how a bot wall becomes a false loss'
+    assert "misses >= 2 ? 'lost' : 'at_risk'" in _as83, \
+        'B11-2: one reading is being called a loss again (the peppol.org mistake, in a new place)'
+    # INVARIANTS rule 4: only the proven loss moves the stored record, and it keeps what it is replacing
+    assert "if (state === 'lost') { const pr = myProspects.find" in _as83 and "status: 'lost'" in _as83, \
+        'B11-2 (INVARIANTS rule 4): a link proven gone is still counted as won'
+    assert "status: 'at_risk'" not in _as83, 'B11-2: an at-risk reading must not be written onto the prospect row as a status'
+    # it must not fetch what the Backlink Monitor already fetches, or the customer's prospects get two of our GETs every Monday
+    assert "linking.has(key)" in _code83['LB Page Requests'], 'B11-2: the won queue no longer skips the links the ledger carries'
+
+log('A link won once is not a link you still have (2026-10-15, benchmark area 11, rows B11-1 / B11-2 / B11-3 / B11-4; BENCH_AREA11_link_building.md). The rubric names Pitchbox / Respona: opened 2026-10-15, Respona no longer sells outreach software at all (pay-per-placement guest posts, $100-$500 by the host\'s Ahrefs DR, the article written by them and the customer\'s anchor placed, exact match offered), Postaga answers 404, and Semrush has withdrawn its Link Building Tool documentation - Pitchbox is the one leader still publishing a mechanism. B11-2: a link won through outreach was proven exactly once, at the reply, and never read again; a page no crawler indexes never enters the backlink ledger either, so the Backlink Monitor never reached it, and "Links won" counted it for ever while about a third of links go within a year (Linkody, 865,000 backlinks, June 2026). LB Page Requests now queues every won link the ledger does NOT carry (12 a run, oldest first, free GETs, never a page the monitor already fetches), LB Assemble reads it with the same LK.verify and runs the state machine - found is live and the miss count resets, missing or gone is ONE miss and at_risk before two in a row make it lost, and a bot wall, a JavaScript shell or a fetch error is not_checked with the miss count untouched - and only a proven loss takes the prospect off won, with the date it was won and what we found. The reading rides checks_json, so no Data Table column is added. Pitchbox re-checks the top 100 links monthly; Respona asks the customer to notice. B11-1, B11-3 and B11-4 are in app/: a rate is withheld under a derived floor (the bounce one from the 2% limit it is judged against, unmeasurable under 50 sends), the postal address rides every commercial message and not only the first (CAN-SPAM is per message, at up to $53,088 each), and SPF / DKIM is re-read weekly and refuses a NEW conversation from a domain publishing neither - Google\'s own rule for every sender')
+
 
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:
@@ -8353,5 +8445,8 @@ _b78_checks()
 # like every check in this block it runs here and not where it is defined.
 _b81_log(_b81_checks())
 _b79_checks()
+# section 83 (B11-2): benchmark area 11, on the generated Link Builder - the won links are read again, and a reading
+# that failed is not a loss
+_b83_checks()
 _b69_checks()
 

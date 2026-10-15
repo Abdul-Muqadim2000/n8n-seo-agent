@@ -93,8 +93,12 @@ export interface MailboxTestResult { ok: boolean; smtp: { ok: boolean; error: st
 export interface DnsCheck { spf: 'pass' | 'missing' | 'weak'; dmarc: 'pass' | 'missing' | 'none'; dkim: 'found' | 'unknown'; checkedAt: string; notes: string[] }
 export interface LinkSettings { mode: 'approve' | 'auto'; mailboxId: string | null; autoDailyMax: number }
 export const DEFAULT_LINK_SETTINGS: LinkSettings = { mode: 'approve', mailboxId: null, autoDailyMax: 5 };
-export interface LinkBuildingKpis { wonMonth: number; wonAll: number; sentMonth: number; contactedDomains: number; replied: number; positive: number; replyRate: number | null; winRate: number | null;
-  bounceRate: number | null; unsubscribes: number; medianDaysToLink: number | null; byType: { type: string; sent: number; replied: number; won: number }[] }
+export interface LinkBuildingKpis { wonMonth: number; wonAll: number; sentMonth: number; contactedDomains: number; replied: number; positive: number;
+  /** B11-1: null until the sample reaches `OUTREACH_RATE_MIN` — the page shows `rates.*.note` instead of an invented percentage */
+  replyRate: number | null; winRate: number | null; bounceRate: number | null;
+  /** B11-1: the same three figures with what they were counted over and whether they may be read at all */
+  rates: { reply: RateRead; win: RateRead; bounce: RateRead };
+  unsubscribes: number; medianDaysToLink: number | null; byType: { type: string; sent: number; replied: number; won: number }[] }
 export interface LinkBuildingData {
   settings: LinkSettings; mailboxes: MailboxView[]; drafts: OutreachDraft[]; sequences: OutreachSequence[]; kpis: LinkBuildingKpis;
   listings: { id: string; name: string; category: string; status: string; profileUrl: string; rel: string; competitors: string[]; submitUrl: string; priority: number; why: string; checkedAt: string; submittedAt: string; note: string }[];
@@ -197,14 +201,65 @@ export function consentGate(country: string, email: string): ConsentGate {
   if (c === 'AE' && !role) return { needed: true, why: "The UAE's data law is consent-based: write to a named person only with their consent or an existing relationship (editor@ or info@ inboxes are fine)." };
   return { needed: false, why: '' };
 }
-/** the lines every e-mail ends with: who is writing, from where, and how to stop it (CAN-SPAM, GDPR Art. 14, PECR) */
+/** the lines every e-mail ends with: who is writing, from where, and how to stop it (CAN-SPAM, GDPR Art. 14, PECR)
+ *
+ *  **B11-3 (2026-10-15, benchmark area 11).** The postal address used to go out on the FIRST e-mail only, and the two follow-ups
+ *  carried the signature and the opt-out without it. CAN-SPAM's requirements are written per **message** — "Include your valid
+ *  physical postal address" is one of the seven, and the Act's definition of a commercial electronic mail message covers every
+ *  message whose primary purpose is commercial advertising, not only the first one in a thread
+ *  (https://www.ftc.gov/business-guidance/resources/can-spam-act-compliance-guide-business). A link pitch is such a message and so
+ *  is its follow-up, so two of every three e-mails we sent were short of a requirement that costs one line. The address is on all
+ *  of them now; a mailbox with no postal address on file cannot start a conversation at all (`canSend`).
+ *  The GDPR Art. 14 line stays on the first contact, where the Article puts it ("at the time of the first communication").
+ */
 export function footerLines(m: { name: string; title: string; company: string; postalAddress: string }, opts: { firstEmail: boolean; country: string; foundOn?: string }): string[] {
   const who = [m.name, m.title].filter(Boolean).join(', ');
   const lines = ['', '—', [who, m.company].filter(Boolean).join(' · ')];
-  if (opts.firstEmail && m.postalAddress) lines.push(m.postalAddress);
+  if (m.postalAddress) lines.push(m.postalAddress);   // B11-3: every commercial message, not only the first
   if (opts.firstEmail && EU_UK.has(String(opts.country || '').toUpperCase()) && opts.foundOn) lines.push(`I found your address on ${opts.foundOn}.`);
   lines.push(opts.firstEmail ? 'If you would rather not hear from me, reply "no" and I won\'t write again.' : 'Reply "no" and I won\'t write again.');
   return lines;
+}
+
+// ---- B11-1 (2026-10-15, benchmark area 11): a rate is measured, or it says it is not yet ------------------------------------
+// The Link building page printed a reply rate, a win rate and a bounce rate from whatever had been sent — "33.3%" off one reply in
+// three, and a red "50.0% bounced" badge off a single bounce in two e-mails — on the same screen as the subject-line A/B, which
+// refuses to name a better subject under 30 first e-mails per style. The discipline was in one corner of the page and nowhere else
+// (INVARIANTS rule 1: a figure is measured, modelled, or not available, and says which).
+// The floors are derived, not chosen:
+//  * **bounce, 50.** Criterion 4C.5 and every mailbox provider's guidance put the limit at ~2%. One bounce in 50 IS 2%, so below 50
+//    sends the rate cannot land on the threshold it is judged against: it can only be 0% or something far above it.
+//  * **reply, 20.** The smallest list size the published data even separates is 21-50 (Hunter, State of Cold Email, 31M e-mails:
+//    6.2% for lists of 21-50 against 2.4% for 500+). Under 20 first e-mails there is no rate to compare with it.
+//  * **win, 25 contacted sites.** The only published link-building funnel with its arithmetic shown is Hunter's own — 1,000
+//    prospects e-mailed, ~50 replies, ~13 published links, a 1.3% prospect-to-backlink rate
+//    (https://hunter.io/blog/link-building-outreach-guide/, April 2026). At rates like that even 25 sites expects well under one
+//    link, so the figure is shown with that base rate beside it and never on its own.
+// Below the floor the counts are still shown, with how many more are needed: the customer sees the work, not an invented rate.
+export const OUTREACH_RATE_MIN = { reply: 20, win: 25, bounce: 50 } as const;
+export type OutreachRateKind = keyof typeof OUTREACH_RATE_MIN;
+export interface RateRead {
+  /** the percentage, or null when the sample is too small to read one from */
+  value: number | null;
+  /** measured (enough sample) or not available (not enough yet) — never modelled: this one is counted or it is withheld */
+  basis: 'measured' | 'unavailable';
+  hits: number;
+  sample: number;
+  min: number;
+  /** one sentence for the customer: the rate and what it was counted over, or how many more are needed */
+  note: string;
+}
+/** a rate the page may print, or the counts and the reason it may not be read yet */
+export function outreachRate(kind: OutreachRateKind, hits: number, sample: number, unit: string): RateRead {
+  const h = Math.max(0, Math.round(hits));
+  const n = Math.max(0, Math.round(sample));
+  const min = OUTREACH_RATE_MIN[kind];
+  const counted = `${h} of ${n} ${n === 1 ? unit.replace(/s$/, '') : unit}`;
+  if (n < min) {
+    return { value: null, basis: 'unavailable', hits: h, sample: n, min,
+      note: n === 0 ? `Nothing to count yet: ${unit} start this at ${min}.` : `${counted} so far — too few to read a rate from (${min} needed).` };
+  }
+  return { value: Math.round((1000 * Math.min(h, n)) / n) / 10, basis: 'measured', hits: h, sample: n, min, note: `${counted}.` };
 }
 /** subject of a follow-up in the same thread */
 export const replySubject = (first: string) => (/^re:/i.test(first.trim()) ? first.trim() : `Re: ${first.trim()}`);

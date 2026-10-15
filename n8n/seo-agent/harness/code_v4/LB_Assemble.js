@@ -905,6 +905,46 @@ for (const p of plans) {
     fixes.push({ from: r.url, to: best && best.f >= 0.3 ? best.pg.url : p.home, archived_at: r.archived_at, status: st });
   }
   for (const f of fixes.slice(0, 30)) outreach_rows.push(base({ prospect_domain: LK.normUrl(f.from), type: 'redirect',   /* one row per old URL */ status: 'fix', page_url: f.from, target_url: f.to, target_reason: 'answered ' + f.status + '; archived ' + String(f.archived_at).replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3'), evidence: 'Add a 301 redirect from ' + f.from + ' to ' + f.to + ' (links and bookmarks to the old URL keep working).', checks: { kind: 'wayback' } }));
+  // ---- 3b. B11-2 (2026-10-15, benchmark area 11): the links already won, read again on their own page ----------------------
+  // A link won through outreach was proven exactly once — at the moment of the reply — and then nothing looked at it again. When no
+  // crawler indexes the linking page (the normal case for a small site's first links) it never enters the backlink ledger either, so
+  // the Backlink Monitor's weekly re-check never reaches it: the links the customer worked hardest for were the ones nobody verified
+  // twice, while "Links won" went on counting them for ever. Criterion 4C.7 is "confirmed live by our own check, THEN monitored"
+  // (INVARIANTS rule 4: a record says a thing exists only while the thing exists).
+  // The state machine, which is the whole point:
+  //   found                      -> `live`, the miss count back to 0
+  //   missing / gone             -> a miss. ONE miss is `at_risk`, never a loss; TWO readings in a row make it `lost` (the peppol.org
+  //                                 rule: one reading is not evidence, and a page can come back)
+  //   blocked / JavaScript shell / fetch error -> `not_checked`, the miss count UNTOUCHED (INVARIANTS rule 3: a call that failed is
+  //                                 evidence we do not have, and nothing may be concluded from it — a bot wall is not a removed link)
+  // Only a confirmed loss moves the prospect off `won`, and it carries the date it was won and the reason it is no longer there.
+  const won_checks = [];
+  for (const { r, x } of pagesRead.filter(o => o.r.site_id === sid && o.r.kind === 'won')) {
+    if (outreach_rows.some(o => o.prospect_domain === r.prospect_domain && o.type === r.type)) continue;
+    const stored = myOutreach.find(o => o.prospect_domain === r.prospect_domain && o.type === r.type) || {};
+    let ck = {}; try { ck = JSON.parse(stored.checks_json || '{}') || {}; } catch (e) { ck = {}; }
+    const before = ck.won || {};
+    const v = LK.verify(x, p.domain, { url: r.url });
+    const readable = ['found', 'missing', 'gone'].includes(v.verify);
+    const misses = v.verify === 'found' ? 0 : readable ? (Number(before.misses) || 0) + 1 : (Number(before.misses) || 0);
+    const state = v.verify === 'found' ? 'live' : !readable ? 'not_checked' : misses >= 2 ? 'lost' : 'at_risk';
+    const why = v.verify === 'found' ? (v.rel === 'follow' ? 'the link is on the page' : 'the link is on the page, marked ' + v.rel)
+      : v.verify === 'gone' ? 'their page answered ' + (v.status || 'nothing') + ': the page itself is gone'
+      : v.verify === 'missing' ? 'their page no longer carries a link to you'
+      : v.verify === 'blocked' ? 'their site blocks automatic checks, so this was not read'
+      : v.verify === 'js' ? 'their page needs JavaScript to show its links, so this was not read'
+      : 'their page could not be read (' + String(v.error || v.status || 'no answer').slice(0, 80) + ')';
+    const w = { url: r.url, at: iso, state, misses, verify: v.verify, rel: v.verify === 'found' ? v.rel : '', placement: v.verify === 'found' ? v.placement : '',
+      anchor: v.verify === 'found' ? String(v.anchor || '').slice(0, 120) : '', why, won_at: String(r.won_at || ''), was: before.state || '' };
+    won_checks.push({ prospect_domain: r.prospect_domain, type: r.type, ...w });
+    outreach_rows.push(base({ prospect_domain: r.prospect_domain, type: r.type, status: stored.status || 'won', score: Number(stored.score) || 0, fit: Number(stored.fit) || 0,
+      fit_reason: state === 'live' ? 'the link is live (checked ' + day + ')' : state === 'not_checked' ? 'the link could not be checked: ' + why : why,
+      checks: { ...ck, won: w }, page_url: r.url, page_title: stored.page_title || '', evidence: stored.evidence || '', contacts: [], contact_form_url: stored.contact_form_url || '',
+      country: stored.country || '', language: stored.language || '', target_url: v.verify === 'found' ? (v.to_url || stored.target_url || '') : (stored.target_url || ''),
+      target_reason: stored.target_reason || '', anchor_hint: stored.anchor_hint || '', sequence_json: stored.sequence_json || '', deadline: stored.deadline || '', drafted_at: stored.drafted_at || '' }));
+    if (state === 'lost') { const pr = myProspects.find(y => y.prospect_domain === r.prospect_domain && y.type === r.type);
+      if (pr) prospect_rows.push({ ...pr, status: 'lost', last_seen: iso, verified_at: iso, note: String('won ' + String(r.won_at || '').slice(0, 10) + ', gone by ' + day + ': ' + why).slice(0, 300) }); }
+  }
   // ---- 4. the listings checklist ----
   if (p.due.listings) {
     const selfHtml = pagesRead.filter(o => o.r.site_id === sid && o.r.kind === 'self').map(o => htmlOf(o.x)).join(' ');
@@ -1024,7 +1064,7 @@ for (const p of plans) {
   const jobs = p.free_only ? [] : ready.slice(0, p.budget).map(({ rankv, ...o }) => o);
   const stillOld = (k) => !(myOutreach.find(o => o.prospect_domain + '|' + o.type === k) || {}).sequence_json;
   out.push({ json: { site_id: sid, domain: p.domain, email: p.email, callback_url: p.callback_url, request_id: p.request_id, on_demand: p.on_demand, free_only: p.free_only, checked_at: iso,
-    outreach_rows, prospect_rows, listing_rows, impact_rows, jobs: jobs.filter(j => stillOld(j.prospect_domain + '|' + j.type)), fixes, asset_ideas,
+    outreach_rows, prospect_rows, listing_rows, impact_rows, jobs: jobs.filter(j => stillOld(j.prospect_domain + '|' + j.type)), fixes, asset_ideas, won_checks,
     cache_row: { key: 'linkbld:' + sid, kind: 'linkbld', site_id: sid, value: JSON.stringify({ ...p.state, listings_at: p.due.listings ? iso : p.state.listings_at, resources_at: p.due.resources ? iso : p.state.resources_at, wayback_at: p.due.wayback ? iso : p.state.wayback_at, broken_at: p.due.broken ? iso : p.state.broken_at,
       podcasts_at: p.due.podcasts ? iso : p.state.podcasts_at, assets_at: p.due.assets ? iso : p.state.assets_at, last_run: iso }), updated_at: iso },
     summary: { press: press.length, digests: outreach_rows.filter(o => o.type === 'digest' && o.status !== 'not_fit').length,
@@ -1033,6 +1073,9 @@ for (const p of plans) {
       ready: ready.length, to_draft: jobs.length, redirects: fixes.length, listings_missing: listing_rows.filter(l => l.status === 'missing').length, listings_linked: listing_rows.filter(l => l.status === 'linked').length,
       impact_reads: impact_rows.filter(r => r.kind === 'link' && !['too_early', 'cant_tell'].includes(r.verdict)).length,
       page_changes: impact_rows.filter(r => r.kind === 'page_change').length,
-      change_reads: impact_rows.filter(r => r.kind === 'page_change' && !['too_early', 'cant_tell'].includes(r.verdict)).length } } });
+      change_reads: impact_rows.filter(r => r.kind === 'page_change' && !['too_early', 'cant_tell'].includes(r.verdict)).length,
+      // B11-2: what our own re-read of the won links found. `won_unchecked` is deliberately its own number: a bot wall is not a lost link.
+      won_checked: won_checks.length, won_live: won_checks.filter(w => w.state === 'live').length, won_at_risk: won_checks.filter(w => w.state === 'at_risk').length,
+      won_lost: won_checks.filter(w => w.state === 'lost').length, won_unchecked: won_checks.filter(w => w.state === 'not_checked').length } } });
 }
 return out.length ? out : [{ json: { skip: true } }];
