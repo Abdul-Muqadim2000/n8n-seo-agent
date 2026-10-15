@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DRAFT_GATES_AT, addWorkingDays, consentGate, draftSuperseded, draftWasSent, footerLines, inSendWindow, isAutoReply, isBounce, parseReturnDate, prospectDraft, replySubject, sendGap, warmupCap, type StoredDraftRow } from './outreach';
+import { DRAFT_GATES_AT, OUTREACH_RATE_MIN, addWorkingDays, consentGate, draftSuperseded, draftWasSent, footerLines, inSendWindow, isAutoReply, isBounce, outreachRate, parseReturnDate, prospectDraft, replySubject, sendGap, warmupCap, type StoredDraftRow } from './outreach';
 
 describe('link-building sending rules (v4.13)', () => {
   it('warms a new mailbox up: 5, then 10, then the set cap (at most 30)', () => {
@@ -34,8 +34,10 @@ describe('link-building sending rules (v4.13)', () => {
     const m = { name: 'Sara Khan', title: 'Head of Finance Systems', company: 'Techand Systems', postalAddress: 'Office 1204, Bay Square, Dubai' };
     const first = footerLines(m, { firstEmail: true, country: 'GB', foundOn: 'https://x.co.uk/contact' }).join('\n');
     expect(first).toContain('Sara Khan, Head of Finance Systems · Techand Systems'); expect(first).toContain('Bay Square'); expect(first).toContain('I found your address on https://x.co.uk/contact'); expect(first).toMatch(/reply "no"/);
+    // B11-3: CAN-SPAM's requirements are per message, so the postal address rides every e-mail of the sequence, not only the first
     const later = footerLines(m, { firstEmail: false, country: 'GB' }).join('\n');
-    expect(later).not.toContain('Bay Square'); expect(later).toMatch(/reply "no"/i);
+    expect(later).toContain('Bay Square'); expect(later).toMatch(/reply "no"/i);
+    expect(later).not.toContain('I found your address');
     expect(footerLines(m, { firstEmail: true, country: 'AE', foundOn: 'https://x.ae' }).join('\n')).not.toContain('I found your address');
   });
   it('threads follow-ups as "Re:" once', () => { expect(replySubject('A dead link on your page')).toBe('Re: A dead link on your page'); expect(replySubject('Re: x')).toBe('Re: x'); });
@@ -90,5 +92,37 @@ describe('stored outreach drafts: only the ones written under the current rules 
     expect(prospectDraft({ outreach_body: '' })).toBeNull();
     expect(prospectDraft(null)).toBeNull();
     expect(prospectDraft(undefined)).toBeNull();
+  });
+});
+
+// ---- B11-1 (2026-10-15, benchmark area 11): an outreach rate is measured or it is withheld ----------------------------------
+// Before this, the Link building page printed a reply rate off three conversations and a red "50.0% bounced" badge off one bounce
+// in two e-mails, on the same screen as a subject-line test that refuses to name a winner under 30 sends per style.
+describe('B11-1 outreach rates refuse a sample they cannot be read from', () => {
+  it('prints no rate under the floor, and says how many more are needed', () => {
+    const r = outreachRate('reply', 1, 3, 'conversations');
+    expect(r.value).toBeNull();
+    expect(r.basis).toBe('unavailable');
+    expect(r.note).toContain('1 of 3 conversations');
+    expect(r.note).toContain(String(OUTREACH_RATE_MIN.reply));
+  });
+  it('says nothing at all when nothing has gone out', () => {
+    const r = outreachRate('win', 0, 0, 'sites contacted');
+    expect(r.value).toBeNull();
+    expect(r.note).toMatch(/Nothing to count yet/);
+  });
+  it('reads the rate once the sample is there, and names what it counted', () => {
+    const r = outreachRate('reply', 4, 40, 'conversations');
+    expect(r.value).toBe(10);
+    expect(r.basis).toBe('measured');
+    expect(r.note).toBe('4 of 40 conversations.');
+  });
+  it('the bounce floor is the one the 2% limit needs: one bounce in 50 IS 2%, so nothing is read below it', () => {
+    expect(OUTREACH_RATE_MIN.bounce).toBe(50);
+    expect(outreachRate('bounce', 1, 49, 'e-mails sent').value).toBeNull();
+    expect(outreachRate('bounce', 1, 50, 'e-mails sent').value).toBe(2);
+  });
+  it('never reports more hits than the sample', () => {
+    expect(outreachRate('reply', 99, 20, 'conversations').value).toBe(100);
   });
 });

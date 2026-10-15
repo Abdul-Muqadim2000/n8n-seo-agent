@@ -13092,5 +13092,120 @@ await guard('b10-backlink-freshness-and-measured-liveness', async () => {
 });
 
 
+// ===================================================================================
+// S93 B11-2 (2026-10-15, benchmark programme area 11 —
+// docs/system-review-2026-10-14/BENCH_AREA11_link_building.md): a link won through outreach is read again on its own page every
+// week, and a reading that failed is not a loss.
+// Before this, a won link was proven exactly once — the Reply Reader fetched the page named in the reply, found the link, set the
+// prospect to `won` — and nothing ever looked at it again. A page no crawler indexes never enters the backlink ledger either, so
+// the Backlink Monitor's weekly re-check never reached it: the link the customer worked hardest for was the one link nobody
+// verified twice, while "Links won" counted it for ever. Criterion 4C.7 is "confirmed live by our own check, THEN monitored".
+// Pitchbox re-checks "the top 100 backlinks" for a monitoring domain and does it MONTHLY
+// (https://help.pitchbox.com/article/34-what-is-link-monitoring); Respona, which no longer sells software at all, asks the
+// customer to notice: "If one of your delivered links is broken or no longer live, contact our support team"
+// (https://help.respona.com/en/articles/13576701-how-do-i-report-a-broken-or-lost-link). About a third of links are gone within a
+// year (Linkody, 865,000 monitored backlinks, June 2026), so "won once" is not a fact that keeps.
+// Every check below fails against the code as it stood this morning: nothing queued a won link, nothing verified one, and the
+// report had no section for it.
+// ===================================================================================
+await guard('b11-won-links-are-read-again', async () => {
+  const SN = 'S93 B11-2 — a link won is a link re-read, one miss is not a loss, and a page we could not read is neither';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const F93 = require('./fixtures_lb413');
+  const ago93 = (d) => new Date(Date.now() - d * 864e5).toISOString();
+  const W = (d, o = {}) => ({ site_id: F93.SITE, domain: F93.DOMAIN, prospect_domain: d, type: 'gap', rank: 0, spam_score: 0, detail: 'won through outreach', source_url: 'https://' + d + '/partners',
+    target_url: '', status: 'won', first_seen: ago93(120), last_seen: ago93(30), won_at: ago93(60), outreach_subject: '', outreach_body: '', note: '', score: 50, origin: 'link_builder',
+    contact_email: '', contact_url: '', contacted_at: ago93(70), followup_step: 0, followup_subject: '', followup_body: '', verified_at: ago93(60), drafted_at: '', ...o });
+  // the stored outreach row that carries the previous reading (checks_json is the column this rides; no new Data Table column)
+  const OR = (d, won) => ({ site_id: F93.SITE, domain: F93.DOMAIN, prospect_domain: d, type: 'gap', status: 'drafted', score: 50, fit: 0.6, fit_reason: '', checks_json: JSON.stringify(won ? { won } : {}),
+    page_url: 'https://' + d + '/partners', page_title: 'Partners', evidence: '', contacts_json: '[]', contact_email: '', contact_form_url: '', country: 'AE', language: 'en',
+    target_url: F93.GUIDE, target_reason: '', anchor_hint: 'brand', sequence_json: '', deadline: '', drafted_at: ago93(70), checked_at: ago93(7), request_id: '' });
+  const withLink = '<html><head><title>Our partners</title></head><body><main><p>We work with <a href="' + F93.GUIDE + '">Techand Systems</a> on Peppol.</p></main></body></html>';
+  const noLink = '<html><head><title>Our partners</title></head><body><main><p>We work with several providers.</p></main></body></html>';
+
+  mock('Load Sites', F93.sites()); mock('Load Ladders', F93.ladders()); mock('Load Monitors', F93.monitors()); mock('Load Profiles', F93.profiles());
+  mock('Load Listings', F93.listingsPrev().map(j => ({ json: j }))); mock('Load Link Impact', [{ json: {} }]);
+  mock('Load Backlink Snapshots', F93.snaps().map(j => ({ json: j }))); mock('Load AI Targets', F93.targets().map(j => ({ json: j })));
+  mock('Load Query History', F93.queries().map(j => ({ json: j }))); mock('Load Rank History', F93.ranks().map(j => ({ json: j })));
+  mock('Load Content Log', [{ json: {} }]); mock('Load Cache (Links)', F93.cache().map(j => ({ json: j })));
+  // five won links: one live, one that missed last week, one never checked, one behind a bot wall that missed last week, and one
+  // the backlink index already reports (the Backlink Monitor's job, not ours)
+  mock('Load Link Prospects', [W('wonlive.example'), W('wongone.example'), W('wonfresh.example'), W('wonblocked.example'), W('inledger.example')].map(j => ({ json: j })));
+  mock('Load Link Outreach', [OR('wonlive.example', { url: 'https://wonlive.example/partners', at: ago93(7), state: 'live', misses: 0, verify: 'found' }),
+    OR('wongone.example', { url: 'https://wongone.example/partners', at: ago93(7), state: 'at_risk', misses: 1, verify: 'missing' }),
+    OR('wonfresh.example', null),
+    OR('wonblocked.example', { url: 'https://wonblocked.example/partners', at: ago93(7), state: 'at_risk', misses: 1, verify: 'missing' }),
+    OR('inledger.example', null)].map(j => ({ json: j })));
+  mock('Load Backlinks', [...F93.ledger(), { site_id: F93.SITE, domain: F93.DOMAIN, ref_domain: 'inledger.example', kind: 'web', from_url: 'https://inledger.example/partners', to_url: F93.H + '/', anchor: 'Techand', rel: 'follow', status: 'live', verify: 'found', first_seen: ago93(60), seo_value: 30 }].map(j => ({ json: j })));
+  delete store['Manual Run'];
+  const P93 = (await run('LB Plan', store['Load Cache (Links)']))[0].json;
+  const SR93 = (await run('LB Source Requests', [{ json: P93 }])).map(r => r.json); mock('Fetch LB Sources', SR93.map(() => ({})));
+  const DR93 = (await run('LB DFS Requests', [{ json: P93 }])).map(r => r.json); mock('Run LB DFS', DR93.map(() => ({})));
+  const PR93 = (await run('LB Page Requests', [{ json: {} }])).map(r => r.json);
+  const wonReqs = PR93.filter(r => r.kind === 'won');
+  console.log('   won re-checks queued ->', JSON.stringify(wonReqs.map(r => [r.prospect_domain, r.url])));
+  check('B11-2: every link won through outreach is queued to be read again on its own page',
+    ['wonlive.example', 'wongone.example', 'wonfresh.example', 'wonblocked.example'].every(d => wonReqs.some(r => r.prospect_domain === d)),
+    JSON.stringify(wonReqs.map(r => r.prospect_domain)));
+  check('B11-2: a won link the backlink index already reports is NOT queued here — the Backlink Monitor fetches that page, and two workflows fetching the same page every Monday is a cost to the prospect, not to us',
+    !wonReqs.some(r => r.prospect_domain === 'inledger.example'), JSON.stringify(wonReqs.map(r => r.prospect_domain)));
+  check('B11-2: the page read is the one where the link was last found, not a guess at their homepage',
+    (wonReqs.find(r => r.prospect_domain === 'wonlive.example') || {}).url === 'https://wonlive.example/partners', JSON.stringify(wonReqs));
+  // the answers: live / gone again / never checked before and missing / behind a bot wall
+  const PAGE93 = { 'https://wonlive.example/partners': { statusCode: 200, headers: { 'content-type': 'text/html' }, data: withLink },
+    'https://wongone.example/partners': { statusCode: 200, headers: { 'content-type': 'text/html' }, data: noLink },
+    'https://wonfresh.example/partners': { statusCode: 200, headers: { 'content-type': 'text/html' }, data: noLink },
+    'https://wonblocked.example/partners': { statusCode: 403, headers: {}, data: '<html><body>Attention Required! | Cloudflare<br>Please enable cookies.</body></html>' } };
+  mock('Fetch LB Pages', PR93.map(r => PAGE93[r.url] || F93.fetchPage(r.url)));
+  const S293 = (await run('LB Second Requests', [{ json: {} }])).map(r => r.json); mock('Fetch LB Second', S293.map(r => F93.fetchPage(r.url)));
+  const AS93 = (await run('LB Assemble', [{ json: {} }]))[0].json;
+  const WC = (d) => (AS93.won_checks || []).find(w => w.prospect_domain === d) || {};
+  console.log('   won states ->', JSON.stringify((AS93.won_checks || []).map(w => [w.prospect_domain, w.state, w.misses, w.verify])));
+  check('B11-2: a link still on the page reads `live`, with the rel it carries, and its miss count goes back to zero',
+    WC('wonlive.example').state === 'live' && WC('wonlive.example').misses === 0 && WC('wonlive.example').rel === 'follow', JSON.stringify(WC('wonlive.example')));
+  check('B11-2: a link missing for the FIRST time is `at_risk`, never a loss — one reading is not evidence, and a link removed in an edit often comes back',
+    WC('wonfresh.example').state === 'at_risk' && WC('wonfresh.example').misses === 1, JSON.stringify(WC('wonfresh.example')));
+  check('B11-2: missing twice running is a loss, with the date it was won and what we found',
+    WC('wongone.example').state === 'lost' && WC('wongone.example').misses === 2 && /no longer carries a link/.test(WC('wongone.example').why), JSON.stringify(WC('wongone.example')));
+  check('B11-2 (INVARIANTS rule 3): a page behind a bot wall is `not_checked` and does NOT advance the miss count — a reading we could not take is not evidence that the link went, and this one would otherwise have been its second miss and a false loss',
+    WC('wonblocked.example').state === 'not_checked' && WC('wonblocked.example').misses === 1 && /blocks automatic checks/.test(WC('wonblocked.example').why),
+    JSON.stringify(WC('wonblocked.example')));
+  check('B11-2: the run\'s own counts separate the four states, so "not checked" is never folded into either side',
+    AS93.summary.won_checked === 4 && AS93.summary.won_live === 1 && AS93.summary.won_at_risk === 1 && AS93.summary.won_lost === 1 && AS93.summary.won_unchecked === 1,
+    JSON.stringify({ c: AS93.summary.won_checked, l: AS93.summary.won_live, r: AS93.summary.won_at_risk, g: AS93.summary.won_lost, u: AS93.summary.won_unchecked }));
+  // INVARIANTS rule 4: only the confirmed loss moves the record, and the reading rides checks_json (no new Data Table column)
+  const lostRow = (AS93.prospect_rows || []).filter(r => r.status === 'lost');
+  check('B11-2 (INVARIANTS rule 4): ONLY the confirmed loss takes the prospect off `won`, and it keeps the date it was won and says what happened; the at-risk and unread ones are left exactly as they were',
+    lostRow.length === 1 && lostRow[0].prospect_domain === 'wongone.example' && /won \d{4}-\d{2}-\d{2}, gone by/.test(lostRow[0].note) && lostRow[0].won_at,
+    JSON.stringify(lostRow.map(r => [r.prospect_domain, r.status, r.note])));
+  const row = (d) => (AS93.outreach_rows || []).find(o => o.prospect_domain === d && o.type === 'gap') || {};
+  const ckOf = (d) => { try { return (JSON.parse(row(d).checks_json || '{}') || {}).won || {}; } catch (e) { return {}; } };
+  check('B11-2: next week\'s run can carry on from this one — the reading is stored on the outreach row it belongs to (checks_json), with the page, the date and the miss count',
+    ckOf('wonfresh.example').misses === 1 && ckOf('wonfresh.example').url === 'https://wonfresh.example/partners' && ckOf('wonfresh.example').at
+    && ckOf('wonlive.example').state === 'live', JSON.stringify({ fresh: ckOf('wonfresh.example'), live: ckOf('wonlive.example') }));
+  check('B11-2: a won prospect is never offered back as a fresh pitch to draft this week',
+    !(AS93.jobs || []).some(j => ['wonlive.example', 'wongone.example', 'wonfresh.example', 'wonblocked.example'].includes(j.prospect_domain)),
+    JSON.stringify((AS93.jobs || []).map(j => j.prospect_domain)));
+  // the report: the customer has to see it, with the base rate beside the loss and the refusal said out loud
+  mock('LB Assemble', [{ json: AS93 }]);
+  mock('LB Rows', [{ json: { site_id: F93.SITE, outreach_rows: AS93.outreach_rows, drafted: 0, held: 0, skipped: 0, writer_error: '' } }]);
+  const REP93 = (await run('LB Report', [{ json: {} }]))[0].json;
+  check('B11-2: the weekly report shows what our own re-read found, with the four states apart from each other',
+    /Links you won — are they still there\?/.test(REP93.html) && /Still live/.test(REP93.html) && /Not checked/.test(REP93.html) && /Gone/.test(REP93.html),
+    (REP93.html.match(/Links you won[^<]{0,80}/) || [''])[0]);
+  check('B11-2: the report says plainly that one reading is never a loss and that a blocked page is "not checked", so the number can be trusted',
+    /missing twice running/.test(REP93.html) && /never as gone/.test(REP93.html), 'the refusal rule is not printed');
+  check('B11-2: a loss carries the measured base rate beside it — about a third of links are gone within a year (Linkody, 865,000 monitored backlinks, June 2026) — so nobody reads one lost link as a failure',
+    /865,000 links tracked by Linkody/.test(REP93.html) && /63% were still live a year on/.test(REP93.html), 'no base rate beside the loss');
+  const ln93 = (REP93.lineage || []).find(l => /links you won are still on the page/i.test(l.figure || ''));
+  check('B11-2 (INVARIANTS rule 1): the figure carries its own source — our fetch of their page, not an index\'s memory of it — with the sample it was read over',
+    !!ln93 && ln93.basis === 'measured' && /our own fetch/.test(ln93.note) && /4/.test(String(ln93.sample)), JSON.stringify(ln93));
+  check('B11-2: the callback carries the per-link states, so the app can show the same thing the e-mail does',
+    (REP93.won_checks || []).length === 4 && REP93.won_checks.every(w => w.state && w.why && w.checked_at), JSON.stringify((REP93.won_checks || []).map(w => [w.prospect_domain, w.state])));
+  reset();
+});
+
+
 H.report();
 })();

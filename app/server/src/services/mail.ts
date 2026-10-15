@@ -167,3 +167,43 @@ export function stripQuoted(text: string): string {
   const cut = text.search(/\n(On .{5,200}wrote:|-{2,}\s*Original Message\s*-{2,}|From: .+\n(Sent|Date): |_{10,})/i);
   return (cut > 0 ? text.slice(0, cut) : text).split('\n').filter((l) => !/^>/.test(l)).join('\n').trim().slice(0, 6000);
 }
+
+// ---- B11-4 (2026-10-15, benchmark area 11): the authentication check runs on the way in AND on the way out ------------------
+// SPF, DKIM and DMARC were read once, when the mailbox was connected (and again only if someone pressed "Test"), stored on the row
+// and never looked at again — a gate on the write path with nothing on the read path (INVARIANTS rule 2). A DNS record removed, or
+// a domain moved to another provider, left the mailbox sending with a green tick from months earlier, and no path ever refused a
+// send over it at all. Google asks this of EVERY sender, not only bulk ones, and in exactly these words: "Set up SPF or DKIM email
+// authentication for your sending domains" (https://support.google.com/a/answer/81126, read 2026-10-15 - the page carries no
+// revision date, and says Gmail "is ramping up its enforcement on non-compliant traffic" from November 2025). Yahoo is the same
+// shape: "Implement SPF or DKIM at a minimum" (https://senders.yahooinc.com/best-practices/). Pitchbox, the one leader that still
+// publishes its mechanism, monitors every connected mailbox for this continuously ("all active email accounts are automatically
+// monitored by MXRight" - DNS, SMTP, SPAM, DKIM; https://help.pitchbox.com/article/246-mxright). We read it once and forgot it.
+// The rule is therefore Google's own and no wider: a conversation is NOT started when the From domain publishes **neither SPF nor DKIM** that we can
+// find. DKIM is read by guessing the common selectors, so "unknown" is not proof of absence — which is exactly why both have to be
+// missing before anything is refused. A weak SPF, a p=none DMARC or a missing DMARC are notes on the mailbox, never a refusal.
+// Follow-ups are never blocked: leaving one side of a conversation hanging helps nobody, and the thread is authenticated exactly as
+// the first e-mail of it was.
+export const MAIL_AUTH_TTL_DAYS = 7;
+export interface MailAuthGate { ok: boolean; why: string; dns: DnsCheck | null; rechecked: boolean }
+/** B11-4: is the stored reading too old to act on? (no reading at all, or an unreadable / future date, counts as stale) */
+export function authCheckStale(dns: DnsCheck | null | undefined, now = new Date()): boolean {
+  const at = dns?.checkedAt ? Date.parse(dns.checkedAt) : NaN;
+  if (!Number.isFinite(at)) return true;
+  const age = (now.getTime() - at) / 864e5;
+  return !(age >= 0 && age < MAIL_AUTH_TTL_DAYS);
+}
+/** B11-4: what the authentication of the sending domain allows, re-reading the record when the stored one is a week old. */
+export async function mailAuthGate(fromEmail: string, stored: DnsCheck | null, now = new Date()): Promise<MailAuthGate> {
+  if (!config.outreachMxCheck) return { ok: true, why: '', dns: stored, rechecked: false };   // a local mail test with made-up domains
+  let dns = stored;
+  let rechecked = false;
+  if (authCheckStale(stored, now)) {
+    try { dns = await dnsCheck(emailDomain(fromEmail)); rechecked = true; } catch { return { ok: true, why: '', dns: stored, rechecked: false }; }   // a lookup we could not make never blocks a send
+  }
+  if (!dns) return { ok: true, why: '', dns, rechecked };
+  if (dns.spf === 'missing' && dns.dkim === 'unknown') {
+    return { ok: false, rechecked, dns,
+      why: `${emailDomain(fromEmail)} publishes no SPF record and no DKIM key we can find, so a receiving server cannot tell your mail from a forgery. Add one of them before new pitches go out — follow-ups in conversations you have already started still go.` };
+  }
+  return { ok: true, why: '', dns, rechecked };
+}
