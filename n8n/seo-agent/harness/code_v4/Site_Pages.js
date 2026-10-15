@@ -26,6 +26,22 @@ const clean = (raw) => {
   return { title: title.trim(), text: t };
 };
 
+// R52 (2026-10-16): the reader's `Title:` line is the application's generic title on a client-rendered site (exec 606: all five menu pages
+// came back as "Tech& | Enterprise Automation & Digital Transformation Solutions", the homepage as another generic one), and the description
+// page printed "Pages read:" with that one title five times. A reader title that the homepage already carries, or that two pages of this read
+// share, is the site's, not the page's: the page is then named by its menu link text, else by its first heading, else by its path.
+const normT = (t) => String(t || '').toLowerCase().replace(/\s+/g, ' ').trim();
+const firstHeading = (text) => { const m = String(text || '').split('\n').find(l => /^#{1,3}\s+\S/.test(l.trim()) && !/^#{1,3}\s*\d/.test(l.trim())); return m ? stripMd(m.replace(/^\s*#+\s*/, '')).replace(/\s+/g, ' ').trim().slice(0, 90) : ''; };
+const pathTitle = (u) => { const seg = String(u || '').replace(/[?#].*$/, '').split('/').filter(Boolean).pop() || ''; return seg.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim(); };
+const readerTitles = plan.map((p, i) => { const r = res[i] || {}; const raw = r.page_text != null ? r.page_text : (r.data != null ? r.data : r.body); return normT(((String(raw || '').match(/^Title:\s*(.+)$/m) || [])[1]) || ''); });
+const titleCount = {}; readerTitles.forEach(t => { if (t) titleCount[t] = (titleCount[t] || 0) + 1; });
+const pageTitle = (i, p, c) => {
+  const t = normT(c.title);
+  const generic = !t || t === normT(home.page_title) || titleCount[t] > 1;
+  if (!generic) return c.title.trim();
+  const link = String(p.text || '').replace(/\s+/g, ' ').trim();
+  return (link.length >= 4 ? link : '') || firstHeading(c.text) || link || pathTitle(p.url) || String(p.path || '');
+};
 const site_pages = [{ url: 'https://' + String(home.domain || '').replace(/^https?:\/\//, ''), title: home.page_title || '', kind: 'homepage', words: String(home.site_text || '').split(/\s+/).filter(Boolean).length }];
 const site_facts = headingsOf(home.site_text);
 const pages_failed = [];
@@ -39,8 +55,9 @@ plan.forEach((p, i) => {
   if (used >= CONFIG.total) { pages_failed.push({ url: p.url, reason: 'skipped: enough text already' }); return; }
   const body = c.text.slice(0, Math.min(CONFIG.chars, CONFIG.total - used));
   used += body.length;
-  block += '\n--- PAGE: ' + (c.title || p.text || p.path) + ' (' + p.url + ') ---\n' + body + '\n';
-  site_pages.push({ url: p.url, title: c.title || String(p.text || ''), kind: 'nav', words: body.split(/\s+/).filter(Boolean).length });
+  const title = pageTitle(i, p, c);
+  block += '\n--- PAGE: ' + title + ' (' + p.url + ') ---\n' + body + '\n';
+  site_pages.push({ url: p.url, title, kind: 'nav', words: body.split(/\s+/).filter(Boolean).length });
   for (const h of headingsOf(c.text)) if (!site_facts.includes(h)) site_facts.push(h);
 });
 

@@ -37,6 +37,8 @@
     "competitors_read",
     "country",
     "existing_page",
+    "existing_page_facts_text",
+    "existing_page_tables",
     "existing_page_text",
     "facts",
     "goal",
@@ -54,7 +56,7 @@
    "model": "claude-sonnet-5-5",
    "node": "Competitor Analyzer",
    "streaming": false,
-   "template_chars": 4016
+   "template_chars": 4953
   },
   {
    "count_answer": "Count Answer (Content Reviewer)",
@@ -92,6 +94,8 @@
     "country",
     "eeat_context",
     "existing_page",
+    "existing_page_facts_text",
+    "existing_page_tables",
     "existing_page_text",
     "goal",
     "keyword",
@@ -111,7 +115,7 @@
    "model": "claude-opus-5-5",
    "node": "Copywriter",
    "streaming": true,
-   "template_chars": 9555
+   "template_chars": 10243
   },
   {
    "count_answer": "Count Answer (Critic)",
@@ -370,6 +374,7 @@
     "country",
     "domain",
     "existing_page",
+    "existing_page_facts_text",
     "goal",
     "keyword",
     "keyword_data",
@@ -385,7 +390,7 @@
    "model": "claude-sonnet-5-5",
    "node": "Verdict Agent",
    "streaming": false,
-   "template_chars": 4379
+   "template_chars": 5394
   }
  ],
  "calibrate": {
