@@ -11844,5 +11844,113 @@ await guard('INVARIANTS rule 1 — lineage, evidence, like-for-like deltas and w
   reset();
 });
 
+// S84 (2026-10-15, docs/system-review-2026-10-14/INVARIANTS.md rule 4 — build section 74) — nothing is promised until it
+// exists, and nothing exists until it is delivered. ~8 of the 81 defects were this class, and they are the ones a customer
+// feels: a page delivered with 50 placeholders (D10) and again with 12 after its own gate had failed twice (R11); a ladder row
+// claiming a page nobody wrote (R1); a masked figure shipped without telling the owner (R25); 23 reports that reached the app
+// and no human (B-R1); an alert recorded as sent that was never sent (R6 / R30); a 404 from a revoked webhook recorded as a
+// DELIVERY (B-F2); Page Watch posting its digest and writing nothing back (B-F3); and a draft 100% identical to a competitor's
+// page delivered "publishable: true" because the originality gate ran after Content QA had finalised that field (B3-3).
+//
+// `state_lint.py` walks the GENERATED workflow JSON, so it cannot be exercised by running node code: the build runs the lint's
+// own self-test and records it, exactly as S79 reads gate_pairs.json and S82 reads lineage.json, and this scenario asserts what
+// was recorded. The two defects section 74 FOUND and PAID are asserted the other way round — by running the real node code.
+// ===================================================================================
+await guard('INVARIANTS rule 4 — promises that need their evidence, deliveries that need an acknowledgement', async () => {
+  reset(); const SN = 'S84 INVARIANTS rule 4 — a record says a thing exists only when the thing exists, a delivery is recorded only on an acknowledgement, and a gate that fails is a refusal and not a label';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const R4 = require('./rule4.json');
+  const RB = require('./rule4_baseline.json');
+  const T = require('./fixtures_tracking');
+
+  // ---------- 1. the lint's own ways of being broken, each one caught, beside the healthy case ----------
+  const ST = R4.selftest;
+  const pair = (label, bad, good) => check(label, ST[bad].caught === true && ST[bad].ok === false && ST[good].caught === true && ST[good].ok === true,
+    JSON.stringify([ST[bad], ST[good]]));
+  pair('rule 4 broken way 1: a row saying a page was WRITTEN by a node that read no page -> caught (D10 / R1: three features then report a page that does not exist)',
+    'a_written_row_that_read_nothing', 'a_written_row_that_read_the_page');
+  pair('rule 4 broken way 2: the shared published-row builder called without the proof -> caught (this is the live defect: "I published a page" wrote status=published for a URL that answered 404)',
+    'published_rows_called_on_nothing', 'published_rows_handed_the_proof');
+  pair('rule 4 broken way 3: a Data Table node minting "published" with no gate at all -> caught (Mark Case Study Published did exactly this, while its Site Tracker twin sat behind an IF)',
+    'a_table_node_that_mints_published_with_no_gate_at_all', 'a_table_node_behind_a_gate_that_reads_the_proof');
+  check('rule 4 broken way 3b: a gate added while the OLD direct path is left wired -> caught. One proof IF upstream is not enough; every path into the write needs one (this hole was in the check until it was broken on purpose)',
+    ST.a_gate_added_while_the_old_direct_path_is_left_wired.caught === true && ST.a_gate_added_while_the_old_direct_path_is_left_wired.ok === false,
+    JSON.stringify(ST.a_gate_added_while_the_old_direct_path_is_left_wired));
+  pair('rule 4 broken way 4: a "writing" row with nothing that can move it back with a reason -> caught (R1, and fix_phantom_pages.py exists because of it)',
+    'nothing_puts_the_row_back', 'a_refusal_puts_the_row_back');
+  pair('rule 4 broken way 5: a POST that is neverError with no fullResponse, read as a delivery -> caught (B-F2: a 404 from a revoked Slack hook was written down as delivered)',
+    'a_404_from_a_revoked_webhook_counted_as_a_delivery', 'a_delivery_judged_on_its_status_code');
+  check('rule 4 broken way 5b: a node writing `delivered` while reading no status code at all -> caught',
+    ST.a_delivery_recorded_without_reading_anything.caught === true && ST.a_delivery_recorded_without_reading_anything.ok === false,
+    JSON.stringify(ST.a_delivery_recorded_without_reading_anything));
+  pair('rule 4 broken way 6: a workflow that OPENS a delivery record and never settles it -> caught (B-F3: Page Watch posted its digest and its rows sat `pending` for ever)',
+    'the_digest_is_posted_and_nothing_written_back', 'the_digest_is_posted_and_settled');
+  pair('rule 4 broken way 7: a later gate that refuses by flipping one internal flag -> caught (B3-3: publishable, not_ready and quality.label kept saying the page had passed)',
+    'a_later_gate_that_flips_one_internal_flag', 'a_later_gate_that_refuses_everywhere');
+  check('rule 4 broken way 8: the guards rename themselves, so the lint would silently check nothing -> caught, both the row builder and the verdict field list',
+    ST.the_builder_renames_itself.caught === true && ST.the_verdict_field_list_goes_stale.caught === true,
+    JSON.stringify([ST.the_builder_renames_itself, ST.the_verdict_field_list_goes_stale]));
+
+  // ---------- 2. what the lint found in the real workflows, and the honesty of the ratchet ----------
+  check('rule 4: all six checks are live over the generated workflows, every one of them with real nodes subject to it, and every one of them passing',
+    ['promise', 'builders', 'stored', 'reversal', 'delivery', 'verdict'].every(k => R4.counts[k].subject > 0 && R4.counts[k].pass === R4.counts[k].subject)
+    && R4.counts.delivery.subject >= 10, JSON.stringify(R4.counts));
+  check('rule 4: nothing is deferred — the ratchet baseline is empty, and it holds exactly what the lint reports as unpaid',
+    R4.unpaid.length === 0 && Object.keys(RB).filter(k => k !== '_note').length === 0, JSON.stringify([R4.unpaid, Object.keys(RB)]));
+  check('rule 4: the baseline says plainly what the lint does NOT prove — that the row a passing node wrote is the row its evidence covers, and that the app-side half of B-R1 lives in app/',
+    /never that the row it wrote is the row that evidence covers/.test(String(RB._note || '')) && /app\//.test(String(RB._note || '')) && String(RB._note || '').length > 400,
+    String(RB._note || '').slice(0, 160));
+  check('rule 4: both callers of the shared published-row builder hand it the proof — the one that always had it (Detect Published) and the one that never did (Publish Check)',
+    R4.rows.builders.length === 2 && R4.rows.builders.every(r => r.ok) && R4.rows.builders.some(r => /Publish Check/.test(r.node)) && R4.rows.builders.some(r => /Detect Published/.test(r.node)),
+    JSON.stringify(R4.rows.builders.map(r => [r.node, r.ok])));
+  check('rule 4: the case-study write now sits behind a gate that reads the proof, in BOTH workflows',
+    R4.rows.stored.length === 2 && R4.rows.stored.every(r => r.ok && r.proven_by.length), JSON.stringify(R4.rows.stored.map(r => [r.workflow, r.node, r.proven_by])));
+  check('rule 4: every alert row opened anywhere is settled from a status code, and no delivery node reads a POST that cannot answer with one',
+    R4.rows.delivery.filter(r => r.node === '(workflow)').every(r => r.ok && r.settles.length)
+    && R4.rows.delivery.every(r => !(r.blind_sources || []).length), JSON.stringify(R4.rows.delivery.filter(r => !r.ok)));
+
+  // ---------- 3. paid in section 74: "I published a page" believes the page, not the owner ----------
+  const D84 = 'northwind-erp.com', W84 = 'https://www.' + D84, U84 = W84 + '/blog/wms-uae/';
+  const LOG84 = [{ json: { site_id: 'site_northwind-erp-com', domain: D84, keyword: 'wms uae', source: 'trend', page_type: 'Guide', existing_page_url: '', rung: 0, ladder_id: 'lad_84', request_id: 'cad_old', started_at: '2026-09-15T10:00:00.000Z', status: 'written', published_url: '', published_at: '', week: '2026-09-15' } }];
+  const LAD84 = [{ json: { ladder_id: 'lad_84', domain: D84, head_keyword: 'wms uae', rung: 1, page_no: 1, keyword: 'wms uae', supporting: '', page_type: 'Guide', target_url: '', page_exists: false, status: 'writing', months: '', start_date: '', country: 'AE', location_code: 2784, language_code: 'en', email: '', callback_url: '', request_id: '', target_words: 1800, status_note: '' } }];
+  mock('Start Form', { 'What do you want?': 'I published a page' });
+  await run('Normalize Input', { 'Website Domain': D84, 'Keyword of the page': 'wms uae', 'Published page URL': U84 });
+  delete store['Start Form'];
+  mock('Load Content Log (Published)', LOG84); mock('Load Ladders (Published)', LAD84); mock('Load Query History (Published)', []);
+
+  mock('Fetch Published Page', T.publishedPage(U84, 'wms uae'));
+  const ok84 = (await run('Publish Check', store['Load Query History (Published)']))[0].json;
+  check('rule 4 (paid): a page that really is there is recorded as published, with its URL, its date and the ladder row marked — the proof is HTTP 200 and nothing else changed',
+    ok84.live === true && ok84.log_row.status === 'published' && ok84.log_row.published_url === U84 && !!ok84.log_row.published_at
+    && !!ok84.ladder_row && ok84.ladder_row.status === 'published' && ok84.ladder_row.page_exists === true,
+    JSON.stringify([ok84.live, ok84.log_row, ok84.ladder_row]));
+
+  mock('Fetch Published Page', T.publishedPage(U84, 'wms uae', { status: 404 }));
+  const no84 = (await run('Publish Check', store['Load Query History (Published)']))[0].json;
+  check('rule 4 (paid, the live defect): the owner says the page is published and it answers 404 — NO row says it is. The content-log row keeps the state it had, records no URL and no date, and the ladder row is not touched at all',
+    no84.live === false && no84.log_row.status === 'written' && no84.log_row.published_url === '' && no84.log_row.published_at === ''
+    && no84.ladder_row === null, JSON.stringify([no84.live, no84.log_row, no84.ladder_row]));
+  check('rule 4 (paid): and the row the ladder update would have made is skipped, so nothing downstream can mark the rung published either',
+    (await run('Published Ladder Row', [{ json: no84 }]))[0].json.skip === true, JSON.stringify(no84.ladder_row));
+  check('rule 4 (paid): the owner is told the truth in the same run — the page could not be fetched, and the Monday check will look again. The row and the message now agree; before this they did not',
+    /could not be fetched/.test(String(no84.summary)) && /Monday/.test(String(no84.summary)) && no84.checks[0].ok === false,
+    String(no84.summary).slice(0, 180));
+
+  mock('Fetch Published Page', { error: 'timeout of 45000ms exceeded', details: {} });
+  const to84 = (await run('Publish Check', store['Load Query History (Published)']))[0].json;
+  check('rule 4 (paid): a fetch that never answered is not proof either — a timeout promises nothing',
+    to84.live === false && to84.log_row.status === 'written' && to84.log_row.published_url === '' && to84.ladder_row === null,
+    JSON.stringify([to84.live, to84.log_row.status, to84.ladder_row]));
+
+  mock('Load Content Log (Published)', []);
+  mock('Fetch Published Page', T.publishedPage(U84, 'wms uae', { status: 404 }));
+  const new84 = (await run('Publish Check', store['Load Query History (Published)']))[0].json;
+  check('rule 4 (paid): with no earlier row at all, the claim is recorded as "reported" and never as "published" — the request is on file, the page is not',
+    new84.log_row.status === 'reported' && new84.log_row.published_url === '' && new84.log_row.published_at === '',
+    JSON.stringify(new84.log_row));
+  reset();
+});
+
 H.report();
 })();
