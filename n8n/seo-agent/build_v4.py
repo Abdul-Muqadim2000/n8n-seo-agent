@@ -6316,6 +6316,68 @@ def _b64_checks():
 
 
 # =============================================================================
+# 66. A PLAN MEASURED ON ITS OWN TOPIC, AND AN ORDER THAT SAYS WHY (2026-10-15, benchmark programme area 2 —
+#     docs/system-review-2026-10-14/BENCH_AREA2_ladders.md; register rows B2-1 / B2-2 / B2-3)
+#     The leaders of topical planning personalise difficulty PER TOPIC. MarketMuse subtracts a topic-level Topic Authority from the
+#     keyword difficulty and says plainly what happens without one ("If you have no Topic Authority, then your Personalized Difficulty
+#     = Keyword Difficulty", https://docs.marketmuse.com/reference/personalized-difficulty-and-topic-authority/, still sold standalone
+#     after the Siteimprove acquisition of 2024-10-08). Semrush builds a thematic vector map and lowers Personal KD with the distance
+#     between a domain's core topics and the target topic (https://www.semrush.com/blog/ai-keyword-research-updates/, 2024-05-21).
+#     * B2-1 — ours had ONE reach per website, cached 30 days (`_reach.js`), so the same number decided unrelated plans: ladder
+#       `lad_mv5pjt5y4aoa` ("erp implementation dubai", exec 494, 2026-10-13) was planned against reach 10 measured on 2026-10-08 for
+#       e-invoicing research. `reachTopic()` now measures the reach on the ladder's OWN topic from the `ranked` pull the run already
+#       paid for, using the same on-topic test the rungs are filtered by (`RAD.headFit`), and uses it only with REACH_CFG.min_top10
+#       on-topic top-10 keywords behind it. Below that bar the site-wide reach stays and the plan says which number it used and why —
+#       it never invents a penalty for a topic the site has simply never tried.
+#     * B2-2 — a plan opened with its new pages and never counted what the site already had on the topic, although `findExisting`
+#       knew per page. `topic_authority.coverage` counts the pages on the topic, the searches it ranks for, the best position, and
+#       the plan's own improve-vs-new split, in the report's own section.
+#     * B2-3 — the order was rung band, then the opportunity sum of the cluster, and neither was printed, so "why this page first"
+#       could only be taken on trust. Semrush names its five ranking factors; every planned page now carries `why` and `why_factors`
+#       with the figures that really placed it, into the report, the callback and the app.
+# =============================================================================
+for _a66 in ('function reachTopic(', 'const reachTopicMatch =', 'const REACH_TOPIC_CFG ='):
+    assert _a66 in code('Ladder Plan'), 'B2-1: the topic-reach kit is not in Ladder Plan (' + _a66 + ')'
+assert 'function reachTopic(' in _rd0('code/_reach.js'), 'B2-1: reachTopic belongs in the shared reach kit, not in one node'
+# the plan measures itself against the topic reach, and the site measurement stays visible beside it
+assert 'const topic_authority = reachTopic(rankedAll, head, reachInfo.reach,' in code('Ladder Plan'), 'B2-1: Ladder Plan does not measure a topic reach'
+assert 'match: (kw) => RAD.headFit(head, kw).ok' in code('Ladder Plan'), \
+    'B2-1: the on-topic test for the reach must be the one the rungs are filtered by, or the two can disagree'
+assert 'const reach = topic_authority.reach;' in code('Ladder Plan'), 'B2-1: the plan is still measured against the site-wide reach'
+assert 'reach_info: { reach: reachInfo.reach,' in code('Ladder Plan'), 'B2-1: reach_info must keep the SITE-wide measurement'
+assert 'topic_authority,' in code('Ladder Plan'), 'B2-1: the topic measurement does not travel with the plan'
+assert 'notes.push(topic_authority.note)' in code('Ladder Plan'), 'B2-1: the owner is not told which reach the plan used'
+# B2-2 / B2-3 in the plan
+for _a66 in ('topic_authority.coverage = {', 'planned_improve: nImprove', 'const onTopicPage =', 'notes.push(topic_authority.coverage.summary)'):
+    assert _a66 in code('Ladder Plan'), 'B2-2: Ladder Plan is missing ' + _a66
+for _a66 in ('const whyFactorsOf =', 'const whyOf =', 'p.why = whyOf(p); p.why_factors = whyFactorsOf(p);', 'why: p.why ||'):
+    assert _a66 in code('Ladder Plan'), 'B2-3: Ladder Plan is missing ' + _a66
+# the report and the callback
+assert 'What you already have on this topic' in code('Build Ladder Report'), 'B2-2: the report does not open the topic inventory'
+assert "const ta = L.topic_authority || null;" in code('Build Ladder Report') and "ta && ta.note" in code('Build Ladder Report'), \
+    'B2-1: the report does not say which reach the plan was measured against'
+assert "esc(ri.reach != null ? ri.reach : L.reach)" in code('Build Ladder Report'), \
+    'B2-1: the report would print the topic reach as if it were the site-wide measurement'
+assert "p.why ? '<br><span class=\"small\">' + esc(p.why)" in code('Build Ladder Report') and "['Why here', esc(top.why)]" in code('Build Ladder Report'), \
+    'B2-3: the report does not print why each page sits where it sits'
+assert 'topic_authority: L.topic_authority || null' in code('Build Ladder Response'), 'B2-1 / B2-2: the callback drops the topic measurement'
+assert 'why: p.why ||' in code('Build Ladder Response'), 'B2-3: the callback drops the reason per page'
+# harness shim (S76): the topic reach as a runnable script, one call per item
+os.makedirs(OUT_CODE, exist_ok=True)
+open(os.path.join(OUT_CODE, '_reach_topic.js'), 'w').write(
+    "// generated by build_v4.py section 66 — the topic-reach kit as a runnable node for the harness (S76)\n"
+    + _rd0('code/_reach.js').rstrip('\n')
+    + "\nreturn $input.all().map(i => { const j = i.json || {};\n"
+      "  return { json: reachTopic(j.ranked === null ? null : (j.ranked || []), j.head || '', j.reach, { domain: j.domain || '' }) }; });\n")
+sticky("""### A plan measured on its own topic, and an order that says why (B2-1 · B2-2 · B2-3, 2026-10-15)
+**Reach was one number for the whole website**, cached 30 days — so the same 10 measured on e-invoicing research decided the plan for "erp implementation dubai" (`lad_mv5pjt5y4aoa`, 2026-10-13). The ladder now measures the reach **on its own topic** from the keywords the site already ranks for, with the same on-topic test the rungs use, and uses it only when at least 5 on-topic top-10 keywords stand behind it. Otherwise the site-wide reach stays and the plan says so: *"treat the months and the chance below as the optimistic case."* Absence of on-topic wins never invents a penalty.
+**The plan opens with what you already have on the topic** — pages, searches you rank for, your best position — and states its own improve-vs-new split. A search an existing page already answers never gets a second page.
+**Every planned page carries the figures that put it there**: its difficulty against the reach actually used, its keywords and volume, its intent, whether it is new or an improvement, and that it links up to the main page.""",
+    pos('Ladder Plan')[0] - 40, pos('Ladder Plan')[1] + 560, 1120, 280, 4)
+log('A ladder plan measured on its own topic, with the inventory it starts from and the reason for its order (2026-10-15, benchmark area 2, rows B2-1 / B2-2 / B2-3; BENCH_AREA2_ladders.md). B2-1: reachTopic() in the shared reach kit measures the difficulty the site already wins ON THE LADDER\'S TOPIC from the ranked-keywords pull the run already paid for, filtered with the same RAD.headFit test the rungs use; it replaces the site-wide reach only with REACH_CFG.min_top10 on-topic top-10 keywords behind it, and otherwise the site reach stays with a sentence naming the topics it was actually measured on and calling the plan the optimistic case - the leaders personalise difficulty per topic (MarketMuse Personalized Difficulty = KD - Topic Authority; Semrush PKD falls with the thematic distance to the domain\'s core topics), ours used one cached number per site for every topic. B2-2: topic_authority.coverage counts the pages the site already has on the topic, the searches it ranks for, its best position and the plan\'s own improve-vs-new split, in the plan notes, the callback and a report section of its own. B2-3: every planned page carries `why` and `why_factors` - difficulty against the reach actually used, keyword count, volume, intent, improve or new, links up - in the report table, the callback and write_now')
+
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 w['nodes'] = list(nodes.values())
