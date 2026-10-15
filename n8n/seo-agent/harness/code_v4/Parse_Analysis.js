@@ -40,11 +40,15 @@ const PT = (() => {
 //   CVG.termRe(term)            one matcher for every coverage figure we print (singular / plural, hyphen or space, a filler word between
 //                               the words). Content QA's flexRe is this function, so the draft and the competitor pages are measured alike.
 //   CVG.coverageOf(text, terms) how many of the shared terms one page uses -> { found, total, pct, used, missing }
-//   CVG.best(pages, terms)      the page that uses most of them (a tie goes to the better Google position)
+//   CVG.best(pages, terms, want) the page that uses most of them (a tie goes to the better Google position); with want = { kind, keyword }
+//                               only among the pages of the kind being written (R44: a service page is never measured against a guide
+//                               for agencies or a listicle of other companies) — `kind` / `type_match` say which pool it came from
+//   CVG.kindOf(page)            'list' | 'guide' | 'service', from the URL path, the title and the byline; CVG.kindFor(pageType) ours
 //   CVG.target(pct)             the coverage to aim for: the best competitor's, kept inside 60-90% (a weak results page must not lower
 //                               the bar, and a term-stuffed one must not force stuffing). It is a target read off competitor pages, not
 //                               a promise about rankings.
-//   CVG.subtopics(page)         the best competitor's own H2 / H3 headings, cleaned, as the subtopics to cover
+//   CVG.subtopics(page)         the best competitor's own H2 / H3 headings, cleaned, as the subtopics to cover — never a promotion, a
+//                               heading with no text under it, or a list page's entries naming other companies (R44)
 //   CVG.subtopicGap(subs, ctx)  per subtopic: has its own section, covered in the text, or missing
 // Regex only: the n8n Code sandbox has no URL constructor.
 const CVG = (() => {
@@ -59,14 +63,47 @@ const CVG = (() => {
     const used = list.filter(term => { try { return termRe(term, 'i').test(t); } catch (e) { return false; } });
     return { found: used.length, total: list.length, pct: pct(used.length, list.length), used, missing: list.filter(x => !used.includes(x)) };
   };
-  const best = (pages, terms) => {
+  // R44 (2026-10-16, re-rating 2026-10-15): what kind of page a result is. Live (exec 616) the page to beat for a SERVICE page was
+  // vendasta.com's blog guide for marketing agencies on selling AI consulting, and for the ladder verdict of exec 610 a "Best AI Consulting
+  // Companies in Dubai" listicle whose numbered entries (Accenture, IBM, G42 …) became "subtopics to cover". A result is a 'list' (a ranked
+  // list of companies / tools), a 'guide' (blog, article, glossary, news) or a 'service' page (a provider selling the thing), read from its
+  // URL path, its title and its byline — signals the competitor read already carries.
+  const LIST_RE = /\b(?:top|best)\b[^|]{0,60}?\b(?:companies|firms|agencies|providers|vendors|consultants|consultancies|partners|tools|platforms|software|apps|services|solutions)\b|\brankings?\b|\btop[\s-]?\d+\b/i;
+  const SERVICE_PATH = /\/(?:services?|solutions?|offerings?|what-we-do|capabilities|industries)\//i;
+  const GUIDE_PATH = /\/(?:blogs?|insights?|resources|articles?|news|guides?|glossary|learn|academy|wiki|knowledge|library|posts?)\//i;
+  const GUIDE_TITLE = /\b(?:what is|what are|how to|how do|guide|explained|definition|versus|vs\.?|everything you need|tips|ways to|checklist)\b|\?/i;
+  const SERVICE_WORDS = /\b(?:services?|solutions?|consult\w*|agency|company|firm|partner|software|platform|pricing|hire)\b/i;
+  const pathOf = (u) => S(u).replace(/^https?:\/\/[^\/]+/i, '').replace(/[?#].*$/, '') || '/';
+  const kindOf = (p) => {
+    const title = S(p && p.title), path = pathOf(p && p.url), slug = path.replace(/[\/_-]+/g, ' ');
+    if (LIST_RE.test(title) || LIST_RE.test(slug)) return 'list';
+    if (SERVICE_PATH.test(path)) return 'service';
+    if (GUIDE_PATH.test(path) || GUIDE_TITLE.test(title)) return 'guide';
+    const sep = title.split(/\s+[|–—-]\s+/);   // "AI Consulting Services | ATI Lab", "AI Consulting Services in Dubai - Kinetic Consulting"
+    if (sep.length >= 2 && sep[sep.length - 1].split(/\s+/).length <= 4 && SERVICE_WORDS.test(sep.slice(0, -1).join(' '))) return 'service';
+    if (p && p.has_author && p.has_date) return 'guide';
+    return 'service';
+  };
+  // the kind of page being written, from the page type (PT.of options): a service / product / landing / local page sells; the rest explain
+  const kindFor = (pageType) => (/blog|guide|article|pillar|hub|case stud|post/i.test(S(pageType)) ? 'guide' : 'service');
+  // a list is a fair benchmark only for a guide whose search itself asks for a list ("best erp companies in dubai")
+  const LIST_SEARCH = /\b(?:best|top|companies|firms|agencies|providers|vendors|tools|alternatives|list)\b/i;
+  const best = (pages, terms, want) => {
     const scored = (Array.isArray(pages) ? pages : []).filter(p => p && S(p.content_full || p.content || p.text))
-      .map(p => ({ page: p, cov: coverageOf(p.content_full || p.content || p.text, terms) }));
+      .map(p => ({ page: p, kind: kindOf(p), cov: coverageOf(p.content_full || p.content || p.text, terms) }));
     if (!scored.length) return null;
-    scored.sort((a, b) => (b.cov.pct || 0) - (a.cov.pct || 0) || (Number(a.page.rank) || 99) - (Number(b.page.rank) || 99));
-    const w = scored[0];
+    const order = (a, b) => (b.cov.pct || 0) - (a.cov.pct || 0) || (Number(a.page.rank) || 99) - (Number(b.page.rank) || 99);
+    // R44: the page to beat is the best page OF THE KIND being written; with none read, the best page that is not a list (a list is
+    // never the bar for a service page), and only then any page — and the answer says which of the three it was.
+    const k = want && want.kind ? want.kind : null;
+    const lists = !!(k === 'guide' && want && LIST_SEARCH.test(S(want.keyword)));
+    const same = k ? scored.filter(x => x.kind === k || (lists && x.kind === 'list')) : scored;
+    const notList = scored.filter(x => x.kind !== 'list');
+    const pool = same.length ? same : (notList.length ? notList : scored);
+    const w = pool.slice().sort(order)[0];
     return { domain: S(w.page.domain), url: S(w.page.url), rank: Number(w.page.rank) || null, coverage_pct: w.cov.pct, terms_used: w.cov.found,
-      terms_total: w.cov.total, word_count: Number(w.page.word_count) || null, sections: (w.page.headings || []).length,
+      terms_total: w.cov.total, word_count: Number(w.page.word_count) || null, sections: (w.page.headings || []).length, kind: w.kind,
+      type_match: k ? same.length > 0 : null, same_kind_pages: k ? same.length : null,
       average_pct: Math.round(scored.reduce((s, x) => s + (x.cov.pct || 0), 0) / scored.length), pages_compared: scored.length };
   };
   const MIN_TARGET = 60, MAX_TARGET = 90;
@@ -75,12 +112,37 @@ const CVG = (() => {
   const toks = (t) => S(t).toLowerCase().replace(/[^a-z0-9\s]+/g, ' ').split(/\s+/).filter(w => w.length > 2 && !STOP.has(w));
   const clean = (h) => S(h).replace(/^H\d:\s*/i, '').replace(/^#+\s*/, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`]+/g, '').replace(/\s+/g, ' ').trim();
   const JUNK = /^(conclusion|summary|introduction|overview|about us|contact|contact us|faq|faqs|frequently asked questions|related (posts|articles|reading)|share this|table of contents|references|sources|get started|book a demo|request a demo|free trial|sign up|subscribe|recent posts|categories|tags|author|comments?)\b/i;
+  // R44: a heading is a subtopic only when it is a topic. Live, vendasta.com's banner "Acquire and serve 10x more clients with AI-powered
+  // software" (an H2 with no text under it, straight above "What is AI Consulting?") reached the editor as a subtopic to add, and the draft
+  // grew a section "Serving more clients with AI-powered software". Left out now: promotion / call-to-action headings, a heading with no
+  // text under it before the next heading of the same or a higher level (a heading followed by its own sub-headings is a parent and stays),
+  // and on a list page the numbered entries (each one another company: "2. Accenture AI & Analytics") and their detail blocks.
+  const PROMO = /\b(?:\d+x\b|acquire and serve|get in touch|contact us|call us|book (?:a|an|your)|schedule (?:a|an|your)|request (?:a|an|your)|free (?:trial|demo|consultation|quote|assessment)|sign up|start your|ready to|why choose|promote your|subscribe|download (?:the|our|your)|join (?:us|our)|talk to (?:us|our|an?)|let'?s talk|trusted by|partner with us|explore (?:the|our|related)|learn more|read more|see how (?:we|our)|try (?:it|for free))\b/i;
+  const ENTRY_DETAIL = /^(?:key (?:highlights|features|services)|services|contact information|location|founded|headquarters|pricing|rating|website|pros|cons|why we picked it)\b/i;
+  const levelOf = (h) => { const m = S(h).match(/^H(\d)\s*:/i); return m ? Number(m[1]) : 2; };
+  const bodyUnder = (content, text) => {   // the words between this heading's line and the next heading line, or null when the line is not found
+    const lines = S(content).split('\n'); const want = text.toLowerCase();
+    for (let i = 0; i < lines.length; i++) {
+      if (!/^#{1,6}\s/.test(lines[i]) || clean(lines[i]).toLowerCase() !== want) continue;
+      let words = 0, j = i + 1; for (; j < lines.length && !/^#{1,6}\s/.test(lines[j]); j++) words += lines[j].split(/\s+/).filter(Boolean).length;
+      return j >= lines.length && !words ? null : words;   // the text ends right after it: cut short, not a banner
+    }
+    return null;
+  };
   const subtopics = (page, limit) => {
     const out = []; const seen = new Set();
-    for (const h of ((page && page.headings) || [])) {
+    const hs = (page && page.headings) || []; const list = page ? kindOf(page) === 'list' : false;
+    const content = S(page && (page.content_full || page.content || page.text));
+    for (let i = 0; i < hs.length; i++) {
+      const h = hs[i];
       const text = clean(h); const key = text.toLowerCase();
       if (!text || text.length < 8 || text.length > 90 || JUNK.test(text) || seen.has(key)) continue;
       if (toks(text).length < 2) continue;
+      if (PROMO.test(text)) continue;
+      if (list && (/^\d+[.)]\s/.test(text) || ENTRY_DETAIL.test(text))) continue;
+      const parent = i + 1 < hs.length && levelOf(hs[i + 1]) > levelOf(h);
+      const words = parent ? null : bodyUnder(content, text);
+      if (words === 0) continue;   // a banner: nothing under it before the next heading of its own level
       seen.add(key); out.push(text);
       if (out.length >= (limit || 12)) break;
     }
@@ -99,7 +161,7 @@ const CVG = (() => {
       return { subtopic: sub, state: 'missing' };
     });
   };
-  return { termRe, coverageOf, best, target, subtopics, subtopicGap, pct, toks, clean, MIN_TARGET, MAX_TARGET };
+  return { termRe, coverageOf, best, target, subtopics, subtopicGap, pct, toks, clean, kindOf, kindFor, MIN_TARGET, MAX_TARGET };
 })();
 // Accepts an object (from the Structured Output Parser) or a string with/without code fences or surrounding text
 const parseAgentJson = (raw) => {
@@ -127,22 +189,33 @@ analysis.recommended_word_count = Math.min(hi, Math.max(lo, Math.round(rec / 100
 // topic the pages that already rank actually cover. Surfer measured the best articles at 0.74 coverage against a results-page average of
 // 0.44 (n = 100), so the page to beat is the best one: its term coverage becomes the target, its own headings become the subtopics to
 // cover, and its length and section count say how deep it goes. It is read off competitor pages -- a target, never a promise about rank.
+// R44 (2026-10-16, re-rating 2026-10-15): the page to beat is chosen among the results of the KIND being written. Live (exec 616) a
+// service page was measured against vendasta.com's blog guide for marketing agencies, and the ladder verdict of exec 610 against a
+// "Best AI Consulting Companies in Dubai" listicle whose entries (Accenture, IBM, G42 …) became subtopics to cover. The kind comes from
+// the page type (PT.of) and each result's URL, title and byline (CVG.kindOf); with no page of that kind read, the best page that is not a
+// list stands in, and the target says so (`type_match: false`). The market (country) of the results is the search's own already.
 const covTerms = (prev.term_model || []).slice(0, 25);
-const bestCov = covTerms.length ? CVG.best(prev.competitors || [], covTerms) : null;
+const pageKind = CVG.kindFor(PT.of(prev.page_type));
+const KIND_NAME = { service: 'service page', guide: 'guide or article', list: 'list of companies' };
+const bestCov = covTerms.length ? CVG.best(prev.competitors || [], covTerms, { kind: pageKind, keyword: prev.keyword }) : null;
 const coverage_target = bestCov && bestCov.coverage_pct != null ? {
   terms_total: bestCov.terms_total,
   terms: covTerms.map(t => t.term),
   best: { domain: bestCov.domain, url: bestCov.url, rank: bestCov.rank, coverage_pct: bestCov.coverage_pct, terms_used: bestCov.terms_used,
-    word_count: bestCov.word_count, sections: bestCov.sections },
+    word_count: bestCov.word_count, sections: bestCov.sections, kind: bestCov.kind },
+  page_kind: pageKind, type_match: bestCov.type_match,
+  measure: 'presence',   // R43: a term counts once it appears — Content QA measures the draft by the same rule
   average_pct: bestCov.average_pct,
   pages_compared: bestCov.pages_compared,
   target_pct: CVG.target(bestCov.coverage_pct),
   subtopics: CVG.subtopics((prev.competitors || []).find(c => c && c.url === bestCov.url) || null, 12),
   basis: 'the ' + bestCov.pages_compared + ' competitor page(s) read for this keyword: ' + (bestCov.domain || 'the best page')
     + (bestCov.rank ? ' (position ' + bestCov.rank + ')' : '') + ' uses ' + bestCov.terms_used + ' of the ' + bestCov.terms_total
-    + ' terms they share (' + bestCov.coverage_pct + '%), against an average of ' + bestCov.average_pct + '%'
+    + ' terms they share (' + bestCov.coverage_pct + '%), against an average of ' + bestCov.average_pct + '% (a term counts once it appears)'
+    + (bestCov.type_match ? '; it is the best ' + KIND_NAME[pageKind] + ' among them, the kind of page being written (' + bestCov.same_kind_pages + ' of that kind read)'
+      : '; no ' + KIND_NAME[pageKind] + ' was among the pages read, so the best ' + (bestCov.kind === 'list' ? 'page' : 'page that is not a list of companies') + ' stands in')
 } : null;
-const coverage_digest = coverage_target ? 'TARGET: use at least ' + coverage_target.target_pct + '% of the shared terms above (the best page in the results, '
+const coverage_digest = coverage_target ? 'TARGET: use at least ' + coverage_target.target_pct + '% of the shared terms above, each at least once (the best ' + (coverage_target.type_match ? KIND_NAME[pageKind] : 'page') + ' in the results, '
   + (coverage_target.best.domain || 'the leader') + (coverage_target.best.rank ? ' at position ' + coverage_target.best.rank : '') + ', uses '
   + coverage_target.best.coverage_pct + '%; the average of the pages read is ' + coverage_target.average_pct + '%). Its depth: '
   + (coverage_target.best.word_count ? coverage_target.best.word_count + ' useful words' : 'length unknown') + ' in ' + (coverage_target.best.sections || 0) + ' sections.'

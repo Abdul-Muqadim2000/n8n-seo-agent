@@ -219,10 +219,53 @@ const SRC = (() => {
   // every figure with where it sits, so the caller can bracket it in place
   // `raw` is the figure without its trailing punctuation, and `length` matches it, so a caller can replace it in place without eating the full stop
   const figures = (text) => { const out = []; for (const m of String(text == null ? '' : text).matchAll(FIG_RE)) { const f = valueOf(m[0]); if (f) out.push({ ...f, index: m.index, length: f.raw.length }); } return out; };
+  // ---- R37 (2026-10-16, re-rating 2026-10-15): the SOURCE side reads numbers written in words, and a snippet cut before its unit ----
+  // Live (exec 616) McKinsey's snippet read "Forty percent of respondents … report scaling AI agents, up from 27 ... Read more". The draft
+  // quoted it exactly ("40% … up from 27%") and both figures were masked as "not carried": the matcher knew only digits, and the snippet
+  // was cut before "percent". `spelled()` rewrites number words into digits ("Forty percent" -> "40 percent", "fifty million dirhams" ->
+  // "50 million dirhams", "a third" -> "33.3 percent") on the text a figure is LOOKED UP in — never on the draft, whose figure positions the
+  // caller brackets in place. `cutPct()` accepts a bare number that sits right where the snippet was cut ("27 ..." / "27…" / the end of
+  // the text) only for a percentage, and only when the same excerpt states a percentage within the 240 characters before it: the number
+  // itself must be there, and the unit it lost is the one the sentence was using. Nothing else is loosened: a number the excerpt does not
+  // carry is still not carried, and a bare number in a COMPLETE sentence ("up from 27 respondents.") still vouches for nothing.
+  const ONES = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12,
+    thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19 };
+  const TENS = { twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+  const NW = '(?:' + Object.keys(TENS).concat(Object.keys(ONES).sort((a, b) => b.length - a.length)).join('|') + '|hundred)';
+  const NW_RUN = new RegExp('\\b' + NW + '(?:(?:[\\s-]+|\\s+and\\s+)' + NW + ')*\\b', 'gi');
+  const FRACTIONS = [[/\b(?:a|one)[\s-]+half\b|\bhalf\s+of\b/gi, '50 percent'], [/\btwo[\s-]+thirds\b/gi, '66.7 percent'], [/\b(?:a|one)[\s-]+third\b/gi, '33.3 percent'],
+    [/\bthree[\s-]+quarters\b/gi, '75 percent'], [/\b(?:a|one)[\s-]+quarter\b/gi, '25 percent']];
+  const spelled = (text) => {
+    let t = String(text == null ? '' : text);
+    for (const fr of FRACTIONS) t = t.replace(fr[0], fr[1]);
+    return t.replace(NW_RUN, (run) => {
+      let cur = 0, any = false;
+      for (const w of run.toLowerCase().split(/[\s-]+/)) {
+        if (w === 'and') continue;
+        if (w === 'hundred') { cur = (cur || 1) * 100; any = true; continue; }
+        const v = ONES[w] != null ? ONES[w] : TENS[w]; if (v == null) return run; cur += v; any = true;
+      }
+      return any ? String(cur) : run;
+    });
+  };
+  // a fraction is stated to one decimal ("a third" = 33.3%) and quoted rounded ("33%"): both are the source's figure
+  const ROUNDED = { 33.3: 33, 66.7: 67 };
+  const valueSetOf = (t) => { const s = new Set(); for (const f of figures(t)) { s.add(f.v); if (f.pct && ROUNDED[f.v] != null) s.add(ROUNDED[f.v]); } return s; };
+  const PCT_NEAR = /%|\bper\s?cent\b|\bpercent(?:age)?\b/i;
+  const cutPct = (f, t) => {
+    if (!f || !f.pct || f.year) return false;
+    const n = String(f.n).replace(/[.]/g, '\\.');
+    const re = new RegExp('(^|[^\\d.,$€£₹])' + n + '\\s*(?:\\.{3}|…|$)', 'g');
+    for (const m of t.matchAll(re)) { const at = m.index + m[1].length; if (PCT_NEAR.test(t.slice(Math.max(0, at - 240), at))) return true; }
+    return false;
+  };
   // the magnitude is part of the figure: "AED 50 million" in the source does not vouch for "AED 50bn" in the draft
-  const valueSet = (text) => { const s = new Set(); for (const f of figures(text)) s.add(f.v); return s; };
-  const hasFigure = (f, text) => !!f && valueSet(text).has(f.v);
-  return { TRACK, clean, key, host, tier, TIERS, strong, figures, valueOf, valueSet, hasFigure, FIG_RE };
+  const valueSet = (text) => valueSetOf(spelled(text));
+  const hasFigure = (f, text) => { if (!f) return false; const t = spelled(text); return valueSetOf(t).has(f.v) || cutPct(f, t); };
+  // an excerpt the run read was cut short (a search snippet: "…", "...", "Read more"): a figure missing from it is "not in the excerpt
+  // the run read", never "the source does not carry it" — the page itself was never read in full.
+  const cutShort = (text) => /\.{3}|…|\bread more\b/i.test(String(text == null ? '' : text));
+  return { TRACK, clean, key, host, tier, TIERS, strong, figures, valueOf, valueSet, hasFigure, spelled, cutShort, FIG_RE };
 })();
 // ---- anchor kit (D9, 2026-10-11; inlined through the __ANCHOR__ marker): the words a link to one of our own pages is written with.
 // Live, "Guides in this series" linked to "Facts erp" and "Erp software dubai" — a raw keyword string with one capital letter (exec 365).
@@ -460,11 +503,15 @@ const SM = (() => {
 //   CVG.termRe(term)            one matcher for every coverage figure we print (singular / plural, hyphen or space, a filler word between
 //                               the words). Content QA's flexRe is this function, so the draft and the competitor pages are measured alike.
 //   CVG.coverageOf(text, terms) how many of the shared terms one page uses -> { found, total, pct, used, missing }
-//   CVG.best(pages, terms)      the page that uses most of them (a tie goes to the better Google position)
+//   CVG.best(pages, terms, want) the page that uses most of them (a tie goes to the better Google position); with want = { kind, keyword }
+//                               only among the pages of the kind being written (R44: a service page is never measured against a guide
+//                               for agencies or a listicle of other companies) — `kind` / `type_match` say which pool it came from
+//   CVG.kindOf(page)            'list' | 'guide' | 'service', from the URL path, the title and the byline; CVG.kindFor(pageType) ours
 //   CVG.target(pct)             the coverage to aim for: the best competitor's, kept inside 60-90% (a weak results page must not lower
 //                               the bar, and a term-stuffed one must not force stuffing). It is a target read off competitor pages, not
 //                               a promise about rankings.
-//   CVG.subtopics(page)         the best competitor's own H2 / H3 headings, cleaned, as the subtopics to cover
+//   CVG.subtopics(page)         the best competitor's own H2 / H3 headings, cleaned, as the subtopics to cover — never a promotion, a
+//                               heading with no text under it, or a list page's entries naming other companies (R44)
 //   CVG.subtopicGap(subs, ctx)  per subtopic: has its own section, covered in the text, or missing
 // Regex only: the n8n Code sandbox has no URL constructor.
 const CVG = (() => {
@@ -479,14 +526,47 @@ const CVG = (() => {
     const used = list.filter(term => { try { return termRe(term, 'i').test(t); } catch (e) { return false; } });
     return { found: used.length, total: list.length, pct: pct(used.length, list.length), used, missing: list.filter(x => !used.includes(x)) };
   };
-  const best = (pages, terms) => {
+  // R44 (2026-10-16, re-rating 2026-10-15): what kind of page a result is. Live (exec 616) the page to beat for a SERVICE page was
+  // vendasta.com's blog guide for marketing agencies on selling AI consulting, and for the ladder verdict of exec 610 a "Best AI Consulting
+  // Companies in Dubai" listicle whose numbered entries (Accenture, IBM, G42 …) became "subtopics to cover". A result is a 'list' (a ranked
+  // list of companies / tools), a 'guide' (blog, article, glossary, news) or a 'service' page (a provider selling the thing), read from its
+  // URL path, its title and its byline — signals the competitor read already carries.
+  const LIST_RE = /\b(?:top|best)\b[^|]{0,60}?\b(?:companies|firms|agencies|providers|vendors|consultants|consultancies|partners|tools|platforms|software|apps|services|solutions)\b|\brankings?\b|\btop[\s-]?\d+\b/i;
+  const SERVICE_PATH = /\/(?:services?|solutions?|offerings?|what-we-do|capabilities|industries)\//i;
+  const GUIDE_PATH = /\/(?:blogs?|insights?|resources|articles?|news|guides?|glossary|learn|academy|wiki|knowledge|library|posts?)\//i;
+  const GUIDE_TITLE = /\b(?:what is|what are|how to|how do|guide|explained|definition|versus|vs\.?|everything you need|tips|ways to|checklist)\b|\?/i;
+  const SERVICE_WORDS = /\b(?:services?|solutions?|consult\w*|agency|company|firm|partner|software|platform|pricing|hire)\b/i;
+  const pathOf = (u) => S(u).replace(/^https?:\/\/[^\/]+/i, '').replace(/[?#].*$/, '') || '/';
+  const kindOf = (p) => {
+    const title = S(p && p.title), path = pathOf(p && p.url), slug = path.replace(/[\/_-]+/g, ' ');
+    if (LIST_RE.test(title) || LIST_RE.test(slug)) return 'list';
+    if (SERVICE_PATH.test(path)) return 'service';
+    if (GUIDE_PATH.test(path) || GUIDE_TITLE.test(title)) return 'guide';
+    const sep = title.split(/\s+[|–—-]\s+/);   // "AI Consulting Services | ATI Lab", "AI Consulting Services in Dubai - Kinetic Consulting"
+    if (sep.length >= 2 && sep[sep.length - 1].split(/\s+/).length <= 4 && SERVICE_WORDS.test(sep.slice(0, -1).join(' '))) return 'service';
+    if (p && p.has_author && p.has_date) return 'guide';
+    return 'service';
+  };
+  // the kind of page being written, from the page type (PT.of options): a service / product / landing / local page sells; the rest explain
+  const kindFor = (pageType) => (/blog|guide|article|pillar|hub|case stud|post/i.test(S(pageType)) ? 'guide' : 'service');
+  // a list is a fair benchmark only for a guide whose search itself asks for a list ("best erp companies in dubai")
+  const LIST_SEARCH = /\b(?:best|top|companies|firms|agencies|providers|vendors|tools|alternatives|list)\b/i;
+  const best = (pages, terms, want) => {
     const scored = (Array.isArray(pages) ? pages : []).filter(p => p && S(p.content_full || p.content || p.text))
-      .map(p => ({ page: p, cov: coverageOf(p.content_full || p.content || p.text, terms) }));
+      .map(p => ({ page: p, kind: kindOf(p), cov: coverageOf(p.content_full || p.content || p.text, terms) }));
     if (!scored.length) return null;
-    scored.sort((a, b) => (b.cov.pct || 0) - (a.cov.pct || 0) || (Number(a.page.rank) || 99) - (Number(b.page.rank) || 99));
-    const w = scored[0];
+    const order = (a, b) => (b.cov.pct || 0) - (a.cov.pct || 0) || (Number(a.page.rank) || 99) - (Number(b.page.rank) || 99);
+    // R44: the page to beat is the best page OF THE KIND being written; with none read, the best page that is not a list (a list is
+    // never the bar for a service page), and only then any page — and the answer says which of the three it was.
+    const k = want && want.kind ? want.kind : null;
+    const lists = !!(k === 'guide' && want && LIST_SEARCH.test(S(want.keyword)));
+    const same = k ? scored.filter(x => x.kind === k || (lists && x.kind === 'list')) : scored;
+    const notList = scored.filter(x => x.kind !== 'list');
+    const pool = same.length ? same : (notList.length ? notList : scored);
+    const w = pool.slice().sort(order)[0];
     return { domain: S(w.page.domain), url: S(w.page.url), rank: Number(w.page.rank) || null, coverage_pct: w.cov.pct, terms_used: w.cov.found,
-      terms_total: w.cov.total, word_count: Number(w.page.word_count) || null, sections: (w.page.headings || []).length,
+      terms_total: w.cov.total, word_count: Number(w.page.word_count) || null, sections: (w.page.headings || []).length, kind: w.kind,
+      type_match: k ? same.length > 0 : null, same_kind_pages: k ? same.length : null,
       average_pct: Math.round(scored.reduce((s, x) => s + (x.cov.pct || 0), 0) / scored.length), pages_compared: scored.length };
   };
   const MIN_TARGET = 60, MAX_TARGET = 90;
@@ -495,12 +575,37 @@ const CVG = (() => {
   const toks = (t) => S(t).toLowerCase().replace(/[^a-z0-9\s]+/g, ' ').split(/\s+/).filter(w => w.length > 2 && !STOP.has(w));
   const clean = (h) => S(h).replace(/^H\d:\s*/i, '').replace(/^#+\s*/, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`]+/g, '').replace(/\s+/g, ' ').trim();
   const JUNK = /^(conclusion|summary|introduction|overview|about us|contact|contact us|faq|faqs|frequently asked questions|related (posts|articles|reading)|share this|table of contents|references|sources|get started|book a demo|request a demo|free trial|sign up|subscribe|recent posts|categories|tags|author|comments?)\b/i;
+  // R44: a heading is a subtopic only when it is a topic. Live, vendasta.com's banner "Acquire and serve 10x more clients with AI-powered
+  // software" (an H2 with no text under it, straight above "What is AI Consulting?") reached the editor as a subtopic to add, and the draft
+  // grew a section "Serving more clients with AI-powered software". Left out now: promotion / call-to-action headings, a heading with no
+  // text under it before the next heading of the same or a higher level (a heading followed by its own sub-headings is a parent and stays),
+  // and on a list page the numbered entries (each one another company: "2. Accenture AI & Analytics") and their detail blocks.
+  const PROMO = /\b(?:\d+x\b|acquire and serve|get in touch|contact us|call us|book (?:a|an|your)|schedule (?:a|an|your)|request (?:a|an|your)|free (?:trial|demo|consultation|quote|assessment)|sign up|start your|ready to|why choose|promote your|subscribe|download (?:the|our|your)|join (?:us|our)|talk to (?:us|our|an?)|let'?s talk|trusted by|partner with us|explore (?:the|our|related)|learn more|read more|see how (?:we|our)|try (?:it|for free))\b/i;
+  const ENTRY_DETAIL = /^(?:key (?:highlights|features|services)|services|contact information|location|founded|headquarters|pricing|rating|website|pros|cons|why we picked it)\b/i;
+  const levelOf = (h) => { const m = S(h).match(/^H(\d)\s*:/i); return m ? Number(m[1]) : 2; };
+  const bodyUnder = (content, text) => {   // the words between this heading's line and the next heading line, or null when the line is not found
+    const lines = S(content).split('\n'); const want = text.toLowerCase();
+    for (let i = 0; i < lines.length; i++) {
+      if (!/^#{1,6}\s/.test(lines[i]) || clean(lines[i]).toLowerCase() !== want) continue;
+      let words = 0, j = i + 1; for (; j < lines.length && !/^#{1,6}\s/.test(lines[j]); j++) words += lines[j].split(/\s+/).filter(Boolean).length;
+      return j >= lines.length && !words ? null : words;   // the text ends right after it: cut short, not a banner
+    }
+    return null;
+  };
   const subtopics = (page, limit) => {
     const out = []; const seen = new Set();
-    for (const h of ((page && page.headings) || [])) {
+    const hs = (page && page.headings) || []; const list = page ? kindOf(page) === 'list' : false;
+    const content = S(page && (page.content_full || page.content || page.text));
+    for (let i = 0; i < hs.length; i++) {
+      const h = hs[i];
       const text = clean(h); const key = text.toLowerCase();
       if (!text || text.length < 8 || text.length > 90 || JUNK.test(text) || seen.has(key)) continue;
       if (toks(text).length < 2) continue;
+      if (PROMO.test(text)) continue;
+      if (list && (/^\d+[.)]\s/.test(text) || ENTRY_DETAIL.test(text))) continue;
+      const parent = i + 1 < hs.length && levelOf(hs[i + 1]) > levelOf(h);
+      const words = parent ? null : bodyUnder(content, text);
+      if (words === 0) continue;   // a banner: nothing under it before the next heading of its own level
       seen.add(key); out.push(text);
       if (out.length >= (limit || 12)) break;
     }
@@ -519,7 +624,7 @@ const CVG = (() => {
       return { subtopic: sub, state: 'missing' };
     });
   };
-  return { termRe, coverageOf, best, target, subtopics, subtopicGap, pct, toks, clean, MIN_TARGET, MAX_TARGET };
+  return { termRe, coverageOf, best, target, subtopics, subtopicGap, pct, toks, clean, kindOf, kindFor, MIN_TARGET, MAX_TARGET };
 })();
 // Deterministic quality gate for the generated page. v5 adds: banned-phrase (AI cliché) detection, readability (Flesch),
 // term coverage against the competitor term model / brief, specificity, section-length checks, the editor's critique,
@@ -777,7 +882,9 @@ const unverified_figures = [];
     for (const f of SRC.figures(body)) {
       if (texts.some(t => SRC.hasFigure(f, t))) continue;
       if (SRC.hasFigure(f, ownFacts) || clientNums.includes(String(f.raw).toLowerCase())) continue;
-      unverified_figures.push({ figure: f.raw, sources: [...new Set(urls.map(u => SRC.host(u)))] });
+      // R37 (2026-10-16): "does not carry" is said only of a source text the run read whole; a figure missing from a search snippet that
+      // was cut short ("…", "Read more") is "not in the excerpt the run read" — still held for review, but never blamed on the source.
+      unverified_figures.push({ figure: f.raw, sources: [...new Set(urls.map(u => SRC.host(u)))], reason: texts.some(t => SRC.cutShort(t)) ? 'not_in_excerpt' : 'absent' });
       marks.push({ start: a + f.index, end: a + f.index + f.length, raw: f.raw });
       if (marks.length >= 12) break;
     }
@@ -785,7 +892,7 @@ const unverified_figures = [];
   }
   marks.sort((x, y) => y.start - x.start);
   for (const t of marks) md = md.slice(0, t.start) + '[Confirm: ' + t.raw + ']' + md.slice(t.end);
-  if (marks.length) fixes.push(`Marked ${marks.length} figure(s) that the cited source does not carry as [Confirm: …] for review`);
+  if (marks.length) fixes.push(`Marked ${marks.length} figure(s) that the cited source does not carry, or that the excerpt of it the run read does not show, as [Confirm: …] for review`);
 }
 
 // 10. Banned phrases (AI clichés and filler)
@@ -810,9 +917,19 @@ const passive_pct = sentences.length ? Math.round(passive / sentences.length * 1
 const termList = (brief.terms_to_use || []).map(t => ({ term: String(t.term || t).toLowerCase(), min: Number(t.min_count) || 1 }))
   .concat((prev.term_model || []).slice(0, 25).map(t => ({ term: t.term, min: 1 })))
   .filter((t, i, a) => t.term && a.findIndex(x => x.term === t.term) === i).slice(0, 30);
-const termCoverage = termList.map(t => ({ term: t.term, target: t.min, found: (bodyPlain.match(flexRe(t.term, 'gi')) || []).length })).map(t => ({ ...t, ok: t.found >= t.target }));
-const coverage = termCoverage.length ? termCoverage.filter(t => t.ok).length / termCoverage.length : 1;
-const missingTerms = termCoverage.filter(t => !t.ok).slice(0, 10).map(t => t.term);
+// R43 (2026-10-16, re-rating 2026-10-15): the draft is measured exactly as the page it is compared with — a term counts once it APPEARS
+// (CVG.coverageOf, the measure the benchmark below and Parse Analysis use). Live (exec 616) the draft was scored on "count reaches the
+// brief's min_count" and the competitor on presence, and the two were printed side by side as one quantity: "covers 60% … against a
+// target of 90%" for a draft that uses all 20 terms (the competitor uses 18). The editor's length cut had pushed counts under the brief's
+// thresholds (strategy 11 -> 7 against 8), which alone flipped a passing round into a refusal. The brief's counts are still reported —
+// "strategy used 7 times (the brief asked for 8)" — as information, never as a term to "work in".
+const termCoverage = termList.map(t => ({ term: t.term, target: t.min, found: (bodyPlain.match(flexRe(t.term, 'gi')) || []).length }))
+  .map(t => ({ ...t, ok: t.found > 0, present: t.found > 0, below_brief: t.found > 0 && t.found < t.target }));
+const coverage = termCoverage.length ? termCoverage.filter(t => t.present).length / termCoverage.length : 1;
+const missingTerms = termCoverage.filter(t => !t.present).slice(0, 10).map(t => t.term);
+const belowBrief = termCoverage.filter(t => t.below_brief).map(t => ({ term: t.term, found: t.found, target: t.target }));
+const counts_note = belowBrief.length ? 'Used fewer times than the brief suggested (the page still uses each one; coverage counts a term once it appears): '
+  + belowBrief.slice(0, 8).map(t => t.term + ' used ' + t.found + ' time' + (t.found === 1 ? '' : 's') + ' (the brief asked for ' + t.target + ')').join(', ') : '';
 
 // 12b. Coverage against the BEST competitor (FIX_PLAN G33, 2026-10-13)
 // The score used to give 25 points for the share of the term list the page uses, with 100% as the silent bar and no statement of what the
@@ -837,8 +954,12 @@ const coverage_ratio = coverage_target_pct ? Math.min(1, coverage / (coverage_ta
 const missingSubtopics = covPlan && Array.isArray(covPlan.subtopics) && covPlan.subtopics.length
   ? CVG.subtopicGap(covPlan.subtopics, { headings: h2s.concat(md.match(/^###\s+.+$/gm) || []), text: bodyPlain }).filter(x => x.state === 'missing').map(x => x.subtopic)
   : [];
+const termsFound = termCoverage.filter(t => t.present).length;
+const benchUsed = benchCov ? benchCov.found : (covPlan && covPlan.best && covPlan.best.terms_used != null ? covPlan.best.terms_used : null);
+const benchOf = benchCov ? benchCov.total : (covPlan ? covPlan.terms_total ?? null : null);
 const coverage_report = {
-  pct: coverage_pct, terms_found: termCoverage.filter(t => t.ok).length, terms_total: termCoverage.length,
+  pct: coverage_pct, terms_found: termsFound, terms_total: termCoverage.length, measure: 'presence',
+  best_competitor_terms_used: benchUsed, best_competitor_terms_total: benchOf, below_brief: belowBrief, counts_note,
   target_pct: coverage_target_pct, best_competitor_pct: bestPct == null ? null : bestPct,
   best_competitor: covPlan && covPlan.best ? { domain: covPlan.best.domain || '', url: covPlan.best.url || '', rank: covPlan.best.rank ?? null, word_count: covPlan.best.word_count ?? null, sections: covPlan.best.sections ?? null } : null,
   average_competitor_pct: covPlan ? (covPlan.average_pct ?? null) : null,
@@ -846,11 +967,18 @@ const coverage_report = {
   missing_terms: missingTerms, subtopics_total: covPlan && covPlan.subtopics ? covPlan.subtopics.length : 0,
   subtopics_missing: missingSubtopics, pages_compared: covPlan ? (covPlan.pages_compared ?? null) : null,
   basis: coverage_target_pct
-    ? coverage_pct + '% of the ' + termCoverage.length + ' terms the top pages share, against a target of ' + coverage_target_pct + '% taken from '
+    ? 'uses ' + termsFound + ' of the ' + termCoverage.length + ' terms the top pages share (' + coverage_pct + '%; a term counts once it appears), against a target of ' + coverage_target_pct + '% taken from '
       + ((covPlan.best.domain || 'the best page') + (covPlan.best.rank ? ' (position ' + covPlan.best.rank + ')' : '')) + ', which covers ' + bestPct + '%'
+      + (benchCov ? ' — on the same list and the same measure it uses ' + benchCov.found + ' of the ' + benchCov.total : ' on the shared-term list of the brief')
       + (covPlan.average_pct != null ? ' (average of the ' + (covPlan.pages_compared || 0) + ' pages read: ' + covPlan.average_pct + '%)' : '')
-    : coverage_pct + '% of the ' + termCoverage.length + ' terms the top pages share; no competitor page could be read, so there is no target to compare with'
+    : 'uses ' + termsFound + ' of the ' + termCoverage.length + ' terms the top pages share (' + coverage_pct + '%; a term counts once it appears); no competitor page could be read, so there is no target to compare with'
 };
+// the comparison in one sentence, on one measure, for the reason the owner reads
+const coverage_compare = coverage_target_pct
+  ? 'it uses ' + termsFound + ' of the ' + termCoverage.length + ' terms the top pages share (' + coverage_pct + '%), against a target of ' + coverage_target_pct + '% — '
+    + ((covPlan.best.domain || 'the best page') + (benchCov ? ' uses ' + benchCov.found + ' of the ' + benchCov.total + ' (' + bestPct + '%) on the same list' : ' covers ' + bestPct + '%'))
+    + '; a term counts once it appears'
+  : '';
 
 // 13. Specificity: numbers, examples, steps, decision rules per 100 words
 const specHits = (bodyPlain.match(/\b\d[\d,.%]*\b/g) || []).length + (lower.match(/\b(for example|for instance|such as|e\.g\.|step \d|case study|in practice|choose .* if|rule of thumb)\b/g) || []).length;
@@ -899,7 +1027,9 @@ if (AT) {
 }
 if (/guarantee/i.test(md) && !prev.business) warnings.push('Contains a guarantee claim — please verify');
 if (stats.length) warnings.push('Unverified statistics that need a linked source or a [Statistic] marker: ' + stats.join('; '));
-if (unverified_figures.length) warnings.push('Figures the cited source does not carry (now marked [Confirm: …]): ' + unverified_figures.slice(0, 5).map(f => '"' + f.figure + '" (' + f.sources.join(', ') + ')').join('; ') + ' — quote the source\'s own number or cite the page that states it');
+const figAbsent = unverified_figures.filter(f => f.reason !== 'not_in_excerpt'), figExcerpt = unverified_figures.filter(f => f.reason === 'not_in_excerpt');
+if (figAbsent.length) warnings.push('Figures the cited source does not carry (now marked [Confirm: …]): ' + figAbsent.slice(0, 5).map(f => '"' + f.figure + '" (' + f.sources.join(', ') + ')').join('; ') + ' — quote the source\'s own number or cite the page that states it');
+if (figExcerpt.length) warnings.push('Figures not in the excerpt of the cited source the run read (the excerpt was cut short, so the page itself may state them; now marked [Confirm: …]): ' + figExcerpt.slice(0, 5).map(f => '"' + f.figure + '" (' + f.sources.join(', ') + ')').join('; ') + ' — check the figure on the source page, or cite the page that states it');
 if (weakRepeats.length) warnings.push('A source with no independent authority was cited more than once (' + [...new Set(weakRepeats)].join(', ') + '): the repeats were unlinked — cite an official, standards, research or major-press source instead');
 if ((prev.internal_link_candidates || []).length > 1 && internalLinks === 0) warnings.push('No internal links to existing pages on the site');
 if (bannedCount) warnings.push('Filler / AI-cliché phrases to rewrite (' + bannedCount + '): ' + banned_found.slice(0, 8).map(b => '"' + b.phrase + '"' + (b.count > 1 ? ' x' + b.count : '')).join(', '));
@@ -907,7 +1037,7 @@ if (flesch != null && flesch < 30) warnings.push(`Hard to read (Flesch ${flesch}
 if (longSentences > Math.max(3, sentences.length * 0.12)) warnings.push(`${longSentences} sentences longer than 28 words — split them`);
 if (passive_pct > 25) warnings.push(`Passive voice in about ${passive_pct}% of sentences — rewrite in active voice`);
 if (termCoverage.length >= 8 && coverage_target_pct && coverage_pct < coverage_target_pct)
-  warnings.push('Topic coverage ' + coverage_pct + '% against a target of ' + coverage_target_pct + '% (' + (coverage_report.best_competitor ? (coverage_report.best_competitor.domain || 'the best page') + ' covers ' + coverage_report.best_competitor_pct + '%' : 'the best page in the results') + ') — work these terms in where they belong: ' + missingTerms.join(', '));
+  warnings.push('Topic coverage ' + coverage_pct + '% against a target of ' + coverage_target_pct + '% (' + (coverage_report.best_competitor ? (coverage_report.best_competitor.domain || 'the best page') + ' covers ' + coverage_report.best_competitor_pct + '%' : 'the best page in the results') + ') — both counted the same way, a term counts once it appears; these terms do not appear at all, work them in where they belong: ' + missingTerms.join(', '));
 else if (termCoverage.length >= 8 && !coverage_target_pct && coverage < 0.6) warnings.push('Topic coverage is thin — competitors cover these terms and this page does not: ' + missingTerms.join(', '));
 if (missingSubtopics.length) warnings.push('Subtopics the best competitor page covers and this draft does not: ' + missingSubtopics.slice(0, 4).map(x => '"' + x + '"').join(', ') + ' — add each one where it belongs (our own heading and words, never theirs), or the page is thinner than the one it has to beat');
 if (wordsArr.length > 400 && specificity < 0.6) warnings.push(`Too generic (${specificity} specifics per 100 words) — add concrete examples, numbers with sources, steps or decision rules`);
@@ -919,14 +1049,25 @@ if (critique && Array.isArray(critique.problems)) critique.problems.filter(p => 
 //      than PH_MAX means the brief asked for figures the business never gave, and the editor has to rewrite those passages without them.
 //      Counted exactly as the web app highlights them (an upper-case word in square brackets): link text is not a placeholder, and a note
 //      with a colon ([Confirm: AED 50m], [Owner: confirm — …], [Author insight: …], [Image: …]) is a review note, not a gap in the copy.
+// R45 (2026-10-16, re-rating 2026-10-15): live (exec 616) the delivered body carried "*Checklist reviewed by [name, role], [date].*" and
+//      "[Confirm: edition year and sample size]" while QA reported `placeholder_count: 0` and named neither: the pattern counted only a
+//      bracket that starts with an UPPER-case letter, and the writer's own [Confirm: …] notes were counted (on the copy before §9b) but never
+//      named to anyone. Every bracket a person has to fill is counted now, whatever its case; the writer's review notes are listed by name;
+//      QA's own [Confirm: <figure>] marks are named once, by the figure warning, and never again here.
 const PH_MAX = 5;
-const PH_RE = /\[[A-Z][A-Za-z0-9 &/'’.,()-]{1,48}\]/g;
+const PH_RE = /\[[A-Za-z][A-Za-z0-9 &/'’.,()-]{1,48}\]/g;
 const phText = withoutMeta.replace(/\[([^\[\]]+)\]\([^)\s]*\)/g, '$1');   // [anchor](url) and the table of contents are links, not placeholders
 const phCounts = new Map();
 for (const t of (phText.match(PH_RE) || [])) phCounts.set(t, (phCounts.get(t) || 0) + 1);
 const placeholders = [...phCounts.entries()].map(x => ({ token: x[0], count: x[1] })).sort((a, b) => b.count - a.count);
 const placeholder_count = placeholders.reduce((s, x) => s + x.count, 0);
-const review_notes = (withoutMeta.match(/\[(?:Confirm|Owner|Author insight|Statistic)\b[^\]]*\]/gi) || []).length;
+const finalBody = md.replace(/^(Title|Meta Description|Slug|Primary Keyword|Secondary Keywords):.*$/gm, '');   // the copy AFTER §9b's marks
+const review_notes = (finalBody.match(/\[(?:Confirm|Owner|Author insight|Statistic)\b[^\]]*\]/gi) || []).length;
+const qaOwnMarks = new Set(unverified_figures.map(f => '[Confirm: ' + f.figure + ']').concat(flagged_amounts.map(a => '[Confirm: ' + a.amount + ']')));
+const wnCounts = new Map();
+for (const t of (finalBody.match(/\[(?:Confirm|Owner)\b[^\]]*\]/gi) || [])) if (!qaOwnMarks.has(t)) wnCounts.set(t, (wnCounts.get(t) || 0) + 1);
+const writer_notes = [...wnCounts.entries()].map(x => ({ token: x[0], count: x[1] }));
+const open_brackets = placeholders.map(p => ({ ...p, kind: 'placeholder' })).concat(writer_notes.map(n => ({ ...n, kind: 'review_note' })));
 if (placeholder_count > PH_MAX) warnings.push(`Too many placeholders to publish (${placeholder_count}, at most ${PH_MAX} allowed): ` + placeholders.slice(0, 6).map(p => p.token + (p.count > 1 ? ' x' + p.count : '')).join(', ')
   + ' — rewrite those passages so they do not need the missing figure (what drives the cost, what the stages are, what to ask the vendor), and keep a placeholder only where the owner must fill one value in');
 
@@ -1073,25 +1214,35 @@ const over_pct = target ? Math.round(100 * over_words / target) : 0;
 const fat_sections = sections.map(sec => { const o = outline.find(x => x.h2 && plain(x.h2).toLowerCase() === sec.h2.toLowerCase());
     const t = o ? Number(o.target_words) || 0 : 0; return { h2: sec.h2, words: sec.words, target: t, over: t ? sec.words - t : 0 }; })
   .sort((a, b) => (b.over - a.over) || (b.words - a.words)).slice(0, 3).filter(x => x.over > 0 || !x.target);
+const atRiskTerms = termCoverage.filter(t => t.found > 0 && t.found <= 2).map(t => t.term).slice(0, 15);
 const length_instruction = (target && mainWords > target * 1.1)
   ? 'CUT ' + over_words + ' words: the main content is ' + mainWords + ' words against a target of ' + target + ' (+' + over_pct + '%). '
     + (fat_sections.length ? 'The longest sections are ' + fat_sections.map(x => '"' + x.h2 + '" (' + x.words + ' words' + (x.target ? ' against ' + x.target : '') + ')').join(', ') + '. ' : '')
     + 'Cut repetition, restatements and secondary detail; keep every section, every verified fact, every source and every link. Do not add a single word, and do not stop above ' + Math.round(target * 1.1) + ' words.'
+    // R43: a correct cut must not fail the coverage check by taking a term off the page — the ones used only once or twice are named
+    + (atRiskTerms.length ? ' Keep at least one use of each of these terms (each appears only once or twice, and the topic coverage counts them): ' + atRiskTerms.join(', ') + '.' : '')
   : '';
 // R25 (2026-10-14, the second re-rating): "Microsoft's highest APIM SLA ([Statistic]) applies to Premium deployments" went out in the
 // delivered body. `placeholder_count: 1` counted it, but the reasons the owner reads listed only the 11 brackets of the empty business
 // profile, so nobody was ever told that a figure in the text is a placeholder. Every body placeholder that is still there is named,
 // whether or not the count is over PH_MAX (the delivery gate itself is unchanged: PH_MAX still decides what cannot be published).
-const placeholder_list = placeholders.slice(0, 4).map(p => p.token + (p.count > 1 ? ' x' + p.count : '')).join(', ');
+const placeholder_list = placeholders.slice(0, 6).map(p => p.token + (p.count > 1 ? ' x' + p.count : '')).join(', ');
 // B3-2 (2026-10-15): name the amounts the mask removed. "[Price] x43" tells the owner nothing they can act on; the number it replaced,
 // with the sentence it came from, is a question they can answer in one reading.
 const removed_note = !masked_amounts.length ? ''
   : ' The amount(s) removed: ' + masked_amounts.slice(0, 4).map(a => '"' + a.amount + '" in "' + a.context + '"').join('; ')
     + (masked_amounts.length > 4 ? ' and ' + (masked_amounts.length - 4) + ' more' : '')
     + ' — nothing on file and no source cited in that sentence states them, so give us the figure or let the sentence drop it.';
-const placeholder_note = !placeholder_count ? (removed_note ? removed_note.trim() : '')
+// R45: a bracket that is not a masked figure ("[name, role]", "[date]") is called what it is, and the writer's notes to confirm are named
+const FIGURE_MASK = /^\[(?:Price|Statistic|Number|Amount|Figure|Percentage|Timeline)\]$/i;
+const allMasks = placeholders.every(p => FIGURE_MASK.test(p.token));
+const writer_note = writer_notes.length ? ' The writer also left ' + writer_notes.reduce((n, x) => n + x.count, 0) + ' note(s) for you to confirm: '
+  + writer_notes.slice(0, 4).map(x => x.token + (x.count > 1 ? ' x' + x.count : '')).join(', ') + '.' : '';
+const ph_base = (!placeholder_count ? (removed_note ? removed_note.trim() : '')
   : (too_many_placeholders ? placeholder_count + ' placeholder(s) left in the copy (at most ' + PH_MAX + ' can be published): ' + placeholder_list
-    : placeholder_count + ' masked figure(s) still in the text: ' + placeholder_list + ' — fill each one in, or rewrite the sentence so it does not need the figure, before you publish') + removed_note;
+    : allMasks ? placeholder_count + ' masked figure(s) still in the text: ' + placeholder_list + ' — fill each one in, or rewrite the sentence so it does not need the figure, before you publish'
+      : placeholder_count + ' bracket(s) left in the text for you to fill in: ' + placeholder_list + ' — fill each one in before you publish') + removed_note).trim();
+const placeholder_note = !writer_note ? ph_base : !ph_base ? writer_note.trim() : ph_base + (/[.!?]$/.test(ph_base) ? '' : '.') + writer_note;
 // P2-6: `passed_copy` judges the text and decides the editor round; `passed` judges the page the owner receives, so the author box's
 // bracketed fields keep it false — the honest answer to "can I publish this as it is?".
 const passed_copy = warnings.length === 0 && content_score >= 80 && Math.abs(mainWords - target) <= target * 0.25 && !too_many_placeholders && !too_long;
@@ -1112,12 +1263,15 @@ if (!passed_copy && !editor_needed && round === 1) fixes.push('Editor pass skipp
 const max_rounds = Math.max(1, Math.round(Number(prev.qa_max_rounds) || 2));
 const rounds_left = Math.max(0, max_rounds - round);
 const not_ready = !passed && !rounds_left;   // no round left to fix it: a draft, not a publishable page
+// R46 (2026-10-16): QA round N follows N - 1 editor calls (round 1 reads the copywriter's draft). Live (exec 616) the note said "The editor
+// had 2 round(s)" after ONE editor call and the cost ledger priced a second; both now read `editor_rounds`.
+const editor_rounds = Math.max(0, round - 1);
 const not_ready_reasons = !not_ready ? [] : [
   placeholder_note,   // R25: named whenever any body placeholder is left, not only above PH_MAX
   profile_placeholders ? profile_placeholders + ' bracketed field(s) in the byline, the author box and the Person schema still need your details' : '',
   too_long ? 'the main content is ' + mainWords + ' words against a target of ' + target : '',
   (!too_long && Math.abs(mainWords - target) > target * 0.25) ? 'the main content is ' + mainWords + ' words against a target of ' + target : '',
-  (coverage_target_pct && coverage_pct < coverage_target_pct) ? 'it covers ' + coverage_pct + '% of the terms the best-ranking page covers, against a target of ' + coverage_target_pct + '%' : '',
+  (coverage_target_pct && coverage_pct < coverage_target_pct) ? coverage_compare : '',   // R43: one measure, both figures, the basis named
   content_score < 80 ? 'the content score is ' + content_score + ' of 100 (80 is the bar)' : '',
   ...warnings.filter(w => !/^Too many placeholders|^Main content is too long/.test(w)).slice(0, 4)
 ].filter(Boolean);
@@ -1127,11 +1281,13 @@ const quality_label = passed ? 'passed the quality check'
 const quality = { passed, publishable: passed, not_ready, round, max_rounds, rounds_left, label: quality_label, reasons: not_ready_reasons,
   placeholder_note, placeholders_in_body: placeholders.map(p => p.token),   // R25: the owner is told about a masked figure even on a page that is otherwise ready
   placeholder_count, placeholders_total: placeholder_count + profile_placeholders, placeholder_max: PH_MAX, coverage_pct, coverage_target_pct, content_score,
-  note: not_ready ? 'The editor had ' + max_rounds + ' round(s) and the page still fails the checks above: it is delivered as a draft to finish by hand, not as a page to publish as it is.' : '' };
+  editor_rounds, open_brackets,   // R46 / R45
+  note: not_ready ? (editor_rounds ? 'The editor had ' + editor_rounds + ' round' + (editor_rounds === 1 ? '' : 's') : 'No editing round was left (the quality check allows ' + max_rounds + ' round' + (max_rounds === 1 ? '' : 's') + ')')
+    + ' and the page still fails the checks above: it is delivered as a draft to finish by hand, not as a page to publish as it is.' : '' };
 const site_profile_out = (P && Object.keys(P).some(k => k === 'address' ? Object.values(P.address || {}).some(Boolean) : String(P[k] || '').trim())) ? P : (prev.site_profile || null);
-return [{ json: { ...prev, output: md, qa_round: round, meta: { title: metaTitle, description: metaDesc, slug }, schema_blocks: blocks, critique: critique || lastCritique || null, site_profile: site_profile_out,
-  content_qa: { ai_ready, round, passed, editor_needed, content_score, quality, publishable: passed, not_ready, quality_label, not_ready_reasons, max_rounds, rounds_left, score_breakdown: { structure: Math.round(structure_pts), coverage: Math.round(coverage_pts), readability: Math.round(readability_pts), specificity: Math.round(specificity_pts), clean_language: Math.round(banned_pts), length: Math.round(length_pts) },
-    total_words: totalWords, main_content_words: mainWords, faq_words: faqWords, target_word_count: target, sections, placeholders, placeholder_count, placeholder_max: PH_MAX, review_notes, business_name: bizName, nap_source,
+return [{ json: { ...prev, output: md, qa_round: round, editor_rounds, meta: { title: metaTitle, description: metaDesc, slug }, schema_blocks: blocks, critique: critique || lastCritique || null, site_profile: site_profile_out,
+  content_qa: { ai_ready, round, editor_rounds, passed, editor_needed, content_score, quality, publishable: passed, not_ready, quality_label, not_ready_reasons, max_rounds, rounds_left, score_breakdown: { structure: Math.round(structure_pts), coverage: Math.round(coverage_pts), readability: Math.round(readability_pts), specificity: Math.round(specificity_pts), clean_language: Math.round(banned_pts), length: Math.round(length_pts) },
+    total_words: totalWords, main_content_words: mainWords, faq_words: faqWords, target_word_count: target, sections, placeholders, placeholder_count, placeholder_max: PH_MAX, review_notes, writer_notes, open_brackets, business_name: bizName, nap_source,
     placeholder_note, length_instruction, over_words, over_pct, longest_sections: fat_sections,   // R25 / R22: the masked figures by name, and the cut the editor is asked to make
     masked_amounts, flagged_amounts, sourced_amounts,   // B3-1 / B3-2: what the money mask removed, what it left for review, and what a cited source vouched for
     passed_copy, profile_placeholders, profile_placeholder_fields: PROFILE_PH, placeholders_total: placeholder_count + profile_placeholders,
