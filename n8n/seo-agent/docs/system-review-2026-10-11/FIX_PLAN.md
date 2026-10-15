@@ -1024,7 +1024,7 @@ A1-A4 were built in the same pass (build section 61, harness S71). What follows 
 | B-B4 | **No published reliability statement** — what we commit to, measured how, with the named failure modes. Needs D25a first | Low | docs + the app | after D25a: state it, measure it, show it | open (needs D25a) |
 
 | B-R1 | **Nothing is ever delivered.** 23 reports landed in the app on 2026-10-14 (execs 535-581) and not one was e-mailed, posted or pushed anywhere; every one of the six tools benchmarked delivers the report to the customer. The engine's e-mail is deliberately off (`ENGINE_EMAILS=false`, so the app holds the reports) — the delivery has to come from the app, which now has a working mailbox and a working webhook | **High** | the app: a scheduled digest and per-run delivery, by e-mail and webhook, carrying the share link | deliver on a schedule the customer sets, with the figures and the link; never attach a report a run marked not ready | fixed 2026-10-15 (app: schedules, e-mail + signed webhook, share link, delivery log, retries) |
-| B-R2 | **No client-facing branding or portal.** G15's share links exist and match or beat the only competitor that has them, but no run has ever exercised the app UI, and a client has no branded place to look | Medium | the app | white-label-lite: the company's name and logo on a shared report, and an owner-session browser pass so the UI is evidenced at all | open |
+| B-R2 | **No client-facing branding or portal.** G15's share links exist and match or beat the only competitor that has them, but no run has ever exercised the app UI, and a client has no branded place to look | Medium | the app | white-label-lite: the company's name and logo on a shared report, and an owner-session browser pass so the UI is evidenced at all | fixed 2026-10-15 (app): a shared report carries the customer's name and logo from the business profile they already fill (`seo_profiles.business_name` / `logo_url`) — **no new column and no migration**, a correction to the benchmark's own suggestion; a missing or broken logo does not break the page; and `app/BROWSER_PASS.md` records **54 screenshots** at 1440 and 375, light and dark, on the agent's own test account |
 | B-R3 | **The app's estimate disagrees with the engine's** (also B-B1): `app/shared/src/constants.ts` / `estimate.ts` carry the 2026-10-02 table, 1.3x-2.5x high, which is why runs were refused at "$5.74 of $6". The engine now publishes a calibrated `run_cost_estimate_usd` | Medium | the app | show the engine's figure, and keep one table, not two | fixed 2026-10-15 (app: one table; the engine figure is read when it arrives) |
 
 | B-A10 | **R18's gate reaches three paths, not the class.** The in-200 retry gate (`_dfs_retry.js`) covers the SERP, facts and keyword-data calls; a ratchet added on 2026-10-15 (`retry_lint.check_in200`, `harness/in200_baseline.json`) measures the rest and **48 DataForSEO nodes across 12 workflows are outside a recorded gate** (the untouched v3 export excluded). The build now refuses a *new* ungated node, so the debt cannot grow | Medium | `retry_lint.py`, the builders' DataForSEO nodes | register R18's existing chains with `record_gate()`, then gate the remaining calls workflow by workflow, deleting each name from the baseline as it lands | fixed 2026-10-15 (build section 75, S85): **72 of 95 DataForSEO calls across all 12 workflows are inside a recorded gate**, 21 calls spliced, baseline 49 -> 23 and every remaining row carries its reason. The debt was never 49: `check_in200` ran on the **main workflow only**, so the ten `DFS Balance End` nodes B-A5 added entered ungated and were never measured — the true figure was 59, and `retry_lint.check_all` now walks every generated workflow and fails on a stale baseline row |
@@ -1291,6 +1291,27 @@ Three corrections, each against something a brief or the register asserted:
 | ID | Title | Impact | Where | Fix | Status |
 |---|---|---|---|---|---|
 | B-A11 | **Three nodes still degrade silently when both attempts fail.** *Pick Competitors*, *Analyze Keywords* and *Competitor Analysis* carry on with what they have instead of marking their evidence `unavailable` — pre-existing, and now behind a retry, so it takes two failures rather than one. Everywhere else the gate's refusal was verified reaching the output (Parse Positions, Site SERP, Trends, Assess Result on a 502, Build Keyword Strategy, Collect Research, Analyze Backlinks, Merge Keyword Data, Save Task ID) | Medium | the three nodes | mark `unavailable` and refuse to advise from it, as the other nine do | **open** |
+
+**B-R2 closed, and the four defects the first browser pass found (2026-10-15, app only).** The app UI had never been exercised by any
+run; it has now been, on a test account created for the purpose — never the owner's, which was refused once before as impersonation and
+stays refused. Evidence in `app/BROWSER_PASS.md`: 54 screenshots, 1440 and 375 px, light and dark, with no console errors, no failed
+requests, no horizontal overflow, an `h1` on every page and no sub-AA contrast.
+
+| ID | Title | Impact | Where | Fix | Status |
+|---|---|---|---|---|---|
+| BP-4 | **The dev server was serving stale code.** `tsx watch` never sees bind-mount events, so the running server could be older than the files on disk — which means **every browser check run against the dev stack before 2026-10-15 may have been looking at an older build**, including the v4.11 and v4.14 passes | **High** (it silently invalidates evidence) | `app/compose.dev.yml` | `CHOKIDAR_USEPOLLING` | fixed 2026-10-15 |
+| BP-1 | **Field names were shown to clients** — a shared report printed "HealthScore" rather than a human label | Low | the share renderer | human labels | fixed 2026-10-15 |
+| BP-2 | **The headline figures led with "Score delta"**, because they were rendered in jsonb key order rather than in an order a reader expects | Low | the share renderer | a stated order | fixed 2026-10-15 |
+| BP-3 | A dead link had no `h1` | Low | the app | an `h1` | fixed 2026-10-15 |
+
+**Two corrections to the register and the brief:** the area-12 benchmark said white-label needed "a migration (two columns on `orgs`)" —
+it needed neither, because the customer already fills a business profile with exactly those two fields. And **`smoke.py` cannot pass in a
+worktree at all**: with no `n8n/.env` the app has no n8n key, so four checks fail on "N8N_API_KEY is not configured" both before and after
+any change. A committed stand-in (`app/scripts/stub_n8n.py`, started by hand, never imported by the app, never deployed) serves the Data
+Table endpoints from memory so the app can be exercised without the engine.
+
+**Not covered, stated plainly:** any engine-backed or paid path, so the dashboards were seen as empty states; settings, tools and link
+building; 375-dark except the share page; Chromium only; no keyboard or screen-reader audit.
 
 **A process defect this batch found (B-P1).** `isolation: "worktree"` cut both agents' worktrees from `edca460` — the last merge to
 `main` — which is **47 commits behind** the branch tip: no build sections 55–66, no S67–S74, and `docs/system-review-2026-10-14/` did
