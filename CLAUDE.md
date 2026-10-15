@@ -3,7 +3,7 @@
 Enterprise SEO automation built as n8n workflows: keyword research, keyword verdicts, long-form content with QA, technical site audits, full SEO reports, AI-visibility checks. Everything lives in `n8n/seo-agent/`; the stack runs locally with Docker Compose from `n8n/`.
 
 ## Read first
-- **`n8n/seo-agent/docs/system-review-2026-10-15/` — the third re-rating (5.5/10 measured, 2026-10-16): `RESULTS.md`, `parts/`, `SCORECARD.md`; its 83 defects are FIX_PLAN §3.17.**
+- **`n8n/seo-agent/docs/system-review-2026-10-15/DEFECTS.md` — START HERE to fix the defects: every defect of the third re-rating (5.5/10, 2026-10-16) re-verified with its root cause at file:line, the fix order by family, and an offline + live acceptance test per defect (dossiers in `defects/`). 15 High, 39 Medium, 28 Low, R53 withdrawn, R117–R119 added.** The run itself: `RESULTS.md`, `parts/`, `SCORECARD.md`; register FIX_PLAN §3.17.
 - **`n8n/seo-agent/docs/system-review-2026-10-11/` — the fix plan and its live-check notes (Phases 1-4 done 2026-10-13; see the latest status). `FIX_PLAN.md` is still the register: §3.7-§3.10 hold the defects the live checks found, §5.2 the re-rating protocol.** Whole-system review of 2026-10-11: live run of every feature on techand.ai (`RESULTS.md`, 26 defects with evidence, ≈ $4.3), benchmarks of the best tools with proven data (`CRITERIA_*.md`), the scorecard (`SCORECARD.md`: **5/10 overall**, 13 areas), and **`FIX_PLAN.md`** — 80 items (D defects, G criteria gaps, L Link Builder items, O owner decisions) with evidence, where to fix, the fix, an acceptance test, phases sized into sessions, the re-rating protocol and a scores history. Read its `README.md` first.
 - `app/README.md` — **the web app (v4.7, 2026-10-03)**: multi-company React + TypeScript front end with sign-up / Google login, onboarding, dashboards, every analysis as a form, runs and reports; Fastify + Postgres server in front of n8n. `app/API.md` (every endpoint), `app/web/CONVENTIONS.md` (UI rules). Product name **Ascentra** (brand kit in `app/web/brand/`, public marketing site in `app/web/src/marketing/`, 2026-10-08).
 - `n8n/seo-agent/HANDOVER.md` — current state, how to use every mode (with API bodies), what is verified live, open items for the user. Start here.
@@ -90,8 +90,8 @@ the Mac sleeps.
 dry-run switch); the app inside the owner's company was **not exercised** (a temporary test login was refused by the permission system).
 Toolkit: `n8n/seo-agent/rerate_toolkit.py` (app-shaped requests, Test Runner, balance windows, execution / report / ledger reads;
 never prints a secret) and the executor brief `docs/system-review-2026-10-15/EXECUTOR_BRIEF.md` — reuse both for the next re-rating.
-**Next:** the site-picture family (R34-R38, R59-R61, R78, R111), then R110, R77, R79, R47/R80, R94's restart catch-up; owner: top up
-DataForSEO, D25a, a business profile, close alert row 4.
+**Next:** fix from `docs/system-review-2026-10-15/DEFECTS.md` (re-verified 2026-10-16: R43 and R66 raised to High, R102 lowered;
+15 High), family by family — F1 the site picture first; owner: top up DataForSEO, D25a, a business profile, close alert row 4.
 
 ## Status (2026-10-15, the benchmark programme is finished — 13 of 13 areas — previous)
 **Seventeen agents today, up to four in parallel, nine deploys. Harness 4505 -> 5191 passed, 0 failed. The instance is current: main
