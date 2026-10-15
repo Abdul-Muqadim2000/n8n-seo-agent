@@ -9149,6 +9149,108 @@ sticky("""### One AI Overview figure in one place, and a state that advances onl
 log('One AI Overview figure in one place, and a state that advances only on evidence (2026-10-15, FIX_PLAN §3.16 rows B6-9 and B9-6). B6-9: v5/code/Ladder_Pool.js still multiplied the click-through rate by 0.65 when a results page carried an AI Overview - Ahrefs\' APRIL 2025 figure - after B1-3 had replaced it in _kw_inputs.js with the December 2025 per-position study (300,000 keywords, published 2026-02-04: -58.0% at position 1, -50.8% at 2, -46.4% at 3) and B6-1 in _rank_serp.js. Which kit belongs where is B6-1\'s own reasoning: a flat factor all but cancels out of a SHARE, so the share of voice needed the per-position table, while the ladder\'s traffic_potential is an ABSOLUTE top-three estimate and only the keywords whose results page has an AI Overview carried the factor - so the stale number inflated those estimates by 1.35x and moved them up the pre_score order that decides which rungs are planned. Ladder Pool now makes the same KWI.calibrate call the discovery twin Collect_Research.js makes, and the estimate carries traffic_basis / traffic_note / click_loss instead of arriving bare. The class is closed by a build-time scan that refuses the literal 0.65 within 200 characters of an AI Overview in every v5/code kit and every generated Code node, with comments stripped first so the two comments that record WHY the figure was retired survive. B9-6: the write half of "writing was a promise nobody kept" - the Content Cadence marked an AI target writing and stamped written_at when a page run STARTED, whatever the spawn did, and nothing in the system ever set written, so Growth Metrics counted written: 0 every week of its life and a refused or failed run left the question claiming work in progress for ever (R1\'s class in the one table R1 did not cover). AI Target Marks now writes the row back to queued with the error when the content run could not be started and says in the row\'s own reason that nothing exists yet; the new AI Target Settle is the only exit from writing and advances a row only against the seo_content_log row for that same run, which is R1\'s rule exactly (a page counts as written only on a written content-log row); it deliberately does not time a row out, because the 14-day requeue and its alert belong to the read half in AI Growth. The class is closed by deriving state_lint.py\'s work-in-progress registry from the generated workflows instead of hand-writing it from R1\'s one instance: every table a run moves to writing whose state is read back and acted on must declare its way back, and check B then has to find the node that writes it. On its first run the derived registry found a third table, seo_case_studies, and the honest answer is recorded rather than assumed - nothing tests that row\'s state (Brief Context hands a later page url: \'\' unless the status is published, and the Link Builder takes a case study only when it has a page_url), so it is not this defect')
 
 
+# 102. THE VERDICT READS THE WHOLE PAGE BEFORE IT SAYS WHAT THE PAGE LACKS (2026-10-16, re-rating R38 / R52;
+#      docs/system-review-2026-10-15/defects/A_keywords_content.md).
+#
+#      * R38 **a false statement about the customer's own page.** Exec 608 told the owner their article "has no mandate dates, no PINT-AE
+#        or 5-corner explanation, no tables, no lead CTA and no author or date"; it has the dates, three tables and a byline. Three cuts
+#        (9,000 characters in *Collect Client Pages*, 3,500 in the analyzer's prompt, 5,000 in the copywriter's) hid them, the text reader
+#        (Jina, header / aside selectors removed) flattens tables into plain lines and drops bylines anyway, and the analyzer's "in the
+#        excerpt provided" hedge was lost when the verdict restated the gap as fact. Now: *Read Client Page HTML* (a free GET of the pages
+#        the run reads) -> *Collect Client Pages* measures the page's FACTS on the WHOLE page (dates in the text, tables, byline,
+#        publication date, call to action, schema types; `structure_reliable` says whether the HTML was real) and keeps 24,000 characters
+#        of the existing page; the analyzer, the verdict and the copywriter read the facts and the tables as rows; *Check Page Claims*
+#        (new, between *Parse Analysis* and *Keyword Data*) removes any analyzer gap the facts contradict or could not check, and *Merge
+#        Keyword Data* reads the checked analysis. Section 103 closes the verdict's own text.
+#      * R52 the description's "Pages read" printed the client-rendered application's generic title for every menu page (v5/code/Site_Pages.js).
+_PC102 = _rd0('code/_page_claims.js').rstrip('\n')
+assert 'const PC = (() => {' in _PC102
+
+# --- the pages' own HTML: one free GET per page the run reads, in front of Collect Client Pages ---
+_rcp = pos('Read Client Pages')
+add_node('Read Client Page HTML', 'n8n-nodes-base.httpRequest', 4.5, {
+    # only the run's own host is fetched directly (the URL comes from a sitemap the site's owner controls); anything else gets an inert reserved URL and reads as "not read"
+    'url': "={{ (() => { const u = String($('Client Page Requests').all()[$itemIndex].json.url || ''); const h = (u.match(/^https?:\\/\\/([^\\/:?#]+)/i) || [])[1] || ''; const n = (x) => String(x).toLowerCase().replace(/^www\\./, ''); return (h && n(h) === n($('Collect Site URLs').first().json.domain || '')) ? u : 'https://example.com/'; })() }}",
+    'sendHeaders': True,
+    'headerParameters': {'parameters': [
+        {'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEO-Agent/4.14; +https://example.com/bot)'},
+        {'name': 'Accept', 'value': 'text/html,application/xhtml+xml'}]},
+    'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 500}},
+                'response': {'response': {'neverError': True, 'responseFormat': 'text', 'outputPropertyName': 'page_html'}},
+                'timeout': 20000}},
+    [_rcp[0] + 200, _rcp[1] + 160],
+    {'onError': 'continueRegularOutput', 'retryOnFail': True, 'maxTries': 3, 'waitBetweenTries': 5000})
+assert 'example.com' in nodes['Read Client Page HTML']['parameters']['url'] and 'Collect Site URLs' in nodes['Read Client Page HTML']['parameters']['url'], 'R38: the HTML read is not limited to the run\'s own host'
+disconnect('Read Client Pages', 'Collect Client Pages')
+connect('Read Client Pages', 'Read Client Page HTML'); connect('Read Client Page HTML', 'Collect Client Pages')
+setcode('Collect Client Pages', rd('code/Collect_Client_Pages.js'))
+assert "$('Read Client Pages').all()" in code('Collect Client Pages') and 'existing_page_digest' in code('Collect Client Pages'), 'R38: Collect Client Pages does not measure the page'
+assert "slice(0, r.kind === 'existing' ? 9000 : 6000)" not in code('Collect Client Pages'), 'R38: the 9,000 character cut is back'
+
+# --- the analyzer's claims about the client's page are checked against the page's facts ---
+add_node('Check Page Claims', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Check_Page_Claims.js').replace('/*__PAGE_CLAIMS__*/', _PC102)},
+         [pos('Parse Analysis')[0] + 200, pos('Parse Analysis')[1] + 160])
+assert 'const PC = (() => {' in code('Check Page Claims') and '/*__PAGE_CLAIMS__*/' not in code('Check Page Claims')
+_pa_out = [t['node'] for lst in conns.get('Parse Analysis', {}).get('main', []) for t in lst]
+assert _pa_out == ['Keyword Data'], 'R38: Parse Analysis feeds %r, expected only Keyword Data' % (_pa_out,)
+disconnect('Parse Analysis', 'Keyword Data')
+connect('Parse Analysis', 'Check Page Claims'); connect('Check Page Claims', 'Keyword Data')
+_mkd = code('Merge Keyword Data')
+assert _mkd.count("$('Parse Analysis')") == 1, 'R38: Merge Keyword Data reads Parse Analysis %dx' % _mkd.count("$('Parse Analysis')")
+setcode('Merge Keyword Data', _mkd.replace("$('Parse Analysis')", "$('Check Page Claims')"))
+for _n in nodes:   # nothing else may read the unchecked analysis by name (Keyword Data (Retry) reads only the keyword)
+    _blob = json.dumps(nodes[_n]['parameters'])
+    if "$('Parse Analysis')" in _blob and _n not in ('Keyword Data (Retry)',):
+        raise AssertionError('R38: %s still reads the unchecked analysis' % _n)
+assert 'existing_page_facts_text' in nodes['Competitor Analyzer']['parameters']['text'] and '14000' in nodes['Competitor Analyzer']['parameters']['text'], 'R38: the analyzer prompt is not the whole-page one'
+assert '.slice(0, 3500)' not in nodes['Competitor Analyzer']['parameters']['text'], 'R38: the 3,500 character cut is back'
+assert 'existing_page_facts_text' in nodes['Verdict Agent']['parameters']['text'], 'R38: the verdict does not read the page facts'
+assert '16000' in nodes['Copywriter']['parameters']['text'] and '.slice(0, 5000)' not in nodes['Copywriter']['parameters']['text'], 'R38: the copywriter still cuts the page at 5,000 characters'
+
+# --- R52: the titles of the pages read ---
+assert 'pageTitle(' in code('Site Pages') and 'titleCount' in code('Site Pages'), 'R52: Site Pages still prints the reader title'
+
+sticky("""### The verdict reads the whole page before it says what the page lacks (R38, R52)
+**R38 (High).** The report told a customer that their article had *no mandate dates, no tables, no author or date* — it has all three. Three cuts hid them (9,000, 3,500 and 5,000 characters), and the text reader flattens tables and drops bylines whatever the cut. The run now reads the page's own HTML for free (*Read Client Page HTML*), **measures the page's facts on the whole page** (*Collect Client Pages*: dates in the text, tables, byline, publication date, call to action; "NOT CHECKED" when the HTML was only a script shell), the analyzer / verdict / copywriter read those facts, **Check Page Claims** removes any analyzer gap the facts contradict, and *Parse Verdict* does the same to the verdict's own sentences (`v5/code/_page_claims.js`). A claim the page could not be checked for is not made.
+**R52.** *Site Pages* named every menu page by the reader's title; on a client-rendered site that is one generic title. A title the homepage carries, or two pages share, is replaced by the menu link text.""",
+       -1800, -3800, 1180, 360, 3)
+log('The verdict reads the whole page before it says what the page lacks (2026-10-16, re-rating R38 / R52). R38: a keyword report told a customer their own article had "no mandate dates, no PINT-AE or 5-corner explanation, no tables, no lead CTA and no author or date" - it states the dates in its text, has three tables and a byline; three cuts (9,000 characters in Collect Client Pages, 3,500 in the competitor analyzer\'s prompt, 5,000 in the copywriter\'s), a text reader that flattens tables and drops bylines, and an "in the excerpt provided" hedge lost when the verdict restated the analyzer\'s gap as fact. New node Read Client Page HTML (one free GET per page the run reads); Collect Client Pages keeps 24,000 characters of the existing page and measures its facts on the whole page (dates in the text, tables with their rows, byline, publication date, call to action, schema types, with structure_reliable false and "NOT CHECKED" when the HTML was a script shell); the analyzer, verdict and copywriter prompts read those facts; new node Check Page Claims (v5/code/_page_claims.js) removes any analyzer gap the facts contradict or could not check, and Merge Keyword Data reads the checked analysis. R52: Site Pages named each menu page by the reader\'s Title line - one generic title five times on a client-rendered site - and now uses the menu link text, then the first heading, when the reader title is the homepage\'s or is shared')
+
+
+# 103. THE VERDICT'S OWN SENTENCES ARE CHECKED TOO, AND AN ASP IS NOT "FTA-ACCREDITED" (2026-10-16, re-rating R38 second half, R48).
+#      * R38 the analyzer is only one author of a claim about the client's page: the Verdict Agent writes its own reasons and risks. Parse
+#        Verdict now runs every reason and risk through the same kit, sentence by sentence, against `existing_page_digest` and records
+#        what it removed as `page_claims_dropped` (nothing is removed when no digest exists: a page nobody read makes no claim to check).
+#      * R48 the verdict called an ASP "FTA-accredited"; in the UAE the Ministry of Finance accredits e-invoicing service providers and the
+#        Federal Tax Authority administers the tax. The wording came from competitors' pages (their snippets say "FTA-accredited"), so the
+#        prompts say it (verdict.txt, competitor_analyzer.txt, copywriter.txt) and the kit rewrites it in the verdict's reasons, risks and
+#        changes and in the analyzer's output.
+_pv = code('Parse Verdict')
+_a = "verdict.reasons = (Array.isArray(verdict.reasons) ? verdict.reasons : []).map(noFaqSchema);"
+assert _pv.count(_a) == 1
+patch('Parse Verdict', _a, _a + "\n" + _PC102 + """
+// ---- R38 / R48 (2026-10-16): what the verdict says about the client's own page is checked against what was measured on that page ----
+// Exec 608: reasons[3] said "Its visible text has no mandate dates, ... no tables, ... no author or date" about a page that has all three.
+// The Verdict Agent now reads the page's facts; this removes any sentence of its reasons / risks that the digest still contradicts (or that
+// the digest says could not be checked) and says so in `page_claims_dropped`. R48: "FTA-accredited" -> the Ministry of Finance's framework.
+const PCD = prev.existing_page_digest || null;
+const page_claims_dropped = [];
+const pcClean = (arr) => (Array.isArray(arr) ? arr : []).map(x => { const r = PC.filterText(x, PCD, {}); r.dropped.forEach(d => page_claims_dropped.push(d)); return PC.fta(r.text); }).filter(Boolean);
+verdict.risks = pcClean(verdict.risks);
+verdict.reasons = pcClean(verdict.reasons);""")
+_b = "let verdict_changes = Array.isArray(verdict.what_must_change) ? verdict.what_must_change.map(x => noFaqSchema(x)).filter(Boolean) : [];"
+assert code('Parse Verdict').count(_b) == 1
+patch('Parse Verdict', _b, "let verdict_changes = Array.isArray(verdict.what_must_change) ? verdict.what_must_change.map(x => PC.fta(noFaqSchema(x))).filter(Boolean) : [];")
+_c = "    verdict_changes,\n    existing_page_action,"
+assert code('Parse Verdict').count(_c) == 1
+patch('Parse Verdict', _c, "    verdict_changes,\n    page_claims_dropped,\n    existing_page_action,")
+for _a103 in ['const PCD = prev.existing_page_digest', 'PC.filterText(x, PCD', 'PC.fta(noFaqSchema(x))', 'page_claims_dropped,']:
+    assert _a103 in code('Parse Verdict'), 'R38 / R48: Parse Verdict is missing ' + _a103
+for _f in ('verdict.txt', 'competitor_analyzer.txt', 'copywriter.txt'):
+    assert 'Ministry of Finance' in _rd0('prompts/' + _f), 'R48: ' + _f + ' does not name the accrediting body'
+log('The verdict\'s own sentences are checked too, and an ASP is not "FTA-accredited" (2026-10-16, re-rating R38 second half, R48). Parse Verdict runs every reason and risk through the page-claims kit against the existing page\'s digest and lists what it removed as page_claims_dropped; the competitor analyzer\'s output goes through the same kit in Check Page Claims. R48: the verdict called an ASP "FTA-accredited" - in the UAE the Ministry of Finance accredits e-invoicing service providers and the Federal Tax Authority administers the tax; the wording came from competitors\' snippets, so verdict.txt, competitor_analyzer.txt and (for UAE e-invoicing pages) copywriter.txt now say the Ministry, and the kit rewrites any "FTA-accredited" that still comes out of the analyzer, the verdict\'s reasons, risks and changes')
+
+
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:
 #     "two fixes have never come back and both are enforced by the build".
