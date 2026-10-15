@@ -821,6 +821,7 @@ if (wantContent) {
     ['Status', qa.passed ? '<span class="ok">Passed</span>' : qa.not_ready ? '<span class="bad">Did not pass \u2014 not ready to publish</span>' : '<span class="bad">Needs review</span>'],
     ...(qa.not_ready ? [['Why it is not ready', '<span class="bad">' + (qa.not_ready_reasons || []).map(esc).join('<br>') + '</span>']] : []),   // R11 (2026-10-13): the LAST round's reasons, on the page the owner reads first
     ...(qa.placeholder_note && !qa.not_ready ? [['Figures still masked', '<span class="bad">' + esc(qa.placeholder_note) + '</span>']] : []),   // R25 (2026-10-14): a masked figure in the body is named even when the page is otherwise deliverable
+    ...((qa.sourced_amounts || []).length ? [['Amounts kept', esc((qa.sourced_amounts || []).slice(0, 6).map(a => a.amount + ' (' + a.source + ')').join(', ')) + ' \u2014 each one is stated by the source cited in the same sentence']] : []),   // B3-1 (2026-10-15)
     ...(qa.profile_placeholders ? [['Fields only you can fill', '<span class="bad">' + num(qa.profile_placeholders) + ' bracketed field(s) in the byline / author box / Person schema \u2014 set up the business profile</span>']] : []),
     ['Main Content Words', num(qa.main_content_words) + ' (target ' + num(qa.target_word_count) + ')'],
     ['FAQ Words', num(qa.faq_words)],
@@ -977,6 +978,7 @@ return [{
     qa_round: qa.round == null ? null : qa.round, qa_max_rounds: qa.max_rounds == null ? null : qa.max_rounds,
     qa_placeholders: qa.placeholders_total == null ? null : qa.placeholders_total,
     qa_placeholder_note: (qa.quality || {}).placeholder_note || '',   // R25 (2026-10-14): the app and the callback name the masked figures too
+    qa_amounts: { removed: qa.masked_amounts || [], for_review: qa.flagged_amounts || [], kept_from_source: qa.sourced_amounts || [] },   // B3-1 / B3-2 (2026-10-15)
     content_links_to_add: qa.links_to_add_when_published || [],   // R15: every planned ladder / cluster link, for the package
     ladder_target_url: d.ladder_target_url || '',
     verdict: d.verdict,
