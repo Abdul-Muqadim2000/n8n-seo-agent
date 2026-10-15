@@ -8530,6 +8530,10 @@ def _b86_checks():
                        ("No check was bought for your keyword list this week", 'B6-7: a week that bought nothing must say so'),
                        ("out[0].json.cost_usd = Number(ev.cost_usd)", 'B6-7 / R28: the run settles its reservation instead of what it measured')):
         assert _a86 in _rep, _m86
+    # the app has to be able to tell the customer's own list from a ladder, and to see what was left out
+    _post86 = next(n for n in _wf['nodes'] if n['name'] == 'POST Progress')['parameters']['jsonBody']
+    for _f86 in ('watchlist: !!$json.watchlist', 'site_id: $json.site_id', 'not_checked: $json.not_checked', 'set_aside: $json.set_aside'):
+        assert _f86 in _post86, 'B6-7: the callback does not carry ' + _f86 + ', so the app cannot tell the two reports apart'
     # the money: the reservation is per CHECK (the plan emits one item per check) and the settle takes the MEASURED figure
     _lw86 = json.load(open(os.path.join(HERE0, 'harness', 'ledger_wiring.json'), encoding='utf-8'))['monitors']['SEO Agent — Rank Tracker']
     assert _lw86['est'] == {'ai': 0.0, 'dfs': 0.015}, \
