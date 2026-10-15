@@ -33,7 +33,25 @@ const RELF = { 2: 1, 1: 0.45, 0: 0 };
 const ai_reviewed = rel.size;
 let R = null; try { const x = $('Reach (Discovery)').first().json; if (x && reachNum(x.reach) != null) R = x; } catch (e) { R = null; }
 const strongR = R ? reachStrong(R, null) : false;
-const forYou = (kd) => { if (!R) return {}; const diff = difficultyForYou(kd, R.reach, {}); const plan = reachPlan(diff, strongR); return { difficulty_for_you: diff, plan_type: plan.plan_type, months: plan.months, for_you_label: reachLabel(diff, plan), chance: plan.chance }; };
+// ---- B1-1 (2026-10-15, benchmark area 1 — BENCH_AREA1_keywords.md): the difficulty is measured on the TOPIC where the site has a record on it ----
+// K1's own words for what we had: "domain-level, not per topic". The leaders personalise per topic — MarketMuse subtracts a topic-level
+// Topic Authority from the keyword difficulty and states the empty case as a rule ("If you have no Topic Authority, then your Personalized
+// Difficulty = Keyword Difficulty", docs.marketmuse.com), Semrush lowers Personal KD with the thematic distance between the domain's core
+// topics and the target (semrush.com/blog/ai-keyword-research-updates). The ladder has done this since B2-1; discovery still labelled every
+// topic against ONE site-wide number cached up to 30 days (exec 518, 2026-10-13: "reach 10" on every one of 43 clusters). The same kit
+// answers it here from the keywords the reach was itself measured on — no new call — and only with REACH_CFG.min_top10 on-topic top-10
+// keywords behind it. Below that bar the site-wide reach stays exactly as before and the report says which number it used, and on what.
+const reachRanked = R && R.ranked !== undefined ? R.ranked : null;
+const reachMissingWhy = R && R.cached && !reachRanked
+  ? 'the reach stored on ' + String(R.cached_at || '').slice(0, 10) + ' was kept without the keywords behind it, so this run has no topic evidence to read' : '';
+const taCacheD = new Map();
+const topicReachOf = (topic, head) => { if (!R) return null; const key = String(topic || head || '').toLowerCase().trim(); if (!key) return null;
+  if (!taCacheD.has(key)) taCacheD.set(key, reachTopic(reachRanked, key, R.reach, { domain: base.domain || '', reason_missing: reachMissingWhy }));
+  return taCacheD.get(key); };
+const forYou = (kd, ta) => { if (!R) return {}; const r = ta && reachNum(ta.reach) != null ? ta.reach : R.reach;
+  const diff = difficultyForYou(kd, r, {}); const plan = reachPlan(diff, strongR);
+  return { difficulty_for_you: diff, plan_type: plan.plan_type, months: plan.months, for_you_label: reachLabel(diff, plan), chance: plan.chance,
+    reach_used: r, reach_basis: (ta && ta.used) ? 'topic' : 'site', topic_reach: (ta && ta.used) ? ta.topic_reach : null }; };
 const winnableFor = (diff, kd) => R ? (diff === 'easy' || diff === 'reachable') : (kd == null || kd <= 55);
 // the fit gate's context: the website, the declared competitors (strict), the auto-detected rivals (vendor-like), the brand names AI uses for
 // other companies (seo_cache ai_brands:, when the cache was read), and the seeds / services as protected words
@@ -69,7 +87,7 @@ const kws = (base.research.candidates || []).map(k => {
   const r = rel.get(k.keyword) || { relevance: 1, intent: k.intent, page_type: '', topic: '' };
   const intent = INTENTS.includes(r.intent) ? r.intent : k.intent;
   const page_type = PAGES.includes(r.page_type) ? r.page_type : defaultPage(intent);
-  return { ...k, intent, relevance: r.relevance, page_type, topic: r.topic || k.keyword.split(' ').slice(0, 3).join(' '), opportunity: +(k.pre_score * (RELF[r.relevance] ?? 0.45)).toFixed(1), competitors_in_top20: k.competitors.length, covered_by: coveredBy(k.keyword), ladder_covered: ladderCovers(k.keyword), ...forYou(k.kd) };
+  return { ...k, intent, relevance: r.relevance, page_type, topic: r.topic || k.keyword.split(' ').slice(0, 3).join(' '), opportunity: +(k.pre_score * (RELF[r.relevance] ?? 0.45)).toFixed(1), competitors_in_top20: k.competitors.length, covered_by: coveredBy(k.keyword), ladder_covered: ladderCovers(k.keyword), ...forYou(k.kd, topicReachOf(r.topic, k.keyword)) };
 }).filter(k => k.relevance > 0 && k.intent !== 'navigational').filter(k => {
   const g = fitGate(k.keyword, { ...fitCtx, intent: k.intent });
   if (!g.ok) refused.push({ keyword: k.keyword, volume: k.volume, reason: g.reason, detail: g.detail });
@@ -96,11 +114,12 @@ for (const k of kws) {
   c.page_types[k.page_type] = (c.page_types[k.page_type] || 0) + 1; c.intents[k.intent] = (c.intents[k.intent] || 0) + 1;
 }
 const mode = (o) => (Object.entries(o).sort((a, b) => b[1] - a[1])[0] || [''])[0];
-const clusters = [...cl.values()].map(c => { const p = c.keywords[0]; return {
+const clusters = [...cl.values()].map(c => { const p = c.keywords[0]; const taC = topicReachOf(c.topic, p.keyword); return {
   topic: c.topic, primary_keyword: p.keyword, page_type: mode(c.page_types), intent: mode(c.intents), keyword_count: c.keywords.length,
   total_volume: c.total_volume, total_opportunity: +c.total_opportunity.toFixed(1), primary_kd: p.kd, primary_volume: p.volume, primary_cpc: p.cpc,
   supporting: c.keywords.slice(1, 9).map(k => k.keyword), keywords: c.keywords.slice(0, 12).map(k => ({ keyword: k.keyword, volume: k.volume, kd: k.kd, intent: k.intent, opportunity: k.opportunity })),
-  suggested_title: p.keyword.replace(/\b\w/g, m => m.toUpperCase()), covered_by: p.covered_by || null, ladder_covered: p.ladder_covered || null, ...forYou(p.kd)
+  suggested_title: p.keyword.replace(/\b\w/g, m => m.toUpperCase()), covered_by: p.covered_by || null, ladder_covered: p.ladder_covered || null,
+  ...forYou(p.kd, taC), ...(taC && taC.note ? { topic_reach_note: taC.note } : {})
 }; }).sort((a, b) => b.total_opportunity - a.total_opportunity);
 // Tiers follow the goal: for leads/sales the first "Now" slots go to commercial/transactional topics; research topics support them
 const goalNow = (base.goal || 'leads');
@@ -152,7 +171,12 @@ return [{ json: { ...base, keyword_strategy: {
   competitor_domains: base.research.competitor_domains, by_source: base.research.by_source, research_failures: base.research.failures, refused: refused.slice(0, 60),
   covered: kws.filter(k => k.covered_by).slice(0, 20).map(k => ({ keyword: k.keyword, volume: k.volume, url: k.covered_by.url, matched_by: k.covered_by.matched_by })), pages_known: SM.pages(pageModelD).length,
   ladder_covered: kws.filter(k => k.ladder_covered).slice(0, 20).map(k => ({ keyword: k.keyword, volume: k.volume, ladder_id: k.ladder_covered.ladder_id, head_keyword: k.ladder_covered.head_keyword, ladder_keyword: k.ladder_covered.ladder_keyword, part: k.ladder_covered.part, rung: k.ladder_covered.rung, status: k.ladder_covered.status, target_url: k.ladder_covered.target_url, how: k.ladder_covered.how })), ladders_known: [...new Set(ladderKwsD.map(x => x.ladder_id))].length,
-  reach: R ? { reach: R.reach, method: R.method, p75: R.p75 ?? null, size_reach: R.size_reach ?? null, sample: R.sample ?? null, top10: R.top10 ?? null, organic_keywords: R.organic_keywords ?? null, cached: !!R.cached, cached_at: R.cached_at || null, strong: strongR } : null,
+  reach: R ? { reach: R.reach, method: R.method, p75: R.p75 ?? null, size_reach: R.size_reach ?? null, sample: R.sample ?? null, top10: R.top10 ?? null, organic_keywords: R.organic_keywords ?? null, cached: !!R.cached, cached_at: R.cached_at || null, strong: strongR,
+    // B1-1 / B1-2: the site-wide number is only as good as what it was measured on, so the report can name those searches; and how many
+    // of the topics below had enough of a record on their OWN topic to be measured on it (the rest keep the site-wide number, and say so).
+    measured_on: (reachRanked || []).filter(x => Number(x.position) >= 1 && Number(x.position) <= 10).sort((a, b) => Number(a.position) - Number(b.position)).slice(0, 6).map(x => x.keyword),
+    evidence_kept: !!reachRanked, evidence_note: reachMissingWhy,
+    topics_measured: clusters.filter(c => c.reach_basis === 'topic').length, topics_total: clusters.length } : null,
   // ---- G8 (2026-10-13): the three new inputs, carried into the report, the callback and the app ----
   // K7: which keywords Google answers with the same pages (recomputed in Build Keyword Strategy once the live checks are in)
   serp_clusters: serpOverlap.clusters.slice(0, 15),

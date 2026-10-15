@@ -864,9 +864,11 @@ if (wantVerdict) {
     ['Verdict', '<span class="' + verdictClass + '">' + esc(verdictLabel) + '</span>'],
     ['Score', d.verdict_score != null ? d.verdict_score + '/100' : (d.score_withheld ? 'not scored — the live Google results could not be read' : 'N/A')],
     ['Recommended Page Type', esc(d.recommended_page || d.page_type || 'N/A')],
-    ['Expected visits/month at #1-3', d.expected_visits_top3 != null ? num(d.expected_visits_top3) : (d.score_withheld ? 'not estimated' : 'N/A')],
-    ['Time to rank', d.time_to_rank_months != null ? d.time_to_rank_months + ' months' : (d.score_withheld ? 'not estimated' : 'N/A')]
+    ['Difficulty for your site', d.for_you ? esc(d.for_you.label) : (d.domain ? 'not measured for this request' : 'no website on this request')],
+    ['Expected visits/month at #1-3', d.expected_visits ? (d.expected_visits.visits != null ? num(d.expected_visits.visits) + ' \u2014 ' + esc(d.expected_visits.basis_text) : esc(d.expected_visits.basis_text)) : (d.score_withheld ? 'not estimated' : 'N/A')],
+    ['Time to rank', d.time_to_rank ? esc(d.time_to_rank.months) + ' months \u2014 ' + esc(LN.BASIS.modelled) + (d.time_to_rank.chance && d.time_to_rank.chance.label ? ', ' + esc(d.time_to_rank.chance.label) : '') : (d.score_withheld ? 'not estimated' : 'N/A')]
   ]) +
+  ((d.for_you || d.time_to_rank || d.expected_visits) ? '<p class="muted">' + [d.for_you && d.for_you.note, d.time_to_rank && d.time_to_rank.note, d.expected_visits && d.expected_visits.note].filter(Boolean).map(esc).join(' ') + '</p>' : '') +
   '<h3>Why</h3>' + ul(d.verdict_reasons) +
   ((d.verdict_changes && d.verdict_changes.length) ? '<h3>What must change first</h3>' + ul(d.verdict_changes) : '') +
   ((d.verdict_risks && d.verdict_risks.length) ? '<h3>Risks / Watch-outs</h3>' + ul(d.verdict_risks) : '') +
@@ -1160,6 +1162,7 @@ return [{
     ladder_target_url: d.ladder_target_url || '',
     verdict: d.verdict,
     verdict_score: d.verdict_score,
+    for_you: d.for_you || null, time_to_rank: d.time_to_rank || null, expected_visits: d.expected_visits || null,   // B1-1 (2026-10-15): the app shows the same labelled figures as the document
     verdict_reasons: d.verdict_reasons || [],
     verdict_risks: d.verdict_risks || [],
     recommended_page: d.recommended_page,

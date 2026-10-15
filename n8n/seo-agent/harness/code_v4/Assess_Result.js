@@ -7,8 +7,9 @@
 //   plan       = easy -> direct (2-4 months) · reachable -> short (4-8) · hard -> full (9-15) · very hard -> full, stretch · not realistic -> none;
 //                strong sites (100+ top-10 keywords, 1,000+ ranking keywords, or already top 20 for it): direct 2-3, short 3-6, full 6-12.
 //   cache      = seo_cache 'reach:<site_id>' for 30 days and the same market (value: reach, method, p75, size_reach, sample, top10,
-//                organic_keywords, location_code); a reach that could not be measured (both calls failed) is never stored.
-const REACH_CFG = { min_top10: 5, percentile: 0.75, ttl_days: 30, unknown_kd: 10, easy: 5, reachable: 20, hard: 40, easy_position: 20, sample: 100 };
+//                organic_keywords, location_code, and since B1-2 the EVIDENCE itself: `r` = the top-10 keywords it was measured on);
+//                a reach that could not be measured (both calls failed) is never stored.
+const REACH_CFG = { min_top10: 5, percentile: 0.75, ttl_days: 30, unknown_kd: 10, easy: 5, reachable: 20, hard: 40, easy_position: 20, sample: 100, sample_keep: 60 };
 const REACH_MONTHS = { direct: [2, 4], short: [4, 8], full: [9, 15] }, REACH_MONTHS_STRONG = { direct: [2, 3], short: [3, 6], full: [6, 12] };
 const REACH_DIFF_LABEL = { easy: 'Easy for your site', reachable: 'Reachable for your site', hard: 'Hard for your site', very_hard: 'Very hard for your site', not_realistic: 'Not realistic for your site' };
 const REACH_PLAN_LABEL = { direct: 'Direct plan', short: 'Short ladder', full: 'Full ladder', none: 'No ladder' };
@@ -43,7 +44,10 @@ function reachFrom(ranked, authority) {
   const method = (!ranked && !known) ? 'default' : (p75 != null && p75 >= size_reach) ? 'percentile' : 'size';
   return { reach, method, p75, size_reach, sample: kds.length, top10, organic_keywords: authority && reachNum(authority.organic_keywords) != null ? reachNum(authority.organic_keywords) : null, cached: false };
 }
-// the stored reach of this site for this market, when it is younger than 30 days (null otherwise)
+// the stored reach of this site for this market, when it is younger than 30 days (null otherwise). B1-2: the row also carries the
+// keywords the number was measured on (`r`), so a run that reuses the cached reach can still answer "and what is it measured on?" and
+// measure a reach on ITS OWN topic (reachTopic) without re-buying the pull. A row written before B1-2 has no `r`: `ranked` is then null
+// and the caller says the evidence was not re-read, which is true, rather than reporting zero on-topic keywords, which is not.
 function reachCached(rows, domain, location_code) {
   const key = reachKey(domain);
   const row = (rows || []).filter(r => r && !r.error && r.key === key).sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)))[0];
@@ -53,12 +57,18 @@ function reachCached(rows, domain, location_code) {
   if (reachNum(location_code) && reachNum(v.location_code) && Number(v.location_code) !== Number(location_code)) return null;
   const days = (Date.now() - new Date(row.updated_at).getTime()) / 864e5;
   if (!(days >= 0 && days < REACH_CFG.ttl_days)) return null;
-  return { ...v, reach: Number(v.reach), cached: true, cached_at: String(row.updated_at) };
+  const { r: packed, ...rest } = v;
+  const ranked = Array.isArray(packed) ? packed.map(x => ({ keyword: String((x || [])[0] || ''), kd: reachNum((x || [])[1]), position: reachNum((x || [])[2]) })).filter(x => x.keyword) : null;
+  return { ...rest, reach: Number(v.reach), cached: true, cached_at: String(row.updated_at), ranked, ranked_from: ranked ? 'the stored measurement of ' + String(row.updated_at).slice(0, 10) : '' };
 }
-// the seo_cache row (exact columns) for a freshly measured reach
-const reachCacheRow = (domain, info, location_code) => ({ key: reachKey(domain), kind: 'reach', site_id: reachSiteId(domain),
-  value: JSON.stringify({ reach: info.reach, method: info.method, p75: info.p75, size_reach: info.size_reach, sample: info.sample, top10: info.top10, organic_keywords: info.organic_keywords, location_code: reachNum(location_code) }),
-  updated_at: new Date().toISOString() });
+// the seo_cache row (exact columns) for a freshly measured reach. `ranked` (optional) is the evidence: [{ keyword, kd, position }] as
+// the pull returned it, packed as [keyword, kd, position] triples and capped at REACH_CFG.sample_keep so one row stays small.
+const reachPack = (ranked) => (Array.isArray(ranked) ? ranked : []).filter(r => r && r.keyword && reachNum(r.position) != null)
+  .slice(0, REACH_CFG.sample_keep).map(r => [String(r.keyword).slice(0, 120), reachNum(r.kd), Number(r.position)]);
+const reachCacheRow = (domain, info, location_code, ranked) => { const r = reachPack(ranked);
+  return { key: reachKey(domain), kind: 'reach', site_id: reachSiteId(domain),
+    value: JSON.stringify({ reach: info.reach, method: info.method, p75: info.p75, size_reach: info.size_reach, sample: info.sample, top10: info.top10, organic_keywords: info.organic_keywords, location_code: reachNum(location_code), ...(r.length ? { r } : {}) }),
+    updated_at: new Date().toISOString() }; };
 // o: { position (the site's rank for the keyword), navigational, other_brand, verdict }
 function difficultyForYou(kd, reach, o) {
   o = o || {};
@@ -86,7 +96,7 @@ const reachTopicMatch = (head) => { const h = overlapTokens(head); const need = 
   return (kw) => { if (!h.length) return false; const t = overlapTokens(kw); return t.filter(x => h.includes(x)).length >= need; }; };
 /**
  * ranked: [{ keyword, kd, position }] — every keyword the site ranks for that this run saw (null = the pull failed)
- * head: the topic's head keyword · domainReach: the site-wide reach · o: { match (the on-topic test), domain }
+ * head: the topic's head keyword · domainReach: the site-wide reach · o: { match (the on-topic test), domain, reason_missing }
  * -> { used, reach, topic_reach, site_reach, on_topic, top10, sample, best, examples, other_topics, reason, note }
  */
 function reachTopic(ranked, head, domainReach, o) {
@@ -108,7 +118,9 @@ function reachTopic(ranked, head, domainReach, o) {
     .slice(0, REACH_TOPIC_CFG.max_other).map(r => String(r.keyword));
   const who = String(opts.domain || 'your site');
   const q = '"' + String(head || '') + '"';
-  const reason = ranked == null ? 'the keywords ' + who + ' ranks for could not be read on this run'
+  // B1-2: a caller that reuses a stored reach knows WHY there is no list (the pull was not made again); it says that instead of
+  // "could not be read", which would blame a failure that never happened.
+  const reason = ranked == null ? (String(opts.reason_missing || '') || 'the keywords ' + who + ' ranks for could not be read on this run')
     : !on.length ? 'nothing ' + who + ' ranks for is on this topic'
     : !top10.length ? on.length + ' keyword(s) on this topic rank for ' + who + ', none of them in the top 10 (best #' + (best ? pos(best) : '-') + ')'
     : top10.length + ' keyword(s) on this topic are in the top 10' + (kds.length < top10.length ? ', ' + kds.length + ' of them with a known difficulty' : '')
@@ -177,12 +189,14 @@ const pr = answer('position');
 let position = null, position_url = null;
 if (reachTaskOk(pr)) { const best = ((((pr.tasks[0].result || [])[0]) || {}).items || []).map(x => ((x || {}).ranked_serp_element || {}).serp_item || {}).filter(x => x.rank_group).sort((a, b) => a.rank_group - b.rank_group)[0]; if (best) { position = best.rank_group; position_url = best.url || null; } }
 let rows = []; try { rows = $('Load Assess Cache').all().map(i => i.json).filter(r => r && !r.error); } catch (e) { rows = []; }
+// B1-2 (2026-10-15, benchmark area 1): the keywords the reach was measured on travel with it, from this run's pull or from the stored
+// row, so the answer can measure the difficulty on the TOPIC of the keyword that was asked about instead of only across the whole site.
 let reach_info = reachCached(rows, v.domain, v.location_code), cache_row = null, reach_errors = [];
 if (!reach_info) {
   const rq = reqs.filter(r => String(r.kind).startsWith('reach_'));
   const parsed = reachParse(rq, rq.map(r => answer(r.kind)));
-  reach_info = reachFrom(parsed.ranked, parsed.authority); reach_errors = parsed.errors;
-  if (reach_info.method !== 'default') cache_row = reachCacheRow(v.domain, reach_info, v.location_code);
+  reach_info = { ...reachFrom(parsed.ranked, parsed.authority), ranked: parsed.ranked }; reach_errors = parsed.errors;
+  if (reach_info.method !== 'default') cache_row = reachCacheRow(v.domain, reach_info, v.location_code, parsed.ranked);
 }
 let desc = null; const drow = rows.find(r => r.key === 'desc:' + v.domain);
 try { desc = drow && (Date.now() - new Date(drow.updated_at).getTime()) < 30 * 864e5 ? (JSON.parse(drow.value).description || null) : null; } catch (e) { desc = null; }

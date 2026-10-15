@@ -117,17 +117,34 @@ const KWI = (() => {
       min_impressions: c.min_impressions, striking_min: c.striking_min, striking_max: c.striking_max };
   };
 
-  // the click loss a results page causes (an AI Overview, a snippet, a local pack and so on take clicks off the blue links)
-  const featureLoss = (types) => {
-    const t = (Array.isArray(types) ? types : []).map(x => S(x).toLowerCase());
-    let ctr = 1;
-    if (t.indexOf('ai_overview') >= 0) ctr *= 0.65;
-    if (t.indexOf('featured_snippet') >= 0) ctr *= 0.85;
-    if (t.indexOf('video') >= 0 || t.indexOf('short_videos') >= 0) ctr *= 0.92;
-    if (t.indexOf('local_pack') >= 0 || t.indexOf('map') >= 0) ctr *= 0.85;
-    if (t.indexOf('shopping') >= 0 || t.indexOf('popular_products') >= 0) ctr *= 0.9;
-    return ctr;
+  // ---- K3: the click loss a results page causes, and where each figure comes from (B1-3, 2026-10-15, benchmark area 1) ----
+  // Until today every factor here was an undated constant, and the AI Overview one (0.65 = a 35% loss) was the APRIL 2025 measurement
+  // -- "AI Overviews reduced clicks to top-ranking content by 34.5%" -- while the current study, published 2026-02-04 on December 2025
+  // data over 300,000 keywords, measures **-58.0% at position 1**, -50.8% at 2 and -46.4% at 3
+  // (https://ahrefs.com/blog/ai-overviews-reduce-clicks-update/). The estimate these factors feed is explicitly "what a page in the top
+  // three would get" (`top_share`), so the top-three average of that table is the figure that belongs here: it was 1.5x too generous.
+  // The other features have no comparable published measurement (the 2025 featured-snippet numbers disagree with each other and with
+  // Perficient's "click-neutral" finding), so they stay where they were and are labelled a STATED RULE, not a measurement. Every one of
+  // them is named in `CLICK_LOSS` with its basis so a report can print what it applied and why, instead of a bare multiplier.
+  const AIO_CTR_2025 = { 1: 0.420, 2: 0.492, 3: 0.536 };   // 1 - the measured loss at each of the top three positions
+  const CLICK_LOSS = {
+    ai_overview: { factor: +(((AIO_CTR_2025[1] + AIO_CTR_2025[2] + AIO_CTR_2025[3]) / 3).toFixed(3)), basis: 'measured',
+      what: 'an AI Overview', source: 'Ahrefs, 300,000 keywords, December 2025 data (published 2026-02-04)',
+      url: 'https://ahrefs.com/blog/ai-overviews-reduce-clicks-update/',
+      note: 'clicks to position 1 fall 58.0% when an AI Overview is shown (50.8% at 2, 46.4% at 3); this estimate is for a page in the top three, so their average is applied' },
+    featured_snippet: { factor: 0.85, basis: 'stated rule', what: 'a featured snippet', source: 'no measurement we could verify; published 2025 studies disagree', url: '' },
+    video: { factor: 0.92, basis: 'stated rule', what: 'video results', source: 'no measurement we could verify', url: '' },
+    local_pack: { factor: 0.85, basis: 'stated rule', what: 'a local pack', source: 'no measurement we could verify', url: '' },
+    shopping: { factor: 0.9, basis: 'stated rule', what: 'shopping results', source: 'no measurement we could verify', url: '' },
   };
+  const FEATURE_KEY = { ai_overview: 'ai_overview', featured_snippet: 'featured_snippet', video: 'video', short_videos: 'video',
+    local_pack: 'local_pack', map: 'local_pack', shopping: 'shopping', popular_products: 'shopping' };
+  // which of the five were seen on this results page, each once, in the order they are listed above
+  const lossApplied = (types) => { const seen = new Set((Array.isArray(types) ? types : []).map(x => FEATURE_KEY[S(x).toLowerCase()]).filter(Boolean));
+    return Object.keys(CLICK_LOSS).filter(k => seen.has(k)).map(k => ({ key: k, ...CLICK_LOSS[k] })); };
+  const featureLoss = (types) => lossApplied(types).reduce((ctr, f) => ctr * f.factor, 1);
+  // "an AI Overview (-52% of the clicks, measured: Ahrefs ...)" - one clause per feature, for the note under a traffic figure
+  const lossText = (types) => lossApplied(types).map(f => f.what + ' (-' + Math.round((1 - f.factor) * 100) + '% of the clicks, ' + f.basis + (f.source ? ': ' + f.source : '') + ')').join(', ');
 
   // ---- K2: the traffic number, and where it comes from ----
   // `calibrated`: the site's own measured impressions for this exact search (the Search Console period, scaled to a month) through the
@@ -138,7 +155,13 @@ const KWI = (() => {
     const c = { ...CFG, ...(o || {}) };
     const k = e || {};
     const ctr = featureLoss(k.serp_types);
-    const vol = num(k.volume);
+    // B1-3: the figure says which features took clicks off it, how much each one took and whether that number is measured or a rule
+    const lossTxt = lossText(k.serp_types);
+    const lossNote = lossTxt ? ' Click loss applied: ' + lossTxt + '.' : '';
+    // B1-3 (2026-10-15): `num(null)` is 0, not null — Number(null) is 0 and 0 is finite — so a keyword the provider has NO volume for
+    // came back as "0 visits a month (modelled)" instead of "no estimate", a confident number where nothing was measured (the R26
+    // class). An absent volume is absent; a provider that really reports 0 still reports 0.
+    const vol = (k.volume === null || k.volume === undefined || k.volume === '') ? null : num(k.volume);
     const modelled = vol == null ? null : Math.round(vol * ctr * c.top_share);
     const g = (k.gsc && typeof k.gsc === 'object') ? k.gsc : null;
     const impressions = g ? num(g.impressions) : null;
@@ -152,14 +175,64 @@ const KWI = (() => {
         traffic_note: 'Calibrated with your own Search Console data: ' + Math.round(impressions) + ' impressions and ' + Math.round(clicks)
           + ' click(s) measured for this exact search on your site in ' + Math.round(days) + ' days'
           + (pos ? ' at average position ' + (Math.round(pos * 10) / 10) : '') + '. A page in the top three would take about '
-          + traffic_potential + ' visits a month' + (modelled != null ? ' (the modelled estimate from the provider\'s volume is ' + modelled + ').' : '.') };
+          + traffic_potential + ' visits a month' + (modelled != null ? ' (the modelled estimate from the provider\'s volume is ' + modelled + ').' : '.') + lossNote };
     }
     if (modelled == null) {
       return { traffic_potential: null, traffic_basis: 'unknown', modelled_traffic_potential: null,
         traffic_note: 'No monthly volume from the provider and no Search Console measurement for this search, so no traffic estimate is given.' };
     }
     return { traffic_potential: modelled, traffic_basis: 'modelled', modelled_traffic_potential: modelled,
-      traffic_note: 'Modelled, not measured: ' + vol + ' searches a month (a provider estimate) through the click loss of this results page and the share a top-three page takes.' };
+      traffic_note: 'Modelled, not measured: ' + vol + ' searches a month (a provider estimate) through the click loss of this results page and the share a top-three page takes.' + lossNote };
+  };
+  // ---- K4: what KIND of page Google actually ranks for this search (B1-5, 2026-10-15, benchmark area 1) ----
+  // The intent and the page type came from the AI screen's label (and DataForSEO's `main_intent` behind it). The live results page
+  // was already bought for the priority keywords and only its domains, its features and its People Also Ask were kept, so the one
+  // piece of evidence that settles the question - the ten pages Google chose - was thrown away. K4's own anchor for a 10 is "the
+  // dominant top-10 page type decides, a mismatch is flagged"; Ahrefs tells you to study the top 10 by hand for exactly this.
+  // `serpPageTypes` reads the URL and the title of each organic result, with the title first where it is decisive ("best ... ",
+  // "how to ...") and the path after it. Nothing is inferred from a domain we have not read, and a result it cannot place is
+  // `Other`, counted and never guessed at.
+  const SHAPES = [
+    { type: 'Government or official', test: (u, t, d) => /(^|\.)(gov|gov\.[a-z]{2}|gob|govt)(\.|$)/.test(d) || /\.gov($|\.)/.test(d) },
+    { type: 'Forum or community', test: (u, t, d) => /(^|\.)(reddit|quora|stackexchange|stackoverflow|linkedin|facebook|x|twitter|medium)\./.test(d) || /\/(forum|community|questions|discussion)\//.test(u) },
+    { type: 'Directory or marketplace', test: (u, t, d) => /(^|\.)(g2|capterra|getapp|softwareadvice|trustradius|saashub|clutch|crunchbase|yelp|yellowpages|indiamart)\./.test(d) },
+    { type: 'Comparison or list', test: (u, t) => /\b(best|top\s*\d+|vs\.?|versus|alternatives?|comparison|compared)\b/i.test(t) || /\/(best|top|vs|alternatives|compare)[-\/]/.test(u) },
+    { type: 'Pricing page', test: (u, t) => /\bpricing\b|\bprice list\b|\bcost(s)?\b.*\b(plans?|pricing)\b/i.test(t) || /\/(pricing|plans|price)(\/|$)/.test(u) },
+    { type: 'Guide or article', test: (u, t) => /\b(how to|what is|why|guide|tutorial|checklist|explained|step[- ]by[- ]step|everything you need)\b/i.test(t) || /\/(blog|insights|articles?|news|resources?|learn|guides?|knowledge|academy)(\/|$)/.test(u) },
+    { type: 'Service or product page', test: (u, t) => /\/(services?|solutions?|products?|software|platform|industries)(\/|$)/.test(u) || /\b(software|solution|services?|platform)\b/i.test(t) },
+    { type: 'Homepage', test: (u) => /^[a-z0-9.-]+\/?$/.test(u) },
+  ];
+  // what WE would write for it, in the same words, so a mismatch is a real disagreement and not a vocabulary difference
+  const OURS = { 'Blog Post': 'Guide or article', Guide: 'Guide or article', 'Pillar Page': 'Guide or article', 'FAQ Page': 'Guide or article',
+    'Comparison Page': 'Comparison or list', 'Service Page': 'Service or product page', 'Product Page': 'Service or product page',
+    'Landing Page': 'Service or product page', 'Category Page': 'Service or product page', 'Location Page': 'Service or product page',
+    'Local Page': 'Service or product page', 'Case Study': 'Guide or article' };
+  const shapeOf = (url, title) => {
+    const u = urlKey(url), d = bare(url), t = S(title);
+    for (const sh of SHAPES) { try { if (sh.test(u, t, d)) return sh.type; } catch (e) {} }
+    return 'Other';
+  };
+  /** results: [{ url, title }] from the live top 10 · o.page_type = the page we plan to write
+   *  -> { read, counts, dominant, dominant_count, dominant_share, ours, mismatch, text } */
+  const serpPageTypes = (results, o) => {
+    const c = { ...CFG, ...(o || {}) };
+    const list = (Array.isArray(results) ? results : []).filter(r => r && S(r.url)).slice(0, 10);
+    const counts = {};
+    for (const r of list) { const k = shapeOf(r.url, r.title); counts[k] = (counts[k] || 0) + 1; }
+    const read = list.length;
+    const ranked = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    const top = ranked[0] || null;
+    const ours = OURS[S(c.page_type)] || '';
+    // a dominant kind is one at least half the page agrees on, out of at least four results read: below that nobody can call it
+    const dominant = top && read >= 4 && top[1] / read >= 0.5 && top[0] !== 'Other' ? top[0] : '';
+    const mismatch = !!(dominant && ours && dominant !== ours);
+    const text = !read ? 'The results page was not read, so what Google ranks for this search is unknown.'
+      : !dominant ? 'Google ranks a mix for this search (' + ranked.map(x => x[1] + ' ' + x[0].toLowerCase()).join(', ') + '), so no page type is settled by the results.'
+        : dominant.toLowerCase().replace(/^./, m => m.toUpperCase()) + 's are what Google ranks here: ' + top[1] + ' of the ' + read + ' results read'
+          + (ours ? (mismatch ? ', while this plan writes a ' + ours.toLowerCase() + ' - expect to work harder, or write what the results page shows'
+            : ', which is what this plan writes') : '') + '.';
+    return { read, counts, dominant, dominant_count: top ? top[1] : 0, dominant_share: read ? Math.round((top ? top[1] : 0) / read * 100) : 0,
+      ours, mismatch, text };
   };
   const BASIS_TEXT = { calibrated: 'calibrated with your Search Console data', modelled: 'modelled from provider volume', unknown: 'no estimate' };
 
@@ -212,7 +285,7 @@ const KWI = (() => {
       + others.map(k => k.shared_urls + ' of its ' + depthTxt + ' pages with "' + k.keyword + '"').join(', ')
       + ' - Google answers these searches with the same pages, so a second page would only split the signals.';
   };
-  return { CFG, gscSeeds, calibrate, serpClusters, clusterText, featureLoss, liveChecks, ladderChecks, checkCost, urlKey, BASIS_TEXT, helpers: { bare, low, num } };
+  return { CFG, CLICK_LOSS, gscSeeds, calibrate, serpClusters, clusterText, featureLoss, lossApplied, lossText, serpPageTypes, shapeOf, liveChecks, ladderChecks, checkCost, urlKey, BASIS_TEXT, helpers: { bare, low, num } };
 })();
 // ---- topic radius (G32, 2026-10-13, system review FIX_PLAN.md G32; criterion K12 in CRITERIA_keywords_content.md) ----
 // "Which topics is this website close enough to win, and which are a stretch?" — until now the system answered that per keyword

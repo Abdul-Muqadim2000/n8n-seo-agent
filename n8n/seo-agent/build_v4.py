@@ -7737,6 +7737,155 @@ log('The other half of every Claude figure, and three nodes that advised from wh
     'calibrated: Analyze Backlinks refuses in its own words (available: false plus the provider\'s message), and a lint that only knew '
     'the kit\'s idiom would have been checking which helper a node imported rather than whether it can refuse')
 
+# =============================================================================
+# 77. THE VERDICT'S OWN TWO NUMBERS, AND A DIFFICULTY MEASURED ON THE TOPIC (2026-10-15, benchmark programme area 1 —
+#     docs/system-review-2026-10-14/BENCH_AREA1_keywords.md; register rows B1-1 / B1-2 / B1-3)
+#
+#     The leaders of keyword research personalise difficulty to the SITE and label every figure they show. Semrush's Personal
+#     Keyword Difficulty "assesses the thematic relevance between the domain you've entered and the keyword" and publishes its bands
+#     (https://www.semrush.com/kb/1434-how-is-personal-keyword-difficulty-calculated); MarketMuse subtracts a topic-level Topic
+#     Authority from the keyword difficulty and states the empty case as a rule — "If you have no Topic Authority, then your
+#     Personalized Difficulty = Keyword Difficulty" (https://docs.marketmuse.com/reference/personalized-difficulty-and-topic-
+#     authority/). Ahrefs deliberately does NOT personalise ("We calculate the KD score based solely on the average number of
+#     backlinks to the top-ranking pages", https://ahrefs.com/keywords-explorer) and leads instead on Traffic Potential.
+#
+#     * B1-1 — **the keyword report's two headline numbers came out of the language model.** `Parse Verdict` took
+#       `expected_monthly_visits_top3` and `time_to_rank_months` straight from the Verdict Agent's JSON and shipped them into the
+#       Word file, the PDF and the ladder's feasibility card ("Expected visits/month at #1-3: 70", "Time to rank: 6 months" — execs
+#       540 and 519, 2026-10-13/14, the second of them with the difficulty unavailable). Nothing said they were modelled, estimated
+#       or measured, and the same run's own reach model computes a month RANGE with an uncalibrated chance band and the published
+#       base rate behind it (G3), while `KWI.calibrate` computes a traffic figure that says calibrated / modelled / unknown (G8).
+#       The verdict now carries `for_you` (difficulty for this site, plan, months, chance, and which reach it was measured against),
+#       `time_to_rank` (the range, modelled, with its chance band — the model's own number kept beside it as `model_months`) and
+#       `expected_visits` (through the click-loss model, with its basis in words). A results page that could not be read yields no
+#       visit estimate at all, because nobody saw what it takes in clicks.
+#     * B1-2 — **the reach cache kept the number and threw away the evidence**, so every run that reused it (30 days) could not
+#       measure a topic and could not say what the number rested on. `reachCacheRow` now stores the top-10 keywords it was measured
+#       on, `reachCached` hands them back, and the Keyword Check and discovery measure a reach on the TOPIC asked about exactly as
+#       the ladder has since B2-1 — same kit, same bar (REACH_CFG.min_top10), same refusal to invent a penalty where a site simply
+#       has no record yet. Nothing extra is bought: a row written before this change has no evidence, and the run says so.
+#     * B1-3 — **the AI Overview click loss was the April 2025 figure.** `KWI.featureLoss` multiplied by 0.65 (a 35% loss) while the
+#       current study — Ahrefs, 300,000 keywords, December 2025 data, published 2026-02-04 — measures −58.0% at position 1, −50.8%
+#       at 2 and −46.4% at 3 (https://ahrefs.com/blog/ai-overviews-reduce-clicks-update/). Our estimate is explicitly for a page in
+#       the top three, so the top-three average (0.483) is the honest factor: every traffic potential on an AI Overview results page
+#       was ~1.5x too generous. The four other features have no measurement we could verify, so they keep their values and are
+#       labelled a STATED RULE, named in `KWI.CLICK_LOSS` and printed with the figure they moved.
+# =============================================================================
+REACH_SRC_77 = _rd0('code/_reach.js').rstrip('\n')
+# B1-3: the corrected click loss is in the shared kit, so discovery, the ladder and the verdict apply the same one
+assert "const AIO_CTR_2025 = { 1: 0.420, 2: 0.492, 3: 0.536 };" in KW_INPUTS_SRC, 'B1-3: the measured AI Overview click loss is not in the discovery kit'
+assert "ai_overview: { factor: +(((AIO_CTR_2025[1] + AIO_CTR_2025[2] + AIO_CTR_2025[3]) / 3).toFixed(3)), basis: 'measured'," in KW_INPUTS_SRC, \
+    'B1-3: the AI Overview factor must be the measured top-three average, not a constant'
+assert "https://ahrefs.com/blog/ai-overviews-reduce-clicks-update/" in KW_INPUTS_SRC, 'B1-3: a measured figure carries the study it was measured by'
+for _a77 in ("basis: 'stated rule'", 'const lossText ='):
+    assert _a77 in KW_INPUTS_SRC, 'B1-3: ' + _a77 + ' missing from the click-loss model'
+# B1-2: the cache keeps its evidence, and every reader of a stored reach can still measure a topic
+assert 'const reachPack = (ranked) =>' in REACH_SRC_77 and 'const reachCacheRow = (domain, info, location_code, ranked) =>' in REACH_SRC_77, \
+    'B1-2: the reach cache row does not keep the keywords it was measured on'
+assert "ranked_from: ranked ? 'the stored measurement of '" in REACH_SRC_77, 'B1-2: a restored reach does not say where its evidence came from'
+assert "reason_missing" in REACH_SRC_77, 'B1-2: reachTopic cannot tell a failed pull from a pull that was never made'
+assert 'reachCacheRow(domain, info, d.location_code, parsed.ranked)' in code('Reach (Discovery)'), 'B1-2: the discovery reach is stored without its evidence'
+assert 'const topicReachOf = (topic, head) =>' in code('Rank Keywords') and 'const taC = topicReachOf(c.topic, p.keyword);' in code('Rank Keywords') and '...forYou(p.kd, taC)' in code('Rank Keywords'), \
+    'B1-1: discovery still labels every topic against one site-wide number'
+assert 'topics_measured: clusters.filter(c => c.reach_basis === ' in code('Rank Keywords'), 'B1-1: the report cannot say how many topics were measured on their own topic'
+assert 'measured on this topic (difficulty ' in code('Build Keyword Strategy') and 'the optimistic case for a topic you have no record on' in code('Build Keyword Strategy'), \
+    'B1-1: the keyword report does not say which reach each label was measured against'
+assert 'KWI.CLICK_LOSS.ai_overview.source' in code('Build Keyword Strategy'), 'B1-3: the report does not name the study behind its click loss'
+
+# ---------- A. the verdict measures the keyword against this site, on this topic ----------
+# the two shared kits the verdict now needs: the reach model (difficulty for this site, plan, months, chance) and the discovery
+# inputs (the click-loss model behind a traffic figure). One copy each, as everywhere else.
+patch('Parse Verdict', "const prev = $('Merge Keyword Data').first().json;",
+      REACH_SRC_77 + '\n' + KW_INPUTS_SRC + "\nconst prev = $('Merge Keyword Data').first().json;")
+patch('Parse Verdict', "const EXP = (prev.existing_page && prev.existing_page.url) ? prev.existing_page : null;", """// ---- B1-1 (2026-10-15, benchmark area 1): the two numbers the keyword report puts in front of a customer ----
+// They used to be whatever the Verdict Agent typed into its JSON. The same run computes both properly: `_reach.js` turns a keyword
+// difficulty and this site's reach into a plan with a month RANGE and an uncalibrated chance band against a published base rate, and
+// `KWI.calibrate` turns a monthly volume into visits through the measured click loss of the results page that was actually read.
+const KD77 = (prev.keyword_data || {}).keyword_difficulty ?? null;
+const VOL77 = (prev.keyword_data || {}).search_volume ?? null;
+const SF77 = prev.serp_features || {};
+const SERP_READ77 = SF77.unavailable !== true;
+let CACHE77 = []; try { CACHE77 = $('Load Site Cache').all().map(i => i.json); } catch (e) { CACHE77 = []; }
+// the site's reach: the stored measurement (30 days, same market) or, failing that, the size tier of the authority this run already
+// read. Never a fresh paid pull: a keyword report does not buy the ranked-keywords list.
+const RI77 = reachCached(CACHE77, prev.domain, prev.location_code) || { ...reachFrom(null, prev.site_authority || null), ranked: null, cached: false };
+const TA77 = reachTopic(RI77.ranked === undefined ? null : RI77.ranked, prev.keyword, RI77.reach, { domain: prev.domain || 'your site',
+  reason_missing: RI77.cached ? 'the reach stored on ' + String(RI77.cached_at || '').slice(0, 10) + ' was kept without the keywords behind it, so this report has no topic evidence to read'
+    : 'a keyword report does not buy the list of keywords your site ranks for (the keyword research and the ladder do)' });
+const DIFF77 = prev.domain ? difficultyForYou(KD77, TA77.reach, {}) : null;
+const PLAN77 = DIFF77 ? reachPlan(DIFF77, reachStrong(RI77, null)) : null;
+const FORYOU77 = !DIFF77 ? null : { difficulty_for_you: DIFF77, plan_type: PLAN77.plan_type, months: PLAN77.months, months_range: PLAN77.months_range,
+  stretch: PLAN77.stretch, chance: PLAN77.chance, reach_used: TA77.reach, reach_basis: TA77.used ? 'topic' : 'site',
+  site_reach: TA77.site_reach, topic_reach: TA77.topic_reach, kd_known: KD77 != null,
+  label: reachLabel(DIFF77, PLAN77.plan_type === 'none' ? null : PLAN77) + (TA77.used ? ' \\u00b7 measured on this topic' : ''),
+  note: TA77.note + (KD77 == null ? ' This keyword has no measured difficulty either, so it is counted as that reach + ' + REACH_CFG.unknown_kd + '.' : '') };
+const TTR77 = (!PLAN77 || PLAN77.plan_type === 'none') ? null : { months: PLAN77.months, months_range: PLAN77.months_range, basis: 'modelled',
+  chance: PLAN77.chance, note: reachChanceText(PLAN77), base_rate: REACH_BASE_RATE, model_months: verdict.time_to_rank_months ?? null };
+// the visits a page in the top three would take. A results page nobody could read yields NO estimate: what it takes in clicks before
+// anyone reaches a link is exactly what was not seen.
+const VIS77 = (() => {
+  const model = verdict.expected_monthly_visits_top3 ?? null;
+  if (!SERP_READ77) return { visits: null, basis: 'unknown', basis_text: 'not estimated: the live results page could not be read, so the clicks it takes before anyone reaches a link are unknown',
+    note: 'No visit estimate: the live Google results could not be read (' + String(SF77.error || 'no answer').slice(0, 120) + ').', model_estimate: model, loss_applied: '' };
+  const c = KWI.calibrate({ volume: VOL77, serp_types: SF77.features_present || [] }, {});
+  const basis_text = c.traffic_basis === 'calibrated' ? 'calibrated with your own Search Console data'
+    : c.traffic_basis === 'modelled' ? 'modelled from the provider\\'s monthly volume, after this results page\\'s click loss'
+    : 'not estimated: no monthly search volume was measured for this keyword';
+  return { visits: c.traffic_potential, basis: c.traffic_basis, basis_text, note: c.traffic_note, model_estimate: model, loss_applied: KWI.lossText(SF77.features_present || []) };
+})();
+const EXP = (prev.existing_page && prev.existing_page.url) ? prev.existing_page : null;""")
+patch('Parse Verdict', """    expected_visits_top3: EV56.withheld ? null : (verdict.expected_monthly_visits_top3 ?? null),
+    time_to_rank_months: EV56.withheld ? null : (verdict.time_to_rank_months ?? null)""",
+"""    expected_visits_top3: EV56.withheld ? null : (VIS77.visits ?? null),
+    expected_visits: EV56.withheld ? null : VIS77,
+    time_to_rank_months: EV56.withheld ? null : (verdict.time_to_rank_months ?? null),   // kept for the ladder and older readers: it is the MODEL's own number and every surface now says so
+    time_to_rank: EV56.withheld ? null : TTR77,
+    for_you: EV56.withheld ? null : FORYOU77,
+    reach_info: FORYOU77 ? { reach: RI77.reach, method: RI77.method, cached: !!RI77.cached, cached_at: RI77.cached_at || null, evidence_kept: !!RI77.ranked } : null""")
+
+# ---------- B. the delivered document says which figure is which ----------
+patch('Build Word File', """    ['Expected visits/month at #1-3', d.expected_visits_top3 != null ? num(d.expected_visits_top3) : (d.score_withheld ? 'not estimated' : 'N/A')],
+    ['Time to rank', d.time_to_rank_months != null ? d.time_to_rank_months + ' months' : (d.score_withheld ? 'not estimated' : 'N/A')]""",
+"""    ['Difficulty for your site', d.for_you ? esc(d.for_you.label) : (d.domain ? 'not measured for this request' : 'no website on this request')],
+    ['Expected visits/month at #1-3', d.expected_visits ? (d.expected_visits.visits != null ? num(d.expected_visits.visits) + ' \\u2014 ' + esc(d.expected_visits.basis_text) : esc(d.expected_visits.basis_text)) : (d.score_withheld ? 'not estimated' : 'N/A')],
+    ['Time to rank', d.time_to_rank ? esc(d.time_to_rank.months) + ' months \\u2014 ' + esc(LN.BASIS.modelled) + (d.time_to_rank.chance && d.time_to_rank.chance.label ? ', ' + esc(d.time_to_rank.chance.label) : '') : (d.score_withheld ? 'not estimated' : 'N/A')]""")
+patch('Build Word File', """  '<h3>Why</h3>' + ul(d.verdict_reasons) +""",
+"""  ((d.for_you || d.time_to_rank || d.expected_visits) ? '<p class="muted">' + [d.for_you && d.for_you.note, d.time_to_rank && d.time_to_rank.note, d.expected_visits && d.expected_visits.note].filter(Boolean).map(esc).join(' ') + '</p>' : '') +
+  '<h3>Why</h3>' + ul(d.verdict_reasons) +""")
+patch('Build Word File', """    verdict_score: d.verdict_score,""",
+"""    verdict_score: d.verdict_score,
+    for_you: d.for_you || null, time_to_rank: d.time_to_rank || null, expected_visits: d.expected_visits || null,   // B1-1 (2026-10-15): the app shows the same labelled figures as the document""")
+# the ladder's feasibility card prints the verdict's month count too: it is the model's own guess, and it says so now (the plan's
+# own modelled range and chance band sit a few rows above it)
+patch('Build Ladder Report', "['Time to rank (verdict estimate)', f.time_to_rank_months != null ? f.time_to_rank_months + ' months' : 'N/A'],",
+      "['Time to rank', f.time_to_rank_months != null ? f.time_to_rank_months + ' months \\u2014 the writing model\\'s own estimate, not measured; the modelled range and its chance band are in the plan above' : 'not estimated'],")
+for _a77 in ('const FORYOU77 =', 'const TTR77 =', 'const VIS77 =', 'reachTopic(RI77.ranked'):
+    assert _a77 in code('Parse Verdict'), 'B1-1: Parse Verdict is missing ' + _a77
+assert 'expected_visits_top3: EV56.withheld ? null : (VIS77.visits ?? null)' in code('Parse Verdict'), 'B1-1: the verdict still ships the model\'s own visit number as the figure'
+assert "if (!SERP_READ77) return { visits: null, basis: 'unknown'" in code('Parse Verdict'), 'B1-1: a results page nobody read must not produce a visit estimate'
+assert "Difficulty for your site" in code('Build Word File') and "d.time_to_rank ? esc(d.time_to_rank.months)" in code('Build Word File'), \
+    'B1-1: the delivered document does not carry the measured plan'
+# B1-5 (K4, 2026-10-15): what Google really ranks decides the page type, and a disagreement with the plan is printed
+assert 'const serpPageTypes = (results, o) =>' in KW_INPUTS_SRC and "{ type: 'Comparison or list'," in KW_INPUTS_SRC, \
+    'B1-5: the results-page shapes belong in the shared kit'
+assert 'page_types: KWI.serpPageTypes(' in code('Build Keyword Strategy'), 'B1-5: the live check still keeps only the domains it read'
+assert 'What Google ranks:' in code('Build Keyword Strategy'), 'B1-5: the card does not say what kind of page Google ranks'
+# harness shim (S87): the click-loss and traffic model as a runnable script, one call per item
+os.makedirs(OUT_CODE, exist_ok=True)
+open(os.path.join(OUT_CODE, '_kw_click_loss.js'), 'w').write(
+    "// generated by build_v4.py section 77 - the click-loss and traffic model as a runnable node for the harness (S87)\n"
+    + KW_INPUTS_SRC + "\nreturn $input.all().map(i => { const j = i.json || {};\n"
+      "  const types = j.serp_types || [];\n"
+      "  return { json: { ctr: KWI.featureLoss(types), applied: KWI.lossApplied(types), text: KWI.lossText(types), click_loss: KWI.CLICK_LOSS,\n"
+      "    page_types: KWI.serpPageTypes(j.results || [], { page_type: j.page_type }),\n"
+      "    ...KWI.calibrate({ volume: j.volume === undefined ? null : j.volume, serp_types: types, gsc: j.gsc || null }, j.opts || {}) } }; });\n")
+sticky("""### The verdict’s own two numbers, and a difficulty measured on the topic (B1-1 · B1-2 · B1-3, 2026-10-15)
+**“Time to rank: 6 months” and “Expected visits/month at #1-3: 70” came out of the language model** and reached the Word file, the PDF and the ladder card with no basis at all. They are now **computed**: the plan’s month range with its uncalibrated chance band, and the volume through the **measured** click loss of the results page that was read — each printed with what it is. A results page nobody could read produces no visit figure at all.
+**Difficulty is measured on the topic**, as MarketMuse and Semrush do it: the reach cache keeps the keywords it was measured on, so the Keyword Check, the keyword report and discovery can measure the difficulty this site has already beaten **on this topic**. Below five on-topic top-10 keywords the site-wide number stays — never a penalty — and the answer says which number it used and on what.
+**The AI Overview click loss was the April 2025 figure (0.65).** December 2025: −58.0% at position 1, −50.8% at 2, −46.4% at 3 (Ahrefs, 300,000 keywords). Every traffic potential on an AI Overview page was ~1.5x too generous.""",
+    pos('Parse Verdict')[0] - 40, pos('Parse Verdict')[1] + 320, 1120, 280, 4)
+log('The keyword verdict\'s own two numbers, and a difficulty measured on the topic (2026-10-15, benchmark area 1, rows B1-1 / B1-2 / B1-3; BENCH_AREA1_keywords.md). B1-1: `expected_monthly_visits_top3` and `time_to_rank_months` came straight out of the Verdict Agent\'s JSON and reached the Word file, the PDF and the ladder card with no basis at all ("Time to rank: 6 months", exec 519) while the same run computes a month RANGE with an uncalibrated chance band (G3) and a traffic figure that says calibrated / modelled / unknown (G8) - Parse Verdict now carries for_you (difficulty for this site, plan, months, chance, and WHICH reach it was measured against), time_to_rank (the modelled range, the model\'s own number kept beside it) and expected_visits (through the click-loss model, with its basis in words), a results page that could not be read yields no visit estimate at all, and the document prints the basis next to every one. B1-2: the reach cache kept the number and threw the evidence away, so a run reusing it could not measure a topic and could not say what the number rested on - reachCacheRow now stores the top-10 keywords behind it, reachCached hands them back, and the Keyword Check and discovery measure the reach on the TOPIC asked about exactly as the ladder does (same kit, same bar, no new call; a row written before this change says it has no evidence). B1-3: the AI Overview click loss was 0.65, the April 2025 measurement, while Ahrefs\' December 2025 study (300,000 keywords, published 2026-02-04) measures -58.0% at position 1, -50.8% at 2 and -46.4% at 3 - the estimate is for a page in the top three, so their average (0.483) is the factor, every AI Overview traffic potential was ~1.5x too generous, and the four features with no verifiable measurement keep their values and are labelled a stated rule in KWI.CLICK_LOSS')
+
 
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:

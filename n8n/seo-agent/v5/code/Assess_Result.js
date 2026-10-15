@@ -15,12 +15,14 @@ const pr = answer('position');
 let position = null, position_url = null;
 if (reachTaskOk(pr)) { const best = ((((pr.tasks[0].result || [])[0]) || {}).items || []).map(x => ((x || {}).ranked_serp_element || {}).serp_item || {}).filter(x => x.rank_group).sort((a, b) => a.rank_group - b.rank_group)[0]; if (best) { position = best.rank_group; position_url = best.url || null; } }
 let rows = []; try { rows = $('Load Assess Cache').all().map(i => i.json).filter(r => r && !r.error); } catch (e) { rows = []; }
+// B1-2 (2026-10-15, benchmark area 1): the keywords the reach was measured on travel with it, from this run's pull or from the stored
+// row, so the answer can measure the difficulty on the TOPIC of the keyword that was asked about instead of only across the whole site.
 let reach_info = reachCached(rows, v.domain, v.location_code), cache_row = null, reach_errors = [];
 if (!reach_info) {
   const rq = reqs.filter(r => String(r.kind).startsWith('reach_'));
   const parsed = reachParse(rq, rq.map(r => answer(r.kind)));
-  reach_info = reachFrom(parsed.ranked, parsed.authority); reach_errors = parsed.errors;
-  if (reach_info.method !== 'default') cache_row = reachCacheRow(v.domain, reach_info, v.location_code);
+  reach_info = { ...reachFrom(parsed.ranked, parsed.authority), ranked: parsed.ranked }; reach_errors = parsed.errors;
+  if (reach_info.method !== 'default') cache_row = reachCacheRow(v.domain, reach_info, v.location_code, parsed.ranked);
 }
 let desc = null; const drow = rows.find(r => r.key === 'desc:' + v.domain);
 try { desc = drow && (Date.now() - new Date(drow.updated_at).getTime()) < 30 * 864e5 ? (JSON.parse(drow.value).description || null) : null; } catch (e) { desc = null; }

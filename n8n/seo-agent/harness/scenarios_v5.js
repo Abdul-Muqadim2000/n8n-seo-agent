@@ -1968,7 +1968,11 @@ await guard('pipeline phase 3', async () => {
   console.log('   keyword check 200 ->', JSON.stringify(B));
   save('keyword-check-response.json', B);
   check('assess 200: every field of the contract', RESP_KEYS.every(k => k in B) && resp1[0].json.status === 200, RESP_KEYS.filter(k => !(k in B)).join(','));
-  check('assess 200: kd 38 at reach 30 -> reachable, short ladder 4-8 months, fit 2, no alternatives', B.difficulty_for_you === 'reachable' && B.plan_type === 'short' && B.months === '4-8' && B.fit === 2 && B.navigational === false && eq(B.alternatives, []) && B.reach === 30 && B.label === 'Reachable for your site · Short ladder · 4-8 months' && !B.warnings.length, JSON.stringify(B));
+  check('assess 200: kd 38 at reach 30 -> reachable, short ladder 4-8 months, fit 2, no alternatives', B.difficulty_for_you === 'reachable' && B.plan_type === 'short' && B.months === '4-8' && B.fit === 2 && B.navigational === false && eq(B.alternatives, []) && B.reach === 30 && B.label === 'Reachable for your site · Short ladder · 4-8 months', JSON.stringify(B));
+  // B1-1 (2026-10-15, benchmark area 1): that reach was measured on "a1" ... "a5", searches with nothing to do with this keyword. The
+  // answer used to read as a measurement of THIS topic; it now names what it really rests on, the way MarketMuse states the same case
+  // ("If you have no Topic Authority, then your Personalized Difficulty = Keyword Difficulty"). The warning is the only change here.
+  check('B1-1: an encouraging answer measured against a reach that came from OTHER topics names them and calls itself the optimistic case', B.reach_basis === 'site' && B.topic_reach === null && B.reach_used === 30 && /measured against your site-wide reach \(30\), which comes from other topics/.test(B.warnings.join(' ')) && /optimistic case/.test(B.warnings.join(' ')) && /is on this topic/.test(B.reach_note), JSON.stringify([B.warnings, B.reach_note]));
   check('assess: cost = the DataForSEO task costs (4 x $0.01) + Claude ($0.002)', B.cost_usd === 0.042, B.cost_usd);
   const rra = await run('Reach Row (Assess)', resp1);
   check('assess: the measured reach is stored after the answer (exact cache columns)', keysOf(rra[0].json) === CACHE_COLS && rra[0].json.key === 'reach:' + SITE && JSON.parse(rra[0].json.value).reach === 30, JSON.stringify(rra[0].json));
@@ -12519,6 +12523,216 @@ await guard('B-F1 the Sonnet half, and B-A11 three nodes that advised from what 
   reset();
 });
 
+
+
+// ===================================================================================
+// S87 B1-1 / B1-2 / B1-3 (2026-10-15, benchmark programme area 1 — docs/system-review-2026-10-14/BENCH_AREA1_keywords.md):
+// a figure a customer reads about a keyword is measured, modelled or missing, and says which — and the difficulty it is judged by
+// belongs to the TOPIC, not to the whole website. Every check below fails against the code of the 2026-10-14 run: the keyword
+// report shipped the language model's own "Time to rank: 6 months" and "Expected visits/month at #1-3: 70" with no basis of any
+// kind (execs 519 / 540), every keyword and topic of a discovery run was labelled against one site-wide reach cached for 30 days
+// (exec 518: reach 10 on all 43 clusters), and the AI Overview click loss behind every traffic number was the April 2025
+// measurement (0.65) while the December 2025 one is half as generous again.
+// ===================================================================================
+await guard('b1-verdict-numbers-and-topic-reach', async () => {
+  const SN = 'S87 B1-1 B1-2 B1-3 — the keyword verdict\'s own two numbers, a difficulty measured on the topic it is about, and the click loss an AI Overview really takes';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const D = 'techand.ai', W = 'https://www.' + D, SITE = 'site_techand-ai', LOC = 2784, EMPTY = [{ json: {} }];
+  const ago87 = (d) => new Date(Date.now() - d * 864e5).toISOString();
+
+  // ---------- 1. B1-3: the click loss a results page takes, and the study it was measured by ----------
+  const CL = { code: '_kw_click_loss' };
+  const loss87 = async (serp_types, o = {}) => (await run('Click Loss', [{ json: { serp_types, ...o } }], CL))[0].json;
+  const aio87 = await loss87(['organic', 'ai_overview'], { volume: 1000 });
+  console.log('   click loss ->', JSON.stringify({ ctr: aio87.ctr, tp: aio87.traffic_potential, basis: aio87.traffic_basis, text: aio87.text }));
+  check('B1-3: an AI Overview is counted at the measured December 2025 loss (top three: -58.0% / -50.8% / -46.4%, average 0.483), not at the April 2025 figure of 0.65 the code carried',
+    aio87.ctr === 0.483 && aio87.traffic_potential === Math.round(1000 * 0.483 * 0.3) && aio87.traffic_potential < Math.round(1000 * 0.65 * 0.3),
+    JSON.stringify({ ctr: aio87.ctr, now: aio87.traffic_potential, before: Math.round(1000 * 0.65 * 0.3) }));
+  check('B1-3: that factor is labelled measured and carries the study a reader can open — a number taken from a provider is not the same kind of thing as a rule we chose',
+    aio87.click_loss.ai_overview.basis === 'measured' && /ahrefs\.com\/blog\/ai-overviews-reduce-clicks-update/.test(aio87.click_loss.ai_overview.url)
+    && /December 2025/.test(aio87.click_loss.ai_overview.source) && /300,000 keywords/.test(aio87.click_loss.ai_overview.source),
+    JSON.stringify(aio87.click_loss.ai_overview));
+  check('B1-3: the figure says what was taken off it and on whose authority, in the note the customer reads',
+    /Click loss applied: an AI Overview \(-52% of the clicks, measured: Ahrefs/.test(aio87.traffic_note) && /Modelled, not measured/.test(aio87.traffic_note), aio87.traffic_note);
+  const fs87 = await loss87(['organic', 'featured_snippet'], { volume: 1000 });
+  check('B1-3: the four features with no measurement we could verify keep their values and say so — a stated rule is not dressed up as a measurement',
+    fs87.ctr === 0.85 && fs87.click_loss.featured_snippet.basis === 'stated rule' && /a featured snippet \(-15% of the clicks, stated rule/.test(fs87.text)
+    && ['video', 'local_pack', 'shopping'].every(k => fs87.click_loss[k].basis === 'stated rule'), JSON.stringify([fs87.ctr, fs87.text]));
+  const both87 = await loss87(['organic', 'ai_overview', 'featured_snippet', 'people_also_ask'], { volume: 1000 });
+  check('B1-3: two features on one results page compound, and a feature with no deduction (People Also Ask) adds nothing',
+    Math.abs(both87.ctr - 0.483 * 0.85) < 1e-9 && both87.applied.length === 2 && !/also ask/i.test(both87.text), JSON.stringify([both87.ctr, both87.applied.map(a => a.key)]));
+  const clean87 = await loss87(['organic'], { volume: 1000 });
+  check('B1-3: a plain results page loses nothing and claims nothing — no click-loss clause at all, and the figure is the volume through the top-three share',
+    clean87.ctr === 1 && clean87.text === '' && !/Click loss applied/.test(clean87.traffic_note) && clean87.traffic_potential === 300, JSON.stringify([clean87.ctr, clean87.traffic_potential]));
+  const noVol87 = await loss87(['organic', 'ai_overview'], {});
+  check('B1-3 / K2: with no volume there is no estimate at all, which is better than a confident zero',
+    noVol87.traffic_potential === null && noVol87.traffic_basis === 'unknown' && /no traffic estimate is given/.test(noVol87.traffic_note), JSON.stringify(noVol87.traffic_note));
+
+  // ---------- 2. B1-2: the reach cache keeps the evidence, not only the number ----------
+  const rankedTask87 = (list) => V.task({ target: D, items: list.map(([kw, kd, pos]) => ({ se_type: 'google',
+    keyword_data: { keyword: kw, keyword_info: { search_volume: 100 }, keyword_properties: { keyword_difficulty: kd } },
+    ranked_serp_element: { serp_item: { type: 'organic', rank_group: pos, url: W + '/' + kw.replace(/\s+/g, '-') + '/' } } })) });
+  const overview87 = (top10) => V.task({ items: [{ se_type: 'google', metrics: { organic: { pos_1: 1, pos_2_3: 2, pos_4_10: Math.max(0, top10 - 3), count: 400, etv: 10 } } }] });
+  const ONTOPIC87 = [['e invoicing uae guide', 8, 2], ['e invoicing software features', 10, 3], ['e invoicing penalties uae', 12, 5],
+    ['e invoicing phase 2 uae', 14, 7], ['e invoicing software uae pricing', 16, 9]];
+  const OFFTOPIC87 = [['erp implementation dubai', 40, 4], ['dynamics 365 partner uae', 44, 6]];
+  const measureReach87 = async (cacheRows) => {
+    mock('Seed List', [{ json: { domain: D, location_code: LOC, language_code: 'en' } }]);
+    mock('Load Site Cache', cacheRows || EMPTY);
+    mock('Reach Requests (Discovery)', [{ json: { kind: 'reach_ranked', label: 'top-10 keywords of ' + D } }, { json: { kind: 'reach_overview', label: 'size of ' + D } }]);
+    mock('Run Reach Requests Answers', [rankedTask87([...ONTOPIC87, ...OFFTOPIC87]), overview87(7)]);
+    return (await run('Reach (Discovery)', EMPTY))[0].json;
+  };
+  const fresh87 = await measureReach87(null);
+  const stored87 = JSON.parse(fresh87.cache_row.value);
+  console.log('   fresh reach ->', JSON.stringify({ reach: fresh87.reach, method: fresh87.method, kept: (stored87.r || []).length }));
+  check('B1-2: a freshly measured reach is stored WITH the keywords it was measured on, packed as [keyword, difficulty, position] triples',
+    fresh87.reach === 28 && Array.isArray(stored87.r) && stored87.r.length === 7 && stored87.r[0][0] === 'e invoicing uae guide' && stored87.r[0][1] === 8 && stored87.r[0][2] === 2
+    && stored87.reach === fresh87.reach, JSON.stringify(stored87).slice(0, 240));
+  check('B1-2: and the list travels with the item in the same run, so nothing downstream has to buy it twice',
+    Array.isArray(fresh87.ranked) && fresh87.ranked.length === 7 && fresh87.ranked.every(r => r.keyword && r.position != null), JSON.stringify((fresh87.ranked || []).slice(0, 2)));
+  const cacheRow87 = (value, at) => [{ json: { id: 1, key: 'reach:' + SITE, kind: 'reach', site_id: SITE, value: JSON.stringify(value), updated_at: at || ago87(3) } }];
+  const reused87 = await measureReach87(cacheRow87({ ...stored87 }));
+  check('B1-2: the next run reuses that row without a call and gets the evidence back with it, dated',
+    reused87.cached === true && reused87.reach === 28 && (reused87.ranked || []).length === 7 && /the stored measurement of /.test(reused87.ranked_from || ''),
+    JSON.stringify({ cached: reused87.cached, n: (reused87.ranked || []).length, from: reused87.ranked_from }));
+  const old87 = await measureReach87(cacheRow87({ reach: 28, method: 'percentile', p75: 28, size_reach: 20, sample: 7, top10: 7, organic_keywords: 400, location_code: LOC }));
+  check('B1-2: a row written before this change has no evidence, and that is `null` — never an empty list, which would read as "the site ranks for nothing"',
+    old87.cached === true && old87.reach === 28 && old87.ranked === null && !old87.ranked_from, JSON.stringify({ ranked: old87.ranked, from: old87.ranked_from || '' }));
+
+  // ---------- 3. B1-1: discovery measures each TOPIC against what the site has won on that topic ----------
+  const cand87 = (keyword, kd, volume, topic) => ({ keyword, volume, kd, cpc: 3, intent: 'commercial', words: keyword.split(' ').length, pre_score: 60 + volume / 10,
+    traffic_potential: volume, competitors: [], your_position: null, your_url: '', topic });
+  const CANDS87 = [cand87('e invoicing software uae', 45, 480, 'e invoicing'), cand87('e invoicing solution uae', 45, 320, 'e invoicing'), cand87('e invoicing vendors uae', 45, 170, 'e invoicing'),
+    cand87('erp implementation dubai', 45, 390, 'erp implementation'), cand87('erp implementation partner dubai', 45, 210, 'erp implementation'), cand87('erp implementation cost dubai', 45, 140, 'erp implementation')];
+  const discover87 = async (reachItem) => {
+    reset();
+    mock('Collect Research', [{ json: { domain: D, goal: 'leads', seeds: ['e invoicing'], services: ['e-invoicing', 'ERP implementation'], business: 'Microsoft partner in the UAE',
+      competitors: [], site_urls: [W + '/'], research: { candidates: CANDS87, pool_size: CANDS87.length, competitor_domains: [], by_source: {}, failures: [] } } }]);
+    mock('Relevance Chunks', [{ json: { keywords_chunk: CANDS87.map(c => ({ keyword: c.keyword })) } }]);
+    mock('Load Site Cache', EMPTY);
+    mock('Site Model', [{ json: { site_model: { site_id: SITE, domain: D, canonical_host: 'www.' + D, business_name: 'Tech&', brand_names: ['Tech&'], pages: [] } } }]);
+    mock('Reach (Discovery)', [{ json: reachItem }]);
+    const rel = [{ json: { output: { items: CANDS87.map(c => ({ keyword: c.keyword, relevance: 2, intent: 'commercial', page_type: 'Service Page', topic: c.topic })) } } }];
+    return (await run('Rank Keywords', rel))[0].json.keyword_strategy;
+  };
+  const KS87 = await discover87({ reach: 35, method: 'percentile', p75: 35, size_reach: 20, sample: 7, top10: 7, organic_keywords: 400, cached: false, domain: D,
+    ranked: [...ONTOPIC87, ...OFFTOPIC87].map(([keyword, kd, position]) => ({ keyword, kd, position })) });
+  const cE = KS87.clusters.find(c => c.topic === 'e invoicing'), cR = KS87.clusters.find(c => c.topic === 'erp implementation');
+  console.log('   topics ->', JSON.stringify(KS87.clusters.map(c => [c.topic, c.reach_basis, c.reach_used, c.difficulty_for_you, c.months])));
+  check('B1-1: the topic the site has really won on is measured against the difficulty it has beaten THERE (75% of 5 on-topic top-10 keywords are at 14 or lower), not against the site-wide 35',
+    cE && cE.reach_basis === 'topic' && cE.topic_reach === 14 && cE.reach_used === 14 && cE.difficulty_for_you === 'hard' && cE.months === '9-15',
+    JSON.stringify(cE && { basis: cE.reach_basis, used: cE.reach_used, diff: cE.difficulty_for_you }));
+  check('B1-1: the topic with nothing behind it keeps the site-wide number and is NOT penalised for it — the same difficulty 45 reads "reachable" there, exactly as MarketMuse states the no-authority case',
+    cR && cR.reach_basis === 'site' && cR.topic_reach === null && cR.reach_used === 35 && cR.difficulty_for_you === 'reachable' && cR.months === '4-8',
+    JSON.stringify(cR && { basis: cR.reach_basis, used: cR.reach_used, diff: cR.difficulty_for_you }));
+  check('B1-1: each topic carries the sentence that says which number it was measured against and why, and the strategy counts how many of them had their own measurement',
+    /Measured on this topic/.test(cE.topic_reach_note || '') && /not against the site-wide reach of 35/.test(cE.topic_reach_note || '')
+    && /site-wide reach \(35\)/.test(cR.topic_reach_note || '') && /optimistic case/.test(cR.topic_reach_note || '')
+    && KS87.reach.topics_measured === 1 && KS87.reach.topics_total === 2 && KS87.reach.evidence_kept === true
+    && KS87.reach.measured_on[0] === 'e invoicing uae guide', JSON.stringify({ measured: KS87.reach.topics_measured, of: KS87.reach.topics_total, on: KS87.reach.measured_on.slice(0, 3) }));
+  check('B1-1: the site measurement itself is untouched — the topic number never overwrites what the cache holds for the whole site',
+    KS87.reach.reach === 35 && KS87.reach.method === 'percentile', JSON.stringify(KS87.reach));
+  mock('Rank Keywords', [{ json: { domain: D, keyword_strategy: KS87 } }]); mock('Priority Keywords', EMPTY); delete store['AI Demand'];
+  const KSR87 = (await run('Build Keyword Strategy', EMPTY))[0].json;
+  save('keyword-strategy-b1-topic-reach.html', KSR87.result_html); scanHtml('keyword strategy with a topic reach (B1)', KSR87.result_html);
+  check('B1-1: the report names the searches the site-wide number was measured on and how many topics were measured on their own topic',
+    /That number comes from the searches you already win/.test(KSR87.result_html) && /e invoicing uae guide/.test(KSR87.result_html)
+    && /1 of the 2 topics below were measured on their OWN topic/.test(KSR87.result_html) && /optimistic case for a topic you have no record on/.test(KSR87.result_html),
+    (KSR87.result_html.match(/Your site&#39;s reach[\s\S]{0,420}|Your site's reach[\s\S]{0,420}/) || [''])[0]);
+  check('B1-1: and the table marks the labels that were measured on the topic itself, with the difficulty they were measured against',
+    /measured on this topic \(difficulty 14\)/.test(KSR87.result_html), (KSR87.result_html.match(/measured on this topic[\s\S]{0,80}/) || [''])[0]);
+  check('B1-3: the report names the study behind its click loss instead of printing a bare multiplier',
+    /a results page with an AI Overview is counted at 48% of the clicks, measured by Ahrefs/.test(KSR87.result_html)
+    && /stated rules, not measurements/.test(KSR87.result_html), (KSR87.result_html.match(/Click loss:[\s\S]{0,300}/) || [''])[0]);
+  const KSnone87 = await discover87({ reach: 35, method: 'size', p75: null, size_reach: 35, sample: 0, top10: 7, organic_keywords: 400, cached: true, cached_at: ago87(9), domain: D, ranked: null });
+  check('B1-2 / B1-1: when the stored reach kept no evidence the run says exactly that — never "nothing you rank for is on this topic", which it does not know',
+    KSnone87.clusters.every(c => c.reach_basis === 'site') && KSnone87.reach.topics_measured === 0 && KSnone87.reach.evidence_kept === false
+    && /was kept without the keywords behind it/.test(KSnone87.reach.evidence_note || '') && /was kept without the keywords behind it/.test(KSnone87.clusters[0].topic_reach_note || ''),
+    JSON.stringify([KSnone87.reach.evidence_note, (KSnone87.clusters[0] || {}).topic_reach_note]));
+
+  // ---------- 3b. B1-5 / K4: what Google really ranks decides the page type, and a disagreement is said out loud ----------
+  const PT87 = async (results, page_type) => (await run('Click Loss', [{ json: { serp_types: [], results, page_type } }], CL))[0].json.page_types;
+  const GUIDES87 = [
+    { url: 'https://tax.gov.ae/en/taxes/e.invoicing.aspx', title: 'E-Invoicing' },
+    { url: 'https://zoho.com/blog/e-invoicing-uae-guide/', title: 'How to prepare for e-invoicing in the UAE' },
+    { url: 'https://pwc.com/m1/en/insights/e-invoicing-explained.html', title: 'UAE e-invoicing explained: what is changing' },
+    { url: 'https://cleartax.com/ae/insights/e-invoicing-checklist', title: 'E-invoicing checklist for UAE businesses' },
+    { url: 'https://tally.com/ae/blog/uae-e-invoicing-phase-2', title: 'UAE e-invoicing phase 2: everything you need to know' },
+    { url: 'https://sovos.com/services/e-invoicing/', title: 'E-invoicing compliance software' },
+  ];
+  const guidePT87 = await PT87(GUIDES87, 'Service Page');
+  console.log('   what Google ranks ->', JSON.stringify({ counts: guidePT87.counts, dominant: guidePT87.dominant, mismatch: guidePT87.mismatch }));
+  check('B1-5 / K4: the pages Google chose decide what kind of page wins the search, counted from the ten results and not from a label',
+    guidePT87.read === 6 && guidePT87.dominant === 'Guide or article' && guidePT87.dominant_count === 4 && guidePT87.counts['Government or official'] === 1
+    && guidePT87.counts['Service or product page'] === 1, JSON.stringify(guidePT87.counts));
+  check('B1-5 / K4: planning a service page where Google ranks guides is a MISMATCH the report states, in the customer\'s words, instead of overriding the plan behind their back',
+    guidePT87.mismatch === true && guidePT87.ours === 'Service or product page'
+    && /Guide or articles are what Google ranks here: 4 of the 6 results read, while this plan writes a service or product page - expect to work harder/.test(guidePT87.text),
+    guidePT87.text);
+  const matchPT87 = await PT87(GUIDES87, 'Guide');
+  check('B1-5: and when the plan already writes what Google ranks, it says so and flags nothing',
+    matchPT87.mismatch === false && /which is what this plan writes/.test(matchPT87.text), matchPT87.text);
+  const mixedPT87 = await PT87([{ url: 'https://a.example/pricing', title: 'Pricing' }, { url: 'https://b.example/blog/guide', title: 'A guide' },
+    { url: 'https://reddit.com/r/uae/comments/1', title: 'Anyone using this?' }, { url: 'https://g2.com/categories/e-invoicing', title: 'Best e-invoicing software' }], 'Guide');
+  check('B1-5: a results page with no agreement settles nothing — no dominant type, no mismatch, and the mix is listed rather than rounded into a verdict',
+    mixedPT87.dominant === '' && mixedPT87.mismatch === false && /Google ranks a mix for this search/.test(mixedPT87.text), mixedPT87.text);
+  const thinPT87 = await PT87(GUIDES87.slice(0, 3), 'Service Page');
+  check('B1-5: under four results read nothing is called dominant — the sample is too small to name what wins',
+    thinPT87.read === 3 && thinPT87.dominant === '' && thinPT87.mismatch === false, JSON.stringify(thinPT87));
+  const nonePT87 = await PT87([], 'Service Page');
+  check('B1-5: and a results page that was never read says that, instead of reporting an empty consensus',
+    nonePT87.read === 0 && /was not read, so what Google ranks for this search is unknown/.test(nonePT87.text), nonePT87.text);
+
+  // ---------- 4. B1-1: the keyword verdict's own two numbers ----------
+  reset();
+  const ANSWER87 = { verdict: 'GO_WITH_CHANGES', score: 58, reasons: ['The top pages are advisory firms.'], risks: [], recommended_page: 'Guide',
+    what_must_change: ['Write a buyer\'s guide of about 1,800 words'], expected_monthly_visits_top3: 140, time_to_rank_months: 6, secondary_keywords: ['e invoicing vendors uae'] };
+  const PREV87 = (o = {}) => ({ keyword: 'e invoicing software uae', domain: D, country: 'United Arab Emirates', location_code: LOC, language_code: 'en', goal: 'leads',
+    page_type: 'Guide', brand: 'Dev SEO', currency: 'AED', competitors_summary: [], site_authority: { organic_keywords: 400, top3: 3, top10: 7, est_monthly_traffic: 300 },
+    keyword_data: { search_volume: 480, cpc: 7.25, keyword_difficulty: 45, difficulty_label: 'Medium', google_intent: 'commercial', competitor_backlink_strength: {} },
+    keyword_data_evidence: { what: 'search volume', asked: 1, checked: 1, failed: 0, unavailable: false },
+    serp_features: { features_present: ['ai_overview', 'people_also_ask'], checked_at: ago87(0), ai_overview: { present: true, cited_domains: ['tax.gov.ae'], seen_at: ago87(0) }, people_also_ask: [] },
+    ...o });
+  const verdict87 = async (prev, cacheRows) => { mock('Merge Keyword Data', [{ json: prev }]); mock('Load Site Cache', cacheRows || EMPTY);
+    return (await run('Parse Verdict', [{ json: { output: JSON.stringify(ANSWER87) } }]))[0].json; };
+  const V87 = await verdict87(PREV87(), cacheRow87({ ...stored87 }));
+  console.log('   verdict numbers ->', JSON.stringify({ for_you: V87.for_you && V87.for_you.label, months: V87.time_to_rank && V87.time_to_rank.months, visits: V87.expected_visits_top3, basis: V87.expected_visits && V87.expected_visits.basis }));
+  check('B1-1: "time to rank" is the modelled RANGE of the plan this site is on, with its uncalibrated chance band and the published base rate — the model\'s own single number is kept beside it, named as its own',
+    V87.time_to_rank && V87.time_to_rank.months === '9-15' && V87.time_to_rank.basis === 'modelled' && V87.time_to_rank.model_months === 6
+    && V87.time_to_rank.chance.band === 'low' && /uncalibrated/.test(V87.time_to_rank.note) && /1.74% of new pages/.test(V87.time_to_rank.note),
+    JSON.stringify(V87.time_to_rank));
+  check('B1-1: the visit figure is computed from the volume through the click loss of the results page that was really read, and says it is modelled — not the 70 the language model typed',
+    V87.expected_visits_top3 === Math.round(480 * 0.483 * 0.3) && V87.expected_visits.basis === 'modelled' && V87.expected_visits.model_estimate === 140
+    && /an AI Overview \(-52% of the clicks, measured/.test(V87.expected_visits.loss_applied) && /modelled from the provider/.test(V87.expected_visits.basis_text),
+    JSON.stringify({ visits: V87.expected_visits_top3, basis: V87.expected_visits.basis_text, model: V87.expected_visits.model_estimate }));
+  check('B1-1 / B1-2: the keyword report now answers "how hard is this FOR ME" at all — measured on this topic, because the stored reach kept its evidence and five of those keywords are about it',
+    V87.for_you && V87.for_you.reach_basis === 'topic' && V87.for_you.reach_used === 14 && V87.for_you.difficulty_for_you === 'hard'
+    && /measured on this topic/.test(V87.for_you.label) && /Measured on this topic/.test(V87.for_you.note), JSON.stringify(V87.for_you && { label: V87.for_you.label, used: V87.for_you.reach_used }));
+  const V87site = await verdict87(PREV87(), cacheRow87({ reach: 35, method: 'size', p75: null, size_reach: 35, sample: 0, top10: 7, organic_keywords: 400, location_code: LOC }));
+  check('B1-1: without that evidence the same keyword is judged against the site-wide number and says so — the answer changes from "hard" to "reachable" and the reason is printed, not hidden',
+    V87site.for_you.reach_basis === 'site' && V87site.for_you.reach_used === 35 && V87site.for_you.difficulty_for_you === 'reachable'
+    && V87site.time_to_rank.months === '4-8' && /optimistic case/.test(V87site.for_you.note), JSON.stringify({ basis: V87site.for_you.reach_basis, diff: V87site.for_you.difficulty_for_you, months: V87site.time_to_rank.months }));
+  const V87nodata = await verdict87(PREV87({ keyword_data: { search_volume: null, cpc: null, keyword_difficulty: null, google_intent: null, competitor_backlink_strength: {} } }), cacheRow87({ ...stored87 }));
+  check('B1-1 / K2: with no volume there is no visit figure and the document says why, while the plan still states the difficulty it assumed',
+    V87nodata.expected_visits_top3 === null && V87nodata.expected_visits.basis === 'unknown' && /no monthly search volume was measured/.test(V87nodata.expected_visits.basis_text)
+    && V87nodata.for_you.kd_known === false && /counted as that reach \+ 10/.test(V87nodata.for_you.note), JSON.stringify({ v: V87nodata.expected_visits, kd: V87nodata.for_you.kd_known }));
+  const V87blind = await verdict87(PREV87({ serp_features: { unavailable: true, error: 'Internal SE Server Error.', features_present: [], ai_overview: { present: null } },
+    serp_evidence: { unavailable: true, error: 'Internal SE Server Error.', asked: 1, checked: 0, retried: 1 } }), cacheRow87({ ...stored87 }));
+  check('B1-1 / R18: a results page nobody could read produces no verdict, no visit figure and no months — the three are withheld together, which is what "no score on unread evidence" has to mean',
+    V87blind.verdict === 'NOT_CHECKED' && V87blind.verdict_score === null && V87blind.expected_visits_top3 === null && V87blind.expected_visits === null
+    && V87blind.time_to_rank === null && V87blind.for_you === null, JSON.stringify({ v: V87blind.verdict, visits: V87blind.expected_visits, ttr: V87blind.time_to_rank }));
+  const doc87 = decode(await run('Build Word File', [{ json: { ...V87, include_seo_report: false } }]));
+  save('keyword-verdict-b1-numbers.doc.html', doc87); scanHtml('keyword verdict with measured numbers (B1)', doc87);
+  check('B1-1: the delivered document prints the difficulty for this site, the modelled range with its chance band and the visit figure with its basis — no bare number anywhere in the verdict table',
+    /Difficulty for your site<\/td><td>Hard for your site \u00b7 Full ladder \u00b7 9-15 months \u00b7 measured on this topic<\/td>/.test(doc87) && /9-15 months — modelled, not measured, estimated chance low \(15-30%, uncalibrated\)/.test(doc87)
+    && /70 — modelled from the provider/.test(doc87), (doc87.match(/Difficulty for your site[\s\S]{0,420}/) || [''])[0]);
+  check('B1-1: and the sentence under the table says which reach it used, what the chance rests on and how the visits were computed',
+    /Measured on this topic/.test(doc87) && /uncalibrated estimate until this system has measured its own ladders/.test(doc87)
+    && /Click loss applied: an AI Overview/.test(doc87), (doc87.match(/Measured on this topic[\s\S]{0,300}/) || [''])[0]);
+  reset();
+});
 
 
 H.report();

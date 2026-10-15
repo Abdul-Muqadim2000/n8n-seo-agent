@@ -7,8 +7,9 @@
 //   plan       = easy -> direct (2-4 months) · reachable -> short (4-8) · hard -> full (9-15) · very hard -> full, stretch · not realistic -> none;
 //                strong sites (100+ top-10 keywords, 1,000+ ranking keywords, or already top 20 for it): direct 2-3, short 3-6, full 6-12.
 //   cache      = seo_cache 'reach:<site_id>' for 30 days and the same market (value: reach, method, p75, size_reach, sample, top10,
-//                organic_keywords, location_code); a reach that could not be measured (both calls failed) is never stored.
-const REACH_CFG = { min_top10: 5, percentile: 0.75, ttl_days: 30, unknown_kd: 10, easy: 5, reachable: 20, hard: 40, easy_position: 20, sample: 100 };
+//                organic_keywords, location_code, and since B1-2 the EVIDENCE itself: `r` = the top-10 keywords it was measured on);
+//                a reach that could not be measured (both calls failed) is never stored.
+const REACH_CFG = { min_top10: 5, percentile: 0.75, ttl_days: 30, unknown_kd: 10, easy: 5, reachable: 20, hard: 40, easy_position: 20, sample: 100, sample_keep: 60 };
 const REACH_MONTHS = { direct: [2, 4], short: [4, 8], full: [9, 15] }, REACH_MONTHS_STRONG = { direct: [2, 3], short: [3, 6], full: [6, 12] };
 const REACH_DIFF_LABEL = { easy: 'Easy for your site', reachable: 'Reachable for your site', hard: 'Hard for your site', very_hard: 'Very hard for your site', not_realistic: 'Not realistic for your site' };
 const REACH_PLAN_LABEL = { direct: 'Direct plan', short: 'Short ladder', full: 'Full ladder', none: 'No ladder' };
@@ -43,7 +44,10 @@ function reachFrom(ranked, authority) {
   const method = (!ranked && !known) ? 'default' : (p75 != null && p75 >= size_reach) ? 'percentile' : 'size';
   return { reach, method, p75, size_reach, sample: kds.length, top10, organic_keywords: authority && reachNum(authority.organic_keywords) != null ? reachNum(authority.organic_keywords) : null, cached: false };
 }
-// the stored reach of this site for this market, when it is younger than 30 days (null otherwise)
+// the stored reach of this site for this market, when it is younger than 30 days (null otherwise). B1-2: the row also carries the
+// keywords the number was measured on (`r`), so a run that reuses the cached reach can still answer "and what is it measured on?" and
+// measure a reach on ITS OWN topic (reachTopic) without re-buying the pull. A row written before B1-2 has no `r`: `ranked` is then null
+// and the caller says the evidence was not re-read, which is true, rather than reporting zero on-topic keywords, which is not.
 function reachCached(rows, domain, location_code) {
   const key = reachKey(domain);
   const row = (rows || []).filter(r => r && !r.error && r.key === key).sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)))[0];
@@ -53,12 +57,18 @@ function reachCached(rows, domain, location_code) {
   if (reachNum(location_code) && reachNum(v.location_code) && Number(v.location_code) !== Number(location_code)) return null;
   const days = (Date.now() - new Date(row.updated_at).getTime()) / 864e5;
   if (!(days >= 0 && days < REACH_CFG.ttl_days)) return null;
-  return { ...v, reach: Number(v.reach), cached: true, cached_at: String(row.updated_at) };
+  const { r: packed, ...rest } = v;
+  const ranked = Array.isArray(packed) ? packed.map(x => ({ keyword: String((x || [])[0] || ''), kd: reachNum((x || [])[1]), position: reachNum((x || [])[2]) })).filter(x => x.keyword) : null;
+  return { ...rest, reach: Number(v.reach), cached: true, cached_at: String(row.updated_at), ranked, ranked_from: ranked ? 'the stored measurement of ' + String(row.updated_at).slice(0, 10) : '' };
 }
-// the seo_cache row (exact columns) for a freshly measured reach
-const reachCacheRow = (domain, info, location_code) => ({ key: reachKey(domain), kind: 'reach', site_id: reachSiteId(domain),
-  value: JSON.stringify({ reach: info.reach, method: info.method, p75: info.p75, size_reach: info.size_reach, sample: info.sample, top10: info.top10, organic_keywords: info.organic_keywords, location_code: reachNum(location_code) }),
-  updated_at: new Date().toISOString() });
+// the seo_cache row (exact columns) for a freshly measured reach. `ranked` (optional) is the evidence: [{ keyword, kd, position }] as
+// the pull returned it, packed as [keyword, kd, position] triples and capped at REACH_CFG.sample_keep so one row stays small.
+const reachPack = (ranked) => (Array.isArray(ranked) ? ranked : []).filter(r => r && r.keyword && reachNum(r.position) != null)
+  .slice(0, REACH_CFG.sample_keep).map(r => [String(r.keyword).slice(0, 120), reachNum(r.kd), Number(r.position)]);
+const reachCacheRow = (domain, info, location_code, ranked) => { const r = reachPack(ranked);
+  return { key: reachKey(domain), kind: 'reach', site_id: reachSiteId(domain),
+    value: JSON.stringify({ reach: info.reach, method: info.method, p75: info.p75, size_reach: info.size_reach, sample: info.sample, top10: info.top10, organic_keywords: info.organic_keywords, location_code: reachNum(location_code), ...(r.length ? { r } : {}) }),
+    updated_at: new Date().toISOString() }; };
 // o: { position (the site's rank for the keyword), navigational, other_brand, verdict }
 function difficultyForYou(kd, reach, o) {
   o = o || {};
@@ -86,7 +96,7 @@ const reachTopicMatch = (head) => { const h = overlapTokens(head); const need = 
   return (kw) => { if (!h.length) return false; const t = overlapTokens(kw); return t.filter(x => h.includes(x)).length >= need; }; };
 /**
  * ranked: [{ keyword, kd, position }] — every keyword the site ranks for that this run saw (null = the pull failed)
- * head: the topic's head keyword · domainReach: the site-wide reach · o: { match (the on-topic test), domain }
+ * head: the topic's head keyword · domainReach: the site-wide reach · o: { match (the on-topic test), domain, reason_missing }
  * -> { used, reach, topic_reach, site_reach, on_topic, top10, sample, best, examples, other_topics, reason, note }
  */
 function reachTopic(ranked, head, domainReach, o) {
@@ -108,7 +118,9 @@ function reachTopic(ranked, head, domainReach, o) {
     .slice(0, REACH_TOPIC_CFG.max_other).map(r => String(r.keyword));
   const who = String(opts.domain || 'your site');
   const q = '"' + String(head || '') + '"';
-  const reason = ranked == null ? 'the keywords ' + who + ' ranks for could not be read on this run'
+  // B1-2: a caller that reuses a stored reach knows WHY there is no list (the pull was not made again); it says that instead of
+  // "could not be read", which would blame a failure that never happened.
+  const reason = ranked == null ? (String(opts.reason_missing || '') || 'the keywords ' + who + ' ranks for could not be read on this run')
     : !on.length ? 'nothing ' + who + ' ranks for is on this topic'
     : !top10.length ? on.length + ' keyword(s) on this topic rank for ' + who + ', none of them in the top 10 (best #' + (best ? pos(best) : '-') + ')'
     : top10.length + ' keyword(s) on this topic are in the top 10' + (kds.length < top10.length ? ', ' + kds.length + ' of them with a known difficulty' : '')
@@ -186,7 +198,16 @@ let plainRan = false; try { plainRan = !!($('Keyword Fit (Text)').first() || {})
 const brand = String(a.domain || '').split('.')[0].replace(/[^a-z0-9]/g, '');
 const ownBrand = brand.length >= 4 && String(a.keyword).replace(/[^a-z0-9]/g, '').includes(brand);
 const navigational = aiOk ? (o.navigational === true || String(o.navigational).toLowerCase() === 'true') : (String(a.intent || '') === 'navigational' && !ownBrand);
-const reach = a.reach_info.reach;
+// ---- B1-1 / B1-2 (2026-10-15, benchmark area 1): "difficulty for your site" is measured on THIS keyword's topic where the site has a
+// record on it. The leaders personalise per topic (MarketMuse Personalized Difficulty = Keyword Difficulty - a topic-level Topic
+// Authority, and "If you have no Topic Authority, then your Personalized Difficulty = Keyword Difficulty"; Semrush lowers Personal KD
+// with the thematic distance to the domain's core topics). Ours used one number per website, cached 30 days, for every keyword: on
+// 2026-10-13 "erp software uae", "business central partner uae" and "dynamics 365 partner uae" (execs 487-489) were all answered against
+// the same site-wide reach. The topic measurement replaces it only with REACH_CFG.min_top10 on-topic top-10 keywords behind it; below
+// that bar the site reach stays, unchanged, and the answer says which number it used and why - never a penalty for a topic never tried.
+const topic = reachTopic(a.reach_info.ranked === undefined ? null : a.reach_info.ranked, a.keyword, a.reach_info.reach,
+  { domain: a.domain, reason_missing: a.reach_info.cached ? 'the reach stored on ' + String(a.reach_info.cached_at || '').slice(0, 10) + ' was kept without the keywords behind it, so this check has no topic evidence to read' : '' });
+const reach = topic.reach;
 const difficulty_for_you = difficultyForYou(a.kd, reach, { navigational, position: a.position });
 const plan = reachPlan(difficulty_for_you, reachStrong(a.reach_info, a.position));
 const listOf = (v) => (Array.isArray(v) ? v : (typeof v === 'string' ? v.split(/[\n,;]+/) : [])).map(x => String(x == null ? '' : x).toLowerCase().replace(/["“”]/g, '').replace(/\s+/g, ' ').trim()).filter(x => x.length >= 2 && x.length <= 100);
@@ -195,6 +216,11 @@ const alternatives = need && aiOk ? [...new Set(listOf(o.alternatives))].filter(
 const warnings = [];
 if (!aiOk) warnings.push('topic check unavailable: ' + String((out.error && (out.error.message || out.error)) || 'no answer from the model').slice(0, 160) + (plainRan ? ' (the plain-text retry answered nothing either)' : ''));
 if ((a.reach_errors || []).length) warnings.push('reach measured from partial data: ' + a.reach_errors.join('; ').slice(0, 200));
+// B1-1: an encouraging answer that rests on a reach measured on OTHER topics says so where the warnings are read. Only then: a site
+// with no record anywhere is not borrowing anything, and a measurement on this topic needs no caveat.
+if (!topic.used && ['easy', 'reachable'].includes(difficulty_for_you) && (topic.other_topics || []).length)
+  warnings.push('measured against your site-wide reach (' + topic.site_reach + '), which comes from other topics ('
+    + topic.other_topics.slice(0, 3).map(k => '"' + k + '"').join(', ') + '): ' + topic.reason + ', so this is the optimistic case');
 if (!a.known) warnings.push('DataForSEO has no data for this keyword in ' + a.country + ' (volume and difficulty unknown)');
 // D22 (2026-10-11): a stored description written before the site's menu pages were read lists only the homepage's services, which is how
 // "business central partner uae" came back as fit 1. Say so whenever that list is what decided a less-than-core fit.
@@ -202,9 +228,14 @@ if (fit !== null && fit < 2 && /homepage only/.test(String(a.services_source || 
 const body = { ok: true, keyword: a.keyword, country: a.country, volume: a.volume, kd: a.kd, intent: a.intent, cpc: a.cpc, position: a.position, reach,
   difficulty_for_you, plan_type: plan.plan_type, months: plan.months, fit, navigational, alternatives,
   cost_usd: +(Number(a.dfs_cost || 0) + CONFIG.ai_cost_usd * (plainRan ? 2 : 1)).toFixed(4),   // R3: the model is charged even when its answer could not be parsed
-  label: (reachLabel(difficulty_for_you, plan.plan_type === 'none' ? null : plan) || REACH_DIFF_LABEL[difficulty_for_you]) + (fit === null ? ' \u00b7 ' + FIT_UNKNOWN : ''), fit_known: fit !== null, stretch: plan.stretch, position_url: a.position_url,
+  label: (reachLabel(difficulty_for_you, plan.plan_type === 'none' ? null : plan) || REACH_DIFF_LABEL[difficulty_for_you]) + (topic.used ? ' \u00b7 measured on this topic' : '') + (fit === null ? ' \u00b7 ' + FIT_UNKNOWN : ''), fit_known: fit !== null, stretch: plan.stretch, position_url: a.position_url,
   chance: plan.plan_type === 'none' ? null : plan.chance, chance_text: plan.plan_type === 'none' ? '' : reachChanceText(plan), base_rate: REACH_BASE_RATE,   // G3 (2026-10-11): the estimated chance band (uncalibrated) and the 2025 base rate
-  reach_info: { method: a.reach_info.method, p75: a.reach_info.p75 ?? null, size_reach: a.reach_info.size_reach ?? null, sample: a.reach_info.sample ?? null, top10: a.reach_info.top10 ?? null, cached: !!a.reach_info.cached, cached_at: a.reach_info.cached_at || null },
+  reach_info: { method: a.reach_info.method, p75: a.reach_info.p75 ?? null, size_reach: a.reach_info.size_reach ?? null, sample: a.reach_info.sample ?? null, top10: a.reach_info.top10 ?? null, cached: !!a.reach_info.cached, cached_at: a.reach_info.cached_at || null,
+    site_reach: topic.site_reach },
+  // B1-1: which number this answer was measured against, what stands behind it, and the sentence that says so in the owner's words
+  reach_basis: topic.used ? 'topic' : 'site', topic_reach: topic.topic_reach, reach_used: reach,
+  topic_evidence: { on_topic: topic.on_topic, top10: topic.top10, sample: topic.sample, best: topic.best, examples: topic.examples, other_topics: topic.other_topics, reason: topic.reason },
+  reach_note: topic.note,
   business_source: a.business_source, warnings };
 // ---- R26 (2026-10-14, FIX_PLAN.md §3.12): an answer with no search data may not sound sure ----
 // Live on 2026-10-14 "business central partner uae" and "dynamics 365 partner uae" came back with volume, difficulty, intent and CPC
