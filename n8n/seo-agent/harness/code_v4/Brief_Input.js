@@ -182,8 +182,16 @@ const SM = (() => {
       business_facts: S(m.business_facts).slice(0, 2000), cta: S(m.cta).slice(0, 200), brand_names: (m.brand_names || []).join(', ').slice(0, 500),
       competitors: (m.competitors || []).join(', ').slice(0, 500), accreditation: S(m.accreditation).slice(0, 200), model_updated_at: S(m.model_updated_at) };
   };
+  // B4-1 / B4-2 (2026-10-15, benchmark area 4): the measurement columns belong to the row, so the kit emits them — a Data Table
+  // node auto-maps every field it is given, and a row that is short of a column is as wrong as one that carries a stray field.
+  // The model itself measures nothing: these are the defaults the Site Tracker's own judgement is written over
+  // (v5/code/Page_Inventory_Site.js), and `''` for decay_state means "never measured", never "steady".
+  const num0 = (v) => (Number(v) || 0);
   const pageRows = (model) => pages(model).map(p => ({ site_id: S((model || {}).site_id), url: S(p.url), title: S(p.title).slice(0, 300), h1: S(p.h1).slice(0, 300),
-    source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries_json: JSON.stringify(p.queries || []), updated_at: S((model || {}).model_updated_at) || new Date().toISOString() }));
+    source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries_json: JSON.stringify(p.queries || []), updated_at: S((model || {}).model_updated_at) || new Date().toISOString(),
+    clicks: num0(p.clicks), impressions: num0(p.impressions), position: num0(p.position), prev_clicks: num0(p.prev_clicks), yoy_clicks: num0(p.yoy_clicks),
+    decay_state: S(p.decay_state), decay_pct: num0(p.decay_pct), decay_lost: num0(p.decay_lost), decay_kind: S(p.decay_kind),
+    decay_basis: S(p.decay_basis).slice(0, 900), measured_at: S(p.measured_at) }));
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml } };
 })();
@@ -221,7 +229,7 @@ const ST = (() => {
   // Google's confirmed ranking updates: context for a real fall, never a cause ("correlation, not proof").
   // G12 (2026-10-13): the list is no longer written here. It is inlined from `v5/data/seo_events.json` — the one dated place to add
   // an update, shared with the chart annotations (`_annotations.js`) and with the app (`app/shared/src/seo-events.generated.ts`).
-  const UPDATES = [].concat([{"name": "March 2025 core update", "start": "2025-03-13", "end": "2025-03-27"}, {"name": "June 2025 core update", "start": "2025-06-30", "end": "2025-07-17"}, {"name": "August 2025 spam update", "start": "2025-08-26", "end": "2025-09-22"}, {"name": "December 2025 core update", "start": "2025-12-02", "end": "2025-12-18"}, {"name": "March 2026 core update", "start": "2026-03-10", "end": "2026-03-26"}, {"name": "June 2026 core update", "start": "2026-06-23", "end": "2026-07-08"}, {"name": "September 2026 core update", "start": "2026-09-15", "end": "2026-09-30"}]);
+  const UPDATES = [].concat([{"name": "March 2025 core update", "start": "2025-03-13", "end": "2025-03-26"}, {"name": "June 2025 core update", "start": "2025-06-30", "end": "2025-07-16"}, {"name": "August 2025 spam update", "start": "2025-08-26", "end": "2025-09-21"}, {"name": "December 2025 core update", "start": "2025-12-11", "end": "2025-12-29"}, {"name": "February 2026 Discover update", "start": "2026-02-05", "end": "2026-02-26"}, {"name": "March 2026 spam update", "start": "2026-03-24", "end": "2026-03-24"}, {"name": "March 2026 core update", "start": "2026-03-27", "end": "2026-04-08"}, {"name": "May 2026 core update", "start": "2026-05-21", "end": "2026-06-01"}, {"name": "June 2026 spam update", "start": "2026-06-24", "end": "2026-06-26"}, {"name": "August 2026 spam update", "start": "2026-08-18", "end": "2026-08-20"}, {"name": "September 2026 spam update", "start": "2026-09-24", "end": "2026-10-07"}]);
   const updatesIn = (range) => { const r = range || {}; const a = String(r.start || ''), b = String(r.end || '');
     if (!a || !b) return []; return UPDATES.filter(u => u.start <= b && u.end >= a); };
   const updateNote = (range) => { const hits = updatesIn(range); return hits.length ? ' A Google ' + hits.map(u => u.name + ' (' + u.start + ' to ' + u.end + ')').join(' and ') + ' ran inside this period — it may be part of the cause, which cannot be proven from these numbers.' : ''; };
@@ -256,7 +264,110 @@ const ST = (() => {
       basis: 'Search Console average position, the last 28 days against the 28 days before, on ' + impPrev + ' then ' + imp + ' impressions'
         + (measurable ? '' : ' (under ' + minImp + ' impressions in a period one search can move the average several places)') };
   };
-  return { z, band, change, position, tested, updatesIn, updateNote, UPDATES };
+  // ---- B4-1 (2026-10-15, benchmark area 4 — docs/system-review-2026-10-14/BENCH_AREA4_cadence.md): IS THIS PAGE REALLY LOSING
+  // TRAFFIC, OR ARE THESE WEEKS QUIET EVERY YEAR? Clearscope's Content Decay view compares a page's clicks over 90 days against
+  // THE SAME 90 DAYS A YEAR EARLIER and names the two figures "seasonal difference" and "seasonal growth"
+  // (https://www.clearscope.io/support/content-decay); Ahrefs tells you to flag pages down more than 20% YEAR OVER YEAR
+  // (https://ahrefs.com/blog/content-decay/). Ours compared 28 days with the 28 before and called any 25% fall on 10 earlier
+  // clicks a "decaying page" — the one window that cannot tell a decay from a seasonal dip, at a volume this file's own test
+  // rejects (10 -> 7 clicks is z = -0.73, well inside chance). decay() tests the fall first and then, when the year-ago figure
+  // was read, refuses to call a fall "decay" that the same page also had a year ago.
+  // Two falls are NOT the same thing and need different work, so they are told apart here and nowhere else: clicks down while
+  // impressions held is a click-through loss (title and snippet), clicks down WITH impressions is lost visibility (the page).
+  // o: { clicks, prev_clicks, yoy_clicks, impressions, prev_impressions, min_events, min_pct, period, yoy_period }
+  const decay = (o) => {
+    const x = o || {}; const cur = num(x.clicks), prev = num(x.prev_clicks);
+    const yoy = (x.yoy_clicks === '' || x.yoy_clicks == null) ? null : num(x.yoy_clicks);
+    const minEvents = x.min_events == null ? 40 : num(x.min_events), minPct = x.min_pct == null ? 20 : num(x.min_pct);
+    const per = String(x.period || 'the last 28 days against the 28 days before');
+    const yper = String(x.yoy_period || 'the same 28 days a year earlier');
+    const ch = change(cur, prev, { min_events: minEvents, min_pct: minPct });
+    const imps = change(num(x.impressions), num(x.prev_impressions), { min_events: minEvents * 10, min_pct: minPct });
+    const yc = yoy == null ? null : change(cur, yoy, { min_events: minEvents, min_pct: minPct });
+    const lost = Math.max(0, prev - cur);
+    const kind = ch.direction === 'down' ? ((imps.direction === 'down' && imps.significant) ? 'visibility' : 'clickthrough') : null;
+    const kindNote = kind === 'visibility' ? ' Impressions fell with the clicks (' + imps.text + '), so the page is being shown less often: this is lost visibility, not a snippet problem.'
+      : kind === 'clickthrough' ? ' Impressions held (' + imps.text + '), so the page is still being shown and fewer people click it: look at the title and the description before rewriting the page.' : '';
+    const base = (state, note) => ({ state, lost, pct: ch.pct, kind: (state === 'decaying' || state === 'watch') ? kind : null,
+      clicks: cur, prev_clicks: prev, yoy_clicks: yoy, change: ch, yoy_change: yc, impressions: imps,
+      basis: 'Search Console clicks for this page, ' + per + ' (' + prev + ' → ' + cur + ')'
+        + (yoy == null ? '; ' + yper + ' was not read, so a seasonal dip cannot be ruled out' : '; ' + yper + ': ' + yoy + ' clicks')
+        + '.' + note });
+    if (!ch.measurable) return base('too_small', ' Not enough clicks to test: ' + (cur + prev) + ' over both periods together, against the ' + minEvents + ' this test needs. No fall is claimed.');
+    if (ch.direction !== 'down') return base('steady', ' No fall to explain (' + ch.text + ').');
+    if (ch.real) {
+      if (yc && yc.measurable && yc.direction !== 'down')
+        return base('seasonal', ' But against ' + yper + ' the page is ' + yc.text + ', so these weeks are simply quieter than the ones before them every year. Not decay.'
+          + tested(yc, { source: 'Search Console', period: 'the last 28 days against ' + yper }));
+      return base('decaying', kindNote + tested(ch, { source: 'Search Console', period: per })
+        + (yc ? ' Against ' + yper + ' it is ' + yc.text + '.' : ''));
+    }
+    if (ch.watch) return base('watch', ' Large but inside 95% sampling noise (z ' + ch.z + '), so it is something to watch, not a fall.' + kindNote);
+    return base('steady', ' The fall is smaller than the ' + minPct + '% worth acting on (' + ch.text + ').');
+  };
+  // ---- B7-1 (2026-10-15, benchmark area 7 — docs/system-review-2026-10-14/BENCH_AREA7_site_tracking.md): DID THE CHANGE WORK,
+  // OR DID THE WHOLE SITE MOVE? "We published the page and its clicks are up 40%" is not a result on a site that is up 45%.
+  // SEOTesting's split test is exactly this comparison — a test group against a control group of similar pages, so that
+  // "algorithm updates or seasonal shifts" hit both sides (https://seotesting.com/features/); its group builder balances the two
+  // groups on 90 days of Search Console clicks and throws out pages more than 2 standard deviations from the mean and pages with
+  // no clicks on more than half the days (https://support.seotesting.com/en/article/split-test-group-configuration-tool-1reabjb/).
+  // The arithmetic here is CausalImpact's idea in plain form (P1, Brodersen et al. 2015, https://arxiv.org/abs/1506.00356): what
+  // the page WOULD have done had it followed the rest of the site, against what it did.
+  //     expected = prev_clicks x (control_clicks / control_prev_clicks)        <- MODELLED, never measured
+  //     d = ln(cur/prev) - ln(control_cur/control_prev),  SE = sqrt(1/cur + 1/prev + 1/cc + 1/cp)
+  //     lift = exp(d) - 1,  95% range = exp(d +- 1.96 SE) - 1,  z = d / SE
+  // The rate-ratio form carries the CONTROL group's own sampling error into the range; a ratio of two percentages does not, and
+  // that is how a quiet control group turns into a confident claim. A Google update inside the window is NOT a reason to refuse:
+  // it moves the control group too, which is the whole point of having one. Nothing here ever says a change CAUSED anything —
+  // a control group narrows the alternatives (the shared wording is CT, v5/code/_change_test.js).
+  // Five refusals, because a lift computed on nothing reads as "no effect": no clicks before, no clicks after, too few events over
+  // both periods together, fewer control pages than min_control_pages, and a control group with too little traffic to be a baseline.
+  const LIFT_LABEL = { helped: 'Likely helped', hurt: 'Likely hurt', watch: 'Possibly moved', no_difference: 'No measurable difference',
+    too_small: 'Can\'t tell yet', no_before: 'Can\'t tell', no_after: 'Can\'t tell', no_control: 'Can\'t tell' };
+  const liftMethod = 'Every change is dated and read against a control group: the page\'s own clicks before and after, divided by what '
+    + 'the site\'s OTHER pages did over the same two periods. The expected figure is modelled from that control group, not measured, and '
+    + 'the 95% range carries the control group\'s own sampling error. A Google update inside the window moves the control group too — '
+    + 'that is what the control group is for. A control group narrows the alternatives; it never proves a cause.';
+  const lift = (o) => {
+    const x = o || {};
+    const cur = num(x.clicks), prev = num(x.prev_clicks), cc = num(x.control_clicks), cp = num(x.control_prev_clicks);
+    const pagesN = Math.max(0, Math.round(num(x.control_pages)));
+    const minEvents = x.min_events == null ? 20 : num(x.min_events);
+    const minControl = x.min_control_events == null ? 40 : num(x.min_control_events);
+    const minPages = x.min_control_pages == null ? 3 : num(x.min_control_pages);
+    const minPct = x.min_pct == null ? 20 : num(x.min_pct);
+    const per = String(x.period || 'the last 28 days against the 28 days before');
+    const what = String(x.label || 'clicks');
+    const ch = change(cur, prev, { min_events: minEvents, min_pct: 0 });
+    const ctrl = change(cc, cp, { min_events: minControl, min_pct: 0 });
+    const out = (state, note, extra) => Object.assign({ state, verdict: LIFT_LABEL[state] || state,
+      clicks: cur, prev_clicks: prev, control_clicks: cc, control_prev_clicks: cp, control_pages: pagesN,
+      expected: null, lift: null, lift_pct: null, ci: null, z: null, significant: false, change: ch, control_change: ctrl,
+      basis: 'Search Console ' + what + ' for this page, ' + per + ' (' + prev + ' → ' + cur + '), against the site\'s other '
+        + pagesN + ' page' + (pagesN === 1 ? '' : 's') + ' over the same two periods (' + cp + ' → ' + cc + '). ' + note }, extra || {});
+    if (pagesN < minPages) return out('no_control', 'Fewer than ' + minPages + ' other pages of this site carried Search Console clicks, so there is no control group and no lift is claimed.');
+    if (cp < minControl) return out('no_control', 'The rest of the site carried ' + cp + ' clicks in the earlier period, under the ' + minControl + ' this comparison needs for a baseline, so no lift is claimed.');
+    if (prev <= 0) return out('no_before', 'The page had no clicks in the earlier period, so there is nothing to compare it with: this is a page new to Search Console, not an improved one.');
+    if (cur <= 0) return out('no_after', 'The page has no clicks in the current period (it had ' + prev + '), so the ratio cannot be computed. That fall is reported on its own, never as a lift.');
+    if ((cur + prev) < minEvents) return out('too_small', 'Only ' + (cur + prev) + ' clicks over both periods together, against the ' + minEvents + ' this comparison needs. No lift is claimed.');
+    const ratio = cc / cp;
+    const expected = Math.round(prev * ratio * 10) / 10;
+    const d = Math.log(cur / prev) - Math.log(ratio);
+    const se = Math.sqrt(1 / cur + 1 / prev + 1 / cc + 1 / cp);
+    const zz = Math.round((d / se) * 100) / 100;
+    const pctOf = (v) => Math.round((Math.exp(v) - 1) * 100);
+    const liftPct = pctOf(d), ci = [pctOf(d - 1.96 * se), pctOf(d + 1.96 * se)];
+    const sig = Math.abs(zz) >= 1.96;
+    const state = sig ? (d > 0 ? 'helped' : 'hurt') : (Math.abs(liftPct) >= minPct ? 'watch' : 'no_difference');
+    const rest = 'The rest of the site went ' + ctrl.text + ', so a page that had simply followed it would have about ' + expected
+      + ' clicks; this page has ' + cur + '.';
+    const size = (liftPct >= 0 ? 'up ' : 'down ') + Math.abs(liftPct) + '% against that expectation (95% range ' + ci[0] + '% to ' + ci[1] + '%, z ' + zz + ')';
+    const note = rest + ' That is ' + size + '. '
+      + (sig ? 'Outside 95% sampling noise.' : Math.abs(liftPct) >= minPct ? 'Inside 95% sampling noise, so it is something to watch and not yet a result.' : 'Inside 95% sampling noise and smaller than the ' + minPct + '% worth acting on.')
+      + ' The expected figure is modelled from the control group, not measured.';
+    return out(state, note, { expected, lift: Math.round((cur - expected) * 10) / 10, lift_pct: liftPct, ci, z: zz, significant: sig });
+  };
+  return { z, band, change, position, decay, tested, updatesIn, updateNote, UPDATES, lift, LIFT_LABEL, liftMethod };
 })();
 const r1 = (v) => Math.round((Number(v) || 0) * 10) / 10;
 return $('Site Metrics').all().map(i => { const m = i.json; const G = m.gsc, A = m.ga4;
@@ -269,7 +380,9 @@ return $('Site Metrics').all().map(i => { const m = i.json; const G = m.gsc, A =
       brand_vs_non_brand: G.brand_split ? { brand_names: G.brand_split.names, brand: { queries: G.brand_split.brand.queries, clicks: G.brand_split.brand.clicks, impressions: G.brand_split.brand.impressions }, non_brand: { queries: G.brand_split.non_brand.queries, clicks: G.brand_split.non_brand.clicks, impressions: G.brand_split.non_brand.impressions }, previous_non_brand_clicks: G.brand_split.previous.non_brand.clicks, note: G.brand_split.note } : null,
       tool_and_scraper_queries: G.scraper_queries || null, rows_read: G.rows_read ?? null, ...(((G.truncated || []).length) ? { rows_truncated: G.truncated } : {}), winners: G.winners.slice(0, 5), losers: G.losers.slice(0, 5), new_queries: G.new_queries.slice(0, 5), lost_queries: G.lost_queries.slice(0, 5),
       striking_distance: G.striking.slice(0, 8).map(q => ({ query: q.query, position: r1(q.position), impressions: q.impressions, clicks: q.clicks, page: q.page })), ctr_gaps: G.ctr_gaps.slice(0, 5).map(q => ({ query: q.query, position: r1(q.position), impressions: q.impressions, ctr: r1(q.ctr * 1000) / 10, expected_ctr: Math.round(q.expected_ctr * 100), page: q.page })),
-      top_pages: G.top_pages.slice(0, 8), decaying_pages: G.decaying_pages.slice(0, 5), rising_pages: G.rising_pages.slice(0, 5) } : { connected: false, error: G.error },
+      // B4-1: the brief gets the decay judgement with its basis, and the pages the evidence refused to call decay, so the
+      // writer cannot turn a seasonal dip into "your traffic is falling".
+      top_pages: G.top_pages.slice(0, 8), decaying_pages: G.decaying_pages.slice(0, 5), decay_not_claimed: (G.not_decay || []).slice(0, 3), decay_check: G.decay_summary || null, rising_pages: G.rising_pages.slice(0, 5) } : { connected: false, error: G.error },
     analytics: A.connected ? { organic: A.organic, all_channels: A.total, organic_share_pct: A.organic_share, channels: A.channels.slice(0, 6), organic_landing_pages: A.landing.slice(0, 8) } : { connected: false, error: A.error },
     tracked_keywords: m.tracked.map(t => ({ keyword: t.keyword, source: t.source + (t.rung ? ' rung ' + t.rung : ''), search_console_position: G.connected ? (t.gsc_position ? r1(t.gsc_position) : 'no impressions in the period') : 'Search Console not connected', previous_position: G.connected && t.gsc_prev_position ? r1(t.gsc_prev_position) : null, impressions: G.connected ? t.impressions : null, clicks: G.connected ? t.clicks : null,
       live_google_position: t.serp_position == null ? 'not checked' : t.serp_position > 0 ? t.serp_position : t.serp_position === 0 ? 'not in the top 50' : 'check failed', live_check_date: t.serp_checked_at ? String(t.serp_checked_at).slice(0, 10) : null, page: t.page || t.serp_url || null })),

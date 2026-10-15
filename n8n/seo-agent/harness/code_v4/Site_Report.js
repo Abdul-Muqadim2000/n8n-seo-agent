@@ -32,6 +32,7 @@ const LN = (() => {
     ai_engines: { label: 'the AI assistants themselves', how: 'the answers ChatGPT, Gemini, Google AI Mode and the others gave to the questions in your panel' },
     ai_db: { label: 'the DataForSEO AI-answer database', how: 'a database of AI answers and the brands they name' },
     own_check: { label: 'our own fetch of the page', how: 'we requested the page ourselves and read what came back' },
+    draft: { label: 'the finished draft itself', how: 'counted in the text this run wrote, before anybody published it' },
     crawl: { label: 'our crawl of your website', how: 'the pages we could reach and read on your site' },
     crux: { label: 'the Chrome User Experience Report', how: 'speed as real Chrome visitors experienced it over 28 days' },
     pagespeed: { label: 'Google PageSpeed Insights (Lighthouse)', how: 'one simulated mobile load in a lab, not what your visitors felt' },
@@ -80,6 +81,25 @@ const LN = (() => {
   const note = (l) => { const x = l || {}; const lbl = x.source_label || MISSING;
     return [lbl, x.period, x.sample, x.basis_label === lbl ? '' : x.basis_label, x.note].filter(Boolean).join(' · '); };
   const isHonest = (l) => !!l && (l.basis !== 'unknown' || note(l).indexOf(MISSING) >= 0);
+  // ---- the evidence half of the same rule (R10, promoted to the class by lineage_lint.py, 2026-10-15) ----
+  // A finding is a figure like any other: it may not be shown without the thing that shows it. R10 was exactly this - Google
+  // retired the Mobile Usability report, the API answered VERDICT_UNSPECIFIED for every page, and the audit raised a HIGH finding
+  // on 45 of 47 pages whose evidence string was "/:  | /whatwedo/ai-automation: " - punctuation and nothing else. So the test is
+  // not `evidence !== ''`: a string that is only separators, brackets or a bare "0" carries no evidence either.
+  const hasEvidence = (f) => {
+    const ev = S((f || {}).evidence).replace(/<[^>]*>/g, ' ');     // markup is not evidence
+    return /[A-Za-z]|[1-9]/.test(ev.replace(/[\s;|,.:·\-–—()\[\]\/]+/g, ' '));
+  };
+  // the findings that may be shown, and the titles of the ones held back. `allow` names a title that is evidence in itself
+  // (a count in the title, a note about data that could not be collected); everything else has to carry its own.
+  const unevidenced = (list, o) => { const x = o || {}; const allow = (x.allow || []).map(S);
+    return (list || []).filter(f => f && !hasEvidence(f) && allow.indexOf(S(f.title)) < 0).map(f => S(f.title || f.id || 'untitled')); };
+  const evidenced = (list, o) => { const x = o || {}; const allow = (x.allow || []).map(S);
+    const keep = (list || []).filter(f => f && (hasEvidence(f) || allow.indexOf(S(f.title)) >= 0));
+    if (typeof x.onDrop === 'function') { const d = unevidenced(list, o); if (d.length) x.onDrop(d); }
+    return keep; };
+  const evidenceNote = (dropped) => (dropped || []).length
+    ? (dropped.length + ' finding(s) were left out because nothing was measured to show them: ' + dropped.slice(0, 5).join(', ')) : '';
   const html = (l) => '<span style="color:#64748b;font-size:11px">' + esc1(note(l)) + '</span>';
   const line = (l) => '<div style="color:#64748b;font-size:11px;margin-top:2px">' + esc1(note(l)) + '</div>';
   // the block under a report: one row per figure, so no number is left without a source, a period and a sample
@@ -94,7 +114,8 @@ const LN = (() => {
         + '</td><td ' + td + '>' + esc1(l.sample || '—') + '</td><td ' + td + '>' + esc1([l.basis_label, l.note].filter(Boolean).join(' — ')) + '</td></tr>').join('')
       + '</table><p style="color:#64748b;font-size:11px;margin:4px 0">' + esc1(x.footer || 'A figure marked "' + BASIS.modelled + '" is computed, not counted; "' + MISSING + '" means the figure reached this report without its source and should be treated as unverified.') + '</p>';
   };
-  return { of, unknown, note, html, line, block, range, asOf, days, sample, isHonest, SOURCES, BASIS, MISSING };
+  return { of, unknown, note, html, line, block, range, asOf, days, sample, isHonest, hasEvidence, evidenced, unevidenced,
+    evidenceNote, SOURCES, BASIS, MISSING };
 })();
 // ---- chart annotations (G12, 2026-10-13, system review FIX_PLAN.md; CRITERIA_technical_tracking_reporting_ai_links.md 3.5 / 2.12) ----
 // A line that falls in mid-September 2025 is not a ranking problem: that is the week Google stopped serving 100 results on one page.
@@ -105,7 +126,7 @@ const LN = (() => {
 // The registry is THE one place to add a new Google update: the build inlines the same file here, into _site_stats.js and into the
 // app (app/shared/src/seo-events.generated.ts), so the engine and the dashboards mark the same dates.
 const AN = (() => {
-  const EVENTS = Object.assign({ updated: '', google_updates: [], data_breaks: [] }, {"updated": "2026-10-13", "google_updates": [{"name": "March 2025 core update", "start": "2025-03-13", "end": "2025-03-27"}, {"name": "June 2025 core update", "start": "2025-06-30", "end": "2025-07-17"}, {"name": "August 2025 spam update", "start": "2025-08-26", "end": "2025-09-22"}, {"name": "December 2025 core update", "start": "2025-12-02", "end": "2025-12-18"}, {"name": "March 2026 core update", "start": "2026-03-10", "end": "2026-03-26"}, {"name": "June 2026 core update", "start": "2026-06-23", "end": "2026-07-08"}, {"name": "September 2026 core update", "start": "2026-09-15", "end": "2026-09-30"}], "data_breaks": [{"name": "num=100 stopped working", "start": "2025-09-10", "end": "2025-09-19", "affects": ["impressions", "position"], "detail": "Google stopped serving 100 results on one page in mid-September 2025, so the SEO tools that read 100 results at a time disappeared from the counts. Impressions fell and average position improved on most sites without anything changing on the site: figures from before and after this break are not comparable."}]});
+  const EVENTS = Object.assign({ updated: '', google_updates: [], data_breaks: [] }, {"updated": "2026-10-15", "google_updates": [{"name": "March 2025 core update", "start": "2025-03-13", "end": "2025-03-26"}, {"name": "June 2025 core update", "start": "2025-06-30", "end": "2025-07-16"}, {"name": "August 2025 spam update", "start": "2025-08-26", "end": "2025-09-21"}, {"name": "December 2025 core update", "start": "2025-12-11", "end": "2025-12-29"}, {"name": "February 2026 Discover update", "start": "2026-02-05", "end": "2026-02-26"}, {"name": "March 2026 spam update", "start": "2026-03-24", "end": "2026-03-24"}, {"name": "March 2026 core update", "start": "2026-03-27", "end": "2026-04-08"}, {"name": "May 2026 core update", "start": "2026-05-21", "end": "2026-06-01"}, {"name": "June 2026 spam update", "start": "2026-06-24", "end": "2026-06-26"}, {"name": "August 2026 spam update", "start": "2026-08-18", "end": "2026-08-20"}, {"name": "September 2026 spam update", "start": "2026-09-24", "end": "2026-10-07"}], "data_breaks": [{"name": "num=100 stopped working", "start": "2025-09-10", "end": "2025-09-19", "affects": ["impressions", "position"], "detail": "Google stopped serving 100 results on one page in mid-September 2025, so the SEO tools that read 100 results at a time disappeared from the counts. Impressions fell and average position improved on most sites without anything changing on the site: figures from before and after this break are not comparable."}]});
   const KINDS = {
     publish: { label: 'Page published', tone: 'good' },
     fix: { label: 'Audit fixes', tone: 'good' },
@@ -243,6 +264,22 @@ return metrics.map((m, i) => {
     + BRK.map(b => '<li>' + esc(b.name) + ' (' + esc(b.start) + ' to ' + esc(b.end) + '): ' + esc(b.detail) + '</li>').join('') + '</ul></div>';
   if (MK.length) html += h3('What happened in this period') + AN.html(MK, { empty: false })
     + '<p style="font-size:12px;color:#64748b">Every chart in your dashboard is marked with these dates. A Google update inside the period may be part of the cause of a move, which cannot be proven from these numbers.</p>';
+  // B7-1 (2026-10-15, benchmark area 7): did the change work, or did the whole site move? Every dated change, read over its OWN
+  // 28 days after against the 28 before, against the control group of the site's other pages over exactly the same days. A change
+  // that could not be read keeps its row with the reason — a shorter list would read as "nothing was tried".
+  const CTST = m.change_tests || null;
+  if (CTST && (CTST.tests || []).length) {
+    html += h3('Did it work? Your changes against the rest of the site')
+      + table(['Page', 'What changed', 'Clicks before → after', 'The rest of the site expected', 'Verdict', 'Position'],
+        CTST.tests.slice(0, 6).map(t => [link(t.url) + (t.keyword ? '<br><span style="color:#64748b;font-size:11px">' + esc(t.keyword) + '</span>' : ''),
+          esc(t.what || 'changed') + ' ' + esc(t.date), t.read ? n(t.prev_clicks) + ' → ' + n(t.clicks) : '—',
+          t.read && t.expected != null ? n(t.expected) + (t.lift_pct == null ? '' : ' <span style="color:#64748b">(' + (t.lift_pct >= 0 ? '+' : '') + t.lift_pct + '% vs expected)</span>') : '—',
+          '<b>' + esc(t.verdict) + '</b>', t.read && t.position_verdict ? esc(t.position_verdict) : '—']))
+      + '<ul style="font-size:12px;color:#475569;margin:4px 0;padding-left:18px">'
+      + CTST.tests.slice(0, 6).map(t => '<li>' + esc(t.url) + ': ' + esc(t.basis || '') + '</li>').join('') + '</ul>'
+      + '<p style="font-size:12px;color:#64748b">' + esc(CTST.method) + '</p>';
+  } else if (CTST && CTST.reason) html += h3('Did it work? Your changes against the rest of the site')
+    + '<p style="font-size:13px;color:#b45309">' + esc(CTST.reason) + '</p>';
   const acts = (b && Array.isArray(b.actions) && b.actions.length) ? b.actions.slice(0, 6).map(a => ({ action: a.action, why: a.why, keyword: a.keyword, url: a.url })) : m.actions.slice(0, 6);
   const withBody = m.actions.filter(a => a.api_body);
   html += h3('Do this week') + (acts.length ? '<ol style="margin:4px 0;padding-left:20px;font-size:14px">' + acts.map(a => '<li style="margin:4px 0"><b>' + esc(a.action) + '</b>' + (a.why ? '<br><span style="color:#475569;font-size:13px">' + esc(a.why) + '</span>' : '') + '</li>').join('') + '</ol>' : '<p style="font-size:13px;color:#64748b">Nothing urgent this week.</p>');
@@ -260,6 +297,10 @@ return metrics.map((m, i) => {
   }
   if (m.tracked.length) html += h3('Tracked keywords') + table(['Keyword', 'Source', 'Search Console avg', 'Before', 'Live Google check', 'Clicks', 'Impr.', 'Ranking page'], m.tracked.map(t => [esc(t.keyword), esc(t.source === 'ladder' ? (t.rung === 4 ? 'ladder top' : 'ladder rung ' + t.rung) : t.source === 'blog' ? 'blog page' : 'your list'),
     G.connected ? posS(t.gsc_position) : '<span style="color:#94a3b8">connect GSC</span>', G.connected ? posS(t.gsc_prev_position) : '—', t.serp_position == null ? '—' : (t.serp_position > 0 ? '#' + t.serp_position : t.serp_position === 0 ? 'not in top 50' : 'check failed') + (t.serp_checked_at ? '<br><span style="color:#94a3b8;font-size:11px">' + esc(String(t.serp_checked_at).slice(0, 10)) + '</span>' : ''), n(t.clicks), n(t.impressions), link(t.page || t.serp_url)]));
+  // B-G3 (2026-10-15, INVARIANTS rule 1 + 2): a rung the read-path fit gate set aside bought no rank check and is not in the table
+  // above — so it is named here, with its reason, rather than leaving a shorter list nobody can explain.
+  if ((m.set_aside || []).length) html += '<p style="margin:2px 0 8px;font-size:12px;color:#b45309"><b>Set aside</b> (planned before the keyword rule existed): '
+    + m.set_aside.map(x => esc(x.note || (x.keyword + ' — ' + x.detail))).join(' | ') + '</p>';
   const linLine = (re) => { const l = linOf(re); return l ? '<p style="margin:2px 0 8px;font-size:11px;color:#64748b">' + esc(LN.note(l)) + '</p>' : ''; };
   if (m.tracked.length) html += linLine(/^Live Google check/) || linLine(/^Clicks, impressions/);
   const C = m.console || { notices: [], last_checkin: null, checkin_due: false };
@@ -283,12 +324,39 @@ return metrics.map((m, i) => {
       (AN ? 'Queries Google does not name (rare searches, withheld for privacy): ' + n(AN.clicks) + ' clicks and ' + n(AN.impressions) + ' impressions, ' + AN.impressions_pct + '% of all impressions.' : '') +
       (G.scraper_queries && G.scraper_queries.count ? '<br>' + n(G.scraper_queries.count) + ' queries came from SEO tools or scrapers (search operators) and are left out of every list above: ' + esc((G.scraper_queries.sample || []).join(', ')) + '.' : '') +
       ((G.truncated || []).length ? '<br><span style="color:#b45309">Search Console returned more rows than this run read (' + esc(G.truncated.join(', ')) + '): the figures below cover the ' + n(G.rows_read) + ' rows read.</span>' : '') + '</p>';
+    // B7-2 (2026-10-15, benchmark area 7): the device and the country, free and first-party. A split Google did not answer prints
+    // its reason — an empty table would read as "no phone traffic" (INVARIANTS rule 1).
+    const DV = G.devices || null, CO = G.countries || null;
+    const DVL = { DESKTOP: 'Desktop', MOBILE: 'Phones', TABLET: 'Tablets' };
+    if (DV) html += h3('Where your visitors searched from') + (DV.read
+      ? table(['Device', 'Clicks', 'Change', 'Share of clicks', 'Impressions', 'Position'],
+          DV.rows.map(d => [esc(DVL[d.key] || d.key), n(d.clicks), deltaS(d.clicks, d.prev_clicks), d.share + '%', n(d.impressions), posS(d.position)]), 'no device rows came back')
+      : '<p style="font-size:13px;color:#b45309">' + esc(DV.reason) + '.</p>');
+    if (CO && CO.read && CO.rows.length) html += table(['Country', 'Clicks', 'Change', 'Share of clicks', 'Impressions', 'Position'],
+      CO.rows.slice(0, 6).map(c => [esc(String(c.key).toUpperCase()), n(c.clicks), deltaS(c.clicks, c.prev_clicks), c.share + '%', n(c.impressions), posS(c.position)]));
+    else if (CO && !CO.read) html += '<p style="font-size:13px;color:#b45309">' + esc(CO.reason) + '.</p>';
+    // B7-3: two of your own pages shown for one search — observed by Google, never inferred
+    const CB = G.cannibal || [];
+    if (CB.length) html += h3('Searches two of your pages compete for')
+      + table(['Search', 'Impressions', 'Your pages', 'Google shows most often'],
+        CB.slice(0, 6).map(c => [esc(c.query), n(c.impressions), c.pages.map(p => link(p.page) + ' <span style="color:#64748b">' + p.share + '% at #' + p.position + '</span>').join('<br>'),
+          link(c.preferred) + (c.split ? '<br><span style="color:#b45309;font-size:11px">but ' + esc(c.best.page) + ' ranks better when it is shown</span>' : '')]))
+      + '<p style="font-size:12px;color:#64748b">' + esc((G.cannibal_summary || {}).note || '') + '</p>';
     html += h3('Quick wins: striking distance (positions 4-20)') + table(['Query', 'Position', 'Before', 'Impressions', 'Clicks', 'Page'], G.striking.slice(0, 10).map(q => [esc(q.query), posS(q.position), posS(q.prev_position), n(q.impressions), n(q.clicks), link(q.page)]), 'no query between positions 4 and 20 with enough impressions yet');
     if (G.ctr_gaps.length) html += h3('Low click-through for the position (rewrite titles)') + table(['Query', 'Position', 'Impressions', 'CTR', 'Expected', 'Page'], G.ctr_gaps.slice(0, 6).map(q => [esc(q.query), posS(q.position), n(q.impressions), (q.ctr * 100).toFixed(1) + '%', Math.round(q.expected_ctr * 100) + '%', link(q.page)]));
     html += h3('Query movers') + '<table style="border-collapse:collapse;width:100%"><tr><td style="vertical-align:top;padding-right:8px;width:50%"><b style="font-size:13px;color:#15803d">Winners</b>' + table(['Query', 'Clicks', 'Position'], G.winners.slice(0, 6).map(q => [esc(q.query), n(q.clicks) + ' (' + deltaS(q.clicks, q.prev_clicks) + ')', posS(q.position) + (q.prev_position ? ' <span style="color:#94a3b8">was ' + posS(q.prev_position) + '</span>' : '')]), 'no clear winners') + '</td><td style="vertical-align:top;width:50%"><b style="font-size:13px;color:#b91c1c">Losers</b>' + table(['Query', 'Clicks', 'Position'], G.losers.slice(0, 6).map(q => [esc(q.query), n(q.clicks) + ' (' + deltaS(q.clicks, q.prev_clicks) + ')', posS(q.position) + (q.prev_position ? ' <span style="color:#94a3b8">was ' + posS(q.prev_position) + '</span>' : '')]), 'no clear losers') + '</td></tr></table>';
     if (G.new_queries.length || G.lost_queries.length) html += '<p style="font-size:13px"><b>New queries:</b> ' + (G.new_queries.slice(0, 8).map(q => esc(q.query) + ' (' + n(q.impressions) + ' impr.)').join(', ') || 'none') + '<br><b>Lost queries:</b> ' + (G.lost_queries.slice(0, 8).map(q => esc(q.query) + ' (' + n(q.prev_clicks) + ' clicks before)').join(', ') || 'none') + '</p>';
     html += h3('Pages') + table(['Page', 'Clicks', 'Change', 'Impressions', 'Position'], G.top_pages.slice(0, 8).map(p => [link(p.page), n(p.clicks), deltaS(p.clicks, p.prev_clicks), n(p.impressions), posS(p.position)]));
-    if (G.decaying_pages.length) html += '<p style="font-size:13px"><b style="color:#b91c1c">Decaying pages:</b> ' + G.decaying_pages.slice(0, 5).map(p => esc(path(p.page)) + ' (' + n(p.prev_clicks) + ' → ' + n(p.clicks) + ' clicks)').join('; ') + '</p>';
+    // B4-1 (2026-10-15, benchmark area 4): every page with clicks is tested against the 28 days before AND the same 28 days a
+    // year earlier, so this list is what really decayed — and the line underneath names what was checked and refused, because a
+    // report that only prints its hits cannot be told apart from one that found nothing.
+    if (G.decaying_pages.length) html += '<p style="font-size:13px"><b style="color:#b91c1c">Pages losing traffic:</b> ' + G.decaying_pages.slice(0, 5).map(p => esc(path(p.page)) + ' (' + n(p.prev_clicks) + ' → ' + n(p.clicks) + ' clicks, −' + n(p.lost) + (p.kind === 'clickthrough' ? ', still shown as often: title and description first' : '') + ')').join('; ') + '</p>';
+    if (G.decay_summary && G.decay_summary.tested) { const ds = G.decay_summary;
+      html += '<p style="font-size:12px;color:#64748b">Decay check: ' + n(ds.tested) + ' pages tested, <b>' + n(ds.decaying) + '</b> really losing traffic'
+        + (ds.seasonal ? ', ' + n(ds.seasonal) + ' down only against the weeks before and not against a year ago (seasonal)' : '')
+        + (ds.watch ? ', ' + n(ds.watch) + ' large but inside sampling noise' : '')
+        + (ds.too_small ? ', ' + n(ds.too_small) + ' with too few clicks to test (under ' + n(ds.min_click_events) + ' over both periods)' : '')
+        + '. ' + esc(ds.note) + '</p>'; }
   }
   if (A.connected) html += h3('Traffic (GA4, organic search)') + '<p style="font-size:13px">Organic: <b>' + n(A.organic.cur.sessions) + '</b> sessions (' + pctS(pct(A.organic.cur.sessions, A.organic.prev.sessions)) + '), ' + n(A.organic.cur.engaged) + ' engaged, ' + n(A.organic.cur.key_events) + ' key events, ' + n(A.organic.cur.users) + ' users · all channels: ' + n(A.total.cur.sessions) + ' sessions' + (A.channels.length ? ' (' + A.channels.slice(0, 4).map(c => esc(c.channel) + ' ' + n(c.sessions)).join(', ') + ')' : '') + (A.detected ? ' · property ' + esc(A.property_id) + ' detected automatically' : '') + '</p>' + table(['Landing page', 'Organic sessions', 'Change', 'Engaged', 'Key events'], A.landing.slice(0, 8).map(l => [link(l.page), n(l.sessions), deltaS(l.sessions, l.prev_sessions), n(l.engaged), n(l.key_events)]));
   if (m.trends.length) html += h3('Search interest (Google Trends, 12 months)') + table(['Keyword', 'Direction', 'Last 4 weeks vs average', 'Peak', 'Rising related searches'], m.trends.map(t => [esc(t.keyword), t.error ? '<span style="color:#94a3b8">' + esc(t.error) + '</span>' : t.direction === 'sparse' ? '<span style="color:#94a3b8">too little search volume for a trend</span>' : esc(t.direction), (t.change_pct == null || t.direction === 'sparse') ? '—' : (t.change_pct > 0 ? '+' : '') + t.change_pct + '%', esc(t.peak_date ? String(t.peak_date).slice(0, 7) : '—'), esc((t.rising || []).slice(0, 4).map(r => r.query + ' (' + r.value + ')').join(', ') || '—')]));

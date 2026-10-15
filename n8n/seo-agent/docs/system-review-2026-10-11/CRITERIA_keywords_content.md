@@ -1,5 +1,13 @@
 # Scoring criteria: keywords and content (2026-10-11)
 
+> **One criterion was re-baselined after this file was frozen.** On 2026-10-15 the owner agreed to move **K7** from "≥ 3–4 shared
+> top-10 URLs" to "≥ 40% shared top-7 URLs", because Keyword Insights — the source of the shared-URL convention this criterion
+> cites — now compares the top 7, "because Google no longer reliably shows 10 traditional links"
+> ([docs.keywordinsights.ai](https://docs.keywordinsights.ai/learning-center/the-features/keyword-clustering/), read 2026-10-15,
+> evidence in `../system-review-2026-10-14/BENCH_AREA2_ladders.md`). The old statement is kept in the row. Nothing else in this
+> file has changed since it was frozen on 2026-10-11, and the 5 → 6 → 8 comparison holds for every other criterion.
+
+
 Scope: (1) keyword research, difficulty, "should I target this" verdicts, ladders / topic clusters; (2) AI-assisted content, on-page SEO, cadence.
 
 **Evidence tags:** **[G]** Google statement or documentation · **[L]** large study (100k+ pages or a clickstream panel) · **[V]** vendor study or claim · **[A]** anecdote or single case · **[U]** unverified (only a secondary source was seen). Correlations are not causes. "Product today" summarises the product's own docs (LADDER / PIPELINE specs, REVIEW §3b–3k, `v5/prompts`, `Content_QA.js`). It is not a score.
@@ -51,7 +59,7 @@ Scope: (1) keyword research, difficulty, "should I target this" verdicts, ladder
 | K4 | **Intent and page type from the live SERP** | 0 guess · 5 API label · 10 the dominant top-10 page type decides, a mismatch is flagged | Ahrefs "pick intent"; Semrush SERP summary | Claude labels; a live SERP only for the 8 priority keywords |
 | K5 | **Business-fit gate** | 0 none · 5 AI relevance tag · 10 a scored business value gates the verdict; navigational / other-brand terms refused | Google focus; HubSpot | Relevance and fit scored 0–2; navigational / other-brand refused |
 | K6 | **Sources incl. first-party data** | 0 one seed list · 5 several sources + competitors · 10 + Search Console striking distance / impressions with no page, + AI prompt demand, fed into discovery | Search Console = ground truth | 7 pulls + competitors + AI demand; Search Console only in the cadence (roadmap 10) |
-| K7 | **Clustering by SERP overlap** | 0 none · 5 token / LLM labels · 10 ≥ 3–4 shared top-10 URLs + intent | Convention [V] | Token / AI labels; SERP overlap on the roadmap |
+| K7 | **Clustering by SERP overlap** | 0 none · 5 token / LLM labels · 10 ≥ 40% shared **top-7** URLs + intent | Convention [V] | Token / AI labels; SERP overlap on the roadmap · **re-baselined 2026-10-15 on the owner's decision (B2-6)** — old statement: "≥ 3–4 shared top-10 URLs" |
 | K8 | **Cannibalisation guard** | 0 none · 5 keyword text similarity · 10 SERP overlap + Search Console "two URLs for one query", across ladders, pages and queue | Site diversity [G] | Jaccard ≥ 0.75; sitemap / ranking-URL match; one-character numbers drop out |
 | K9 | **Verdict quality** | 0 a score · 5 go / no-go + reasons · 10 + plan, visits and months as ranges, cost, alternatives, reasons traceable to data | — | Verdict, plan type, months, alternatives, "Why this plan" |
 | K10 | **Calibrated timelines** | 0 promises · 5 month ranges · 10 probabilities per plan type, re-fit from the product's own tracked outcomes | 1.74% / 40.8% | 2–4 / 4–8 / 9–15 months; 2017 citation; no calibration |

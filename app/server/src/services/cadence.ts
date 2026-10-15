@@ -28,7 +28,11 @@ import {
 //   week. A keyword waits when a content-log row of the last 120 days has any status but published (every content run writes one:
 //   the ladder's page runs, the app's "Write now", the cadence), or a ladder row is still 'writing' and its keyword has no
 //   published page;
-// - opportunity posts (Search Console striking distance, then rising Google Trends searches) only when opportunities is Auto;
+// - v4.16 (B4-3, benchmark area 4): a page the Site Tracker's decay test confirmed is losing traffic (seo_pages.decay_state ===
+//   'decaying') is queued as a REFRESH ahead of striking distance and rising trends, ranked by the clicks actually lost, at most
+//   CADENCE.decayPerWeek a week, and never if that page was refreshed in the last CADENCE.decayRefreshDays days. 'seasonal',
+//   'watch' and 'too_small' are never written — a quiet month is not a reason to rewrite a page;
+// - opportunity posts (the refreshes above, then Search Console striking distance, then rising Google Trends searches) only when opportunities is Auto;
 //   when Manual they are suggestions (the first 5);
 // - Manual ladders are never written: each one's next eligible page waits for approval;
 // - skips keywords written in the last 90 days (or published), ladder rows marked writing / published, brand queries;
@@ -51,6 +55,9 @@ export const CADENCE = {
   wonChecks: 4,
   wonPosition: 3,
   suggestions: 5,
+  /** v4.16 (B4-3): refreshes of decaying pages offered in one week, and the days a page is left to settle after any refresh */
+  decayPerWeek: 2,
+  decayRefreshDays: 60,
   /** queue entries shown after the coming run's picks (n8n reports 4 as `upcoming`; the app shows a few more) */
   later: 8,
 } as const;
@@ -255,8 +262,53 @@ export function planCadence(input: CadenceInput, now: number): CadencePlan {
   const cands: QueueItem[] = [];
   for (const x of active) for (const l of x.eligible) cands.push(ladderItem(l));
 
-  // ---- opportunity posts: striking distance (Search Console), then rising searches (Google Trends) ----
+  // ---- opportunity posts: refreshes of pages losing traffic, then striking distance, then rising searches ----
   const opps: QueueItem[] = [];
+  // B4-3 (2026-10-15, benchmark area 4): the mirror of Cadence_Plan.js's decay block. A page the Site Tracker's test confirmed is
+  // losing traffic (seo_pages.decay_state === 'decaying') is refreshed ahead of a striking-distance query or a rising trend:
+  // recovering clicks the page already earned beats guessing at new ones. `seasonal`, `watch` and `too_small` are never written.
+  const pageKey = (u: unknown) => String(u || '').toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  /** the search a page is refreshed FOR: the query it gets the most impressions for. No query = reported, never written blind. */
+  const topQueryOfPage = (p: SitePageRow): { query: string; impressions: number } | null => {
+    let best: { query: string; impressions: number } | null = null;
+    try {
+      const qs: unknown = JSON.parse(String(p.queries_json || '[]'));
+      for (const q of Array.isArray(qs) ? qs : []) {
+        const row = q as { query?: unknown; impressions?: unknown };
+        const query = String(row.query || '').trim();
+        if (!query) continue;
+        const impressions = num(row.impressions);
+        if (!best || impressions > best.impressions) best = { query, impressions };
+      }
+    } catch {
+      return null;
+    }
+    return best;
+  };
+  const touchedRecently = new Set(
+    logs.filter((l) => l.existing_page_url && now - ms(l.started_at) < CADENCE.decayRefreshDays * 864e5).map((l) => pageKey(l.existing_page_url)),
+  );
+  const decayRows = (input.pages ?? [])
+    .filter((p) => p && p.url && String(p.decay_state || '') === 'decaying')
+    .map((p) => ({ row: p, q: topQueryOfPage(p), lost: num(p.decay_lost) }))
+    .filter((x) => !!x.q);
+  const decayCands = decayRows
+    .filter((x) => !touchedRecently.has(pageKey(x.row.url)) && !recent.has(norm(x.q!.query)) && !ladderKw.has(norm(x.q!.query)))
+    .sort((a, b) => b.lost - a.lost)
+    .slice(0, CADENCE.decayPerWeek);
+  for (const x of decayCands)
+    opps.push({
+      keyword: x.q!.query,
+      source: 'decay',
+      why: `This page is losing traffic: ${x.lost} clicks lost in 28 days (${num(x.row.prev_clicks)} → ${num(x.row.clicks)})${
+        String(x.row.decay_kind || '') === 'clickthrough' ? ', and it is still shown as often, so the title and description come first' : ''
+      } — refreshed, not written again.`,
+      pageType: 'Guide',
+      existingPageUrl: x.row.url,
+      ladder: null,
+      decayLost: x.lost,
+    });
+  const decayUrls = new Set(decayCands.map((x) => pageKey(x.row.url)));
   const sq = input.queries.filter((q) => q && q.query);
   const latest = sq.reduce((m, q) => (String(q.period_end) > m ? String(q.period_end) : m), '');
   const brand = input.domain.split('.')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -272,7 +324,8 @@ export function planCadence(input: CadenceInput, now: number): CadencePlan {
         !ladderKw.has(norm(q.query)),
     )
     .sort((a, b) => Number(b.impressions) - Number(a.impressions));
-  for (const q of strikes)
+  for (const q of strikes) {
+    if (q.page && decayUrls.has(pageKey(q.page))) continue; // B4-3: one page, one piece of work
     opps.push({
       keyword: q.query,
       source: 'striking',
@@ -281,6 +334,7 @@ export function planCadence(input: CadenceInput, now: number): CadencePlan {
       existingPageUrl: q.page || '',
       ladder: null,
     });
+  }
   const rising = input.trends.filter((t) => t && t.direction === 'rising' && t.rising);
   const latestT = rising.reduce((m, t) => (String(t.checked_at) > m ? String(t.checked_at) : m), '');
   for (const t of rising.filter((x) => String(x.checked_at) === latestT))

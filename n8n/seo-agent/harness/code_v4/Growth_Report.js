@@ -46,6 +46,7 @@ const LN = (() => {
     ai_engines: { label: 'the AI assistants themselves', how: 'the answers ChatGPT, Gemini, Google AI Mode and the others gave to the questions in your panel' },
     ai_db: { label: 'the DataForSEO AI-answer database', how: 'a database of AI answers and the brands they name' },
     own_check: { label: 'our own fetch of the page', how: 'we requested the page ourselves and read what came back' },
+    draft: { label: 'the finished draft itself', how: 'counted in the text this run wrote, before anybody published it' },
     crawl: { label: 'our crawl of your website', how: 'the pages we could reach and read on your site' },
     crux: { label: 'the Chrome User Experience Report', how: 'speed as real Chrome visitors experienced it over 28 days' },
     pagespeed: { label: 'Google PageSpeed Insights (Lighthouse)', how: 'one simulated mobile load in a lab, not what your visitors felt' },
@@ -94,6 +95,25 @@ const LN = (() => {
   const note = (l) => { const x = l || {}; const lbl = x.source_label || MISSING;
     return [lbl, x.period, x.sample, x.basis_label === lbl ? '' : x.basis_label, x.note].filter(Boolean).join(' · '); };
   const isHonest = (l) => !!l && (l.basis !== 'unknown' || note(l).indexOf(MISSING) >= 0);
+  // ---- the evidence half of the same rule (R10, promoted to the class by lineage_lint.py, 2026-10-15) ----
+  // A finding is a figure like any other: it may not be shown without the thing that shows it. R10 was exactly this - Google
+  // retired the Mobile Usability report, the API answered VERDICT_UNSPECIFIED for every page, and the audit raised a HIGH finding
+  // on 45 of 47 pages whose evidence string was "/:  | /whatwedo/ai-automation: " - punctuation and nothing else. So the test is
+  // not `evidence !== ''`: a string that is only separators, brackets or a bare "0" carries no evidence either.
+  const hasEvidence = (f) => {
+    const ev = S((f || {}).evidence).replace(/<[^>]*>/g, ' ');     // markup is not evidence
+    return /[A-Za-z]|[1-9]/.test(ev.replace(/[\s;|,.:·\-–—()\[\]\/]+/g, ' '));
+  };
+  // the findings that may be shown, and the titles of the ones held back. `allow` names a title that is evidence in itself
+  // (a count in the title, a note about data that could not be collected); everything else has to carry its own.
+  const unevidenced = (list, o) => { const x = o || {}; const allow = (x.allow || []).map(S);
+    return (list || []).filter(f => f && !hasEvidence(f) && allow.indexOf(S(f.title)) < 0).map(f => S(f.title || f.id || 'untitled')); };
+  const evidenced = (list, o) => { const x = o || {}; const allow = (x.allow || []).map(S);
+    const keep = (list || []).filter(f => f && (hasEvidence(f) || allow.indexOf(S(f.title)) >= 0));
+    if (typeof x.onDrop === 'function') { const d = unevidenced(list, o); if (d.length) x.onDrop(d); }
+    return keep; };
+  const evidenceNote = (dropped) => (dropped || []).length
+    ? (dropped.length + ' finding(s) were left out because nothing was measured to show them: ' + dropped.slice(0, 5).join(', ')) : '';
   const html = (l) => '<span style="color:#64748b;font-size:11px">' + esc1(note(l)) + '</span>';
   const line = (l) => '<div style="color:#64748b;font-size:11px;margin-top:2px">' + esc1(note(l)) + '</div>';
   // the block under a report: one row per figure, so no number is left without a source, a period and a sample
@@ -108,15 +128,25 @@ const LN = (() => {
         + '</td><td ' + td + '>' + esc1(l.sample || '—') + '</td><td ' + td + '>' + esc1([l.basis_label, l.note].filter(Boolean).join(' — ')) + '</td></tr>').join('')
       + '</table><p style="color:#64748b;font-size:11px;margin:4px 0">' + esc1(x.footer || 'A figure marked "' + BASIS.modelled + '" is computed, not counted; "' + MISSING + '" means the figure reached this report without its source and should be treated as unverified.') + '</p>';
   };
-  return { of, unknown, note, html, line, block, range, asOf, days, sample, isHonest, SOURCES, BASIS, MISSING };
+  return { of, unknown, note, html, line, block, range, asOf, days, sample, isHonest, hasEvidence, evidenced, unevidenced,
+    evidenceNote, SOURCES, BASIS, MISSING };
 })();
 const KIND = { list: '"Best of" list', article: 'Article', news: 'News', review: 'Review site', forum: 'Forum thread', video: 'Video', social: 'Social post', official: 'Official list', encyclopedia: 'Encyclopedia', competitor: 'Competitor page' };
 // reads Growth Metrics explicitly: the node before it saves a Data Table row and outputs that row, not the summary
 return $('Growth Metrics').all().map(i => i.json).filter(m => !m.skip).map(m => {
   const B = m.submitted.bing, X = m.submitted.indexnow;
-  const done = [B.submitted ? n(B.submitted) + ' page(s) sent to Bing (ChatGPT search, Copilot)' : (B.enabled ? (B.in_account ? (B.error ? 'Bing submission failed: ' + esc(B.error) : 'nothing new to send to Bing') : 'not sent to Bing: the site is not in the Bing Webmaster account') : 'Bing submission is off (no Bing Webmaster key)'),
-    X.verified ? (X.submitted ? n(X.submitted) + ' page(s) sent through IndexNow' : 'IndexNow ready (nothing new to send)') : 'IndexNow waits for its key file',
-    n(m.pages.filter(p => p.status).length) + ' key page(s) checked for AI readiness' + (m.avg_score != null ? ' (average ' + m.avg_score + '/100' + (m.previous_avg_score != null ? ', was ' + m.previous_avg_score : '') + ')' : ''),
+  // B9-1 (2026-10-15, benchmark area 9): what a submission actually reaches, said the way the sources say it. Bing's index is read
+  // by Bing and Microsoft Copilot; OpenAI documents OAI-SearchBot, not Bing, as what surfaces pages in ChatGPT search; and
+  // IndexNow's own FAQ states that submitting "does not guarantee immediate indexing". Sent is sent — never "indexed".
+  const O = m.outcome || {};
+  const done = [B.submitted ? n(B.submitted) + ' page(s) sent to Bing — the index Bing and Microsoft Copilot answer from (a submission is a notification, not indexing)' : (B.enabled ? (B.in_account ? (B.error ? 'Bing submission failed: ' + esc(B.error) : 'nothing new to send to Bing') : 'not sent to Bing: the site is not in the Bing Webmaster account') : 'Bing submission is off (no Bing Webmaster key)'),
+    X.verified ? (X.submitted ? n(X.submitted) + ' page(s) notified through IndexNow (Bing, Yandex, Naver, Seznam, Yep — Google does not take part)' : 'IndexNow ready (nothing new to send)') : 'IndexNow waits for its key file',
+    // B9-2 (INVARIANTS rule 4): a page sent is not a page crawled, so the run says what became of the ones sent before
+    O.basis === 'measured' ? 'Of ' + n(O.submitted) + ' page(s) sent in the last ' + O.window_days + ' days, <b>' + n(O.crawled) + ' have since been crawled by Bing</b> and ' + n(O.submitted - O.crawled) + ' not yet'
+      + (O.not_checked ? ' (' + n(O.not_checked) + ' of them not asked about this run)' : '') + ' — measured from Bing Webmaster Tools, not from the fact that we sent them'
+      : O.basis === 'not available' ? 'What became of earlier submissions: not available — ' + esc(O.reason || '') : 'Nothing had been sent before this run, so there is nothing to follow up yet',
+    n(m.pages.filter(p => p.status).length) + ' key page(s) checked for AI readiness' + (m.avg_score != null ? ' (average ' + m.avg_score + '/100' + (m.previous_avg_score != null ? ', was ' + m.previous_avg_score : '') + ')' : '')
+      + (m.withheld_scores ? ', ' + n(m.withheld_scores) + ' not scored: robots.txt lets no AI search fetcher read them' : ''),
     n(m.earned.length) + ' page(s) AI cites without naming you' + (m.drafts_written ? ', ' + n(m.drafts_written) + ' outreach draft(s) written' : (m.handed_over ? ', ' + n(m.handed_over) + ' handed to the Link Builder (one writer): approve the pitches on the Link building page' : '')),   // P34-1: only the drafts THIS run wrote are counted; the stored ones of earlier runs are not this week's work
     n(m.targets.filter(t => t.status === 'queued').length) + ' question(s) queued for an AI answer page or refresh' + (m.ai_pages_month > 0 ? ' (' + m.ai_pages_month + ' a month, written by the Monday content run)' : ' (AI pages are off)')];
   let html = '<div style="font-family:Arial,Helvetica,sans-serif;max-width:860px;color:#0f172a">';
@@ -125,16 +155,33 @@ return $('Growth Metrics').all().map(i => i.json).filter(m => !m.skip).map(m => 
   if (m.alerts.some(a => a.level === 'good')) html += '<div style="background:#f0fdf4;border-left:4px solid #15803d;padding:8px 12px;margin:8px 0">' + m.alerts.filter(a => a.level === 'good').map(a => '<div style="font-size:13px">✓ ' + esc(a.text) + '</div>').join('') + '</div>';
   html += h3('Done for you this week') + '<ul style="font-size:13px;margin:4px 0 8px 18px;padding:0">' + done.map(d => '<li>' + d + '</li>').join('') + '</ul>';
   html += h3('What to do next') + table(['', 'Action', 'Why'], m.actions.map(a => [a.priority === 1 ? 'High' : a.priority === 2 ? 'Medium' : 'Low', esc(a.action) + (a.draft ? '<div style="margin-top:4px;padding:6px;background:#f8fafc;font-size:12px;white-space:pre-wrap">' + (a.draft.subject ? '<b>' + esc(a.draft.subject) + '</b>\n' : '') + esc(a.draft.body) + '</div>' : ''), esc(a.why)]), 'nothing to do this week');
+  // B-G2 (2026-10-15, INVARIANTS rule 1 + 2): a stored rung the read-path fit gate set aside became no question and no page — named
+  // here with its reason, because "we are not writing a page about X because it is a competitor's brand" is the better answer.
+  if ((m.set_aside || []).length) html += '<p style="margin:4px 0 8px;font-size:12px;color:#b45309"><b>Set aside</b> (planned before the keyword rule existed, no question and no page): '
+    + m.set_aside.map(x => esc(x.note || (x.keyword + ' — ' + x.detail))).join(' | ') + '</p>';
   html += h3('Pages AI cites without naming you (earned media)') + table(['Page', 'Kind', 'Cited', 'Names', 'Next step'], m.earned.slice(0, 12).map(e => [link(e.url, e.title || e.host), esc(KIND[e.kind] || e.kind), n(e.citations) + 'x · ' + esc(e.engines.join(', ')),
     e.mentions_us === true ? '<b style="color:#15803d">you</b>' : esc(e.competitors_named.join(', ') || (e.mentions_us === false ? 'not you' : '—')), esc(e.action)]), 'no third-party pages cited this week');
-  html += h3('Key pages: can AI read and quote them?') + table(['Page', 'Score', 'Updated', 'Bing', 'Fix first'], m.pages.slice().sort((a, b) => a.score - b.score).map(p => [link(p.url), p.status ? '<b>' + p.score + '</b>/100' : 'error ' + (p.status || ''), esc(p.updated_on || 'no date'),
+  // B9-3: a withheld score says why instead of printing a number nothing supports; the blocked pages sort to the top
+  html += h3('Key pages: can AI read and quote them?') + table(['Page', 'Score', 'Updated', 'Bing', 'Fix first'], m.pages.slice().sort((a, b) => (a.score == null ? -1 : a.score) - (b.score == null ? -1 : b.score)).map(p => [link(p.url),
+    p.score == null && p.score_withheld ? '<b style="color:#b91c1c">not scored</b><div style="font-size:11px;color:#64748b">' + esc(p.score_withheld) + '</div>' : p.status ? '<b>' + p.score + '</b>/100' : 'error ' + (p.status || ''), esc(p.updated_on || 'no date'),
     p.bing_crawled_at ? 'crawled ' + esc(p.bing_crawled_at.slice(0, 10)) : (p.bing_known ? 'not crawled' : '—'), esc(p.issues[0] || 'nothing')]), 'no pages checked this week');
-  html += h3('Questions queued for an AI answer page') + table(['Question', 'Plan', 'Status'], m.targets.filter(t => ['queued', 'writing', 'written', 'won'].includes(t.status)).slice(0, 10).map(t => [esc(t.question), t.kind === 'refresh' ? 'refresh ' + link(t.page_url) : 'new answer page', esc(t.status)]), 'no lost questions — AI already names you for all of them');
+  // B9-4: the status travels with the evidence it was decided on — how many answers named the business, out of how many asked
+  html += h3('Questions queued for an AI answer page') + table(['Question', 'Plan', 'Status'], m.targets.filter(t => ['queued', 'writing', 'written', 'won'].includes(t.status)).slice(0, 10).map(t => [esc(t.question), t.kind === 'refresh' ? 'refresh ' + link(t.page_url) : 'new answer page',
+    esc(t.status) + (t.reason ? '<div style="font-size:11px;color:#64748b">' + esc(String(t.reason).slice(0, 180)) + '</div>' : '')]), 'no lost questions — AI already names you for all of them');
+  if ((m.refused_submissions || []).length) html += p_('Not sent: ' + m.refused_submissions.slice(0, 5).map(r => esc(r.url) + ' (' + esc(r.reason) + ')').join('; ') + '.', true);
   if (m.entity) html += h3('Entity') + p_(m.entity.found ? 'Wikidata: <b>' + esc(m.entity.qid) + '</b> lists ' + esc(m.domain) + ' as its official website.' : 'No Wikidata item has ' + esc(m.domain) + ' as its official website' + (m.entity.by_name.length ? ' (items with a similar name: ' + m.entity.by_name.slice(0, 3).map(x => esc(x.label + (x.description ? ' — ' + x.description : ''))).join('; ') + ')' : '') + '.');
   if (!m.submitted.indexnow.verified) html += p_('IndexNow: put a file at <b>' + esc(m.submitted.indexnow.key_url) + '</b> containing only <code>' + esc(m.submitted.indexnow.key) + '</code>.', true);
+  if (!X.verified || B.enabled) html += p_('What a submission reaches: Bing\'s index, which Bing and Microsoft Copilot answer from — Bing Webmaster Tools reports those citations in its AI Performance report, which has no API, so read it there. OpenAI documents <b>OAI-SearchBot</b>, not Bing, as what surfaces pages in ChatGPT search, and IndexNow states that submitting "does not guarantee immediate indexing".', true);
   const lineage = [
-    LN.of('AI readiness score per key page', 'own_check', { basis: 'modelled', period: LN.asOf(m.checked_at), sample: LN.sample(m.pages.filter(p => p.status).length, 'key pages fetched as raw HTML'),
-      note: 'our own 0-100 score (answer in the first 200 characters, a visible update date, question headings, sourced figures) — a model, not a Google or an AI-engine figure' }),
+    LN.of('AI readiness score per key page', 'own_check', { basis: 'modelled', period: LN.asOf(m.checked_at), sample: LN.sample(m.pages.filter(p => p.status && p.score != null).length, 'key pages fetched as raw HTML and readable by at least one AI fetcher'),
+      note: 'our own 0-100 score (answer in the first 200 characters, a visible update date, question headings, sourced figures) — a model, not a Google or an AI-engine figure' + (m.withheld_scores ? '; ' + m.withheld_scores + ' page(s) have no score because robots.txt lets no AI search fetcher read them' : '') }),
+    // B9-2: the one figure in this report that says what a submission achieved, and it is Bing's own answer or it is nothing
+    (m.outcome && m.outcome.basis === 'measured')
+      ? LN.of('Pages crawled by Bing after we submitted them', 'bing', { basis: 'measured', period: 'the ' + m.outcome.window_days + ' days before ' + String(m.checked_at).slice(0, 10), sample: LN.sample(m.outcome.submitted, 'pages submitted and asked about again'), note: 'Bing Webmaster Tools GetUrlInfo (LastCrawledDate); a submission on its own proves nothing' })
+      : LN.unknown('Pages crawled by Bing after we submitted them', (m.outcome && (m.outcome.reason || m.outcome.basis)) || 'no submission has been followed up yet'),
+    // B9-3: what the AI fetchers may read is measured from the site's own robots.txt, or it is not checked
+    (m.robots && !m.robots.unavailable) ? LN.of('What the AI search fetchers may read', 'own_check', { basis: 'measured', period: LN.asOf(m.checked_at), sample: LN.sample(Object.keys((m.robots && m.robots.verdicts) || {}).length, 'key pages evaluated against robots.txt'), note: (m.robots.note || 'the site\'s own robots.txt') + ', matched by Google\'s documented rules (most specific group, longest rule, Allow wins a tie)' })
+      : LN.unknown('What the AI search fetchers may read', (m.robots && (m.robots.reason || m.robots.note)) || 'robots.txt was not read this run'),
     LN.of('Pages AI cites without naming you', 'ai_engines', { basis: 'measured', period: 'the answers of the last weekly AI-visibility run', sample: LN.sample(m.earned.length, 'third-party pages cited'), note: 'the exact pages the assistants linked in their answers' }),
     B.enabled && B.in_account ? LN.of('Bing crawl state and submissions', 'bing', { basis: 'reported', period: LN.asOf(m.checked_at), sample: LN.sample(B.submitted, 'pages submitted this run') })
       : LN.unknown('Bing crawl state', B.enabled ? 'this site is not in the Bing Webmaster account' : 'no Bing Webmaster key is configured'),

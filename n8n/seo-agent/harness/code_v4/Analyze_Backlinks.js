@@ -447,7 +447,7 @@ const OK = (() => {
 })();
 const base = $('Analyze Keywords').first().json;
 const targets = $('BL Targets').all().map(i => i.json);
-const sums = $('Backlink Summary').all().map(i => i.json);
+const sums = $('Backlink Summary Answers').all().map(i => i.json);
 const gapRes = $input.first().json || {};
 
 const rows = targets.map((t, i) => {

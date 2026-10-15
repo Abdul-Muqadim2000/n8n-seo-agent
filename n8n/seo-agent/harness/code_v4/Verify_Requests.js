@@ -11,7 +11,7 @@
 const merged = $('Link Merge').all().map(i => i.json).filter(m => !m.skip);
 let lreqs = [], lresps = []; try { lreqs = $('Locate Requests').all().map(i => i.json); lresps = $('Fetch Locate').all().map(i => i.json || {}); } catch (e) {}
 let prospects = []; try { prospects = $('Load Link Prospects').all().map(i => i.json).filter(x => x && x.prospect_domain); } catch (e) {}
-let dreqs = [], dresps = []; try { dreqs = $('BL Requests').all().map(i => i.json); dresps = $('Run BL Requests').all().map(i => i.json || {}); } catch (e) {}
+let dreqs = [], dresps = []; try { dreqs = $('BL Requests').all().map(i => i.json); dresps = $('Run BL Requests Answers').all().map(i => i.json || {}); } catch (e) {}
 const host = (u) => { const m = String(u || '').match(/^(?:https?:)?\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i); return m ? m[1].toLowerCase().replace(/^www\./, '') : ''; };
 const same = (h, d) => !!h && (h === d || h.endsWith('.' + d));
 const parse = (r) => { if (!r) return {}; if (r.body && typeof r.body === 'object') return r.body; if (r.results) return r; try { return JSON.parse(String(r.body ?? r.data ?? '')); } catch (e) { return {}; } };
@@ -23,10 +23,19 @@ for (const m of merged) {
   const located = new Map(); lreqs.forEach((r, i) => { if (r.site_id !== m.site_id || r.skip) return; const hit = (parse(lresps[i]).results || []).find(x => same(host(x.url), r.ref_domain)); if (hit) located.set(r.ref_domain, hit.url); });
   const won = new Set(prospects.filter(x => x.site_id === m.site_id && x.status === 'won').map(x => x.prospect_domain));
   const urlOf = (e) => (e.dfs_lost && e.dfs_lost.url) || (e.prev && e.prev.verify === 'found' && e.prev.from_url) || located.get(e.ref_domain) || e.from_url || (e.pages[0] || {}).url || '';
-  const links = m.entries.filter(e => e.kind === 'web' && !e.sources.every(s => s === 'wiki' || s === 'hn') && !['en.wikipedia.org', 'news.ycombinator.com'].includes(e.ref_domain) && !/wikipedia\.org$/.test(e.ref_domain)).map(e => {
+  // B10-4 (2026-10-15, benchmark area 10): `[].every()` is TRUE, so a carried row that NO source reported this run was dropped
+  // from the check queue entirely - and that is precisely the population the 120-day rule went on to call lost. The Wikipedia /
+  // Hacker News exclusion is about rows whose own source already answers the question; a row with no source at all is the one
+  // row that most needs our own eyes.
+  const links = m.entries.filter(e => e.kind === 'web' && !(e.sources.length && e.sources.every(s => s === 'wiki' || s === 'hn')) && !['en.wikipedia.org', 'news.ycombinator.com'].includes(e.ref_domain) && !/wikipedia\.org$/.test(e.ref_domain)).map(e => {
     const pv = e.prev || {}; const miss = Number(pv.miss_count) || 0; const val = Number(pv.seo_value) || 0;
-    const prio = e.footprint ? -1 : miss > 0 ? 1000 : e.dfs_lost ? 900 : won.has(e.ref_domain) ? 800 : !e.prev ? 700 + Math.min(99, (e.authority || 0) / 10) : (val >= 40 || e.visits > 0) ? 500 + val : Math.min(400, days(pv.verified_at));   // link-farm pages (D3): last, full runs only
-    return { e, url: urlOf(e), prio, why: e.footprint ? 'footprint' : miss > 0 ? 'missed_once' : e.dfs_lost ? 'reported_lost' : won.has(e.ref_domain) ? 'won' : !e.prev ? 'new' : (val >= 40 || e.visits > 0) ? 'valuable' : 'rotation' };
+    // B10-4 (2026-10-15, benchmark area 10): a row the ledger put at risk because NO index has seen it for four months and nobody
+    // has ever read its page. Parse Backlinks refuses to call that a loss on an index's silence alone, so something has to go and
+    // look: these are checked before the valuable ones and on light runs too. The read half of INVARIANTS rule 2 - the status that
+    // branch writes is acted on here, or it would sit at risk for ever.
+    const dormant = pv.status === 'at_risk' && pv.lost_reason === 'not_seen';
+    const prio = e.footprint ? -1 : miss > 0 ? 1000 : e.dfs_lost ? 900 : dormant ? 850 : won.has(e.ref_domain) ? 800 : !e.prev ? 700 + Math.min(99, (e.authority || 0) / 10) : (val >= 40 || e.visits > 0) ? 500 + val : Math.min(400, days(pv.verified_at));   // link-farm pages (D3): last, full runs only
+    return { e, url: urlOf(e), prio, why: e.footprint ? 'footprint' : miss > 0 ? 'missed_once' : e.dfs_lost ? 'reported_lost' : dormant ? 'dormant' : won.has(e.ref_domain) ? 'won' : !e.prev ? 'new' : (val >= 40 || e.visits > 0) ? 'valuable' : 'rotation' };
   }).filter(x => /^https?:\/\//i.test(x.url) && !DOC.test(x.url) && (full || x.prio >= 500)).sort((a, b) => b.prio - a.prio).slice(0, full ? 220 : 60);
   for (const x of links) add({ purpose: 'link', ref_domain: x.e.ref_domain, url: x.url, why: x.why, located: located.get(x.e.ref_domain) === x.url, authority: x.e.authority || 0, spam: x.e.spam || 0 });
   const fetched = new Set(links.map(x => x.url));

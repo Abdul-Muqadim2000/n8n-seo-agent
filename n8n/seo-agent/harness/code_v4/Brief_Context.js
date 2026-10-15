@@ -324,6 +324,70 @@ const fitStored = (row, ctx) => {
   return { ok: false, live: false, flagged: true, reason: g.reason, detail: g.detail,
     note: why + ' — it was planned before this rule existed, so it is set aside instead of written' };
 };
+// ---- B-G1 / B-G2 / B-G3 (2026-10-15, FIX_PLAN §3.16; INVARIANTS rule 2): the READ path, written once ----
+// R16 put `fitStored` on two read paths — the Rank Tracker and the Content Cadence — and wrote the loop around it twice. Three more
+// readers of the same stored rungs were written afterwards without it, and every one of them ACTS on what it reads: *AI Plan* (the AI
+// Visibility Tracker and the AI Pulse) turns a stored rung into a question asked of ChatGPT and then scores the site against the answer;
+// *Growth Plan* turns it into a "question to win" and then into a page the Content Cadence writes; *Site Plan* buys it a live rank check
+// every week and prints it in the weekly report. Three copies of one loop are three chances to drift, and the drift IS this defect — so
+// the loop lives here, once, and every reader calls it. FITR.rungs() never throws a refusal away: `set_aside` carries the row, the reason
+// and the sentence to print, because a list that is shorter because a gate ran has to say so (INVARIANTS rule 1).
+const FITR = {
+  // The context a stored row is judged in. Deliberately the shape R16's two callers build by hand: the site's own domain, the
+  // competitors it declared, the brand names AI uses for other companies, and — PROTECTED, so the ladder's own subject can never look
+  // like somebody's brand — the ladder head terms, the site's services and its own tracked keywords. Topics are optional: with none on
+  // file the topic bar judges nothing (fitTopic's own "no evidence, no refusal" rule).
+  ctx(o) {
+    o = o || {};
+    const own = fitHost(o.own_domain || o.domain || '');
+    const protect = [...new Set([...(o.heads || []), ...(o.services || []), ...(o.keywords || []), ...(o.protect || [])]
+      .map(x => String(x || '').trim()).filter(Boolean))];
+    return { own_domain: own, brands: o.brands || {}, intent: o.intent || '',
+      competitors: [...new Set((o.competitors || []).map(fitHost).filter(d => d && d !== own))],
+      serp_domains: (o.serp_domains || []).map(fitHost).filter(Boolean), protect,
+      topics: o.topics && (Array.isArray(o.topics) ? o.topics.length : String(o.topics).trim()) ? o.topics : null,
+      topic_label: o.topic_label || 'what this website sells' };
+  },
+  // Every stored row, gated once. Returns { keep, set_aside, dropped, flagged, refused_keywords }:
+  //   keep      — what the caller may act on (a row whose page is already written stays: that page is live work);
+  //   set_aside — one record per refusal, with `reason`, `detail`, `note` (the sentence to print), `written` and `dropped`.
+  // opts: { keyword: row -> the keyword (default row.keyword), live: row -> true when the row must be kept and only flagged,
+  //         serpFor: (keyword, row) -> [domains in rank order] for the results-page rules, where: a label naming this read path }.
+  rungs(rows, ctx, opts) {
+    const o = opts || {}; const C = ctx || {};
+    const kwOf = typeof o.keyword === 'function' ? o.keyword : ((r) => (r || {}).keyword);
+    const liveOf = typeof o.live === 'function' ? o.live : null;
+    const serpFor = typeof o.serpFor === 'function' ? o.serpFor : null;
+    const keep = []; const set_aside = [];
+    for (const r0 of (rows || [])) {
+      const r = (r0 && typeof r0 === 'object') ? r0 : {};
+      const kw = String(kwOf(r0) || '').trim();
+      if (!kw) { keep.push(r0); continue; }   // a row with no keyword is not this gate's business (the caller's own emptiness rules apply)
+      const serp = serpFor ? (serpFor(kw, r0) || []).map(fitHost).filter(Boolean) : [];
+      let c = C;
+      if (serp.length) c = { ...c, serp, serp_domains: [...new Set([...(C.serp_domains || []), ...serp])] };
+      if (liveOf && liveOf(r0)) c = { ...c, written: true };
+      const g = fitStored({ ...r, keyword: kw }, c);
+      if (g.ok) keep.push(r0);
+      if (!g.flagged) continue;
+      set_aside.push({ keyword: kw, reason: g.reason, detail: g.detail, note: g.note, written: !!g.live, dropped: !g.ok,
+        where: String(o.where || ''), ladder_id: r.ladder_id || '', head_keyword: r.head_keyword || '', rung: Number(r.rung) || 0,
+        page_no: Number(r.page_no) || 0, status: r.status || '', target_url: r.target_url || '', prompt_id: r.prompt_id || '' });
+    }
+    return { keep, set_aside, dropped: set_aside.filter(x => x.dropped), flagged: set_aside.filter(x => !x.dropped),
+      refused_keywords: set_aside.filter(x => x.dropped).map(x => x.keyword) };
+  },
+  // The sentence a human reads. INVARIANTS rule 1: a list that is shorter because a gate ran says so, with the reason, every time.
+  // `what` finishes "so they are not …" ("asked of the AI engines", "tracked", "written as a page").
+  line(set_aside, what) {
+    const a = (set_aside || []).filter(x => x && x.dropped);
+    if (!a.length) return '';
+    return a.length + ' stored keyword' + (a.length === 1 ? ' was' : 's were') + ' set aside, so ' + (a.length === 1 ? 'it is' : 'they are')
+      + ' not ' + String(what || 'used') + ': ' + a.slice(0, 6).map(x => '"' + x.keyword + '" — ' + (x.detail || x.reason)).join('; ')
+      + (a.length > 6 ? ' (and ' + (a.length - 6) + ' more)' : '')
+      + '. They were planned before this rule existed; a page that is already written is kept and only flagged.';
+  }
+};
 // ---- anchor kit (D9, 2026-10-11; inlined through the __ANCHOR__ marker): the words a link to one of our own pages is written with.
 // Live, "Guides in this series" linked to "Facts erp" and "Erp software dubai" — a raw keyword string with one capital letter (exec 365).
 // anchorText() uses the page's own title when we have one, else title-cases the keyword and keeps acronyms: a token that is already
@@ -540,8 +604,16 @@ const SM = (() => {
       business_facts: S(m.business_facts).slice(0, 2000), cta: S(m.cta).slice(0, 200), brand_names: (m.brand_names || []).join(', ').slice(0, 500),
       competitors: (m.competitors || []).join(', ').slice(0, 500), accreditation: S(m.accreditation).slice(0, 200), model_updated_at: S(m.model_updated_at) };
   };
+  // B4-1 / B4-2 (2026-10-15, benchmark area 4): the measurement columns belong to the row, so the kit emits them — a Data Table
+  // node auto-maps every field it is given, and a row that is short of a column is as wrong as one that carries a stray field.
+  // The model itself measures nothing: these are the defaults the Site Tracker's own judgement is written over
+  // (v5/code/Page_Inventory_Site.js), and `''` for decay_state means "never measured", never "steady".
+  const num0 = (v) => (Number(v) || 0);
   const pageRows = (model) => pages(model).map(p => ({ site_id: S((model || {}).site_id), url: S(p.url), title: S(p.title).slice(0, 300), h1: S(p.h1).slice(0, 300),
-    source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries_json: JSON.stringify(p.queries || []), updated_at: S((model || {}).model_updated_at) || new Date().toISOString() }));
+    source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries_json: JSON.stringify(p.queries || []), updated_at: S((model || {}).model_updated_at) || new Date().toISOString(),
+    clicks: num0(p.clicks), impressions: num0(p.impressions), position: num0(p.position), prev_clicks: num0(p.prev_clicks), yoy_clicks: num0(p.yoy_clicks),
+    decay_state: S(p.decay_state), decay_pct: num0(p.decay_pct), decay_lost: num0(p.decay_lost), decay_kind: S(p.decay_kind),
+    decay_basis: S(p.decay_basis).slice(0, 900), measured_at: S(p.measured_at) }));
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml } };
 })();

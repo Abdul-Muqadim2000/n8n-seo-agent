@@ -8,7 +8,7 @@
 // MODE / EST / HEAVY are written in by the builder at build time (one source: build_monitors.py's WF.run_ledger).
 const PLAN = 'Tracker Plan';
 const MODE = 'rank_tracker';
-const EST = {"ai": 0.0, "dfs": 0.15};   // { ai: <usd per site>, dfs: <usd per site>, dfs_full?: <usd per site for a full run> }
+const EST = {"ai": 0.0, "dfs": 0.015};   // { ai: <usd per site>, dfs: <usd per site>, dfs_full?: <usd per site for a full run> }
 const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 let rows = [];
 try { rows = $(PLAN).all().map(i => i.json || {}).filter(r => !r.nothing_to_do && !r.skip && (r.domain || r.site_id)); } catch (e) { rows = []; }
@@ -39,7 +39,7 @@ return [{ json: { run_id: String($execution.id), key: 'schedule:' + MODE, mode: 
   cost_mode: MODE, ai_usd: 0, measured_usd: 0, estimated_usd: +(ai + dfs).toFixed(4),
   // R31 (2026-10-14): $0 is never called an estimate - a run that reserves nothing says so, with the reason.
   cost_basis: ((ai + dfs) > 0
-    ? 'reserved: Claude $' + ai.toFixed(4) + ' ESTIMATED (' + paid.length + ' site(s) x the per-site figure), DataForSEO $' + dfs.toFixed(4) + ' ESTIMATED - nothing measured yet'
+    ? 'reserved: Claude $' + ai.toFixed(4) + ' ESTIMATED (' + paid.length + ' keyword check(s) x the measured per-check price), DataForSEO $' + dfs.toFixed(4) + ' ESTIMATED - nothing measured yet'
     : 'reserved: nothing - this run spends no model and no paid API money'
     ) + (freeRows ? '; ' + freeRows + ' free-only site(s) reserve nothing (no paid API, no model call)' : ''),
   // B-A5 (2026-10-15, build section 62): filled in by the settle — when it settled, what the account read then, and whether the figure

@@ -47,6 +47,7 @@ const LN = (() => {
     ai_engines: { label: 'the AI assistants themselves', how: 'the answers ChatGPT, Gemini, Google AI Mode and the others gave to the questions in your panel' },
     ai_db: { label: 'the DataForSEO AI-answer database', how: 'a database of AI answers and the brands they name' },
     own_check: { label: 'our own fetch of the page', how: 'we requested the page ourselves and read what came back' },
+    draft: { label: 'the finished draft itself', how: 'counted in the text this run wrote, before anybody published it' },
     crawl: { label: 'our crawl of your website', how: 'the pages we could reach and read on your site' },
     crux: { label: 'the Chrome User Experience Report', how: 'speed as real Chrome visitors experienced it over 28 days' },
     pagespeed: { label: 'Google PageSpeed Insights (Lighthouse)', how: 'one simulated mobile load in a lab, not what your visitors felt' },
@@ -95,6 +96,25 @@ const LN = (() => {
   const note = (l) => { const x = l || {}; const lbl = x.source_label || MISSING;
     return [lbl, x.period, x.sample, x.basis_label === lbl ? '' : x.basis_label, x.note].filter(Boolean).join(' · '); };
   const isHonest = (l) => !!l && (l.basis !== 'unknown' || note(l).indexOf(MISSING) >= 0);
+  // ---- the evidence half of the same rule (R10, promoted to the class by lineage_lint.py, 2026-10-15) ----
+  // A finding is a figure like any other: it may not be shown without the thing that shows it. R10 was exactly this - Google
+  // retired the Mobile Usability report, the API answered VERDICT_UNSPECIFIED for every page, and the audit raised a HIGH finding
+  // on 45 of 47 pages whose evidence string was "/:  | /whatwedo/ai-automation: " - punctuation and nothing else. So the test is
+  // not `evidence !== ''`: a string that is only separators, brackets or a bare "0" carries no evidence either.
+  const hasEvidence = (f) => {
+    const ev = S((f || {}).evidence).replace(/<[^>]*>/g, ' ');     // markup is not evidence
+    return /[A-Za-z]|[1-9]/.test(ev.replace(/[\s;|,.:·\-–—()\[\]\/]+/g, ' '));
+  };
+  // the findings that may be shown, and the titles of the ones held back. `allow` names a title that is evidence in itself
+  // (a count in the title, a note about data that could not be collected); everything else has to carry its own.
+  const unevidenced = (list, o) => { const x = o || {}; const allow = (x.allow || []).map(S);
+    return (list || []).filter(f => f && !hasEvidence(f) && allow.indexOf(S(f.title)) < 0).map(f => S(f.title || f.id || 'untitled')); };
+  const evidenced = (list, o) => { const x = o || {}; const allow = (x.allow || []).map(S);
+    const keep = (list || []).filter(f => f && (hasEvidence(f) || allow.indexOf(S(f.title)) >= 0));
+    if (typeof x.onDrop === 'function') { const d = unevidenced(list, o); if (d.length) x.onDrop(d); }
+    return keep; };
+  const evidenceNote = (dropped) => (dropped || []).length
+    ? (dropped.length + ' finding(s) were left out because nothing was measured to show them: ' + dropped.slice(0, 5).join(', ')) : '';
   const html = (l) => '<span style="color:#64748b;font-size:11px">' + esc1(note(l)) + '</span>';
   const line = (l) => '<div style="color:#64748b;font-size:11px;margin-top:2px">' + esc1(note(l)) + '</div>';
   // the block under a report: one row per figure, so no number is left without a source, a period and a sample
@@ -109,7 +129,8 @@ const LN = (() => {
         + '</td><td ' + td + '>' + esc1(l.sample || '—') + '</td><td ' + td + '>' + esc1([l.basis_label, l.note].filter(Boolean).join(' — ')) + '</td></tr>').join('')
       + '</table><p style="color:#64748b;font-size:11px;margin:4px 0">' + esc1(x.footer || 'A figure marked "' + BASIS.modelled + '" is computed, not counted; "' + MISSING + '" means the figure reached this report without its source and should be treated as unverified.') + '</p>';
   };
-  return { of, unknown, note, html, line, block, range, asOf, days, sample, isHonest, SOURCES, BASIS, MISSING };
+  return { of, unknown, note, html, line, block, range, asOf, days, sample, isHonest, hasEvidence, evidenced, unevidenced,
+    evidenceNote, SOURCES, BASIS, MISSING };
 })();
 // ---- change test (G12, 2026-10-13, system review FIX_PLAN.md; CRITERIA_technical_tracking_reporting_ai_links.md 3.4) ----
 // "We changed the page and clicks went up" is not a result: seasonality and Google's own updates move every page on a site at once
@@ -172,6 +193,7 @@ const ANGLE = { broken: 'Dead link on their page', lost: 'Link to restore', ment
 const ASSET_KIND = { data: 'Data study', tool: 'Free tool', template: 'Template', guide: 'Definitive guide' };   // L6
 const VERDICT = CT.LABELS;   // G12: one set of graded verdicts for links and page changes
 const CHANGE = { published: 'Published', rewritten: 'Rewritten' };
+const WON_STATE = { live: 'Still live', at_risk: 'Not found this week', lost: 'Gone', not_checked: 'Could not be read' };   // B11-2
 const STATUS = { linked: 'Linked', listed: 'Listed (no link seen)', missing: 'Not listed', submitted: 'Submitted', unknown: 'Not checked (the site blocks checks)', ignored: 'Not relevant' };
 return A.map(s => {
   const r = R.find(x => x.site_id === s.site_id) || { outreach_rows: s.outreach_rows, drafted: 0, skipped: 0 };
@@ -184,6 +206,7 @@ return A.map(s => {
   const ideas = s.asset_ideas || [];
   const fixes = rows.filter(o => o.type === 'redirect');
   const listings = (s.listing_rows || []).slice().sort((a, b) => (a.status === 'linked') - (b.status === 'linked') || a.priority - b.priority);
+  const wonChecks = (s.won_checks || []).slice().sort((a, b) => ['lost', 'at_risk', 'not_checked', 'live'].indexOf(a.state) - ['lost', 'at_risk', 'not_checked', 'live'].indexOf(b.state));   // B11-2: what needs the owner first
   const reads = (s.impact_rows || []).filter(x => x.kind !== 'page_change');
   const changeReads = (s.impact_rows || []).filter(x => x.kind === 'page_change');
   const sm = s.summary;
@@ -209,6 +232,18 @@ return A.map(s => {
     + p_('These are the kinds of page that have earned links for your competitors, with the pages that prove it and the number of websites linking to each. Making one is work, and no asset is a promise of links — it is the best-evidenced bet in your market.', true);
   if (listings.length) html += h3('Links you can add yourself') + table(['Where', 'Status', 'Competitors there', 'Why'], listings.slice(0, 20).map(l => [l.submit_url && l.status !== 'linked' ? link(l.submit_url, l.name) : esc(l.name), esc(STATUS[l.status] || l.status) + (l.profile_url ? ' · ' + link(l.profile_url, 'profile') : ''), esc(l.competitors || '—'), esc(String(l.why).slice(0, 200))]), '');
   if (fixes.length) html += h3('Redirects to add (old URLs that now answer 404)') + table(['Old URL', 'Redirect to', ''], fixes.slice(0, 20).map(f => [esc(f.page_url), link(f.target_url), esc(f.target_reason)]), '');
+  // B11-2: the links you already have, read again on their own page this week. A link is "live" because we fetched the page and
+  // found it, not because a row once said so; a page we could not read says so and counts as neither live nor lost.
+  if (wonChecks.length) {
+    html += h3('Links you won — are they still there?')
+      + '<table style="border-collapse:collapse;margin:8px 0"><tr>' + tile('Still live', n(sm.won_live), 'found on their page ' + esc(s.checked_at.slice(0, 10)))
+      + (sm.won_at_risk ? tile('Gone once', n(sm.won_at_risk), 'checked again next week') : '') + (sm.won_lost ? tile('Gone', n(sm.won_lost), 'missing twice running') : '')
+      + (sm.won_unchecked ? tile('Not checked', n(sm.won_unchecked), 'their site blocks checks') : '') + '</tr></table>'
+      + table(['Linking page', 'What we found', 'Link text'], wonChecks.map(w => [link(w.url, w.prospect_domain), esc(WON_STATE[w.state] || w.state) + '<div style="font-size:12px;color:#64748b">' + esc(w.why) + '</div>',
+        w.state === 'live' ? esc(w.anchor || '—') + (w.rel && w.rel !== 'follow' ? ' <span style="font-size:12px;color:#64748b">(' + esc(w.rel) + ')</span>' : '') : '—']), '')
+      + p_('One reading is never a loss: a link we cannot find is checked again the following week and only called gone when it is missing twice running — and a page behind a bot wall or one that needs JavaScript is reported as "not checked", never as gone. Links a backlink index already reports are re-read by the backlink monitor instead, so no page is fetched twice.', true)
+      + (sm.won_lost ? p_('Losing one is normal and not a reflection on the work: of 865,000 links tracked by Linkody (June 2026), about 63% were still live a year on and a third had gone. What is worth doing is asking: a link removed in an edit often goes back when you ask the person who put it there.', true) : '');
+  }
   if (reads.length) html += h3('What your links did') + table(['Link from', 'Your page', 'Weeks', 'Position', 'Verdict'], reads.slice(0, 15).map(x => [esc(x.ref_domain), link(x.target_url), n(x.weeks), x.base_position ? x.base_position + ' → ' + x.position : '—', esc(VERDICT[x.verdict] || x.verdict) + (x.note ? '<div style="font-size:12px;color:#64748b">' + esc(x.note) + '</div>' : '')]), '');
   if (changeReads.length) html += h3('What your page changes did') + table(['Page', 'Change', 'Since', 'Weeks', 'Position', 'Verdict'], changeReads.slice(0, 15).map(x => [link(x.target_url), esc(CHANGE[x.change] || x.change || 'changed'), esc(x.t0), n(x.weeks),
     x.base_position ? x.base_position + ' → ' + x.position : '—', esc(VERDICT[x.verdict] || x.verdict) + (x.note ? '<div style="font-size:12px;color:#64748b">' + esc(x.note) + '</div>' : '')]), '')
@@ -221,6 +256,8 @@ return A.map(s => {
     LN.of('New opportunities, journalist requests and listings', 'web', { basis: 'measured', period: LN.asOf(s.checked_at), sample: LN.sample(rows.length, 'prospects read this run'), note: 'pages we fetched ourselves; a page behind a bot wall is reported as "not checked", never as "missing"' }),
     ...(ideas.length ? [LN.of('Which kind of page earns links here', 'backlink_index', { basis: 'reported', period: 'read monthly, last ' + LN.asOf(s.checked_at),
       sample: LN.sample(sm.asset_pages || 0, 'competitor pages with 3 or more linking sites'), note: 'one crawler\'s index of the web; the idea is what worked for them, never a forecast for you' })] : []),
+    ...(wonChecks.length ? [LN.of('Whether the links you won are still on the page', 'web', { basis: 'measured', period: LN.asOf(s.checked_at),
+      sample: LN.sample(wonChecks.length, 'linking pages we fetched ourselves this run'), note: 'our own fetch of the linking page, not an index\'s memory of it; a page we could not read counts as neither live nor lost, and a link is called gone only after two readings in a row missed it' })] : []),
     ...(podcasts.length || podcastsOut.length ? [LN.of('Podcast shows that take guests', 'web', { basis: 'measured', period: LN.asOf(s.checked_at),
       sample: LN.sample(sm.podcasts_read || 0, 'shows whose own website we read'), note: 'a free podcast directory, each show\'s own RSS feed and its own website; a show is only pitched when it says it takes guests and has a contact on its own domain' })] : []),
     s.free_only ? LN.unknown('Competitors\' broken backlinks', 'this was a free check: the DataForSEO backlink index was not asked')
@@ -232,6 +269,7 @@ return A.map(s => {
   return { json: { site_id: s.site_id, domain: s.domain, email: s.email, callback_url: s.callback_url, request_id: s.request_id, checked_at: s.checked_at, free_only: s.free_only, summary: { ...sm, drafted: r.drafted || 0, held: r.held || 0, writer_skipped: r.skipped || 0, writer_error: r.writer_error || '' },
     drafted: drafted.map(o => ({ prospect_domain: o.prospect_domain, type: o.type, target_url: o.target_url })), listings: listings.map(l => ({ listing_id: l.listing_id, name: l.name, status: l.status })), redirects: fixes.map(f => ({ from: f.page_url, to: f.target_url })),
     impact: reads.map(x => ({ ref_domain: x.ref_domain, target_url: x.target_url, weeks: x.weeks, verdict: x.verdict })),
+    won_checks: wonChecks.map(w => ({ prospect_domain: w.prospect_domain, type: w.type, url: w.url, state: w.state, why: w.why, rel: w.rel, anchor: w.anchor, checked_at: w.at, won_at: w.won_at })),
     podcasts: podcasts.map(o => ({ prospect_domain: o.prospect_domain, show: o.page_title, page_url: o.page_url, status: o.status })), asset_ideas: ideas,
     page_changes: changeReads.map(x => ({ target_url: x.target_url, change: x.change, t0: x.t0, weeks: x.weeks, effect: x.effect, verdict: x.verdict, verdict_label: CT.label(x.verdict), note: x.note })),
     change_method: CT.method, lineage, subject, html, file_name, status: 'progress', stage: 'link_builder' },

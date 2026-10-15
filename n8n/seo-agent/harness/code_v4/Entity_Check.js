@@ -3,7 +3,7 @@
 // one consistent entity. Findings are appended to the Search Console step's extra_findings so Build Site Issues scores them.
 const prev = $('GSC Audit Findings').first().json;
 const g = $('GBP Request').first().json;
-let rs = []; try { rs = $('Fetch GBP').all().map(i => i.json || {}); } catch (e) {}
+let rs = []; try { rs = $('Fetch GBP Answers').all().map(i => i.json || {}); } catch (e) {}
 const hostOf0 = (u) => { const m = String(u || '').match(/^https?:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i); return m ? m[1].toLowerCase().replace(/^www\./, '') : ''; };
 const found = rs.flatMap(r => (((((r.tasks || [])[0] || {}).result || [])[0] || {}).items || [])).filter(x => x && (x.type === 'google_business_info' || x.title));
 const task = ((rs.find(r => (((r.tasks || [])[0] || {}).status_code) === 20000) || rs[0] || {}).tasks || [])[0] || {};

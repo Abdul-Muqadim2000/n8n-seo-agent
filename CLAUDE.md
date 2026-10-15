@@ -57,7 +57,139 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-10-14 evening, the second re-rating run and every defect it found — latest)
+## Status (2026-10-15, the benchmark programme is finished — 13 of 13 areas — latest)
+**Seventeen agents today, up to four in parallel, nine deploys. Harness 4505 -> 5191 passed, 0 failed. The instance is current: main
+workflow 659 nodes (519 this morning), AI Growth 102, 21 published.** Everything committed, pushed and deployed; working tree clean.
+**All 13 benchmark areas are done** (`docs/system-review-2026-10-14/BENCH_AREA*.md`, ~150 register rows in `FIX_PLAN.md` §3.16), and
+**all four INVARIANTS lints fail the build** — rule 1 `lineage_lint.py`, rule 2 `gate_lint.py`, rule 3 `retry_lint.py`, rule 4
+`state_lint.py`. Every lint found live defects the day it landed, and **four lints were themselves found measuring less than they
+claimed** (an inlined kit counted as a gate; a kit's header comment counted as lineage; `check_in200` walking only the main workflow;
+`state_lint` finding four holes in itself). **The rule now: a new lint's first question is what it does not look at.**
+**The defects these passes found had reached customers.** Two Google updates in `v5/data/seo_events.json` **never happened**, and the
+2026-10-13 report named one as the cause of a real fall (it was the September *spam* update). The AI Growth report told customers a Bing
+submission reaches **ChatGPT search**; OpenAI's own crawler docs never mention Bing. "Can AI read this page" was scored with a **Chrome**
+User-Agent and robots.txt never read. A **404 page was recorded as published** in two tables. A draft **identical to a competitor's page**
+came out `publishable: true`. An index's **silence** was recorded as a lost link with no page ever fetched. The verdict printed the
+model's own JSON as fact. The AI Overview click loss was **eight months stale**, in three files. The Critic was billed as a **loop that
+never looped**. A change test's **method** shipped in every weekly callback while the test itself was never run.
+**Three fixes landed on one of N paths and were caught the same day**: B-L4 (Tracker, not Pulse), B1-3 (one file, not three), B2-1 (one
+caller, not the area). That pattern — R28's shape — is now the first thing to check when a fix lands.
+**Where the leaders actually are, October 2026**: Adobe has **closed** the Semrush acquisition; **Respona has left outreach software**
+for pay-per-placement guest posts with exact-match anchors and no `rel="sponsored"` (link spam by Google's own rules); Postaga is 404;
+Profound's self-serve pricing is withdrawn; "Profound Actions" is two generations stale. **No vendor puts a sample size or interval
+beside a rate, and none refuses a delta across a changed panel** — our refusals are the lead to defend.
+**Next: the re-rating** (`FIX_PLAN.md` §5.2, 21 runs, ~$4-6) — **the owner approves it before it runs**, and **DataForSEO holds $13.79**,
+which binds before the spend guard does. Still the owner's: **D25a** (an always-on host — the "daily" AI Pulse fires whenever the Mac is
+awake), **G20** (panel 8 -> 20, +$5.08/site/month, this area's ceiling), **B2-7**, G13, G16, G17, O1-O12.
+
+## Status (2026-10-15 evening, all four invariant lints enforcing — earlier)
+**Nine agents today, two at a time, four deploys. The instance is current: main workflow 519 nodes, 21 published.** Harness **4812
+passed, 0 failed** (4505 this morning); build exit 0; app typecheck clean in all three workspaces.
+**All four INVARIANTS rules now fail the build**, and every one of them found a live defect on the day it landed:
+`retry_lint.py` (rule 3, ratchet of 48 for B-A10), `gate_lint.py` (rule 2: 4 pairs, 13 read paths gated, 26 ratcheted),
+`lineage_lint.py` (rule 1: lineage 13/16, evidence 1/2, like-for-like 6/6, withheld 4/4, 4 ratcheted) and `state_lint.py`
+(rule 4: six classes, **no ratchet at all**).
+**What they caught.** Rule 2 -> **B-G1/B-G2/B-G3**: the AI question panel, AI Growth's questions to win and the Site Tracker's tracked
+keywords were all built from stored ladder rungs with **no gate**, so a competitor's brand became a question we asked ChatGPT and scored
+ourselves against; one shared `FITR` now gates all four read paths and prints each refusal with its reason. Rule 1 -> **seven audit
+findings shipping with literally `evidence: ''`**, scored and ranked, plus **B-L4** (AI visibility deltas subtracted across different
+engine sets / panel sizes) and **B-L5** (a spam alert comparing a `free_only` snapshot with a full one) — R19 and R20 in new places, both
+now fixed, with the blog package, the keyword strategy and the **Word attachment** gaining lineage. Rule 4 -> **B-S1**: *Publish Check*,
+the node whose whole job is to verify a page is live, called `publishedRows()` **unconditionally**, so a URL answering **404** was written
+`status: published` into `seo_content_log` and `seo_ladders` while the same run told the owner it could not be fetched (verified in the
+pre-merge source); and **B-S2**, a case study marked published with no gate at all.
+**The lesson that will recur: three lints, three holes of the same kind, in one day.** `gate_lint` counted a node that merely *inlined* a
+kit as gated — which would have dropped two nodes from its ratchet **for ever**; `lineage_lint` counted the kit's own **header comment**
+and then its rendered output; `state_lint` found four such holes in itself before it was merged. **A lint that reads generated source must
+strip the kit, comments included, before asking whether a node calls that kit.** Each lint was also broken on purpose to prove it bites —
+six ways for rule 1, ten for rule 4 with 18 self-test cases.
+**Also today:** B-F5 closed both halves (the build refuses a missing `n8n/.env`; node ids are `uuid5(workflow:node)` so two builds of
+unchanged sources are **byte-identical**), and B2-4 / B2-5 built on the owner's decision — rung keywords clustered by the results pages
+Google actually shows (one SERP call per keyword, top 7 at 40%, capped at 24 = **$0.048 a ladder**, counted once by task id) and SERP
+domain diversity in the feasibility verdict.
+**Open and mine:** B-A10 (48 ungated DataForSEO nodes) and B-R2 (white-label + a browser pass) are in flight; then the Sonnet half of
+B-F1, and benchmark areas 1, 6, 7, 8, 9, 10, 11.
+**Open and the owner's:** **D25a** — the "daily" AI Pulse fired at 14:51 and 10:54 UTC on consecutive days instead of 06:30
+America/New_York because the Mac sleeps (`pmset`: asleep 07:10-11:06 PKT on 2026-10-15); three criteria are capped on an always-on host.
+Plus topping up DataForSEO (**$13.79**), B2-7 (discovery still clusters 3-of-top-10 while the ladder uses top 7 / 40%), G13, G16, G17,
+G20, O1-O12.
+
+## Status (2026-10-15 afternoon, four benchmark areas, two invariant lints, and everything deployed — earlier today)
+**Seven agents, two at a time, every merge rebuilt in the main worktree and deployed three times. The instance is current for the first
+time since 2026-10-14: main workflow 516 nodes, 21 published, 18 Data Table columns synced.** Harness **4750 passed, 0 failed** (4505 at
+the start of the day); build exit 0; app typecheck clean in all three workspaces (web, server, shared) and 254 + 243 tests.
+**The queue was verified against the code before any agent ran**, because the owner asked whether four rounds of fixes had already closed
+it. Every open item was still open; what *was* stale was the evidence — areas 5/2/4/3 carried 2026-10-13 scores from before 21 fixes
+inside those same areas, so each agent was briefed with that closed list and the 2026-10-14 run instead of the scorecard (FIX_PLAN §3.15).
+**Four areas benchmarked (4 of 13 now done), 46 register rows added** (`docs/system-review-2026-10-14/BENCH_AREA{5,2,4,3}_*.md`,
+FIX_PLAN §3.16). **Area 5:** the crawl reads the first response, so a client-rendered site got "missing H1", "thin content" and "orphan
+pages" as three findings with three deductions while the render check beside it knew the cause — now one finding, one deduction; plus the
+links a crawler cannot follow. Both desktop leaders shipped an agent layer in 2026, so the comparison is judgement, not crawler size.
+**Area 2:** one cached reach per *website* decided every topic's plan (exec 494 planned an ERP ladder against a reach measured during
+e-invoicing research); `reachTopic()` measures the ladder's own topic and says so when it cannot. **Area 3:** a draft **identical to a
+competitor page** came out `publishable: true` because the originality gate ran after Content QA had finalised the delivery fields and
+flipped only an internal flag — Rule 4 in the worst place; and the money mask judged amounts against a narrower corpus than the figure
+check, so seven amounts quoted verbatim from the cited source became `[Price]` (the shipped page carries 43) and *that* is what pushed it
+past the placeholder limit and had it refused. **No tool on the market gates on verified fact; we do** — Surfer, Clearscope, Ahrefs,
+Semrush, Frase, Jasper and Writer all refuse nothing. **Area 4:** `GSC_Requests.js` had asked for the year-ago range since v4.3 at
+`rowLimit: 1`, site totals only; the per-page comparison cost one more free request. Decay is now a Poisson test (seasonal is called
+seasonal, low volume is called too small) and the cadence writes the refresh first. That agent also **marked its own area down**: C15 was
+scored 6 but nothing could act on the verdict — honest figure 4.
+**Three invariant lints now fail the build** (INVARIANTS.md): rule 3 was already a ratchet; **rule 2** (`gate_lint.py`: 4 gate/table
+pairs, 13 read paths gated, 26 ratcheted) and **rule 1** (`lineage_lint.py`: lineage 10/16, evidence 1/2, like-for-like 4/6, withheld 3/4,
+9 ratcheted) landed today, each proved to bite by being broken on purpose — six ways for rule 1. **B-F5 is closed both halves**: the build
+refuses a missing `n8n/.env` (`env_settings.require_settings`, `--no-env` opts out loudly) and node ids are `uuid5(workflow:node)`, so two
+builds of unchanged sources are **byte-identical** — the uuid4 churn was what made "the rebuild produced no diff" useless as a check.
+**The lints paid for themselves the same day.** Rule 2 found **B-G1/B-G2/B-G3** — the AI question panel, AI Growth's questions to win and
+the Site Tracker's tracked keywords all built from stored rungs with no gate, so a competitor's brand became a question we asked ChatGPT
+and scored ourselves against; all three fixed through one shared `FITR`, refusals printed with reasons. Rule 1 found **seven audit
+findings shipping with literally `evidence: ''`**, scored and ranked (fixed at the sink), and **B-L4 / B-L5**, both still open and both
+wrong numbers: AI visibility deltas subtracted across question panels of different sizes, and a backlink spam alert comparing a
+`free_only` snapshot with a full one — R19 and R20 in new places.
+**Owner decisions taken today:** B2-4 built on the **direct route** (one SERP call per rung keyword, top 7 at 40%, capped at 24 =
+$0.048 a ladder, cost counted once by task id); B2-5 built (SERP domain diversity moves feasibility −6/−3/0, as a *share* of the results
+read); **B2-6 re-baselined K7** to "≥ 40% shared top-7 URLs" with the old statement kept in the row — the only change to a frozen
+criterion, and it is annotated.
+**Still open and owned by the owner:** **D25a** — the AI Pulse's scheduled runs fired at 14:51 and 10:54 UTC on consecutive days instead
+of its configured 06:30 America/New_York, because the Mac sleeps (`pmset`: asleep 07:10–11:06 PKT today). "Daily" is really "whenever the
+laptop is awake", and three criteria are capped on it. Also **B2-7** (discovery still clusters 3-of-top-10 while the ladder now uses top
+7 / 40% — two code paths, one question), **B-L1..B-L5**, G13, G16, G17, G20, O1–O12, and topping up DataForSEO (**$13.79**).
+**Next:** benchmark areas 1, 6, 7, 8, 9, 10, 11 (seven left); INVARIANTS rule 4 (the state machine) is the last lint; then B-A10 (48
+ungated DataForSEO nodes), B-R2, the Sonnet half of B-F1, and the re-rating (FIX_PLAN §5.2, ≈ $4–6 — the DataForSEO balance binds first).
+
+## Status (2026-10-15, the benchmark fix batch and what it found — previous)
+**Seven benchmark items closed, nine new problems found while closing them, nothing deployed.** Four worktree agents, two at a time.
+Harness **4505 passed, 0 failed** (4315 at the start of the day); app typecheck clean, **493** tests (254 shared + 239 server); smoke ALL
+PASSED; build exit 0. Register: `docs/system-review-2026-10-11/FIX_PLAN.md` §3.14 (statuses) and **§3.15 (B-F1…B-F9, what the batch found)**.
+**Closed:** B-R1 reports are delivered at last (per-company schedule, e-mail + signed webhook with an SSRF guard, share link, delivery log,
+retries, "Send it now"; it refuses anything a run marked not ready, with no override even on manual send — 23 reports landed in the app on
+2026-10-14 and not one had been delivered to anyone); B-R3 / B-B1 one cost table (`app/shared/src/cost.ts`), the app's 2026-10-02 table was
+1.3x–2.5x HIGH and was why runs were refused at "$5.74 of $6"; B-A8 measured Claude tokens; B-A5 per-run cost reconciliation; B-A6
+front-door idempotency; B-A7 alert retry + escalation; B-A9 all ten schedules through the concurrency gate.
+**The correction that matters (B-F1).** The engine measured **no** Claude token at all — not the 32%-estimated this file used to claim.
+`@langchain/anthropic` 1.5.6 returns `llmOutput` only from `_generateNonStreaming`; n8n's tracing reads exactly
+`result?.llmOutput?.tokenUsage`, so streaming falls back to a tiktoken estimate — and the eight non-streaming nodes' real `tokenUsage`
+rides the `ai_languageModel` connection, which `WorkflowDataProxy` only reads as `main`, so **no Code node can read a token**. The
+"measured" figures in the run analyses were real but came from reading executions back through the API *afterwards*. Verified by reading
+the running container, not inferred. Fixed with Anthropic's free `count_tokens` on the main path: those three Opus nodes 0% → **70.9%
+measured**, a whole page run 53.7%. Thinking stays modelled; **the Sonnet nodes are still character-priced — the open half.**
+**Also found:** a 404 from a revoked alert webhook was recorded as a **delivery** (`neverError`, no `fullResponse`) — the exact Rule 4
+violation the rule exists for; Page Watch posted its digest and wrote nothing back, so its rows sat `pending` for ever; a deduplicated
+request and the app disagreed about which run it was (the app matched callbacks newest-first, deliberately, because weekly reports reuse
+the tracking run's id — so the app now keeps no row for a run that never started, `repeatResolvesToOriginal`); `request_id` is
+`$execution.id` and not a caller key; `run_cost_estimate_usd` was computed and shipped to nobody; it is **ten** schedules, not nine.
+**Process hazard, open (B-F5): a git worktree has no `n8n/.env`** — it is gitignored, so it is absent there, and the build does **not**
+fail without it: it quietly bakes defaults into ten workflows (mail identity, service account, Bing flag). Every worktree agent of the last
+four days was exposed. Contained only because the generated JSON is **always rebuilt in the main worktree after a merge**. The build
+should refuse to write workflows when `.env` is absent. Keep rebuilding after every merge until it does.
+**Spend ceilings raised $6 → $15 a day** (`ai_budget_usd` and `dfs_budget_usd`, Normalize Input CONFIG) at the owner's request — cost is
+not the constraint, the result is. `dfs_balance_floor_usd` stays $0.50. **The DataForSEO account holds $13.79** (it held $32.60 on
+2026-10-01) and is roughly two thirds of what a run spends, so the account binds before the guard does: top it up before any live run.
+**NOT DEPLOYED — needs the owner.** `apply_env.py` was refused by the permission classifier as a production deploy. Everything above is
+inert on the running instance until it runs, and B-A5's three new Data Table columns need the `sync_tables.py` it runs.
+**Next:** `docs/system-review-2026-10-14/NEXT_SESSION.md` — the benchmark programme is **2 of 13 areas done**.
+
+## Status (2026-10-14 evening, the second re-rating run and every defect it found — previous)
 **The second whole-system live run is done and all 12 defects it found are fixed, deployed and pushed** (`docs/system-review-2026-10-14/RESULTS.md`: 21 protocol runs + G27 and G11, 47 executions 535-581, every one `success`, **$3.63** of its $8 cap — DataForSEO $2.3876 measured, Claude $1.2458 of which $0.3937 is `tokenUsageEstimate` only). Harness **4277 passed, 0 failed**; app typecheck + 387 tests; smoke ALL PASSED; deployed (main workflow **483 nodes**, 20 published, `seo_run_ledger.dfs_balance` + `seo_audit_findings.checked` synced). **81 defects have now been found and closed across four rounds**; no defect row in the register is open.
 **The three High ones.** **R17**: every monitor wrote its `seo_run_ledger` row *after* it had finished spending and never settled it (58% of the run's money attributed to no row) — the reserve chain hung beside the plan node, so n8n's v1 order ran it last. `ladder_common.ledger_mainline` puts Ensure / Row / Reserve on the **main** path in all ten workflows, and build section 55 **proves the ordering** by walking `main` from every trigger, refusing to pass *Reserve Run Ledger* and failing if a paid node is still reachable (broken three ways on purpose; it caught each). **R18**: the in-200 retry test matched error 50000 only, which is why 40101 passed twice and a ladder was planned, scored "winnable 68" and written on a SERP nobody saw — the rule is now the shared kit `_dfs_retry.js`, fires on any task error, and when a retry still fails the verdict is `NOT_CHECKED` with no score, no visits and no timeline ("could not be read", never "no demand"). **R19**: 31 of 45 URL inspections failed unretried and the diff called the smaller sample an improvement — failures are re-sent, findings carry `checked` / `checked_of`, and past 20% drift the diff prints "not compared: the sample moved".
 **Secret handling (R29 / R30, found while checking the credential refresh, not by the run).** `SEO_ALERT_WEBHOOK_URL` was baked into generated workflow JSON and harness code that this **public** repo tracks. The build no longer reads the setting: it bakes `__SEO_ALERT_WEBHOOK_URL__`, `apply_env.py` substitutes the real URL into a copy **outside** the repo at import time, and an un-substituted placeholder is treated as unset, so no build can emit a node that posts to a customer's Slack. Builds with and without the setting are byte-identical. A **build-time scanner** fails on Slack / Discord / Teams / Zapier webhooks, `xoxb-`, `sk-ant-`, `AIza` and private keys (proved by planting one). Verified both ends: the deployed instance carries the URL, the repository carries none.

@@ -115,7 +115,7 @@ export function LadderReport({ report }: { report: ReportDetail }) {
               <HeroStat
                 label="Time to rank"
                 value={num(feas.time_to_rank_months) != null ? <WordValue>~{num(feas.time_to_rank_months)} months</WordValue> : '–'}
-                hint={`Visits / month at top 3: ${n(feas.expected_visits_top3)}`}
+                hint={`The writing model's own estimate, not measured \u2014 the plan's modelled range and its chance band are below \u00b7 visits / month at top 3: ${n(feas.expected_visits_top3)} (modelled)`}
               />
             )}
           </>
@@ -235,6 +235,14 @@ function FeasibilityMark({ feas }: { feas: P }) {
 /** "Why this plan": the website's reach, the keyword's difficulty for it, the plan, its order and months (PIPELINE_FEATURE_SPEC.md §5.5). */
 function WhyThisPlan({ p, planType, difficulty }: { p: P; planType: PlanType; difficulty: DifficultyForYou | null }) {
   const info = obj(p.reach_info);
+  // B2-1 (2026-10-15): `reach_info` is the site-wide measurement; `reach` is what THIS plan was measured against, which is the reach for
+  // this topic when there was enough on-topic evidence to measure one. The two are shown as what they are, never as each other.
+  const ta = obj(p.topic_authority);
+  // B2-4 / B2-5 (2026-10-15): the results pages the run read — which searches Google answers with the same pages (so one page covers
+  // them all), what could not be compared, and how many different websites own the main keyword's own results page.
+  const scl = obj(p.serp_clusters);
+  const dv = obj(p.serp_diversity);
+  const siteReach = num(info.reach) ?? num(p.reach);
   const reach = num(p.reach) ?? num(info.reach);
   const kd = num(obj(p.head).kd);
   const how =
@@ -246,10 +254,18 @@ function WhyThisPlan({ p, planType, difficulty }: { p: P; planType: PlanType; di
   return (
     <Block title="Why this plan" icon={<Route />}>
       <ul className="space-y-2.5 text-sm leading-relaxed text-ink-2">
-        {reach != null && (
+        {siteReach != null && (
           <li>
-            <span className="font-medium text-ink">Your website’s reach: difficulty {reach}.</span> That is the difficulty it already wins ({how}
+            <span className="font-medium text-ink">Your website’s reach: difficulty {siteReach}.</span> That is the difficulty it already wins ({how}
             {info.cached === true && str(info.cached_at) ? `, measured ${fmtDate(str(info.cached_at))}` : ''}).
+          </li>
+        )}
+        {str(ta.note) && (
+          <li>
+            <span className="font-medium text-ink">
+              {ta.used === true ? `Measured on this topic: difficulty ${reach ?? ''}.` : 'Measured across the whole website.'}
+            </span>{' '}
+            {str(ta.note)}
           </li>
         )}
         {difficulty && (
@@ -266,6 +282,19 @@ function WhyThisPlan({ p, planType, difficulty }: { p: P; planType: PlanType; di
           {str(p.order) ? `${str(p.order).replace(/^\w/, (c) => c.toUpperCase())}.` : PLAN_ORDER_TEXT[planType]}
           {str(p.months) && ` Expected about ${str(p.months).replace('-', '–')} months until the main keyword ranks.`}
         </li>
+        {(num(scl.asked) ?? 0) > 0 && str(scl.note) && (
+          <li>
+            <span className="font-medium text-ink">One page per results page.</span> {str(scl.note)}
+          </li>
+        )}
+        {dv.checked === true && str(dv.text) && (
+          <li>
+            <span className="font-medium text-ink">
+              {n(dv.domains)} different website{num(dv.domains) === 1 ? '' : 's'} own the results page.
+            </span>{' '}
+            {str(dv.text)}
+          </li>
+        )}
         {str(p.months) && (
           <li>
             <span className="font-medium text-ink">Estimated chance.</span> {str(p.chance_text) || chanceText(planType, str(p.months), p.stretch === true)}

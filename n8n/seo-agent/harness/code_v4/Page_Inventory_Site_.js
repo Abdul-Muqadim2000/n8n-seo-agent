@@ -190,8 +190,16 @@ const SM = (() => {
       business_facts: S(m.business_facts).slice(0, 2000), cta: S(m.cta).slice(0, 200), brand_names: (m.brand_names || []).join(', ').slice(0, 500),
       competitors: (m.competitors || []).join(', ').slice(0, 500), accreditation: S(m.accreditation).slice(0, 200), model_updated_at: S(m.model_updated_at) };
   };
+  // B4-1 / B4-2 (2026-10-15, benchmark area 4): the measurement columns belong to the row, so the kit emits them — a Data Table
+  // node auto-maps every field it is given, and a row that is short of a column is as wrong as one that carries a stray field.
+  // The model itself measures nothing: these are the defaults the Site Tracker's own judgement is written over
+  // (v5/code/Page_Inventory_Site.js), and `''` for decay_state means "never measured", never "steady".
+  const num0 = (v) => (Number(v) || 0);
   const pageRows = (model) => pages(model).map(p => ({ site_id: S((model || {}).site_id), url: S(p.url), title: S(p.title).slice(0, 300), h1: S(p.h1).slice(0, 300),
-    source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries_json: JSON.stringify(p.queries || []), updated_at: S((model || {}).model_updated_at) || new Date().toISOString() }));
+    source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries_json: JSON.stringify(p.queries || []), updated_at: S((model || {}).model_updated_at) || new Date().toISOString(),
+    clicks: num0(p.clicks), impressions: num0(p.impressions), position: num0(p.position), prev_clicks: num0(p.prev_clicks), yoy_clicks: num0(p.yoy_clicks),
+    decay_state: S(p.decay_state), decay_pct: num0(p.decay_pct), decay_lost: num0(p.decay_lost), decay_kind: S(p.decay_kind),
+    decay_basis: S(p.decay_basis).slice(0, 900), measured_at: S(p.measured_at) }));
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml } };
 })();
@@ -206,7 +214,14 @@ const stored = grab('Load Pages (Site)').filter(r => r.site_id && r.url);
 const now = new Date().toISOString();
 const S = (v) => String(v == null ? '' : v).trim();
 const ukey = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/$/, '');
-const sameRow = (a, b) => !!b && S(a.title) === S(b.title) && S(a.h1) === S(b.h1) && S(a.source) === S(b.source) && S(a.lastmod) === S(b.lastmod) && S(a.queries_json) === S(b.queries_json);
+// B4-2 (2026-10-15, benchmark area 4): the measurement columns count as a change too — a page that went from steady to decaying
+// must reach the Content Cadence this week, not next time its title changes.
+const PERF = ['clicks', 'impressions', 'position', 'prev_clicks', 'yoy_clicks', 'decay_state', 'decay_pct', 'decay_lost', 'decay_kind', 'decay_basis'];
+const sameRow = (a, b) => !!b && S(a.title) === S(b.title) && S(a.h1) === S(b.h1) && S(a.source) === S(b.source) && S(a.lastmod) === S(b.lastmod) && S(a.queries_json) === S(b.queries_json)
+  && PERF.every(k => S(a[k]) === S(b[k]));
+// the empty measurement: a page Search Console said nothing about this week keeps the columns it already had, and a page that was
+// never measured carries zeros with `decay_state: ''` — never a "steady" that nothing stood behind.
+const EMPTY_PERF = { clicks: 0, impressions: 0, position: 0, prev_clicks: 0, yoy_clicks: 0, decay_state: '', decay_pct: 0, decay_lost: 0, decay_kind: '', decay_basis: '', measured_at: '' };
 return sites.map((s, idx) => {
   const model = (siteModels.find(m => m.site_id === s.site_id) || {}).model || SM.from({ site_id: s.site_id, domain: s.domain }, {});
   const det = detAll.find(x => x.site_id === s.site_id) || null;
@@ -232,8 +247,27 @@ return sites.map((s, idx) => {
   merged.pages = merged.pages.slice(0, CONFIG.max_pages);
   merged.model_updated_at = merged.model_updated_at || now;
   const was = new Map(stored.filter(r => r.site_id === s.site_id).map(r => [ukey(r.url), r]));
-  const rows = SM.pageRows({ ...merged, site_id: s.site_id, model_updated_at: now }).filter(r => !sameRow(r, was.get(ukey(r.url))));
+  // B4-2: this week's Search Console measurement and decay judgement per page (Parse GSC `page_perf`, ST.decay). It is attached to
+  // the inventory row rather than kept in the report, because a verdict nothing stores is a verdict nothing can act on: the
+  // Content Cadence reads these columns and writes the refresh (B4-3).
+  const perfBy = new Map(((gsc && gsc.page_perf) || []).map(p => [ukey(p.page), p]));
+  const perfOf = (url) => { const p = perfBy.get(ukey(url)); if (!p) return null;
+    return { clicks: Number(p.clicks) || 0, impressions: Number(p.impressions) || 0, position: Number(p.position) || 0,
+      prev_clicks: Number(p.prev_clicks) || 0, yoy_clicks: p.yoy_clicks == null ? 0 : (Number(p.yoy_clicks) || 0),
+      decay_state: S(p.state), decay_pct: p.pct == null ? 0 : (Number(p.pct) || 0), decay_lost: Number(p.lost) || 0,
+      // the sentence is kept only where something is being claimed. `Load Pages (Cadence)` reads EVERY row of EVERY site, and a
+      // 500-character basis on 2,000 steady pages is a megabyte the cadence has to carry to make one decision.
+      decay_kind: S(p.kind), decay_basis: ['decaying', 'seasonal', 'watch'].indexOf(S(p.state)) >= 0 ? S(p.basis).slice(0, 600) : '', measured_at: now }; };
+  const rows = SM.pageRows({ ...merged, site_id: s.site_id, model_updated_at: now })
+    .map(r => { const old = was.get(ukey(r.url)) || {}; const fresh = perfOf(r.url);
+      // no measurement this week = keep what was measured before, with the date it was measured on. Never a stale number
+      // wearing today's date, and never a blank where a judgement stood last week.
+      const kept = {}; for (const k of Object.keys(EMPTY_PERF)) kept[k] = old[k] == null || old[k] === '' ? EMPTY_PERF[k] : old[k];
+      return { ...r, ...(fresh || kept) }; })
+    .filter(r => !sameRow(r, was.get(ukey(r.url))));
   const bySource = {}; for (const p of merged.pages) bySource[p.source] = (bySource[p.source] || 0) + 1;
   return { json: { site_id: s.site_id, domain: s.domain, pages: merged.pages, rows, total: merged.pages.length, changed: rows.length, stored: was.size, by_source: bySource,
+    measured: perfBy.size, decaying: [...perfBy.values()].filter(p => p.state === 'decaying').length,
+    decay_summary: (gsc && gsc.decay_summary) || null,
     sitemap_read: !!(det && (det.sitemap || {}).ok), with_queries: merged.pages.filter(p => (p.queries || []).length).length } };
 });

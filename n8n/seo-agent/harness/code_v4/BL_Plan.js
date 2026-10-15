@@ -266,8 +266,16 @@ const SM = (() => {
       business_facts: S(m.business_facts).slice(0, 2000), cta: S(m.cta).slice(0, 200), brand_names: (m.brand_names || []).join(', ').slice(0, 500),
       competitors: (m.competitors || []).join(', ').slice(0, 500), accreditation: S(m.accreditation).slice(0, 200), model_updated_at: S(m.model_updated_at) };
   };
+  // B4-1 / B4-2 (2026-10-15, benchmark area 4): the measurement columns belong to the row, so the kit emits them — a Data Table
+  // node auto-maps every field it is given, and a row that is short of a column is as wrong as one that carries a stray field.
+  // The model itself measures nothing: these are the defaults the Site Tracker's own judgement is written over
+  // (v5/code/Page_Inventory_Site.js), and `''` for decay_state means "never measured", never "steady".
+  const num0 = (v) => (Number(v) || 0);
   const pageRows = (model) => pages(model).map(p => ({ site_id: S((model || {}).site_id), url: S(p.url), title: S(p.title).slice(0, 300), h1: S(p.h1).slice(0, 300),
-    source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries_json: JSON.stringify(p.queries || []), updated_at: S((model || {}).model_updated_at) || new Date().toISOString() }));
+    source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries_json: JSON.stringify(p.queries || []), updated_at: S((model || {}).model_updated_at) || new Date().toISOString(),
+    clicks: num0(p.clicks), impressions: num0(p.impressions), position: num0(p.position), prev_clicks: num0(p.prev_clicks), yoy_clicks: num0(p.yoy_clicks),
+    decay_state: S(p.decay_state), decay_pct: num0(p.decay_pct), decay_lost: num0(p.decay_lost), decay_kind: S(p.decay_kind),
+    decay_basis: S(p.decay_basis).slice(0, 900), measured_at: S(p.measured_at) }));
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml } };
 })();
@@ -321,6 +329,10 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
     brand_query, brand_res, label, topics, ga4_property_id: String(s.ga4_property_id || '').replace(/^properties\//, ''), gsc_property: s.gsc_property || '', bing: CONFIG.bing, link_builder: !!(s.settings || {}).link_builder, import_info,
     ledger_size: myLedger.length, ledger_live: myLedger.filter(x => x.status !== 'lost').length,
     previous: last ? { checked_at: last.checked_at, mode: last.mode, rank: Number(last.rank) || 0, backlinks: Number(last.backlinks) || 0, referring_domains: Number(last.referring_domains) || 0, spam_score: Number(last.spam_score) || 0, broken_backlinks: Number(last.broken_backlinks) || 0,
-      union_domains: lastSame ? Number(lastSame.union_domains) || 0 : 0, best_links: lastSame ? Number(lastSame.best_links) || 0 : 0, referral_visits: lastSame ? Number(lastSame.referral_visits) || 0 : 0 } : (lastSame ? { checked_at: lastSame.checked_at, mode: lastSame.mode, rank: 0, backlinks: 0, referring_domains: 0, spam_score: 0, broken_backlinks: 0, union_domains: Number(lastSame.union_domains) || 0, best_links: Number(lastSame.best_links) || 0, referral_visits: Number(lastSame.referral_visits) || 0 } : null),
+      // B-L5 (2026-10-15): `mode` above is the kind of run the DataForSEO figures came from; the union of referring sites comes
+      // from `lastSame` (a snapshot of the same free / paid kind), so it carries its OWN kind and Parse Backlinks compares each
+      // half with the half it belongs to instead of assuming one row describes both.
+      union_mode: lastSame ? String(lastSame.mode || '') : '',
+      union_domains: lastSame ? Number(lastSame.union_domains) || 0 : 0, best_links: lastSame ? Number(lastSame.best_links) || 0 : 0, referral_visits: lastSame ? Number(lastSame.referral_visits) || 0 : 0 } : (lastSame ? { checked_at: lastSame.checked_at, mode: lastSame.mode, union_mode: String(lastSame.mode || ''), rank: 0, backlinks: 0, referring_domains: 0, spam_score: 0, broken_backlinks: 0, union_domains: Number(lastSame.union_domains) || 0, best_links: Number(lastSame.best_links) || 0, referral_visits: Number(lastSame.referral_visits) || 0 } : null),
     existing_prospects: prospects.filter(p => p.site_id === s.site_id).length, checked_at: iso } };
 });

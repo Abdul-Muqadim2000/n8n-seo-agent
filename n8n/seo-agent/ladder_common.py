@@ -59,7 +59,14 @@ SITES_COLS = [('site_id', 'string'), ('domain', 'string'), ('gsc_property', 'str
 # by D11; `queries_json` holds the Search Console queries the page gets impressions for. SM.matchPage() reads it.
 PAGES_TABLE = 'seo_pages'
 PAGES_COLS = [('site_id', 'string'), ('url', 'string'), ('title', 'string'), ('h1', 'string'), ('source', 'string'), ('lastmod', 'string'),
-              ('queries_json', 'string'), ('updated_at', 'string')]
+              ('queries_json', 'string'), ('updated_at', 'string'),
+              # B4-1 / B4-2 (2026-10-15, benchmark area 4, BENCH_AREA4_cadence.md): the page's own Search Console measurement and the
+              # decay judgement made of it. Until now the decay verdict lived for the length of one Site Tracker run and died in an
+              # e-mail; stored here, the Content Cadence reads it and WRITES the refresh. `decay_state` is one of
+              # decaying / seasonal / watch / steady / too_small; `decay_basis` is the sentence that must travel with the number.
+              ('clicks', 'number'), ('impressions', 'number'), ('position', 'number'), ('prev_clicks', 'number'), ('yoy_clicks', 'number'),
+              ('decay_state', 'string'), ('decay_pct', 'number'), ('decay_lost', 'number'), ('decay_kind', 'string'),
+              ('decay_basis', 'string'), ('measured_at', 'string')]
 METRICS_COLS = [('site_id', 'string'), ('domain', 'string'), ('period_start', 'string'), ('period_end', 'string'), ('checked_at', 'string'), ('gsc_connected', 'boolean'), ('ga4_connected', 'boolean'),
                 ('clicks', 'number'), ('impressions', 'number'), ('ctr', 'number'), ('position', 'number'), ('prev_clicks', 'number'), ('prev_impressions', 'number'), ('prev_ctr', 'number'), ('prev_position', 'number'),
                 ('yoy_clicks', 'number'), ('yoy_impressions', 'number'), ('sessions', 'number'), ('engaged_sessions', 'number'), ('key_events', 'number'), ('prev_sessions', 'number'), ('prev_engaged_sessions', 'number'),
@@ -352,7 +359,11 @@ LEDGER_EST = {
     # Cadence does, and the guard still sees every audit through the row each spawned run makes before its own crawl.
     'audit_schedule':  {'ai': 0.0,  'dfs': 0.0},     # it plans and spawns; every spawned audit reserves its own row (the crawl is $0.09 there)
     'link_builder':    {'ai': 0.30, 'dfs': 0.05},    # $0.35 / site / month (LINK_BUILDER_SPEC)
-    'rank_tracker':    {'ai': 0.0,  'dfs': 0.15},    # the week's SERP checks of one site's ladders
+    # B6-7 (2026-10-15, benchmark area 6): Monitor_Ledger_Row multiplies this by the number of PLAN ITEMS, and the Rank Tracker's
+    # plan emits one item per keyword check - so $0.15 reserved $0.15 a CHECK and a ten-check week held $1.50 of the day's budget
+    # for $0.15 of work. It is the measured per-check price now (depth 50, $0.015), so the reservation is what the run will spend,
+    # and B6-7's own keyword checks move it by exactly what they cost. The settle takes the provider's measured figure (R28).
+    'rank_tracker':    {'ai': 0.0,  'dfs': 0.015},   # ONE depth-50 SERP check, measured; the plan emits one item per check
     'site_tracker':    {'ai': 0.03, 'dfs': 0.01},    # the site brief; Search Console / GA4 / Trends are free
     'content_cadence': {'ai': 0.0,  'dfs': 0.0},     # it plans and spawns; every page run reserves its own row
     # R32's companion (2026-10-14, FIX_PLAN §3.13): the daily key-page watch spends nothing (25 plain GETs, no DataForSEO, no Claude) but
@@ -452,18 +463,26 @@ _LEDGER_NS = _uuid.UUID('7c1f2a44-0b3e-4e6a-9d21-5e8a1c0f4b77')
 DFS_BALANCE_URL = 'https://api.dataforseo.com/v3/appendix/user_data'   # free, answers in milliseconds, no cost to the account
 
 
+# B-C2 (2026-10-15, build section 84): the one FREE Anthropic endpoint. `/v1/messages/count_tokens` costs nothing and is called on the
+# main path behind every agent to measure what that agent really sent and received. The URL is what identifies it, not the node's name,
+# so a paid call cannot slip past by being called "Count …" — the same rule R32 used for `appendix/user_data`.
+ANTHROPIC_COUNT_URL = 'https://api.anthropic.com/v1/messages/count_tokens'
+
+
 def _ai_nodes_of(wfobj):
-    """Every Claude node of this workflow, as the names that appear in the run data: an `lmChatAnthropic` model node never runs on the
-    main path (it hangs off its agent on an `ai_languageModel` connection and has no items of its own), so the AGENT is what a settle can
-    ask about; an HTTP node that carries the Anthropic credential is itself the call."""
+    """Every Claude node of this workflow that SPENDS, as the names that appear in the run data: an `lmChatAnthropic` model node never
+    runs on the main path (it hangs off its agent on an `ai_languageModel` connection and has no items of its own), so the AGENT is what
+    a settle can ask about; an HTTP node that carries the Anthropic credential is itself the call — unless it is the free token counter,
+    which bills nothing and whose presence must never be read as "a model ran" (B-C2)."""
     conns, out = wfobj.get('connections') or {}, set()
     for n in wfobj['nodes']:
         t = str(n.get('type') or '')
         if 'lmChatAnthropic' in t:
             for lst in ((conns.get(n['name']) or {}).get('ai_languageModel') or []):
                 for tgt in (lst or []): out.add(tgt['node'])
-        elif 'lmChat' not in t and any(isinstance(c, dict) and c.get('id') == 'SEOcredAnthropic'
-                                       for c in (n.get('credentials') or {}).values()):
+        elif 'lmChat' not in t and str((n.get('parameters') or {}).get('url') or '') != ANTHROPIC_COUNT_URL \
+                and any(isinstance(c, dict) and c.get('id') == 'SEOcredAnthropic'
+                        for c in (n.get('credentials') or {}).values()):
             out.add(n['name'])
     return sorted(out)
 
@@ -720,3 +739,58 @@ OPS_ALERTS_COLS = [('alert_key', 'string'), ('workflow', 'string'), ('node', 'st
                    # per attempt so the row carries the whole history rather than only its last line.
                    # New columns reach an existing table only through sync_tables.py (apply_env.py runs it).
                    ('attempts', 'number'), ('last_attempt_at', 'string'), ('next_attempt_at', 'string'), ('attempt_log', 'string')]
+
+
+# =============================================================================
+# B-F5 (2026-10-15, FIX_PLAN §3.15): one id rule, so that a rebuild of unchanged sources is byte-identical
+# -----------------------------------------------------------------------------
+# `build_api.py` minted a fresh uuid4 for every node on every build, so SEO_Agent_API.json and SEO_Agent_Admin_API.json came out
+# dirty after any rebuild whether or not anything had changed. That is not cosmetic: today's containment for the missing-.env
+# hazard is "always rebuild in the main worktree after a merge and read the diff", and a defaults-bake cannot be told apart from id
+# churn by eye.
+# The rule: a node's id is uuid5(NS, '<workflow name>:<node name>') -- the natural key, since n8n requires node names to be unique
+# inside a workflow and wires `connections` by name, never by id. The ids inside a node's parameters that n8n also wants unique (an
+# IF node's conditions, an Assignment node's values) are keyed on the same pair plus where they sit.
+# `webhookId` is NOT touched: it is a separate field, it is the public URL path of a Webhook or Form node, and a script-created
+# webhook node must keep the one it was given (CLAUDE.md), so changing it would move a live endpoint.
+_ID_NS = _uuid.UUID('5e0a9e1e-2a1f-4c0b-9d8e-0000a9e0c0de')
+_ID_FIELDS = ('conditions', 'assignments', 'values', 'fields')
+
+
+def node_id(workflow_name, node_name):
+    return str(_uuid.uuid5(_ID_NS, str(workflow_name) + ':' + str(node_name)))
+
+
+def _freeze_inner(obj, stem, path=''):
+    """Re-key every `id` inside a node's parameters on (workflow, node, where it sits), so it too is the same on every build."""
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k in _ID_FIELDS and isinstance(v, list):
+                for i, el in enumerate(v):
+                    if isinstance(el, dict) and isinstance(el.get('id'), str):
+                        el['id'] = str(_uuid.uuid5(_ID_NS, stem + '|' + path + '/' + k + '[' + str(i) + ']'))
+                    _freeze_inner(el, stem, path + '/' + k + '[' + str(i) + ']')
+            else:
+                _freeze_inner(v, stem, path + '/' + str(k))
+    elif isinstance(obj, list):
+        for i, el in enumerate(obj):
+            _freeze_inner(el, stem, path + '[' + str(i) + ']')
+
+
+def freeze_ids(workflow):
+    """Called by every builder immediately before it writes a workflow. Returns the workflow."""
+    name = workflow.get('name') or workflow.get('id') or ''
+    seen = set()
+    for n in workflow.get('nodes') or []:
+        nm = n.get('name')
+        assert nm not in seen, 'two nodes called %r in %r: a node name is the id key, so it must be unique' % (nm, name)
+        seen.add(nm)
+        n['id'] = node_id(name, nm)
+        _freeze_inner(n.get('parameters') or {}, str(name) + ':' + str(nm))
+    return workflow
+
+
+def ids_are_frozen(workflow):
+    """-> the nodes whose id is not the one the rule gives. Build section 69 asserts this over every generated workflow."""
+    name = workflow.get('name') or workflow.get('id') or ''
+    return sorted(n.get('name') for n in (workflow.get('nodes') or []) if n.get('id') != node_id(name, n.get('name')))

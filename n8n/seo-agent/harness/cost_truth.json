@@ -273,7 +273,7 @@
    "dead_ends": [],
    "est": {
     "ai": 0.0,
-    "dfs": 0.15
+    "dfs": 0.015
    },
    "settle": "Settle Run Ledger (Tracker)",
    "settle_from": [

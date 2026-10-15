@@ -14,8 +14,14 @@
 // get a MOBILE check once a week — only 13% of sites hold the same position on both devices (Semrush, 50k keywords), so a desktop-only tracker
 // reports a position most visitors never see. Cost: one more depth-50 call per main keyword, the measured $0.015, at most 2 per ladder a week
 // (about $0.13 a month for a ladder, on top of the ~$0.60 it costs today).
+// B6-7 (2026-10-15, benchmark area 6 - docs/system-review-2026-10-14/BENCH_AREA6_rank_tracking.md gap G6-8, register row B6-7):
+// the tracker also watches the keywords the CUSTOMER named. max_watch_per_site / max_watch_per_run bound what one week may buy for them
+// (the measured $0.015 a check, so 10 a site is $0.15 a week); watch_own_days is our own weekly rhythm (6, not 7, for the same reason the
+// mobile check uses 6); watch_site_days is how recent a reading from the weekly SITE check has to be for the tracker to read it instead of
+// buying a second one of the same results page on the same morning.
 const LIMITS = { max_keywords_per_ladder: 15, max_checks_per_run: 120, stop_after_top3_checks: 4, unpublished_every_days: 28, won_every_days: 28,
-  mobile: true, max_mobile_per_ladder: 2, mobile_every_days: 6 };   // 6, not 7: a run started by hand on the day of the weekly run must not pay for the same mobile check twice
+  mobile: true, max_mobile_per_ladder: 2, mobile_every_days: 6,   // 6, not 7: a run started by hand on the day of the weekly run must not pay for the same mobile check twice
+  max_watch_per_site: 10, max_watch_per_run: 30, watch_own_days: 6, watch_site_days: 10, max_watch_listed: 40 };
 const daysSince = (iso) => iso ? (Date.now() - new Date(iso).getTime()) / 864e5 : 1e9;
 const deferred = [];
 const rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error && Object.keys(r).length); } catch (e) { return []; } };
@@ -90,5 +96,96 @@ for (const [id, pages] of byLadder) {
     checks.push({ ...m, device: 'mobile', endpoint: 'https://api.dataforseo.com/v3/serp/google/organic/live/advanced', body: serpBody(m, 'mobile') });
   }
 }
-if (!checks.length) return [{ json: { nothing_to_do: true, ladders: byLadder.size, skipped, deferred, set_aside: setAside } }];
-return checks.map(c => ({ json: { ...c, skipped_ladders: skipped, deferred_pages: deferred, set_aside_pages: setAside } }));
+// ---- B6-7 (2026-10-15, benchmark area 6 - BENCH_AREA6_rank_tracking.md section 7): the keywords the CUSTOMER named ----
+// Until now `Tracker Plan` read `seo_ladders` and nothing else, so the thirty searches a business names when it sets tracking up were
+// invisible to the tracker that exists for exactly that question (gap G6-8: "a tracker tracks whatever keyword list you give it").
+// Their list is already stored - `seo_sites.keywords`, written by the tracking form and by "Track my site" - and the weekly Site
+// Tracker already BUYS a live check for much of it an hour later and stores the reading in THIS table (ladder_id = site_id, rung 0).
+// So the rule here is read first, buy second:
+//   * a reading the weekly site check made less than `watch_site_days` ago is READ, never bought again - the two workflows share one
+//     series instead of each paying for the same results page on the same morning (R28's rule one step up: money is counted once
+//     because it is spent once). Our own reading counts for `watch_own_days`, so the series stays weekly;
+//   * what is bought is bounded - `max_watch_per_site` a site and `max_watch_per_run` a run, oldest reading first - and every keyword
+//     the cap does not reach is NAMED with the cap and its last reading, never silently dropped (INVARIANTS rule 1);
+//   * INVARIANTS rule 2: a stored keyword is read through the same fit gate the stored rungs pass. A competitor's brand typed into a
+//     form is still a competitor's brand. Unlike the Site Tracker's own read path, the customer's keywords are deliberately NOT put
+//     in `protect` here - protecting them would mean the gate could never judge them, which is the whole point of running it;
+//   * the rows are written under `watch_<site_id>`, so a reading of ours is told apart from the site check's own (that is what makes
+//     "somebody already buys this one weekly" a measurement and not a guess) while both halves stay one series for the report.
+const kwList = (v) => [...new Set(String(v || '').split(/[\n,;]+/).map(k => k.trim().toLowerCase().replace(/\s+/g, ' ')).filter(Boolean))];
+const already = new Set();   // what the ladders of this run already cost money for, or deliberately did not: a keyword is counted once
+for (const c of checks) already.add(normD(c.domain) + '|' + String(c.keyword).toLowerCase());
+for (const d of deferred) already.add(normD(d.domain) + '|' + String(d.keyword).toLowerCase());
+for (const a of setAside) already.add(normD(a.domain) + '|' + String(a.keyword).toLowerCase());
+const watchChecks = []; const watchCarried = []; const watchHeld = []; const watchAside = []; const watchSites = [];
+let watchBudget = LIMITS.max_watch_per_run;
+for (const s of siteRows) {
+  if (String(s.status || 'active') === 'paused') continue;
+  const d = normD(s.domain); if (!d) continue;
+  const kws = kwList(s.keywords); if (!kws.length) continue;
+  const sid = String(s.site_id || ('site_' + d.replace(/[^a-z0-9]+/g, '-')));
+  const wid = 'watch_' + sid;
+  const mon = monRows.find(m => m.site_id === sid || normD(m.domain) === d) || {};
+  let services = []; try { services = SM.from(s, { monitors: mon }).services || []; } catch (e) { services = []; }
+  const fitCtx = FITR.ctx({ own_domain: d, competitors: competitorsFor(d), heads: rows.filter(r => normD(r.domain) === d).map(r => r.head_keyword), services });
+  const gated = FITR.rungs(kws.map(k => ({ keyword: k, domain: d, ladder_id: wid })), fitCtx, { where: 'the weekly rank tracker' });
+  for (const a of gated.set_aside) watchAside.push({ site_id: sid, domain: d, keyword: a.keyword, reason: a.reason, detail: a.detail, dropped: !!a.dropped,
+    note: '"' + a.keyword + '" is on your tracking list, but no position is checked for it: ' + a.detail + ' (' + a.reason + '). Take it off the list, or tell us it is deliberate.' });
+  const kept = gated.keep.map(r => r.keyword);
+  const site = { site_id: sid, domain: d, email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '',
+    country: s.country || '', total: kws.length, checked: 0, carried: 0, held: 0, set_aside: gated.set_aside.filter(x => x.dropped).length };
+  const loc = Number(s.location_code) || 0;
+  if (!(loc > 0)) {   // rule 1: a keyword nobody can buy a country-level check for is named, not quietly missing
+    for (const k of kept) watchHeld.push({ site_id: sid, domain: d, keyword: k, last_position: null, last_checked: '',
+      reason: 'no market (country) is stored for this website, so a position cannot be checked for it - set the country in your tracking settings' });
+    site.held = kept.length; watchSites.push(site); continue;
+  }
+  const competitors = competitorsFor(d);
+  const newest = (kw, who) => deskHist.filter(h => String(h.keyword).toLowerCase() === kw && (who ? h.ladder_id === who : (h.ladder_id === wid || h.ladder_id === sid || normD(h.domain) === d))
+    && h.position !== '' && h.position != null && h.checked_at).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)))[0] || null;
+  const cand = [];
+  for (const k of kept) {
+    const theirs = newest(k, sid), ours = newest(k, wid), any = newest(k, '');
+    if (already.has(d + '|' + k)) {
+      watchCarried.push({ site_id: sid, domain: d, keyword: k, source: 'ladder', last_checked: any ? any.checked_at : '',
+        reason: 'it is also a rung of one of your keyword ladders, so the check bought there is the one reported - it is never bought twice' });
+      site.carried++; continue;
+    }
+    if (theirs && daysSince(theirs.checked_at) < LIMITS.watch_site_days) {
+      watchCarried.push({ site_id: sid, domain: d, keyword: k, source: 'site_check', last_checked: theirs.checked_at,
+        reason: 'the weekly site check already read this results page on ' + String(theirs.checked_at).slice(0, 10) + ', so the tracker reads that reading instead of buying a second one' });
+      site.carried++; continue;
+    }
+    if (ours && daysSince(ours.checked_at) < LIMITS.watch_own_days) {
+      watchCarried.push({ site_id: sid, domain: d, keyword: k, source: 'own', last_checked: ours.checked_at,
+        reason: 'it was checked on ' + String(ours.checked_at).slice(0, 10) + ', less than ' + LIMITS.watch_own_days + ' days ago - a position is checked once a week, not once a run' });
+      site.carried++; continue;
+    }
+    cand.push({ keyword: k, last_at: any ? String(any.checked_at) : '', last_position: any ? Number(any.position) : null });
+  }
+  // oldest reading first, and a keyword nobody has ever checked before all of them: the cap buys the readings that are missing most
+  cand.sort((a, b) => (a.last_at ? 1 : 0) - (b.last_at ? 1 : 0) || String(a.last_at).localeCompare(String(b.last_at)) || a.keyword.localeCompare(b.keyword));
+  const room = Math.max(0, Math.min(LIMITS.max_watch_per_site, watchBudget, LIMITS.max_checks_per_run - checks.length - watchChecks.length));
+  cand.forEach((c, i) => {
+    if (i < room) {
+      watchChecks.push({ ladder_id: wid, watch_keyword: true, site_id: sid, domain: d, head_keyword: '', rung: 0, page_no: 0, keyword: c.keyword,
+        page_type: '', target_url: '', status: '', location_code: loc, language_code: s.language_code || 'en', email: s.email || '',
+        callback_url: s.callback_url || '', request_id: s.request_id || '', country: s.country || '', won_monthly: false, competitors,
+        device: 'desktop', endpoint: 'https://api.dataforseo.com/v3/serp/google/organic/live/advanced',
+        body: serpBody({ keyword: c.keyword, location_code: loc, language_code: s.language_code || 'en' }, 'desktop') });
+      site.checked++;
+    } else {
+      watchHeld.push({ site_id: sid, domain: d, keyword: c.keyword, last_position: c.last_position, last_checked: c.last_at,
+        reason: 'the tracker buys at most ' + LIMITS.max_watch_per_site + ' checks a week for your own keyword list (oldest reading first, about $0.015 each), so this one waits for a week when an older reading does not need it more' });
+      site.held++;
+    }
+  });
+  watchBudget -= site.checked;
+  watchSites.push(site);
+}
+const watch = { sites: watchSites, limits: { per_site: LIMITS.max_watch_per_site, per_run: LIMITS.max_watch_per_run, own_days: LIMITS.watch_own_days, site_days: LIMITS.watch_site_days },
+  carried: watchCarried.slice(0, LIMITS.max_watch_listed), held: watchHeld.slice(0, LIMITS.max_watch_listed), set_aside: watchAside.slice(0, LIMITS.max_watch_listed),
+  carried_total: watchCarried.length, held_total: watchHeld.length, set_aside_total: watchAside.length, checked_total: watchChecks.length };
+const all = [...checks, ...watchChecks];
+if (!all.length) return [{ json: { nothing_to_do: true, ladders: byLadder.size, skipped, deferred, set_aside: setAside, watch } }];
+return all.map(c => ({ json: { ...c, skipped_ladders: skipped, deferred_pages: deferred, set_aside_pages: setAside, watch } }));

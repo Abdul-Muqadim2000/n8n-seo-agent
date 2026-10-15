@@ -7,8 +7,9 @@
 //   plan       = easy -> direct (2-4 months) · reachable -> short (4-8) · hard -> full (9-15) · very hard -> full, stretch · not realistic -> none;
 //                strong sites (100+ top-10 keywords, 1,000+ ranking keywords, or already top 20 for it): direct 2-3, short 3-6, full 6-12.
 //   cache      = seo_cache 'reach:<site_id>' for 30 days and the same market (value: reach, method, p75, size_reach, sample, top10,
-//                organic_keywords, location_code); a reach that could not be measured (both calls failed) is never stored.
-const REACH_CFG = { min_top10: 5, percentile: 0.75, ttl_days: 30, unknown_kd: 10, easy: 5, reachable: 20, hard: 40, easy_position: 20, sample: 100 };
+//                organic_keywords, location_code, and since B1-2 the EVIDENCE itself: `r` = the top-10 keywords it was measured on);
+//                a reach that could not be measured (both calls failed) is never stored.
+const REACH_CFG = { min_top10: 5, percentile: 0.75, ttl_days: 30, unknown_kd: 10, easy: 5, reachable: 20, hard: 40, easy_position: 20, sample: 100, sample_keep: 60 };
 const REACH_MONTHS = { direct: [2, 4], short: [4, 8], full: [9, 15] }, REACH_MONTHS_STRONG = { direct: [2, 3], short: [3, 6], full: [6, 12] };
 const REACH_DIFF_LABEL = { easy: 'Easy for your site', reachable: 'Reachable for your site', hard: 'Hard for your site', very_hard: 'Very hard for your site', not_realistic: 'Not realistic for your site' };
 const REACH_PLAN_LABEL = { direct: 'Direct plan', short: 'Short ladder', full: 'Full ladder', none: 'No ladder' };
@@ -43,7 +44,10 @@ function reachFrom(ranked, authority) {
   const method = (!ranked && !known) ? 'default' : (p75 != null && p75 >= size_reach) ? 'percentile' : 'size';
   return { reach, method, p75, size_reach, sample: kds.length, top10, organic_keywords: authority && reachNum(authority.organic_keywords) != null ? reachNum(authority.organic_keywords) : null, cached: false };
 }
-// the stored reach of this site for this market, when it is younger than 30 days (null otherwise)
+// the stored reach of this site for this market, when it is younger than 30 days (null otherwise). B1-2: the row also carries the
+// keywords the number was measured on (`r`), so a run that reuses the cached reach can still answer "and what is it measured on?" and
+// measure a reach on ITS OWN topic (reachTopic) without re-buying the pull. A row written before B1-2 has no `r`: `ranked` is then null
+// and the caller says the evidence was not re-read, which is true, rather than reporting zero on-topic keywords, which is not.
 function reachCached(rows, domain, location_code) {
   const key = reachKey(domain);
   const row = (rows || []).filter(r => r && !r.error && r.key === key).sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)))[0];
@@ -53,12 +57,18 @@ function reachCached(rows, domain, location_code) {
   if (reachNum(location_code) && reachNum(v.location_code) && Number(v.location_code) !== Number(location_code)) return null;
   const days = (Date.now() - new Date(row.updated_at).getTime()) / 864e5;
   if (!(days >= 0 && days < REACH_CFG.ttl_days)) return null;
-  return { ...v, reach: Number(v.reach), cached: true, cached_at: String(row.updated_at) };
+  const { r: packed, ...rest } = v;
+  const ranked = Array.isArray(packed) ? packed.map(x => ({ keyword: String((x || [])[0] || ''), kd: reachNum((x || [])[1]), position: reachNum((x || [])[2]) })).filter(x => x.keyword) : null;
+  return { ...rest, reach: Number(v.reach), cached: true, cached_at: String(row.updated_at), ranked, ranked_from: ranked ? 'the stored measurement of ' + String(row.updated_at).slice(0, 10) : '' };
 }
-// the seo_cache row (exact columns) for a freshly measured reach
-const reachCacheRow = (domain, info, location_code) => ({ key: reachKey(domain), kind: 'reach', site_id: reachSiteId(domain),
-  value: JSON.stringify({ reach: info.reach, method: info.method, p75: info.p75, size_reach: info.size_reach, sample: info.sample, top10: info.top10, organic_keywords: info.organic_keywords, location_code: reachNum(location_code) }),
-  updated_at: new Date().toISOString() });
+// the seo_cache row (exact columns) for a freshly measured reach. `ranked` (optional) is the evidence: [{ keyword, kd, position }] as
+// the pull returned it, packed as [keyword, kd, position] triples and capped at REACH_CFG.sample_keep so one row stays small.
+const reachPack = (ranked) => (Array.isArray(ranked) ? ranked : []).filter(r => r && r.keyword && reachNum(r.position) != null)
+  .slice(0, REACH_CFG.sample_keep).map(r => [String(r.keyword).slice(0, 120), reachNum(r.kd), Number(r.position)]);
+const reachCacheRow = (domain, info, location_code, ranked) => { const r = reachPack(ranked);
+  return { key: reachKey(domain), kind: 'reach', site_id: reachSiteId(domain),
+    value: JSON.stringify({ reach: info.reach, method: info.method, p75: info.p75, size_reach: info.size_reach, sample: info.sample, top10: info.top10, organic_keywords: info.organic_keywords, location_code: reachNum(location_code), ...(r.length ? { r } : {}) }),
+    updated_at: new Date().toISOString() }; };
 // o: { position (the site's rank for the keyword), navigational, other_brand, verdict }
 function difficultyForYou(kd, reach, o) {
   o = o || {};
@@ -68,6 +78,60 @@ function difficultyForYou(kd, reach, o) {
   const r = reachNum(reach) == null ? reachSizeTier(0) : Number(reach);
   const k = reachNum(kd) == null ? r + REACH_CFG.unknown_kd : Number(kd);
   return k <= r + REACH_CFG.easy ? 'easy' : k <= r + REACH_CFG.reachable ? 'reachable' : k <= r + REACH_CFG.hard ? 'hard' : 'very_hard';
+}
+// ---- B2-1 (2026-10-15, benchmark area 2): the reach measured on ONE TOPIC, not across the whole website ----
+// `reach` above is a single number per site: the 75th-percentile difficulty of everything it ranks top 10 for, cached 30 days. The same
+// number therefore decided two unrelated plans — "peppol uae" and "erp implementation dubai" (lad_mv5pjt5y4aoa, 2026-10-13: reach 10 from
+// a cached 2026-10-08 measurement). The leaders personalise per TOPIC: MarketMuse subtracts a topic-level Topic Authority from the keyword
+// difficulty ("If you have no Topic Authority, then your Personalized Difficulty = Keyword Difficulty",
+// https://docs.marketmuse.com/reference/personalized-difficulty-and-topic-authority/), and Semrush measures the thematic distance between a
+// domain's core topics and the target topic, lowering PKD the closer the match (https://www.semrush.com/blog/ai-keyword-research-updates/).
+// reachTopic() does the same from data the run already paid for: the keywords the site ALREADY ranks for that are on this topic. It is used
+// only when that evidence is as strong as the site-wide measurement demands (REACH_CFG.min_top10 keywords in the top 10 with a difficulty).
+// Below that bar the site-wide reach stays and the caller is told WHY, so no plan quietly rests on a number measured on other topics. There
+// is no third direction: absence of on-topic wins is not evidence of inability, so it never invents a penalty of its own.
+const REACH_TOPIC_CFG = { max_examples: 6, max_other: 4 };
+// the default on-topic test: half of the head's meaningful words (the shape `_radius.js` RAD.headFit uses; the ladder passes that kit in)
+const reachTopicMatch = (head) => { const h = overlapTokens(head); const need = Math.max(1, Math.ceil(h.length / 2));
+  return (kw) => { if (!h.length) return false; const t = overlapTokens(kw); return t.filter(x => h.includes(x)).length >= need; }; };
+/**
+ * ranked: [{ keyword, kd, position }] — every keyword the site ranks for that this run saw (null = the pull failed)
+ * head: the topic's head keyword · domainReach: the site-wide reach · o: { match (the on-topic test), domain, reason_missing }
+ * -> { used, reach, topic_reach, site_reach, on_topic, top10, sample, best, examples, other_topics, reason, note }
+ */
+function reachTopic(ranked, head, domainReach, o) {
+  const opts = o || {};
+  const site = reachNum(domainReach) == null ? reachSizeTier(0) : Number(domainReach);
+  const match = typeof opts.match === 'function' ? opts.match : reachTopicMatch(head);
+  const rows = (ranked || []).filter(r => r && r.keyword && reachNum(r.position) != null);
+  const on = rows.filter(r => { try { return !!match(String(r.keyword)); } catch (e) { return false; } });
+  const pos = (r) => Number(r.position);
+  const top10 = on.filter(r => pos(r) >= 1 && pos(r) <= 10);
+  const kds = top10.map(r => reachNum(r.kd)).filter(v => v != null).sort((a, b) => a - b);
+  let p75 = null;
+  if (kds.length >= REACH_CFG.min_top10) { const i = REACH_CFG.percentile * (kds.length - 1), lo = Math.floor(i), hi = Math.ceil(i); p75 = Math.round(kds[lo] + (kds[hi] - kds[lo]) * (i - lo)); }
+  const used = p75 != null;
+  const best = on.slice().sort((a, b) => pos(a) - pos(b))[0] || null;
+  const examples = top10.slice().sort((a, b) => pos(a) - pos(b)).slice(0, REACH_TOPIC_CFG.max_examples)
+    .map(r => ({ keyword: String(r.keyword), position: pos(r), kd: reachNum(r.kd) }));
+  const other_topics = rows.filter(r => pos(r) >= 1 && pos(r) <= 10 && on.indexOf(r) < 0).sort((a, b) => pos(a) - pos(b))
+    .slice(0, REACH_TOPIC_CFG.max_other).map(r => String(r.keyword));
+  const who = String(opts.domain || 'your site');
+  const q = '"' + String(head || '') + '"';
+  // B1-2: a caller that reuses a stored reach knows WHY there is no list (the pull was not made again); it says that instead of
+  // "could not be read", which would blame a failure that never happened.
+  const reason = ranked == null ? (String(opts.reason_missing || '') || 'the keywords ' + who + ' ranks for could not be read on this run')
+    : !on.length ? 'nothing ' + who + ' ranks for is on this topic'
+    : !top10.length ? on.length + ' keyword(s) on this topic rank for ' + who + ', none of them in the top 10 (best #' + (best ? pos(best) : '-') + ')'
+    : top10.length + ' keyword(s) on this topic are in the top 10' + (kds.length < top10.length ? ', ' + kds.length + ' of them with a known difficulty' : '')
+      + ' - fewer than the ' + REACH_CFG.min_top10 + ' needed to measure a reach on one topic';
+  const note = used
+    ? 'Measured on this topic: 75% of the ' + kds.length + ' keyword(s) about ' + q + ' that ' + who + ' ranks in the top 10 for have a difficulty of ' + p75
+      + ' or lower, so this plan is measured against ' + p75 + ' and not against the site-wide reach of ' + site + '.'
+    : 'This plan is measured against your site-wide reach (' + site + '), because ' + reason + '. A reach measured on other topics'
+      + (other_topics.length ? ' (' + other_topics.map(k => '"' + k + '"').join(', ') + ')' : '') + ' is weaker evidence for this one: treat the months and the chance below as the optimistic case.';
+  return { used, reach: used ? p75 : site, topic_reach: p75, site_reach: site, on_topic: on.length, top10: top10.length, sample: kds.length,
+    best: best ? { keyword: String(best.keyword), position: pos(best) } : null, examples, other_topics, reason, note, head: String(head || '') };
 }
 const reachStrong = (authority, position) => { const p = reachNum(position); return !!(authority && ((Number(authority.top10) || 0) >= 100 || (Number(authority.organic_keywords) || 0) >= 1000)) || (p != null && p >= 1 && p <= REACH_CFG.easy_position); };
 function reachPlan(difficulty, strong) {
@@ -392,6 +456,70 @@ const fitStored = (row, ctx) => {
   return { ok: false, live: false, flagged: true, reason: g.reason, detail: g.detail,
     note: why + ' — it was planned before this rule existed, so it is set aside instead of written' };
 };
+// ---- B-G1 / B-G2 / B-G3 (2026-10-15, FIX_PLAN §3.16; INVARIANTS rule 2): the READ path, written once ----
+// R16 put `fitStored` on two read paths — the Rank Tracker and the Content Cadence — and wrote the loop around it twice. Three more
+// readers of the same stored rungs were written afterwards without it, and every one of them ACTS on what it reads: *AI Plan* (the AI
+// Visibility Tracker and the AI Pulse) turns a stored rung into a question asked of ChatGPT and then scores the site against the answer;
+// *Growth Plan* turns it into a "question to win" and then into a page the Content Cadence writes; *Site Plan* buys it a live rank check
+// every week and prints it in the weekly report. Three copies of one loop are three chances to drift, and the drift IS this defect — so
+// the loop lives here, once, and every reader calls it. FITR.rungs() never throws a refusal away: `set_aside` carries the row, the reason
+// and the sentence to print, because a list that is shorter because a gate ran has to say so (INVARIANTS rule 1).
+const FITR = {
+  // The context a stored row is judged in. Deliberately the shape R16's two callers build by hand: the site's own domain, the
+  // competitors it declared, the brand names AI uses for other companies, and — PROTECTED, so the ladder's own subject can never look
+  // like somebody's brand — the ladder head terms, the site's services and its own tracked keywords. Topics are optional: with none on
+  // file the topic bar judges nothing (fitTopic's own "no evidence, no refusal" rule).
+  ctx(o) {
+    o = o || {};
+    const own = fitHost(o.own_domain || o.domain || '');
+    const protect = [...new Set([...(o.heads || []), ...(o.services || []), ...(o.keywords || []), ...(o.protect || [])]
+      .map(x => String(x || '').trim()).filter(Boolean))];
+    return { own_domain: own, brands: o.brands || {}, intent: o.intent || '',
+      competitors: [...new Set((o.competitors || []).map(fitHost).filter(d => d && d !== own))],
+      serp_domains: (o.serp_domains || []).map(fitHost).filter(Boolean), protect,
+      topics: o.topics && (Array.isArray(o.topics) ? o.topics.length : String(o.topics).trim()) ? o.topics : null,
+      topic_label: o.topic_label || 'what this website sells' };
+  },
+  // Every stored row, gated once. Returns { keep, set_aside, dropped, flagged, refused_keywords }:
+  //   keep      — what the caller may act on (a row whose page is already written stays: that page is live work);
+  //   set_aside — one record per refusal, with `reason`, `detail`, `note` (the sentence to print), `written` and `dropped`.
+  // opts: { keyword: row -> the keyword (default row.keyword), live: row -> true when the row must be kept and only flagged,
+  //         serpFor: (keyword, row) -> [domains in rank order] for the results-page rules, where: a label naming this read path }.
+  rungs(rows, ctx, opts) {
+    const o = opts || {}; const C = ctx || {};
+    const kwOf = typeof o.keyword === 'function' ? o.keyword : ((r) => (r || {}).keyword);
+    const liveOf = typeof o.live === 'function' ? o.live : null;
+    const serpFor = typeof o.serpFor === 'function' ? o.serpFor : null;
+    const keep = []; const set_aside = [];
+    for (const r0 of (rows || [])) {
+      const r = (r0 && typeof r0 === 'object') ? r0 : {};
+      const kw = String(kwOf(r0) || '').trim();
+      if (!kw) { keep.push(r0); continue; }   // a row with no keyword is not this gate's business (the caller's own emptiness rules apply)
+      const serp = serpFor ? (serpFor(kw, r0) || []).map(fitHost).filter(Boolean) : [];
+      let c = C;
+      if (serp.length) c = { ...c, serp, serp_domains: [...new Set([...(C.serp_domains || []), ...serp])] };
+      if (liveOf && liveOf(r0)) c = { ...c, written: true };
+      const g = fitStored({ ...r, keyword: kw }, c);
+      if (g.ok) keep.push(r0);
+      if (!g.flagged) continue;
+      set_aside.push({ keyword: kw, reason: g.reason, detail: g.detail, note: g.note, written: !!g.live, dropped: !g.ok,
+        where: String(o.where || ''), ladder_id: r.ladder_id || '', head_keyword: r.head_keyword || '', rung: Number(r.rung) || 0,
+        page_no: Number(r.page_no) || 0, status: r.status || '', target_url: r.target_url || '', prompt_id: r.prompt_id || '' });
+    }
+    return { keep, set_aside, dropped: set_aside.filter(x => x.dropped), flagged: set_aside.filter(x => !x.dropped),
+      refused_keywords: set_aside.filter(x => x.dropped).map(x => x.keyword) };
+  },
+  // The sentence a human reads. INVARIANTS rule 1: a list that is shorter because a gate ran says so, with the reason, every time.
+  // `what` finishes "so they are not …" ("asked of the AI engines", "tracked", "written as a page").
+  line(set_aside, what) {
+    const a = (set_aside || []).filter(x => x && x.dropped);
+    if (!a.length) return '';
+    return a.length + ' stored keyword' + (a.length === 1 ? ' was' : 's were') + ' set aside, so ' + (a.length === 1 ? 'it is' : 'they are')
+      + ' not ' + String(what || 'used') + ': ' + a.slice(0, 6).map(x => '"' + x.keyword + '" — ' + (x.detail || x.reason)).join('; ')
+      + (a.length > 6 ? ' (and ' + (a.length - 6) + ' more)' : '')
+      + '. They were planned before this rule existed; a page that is already written is kept and only flagged.';
+  }
+};
 // ---- the one site model (G19, 2026-10-12; see SITE_MODEL_SPEC.md; the builders inline this file where a node asks for the SITE_MODEL kit) ----
 // Every workflow reads the same facts about a site through SM: the canonical host, the business name / logo / NAP (seo_profiles ->
 // the homepage Organization / LocalBusiness schema -> Google Business Profile -> the fields the web app sent), the services and nav
@@ -575,8 +703,16 @@ const SM = (() => {
       business_facts: S(m.business_facts).slice(0, 2000), cta: S(m.cta).slice(0, 200), brand_names: (m.brand_names || []).join(', ').slice(0, 500),
       competitors: (m.competitors || []).join(', ').slice(0, 500), accreditation: S(m.accreditation).slice(0, 200), model_updated_at: S(m.model_updated_at) };
   };
+  // B4-1 / B4-2 (2026-10-15, benchmark area 4): the measurement columns belong to the row, so the kit emits them — a Data Table
+  // node auto-maps every field it is given, and a row that is short of a column is as wrong as one that carries a stray field.
+  // The model itself measures nothing: these are the defaults the Site Tracker's own judgement is written over
+  // (v5/code/Page_Inventory_Site.js), and `''` for decay_state means "never measured", never "steady".
+  const num0 = (v) => (Number(v) || 0);
   const pageRows = (model) => pages(model).map(p => ({ site_id: S((model || {}).site_id), url: S(p.url), title: S(p.title).slice(0, 300), h1: S(p.h1).slice(0, 300),
-    source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries_json: JSON.stringify(p.queries || []), updated_at: S((model || {}).model_updated_at) || new Date().toISOString() }));
+    source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries_json: JSON.stringify(p.queries || []), updated_at: S((model || {}).model_updated_at) || new Date().toISOString(),
+    clicks: num0(p.clicks), impressions: num0(p.impressions), position: num0(p.position), prev_clicks: num0(p.prev_clicks), yoy_clicks: num0(p.yoy_clicks),
+    decay_state: S(p.decay_state), decay_pct: num0(p.decay_pct), decay_lost: num0(p.decay_lost), decay_kind: S(p.decay_kind),
+    decay_basis: S(p.decay_basis).slice(0, 900), measured_at: S(p.measured_at) }));
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml } };
 })();
@@ -588,9 +724,11 @@ const SM = (() => {
 //                          pulls instead of only being read afterwards (K6).
 //   * KWI.calibrate()    - the traffic estimate checked against the site's own measured clicks and impressions where it already
 //                          ranks, labelled `calibrated` or `modelled`. A modelled number is never presented as measured (K2).
-//   * KWI.serpClusters() - keywords grouped when their top-10 results share at least 3 URLs, each cluster named by its head keyword
-//                          and carrying the shared URLs, so one page can target the whole group (K7). Only results pages the run
-//                          already fetched are used: the live checks and the competitors' own ranking URLs.
+//   * KWI.serpClusters() - keywords grouped when their results pages share enough URLs, each cluster named by its head keyword and
+//                          carrying the shared URLs, so one page can target the whole group (K7). Discovery compares the top 10 at 3
+//                          shared URLs from results pages the run already fetched (the live checks and the competitors' own ranking
+//                          URLs); the keyword ladder (B2-4, 2026-10-15) buys one results page per rung candidate and compares the
+//                          TOP 7 at a 40% threshold, the convention's own current numbers (B2-6, `top_n` / `min_overlap`).
 // Every function is pure and takes its thresholds as options, so the harness (S52) can drive it directly.
 const KWI = (() => {
   const S = (v) => String(v == null ? '' : v).trim();
@@ -609,13 +747,31 @@ const KWI = (() => {
     min_urls: 3,                // a keyword needs this many known top-10 URLs before it can be compared at all
     max_cluster_keywords: 12,
     live_serp_checks: 16,       // K4: how many keywords get a live intent / page-type check (cost-aware cap, see LIVE_MAX)
-    live_serp_max: 25
+    live_serp_max: 25,
+    // B2-6 (2026-10-15, benchmark area 2, approved by the owner): Keyword Insights, whose convention the shared-URL rule is, now
+    // compares the TOP 7 and not the top 10 - "the overlap setting was originally 1-10, it now runs from 1-7 because Google no longer
+    // reliably shows 10 traditional links" - at a default threshold of 40% of them (https://docs.keywordinsights.ai/learning-center/
+    // the-features/keyword-clustering/). `top_n` cuts every keyword's list to that depth BEFORE anything is compared, and
+    // `min_overlap` turns the threshold into a share of it: ceil(7 x 0.4) = 3 of 7. Both default to 0 = off, so the discovery path
+    // keeps the top-10 / 3-URL shape it was measured on until the orchestrator re-baselines K7; the ladder (B2-4) passes 7 / 0.4.
+    top_n: 0,
+    min_overlap: 0,
+    // B2-4: how many of a ladder's rung candidates may be sent for a results page of their own, and what one costs. A full ladder
+    // plans at most 11 pages (rung limits 4 / 4 / 3) and a page takes at most 7 keywords, so 24 covers more than twice the pages a
+    // plan can hold; the rest of the pool would be bought for keywords no page will ever target.
+    ladder_serp_checks: 24,
+    ladder_serp_max: 30,
+    serp_check_usd: 0.002       // one DataForSEO live-advanced SERP at depth 10, the same call the discovery live checks buy
   };
   const bare = (v) => S(v).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '').replace(/:\d+$/, '');
   const cap = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
   // K4: how many live results-page checks this run may buy. One check is a DataForSEO live-advanced SERP at depth 10 (~$0.002), so the
   // default 16 costs about $0.032 a run against $0.016 at the old fixed 8; the owner may set it per run and it is hard-capped at 25.
   const liveChecks = (requested) => { const n = num(requested); return n == null || n <= 0 ? CFG.live_serp_checks : Math.round(cap(n, 1, CFG.live_serp_max)); };
+  // B2-4: the same shape for the ladder's own cap. 0 or a negative number means "make no call at all" (a free run), which is why this
+  // one does NOT fall back to the default when it is given a zero: a bound of nothing has to be expressible.
+  const ladderChecks = (requested) => { const n = num(requested); if (n == null) return CFG.ladder_serp_checks; if (n <= 0) return 0; return Math.round(cap(n, 1, CFG.ladder_serp_max)); };
+  const checkCost = (n) => +((Math.max(0, Number(n) || 0)) * CFG.serp_check_usd).toFixed(4);
 
   // ---- K6: the site's own Search Console queries as seeds ----
   // rows = seo_query_history rows (the Site Tracker writes one per site, query and 28-day period). Only the newest period counts:
@@ -679,17 +835,34 @@ const KWI = (() => {
       min_impressions: c.min_impressions, striking_min: c.striking_min, striking_max: c.striking_max };
   };
 
-  // the click loss a results page causes (an AI Overview, a snippet, a local pack and so on take clicks off the blue links)
-  const featureLoss = (types) => {
-    const t = (Array.isArray(types) ? types : []).map(x => S(x).toLowerCase());
-    let ctr = 1;
-    if (t.indexOf('ai_overview') >= 0) ctr *= 0.65;
-    if (t.indexOf('featured_snippet') >= 0) ctr *= 0.85;
-    if (t.indexOf('video') >= 0 || t.indexOf('short_videos') >= 0) ctr *= 0.92;
-    if (t.indexOf('local_pack') >= 0 || t.indexOf('map') >= 0) ctr *= 0.85;
-    if (t.indexOf('shopping') >= 0 || t.indexOf('popular_products') >= 0) ctr *= 0.9;
-    return ctr;
+  // ---- K3: the click loss a results page causes, and where each figure comes from (B1-3, 2026-10-15, benchmark area 1) ----
+  // Until today every factor here was an undated constant, and the AI Overview one (0.65 = a 35% loss) was the APRIL 2025 measurement
+  // -- "AI Overviews reduced clicks to top-ranking content by 34.5%" -- while the current study, published 2026-02-04 on December 2025
+  // data over 300,000 keywords, measures **-58.0% at position 1**, -50.8% at 2 and -46.4% at 3
+  // (https://ahrefs.com/blog/ai-overviews-reduce-clicks-update/). The estimate these factors feed is explicitly "what a page in the top
+  // three would get" (`top_share`), so the top-three average of that table is the figure that belongs here: it was 1.5x too generous.
+  // The other features have no comparable published measurement (the 2025 featured-snippet numbers disagree with each other and with
+  // Perficient's "click-neutral" finding), so they stay where they were and are labelled a STATED RULE, not a measurement. Every one of
+  // them is named in `CLICK_LOSS` with its basis so a report can print what it applied and why, instead of a bare multiplier.
+  const AIO_CTR_2025 = { 1: 0.420, 2: 0.492, 3: 0.536 };   // 1 - the measured loss at each of the top three positions
+  const CLICK_LOSS = {
+    ai_overview: { factor: +(((AIO_CTR_2025[1] + AIO_CTR_2025[2] + AIO_CTR_2025[3]) / 3).toFixed(3)), basis: 'measured',
+      what: 'an AI Overview', source: 'Ahrefs, 300,000 keywords, December 2025 data (published 2026-02-04)',
+      url: 'https://ahrefs.com/blog/ai-overviews-reduce-clicks-update/',
+      note: 'clicks to position 1 fall 58.0% when an AI Overview is shown (50.8% at 2, 46.4% at 3); this estimate is for a page in the top three, so their average is applied' },
+    featured_snippet: { factor: 0.85, basis: 'stated rule', what: 'a featured snippet', source: 'no measurement we could verify; published 2025 studies disagree', url: '' },
+    video: { factor: 0.92, basis: 'stated rule', what: 'video results', source: 'no measurement we could verify', url: '' },
+    local_pack: { factor: 0.85, basis: 'stated rule', what: 'a local pack', source: 'no measurement we could verify', url: '' },
+    shopping: { factor: 0.9, basis: 'stated rule', what: 'shopping results', source: 'no measurement we could verify', url: '' },
   };
+  const FEATURE_KEY = { ai_overview: 'ai_overview', featured_snippet: 'featured_snippet', video: 'video', short_videos: 'video',
+    local_pack: 'local_pack', map: 'local_pack', shopping: 'shopping', popular_products: 'shopping' };
+  // which of the five were seen on this results page, each once, in the order they are listed above
+  const lossApplied = (types) => { const seen = new Set((Array.isArray(types) ? types : []).map(x => FEATURE_KEY[S(x).toLowerCase()]).filter(Boolean));
+    return Object.keys(CLICK_LOSS).filter(k => seen.has(k)).map(k => ({ key: k, ...CLICK_LOSS[k] })); };
+  const featureLoss = (types) => lossApplied(types).reduce((ctr, f) => ctr * f.factor, 1);
+  // "an AI Overview (-52% of the clicks, measured: Ahrefs ...)" - one clause per feature, for the note under a traffic figure
+  const lossText = (types) => lossApplied(types).map(f => f.what + ' (-' + Math.round((1 - f.factor) * 100) + '% of the clicks, ' + f.basis + (f.source ? ': ' + f.source : '') + ')').join(', ');
 
   // ---- K2: the traffic number, and where it comes from ----
   // `calibrated`: the site's own measured impressions for this exact search (the Search Console period, scaled to a month) through the
@@ -700,7 +873,13 @@ const KWI = (() => {
     const c = { ...CFG, ...(o || {}) };
     const k = e || {};
     const ctr = featureLoss(k.serp_types);
-    const vol = num(k.volume);
+    // B1-3: the figure says which features took clicks off it, how much each one took and whether that number is measured or a rule
+    const lossTxt = lossText(k.serp_types);
+    const lossNote = lossTxt ? ' Click loss applied: ' + lossTxt + '.' : '';
+    // B1-3 (2026-10-15): `num(null)` is 0, not null — Number(null) is 0 and 0 is finite — so a keyword the provider has NO volume for
+    // came back as "0 visits a month (modelled)" instead of "no estimate", a confident number where nothing was measured (the R26
+    // class). An absent volume is absent; a provider that really reports 0 still reports 0.
+    const vol = (k.volume === null || k.volume === undefined || k.volume === '') ? null : num(k.volume);
     const modelled = vol == null ? null : Math.round(vol * ctr * c.top_share);
     const g = (k.gsc && typeof k.gsc === 'object') ? k.gsc : null;
     const impressions = g ? num(g.impressions) : null;
@@ -714,14 +893,64 @@ const KWI = (() => {
         traffic_note: 'Calibrated with your own Search Console data: ' + Math.round(impressions) + ' impressions and ' + Math.round(clicks)
           + ' click(s) measured for this exact search on your site in ' + Math.round(days) + ' days'
           + (pos ? ' at average position ' + (Math.round(pos * 10) / 10) : '') + '. A page in the top three would take about '
-          + traffic_potential + ' visits a month' + (modelled != null ? ' (the modelled estimate from the provider\'s volume is ' + modelled + ').' : '.') };
+          + traffic_potential + ' visits a month' + (modelled != null ? ' (the modelled estimate from the provider\'s volume is ' + modelled + ').' : '.') + lossNote };
     }
     if (modelled == null) {
       return { traffic_potential: null, traffic_basis: 'unknown', modelled_traffic_potential: null,
         traffic_note: 'No monthly volume from the provider and no Search Console measurement for this search, so no traffic estimate is given.' };
     }
     return { traffic_potential: modelled, traffic_basis: 'modelled', modelled_traffic_potential: modelled,
-      traffic_note: 'Modelled, not measured: ' + vol + ' searches a month (a provider estimate) through the click loss of this results page and the share a top-three page takes.' };
+      traffic_note: 'Modelled, not measured: ' + vol + ' searches a month (a provider estimate) through the click loss of this results page and the share a top-three page takes.' + lossNote };
+  };
+  // ---- K4: what KIND of page Google actually ranks for this search (B1-5, 2026-10-15, benchmark area 1) ----
+  // The intent and the page type came from the AI screen's label (and DataForSEO's `main_intent` behind it). The live results page
+  // was already bought for the priority keywords and only its domains, its features and its People Also Ask were kept, so the one
+  // piece of evidence that settles the question - the ten pages Google chose - was thrown away. K4's own anchor for a 10 is "the
+  // dominant top-10 page type decides, a mismatch is flagged"; Ahrefs tells you to study the top 10 by hand for exactly this.
+  // `serpPageTypes` reads the URL and the title of each organic result, with the title first where it is decisive ("best ... ",
+  // "how to ...") and the path after it. Nothing is inferred from a domain we have not read, and a result it cannot place is
+  // `Other`, counted and never guessed at.
+  const SHAPES = [
+    { type: 'Government or official', test: (u, t, d) => /(^|\.)(gov|gov\.[a-z]{2}|gob|govt)(\.|$)/.test(d) || /\.gov($|\.)/.test(d) },
+    { type: 'Forum or community', test: (u, t, d) => /(^|\.)(reddit|quora|stackexchange|stackoverflow|linkedin|facebook|x|twitter|medium)\./.test(d) || /\/(forum|community|questions|discussion)\//.test(u) },
+    { type: 'Directory or marketplace', test: (u, t, d) => /(^|\.)(g2|capterra|getapp|softwareadvice|trustradius|saashub|clutch|crunchbase|yelp|yellowpages|indiamart)\./.test(d) },
+    { type: 'Comparison or list', test: (u, t) => /\b(best|top\s*\d+|vs\.?|versus|alternatives?|comparison|compared)\b/i.test(t) || /\/(best|top|vs|alternatives|compare)[-\/]/.test(u) },
+    { type: 'Pricing page', test: (u, t) => /\bpricing\b|\bprice list\b|\bcost(s)?\b.*\b(plans?|pricing)\b/i.test(t) || /\/(pricing|plans|price)(\/|$)/.test(u) },
+    { type: 'Guide or article', test: (u, t) => /\b(how to|what is|why|guide|tutorial|checklist|explained|step[- ]by[- ]step|everything you need)\b/i.test(t) || /\/(blog|insights|articles?|news|resources?|learn|guides?|knowledge|academy)(\/|$)/.test(u) },
+    { type: 'Service or product page', test: (u, t) => /\/(services?|solutions?|products?|software|platform|industries)(\/|$)/.test(u) || /\b(software|solution|services?|platform)\b/i.test(t) },
+    { type: 'Homepage', test: (u) => /^[a-z0-9.-]+\/?$/.test(u) },
+  ];
+  // what WE would write for it, in the same words, so a mismatch is a real disagreement and not a vocabulary difference
+  const OURS = { 'Blog Post': 'Guide or article', Guide: 'Guide or article', 'Pillar Page': 'Guide or article', 'FAQ Page': 'Guide or article',
+    'Comparison Page': 'Comparison or list', 'Service Page': 'Service or product page', 'Product Page': 'Service or product page',
+    'Landing Page': 'Service or product page', 'Category Page': 'Service or product page', 'Location Page': 'Service or product page',
+    'Local Page': 'Service or product page', 'Case Study': 'Guide or article' };
+  const shapeOf = (url, title) => {
+    const u = urlKey(url), d = bare(url), t = S(title);
+    for (const sh of SHAPES) { try { if (sh.test(u, t, d)) return sh.type; } catch (e) {} }
+    return 'Other';
+  };
+  /** results: [{ url, title }] from the live top 10 · o.page_type = the page we plan to write
+   *  -> { read, counts, dominant, dominant_count, dominant_share, ours, mismatch, text } */
+  const serpPageTypes = (results, o) => {
+    const c = { ...CFG, ...(o || {}) };
+    const list = (Array.isArray(results) ? results : []).filter(r => r && S(r.url)).slice(0, 10);
+    const counts = {};
+    for (const r of list) { const k = shapeOf(r.url, r.title); counts[k] = (counts[k] || 0) + 1; }
+    const read = list.length;
+    const ranked = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    const top = ranked[0] || null;
+    const ours = OURS[S(c.page_type)] || '';
+    // a dominant kind is one at least half the page agrees on, out of at least four results read: below that nobody can call it
+    const dominant = top && read >= 4 && top[1] / read >= 0.5 && top[0] !== 'Other' ? top[0] : '';
+    const mismatch = !!(dominant && ours && dominant !== ours);
+    const text = !read ? 'The results page was not read, so what Google ranks for this search is unknown.'
+      : !dominant ? 'Google ranks a mix for this search (' + ranked.map(x => x[1] + ' ' + x[0].toLowerCase()).join(', ') + '), so no page type is settled by the results.'
+        : dominant.toLowerCase().replace(/^./, m => m.toUpperCase()) + 's are what Google ranks here: ' + top[1] + ' of the ' + read + ' results read'
+          + (ours ? (mismatch ? ', while this plan writes a ' + ours.toLowerCase() + ' - expect to work harder, or write what the results page shows'
+            : ', which is what this plan writes') : '') + '.';
+    return { read, counts, dominant, dominant_count: top ? top[1] : 0, dominant_share: read ? Math.round((top ? top[1] : 0) / read * 100) : 0,
+      ours, mismatch, text };
   };
   const BASIS_TEXT = { calibrated: 'calibrated with your Search Console data', modelled: 'modelled from provider volume', unknown: 'no estimate' };
 
@@ -732,8 +961,14 @@ const KWI = (() => {
   const urlKey = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
   const serpClusters = (entries, o) => {
     const c = { ...CFG, ...(o || {}) };
+    // B2-6: the depth every list is cut to before it is compared, and the number of shared URLs that depth demands. With `top_n` and
+    // `min_overlap` set (the ladder: 7 and 0.4) the threshold is a SHARE of the depth - ceil(7 x 0.4) = 3 of 7 - instead of the flat
+    // count discovery still uses, and both numbers travel on every cluster so a report can state what was compared and how deeply.
+    const depth = (num(c.top_n) || 0) > 0 ? Math.round(c.top_n) : 0;
+    const need = (num(c.min_overlap) || 0) > 0 && depth ? Math.max(1, Math.ceil(depth * c.min_overlap)) : c.min_shared_urls;
     const list = (Array.isArray(entries) ? entries : []).map(e => ({ keyword: low((e || {}).keyword),
-      urls: [...new Set(((e || {}).urls || []).map(urlKey).filter(Boolean))], weight: num((e || {}).weight) || 0, volume: num((e || {}).volume) }))
+      urls: (() => { const u = [...new Set(((e || {}).urls || []).map(urlKey).filter(Boolean))]; return depth ? u.slice(0, depth) : u; })(),
+      weight: num((e || {}).weight) || 0, volume: num((e || {}).volume) }))
       .filter(e => e.keyword && e.urls.length >= c.min_urls);
     const byKw = new Map(); for (const e of list) if (!byKw.has(e.keyword)) byKw.set(e.keyword, e);
     const ranked = [...byKw.values()].sort((a, b) => b.weight - a.weight || (b.volume || 0) - (a.volume || 0) || a.keyword.localeCompare(b.keyword));
@@ -744,28 +979,31 @@ const KWI = (() => {
       for (const other of ranked) {
         if (other.keyword === head.keyword || used.has(other.keyword)) continue;
         const shared = other.urls.filter(u => hs.has(u));
-        if (shared.length >= c.min_shared_urls) members.push({ keyword: other.keyword, volume: other.volume, shared_urls: shared.length, shared: shared.slice(0, 3) });
+        if (shared.length >= need) members.push({ keyword: other.keyword, volume: other.volume, shared_urls: shared.length, shared: shared.slice(0, 3) });
       }
       if (!members.length) continue;
       used.add(head.keyword); members.forEach(m => used.add(m.keyword));
       members.sort((a, b) => b.shared_urls - a.shared_urls || (b.volume || 0) - (a.volume || 0));
       clusters.push({ head_keyword: head.keyword, keyword_count: members.length + 1, urls_compared: head.urls.length,
-        min_shared_urls: c.min_shared_urls, total_volume: [head, ...members].reduce((s, m) => s + (num(m.volume) || 0), 0),
+        min_shared_urls: need, top_n: depth, min_overlap_pct: depth && (num(c.min_overlap) || 0) > 0 ? Math.round(c.min_overlap * 100) : null,
+        total_volume: [head, ...members].reduce((s, m) => s + (num(m.volume) || 0), 0),
         keywords: [{ keyword: head.keyword, volume: head.volume, shared_urls: head.urls.length, shared: [] }, ...members].slice(0, c.max_cluster_keywords) });
     }
     clusters.sort((a, b) => b.keyword_count - a.keyword_count || b.total_volume - a.total_volume);
-    return { clusters, keywords_compared: ranked.length, min_shared_urls: c.min_shared_urls, min_urls: c.min_urls,
+    return { clusters, keywords_compared: ranked.length, min_shared_urls: need, min_urls: c.min_urls, top_n: depth,
+      min_overlap_pct: depth && (num(c.min_overlap) || 0) > 0 ? Math.round(c.min_overlap * 100) : null,
       clustered: clusters.reduce((n, x) => n + x.keyword_count, 0) };
   };
   // "one page can serve all three: 'erp software uae' also covers 'erp system uae' (4 of the same top-10 pages), ..."
   const clusterText = (cl) => {
     const c = cl || {}; const others = (c.keywords || []).slice(1);
     if (!others.length) return '';
+    const depthTxt = c.top_n ? 'top ' + c.top_n : 'top-10';
     return 'One page can target all ' + c.keyword_count + ': "' + c.head_keyword + '" shares '
-      + others.map(k => k.shared_urls + ' of its top-10 pages with "' + k.keyword + '"').join(', ')
+      + others.map(k => k.shared_urls + ' of its ' + depthTxt + ' pages with "' + k.keyword + '"').join(', ')
       + ' - Google answers these searches with the same pages, so a second page would only split the signals.';
   };
-  return { CFG, gscSeeds, calibrate, serpClusters, clusterText, featureLoss, liveChecks, urlKey, BASIS_TEXT, helpers: { bare, low, num } };
+  return { CFG, CLICK_LOSS, gscSeeds, calibrate, serpClusters, clusterText, featureLoss, lossApplied, lossText, serpPageTypes, shapeOf, liveChecks, ladderChecks, checkCost, urlKey, BASIS_TEXT, helpers: { bare, low, num } };
 })();
 // Applies the AI relevance verdicts, computes the final opportunity score, builds topic clusters and the content plan,
 // and chooses the priority keywords (live SERP check next) and the keyword for the content pipeline.
@@ -797,7 +1035,25 @@ const RELF = { 2: 1, 1: 0.45, 0: 0 };
 const ai_reviewed = rel.size;
 let R = null; try { const x = $('Reach (Discovery)').first().json; if (x && reachNum(x.reach) != null) R = x; } catch (e) { R = null; }
 const strongR = R ? reachStrong(R, null) : false;
-const forYou = (kd) => { if (!R) return {}; const diff = difficultyForYou(kd, R.reach, {}); const plan = reachPlan(diff, strongR); return { difficulty_for_you: diff, plan_type: plan.plan_type, months: plan.months, for_you_label: reachLabel(diff, plan), chance: plan.chance }; };
+// ---- B1-1 (2026-10-15, benchmark area 1 — BENCH_AREA1_keywords.md): the difficulty is measured on the TOPIC where the site has a record on it ----
+// K1's own words for what we had: "domain-level, not per topic". The leaders personalise per topic — MarketMuse subtracts a topic-level
+// Topic Authority from the keyword difficulty and states the empty case as a rule ("If you have no Topic Authority, then your Personalized
+// Difficulty = Keyword Difficulty", docs.marketmuse.com), Semrush lowers Personal KD with the thematic distance between the domain's core
+// topics and the target (semrush.com/blog/ai-keyword-research-updates). The ladder has done this since B2-1; discovery still labelled every
+// topic against ONE site-wide number cached up to 30 days (exec 518, 2026-10-13: "reach 10" on every one of 43 clusters). The same kit
+// answers it here from the keywords the reach was itself measured on — no new call — and only with REACH_CFG.min_top10 on-topic top-10
+// keywords behind it. Below that bar the site-wide reach stays exactly as before and the report says which number it used, and on what.
+const reachRanked = R && R.ranked !== undefined ? R.ranked : null;
+const reachMissingWhy = R && R.cached && !reachRanked
+  ? 'the reach stored on ' + String(R.cached_at || '').slice(0, 10) + ' was kept without the keywords behind it, so this run has no topic evidence to read' : '';
+const taCacheD = new Map();
+const topicReachOf = (topic, head) => { if (!R) return null; const key = String(topic || head || '').toLowerCase().trim(); if (!key) return null;
+  if (!taCacheD.has(key)) taCacheD.set(key, reachTopic(reachRanked, key, R.reach, { domain: base.domain || '', reason_missing: reachMissingWhy }));
+  return taCacheD.get(key); };
+const forYou = (kd, ta) => { if (!R) return {}; const r = ta && reachNum(ta.reach) != null ? ta.reach : R.reach;
+  const diff = difficultyForYou(kd, r, {}); const plan = reachPlan(diff, strongR);
+  return { difficulty_for_you: diff, plan_type: plan.plan_type, months: plan.months, for_you_label: reachLabel(diff, plan), chance: plan.chance,
+    reach_used: r, reach_basis: (ta && ta.used) ? 'topic' : 'site', topic_reach: (ta && ta.used) ? ta.topic_reach : null }; };
 const winnableFor = (diff, kd) => R ? (diff === 'easy' || diff === 'reachable') : (kd == null || kd <= 55);
 // the fit gate's context: the website, the declared competitors (strict), the auto-detected rivals (vendor-like), the brand names AI uses for
 // other companies (seo_cache ai_brands:, when the cache was read), and the seeds / services as protected words
@@ -833,7 +1089,7 @@ const kws = (base.research.candidates || []).map(k => {
   const r = rel.get(k.keyword) || { relevance: 1, intent: k.intent, page_type: '', topic: '' };
   const intent = INTENTS.includes(r.intent) ? r.intent : k.intent;
   const page_type = PAGES.includes(r.page_type) ? r.page_type : defaultPage(intent);
-  return { ...k, intent, relevance: r.relevance, page_type, topic: r.topic || k.keyword.split(' ').slice(0, 3).join(' '), opportunity: +(k.pre_score * (RELF[r.relevance] ?? 0.45)).toFixed(1), competitors_in_top20: k.competitors.length, covered_by: coveredBy(k.keyword), ladder_covered: ladderCovers(k.keyword), ...forYou(k.kd) };
+  return { ...k, intent, relevance: r.relevance, page_type, topic: r.topic || k.keyword.split(' ').slice(0, 3).join(' '), opportunity: +(k.pre_score * (RELF[r.relevance] ?? 0.45)).toFixed(1), competitors_in_top20: k.competitors.length, covered_by: coveredBy(k.keyword), ladder_covered: ladderCovers(k.keyword), ...forYou(k.kd, topicReachOf(r.topic, k.keyword)) };
 }).filter(k => k.relevance > 0 && k.intent !== 'navigational').filter(k => {
   const g = fitGate(k.keyword, { ...fitCtx, intent: k.intent });
   if (!g.ok) refused.push({ keyword: k.keyword, volume: k.volume, reason: g.reason, detail: g.detail });
@@ -860,11 +1116,12 @@ for (const k of kws) {
   c.page_types[k.page_type] = (c.page_types[k.page_type] || 0) + 1; c.intents[k.intent] = (c.intents[k.intent] || 0) + 1;
 }
 const mode = (o) => (Object.entries(o).sort((a, b) => b[1] - a[1])[0] || [''])[0];
-const clusters = [...cl.values()].map(c => { const p = c.keywords[0]; return {
+const clusters = [...cl.values()].map(c => { const p = c.keywords[0]; const taC = topicReachOf(c.topic, p.keyword); return {
   topic: c.topic, primary_keyword: p.keyword, page_type: mode(c.page_types), intent: mode(c.intents), keyword_count: c.keywords.length,
   total_volume: c.total_volume, total_opportunity: +c.total_opportunity.toFixed(1), primary_kd: p.kd, primary_volume: p.volume, primary_cpc: p.cpc,
   supporting: c.keywords.slice(1, 9).map(k => k.keyword), keywords: c.keywords.slice(0, 12).map(k => ({ keyword: k.keyword, volume: k.volume, kd: k.kd, intent: k.intent, opportunity: k.opportunity })),
-  suggested_title: p.keyword.replace(/\b\w/g, m => m.toUpperCase()), covered_by: p.covered_by || null, ladder_covered: p.ladder_covered || null, ...forYou(p.kd)
+  suggested_title: p.keyword.replace(/\b\w/g, m => m.toUpperCase()), covered_by: p.covered_by || null, ladder_covered: p.ladder_covered || null,
+  ...forYou(p.kd, taC), ...(taC && taC.note ? { topic_reach_note: taC.note } : {})
 }; }).sort((a, b) => b.total_opportunity - a.total_opportunity);
 // Tiers follow the goal: for leads/sales the first "Now" slots go to commercial/transactional topics; research topics support them
 const goalNow = (base.goal || 'leads');
@@ -916,7 +1173,12 @@ return [{ json: { ...base, keyword_strategy: {
   competitor_domains: base.research.competitor_domains, by_source: base.research.by_source, research_failures: base.research.failures, refused: refused.slice(0, 60),
   covered: kws.filter(k => k.covered_by).slice(0, 20).map(k => ({ keyword: k.keyword, volume: k.volume, url: k.covered_by.url, matched_by: k.covered_by.matched_by })), pages_known: SM.pages(pageModelD).length,
   ladder_covered: kws.filter(k => k.ladder_covered).slice(0, 20).map(k => ({ keyword: k.keyword, volume: k.volume, ladder_id: k.ladder_covered.ladder_id, head_keyword: k.ladder_covered.head_keyword, ladder_keyword: k.ladder_covered.ladder_keyword, part: k.ladder_covered.part, rung: k.ladder_covered.rung, status: k.ladder_covered.status, target_url: k.ladder_covered.target_url, how: k.ladder_covered.how })), ladders_known: [...new Set(ladderKwsD.map(x => x.ladder_id))].length,
-  reach: R ? { reach: R.reach, method: R.method, p75: R.p75 ?? null, size_reach: R.size_reach ?? null, sample: R.sample ?? null, top10: R.top10 ?? null, organic_keywords: R.organic_keywords ?? null, cached: !!R.cached, cached_at: R.cached_at || null, strong: strongR } : null,
+  reach: R ? { reach: R.reach, method: R.method, p75: R.p75 ?? null, size_reach: R.size_reach ?? null, sample: R.sample ?? null, top10: R.top10 ?? null, organic_keywords: R.organic_keywords ?? null, cached: !!R.cached, cached_at: R.cached_at || null, strong: strongR,
+    // B1-1 / B1-2: the site-wide number is only as good as what it was measured on, so the report can name those searches; and how many
+    // of the topics below had enough of a record on their OWN topic to be measured on it (the rest keep the site-wide number, and say so).
+    measured_on: (reachRanked || []).filter(x => Number(x.position) >= 1 && Number(x.position) <= 10).sort((a, b) => Number(a.position) - Number(b.position)).slice(0, 6).map(x => x.keyword),
+    evidence_kept: !!reachRanked, evidence_note: reachMissingWhy,
+    topics_measured: clusters.filter(c => c.reach_basis === 'topic').length, topics_total: clusters.length } : null,
   // ---- G8 (2026-10-13): the three new inputs, carried into the report, the callback and the app ----
   // K7: which keywords Google answers with the same pages (recomputed in Build Keyword Strategy once the live checks are in)
   serp_clusters: serpOverlap.clusters.slice(0, 15),

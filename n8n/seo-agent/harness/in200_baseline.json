@@ -1,74 +1,48 @@
 {
- "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content": [
-  "AI Demand",
-  "AI SERP",
-  "Ask LLMs",
-  "Backlink Gap",
-  "Backlink Summary",
-  "Candidate SERP",
-  "DFS Balance",
-  "DataForSEO Whois",
-  "Domain Overview",
-  "Facts SERP",
-  "Facts SERP (Retry)",
-  "Fallback SERP",
-  "Fetch GBP",
-  "Find Competitors",
-  "Get Crawl Summary",
-  "Get Crawled Pages",
-  "Keyword Data",
-  "Keyword Data (Retry)",
-  "Keyword Ideas",
-  "Ranked Keywords",
-  "Run Competitor Keywords",
-  "Run Crawl Extras",
-  "Run Ladder Research",
-  "Run Reach Requests",
-  "Run Research",
-  "SERP Top 10",
-  "SERP Top 10 (Retry)",
-  "Site Authority",
-  "Start Crawl"
- ],
- "SEO Agent \u2014 AI Growth": [
-  "DFS Balance (Growth)"
- ],
- "SEO Agent \u2014 AI Pulse": [
-  "DFS Balance (Pulse)"
- ],
- "SEO Agent \u2014 AI Visibility Tracker": [
-  "DFS Balance (AI)",
-  "Run Discovery"
- ],
- "SEO Agent \u2014 Audit Scheduler": [
-  "DFS Balance (Audit)"
- ],
- "SEO Agent \u2014 Backlink Monitor": [
-  "DFS Balance (BL)",
-  "Run Authority",
-  "Run BL Requests",
-  "Run Gap Requests"
- ],
- "SEO Agent \u2014 Content Cadence": [
-  "DFS Balance (Cadence)"
- ],
- "SEO Agent \u2014 Keyword Check": [
-  "Run Assess Requests"
- ],
- "SEO Agent \u2014 Link Builder": [
-  "DFS Balance (LB)",
-  "Run LB DFS"
- ],
- "SEO Agent \u2014 Page Watch": [
-  "DFS Balance (Watch)"
- ],
- "SEO Agent \u2014 Rank Tracker": [
-  "DFS Balance (Tracker)",
-  "SERP Check"
- ],
- "SEO Agent \u2014 Site Tracker": [
-  "DFS Balance (Site)",
-  "Google Trends",
-  "SERP Check (Site)"
- ]
+ "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content": {
+  "DFS Balance": "structurally different, and deliberately left here: appendix/user_data is FREE, is read once on the ledger chain before the first paid call, and FAILS OPEN - Run Ledger Row stores 0 when the probe does not answer, Rate Limit refuses nothing on a 0, CC.dfsDay drops a 0 reading from the day's reconciliation and prints 'no balance reading for the day (appendix/user_data was not answered)'. Nothing is scored, ranked or advised from it. A gate would put a 5-second wait on the critical path of every run and of all ten schedules to improve a guard that already says when it could not read.",
+  "DFS Balance End": "structurally different, and deliberately left here: appendix/user_data is FREE, is read once on the ledger chain before the first paid call, and FAILS OPEN - Run Ledger Row stores 0 when the probe does not answer, Rate Limit refuses nothing on a 0, CC.dfsDay drops a 0 reading from the day's reconciliation and prints 'no balance reading for the day (appendix/user_data was not answered)'. Nothing is scored, ranked or advised from it. A gate would put a 5-second wait on the critical path of every run and of all ten schedules to improve a guard that already says when it could not read.",
+  "Get Crawl Summary": "structurally different, and deliberately left here: this is the POLL of a crawl already paid for - Check Crawl -> Wait 1 min -> Get Crawl Summary re-asks up to its own limit, which is a retry loop with a longer pause than this gate's. A gate inside it would only make it re-ask sooner. The crawl's own failure is judged by Check Crawl, which stops and says so."
+ },
+ "SEO Agent \u2014 AI Growth": {
+  "DFS Balance (Growth)": "structurally different, and deliberately left here: appendix/user_data is FREE, is read once on the ledger chain before the first paid call, and FAILS OPEN - Run Ledger Row stores 0 when the probe does not answer, Rate Limit refuses nothing on a 0, CC.dfsDay drops a 0 reading from the day's reconciliation and prints 'no balance reading for the day (appendix/user_data was not answered)'. Nothing is scored, ranked or advised from it. A gate would put a 5-second wait on the critical path of every run and of all ten schedules to improve a guard that already says when it could not read.",
+  "DFS Balance End (Growth)": "structurally different, and deliberately left here: the SECOND free appendix/user_data reading B-A5 takes at settle time, to see whether the account's move belongs to this run. It is free, it fails open - CC.dfsRun keeps the cost this run's own tasks reported and says the reading was missing - and it is the last node of the run, so a retry would delay the settle to improve a reconciliation that already states when it could not be made. Nothing is scored, ranked or advised from it."
+ },
+ "SEO Agent \u2014 AI Pulse": {
+  "DFS Balance (Pulse)": "structurally different, and deliberately left here: appendix/user_data is FREE, is read once on the ledger chain before the first paid call, and FAILS OPEN - Run Ledger Row stores 0 when the probe does not answer, Rate Limit refuses nothing on a 0, CC.dfsDay drops a 0 reading from the day's reconciliation and prints 'no balance reading for the day (appendix/user_data was not answered)'. Nothing is scored, ranked or advised from it. A gate would put a 5-second wait on the critical path of every run and of all ten schedules to improve a guard that already says when it could not read.",
+  "DFS Balance End (Pulse)": "structurally different, and deliberately left here: the SECOND free appendix/user_data reading B-A5 takes at settle time, to see whether the account's move belongs to this run. It is free, it fails open - CC.dfsRun keeps the cost this run's own tasks reported and says the reading was missing - and it is the last node of the run, so a retry would delay the settle to improve a reconciliation that already states when it could not be made. Nothing is scored, ranked or advised from it."
+ },
+ "SEO Agent \u2014 AI Visibility Tracker": {
+  "DFS Balance (AI)": "structurally different, and deliberately left here: appendix/user_data is FREE, is read once on the ledger chain before the first paid call, and FAILS OPEN - Run Ledger Row stores 0 when the probe does not answer, Rate Limit refuses nothing on a 0, CC.dfsDay drops a 0 reading from the day's reconciliation and prints 'no balance reading for the day (appendix/user_data was not answered)'. Nothing is scored, ranked or advised from it. A gate would put a 5-second wait on the critical path of every run and of all ten schedules to improve a guard that already says when it could not read.",
+  "DFS Balance End (AI)": "structurally different, and deliberately left here: the SECOND free appendix/user_data reading B-A5 takes at settle time, to see whether the account's move belongs to this run. It is free, it fails open - CC.dfsRun keeps the cost this run's own tasks reported and says the reading was missing - and it is the last node of the run, so a retry would delay the settle to improve a reconciliation that already states when it could not be made. Nothing is scored, ranked or advised from it."
+ },
+ "SEO Agent \u2014 Audit Scheduler": {
+  "DFS Balance (Audit)": "structurally different, and deliberately left here: appendix/user_data is FREE, is read once on the ledger chain before the first paid call, and FAILS OPEN - Run Ledger Row stores 0 when the probe does not answer, Rate Limit refuses nothing on a 0, CC.dfsDay drops a 0 reading from the day's reconciliation and prints 'no balance reading for the day (appendix/user_data was not answered)'. Nothing is scored, ranked or advised from it. A gate would put a 5-second wait on the critical path of every run and of all ten schedules to improve a guard that already says when it could not read.",
+  "DFS Balance End (Audit)": "structurally different, and deliberately left here: the SECOND free appendix/user_data reading B-A5 takes at settle time, to see whether the account's move belongs to this run. It is free, it fails open - CC.dfsRun keeps the cost this run's own tasks reported and says the reading was missing - and it is the last node of the run, so a retry would delay the settle to improve a reconciliation that already states when it could not be made. Nothing is scored, ranked or advised from it."
+ },
+ "SEO Agent \u2014 Backlink Monitor": {
+  "DFS Balance (BL)": "structurally different, and deliberately left here: appendix/user_data is FREE, is read once on the ledger chain before the first paid call, and FAILS OPEN - Run Ledger Row stores 0 when the probe does not answer, Rate Limit refuses nothing on a 0, CC.dfsDay drops a 0 reading from the day's reconciliation and prints 'no balance reading for the day (appendix/user_data was not answered)'. Nothing is scored, ranked or advised from it. A gate would put a 5-second wait on the critical path of every run and of all ten schedules to improve a guard that already says when it could not read.",
+  "DFS Balance End (BL)": "structurally different, and deliberately left here: the SECOND free appendix/user_data reading B-A5 takes at settle time, to see whether the account's move belongs to this run. It is free, it fails open - CC.dfsRun keeps the cost this run's own tasks reported and says the reading was missing - and it is the last node of the run, so a retry would delay the settle to improve a reconciliation that already states when it could not be made. Nothing is scored, ranked or advised from it."
+ },
+ "SEO Agent \u2014 Content Cadence": {
+  "DFS Balance (Cadence)": "structurally different, and deliberately left here: appendix/user_data is FREE, is read once on the ledger chain before the first paid call, and FAILS OPEN - Run Ledger Row stores 0 when the probe does not answer, Rate Limit refuses nothing on a 0, CC.dfsDay drops a 0 reading from the day's reconciliation and prints 'no balance reading for the day (appendix/user_data was not answered)'. Nothing is scored, ranked or advised from it. A gate would put a 5-second wait on the critical path of every run and of all ten schedules to improve a guard that already says when it could not read.",
+  "DFS Balance End (Cadence)": "structurally different, and deliberately left here: the SECOND free appendix/user_data reading B-A5 takes at settle time, to see whether the account's move belongs to this run. It is free, it fails open - CC.dfsRun keeps the cost this run's own tasks reported and says the reading was missing - and it is the last node of the run, so a retry would delay the settle to improve a reconciliation that already states when it could not be made. Nothing is scored, ranked or advised from it."
+ },
+ "SEO Agent \u2014 Keyword Check": {},
+ "SEO Agent \u2014 Link Builder": {
+  "DFS Balance (LB)": "structurally different, and deliberately left here: appendix/user_data is FREE, is read once on the ledger chain before the first paid call, and FAILS OPEN - Run Ledger Row stores 0 when the probe does not answer, Rate Limit refuses nothing on a 0, CC.dfsDay drops a 0 reading from the day's reconciliation and prints 'no balance reading for the day (appendix/user_data was not answered)'. Nothing is scored, ranked or advised from it. A gate would put a 5-second wait on the critical path of every run and of all ten schedules to improve a guard that already says when it could not read.",
+  "DFS Balance End (LB)": "structurally different, and deliberately left here: the SECOND free appendix/user_data reading B-A5 takes at settle time, to see whether the account's move belongs to this run. It is free, it fails open - CC.dfsRun keeps the cost this run's own tasks reported and says the reading was missing - and it is the last node of the run, so a retry would delay the settle to improve a reconciliation that already states when it could not be made. Nothing is scored, ranked or advised from it."
+ },
+ "SEO Agent \u2014 Page Watch": {
+  "DFS Balance (Watch)": "structurally different, and deliberately left here: appendix/user_data is FREE, is read once on the ledger chain before the first paid call, and FAILS OPEN - Run Ledger Row stores 0 when the probe does not answer, Rate Limit refuses nothing on a 0, CC.dfsDay drops a 0 reading from the day's reconciliation and prints 'no balance reading for the day (appendix/user_data was not answered)'. Nothing is scored, ranked or advised from it. A gate would put a 5-second wait on the critical path of every run and of all ten schedules to improve a guard that already says when it could not read.",
+  "DFS Balance End (Watch)": "structurally different, and deliberately left here: the SECOND free appendix/user_data reading B-A5 takes at settle time, to see whether the account's move belongs to this run. It is free, it fails open - CC.dfsRun keeps the cost this run's own tasks reported and says the reading was missing - and it is the last node of the run, so a retry would delay the settle to improve a reconciliation that already states when it could not be made. Nothing is scored, ranked or advised from it."
+ },
+ "SEO Agent \u2014 Rank Tracker": {
+  "DFS Balance (Tracker)": "structurally different, and deliberately left here: appendix/user_data is FREE, is read once on the ledger chain before the first paid call, and FAILS OPEN - Run Ledger Row stores 0 when the probe does not answer, Rate Limit refuses nothing on a 0, CC.dfsDay drops a 0 reading from the day's reconciliation and prints 'no balance reading for the day (appendix/user_data was not answered)'. Nothing is scored, ranked or advised from it. A gate would put a 5-second wait on the critical path of every run and of all ten schedules to improve a guard that already says when it could not read.",
+  "DFS Balance End (Tracker)": "structurally different, and deliberately left here: the SECOND free appendix/user_data reading B-A5 takes at settle time, to see whether the account's move belongs to this run. It is free, it fails open - CC.dfsRun keeps the cost this run's own tasks reported and says the reading was missing - and it is the last node of the run, so a retry would delay the settle to improve a reconciliation that already states when it could not be made. Nothing is scored, ranked or advised from it."
+ },
+ "SEO Agent \u2014 Site Tracker": {
+  "DFS Balance (Site)": "structurally different, and deliberately left here: appendix/user_data is FREE, is read once on the ledger chain before the first paid call, and FAILS OPEN - Run Ledger Row stores 0 when the probe does not answer, Rate Limit refuses nothing on a 0, CC.dfsDay drops a 0 reading from the day's reconciliation and prints 'no balance reading for the day (appendix/user_data was not answered)'. Nothing is scored, ranked or advised from it. A gate would put a 5-second wait on the critical path of every run and of all ten schedules to improve a guard that already says when it could not read.",
+  "DFS Balance End (Site)": "structurally different, and deliberately left here: the SECOND free appendix/user_data reading B-A5 takes at settle time, to see whether the account's move belongs to this run. It is free, it fails open - CC.dfsRun keeps the cost this run's own tasks reported and says the reading was missing - and it is the last node of the run, so a retry would delay the settle to improve a reconciliation that already states when it could not be made. Nothing is scored, ranked or advised from it."
+ }
 }

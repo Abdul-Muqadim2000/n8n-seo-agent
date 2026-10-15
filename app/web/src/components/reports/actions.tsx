@@ -16,6 +16,7 @@ const TYPE_LABEL: Record<string, string> = {
   ctr: 'Click-through',
   content: 'Content',
   decay: 'Refresh',
+  decay_watch: 'Watch',
   links: 'Links',
   technical: 'Technical',
   trend: 'Trend',

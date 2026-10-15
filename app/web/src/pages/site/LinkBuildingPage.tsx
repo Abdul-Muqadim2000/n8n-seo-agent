@@ -196,23 +196,27 @@ function LinkBuilding({ d, onRun }: { d: LinkBuildingData; onRun?: () => void })
             deltaLabel="this month"
             meta={`${plural(k.contactedDomains, 'site')} contacted in all`}
           />
+          {/* B11-1: a rate is shown only once there is enough to read one from — under the floor the counts and what is still
+              needed take its place, the same rule the subject-line test below already applies. */}
           <MetricCard
             icon={<MessageSquareReply />}
             label="Reply rate"
-            info="People who replied ÷ conversations started. Out-of-office and other automatic replies are not counted. Link outreach usually gets 4–9% replies, journalist pitches about 13%."
+            info={`People who replied ÷ conversations started. Out-of-office and other automatic replies are not counted. No rate is shown under ${k.rates.reply.min} conversations: a reply or two says nothing about a rate. Link outreach usually gets 4–9% replies, journalist pitches about 13%.`}
             value={k.replyRate != null ? <CountUp value={k.replyRate} format={(v) => formatPercent(v)} /> : '–'}
-            meta={`${k.replied} replied · ${k.positive} positive`}
+            meta={k.replyRate != null ? `${k.replied} replied · ${k.positive} positive` : k.rates.reply.note}
           />
           <MetricCard
             icon={<Target />}
             label="Win rate"
-            info="Sites that linked ÷ sites contacted. Bounces above 2% hurt your mailbox's reputation: check the addresses if it climbs."
+            info={`Sites that linked ÷ sites contacted, once ${k.rates.win.min} sites have been contacted. Links are rare by nature: the one published funnel with its arithmetic shown puts it at roughly 13 links per 1,000 sites e-mailed (Hunter, 2026), so a quiet month is normal. Bounces above 2% hurt your mailbox's reputation — that limit cannot be measured under ${k.rates.bounce.min} e-mails, so no bounce rate is shown until then.`}
             value={k.winRate != null ? <CountUp value={k.winRate} format={(v) => formatPercent(v)} /> : '–'}
             meta={
               k.bounceRate != null && k.bounceRate > 2 ? (
                 <StatusBadge tone="warning">{formatPercent(k.bounceRate)} bounced</StatusBadge>
+              ) : k.bounceRate != null ? (
+                `${formatPercent(k.bounceRate)} bounced · ${k.unsubscribes} opted out`
               ) : (
-                `${k.bounceRate != null ? `${formatPercent(k.bounceRate)} bounced` : 'no bounces yet'} · ${k.unsubscribes} opted out`
+                `${k.rates.win.value == null ? k.rates.win.note : `${k.rates.bounce.hits} bounced of ${k.rates.bounce.sample} sent`} · ${k.unsubscribes} opted out`
               )
             }
           />

@@ -65,7 +65,7 @@ export const COST_TABLE: Record<CostKey, CostRow> = {
   report: { ai: 0.16, dfs: 0.04, measured: 0.127, basis: 'a keyword report, exec 519' },
   verdict: { ai: 0.16, dfs: 0.04, measured: 0.13, basis: 'a keyword verdict, exec 486' },
   discover: { ai: 0.24, dfs: 0.34, measured: 0.42, basis: 'keyword discovery, exec 518' },
-  ladder: { ai: 0.18, dfs: 0.16, measured: 0.231, basis: 'a ladder plan, exec 495 (each page it writes reserves its own run)' },
+  ladder: { ai: 0.18, dfs: 0.21, measured: 0.279, basis: 'a ladder plan, exec 495 ($0.231) plus the 24 results pages B2-4 reads to group the rungs, at $0.002 each (each page it writes reserves its own run)' },
   full: { ai: 0.08, dfs: 0.55, measured: 0.458, basis: 'the full SEO report, exec 523' },
   site_audit: { ai: 0, dfs: 0, measured: 0, basis: 'a technical audit calls no model (execs 497 / 513)' },
   crawl: { ai: 0, dfs: 0.09, measured: 0.032, basis: 'the crawl of a technical audit; $0.09 is the provider’s quote, $0.032 the pages really crawled (exec 588)' },

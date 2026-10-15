@@ -5,7 +5,10 @@ All three read the sites from seo_sites + seo_ladders and their settings from se
 ({ domain | site_id, email?, callback_url?, country?, location_code?, competitors? }) and write their Code nodes to harness/code_v4."""
 import json, os, re, uuid
 import url_lint   # D15 (2026-10-11 system review): the canonical-host lint
+import env_settings as _env   # B-F5 (2026-10-15): a build with no n8n/.env must refuse, not bake its fallbacks
+_env.require_settings('build_monitors.py')
 import retry_lint   # G1 (2026-10-11 system review): one retry rule for every external HTTP node
+import dfs_gate     # B-A10 (2026-10-15): INVARIANTS rule 3 — the in-200 retry gate, one shape for every DataForSEO call
 from ladder_common import (DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_upsert_params, dt_upsert_params_keys,
                            SITES_TABLE, SITES_COLS, LADDER_TABLE, LADDER_COLS, LOG_TABLE, LOG_COLS, PROFILE_TABLE, PROFILE_COLS, CASE_TABLE, CASE_COLS,
                            MONITORS_TABLE, MONITORS_COLS, AI_PROMPTS_TABLE, AI_PROMPTS_COLS, AI_ANSWERS_TABLE, AI_ANSWERS_COLS, AI_VIS_TABLE, AI_VIS_COLS,
@@ -15,7 +18,8 @@ from ladder_common import (DT_TYPE, DT_VERSION, dt_create_params, dt_insert_para
                            AI_PAGES_TABLE, AI_PAGES_COLS, AI_TARGETS_TABLE, AI_TARGETS_COLS, AI_GROWTH_TABLE, AI_GROWTH_COLS,
                            LINK_OUTREACH_TABLE, LINK_OUTREACH_COLS, LISTINGS_TABLE, LISTINGS_COLS, LINK_IMPACT_TABLE, LINK_IMPACT_COLS, HISTORY_TABLE, METRICS_TABLE,
                            RUN_LEDGER_TABLE, RUN_LEDGER_COLS, dt_update_params, monitor_ledger_js, LEDGER_EST,   # R9 (2026-10-13): every scheduled run reserves and settles a ledger row
-                           ledger_mainline)   # R17 (2026-10-14): and reserves it on the MAIN path, before the first paid call
+                           ledger_mainline,   # R17 (2026-10-14): and reserves it on the MAIN path, before the first paid call
+                           ledger_tag)   # B-C2 (2026-10-15): …and settles a MEASURED Claude figure into it, not the reservation
 from env_settings import SENDER, ENV, BRAND, OPS_EMAIL
 BING_ON = bool((ENV.get('SEO_BING_WEBMASTER_API_KEY') or '').strip())   # v4.10: optional free sources, baked in at build time (apply_env.py rebuilds)
 AHREFS_ON = bool((ENV.get('SEO_AHREFS_API_KEY') or '').strip())
@@ -32,14 +36,32 @@ def src(p):   # a Code node source with the shared snippets inlined
     s = seo_events.inline(rd('code/' + p))
     s = s.replace('/*__MONITOR_SITES__*/', rd('code/_monitor_sites.js')).replace('/*__REPORT_KIT__*/', rd('code/_report_kit.js')).replace('/*__AI_STATS__*/', rd('code/_ai_stats.js'))
     s = s.replace('/*__SITE_MODEL__*/', rd('code/_site_model.js').rstrip('\n'))   # G19 (SITE_MODEL_SPEC.md): the one site model, one copy per node that asks for it
+    s = s.replace('/*__FIT_GATE__*/', rd('code/_fit_gate.js').rstrip('\n'))   # B-G1 / B-G2 (2026-10-15): the fit gate, on the READ path too (FITR, INVARIANTS rule 2)
     s = s.replace('/*__DRAFTS__*/', rd('code/_drafts.js').rstrip('\n'))   # P34-1: which stored outreach draft may still be offered
     s = s.replace('/*__PODCAST__*/', rd('code/_podcast.js').rstrip('\n'))   # L5: podcast guest opportunities (free directory, the show's own feed and site)
     s = s.replace('/*__AB__*/', rd('code/_ab.js').rstrip('\n'))   # L7: two subjects a batch, and no verdict under 30 sends per variant
+    s = s.replace('/*__DFS_RETRY__*/', rd('code/_dfs_retry.js').rstrip('\n'))   # R18 / R19 / B-L4 / B-L5: the in-200 retry rule and the two like-for-like guards (RT.comparable, RT.likeForLike)
     s = s.replace('/*__LINK_KIT__*/', rd('code/_link_kit.js')).replace('/*__OUTREACH_KIT__*/', rd('code/_outreach_kit.js')).replace('/*__LISTINGS__*/', rd('code/_listings.js')).replace('/*__CLAIMS__*/', rd('code/_claims.js')).replace('/*__DRAFT_QA__*/', rd('code/_draft_qa.js')).replace('__BING_ENABLED__', 'true' if BING_ON else 'false').replace('__AHREFS_ENABLED__', 'true' if AHREFS_ON else 'false')
     s = s.replace('/*__COUNTRIES__*/', "// ---- countries: copied from the main workflow's Normalize Input by build_monitors.py (DataForSEO location code = 2000 + ISO numeric) ----" + _COUNTRIES.group(0))
     assert '/*__' not in s and '_ENABLED__' not in s, p + ': placeholder left'
     return s.replace('__FORM_URL__', FORM_URL).replace('__API_URL__', API_URL)
 LEDGER_WIRING = {}   # R9: workflow name -> its ledger nodes; merged into harness/ledger_wiring.json at the end (S57)
+
+# ---- B-C2 (2026-10-15, build section 84): the free token counter behind every Claude agent of a scheduled workflow ---------------
+# The engine has 22 Claude agents. Eight live in the main workflow and have been counted by Anthropic's free `count_tokens` since build
+# sections 62 and 76; the eleven in the other workflows were never priced from tokens at all — a monitor settled its RESERVATION
+# (`CC.aiRun` with no figure), so the Claude cost it reported to the owner and to the day's guard was a guess wearing the clothes of a
+# measurement. The seven agents of the six workflows built here are counted now, by the same two free calls on the same MAIN path.
+from ladder_common import ANTHROPIC_COUNT_URL as COUNT_URL   # one definition of the free endpoint; _ai_nodes_of excludes it by URL
+AI_CALLS = {}   # workflow name -> its Claude call table, baked from the real agent nodes and read by that workflow's settle
+
+
+def _roots(paths):
+    """`{'facts', 'facts.name'}` -> `['facts']`: a field is counted once, at its root-most prefix (build section 51's rule)."""
+    out = []
+    for p in sorted(paths, key=lambda s: (s.count('.'), s)):
+        if not any(p == q or p.startswith(q + '.') for q in out): out.append(p)
+    return sorted(out)
 NS = uuid.UUID('5e0a9e1e-2a1f-4c0b-9d8e-0000a9e0c0de')
 SMTP = {'smtp': {'id': 'SEOcredSmtpGmail', 'name': 'Gmail SMTP (SEO Agent)'}}
 DFS = {'httpBasicAuth': {'id': 'SEOcredDataForSE', 'name': 'DataForSEO'}}
@@ -70,6 +92,105 @@ class WF:
         self.node('Parser — ' + name, '@n8n/n8n-nodes-langchain.outputParserStructured', 1.3, {'schemaType': 'manual', 'inputSchema': json.dumps(schema)}, [pos[0] + 120, pos[1] + 200])
         self.C['Claude — ' + name] = {'ai_languageModel': [[{'node': name, 'type': 'ai_languageModel', 'index': 0}]]}
         self.C['Parser — ' + name] = {'ai_outputParser': [[{'node': name, 'type': 'ai_outputParser', 'index': 0}]]}
+    def count_node(self, name, body, pos):
+        """One free `/v1/messages/count_tokens` call. Free or not it is an EXTERNAL HTTP call, so it carries the retry rule
+        (INVARIANTS rule 3) and can never fail a run: `neverError` keeps a non-200 out of the error path, `continueRegularOutput`
+        keeps a transport failure out of it, and `alwaysOutputData` means the next node still runs. A call that does not answer
+        simply has no `input_tokens`, and its call falls back to characters with that basis (rule 1)."""
+        return self.node(name, 'n8n-nodes-base.httpRequest', 4.5, {
+            'method': 'POST', 'url': COUNT_URL,
+            'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'anthropicApi',
+            'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'anthropic-version', 'value': '2023-06-01'}]},
+            'sendBody': True, 'specifyBody': 'json', 'jsonBody': body,
+            'options': {'timeout': 20000, 'response': {'response': {'neverError': True}}}}, pos,
+            credentials=ANTHROPIC, onError='continueRegularOutput', alwaysOutputData=True, **retry_lint.RETRY)
+
+    def count_chain(self):
+        """B-C2 (2026-10-15, build section 84): put the two free counts on the MAIN path behind every Claude agent of this workflow
+        and return the call table its settle prices with. Called at WRITE time, when every connection exists.
+
+        Four things this had to get right, and each one is asserted rather than assumed:
+          * **the chain is on the main path, never beside it.** R17's lesson: n8n's v1 order runs a side branch last, or not at all.
+            *After Count (…)* hands the agent's own items straight back, so nothing downstream ever sees the counter.
+          * **the prompt is re-read against the node that FED the agent.** The agent's prompt is an expression over `$json`; one node
+            later `$json` is the agent's answer. Every monitor agent is fed one job item per SITE, so the reference is `.item` through
+            pairedItem (`$('X').first()` would price site 1's prompt for all of them) — and the output index it hangs off is recorded
+            for the fallback read, because `$('X').all()` defaults to the output the ACTIVE node is connected to and the settle is
+            connected to none of these (the trap that caught section 62 out with *Keyword Seeds* on output 1 of *Route Mode*).
+          * **the agent's own prompt is not touched.** Only a copy of the expression goes into the Set node, so the prompt the model
+            receives is byte-for-byte what it was.
+          * **every call is on the main path**, because these agents do not loop: one job in, one answer out, so the counter sees all
+            of them and `rounds` can carry no cap."""
+        nodes = {n['name']: n for n in self.N}
+        table = []
+        for mn, m in sorted(nodes.items()):
+            if m['type'] != '@n8n/n8n-nodes-langchain.lmChatAnthropic': continue
+            o = m['parameters'].get('options') or {}
+            model = m['parameters']['model']['value']
+            for ag in [t['node'] for l in ((self.C.get(mn) or {}).get('ai_languageModel') or [[]]) for t in (l or [])]:
+                assert ag in nodes, 'B-C2: ' + self.name + ' wires ' + mn + ' to a missing agent ' + ag
+                txt = str(nodes[ag]['parameters'].get('text') or '')
+                assert txt.startswith('='), 'B-C2: ' + ag + "'s prompt is not an expression"
+                pre = sorted({s for s, outs in self.C.items() for l in (outs.get('main') or []) for t in (l or []) if t['node'] == ag})
+                assert len(pre) == 1, 'B-C2: ' + ag + ' has ' + str(len(pre)) + ' main inputs, so $json is not one node'
+                fed = pre[0]
+                branch = next((i for i, l in enumerate((self.C.get(fed) or {}).get('main') or []) if any(t['node'] == ag for t in (l or []))), None)
+                assert branch is not None, 'B-C2: no main connection from ' + fed + ' to ' + ag
+                ref = "$('" + fed + "').item.json"
+                prompt = re.sub(r'\$json\b', lambda _m: ref, txt)
+                assert '$json.' not in prompt and prompt != txt, 'B-C2: ' + ag + "'s prompt still reads $json after the rewrite"
+                set_n, cp = 'Prompt For Count (' + ag + ')', 'Count Prompt (' + ag + ')'
+                ca, af = 'Count Answer (' + ag + ')', 'After Count (' + ag + ')'
+                px, py = nodes[ag]['position']
+                # what the agent really sent and what it really answered, one item per call. It fails open like the rest of the chain:
+                # an expression that cannot resolve leaves __prompt empty and the count comes back with no input_tokens.
+                self.node(set_n, 'n8n-nodes-base.set', 3.4, {'mode': 'manual', 'includeOtherFields': True, 'options': {}, 'assignments': {'assignments': [
+                    {'id': str(uuid.uuid5(NS, 'bc2:' + self.prefix + ':' + ag + ':prompt')), 'name': '__prompt', 'value': prompt, 'type': 'string'},
+                    {'id': str(uuid.uuid5(NS, 'bc2:' + self.prefix + ':' + ag + ':answer')), 'name': '__answer',
+                     'value': "={{ String($json.output ?? '') }}", 'type': 'string'}]}},
+                    [px, py + 320], onError='continueRegularOutput', alwaysOutputData=True)
+                mdl, own = json.dumps(model), "$('" + set_n + "').item.json"
+                self.count_node(cp, '={{ JSON.stringify({ model: ' + mdl + ', messages: [{ role: "user", content: String($json.__prompt || "") }] }) }}',
+                                [px + 200, py + 320])
+                self.count_node(ca, '={{ JSON.stringify({ model: ' + mdl + ', messages: ['
+                                + '{ role: "user", content: String(' + own + '.__prompt || "") }, '
+                                + '{ role: "assistant", content: String(' + own + '.__answer || "") }] }) }}', [px + 400, py + 320])
+                self.code(af, "// B-C2 (2026-10-15, build section 84): the two free token counts are taken; hand " + ag + "'s own items\n"
+                              "// back to the pipeline, unchanged and in order, so nothing downstream sees the counter (the R17 resume pattern).\n"
+                              "return $('" + ag + "').all();\n", [px + 600, py + 320])
+                outs = (self.C.get(ag) or {}).get('main') or []
+                assert len(outs) == 1, 'B-C2: ' + ag + ' has ' + str(len(outs)) + ' main outputs'
+                succ = [t['node'] for t in (outs[0] or [])]
+                assert succ, 'B-C2: ' + ag + ' feeds nothing'
+                self.C[ag]['main'] = [[]]
+                self.link(ag, set_n); self.chain(set_n, cp, ca, af)
+                for s in succ: self.link(af, s)
+                table.append({'node': ag, 'model': model, 'max_tokens': int(o.get('maxTokensToSample') or 0),
+                              'effort': o.get('effort') or '', 'streaming': bool(o.get('streaming')),
+                              'template_chars': len(txt), 'input': fed, 'branch': branch, 'ref': ref,
+                              'fields': _roots(re.findall(r"\$json\.([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)", txt)),
+                              'from': [[a, b] for a, b in sorted({(a, b) for a, b in re.findall(
+                                  r"\$\('([^']+)'\)\.(?:first\(\)|item)\.json\.([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)", txt)})],
+                              'count_prompt': cp, 'count_answer': ca, 'count_set': set_n, 'count_resume': af,
+                              'count_rounds': 0,        # no cap: every call of a monitor agent is on the main path (it does not loop)
+                              'count_per_item': True, 'after': succ})
+        return table
+
+    def bake_calls(self):
+        """B-C2: the call table and the calibration node go into this workflow's settle, which is the only node that prices them."""
+        w, tag = LEDGER_WIRING[self.name], ledger_tag(LEDGER_WIRING[self.name])
+        n = next(x for x in self.N if x['name'] == 'Ledger Settle (' + tag + ')')
+        src_js, table = n['parameters']['jsCode'], AI_CALLS[self.name]
+        assert '/*__AI_CALLS__*/[]' in src_js and "/*__CAL__*/''" in src_js, 'B-C2: ' + self.name + "'s settle has nowhere to learn its Claude calls"
+        # both defaults are valid JS on their own (`[]` and `''`), so a workflow whose builder has not been taught this keeps exactly
+        # R31's behaviour instead of carrying a placeholder into a running node
+        n['parameters']['jsCode'] = (src_js.replace('/*__AI_CALLS__*/[]', json.dumps(table, sort_keys=True), 1)
+                                     .replace("/*__CAL__*/''", json.dumps(w['cost_cal']), 1))
+        # the pricing table and R31's "did any model run" sweep must name the same agents, or one of the two is stale
+        assert sorted(c['node'] for c in table) == sorted(w['ai_nodes']), \
+            'B-C2: ' + self.name + ' prices ' + str([c['node'] for c in table]) + ' but sweeps ' + str(w['ai_nodes'])
+        w['ai_calls'] = table
+
     def pdf_chain(self, tag, pos, keep_extra=False):
         x, y = pos
         self.code('Prepare PDF ' + tag, "// Copy of each report HTML named index.html for the PDF renderer (Gotenberg requires that exact file name); one item per site.\nreturn $input.all().map(item => { const doc = (item.binary || {}).data; if (!doc) return item; return { json: item.json, binary: { ...(item.binary || {}), html: { ...doc, fileName: 'index.html', mimeType: 'text/html', fileExtension: 'html' } } }; });", [x, y])
@@ -121,11 +242,18 @@ class WF:
              'cost_mode': '={{ $json.cost_mode }}', 'measured_usd': '={{ $json.measured_usd }}', 'estimated_usd': '={{ $json.estimated_usd }}',
              'cost_basis': '={{ $json.cost_basis }}'}), [x + 440, y + 160],
             onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
+        # B-C2 (2026-10-15): the per-model correction factors the monthly reconciliation writes into seo_cache (`cost:factor:claude`,
+        # reconcile_claude_cost.py). The main workflow has priced through them since section 51; a monitor priced through nothing,
+        # because it settled a reservation. Now that it settles a measurement it reads the same factors, so one engine reports one
+        # price. Free (a local table) and fail-open: no rows, or no table yet, and the Anthropic list prices stand.
+        cal_node = 'Load Cost Factors (' + tag + ')'
+        self.node(cal_node, DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'cost'), [x, y + 160], **LOAD)
         self.chain(plan, 'Ensure Run Ledger (' + tag + ')', row_node, 'Reserve Run Ledger (' + tag + ')')
-        for e in ends: self.link(e, 'Ledger Settle (' + tag + ')')
-        self.chain('Ledger Settle (' + tag + ')', 'Settle Run Ledger (' + tag + ')')
+        for e in ends: self.link(e, cal_node)
+        self.chain(cal_node, 'Ledger Settle (' + tag + ')', 'Settle Run Ledger (' + tag + ')')
         LEDGER_WIRING[self.name] = {'mode': mode, 'plan': plan, 'reserve': row_node, 'settle': 'Settle Run Ledger (' + tag + ')',
                                     'settle_from': list(ends), 'measured': measured, 'est': LEDGER_EST[mode],
+                                    'cost_cal': cal_node,   # B-C2: where the settle reads the reconciliation's correction factors
                                     'resume': 'After Run Ledger (' + tag + ')'}   # R17: the node that hands the plan's items back
 
     def sticky(self, content, pos, w, h, color=5): return self.node('Note', 'n8n-nodes-base.stickyNote', 1, {'content': content, 'height': h, 'width': w, 'color': color}, pos)
@@ -135,10 +263,22 @@ class WF:
         outs[out].append({'node': b, 'type': 'main', 'index': 0})
     def chain(self, *names):
         for a, b in zip(names, names[1:]): self.link(a, b)
+    def in200_gate(self, http, what, unit='request', **kw):
+        """B-A10 (2026-10-15, INVARIANTS rule 3): the in-200 retry gate around one DataForSEO call — DataForSEO reports most of
+        its failures inside an HTTP 200, which `retryOnFail` never sees. One shape for every call (dfs_gate.py), spliced after the
+        workflow's connections are made, so whatever read the call now reads the merged answers and their evidence."""
+        g = dfs_gate.splice({'name': self.name, 'nodes': self.N, 'connections': self.C}, http, V5, what=what, unit=unit,
+                            code_dir=CODE, code_prefix=self.code_prefix, **kw)
+        retry_lint.record_gate(self.name, g['chain'])
+        return g
     def write(self, fname):
         # R17 (2026-10-14, FIX_PLAN §3.12): the reserve chain goes on the MAIN path, now that every connection of this workflow is made
+        # B-C2 (2026-10-15, build section 84): and so does the free token counter behind every Claude agent — only in a workflow that
+        # HAS a ledger row, because a measurement with nowhere to settle is a number nobody reads.
         if self.name in LEDGER_WIRING:
+            AI_CALLS[self.name] = self.count_chain()
             ledger_mainline({'id': self.wid, 'name': self.name, 'nodes': self.N, 'connections': self.C}, LEDGER_WIRING[self.name])
+            self.bake_calls()   # after ledger_mainline: it is what fills in __AI_NODES__, and the two lists are asserted equal
         names = {n['name'] for n in self.N}; assert len(names) == len(self.N), 'duplicate node names in ' + fname
         for s, outs in self.C.items():
             assert s in names, s
@@ -152,6 +292,7 @@ class WF:
         w = {'id': self.wid, 'name': self.name, 'active': False, 'settings': {'executionOrder': 'v1', 'errorWorkflow': 'SEOagentErrHandl', 'executionTimeout': self.timeout, 'saveDataErrorExecution': 'all', 'saveDataSuccessExecution': 'all'}, 'tags': [], 'nodes': self.N, 'connections': self.C}
         url_lint.check(w, self.name)   # D15: no node builds a site URL by hand (url_lint.py)
         retry_lint.check(w, self.name)   # G1: every external HTTP node carries the retry rule (retry_lint.py)
+        retry_lint.check_in200(w, self.name)   # B-A10: and the in-200 gate on top, because a 200 can still be a failure
         json.dump([w], open(os.path.join(OUT, fname), 'w'), indent=2, ensure_ascii=False)
         os.makedirs(CODE, exist_ok=True)
         for n in self.N:
@@ -224,6 +365,10 @@ A.chain('AI Metrics', 'AI Vis Rows', 'Save AI Visibility', 'AI Prospect Rows', '
 A.chain('AI Cache Rows', 'Any Cache Rows?'); A.link('Any Cache Rows?', 'Save AI Cache', 0); A.link('Any Cache Rows?', 'Prune Old Answers', 1); A.link('Save AI Cache', 'Prune Old Answers')
 A.chain('Prune Old Answers', 'AI Brief Input', 'AI Brief', 'AI Report', 'Prepare PDF AI', 'Render PDF AI', 'Attach PDF AI', 'Has Email (AI)?'); A.link('Attach PDF AI', 'Build AI Callback'); A.link('Build AI Callback', 'Has Callback (AI)?')
 A.run_ledger('ai_visibility', 'AI', 'AI Plan', ['AI Report'], at(12, 7), measured='AI Metrics')
+# B-A10 (2026-10-15, INVARIANTS rule 3): the monthly question-discovery pull is the one paid call outside the AI gate D19 built.
+# Its failure is silent by construction — *Prompt Jobs* simply finds no new questions — so a 40101 inside a 200 shrinks next
+# month's panel with nobody told, and a smaller panel is exactly what B-L4 had to stop being read as a fall in visibility.
+A.in200_gate('Run Discovery', 'the questions buyers ask AI assistants about this topic', 'question')
 A.sticky(f"""## SEO Agent — AI Visibility Tracker (v4.5, v4.9)
 **Every Monday 07:00** (before the Site Tracker, whose report shows the summary) and on demand (*Manual Run* `{{ domain | site_id, email?, callback_url?, country?, location_code?, competitors?, topics? }}`; form option "Check my AI visibility" / API `mode: ai_visibility`). The **AI Pulse** workflow asks the same panel every other day on the fast engines; this run adds its samples to the week's figures.
 Per site (`seo_sites` + ladder domains; settings in `{MONITORS_TABLE}`: engines, questions (3-50, default 20), daily pulse, competitors, brand names): a stable **question panel** (`{AI_PROMPTS_TABLE}`: buyer stage, topic cluster, monthly AI search volume; written by Claude from the topics, **real questions from the AI-answer database** and the site's long Search Console queries; custom ones through Site Admin `ai_prompts`) is asked to **ChatGPT** and **Gemini** (the real chat interfaces, LLM scraper $0.004), **Perplexity** (sonar, localised, $0.006), **Google AI Mode** ($0.004) and the **AI Overview** of the matching search ($0.002); **Claude** (Haiku + web search, $0.025), the brand question, question discovery and the **market-wide index** (LLM Mentions: your share vs the competitors across the 387M-question database) on the month's first run.
@@ -359,6 +504,13 @@ step('Prospect Rows', 'Any Prospect Rows?', 'Save Prospects', 'Ledger Rows')
 step('Ledger Rows', 'Any Ledger Rows?', 'Save Backlinks', 'BL Snapshot Rows')
 B.chain('BL Snapshot Rows', 'Save BL Snapshot', 'BL Report', 'Prepare PDF BL', 'Render PDF BL', 'Attach PDF BL', 'Has Email (BL)?'); B.link('Attach PDF BL', 'Build BL Callback'); B.link('Build BL Callback', 'Has Callback (BL)?')
 B.run_ledger('backlinks', 'BL', 'BL Plan', ['BL Report'], at(13, 6), measured='Parse Backlinks')
+# B-A10 (2026-10-15, INVARIANTS rule 3): the three paid DataForSEO pulls of the link ledger. Each one's failure is a silent
+# shrinking of the ledger — *Parse Backlinks* counts what came back, so a pull that failed inside a 200 looks like a site with
+# fewer links, which is the shape R20 / B-L5 exist to stop ("not compared" instead of an arrow). A second attempt costs nothing
+# when the first failed (a failed task is billed 0), and `result()` prices both attempts, each task once.
+B.in200_gate('Run BL Requests', 'the link profile this check is built on', 'pull')
+B.in200_gate('Run Gap Requests', 'the sites linking to competitors but not to you', 'pull')
+B.in200_gate('Run Authority', "the referring sites' authority and spam scores", 'pull')
 B.sticky(f"""## SEO Agent — Backlink Monitor (v4.5; v4.10 every source merged + our own link check — BACKLINKS_SPEC.md)
 **Every Monday 07:30**: a light watch (links lost / new since the last check, spam, the valuable links re-checked on their pages) that e-mails only when an **important link was lost** (two misses in a row) or spam arrived; the **first run of each month** is the full report. On demand: *Manual Run* `{{ domain | site_id, light?, email?, callback_url? }}`; form option "Check my backlinks" / API `mode: backlinks`.
 **Sources**: DataForSEO Backlinks (summary, lost, new; full runs: referring domains, one link per domain with details, anchors, most-linked pages, broken, history, Content Analysis mentions, competitors' new links, the quarterly gap); **free**: Bing Webmaster Tools (GetUrlLinks; when SEO_BING_WEBMASTER_API_KEY is set: {'on' if BING_ON else 'off'}), the Search Console Links exports uploaded in the app (`{LINK_IMPORTS_TABLE}`), GA4 referrals (links that send visits), the Common Crawl web graph (`{LINK_GRAPH_TABLE}`, monthly linkgraph job), Wikipedia, Hacker News, GDELT news, web search (SearXNG: mentions, "best X" lists, `site:` lookups); Ahrefs Domain Rating (free key; {'on' if AHREFS_ON else 'off'}).
@@ -422,6 +574,11 @@ def g_http(name, pos, url='={{ $json.url }}', batch=1, interval=300, timeout=300
     if cred: kind, cid, cname = cred; params.update({'authentication': 'genericCredentialType', 'genericAuthType': kind}); extra['credentials'] = {kind: {'id': cid, 'name': cname}}
     return G.node(name, 'n8n-nodes-base.httpRequest', 4.5, params, pos, onError='continueRegularOutput', **retry_lint.RETRY, **extra)   # G1: the one retry rule
 WIKI_UA = 'SEOAgentAIGrowth/4.12 (' + BRAND + '; entity check; mailto:' + OPS_EMAIL + ')'
+# B9-3 (2026-10-15, benchmark area 9): robots.txt first, because what the AI search fetchers may read decides whether a readiness
+# score means anything and whether a page is worth a submission slot. One free GET per site, retried by the shared rule.
+G.code('Robots Requests (Growth)', 'Growth_Robots_Requests.js', at(16, 0)); G.iff('Any Robots (Growth)?', '{{ !$json.skip }}', at(16, -1))
+g_http('Fetch Robots (Growth)', at(16, -2), timeout=15000, text=True, headers={'User-Agent': BOT_UA, 'Accept': 'text/plain,*/*'})
+G.code('Robots Verdicts (Growth)', 'Growth_Robots.js', at(16, -3))
 G.code('Page Requests (Growth)', 'Growth_Page_Requests.js', at(17, 0)); G.iff('Any Pages (Growth)?', '{{ !$json.skip }}', at(18, 0))
 g_http('Fetch Key Pages', at(19, -1), batch=4, interval=300, timeout=20000, text=True, headers={'User-Agent': BROWSER_UA, 'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8', 'Accept-Language': 'en-US,en;q=0.8'})
 G.code('Earned Requests', 'Growth_Earned_Requests.js', at(20, 0)); G.iff('Any Earned?', '{{ !$json.skip }}', at(21, 0))
@@ -455,8 +612,11 @@ G.code('Growth Report', 'Growth_Report.js', at(62, 0))
 G.code('Build Growth Callback', "// Callback payload per site (stage ai_growth): the summary; the table rows stay in n8n.\nreturn $input.all().map(i => { const { html, page_rows, target_rows, prospect_rows, growth_row, cache_rows, ...rest } = i.json; return { json: rest }; });", at(63, 1))
 G.deliver('Growth', at(63, 0), None)
 G.chain('Weekly Schedule', *[e[0] for e in ens], *[l[0] for l in loads], 'Load AI Answers', 'Load Cache (Growth)', 'Growth Plan', 'Any Sites (Growth)?'); G.link('Manual Run', ens[0][0])
-G.link('Any Sites (Growth)?', 'Page Requests (Growth)', 0); G.link('Any Sites (Growth)?', 'Nothing To Do (Growth)', 1)
+G.link('Any Sites (Growth)?', 'Robots Requests (Growth)', 0); G.link('Any Sites (Growth)?', 'Nothing To Do (Growth)', 1)
 def gstep(code, iff, http, nxt): G.link(code, iff); G.link(iff, http, 0); G.link(iff, nxt, 1); G.link(http, nxt)
+# B9-3: robots.txt is read and judged before any page is scored or submitted
+gstep('Robots Requests (Growth)', 'Any Robots (Growth)?', 'Fetch Robots (Growth)', 'Robots Verdicts (Growth)')
+G.link('Robots Verdicts (Growth)', 'Page Requests (Growth)')
 gstep('Page Requests (Growth)', 'Any Pages (Growth)?', 'Fetch Key Pages', 'Earned Requests')
 gstep('Earned Requests', 'Any Earned?', 'Fetch Cited Pages', 'Bing Sites (Growth)')
 gstep('Bing Sites (Growth)', 'Any Bing (Growth)?', 'Fetch Bing Sites (Growth)', 'Bing Growth Requests')
@@ -477,8 +637,8 @@ G.link('Growth Report', 'Has Email (Growth)?'); G.link('Growth Report', 'Build G
 G.run_ledger('ai_growth', 'Growth', 'Growth Plan', ['Growth Report'], at(16, 4), measured='Growth Metrics')
 G.sticky(f"""## SEO Agent — AI Growth (v4.12, AI_GROWTH_SPEC.md)
 **Every Monday 09:30** (after the AI Visibility Tracker 07:00 and the Site Tracker 09:00, before the Content Cadence 10:00) and on demand (*Manual Run* `{{{{ domain | site_id, email?, callback_url? }}}}`). Per site with AI visibility and `ai_growth` on (`{MONITORS_TABLE}`; default on): the work that gets the business **named and cited** in AI answers.
-**Indexing**: new / updated pages and key pages Bing has not crawled → **Bing Webmaster Tools SubmitUrlBatch** (ChatGPT search and Copilot draw on Bing; key SEO_BING_WEBMASTER_API_KEY: {'on' if BING_ON else 'off'}) and **IndexNow** once the site hosts its key file (`{CACHE_TABLE}` `indexnow:`). **AI readiness** of up to 12 key pages a week (`{AI_PAGES_TABLE}`): raw HTML without JavaScript, answer in the first ~200 characters, visible update date ≤ 90 days, question headings, sourced figures, lists, author, FAQ; Bing's crawl state (GetUrlInfo).
-**Questions to win** (`{AI_TARGETS_TABLE}`): every lost question of the latest AI visibility run → a new answer page or a refresh of the page the site has; the **Content Cadence** writes the queued ones (`ai_pages_month`, default 2) with the question, the AI's searches and its sources. **Earned media**: the exact third-party pages AI cited in answers that did not name the business, fetched (do they name you / your competitors?), one action per kind, drafts for the 3 most valuable (*AI Outreach Writer*), kept as prospects (`{PROSPECT_TABLE}` ai_source) for the Backlink Monitor's contacts and follow-ups. **Entity**: Wikidata monthly. Run row → `{AI_GROWTH_TABLE}`; report e-mail + callback `ai_growth`. Cost: Claude for the drafts (~$0.03 a site); everything else is free.""", [-40, -420], 1100, 300, 6)
+**Indexing**: new / updated pages and key pages Bing has not crawled → **Bing Webmaster Tools SubmitUrlBatch** (the index **Bing and Microsoft Copilot** answer from; OpenAI documents OAI-SearchBot, not Bing, for ChatGPT search; key SEO_BING_WEBMASTER_API_KEY: {'on' if BING_ON else 'off'}) and **IndexNow** once the site hosts its key file (`{CACHE_TABLE}` `indexnow:`; Bing, Yandex, Naver, Seznam, Yep — not Google, and a submission "does not guarantee immediate indexing"). **B9-2**: every page sent in the last 45 days is asked about again (GetUrlInfo) and the report says how many Bing has **since crawled** — measured, or "not available" with the reason. **B9-3**: `robots.txt` is read first (*Robots Verdicts (Growth)*) and judged per page for OAI-SearchBot / ChatGPT-User / PerplexityBot / Claude-SearchBot / Googlebot / Bingbot — a page no AI fetcher may read gets **no readiness score** and is not submitted. **AI readiness** of up to 12 key pages a week (`{AI_PAGES_TABLE}`): raw HTML without JavaScript, answer in the first ~200 characters, visible update date ≤ 90 days, question headings, sourced figures, lists, author; Bing's crawl state (GetUrlInfo).
+**Questions to win** (`{AI_TARGETS_TABLE}`): every lost question of the latest AI visibility run → a new answer page or a refresh of the page the site has; the **Content Cadence** writes the queued ones (`ai_pages_month`, default 2) with the question, the AI's searches and its sources. **B9-4**: a target is **won** only when at least 2 answers of the last 8 days (weekly + pulse) named the business, with the count printed — and a won question that is lost again goes back in the queue with both dates and an alert. **B9-5**: a page AI cited in earlier weekly checks and in neither of the last two is raised as a refresh, with the counts. **Earned media**: the exact third-party pages AI cited in answers that did not name the business, fetched (do they name you / your competitors?), one action per kind, drafts for the 3 most valuable (*AI Outreach Writer*), kept as prospects (`{PROSPECT_TABLE}` ai_source) for the Backlink Monitor's contacts and follow-ups. **Entity**: Wikidata monthly. Run row → `{AI_GROWTH_TABLE}`; report e-mail + callback `ai_growth`. Cost: Claude for the drafts (~$0.03 a site); everything else is free.""", [-40, -420], 1100, 300, 6)
 G.write('SEO_Agent_AI_Growth.json')
 
 # =============================================================================
@@ -556,6 +716,10 @@ lstep('LB Cache Rows', 'Any LB Cache?', 'Save LB Cache', 'LB Report')
 L.chain('LB Report', 'LB Doc', 'Prepare PDF LB', 'Render PDF LB', 'Attach PDF LB')   # L3
 L.link('Attach PDF LB', 'Has Email (LB)?'); L.link('Attach PDF LB', 'Build LB Callback'); L.link('Build LB Callback', 'Has Callback (LB)?')
 L.run_ledger('link_builder', 'LB', 'LB Plan', ['LB Report'], at(17, 4))
+# B-A10 (2026-10-15, INVARIANTS rule 3): the one paid DataForSEO pull of the week's link building — competitors' broken links
+# and their most-linked pages. A failure inside a 200 is a week with fewer opportunities and nobody told; the whole point of
+# this workflow is the pitch it ends with, so the evidence behind one has to be evidence that was really read.
+L.in200_gate('Run LB DFS', "the competitors' links and most-linked pages this week's opportunities come from", 'pull')
 L.sticky(f"""## SEO Agent — Link Builder (v4.13, LINK_BUILDER_SPEC.md)
 **Every Monday 11:00** (after the Backlink Monitor 07:30 and AI Growth 09:30) and on demand (*Manual Run* `{{{{ domain | site_id, free_only?, callback_url?, request_id? }}}}`, started by **SEO Agent — Link Builder API** `POST /webhook/seo-link-builder`). Per site with `link_builder` on (`{MONITORS_TABLE}`, default on).
 **New opportunities** (free): journalist requests (#journorequest on Bluesky, matched to the topics), **journalist digests** (HARO / Source of Sources, read from the customer's own mailbox by the web app and written here as `digest` prospects — nothing arrives until a mailbox is connected), **podcast shows that take guests** (monthly: a free podcast directory → the show's RSS feed → the show's own website; pitched only when it is on topic, still publishing, says it takes guests and has a contact on its own domain), resource pages (web search), dead links on resource / list pages, our old URLs from the Wayback Machine that now 404 (redirects), the listings checklist (own and competitors' pages, member lists, guessed profiles); monthly **competitors' broken backlinks** and their **most-linked pages** (DataForSEO, ≈ $0.07 + ≈ $0.02 a competitor) — the second gives the **linkable-asset ideas** (data study / free tool / template / definitive guide), each tied to the competitor pages that prove it and the referring domains they hold, and never a promise of links. **Every prospect** (also the Backlink Monitor's and AI Growth's) qualified (gone / blocked / sells links / language / already linking), with the evidence to quote, up to 3 contacts, the recipient's country, **our page and the link text** (topic match × position band × links needed, paced). **Outreach Sequence Writer** (Claude): ≤ 10 sequences a week (first e-mail + 2 follow-ups; journalists: 1), then the **draft gate** (*LB Draft QA*, L2): claims against the facts on file, no bracket left to fill, the address on their own domain, a real quote from their page, one link to the page we chose on the canonical host, length and one clear ask, the words we never use, the business name as the site model has it — a draft that fails is held as `needs_edit` with its reasons. **Two subjects a batch** (L7): the writer gives every sequence a second subject in the other style, the drafts take the two in turn (A, B, A, B …) and the app shows the reply rate per style — with **no verdict under 30 first e-mails per variant**. Nothing is sent here: the **web app** sends from the customer's own mailbox after approval.

@@ -51,6 +51,7 @@ const LN = (() => {
     ai_engines: { label: 'the AI assistants themselves', how: 'the answers ChatGPT, Gemini, Google AI Mode and the others gave to the questions in your panel' },
     ai_db: { label: 'the DataForSEO AI-answer database', how: 'a database of AI answers and the brands they name' },
     own_check: { label: 'our own fetch of the page', how: 'we requested the page ourselves and read what came back' },
+    draft: { label: 'the finished draft itself', how: 'counted in the text this run wrote, before anybody published it' },
     crawl: { label: 'our crawl of your website', how: 'the pages we could reach and read on your site' },
     crux: { label: 'the Chrome User Experience Report', how: 'speed as real Chrome visitors experienced it over 28 days' },
     pagespeed: { label: 'Google PageSpeed Insights (Lighthouse)', how: 'one simulated mobile load in a lab, not what your visitors felt' },
@@ -99,6 +100,25 @@ const LN = (() => {
   const note = (l) => { const x = l || {}; const lbl = x.source_label || MISSING;
     return [lbl, x.period, x.sample, x.basis_label === lbl ? '' : x.basis_label, x.note].filter(Boolean).join(' · '); };
   const isHonest = (l) => !!l && (l.basis !== 'unknown' || note(l).indexOf(MISSING) >= 0);
+  // ---- the evidence half of the same rule (R10, promoted to the class by lineage_lint.py, 2026-10-15) ----
+  // A finding is a figure like any other: it may not be shown without the thing that shows it. R10 was exactly this - Google
+  // retired the Mobile Usability report, the API answered VERDICT_UNSPECIFIED for every page, and the audit raised a HIGH finding
+  // on 45 of 47 pages whose evidence string was "/:  | /whatwedo/ai-automation: " - punctuation and nothing else. So the test is
+  // not `evidence !== ''`: a string that is only separators, brackets or a bare "0" carries no evidence either.
+  const hasEvidence = (f) => {
+    const ev = S((f || {}).evidence).replace(/<[^>]*>/g, ' ');     // markup is not evidence
+    return /[A-Za-z]|[1-9]/.test(ev.replace(/[\s;|,.:·\-–—()\[\]\/]+/g, ' '));
+  };
+  // the findings that may be shown, and the titles of the ones held back. `allow` names a title that is evidence in itself
+  // (a count in the title, a note about data that could not be collected); everything else has to carry its own.
+  const unevidenced = (list, o) => { const x = o || {}; const allow = (x.allow || []).map(S);
+    return (list || []).filter(f => f && !hasEvidence(f) && allow.indexOf(S(f.title)) < 0).map(f => S(f.title || f.id || 'untitled')); };
+  const evidenced = (list, o) => { const x = o || {}; const allow = (x.allow || []).map(S);
+    const keep = (list || []).filter(f => f && (hasEvidence(f) || allow.indexOf(S(f.title)) >= 0));
+    if (typeof x.onDrop === 'function') { const d = unevidenced(list, o); if (d.length) x.onDrop(d); }
+    return keep; };
+  const evidenceNote = (dropped) => (dropped || []).length
+    ? (dropped.length + ' finding(s) were left out because nothing was measured to show them: ' + dropped.slice(0, 5).join(', ')) : '';
   const html = (l) => '<span style="color:#64748b;font-size:11px">' + esc1(note(l)) + '</span>';
   const line = (l) => '<div style="color:#64748b;font-size:11px;margin-top:2px">' + esc1(note(l)) + '</div>';
   // the block under a report: one row per figure, so no number is left without a source, a period and a sample
@@ -113,19 +133,22 @@ const LN = (() => {
         + '</td><td ' + td + '>' + esc1(l.sample || '—') + '</td><td ' + td + '>' + esc1([l.basis_label, l.note].filter(Boolean).join(' — ')) + '</td></tr>').join('')
       + '</table><p style="color:#64748b;font-size:11px;margin:4px 0">' + esc1(x.footer || 'A figure marked "' + BASIS.modelled + '" is computed, not counted; "' + MISSING + '" means the figure reached this report without its source and should be treated as unverified.') + '</p>';
   };
-  return { of, unknown, note, html, line, block, range, asOf, days, sample, isHonest, SOURCES, BASIS, MISSING };
+  return { of, unknown, note, html, line, block, range, asOf, days, sample, isHonest, hasEvidence, evidenced, unevidenced,
+    evidenceNote, SOURCES, BASIS, MISSING };
 })();
 const sites = $('Parse Backlinks').all().map(i => i.json);
 let rows = []; try { rows = $('Prospect Rows').all().map(i => i.json).filter(r => !r.skip); } catch (e) {}
 let stored = []; try { stored = $('Load Link Prospects').all().map(i => i.json).filter(x => x && x.prospect_domain); } catch (e) {}
 const csvCell = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
 const TYPE = { lost: 'Lost link — ask to restore', mention: 'Unlinked mention — ask for the link', list: '"Best of" list without you', comp_new: 'Just linked to a competitor', gap: 'Links to competitors', ai_source: 'Cited by AI answers', reclaim: 'Broken page — redirect' };
-const REASON = { link_removed: 'link removed from the page', page_gone: 'the page is gone (404 / 410)', domain_gone: 'the site is gone', not_seen: 'no source has seen it for 4 months', reported_lost: 'reported lost by the index — being checked' };
+const REASON = { link_removed: 'link removed from the page', page_gone: 'the page is gone (404 / 410)', domain_gone: 'the site is gone', not_seen: 'no index has seen it for 4 months, and it was not on the page when we last read it', reported_lost: 'reported lost by the index — being checked' };
 const ACTION = { link_removed: 'Ask the editor to restore it (draft below)', page_gone: 'Ask whether the content moved; offer the link for the new page', domain_gone: 'Nothing to do', not_seen: 'Check the page by hand', reported_lost: 'Checked again next week' };
 const SRC = [['dfs', 'DataForSEO index'], ['bing', 'Bing Webmaster Tools'], ['gsc', 'Google Search Console (upload)'], ['ga4', 'GA4 referrals (visits)'], ['cc', 'Common Crawl web graph'], ['wiki', 'Wikipedia'], ['hn', 'Hacker News'], ['news', 'News (GDELT)'], ['web', 'Web search'], ['import', 'Other upload']];
 const vtag = (v) => ({ found: '<span style="color:#15803d">✓ on the page</span>', missing: '<span style="color:#b91c1c">not on the page</span>', gone: '<span style="color:#b91c1c">page gone</span>', blocked: '<span style="color:#64748b">bot-blocked (not checked)</span>', js: '<span style="color:#64748b">needs JavaScript</span>', error: '<span style="color:#64748b">error</span>' })[v] || '<span style="color:#64748b">not checked yet</span>';
 return sites.filter(s => s.deliver).map(s => {
   const S = s.summary, P = s.previous, C = s.coverage || {}; const full = s.mode === 'full'; const st = C.status || {};
+  const CK = C.check || {}, FR = C.freshness || {}, FRO = FR.own || {}, FRI = FR.index || {};
+  const dayWord = (d) => d == null ? '' : (d === 0 ? 'today' : d === 1 ? 'yesterday' : d + ' days ago');
   const pipe = [...rows.filter(r => r.site_id === s.site_id), ...stored.filter(x => x.site_id === s.site_id && !rows.some(r => r.site_id === s.site_id && r.prospect_domain === x.prospect_domain && r.type === x.type))];
   const won = pipe.filter(r => r.status === 'won' && String(r.won_at || '').slice(0, 10) === s.checked_at.slice(0, 10));
   const counts = ['new', 'contacted', 'won', 'rejected', 'ignored'].map(x => x + ' ' + pipe.filter(r => (r.status || 'new') === x).length).join(' · ');
@@ -135,15 +158,25 @@ return sites.filter(s => s.deliver).map(s => {
   let html = '<div style="font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#0f172a;max-width:900px">';
   html += '<h2 style="margin:0 0 2px;font-size:20px">' + (full ? 'Backlinks: ' : 'Backlink alert: ') + esc(s.domain) + '</h2>' + p_(esc(s.checked_at.slice(0, 10)) + ' · changes since ' + esc(s.since.slice(0, 10)) + (full ? ' · monthly report' : ' · weekly watch') + (s.on_demand ? ' · on-demand run' : ''), true);
   html += alertBox(s.alerts.filter(a => full || a.level !== 'low'));
+  // B-L5 (2026-10-15, INVARIANTS rule 1): what was NOT compared with the last snapshot, and why. A figure the two snapshots
+  // cannot be compared on is said out loud here instead of appearing as "no change".
+  if ((s.not_compared || []).length) html += '<div style="background:#fffbeb;border-left:4px solid #d97706;padding:8px 12px;margin:8px 0;font-size:13px"><b>Not compared with the last check</b><ul style="margin:4px 0 0;padding-left:18px">'
+    + s.not_compared.map(t => '<li>' + esc(t) + '</li>').join('') + '</ul></div>';
   if (s.free_only) html += p_('<b>Free sources only</b> (asked on demand): Bing, your Search Console upload, GA4, Common Crawl, Wikipedia, Hacker News, news and web search, each important link checked on its page. No DataForSEO and no AI drafts: this check cost $0.', true);
   else if (!S.available) html += p_('The DataForSEO Backlinks API returned no summary (' + esc(S.error || 'no data') + '); the other sources are below.', true);
   html += '<table style="border-collapse:collapse;margin:8px 0"><tr>' + tile('Referring sites (all sources)', n(C.union), P && P.union_domains ? dv(C.union, P.union_domains) : (S.available ? 'DataForSEO alone: ' + n(S.referring_domains) : 'free sources')) + tile('Best links', n(s.best_links), 'SEO value 50+') +
-    tile('Checked on the page', n(C.verified), C.checked_now ? n(C.checked_now) + ' checked this run' : '') + tile('Visits from links', n(s.referral.visits), 'past year · ' + n(s.referral.visits_28d) + ' in 28 days') +
-    (S.available ? tile('Authority (0-1000)', n(S.rank), P && P.rank ? dv(S.rank, P.rank) : '') + tile('Spam score', S.spam_score + '/100', S.spam_score >= 40 ? '<span style="color:#b91c1c">high</span>' : 'ok') : tile('Authority (0-1000)', '—', 'DataForSEO: monthly full run')) + '</tr></table>';
+    // B10-2 (2026-10-15, benchmark area 10): this tile used to read "Checked on the page 1" over "18 checked this run" - two
+    // different denominators and no rate at all. It now shows what was read and what could not be read, and the rate itself is
+    // stated below only when enough pages were readable to state one.
+    tile('Checked on their page', n(CK.found) + (CK.read ? ' of ' + n(CK.read) : ''), CK.fetched ? n(CK.fetched) + ' fetched' + (CK.unread ? ' · ' + n(CK.unread) + ' could not be read' : '') : 'none fetched this run') + tile('Visits from links', n(s.referral.visits), 'past year · ' + n(s.referral.visits_28d) + ' in 28 days') +
+    (S.available ? tile('Authority (0-1000)', n(S.rank), P && P.rank ? dv(S.rank, P.rank) : '') + tile('Spam score (the index\'s)', S.spam_score + '/100', 'reported by DataForSEO over ' + n(S.backlinks) + ' links') : tile('Authority (0-1000)', '—', 'DataForSEO: monthly full run')) + '</tr></table>';
   // lost and at risk
   const lostC = s.lost.filter(l => !l.pending);
   if (lostC.length || !full) html += h3('Links lost (confirmed by two checks)') + table(['From', 'Authority', 'Pointed to', 'Why', 'What to do'], lostC.slice(0, 15).map(l => [l.from_url ? link(l.from_url, l.from_domain) : esc(l.from_domain), auth(l), esc(pathOf(l.to_url)), esc(REASON[l.reason] || l.reason), esc(ACTION[l.reason] || '')]), 'none');
   if (s.at_risk.length) html += p_('Not found on their page this week, checked again next week before they count as lost: ' + esc(s.at_risk.slice(0, 10).map(a => a.ref_domain).join(', ')) + '.', true);
+  // B10-4: an index that stopped re-crawling a page is not a lost link. These rows keep their value and their place in the count,
+  // and they are first in next week's check.
+  if ((s.dormant || []).length) html += p_('<b>No index has seen ' + n(s.dormant.length) + ' link(s) for more than 4 months</b>, and we have not read their pages yet: ' + esc(s.dormant.slice(0, 10).map(d => d.ref_domain + ' (last seen ' + d.last_seen + ')').join(', ')) + '. They are not counted as lost - an index that stopped re-crawling a page proves nothing - and they are first in the next check.', true);
   if (s.rel_changed.length) html += h3('Links that changed') + table(['Site', 'Page', 'Now'], s.rel_changed.map(r => [esc(r.ref_domain), link(r.url), esc(r.rel)]));
   if (full) {
     // coverage
@@ -155,7 +188,17 @@ return sites.filter(s => s.deliver).map(s => {
       return [esc(label), n((C.per_source || {})[k] || 0), n((C.only_in || {})[k] || 0), note]; });
     html += h3('Where the links were found') + table(['Source', 'Referring sites', 'Only this source', 'Note'], covRows) +
       p_(C.gsc_sample ? 'Of the ' + n(C.gsc_sample) + ' sites in Google\'s own sample (Search Console), DataForSEO sees <b>' + C.dfs_sees_google + '%</b>; at least one other source confirms ' + C.all_see_google + '%.' : 'Upload the Search Console Links export to measure how much of Google\'s view each source covers.', true) +
-      p_('DataForSEO finds ' + C.dfs_share + '% of the ' + n(C.union) + ' referring sites; the rest come from the other sources.' + (C.social ? ' Social networks (not counted): ' + n(C.social) + '.' : ''), true);
+      p_('DataForSEO finds ' + C.dfs_share + '% of the ' + n(C.union) + ' referring sites; the rest come from the other sources.' + (C.social ? ' Social networks (not counted): ' + n(C.social) + '.' : ''), true) +
+      // B10-1: how old this view of the web is. An index's "live" means "live when it last crawled it".
+      p_('<b>How fresh this is.</b> ' + (FRI.rows ? 'The link index last saw these links between ' + dayWord(FRI.newest_days) + ' and ' + dayWord(FRI.oldest_days) + ' (middle: ' + dayWord(FRI.median_days) + ', over ' + n(FRI.rows) + ' link(s) it reports). ' : 'The link index reported no sighting dates in this run. ')
+        + (FRO.rows ? 'We read ' + n(FRO.checked_this_run) + ' page(s) ourselves in this run; the links confirmed on their page were last read ' + dayWord(FRO.median_days) + ' on average' + (FRO.never_checked ? ', and ' + n(FRO.never_checked) + ' referring site(s) have never been read by us' : '') + '.' : 'No page has been read by us yet.')
+        + (FR.gsc_days != null ? ' Google\'s own link sample was uploaded ' + dayWord(FR.gsc_days) + '.' : '') + (FR.cc_release ? ' Common Crawl release ' + esc(FR.cc_release) + (FR.cc_days != null ? ', read ' + dayWord(FR.cc_days) : '') + '.' : ''), true) +
+      // B10-2: the one measured figure in this report - and no figure at all when too few pages could be read
+      p_('<b>Checked by us, not taken on trust.</b> ' + (CK.precision == null
+          ? 'Too few pages could be read this run to state a rate (' + n(CK.read) + ' read, at least ' + n(CK.min_sample) + ' needed)' + (CK.unread ? '; ' + n(CK.unread) + ' could not be read (' + esc(Object.keys(CK.unread_by || {}).map(k => ({ blocked: 'bot wall', js: 'needs JavaScript', error: 'fetch error' }[k] || k) + ' ' + CK.unread_by[k]).join(', ')) + ')' : '') + '.'
+          : 'Of the ' + n(CK.read) + ' referring pages we could read, <b>' + CK.found + ' still carry the link (' + CK.precision + '%)</b>'
+            + (CK.index_precision == null ? '' : ', and of the ' + n(CK.index_read) + ' the DataForSEO index reports live, ' + CK.index_live + ' are live (' + CK.index_precision + '%)')
+            + (CK.unread ? '. ' + n(CK.unread) + ' page(s) could not be read (' + esc(Object.keys(CK.unread_by || {}).map(k => ({ blocked: 'bot wall', js: 'needs JavaScript', error: 'fetch error' }[k] || k) + ' ' + CK.unread_by[k]).join(', ')) + ') and count on neither side' : '') + '.'), true);
     if (s.wins.length) html += h3('Wins') + table(['Site', 'Page', ''], s.wins.slice(0, 12).map(w => [esc(w.ref_domain), link(w.url), w.why === 'restored' ? 'restored' : 'new' + (w.link_type ? ' · ' + esc(w.link_type) : '') + (w.seo ? ' · value ' + w.seo : '')]));
     const best = L.filter(r => r.status !== 'lost' && r.kind === 'web' && r.link_type !== 'spam').sort((a, b) => b.seo_value - a.seo_value).slice(0, 15);
     const farms = s.farms || []; const farmWhy = [...new Set(farms.map(f => String(f.reason || '').replace(/ \(.*$/, '')))].slice(0, 3);
@@ -167,7 +210,14 @@ return sites.filter(s => s.deliver).map(s => {
     html += h3('New links') + table(['From', 'Authority', 'Anchor', 'First seen', ''], s.new_links.slice(0, 20).map(l => [l.from_url ? link(l.from_url, l.from_domain) : esc(l.from_domain), auth(l), esc(l.anchor), esc(l.first_seen), l.spammy ? '<span style="color:#b91c1c">spammy</span>' : (l.dofollow ? 'follow' : 'nofollow') + (l.verified ? ' · ' + vtag(l.verified) : '')]), 'no new links since the last check');
     html += h3('Links to broken pages (reclaim with a 301)') + table(['Broken page', 'Status', 'Links', 'From', 'Redirect to'], s.reclaim.map(r => [esc(pathOf(r.broken_url)), esc(r.status || 'error'), n(r.links), esc(r.domains.join(', ')), link(r.redirect_to)]), 'none — every linked page works');
     const K = (s.anchors || {}).kinds || {}; const kt = Object.values(K).reduce((a, b) => a + b, 0);
-    if (kt) html += h3('Anchor texts') + p_(['brand', 'url', 'generic', 'money', 'image_or_empty'].filter(k => K[k]).map(k => esc({ brand: 'your name', url: 'web address', generic: 'generic ("here", "website")', money: 'keyword', image_or_empty: 'image / empty' }[k]) + ' ' + Math.round(100 * K[k] / kt) + '%').join(' · ') + ((K.money || 0) / kt > 0.3 && kt >= 10 ? ' — <b>keyword anchors are over 30%</b>: ask new links to use your name or the page title.' : ''), true) + table(['Anchor', 'Referring domains', 'Kind'], ((s.anchors || {}).top || []).slice(0, 10).map(a => [esc(a.anchor), n(a.referring_domains), esc(a.kind)]));
+    // B10-3 (2026-10-15, benchmark area 10): the percentages and the table are computed on the same set - the link farms out of
+    // both, counted beside them - and the rule of thumb under it carries the measured distribution it is judged against.
+    const AB = (s.anchors || {}).base || {}; const moneyPct = kt ? Math.round(100 * (K.money || 0) / kt) : null;
+    if (kt) html += h3('Anchor texts') + p_(['brand', 'url', 'generic', 'money', 'image_or_empty'].filter(k => K[k]).map(k => esc({ brand: 'your name', url: 'web address', generic: 'generic ("here", "website")', money: 'keyword', image_or_empty: 'image / empty' }[k]) + ' ' + Math.round(100 * K[k] / kt) + '%').join(' · ')
+      + ' — over ' + n(kt) + ' referring site(s)' + ((s.anchors || {}).set_aside ? ', with ' + n(s.anchors.set_aside) + ' link-farm site(s) left out of both the percentages and the table below' : '')
+      + (AB.url ? '. For comparison, ' + esc(AB.source) + ': keyword ' + AB.money + '%, your name ' + AB.brand + '%, web address ' + AB.url + '%, image or empty ' + AB.image_or_empty + '%, generic ' + AB.generic + '%' : '') + '.'
+      + (moneyPct != null && moneyPct > (AB.money || 30) && kt >= 10 ? ' <b>Keyword anchors are above that population (' + moneyPct + '%)</b>: ask new links to use your name or the page title.' : ''), true)
+      + table(['Anchor', 'Referring domains', 'Kind'], ((s.anchors || {}).top || []).slice(0, 10).map(a => [esc(a.anchor), n(a.referring_domains), esc(a.kind) + (a.farm ? ' <span style="color:#b91c1c">· link farm, set aside</span>' : '')]));
     if (s.comp_new.length) html += h3('Sites that just linked to a competitor') + table(['Site', 'Linked to', 'When', 'Page', 'Authority'], s.comp_new.slice(0, 12).map(c => [esc(c.domain), esc(c.competitor), esc(c.first_seen), link(c.url, c.title || c.url), auth(c)]));
     if (s.lists.length) html += h3('"Best of" lists') + table(['Page', 'Names competitors', 'You'], s.lists.slice(0, 10).map(l => [link(l.url, l.title || l.url), esc(l.competitors.join(', ') || '—'), l.linked ? '<span style="color:#15803d">linked</span>' : l.named ? 'named, no link' : '<b>missing</b>']));
     html += h3('Link gap: sites that link to ' + (s.competitors.length ? s.competitors.join(', ') : 'your competitors') + ' but not to you') + (s.gap_stored ? p_('DataForSEO gap from ' + esc(s.gap_checked) + ' (refreshed every 3 months; links won since then are removed). Common Crawl adds its monthly view.', true) : '') + (s.gap_error ? p_('DataForSEO gap not available: ' + esc(s.gap_error), true) : '') +
@@ -192,6 +242,14 @@ return sites.filter(s => s.deliver).map(s => {
     s.free_only || !S.available
       ? LN.unknown('Authority (0-1000) and spam score', s.free_only ? 'this was a free check: the DataForSEO index was not asked' : 'the DataForSEO Backlinks API returned no summary (' + String(S.error || 'no data') + ')')
       : LN.of('Authority (0-1000) and spam score', 'backlink_index', { basis: 'reported', period: LN.asOf(s.checked_at), sample: LN.sample(S.referring_domains, 'referring domains in that index'), note: 'DataForSEO\'s own rating of the domain, not a Google figure' }),
+    // B10-1 / B10-2: the index's own freshness is a figure like any other, and so is the rate we measured
+    FRI.rows ? LN.of('How old the link index\'s view of these links is', 'backlink_index', { basis: 'reported', period: 'last seen between ' + dayWord(FRI.newest_days) + ' and ' + dayWord(FRI.oldest_days),
+      sample: LN.sample(FRI.rows, 'links with a sighting date'), note: 'an index\'s "live" means "live when it last crawled"; a complete refresh of a web-wide index takes weeks' })
+      : LN.unknown('How old the link index\'s view of these links is', 'no sighting date was returned for any link in this run'),
+    CK.precision == null
+      ? LN.unknown('Share of the links we read that still carry the link', 'only ' + (CK.read || 0) + ' referring page(s) could be read this run; at least ' + (CK.min_sample || 5) + ' are needed to state a rate')
+      : LN.of('Share of the links we read that still carry the link', 'own_check', { basis: 'measured', period: LN.asOf(s.checked_at), sample: LN.sample(CK.read, 'referring pages read'),
+          note: 'pages behind a bot wall, JavaScript-only pages and fetch errors are counted on neither side' }),
     LN.of('Links checked on their page (found / at risk / lost)', 'own_check', { basis: 'measured', period: LN.asOf(s.checked_at),
       sample: LN.sample(C.verified, 'links confirmed on the page' + (C.checked_now ? ', ' + C.checked_now + ' fetched this run' : '')), note: 'lost needs two misses with a reason, never one index saying so' }),
     LN.of('SEO, referral and brand value per link', 'model', { basis: 'modelled', period: LN.asOf(s.checked_at), sample: LN.sample(L.length, 'links scored'),

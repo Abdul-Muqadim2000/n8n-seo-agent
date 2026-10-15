@@ -1,10 +1,10 @@
 import { and, eq, inArray, isNotNull, lte, or, sql } from 'drizzle-orm';
-import { addWorkingDays, consentGate, digestOpen, digestProspect, emailDomain, inSendWindow, isDigestEmail, n8nSiteId, parseDigest, parseReturnDate, sendGap, warmupCap, type LinkOutreachRow, type ProfileRow, type ProspectRow } from '@seo/shared';
+import { addWorkingDays, consentGate, digestOpen, digestProspect, emailDomain, inSendWindow, isDigestEmail, n8nSiteId, parseDigest, parseReturnDate, sendGap, warmupCap, type DnsCheck, type LinkOutreachRow, type ProfileRow, type ProspectRow } from '@seo/shared';
 import { db, schema } from '../db';
 import type { MailboxRow, OutreachSequenceRow, SiteRow } from '../db/schema';
 import { replyRead, siteRows, upsertRow } from '../n8n/client';
 import { approve, isSuppressed, linkSettingsOf, sentCounts, setProspectStatus, suppress } from './linkBuilder';
-import { compose, connOf, imapClient, mxCheck, parseIncoming, rawMessage, savesSentCopy, smtpTransport, stripQuoted, type Incoming } from './mail';
+import { compose, connOf, imapClient, mailAuthGate, mxCheck, parseIncoming, rawMessage, savesSentCopy, smtpTransport, stripQuoted, type Incoming } from './mail';
 import { inboxViaApi, isOauthMailbox, sendRawViaApi } from './mailOauth';
 import { replyReadBody } from './replyFacts';
 
@@ -96,6 +96,18 @@ export async function senderTick(log: Log, now = new Date()): Promise<number> {
         const site = await siteOf(q.siteId); if (!site) continue;
         const supp = await isSuppressed(q.orgId, q.toEmail);
         if (supp) { await db.update(schema.outreachSequences).set({ status: 'stopped', error: 'Not sent: ' + supp, nextAt: null, updatedAt: now }).where(eq(schema.outreachSequences.id, q.id)); continue; }
+        // B11-4: before a NEW conversation, the sender's own authentication is re-read when the stored reading is a week old. A
+        // From domain with neither SPF nor DKIM cannot start one; open threads keep running. The reason is put on the mailbox so
+        // the Link building page and the Mailboxes tab say the same thing the sender decided.
+        if (q.step === 0) {
+          const auth = await mailAuthGate(mb.fromEmail, (mb.dns as DnsCheck | null) ?? null, now);
+          if (auth.rechecked && auth.dns) await db.update(schema.mailboxes).set({ dns: auth.dns as unknown as Record<string, unknown>, updatedAt: now }).where(eq(schema.mailboxes.id, mb.id));
+          if (!auth.ok) {
+            await db.update(schema.mailboxes).set({ status: 'paused', statusReason: auth.why, updatedAt: now }).where(eq(schema.mailboxes.id, mb.id));
+            log.warn({ mailbox: mb.id }, 'outreach paused: the sending domain has no SPF and no DKIM');
+            break;
+          }
+        }
         if (q.step === 0) {   // L1: the recipient's domain must accept mail at all — an address with no mail server is suppressed, never sent to
           const mx = await mxCheck(q.toEmail);
           if (!mx.ok) {

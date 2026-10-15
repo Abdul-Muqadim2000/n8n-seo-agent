@@ -1,5 +1,6 @@
 /*__REACH__*/
 /*__SERP_OBS__*/
+/*__LINEAGE__*/
 /*__KW_INPUTS__*/
 // Final keyword strategy: merges AI search demand and the live SERP checks into the ranked keyword set and renders the
 // "Keyword Strategy" report. Also exposes keyword_suggestions for the downstream file/email/content steps.
@@ -50,7 +51,10 @@ prio.forEach((p, i) => {
   liveUrlsBy.set(String(p.keyword || '').toLowerCase(), organic.filter(o => !(Number(o.rank_group) > 10)).map(o => o.url).filter(Boolean));
   const k = ks.priority.find(x => x.keyword === p.keyword);
   if (!k) return;
+  // B1-5 / K4 (2026-10-15): the ten pages Google chose are the evidence for what KIND of page wins this search; until today only
+  // their domains were kept and the page type came from the AI label alone.
   k.live = { top_domains: [...new Set(organic.map(o => normD(o.domain)).filter(Boolean))].slice(0, 5), your_position: mine ? mine.rank_group : null, checked_at: serpSeenAt(serps[i]),
+    page_types: KWI.serpPageTypes(organic.filter(o => !(Number(o.rank_group) > 10)).map(o => ({ url: o.url, title: o.title })), { page_type: k.page_type }),
     features: [...new Set(items.map(x => x.type))].filter(t => t !== 'organic'), ai_overview: items.some(x => x.type === 'ai_overview'), paa: (items.find(x => x.type === 'people_also_ask') || { items: [] }).items.slice(0, 4).map(q => q.title || q.question).filter(Boolean) };
 });
 if (liveFailures.length) ks.research_failures = [...(ks.research_failures || []), ...liveFailures];
@@ -93,6 +97,8 @@ const why = (k) => {
   if (ao.live === true) bits.push('an AI Overview was seen on ' + obsDay(k.live.checked_at) + ' (they vary between searches) — write a quotable answer block');
   else if (ao.live == null && ao.stored === true) bits.push('the stored results page showed an AI Overview (historical, undated — not checked live)');
   if (k.live && k.live.your_position) bits.push('you are already at #' + k.live.your_position);
+  // K4: what Google ranks settles the page type; a disagreement with the plan is said out loud, never silently overridden
+  if (k.live && k.live.page_types && k.live.page_types.read) bits.push(k.live.page_types.text.replace(/\.$/, ''));
   // G8 / K2: say when the traffic number is the site's own measurement rather than a model, and K7: when one page can serve more searches
   if (k.traffic_basis === 'calibrated' && k.gsc) bits.push('Search Console already measured ' + Math.round(Number(k.gsc.impressions) || 0) + ' impressions for this exact search on your site in ' + (Number(k.gsc.period_days) || 28) + ' days, so the traffic number below is calibrated, not modelled');
   if (k.serp_cluster) bits.push('the same pages rank for "' + k.serp_cluster.head_keyword + '" (' + k.serp_cluster.shared_urls + ' shared top-10 results), so one page can target both');
@@ -101,8 +107,11 @@ const why = (k) => {
 ks.priority.forEach(k => { k.why = why(k); });
 // v4.8: the live position upgrades the label (already top 20 = easy; a top-20 position also shortens the months)
 const RR = ks.reach || null;
-if (RR) ks.priority.forEach(k => { const p = k.live && k.live.your_position; if (p && p <= REACH_CFG.easy_position) { const diff = difficultyForYou(k.kd, RR.reach, { position: p }); const plan = reachPlan(diff, reachStrong(RR, p));
-  Object.assign(k, { difficulty_for_you: diff, plan_type: plan.plan_type, months: plan.months, for_you_label: reachLabel(diff, plan) }); } });
+// B1-1: the upgrade keeps the reach the keyword was really measured against (its topic's, where there was one), so a live top-20
+// position never quietly swaps the topic measurement back for the site-wide number.
+if (RR) ks.priority.forEach(k => { const p = k.live && k.live.your_position; if (p && p <= REACH_CFG.easy_position) { const rUsed = k.reach_used != null ? k.reach_used : RR.reach;
+  const diff = difficultyForYou(k.kd, rUsed, { position: p }); const plan = reachPlan(diff, reachStrong(RR, p));
+  Object.assign(k, { difficulty_for_you: diff, plan_type: plan.plan_type, months: plan.months, for_you_label: reachLabel(diff, plan), reach_used: rUsed }); } });
 
 // ---- compatibility object for the file, email and content-pipeline steps ----
 let pipeline = ks.pipeline_keyword ? withAi(ks.pipeline_keyword) : null;
@@ -126,10 +135,20 @@ const trend = (k) => k.trend_yearly == null ? '—' : (k.trend_yearly > 0 ? '+' 
 const table = (list, cols) => list.length ? '<table class="t"><tr>' + cols.map(c => '<th>' + c[0] + '</th>').join('') + '</tr>' + list.map(k => '<tr>' + cols.map(c => '<td>' + c[1](k) + '</td>').join('') + '</tr>').join('') + '</table>' : '<p class="muted">Nothing with measurable demand in this group.</p>';
 const FY = { easy: 'Easy', reachable: 'Reachable', hard: 'Hard', very_hard: 'Very hard', not_realistic: 'Not realistic' };
 const chanceTxt = (k) => k.chance && k.chance.label ? ', ' + esc(k.chance.band) + ' chance (' + k.chance.range[0] + '-' + k.chance.range[1] + '%, uncalibrated)' : '';
-const forYouCell = (k) => k.difficulty_for_you ? esc(FY[k.difficulty_for_you] || k.difficulty_for_you) + (k.months ? '<br><span class="muted">' + esc(({ direct: 'direct', short: 'short ladder', full: 'full ladder' })[k.plan_type] || '') + ', ' + esc(k.months) + ' mo' + chanceTxt(k) + '</span>' : '') : '—';
+// B1-1: a label measured on the topic itself says so, with the difficulty it was measured against; everything else is the site-wide number
+const basisTxt = (k) => k.reach_basis === 'topic' && k.topic_reach != null ? ', measured on this topic (difficulty ' + k.topic_reach + ')' : '';
+const forYouCell = (k) => k.difficulty_for_you ? esc(FY[k.difficulty_for_you] || k.difficulty_for_you) + (k.months ? '<br><span class="muted">' + esc(({ direct: 'direct', short: 'short ladder', full: 'full ladder' })[k.plan_type] || '') + ', ' + esc(k.months) + ' mo' + chanceTxt(k) + esc(basisTxt(k)) + '</span>' : '') : '—';
 const KW0 = [['Keyword', k => esc(k.keyword)], ['Searches/mo', k => num(k.volume)], ['Difficulty', k => kdLabel(k.kd)], ['CPC $', k => k.cpc == null ? '—' : cpcTxt(k.cpc)], ['Intent', k => cap(k.intent)], ['Trend', k => trend(k)], ['SERP features', k => feat(k)], ['Opportunity', k => num(k.opportunity)]];
 const KW = RR ? [...KW0.slice(0, 3), ['For your site', forYouCell], ...KW0.slice(3)] : KW0;
-const reachLine = RR ? 'Your site\'s reach: difficulty ' + RR.reach + ' (' + (RR.method === 'percentile' ? '75% of the ' + RR.sample + ' keywords you rank top 10 for are at or below it' : 'from ' + num(RR.top10) + ' keyword(s) in the top 10') + (RR.cached ? ', measured ' + String(RR.cached_at || '').slice(0, 10) : '') + '). "For your site": easy up to reach + 5 or already top 20, reachable up to + 20, hard up to + 40. Months and the chance band per plan are estimates (the chance is uncalibrated until this system has measured its own ladders). ' + reachBaseRateText() : '';
+// B1-1 / B1-2 (2026-10-15, benchmark area 1): the site-wide reach now says WHAT it was measured on, and the line states how many of
+// the topics below could be measured on their own topic instead. A number measured on other topics is weaker evidence for this one.
+const measuredOnTxt = !RR ? '' : (RR.measured_on || []).length
+  ? ' That number comes from the searches you already win — ' + RR.measured_on.slice(0, 4).map(k => '"' + k + '"').join(', ') + (RR.measured_on.length > 4 ? ' and others' : '') + '.'
+  : (RR.evidence_note ? ' ' + RR.evidence_note + '.' : '');
+const topicReachTxt = !RR ? '' : (RR.topics_measured
+  ? ' ' + RR.topics_measured + ' of the ' + RR.topics_total + ' topics below were measured on their OWN topic (the difficulty you have already beaten on it); the rest use the site-wide number above, which is the optimistic case for a topic you have no record on.'
+  : ' No topic below has the ' + REACH_CFG.min_top10 + ' top-10 keywords of its own that measuring a topic needs, so every "for your site" label uses the site-wide number — treat it as the optimistic case for a topic you have no record on.');
+const reachLine = RR ? 'Your site\'s reach: difficulty ' + RR.reach + ' (' + (RR.method === 'percentile' ? '75% of the ' + RR.sample + ' keywords you rank top 10 for are at or below it' : 'from ' + num(RR.top10) + ' keyword(s) in the top 10') + (RR.cached ? ', measured ' + String(RR.cached_at || '').slice(0, 10) : '') + ').' + measuredOnTxt + topicReachTxt + ' "For your site": easy up to reach + 5 or already top 20, reachable up to + 20, hard up to + 40. Months and the chance band per plan are estimates (the chance is uncalibrated until this system has measured its own ladders). ' + reachBaseRateText() : '';
 // 2026-10-12 (FIX_PLAN D11): a keyword a live page of the site already answers is named with that page, so nobody writes a second one
 const coveredLine = (ks.covered || []).length ? (ks.covered.length === 1 ? 'One keyword below is' : ks.covered.length + ' keywords below are') + ' already answered by a page you have: ' + ks.covered.slice(0, 5).map(c => '"' + esc(c.keyword) + '" \u2192 <a href="' + esc(c.url) + '">' + esc(c.url) + '</a>').join(', ') + '. Refresh those pages instead of writing new ones \u2014 two pages for one search split the signals and neither ranks.' : '';
 // 2026-10-12 (FIX_PLAN D20): a keyword one of the site's own keyword ladders already covers is named with that ladder, so the top pick never
@@ -138,7 +157,8 @@ const ladderLine = (ks.ladder_covered || []).length ? (ks.ladder_covered.length 
 const refusedLine = (ks.refused || []).length ? ks.refused.length + ' keyword(s) were left out as government, portal or other companies\' brand searches (e.g. ' + ks.refused.slice(0, 5).map(r => '"' + esc(r.keyword) + '" — ' + esc(r.reason)).join(', ') + ').' : '';
 // ---- G8 (2026-10-13): the three new inputs in the report ----
 // K2: every traffic number says whether the site's own Search Console data could check it
-const tpCell = (k) => '~' + num(k.traffic_potential) + '/mo' + (k.traffic_basis === 'calibrated' ? ' (calibrated with your data)' : k.traffic_basis === 'modelled' ? ' (modelled)' : '');
+// B1-3: a keyword the provider has no volume for has no traffic estimate at all, and the cell says so instead of printing "~—/mo"
+const tpCell = (k) => k.traffic_potential == null ? 'not estimated (no volume measured)' : '~' + num(k.traffic_potential) + '/mo' + (k.traffic_basis === 'calibrated' ? ' (calibrated with your data)' : k.traffic_basis === 'modelled' ? ' (modelled)' : '');
 const SC = ks.search_console || null;
 const scRows = SC ? (SC.queries || []) : [];
 const scTable = (list) => table(list, [['Search', q => esc(q.keyword)], ['Impressions (' + ((SC && SC.period_days) || 28) + ' days)', q => num(q.impressions)], ['Clicks', q => num(q.clicks)],
@@ -176,6 +196,43 @@ const goalText = { leads: 'enquiries and leads', sales: 'online sales', traffic:
 const now = (ks.clusters || []).filter(c => c.tier === 'Now'), next = (ks.clusters || []).filter(c => c.tier === 'Next'), later = (ks.clusters || []).filter(c => c.tier === 'Later');
 const seeds = (base.seeds || []).slice(0, 10);
 
+// ---- B-L2 (2026-10-15, INVARIANTS rule 1, lineage_lint.py "lineage"): the keyword strategy prints searches per month,
+// difficulty and cost per click as if they were facts about this site. They are the provider's ESTIMATES for a single keyword —
+// the methodology paragraph said so in prose, which no table of numbers inherits, and when the strategy ships on its own (the
+// "Keyword Strategy" document, the ideas callback) the full report's "Where these numbers come from" table was not there at all.
+// The same table is now part of this document, and it travels in the returned json so the app shows the same words.
+const today = new Date().toISOString().slice(0, 10);
+const kwCount = (ks.keywords || []).length;
+const calibrated = (ks.keywords || []).filter(k => k.traffic_basis === 'calibrated').length;
+const liveDone = (ks.live_checks || {}).done != null ? (ks.live_checks || {}).done : prio.length;
+const lineage = [
+  LN.of('Searches per month, difficulty and cost per click', 'kwdata', { basis: 'estimated', period: 'the provider\'s latest 12-month average',
+    sample: LN.sample(kwCount, 'keywords'), note: 'a provider estimate for one keyword in ' + String(base.country || '') + ', not a measurement of your site: a single keyword\'s volume and difficulty can be well off, and the ranking below uses them together, never one on its own' }),
+  LN.of('Traffic potential per keyword', calibrated ? 'gsc' : 'model', { basis: calibrated ? 'calibrated' : 'modelled', period: calibrated ? 'the last 28 days, scaled to a month' : 'per month, once the page ranks',
+    sample: LN.sample(kwCount, 'keywords, ' + calibrated + ' of them calibrated against your own Search Console data'),
+    note: 'searches after results-page click loss x a top-3 click share; every number carries its own "calibrated" or "modelled" label' }),
+  liveDone
+    ? LN.of('Who ranks now, results-page features, AI Overview and your position', 'serp', { basis: 'one_sample', period: LN.asOf(today),
+        sample: LN.sample(liveDone, 'keywords checked live on Google'), note: 'one results page per keyword at one moment, from ' + String(base.country || 'the chosen country') + ' on one device; every other keyword is marked "not checked", never "nobody ranks"' })
+    : LN.unknown('Who ranks now, results-page features, AI Overview and your position', 'no live results page was read in this run'),
+  (SC && SC.available)
+    ? LN.of('Searches your website already appears for', 'gsc', { basis: 'measured', period: 'the 28 days to ' + String((SC && SC.period_end) || '').slice(0, 10),
+        sample: LN.sample(scRows.length, 'searches'), note: 'Google\'s own count for your property; the last 3 days are not final' })
+    : LN.unknown('Searches your website already appears for', 'no Search Console history is stored for this website yet'),
+  ks.ai_demand && ks.ai_demand.available
+    ? LN.of('AI search demand', 'ai_db', { basis: 'reported', period: LN.asOf(today), sample: LN.sample((ks.ai_demand.top || []).length, 'keywords with AI demand'),
+        note: 'how often these keywords are asked in AI assistants, as the AI-answer database reports it' })
+    : LN.unknown('AI search demand', String((ks.ai_demand && ks.ai_demand.error) || 'the AI keyword database returned nothing for this run')),
+  RR
+    ? LN.of('Difficulty for your site and the plan type', 'model', { basis: 'modelled', period: LN.asOf(today), sample: 'your site\'s reach ' + String(RR.reach == null ? 'unknown' : RR.reach),
+        note: 'your reach against each keyword\'s difficulty; the month ranges are modelled from published base rates, not from your own history yet' })
+    : LN.unknown('Difficulty for your site and the plan type', 'no website was given for this research, so difficulty is the provider\'s number and not yours'),
+];
+const lineageHtml = '<h2>Where these numbers come from</h2>'
+  + '<table class="t"><tr><th>Figure</th><th>Source</th><th>Period</th><th>Sample</th><th>How it was arrived at</th></tr>'
+  + lineage.map(l => '<tr><td>' + esc(l.figure) + '</td><td>' + esc(l.source_label) + '</td><td>' + esc(l.period || '—') + '</td><td>' + esc(l.sample || '—') + '</td><td>' + esc([l.basis_label, l.note].filter(Boolean).join(' — ')) + '</td></tr>').join('')
+  + '</table><p class="muted">A figure marked "' + esc(LN.BASIS.modelled) + '" is computed, not counted; "' + esc(LN.BASIS.estimated) + '" is the data provider\'s own estimate for a single keyword; "' + esc(LN.MISSING) + '" means the figure reached this report without its source and should be treated as unverified.</p>';
+
 const html = `
 <style>
   .w{font-family:Arial,sans-serif;max-width:900px;margin:0 auto;color:#1e293b;text-align:left;line-height:1.55;padding:24px 20px}
@@ -200,7 +257,7 @@ const html = `
     <div class="kw">${i + 1}. ${esc(k.keyword)}</div>
     <p>${k.volume == null ? '<span class="pill">No provider volume — measured on your site instead</span>' : '<span class="pill">' + num(k.volume) + ' searches/mo</span>'}<span class="pill">Difficulty ${kdLabel(k.kd)}</span>${k.for_you_label ? '<span class="pill ' + (['easy', 'reachable'].includes(k.difficulty_for_you) ? 'now' : 'later') + '">' + esc(k.for_you_label) + '</span>' : ''}<span class="pill">${cap(k.intent)}</span><span class="pill">${esc(k.page_type)}</span>${k.cpc != null ? '<span class="pill">CPC $' + cpcTxt(k.cpc) + '</span>' : ''}${k.ladder_covered ? '<span class="pill later">Already in your ladder "' + esc(k.ladder_covered.head_keyword) + '"</span>' : ''}${k.serp_cluster ? '<span class="pill">Same results page as "' + esc(k.serp_cluster.head_keyword) + '"</span>' : ''}<span class="pill${k.traffic_basis === 'calibrated' ? ' now' : ''}">Traffic potential ${tpCell(k)}</span>${k.ai_search_volume ? '<span class="pill ai">AI search volume ' + num(k.ai_search_volume) + '/mo</span>' : ''}</p>
     <p>${esc(k.why)}</p>
-    <p class="muted"><b>Topic:</b> ${esc(k.topic)} · <b>SERP features:</b> ${esc(k.live ? (k.live.features.join(', ') || 'none') : feat(k))}${k.live ? ' (live check at ' + esc(obsClock(k.live.checked_at)) + ')' : ' (stored results page)'} · <b>AI Overview:</b> ${esc(aioObs(k).text)} · <b>Who ranks now:</b> ${esc(k.live ? (k.live.top_domains.join(', ') || 'unknown') : 'not checked')}${base.domain ? ' · <b>Your position:</b> ' + (k.live && k.live.your_position ? '#' + k.live.your_position : 'not in top 20') : ''}${k.live && k.live.paa.length ? '<br><b>People also ask:</b> ' + esc(k.live.paa.join(' · ')) : ''}</p>
+    <p class="muted"><b>Topic:</b> ${esc(k.topic)} · <b>SERP features:</b> ${esc(k.live ? (k.live.features.join(', ') || 'none') : feat(k))}${k.live ? ' (live check at ' + esc(obsClock(k.live.checked_at)) + ')' : ' (stored results page)'} · <b>AI Overview:</b> ${esc(aioObs(k).text)} · <b>Who ranks now:</b> ${esc(k.live ? (k.live.top_domains.join(', ') || 'unknown') : 'not checked')}${k.live && k.live.page_types && k.live.page_types.read ? ' · <b>What Google ranks:</b> ' + esc(k.live.page_types.text) + (k.live.page_types.mismatch ? ' <span class="pill later">page type mismatch</span>' : '') : ''}${base.domain ? ' · <b>Your position:</b> ' + (k.live && k.live.your_position ? '#' + k.live.your_position : 'not in top 20') : ''}${k.live && k.live.paa.length ? '<br><b>People also ask:</b> ' + esc(k.live.paa.join(' · ')) : ''}</p>
   </div>`).join('') || '<p class="muted">No priority keywords could be determined.</p>'}
 
   <h2>Searches your website already appears for</h2>
@@ -235,11 +292,13 @@ const html = `
 
   ${['commercial', 'transactional', 'informational'].map(x => `<h2>${cap(x)} keywords</h2>${table((ks.by_intent || {})[x] || [], KW)}`).join('')}
 
+  ${lineageHtml}
+
   <h2>How this was built</h2>
-  <p class="muted">Seeds: ${esc(seeds.join(', '))}${SC && (SC.seeded || []).length ? ', plus your own Search Console searches: ' + esc(SC.seeded.slice(0, 10).join(', ')) : ''}. Sources: ${esc(Object.entries(ks.by_source || {}).map(([k, v]) => k + ' ' + v).join(', '))}. Opportunity = traffic potential (volume after SERP-feature click loss) × winnability (difficulty and top-10 link strength) × commercial value (CPC) × intent weight for your goal × trend, then multiplied by AI relevance (2 = core, 1 = adjacent, 0 = dropped). Traffic potential is <b>calibrated</b> where Search Console measured that exact search on your site (its impressions and clicks over 28 days, scaled to a month) and <b>modelled</b> everywhere else (the provider's monthly volume, typically 50-70% off for a single keyword) — the label is on every number. ${prio.length} keyword${prio.length === 1 ? '' : 's'} were checked live on Google for intent and page type${(ks.live_checks || {}).cap ? ' (limit ' + ks.live_checks.cap + ' a run, about $' + ((ks.live_checks.cap * 0.002).toFixed(2)) + ' of search data)' : ''}.${(ks.research_failures || []).length ? ' Some data pulls failed: ' + esc(ks.research_failures.join('; ')) + '.' : ''}</p>
+  <p class="muted">Seeds: ${esc(seeds.join(', '))}${SC && (SC.seeded || []).length ? ', plus your own Search Console searches: ' + esc(SC.seeded.slice(0, 10).join(', ')) : ''}. Sources: ${esc(Object.entries(ks.by_source || {}).map(([k, v]) => k + ' ' + v).join(', '))}. Opportunity = traffic potential (volume after SERP-feature click loss) × winnability (difficulty and top-10 link strength) × commercial value (CPC) × intent weight for your goal × trend, then multiplied by AI relevance (2 = core, 1 = adjacent, 0 = dropped). Traffic potential is <b>calibrated</b> where Search Console measured that exact search on your site (its impressions and clicks over 28 days, scaled to a month) and <b>modelled</b> everywhere else (the provider's monthly volume, typically 50-70% off for a single keyword) — the label is on every number. Click loss: a results page with an AI Overview is counted at ${Math.round(KWI.CLICK_LOSS.ai_overview.factor * 100)}% of the clicks, measured by ${esc(KWI.CLICK_LOSS.ai_overview.source)} (<a href="${esc(KWI.CLICK_LOSS.ai_overview.url)}">source</a>); the deductions for a featured snippet, video, a local pack and shopping results are stated rules, not measurements. ${prio.length} keyword${prio.length === 1 ? '' : 's'} were checked live on Google for intent and page type${(ks.live_checks || {}).cap ? ' (limit ' + ks.live_checks.cap + ' a run, about $' + ((ks.live_checks.cap * 0.002).toFixed(2)) + ' of search data)' : ''}.${(ks.research_failures || []).length ? ' Some data pulls failed: ' + esc(ks.research_failures.join('; ')) + '.' : ''}</p>
   <p class="by">Prepared by ${esc(base.brand || 'Dev SEO')} · Search volumes, difficulty, CPC and SERP features from DataForSEO for ${esc(base.country)}.</p>
 </div>`;
 
 // Options for the form-only "Choose your keyword" step (the number prefix makes the pick unambiguous)
 const choice_options = ['Let the system choose for my goal', ...ks.priority.slice(0, 8).map((k, i) => (i + 1) + '. ' + k.keyword + ' · ' + num(k.volume) + ' searches/mo · difficulty ' + (k.kd == null ? '?' : k.kd) + ' · ' + cap(k.intent) + ' · ' + k.page_type + (k.for_you_label ? ' · ' + k.for_you_label : ''))];
-return [{ json: { ...base, keyword_strategy: ks, keyword_suggestions, result_html: html, choice_options } }];
+return [{ json: { ...base, keyword_strategy: ks, keyword_suggestions, result_html: html, lineage, choice_options } }];

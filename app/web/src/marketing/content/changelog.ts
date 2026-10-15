@@ -15,6 +15,66 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-15',
+    title: 'Rank tracking now follows the keywords you named, not only the ones in a ladder',
+    summary:
+      'The rank tracker only ever watched the pages of your keyword ladders. The keywords you listed when you set tracking up were checked elsewhere, in a different report, with none of the depth. They now get their own weekly report — position, the reading it is compared with, how much the results page itself moved, share of voice and who is above you — and almost none of it costs anything extra, because the readings were already being bought.',
+    highlights: [
+      'A weekly report for your own keyword list, beside the one for each keyword ladder',
+      'Each keyword gets the same depth a ladder page gets: the previous reading with its date, the measured movement of the results page itself, share of voice and the sites above you',
+      'A reading the weekly site check already took is read, not bought again, and the row says where it came from and when',
+      'A keyword that is also a ladder rung is checked once, with the ladder — never twice',
+      'The week is bounded: the ten keywords whose reading is oldest are checked, and the rest are listed with the limit and the date they were last read',
+      'A keyword whose results page could not be read says “check again” and is left out of every count — it is never reported as not ranking',
+      'A competitor’s brand on your list is set aside with the reason, instead of being tracked as if it were yours',
+      'The report prints what the checks cost, from the figure the data provider reported for exactly those calls',
+    ],
+    features: ['keyword-ladders', 'site-tracking'],
+  },
+  {
+    date: '2026-10-15',
+    title: 'A shared report now looks like yours',
+    summary:
+      'A report you share with a client opens under your own business name and logo, with ours in a single line at the bottom. And a report the run marked unfinished tells the reader so before the first figure, instead of looking like finished work.',
+    highlights: [
+      'Your business name and logo at the head of a shared report and in the browser tab; our name is one line in the footer',
+      'Both come from the business profile you already fill in for the website — there is no second place to keep a logo up to date',
+      'No logo yet, or a logo that fails to load: the page shows your initials and still reads as finished',
+      'A draft that did not pass the quality check, a plan the engine refused, a verdict it could not check — the reader is told, in the run’s own words, above the figures',
+      'The headline figures are ordered the way the report writes them, and named in plain words instead of field names',
+    ],
+    features: ['reports'],
+  },
+  {
+    date: '2026-10-15',
+    title: 'One search, one page — decided by Google’s own results, not by a label',
+    summary:
+      'A keyword ladder used to group its supporting keywords by what they looked like. Two searches that Google answers with exactly the same pages could therefore become two pages of yours, competing with each other. Before planning, Ascentra now reads the results page for each supporting keyword and puts the searches that share them on one page.',
+    highlights: [
+      'The results page is read for each supporting keyword, and the searches that share enough of their top seven results become one page',
+      'The grouping holds across difficulty levels, so two keywords Google answers the same way are never split into two pages',
+      'Every plan says which keywords were compared, which could not be read, and what the comparison cost',
+      'A keyword whose results page could not be read keeps its own page: nothing is merged or dropped on a reading that never arrived',
+      'The head term’s results page is counted for how many different websites own it, and a page held by only a few of them lowers how realistic the plan calls itself — with the count, the rule and the reason printed',
+    ],
+    features: ['keyword-ladders', 'keyword-research'],
+  },
+  {
+    date: '2026-10-15',
+    title: 'A page losing traffic now gets refreshed, not just reported',
+    summary:
+      'Ascentra used to tell you a page was decaying and leave it there. It now proves the fall before claiming it — and then writes the refresh. A page counts as losing traffic only when the drop is beyond normal variation and the page is genuinely worse off than it was in the same weeks a year earlier, so a quiet season is never mistaken for a decline.',
+    highlights: [
+      'Every page with search traffic is compared both with the weeks before and with the same weeks a year earlier',
+      'A fall that the same weeks also had last year is named as seasonal and left alone',
+      'A drop too small to tell apart from chance says so, with the clicks it was measured on — it is never called a decline',
+      'Clicks down while the page is still shown as often is called out as a title-and-description job, not a rewrite',
+      'The pages that really are losing traffic are refreshed by the weekly pipeline, ranked by the clicks at stake, ahead of newer guesses',
+      'At most two refreshes a week, and a page is left to settle for 60 days before it is touched again',
+    ],
+    features: ['autopilot', 'site-tracking', 'content'],
+  },
+  {
+    date: '2026-10-15',
     title: 'Reports now come to you, and the ones that are not ready stay put',
     summary:
       'Every finished report used to wait in Ascentra until somebody logged in. You can now have each one sent as it arrives, or collected into a daily, weekly or monthly summary — by e-mail with its figures and files, or to a webhook your team already watches. The reports an analysis marked as not ready are deliberately held back, with the reason stated.',

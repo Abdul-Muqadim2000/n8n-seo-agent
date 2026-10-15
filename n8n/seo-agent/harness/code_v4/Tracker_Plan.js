@@ -181,8 +181,16 @@ const SM = (() => {
       business_facts: S(m.business_facts).slice(0, 2000), cta: S(m.cta).slice(0, 200), brand_names: (m.brand_names || []).join(', ').slice(0, 500),
       competitors: (m.competitors || []).join(', ').slice(0, 500), accreditation: S(m.accreditation).slice(0, 200), model_updated_at: S(m.model_updated_at) };
   };
+  // B4-1 / B4-2 (2026-10-15, benchmark area 4): the measurement columns belong to the row, so the kit emits them — a Data Table
+  // node auto-maps every field it is given, and a row that is short of a column is as wrong as one that carries a stray field.
+  // The model itself measures nothing: these are the defaults the Site Tracker's own judgement is written over
+  // (v5/code/Page_Inventory_Site.js), and `''` for decay_state means "never measured", never "steady".
+  const num0 = (v) => (Number(v) || 0);
   const pageRows = (model) => pages(model).map(p => ({ site_id: S((model || {}).site_id), url: S(p.url), title: S(p.title).slice(0, 300), h1: S(p.h1).slice(0, 300),
-    source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries_json: JSON.stringify(p.queries || []), updated_at: S((model || {}).model_updated_at) || new Date().toISOString() }));
+    source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries_json: JSON.stringify(p.queries || []), updated_at: S((model || {}).model_updated_at) || new Date().toISOString(),
+    clicks: num0(p.clicks), impressions: num0(p.impressions), position: num0(p.position), prev_clicks: num0(p.prev_clicks), yoy_clicks: num0(p.yoy_clicks),
+    decay_state: S(p.decay_state), decay_pct: num0(p.decay_pct), decay_lost: num0(p.decay_lost), decay_kind: S(p.decay_kind),
+    decay_basis: S(p.decay_basis).slice(0, 900), measured_at: S(p.measured_at) }));
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml } };
 })();
@@ -361,6 +369,70 @@ const fitStored = (row, ctx) => {
   return { ok: false, live: false, flagged: true, reason: g.reason, detail: g.detail,
     note: why + ' — it was planned before this rule existed, so it is set aside instead of written' };
 };
+// ---- B-G1 / B-G2 / B-G3 (2026-10-15, FIX_PLAN §3.16; INVARIANTS rule 2): the READ path, written once ----
+// R16 put `fitStored` on two read paths — the Rank Tracker and the Content Cadence — and wrote the loop around it twice. Three more
+// readers of the same stored rungs were written afterwards without it, and every one of them ACTS on what it reads: *AI Plan* (the AI
+// Visibility Tracker and the AI Pulse) turns a stored rung into a question asked of ChatGPT and then scores the site against the answer;
+// *Growth Plan* turns it into a "question to win" and then into a page the Content Cadence writes; *Site Plan* buys it a live rank check
+// every week and prints it in the weekly report. Three copies of one loop are three chances to drift, and the drift IS this defect — so
+// the loop lives here, once, and every reader calls it. FITR.rungs() never throws a refusal away: `set_aside` carries the row, the reason
+// and the sentence to print, because a list that is shorter because a gate ran has to say so (INVARIANTS rule 1).
+const FITR = {
+  // The context a stored row is judged in. Deliberately the shape R16's two callers build by hand: the site's own domain, the
+  // competitors it declared, the brand names AI uses for other companies, and — PROTECTED, so the ladder's own subject can never look
+  // like somebody's brand — the ladder head terms, the site's services and its own tracked keywords. Topics are optional: with none on
+  // file the topic bar judges nothing (fitTopic's own "no evidence, no refusal" rule).
+  ctx(o) {
+    o = o || {};
+    const own = fitHost(o.own_domain || o.domain || '');
+    const protect = [...new Set([...(o.heads || []), ...(o.services || []), ...(o.keywords || []), ...(o.protect || [])]
+      .map(x => String(x || '').trim()).filter(Boolean))];
+    return { own_domain: own, brands: o.brands || {}, intent: o.intent || '',
+      competitors: [...new Set((o.competitors || []).map(fitHost).filter(d => d && d !== own))],
+      serp_domains: (o.serp_domains || []).map(fitHost).filter(Boolean), protect,
+      topics: o.topics && (Array.isArray(o.topics) ? o.topics.length : String(o.topics).trim()) ? o.topics : null,
+      topic_label: o.topic_label || 'what this website sells' };
+  },
+  // Every stored row, gated once. Returns { keep, set_aside, dropped, flagged, refused_keywords }:
+  //   keep      — what the caller may act on (a row whose page is already written stays: that page is live work);
+  //   set_aside — one record per refusal, with `reason`, `detail`, `note` (the sentence to print), `written` and `dropped`.
+  // opts: { keyword: row -> the keyword (default row.keyword), live: row -> true when the row must be kept and only flagged,
+  //         serpFor: (keyword, row) -> [domains in rank order] for the results-page rules, where: a label naming this read path }.
+  rungs(rows, ctx, opts) {
+    const o = opts || {}; const C = ctx || {};
+    const kwOf = typeof o.keyword === 'function' ? o.keyword : ((r) => (r || {}).keyword);
+    const liveOf = typeof o.live === 'function' ? o.live : null;
+    const serpFor = typeof o.serpFor === 'function' ? o.serpFor : null;
+    const keep = []; const set_aside = [];
+    for (const r0 of (rows || [])) {
+      const r = (r0 && typeof r0 === 'object') ? r0 : {};
+      const kw = String(kwOf(r0) || '').trim();
+      if (!kw) { keep.push(r0); continue; }   // a row with no keyword is not this gate's business (the caller's own emptiness rules apply)
+      const serp = serpFor ? (serpFor(kw, r0) || []).map(fitHost).filter(Boolean) : [];
+      let c = C;
+      if (serp.length) c = { ...c, serp, serp_domains: [...new Set([...(C.serp_domains || []), ...serp])] };
+      if (liveOf && liveOf(r0)) c = { ...c, written: true };
+      const g = fitStored({ ...r, keyword: kw }, c);
+      if (g.ok) keep.push(r0);
+      if (!g.flagged) continue;
+      set_aside.push({ keyword: kw, reason: g.reason, detail: g.detail, note: g.note, written: !!g.live, dropped: !g.ok,
+        where: String(o.where || ''), ladder_id: r.ladder_id || '', head_keyword: r.head_keyword || '', rung: Number(r.rung) || 0,
+        page_no: Number(r.page_no) || 0, status: r.status || '', target_url: r.target_url || '', prompt_id: r.prompt_id || '' });
+    }
+    return { keep, set_aside, dropped: set_aside.filter(x => x.dropped), flagged: set_aside.filter(x => !x.dropped),
+      refused_keywords: set_aside.filter(x => x.dropped).map(x => x.keyword) };
+  },
+  // The sentence a human reads. INVARIANTS rule 1: a list that is shorter because a gate ran says so, with the reason, every time.
+  // `what` finishes "so they are not …" ("asked of the AI engines", "tracked", "written as a page").
+  line(set_aside, what) {
+    const a = (set_aside || []).filter(x => x && x.dropped);
+    if (!a.length) return '';
+    return a.length + ' stored keyword' + (a.length === 1 ? ' was' : 's were') + ' set aside, so ' + (a.length === 1 ? 'it is' : 'they are')
+      + ' not ' + String(what || 'used') + ': ' + a.slice(0, 6).map(x => '"' + x.keyword + '" — ' + (x.detail || x.reason)).join('; ')
+      + (a.length > 6 ? ' (and ' + (a.length - 6) + ' more)' : '')
+      + '. They were planned before this rule existed; a page that is already written is kept and only flagged.';
+  }
+};
 // Rank tracker: one SERP check (Google top 50) per tracked keyword: the primary keyword of every ladder page, plus the head term.
 // Reads the ladders and the history from the Data Tables, skips finished ladders and caps the spend per run.
 // v4.6 (no repeated checks): live pages, the head term and any keyword the site already ranks for are checked every week; pages not written /
@@ -372,8 +444,14 @@ const fitStored = (row, ctx) => {
 // get a MOBILE check once a week — only 13% of sites hold the same position on both devices (Semrush, 50k keywords), so a desktop-only tracker
 // reports a position most visitors never see. Cost: one more depth-50 call per main keyword, the measured $0.015, at most 2 per ladder a week
 // (about $0.13 a month for a ladder, on top of the ~$0.60 it costs today).
+// B6-7 (2026-10-15, benchmark area 6 - docs/system-review-2026-10-14/BENCH_AREA6_rank_tracking.md gap G6-8, register row B6-7):
+// the tracker also watches the keywords the CUSTOMER named. max_watch_per_site / max_watch_per_run bound what one week may buy for them
+// (the measured $0.015 a check, so 10 a site is $0.15 a week); watch_own_days is our own weekly rhythm (6, not 7, for the same reason the
+// mobile check uses 6); watch_site_days is how recent a reading from the weekly SITE check has to be for the tracker to read it instead of
+// buying a second one of the same results page on the same morning.
 const LIMITS = { max_keywords_per_ladder: 15, max_checks_per_run: 120, stop_after_top3_checks: 4, unpublished_every_days: 28, won_every_days: 28,
-  mobile: true, max_mobile_per_ladder: 2, mobile_every_days: 6 };   // 6, not 7: a run started by hand on the day of the weekly run must not pay for the same mobile check twice
+  mobile: true, max_mobile_per_ladder: 2, mobile_every_days: 6,   // 6, not 7: a run started by hand on the day of the weekly run must not pay for the same mobile check twice
+  max_watch_per_site: 10, max_watch_per_run: 30, watch_own_days: 6, watch_site_days: 10, max_watch_listed: 40 };
 const daysSince = (iso) => iso ? (Date.now() - new Date(iso).getTime()) / 864e5 : 1e9;
 const deferred = [];
 const rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error && Object.keys(r).length); } catch (e) { return []; } };
@@ -448,5 +526,96 @@ for (const [id, pages] of byLadder) {
     checks.push({ ...m, device: 'mobile', endpoint: 'https://api.dataforseo.com/v3/serp/google/organic/live/advanced', body: serpBody(m, 'mobile') });
   }
 }
-if (!checks.length) return [{ json: { nothing_to_do: true, ladders: byLadder.size, skipped, deferred, set_aside: setAside } }];
-return checks.map(c => ({ json: { ...c, skipped_ladders: skipped, deferred_pages: deferred, set_aside_pages: setAside } }));
+// ---- B6-7 (2026-10-15, benchmark area 6 - BENCH_AREA6_rank_tracking.md section 7): the keywords the CUSTOMER named ----
+// Until now `Tracker Plan` read `seo_ladders` and nothing else, so the thirty searches a business names when it sets tracking up were
+// invisible to the tracker that exists for exactly that question (gap G6-8: "a tracker tracks whatever keyword list you give it").
+// Their list is already stored - `seo_sites.keywords`, written by the tracking form and by "Track my site" - and the weekly Site
+// Tracker already BUYS a live check for much of it an hour later and stores the reading in THIS table (ladder_id = site_id, rung 0).
+// So the rule here is read first, buy second:
+//   * a reading the weekly site check made less than `watch_site_days` ago is READ, never bought again - the two workflows share one
+//     series instead of each paying for the same results page on the same morning (R28's rule one step up: money is counted once
+//     because it is spent once). Our own reading counts for `watch_own_days`, so the series stays weekly;
+//   * what is bought is bounded - `max_watch_per_site` a site and `max_watch_per_run` a run, oldest reading first - and every keyword
+//     the cap does not reach is NAMED with the cap and its last reading, never silently dropped (INVARIANTS rule 1);
+//   * INVARIANTS rule 2: a stored keyword is read through the same fit gate the stored rungs pass. A competitor's brand typed into a
+//     form is still a competitor's brand. Unlike the Site Tracker's own read path, the customer's keywords are deliberately NOT put
+//     in `protect` here - protecting them would mean the gate could never judge them, which is the whole point of running it;
+//   * the rows are written under `watch_<site_id>`, so a reading of ours is told apart from the site check's own (that is what makes
+//     "somebody already buys this one weekly" a measurement and not a guess) while both halves stay one series for the report.
+const kwList = (v) => [...new Set(String(v || '').split(/[\n,;]+/).map(k => k.trim().toLowerCase().replace(/\s+/g, ' ')).filter(Boolean))];
+const already = new Set();   // what the ladders of this run already cost money for, or deliberately did not: a keyword is counted once
+for (const c of checks) already.add(normD(c.domain) + '|' + String(c.keyword).toLowerCase());
+for (const d of deferred) already.add(normD(d.domain) + '|' + String(d.keyword).toLowerCase());
+for (const a of setAside) already.add(normD(a.domain) + '|' + String(a.keyword).toLowerCase());
+const watchChecks = []; const watchCarried = []; const watchHeld = []; const watchAside = []; const watchSites = [];
+let watchBudget = LIMITS.max_watch_per_run;
+for (const s of siteRows) {
+  if (String(s.status || 'active') === 'paused') continue;
+  const d = normD(s.domain); if (!d) continue;
+  const kws = kwList(s.keywords); if (!kws.length) continue;
+  const sid = String(s.site_id || ('site_' + d.replace(/[^a-z0-9]+/g, '-')));
+  const wid = 'watch_' + sid;
+  const mon = monRows.find(m => m.site_id === sid || normD(m.domain) === d) || {};
+  let services = []; try { services = SM.from(s, { monitors: mon }).services || []; } catch (e) { services = []; }
+  const fitCtx = FITR.ctx({ own_domain: d, competitors: competitorsFor(d), heads: rows.filter(r => normD(r.domain) === d).map(r => r.head_keyword), services });
+  const gated = FITR.rungs(kws.map(k => ({ keyword: k, domain: d, ladder_id: wid })), fitCtx, { where: 'the weekly rank tracker' });
+  for (const a of gated.set_aside) watchAside.push({ site_id: sid, domain: d, keyword: a.keyword, reason: a.reason, detail: a.detail, dropped: !!a.dropped,
+    note: '"' + a.keyword + '" is on your tracking list, but no position is checked for it: ' + a.detail + ' (' + a.reason + '). Take it off the list, or tell us it is deliberate.' });
+  const kept = gated.keep.map(r => r.keyword);
+  const site = { site_id: sid, domain: d, email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '',
+    country: s.country || '', total: kws.length, checked: 0, carried: 0, held: 0, set_aside: gated.set_aside.filter(x => x.dropped).length };
+  const loc = Number(s.location_code) || 0;
+  if (!(loc > 0)) {   // rule 1: a keyword nobody can buy a country-level check for is named, not quietly missing
+    for (const k of kept) watchHeld.push({ site_id: sid, domain: d, keyword: k, last_position: null, last_checked: '',
+      reason: 'no market (country) is stored for this website, so a position cannot be checked for it - set the country in your tracking settings' });
+    site.held = kept.length; watchSites.push(site); continue;
+  }
+  const competitors = competitorsFor(d);
+  const newest = (kw, who) => deskHist.filter(h => String(h.keyword).toLowerCase() === kw && (who ? h.ladder_id === who : (h.ladder_id === wid || h.ladder_id === sid || normD(h.domain) === d))
+    && h.position !== '' && h.position != null && h.checked_at).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)))[0] || null;
+  const cand = [];
+  for (const k of kept) {
+    const theirs = newest(k, sid), ours = newest(k, wid), any = newest(k, '');
+    if (already.has(d + '|' + k)) {
+      watchCarried.push({ site_id: sid, domain: d, keyword: k, source: 'ladder', last_checked: any ? any.checked_at : '',
+        reason: 'it is also a rung of one of your keyword ladders, so the check bought there is the one reported - it is never bought twice' });
+      site.carried++; continue;
+    }
+    if (theirs && daysSince(theirs.checked_at) < LIMITS.watch_site_days) {
+      watchCarried.push({ site_id: sid, domain: d, keyword: k, source: 'site_check', last_checked: theirs.checked_at,
+        reason: 'the weekly site check already read this results page on ' + String(theirs.checked_at).slice(0, 10) + ', so the tracker reads that reading instead of buying a second one' });
+      site.carried++; continue;
+    }
+    if (ours && daysSince(ours.checked_at) < LIMITS.watch_own_days) {
+      watchCarried.push({ site_id: sid, domain: d, keyword: k, source: 'own', last_checked: ours.checked_at,
+        reason: 'it was checked on ' + String(ours.checked_at).slice(0, 10) + ', less than ' + LIMITS.watch_own_days + ' days ago - a position is checked once a week, not once a run' });
+      site.carried++; continue;
+    }
+    cand.push({ keyword: k, last_at: any ? String(any.checked_at) : '', last_position: any ? Number(any.position) : null });
+  }
+  // oldest reading first, and a keyword nobody has ever checked before all of them: the cap buys the readings that are missing most
+  cand.sort((a, b) => (a.last_at ? 1 : 0) - (b.last_at ? 1 : 0) || String(a.last_at).localeCompare(String(b.last_at)) || a.keyword.localeCompare(b.keyword));
+  const room = Math.max(0, Math.min(LIMITS.max_watch_per_site, watchBudget, LIMITS.max_checks_per_run - checks.length - watchChecks.length));
+  cand.forEach((c, i) => {
+    if (i < room) {
+      watchChecks.push({ ladder_id: wid, watch_keyword: true, site_id: sid, domain: d, head_keyword: '', rung: 0, page_no: 0, keyword: c.keyword,
+        page_type: '', target_url: '', status: '', location_code: loc, language_code: s.language_code || 'en', email: s.email || '',
+        callback_url: s.callback_url || '', request_id: s.request_id || '', country: s.country || '', won_monthly: false, competitors,
+        device: 'desktop', endpoint: 'https://api.dataforseo.com/v3/serp/google/organic/live/advanced',
+        body: serpBody({ keyword: c.keyword, location_code: loc, language_code: s.language_code || 'en' }, 'desktop') });
+      site.checked++;
+    } else {
+      watchHeld.push({ site_id: sid, domain: d, keyword: c.keyword, last_position: c.last_position, last_checked: c.last_at,
+        reason: 'the tracker buys at most ' + LIMITS.max_watch_per_site + ' checks a week for your own keyword list (oldest reading first, about $0.015 each), so this one waits for a week when an older reading does not need it more' });
+      site.held++;
+    }
+  });
+  watchBudget -= site.checked;
+  watchSites.push(site);
+}
+const watch = { sites: watchSites, limits: { per_site: LIMITS.max_watch_per_site, per_run: LIMITS.max_watch_per_run, own_days: LIMITS.watch_own_days, site_days: LIMITS.watch_site_days },
+  carried: watchCarried.slice(0, LIMITS.max_watch_listed), held: watchHeld.slice(0, LIMITS.max_watch_listed), set_aside: watchAside.slice(0, LIMITS.max_watch_listed),
+  carried_total: watchCarried.length, held_total: watchHeld.length, set_aside_total: watchAside.length, checked_total: watchChecks.length };
+const all = [...checks, ...watchChecks];
+if (!all.length) return [{ json: { nothing_to_do: true, ladders: byLadder.size, skipped, deferred, set_aside: setAside, watch } }];
+return all.map(c => ({ json: { ...c, skipped_ladders: skipped, deferred_pages: deferred, set_aside_pages: setAside, watch } }));

@@ -248,6 +248,150 @@ const LK = (() => {
   return { text, attr, hostOf, regDomain, refKey, sameSite, isInfra, isScraper, isSearchPage, isWire, normUrl, cleanUrl, placementAt, anchorPlacements, linksTo, pageFacts, contextAt, challenge, emailsIn, verify, mention, domainKind, quality, values, anchorKind, SPAM_RE, isGambling, footPath, footprints };
 })();
 
+// ---- the in-200 retry gate, for every provider that answers "failed" with HTTP 200 (R18 / R19, 2026-10-14, FIX_PLAN §3.12) ----
+// n8n's `retryOnFail` only fires when a node FAILS. DataForSEO answers a dead task with HTTP 200 and `status_code` 40101
+// ("Internal SE Server Error."), Google's URL Inspection answers HTTP 200 with an `error` object ("Internal error
+// encountered."): both look like success to n8n, so the run spent the money, got nothing, and carried on.
+//   Until 2026-10-14 the only gate of this kind was `AI_Retry_Requests.js` (the AI paths) and the 50000-only IF of build
+// section 25, which is why execution 549 billed `SERP Top 10` and `Facts SERP` for two 40101 answers, never re-sent them, and
+// planned, scored ("winnable 68") and wrote a page on a results page nobody had seen; and why the technical audit of execution
+// 550 lost 31 of 45 URL inspections and reported the 14 that answered as an improvement.
+//   This kit is that one rule. Two halves, and the second matters more:
+//     1. `RT.dfs` / `RT.google` classify an answer; `RT.retryable` says whether sending it again can help (a transient error
+//        can, a permission error or an exhausted quota cannot); `RT.plan` builds the second attempt and `RT.merge` puts its
+//        answers in the failed ones' place.
+//     2. `RT.stats` / `RT.evidence` / `RT.note` carry what was actually seen — asked, answered, failed, retried — into the
+//        report, so evidence that is missing is marked `unavailable` and nothing downstream may score on it. `RT.comparable`
+//        is the same idea for two runs: counts measured on samples of different sizes are not compared.
+const RT = (() => {
+  const S = (x) => String(x == null ? '' : x);
+  const N = (x) => { const v = Number(x); return Number.isFinite(v) ? v : 0; };
+  // an answer that can be different next time: the provider's own servers, a timeout, a rate limit. Never a wrong request.
+  const TRANSIENT = /internal (?:se )?server error|internal error|server error|timeout|timed out|temporar|try again|unavailable|service unavailable|backend|deadline exceeded|connection|socket|econn|eai_again|rate limit|too many requests|\b(?:429|500|502|503|504)\b/i;
+  const PERMANENT = /permission|forbidden|unauthor|invalid[_ ]grant|credential|not found|no access|invalid field|unknown field|unsupported|quota|resource_exhausted|insufficient funds|payment|balance/i;
+  const errText = (e) => {
+    if (!e) return '';
+    if (typeof e === 'string') return e.slice(0, 200);
+    const ctx = (e.context && e.context.data) || {};
+    const inner = (ctx.error && typeof ctx.error === 'object') ? ctx.error : null;
+    return S((inner && inner.message) || (ctx.error_description ? S(ctx.error || 'error') + ': ' + ctx.error_description : '') || e.message || e.description || e.status || JSON.stringify(e)).slice(0, 200);
+  };
+  const verdict = (why, code) => {
+    const ok = !why;
+    const perm = !ok && PERMANENT.test(why) && !TRANSIENT.test(why);
+    return { ok, why: why || '', code: code || 0, retryable: !ok && !perm, permanent: perm };
+  };
+  // the reason a report prints is the provider's OWN message ("Internal SE Server Error.", "Invalid Field: target."), never our
+  // paraphrase of it: it is what the owner would see in the provider's console, and it is what `retryable` is decided on.
+  const said = (msg, code, dflt) => S(msg).trim() ? S(msg).trim().slice(0, 160) : (code ? dflt + ' (error ' + code + ')' : dflt);
+  /** one DataForSEO answer (the whole envelope of a live endpoint). The same four cases AI_Retry_Requests.js has used since D19. */
+  const dfs = (r) => {
+    const res = r || {};
+    if (res.error) return verdict(errText(res.error) || 'the request failed');
+    if (N(res.status_code) >= 40000) return verdict(said(res.status_message, N(res.status_code), 'the search data provider reported an error'), N(res.status_code));
+    if (!Array.isArray(res.tasks) || !res.tasks.length) return verdict('no answer from the search data provider');
+    const t = res.tasks[0] || {};
+    const code = N(t.status_code);
+    if (!code) return verdict('no answer from the search data provider');
+    if (code >= 40000) return verdict(said(t.status_message, code, 'the search data provider reported an error'), code);
+    if (code === 20000 && !((t.result || [])[0])) return verdict('the search data provider returned no result', code);
+    return verdict('', code);
+  };
+  /** one Google API answer (URL Inspection, Search Analytics): an `error` object, or the field the caller expected missing. */
+  const google = (r, expect) => {
+    const res = r || {};
+    if (res.error) return verdict(errText(res.error));
+    const want = S(expect);
+    if (want && !res[want]) return verdict('no ' + want + ' in the answer');
+    return verdict('');
+  };
+  const check = (r, o) => { const opt = o || {}; return opt.api === 'google' ? google(r, opt.expect) : dfs(r); };
+  /** [answers] -> [{ i, why, retryable }] for the ones that failed (same order as the requests). */
+  const failures = (answers, o) => (answers || []).map((r, i) => ({ i, v: check(r, o) })).filter(x => !x.v.ok).map(x => ({ i: x.i, why: x.v.why, code: x.v.code, retryable: x.v.retryable, permanent: x.v.permanent }));
+  /** the second attempt: the failed requests, once, newest rule first — never more than `max`, never a permanent failure. */
+  const plan = (requests, answers, o) => {
+    const opt = o || {};
+    const max = opt.max == null ? 60 : opt.max;
+    const fails = failures(answers, opt).filter(f => !opt.only || opt.only(requests[f.i], f));
+    const retryable = fails.filter(f => f.retryable);
+    const out = retryable.slice(0, max).map(f => ({ ...(requests[f.i] || {}), retry_of: f.i, retry_reason: f.why, is_retry: true }));
+    return { items: out, failed: fails.length, retryable: retryable.length, skipped: Math.max(0, retryable.length - out.length),
+      permanent: fails.filter(f => f.permanent).map(f => f.why).slice(0, 3), reasons: fails.map(f => f.why).slice(0, 5) };
+  };
+  /** the first answers with each retry's answer in the failed one's place (the retry's own failure keeps the first reason). */
+  const merge = (answers, retryItems, retryAnswers, o) => {
+    const out = (answers || []).slice();
+    (retryItems || []).forEach((q, k) => {
+      const i = Number(q && q.retry_of);
+      const a = (retryAnswers || [])[k];
+      if (!Number.isFinite(i) || a === undefined) return;
+      if (check(a, o).ok) out[i] = a;
+    });
+    return out;
+  };
+  /** what was actually seen, in numbers a report can print. */
+  const stats = (answers, o, retryItems, retryAnswers) => {
+    const opt = o || {};
+    const first = failures(answers, opt);
+    const merged = merge(answers, retryItems, retryAnswers, opt);
+    const after = failures(merged, opt);
+    const asked = (answers || []).length;
+    const retried = (retryItems || []).length;
+    return { asked, answered: asked - after.length, failed: after.length, failed_first: first.length, retried,
+      retry_answered: Math.max(0, first.length - after.length), reasons: [...new Set(after.map(f => f.why))].slice(0, 3), answers: merged };
+  };
+  /** the same, for a path that makes ONE call and has one retry node (the SERP / facts / keyword-data gates). */
+  const one = (first, retry, o) => stats([first], o, retry == null ? [] : [{ retry_of: 0 }], retry == null ? [] : [retry]);
+  /** one sentence about those numbers, in the words the reports already use. */
+  const note = (s, what) => {
+    const st = s || {}; const thing = S(what) || 'request';
+    const plural = (n) => n === 1 ? thing : thing + 's';
+    if (!st.asked) return '';
+    if (!st.failed && !st.retried) return '';
+    if (!st.failed) return st.failed_first + ' of ' + st.asked + ' ' + plural(st.asked) + ' failed and ' + (st.retry_answered === 1 ? 'the retry answered' : 'all ' + st.retry_answered + ' answered when they were sent again') + '.';
+    return st.failed + ' of ' + st.asked + ' ' + plural(st.asked) + ' could not be checked' + (st.retried ? ' (sent again once, ' + st.retry_answered + ' answered)' : ' (no answer)')
+      + (st.reasons.length ? ': ' + st.reasons.join('; ') : '') + '. Only the ' + st.answered + ' that answered are counted below.';
+  };
+  /** the evidence block a score may be refused on: `unavailable` means nobody saw it, twice. */
+  const evidence = (what, s, extra) => {
+    const st = s || {};
+    const unavailable = !st.asked || st.answered === 0;
+    return { what: S(what), asked: st.asked || 0, checked: st.answered || 0, failed: st.failed || 0, retried: st.retried || 0,
+      retry_answered: st.retry_answered || 0, unavailable, partial: !unavailable && (st.failed || 0) > 0,
+      error: (st.reasons || [])[0] || '', note: note(st, (extra && extra.unit) || 'request'), ...(extra || {}) };
+  };
+  /** two counts measured on samples of different sizes are not a change (R19): say the sample moved instead of printing a delta.
+   *  `unit` names what the sample is made of ("pages" by default, "questions" for the AI panel, "sources" for a link snapshot). */
+  const MAX_SAMPLE_DRIFT = 0.2;
+  const comparable = (now, before, o) => {
+    const opt = o || {};
+    const tol = opt.tolerance == null ? MAX_SAMPLE_DRIFT : opt.tolerance;
+    const unit = S(opt.unit);                     // named only where the caller said what the sample is made of
+    const a = Number(now), b = Number(before);
+    if (!Number.isFinite(a) || !Number.isFinite(b) || a <= 0 || b <= 0) return { comparable: false, why: 'how many ' + (unit || 'pages') + ' each number was measured on was not recorded', drift: null };
+    const drift = Math.abs(a - b) / Math.max(a, b);
+    if (drift > tol) return { comparable: false, drift: Math.round(drift * 100) / 100,
+      why: 'the two counts were measured on different samples (' + b + (unit ? ' ' + unit : '') + ' then, ' + a + ' now), so they are not compared' };
+    return { comparable: true, drift: Math.round(drift * 100) / 100, why: '' };
+  };
+  /** the other half of like for like (R20, B-L4 / B-L5, 2026-10-15): two figures produced by runs of a DIFFERENT KIND are not a
+   *  change either. R20 was a health score chained across a technical audit and a full report; the same shape reaches the AI
+   *  panel (a weekly check asks fewer engines than the monthly full one) and the link ledger (a free_only snapshot is built from
+   *  a different set of sources than a paid one). `labels` turns the stored key into the words a customer reads. The guard is a
+   *  CALL, never an inlined kit: lineage_lint.py looks for the prefixed call, which this file never writes, so a node cannot
+   *  look guarded without using it. Keep it that way: build section 73 fails if this kit ever spells one of those calls out. */
+  const likeForLike = (now, before, o) => {
+    const opt = o || {}, lab = opt.labels || {};
+    const a = S(now).trim().toLowerCase(), b = S(before).trim().toLowerCase();
+    const what = S(opt.what) || 'these two figures';
+    const name = (k) => S(lab[k]) || k;
+    if (!a || !b) return { comparable: false, why: 'what kind of run produced ' + (b ? 'this figure' : 'the earlier figure') + ' was not recorded, so ' + what + ' are not compared', kind: a, kind_before: b };
+    if (a !== b) return { comparable: false, kind: a, kind_before: b,
+      why: 'the earlier figure came from ' + name(b) + ' and this one from ' + name(a) + ', which do not measure the same thing, so ' + what + ' are not compared' };
+    return { comparable: true, why: '', kind: a, kind_before: b };
+  };
+  return { dfs, google, check, failures, plan, merge, stats, one, note, evidence, comparable, likeForLike, errText, MAX_SAMPLE_DRIFT, TRANSIENT, PERMANENT };
+})();
 // ---- outreach kit (v4.13 Link Builder, LINK_BUILDER_SPEC.md; inlined after the link kit): contacts, qualification, topic fit, our page and
 // the link text to ask for. Regex only (the n8n sandbox has no URL / DOM).
 const OK = (() => {
@@ -646,23 +790,34 @@ const SM = (() => {
       business_facts: S(m.business_facts).slice(0, 2000), cta: S(m.cta).slice(0, 200), brand_names: (m.brand_names || []).join(', ').slice(0, 500),
       competitors: (m.competitors || []).join(', ').slice(0, 500), accreditation: S(m.accreditation).slice(0, 200), model_updated_at: S(m.model_updated_at) };
   };
+  // B4-1 / B4-2 (2026-10-15, benchmark area 4): the measurement columns belong to the row, so the kit emits them — a Data Table
+  // node auto-maps every field it is given, and a row that is short of a column is as wrong as one that carries a stray field.
+  // The model itself measures nothing: these are the defaults the Site Tracker's own judgement is written over
+  // (v5/code/Page_Inventory_Site.js), and `''` for decay_state means "never measured", never "steady".
+  const num0 = (v) => (Number(v) || 0);
   const pageRows = (model) => pages(model).map(p => ({ site_id: S((model || {}).site_id), url: S(p.url), title: S(p.title).slice(0, 300), h1: S(p.h1).slice(0, 300),
-    source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries_json: JSON.stringify(p.queries || []), updated_at: S((model || {}).model_updated_at) || new Date().toISOString() }));
+    source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries_json: JSON.stringify(p.queries || []), updated_at: S((model || {}).model_updated_at) || new Date().toISOString(),
+    clicks: num0(p.clicks), impressions: num0(p.impressions), position: num0(p.position), prev_clicks: num0(p.prev_clicks), yoy_clicks: num0(p.yoy_clicks),
+    decay_state: S(p.decay_state), decay_pct: num0(p.decay_pct), decay_lost: num0(p.decay_lost), decay_kind: S(p.decay_kind),
+    decay_basis: S(p.decay_basis).slice(0, 900), measured_at: S(p.measured_at) }));
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml } };
 })();
 const plans = $('BL Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 const all = (n) => { try { return $(n).all().map(i => i.json || {}); } catch (e) { return []; } };
-const reqs = all('BL Requests'), resps = all('Run BL Requests');
-const greqs = all('Gap Requests'), gresps = all('Run Gap Requests');
-const areqs = all('Authority Requests'), aresps = all('Run Authority');
+const reqs = all('BL Requests'), resps = all('Run BL Requests Answers');
+const greqs = all('Gap Requests'), gresps = all('Run Gap Requests Answers');
+const areqs = all('Authority Requests'), aresps = all('Run Authority Answers');
 const dreqs = all('DR Requests'), dresps = all('Fetch DR');
 const merged = all('Link Merge').filter(m => !m.skip);
 const ver = all('Verify Links').filter(v => !v.skip);
 const ljobs = all('Link Analyst Jobs').filter(j => !j.skip), louts = all('Link Analyst');
 const SPAM_WORDS = LK.SPAM_RE;   // one list of link-selling words for new links, the ledger gate and the Link Builder (D3)
 const BIG = /(^|\.)(google|youtube|facebook|linkedin|wikipedia|amazon|apple|microsoft|reddit|quora|instagram|twitter|x|tiktok|medium|github|pinterest|blogspot|wordpress|tumblr)\.[a-z.]+$/i;
-const result = (rs, i) => { const t = ((rs[i] || {}).tasks || [])[0] || {}; return { ok: t.status_code === 20000, res: (t.result || [])[0] || null, cost: Number(t.cost) || 0, error: t.status_code && t.status_code !== 20000 ? t.status_message : ((rs[i] || {}).error ? String((rs[i].error.message || rs[i].error)).slice(0, 160) : null) }; };
+// B-A10 / R28 (2026-10-15): the cost is both attempts of the in-200 gate, each task counted once by its own id — the gate
+// puts that figure on the item, because the merged answer is the retry's and a first attempt that was billed and then
+// replaced (a task answering 20000 with an empty result did the work) would otherwise vanish from the bill.
+const result = (rs, i) => { const t = ((rs[i] || {}).tasks || [])[0] || {}; return { ok: t.status_code === 20000, res: (t.result || [])[0] || null, cost: Number.isFinite(Number((rs[i] || {}).__dfs_cost_usd)) ? Number((rs[i] || {}).__dfs_cost_usd) : (Number(t.cost) || 0), error: t.status_code && t.status_code !== 20000 ? t.status_message : ((rs[i] || {}).error ? String((rs[i].error.message || rs[i].error)).slice(0, 160) : null) }; };
 const pathOf = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/i, '') || '/';
 const toks = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').split(' ').filter(t => t.length > 2);
 const parseJ = (raw) => { if (raw && typeof raw === 'object') return raw; const s = String(raw || '').replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, ''); try { return JSON.parse(s); } catch (e) { const a = s.indexOf('{'), b = s.lastIndexOf('}'); try { return JSON.parse(s.slice(a, b + 1)); } catch (e2) { return null; } } };
@@ -708,7 +863,7 @@ return plans.map(p => {
   for (const v of vMention) if (v.verify === 'found' && v.ref_domain && !entries.some(e => e.ref_domain === v.ref_domain)) { entries.push({ ref_domain: v.ref_domain, kind: 'web', sources: [v.source === 'news' ? 'news' : 'web'], from_url: v.url, to_url: v.to_url || '', anchor: v.anchor || '', first_seen: today, last_seen: today, authority: 0, visits: 0, visits_28d: 0, key_events: 0, pages: [{ url: v.url }], prev: null, ai_cited: false }); vLink.set(v.ref_domain, v); }
   // ---------------- the ledger ----------------
   const brands = (p.brand_names || []).filter(b => !String(b).includes('.'));
-  const ledger = [], lostNow = [], atRisk = [], relChanged = [], wins = [];
+  const ledger = [], lostNow = [], atRisk = [], relChanged = [], wins = [], dormant = [];
   for (const e of entries) {
     const pv = e.prev || {}; const v = vLink.get(e.ref_domain); const lab = labels.get(e.ref_domain) || {};
     const prevStatus = pv.status || ''; const freshEvidence = e.sources.some(s => ['dfs', 'bing', 'gsc', 'import', 'cc'].includes(s)) && !e.dfs_lost || (e.visits_28d || 0) > 0;
@@ -730,7 +885,22 @@ return plans.map(p => {
         else { status = 'at_risk'; atRisk.push({ e, v }); }
       }
     } else if (e.dfs_lost && prevStatus !== 'lost') { status = 'at_risk'; atRisk.push({ e, v: { url: e.dfs_lost.url, verify: 'unchecked' } }); }
-    else if (!e.sources.length && prevStatus !== 'lost' && String(pv.last_seen || '') && (Date.now() - new Date(pv.last_seen).getTime()) / 864e5 > 120 && !(pv.verify === 'found' && (Date.now() - new Date(pv.verified_at || 0).getTime()) / 864e5 < 60)) { status = 'lost'; lost_reason = 'not_seen'; lost_at = now; }
+    // B10-4 (2026-10-15, benchmark area 10): four months of silence from every INDEX was called a loss here - status "lost",
+    // reason "not_seen", nobody told, and the site's referring-site count quietly smaller. That is this area's founding mistake in
+    // a new place: DataForSEO reported peppol.org lost while the link was live and followed, which is why a loss needs our own
+    // eyes. A crawler that simply stopped re-visiting a page proves nothing - Ahrefs states that a complete refresh of its own
+    // index "takes about two months" (https://help.ahrefs.com/en/articles/78052-how-often-is-ahrefs-links-database-updated) and
+    // that a dropped page's link "may still exist on the page"
+    // (https://help.ahrefs.com/en/articles/920461-understanding-link-lost-reasons). So the silence is a loss only when OUR own
+    // fetch has already failed on that page (that miss plus four months of silence is the second). Otherwise the row is
+    // `at_risk`: it keeps its value and its place in the referring-site count, the report names it, and *Verify Requests* puts it
+    // at the front of the next check - the read half of INVARIANTS rule 2, so the status written here is acted on.
+    else if (!e.sources.length && prevStatus !== 'lost' && String(pv.last_seen || '') && (Date.now() - new Date(pv.last_seen).getTime()) / 864e5 > 120 && !(pv.verify === 'found' && (Date.now() - new Date(pv.verified_at || 0).getTime()) / 864e5 < 60)) {
+      const silent = Math.round((Date.now() - new Date(pv.last_seen).getTime()) / 864e5);
+      lost_reason = 'not_seen';
+      if (pv.verify === 'missing' || pv.verify === 'gone') { if (prevStatus !== 'lost') { lost_at = now; lostNow.push({ e, v: { url: pv.from_url || from_url, verify: pv.verify }, reason: 'not_seen' }); } status = 'lost'; }
+      else { status = 'at_risk'; dormant.push({ ref_domain: e.ref_domain, url: from_url || (e.pages[0] || {}).url || '', last_seen: String(pv.last_seen).slice(0, 10), days: silent, checked: String(pv.verify || 'unchecked') }); }
+    }
     else if (e.sources.length && prevStatus === 'lost' && !['link_removed', 'page_gone', 'domain_gone'].includes(pv.lost_reason)) { status = 'live'; lost_reason = ''; lost_at = ''; }
     const sources = [...new Set([...String(pv.sources || '').split(',').filter(Boolean), ...e.sources])];
     const authority = Math.max(Number(e.authority) || 0, rankOf.get(e.ref_domain) || 0, (rankOf.has(e.ref_domain) || e.authority > 0) ? 0 : Number(pv.authority) || 0);
@@ -853,12 +1023,61 @@ return plans.map(p => {
   const per = {}, only = {}; for (const r of liveRows) { const s = srcNow(r); for (const x of s) per[x] = (per[x] || 0) + 1; if (s.length === 1) only[s[0]] = (only[s[0]] || 0) + 1; }
   const gscSet = new Set(liveRows.filter(r => srcNow(r).includes('gsc')).map(r => r.ref_domain));
   const dfsSet = new Set(liveRows.filter(r => srcNow(r).includes('dfs')).map(r => r.ref_domain));
+  // ---- B10-1 (2026-10-15, benchmark area 10): how old this view of the web is, per source ----
+  // Freshness is one of the three dimensions the rubric names for this area and no report of ours ever stated it. The leaders all
+  // publish theirs: Ahrefs updates "every 15-30 minutes" but a COMPLETE refresh "takes about two months", within which "some pages
+  // will be updated 60 times, others only once" (https://help.ahrefs.com/en/articles/78052-how-often-is-ahrefs-links-database-updated);
+  // Majestic's Fresh Index "contains backlinks we've seen in the past 120 days" and prints its own date range
+  // (https://majestic.com/support/glossary); Semrush "keeps its backlink database up-to-date by removing backlinks that haven't
+  // been detected in six months" (https://www.semrush.com/blog/biggest-backlink-database-study); Linkody re-checks every monitored
+  // link "every 24h" (https://www.linkody.com/en/plans). An index's "live" therefore means "live when it last crawled" - so the age
+  // of its last sighting is said out loud, beside the one figure in this report that is a measurement: our own fetch.
+  const ageOf = (d) => { const t = Date.parse(String(d || '').slice(0, 10) + 'T00:00:00Z'); return Number.isFinite(t) ? Math.max(0, Math.round((Date.now() - t) / 864e5)) : null; };
+  const sorted = (a) => a.filter(x => x != null).sort((x, y) => x - y);
+  const median = (a) => a.length ? a[Math.floor((a.length - 1) / 2)] : null;
+  const liveSet = new Set(liveRows.map(r => r.ref_domain));
+  const idxAges = sorted(entries.filter(e => e.dfs_last_seen && liveSet.has(e.ref_domain)).map(e => ageOf(e.dfs_last_seen)));
+  const ownAges = sorted(liveRows.filter(r => r.verify === 'found' && r.verified_at).map(r => ageOf(r.verified_at)));
+  const freshness = {
+    own: { checked_this_run: [...vLink.values()].length, median_days: median(ownAges), oldest_days: ownAges.length ? ownAges[ownAges.length - 1] : null, never_checked: liveRows.filter(r => !r.verified_at).length, rows: ownAges.length },
+    index: { rows: idxAges.length, newest_days: idxAges.length ? idxAges[0] : null, median_days: median(idxAges), oldest_days: idxAges.length ? idxAges[idxAges.length - 1] : null },
+    gsc_days: ageOf((((m.sources || {}).gsc) || {}).uploaded_at), cc_release: String((((m.sources || {}).cc) || {}).release || ''), cc_days: ageOf((((m.sources || {}).cc) || {}).checked_at) };
+  // ---- B10-2: live precision, measured by us, with a refusal path ----
+  // Criterion 4B.2 asks for ">= 90% of links reported live are live", checked by our own re-crawl. Nothing computed it: the report
+  // printed "Checked on the page 1" beside "18 checked this run" (exec 529, 2026-10-13) - two different denominators and no rate at
+  // all - while `coverage.blocked` was computed and shown to nobody. A page behind a bot wall, a JavaScript-only page or a fetch
+  // error proves nothing either way and is counted on neither side, the same exclusion Linkody makes in its own study ("crawl
+  // errors (13%) are excluded", https://blog.linkody.com/seo/link-building-statistics-2026-2). Under CHECK_MIN readable checks
+  // there is NO rate: 100% measured on one link is not a measurement.
+  const CHECK_MIN = 5;
+  const READ_OK = ['found', 'missing', 'gone'];
+  const readOf = (r) => { const v = vLink.get(r.ref_domain); return v && READ_OK.indexOf(v.verify) >= 0 ? v : null; };
+  const unread_by = {}; for (const v of vLink.values()) if (READ_OK.indexOf(v.verify) < 0) unread_by[v.verify || 'unchecked'] = (unread_by[v.verify || 'unchecked'] || 0) + 1;
+  const readRows = ledger.filter(r => r.kind === 'web' && readOf(r));
+  const idxRows = readRows.filter(r => (r._sources_now || []).indexOf('dfs') >= 0);
+  const rateOf = (rows) => rows.length >= CHECK_MIN ? Math.round(100 * rows.filter(r => readOf(r).verify === 'found').length / rows.length) : null;
+  const linkCheck = { fetched: [...vLink.values()].length, read: readRows.length, unread: Object.keys(unread_by).reduce((s, k) => s + unread_by[k], 0), unread_by, min_sample: CHECK_MIN,
+    found: readRows.filter(r => readOf(r).verify === 'found').length, precision: rateOf(readRows),
+    index_read: idxRows.length, index_live: idxRows.filter(r => readOf(r).verify === 'found').length, index_precision: rateOf(idxRows) };
   const coverage = { union: liveRows.length, social: ledger.filter(r => r.status !== 'lost' && r.kind === 'social').length, per_source: per, only_in: only, dfs_share: liveRows.length ? Math.round(100 * dfsSet.size / liveRows.length) : 0,
+    freshness, check: linkCheck,
     gsc_sample: gscSet.size, dfs_sees_google: gscSet.size ? Math.round(100 * [...gscSet].filter(d => dfsSet.has(d)).length / gscSet.size) : null, all_see_google: gscSet.size ? Math.round(100 * [...gscSet].filter(d => srcNow(liveRows.find(r => r.ref_domain === d)).length > 1).length / gscSet.size) : null,
     verified: liveRows.filter(r => r.verify === 'found').length, checked_now: [...vLink.values()].length, blocked: [...vLink.values()].filter(v => v.verify === 'blocked' || v.verify === 'js').length, status: m.sources || {} };
   // ---------------- anchors, pages, values ----------------
-  const kinds = {}; for (const r of liveRows) kinds[r.anchor_kind] = (kinds[r.anchor_kind] || 0) + 1;
-  const anchors = { kinds, top: ((one('anchors').res || {}).items || []).slice(0, 15).map(a => ({ anchor: String(a.anchor || '').slice(0, 80), referring_domains: Number(a.referring_domains) || 0, backlinks: Number(a.backlinks) || 0, kind: LK.anchorKind(a.anchor, p.domain, brands) })) };
+  // B10-3 (2026-10-15, benchmark area 10): the two halves of the anchor block were computed on different sets - the percentages
+  // over the ledger, the table straight out of the index - so a link farm's anchor ("High Quality Dofollow Backlinks DA 50 PA 40
+  // Premium PBN Network Service", 17 referring domains, exec 564, 2026-10-14) was printed inside a table whose own percentages had
+  // excluded it. One set for both now: the farms are out of the distribution and counted beside it, and every row of the table says
+  // whether it is one. The ">30% keyword anchors" rule of thumb under it was an unsourced constant; it now carries the only measured
+  // distribution we could open, so the customer compares against a real population instead of a number we invented.
+  const ANCHOR_BASE = { source: 'Linkody, 865,000 monitored backlinks, June 2026', url: 'https://blog.linkody.com/seo/link-building-statistics-2026-2',
+    money: 56, brand: 18, url: 15, image_or_empty: 10, generic: 1 };
+  const normA = (a) => String(a || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const cleanAnchors = liveRows.filter(r => !spamSet.has(r.ref_domain));
+  const farmAnchors = new Set(ledger.filter(r => spamSet.has(r.ref_domain)).map(r => normA(r.anchor)).filter(Boolean));
+  const kinds = {}; for (const r of cleanAnchors) kinds[r.anchor_kind] = (kinds[r.anchor_kind] || 0) + 1;
+  const anchors = { kinds, set_aside: liveRows.length - cleanAnchors.length, base: ANCHOR_BASE,
+    top: ((one('anchors').res || {}).items || []).slice(0, 15).map(a => ({ anchor: String(a.anchor || '').slice(0, 80), referring_domains: Number(a.referring_domains) || 0, backlinks: Number(a.backlinks) || 0, kind: LK.anchorKind(a.anchor, p.domain, brands), farm: farmAnchors.has(normA(a.anchor)) })) };
   const pages = ((one('pages').res || {}).items || []).slice(0, 15).map(x => ({ url: x.page, referring_domains: Number((x.page_summary || {}).referring_domains) || 0, backlinks: Number((x.page_summary || {}).backlinks) || 0, status: (vTarget.find(t => t.url === x.page) || {}).status || Number(x.status_code) || null }));
   // G18-1: a link a cap has written off (link farm, search-results page) is never one of the site's "best links" for SEO, whatever is left
   // of its score — a capped 5 above nothing is still nothing. Referral keeps every row: the visits it sends are measured, not judged.
@@ -869,7 +1088,24 @@ return plans.map(p => {
   const referral = { visits: liveRows.reduce((s, r) => s + (Number(r.visits) || 0), 0), visits_28d: liveRows.reduce((s, r) => s + (Number(r.visits_28d) || 0), 0), key_events: liveRows.reduce((s, r) => s + (Number(r.key_events) || 0), 0) };
   // ---------------- alerts ----------------
   const prev = p.previous; const alerts = [];
-  const REASON = { link_removed: 'link removed', page_gone: 'page gone', domain_gone: 'site gone', not_seen: 'not seen for 4 months' };
+  // ---- B-L5 (2026-10-15, INVARIANTS rule 1, lineage_lint.py "like_for_like"): two snapshots are compared only when they were
+  // built the same way. R20's shape on a different figure: a free_only check reads the free sources and our own fetch of every
+  // page and buys NOTHING from DataForSEO, so its link count, its spam score and its union of referring sites come from a
+  // different set of sources than a paid run's. Subtracting one from the other measures the source set, not the link profile.
+  // The second half is R19's: the spam score is the share of the INDEX's links judged spammy, so when the index's own link count
+  // moves more than 20% between the two snapshots a 15-point move is the recrawl, not the site. Neither case is hidden: the
+  // reason goes into `not_compared`, which the snapshot carries and the report prints where the change would have been.
+  const SNAP_SOURCES = { free: 'the free sources only (no DataForSEO)', all: 'every source (DataForSEO and the free ones)' };
+  // a snapshot whose mode nobody recorded is NOT assumed to be a paid one: the guard refuses it and says so, which is the whole
+  // point — `mine.find(x => x.mode !== 'free')` in BL Plan reads an empty mode as paid, and that is how an unlike snapshot got in.
+  const sourceSetOf = (m) => { const v = String(m || '').toLowerCase().trim(); return !v ? '' : (v === 'free' ? 'free' : 'all'); };
+  const sameSources = prev ? RT.likeForLike(sourceSetOf(p.mode), sourceSetOf(prev.mode), { labels: SNAP_SOURCES, what: 'the two snapshots' }) : null;
+  const sameIndex = prev ? RT.comparable(summary.backlinks, prev.backlinks, { unit: 'links in the index' }) : null;
+  const sameUnion = prev ? RT.likeForLike(sourceSetOf(p.mode), sourceSetOf(prev.union_mode || prev.mode), { labels: SNAP_SOURCES, what: 'the two counts of referring sites' }) : null;
+  const not_compared = [];
+  const spamLike = !!(prev && summary.available && sameSources.comparable && sameIndex.comparable);
+  if (prev && summary.available && prev.spam_score && !spamLike) not_compared.push('Link spam score (' + prev.spam_score + ' then, ' + summary.spam_score + ' now): ' + (sameSources.comparable ? sameIndex.why : sameSources.why) + '.');
+  const REASON = { link_removed: 'link removed', page_gone: 'page gone', domain_gone: 'site gone', not_seen: 'no index has seen it for 4 months, and it was not on the page when we last read it' };
   const actionable = important_lost.filter(l => l.reason !== 'domain_gone'), siteGone = important_lost.filter(l => l.reason === 'domain_gone');
   if (actionable.length) alerts.push({ level: 'high', text: actionable.length + ' important link(s) lost (checked twice): ' + actionable.slice(0, 3).map(l => l.from_domain + ' (' + (REASON[l.reason] || l.reason) + ')').join(', ') + '.' });
   if (siteGone.length) alerts.push({ level: 'low', text: siteGone.length + ' linking site(s) no longer exist (' + siteGone.slice(0, 3).map(l => l.from_domain).join(', ') + '): those links cannot be won back.' });
@@ -877,14 +1113,15 @@ return plans.map(p => {
   if (spammy.length >= 3) alerts.push({ level: 'medium', text: spammy.length + ' new spammy links (PBN / link-farm pages) since ' + p.since.slice(0, 10) + '. Google ignores most of them; nothing to do unless you get a manual action.' });
   const newMoney = ledger.filter(r => r._new && r.anchor_kind === 'money' && (r.spam_score >= 30 || (r.relevance !== '' && r.relevance < 0.34)));
   if (newMoney.length >= 10) alerts.push({ level: 'medium', text: newMoney.length + ' new off-topic links with keyword anchors at once — a possible negative-SEO pattern. Keep watching; disavow only if a manual action follows.' });
-  if (prev && summary.available && prev.spam_score && summary.spam_score - prev.spam_score >= 15) alerts.push({ level: 'medium', text: 'Link spam score rose from ' + prev.spam_score + ' to ' + summary.spam_score + '.' });
+  if (spamLike && prev.spam_score && summary.spam_score - prev.spam_score >= 15) alerts.push({ level: 'medium', text: 'Link spam score rose from ' + prev.spam_score + ' to ' + summary.spam_score + ' (both checks read ' + SNAP_SOURCES[sourceSetOf(p.mode)] + ', over ' + prev.backlinks + ' and ' + summary.backlinks + ' links).' });
   // the drop alert counts real referring sites only: a link-farm cluster leaving is not a loss (P1-2). The stored union counted the farms, so
   // the farm pages that were live at the last check are taken off it too; the alert says so when any were.
   const farmLiveNow = ledger.filter(r => spamSet.has(r.ref_domain) && r.kind === 'web' && r.status !== 'lost').length;
   const farmLivePrev = ledger.filter(r => spamSet.has(r.ref_domain) && r.kind === 'web' && !r._new && r._prev_status !== 'lost').length;
   const cleanNow = liveRows.length - farmLiveNow, cleanPrev = Math.max(0, (prev ? Number(prev.union_domains) || 0 : 0) - farmLivePrev);
-  if (prev && cleanPrev >= 10 && cleanNow < cleanPrev * 0.9) alerts.push({ level: 'medium', text: 'Referring sites (all sources) fell from ' + cleanPrev + ' to ' + cleanNow + '.' + (farmLivePrev || farmLiveNow ? ' (Link-farm pages are not counted.)' : '') });
-  else if (prev && !prev.union_domains && summary.available && prev.referring_domains >= 10 && summary.referring_domains < prev.referring_domains * 0.9) alerts.push({ level: 'medium', text: 'Referring domains fell from ' + prev.referring_domains + ' to ' + summary.referring_domains + '.' });
+  if (prev && !sameUnion.comparable && cleanPrev >= 10) not_compared.push('Referring sites (' + cleanPrev + ' then, ' + cleanNow + ' now): ' + sameUnion.why + '.');
+  if (prev && sameUnion.comparable && cleanPrev >= 10 && cleanNow < cleanPrev * 0.9) alerts.push({ level: 'medium', text: 'Referring sites (all sources) fell from ' + cleanPrev + ' to ' + cleanNow + '.' + (farmLivePrev || farmLiveNow ? ' (Link-farm pages are not counted.)' : '') });
+  else if (prev && sameSources.comparable && !prev.union_domains && summary.available && prev.referring_domains >= 10 && summary.referring_domains < prev.referring_domains * 0.9) alerts.push({ level: 'medium', text: 'Referring domains fell from ' + prev.referring_domains + ' to ' + summary.referring_domains + '.' });
   const atRiskOut = atRisk.filter(({ e }) => !spamSet.has(e.ref_domain));   // a link-farm page is never "at risk": there is nothing to win back (D3)
   const riskImportant = atRiskOut.filter(({ e }) => { const r = ledger.find(x => x.ref_domain === e.ref_domain) || {}; return importantOf(e.prev ? { ...r, seo_value: Number(e.prev.seo_value) || r.seo_value } : r); });
   if (riskImportant.length) alerts.push({ level: 'low', text: riskImportant.length + ' valuable link(s) not found on their page this week (' + riskImportant.slice(0, 3).map(x => x.e.ref_domain).join(', ') + '); checked again next week before calling them lost.' });
@@ -909,6 +1146,6 @@ return plans.map(p => {
     ...ledger.filter(r => r._new && !r._dfs_new && r.kind === 'web' && r.status !== 'lost').map(r => ({ from_domain: r.ref_domain, from_url: r.from_url, to_url: r.to_url, anchor: r.anchor, dofollow: r.rel === 'follow', domain_rank: r.authority, dr: r.dr, page_rank: 0, spam: r.spam_score, first_seen: r.first_seen, last_seen: r.last_seen, title: r.page_title, spammy: r.link_type === 'spam', sources: r.sources, verified: r.verify }))]
     .filter((x, i, a) => a.findIndex(y => LK.refKey(y.from_domain) === LK.refKey(x.from_domain)) === i);
   return { json: { ...p, competitors, summary, lost, important_lost, new_links, spammy, reclaim, refdomains: [...linking].slice(0, 2000), timeseries: ts, mentions, gap, gap_off_topic, gap_stored: gi < 0 && gapBase.length > 0, gap_checked: gi < 0 ? ((p.stored_gap || [])[0] || {}).last_seen || '' : p.checked_at.slice(0, 10),
-    lists, comp_new: compNew.slice(0, 20), coverage, anchors, pages, values, best_links, referral, wins: wins.filter(w => !spamSet.has(w.ref_domain)), at_risk: atRiskOut.map(({ e, v }) => ({ ref_domain: e.ref_domain, url: v.url, verify: v.verify })), rel_changed: relChanged.filter(r => !spamSet.has(r.ref_domain)), farms, dr_enabled: drOf.size > 0, dr_error,
-    ledger_rows, alerts, deliver, disavow_text, candidates, gap_error: G && !G.ok ? G.error : null, cost_usd: +cost.toFixed(4) } };
+    lists, comp_new: compNew.slice(0, 20), coverage, anchors, pages, values, best_links, referral, dormant: dormant.slice(0, 25), wins: wins.filter(w => !spamSet.has(w.ref_domain)), at_risk: atRiskOut.map(({ e, v }) => ({ ref_domain: e.ref_domain, url: v.url, verify: v.verify })), rel_changed: relChanged.filter(r => !spamSet.has(r.ref_domain)), farms, dr_enabled: drOf.size > 0, dr_error,
+    ledger_rows, alerts, not_compared, deliver, disavow_text, candidates, gap_error: G && !G.ok ? G.error : null, cost_usd: +cost.toFixed(4) } };
 });

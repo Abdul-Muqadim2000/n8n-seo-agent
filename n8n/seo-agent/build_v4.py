@@ -2,6 +2,11 @@
 """Builds SEO Agent v4 from the v3 export by applying explicit, asserted patches."""
 import json, copy, uuid, os, re, sys
 HERE0 = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE0)
+import env_settings as _envb   # B-F5 (2026-10-15, FIX_PLAN §3.15): a build with no n8n/.env must refuse, not bake its fallbacks
+_envb.require_settings('build_v4.py')
+if _envb.opted_out():                      # the four sub-builds are spawned with this environment, so they never have to guess the
+    os.environ['SEO_BUILD_ALLOW_DEFAULTS'] = '1'   # decision -- and a `--no-env` on this command line reaches all five builders
 PROJECT = os.path.isfile(os.path.join(HERE0, 'workflows', 'SEO_Agent_v3_original_export.json'))
 SRC = os.path.join(HERE0, 'workflows', 'SEO_Agent_v3_original_export.json') if PROJECT else '../wf/seo_wf.json'
 OUT_JSON = os.path.join(HERE0, 'workflows', 'SEO_Agent_v4.json') if PROJECT else 'SEO_Agent_v4.json'
@@ -3509,7 +3514,7 @@ patch('Build Word File', """    ['Topic coverage', qa.coverage_pct != null ? qa.
 patch('Build Word File', "    page_markdown: md || undefined, content_brief_slug: brief.slug || '',",
       "    content_originality: qa.originality || null, content_coverage: qa.coverage || null,\n    page_markdown: md || undefined, content_brief_slug: brief.slug || '',")
 setcode('Blog Package', rd46('code/Blog_Package.js'))
-assert "originality: d.content_originality" in code('Blog Package'), 'the package does not carry the originality figure (G5)'
+assert "ORG = d.content_originality" in code('Blog Package') and "originality: ORG ?" in code('Blog Package'), 'the package does not carry the originality figure (G5)'
 
 # ---------- G30: the three planned images are produced ----------
 # Gotenberg's screenshot route answers with the image file itself; the service is already in n8n/compose.override.yml for the PDF
@@ -4071,8 +4076,8 @@ const meta = { title, h1: h1 || title, slug, suggested_url: plannedPageUrl || (d
 patch('Blog Package', _BP_META_OLD, _BP_META_NEW)
 patch('Blog Package', "  links_to_add_when_published: HPplanned.map(p => ({ keyword: p.keyword || '', planned_url: SRC.clean(p.url), anchor: anchorText(p), note: 'Not published yet: add this link from this page once the page is live.' })),",
       "  links_to_add_when_published: plannedLinks,")
-patch('Blog Package', "word_count: words, content_score: d.content_score == null ? null : d.content_score, qa_summary: d.qa_summary || '',",
-      "word_count: words, content_score: d.content_score == null ? null : d.content_score, qa_summary: d.qa_summary || '',\n"
+patch('Blog Package', "word_count: words, content_score, content_score_withheld, quality_checked: qa_checked, qa_summary: d.qa_summary || '',",
+      "word_count: words, content_score, content_score_withheld, quality_checked: qa_checked, qa_summary: d.qa_summary || '',\n"
       "  // R11 (2026-10-13): the package says whether this page may be published as it is, with the last quality round's counts and reasons\n"
       "  publishable: d.qa_publishable == null ? null : !!d.qa_publishable, quality: d.qa_quality || null,")
 patch('Blog Package', "if (HPplanned.length) extra.push('\"links_to_add_when_published\" lists ' + HPplanned.length + ' page(s) this hub does NOT link to yet because they are not published: add the link with the anchor given once each one is live (the weekly ladder e-mail reminds you)');",
@@ -5452,8 +5457,10 @@ retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
 # INVARIANTS rule 3 (2026-10-15): a DataForSEO node needs the in-200 gate as well as retryOnFail, because the API reports most of
 # its failures inside an HTTP 200. A ratchet, not a big-bang rule: the build fails when a node appears that harness/in200_baseline.json
 # does not already excuse, so the debt R18 left behind (it gated three paths) cannot grow and shrinks as gates land.
-_g3, _u3 = retry_lint.check_in200({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
-log('A DataForSEO node that fails inside an HTTP 200 (2026-10-15, INVARIANTS rule 3): the API reports most failures inside a 200, so retryOnFail does not see them - R18 gated the SERP, facts and keyword-data paths, and this measures how far that reaches. %d of the main workflow\'s %d DataForSEO calls are covered by a gate chain recorded with retry_lint.record_gate(); the rest are either ungated or gated without being recorded, and registering R18\'s chains is the next step. The build now refuses a NEW ungated node against harness/in200_baseline.json, so the class cannot grow' % (len(_g3), len(_g3) + len(_u3)))
+# B-A10 (2026-10-15): this is a MEASUREMENT taken half way through the build, not the gate. The gate is section 75, which runs
+# after every call of this workflow has been built and spliced; asserting here would only measure how far the file had been read.
+_g3, _u3 = retry_lint.in200_coverage({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+log('A DataForSEO node that fails inside an HTTP 200 (2026-10-15, INVARIANTS rule 3): the API reports most failures inside a 200, so retryOnFail does not see them - R18 gated the SERP, facts and keyword-data paths, and this measures how far that reaches. %d of the main workflow\'s %d DataForSEO calls are covered by a gate chain recorded with retry_lint.record_gate(); the rest are either ungated or gated without being recorded, and B-A10 (section 75) registers R18\'s chains and splices the gate around the rest. The build refuses a NEW ungated node against harness/in200_baseline.json, so the class cannot grow' % (len(_g3), len(_g3) + len(_u3)))
 sticky("""### An answer that arrived with HTTP 200 and was still a failure (R18 / R19 / R24)
 **One rule, one kit** (`v5/code/_dfs_retry.js`): DataForSEO answers a dead task with `status_code` 40101 inside an HTTP 200 and Google's URL Inspection with an `error` object — n8n's `retryOnFail` never sees either. Every gate (SERP, facts search, keyword data, URL inspection) now judges the answer with `RT`, **pauses and asks once more**, and never re-sends what a second attempt cannot fix (permission, property, quota).
 **Where the retry fails too, nothing is scored on it.** The evidence is `unavailable`, the keyword verdict is **NOT CHECKED** with no score, no expected visits and no time to rank, and the first reason says why. A verdict computed on a results page nobody saw is worse than no verdict.
@@ -6315,6 +6322,2922 @@ def _b64_checks():
     print('alert retry + run guard (B-A7 / B-A9): ' + str(len(out64)) + ' scheduled workflows sweep undelivered alerts and pass the shared concurrency gate')
 
 
+
+# =============================================================================
+# 65. ONE CAUSE, NOT FIVE SYMPTOMS — AND THE LINKS NOTHING CAN FOLLOW
+#     (2026-10-15, benchmark area 5, the technical audit; docs/system-review-2026-10-14/BENCH_AREA5_technical_audit.md,
+#      register rows B5-1 / B5-2 / B5-3; CRITERIA_technical… 1.2 / 1.4 / 1.6 / 1.12)
+#     The audit crawl runs WITHOUT JavaScript by default (`enable_javascript: false`, CONFIG.crawl_js), so every page figure it
+#     reports — the H1, the word count, the title, the canonical, the links — is read from the first response. On a site that
+#     renders in the browser that is the right reading to take (it is what the AI crawlers get, and what Google gets on its first
+#     pass), but it was never SAID, and the findings drawn from it named the wrong cause and gave the wrong fix: "Missing H1
+#     heading — add one clear H1 per page" on a page whose H1 exists and is written by a script, and "Thin content — expand these
+#     pages" on 900 words no crawler can see. Sitebulb's own 2024 corpus puts that case at 18.3% of pages for the H1 alone
+#     (sitebulb.com/javascript-seo/2024-report/sitebulb-data/), so it is the common case, not the exotic one.
+#       * B5-2. Where the response-versus-render check (G14) PROVED the figure is written by JavaScript — on at least half of the
+#         key pages it read twice — the crawl-wide symptom is merged into that cause: one finding, the higher of the two
+#         severities, the crawl's own count and sample, the rendering fix, and both sentences of evidence. The score deducts once,
+#         for the cause, instead of twice for a symptom and its explanation. Nothing is dropped: `merged_titles` keeps every title.
+#       * B5-3. And when the crawl did not render, the audit says so in its notes whatever the render check found, so no reader
+#         takes a page figure for a statement about the page rather than about its first response.
+#       * B5-1. *Render Diff* also reads what no crawler can follow out of the HTML it has already fetched (Screaming Frog v24's
+#         "Find Uncrawlable Links", screamingfrog.co.uk/seo-spider-24/): <a> tags with no href or a javascript: href that navigate
+#         on click, and div / span / li / button / tr elements carrying a page address in an onclick or a data-href. That is the
+#         usual cause of the orphan pages the crawl reports, which the audit used to name as a symptom and guess at in prose.
+#     No new request, no new credential, no cost: every byte of this was already fetched for the render diff.
+# =============================================================================
+# ---------- A. B5-1: the uncrawlable links reached Render Diff through v5/code/Render_Diff.js; here is what the build asserts ----------
+_rd65 = code('Render Diff')
+for _need65 in ('const uncrawlable = (html) =>', "kind: 'javascript_href'", "kind: 'element_as_link'",
+                'uncrawlable_links', "figure: figure || ''", 'crawl_js: !!plan.crawl_js'):
+    assert _need65 in _rd65, 'B5-1: Render Diff does not carry ' + _need65
+assert "F('Crawlability & Indexing', sev," in _rd65, 'B5-1: Render Diff raises no finding for the links nothing can follow'
+assert 'looksLikeUrl(t)' in _rd65, 'B5-1: an element is counted as a link without a readable address'
+
+# ---------- B. B5-2 / B5-3: Build Site Issues joins the symptom to the cause, and says what the crawl read ----------
+patch('Build Site Issues', "// ===== 5. What works =====",
+r"""// ===== 4c. B5-2 (2026-10-15, benchmark area 5): one cause, not five symptoms =====
+// The crawl reads the first response unless CONFIG.crawl_js is on. Where the response-versus-render check proved that a figure is
+// written by JavaScript on at least half the key pages it read twice, the crawl-wide finding is not a second problem: it is the same
+// problem, counted over the whole crawl. Merging keeps the bigger sample and the right fix, deducts once, and keeps both titles.
+const RDF = input.render_diff || null;
+const renderMerges = [];
+if (RDF && RDF.available && RDF.crawl_js === false) {
+  const rdChecked = (RDF.pages || []).filter(p => p && p.checked);
+  const SYMPTOM_OF = {
+    h1: [/^missing h1 heading$/i],
+    words: [/^thin content/i, /^light content/i, /^very little text on the page$/i, /^low text-to-html ratio$/i],
+    title: [/^missing title tag$/i],
+    canonical: [/^missing canonical tag$/i],
+    links: [/^few internal links pointing to the page$/i, /^orphan pages/i]
+  };
+  const PROVED_SHARE = 0.5;   // on half the key pages read twice, or it is one odd page and not how the site is built
+  for (const key of Object.keys(SYMPTOM_OF)) {
+    const proved = rdChecked.filter(p => (p.js_only || []).includes(key));
+    if (!proved.length || !rdChecked.length || proved.length / rdChecked.length < PROVED_SHARE) continue;
+    const cause = findings.find(f => f.source === 'render_diff' && f.figure === key && f.scoring !== false);
+    if (!cause) continue;
+    for (let i = findings.length - 1; i >= 0; i--) {
+      const s = findings[i];
+      if (s === cause || s.source === 'render_diff' || s.scoring === false) continue;
+      if (!SYMPTOM_OF[key].some(re => re.test(String(s.title || '')))) continue;
+      if (SEV_ORDER[s.severity] < SEV_ORDER[cause.severity]) cause.severity = s.severity;
+      cause.evidence = [cause.evidence, 'the crawl of ' + total + ' pages, which read only the first response, reports "' + s.title + '" on '
+        + (s.affected_count == null ? 'them' : s.affected_count + ' of them')].filter(Boolean).join('; ');
+      if ((Number(s.affected_count) || 0) > (Number(cause.affected_count) || 0)) { cause.affected_count = s.affected_count; cause.affected_pct = s.affected_pct; }
+      cause.sample_urls = [...new Set([...(cause.sample_urls || []), ...(s.sample_urls || [])])].slice(0, 10);
+      cause.merged_titles = [...(cause.merged_titles || [cause.title]), s.title];
+      cause.caused_by = 'javascript_rendering';
+      cause.why = String(cause.why || '') + ' The crawl did not run JavaScript, so it reports this as "' + String(s.title).toLowerCase()
+        + '" on the pages it read — the same problem, seen from the other side.';
+      renderMerges.push({ figure: key, symptom: s.title, affected: s.affected_count == null ? null : s.affected_count, proved_on: proved.length, of: rdChecked.length });
+      findings.splice(i, 1);
+    }
+  }
+}
+const render_merge = renderMerges.length ? { merged: renderMerges.length, items: renderMerges,
+  method: 'A finding the crawl drew from the first response was joined to the rendering problem that causes it, where the two readings of the key pages proved the figure is written by JavaScript on at least half of them. The joined finding keeps the crawl\'s own count, the higher severity of the two and both titles, and the score deducts once for the cause instead of twice.' } : null;
+
+// ===== 5. What works =====""")
+patch('Build Site Issues', "      render_diff: input.render_diff || null,\n", "      render_diff: input.render_diff || null,\n      render_merge,\n")
+# B5-3: what the crawl itself read is said in the audit's own notes, whether or not the render check could be made
+patch('Build Site Issues', "notes: [probe.note,",
+      "notes: [probe.note, base.crawl_js === false ? 'Every page figure in this report was read from the first response: the crawl did not run JavaScript. That is what a crawler which does not render sees — every AI crawler today, and Google on its first pass — so a heading, a text or a link that a script writes is reported here as missing.'"
+      " + (RDF && RDF.available ? ' The ' + RDF.pages_checked + ' key page(s) of the response-versus-render check were read both ways' + (render_merge ? ', and ' + render_merge.merged + ' finding(s) were joined to the rendering that causes them' : '') + '.' : '') : '',")
+for _need65 in ('const RDF = input.render_diff', 'renderMerges', 'render_merge', "caused_by = 'javascript_rendering'"):
+    assert _need65 in code('Build Site Issues'), 'B5-2: ' + _need65 + ' did not reach Build Site Issues'
+assert code('Build Site Issues').index('const RDF = input.render_diff') < code('Build Site Issues').index('IMP.rank(findings'), \
+    'B5-2: the merge must happen before the fix list is ordered and before the score is computed'
+
+# ---------- C. both audit reports name the links nothing can follow, next to the render table ----------
+UNC_SECTION_JS = r"""// ---- the links nothing can follow (B5-1, 2026-10-15, benchmark area 5) ----
+const uncrawlableSection = (a) => {
+  const rdf = a.render_diff || null; const u = rdf && rdf.uncrawlable_links;
+  if (!u || !u.total) return '';
+  const e4 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const rows = (rdf.pages || []).filter(p => p.uncrawlable).map(p =>
+    `<tr><td>${e4(p.path)}</td><td>${p.uncrawlable}</td><td class="small">${e4((p.uncrawlable_samples || []).map(x => '<' + x.tag + '>' + (x.detail ? ' -> ' + x.detail : '')).join(', '))}</td></tr>`).join('');
+  return `<h3>Links nothing can follow</h3><table class="ct"><tr><th>Page</th><th>Found</th><th>Examples</th></tr>${rows}</table>`
+    + `<p class="small">${e4(u.method)}${u.orphan_pages ? ' The crawl found ' + u.orphan_pages + ' orphan page(s) with no crawlable internal link.' : ''}</p>`;
+};
+"""
+for _rn65 in ('Build Audit Report', 'Build Full Report'):
+    patch(_rn65, "const findings = a.findings || [];", UNC_SECTION_JS + "const findings = a.findings || [];")
+    patch(_rn65, "html += cwvSection(a)", "html += uncrawlableSection(a);\nhtml += cwvSection(a)")
+    assert code(_rn65).count('html += uncrawlableSection(a);') == 1 and 'const uncrawlableSection = (a) =>' in code(_rn65), \
+        _rn65 + ': the uncrawlable section is not printed once'
+
+sticky("""### One cause, not five symptoms — and the links nothing can follow (B5-1 / B5-2 / B5-3)
+**The crawl reads the first response** (JavaScript off by default), so an H1 a script writes was reported as *"Missing H1 heading — add one clear H1 per page"* on a page whose H1 exists. Sitebulb's 2024 corpus puts that at **18.3% of pages**.
+**Now:** where the response-versus-render check proved the figure is written by JavaScript on **half or more** of the key pages it read twice, the crawl-wide symptom is **joined to the cause** — one finding, the higher severity, the crawl's own count, the rendering fix, both titles kept in `merged_titles`, and **one deduction instead of two**.
+**And the audit says what it read**: "Every page figure in this report was read from the first response."
+**Links nothing can follow** (Screaming Frog v24 parity, free): `<a>` with no href or a `javascript:` href that navigates on click, and div / span / li / button / tr carrying an address in `onclick` or `data-href` — read from HTML already fetched, and named as the usual cause of the orphan pages the crawl reports.""",
+    pos('Render Diff')[0] - 40, pos('Render Diff')[1] + 340, 1180, 290, 4)
+log('One cause, not five symptoms, and the links nothing can follow (2026-10-15, benchmark area 5, B5-1 / B5-2 / B5-3): the audit crawl reads the first response unless crawl_js is on, so an H1, a text or a link a script writes was reported as missing with the wrong fix - where the response-versus-render check proves the figure is written by JavaScript on at least half the key pages it read twice, the crawl-wide symptom is now merged into the rendering finding (higher severity, the crawl\'s count, the rendering fix, every title kept, one deduction instead of two), the audit says in its notes that every page figure came from the first response, and Render Diff reads the links nothing can follow (<a> with no href or a javascript: href, div / span / li / button / tr navigating from onclick or data-href) out of the HTML it already fetched, naming them as the usual cause of the orphan pages the crawl reports')
+
+# =============================================================================
+# 66. A PLAN MEASURED ON ITS OWN TOPIC, AND AN ORDER THAT SAYS WHY (2026-10-15, benchmark programme area 2 —
+#     docs/system-review-2026-10-14/BENCH_AREA2_ladders.md; register rows B2-1 / B2-2 / B2-3)
+#     The leaders of topical planning personalise difficulty PER TOPIC. MarketMuse subtracts a topic-level Topic Authority from the
+#     keyword difficulty and says plainly what happens without one ("If you have no Topic Authority, then your Personalized Difficulty
+#     = Keyword Difficulty", https://docs.marketmuse.com/reference/personalized-difficulty-and-topic-authority/, still sold standalone
+#     after the Siteimprove acquisition of 2024-10-08). Semrush builds a thematic vector map and lowers Personal KD with the distance
+#     between a domain's core topics and the target topic (https://www.semrush.com/blog/ai-keyword-research-updates/, 2024-05-21).
+#     * B2-1 — ours had ONE reach per website, cached 30 days (`_reach.js`), so the same number decided unrelated plans: ladder
+#       `lad_mv5pjt5y4aoa` ("erp implementation dubai", exec 494, 2026-10-13) was planned against reach 10 measured on 2026-10-08 for
+#       e-invoicing research. `reachTopic()` now measures the reach on the ladder's OWN topic from the `ranked` pull the run already
+#       paid for, using the same on-topic test the rungs are filtered by (`RAD.headFit`), and uses it only with REACH_CFG.min_top10
+#       on-topic top-10 keywords behind it. Below that bar the site-wide reach stays and the plan says which number it used and why —
+#       it never invents a penalty for a topic the site has simply never tried.
+#     * B2-2 — a plan opened with its new pages and never counted what the site already had on the topic, although `findExisting`
+#       knew per page. `topic_authority.coverage` counts the pages on the topic, the searches it ranks for, the best position, and
+#       the plan's own improve-vs-new split, in the report's own section.
+#     * B2-3 — the order was rung band, then the opportunity sum of the cluster, and neither was printed, so "why this page first"
+#       could only be taken on trust. Semrush names its five ranking factors; every planned page now carries `why` and `why_factors`
+#       with the figures that really placed it, into the report, the callback and the app.
+# =============================================================================
+for _a66 in ('function reachTopic(', 'const reachTopicMatch =', 'const REACH_TOPIC_CFG ='):
+    assert _a66 in code('Ladder Plan'), 'B2-1: the topic-reach kit is not in Ladder Plan (' + _a66 + ')'
+assert 'function reachTopic(' in _rd0('code/_reach.js'), 'B2-1: reachTopic belongs in the shared reach kit, not in one node'
+# the plan measures itself against the topic reach, and the site measurement stays visible beside it
+assert 'const topic_authority = reachTopic(rankedAll, head, reachInfo.reach,' in code('Ladder Plan'), 'B2-1: Ladder Plan does not measure a topic reach'
+assert 'match: (kw) => RAD.headFit(head, kw).ok' in code('Ladder Plan'), \
+    'B2-1: the on-topic test for the reach must be the one the rungs are filtered by, or the two can disagree'
+assert 'const reach = topic_authority.reach;' in code('Ladder Plan'), 'B2-1: the plan is still measured against the site-wide reach'
+assert 'reach_info: { reach: reachInfo.reach,' in code('Ladder Plan'), 'B2-1: reach_info must keep the SITE-wide measurement'
+assert 'topic_authority,' in code('Ladder Plan'), 'B2-1: the topic measurement does not travel with the plan'
+assert 'notes.push(topic_authority.note)' in code('Ladder Plan'), 'B2-1: the owner is not told which reach the plan used'
+# B2-2 / B2-3 in the plan
+for _a66 in ('topic_authority.coverage = {', 'planned_improve: nImprove', 'const onTopicPage =', 'notes.push(topic_authority.coverage.summary)'):
+    assert _a66 in code('Ladder Plan'), 'B2-2: Ladder Plan is missing ' + _a66
+for _a66 in ('const whyFactorsOf =', 'const whyOf =', 'p.why = whyOf(p); p.why_factors = whyFactorsOf(p);', 'why: p.why ||'):
+    assert _a66 in code('Ladder Plan'), 'B2-3: Ladder Plan is missing ' + _a66
+# the report and the callback
+assert 'What you already have on this topic' in code('Build Ladder Report'), 'B2-2: the report does not open the topic inventory'
+assert "const ta = L.topic_authority || null;" in code('Build Ladder Report') and "ta && ta.note" in code('Build Ladder Report'), \
+    'B2-1: the report does not say which reach the plan was measured against'
+assert "esc(ri.reach != null ? ri.reach : L.reach)" in code('Build Ladder Report'), \
+    'B2-1: the report would print the topic reach as if it were the site-wide measurement'
+assert "p.why ? '<br><span class=\"small\">' + esc(p.why)" in code('Build Ladder Report') and "['Why here', esc(top.why)]" in code('Build Ladder Report'), \
+    'B2-3: the report does not print why each page sits where it sits'
+assert 'topic_authority: L.topic_authority || null' in code('Build Ladder Response'), 'B2-1 / B2-2: the callback drops the topic measurement'
+assert 'why: p.why ||' in code('Build Ladder Response'), 'B2-3: the callback drops the reason per page'
+# harness shim (S76): the topic reach as a runnable script, one call per item
+os.makedirs(OUT_CODE, exist_ok=True)
+open(os.path.join(OUT_CODE, '_reach_topic.js'), 'w').write(
+    "// generated by build_v4.py section 66 — the topic-reach kit as a runnable node for the harness (S76)\n"
+    + _rd0('code/_reach.js').rstrip('\n')
+    + "\nreturn $input.all().map(i => { const j = i.json || {};\n"
+      "  return { json: reachTopic(j.ranked === null ? null : (j.ranked || []), j.head || '', j.reach, { domain: j.domain || '' }) }; });\n")
+sticky("""### A plan measured on its own topic, and an order that says why (B2-1 · B2-2 · B2-3, 2026-10-15)
+**Reach was one number for the whole website**, cached 30 days — so the same 10 measured on e-invoicing research decided the plan for "erp implementation dubai" (`lad_mv5pjt5y4aoa`, 2026-10-13). The ladder now measures the reach **on its own topic** from the keywords the site already ranks for, with the same on-topic test the rungs use, and uses it only when at least 5 on-topic top-10 keywords stand behind it. Otherwise the site-wide reach stays and the plan says so: *"treat the months and the chance below as the optimistic case."* Absence of on-topic wins never invents a penalty.
+**The plan opens with what you already have on the topic** — pages, searches you rank for, your best position — and states its own improve-vs-new split. A search an existing page already answers never gets a second page.
+**Every planned page carries the figures that put it there**: its difficulty against the reach actually used, its keywords and volume, its intent, whether it is new or an improvement, and that it links up to the main page.""",
+    pos('Ladder Plan')[0] - 40, pos('Ladder Plan')[1] + 560, 1120, 280, 4)
+log('A ladder plan measured on its own topic, with the inventory it starts from and the reason for its order (2026-10-15, benchmark area 2, rows B2-1 / B2-2 / B2-3; BENCH_AREA2_ladders.md). B2-1: reachTopic() in the shared reach kit measures the difficulty the site already wins ON THE LADDER\'S TOPIC from the ranked-keywords pull the run already paid for, filtered with the same RAD.headFit test the rungs use; it replaces the site-wide reach only with REACH_CFG.min_top10 on-topic top-10 keywords behind it, and otherwise the site reach stays with a sentence naming the topics it was actually measured on and calling the plan the optimistic case - the leaders personalise difficulty per topic (MarketMuse Personalized Difficulty = KD - Topic Authority; Semrush PKD falls with the thematic distance to the domain\'s core topics), ours used one cached number per site for every topic. B2-2: topic_authority.coverage counts the pages the site already has on the topic, the searches it ranks for, its best position and the plan\'s own improve-vs-new split, in the plan notes, the callback and a report section of its own. B2-3: every planned page carries `why` and `why_factors` - difficulty against the reach actually used, keyword count, volume, intent, improve or new, links up - in the report table, the callback and write_now')
+
+
+# =============================================================================
+# 68. THE NUMBER A SOURCE STATES, AND A GATE THAT HAS TO REFUSE (2026-10-15, benchmark programme area 3 —
+#     docs/system-review-2026-10-14/BENCH_AREA3_content.md; rows B3-1, B3-2, B3-3)
+# =============================================================================
+# Two things were proven by running the node code, not read off a register.
+#
+# B3-1 / B3-2 — the money mask was the strictest check in the system and the least informed one. It ran at §3, before anything else,
+# and rewrote `md` irreversibly; its evidence was `prev.facts` plus the customer's own text. Forty lines later §9b checked every OTHER
+# figure against the full source corpus this run had fetched — `facts` (text + claim + title), the brief's evidence plan and the
+# competitor pages — and kept whatever a cited source stated. So the two checks disagreed about the same sentence of the same page:
+# a probe on the shipped code put "AED 5,000", "AED 500" and "AED 10,000" and the percentage "42%" in one paragraph, every one of them
+# verbatim in the cited mof.gov.ae text the run had read. The percentage survived. All seven currency amounts became `[Price]`.
+# The delivered "uae e invoicing penalties" page is the live proof: **43 × [Price]**, including the Fine column of its own comparison
+# table, under a correct citation of the Ministry of Finance decision that states every one of those fines. Those 43 tokens then put
+# `placeholder_count` over `PH_MAX` (5), so the page was refused as not publishable — the mask manufactured the refusal.
+# And the classifier let a price VERB decide a statutory subject: the guard was `(big || OTHER_WORDS) && !PRICE_WORDS`, and "costs"
+# is a PRICE_WORD, so "the penalty costs AED 5,000 per month" was treated as our own pricing and the number was destroyed rather than
+# put in front of the reviewer as `[Confirm: AED 5,000]`.
+# Both checks now read one corpus, built once in §2b above the mask, and an amount is kept when a source cited IN THAT SENTENCE states
+# it — exactly §9b's rule. A fine, penalty, threshold, levy, duty, violation or sanction is never our price, so it is flagged for
+# review, never erased. What the mask does remove is now named with its sentence: `[Price] x43` is nothing the owner can answer, while
+# "AED 5,000" in the sentence it came from is a question they can settle in one reading.
+#
+# B3-3 — *Content QA* finalises the delivery gate (`quality`, `not_ready`, `quality_label`, `publishable`, the reasons) and
+# *Originality Check* runs AFTER it, flipping only `passed` / `passed_copy` / `editor_needed`. On any round but the last the editor
+# loop still fired, so it was invisible. On the LAST round it was not: a probe fed the real node a draft 100% identical to a
+# competitor page with `rounds_left: 0`, and it came back `publishable: true`, `not_ready: false`,
+# `quality.label: "passed the quality check"`, reasons empty. Those exact fields drive the Word file's status line, the `-DRAFT` file
+# name, the package's "DID NOT PASS" banner, `meta.json`, the callback and the app — so a plagiarised page was delivered labelled as
+# having passed its quality check. The check now re-decides the gate it invalidated. A gate that fails must refuse, never only label.
+assert 'const srcText = new Map();' in code('Content QA').split('// 3. Prices become')[0], \
+    'B3-1: the source corpus is not built above the money mask, so the mask still reads less than the figure check'
+assert 'amountInCitedSource' in code('Content QA') and 'STATUTORY_WORDS' in code('Content QA'), \
+    'B3-1 / B3-2: the money mask does not consult the cited source, or still lets a price verb erase a statutory amount'
+assert code('Content QA').count('const srcText = new Map();') == 1, 'B3-1: the source corpus is built twice'
+assert 'masked_amounts, flagged_amounts, sourced_amounts,' in code('Content QA') and 'The amount(s) removed:' in code('Content QA'), \
+    'B3-2: the amounts the mask removed never reach the owner'
+assert 'qa.not_ready = !roundsLeft;' in code('Originality Check') and 'qa.publishable = false;' in code('Originality Check'), \
+    'B3-3: an originality failure still leaves the delivery gate saying the page passed'
+# the owner is told what happened to the money in the copy, next to the figures that were masked
+patch('Build Word File', """    ...(qa.placeholder_note && !qa.not_ready ? [['Figures still masked', '<span class="bad">' + esc(qa.placeholder_note) + '</span>']] : []),   // R25 (2026-10-14): a masked figure in the body is named even when the page is otherwise deliverable""",
+      """    ...(qa.placeholder_note && !qa.not_ready ? [['Figures still masked', '<span class="bad">' + esc(qa.placeholder_note) + '</span>']] : []),   // R25 (2026-10-14): a masked figure in the body is named even when the page is otherwise deliverable
+    ...((qa.sourced_amounts || []).length ? [['Amounts kept', esc((qa.sourced_amounts || []).slice(0, 6).map(a => a.amount + ' (' + a.source + ')').join(', ')) + ' \\u2014 each one is stated by the source cited in the same sentence']] : []),   // B3-1 (2026-10-15)""")
+patch('Build Word File', "    qa_placeholder_note: (qa.quality || {}).placeholder_note || '',   // R25 (2026-10-14): the app and the callback name the masked figures too",
+      "    qa_placeholder_note: (qa.quality || {}).placeholder_note || '',   // R25 (2026-10-14): the app and the callback name the masked figures too\n"
+      "    qa_amounts: { removed: qa.masked_amounts || [], for_review: qa.flagged_amounts || [], kept_from_source: qa.sourced_amounts || [] },   // B3-1 / B3-2 (2026-10-15)")
+assert 'qa_amounts' in code('Build Word File'), 'B3-1: the money the mask touched never reaches the callback'
+sticky("""### The number a source states, and a gate that has to refuse (B3-1 · B3-2 · B3-3, 2026-10-15)
+**The money mask knew less than the figure check beside it.** It ran first and rewrote the draft for good, judging an amount only against the facts on file — while the check forty lines later kept any other figure a cited source stated. So one sentence of one fetched page kept its "42%" and lost "AED 5,000", "AED 500" and "AED 10,000". The delivered penalties page shows it: **43 × [Price]**, its own Fine column included, under a correct citation of the decision that states every fine — and those 43 tokens are what put the page over the placeholder limit and had it refused. Both checks now read **one** corpus, and an amount a source cited **in that sentence** states is kept, with the source named.
+**A fine is never our price.** "costs" is a price word, so "the penalty costs AED 5,000 per month" was erased instead of being put in front of the reviewer. A fine, penalty, threshold, levy, duty or violation now always keeps its number as `[Confirm: …]`.
+**And what the mask does remove is named**, with the sentence it came from: `[Price] x43` is nothing an owner can answer.
+**A gate that fails must refuse, not label.** *Originality Check* runs after *Content QA* has already finalised the delivery gate, and flipped only `passed`. On the last round a draft **100% identical to a competitor page** came out `publishable: true`, `not_ready: false`, *"passed the quality check"* — which is what the file name, the package banner, meta.json, the callback and the app all read. It now re-decides the gate it invalidated.""",
+    pos('Content QA')[0] - 40, pos('Content QA')[1] + 420, 1120, 300, 3)
+log('The number a source states, and a gate that has to refuse (2026-10-15, benchmark area 3, rows B3-1 / B3-2 / B3-3; BENCH_AREA3_content.md). B3-1: Content QA\'s money mask ran before everything else and judged an amount only against the facts on file, while the figure check forty lines later kept any figure a cited source stated - so a probe on the node code kept "42%" and destroyed "AED 5,000", "AED 500" and "AED 10,000" from the same sentence of the same fetched page, and the delivered penalties page carries 43 x [Price] (its own Fine column included) under a correct citation of the decision that states every fine, which is what put it over the placeholder limit and had it refused; the source corpus is now built once above the mask and an amount a source cited in that sentence states is kept with the source named. B3-2: "costs" is a price word, so a statutory penalty was erased as if it were our own pricing - a fine, penalty, threshold, levy, duty, violation or sanction now always keeps its number as [Confirm: ...], and every amount the mask does remove is reported with the sentence it came from. B3-3: Originality Check runs after Content QA has finalised the delivery gate and flipped only `passed`, so on the last round a draft 100% identical to a competitor page was delivered with publishable: true, not_ready: false and the label "passed the quality check" - the fields the file name, the package banner, meta.json, the callback and the app all read; it now re-decides the gate it invalidated')
+# 67. A DECAYING PAGE IS A TESTED, SEASONAL JUDGEMENT — AND THEN IT IS WORK (2026-10-15, benchmark programme area 4 —
+#     docs/system-review-2026-10-14/BENCH_AREA4_cadence.md; register rows B4-1 / B4-2 / B4-3)
+#     The leader of content inventory and decay is still Clearscope. Its Content Decay view compares a page's clicks over 90 days
+#     against THE SAME 90 DAYS A YEAR EARLIER and names the two figures "seasonal difference" and "seasonal growth"
+#     (https://www.clearscope.io/support/content-decay); its Content Decay report ranks pages by the clicks actually lost
+#     (https://www.clearscope.io/blog/content-decay-report); its Content Inventory stores clicks, impressions and average position
+#     per page from Search Console and rescans monthly (https://www.clearscope.io/support/getting-started-content-inventory), for
+#     50 pages at $129 a month or 300 at $399 (https://www.clearscope.io/pricing). Ahrefs tells you to flag pages down more than
+#     20% YEAR OVER YEAR (https://ahrefs.com/blog/content-decay/); Semrush's own content-audit guide says to allow for seasonality
+#     and to wait two months before judging a refresh (https://www.semrush.com/blog/content-audit/).
+#     * B4-1 — ours compared 28 days with the 28 before and called any 25% fall on 10 earlier clicks a "decaying page"
+#       (`Parse_GSC.js`, `decay_drop_pct: 25`). That is the one window that cannot tell a decay from a seasonal dip, at a volume
+#       this system's own test rejects: 10 -> 7 clicks is z = -0.73. On techand.ai, which took 34 clicks site-wide in the 28 days
+#       of exec 581 (2026-10-14), the 10-click floor is reachable by at most three pages and nothing at that volume can be
+#       measured at all. `ST.decay` now tests the fall (two-sample Poisson, the machinery G28 built) and, with the new free
+#       `pages_yoy` request, refuses to call a fall "decay" that the same page also had a year ago. It also separates the two
+#       falls that need different work: clicks down while impressions held is a click-through loss (title and snippet), clicks
+#       down WITH impressions is lost visibility. `seasonal`, `watch` and `too_small` are reported with their reason, never acted on.
+#     * B4-2 — that verdict used to live for the length of one Site Tracker run and die in an e-mail. The page inventory
+#       `seo_pages` now carries the measurement and the judgement (clicks, impressions, position, prev_clicks, yoy_clicks,
+#       decay_state / pct / lost / kind / basis, measured_at), so something downstream can act on it.
+#     * B4-3 — and the Content Cadence does: a confirmed decaying page is queued as a REFRESH of that URL, ranked by the clicks
+#       actually lost, ahead of striking distance and rising trends — Clearscope generates a Draft straight from its decay view
+#       and Siteimprove.ai Content Strategy sells "a prioritized plan of what to create, refresh, or optimize"
+#       (https://www.siteimprove.com/marketmuse/). Ladder rungs still come first: they are the plan the owner chose.
+#     NOTE FOR THE DEPLOY: `seo_pages` gains eleven columns, so `sync_tables.py` must run (apply_env.py does).
+# =============================================================================
+for _a67 in ('const decay = (o) =>', 'yoy_clicks', "base('seasonal'", "base('too_small'", "base('decaying'", "'clickthrough'"):
+    assert _a67 in _rd0('code/_site_stats.js'), 'B4-1: the decay test is not in the shared statistics kit (' + _a67 + ')'
+assert 'return { z, band, change, position, decay, tested' in _rd0('code/_site_stats.js'), 'B4-1: ST.decay is not exported'
+# the fall is tested, never thresholded, and the year-ago window is actually asked for
+assert "pagedReq('pages_yoy'" in _rd0('code/GSC_Requests.js'), 'B4-1: the year-ago page rows are never requested'
+assert 'R.yoy.start' in _rd0('code/GSC_Requests.js'), 'B4-1: the year-ago request does not use the year-ago range'
+_pg67 = _rd0('code/Parse_GSC.js')
+assert 'ST.decay({' in _pg67 and '/*__SITE_STATS__*/' in _pg67, 'B4-1: Parse GSC does not judge decay through the statistics kit'
+assert 'decay_drop_pct' not in _pg67 and 'decay_drop_pct' not in _rd0('code/Site_Plan.js'), \
+    'B4-1: the fixed 25% decay threshold is still in the Site Tracker'
+assert "p.decay.state === 'decaying'" in _pg67 and 'byLost' in _pg67, 'B4-1: decaying pages are not selected by the test and ranked by the clicks lost'
+assert 'page_perf' in _pg67 and 'decay_summary' in _pg67, 'B4-2: Parse GSC does not hand the per-page measurement on'
+assert 'yoy_read' in _pg67, 'B4-1: a page missing from the year-ago rows cannot be told from a year-ago request that never ran'
+# the measurement is stored, so the cadence can read it
+assert [c for c, _t in PAGES_COLS].count('decay_state') == 1 and [c for c, _t in PAGES_COLS].count('yoy_clicks') == 1, \
+    'B4-2: seo_pages does not carry the decay judgement'
+_pi67 = _rd0('code/Page_Inventory_Site.js')
+assert 'gsc.page_perf' in _pi67 and 'EMPTY_PERF' in _pi67 and 'PERF.every(' in _pi67, \
+    'B4-2: the page inventory does not store (or does not compare) the measurement'
+for _c67, _t67 in PAGES_COLS:
+    assert _c67 in _pi67 or _c67 in _rd0('code/_site_model.js'), 'B4-2: seo_pages column ' + _c67 + ' is written by nothing'
+# and the cadence writes the refresh rather than recommending it
+_cp67 = _rd0('code/Cadence_Plan.js')
+assert "source: 'decay'" in _cp67 and "String(r.decay_state || '') === 'decaying'" in _cp67, \
+    'B4-3: the Content Cadence does not queue a decaying page'
+assert 'decay_per_week' in _cp67 and 'decay_refresh_days' in _cp67, 'B4-3: the refresh has no weekly cap or settle period'
+assert _cp67.index("source: 'decay'") < _cp67.index("source: 'striking'"), \
+    'B4-3: a measured loss must be queued before a striking-distance guess'
+assert 'decayUrls.has(' in _cp67, 'B4-3: one page could be queued twice, as a refresh and as a striking-distance page'
+# the app mirrors the rule, or the Pipeline page promises a page n8n will not write
+_ct67 = open(os.path.join(HERE0, '..', '..', 'app', 'server', 'src', 'services', 'cadence.ts'), encoding='utf-8').read()
+assert "source: 'decay'" in _ct67 and 'decayPerWeek' in _ct67 and 'decayRefreshDays' in _ct67, \
+    'B4-3: app/server/src/services/cadence.ts does not mirror the decay rule (Cadence_Plan.js and it must change together)'
+assert _ct67.index("source: 'decay'") < _ct67.index("source: 'striking'"), 'B4-3: the app orders the queue differently from n8n'
+# harness shim (S77): the decay test as a runnable script, one judgement per item
+os.makedirs(OUT_CODE, exist_ok=True)
+open(os.path.join(OUT_CODE, '_decay.js'), 'w').write(
+    "// generated by build_v4.py section 67 — the decay test as a runnable node for the harness (S77)\n"
+    + seo_events.inline(_rd0('code/_site_stats.js')).rstrip('\n')
+    + "\nreturn $input.all().map(i => ({ json: ST.decay(i.json || {}) }));\n")
+
+
+def _b67_checks():
+    """Run after the sub-builds: the Site Tracker really asks Google for the year-ago page rows, really inlines the statistics
+    kit into Parse GSC, and really stores the judgement — and the Content Cadence really reads seo_pages."""
+    _f67 = {w['name']: w for f in os.listdir(os.path.join(HERE0, 'workflows')) if f.endswith('.json')
+            for w in json.load(open(os.path.join(HERE0, 'workflows', f), encoding='utf-8'))}
+    _st67 = {n['name']: n for n in _f67['SEO Agent — Site Tracker']['nodes']}
+    _gsc67 = _st67['Parse GSC']['parameters']['jsCode']
+    assert 'const ST = (() => {' in _gsc67, 'B4-1: the statistics kit is not inlined into Parse GSC'
+    assert '/*__SITE_STATS__*/' not in _gsc67, 'B4-1: the statistics placeholder is left in Parse GSC'
+    assert "pagedReq('pages_yoy'" in _st67['GSC Requests']['parameters']['jsCode'], 'B4-1: the deployed Site Tracker never asks for the year-ago page rows'
+    _inv67 = _st67['Page Inventory (Site)']['parameters']['jsCode']
+    assert 'decay_state' in _inv67, 'B4-2: the deployed inventory does not store the judgement'
+    _save67 = _st67['Save Pages (Site)']['parameters']['columns']['schema']
+    assert {c['id'] for c in _save67} == {c for c, _t in PAGES_COLS}, \
+        'B4-2: the seo_pages upsert does not carry exactly the table columns (a Data Table node auto-maps every field it is given)'
+    _cad67 = {n['name']: n for n in _f67['SEO Agent — Content Cadence']['nodes']}
+    assert "source: 'decay'" in _cad67['Cadence Plan']['parameters']['jsCode'], 'B4-3: the deployed cadence cannot write a refresh'
+    assert 'Load Pages (Cadence)' in _cad67, 'B4-3: the cadence has nothing to read the judgement from'
+    print('decay: tested and seasonal (B4-1), stored on the page row (B4-2), written by the cadence (B4-3)')
+
+
+sticky("""### A page losing traffic is tested, then refreshed (B4-1 · B4-2 · B4-3, 2026-10-15)
+**The old rule called any 25% fall on 10 earlier clicks a "decaying page"** — the one window that cannot tell a decay from a seasonal dip, at a volume this system's own test rejects (10 → 7 clicks is z = −0.73). A page is now decaying only when the fall survives the **two-sample Poisson test** *and* is not the dip the same weeks had **a year ago** (one more free Search Console request). Clicks down while impressions held is named a **click-through** loss — title and description first, not a rewrite.
+**What is refused is still reported**: seasonal, watch and too-small each say so, with the clicks they were measured on.
+**And then it becomes work.** The judgement is stored on the page's `seo_pages` row, and the Content Cadence writes the **refresh** of that URL — ranked by the clicks actually lost, ahead of striking distance and rising trends, at most 2 a week, never within 60 days of the last refresh. Ladder rungs still come first.""",
+    pos('Rate Limit')[0] - 40, pos('Rate Limit')[1] + 620, 1120, 280, 6)
+log('A decaying page is a tested, seasonal judgement - and then it is work (2026-10-15, benchmark area 4, rows B4-1 / B4-2 / B4-3; BENCH_AREA4_cadence.md). B4-1: ST.decay (v5/code/_site_stats.js) replaces the fixed decay_drop_pct 25% / 10-click rule with the two-sample Poisson test G28 already uses, plus the seasonal comparison the leader is built on - a new free pages_yoy Search Console request gives every page the same 28 days a year earlier, and a fall the page also had last year is reported as `seasonal`, not decay; a fall at a volume too small to test is `too_small` with the clicks it was measured on; clicks down while impressions held is `clickthrough` (title and description), clicks down with impressions is `visibility`. B4-2: the judgement and the measurement behind it (clicks, impressions, position, prev_clicks, yoy_clicks, decay_state / pct / lost / kind / basis, measured_at) are stored on the seo_pages row by the weekly Site Tracker, instead of dying in the e-mail that recommended the refresh. B4-3: the Content Cadence queues a confirmed decaying page as a refresh of that URL, ranked by the clicks actually lost, ahead of striking distance and rising trends, capped at decay_per_week and never within decay_refresh_days of the last refresh - mirrored rule for rule in app/server/src/services/cadence.ts. Needs sync_tables.py for the eleven new seo_pages columns')
+
+
+# =============================================================================
+# 70. ONE SEARCH, ONE PAGE — DECIDED BY THE RESULTS PAGE AND NOT BY A LABEL (2026-10-15, benchmark programme area 2 —
+#     docs/system-review-2026-10-14/BENCH_AREA2_ladders.md gaps 5 and 6; register rows B2-4, B2-5, and B2-6 as its convention)
+#     * B2-4 (K7, the one place the rubric scores us at 5/10 by design). Keyword Insights clusters keywords by the results pages
+#       Google actually shows and argues, in its own documentation, that shared URLs beat an NLP label. `KWI.serpClusters` has existed
+#       since G8 and discovery uses it — but the ladder's four Labs pulls return `serp_info.serp_item_types` and NO URL list, and
+#       `Ladder_Pool` initialised `competitors: []` and never filled it, so the rungs were grouped by the AI's topic label plus the
+#       page type. Two searches Google answers with the same pages could therefore become two pages: the exact duplication the "one
+#       search, one page" rule exists to prevent, written by the system that enforces that rule everywhere else.
+#       The owner chose the DIRECT route on 2026-10-15 — one SERP call per rung candidate, which is exact — over the cheaper
+#       competitor-domain approximation, because the result is what matters. The chain is *Ladder Cluster Requests* (the bound) ->
+#       *Cluster SERP Wanted?* -> *Run Ladder Cluster SERP* -> *Ladder Cluster Retry* (the in-200 gate of R18, `_dfs_retry.js`) ->
+#       *Any Cluster Retries?* -> *Wait Before Cluster Retry* -> *Run Ladder Cluster SERP (Retry)* -> *Ladder Clusters*, and it sits
+#       on the MAIN path between the pool and the relevance screen — never beside it, which is what made R17's reserve chain run last.
+#       Bounded at 24 keywords (a full ladder plans at most 11 pages of at most 7 keywords each) = $0.048 a run at $0.002 a call, with
+#       the cap, the price and what was really spent printed in the plan; a `free_only` run, `ladder_serp_checks: 0` and a pool with
+#       fewer than two on-topic candidates buy nothing. INVARIANTS rule 1 holds: a keyword whose results page failed twice is named in
+#       `not_compared` with the provider's own reason, is not clustered, is not merged into anything and is not dropped.
+#     * B2-5 (Semrush's fifth ranking factor). The destination's results page is now read for how many DIFFERENT sites own it —
+#       distinct registrable domains through the same `LK.regDomain` the competitor gate has used since R21, so a rival on a subdomain
+#       is not counted twice — and that moves the feasibility score: 6 points at five sites or fewer, 3 at six or seven, nothing at
+#       eight or more. The owner accepted a moving score on the condition that it moves for a stated reason the report prints, so the
+#       count is labelled measured, the adjustment is labelled a stated rule, and both are in the plan, the report and the callback.
+#     * The money (R28 / R31 / R32 / R33 are the precedent): the two new nodes are on every run ledger's node list, so the DataForSEO
+#       cost is settled from the tasks that really ran and counted ONCE by task id; the plan's own figure is computed the same way and
+#       is never the price it was quoted. `CC.DFS_EST.ladder` goes 0.16 -> 0.21 (exec 495 measured $0.1162 + 24 x $0.002 = $0.1642,
+#       with the same headroom the other rows carry), and `app/shared/src/cost.ts` — the one cost table — moves with it.
+# =============================================================================
+_LX70, _LY70 = pos('Ladder Pool')[0], pos('Ladder Pool')[1] + 260
+_X70 = _LX70
+_rd70 = lambda p: rd(p).replace('/*__DFS_RETRY__*/', DFS_RETRY_SRC)
+add_node('Ladder Cluster Requests', 'n8n-nodes-base.code', 2, {'jsCode': _rd70('code/Ladder_Cluster_Requests.js')}, [_X70, _LY70]); _X70 += 220
+if_node('Cluster SERP Wanted?', '{{ $json.cluster_check === true }}', [_X70, _LY70]); _X70 += 220
+add_node('Run Ladder Cluster SERP', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': 'https://api.dataforseo.com/v3/serp/google/organic/live/advanced',
+    'authentication': 'genericCredentialType', 'genericAuthType': 'httpBasicAuth', 'sendBody': True, 'specifyBody': 'json',
+    'jsonBody': "={{ JSON.stringify([{ keyword: $json.keyword, location_code: $json.location_code, language_code: $json.language_code || 'en', depth: 10 }]) }}",
+    'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 400}}, 'timeout': 90000}}, [_X70, _LY70],
+    {'onError': 'continueRegularOutput', **retry_lint.RETRY}); _X70 += 220
+add_node('Ladder Cluster Retry', 'n8n-nodes-base.code', 2, {'jsCode': _rd70('code/Ladder_Cluster_Retry.js')}, [_X70, _LY70]); _X70 += 220
+if_node('Any Cluster Retries?', '{{ $json.is_retry === true }}', [_X70, _LY70]); _X70 += 200
+_wait56('Wait Before Cluster Retry', [_X70, _LY70 + 160]); _X70 += 200
+_r70 = copy.deepcopy(nodes['Run Ladder Cluster SERP'])
+_r70['name'] = 'Run Ladder Cluster SERP (Retry)'; _r70['id'] = nid(_r70['name']); _r70['position'] = [_X70, _LY70 + 160]
+nodes[_r70['name']] = _r70; _X70 += 220
+add_node('Ladder Clusters', 'n8n-nodes-base.code', 2, {'jsCode': _rd70('code/Ladder_Clusters.js')}, [_X70, _LY70])
+for _n70 in ('Run Ladder Cluster SERP', 'Run Ladder Cluster SERP (Retry)'):
+    slot(_n70, 'dataforseo')
+    assert nodes[_n70].get('credentials') and nodes[_n70].get('retryOnFail') and nodes[_n70]['maxTries'] == 3, _n70 + ': credential or retry slot missing'
+# the chain goes ON the main path (R17: a chain hung beside a node runs last in n8n's v1 order, which is how a reserve chain once
+# settled after the money was spent). The relevance screen reads the pool item, which *Ladder Clusters* passes through unchanged.
+disconnect('Ladder Pool', 'Ladder Relevance Chunks')
+connect('Ladder Pool', 'Ladder Cluster Requests')
+connect('Ladder Cluster Requests', 'Cluster SERP Wanted?')
+connect('Cluster SERP Wanted?', 'Run Ladder Cluster SERP', 0); connect('Cluster SERP Wanted?', 'Ladder Clusters', 1)
+connect('Run Ladder Cluster SERP', 'Ladder Cluster Retry')
+connect('Ladder Cluster Retry', 'Any Cluster Retries?')
+connect('Any Cluster Retries?', 'Wait Before Cluster Retry', 0); connect('Any Cluster Retries?', 'Ladder Clusters', 1)
+connect('Wait Before Cluster Retry', 'Run Ladder Cluster SERP (Retry)')
+connect('Run Ladder Cluster SERP (Retry)', 'Ladder Clusters')
+connect('Ladder Clusters', 'Ladder Relevance Chunks')
+assert [t['node'] for l in conns['Ladder Pool']['main'] for t in l] == ['Ladder Cluster Requests'], 'B2-4: the pool still feeds the relevance screen directly'
+assert [t['node'] for l in conns['Ladder Clusters']['main'] for t in l] == ['Ladder Relevance Chunks'], 'B2-4: the clusters do not reach the relevance screen'
+# B2-5: the registrable-domain helper the competitor gate uses (R21), in the node that counts the SERP's owners
+if 'const LK = (() => {' not in code('Ladder Plan'):
+    patch('Ladder Plan', "const base = $('Parse Verdict').first().json;", LK_SRC + "\nconst base = $('Parse Verdict').first().json;")
+assert 'const LK = (() => {' in code('Ladder Plan') and 'LK.regDomain(' in code('Ladder Plan'), 'B2-5: the registrable-domain helper is not in Ladder Plan'
+# the kits each new node needs, and no placeholder left behind
+for _n70, _needs70 in (('Ladder Cluster Requests', ('const KWI = (() => {', 'const RAD = (() => {', 'KWI.ladderChecks(')),
+                       ('Ladder Cluster Retry', ('const RT = (() => {', 'RT.plan(')),
+                       ('Ladder Clusters', ('const KWI = (() => {', 'const RT = (() => {', 'KWI.serpClusters(', 'RT.stats('))):
+    for _need70 in _needs70: assert _need70 in code(_n70), 'B2-4: ' + _n70 + ' is missing ' + _need70
+    assert '/*__' not in code(_n70), 'B2-4: ' + _n70 + ' still carries a kit placeholder'
+# B2-6: the convention the owner approved — the top 7 at 40%, on the ladder path, with discovery's own numbers untouched
+assert "{ top_n: out.top_n, min_overlap: out.min_overlap_pct / 100 }" in code('Ladder Clusters') \
+    and "top_n: 7" in code('Ladder Clusters') and "min_overlap_pct: 40" in code('Ladder Clusters'), 'B2-6: the ladder does not cluster on the top 7 at 40%'
+assert 'top_n: 0,' in KW_INPUTS_SRC and 'min_overlap: 0,' in KW_INPUTS_SRC, 'B2-6: the kit default must stay the top-10 / 3-URL shape discovery was measured on'
+assert "KWI.serpClusters(serpEntries, {})" in code('Build Keyword Strategy') and "KWI.serpClusters(kws.map(serpEntry), {})" in code('Rank Keywords'), \
+    'B2-6: discovery must keep clustering on the defaults until the orchestrator re-baselines K7'
+# INVARIANTS rule 1: a keyword that could not be compared is named, not clustered and not dropped
+for _a70 in ('out.not_compared.push(', 'retried: retryItems.some(', "out.available = out.compared >= 2"):
+    assert _a70 in code('Ladder Clusters'), 'B2-4 / rule 1: Ladder Clusters is missing ' + _a70
+assert 'serp_not_compared' in code('Ladder Plan') and 'notCompared' in code('Ladder Plan'), 'B2-4 / rule 1: the plan does not carry what could not be compared'
+# the grouping itself, and the rung it decides
+for _a70 in ("k.serp_group ? 'serp|' + k.serp_group", 'const rungMap = new Map(', 'clusterRungs.push({'):
+    assert _a70 in code('Ladder Plan'), 'B2-4: Ladder Plan is missing ' + _a70
+assert "if (String(key).indexOf('serp|') === 0) { groups.push(sorted); continue; }" in code('Ladder Plan'), \
+    'B2-4: a group built on shared results pages must not be split into two pages by the topic-label cap'
+# B2-5 in the plan: measured count, stated adjustment, both printed
+for _a70 in ('const serp_diversity = {', 'DIVERSITY_PENALTY', 'score_before: scoreBefore', 'score: dataRefused ? null : scoreAfter'):
+    assert _a70 in code('Ladder Plan'), 'B2-5: Ladder Plan is missing ' + _a70
+assert 'not a measured effect' in code('Ladder Plan'), 'B2-5: the adjustment does not say what kind of number it is'
+# the report and the callback
+assert 'Searches that share a results page' in code('Build Ladder Report') and 'What it cost' in code('Build Ladder Report'), \
+    'B2-4: the report does not print the clusters or what they cost'
+assert 'Who owns the results page' in code('Build Ladder Report'), 'B2-5: the report does not print the domain diversity'
+assert 'serp_clusters: L.serp_clusters' in code('Build Ladder Response') and 'serp_diversity: L.serp_diversity' in code('Build Ladder Response'), \
+    'B2-4 / B2-5: the callback drops the clusters or the diversity'
+# the money: the two new calls are on every ledger's node list, so they are settled from the tasks that ran, once by task id (R28)
+_ln70 = [nm for nm in nodes if "const __LEDGER_NODES = ['SERP Top 10', " in nodes[nm]['parameters'].get('jsCode', '')]
+assert len(_ln70) >= 5, _ln70
+for nm in _ln70:
+    patch(nm, "'Candidate SERP', ", "'Candidate SERP', 'Run Ladder Cluster SERP', 'Run Ladder Cluster SERP (Retry)', ")
+    assert "__dfsOnce(t)" in code(nm), nm + ': R28 dedupe missing where the new calls are counted'
+assert 'ladder: 0.21,' in COST_SRC, 'B2-4: the per-mode DataForSEO estimate was not raised for the results-page calls'
+# INVARIANTS rule 3: the new DataForSEO nodes are inside a recorded in-200 gate chain, and the ratchet is re-checked with them in
+retry_lint.record_gate('SEO Agent v4', list(retry_lint.GATES.get('SEO Agent v4') or [])
+                       + ['Ladder Cluster Requests', 'Cluster SERP Wanted?', 'Run Ladder Cluster SERP', 'Ladder Cluster Retry',
+                          'Any Cluster Retries?', 'Wait Before Cluster Retry', 'Run Ladder Cluster SERP (Retry)', 'Ladder Clusters'])
+url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+_g70, _u70 = retry_lint.in200_coverage({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})   # B-A10: the gate itself is section 75
+assert 'Run Ladder Cluster SERP' in _g70 and 'Run Ladder Cluster SERP (Retry)' in _g70, 'B2-4: the new DataForSEO calls are not covered by a gate'
+sticky("""### One search, one page — decided by the results page, not by a label (B2-4 · B2-5, 2026-10-15)
+**The rungs were grouped by the AI's topic label**, because the ladder's four Labs pulls return no URLs and `Ladder Pool` left `competitors` empty — so two searches Google answers with **the same pages** could become two pages, the duplication this system forbids everywhere else.
+**Now the ladder buys one results page per rung candidate** (capped at 24 = **$0.048**, free runs buy none) and groups them the way Keyword Insights does: **the top 7 at 40% shared URLs**. A cluster takes its head keyword's rung, so the difficulty bands cannot undo it, and a group built on evidence is never split in two.
+**A keyword whose results page failed twice is named, not clustered and not dropped** — the plan prints how many could not be compared, with the provider's own reason, and what the comparison really cost (counted once per task id).
+**And the destination's results page is counted**: distinct **registrable** domains in the top 10 (Semrush's fifth factor). Five or fewer own it → the feasibility score is 6 lower; six or seven → 3. The count is measured, the adjustment is a stated rule, and the report prints both.""",
+    pos('Ladder Cluster Requests')[0] - 60, pos('Ladder Cluster Requests')[1] + 240, 1160, 280, 4)
+log('One search, one page, decided by the results page and not by a label (2026-10-15, benchmark area 2, rows B2-4 / B2-5 with B2-6 as its convention; BENCH_AREA2_ladders.md gaps 5 and 6). B2-4: the ladder now buys ONE DataForSEO results page per rung candidate (Ladder Cluster Requests -> Cluster SERP Wanted? -> Run Ladder Cluster SERP -> Ladder Cluster Retry -> Any Cluster Retries? -> Wait Before Cluster Retry -> Run Ladder Cluster SERP (Retry) -> Ladder Clusters, on the main path between the pool and the relevance screen) and groups the rungs with KWI.serpClusters on the TOP 7 at a 40% shared-URL threshold - Keyword Insights own current numbers, approved by the owner as B2-6 - instead of on the AI topic label, so two searches Google answers with the same pages become one page; every member of a cluster takes its head keyword\'s rung, a group built on shared results pages is never split by the topic-label cap, and the plan, the report and the callback print the groups, what they merged, the cap (24 keywords, about $0.048 at $0.002 a call), what was really spent (counted once by task id, R28) and - INVARIANTS rule 1 - every keyword whose results page could not be read twice, with the provider\'s own reason, uncompared and unmerged rather than silently dropped; a free_only run, ladder_serp_checks 0 or a pool with fewer than two on-topic candidates buys nothing. The in-200 retry gate (_dfs_retry.js, R18) covers both new calls and the build proves it against harness/in200_baseline.json. B2-5: the destination\'s results page is counted for distinct REGISTRABLE domains (LK.regDomain, the helper the competitor gate has used since R21, so a rival on a subdomain is not a second site) and that moves the feasibility score by a stated rule - 6 points at five domains or fewer, 3 at six or seven, nothing at eight or more - with the count labelled measured, the adjustment labelled a stated rule and both printed in the plan notes, the feasibility section and the callback. The per-mode DataForSEO estimate for a ladder goes 0.16 -> 0.21 (exec 495 measured $0.1162 plus 24 calls at $0.002) in v5/code/_cost_cal.js and in app/shared/src/cost.ts')
+
+# =============================================================================
+# 71. A GATE THAT ONLY RAN WHEN THE ROW WAS WRITTEN (2026-10-15, FIX_PLAN.md §3.16 B-G1 / B-G2 / B-G3; INVARIANTS rule 2).
+#     The three defects section 69's gate-pair lint found on its first run, and the first three entries the ratchet gives back.
+#
+#     The shape is R16's exactly. The fit gate (`v5/code/_fit_gate.js`) refuses a keyword that is a competitor's brand, a government
+#     portal, a navigational search or off this site's topic — but only where a rung is PLANNED. `seo_ladders` still holds rows
+#     written before the gate existed (rung 2 of lad_mv40b6s9h5a8 held "facts erp", facts.ae being a competing UAE ERP vendor), and
+#     R16 taught only the Rank Tracker and the Content Cadence to ask the question again on the way out. Three later readers never
+#     learnt it, and every one of them ACTS on what it reads:
+#       * B-G1 *AI Plan*, in BOTH the AI Visibility Tracker and the AI Pulse — the question panel was built from every stored ladder
+#         keyword (`head_keyword` and every rung but rung 4), so a competitor's brand became a question asked of ChatGPT, Gemini and
+#         Google AI Mode, six mornings a week in the pulse, and the site was then scored against an answer about somebody else's
+#         product. The stored PANEL rows (`seo_ai_prompts`) predate the gate for the same reason, so they are gated too — except a
+#         question the owner wrote themselves, which is kept and only flagged: it is their deliberate choice, and hiding it would be
+#         the opposite of telling them.
+#       * B-G2 *Growth Plan* — the same rungs became "questions to win" and then pages the Content Cadence writes.
+#       * B-G3 *Site Plan* — every stored rung joined the tracked keywords, so a set-aside rung still bought a live rank check every
+#         week and still appeared in the weekly report as work in progress.
+#
+#     **One shared thing, not a fourth copy.** R16 wrote its loop around `fitStored` twice; three readers were then written without
+#     it, which is the drift this defect IS. `FITR` (in `_fit_gate.js`, beside the gate it calls) is that loop, once: `FITR.ctx`
+#     builds the context R16's two callers build by hand (own domain, declared competitors, learned AI brand names, and the head
+#     terms / services / tracked keywords PROTECTED so the ladder's own subject can never read as somebody's brand), `FITR.rungs`
+#     gates a list of stored rows and returns `{ keep, set_aside }`, and `FITR.line` writes the sentence. All three read paths call
+#     it with the same context and record the same refusal, so they cannot drift apart again.
+#
+#     **Nothing is dropped quietly** (INVARIANTS rule 1). Every refusal travels with the plan as `set_aside` — the row, the reason,
+#     the gate's own detail and the sentence to print — and reaches the human: "Not asked" in the AI visibility report and the pulse
+#     mail, "Set aside" in the AI growth report and the weekly site report. A rung whose page is already written is kept and only
+#     flagged: that page is live work. "We are not asking ChatGPT about X because it is a competitor's brand" is a better answer
+#     than a shorter list nobody can account for.
+#
+#     Section 69's lint is what holds it: these four read paths leave `harness/gate_pairs_baseline.json` for ever (the ratchet's
+#     rule — a reader that gains its gate can never come back), so a build that drops the gate again fails instead of regressing.
+# =============================================================================
+assert 'const FITR = {' in FIT_GATE_SRC and 'rungs(rows, ctx, opts)' in FIT_GATE_SRC and 'line(set_aside, what)' in FIT_GATE_SRC, \
+    'B-G1..B-G3: v5/code/_fit_gate.js does not define the shared read-path gate FITR'
+assert 'fitStored({ ...r, keyword: kw }, c)' in FIT_GATE_SRC, 'B-G1..B-G3: FITR.rungs no longer calls fitStored — it would gate nothing'
+
+_B71_PATHS = {('SEO Agent — AI Visibility Tracker', 'AI Plan'): 'asked of the AI engines or scored against',
+              ('SEO Agent — AI Pulse', 'AI Plan'): 'asked of the AI engines or scored against',
+              ('SEO Agent — AI Growth', 'Growth Plan'): 'turned into a question to win or a page to write',
+              ('SEO Agent — Site Tracker', 'Site Plan'): 'tracked or given a live rank check'}
+
+
+def _b71_checks():
+    """Runs after the sub-builds: the three read paths are written by build_monitors.py and build_site_tracker.py."""
+    _wdir71 = os.path.join(HERE0, 'workflows')
+    _seen71 = {}
+    for _f71 in sorted(os.listdir(_wdir71)):
+        if not _f71.endswith('.json') or _f71 in _NOT_GENERATED69:
+            continue
+        for _w71 in json.load(open(os.path.join(_wdir71, _f71), encoding='utf-8')):
+            for _n71 in (_w71.get('nodes') or []):
+                if (_w71.get('name'), _n71.get('name')) in _B71_PATHS and _n71.get('type') == 'n8n-nodes-base.code':
+                    _seen71[(_w71.get('name'), _n71.get('name'))] = _n71['parameters'].get('jsCode', '')
+    _missing71 = sorted('%s / %s' % k for k in _B71_PATHS if k not in _seen71)
+    assert not _missing71, 'B-G1..B-G3: read path not found in the generated workflows: %s' % ', '.join(_missing71)
+    for _k71, _phrase71 in _B71_PATHS.items():
+        _js71, _where71 = _seen71[_k71], '%s / %s' % _k71
+        # the gate, through the ONE shared loop — never a fourth hand-written copy of it
+        assert 'const FITR = {' in _js71 and 'const fitStored = ' in _js71, \
+            'B-G1..B-G3: %s does not carry the shared read-path gate' % _where71
+        # The kit is cut out before the node's OWN code is read: _fit_gate.js documents FITR.ctx / FITR.rungs / FITR.line in its own
+        # comments, so searching the whole node would find the gate in every node that merely inlines the kit — a check that passes
+        # while the call is gone is worse than none, and this one was written that way first (probe: deleting the call still built).
+        _body71 = _js71.replace(FIT_GATE_SRC, '')
+        assert _body71 != _js71, 'B-G1..B-G3: %s does not inline v5/code/_fit_gate.js verbatim' % _where71
+        assert 'FITR.ctx(' in _body71 and 'FITR.rungs(' in _body71, 'B-G1..B-G3: %s does not call FITR on the read path' % _where71
+        # and the three paths agree: the same record, and the same sentence for whoever reads it (INVARIANTS rule 1)
+        assert 'set_aside' in _body71 and 'FITR.line(' in _body71 and _phrase71 in _body71, \
+            'B-G1..B-G3: %s sets rows aside without saying so in words a reader sees' % _where71
+    # what the human actually reads: one named place per report, each carrying the rows and the reason
+    for _file71, _needle71 in (('AI_Report.js', 'Not asked'), ('Pulse_Metrics.js', 'Not asked'),
+                               ('Growth_Report.js', 'Set aside'), ('Site_Report.js', 'Set aside')):
+        _src71 = open(os.path.join(HERE0, 'v5', 'code', _file71), encoding='utf-8').read()
+        assert _needle71 in _src71 and 'set_aside' in _src71, \
+            'B-G1..B-G3: v5/code/%s never prints the set-aside rungs, so the list would only be shorter' % _file71
+    # the ratchet gave these four back, and they can never return to it
+    _base71 = json.load(open(os.path.join(HERE0, 'harness', 'gate_pairs_baseline.json'), encoding='utf-8'))
+    _listed71 = [_n for _r71 in _base71.values() if isinstance(_r71, dict) for _n in (_r71.get('ungated') or [])]
+    _back71 = sorted('%s / %s' % k for k in _B71_PATHS if '%s / %s' % k in _listed71)
+    assert not _back71, ('B-G1..B-G3: %s is still named in harness/gate_pairs_baseline.json. A read path that gains its gate leaves '
+                         'the ratchet for ever — delete the entry.' % ', '.join(_back71))
+    print('B-G1/B-G2/B-G3: %d read paths of stored ladder rungs gated through the one shared FITR, off the ratchet for good'
+          % len(_B71_PATHS))
+
+
+log('A gate that only ran on the way in (2026-10-15, FIX_PLAN §3.16 B-G1 / B-G2 / B-G3 - the three defects section 69\'s gate-pair lint found on its first run; INVARIANTS rule 2). Stored ladder rungs were read back and ACTED on with no fit gate although the write path gates them - R16\'s exact shape, fixed then for the Rank Tracker and the Content Cadence only. B-G1: AI Plan, in BOTH the AI Visibility Tracker and the AI Pulse, built the question panel from every stored ladder keyword (head_keyword and every rung but rung 4), so a competitor\'s brand or a government portal became a question asked of ChatGPT, Gemini and Google AI Mode - six mornings a week in the pulse - and the site was then scored against the answer; the stored panel rows in seo_ai_prompts are gated for the same reason, except a question the owner wrote themselves, which is kept and only flagged. B-G2: Growth Plan turned the same rungs into questions to win and then into pages the Content Cadence writes. B-G3: Site Plan added every stored rung to the tracked keywords, so a set-aside rung still bought a live rank check every week and still appeared in the weekly report. The fix is ONE shared read-path gate rather than a fourth copy: FITR in v5/code/_fit_gate.js (ctx / rungs / line) beside the fitStored it calls, used by all three - three copies of a loop are three chances to drift and that drift is this defect. Every refusal travels with the plan as set_aside (the row, the reason, the gate\'s own detail and the sentence to print) and reaches the reader: "Not asked" in the AI visibility report and the pulse mail, "Set aside" in the AI growth report and the weekly site report (INVARIANTS rule 1); a rung whose page is already written is kept and only flagged. All four read paths leave harness/gate_pairs_baseline.json for ever, so the ratchet now fails any build that drops the gate again (build section 71, harness S81)')
+
+# 72. A NUMBER WE REPORT IS MEASURED, OR IT SAYS WHAT IT IS (2026-10-15, docs/system-review-2026-10-14/INVARIANTS.md rule 1).
+#     The third of the four lints the INVARIANTS note argues for, and the one that covers the most defects: ~19 of the 81, among
+#     them every one that made the system state something untrue with a straight face — a High finding on 45 of 47 pages from a
+#     field Google no longer answers (R10); an impact basis of 22,860 impressions for a property that measured 5,295 (R10); "no
+#     page of yours answers this search" beside the page ranking #6.2 for it (R12); 19,579 citing AI answers from a four-character
+#     name match (R14); "winnable 68" from two SERP calls that both failed (R18 / R23); a health score chained across unlike
+#     report types (R20); a crawl settled at the price quoted for 200 pages when 47 were crawled (R32).
+#
+#     Each of those was fixed where it was found. `lineage_lint.py` walks the GENERATED workflows — the way section 55 walks the
+#     ledger ordering and `gate_lint.py` walks the gate pairs — and asks the four questions of the class instead:
+#       A. **lineage**      a node that composes a document a customer receives carries `_lineage.js`, calls it, and lets the
+#                           result travel out. G29 built the kit; this is what makes it the rule rather than a habit.
+#       B. **evidence**     no finding ships with an empty evidence string (R10, promoted from one finding to every finding).
+#       C. **like-for-like** no delta is computed across differing `report_type` or differing sample sizes (R20 + R19).
+#       D. **withheld**     a node that puts a score in front of a customer carries a way of not showing it (R18 / R23).
+#
+#     **What it proves and what it only ratchets**, because a lint that claims more than it proves is the failure mode this rule
+#     exists to stop. It PROVES that no new node can join any of the four classes without its guard: the survey is over the
+#     generated JSON, the four questions are structural, and a node that fails one and is not on the baseline fails the build. It
+#     RATCHETS `harness/lineage_baseline.json` — today's unpaid debt, named node by node — and it does NOT prove that every
+#     individual figure inside a node that passes carries its own lineage: `LN.of()` says the node was built to say where a number
+#     came from, not that the number beside it did. The detector reads each node's OWN code with the shared kits stripped out,
+#     because judging a node on text it did not write is how a lint starts lying (inlining `_lineage.js` would otherwise make any
+#     node a "report builder", and `_page_watch.js` made eleven nodes "delta" nodes before that was fixed).
+#
+#     Two of the debts are paid here rather than listed, because the inventory found them and they are small:
+#       * **the audit shipped seven findings with no evidence at all.** `addDomain` defaulted `evidence` to `''`, so "Invalid SSL
+#         certificate", "HTTP does not redirect to HTTPS", "No XML sitemap found", "No robots.txt file", "Missing pages do not
+#         return a real 404", "Directory browsing is enabled" and "HTTP/2 not enabled" were raised, scored and ranked with nothing
+#         a reader could check — exactly R10's shape, still live. Each now states the site-wide check that produced it. And the
+#         guard runs at the sink: `Build Site Issues` merges every module's findings, so `LN.evidenced` there covers the probe,
+#         the Search Console findings and the AI content review in one place, before anything is scored — and says in the report's
+#         notes what it held back, rather than letting it vanish.
+#       * **the technical site audit had no lineage at all.** The full report has carried its "Where these numbers come from"
+#         table since G29; the audit — 260 pieces of markup, the same crawl, the same Search Console, the same Lighthouse numbers
+#         — had none. It has one now, and it travels in the callback.
+# =============================================================================
+import lineage_lint as _ll72
+
+# ---------- A. no finding ships with an empty evidence string (R10, as the class) ----------
+# A1. the seven site-wide findings say what was checked. The flag is inserted after the condition, whatever the condition is.
+patch('Build Site Issues',
+      "const addDomain = (cond, cat, sev, title, why, fix, evidence) => {\n"
+      "  if (cond) findings.push({ category: cat, severity: sev, title, why, fix, evidence: evidence || '', affected_count: null, affected_pct: 100, sample_urls: [], scope: 'site' });",
+      "const addDomain = (cond, flag, cat, sev, title, why, fix, evidence) => {\n"
+      "  // INVARIANTS rule 1 (2026-10-15): these seven findings shipped with an EMPTY evidence string — raised, scored and ranked\n"
+      "  // with nothing a reader could check, which is R10's shape. The evidence is the check that produced them: which site-wide\n"
+      "  // test ran, what it answered, and that it is one answer for the whole site and not a count of pages.\n"
+      "  if (cond) findings.push({ category: cat, severity: sev, title, why, fix, evidence: evidence || (\"the crawler's site-wide check \" + flag + ' answered \"failed\" for ' + String(base.domain || di.name || 'this site') + ' — one answer for the whole site, not a count of pages'), affected_count: null, affected_pct: 100, sample_urls: [], scope: 'site' });")
+
+
+def _flag72(m):
+    cond, cat0 = m.group(1), m.group(2)
+    fm = re.search(r'dc\.(\w+)', cond)
+    assert fm, 'rule 1: an addDomain condition with no dc.<check> to name as its evidence: ' + cond[:90]
+    return "addDomain(%s, '%s', '%s" % (cond, fm.group(1), cat0)
+
+
+_bsi72, _nflag72 = re.subn(r"addDomain\((.+?), '([A-Z])", _flag72, code('Build Site Issues'))
+assert _nflag72 == 7, 'rule 1: expected 7 addDomain call sites to name their check, found %d' % _nflag72
+setcode('Build Site Issues', _bsi72)
+# A2. the guard at the sink: after every module's findings are merged and deduplicated, before anything is scored or ranked
+setcode('Build Site Issues', LINEAGE_SRC47 + '\n' + code('Build Site Issues'))
+patch('Build Site Issues', "  findings.splice(0, findings.length, ...kept); }\n",
+      "  findings.splice(0, findings.length, ...kept); }\n\n"
+      "// ===== 4c. INVARIANTS rule 1 (2026-10-15, lineage_lint.py): a finding is a figure — it may not be shown without the thing\n"
+      "// that shows it. R10 shipped a High finding on 45 of 47 pages whose evidence string was \"/:  | /whatwedo/ai-automation: \" —\n"
+      "// separators and nothing else. The guard runs HERE, where every module's findings (the probe, Search Console, the AI content\n"
+      "// review, the render diff) have been merged, and BEFORE scoring, so an unevidenced finding neither deducts a point nor\n"
+      "// reaches the report. What it held back is said out loud in the notes: held back, never vanished. =====\n"
+      "const evidence_withheld = LN.unevidenced(findings);\n"
+      "if (evidence_withheld.length) findings.splice(0, findings.length, ...LN.evidenced(findings));\n")
+patch('Build Site Issues', "      not_assessed,\n", "      not_assessed,\n      evidence_withheld,\n")
+patch('Build Site Issues', "      notes: [probe.note,", "      notes: [LN.evidenceNote(evidence_withheld), probe.note,")
+
+# ---------- B. the technical site audit says where its numbers come from (G29, finished) ----------
+setcode('Build Audit Report', LINEAGE_SRC47 + '\n' + code('Build Audit Report'))
+_LIN72 = """// INVARIANTS rule 1 (2026-10-15): the figure groups of a technical audit with their source, period and sample (LN, v5/code/_lineage.js).
+// G29 gave the full report this table and left the audit without one, so the same crawl, the same Search Console numbers and the
+// same Lighthouse scores were printed here with nothing to tell them apart.
+const _sc72 = a.search_console || {};
+const _ins72 = _sc72.inspection_stats || {};
+const lineage = [
+  LN.of('Health score, the grade and the category scores', 'crawl', { basis: 'modelled', period: LN.asOf(a.audited_at || today), sample: LN.sample(a.pages_crawled, 'pages crawled'),
+    note: 'our own 0-100 score: points off per finding by severity (section 7), not a Google figure' }),
+  LN.of('The findings and how many pages each one affects', 'crawl', { basis: 'measured', period: LN.asOf(a.audited_at || today), sample: LN.sample(a.pages_crawled, 'pages crawled'),
+    note: 'each finding states the pages it was measured on; a finding with nothing to show for it is left out and named in the notes' }),
+  _sc72.connected
+    ? LN.of('Clicks, impressions and index coverage', 'gsc', { basis: 'measured', period: 'the last 28 days', sample: LN.sample((_sc72.totals || {}).impressions, 'impressions'), note: 'property ' + String(_sc72.property || '') })
+    : LN.unknown('Clicks, impressions and index coverage', String(_sc72.error || 'Search Console is not connected for this site')),
+  _ins72.asked
+    ? LN.of('What Google says about each key page', 'inspection', { basis: 'measured', period: LN.asOf(today), sample: LN.sample(_ins72.checked, 'of ' + _ins72.asked + ' pages Google answered for'), note: String(_ins72.note || '') })
+    : LN.unknown('What Google says about each key page', 'no URL inspection ran for this audit'),
+  (a.crux && a.crux.available !== false)
+    ? LN.of('Core Web Vitals (real users)', 'crux', { basis: 'measured', period: 'the last 28 days of Chrome visits', sample: 'all Chrome visitors Google could aggregate' })
+    : LN.unknown('Core Web Vitals (real users)', String(((a.crux || {}).note) || 'too few Chrome visits for Google to report field data')),
+  LN.of('Lighthouse scores and speed savings', 'pagespeed', { basis: 'one_sample', period: LN.asOf(today), sample: 'one simulated mobile load per page tested' }),
+  LN.of('Crawler access for search and AI bots', 'own_check', { basis: 'measured', period: LN.asOf(today), sample: '11 user agents requested', note: 'what the live robots.txt and the server answered us' }),
+];
+html += `<h2>6a. Where these numbers come from</h2>` + LN.block(lineage, { title: '' });
+"""
+patch('Build Audit Report', "// ---------- 7. Methodology ----------\n", _LIN72 + "\n// ---------- 7. Methodology ----------\n")
+patch('Build Audit Report', "<li>Not Assessed in This Audit</li><li>Methodology</li></ol>`;",
+      "<li>Not Assessed in This Audit</li><li>Where these numbers come from (6a)</li><li>Methodology</li></ol>`;")
+patch('Build Audit Report', "    health_score: a.health_score,\n", "    health_score: a.health_score,\n    lineage,\n")
+
+# ---------- C. what the paid items must keep ----------
+assert "LN.unevidenced(findings)" in code('Build Site Issues') and "LN.evidenced(findings)" in code('Build Site Issues'), \
+    'rule 1: the audit findings no longer run through the evidence guard'
+assert "evidence: evidence || (\"the crawler's site-wide check \"" in code('Build Site Issues'), \
+    'rule 1: addDomain can ship an empty evidence string again'
+assert 'Where these numbers come from' in code('Build Audit Report') and 'const LN = (() => {' in code('Build Audit Report'), \
+    'rule 1: the technical site audit has no lineage'
+
+
+def _b72_checks():
+    """INVARIANTS rule 1 over every generated workflow. Runs after the four sub-builds, next to section 55's ordering proof."""
+    _sv72, _unpaid72 = _ll72.check()
+    _c72 = _ll72.counts(_sv72)
+    print('INVARIANTS rule 1 (lineage): ' + ', '.join(
+        '%s %d/%d' % (k, v['pass'], v['subject']) for k, v in sorted(_c72.items()))
+        + '; %d node(s) on the ratchet baseline' % len(_unpaid72))
+
+
+sticky("""### A number we report is measured, or it says what it is (INVARIANTS rule 1)
+`lineage_lint.py` walks the **generated** workflows at build time and fails the build on four things, so none of them can be reintroduced: a node that composes a document a customer receives without carrying `_lineage.js`; a **finding with an empty evidence string**; a **delta** computed across a different `report_type` or a sample that moved; a **score** with no way of being withheld when its inputs are unavailable.
+**Paid here:** the audit's seven site-wide findings (SSL, HTTPS redirect, sitemap, robots.txt, 404, directory browsing, HTTP/2) stated **nothing** a reader could check - they now name the check that produced them; `LN.evidenced` runs at the sink (*Build Site Issues*, after every module's findings are merged, before scoring) and the report's notes say what it held back; and the **technical site audit** gained the "Where these numbers come from" table the full report has had since G29.
+**Ratcheted, not proven:** `harness/lineage_baseline.json` names today's unpaid debt. The lint proves no NEW node can join a class; it does not prove that every figure inside a passing node carries its own lineage.""",
+    pos('Build Site Issues')[0] - 60, pos('Build Site Issues')[1] + 300, 1140, 290, 4)
+log('A number we report is measured, or it says what it is (2026-10-15, INVARIANTS.md rule 1 - the class behind ~19 of the 81 defects). lineage_lint.py walks the GENERATED workflows the way section 55 walks the ledger ordering and gate_lint.py walks the gate pairs, and fails the build on four things: a node that composes a document a customer receives and does not carry v5/code/_lineage.js (carry it, call it, let it travel); a finding that ships with an empty evidence string (R10, promoted from one finding to every finding); a delta computed against a stored earlier report of a different report_type or over a sample that moved (R20 + R19, promoted from the chart marks and the URL inspections to every node that subtracts a stored figure, with the annotation kit itself in the class); and a score put in front of a customer with no path that withholds it when an input is unavailable (R18 / R23). Each node reads with the SHARED KITS STRIPPED OUT, because judging a node on text it did not write is how a lint starts lying - inlining _lineage.js would otherwise make any node a report builder, and _page_watch.js made eleven nodes delta nodes. Two debts the inventory found are paid rather than listed: the audit raised SEVEN site-wide findings (invalid SSL, no HTTPS redirect, no sitemap, no robots.txt, no real 404, directory browsing, no HTTP/2) with an EMPTY evidence string - scored and ranked with nothing a reader could check, R10 still live - and each now names the site-wide check that produced it, with LN.evidenced running at the sink (Build Site Issues, after every module merges and before anything is scored) and the held-back findings named in the report notes instead of vanishing; and the technical site audit, which had no lineage at all while the full report has had its "Where these numbers come from" table since G29, now carries one (health score modelled from the crawl, Search Console measured over 28 days or unavailable with Google\'s reason, URL inspection with how many pages Google answered for, CrUX measured or unavailable with why, Lighthouse as one simulated load, crawler access from our own fetch) and it travels in the callback. Everything the lint cannot yet prove is a ratchet in harness/lineage_baseline.json, named node by node, exactly as retry_lint.check_in200 and gate_lint keep theirs: the debt is visible, cannot grow, and a node that gains its guard leaves the list for ever')
+
+
+# 74. NOTHING IS PROMISED UNTIL IT EXISTS (2026-10-15, docs/system-review-2026-10-14/INVARIANTS.md rule 4).
+#     The last of the four lints the INVARIANTS note argues for, and the one whose defects a customer feels directly: a page
+#     delivered with 50 placeholders (D10), and again with 12 after its own gate had failed twice (R11); a ladder row claiming a
+#     page nobody wrote (R1 — `fix_phantom_pages.py` is still in the repository); a masked figure shipped without telling the
+#     owner (R25); 23 reports that reached the app and no human (B-R1); an alert recorded as sent that was never sent (R6 / R30);
+#     a 404 from a revoked webhook recorded as a delivery (B-F2); Page Watch posting its digest and writing nothing back, so its
+#     rows sat `pending` for ever (B-F3); and a draft 100% identical to a competitor's page delivered `publishable: true`,
+#     `not_ready: false`, "passed the quality check", because the originality gate ran after *Content QA* had finalised those
+#     fields and flipped only an internal flag (B3-3).
+#
+#     `state_lint.py` walks the GENERATED workflows — the way section 55 walks the ledger ordering, `gate_lint.py` the gate pairs
+#     and `lineage_lint.py` the figures — and asks six questions of the class instead of the instance:
+#       A1 **promise**   a Code node may not mint `written` / `published` into a stored row without reading the evidence for it.
+#       A2 **builder**   every caller of the shared published-row builder must HAND it the proof, and the builder refuses without.
+#       A3 **stored**    a Data Table node that mints a forward state in its own `defineBelow` parameters must sit behind an IF
+#                        that reads the proof — it writes its literal into the row with no code in between, so nothing else can.
+#       B  **reversal**  a state that promises work in progress must have a way back, with a reason (R1).
+#       C  **delivery**  a node may not write `delivered` to a value meaning "somebody has it" without judging a status code, an
+#                        HTTP node it reads may not be `neverError` without `fullResponse` (B-F2 is exactly that pair), and a
+#                        workflow that OPENS a delivery record must contain the node that settles it (B-F3).
+#       D  **verdict**   a gate that refuses must set every field a consumer reads, never only the internal flag (B3-3).
+#
+#     **Two live defects of this class, found by seeding the lint and fixed here** — both the same mistake as B3-3, in the path
+#     that records a page as live:
+#       * **"I published a page" believed the owner.** *Publish Check* fetches the URL and knows perfectly well whether it
+#         answered (`live`), says so to the owner in words — "Recorded, but the page could not be fetched … the Site Tracker
+#         checks it again on Monday" — and then called `publishedRows()` **unconditionally**, writing `status: 'published'`, the
+#         URL and `page_exists: true` into seo_content_log and seo_ladders for a page that had just answered 404. Every reader of
+#         those two tables (the ladder plan, the Rank Tracker, the Content Cadence's pile-up guard, the Site Tracker, the app)
+#         then treated an unreachable page as live. Its twin, *Detect Published*, never had the bug — it only calls the builder
+#         for a page that answered 200 — which is the whole argument for the lint: one copy was right and nothing said the other
+#         was wrong. The builder now TAKES the proof and refuses without it (the row keeps the state it had, records no URL and no
+#         date, and the ladder row is not touched at all), and both call sites name what proved it.
+#       * **the case study was marked live by a Data Table node with no gate at all.** *Mark Case Study Published* wrote
+#         `status: 'published'` straight into seo_case_studies the moment the request arrived. Its twin in the Site Tracker sits
+#         behind *Any Case Studies Detected?*; this one sat behind nothing. It now sits behind *Page Live? (Published)*.
+#
+#     **What it proves and what it only ratchets.** It PROVES, with no baseline, that no caller of the row builder can omit the
+#     proof, that the builder still refuses without it, that no Data Table node can mint a forward state with no gate, that the
+#     reversal path exists, that no node can record a delivery without reading a status code, that no delivery POST can be
+#     `neverError` without `fullResponse`, that a workflow which opens a delivery record settles it, and that no node after a
+#     verdict node can touch one verdict field without setting all of them. It RATCHETS A1 in
+#     `harness/rule4_baseline.json` — today empty, and an empty ratchet with a named note is the honest shape, not a claim of
+#     perfection — and it does NOT prove that the row a passing node wrote is the row its evidence covers: reading `statusCode`
+#     says the node was built to look, not that it looked at this page. The app-side half of B-R1 (a report that reaches the app
+#     and no human) is enforced in `app/`, outside any build-time walk of workflow JSON, and the baseline's note says so rather
+#     than letting silence imply coverage.
+# =============================================================================
+import state_lint as _sl74
+
+# ---------- the case study is marked live only when something proved it (A3) ----------
+_mcs74 = pos('Mark Case Study Published')
+if_node('Page Live? (Published)', "{{ $('Publish Check').first().json.live }}", [_mcs74[0] - 170, _mcs74[1]])
+disconnect('Save Published (Log)', 'Mark Case Study Published')
+connect('Save Published (Log)', 'Page Live? (Published)')
+connect('Page Live? (Published)', 'Mark Case Study Published', 0)
+connect('Page Live? (Published)', 'Published Ladder Row', 1)   # not live: the chain goes on, the row is left alone
+
+# ---------- what the two fixes must keep (the v5 sources carry them; these fail the build if they are undone) ----------
+for _n74 in ('Publish Check', 'Detect Published'):
+    _c74 = code(_n74) if _n74 in nodes else None
+    if _c74 is not None:
+        assert re.search(r'publishedRows\(\{[^}]*\blive\b', _c74), \
+            'rule 4: %s calls publishedRows() without handing it the proof that the page is there' % _n74
+assert "status: live ? 'published'" in code('Publish Check'), \
+    'rule 4: the published-row builder advances the state without proof again (v5/code/_publish_rows.js)'
+assert "(ladder && live)" in code('Publish Check'), \
+    'rule 4: a ladder row can be marked published for a page nothing reached (v5/code/_publish_rows.js)'
+
+
+def _b74_checks():
+    """INVARIANTS rule 4 over every generated workflow. Runs after the four sub-builds, beside section 55's ordering proof."""
+    _sv74, _unpaid74 = _sl74.check()
+    _c74 = _sl74.counts(_sv74)
+    print('INVARIANTS rule 4 (promises and deliveries): ' + ', '.join(
+        '%s %d/%d' % (k, v['pass'], v['subject']) for k, v in sorted(_c74.items()))
+        + '; %d row(s) on the ratchet baseline' % len(_unpaid74))
+
+
+sticky("""### Nothing is promised until it exists, and nothing exists until it is delivered (INVARIANTS rule 4)
+`state_lint.py` walks the **generated** workflows at build time and fails the build on six things: a node that mints `written` / `published` into a stored row without reading the evidence; a call of the shared published-row builder that does not **hand it the proof**; a **Data Table node** that mints a forward state with no gate in front of it; a `writing` state with no way back; a **delivery written down without a status code** (or read from an HTTP node that is `neverError` with no `fullResponse` — how a 404 from a revoked webhook was recorded as a delivery); and a later gate that refuses on one field while the fields the file name, the banner, meta.json, the callback and the app read still say the page passed.
+**Found and paid here:** "I published a page" wrote `status: 'published'`, the URL and `page_exists: true` for a page that had just answered **404** — while telling the owner, in the same run, that it could not be fetched; and *Mark Case Study Published* marked the case study live with no gate at all. Both now need the proof.
+**Ratcheted, not proven:** `harness/rule4_baseline.json` (empty today). The lint does not prove the row a passing node wrote is the row its evidence covers, and the app-side half of B-R1 is enforced in `app/`.""",
+    _mcs74[0] - 180, _mcs74[1] + 170, 1140, 290, 4)
+log('Nothing is promised until it exists, and nothing exists until it is delivered (2026-10-15, INVARIANTS.md rule 4 - the class behind ~8 of the 81 defects, and the ones a customer feels: a page delivered with 50 placeholders (D10) and again with 12 after its own gate had failed twice (R11), a ladder row claiming a page nobody wrote (R1), a masked figure shipped without telling the owner (R25), 23 reports that reached the app and no human (B-R1), an alert recorded as sent that was never sent (R6 / R30), a 404 from a revoked webhook recorded as a DELIVERY (B-F2), Page Watch posting its digest and writing nothing back so its rows sat pending for ever (B-F3), and a draft 100% identical to a competitor page delivered "publishable: true" because the originality gate ran after Content QA had finalised that field and flipped only an internal flag (B3-3)). state_lint.py walks the GENERATED workflows the way section 55 walks the ledger ordering, gate_lint.py the gate pairs and lineage_lint.py the figures, and fails the build on six things: a Code node that mints written / published into a stored row without reading the evidence for it; a caller of the shared published-row builder that does not hand it the proof; a Data Table node that mints a forward state in its own defineBelow parameters with no IF in front of it that reads the proof; a state promising work in progress with no path that writes the row back with a reason; a node that writes "delivered" to a value meaning somebody has it without judging a status code, or that reads an HTTP node which is neverError with no fullResponse (literally the B-F2 pair), or a workflow that opens a delivery record and never settles it; and a node after a verdict node that touches one verdict field without setting all of them. Every question is asked of each node\'s OWN code with the shared kits cut out first, because gate_lint had a hole of exactly that kind within hours of landing - it counted a node that merely inlined a kit as guarded. TWO LIVE DEFECTS were found seeding it and are fixed here, both the same mistake as B3-3 in the path that records a page as live: "I published a page" (Publish Check) fetched the URL, knew it had answered 404, said so to the owner in words - and still called publishedRows() unconditionally, writing status published, the URL and page_exists true into seo_content_log and seo_ladders, so the ladder plan, the Rank Tracker, the cadence pile-up guard, the Site Tracker and the app all treated an unreachable page as live (its twin Detect Published never had the bug - it only calls the builder for a page that answered 200 - which is the whole argument for a lint: one copy was right and nothing said the other was wrong); and Mark Case Study Published wrote status published straight into seo_case_studies with no gate of any kind, while its Site Tracker twin sits behind Any Case Studies Detected?. The builder now TAKES the proof and refuses without it (the row keeps the state it had, records no URL and no date, the ladder row is not touched at all), both call sites name what proved it, and the case-study write sits behind the new IF Page Live? (Published). What the lint only ratchets is named in harness/rule4_baseline.json, empty today, with a note saying plainly what it does not prove: that the row a passing node wrote is the row its evidence covers, and the app-side half of B-R1, which lives in app/ and no walk of workflow JSON can reach')
+
+# =============================================================================
+# 73. THE FIVE REAL DEFECTS RULE 1's LINT FOUND WHEN IT WAS SEEDED (2026-10-15, FIX_PLAN.md §3.16 B-L1 … B-L5).
+#     Section 72 seeded `harness/lineage_baseline.json` with every node that fails one of the four checks. Five of those entries
+#     were named as real defects rather than excused. They are paid here, and each one leaves the ratchet FOR EVER (the baseline
+#     entry is deleted, `lineage_lint.write_baseline` can never put it back).
+#
+#     **Two were wrong numbers reaching a customer.**
+#       * **B-L4 — a changed question panel read as a change in visibility.** *AI Metrics* subtracted the previous run's
+#         `share_of_voice` and `visibility_score` with no check that the two runs measured the same thing. The AI panel is
+#         settable from **3 to 50** questions (v4.9), so a site that went from 8 questions to 20 — which the owner is asked to do,
+#         and which costs about $5 a month — read as a collapse in share of voice; and the monthly **full** run asks more engines
+#         than the weekly one, which moves the same figures again. This is R19's shape on a different figure, so it takes R19's
+#         answer: the shared guard, the 20% drift, and "not compared" with the reason in the place the arrow would have been.
+#       * **B-L5 — a spam-score alert across two different source sets.** *Parse Backlinks* alerted on a 15-point move in
+#         `spam_score` between snapshots without checking the two snapshots were built the same way. A `free_only` check buys
+#         nothing from DataForSEO (v4.10), so its figures come from a different set of sources; and the spam score is the share of
+#         the INDEX's links judged spammy, so when the index's own link count moves the score moves with it. R20's shape.
+#     Both now go through one guard, `RT.likeForLike` + `RT.comparable` (v5/code/_dfs_retry.js, where R19's `comparable` already
+#     lived). The guard is a CALL, not an inlined kit — `lineage_lint` looks for `RT.likeForLike(` / `RT.comparable(`, which the
+#     kit's own body never writes — so a node cannot look guarded without using it. Nothing is hidden: `delta_not_compared` and
+#     `not_compared` carry the reason into the report, the callback and the app.
+#
+#     **Three were figures with no provenance.**
+#       * **B-L1 — the written page package.** *Blog Package* printed the content score, the QA counts, topic coverage and
+#         originality as bare numbers, and printed them whether or not the check behind them had anything to work with: coverage
+#         "0%" against an empty term list and "no overlap found" against no page at all read as good news. Every figure now says
+#         where it came from and over what sample, and a figure whose check did not run is **withheld** (null, with the reason).
+#         The lineage travels in meta.json and in the callback — deliberately NOT into the article, which is the customer's own
+#         published page and carries no figures of ours.
+#       * **B-L2 — the keyword strategy.** Searches per month, difficulty and cost per click are the data provider's estimates
+#         for a single keyword. The methodology paragraph said so in prose, which no table of numbers inherits, and when the
+#         strategy ships on its own there was no lineage table at all — the full report has had one since G29. It has one now.
+#       * **B-L3 — the Word attachment.** Every report type renders through *Build Word File*, and the lineage block did not
+#         travel into the `.doc`: the customer who opens the attachment saw every figure without its source. One fix, every
+#         attachment.
+# =============================================================================
+# ---------- B-L1 / B-L2: proved on the generated nodes (the sources carry the kit and the figures; see v5/code/) ----------
+for _n73, _need73 in (('Blog Package', ('const LN = (() => {', 'LN.unknown(', 'content_score_withheld', 'lineage,')),
+                      ('Build Keyword Strategy', ('const LN = (() => {', 'LN.of(', 'Where these numbers come from', 'lineage,'))):
+    for _t73 in _need73:
+        assert _t73 in code(_n73), 'B-L1 / B-L2: %s no longer carries %r' % (_n73, _t73)
+assert 'LN.block(' not in _ll72.own_code(code('Blog Package')), \
+    'B-L1: the lineage table must not be rendered into the article — the article is the customer\'s published page'
+
+# ---------- B-L3: the Word document carries the sources of everything it prints ----------
+setcode('Build Word File', LINEAGE_SRC47 + '\n' + code('Build Word File'))
+_LIN73 = """
+// ---- B-L3 (2026-10-15, INVARIANTS rule 1): where the numbers in THIS document came from. Every report type renders through this
+// node — the keyword verdict, the keyword report, the written page and the audit attachment — and until today not one of them
+// carried its sources into the .doc the customer opens. Only the sections this document actually contains are listed.
+const lineage = [];
+if (wantVerdict) lineage.push(d.score_withheld
+  ? LN.unknown('The verdict, its score, expected visits and time to rank', 'the live Google results could not be read for this keyword, so nothing was scored')
+  : LN.of('The verdict, its score, expected visits and time to rank', 'model', { basis: 'modelled', period: LN.asOf(today), sample: 'one keyword in ' + String(d.country || ''),
+      note: 'our own 0-100 score from the demand, the difficulty and who ranks now; the visits are modelled from click-share curves, never measured clicks' }));
+if (wantSeo) {
+  lineage.push(LN.of('Monthly searches, keyword difficulty, cost per click and ads competition', 'kwdata', { basis: 'estimated', period: 'the provider\\'s latest 12-month average',
+    sample: 'one keyword in ' + String(d.country || ''), note: 'a provider estimate for a single keyword, not a measurement of your site' }));
+  if (kd.competitor_backlink_strength) lineage.push(LN.of('Competitor link strength', 'backlink_index', { basis: 'reported', period: LN.asOf(today),
+    sample: LN.sample((kd.competitor_backlink_strength || {}).pages_checked, 'top-ranking pages'), note: 'one crawler\\'s index of the web: it finds much of the web, never all of it' }));
+  lineage.push((sf && !sf.unavailable)
+    ? LN.of('What the results page looks like, and who ranks now', 'serp', { basis: 'one_sample', period: LN.asOf(sf.checked_at || today), sample: 'one results page',
+        note: 'read once, from ' + String(d.country || 'the chosen country') + ' on one device; a feature not seen in that one check is unknown, not absent' })
+    : LN.unknown('What the results page looks like, and who ranks now', String((sf && sf.error) || 'no live results page was read in this run')));
+  if ((ca.top_pages || []).length) lineage.push(LN.of('The competitor pages, their word counts and the content gaps', 'web', { basis: 'measured', period: LN.asOf(today),
+    sample: LN.sample((ca.top_pages || []).length, 'competitor pages read'), note: 'pages we fetched and read ourselves; the strengths and gaps are an AI reading of those pages' }));
+}
+if (wantContent) {
+  lineage.push(qa.content_score == null
+    ? LN.unknown('Content score and its breakdown', 'the quality check produced no score for this page')
+    : LN.of('Content score and its breakdown', 'model', { basis: 'modelled', period: LN.asOf(today), sample: LN.sample(qa.main_content_words, 'words of the finished draft'),
+        note: 'our own score, not a Google figure: structure 25, topic coverage 25, readability 15, specificity 10, clean language 10, length 15'
+          + (qa.round ? ' (quality round ' + qa.round + ' of ' + qa.max_rounds + ')' : '') }));
+  lineage.push(qa.readability
+    ? LN.of('Readability (Flesch, sentence length, passive voice)', 'draft', { basis: 'measured', period: LN.asOf(today), sample: LN.sample(qa.main_content_words, 'words'),
+        note: 'counted in the finished draft itself' })
+    : LN.unknown('Readability (Flesch, sentence length, passive voice)', 'the readability check did not run for this page'));
+  lineage.push((qa.coverage && Number(qa.coverage.terms_total) > 0)
+    ? LN.of('Topic coverage against the top-ranking pages', 'web', { basis: 'measured', period: LN.asOf(today),
+        sample: LN.sample(qa.coverage.terms_total, 'shared terms' + (qa.coverage.pages_compared ? ', from ' + qa.coverage.pages_compared + ' competitor pages read' : '')), note: String(qa.coverage.basis || '') })
+    : LN.unknown('Topic coverage against the top-ranking pages', String(((qa.coverage || {}).basis) || 'no competitor page could be read in this run, so coverage was not measured')));
+  lineage.push((qa.originality && Number(qa.originality.pages_compared) > 0)
+    ? LN.of('Originality (overlap with the pages this run read)', 'web', { basis: 'measured', period: LN.asOf(today),
+        sample: LN.sample(qa.originality.pages_compared, 'pages compared'), note: String(qa.originality.basis || '') })
+    : LN.unknown('Originality (overlap with the pages this run read)', String(((qa.originality || {}).basis) || 'no page text was available in this run, so nothing could be compared')));
+}
+if (wantAudit) lineage.push(d.site_audit
+  ? LN.of('The site audit findings and its health score', 'crawl', { basis: 'modelled', period: LN.asOf(today), sample: LN.sample((d.site_audit || {}).pages_crawled, 'pages crawled'),
+      note: 'our own 0-100 score: points off per finding by severity, not a Google figure' })
+  : LN.unknown('The site audit findings and its health score', 'the site audit runs separately and is sent as its own report'));
+parts.push(h2('Where these numbers come from', true)
+  + '<table class="ct"><tr><th>Figure</th><th>Source</th><th>Period</th><th>Sample</th><th>How it was arrived at</th></tr>'
+  + lineage.map(l => '<tr><td>' + esc(l.figure) + '</td><td>' + esc(l.source_label) + '</td><td>' + esc(l.period || '—') + '</td><td>' + esc(l.sample || '—') + '</td><td>' + esc([l.basis_label, l.note].filter(Boolean).join(' — ')) + '</td></tr>').join('')
+  + '</table><p class="small">A figure marked "' + esc(LN.BASIS.modelled) + '" is computed, not counted; "' + esc(LN.BASIS.estimated) + '" is the data provider\\'s own estimate for a single keyword; "'
+  + esc(LN.MISSING) + '" means the figure reached this document without its source and should be treated as unverified.</p>');
+
+"""
+patch('Build Word File', "const css = `\n@page { margin: 0.9in; }", _LIN73 + "const css = `\n@page { margin: 0.9in; }")
+patch('Build Word File', "    report_type: reportType,\n", "    report_type: reportType,\n    lineage,\n")
+assert 'const LN = (() => {' in code('Build Word File') and "parts.push(h2('Where these numbers come from'" in code('Build Word File'), \
+    'B-L3: the Word document has no lineage'
+# `ca` is the competitor analysis object the SEO section already reads; proving it exists keeps the new block from inventing a name
+assert re.search(r'^const ca = ', code('Build Word File'), re.M), 'B-L3: Build Word File no longer defines `ca`'
+
+
+def _b73_checks():
+    """B-L4 / B-L5 over the generated monitor workflows: the guard has to be a CALL, not an inlined kit (the trap gate_lint fell
+    into). `RT.likeForLike(` and `RT.comparable(` are never written by the kit's own body, so finding them is proof of use."""
+    import json as _j73
+    _want73 = {'SEO_Agent_AI_Visibility.json': ('AI Metrics', 'B-L4', ('RT.likeForLike(', 'RT.comparable(', 'delta_not_compared', 'panel_before')),
+               'SEO_Agent_Backlink_Monitor.json': ('Parse Backlinks', 'B-L5', ('RT.likeForLike(', 'RT.comparable(', 'not_compared', 'sourceSetOf'))}
+    _kit73 = open(os.path.join(HERE0, 'v5', 'code', '_dfs_retry.js'), encoding='utf-8').read()
+    for _needle73 in ('RT.likeForLike(', 'RT.comparable('):
+        assert _needle73 not in _kit73, 'B-L4 / B-L5: the kit writes %r itself, so finding it proves nothing' % _needle73
+    for _f73, (_node73, _row73, _needs73) in _want73.items():
+        _p73 = os.path.join(HERE0, 'workflows', _f73)
+        assert os.path.exists(_p73), _f73 + ' was not generated'
+        _js73 = ''
+        for _w73 in _j73.load(open(_p73, encoding='utf-8')):
+            for _n73b in (_w73.get('nodes') or []):
+                if _n73b['name'] == _node73:
+                    _js73 = (_n73b.get('parameters') or {}).get('jsCode') or ''
+        assert _js73, '%s: %s not found' % (_f73, _node73)
+        for _t73b in _needs73:
+            assert _t73b in _js73, '%s (%s): %s does not carry %r' % (_row73, _node73, _f73, _t73b)
+
+
+sticky("""### The five defects rule 1's lint found (B-L1 … B-L5)
+**Two wrong numbers reaching a customer.** *AI Metrics* subtracted the last run's **share of voice** and **visibility score** without checking the question panel was the same size — the panel is settable from **3 to 50**, so growing it read as a collapse (B-L4, R19's shape). *Parse Backlinks* alerted on a 15-point **spam score** move without checking the two snapshots were built from the same sources — a `free_only` check buys nothing from DataForSEO (B-L5, R20's shape). One guard for both: `RT.likeForLike` + `RT.comparable`, and the reason is printed where the arrow would have been.
+**Three figures with no provenance.** The written-page package (B-L1) printed the content score, topic coverage and originality whether or not the check behind them had anything to work with — a score whose check did not run is now **withheld, with the reason**. The keyword strategy (B-L2) printed provider **estimates** for a single keyword as facts and shipped with no lineage table at all. The **Word attachment** (B-L3) dropped the lineage block, so the customer who opened the file saw every number without its source — every report type renders through that one node.""",
+    pos('Build Word File')[0] - 60, pos('Build Word File')[1] - 360, 1140, 270, 4)
+log('The five real defects the rule-1 lint found when it was seeded (2026-10-15, FIX_PLAN.md §3.16 B-L1 ... B-L5; INVARIANTS.md rule 1). B-L4 (wrong number to a customer): AI Metrics subtracted the stored run\'s share_of_voice and visibility_score with no check that the two runs measured the same thing - the AI question panel is settable from 3 to 50 and the monthly full run asks more engines than the weekly one, so raising the panel from 8 to 20 (which the owner is asked to do) read as a collapse in visibility; the panel size and the run kind now travel with the stored row (AI Plan), the delta is computed only when both match - the run kind first, then R19\'s 20% sample drift, through the one shared guard RT.likeForLike / RT.comparable in v5/code/_dfs_retry.js where R19\'s comparable already lived - and when they do not match there is NO delta and the report prints "not compared" with the reason in the place the arrow would have been, with the competitor-share and sentiment comparisons held to the same test. B-L5: Parse Backlinks alerted on a 15-point spam_score move between snapshots without checking they were built the same way - a free_only check buys nothing from DataForSEO so its figures come from a different source set, and the spam score is the share of the INDEX\'s links judged spammy so it moves when the index\'s own link count moves; both halves are now checked and what was not compared is listed in the snapshot and printed in the report. B-L1: Blog Package printed the content score, the QA counts, topic coverage and originality with no source line and printed them whether or not the check behind them had anything to work with (coverage 0% against an empty term list, "no overlap found" against no page read at all); every figure now carries its source, period, sample and basis (LN) and a figure whose check did not run is withheld with its reason, in meta.json and the callback but deliberately NOT in the article, which is the customer\'s own published page. B-L2: the keyword strategy printed searches per month, difficulty and cost per click as facts about the site when they are the provider\'s estimates for a single keyword, said so in prose that no table inherits, and shipped on its own with no lineage table at all - it now carries the same "Where these numbers come from" table the full report has had since G29. B-L3: the lineage block never travelled into the .doc, so the customer who opened the attachment saw every figure without its source; Build Word File renders every report type, so one fix covers the verdict, the keyword report, the written page and the audit attachment. All five leave harness/lineage_baseline.json for ever; harness scenario S83 proves each one by running the node code')
+
+
+# =============================================================================
+# 75. AN ANSWER NOBODY ASKED TWICE FOR (2026-10-15, FIX_PLAN.md §3.14 row B-A10; docs/system-review-2026-10-14/INVARIANTS.md
+#     **rule 3** — "an external call that fails says so, loudly, once").
+#
+#     **The debt.** DataForSEO reports most of its failures *inside* an HTTP 200, where n8n's `retryOnFail` — which only fires
+#     when a node *fails* — can never see them. R18 is what that costs: in execution 549 *SERP Top 10* and *Facts SERP* both
+#     came back 40101 inside a 200, neither was re-sent, and a ladder was planned, scored "winnable 68" and written on a results
+#     page nobody had seen. R18 gated three chains by hand; `retry_lint.check_in200` then measured the rest and found **49
+#     DataForSEO nodes across 12 workflows** outside a recorded gate, 30 of them here. The build already refused a *new* ungated
+#     node, so the debt could not grow — this pays it down.
+#
+#     **One shape, spliced, not re-typed** (`dfs_gate.py`): `<X>` -> *<X> Retry Plan* -> *Any <X> Retries?* -> *Wait Before <X>
+#     Retry* -> *<X> (Retry)* -> *<X> Answers* -> whatever read `<X>` before. The plan node asks `RT.plan` which failures a
+#     second attempt can help (a provider-side error can; a wrong field or an exhausted quota cannot) and **refuses to re-send
+#     anything when the requests and the answers cannot be paired one to one** — a request re-sent in the wrong place is worse
+#     than one not re-sent. The retry node is a byte copy of the call, so the retry items (copies of the original request items)
+#     resolve `$json...` exactly as the first attempt did; no body is rewritten, which is the one place R18's hand-wired version
+#     could slip. *<X> Answers* merges, counts and attaches `RT.evidence` as `__dfs` to every item, so **rule 1** has something
+#     to refuse on: a call that failed twice is `unavailable`, with the provider's own words.
+#
+#     **The money (R28 / R31 / R32 / R33).** A failed DataForSEO task is billed 0, so re-sending a failure costs nothing; where
+#     both attempts were billed, `__dfs.cost_usd` sums **both** and counts each task **once by its own id**, and every new
+#     `(Retry)` node joins `__LEDGER_NODES`, where `__dfsOnce` applies the same rule — so a retry can neither double-charge nor
+#     go unnoticed. *Start Crawl* is the exception that proves it: `on_page/task_post` **creates** a paid task, so it re-sends
+#     only an envelope or task error and never a task that answered 20000 with an empty result (that one did the work).
+#
+#     **What stays on the ratchet, with its reason in the baseline's `why`** — an excused node is not a deleted one:
+#       * the twelve `DFS Balance …` probes. `appendix/user_data` is free, is read once on the ledger chain before the first
+#         paid call, and **fails open**: *Run Ledger Row* stores 0 when it does not answer, *Rate Limit* refuses nothing on a 0,
+#         and `CC.dfsDay` drops a 0 reading and prints "no balance reading for the day". Nothing scores, ranks or advises from
+#         it. A gate would add a 5 s wait to the critical path of every run and all ten schedules to improve a guard that
+#         already says when it could not read.
+#       * *Get Crawl Summary*. It is the poll of a crawl already paid for — *Check Crawl* -> *Wait 1 min* -> *Get Crawl Summary*
+#         re-asks up to its own limit, which is a retry loop with a longer pause than this gate's. A second gate inside it would
+#         only re-ask sooner.
+#
+#     **And a hole in the ratchet itself, found while paying it down.** `check_in200` was called on the main workflow and on no
+#     other, so the 19 DataForSEO nodes in the other eleven workflows were measured once and then guarded by nothing — a new
+#     ungated call in the Backlink Monitor or the Site Tracker would have passed in silence. `retry_lint.check_all` now walks
+#     every generated workflow after the sub-builds, and it also fails on a baseline row for a node that no longer exists.
+# =============================================================================
+import dfs_gate as _dg75
+_WF75 = 'SEO Agent v4 — Audit, Keywords, Verdict & Content'
+
+# ---------- A. R18's three chains, registered at last (they existed; the ratchet could not see them) ----------
+for _first75, _gate75n, _wait75, _retry75, _dst75 in (
+        ('SERP Top 10', 'SERP Failed?', 'Wait Before SERP Retry', 'SERP Top 10 (Retry)', 'Pick Top 6'),
+        ('Facts SERP', 'Facts SERP Failed?', 'Wait Before Facts Retry', 'Facts SERP (Retry)', 'Collect Facts'),
+        ('Keyword Data', 'Keyword Data Failed?', 'Wait Before Keyword Data Retry', 'Keyword Data (Retry)', 'Has Domain (Authority)?')):
+    for _n75 in (_first75, _gate75n, _wait75, _retry75, _dst75):
+        assert _n75 in nodes, 'B-A10: R18 chain node missing: ' + _n75
+    assert [t['node'] for l in conns[_first75]['main'] for t in l] == [_gate75n], _first75 + ': R18 gate not on its output'
+    assert [t['node'] for l in conns[_retry75]['main'] for t in l] == [_dst75], _retry75 + ': the retry does not reach the consumer'
+    retry_lint.record_gate('SEO Agent v4', [_first75, _gate75n, _wait75, _retry75, _dst75])
+
+# ---------- B. every other DataForSEO call of this workflow, through the one splice ----------
+def _gate75(http, what, unit='request', retry_empty=True, max_retries=_dg75.MAX_RETRIES):
+    view = {'name': _WF75, 'nodes': list(nodes.values()), 'connections': conns}
+    g = _dg75.splice(view, http, V5, what=what, unit=unit, code_dir=OUT_CODE, max_retries=max_retries, retry_empty=retry_empty)
+    for n in view['nodes']:
+        nodes[n['name']] = n
+    retry_lint.record_gate('SEO Agent v4', g['chain'])
+    return g
+
+# in the order the run makes them, so the gates read left to right on the canvas. `what` is what the customer would call the
+# thing that could not be read -- it is printed in the evidence, so it is never "the endpoint" or "the request".
+_GATED75 = [
+    ('Find Competitors', 'the list of sites competing for this domain', 'lookup'),
+    ('Fallback SERP', 'the live Google results used to find competitors', 'search'),
+    ('Domain Overview', "a competitor's search visibility", 'domain'),
+    ('DataForSEO Whois', "a competitor's domain registration date", 'domain'),
+    ('Ranked Keywords', 'the keywords this domain already ranks for', 'lookup'),
+    ('Keyword Ideas', 'keyword ideas for the seed terms', 'lookup'),
+    ('Run Research', 'the keyword research pulls for this run', 'request'),
+    ('Run Competitor Keywords', "the competitors' keyword pulls", 'request'),
+    ('Run Reach Requests', "what this site already ranks for, which sets the difficulty it is measured against", 'request'),
+    ('Run Ladder Research', "the keyword pulls behind this ladder's rungs", 'request'),
+    ('Candidate SERP', 'the live Google results for a candidate keyword', 'search'),
+    ('AI Demand', 'how often these keywords are asked of AI assistants', 'request'),
+    ('AI SERP', "the live Google results behind this page's AI questions", 'search'),
+    ('Ask LLMs', 'what the AI assistants answer for these questions', 'question'),
+    ('Site Authority', "this site's own search visibility", 'domain'),
+    ('Backlink Summary', "the link profile of this domain", 'domain'),
+    ('Backlink Gap', 'the sites linking to competitors but not to you', 'lookup'),
+    ('Fetch GBP', 'the Google Business Profile listing for this business', 'lookup'),
+    ('Get Crawled Pages', 'the pages the crawl read', 'page'),
+    ('Run Crawl Extras', 'the extra crawl pulls (links, resources, duplicates)', 'request'),
+]
+_g75 = {}
+for _nm75, _what75, _unit75 in _GATED75:
+    _g75[_nm75] = _gate75(_nm75, _what75, _unit75)
+# Start Crawl CREATES a paid task, so an empty result is never re-sent: a second attempt there is a second crawl.
+_g75['Start Crawl'] = _gate75('Start Crawl', 'the crawl of this website', 'crawl', retry_empty=False, max_retries=1)
+assert 'f.code >= 40000' in code('Start Crawl Retry Plan') and 'only:' in code('Start Crawl Retry Plan'), \
+    'B-A10: the crawl would be created twice on an empty result'
+
+# ---------- C. the money: every retry joins the ledger's node list, where __dfsOnce counts a task once by its own id ----------
+_ln75 = [nm for nm in nodes if "const __LEDGER_NODES = ['SERP Top 10', " in nodes[nm]['parameters'].get('jsCode', '')]
+assert len(_ln75) >= 5, _ln75
+_RETRIES75 = sorted(g['retry'] for g in _g75.values() if g['retry'] in nodes)
+for _nm75 in _ln75:
+    patch(_nm75, "const __LEDGER_NODES = ['SERP Top 10', ",
+          "const __LEDGER_NODES = [" + ''.join("'" + r + "', " for r in _RETRIES75) + "'SERP Top 10', ")
+    assert "__dfsOnce(t)" in code(_nm75), _nm75 + ': R28 dedupe missing where the retries are counted'
+    for _r75 in ('Candidate SERP (Retry)', 'Start Crawl (Retry)', 'Backlink Gap (Retry)'):
+        assert _r75 in code(_nm75), _nm75 + ': ' + _r75 + ' is not on the ledger node list, so its money would go unseen'
+
+# ---------- D. the proof, on the generated graph ----------
+for _nm75, g in _g75.items():
+    assert [t['node'] for l in conns[_nm75]['main'] for t in l] == [g['plan']], _nm75 + ': the call does not feed its gate'
+    assert [t['node'] for l in conns[g['retry']]['main'] for t in l] == [g['answers']], g['retry'] + ': the retry does not reach the merge'
+    assert sorted(t['node'] for l in conns[g['answers']]['main'] for t in l) == sorted(g['dsts']), \
+        g['answers'] + ': the merged answers do not reach what read the call before'
+    assert "RT.plan(" in code(g['plan']) and "live.length !== answers.length" in code(g['plan']), g['plan']
+    assert "RT.stats(" in code(g['answers']) and "__dfs: ev" in code(g['answers']) and 'counted once by task id' in code(g['answers']), g['answers']
+    assert nodes[g['retry']].get('credentials') and nodes[g['retry']].get('maxTries') == 3, g['retry'] + ': credential or retry slot'
+# nothing still reads the first attempt where the merged answer is what it wanted (the retry would be paid for and ignored)
+for _nm75, g in _g75.items():
+    for _o75 in nodes.values():
+        _js75 = (_o75.get('parameters') or {}).get('jsCode') or ''
+        if _o75['name'] in (g['plan'], g['answers'], g['retry']):
+            continue
+        assert ("$('" + _nm75 + "')") not in _js75, 'B-A10: %s still reads $(%r) instead of the merged answers' % (_o75['name'], _nm75)
+url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+_gg75, _uu75 = retry_lint.check_in200({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+assert sorted(_uu75) == ['DFS Balance', 'DFS Balance End', 'Get Crawl Summary'], \
+    'B-A10: the main workflow should be down to the three reasoned exclusions, not %r' % (sorted(_uu75),)
+
+
+def _b75_checks():
+    """B-A10: the ratchet over EVERY generated workflow — runs after the four sub-builds, the first moment they all exist."""
+    _cov75 = retry_lint.check_all(os.path.join(HERE0, 'workflows'))
+    _tot75 = sum(len(r['gated']) + len(r['ungated']) for r in _cov75.values())
+    _un75 = sum(len(r['ungated']) for r in _cov75.values())
+    _bad75 = {w: r['unexplained'] for w, r in _cov75.items() if r['unexplained']}
+    assert not _bad75, 'B-A10: a node is on the in-200 ratchet with no reason written beside it: %r' % _bad75
+    json.dump({w: {'gated': r['gated'], 'ungated': r['ungated'], 'excused': r['excused']} for w, r in _cov75.items()},
+              open(os.path.join(HERE0, 'harness', 'in200.json'), 'w'), indent=1, sort_keys=True)
+    print('INVARIANTS rule 3 (in-200 retry gate): %d of %d DataForSEO calls across %d workflows are inside a recorded gate; '
+          '%d stay on the ratchet, every one with its reason' % (_tot75 - _un75, _tot75, len(_cov75), _un75))
+
+
+sticky("""### An answer nobody asked twice for (B-A10, 2026-10-15)
+**DataForSEO reports most failures inside an HTTP 200**, which `retryOnFail` never sees. R18 gated three paths by hand; **49 calls across 12 workflows** were still outside a gate — the shape that planned, scored and wrote a whole ladder on two results pages that had both failed (exec 549).
+**One splice, not twenty hand-wired chains** (`dfs_gate.py`): plan → wait → one more attempt → merge. Only a failure a second attempt can help is re-sent, and **nothing at all** when the requests and the answers cannot be paired one to one.
+**A retry cannot double-charge.** A failed task is billed 0; where both attempts were billed, the cost sums both and counts each task **once by its own id**, and every retry node is on the ledger's list. *Start Crawl* never re-sends an empty result — that would be a second crawl.
+**What stays, and why.** The twelve free `appendix/user_data` balance probes (they fail open and nothing scores on them) and *Get Crawl Summary* (it is already a poll loop). Each keeps its reason in `harness/in200_baseline.json`.""",
+    pos('Candidate SERP')[0] - 60, pos('Candidate SERP')[1] - 360, 1140, 280, 3)
+log('An answer nobody asked twice for (2026-10-15, FIX_PLAN.md §3.14 row B-A10; INVARIANTS.md rule 3). DataForSEO reports most of its failures INSIDE an HTTP 200, where n8n\'s retryOnFail cannot see them - R18 proved what that costs (exec 549: SERP Top 10 and Facts SERP both 40101 inside a 200, neither re-sent, a ladder planned, scored "winnable 68" and written on a results page nobody saw) and gated three chains by hand; the ratchet then measured 49 DataForSEO nodes across 12 workflows outside a recorded gate. This pays the debt down: dfs_gate.splice() puts ONE shape around every remaining call - <X> -> Retry Plan -> Any Retries? -> Wait -> <X> (Retry) -> <X> Answers -> whatever read the call before - where RT.plan (v5/code/_dfs_retry.js) decides which failures a second attempt can help, refuses to re-send anything when the requests and the answers cannot be paired one to one, and the retry node is a byte copy of the call so no request body is ever rewritten; <X> Answers merges the two attempts, counts what really happened and attaches RT.evidence as __dfs to every item, so rule 1 has something to refuse on. The money follows R28: a failed task is billed 0, a task billed twice is counted once by its own id across both attempts, and every (Retry) node joins __LEDGER_NODES - Start Crawl is the exception, because on_page/task_post CREATES a paid task, so it re-sends only an envelope or task error and never an empty result. Deliberately left on the ratchet with the reason in the baseline\'s `why`: the twelve free appendix/user_data balance probes (read before the first paid call, failing OPEN - 0 refuses nothing, the day\'s reconciliation drops a 0 reading and says so - and nothing is scored, ranked or advised from them) and Get Crawl Summary (the poll of a crawl already paid for: Check Crawl -> Wait 1 min -> Get Crawl Summary is already a retry loop with a longer pause). And the ratchet had a hole of its own: check_in200 ran on the main workflow only, so the 19 DataForSEO nodes in the other eleven workflows were measured once and guarded by nothing - retry_lint.check_all now walks every generated workflow after the sub-builds and fails on a stale baseline row too')
+
+
+# 76. THE OTHER HALF OF EVERY CLAUDE FIGURE, AND THREE NODES THAT ADVISED FROM WHAT THEY COULD NOT READ
+#     (2026-10-15, FIX_PLAN.md §3.15 row B-F1 — the Sonnet half — and §3.16 row B-A11; INVARIANTS.md rule 1.)
+#
+#     **B-F1, the half section 62 left open.** Section 62 proved that NOTHING in this engine measured a Claude token: a streaming
+#     call returns no `llmOutput`, so n8n records a tiktoken guess, and the non-streaming nodes' real `tokenUsage` rides the
+#     `ai_languageModel` connection, which `WorkflowDataProxy` never reads. It then put Anthropic's free
+#     `/v1/messages/count_tokens` on the MAIN path behind the three streaming Opus agents (0% -> 70.9% measured on those nodes).
+#     The other eight calls — every Sonnet node and the Haiku describer — were still priced from characters, which is a model,
+#     not a measurement. They are counted here, by the same two free calls, and four things had to be worked out from the code
+#     rather than assumed:
+#       * **a prompt is read against the node that fed the agent.** The agent's prompt is an expression over `$json`; one node
+#         later `$json` is something else, so the expression is re-pointed at the agent's input node — and with the OUTPUT INDEX
+#         spelled out. `$('Route Mode').first()` defaults to "the output the active node is connected to", and the counter node
+#         is connected to nothing of the sort: *Keyword Seeds* hangs off output **1** of that Switch, so a default `.first()`
+#         would have counted a branch that carries no data in a discovery run. Section 62's three agents all sit on output 0,
+#         which is why it never had to find this out.
+#       * **two of the eight answer once per ITEM.** *Keyword Relevance* and *Ladder Keyword Relevance* run once per chunk of 80
+#         candidates (S20 already asserts `ai_calls === 1 + chunks`), so their counter chain fires once per chunk too: the prompt
+#         is read with `$('<chunks>').item` (the agent sets `pairedItem: { item: itemIndex }`, as does the Set node and the HTTP
+#         node, so the chain resolves back to the right chunk) and the counts are SUMMED, with `rounds` saying how many calls the
+#         sum covers. One item is the old behaviour exactly, which is why nothing section 62 measured changes.
+#       * **the Critic is not a loop.** `_LOOPS51` has said since section 51 that the Critic runs once per QA round, so its cost
+#         was multiplied by `qa_round`. Walking `main` from the Critic shows no path back to it: the QA loop is *Content QA* ->
+#         *Needs Revision?* -> *Editor* -> *Content QA*, and the Critic's single predecessor is the Copywriter's resume node. It
+#         ran once and was charged `qa_round` times. The walk is kept as the assertion, so a future rewiring has to agree.
+#       * **thinking is still modelled and always will be.** `count_tokens` counts the messages we send; the thinking the model
+#         does before answering is billed as output and never returned. Only *Site Describer* has no thinking budget at all
+#         (Haiku, no adaptive effort), so it is the one node that becomes 100% measured.
+#     Free or not, `count_tokens` is an HTTP call: every one carries the retry rule, `neverError` + `continueRegularOutput` and
+#     `alwaysOutputData`, and a count that does not answer — or whose two halves do not cover the same number of calls — leaves
+#     the call on its character figure with its old basis. None of them can fail a run.
+#     **What is NOT counted, with its reason recorded** (`harness/claude_count.json`, and `_b76_checks` fails the build on a new
+#     one): the **eleven** Claude agents in the other seven workflows. The brief for this work said there were eight
+#     non-streaming nodes; that is true of the main workflow and not of the engine, which has 22 Claude agents. The other eleven
+#     are not character-priced at all — a monitor settles `CC.aiRun`, which is the RESERVATION, labelled an estimate — and
+#     counting them needs a per-workflow call table in each of the three other builders. Recorded, not done.
+#
+#     **B-A11 — three nodes advised from evidence that could not be read.** Rule 3's in-200 gate attaches `RT.evidence` to every
+#     answer as `__dfs`; rule 1 says nothing downstream may score, rank or advise from it when it is `unavailable`. Nine nodes
+#     already refuse. These three did not: *Pick Competitors* ranked rivals from two reads that may both have failed twice and
+#     called the empty result "auto-detected"; *Competitor Analysis* turned a missing domain overview into `top10: 0` and raised
+#     a **High** "The site does not rank in Google's top 10 for any keyword"; *Analyze Keywords* raised a keyword gap, a "you
+#     rank for 0 informational keywords" and a list of easy wins from the same kind of silence. Each now carries the gate's own
+#     evidence, hands on `null` instead of a measured-looking zero, and says "could not be read" where it used to say "none".
+#     And the class is now a lint, which is worth more than the three fixes: `lineage_lint.py` gains check **E (refusal)** —
+#     every node that reads a `<X> Answers` node must carry a way of saying it could not be read — with today's 19 remaining
+#     consumers on the ratchet baseline, each with its reason. Its vocabulary was widened once while being calibrated: *Analyze
+#     Backlinks* refuses in its own words (`available: false` + the provider's message), and a lint that only recognised the
+#     kit's idiom would have been checking which helper a node imported, not whether it can refuse.
+# =============================================================================
+
+# ---------- A. B-F1: the free token counter behind the eight non-streaming Claude calls ----------
+_NS76 = [c for c in _AI_CALLS51 if not c['streaming']]
+assert len(_NS76) == 8 and len(_AI_CALLS51) == 11, _NS76
+_OLD76 = json.dumps(_AI_CALLS51)
+assert _OLD76 == _NEW_CALLS62, 'B-F1: the call table changed between section 62 and section 76'
+
+# a node that answers once per input item, and the node that makes those items. Declared, then PROVED against the code that
+# makes them, so the declaration cannot drift away from what the run does.
+_PER_ITEM76 = {'Keyword Relevance': 'Relevance Chunks', 'Ladder Keyword Relevance': 'Ladder Relevance Chunks'}
+for _a76, _s76 in _PER_ITEM76.items():
+    assert 'chunks.map((ch, i) => ({ json:' in code(_s76), 'B-F1: ' + _s76 + ' no longer emits one item per chunk'
+
+
+def _branch76(src, dst):
+    """The output index `dst` hangs off. `$('X').first()` defaults to the output the ACTIVE node is connected to, and the
+    counter node is not connected to X at all — Keyword Seeds is on output 1 of Route Mode, so this is never left implicit."""
+    for _i, _l in enumerate((conns.get(src) or {}).get('main') or []):
+        if any(t['node'] == dst for t in (_l or [])):
+            return _i
+    raise AssertionError('B-F1: no main connection from ' + src + ' to ' + dst)
+
+
+def _loops76(start):
+    """True when a main path leads from `start` back to `start` — the QA loop, and the only honest definition of `loop`."""
+    _seen, _stack = set(), [start]
+    while _stack:
+        for _t in [t['node'] for _l in ((conns.get(_stack.pop()) or {}).get('main') or []) for t in (_l or [])]:
+            if _t == start:
+                return True
+            if _t not in _seen:
+                _seen.add(_t)
+                _stack.append(_t)
+    return False
+
+
+assert _loops76('Editor'), 'B-F1: the Editor no longer loops — Content QA / Needs Revision? was rewired'
+assert not _loops76('Critic'), 'B-F1: the Critic now loops, so it is charged per QA round again'
+for _c76 in _AI_CALLS51:
+    if _c76['node'] == 'Critic':
+        assert _c76['loop'], 'B-F1: the Critic was already not a loop — this correction is stale'
+        _c76['loop'] = False        # it runs ONCE: nothing on main leads back to it (asserted above)
+
+_WIRE76 = {}
+for _c76 in _NS76:
+    _ag76, _in76 = _c76['node'], _c76['input']
+    assert _in76 and _in76 in nodes, 'B-F1: ' + _ag76 + ' has no input node to render its prompt against'
+    # `input` is what fed the agent when section 51 read the table; what feeds it NOW is what `$json` resolves against, and for
+    # the Critic that is section 62's own resume node (which hands the Copywriter's items back unchanged). The prompt is read
+    # against the live predecessor, and the two are asserted to be the same node or that node's resume.
+    _pre76 = sorted({s for s, o in conns.items() for l in (o.get('main') or []) for t in (l or []) if t['node'] == _ag76})
+    assert len(_pre76) == 1, 'B-F1: ' + _ag76 + ' has ' + str(len(_pre76)) + ' main inputs, so $json is not one node'
+    _fed76 = _pre76[0]
+    assert _fed76 == _in76 or _fed76 == 'After Count (' + _in76 + ')', \
+        'B-F1: ' + _ag76 + ' is fed by ' + _fed76 + ', which is neither ' + _in76 + ' nor its resume node'
+    _txt76 = str(nodes[_ag76]['parameters']['text'])
+    assert _txt76.startswith('='), 'B-F1: ' + _ag76 + "'s prompt is not an expression"
+    _multi76 = _ag76 in _PER_ITEM76
+    if _multi76:
+        assert _PER_ITEM76[_ag76] == _fed76, 'B-F1: ' + _ag76 + ' is no longer fed by ' + _PER_ITEM76[_ag76]
+        _ref76, _br76 = "$('" + _fed76 + "').item.json", None
+    else:
+        _br76 = _branch76(_fed76, _ag76)
+        _ref76 = "$('" + _fed76 + "').first(" + str(_br76) + ").json"
+    _WIRE76[_ag76] = {'fed_by': _fed76, 'branch': _br76, 'ref': _ref76}
+    _prompt76 = re.sub(r'\$json\b', lambda m: _ref76, _txt76)
+    assert '$json.' not in _prompt76 and _prompt76 != _txt76, 'B-F1: ' + _ag76 + "'s prompt still reads $json after the rewrite"
+    _set76, _cp76 = 'Prompt For Count (' + _ag76 + ')', 'Count Prompt (' + _ag76 + ')'
+    _ca76, _af76 = 'Count Answer (' + _ag76 + ')', 'After Count (' + _ag76 + ')'
+    _px76, _py76 = pos(_ag76)
+    # the Set node renders what the agent really sent and what it really answered, one item per call. It can fail open like
+    # every other node of the chain: an expression that cannot resolve leaves __prompt empty, the count comes back without an
+    # `input_tokens` and the call falls back to characters.
+    add_node(_set76, 'n8n-nodes-base.set', 3.4, {'mode': 'manual', 'includeOtherFields': True, 'options': {}, 'assignments': {'assignments': [
+        {'id': str(uuid.uuid5(uuid.NAMESPACE_URL, 'bf1:' + _ag76 + ':prompt')), 'name': '__prompt', 'value': _prompt76, 'type': 'string'},
+        {'id': str(uuid.uuid5(uuid.NAMESPACE_URL, 'bf1:' + _ag76 + ':answer')), 'name': '__answer',
+         'value': "={{ String($json.output ?? '') }}", 'type': 'string'}]}},
+        [_px76, _py76 + 300], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+    _mdl76 = json.dumps(_c76['model'])
+    _own76 = "$('" + _set76 + "')." + ('item' if _multi76 else 'first()') + ".json"
+    _count_node62(_cp76, '={{ JSON.stringify({ model: ' + _mdl76 + ', messages: [{ role: "user", content: String($json.__prompt || "") }] }) }}',
+                  [_px76 + 200, _py76 + 300])
+    _count_node62(_ca76, '={{ JSON.stringify({ model: ' + _mdl76 + ', messages: ['
+                  + '{ role: "user", content: String(' + _own76 + '.__prompt || "") }, '
+                  + '{ role: "assistant", content: String(' + _own76 + '.__answer || "") }] }) }}',
+                  [_px76 + 400, _py76 + 300])
+    add_node(_af76, 'n8n-nodes-base.code', 2, {'jsCode':
+        "// B-F1 (2026-10-15, section 76): the two free token counts are taken; hand " + _ag76 + "'s own items back to the\n"
+        "// pipeline, unchanged and in order, so nothing downstream sees the counter at all (the R17 resume pattern).\n"
+        "return $('" + _ag76 + "').all();\n"}, [_px76 + 600, _py76 + 300])
+    _succ76 = [t['node'] for lst in ((conns.get(_ag76) or {}).get('main') or []) for t in (lst or [])]
+    assert _succ76, 'B-F1: ' + _ag76 + ' feeds nothing'
+    for _s in _succ76:
+        disconnect(_ag76, _s)
+    connect(_ag76, _set76); connect(_set76, _cp76); connect(_cp76, _ca76); connect(_ca76, _af76)
+    for _s in _succ76:
+        connect(_af76, _s)
+    _c76['count_prompt'], _c76['count_answer'] = _cp76, _ca76
+    _c76['count_per_item'] = _multi76
+    # the most of this node's calls the main path can show: one per item for a per-item node (0 = no cap), exactly one otherwise
+    _c76['count_rounds'] = 0 if _multi76 else 1
+
+# ---------- A2. the pricing loop learns to add up several counts, and the new table goes back into the six nodes ----------
+_NEW76 = json.dumps(_AI_CALLS51)
+assert 'Count Prompt (Verdict Agent)' in _NEW76 and '"loop": false' in _NEW76, 'B-F1: the call table did not learn'
+_OLD_COUNTOF76 = _COUNT_OF62
+_NEW_COUNTOF76 = """const __countOf = (n) => { let sum = 0, k = 0; for (const j of (__jsonOf(n) || [])) { const v = Number((j || {}).input_tokens); if (Number.isFinite(v) && v > 0) { sum += v; k++; } } return { sum: sum, n: k }; };
+const __costCalls = [];"""
+_NEW_PUSH76 = """  // B-A8 / B-F1 (2026-10-15): the free Anthropic token counter answered for this node on the main path — the prompt it really
+  // rendered (*Count Prompt (…)*) and that prompt plus the answer it really got (*Count Answer (…)*). The difference is the
+  // answer's own tokens. A node that answers once per ITEM has one pair of counts per call (the keyword screen runs once per
+  // chunk of 80 candidates), so the counts are SUMMED and `rounds` says how many calls the sum covers; `count_rounds` is the
+  // most the main path can show — 1 for a looping agent, because only the Editor's LAST round is on it — and a count that
+  // covers more than that is refused rather than spread. The two counts must cover the same number of calls, or their
+  // difference is not this node's answer tokens. Anything else leaves `counted` null and the call falls back to characters,
+  // with the old basis: a count that failed is never a measurement.
+  let counted = null;
+  if (c.count_prompt && c.count_answer) {
+    const p = __countOf(c.count_prompt), t = __countOf(c.count_answer), cap = Number(c.count_rounds || 0);
+    if (p.n > 0 && p.n === t.n && p.sum > 0 && t.sum > p.sum && (!cap || p.n <= cap))
+      counted = { prompt_tokens: p.sum, total_tokens: t.sum, rounds: p.n, source: 'Anthropic /v1/messages/count_tokens' };
+  }
+  __costCalls.push({ node: c.node, model: c.model, max_tokens: c.max_tokens, effort: c.effort, streaming: c.streaming,
+    prompt_chars, output_chars, counted, calls: answers.length * (c.loop ? __qaRounds() : 1) });"""
+for _n76 in _ends51 + ['Run Ledger Settle']:
+    _src76 = code(_n76)
+    assert _OLD76 in _src76 and _NEW_PUSH62 in _src76 and _OLD_COUNTOF76 in _src76, 'B-F1: ' + _n76 + " does not carry section 62's counter"
+    _src76 = _src76.replace(_OLD76, _NEW76).replace(_NEW_PUSH62, _NEW_PUSH76).replace(_OLD_COUNTOF76, _NEW_COUNTOF76)
+    setcode(_n76, _src76)
+    assert 'p.n === t.n' in code(_n76) and 'let sum = 0, k = 0;' in code(_n76), _n76
+    assert code(_n76).index('const __countOf') < code(_n76).index('__countOf(c.count_prompt)'), _n76 + ': the helper is used before it exists'
+assert 'const covers = cnt ?' in COST_SRC and 'perIn * rounds' in COST_SRC, 'B-F1: the cost kit still treats a count as one call'
+
+# ---------- A3. the wiring and the recorded gap (harness S86) ----------
+_cw51['count_nonstream'] = {c['node']: {'set': 'Prompt For Count (' + c['node'] + ')', 'prompt': c['count_prompt'],
+                                        'answer': c['count_answer'], 'resume': 'After Count (' + c['node'] + ')',
+                                        'input': c['input'], 'model': c['model'], 'rounds': c['count_rounds'],
+                                        'per_item': c['count_per_item'], 'loop': c['loop'],
+                                        'fed_by': _WIRE76[c['node']]['fed_by'], 'branch': _WIRE76[c['node']]['branch'],
+                                        'ref': _WIRE76[c['node']]['ref'],
+                                        'after': [t['node'] for lst in ((conns.get('After Count (' + c['node'] + ')') or {}).get('main') or []) for t in (lst or [])]}
+                            for c in _NS76}
+_cw51['ai_calls'] = _AI_CALLS51
+# every Claude agent in the engine, and for each one that is NOT counted, why. `_b76_checks` walks the generated workflows and
+# fails the build on an agent that is neither counted nor listed here, so the gap can be read but cannot grow.
+_WHY_NOT76 = ('priced from the run RESERVATION (CC.aiRun), not from this node and not from characters: a monitor settles its '
+              'reserved Claude figure and labels it ESTIMATED. Counting it needs a per-workflow call table in its own builder '
+              '(build_monitors.py / build_site_tracker.py / build_api.py), which is not built — B-F1 covered the main workflow')
+_cw51['count_gap'] = {'why': _WHY_NOT76, 'workflows': ['SEO_Agent_AI_Growth.json', 'SEO_Agent_AI_Visibility.json',
+                                                       'SEO_Agent_Backlink_Monitor.json', 'SEO_Agent_Keyword_Check.json',
+                                                       'SEO_Agent_Link_Builder.json', 'SEO_Agent_Reply_Reader.json',
+                                                       'SEO_Agent_Site_Tracker.json']}
+json.dump(_cw51, open(os.path.join(HERE0, 'harness', 'cost_wiring.json'), 'w'), indent=1, sort_keys=True)
+
+
+def _b76_checks():
+    """Every Claude agent in every generated workflow is either counted on its main path or listed with a reason. Runs after
+    the four sub-builds, like the other ratchets, because that is the first moment all the workflows exist on disk."""
+    _out76, _gap76 = {}, []
+    for _f in sorted(os.listdir(os.path.join(HERE0, 'workflows'))):
+        if not _f.endswith('.json') or _f in _NOT_GENERATED69:
+            continue
+        for _w in json.load(open(os.path.join(HERE0, 'workflows', _f), encoding='utf-8')):
+            _nm = {n['name']: n for n in (_w.get('nodes') or [])}
+            _cn = _w.get('connections') or {}
+            for _mn, _m in sorted(_nm.items()):
+                if _m.get('type') != '@n8n/n8n-nodes-langchain.lmChatAnthropic':
+                    continue
+                for _ag in [t['node'] for l in ((_cn.get(_mn) or {}).get('ai_languageModel') or [[]]) for t in (l or [])]:
+                    _counted = ('Count Prompt (' + _ag + ')') in _nm and ('Count Answer (' + _ag + ')') in _nm
+                    _out76[_f + ' / ' + _ag] = {'counted': _counted, 'model': _m['parameters']['model']['value'],
+                                                # B-C2 (section 84): each uncounted workflow carries ITS OWN reason, not one shared
+                                                # sentence — three of the four left are left for different reasons entirely
+                                                'why_not': '' if _counted else (_cw51['count_gap'].get('reasons') or {}).get(_f, _WHY_NOT76)}
+                    if not _counted:
+                        _gap76.append(_f + ' / ' + _ag)
+    _listed76 = set(_cw51['count_gap']['workflows'])
+    _unexplained76 = sorted(g for g in _gap76 if g.split(' / ')[0] not in _listed76)
+    assert not _unexplained76, ('B-F1: %d Claude agent(s) are neither counted on the main path nor covered by the recorded gap: '
+                                '%s\n  Either put the counter chain behind them (build section 76) or add the workflow to '
+                                "cost_wiring.json's `count_gap` with a reason." % (len(_unexplained76), ', '.join(_unexplained76)))
+    _stale76 = sorted(w for w in _listed76 if not any(g.startswith(w + ' / ') for g in _gap76))
+    assert not _stale76, ('B-F1: cost_wiring.json lists %s in `count_gap` and nothing there is uncounted any more — '
+                          'a gap that was paid leaves the list for ever.' % ', '.join(_stale76))
+    json.dump(_out76, open(os.path.join(HERE0, 'harness', 'claude_count.json'), 'w'), indent=1, sort_keys=True)
+    print('B-F1 (Claude tokens counted on the main path): %d of %d Claude agents across %d workflows are counted; '
+          '%d stay priced from the reservation, every one with its reason'
+          % (sum(1 for r in _out76.values() if r['counted']), len(_out76),
+             len({k.split(' / ')[0] for k in _out76}), len(_gap76)))
+
+
+# ---------- B. B-A11: three nodes that advised from evidence that could not be read ----------
+# The shape the other nine use: read the gate's `__dfs` off the answers, refuse to derive anything from it when it is
+# `unavailable`, and say so in the words the reports already use. Nothing here invents a third pattern.
+_EV76 = """// B-A11 (2026-10-15, INVARIANTS rule 1): the in-200 retry gate (rule 3) marks an answer `unavailable` when BOTH attempts
+// failed, and attaches that block to every item as `__dfs`. Nothing below may rank, score or advise from one.
+const __ev76 = (list, node) => { try { const a = (node ? $(node).all().map(i => i.json) : list) || []; return (a.find(x => x && x.__dfs) || {}).__dfs || null; } catch (e) { return null; } };
+// A refusal fires on an evidence block that SAYS `unavailable`, never on the absence of one: a path with no gate attached
+// (and every harness fixture) has no `__dfs`, and inventing a failure out of silence is the same mistake in the other
+// direction. This is how the nine nodes that already refuse read it too (Assess Result falls back when `__dfs` is absent).
+const __read76 = (ev) => !ev || !ev.unavailable;
+"""
+
+patch('Pick Competitors', "const serps = $input.all().map(i => i.json);\n",
+      "const serps = $input.all().map(i => i.json);\n" + _EV76 +
+      "const labsEv76 = __ev76(null, 'Find Competitors Answers'), serpEv76 = __ev76(serps);\n"
+      "// the list is readable when EITHER read answered; when neither did there is no list, only silence that must not be\n"
+      "// reported as \"no competitors found\" (the old wording, and a measurement nobody took).\n"
+      "const competitors_evidence = { what: 'the domains that compete with this site for the same searches',\n"
+      "  labs: labsEv76, serps: serpEv76, checked: (labsEv76 ? labsEv76.checked || 0 : 0) + (serpEv76 ? serpEv76.checked || 0 : 0),\n"
+      "  // both reads have to have FAILED for there to be no list: one silent block is not a refusal\n"
+      "  unavailable: !__read76(labsEv76) && !__read76(serpEv76),\n"
+      "  error: (labsEv76 && labsEv76.error) || (serpEv76 && serpEv76.error) || '' };\n")
+patch('Pick Competitors', "} else {\n  const score = {};",
+      "} else if (competitors_evidence.unavailable) {\n"
+      "  // both reads failed twice: no competitor is named, nothing is ranked, and the reason travels with the row\n"
+      "  comps = [];\n"
+      "  method = 'the competitor search could not be read' + (competitors_evidence.error ? ': ' + competitors_evidence.error : '')\n"
+      "    + ' (asked twice). This is not \"no competitors\": nothing was measured.';\n"
+      "} else {\n  const score = {};")
+patch('Pick Competitors', "return [\n  { json: { domain: ours, is_you: true, shared: null, source: 'you', method } },\n  ...comps.map(c => ({ json: { ...c, is_you: false, method } }))\n];",
+      "return [\n  { json: { domain: ours, is_you: true, shared: null, source: 'you', method, competitors_evidence } },\n"
+      "  ...comps.map(c => ({ json: { ...c, is_you: false, method, competitors_evidence } }))\n];")
+assert 'competitors_evidence' in code('Pick Competitors') and 'could not be read' in code('Pick Competitors')
+
+patch('Competitor Analysis', "const AGES = $('Domain Ages').first().json.ages || {};",
+      "const AGES = $('Domain Ages').first().json.ages || {};\n" + _EV76 +
+      "const ovEv76 = __ev76(ov);\n"
+      "// R17's lesson in one line: a missing domain overview is not a site with no rankings. When the read failed twice every\n"
+      "// figure it would have produced is null and the comparison is left out of the report, with its reason.\n"
+      "const metricsRead76 = __read76(ovEv76);\n"
+      "const listEv76 = (list.find(c => c && c.competitors_evidence) || {}).competitors_evidence || null;")
+patch('Competitor Analysis', "  const top3 = (m.pos_1 || 0) + (m.pos_2_3 || 0);\n  const top10 = top3 + (m.pos_4_10 || 0);",
+      "  const top3 = metricsRead76 ? (m.pos_1 || 0) + (m.pos_2_3 || 0) : null;\n"
+      "  const top10 = metricsRead76 ? top3 + (m.pos_4_10 || 0) : null;")
+patch('Competitor Analysis', "    organic_keywords: m.count ?? 0,\n    top3, top10,\n    est_monthly_traffic: m.etv != null ? Math.round(m.etv) : 0,\n    traffic_value_usd: m.estimated_paid_traffic_cost != null ? Math.round(m.estimated_paid_traffic_cost) : 0,",
+      "    organic_keywords: metricsRead76 ? (m.count ?? 0) : null,\n    top3, top10,\n"
+      "    est_monthly_traffic: metricsRead76 ? (m.etv != null ? Math.round(m.etv) : 0) : null,\n"
+      "    traffic_value_usd: metricsRead76 ? (m.estimated_paid_traffic_cost != null ? Math.round(m.estimated_paid_traffic_cost) : 0) : null,")
+patch('Competitor Analysis', "if ((you.top10 || 0) === 0) {\n  F('High',",
+      "if (!metricsRead76) {\n"
+      "  findings.push({ category: 'Authority', severity: 'Info', title: 'The ranking comparison could not be read',\n"
+      "    evidence: 'The search data provider did not answer ' + (ovEv76 ? ovEv76.asked || 0 : 0) + ' domain overview request(s), asked twice'\n"
+      "      + (ovEv76 && ovEv76.error ? ': ' + ovEv76.error : '') + '.',\n"
+      "    why: 'Rankings, traffic and authority comparisons are left out of this report: nothing was measured. This is not \"no rankings\".',\n"
+      "    fix: 'No action needed — the check is made again on the next run.',\n"
+      "    sample_urls: [], affected_count: null, affected_pct: 100, scope: 'site', scoring: false });\n"
+      "} else if ((you.top10 || 0) === 0) {\n  F('High',")
+patch('Competitor Analysis', "if (comps.length && med.est_monthly_traffic && (you.est_monthly_traffic || 0) < med.est_monthly_traffic * 0.1) {",
+      "if (metricsRead76 && comps.length && med.est_monthly_traffic && (you.est_monthly_traffic || 0) < med.est_monthly_traffic * 0.1) {")
+patch('Competitor Analysis', "if (!comps.length) {\n  findings.push({ category: 'Authority', severity: 'Info', title: 'No competitors could be identified', evidence: 'No overlapping domains found for ' + base.country, why: 'Competitor comparisons in this report are limited.', fix: 'Add up to 3 competitors in the form for a full comparison.',",
+      "if (!comps.length) {\n  const unread76 = !!(listEv76 && listEv76.unavailable);\n"
+      "  findings.push({ category: 'Authority', severity: 'Info',\n"
+      "    title: unread76 ? 'The competitor search could not be read' : 'No competitors could be identified',\n"
+      "    evidence: unread76 ? 'The search data provider did not answer, asked twice' + (listEv76.error ? ': ' + listEv76.error : '') + '.' : 'No overlapping domains found for ' + base.country,\n"
+      "    why: unread76 ? 'Competitor comparisons are left out of this report: nothing was measured.' : 'Competitor comparisons in this report are limited.',\n"
+      "    fix: unread76 ? 'No action needed — the search is made again on the next run.' : 'Add up to 3 competitors in the form for a full comparison.',")
+patch('Competitor Analysis', "      rows,\n      medians: med\n    },",
+      "      rows,\n      medians: med,\n"
+      "      evidence: { metrics: ovEv76, list: listEv76, unavailable: !metricsRead76 }\n    },")
+assert 'metricsRead76' in code('Competitor Analysis') and "could not be read'" in code('Competitor Analysis')
+
+patch('Analyze Keywords', "const ideasRes = $input.first().json || {};",
+      "const ideasRes = $input.first().json || {};\n" + _EV76 +
+      "const rankedEv76 = __ev76(ranked), ideasEv76 = __ev76([ideasRes]);\n"
+      "// the two reads behind every number below: what this site and its rivals rank for, and the keyword ideas. A finding\n"
+      "// built on a read that failed twice reads as a measurement (\"you rank for 0 informational keywords\") and is not one.\n"
+      "const rankedRead76 = __read76(rankedEv76), ideasRead76 = __read76(ideasEv76);\n"
+      "const keywords_evidence = { ranked: rankedEv76, ideas: ideasEv76, unavailable: !rankedRead76 && !ideasRead76 };")
+patch('Analyze Keywords', "if (keyword_gap.length) {\n  F('High',",
+      "if (!rankedRead76 && !ideasRead76) {\n"
+      "  findings.push({ category: 'Authority', severity: 'Info', title: 'The keyword research could not be read',\n"
+      "    evidence: 'The search data provider did not answer the ranked-keyword and keyword-idea requests, asked twice'\n"
+      "      + ((rankedEv76 && rankedEv76.error) || (ideasEv76 && ideasEv76.error) ? ': ' + ((rankedEv76 && rankedEv76.error) || ideasEv76.error) : '') + '.',\n"
+      "    why: 'The keyword gap, the easy wins and the rankings comparison are left out of this report: nothing was measured. This is not \"no demand\".',\n"
+      "    fix: 'No action needed — the research is repeated on the next run.',\n"
+      "    sample_urls: [], affected_count: null, affected_pct: 100, scope: 'site', scoring: false });\n"
+      "}\nif (rankedRead76 && keyword_gap.length) {\n  F('High',")
+patch('Analyze Keywords', "INTENTS.filter(x => x !== 'navigational').forEach(x => {   // P1-4",
+      "if (rankedRead76) INTENTS.filter(x => x !== 'navigational').forEach(x => {   // P1-4")
+patch('Analyze Keywords', "if (easy_wins.length) {\n  F('Low',", "if (ideasRead76 && easy_wins.length) {\n  F('Low',")
+patch('Analyze Keywords', "if (striking_distance.length) {\n  F('Low',", "if (rankedRead76 && striking_distance.length) {\n  F('Low',")
+patch('Analyze Keywords', "if (you.top10 > 0) works.push(", "if (rankedRead76 && you.top10 > 0) works.push(")
+patch('Analyze Keywords', "      refused: refused.filter((r, i, a) => a.findIndex(x => x.keyword === r.keyword) === i).slice(0, 40)\n    },",
+      "      refused: refused.filter((r, i, a) => a.findIndex(x => x.keyword === r.keyword) === i).slice(0, 40),\n"
+      "      evidence: keywords_evidence\n    },")
+assert 'rankedRead76' in code('Analyze Keywords') and 'keywords_evidence' in code('Analyze Keywords')
+
+sticky("""### The other half of every Claude figure, and three nodes that advised from what they could not read (B-F1 / B-A11, 2026-10-15)
+**B-F1.** Section 62 counted the three streaming Opus agents and left the eight non-streaming ones on characters. They are counted here by the same two **free** `count_tokens` calls on the **main** path. Three things the code had to settle: the prompt is re-read against the agent's input node **with its output index spelled out** (*Keyword Seeds* hangs off output **1** of *Route Mode*, and `.first()` defaults to the output the ACTIVE node is connected to); *Keyword Relevance* and *Ladder Keyword Relevance* answer **once per chunk**, so their counts are summed and `rounds` says how many calls the sum covers; and **the Critic is not a loop** — walking `main` shows no path back to it, so `qa_round` had been multiplying a call that happened once.
+**Still modelled, and always will be:** the thinking a model does before answering is billed as output and never returned. *Site Describer* has no thinking budget, so it is the one node that is 100% measured.
+**Not counted, and recorded (`harness/claude_count.json`):** the **eleven** Claude agents in the other seven workflows, which are not character-priced at all — a monitor settles its RESERVATION. `_b76_checks` fails the build on a new uncounted agent.
+**B-A11.** *Pick Competitors*, *Competitor Analysis* and *Analyze Keywords* each turned a read that had failed **twice** into a measured-looking zero — a **High** "does not rank in the top 10 for any keyword" among them. Each now carries the gate's `__dfs`, hands on `null`, and says "could not be read". The class is now **check E of `lineage_lint.py`**, with 19 consumers on the ratchet.""",
+    pos('Pick Competitors')[0] - 60, pos('Pick Competitors')[1] + 320, 1140, 330, 5)
+
+log('The other half of every Claude figure, and three nodes that advised from what they could not read (2026-10-15, FIX_PLAN.md '
+    '§3.15 B-F1 Sonnet half + §3.16 B-A11; INVARIANTS.md rule 1). B-F1: section 62 put Anthropic\'s free /v1/messages/count_tokens '
+    'on the main path behind the three STREAMING Opus agents and left the eight non-streaming calls priced from characters - a '
+    'model, not a measurement. All eight are counted now by the same two free calls, and four things had to be read out of the code '
+    'rather than assumed: (1) the agent\'s prompt is an expression over $json, so it is re-pointed at the node that fed the agent '
+    'WITH THE OUTPUT INDEX SPELLED OUT, because $(\'X\').first() defaults to "the output the active node is connected to" and the '
+    'counter node is connected to nothing of the sort - Keyword Seeds hangs off output 1 of the Route Mode switch, so a default '
+    'first() would have counted a branch carrying no data in a discovery run (section 62 never met this: its three agents are all on '
+    'output 0); (2) Keyword Relevance and Ladder Keyword Relevance answer ONCE PER ITEM (one chunk of 80 candidates each, which S20 '
+    'already asserts), so their chain fires per item - the prompt is read through pairedItem with $(\'<chunks>\').item and the counts '
+    'are SUMMED, with `rounds` saying how many calls the sum covers, which leaves every figure section 62 measured unchanged because '
+    'one item is the old arithmetic exactly; (3) the Critic is NOT a loop - walking main from it finds no path back (the QA loop is '
+    'Content QA -> Needs Revision? -> Editor -> Content QA) so its cost had been multiplied by qa_round since section 51, and the walk '
+    'is kept as the assertion; (4) thinking stays modelled for ever, because count_tokens counts the messages we send and the thinking '
+    'billed as output is never returned - Site Describer, the one node with no thinking budget, is therefore the one that becomes 100% '
+    'measured. Every counter node keeps the retry rule, neverError + continueRegularOutput and alwaysOutputData, and a count that does '
+    'not answer - or whose two halves cover different numbers of calls - leaves the call on its character figure with its old basis. '
+    'What is NOT counted is recorded rather than implied: the ELEVEN Claude agents in the other seven workflows (the brief said there '
+    'were eight non-streaming nodes, which is true of the main workflow and not of the engine, which has 22 Claude agents) are not '
+    'character-priced at all - a monitor settles CC.aiRun, the reservation, labelled ESTIMATED - and _b76_checks walks every generated '
+    'workflow and fails the build on an agent that is neither counted nor on that list. B-A11: Pick Competitors ranked rivals from two '
+    'reads that may both have failed twice and called the empty result "auto-detected"; Competitor Analysis turned a missing domain '
+    'overview into top10: 0 and raised a HIGH "The site does not rank in Google\'s top 10 for any keyword"; Analyze Keywords raised a '
+    'keyword gap, "you rank for 0 informational keywords" and a list of easy wins from the same silence. All three now read the gate\'s '
+    'own __dfs block, hand on null instead of a measured-looking zero and say "could not be read" where they said "none found" - the '
+    'shape the other nine already use, not a third pattern. And the class is a lint now, which is worth more than the three fixes: '
+    'lineage_lint.py gains check E (refusal) - every node that reads a <X> Answers node must carry a way of saying it could not be read '
+    '- with the 19 remaining consumers on the ratchet baseline, each with its reason. Its vocabulary was widened once while being '
+    'calibrated: Analyze Backlinks refuses in its own words (available: false plus the provider\'s message), and a lint that only knew '
+    'the kit\'s idiom would have been checking which helper a node imported rather than whether it can refuse')
+
+# =============================================================================
+# 77. THE VERDICT'S OWN TWO NUMBERS, AND A DIFFICULTY MEASURED ON THE TOPIC (2026-10-15, benchmark programme area 1 —
+#     docs/system-review-2026-10-14/BENCH_AREA1_keywords.md; register rows B1-1 / B1-2 / B1-3)
+#
+#     The leaders of keyword research personalise difficulty to the SITE and label every figure they show. Semrush's Personal
+#     Keyword Difficulty "assesses the thematic relevance between the domain you've entered and the keyword" and publishes its bands
+#     (https://www.semrush.com/kb/1434-how-is-personal-keyword-difficulty-calculated); MarketMuse subtracts a topic-level Topic
+#     Authority from the keyword difficulty and states the empty case as a rule — "If you have no Topic Authority, then your
+#     Personalized Difficulty = Keyword Difficulty" (https://docs.marketmuse.com/reference/personalized-difficulty-and-topic-
+#     authority/). Ahrefs deliberately does NOT personalise ("We calculate the KD score based solely on the average number of
+#     backlinks to the top-ranking pages", https://ahrefs.com/keywords-explorer) and leads instead on Traffic Potential.
+#
+#     * B1-1 — **the keyword report's two headline numbers came out of the language model.** `Parse Verdict` took
+#       `expected_monthly_visits_top3` and `time_to_rank_months` straight from the Verdict Agent's JSON and shipped them into the
+#       Word file, the PDF and the ladder's feasibility card ("Expected visits/month at #1-3: 70", "Time to rank: 6 months" — execs
+#       540 and 519, 2026-10-13/14, the second of them with the difficulty unavailable). Nothing said they were modelled, estimated
+#       or measured, and the same run's own reach model computes a month RANGE with an uncalibrated chance band and the published
+#       base rate behind it (G3), while `KWI.calibrate` computes a traffic figure that says calibrated / modelled / unknown (G8).
+#       The verdict now carries `for_you` (difficulty for this site, plan, months, chance, and which reach it was measured against),
+#       `time_to_rank` (the range, modelled, with its chance band — the model's own number kept beside it as `model_months`) and
+#       `expected_visits` (through the click-loss model, with its basis in words). A results page that could not be read yields no
+#       visit estimate at all, because nobody saw what it takes in clicks.
+#     * B1-2 — **the reach cache kept the number and threw away the evidence**, so every run that reused it (30 days) could not
+#       measure a topic and could not say what the number rested on. `reachCacheRow` now stores the top-10 keywords it was measured
+#       on, `reachCached` hands them back, and the Keyword Check and discovery measure a reach on the TOPIC asked about exactly as
+#       the ladder has since B2-1 — same kit, same bar (REACH_CFG.min_top10), same refusal to invent a penalty where a site simply
+#       has no record yet. Nothing extra is bought: a row written before this change has no evidence, and the run says so.
+#     * B1-3 — **the AI Overview click loss was the April 2025 figure.** `KWI.featureLoss` multiplied by 0.65 (a 35% loss) while the
+#       current study — Ahrefs, 300,000 keywords, December 2025 data, published 2026-02-04 — measures −58.0% at position 1, −50.8%
+#       at 2 and −46.4% at 3 (https://ahrefs.com/blog/ai-overviews-reduce-clicks-update/). Our estimate is explicitly for a page in
+#       the top three, so the top-three average (0.483) is the honest factor: every traffic potential on an AI Overview results page
+#       was ~1.5x too generous. The four other features have no measurement we could verify, so they keep their values and are
+#       labelled a STATED RULE, named in `KWI.CLICK_LOSS` and printed with the figure they moved.
+# =============================================================================
+# 78. A POSITION IS ONE READING, AND NOTHING SAID WHAT THE PAGE ITSELF DID (2026-10-15, benchmark programme area 6 —
+#     docs/system-review-2026-10-14/BENCH_AREA6_rank_tracking.md; register rows B6-1 / B6-2 / B6-3 / B6-4 / B6-5)
+#
+#     The rank trackers are judged on what they do on a volatile day. The leaders answer with a MARKET-WIDE index computed on
+#     somebody else's keywords: Semrush's Sensor is "SERP volatility on a scale of 0-10" over a fixed keyword set, banded
+#     "0-2 low, 2-5 normal, 5-8 high and 8-10 very high" (https://www.semrush.com/kb/652-sensor), and AccuRanker's Google Grump
+#     "calculates the average number of rank changes across the top 30 results for ~1,000,000 high-volume keywords"
+#     (https://accuranker.com/grump). Neither of those tells an owner whether THEIR results page moved. Ours said nothing at all:
+#     exec 570 (2026-10-14) printed "peppol uae (not in top 50 -> #47)" and exec 505 printed its drops the same way — a number and
+#     an arrow, with no way to tell a page that slipped from a page that was pushed down by a results page rewritten under it.
+#
+#     * B6-2 — **the proof was already in the table and nobody read it.** G6 stores `snapshot_json`, the top ten with their URLs,
+#       for every check (criterion 2.2). `RS.churn` compares this reading with the previous one for the same keyword and the same
+#       device: how many of the top places changed occupant, how many URLs came in and left, and how far the URLs in both readings
+#       moved. It is MEASURED, free, and specific to the keyword instead of to a market. Every gain and every drop now carries the
+#       answer ("the whole results page moved that week (7 of the top 10 places changed), so this is not necessarily about your
+#       page" / "the rest of the results page barely moved, so this move is your page"), and the three labels say in the same
+#       breath that they are a stated rule, because no tool publishes a per-keyword threshold. A keyword with no earlier stored
+#       reading, a check that could not be read, two readings of different devices and a snapshot trimmed below the comparable
+#       depth all come back `available: false` **with the reason** — never a quiet 0, which would read as "it did not move".
+#     * B6-1 — **the share of voice still cut every position by 0.65**, Ahrefs' MARCH 2025 figure, which the keyword research had
+#       already left behind the same day (B1-3). The current study — 300,000 keywords, December 2025 data, published 2026-02-04
+#       (https://ahrefs.com/blog/ai-overviews-reduce-clicks-update/) — measures the loss position by position, and it is both
+#       bigger and very uneven: 58.0% of the clicks gone at #1, 50.8% at #2, 46.4% at #3, 19.4% at #10. A flat factor was wrong
+#       twice: it understated the loss by about half, and because it hit every position equally it very nearly cancelled out of a
+#       share, so an AI Overview cost the top of page 1 almost nothing in our own numbers.
+#     * B6-3 — **a Google update inside the compared window was never named beside the moves** (criterion 2.12). The marks were
+#       computed for the chart at the bottom of the mail over the ladder's whole life; the drops at the top had no context at all.
+#     * B6-4 — **two of the Google updates in the registry never happened.** `v5/data/seo_events.json` carried a "June 2026 core
+#       update" and a "September 2026 core update" that are on no Google page, and misdated the December 2025 and March 2026 core
+#       updates by weeks. Google's own ranking history
+#       (https://status.search.google.com/products/rGHU1u87FJnkP6W2GwMi/history) has a May 2026 core update (21 May - 1 Jun), a
+#       September 2026 **spam** update (24 Sep - 7 Oct) and a December 2025 core update from 11 Dec, not 2 Dec. The registry feeds
+#       the Rank Tracker's marks, the Site Tracker's alert text (`ST.updateNote`) and the app's charts, so an invented update was
+#       being handed to customers as the context for a real fall. Re-read from the dashboard, names copied as Google writes them.
+#     * B6-5 — **the week's checks were costed for nobody** (criterion 2.14). The in-200 gate (B-A10) already reads the provider's
+#       own cost for exactly these calls and it reached the callback; nothing printed it. It is printed now, with what a keyword
+#       costs a month at this frequency — and when the provider reported no cost, the line says that instead of inventing one.
+# =============================================================================
+def _b78_checks():
+    """Benchmark area 6: the movement, the corrected loss, the update context and the cost, on the generated Rank Tracker."""
+    import json as _j
+    _wf = _j.load(open(os.path.join(HERE0, 'workflows', 'SEO_Agent_Rank_Tracker.json')))[0]
+    _code = {n['name']: n['parameters'].get('jsCode', '') for n in _wf['nodes'] if n['type'] == 'n8n-nodes-base.code'}
+    for _n in ('Parse Positions', 'Tracker Report'):
+        assert 'const churn = (prev, cur, o) =>' in _code[_n], 'B6-2: %s does not carry the page-movement kit' % _n
+        assert 'const AIO_KEEP = [0.420,' in _code[_n] and 'ORGANIC_LEFT_WITH_AIO' not in _code[_n], \
+            'B6-1: %s still carries the April 2025 AI Overview factor' % _n
+    _r = _code['Tracker Report']
+    assert 'RS.churn(r.prev_row ? r.prev_row.snapshot_json : null' in _r, 'B6-2: the report does not compare the two stored readings'
+    assert '.map(withMove);' in _r and _r.count('.map(withMove);') == 2, 'B6-2: a gain or a drop is still printed with nothing beside it'
+    assert 'serp_change: changes.get(r.keyword) || null' in _r and 'page_movement: { compared:' in _r, \
+        'B6-2: the movement does not reach the app'
+    assert 'const updateLine = sinceMarks.length ?' in _r and 'cannot be proven from these positions' in _r, \
+        'B6-3: a Google update in the compared window is not named beside the moves'
+    assert 'const costHtml' in _r and 'The provider reported no cost for these calls' in _r, \
+        'B6-5: the week\'s checks are costed for nobody, or a cost nobody reported is invented'
+    # B6-4: nothing in the registry that Google's own ranking history does not have, and every name copied as Google writes it
+    _ev = _j.load(open(os.path.join(HERE0, 'v5', 'data', 'seo_events.json')))
+    assert 'status.search.google.com' in _ev['_doc'], 'B6-4: the registry does not name the first-party source it was read from'
+    _gone = [u['name'] for u in _ev['google_updates'] if u['name'] in ('June 2026 core update', 'September 2026 core update')]
+    assert not _gone, 'B6-4: the registry still carries a Google update that never ran: %r' % _gone
+    for _u in _ev['google_updates']:
+        assert _u['start'] <= _u['end'], 'B6-4: %s ends before it starts' % _u['name']
+        assert ('core update' in _u['name'] or 'spam update' in _u['name'] or 'Discover update' in _u['name']), \
+            'B6-4: %s is not named the way Google names its updates' % _u['name']
+    print('benchmark area 6 (rank tracking): page movement measured from the stored snapshots, the AI Overview loss measured per '
+          'position, the update window named, %d Google updates in the registry, all from the Search Status dashboard'
+          % len(_ev['google_updates']))
+
+
+# =============================================================================
+REACH_SRC_77 = _rd0('code/_reach.js').rstrip('\n')
+# B1-3: the corrected click loss is in the shared kit, so discovery, the ladder and the verdict apply the same one
+assert "const AIO_CTR_2025 = { 1: 0.420, 2: 0.492, 3: 0.536 };" in KW_INPUTS_SRC, 'B1-3: the measured AI Overview click loss is not in the discovery kit'
+assert "ai_overview: { factor: +(((AIO_CTR_2025[1] + AIO_CTR_2025[2] + AIO_CTR_2025[3]) / 3).toFixed(3)), basis: 'measured'," in KW_INPUTS_SRC, \
+    'B1-3: the AI Overview factor must be the measured top-three average, not a constant'
+assert "https://ahrefs.com/blog/ai-overviews-reduce-clicks-update/" in KW_INPUTS_SRC, 'B1-3: a measured figure carries the study it was measured by'
+for _a77 in ("basis: 'stated rule'", 'const lossText ='):
+    assert _a77 in KW_INPUTS_SRC, 'B1-3: ' + _a77 + ' missing from the click-loss model'
+# B1-2: the cache keeps its evidence, and every reader of a stored reach can still measure a topic
+assert 'const reachPack = (ranked) =>' in REACH_SRC_77 and 'const reachCacheRow = (domain, info, location_code, ranked) =>' in REACH_SRC_77, \
+    'B1-2: the reach cache row does not keep the keywords it was measured on'
+assert "ranked_from: ranked ? 'the stored measurement of '" in REACH_SRC_77, 'B1-2: a restored reach does not say where its evidence came from'
+assert "reason_missing" in REACH_SRC_77, 'B1-2: reachTopic cannot tell a failed pull from a pull that was never made'
+assert 'reachCacheRow(domain, info, d.location_code, parsed.ranked)' in code('Reach (Discovery)'), 'B1-2: the discovery reach is stored without its evidence'
+assert 'const topicReachOf = (topic, head) =>' in code('Rank Keywords') and 'const taC = topicReachOf(c.topic, p.keyword);' in code('Rank Keywords') and '...forYou(p.kd, taC)' in code('Rank Keywords'), \
+    'B1-1: discovery still labels every topic against one site-wide number'
+assert 'topics_measured: clusters.filter(c => c.reach_basis === ' in code('Rank Keywords'), 'B1-1: the report cannot say how many topics were measured on their own topic'
+assert 'measured on this topic (difficulty ' in code('Build Keyword Strategy') and 'the optimistic case for a topic you have no record on' in code('Build Keyword Strategy'), \
+    'B1-1: the keyword report does not say which reach each label was measured against'
+assert 'KWI.CLICK_LOSS.ai_overview.source' in code('Build Keyword Strategy'), 'B1-3: the report does not name the study behind its click loss'
+
+# ---------- A. the verdict measures the keyword against this site, on this topic ----------
+# the two shared kits the verdict now needs: the reach model (difficulty for this site, plan, months, chance) and the discovery
+# inputs (the click-loss model behind a traffic figure). One copy each, as everywhere else.
+patch('Parse Verdict', "const prev = $('Merge Keyword Data').first().json;",
+      REACH_SRC_77 + '\n' + KW_INPUTS_SRC + "\nconst prev = $('Merge Keyword Data').first().json;")
+patch('Parse Verdict', "const EXP = (prev.existing_page && prev.existing_page.url) ? prev.existing_page : null;", """// ---- B1-1 (2026-10-15, benchmark area 1): the two numbers the keyword report puts in front of a customer ----
+// They used to be whatever the Verdict Agent typed into its JSON. The same run computes both properly: `_reach.js` turns a keyword
+// difficulty and this site's reach into a plan with a month RANGE and an uncalibrated chance band against a published base rate, and
+// `KWI.calibrate` turns a monthly volume into visits through the measured click loss of the results page that was actually read.
+const KD77 = (prev.keyword_data || {}).keyword_difficulty ?? null;
+const VOL77 = (prev.keyword_data || {}).search_volume ?? null;
+const SF77 = prev.serp_features || {};
+const SERP_READ77 = SF77.unavailable !== true;
+let CACHE77 = []; try { CACHE77 = $('Load Site Cache').all().map(i => i.json); } catch (e) { CACHE77 = []; }
+// the site's reach: the stored measurement (30 days, same market) or, failing that, the size tier of the authority this run already
+// read. Never a fresh paid pull: a keyword report does not buy the ranked-keywords list.
+const RI77 = reachCached(CACHE77, prev.domain, prev.location_code) || { ...reachFrom(null, prev.site_authority || null), ranked: null, cached: false };
+const TA77 = reachTopic(RI77.ranked === undefined ? null : RI77.ranked, prev.keyword, RI77.reach, { domain: prev.domain || 'your site',
+  reason_missing: RI77.cached ? 'the reach stored on ' + String(RI77.cached_at || '').slice(0, 10) + ' was kept without the keywords behind it, so this report has no topic evidence to read'
+    : 'a keyword report does not buy the list of keywords your site ranks for (the keyword research and the ladder do)' });
+const DIFF77 = prev.domain ? difficultyForYou(KD77, TA77.reach, {}) : null;
+const PLAN77 = DIFF77 ? reachPlan(DIFF77, reachStrong(RI77, null)) : null;
+const FORYOU77 = !DIFF77 ? null : { difficulty_for_you: DIFF77, plan_type: PLAN77.plan_type, months: PLAN77.months, months_range: PLAN77.months_range,
+  stretch: PLAN77.stretch, chance: PLAN77.chance, reach_used: TA77.reach, reach_basis: TA77.used ? 'topic' : 'site',
+  site_reach: TA77.site_reach, topic_reach: TA77.topic_reach, kd_known: KD77 != null,
+  label: reachLabel(DIFF77, PLAN77.plan_type === 'none' ? null : PLAN77) + (TA77.used ? ' \\u00b7 measured on this topic' : ''),
+  note: TA77.note + (KD77 == null ? ' This keyword has no measured difficulty either, so it is counted as that reach + ' + REACH_CFG.unknown_kd + '.' : '') };
+const TTR77 = (!PLAN77 || PLAN77.plan_type === 'none') ? null : { months: PLAN77.months, months_range: PLAN77.months_range, basis: 'modelled',
+  chance: PLAN77.chance, note: reachChanceText(PLAN77), base_rate: REACH_BASE_RATE, model_months: verdict.time_to_rank_months ?? null };
+// the visits a page in the top three would take. A results page nobody could read yields NO estimate: what it takes in clicks before
+// anyone reaches a link is exactly what was not seen.
+const VIS77 = (() => {
+  const model = verdict.expected_monthly_visits_top3 ?? null;
+  if (!SERP_READ77) return { visits: null, basis: 'unknown', basis_text: 'not estimated: the live results page could not be read, so the clicks it takes before anyone reaches a link are unknown',
+    note: 'No visit estimate: the live Google results could not be read (' + String(SF77.error || 'no answer').slice(0, 120) + ').', model_estimate: model, loss_applied: '' };
+  const c = KWI.calibrate({ volume: VOL77, serp_types: SF77.features_present || [] }, {});
+  const basis_text = c.traffic_basis === 'calibrated' ? 'calibrated with your own Search Console data'
+    : c.traffic_basis === 'modelled' ? 'modelled from the provider\\'s monthly volume, after this results page\\'s click loss'
+    : 'not estimated: no monthly search volume was measured for this keyword';
+  return { visits: c.traffic_potential, basis: c.traffic_basis, basis_text, note: c.traffic_note, model_estimate: model, loss_applied: KWI.lossText(SF77.features_present || []) };
+})();
+const EXP = (prev.existing_page && prev.existing_page.url) ? prev.existing_page : null;""")
+patch('Parse Verdict', """    expected_visits_top3: EV56.withheld ? null : (verdict.expected_monthly_visits_top3 ?? null),
+    time_to_rank_months: EV56.withheld ? null : (verdict.time_to_rank_months ?? null)""",
+"""    expected_visits_top3: EV56.withheld ? null : (VIS77.visits ?? null),
+    expected_visits: EV56.withheld ? null : VIS77,
+    time_to_rank_months: EV56.withheld ? null : (verdict.time_to_rank_months ?? null),   // kept for the ladder and older readers: it is the MODEL's own number and every surface now says so
+    time_to_rank: EV56.withheld ? null : TTR77,
+    for_you: EV56.withheld ? null : FORYOU77,
+    reach_info: FORYOU77 ? { reach: RI77.reach, method: RI77.method, cached: !!RI77.cached, cached_at: RI77.cached_at || null, evidence_kept: !!RI77.ranked } : null""")
+
+# ---------- B. the delivered document says which figure is which ----------
+patch('Build Word File', """    ['Expected visits/month at #1-3', d.expected_visits_top3 != null ? num(d.expected_visits_top3) : (d.score_withheld ? 'not estimated' : 'N/A')],
+    ['Time to rank', d.time_to_rank_months != null ? d.time_to_rank_months + ' months' : (d.score_withheld ? 'not estimated' : 'N/A')]""",
+"""    ['Difficulty for your site', d.for_you ? esc(d.for_you.label) : (d.domain ? 'not measured for this request' : 'no website on this request')],
+    ['Expected visits/month at #1-3', d.expected_visits ? (d.expected_visits.visits != null ? num(d.expected_visits.visits) + ' \\u2014 ' + esc(d.expected_visits.basis_text) : esc(d.expected_visits.basis_text)) : (d.score_withheld ? 'not estimated' : 'N/A')],
+    ['Time to rank', d.time_to_rank ? esc(d.time_to_rank.months) + ' months \\u2014 ' + esc(LN.BASIS.modelled) + (d.time_to_rank.chance && d.time_to_rank.chance.label ? ', ' + esc(d.time_to_rank.chance.label) : '') : (d.score_withheld ? 'not estimated' : 'N/A')]""")
+patch('Build Word File', """  '<h3>Why</h3>' + ul(d.verdict_reasons) +""",
+"""  ((d.for_you || d.time_to_rank || d.expected_visits) ? '<p class="muted">' + [d.for_you && d.for_you.note, d.time_to_rank && d.time_to_rank.note, d.expected_visits && d.expected_visits.note].filter(Boolean).map(esc).join(' ') + '</p>' : '') +
+  '<h3>Why</h3>' + ul(d.verdict_reasons) +""")
+patch('Build Word File', """    verdict_score: d.verdict_score,""",
+"""    verdict_score: d.verdict_score,
+    for_you: d.for_you || null, time_to_rank: d.time_to_rank || null, expected_visits: d.expected_visits || null,   // B1-1 (2026-10-15): the app shows the same labelled figures as the document""")
+# the ladder's feasibility card prints the verdict's month count too: it is the model's own guess, and it says so now (the plan's
+# own modelled range and chance band sit a few rows above it)
+patch('Build Ladder Report', "['Time to rank (verdict estimate)', f.time_to_rank_months != null ? f.time_to_rank_months + ' months' : 'N/A'],",
+      "['Time to rank', f.time_to_rank_months != null ? f.time_to_rank_months + ' months \\u2014 the writing model\\'s own estimate, not measured; the modelled range and its chance band are in the plan above' : 'not estimated'],")
+for _a77 in ('const FORYOU77 =', 'const TTR77 =', 'const VIS77 =', 'reachTopic(RI77.ranked'):
+    assert _a77 in code('Parse Verdict'), 'B1-1: Parse Verdict is missing ' + _a77
+assert 'expected_visits_top3: EV56.withheld ? null : (VIS77.visits ?? null)' in code('Parse Verdict'), 'B1-1: the verdict still ships the model\'s own visit number as the figure'
+assert "if (!SERP_READ77) return { visits: null, basis: 'unknown'" in code('Parse Verdict'), 'B1-1: a results page nobody read must not produce a visit estimate'
+assert "Difficulty for your site" in code('Build Word File') and "d.time_to_rank ? esc(d.time_to_rank.months)" in code('Build Word File'), \
+    'B1-1: the delivered document does not carry the measured plan'
+# B1-5 (K4, 2026-10-15): what Google really ranks decides the page type, and a disagreement with the plan is printed
+assert 'const serpPageTypes = (results, o) =>' in KW_INPUTS_SRC and "{ type: 'Comparison or list'," in KW_INPUTS_SRC, \
+    'B1-5: the results-page shapes belong in the shared kit'
+assert 'page_types: KWI.serpPageTypes(' in code('Build Keyword Strategy'), 'B1-5: the live check still keeps only the domains it read'
+assert 'What Google ranks:' in code('Build Keyword Strategy'), 'B1-5: the card does not say what kind of page Google ranks'
+# harness shim (S87): the click-loss and traffic model as a runnable script, one call per item
+os.makedirs(OUT_CODE, exist_ok=True)
+open(os.path.join(OUT_CODE, '_kw_click_loss.js'), 'w').write(
+    "// generated by build_v4.py section 77 - the click-loss and traffic model as a runnable node for the harness (S87)\n"
+    + KW_INPUTS_SRC + "\nreturn $input.all().map(i => { const j = i.json || {};\n"
+      "  const types = j.serp_types || [];\n"
+      "  return { json: { ctr: KWI.featureLoss(types), applied: KWI.lossApplied(types), text: KWI.lossText(types), click_loss: KWI.CLICK_LOSS,\n"
+      "    page_types: KWI.serpPageTypes(j.results || [], { page_type: j.page_type }),\n"
+      "    ...KWI.calibrate({ volume: j.volume === undefined ? null : j.volume, serp_types: types, gsc: j.gsc || null }, j.opts || {}) } }; });\n")
+sticky("""### The verdict’s own two numbers, and a difficulty measured on the topic (B1-1 · B1-2 · B1-3, 2026-10-15)
+**“Time to rank: 6 months” and “Expected visits/month at #1-3: 70” came out of the language model** and reached the Word file, the PDF and the ladder card with no basis at all. They are now **computed**: the plan’s month range with its uncalibrated chance band, and the volume through the **measured** click loss of the results page that was read — each printed with what it is. A results page nobody could read produces no visit figure at all.
+**Difficulty is measured on the topic**, as MarketMuse and Semrush do it: the reach cache keeps the keywords it was measured on, so the Keyword Check, the keyword report and discovery can measure the difficulty this site has already beaten **on this topic**. Below five on-topic top-10 keywords the site-wide number stays — never a penalty — and the answer says which number it used and on what.
+**The AI Overview click loss was the April 2025 figure (0.65).** December 2025: −58.0% at position 1, −50.8% at 2, −46.4% at 3 (Ahrefs, 300,000 keywords). Every traffic potential on an AI Overview page was ~1.5x too generous.""",
+    pos('Parse Verdict')[0] - 40, pos('Parse Verdict')[1] + 320, 1120, 280, 4)
+log('The keyword verdict\'s own two numbers, and a difficulty measured on the topic (2026-10-15, benchmark area 1, rows B1-1 / B1-2 / B1-3; BENCH_AREA1_keywords.md). B1-1: `expected_monthly_visits_top3` and `time_to_rank_months` came straight out of the Verdict Agent\'s JSON and reached the Word file, the PDF and the ladder card with no basis at all ("Time to rank: 6 months", exec 519) while the same run computes a month RANGE with an uncalibrated chance band (G3) and a traffic figure that says calibrated / modelled / unknown (G8) - Parse Verdict now carries for_you (difficulty for this site, plan, months, chance, and WHICH reach it was measured against), time_to_rank (the modelled range, the model\'s own number kept beside it) and expected_visits (through the click-loss model, with its basis in words), a results page that could not be read yields no visit estimate at all, and the document prints the basis next to every one. B1-2: the reach cache kept the number and threw the evidence away, so a run reusing it could not measure a topic and could not say what the number rested on - reachCacheRow now stores the top-10 keywords behind it, reachCached hands them back, and the Keyword Check and discovery measure the reach on the TOPIC asked about exactly as the ladder does (same kit, same bar, no new call; a row written before this change says it has no evidence). B1-3: the AI Overview click loss was 0.65, the April 2025 measurement, while Ahrefs\' December 2025 study (300,000 keywords, published 2026-02-04) measures -58.0% at position 1, -50.8% at 2 and -46.4% at 3 - the estimate is for a page in the top three, so their average (0.483) is the factor, every AI Overview traffic potential was ~1.5x too generous, and the four features with no verifiable measurement keep their values and are labelled a stated rule in KWI.CLICK_LOSS')
+
+
+# =============================================================================
+# 79. WHAT AN INDEX SAW LAST WEEK IS NOT WHAT IS ON THE PAGE TODAY (2026-10-15, benchmark programme area 10 —
+#     docs/system-review-2026-10-14/BENCH_AREA10_backlinks.md; register rows B10-1 / B10-2 / B10-3 / B10-4)
+#
+#     The rubric scores this area on three things: index size and freshness, lost-link verification, and spam scoring. On the
+#     second we were already ahead of every tool that was checked — a loss needs two misses and a reason, because DataForSEO
+#     reported techand.ai's strongest link (peppol.org) lost while it was live and followed. On the other two the report said
+#     nothing honest at all, and this section pays that.
+#
+#     What the leaders publish, opened 2026-10-15. Ahrefs: "updated with fresh data every 15-30 minutes", but "The complete
+#     database update ... takes about two months" and inside it "some pages will be updated 60 times, others only once"
+#     (https://help.ahrefs.com/en/articles/78052-how-often-is-ahrefs-links-database-updated); its eight "link lost" reasons include
+#     four where the link "may still exist on the page" — Noindex, Not canonical anymore, Crawl errors, Dropped
+#     (https://help.ahrefs.com/en/articles/920461-understanding-link-lost-reasons). Majestic prints its freshness as a rule and a
+#     date range: the Fresh Index "contains backlinks we've seen in the past 120 days", updated "frequently throughout the day"
+#     (https://majestic.com/support/glossary). Semrush: "a backlink index of more than 43 trillion backlinks", "refreshed at least
+#     hourly" (https://www.semrush.com/analytics/backlinks/), and it "keeps its backlink database up-to-date by removing backlinks
+#     that haven't been detected in six months" (https://www.semrush.com/blog/biggest-backlink-database-study). Linkody re-checks
+#     every monitored link "every 24h" from $14.90 a month (https://www.linkody.com/en/plans). Our own provider publishes
+#     1,981,638,221,669 live backlinks and 1,202,825,143 pages crawled in 24 hours (https://dataforseo.com/apis/backlinks-api).
+#     Nobody publishes a comparable liveness rate: the one study of monitored links that was found is Linkody's own, June 2026,
+#     865,000 links — "Only 56% of monitored backlinks are still live and correct", 21% gone within 3 months, 52% within a year,
+#     and crawl errors excluded from both sides (https://blog.linkody.com/seo/link-building-statistics-2026-2).
+#
+#     * B10-1 — **freshness was never stated.** Every figure in the backlink report was printed as if it described today, while the
+#       index behind most of it says only "live when I last crawled". The ledger already holds the dates; nothing read them.
+#       *Link Merge* now keeps the index's OWN last sighting per referring site (`dfs_last_seen`, apart from `last_seen`, which
+#       every source and our own fetch move), *Parse Backlinks* reduces it to newest / middle / oldest, and the report prints one
+#       sentence: how old the index's view is, how recently we read the pages ourselves, how many have never been read by us, and
+#       the age of Google's uploaded sample and the Common Crawl release.
+#     * B10-2 — **criterion 4B.2's own number was computed by nobody.** It asks for ">= 90% of links reported live are live",
+#       measured by our own re-crawl — and the report printed "Checked on the page 1" beside "18 checked this run" (exec 529,
+#       2026-10-13), which is two different denominators and no rate, while `coverage.blocked` was computed and shown to no one.
+#       `coverage.check` now carries fetched / read / unread-by-reason, the share of the pages we READ that still carry the link,
+#       and the same share restricted to the links the index reports live. A bot wall, a JavaScript-only page or a fetch error
+#       counts on neither side — Linkody excludes its 13% of crawl errors for the same reason — and under five readable checks
+#       there is NO rate, only the sentence saying why (INVARIANTS rule 1: a figure says what it is, or it is withheld).
+#     * B10-3 — **the anchor block was two sets pretending to be one.** The percentages came from the ledger and the table came
+#       straight out of the index, so a link farm's anchor ("High Quality Dofollow Backlinks DA 50 PA 40 Premium PBN Network
+#       Service", 17 referring domains) was printed inside a table whose own percentages had excluded it (exec 564, 2026-10-14,
+#       noted in that run's RESULTS.md and never numbered). One set for both now, the farms counted beside it and marked in the
+#       table. The ">30% keyword anchors" rule of thumb was an unsourced constant: it is now judged against the only measured
+#       distribution that could be opened (Linkody, 865,000 links, June 2026 — keyword 56%, brand 18%, URL 15%, image/empty 10%,
+#       generic 1%), printed beside the site's own. And the headline "Spam score 63/100 · high" was the index's own 0-100 with a
+#       band we invented: DataForSEO's documentation defines the field and publishes no bands
+#       (https://docs.dataforseo.com/v3/backlinks/summary/live/), so the tile now says whose number it is and what it was computed
+#       over instead of grading it.
+#     * B10-4 — **an index's silence was recorded as a loss.** A referring site no source had seen for 120 days became
+#       `status: 'lost'`, reason `not_seen` — with no page ever fetched, no alert, no row in the lost table, and the referring-site
+#       count quietly smaller on both the headline and the drop alert. That is the peppol.org mistake with the index saying nothing
+#       instead of saying "lost", and Ahrefs documents the same trap from the other side (a "Dropped" page's link "may still exist
+#       on the page"). Silence is now a loss only when our OWN fetch has already failed on that page; otherwise the row is
+#       `at_risk`, keeps its value and its place in the count, is named in the report, and *Verify Requests* raises it to priority
+#       850 — above the valuable rotation and inside the light run's budget — so the status written on one path is acted on on the
+#       other (INVARIANTS rule 2).
+# =============================================================================
+# 82. A SUBMISSION IS A NOTIFICATION, AND A WIN IS NOT FOR EVER (2026-10-15, benchmark programme area 9 —
+#     docs/system-review-2026-10-14/BENCH_AREA9_ai_growth.md; register rows B9-1 / B9-2 / B9-3 / B9-4 / B9-5)
+#
+#     Area 9 is the ACTING half of AI search: getting a site named and cited, not measuring whether it is. The rubric names
+#     Profound Actions and AthenaHQ, and both were opened in this pass. Profound's own launch of Actions (10 Jul 2025) is a
+#     brief generator and says so — "We don't generate content for you" — and its 2026 successor Aim is "an always-on background
+#     agent" that routes work to agents "while keeping marketers in control of every approval"
+#     (https://www.tryprofound.com/blog/introducing-actions, https://www.tryprofound.com/newsroom/profound-launches-aim-to-transform-ai-search-data-into-marketing-execution).
+#     AthenaHQ "tells you what to fix" and publishes only through a customer's own CMS connection (https://athenahq.ai/).
+#     So the leaders stage and recommend; the human approves. We already do that — nothing here sends, publishes or places a
+#     citation, and Google's spam policies are the reason it stays that way: scaled content abuse is "many pages ... generated
+#     for the primary purpose of manipulating search rankings ... no matter how it's created", link spam includes "using
+#     automated programs or services to create links to your site", and spam now covers attempts "to manipulate generative AI
+#     responses in Google Search" (https://developers.google.com/search/docs/essentials/spam-policies).
+#
+#     What this pass found is not a missing feature. It is five claims the engine was making that its own data did not support.
+#
+#     * B9-1 — **we told customers a submission reaches ChatGPT.** "N page(s) sent to Bing (ChatGPT search, Copilot)" was in the
+#       weekly report, the node comments and the sticky. OpenAI's crawler documentation says OAI-SearchBot "is used to surface
+#       websites in search results in ChatGPT's search features" and never mentions Bing
+#       (https://developers.openai.com/api/docs/bots); Bing's index is what Bing and Microsoft Copilot answer from, and Bing
+#       Webmaster Tools reports those citations in AI Performance, a dashboard with no API
+#       (https://blogs.bing.com/webmaster/2026/2/Introducing-AI-Performance-in-Bing-Webmaster-Tools-Public-Preview/, and its
+#       Topics Portfolio beta of 13 Oct 2026). IndexNow's own FAQ states that "Submitting a URL does not guarantee immediate
+#       indexing" and that each engine "makes its own decision about whether to index it", over Amazon, Bing, Naver, Seznam.cz,
+#       Yandex and Yep — Google does not take part (https://www.indexnow.org/faq). The report now says exactly that, and the
+#       word "sent" is never dressed up as "indexed".
+#     * B9-2 — **nothing ever went back to look.** "16 pages sent to Bing" was the headline of a week's work and no run ever
+#       asked what became of them: GetUrlInfo was called for the 12 pages of the readiness rotation only. Every page submitted
+#       in the last 45 days that Bing has not crawled is now asked about again (free), and the report states how many Bing has
+#       SINCE crawled, how long the rest have waited, and how many were not asked about — or, with the site outside the Bing
+#       account, that the figure is not available and why (INVARIANTS rule 4, then rule 1).
+#     * B9-3 — **"can AI read and quote this page" was answered by a browser.** The key pages were fetched with a Chrome
+#       User-Agent and robots.txt was never read on this path, so a page the AI fetchers are forbidden to touch could score
+#       90/100 and be sent to Bing and IndexNow on top. robots.txt is now read first and matched per page by Google's documented
+#       rules for OAI-SearchBot, ChatGPT-User, PerplexityBot, Claude-SearchBot, Googlebot and Bingbot: closed to all six and
+#       there is NO score (not a zero — a refusal with the rule quoted), closed to some and the score is capped with that block
+#       as the first fix, and a robots.txt that could not be read is "not checked", never "allowed".
+#     * B9-4 — **a win was one observation, and once won it could never be lost.** A target became `won` because its question
+#       was absent from the latest run's gap list — which also happens when the question was not asked at all — and a stored
+#       `won` row stayed `won` even while the gap list said the question was lost again. A win now needs at least two answers of
+#       the last eight days naming the business (the weekly run and the daily pulse both write them), the count travels with the
+#       status into the report and the alert, and a question that is lost again goes back in the queue with both dates and a
+#       medium alert.
+#     * B9-6 — **"writing" was a promise nobody ever kept.** The Content Cadence marks a target `writing` and stamps `written_at`
+#       when it STARTS a page run, nothing ever sets `written`, and nothing writes the row back when the run is refused or fails —
+#       the R1 class, in the one table R1 did not cover. The read path now believes a `writing` row only against a content-log row
+#       for the same run that says written or published; after two weeks without one the question is queued again with the reason
+#       and a medium alert. The write-side release belongs to the cadence and is registered for area 4.
+#     * B9-5 — **a refresh queue with no decay in it.** Refreshes were chosen by age and by our own readiness score; the thing
+#       the leaders rank them by is citation decay. A page cited in earlier weekly checks and in neither of the last two is now
+#       raised as a refresh with the counts and the date it was last cited — measured from runs we already store.
+# =============================================================================
+def _b82_checks():
+    """Area 9 over the generated AI Growth workflow: the sourced wording, the follow-up, the robots gate on BOTH the scoring and
+    the submitting path, the measured win, and the decay. Walks the built workflow and its main connections, because R17's lesson
+    was that the code can be right while the wiring is not."""
+    import json as _j82
+    _p82 = os.path.join(HERE0, 'workflows', 'SEO_Agent_AI_Growth.json')
+    assert os.path.exists(_p82), 'SEO_Agent_AI_Growth.json was not generated'
+    _wf82 = _j82.load(open(_p82, encoding='utf-8'))[0]
+    _code82 = {n['name']: (n.get('parameters') or {}).get('jsCode') or '' for n in (_wf82.get('nodes') or []) if (n.get('parameters') or {}).get('jsCode')}
+    _want82 = {
+        'Growth Plan': ('B9-2 / B9-4 / B9-5 / B9-6', ('win_min_answers: 2', 'follow_up_days: 45', 'const obsOf =', 'obsLine', 'const wasWon =',
+                                                      'won_lost.push', 'const decayOf =', 'const follow_up =', 'const logByReq =', 'stalled_targets.push')),
+        'Robots Verdicts (Growth)': ('B9-3', ("{ bot: 'OAI-SearchBot'", "{ bot: 'Bingbot'", 'const rulesFor =', 'blocked_all:', 'unavailable', 'bing_ok:')),
+        'AI Readiness': ('B9-3', ("$('Robots Verdicts (Growth)')", 'score_withheld', 'score = null', "key: 'ai_fetchable'", 'robots_note')),
+        'Bing Submit Requests': ('B9-1 / B9-2 / B9-3', ('OAI-SearchBot', 'refused', 'blockedFor', "x.q.why === 'checked this week'")),
+        'IndexNow Requests': ('B9-1 / B9-3', ('does not guarantee immediate indexing', 'blocked_all', 'refused')),
+        'Bing Growth Requests': ('B9-2', ('p.follow_up', "'submitted '", 'submitted_days')),
+        'Growth Metrics': ('B9-2 / B9-3 / B9-4 / B9-5 / B9-6', ('const outcome =', "basis: 'not available'", 'crawlOf', 'r.score != null',
+                                                                "type: 'robots'", "type: 'decay'", 'won_lost', 'refusedSub', 'stalled_targets')),
+        'Growth Report': ('B9-1 / B9-2 / B9-3 / B9-4', ('a submission is a notification, not indexing', 'Bing, Yandex, Naver, Seznam, Yep',
+                                                        'OAI-SearchBot', 'have since been crawled by Bing', 'not scored', 'crawled by Bing after we submitted them')),
+    }
+    for _node82, (_row82, _needs82) in _want82.items():
+        _js82 = _code82.get(_node82) or ''
+        assert _js82, 'area 9: node %s not found in the AI Growth workflow' % _node82
+        for _t82 in _needs82:
+            assert _t82 in _js82, '%s: %s no longer carries %r' % (_row82, _node82, _t82)
+    # B9-1: the claim that a Bing submission reaches ChatGPT may not come back anywhere in this workflow, code or sticky
+    _all82 = '\n'.join(_code82.values()) + '\n' + '\n'.join(((n.get('parameters') or {}).get('content') or '') for n in (_wf82.get('nodes') or []))
+    assert '(ChatGPT search, Copilot)' not in _all82, 'B9-1: a Bing submission is being sold as reaching ChatGPT search again'
+    # B9-2: the outcome has a refusal path and is never derived from the submissions themselves
+    _gm82 = _code82['Growth Metrics']
+    assert "if (!BING) return { basis: 'not available'" in _gm82 and "if (!inAccount) return { basis: 'not available'" in _gm82, \
+        'B9-2: the submission outcome has no refusal path — it would print a figure for a site Bing cannot be asked about'
+    assert 'crawled: crawled.length' in _gm82 and "source: 'Bing Webmaster Tools (GetUrlInfo)'" in _gm82, 'B9-2: the outcome no longer says what measured it'
+    # B9-4: a lost question may not keep a stored "won"
+    _gp82 = _code82['Growth Plan']
+    assert "['writing', 'written', 'won'].includes(old.status) ? old.status" not in _gp82, 'B9-4: a question that is lost again is being left at "won" again'
+    assert 'o.named >= CONFIG.win_min_answers' in _gp82, 'B9-4: a win is being declared without counting the answers behind it'
+    # B9-6: a stored "writing" row is believed only against a content-log row for the same run
+    assert "if (l && ['written', 'published'].includes(String(l.status))) return null;" in _gp82, \
+        'B9-6: a target marked "writing" by the cadence is being trusted again without the page run that proves it'
+    # B9-3, the wiring: every path from a trigger to the scoring and the submitting nodes runs through the robots verdicts.
+    # Proved by deleting that node from the graph and showing the three consumers become unreachable (R17's lesson).
+    _conns82 = _wf82.get('connections') or {}
+    def _reach82(skip):
+        _seen, _stack = set(), [n['name'] for n in (_wf82.get('nodes') or []) if n['type'].endswith(('scheduleTrigger', 'executeWorkflowTrigger'))]
+        while _stack:
+            _cur = _stack.pop()
+            if _cur in _seen or _cur == skip:
+                continue
+            _seen.add(_cur)
+            for _lst in ((_conns82.get(_cur) or {}).get('main') or []):
+                for _t in (_lst or []):
+                    _stack.append(_t['node'])
+        return _seen
+    _full82 = _reach82(None)
+    for _consumer82 in ('AI Readiness', 'Bing Submit Requests', 'IndexNow Requests', 'Growth Metrics'):
+        assert _consumer82 in _full82, 'area 9: %s is not on the AI Growth main path at all' % _consumer82
+    _without82 = _reach82('Robots Verdicts (Growth)')
+    for _consumer82 in ('AI Readiness', 'Bing Submit Requests', 'IndexNow Requests'):
+        assert _consumer82 not in _without82, \
+            'B9-3 (INVARIANTS rule 2): %s can be reached without passing Robots Verdicts (Growth) — the gate exists in the code and not in the wiring' % _consumer82
+
+log('A submission is a notification, and a win is not for ever (2026-10-15, benchmark area 9, rows B9-1 ... B9-5; BENCH_AREA9_ai_growth.md). The leaders of the ACTING half stage and recommend and the human approves - Profound Actions says "We don\'t generate content for you", its 2026 successor Aim keeps "marketers in control of every approval", AthenaHQ "tells you what to fix" - and Google\'s spam policies now cover attempts "to manipulate generative AI responses in Google Search", so what this pass changed is not what we do but what we CLAIM. B9-1: the weekly report said "N page(s) sent to Bing (ChatGPT search, Copilot)" while OpenAI\'s own crawler page documents OAI-SearchBot for ChatGPT search and never mentions Bing; it now names Bing and Microsoft Copilot for Bing\'s index, lists IndexNow\'s engines (Amazon, Bing, Naver, Seznam, Yandex, Yep - not Google) and quotes IndexNow\'s own "does not guarantee immediate indexing", so a submission is never dressed up as an indexing. B9-2: nothing ever went back to look at the pages we sent - GetUrlInfo was asked only about the readiness rotation - so every page submitted in the last 45 days that Bing has not crawled is asked about again (free) and the report states how many Bing has SINCE crawled, how long the rest have waited and how many were not asked about, or that the figure is not available and why. B9-3: "can AI read and quote this page" was answered by a Chrome User-Agent with robots.txt never read on this path, so a page the AI fetchers may not touch could score 90/100 and be submitted on top; robots.txt is read first and matched per page by Google\'s documented rules for the six answer fetchers - closed to all six means NO score and no submission (a refusal with the rule quoted, not a zero), closed to some caps the score with that block as the first fix, and a robots.txt that could not be read is "not checked", never "allowed" - and the build proves the gate is in the WIRING by deleting the node and showing AI Readiness, Bing Submit Requests and IndexNow Requests become unreachable. B9-4: a win was one observation and, once won, could never be lost - a target became won because its question was absent from the latest gap list (which also covers a question nobody asked) and a stored won row survived the question being lost again; a win now needs at least two answers of the last eight days naming the business, the count travels into the report and the alert, and a question lost again returns to the queue with both dates and a medium alert. B9-6: "writing" was a promise nobody kept - the Content Cadence stamps a target writing and written_at when it STARTS a page run, nothing ever sets written and nothing writes the row back when the run is refused, so a question could sit being written for ever (the R1 class in the one table R1 did not cover); the read path now believes a writing row only against a content-log row for the SAME run that says written or published, and after two weeks without one the question is queued again with the reason and a medium alert, while the write-side release is registered for the cadence. B9-5: refreshes were ranked by age and by our own score, never by citation decay - a page cited in earlier weekly checks and in neither of the last two is now raised with the counts and the date it was last cited, measured from runs we already store')
+
+
+# =============================================================================
+def _b79_checks():
+    """Area 10 over the generated Backlink Monitor: freshness, the measured liveness rate, one set for the anchors, and a silence
+    that is no longer a loss. Walks the built workflow, so a change that never reaches a node cannot pass."""
+    import json as _j79
+    _p79 = os.path.join(HERE0, 'workflows', 'SEO_Agent_Backlink_Monitor.json')
+    assert os.path.exists(_p79), 'SEO_Agent_Backlink_Monitor.json was not generated'
+    _code79 = {}
+    for _w79 in _j79.load(open(_p79, encoding='utf-8')):
+        for _n79 in (_w79.get('nodes') or []):
+            if (_n79.get('parameters') or {}).get('jsCode'):
+                _code79[_n79['name']] = _n79['parameters']['jsCode']
+    _want79 = {
+        'Link Merge': ('B10-1', ("dfs_last_seen: ''", "e.dfs_last_seen = ymd(x.last_seen)")),
+        'Parse Backlinks': ('B10-1 / B10-2 / B10-3 / B10-4', (
+            'const freshness = {', 'idxAges', 'e.dfs_last_seen',                      # B10-1
+            'const CHECK_MIN = 5;', 'index_precision:', 'unread_by', 'const linkCheck = {',   # B10-2
+            'const ANCHOR_BASE = {', 'farmAnchors', 'set_aside:',                     # B10-3
+            "dormant.push({", "dormant: dormant.slice(0, 25)")),                      # B10-4
+        'Verify Requests': ('B10-4', ("pv.status === 'at_risk' && pv.lost_reason === 'not_seen'", "dormant ? 850 :", "dormant ? 'dormant' :",
+                                      "!(e.sources.length && e.sources.every(s => s === 'wiki' || s === 'hn'))")),
+        'BL Report': ('B10-1 / B10-2 / B10-3', ('const CK = C.check || {}', 'Checked by us, not taken on trust', 'How fresh this is',
+                                                'at least ' + "' + n(CK.min_sample) + '", 'AB.source', 'link farm, set aside', "Spam score (the index")),
+    }
+    for _node79, (_row79, _needs79) in _want79.items():
+        _js79 = _code79.get(_node79) or ''
+        assert _js79, 'area 10: node %s not found in the Backlink Monitor' % _node79
+        for _t79 in _needs79:
+            assert _t79 in _js79, '%s: %s no longer carries %r' % (_row79, _node79, _t79)
+    # B10-4 both ways: the branch may not call a silence a loss on its own, and the row it writes has to be read somewhere
+    _pb79 = _code79['Parse Backlinks']
+    assert "{ status = 'lost'; lost_reason = 'not_seen'; lost_at = now; }" not in _pb79, \
+        'B10-4: 120 days of an index saying nothing is being recorded as a lost link again'
+    assert "dormant ? 850 :" in _code79['Verify Requests'], 'B10-4: nothing ever goes and looks at a dormant link'
+    # B10-2: the refusal path is what makes the rate honest - a rate off one link is not a measurement
+    assert 'rows.length >= CHECK_MIN ?' in _pb79 and ': null;' in _pb79, 'B10-2: the liveness rate has no refusal path'
+    # B10-3: the farms are out of the distribution AND marked in the table, or the two halves disagree again
+    assert 'const cleanAnchors = liveRows.filter(r => !spamSet.has(r.ref_domain));' in _pb79, \
+        'B10-3: the anchor percentages are being computed over the link farms again'
+
+log('What an index saw last week is not what is on the page today (2026-10-15, benchmark area 10, rows B10-1 / B10-2 / B10-3 / B10-4; BENCH_AREA10_backlinks.md). B10-1: the report never said how fresh anything was, while the index behind most of it only means "live when I last crawled" - Ahrefs states a complete refresh of its own index takes about two months, Majestic publishes a 120-day Fresh Index, Semrush drops links not detected in six months, Linkody re-checks every link every 24h; Link Merge now keeps the index\'s own last sighting per referring site (dfs_last_seen, apart from last_seen, which every source and our own fetch move) and the report prints newest / middle / oldest beside how recently we read the pages ourselves, how many we have never read, and the age of Google\'s uploaded sample and the Common Crawl release. B10-2: criterion 4B.2 asks for the share of links reported live that are live and nothing computed it - the report printed "Checked on the page 1" beside "18 checked this run", two denominators and no rate, and coverage.blocked was computed for nobody; coverage.check now carries fetched / read / unread by reason, the share of the pages we READ that still carry the link and the same share over the links the index reports live, with bot walls, JavaScript-only pages and fetch errors counted on neither side and NO rate at all under five readable checks. B10-3: the anchor percentages were computed over the ledger while the table came straight from the index, so a link farm\'s anchor was printed inside a table whose percentages had excluded it - one set for both now, the farms counted beside it and marked in the table, and the >30% keyword-anchor rule of thumb judged against the only measured distribution that could be opened (Linkody, 865,000 monitored backlinks, June 2026); the headline spam tile no longer grades the index\'s 0-100 with a band we invented, it says whose number it is and what it was computed over. B10-4: a referring site no source had seen for 120 days was recorded as lost with no page ever fetched, no alert and no row in the lost table, and the referring-site count quietly fell - the peppol.org mistake with the index saying nothing instead of saying lost; a silence is now a loss only when our own fetch has already failed on that page, otherwise the row is at_risk, keeps its value and its place in the count, is named in the report, and Verify Requests raises it to priority 850 so it is actually read on the next run (INVARIANTS rule 2, both paths)')
+
+
+# 81. A RATE WITHOUT ITS SAMPLE, AND A CHANGE WITHOUT A TEST (2026-10-15, benchmark programme area 8 —
+#     docs/system-review-2026-10-14/BENCH_AREA8_ai_visibility.md; register rows B8-1 / B8-2 / B8-3 / B8-4 / B8-5)
+#
+#     This area measures a signal that is non-deterministic by construction. SparkToro and Gumshoe ran 2,961 prompt executions
+#     across 600 volunteers and found an identical brand list comes back from ChatGPT or Google's AI under 1% of the time, and
+#     the same list IN THE SAME ORDER about once in 1,000 runs; presence is far more stable than rank (City of Hope was mentioned
+#     in 69 of 71 ChatGPT responses and ranked first in 25). Their advice to buyers, verbatim: "stop throwing money at AI tracking
+#     products that don't provide stats-backed, publicly-reviewable research ... make sure your provider answers the questions
+#     we've surfaced here and shows their math"
+#     (https://sparktoro.com/blog/new-research-ais-are-highly-inconsistent-when-recommending-brands-or-products-marketers-should-take-care-when-tracking-ai-visibility/).
+#
+#     What the leaders actually ship, read on their own pages and API docs on 2026-10-15. **Profound** — still the leader, $180M
+#     Series D at $1.8bn on 15 Sep 2026 — ran the only proper variance study in the market: 753 prompts x 7 platforms, ~989,000
+#     AI responses over two weeks, decomposing daily variance into V(Mn) = S/n + D with Wald SDs, bootstrap SDs and a quadrature
+#     total SE (https://www.tryprofound.com/blog/is-once-a-day-enough). Its product then exposes NONE of it: the v2 visibility
+#     endpoint returns `visibility_score`, `share_of_voice` and `average_position` and no denominator, no standard error, no
+#     interval (https://docs.tryprofound.com/rest-api/reports/query-visibility-v2.md), and no delta or significance rule is
+#     defined anywhere (https://docs.tryprofound.com/cookbook/metrics/how-metrics-are-calculated.md). It is also actively worse
+#     than neutral on comparability: the CURRENT configuration is applied retroactively to stored answers at request time, so
+#     adding, pausing, deleting or retagging a prompt changes past numbers, "Reports reflect the current configuration only. An
+#     older configuration cannot be viewed", and a newly added model gets no backfill while the cross-model average silently
+#     changes denominator (https://docs.tryprofound.com/cookbook/metrics/why-past-numbers-change.md). **Semrush** — now an Adobe
+#     subsidiary, acquisition closed and announced 2026-04-28 (https://www.semrush.com/news/455963-faq-for-customers-adobe-
+#     acquires-semrush/) — tracks 25 prompts per account and defines its change column, in full, as "The change in your brand
+#     mentions since the last update" (https://www.semrush.com/kb/1503-ai-search-tracking). **Ahrefs Brand Radar** never uses the
+#     words variance, noise, sample size or confidence on its product or methodology page, and sells 5 prompts on Lite and 20 on
+#     Advanced (https://ahrefs.com/brand-radar, https://ahrefs.com/blog/brand-radar-methodology/). **Evertune** publishes real
+#     margins of error - one prompt asked once is +/-44 points, 100 prompts asked once is +/-9 overall but +/-31 at topic level -
+#     and then marks "Statistical significance" with a dash on its $60 Starter tier, selling it at $800
+#     (https://www.evertune.ai/platform/methodology, https://www.evertune.ai/pricing).
+#
+#     So the bar is not "add more engines". Not one tool in this market puts a sample size or an interval next to a rate, and
+#     none refuses a delta when the panel or the engine set moved underneath it. We already did that for ONE of four headline
+#     figures. This section does it for the rest, and for the two silences.
+#
+#     * B8-1 - **three of the four headline tiles printed an untested arrow beside a tested one.** "Named in" carried a 95%
+#       Wilson range and a two-proportion z-test from v4.9; "Your pages cited", "Share of voice" and the visibility score were
+#       bare subtractions in the same row, in the same type, off the same 33-54 answers (exec 526 measured 54, exec 556 measured
+#       41) - and the SUBJECT LINE put the untested points in front of every reader before they opened the mail. All four now go
+#       through one shared test (`changeOf`, `_ai_stats.js`) and print real change / within noise / not tested. The share of voice
+#       is tested on its own denominator - yours out of yours plus the competitors' mentions - and the earlier run's competitor
+#       counts come from the stored row rather than from reconstructing them out of a rounded percentage. The visibility score is
+#       a WEIGHTED MEAN, so Wilson does not apply: it gets the standard error of that mean over Kish's effective sample size
+#       (`scoreBand`), is labelled modelled, and a move inside its own 95% band is not called a change. The "a competitor gained
+#       10+ points" alert, a fixed rule since v4.9, is z-tested on the same denominator.
+#     * B8-2 - **the daily pulse pooled seven days of baseline with no check that they measured the same thing.** B-L4 put exactly
+#       this guard on the weekly tracker on 2026-10-15 and left the pulse without it, so raising the panel from 8 questions to 20
+#       - which the owner is being asked to do (G20) - or switching an engine on would move the pooled rate and fire a 99%
+#       "a real drop, not sampling noise" at a site whose visibility had not moved. A morning is pooled only when the same engines
+#       answered it and it was measured on a comparable number of answers (`sameBasis`, R19's 20% drift); every day left out is
+#       named with its reason, and with no comparable day there is no test at all and the mail says so.
+#     * B8-3 - **a morning nobody could read was indistinguishable from a quiet one.** The pulse sends mail only when it has an
+#       alert, so a day on which every request failed sent nothing: rule 3's "a failure that reaches no human is not handled".
+#       Today's readability is now its own evidence block (`unavailable`, asked / checked / failed / retried), an unreadable
+#       morning always reaches a human, a silent engine is a medium alert, and no statistical drop is drawn from a day that could
+#       not be read. The weekly half: the tracker pools the pulse mornings straight into `samples` and `mentioned`, and a morning
+#       that reached only two of three engines is a different mix - it is still pooled, and the report now says how many answers
+#       came from such a day, by date, with the engine that was silent.
+#     * B8-4 - **a per-question win rate had no floor and picked the actions.** With an 8-question panel on the weekly engines a
+#       question can carry one answer, and "0%" read exactly like a question the business reliably loses - which then became a
+#       gap, an action and a ready-to-send API body telling the owner to write a page. A question needs four answers before its
+#       rate says anything; below that it is listed as undecided with what it would need, and it picks nothing.
+#     * B8-5 - **`skipped_by_cap` was written by *AI Requests* and read by nobody.** At 900 requests or $15 ($4 on the pulse) the
+#       run stops asking, every rate is measured on what was left, and the panel simply looked shorter. It is counted per engine,
+#       printed in the report and recorded in the lineage as evidence nobody gathered.
+# =============================================================================
+def _b81_checks():
+    """Area 8 over the generated AI Visibility Tracker and AI Pulse. Walks the built workflows, so a change that never reaches a
+    node cannot pass, and proves the ORDER of the two guards: a basis filter that runs after its own z-test guards nothing."""
+    import json as _j81
+    _code81 = {}
+    for _f81 in ('SEO_Agent_AI_Visibility.json', 'SEO_Agent_AI_Pulse.json'):
+        _p81 = os.path.join(HERE0, 'workflows', _f81)
+        assert os.path.exists(_p81), '%s was not generated' % _f81
+        for _w81 in _j81.load(open(_p81, encoding='utf-8')):
+            for _n81 in (_w81.get('nodes') or []):
+                if (_n81.get('parameters') or {}).get('jsCode'):
+                    _code81[_f81.replace('SEO_Agent_', '').replace('.json', '') + ' / ' + _n81['name']] = _n81['parameters']['jsCode']
+    _want81 = {
+        'AI_Visibility / AI Metrics': ('B8-1 / B8-3 / B8-4 / B8-5', (
+            'const tests = (prev && like.comparable) ? {',                       # B8-1
+            'changeOf(cited, samples, citedBefore, prev.samples)',
+            'changeOf(mentioned, mentioned + compTotal, prev.mentioned_k, prev.mentioned_k + compTotalBefore)',
+            'const score_band = scoreBand(ans,', 'scoreChange(visibility_score, prev.visibility_score, score_band)',
+            "changeOf(c.mentions, mentioned + compTotal, Number(b0.mentions) || 0, prev.mentioned_k + compTotalBefore, { min_points: 10 })",
+            'citation_ci: wilson(cited, samples), sov_ci: wilson(mentioned, mentioned + compTotal)',
+            'win: rateOf(q.m, q.n, { min: MIN_Q_SAMPLES }), decided: q.n >= MIN_Q_SAMPLES',   # B8-4
+            'const gaps = lostQ.filter(q => q.decided).slice(0, 8);', 'const undecided = lostQ.filter(q => !q.decided)',
+            'const pulse_basis = PR.length ?', 'partial_days:', 'const capped = (()',          # B8-3 / B8-5
+            'cited === 0 && samples >= MIN_RATE_SAMPLES')),
+        'AI_Visibility / AI Report': ('B8-1 / B8-3 / B8-4 / B8-5', (
+            'const verdict = (t) =>', 'const chg = (key, first) =>', 'within noise', ' (not tested)',
+            "'95% range ' + cci[0]", "'95% range ' + sci[0]", "'95% band ±'",
+            'const subjChange =', 'Not enough answers to tell yet', 'too few',
+            'Too few answers to draw a rate from', 'Not everything was asked',
+            "LN.unknown('The engines and questions this run did not reach'")),
+        'AI_Pulse / Pulse Metrics': ('B8-2 / B8-3', (
+            'const readable = {', 'unavailable: !R.length || n === 0', 'could not be read',
+            'No answer came back at all today',
+            'const judged = (p.baseline || []).map(d => ({ d, v: sameBasis({ engines: d.engines, size: d.samples, panel: d.panel }, nowBasis) }));',
+            'const B = judged.filter(x => x.v.ok).map(x => x.d);', 'const baseline_set_aside =', 'const baseline_note =',
+            '!readable.unavailable && todayRate.enough && n >= 20 && bn >= 40')),
+        'AI_Pulse / AI Plan': ('B8-2', (
+            'engines: Object.keys(eng).filter(e => (Number((eng[e] || {}).answered) || 0) > 0).sort(), panel: Object.keys(pr).length',)),
+    }
+    for _node81, (_row81, _needs81) in _want81.items():
+        _js81 = _code81.get(_node81) or ''
+        assert _js81, 'area 8: node %s not found in the generated workflows' % _node81
+        for _t81 in _needs81:
+            assert _t81 in _js81, '%s: %s no longer carries %r' % (_row81, _node81, _t81)
+    # the shared kit reaches BOTH workflows, or one of them silently loses every guard it defines
+    for _n81 in ('AI_Visibility / AI Metrics', 'AI_Pulse / Pulse Metrics'):
+        for _d81 in ('const rateOf = (k, n, o) =>', 'const changeOf = (k1, n1, k2, n2, o) =>',
+                     'const scoreBand = (answers, volumeOf) =>', 'const sameBasis = (day, now) =>', 'const MIN_RATE_SAMPLES ='):
+            assert _d81 in _code81[_n81], 'area 8: %s does not carry _ai_stats.js definition %r' % (_n81, _d81)
+    # ---- the ordering proof: a guard that runs after the test it guards is not a guard -------------------------------------
+    _pm81 = _code81['AI_Pulse / Pulse Metrics']
+    _basis81 = _pm81.index('const B = judged.filter(x => x.v.ok)')
+    _ztest81 = _pm81.index('zTest(m, n, bm, bn)')
+    assert _basis81 < _ztest81, 'B8-2: the daily z-test runs before the comparable-baseline filter, so it still pools every day'
+    assert _pm81.index('const readable = {') < _ztest81, 'B8-3: the drop is tested before anything asks whether the day could be read'
+    _am81 = _code81['AI_Visibility / AI Metrics']
+    assert _am81.index('const tests = (prev && like.comparable)') < _am81.index('const alerts = [];'), \
+        'B8-1: the alerts are built before the tests they are supposed to read'
+    assert _am81.index('const gaps = lostQ.filter(q => q.decided)') < _am81.index('const actions = [];'), \
+        'B8-4: the actions are built before the sample floor that decides what counts as a gap'
+    # ---- and the shapes that were wrong are gone, not merely shadowed -------------------------------------------------------
+    assert 'c.share - before >= 10 && c.mentions >= 5' not in _am81, \
+        'B8-1: the competitor share alert is back on the fixed 10-point rule, with no test'
+    assert "const gaps = questions.filter(q => !q.won && q.kind !== 'brand' && q.competitors.length)" not in _am81, \
+        'B8-4: a question with one answer can become a gap again'
+    assert 'const B = p.baseline || [];' not in _pm81, \
+        'B8-2: the pulse is pooling its whole baseline again with no check that it measured the same thing'
+    _ar81 = _code81['AI_Visibility / AI Report']
+    assert "(d.significant === true ? ', real change' : '')" not in _ar81, \
+        'B8-1: the subject line prints the points again with no word about the test'
+    assert "q.samples ? q.win_rate + '%' + muted(q.samples + ' answers')" not in _ar81, \
+        'B8-4: the answer grid prints a one-answer question as a rate again'
+    return len(_want81)
+
+
+_b81_log = lambda _b81_n: log('A rate without its sample, and a change without a test (2026-10-15, benchmark area 8, rows B8-1 / B8-2 / B8-3 / B8-4 / B8-5; BENCH_AREA8_ai_visibility.md). The signal is non-deterministic by construction - SparkToro and Gumshoe measured an identical brand list coming back under 1% of the time over 2,961 runs - and not one tool in this market puts a sample size or an interval beside a rate: Profound ran ~989,000 AI responses to decompose the variance (V(Mn) = S/n + D, Wald and bootstrap SDs) and its v2 visibility endpoint returns three floats with no denominator and no standard error; Semrush, now an Adobe subsidiary, defines its whole change method as "the change in your brand mentions since the last update"; Ahrefs Brand Radar never uses the word variance; Evertune publishes +/-44 points for one prompt asked once and sells "statistical significance" as an $800 tier. B8-1: three of our four headline tiles printed an untested arrow beside a tested one, and the subject line printed the points with no word about the test - all four now go through one shared two-proportion z-test, the share of voice on its own denominator, the visibility score (a weighted mean, not a proportion) with the standard error of that mean over Kish\'s effective sample size and no change called inside its own band, and the competitor-share alert off its fixed 10-point rule. B8-2: the daily pulse pooled seven days of baseline with no check that they measured the same thing - B-L4 guarded the weekly run the same day and left this one, so raising the panel 8 to 20 or adding an engine would have fired a 99% "real drop" at a site whose visibility had not moved; a morning is pooled only when the same engines answered it on a comparable number of answers, every day left out is named with its reason, and with no comparable day there is no test. B8-3: a morning nobody could read sent nothing at all, which looked exactly like a quiet one - today\'s readability is its own evidence block, an unreadable morning always reaches a human, and the weekly report says how many of its answers came from a pulse day that did not reach every engine. B8-4: a per-question rate had no floor and picked the actions, so a question asked once and lost once became a gap, an action and a ready-to-send API body - four answers now, or it is listed as undecided and picks nothing. B8-5: skipped_by_cap was written by AI Requests and read by nobody; it is counted per engine, printed, and recorded as evidence nobody gathered. proved against the generated workflows, with the ordering of both new guards walked: ' + str(_b81_n) + ' node group(s) checked')
+
+# =============================================================================
+# 83. A LINK WON ONCE IS NOT A LINK YOU STILL HAVE (2026-10-15, benchmark programme area 11 —
+#     docs/system-review-2026-10-14/BENCH_AREA11_link_building.md; register rows B11-1 / B11-2 / B11-3 / B11-4)
+#
+#     The rubric names Pitchbox / Respona as the leaders here. Opened on 2026-10-15, two of the three names in the area's
+#     research are no longer what they were: **Respona no longer sells outreach software at all** - it is a done-for-you,
+#     pay-per-placement guest-post service, $100-$500 per placement by the host's Ahrefs DR, writing the article itself and
+#     placing the customer's chosen anchor, exact-match offered (https://respona.com/pricing/,
+#     https://help.respona.com/en/articles/13575093-our-link-building-process) - and **Postaga is gone** (postaga.com answers 404
+#     from a WP Engine holding page). Semrush has withdrawn its Link Building Tool documentation
+#     (semrush.com/features/link-building/ 301s to /features/backlink-analysis/). **Pitchbox is the one leader still alive,
+#     selling and publishing its mechanism**, so it is the comparison that counts.
+#
+#     Three things Pitchbox does that we did not, and one it does that we will not:
+#       * it monitors every connected mailbox's authentication continuously - "all active email accounts are automatically
+#         monitored by MXRight", covering DNS, SMTP, SPAM and DKIM (https://help.pitchbox.com/article/246-mxright). We read SPF /
+#         DKIM / DMARC once, when the mailbox was connected, and never again.
+#       * it re-checks won links, monthly, for the top 100 (https://help.pitchbox.com/article/34-what-is-link-monitoring). We
+#         re-checked a link won through outreach exactly **never**.
+#       * it refuses open-tracking pixels outright - "we've made a deliberate decision not to include open rate tracking in
+#         outreach campaigns" (https://help.pitchbox.com/article/257-open-rates-vs-response-rates). So do we, and Hunter's own
+#         2026 data says why: 7.4% reply with tracking off against 4.4% with it on (https://hunter.io/the-state-of-cold-email).
+#       * its AI Agents send replies with no human in the loop and will "Negotiate pricing within your defined limits"
+#         (https://help.pitchbox.com/article/275-ai-agents-in-pitchbox). We will not: a paid link must carry rel="sponsored" and
+#         then earns no ranking credit anyway (Google's spam policies, last updated 2026-08-28).
+#
+#     * B11-2 - **a link won through outreach was proven once and never looked at again.** The Reply Reader fetches the page a
+#       reply names, finds the link, and the prospect becomes `won`; from then on "Links won" counted it for ever. A page no
+#       crawler indexes - the normal case for a small site's first links - never enters `seo_backlinks` either, so the Backlink
+#       Monitor's weekly re-check never reached it: the link the customer worked hardest for was the one link nobody verified
+#       twice. Criterion 4C.7 is "confirmed live by our own check, THEN monitored", and about a third of monitored links are gone
+#       within a year (Linkody, 865,000 backlinks, June 2026, https://blog.linkody.com/seo/link-building-statistics-2026-2).
+#       *LB Page Requests* now queues every won link the ledger does NOT carry (oldest reading first, a row that already missed
+#       once first, 12 a run, free GETs, and never a page the Backlink Monitor is already fetching); *LB Assemble* reads it with
+#       the same LK.verify the monitor uses and runs the state machine: found -> `live` and the miss count back to 0; missing or
+#       gone -> a miss, where ONE miss is `at_risk` and never a loss (the peppol.org rule) and two in a row are `lost`; blocked,
+#       JavaScript-only or a fetch error -> `not_checked` with the miss count UNTOUCHED (INVARIANTS rule 3 - a reading we could
+#       not take is not evidence that the link went). Only a confirmed loss takes the prospect off `won`, carrying the date it
+#       was won and what we found (INVARIANTS rule 4). The reading rides `checks_json`, so no Data Table column is added and
+#       nothing needs `sync_tables.py`. The report prints the four states apart from each other, says the refusal rule out loud,
+#       and puts the measured decay base rate beside a loss so nobody reads one as a failure.
+#
+#     The other three rows of this pass are in app/ and have no node to walk, so they are proved by the app's own tests rather
+#     than here: B11-1 (every outreach rate was printed from whatever sample existed - 33.3% off one reply in three, a red
+#     "50.0% bounced" badge off one bounce in two - on the same screen as a subject-line test that refuses a verdict under 30
+#     sends; the floors are now derived, the bounce one from the 2% limit it is judged against, which cannot be measured under 50
+#     sends); B11-3 (the postal address went out on the first e-mail only, while CAN-SPAM's requirements are per message and each
+#     one carries a maximum penalty of $53,088 - https://www.ftc.gov/business-guidance/resources/can-spam-act-compliance-guide-business);
+#     and B11-4 (SPF / DKIM / DMARC were a gate on the way in and nothing on the way out - re-read when the stored reading is a
+#     week old, and a From domain with neither SPF nor DKIM cannot START a conversation, which is Google's own rule for every
+#     sender: "Set up SPF or DKIM email authentication for your sending domains", https://support.google.com/a/answer/81126).
+# =============================================================================
+def _b83_checks():
+    """Area 11 over the generated Link Builder: the won links are queued, verified, counted apart and reported - walked on the
+    built workflow, so a change that never reaches a node cannot pass."""
+    import json as _j83
+    _p83 = os.path.join(HERE0, 'workflows', 'SEO_Agent_Link_Builder.json')
+    assert os.path.exists(_p83), 'SEO_Agent_Link_Builder.json was not generated'
+    _code83 = {}
+    for _w83 in _j83.load(open(_p83, encoding='utf-8')):
+        for _n83 in (_w83.get('nodes') or []):
+            if (_n83.get('parameters') or {}).get('jsCode'):
+                _code83[_n83['name']] = _n83['parameters']['jsCode']
+    _want83 = {
+        'LB Page Requests': ('B11-2', ("const wonQueue = [];", "String(y.status || '') === 'won'", "if (!key || linking.has(key)) continue;",
+                                       "wonQueue.sort((a, b) => (b.misses - a.misses) || (b.age - a.age));", "LB_WON_MAX")),
+        'LB Assemble': ('B11-2', ("const won_checks = [];", "o.r.kind === 'won'", "LK.verify(x, p.domain", "won_live:", "won_unchecked:")),
+        'LB Report': ('B11-2', ("const WON_STATE = {", 'Links you won', 'missing twice running', '865,000 links tracked by Linkody',
+                                "Whether the links you won are still on the page", 'won_checks: wonChecks.map')),
+    }
+    for _node83, (_row83, _needs83) in _want83.items():
+        _js83 = _code83.get(_node83) or ''
+        assert _js83, 'area 11: node %s not found in the Link Builder' % _node83
+        for _t83 in _needs83:
+            assert _t83 in _js83, '%s: %s no longer carries %r' % (_row83, _node83, _t83)
+    _as83 = _code83['LB Assemble']
+    # the state machine, both halves. A reading we could not take may never advance the miss count, and one miss may never be a loss.
+    assert "const readable = ['found', 'missing', 'gone'].includes(v.verify);" in _as83, \
+        'B11-2: nothing decides whether the reading could be taken at all'
+    assert "misses = v.verify === 'found' ? 0 : readable ? (Number(before.misses) || 0) + 1 : (Number(before.misses) || 0);" in _as83, \
+        'B11-2 (INVARIANTS rule 3): a blocked or unreadable page is counting as a miss again - that is how a bot wall becomes a false loss'
+    assert "misses >= 2 ? 'lost' : 'at_risk'" in _as83, \
+        'B11-2: one reading is being called a loss again (the peppol.org mistake, in a new place)'
+    # INVARIANTS rule 4: only the proven loss moves the stored record, and it keeps what it is replacing
+    assert "if (state === 'lost') { const pr = myProspects.find" in _as83 and "status: 'lost'" in _as83, \
+        'B11-2 (INVARIANTS rule 4): a link proven gone is still counted as won'
+    assert "status: 'at_risk'" not in _as83, 'B11-2: an at-risk reading must not be written onto the prospect row as a status'
+    # it must not fetch what the Backlink Monitor already fetches, or the customer's prospects get two of our GETs every Monday
+    assert "linking.has(key)" in _code83['LB Page Requests'], 'B11-2: the won queue no longer skips the links the ledger carries'
+
+log('A link won once is not a link you still have (2026-10-15, benchmark area 11, rows B11-1 / B11-2 / B11-3 / B11-4; BENCH_AREA11_link_building.md). The rubric names Pitchbox / Respona: opened 2026-10-15, Respona no longer sells outreach software at all (pay-per-placement guest posts, $100-$500 by the host\'s Ahrefs DR, the article written by them and the customer\'s anchor placed, exact match offered), Postaga answers 404, and Semrush has withdrawn its Link Building Tool documentation - Pitchbox is the one leader still publishing a mechanism. B11-2: a link won through outreach was proven exactly once, at the reply, and never read again; a page no crawler indexes never enters the backlink ledger either, so the Backlink Monitor never reached it, and "Links won" counted it for ever while about a third of links go within a year (Linkody, 865,000 backlinks, June 2026). LB Page Requests now queues every won link the ledger does NOT carry (12 a run, oldest first, free GETs, never a page the monitor already fetches), LB Assemble reads it with the same LK.verify and runs the state machine - found is live and the miss count resets, missing or gone is ONE miss and at_risk before two in a row make it lost, and a bot wall, a JavaScript shell or a fetch error is not_checked with the miss count untouched - and only a proven loss takes the prospect off won, with the date it was won and what we found. The reading rides checks_json, so no Data Table column is added. Pitchbox re-checks the top 100 links monthly; Respona asks the customer to notice. B11-1, B11-3 and B11-4 are in app/: a rate is withheld under a derived floor (the bounce one from the 2% limit it is judged against, unmeasurable under 50 sends), the postal address rides every commercial message and not only the first (CAN-SPAM is per message, at up to $53,088 each), and SPF / DKIM is re-read weekly and refuses a NEW conversation from a domain publishing neither - Google\'s own rule for every sender')
+
+# 80. A METHOD WE PUBLISHED AND A TEST WE NEVER RAN (2026-10-15, benchmark programme area 7 —
+#     docs/system-review-2026-10-14/BENCH_AREA7_site_tracking.md; register rows B7-1 / B7-2 / B7-3)
+#
+#     The rubric compares this area with SEOTesting and Looker Studio, and asks one question: what tests and annotations do they
+#     offer that we do not. Annotations landed with G12 (and Google itself shipped custom annotations in Search Console in
+#     November 2025: 120 characters, 200 a property, visible to everyone with access, and NOT in any API —
+#     https://developers.google.com/search/blog/2025/11/custom-chart-annotations). Tests did not.
+#
+#     What the leader does, opened 2026-10-15. SEOTesting runs two kinds of test on Search Console data: a time-based test
+#     ("track and prove the impact of a change against a forecast") and a split test that will "compare test and control groups to
+#     isolate true impact" (https://seotesting.com/features/). Its group builder balances the two groups greedily on 90 days of
+#     Search Console clicks, and throws out pages whose clicks are more than two standard deviations from the mean and pages with
+#     zero clicks on more than half of those 90 days
+#     (https://support.seotesting.com/en/article/split-test-group-configuration-tool-1reabjb/). Its own support page then refuses
+#     the number everyone wants: it does "not display a traditional significance score for split tests", because a significance
+#     calculation over the daily difference "would not be meaningful or true"
+#     (https://support.seotesting.com/en/article/seo-split-testing-and-statistical-significance-1ad6ffx/) — while its changelog of
+#     2026-02-17 says "statistical significance is now generated directly in SEO split test results". The vendor's own two pages
+#     disagree, which is exactly the case the programme's source rule exists for, and neither publishes a formula.
+#
+#     * B7-1 — **we published the method of a test we never ran.** Since G12 the Site Tracker has inlined the change-test kit
+#       (`_change_test.js`) and shipped `CT.method` as `change_method` in every weekly callback, while `CT.compare` was called by
+#       the Link Builder and by nobody else. That is INVARIANTS rule 4 in the one place criterion 3.4 is scored. The test runs
+#       now, and it buys its own windows: a change made three months ago cannot be read from the report's 28-vs-28, because both
+#       of those periods sit after it. Each dated change (`seo_content_log.published_at`) gets the 28 complete days after it and
+#       the 28 before it, over the WHOLE site, so the page under test and the control group of every other page are measured on
+#       exactly the same days — free, on a Google quota measured in thousands. The clicks are read with the rate ratio
+#       (`ST.lift`: expected = prev x the control group's ratio; d = ln(cur/prev) - ln(cc/cp); SE carries the control group's own
+#       sampling error, so the 95% range is honest where a ratio of two percentages is not), the position with `CT.compare`, the
+#       Link Builder's own comparison. Five refusals, because a lift computed on nothing reads as "no effect": no clicks before,
+#       no clicks after, under 20 clicks over both windows together, fewer than 3 control pages, and a control group under 40
+#       clicks. A Google update inside the window is NOT a refusal — it moves the control group too, which is what the control
+#       group is for, and the report says so.
+#     * B7-2 — **`type: web` and nothing else.** The Search Analytics API has answered `device` (DESKTOP / MOBILE / TABLET) and
+#       `country` since it existed (https://developers.google.com/webmaster-tools/v1/searchanalytics/query), Looker Studio's
+#       Search Console connector exposes both and SEOTesting filters its dashboards by country. We asked for neither, so a site
+#       whose phone clicks halved while desktop held read as one flat "clicks down 18%". Four tiny free requests, each device and
+#       country tested on the same statistical bar as every other alert (`ST.change`), and a split Google did not ANSWER is
+#       `failed` and unavailable while a split Google answered with no rows is a measured zero — the two look identical in an
+#       empty table and mean opposite things (INVARIANTS rule 1).
+#     * B7-3 — **cannibalisation was already in the data.** Criterion 2.10 names it, SEOTesting ships a report of it and Semrush
+#       a tab, and we computed nothing — although `queries_cur` has been read with dimensions ['query','page'] since G9, so every
+#       page Google showed for a search was in the node and the strongest one was kept and the rest thrown away. It is observed,
+#       not inferred: both pages really were shown for that search. Brand searches are excluded (several of your pages SHOULD
+#       answer your own name), as are scraper queries, searches under 50 impressions and a second page holding under 10% of them;
+#       URLs differing only by scheme, www, trailing slash or query string are one page. The action merges or differentiates the
+#       two pages and never asks for a third, which is D11 by another name.
+# =============================================================================
+# 86. A TRACKER THAT TRACKS WHATEVER LIST YOU GIVE IT (2026-10-15, benchmark programme area 6 —
+#     docs/system-review-2026-10-14/BENCH_AREA6_rank_tracking.md gap G6-8 and §7; register row B6-7)
+#
+#     Area 6's own conclusion, in its own words: "Let the tracker watch the keywords the customer actually named, not only the
+#     rungs of a ladder — today a rank tracker that reads `seo_ladders` and nothing else cannot answer 'how am I doing for the
+#     thirty searches my business lives on', which is the question every competing tool is bought to answer; everything else in
+#     this area is depth on a tracker that is watching too narrow a list." Ahrefs' Rank Tracker, Semrush's Position Tracking and
+#     AccuRanker are all bought to watch a list you type in. Ours could not watch one at all: `Tracker Plan` read `seo_ladders`,
+#     so a keyword that was not a rung did not exist to the workflow.
+#
+#     The list was already stored — `seo_sites.keywords`, written by the tracking form and by "Track my site" — and the weekly
+#     Site Tracker already BUYS a live reading of much of it an hour later, into `seo_rank_history` itself (ladder_id = site_id,
+#     rung 0, every G6 column). So the rule is read first, buy second, and the whole fix costs almost nothing:
+#
+#     * a results page the weekly site check read less than 10 days ago is READ, not bought a second time on the same morning —
+#       R28's rule one step up: money is counted once because it is spent once. Our own reading counts for 6 days, so the series
+#       stays weekly rather than slipping to a fortnight, and the two halves (`watch_<site_id>` and `<site_id>`) are ONE series;
+#     * a keyword that is also a ladder rung is checked once, with the ladder, and carried into the list's report with the reason;
+#     * what is bought is bounded — 10 a website and 30 a run, oldest reading first — so a thirty-keyword list costs at most
+#       ~$0.15 a week at the measured $0.015 a check, and every keyword the cap did not reach is NAMED with the cap and its last
+#       reading (INVARIANTS rule 1: a list that is shorter because a rule ran has to say so);
+#     * INVARIANTS rule 2: the list is stored data, so it is read through the same FITR gate the stored rungs pass (section 71).
+#       A competitor's brand typed into a form is still a competitor's brand: no check is bought and the report names it with its
+#       reason. Unlike the Site Tracker's own read path the customer's keywords are deliberately NOT in `protect` — protecting
+#       them would mean the gate could never judge them, which is the whole point of running it;
+#     * INVARIANTS rule 1 / R18: a keyword whose results page could not be read is -1, "check again" — no share of voice, no
+#       movement, out of every count, and the report says it in those words. Never "not ranking".
+#
+#     Two things the money needed, found while doing it:
+#     * the reservation multiplied the per-mode figure by the number of PLAN ITEMS, and this plan emits one item per CHECK, so
+#       $0.15 reserved $0.15 a check — a ten-check week held $1.50 of the day's budget for $0.15 of work. The figure is now the
+#       measured per-check price, so the reservation is what the run will spend and B6-7's own checks move it by what they cost;
+#     * the run settled its reservation although the in-200 gate (B-A10) had MEASURED the provider's own cost for exactly these
+#       calls, each task counted once by its id. The report carries that figure and the settle takes it (R28 / R31).
+#
+#     And one silent data loss, found because a watched keyword's "Above you" column was empty: `RS.pack` cut a column mid-string
+#     when there was no `top` array to trim, and a sliced JSON string is not JSON, so `RS.unpack` handed back the default and the
+#     WHOLE reading disappeared with nothing said. `competitors_json` overflows on any results page with a full top ten. Nothing
+#     is sliced now.
+# =============================================================================
+def _b86_checks():
+    """Benchmark area 6, row B6-7: the customer's own keyword list, on the generated Rank Tracker."""
+    import json as _j
+    _wf = _j.load(open(os.path.join(HERE0, 'workflows', 'SEO_Agent_Rank_Tracker.json')))[0]
+    _code = {n['name']: n['parameters'].get('jsCode', '') for n in _wf['nodes'] if n['type'] == 'n8n-nodes-base.code'}
+    _plan, _rep = _code['Tracker Plan'], _code['Tracker Report']
+    # the second source, with the gate the stored rungs pass (INVARIANTS rule 2, section 71's FITR)
+    assert 'const FITR = {' in _plan and 'FITR.rungs(kws.map(k =>' in _plan, \
+        'B6-7 (INVARIANTS rule 2): the customer\'s stored keywords reach a paid check without the shared read-path gate'
+    assert "kwList(s.keywords)" in _plan, 'B6-7: the plan does not read seo_sites.keywords'
+    for _a86, _m86 in (("LIMITS.watch_site_days", 'B6-7 / R28: the plan would buy a results page the weekly site check already bought'),
+                       ("LIMITS.watch_own_days", 'B6-7: the plan has no weekly rhythm of its own'),
+                       ("already.has(d + '|' + k)", 'B6-7: a keyword that is both a rung and on the list could be bought twice'),
+                       ("LIMITS.max_watch_per_site", 'B6-7: the customer\'s list is unbounded per website'),
+                       ("LIMITS.max_watch_per_run", 'B6-7: one run\'s spend on the customer lists is unbounded'),
+                       ("watchHeld.push(", 'B6-7 (rule 1): a keyword the cap did not reach is dropped with no reason'),
+                       ("const wid = 'watch_' + sid;", 'B6-7: a reading of ours cannot be told from the weekly site check\'s')):
+        assert _a86 in _plan, _m86
+    assert 'watch_keyword: true' in _plan and 'p.watch_keyword' in _rep, \
+        'B6-7: a watched keyword is not told apart from a ladder rung on the way through'
+    for _a86, _m86 in (("const watchMeta = ((plan[0] || {}).watch) || null;", 'B6-7: the report never sees the customer\'s list'),
+                       ("watchlist: true", 'B6-7: the watched keywords are never reported'),
+                       ("RS.churnNone('no live reading of this results page is stored", 'B6-7: a keyword nobody read comes back as no movement'),
+                       ("Not checked this week", 'B6-7: the keywords the cap held back are not named'),
+                       ("Set aside by the keyword rule", 'B6-7: a set-aside keyword is not shown with its reason'),
+                       ('that is "check again", not "not ranking"', 'B6-7 (rule 1 / R18): a reading nobody could take would read as "not ranking"'),
+                       ("No check was bought for your keyword list this week", 'B6-7: a week that bought nothing must say so'),
+                       ("out[0].json.cost_usd = Number(ev.cost_usd)", 'B6-7 / R28: the run settles its reservation instead of what it measured')):
+        assert _a86 in _rep, _m86
+    # the app has to be able to tell the customer's own list from a ladder, and to see what was left out
+    _post86 = next(n for n in _wf['nodes'] if n['name'] == 'POST Progress')['parameters']['jsonBody']
+    for _f86 in ('watchlist: !!$json.watchlist', 'site_id: $json.site_id', 'not_checked: $json.not_checked', 'set_aside: $json.set_aside'):
+        assert _f86 in _post86, 'B6-7: the callback does not carry ' + _f86 + ', so the app cannot tell the two reports apart'
+    # the money: the reservation is per CHECK (the plan emits one item per check) and the settle takes the MEASURED figure
+    _lw86 = json.load(open(os.path.join(HERE0, 'harness', 'ledger_wiring.json'), encoding='utf-8'))['monitors']['SEO Agent — Rank Tracker']
+    assert _lw86['est'] == {'ai': 0.0, 'dfs': 0.015}, \
+        'B6-7: the Rank Tracker reserves a per-SITE figure for every keyword check it plans (%r)' % (_lw86['est'],)
+    assert _lw86['measured'] == 'Tracker Report', 'B6-7 / R28: the Rank Tracker still settles its reservation instead of its measurement'
+    _row86 = _code['Run Ledger Row (Tracker)']
+    assert 'keyword check(s) x the measured per-check price' in _row86, 'B6-7 (rule 1): the reservation does not say what it counted'
+    assert "const MEASURED = 'Tracker Report';" in _code['Ledger Settle (Tracker)'], \
+        'B6-7: the settle was not told where this run\'s measured cost is'
+    # the reading that used to disappear: nothing is ever sliced into something that is not JSON
+    _rs86 = _rd0('code/_rank_serp.js')
+    assert 's.slice(0, limit)' not in _rs86 and "JSON.stringify({ trimmed: 'overflow'" in _rs86, \
+        'B6-7: RS.pack can still cut a stored reading mid-string, which RS.unpack then throws away whole'
+    print('benchmark area 6 (B6-7): the customer\'s own keyword list is watched beside the ladders - gated, bounded at %d a site '
+          'and %d a run, never bought twice, and the run settles the cost it measured'
+          % (int(re.search(r'max_watch_per_site: (\d+)', _plan).group(1)), int(re.search(r'max_watch_per_run: (\d+)', _plan).group(1))))
+
+
+# 87. THE KNOWN URLS THE CRAWL NEVER REACHED, AND A QUEUE THAT STARTS WITH WHAT CHANGED
+#     (2026-10-15, benchmark area 5 — docs/system-review-2026-10-14/BENCH_AREA5_technical_audit.md §5(a) rows a5 and a8;
+#      register rows B5-5 and B5-8; CRITERIA_technical… 1.1 and 1.7)
+#
+#     * B5-5 **the pages behind the coverage figure were counted and never looked at.** G24 made the line honest — "Crawled 47 of
+#       112 known URLs (sitemap ∪ the pages Search Console reports impressions for)" — and under 90% the audit says every share
+#       below is a share of the crawled sample. True, and useless on its own: the 65 URLs outside the sample were a number, and the
+#       worst problems live exactly there, because a URL the crawler did not reach is the kind that 404s, redirects, carries a
+#       `noindex` or points its canonical somewhere else. Up to CONFIG.not_crawled_checks (25) of them are now read with one free
+#       plain GET each — the *Fetch Raw Pages* shape, redirects NOT followed so a redirect is itself the answer — and reported as
+#       what they are: gone, redirecting, noindex, canonicalised elsewhere, or live and indexable and simply never audited. No new
+#       credential, no paid API, no render: **$0 per audit.**
+#       The rule this check is held to is the one this area's history demands. The audit once shipped seven findings with an empty
+#       evidence string, so a new check that cannot say what it saw is worse than no check: a page we could not fetch is reported
+#       as **not fetched, with the reason** (timeout, DNS, a bot wall, HTTP 403) and never as a finding, every count carries
+#       `checked` / `checked_of`, and with nothing readable the whole block is `available: false` with the reason and lands in the
+#       audit's "not assessed" list.
+#     * B5-8 **IndexNow and the published-page log ordered nothing.** Ahrefs' Always-On Audit picks its next URL partly from
+#       IndexNow pings (ahrefs.com/blog/always-on-audit). We OPERATE IndexNow for the customer since v4.12 and we write their pages
+#       ourselves, so we hold that signal twice over and spent it on nothing: both queues were "oldest reading first", which puts
+#       the page we submitted on Monday behind a page nobody has touched in a year. `PW.changedPages` reads three stored tables —
+#       `seo_ai_pages.submitted_at` (IndexNow / Bing), `seo_content_log.published_at` and `seo_ai_targets.written_at` — and
+#       `PW.freshFirst` puts what changed in the last PW.FRESH_DAYS (7) days at the front of **Google's URL-Inspection rotation**
+#       and of the new not-crawled queue, with the existing order kept underneath. The three loads are **read-only**: this build
+#       writes nothing to the AI Growth tables and does not touch that workflow.
+#       Rule 1 again, and it is the whole design here: a table that could not be read is `not_read` **with its reason**, which is a
+#       different answer from "no page changed this week", and every sentence printed says which of the two it was. With no signal
+#       at all the order is exactly what it was before this section.
+#     Both halves cost $0 and add no paid call. S97 proves them on fixtures; nothing is fetched live.
+# =============================================================================
+from ladder_common import AI_PAGES_TABLE as _AIP87, AI_TARGETS_TABLE as _AIT87, LOG_TABLE as _LOG87
+import retry_lint as _rl87
+LOAD87 = {'alwaysOutputData': True, 'executeOnce': True, 'onError': 'continueRegularOutput'}
+
+# ---------- A. the cap travels with the run, like every other limit ----------
+patch('Normalize Input', "  render_diff_pages: 5,\n",
+      "  render_diff_pages: 5,\n"
+      "  // B5-5 (2026-10-15): how many of the known URLs the crawl never reached are read with a free plain GET, so \"not crawled\"\n"
+      "  // becomes a statement instead of a count. 0 switches the check off for a site; 50 is the ceiling.\n"
+      "  not_crawled_checks: 25,\n")
+patch('Normalize Input', "    render_diff_pages: CONFIG.render_diff_pages,\n",
+      "    render_diff_pages: CONFIG.render_diff_pages,\n    not_crawled_checks: CONFIG.not_crawled_checks,\n")
+
+# ---------- B. B5-5: the coverage reading carries the addresses, not only the count ----------
+# `sitemapUrls` and `gscPageKeys` are host-agnostic KEYS by the time coverage is computed, and a key cannot be fetched: it has lost
+# the scheme and any www. So the original address of every known URL is kept beside the key as it is read.
+patch('GSC Audit Findings', "sitemapUrls = [...new Set(sitemapUrls.map(key))].slice(0, 5000);",
+      "// B5-5 (2026-10-15, benchmark area 5): the address every known URL is actually published at, kept beside its host-agnostic key\n"
+      "// so the pages the crawl never reached can be fetched exactly as they are, instead of being rebuilt from a key.\n"
+      "const knownMeta = new Map();\n"
+      "for (const u of sitemapUrls) { const k = key(u); if (k && !knownMeta.has(k)) knownMeta.set(k, { url: String(u).trim(), source: 'sitemap', impressions: 0, clicks: 0 }); }\n"
+      "sitemapUrls = [...new Set(sitemapUrls.map(key))].slice(0, 5000);")
+patch('GSC Audit Findings', "  gscPageKeys = [...new Set(pagesRows.map(p => key(p.page)).filter(Boolean))];",
+      "  gscPageKeys = [...new Set(pagesRows.map(p => key(p.page)).filter(Boolean))];\n"
+      "  // B5-5: Search Console's own address for the page, and what it earns — a page Google shows is read before a sitemap-only one\n"
+      "  for (const p of pagesRows) { const k = key(p.page); if (!k) continue; const prevM = knownMeta.get(k);\n"
+      "    knownMeta.set(k, { url: String(p.page || (prevM && prevM.url) || '').trim(), source: prevM ? 'sitemap + Search Console' : 'Search Console',\n"
+      "      impressions: Number(p.impressions) || 0, clicks: Number(p.clicks) || 0 }); }")
+patch('GSC Audit Findings', "  sample_not_crawled: notCrawled.slice(0, 10).map(u => 'https://' + u),",
+      "  sample_not_crawled: notCrawled.slice(0, 10).map(u => (knownMeta.get(u) || {}).url || ('https://' + u)),\n"
+      "  // B5-5: the list *Not Crawled Targets* reads up to its own cap from — with the address as published and what Google says it earns\n"
+      "  not_crawled_list: notCrawled.map(u => knownMeta.get(u) || { url: 'https://' + u, source: 'sitemap', impressions: 0, clicks: 0 })\n"
+      "    .filter(m => /^https?:\\/\\//i.test(String(m.url || ''))).sort((a, b) => (b.impressions - a.impressions) || (b.clicks - a.clicks)).slice(0, 60),")
+
+# ---------- C. B5-8: the three read-only loads, and the inspection rotation that uses them ----------
+_gap87 = pos('GSC Audit Plan')
+disconnect('Full Report?', 'GSC Audit Plan'); disconnect('AI Visibility', 'GSC Audit Plan')
+add_node('Load AI Pages (Audit)', DT_TYPE, DT_VERSION, dt_get_all_params(_AIP87), [_gap87[0] - 660, _gap87[1] + 200], LOAD87)
+add_node('Load Content Log (Audit)', DT_TYPE, DT_VERSION, dt_get_all_params(_LOG87), [_gap87[0] - 440, _gap87[1] + 200], LOAD87)
+add_node('Load AI Targets (Audit)', DT_TYPE, DT_VERSION, dt_get_all_params(_AIT87), [_gap87[0] - 220, _gap87[1] + 200], LOAD87)
+connect('Full Report?', 'Load AI Pages (Audit)', 1); connect('AI Visibility', 'Load AI Pages (Audit)')
+for _a87, _b87 in [('Load AI Pages (Audit)', 'Load Content Log (Audit)'), ('Load Content Log (Audit)', 'Load AI Targets (Audit)'),
+                   ('Load AI Targets (Audit)', 'GSC Audit Plan')]:
+    connect(_a87, _b87)
+# a Data Table node outputs its table, not the item that entered it (CLAUDE.md), so the audit item is taken from the node that made it
+patch('GSC Audit Plan', "const base = $input.first().json || {};",
+      "// B5-8 (2026-10-15): three read-only Data Table loads now sit between the audit and this node, and a Data Table node outputs its\n"
+      "// table rather than the item that entered it (CLAUDE.md), so the audit item is read from the node that produced it.\n"
+      "const base = (() => {\n"
+      "  for (const n of ['AI Visibility', 'Full Report?']) { try { const j = ($(n).first() || {}).json; if (j && typeof j === 'object' && j.probe) return j; } catch (e) {} }\n"
+      "  return $input.first().json || {};\n"
+      "})();")
+patch('GSC Audit Plan', "const inspectPlan = PW.inspectBudget(ranked.map((p, i) => ({ url: inspectUrl(p), weight: ranked.length - i })), PW.PER_AUDIT);",
+      "// B5-8: a page we submitted to IndexNow / Bing or wrote in the last week goes to the front of Google's inspection rotation —\n"
+      "// it is the page most likely to have changed since Google last looked. A table that could not be read says so and changes no order.\n"
+      "const _load87 = (nodeName) => { let items = null;\n"
+      "  try { items = $(nodeName).all().map(i => i.json); } catch (e) { return { ok: false, reason: 'it was not read in this run' }; }\n"
+      "  if (!Array.isArray(items)) return { ok: false, reason: 'it was not read in this run' };\n"
+      "  const errs = items.filter(r => r && r.error); const rows = items.filter(r => r && typeof r === 'object' && !r.error);\n"
+      "  if (errs.length && !rows.length) return { ok: false, reason: String((errs[0].error && (errs[0].error.message || errs[0].error.description)) || errs[0].error).slice(0, 120) || 'the load failed' };\n"
+      "  return { ok: true, rows }; };\n"
+      "const _src87 = (name, nodeName, map) => { const got = _load87(nodeName);\n"
+      "  return got.ok ? Object.assign({ name, read: true, rows: got.rows }, map) : { name, read: false, reason: got.reason }; };\n"
+      "const recent_changes = PW.changedPages([\n"
+      "  _src87('IndexNow / Bing submissions', 'Load AI Pages (Audit)', { url: (r) => r.url, at: (r) => r.submitted_at,\n"
+      "    kind: (r) => (/bing/i.test(String(r.submitted_via || '')) && !/indexnow/i.test(String(r.submitted_via || '')) ? 'bing' : 'indexnow') }),\n"
+      "  _src87('the published-page log', 'Load Content Log (Audit)', { url: (r) => String(r.published_url || r.existing_page_url || ''), at: (r) => r.published_at, kind: () => 'published' }),\n"
+      "  _src87('the AI answer pages written', 'Load AI Targets (Audit)', { url: (r) => r.page_url, at: (r) => r.written_at, kind: () => 'written' }),\n"
+      "], { days: PW.FRESH_DAYS, now: String(base.today || '') || undefined });\n"
+      "const inspectPlan = PW.inspectBudget(ranked.map((p, i) => ({ url: inspectUrl(p), weight: ranked.length - i })), PW.PER_AUDIT, { changed: recent_changes });")
+patch('GSC Audit Plan', "const inspect_budget = { note: inspectPlan.note, cap: inspectPlan.limit, quota: inspectPlan.quota, candidates: ranked.length, asked: sample.length,",
+      "const inspect_budget = { note: inspectPlan.note, order_note: inspectPlan.order_note, changed_first: inspectPlan.changed_first,\n"
+      "  changed: { read: recent_changes.read, count: recent_changes.count, window_days: recent_changes.window_days, basis: recent_changes.basis,\n"
+      "    sources_read: recent_changes.sources_read, not_read: recent_changes.not_read, pages: recent_changes.pages },\n"
+      "  cap: inspectPlan.limit, quota: inspectPlan.quota, candidates: ranked.length, asked: sample.length,")
+
+# ---------- D. B5-5: the chain, between the render diff and the scoring (both audit types pass through it) ----------
+_rd87 = pos('Render Diff'); NX, NY = _rd87[0] + 220, _rd87[1]
+disconnect('Render Diff', 'Build Site Issues')
+add_node('Not Crawled Targets', 'n8n-nodes-base.code', 2,
+         {'jsCode': PAGE_WATCH_SRC + '\n' + rd('code/Not_Crawled_Targets.js')}, [NX, NY])
+if_node('Any Not Crawled?', '{{ !$json.skip }}', [NX + 220, NY])
+add_node('Fetch Not Crawled', 'n8n-nodes-base.httpRequest', 4.5, {
+    'url': '={{ $json.url }}', 'sendHeaders': True, 'headerParameters': {'parameters': [
+        {'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEOAgentAudit/1.0; +https://www.google.com/bot.html)'},
+        {'name': 'Accept', 'value': 'text/html,application/xhtml+xml'}]},
+    # redirects are NOT followed: a known URL that redirects is itself the answer to "why was it not crawled"
+    'options': {'batching': {'batch': {'batchSize': 5, 'batchInterval': 400}}, 'timeout': 20000,
+                'redirect': {'redirect': {'followRedirects': False}},
+                'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}},
+    [NX + 440, NY - 160], dict(onError='continueRegularOutput', alwaysOutputData=True, **_rl87.RETRY))
+add_node('Not Crawled Check', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Not_Crawled_Check.js')}, [NX + 660, NY])
+for _a87, _b87 in [('Render Diff', 'Not Crawled Targets'), ('Not Crawled Targets', 'Any Not Crawled?'),
+                   ('Fetch Not Crawled', 'Not Crawled Check'), ('Not Crawled Check', 'Build Site Issues')]:
+    connect(_a87, _b87)
+connect('Any Not Crawled?', 'Fetch Not Crawled', 0); connect('Any Not Crawled?', 'Not Crawled Check', 1)
+
+# ---------- E. the scored audit carries it, and says when it could not be made ----------
+patch('Build Site Issues', "      render_diff: input.render_diff || null,\n", "      render_diff: input.render_diff || null,\n      not_crawled_check: input.not_crawled_check || null,\n")
+patch('Build Site Issues', "if (!input.content_review) not_assessed.push('Content quality and E-E-A-T review (authors, case studies, claims, pricing)');",
+      "if (!(input.not_crawled_check && input.not_crawled_check.available)) not_assessed.push('The known URLs the crawl never reached (status, redirect, noindex, canonical, title of up to 25 of them): '"
+      " + ((input.not_crawled_check && input.not_crawled_check.not_available) || 'not collected in this run'));\n"
+      "if (!input.content_review) not_assessed.push('Content quality and E-E-A-T review (authors, case studies, claims, pricing)');")
+
+# ---------- F. both audit reports, and the app's technical page ----------
+NC_SECTION_JS = r"""// ---- the known URLs the crawl never reached (B5-5, 2026-10-15, benchmark area 5) ----
+const notCrawledSection = (a) => {
+  const nc = a.not_crawled_check || null;
+  const e5 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  if (!nc) return '';
+  let h = `<h3>The pages the crawl never reached</h3>`;
+  if (!nc.available) return h + `<p><b>Not checked:</b> ${e5(nc.not_available)}.</p>`;
+  const LABEL = { live: 'live and indexable', gone: 'gone (404 / 410)', error: 'server error', redirect: 'redirects elsewhere',
+    noindex: 'set to noindex', canonical_elsewhere: 'canonical points elsewhere' };
+  const detail5 = (p) => p.state === 'redirect' ? ('→ ' + (p.redirect_to || 'an unnamed address'))
+    : p.state === 'canonical_elsewhere' ? ('canonical → ' + p.canonical) : (p.title || '—');
+  const rows = (nc.pages || []).map(p => !p.checked
+    ? `<tr><td>${e5(p.path)}</td><td colspan="3" class="small"><b>not read</b> — ${e5(p.not_checked)}</td></tr>`
+    : `<tr><td>${e5(p.path)}</td><td>${p.status}</td><td>${e5(LABEL[p.state] || p.state)}</td><td class="small">${e5(detail5(p))}</td></tr>`).join('');
+  h += `<table class="ct"><tr><th>Address</th><th>Answered</th><th>What it is</th><th>Detail</th></tr>${rows}</table>`;
+  h += `<p class="small">${e5(nc.basis)}. ${e5(nc.method)}${nc.order_note ? ' ' + e5(nc.order_note) : ''}</p>`;
+  return h;
+};
+"""
+for _rn87 in ('Build Audit Report', 'Build Full Report'):
+    patch(_rn87, "const findings = a.findings || [];", NC_SECTION_JS + "const findings = a.findings || [];")
+    patch(_rn87, "html += uncrawlableSection(a);", "html += notCrawledSection(a);\nhtml += uncrawlableSection(a);")
+patch('Build Audit Response', "crux: d.crux || null, render_diff: d.render_diff || null,",
+      "crux: d.crux || null, render_diff: d.render_diff || null, not_crawled_check: d.not_crawled_check || null,")
+
+# ---------- G. what the build proves ----------
+assert 'const PW = (() => {' in code('Not Crawled Targets'), 'B5-5: the page-watch kit is not inlined into Not Crawled Targets'
+for _n87 in ('changedPages, changeOf, freshFirst', 'const freshFirst = (list, changed, o)', 'const changedPages = (sources, o)'):
+    assert _n87 in rd('code/_page_watch.js'), 'B5-8: the page-watch kit no longer defines ' + _n87
+assert 'not_crawled_list' in code('GSC Audit Findings'), 'B5-5: the coverage reading carries no addresses to look at'
+assert "PW.freshFirst(" in code('Not Crawled Targets') and 'PW.changedPages(' in code('Not Crawled Targets'), 'B5-8: the not-crawled queue is not ordered by what changed'
+assert 'PW.changedPages(' in code('GSC Audit Plan') and '{ changed: recent_changes }' in code('GSC Audit Plan'), \
+    "B5-8: Google's inspection rotation does not read what we know changed"
+assert "Load AI Pages (Audit)" in code('GSC Audit Plan') and "Load Content Log (Audit)" in code('GSC Audit Plan') \
+    and "Load AI Targets (Audit)" in code('GSC Audit Plan'), 'B5-8: the three recent-change signals are not read by the audit'
+for _n87 in ('Load AI Pages (Audit)', 'Load Content Log (Audit)', 'Load AI Targets (Audit)'):
+    assert nodes[_n87]['parameters']['operation'] == 'get', _n87 + ': B5-8 reads these tables, it never writes them'
+assert not _rl87.weak(nodes['Fetch Not Crawled']), 'Fetch Not Crawled: the G1 retry rule is missing'
+assert nodes['Fetch Not Crawled']['parameters']['options']['response']['response']['fullResponse'] is True, \
+    'Fetch Not Crawled: without fullResponse the status code never reaches the check (INVARIANTS rule 3)'
+# the refusal path: a page that could not be read is never a finding about that page
+_ncc87 = code('Not Crawled Check')
+for _need87 in ("out.not_checked = 'the server refused our request", "checked_of: targets.length",
+                "const available = checked.length > 0", "const not_available = available ? ''", "'not available: ' + not_available"):
+    assert _need87 in _ncc87, 'B5-5: Not Crawled Check no longer carries ' + _need87
+assert "scoring: scoring !== false" in _ncc87 and "notChecked.map(p => p.url), null, false);" in _ncc87, \
+    'B5-5: the "could not be read" line must be an unscored Info note, not a scored finding'
+for _rn87 in ('Build Audit Report', 'Build Full Report'):
+    assert code(_rn87).count('html += notCrawledSection(a);') == 1, _rn87 + ': the not-crawled section is not printed once'
+url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+sticky("""### The pages the crawl never reached, and a queue that starts with what changed (B5-5 / B5-8)
+**B5-5.** G24 told the truth — "Crawled 47 of 112 known URLs" — and then judged the site on the 47. The other 65 were a **number**: never opened, although a URL the crawler could not reach is exactly the kind that 404s, redirects or carries a `noindex`.
+*Not Crawled Targets → Fetch Not Crawled → Not Crawled Check* now reads up to **25** of them with one **free plain GET** each (redirects not followed, so a redirect is the answer) and reports gone / redirecting / noindex / canonicalised elsewhere / **live and indexable and never audited**. **$0.**
+**A page we could not fetch is reported as not fetched, with the reason** — a timeout, a DNS failure or a bot wall is `not_checked`, never a finding; every count carries `checked` / `checked_of`; with nothing readable the block is "not assessed" with its reason.
+**B5-8.** Ahrefs' Always-On Audit picks its next URL partly from **IndexNow** pings. We operate IndexNow for the customer and write their pages, and used neither: both queues were "oldest reading first". `PW.changedPages` reads `seo_ai_pages.submitted_at`, `seo_content_log.published_at` and `seo_ai_targets.written_at` (**read-only**) and `PW.freshFirst` puts what changed in the last **7 days** in front of Google's URL-Inspection rotation and of the not-crawled queue. A table that could **not be read** says so — which is not the same answer as "nothing changed this week".""",
+    NX - 40, NY + 340, 1180, 300, 4)
+log('The known URLs the crawl never reached, and a queue that starts with what changed (2026-10-15, benchmark area 5, B5-5 / B5-8): G24 printed "crawled X of Y known URLs" and the Y-X outside the sample were a count nobody ever opened, although a URL a crawler did not reach is the kind that 404s, redirects, carries a noindex or canonicalises elsewhere - up to CONFIG.not_crawled_checks (25) of them are now read with one free plain GET each (Not Crawled Targets -> Fetch Not Crawled -> Not Crawled Check, redirects not followed so a redirect is itself the answer, $0 per audit) and reported as gone / redirecting / noindex / canonical elsewhere / live and indexable and never audited, with a page that could not be fetched reported as not fetched with its reason and never as a finding, checked / checked_of on every count, and the whole block in the audit\'s "not assessed" list with the reason when nothing could be read; and the IndexNow and Bing submissions AI Growth makes (seo_ai_pages.submitted_at), the published-page log (seo_content_log) and the AI answer pages written (seo_ai_targets.written_at) are read - read-only, the AI Growth workflow is untouched - by the new PW.changedPages / PW.freshFirst, which put a page submitted or written in the last 7 days at the front of Google\'s URL-Inspection rotation and of the not-crawled queue the way Ahrefs\' Always-On Audit does, while a table that could not be read is reported as not read with its reason and never as "nothing changed this week"')
+
+# =============================================================================
+def _b80_checks():
+    """Area 7 over the generated Site Tracker: the change test with its own windows and its refusals, the device and country
+    splits Search Console always answered, and two of the site's own pages in one search. Walks the built workflow, so a change
+    that never reaches a node cannot pass."""
+    import json as _j80
+    _p80 = os.path.join(HERE0, 'workflows', 'SEO_Agent_Site_Tracker.json')
+    assert os.path.exists(_p80), 'SEO_Agent_Site_Tracker.json was not generated'
+    _code80 = {}
+    for _w80 in _j80.load(open(_p80, encoding='utf-8')):
+        for _n80 in (_w80.get('nodes') or []):
+            if (_n80.get('parameters') or {}).get('jsCode'):
+                _code80[_n80['name']] = _n80['parameters']['jsCode']
+    _want80 = {
+        'Site Plan': ('B7-1', ('max_change_tests: 6, change_test_min_days: 28', 'const changes = ', 'window_after', 'window_before',
+                               'not_yet:', 'changes: changes.slice(')),
+        'GSC Requests': ('B7-1 / B7-2', ("req('device_cur'", "req('device_prev'", "req('country_cur'", "req('country_prev'",
+                                         "req('test_before'", "req('test_after'", 'test_key: c.key', 'c.readable')),
+        'Parse GSC': ('B7-1 / B7-2 / B7-3', ('const cannibal = ', 'cnbMinShare', 'const splitOf = ', 'const devices = splitOf(',
+                                             'const countries = splitOf(', 'const change_tests = ', "a.tests['test_before|'",
+                                             'cannibal_summary', 'prev_position')),
+        'Site Metrics': ('B7-1 / B7-2 / B7-3', ('const change_tests = (() => {', 'ST.lift(', 'CT.compare(', 'change_method: change_tests.method',
+                                                "type: 'cannibalisation'", "stat: 'device'", "stat: 'country'", 'splitLineage')),
+        'Site Report': ('B7-1 / B7-2 / B7-3', ('Did it work? Your changes against the rest of the site', 'Where your visitors searched from',
+                                               'Searches two of your pages compete for', 'vs expected')),
+    }
+    for _node80, (_row80, _needs80) in _want80.items():
+        _js80 = _code80.get(_node80) or ''
+        assert _js80, 'area 7: node %s not found in the Site Tracker' % _node80
+        for _t80 in _needs80:
+            assert _t80 in _js80, '%s: %s no longer carries %r' % (_row80, _node80, _t80)
+    # B7-1: the kit itself. The expectation is modelled and must say so, and every refusal has to exist - a lift computed on
+    # nothing reads as "no effect", which is the exact shape of the defects rule 1 was written for.
+    _st80 = _rd0('code/_site_stats.js')
+    assert 'const lift = (o) => {' in _st80 and 'lift, LIFT_LABEL, liftMethod' in _st80, 'B7-1: ST.lift is not in the stats kit'
+    assert "Math.log(cur / prev) - Math.log(ratio)" in _st80, 'B7-1: the lift is no longer the rate ratio'
+    assert '1 / cur + 1 / prev + 1 / cc + 1 / cp' in _st80, "B7-1: the 95% range no longer carries the control group's own sampling error"
+    assert 'modelled from the control group, not measured' in _st80, 'B7-1: the expected figure no longer says it is modelled'
+    for _state80 in ("out('no_control'", "out('no_before'", "out('no_after'", "out('too_small'"):
+        assert _state80 in _st80, 'B7-1: the refusal %s is gone - a lift computed on nothing reads as "no effect"' % _state80
+    assert 'that is what the control group is for' in _st80.lower(), 'B7-1: the Google-update sentence is gone'
+    # B7-1: the method sentence may not travel without the test that produces it (INVARIANTS rule 4)
+    _sm80 = _code80['Site Metrics']
+    assert 'change_method: CT.method' not in _sm80, 'B7-1: the Site Tracker is shipping the method of a test it does not run again'
+    assert _sm80.index('const change_tests = (() => {') < _sm80.index('change_method: change_tests.method'), \
+        'B7-1: change_method is emitted before the tests are computed'
+    # B7-2: a window or a split that Google did not ANSWER is unavailable; one it answered with nothing is a measured zero
+    _pg80 = _code80['Parse GSC']
+    assert 'read: false, failed, rows: []' in _pg80 and 'answered the ' in _pg80, \
+        'B7-2: a split Google did not answer and a split it answered with nothing are the same thing again'
+    assert "read: false, page: null, control: null" in _pg80, 'B7-1: an unanswered window no longer refuses with a reason'
+    # B7-3: brand searches are out of the cannibalisation list, on the write path, not filtered later
+    assert 'filter(m => !isBrand(m.query))' in _pg80, 'B7-3: brand searches are being reported as cannibalisation'
+    # B7-3: the action may never ask for another page (D11 by another name)
+    assert 'Decide which one answers this search' in _sm80 and 'Two of your pages compete for' in _sm80, 'B7-3: the action is gone'
+
+
+log('A method we published and a test we never ran (2026-10-15, benchmark area 7, rows B7-1 / B7-2 / B7-3; BENCH_AREA7_site_tracking.md). B7-1: since G12 the Site Tracker has inlined the change-test kit and shipped its METHOD sentence in every weekly callback (change_method) while running no test at all - CT.compare was called by the Link Builder and by nobody else - which is INVARIANTS rule 4 in the one place criterion 3.4 is scored (control group or counterfactual, capped at links only); every dated change now buys its OWN two windows, the 28 complete days after it and the 28 before it over the whole site, because the report\'s 28-vs-28 both sit after a change made three months ago and would measure nothing, and the page under test and the control group of every other page are read from the same two free requests - the clicks with the rate ratio (expected = prev x the control group\'s ratio, 95% range carrying the control group\'s own sampling error) and the position with CT.compare, with five refusals so that a lift computed on nothing is never printed as no effect, and a Google update inside the window named rather than refused because it moves the control group too. B7-2: the Search Analytics API has answered device and country since it existed and we asked for neither, so a site whose phone clicks halved while desktop held read as one flat site-wide figure - four tiny free requests, every device and country tested on the same statistical bar as the other alerts, and a split Google did not ANSWER marked unavailable while a split it answered with no rows is a measured zero. B7-3: cannibalisation (criterion 2.10, a report of its own at SEOTesting and a tab at Semrush) was computed by nobody although the query x page rows have been read in full since G9 - two of the site\'s own pages shown for one non-brand search are now named with the share of impressions each takes, the page Google shows most often beside the page that ranks better when it is shown, and the action merges or differentiates them and never asks for a third page')
+
+
+# =============================================================================
+# 84. A MONITOR'S CLAUDE FIGURE WAS ITS RESERVATION WEARING THE CLOTHES OF A MEASUREMENT
+#     (2026-10-15, FIX_PLAN.md §3.16 row B-C2; docs/system-review-2026-10-14/INVARIANTS.md rule 1.)
+#
+#     Sections 62 and 76 counted the main workflow's eleven Claude calls with Anthropic's free `/v1/messages/count_tokens` and
+#     recorded, rather than implied, what they had not reached: **the engine has 22 Claude agents, not eight.** The other eleven
+#     live in seven workflows, and they were not merely character-priced — they were not priced by this engine's cost kit at all.
+#     A monitor settled `CC.aiRun` with no figure, which returns the per-mode RESERVATION: the number the guard holds back BEFORE
+#     a run, labelled ESTIMATED, standing in for a measurement nobody ever took. `seo_run_ledger.ai_usd`, the day's reconciliation
+#     and every report that reads the row all carried it. A full deep run graded a reservation.
+#
+#     Seven of the eleven are counted here — the agents of the six scheduled workflows `build_monitors.py` writes — by the same
+#     chain, not a second one: *Prompt For Count (…)* → *Count Prompt (…)* → *Count Answer (…)* → *After Count (…)*, on the **main**
+#     path behind the agent, every node `neverError` + `continueRegularOutput` + `alwaysOutputData` with the retry rule (rule 3:
+#     free or not, it is an external HTTP call and it may never fail a run), and a count that does not answer falls back to the
+#     character figure with its old basis. Three things differ from section 76 and each is asserted, not assumed:
+#       * **every call is on the main path.** A monitor agent is fed one job item per SITE and does not loop, so the counter sees
+#         all of its calls: the counts are summed and `rounds` carries no cap. Section 76 needed a cap because only the Editor's
+#         LAST round is on the main path.
+#       * **the prompt is read per item.** `$('X').first()` would price site 1's prompt for every site, so the expression is
+#         re-pointed through `pairedItem` at `$('<the node that fed the agent>').item.json`; the output index it hangs off is
+#         recorded all the same, because the character FALLBACK reads the job items with `$('X').all(<index>)` from the settle,
+#         which is connected to none of them (section 62's trap, found by section 76 on *Keyword Seeds*).
+#       * **the settle prices, and it is the only node that does.** `Monitor_Ledger_Settle.js` carries the workflow's own call
+#         table, baked from its real agent nodes at build time, and hands `CC.runCost` to `CC.aiRun` as `figure` — the parameter
+#         R31 wrote for exactly this and nothing had ever filled in. The row gains `ai_calls`, `ai_counted_nodes`,
+#         `ai_measured_usd`, `ai_measured_share`, `ai_think_usd` and `ai_by_node`, so a reader can tell a measurement from a model
+#         without reading the basis. And *Load Cost Factors (…)* puts the monthly reconciliation's correction factors on the settle
+#         chain, so the monitors and the main workflow now price at the same prices.
+#
+#     **What stays modelled, and why — a result, not an omission.** The THINKING a model does before answering is billed as output
+#     and is never returned by any counter, so it stays modelled from the node's effort budget; all seven are Sonnet with an
+#     adaptive `low` budget, so none of them can reach 100% measured, and the basis says exactly which part is which.
+#
+#     **The four agents still on their reservation, each for its own reason** (recorded in `harness/claude_count.json`, and each
+#     reason PROVED against the generated workflow by `_b84_checks` below, so none of them can quietly become untrue):
+#       * *Reply Reader* — it has **no run-ledger row at all**: a synchronous reply classification reserves nothing and settles
+#         nothing, so there is no figure for a measurement to replace. Counting it would produce a number with nowhere to go.
+#       * *Keyword Fit* and *Keyword Fit (Text)* (the Keyword Check) — they answer the web app **synchronously**, between its
+#         request and `Respond Assess`, so two more round-trips per agent would land on the caller's clock rather than on a
+#         schedule's; and `build_api.py` was outside this change (four agents worked in parallel on one branch).
+#       * *Site Brief* (the Site Tracker) — `build_site_tracker.py` was outside this change. Nothing else is in the way: its
+#         *Ledger Settle (Site)* already carries the empty call table this section's code reads, waiting for the bake.
+# =============================================================================
+import ladder_common as _lc84
+assert COUNT_URL62 == _lc84.ANTHROPIC_COUNT_URL, 'B-C2: the free counter endpoint is defined twice and the two disagree'
+
+# Why each remaining workflow is not counted. One sentence per workflow, not one shared sentence for all of them: the reasons are
+# genuinely different, and a shared one would hide that three of these four need no work beyond someone owning the file.
+_GAP84 = {
+    'SEO_Agent_Reply_Reader.json':
+        'NOT counted, and nothing to count it into: the Reply Reader has no seo_run_ledger row at all - a synchronous reply '
+        'classification reserves nothing and settles nothing, so there is no figure for a measurement to replace. Proved by '
+        '_b84_checks: the workflow contains no Ledger Settle node.',
+    'SEO_Agent_Keyword_Check.json':
+        'NOT counted: the Keyword Check answers the web app SYNCHRONOUSLY - both Haiku agents sit between the request and Respond '
+        "Assess - so the two free count_tokens round-trips per agent would land on the caller's clock rather than on a schedule's, "
+        'and that is a decision for whoever owns the response-time budget. build_api.py was also outside build section 84 (four '
+        'agents worked in parallel). Neither agent has a thinking budget, so counting them would make them 100% measured. Proved by '
+        '_b84_checks: both agents lie on a main path from the webhook to a Respond node.',
+    'SEO_Agent_Site_Tracker.json':
+        'NOT counted only because build_site_tracker.py was outside build section 84 (four agents worked in parallel on one branch). '
+        'Nothing is in the way: Ledger Settle (Site) already carries the empty call table Monitor_Ledger_Settle.js reads, so baking '
+        "Site Brief's table into it is the whole of the work. Proved by _b84_checks: that settle exists and its call table is empty.",
+}
+_cw51['count_gap'] = {'why': _WHY_NOT76, 'workflows': sorted(_GAP84), 'reasons': _GAP84,
+                      'counted_here': ['SEO_Agent_AI_Growth.json', 'SEO_Agent_AI_Visibility.json',
+                                       'SEO_Agent_Backlink_Monitor.json', 'SEO_Agent_Link_Builder.json']}
+json.dump(_cw51, open(os.path.join(HERE0, 'harness', 'cost_wiring.json'), 'w'), indent=1, sort_keys=True)
+
+
+def _b84_checks():
+    """B-C2 over the generated workflows: the chain is on the MAIN path behind every agent of the six scheduled workflows, the
+    settle prices from it, and each of the four agents left on its reservation can still show the reason it is. Runs after the
+    sub-builds, like every other ratchet, because that is the first moment all the workflows exist on disk."""
+    import json as _j84
+    _dir84 = os.path.join(HERE0, 'workflows')
+    _load84 = lambda f: _j84.load(open(os.path.join(_dir84, f), encoding='utf-8'))[0]
+    _lw84 = _j84.load(open(os.path.join(HERE0, 'harness', 'ledger_wiring.json'), encoding='utf-8'))
+    _want84 = {'SEO Agent — AI Visibility Tracker': ['AI Brief', 'Answer Analyst', 'Prompt Writer'],
+               'SEO Agent — AI Pulse': [], 'SEO Agent — Audit Scheduler': [],
+               'SEO Agent — Backlink Monitor': ['Link Analyst', 'Outreach Writer'],
+               'SEO Agent — AI Growth': ['AI Outreach Writer'],
+               'SEO Agent — Link Builder': ['Outreach Sequence Writer']}
+    _files84 = {w['name']: f for f in sorted(os.listdir(_dir84)) if f.endswith('.json')
+                for w in _j84.load(open(os.path.join(_dir84, f), encoding='utf-8'))}
+    _n84 = 0
+    for _wname84, _agents84 in sorted(_want84.items()):
+        assert _wname84 in _files84, 'B-C2: no generated workflow called ' + _wname84
+        _wf84 = _load84(_files84[_wname84])
+        _by84 = {n['name']: n for n in _wf84['nodes']}
+        _c84 = _wf84.get('connections') or {}
+        _w84 = (_lw84.get('monitors') or {}).get(_wname84) or {}
+        _tag84 = _w84['reserve'][len('Run Ledger Row ('):-1]
+        _settle84 = _by84['Ledger Settle (' + _tag84 + ')']['parameters']['jsCode']
+        # the call table is baked, the placeholder is gone, and the settle hands it to the kit as a FIGURE (not a reservation)
+        assert '/*__AI_CALLS__*/' not in _settle84 and "'__CAL__'" not in _settle84, 'B-C2: ' + _wname84 + "'s settle kept a placeholder"
+        assert 'CC.runCost(__costCalls' in _settle84 and 'CC.aiRun({ figure: aiFig' in _settle84, \
+            'B-C2: ' + _wname84 + ' still settles its reservation instead of what it priced'
+        _tbl84 = _j84.loads(re.search(r'const AI_CALLS = (\[.*?\]);\n', _settle84, re.S).group(1))
+        assert sorted(c['node'] for c in _tbl84) == sorted(_agents84), \
+            'B-C2: ' + _wname84 + ' prices ' + str(sorted(c['node'] for c in _tbl84)) + ', expected ' + str(sorted(_agents84))
+        assert _w84.get('cost_cal') in _by84, 'B-C2: ' + _wname84 + ' does not read the reconciliation factors'
+        # and the factor node is on the MAIN path into the settle chain, not beside it (R17's lesson, every time)
+        assert any(t['node'] in ('Ledger Settle (' + _tag84 + ')', 'DFS Balance End (' + _tag84 + ')')
+                   for l in ((_c84.get(_w84['cost_cal']) or {}).get('main') or []) for t in (l or [])), \
+            'B-C2: ' + _wname84 + "'s cost factors hang beside the settle chain, so n8n's v1 order runs them last"
+        _main84 = lambda s: [t['node'] for l in ((_c84.get(s) or {}).get('main') or []) for t in (l or [])]
+        for _c in _tbl84:
+            _ag84 = _c['node']
+            _set84, _cp84 = 'Prompt For Count (' + _ag84 + ')', 'Count Prompt (' + _ag84 + ')'
+            _ca84, _af84 = 'Count Answer (' + _ag84 + ')', 'After Count (' + _ag84 + ')'
+            for _nm84 in (_set84, _cp84, _ca84, _af84):
+                assert _nm84 in _by84, 'B-C2: ' + _wname84 + ' has no node "' + _nm84 + '"'
+            assert _main84(_ag84) == [_set84] and _main84(_set84) == [_cp84] and _main84(_cp84) == [_ca84] \
+                and _main84(_ca84) == [_af84], 'B-C2: ' + _ag84 + "'s counter is not the whole of its main path"
+            assert _main84(_af84) == _c['after'] and _c['after'], \
+                'B-C2: ' + _ag84 + "'s pipeline does not hang off its resume node: " + str(_main84(_af84))
+            assert _by84[_af84]['parameters']['jsCode'].rstrip().endswith("return $('" + _ag84 + "').all();"), \
+                'B-C2: ' + _af84 + ' does not hand the agent its own items back'
+            # rule 3: free or not, these are external HTTP calls — they retry, they never error, and they always answer
+            for _nm84 in (_cp84, _ca84):
+                _h84 = _by84[_nm84]
+                assert _h84['parameters']['url'] == COUNT_URL62, 'B-C2: ' + _nm84 + ' does not call the free counter'
+                assert _h84.get('retryOnFail') and _h84.get('maxTries') == 3 and _h84.get('alwaysOutputData') \
+                    and _h84.get('onError') == 'continueRegularOutput' \
+                    and _h84['parameters']['options']['response']['response']['neverError'] is True, \
+                    'B-C2: ' + _nm84 + ' can fail a run'
+            # the prompt is a COPY: the agent still sends exactly what it sent before, read against the node that fed it
+            assert '$json' in str(_by84[_ag84]['parameters']['text']), 'B-C2: ' + _ag84 + "'s own prompt was rewritten"
+            _pv84 = next(a['value'] for a in _by84[_set84]['parameters']['assignments']['assignments'] if a['name'] == '__prompt')
+            assert _c['ref'] in _pv84 and '$json.' not in _pv84, 'B-C2: ' + _set84 + " does not read the agent's own input"
+            assert _c['count_rounds'] == 0 and _c['count_per_item'] is True, \
+                'B-C2: ' + _ag84 + ' is capped like a looping agent, but every one of its calls is on the main path'
+            _n84 += 1
+        # the whole chain sits behind the reservation: a counted call is a call that was allowed to happen
+        _after84 = _reach55(_c84, ['Reserve Run Ledger (' + _tag84 + ')'], None)
+        for _c in _tbl84:
+            assert 'Count Prompt (' + _c['node'] + ')' in _after84, 'B-C2: ' + _c['node'] + "'s counter runs before the run is allowed"
+    # ---- the four left behind, each still able to show its reason ----
+    _rr84 = _load84('SEO_Agent_Reply_Reader.json')
+    assert not [n for n in _rr84['nodes'] if n['name'].startswith('Ledger Settle (')], \
+        'B-C2: the Reply Reader has a settle now, so its recorded reason ("no ledger row to settle into") is stale'
+    _kc84 = _load84('SEO_Agent_Keyword_Check.json')
+    _kcc84 = _kc84.get('connections') or {}
+    _resp84 = {n['name'] for n in _kc84['nodes'] if n['type'] == 'n8n-nodes-base.respondToWebhook'}
+    for _ag84 in ('Keyword Fit', 'Keyword Fit (Text)'):
+        assert _resp84 & _reach55(_kcc84, [_ag84], None), \
+            'B-C2: ' + _ag84 + ' no longer answers the caller synchronously, so its recorded reason is stale'
+    _st84 = _load84('SEO_Agent_Site_Tracker.json')
+    _sj84 = next(n['parameters']['jsCode'] for n in _st84['nodes'] if n['name'] == 'Ledger Settle (Site)')
+    assert 'const AI_CALLS = /*__AI_CALLS__*/[];' in _sj84 and "const CAL = /*__CAL__*/'';" in _sj84, \
+        'B-C2: the Site Tracker settle no longer carries the empty call table, so its recorded reason is stale'
+    print('B-C2 (a monitor settles a measurement, not its reservation): %d Claude agent(s) across %d scheduled workflow(s) are '
+          'counted on the main path and priced into their ledger row; 4 stay on the reservation, each with its own recorded reason'
+          % (_n84, len([a for a in _want84.values() if a])))
+
+
+log("A monitor's Claude figure was its reservation wearing the clothes of a measurement (2026-10-15, FIX_PLAN.md §3.16 B-C2; "
+    "INVARIANTS rule 1). Sections 62 and 76 counted the main workflow's eleven Claude calls with Anthropic's free "
+    '/v1/messages/count_tokens and recorded what they had not reached: the engine has 22 Claude agents, not eight, and the other '
+    'eleven were not character-priced - they were not priced at all. A monitor called CC.aiRun with no figure, which returns the '
+    'PER-MODE RESERVATION: the number the guard holds back before a run, labelled ESTIMATED, standing in for a measurement nobody '
+    'took, and seo_run_ledger.ai_usd, the day reconciliation and every report reading that row all carried it - a full deep run '
+    'graded a reservation. The seven agents of the six scheduled workflows build_monitors.py writes are counted now by the same '
+    'chain and not a second one (Prompt For Count -> Count Prompt -> Count Answer -> After Count, on the MAIN path behind the agent, '
+    'every node neverError + continueRegularOutput + alwaysOutputData with the retry rule, because free or not it is an external HTTP '
+    'call and may never fail a run), and a count that does not answer leaves its call on characters with the old basis. Three things '
+    'differ from section 76, each asserted rather than assumed: every call is on the main path, because a monitor agent is fed one job '
+    'item per SITE and does not loop, so the counts are summed and rounds carries no cap; the prompt is read per item through '
+    "pairedItem ($('<the node that fed the agent>').item.json), since first() would price site 1's prompt for every site, while the "
+    'output index it hangs off is still recorded because the character FALLBACK reads the job items with .all(<index>) from the settle, '
+    "which is connected to none of them; and the settle is the only node that prices, carrying the workflow's own call table baked from "
+    'its real agent nodes and handing CC.runCost to CC.aiRun as `figure` - the parameter R31 wrote for exactly this and nothing had ever '
+    'filled in - so the row gains ai_calls, ai_counted_nodes, ai_measured_usd, ai_measured_share, ai_think_usd and ai_by_node, and '
+    "Load Cost Factors puts the monthly reconciliation's correction factors on the settle chain so the monitors and the main workflow "
+    'price at the same prices. What stays modelled is a result, not an omission: the thinking a model does before answering is billed as '
+    'output and never returned, so it is modelled from the effort budget, and all seven agents are Sonnet with an adaptive low budget, so '
+    'none can reach 100% measured and the basis says which part is which. Four agents stay on their reservation, each for its OWN reason, '
+    'recorded in harness/claude_count.json and each reason proved against the generated workflow by _b84_checks so none of them can '
+    'quietly become untrue: the Reply Reader has no run-ledger row at all, so there is no figure to make measured; Keyword Fit and '
+    'Keyword Fit (Text) answer the web app synchronously between its request and Respond Assess, so two more round-trips per agent would '
+    "land on the caller's clock, and build_api.py was outside this change; and Site Brief's builder was outside this change, with nothing "
+    'else in the way - Ledger Settle (Site) already carries the empty call table the new code reads')
+
+# 85. ONE AI OVERVIEW FIGURE IN ONE PLACE, AND A STATE THAT ADVANCES ONLY ON EVIDENCE (2026-10-15, FIX_PLAN.md §3.16 rows
+#     B6-9 and B9-6; docs/system-review-2026-10-14/INVARIANTS.md rules 1 and 4).
+#
+#     Both items exist because an earlier fix reached some paths and not all of them — the pattern INVARIANTS.md was written
+#     about (R28: one of four settle paths; B1-3: one of three files; B-L4: the Tracker and not the Pulse). This section
+#     finishes two of them, and in each case makes the CLASS impossible rather than the instance.
+#
+#     * **B6-9 — the third copy of a stale constant.** `v5/code/Ladder_Pool.js` line 61 still multiplied the click-through
+#       rate by **0.65** when a results page carried an AI Overview: Ahrefs' APRIL 2025 figure ("AI Overviews reduced clicks
+#       to top-ranking content by 34.5%"). B1-3 replaced it in `_kw_inputs.js` with the December 2025 study — 300,000
+#       keywords, published 2026-02-04, measured PER POSITION: -58.0% at #1, -50.8% at #2, -46.4% at #3 — and B6-1 replaced
+#       it in `_rank_serp.js`. Nothing replaced it here, and three copies of one measurement is how three answers start.
+#       B6-1's reasoning decides WHICH kit belongs here. A flat factor applied to every position all but cancels out of a
+#       *share*, which is why the share of voice needed `RS.keepAt`'s per-position table. This is not a share:
+#       `traffic_potential` is an absolute monthly estimate — "what a page in the top three would get" — and only the
+#       keywords whose results page HAS an AI Overview carried the factor, so the stale number inflated the printed estimate
+#       by 1.35x on exactly those keywords **and moved them up the `pre_score` order that decides which rungs are planned**.
+#       The figure for a top-three estimate is the kit's measured top-three average, so *Ladder Pool* now makes the same
+#       `KWI.calibrate` call the discovery twin `Collect_Research.js` makes, and the number arrives with its basis.
+#       **The class:** a build-time scan refuses the literal `0.65` anywhere near an AI Overview in any kit, in the sources
+#       and in the generated nodes, with comments stripped first — so the comments that record WHY the figure was retired
+#       survive, and a fourth copy fails the build instead of surviving two fixes.
+#
+#     * **B9-6 — the write half of a promise nobody kept.** The read half landed in section 82. The Content Cadence marked an
+#       AI target `writing` and stamped `written_at` when a page run *started*, whatever the spawn did, and **nothing in the
+#       system ever set `written`** — so `Growth_Metrics` counted `written: 0` every week of its life, and a refused or
+#       failed run left the question claiming work in progress for ever. That is INVARIANTS rule 4, and the same class as R1,
+#       where a budget-refused run left a ladder row promising a page nobody wrote (`fix_phantom_pages.py` exists because of
+#       it). R1's precedent is followed exactly: **a page counts as written only on a `written` content-log row.**
+#       *AI Target Marks* now writes the row back to `queued` with the error when the content run could not be started, and
+#       says in the row's own `reason` that nothing exists yet; *AI Target Settle* is the only exit from `writing`, and it
+#       advances the row only against the `seo_content_log` row for that same run. It deliberately does not time a row out:
+#       the 14-day requeue and its alert stay in the read half, so there is one rule in one place.
+#       **The class, and what it found:** `state_lint.py` check B (a work-in-progress state must have a way back) was a rule
+#       asked only of the tables somebody had listed, and the list was written from R1's one instance — which is exactly how
+#       `seo_ai_targets` sat in it for three releases. The registry is now DERIVED from the generated workflows: every table
+#       a run moves to `writing` **and whose state is read back and acted on** must declare its way back, and check B then
+#       has to find the node that writes it. On its first run it found a third table, `seo_case_studies`, and the honest
+#       answer there is recorded rather than assumed: nothing tests that row's state (both readers already require
+#       `published` / a `page_url`, and the row IS the artefact), so it is not this defect, and the lint says so in words.
+# =============================================================================
+# ---------- B6-9: the ladder pool uses the one measured copy ----------
+_LP85 = rd('code/Ladder_Pool.js')
+assert 'KWI.calibrate(e, {})' in _LP85 and 'KWI.lossApplied(e.serp_types)' in _LP85, \
+    'B6-9: Ladder Pool no longer applies the shared click-loss kit — the ladder would price an AI Overview on its own again'
+assert 'traffic_basis: cal.traffic_basis' in _LP85, 'B6-9 (INVARIANTS rule 1): the ladder\'s traffic estimate lost the label that says it is modelled'
+assert "const KWI = ((" in code('Ladder Pool'), 'B6-9: the discovery-input kit was not inlined into Ladder Pool'
+# (the stale factor itself is refused by the scan below, over every kit and every node — and over this file's CODE only, so
+#  the comment above `score()` may go on naming the number it retired. An assert on the raw text could not tell the two apart:
+#  it fired on the comment the moment it was written.)
+
+# ---------- B6-9, the class: 0.65 may never again sit beside an AI Overview, in any kit or any node ----------
+_AIO85 = re.compile(r'ai[ _-]?overview|\bAIO', re.I)   # `AIO_KEEP`, `aioPool`: the name the per-position table goes by
+_F85 = re.compile(r'(?<![\d.])0\.65(?![\d])')
+
+
+def _strip_js_comments_85(js):
+    """Code only. A URL inside a string is protected first (`https://` is not a comment), then `//` to end of line and every
+    /* ... */ block comes out. The comments are where this figure is allowed to live: `_kw_inputs.js` and `_rank_serp.js` both
+    record 0.65 as the number they retired, and a scan that could not tell a comment from a factor would delete that history."""
+    js = js.replace('https://', 'https\x01').replace('http://', 'http\x01')
+    js = re.sub(r'/\*.*?\*/', ' ', js, flags=re.S)
+    return re.sub(r'//[^\n]*', ' ', js)
+
+
+def _aio_factor_hits_85(js, window=200):
+    """Every place the retired flat factor sits within `window` characters of an AI Overview, in executable code."""
+    src = _strip_js_comments_85(js)
+    out = []
+    for m in _AIO85.finditer(src):
+        seg = src[max(0, m.start() - window):m.end() + window]
+        if _F85.search(seg):
+            out.append(' '.join(seg.split())[:200])
+    return out
+
+
+_scanned85 = 0
+_hits85 = []
+for _f85 in sorted(os.listdir(os.path.join(HERE0, 'v5', 'code'))):
+    if not _f85.endswith('.js'):
+        continue
+    _scanned85 += 1
+    for _h85 in _aio_factor_hits_85(open(os.path.join(HERE0, 'v5', 'code', _f85), encoding='utf-8').read()):
+        _hits85.append('v5/code/' + _f85 + ': ' + _h85)
+for _n85, _nd85 in sorted(nodes.items()):
+    for _h85 in _aio_factor_hits_85((_nd85.get('parameters') or {}).get('jsCode') or ''):
+        _hits85.append('node "' + _n85 + '": ' + _h85)
+assert not _hits85, (
+    'B6-9: the April 2025 AI Overview click-loss factor (0.65 = a flat 35%% loss) is back beside an AI Overview in %d place(s).\n  '
+    % len(_hits85) + '\n  '.join(_hits85[:6])
+    + '\n  The measured figure is per position (Ahrefs, 300,000 keywords, December 2025 data, published 2026-02-04): use '
+      '`RS.keepAt` where a position is known and `KWI.CLICK_LOSS` / `KWI.calibrate` for a top-three estimate. A comment '
+      'recording the retired number is fine — this scan reads code only.')
+
+# ---------- B9-6: the write half, on the sources the cadence builder inlines ----------
+_AM85 = rd('code/AI_Target_Marks.js')
+_AS85 = rd('code/AI_Target_Settle.js')
+assert "status: 'queued'" in _AM85 and 'reason:' in _AM85, \
+    'B9-6: AI Target Marks has no way back — a spawn that failed would leave the question saying "being written" for ever'
+assert "$('Start Content Runs')" in _AM85, 'B9-6: AI Target Marks no longer reads what the spawn actually did'
+assert "$('Load Content Log')" in _AS85 and "st !== 'written' && st !== 'published'" in _AS85, \
+    'B9-6 (R1\'s rule): AI Target Settle advances a row without the content-log row that proves the page exists'
+assert 'rowsOf(' not in _AS85, 'B9-6: AI Target Settle hides the node it reads behind a helper, so no lint can see its evidence'
+from ladder_common import AI_TARGETS_COLS as _ATC85
+assert ('reason', 'string') in _ATC85 and ('written_at', 'string') in _ATC85, \
+    'B9-6: seo_ai_targets has no reason / written_at column (run sync_tables.py after deploying)'
+# the read half of section 82 must stay, or the two halves would disagree about what a `writing` row means
+assert "if (l && ['written', 'published'].includes(String(l.status))) return null;" in rd('code/Growth_Plan.js'), \
+    'B9-6: the read half no longer checks the content-log row, so nothing would requeue a question whose run died'
+# the derived registry must know this table, and check B must be able to find the writer of the way back
+assert any(r['table'] == 'seo_ai_targets' and r['forward'] == 'writing' for r in _sl74.REVERSALS), \
+    'B9-6: state_lint.REVERSALS no longer declares the way back for seo_ai_targets'
+assert _sl74.WIP_STATES and _sl74._READS_STATE, 'B9-6: the derived work-in-progress registry was removed from state_lint.py'
+
+
+def _b85_checks():
+    """B9-6 on the GENERATED Content Cadence: the two new nodes exist, they sit on the main path in the right order, and the
+    settle is reachable whether or not anything was marked this week. R17's lesson is that the code can be right while the
+    wiring is not, so the walk is of the built workflow's own connections."""
+    import json as _j85
+    _p85 = os.path.join(HERE0, 'workflows', 'SEO_Agent_Content_Cadence.json')
+    assert os.path.exists(_p85), 'SEO_Agent_Content_Cadence.json was not generated'
+    _wf85 = _j85.load(open(_p85, encoding='utf-8'))[0]
+    _nd85 = {n['name']: n for n in (_wf85.get('nodes') or [])}
+    for _n85 in ('Load AI Targets Writing (Cadence)', 'AI Target Marks', 'Mark AI Target Writing',
+                 'AI Target Settle', 'Any AI Settles?', 'Settle AI Targets'):
+        assert _n85 in _nd85, 'B9-6: %s is missing from the Content Cadence' % _n85
+    _down85 = {}
+    for _s85, _o85 in (_wf85.get('connections') or {}).items():
+        for _lst85 in (_o85.get('main') or []):
+            for _t85 in (_lst85 or []):
+                _down85.setdefault(_s85, []).append(_t85['node'])
+    for _a85, _b85 in (('Mark AI Target Writing', 'AI Target Settle'), ('Any AI Marks?', 'AI Target Settle'),
+                       ('AI Target Settle', 'Any AI Settles?'), ('Any AI Settles?', 'Settle AI Targets'),
+                       ('Any AI Settles?', 'Cadence Note'), ('Settle AI Targets', 'Cadence Note'),
+                       ('Load AI Targets Writing (Cadence)', 'Load Monitors (Cadence)')):
+        assert _b85 in (_down85.get(_a85) or []), 'B9-6: %s does not feed %s in the Content Cadence' % (_a85, _b85)
+    # the settle must not be able to write anything but `written`, and only from the item it built
+    _vals85 = ((_nd85['Settle AI Targets'].get('parameters') or {}).get('columns') or {}).get('value') or {}
+    assert _vals85.get('status') == '={{ $json.status }}' and _vals85.get('reason') == '={{ $json.reason }}', \
+        'B9-6: Settle AI Targets writes a literal state instead of the one the Code node could refuse'
+    _mk85 = ((_nd85['Mark AI Target Writing'].get('parameters') or {}).get('columns') or {}).get('value') or {}
+    assert _mk85.get('status') == '={{ $json.status }}', \
+        'B9-6: Mark AI Target Writing mints "writing" in its own parameters again — a failed spawn could not be refused'
+    print('B6-9 / B9-6: %d kit source(s) and %d node(s) carry no flat AI Overview factor; the Content Cadence settles an AI '
+          'target only against a content-log row' % (_scanned85, len(nodes)))
+
+
+sticky("""### One AI Overview figure in one place, and a state that advances only on evidence (B6-9 / B9-6)
+**B6-9 (INVARIANTS rule 1).** *Ladder Pool* kept its own copy of the SERP click-loss table, with the **April 2025** AI Overview figure (a flat 35% loss) that B1-3 had removed from the discovery kit and B6-1 from the rank kit. A flat factor cancels out of a *share* — which is why the share of voice needed a per-position table — but this is an absolute estimate, and only the keywords whose results page has an AI Overview carried it, so it inflated those estimates by 1.35x **and moved them up the order that decides which rungs are planned**. The ladder now makes the same `KWI.calibrate` call discovery makes, and the number carries its basis. A **build-time scan** refuses `0.65` beside an AI Overview in any kit or node, with comments stripped first, so the fourth copy fails the build.
+**B9-6 (INVARIANTS rule 4).** An AI target was marked `writing` when a page run *started*, and **nothing ever set `written`** — a refused or failed run left the question claiming work in progress for ever, R1's class in the one table R1 did not cover. *AI Target Marks* now puts the row back to `queued` with the error when the spawn fails; **AI Target Settle** is the only exit, and it advances a row only against the `seo_content_log` row for that same run (R1's rule: a page counts as written only on a `written` content-log row). The 14-day requeue stays in AI Growth, so there is one rule in one place.
+**And the class:** `state_lint.py`'s "a work-in-progress state needs a way back" was asked only of the tables someone had listed — which is how `seo_ai_targets` sat outside it for three releases. The list is now **derived from the generated workflows**, and a table whose `writing` state is read back and acted on fails the build until its way back is declared *and* built. It found a third table on its first run, `seo_case_studies`, and records the honest answer: nothing tests that row's state, so it is not this defect.""",
+       -2600, -3800, 1180, 420, 3)
+log('One AI Overview figure in one place, and a state that advances only on evidence (2026-10-15, FIX_PLAN §3.16 rows B6-9 and B9-6). B6-9: v5/code/Ladder_Pool.js still multiplied the click-through rate by 0.65 when a results page carried an AI Overview - Ahrefs\' APRIL 2025 figure - after B1-3 had replaced it in _kw_inputs.js with the December 2025 per-position study (300,000 keywords, published 2026-02-04: -58.0% at position 1, -50.8% at 2, -46.4% at 3) and B6-1 in _rank_serp.js. Which kit belongs where is B6-1\'s own reasoning: a flat factor all but cancels out of a SHARE, so the share of voice needed the per-position table, while the ladder\'s traffic_potential is an ABSOLUTE top-three estimate and only the keywords whose results page has an AI Overview carried the factor - so the stale number inflated those estimates by 1.35x and moved them up the pre_score order that decides which rungs are planned. Ladder Pool now makes the same KWI.calibrate call the discovery twin Collect_Research.js makes, and the estimate carries traffic_basis / traffic_note / click_loss instead of arriving bare. The class is closed by a build-time scan that refuses the literal 0.65 within 200 characters of an AI Overview in every v5/code kit and every generated Code node, with comments stripped first so the two comments that record WHY the figure was retired survive. B9-6: the write half of "writing was a promise nobody kept" - the Content Cadence marked an AI target writing and stamped written_at when a page run STARTED, whatever the spawn did, and nothing in the system ever set written, so Growth Metrics counted written: 0 every week of its life and a refused or failed run left the question claiming work in progress for ever (R1\'s class in the one table R1 did not cover). AI Target Marks now writes the row back to queued with the error when the content run could not be started and says in the row\'s own reason that nothing exists yet; the new AI Target Settle is the only exit from writing and advances a row only against the seo_content_log row for that same run, which is R1\'s rule exactly (a page counts as written only on a written content-log row); it deliberately does not time a row out, because the 14-day requeue and its alert belong to the read half in AI Growth. The class is closed by deriving state_lint.py\'s work-in-progress registry from the generated workflows instead of hand-writing it from R1\'s one instance: every table a run moves to writing whose state is read back and acted on must declare its way back, and check B then has to find the node that writes it. On its first run the derived registry found a third table, seo_case_studies, and the honest answer is recorded rather than assumed - nothing tests that row\'s state (Brief Context hands a later page url: \'\' unless the status is published, and the Link Builder takes a case study only when it has a page_url), so it is not this defect')
+
+
+# 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
+#     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:
+#     "two fixes have never come back and both are enforced by the build".
+#
+#     * B-F5 **the build baked fallbacks for settings nobody gave it, and exited 0.** `env_settings.load_env()` answers `{}` for a
+#       missing file without a word, so BRAND became "Dev SEO", SENDER and OPS_EMAIL became an address belonging to nobody and
+#       SA_EMAIL became '' — the Google service account Search Console and GA4 are read with — and all of it went into eleven
+#       workflows. `n8n/.env` is gitignored, so a git worktree never has one: every worktree agent of the five days to 2026-10-15
+#       built exactly that way, and the agent working on benchmark area 3 confirmed its own build had done it. The only containment
+#       was "rebuild in the main worktree after every merge and read the diff" — and that was weaker than it looked, because
+#       `build_api.py` minted a fresh uuid4 for every node on every build, so SEO_Agent_API.json and SEO_Agent_Admin_API.json were
+#       ALWAYS dirty and a defaults-bake could not be told from the churn by eye.
+#       Both halves are closed. (a) `env_settings.require_settings()` refuses the build — naming the path it looked for, which
+#       settings are missing, what each one is for, and what to do — unless `SEO_BUILD_ALLOW_DEFAULTS=1` or `--no-env` says the
+#       offline build is deliberate, which it then announces in the log. Importing `env_settings` from a `build_*.py` IS the call,
+#       so a builder cannot forget it. (b) `ladder_common.freeze_ids` gives every node the id uuid5(NS, workflow + ':' + node), so
+#       a rebuild of unchanged sources is byte-identical and a real difference is visible. `webhookId` is untouched: it is the
+#       public URL path of a Webhook or Form node (CLAUDE.md), and moving it would move a live endpoint.
+#     * INVARIANTS rule 2 **a gate must run where data is written AND where it is read back**, because stored data predates every
+#       gate we will ever write. ~16 defects came from that one class (D3, D8, P2-3, R16, R21, R1 / R15); R16 fixed it for one gate
+#       on two read paths. `gate_lint.py` walks the GENERATED workflows the way section 55 walks the ledger ordering, pairs each
+#       gate kit's write entry point with its read entry point over the table it guards, and fails the build on a read path that
+#       trusts storage. Most of today's read paths do; they are a ratchet baseline (`harness/gate_pairs_baseline.json`), exactly as
+#       `retry_lint.check_in200` keeps the in-200 debt — it cannot grow, and a node that gains its gate leaves the list for ever.
+#       Three of the baselined rows were real defects and were registered as such, not excused: *AI Plan* (AI Visibility and AI
+#       Pulse), *Growth Plan* and *Site Plan* each turned every stored ladder rung into a question asked, a page planned or a rank
+#       check bought, with no fit gate between — the exact shape of R16. They are **FIX_PLAN §3.16 B-G1 / B-G2 / B-G3**, fixed in
+#       section 71 the same day; all four read paths have left the baseline and may never return to it.
+# =============================================================================
+import gate_lint as _gl69
+from ladder_common import freeze_ids as _freeze69, ids_are_frozen as _frozen69
+# not generated by any builder: the v3 export is this build's INPUT, and the test callback receiver is maintained by hand
+_NOT_GENERATED69 = ('SEO_Agent_v3_original_export.json', 'SEO_Agent_Test_Callback_Receiver.json')
+
+
+def _b69_checks():
+    """Runs at the very end, after the four sub-builds: both checks need every generated workflow on disk."""
+    # ---------- A. B-F5 (b): one id rule over every generated workflow, so an unchanged rebuild is byte-identical ----------
+    # The lint that actually bites: no builder may mint a random id again. (The freeze below cannot fail by construction —
+    # it sets what it then checks — so this, and the "already frozen" check on the four workflows whose builder applies the
+    # rule itself, are what a regression would break.)
+    _u469 = [_f for _f in ('build_v4.py', 'build_api.py', 'build_ladder_extras.py', 'build_site_tracker.py', 'build_monitors.py')
+             if ('uuid.' + 'uuid4(') in open(os.path.join(HERE0, _f), encoding='utf-8').read()]   # spelt in two halves so this line is not its own first hit
+    assert not _u469, ('B-F5: %s mints a random node id (uuid.uuid4). A node id is uuid5(workflow + ":" + node) — use '
+                       'ladder_common.node_id / freeze_ids, so that an unchanged rebuild stays byte-identical.' % ', '.join(_u469))
+    _wdir69 = os.path.join(HERE0, 'workflows')
+    _SELF_FROZEN69 = ('SEO_Agent_API.json', 'SEO_Agent_Admin_API.json', 'SEO_Agent_Keyword_Check.json', 'SEO_Agent_Prerelease.json')
+    _froze69 = 0
+    for _f69 in sorted(os.listdir(_wdir69)):
+        if not _f69.endswith('.json') or _f69 in _NOT_GENERATED69:
+            continue
+        _p69 = os.path.join(_wdir69, _f69)
+        _d69 = json.load(open(_p69, encoding='utf-8'))
+        if _f69 in _SELF_FROZEN69:          # build_api.py applies the rule itself, so its files arrive already frozen
+            for _w69 in (_d69 if isinstance(_d69, list) else [_d69]):
+                _pre69 = _frozen69(_w69)
+                assert not _pre69, ('B-F5: build_api.py wrote %s with ids the rule does not give (%s) — it must pass every '
+                                    'workflow through ladder_common.freeze_ids before json.dump.' % (_f69, ', '.join(_pre69[:5])))
+        for _w69 in (_d69 if isinstance(_d69, list) else [_d69]):
+            _freeze69(_w69)
+        json.dump(_d69, open(_p69, 'w', encoding='utf-8'), indent=2, ensure_ascii=False)
+        for _w69 in (_d69 if isinstance(_d69, list) else [_d69]):
+            _loose69 = _frozen69(_w69)
+            assert not _loose69, 'B-F5: %s has node ids the rule does not give: %s' % (_f69, ', '.join(_loose69[:5]))
+        _froze69 += 1
+    # ---------- B. B-F5 (a): the refusal has to fire, and the opt-out has to work (recorded for harness S79) ----------
+    _guard69 = _envb.guard_selftest()
+    assert _guard69['cases']['missing_file']['refused'] and _guard69['cases']['missing_file']['says_what_to_do'], _guard69
+    assert _guard69['cases']['empty_setting']['refused'] and _guard69['cases']['one_empty_setting']['refused'], _guard69
+    assert not _guard69['cases']['all_present']['refused'], _guard69
+    assert not _guard69['cases']['opt_out_flag']['refused'] and not _guard69['cases']['opt_out_variable']['refused'], _guard69
+    _guard69['this_build'] = {'file_present': os.path.exists(_envb.ENV_FILE), 'opt_out': _envb.opted_out(),
+                              'missing': [k for k, _w in _envb.BAKED if not (_envb.ENV.get(k) or '').strip()],
+                              'frozen_workflows': _froze69}   # never a value from .env, only whether it is set (R29)
+    json.dump(_guard69, open(os.path.join(HERE0, 'harness', 'env_guard.json'), 'w'), indent=1, sort_keys=True)
+    # ---------- C. INVARIANTS rule 2: the gate pairs ----------
+    _sv69, _unpaid69 = _gl69.check()
+    _pairs69 = sum(1 for r in _sv69.values() if r['writers'])
+    _gated69 = sum(sum(1 for v in r['readers'].values() if v) for r in _sv69.values() if r['writers'])
+    _un69 = sum(len(v) for v in _unpaid69.values())
+    print('B-F5: %d generated workflows carry deterministic node ids; the build refuses a missing n8n/.env%s'
+          % (_froze69, ' (opted out this run: ' + _envb.opted_out() + ')' if _envb.opted_out() else ''))
+    print('INVARIANTS rule 2 (gate pairs): %d gate/table pairs, %d read paths gated, %d on the ratchet baseline'
+          % (_pairs69, _gated69, _un69))
+
+
+log('A build that invents what it was not told, and a gate that only works one way (2026-10-15, FIX_PLAN §3.15 B-F5 + INVARIANTS rule 2). B-F5: env_settings.load_env() answered {} for a missing n8n/.env without a word, so the build baked brand "Dev SEO", a sender and an ops address belonging to nobody and an EMPTY Google service-account e-mail into eleven workflows and exited 0 - and because .env is gitignored, a git worktree never has one, so every worktree agent of the five days to 2026-10-15 built that way; the build refuses now, naming the path, the missing settings and what each is for, unless SEO_BUILD_ALLOW_DEFAULTS=1 or --no-env says the offline build is deliberate (importing env_settings from a build_*.py is itself the call, so a builder cannot forget it). The containment that was supposed to catch it - rebuild in the main worktree and read the diff - could not, because build_api.py minted a fresh uuid4 per node on every build and the two API workflows were always dirty: every node id is now uuid5(workflow + ":" + node), webhookId untouched, so an unchanged rebuild is byte-identical and a real difference is visible. INVARIANTS rule 2: gate_lint.py walks the generated workflows and fails the build when a gate applied where a table is WRITTEN is missing from a node that reads those rows back - the class behind D3, D8, P2-3, R16, R21 and R1/R15; today\'s unguarded read paths are a ratchet baseline (harness/gate_pairs_baseline.json) that cannot grow, with three of them registered as the defects FIX_PLAN §3.16 B-G1 / B-G2 / B-G3 (AI Plan in both AI workflows, Growth Plan and Site Plan each turned a stored ladder rung into a question asked, a page planned or a rank check bought, with no fit gate between) and fixed the same day in section 71, so those four read paths have left the baseline for good')
+
+
 # =============================================================================
 # 9. WRITE
 # =============================================================================
@@ -6353,4 +9276,47 @@ _r17_r29_checks()
 _r31_checks()
 # section 64 (B-A7 / B-A9): the sweep and the concurrency gate, in every scheduled workflow
 _b64_checks()
+# section 67 (B4-1 / B4-2 / B4-3): the decay test, what stores it and what acts on it, in the Site Tracker and the Cadence
+_b67_checks()
+# section 75 (B-A10, INVARIANTS rule 3): the in-200 retry ratchet over EVERY generated workflow, not the main one alone
+_b75_checks()
+# section 76 (B-F1): every Claude agent is counted on its main path, or listed with the reason it is not
+_b76_checks()
+# section 71 (B-G1 / B-G2 / B-G3): the three read paths of stored ladder rungs, gated through the one shared FITR
+_b71_checks()
+
+# section 72 (INVARIANTS rule 1): lineage, evidence, like-for-like deltas and withheld scores over every generated workflow
+_b72_checks()
+# section 74 (INVARIANTS rule 4): promises that need their evidence, and deliveries that need an acknowledgement
+_b74_checks()
+
+# section 73 (B-L1 ... B-L5): the five real defects the rule-1 lint found, each proved on the generated node
+_b73_checks()
+# section 78 (B6-1 ... B6-5): benchmark area 6, on the generated Rank Tracker and the dated event registry
+_b78_checks()
+# section 82 (B9-1 ... B9-5): benchmark area 9, on the generated AI Growth workflow and its main-path wiring
+_b82_checks()
+
+# section 80 (B7-1 ... B7-3): benchmark area 7, on the generated Site Tracker
+_b80_checks()
+
+# section 69 (B-F5 + INVARIANTS rule 2): deterministic node ids over every generated workflow, the settings refusal's self-test,
+# and the gate-pair lint. Last, because the id freeze rewrites the files the checks above have just finished reading.
+# section 81 (benchmark area 8): the AI Visibility Tracker and the AI Pulse are written by build_monitors.py above, so
+# like every check in this block it runs here and not where it is defined.
+_b81_log(_b81_checks())
+_b79_checks()
+# section 83 (B11-2): benchmark area 11, on the generated Link Builder - the won links are read again, and a reading
+# that failed is not a loss
+_b83_checks()
+# section 84 (B-C2): every Claude agent of the six scheduled workflows is counted on its main path and priced
+# into its ledger row, and the four left on their reservation can each still show the reason they are
+_b84_checks()
+
+# section 85 (B6-9 + B9-6): one AI Overview figure in one place, and a state that advances only on evidence
+_b85_checks()
+
+# section 86 (B6-7): benchmark area 6's structural gap - the keywords the customer named, on the generated Rank Tracker
+_b86_checks()
+_b69_checks()
 

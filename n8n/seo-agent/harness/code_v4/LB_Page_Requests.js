@@ -634,11 +634,12 @@ const plans = $('LB Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 const rows = (n) => { try { return $(n).all().map(i => i.json).filter(r => r && typeof r === 'object' && Object.keys(r).length && !r.error); } catch (e) { return []; } };
 const prospects = rows('Load Link Prospects'), outreach = rows('Load Link Outreach'), ledger = rows('Load Backlinks');
 let sreqs = [], sresps = []; try { sreqs = $('LB Source Requests').all().map(i => i.json); sresps = $('Fetch LB Sources').all().map(i => i.json || {}); } catch (e) {}
-let dreqs = [], dresps = []; try { dreqs = $('LB DFS Requests').all().map(i => i.json).filter(r => !r.skip); dresps = $('Run LB DFS').all().map(i => i.json || {}); } catch (e) {}
+let dreqs = [], dresps = []; try { dreqs = $('LB DFS Requests').all().map(i => i.json).filter(r => !r.skip); dresps = $('Run LB DFS Answers').all().map(i => i.json || {}); } catch (e) {}
 const body = (r) => { if (!r) return null; if (r.body && typeof r.body === 'object') return r.body; if (r.posts || r.results || Array.isArray(r)) return r; try { return JSON.parse(String(r.body ?? r.data ?? '')); } catch (e) { return null; } };
 const BIG = /(^|\.)(google|youtube|facebook|linkedin|wikipedia|amazon|apple|microsoft|reddit|quora|instagram|twitter|x|tiktok|medium|github|pinterest|bing|yahoo|duckduckgo)\.[a-z.]+$/i;
 const DOC = /\.(pdf|docx?|xlsx?|pptx?|zip|csv|xml|json|txt|mp4|mp3)(\?|$)/i;
 const ASSET = /\.(css|js|mjs|png|jpe?g|gif|svg|webp|avif|ico|woff2?|ttf|eot|xml|json|txt|pdf|map|webmanifest)(\?|$)/i;
+const LB_WON_MAX = 12;   // B11-2: won links re-read a run (free GETs; the rest wait a week, oldest reading first)
 const out = [];
 for (const p of plans) {
   const add = (kind, url, extra = {}) => { if (!/^https?:\/\//i.test(url || '') || out.some(o => o.json.site_id === p.site_id && o.json.url === url && o.json.kind === kind)) return; /* one fetch per purpose */ out.push({ json: { site_id: p.site_id, kind, url: String(url).slice(0, 500), ...extra } }); };
@@ -650,6 +651,29 @@ for (const p of plans) {
   const todo = prospects.filter(x => x.site_id === p.site_id && (x.status || 'new') === 'new' && !['reclaim', 'digest'].includes(x.type) && !known.has(x.prospect_domain + '|' + x.type) && !skipD(x.prospect_domain))
     .sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0)).slice(0, p.qualify_max);
   for (const x of todo) add('prospect', (x.source_url && !DOC.test(x.source_url)) ? x.source_url : 'https://' + x.prospect_domain + '/', { prospect_domain: x.prospect_domain, type: x.type });
+  // 1b. B11-2 (2026-10-15, benchmark area 11): the links we have already won, read again on their own page.
+  // A link won through outreach was proven ONCE — the Reply Reader fetched the page named in the reply and found the link — and then
+  // nothing ever looked at it again. If no crawler indexes that page (which is the normal case for a small site's first links) the
+  // link is in no backlink index either, so the Backlink Monitor's weekly re-check never reaches it: the one link the customer worked
+  // hardest for was the one link nobody verified twice. Criterion 4C.7 is "confirmed live by our own check, THEN monitored", and
+  // Pitchbox re-checks only its top 100 links while Linkody re-checks every monitored link every 24 hours.
+  // Only the links the ledger does NOT carry are queued here: the ones it does carry are already re-fetched by the Backlink Monitor,
+  // and two workflows fetching the same page every Monday is a cost to them, not to us. Oldest reading first, a row already missing
+  // once always first, at most LB_WON_MAX a run — all free GETs.
+  const wonQueue = [];
+  for (const x of prospects.filter(y => y.site_id === p.site_id && String(y.status || '') === 'won')) {
+    const key = LK.refKey(x.prospect_domain);
+    if (!key || linking.has(key)) continue;   // in the ledger: the Backlink Monitor reads that page itself
+    const row = outreach.find(o => o.site_id === p.site_id && o.prospect_domain === x.prospect_domain && o.type === x.type) || {};
+    let ck = {}; try { ck = JSON.parse(row.checks_json || '{}') || {}; } catch (e) { ck = {}; }
+    const w = ck.won || {};
+    const url = /^https?:\/\//i.test(w.url || '') ? w.url
+      : (/^https?:\/\//i.test(x.source_url || '') && !DOC.test(x.source_url)) ? x.source_url : 'https://' + x.prospect_domain + '/';
+    const at = Date.parse(w.at || '');
+    wonQueue.push({ x, url, age: Number.isFinite(at) ? (Date.now() - at) / 864e5 : 9999, misses: Number(w.misses) || 0 });
+  }
+  wonQueue.sort((a, b) => (b.misses - a.misses) || (b.age - a.age));
+  for (const w of wonQueue.slice(0, LB_WON_MAX)) add('won', w.url, { prospect_domain: w.x.prospect_domain, type: w.x.type, won_at: String(w.x.won_at || ''), url_source: /^https?:\/\//i.test(String(w.x.source_url || '')) && w.age > 9000 ? 'the page we pitched' : 'where the link was last found' });
   // 2. resource pages found by search (monthly)
   let nRes = 0;
   sreqs.forEach((r, i) => { if (r.site_id !== p.site_id || r.kind !== 'resource_search') return; const j = body(sresps[i]) || {};

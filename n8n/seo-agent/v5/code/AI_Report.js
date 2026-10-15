@@ -16,7 +16,7 @@ return metrics.map((m, i) => {
   const b = briefs[i] || null; const M = m.metrics; const d = M.delta || {}; const T = m.traffic; const A = m.access; const X = m.index; const P = m.perception;
   const engs = Object.keys(m.engines);
   let html = '<div style="font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#0f172a;max-width:900px">';
-  html += '<h2 style="margin:0 0 2px;font-size:20px">AI search visibility: ' + esc(m.domain) + '</h2>' + p_(esc(m.checked_at.slice(0, 10)) + ' · ' + m.questions.length + ' buyer questions × ' + engs.length + ' AI engines · ' + n(M.samples) + ' answers counted' + (M.pulse_samples ? ' (' + n(M.pulse_samples) + ' from the daily pulse)' : '') + (m.on_demand ? ' · on-demand run' : '') + (m.previous ? ' · compared with ' + esc(String(m.previous.checked_at).slice(0, 10)) : ' · first run (baseline)'), true);
+  html += '<h2 style="margin:0 0 2px;font-size:20px">AI search visibility: ' + esc(m.domain) + '</h2>' + p_(esc(m.checked_at.slice(0, 10)) + ' · ' + m.questions.length + ' buyer questions × ' + engs.length + ' AI engines · ' + n(M.samples) + ' answers counted' + (M.pulse_samples ? ' (' + n(M.pulse_samples) + ' from the daily pulse)' : '') + (m.on_demand ? ' · on-demand run' : '') + (m.previous ? (M.delta_not_compared ? ' · ' + esc(String(M.delta_not_compared).replace(/\.$/, '')) : ' · compared with ' + esc(String(m.previous.checked_at).slice(0, 10))) : ' · first run (baseline)'), true);
   // D19: every figure counts answered requests only, so the failures are named here instead of being invisible
   if (M.errors) html += p_(M.errors + ' of ' + n(M.requests || M.asked_all) + ' requests failed this run (' + M.error_rate + '%)'
     + (M.retried ? ', ' + M.retry_answered + ' of ' + M.retried + ' answered when they were sent again' : '') + ': '
@@ -24,15 +24,37 @@ return metrics.map((m, i) => {
     + '. The rates below count the ' + n(M.answered) + ' answers that came back.', true);
   html += briefBox(b) + alertBox(m.alerts);
   const sig = d.significant === true ? ' <b>real change</b>' : d.significant === false ? ' (within noise)' : '';
-  html += '<table style="border-collapse:collapse;margin:8px 0"><tr>' + tile('Named in', M.mention_rate + '%', '95% range ' + M.mention_ci[0] + '–' + M.mention_ci[1] + '%' + (m.previous ? '<br>' + dpts(d.mention_rate) + sig : '')) +
-    tile('Visibility score', M.visibility_score + '/100', m.previous && d.visibility_score != null ? dpts(d.visibility_score) : 'position and demand weighted') + tile('Your pages cited', M.citation_rate + '%', m.previous ? dpts(d.citation_rate) : M.cited + ' answers') +
-    tile('Share of voice', M.share_of_voice + '%', m.previous ? dpts(d.share_of_voice) : 'vs ' + m.competitors.length + ' competitors') +
+  // B8-1 (2026-10-15, benchmark area 8, INVARIANTS rule 1): three of the four headline tiles printed a bare arrow beside a tested
+  // one, in the same type and the same row. Every arrow now carries the verdict of its own test, and every rate its own 95% range.
+  const T_ = M.tests || {};
+  const verdict = (t) => !t ? ' (not tested)' : t.significant === true ? ' <b>real change</b>' : t.significant === false ? ' (within noise)' : ' (not tested)';
+  const band = M.score_band || {};
+  // B-L4 (2026-10-15, INVARIANTS rule 1): the panel or the run kind moved, so there is no change to print — say that in the
+  // place the arrow would have been. An empty box reads as "no change", which is the opposite of what happened.
+  const nc = '<span style="color:#b45309">not compared</span>';
+  const chg = (key, first) => !m.previous ? first : M.delta_not_compared ? nc
+    : (T_[key] && T_[key].delta != null) ? dpts(T_[key].delta) + verdict(T_[key])
+    : (d[key] != null ? dpts(d[key]) + ' (not tested)' : nc);
+  if (M.delta_not_compared) html += p_('<b>These figures are not compared with the last check.</b> ' + esc(String(M.delta_not_compared).replace(/^Not compared with [0-9-]+: /, '')) + ' The figures below are this run\'s own measurement.', true);
+  const cci = M.citation_ci || [0, 0], sci = M.sov_ci || [0, 0];
+  html += '<table style="border-collapse:collapse;margin:8px 0"><tr>' + tile('Named in', M.mention_rate + '%', '95% range ' + M.mention_ci[0] + '–' + M.mention_ci[1] + '% of ' + n(M.samples) + ' answers' + (m.previous ? '<br>' + (M.delta_not_compared ? nc : dpts(d.mention_rate) + sig) : '')) +
+    tile('Visibility score', M.visibility_score + '/100', (band.half != null ? '95% band ±' + band.half + ' pts' : 'position and demand weighted') + (m.previous ? '<br>' + chg('visibility_score', '') : '')) +
+    tile('Your pages cited', M.citation_rate + '%', '95% range ' + cci[0] + '–' + cci[1] + '%' + (m.previous ? '<br>' + chg('citation_rate', '') : '<br>' + M.cited + ' answers')) +
+    tile('Share of voice', M.share_of_voice + '%', '95% range ' + sci[0] + '–' + sci[1] + '% of ' + n(M.sov_denominator) + ' mentions' + (m.previous ? '<br>' + chg('share_of_voice', '') : '<br>vs ' + m.competitors.length + ' competitors')) +
     (T && T.connected ? tile('AI visits (28 days)', n(T.sessions), (T.change_pct != null ? (T.change_pct >= 0 ? '▲ ' : '▼ ') + Math.abs(T.change_pct) + '% · ' : '') + n(T.key_events) + ' key events' + (T.revenue ? ' · ' + money(T.revenue) + ' revenue' : '')) : '') +
     (M.sentiment_score != null ? tile('Sentiment', (M.sentiment_score > 0 ? '+' : '') + M.sentiment_score, P.positive + ' positive · ' + P.negative + ' negative', M.sentiment_score < 0 ? '#b91c1c' : '#15803d') : '') + '</tr><tr>' +
     tile('Avg. position', M.avg_rank ? '#' + M.avg_rank : '—', 'when named') + tile('AI Overview', M.aio_presence + '%', 'of searches show one; you cited in ' + M.aio_citation_rate + '%') +
     (M.brand && M.brand.answered ? tile('Brand recognised', M.brand.known + ' of ' + M.brand.answered, M.brand.carried ? 'checked ' + String(M.brand.checked_at).slice(0, 10) + ' (monthly)' : 'assistants know who you are', M.brand_known === false ? '#b91c1c' : '#15803d') : '') +
     (X && X.sov != null ? tile('Market-wide share', X.sov + '%', n(X.answers_citing_you) + ' AI answers cite you' + (X.carried ? ' (monthly)' : '')) : '') +
     (A ? tile('AI crawlers', A.answer_bots_ok + ' of ' + A.answer_bots, A.ok ? 'answer bots can read the site' : 'blocked: see below', A.ok ? '#15803d' : '#b91c1c') : '') + '</tr></table>';
+  // B8-1 / B8-3 / B8-5: what the figures above were measured on, in the place they are read. A sample too small for a rate, the
+  // pulse mornings pooled into the week (and the ones that did not reach every engine), and the requests the run never sent.
+  const basisLines = [];
+  if (!M.enough_samples && M.sample_note) basisLines.push('<b>Too few answers to draw a rate from.</b> ' + esc(M.sample_note) + ' The figures above are what came back, with their ranges; nothing above is called a change.');
+  if (M.score_band && M.score_band.basis === 'modelled') basisLines.push('The visibility score is <b>modelled</b>, not counted: ' + esc(M.score_band.why) + ', so it carries a 95% band of ±' + M.score_band.half + ' points and a move inside that band is not reported as a change.');
+  if (M.pulse_basis && M.pulse_basis.note) basisLines.push(esc(M.pulse_basis.note));
+  if (M.capped && M.capped.note) basisLines.push('<b>Not everything was asked.</b> ' + esc(M.capped.note));
+  if (basisLines.length) html += '<p style="margin:6px 0 10px;font-size:12px;color:#475569;background:#f8fafc;border-left:3px solid #cbd5e1;padding:6px 10px">' + basisLines.join('<br>') + '</p>';
   const acts = (b && Array.isArray(b.actions) && b.actions.length) ? b.actions.map(a => ({ action: a.action, why: a.why })) : m.actions;
   html += h3('Do this next') + (acts.length ? '<ol style="margin:4px 0 4px 18px;padding:0;font-size:13px">' + acts.map(a => '<li style="margin:3px 0"><b>' + esc(a.action) + '</b> — ' + esc(a.why) + '</li>').join('') + '</ol>' : p_('Nothing urgent.', true));
   const gapActs = m.actions.filter(a => a.api_body);
@@ -58,9 +80,17 @@ return metrics.map((m, i) => {
   const st = m.clusters.stages || [], cl = m.clusters.clusters || [];
   if (st.length) html += h3('By buyer stage') + table(['Stage', 'Questions', 'Named in', 'AI searches / month', 'Named most instead'], st.map(s => [esc(s.key), n(s.questions), s.mention_rate + '%', s.volume ? n(s.volume) : '—', esc(s.leader || '—')]));
   if (cl.length > 1) html += h3('By topic') + table(['Topic', 'Questions', 'Named in', 'AI searches / month', 'Named most instead'], cl.map(s => [esc(s.key), n(s.questions), s.mention_rate + '%', s.volume ? n(s.volume) : '—', esc(s.leader || '—')]));
-  html += h3('Answer by answer') + table(['Question', 'Week', ...engs.map(e => m.engines[e].name)], m.questions.map(q => [esc(q.prompt) + muted(esc(q.kind) + (q.stage ? ' · ' + esc(q.stage) : '') + (q.volume ? ' · ' + n(q.volume) + ' AI searches/mo' : '') + (q.competitors.length && !q.won ? ' · named instead: ' + esc(q.competitors.slice(0, 3).join(', ')) : '')), q.samples ? q.win_rate + '%' + muted(q.samples + ' answers') : '—', ...engs.map(e => SYM[q.engines[e]] || '—')]), 'no answers this week');
+  html += h3('Answer by answer') + table(['Question', 'Week', ...engs.map(e => m.engines[e].name)], m.questions.map(q => [esc(q.prompt) + muted(esc(q.kind) + (q.stage ? ' · ' + esc(q.stage) : '') + (q.volume ? ' · ' + n(q.volume) + ' AI searches/mo' : '') + (q.competitors.length && !q.won ? ' · named instead: ' + esc(q.competitors.slice(0, 3).join(', ')) : '')), (q.win && q.win.enough ? q.win.rate + '%' + muted(q.win.ci[0] + '–' + q.win.ci[1] + '% · ' + q.samples + ' answers') : q.samples ? '<span style="color:#b45309">too few</span>' + muted(esc((q.win && q.win.why) || (q.samples + ' answers'))) : '—'), ...engs.map(e => SYM[q.engines[e]] || '—')]), 'no answers this week');
+  // B8-4: the questions nobody has enough answers about. They are NOT in the gap list above, do not pick an action and do not carry
+  // an API body — a question asked once and lost once is not a question the business loses.
+  if ((m.undecided || []).length) html += '<p style="margin:6px 0 2px;font-size:13px"><b>Not enough answers to tell yet</b> (left out of the gaps and the actions)</p>'
+    + table(['Question', 'Answers so far', 'AI searches / month', 'Named instead'], m.undecided.map(u => [esc(u.prompt), n(u.samples) + muted(esc(u.why)), u.volume ? n(u.volume) : '—', esc((u.competitors || []).slice(0, 3).join(', ') || '—')]));
   html += h3('By engine') + table(['Engine', 'Answers', 'Named you', '95% range', 'Cited your pages', 'Failed'], engs.map(e => { const x = m.engines[e]; return [esc(x.name) + (x.carried ? muted('monthly · last asked ' + esc(String(x.checked_at || '').slice(0, 10))) : x.pulse_samples ? muted(x.pulse_samples + ' from the daily pulse') : ''), n(x.samples != null ? x.samples : x.answered), x.mentioned + ' (' + x.mention_rate + '%)', x.ci ? x.ci[0] + '–' + x.ci[1] + '%' : '—', x.cited + ' (' + x.citation_rate + '%)', n(x.errors)]; }));
   html += h3('Who AI recommends instead') + table(['Business', 'Answers naming it', 'Share of voice', ''], [['<b>' + esc(m.domain) + ' (you)</b>', n(M.mentioned), M.share_of_voice + '%', ''], ...m.competitors.map(c => [esc(c.domain), n(c.mentions), c.share + '%', c.auto ? (c.named_only ? 'named (no website shown)' : 'detected') : 'your competitor'])], 'no other businesses named');
+  // B-G1 (2026-10-15, INVARIANTS rule 1 + 2): a stored keyword the read-path fit gate set aside was NOT asked of any engine and is in no
+  // rate above — so the panel says why it is shorter, instead of a number nobody can account for.
+  if ((m.set_aside || []).length) html += '<p style="margin:4px 0 8px;font-size:12px;color:#b45309"><b>Not asked</b> (set aside by the keyword rule): '
+    + m.set_aside.map(x => esc(x.note || (x.keyword + ' — ' + x.detail))).join(' | ') + '</p>';
   if (X) { html += h3('Market-wide: every AI answer in the database' + (X.carried ? ' (from ' + esc(X.checked_at) + ')' : '')) + p_('Beyond your tracked questions: how often answers across the AI-answer database (387M+ real questions; Google AI Overviews' + ((X.platforms || []).includes('chat_gpt') ? ' and ChatGPT' : '') + ') cite each business\'s website, weighted by AI search volume.' + (X.answers_citing_you ? ' ' + n(X.answers_citing_you) + ' answers cite you.' : ''), true) +
       table(['Business', 'Answers citing it', 'Share', 'AI search volume'], (X.brands || []).map(bb => [(bb.you ? '<b>' : '') + esc(bb.domain || ('"' + bb.name + '" by name'))
         + (bb.you ? ' (you)</b>' : bb.name_only ? muted('matched by name only — not matched to your website, so it carries no share') : ''), n(bb.mentions), bb.share != null ? bb.share + '%' : '—', n(bb.ai_search_volume)]), 'no data') +
@@ -77,7 +107,9 @@ return metrics.map((m, i) => {
   const lineage = [
     LN.of('Named in, your pages cited, share of voice and the visibility score', 'ai_engines', { basis: 'measured',
       period: 'the 7 days to ' + esc(m.checked_at.slice(0, 10)), sample: LN.sample(M.samples, 'answers (' + m.questions.length + ' questions × ' + engs.length + ' engines)'),
-      note: '95% range ' + M.mention_ci[0] + '–' + M.mention_ci[1] + '% for "named in"; the visibility score is modelled from the position in each answer and the question\'s AI search volume' }),
+      note: '95% range ' + M.mention_ci[0] + '–' + M.mention_ci[1] + '% for "named in", ' + cci[0] + '–' + cci[1] + '% for the pages cited, ' + sci[0] + '–' + sci[1] + '% for the share of voice'
+        + (M.score_band && M.score_band.half != null ? '; the visibility score is MODELLED from the position in each answer and the question\'s AI search volume, ±' + M.score_band.half + ' points at 95% (' + M.score_band.why + ')' : '; the visibility score is modelled from the position in each answer and the question\'s AI search volume')
+        + (M.pulse_basis ? '; ' + M.pulse_basis.note.replace(/\.$/, '') : '') + '. Every change above is two-proportion z-tested and labelled real, within noise, or not tested' }),
     LN.of('AI searches per month per question', 'ai_db', { basis: 'estimated', period: 'the provider\'s latest month', sample: LN.sample(m.questions.filter(q => q.volume).length, 'questions with a volume'),
       note: 'DataForSEO\'s estimate of how often the question is asked; "estimated answers naming you" multiplies it by your win rate' }),
     T && T.connected
@@ -87,10 +119,16 @@ return metrics.map((m, i) => {
       note: P.fact_check === 'checked' ? 'claims read by Claude against your business profile' : 'claims not checked: ' + String(P.fact_check_note || 'no business facts on file') })
       : LN.unknown('How AI describes you', 'no answer named you this run, so there is nothing to read'),
   ];
+  // B8-5: a request the cost or request cap stopped is evidence that was never gathered, and it says so in the lineage block too
+  if (M.capped) lineage.push(LN.unknown('The engines and questions this run did not reach', M.capped.note));
   if (A) lineage.push(LN.of('Whether AI crawlers can read your site', 'own_check', { basis: 'one_sample', period: LN.asOf(m.checked_at), sample: LN.sample(A.answer_bots, 'answer crawlers, robots.txt plus one homepage fetch each') }));
   if (X) lineage.push(LN.of('Market-wide share and the answers citing you', 'ai_db', { basis: 'reported', period: X.carried ? LN.asOf(X.checked_at) + ' (read monthly)' : LN.asOf(m.checked_at), sample: LN.sample(X.answers_citing_you, 'answers in the database citing you'), note: 'the whole AI-answer database, not only your tracked questions' }));
   html += LN.block(lineage) + '</div>';
-  const subject = '[AI visibility] ' + m.domain + ' — named in ' + M.mention_rate + '% of AI answers' + (m.previous && d.mention_rate ? ' (' + (d.mention_rate > 0 ? '+' : '') + d.mention_rate + ' pts' + (d.significant === true ? ', real change' : '') + ')' : '') + (T && T.connected ? ' · ' + n(T.sessions) + ' AI visits' : '') + (m.alerts.length ? ' · ' + m.alerts.length + ' alert(s)' : '');
+  // B8-1: the subject line is the one line everybody reads, and it used to print the points with no word about the test — so an
+  // untested "+5 pts" arrived in the inbox looking exactly like a measured gain. It now says which it is, or says nothing.
+  const subjChange = (m.previous && d.mention_rate) ? ' (' + (d.mention_rate > 0 ? '+' : '') + d.mention_rate + ' pts'
+    + (d.significant === true ? ', real change' : d.significant === false ? ', within noise' : ', not tested') + ')' : '';
+  const subject = '[AI visibility] ' + m.domain + ' — named in ' + M.mention_rate + '% of AI answers' + subjChange + (T && T.connected ? ' · ' + n(T.sessions) + ' AI visits' : '') + (m.alerts.length ? ' · ' + m.alerts.length + ' alert(s)' : '');
   const file_name = 'ai-visibility-' + m.domain.replace(/[^a-z0-9]+/gi, '-') + '-' + m.checked_at.slice(0, 10) + '.html';
   return { json: { ...m, brief: b, lineage, subject, html, file_name, status: 'progress', stage: 'ai_visibility' }, binary: { data: { data: b64(wrapDoc(subject, html)), mimeType: 'text/html', fileName: file_name, fileExtension: 'html' } } };
 });

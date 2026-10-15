@@ -5,6 +5,7 @@ import {
   draftGate,
   emailDomain,
   n8nSiteId,
+  outreachRate,
   subjectAbStats,
   warmupCap,
   type LinkBuildingData,
@@ -107,13 +108,20 @@ function kpisOf(seqs: OutreachSequence[], prospects: ProspectRow[]): LinkBuildin
   const days = wonSeq.map((q) => (new Date(q.wonAt!).getTime() - new Date(q.startedAt!).getTime()) / 864e5).sort((a, b) => a - b);
   const domains = new Set(started.map((q) => q.prospectDomain));
   const types = [...new Set(started.map((q) => q.type))];
+  // B11-1 (benchmark area 11): a rate below its floor is not printed at all. The bounce rate counts e-mails, not conversations —
+  // it is judged against a ~2% limit, and one bounce in 50 IS 2%, so conversations were the wrong denominator for it as well as
+  // too small a one.
+  const sentAll = seqs.flatMap((q) => q.messages).filter((m) => m.direction === 'out' && !m.error).length;
+  const rates = {
+    reply: outreachRate('reply', people.length, started.length, 'conversations'),
+    win: outreachRate('win', new Set(started.filter((q) => q.status === 'won').map((q) => q.prospectDomain)).size, domains.size, 'sites contacted'),
+    bounce: outreachRate('bounce', started.filter((q) => q.status === 'bounced').length, sentAll, 'e-mails sent'),
+  };
   return {
     wonMonth: wonRows.filter((p) => s(p.won_at).slice(0, 7) === month).length, wonAll: wonRows.length,
     sentMonth: seqs.flatMap((q) => q.messages).filter((m) => m.direction === 'out' && !m.error && m.at.slice(0, 7) === month).length,
     contactedDomains: domains.size, replied: people.length, positive: positive.length,
-    replyRate: started.length ? Math.round((1000 * people.length) / started.length) / 10 : null,
-    winRate: domains.size ? Math.round((1000 * new Set(started.filter((q) => q.status === 'won').map((q) => q.prospectDomain)).size) / domains.size) / 10 : null,
-    bounceRate: started.length ? Math.round((1000 * started.filter((q) => q.status === 'bounced').length) / started.length) / 10 : null,
+    replyRate: rates.reply.value, winRate: rates.win.value, bounceRate: rates.bounce.value, rates,
     unsubscribes: started.filter((q) => q.replyClass === 'unsubscribe').length,
     medianDaysToLink: days.length ? Math.round(days[Math.floor((days.length - 1) / 2)]!) : null,
     byType: types.map((t) => ({ type: t, sent: started.filter((q) => q.type === t).length, replied: people.filter((q) => q.type === t).length, won: started.filter((q) => q.type === t && q.status === 'won').length })),
@@ -141,7 +149,10 @@ export async function linkBuildingData(org: OrgRow, site: SiteRow, role: Role): 
   const active = mailboxes.find((m) => m.id === settings.mailboxId && m.status === 'active') ?? mailboxes.find((m) => m.status === 'active');
   const canSend = !mailboxes.length ? { ok: false, why: 'Connect a mailbox in company settings → Mailboxes: pitches go out from your own address.' }
     : !active ? { ok: false, why: 'Your mailbox is paused or has an error: check it in company settings → Mailboxes.' }
-    : !active.postalAddress ? { ok: false, why: 'Add your postal address to the mailbox: every e-mail must carry it (CAN-SPAM).' }
+    : !active.postalAddress ? { ok: false, why: 'Add your postal address to the mailbox: every e-mail must carry it, the follow-ups too (CAN-SPAM).' }
+    // B11-4: the same refusal the sender makes, said here before anyone approves a pitch — neither SPF nor DKIM on the From domain
+    : active.dns && active.dns.spf === 'missing' && active.dns.dkim === 'unknown'
+      ? { ok: false, why: `${active.fromEmail.split('@')[1] ?? 'Your sending domain'} publishes no SPF record and no DKIM key we can find: receiving servers cannot tell your mail from a forgery. Add one of them in company settings → Mailboxes before new pitches go out.` }
     : role === 'viewer' ? { ok: false, why: 'Viewers cannot send.' } : { ok: true, why: '' };
   return {
     settings, mailboxes, drafts, sequences: seqs, kpis: kpisOf(seqs, prospects), subjectAb: subjectAbStats(seqs),

@@ -286,10 +286,132 @@ const SM = (() => {
       business_facts: S(m.business_facts).slice(0, 2000), cta: S(m.cta).slice(0, 200), brand_names: (m.brand_names || []).join(', ').slice(0, 500),
       competitors: (m.competitors || []).join(', ').slice(0, 500), accreditation: S(m.accreditation).slice(0, 200), model_updated_at: S(m.model_updated_at) };
   };
+  // B4-1 / B4-2 (2026-10-15, benchmark area 4): the measurement columns belong to the row, so the kit emits them — a Data Table
+  // node auto-maps every field it is given, and a row that is short of a column is as wrong as one that carries a stray field.
+  // The model itself measures nothing: these are the defaults the Site Tracker's own judgement is written over
+  // (v5/code/Page_Inventory_Site.js), and `''` for decay_state means "never measured", never "steady".
+  const num0 = (v) => (Number(v) || 0);
   const pageRows = (model) => pages(model).map(p => ({ site_id: S((model || {}).site_id), url: S(p.url), title: S(p.title).slice(0, 300), h1: S(p.h1).slice(0, 300),
-    source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries_json: JSON.stringify(p.queries || []), updated_at: S((model || {}).model_updated_at) || new Date().toISOString() }));
+    source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries_json: JSON.stringify(p.queries || []), updated_at: S((model || {}).model_updated_at) || new Date().toISOString(),
+    clicks: num0(p.clicks), impressions: num0(p.impressions), position: num0(p.position), prev_clicks: num0(p.prev_clicks), yoy_clicks: num0(p.yoy_clicks),
+    decay_state: S(p.decay_state), decay_pct: num0(p.decay_pct), decay_lost: num0(p.decay_lost), decay_kind: S(p.decay_kind),
+    decay_basis: S(p.decay_basis).slice(0, 900), measured_at: S(p.measured_at) }));
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml } };
+})();
+// ---- lineage (G29, 2026-10-13, system review FIX_PLAN.md; CRITERIA_technical_tracking_reporting_ai_links.md 3.11) ----
+// Every number a customer reads has to say where it came from, over what period, and how big the sample was. Before this, the AI
+// visibility report said it (sample sizes, Wilson ranges) and the others did not: the weekly report printed "1,240 impressions" and
+// "#8" side by side without saying that one is a 28-day Search Console count and the other one live sample of one results page.
+// LN.of() carries that as structured fields next to the value (`source`, `period`, `sample`, `basis`), LN.note() turns them into one
+// short line for a tooltip or a footnote, and LN.block() prints the whole list under a report as "Where these numbers come from".
+// Rules: the vocabulary is the one the rest of the system already uses (G6 "modelled, not measured clicks", G8 `calibrated` /
+// `modelled` / `unknown`, G28 statistical ranges, G26 `impact_basis`) - this kit makes it universal, it does not invent a second
+// scheme. A modelled or uncalibrated number must say so. Where lineage is genuinely unknown the note reads "source not recorded":
+// never a guessed source.
+const LN = (() => {
+  const MISSING = 'source not recorded';
+  // where numbers come from. `label` is what a customer reads, `how` the one sentence about what that source can and cannot see.
+  const SOURCES = {
+    gsc: { label: 'Google Search Console', how: 'Google\'s own count of the impressions and clicks it served; the last 3 days are not final, and figures are averages across devices and locations' },
+    gsc_history: { label: 'your stored Search Console history', how: 'the weekly Search Console readings we have kept for this site' },
+    inspection: { label: 'Search Console URL Inspection', how: 'Google\'s own answer about one URL at the moment it was asked' },
+    gsc_links: { label: 'your Search Console link export', how: 'the sample of links Google shows you; it is a sample, not the whole list' },
+    ga4: { label: 'Google Analytics 4', how: 'visits measured on your site by your own GA4 property' },
+    serp: { label: 'a live Google results page', how: 'one results page read through DataForSEO at that moment, from one country and one device' },
+    kwdata: { label: 'Google Ads keyword data (through DataForSEO)', how: 'the provider\'s monthly search volume and cost per click; a provider estimate for a single keyword, not a measurement of your site' },
+    backlink_index: { label: 'the DataForSEO backlink index', how: 'one crawler\'s index of the web: it finds much of the web, never all of it' },
+    bing: { label: 'Bing Webmaster Tools', how: 'Bing\'s own figures for the site it has verified' },
+    link_graph: { label: 'the Common Crawl web graph', how: 'a public crawl of the web, released every few months' },
+    ahrefs: { label: 'the Ahrefs Domain Rating API', how: 'Ahrefs\' own 0-100 rating of a domain' },
+    trends: { label: 'Google Trends', how: 'a relative index of search interest (100 = the peak of the period), not a count of searches' },
+    ai_engines: { label: 'the AI assistants themselves', how: 'the answers ChatGPT, Gemini, Google AI Mode and the others gave to the questions in your panel' },
+    ai_db: { label: 'the DataForSEO AI-answer database', how: 'a database of AI answers and the brands they name' },
+    own_check: { label: 'our own fetch of the page', how: 'we requested the page ourselves and read what came back' },
+    draft: { label: 'the finished draft itself', how: 'counted in the text this run wrote, before anybody published it' },
+    crawl: { label: 'our crawl of your website', how: 'the pages we could reach and read on your site' },
+    crux: { label: 'the Chrome User Experience Report', how: 'speed as real Chrome visitors experienced it over 28 days' },
+    pagespeed: { label: 'Google PageSpeed Insights (Lighthouse)', how: 'one simulated mobile load in a lab, not what your visitors felt' },
+    rdap: { label: 'the domain registry (RDAP, else WHOIS)', how: 'the registry\'s own record of when a domain was registered' },
+    gbp: { label: 'Google Business Profile', how: 'the public listing Google holds for the business' },
+    wikidata: { label: 'Wikidata', how: 'the public knowledge base search engines read' },
+    web: { label: 'public web pages we read', how: 'pages we fetched and quoted; nothing behind a login' },
+    you: { label: 'what you told us', how: 'the business profile, the monthly check-in or the forms you filled in' },
+    model: { label: 'a model on top of measured data', how: 'computed from measured numbers with a published formula, not measured itself' },
+    none: { label: MISSING, how: 'this figure reached the report without its source: treat it as unverified' },
+  };
+  // how the figure was arrived at. The words are the ones G6 / G8 / G28 already use.
+  const BASIS = {
+    measured: 'measured',
+    calibrated: 'calibrated against your own measured data',
+    modelled: 'modelled, not measured',
+    one_sample: 'one sample, not an average',
+    estimated: 'estimated',
+    reported: 'reported by the source',
+    unknown: MISSING,
+  };
+  const S = (v) => String(v == null ? '' : v);
+  const fmt = (v) => (Number(v) || 0).toLocaleString('en-GB');
+  const esc1 = (s) => S(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const src = (k) => SOURCES[k] || SOURCES.none;
+  // "2026-09-15 to 2026-10-12 (28 days)" - the period a figure covers, never an empty string
+  const range = (r, label) => { const o = r || {}; const a = S(o.start), b = S(o.end);
+    if (!a && !b) return label ? S(label) : 'period not recorded';
+    if (a && b) { const d = Math.round((new Date(b + 'T00:00:00Z').getTime() - new Date(a + 'T00:00:00Z').getTime()) / 864e5) + 1;
+      return a + ' to ' + b + (Number.isFinite(d) && d > 0 ? ' (' + d + ' day' + (d === 1 ? '' : 's') + ')' : ''); }
+    return 'to ' + (b || a); };
+  const asOf = (at) => { const d = S(at).slice(0, 10); return d ? 'as of ' + d : 'date not recorded'; };
+  const days = (n, end) => (Number(n) || 0) + ' days' + (S(end).slice(0, 10) ? ' to ' + S(end).slice(0, 10) : '');
+  const sample = (n, unit) => (n == null || n === '' || !Number.isFinite(Number(n))) ? 'sample not recorded' : fmt(n) + (unit ? ' ' + S(unit) : '');
+  // one figure's lineage, as structured fields beside the value
+  const of = (figure, source, o) => { const x = o || {}; const key = SOURCES[source] ? source : 'none';
+    const basis = BASIS[x.basis] ? x.basis : (key === 'none' ? 'unknown' : 'measured');
+    return { figure: S(figure), source: key, source_label: src(key).label, source_how: src(key).how,
+      period: S(x.period) || 'period not recorded', sample: x.sample == null ? 'sample not recorded' : S(x.sample),
+      basis, basis_label: BASIS[basis], note: S(x.note) };
+  };
+  // a figure whose source nobody recorded: say exactly that instead of inventing one
+  const unknown = (figure, why) => ({ figure: S(figure), source: 'none', source_label: MISSING, source_how: src('none').how,
+    period: '', sample: '', basis: 'unknown', basis_label: MISSING, note: S(why) });
+  // "Google Search Console · 2026-09-15 to 2026-10-12 (28 days) · 1,240 impressions · measured"
+  const note = (l) => { const x = l || {}; const lbl = x.source_label || MISSING;
+    return [lbl, x.period, x.sample, x.basis_label === lbl ? '' : x.basis_label, x.note].filter(Boolean).join(' · '); };
+  const isHonest = (l) => !!l && (l.basis !== 'unknown' || note(l).indexOf(MISSING) >= 0);
+  // ---- the evidence half of the same rule (R10, promoted to the class by lineage_lint.py, 2026-10-15) ----
+  // A finding is a figure like any other: it may not be shown without the thing that shows it. R10 was exactly this - Google
+  // retired the Mobile Usability report, the API answered VERDICT_UNSPECIFIED for every page, and the audit raised a HIGH finding
+  // on 45 of 47 pages whose evidence string was "/:  | /whatwedo/ai-automation: " - punctuation and nothing else. So the test is
+  // not `evidence !== ''`: a string that is only separators, brackets or a bare "0" carries no evidence either.
+  const hasEvidence = (f) => {
+    const ev = S((f || {}).evidence).replace(/<[^>]*>/g, ' ');     // markup is not evidence
+    return /[A-Za-z]|[1-9]/.test(ev.replace(/[\s;|,.:·\-–—()\[\]\/]+/g, ' '));
+  };
+  // the findings that may be shown, and the titles of the ones held back. `allow` names a title that is evidence in itself
+  // (a count in the title, a note about data that could not be collected); everything else has to carry its own.
+  const unevidenced = (list, o) => { const x = o || {}; const allow = (x.allow || []).map(S);
+    return (list || []).filter(f => f && !hasEvidence(f) && allow.indexOf(S(f.title)) < 0).map(f => S(f.title || f.id || 'untitled')); };
+  const evidenced = (list, o) => { const x = o || {}; const allow = (x.allow || []).map(S);
+    const keep = (list || []).filter(f => f && (hasEvidence(f) || allow.indexOf(S(f.title)) >= 0));
+    if (typeof x.onDrop === 'function') { const d = unevidenced(list, o); if (d.length) x.onDrop(d); }
+    return keep; };
+  const evidenceNote = (dropped) => (dropped || []).length
+    ? (dropped.length + ' finding(s) were left out because nothing was measured to show them: ' + dropped.slice(0, 5).join(', ')) : '';
+  const html = (l) => '<span style="color:#64748b;font-size:11px">' + esc1(note(l)) + '</span>';
+  const line = (l) => '<div style="color:#64748b;font-size:11px;margin-top:2px">' + esc1(note(l)) + '</div>';
+  // the block under a report: one row per figure, so no number is left without a source, a period and a sample
+  const block = (list, o) => { const rows = (list || []).filter(Boolean); const x = o || {};
+    const td = 'style="padding:3px 8px;border:1px solid #cbd5e1;font-size:11px;vertical-align:top;color:#334155"';
+    const th = 'style="padding:3px 8px;border:1px solid #cbd5e1;background:#f1f5f9;text-align:left;font-size:11px"';
+    if (!rows.length) return '';
+    return '<h3 style="margin:18px 0 4px;font-size:13px;color:#0f172a">' + esc1(x.title || 'Where these numbers come from') + '</h3>'
+      + '<table style="border-collapse:collapse;margin:4px 0;max-width:100%">'
+      + '<tr><th ' + th + '>Figure</th><th ' + th + '>Source</th><th ' + th + '>Period</th><th ' + th + '>Sample</th><th ' + th + '>How it was arrived at</th></tr>'
+      + rows.map(l => '<tr><td ' + td + '>' + esc1(l.figure) + '</td><td ' + td + '>' + esc1(l.source_label) + '</td><td ' + td + '>' + esc1(l.period || '—')
+        + '</td><td ' + td + '>' + esc1(l.sample || '—') + '</td><td ' + td + '>' + esc1([l.basis_label, l.note].filter(Boolean).join(' — ')) + '</td></tr>').join('')
+      + '</table><p style="color:#64748b;font-size:11px;margin:4px 0">' + esc1(x.footer || 'A figure marked "' + BASIS.modelled + '" is computed, not counted; "' + MISSING + '" means the figure reached this report without its source and should be treated as unverified.') + '</p>';
+  };
+  return { of, unknown, note, html, line, block, range, asOf, days, sample, isHonest, hasEvidence, evidenced, unevidenced,
+    evidenceNote, SOURCES, BASIS, MISSING };
 })();
 // Framework-agnostic blog package for every content run: the article as clean HTML (with the JSON-LD blocks), as Markdown, and a meta.json
 // (title, slug, meta description, H1, keywords, headings, links, schema, word count, content score, suggested URL, publish checklist).
@@ -457,6 +579,42 @@ const cluster = () => fmt === 'html' ? clusterHtml : (clusterMd ? '\n' + cluster
 fmt = 'html'; bodyHtml = weave(bodyHtml.split('\n'), (l) => /^<h2[ >]/.test(l), (l) => /^<p><strong>Quick answer:?<\/strong>/i.test(l)).filter(x => x !== '').join('\n');
 fmt = 'md'; mdOut = weave(mdOut.split('\n'), (l) => /^##\s+/.test(l), (l) => /^\*\*Quick answer:?\*\*/i.test(l.trim())).join('\n').replace(/\n{3,}/g, '\n\n');
 const html = '<article>\n<h1>' + inline(h1 || title) + '</h1>\n' + (bylineHtml ? bylineHtml + '\n' : '') + (heroImg ? figure(heroImg, true) + '\n' : '') + (snapshotHtml ? snapshotHtml + '\n' : '') + bodyHtml + (authorBoxHtml ? '\n' + authorBoxHtml : '') + (schema.length ? '\n' + schema.map(b => '<script type="application/ld+json">' + JSON.stringify(b.json || b) + '</script>').join('\n') : '') + '\n</article>';
+// ---- B-L1 (2026-10-15, INVARIANTS rule 1, lineage_lint.py "lineage" + "withheld"): the package printed the quality figures —
+// the content score, the QA counts, topic coverage and originality — as bare numbers, with no source line, and printed them
+// whether or not the check that produced them had anything to work with. A coverage of "0%" measured against an empty term list
+// and an originality of "no overlap found" measured against no page at all read exactly like good news. Each figure now says
+// where it came from, over what sample, and how it was arrived at (LN, v5/code/_lineage.js); and a figure whose check did not
+// run is WITHHELD — null, with the reason — instead of being shown. This travels in meta.json and in the callback; it is
+// deliberately NOT written into the article, which is the customer's published page and carries no figures of ours.
+const CVR = d.content_coverage || null, ORG = d.content_originality || null;
+const qa_checked = d.qa_publishable != null || d.qa_passed != null || d.content_score != null;
+const coverage_measured = !!(CVR && Number(CVR.terms_total) > 0);
+const originality_measured = !!(ORG && Number(ORG.pages_compared) > 0);
+const content_score = qa_checked && d.content_score != null ? d.content_score : null;
+const content_score_withheld = content_score == null
+  ? (qa_checked ? 'the quality check ran but produced no score for this page' : 'the quality check did not run for this page, so there is no score to show')
+  : '';
+const lineage = [
+  content_score == null
+    ? LN.unknown('Content score (0-100)', content_score_withheld)
+    : LN.of('Content score (0-100)', 'model', { basis: 'modelled', period: LN.asOf(today), sample: LN.sample(words, 'words of the finished draft'),
+        note: 'our own score, not a Google figure: structure 25, topic coverage 25, readability 15, specificity 10, clean language 10, length 15'
+          + (d.qa_round ? ' (quality round ' + d.qa_round + ' of ' + d.qa_max_rounds + ')' : '') }),
+  coverage_measured
+    ? LN.of('Topic coverage against the top-ranking pages', 'web', { basis: 'measured', period: LN.asOf(today),
+        sample: LN.sample(CVR.terms_total, 'shared terms' + (CVR.pages_compared ? ', from ' + CVR.pages_compared + ' competitor pages read' : '')), note: String(CVR.basis || '') })
+    : LN.unknown('Topic coverage against the top-ranking pages', String((CVR && CVR.basis) || 'no competitor page could be read in this run, so coverage was not measured')),
+  originality_measured
+    ? LN.of('Originality (overlap with the pages this run read)', 'web', { basis: 'measured', period: LN.asOf(today),
+        sample: LN.sample(ORG.pages_compared, 'pages compared, ' + (ORG.draft_windows || 0) + ' word windows'), note: String(ORG.basis || '') })
+    : LN.unknown('Originality (overlap with the pages this run read)', String((ORG && ORG.basis) || 'no page text was available in this run, so nothing could be compared')),
+  LN.of('Word count, headings, links and images', 'draft', { basis: 'measured', period: LN.asOf(today), sample: LN.sample(words, 'words'),
+    note: 'counted in the finished draft itself' }),
+  d.qa_summary
+    ? LN.of('The quality check summary and what it asks you to review', 'draft', { basis: 'measured', period: LN.asOf(today),
+        sample: d.qa_round ? 'round ' + d.qa_round + ' of ' + d.qa_max_rounds : LN.sample(null), note: 'the LAST round\'s counts, not the first' })
+    : LN.unknown('The quality check summary and what it asks you to review', 'the quality check did not run for this page'),
+];
 // R15 (2026-10-13, re-rating §3.11): a ladder page is published at the URL its ladder row planned — the row's link map, the siblings'
 // up-links and the Rank Tracker all use it, so a different suggested URL leaves every stored link pointing nowhere.
 const plannedPageUrl = (d.ladder_id && String(d.ladder_target_url || '').trim()) ? ownUrl(String(d.ladder_target_url).trim()) : '';
@@ -466,15 +624,18 @@ const plannedLinks = (Array.isArray(d.content_links_to_add) && d.content_links_t
   : HPplanned.map(p => ({ keyword: p.keyword || '', planned_url: SRC.clean(p.url), anchor: anchorText(p), role: p.role || p.ladder || '', note: 'Not published yet: add this link from this page once the page is live.' }));
 const meta = { title, h1: h1 || title, slug, suggested_url: plannedPageUrl || (dom ? siteUrlOf(dom, '/' + slug + '/') : '/' + slug + '/'), meta_description: description, meta_description_length: description.length, title_length: title.length,
   primary_keyword: d.keyword || metaLines['primary keyword'] || '', secondary_keywords: (Array.isArray(d.secondary_keywords) && d.secondary_keywords.length) ? d.secondary_keywords : String(metaLines['secondary keywords'] || '').split(/,\s*/).filter(Boolean),
-  page_type: d.recommended_page || '', language: d.language_name || 'English', country: d.country || '', domain: dom, word_count: words, content_score: d.content_score == null ? null : d.content_score, qa_summary: d.qa_summary || '',
+  page_type: d.recommended_page || '', language: d.language_name || 'English', country: d.country || '', domain: dom, word_count: words, content_score, content_score_withheld, quality_checked: qa_checked, qa_summary: d.qa_summary || '',
   // R11 (2026-10-13): the package says whether this page may be published as it is, with the last quality round's counts and reasons
   publishable: d.qa_publishable == null ? null : !!d.qa_publishable, quality: d.qa_quality || null,
+  lineage, quality_notes: lineage.map(l => l.figure + ' — ' + LN.note(l)),
   headings, internal_links: links.filter(l => isInternal(l.url)), external_links: links.filter(l => !isInternal(l.url)), schema_blocks: schema.map(b => ({ type: b.type || ((b.json || {})['@type']) || '', json: b.json || b })),
   images, featured_image: heroImg || images[0] || null, open_graph: { 'og:title': title, 'og:description': description, 'og:image': (heroImg || images[0] || {}).path || '', 'og:image:width': 1200, 'og:image:height': 630, 'twitter:card': 'summary_large_image' },
   ladder: d.ladder_id ? { ladder_id: d.ladder_id, rung: d.ladder_rung == null ? null : d.ladder_rung, head_keyword: d.ladder_head || '' } : null, request_id: d.request_id || null, generated_at: new Date().toISOString(),
   page_role: role, article_like: articleLike,
   // FIX_PLAN G5 / G33 (2026-10-13): what the quality check measured, with its basis, so the customer sees it next to the page it judges
-  originality: d.content_originality || null, coverage: d.content_coverage || null,
+  // B-L1: a measurement nothing was measured on is not a number — the percentage is withheld and the reason kept beside it
+  originality: ORG ? { ...ORG, measured: originality_measured, highest_pct: originality_measured ? ORG.highest_pct : null, not_measured: originality_measured ? '' : String(ORG.basis || 'nothing could be compared') } : null,
+  coverage: CVR ? { ...CVR, measured: coverage_measured, pct: coverage_measured ? CVR.pct : null, not_measured: coverage_measured ? '' : String(CVR.basis || 'no competitor page could be read') } : null,
   author: articleLike ? (AU ? { name: AU.name, job_title: AU.job_title || '', bio: AU.bio || '', credentials: AU.credentials || '', url: AU.url || '', image_url: AU.image_url || '', same_as: AU.same_as || [], knows_about: AU.knows_about || [], placeholder: false } : { name: '[Author Name]', placeholder: true }) : null,
   reviewer: RV || null, updated: today, table_of_contents: tocHtml ? tocH2.map(h => ({ text: h.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1'), anchor: '#' + anchorOf(h) })) : [],
   hub: role === 'hub' ? { cluster_pages: HP, planned_pages: HPplanned, planned: HPplanned.length } : null,

@@ -15,7 +15,7 @@ const list = $('Pick Competitors').all().map(i => i.json);
 let cache = []; try { cache = $('Load Age Cache').all().map(i => i.json).filter(r => r && r.key && !r.error); } catch (e) {}
 let asked = [], rdaps = [], wasked = [], whois = [];
 try { asked = $('Age Lookup Plan').all().map(i => i.json).filter(a => !a.skip); rdaps = $('RDAP Lookup').all().map(i => i.json || {}); } catch (e) {}
-try { wasked = $('RDAP Results').all().map(i => i.json).filter(a => !a.skip); whois = $('DataForSEO Whois').all().map(i => i.json || {}); } catch (e) {}
+try { wasked = $('RDAP Results').all().map(i => i.json).filter(a => !a.skip); whois = $('DataForSEO Whois Answers').all().map(i => i.json || {}); } catch (e) {}
 const ages = {}; const now = new Date().toISOString();
 for (const r of cache) { let v = null; try { v = JSON.parse(r.value); } catch (e) {} if (!v) continue; const days = (Date.now() - new Date(r.updated_at).getTime()) / 864e5;
   if (days < (v.registered ? CONFIG.ttl_days : CONFIG.unknown_ttl_days)) ages[String(r.key).slice(4)] = { registered: v.registered || null, source: (v.source || 'stored') + ', stored ' + String(r.updated_at).slice(0, 10) }; }

@@ -38,7 +38,16 @@ if (!reachInfo) {
   reachInfo = reachFrom(SR.available === false ? null : (SR.top10 || []), sa);
   if (reachInfo.method !== 'default') reach_cache_row = reachCacheRow(domain, reachInfo, base.location_code);
 }
-const reach = reachInfo.reach;
+// ---- B2-1 (2026-10-15, benchmark area 2): the reach this plan is measured against is the reach ON THIS TOPIC ----
+// The site reach above is one number for the whole website, cached 30 days: on 2026-10-13 the SAME cached reach of 10 (measured
+// 2026-10-08 on "peppol uae" research) decided the plan for "erp implementation dubai" (lad_mv5pjt5y4aoa). MarketMuse subtracts a
+// topic-level Topic Authority from the difficulty and Semrush lowers PKD with the thematic distance to the domain's core topics; this
+// measures the same thing from the `ranked` pull this run already paid for, using the SAME on-topic test the rungs are filtered by
+// (RAD.headFit), so the keywords that count as "this topic" for the reach are the keywords that count as "this topic" for the plan.
+// It is used only with REACH_CFG.min_top10 on-topic top-10 keywords behind it; otherwise the site reach stays and the plan says so.
+const rankedAll = SR.available === false ? null : Object.entries(SR.keywords || {}).map(([keyword, r]) => ({ keyword, kd: r.kd, position: r.position }));
+const topic_authority = reachTopic(rankedAll, head, reachInfo.reach, { domain, match: (kw) => RAD.headFit(head, kw).ok });
+const reach = topic_authority.reach;
 
 // ---- the site's other ladders (rule R1: one search, one page) ----
 const settingsRows = rowsOf('Load Domain Ladder Settings');
@@ -95,13 +104,49 @@ const onTopic = kws.filter(k => {
   return false;
 });
 
+// ---- B2-4 (2026-10-15, benchmark area 2, criterion K7): rungs grouped by the results pages Google really shows ----
+// `Ladder Clusters` bought one results page per rung candidate (bounded, see that node) and compared the TOP 7 at a 40% threshold -
+// Keyword Insights' own current numbers, approved by the owner as B2-6. Two searches Google answers with the same pages are ONE page
+// here: the cluster's members take the rung of their head keyword, so the grouping cannot be undone by the difficulty bands below, and
+// `makePages` keys them on the cluster instead of on the AI's topic label.
+//   INVARIANTS rule 1: a keyword whose results page could not be read is NOT clustered. It keeps its own group, it is named in
+// `serp_clusters.not_compared` with the reason, and the plan says how many there were - it is never quietly merged or quietly dropped.
+let SERP_CL = null; try { SERP_CL = $('Ladder Clusters').first().json.serp_clusters || null; } catch (e) { SERP_CL = null; }
+const clusterOf = (SERP_CL && SERP_CL.available) ? (SERP_CL.of_keyword || {}) : {};
+const notCompared = new Set(((SERP_CL || {}).not_compared || []).map(x => String(x.keyword)));
+for (const k of onTopic) {
+  const c = clusterOf[k.keyword] || null;
+  k.serp_group = c ? c.head_keyword : '';
+  k.serp_cluster = c && c.head_keyword !== k.keyword ? c : null;
+  k.serp_cluster_size = c ? c.keyword_count : 0;
+  k.serp_checked = !!SERP_CL && SERP_CL.asked > 0 && !notCompared.has(k.keyword) && (!!c || SERP_CL.compared > 0);
+  k.serp_not_compared = notCompared.has(k.keyword);
+}
+
 // ---- rung bands relative to reach (unknown difficulty = reach + 10) ----
 const kdOf = (k) => k.kd == null ? reach + REACH_CFG.unknown_kd : k.kd;
 const longTail = (k) => k.words >= 3 || (k.words >= 2 && k.volume < 200);
 const BAND = { 1: reach, 2: reach + 15, 3: reach + 30 };
 const rungOf = (k) => { const kd = kdOf(k); if (kd <= BAND[1] && k.volume >= 20 && longTail(k)) return 1; if (kd <= BAND[2]) return 2; if (kd <= BAND[3]) return 3; return 0; };   // 0 = later
+// B2-4: one search, one page - so one CLUSTER, one rung. Every member of a cluster takes the rung of its head keyword (the strongest of
+// the group); without that, "erp implementation cost" in rung 1 and "erp implementation cost dubai" in rung 2 would still become two
+// pages although Google answers both with the same pages, which is exactly what this is here to stop.
+const rungMap = new Map(onTopic.map(k => [k.keyword, rungOf(k)]));
+const clusterRungs = [];
+if (SERP_CL && SERP_CL.available) {
+  const byHead = new Map();
+  for (const k of onTopic) { const h = k.serp_group; if (!h) continue; if (!byHead.has(h)) byHead.set(h, []); byHead.get(h).push(k); }
+  for (const [h, ks] of byHead) {
+    if (ks.length < 2) continue;
+    const headK = ks.find(k => k.keyword === h) || ks.slice().sort((a, b) => b.opportunity - a.opportunity)[0];
+    const r = rungMap.get(headK.keyword);
+    const moved = ks.filter(k => rungMap.get(k.keyword) !== r).map(k => k.keyword);
+    for (const k of ks) rungMap.set(k.keyword, r);
+    clusterRungs.push({ head_keyword: h, rung: r, keywords: ks.map(k => k.keyword), moved });
+  }
+}
 const byRung = { 1: [], 2: [], 3: [] }; const later = [];
-for (const k of onTopic) { const r = rungOf(k); if (r) byRung[r].push(k); else later.push(k); }
+for (const k of onTopic) { const r = rungMap.get(k.keyword); if (r) byRung[r].push(k); else later.push(k); }
 
 // ---- existing pages on the site (the site model's page inventory, this run's sitemap, or the URL that already ranks) ----
 // 2026-10-12 (FIX_PLAN D11): the old rule scored the keyword's words against the slug's with Jaccard >= 0.5, so 3 keyword words in a
@@ -127,9 +172,14 @@ const LIMIT = { 1: 4, 2: 4, 3: 3 };
 const MAX_CLUSTER = 6;   // a coarse AI topic label must not swallow a whole rung: split by page type, then into groups of 6
 const makePages = (list, rung) => {
   const cl = new Map();
-  for (const k of list) { const key = (k.topic || k.keyword) + '|' + k.page_type; if (!cl.has(key)) cl.set(key, []); cl.get(key).push(k); }
+  // B2-4: a shared results page beats the AI's topic label. Keywords Google answers with the same pages share one key (and one page);
+  // everything else keeps the old topic|page_type key. A keyword whose results page could not be read is in neither - it keeps its own.
+  for (const k of list) { const key = k.serp_group ? 'serp|' + k.serp_group : (k.topic || k.keyword) + '|' + k.page_type; if (!cl.has(key)) cl.set(key, []); cl.get(key).push(k); }
   const groups = [];
-  for (const ks of cl.values()) { const sorted = ks.slice().sort((a, b) => b.opportunity - a.opportunity); for (let i = 0; i < sorted.length; i += MAX_CLUSTER) groups.push(sorted.slice(i, i + MAX_CLUSTER)); }
+  // a SERP group is evidence, not a label, so it is never split into two pages; an AI-label group still is (MAX_CLUSTER)
+  for (const [key, ks] of cl) { const sorted = ks.slice().sort((a, b) => b.opportunity - a.opportunity);
+    if (String(key).indexOf('serp|') === 0) { groups.push(sorted); continue; }
+    for (let i = 0; i < sorted.length; i += MAX_CLUSTER) groups.push(sorted.slice(i, i + MAX_CLUSTER)); }
   const clusters = groups.map(ks => ({ ks, opp: ks.reduce((s, k) => s + k.opportunity, 0) })).sort((a, b) => b.opp - a.opp);
   return clusters.slice(0, LIMIT[rung]).map(({ ks }) => {
     const p = ks[0];
@@ -138,7 +188,12 @@ const makePages = (list, rung) => {
     // FIX_PLAN D10 (2026-10-12): the AI screen answers in free text ("Comparison Page", "Service Page with a cost section"); the row,
     // the spawned page run and the brief take one of the form's fixed types, and the sentence itself stays as page_notes.
     const ptype = PT.of(p.page_type, defaultPage(p.intent));
+    // B2-4: what the group was built on - the shared results page, or the AI's topic label when no results page could be read
+    const shared = ks.filter(k => k.serp_group === p.serp_group && k.keyword !== p.keyword).map(k => ({ keyword: k.keyword, shared_urls: (k.serp_cluster || {}).shared_urls || null }));
+    const grouped_by = p.serp_group && ks.length > 1 ? 'shared results page' : (SERP_CL && SERP_CL.available ? 'topic label (no search Google answers with the same pages)' : 'topic label (results pages not compared)');
     return { rung, keyword: p.keyword, topic: p.topic, page_type: ptype, page_notes: PT.notes(p.page_type, ptype), intent: p.intent, volume: p.volume, kd: p.kd, cpc: p.cpc, opportunity: p.opportunity,
+      grouped_by, serp_cluster: p.serp_group && ks.length > 1 ? { head_keyword: p.serp_group, keyword_count: ks.length, shared, urls_compared: ((clusterOf[p.keyword] || {}).urls_compared) || null, min_shared_urls: (SERP_CL || {}).min_shared_urls || null, top_n: (SERP_CL || {}).top_n || null } : null,
+      serp_not_compared: !!p.serp_not_compared,
       supporting: ks.slice(1, 7).map(k => k.keyword),
       keywords: ks.slice(0, 8).map(k => ({ keyword: k.keyword, volume: k.volume, kd: k.kd, intent: k.intent, your_position: k.your_position })),
       total_volume: ks.reduce((s, k) => s + k.volume, 0), traffic_potential: ks.reduce((s, k) => s + (k.traffic_potential || 0), 0),
@@ -288,11 +343,49 @@ else if (plan_type === 'full') {
 }
 
 const bl = kd.competitor_backlink_strength || {};
+// ---- B2-5 (2026-10-15, benchmark area 2): how many different sites own the destination's results page ----
+// Semrush ranks the pages of a plan on five named factors and DOMAIN DIVERSITY is the fifth (https://www.semrush.com/kb/1058-keyword-
+// strategy-builder); ours never looked at it - `avg_referring_domains` was the only competition signal. A results page held by a few
+// sites is a page where each of them holds more than one of the ten results, which is what a site with real topical coverage looks
+// like, and it is harder to break into than a page of ten different sites.
+//   The COUNT is measured (distinct registrable domains among the top 10 results this run read, at the time it read them, through the
+// same LK.regDomain the competitor gate uses since R21, so a rival on a subdomain is not counted as a second site). The ADJUSTMENT is a
+// stated rule and says so: it is not measured, and it is printed with the reason wherever the score is.
+const headTop10 = (base.competitors_summary || []).filter(c => c && Number(c.rank) >= 1 && Number(c.rank) <= 10);
+const diversityDomains = [...new Set(headTop10.map(c => LK.regDomain(LK.hostOf(c.url || '') || String(c.domain || ''))).filter(Boolean))];
+// The rule is stated on ten results - 5 or fewer sites is concentrated, 6 or 7 narrow, 8 or more open - but a results page does not
+// always carry ten ordinary results (an AI Overview, a local pack and a video block take their room), so it is applied as the SHARE it
+// is: half of the results read or fewer is concentrated, 70% or fewer is narrow. Six different sites in six results is a page of six
+// different sites, not a narrow one. Below DIVERSITY.min_results there is too little of the page to judge and nothing is adjusted.
+const DIVERSITY = { concentrated: 5, narrow: 7, of: 10, min_results: 5 };
+const DIVERSITY_PENALTY = { concentrated: 6, narrow: 3, open: 0 };
+const divShare = headTop10.length ? diversityDomains.length / headTop10.length : 0;
+const divBand = divShare <= DIVERSITY.concentrated / DIVERSITY.of ? 'concentrated' : divShare <= DIVERSITY.narrow / DIVERSITY.of ? 'narrow' : 'open';
+const divChecked = !serpOut && headTop10.length >= DIVERSITY.min_results && diversityDomains.length > 0;
+const divPenalty = divChecked && !dataRefused ? DIVERSITY_PENALTY[divBand] : 0;
+const divText = !divChecked
+  ? 'The results page for "' + head + '" could not be read on this run, so how many different sites own it is not known and the score is unchanged.'
+  : diversityDomains.length + ' different site(s) hold the top ' + headTop10.length + ' results for "' + head + '"'
+    + (divBand === 'open' ? ' — no site owns more than its share, so the page is as open as a results page gets and the feasibility score is unchanged.'
+      : ' — ' + (divBand === 'concentrated' ? 'few sites own this page' : 'the page is narrow') + ', so at least one of them holds several of the results with the topical coverage that takes. The feasibility score is '
+        + divPenalty + ' point(s) lower for it: a stated rule (' + DIVERSITY_PENALTY.concentrated + ' at ' + DIVERSITY.concentrated + ' sites or fewer of ten, '
+        + DIVERSITY_PENALTY.narrow + ' at ' + (DIVERSITY.concentrated + 1) + '-' + DIVERSITY.narrow + ' of ten, nothing above), not a measured effect.')
+    + (diversityDomains.length ? ' The sites: ' + diversityDomains.slice(0, 10).join(', ') + '.' : '');
+const scoreBefore = dataRefused ? null : (base.verdict_score ?? null);
+const scoreAfter = scoreBefore == null ? null : Math.max(0, Math.round(scoreBefore - divPenalty));
+const serp_diversity = { checked: divChecked, domains: divChecked ? diversityDomains.length : null, results: headTop10.length,
+  band: divChecked ? divBand : 'unknown', share_pct: divChecked ? Math.round(divShare * 100) : null, domain_list: diversityDomains.slice(0, 10), penalty: divPenalty,
+  score_before: scoreBefore, score_after: scoreAfter, bands: DIVERSITY, penalties: DIVERSITY_PENALTY,
+  basis: divChecked ? 'measured: distinct registrable domains among the top ' + headTop10.length + ' results read on this run'
+    + ((base.serp_features || {}).checked_at ? ' at ' + String((base.serp_features || {}).checked_at) : '') + '; the adjustment itself is a stated rule, not a measured effect'
+    : 'not available: the live results page could not be read on this run', text: divText };
+
 // R23: a feasibility score is a reading of the competition. With no results page and no research there is nothing to read, so the
 // status is "not checked" and the score is empty — never the verdict's number next to the word "winnable".
-const feasibility = { status: dataRefused ? 'not_checked' : status, verdict: dataRefused ? null : verdict, score: dataRefused ? null : (base.verdict_score ?? null),
-  reasons: base.verdict_reasons || [], what_must_change: base.verdict_changes || [], alternatives,
+const feasibility = { status: dataRefused ? 'not_checked' : status, verdict: dataRefused ? null : verdict, score: dataRefused ? null : scoreAfter,
+  reasons: [...(base.verdict_reasons || []), ...(divChecked ? [divText] : [])], what_must_change: base.verdict_changes || [], alternatives,
   expected_visits_top3: dataRefused ? null : (base.expected_visits_top3 ?? null), time_to_rank_months: dataRefused ? null : (base.time_to_rank_months ?? null), navigational,
+  serp_diversity, score_before: scoreBefore, score_adjustment: -divPenalty,
   scored: !dataRefused, not_scored_reason: dataRefused ? refusal.message : '' };
 
 // ---- what else is needed besides the pages ----
@@ -304,15 +397,73 @@ if ((pool.head_geo || []).length) requirements.push({ item: 'Local trust signals
 requirements.push({ item: 'Entity and trust pages', detail: 'Organization schema, an about page with real credentials, author bylines and case studies; the content QA already adds schema to every generated page.' });
 requirements.push({ item: 'Publish on schedule and interlink', detail: 'Each rung page links up to the top page and sideways to one sibling; the top page links down to every rung page. Ranking only starts once the pages are live.' });
 
+// ---- B2-2 (2026-10-15, benchmark area 2): what this website ALREADY has on this topic, before one new page is planned ----
+// MarketMuse starts a plan from the site's topic inventory and its effort bands begin with "optimise the existing page if it matches the
+// topic; otherwise create a new one" (https://docs.marketmuse.com/reference/personalized-difficulty-and-topic-authority/). The ladder has
+// always decided improve-vs-new per page (`findExisting`), but it never counted it up, so a plan opened with five new pages and said
+// nothing about the pages the site already had on the same topic. The counts come from data already in the run: the page inventory, and
+// the keywords the site ranks for, both filtered with the SAME on-topic test as the rungs.
+// a page with no words of its own (the homepage: no title in the inventory and an empty path) matches nothing — RAD.headFit passes an
+// empty token set, so it has to be refused here or every site "already has a page" on every topic
+const onTopicPage = (p) => { try { const txt = [p.title || '', String(p.url || '').replace(/^https?:\/\/[^/]+/i, '').replace(/[^A-Za-z0-9]+/g, ' ')].join(' ');
+  return RAD.tokens(txt).length > 0 && RAD.headFit(head, txt).ok; } catch (e) { return false; } };
+const pagesOnTopic = []; const seenPg = new Set();
+for (const p of invPages) { const u = String(p.url || ''); if (!u || seenPg.has(u) || !onTopicPage(p)) continue; seenPg.add(u); pagesOnTopic.push({ url: u, title: String(p.title || '') }); }
+const allPlanned = planned ? [...rungPages, top] : [];
+const nImprove = allPlanned.filter(p => p.exists).length, nNew = allPlanned.length - nImprove;
+const bestPos = topic_authority.best;
+topic_authority.coverage = { pages_on_site: pagesOnTopic.length, pages: pagesOnTopic.slice(0, 8), ranked_keywords: topic_authority.on_topic,
+  top10_keywords: topic_authority.top10, best_position: bestPos ? bestPos.position : null, best_keyword: bestPos ? bestPos.keyword : '',
+  planned_total: allPlanned.length, planned_improve: nImprove, planned_new: nNew,
+  summary: !planned ? 'No pages were planned, so there is nothing to compare with what the site already has.'
+    : (!pagesOnTopic.length && !topic_authority.on_topic
+      ? 'Nothing on ' + domain + ' is about "' + head + '" yet — no page and no keyword it ranks for — so all ' + allPlanned.length + ' page(s) in this plan are new and this topic starts from zero.'
+      : domain + ' already has ' + pagesOnTopic.length + ' page(s) about "' + head + '" and ranks for ' + topic_authority.on_topic + ' keyword(s) on it ('
+        + topic_authority.top10 + ' in the top 10' + (bestPos ? ', best #' + bestPos.position + ' for "' + bestPos.keyword + '"' : '') + '). Of the '
+        + allPlanned.length + ' page(s) in this plan, ' + nImprove + ' improve' + (nImprove === 1 ? 's' : '') + ' a page you already have and ' + nNew + ' ' + (nNew === 1 ? 'is' : 'are') + ' new.')
+      + ' A search that an existing page already answers is never given a second page.' };
+// ---- B2-3 (2026-10-15, benchmark area 2): every planned page says why it sits where it sits ----
+// Semrush's Keyword Strategy Builder ranks the pages of a plan on five stated factors — relevance to the seed, search volume, keyword
+// difficulty, domain diversity and SERP features (https://www.semrush.com/kb/1058-keyword-strategy-builder). Ours ordered pages by rung
+// band and by the opportunity sum of their cluster and printed neither, so the plan's order had to be taken on trust. These are the
+// factors that really decided it, in the page's own row — nothing new is computed and nothing new is fetched.
+const unknownKd = reach + REACH_CFG.unknown_kd;
+const whyFactorsOf = (p) => ({ rung: p.rung, kd: p.kd == null ? null : p.kd, counted_kd: p.kd == null ? unknownKd : p.kd, reach,
+  difficulty_for_you: difficultyForYou(p.kd == null ? null : p.kd, reach, { position: p.your_position || null }),
+  keywords: p.rung === 4 ? 1 + (p.supporting || []).length : ((p.keywords || []).length || 1),
+  volume: p.rung === 4 ? (p.volume ?? null) : (p.total_volume ?? null), intent: p.intent || null,
+  status: p.exists ? 'improve' : 'new', your_position: p.your_position || null, links_up: (p.links_to || []).some(l => l.role === 'top'),
+  grouped_by: p.grouped_by || null, serp_cluster: p.serp_cluster || null,   // B2-4: Semrush's own fifth factor is the SERP, and this is where it decided the grouping
+  serp_domains: p.rung === 4 ? serp_diversity.domains : null });
+const whyOf = (p) => { const f = whyFactorsOf(p); const b = [];
+  b.push((p.rung === 4 ? 'The destination page' : 'Rung ' + p.rung) + ': ' + (f.kd == null ? 'difficulty unknown, counted as ' + unknownKd : 'difficulty ' + f.kd)
+    + ' against the reach this plan is measured against (' + reach + ')' + (topic_authority.used ? ', measured on this topic' : ', measured across the whole site'));
+  b.push(f.keywords + ' keyword(s)' + (f.volume != null ? ', ' + f.volume + ' searches a month' : ', no search volume in the data'));
+  if (f.intent) b.push(f.intent + ' intent');
+  if (f.your_position) b.push('you are #' + f.your_position + ' for it today');
+  b.push(f.status === 'improve' ? 'improves ' + p.target_url + ', which already answers it' : 'a page you do not have yet');
+  if (f.links_up) b.push('links up to the main page');
+  // B2-4: when a page exists because Google answers several searches with the same pages, that is the reason it exists
+  if (f.serp_cluster && f.serp_cluster.keyword_count > 1) b.push('one page for ' + f.serp_cluster.keyword_count + ' searches Google answers with the same pages ('
+    + (f.serp_cluster.shared || []).slice(0, 3).map(x => '"' + x.keyword + '"' + (x.shared_urls ? ' shares ' + x.shared_urls + ' of the top ' + (f.serp_cluster.top_n || 7) : '')).join(', ') + ')');
+  else if (p.serp_not_compared) b.push('its results page could not be read on this run, so it was not compared with the others');
+  if (p.rung === 4 && f.serp_domains) b.push(f.serp_domains + ' different site(s) hold the top ' + serp_diversity.results + ' results for it');
+  return b.join('; ') + '.'; };
+for (const p of allPlanned) { p.why = whyOf(p); p.why_factors = whyFactorsOf(p); }
+
 // ---- pages to write now, in the plan's order (direct: the main page first; otherwise the supporting pages, the main page waits for support) ----
 const order = !planned ? [] : mainFirst ? [top, ...rungPages] : rungPages;
-const write_now = order.slice(0, pagesNow).map(p => ({ page_no: p.page_no, rung: p.rung, keyword: p.keyword, page_type: p.page_type, target_url: p.target_url, exists: p.exists, supporting: p.supporting, links_to: p.links_to, target_words: Number(p.target_words) || 0 }));   // R8: a rung page carries its own measured target now, not 0
+const write_now = order.slice(0, pagesNow).map(p => ({ page_no: p.page_no, rung: p.rung, keyword: p.keyword, page_type: p.page_type, target_url: p.target_url, exists: p.exists, supporting: p.supporting, links_to: p.links_to, target_words: Number(p.target_words) || 0, why: p.why || '' }));   // R8: a rung page carries its own measured target now, not 0   // B2-3: and the reason it is first
 const pages_total = planned ? rungPages.length + 1 : 0;
 const stats = { pool_size: (pool.research || {}).pool_size || 0, ai_reviewed: rel.size, relevant: kws.length, pages_total, rung_pages: planned ? rungPages.length : 0,
   keywords_covered: planned ? rungPages.reduce((s, p) => s + 1 + p.supporting.length, 0) + 1 + top.supporting.length : 0,
   traffic_potential_total: planned ? rungPages.reduce((s, p) => s + (p.traffic_potential || 0), 0) + (top.traffic_potential || 0) : 0,
   site_rankings_found: SR.count || 0, research_failures: (pool.research || {}).failures || [], excluded_keywords: excluded.length, refused_keywords: poolRefused.length,
-  off_topic_keywords: offTopic.length, on_topic: onTopic.length };
+  off_topic_keywords: offTopic.length, on_topic: onTopic.length,
+  // B2-4: what the results-page comparison cost and what it changed; B2-5: how many sites own the destination's results page
+  serp_checks: SERP_CL ? SERP_CL.asked : 0, serp_checks_compared: SERP_CL ? SERP_CL.compared : 0, serp_checks_failed: SERP_CL ? SERP_CL.not_compared.length : 0,
+  serp_check_cost_usd: SERP_CL ? SERP_CL.cost_usd : 0, serp_clusters: SERP_CL ? (SERP_CL.clusters || []).length : 0,
+  serp_merged_keywords: clusterRungs.reduce((n, c) => n + Math.max(0, c.keywords.length - 1), 0), serp_domains: serp_diversity.domains };
 // ---- G32 / K12: the site's topic radius around this ladder — in reach, a stretch, or out of reach for now, with the evidence ----
 // (v5/code/_radius.js; the same kit draws discovery's radius, so the two never disagree). It is shown, not enforced: a plan the owner
 // approved is never changed by it.
@@ -324,6 +475,15 @@ const topic_radius = RAD.of({ reach, reach_method: reachInfo.method, domain,
 const head_radius = RAD.pick(topic_radius, head);
 const notes = [];
 if (refusal) notes.push(refusal.message);
+// B2-1 / B2-2: which reach this plan was measured against, and what the site already has on the topic — both in the owner's reading
+notes.push(topic_authority.note);
+if (planned) notes.push(topic_authority.coverage.summary);
+// B2-4: what Google itself said about which of these searches want the same page, what it cost, and what could not be compared
+if (SERP_CL && SERP_CL.note) notes.push(SERP_CL.note
+  + (planned && clusterRungs.length ? ' In this plan ' + clusterRungs.length + ' group(s) became one page each instead of several: '
+    + clusterRungs.slice(0, 4).map(c => '"' + c.head_keyword + '" (+' + Math.max(0, c.keywords.length - 1) + ')').join(', ') + '.' : ''));
+// B2-5: the destination's results page, and the stated effect on the score
+if (serp_diversity.checked) notes.push(serp_diversity.text);
 if (head_radius) notes.push('Topic radius — "' + head_radius.topic + '": ' + RAD.line(head_radius) + '.');
 if (poolRefused.length) notes.push(poolRefused.length + ' keyword(s) were left out of the ladder because they are other companies\' brands, government or portal searches, or navigational: ' + poolRefused.slice(0, 6).map(x => '"' + x.keyword + '" (' + x.reason + ')').join(', ') + (poolRefused.length > 6 ? ' …' : '') + '.');
 if (planned && plan_type === 'full' && rungPages.length && pages_total < 8) notes.push('Only ' + pages_total + ' pages could be planned from the data: the topic is narrow in ' + base.country + '. The ladder is shorter but still valid.');
@@ -342,7 +502,10 @@ const ladder = { ladder_id: ladderId, head: { keyword: head, volume: top.volume,
   plan_type, difficulty_for_you, reach, months: planned ? plan.months : '', months_range: planned ? plan.months_range : null, stretch: planned && plan.stretch, planned, refusal, order: order_text,
   label: planned ? reachLabel(difficulty_for_you, plan) : dataRefused ? ('No ladder planned · ' + refusal.short) : (REACH_DIFF_LABEL[difficulty_for_you] + ' · no ladder'),
   chance: planned ? plan.chance : null, chance_text: planned ? reachChanceText(plan) : '', base_rate: REACH_BASE_RATE, refused_keywords: poolRefused.slice(0, 40),
-  reach_info: { reach, method: reachInfo.method, p75: reachInfo.p75 ?? null, size_reach: reachInfo.size_reach ?? null, sample: reachInfo.sample ?? null, top10: reachInfo.top10 ?? null, organic_keywords: reachInfo.organic_keywords ?? null, cached: !!reachInfo.cached, cached_at: reachInfo.cached_at || null },
+  reach_info: { reach: reachInfo.reach, method: reachInfo.method, p75: reachInfo.p75 ?? null, size_reach: reachInfo.size_reach ?? null, sample: reachInfo.sample ?? null, top10: reachInfo.top10 ?? null, organic_keywords: reachInfo.organic_keywords ?? null, cached: !!reachInfo.cached, cached_at: reachInfo.cached_at || null },   // B2-1: the SITE-wide measurement; `reach` above is what this topic was measured against
+  topic_authority,   // B2-1: what this site already wins on THIS topic, what it already has written about it, and which reach the plan used
+  serp_clusters: SERP_CL,   // B2-4: the results pages this run read, the groups they made, what could not be compared and what it cost
+  serp_cluster_rungs: clusterRungs.slice(0, 12), serp_diversity,   // B2-5: how many different sites own the destination's results page, and the stated adjustment
   excluded_keywords: excluded.slice(0, 40), topic_radius, head_radius, off_topic_keywords: offTopic.slice(0, 20),   // R23: what the topic radius left out, with the reason   // G32: shown with the plan, never enforced on it
   words: { main: top.target_words || 0, rung: rungWords.words, main_source: top.target_words_source, rung_source: rungWords.source },   // R22: where each page's length target came from
   data_check: { pool_size: poolSize, minimum_pool: LADDER_MIN_POOL, head_measured: headMeasured, serp_checked: !serpOut, serp_error: serpOut, enough: !dataRefused },   // R23

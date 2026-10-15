@@ -41,7 +41,9 @@ describe('the engine’s repeat flag reaches the app', () => {
 });
 
 describe('when a start resolves to a run already going', () => {
-  it('only when the engine said duplicate AND named the run', async () => {
+  // the `afterEach` above resets the module registry, so this one re-transpiles the whole runs service from cold: under load that
+  // import alone has taken over 5 seconds and failed the run (seen twice on 2026-10-15). The assertions are instant; only the import is slow.
+  it('only when the engine said duplicate AND named the run', { timeout: 30_000 }, async () => {
     const { repeatResolvesToOriginal } = await import('../src/services/runs.js');
     expect(repeatResolvesToOriginal({ duplicate: true, requestId: '511' })).toBe(true);
     expect(repeatResolvesToOriginal({ duplicate: false, requestId: '511' })).toBe(false);

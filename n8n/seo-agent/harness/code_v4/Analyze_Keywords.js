@@ -1,7 +1,19 @@
 const base = $('Competitor Analysis').first().json;
 const targets = $('KW Targets').all().map(i => i.json);
-const ranked = $('Ranked Keywords').all().map(i => i.json);
+const ranked = $('Ranked Keywords Answers').all().map(i => i.json);
 const ideasRes = $input.first().json || {};
+// B-A11 (2026-10-15, INVARIANTS rule 1): the in-200 retry gate (rule 3) marks an answer `unavailable` when BOTH attempts
+// failed, and attaches that block to every item as `__dfs`. Nothing below may rank, score or advise from one.
+const __ev76 = (list, node) => { try { const a = (node ? $(node).all().map(i => i.json) : list) || []; return (a.find(x => x && x.__dfs) || {}).__dfs || null; } catch (e) { return null; } };
+// A refusal fires on an evidence block that SAYS `unavailable`, never on the absence of one: a path with no gate attached
+// (and every harness fixture) has no `__dfs`, and inventing a failure out of silence is the same mistake in the other
+// direction. This is how the nine nodes that already refuse read it too (Assess Result falls back when `__dfs` is absent).
+const __read76 = (ev) => !ev || !ev.unavailable;
+const rankedEv76 = __ev76(ranked), ideasEv76 = __ev76([ideasRes]);
+// the two reads behind every number below: what this site and its rivals rank for, and the keyword ideas. A finding
+// built on a read that failed twice reads as a measurement ("you rank for 0 informational keywords") and is not one.
+const rankedRead76 = __read76(rankedEv76), ideasRead76 = __read76(ideasEv76);
+const keywords_evidence = { ranked: rankedEv76, ideas: ideasEv76, unavailable: !rankedRead76 && !ideasRead76 };
 const seeds = $('Fallback Queries').all().map(i => i.json.query).filter(Boolean);
 const INTENTS = ['informational', 'navigational', 'commercial', 'transactional'];
 const brand = base.domain.split('.')[0].toLowerCase();
@@ -268,6 +280,70 @@ const fitStored = (row, ctx) => {
   return { ok: false, live: false, flagged: true, reason: g.reason, detail: g.detail,
     note: why + ' — it was planned before this rule existed, so it is set aside instead of written' };
 };
+// ---- B-G1 / B-G2 / B-G3 (2026-10-15, FIX_PLAN §3.16; INVARIANTS rule 2): the READ path, written once ----
+// R16 put `fitStored` on two read paths — the Rank Tracker and the Content Cadence — and wrote the loop around it twice. Three more
+// readers of the same stored rungs were written afterwards without it, and every one of them ACTS on what it reads: *AI Plan* (the AI
+// Visibility Tracker and the AI Pulse) turns a stored rung into a question asked of ChatGPT and then scores the site against the answer;
+// *Growth Plan* turns it into a "question to win" and then into a page the Content Cadence writes; *Site Plan* buys it a live rank check
+// every week and prints it in the weekly report. Three copies of one loop are three chances to drift, and the drift IS this defect — so
+// the loop lives here, once, and every reader calls it. FITR.rungs() never throws a refusal away: `set_aside` carries the row, the reason
+// and the sentence to print, because a list that is shorter because a gate ran has to say so (INVARIANTS rule 1).
+const FITR = {
+  // The context a stored row is judged in. Deliberately the shape R16's two callers build by hand: the site's own domain, the
+  // competitors it declared, the brand names AI uses for other companies, and — PROTECTED, so the ladder's own subject can never look
+  // like somebody's brand — the ladder head terms, the site's services and its own tracked keywords. Topics are optional: with none on
+  // file the topic bar judges nothing (fitTopic's own "no evidence, no refusal" rule).
+  ctx(o) {
+    o = o || {};
+    const own = fitHost(o.own_domain || o.domain || '');
+    const protect = [...new Set([...(o.heads || []), ...(o.services || []), ...(o.keywords || []), ...(o.protect || [])]
+      .map(x => String(x || '').trim()).filter(Boolean))];
+    return { own_domain: own, brands: o.brands || {}, intent: o.intent || '',
+      competitors: [...new Set((o.competitors || []).map(fitHost).filter(d => d && d !== own))],
+      serp_domains: (o.serp_domains || []).map(fitHost).filter(Boolean), protect,
+      topics: o.topics && (Array.isArray(o.topics) ? o.topics.length : String(o.topics).trim()) ? o.topics : null,
+      topic_label: o.topic_label || 'what this website sells' };
+  },
+  // Every stored row, gated once. Returns { keep, set_aside, dropped, flagged, refused_keywords }:
+  //   keep      — what the caller may act on (a row whose page is already written stays: that page is live work);
+  //   set_aside — one record per refusal, with `reason`, `detail`, `note` (the sentence to print), `written` and `dropped`.
+  // opts: { keyword: row -> the keyword (default row.keyword), live: row -> true when the row must be kept and only flagged,
+  //         serpFor: (keyword, row) -> [domains in rank order] for the results-page rules, where: a label naming this read path }.
+  rungs(rows, ctx, opts) {
+    const o = opts || {}; const C = ctx || {};
+    const kwOf = typeof o.keyword === 'function' ? o.keyword : ((r) => (r || {}).keyword);
+    const liveOf = typeof o.live === 'function' ? o.live : null;
+    const serpFor = typeof o.serpFor === 'function' ? o.serpFor : null;
+    const keep = []; const set_aside = [];
+    for (const r0 of (rows || [])) {
+      const r = (r0 && typeof r0 === 'object') ? r0 : {};
+      const kw = String(kwOf(r0) || '').trim();
+      if (!kw) { keep.push(r0); continue; }   // a row with no keyword is not this gate's business (the caller's own emptiness rules apply)
+      const serp = serpFor ? (serpFor(kw, r0) || []).map(fitHost).filter(Boolean) : [];
+      let c = C;
+      if (serp.length) c = { ...c, serp, serp_domains: [...new Set([...(C.serp_domains || []), ...serp])] };
+      if (liveOf && liveOf(r0)) c = { ...c, written: true };
+      const g = fitStored({ ...r, keyword: kw }, c);
+      if (g.ok) keep.push(r0);
+      if (!g.flagged) continue;
+      set_aside.push({ keyword: kw, reason: g.reason, detail: g.detail, note: g.note, written: !!g.live, dropped: !g.ok,
+        where: String(o.where || ''), ladder_id: r.ladder_id || '', head_keyword: r.head_keyword || '', rung: Number(r.rung) || 0,
+        page_no: Number(r.page_no) || 0, status: r.status || '', target_url: r.target_url || '', prompt_id: r.prompt_id || '' });
+    }
+    return { keep, set_aside, dropped: set_aside.filter(x => x.dropped), flagged: set_aside.filter(x => !x.dropped),
+      refused_keywords: set_aside.filter(x => x.dropped).map(x => x.keyword) };
+  },
+  // The sentence a human reads. INVARIANTS rule 1: a list that is shorter because a gate ran says so, with the reason, every time.
+  // `what` finishes "so they are not …" ("asked of the AI engines", "tracked", "written as a page").
+  line(set_aside, what) {
+    const a = (set_aside || []).filter(x => x && x.dropped);
+    if (!a.length) return '';
+    return a.length + ' stored keyword' + (a.length === 1 ? ' was' : 's were') + ' set aside, so ' + (a.length === 1 ? 'it is' : 'they are')
+      + ' not ' + String(what || 'used') + ': ' + a.slice(0, 6).map(x => '"' + x.keyword + '" — ' + (x.detail || x.reason)).join('; ')
+      + (a.length > 6 ? ' (and ' + (a.length - 6) + ' more)' : '')
+      + '. They were planned before this rule existed; a page that is already written is kept and only flagged.';
+  }
+};
 let cacheRowsAK = []; try { cacheRowsAK = $('Load Site Cache').all().map(i => i.json); } catch (e) { cacheRowsAK = []; }
 const fitCtxAK = { own_domain: base.domain || '', competitors: (base.competitors || []).map(String), serp_domains: comps.map(c => c.domain).filter(d => !(base.competitors || []).includes(d)), brands: fitLearnedBrands(cacheRowsAK), protect: [...seeds, ...(base.services || []), String(base.business || '').slice(0, 400)],
   // R13 (2026-10-13, re-rating §3.11): topic distance on the same 25% bar the outreach gate uses — §4a offered "ai" (165,000/mo),
@@ -308,14 +384,22 @@ const F = (severity, title, evidence, why, fix) => findings.push({
   sample_urls: [], affected_count: null, affected_pct: 100, scope: 'site'
 });
 
-if (keyword_gap.length) {
+if (!rankedRead76 && !ideasRead76) {
+  findings.push({ category: 'Authority', severity: 'Info', title: 'The keyword research could not be read',
+    evidence: 'The search data provider did not answer the ranked-keyword and keyword-idea requests, asked twice'
+      + ((rankedEv76 && rankedEv76.error) || (ideasEv76 && ideasEv76.error) ? ': ' + ((rankedEv76 && rankedEv76.error) || ideasEv76.error) : '') + '.',
+    why: 'The keyword gap, the easy wins and the rankings comparison are left out of this report: nothing was measured. This is not "no demand".',
+    fix: 'No action needed — the research is repeated on the next run.',
+    sample_urls: [], affected_count: null, affected_pct: 100, scope: 'site', scoring: false });
+}
+if (rankedRead76 && keyword_gap.length) {
   F('High', 'Keyword gap: searches competitors win and you do not',
     keyword_gap.length + ' keywords where competitors rank in the top 10 and you are not in the top 20. Top: ' +
     keyword_gap.slice(0, 5).map(g => '"' + g.keyword + '" (' + (g.volume || 0) + '/mo)').join(', '),
     'Each of these is proven demand in your market that is currently going to competitors.',
     'Create or improve a dedicated page for the highest-volume, lowest-difficulty gap keywords first.');
 }
-INTENTS.filter(x => x !== 'navigational').forEach(x => {   // P1-4: "no rankings for navigational searches" counted other companies' brands — never a goal for this site
+if (rankedRead76) INTENTS.filter(x => x !== 'navigational').forEach(x => {   // P1-4: "no rankings for navigational searches" counted other companies' brands — never a goal for this site
   const med = median(comps.map(c => c.by_intent[x]));
   if ((you.by_intent[x] || 0) === 0 && med != null && med >= 5) {
     F('Medium', 'No rankings for ' + x + ' searches',
@@ -327,19 +411,19 @@ INTENTS.filter(x => x !== 'navigational').forEach(x => {   // P1-4: "no rankings
       'Make sure branded searches lead clearly to your site.');
   }
 });
-if (easy_wins.length) {
+if (ideasRead76 && easy_wins.length) {
   F('Low', 'Low-difficulty keywords you can target now',
     easy_wins.slice(0, 5).map(k => '"' + k.keyword + '" (' + k.volume + '/mo, difficulty ' + k.difficulty + ')').join(', '),
     'These searches have real demand and weak competition, the best starting point for a young site.',
     'Build or optimise one focused page per keyword group, starting with the highest volume.');
 }
-if (striking_distance.length) {
+if (rankedRead76 && striking_distance.length) {
   F('Low', 'Keywords close to page 1 (positions 11-20)',
     striking_distance.slice(0, 5).map(k => '"' + k.keyword + '" #' + k.position).join(', '),
     'These are the fastest wins: small improvements can move them onto page 1.',
     'Improve the ranking page (depth, internal links, title) for each of these keywords.');
 }
-if (you.top10 > 0) works.push('Ranks in the Google top 10 for ' + you.top10 + ' keywords');
+if (rankedRead76 && you.top10 > 0) works.push('Ranks in the Google top 10 for ' + you.top10 + ' keywords');
 
 return [{
   json: {
@@ -352,7 +436,8 @@ return [{
       easy_wins,
       keyword_gap,
       striking_distance,
-      refused: refused.filter((r, i, a) => a.findIndex(x => x.keyword === r.keyword) === i).slice(0, 40)
+      refused: refused.filter((r, i, a) => a.findIndex(x => x.keyword === r.keyword) === i).slice(0, 40),
+      evidence: keywords_evidence
     },
     extra_findings: [...(base.extra_findings || []), ...findings],
     extra_works: [...(base.extra_works || []), ...works]

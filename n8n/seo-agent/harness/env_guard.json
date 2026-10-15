@@ -1,0 +1,70 @@
+{
+ "baked": [
+  "SEO_BRAND",
+  "SEO_MAIL_FROM",
+  "SEO_OPS_EMAIL",
+  "SEO_GOOGLE_SA_EMAIL"
+ ],
+ "cases": {
+  "all_present": {
+   "missing": [],
+   "refused": false
+  },
+  "empty_setting": {
+   "missing": [
+    "SEO_BRAND",
+    "SEO_MAIL_FROM",
+    "SEO_OPS_EMAIL",
+    "SEO_GOOGLE_SA_EMAIL"
+   ],
+   "refused": true,
+   "says_path": true,
+   "says_what_to_do": true
+  },
+  "missing_file": {
+   "missing": [],
+   "refused": true,
+   "says_path": true,
+   "says_what_to_do": true
+  },
+  "one_empty_setting": {
+   "missing": [
+    "SEO_GOOGLE_SA_EMAIL"
+   ],
+   "refused": true,
+   "says_path": true,
+   "says_what_to_do": true
+  },
+  "opt_out_flag": {
+   "missing": [
+    "SEO_BRAND",
+    "SEO_MAIL_FROM",
+    "SEO_OPS_EMAIL",
+    "SEO_GOOGLE_SA_EMAIL"
+   ],
+   "opt_out": "--no-env",
+   "refused": false
+  },
+  "opt_out_variable": {
+   "missing": [
+    "SEO_BRAND",
+    "SEO_MAIL_FROM",
+    "SEO_OPS_EMAIL",
+    "SEO_GOOGLE_SA_EMAIL"
+   ],
+   "opt_out": "SEO_BUILD_ALLOW_DEFAULTS",
+   "refused": false
+  }
+ },
+ "env_file": "n8n/.env",
+ "flags": [
+  "SEO_BING_WEBMASTER_API_KEY",
+  "SEO_AHREFS_API_KEY"
+ ],
+ "this_build": {
+  "file_present": true,
+  "frozen_workflows": 22,
+  "missing": [],
+  "opt_out": ""
+ }
+}

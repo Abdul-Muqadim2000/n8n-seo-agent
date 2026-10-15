@@ -5,7 +5,7 @@
 const d = $('Audit Diff').first().json; const a = d.site_audit || {};
 const base = $('Check Crawl').first().json; const domain = base.domain;
 const m = a.measurements || {}; const host = m.canonical_host || domain; const home = 'https://' + host + '/';
-const pages = ($('Get Crawled Pages').first().json.tasks?.[0]?.result?.[0]?.items || []).filter(p => p && p.resource_type === 'html');
+const pages = ($('Get Crawled Pages Answers').first().json.tasks?.[0]?.result?.[0]?.items || []).filter(p => p && p.resource_type === 'html');
 const E = a.entity || {}; const P = (() => { try { return $('Load Profile (Audit)').all().map(i => i.json).find(x => x && x.site_id === d.site_id) || {}; } catch (e) { return {}; } })();
 const pathOf = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/i, '') || '/';
 const files = [];

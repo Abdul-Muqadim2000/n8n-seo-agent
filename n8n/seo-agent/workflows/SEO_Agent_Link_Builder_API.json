@@ -20,7 +20,7 @@
           "responseMode": "responseNode",
           "options": {}
         },
-        "id": "2e4d3018-9c74-5559-8afa-f41ddf465304",
+        "id": "9ca6e8b8-270b-5029-b2a3-e36cd2f61476",
         "name": "Link Builder API",
         "type": "n8n-nodes-base.webhook",
         "typeVersion": 2,
@@ -40,7 +40,7 @@
         "parameters": {
           "jsCode": "// Link Builder on demand (POST /webhook/seo-link-builder, header X-API-Key; the web app's \"Find opportunities now\"): { domain | site_id,\n// free_only?, callback_url?, request_id? } — answered at once (accepted), the run starts as its own execution through Manual Run.\nconst raw = $input.first().json || {}; const b = (raw.body && typeof raw.body === 'object' && !Array.isArray(raw.body)) ? raw.body : {};\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst domain = normD(b.domain); const site_id = String(b.site_id || '').trim();\nconst errors = []; if (!domain && !site_id) errors.push('domain or site_id is required');\nif (b.callback_url && !/^https?:\\/\\//i.test(String(b.callback_url))) errors.push('callback_url must be an http(s) URL');\nreturn [{ json: { ok: !errors.length, error: errors.join('; '), domain, site_id, free_only: /^(true|1|yes|on)$/i.test(String(b.free_only ?? '')), callback_url: String(b.callback_url || ''), email: '', request_id: String(b.request_id || ('lb-' + $execution.id)) } }];\n"
         },
-        "id": "90ca68f9-b301-57c3-ab1e-5c1706924fdd",
+        "id": "a002c442-5339-58ab-894d-bc3c47ae5860",
         "name": "LB API Validate",
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -60,7 +60,7 @@
             },
             "conditions": [
               {
-                "id": "92e7bc98-51fd-5b1a-b3ef-9c636303e577",
+                "id": "9fbec9fa-26df-50d3-83bf-869c187f1347",
                 "leftValue": "={{ $json.ok }}",
                 "rightValue": "",
                 "operator": {
@@ -75,7 +75,7 @@
           "looseTypeValidation": true,
           "options": {}
         },
-        "id": "195dfea0-35a5-5c50-bb5d-fb797a80fa23",
+        "id": "5cc782b0-4064-5f27-b5a0-00e4e8914920",
         "name": "LB API OK?",
         "type": "n8n-nodes-base.if",
         "typeVersion": 2.3,
@@ -92,7 +92,7 @@
             "responseCode": 202
           }
         },
-        "id": "a8e2313a-19ee-5350-8907-4facb58cb0fc",
+        "id": "c4cf2e92-22b5-5748-a219-654643d2896f",
         "name": "Respond LB Accepted",
         "type": "n8n-nodes-base.respondToWebhook",
         "typeVersion": 1.1,
@@ -105,7 +105,7 @@
         "parameters": {
           "jsCode": "// The run's input (Manual Run of the Link Builder): only the fields it reads.\nconst v = $('LB API Validate').first().json;\nreturn [{ json: { domain: v.domain, site_id: v.site_id, free_only: v.free_only, callback_url: v.callback_url, email: '', request_id: v.request_id } }];"
         },
-        "id": "928ffa99-7b5b-5b67-a43c-2b234ad06bc7",
+        "id": "b4358b05-ec98-570f-af92-37c85f0f97ce",
         "name": "LB Payload",
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -127,7 +127,7 @@
             "waitForSubWorkflow": false
           }
         },
-        "id": "4cdcb801-50c5-5d21-ab48-354b305f2e73",
+        "id": "55762b10-317e-5a04-a394-c971a127683f",
         "name": "Start Link Builder",
         "type": "n8n-nodes-base.executeWorkflow",
         "typeVersion": 1.2,
@@ -144,7 +144,7 @@
             "responseCode": 400
           }
         },
-        "id": "7641e264-6919-5e88-94e5-8e9dc95fd25c",
+        "id": "a896f28d-1230-5d89-b05a-6dc7e28cc40f",
         "name": "Respond LB Bad Request",
         "type": "n8n-nodes-base.respondToWebhook",
         "typeVersion": 1.1,
@@ -160,7 +160,7 @@
           "width": 700,
           "color": 6
         },
-        "id": "541efb59-9abd-5afc-a83e-2f12eadc831c",
+        "id": "23630212-4ff9-50b2-87e7-3817411ed3cc",
         "name": "Note",
         "type": "n8n-nodes-base.stickyNote",
         "typeVersion": 1,

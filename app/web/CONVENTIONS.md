@@ -57,6 +57,23 @@ the engine's calibrated figures); `MODES[mode].costUsd`, `estimateRunCost()` and
 costs, call `runCostEstimate(run)` and render `COST_SOURCE_LABEL[cost.source]` beside the number with `cost.basis` behind an
 `InfoTip` — a figure shown without saying whether it is actual, the engine's estimate or ours is a bug.
 
+## Pages a client sees (the shared report)
+
+`/share/:token` is the one page in the app that a person outside the company opens, so two rules apply only there and must not be
+broken by a tidy-up:
+
+- **It carries the customer's mark, not ours.** `ShareBrand` draws their business name and logo at the head of the page and in the
+  browser tab; our name is one line in the footer and never above the fold. The values come from `SharedReport.brand` (the server
+  reads `seo_profiles`) — never add a second place to store a logo, and never render one that `brandLogoUrl()` refused. Every
+  fallback has to look finished: no logo, a logo that 404s, a logo drawn for white paper on our dark theme (it sits on a white tile),
+  and a company that has filled in nothing at all (its initials).
+- **It never shows a key the engine stores.** A headline figure is labelled in words ("Health score", not `healthScore`); a key no
+  rule can make readable is named outright in `NAMED`. The same goes for any value that is an internal code.
+- **It never looks more finished than the run was.** `SharedReport.caveat` is rendered above the figures whenever the run marked
+  the work unfinished. The rule behind it is `deliveryDecision` (B-R1) — one rule for the e-mail and the link.
+
+Evidence that these hold, at 1440 and 375, light and dark: `../BROWSER_PASS.md`.
+
 ## Brand (Ascentra) — for every UI change
 Full guide: `brand/BRAND.md`; the app's tokens are in `src/index.css` (light + dark).
 - Name: **Ascentra** in all UI copy ("SEO Agent" is only the internal engine name). The logo is always one of the supplied SVGs in

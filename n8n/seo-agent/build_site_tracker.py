@@ -6,6 +6,7 @@ brief -> HTML e-mail + PDF + callback with ready-to-send API bodies. Code nodes 
 import json, os, re, uuid, sys
 import url_lint   # D15 (2026-10-11 system review): the canonical-host lint
 import retry_lint   # G1 (2026-10-11 system review): one retry rule for every external HTTP node
+import dfs_gate     # B-A10 (2026-10-15): INVARIANTS rule 3 — the in-200 retry gate, one shape for every DataForSEO call
 from ladder_common import (dt_schema, LADDER_TABLE, LADDER_COLS, HISTORY_TABLE, HISTORY_COLS, SITES_TABLE, METRICS_TABLE, QUERY_TABLE, SITES_COLS, METRICS_COLS, QUERY_COLS,
                            LOG_TABLE, LOG_COLS, TRENDS_TABLE, TRENDS_COLS, CADENCE_TABLE, CADENCE_COLS, ALERTS_TABLE, ALERTS_COLS, CHECKIN_TABLE, CHECKIN_COLS,
                            MONITORS_TABLE, MONITORS_COLS, AI_VIS_TABLE, AI_VIS_COLS, BL_SNAP_TABLE, BL_SNAP_COLS, AUDITS_TABLE, AUDITS_COLS, PROSPECT_TABLE, PROSPECT_COLS, AI_PROMPTS_TABLE, AI_PROMPTS_COLS,
@@ -359,7 +360,17 @@ assert not any('/*__PAGE_WATCH__*/' in c_ for c_ in _code.values()), 'page-watch
 assert 'PW.inspectBudget(' in _code['Inspect Requests'] and 'inspect_at' in _code['Inspect Requests'], 'G25: the inspections do not rotate within the quota'
 assert 'index_coverage' in _code['Site Metrics'] and 'page_watch: watch' in _code['Site Metrics'], 'G11 / G25: the weekly item carries neither the index view nor the watch'
 LEDGER_WIRING['SEO Agent — Site Tracker'] = ledger_nodes(N, C, 'site_tracker', 'Site', 'Site Plan', ['Site Report'], at(11, 9))
-write(wf(WF_ID, 'SEO Agent — Site Tracker', N, C), 'SEO_Agent_Site_Tracker.json')
+# ---- B-A10 (2026-10-15, INVARIANTS rule 3): the two paid DataForSEO calls of the week go through the in-200 retry gate ----
+# Both reading sides were already honest about a task error inside a 200 (Parse Trends -> `DataForSEO <code>`, Parse Site SERP ->
+# RS.read -> position -1, "check failed" and never "not in the top 50"); what neither had was a second attempt. A trend that
+# fails is a week of a head term's demand missing from the brief, and a position that fails is a hole in the site's own history.
+_wf_site = wf(WF_ID, 'SEO Agent — Site Tracker', N, C)
+for _h10, _w10, _u10 in (('Google Trends', 'the 12-month search interest for this term', 'term'),
+                         ('SERP Check (Site)', "the live Google results for one of the site's own keywords", 'keyword check')):
+    _gs10 = dfs_gate.splice(_wf_site, _h10, V5, what=_w10, unit=_u10, code_dir=CODE)
+    retry_lint.record_gate('SEO Agent — Site Tracker', _gs10['chain'])
+retry_lint.check_in200(_wf_site)
+write(_wf_site, 'SEO_Agent_Site_Tracker.json')
 
 # =============================================================================
 # SEO Agent — Site Admin: delete / pause / resume / cadence / unpublish for a tracked site (published sub-workflow; run through the Test Runner or Execute Workflow)
@@ -430,6 +441,9 @@ N.append(node('Load Main Keyword Ranks', DT_TYPE, DT_VERSION, dt_get_recent_para
 # v4.12 (AI_GROWTH_SPEC.md): the AI targets queued by the AI Growth loop and the sites' AI pages a month (seo_monitors ai_pages_month)
 N.append(node('Ensure AI Targets Table (Cadence)', DT_TYPE, DT_VERSION, dt_create_params(AI_TARGETS_TABLE, AI_TARGETS_COLS), at(5, 2), onError='continueRegularOutput'))
 N.append(node('Load AI Targets (Cadence)', DT_TYPE, DT_VERSION, dt_get_where_params(AI_TARGETS_TABLE, 'status', 'eq', 'queued'), at(11, 2), **LOAD))
+# B9-6 (2026-10-15, INVARIANTS rule 4): the rows an EARLIER run left `writing`. *AI Target Settle* moves each one to `written`
+# against the seo_content_log row for its own run, and leaves the rest alone (the 14-day requeue is the read half's, in AI Growth).
+N.append(node('Load AI Targets Writing (Cadence)', DT_TYPE, DT_VERSION, dt_get_where_params(AI_TARGETS_TABLE, 'status', 'eq', 'writing'), at(11, 3), **LOAD))
 N.append(node('Load Monitors (Cadence)', DT_TYPE, DT_VERSION, dt_get_all_params(MONITORS_TABLE), at(12, 2), **LOAD))
 # D11: the website's page inventory, so a search a live page already answers is refreshed, not written as a second page
 N.append(node('Ensure Pages Table (Cadence)', DT_TYPE, DT_VERSION, dt_create_params(PAGES_TABLE, PAGES_COLS), at(13, 2), onError='continueRegularOutput'))
@@ -447,9 +461,15 @@ N.append(node('Save Content Log', DT_TYPE, DT_VERSION, dt_insert_params(LOG_TABL
 N.append(code('Ladder Marks', rd('code/Ladder_Marks.js'), at(16, 0)))
 N.append(iff('Any Ladder Marks?', '{{ !$json.skip }}', at(17, 0)))
 N.append(node('Mark Ladder Writing', DT_TYPE, DT_VERSION, dt_update_params(LADDER_TABLE, LADDER_COLS, [('ladder_id', '={{ $json.ladder_id }}'), ('keyword', '={{ $json.keyword }}')], {'status': '={{ $json.status }}'}), at(18, 0), alwaysOutputData=True, onError='continueRegularOutput'))
-N.append(code('AI Target Marks', "// v4.12: the AI targets written this week -> status writing (the AI Growth loop marks them won once AI names the business for the question).\nconst now = new Date().toISOString();\nconst rows = $('Cadence Plan').all().map(i => i.json).filter(p => !p.nothing_to_do && !p.dry_run && p.target_id).map(p => ({ json: { target_id: p.target_id, request_id: (p.body && p.body.request_id) || '', at: now } }));\nreturn rows.length ? rows : [{ json: { skip: true } }];", at(18, 1)))
+N.append(code('AI Target Marks', rd('code/AI_Target_Marks.js'), at(18, 1)))
 N.append(iff('Any AI Marks?', '{{ !$json.skip }}', at(18, 2)))
-N.append(node('Mark AI Target Writing', DT_TYPE, DT_VERSION, dt_update_params(AI_TARGETS_TABLE, AI_TARGETS_COLS, [('target_id', '={{ $json.target_id }}')], {'status': 'writing', 'request_id': '={{ $json.request_id }}', 'written_at': '={{ $json.at }}', 'updated_at': '={{ $json.at }}'}), at(18, 3), alwaysOutputData=True, onError='continueRegularOutput'))
+# B9-6: the status and the reason come from the item now - a spawn that failed writes the row back to `queued` instead of
+# leaving it claiming work in progress, and the row that IS marked carries, in its own words, that nothing exists yet.
+N.append(node('Mark AI Target Writing', DT_TYPE, DT_VERSION, dt_update_params(AI_TARGETS_TABLE, AI_TARGETS_COLS, [('target_id', '={{ $json.target_id }}')], {'status': '={{ $json.status }}', 'request_id': '={{ $json.request_id }}', 'written_at': '={{ $json.written_at }}', 'updated_at': '={{ $json.at }}', 'reason': '={{ $json.reason }}'}), at(18, 3), alwaysOutputData=True, onError='continueRegularOutput'))
+# B9-6: and the exit from `writing` - `written`, only against the content-log row of the run that was supposed to write it
+N.append(code('AI Target Settle', rd('code/AI_Target_Settle.js'), at(18, 4)))
+N.append(iff('Any AI Settles?', '{{ !$json.skip }}', at(18, 5)))
+N.append(node('Settle AI Targets', DT_TYPE, DT_VERSION, dt_update_params(AI_TARGETS_TABLE, AI_TARGETS_COLS, [('target_id', '={{ $json.target_id }}')], {'status': '={{ $json.status }}', 'written_at': '={{ $json.written_at }}', 'updated_at': '={{ $json.at }}', 'reason': '={{ $json.reason }}'}), at(18, 6), alwaysOutputData=True, onError='continueRegularOutput'))
 N.append(code('Cadence Note', urls(rd('code/Cadence_Note.js')), at(19, 0)))
 N.append(iff('Has Email (Cadence)?', '{{ !!$json.email }}', at(20, -1)))
 N.append(node('Send Cadence Note', 'n8n-nodes-base.emailSend', 2.1, {'fromEmail': SENDER, 'toEmail': '={{ $json.email }}', 'subject': '={{ $json.subject }}', 'emailFormat': 'html', 'html': '={{ $json.html }}', 'options': {'appendAttribution': False}}, at(21, -1), credentials=SMTP, onError='continueRegularOutput'))
@@ -458,17 +478,19 @@ N.append(node('POST Cadence Note', 'n8n-nodes-base.httpRequest', 4.5, {'method':
 N.append(sticky('Note', f"""## SEO Agent — Content Cadence (v4.3, pipeline rules v4.8)
 Runs **every Monday 10:00** (after the trackers) and on demand through *Manual Run* (`{{ site_id | domain, pages?, dry_run?, force? }}`). For every site with a cadence in `{CADENCE_TABLE}` (set by "Track my site" / API `blogs_per_week`, or Site Admin `cadence`; 1-3 per week) it picks the week's topics in this order: the keyword ladder's next **planned** pages (rung order, with the ladder's internal links), **striking-distance** queries from `{QUERY_TABLE}` (positions 4-20 with impressions: the page that already ranks gets strengthened), **rising** related searches from `{TRENDS_TABLE}`. Keywords written in the last 90 days, written/published ladder pages, brand queries and paused sites are skipped.
 Each pick starts a content run in SEO Agent v4 (`mode: keyword`, `force_content`, internal rate-limit key `cadence:<site>`) that delivers the PDF/Word report **plus the blog package** (article HTML, Markdown, meta.json) by e-mail / callback (`stage: content`). The run is logged in `{LOG_TABLE}` (status started), ladder rows go to *writing*, and one note per site goes out (`stage: content_cadence`): this week's pages and why, what comes next, pages still waiting for a publish link.
+**An AI target says `writing` only while a run is on record, and `written` only when a page is (B9-6, INVARIANTS rule 4).** *AI Target Marks* marks a `{AI_TARGETS_TABLE}` row `writing` with the run's id and the plain reason that nothing exists yet; a spawn that **failed** puts the row back to `queued` with its error, so the question is picked again instead of claiming work in progress for ever. *AI Target Settle* is the only exit: a row moves to `written` against a `{LOG_TABLE}` row for that same run saying `written` or `published` — R1's rule, in the one table R1 did not cover. A row with no such log row is left alone; AI Growth queues the question again after 14 days with its reason and a medium alert.
 **Pipeline rules (v4.8)** from `{LADDER_SETTINGS_TABLE}` (written by the web app; one row per ladder + a `_site` row with the website defaults; no row = the site's default mode or Auto, active, priority by start date): only **Auto** ladders with status active / queued are written, at most `max_active` (default 2) at a time in **priority** order (ladder 1's pages before ladder 2's; plan type *direct* writes the main page first); the **main page waits** until half of the supporting pages are published or the main keyword ranks 1-30; a ladder whose main keyword held the **top 3 for 4 checks** gets no more pages; with `max_waiting` (default 3) pages written but not published the site is **paused** (`paused_reason: pileup`; on demand `force: true` bypasses it); opportunity posts only when `opportunities` is Auto (else listed as `suggestions`); **Manual** ladders' next pages are listed in `awaiting_approval`. Sites without a page but with news get a *Cadence Status* note (same callback stage).
 The owner publishes in any CMS and reports the URL ("I published a page" in the form, or API `mode: published`): the page is checked live, logged as published, the ladder row gets the real URL, and the Site Tracker inspects indexing and positions from the next Monday. `dry_run: true` only plans. Cost: about $1.20 of AI per page.
 Form: {FORM_URL} · API: {API_URL}""", [-40, -700], 1180, 560))
-for a, b in [('Weekly Schedule', 'Ensure Log Table'), ('Manual Run', 'Ensure Log Table'), ('Ensure Log Table', 'Ensure Cadence Table'), ('Ensure Cadence Table', 'Ensure Trends Table (Cadence)'), ('Ensure Trends Table (Cadence)', 'Ensure Ladder Settings Table'), ('Ensure Ladder Settings Table', 'Ensure AI Targets Table (Cadence)'), ('Ensure AI Targets Table (Cadence)', 'Load Sites'), ('Load Sites', 'Load Cadence'), ('Load Cadence', 'Load Ladders'), ('Load Ladders', 'Load Query History'), ('Load Query History', 'Load Trends'), ('Load Trends', 'Load Content Log'), ('Load Content Log', 'Load Ladder Settings'), ('Load Ladder Settings', 'Load Main Keyword Ranks'), ('Load Main Keyword Ranks', 'Load AI Targets (Cadence)'), ('Load AI Targets (Cadence)', 'Load Monitors (Cadence)'), ('Load Monitors (Cadence)', 'Ensure Pages Table (Cadence)'), ('Ensure Pages Table (Cadence)', 'Load Pages (Cadence)'), ('Load Pages (Cadence)', 'Cadence Plan'), ('Cadence Plan', 'Any Pages?'),
-             ('Start Content Runs', 'Log Rows'), ('Log Rows', 'Save Content Log'), ('Save Content Log', 'Ladder Marks'), ('Ladder Marks', 'Any Ladder Marks?'), ('Mark Ladder Writing', 'AI Target Marks'), ('AI Target Marks', 'Any AI Marks?'), ('Mark AI Target Writing', 'Cadence Note'), ('Cadence Note', 'Has Email (Cadence)?'), ('Cadence Note', 'Has Callback (Cadence)?')]: link(C, a, b)
+for a, b in [('Weekly Schedule', 'Ensure Log Table'), ('Manual Run', 'Ensure Log Table'), ('Ensure Log Table', 'Ensure Cadence Table'), ('Ensure Cadence Table', 'Ensure Trends Table (Cadence)'), ('Ensure Trends Table (Cadence)', 'Ensure Ladder Settings Table'), ('Ensure Ladder Settings Table', 'Ensure AI Targets Table (Cadence)'), ('Ensure AI Targets Table (Cadence)', 'Load Sites'), ('Load Sites', 'Load Cadence'), ('Load Cadence', 'Load Ladders'), ('Load Ladders', 'Load Query History'), ('Load Query History', 'Load Trends'), ('Load Trends', 'Load Content Log'), ('Load Content Log', 'Load Ladder Settings'), ('Load Ladder Settings', 'Load Main Keyword Ranks'), ('Load Main Keyword Ranks', 'Load AI Targets (Cadence)'), ('Load AI Targets (Cadence)', 'Load AI Targets Writing (Cadence)'), ('Load AI Targets Writing (Cadence)', 'Load Monitors (Cadence)'), ('Load Monitors (Cadence)', 'Ensure Pages Table (Cadence)'), ('Ensure Pages Table (Cadence)', 'Load Pages (Cadence)'), ('Load Pages (Cadence)', 'Cadence Plan'), ('Cadence Plan', 'Any Pages?'),
+             ('Start Content Runs', 'Log Rows'), ('Log Rows', 'Save Content Log'), ('Save Content Log', 'Ladder Marks'), ('Ladder Marks', 'Any Ladder Marks?'), ('Mark Ladder Writing', 'AI Target Marks'), ('AI Target Marks', 'Any AI Marks?'), ('Mark AI Target Writing', 'AI Target Settle'), ('AI Target Settle', 'Any AI Settles?'), ('Settle AI Targets', 'Cadence Note'), ('Cadence Note', 'Has Email (Cadence)?'), ('Cadence Note', 'Has Callback (Cadence)?')]: link(C, a, b)
 link(C, 'Any Pages?', 'Dry Run?', 0); link(C, 'Any Pages?', 'Site Notes?', 1)
 link(C, 'Site Notes?', 'Cadence Status', 0); link(C, 'Site Notes?', 'Nothing To Write', 1)
 link(C, 'Cadence Status', 'Has Email (Cadence)?'); link(C, 'Cadence Status', 'Has Callback (Cadence)?')
 link(C, 'Dry Run?', 'Planned Only', 0); link(C, 'Dry Run?', 'Start Content Runs', 1)
 link(C, 'Any Ladder Marks?', 'Mark Ladder Writing', 0); link(C, 'Any Ladder Marks?', 'AI Target Marks', 1)
-link(C, 'Any AI Marks?', 'Mark AI Target Writing', 0); link(C, 'Any AI Marks?', 'Cadence Note', 1)
+link(C, 'Any AI Marks?', 'Mark AI Target Writing', 0); link(C, 'Any AI Marks?', 'AI Target Settle', 1)
+link(C, 'Any AI Settles?', 'Settle AI Targets', 0); link(C, 'Any AI Settles?', 'Cadence Note', 1)
 link(C, 'Has Email (Cadence)?', 'Send Cadence Note', 0); link(C, 'Has Callback (Cadence)?', 'POST Cadence Note', 0)
 LEDGER_WIRING['SEO Agent — Content Cadence'] = ledger_nodes(N, C, 'content_cadence', 'Cadence', 'Cadence Plan', ['Cadence Note'], at(11, 4))
 # R31 (2026-10-14): the merge into harness/ledger_wiring.json moved to the END of this builder — ledger_mainline() fills each entry's

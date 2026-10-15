@@ -241,7 +241,7 @@ const LK = (() => {
 
 const plans = $('BL Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 const all = (n) => { try { return $(n).all().map(i => i.json || {}); } catch (e) { return []; } };
-const reqs = all('BL Requests'), resps = all('Run BL Requests');
+const reqs = all('BL Requests'), resps = all('Run BL Requests Answers');
 const sreqs = all('Source Requests'), sresps = all('Fetch Sources');
 const nreqs = all('News Requests'), nresps = all('Fetch News');
 const bcreqs = all('Bing Requests'), bcresps = all('Fetch Bing Counts'), breqs = all('Bing Link Requests'), bresps = all('Fetch Bing');
@@ -262,7 +262,7 @@ const out = [];
 for (const p of plans) {
   const M = new Map(); const now = p.checked_at; const today = ymd(now);
   const get = (host) => { const kind = LK.domainKind(host, p.domain); if (['self', 'mail', 'tool', 'search', 'ai'].includes(kind)) return null; const k = LK.refKey(host); if (!k || LK.sameSite(k, p.domain)) return null;
-    if (!M.has(k)) M.set(k, { ref_domain: k, kind, sources: new Set(), from_url: '', to_url: '', anchor: '', rel: '', placement: '', first_seen: '', last_seen: '', authority: 0, page_keywords: 0, spam: 0, original: null, sitewide: 0, links: 0, visits: 0, visits_28d: 0, key_events: 0, dfs_lost: null, pages: [] });
+    if (!M.has(k)) M.set(k, { ref_domain: k, kind, sources: new Set(), from_url: '', to_url: '', anchor: '', rel: '', placement: '', first_seen: '', last_seen: '', dfs_last_seen: '', authority: 0, page_keywords: 0, spam: 0, original: null, sitewide: 0, links: 0, visits: 0, visits_28d: 0, key_events: 0, dfs_lost: null, pages: [] });
     return M.get(k); };
   const seen = (e, src, d) => { e.sources.add(src); const x = ymd(d) || today; if (!e.first_seen || x < e.first_seen) e.first_seen = x; if (!e.last_seen || x > e.last_seen) e.last_seen = x; };
   // D23 (2026-10-11): the URL we store carries no tracking parameters (`?utm_source=chatgpt.com` and `srsltid` came in through GA4
@@ -274,6 +274,9 @@ for (const p of plans) {
     const res = dfsRes(resp); if (!res) continue; const items = res.items || [];
     if (r.kind === 'refdomains') for (const x of items) { const e = get(x.domain); if (!e) continue; seen(e, 'dfs', x.first_seen); e.authority = Math.max(e.authority, Number(x.rank) || 0); e.spam = Number(x.backlinks_spam_score) || e.spam; e.sitewide = Math.max(e.sitewide, Number(x.backlinks) || 0); e.links = Math.max(e.links, Number(x.backlinks) || 0); }
     if (r.kind === 'links' || r.kind === 'new') for (const x of items) { const e = get(x.domain_from); if (!e) continue; seen(e, 'dfs', x.first_seen); e.last_seen = ymd(x.last_seen) > e.last_seen ? ymd(x.last_seen) : e.last_seen;
+      // B10-1 (2026-10-15, benchmark area 10): the INDEX's own last sighting, kept apart from `last_seen` (which every
+      // source and our own fetch move). It is the only thing that can say how stale a crawler's "live" is.
+      if (ymd(x.last_seen) > String(e.dfs_last_seen || '')) e.dfs_last_seen = ymd(x.last_seen);
       page(e, x.url_from, 'dfs'); if (!e.to_url) e.to_url = x.url_to || ''; if (!e.anchor) e.anchor = String(x.anchor || (x.alt ? '[image] ' + x.alt : '')).slice(0, 160);
       if (!e.rel) e.rel = x.dofollow ? 'follow' : ((x.attributes || []).includes('sponsored') ? 'sponsored' : (x.attributes || []).includes('ugc') ? 'ugc' : 'nofollow');
       e.placement = e.placement || SEM[String(x.semantic_location || '')] || 'body'; e.authority = Math.max(e.authority, Number(x.domain_from_rank) || 0); e.spam = Math.max(e.spam, Number(x.backlink_spam_score) || 0);

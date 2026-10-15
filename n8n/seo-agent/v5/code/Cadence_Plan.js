@@ -1,5 +1,6 @@
 // Content cadence: picks this week's blog topics per site (pages per week from seo_cadence, max 3), in this order: the keyword ladders' next
-// planned pages (with each ladder's internal links), striking-distance queries from Search Console (positions 4-20 with impressions:
+// planned pages (with each ladder's internal links), REFRESHES of pages the Site Tracker proved are losing traffic (v4.16 / B4-3, ranked by
+// the clicks actually lost), striking-distance queries from Search Console (positions 4-20 with impressions:
 // strengthen the page that already ranks), rising related searches from Google Trends. Skips keywords written in the last 90 days, pages already
 // written or published, brand queries, and paused sites. Each pick becomes a content run (mode keyword, force_content) that delivers the blog package.
 // v4.8 (Pipeline phase 2, PIPELINE_FEATURE_SPEC §6-7) — per ladder from seo_ladder_settings (no row = the site's default mode, else auto; active;
@@ -26,7 +27,11 @@
 // writes `status: set_aside` back on the row, so the app and the next run see the same thing).
 /*__FIT_GATE__*/
 const CONFIG = { default_pages_per_week: 1, max_pages_per_week: 3, skip_recent_days: 90, striking_min_impressions: 30, striking_min_position: 4, striking_max_position: 20, publish_reminder_days: 7, upcoming: 4,
-  max_active: 2, max_waiting: 3, waiting_days: 120, gate_head_position: 30, won_checks: 4, won_position: 3, suggestions: 5 };
+  max_active: 2, max_waiting: 3, waiting_days: 120, gate_head_position: 30, won_checks: 4, won_position: 3, suggestions: 5,
+  // B4-3 (2026-10-15, benchmark area 4): at most this many refreshes of decaying pages offered in one week, and the days a page
+  // is left alone after any refresh before it can be queued again (Semrush's own content-audit guide says to wait at least two
+  // months before judging a refresh: https://www.semrush.com/blog/content-audit/)
+  decay_per_week: 2, decay_refresh_days: 60 };
 let trigger = {}; try { const t = $('Manual Run').first(); trigger = (t && t.json) || {}; } catch (e) {}
 if (trigger.body && typeof trigger.body === 'object') trigger = { ...trigger, ...trigger.body };
 const rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error); } catch (e) { return []; } };
@@ -148,10 +153,39 @@ for (const s of list) {
   const cands = [];
   for (const x of active) for (const l of x.eligible) cands.push(ladderCand(x, l));
   const opps = [];
+  // ---- B4-3 (2026-10-15, benchmark area 4): A PAGE THAT IS LOSING TRAFFIC IS WORK, NOT A LINE IN AN E-MAIL ----
+  // Until today the decay verdict lived for the length of one Site Tracker run and died in a weekly e-mail as a priority-3
+  // "Refresh this page"; nothing in the system ever wrote that refresh. The leaders all close this loop — Clearscope generates a
+  // Draft straight from its Content Decay view (https://www.clearscope.io/support/content-decay), Siteimprove.ai Content Strategy
+  // sells "a prioritized plan of what to create, refresh, or optimize" (https://www.siteimprove.com/marketmuse/).
+  // The Site Tracker now stores its judgement on the seo_pages row (B4-1 / B4-2), so the cadence reads it and queues the refresh
+  // AHEAD of striking distance and rising trends: recovering clicks a page already earned beats guessing at new ones, and a
+  // decaying page is measured fact where a rising trend is a forecast. Ladder rungs still come first — they are the plan the
+  // owner chose. Only `decaying` qualifies: `seasonal`, `watch` and `too_small` are never written, so nothing is rewritten
+  // because of a quiet month. A page refreshed in the last `decay_refresh_days` is left to settle before being touched again.
+  const decayRows = pageRows.filter(r => r.site_id === s.site_id && String(r.decay_state || '') === 'decaying' && r.url);
+  const ukeyD = (u) => String(u || '').toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  const touchedRecently = new Set(slog.filter(l => l.existing_page_url && (now - new Date(l.started_at || 0)) < CONFIG.decay_refresh_days * 864e5).map(l => ukeyD(l.existing_page_url)));
+  const topQueryRow = (r) => { let best = null; try { const qs = JSON.parse(r.queries_json || '[]');
+      for (const q of (Array.isArray(qs) ? qs : [])) { const k = String(q.query || '').trim(); if (!k) continue;
+        if (!best || (Number(q.impressions) || 0) > (Number(best.impressions) || 0)) best = q; } } catch (e) {}
+    return best; };
+  const decayCands = decayRows.map(r => ({ row: r, q: topQueryRow(r), lost: Number(r.decay_lost) || 0 }))
+    // a refresh needs a search to be refreshed FOR; a page Search Console names no query for is reported, never written blind
+    .filter(x => x.q && !touchedRecently.has(ukeyD(x.row.url)) && !recent.has(norm(x.q.query)) && !ladderKw.has(norm(x.q.query)))
+    .sort((a, b) => b.lost - a.lost).slice(0, CONFIG.decay_per_week);
+  const decay_skipped = decayRows.length - decayCands.length;
+  for (const x of decayCands) opps.push({ keyword: x.q.query, page_type: 'Guide', existing_page_url: x.row.url, source: 'decay', decay_lost: x.lost,
+    why: 'this page is losing traffic: ' + x.lost + ' clicks lost in 28 days (' + (Number(x.row.prev_clicks) || 0) + ' → ' + (Number(x.row.clicks) || 0) + ')'
+      + (String(x.row.decay_kind || '') === 'clickthrough' ? ', and it is still shown as often, so the title and description come first' : '')
+      + ' — refreshed, not written again. ' + String(x.row.decay_basis || '') });
   const sq = qh.filter(q => normD(q.domain) === s.domain && q.query); const latest = sq.reduce((m, q) => String(q.period_end) > m ? String(q.period_end) : m, '');
   const brand = s.domain.split('.')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
   const strikes = sq.filter(q => String(q.period_end) === latest && Number(q.position) >= CONFIG.striking_min_position && Number(q.position) <= CONFIG.striking_max_position && Number(q.impressions) >= CONFIG.striking_min_impressions && !(brand.length >= 4 && norm(q.query).replace(/\s/g, '').includes(brand)) && !recent.has(norm(q.query)) && !ladderKw.has(norm(q.query))).sort((a, b) => Number(b.impressions) - Number(a.impressions));
-  for (const q of strikes) opps.push({ keyword: q.query, page_type: (q.page && !/\/(blog|news|insights|articles)\//i.test(q.page)) ? 'Service Page' : 'Guide', existing_page_url: q.page || '', source: 'striking', why: 'ranks #' + Math.round(Number(q.position)) + ' with ' + q.impressions + ' impressions in 28 days (Search Console): one push from the top 3' });
+  // B4-3: a page already queued as a refresh is not queued a second time for one of its other queries — one page, one piece of work
+  const decayUrls = new Set(decayCands.map(x => ukeyD(x.row.url)));
+  for (const q of strikes) { if (q.page && decayUrls.has(ukeyD(q.page))) continue;
+    opps.push({ keyword: q.query, page_type: (q.page && !/\/(blog|news|insights|articles)\//i.test(q.page)) ? 'Service Page' : 'Guide', existing_page_url: q.page || '', source: 'striking', why: 'ranks #' + Math.round(Number(q.position)) + ' with ' + q.impressions + ' impressions in 28 days (Search Console): one push from the top 3' }); }
   const st = trends.filter(t => normD(t.domain) === s.domain && t.direction === 'rising' && t.rising); const latestT = st.reduce((m, t) => String(t.checked_at) > m ? String(t.checked_at) : m, '');
   for (const t of st.filter(t => String(t.checked_at) === latestT)) for (const rq of String(t.rising).split(',').map(x => x.replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase()).filter(Boolean)) {
     if (recent.has(norm(rq)) || ladderKw.has(norm(rq)) || cands.some(x => norm(x.keyword) === norm(rq)) || opps.some(x => norm(x.keyword) === norm(rq))) continue;
@@ -220,7 +254,11 @@ for (const s of list) {
   const upcoming = uniq.slice(fromUniq, fromUniq + CONFIG.upcoming).map(x => ({ keyword: x.keyword, source: x.source, why: x.why }));
   const pending = waiting.map(w => ({ keyword: w.keyword, started_at: w.written_at, days: Math.round((now - new Date(w.written_at || nowIso)) / 864e5) })).filter(p => p.days >= CONFIG.publish_reminder_days);   // D5: ladder pages are in `waiting` too
   const awaiting_approval = manualL.filter(x => x.eligible.length).map(x => { const l = x.eligible[0]; return { ladder_id: x.id, head: x.head, keyword: l.keyword, rung: Number(l.rung) || 0, page_no: Number(l.page_no) || 0, page_type: l.page_type || 'Service Page', existing_page_url: l.page_exists ? (l.target_url || '') : '' }; });
-  const facts = { set_aside, covered_by_live_pages: covered.slice(0, 10), paused_reason, waiting_publish: waitingKw.size, waiting_keywords: waiting.map(w => w.keyword).slice(0, 20), max_waiting: cfg.max_waiting, pileup_forced: pileup && force, opportunities: cfg.opportunities, awaiting_approval, suggestions,
+  const facts = { set_aside, covered_by_live_pages: covered.slice(0, 10), paused_reason, waiting_publish: waitingKw.size,
+    // B4-3: what the week knows about pages losing traffic, whether or not one was picked — `decaying` is how many the Site
+    // Tracker's test confirmed, `skipped` how many of those were left alone (refreshed recently, or no search to refresh for)
+    decay: { decaying: decayRows.length, queued: decayCands.length, skipped: decay_skipped,
+      pages: decayCands.map(x => ({ url: x.row.url, keyword: x.q.query, lost: x.lost, kind: String(x.row.decay_kind || ''), basis: String(x.row.decay_basis || '') })) }, waiting_keywords: waiting.map(w => w.keyword).slice(0, 20), max_waiting: cfg.max_waiting, pileup_forced: pileup && force, opportunities: cfg.opportunities, awaiting_approval, suggestions,
     ai_pages: { per_month: aiQuota, used_this_month: aiUsed, this_week: !!aiPick, next: aiCand ? { keyword: aiCand.keyword, source: aiCand.source, target_id: aiCand.target_id, why: aiCand.why } : null, queued: aiQueue.length },
     queued_ladders: queued.map(x => ({ ladder_id: x.id, head: x.head, priority: Number.isFinite(x.priority) ? x.priority : null, reason: 'max_active' })),
     won_ladders: info.filter(x => x.won || x.status === 'won').map(x => ({ ladder_id: x.id, head: x.head, position: x.head_position, checks: x.won_checks })),
