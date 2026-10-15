@@ -57,7 +57,32 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-10-15 evening, all four invariant lints enforcing — latest)
+## Status (2026-10-15, the benchmark programme is finished — 13 of 13 areas — latest)
+**Seventeen agents today, up to four in parallel, nine deploys. Harness 4505 -> 5191 passed, 0 failed. The instance is current: main
+workflow 659 nodes (519 this morning), AI Growth 102, 21 published.** Everything committed, pushed and deployed; working tree clean.
+**All 13 benchmark areas are done** (`docs/system-review-2026-10-14/BENCH_AREA*.md`, ~150 register rows in `FIX_PLAN.md` §3.16), and
+**all four INVARIANTS lints fail the build** — rule 1 `lineage_lint.py`, rule 2 `gate_lint.py`, rule 3 `retry_lint.py`, rule 4
+`state_lint.py`. Every lint found live defects the day it landed, and **four lints were themselves found measuring less than they
+claimed** (an inlined kit counted as a gate; a kit's header comment counted as lineage; `check_in200` walking only the main workflow;
+`state_lint` finding four holes in itself). **The rule now: a new lint's first question is what it does not look at.**
+**The defects these passes found had reached customers.** Two Google updates in `v5/data/seo_events.json` **never happened**, and the
+2026-10-13 report named one as the cause of a real fall (it was the September *spam* update). The AI Growth report told customers a Bing
+submission reaches **ChatGPT search**; OpenAI's own crawler docs never mention Bing. "Can AI read this page" was scored with a **Chrome**
+User-Agent and robots.txt never read. A **404 page was recorded as published** in two tables. A draft **identical to a competitor's page**
+came out `publishable: true`. An index's **silence** was recorded as a lost link with no page ever fetched. The verdict printed the
+model's own JSON as fact. The AI Overview click loss was **eight months stale**, in three files. The Critic was billed as a **loop that
+never looped**. A change test's **method** shipped in every weekly callback while the test itself was never run.
+**Three fixes landed on one of N paths and were caught the same day**: B-L4 (Tracker, not Pulse), B1-3 (one file, not three), B2-1 (one
+caller, not the area). That pattern — R28's shape — is now the first thing to check when a fix lands.
+**Where the leaders actually are, October 2026**: Adobe has **closed** the Semrush acquisition; **Respona has left outreach software**
+for pay-per-placement guest posts with exact-match anchors and no `rel="sponsored"` (link spam by Google's own rules); Postaga is 404;
+Profound's self-serve pricing is withdrawn; "Profound Actions" is two generations stale. **No vendor puts a sample size or interval
+beside a rate, and none refuses a delta across a changed panel** — our refusals are the lead to defend.
+**Next: the re-rating** (`FIX_PLAN.md` §5.2, 21 runs, ~$4-6) — **the owner approves it before it runs**, and **DataForSEO holds $13.79**,
+which binds before the spend guard does. Still the owner's: **D25a** (an always-on host — the "daily" AI Pulse fires whenever the Mac is
+awake), **G20** (panel 8 -> 20, +$5.08/site/month, this area's ceiling), **B2-7**, G13, G16, G17, O1-O12.
+
+## Status (2026-10-15 evening, all four invariant lints enforcing — earlier)
 **Nine agents today, two at a time, four deploys. The instance is current: main workflow 519 nodes, 21 published.** Harness **4812
 passed, 0 failed** (4505 this morning); build exit 0; app typecheck clean in all three workspaces.
 **All four INVARIANTS rules now fail the build**, and every one of them found a live defect on the day it landed:
