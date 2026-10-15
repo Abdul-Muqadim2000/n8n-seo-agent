@@ -271,11 +271,19 @@ const RS = (() => {
   // the same CTR-by-position curve the Search Console report uses (v5/code/Parse_GSC.js EXPECTED_CTR): industry averages, a model
   const CTR = [0.28, 0.15, 0.11, 0.08, 0.07, 0.05, 0.04, 0.035, 0.03, 0.025];
   const SUM_CTR = CTR.reduce((s, x) => s + x, 0);
-  // Ahrefs (300k keywords, Mar 2025): position-1 CTR is 34.5% lower when an AI Overview is on the page. The clicks it keeps are
-  // shared between the pages it cites. Both numbers are the model, not a measurement of this site.
-  const ORGANIC_LEFT_WITH_AIO = 0.65;
+  // B6-1 (2026-10-15, benchmark area 6 — docs/system-review-2026-10-14/BENCH_AREA6_rank_tracking.md): the AI Overview factor here
+  // was 0.65, a flat 35% loss, taken from Ahrefs' MARCH 2025 study. The current study — same publisher, 300,000 keywords, December
+  // 2025 data, published 2026-02-04 (https://ahrefs.com/blog/ai-overviews-reduce-clicks-update/) — measures the loss POSITION BY
+  // POSITION, and it is both larger and very uneven: 58.0% of the clicks gone at #1, 50.8% at #2, 46.4% at #3 … 19.4% at #10. A
+  // flat factor is wrong twice over: it understated the loss by about half, and because it hit every position equally it almost
+  // cancelled out of a share, so an AI Overview cost the top of page 1 nothing in our numbers. The same correction was made to the
+  // keyword research's click-loss model on 2026-10-15 (B1-3, `_kw_inputs.js`) and this is the other place the old figure lived.
+  // AIO_KEEP[p - 1] = the share of its clicks position p KEEPS when an AI Overview is on the page (1 - the measured loss).
+  const AIO_KEEP = [0.420, 0.492, 0.536, 0.612, 0.674, 0.695, 0.703, 0.712, 0.703, 0.806];
+  const AIO_SOURCE = 'Ahrefs, 300,000 keywords, December 2025 data (published 2026-02-04)';
+  const keepAt = (p, aio) => { if (!aio) return 1; const i = Math.max(1, Number(p) || 1) - 1; return AIO_KEEP[i] == null ? AIO_KEEP[AIO_KEEP.length - 1] : AIO_KEEP[i]; };
   const SNIPPET_BONUS = 0.10;
-  const METHOD = 'modelled: clicks by position from a published CTR curve (28/15/11/8/7/5/4/3.5/3/2.5%), the organic share cut to 65% when an AI Overview is shown (Ahrefs 2025) with the rest shared between the pages it cites, +0.10 for the featured snippet. Not measured clicks.';
+  const METHOD = 'modelled: clicks by position from a published CTR curve (28/15/11/8/7/5/4/3.5/3/2.5%); when an AI Overview is shown each position keeps only what was measured for it (58.0% of the clicks gone at #1, 50.8% at #2, 46.4% at #3, 19.4% at #10 — ' + AIO_SOURCE + ', https://ahrefs.com/blog/ai-overviews-reduce-clicks-update/) and what the overview takes is shared between the pages it cites; +0.10 for the featured snippet, which is a stated rule with no measurement behind it. Not measured clicks.';
   const S = (v) => String(v == null ? '' : v).trim();
   const bare = (v) => S(v).toLowerCase().replace(/^https?:\/\//, '').replace(/[\/?#].*$/, '').replace(/:\d+$/, '').replace(/^www\./, '');
   const hostOf = (u) => bare((S(u).match(/^https?:\/\/([^\/?#]+)/i) || [])[1] || '');   // the n8n Code sandbox has no URL constructor
@@ -374,16 +382,18 @@ const RS = (() => {
     const aio = feats.ai_overview.shown === true;
     const sourcesUnknown = aio && !feats.ai_overview.content_loaded;
     const cited = aio && !sourcesUnknown ? (feats.ai_overview.cited_domains || []) : [];
-    const organicLeft = aio ? ORGANIC_LEFT_WITH_AIO : 1;
     const snipDom = feats.featured_snippet.shown ? feats.featured_snippet.domain : '';
     const w = new Map();
     const add = (d, v) => { if (!d || !(v > 0)) return; w.set(d, (w.get(d) || 0) + v); };
-    for (const t of land.top) add(t.domain, weight(t.position) * organicLeft);
-    if (snipDom) add(snipDom, SNIPPET_BONUS * organicLeft);
-    if (cited.length) { const each = (1 - organicLeft) * SUM_CTR / cited.length; for (const d of cited) add(d, each); }
+    // B6-1: every position keeps what was measured FOR THAT POSITION, and what it loses is what the overview took
+    for (const t of land.top) add(t.domain, weight(t.position) * keepAt(t.position, aio));
+    let aioPool = 0;
+    if (aio) for (let p = 1; p <= CTR.length; p++) aioPool += CTR[p - 1] * (1 - keepAt(p, true));
+    if (snipDom) { const k = keepAt(1, aio); add(snipDom, SNIPPET_BONUS * k); aioPool += SNIPPET_BONUS * (1 - k); }
+    if (cited.length) { const each = aioPool / cited.length; for (const d of cited) add(d, each); }
     // the clicks the AI Overview keeps when we do not know which pages it cites belong to nobody on the page: they stay in the
-    // denominator, so everyone's share drops (without this the 0.65 factor would cancel out and an AI Overview would cost nothing)
-    const unattributed = (aio && !cited.length) ? (1 - organicLeft) * SUM_CTR : 0;
+    // denominator, so everyone's share drops (without this the loss would cancel out and an AI Overview would cost nothing)
+    const unattributed = (aio && !cited.length) ? aioPool : 0;
     const total = [...w.values()].reduce((s, x) => s + x, 0) + unattributed;
     if (!(total > 0)) return { ours: 0, shares: [], method: METHOD, unavailable: false, aio_sources_unknown: sourcesUnknown };
     const shares = [...w.entries()].map(([domain, v]) => ({ domain, pct: r1(v / total * 100), ours: isOurs(domain, our) })).sort((x, y) => y.pct - x.pct);
@@ -438,8 +448,75 @@ const RS = (() => {
     return c;
   };
 
-  return { CTR, SUM_CTR, METHOD, ORGANIC_LEFT_WITH_AIO, read, features, typeList, ourRank, landscape, voice, snapshot, pack, unpack,
-    featureLine, featureChips, bare, hostOf, isOurs, listOf, weight };
+  // ---- B6-2 (2026-10-15, benchmark area 6): HOW MUCH THE RESULTS PAGE ITSELF MOVED, AND WHAT A DROP THEREFORE MEANS ----
+  // The question the rank trackers are judged on is what they do on a volatile day. The leaders answer it with a MARKET-WIDE index
+  // computed on somebody else's keywords — Semrush's Sensor is "SERP volatility on a scale of 0-10" over a fixed keyword set
+  // (https://www.semrush.com/kb/652-sensor), AccuRanker's Google Grump "calculates the average number of rank changes across the top
+  // 30 results for ~1,000,000 high-volume keywords" (https://accuranker.com/grump). Neither tells the owner whether THEIR results
+  // page moved, and ours said nothing at all: a fall of seven places read exactly the same whether our page had slipped or the whole
+  // page had been rewritten under it.
+  // We already store the proof we need: `snapshot_json` keeps the top 10 with their URLs for every reading (criterion 2.2). Comparing
+  // this reading with the previous one for the SAME keyword and the SAME device is a measurement of the page's own movement, free,
+  // and specific to the keyword instead of to a market. What is measured: how many places changed occupant, how many URLs left and
+  // entered, and how far the URLs present in both readings moved. What is NOT measured is the three labels (still / some / high):
+  // nobody publishes a per-keyword threshold, so they are a STATED RULE and say so.
+  // Rules it keeps: a missing or unreadable snapshot gives `available: false` with the reason — never a quiet 0, which would read as
+  // "the page did not move"; two readings on different devices are not comparable; `RS.pack` can trim a long snapshot's tail, so the
+  // comparison only runs over the depth BOTH readings kept and reports that depth.
+  const urlKey = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  const CHURN = { still_pct: 20, high_pct: 50, min_depth: 5, stale_days: 10,
+    labels_basis: 'the still / some / high labels are a stated rule, not a measurement: no tool publishes a per-keyword threshold' };
+  const churnNone = (reason) => ({ available: false, reason: S(reason) || 'not available', basis: 'not available', measured: false,
+    depth: 0, changed: null, changed_pct: null, entered: null, gone: null, moved: null, mean_move: null, band: null,
+    from: null, to: null, device: '', labels_basis: CHURN.labels_basis });
+  const snapOf = (v) => { const x = (v && typeof v === 'object' && !Array.isArray(v)) ? v : unpack(v, null);
+    if (!x || x.unavailable) return null;
+    const top = (Array.isArray(x.top) ? x.top : []).map(e => ({ p: Number(e && e.p) || 0, k: urlKey(e && e.u) })).filter(e => e.p > 0 && e.k);
+    return top.length ? { top, at: x.at || null, device: S(x.device) || 'desktop', trimmed: S(x.trimmed) } : null; };
+  // prev / cur: a stored snapshot (the packed string or the object). o: { min_depth }
+  const churn = (prev, cur, o) => {
+    const c = { ...CHURN, ...(o || {}) };
+    const A = snapOf(prev), B = snapOf(cur);
+    if (!B) return churnNone('this check could not read the results page, so nothing can be compared');
+    if (!A) return churnNone('no earlier reading of this results page is stored, so how much it moved cannot be told yet');
+    if (A.device !== B.device) return churnNone('the two readings are of different devices (' + A.device + ' and ' + B.device + ')');
+    const depth = Math.min(A.top.length, B.top.length, CTR.length);
+    if (depth < c.min_depth) return churnNone('only ' + depth + ' result' + (depth === 1 ? '' : 's') + ' were kept in both readings, too few to compare');
+    const a = A.top.filter(e => e.p <= depth), b = B.top.filter(e => e.p <= depth);
+    const aAt = new Map(a.map(e => [e.p, e.k])), bAt = new Map(b.map(e => [e.p, e.k]));
+    const aPos = new Map(a.map(e => [e.k, e.p]));
+    let changed = 0;
+    for (let p = 1; p <= depth; p++) if ((aAt.get(p) || '') !== (bAt.get(p) || '')) changed++;
+    const gone = a.filter(e => !b.some(x => x.k === e.k)).length;
+    const entered = b.filter(e => !aPos.has(e.k)).length;
+    const moves = b.filter(e => aPos.has(e.k)).map(e => Math.abs(e.p - aPos.get(e.k)));
+    const changed_pct = Math.round(changed / depth * 100);
+    return { available: true, reason: '', basis: 'measured', measured: true, depth,
+      changed, changed_pct, entered, gone, moved: moves.filter(m => m > 0).length,
+      mean_move: moves.length ? r1(moves.reduce((s, x) => s + x, 0) / moves.length) : 0,
+      band: changed_pct >= c.high_pct ? 'high' : changed_pct >= c.still_pct ? 'some' : 'still',
+      from: A.at, to: B.at, device: B.device, trimmed: !!(A.trimmed || B.trimmed), labels_basis: c.labels_basis };
+  };
+  // "7 of 10 places on the results page changed since 2026-10-07" — the measured sentence, with its basis
+  const churnText = (ch) => {
+    if (!ch || !ch.available) return 'How much the results page itself moved: not available — ' + ((ch && ch.reason) || 'no comparison was possible') + '.';
+    const when = ch.from ? ' since the reading of ' + String(ch.from).slice(0, 10) : ' since the previous reading';
+    const band = ch.band === 'high' ? 'the whole results page moved' : ch.band === 'some' ? 'part of the results page moved' : 'the results page barely moved';
+    return band + ': ' + ch.changed + ' of the top ' + ch.depth + ' places changed' + when
+      + (ch.entered ? ', ' + ch.entered + ' new page' + (ch.entered === 1 ? '' : 's') + ' came in' : '')
+      + (ch.mean_move ? ', and the pages present in both readings moved ' + ch.mean_move + ' place' + (ch.mean_move === 1 ? '' : 's') + ' on average' : '')
+      + ' (measured by comparing the two stored readings; ' + ch.labels_basis + ').';
+  };
+  // the clause that goes beside a gain or a drop, so a move is never reported without the context that decides what it means
+  const moveNote = (delta, ch) => {
+    if (delta == null) return '';
+    if (!ch || !ch.available) return 'whether the results page itself moved cannot be told — ' + ((ch && ch.reason) || 'no earlier reading stored');
+    if (ch.band === 'high') return 'the whole results page moved that week (' + ch.changed + ' of the top ' + ch.depth + ' places changed), so this is not necessarily about your page';
+    if (ch.band === 'some') return 'part of the results page moved too (' + ch.changed + ' of the top ' + ch.depth + ' places changed)';
+    return 'the rest of the results page barely moved (' + ch.changed + ' of the top ' + ch.depth + ' places changed), so this move is your page';
+  };
+  return { CTR, SUM_CTR, METHOD, AIO_KEEP, AIO_SOURCE, keepAt, CHURN, read, features, typeList, ourRank, landscape, voice, snapshot, pack, unpack,
+    featureLine, featureChips, churn, churnNone, churnText, moveNote, bare, hostOf, isOurs, listOf, weight, urlKey };
 })();
 // ---- chart annotations (G12, 2026-10-13, system review FIX_PLAN.md; CRITERIA_technical_tracking_reporting_ai_links.md 3.5 / 2.12) ----
 // A line that falls in mid-September 2025 is not a ranking problem: that is the week Google stopped serving 100 results on one page.
@@ -450,7 +527,7 @@ const RS = (() => {
 // The registry is THE one place to add a new Google update: the build inlines the same file here, into _site_stats.js and into the
 // app (app/shared/src/seo-events.generated.ts), so the engine and the dashboards mark the same dates.
 const AN = (() => {
-  const EVENTS = Object.assign({ updated: '', google_updates: [], data_breaks: [] }, {"updated": "2026-10-13", "google_updates": [{"name": "March 2025 core update", "start": "2025-03-13", "end": "2025-03-27"}, {"name": "June 2025 core update", "start": "2025-06-30", "end": "2025-07-17"}, {"name": "August 2025 spam update", "start": "2025-08-26", "end": "2025-09-22"}, {"name": "December 2025 core update", "start": "2025-12-02", "end": "2025-12-18"}, {"name": "March 2026 core update", "start": "2026-03-10", "end": "2026-03-26"}, {"name": "June 2026 core update", "start": "2026-06-23", "end": "2026-07-08"}, {"name": "September 2026 core update", "start": "2026-09-15", "end": "2026-09-30"}], "data_breaks": [{"name": "num=100 stopped working", "start": "2025-09-10", "end": "2025-09-19", "affects": ["impressions", "position"], "detail": "Google stopped serving 100 results on one page in mid-September 2025, so the SEO tools that read 100 results at a time disappeared from the counts. Impressions fell and average position improved on most sites without anything changing on the site: figures from before and after this break are not comparable."}]});
+  const EVENTS = Object.assign({ updated: '', google_updates: [], data_breaks: [] }, {"updated": "2026-10-15", "google_updates": [{"name": "March 2025 core update", "start": "2025-03-13", "end": "2025-03-26"}, {"name": "June 2025 core update", "start": "2025-06-30", "end": "2025-07-16"}, {"name": "August 2025 spam update", "start": "2025-08-26", "end": "2025-09-21"}, {"name": "December 2025 core update", "start": "2025-12-11", "end": "2025-12-29"}, {"name": "February 2026 Discover update", "start": "2026-02-05", "end": "2026-02-26"}, {"name": "March 2026 spam update", "start": "2026-03-24", "end": "2026-03-24"}, {"name": "March 2026 core update", "start": "2026-03-27", "end": "2026-04-08"}, {"name": "May 2026 core update", "start": "2026-05-21", "end": "2026-06-01"}, {"name": "June 2026 spam update", "start": "2026-06-24", "end": "2026-06-26"}, {"name": "August 2026 spam update", "start": "2026-08-18", "end": "2026-08-20"}, {"name": "September 2026 spam update", "start": "2026-09-24", "end": "2026-10-07"}], "data_breaks": [{"name": "num=100 stopped working", "start": "2025-09-10", "end": "2025-09-19", "affects": ["impressions", "position"], "detail": "Google stopped serving 100 results on one page in mid-September 2025, so the SEO tools that read 100 results at a time disappeared from the counts. Impressions fell and average position improved on most sites without anything changing on the site: figures from before and after this break are not comparable."}]});
   const KINDS = {
     publish: { label: 'Page published', tone: 'good' },
     fix: { label: 'Audit fixes', tone: 'good' },
@@ -1052,10 +1129,13 @@ for (const d of ((plan[0] || {}).deferred_pages || [])) { if (isMob(d) || !byLad
 const asideAll = ((plan[0] || {}).set_aside_pages) || [];
 const out = [];
 for (const [id, items] of byLadder) {
-  const prevOf = (kw) => { const h = deskHist.filter(x => x.ladder_id === id && x.keyword === kw && String(x.checked_at) < nowCheck && Number(x.position) >= 0).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)))[0]; return h ? Number(h.position) : null; };
-  const rowsK = items.map(it => { const cur = Number(it.result.position); const prev = it.deferred ? cur : prevOf(it.keyword);
+  // B6-2 (2026-10-15, benchmark area 6): the whole previous row, not only its position — its snapshot is what says how much the
+  // results page itself moved, and its date is what says how old the "Before" column really is.
+  const prevRowOf = (kw) => deskHist.filter(x => x.ladder_id === id && x.keyword === kw && String(x.checked_at) < nowCheck && Number(x.position) >= 0).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)))[0] || null;
+  const prevOf = (kw) => { const h = prevRowOf(kw); return h ? Number(h.position) : null; };
+  const rowsK = items.map(it => { const pr = it.deferred ? null : prevRowOf(it.keyword); const cur = Number(it.result.position); const prev = it.deferred ? cur : (pr ? Number(pr.position) : null);
     const delta = (cur > 0 && prev > 0) ? prev - cur : (cur > 0 && prev === 0) ? 100 : (cur === 0 && prev > 0) ? -100 : null;
-    return { ...it, current: cur, previous: prev, delta, url: it.result.url || '' }; }).sort((a, b) => a.rung - b.rung || a.page_no - b.page_no);
+    return { ...it, current: cur, previous: prev, delta, prev_row: pr, prev_at: pr ? String(pr.checked_at) : '', url: it.result.url || '' }; }).sort((a, b) => a.rung - b.rung || a.page_no - b.page_no);
   const head = rowsK.find(r => r.rung === 4) || rowsK[0];
   // ---- G6: the results page of each keyword, read back from the row that was just stored ----
   const serpOf = (r) => {
@@ -1076,9 +1156,24 @@ for (const [id, items] of byLadder) {
   };
   const serps = new Map(rowsK.map(r => [r.keyword, serpOf(r)]));
   const mobiles = new Map(rowsK.map(r => [r.keyword, mobileOf(r.keyword)]));
+  // ---- B6-2: how much each results page itself moved since the previous reading, measured from the stored snapshots ----
+  // A position is one reading of one page at one moment. Until now a fall of seven places was printed with nothing beside it, so a
+  // page that slipped and a page that was simply pushed down by a rewritten results page read identically. The proof was already
+  // stored (criterion 2.2): `snapshot_json` keeps the top 10 with their URLs for every check. Nothing extra is bought.
+  const changes = new Map(rowsK.map(r => [r.keyword, r.deferred ? RS.churnNone('no check was bought for this keyword this week — it is checked monthly until its page is live')
+    : RS.churn(r.prev_row ? r.prev_row.snapshot_json : null, r.result.snapshot_json, {})]));
+  const moveNoteOf = (r) => RS.moveNote(r.delta, changes.get(r.keyword));
+  const withMove = (r) => { const n = moveNoteOf(r); return r.keyword + ' (' + posText(r.previous) + ' \u2192 ' + posText(r.current) + (n ? '; ' + n : '') + ')'; };
+  // how old the oldest reading this report compares against is, and what Google did in between (criterion 2.12)
+  const prevDays = rowsK.map(r => r.prev_at).filter(Boolean).sort();
+  const windowStart = prevDays.length ? prevDays[0].slice(0, 10) : '';
+  const sinceMarks = windowStart ? AN.marks({ from: windowStart, to: String(nowCheck).slice(0, 10) }).filter(m => m.kind === 'google_update' || m.kind === 'data_break') : [];
+  const updateLine = sinceMarks.length ? 'Google changed its ranking systems inside the window these positions are compared over ('
+    + windowStart + ' to ' + String(nowCheck).slice(0, 10) + '): ' + sinceMarks.map(m => String(m.label).replace(/^Google: /, '') + ' (' + m.date + (m.date_end && m.date_end !== m.date ? ' to ' + m.date_end : '') + ')').join(' and ')
+    + '. A move in this window may be part of the cause, which cannot be proven from these positions.' : '';
   const rungs = [1, 2, 3].map(r => { const ps = rowsK.filter(x => x.rung === r); return { rung: r, pages: ps.length, top10: ps.filter(x => x.current > 0 && x.current <= 10).length, top3: ps.filter(x => x.current > 0 && x.current <= 3).length, reached: ps.length > 0 && ps.every(x => x.current > 0 && x.current <= 10) }; }).filter(r => r.pages);
-  const drops = rowsK.filter(r => r.delta != null && r.delta <= -5).map(r => r.keyword + ' (' + posText(r.previous) + ' → ' + posText(r.current) + ')');
-  const gains = rowsK.filter(r => r.delta != null && r.delta >= 5).map(r => r.keyword + ' (' + posText(r.previous) + ' → ' + posText(r.current) + ')');
+  const drops = rowsK.filter(r => r.delta != null && r.delta <= -5).map(withMove);
+  const gains = rowsK.filter(r => r.delta != null && r.delta >= 5).map(withMove);
   const topTop3Before = deskHist.filter(x => x.ladder_id === id && x.keyword === head.keyword && String(x.checked_at) < nowCheck && Number(x.position) > 0 && Number(x.position) <= 3).length;
   const done = head.current > 0 && head.current <= 3 && topTop3Before >= 3;
   const rowOf = (kw) => ladderRows.find(l => l.ladder_id === id && l.keyword === kw) || {};
@@ -1170,19 +1265,48 @@ for (const [id, items] of byLadder) {
   const firstPending = (next.pages || []).find(p => !(p.status === 'writing' && writtenOf(p.keyword))) || (next.pages || [])[0];   // R1: a `writing` row with no written page is still to be written
   const apiBody = firstPending ? { mode: 'keyword', keyword: firstPending.keyword, page_type: firstPending.page_type || 'Service Page', country: head.country || '', domain: head.domain, existing_page_url: (next.action === 'improve_top' || firstPending.covered_by) ? (firstPending.target_url || '') : '', email: head.email, ladder_id: id, ladder_rung: next.rung, ladder_head: head.head_keyword, force_content: true } : null;   // D11: a covered keyword is written as a refresh of the page that exists
   const formLink = FORM_URL + '?' + encodeURIComponent('What do you want?') + '=' + encodeURIComponent('I know my keyword');
+  // B6-2: a reading from a month ago is not "before" in the sense a weekly table implies — a won ladder and an unpublished rung are
+  // both checked monthly, and the column said nothing about it.
+  const staleRead = (r) => !!r.prev_at && (new Date(nowCheck).getTime() - new Date(r.prev_at).getTime()) / 864e5 > RS.CHURN.stale_days;
   const table = '<table style="border-collapse:collapse;font-size:13px"><tr><th align="left" ' + td + '>Rung</th><th align="left" ' + td + '>Keyword</th><th ' + td + '>Now</th><th ' + td + '>Before</th><th align="left" ' + td + '>Ranking URL</th></tr>' +
-    rowsK.map(r => '<tr><td ' + td + '>' + (r.rung === 4 ? 'Top' : r.rung) + '</td><td ' + td + '>' + esc(r.keyword) + (r.deferred ? ' <span style="color:#64748b;font-size:11px">(not published yet: checked monthly, last ' + esc(String(r.last_checked || '').slice(0, 10)) + ')</span>' : '') + '</td><td align="center" ' + td + '>' + esc(posText(r.current)) + '</td><td align="center" ' + td + '>' + (r.previous == null ? 'first check' : esc(posText(r.previous))) + '</td><td ' + td + '>' + esc(r.url || '—') + '</td></tr>').join('') + '</table>';
+    rowsK.map(r => '<tr><td ' + td + '>' + (r.rung === 4 ? 'Top' : r.rung) + '</td><td ' + td + '>' + esc(r.keyword) + (r.deferred ? ' <span style="color:#64748b;font-size:11px">(not published yet: checked monthly, last ' + esc(String(r.last_checked || '').slice(0, 10)) + ')</span>' : '') + '</td><td align="center" ' + td + '>' + esc(posText(r.current)) + '</td><td align="center" ' + td + '>' + (r.previous == null ? 'first check' : esc(posText(r.previous)) + (staleRead(r) ? ' <span style="color:#64748b;font-size:11px">(' + esc(r.prev_at.slice(0, 10)) + ')</span>' : '')) + '</td><td ' + td + '>' + esc(r.url || '—') + '</td></tr>').join('') + '</table>';
   // ---- G6: what the results pages looked like, who is above us and the share of voice ----
   const mobText = (m) => !m ? '—' : posText(m.position) + (m.fresh ? '' : ' <span style="color:#64748b;font-size:11px">(' + esc(String(m.checked_at || '').slice(0, 10)) + ')</span>');
   const serpRows = rowsK.filter(r => serps.get(r.keyword) || mobiles.get(r.keyword));
-  const serpTable = serpRows.length ? '<table style="border-collapse:collapse;font-size:13px"><tr><th align="left" ' + td + '>Keyword</th><th align="left" ' + td + '>What the page showed</th><th ' + td + '>Share of voice</th><th ' + td + '>Mobile</th><th align="left" ' + td + '>Above you</th></tr>' +
+  const serpTable = serpRows.length ? '<table style="border-collapse:collapse;font-size:13px"><tr><th align="left" ' + td + '>Keyword</th><th align="left" ' + td + '>What the page showed</th><th ' + td + '>Share of voice</th><th ' + td + '>Mobile</th><th align="left" ' + td + '>Page movement</th><th align="left" ' + td + '>Above you</th></tr>' +
     serpRows.map(r => { const s = serps.get(r.keyword), m = mobiles.get(r.keyword);
       const ab = s && s.above.length ? s.above.slice(0, 3).map(a => esc(a.domain) + ' (#' + a.position + ')' + (a.tracked ? ' *' : '')).join(', ') + (s.above.length > 3 ? ' +' + (s.above.length - 3) + ' more' : '') : (s && r.current > 0 && r.current <= 10 ? 'nobody on page 1' : '—');
-      return '<tr><td ' + td + '>' + esc(r.keyword) + '</td><td ' + td + '>' + esc(s ? (s.chips.join(' · ') || 'plain results, no features') : 'not checked this week') + '</td><td align="center" ' + td + '>' + (s && s.share_of_voice != null ? s.share_of_voice + '%' : '—') + '</td><td align="center" ' + td + '>' + mobText(m) + '</td><td ' + td + '>' + ab + '</td></tr>'; }).join('') + '</table>' : '';
+      const ch = changes.get(r.keyword);
+      const chCell = ch && ch.available ? esc(ch.changed + ' of top ' + ch.depth + ' changed') + ' <span style="color:#64748b;font-size:11px">(' + esc(ch.band) + ')</span>'
+        : '<span style="color:#64748b;font-size:11px">not available</span>';
+      return '<tr><td ' + td + '>' + esc(r.keyword) + '</td><td ' + td + '>' + esc(s ? (s.chips.join(' \u00b7 ') || 'plain results, no features') : 'not checked this week') + '</td><td align="center" ' + td + '>' + (s && s.share_of_voice != null ? s.share_of_voice + '%' : '\u2014') + '</td><td align="center" ' + td + '>' + mobText(m) + '</td><td ' + td + '>' + chCell + '</td><td ' + td + '>' + ab + '</td></tr>'; }).join('') + '</table>' : '';
   const headSerp = serps.get(head.keyword) || null;
+  const headChange = changes.get(head.keyword) || null;
+  // ---- B6-5 (2026-10-15, benchmark area 6, criterion 2.14): what this week's checks cost, and what a keyword costs a month ----
+  // The gate (B-A10) already reads the provider's own cost for these calls; it reached the callback and nothing printed it. A figure
+  // the provider did not report is not invented here: the line then says the cost was not reported.
+  const weekChecks = (() => { try { return checkEvidence || null; } catch (e) { return null; } })();
+  const costHtml = (() => {
+    if (!weekChecks) return '';
+    // the gate's own evidence block names them `checked` and `retried`; B-A10's summary renames them `read` and `sent_again`
+    const asked = Number(weekChecks.asked) || 0;
+    const read = Number(weekChecks.read != null ? weekChecks.read : weekChecks.checked) || 0;
+    const sentAgain = Number(weekChecks.sent_again != null ? weekChecks.sent_again : weekChecks.retried) || 0;
+    const usd = weekChecks.cost_usd == null ? null : Number(weekChecks.cost_usd);
+    const per = (usd != null && asked > 0) ? (usd / asked * (365 / 7 / 12)) : null;
+    return '<p style="color:#64748b;font-size:12px">This week\u2019s checks: ' + asked + ' results page' + (asked === 1 ? '' : 's') + ' asked for, ' + read + ' read'
+      + (Number(weekChecks.failed) ? ', ' + Number(weekChecks.failed) + ' could not be read' + (sentAgain ? ' and ' + sentAgain + ' of them sent again' : '') : '')
+      + (usd == null ? '. The provider reported no cost for these calls, so none is shown.'
+        : '. Cost $' + usd.toFixed(4) + (weekChecks.cost_basis ? ' (' + esc(String(weekChecks.cost_basis)) + ')' : ' (measured: the provider\u2019s own figure for these calls)')
+          + (per != null ? ' \u2014 about $' + per.toFixed(3) + ' per keyword per month at a weekly check, modelled from this week\u2019s figure.' : '.'))
+      + '</p>';
+  })();
   const serpHtml = serpTable ? '<p style="margin-top:14px"><b>The results page itself</b> (the same check, no extra cost):</p>' + serpTable +
     (headSerp ? '<p style="font-size:12px;color:#334155">' + esc(headSerp.line) + '</p>' : '') +
-    '<p style="color:#64748b;font-size:12px">Share of voice is an estimate of the clicks page 1 offers, not measured clicks: ' + esc(RS.METHOD) + ' Domains marked * are the competitors on your list. Mobile is checked weekly for the main keywords (only about 13% of sites hold the same position on both devices).</p>' : '';
+    (headChange && headChange.available ? '<p style="font-size:12px;color:#334155">' + esc(RS.churnText(headChange)) + '</p>' : '') +
+    (updateLine ? '<p style="font-size:12px;color:#b45309">' + esc(updateLine) + '</p>' : '') +
+    '<p style="color:#64748b;font-size:12px">Share of voice is an estimate of the clicks page 1 offers, not measured clicks: ' + esc(RS.METHOD) + ' Domains marked * are the competitors on your list. Mobile is checked weekly for the main keywords (only about 13% of sites hold the same position on both devices). ' +
+    'Page movement is measured: the top ten stored for this reading against the top ten stored for the previous one. ' + esc(RS.CHURN.labels_basis) + '.</p>' + costHtml : '';
   // ---- G12 (2026-10-13): the events of the tracked window (pages that went live, Google updates, data breaks), for the charts ----
   const firstCheck = [...deskHist.filter(x => x.ladder_id === id).map(x => String(x.checked_at)), nowCheck].sort()[0];
   const windowFrom = (String((rowOf(head.keyword) || {}).start_date || head.start_date || '').slice(0, 10) || String(firstCheck).slice(0, 10));
@@ -1194,6 +1318,11 @@ for (const [id, items] of byLadder) {
     LN.of('Position per keyword', 'serp', { basis: 'one_sample', period: LN.asOf(nowCheck), sample: LN.sample(rowsK.length, 'keywords, one results page each (top 50, desktop)'),
       note: 'one country and one device at one moment: it will differ from a Search Console average' }),
     LN.of('Share of voice', 'model', { basis: 'modelled', period: LN.asOf(nowCheck), sample: LN.sample(rowsK.map(r => serps.get(r.keyword)).filter(s => s && s.share_of_voice != null).length, 'results pages read'), note: RS.METHOD }),
+    [...changes.values()].some(c => c.available)
+      ? LN.of('How much the results page itself moved', 'serp', { basis: 'measured', period: (windowStart || String(nowCheck).slice(0, 10)) + ' to ' + String(nowCheck).slice(0, 10),
+          sample: LN.sample([...changes.values()].filter(c => c.available).length, 'results pages with a stored earlier reading to compare against'),
+          note: 'counted from the two stored top-ten readings; ' + RS.CHURN.labels_basis })
+      : LN.unknown('How much the results page itself moved', 'no earlier stored reading of these results pages to compare with yet'),
     mobileChecked ? LN.of('Mobile position', 'serp', { basis: 'one_sample', period: LN.asOf(nowCheck), sample: LN.sample(mobileChecked, 'main keywords checked on mobile') })
       : LN.unknown('Mobile position', 'no mobile check was bought for this ladder this week'),
     myPub.length ? LN.of('The dates your pages went live', 'own_check', { basis: 'measured', period: windowFrom + ' onwards', sample: LN.sample(myPub.length, 'published pages recorded') })
@@ -1230,6 +1359,14 @@ for (const [id, items] of byLadder) {
       featured_snippet: fcount(f => f.featured_snippet.shown), snippet_ours: fcount(f => f.featured_snippet.ours),
       people_also_ask: fcount(f => f.people_also_ask.shown), local_pack: fcount(f => f.local_pack.shown),
       video: fcount(f => f.video.shown), shopping: fcount(f => f.shopping.shown), not_read: rowsK.filter(r => (serps.get(r.keyword) || {}).features && serps.get(r.keyword).features.unavailable).length },
+    // B6-2 / B6-3: how much the results pages themselves moved, and what Google did inside the window these positions are compared over
+    page_movement: { compared: [...changes.values()].filter(c => c.available).length, not_available: [...changes.values()].filter(c => !c.available).length,
+      high: [...changes.values()].filter(c => c.available && c.band === 'high').length, some: [...changes.values()].filter(c => c.available && c.band === 'some').length,
+      still: [...changes.values()].filter(c => c.available && c.band === 'still').length,
+      basis: 'measured: the stored top ten of this reading against the stored top ten of the previous one', labels_basis: RS.CHURN.labels_basis,
+      window_from: windowStart || null, head: headChange },
+    updates_in_window: sinceMarks, update_note: updateLine,
+    week_checks: weekChecks,
     head_line: headSerp ? headSerp.line : '', mobile_checked: rowsK.filter(r => (mobiles.get(r.keyword) || {}).fresh).length,
     checks: checkEvidence ? { asked: checkEvidence.asked, read: checkEvidence.checked, failed: checkEvidence.failed,
       sent_again: checkEvidence.retried, answered_on_retry: checkEvidence.retry_answered, unavailable: checkEvidence.unavailable,
@@ -1240,7 +1377,9 @@ for (const [id, items] of byLadder) {
       return { rung: r.rung, keyword: r.keyword, position: r.current, previous: r.previous, delta: r.delta, url: r.url, device: 'desktop',
         mobile_position: m ? m.position : null, mobile_checked_at: m ? m.checked_at : null,
         features: s ? s.features : null, feature_labels: s ? s.chips : [], results_page: s ? s.line : '',
-        share_of_voice: s ? s.share_of_voice : null, above: s ? s.above : [], competitors: s ? s.competitors : [], snapshot_at: s ? s.snapshot_at : null }; }),
+        share_of_voice: s ? s.share_of_voice : null, above: s ? s.above : [], competitors: s ? s.competitors : [], snapshot_at: s ? s.snapshot_at : null,
+        previous_checked_at: r.prev_at || null, previous_is_stale: staleRead(r),
+        serp_change: changes.get(r.keyword) || null, move_note: moveNoteOf(r) }; }),
     rungs, gains, drops, serp_summary, annotations: marks, lineage, next_step: next, links_to_add, set_aside: aside, api_body: apiBody, done, won, stuck,
     stuck_weeks: stuckWeeks, replan } });   // G32: the proposal, never applied here
 }

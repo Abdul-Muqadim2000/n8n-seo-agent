@@ -42,11 +42,19 @@ const RS = (() => {
   // the same CTR-by-position curve the Search Console report uses (v5/code/Parse_GSC.js EXPECTED_CTR): industry averages, a model
   const CTR = [0.28, 0.15, 0.11, 0.08, 0.07, 0.05, 0.04, 0.035, 0.03, 0.025];
   const SUM_CTR = CTR.reduce((s, x) => s + x, 0);
-  // Ahrefs (300k keywords, Mar 2025): position-1 CTR is 34.5% lower when an AI Overview is on the page. The clicks it keeps are
-  // shared between the pages it cites. Both numbers are the model, not a measurement of this site.
-  const ORGANIC_LEFT_WITH_AIO = 0.65;
+  // B6-1 (2026-10-15, benchmark area 6 — docs/system-review-2026-10-14/BENCH_AREA6_rank_tracking.md): the AI Overview factor here
+  // was 0.65, a flat 35% loss, taken from Ahrefs' MARCH 2025 study. The current study — same publisher, 300,000 keywords, December
+  // 2025 data, published 2026-02-04 (https://ahrefs.com/blog/ai-overviews-reduce-clicks-update/) — measures the loss POSITION BY
+  // POSITION, and it is both larger and very uneven: 58.0% of the clicks gone at #1, 50.8% at #2, 46.4% at #3 … 19.4% at #10. A
+  // flat factor is wrong twice over: it understated the loss by about half, and because it hit every position equally it almost
+  // cancelled out of a share, so an AI Overview cost the top of page 1 nothing in our numbers. The same correction was made to the
+  // keyword research's click-loss model on 2026-10-15 (B1-3, `_kw_inputs.js`) and this is the other place the old figure lived.
+  // AIO_KEEP[p - 1] = the share of its clicks position p KEEPS when an AI Overview is on the page (1 - the measured loss).
+  const AIO_KEEP = [0.420, 0.492, 0.536, 0.612, 0.674, 0.695, 0.703, 0.712, 0.703, 0.806];
+  const AIO_SOURCE = 'Ahrefs, 300,000 keywords, December 2025 data (published 2026-02-04)';
+  const keepAt = (p, aio) => { if (!aio) return 1; const i = Math.max(1, Number(p) || 1) - 1; return AIO_KEEP[i] == null ? AIO_KEEP[AIO_KEEP.length - 1] : AIO_KEEP[i]; };
   const SNIPPET_BONUS = 0.10;
-  const METHOD = 'modelled: clicks by position from a published CTR curve (28/15/11/8/7/5/4/3.5/3/2.5%), the organic share cut to 65% when an AI Overview is shown (Ahrefs 2025) with the rest shared between the pages it cites, +0.10 for the featured snippet. Not measured clicks.';
+  const METHOD = 'modelled: clicks by position from a published CTR curve (28/15/11/8/7/5/4/3.5/3/2.5%); when an AI Overview is shown each position keeps only what was measured for it (58.0% of the clicks gone at #1, 50.8% at #2, 46.4% at #3, 19.4% at #10 — ' + AIO_SOURCE + ', https://ahrefs.com/blog/ai-overviews-reduce-clicks-update/) and what the overview takes is shared between the pages it cites; +0.10 for the featured snippet, which is a stated rule with no measurement behind it. Not measured clicks.';
   const S = (v) => String(v == null ? '' : v).trim();
   const bare = (v) => S(v).toLowerCase().replace(/^https?:\/\//, '').replace(/[\/?#].*$/, '').replace(/:\d+$/, '').replace(/^www\./, '');
   const hostOf = (u) => bare((S(u).match(/^https?:\/\/([^\/?#]+)/i) || [])[1] || '');   // the n8n Code sandbox has no URL constructor
@@ -145,16 +153,18 @@ const RS = (() => {
     const aio = feats.ai_overview.shown === true;
     const sourcesUnknown = aio && !feats.ai_overview.content_loaded;
     const cited = aio && !sourcesUnknown ? (feats.ai_overview.cited_domains || []) : [];
-    const organicLeft = aio ? ORGANIC_LEFT_WITH_AIO : 1;
     const snipDom = feats.featured_snippet.shown ? feats.featured_snippet.domain : '';
     const w = new Map();
     const add = (d, v) => { if (!d || !(v > 0)) return; w.set(d, (w.get(d) || 0) + v); };
-    for (const t of land.top) add(t.domain, weight(t.position) * organicLeft);
-    if (snipDom) add(snipDom, SNIPPET_BONUS * organicLeft);
-    if (cited.length) { const each = (1 - organicLeft) * SUM_CTR / cited.length; for (const d of cited) add(d, each); }
+    // B6-1: every position keeps what was measured FOR THAT POSITION, and what it loses is what the overview took
+    for (const t of land.top) add(t.domain, weight(t.position) * keepAt(t.position, aio));
+    let aioPool = 0;
+    if (aio) for (let p = 1; p <= CTR.length; p++) aioPool += CTR[p - 1] * (1 - keepAt(p, true));
+    if (snipDom) { const k = keepAt(1, aio); add(snipDom, SNIPPET_BONUS * k); aioPool += SNIPPET_BONUS * (1 - k); }
+    if (cited.length) { const each = aioPool / cited.length; for (const d of cited) add(d, each); }
     // the clicks the AI Overview keeps when we do not know which pages it cites belong to nobody on the page: they stay in the
-    // denominator, so everyone's share drops (without this the 0.65 factor would cancel out and an AI Overview would cost nothing)
-    const unattributed = (aio && !cited.length) ? (1 - organicLeft) * SUM_CTR : 0;
+    // denominator, so everyone's share drops (without this the loss would cancel out and an AI Overview would cost nothing)
+    const unattributed = (aio && !cited.length) ? aioPool : 0;
     const total = [...w.values()].reduce((s, x) => s + x, 0) + unattributed;
     if (!(total > 0)) return { ours: 0, shares: [], method: METHOD, unavailable: false, aio_sources_unknown: sourcesUnknown };
     const shares = [...w.entries()].map(([domain, v]) => ({ domain, pct: r1(v / total * 100), ours: isOurs(domain, our) })).sort((x, y) => y.pct - x.pct);
@@ -209,8 +219,75 @@ const RS = (() => {
     return c;
   };
 
-  return { CTR, SUM_CTR, METHOD, ORGANIC_LEFT_WITH_AIO, read, features, typeList, ourRank, landscape, voice, snapshot, pack, unpack,
-    featureLine, featureChips, bare, hostOf, isOurs, listOf, weight };
+  // ---- B6-2 (2026-10-15, benchmark area 6): HOW MUCH THE RESULTS PAGE ITSELF MOVED, AND WHAT A DROP THEREFORE MEANS ----
+  // The question the rank trackers are judged on is what they do on a volatile day. The leaders answer it with a MARKET-WIDE index
+  // computed on somebody else's keywords — Semrush's Sensor is "SERP volatility on a scale of 0-10" over a fixed keyword set
+  // (https://www.semrush.com/kb/652-sensor), AccuRanker's Google Grump "calculates the average number of rank changes across the top
+  // 30 results for ~1,000,000 high-volume keywords" (https://accuranker.com/grump). Neither tells the owner whether THEIR results
+  // page moved, and ours said nothing at all: a fall of seven places read exactly the same whether our page had slipped or the whole
+  // page had been rewritten under it.
+  // We already store the proof we need: `snapshot_json` keeps the top 10 with their URLs for every reading (criterion 2.2). Comparing
+  // this reading with the previous one for the SAME keyword and the SAME device is a measurement of the page's own movement, free,
+  // and specific to the keyword instead of to a market. What is measured: how many places changed occupant, how many URLs left and
+  // entered, and how far the URLs present in both readings moved. What is NOT measured is the three labels (still / some / high):
+  // nobody publishes a per-keyword threshold, so they are a STATED RULE and say so.
+  // Rules it keeps: a missing or unreadable snapshot gives `available: false` with the reason — never a quiet 0, which would read as
+  // "the page did not move"; two readings on different devices are not comparable; `RS.pack` can trim a long snapshot's tail, so the
+  // comparison only runs over the depth BOTH readings kept and reports that depth.
+  const urlKey = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  const CHURN = { still_pct: 20, high_pct: 50, min_depth: 5, stale_days: 10,
+    labels_basis: 'the still / some / high labels are a stated rule, not a measurement: no tool publishes a per-keyword threshold' };
+  const churnNone = (reason) => ({ available: false, reason: S(reason) || 'not available', basis: 'not available', measured: false,
+    depth: 0, changed: null, changed_pct: null, entered: null, gone: null, moved: null, mean_move: null, band: null,
+    from: null, to: null, device: '', labels_basis: CHURN.labels_basis });
+  const snapOf = (v) => { const x = (v && typeof v === 'object' && !Array.isArray(v)) ? v : unpack(v, null);
+    if (!x || x.unavailable) return null;
+    const top = (Array.isArray(x.top) ? x.top : []).map(e => ({ p: Number(e && e.p) || 0, k: urlKey(e && e.u) })).filter(e => e.p > 0 && e.k);
+    return top.length ? { top, at: x.at || null, device: S(x.device) || 'desktop', trimmed: S(x.trimmed) } : null; };
+  // prev / cur: a stored snapshot (the packed string or the object). o: { min_depth }
+  const churn = (prev, cur, o) => {
+    const c = { ...CHURN, ...(o || {}) };
+    const A = snapOf(prev), B = snapOf(cur);
+    if (!B) return churnNone('this check could not read the results page, so nothing can be compared');
+    if (!A) return churnNone('no earlier reading of this results page is stored, so how much it moved cannot be told yet');
+    if (A.device !== B.device) return churnNone('the two readings are of different devices (' + A.device + ' and ' + B.device + ')');
+    const depth = Math.min(A.top.length, B.top.length, CTR.length);
+    if (depth < c.min_depth) return churnNone('only ' + depth + ' result' + (depth === 1 ? '' : 's') + ' were kept in both readings, too few to compare');
+    const a = A.top.filter(e => e.p <= depth), b = B.top.filter(e => e.p <= depth);
+    const aAt = new Map(a.map(e => [e.p, e.k])), bAt = new Map(b.map(e => [e.p, e.k]));
+    const aPos = new Map(a.map(e => [e.k, e.p]));
+    let changed = 0;
+    for (let p = 1; p <= depth; p++) if ((aAt.get(p) || '') !== (bAt.get(p) || '')) changed++;
+    const gone = a.filter(e => !b.some(x => x.k === e.k)).length;
+    const entered = b.filter(e => !aPos.has(e.k)).length;
+    const moves = b.filter(e => aPos.has(e.k)).map(e => Math.abs(e.p - aPos.get(e.k)));
+    const changed_pct = Math.round(changed / depth * 100);
+    return { available: true, reason: '', basis: 'measured', measured: true, depth,
+      changed, changed_pct, entered, gone, moved: moves.filter(m => m > 0).length,
+      mean_move: moves.length ? r1(moves.reduce((s, x) => s + x, 0) / moves.length) : 0,
+      band: changed_pct >= c.high_pct ? 'high' : changed_pct >= c.still_pct ? 'some' : 'still',
+      from: A.at, to: B.at, device: B.device, trimmed: !!(A.trimmed || B.trimmed), labels_basis: c.labels_basis };
+  };
+  // "7 of 10 places on the results page changed since 2026-10-07" — the measured sentence, with its basis
+  const churnText = (ch) => {
+    if (!ch || !ch.available) return 'How much the results page itself moved: not available — ' + ((ch && ch.reason) || 'no comparison was possible') + '.';
+    const when = ch.from ? ' since the reading of ' + String(ch.from).slice(0, 10) : ' since the previous reading';
+    const band = ch.band === 'high' ? 'the whole results page moved' : ch.band === 'some' ? 'part of the results page moved' : 'the results page barely moved';
+    return band + ': ' + ch.changed + ' of the top ' + ch.depth + ' places changed' + when
+      + (ch.entered ? ', ' + ch.entered + ' new page' + (ch.entered === 1 ? '' : 's') + ' came in' : '')
+      + (ch.mean_move ? ', and the pages present in both readings moved ' + ch.mean_move + ' place' + (ch.mean_move === 1 ? '' : 's') + ' on average' : '')
+      + ' (measured by comparing the two stored readings; ' + ch.labels_basis + ').';
+  };
+  // the clause that goes beside a gain or a drop, so a move is never reported without the context that decides what it means
+  const moveNote = (delta, ch) => {
+    if (delta == null) return '';
+    if (!ch || !ch.available) return 'whether the results page itself moved cannot be told — ' + ((ch && ch.reason) || 'no earlier reading stored');
+    if (ch.band === 'high') return 'the whole results page moved that week (' + ch.changed + ' of the top ' + ch.depth + ' places changed), so this is not necessarily about your page';
+    if (ch.band === 'some') return 'part of the results page moved too (' + ch.changed + ' of the top ' + ch.depth + ' places changed)';
+    return 'the rest of the results page barely moved (' + ch.changed + ' of the top ' + ch.depth + ' places changed), so this move is your page';
+  };
+  return { CTR, SUM_CTR, METHOD, AIO_KEEP, AIO_SOURCE, keepAt, CHURN, read, features, typeList, ourRank, landscape, voice, snapshot, pack, unpack,
+    featureLine, featureChips, churn, churnNone, churnText, moveNote, bare, hostOf, isOurs, listOf, weight, urlKey };
 })();
 // Reads everything one rank check's results page showed (G6, 2026-10-12 system review): our position and ranking URL in the top 50, the
 // SERP features (AI Overview — shown and whether it cites us —, featured snippet, People Also Ask, local pack, video, shopping), the
