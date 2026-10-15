@@ -10183,12 +10183,20 @@ await guard('B-A8 counted tokens and B-A5 the run against the account', async ()
   const streamCalls = CW72.ai_calls.filter(c => c.streaming);
   check('B-A8: the call table knows which count nodes belong to which agent, so the pricing reads the right two answers',
     streamCalls.length === 3 && streamCalls.every(c => c.count_prompt === 'Count Prompt (' + c.node + ')' && c.count_answer === 'Count Answer (' + c.node + ')' && c.count_rounds === 1)
-    && CW72.ai_calls.filter(c => !c.streaming).every(c => !c.count_prompt), JSON.stringify(streamCalls.map(c => [c.node, c.count_prompt])));
+    && CW72.ai_calls.length === 11, JSON.stringify(streamCalls.map(c => [c.node, c.count_prompt])));
+  // B-F1 (2026-10-15, build section 76): the eight non-streaming calls were counted too, so this check no longer asserts that
+  // they are NOT — it asserts that every one of the eleven is, which is the stronger statement. S86 proves the chains.
+  check('B-F1: and now every Claude call of this workflow has a counter chain, not only the three streaming ones',
+    CW72.ai_calls.every(c => c.count_prompt === 'Count Prompt (' + c.node + ')' && c.count_answer === 'Count Answer (' + c.node + ')'),
+    JSON.stringify(CW72.ai_calls.filter(c => !c.count_prompt).map(c => c.node)));
   for (const f of ['Build_Word_File.js', 'Run_Ledger_Settle.js']) {
     const s = src72(f);
-    check('B-A8: ' + f + ' reads the counter\'s two answers before it prices anything, and uses the LAST round of a looping agent',
-      /const __countOf = /.test(s) && /__countOf\(c\.count_prompt\)/.test(s) && /a\[a\.length - 1\]/.test(s)
-      && s.indexOf('const __countOf') < s.indexOf('__countOf(c.count_prompt)'), f);
+    // B-F1 (2026-10-15): the helper used to read the LAST counter item, because a streaming agent answers once. Two of the
+    // eight nodes section 76 added answer once per item, so it now SUMS the items and says how many calls the sum covers —
+    // which is the same number for one item, and is why every figure B-A8 measured is unchanged.
+    check('B-A8 / B-F1: ' + f + ' reads the counter\'s answers before it prices anything, and adds up one count per call',
+      /const __countOf = /.test(s) && /__countOf\(c\.count_prompt\)/.test(s) && /return \{ sum: sum, n: k \}/.test(s)
+      && /p\.n === t\.n/.test(s) && s.indexOf('const __countOf') < s.indexOf('__countOf(c.count_prompt)'), f);
   }
 
   // ---------- 5. B-A5: the run against the account, and only when the account can answer for it ----------
@@ -12258,6 +12266,259 @@ await guard('B-A10 — a failure inside an HTTP 200 is asked again once, counted
     !unpaired.length, JSON.stringify(unpaired));
   reset();
 });
+
+// ===================================================================================
+// S86 (2026-10-15, FIX_PLAN.md §3.15 row B-F1 — the Sonnet half — and §3.16 row B-A11; INVARIANTS.md rule 1 — build section 76)
+// B-F1: section 62 counted the three STREAMING Opus agents with Anthropic's free `count_tokens` and left the eight
+// non-streaming calls priced from characters, which is a model and not a measurement. All eight are counted here. The three
+// things the code had to settle, each proved below: the prompt is re-read against the node that FEEDS the agent with the
+// output index spelled out (*Keyword Seeds* hangs off output 1 of the *Route Mode* switch, and `$('X').first()` defaults to
+// "the output the ACTIVE node is connected to" — a node the counter is not); two agents answer once per ITEM, so their counts
+// are summed and `rounds` says how many calls the sum covers; and the Critic is NOT a loop, so `qa_round` had been
+// multiplying a call that happens once. Thinking stays modelled for ever — `count_tokens` counts the messages we send and the
+// thinking billed as output is never returned.
+// B-A11: *Pick Competitors*, *Competitor Analysis* and *Analyze Keywords* each turned a read that failed TWICE into a
+// measured-looking zero, including a High "The site does not rank in Google's top 10 for any keyword". Each now carries the
+// in-200 gate's own `__dfs` evidence and refuses. And the class is a lint: `lineage_lint.py` check E (refusal).
+// ===================================================================================
+await guard('B-F1 the Sonnet half, and B-A11 three nodes that advised from what they could not read', async () => {
+  reset(); const SN = 'S86 B-F1 B-A11 — every Claude call is counted by Anthropic or says it is a model, and nothing advises from a read that failed twice';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const eq86 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const fs86 = require('fs'), path86 = require('path');
+  const CODE86 = process.env.CODE_DIR || path86.join(__dirname, 'code');
+  const CW86 = require('./cost_wiring.json');
+  const CC86 = require('./claude_count.json');
+  const LG86 = require('./lineage.json');
+  const kit86 = async (j) => (await run('Cost Kit', [{ json: j }], { code: '_cost_cal' }))[0].json;
+  const T86 = await kit86({ call: 'tables' });
+
+  // ---------- 1. a counted non-streaming call: measured money, and it names what measured it ----------
+  // The Critic's numbers are the REAL ones n8n recorded for execution 521 on its `ai_languageModel` connection (12,905 prompt
+  // / 3,303 answer) — the usage no Code node can read, which is the whole reason the counter exists.
+  const CRITIC = { node: 'Critic', model: 'claude-sonnet-5-5', max_tokens: 16384, effort: 'medium', streaming: false,
+    prompt_chars: 47000, output_chars: 12000, calls: 1 };
+  const counted86 = { prompt_tokens: 12905, total_tokens: 12905 + 3303, rounds: 1, source: 'Anthropic /v1/messages/count_tokens' };
+  const before86 = await kit86({ call: 'callCost', call_spec: { ...CRITIC } });
+  const after86 = await kit86({ call: 'callCost', call_spec: { ...CRITIC, counted: counted86 } });
+  console.log('   Critic before ->', JSON.stringify({ usd: before86.usd, m: before86.measured_usd, basis: before86.basis }));
+  console.log('   Critic after  ->', JSON.stringify({ usd: after86.usd, m: after86.measured_usd, e: after86.estimated_usd, basis: after86.basis }));
+  check('B-F1: a non-streaming Sonnet call measured NOTHING before — every token of it came from a character count',
+    before86.counted === false && before86.measured_usd === 0 && before86.estimated_usd === before86.usd
+    && /^estimated: prompt and answer characters/.test(before86.basis), JSON.stringify(before86));
+  check('B-F1: counted, the same call is priced from the 12,905 prompt and 3,303 answer tokens Anthropic counted, and the characters are ignored',
+    after86.counted === true && after86.in_tokens === 12905
+    && after86.out_tokens === 3303 + Math.round(16384 * T86.THINK_SHARE.medium)
+    && after86.measured_usd > 0 && after86.measured_usd > after86.estimated_usd
+    && /^measured: Anthropic \/v1\/messages\/count_tokens counted 12905 prompt and 3303 answer token\(s\)/.test(after86.basis),
+    JSON.stringify(after86));
+  check('B-F1: only the thinking no counter can see is still modelled, and the basis says so and says what it costs',
+    after86.estimated_usd > 0 && after86.measured === false
+    && /thinking token\(s\) it cannot see are modelled from the medium effort budget/.test(after86.basis)
+    && /is modelled\)/.test(after86.basis), after86.basis);
+  const describer86 = await kit86({ call: 'callCost', call_spec: { node: 'Site Describer', model: 'claude-haiku-4-5-20251001',
+    max_tokens: 4096, effort: '', streaming: false, prompt_chars: 22000, output_chars: 3000, calls: 1,
+    counted: { prompt_tokens: 6000, total_tokens: 6800, rounds: 1 } } });
+  check('B-F1: *Site Describer* has no thinking budget at all (Haiku, no adaptive effort), so it is the one node that becomes 100% measured',
+    describer86.measured === true && describer86.estimated_usd === 0 && describer86.think_tokens === 0
+    && describer86.measured_usd === describer86.usd, JSON.stringify(describer86));
+
+  // ---------- 2. a node that answers once per ITEM: the counts are summed and say how many calls they cover ----------
+  const CHUNKS = { node: 'Keyword Relevance', model: 'claude-sonnet-5-5', max_tokens: 16384, effort: 'low', streaming: false,
+    prompt_chars: 9000, output_chars: 4000, calls: 3 };
+  const perItem86 = await kit86({ call: 'callCost', call_spec: { ...CHUNKS, counted: { prompt_tokens: 7800, total_tokens: 11400, rounds: 3 } } });
+  console.log('   3 chunks ->', JSON.stringify({ usd: perItem86.usd, m: perItem86.measured_usd, rounds: perItem86.counted_rounds, basis: perItem86.basis }));
+  check('B-F1: the keyword screen runs once per chunk of 80, so its three counts are SUMMED — 7,800 prompt and 3,600 answer tokens across three calls, all three measured',
+    perItem86.counted === true && perItem86.counted_rounds === 3 && perItem86.in_tokens === 7800
+    && perItem86.out_tokens === 3600 + Math.round(16384 * T86.THINK_SHARE.low) * 3
+    && / across 3 call\(s\)/.test(perItem86.basis) && !/repeated for the/.test(perItem86.basis), JSON.stringify(perItem86));
+  const oneOfThree = await kit86({ call: 'callCost', call_spec: { ...CHUNKS, counted: { prompt_tokens: 2600, total_tokens: 3800, rounds: 1 } } });
+  check('B-F1: and a count that covers ONE of three calls measures one and repeats the other two as a model — the Editor\'s rule, unchanged by any of this',
+    oneOfThree.counted_rounds === 1 && oneOfThree.in_tokens === 2600 * 3
+    && / repeated for the 2 round\(s\) the counter did not see/.test(oneOfThree.basis), JSON.stringify(oneOfThree));
+
+  // ---------- 3. a counter that does not answer never becomes a measurement ----------
+  for (const [why, bad] of [['neither probe answered', null],
+                            ['the prompt count did not answer', { prompt_tokens: 0, total_tokens: 16208, rounds: 1 }],
+                            ['the answer count came back no larger than the prompt', { prompt_tokens: 12905, total_tokens: 12905, rounds: 1 }]]) {
+    const cf = await kit86({ call: 'callCost', call_spec: { ...CRITIC, counted: bad } });
+    check('B-F1: ' + why + ' — the call falls back to the character figure with its OLD basis and measures nothing',
+      cf.counted === false && cf.measured_usd === 0 && cf.estimated_usd === cf.usd && cf.usd === before86.usd
+      && /^estimated: prompt and answer characters/.test(cf.basis), JSON.stringify(cf));
+  }
+
+  // ---------- 4. what the run reports about itself: 0% measured on these eight, then most of it ----------
+  // The sizes are illustrative and are stated here on purpose: the point of the figure is the share that moves from modelled
+  // to measured, and the only node-specific part of what stays modelled is the thinking budget (max_tokens x effort share).
+  const RUN86 = [
+    { node: 'Strategy Brief', model: 'claude-opus-5-5', max_tokens: 24576, effort: 'medium', streaming: true, prompt_chars: 38000, output_chars: 9000, calls: 1, counted: { prompt_tokens: 10200, total_tokens: 12600, rounds: 1 } },
+    { node: 'Copywriter', model: 'claude-opus-5-5', max_tokens: 32768, effort: 'medium', streaming: true, prompt_chars: 40000, output_chars: 19000, calls: 1, counted: { prompt_tokens: 10800, total_tokens: 15900, rounds: 1 } },
+    { node: 'Editor', model: 'claude-opus-5-5', max_tokens: 32768, effort: 'medium', streaming: true, prompt_chars: 44000, output_chars: 19000, calls: 2, counted: { prompt_tokens: 11900, total_tokens: 17000, rounds: 1 } },
+    { ...CRITIC, counted: counted86 },
+    { node: 'Site Describer', model: 'claude-haiku-4-5-20251001', max_tokens: 4096, effort: '', streaming: false, prompt_chars: 22000, output_chars: 3000, calls: 1, counted: { prompt_tokens: 6000, total_tokens: 6800, rounds: 1 } },
+    { node: 'Competitor Analyzer', model: 'claude-sonnet-5-5', max_tokens: 16384, effort: 'medium', streaming: false, prompt_chars: 33000, output_chars: 7000, calls: 1, counted: { prompt_tokens: 9000, total_tokens: 11000, rounds: 1 } },
+    { node: 'Content Reviewer', model: 'claude-sonnet-5-5', max_tokens: 16384, effort: 'medium', streaming: false, prompt_chars: 26000, output_chars: 4500, calls: 1, counted: { prompt_tokens: 7000, total_tokens: 8200, rounds: 1 } },
+  ];
+  const nowRun = await kit86({ call: 'runCost', calls: RUN86 });
+  const thenRun = await kit86({ call: 'runCost', calls: RUN86.map(c => (c.streaming ? c : { ...c, counted: null })) });
+  const share = (r, n) => r.by_node[n] ? Math.round(1000 * r.by_node[n].measured_usd / r.by_node[n].usd) / 10 : null;
+  console.log('   page run measured share: before(B-A8 only) ' + thenRun.measured_share + '% -> after(B-F1) ' + nowRun.measured_share + '%');
+  for (const n of Object.keys(nowRun.by_node)) console.log('     ' + n + ': ' + share(thenRun, n) + '% -> ' + share(nowRun, n) + '%');
+  check('B-F1: the four non-streaming calls of a page run measured 0% of their money and now measure the majority of it — what is left is the thinking budget, which no counter can ever see',
+    ['Critic', 'Site Describer', 'Competitor Analyzer', 'Content Reviewer'].every(n => share(thenRun, n) === 0 && share(nowRun, n) > 60),
+    JSON.stringify(Object.fromEntries(Object.keys(nowRun.by_node).map(n => [n, [share(thenRun, n), share(nowRun, n)]]))));
+  // the other four non-streaming nodes never run in a page run: the discovery screens keywords once per chunk, the verdict
+  // reads one keyword. Same fixture discipline — illustrative sizes, stated, so the figure that means something is the share.
+  const OTHER86 = [
+    { node: 'Site Describer', model: 'claude-haiku-4-5-20251001', max_tokens: 4096, effort: '', streaming: false, prompt_chars: 22000, output_chars: 3000, calls: 1, counted: { prompt_tokens: 6000, total_tokens: 6800, rounds: 1 } },
+    { node: 'Keyword Seeds', model: 'claude-sonnet-5-5', max_tokens: 16384, effort: 'medium', streaming: false, prompt_chars: 2400, output_chars: 2600, calls: 1, counted: { prompt_tokens: 650, total_tokens: 1400, rounds: 1 } },
+    { ...CHUNKS, counted: { prompt_tokens: 7800, total_tokens: 11400, rounds: 3 } },
+    { node: 'Ladder Keyword Relevance', model: 'claude-sonnet-5-5', max_tokens: 16384, effort: 'low', streaming: false, prompt_chars: 6000, output_chars: 2600, calls: 2, counted: { prompt_tokens: 5200, total_tokens: 7600, rounds: 2 } },
+    { node: 'Verdict Agent', model: 'claude-sonnet-5-5', max_tokens: 16384, effort: 'medium', streaming: false, prompt_chars: 18000, output_chars: 5000, calls: 1, counted: { prompt_tokens: 5000, total_tokens: 6500, rounds: 1 } },
+  ];
+  const nowOther = await kit86({ call: 'runCost', calls: OTHER86 });
+  const thenOther = await kit86({ call: 'runCost', calls: OTHER86.map(c => ({ ...c, counted: null })) });
+  console.log('   discovery / ladder / verdict measured share: before 0% -> after ' + nowOther.measured_share + '%');
+  for (const n of Object.keys(nowOther.by_node)) console.log('     ' + n + ': ' + share(thenOther, n) + '% -> ' + share(nowOther, n) + '%');
+  check('B-F1: and the other four — the two keyword screens, the seed writer and the verdict — go from 0% measured to the same shape, so all eight non-streaming nodes are covered',
+    ['Keyword Seeds', 'Keyword Relevance', 'Ladder Keyword Relevance', 'Verdict Agent'].every(n => share(thenOther, n) === 0 && share(nowOther, n) > 20)
+    && thenOther.measured_usd === 0 && nowOther.measured_share > 50,
+    JSON.stringify(Object.fromEntries(Object.keys(nowOther.by_node).map(n => [n, [share(thenOther, n), share(nowOther, n)]]))));
+  check('B-F1: and the whole run\'s measured share rises, with every node of it counted and none of them listed as reporting no usage',
+    nowRun.measured_share > thenRun.measured_share && nowRun.counted_nodes.length === 7
+    && eq86(nowRun.streaming_nodes, []) && +(nowRun.measured_usd + nowRun.estimated_usd).toFixed(4) === nowRun.usd,
+    JSON.stringify({ before: thenRun.measured_share, after: nowRun.measured_share, counted: nowRun.counted_nodes }));
+  check('B-F1: a run in which every call was counted says "measured" first and names only the thinking as modelled',
+    /^measured: Anthropic \/v1\/messages\/count_tokens counted the prompt and the answer of every call/.test(nowRun.basis)
+    && /thinking no counter can see is modelled from the effort budget/.test(nowRun.basis), nowRun.basis);
+
+  // ---------- 5. the wiring: eight chains on the MAIN path, each reading the right branch ----------
+  const NS86 = CW86.count_nonstream;
+  check('B-F1: there are eight chains, one per non-streaming Claude call, and the three streaming ones still have theirs',
+    eq86(Object.keys(NS86).sort(), ['Competitor Analyzer', 'Content Reviewer', 'Critic', 'Keyword Relevance', 'Keyword Seeds',
+      'Ladder Keyword Relevance', 'Site Describer', 'Verdict Agent'])
+    && eq86(Object.keys(CW86.count.nodes).sort(), ['Copywriter', 'Editor', 'Strategy Brief'])
+    && CW86.ai_calls.length === 11, JSON.stringify(Object.keys(NS86)));
+  check('B-F1: each chain sits on the MAIN path behind its agent and hands the agent\'s own items back, so nothing downstream sees the counter (a side branch runs last, or not at all — R17)',
+    Object.entries(NS86).every(([ag, n]) => n.set === 'Prompt For Count (' + ag + ')' && n.prompt === 'Count Prompt (' + ag + ')'
+      && n.answer === 'Count Answer (' + ag + ')' && n.resume === 'After Count (' + ag + ')' && n.after.length),
+    JSON.stringify(NS86));
+  check('B-F1: the pipeline is preserved — the agent\'s old successors hang off the resume node (Keyword Seeds -> Seed List, Verdict Agent -> Parse Verdict, Keyword Relevance -> Rank Keywords)',
+    eq86(NS86['Keyword Seeds'].after, ['Seed List']) && eq86(NS86['Verdict Agent'].after, ['Parse Verdict'])
+    && eq86(NS86['Keyword Relevance'].after, ['Rank Keywords']) && eq86(NS86.Critic.after, ['Parse Critique']),
+    JSON.stringify(Object.fromEntries(Object.entries(NS86).map(([k, v]) => [k, v.after]))));
+  // the trap section 62 never met: `$('X').first()` defaults to the output the ACTIVE node is connected to, and the counter
+  // node is connected to nothing of the sort. Keyword Seeds is on output 1 of the Route Mode switch.
+  check('B-F1: the prompt is re-read against the node that FED the agent with the output index spelled out — Keyword Seeds reads output 1 of Route Mode, never the default 0',
+    NS86['Keyword Seeds'].ref === "$('Route Mode').first(1).json" && NS86['Keyword Seeds'].branch === 1
+    && Object.values(NS86).every(n => n.per_item ? /\.item\.json$/.test(n.ref) : /\.first\(\d+\)\.json$/.test(n.ref)),
+    JSON.stringify(Object.fromEntries(Object.entries(NS86).map(([k, v]) => [k, v.ref]))));
+  check('B-F1: the two agents that answer once per chunk read their chunk through pairedItem, and carry no round cap; the single-call ones cap at one',
+    NS86['Keyword Relevance'].per_item === true && NS86['Keyword Relevance'].rounds === 0
+    && NS86['Ladder Keyword Relevance'].per_item === true
+    && NS86['Keyword Seeds'].per_item === false && NS86['Keyword Seeds'].rounds === 1, JSON.stringify(NS86['Keyword Relevance']));
+  check('B-F1: the Critic is not a loop any more — nothing on the main path leads back to it, so it is charged once instead of once per QA round',
+    CW86.ai_calls.find(c => c.node === 'Critic').loop === false
+    && CW86.ai_calls.find(c => c.node === 'Editor').loop === true,
+    JSON.stringify(CW86.ai_calls.filter(c => c.loop).map(c => c.node)));
+  const resume86 = fs86.readFileSync(path86.join(CODE86, 'After_Count_Critic_.js'), 'utf8');
+  check('B-F1: the resume node hands the agent\'s own items straight back, in order, so the counter cannot change what the pipeline sees',
+    /return \$\('Critic'\)\.all\(\);/.test(resume86), resume86.slice(0, 200));
+  for (const f of ['Build_Word_File.js', 'Build_Keyword_File.js', 'Run_Ledger_Settle.js']) {
+    const s = fs86.readFileSync(path86.join(CODE86, f), 'utf8');
+    check('B-F1: ' + f + ' adds up one count per call and refuses a pair that covers different numbers of calls',
+      /return \{ sum: sum, n: k \}/.test(s) && /p\.n === t\.n/.test(s) && /cap \|\| p\.n <= cap/.test(s)
+      && /Count Prompt \(Verdict Agent\)/.test(s), f);
+  }
+
+  // ---------- 6. what is NOT counted is recorded, not implied ----------
+  const gapRows = Object.entries(CC86).filter(([, r]) => !r.counted);
+  check('B-F1: every Claude agent in every generated workflow is either counted on its main path or carries the reason it is not',
+    Object.keys(CC86).length === 22 && Object.values(CC86).filter(r => r.counted).length === 11
+    && gapRows.length === 11 && gapRows.every(([, r]) => /priced from the run RESERVATION/.test(r.why_not)),
+    JSON.stringify({ total: Object.keys(CC86).length, counted: Object.values(CC86).filter(r => r.counted).length }));
+  check('B-F1: and the eleven that are not counted are all OUTSIDE the main workflow — nothing in the workflow this pass covered was left behind',
+    gapRows.every(([k]) => !/^SEO_Agent_v4\.json/.test(k))
+    && Object.entries(CC86).filter(([k]) => /^SEO_Agent_v4\.json/.test(k)).every(([, r]) => r.counted),
+    JSON.stringify(gapRows.map(([k]) => k)));
+
+  // ---------- 7. B-A11: nothing ranks, scores or advises from a read that failed twice ----------
+  const unread = (what) => ({ what, asked: 2, checked: 0, failed: 2, retried: 2, retry_answered: 0, unavailable: true,
+    partial: false, error: 'Internal SE Server Error.', note: '2 of 2 requests could not be checked (sent again once, 0 answered): Internal SE Server Error.' });
+  const read = (what) => ({ what, asked: 2, checked: 2, failed: 0, retried: 0, retry_answered: 0, unavailable: false, partial: false, error: '', note: '' });
+  const serpItem = (dom, rank) => ({ type: 'organic', rank_group: rank, domain: dom, url: 'https://' + dom + '/x' });
+  const labs = (ev) => ({ __dfs: ev, tasks: [{ status_code: 20000, result: [{ items: [{ domain: 'cleartax.com', intersections: 40 }] }] }] });
+  const serpOf = (ev) => ({ __dfs: ev, tasks: [{ status_code: 20000, result: [{ items: [serpItem('zoho.com', 2), serpItem('cleartax.com', 3)] }] }] });
+  const SCHEMA = { domain: 'techand.ai', country: 'United Arab Emirates', competitors: [], extra_findings: [], extra_works: [] };
+
+  mock('Schema Findings', [{ json: SCHEMA }]);
+  mock('Fallback Queries', [{ json: { query: 'e invoicing uae' } }, { json: { query: 'erp software uae' } }]);
+  mock('Find Competitors Answers', [{ json: labs(read('competing domains')) }]);
+  const pcOk = (await run('Pick Competitors', [{ json: serpOf(read('results pages')) }])).map(i => i.json);
+  check('B-A11: when both reads answered, Pick Competitors still names the rivals it found and says the evidence was read',
+    pcOk.length > 1 && pcOk[0].competitors_evidence.unavailable === false && pcOk.some(c => c.domain === 'cleartax.com'),
+    JSON.stringify(pcOk.map(c => c.domain + ':' + c.source)));
+  mock('Find Competitors Answers', [{ json: { __dfs: unread('competing domains') } }]);
+  const pcBad = (await run('Pick Competitors', [{ json: { __dfs: unread('results pages') } }])).map(i => i.json);
+  console.log('   Pick Competitors (both reads failed twice) ->', JSON.stringify(pcBad));
+  check('B-A11: when BOTH reads failed twice, no competitor is named, nothing is ranked, and the row says "could not be read" instead of calling the silence auto-detection',
+    pcBad.length === 1 && pcBad[0].is_you === true && pcBad[0].competitors_evidence.unavailable === true
+    && /could not be read/.test(pcBad[0].method) && /nothing was measured/.test(pcBad[0].method)
+    && !/auto-detected/.test(pcBad[0].method), JSON.stringify(pcBad[0]));
+
+  const ovOf = (ev, m) => ({ __dfs: ev, tasks: [{ status_code: 20000, result: [{ items: [{ metrics: { organic: m } }] }] }] });
+  mock('Domain Ages', [{ json: { ages: {} } }]);
+  mock('Pick Competitors', [{ json: { domain: 'techand.ai', is_you: true, method: 'provided by user', competitors_evidence: read('x') } },
+                           { json: { domain: 'cleartax.com', is_you: false, shared: 40, method: 'provided by user', competitors_evidence: read('x') } }]);
+  mock('Domain Overview Answers', [{ json: ovOf(unread('domain overviews')) }, { json: ovOf(unread('domain overviews')) }]);
+  const caBad = (await run('Competitor Analysis', [{ json: {} }]))[0].json;
+  const caF = caBad.extra_findings;
+  console.log('   Competitor Analysis (overview failed twice) ->', JSON.stringify(caF.map(f => f.severity + ': ' + f.title)));
+  check('B-A11: a domain overview that failed twice no longer becomes a HIGH "The site does not rank in Google\'s top 10 for any keyword" — the comparison is refused and says why',
+    !caF.some(f => /does not rank in Google/.test(f.title)) && !caF.some(f => f.severity === 'High')
+    && caF.some(f => f.severity === 'Info' && /could not be read/.test(f.title) && f.scoring === false
+      && /Internal SE Server Error/.test(f.evidence) && /nothing was measured/.test(f.why)),
+    JSON.stringify(caF.map(f => [f.severity, f.title])));
+  check('B-A11: and the figures it would have printed are null, never a measured-looking zero, with the evidence beside them',
+    caBad.competitor_benchmark.rows.every(r => r.top10 === null && r.organic_keywords === null && r.est_monthly_traffic === null)
+    && caBad.competitor_benchmark.evidence.unavailable === true, JSON.stringify(caBad.competitor_benchmark.rows));
+  mock('Domain Overview Answers', [{ json: ovOf(read('domain overviews'), { count: 0, pos_1: 0, pos_2_3: 0, pos_4_10: 0, etv: 0 }) },
+                                   { json: ovOf(read('domain overviews'), { count: 900, pos_1: 10, pos_2_3: 30, pos_4_10: 60, etv: 5000 }) }]);
+  const caOk = (await run('Competitor Analysis', [{ json: {} }]))[0].json;
+  check('B-A11: a read that ANSWERED and really shows no top-10 ranking still raises the High finding — the fix refuses silence, not bad news',
+    caOk.extra_findings.some(f => f.severity === 'High' && /does not rank in Google/.test(f.title))
+    && caOk.competitor_benchmark.rows[0].top10 === 0, JSON.stringify(caOk.extra_findings.map(f => [f.severity, f.title])));
+
+  mock('Competitor Analysis', [{ json: { domain: 'techand.ai', competitors: ['cleartax.com'], country: 'United Arab Emirates',
+    business: 'ERP, e-invoicing and Microsoft Dynamics 365 partner in the UAE', services: ['ERP implementation', 'E-invoicing'],
+    extra_findings: [], extra_works: [] } }]);
+  mock('KW Targets', [{ json: { domain: 'techand.ai', is_you: true } }, { json: { domain: 'cleartax.com', is_you: false } }]);
+  mock('Ranked Keywords Answers', [{ json: { __dfs: unread('ranked keywords') } }, { json: { __dfs: unread('ranked keywords') } }]);
+  delete store['Load Site Cache'];
+  const akBad = (await run('Analyze Keywords', [{ json: { __dfs: unread('keyword ideas') } }]))[0].json;
+  console.log('   Analyze Keywords (both reads failed twice) ->', JSON.stringify(akBad.extra_findings.map(f => f.severity + ': ' + f.title)));
+  check('B-A11: when the ranked keywords and the keyword ideas both failed twice, the keyword gap, the easy wins and "you rank for 0 informational keywords" are all withheld',
+    !akBad.extra_findings.some(f => f.severity === 'High' || f.severity === 'Medium' || f.severity === 'Low')
+    && akBad.extra_findings.some(f => f.severity === 'Info' && /could not be read/.test(f.title) && f.scoring === false
+      && /This is not "no demand"/.test(f.why))
+    && akBad.site_keywords.evidence.unavailable === true, JSON.stringify(akBad.extra_findings.map(f => [f.severity, f.title])));
+
+  // ---------- 8. the class is a lint now, not three fixes ----------
+  check('B-A11: lineage_lint.py check E is live over the generated workflows — a node that reads a gated `<X> Answers` node must be able to say it could not be read',
+    LG86.counts.refusal && LG86.counts.refusal.subject >= 30 && LG86.counts.refusal.pass >= 14,
+    JSON.stringify(LG86.counts.refusal));
+  check('B-A11: and it is proved both ways on a planted node — one that derives a figure from a gated read with no refusal is caught, one that carries the gate\'s `__dfs` is not',
+    LG86.selftest.acts_on_a_gated_read_with_no_refusal.caught === true
+    && LG86.selftest.acts_on_a_gated_read_and_can_refuse.caught === true
+    && eq86(LG86.selftest.acts_on_a_gated_read_and_can_refuse.fails, []),
+    JSON.stringify([LG86.selftest.acts_on_a_gated_read_with_no_refusal, LG86.selftest.acts_on_a_gated_read_and_can_refuse]));
+  check('B-A11: the three nodes this pass fixed have left the ratchet for ever, and every node still on it carries its own reason',
+    ['Pick Competitors', 'Competitor Analysis', 'Analyze Keywords'].every(n => !Object.keys(LG86.unpaid).some(k => k.endsWith(' / ' + n) && LG86.unpaid[k].includes('refusal'))),
+    JSON.stringify(Object.keys(LG86.unpaid).filter(k => LG86.unpaid[k].includes('refusal'))));
+  reset();
+});
+
 
 
 H.report();

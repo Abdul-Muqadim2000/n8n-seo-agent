@@ -86,8 +86,9 @@ const CC = (() => {
   // Three ways to price it, best first, and the answer always says which one it used:
   //   `usage`    — reported token usage (promptTokens / completionTokens). Whole call MEASURED, characters ignored. n8n never hands
   //                this to a Code node today (see above), but a call that ever does report it must never be replaced by an estimate.
-  //   `counted`  — B-A8: { prompt_tokens, total_tokens } from the free token counter. Input and answer are MEASURED; only the thinking
-  //                budget stays modelled, and only that part lands in `estimated_usd`.
+  //   `counted`  — B-A8 / B-F1: { prompt_tokens, total_tokens, rounds } from the free token counter — the TOTAL it answered with and
+  //                how many of this node's calls that total covers. Input and answer are MEASURED; only the thinking budget stays
+  //                modelled, and only that part lands in `estimated_usd`.
   //   characters — the fallback, everything estimated, exactly as before.
   const callCost = (call, factors) => {
     const c = call || {}, f = factors || {};
@@ -96,24 +97,31 @@ const CC = (() => {
     const calls = Math.max(1, Math.round(n0(c.calls) || 1));
     const u = c.usage && (n0(c.usage.promptTokens) || n0(c.usage.completionTokens)) ? c.usage : null;
     const cnt = u ? null : countUsage(c);
-    // how many of this node's `calls` the two counts actually cover. The Editor runs once per QA round and only the last round's
-    // prompt and answer are on the main path, so the other rounds are REPEATED from it and are modelled, not measured.
-    const rounds = cnt ? Math.min(calls, Math.max(1, Math.round(n0((c.counted || {}).rounds) || 1))) : 0;
+    // how many of this node's `calls` the two counts actually cover, and what ONE of those calls cost in tokens.
+    // B-F1 (2026-10-15, build section 76): `counted` carries the TOTAL the counter answered with and `rounds` says how many calls
+    // that total covers, because a node may answer once per item — the keyword screen runs once per chunk of 80 candidates, so its
+    // counter chain fires once per chunk and the chunks are summed. With one call the two readings are the same number, which is
+    // why every figure section 62 measured is unchanged. The Editor still runs once per QA round with only the LAST round on the
+    // main path, so the rest are REPEATED from it and stay modelled, not measured.
+    const covers = cnt ? Math.max(1, Math.round(n0((c.counted || {}).rounds) || 1)) : 0;
+    const rounds = cnt ? Math.min(calls, covers) : 0;
+    const perIn = cnt ? cnt.in_tokens / covers : 0, perOut = cnt ? cnt.out_tokens / covers : 0;
     const budget = c.effort ? Math.round(n0(c.max_tokens) * (THINK_SHARE[String(c.effort)] || 0)) * calls : 0;
     const think = u ? 0 : budget;
-    const inTok = u ? n0(u.promptTokens) : cnt ? cnt.in_tokens * calls : tokensOf(c.prompt_chars) * calls;
-    const outTok = u ? n0(u.completionTokens) : (cnt ? cnt.out_tokens * calls : tokensOf(c.output_chars) * calls) + think;
+    const inTok = u ? n0(u.promptTokens) : cnt ? Math.round(perIn * calls) : tokensOf(c.prompt_chars) * calls;
+    const outTok = u ? n0(u.completionTokens) : (cnt ? Math.round(perOut * calls) : tokensOf(c.output_chars) * calls) + think;
     const price1 = (i, o) => r4((n0(i) / 1e6) * price.in * factor + (n0(o) / 1e6) * price.out * factor);
     const usd = price1(inTok, outTok);
     // which half of THIS call is a measurement. A reported usage measures everything; a counted call measures the rounds the counter
     // saw, minus the thinking it cannot see; a character-priced call measures nothing.
-    const measured_usd = u ? usd : cnt ? price1(cnt.in_tokens * rounds, cnt.out_tokens * rounds) : 0;
+    const measured_usd = u ? usd : cnt ? price1(Math.round(perIn * rounds), Math.round(perOut * rounds)) : 0;
     const estimated_usd = r4(usd - measured_usd);
     return { node: String(c.node || ''), model, family: fam, calls, in_tokens: inTok, out_tokens: outTok, think_tokens: think,
       usd, measured_usd, estimated_usd, measured: !!(u || cnt) && estimated_usd <= 0,
       counted: !!cnt, counted_rounds: rounds, counter: cnt ? cnt.source : '', streaming: !!c.streaming, factor,
       basis: u ? 'measured: the token usage this call reported'
         : cnt ? 'measured: ' + cnt.source + ' counted ' + cnt.in_tokens + ' prompt and ' + cnt.out_tokens + ' answer token(s)'
+            + (covers > 1 ? ' across ' + covers + ' call(s)' : '')
             + (calls > rounds ? ', repeated for the ' + (calls - rounds) + ' round(s) the counter did not see' : '')
             + (think > 0 ? '; the ' + think + ' thinking token(s) it cannot see are modelled from the '
               + String(c.effort) + ' effort budget' : '')

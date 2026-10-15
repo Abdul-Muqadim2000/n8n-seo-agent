@@ -7363,6 +7363,381 @@ sticky("""### An answer nobody asked twice for (B-A10, 2026-10-15)
 log('An answer nobody asked twice for (2026-10-15, FIX_PLAN.md §3.14 row B-A10; INVARIANTS.md rule 3). DataForSEO reports most of its failures INSIDE an HTTP 200, where n8n\'s retryOnFail cannot see them - R18 proved what that costs (exec 549: SERP Top 10 and Facts SERP both 40101 inside a 200, neither re-sent, a ladder planned, scored "winnable 68" and written on a results page nobody saw) and gated three chains by hand; the ratchet then measured 49 DataForSEO nodes across 12 workflows outside a recorded gate. This pays the debt down: dfs_gate.splice() puts ONE shape around every remaining call - <X> -> Retry Plan -> Any Retries? -> Wait -> <X> (Retry) -> <X> Answers -> whatever read the call before - where RT.plan (v5/code/_dfs_retry.js) decides which failures a second attempt can help, refuses to re-send anything when the requests and the answers cannot be paired one to one, and the retry node is a byte copy of the call so no request body is ever rewritten; <X> Answers merges the two attempts, counts what really happened and attaches RT.evidence as __dfs to every item, so rule 1 has something to refuse on. The money follows R28: a failed task is billed 0, a task billed twice is counted once by its own id across both attempts, and every (Retry) node joins __LEDGER_NODES - Start Crawl is the exception, because on_page/task_post CREATES a paid task, so it re-sends only an envelope or task error and never an empty result. Deliberately left on the ratchet with the reason in the baseline\'s `why`: the twelve free appendix/user_data balance probes (read before the first paid call, failing OPEN - 0 refuses nothing, the day\'s reconciliation drops a 0 reading and says so - and nothing is scored, ranked or advised from them) and Get Crawl Summary (the poll of a crawl already paid for: Check Crawl -> Wait 1 min -> Get Crawl Summary is already a retry loop with a longer pause). And the ratchet had a hole of its own: check_in200 ran on the main workflow only, so the 19 DataForSEO nodes in the other eleven workflows were measured once and guarded by nothing - retry_lint.check_all now walks every generated workflow after the sub-builds and fails on a stale baseline row too')
 
 
+# 76. THE OTHER HALF OF EVERY CLAUDE FIGURE, AND THREE NODES THAT ADVISED FROM WHAT THEY COULD NOT READ
+#     (2026-10-15, FIX_PLAN.md §3.15 row B-F1 — the Sonnet half — and §3.16 row B-A11; INVARIANTS.md rule 1.)
+#
+#     **B-F1, the half section 62 left open.** Section 62 proved that NOTHING in this engine measured a Claude token: a streaming
+#     call returns no `llmOutput`, so n8n records a tiktoken guess, and the non-streaming nodes' real `tokenUsage` rides the
+#     `ai_languageModel` connection, which `WorkflowDataProxy` never reads. It then put Anthropic's free
+#     `/v1/messages/count_tokens` on the MAIN path behind the three streaming Opus agents (0% -> 70.9% measured on those nodes).
+#     The other eight calls — every Sonnet node and the Haiku describer — were still priced from characters, which is a model,
+#     not a measurement. They are counted here, by the same two free calls, and four things had to be worked out from the code
+#     rather than assumed:
+#       * **a prompt is read against the node that fed the agent.** The agent's prompt is an expression over `$json`; one node
+#         later `$json` is something else, so the expression is re-pointed at the agent's input node — and with the OUTPUT INDEX
+#         spelled out. `$('Route Mode').first()` defaults to "the output the active node is connected to", and the counter node
+#         is connected to nothing of the sort: *Keyword Seeds* hangs off output **1** of that Switch, so a default `.first()`
+#         would have counted a branch that carries no data in a discovery run. Section 62's three agents all sit on output 0,
+#         which is why it never had to find this out.
+#       * **two of the eight answer once per ITEM.** *Keyword Relevance* and *Ladder Keyword Relevance* run once per chunk of 80
+#         candidates (S20 already asserts `ai_calls === 1 + chunks`), so their counter chain fires once per chunk too: the prompt
+#         is read with `$('<chunks>').item` (the agent sets `pairedItem: { item: itemIndex }`, as does the Set node and the HTTP
+#         node, so the chain resolves back to the right chunk) and the counts are SUMMED, with `rounds` saying how many calls the
+#         sum covers. One item is the old behaviour exactly, which is why nothing section 62 measured changes.
+#       * **the Critic is not a loop.** `_LOOPS51` has said since section 51 that the Critic runs once per QA round, so its cost
+#         was multiplied by `qa_round`. Walking `main` from the Critic shows no path back to it: the QA loop is *Content QA* ->
+#         *Needs Revision?* -> *Editor* -> *Content QA*, and the Critic's single predecessor is the Copywriter's resume node. It
+#         ran once and was charged `qa_round` times. The walk is kept as the assertion, so a future rewiring has to agree.
+#       * **thinking is still modelled and always will be.** `count_tokens` counts the messages we send; the thinking the model
+#         does before answering is billed as output and never returned. Only *Site Describer* has no thinking budget at all
+#         (Haiku, no adaptive effort), so it is the one node that becomes 100% measured.
+#     Free or not, `count_tokens` is an HTTP call: every one carries the retry rule, `neverError` + `continueRegularOutput` and
+#     `alwaysOutputData`, and a count that does not answer — or whose two halves do not cover the same number of calls — leaves
+#     the call on its character figure with its old basis. None of them can fail a run.
+#     **What is NOT counted, with its reason recorded** (`harness/claude_count.json`, and `_b76_checks` fails the build on a new
+#     one): the **eleven** Claude agents in the other seven workflows. The brief for this work said there were eight
+#     non-streaming nodes; that is true of the main workflow and not of the engine, which has 22 Claude agents. The other eleven
+#     are not character-priced at all — a monitor settles `CC.aiRun`, which is the RESERVATION, labelled an estimate — and
+#     counting them needs a per-workflow call table in each of the three other builders. Recorded, not done.
+#
+#     **B-A11 — three nodes advised from evidence that could not be read.** Rule 3's in-200 gate attaches `RT.evidence` to every
+#     answer as `__dfs`; rule 1 says nothing downstream may score, rank or advise from it when it is `unavailable`. Nine nodes
+#     already refuse. These three did not: *Pick Competitors* ranked rivals from two reads that may both have failed twice and
+#     called the empty result "auto-detected"; *Competitor Analysis* turned a missing domain overview into `top10: 0` and raised
+#     a **High** "The site does not rank in Google's top 10 for any keyword"; *Analyze Keywords* raised a keyword gap, a "you
+#     rank for 0 informational keywords" and a list of easy wins from the same kind of silence. Each now carries the gate's own
+#     evidence, hands on `null` instead of a measured-looking zero, and says "could not be read" where it used to say "none".
+#     And the class is now a lint, which is worth more than the three fixes: `lineage_lint.py` gains check **E (refusal)** —
+#     every node that reads a `<X> Answers` node must carry a way of saying it could not be read — with today's 19 remaining
+#     consumers on the ratchet baseline, each with its reason. Its vocabulary was widened once while being calibrated: *Analyze
+#     Backlinks* refuses in its own words (`available: false` + the provider's message), and a lint that only recognised the
+#     kit's idiom would have been checking which helper a node imported, not whether it can refuse.
+# =============================================================================
+
+# ---------- A. B-F1: the free token counter behind the eight non-streaming Claude calls ----------
+_NS76 = [c for c in _AI_CALLS51 if not c['streaming']]
+assert len(_NS76) == 8 and len(_AI_CALLS51) == 11, _NS76
+_OLD76 = json.dumps(_AI_CALLS51)
+assert _OLD76 == _NEW_CALLS62, 'B-F1: the call table changed between section 62 and section 76'
+
+# a node that answers once per input item, and the node that makes those items. Declared, then PROVED against the code that
+# makes them, so the declaration cannot drift away from what the run does.
+_PER_ITEM76 = {'Keyword Relevance': 'Relevance Chunks', 'Ladder Keyword Relevance': 'Ladder Relevance Chunks'}
+for _a76, _s76 in _PER_ITEM76.items():
+    assert 'chunks.map((ch, i) => ({ json:' in code(_s76), 'B-F1: ' + _s76 + ' no longer emits one item per chunk'
+
+
+def _branch76(src, dst):
+    """The output index `dst` hangs off. `$('X').first()` defaults to the output the ACTIVE node is connected to, and the
+    counter node is not connected to X at all — Keyword Seeds is on output 1 of Route Mode, so this is never left implicit."""
+    for _i, _l in enumerate((conns.get(src) or {}).get('main') or []):
+        if any(t['node'] == dst for t in (_l or [])):
+            return _i
+    raise AssertionError('B-F1: no main connection from ' + src + ' to ' + dst)
+
+
+def _loops76(start):
+    """True when a main path leads from `start` back to `start` — the QA loop, and the only honest definition of `loop`."""
+    _seen, _stack = set(), [start]
+    while _stack:
+        for _t in [t['node'] for _l in ((conns.get(_stack.pop()) or {}).get('main') or []) for t in (_l or [])]:
+            if _t == start:
+                return True
+            if _t not in _seen:
+                _seen.add(_t)
+                _stack.append(_t)
+    return False
+
+
+assert _loops76('Editor'), 'B-F1: the Editor no longer loops — Content QA / Needs Revision? was rewired'
+assert not _loops76('Critic'), 'B-F1: the Critic now loops, so it is charged per QA round again'
+for _c76 in _AI_CALLS51:
+    if _c76['node'] == 'Critic':
+        assert _c76['loop'], 'B-F1: the Critic was already not a loop — this correction is stale'
+        _c76['loop'] = False        # it runs ONCE: nothing on main leads back to it (asserted above)
+
+_WIRE76 = {}
+for _c76 in _NS76:
+    _ag76, _in76 = _c76['node'], _c76['input']
+    assert _in76 and _in76 in nodes, 'B-F1: ' + _ag76 + ' has no input node to render its prompt against'
+    # `input` is what fed the agent when section 51 read the table; what feeds it NOW is what `$json` resolves against, and for
+    # the Critic that is section 62's own resume node (which hands the Copywriter's items back unchanged). The prompt is read
+    # against the live predecessor, and the two are asserted to be the same node or that node's resume.
+    _pre76 = sorted({s for s, o in conns.items() for l in (o.get('main') or []) for t in (l or []) if t['node'] == _ag76})
+    assert len(_pre76) == 1, 'B-F1: ' + _ag76 + ' has ' + str(len(_pre76)) + ' main inputs, so $json is not one node'
+    _fed76 = _pre76[0]
+    assert _fed76 == _in76 or _fed76 == 'After Count (' + _in76 + ')', \
+        'B-F1: ' + _ag76 + ' is fed by ' + _fed76 + ', which is neither ' + _in76 + ' nor its resume node'
+    _txt76 = str(nodes[_ag76]['parameters']['text'])
+    assert _txt76.startswith('='), 'B-F1: ' + _ag76 + "'s prompt is not an expression"
+    _multi76 = _ag76 in _PER_ITEM76
+    if _multi76:
+        assert _PER_ITEM76[_ag76] == _fed76, 'B-F1: ' + _ag76 + ' is no longer fed by ' + _PER_ITEM76[_ag76]
+        _ref76, _br76 = "$('" + _fed76 + "').item.json", None
+    else:
+        _br76 = _branch76(_fed76, _ag76)
+        _ref76 = "$('" + _fed76 + "').first(" + str(_br76) + ").json"
+    _WIRE76[_ag76] = {'fed_by': _fed76, 'branch': _br76, 'ref': _ref76}
+    _prompt76 = re.sub(r'\$json\b', lambda m: _ref76, _txt76)
+    assert '$json.' not in _prompt76 and _prompt76 != _txt76, 'B-F1: ' + _ag76 + "'s prompt still reads $json after the rewrite"
+    _set76, _cp76 = 'Prompt For Count (' + _ag76 + ')', 'Count Prompt (' + _ag76 + ')'
+    _ca76, _af76 = 'Count Answer (' + _ag76 + ')', 'After Count (' + _ag76 + ')'
+    _px76, _py76 = pos(_ag76)
+    # the Set node renders what the agent really sent and what it really answered, one item per call. It can fail open like
+    # every other node of the chain: an expression that cannot resolve leaves __prompt empty, the count comes back without an
+    # `input_tokens` and the call falls back to characters.
+    add_node(_set76, 'n8n-nodes-base.set', 3.4, {'mode': 'manual', 'includeOtherFields': True, 'options': {}, 'assignments': {'assignments': [
+        {'id': str(uuid.uuid5(uuid.NAMESPACE_URL, 'bf1:' + _ag76 + ':prompt')), 'name': '__prompt', 'value': _prompt76, 'type': 'string'},
+        {'id': str(uuid.uuid5(uuid.NAMESPACE_URL, 'bf1:' + _ag76 + ':answer')), 'name': '__answer',
+         'value': "={{ String($json.output ?? '') }}", 'type': 'string'}]}},
+        [_px76, _py76 + 300], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+    _mdl76 = json.dumps(_c76['model'])
+    _own76 = "$('" + _set76 + "')." + ('item' if _multi76 else 'first()') + ".json"
+    _count_node62(_cp76, '={{ JSON.stringify({ model: ' + _mdl76 + ', messages: [{ role: "user", content: String($json.__prompt || "") }] }) }}',
+                  [_px76 + 200, _py76 + 300])
+    _count_node62(_ca76, '={{ JSON.stringify({ model: ' + _mdl76 + ', messages: ['
+                  + '{ role: "user", content: String(' + _own76 + '.__prompt || "") }, '
+                  + '{ role: "assistant", content: String(' + _own76 + '.__answer || "") }] }) }}',
+                  [_px76 + 400, _py76 + 300])
+    add_node(_af76, 'n8n-nodes-base.code', 2, {'jsCode':
+        "// B-F1 (2026-10-15, section 76): the two free token counts are taken; hand " + _ag76 + "'s own items back to the\n"
+        "// pipeline, unchanged and in order, so nothing downstream sees the counter at all (the R17 resume pattern).\n"
+        "return $('" + _ag76 + "').all();\n"}, [_px76 + 600, _py76 + 300])
+    _succ76 = [t['node'] for lst in ((conns.get(_ag76) or {}).get('main') or []) for t in (lst or [])]
+    assert _succ76, 'B-F1: ' + _ag76 + ' feeds nothing'
+    for _s in _succ76:
+        disconnect(_ag76, _s)
+    connect(_ag76, _set76); connect(_set76, _cp76); connect(_cp76, _ca76); connect(_ca76, _af76)
+    for _s in _succ76:
+        connect(_af76, _s)
+    _c76['count_prompt'], _c76['count_answer'] = _cp76, _ca76
+    _c76['count_per_item'] = _multi76
+    # the most of this node's calls the main path can show: one per item for a per-item node (0 = no cap), exactly one otherwise
+    _c76['count_rounds'] = 0 if _multi76 else 1
+
+# ---------- A2. the pricing loop learns to add up several counts, and the new table goes back into the six nodes ----------
+_NEW76 = json.dumps(_AI_CALLS51)
+assert 'Count Prompt (Verdict Agent)' in _NEW76 and '"loop": false' in _NEW76, 'B-F1: the call table did not learn'
+_OLD_COUNTOF76 = _COUNT_OF62
+_NEW_COUNTOF76 = """const __countOf = (n) => { let sum = 0, k = 0; for (const j of (__jsonOf(n) || [])) { const v = Number((j || {}).input_tokens); if (Number.isFinite(v) && v > 0) { sum += v; k++; } } return { sum: sum, n: k }; };
+const __costCalls = [];"""
+_NEW_PUSH76 = """  // B-A8 / B-F1 (2026-10-15): the free Anthropic token counter answered for this node on the main path — the prompt it really
+  // rendered (*Count Prompt (…)*) and that prompt plus the answer it really got (*Count Answer (…)*). The difference is the
+  // answer's own tokens. A node that answers once per ITEM has one pair of counts per call (the keyword screen runs once per
+  // chunk of 80 candidates), so the counts are SUMMED and `rounds` says how many calls the sum covers; `count_rounds` is the
+  // most the main path can show — 1 for a looping agent, because only the Editor's LAST round is on it — and a count that
+  // covers more than that is refused rather than spread. The two counts must cover the same number of calls, or their
+  // difference is not this node's answer tokens. Anything else leaves `counted` null and the call falls back to characters,
+  // with the old basis: a count that failed is never a measurement.
+  let counted = null;
+  if (c.count_prompt && c.count_answer) {
+    const p = __countOf(c.count_prompt), t = __countOf(c.count_answer), cap = Number(c.count_rounds || 0);
+    if (p.n > 0 && p.n === t.n && p.sum > 0 && t.sum > p.sum && (!cap || p.n <= cap))
+      counted = { prompt_tokens: p.sum, total_tokens: t.sum, rounds: p.n, source: 'Anthropic /v1/messages/count_tokens' };
+  }
+  __costCalls.push({ node: c.node, model: c.model, max_tokens: c.max_tokens, effort: c.effort, streaming: c.streaming,
+    prompt_chars, output_chars, counted, calls: answers.length * (c.loop ? __qaRounds() : 1) });"""
+for _n76 in _ends51 + ['Run Ledger Settle']:
+    _src76 = code(_n76)
+    assert _OLD76 in _src76 and _NEW_PUSH62 in _src76 and _OLD_COUNTOF76 in _src76, 'B-F1: ' + _n76 + " does not carry section 62's counter"
+    _src76 = _src76.replace(_OLD76, _NEW76).replace(_NEW_PUSH62, _NEW_PUSH76).replace(_OLD_COUNTOF76, _NEW_COUNTOF76)
+    setcode(_n76, _src76)
+    assert 'p.n === t.n' in code(_n76) and 'let sum = 0, k = 0;' in code(_n76), _n76
+    assert code(_n76).index('const __countOf') < code(_n76).index('__countOf(c.count_prompt)'), _n76 + ': the helper is used before it exists'
+assert 'const covers = cnt ?' in COST_SRC and 'perIn * rounds' in COST_SRC, 'B-F1: the cost kit still treats a count as one call'
+
+# ---------- A3. the wiring and the recorded gap (harness S86) ----------
+_cw51['count_nonstream'] = {c['node']: {'set': 'Prompt For Count (' + c['node'] + ')', 'prompt': c['count_prompt'],
+                                        'answer': c['count_answer'], 'resume': 'After Count (' + c['node'] + ')',
+                                        'input': c['input'], 'model': c['model'], 'rounds': c['count_rounds'],
+                                        'per_item': c['count_per_item'], 'loop': c['loop'],
+                                        'fed_by': _WIRE76[c['node']]['fed_by'], 'branch': _WIRE76[c['node']]['branch'],
+                                        'ref': _WIRE76[c['node']]['ref'],
+                                        'after': [t['node'] for lst in ((conns.get('After Count (' + c['node'] + ')') or {}).get('main') or []) for t in (lst or [])]}
+                            for c in _NS76}
+_cw51['ai_calls'] = _AI_CALLS51
+# every Claude agent in the engine, and for each one that is NOT counted, why. `_b76_checks` walks the generated workflows and
+# fails the build on an agent that is neither counted nor listed here, so the gap can be read but cannot grow.
+_WHY_NOT76 = ('priced from the run RESERVATION (CC.aiRun), not from this node and not from characters: a monitor settles its '
+              'reserved Claude figure and labels it ESTIMATED. Counting it needs a per-workflow call table in its own builder '
+              '(build_monitors.py / build_site_tracker.py / build_api.py), which is not built — B-F1 covered the main workflow')
+_cw51['count_gap'] = {'why': _WHY_NOT76, 'workflows': ['SEO_Agent_AI_Growth.json', 'SEO_Agent_AI_Visibility.json',
+                                                       'SEO_Agent_Backlink_Monitor.json', 'SEO_Agent_Keyword_Check.json',
+                                                       'SEO_Agent_Link_Builder.json', 'SEO_Agent_Reply_Reader.json',
+                                                       'SEO_Agent_Site_Tracker.json']}
+json.dump(_cw51, open(os.path.join(HERE0, 'harness', 'cost_wiring.json'), 'w'), indent=1, sort_keys=True)
+
+
+def _b76_checks():
+    """Every Claude agent in every generated workflow is either counted on its main path or listed with a reason. Runs after
+    the four sub-builds, like the other ratchets, because that is the first moment all the workflows exist on disk."""
+    _out76, _gap76 = {}, []
+    for _f in sorted(os.listdir(os.path.join(HERE0, 'workflows'))):
+        if not _f.endswith('.json') or _f in _NOT_GENERATED69:
+            continue
+        for _w in json.load(open(os.path.join(HERE0, 'workflows', _f), encoding='utf-8')):
+            _nm = {n['name']: n for n in (_w.get('nodes') or [])}
+            _cn = _w.get('connections') or {}
+            for _mn, _m in sorted(_nm.items()):
+                if _m.get('type') != '@n8n/n8n-nodes-langchain.lmChatAnthropic':
+                    continue
+                for _ag in [t['node'] for l in ((_cn.get(_mn) or {}).get('ai_languageModel') or [[]]) for t in (l or [])]:
+                    _counted = ('Count Prompt (' + _ag + ')') in _nm and ('Count Answer (' + _ag + ')') in _nm
+                    _out76[_f + ' / ' + _ag] = {'counted': _counted, 'model': _m['parameters']['model']['value'],
+                                                'why_not': '' if _counted else _WHY_NOT76}
+                    if not _counted:
+                        _gap76.append(_f + ' / ' + _ag)
+    _listed76 = set(_cw51['count_gap']['workflows'])
+    _unexplained76 = sorted(g for g in _gap76 if g.split(' / ')[0] not in _listed76)
+    assert not _unexplained76, ('B-F1: %d Claude agent(s) are neither counted on the main path nor covered by the recorded gap: '
+                                '%s\n  Either put the counter chain behind them (build section 76) or add the workflow to '
+                                "cost_wiring.json's `count_gap` with a reason." % (len(_unexplained76), ', '.join(_unexplained76)))
+    _stale76 = sorted(w for w in _listed76 if not any(g.startswith(w + ' / ') for g in _gap76))
+    assert not _stale76, ('B-F1: cost_wiring.json lists %s in `count_gap` and nothing there is uncounted any more — '
+                          'a gap that was paid leaves the list for ever.' % ', '.join(_stale76))
+    json.dump(_out76, open(os.path.join(HERE0, 'harness', 'claude_count.json'), 'w'), indent=1, sort_keys=True)
+    print('B-F1 (Claude tokens counted on the main path): %d of %d Claude agents across %d workflows are counted; '
+          '%d stay priced from the reservation, every one with its reason'
+          % (sum(1 for r in _out76.values() if r['counted']), len(_out76),
+             len({k.split(' / ')[0] for k in _out76}), len(_gap76)))
+
+
+# ---------- B. B-A11: three nodes that advised from evidence that could not be read ----------
+# The shape the other nine use: read the gate's `__dfs` off the answers, refuse to derive anything from it when it is
+# `unavailable`, and say so in the words the reports already use. Nothing here invents a third pattern.
+_EV76 = """// B-A11 (2026-10-15, INVARIANTS rule 1): the in-200 retry gate (rule 3) marks an answer `unavailable` when BOTH attempts
+// failed, and attaches that block to every item as `__dfs`. Nothing below may rank, score or advise from one.
+const __ev76 = (list, node) => { try { const a = (node ? $(node).all().map(i => i.json) : list) || []; return (a.find(x => x && x.__dfs) || {}).__dfs || null; } catch (e) { return null; } };
+// A refusal fires on an evidence block that SAYS `unavailable`, never on the absence of one: a path with no gate attached
+// (and every harness fixture) has no `__dfs`, and inventing a failure out of silence is the same mistake in the other
+// direction. This is how the nine nodes that already refuse read it too (Assess Result falls back when `__dfs` is absent).
+const __read76 = (ev) => !ev || !ev.unavailable;
+"""
+
+patch('Pick Competitors', "const serps = $input.all().map(i => i.json);\n",
+      "const serps = $input.all().map(i => i.json);\n" + _EV76 +
+      "const labsEv76 = __ev76(null, 'Find Competitors Answers'), serpEv76 = __ev76(serps);\n"
+      "// the list is readable when EITHER read answered; when neither did there is no list, only silence that must not be\n"
+      "// reported as \"no competitors found\" (the old wording, and a measurement nobody took).\n"
+      "const competitors_evidence = { what: 'the domains that compete with this site for the same searches',\n"
+      "  labs: labsEv76, serps: serpEv76, checked: (labsEv76 ? labsEv76.checked || 0 : 0) + (serpEv76 ? serpEv76.checked || 0 : 0),\n"
+      "  // both reads have to have FAILED for there to be no list: one silent block is not a refusal\n"
+      "  unavailable: !__read76(labsEv76) && !__read76(serpEv76),\n"
+      "  error: (labsEv76 && labsEv76.error) || (serpEv76 && serpEv76.error) || '' };\n")
+patch('Pick Competitors', "} else {\n  const score = {};",
+      "} else if (competitors_evidence.unavailable) {\n"
+      "  // both reads failed twice: no competitor is named, nothing is ranked, and the reason travels with the row\n"
+      "  comps = [];\n"
+      "  method = 'the competitor search could not be read' + (competitors_evidence.error ? ': ' + competitors_evidence.error : '')\n"
+      "    + ' (asked twice). This is not \"no competitors\": nothing was measured.';\n"
+      "} else {\n  const score = {};")
+patch('Pick Competitors', "return [\n  { json: { domain: ours, is_you: true, shared: null, source: 'you', method } },\n  ...comps.map(c => ({ json: { ...c, is_you: false, method } }))\n];",
+      "return [\n  { json: { domain: ours, is_you: true, shared: null, source: 'you', method, competitors_evidence } },\n"
+      "  ...comps.map(c => ({ json: { ...c, is_you: false, method, competitors_evidence } }))\n];")
+assert 'competitors_evidence' in code('Pick Competitors') and 'could not be read' in code('Pick Competitors')
+
+patch('Competitor Analysis', "const AGES = $('Domain Ages').first().json.ages || {};",
+      "const AGES = $('Domain Ages').first().json.ages || {};\n" + _EV76 +
+      "const ovEv76 = __ev76(ov);\n"
+      "// R17's lesson in one line: a missing domain overview is not a site with no rankings. When the read failed twice every\n"
+      "// figure it would have produced is null and the comparison is left out of the report, with its reason.\n"
+      "const metricsRead76 = __read76(ovEv76);\n"
+      "const listEv76 = (list.find(c => c && c.competitors_evidence) || {}).competitors_evidence || null;")
+patch('Competitor Analysis', "  const top3 = (m.pos_1 || 0) + (m.pos_2_3 || 0);\n  const top10 = top3 + (m.pos_4_10 || 0);",
+      "  const top3 = metricsRead76 ? (m.pos_1 || 0) + (m.pos_2_3 || 0) : null;\n"
+      "  const top10 = metricsRead76 ? top3 + (m.pos_4_10 || 0) : null;")
+patch('Competitor Analysis', "    organic_keywords: m.count ?? 0,\n    top3, top10,\n    est_monthly_traffic: m.etv != null ? Math.round(m.etv) : 0,\n    traffic_value_usd: m.estimated_paid_traffic_cost != null ? Math.round(m.estimated_paid_traffic_cost) : 0,",
+      "    organic_keywords: metricsRead76 ? (m.count ?? 0) : null,\n    top3, top10,\n"
+      "    est_monthly_traffic: metricsRead76 ? (m.etv != null ? Math.round(m.etv) : 0) : null,\n"
+      "    traffic_value_usd: metricsRead76 ? (m.estimated_paid_traffic_cost != null ? Math.round(m.estimated_paid_traffic_cost) : 0) : null,")
+patch('Competitor Analysis', "if ((you.top10 || 0) === 0) {\n  F('High',",
+      "if (!metricsRead76) {\n"
+      "  findings.push({ category: 'Authority', severity: 'Info', title: 'The ranking comparison could not be read',\n"
+      "    evidence: 'The search data provider did not answer ' + (ovEv76 ? ovEv76.asked || 0 : 0) + ' domain overview request(s), asked twice'\n"
+      "      + (ovEv76 && ovEv76.error ? ': ' + ovEv76.error : '') + '.',\n"
+      "    why: 'Rankings, traffic and authority comparisons are left out of this report: nothing was measured. This is not \"no rankings\".',\n"
+      "    fix: 'No action needed — the check is made again on the next run.',\n"
+      "    sample_urls: [], affected_count: null, affected_pct: 100, scope: 'site', scoring: false });\n"
+      "} else if ((you.top10 || 0) === 0) {\n  F('High',")
+patch('Competitor Analysis', "if (comps.length && med.est_monthly_traffic && (you.est_monthly_traffic || 0) < med.est_monthly_traffic * 0.1) {",
+      "if (metricsRead76 && comps.length && med.est_monthly_traffic && (you.est_monthly_traffic || 0) < med.est_monthly_traffic * 0.1) {")
+patch('Competitor Analysis', "if (!comps.length) {\n  findings.push({ category: 'Authority', severity: 'Info', title: 'No competitors could be identified', evidence: 'No overlapping domains found for ' + base.country, why: 'Competitor comparisons in this report are limited.', fix: 'Add up to 3 competitors in the form for a full comparison.',",
+      "if (!comps.length) {\n  const unread76 = !!(listEv76 && listEv76.unavailable);\n"
+      "  findings.push({ category: 'Authority', severity: 'Info',\n"
+      "    title: unread76 ? 'The competitor search could not be read' : 'No competitors could be identified',\n"
+      "    evidence: unread76 ? 'The search data provider did not answer, asked twice' + (listEv76.error ? ': ' + listEv76.error : '') + '.' : 'No overlapping domains found for ' + base.country,\n"
+      "    why: unread76 ? 'Competitor comparisons are left out of this report: nothing was measured.' : 'Competitor comparisons in this report are limited.',\n"
+      "    fix: unread76 ? 'No action needed — the search is made again on the next run.' : 'Add up to 3 competitors in the form for a full comparison.',")
+patch('Competitor Analysis', "      rows,\n      medians: med\n    },",
+      "      rows,\n      medians: med,\n"
+      "      evidence: { metrics: ovEv76, list: listEv76, unavailable: !metricsRead76 }\n    },")
+assert 'metricsRead76' in code('Competitor Analysis') and "could not be read'" in code('Competitor Analysis')
+
+patch('Analyze Keywords', "const ideasRes = $input.first().json || {};",
+      "const ideasRes = $input.first().json || {};\n" + _EV76 +
+      "const rankedEv76 = __ev76(ranked), ideasEv76 = __ev76([ideasRes]);\n"
+      "// the two reads behind every number below: what this site and its rivals rank for, and the keyword ideas. A finding\n"
+      "// built on a read that failed twice reads as a measurement (\"you rank for 0 informational keywords\") and is not one.\n"
+      "const rankedRead76 = __read76(rankedEv76), ideasRead76 = __read76(ideasEv76);\n"
+      "const keywords_evidence = { ranked: rankedEv76, ideas: ideasEv76, unavailable: !rankedRead76 && !ideasRead76 };")
+patch('Analyze Keywords', "if (keyword_gap.length) {\n  F('High',",
+      "if (!rankedRead76 && !ideasRead76) {\n"
+      "  findings.push({ category: 'Authority', severity: 'Info', title: 'The keyword research could not be read',\n"
+      "    evidence: 'The search data provider did not answer the ranked-keyword and keyword-idea requests, asked twice'\n"
+      "      + ((rankedEv76 && rankedEv76.error) || (ideasEv76 && ideasEv76.error) ? ': ' + ((rankedEv76 && rankedEv76.error) || ideasEv76.error) : '') + '.',\n"
+      "    why: 'The keyword gap, the easy wins and the rankings comparison are left out of this report: nothing was measured. This is not \"no demand\".',\n"
+      "    fix: 'No action needed — the research is repeated on the next run.',\n"
+      "    sample_urls: [], affected_count: null, affected_pct: 100, scope: 'site', scoring: false });\n"
+      "}\nif (rankedRead76 && keyword_gap.length) {\n  F('High',")
+patch('Analyze Keywords', "INTENTS.filter(x => x !== 'navigational').forEach(x => {   // P1-4",
+      "if (rankedRead76) INTENTS.filter(x => x !== 'navigational').forEach(x => {   // P1-4")
+patch('Analyze Keywords', "if (easy_wins.length) {\n  F('Low',", "if (ideasRead76 && easy_wins.length) {\n  F('Low',")
+patch('Analyze Keywords', "if (striking_distance.length) {\n  F('Low',", "if (rankedRead76 && striking_distance.length) {\n  F('Low',")
+patch('Analyze Keywords', "if (you.top10 > 0) works.push(", "if (rankedRead76 && you.top10 > 0) works.push(")
+patch('Analyze Keywords', "      refused: refused.filter((r, i, a) => a.findIndex(x => x.keyword === r.keyword) === i).slice(0, 40)\n    },",
+      "      refused: refused.filter((r, i, a) => a.findIndex(x => x.keyword === r.keyword) === i).slice(0, 40),\n"
+      "      evidence: keywords_evidence\n    },")
+assert 'rankedRead76' in code('Analyze Keywords') and 'keywords_evidence' in code('Analyze Keywords')
+
+sticky("""### The other half of every Claude figure, and three nodes that advised from what they could not read (B-F1 / B-A11, 2026-10-15)
+**B-F1.** Section 62 counted the three streaming Opus agents and left the eight non-streaming ones on characters. They are counted here by the same two **free** `count_tokens` calls on the **main** path. Three things the code had to settle: the prompt is re-read against the agent's input node **with its output index spelled out** (*Keyword Seeds* hangs off output **1** of *Route Mode*, and `.first()` defaults to the output the ACTIVE node is connected to); *Keyword Relevance* and *Ladder Keyword Relevance* answer **once per chunk**, so their counts are summed and `rounds` says how many calls the sum covers; and **the Critic is not a loop** — walking `main` shows no path back to it, so `qa_round` had been multiplying a call that happened once.
+**Still modelled, and always will be:** the thinking a model does before answering is billed as output and never returned. *Site Describer* has no thinking budget, so it is the one node that is 100% measured.
+**Not counted, and recorded (`harness/claude_count.json`):** the **eleven** Claude agents in the other seven workflows, which are not character-priced at all — a monitor settles its RESERVATION. `_b76_checks` fails the build on a new uncounted agent.
+**B-A11.** *Pick Competitors*, *Competitor Analysis* and *Analyze Keywords* each turned a read that had failed **twice** into a measured-looking zero — a **High** "does not rank in the top 10 for any keyword" among them. Each now carries the gate's `__dfs`, hands on `null`, and says "could not be read". The class is now **check E of `lineage_lint.py`**, with 19 consumers on the ratchet.""",
+    pos('Pick Competitors')[0] - 60, pos('Pick Competitors')[1] + 320, 1140, 330, 5)
+
+log('The other half of every Claude figure, and three nodes that advised from what they could not read (2026-10-15, FIX_PLAN.md '
+    '§3.15 B-F1 Sonnet half + §3.16 B-A11; INVARIANTS.md rule 1). B-F1: section 62 put Anthropic\'s free /v1/messages/count_tokens '
+    'on the main path behind the three STREAMING Opus agents and left the eight non-streaming calls priced from characters - a '
+    'model, not a measurement. All eight are counted now by the same two free calls, and four things had to be read out of the code '
+    'rather than assumed: (1) the agent\'s prompt is an expression over $json, so it is re-pointed at the node that fed the agent '
+    'WITH THE OUTPUT INDEX SPELLED OUT, because $(\'X\').first() defaults to "the output the active node is connected to" and the '
+    'counter node is connected to nothing of the sort - Keyword Seeds hangs off output 1 of the Route Mode switch, so a default '
+    'first() would have counted a branch carrying no data in a discovery run (section 62 never met this: its three agents are all on '
+    'output 0); (2) Keyword Relevance and Ladder Keyword Relevance answer ONCE PER ITEM (one chunk of 80 candidates each, which S20 '
+    'already asserts), so their chain fires per item - the prompt is read through pairedItem with $(\'<chunks>\').item and the counts '
+    'are SUMMED, with `rounds` saying how many calls the sum covers, which leaves every figure section 62 measured unchanged because '
+    'one item is the old arithmetic exactly; (3) the Critic is NOT a loop - walking main from it finds no path back (the QA loop is '
+    'Content QA -> Needs Revision? -> Editor -> Content QA) so its cost had been multiplied by qa_round since section 51, and the walk '
+    'is kept as the assertion; (4) thinking stays modelled for ever, because count_tokens counts the messages we send and the thinking '
+    'billed as output is never returned - Site Describer, the one node with no thinking budget, is therefore the one that becomes 100% '
+    'measured. Every counter node keeps the retry rule, neverError + continueRegularOutput and alwaysOutputData, and a count that does '
+    'not answer - or whose two halves cover different numbers of calls - leaves the call on its character figure with its old basis. '
+    'What is NOT counted is recorded rather than implied: the ELEVEN Claude agents in the other seven workflows (the brief said there '
+    'were eight non-streaming nodes, which is true of the main workflow and not of the engine, which has 22 Claude agents) are not '
+    'character-priced at all - a monitor settles CC.aiRun, the reservation, labelled ESTIMATED - and _b76_checks walks every generated '
+    'workflow and fails the build on an agent that is neither counted nor on that list. B-A11: Pick Competitors ranked rivals from two '
+    'reads that may both have failed twice and called the empty result "auto-detected"; Competitor Analysis turned a missing domain '
+    'overview into top10: 0 and raised a HIGH "The site does not rank in Google\'s top 10 for any keyword"; Analyze Keywords raised a '
+    'keyword gap, "you rank for 0 informational keywords" and a list of easy wins from the same silence. All three now read the gate\'s '
+    'own __dfs block, hand on null instead of a measured-looking zero and say "could not be read" where they said "none found" - the '
+    'shape the other nine already use, not a third pattern. And the class is a lint now, which is worth more than the three fixes: '
+    'lineage_lint.py gains check E (refusal) - every node that reads a <X> Answers node must carry a way of saying it could not be read '
+    '- with the 19 remaining consumers on the ratchet baseline, each with its reason. Its vocabulary was widened once while being '
+    'calibrated: Analyze Backlinks refuses in its own words (available: false plus the provider\'s message), and a lint that only knew '
+    'the kit\'s idiom would have been checking which helper a node imported rather than whether it can refuse')
+
+
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:
 #     "two fixes have never come back and both are enforced by the build".
@@ -7494,6 +7869,8 @@ _b64_checks()
 _b67_checks()
 # section 75 (B-A10, INVARIANTS rule 3): the in-200 retry ratchet over EVERY generated workflow, not the main one alone
 _b75_checks()
+# section 76 (B-F1): every Claude agent is counted on its main path, or listed with the reason it is not
+_b76_checks()
 # section 71 (B-G1 / B-G2 / B-G3): the three read paths of stored ladder rungs, gated through the one shared FITR
 _b71_checks()
 

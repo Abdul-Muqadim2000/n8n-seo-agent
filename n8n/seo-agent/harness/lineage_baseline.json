@@ -1,10 +1,130 @@
 {
+ "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / AI Visibility": {
+  "fails": [
+   "refusal"
+  ],
+  "markup": 0,
+  "why": "refusal (B-A11, 2026-10-15): derives a figure or a recommendation from the answers and cannot yet say they could not be read. Real debt of the B-A11 class, one workflow at a time. Its mention and citation rates come from the AI answers; a question nobody answered reads as a question you were not named in."
+ },
  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Analyze Probes": {
   "fails": [
-   "evidence"
+   "evidence",
+   "refusal"
   ],
   "markup": 1,
-  "why": "its findings reach a customer only through Build Site Issues, which now runs LN.evidenced over every merged finding before anything is scored. Listed rather than excused, so the next person who makes Analyze Probes deliver on its own has to read this file."
+  "why": "its findings reach a customer only through Build Site Issues, which now runs LN.evidenced over every merged finding before anything is scored. Listed rather than excused, so the next person who makes Analyze Probes deliver on its own has to read this file. | refusal (B-A11, 2026-10-15): builds the NEXT request from the previous answer and scores, ranks or advises nothing itself: when less was read it simply asks for less, and the node that acts on the result is where the refusal belongs. Listed rather than excused, so the next person who makes it derive a figure has to read this file. Its findings reach a customer only through Build Site Issues."
+ },
+ "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / CrUX Targets": {
+  "fails": [
+   "refusal"
+  ],
+  "markup": 0,
+  "why": "refusal (B-A11, 2026-10-15): builds the NEXT request from the previous answer and scores, ranks or advises nothing itself: when less was read it simply asks for less, and the node that acts on the result is where the refusal belongs. Listed rather than excused, so the next person who makes it derive a figure has to read this file."
+ },
+ "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Domain Ages": {
+  "fails": [
+   "refusal"
+  ],
+  "markup": 0,
+  "why": "refusal (B-A11, 2026-10-15): builds the NEXT request from the previous answer and scores, ranks or advises nothing itself: when less was read it simply asks for less, and the node that acts on the result is where the refusal belongs. Listed rather than excused, so the next person who makes it derive a figure has to read this file. A WHOIS answer it could not read leaves the age null already, which Competitor Analysis prints as unknown."
+ },
+ "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Entity Check": {
+  "fails": [
+   "refusal"
+  ],
+  "markup": 0,
+  "why": "refusal (B-A11, 2026-10-15): derives a figure or a recommendation from the answers and cannot yet say they could not be read. Real debt of the B-A11 class, one workflow at a time. The Google Business Profile lookup is one call; a failure reads as \"no listing found\"."
+ },
+ "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Fallback Queries": {
+  "fails": [
+   "refusal"
+  ],
+  "markup": 0,
+  "why": "refusal (B-A11, 2026-10-15): builds the NEXT request from the previous answer and scores, ranks or advises nothing itself: when less was read it simply asks for less, and the node that acts on the result is where the refusal belongs. Listed rather than excused, so the next person who makes it derive a figure has to read this file."
+ },
+ "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Fix Pack": {
+  "fails": [
+   "refusal"
+  ],
+  "markup": 0,
+  "why": "refusal (B-A11, 2026-10-15): derives a figure or a recommendation from the answers and cannot yet say they could not be read. Real debt of the B-A11 class, one workflow at a time. The redirect and schema files are built from what was crawled; a smaller crawl makes a smaller pack with no note saying so."
+ },
+ "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / GSC Audit Plan": {
+  "fails": [
+   "refusal"
+  ],
+  "markup": 0,
+  "why": "refusal (B-A11, 2026-10-15): builds the NEXT request from the previous answer and scores, ranks or advises nothing itself: when less was read it simply asks for less, and the node that acts on the result is where the refusal belongs. Listed rather than excused, so the next person who makes it derive a figure has to read this file."
+ },
+ "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Pick Key Pages": {
+  "fails": [
+   "refusal"
+  ],
+  "markup": 0,
+  "why": "refusal (B-A11, 2026-10-15): builds the NEXT request from the previous answer and scores, ranks or advises nothing itself: when less was read it simply asks for less, and the node that acts on the result is where the refusal belongs. Listed rather than excused, so the next person who makes it derive a figure has to read this file."
+ },
+ "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Render Diff": {
+  "fails": [
+   "refusal"
+  ],
+  "markup": 3,
+  "why": "refusal (B-A11, 2026-10-15): derives a figure or a recommendation from the answers and cannot yet say they could not be read. Real debt of the B-A11 class, one workflow at a time. A page it could not fetch twice is not a page without JavaScript-only content."
+ },
+ "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Render Diff Targets": {
+  "fails": [
+   "refusal"
+  ],
+  "markup": 0,
+  "why": "refusal (B-A11, 2026-10-15): builds the NEXT request from the previous answer and scores, ranks or advises nothing itself: when less was read it simply asks for less, and the node that acts on the result is where the refusal belongs. Listed rather than excused, so the next person who makes it derive a figure has to read this file."
+ },
+ "SEO Agent \u2014 AI Pulse / Pulse Metrics": {
+  "fails": [
+   "refusal"
+  ],
+  "markup": 4,
+  "why": "refusal (B-A11, 2026-10-15): derives a figure or a recommendation from the answers and cannot yet say they could not be read. Real debt of the B-A11 class, one workflow at a time. Same class as AI Visibility, on the daily panel."
+ },
+ "SEO Agent \u2014 AI Visibility Tracker / Analyst Jobs": {
+  "fails": [
+   "refusal"
+  ],
+  "markup": 0,
+  "why": "refusal (B-A11, 2026-10-15): builds the NEXT request from the previous answer and scores, ranks or advises nothing itself: when less was read it simply asks for less, and the node that acts on the result is where the refusal belongs. Listed rather than excused, so the next person who makes it derive a figure has to read this file."
+ },
+ "SEO Agent \u2014 AI Visibility Tracker / Apply Analysis": {
+  "fails": [
+   "refusal"
+  ],
+  "markup": 0,
+  "why": "refusal (B-A11, 2026-10-15): derives a figure or a recommendation from the answers and cannot yet say they could not be read. Real debt of the B-A11 class, one workflow at a time. It applies the analyst\u2019s reading of answers that may not have been read."
+ },
+ "SEO Agent \u2014 AI Visibility Tracker / Prompt Jobs": {
+  "fails": [
+   "refusal"
+  ],
+  "markup": 0,
+  "why": "refusal (B-A11, 2026-10-15): builds the NEXT request from the previous answer and scores, ranks or advises nothing itself: when less was read it simply asks for less, and the node that acts on the result is where the refusal belongs. Listed rather than excused, so the next person who makes it derive a figure has to read this file."
+ },
+ "SEO Agent \u2014 AI Visibility Tracker / Prompt Rows": {
+  "fails": [
+   "refusal"
+  ],
+  "markup": 0,
+  "why": "refusal (B-A11, 2026-10-15): builds the NEXT request from the previous answer and scores, ranks or advises nothing itself: when less was read it simply asks for less, and the node that acts on the result is where the refusal belongs. Listed rather than excused, so the next person who makes it derive a figure has to read this file."
+ },
+ "SEO Agent \u2014 Backlink Monitor / Gap Requests": {
+  "fails": [
+   "refusal"
+  ],
+  "markup": 0,
+  "why": "refusal (B-A11, 2026-10-15): builds the NEXT request from the previous answer and scores, ranks or advises nothing itself: when less was read it simply asks for less, and the node that acts on the result is where the refusal belongs. Listed rather than excused, so the next person who makes it derive a figure has to read this file."
+ },
+ "SEO Agent \u2014 Backlink Monitor / Verify Requests": {
+  "fails": [
+   "refusal"
+  ],
+  "markup": 0,
+  "why": "refusal (B-A11, 2026-10-15): builds the NEXT request from the previous answer and scores, ranks or advises nothing itself: when less was read it simply asks for less, and the node that acts on the result is where the refusal belongs. Listed rather than excused, so the next person who makes it derive a figure has to read this file."
  },
  "SEO Agent \u2014 Console Alerts / Alert Target": {
   "fails": [
@@ -27,5 +147,12 @@
   "markup": 7,
   "why": "the cadence status e-mail states the same counts with no source line."
  },
- "_note": "INVARIANTS rule 1 ratchet, seeded 2026-10-15 (build section 72, lineage_lint.py). Every entry is a node that reaches a DELIVERY node and fails one of the four checks: \"lineage\" it composes a document a customer receives without carrying v5/code/_lineage.js; \"evidence\" it hands on findings without running LN.evidenced; \"like_for_like\" it subtracts a stored earlier report figure without checking the report type and the sample size; \"withheld\" it shows a score with no path that withholds it when an input is unavailable. The lint fails the build on anything NOT listed here, so this debt cannot grow, and a node that gains its guard is dropped from the list for ever and can never come back. Five of these are real defects, named here as B-L1..B-L5 for the register (FIX_PLAN.md) rather than excused; the row in the register is the orchestrator's to add. Two debts the same inventory found were PAID in section 72 and are deliberately absent: the audit's seven site-wide findings that shipped with an empty evidence string, and the technical site audit that had no \"Where these numbers come from\" table at all. What this ratchet does NOT say: that every individual figure inside a node that passes carries its own lineage. LN.of() proves the node was built to say where a number came from, never that the number beside it did. PAID AND GONE FOR EVER (build section 73, 2026-10-15): B-L1 Blog Package, B-L2 Build Keyword Strategy, B-L3 Build Word File, B-L4 AI Metrics and B-L5 Parse Backlinks each gained the guard they were listed for and left this file; the ratchet cannot let them back in. Two weaknesses in the lint itself were found while paying them and are fixed in lineage_lint.py: a kit HEADER that names the call the lint looks for (_lineage.js says \"LN.block() prints the whole list\") answered the lint's question for every node that merely carried the kit, so comments are now stripped before every check; and a node that RENDERS lineage composed upstream (Site Report prints the list Site Metrics builds) is a use of the kit, not a gap."
+ "SEO Agent \u2014 Link Builder / LB Page Requests": {
+  "fails": [
+   "refusal"
+  ],
+  "markup": 0,
+  "why": "refusal (B-A11, 2026-10-15): builds the NEXT request from the previous answer and scores, ranks or advises nothing itself: when less was read it simply asks for less, and the node that acts on the result is where the refusal belongs. Listed rather than excused, so the next person who makes it derive a figure has to read this file."
+ },
+ "_note": "INVARIANTS rule 1 ratchet, seeded 2026-10-15 (build section 72, lineage_lint.py). Every entry is a node that reaches a DELIVERY node and fails one of the four checks: \"lineage\" it composes a document a customer receives without carrying v5/code/_lineage.js; \"evidence\" it hands on findings without running LN.evidenced; \"like_for_like\" it subtracts a stored earlier report figure without checking the report type and the sample size; \"withheld\" it shows a score with no path that withholds it when an input is unavailable. The lint fails the build on anything NOT listed here, so this debt cannot grow, and a node that gains its guard is dropped from the list for ever and can never come back. Five of these are real defects, named here as B-L1..B-L5 for the register (FIX_PLAN.md) rather than excused; the row in the register is the orchestrator's to add. Two debts the same inventory found were PAID in section 72 and are deliberately absent: the audit's seven site-wide findings that shipped with an empty evidence string, and the technical site audit that had no \"Where these numbers come from\" table at all. What this ratchet does NOT say: that every individual figure inside a node that passes carries its own lineage. LN.of() proves the node was built to say where a number came from, never that the number beside it did. PAID AND GONE FOR EVER (build section 73, 2026-10-15): B-L1 Blog Package, B-L2 Build Keyword Strategy, B-L3 Build Word File, B-L4 AI Metrics and B-L5 Parse Backlinks each gained the guard they were listed for and left this file; the ratchet cannot let them back in. Two weaknesses in the lint itself were found while paying them and are fixed in lineage_lint.py: a kit HEADER that names the call the lint looks for (_lineage.js says \"LN.block() prints the whole list\") answered the lint's question for every node that merely carried the kit, so comments are now stripped before every check; and a node that RENDERS lineage composed upstream (Site Report prints the list Site Metrics builds) is a use of the kit, not a gap. CHECK E \"refusal\" ADDED 2026-10-15 (build section 76, FIX_PLAN \u00a73.16 B-A11): every node that reads a `<X> Answers` node -- the output of rule 3's in-200 retry gate, which attaches RT.evidence to every item as __dfs -- must carry a way of saying it could not be read, because rule 3 ends \"nothing downstream may score, rank or advise from `unavailable` evidence\" and until now nothing checked the second half of that sentence. 33 nodes are in the class; Pick Competitors, Competitor Analysis and Analyze Keywords were fixed in the same section and are deliberately absent; the 19 listed here are the debt, each with its own reason, split between request builders (they ask for less when less was read and derive nothing) and nodes that do derive a figure and are real debt of the same class. The vocabulary was widened once while being calibrated: Analyze Backlinks refuses in its own words (`available: false` plus the provider's message), and a lint that only knew the kit's idiom would have been measuring which helper a node imported rather than whether it can refuse."
 }
