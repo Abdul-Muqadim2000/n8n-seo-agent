@@ -69,6 +69,58 @@ function difficultyForYou(kd, reach, o) {
   const k = reachNum(kd) == null ? r + REACH_CFG.unknown_kd : Number(kd);
   return k <= r + REACH_CFG.easy ? 'easy' : k <= r + REACH_CFG.reachable ? 'reachable' : k <= r + REACH_CFG.hard ? 'hard' : 'very_hard';
 }
+// ---- B2-1 (2026-10-15, benchmark area 2): the reach measured on ONE TOPIC, not across the whole website ----
+// `reach` above is a single number per site: the 75th-percentile difficulty of everything it ranks top 10 for, cached 30 days. The same
+// number therefore decided two unrelated plans — "peppol uae" and "erp implementation dubai" (lad_mv5pjt5y4aoa, 2026-10-13: reach 10 from
+// a cached 2026-10-08 measurement). The leaders personalise per TOPIC: MarketMuse subtracts a topic-level Topic Authority from the keyword
+// difficulty ("If you have no Topic Authority, then your Personalized Difficulty = Keyword Difficulty",
+// https://docs.marketmuse.com/reference/personalized-difficulty-and-topic-authority/), and Semrush measures the thematic distance between a
+// domain's core topics and the target topic, lowering PKD the closer the match (https://www.semrush.com/blog/ai-keyword-research-updates/).
+// reachTopic() does the same from data the run already paid for: the keywords the site ALREADY ranks for that are on this topic. It is used
+// only when that evidence is as strong as the site-wide measurement demands (REACH_CFG.min_top10 keywords in the top 10 with a difficulty).
+// Below that bar the site-wide reach stays and the caller is told WHY, so no plan quietly rests on a number measured on other topics. There
+// is no third direction: absence of on-topic wins is not evidence of inability, so it never invents a penalty of its own.
+const REACH_TOPIC_CFG = { max_examples: 6, max_other: 4 };
+// the default on-topic test: half of the head's meaningful words (the shape `_radius.js` RAD.headFit uses; the ladder passes that kit in)
+const reachTopicMatch = (head) => { const h = overlapTokens(head); const need = Math.max(1, Math.ceil(h.length / 2));
+  return (kw) => { if (!h.length) return false; const t = overlapTokens(kw); return t.filter(x => h.includes(x)).length >= need; }; };
+/**
+ * ranked: [{ keyword, kd, position }] — every keyword the site ranks for that this run saw (null = the pull failed)
+ * head: the topic's head keyword · domainReach: the site-wide reach · o: { match (the on-topic test), domain }
+ * -> { used, reach, topic_reach, site_reach, on_topic, top10, sample, best, examples, other_topics, reason, note }
+ */
+function reachTopic(ranked, head, domainReach, o) {
+  const opts = o || {};
+  const site = reachNum(domainReach) == null ? reachSizeTier(0) : Number(domainReach);
+  const match = typeof opts.match === 'function' ? opts.match : reachTopicMatch(head);
+  const rows = (ranked || []).filter(r => r && r.keyword && reachNum(r.position) != null);
+  const on = rows.filter(r => { try { return !!match(String(r.keyword)); } catch (e) { return false; } });
+  const pos = (r) => Number(r.position);
+  const top10 = on.filter(r => pos(r) >= 1 && pos(r) <= 10);
+  const kds = top10.map(r => reachNum(r.kd)).filter(v => v != null).sort((a, b) => a - b);
+  let p75 = null;
+  if (kds.length >= REACH_CFG.min_top10) { const i = REACH_CFG.percentile * (kds.length - 1), lo = Math.floor(i), hi = Math.ceil(i); p75 = Math.round(kds[lo] + (kds[hi] - kds[lo]) * (i - lo)); }
+  const used = p75 != null;
+  const best = on.slice().sort((a, b) => pos(a) - pos(b))[0] || null;
+  const examples = top10.slice().sort((a, b) => pos(a) - pos(b)).slice(0, REACH_TOPIC_CFG.max_examples)
+    .map(r => ({ keyword: String(r.keyword), position: pos(r), kd: reachNum(r.kd) }));
+  const other_topics = rows.filter(r => pos(r) >= 1 && pos(r) <= 10 && on.indexOf(r) < 0).sort((a, b) => pos(a) - pos(b))
+    .slice(0, REACH_TOPIC_CFG.max_other).map(r => String(r.keyword));
+  const who = String(opts.domain || 'your site');
+  const q = '"' + String(head || '') + '"';
+  const reason = ranked == null ? 'the keywords ' + who + ' ranks for could not be read on this run'
+    : !on.length ? 'nothing ' + who + ' ranks for is on this topic'
+    : !top10.length ? on.length + ' keyword(s) on this topic rank for ' + who + ', none of them in the top 10 (best #' + (best ? pos(best) : '-') + ')'
+    : top10.length + ' keyword(s) on this topic are in the top 10' + (kds.length < top10.length ? ', ' + kds.length + ' of them with a known difficulty' : '')
+      + ' - fewer than the ' + REACH_CFG.min_top10 + ' needed to measure a reach on one topic';
+  const note = used
+    ? 'Measured on this topic: 75% of the ' + kds.length + ' keyword(s) about ' + q + ' that ' + who + ' ranks in the top 10 for have a difficulty of ' + p75
+      + ' or lower, so this plan is measured against ' + p75 + ' and not against the site-wide reach of ' + site + '.'
+    : 'This plan is measured against your site-wide reach (' + site + '), because ' + reason + '. A reach measured on other topics'
+      + (other_topics.length ? ' (' + other_topics.map(k => '"' + k + '"').join(', ') + ')' : '') + ' is weaker evidence for this one: treat the months and the chance below as the optimistic case.';
+  return { used, reach: used ? p75 : site, topic_reach: p75, site_reach: site, on_topic: on.length, top10: top10.length, sample: kds.length,
+    best: best ? { keyword: String(best.keyword), position: pos(best) } : null, examples, other_topics, reason, note, head: String(head || '') };
+}
 const reachStrong = (authority, position) => { const p = reachNum(position); return !!(authority && ((Number(authority.top10) || 0) >= 100 || (Number(authority.organic_keywords) || 0) >= 1000)) || (p != null && p >= 1 && p <= REACH_CFG.easy_position); };
 function reachPlan(difficulty, strong) {
   const plan_type = { easy: 'direct', reachable: 'short', hard: 'full', very_hard: 'full', not_realistic: 'none' }[difficulty] || 'full';
@@ -650,7 +702,16 @@ if (!reachInfo) {
   reachInfo = reachFrom(SR.available === false ? null : (SR.top10 || []), sa);
   if (reachInfo.method !== 'default') reach_cache_row = reachCacheRow(domain, reachInfo, base.location_code);
 }
-const reach = reachInfo.reach;
+// ---- B2-1 (2026-10-15, benchmark area 2): the reach this plan is measured against is the reach ON THIS TOPIC ----
+// The site reach above is one number for the whole website, cached 30 days: on 2026-10-13 the SAME cached reach of 10 (measured
+// 2026-10-08 on "peppol uae" research) decided the plan for "erp implementation dubai" (lad_mv5pjt5y4aoa). MarketMuse subtracts a
+// topic-level Topic Authority from the difficulty and Semrush lowers PKD with the thematic distance to the domain's core topics; this
+// measures the same thing from the `ranked` pull this run already paid for, using the SAME on-topic test the rungs are filtered by
+// (RAD.headFit), so the keywords that count as "this topic" for the reach are the keywords that count as "this topic" for the plan.
+// It is used only with REACH_CFG.min_top10 on-topic top-10 keywords behind it; otherwise the site reach stays and the plan says so.
+const rankedAll = SR.available === false ? null : Object.entries(SR.keywords || {}).map(([keyword, r]) => ({ keyword, kd: r.kd, position: r.position }));
+const topic_authority = reachTopic(rankedAll, head, reachInfo.reach, { domain, match: (kw) => RAD.headFit(head, kw).ok });
+const reach = topic_authority.reach;
 
 // ---- the site's other ladders (rule R1: one search, one page) ----
 const settingsRows = rowsOf('Load Domain Ladder Settings');
@@ -916,9 +977,56 @@ if ((pool.head_geo || []).length) requirements.push({ item: 'Local trust signals
 requirements.push({ item: 'Entity and trust pages', detail: 'Organization schema, an about page with real credentials, author bylines and case studies; the content QA already adds schema to every generated page.' });
 requirements.push({ item: 'Publish on schedule and interlink', detail: 'Each rung page links up to the top page and sideways to one sibling; the top page links down to every rung page. Ranking only starts once the pages are live.' });
 
+// ---- B2-2 (2026-10-15, benchmark area 2): what this website ALREADY has on this topic, before one new page is planned ----
+// MarketMuse starts a plan from the site's topic inventory and its effort bands begin with "optimise the existing page if it matches the
+// topic; otherwise create a new one" (https://docs.marketmuse.com/reference/personalized-difficulty-and-topic-authority/). The ladder has
+// always decided improve-vs-new per page (`findExisting`), but it never counted it up, so a plan opened with five new pages and said
+// nothing about the pages the site already had on the same topic. The counts come from data already in the run: the page inventory, and
+// the keywords the site ranks for, both filtered with the SAME on-topic test as the rungs.
+// a page with no words of its own (the homepage: no title in the inventory and an empty path) matches nothing — RAD.headFit passes an
+// empty token set, so it has to be refused here or every site "already has a page" on every topic
+const onTopicPage = (p) => { try { const txt = [p.title || '', String(p.url || '').replace(/^https?:\/\/[^/]+/i, '').replace(/[^A-Za-z0-9]+/g, ' ')].join(' ');
+  return RAD.tokens(txt).length > 0 && RAD.headFit(head, txt).ok; } catch (e) { return false; } };
+const pagesOnTopic = []; const seenPg = new Set();
+for (const p of invPages) { const u = String(p.url || ''); if (!u || seenPg.has(u) || !onTopicPage(p)) continue; seenPg.add(u); pagesOnTopic.push({ url: u, title: String(p.title || '') }); }
+const allPlanned = planned ? [...rungPages, top] : [];
+const nImprove = allPlanned.filter(p => p.exists).length, nNew = allPlanned.length - nImprove;
+const bestPos = topic_authority.best;
+topic_authority.coverage = { pages_on_site: pagesOnTopic.length, pages: pagesOnTopic.slice(0, 8), ranked_keywords: topic_authority.on_topic,
+  top10_keywords: topic_authority.top10, best_position: bestPos ? bestPos.position : null, best_keyword: bestPos ? bestPos.keyword : '',
+  planned_total: allPlanned.length, planned_improve: nImprove, planned_new: nNew,
+  summary: !planned ? 'No pages were planned, so there is nothing to compare with what the site already has.'
+    : (!pagesOnTopic.length && !topic_authority.on_topic
+      ? 'Nothing on ' + domain + ' is about "' + head + '" yet — no page and no keyword it ranks for — so all ' + allPlanned.length + ' page(s) in this plan are new and this topic starts from zero.'
+      : domain + ' already has ' + pagesOnTopic.length + ' page(s) about "' + head + '" and ranks for ' + topic_authority.on_topic + ' keyword(s) on it ('
+        + topic_authority.top10 + ' in the top 10' + (bestPos ? ', best #' + bestPos.position + ' for "' + bestPos.keyword + '"' : '') + '). Of the '
+        + allPlanned.length + ' page(s) in this plan, ' + nImprove + ' improve' + (nImprove === 1 ? 's' : '') + ' a page you already have and ' + nNew + ' ' + (nNew === 1 ? 'is' : 'are') + ' new.')
+      + ' A search that an existing page already answers is never given a second page.' };
+// ---- B2-3 (2026-10-15, benchmark area 2): every planned page says why it sits where it sits ----
+// Semrush's Keyword Strategy Builder ranks the pages of a plan on five stated factors — relevance to the seed, search volume, keyword
+// difficulty, domain diversity and SERP features (https://www.semrush.com/kb/1058-keyword-strategy-builder). Ours ordered pages by rung
+// band and by the opportunity sum of their cluster and printed neither, so the plan's order had to be taken on trust. These are the
+// factors that really decided it, in the page's own row — nothing new is computed and nothing new is fetched.
+const unknownKd = reach + REACH_CFG.unknown_kd;
+const whyFactorsOf = (p) => ({ rung: p.rung, kd: p.kd == null ? null : p.kd, counted_kd: p.kd == null ? unknownKd : p.kd, reach,
+  difficulty_for_you: difficultyForYou(p.kd == null ? null : p.kd, reach, { position: p.your_position || null }),
+  keywords: p.rung === 4 ? 1 + (p.supporting || []).length : ((p.keywords || []).length || 1),
+  volume: p.rung === 4 ? (p.volume ?? null) : (p.total_volume ?? null), intent: p.intent || null,
+  status: p.exists ? 'improve' : 'new', your_position: p.your_position || null, links_up: (p.links_to || []).some(l => l.role === 'top') });
+const whyOf = (p) => { const f = whyFactorsOf(p); const b = [];
+  b.push((p.rung === 4 ? 'The destination page' : 'Rung ' + p.rung) + ': ' + (f.kd == null ? 'difficulty unknown, counted as ' + unknownKd : 'difficulty ' + f.kd)
+    + ' against the reach this plan is measured against (' + reach + ')' + (topic_authority.used ? ', measured on this topic' : ', measured across the whole site'));
+  b.push(f.keywords + ' keyword(s)' + (f.volume != null ? ', ' + f.volume + ' searches a month' : ', no search volume in the data'));
+  if (f.intent) b.push(f.intent + ' intent');
+  if (f.your_position) b.push('you are #' + f.your_position + ' for it today');
+  b.push(f.status === 'improve' ? 'improves ' + p.target_url + ', which already answers it' : 'a page you do not have yet');
+  if (f.links_up) b.push('links up to the main page');
+  return b.join('; ') + '.'; };
+for (const p of allPlanned) { p.why = whyOf(p); p.why_factors = whyFactorsOf(p); }
+
 // ---- pages to write now, in the plan's order (direct: the main page first; otherwise the supporting pages, the main page waits for support) ----
 const order = !planned ? [] : mainFirst ? [top, ...rungPages] : rungPages;
-const write_now = order.slice(0, pagesNow).map(p => ({ page_no: p.page_no, rung: p.rung, keyword: p.keyword, page_type: p.page_type, target_url: p.target_url, exists: p.exists, supporting: p.supporting, links_to: p.links_to, target_words: Number(p.target_words) || 0 }));   // R8: a rung page carries its own measured target now, not 0
+const write_now = order.slice(0, pagesNow).map(p => ({ page_no: p.page_no, rung: p.rung, keyword: p.keyword, page_type: p.page_type, target_url: p.target_url, exists: p.exists, supporting: p.supporting, links_to: p.links_to, target_words: Number(p.target_words) || 0, why: p.why || '' }));   // R8: a rung page carries its own measured target now, not 0   // B2-3: and the reason it is first
 const pages_total = planned ? rungPages.length + 1 : 0;
 const stats = { pool_size: (pool.research || {}).pool_size || 0, ai_reviewed: rel.size, relevant: kws.length, pages_total, rung_pages: planned ? rungPages.length : 0,
   keywords_covered: planned ? rungPages.reduce((s, p) => s + 1 + p.supporting.length, 0) + 1 + top.supporting.length : 0,
@@ -936,6 +1044,9 @@ const topic_radius = RAD.of({ reach, reach_method: reachInfo.method, domain,
 const head_radius = RAD.pick(topic_radius, head);
 const notes = [];
 if (refusal) notes.push(refusal.message);
+// B2-1 / B2-2: which reach this plan was measured against, and what the site already has on the topic — both in the owner's reading
+notes.push(topic_authority.note);
+if (planned) notes.push(topic_authority.coverage.summary);
 if (head_radius) notes.push('Topic radius — "' + head_radius.topic + '": ' + RAD.line(head_radius) + '.');
 if (poolRefused.length) notes.push(poolRefused.length + ' keyword(s) were left out of the ladder because they are other companies\' brands, government or portal searches, or navigational: ' + poolRefused.slice(0, 6).map(x => '"' + x.keyword + '" (' + x.reason + ')').join(', ') + (poolRefused.length > 6 ? ' …' : '') + '.');
 if (planned && plan_type === 'full' && rungPages.length && pages_total < 8) notes.push('Only ' + pages_total + ' pages could be planned from the data: the topic is narrow in ' + base.country + '. The ladder is shorter but still valid.');
@@ -954,7 +1065,8 @@ const ladder = { ladder_id: ladderId, head: { keyword: head, volume: top.volume,
   plan_type, difficulty_for_you, reach, months: planned ? plan.months : '', months_range: planned ? plan.months_range : null, stretch: planned && plan.stretch, planned, refusal, order: order_text,
   label: planned ? reachLabel(difficulty_for_you, plan) : dataRefused ? ('No ladder planned · ' + refusal.short) : (REACH_DIFF_LABEL[difficulty_for_you] + ' · no ladder'),
   chance: planned ? plan.chance : null, chance_text: planned ? reachChanceText(plan) : '', base_rate: REACH_BASE_RATE, refused_keywords: poolRefused.slice(0, 40),
-  reach_info: { reach, method: reachInfo.method, p75: reachInfo.p75 ?? null, size_reach: reachInfo.size_reach ?? null, sample: reachInfo.sample ?? null, top10: reachInfo.top10 ?? null, organic_keywords: reachInfo.organic_keywords ?? null, cached: !!reachInfo.cached, cached_at: reachInfo.cached_at || null },
+  reach_info: { reach: reachInfo.reach, method: reachInfo.method, p75: reachInfo.p75 ?? null, size_reach: reachInfo.size_reach ?? null, sample: reachInfo.sample ?? null, top10: reachInfo.top10 ?? null, organic_keywords: reachInfo.organic_keywords ?? null, cached: !!reachInfo.cached, cached_at: reachInfo.cached_at || null },   // B2-1: the SITE-wide measurement; `reach` above is what this topic was measured against
+  topic_authority,   // B2-1: what this site already wins on THIS topic, what it already has written about it, and which reach the plan used
   excluded_keywords: excluded.slice(0, 40), topic_radius, head_radius, off_topic_keywords: offTopic.slice(0, 20),   // R23: what the topic radius left out, with the reason   // G32: shown with the plan, never enforced on it
   words: { main: top.target_words || 0, rung: rungWords.words, main_source: top.target_words_source, rung_source: rungWords.source },   // R22: where each page's length target came from
   data_check: { pool_size: poolSize, minimum_pool: LADDER_MIN_POOL, head_measured: headMeasured, serp_checked: !serpOut, serp_error: serpOut, enough: !dataRefused },   // R23

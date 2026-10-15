@@ -235,6 +235,10 @@ function FeasibilityMark({ feas }: { feas: P }) {
 /** "Why this plan": the website's reach, the keyword's difficulty for it, the plan, its order and months (PIPELINE_FEATURE_SPEC.md §5.5). */
 function WhyThisPlan({ p, planType, difficulty }: { p: P; planType: PlanType; difficulty: DifficultyForYou | null }) {
   const info = obj(p.reach_info);
+  // B2-1 (2026-10-15): `reach_info` is the site-wide measurement; `reach` is what THIS plan was measured against, which is the reach for
+  // this topic when there was enough on-topic evidence to measure one. The two are shown as what they are, never as each other.
+  const ta = obj(p.topic_authority);
+  const siteReach = num(info.reach) ?? num(p.reach);
   const reach = num(p.reach) ?? num(info.reach);
   const kd = num(obj(p.head).kd);
   const how =
@@ -246,10 +250,18 @@ function WhyThisPlan({ p, planType, difficulty }: { p: P; planType: PlanType; di
   return (
     <Block title="Why this plan" icon={<Route />}>
       <ul className="space-y-2.5 text-sm leading-relaxed text-ink-2">
-        {reach != null && (
+        {siteReach != null && (
           <li>
-            <span className="font-medium text-ink">Your website’s reach: difficulty {reach}.</span> That is the difficulty it already wins ({how}
+            <span className="font-medium text-ink">Your website’s reach: difficulty {siteReach}.</span> That is the difficulty it already wins ({how}
             {info.cached === true && str(info.cached_at) ? `, measured ${fmtDate(str(info.cached_at))}` : ''}).
+          </li>
+        )}
+        {str(ta.note) && (
+          <li>
+            <span className="font-medium text-ink">
+              {ta.used === true ? `Measured on this topic: difficulty ${reach ?? ''}.` : 'Measured across the whole website.'}
+            </span>{' '}
+            {str(ta.note)}
           </li>
         )}
         {difficulty && (
