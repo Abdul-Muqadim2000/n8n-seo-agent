@@ -125,6 +125,36 @@
  },
  "monitors": {
   "SEO Agent \u2014 AI Growth": {
+   "ai_calls": [
+    {
+     "after": [
+      "Growth Metrics"
+     ],
+     "branch": 0,
+     "count_answer": "Count Answer (AI Outreach Writer)",
+     "count_per_item": true,
+     "count_prompt": "Count Prompt (AI Outreach Writer)",
+     "count_resume": "After Count (AI Outreach Writer)",
+     "count_rounds": 0,
+     "count_set": "Prompt For Count (AI Outreach Writer)",
+     "effort": "low",
+     "fields": [
+      "business",
+      "domain",
+      "facts",
+      "jobs",
+      "our_pages"
+     ],
+     "from": [],
+     "input": "Any AI Outreach?",
+     "max_tokens": 6000,
+     "model": "claude-sonnet-5-5",
+     "node": "AI Outreach Writer",
+     "ref": "$('Any AI Outreach?').item.json",
+     "streaming": false,
+     "template_chars": 2633
+    }
+   ],
    "ai_nodes": [
     "AI Outreach Writer"
    ],
@@ -140,6 +170,7 @@
    },
    "balance": "DFS Balance (Growth)",
    "balance_end": "DFS Balance End (Growth)",
+   "cost_cal": "Load Cost Factors (Growth)",
    "est": {
     "ai": 0.55,
     "dfs": 0.05
@@ -170,6 +201,7 @@
    ]
   },
   "SEO Agent \u2014 AI Pulse": {
+   "ai_calls": [],
    "ai_nodes": [],
    "alert_retry": {
     "from": "Settle Run Ledger (Pulse)",
@@ -183,6 +215,7 @@
    },
    "balance": "DFS Balance (Pulse)",
    "balance_end": "DFS Balance End (Pulse)",
+   "cost_cal": "Load Cost Factors (Pulse)",
    "est": {
     "ai": 0.004,
     "dfs": 0.08
@@ -213,6 +246,95 @@
    ]
   },
   "SEO Agent \u2014 AI Visibility Tracker": {
+   "ai_calls": [
+    {
+     "after": [
+      "AI Report"
+     ],
+     "branch": 0,
+     "count_answer": "Count Answer (AI Brief)",
+     "count_per_item": true,
+     "count_prompt": "Count Prompt (AI Brief)",
+     "count_resume": "After Count (AI Brief)",
+     "count_rounds": 0,
+     "count_set": "Prompt For Count (AI Brief)",
+     "effort": "low",
+     "fields": [
+      "facts"
+     ],
+     "from": [],
+     "input": "AI Brief Input",
+     "max_tokens": 8192,
+     "model": "claude-sonnet-5-5",
+     "node": "AI Brief",
+     "ref": "$('AI Brief Input').item.json",
+     "streaming": false,
+     "template_chars": 1497
+    },
+    {
+     "after": [
+      "Apply Analysis"
+     ],
+     "branch": 0,
+     "count_answer": "Count Answer (Answer Analyst)",
+     "count_per_item": true,
+     "count_prompt": "Count Prompt (Answer Analyst)",
+     "count_resume": "After Count (Answer Analyst)",
+     "count_rounds": 0,
+     "count_set": "Prompt For Count (Answer Analyst)",
+     "effort": "low",
+     "fields": [
+      "answers",
+      "business",
+      "fact_check",
+      "facts",
+      "known_competitors"
+     ],
+     "from": [],
+     "input": "Any Analyst Jobs?",
+     "max_tokens": 8192,
+     "model": "claude-sonnet-5-5",
+     "node": "Answer Analyst",
+     "ref": "$('Any Analyst Jobs?').item.json",
+     "streaming": false,
+     "template_chars": 2431
+    },
+    {
+     "after": [
+      "Prompt Rows"
+     ],
+     "branch": 0,
+     "count_answer": "Count Answer (Prompt Writer)",
+     "count_per_item": true,
+     "count_prompt": "Count Prompt (Prompt Writer)",
+     "count_resume": "After Count (Prompt Writer)",
+     "count_rounds": 0,
+     "count_set": "Prompt For Count (Prompt Writer)",
+     "effort": "low",
+     "fields": [
+      "business_name",
+      "business_type",
+      "city",
+      "count",
+      "country",
+      "domain",
+      "existing",
+      "has_brand_prompt",
+      "market_questions",
+      "search_questions",
+      "site_text",
+      "topics"
+     ],
+     "from": [],
+     "input": "Any Prompt Jobs?",
+     "max_tokens": 8192,
+     "model": "claude-sonnet-5-5",
+     "node": "Prompt Writer",
+     "ref": "$('Any Prompt Jobs?').item.json",
+     "streaming": false,
+     "template_chars": 2936
+    }
+   ],
    "ai_nodes": [
     "AI Brief",
     "Answer Analyst",
@@ -230,6 +352,7 @@
    },
    "balance": "DFS Balance (AI)",
    "balance_end": "DFS Balance End (AI)",
+   "cost_cal": "Load Cost Factors (AI)",
    "est": {
     "ai": 0.27,
     "dfs": 0.6
@@ -260,6 +383,7 @@
    ]
   },
   "SEO Agent \u2014 Audit Scheduler": {
+   "ai_calls": [],
    "ai_nodes": [],
    "alert_retry": {
     "from": "Settle Run Ledger (Audit)",
@@ -273,6 +397,7 @@
    },
    "balance": "DFS Balance (Audit)",
    "balance_end": "DFS Balance End (Audit)",
+   "cost_cal": "Load Cost Factors (Audit)",
    "est": {
     "ai": 0.0,
     "dfs": 0.0
@@ -301,6 +426,62 @@
    ]
   },
   "SEO Agent \u2014 Backlink Monitor": {
+   "ai_calls": [
+    {
+     "after": [
+      "Parse Backlinks"
+     ],
+     "branch": 0,
+     "count_answer": "Count Answer (Link Analyst)",
+     "count_per_item": true,
+     "count_prompt": "Count Prompt (Link Analyst)",
+     "count_resume": "After Count (Link Analyst)",
+     "count_rounds": 0,
+     "count_set": "Prompt For Count (Link Analyst)",
+     "effort": "low",
+     "fields": [
+      "business",
+      "domain",
+      "links",
+      "topics"
+     ],
+     "from": [],
+     "input": "Any Link Analyst?",
+     "max_tokens": 8192,
+     "model": "claude-sonnet-5-5",
+     "node": "Link Analyst",
+     "ref": "$('Any Link Analyst?').item.json",
+     "streaming": false,
+     "template_chars": 2002
+    },
+    {
+     "after": [
+      "Prospect Rows"
+     ],
+     "branch": 0,
+     "count_answer": "Count Answer (Outreach Writer)",
+     "count_per_item": true,
+     "count_prompt": "Count Prompt (Outreach Writer)",
+     "count_resume": "After Count (Outreach Writer)",
+     "count_rounds": 0,
+     "count_set": "Prompt For Count (Outreach Writer)",
+     "effort": "low",
+     "fields": [
+      "assets",
+      "business_name",
+      "domain",
+      "prospects"
+     ],
+     "from": [],
+     "input": "Any Outreach?",
+     "max_tokens": 8192,
+     "model": "claude-sonnet-5-5",
+     "node": "Outreach Writer",
+     "ref": "$('Any Outreach?').item.json",
+     "streaming": false,
+     "template_chars": 2518
+    }
+   ],
    "ai_nodes": [
     "Link Analyst",
     "Outreach Writer"
@@ -317,6 +498,7 @@
    },
    "balance": "DFS Balance (BL)",
    "balance_end": "DFS Balance End (BL)",
+   "cost_cal": "Load Cost Factors (BL)",
    "est": {
     "ai": 0.05,
     "dfs": 0.05,
@@ -397,6 +579,37 @@
    ]
   },
   "SEO Agent \u2014 Link Builder": {
+   "ai_calls": [
+    {
+     "after": [
+      "LB Draft QA"
+     ],
+     "branch": 0,
+     "count_answer": "Count Answer (Outreach Sequence Writer)",
+     "count_per_item": true,
+     "count_prompt": "Count Prompt (Outreach Sequence Writer)",
+     "count_resume": "After Count (Outreach Sequence Writer)",
+     "count_rounds": 0,
+     "count_set": "Prompt For Count (Outreach Sequence Writer)",
+     "effort": "low",
+     "fields": [
+      "business",
+      "domain",
+      "facts",
+      "home",
+      "jobs",
+      "signer"
+     ],
+     "from": [],
+     "input": "Any LB Writing?",
+     "max_tokens": 16000,
+     "model": "claude-sonnet-5-5",
+     "node": "Outreach Sequence Writer",
+     "ref": "$('Any LB Writing?').item.json",
+     "streaming": false,
+     "template_chars": 6595
+    }
+   ],
    "ai_nodes": [
     "Outreach Sequence Writer"
    ],
@@ -412,6 +625,7 @@
    },
    "balance": "DFS Balance (LB)",
    "balance_end": "DFS Balance End (LB)",
+   "cost_cal": "Load Cost Factors (LB)",
    "est": {
     "ai": 0.3,
     "dfs": 0.05

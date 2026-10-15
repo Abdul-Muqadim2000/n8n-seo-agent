@@ -986,6 +986,20 @@
    {
     "allowed": false,
     "maxTries": 3,
+    "name": "Count Prompt (AI Outreach Writer)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Count Answer (AI Outreach Writer)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
     "name": "DFS Balance (Growth)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
@@ -1110,6 +1124,48 @@
     "allowed": false,
     "maxTries": 3,
     "name": "Run Discovery (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Count Prompt (AI Brief)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Count Answer (AI Brief)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Count Prompt (Answer Analyst)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Count Answer (Answer Analyst)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Count Prompt (Prompt Writer)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Count Answer (Prompt Writer)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    },
@@ -1304,6 +1360,34 @@
    {
     "allowed": false,
     "maxTries": 3,
+    "name": "Count Prompt (Link Analyst)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Count Answer (Link Analyst)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Count Prompt (Outreach Writer)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Count Answer (Outreach Writer)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
     "name": "DFS Balance (BL)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
@@ -1441,6 +1525,20 @@
     "allowed": false,
     "maxTries": 3,
     "name": "Run LB DFS (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Count Prompt (Outreach Sequence Writer)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Count Answer (Outreach Sequence Writer)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    },
