@@ -253,7 +253,7 @@ try { renders = $('Render Key Pages').all().map(i => i.json || {}); } catch (e) 
 let raws = [];
 try { raws = $('Fetch Raw Pages').all().map(i => i.json || {}); } catch (e) {}
 let crawled = [];
-try { crawled = ($('Get Crawled Pages').first().json.tasks?.[0]?.result?.[0]?.items || []).filter(p => p && p.url); } catch (e) {}
+try { crawled = ($('Get Crawled Pages Answers').first().json.tasks?.[0]?.result?.[0]?.items || []).filter(p => p && p.url); } catch (e) {}
 
 const targets = reqs.filter(r => r && r.url && !r.skip);
 const plan = (reqs[0] || {}).render_plan || { pages: 0, cap: 0, crawl_js: false, figures: [] };

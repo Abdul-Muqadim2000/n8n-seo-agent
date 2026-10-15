@@ -524,7 +524,7 @@ const base = $('Rank Keywords').first().json;
 const ks = JSON.parse(JSON.stringify(base.keyword_strategy || {}));
 const prio = $('Priority Keywords').all().map(i => i.json);
 const serps = $input.all().map(i => i.json);
-let aiRes = null; try { aiRes = $('AI Demand').first().json; } catch (e) { aiRes = null; }
+let aiRes = null; try { aiRes = $('AI Demand Answers').first().json; } catch (e) { aiRes = null; }
 
 // ---- AI search demand (ChatGPT & co) ----
 const aiMap = new Map(); let aiAvailable = false, aiError = '';

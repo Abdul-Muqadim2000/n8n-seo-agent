@@ -11,7 +11,7 @@
 const merged = $('Link Merge').all().map(i => i.json).filter(m => !m.skip);
 let lreqs = [], lresps = []; try { lreqs = $('Locate Requests').all().map(i => i.json); lresps = $('Fetch Locate').all().map(i => i.json || {}); } catch (e) {}
 let prospects = []; try { prospects = $('Load Link Prospects').all().map(i => i.json).filter(x => x && x.prospect_domain); } catch (e) {}
-let dreqs = [], dresps = []; try { dreqs = $('BL Requests').all().map(i => i.json); dresps = $('Run BL Requests').all().map(i => i.json || {}); } catch (e) {}
+let dreqs = [], dresps = []; try { dreqs = $('BL Requests').all().map(i => i.json); dresps = $('Run BL Requests Answers').all().map(i => i.json || {}); } catch (e) {}
 const host = (u) => { const m = String(u || '').match(/^(?:https?:)?\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i); return m ? m[1].toLowerCase().replace(/^www\./, '') : ''; };
 const same = (h, d) => !!h && (h === d || h.endsWith('.' + d));
 const parse = (r) => { if (!r) return {}; if (r.body && typeof r.body === 'object') return r.body; if (r.results) return r; try { return JSON.parse(String(r.body ?? r.data ?? '')); } catch (e) { return {}; } };

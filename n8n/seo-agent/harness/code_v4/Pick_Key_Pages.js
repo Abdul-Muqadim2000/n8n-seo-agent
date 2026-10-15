@@ -198,7 +198,7 @@ const SM = (() => {
 // 308-redirects on a www site. With no model (an older run) or another site's domain, the bare domain keeps today's behaviour.
 let SITE_MODEL = null; try { SITE_MODEL = $('Site Model').first().json.site_model || null; } catch (e) {}
 const siteUrlOf = (dom, path) => SM.siteUrl(SITE_MODEL && SITE_MODEL.domain && SITE_MODEL.domain === SM.helpers.bare(dom) ? SITE_MODEL : { domain: dom }, path);
-const all = $('Get Crawled Pages').first().json.tasks?.[0]?.result?.[0]?.items || [];
+const all = $('Get Crawled Pages Answers').first().json.tasks?.[0]?.result?.[0]?.items || [];
 const domain = $('Check Crawl').first().json.domain;
 const pages = all.filter(p => p && p.url && (p.status_code == null || p.status_code === 200));
 

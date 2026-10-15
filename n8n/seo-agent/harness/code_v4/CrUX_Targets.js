@@ -208,7 +208,7 @@ const CRUX = {
 
 const base = $('Check Crawl').first().json;
 let crawled = [];
-try { crawled = ($('Get Crawled Pages').first().json.tasks?.[0]?.result?.[0]?.items || []).filter(p => p && p.url); } catch (e) {}
+try { crawled = ($('Get Crawled Pages Answers').first().json.tasks?.[0]?.result?.[0]?.items || []).filter(p => p && p.url); } catch (e) {}
 let SITE_MODEL = null; try { SITE_MODEL = $('Site Model').first().json.site_model || null; } catch (e) {}
 let prev = {}; try { prev = $input.first().json || {}; } catch (e) {}
 const model = SITE_MODEL && SITE_MODEL.domain && SITE_MODEL.domain === SM.helpers.bare(base.domain) ? SITE_MODEL : { domain: base.domain };

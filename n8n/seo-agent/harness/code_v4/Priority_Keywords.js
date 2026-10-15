@@ -214,7 +214,7 @@ const KWI = (() => {
   };
   return { CFG, gscSeeds, calibrate, serpClusters, clusterText, featureLoss, liveChecks, ladderChecks, checkCost, urlKey, BASIS_TEXT, helpers: { bare, low, num } };
 })();
-// One item per priority keyword for the live SERP check ("Candidate SERP"). Always at least one item.
+// One item per priority keyword for the live SERP check ("Candidate SERP Answers"). Always at least one item.
 // 2026-10-13 (FIX_PLAN G8, criterion K4): the live intent / page-type check was fixed at 8 keywords; the limit is now
 // CONFIG.live_serp_checks (Normalize Input: 16 by default, hard cap 25, about $0.002 a check), the same number Rank Keywords
 // used when it chose the list.

@@ -3,7 +3,7 @@
 // Competitors: configured, kept from earlier runs, or picked now from the Labs competitors (big platforms and the site itself excluded).
 const API = 'https://api.dataforseo.com/v3/';
 const plans = $('BL Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
-const reqs = $('BL Requests').all().map(i => i.json); let resps = []; try { resps = $('Run BL Requests').all().map(i => i.json || {}); } catch (e) {}   // not run on a free-sources-only check
+const reqs = $('BL Requests').all().map(i => i.json); let resps = []; try { resps = $('Run BL Requests Answers').all().map(i => i.json || {}); } catch (e) {}   // not run on a free-sources-only check
 const BIG = /(^|\.)(google|youtube|facebook|linkedin|wikipedia|amazon|apple|microsoft|reddit|quora|instagram|x|twitter|tiktok|medium|github|indeed|glassdoor|gov)\./i;
 const out = [];
 for (const p of plans) {

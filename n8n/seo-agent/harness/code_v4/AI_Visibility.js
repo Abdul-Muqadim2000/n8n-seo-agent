@@ -1,6 +1,6 @@
 const base = $('Parse Content Review').first().json;
 const qs = $('AI Queries').all().map(i => i.json);
-const serps = $('AI SERP').all().map(i => i.json);
+const serps = $('AI SERP Answers').all().map(i => i.json);
 const prompts = $('LLM Prompts').all().map(i => i.json);
 const answers = $input.all().map(i => i.json);
 

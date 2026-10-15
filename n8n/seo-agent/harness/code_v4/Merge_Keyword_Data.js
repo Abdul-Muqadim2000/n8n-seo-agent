@@ -150,7 +150,7 @@ const kdStats = RT.one((() => { try { return $('Keyword Data').first().json; } c
 const keyword_data_evidence = RT.evidence('search volume, difficulty and cost per click for this keyword', kdStats, { unit: 'request' });
 const res = kdStats.answers[0] || {};
 let site_authority = null;
-try { const m = $('Site Authority').first().json?.tasks?.[0]?.result?.[0]?.items?.[0]?.metrics?.organic; if (m) site_authority = { organic_keywords: m.count ?? 0, top3: (m.pos_1 || 0) + (m.pos_2_3 || 0), top10: (m.pos_1 || 0) + (m.pos_2_3 || 0) + (m.pos_4_10 || 0), est_monthly_traffic: Math.round(m.etv || 0) }; } catch (e) {}
+try { const m = $('Site Authority Answers').first().json?.tasks?.[0]?.result?.[0]?.items?.[0]?.metrics?.organic; if (m) site_authority = { organic_keywords: m.count ?? 0, top3: (m.pos_1 || 0) + (m.pos_2_3 || 0), top10: (m.pos_1 || 0) + (m.pos_2_3 || 0) + (m.pos_4_10 || 0), est_monthly_traffic: Math.round(m.etv || 0) }; } catch (e) {}
 const item = res.tasks?.[0]?.result?.[0]?.items?.[0] || null;
 
 const info = item?.keyword_info || {};

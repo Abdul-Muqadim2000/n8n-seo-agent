@@ -701,7 +701,7 @@ const pair = (a, b) => { try { const R = $(a).all().map(i => i.json); const S = 
 const prospects = rows('Load Link Prospects'), outreach = rows('Load Link Outreach'), listingRows = rows('Load Listings'), ledger = rows('Load Backlinks'), impacts = rows('Load Link Impact'), queries = rows('Load Query History');
 const contentLog = rows('Load Content Log');   // G12: the dates pages went live, for the page-change test of section 5b
 const sources = pair('LB Source Requests', 'Fetch LB Sources'), pagesRead = pair('LB Page Requests', 'Fetch LB Pages'), second = pair('LB Second Requests', 'Fetch LB Second');
-const dfs = pair('LB DFS Requests', 'Run LB DFS');   // L6: the competitors' most-linked pages (kind `pages`); the broken-link answers are read in LB Page Requests
+const dfs = pair('LB DFS Requests', 'Run LB DFS Answers');   // L6: the competitors' most-linked pages (kind `pages`); the broken-link answers are read in LB Page Requests
 const now = new Date(); const iso = now.toISOString(); const day = iso.slice(0, 10);
 const htmlOf = (x) => String(x.body ?? x.data ?? ''); const statusOf = (x) => Number(x.statusCode || x.status || 0);
 const jsonOf = (x) => { if (!x) return null; if (x.body && typeof x.body === 'object') return x.body; if (x.posts || Array.isArray(x)) return x; try { return JSON.parse(String(x.body ?? x.data ?? '')); } catch (e) { return null; } };

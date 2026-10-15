@@ -165,7 +165,10 @@ const v = $('Assess Validate').first().json;
 const reqs = $('Assess Requests').all().map(i => i.json);
 const res = $input.all().map(i => i.json);
 const answer = (kind) => { const i = reqs.findIndex(r => r.kind === kind); return i >= 0 ? res[i] : undefined; };
-const dfs_cost = +res.reduce((s, x) => s + (x && Array.isArray(x.tasks) ? x.tasks.reduce((a, t) => a + (Number(t && t.cost) || 0), 0) : 0), 0).toFixed(4);
+// B-A10 (2026-10-15, R28): what both attempts really cost, each task counted once by its own id — the gate's own figure.
+const __ev = (res.find(x => x && x.__dfs) || {}).__dfs || null;
+const dfs_cost = __ev && Number.isFinite(Number(__ev.cost_usd)) ? Number(__ev.cost_usd)
+  : +res.reduce((s, x) => s + (x && Array.isArray(x.tasks) ? x.tasks.reduce((a, t) => a + (Number(t && t.cost) || 0), 0) : 0), 0).toFixed(4);
 const ov = answer('overview');
 if (!reachTaskOk(ov)) return [{ json: { ok: false, error: 'DataForSEO keyword overview failed: ' + reachError(ov), dfs_cost } }];
 const it = ((((ov.tasks[0].result || [])[0]) || {}).items || [])[0] || null;

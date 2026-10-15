@@ -634,7 +634,7 @@ const plans = $('LB Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 const rows = (n) => { try { return $(n).all().map(i => i.json).filter(r => r && typeof r === 'object' && Object.keys(r).length && !r.error); } catch (e) { return []; } };
 const prospects = rows('Load Link Prospects'), outreach = rows('Load Link Outreach'), ledger = rows('Load Backlinks');
 let sreqs = [], sresps = []; try { sreqs = $('LB Source Requests').all().map(i => i.json); sresps = $('Fetch LB Sources').all().map(i => i.json || {}); } catch (e) {}
-let dreqs = [], dresps = []; try { dreqs = $('LB DFS Requests').all().map(i => i.json).filter(r => !r.skip); dresps = $('Run LB DFS').all().map(i => i.json || {}); } catch (e) {}
+let dreqs = [], dresps = []; try { dreqs = $('LB DFS Requests').all().map(i => i.json).filter(r => !r.skip); dresps = $('Run LB DFS Answers').all().map(i => i.json || {}); } catch (e) {}
 const body = (r) => { if (!r) return null; if (r.body && typeof r.body === 'object') return r.body; if (r.posts || r.results || Array.isArray(r)) return r; try { return JSON.parse(String(r.body ?? r.data ?? '')); } catch (e) { return null; } };
 const BIG = /(^|\.)(google|youtube|facebook|linkedin|wikipedia|amazon|apple|microsoft|reddit|quora|instagram|twitter|x|tiktok|medium|github|pinterest|bing|yahoo|duckduckgo)\.[a-z.]+$/i;
 const DOC = /\.(pdf|docx?|xlsx?|pptx?|zip|csv|xml|json|txt|mp4|mp3)(\?|$)/i;

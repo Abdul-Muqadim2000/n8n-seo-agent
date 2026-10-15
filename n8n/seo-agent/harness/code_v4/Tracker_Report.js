@@ -1004,6 +1004,9 @@ const FITR = {
 // Anything volatile is worded as an observation of one search at one moment (_serp_obs.js, D26), never as a fact about the query.
 const FORM_URL = 'http://localhost:5678/form/54f85234-172e-43e6-a84d-b5ecaa140e7d', API_URL = 'http://localhost:5678/webhook/seo-keyword-check';
 const plan = $('Tracker Plan').all().map(i => i.json).filter(p => p && !p.nothing_to_do);
+// B-A10 (2026-10-15, INVARIANTS rule 3): what the week's checks really did — asked, answered, failed, sent again — read from
+// the gate's own evidence block. A week measured on fewer keywords than the last one is not a fall, and now it says so.
+const checkEvidence = (() => { try { return $('SERP Check Answers').first().json.__dfs || null; } catch (e) { return null; } })();
 const pos = $('Parse Positions').all().map(i => i.json);
 let history = []; try { history = $('Load History').all().map(i => i.json).filter(r => r && r.ladder_id); } catch (e) {}
 // v4.8 display-only flags for the app (nothing in the e-mail changes): won / stuck per ladder; published dates from the content log, page facts from the ladder rows
@@ -1227,7 +1230,10 @@ for (const [id, items] of byLadder) {
       featured_snippet: fcount(f => f.featured_snippet.shown), snippet_ours: fcount(f => f.featured_snippet.ours),
       people_also_ask: fcount(f => f.people_also_ask.shown), local_pack: fcount(f => f.local_pack.shown),
       video: fcount(f => f.video.shown), shopping: fcount(f => f.shopping.shown), not_read: rowsK.filter(r => (serps.get(r.keyword) || {}).features && serps.get(r.keyword).features.unavailable).length },
-    head_line: headSerp ? headSerp.line : '', mobile_checked: rowsK.filter(r => (mobiles.get(r.keyword) || {}).fresh).length };
+    head_line: headSerp ? headSerp.line : '', mobile_checked: rowsK.filter(r => (mobiles.get(r.keyword) || {}).fresh).length,
+    checks: checkEvidence ? { asked: checkEvidence.asked, read: checkEvidence.checked, failed: checkEvidence.failed,
+      sent_again: checkEvidence.retried, answered_on_retry: checkEvidence.retry_answered, unavailable: checkEvidence.unavailable,
+      note: checkEvidence.note || '', cost_usd: checkEvidence.cost_usd ?? null, cost_basis: checkEvidence.cost_basis || '' } : null };
   out.push({ json: { ladder_id: id, domain: head.domain, head_keyword: head.head_keyword, email: head.email || '', callback_url: head.callback_url || '', request_id: head.request_id || '',
     subject, html, status: 'progress', stage: 'rank_tracker', checked_at: nowCheck,
     positions: rowsK.map(r => { const s = serps.get(r.keyword), m = mobiles.get(r.keyword);

@@ -1,6 +1,6 @@
 const base = $('Competitor Analysis').first().json;
 const targets = $('KW Targets').all().map(i => i.json);
-const ranked = $('Ranked Keywords').all().map(i => i.json);
+const ranked = $('Ranked Keywords Answers').all().map(i => i.json);
 const ideasRes = $input.first().json || {};
 const seeds = $('Fallback Queries').all().map(i => i.json.query).filter(Boolean);
 const INTENTS = ['informational', 'navigational', 'commercial', 'transactional'];

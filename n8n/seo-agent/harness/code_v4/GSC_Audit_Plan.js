@@ -497,7 +497,7 @@ const domain = String(crawl.domain || base.domain || '').toLowerCase();
 // 308-redirects on a www site. With no model (an older run) or another site's domain, the bare domain keeps today's behaviour.
 let SITE_MODEL = null; try { SITE_MODEL = $('Site Model').first().json.site_model || null; } catch (e) {}
 const siteUrlOf = (dom, path) => SM.siteUrl(SITE_MODEL && SITE_MODEL.domain && SITE_MODEL.domain === SM.helpers.bare(dom) ? SITE_MODEL : { domain: dom }, path);
-let items = []; try { items = ($('Get Crawled Pages').first().json.tasks || [])[0].result[0].items || []; } catch (e) { items = []; }
+let items = []; try { items = ($('Get Crawled Pages Answers').first().json.tasks || [])[0].result[0].items || []; } catch (e) { items = []; }
 const norm = (u) => String(u || '').trim().replace(/#.*$/, '');
 const pages = items.filter(p => p && p.url && (p.resource_type || 'html') === 'html').map(p => ({ url: norm(p.url), status: Number(p.status_code) || 0, depth: p.click_depth == null ? null : Number(p.click_depth), inbound: Number((p.meta || {}).inbound_links_count ?? p.inbound_links_count ?? 0) || 0,
   canonical: String((p.meta || {}).canonical || ''), title: String((p.meta || {}).title || ''), orphan: !!(p.checks && p.checks.is_orphan_page), redirect: !!(p.checks && (p.checks.is_redirect || p.checks.redirect_loop)), broken: !!(p.checks && (p.checks.is_broken || p.checks.is_4xx_code || p.checks.is_5xx_code)) }));

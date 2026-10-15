@@ -1,6 +1,6 @@
 const base = $('Schema Findings').first().json;
 const list = $('Pick Competitors').all().map(i => i.json);
-const ov = $('Domain Overview').all().map(i => i.json);
+const ov = $('Domain Overview Answers').all().map(i => i.json);
 const AGES = $('Domain Ages').first().json.ages || {};   // v4.6: stored registration dates; free RDAP first, paid WHOIS only for the gaps
 
 const rows = list.map((c, i) => {

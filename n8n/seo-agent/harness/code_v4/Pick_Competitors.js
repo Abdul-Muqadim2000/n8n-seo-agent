@@ -1,6 +1,6 @@
 const base = $('Schema Findings').first().json;
 const ours = base.domain;
-const labsItems = $('Find Competitors').first().json.tasks?.[0]?.result?.[0]?.items || [];
+const labsItems = $('Find Competitors Answers').first().json.tasks?.[0]?.result?.[0]?.items || [];
 const queries = $('Fallback Queries').all().map(i => i.json.query);
 const serps = $input.all().map(i => i.json);
 

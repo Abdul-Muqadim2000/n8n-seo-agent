@@ -805,16 +805,19 @@ const SM = (() => {
 })();
 const plans = $('BL Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 const all = (n) => { try { return $(n).all().map(i => i.json || {}); } catch (e) { return []; } };
-const reqs = all('BL Requests'), resps = all('Run BL Requests');
-const greqs = all('Gap Requests'), gresps = all('Run Gap Requests');
-const areqs = all('Authority Requests'), aresps = all('Run Authority');
+const reqs = all('BL Requests'), resps = all('Run BL Requests Answers');
+const greqs = all('Gap Requests'), gresps = all('Run Gap Requests Answers');
+const areqs = all('Authority Requests'), aresps = all('Run Authority Answers');
 const dreqs = all('DR Requests'), dresps = all('Fetch DR');
 const merged = all('Link Merge').filter(m => !m.skip);
 const ver = all('Verify Links').filter(v => !v.skip);
 const ljobs = all('Link Analyst Jobs').filter(j => !j.skip), louts = all('Link Analyst');
 const SPAM_WORDS = LK.SPAM_RE;   // one list of link-selling words for new links, the ledger gate and the Link Builder (D3)
 const BIG = /(^|\.)(google|youtube|facebook|linkedin|wikipedia|amazon|apple|microsoft|reddit|quora|instagram|twitter|x|tiktok|medium|github|pinterest|blogspot|wordpress|tumblr)\.[a-z.]+$/i;
-const result = (rs, i) => { const t = ((rs[i] || {}).tasks || [])[0] || {}; return { ok: t.status_code === 20000, res: (t.result || [])[0] || null, cost: Number(t.cost) || 0, error: t.status_code && t.status_code !== 20000 ? t.status_message : ((rs[i] || {}).error ? String((rs[i].error.message || rs[i].error)).slice(0, 160) : null) }; };
+// B-A10 / R28 (2026-10-15): the cost is both attempts of the in-200 gate, each task counted once by its own id — the gate
+// puts that figure on the item, because the merged answer is the retry's and a first attempt that was billed and then
+// replaced (a task answering 20000 with an empty result did the work) would otherwise vanish from the bill.
+const result = (rs, i) => { const t = ((rs[i] || {}).tasks || [])[0] || {}; return { ok: t.status_code === 20000, res: (t.result || [])[0] || null, cost: Number.isFinite(Number((rs[i] || {}).__dfs_cost_usd)) ? Number((rs[i] || {}).__dfs_cost_usd) : (Number(t.cost) || 0), error: t.status_code && t.status_code !== 20000 ? t.status_message : ((rs[i] || {}).error ? String((rs[i].error.message || rs[i].error)).slice(0, 160) : null) }; };
 const pathOf = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/i, '') || '/';
 const toks = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').split(' ').filter(t => t.length > 2);
 const parseJ = (raw) => { if (raw && typeof raw === 'object') return raw; const s = String(raw || '').replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, ''); try { return JSON.parse(s); } catch (e) { const a = s.indexOf('{'), b = s.lastIndexOf('}'); try { return JSON.parse(s.slice(a, b + 1)); } catch (e2) { return null; } } };

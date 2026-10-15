@@ -1027,7 +1027,7 @@ A1-A4 were built in the same pass (build section 61, harness S71). What follows 
 | B-R2 | **No client-facing branding or portal.** G15's share links exist and match or beat the only competitor that has them, but no run has ever exercised the app UI, and a client has no branded place to look | Medium | the app | white-label-lite: the company's name and logo on a shared report, and an owner-session browser pass so the UI is evidenced at all | open |
 | B-R3 | **The app's estimate disagrees with the engine's** (also B-B1): `app/shared/src/constants.ts` / `estimate.ts` carry the 2026-10-02 table, 1.3x-2.5x high, which is why runs were refused at "$5.74 of $6". The engine now publishes a calibrated `run_cost_estimate_usd` | Medium | the app | show the engine's figure, and keep one table, not two | fixed 2026-10-15 (app: one table; the engine figure is read when it arrives) |
 
-| B-A10 | **R18's gate reaches three paths, not the class.** The in-200 retry gate (`_dfs_retry.js`) covers the SERP, facts and keyword-data calls; a ratchet added on 2026-10-15 (`retry_lint.check_in200`, `harness/in200_baseline.json`) measures the rest and **48 DataForSEO nodes across 12 workflows are outside a recorded gate** (the untouched v3 export excluded). The build now refuses a *new* ungated node, so the debt cannot grow | Medium | `retry_lint.py`, the builders' DataForSEO nodes | register R18's existing chains with `record_gate()`, then gate the remaining calls workflow by workflow, deleting each name from the baseline as it lands | open |
+| B-A10 | **R18's gate reaches three paths, not the class.** The in-200 retry gate (`_dfs_retry.js`) covers the SERP, facts and keyword-data calls; a ratchet added on 2026-10-15 (`retry_lint.check_in200`, `harness/in200_baseline.json`) measures the rest and **48 DataForSEO nodes across 12 workflows are outside a recorded gate** (the untouched v3 export excluded). The build now refuses a *new* ungated node, so the debt cannot grow | Medium | `retry_lint.py`, the builders' DataForSEO nodes | register R18's existing chains with `record_gate()`, then gate the remaining calls workflow by workflow, deleting each name from the baseline as it lands | fixed 2026-10-15 (build section 75, S85): **72 of 95 DataForSEO calls across all 12 workflows are inside a recorded gate**, 21 calls spliced, baseline 49 -> 23 and every remaining row carries its reason. The debt was never 49: `check_in200` ran on the **main workflow only**, so the ten `DFS Balance End` nodes B-A5 added entered ungated and were never measured — the true figure was 59, and `retry_lint.check_all` now walks every generated workflow and fails on a stale baseline row |
 
 ### 3.15 What the 2026-10-15 fix batch found (B-F items)
 
@@ -1270,6 +1270,27 @@ lineage 10/16 -> **13/16**, like-for-like 4/6 -> **6/6**, withheld 3/4 -> **4/4*
 **Three lints, three holes of the same kind, in one day** (`gate_lint` counted an inlined kit as a gate; `lineage_lint` counted a kit's
 own header and then its rendered output; `state_lint` found four in itself before it was merged). The lesson is recorded here because it
 will recur: **a lint that reads generated source must strip the kit — comments included — before it asks whether a node calls a kit.**
+
+**B-A10 closed, and the fourth lint that measured less than it claimed (2026-10-15, build section 75, S85).** Harness 4845; main
+workflow 519 -> **625 nodes**. Left on the ratchet with reasons, not excuses: the 12 free `DFS Balance` probes and 10 `DFS Balance End`
+nodes (they fail open, `CC.dfsDay` drops a 0 reading and says so, and nothing scores on them) and `Get Crawl Summary` (already a poll
+loop). **Money:** both attempts are summed with each task counted once by its id (`__dfs.cost_usd` / `__dfs_cost_usd` per item), retries
+joined `__LEDGER_NODES`, and *Start Crawl* never re-sends an empty result.
+
+Three corrections, each against something a brief or the register asserted:
+
+- **The ratchet only measured one workflow.** `check_in200` ran on the main workflow alone, so ten nodes added the day before entered
+  ungated and were invisible to it — 49 reported, 59 real. This is the **fourth** lint this week found measuring less than it claimed
+  (`gate_lint` counted an inlined kit; `lineage_lint` counted a kit's header comment and then its rendered output; `state_lint` found four
+  such holes in itself). The pattern is now explicit in the register: **a new lint's first question must be "what does it not look at?"**
+- **`record_gate()` replaced a workflow's chain instead of extending it**, which is why section 70 had to re-pass section 56's by hand.
+- **A node can name another through a helper**: *Parse Backlinks*, which prices the whole run, reads `all('Run BL Requests')`, so a naive
+  `$('X')` replace would have paid for the retries and then ignored them. The splice moves argument-position names with comments stripped
+  and fails by name on anything else.
+
+| ID | Title | Impact | Where | Fix | Status |
+|---|---|---|---|---|---|
+| B-A11 | **Three nodes still degrade silently when both attempts fail.** *Pick Competitors*, *Analyze Keywords* and *Competitor Analysis* carry on with what they have instead of marking their evidence `unavailable` — pre-existing, and now behind a retry, so it takes two failures rather than one. Everywhere else the gate's refusal was verified reaching the output (Parse Positions, Site SERP, Trends, Assess Result on a 502, Build Keyword Strategy, Collect Research, Analyze Backlinks, Merge Keyword Data, Save Task ID) | Medium | the three nodes | mark `unavailable` and refuse to advise from it, as the other nine do | **open** |
 
 **A process defect this batch found (B-P1).** `isolation: "worktree"` cut both agents' worktrees from `edca460` — the last merge to
 `main` — which is **47 commits behind** the branch tip: no build sections 55–66, no S67–S74, and `docs/system-review-2026-10-14/` did

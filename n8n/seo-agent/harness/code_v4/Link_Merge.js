@@ -241,7 +241,7 @@ const LK = (() => {
 
 const plans = $('BL Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 const all = (n) => { try { return $(n).all().map(i => i.json || {}); } catch (e) { return []; } };
-const reqs = all('BL Requests'), resps = all('Run BL Requests');
+const reqs = all('BL Requests'), resps = all('Run BL Requests Answers');
 const sreqs = all('Source Requests'), sresps = all('Fetch Sources');
 const nreqs = all('News Requests'), nresps = all('Fetch News');
 const bcreqs = all('Bing Requests'), bcresps = all('Fetch Bing Counts'), breqs = all('Bing Link Requests'), bresps = all('Fetch Bing');

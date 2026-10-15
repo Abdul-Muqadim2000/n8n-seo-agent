@@ -167,7 +167,7 @@ let rows = []; try { rows = $('Load Site Cache').all().map(i => i.json); } catch
 const stored = reachCached(rows, domain, d.location_code);
 if (stored) return [{ json: { ...stored, domain, save: false } }];
 let reqs = [], res = [];
-try { reqs = $('Reach Requests (Discovery)').all().map(i => i.json).filter(r => r && !r.skip); res = $('Run Reach Requests').all().map(i => i.json); } catch (e) { reqs = []; res = []; }
+try { reqs = $('Reach Requests (Discovery)').all().map(i => i.json).filter(r => r && !r.skip); res = $('Run Reach Requests Answers').all().map(i => i.json); } catch (e) { reqs = []; res = []; }
 const parsed = reachParse(reqs, res);
 const info = reachFrom(parsed.ranked, parsed.authority);
 const save = info.method !== 'default';

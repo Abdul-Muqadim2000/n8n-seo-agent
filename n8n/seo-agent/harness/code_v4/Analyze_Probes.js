@@ -2,7 +2,7 @@ const base = $('Check Crawl').first().json;
 const domain = base.domain;
 const probes = [...$('Build Probes').all(), ...$('Content Probes').all()].map(i => i.json);
 const results = [...$('Run Probes').all(), ...$('Run Content Probes').all()].map(i => i.json);
-const crawled = $('Get Crawled Pages').first().json.tasks?.[0]?.result?.[0]?.items || [];
+const crawled = $('Get Crawled Pages Answers').first().json.tasks?.[0]?.result?.[0]?.items || [];
 
 const R = {};
 probes.forEach((p, i) => {

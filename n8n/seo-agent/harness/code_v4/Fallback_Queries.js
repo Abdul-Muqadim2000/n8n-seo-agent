@@ -1,6 +1,6 @@
 // Queries used to discover competitors on Google: what this site's key pages are about, taken from H1s/titles of shallow pages.
 const base = $('Schema Findings').first().json;
-const pages = $('Get Crawled Pages').first().json.tasks?.[0]?.result?.[0]?.items || [];
+const pages = $('Get Crawled Pages Answers').first().json.tasks?.[0]?.result?.[0]?.items || [];
 const brand = String(base.domain || '').split('.')[0].toLowerCase();
 const isHome = (u) => /^https?:\/\/[^\/]+\/?$/.test(u || '');
 const skip = (u) => /privacy|cookie|terms|security|legal|contact|about|insights|blog|news|careers|team|faq|login|cart|thank|404|sitemap|\/tag\/|\/category\/|\/author\//i.test(u || '');

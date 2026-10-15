@@ -223,7 +223,7 @@ const KWI = (() => {
 // instead of modelled from the provider's volume - and says which of the two it is (KWI.calibrate). Search Console queries
 // the providers never returned join the pool as candidates in their own right, with no invented search volume.
 const base = (() => { try { const x = $('Search Console Seeds (Discovery)').first().json; if (x && Array.isArray(x.seeds) && x.seeds.length) return x; } catch (e) {} return $('Seed List').first().json; })();
-const reqA = $('Research Requests').all().map(i => i.json), resA = $('Run Research').all().map(i => i.json);
+const reqA = $('Research Requests').all().map(i => i.json), resA = $('Run Research Answers').all().map(i => i.json);
 const reqB = $('Competitor Keyword Requests').all().map(i => i.json), resB = $input.all().map(i => i.json);
 const goal = base.goal || 'leads';
 const brand = String(base.domain || '').split('.')[0].toLowerCase();
