@@ -8292,6 +8292,112 @@ def _b83_checks():
 
 log('A link won once is not a link you still have (2026-10-15, benchmark area 11, rows B11-1 / B11-2 / B11-3 / B11-4; BENCH_AREA11_link_building.md). The rubric names Pitchbox / Respona: opened 2026-10-15, Respona no longer sells outreach software at all (pay-per-placement guest posts, $100-$500 by the host\'s Ahrefs DR, the article written by them and the customer\'s anchor placed, exact match offered), Postaga answers 404, and Semrush has withdrawn its Link Building Tool documentation - Pitchbox is the one leader still publishing a mechanism. B11-2: a link won through outreach was proven exactly once, at the reply, and never read again; a page no crawler indexes never enters the backlink ledger either, so the Backlink Monitor never reached it, and "Links won" counted it for ever while about a third of links go within a year (Linkody, 865,000 backlinks, June 2026). LB Page Requests now queues every won link the ledger does NOT carry (12 a run, oldest first, free GETs, never a page the monitor already fetches), LB Assemble reads it with the same LK.verify and runs the state machine - found is live and the miss count resets, missing or gone is ONE miss and at_risk before two in a row make it lost, and a bot wall, a JavaScript shell or a fetch error is not_checked with the miss count untouched - and only a proven loss takes the prospect off won, with the date it was won and what we found. The reading rides checks_json, so no Data Table column is added. Pitchbox re-checks the top 100 links monthly; Respona asks the customer to notice. B11-1, B11-3 and B11-4 are in app/: a rate is withheld under a derived floor (the bounce one from the 2% limit it is judged against, unmeasurable under 50 sends), the postal address rides every commercial message and not only the first (CAN-SPAM is per message, at up to $53,088 each), and SPF / DKIM is re-read weekly and refuses a NEW conversation from a domain publishing neither - Google\'s own rule for every sender')
 
+# 80. A METHOD WE PUBLISHED AND A TEST WE NEVER RAN (2026-10-15, benchmark programme area 7 —
+#     docs/system-review-2026-10-14/BENCH_AREA7_site_tracking.md; register rows B7-1 / B7-2 / B7-3)
+#
+#     The rubric compares this area with SEOTesting and Looker Studio, and asks one question: what tests and annotations do they
+#     offer that we do not. Annotations landed with G12 (and Google itself shipped custom annotations in Search Console in
+#     November 2025: 120 characters, 200 a property, visible to everyone with access, and NOT in any API —
+#     https://developers.google.com/search/blog/2025/11/custom-chart-annotations). Tests did not.
+#
+#     What the leader does, opened 2026-10-15. SEOTesting runs two kinds of test on Search Console data: a time-based test
+#     ("track and prove the impact of a change against a forecast") and a split test that will "compare test and control groups to
+#     isolate true impact" (https://seotesting.com/features/). Its group builder balances the two groups greedily on 90 days of
+#     Search Console clicks, and throws out pages whose clicks are more than two standard deviations from the mean and pages with
+#     zero clicks on more than half of those 90 days
+#     (https://support.seotesting.com/en/article/split-test-group-configuration-tool-1reabjb/). Its own support page then refuses
+#     the number everyone wants: it does "not display a traditional significance score for split tests", because a significance
+#     calculation over the daily difference "would not be meaningful or true"
+#     (https://support.seotesting.com/en/article/seo-split-testing-and-statistical-significance-1ad6ffx/) — while its changelog of
+#     2026-02-17 says "statistical significance is now generated directly in SEO split test results". The vendor's own two pages
+#     disagree, which is exactly the case the programme's source rule exists for, and neither publishes a formula.
+#
+#     * B7-1 — **we published the method of a test we never ran.** Since G12 the Site Tracker has inlined the change-test kit
+#       (`_change_test.js`) and shipped `CT.method` as `change_method` in every weekly callback, while `CT.compare` was called by
+#       the Link Builder and by nobody else. That is INVARIANTS rule 4 in the one place criterion 3.4 is scored. The test runs
+#       now, and it buys its own windows: a change made three months ago cannot be read from the report's 28-vs-28, because both
+#       of those periods sit after it. Each dated change (`seo_content_log.published_at`) gets the 28 complete days after it and
+#       the 28 before it, over the WHOLE site, so the page under test and the control group of every other page are measured on
+#       exactly the same days — free, on a Google quota measured in thousands. The clicks are read with the rate ratio
+#       (`ST.lift`: expected = prev x the control group's ratio; d = ln(cur/prev) - ln(cc/cp); SE carries the control group's own
+#       sampling error, so the 95% range is honest where a ratio of two percentages is not), the position with `CT.compare`, the
+#       Link Builder's own comparison. Five refusals, because a lift computed on nothing reads as "no effect": no clicks before,
+#       no clicks after, under 20 clicks over both windows together, fewer than 3 control pages, and a control group under 40
+#       clicks. A Google update inside the window is NOT a refusal — it moves the control group too, which is what the control
+#       group is for, and the report says so.
+#     * B7-2 — **`type: web` and nothing else.** The Search Analytics API has answered `device` (DESKTOP / MOBILE / TABLET) and
+#       `country` since it existed (https://developers.google.com/webmaster-tools/v1/searchanalytics/query), Looker Studio's
+#       Search Console connector exposes both and SEOTesting filters its dashboards by country. We asked for neither, so a site
+#       whose phone clicks halved while desktop held read as one flat "clicks down 18%". Four tiny free requests, each device and
+#       country tested on the same statistical bar as every other alert (`ST.change`), and a split Google did not ANSWER is
+#       `failed` and unavailable while a split Google answered with no rows is a measured zero — the two look identical in an
+#       empty table and mean opposite things (INVARIANTS rule 1).
+#     * B7-3 — **cannibalisation was already in the data.** Criterion 2.10 names it, SEOTesting ships a report of it and Semrush
+#       a tab, and we computed nothing — although `queries_cur` has been read with dimensions ['query','page'] since G9, so every
+#       page Google showed for a search was in the node and the strongest one was kept and the rest thrown away. It is observed,
+#       not inferred: both pages really were shown for that search. Brand searches are excluded (several of your pages SHOULD
+#       answer your own name), as are scraper queries, searches under 50 impressions and a second page holding under 10% of them;
+#       URLs differing only by scheme, www, trailing slash or query string are one page. The action merges or differentiates the
+#       two pages and never asks for a third, which is D11 by another name.
+# =============================================================================
+def _b80_checks():
+    """Area 7 over the generated Site Tracker: the change test with its own windows and its refusals, the device and country
+    splits Search Console always answered, and two of the site's own pages in one search. Walks the built workflow, so a change
+    that never reaches a node cannot pass."""
+    import json as _j80
+    _p80 = os.path.join(HERE0, 'workflows', 'SEO_Agent_Site_Tracker.json')
+    assert os.path.exists(_p80), 'SEO_Agent_Site_Tracker.json was not generated'
+    _code80 = {}
+    for _w80 in _j80.load(open(_p80, encoding='utf-8')):
+        for _n80 in (_w80.get('nodes') or []):
+            if (_n80.get('parameters') or {}).get('jsCode'):
+                _code80[_n80['name']] = _n80['parameters']['jsCode']
+    _want80 = {
+        'Site Plan': ('B7-1', ('max_change_tests: 6, change_test_min_days: 28', 'const changes = ', 'window_after', 'window_before',
+                               'not_yet:', 'changes: changes.slice(')),
+        'GSC Requests': ('B7-1 / B7-2', ("req('device_cur'", "req('device_prev'", "req('country_cur'", "req('country_prev'",
+                                         "req('test_before'", "req('test_after'", 'test_key: c.key', 'c.readable')),
+        'Parse GSC': ('B7-1 / B7-2 / B7-3', ('const cannibal = ', 'cnbMinShare', 'const splitOf = ', 'const devices = splitOf(',
+                                             'const countries = splitOf(', 'const change_tests = ', "a.tests['test_before|'",
+                                             'cannibal_summary', 'prev_position')),
+        'Site Metrics': ('B7-1 / B7-2 / B7-3', ('const change_tests = (() => {', 'ST.lift(', 'CT.compare(', 'change_method: change_tests.method',
+                                                "type: 'cannibalisation'", "stat: 'device'", "stat: 'country'", 'splitLineage')),
+        'Site Report': ('B7-1 / B7-2 / B7-3', ('Did it work? Your changes against the rest of the site', 'Where your visitors searched from',
+                                               'Searches two of your pages compete for', 'vs expected')),
+    }
+    for _node80, (_row80, _needs80) in _want80.items():
+        _js80 = _code80.get(_node80) or ''
+        assert _js80, 'area 7: node %s not found in the Site Tracker' % _node80
+        for _t80 in _needs80:
+            assert _t80 in _js80, '%s: %s no longer carries %r' % (_row80, _node80, _t80)
+    # B7-1: the kit itself. The expectation is modelled and must say so, and every refusal has to exist - a lift computed on
+    # nothing reads as "no effect", which is the exact shape of the defects rule 1 was written for.
+    _st80 = _rd0('code/_site_stats.js')
+    assert 'const lift = (o) => {' in _st80 and 'lift, LIFT_LABEL, liftMethod' in _st80, 'B7-1: ST.lift is not in the stats kit'
+    assert "Math.log(cur / prev) - Math.log(ratio)" in _st80, 'B7-1: the lift is no longer the rate ratio'
+    assert '1 / cur + 1 / prev + 1 / cc + 1 / cp' in _st80, "B7-1: the 95% range no longer carries the control group's own sampling error"
+    assert 'modelled from the control group, not measured' in _st80, 'B7-1: the expected figure no longer says it is modelled'
+    for _state80 in ("out('no_control'", "out('no_before'", "out('no_after'", "out('too_small'"):
+        assert _state80 in _st80, 'B7-1: the refusal %s is gone - a lift computed on nothing reads as "no effect"' % _state80
+    assert 'that is what the control group is for' in _st80.lower(), 'B7-1: the Google-update sentence is gone'
+    # B7-1: the method sentence may not travel without the test that produces it (INVARIANTS rule 4)
+    _sm80 = _code80['Site Metrics']
+    assert 'change_method: CT.method' not in _sm80, 'B7-1: the Site Tracker is shipping the method of a test it does not run again'
+    assert _sm80.index('const change_tests = (() => {') < _sm80.index('change_method: change_tests.method'), \
+        'B7-1: change_method is emitted before the tests are computed'
+    # B7-2: a window or a split that Google did not ANSWER is unavailable; one it answered with nothing is a measured zero
+    _pg80 = _code80['Parse GSC']
+    assert 'read: false, failed, rows: []' in _pg80 and 'answered the ' in _pg80, \
+        'B7-2: a split Google did not answer and a split it answered with nothing are the same thing again'
+    assert "read: false, page: null, control: null" in _pg80, 'B7-1: an unanswered window no longer refuses with a reason'
+    # B7-3: brand searches are out of the cannibalisation list, on the write path, not filtered later
+    assert 'filter(m => !isBrand(m.query))' in _pg80, 'B7-3: brand searches are being reported as cannibalisation'
+    # B7-3: the action may never ask for another page (D11 by another name)
+    assert 'Decide which one answers this search' in _sm80 and 'Two of your pages compete for' in _sm80, 'B7-3: the action is gone'
+
+
+log('A method we published and a test we never ran (2026-10-15, benchmark area 7, rows B7-1 / B7-2 / B7-3; BENCH_AREA7_site_tracking.md). B7-1: since G12 the Site Tracker has inlined the change-test kit and shipped its METHOD sentence in every weekly callback (change_method) while running no test at all - CT.compare was called by the Link Builder and by nobody else - which is INVARIANTS rule 4 in the one place criterion 3.4 is scored (control group or counterfactual, capped at links only); every dated change now buys its OWN two windows, the 28 complete days after it and the 28 before it over the whole site, because the report\'s 28-vs-28 both sit after a change made three months ago and would measure nothing, and the page under test and the control group of every other page are read from the same two free requests - the clicks with the rate ratio (expected = prev x the control group\'s ratio, 95% range carrying the control group\'s own sampling error) and the position with CT.compare, with five refusals so that a lift computed on nothing is never printed as no effect, and a Google update inside the window named rather than refused because it moves the control group too. B7-2: the Search Analytics API has answered device and country since it existed and we asked for neither, so a site whose phone clicks halved while desktop held read as one flat site-wide figure - four tiny free requests, every device and country tested on the same statistical bar as the other alerts, and a split Google did not ANSWER marked unavailable while a split it answered with no rows is a measured zero. B7-3: cannibalisation (criterion 2.10, a report of its own at SEOTesting and a tab at Semrush) was computed by nobody although the query x page rows have been read in full since G9 - two of the site\'s own pages shown for one non-brand search are now named with the share of impressions each takes, the page Google shows most often beside the page that ranks better when it is shown, and the action merges or differentiates them and never asks for a third page')
+
 
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:
@@ -8438,6 +8544,9 @@ _b74_checks()
 _b73_checks()
 # section 78 (B6-1 ... B6-5): benchmark area 6, on the generated Rank Tracker and the dated event registry
 _b78_checks()
+
+# section 80 (B7-1 ... B7-3): benchmark area 7, on the generated Site Tracker
+_b80_checks()
 
 # section 69 (B-F5 + INVARIANTS rule 2): deterministic node ids over every generated workflow, the settings refusal's self-test,
 # and the gate-pair lint. Last, because the id freeze rewrites the files the checks above have just finished reading.

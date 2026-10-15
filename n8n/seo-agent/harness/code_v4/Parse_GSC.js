@@ -150,7 +150,69 @@ const ST = (() => {
     if (ch.watch) return base('watch', ' Large but inside 95% sampling noise (z ' + ch.z + '), so it is something to watch, not a fall.' + kindNote);
     return base('steady', ' The fall is smaller than the ' + minPct + '% worth acting on (' + ch.text + ').');
   };
-  return { z, band, change, position, decay, tested, updatesIn, updateNote, UPDATES };
+  // ---- B7-1 (2026-10-15, benchmark area 7 — docs/system-review-2026-10-14/BENCH_AREA7_site_tracking.md): DID THE CHANGE WORK,
+  // OR DID THE WHOLE SITE MOVE? "We published the page and its clicks are up 40%" is not a result on a site that is up 45%.
+  // SEOTesting's split test is exactly this comparison — a test group against a control group of similar pages, so that
+  // "algorithm updates or seasonal shifts" hit both sides (https://seotesting.com/features/); its group builder balances the two
+  // groups on 90 days of Search Console clicks and throws out pages more than 2 standard deviations from the mean and pages with
+  // no clicks on more than half the days (https://support.seotesting.com/en/article/split-test-group-configuration-tool-1reabjb/).
+  // The arithmetic here is CausalImpact's idea in plain form (P1, Brodersen et al. 2015, https://arxiv.org/abs/1506.00356): what
+  // the page WOULD have done had it followed the rest of the site, against what it did.
+  //     expected = prev_clicks x (control_clicks / control_prev_clicks)        <- MODELLED, never measured
+  //     d = ln(cur/prev) - ln(control_cur/control_prev),  SE = sqrt(1/cur + 1/prev + 1/cc + 1/cp)
+  //     lift = exp(d) - 1,  95% range = exp(d +- 1.96 SE) - 1,  z = d / SE
+  // The rate-ratio form carries the CONTROL group's own sampling error into the range; a ratio of two percentages does not, and
+  // that is how a quiet control group turns into a confident claim. A Google update inside the window is NOT a reason to refuse:
+  // it moves the control group too, which is the whole point of having one. Nothing here ever says a change CAUSED anything —
+  // a control group narrows the alternatives (the shared wording is CT, v5/code/_change_test.js).
+  // Five refusals, because a lift computed on nothing reads as "no effect": no clicks before, no clicks after, too few events over
+  // both periods together, fewer control pages than min_control_pages, and a control group with too little traffic to be a baseline.
+  const LIFT_LABEL = { helped: 'Likely helped', hurt: 'Likely hurt', watch: 'Possibly moved', no_difference: 'No measurable difference',
+    too_small: 'Can\'t tell yet', no_before: 'Can\'t tell', no_after: 'Can\'t tell', no_control: 'Can\'t tell' };
+  const liftMethod = 'Every change is dated and read against a control group: the page\'s own clicks before and after, divided by what '
+    + 'the site\'s OTHER pages did over the same two periods. The expected figure is modelled from that control group, not measured, and '
+    + 'the 95% range carries the control group\'s own sampling error. A Google update inside the window moves the control group too — '
+    + 'that is what the control group is for. A control group narrows the alternatives; it never proves a cause.';
+  const lift = (o) => {
+    const x = o || {};
+    const cur = num(x.clicks), prev = num(x.prev_clicks), cc = num(x.control_clicks), cp = num(x.control_prev_clicks);
+    const pagesN = Math.max(0, Math.round(num(x.control_pages)));
+    const minEvents = x.min_events == null ? 20 : num(x.min_events);
+    const minControl = x.min_control_events == null ? 40 : num(x.min_control_events);
+    const minPages = x.min_control_pages == null ? 3 : num(x.min_control_pages);
+    const minPct = x.min_pct == null ? 20 : num(x.min_pct);
+    const per = String(x.period || 'the last 28 days against the 28 days before');
+    const what = String(x.label || 'clicks');
+    const ch = change(cur, prev, { min_events: minEvents, min_pct: 0 });
+    const ctrl = change(cc, cp, { min_events: minControl, min_pct: 0 });
+    const out = (state, note, extra) => Object.assign({ state, verdict: LIFT_LABEL[state] || state,
+      clicks: cur, prev_clicks: prev, control_clicks: cc, control_prev_clicks: cp, control_pages: pagesN,
+      expected: null, lift: null, lift_pct: null, ci: null, z: null, significant: false, change: ch, control_change: ctrl,
+      basis: 'Search Console ' + what + ' for this page, ' + per + ' (' + prev + ' → ' + cur + '), against the site\'s other '
+        + pagesN + ' page' + (pagesN === 1 ? '' : 's') + ' over the same two periods (' + cp + ' → ' + cc + '). ' + note }, extra || {});
+    if (pagesN < minPages) return out('no_control', 'Fewer than ' + minPages + ' other pages of this site carried Search Console clicks, so there is no control group and no lift is claimed.');
+    if (cp < minControl) return out('no_control', 'The rest of the site carried ' + cp + ' clicks in the earlier period, under the ' + minControl + ' this comparison needs for a baseline, so no lift is claimed.');
+    if (prev <= 0) return out('no_before', 'The page had no clicks in the earlier period, so there is nothing to compare it with: this is a page new to Search Console, not an improved one.');
+    if (cur <= 0) return out('no_after', 'The page has no clicks in the current period (it had ' + prev + '), so the ratio cannot be computed. That fall is reported on its own, never as a lift.');
+    if ((cur + prev) < minEvents) return out('too_small', 'Only ' + (cur + prev) + ' clicks over both periods together, against the ' + minEvents + ' this comparison needs. No lift is claimed.');
+    const ratio = cc / cp;
+    const expected = Math.round(prev * ratio * 10) / 10;
+    const d = Math.log(cur / prev) - Math.log(ratio);
+    const se = Math.sqrt(1 / cur + 1 / prev + 1 / cc + 1 / cp);
+    const zz = Math.round((d / se) * 100) / 100;
+    const pctOf = (v) => Math.round((Math.exp(v) - 1) * 100);
+    const liftPct = pctOf(d), ci = [pctOf(d - 1.96 * se), pctOf(d + 1.96 * se)];
+    const sig = Math.abs(zz) >= 1.96;
+    const state = sig ? (d > 0 ? 'helped' : 'hurt') : (Math.abs(liftPct) >= minPct ? 'watch' : 'no_difference');
+    const rest = 'The rest of the site went ' + ctrl.text + ', so a page that had simply followed it would have about ' + expected
+      + ' clicks; this page has ' + cur + '.';
+    const size = (liftPct >= 0 ? 'up ' : 'down ') + Math.abs(liftPct) + '% against that expectation (95% range ' + ci[0] + '% to ' + ci[1] + '%, z ' + zz + ')';
+    const note = rest + ' That is ' + size + '. '
+      + (sig ? 'Outside 95% sampling noise.' : Math.abs(liftPct) >= minPct ? 'Inside 95% sampling noise, so it is something to watch and not yet a result.' : 'Inside 95% sampling noise and smaller than the ' + minPct + '% worth acting on.')
+      + ' The expected figure is modelled from the control group, not measured.';
+    return out(state, note, { expected, lift: Math.round((cur - expected) * 10) / 10, lift_pct: liftPct, ci, z: zz, significant: sig });
+  };
+  return { z, band, change, position, decay, tested, updatesIn, updateNote, UPDATES, lift, LIFT_LABEL, liftMethod };
 })();
 const reqs = $('GSC Requests').all().map(i => i.json);
 const res = (() => { try { return $('GSC Query').all().map(i => i.json); } catch (e) { return $input.all().map(i => i.json); } })();
@@ -167,12 +229,13 @@ const pct = (cur, prev) => prev > 0 ? Math.round((cur - prev) / prev * 100) : (c
 const acc = new Map();
 const take = (q, r) => {
   if (!q || q.skip) return;
-  if (!acc.has(q.site_idx)) acc.set(q.site_idx, { site_idx: q.site_idx, site_id: q.site_id, errors: [], by_date: [], yoy: null, queries_cur: [], queries_prev: [], pages_cur: [], pages_prev: [], pages_yoy: [], kw: {}, paging: {} });
+  if (!acc.has(q.site_idx)) acc.set(q.site_idx, { site_idx: q.site_idx, site_id: q.site_id, errors: [], by_date: [], yoy: null, queries_cur: [], queries_prev: [], pages_cur: [], pages_prev: [], pages_yoy: [], kw: {}, paging: {}, tests: {}, test_err: {} });   // B7-1: tests / test_err hold each dated change's two windows
   const a = acc.get(q.site_idx); const e = errOf(r);
-  if (e) { a.errors.push(q.kind + (q.keyword ? ' "' + q.keyword + '"' : '') + (q.page > 1 ? ' page ' + q.page : '') + ': ' + e); return; }
+  if (e) { a.errors.push(q.kind + (q.keyword ? ' "' + q.keyword + '"' : '') + (q.page > 1 ? ' page ' + q.page : '') + ': ' + e); if (q.test_key) a.test_err[q.kind + '|' + q.test_key] = e; return; }
   const rows = rowsOf(r);
   if (q.paged) { const pg = a.paging[q.kind] || (a.paging[q.kind] = { pages: 0, rows: 0, page_rows: Number(q.page_rows) || 25000, max_pages: Number(q.max_pages) || 4, truncated: false });
     pg.pages += 1; pg.rows += rows.length; if (q.page >= pg.max_pages && rows.length >= pg.page_rows) pg.truncated = true; }
+  if (q.test_key) { a.tests[q.kind + '|' + q.test_key] = rows; return; }   // B7-1: a change's own before / after window, kept whole for the control group
   if (q.kind === 'kw_cur' || q.kind === 'kw_prev') { const k = a.kw[q.keyword] || (a.kw[q.keyword] = { keyword: q.keyword, cur: null, prev: null }); const top = [...rows].sort((x, y) => y.impressions - x.impressions)[0]; k[q.kind === 'kw_cur' ? 'cur' : 'prev'] = { ...sum(rows), page: top ? top.keys[0] : '' }; }
   else if (q.kind === 'yoy') a.yoy = sum(rows);
   else a[q.kind] = (a[q.kind] || []).concat(rows);   // G9: one kind, several 25,000-row pages
@@ -211,6 +274,7 @@ for (const a of acc.values()) {
   const yoy_read = !a.errors.some(e => /^pages_yoy/.test(String(e))) && reqs.concat(moreReqs).some(q => q.site_idx === a.site_idx && q.kind === 'pages_yoy');
   const pages = a.pages_cur.map(r => { const p = prevP.get(r.keys[0]), y = yoyP.get(r.keys[0]);
     return { page: r.keys[0], clicks: r.clicks, impressions: r.impressions, ctr: r.ctr, position: +r.position.toFixed(1), prev_clicks: p ? p.clicks : 0, prev_impressions: p ? p.impressions : 0, clicks_delta: r.clicks - (p ? p.clicks : 0),
+      prev_position: p && p.impressions ? +p.position.toFixed(1) : 0,   // B7-1: the control group's own position move needs both readings; 0 = the page had no impressions then, not position zero
       yoy_clicks: yoy_read ? (y ? y.clicks : 0) : null, yoy_impressions: yoy_read ? (y ? y.impressions : 0) : null }; }).sort((x, y) => y.clicks - x.clicks);
   // B4-1: a page is "decaying" only when the fall survives the two-sample Poisson test AND is not the dip the same weeks had a
   // year ago (ST.decay). Ranked by the clicks actually lost, which is what Clearscope sorts its Content Decay report by
@@ -227,13 +291,98 @@ for (const a of acc.values()) {
   // every page Search Console reported anything for, with its judgement — the Site Tracker stores this in seo_pages so the
   // Content Cadence can write the refresh instead of only recommending it (B4-2 / B4-3)
   const page_perf = judged.filter(p => p.clicks > 0 || p.prev_clicks > 0 || p.impressions > 0).sort((x, y) => (y.clicks + y.prev_clicks) - (x.clicks + x.prev_clicks)).slice(0, 500)
-    .map(p => ({ page: p.page, clicks: p.clicks, impressions: p.impressions, position: p.position, prev_clicks: p.prev_clicks, yoy_clicks: p.yoy_clicks, state: p.decay.state, pct: p.decay.pct, lost: p.decay.lost, kind: p.decay.kind, basis: p.decay.basis }));
+    .map(p => ({ page: p.page, clicks: p.clicks, impressions: p.impressions, position: p.position, prev_position: p.prev_position, prev_clicks: p.prev_clicks, prev_impressions: p.prev_impressions, yoy_clicks: p.yoy_clicks, state: p.decay.state, pct: p.decay.pct, lost: p.decay.lost, kind: p.decay.kind, basis: p.decay.basis }));
   const decay_summary = { tested: judged.length, decaying: judged.filter(p => p.decay.state === 'decaying').length,
     seasonal: judged.filter(p => p.decay.state === 'seasonal').length, watch: judged.filter(p => p.decay.state === 'watch').length,
     too_small: judged.filter(p => p.decay.state === 'too_small').length, yoy_read, min_click_events: decayCfg.min_events, min_pct: decayCfg.min_pct,
     note: yoy_read ? 'Every page with clicks was tested against the 28 days before and the same 28 days a year earlier.'
       : 'The year-ago page rows could not be read this week, so a seasonal dip cannot be ruled out for any page.' };
   const rising = pages.filter(p => p.clicks_delta >= 5 && (p.prev_clicks === 0 || p.clicks_delta / p.prev_clicks >= 0.3)).sort((x, y) => y.clicks_delta - x.clicks_delta).slice(0, 10);
+  // ---- B7-3 (2026-10-15, benchmark area 7 — docs/system-review-2026-10-14/BENCH_AREA7_site_tracking.md): TWO OF YOUR OWN PAGES
+  // IN ONE SEARCH. Criterion 2.10 names cannibalisation and nothing in this system computed it; SEOTesting ships a Keyword
+  // Cannibalization report (https://seotesting.com/features/) and Semrush a Cannibalization tab. The proof has been inside this
+  // node all along: `queries_cur` is read with dimensions ['query','page'], so every page Google showed for a search is already
+  // here and we kept the strongest one and threw the rest away. This is OBSERVED, not inferred — both pages really were shown for
+  // that search in the last 28 days. Refusals: a brand search SHOULD return several of your pages, so brand (and scraper) queries
+  // are out; a query under `cannibal_min_impressions` is out; a second page holding under `cannibal_min_share` of the query's
+  // impressions is noise, not a competing page; and URLs differing only by scheme, www, trailing slash or query string are ONE page.
+  const cnbMinImp = Number(cfg.cannibal_min_impressions) || 50, cnbMinShare = Number(cfg.cannibal_min_share) || 10;
+  const cnbKey = (u) => String(u || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/$/, '');
+  const cannibal = [...qmap.values()].filter(m => !isBrand(m.query)).map(m => {
+    const byPage = new Map();
+    for (const r of m.rows) { const u = String(r.keys[1] || ''); if (!u) continue; const k = cnbKey(u);
+      const e = byPage.get(k) || { page: u, clicks: 0, impressions: 0, pw: 0 };
+      e.clicks += r.clicks; e.impressions += r.impressions; e.pw += r.position * r.impressions; byPage.set(k, e); }
+    const tot = sum(m.rows);
+    const list = [...byPage.values()].map(e => ({ page: e.page, clicks: e.clicks, impressions: e.impressions,
+      position: e.impressions ? +(e.pw / e.impressions).toFixed(1) : 0,
+      share: tot.impressions ? Math.round(e.impressions / tot.impressions * 1000) / 10 : 0 })).sort((x, y) => y.impressions - x.impressions);
+    const competing = list.filter(e => e.share >= cnbMinShare && e.impressions >= 10);
+    const best = [...competing].sort((x, y) => (x.position || 99) - (y.position || 99))[0] || null;
+    return { query: m.query, impressions: tot.impressions, clicks: tot.clicks, pages: competing, page_count: list.length,
+      preferred: competing[0] ? competing[0].page : '', preferred_share: competing[0] ? competing[0].share : 0, best };
+  }).filter(c => c.impressions >= cnbMinImp && c.pages.length >= 2)
+    .map(c => ({ ...c, split: !!(c.best && cnbKey(c.best.page) !== cnbKey(c.preferred)),
+      basis: 'Search Console showed ' + c.pages.length + ' of your pages for "' + c.query + '" over the last 28 days ('
+        + c.impressions + ' impressions): ' + c.pages.map(p => p.page + ' ' + p.share + '% of them at #' + p.position).join(', ')
+        + '. Measured by Google, not inferred from a ranking check.' }))
+    .sort((x, y) => y.impressions - x.impressions).slice(0, 10);
+  const cannibal_summary = { found: cannibal.length, queries_checked: qmap.size, min_impressions: cnbMinImp, min_share: cnbMinShare,
+    note: qmap.size ? 'Every non-brand search of the last 28 days was checked for a second page of yours holding at least '
+        + cnbMinShare + '% of its impressions; brand searches are left out because several of your pages SHOULD answer those.'
+      : 'No query rows were read this week, so nothing could be checked for cannibalisation.' };
+  // ---- B7-2 (2026-10-15, benchmark area 7): THE DEVICE AND THE COUNTRY, from the same free request budget. The Search Analytics
+  // API has answered `device` and `country` since it existed (https://developers.google.com/webmaster-tools/v1/searchanalytics/query);
+  // Looker Studio's Search Console connector exposes both and SEOTesting filters its dashboards by country. We asked for neither, so
+  // a site whose mobile clicks halved while desktop held read as "search clicks down 18%" and nothing else. A kind Google did not
+  // answer is `read: false` with the reason — never an empty table that reads as "no mobile traffic" (INVARIANTS rule 1 / rule 3).
+  const splitOf = (kind, prevKind, label) => {
+    const curRows = a[kind] || [], prevRows = a[prevKind] || [];
+    const failed = a.errors.some(e => String(e).indexOf(kind + ':') === 0 || String(e).indexOf(prevKind + ':') === 0);
+    // a request Google did not answer is UNAVAILABLE; a request Google answered with nothing is a measured zero. The two read the
+    // same in an empty table and mean opposite things, so they are told apart here (INVARIANTS rule 1).
+    if (failed || !curRows.length) return { read: false, failed, rows: [], total: 0, prev_total: 0,
+      reason: failed ? 'Search Console did not answer the ' + label + ' request this week, so the ' + label + ' split is not available'
+        : 'Search Console answered the ' + label + ' request with no rows: it recorded no search impressions for this site in this period' };
+    const pm = new Map(prevRows.map(r => [String(r.keys[0]), r]));
+    const tot = curRows.reduce((n, r) => n + r.clicks, 0), ptot = prevRows.reduce((n, r) => n + r.clicks, 0);
+    const rows = curRows.map(r => { const k = String(r.keys[0]); const p = pm.get(k);
+      return { key: k, clicks: r.clicks, impressions: r.impressions, ctr: +(r.ctr * 100).toFixed(1), position: +r.position.toFixed(1),
+        prev_clicks: p ? p.clicks : 0, prev_impressions: p ? p.impressions : 0, share: tot ? Math.round(r.clicks / tot * 1000) / 10 : 0,
+        change: ST.change(r.clicks, p ? p.clicks : 0, { min_events: Number(cfg.alert_min_click_events) || 40, min_pct: Number(cfg.alert_min_pct) || 10 }) }; })
+      .sort((x, y) => y.clicks - x.clicks);
+    return { read: true, failed: false, rows: rows.slice(0, 10), total: tot, prev_total: ptot, reason: '',
+      basis: 'Search Console ' + label + ' rows, the last 28 days against the 28 days before (' + ptot + ' → ' + tot + ' clicks across ' + rows.length + ' ' + label + ' values)' };
+  };
+  const devices = splitOf('device_cur', 'device_prev', 'device');
+  const countries = splitOf('country_cur', 'country_prev', 'country');
+  // ---- B7-1 (2026-10-15, benchmark area 7): each dated change, reduced to the two numbers its judgement needs ----
+  // Both windows come back as the WHOLE site's pages, so the page under test and the control group — every other page of the site
+  // over exactly the same days — are measured together and nothing has to be assumed about either. The judgement itself is made in
+  // Site Metrics (ST.lift for the clicks, CT.compare for the position); this node only reduces, and a window Google did not answer
+  // is `read: false` with the reason (INVARIANTS rule 1 / rule 3) instead of a zero that would read as "the change did nothing".
+  const testReqs = reqs.filter(q => q && q.site_idx === a.site_idx && q.test_key && q.kind === 'test_after');
+  const change_tests = testReqs.map(q => {
+    const base = { key: q.test_key, url: q.test_url, date: q.change_date, what: q.change_what, keyword: q.change_keyword,
+      joint: !!q.change_joint, window_before: q.window_before, window_after: q.window_after };
+    const bRows = a.tests['test_before|' + q.test_key], aRows = a.tests['test_after|' + q.test_key];
+    const bErr = a.test_err['test_before|' + q.test_key], aErr = a.test_err['test_after|' + q.test_key];
+    if (!bRows || !aRows) return { ...base, read: false, page: null, control: null,
+      reason: 'Search Console did not answer the ' + (!aRows ? 'window after' : 'window before') + ' this change ('
+        + (aErr || bErr || 'no rows came back') + '), so it was not measured this week.' };
+    const tk = cnbKey(q.test_url);
+    const bMap = new Map(bRows.map(r => [cnbKey(r.keys[0]), r]));
+    const pb = bMap.get(tk) || null, pa = aRows.find(r => cnbKey(r.keys[0]) === tk) || null;
+    const ctrlB = bRows.filter(r => cnbKey(r.keys[0]) !== tk), ctrlA = aRows.filter(r => cnbKey(r.keys[0]) !== tk);
+    const cB = sum(ctrlB), cA = sum(ctrlA);
+    const moves = [];
+    for (const r of ctrlA) { const b = bMap.get(cnbKey(r.keys[0])); if (!b || !b.impressions || !r.impressions) continue; moves.push(+(b.position - r.position).toFixed(2)); }
+    return { ...base, read: true, reason: '',
+      page: { clicks: pa ? pa.clicks : 0, impressions: pa ? pa.impressions : 0, position: pa ? +pa.position.toFixed(1) : 0,
+        prev_clicks: pb ? pb.clicks : 0, prev_impressions: pb ? pb.impressions : 0, prev_position: pb ? +pb.position.toFixed(1) : 0 },
+      control: { clicks: cA.clicks, prev_clicks: cB.clicks, impressions: cA.impressions, prev_impressions: cB.impressions,
+        pages: ctrlA.length, prev_pages: ctrlB.length, moves: moves.slice(0, 300), moves_pages: moves.length } };
+  });
   // ---- G9: what Search Console does not name, and who searched the brand ----
   const anonymised = { current: GQ.anonymised(cur, [...qmapAll.values()].flatMap(m => m.rows)), previous: GQ.anonymised(prev, a.queries_prev) };
   const brandSum = (list, want) => { const picked = list.filter(q => isBrand(q.query) === want); const t = sum(picked.map(q => ({ clicks: q.clicks, impressions: q.impressions, position: q.position }))); return { queries: picked.length, clicks: t.clicks, impressions: t.impressions, ctr: t.ctr, position: t.position, top: picked.slice(0, 5).map(q => ({ query: q.query, clicks: q.clicks, impressions: q.impressions, position: q.position })) }; };
@@ -249,6 +398,7 @@ for (const a of acc.values()) {
   out.push({ json: { site_idx: a.site_idx, site_id: a.site_id, errors: a.errors, totals: { cur, prev, yoy: a.yoy || null },
     deltas: { clicks_pct: pct(cur.clicks, prev.clicks), impressions_pct: pct(cur.impressions, prev.impressions), position: (prev.position && cur.position) ? +(prev.position - cur.position).toFixed(1) : null, ctr_pts: +((cur.ctr - prev.ctr) * 100).toFixed(2), yoy_clicks_pct: a.yoy ? pct(cur.clicks, a.yoy.clicks) : null },
     daily, query_count: queries.length, queries: queries.slice(0, 100), winners, losers, new_queries: newQ, lost_queries: lost, striking, ctr_gaps: ctrGaps, pages: pages.slice(0, 20), decaying_pages: decaying, not_decay, decay_summary, page_perf, rising_pages: rising, tracked,
-    anonymised, brand_split, scraper_queries, page_count: pages.length, rows_read, paging, truncated } });   // G9: every row read, the anonymised share, brand vs non-brand, scraper queries apart
+    anonymised, brand_split, scraper_queries, page_count: pages.length, rows_read, paging, truncated,
+    cannibal, cannibal_summary, devices, countries, change_tests } });   // G9: every row read, the anonymised share, brand vs non-brand, scraper queries apart; B7-2 / B7-3: the device and country splits, and your own pages competing for one search
 }
 return out.length ? out : [{ json: { skip: true, reason: 'no Search Console data came back' } }];

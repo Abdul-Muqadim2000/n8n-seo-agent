@@ -272,6 +272,11 @@ const CONFIG = {
   // per property, so one weekly run asks about up to 150 key pages (7.5% of a day's quota, free) and the pages rotate oldest-first;
   // whatever the budget does not reach is reported as "not checked". The audit spends its own 100 (GSC Audit Plan).
   max_inspections: 150,
+  // B7-1 (2026-10-15, benchmark area 7): the dated page changes this run measures against a control group. Each one costs two free
+  // Search Console requests (the 28 complete days after it, and the 28 before it), so the newest `max_change_tests` are read.
+  // change_test_min_days = the complete days a change needs after it before anything is read at all; 28 is one full comparison
+  // window, and CT (v5/code/_change_test.js) keeps its own 6-week bar for the POSITION verdict.
+  max_change_tests: 6, change_test_min_days: 28, change_test_max_age_days: 400,
   max_gsc_pages: 4,                 // G9: Search Console serves 25,000 rows per request; up to 4 pages per kind = 100,000 query / page rows
   striking_min_impressions: 30,     // "striking distance": position 4-20 with at least this many impressions in 28 days
   ctr_gap_min_impressions: 100,     // CTR gap: top-10 position, at least this many impressions, CTR under half the expected rate for the position
@@ -341,6 +346,28 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   // .map(), which an inline // swallows, so every row kept the raw content-log shape and the report said "(undefined days ago)".
   const pending_publish = blogs.filter(b => b.status === 'written' && !b.published_url)
     .map(b => ({ keyword: b.keyword, started_at: b.started_at || '', days: Math.round((Date.now() - new Date(b.started_at || now).getTime()) / 864e5) }));
+  // B7-1 (2026-10-15, benchmark area 7): the dated changes this run can actually test. A change needs 28 COMPLETE days of final
+  // Search Console data after it and 28 before it, so the test gets its own two windows instead of borrowing the report's 28-v-28
+  // — which both sit after a change made three months ago and would therefore measure nothing. Everything too new is kept out with
+  // the date it can first be read; `joint` marks a second change to the same page inside 56 days, which splits the credit (CT).
+  const chAll = blogs.filter(b => String(b.published_url || '').trim() && String(b.published_at || '').slice(0, 10))
+    .map(b => ({ url: String(b.published_url).trim(), date: String(b.published_at).slice(0, 10), keyword: String(b.keyword || ''),
+      what: String(b.source || '') === 'refresh' ? 'refreshed' : 'published' }))
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const byUrl = new Map(); for (const c of chAll) { const k = c.url.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/$/, ''); if (!byUrl.has(k)) byUrl.set(k, c); }
+  const endD = Date.parse(ranges.current.end + 'T00:00:00Z');
+  const ageOf = (d) => Math.floor((endD - Date.parse(d + 'T00:00:00Z')) / 864e5);
+  const changes = [...byUrl.values()].map(c => { const age = ageOf(c.date);
+    const joint = chAll.some(o => o !== c && o.url === c.url && Math.abs(ageOf(o.date) - age) <= 56);
+    const readable = age >= CONFIG.change_test_min_days && age <= CONFIG.change_test_max_age_days;
+    const after = { start: c.date, end: iso(addDays(new Date(Date.parse(c.date + 'T00:00:00Z')), 27)) };
+    const before = { start: iso(addDays(new Date(Date.parse(c.date + 'T00:00:00Z')), -28)), end: iso(addDays(new Date(Date.parse(c.date + 'T00:00:00Z')), -1)) };
+    return { key: 'chg_' + c.date.replace(/-/g, '') + '_' + c.url.replace(/[^a-z0-9]+/gi, '').slice(-12).toLowerCase(), url: c.url, date: c.date, keyword: c.keyword, what: c.what, age_days: age, joint, readable,
+      window_after: after, window_before: before,
+      not_yet: readable ? '' : age < CONFIG.change_test_min_days
+        ? 'only ' + Math.max(0, age) + ' of the ' + CONFIG.change_test_min_days + ' complete days needed after the change; it can first be read on ' + iso(addDays(new Date(Date.parse(c.date + 'T00:00:00Z')), CONFIG.change_test_min_days + 3))
+        : 'the change is ' + age + ' days old, past the ' + CONFIG.change_test_max_age_days + ' days this test looks back' }; })
+    .sort((a, b) => Number(b.readable) - Number(a.readable) || b.date.localeCompare(a.date));
   const cutoff = new Date(Date.now() - 35 * 864e5).toISOString();
   const console_alerts = alertRows.filter(a => normD(a.domain) === s.domain && String(a.received_at) >= cutoff).sort((a, b) => String(b.received_at).localeCompare(String(a.received_at))).slice(0, 10).map(a => ({ kind: a.kind, severity: a.severity, subject: a.subject, summary: a.summary, received_at: a.received_at, source: a.source || 'mail' }));
   const cks = checkinRows.filter(c => c.site_id === s.site_id).sort((a, b) => String(b.month).localeCompare(String(a.month)));
@@ -353,5 +380,8 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
     keywords: s.keywords, tracked: tracked.slice(0, CONFIG.max_tracked_keywords), ladder_pages: pages.slice(0, CONFIG.max_inspections), ladder_heads: [...new Set(lrows.map(l => String(l.head_keyword || '').toLowerCase().trim()).filter(Boolean))],
     // B-G3: what the gate refused, with its reason, so the weekly report names it instead of printing a shorter list (INVARIANTS rule 1)
     set_aside, set_aside_note: FITR.line(set_aside, 'tracked or given a live rank check'),
+    // B7-1: the dated changes, readable ones first; GSC Requests buys the two windows of the first `max_change_tests`, the rest
+    // travel with the reason they could not be read so the report says so instead of showing a shorter list
+    changes: changes.slice(0, Math.max(CONFIG.max_change_tests, 12)),
     serp_positions: serp, pending_publish, console_alerts, last_checkin, checkin_due, ranges, on_demand, checked_at: now, config: CONFIG } };
 });

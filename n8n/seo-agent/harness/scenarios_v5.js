@@ -13351,6 +13351,188 @@ await guard('b11-won-links-are-read-again', async () => {
   reset();
 });
 
+// S90 B7-1 / B7-2 / B7-3 (2026-10-15, benchmark programme area 7 —
+// docs/system-review-2026-10-14/BENCH_AREA7_site_tracking.md): the Site Tracker has shipped the METHOD of a change test since
+// G12 (`change_method` in every weekly callback) and never ran one — CT.compare was called by the Link Builder and by nobody
+// else — so criterion 3.4's "control group or counterfactual" was capped at links only; it has asked Search Console for
+// `type: web` and nothing else since v4.3, so a site whose phone clicks halved while desktop held read as one flat site-wide
+// figure; and it has read every query x page row since G9 while keeping only the strongest page, so cannibalisation
+// (criterion 2.10, a report of its own at SEOTesting and a tab at Semrush) was invisible from data already in hand.
+// Every check below fails against the code of the 2026-10-14 run.
+// ===================================================================================
+await guard('S90 B7 site tracking', async () => {
+  const SN = 'S90 B7-1 B7-2 B7-3 — did the change work against a control group, the device and country Search Console always had, and two of your own pages in one search';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok  ' : 'FAIL') + ' ' + label + (ok ? '' : '  <- ' + String(detail || '').slice(0, 300))); };
+  const D90 = 'northwind-erp.com', W90 = 'https://www.' + D90, SITE90 = 'site_northwind-erp-com', EMPTY = [{ json: {} }];
+  const ago90 = (d) => new Date(Date.now() - d * 864e5).toISOString();
+  const TESTED = W90 + '/erp-implementation-dubai/';
+  const row90 = (keys, c, im, p) => ({ keys, clicks: c, impressions: im, ctr: im ? +(c / im).toFixed(4) : 0, position: p });
+
+  // ---------- 1. B7-1: Site Plan dates every change and gives it its own two windows ----------
+  const logRow90 = (url, at, o = {}) => ({ json: { id: 1, site_id: SITE90, domain: D90, keyword: o.keyword || 'erp implementation dubai', status: 'published',
+    published_url: url, published_at: at, started_at: at, source: o.source || 'cadence' } });
+  const siteRow90 = { json: { id: 1, site_id: SITE90, domain: D90, gsc_property: 'sc-domain:' + D90, ga4_property_id: '', country: 'United Arab Emirates',
+    location_code: 2784, language_code: 'en', email: '', callback_url: '', keywords: 'erp software uae', status: 'active', created_at: ago90(400), last_run_at: ago90(7) } };
+  const plan90 = async (logs) => {
+    mock('Load Sites', [siteRow90]); mock('Load Ladders', EMPTY); mock('Load Rank History', EMPTY); mock('Load Site Metrics', EMPTY);
+    mock('Load Query History', EMPTY); mock('Load Content Log', logs.length ? logs : EMPTY); mock('Load Console Alerts', EMPTY);
+    mock('Load Check-ins', EMPTY); mock('Load Profiles (Site)', EMPTY); mock('Load Monitors (Site)', EMPTY);
+    return (await run('Site Plan', EMPTY)).map(x => x.json).find(x => x.site_id === SITE90);
+  };
+  const SP = await plan90([
+    logRow90(TESTED, ago90(90).slice(0, 10)),
+    logRow90(W90 + '/blog/brand-new/', ago90(5).slice(0, 10), { keyword: 'brand new page' }),
+    logRow90(W90 + '/blog/ancient/', ago90(900).slice(0, 10), { keyword: 'ancient page' }),
+    logRow90('', ago90(60).slice(0, 10), { keyword: 'never published' }),
+  ]);
+  const chTested = (SP.changes || []).find(c => c.url === TESTED) || {};
+  const chNew = (SP.changes || []).find(c => /brand-new/.test(c.url)) || {};
+  console.log('   changes ->', JSON.stringify((SP.changes || []).map(c => [c.url.replace(W90, ''), c.age_days, c.readable])));
+  check('B7-1: a page published 90 days ago gets its OWN two 28-day windows — the report\'s 28-vs-28 both sit after a change that old and would measure nothing',
+    chTested.readable === true && chTested.window_after.start === chTested.date && chTested.window_before.end < chTested.date
+    && Math.round((Date.parse(chTested.window_after.end) - Date.parse(chTested.window_after.start)) / 864e5) === 27
+    && Math.round((Date.parse(chTested.window_before.end) - Date.parse(chTested.window_before.start)) / 864e5) === 27, JSON.stringify(chTested));
+  check('B7-1: a change made 5 days ago is NOT measured and keeps its row with the date it can first be read — a missing row would read as "nothing was tried"',
+    chNew.readable === false && /only \d+ of the 28 complete days/.test(chNew.not_yet) && /can first be read on \d{4}-\d{2}-\d{2}/.test(chNew.not_yet), JSON.stringify(chNew));
+  check('B7-1: a page with no published URL is not a dated change, and one 900 days old is past the window Search Console keeps',
+    !(SP.changes || []).some(c => !c.url) && ((SP.changes || []).find(c => /ancient/.test(c.url)) || {}).readable === false, JSON.stringify((SP.changes || []).map(c => c.url)));
+
+  // ---------- 2. B7-1 / B7-2: GSC Requests buys the windows, the device and the country ----------
+  const RP90 = { ...SP, gsc_property: 'sc-domain:' + D90, gsc_connected: true, gsc_permission: 'siteFullUser', gsc_error: null };
+  mock('Resolve Properties', [{ json: RP90 }]);
+  const REQ90 = (await run('GSC Requests', [{ json: RP90 }])).map(x => x.json);
+  const kinds90 = REQ90.map(q => q.kind);
+  console.log('   request kinds ->', JSON.stringify([...new Set(kinds90)]));
+  check('B7-2: the device and the country are asked for, both periods — the Search Analytics API has answered them since it existed and we asked for neither',
+    ['device_cur', 'device_prev', 'country_cur', 'country_prev'].every(k => kinds90.includes(k))
+    && REQ90.find(q => q.kind === 'device_cur').body.dimensions[0] === 'device'
+    && REQ90.find(q => q.kind === 'country_prev').body.startDate === RP90.ranges.previous.start, JSON.stringify(kinds90.filter(k => /device|country/.test(k))));
+  const tb90 = REQ90.find(q => q.kind === 'test_before'), ta90 = REQ90.find(q => q.kind === 'test_after');
+  check('B7-1: each readable change buys its own before / after window over the WHOLE site, so the page under test and its control group are measured on exactly the same days',
+    !!tb90 && !!ta90 && tb90.test_url === TESTED && tb90.body.dimensions[0] === 'page' && ta90.body.dimensions[0] === 'page'
+    && ta90.body.startDate === chTested.date && tb90.body.endDate < chTested.date
+    && REQ90.filter(q => q.kind === 'test_after').length === 1, JSON.stringify({ before: tb90 && tb90.body, after: ta90 && ta90.body }));
+
+  // ---------- 3. Parse GSC reduces the windows, the splits and the competing pages ----------
+  const CTRL = ['/erp-software-uae/', '/wms-uae/', '/blog/erp-checklist/', '/pricing/', '/contact/'];
+  const ansFor = (o) => (q) => {
+    const k = q.kind;
+    if (k === 'by_date') { const out = []; for (let i = 0; i < 56; i++) { const d = new Date(Date.parse(q.body.startDate + 'T00:00:00Z') + i * 864e5).toISOString().slice(0, 10); out.push(row90([d], 5, 90, 7.5)); } return { rows: out }; }
+    if (k === 'queries_cur') return { rows: [row90(['erp software uae', W90 + '/erp-software-uae/'], 12, 400, 9.5), row90(['erp software uae', W90 + '/blog/erp-checklist/'], 6, 260, 4.2),
+      row90(['northwind erp', W90 + '/'], 30, 300, 1.2), row90(['northwind erp', W90 + '/about/'], 9, 200, 3.4)] };
+    if (k === 'queries_prev') return { rows: [row90(['erp software uae'], 15, 380, 9.1), row90(['northwind erp'], 28, 290, 1.3)] };
+    if (k === 'pages_cur') return { rows: CTRL.map((u, i) => row90([W90 + u], 40 + i, 300, 8)).concat([row90([TESTED], 60, 700, 6.0)]) };
+    if (k === 'pages_prev') return { rows: CTRL.map((u, i) => row90([W90 + u], 38 + i, 290, 8.2)).concat([row90([TESTED], 10, 300, 14.0)]) };
+    if (k === 'device_cur') return { rows: [row90(['DESKTOP'], 120, 1400, 6.0), row90(['MOBILE'], 40, 900, 8.1)] };
+    if (k === 'device_prev') return { rows: [row90(['DESKTOP'], 118, 1380, 6.1), row90(['MOBILE'], 150, 1000, 7.0)] };
+    if (k === 'country_cur') return { rows: [row90(['are'], 130, 1800, 6.4), row90(['ind'], 30, 500, 9.0)] };
+    if (k === 'country_prev') return { rows: [row90(['are'], 240, 1850, 6.2), row90(['ind'], 28, 480, 9.1)] };
+    if (k === 'test_before' || k === 'test_after') {
+      if (o.windowErr === k) return { error: { message: 'Search Console: internal error' } };
+      const after = k === 'test_after';
+      const ctrl = (o.controlClicks == null ? (after ? 210 : 200) : (after ? o.controlClicks[1] : o.controlClicks[0]));
+      const each = Math.max(1, Math.round(ctrl / CTRL.length));
+      const page = o.page == null ? (after ? 60 : 10) : (after ? o.page[1] : o.page[0]);
+      return { rows: CTRL.map(u => row90([W90 + u], each, 300, 8)).concat(page > 0 ? [row90([TESTED], page, after ? 700 : 300, after ? 6.0 : 14.0)] : []) };
+    }
+    return { rows: [] };
+  };
+  const parse90 = async (o = {}) => { mock('Resolve Properties', [{ json: RP90 }]); mock('GSC Requests', REQ90.map(q => ({ json: q })));
+    mock('GSC Query', REQ90.map(q => ({ json: ansFor(o)(q) }))); mock('GSC More Requests', []); mock('GSC Query (More)', []);
+    mock('Site Model (Site)', EMPTY);
+    return (await run('Parse GSC', store['GSC Query']))[0].json; };
+  const PG = await parse90();
+  console.log('   devices ->', JSON.stringify((PG.devices.rows || []).map(r => [r.key, r.prev_clicks + '->' + r.clicks, r.change.real])));
+  check('B7-2: the device split comes back measured, with each device tested on the same statistical bar as every other alert',
+    PG.devices.read === true && PG.devices.failed === false && PG.devices.rows.length === 2
+    && PG.devices.rows.find(r => r.key === 'MOBILE').change.real === true && PG.devices.rows.find(r => r.key === 'DESKTOP').change.real === false
+    && PG.devices.rows.find(r => r.key === 'DESKTOP').share === 75 && /the last 28 days against the 28 days before/.test(PG.devices.basis), JSON.stringify(PG.devices.basis));
+  check('B7-2: the country split comes back the same way',
+    PG.countries.read === true && PG.countries.rows[0].key === 'are' && PG.countries.rows[0].change.direction === 'down', JSON.stringify(PG.countries.rows.map(r => [r.key, r.clicks])));
+  console.log('   cannibal ->', JSON.stringify(PG.cannibal.map(c => [c.query, c.pages.length, c.split])));
+  const cb90 = PG.cannibal[0] || {};
+  check('B7-3: two of the site\'s own pages shown for one non-brand search are reported from rows this node already read — observed by Google, not inferred from a ranking check',
+    PG.cannibal.length === 1 && cb90.query === 'erp software uae' && cb90.pages.length === 2 && cb90.impressions === 660
+    && /Measured by Google, not inferred/.test(cb90.basis), JSON.stringify(cb90.basis));
+  check('B7-3: the page Google shows most often is named apart from the page that ranks better when it is shown — the two are not the same page here, which is the whole problem',
+    cb90.preferred === W90 + '/erp-software-uae/' && cb90.split === true && cb90.best.page === W90 + '/blog/erp-checklist/', JSON.stringify([cb90.preferred, cb90.split, cb90.best && cb90.best.page]));
+  check('B7-3: a BRAND search answered by two of your pages is not cannibalisation and is never reported as it — several of your pages should answer your own name',
+    !PG.cannibal.some(c => /northwind/.test(c.query)) && PG.cannibal_summary.found === 1 && /brand searches are left out/.test(PG.cannibal_summary.note), JSON.stringify(PG.cannibal_summary));
+  const ct90 = (PG.change_tests || [])[0] || {};
+  check('B7-1: the change\'s two windows are reduced to the page and the control group of every OTHER page, measured over the same days',
+    (PG.change_tests || []).length === 1 && ct90.read === true && ct90.url === TESTED
+    && ct90.page.clicks === 60 && ct90.page.prev_clicks === 10 && ct90.control.pages === CTRL.length && ct90.control.clicks === 210 && ct90.control.prev_clicks === 200
+    && (ct90.control.moves || []).length === CTRL.length, JSON.stringify({ page: ct90.page, control: ct90.control && { ...ct90.control, moves: (ct90.control.moves || []).length } }));
+  const PGerr = await parse90({ windowErr: 'test_after' });
+  check('B7-1 (INVARIANTS rule 1 / rule 3): a window Search Console did not answer is "not measured" with the reason, never a zero that would read as "the change did nothing"',
+    PGerr.change_tests[0].read === false && PGerr.change_tests[0].page === null && /did not answer the window after/.test(PGerr.change_tests[0].reason), JSON.stringify(PGerr.change_tests[0]));
+
+  // ---------- 4. Site Metrics judges the change against the control group ----------
+  const metrics90 = async (pg) => { reset(); mock('Resolve Properties', [{ json: RP90 }]); mock('Parse GSC', [{ json: pg }]);
+    return (await run('Site Metrics', store['Resolve Properties']))[0].json; };
+  const M = await metrics90(PG);
+  const t90 = (M.change_tests.tests || []).find(t => t.url === TESTED) || {};
+  console.log('   verdict ->', JSON.stringify([t90.verdict, t90.lift_pct, t90.ci, t90.z]), '|', String(t90.basis).slice(0, 200));
+  check('B7-1: a page that went 10 -> 60 clicks while the rest of the site went 200 -> 210 is "Likely helped", with what the site\'s trend alone would have given it',
+    t90.state === 'helped' && t90.verdict === 'Likely helped' && t90.expected === 10.5 && t90.lift_pct > 300 && t90.z > 1.96
+    && Array.isArray(t90.ci) && t90.ci[0] > 0, JSON.stringify({ state: t90.state, expected: t90.expected, lift: t90.lift_pct, ci: t90.ci }));
+  check('B7-1: the sentence under it names the control group, the 95% range that carries the control group\'s OWN noise, and says the expectation is modelled and not measured',
+    /against the site's other 5 pages over the same two periods \(200 → 210\)/.test(t90.basis) && /95% range/.test(t90.basis)
+    && /modelled from the control group, not measured/.test(t90.basis), t90.basis);
+  check('B7-1: the position is read with the same kit the Link Builder uses, against the control pages\' own moves',
+    /helped|effect|early/i.test(String(t90.position_verdict)) && typeof t90.position_effect === 'number', JSON.stringify([t90.position_verdict, t90.position_effect, t90.position_note]));
+  check('B7-1: the method sentence the Site Tracker has shipped since G12 now describes a test that actually ran',
+    M.change_tests.measured === 1 && /control group/.test(M.change_method) && M.change_method === M.change_tests.method
+    && M.change_tests.helped === 1 && M.change_tests.hurt === 0, JSON.stringify({ measured: M.change_tests.measured, helped: M.change_tests.helped }));
+  check('B7-1 (INVARIANTS rule 1): the figure says what it is — the two windows\' clicks are measured, what the page "would have done" is modelled',
+    (M.lineage || []).some(l => /Whether a change helped/.test(l.figure) && l.basis === 'modelled' && /would have done/.test(l.note || '')),
+    JSON.stringify((M.lineage || []).filter(l => /change helped|device|country/.test(l.figure)).map(l => [l.figure, l.basis])));
+  const Mhurt = await metrics90(await parse90({ page: [80, 20] }));
+  const tHurt = (Mhurt.change_tests.tests || []).find(t => t.url === TESTED) || {};
+  check('B7-1: the same comparison calls a fall a fall — 80 -> 20 clicks while the site held is "Likely hurt", which no before/after alone could tell from a quiet month',
+    tHurt.state === 'hurt' && tHurt.verdict === 'Likely hurt' && tHurt.lift_pct < -50, JSON.stringify([tHurt.state, tHurt.lift_pct]));
+  const Mno = await metrics90(await parse90({ controlClicks: [15, 16] }));
+  const tNo = (Mno.change_tests.tests || []).find(t => t.url === TESTED) || {};
+  check('B7-1: a site too small to be its own control group gets NO lift at all, with the reason — a lift computed on nothing reads as a result',
+    tNo.state === 'no_control' && tNo.lift_pct == null && tNo.expected == null && /under the 40 this comparison needs for a baseline/.test(tNo.basis), tNo.basis);
+  const Msmall = await metrics90(await parse90({ page: [3, 5] }));
+  const tSmall = (Msmall.change_tests.tests || []).find(t => t.url === TESTED) || {};
+  check('B7-1: a page with 8 clicks over both windows together is "Can\'t tell yet", never "no difference"',
+    tSmall.state === 'too_small' && tSmall.verdict === 'Can\'t tell yet' && /against the 20 this comparison needs/.test(tSmall.basis), tSmall.basis);
+  const tooNew = (M.change_tests.tests || []).find(t => /brand-new/.test(t.url)) || {};
+  check('B7-1: the change made 5 days ago is still in the list, as "Too early to tell" with the date it can first be read',
+    tooNew.state === 'too_early' && tooNew.verdict === 'Too early to tell' && /Not measured yet: only \d+ of the 28 complete days/.test(tooNew.basis), JSON.stringify(tooNew));
+  const aDev = (M.alerts || []).find(a => a.stat === 'device') || {};
+  console.log('   device alert ->', aDev.level, '|', aDev.text);
+  check('B7-2: phones falling 73% while desktop held is an alert of its own — inside the site-wide total it was invisible',
+    aDev.level === 'medium' && aDev.key === 'MOBILE' && /Search clicks from phones fell 73% \(150 → 40 in 28 days; 25% of your clicks\)/.test(aDev.text)
+    && /Tested: Search Console clicks on phones/.test(aDev.text) && /outside 95% sampling noise/.test(aDev.text)
+    && !(M.alerts || []).some(a => a.stat === 'device' && a.key === 'DESKTOP'), JSON.stringify([aDev.level, aDev.text]));
+  const aCb = (M.actions || []).find(a => a.type === 'cannibalisation') || {};
+  check('B7-3: the competing pages become one action that merges or differentiates them — never "publish another page", which is D11 by another name',
+    /Two of your pages compete for "erp software uae"/.test(aCb.action) && /Decide which one answers this search/.test(aCb.action)
+    && !/publish a (new|second)/i.test(aCb.action) && /splitting the signals/.test(aCb.why), JSON.stringify([aCb.action, aCb.why]));
+
+  // ---------- 5. the report a customer reads ----------
+  const Mrep = await metrics90(PG);   // Site Report reads $('Site Metrics'), so the run under test has to be the last one in the store
+  const REP = (await run('Site Report', await run('Brief Input', [{ json: Mrep }])))[0].json;
+  check('B7-1: the report answers "did it work?" with the page, what changed, the clicks either side, what the rest of the site would have given it, and the verdict',
+    /Did it work\? Your changes against the rest of the site/.test(REP.html) && /10 → 60/.test(REP.html) && /Likely helped/.test(REP.html)
+    && /vs expected/.test(REP.html) && /Too early to tell/.test(REP.html), (REP.html.match(/Did it work[\s\S]{0,300}/) || [''])[0]);
+  check('B7-2: the device table is in the report, with the share of clicks each one takes',
+    /Where your visitors searched from/.test(REP.html) && /Phones/.test(REP.html) && /Desktop/.test(REP.html) && /75%/.test(REP.html), (REP.html.match(/Where your visitors searched from[\s\S]{0,260}/) || [''])[0]);
+  check('B7-3: and the searches two of the site\'s own pages compete for, with the page Google prefers',
+    /Searches two of your pages compete for/.test(REP.html) && /erp-software-uae/.test(REP.html) && /ranks better when it is shown/.test(REP.html),
+    (REP.html.match(/Searches two of your pages compete for[\s\S]{0,300}/) || [''])[0]);
+  const PGfail = await parse90({ windowErr: 'test_before' });
+  const Mfail = await metrics90(PGfail);
+  const REPfail = (await run('Site Report', await run('Brief Input', [{ json: Mfail }])))[0].json;
+  check('B7-1: a change that could not be read keeps its row in the report as "Not measured" with the reason — a shorter table would read as "nothing was tried"',
+    /Not measured/.test(REPfail.html) && /did not answer the window before/.test(REPfail.html), (REPfail.html.match(/Not measured[\s\S]{0,200}/) || [''])[0]);
+  reset();
+});
+
 
 H.report();
 })();

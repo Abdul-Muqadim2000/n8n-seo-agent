@@ -108,5 +108,67 @@ const ST = (() => {
     if (ch.watch) return base('watch', ' Large but inside 95% sampling noise (z ' + ch.z + '), so it is something to watch, not a fall.' + kindNote);
     return base('steady', ' The fall is smaller than the ' + minPct + '% worth acting on (' + ch.text + ').');
   };
-  return { z, band, change, position, decay, tested, updatesIn, updateNote, UPDATES };
+  // ---- B7-1 (2026-10-15, benchmark area 7 — docs/system-review-2026-10-14/BENCH_AREA7_site_tracking.md): DID THE CHANGE WORK,
+  // OR DID THE WHOLE SITE MOVE? "We published the page and its clicks are up 40%" is not a result on a site that is up 45%.
+  // SEOTesting's split test is exactly this comparison — a test group against a control group of similar pages, so that
+  // "algorithm updates or seasonal shifts" hit both sides (https://seotesting.com/features/); its group builder balances the two
+  // groups on 90 days of Search Console clicks and throws out pages more than 2 standard deviations from the mean and pages with
+  // no clicks on more than half the days (https://support.seotesting.com/en/article/split-test-group-configuration-tool-1reabjb/).
+  // The arithmetic here is CausalImpact's idea in plain form (P1, Brodersen et al. 2015, https://arxiv.org/abs/1506.00356): what
+  // the page WOULD have done had it followed the rest of the site, against what it did.
+  //     expected = prev_clicks x (control_clicks / control_prev_clicks)        <- MODELLED, never measured
+  //     d = ln(cur/prev) - ln(control_cur/control_prev),  SE = sqrt(1/cur + 1/prev + 1/cc + 1/cp)
+  //     lift = exp(d) - 1,  95% range = exp(d +- 1.96 SE) - 1,  z = d / SE
+  // The rate-ratio form carries the CONTROL group's own sampling error into the range; a ratio of two percentages does not, and
+  // that is how a quiet control group turns into a confident claim. A Google update inside the window is NOT a reason to refuse:
+  // it moves the control group too, which is the whole point of having one. Nothing here ever says a change CAUSED anything —
+  // a control group narrows the alternatives (the shared wording is CT, v5/code/_change_test.js).
+  // Five refusals, because a lift computed on nothing reads as "no effect": no clicks before, no clicks after, too few events over
+  // both periods together, fewer control pages than min_control_pages, and a control group with too little traffic to be a baseline.
+  const LIFT_LABEL = { helped: 'Likely helped', hurt: 'Likely hurt', watch: 'Possibly moved', no_difference: 'No measurable difference',
+    too_small: 'Can\'t tell yet', no_before: 'Can\'t tell', no_after: 'Can\'t tell', no_control: 'Can\'t tell' };
+  const liftMethod = 'Every change is dated and read against a control group: the page\'s own clicks before and after, divided by what '
+    + 'the site\'s OTHER pages did over the same two periods. The expected figure is modelled from that control group, not measured, and '
+    + 'the 95% range carries the control group\'s own sampling error. A Google update inside the window moves the control group too — '
+    + 'that is what the control group is for. A control group narrows the alternatives; it never proves a cause.';
+  const lift = (o) => {
+    const x = o || {};
+    const cur = num(x.clicks), prev = num(x.prev_clicks), cc = num(x.control_clicks), cp = num(x.control_prev_clicks);
+    const pagesN = Math.max(0, Math.round(num(x.control_pages)));
+    const minEvents = x.min_events == null ? 20 : num(x.min_events);
+    const minControl = x.min_control_events == null ? 40 : num(x.min_control_events);
+    const minPages = x.min_control_pages == null ? 3 : num(x.min_control_pages);
+    const minPct = x.min_pct == null ? 20 : num(x.min_pct);
+    const per = String(x.period || 'the last 28 days against the 28 days before');
+    const what = String(x.label || 'clicks');
+    const ch = change(cur, prev, { min_events: minEvents, min_pct: 0 });
+    const ctrl = change(cc, cp, { min_events: minControl, min_pct: 0 });
+    const out = (state, note, extra) => Object.assign({ state, verdict: LIFT_LABEL[state] || state,
+      clicks: cur, prev_clicks: prev, control_clicks: cc, control_prev_clicks: cp, control_pages: pagesN,
+      expected: null, lift: null, lift_pct: null, ci: null, z: null, significant: false, change: ch, control_change: ctrl,
+      basis: 'Search Console ' + what + ' for this page, ' + per + ' (' + prev + ' → ' + cur + '), against the site\'s other '
+        + pagesN + ' page' + (pagesN === 1 ? '' : 's') + ' over the same two periods (' + cp + ' → ' + cc + '). ' + note }, extra || {});
+    if (pagesN < minPages) return out('no_control', 'Fewer than ' + minPages + ' other pages of this site carried Search Console clicks, so there is no control group and no lift is claimed.');
+    if (cp < minControl) return out('no_control', 'The rest of the site carried ' + cp + ' clicks in the earlier period, under the ' + minControl + ' this comparison needs for a baseline, so no lift is claimed.');
+    if (prev <= 0) return out('no_before', 'The page had no clicks in the earlier period, so there is nothing to compare it with: this is a page new to Search Console, not an improved one.');
+    if (cur <= 0) return out('no_after', 'The page has no clicks in the current period (it had ' + prev + '), so the ratio cannot be computed. That fall is reported on its own, never as a lift.');
+    if ((cur + prev) < minEvents) return out('too_small', 'Only ' + (cur + prev) + ' clicks over both periods together, against the ' + minEvents + ' this comparison needs. No lift is claimed.');
+    const ratio = cc / cp;
+    const expected = Math.round(prev * ratio * 10) / 10;
+    const d = Math.log(cur / prev) - Math.log(ratio);
+    const se = Math.sqrt(1 / cur + 1 / prev + 1 / cc + 1 / cp);
+    const zz = Math.round((d / se) * 100) / 100;
+    const pctOf = (v) => Math.round((Math.exp(v) - 1) * 100);
+    const liftPct = pctOf(d), ci = [pctOf(d - 1.96 * se), pctOf(d + 1.96 * se)];
+    const sig = Math.abs(zz) >= 1.96;
+    const state = sig ? (d > 0 ? 'helped' : 'hurt') : (Math.abs(liftPct) >= minPct ? 'watch' : 'no_difference');
+    const rest = 'The rest of the site went ' + ctrl.text + ', so a page that had simply followed it would have about ' + expected
+      + ' clicks; this page has ' + cur + '.';
+    const size = (liftPct >= 0 ? 'up ' : 'down ') + Math.abs(liftPct) + '% against that expectation (95% range ' + ci[0] + '% to ' + ci[1] + '%, z ' + zz + ')';
+    const note = rest + ' That is ' + size + '. '
+      + (sig ? 'Outside 95% sampling noise.' : Math.abs(liftPct) >= minPct ? 'Inside 95% sampling noise, so it is something to watch and not yet a result.' : 'Inside 95% sampling noise and smaller than the ' + minPct + '% worth acting on.')
+      + ' The expected figure is modelled from the control group, not measured.';
+    return out(state, note, { expected, lift: Math.round((cur - expected) * 10) / 10, lift_pct: liftPct, ci, z: zz, significant: sig });
+  };
+  return { z, band, change, position, decay, tested, updatesIn, updateNote, UPDATES, lift, LIFT_LABEL, liftMethod };
 })();
