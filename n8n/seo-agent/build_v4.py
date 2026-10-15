@@ -6648,6 +6648,125 @@ log('A decaying page is a tested, seasonal judgement - and then it is work (2026
 
 
 # =============================================================================
+# 70. ONE SEARCH, ONE PAGE — DECIDED BY THE RESULTS PAGE AND NOT BY A LABEL (2026-10-15, benchmark programme area 2 —
+#     docs/system-review-2026-10-14/BENCH_AREA2_ladders.md gaps 5 and 6; register rows B2-4, B2-5, and B2-6 as its convention)
+#     * B2-4 (K7, the one place the rubric scores us at 5/10 by design). Keyword Insights clusters keywords by the results pages
+#       Google actually shows and argues, in its own documentation, that shared URLs beat an NLP label. `KWI.serpClusters` has existed
+#       since G8 and discovery uses it — but the ladder's four Labs pulls return `serp_info.serp_item_types` and NO URL list, and
+#       `Ladder_Pool` initialised `competitors: []` and never filled it, so the rungs were grouped by the AI's topic label plus the
+#       page type. Two searches Google answers with the same pages could therefore become two pages: the exact duplication the "one
+#       search, one page" rule exists to prevent, written by the system that enforces that rule everywhere else.
+#       The owner chose the DIRECT route on 2026-10-15 — one SERP call per rung candidate, which is exact — over the cheaper
+#       competitor-domain approximation, because the result is what matters. The chain is *Ladder Cluster Requests* (the bound) ->
+#       *Cluster SERP Wanted?* -> *Run Ladder Cluster SERP* -> *Ladder Cluster Retry* (the in-200 gate of R18, `_dfs_retry.js`) ->
+#       *Any Cluster Retries?* -> *Wait Before Cluster Retry* -> *Run Ladder Cluster SERP (Retry)* -> *Ladder Clusters*, and it sits
+#       on the MAIN path between the pool and the relevance screen — never beside it, which is what made R17's reserve chain run last.
+#       Bounded at 24 keywords (a full ladder plans at most 11 pages of at most 7 keywords each) = $0.048 a run at $0.002 a call, with
+#       the cap, the price and what was really spent printed in the plan; a `free_only` run, `ladder_serp_checks: 0` and a pool with
+#       fewer than two on-topic candidates buy nothing. INVARIANTS rule 1 holds: a keyword whose results page failed twice is named in
+#       `not_compared` with the provider's own reason, is not clustered, is not merged into anything and is not dropped.
+#     * B2-5 (Semrush's fifth ranking factor). The destination's results page is now read for how many DIFFERENT sites own it —
+#       distinct registrable domains through the same `LK.regDomain` the competitor gate has used since R21, so a rival on a subdomain
+#       is not counted twice — and that moves the feasibility score: 6 points at five sites or fewer, 3 at six or seven, nothing at
+#       eight or more. The owner accepted a moving score on the condition that it moves for a stated reason the report prints, so the
+#       count is labelled measured, the adjustment is labelled a stated rule, and both are in the plan, the report and the callback.
+#     * The money (R28 / R31 / R32 / R33 are the precedent): the two new nodes are on every run ledger's node list, so the DataForSEO
+#       cost is settled from the tasks that really ran and counted ONCE by task id; the plan's own figure is computed the same way and
+#       is never the price it was quoted. `CC.DFS_EST.ladder` goes 0.16 -> 0.21 (exec 495 measured $0.1162 + 24 x $0.002 = $0.1642,
+#       with the same headroom the other rows carry), and `app/shared/src/cost.ts` — the one cost table — moves with it.
+# =============================================================================
+_LX70, _LY70 = pos('Ladder Pool')[0], pos('Ladder Pool')[1] + 260
+_X70 = _LX70
+_rd70 = lambda p: rd(p).replace('/*__DFS_RETRY__*/', DFS_RETRY_SRC)
+add_node('Ladder Cluster Requests', 'n8n-nodes-base.code', 2, {'jsCode': _rd70('code/Ladder_Cluster_Requests.js')}, [_X70, _LY70]); _X70 += 220
+if_node('Cluster SERP Wanted?', '{{ $json.cluster_check === true }}', [_X70, _LY70]); _X70 += 220
+add_node('Run Ladder Cluster SERP', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': 'https://api.dataforseo.com/v3/serp/google/organic/live/advanced',
+    'authentication': 'genericCredentialType', 'genericAuthType': 'httpBasicAuth', 'sendBody': True, 'specifyBody': 'json',
+    'jsonBody': "={{ JSON.stringify([{ keyword: $json.keyword, location_code: $json.location_code, language_code: $json.language_code || 'en', depth: 10 }]) }}",
+    'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 400}}, 'timeout': 90000}}, [_X70, _LY70],
+    {'onError': 'continueRegularOutput', **retry_lint.RETRY}); _X70 += 220
+add_node('Ladder Cluster Retry', 'n8n-nodes-base.code', 2, {'jsCode': _rd70('code/Ladder_Cluster_Retry.js')}, [_X70, _LY70]); _X70 += 220
+if_node('Any Cluster Retries?', '{{ $json.is_retry === true }}', [_X70, _LY70]); _X70 += 200
+_wait56('Wait Before Cluster Retry', [_X70, _LY70 + 160]); _X70 += 200
+_r70 = copy.deepcopy(nodes['Run Ladder Cluster SERP'])
+_r70['name'] = 'Run Ladder Cluster SERP (Retry)'; _r70['id'] = nid(_r70['name']); _r70['position'] = [_X70, _LY70 + 160]
+nodes[_r70['name']] = _r70; _X70 += 220
+add_node('Ladder Clusters', 'n8n-nodes-base.code', 2, {'jsCode': _rd70('code/Ladder_Clusters.js')}, [_X70, _LY70])
+for _n70 in ('Run Ladder Cluster SERP', 'Run Ladder Cluster SERP (Retry)'):
+    slot(_n70, 'dataforseo')
+    assert nodes[_n70].get('credentials') and nodes[_n70].get('retryOnFail') and nodes[_n70]['maxTries'] == 3, _n70 + ': credential or retry slot missing'
+# the chain goes ON the main path (R17: a chain hung beside a node runs last in n8n's v1 order, which is how a reserve chain once
+# settled after the money was spent). The relevance screen reads the pool item, which *Ladder Clusters* passes through unchanged.
+disconnect('Ladder Pool', 'Ladder Relevance Chunks')
+connect('Ladder Pool', 'Ladder Cluster Requests')
+connect('Ladder Cluster Requests', 'Cluster SERP Wanted?')
+connect('Cluster SERP Wanted?', 'Run Ladder Cluster SERP', 0); connect('Cluster SERP Wanted?', 'Ladder Clusters', 1)
+connect('Run Ladder Cluster SERP', 'Ladder Cluster Retry')
+connect('Ladder Cluster Retry', 'Any Cluster Retries?')
+connect('Any Cluster Retries?', 'Wait Before Cluster Retry', 0); connect('Any Cluster Retries?', 'Ladder Clusters', 1)
+connect('Wait Before Cluster Retry', 'Run Ladder Cluster SERP (Retry)')
+connect('Run Ladder Cluster SERP (Retry)', 'Ladder Clusters')
+connect('Ladder Clusters', 'Ladder Relevance Chunks')
+assert [t['node'] for l in conns['Ladder Pool']['main'] for t in l] == ['Ladder Cluster Requests'], 'B2-4: the pool still feeds the relevance screen directly'
+assert [t['node'] for l in conns['Ladder Clusters']['main'] for t in l] == ['Ladder Relevance Chunks'], 'B2-4: the clusters do not reach the relevance screen'
+# B2-5: the registrable-domain helper the competitor gate uses (R21), in the node that counts the SERP's owners
+if 'const LK = (() => {' not in code('Ladder Plan'):
+    patch('Ladder Plan', "const base = $('Parse Verdict').first().json;", LK_SRC + "\nconst base = $('Parse Verdict').first().json;")
+assert 'const LK = (() => {' in code('Ladder Plan') and 'LK.regDomain(' in code('Ladder Plan'), 'B2-5: the registrable-domain helper is not in Ladder Plan'
+# the kits each new node needs, and no placeholder left behind
+for _n70, _needs70 in (('Ladder Cluster Requests', ('const KWI = (() => {', 'const RAD = (() => {', 'KWI.ladderChecks(')),
+                       ('Ladder Cluster Retry', ('const RT = (() => {', 'RT.plan(')),
+                       ('Ladder Clusters', ('const KWI = (() => {', 'const RT = (() => {', 'KWI.serpClusters(', 'RT.stats('))):
+    for _need70 in _needs70: assert _need70 in code(_n70), 'B2-4: ' + _n70 + ' is missing ' + _need70
+    assert '/*__' not in code(_n70), 'B2-4: ' + _n70 + ' still carries a kit placeholder'
+# B2-6: the convention the owner approved — the top 7 at 40%, on the ladder path, with discovery's own numbers untouched
+assert "{ top_n: out.top_n, min_overlap: out.min_overlap_pct / 100 }" in code('Ladder Clusters') \
+    and "top_n: 7" in code('Ladder Clusters') and "min_overlap_pct: 40" in code('Ladder Clusters'), 'B2-6: the ladder does not cluster on the top 7 at 40%'
+assert 'top_n: 0,' in KW_INPUTS_SRC and 'min_overlap: 0,' in KW_INPUTS_SRC, 'B2-6: the kit default must stay the top-10 / 3-URL shape discovery was measured on'
+assert "KWI.serpClusters(serpEntries, {})" in code('Build Keyword Strategy') and "KWI.serpClusters(kws.map(serpEntry), {})" in code('Rank Keywords'), \
+    'B2-6: discovery must keep clustering on the defaults until the orchestrator re-baselines K7'
+# INVARIANTS rule 1: a keyword that could not be compared is named, not clustered and not dropped
+for _a70 in ('out.not_compared.push(', 'retried: retryItems.some(', "out.available = out.compared >= 2"):
+    assert _a70 in code('Ladder Clusters'), 'B2-4 / rule 1: Ladder Clusters is missing ' + _a70
+assert 'serp_not_compared' in code('Ladder Plan') and 'notCompared' in code('Ladder Plan'), 'B2-4 / rule 1: the plan does not carry what could not be compared'
+# the grouping itself, and the rung it decides
+for _a70 in ("k.serp_group ? 'serp|' + k.serp_group", 'const rungMap = new Map(', 'clusterRungs.push({'):
+    assert _a70 in code('Ladder Plan'), 'B2-4: Ladder Plan is missing ' + _a70
+assert "if (String(key).indexOf('serp|') === 0) { groups.push(sorted); continue; }" in code('Ladder Plan'), \
+    'B2-4: a group built on shared results pages must not be split into two pages by the topic-label cap'
+# B2-5 in the plan: measured count, stated adjustment, both printed
+for _a70 in ('const serp_diversity = {', 'DIVERSITY_PENALTY', 'score_before: scoreBefore', 'score: dataRefused ? null : scoreAfter'):
+    assert _a70 in code('Ladder Plan'), 'B2-5: Ladder Plan is missing ' + _a70
+assert 'not a measured effect' in code('Ladder Plan'), 'B2-5: the adjustment does not say what kind of number it is'
+# the report and the callback
+assert 'Searches that share a results page' in code('Build Ladder Report') and 'What it cost' in code('Build Ladder Report'), \
+    'B2-4: the report does not print the clusters or what they cost'
+assert 'Who owns the results page' in code('Build Ladder Report'), 'B2-5: the report does not print the domain diversity'
+assert 'serp_clusters: L.serp_clusters' in code('Build Ladder Response') and 'serp_diversity: L.serp_diversity' in code('Build Ladder Response'), \
+    'B2-4 / B2-5: the callback drops the clusters or the diversity'
+# the money: the two new calls are on every ledger's node list, so they are settled from the tasks that ran, once by task id (R28)
+_ln70 = [nm for nm in nodes if "const __LEDGER_NODES = ['SERP Top 10', " in nodes[nm]['parameters'].get('jsCode', '')]
+assert len(_ln70) >= 5, _ln70
+for nm in _ln70:
+    patch(nm, "'Candidate SERP', ", "'Candidate SERP', 'Run Ladder Cluster SERP', 'Run Ladder Cluster SERP (Retry)', ")
+    assert "__dfsOnce(t)" in code(nm), nm + ': R28 dedupe missing where the new calls are counted'
+assert 'ladder: 0.21,' in COST_SRC, 'B2-4: the per-mode DataForSEO estimate was not raised for the results-page calls'
+# INVARIANTS rule 3: the new DataForSEO nodes are inside a recorded in-200 gate chain, and the ratchet is re-checked with them in
+retry_lint.record_gate('SEO Agent v4', list(retry_lint.GATES.get('SEO Agent v4') or [])
+                       + ['Ladder Cluster Requests', 'Cluster SERP Wanted?', 'Run Ladder Cluster SERP', 'Ladder Cluster Retry',
+                          'Any Cluster Retries?', 'Wait Before Cluster Retry', 'Run Ladder Cluster SERP (Retry)', 'Ladder Clusters'])
+url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+_g70, _u70 = retry_lint.check_in200({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+assert 'Run Ladder Cluster SERP' in _g70 and 'Run Ladder Cluster SERP (Retry)' in _g70, 'B2-4: the new DataForSEO calls are not covered by a gate'
+sticky("""### One search, one page — decided by the results page, not by a label (B2-4 · B2-5, 2026-10-15)
+**The rungs were grouped by the AI's topic label**, because the ladder's four Labs pulls return no URLs and `Ladder Pool` left `competitors` empty — so two searches Google answers with **the same pages** could become two pages, the duplication this system forbids everywhere else.
+**Now the ladder buys one results page per rung candidate** (capped at 24 = **$0.048**, free runs buy none) and groups them the way Keyword Insights does: **the top 7 at 40% shared URLs**. A cluster takes its head keyword's rung, so the difficulty bands cannot undo it, and a group built on evidence is never split in two.
+**A keyword whose results page failed twice is named, not clustered and not dropped** — the plan prints how many could not be compared, with the provider's own reason, and what the comparison really cost (counted once per task id).
+**And the destination's results page is counted**: distinct **registrable** domains in the top 10 (Semrush's fifth factor). Five or fewer own it → the feasibility score is 6 lower; six or seven → 3. The count is measured, the adjustment is a stated rule, and the report prints both.""",
+    pos('Ladder Cluster Requests')[0] - 60, pos('Ladder Cluster Requests')[1] + 240, 1160, 280, 4)
+log('One search, one page, decided by the results page and not by a label (2026-10-15, benchmark area 2, rows B2-4 / B2-5 with B2-6 as its convention; BENCH_AREA2_ladders.md gaps 5 and 6). B2-4: the ladder now buys ONE DataForSEO results page per rung candidate (Ladder Cluster Requests -> Cluster SERP Wanted? -> Run Ladder Cluster SERP -> Ladder Cluster Retry -> Any Cluster Retries? -> Wait Before Cluster Retry -> Run Ladder Cluster SERP (Retry) -> Ladder Clusters, on the main path between the pool and the relevance screen) and groups the rungs with KWI.serpClusters on the TOP 7 at a 40% shared-URL threshold - Keyword Insights own current numbers, approved by the owner as B2-6 - instead of on the AI topic label, so two searches Google answers with the same pages become one page; every member of a cluster takes its head keyword\'s rung, a group built on shared results pages is never split by the topic-label cap, and the plan, the report and the callback print the groups, what they merged, the cap (24 keywords, about $0.048 at $0.002 a call), what was really spent (counted once by task id, R28) and - INVARIANTS rule 1 - every keyword whose results page could not be read twice, with the provider\'s own reason, uncompared and unmerged rather than silently dropped; a free_only run, ladder_serp_checks 0 or a pool with fewer than two on-topic candidates buys nothing. The in-200 retry gate (_dfs_retry.js, R18) covers both new calls and the build proves it against harness/in200_baseline.json. B2-5: the destination\'s results page is counted for distinct REGISTRABLE domains (LK.regDomain, the helper the competitor gate has used since R21, so a rival on a subdomain is not a second site) and that moves the feasibility score by a stated rule - 6 points at five domains or fewer, 3 at six or seven, nothing at eight or more - with the count labelled measured, the adjustment labelled a stated rule and both printed in the plan notes, the feasibility section and the callback. The per-mode DataForSEO estimate for a ladder goes 0.16 -> 0.21 (exec 495 measured $0.1162 plus 24 calls at $0.002) in v5/code/_cost_cal.js and in app/shared/src/cost.ts')
+
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:
 #     "two fixes have never come back and both are enforced by the build".

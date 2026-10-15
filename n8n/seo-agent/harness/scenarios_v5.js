@@ -11385,5 +11385,191 @@ await guard('B-F5 the build refuses a missing .env, and rule 2 gate pairs', asyn
   reset();
 });
 
+// S80 B2-4 / B2-5 (2026-10-15, benchmark programme area 2 — docs/system-review-2026-10-14/BENCH_AREA2_ladders.md gaps 5 and 6):
+// the rungs were grouped by the AI's topic label because the ladder's Labs pulls return no URLs and `Ladder Pool` left `competitors`
+// empty, so two searches Google answers with the SAME pages could become two pages. The ladder now buys one results page per rung
+// candidate (bounded) and clusters on the top 7 at 40% — Keyword Insights' own current numbers (B2-6) — and the destination's results
+// page is counted for distinct registrable domains, which moves the feasibility score by a stated rule (B2-5).
+// Every check below fails against the code before this pass.
+// ===================================================================================
+await guard('b2-serp-clusters-and-domain-diversity', async () => {
+  const SN = 'S80 B2-4 B2-5 — one page for the searches Google answers with the same pages, a keyword whose results page failed named and left uncompared, the cap and what it cost, and the destination SERP\'s domain diversity moving the score for a printed reason';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const D = 'techand.ai', SITE = 'site_techand-ai', LOC = 2784, EMPTY = [{ json: {} }];
+  const HEAD = 'erp implementation dubai';
+  const ago80 = (d) => new Date(Date.now() - d * 864e5).toISOString();
+  const U = (n) => 'https://site' + n + '.example/erp-implementation/';
+  // one DataForSEO live-advanced answer, and one that failed inside an HTTP 200 the way 40101 does (R18)
+  const serp80 = (keyword, urls, o = {}) => ({ version: '0.1.2026', status_code: 20000, status_message: 'Ok.', cost: 0.002,
+    tasks: [{ id: o.id || ('t-' + keyword.replace(/\s+/g, '-')), status_code: 20000, status_message: 'Ok.', cost: o.cost === undefined ? 0.002 : o.cost,
+      result: [{ keyword, items: urls.map((u, i) => ({ type: 'organic', rank_group: i + 1, rank_absolute: i + 1, domain: u.replace(/^https?:\/\//, '').split('/')[0], url: u, title: 'Page about ' + keyword })) }] }] });
+  const fail80 = (keyword, n) => ({ version: '0.1.2026', status_code: 20000, status_message: 'Ok.', cost: 0,
+    tasks: [{ id: 't-fail-' + n + '-' + keyword.replace(/\s+/g, '-'), status_code: 40101, status_message: 'Internal SE Server Error.', cost: 0, result: null }] });
+
+  const A = 'erp implementation cost dubai';            // kd 55 -> rung 3
+  const B = 'cost of erp implementation dubai';         // kd 47 -> rung 2, and a different AI topic label ("of erp")
+  const C = 'erp implementation checklist';             // kd 23 -> rung 1, its own results page
+  const FAILED = 'erp implementation timeline';         // its results page fails twice
+  const PLAN_KW = 'erp implementation plan dubai';
+  const POOL80 = [A, B, C, FAILED, PLAN_KW, 'erp implementation services dubai'];
+  const SHARED = [U(1), U(2), U(3)];
+  const PAGES80 = { [A]: [...SHARED, U(4), U(5), U(6), U(7)],
+    [B]: [U(8), ...SHARED, U(9), U(10), U(11)],         // 3 of its own top 7 are A's: one page, not two
+    [C]: [U(31), U(32), U(33), U(34), U(35), U(36), U(37)],
+    [PLAN_KW]: [U(41), U(42), U(43), U(44), U(45), U(46), U(47)],
+    'erp implementation services dubai': [U(51), U(52), U(53), U(54), U(55), U(56), U(57)] };
+  const answer80 = (r) => PAGES80[r.keyword] ? serp80(r.keyword, PAGES80[r.keyword]) : serp80(r.keyword, [U(60), U(61), U(62), U(63), U(64), U(65), U(66)]);
+  // the destination's own results page: ten different sites (open) unless a test says otherwise
+  const openSerp = Array.from({ length: 10 }, (_, i) => ({ rank: i + 1, domain: 'erp' + (i + 1) + '.example', url: 'https://erp' + (i + 1) + '.example/dubai', title: 'ERP implementation Dubai', word_count: 1600, headings: ['What it costs'] }));
+  const PV80 = (o = {}) => ({ keyword: HEAD, domain: D, country: 'United Arab Emirates', location_code: LOC, language_code: 'en', goal: 'leads', email: '', callback_url: '', request_id: 'r-b24', ladder_id: 'lad_s80', pages_now: 2,
+    page_type: 'Service Page', recommended_page: 'Service Page', competitors: [], competitors_summary: openSerp,
+    serp_features: { se_results_count: 420000, checked_at: ago80(0), people_also_ask: [], related_searches: [], forum_threads: [], featured_snippet: null, ai_overview: { present: false, text: '', cited_domains: [], seen_at: ago80(0) }, features_present: [], video_results: false, shopping_results: false, local_pack: false },
+    business: 'ERP implementation partner in the UAE', services: ['ERP implementation'],
+    site_description: { business_description: 'ERP implementation partner in the UAE', products_or_services: ['ERP implementation'] },
+    keyword_data: { search_volume: 210, cpc: 11, keyword_difficulty: 45, google_intent: 'commercial', competitor_backlink_strength: { avg_referring_domains: 28 } },
+    verdict: 'GO_WITH_CHANGES', verdict_score: 68, verdict_reasons: ['The top pages are regional ERP partners.'], verdict_changes: ['Write a service page of about 1,900 words'], verdict_risks: [],
+    secondary_keywords: ['erp partner dubai'], competitor_analysis: { recommended_word_count: 1900 }, site_authority: { organic_keywords: 60, top3: 2, top10: 8, est_monthly_traffic: 300 },
+    site_urls: ['https://www.' + D + '/'], expected_visits_top3: 70, time_to_rank_months: 6, ...o });
+  const ladder80 = async (o = {}) => {
+    for (const k of ['Site Model', 'Ladder Clusters', 'Ladder Cluster Requests', 'Run Ladder Cluster SERP', 'Ladder Cluster Retry', 'Run Ladder Cluster SERP (Retry)']) delete store[k];
+    mock('Parse Verdict', PV80(o.pv || {}));
+    mock('Ladder Requests', [{ kind: 'suggestions', label: 'suggestions for ' + HEAD, body: [{ keyword: HEAD }] }, { kind: 'ranked', label: 'keywords ' + D + ' ranks for', domain: D, body: [{ target: D }] }]);
+    mock('Load Site Cache', [{ json: { id: 1, key: 'reach:' + SITE, kind: 'reach', site_id: SITE, value: JSON.stringify({ reach: 35, method: 'size', p75: null, size_reach: 35, sample: 0, top10: 8, organic_keywords: 60, location_code: LOC }), updated_at: ago80(3) } }]);
+    mock('Load Domain Ladders', EMPTY); mock('Load Domain Ladder Settings', EMPTY);
+    const lp = (await run('Ladder Pool', [V.task({ seed_keyword: HEAD, items: (o.pool || POOL80).map((k, i) => V.kwItem(k, i)) }), V.task({ target: D, items: [] })]))[0].json;
+    const reqs = (await run('Ladder Cluster Requests', [{ json: lp }])).map(i => i.json);
+    let feed = lp, clusters = null, retry = [];
+    if (o.serp !== false && reqs.some(r => r.cluster_check)) {
+      const asked = reqs.filter(r => r.cluster_check);
+      mock('Run Ladder Cluster SERP', asked.map(r => (o.answer || answer80)(r)));
+      retry = (await run('Ladder Cluster Retry', store['Run Ladder Cluster SERP'])).map(i => i.json);
+      if (retry.some(x => x.is_retry)) mock('Run Ladder Cluster SERP (Retry)', retry.filter(x => x.is_retry).map(r => (o.retry_answer || answer80)(r)));
+      feed = (await run('Ladder Clusters', store['Run Ladder Cluster SERP']))[0].json;
+      clusters = feed.serp_clusters;
+    }
+    const ch = await run('Ladder Relevance Chunks', [{ json: feed }]);
+    mock('Ladder Keyword Relevance', ch.map(c => V.ladderRelevance(c.json)));
+    const item = (await run('Ladder Plan', store['Ladder Keyword Relevance']))[0].json;
+    return { item, L: item.ladder, reqs, retry, clusters, pool: lp, pages: (item.ladder.rungs || []).flatMap(r => r.pages || []) };
+  };
+
+  // ---------- 1. two searches Google answers with the same pages become ONE page ----------
+  const withFail = (r) => r.keyword === FAILED ? fail80(r.keyword, 1) : answer80(r);
+  const one = await ladder80({ answer: withFail, retry_answer: (r) => fail80(r.keyword, 2) });
+  const cl = one.clusters || {};
+  console.log('   cluster run ->', JSON.stringify({ asked: cl.asked, compared: cl.compared, clusters: (cl.clusters || []).map(c => [c.head_keyword, c.keyword_count, c.min_shared_urls, c.top_n]), cost: cl.cost_usd, notCompared: (cl.not_compared || []).map(x => x.keyword) }));
+  console.log('   pages ->', JSON.stringify(one.pages.map(p => [p.rung, p.keyword, p.grouped_by, (p.serp_cluster || {}).keyword_count || 0])));
+  const abPages = one.pages.filter(p => p.keyword === A || p.keyword === B);
+  const abPage = abPages[0] || {};
+  check('B2-4: "' + A + '" and "' + B + '" share 3 of their top 7 results, so they are ONE page with the other as a supporting keyword — not two pages in two rungs',
+    abPages.length === 1 && (abPage.supporting || []).includes(abPage.keyword === A ? B : A) && abPage.grouped_by === 'shared results page'
+    && (abPage.serp_cluster || {}).keyword_count === 2 && (abPage.serp_cluster || {}).top_n === 7,
+    JSON.stringify({ pages: one.pages.map(p => [p.rung, p.keyword]), cluster: abPage.serp_cluster }));
+  check('B2-4: the cluster is Keyword Insights\' own current convention — the top 7 compared at 40%, which is 3 shared URLs (B2-6, approved by the owner)',
+    cl.top_n === 7 && cl.min_overlap_pct === 40 && cl.min_shared_urls === 3 && (cl.clusters || []).length === 1
+    && (cl.clusters[0].keywords || []).some(k => k.shared_urls === 3), JSON.stringify(cl.clusters));
+  check('B2-4: the two keywords were in DIFFERENT difficulty rungs (47 and 55 against a reach of 35) and the cluster still made one page — a band cannot undo what Google itself answers the same way',
+    (one.L.serp_cluster_rungs || []).length === 1 && one.L.serp_cluster_rungs[0].keywords.length === 2
+    && one.L.serp_cluster_rungs[0].moved.length === 1, JSON.stringify(one.L.serp_cluster_rungs));
+  // the control: the same pool with no results pages read is the behaviour before this pass
+  const label = await ladder80({ serp: false });
+  const abLabel = label.pages.filter(p => p.keyword === A || p.keyword === B);
+  check('B2-4 (control): with no results page read, the same two searches become TWO pages grouped by the AI\'s topic label — which is what shipped until today',
+    abLabel.length === 2 && abLabel.every(p => /topic label/.test(p.grouped_by || '')) && label.clusters === null,
+    JSON.stringify(abLabel.map(p => [p.rung, p.keyword, p.grouped_by])));
+
+  // ---------- 2. INVARIANTS rule 1: a keyword whose results page failed is named, not clustered, not dropped ----------
+  const nc = (cl.not_compared || []).find(x => x.keyword === FAILED) || {};
+  check('B2-4 / rule 1: the keyword whose results page answered 40101 twice is named with the provider\'s own words, marked as asked twice, and is NOT in any cluster',
+    nc.keyword === FAILED && /Internal SE Server Error/.test(nc.reason || '') && nc.retried === true
+    && !(cl.clusters || []).some(c => (c.keywords || []).some(k => k.keyword === FAILED))
+    && cl.compared === cl.asked - 1 && cl.failed === 1, JSON.stringify({ nc, compared: cl.compared, asked: cl.asked }));
+  check('B2-4 / rule 1: it is not dropped either — it keeps its own page, that page says its results page could not be read, and the plan prints how many could not be compared',
+    one.pages.some(p => p.keyword === FAILED && p.serp_not_compared === true && /could not be read on this run/.test(p.why || ''))
+    && one.L.notes.some(n => /1 keyword\(s\) could not be compared/.test(n)) && one.L.stats.serp_checks_failed === 1,
+    JSON.stringify({ page: one.pages.find(p => p.keyword === FAILED), notes: one.L.notes.filter(n => /compared/.test(n)) }));
+  check('B2-4 / rule 1: the retry is the shared in-200 gate, not a new rule — the failed call was re-sent once and only the failed one',
+    one.retry.filter(x => x.is_retry).length === 1 && one.retry[0].keyword === FAILED && one.retry[0].retry_reason === 'Internal SE Server Error.'
+    && one.retry[0].retry_max === 12, JSON.stringify(one.retry.map(x => [x.keyword, x.is_retry, x.retry_reason])));
+
+  // ---------- 3. the bound, and what it cost ----------
+  const BIG = [...POOL80, ...Array.from({ length: 28 }, (_, i) => 'erp implementation ' + ['guide', 'cost', 'steps', 'risk', 'plan', 'partner', 'audit', 'review'][i % 8] + ' ' + (i + 1) + ' dubai')];
+  const big = await ladder80({ pool: BIG, serp: false });
+  const askedBig = big.reqs.filter(r => r.cluster_check);
+  console.log('   cap ->', JSON.stringify({ candidates: big.reqs[0].candidates, on_topic: big.reqs[0].on_topic, asked: askedBig.length, cap: big.reqs[0].cap, cost: big.reqs[0].cost_usd, left: big.reqs[0].left_uncompared }));
+  check('B2-4: the cap is 24 keywords a ladder, whatever the pool holds, and the request itself carries the cap, the price and what the run will spend ($0.048)',
+    askedBig.length === 24 && big.reqs[0].cap === 24 && big.reqs[0].cost_usd === 0.048 && big.reqs[0].price_usd === 0.002
+    && big.reqs[0].on_topic > 24 && big.reqs[0].left_uncompared === big.reqs[0].on_topic - 24, JSON.stringify(big.reqs[0]));
+  check('B2-4: what was really spent is read back from the tasks that ran, counted once by task id, and never from the reservation',
+    cl.cost_usd === +(cl.asked * 0.002 - 0.002).toFixed(4) && /measured:/.test(cl.cost_basis) && /counted once by task id/.test(cl.cost_basis),
+    JSON.stringify({ cost: cl.cost_usd, asked: cl.asked, basis: cl.cost_basis }));
+
+  // ---------- 4. a free run buys nothing ----------
+  const free = await ladder80({ pv: { free_only: true } });
+  check('B2-4: a free_only run makes no results-page call at all — one item with the gate shut, nothing asked, nothing spent, and the reason in the plan',
+    free.reqs.length === 1 && free.reqs[0].cluster_check === false && free.reqs[0].asked === 0 && free.reqs[0].cost_usd === 0
+    && /free sources only/.test(free.reqs[0].skip_reason), JSON.stringify(free.reqs));
+  const off = await ladder80({ pv: { ladder_serp_checks: 0 } });
+  check('B2-4: and an explicit "no results-page checks" (ladder_serp_checks 0) is a bound of nothing, not a fallback to the default',
+    off.reqs.length === 1 && off.reqs[0].cluster_check === false && off.reqs[0].cap === 0 && /switched off for this run/.test(off.reqs[0].skip_reason),
+    JSON.stringify(off.reqs[0]));
+
+  // ---------- 5. the money: reserved before it is spent, settled from the tasks that ran ----------
+  ledgerReset([]);
+  const ladRun = (await ledgerRun([{ json: { mode: 'ladder', keyword: HEAD, domain: D, pages_now: 1, ai_budget_usd: 15, ai_budget_period: 'day', dfs_budget_usd: 15, client_ip: '1.2.3.4', email: 'owner@example.com' } }]))[0].json;
+  const ladRow = LEDGER.rows[LEDGER.rows.length - 1];
+  check('B2-4: a ladder reserves the new results-page money BEFORE it is spent — $0.21 of DataForSEO money (exec 495 measured $0.1162 plus 24 calls at $0.002), not the $0.16 of before',
+    !ladRun.validation_error && ladRow.dfs_est_usd === 0.21 && ladRun.dfs_spend_estimate_usd === 0.21,
+    JSON.stringify({ row: { dfs: ladRow.dfs_est_usd, ai: ladRow.est_usd }, run: ladRun.dfs_spend_estimate_usd }));
+  // the settle reads the calls back: the same task answered twice is paid for once (R28)
+  const ledgerAnswers = [serp80(A, PAGES80[A]), serp80(B, PAGES80[B], { id: 't-' + A.replace(/\s+/g, '-') })];
+  mock('Run Ladder Cluster SERP', ledgerAnswers);
+  delete store['Run Ladder Cluster SERP (Retry)'];
+  mock('Ladder Plan', [{ json: one.item }]);
+  const rep = await run('Build Ladder Report', EMPTY);
+  const RL = rep[0].json.run_ledger || {};
+  const html80 = decode(rep);
+  save('ladder-plan-b2-4-clusters.doc.html', html80); scanHtml('ladder plan with SERP clusters (B2-4)', html80);
+  check('B2-4: the run ledger counts the new calls — two answers, one repeated task id, $0.002 counted once (R28\'s rule, on the node that did not exist until today)',
+    RL.by_node['Run Ladder Cluster SERP'] === 0.002 && RL.dataforseo_tasks_repeated >= 1 && RL.dataforseo_calls >= 2,
+    JSON.stringify({ by_node: RL.by_node, repeated: RL.dataforseo_tasks_repeated, usd: RL.dataforseo_usd }));
+  check('B2-4: the report prints the groups, how deeply they were compared and what it cost — not just the result',
+    /Searches that share a results page/.test(html80) && /the top 7 results, 3 shared URLs \(40%\)/.test(html80)
+    && /What it cost/.test(html80) && /Grouped by/.test(html80) && /could not be compared/i.test(html80), (html80.match(/Searches that share a results page[\s\S]{0,320}/) || [''])[0]);
+
+  // ---------- 6. B2-5: who owns the destination's results page ----------
+  const dvOpen = one.L.serp_diversity || {};
+  check('B2-5: ten different sites in the top ten is an open results page — the count is measured and the feasibility score is left exactly where the verdict put it',
+    dvOpen.checked === true && dvOpen.domains === 10 && dvOpen.band === 'open' && dvOpen.penalty === 0
+    && one.L.feasibility.score === 68 && one.L.feasibility.score_before === 68, JSON.stringify({ dv: { domains: dvOpen.domains, band: dvOpen.band }, score: one.L.feasibility.score }));
+  const CONC = Array.from({ length: 10 }, (_, i) => ({ rank: i + 1, domain: ['erpone.example', 'www.erpone.example', 'blog.erpone.example', 'erptwo.example', 'www.erptwo.example', 'erpthree.ae', 'erpthree.ae', 'erpfour.co.uk', 'www.erpfour.co.uk', 'erpone.example'][i], url: 'https://' + ['erpone.example', 'www.erpone.example', 'blog.erpone.example', 'erptwo.example', 'www.erptwo.example', 'erpthree.ae', 'erpthree.ae', 'erpfour.co.uk', 'www.erpfour.co.uk', 'erpone.example'][i] + '/erp-implementation-dubai', title: 'ERP implementation Dubai', word_count: 1600, headings: [] }));
+  const conc = await ladder80({ pv: { competitors_summary: CONC }, answer: withFail, retry_answer: (r) => fail80(r.keyword, 2) });
+  const dvC = conc.L.serp_diversity || {};
+  console.log('   concentrated serp ->', JSON.stringify({ domains: dvC.domains, list: dvC.domain_list, band: dvC.band, penalty: dvC.penalty, score: conc.L.feasibility.score }));
+  check('B2-5: four REGISTRABLE domains own those ten results — a subdomain and a www host are the same site (LK.regDomain, the helper the competitor gate has used since R21), so the page is concentrated',
+    dvC.checked === true && dvC.domains === 4 && dvC.band === 'concentrated'
+    && dvC.domain_list.includes('erpone.example') && dvC.domain_list.includes('erpfour.co.uk') && !dvC.domain_list.includes('blog.erpone.example'),
+    JSON.stringify(dvC.domain_list));
+  check('B2-5: the feasibility score MOVES for it — 68 becomes 62 — and the plan carries the number it moved from, the rule it moved by and the words "not a measured effect"',
+    conc.L.feasibility.score === 62 && conc.L.feasibility.score_before === 68 && conc.L.feasibility.score_adjustment === -6
+    && /not a measured effect/.test(dvC.text) && /measured: distinct registrable domains/.test(dvC.basis), JSON.stringify({ f: { score: conc.L.feasibility.score, before: conc.L.feasibility.score_before, adj: conc.L.feasibility.score_adjustment }, basis: dvC.basis }));
+  check('B2-5: and the owner reads it where the verdict is — in the reasons, in the plan notes and in the report, never as a silent number',
+    conc.L.feasibility.reasons.some(r => /4 different site\(s\) hold the top 10/.test(r)) && conc.L.notes.some(n => /4 different site\(s\)/.test(n)),
+    JSON.stringify(conc.L.feasibility.reasons));
+  mock('Ladder Plan', [{ json: conc.item }]);
+  const htmlC = decode(await run('Build Ladder Report', EMPTY));
+  check('B2-5: the report prints who owns the results page, the adjusted score and what kind of number the adjustment is',
+    /Who owns the results page/.test(htmlC) && /4 different site\(s\)/.test(htmlC) && /62\/100/.test(htmlC)
+    && /point\(s\) below the verdict's 68|point\(s\) below the verdict&#39;s 68/.test(htmlC) && /A stated rule, not a measured effect/.test(htmlC),
+    (htmlC.match(/Who owns the results page[\s\S]{0,300}/) || [''])[0]);
+  // a results page that could not be read moves nothing
+  const noSerpDv = await ladder80({ pv: { competitors_summary: CONC.slice(0, 3) }, serp: false });
+  check('B2-5: fewer than five results read is too little of the page to judge — the band is unknown, nothing is adjusted and the plan says so',
+    (noSerpDv.L.serp_diversity || {}).checked === false && noSerpDv.L.feasibility.score === 68
+    && /could not be read on this run|not available/.test((noSerpDv.L.serp_diversity || {}).basis || ''), JSON.stringify(noSerpDv.L.serp_diversity));
+  reset();
+});
+
 H.report();
 })();

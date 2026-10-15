@@ -648,9 +648,11 @@ const SM = (() => {
 //                          pulls instead of only being read afterwards (K6).
 //   * KWI.calibrate()    - the traffic estimate checked against the site's own measured clicks and impressions where it already
 //                          ranks, labelled `calibrated` or `modelled`. A modelled number is never presented as measured (K2).
-//   * KWI.serpClusters() - keywords grouped when their top-10 results share at least 3 URLs, each cluster named by its head keyword
-//                          and carrying the shared URLs, so one page can target the whole group (K7). Only results pages the run
-//                          already fetched are used: the live checks and the competitors' own ranking URLs.
+//   * KWI.serpClusters() - keywords grouped when their results pages share enough URLs, each cluster named by its head keyword and
+//                          carrying the shared URLs, so one page can target the whole group (K7). Discovery compares the top 10 at 3
+//                          shared URLs from results pages the run already fetched (the live checks and the competitors' own ranking
+//                          URLs); the keyword ladder (B2-4, 2026-10-15) buys one results page per rung candidate and compares the
+//                          TOP 7 at a 40% threshold, the convention's own current numbers (B2-6, `top_n` / `min_overlap`).
 // Every function is pure and takes its thresholds as options, so the harness (S52) can drive it directly.
 const KWI = (() => {
   const S = (v) => String(v == null ? '' : v).trim();
@@ -669,13 +671,31 @@ const KWI = (() => {
     min_urls: 3,                // a keyword needs this many known top-10 URLs before it can be compared at all
     max_cluster_keywords: 12,
     live_serp_checks: 16,       // K4: how many keywords get a live intent / page-type check (cost-aware cap, see LIVE_MAX)
-    live_serp_max: 25
+    live_serp_max: 25,
+    // B2-6 (2026-10-15, benchmark area 2, approved by the owner): Keyword Insights, whose convention the shared-URL rule is, now
+    // compares the TOP 7 and not the top 10 - "the overlap setting was originally 1-10, it now runs from 1-7 because Google no longer
+    // reliably shows 10 traditional links" - at a default threshold of 40% of them (https://docs.keywordinsights.ai/learning-center/
+    // the-features/keyword-clustering/). `top_n` cuts every keyword's list to that depth BEFORE anything is compared, and
+    // `min_overlap` turns the threshold into a share of it: ceil(7 x 0.4) = 3 of 7. Both default to 0 = off, so the discovery path
+    // keeps the top-10 / 3-URL shape it was measured on until the orchestrator re-baselines K7; the ladder (B2-4) passes 7 / 0.4.
+    top_n: 0,
+    min_overlap: 0,
+    // B2-4: how many of a ladder's rung candidates may be sent for a results page of their own, and what one costs. A full ladder
+    // plans at most 11 pages (rung limits 4 / 4 / 3) and a page takes at most 7 keywords, so 24 covers more than twice the pages a
+    // plan can hold; the rest of the pool would be bought for keywords no page will ever target.
+    ladder_serp_checks: 24,
+    ladder_serp_max: 30,
+    serp_check_usd: 0.002       // one DataForSEO live-advanced SERP at depth 10, the same call the discovery live checks buy
   };
   const bare = (v) => S(v).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '').replace(/:\d+$/, '');
   const cap = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
   // K4: how many live results-page checks this run may buy. One check is a DataForSEO live-advanced SERP at depth 10 (~$0.002), so the
   // default 16 costs about $0.032 a run against $0.016 at the old fixed 8; the owner may set it per run and it is hard-capped at 25.
   const liveChecks = (requested) => { const n = num(requested); return n == null || n <= 0 ? CFG.live_serp_checks : Math.round(cap(n, 1, CFG.live_serp_max)); };
+  // B2-4: the same shape for the ladder's own cap. 0 or a negative number means "make no call at all" (a free run), which is why this
+  // one does NOT fall back to the default when it is given a zero: a bound of nothing has to be expressible.
+  const ladderChecks = (requested) => { const n = num(requested); if (n == null) return CFG.ladder_serp_checks; if (n <= 0) return 0; return Math.round(cap(n, 1, CFG.ladder_serp_max)); };
+  const checkCost = (n) => +((Math.max(0, Number(n) || 0)) * CFG.serp_check_usd).toFixed(4);
 
   // ---- K6: the site's own Search Console queries as seeds ----
   // rows = seo_query_history rows (the Site Tracker writes one per site, query and 28-day period). Only the newest period counts:
@@ -792,8 +812,14 @@ const KWI = (() => {
   const urlKey = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
   const serpClusters = (entries, o) => {
     const c = { ...CFG, ...(o || {}) };
+    // B2-6: the depth every list is cut to before it is compared, and the number of shared URLs that depth demands. With `top_n` and
+    // `min_overlap` set (the ladder: 7 and 0.4) the threshold is a SHARE of the depth - ceil(7 x 0.4) = 3 of 7 - instead of the flat
+    // count discovery still uses, and both numbers travel on every cluster so a report can state what was compared and how deeply.
+    const depth = (num(c.top_n) || 0) > 0 ? Math.round(c.top_n) : 0;
+    const need = (num(c.min_overlap) || 0) > 0 && depth ? Math.max(1, Math.ceil(depth * c.min_overlap)) : c.min_shared_urls;
     const list = (Array.isArray(entries) ? entries : []).map(e => ({ keyword: low((e || {}).keyword),
-      urls: [...new Set(((e || {}).urls || []).map(urlKey).filter(Boolean))], weight: num((e || {}).weight) || 0, volume: num((e || {}).volume) }))
+      urls: (() => { const u = [...new Set(((e || {}).urls || []).map(urlKey).filter(Boolean))]; return depth ? u.slice(0, depth) : u; })(),
+      weight: num((e || {}).weight) || 0, volume: num((e || {}).volume) }))
       .filter(e => e.keyword && e.urls.length >= c.min_urls);
     const byKw = new Map(); for (const e of list) if (!byKw.has(e.keyword)) byKw.set(e.keyword, e);
     const ranked = [...byKw.values()].sort((a, b) => b.weight - a.weight || (b.volume || 0) - (a.volume || 0) || a.keyword.localeCompare(b.keyword));
@@ -804,28 +830,31 @@ const KWI = (() => {
       for (const other of ranked) {
         if (other.keyword === head.keyword || used.has(other.keyword)) continue;
         const shared = other.urls.filter(u => hs.has(u));
-        if (shared.length >= c.min_shared_urls) members.push({ keyword: other.keyword, volume: other.volume, shared_urls: shared.length, shared: shared.slice(0, 3) });
+        if (shared.length >= need) members.push({ keyword: other.keyword, volume: other.volume, shared_urls: shared.length, shared: shared.slice(0, 3) });
       }
       if (!members.length) continue;
       used.add(head.keyword); members.forEach(m => used.add(m.keyword));
       members.sort((a, b) => b.shared_urls - a.shared_urls || (b.volume || 0) - (a.volume || 0));
       clusters.push({ head_keyword: head.keyword, keyword_count: members.length + 1, urls_compared: head.urls.length,
-        min_shared_urls: c.min_shared_urls, total_volume: [head, ...members].reduce((s, m) => s + (num(m.volume) || 0), 0),
+        min_shared_urls: need, top_n: depth, min_overlap_pct: depth && (num(c.min_overlap) || 0) > 0 ? Math.round(c.min_overlap * 100) : null,
+        total_volume: [head, ...members].reduce((s, m) => s + (num(m.volume) || 0), 0),
         keywords: [{ keyword: head.keyword, volume: head.volume, shared_urls: head.urls.length, shared: [] }, ...members].slice(0, c.max_cluster_keywords) });
     }
     clusters.sort((a, b) => b.keyword_count - a.keyword_count || b.total_volume - a.total_volume);
-    return { clusters, keywords_compared: ranked.length, min_shared_urls: c.min_shared_urls, min_urls: c.min_urls,
+    return { clusters, keywords_compared: ranked.length, min_shared_urls: need, min_urls: c.min_urls, top_n: depth,
+      min_overlap_pct: depth && (num(c.min_overlap) || 0) > 0 ? Math.round(c.min_overlap * 100) : null,
       clustered: clusters.reduce((n, x) => n + x.keyword_count, 0) };
   };
   // "one page can serve all three: 'erp software uae' also covers 'erp system uae' (4 of the same top-10 pages), ..."
   const clusterText = (cl) => {
     const c = cl || {}; const others = (c.keywords || []).slice(1);
     if (!others.length) return '';
+    const depthTxt = c.top_n ? 'top ' + c.top_n : 'top-10';
     return 'One page can target all ' + c.keyword_count + ': "' + c.head_keyword + '" shares '
-      + others.map(k => k.shared_urls + ' of its top-10 pages with "' + k.keyword + '"').join(', ')
+      + others.map(k => k.shared_urls + ' of its ' + depthTxt + ' pages with "' + k.keyword + '"').join(', ')
       + ' - Google answers these searches with the same pages, so a second page would only split the signals.';
   };
-  return { CFG, gscSeeds, calibrate, serpClusters, clusterText, featureLoss, liveChecks, urlKey, BASIS_TEXT, helpers: { bare, low, num } };
+  return { CFG, gscSeeds, calibrate, serpClusters, clusterText, featureLoss, liveChecks, ladderChecks, checkCost, urlKey, BASIS_TEXT, helpers: { bare, low, num } };
 })();
 // Applies the AI relevance verdicts, computes the final opportunity score, builds topic clusters and the content plan,
 // and chooses the priority keywords (live SERP check next) and the keyword for the content pipeline.

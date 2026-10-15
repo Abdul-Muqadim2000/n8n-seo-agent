@@ -18,6 +18,11 @@ const f = L.feasibility || {}; const head = L.head || {}; const top = L.top || {
 const rungs = (L.rungs || []).filter(r => r.pages && r.pages.length);
 const allPages = rungs.flatMap(r => r.pages);
 const statusLabel = { winnable: 'Winnable', stretch: 'A stretch — possible with authority building', unrealistic: 'Not realistic as the top rung' }[f.status] || esc(f.status);
+const dv = f.serp_diversity || L.serp_diversity || null;   // B2-5: the destination's results page, and who owns it
+const scl = L.serp_clusters || null;                        // B2-4: the rung keywords' own results pages, and the groups they made
+// B2-5: a score that moved says so where it is printed, with the number it moved from and the reason
+const scoreAdjNote = (f.score != null && f.score_adjustment) ? '<br><span class="small">' + Math.abs(f.score_adjustment) + ' point(s) below the verdict\'s ' + f.score_before
+  + ': ' + esc(((f.serp_diversity || {}).domains) || 0) + ' different site(s) own the top ' + esc(((f.serp_diversity || {}).results) || 0) + ' results. A stated rule, not a measured effect.</span>' : '';
 // v4.8: the plan for this site (reach, difficulty for you, plan type, order); a refused ladder (duplicate / not realistic) has no pages
 const planned = L.planned !== false; const ri = L.reach_info || {};
 const DIFF = { easy: 'Easy for your site', reachable: 'Reachable for your site', hard: 'Hard for your site', very_hard: 'Very hard for your site', not_realistic: 'Not realistic for your site' };
@@ -64,7 +69,7 @@ parts.push(`
 // 1. Summary
 parts.push(h2('The plan in one page') + kv([
   ['Destination keyword', '<b>' + esc(head.keyword) + '</b> — ' + num(head.volume) + ' searches/mo, difficulty ' + kdLabel(head.kd) + (head.cpc != null ? ', CPC ' + String(Math.round(Number(head.cpc) * 100) / 100) : '')],
-  ['Is it realistic?', '<span class="' + statusClass + '">' + statusLabel + '</span>' + (f.score != null ? ' (verdict ' + esc(f.verdict) + ', ' + f.score + '/100)' : '')],
+  ['Is it realistic?', '<span class="' + statusClass + '">' + statusLabel + '</span>' + (f.score != null ? ' (verdict ' + esc(f.verdict) + ', ' + f.score + '/100)' : '') + scoreAdjNote],
   ...(L.stretch && (f.alternatives || []).length ? [['Consider first', f.alternatives.map(a => '"' + esc(a) + '"').join(' · ') + ' — realistic alternatives; the full ladder below is a stretch']] : []),
   ['For your site', '<b>' + esc(DIFF[L.difficulty_for_you] || '—') + '</b> · reach ' + esc(L.reach) + ' · ' + (planned ? esc(planName) + ' · about ' + esc(L.months) + ' months' : 'no ladder planned')],
   ['Where you rank today', (head.your_position ? '#' + head.your_position + ' for the destination keyword' : 'not in the top 60 for the destination keyword') + (st.site_rankings_found ? '; the site ranks for ' + num(st.site_rankings_found) + ' keywords in the top 60' : '')],
@@ -86,7 +91,11 @@ parts.push(h2('Is the destination realistic?') +
   '<h3>Why</h3>' + ul(f.reasons) + serpObsLine +
   ((f.what_must_change || []).length ? '<h3>What must change first</h3>' + ul(f.what_must_change) : '') +
   ((f.alternatives || []).length ? '<div class="note"><b>Realistic alternative top rungs:</b> ' + f.alternatives.map(esc).join(' · ') + '. ' + (f.status === 'unrealistic' ? 'Brand terms of other companies are navigational and out of reach; pick one of these as the destination instead.' : 'Consider one of these if authority building stalls.') + '</div>' : '') +
-  kv([['Expected visits/month at #1-3', f.expected_visits_top3 != null ? num(f.expected_visits_top3) : 'N/A'], ['Time to rank (verdict estimate)', f.time_to_rank_months != null ? f.time_to_rank_months + ' months' : 'N/A']]));
+  kv([['Expected visits/month at #1-3', f.expected_visits_top3 != null ? num(f.expected_visits_top3) : 'N/A'], ['Time to rank (verdict estimate)', f.time_to_rank_months != null ? f.time_to_rank_months + ' months' : 'N/A'],
+    // B2-5 (2026-10-15): domain diversity is Semrush's fifth ranking factor and it now moves this score - the count is measured, the
+    // adjustment is a stated rule, and both are printed here so nobody has to take the number on trust.
+    ...(dv ? [['Who owns the results page', (dv.checked ? '<b>' + num(dv.domains) + ' different site(s)</b> in the top ' + num(dv.results) + ' — ' + esc(dv.band) : 'not known: the results page could not be read')
+      + '<br><span class="small">' + esc(dv.text) + '</span><br><span class="small">' + esc(dv.basis) + '</span>']] : [])]));
 
 // B2-2 (2026-10-15, benchmark area 2): what the site already has on this topic, before the plan's new pages — the inventory the leaders
 // open a content plan with (MarketMuse site inventory; its effort bands start at "optimise the page you have if it matches the topic").
@@ -103,13 +112,31 @@ if (cov) {
       ['This plan', num(cov.planned_total) + ' page(s): ' + num(cov.planned_improve) + ' improved, ' + num(cov.planned_new) + ' new']]) + covPages);
 }
 
+// B2-4 (2026-10-15, benchmark area 2, criterion K7): the searches Google answers with the SAME pages, and the ones that could not be
+// compared. The convention is Keyword Insights' own: the top 7 results at a 40% shared-URL threshold (B2-6).
+if (scl && scl.asked) {
+  const clRows = (scl.clusters || []).slice(0, 12).map(c => '<tr><td><b>' + esc(c.head_keyword) + '</b></td><td>' + c.keyword_count + '</td><td>'
+    + esc((c.keywords || []).slice(1).map(k => '"' + k.keyword + '" (' + k.shared_urls + ' shared)').join(', ') || '—') + '</td></tr>').join('');
+  const ncRows = (scl.not_compared || []).slice(0, 10).map(x => '<li>"' + esc(x.keyword) + '" — ' + esc(x.reason) + (x.retried ? ' (asked twice)' : '') + '</li>').join('');
+  parts.push(h2('Searches that share a results page') +
+    '<p class="small">' + esc(scl.note) + '</p>' +
+    (clRows ? '<table class="ct"><tr><th>One page for</th><th>Searches</th><th>Also covers</th></tr>' + clRows + '</table>' : '') +
+    kv([['Results pages read', num(scl.compared) + ' of ' + num(scl.asked) + ' asked' + (scl.retried ? ' (' + num(scl.retried) + ' sent again, ' + num(scl.retry_answered) + ' answered)' : '')],
+      ['How they were compared', 'the top ' + num(scl.top_n) + ' results, ' + num(scl.min_shared_urls) + ' shared URLs (' + num(scl.min_overlap_pct) + '%)'],
+      ['What it cost', '$' + Number(scl.cost_usd || 0).toFixed(4) + '<br><span class="small">' + esc(scl.cost_basis) + '</span>']]) +
+    (ncRows ? '<p class="small"><b>Could not be compared</b> — these keep their own group and nothing was merged on their behalf:</p><ul class="small">' + ncRows + '</ul>' : '') +
+    (scl.left_uncompared ? '<p class="small">' + num(scl.left_uncompared) + ' further keyword(s) on this topic were below the cap of ' + num(scl.cap) + ' and were not compared.</p>' : ''));
+} else if (scl && scl.skip_reason) {
+  parts.push(h2('Searches that share a results page') + '<p>' + esc(scl.note || scl.skip_reason) + '</p>');
+}
+
 // 4. The ladder (only when pages were planned)
 if (planned) {
 let ladderHtml = h2('The ladder', true) + '<p class="small">One page per topic. Lower rungs are specific and winnable; each rung links up to the top page. Pages marked "improve" already exist on your site. "Why here" is the data that put the page in this position (B2-3).</p>';
 for (const r of rungs) {
   ladderHtml += '<h3>' + esc(r.label) + ' — ' + months(r.months) + '</h3>' +
-    '<table class="ct"><tr><th>#</th><th>Page (primary keyword)</th><th>Supporting keywords</th><th>Page type</th><th>Searches/mo</th><th>Difficulty</th><th>You today</th><th>Page on site</th></tr>' +
-    r.pages.map(p => '<tr><td>' + p.page_no + '</td><td><b>' + esc(p.keyword) + '</b>' + (p.why ? '<br><span class="small">' + esc(p.why) + '</span>' : '') + '</td><td>' + esc((p.supporting || []).join(', ') || '—') + '</td><td>' + esc(p.page_type) + '</td><td>' + num(p.total_volume) + '</td><td>' + kdLabel(p.kd) + '</td><td>' + esc(posText(p.your_position)) + '</td><td>' + (p.exists ? '<span class="ok">improve</span><br><span class="small">' + esc(p.target_url) + '</span>' : 'new<br><span class="small">' + esc(p.target_url) + '</span>') + '</td></tr>').join('') + '</table>';
+    '<table class="ct"><tr><th>#</th><th>Page (primary keyword)</th><th>Supporting keywords</th><th>Grouped by</th><th>Page type</th><th>Searches/mo</th><th>Difficulty</th><th>You today</th><th>Page on site</th></tr>' +
+    r.pages.map(p => '<tr><td>' + p.page_no + '</td><td><b>' + esc(p.keyword) + '</b>' + (p.why ? '<br><span class="small">' + esc(p.why) + '</span>' : '') + '</td><td>' + esc((p.supporting || []).join(', ') || '—') + '</td><td>' + esc(p.grouped_by || 'topic label') + '</td><td>' + esc(p.page_type) + '</td><td>' + num(p.total_volume) + '</td><td>' + kdLabel(p.kd) + '</td><td>' + esc(posText(p.your_position)) + '</td><td>' + (p.exists ? '<span class="ok">improve</span><br><span class="small">' + esc(p.target_url) + '</span>' : 'new<br><span class="small">' + esc(p.target_url) + '</span>') + '</td></tr>').join('') + '</table>';
 }
 ladderHtml += '<h3>Top — ' + esc(top.keyword) + ' — ' + months(top.months) + '</h3>' + kv([
   ['Page', (top.exists ? '<span class="ok">improve</span> ' : 'new ') + esc(top.target_url)],

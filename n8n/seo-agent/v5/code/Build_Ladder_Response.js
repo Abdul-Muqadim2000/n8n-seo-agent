@@ -5,7 +5,8 @@ const b64 = async (prop, b) => { try { const buf = await this.helpers.getBinaryD
 const pdfData = bin.pdf ? await b64('pdf', bin.pdf) : null;
 const docData = bin.data ? await b64('data', bin.data) : null;
 const page = (p) => ({ page_no: p.page_no, rung: p.rung, keyword: p.keyword, supporting: p.supporting, page_type: p.page_type, intent: p.intent, volume: p.volume, total_volume: p.total_volume, kd: p.kd, traffic_potential: p.traffic_potential, your_position: p.your_position, exists: p.exists, target_url: p.target_url, status: p.status, links_to: p.links_to, months: p.months || null,
-  why: p.why || '', why_factors: p.why_factors || null });   // B2-3 (2026-10-15): the factors that put this page in this position
+  why: p.why || '', why_factors: p.why_factors || null,   // B2-3 (2026-10-15): the factors that put this page in this position
+  grouped_by: p.grouped_by || null, serp_cluster: p.serp_cluster || null, serp_not_compared: !!p.serp_not_compared });   // B2-4: one page per results page Google really shows
 return [{ json: {
   status: 'completed', stage: 'ladder_plan', request_id: d.request_id || null, execution_id: $execution.id, ladder_id: L.ladder_id || d.ladder_id || null,
   keyword: d.keyword, domain: d.domain, country: d.country, goal: L.goal, head: L.head || null, feasibility: L.feasibility || null,
@@ -16,6 +17,8 @@ return [{ json: {
   plan_type: L.plan_type || null, difficulty_for_you: L.difficulty_for_you || null, reach: L.reach ?? null, months: L.months || '', months_range: L.months_range || null, stretch: !!L.stretch,
   label: L.label || '', order: L.order || '', planned: L.planned !== false, refusal: L.refusal || null, reach_info: L.reach_info || null, excluded_keywords: L.excluded_keywords || [],
   topic_authority: L.topic_authority || null,   // B2-1 / B2-2 (2026-10-15): the reach measured on THIS topic, and what the site already has on it
+  serp_clusters: L.serp_clusters || null, serp_cluster_rungs: L.serp_cluster_rungs || [],   // B2-4: the results pages read, the groups they made, what could not be compared and what it cost
+  serp_diversity: L.serp_diversity || null,   // B2-5: how many different sites own the destination's results page, and the stated adjustment to the score
   chance: L.chance || null, chance_text: L.chance_text || '', base_rate: L.base_rate || null, refused_keywords: L.refused_keywords || [],   // 2026-10-11: G3 chance band (uncalibrated) + base rate, D8 refused brands
   settings_registered: !!d.settings_registered, settings_error: d.settings_error || null,
   tracking_registered: !!d.tracking_registered, stored_rows: d.stored_rows || 0, store_error: d.store_error || null, run_ledger: d.run_ledger || null, emailed_to: d.email || null,

@@ -6,7 +6,15 @@
    "Any Inspect Retries?",
    "Wait Before Inspect Retry",
    "GSC Audit Query (Retry)",
-   "GSC Sitemaps (Audit)"
+   "GSC Sitemaps (Audit)",
+   "Ladder Cluster Requests",
+   "Cluster SERP Wanted?",
+   "Run Ladder Cluster SERP",
+   "Ladder Cluster Retry",
+   "Any Cluster Retries?",
+   "Wait Before Cluster Retry",
+   "Run Ladder Cluster SERP (Retry)",
+   "Ladder Clusters"
   ],
   "SEO Agent \u2014 AI Pulse": [
    "Run AI Requests",
@@ -485,6 +493,69 @@
     "allowed": false,
     "maxTries": 3,
     "name": "GSC Audit Query (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Count Prompt (Copywriter)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Count Answer (Copywriter)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Count Prompt (Editor)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Count Answer (Editor)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Count Prompt (Strategy Brief)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Count Answer (Strategy Brief)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance End",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Run Ladder Cluster SERP",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Run Ladder Cluster SERP (Retry)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    }

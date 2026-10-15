@@ -238,6 +238,10 @@ function WhyThisPlan({ p, planType, difficulty }: { p: P; planType: PlanType; di
   // B2-1 (2026-10-15): `reach_info` is the site-wide measurement; `reach` is what THIS plan was measured against, which is the reach for
   // this topic when there was enough on-topic evidence to measure one. The two are shown as what they are, never as each other.
   const ta = obj(p.topic_authority);
+  // B2-4 / B2-5 (2026-10-15): the results pages the run read — which searches Google answers with the same pages (so one page covers
+  // them all), what could not be compared, and how many different websites own the main keyword's own results page.
+  const scl = obj(p.serp_clusters);
+  const dv = obj(p.serp_diversity);
   const siteReach = num(info.reach) ?? num(p.reach);
   const reach = num(p.reach) ?? num(info.reach);
   const kd = num(obj(p.head).kd);
@@ -278,6 +282,19 @@ function WhyThisPlan({ p, planType, difficulty }: { p: P; planType: PlanType; di
           {str(p.order) ? `${str(p.order).replace(/^\w/, (c) => c.toUpperCase())}.` : PLAN_ORDER_TEXT[planType]}
           {str(p.months) && ` Expected about ${str(p.months).replace('-', '–')} months until the main keyword ranks.`}
         </li>
+        {(num(scl.asked) ?? 0) > 0 && str(scl.note) && (
+          <li>
+            <span className="font-medium text-ink">One page per results page.</span> {str(scl.note)}
+          </li>
+        )}
+        {dv.checked === true && str(dv.text) && (
+          <li>
+            <span className="font-medium text-ink">
+              {n(dv.domains)} different website{num(dv.domains) === 1 ? '' : 's'} own the results page.
+            </span>{' '}
+            {str(dv.text)}
+          </li>
+        )}
         {str(p.months) && (
           <li>
             <span className="font-medium text-ink">Estimated chance.</span> {str(p.chance_text) || chanceText(planType, str(p.months), p.stretch === true)}
