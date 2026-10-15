@@ -57,7 +57,39 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-10-15 afternoon, four benchmark areas, two invariant lints, and everything deployed — latest)
+## Status (2026-10-15 evening, all four invariant lints enforcing — latest)
+**Nine agents today, two at a time, four deploys. The instance is current: main workflow 519 nodes, 21 published.** Harness **4812
+passed, 0 failed** (4505 this morning); build exit 0; app typecheck clean in all three workspaces.
+**All four INVARIANTS rules now fail the build**, and every one of them found a live defect on the day it landed:
+`retry_lint.py` (rule 3, ratchet of 48 for B-A10), `gate_lint.py` (rule 2: 4 pairs, 13 read paths gated, 26 ratcheted),
+`lineage_lint.py` (rule 1: lineage 13/16, evidence 1/2, like-for-like 6/6, withheld 4/4, 4 ratcheted) and `state_lint.py`
+(rule 4: six classes, **no ratchet at all**).
+**What they caught.** Rule 2 -> **B-G1/B-G2/B-G3**: the AI question panel, AI Growth's questions to win and the Site Tracker's tracked
+keywords were all built from stored ladder rungs with **no gate**, so a competitor's brand became a question we asked ChatGPT and scored
+ourselves against; one shared `FITR` now gates all four read paths and prints each refusal with its reason. Rule 1 -> **seven audit
+findings shipping with literally `evidence: ''`**, scored and ranked, plus **B-L4** (AI visibility deltas subtracted across different
+engine sets / panel sizes) and **B-L5** (a spam alert comparing a `free_only` snapshot with a full one) — R19 and R20 in new places, both
+now fixed, with the blog package, the keyword strategy and the **Word attachment** gaining lineage. Rule 4 -> **B-S1**: *Publish Check*,
+the node whose whole job is to verify a page is live, called `publishedRows()` **unconditionally**, so a URL answering **404** was written
+`status: published` into `seo_content_log` and `seo_ladders` while the same run told the owner it could not be fetched (verified in the
+pre-merge source); and **B-S2**, a case study marked published with no gate at all.
+**The lesson that will recur: three lints, three holes of the same kind, in one day.** `gate_lint` counted a node that merely *inlined* a
+kit as gated — which would have dropped two nodes from its ratchet **for ever**; `lineage_lint` counted the kit's own **header comment**
+and then its rendered output; `state_lint` found four such holes in itself before it was merged. **A lint that reads generated source must
+strip the kit, comments included, before asking whether a node calls that kit.** Each lint was also broken on purpose to prove it bites —
+six ways for rule 1, ten for rule 4 with 18 self-test cases.
+**Also today:** B-F5 closed both halves (the build refuses a missing `n8n/.env`; node ids are `uuid5(workflow:node)` so two builds of
+unchanged sources are **byte-identical**), and B2-4 / B2-5 built on the owner's decision — rung keywords clustered by the results pages
+Google actually shows (one SERP call per keyword, top 7 at 40%, capped at 24 = **$0.048 a ladder**, counted once by task id) and SERP
+domain diversity in the feasibility verdict.
+**Open and mine:** B-A10 (48 ungated DataForSEO nodes) and B-R2 (white-label + a browser pass) are in flight; then the Sonnet half of
+B-F1, and benchmark areas 1, 6, 7, 8, 9, 10, 11.
+**Open and the owner's:** **D25a** — the "daily" AI Pulse fired at 14:51 and 10:54 UTC on consecutive days instead of 06:30
+America/New_York because the Mac sleeps (`pmset`: asleep 07:10-11:06 PKT on 2026-10-15); three criteria are capped on an always-on host.
+Plus topping up DataForSEO (**$13.79**), B2-7 (discovery still clusters 3-of-top-10 while the ladder uses top 7 / 40%), G13, G16, G17,
+G20, O1-O12.
+
+## Status (2026-10-15 afternoon, four benchmark areas, two invariant lints, and everything deployed — earlier today)
 **Seven agents, two at a time, every merge rebuilt in the main worktree and deployed three times. The instance is current for the first
 time since 2026-10-14: main workflow 516 nodes, 21 published, 18 Data Table columns synced.** Harness **4750 passed, 0 failed** (4505 at
 the start of the day); build exit 0; app typecheck clean in all three workspaces (web, server, shared) and 254 + 243 tests.
