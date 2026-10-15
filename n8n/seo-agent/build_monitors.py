@@ -5,6 +5,8 @@ All three read the sites from seo_sites + seo_ladders and their settings from se
 ({ domain | site_id, email?, callback_url?, country?, location_code?, competitors? }) and write their Code nodes to harness/code_v4."""
 import json, os, re, uuid
 import url_lint   # D15 (2026-10-11 system review): the canonical-host lint
+import env_settings as _env   # B-F5 (2026-10-15): a build with no n8n/.env must refuse, not bake its fallbacks
+_env.require_settings('build_monitors.py')
 import retry_lint   # G1 (2026-10-11 system review): one retry rule for every external HTTP node
 from ladder_common import (DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_upsert_params, dt_upsert_params_keys,
                            SITES_TABLE, SITES_COLS, LADDER_TABLE, LADDER_COLS, LOG_TABLE, LOG_COLS, PROFILE_TABLE, PROFILE_COLS, CASE_TABLE, CASE_COLS,

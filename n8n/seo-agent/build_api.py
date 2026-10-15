@@ -4,9 +4,18 @@ import retry_lint   # G1 (2026-10-11 system review): one retry rule for every ex
 # B-A6 (2026-10-15, build section 63): the idempotency log lives in seo_cache, which is where this engine already keeps
 # keyed-with-a-lifetime values (`sitemap:`, `age:`, `desc:`, `reach:`, `cost:`). See the long note beside the nodes for why NOT
 # seo_run_ledger, which the brief for this work assumed.
+from ladder_common import freeze_ids   # B-F5 (2026-10-15): one id rule, so an unchanged rebuild is byte-identical
+import env_settings as _env   # B-F5: a build with no n8n/.env must refuse, not bake its fallbacks
+_env.require_settings('build_api.py')
 from ladder_common import (CACHE_TABLE, CACHE_COLS, DT_TYPE, DT_VERSION,
                            dt_create_params, dt_insert_params, dt_get_all_where_params, dt_delete_where_params)
-nid = lambda: str(uuid.uuid4())
+# B-F5 (2026-10-15): these ids are placeholders — freeze_ids() re-keys every one of them on (workflow, node) before the dump.
+# They are generated in build order rather than at random all the same, so that even a half-built workflow dumped for debugging
+# is the same twice, and so that the build-time lint for a random id (build_v4.py section 69) has nothing to find.
+_NID_NS = uuid.UUID('5e0a9e1e-2a1f-4c0b-9d8e-0000a9e0c0de'); _NID_SEQ = [0]
+def nid():
+    _NID_SEQ[0] += 1
+    return str(uuid.uuid5(_NID_NS, 'build_api placeholder %d' % _NID_SEQ[0]))
 webhook = {"httpMethod": "POST", "path": "seo-keyword-check", "authentication": "headerAuth", "responseMode": "responseNode", "options": {}}
 QV = r"""// Fast validation so callers get an immediate, useful 400. The full validation happens again in the main workflow.
 const raw = $input.first().json || {};
@@ -231,7 +240,7 @@ def _api_idem_order(wfobj):
 _api_idem_order(wf)
 assert "const request_id = $execution.id;" in QV and 'idem_key' in QV, 'B-A6: Quick Validate does not mint the idempotency key'
 
-json.dump([wf], open(_out, 'w'), indent=2, ensure_ascii=False)
+json.dump([freeze_ids(wf)], open(_out, 'w'), indent=2, ensure_ascii=False)
 print('API workflow written:', len(wf['nodes']), 'nodes (B-A6: a repeat inside '
       + re.search(r'IDEM_WINDOW_MIN = (\d+)', QV).group(1) + ' minutes returns the first run)')
 # the harness runs Quick Validate too (scenario S23: the web app's request bodies), and S73 runs the two idempotency nodes
@@ -283,7 +292,7 @@ awf = {"id": "SEOagentAdminAPI", "name": "SEO Agent — Admin API", "active": Fa
 _aout = os.path.join(os.path.dirname(_out), 'SEO_Agent_Admin_API.json')
 url_lint.check(awf)   # D15: no node builds a site URL by hand (url_lint.py)
 retry_lint.check(awf)   # G1: every external HTTP node carries the retry rule (retry_lint.py)
-json.dump([awf], open(_aout, 'w'), indent=2, ensure_ascii=False)
+json.dump([freeze_ids(awf)], open(_aout, 'w'), indent=2, ensure_ascii=False)
 if os.path.isdir(_code):
     open(os.path.join(_code, 'Admin_Validate.js'), 'w').write(AV)
 print('Admin API workflow written:', len(awf['nodes']), 'nodes')
@@ -401,7 +410,7 @@ assert all(n.get('credentials') for n in _AN if n['type'] in ('@n8n/n8n-nodes-la
 kwf = {"id": "SEOagentAssess", "name": "SEO Agent — Keyword Check", "active": False, "settings": {"executionOrder": "v1", "errorWorkflow": "SEOagentErrHandl", "executionTimeout": 45}, "tags": [], "nodes": _AN, "connections": _AC}
 url_lint.check(kwf)   # D15: no node builds a site URL by hand (url_lint.py)
 retry_lint.check(kwf)   # G1: every external HTTP node carries the retry rule (retry_lint.py)
-json.dump([kwf], open(os.path.join(os.path.dirname(_out), 'SEO_Agent_Keyword_Check.json'), 'w'), indent=2, ensure_ascii=False)
+json.dump([freeze_ids(kwf)], open(os.path.join(os.path.dirname(_out), 'SEO_Agent_Keyword_Check.json'), 'w'), indent=2, ensure_ascii=False)
 if os.path.isdir(_code):
     for _n in _AN:
         if _n['type'] == 'n8n-nodes-base.code': open(os.path.join(_code, re.sub(r'[^A-Za-z0-9_.-]+', '_', _n['name']) + '.js'), 'w').write(_n['parameters']['jsCode'])
@@ -477,7 +486,7 @@ assert all(n.get('credentials') for n in _PN if n['type'] == 'n8n-nodes-base.web
 pwf = {"id": "SEOagentPreRel1", "name": "SEO Agent — Pre-release Check", "active": False, "settings": {"executionOrder": "v1", "errorWorkflow": "SEOagentErrHandl", "executionTimeout": 120}, "tags": [], "nodes": _PN, "connections": _PC}
 url_lint.check(pwf)   # D15: no node builds a site URL by hand (url_lint.py)
 retry_lint.check(pwf)   # G1: every external HTTP node carries the retry rule (retry_lint.py)
-json.dump([pwf], open(os.path.join(os.path.dirname(_out), 'SEO_Agent_Prerelease.json'), 'w'), indent=2, ensure_ascii=False)
+json.dump([freeze_ids(pwf)], open(os.path.join(os.path.dirname(_out), 'SEO_Agent_Prerelease.json'), 'w'), indent=2, ensure_ascii=False)
 if os.path.isdir(_code):
     for _n in _PN:
         if _n['type'] == 'n8n-nodes-base.code': open(os.path.join(_code, re.sub(r'[^A-Za-z0-9_.-]+', '_', _n['name']) + '.js'), 'w').write(_n['parameters']['jsCode'])
