@@ -68,7 +68,17 @@
     "if": "Run Allowed? (Growth)",
     "kit": "RG",
     "load": "Load Open Runs (Growth)",
-    "refuse": "Refuse Run Ledger (Growth)"
+    "notice": "Refusal Notice (Growth)",
+    "post": "Post Refusal (Growth)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Growth)",
+     "Refusal Notice (Growth)",
+     "Refuse Run Ledger (Growth)",
+     "Tell Caller (Growth)?"
+    ],
+    "refuse": "Refuse Run Ledger (Growth)",
+    "tell": "Tell Caller (Growth)?"
    },
    "if_outputs": [
     [
@@ -114,7 +124,17 @@
     "if": "Run Allowed? (Pulse)",
     "kit": "RG",
     "load": "Load Open Runs (Pulse)",
-    "refuse": "Refuse Run Ledger (Pulse)"
+    "notice": "Refusal Notice (Pulse)",
+    "post": "Post Refusal (Pulse)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Pulse)",
+     "Refusal Notice (Pulse)",
+     "Refuse Run Ledger (Pulse)",
+     "Tell Caller (Pulse)?"
+    ],
+    "refuse": "Refuse Run Ledger (Pulse)",
+    "tell": "Tell Caller (Pulse)?"
    },
    "if_outputs": [
     [
@@ -160,7 +180,17 @@
     "if": "Run Allowed? (AI)",
     "kit": "RG",
     "load": "Load Open Runs (AI)",
-    "refuse": "Refuse Run Ledger (AI)"
+    "notice": "Refusal Notice (AI)",
+    "post": "Post Refusal (AI)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (AI)",
+     "Refusal Notice (AI)",
+     "Refuse Run Ledger (AI)",
+     "Tell Caller (AI)?"
+    ],
+    "refuse": "Refuse Run Ledger (AI)",
+    "tell": "Tell Caller (AI)?"
    },
    "if_outputs": [
     [
@@ -206,7 +236,17 @@
     "if": "Run Allowed? (Audit)",
     "kit": "RG",
     "load": "Load Open Runs (Audit)",
-    "refuse": "Refuse Run Ledger (Audit)"
+    "notice": "Refusal Notice (Audit)",
+    "post": "Post Refusal (Audit)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Audit)",
+     "Refusal Notice (Audit)",
+     "Refuse Run Ledger (Audit)",
+     "Tell Caller (Audit)?"
+    ],
+    "refuse": "Refuse Run Ledger (Audit)",
+    "tell": "Tell Caller (Audit)?"
    },
    "if_outputs": [
     [
@@ -252,7 +292,17 @@
     "if": "Run Allowed? (BL)",
     "kit": "RG",
     "load": "Load Open Runs (BL)",
-    "refuse": "Refuse Run Ledger (BL)"
+    "notice": "Refusal Notice (BL)",
+    "post": "Post Refusal (BL)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (BL)",
+     "Refusal Notice (BL)",
+     "Refuse Run Ledger (BL)",
+     "Tell Caller (BL)?"
+    ],
+    "refuse": "Refuse Run Ledger (BL)",
+    "tell": "Tell Caller (BL)?"
    },
    "if_outputs": [
     [
@@ -298,7 +348,17 @@
     "if": "Run Allowed? (Cadence)",
     "kit": "RG",
     "load": "Load Open Runs (Cadence)",
-    "refuse": "Refuse Run Ledger (Cadence)"
+    "notice": "Refusal Notice (Cadence)",
+    "post": "Post Refusal (Cadence)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Cadence)",
+     "Refusal Notice (Cadence)",
+     "Refuse Run Ledger (Cadence)",
+     "Tell Caller (Cadence)?"
+    ],
+    "refuse": "Refuse Run Ledger (Cadence)",
+    "tell": "Tell Caller (Cadence)?"
    },
    "if_outputs": [
     [
@@ -344,7 +404,17 @@
     "if": "Run Allowed? (LB)",
     "kit": "RG",
     "load": "Load Open Runs (LB)",
-    "refuse": "Refuse Run Ledger (LB)"
+    "notice": "Refusal Notice (LB)",
+    "post": "Post Refusal (LB)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (LB)",
+     "Refusal Notice (LB)",
+     "Refuse Run Ledger (LB)",
+     "Tell Caller (LB)?"
+    ],
+    "refuse": "Refuse Run Ledger (LB)",
+    "tell": "Tell Caller (LB)?"
    },
    "if_outputs": [
     [
@@ -390,7 +460,17 @@
     "if": "Run Allowed? (Watch)",
     "kit": "RG",
     "load": "Load Open Runs (Watch)",
-    "refuse": "Refuse Run Ledger (Watch)"
+    "notice": "Refusal Notice (Watch)",
+    "post": "Post Refusal (Watch)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Watch)",
+     "Refusal Notice (Watch)",
+     "Refuse Run Ledger (Watch)",
+     "Tell Caller (Watch)?"
+    ],
+    "refuse": "Refuse Run Ledger (Watch)",
+    "tell": "Tell Caller (Watch)?"
    },
    "if_outputs": [
     [
@@ -436,7 +516,17 @@
     "if": "Run Allowed? (Tracker)",
     "kit": "RG",
     "load": "Load Open Runs (Tracker)",
-    "refuse": "Refuse Run Ledger (Tracker)"
+    "notice": "Refusal Notice (Tracker)",
+    "post": "Post Refusal (Tracker)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Tracker)",
+     "Refusal Notice (Tracker)",
+     "Refuse Run Ledger (Tracker)",
+     "Tell Caller (Tracker)?"
+    ],
+    "refuse": "Refuse Run Ledger (Tracker)",
+    "tell": "Tell Caller (Tracker)?"
    },
    "if_outputs": [
     [
@@ -482,7 +572,17 @@
     "if": "Run Allowed? (Site)",
     "kit": "RG",
     "load": "Load Open Runs (Site)",
-    "refuse": "Refuse Run Ledger (Site)"
+    "notice": "Refusal Notice (Site)",
+    "post": "Post Refusal (Site)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Site)",
+     "Refusal Notice (Site)",
+     "Refuse Run Ledger (Site)",
+     "Tell Caller (Site)?"
+    ],
+    "refuse": "Refuse Run Ledger (Site)",
+    "tell": "Tell Caller (Site)?"
    },
    "if_outputs": [
     [

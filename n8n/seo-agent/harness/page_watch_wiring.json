@@ -197,9 +197,14 @@
     "Watch Ops Delivery"
    ]
   ],
+  "Refusal Notice (Watch)": [
+   [
+    "Tell Caller (Watch)?"
+   ]
+  ],
   "Refuse Run Ledger (Watch)": [
    [
-    "DFS Balance End (Watch)"
+    "Refusal Notice (Watch)"
    ]
   ],
   "Reserve Run Ledger (Watch)": [
@@ -262,6 +267,12 @@
    [
     "Ensure Ops Alerts (Watch)"
    ]
+  ],
+  "Tell Caller (Watch)?": [
+   [
+    "Post Refusal (Watch)"
+   ],
+   []
   ],
   "Watch Alerts": [
    [
@@ -383,6 +394,9 @@
   "After Run Ledger (Watch)",
   "Run Allowed? (Watch)",
   "Refuse Run Ledger (Watch)",
+  "Refusal Notice (Watch)",
+  "Tell Caller (Watch)?",
+  "Post Refusal (Watch)",
   "DFS Balance End (Watch)",
   "Load Run Ledger (Watch)",
   "Ensure Ops Alerts (Watch)",

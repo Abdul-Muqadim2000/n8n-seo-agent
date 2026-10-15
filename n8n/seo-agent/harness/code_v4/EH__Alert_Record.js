@@ -16,8 +16,15 @@ const OA = (() => {
   const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
   // the identity of a failure: the workflow, the node and the message with numbers, ids and quoted values removed, so "timeout after 30012ms"
   // and "timeout after 31004ms" at the same node are one alert
+  // R79 (2026-10-16, re-rating C-3): the slice used to keep a trailing space when the 160th character was one, so row 4 was stored under a
+  // 207-character key ending in a space while every reader trimmed it to 206 — the retry's update matched no row and the alert was re-sent to
+  // Slack on every run of every monitor (14 posts on 2026-10-15). The key is trimmed after the slice: ONE normal form, built here only.
   const keyOf = (a) => [S(a.workflow) || 'unknown workflow', S(a.node) || 'unknown node',
-    S(a.message).toLowerCase().replace(/\d[\d.,:]*/g, '#').replace(/["'`][^"'`]*["'`]/g, '"x"').replace(/\s+/g, ' ').slice(0, 160)].join(' | ');
+    S(a.message).toLowerCase().replace(/\d[\d.,:]*/g, '#').replace(/["'`][^"'`]*["'`]/g, '"x"').replace(/\s+/g, ' ').slice(0, 160).trim()].join(' | ');
+  // R79: a stored row is matched on the normal form (trimmed), but it is WRITTEN BACK under the key it is stored with, byte for byte — rows
+  // written before the trim (row 4) keep their trailing space, and a Data Table update / upsert filters on exact equality. Normalise on
+  // read, write back the identity: no migration of the stored keys is needed, and no second row is ever created beside an old one.
+  const storedKey = (r) => String(r == null || r.alert_key == null ? '' : r.alert_key);
   const severityOf = (a) => /credential|unauthor|forbidden|payment|credit|quota|balance/i.test(S(a.message)) ? 'critical' : 'high';
   // B-A7: a row is "carried" when `delivered` NAMES the channel that took it ('webhook', 'email', 'webhook,email'). Everything else -
   // pending, failed, not_sent, deduped - means the same thing to a human: nobody has it. The same rule as AR.carried.
@@ -32,9 +39,10 @@ const OA = (() => {
     const a = alert || {}, c = cfg || {};
     const now = new Date();
     const nowIso = now.toISOString();
-    const alert_key = keyOf(a);
-    const prior = (rows || []).filter(r => r && S(r.alert_key) === alert_key)
+    const fresh = keyOf(a);
+    const prior = (rows || []).filter(r => r && S(r.alert_key) === fresh)
       .sort((x, y) => S(y.last_seen_at).localeCompare(S(x.last_seen_at)))[0] || null;
+    const alert_key = prior ? storedKey(prior) : fresh;   // R79: the row that exists, under the key it is stored with
     const sinceMin = prior && S(prior.last_seen_at) ? (now - new Date(S(prior.last_seen_at))) / 60000 : Infinity;
     const repeat = !!prior && Number.isFinite(sinceMin) && sinceMin < DEDUPE_MINUTES;
     const count = prior ? n0(prior.count) + 1 : 1;
@@ -71,7 +79,7 @@ const OA = (() => {
     return { row, notify, repeat, channels, webhook_url, email_to, webhook_body: body, plain, alert_key, severity: row.severity, DEDUPE_MINUTES };
   };
 
-  return { plan, keyOf, severityOf, cfgUrl, carried, DEDUPE_MINUTES, RETRY_MINUTES };
+  return { plan, keyOf, storedKey, severityOf, cfgUrl, carried, DEDUPE_MINUTES, RETRY_MINUTES };
 })();
 const alert = $('Format Alert').first().json;
 let rows = []; try { rows = $('Load Ops Alerts').all().map(i => i.json).filter(r => r && !r.error); } catch (e) {}

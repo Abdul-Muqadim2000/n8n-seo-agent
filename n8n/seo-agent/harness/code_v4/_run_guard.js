@@ -33,13 +33,20 @@ const RG = (() => {
     const t = ms(r && r.created_at);
     return st === 'reserved' && t > 0 && t < (nowMs || Date.now()) - h * 3600000;
   };
-  // the runs that are genuinely in flight right now, mine excluded
+  // R77 (2026-10-16, re-rating C-1): the run that STARTED this one. An on-demand monitor is spawned by the main workflow's front door, whose
+  // own ledger row carries the same `mode` and is still `reserved` while the child reads the ledger (exec 622 -> 624: the app's backlinks
+  // request was refused by its own parent, 0.6 s after the AI visibility pair 620 -> 623 slipped through on timing alone). The child knows
+  // its parent by identity: the front door passes `parent_run_id` (its own execution id) and the child's row stores it in its key
+  // (`parent:<id>`). A parent is never "another run in flight" — it handed this run its work — but a genuine twin with any other id still is.
+  const parentOf = (row) => { const m = /^parent:(.+)$/.exec(S(row && row.key)); return m ? S(m[1]) : ''; };
+  // the runs that are genuinely in flight right now, mine (and the run that started mine) excluded
   const liveRuns = (rows, o) => {
-    const c = o || {}, nowMs = ms(c.now) || Date.now(), myId = n0(c.my_id), myRun = S(c.run_id);
+    const c = o || {}, nowMs = ms(c.now) || Date.now(), myId = n0(c.my_id), myRun = S(c.run_id), parent = S(c.parent_run_id);
     return (rows || []).filter(r => r && !r.error && S(r.run_id)
       && S(r.mode) !== 'assess' && S(r.status) === 'reserved' && !isStale(r, nowMs, c.stale_hours)
       && (myId > 0 ? n0(r.id) < myId : S(r.run_id) !== myRun)   // row order decides ties, exactly as Rate Limit resolves them
-      && S(r.run_id) !== myRun);
+      && S(r.run_id) !== myRun
+      && !(parent && S(r.run_id) === parent));
   };
   // P34-5: a second heavy crawl of the same site while one is running
   const heavyBusy = (rows, o) => {
@@ -56,14 +63,17 @@ const RG = (() => {
     const nowMs = ms(c.now) || Date.now();
     const mode = S(c.mode) || S(mine.mode);
     const where = S(c.where) || mode;
-    const ctx = { now: new Date(nowMs).toISOString(), my_id: n0(mine.id), run_id: S(c.run_id) || S(mine.run_id), stale_hours: c.stale_hours };
+    const parent_run_id = S(c.parent_run_id) || parentOf(mine);
+    const ctx = { now: new Date(nowMs).toISOString(), my_id: n0(mine.id), run_id: S(c.run_id) || S(mine.run_id), stale_hours: c.stale_hours, parent_run_id };
     const live = liveRuns(rows, ctx);
     const stale = (rows || []).filter(r => r && !r.error && isStale(r, nowMs, c.stale_hours)).length;
     const max_open = n0(c.max_open) > 0 ? n0(c.max_open) : MAX_OPEN;
+    const parentOpen = !!parent_run_id && (rows || []).some(r => r && S(r.run_id) === parent_run_id && S(r.status) === 'reserved');
     const basis = live.length + ' other run(s) in flight (' + (live.map(r => S(r.mode) + ' ' + at(r)).join(', ') || 'none') + ')'
-      + (stale ? ', ' + stale + ' stale reservation(s) ignored' : '') + '; the limit is ' + max_open;
+      + (stale ? ', ' + stale + ' stale reservation(s) ignored' : '')
+      + (parentOpen ? ', the run that started this one (execution ' + parent_run_id + ') not counted' : '') + '; the limit is ' + max_open;
     const refuse = (reason, detail) => ({ allowed: false, reason, refusal: detail, open_runs: live.length, open: live.map(r => ({ mode: S(r.mode), run_id: S(r.run_id), at: at(r) })),
-      stale_ignored: stale, max_open, mode, where, basis, checked_at: ctx.now });
+      stale_ignored: stale, max_open, mode, where, basis, checked_at: ctx.now, parent_run_id });
 
     // 1. the same monitor is still running. A weekly check that overlaps its own previous run reads the same tables twice, writes the same
     //    rows twice and bills the same APIs twice; the one still going is the one with the data.
@@ -89,10 +99,10 @@ const RG = (() => {
       + '). Nothing was charged and nothing was started: a run that runs out of data credit half way through delivers half a report.');
 
     return { allowed: true, reason: 'ok', refusal: '', open_runs: live.length, open: live.map(r => ({ mode: S(r.mode), run_id: S(r.run_id), at: at(r) })),
-      stale_ignored: stale, max_open, mode, where, basis, checked_at: ctx.now };
+      stale_ignored: stale, max_open, mode, where, basis, checked_at: ctx.now, parent_run_id };
   };
 
-  return { gate, liveRuns, heavyBusy, isStale, STALE_HOURS, MAX_OPEN };
+  return { gate, liveRuns, heavyBusy, isStale, parentOf, STALE_HOURS, MAX_OPEN };
 })();
 return $input.all().map(i => { const j = i.json || {}; const fn = String(j.call || '');
   if (fn === 'gate') return { json: RG.gate(j.args || {}) };

@@ -1126,6 +1126,13 @@
    {
     "allowed": false,
     "maxTries": 3,
+    "name": "Post Refusal (Growth)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
     "name": "DFS Balance End (Growth)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
@@ -1164,6 +1171,13 @@
     "allowed": false,
     "maxTries": 3,
     "name": "DFS Balance (Pulse)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Refusal (Pulse)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    },
@@ -1298,6 +1312,13 @@
    {
     "allowed": false,
     "maxTries": 3,
+    "name": "Post Refusal (AI)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
     "name": "DFS Balance End (AI)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
@@ -1324,6 +1345,13 @@
     "allowed": false,
     "maxTries": 3,
     "name": "DFS Balance (Audit)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Refusal (Audit)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    },
@@ -1514,6 +1542,13 @@
    {
     "allowed": false,
     "maxTries": 3,
+    "name": "Post Refusal (BL)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
     "name": "DFS Balance End (BL)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
@@ -1547,6 +1582,13 @@
     "allowed": false,
     "maxTries": 3,
     "name": "DFS Balance (Cadence)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Refusal (Cadence)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    },
@@ -1671,6 +1713,13 @@
    {
     "allowed": false,
     "maxTries": 3,
+    "name": "Post Refusal (LB)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
     "name": "DFS Balance End (LB)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
@@ -1703,6 +1752,13 @@
     "allowed": false,
     "maxTries": 3,
     "name": "DFS Balance (Watch)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Refusal (Watch)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    },
@@ -1765,6 +1821,13 @@
     "allowed": false,
     "maxTries": 3,
     "name": "DFS Balance (Tracker)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Refusal (Tracker)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    },
@@ -1917,6 +1980,13 @@
     "allowed": false,
     "maxTries": 3,
     "name": "DFS Balance (Site)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Refusal (Site)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    },

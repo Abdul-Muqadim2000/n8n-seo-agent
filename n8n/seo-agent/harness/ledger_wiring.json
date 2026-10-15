@@ -180,7 +180,17 @@
     "if": "Run Allowed? (Growth)",
     "kit": "RG",
     "load": "Load Open Runs (Growth)",
-    "refuse": "Refuse Run Ledger (Growth)"
+    "notice": "Refusal Notice (Growth)",
+    "post": "Post Refusal (Growth)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Growth)",
+     "Refusal Notice (Growth)",
+     "Refuse Run Ledger (Growth)",
+     "Tell Caller (Growth)?"
+    ],
+    "refuse": "Refuse Run Ledger (Growth)",
+    "tell": "Tell Caller (Growth)?"
    },
    "ledger_load": "Load Run Ledger (Growth)",
    "measured": "Growth Metrics",
@@ -196,8 +206,7 @@
     "Refuse Run Ledger (Growth)"
    ],
    "settle_from_ends": [
-    "Nothing To Do (Growth)",
-    "Refuse Run Ledger (Growth)"
+    "Nothing To Do (Growth)"
    ]
   },
   "SEO Agent \u2014 AI Pulse": {
@@ -216,6 +225,11 @@
    "balance": "DFS Balance (Pulse)",
    "balance_end": "DFS Balance End (Pulse)",
    "cost_cal": "Load Cost Factors (Pulse)",
+   "daily_upsert_keys": [
+    "site_id",
+    "date",
+    "run_id"
+   ],
    "est": {
     "ai": 0.004,
     "dfs": 0.08
@@ -225,7 +239,17 @@
     "if": "Run Allowed? (Pulse)",
     "kit": "RG",
     "load": "Load Open Runs (Pulse)",
-    "refuse": "Refuse Run Ledger (Pulse)"
+    "notice": "Refusal Notice (Pulse)",
+    "post": "Post Refusal (Pulse)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Pulse)",
+     "Refusal Notice (Pulse)",
+     "Refuse Run Ledger (Pulse)",
+     "Tell Caller (Pulse)?"
+    ],
+    "refuse": "Refuse Run Ledger (Pulse)",
+    "tell": "Tell Caller (Pulse)?"
    },
    "ledger_load": "Load Run Ledger (Pulse)",
    "measured": "Pulse Metrics",
@@ -241,8 +265,7 @@
     "Refuse Run Ledger (Pulse)"
    ],
    "settle_from_ends": [
-    "Nothing To Do (Pulse)",
-    "Refuse Run Ledger (Pulse)"
+    "Nothing To Do (Pulse)"
    ]
   },
   "SEO Agent \u2014 AI Visibility Tracker": {
@@ -362,7 +385,17 @@
     "if": "Run Allowed? (AI)",
     "kit": "RG",
     "load": "Load Open Runs (AI)",
-    "refuse": "Refuse Run Ledger (AI)"
+    "notice": "Refusal Notice (AI)",
+    "post": "Post Refusal (AI)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (AI)",
+     "Refusal Notice (AI)",
+     "Refuse Run Ledger (AI)",
+     "Tell Caller (AI)?"
+    ],
+    "refuse": "Refuse Run Ledger (AI)",
+    "tell": "Tell Caller (AI)?"
    },
    "ledger_load": "Load Run Ledger (AI)",
    "measured": "AI Metrics",
@@ -378,8 +411,7 @@
     "Refuse Run Ledger (AI)"
    ],
    "settle_from_ends": [
-    "Nothing To Do (AI)",
-    "Refuse Run Ledger (AI)"
+    "Nothing To Do (AI)"
    ]
   },
   "SEO Agent \u2014 Audit Scheduler": {
@@ -407,7 +439,17 @@
     "if": "Run Allowed? (Audit)",
     "kit": "RG",
     "load": "Load Open Runs (Audit)",
-    "refuse": "Refuse Run Ledger (Audit)"
+    "notice": "Refusal Notice (Audit)",
+    "post": "Post Refusal (Audit)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Audit)",
+     "Refusal Notice (Audit)",
+     "Refuse Run Ledger (Audit)",
+     "Tell Caller (Audit)?"
+    ],
+    "refuse": "Refuse Run Ledger (Audit)",
+    "tell": "Tell Caller (Audit)?"
    },
    "ledger_load": "Load Run Ledger (Audit)",
    "measured": "",
@@ -421,9 +463,7 @@
     "Audits Started",
     "Refuse Run Ledger (Audit)"
    ],
-   "settle_from_ends": [
-    "Refuse Run Ledger (Audit)"
-   ]
+   "settle_from_ends": []
   },
   "SEO Agent \u2014 Backlink Monitor": {
    "ai_calls": [
@@ -509,7 +549,17 @@
     "if": "Run Allowed? (BL)",
     "kit": "RG",
     "load": "Load Open Runs (BL)",
-    "refuse": "Refuse Run Ledger (BL)"
+    "notice": "Refusal Notice (BL)",
+    "post": "Post Refusal (BL)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (BL)",
+     "Refusal Notice (BL)",
+     "Refuse Run Ledger (BL)",
+     "Tell Caller (BL)?"
+    ],
+    "refuse": "Refuse Run Ledger (BL)",
+    "tell": "Tell Caller (BL)?"
    },
    "ledger_load": "Load Run Ledger (BL)",
    "measured": "Parse Backlinks",
@@ -525,8 +575,7 @@
     "Refuse Run Ledger (BL)"
    ],
    "settle_from_ends": [
-    "Nothing To Do (BL)",
-    "Refuse Run Ledger (BL)"
+    "Nothing To Do (BL)"
    ]
   },
   "SEO Agent \u2014 Content Cadence": {
@@ -552,7 +601,17 @@
     "if": "Run Allowed? (Cadence)",
     "kit": "RG",
     "load": "Load Open Runs (Cadence)",
-    "refuse": "Refuse Run Ledger (Cadence)"
+    "notice": "Refusal Notice (Cadence)",
+    "post": "Post Refusal (Cadence)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Cadence)",
+     "Refusal Notice (Cadence)",
+     "Refuse Run Ledger (Cadence)",
+     "Tell Caller (Cadence)?"
+    ],
+    "refuse": "Refuse Run Ledger (Cadence)",
+    "tell": "Tell Caller (Cadence)?"
    },
    "ledger_load": "Load Run Ledger (Cadence)",
    "measured": "",
@@ -574,7 +633,6 @@
     "Nothing To Write",
     "POST Cadence Note",
     "Planned Only",
-    "Refuse Run Ledger (Cadence)",
     "Send Cadence Note"
    ]
   },
@@ -635,7 +693,17 @@
     "if": "Run Allowed? (LB)",
     "kit": "RG",
     "load": "Load Open Runs (LB)",
-    "refuse": "Refuse Run Ledger (LB)"
+    "notice": "Refusal Notice (LB)",
+    "post": "Post Refusal (LB)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (LB)",
+     "Refusal Notice (LB)",
+     "Refuse Run Ledger (LB)",
+     "Tell Caller (LB)?"
+    ],
+    "refuse": "Refuse Run Ledger (LB)",
+    "tell": "Tell Caller (LB)?"
    },
    "ledger_load": "Load Run Ledger (LB)",
    "measured": "",
@@ -651,8 +719,7 @@
     "Refuse Run Ledger (LB)"
    ],
    "settle_from_ends": [
-    "Nothing To Do (LB)",
-    "Refuse Run Ledger (LB)"
+    "Nothing To Do (LB)"
    ]
   },
   "SEO Agent \u2014 Page Watch": {
@@ -678,7 +745,17 @@
     "if": "Run Allowed? (Watch)",
     "kit": "RG",
     "load": "Load Open Runs (Watch)",
-    "refuse": "Refuse Run Ledger (Watch)"
+    "notice": "Refusal Notice (Watch)",
+    "post": "Post Refusal (Watch)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Watch)",
+     "Refusal Notice (Watch)",
+     "Refuse Run Ledger (Watch)",
+     "Tell Caller (Watch)?"
+    ],
+    "refuse": "Refuse Run Ledger (Watch)",
+    "tell": "Tell Caller (Watch)?"
    },
    "ledger_load": "Load Run Ledger (Watch)",
    "measured": "",
@@ -694,9 +771,7 @@
     "Save Watch Ops Delivery",
     "Watched"
    ],
-   "settle_from_ends": [
-    "Refuse Run Ledger (Watch)"
-   ]
+   "settle_from_ends": []
   },
   "SEO Agent \u2014 Rank Tracker": {
    "ai_nodes": [],
@@ -721,7 +796,17 @@
     "if": "Run Allowed? (Tracker)",
     "kit": "RG",
     "load": "Load Open Runs (Tracker)",
-    "refuse": "Refuse Run Ledger (Tracker)"
+    "notice": "Refusal Notice (Tracker)",
+    "post": "Post Refusal (Tracker)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Tracker)",
+     "Refusal Notice (Tracker)",
+     "Refuse Run Ledger (Tracker)",
+     "Tell Caller (Tracker)?"
+    ],
+    "refuse": "Refuse Run Ledger (Tracker)",
+    "tell": "Tell Caller (Tracker)?"
    },
    "ledger_load": "Load Run Ledger (Tracker)",
    "measured": "Tracker Report",
@@ -737,8 +822,7 @@
     "Tracker Report"
    ],
    "settle_from_ends": [
-    "Nothing To Track",
-    "Refuse Run Ledger (Tracker)"
+    "Nothing To Track"
    ]
   },
   "SEO Agent \u2014 Site Tracker": {
@@ -766,7 +850,17 @@
     "if": "Run Allowed? (Site)",
     "kit": "RG",
     "load": "Load Open Runs (Site)",
-    "refuse": "Refuse Run Ledger (Site)"
+    "notice": "Refusal Notice (Site)",
+    "post": "Post Refusal (Site)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Site)",
+     "Refusal Notice (Site)",
+     "Refuse Run Ledger (Site)",
+     "Tell Caller (Site)?"
+    ],
+    "refuse": "Refuse Run Ledger (Site)",
+    "tell": "Tell Caller (Site)?"
    },
    "ledger_load": "Load Run Ledger (Site)",
    "measured": "",
@@ -782,8 +876,7 @@
     "Site Report"
    ],
    "settle_from_ends": [
-    "Nothing To Track (Site)",
-    "Refuse Run Ledger (Site)"
+    "Nothing To Track (Site)"
    ]
   }
  },
