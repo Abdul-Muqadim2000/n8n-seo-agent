@@ -916,6 +916,24 @@ const uncrawlableSection = (a) => {
   return `<h3>Links nothing can follow</h3><table class="ct"><tr><th>Page</th><th>Found</th><th>Examples</th></tr>${rows}</table>`
     + `<p class="small">${e4(u.method)}${u.orphan_pages ? ' The crawl found ' + u.orphan_pages + ' orphan page(s) with no crawlable internal link.' : ''}</p>`;
 };
+// ---- the known URLs the crawl never reached (B5-5, 2026-10-15, benchmark area 5) ----
+const notCrawledSection = (a) => {
+  const nc = a.not_crawled_check || null;
+  const e5 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  if (!nc) return '';
+  let h = `<h3>The pages the crawl never reached</h3>`;
+  if (!nc.available) return h + `<p><b>Not checked:</b> ${e5(nc.not_available)}.</p>`;
+  const LABEL = { live: 'live and indexable', gone: 'gone (404 / 410)', error: 'server error', redirect: 'redirects elsewhere',
+    noindex: 'set to noindex', canonical_elsewhere: 'canonical points elsewhere' };
+  const detail5 = (p) => p.state === 'redirect' ? ('→ ' + (p.redirect_to || 'an unnamed address'))
+    : p.state === 'canonical_elsewhere' ? ('canonical → ' + p.canonical) : (p.title || '—');
+  const rows = (nc.pages || []).map(p => !p.checked
+    ? `<tr><td>${e5(p.path)}</td><td colspan="3" class="small"><b>not read</b> — ${e5(p.not_checked)}</td></tr>`
+    : `<tr><td>${e5(p.path)}</td><td>${p.status}</td><td>${e5(LABEL[p.state] || p.state)}</td><td class="small">${e5(detail5(p))}</td></tr>`).join('');
+  h += `<table class="ct"><tr><th>Address</th><th>Answered</th><th>What it is</th><th>Detail</th></tr>${rows}</table>`;
+  h += `<p class="small">${e5(nc.basis)}. ${e5(nc.method)}${nc.order_note ? ' ' + e5(nc.order_note) : ''}</p>`;
+  return h;
+};
 const findings = a.findings || [];
 const counts = a.issue_counts || {};
 const byCat = (cat) => findings.filter(f => f.category === cat);
@@ -1088,6 +1106,7 @@ if (ps) {
   const yps = ps.rows.find(r => r.is_you) || {};
   if ((yps.opportunities || []).length) html += '<h3>Biggest Speed Savings (your homepage)</h3><ul>' + yps.opportunities.map(o => `<li>${esc(o.title)} — about ${num(o.savings_ms)}ms</li>`).join('') + '</ul>';
 }
+html += notCrawledSection(a);
 html += uncrawlableSection(a);
 html += cwvSection(a) + renderDiffSection(a) + '<h3>Findings</h3>' + findingsBlock(byCat('Performance'));
 

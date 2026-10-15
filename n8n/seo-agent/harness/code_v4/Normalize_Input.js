@@ -70,6 +70,9 @@ const CONFIG = {
   // report can say what only exists after JavaScript. Both fetches are free (a plain GET and one render); 5 covers the homepage
   // plus the four pages Search Console says earn the most.
   render_diff_pages: 5,
+  // B5-5 (2026-10-15): how many of the known URLs the crawl never reached are read with a free plain GET, so "not crawled"
+  // becomes a statement instead of a count. 0 switches the check off for a site; 50 is the ceiling.
+  not_crawled_checks: 25,
   ladder_pages_default: 1,          // ladder mode: pages written immediately (1-3; each page is its own content run)
   ladder_tracker_cadence: 'weekly', // the Rank Tracker workflow runs weekly; 'monthly' is documentation only until its schedule is changed
   ladder_auto_next_rung: false,     // false = the tracker recommends the next rung (one-click form link + API body); true is not wired
@@ -433,6 +436,7 @@ return [{
     live_serp_checks: CONFIG.live_serp_checks,
     heavy_audit_pages: CONFIG.heavy_audit_pages,
     render_diff_pages: CONFIG.render_diff_pages,
+    not_crawled_checks: CONFIG.not_crawled_checks,
     started_at: new Date().toISOString(),
     validation_error: ''
   }

@@ -49,13 +49,6 @@
   "markup": 0,
   "why": "refusal (B-A11, 2026-10-15): derives a figure or a recommendation from the answers and cannot yet say they could not be read. Real debt of the B-A11 class, one workflow at a time. The redirect and schema files are built from what was crawled; a smaller crawl makes a smaller pack with no note saying so."
  },
- "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / GSC Audit Plan": {
-  "fails": [
-   "refusal"
-  ],
-  "markup": 0,
-  "why": "refusal (B-A11, 2026-10-15): builds the NEXT request from the previous answer and scores, ranks or advises nothing itself: when less was read it simply asks for less, and the node that acts on the result is where the refusal belongs. Listed rather than excused, so the next person who makes it derive a figure has to read this file."
- },
  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Pick Key Pages": {
   "fails": [
    "refusal"

@@ -13,7 +13,7 @@
    "subject": 16
   },
   "refusal": {
-   "pass": 15,
+   "pass": 16,
    "subject": 33
   },
   "withheld": {
@@ -117,7 +117,7 @@
     "kit": true,
     "travels": true
    },
-   "markup": 262,
+   "markup": 274,
    "node": "Build Audit Report",
    "subject": [
     "lineage",
@@ -133,7 +133,7 @@
     "kit": true,
     "travels": true
    },
-   "markup": 454,
+   "markup": 466,
    "node": "Build Full Report",
    "subject": [
     "lineage",
@@ -281,12 +281,10 @@
    "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
   },
   "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / GSC Audit Plan": {
-   "fails": [
-    "refusal"
-   ],
+   "fails": [],
    "markup": 0,
    "node": "GSC Audit Plan",
-   "refusal": false,
+   "refusal": true,
    "subject": [
     "refusal"
    ],
@@ -776,9 +774,6 @@
    "refusal"
   ],
   "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Fix Pack": [
-   "refusal"
-  ],
-  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / GSC Audit Plan": [
    "refusal"
   ],
   "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Pick Key Pages": [

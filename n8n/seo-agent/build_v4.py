@@ -8554,6 +8554,200 @@ def _b86_checks():
           % (int(re.search(r'max_watch_per_site: (\d+)', _plan).group(1)), int(re.search(r'max_watch_per_run: (\d+)', _plan).group(1))))
 
 
+# 87. THE KNOWN URLS THE CRAWL NEVER REACHED, AND A QUEUE THAT STARTS WITH WHAT CHANGED
+#     (2026-10-15, benchmark area 5 — docs/system-review-2026-10-14/BENCH_AREA5_technical_audit.md §5(a) rows a5 and a8;
+#      register rows B5-5 and B5-8; CRITERIA_technical… 1.1 and 1.7)
+#
+#     * B5-5 **the pages behind the coverage figure were counted and never looked at.** G24 made the line honest — "Crawled 47 of
+#       112 known URLs (sitemap ∪ the pages Search Console reports impressions for)" — and under 90% the audit says every share
+#       below is a share of the crawled sample. True, and useless on its own: the 65 URLs outside the sample were a number, and the
+#       worst problems live exactly there, because a URL the crawler did not reach is the kind that 404s, redirects, carries a
+#       `noindex` or points its canonical somewhere else. Up to CONFIG.not_crawled_checks (25) of them are now read with one free
+#       plain GET each — the *Fetch Raw Pages* shape, redirects NOT followed so a redirect is itself the answer — and reported as
+#       what they are: gone, redirecting, noindex, canonicalised elsewhere, or live and indexable and simply never audited. No new
+#       credential, no paid API, no render: **$0 per audit.**
+#       The rule this check is held to is the one this area's history demands. The audit once shipped seven findings with an empty
+#       evidence string, so a new check that cannot say what it saw is worse than no check: a page we could not fetch is reported
+#       as **not fetched, with the reason** (timeout, DNS, a bot wall, HTTP 403) and never as a finding, every count carries
+#       `checked` / `checked_of`, and with nothing readable the whole block is `available: false` with the reason and lands in the
+#       audit's "not assessed" list.
+#     * B5-8 **IndexNow and the published-page log ordered nothing.** Ahrefs' Always-On Audit picks its next URL partly from
+#       IndexNow pings (ahrefs.com/blog/always-on-audit). We OPERATE IndexNow for the customer since v4.12 and we write their pages
+#       ourselves, so we hold that signal twice over and spent it on nothing: both queues were "oldest reading first", which puts
+#       the page we submitted on Monday behind a page nobody has touched in a year. `PW.changedPages` reads three stored tables —
+#       `seo_ai_pages.submitted_at` (IndexNow / Bing), `seo_content_log.published_at` and `seo_ai_targets.written_at` — and
+#       `PW.freshFirst` puts what changed in the last PW.FRESH_DAYS (7) days at the front of **Google's URL-Inspection rotation**
+#       and of the new not-crawled queue, with the existing order kept underneath. The three loads are **read-only**: this build
+#       writes nothing to the AI Growth tables and does not touch that workflow.
+#       Rule 1 again, and it is the whole design here: a table that could not be read is `not_read` **with its reason**, which is a
+#       different answer from "no page changed this week", and every sentence printed says which of the two it was. With no signal
+#       at all the order is exactly what it was before this section.
+#     Both halves cost $0 and add no paid call. S97 proves them on fixtures; nothing is fetched live.
+# =============================================================================
+from ladder_common import AI_PAGES_TABLE as _AIP87, AI_TARGETS_TABLE as _AIT87, LOG_TABLE as _LOG87
+import retry_lint as _rl87
+LOAD87 = {'alwaysOutputData': True, 'executeOnce': True, 'onError': 'continueRegularOutput'}
+
+# ---------- A. the cap travels with the run, like every other limit ----------
+patch('Normalize Input', "  render_diff_pages: 5,\n",
+      "  render_diff_pages: 5,\n"
+      "  // B5-5 (2026-10-15): how many of the known URLs the crawl never reached are read with a free plain GET, so \"not crawled\"\n"
+      "  // becomes a statement instead of a count. 0 switches the check off for a site; 50 is the ceiling.\n"
+      "  not_crawled_checks: 25,\n")
+patch('Normalize Input', "    render_diff_pages: CONFIG.render_diff_pages,\n",
+      "    render_diff_pages: CONFIG.render_diff_pages,\n    not_crawled_checks: CONFIG.not_crawled_checks,\n")
+
+# ---------- B. B5-5: the coverage reading carries the addresses, not only the count ----------
+# `sitemapUrls` and `gscPageKeys` are host-agnostic KEYS by the time coverage is computed, and a key cannot be fetched: it has lost
+# the scheme and any www. So the original address of every known URL is kept beside the key as it is read.
+patch('GSC Audit Findings', "sitemapUrls = [...new Set(sitemapUrls.map(key))].slice(0, 5000);",
+      "// B5-5 (2026-10-15, benchmark area 5): the address every known URL is actually published at, kept beside its host-agnostic key\n"
+      "// so the pages the crawl never reached can be fetched exactly as they are, instead of being rebuilt from a key.\n"
+      "const knownMeta = new Map();\n"
+      "for (const u of sitemapUrls) { const k = key(u); if (k && !knownMeta.has(k)) knownMeta.set(k, { url: String(u).trim(), source: 'sitemap', impressions: 0, clicks: 0 }); }\n"
+      "sitemapUrls = [...new Set(sitemapUrls.map(key))].slice(0, 5000);")
+patch('GSC Audit Findings', "  gscPageKeys = [...new Set(pagesRows.map(p => key(p.page)).filter(Boolean))];",
+      "  gscPageKeys = [...new Set(pagesRows.map(p => key(p.page)).filter(Boolean))];\n"
+      "  // B5-5: Search Console's own address for the page, and what it earns — a page Google shows is read before a sitemap-only one\n"
+      "  for (const p of pagesRows) { const k = key(p.page); if (!k) continue; const prevM = knownMeta.get(k);\n"
+      "    knownMeta.set(k, { url: String(p.page || (prevM && prevM.url) || '').trim(), source: prevM ? 'sitemap + Search Console' : 'Search Console',\n"
+      "      impressions: Number(p.impressions) || 0, clicks: Number(p.clicks) || 0 }); }")
+patch('GSC Audit Findings', "  sample_not_crawled: notCrawled.slice(0, 10).map(u => 'https://' + u),",
+      "  sample_not_crawled: notCrawled.slice(0, 10).map(u => (knownMeta.get(u) || {}).url || ('https://' + u)),\n"
+      "  // B5-5: the list *Not Crawled Targets* reads up to its own cap from — with the address as published and what Google says it earns\n"
+      "  not_crawled_list: notCrawled.map(u => knownMeta.get(u) || { url: 'https://' + u, source: 'sitemap', impressions: 0, clicks: 0 })\n"
+      "    .filter(m => /^https?:\\/\\//i.test(String(m.url || ''))).sort((a, b) => (b.impressions - a.impressions) || (b.clicks - a.clicks)).slice(0, 60),")
+
+# ---------- C. B5-8: the three read-only loads, and the inspection rotation that uses them ----------
+_gap87 = pos('GSC Audit Plan')
+disconnect('Full Report?', 'GSC Audit Plan'); disconnect('AI Visibility', 'GSC Audit Plan')
+add_node('Load AI Pages (Audit)', DT_TYPE, DT_VERSION, dt_get_all_params(_AIP87), [_gap87[0] - 660, _gap87[1] + 200], LOAD87)
+add_node('Load Content Log (Audit)', DT_TYPE, DT_VERSION, dt_get_all_params(_LOG87), [_gap87[0] - 440, _gap87[1] + 200], LOAD87)
+add_node('Load AI Targets (Audit)', DT_TYPE, DT_VERSION, dt_get_all_params(_AIT87), [_gap87[0] - 220, _gap87[1] + 200], LOAD87)
+connect('Full Report?', 'Load AI Pages (Audit)', 1); connect('AI Visibility', 'Load AI Pages (Audit)')
+for _a87, _b87 in [('Load AI Pages (Audit)', 'Load Content Log (Audit)'), ('Load Content Log (Audit)', 'Load AI Targets (Audit)'),
+                   ('Load AI Targets (Audit)', 'GSC Audit Plan')]:
+    connect(_a87, _b87)
+# a Data Table node outputs its table, not the item that entered it (CLAUDE.md), so the audit item is taken from the node that made it
+patch('GSC Audit Plan', "const base = $input.first().json || {};",
+      "// B5-8 (2026-10-15): three read-only Data Table loads now sit between the audit and this node, and a Data Table node outputs its\n"
+      "// table rather than the item that entered it (CLAUDE.md), so the audit item is read from the node that produced it.\n"
+      "const base = (() => {\n"
+      "  for (const n of ['AI Visibility', 'Full Report?']) { try { const j = ($(n).first() || {}).json; if (j && typeof j === 'object' && j.probe) return j; } catch (e) {} }\n"
+      "  return $input.first().json || {};\n"
+      "})();")
+patch('GSC Audit Plan', "const inspectPlan = PW.inspectBudget(ranked.map((p, i) => ({ url: inspectUrl(p), weight: ranked.length - i })), PW.PER_AUDIT);",
+      "// B5-8: a page we submitted to IndexNow / Bing or wrote in the last week goes to the front of Google's inspection rotation —\n"
+      "// it is the page most likely to have changed since Google last looked. A table that could not be read says so and changes no order.\n"
+      "const _load87 = (nodeName) => { let items = null;\n"
+      "  try { items = $(nodeName).all().map(i => i.json); } catch (e) { return { ok: false, reason: 'it was not read in this run' }; }\n"
+      "  if (!Array.isArray(items)) return { ok: false, reason: 'it was not read in this run' };\n"
+      "  const errs = items.filter(r => r && r.error); const rows = items.filter(r => r && typeof r === 'object' && !r.error);\n"
+      "  if (errs.length && !rows.length) return { ok: false, reason: String((errs[0].error && (errs[0].error.message || errs[0].error.description)) || errs[0].error).slice(0, 120) || 'the load failed' };\n"
+      "  return { ok: true, rows }; };\n"
+      "const _src87 = (name, nodeName, map) => { const got = _load87(nodeName);\n"
+      "  return got.ok ? Object.assign({ name, read: true, rows: got.rows }, map) : { name, read: false, reason: got.reason }; };\n"
+      "const recent_changes = PW.changedPages([\n"
+      "  _src87('IndexNow / Bing submissions', 'Load AI Pages (Audit)', { url: (r) => r.url, at: (r) => r.submitted_at,\n"
+      "    kind: (r) => (/bing/i.test(String(r.submitted_via || '')) && !/indexnow/i.test(String(r.submitted_via || '')) ? 'bing' : 'indexnow') }),\n"
+      "  _src87('the published-page log', 'Load Content Log (Audit)', { url: (r) => String(r.published_url || r.existing_page_url || ''), at: (r) => r.published_at, kind: () => 'published' }),\n"
+      "  _src87('the AI answer pages written', 'Load AI Targets (Audit)', { url: (r) => r.page_url, at: (r) => r.written_at, kind: () => 'written' }),\n"
+      "], { days: PW.FRESH_DAYS, now: String(base.today || '') || undefined });\n"
+      "const inspectPlan = PW.inspectBudget(ranked.map((p, i) => ({ url: inspectUrl(p), weight: ranked.length - i })), PW.PER_AUDIT, { changed: recent_changes });")
+patch('GSC Audit Plan', "const inspect_budget = { note: inspectPlan.note, cap: inspectPlan.limit, quota: inspectPlan.quota, candidates: ranked.length, asked: sample.length,",
+      "const inspect_budget = { note: inspectPlan.note, order_note: inspectPlan.order_note, changed_first: inspectPlan.changed_first,\n"
+      "  changed: { read: recent_changes.read, count: recent_changes.count, window_days: recent_changes.window_days, basis: recent_changes.basis,\n"
+      "    sources_read: recent_changes.sources_read, not_read: recent_changes.not_read, pages: recent_changes.pages },\n"
+      "  cap: inspectPlan.limit, quota: inspectPlan.quota, candidates: ranked.length, asked: sample.length,")
+
+# ---------- D. B5-5: the chain, between the render diff and the scoring (both audit types pass through it) ----------
+_rd87 = pos('Render Diff'); NX, NY = _rd87[0] + 220, _rd87[1]
+disconnect('Render Diff', 'Build Site Issues')
+add_node('Not Crawled Targets', 'n8n-nodes-base.code', 2,
+         {'jsCode': PAGE_WATCH_SRC + '\n' + rd('code/Not_Crawled_Targets.js')}, [NX, NY])
+if_node('Any Not Crawled?', '{{ !$json.skip }}', [NX + 220, NY])
+add_node('Fetch Not Crawled', 'n8n-nodes-base.httpRequest', 4.5, {
+    'url': '={{ $json.url }}', 'sendHeaders': True, 'headerParameters': {'parameters': [
+        {'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEOAgentAudit/1.0; +https://www.google.com/bot.html)'},
+        {'name': 'Accept', 'value': 'text/html,application/xhtml+xml'}]},
+    # redirects are NOT followed: a known URL that redirects is itself the answer to "why was it not crawled"
+    'options': {'batching': {'batch': {'batchSize': 5, 'batchInterval': 400}}, 'timeout': 20000,
+                'redirect': {'redirect': {'followRedirects': False}},
+                'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}},
+    [NX + 440, NY - 160], dict(onError='continueRegularOutput', alwaysOutputData=True, **_rl87.RETRY))
+add_node('Not Crawled Check', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Not_Crawled_Check.js')}, [NX + 660, NY])
+for _a87, _b87 in [('Render Diff', 'Not Crawled Targets'), ('Not Crawled Targets', 'Any Not Crawled?'),
+                   ('Fetch Not Crawled', 'Not Crawled Check'), ('Not Crawled Check', 'Build Site Issues')]:
+    connect(_a87, _b87)
+connect('Any Not Crawled?', 'Fetch Not Crawled', 0); connect('Any Not Crawled?', 'Not Crawled Check', 1)
+
+# ---------- E. the scored audit carries it, and says when it could not be made ----------
+patch('Build Site Issues', "      render_diff: input.render_diff || null,\n", "      render_diff: input.render_diff || null,\n      not_crawled_check: input.not_crawled_check || null,\n")
+patch('Build Site Issues', "if (!input.content_review) not_assessed.push('Content quality and E-E-A-T review (authors, case studies, claims, pricing)');",
+      "if (!(input.not_crawled_check && input.not_crawled_check.available)) not_assessed.push('The known URLs the crawl never reached (status, redirect, noindex, canonical, title of up to 25 of them): '"
+      " + ((input.not_crawled_check && input.not_crawled_check.not_available) || 'not collected in this run'));\n"
+      "if (!input.content_review) not_assessed.push('Content quality and E-E-A-T review (authors, case studies, claims, pricing)');")
+
+# ---------- F. both audit reports, and the app's technical page ----------
+NC_SECTION_JS = r"""// ---- the known URLs the crawl never reached (B5-5, 2026-10-15, benchmark area 5) ----
+const notCrawledSection = (a) => {
+  const nc = a.not_crawled_check || null;
+  const e5 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  if (!nc) return '';
+  let h = `<h3>The pages the crawl never reached</h3>`;
+  if (!nc.available) return h + `<p><b>Not checked:</b> ${e5(nc.not_available)}.</p>`;
+  const LABEL = { live: 'live and indexable', gone: 'gone (404 / 410)', error: 'server error', redirect: 'redirects elsewhere',
+    noindex: 'set to noindex', canonical_elsewhere: 'canonical points elsewhere' };
+  const detail5 = (p) => p.state === 'redirect' ? ('→ ' + (p.redirect_to || 'an unnamed address'))
+    : p.state === 'canonical_elsewhere' ? ('canonical → ' + p.canonical) : (p.title || '—');
+  const rows = (nc.pages || []).map(p => !p.checked
+    ? `<tr><td>${e5(p.path)}</td><td colspan="3" class="small"><b>not read</b> — ${e5(p.not_checked)}</td></tr>`
+    : `<tr><td>${e5(p.path)}</td><td>${p.status}</td><td>${e5(LABEL[p.state] || p.state)}</td><td class="small">${e5(detail5(p))}</td></tr>`).join('');
+  h += `<table class="ct"><tr><th>Address</th><th>Answered</th><th>What it is</th><th>Detail</th></tr>${rows}</table>`;
+  h += `<p class="small">${e5(nc.basis)}. ${e5(nc.method)}${nc.order_note ? ' ' + e5(nc.order_note) : ''}</p>`;
+  return h;
+};
+"""
+for _rn87 in ('Build Audit Report', 'Build Full Report'):
+    patch(_rn87, "const findings = a.findings || [];", NC_SECTION_JS + "const findings = a.findings || [];")
+    patch(_rn87, "html += uncrawlableSection(a);", "html += notCrawledSection(a);\nhtml += uncrawlableSection(a);")
+patch('Build Audit Response', "crux: d.crux || null, render_diff: d.render_diff || null,",
+      "crux: d.crux || null, render_diff: d.render_diff || null, not_crawled_check: d.not_crawled_check || null,")
+
+# ---------- G. what the build proves ----------
+assert 'const PW = (() => {' in code('Not Crawled Targets'), 'B5-5: the page-watch kit is not inlined into Not Crawled Targets'
+for _n87 in ('changedPages, changeOf, freshFirst', 'const freshFirst = (list, changed, o)', 'const changedPages = (sources, o)'):
+    assert _n87 in rd('code/_page_watch.js'), 'B5-8: the page-watch kit no longer defines ' + _n87
+assert 'not_crawled_list' in code('GSC Audit Findings'), 'B5-5: the coverage reading carries no addresses to look at'
+assert "PW.freshFirst(" in code('Not Crawled Targets') and 'PW.changedPages(' in code('Not Crawled Targets'), 'B5-8: the not-crawled queue is not ordered by what changed'
+assert 'PW.changedPages(' in code('GSC Audit Plan') and '{ changed: recent_changes }' in code('GSC Audit Plan'), \
+    "B5-8: Google's inspection rotation does not read what we know changed"
+assert "Load AI Pages (Audit)" in code('GSC Audit Plan') and "Load Content Log (Audit)" in code('GSC Audit Plan') \
+    and "Load AI Targets (Audit)" in code('GSC Audit Plan'), 'B5-8: the three recent-change signals are not read by the audit'
+for _n87 in ('Load AI Pages (Audit)', 'Load Content Log (Audit)', 'Load AI Targets (Audit)'):
+    assert nodes[_n87]['parameters']['operation'] == 'get', _n87 + ': B5-8 reads these tables, it never writes them'
+assert not _rl87.weak(nodes['Fetch Not Crawled']), 'Fetch Not Crawled: the G1 retry rule is missing'
+assert nodes['Fetch Not Crawled']['parameters']['options']['response']['response']['fullResponse'] is True, \
+    'Fetch Not Crawled: without fullResponse the status code never reaches the check (INVARIANTS rule 3)'
+# the refusal path: a page that could not be read is never a finding about that page
+_ncc87 = code('Not Crawled Check')
+for _need87 in ("out.not_checked = 'the server refused our request", "checked_of: targets.length",
+                "const available = checked.length > 0", "const not_available = available ? ''", "'not available: ' + not_available"):
+    assert _need87 in _ncc87, 'B5-5: Not Crawled Check no longer carries ' + _need87
+assert "scoring: scoring !== false" in _ncc87 and "notChecked.map(p => p.url), null, false);" in _ncc87, \
+    'B5-5: the "could not be read" line must be an unscored Info note, not a scored finding'
+for _rn87 in ('Build Audit Report', 'Build Full Report'):
+    assert code(_rn87).count('html += notCrawledSection(a);') == 1, _rn87 + ': the not-crawled section is not printed once'
+url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+sticky("""### The pages the crawl never reached, and a queue that starts with what changed (B5-5 / B5-8)
+**B5-5.** G24 told the truth — "Crawled 47 of 112 known URLs" — and then judged the site on the 47. The other 65 were a **number**: never opened, although a URL the crawler could not reach is exactly the kind that 404s, redirects or carries a `noindex`.
+*Not Crawled Targets → Fetch Not Crawled → Not Crawled Check* now reads up to **25** of them with one **free plain GET** each (redirects not followed, so a redirect is the answer) and reports gone / redirecting / noindex / canonicalised elsewhere / **live and indexable and never audited**. **$0.**
+**A page we could not fetch is reported as not fetched, with the reason** — a timeout, a DNS failure or a bot wall is `not_checked`, never a finding; every count carries `checked` / `checked_of`; with nothing readable the block is "not assessed" with its reason.
+**B5-8.** Ahrefs' Always-On Audit picks its next URL partly from **IndexNow** pings. We operate IndexNow for the customer and write their pages, and used neither: both queues were "oldest reading first". `PW.changedPages` reads `seo_ai_pages.submitted_at`, `seo_content_log.published_at` and `seo_ai_targets.written_at` (**read-only**) and `PW.freshFirst` puts what changed in the last **7 days** in front of Google's URL-Inspection rotation and of the not-crawled queue. A table that could **not be read** says so — which is not the same answer as "nothing changed this week".""",
+    NX - 40, NY + 340, 1180, 300, 4)
+log('The known URLs the crawl never reached, and a queue that starts with what changed (2026-10-15, benchmark area 5, B5-5 / B5-8): G24 printed "crawled X of Y known URLs" and the Y-X outside the sample were a count nobody ever opened, although a URL a crawler did not reach is the kind that 404s, redirects, carries a noindex or canonicalises elsewhere - up to CONFIG.not_crawled_checks (25) of them are now read with one free plain GET each (Not Crawled Targets -> Fetch Not Crawled -> Not Crawled Check, redirects not followed so a redirect is itself the answer, $0 per audit) and reported as gone / redirecting / noindex / canonical elsewhere / live and indexable and never audited, with a page that could not be fetched reported as not fetched with its reason and never as a finding, checked / checked_of on every count, and the whole block in the audit\'s "not assessed" list with the reason when nothing could be read; and the IndexNow and Bing submissions AI Growth makes (seo_ai_pages.submitted_at), the published-page log (seo_content_log) and the AI answer pages written (seo_ai_targets.written_at) are read - read-only, the AI Growth workflow is untouched - by the new PW.changedPages / PW.freshFirst, which put a page submitted or written in the last 7 days at the front of Google\'s URL-Inspection rotation and of the not-crawled queue the way Ahrefs\' Always-On Audit does, while a table that could not be read is reported as not read with its reason and never as "nothing changed this week"')
+
 # =============================================================================
 def _b80_checks():
     """Area 7 over the generated Site Tracker: the change test with its own windows and its refusals, the device and country

@@ -207,6 +207,74 @@ const PW = (() => {
           note: 'Fixed on the ' + list.length + ' key pages checked (no ' + r.label + ' left). The next full audit checks the rest of the site.' };
   };
 
+  // ---- B5-8 (2026-10-15, benchmark area 5): what we already know changed, and what that orders ----
+  // Ahrefs' Always-On Audit picks the next URL to re-crawl partly from IndexNow pings (ahrefs.com/blog/always-on-audit). We OPERATE
+  // IndexNow for the customer (v4.12) and we write their pages ourselves, so we hold the same signal and used it for nothing: the
+  // queues were ordered "oldest reading first", which puts the page we changed on Monday behind a page nobody has touched in a year.
+  // Three free signals, all already stored:
+  //   * seo_ai_pages.submitted_at / submitted_via  - the IndexNow and Bing submissions AI Growth makes every week
+  //   * seo_content_log.published_at / started_at  - the published-page log (what the Content Cadence wrote, and when it went live)
+  //   * seo_ai_targets.written_at                  - the AI answer / refresh pages
+  // INVARIANTS rule 1 lives in the return value: a table that could NOT be read is `not_read` with its reason, which is not the same
+  // answer as "nothing changed this week", and every consumer prints whichever of the two it got.
+  const FRESH_DAYS = 7;
+  const CHANGE_LABEL = { indexnow: 'submitted to IndexNow', bing: 'submitted to Bing', published: 'published', written: 'written' };
+  const changedPages = (sources, o) => {
+    const opts = o || {};
+    const days = Math.max(1, n0(opts.days) || FRESH_DAYS);
+    const nowMs = Date.parse(S(opts.now)) || Date.now();
+    const cutoff = nowMs - days * 864e5;
+    const map = new Map(); const sources_read = []; const not_read = [];
+    for (const src of (sources || [])) {
+      const name = S(src && src.name) || 'a stored table';
+      if (!src || src.read === false) { not_read.push({ source: name, reason: S(src && src.reason) || 'the table could not be read in this run' }); continue; }
+      let used = 0;
+      for (const r of (src.rows || [])) {
+        const url = S(src.url ? src.url(r) : r.url);
+        const ts = Date.parse(S(src.at ? src.at(r) : r.updated_at));
+        if (!/^https?:\/\//i.test(url) || !Number.isFinite(ts) || ts < cutoff || ts > nowMs + 864e5) continue;
+        const kind = S(src.kind ? src.kind(r) : src.default_kind) || 'written';
+        const k = ukey(url); const prev = map.get(k);
+        if (!prev || ts > prev.ts) map.set(k, { url, ts, at: new Date(ts).toISOString().slice(0, 10), kind, label: CHANGE_LABEL[kind] || kind, source: name });
+        used += 1;
+      }
+      sources_read.push({ source: name, rows: (src.rows || []).length, within_window: used });
+    }
+    const read = sources_read.length > 0;
+    const count = map.size;
+    const basis = !read
+      ? 'not available: none of the recent-change signals could be read in this run (' + (not_read.map(x => x.source + ' - ' + x.reason).join('; ') || 'no source was offered') + ')'
+      : count
+        ? 'measured: ' + count + ' page(s) we submitted or wrote in the last ' + days + ' days, from ' + sources_read.map(x => x.source).join(' + ')
+          + (not_read.length ? ' (' + not_read.map(x => x.source + ' could not be read: ' + x.reason).join('; ') + ')' : '')
+        : 'measured: no page was submitted or written in the last ' + days + ' days by the signals we hold (' + sources_read.map(x => x.source).join(' + ') + ')'
+          + (not_read.length ? '; ' + not_read.map(x => x.source + ' could not be read: ' + x.reason).join('; ') : '');
+    return { map, read, count, window_days: days, as_of: new Date(nowMs).toISOString().slice(0, 10), sources_read, not_read, basis,
+      pages: [...map.values()].sort((a, b) => b.ts - a.ts).slice(0, 25).map(p => ({ url: p.url, at: p.at, kind: p.kind, label: p.label, source: p.source })) };
+  };
+  /** The freshness of one URL against a changedPages() result, or null when nothing is known about it. */
+  const changeOf = (changed, url) => (changed && changed.map && changed.map.get(ukey(url))) || null;
+  /**
+   * B5-8: puts the pages we know changed at the front of a queue and leaves the rest in the order they arrived.
+   * `then` is the queue's own comparator, so the existing order survives underneath. Returns the sentence a report prints:
+   * a signal that could not be read NEVER reads as "nothing changed".
+   */
+  const freshFirst = (list, changed, o) => {
+    const opts = o || {};
+    const then = typeof opts.then === 'function' ? opts.then : () => 0;
+    const ts = (p) => { const c = changeOf(changed, p && p.url); return c ? c.ts : 0; };
+    const ordered = (list || []).slice().sort((a, b) => (ts(b) - ts(a)) || then(a, b));
+    const first = ordered.filter(p => ts(p) > 0);
+    const days = (changed && changed.window_days) || FRESH_DAYS;
+    const order = S(opts.order) || 'oldest reading first';
+    const note = !changed ? ''
+      : !changed.read ? 'The pages we know changed could not be read in this run, so the order is the usual one: ' + order + '.'
+        : first.length ? first.length + ' page(s) we submitted or wrote in the last ' + days + ' days are checked first ('
+            + first.slice(0, 3).map(p => { const c = changeOf(changed, p.url); return pathOf(p.url) + ' ' + c.label + ' ' + c.at; }).join(', ')
+            + (first.length > 3 ? ', ...' : '') + '), because a page that has just changed is the page most likely to have changed again.'
+          : 'No page was submitted or written in the last ' + days + ' days, so the order is the usual one: ' + order + '.';
+    return { ordered, first, note, changed_known: !!(changed && changed.read), changed_count: first.length };
+  };
   // ---- G25: URL Inspection within the quota ----
   const QUOTA_PER_DAY = 2000;        // Search Console URL Inspection API, per property (developers.google.com/webmaster-tools/limits)
   const QUOTA_PER_MINUTE = 600;      // the same page, per property
@@ -223,12 +291,17 @@ const PW = (() => {
     const seen = new Set(); const list = [];
     for (const p of (pages || [])) { const k = ukey(p.url); if (!S(p.url) || seen.has(k)) continue; seen.add(k); list.push(p); }
     const ts = (p) => { const t = Date.parse(S(p.inspect_at)); return Number.isFinite(t) ? t : 0; };   // 0 = never inspected, so it goes first
-    const ordered = list.slice().sort((a, b) => ts(a) - ts(b) || n0(b.weight) - n0(a.weight) || S(a.url).localeCompare(S(b.url)));
+    // B5-8 (2026-10-15): a page we submitted to IndexNow or wrote this week goes in front of the rotation - it is the one most likely
+    // to have changed since Google last looked. Without that signal (or when it could not be read) the order is exactly what it was.
+    const fresh = freshFirst(list, opts.changed || null,
+      { then: (a, b) => ts(a) - ts(b) || n0(b.weight) - n0(a.weight) || S(a.url).localeCompare(S(b.url)), order: 'oldest inspection first' });
+    const ordered = fresh.ordered;
     const take = ordered.slice(0, limit), skipped = ordered.slice(limit);
-    return { take, skipped, limit, quota: QUOTA_PER_DAY,
+    return { take, skipped, limit, quota: QUOTA_PER_DAY, changed_first: fresh.changed_count, changed_known: fresh.changed_known, order_note: fresh.note,
       note: 'URL Inspection is capped at ' + QUOTA_PER_DAY + ' pages a day per Search Console property (Google\'s quota); this run asked about '
         + take.length + ' of ' + ordered.length + ' key pages, oldest inspection first'
-        + (skipped.length ? ', so ' + skipped.length + ' are reported as "not checked" until the next run.' : '.') };
+        + (skipped.length ? ', so ' + skipped.length + ' are reported as "not checked" until the next run.' : '.')
+        + (fresh.note ? ' ' + fresh.note : '') };
   };
   /** One URL Inspection answer -> what Google thinks. A permission or quota error is an error, never "not indexed". */
   const inspection = (res) => {
@@ -297,7 +370,8 @@ const PW = (() => {
   };
 
   return { signals, robotsRead, compare, robotsChange, state, worst, recheck, recheckRule, inspectBudget, inspection, coverage, hash,
-    CODES, RULES, QUOTA_PER_DAY, QUOTA_PER_MINUTE, PER_RUN, PER_AUDIT,
+    changedPages, changeOf, freshFirst,
+    CODES, RULES, QUOTA_PER_DAY, QUOTA_PER_MINUTE, PER_RUN, PER_AUDIT, FRESH_DAYS,
     helpers: { hostOf, bare, pathOf, ukey, same, strip, S, n0 } };
 })();
 const plan = $('Prerelease Validate').all().map(i => i.json).filter(p => p && p.ok !== false && p.url);

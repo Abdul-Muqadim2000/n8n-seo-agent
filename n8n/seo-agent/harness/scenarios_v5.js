@@ -14264,5 +14264,262 @@ await guard('S96 B6-7 the customer\'s own keyword list', async () => {
   reset();
 });
 
+// ===================================================================================
+// S97 (2026-10-15, benchmark area 5 — the technical audit; docs/system-review-2026-10-14/BENCH_AREA5_technical_audit.md §5(a) a5 / a8,
+// register rows B5-5 and B5-8)
+// The known URLs the crawl never reached, and a queue that starts with what changed.
+// Every check below fails on the build of 2026-10-15 morning. G24 told the customer "Crawled 8 of 14 known URLs" and then judged the
+// site on the 8 — the other 6 were a COUNT nobody ever opened, although a URL a crawler could not reach is exactly the kind that 404s,
+// redirects or carries a noindex. And we have operated IndexNow for the customer since v4.12 and written their pages ourselves, and fed
+// neither signal back into what to look at next: both queues were "oldest reading first".
+// ===================================================================================
+await guard('the pages the crawl never reached, and a queue that starts with what changed', async () => {
+  reset(); const SN = 'S97 B5-5 B5-8 — the known URLs outside the crawl are read and reported, a page that could not be read is never a finding, and what we submitted or wrote this week goes first';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 450))); };
+  const T97 = require('./fixtures_tracking');
+  const D97 = 'northwind-erp.com';
+  const W97 = 'https://www.' + D97;             // the site publishes on www; the crawl reports the bare host
+  const TODAY97 = '2026-10-15T09:00:00Z';
+  const ago97 = (days) => new Date(Date.parse(TODAY97) - days * 864e5).toISOString();
+
+  // ====================================================================
+  // A. B5-5: the coverage reading carries the ADDRESSES, not only the count
+  // ====================================================================
+  const SM97 = Array.from({ length: 12 }, (_, i) => W97 + '/p' + (i + 1) + '/');
+  const crawledPage97 = (u, i) => ({ url: u.replace('://www.', '://'), status: 200, depth: i === 0 ? 0 : 1, inbound: 5, orphan: false, indexable: true });
+  const coverage97 = async (crawledCount, gscPages) => {
+    reset();
+    const pages = SM97.slice(0, crawledCount).map(crawledPage97);
+    mock('GSC Audit Plan', [{ json: { base: { domain: D97, audit_level: 'site_audit', extra_findings: [], extra_works: [] }, domain: D97,
+      crawl_pages: pages.length, crawl_indexable: pages.length, crawl_limit: 200, crawl_finished: true, pages_crawled: pages.length, pages,
+      sample: pages.slice(0, 2).map(p => p.url), sitemap_url: W97 + '/sitemap.xml', range: { start: '2026-09-14', end: '2026-10-11' } } }]);
+    mock('Fetch Sitemap (Audit)', { statusCode: 200, headers: {}, data: '<?xml version="1.0"?><urlset>' + SM97.map(u => '<url><loc>' + u + '</loc></url>').join('') + '</urlset>' });
+    delete store['Fetch Sitemap Children (Audit)'];
+    mock('GSC Audit Requests', [{ json: { kind: 'totals', connected: true, property: 'sc-domain:' + D97, permission: 'siteFullUser' } },
+      { json: { kind: 'pages', connected: true, property: 'sc-domain:' + D97 } }, { json: { kind: 'queries', connected: true, property: 'sc-domain:' + D97 } }]);
+    mock('GSC Audit Query', [{ json: { rows: [{ keys: [], clicks: 100, impressions: 2000, ctr: 0.05, position: 12 }] } },
+      { json: { rows: gscPages.map((u, i) => ({ keys: [u], clicks: 3 + i, impressions: 90 + i * 40, ctr: 0.03, position: 14 })) } },
+      { json: { rows: [{ keys: ['erp implementation dubai'], clicks: 20, impressions: 400, ctr: 0.05, position: 6 }] } }]);
+    mock('GSC Sitemaps (Audit)', T97.gscSitemaps());
+    return (await run('GSC Audit Findings', store['GSC Sitemaps (Audit)']))[0].json;
+  };
+  const gf97 = await coverage97(8, [W97 + '/news/launch/', W97 + '/news/award/']);
+  const cov97 = gf97.site_structure.crawl_coverage;
+  console.log('   coverage ->', JSON.stringify({ known: cov97.known_urls, crawled: cov97.crawled_known, not: cov97.not_crawled, listed: (cov97.not_crawled_list || []).length }));
+  check('B5-5: the crawl-coverage reading now carries the addresses the crawl never reached, not only how many there were',
+    Array.isArray(cov97.not_crawled_list) && cov97.not_crawled_list.length === cov97.not_crawled && cov97.not_crawled === 6,
+    JSON.stringify({ not_crawled: cov97.not_crawled, list: (cov97.not_crawled_list || []).length }));
+  check('B5-5: each address is the one the page is PUBLISHED at (www here), not one rebuilt from the host-agnostic key — a rebuilt address would 308 on this site and prove nothing',
+    cov97.not_crawled_list.every(m => /^https:\/\/www\.northwind-erp\.com\//.test(m.url)),
+    JSON.stringify(cov97.not_crawled_list.map(m => m.url)));
+  check('B5-5: a page Google already shows is read before a sitemap-only one, and each address says where we know it from',
+    cov97.not_crawled_list[0].source === 'Search Console' && cov97.not_crawled_list[0].impressions === 130
+    && cov97.not_crawled_list.some(m => m.source === 'sitemap' && m.impressions === 0),
+    JSON.stringify(cov97.not_crawled_list.slice(0, 3)));
+
+  // ====================================================================
+  // B. B5-8: what we already know changed, and what it orders
+  // ====================================================================
+  const aiPages97 = (rows) => mock('Load AI Pages (Audit)', rows.map(r => ({ json: r })));
+  const contentLog97 = (rows) => mock('Load Content Log (Audit)', rows.map(r => ({ json: r })));
+  const aiTargets97 = (rows) => mock('Load AI Targets (Audit)', rows.map(r => ({ json: r })));
+  const SIGNALS97 = () => {
+    aiPages97([{ site_id: 's1', domain: D97, url: W97 + '/p9/', submitted_at: ago97(2), submitted_via: 'indexnow' },
+      { site_id: 's1', domain: D97, url: W97 + '/p1/', submitted_at: ago97(40), submitted_via: 'indexnow' }]);
+    contentLog97([{ site_id: 's1', domain: D97, status: 'published', published_url: W97 + '/news/award/', published_at: ago97(4) }]);
+    aiTargets97([{ site_id: 's1', domain: D97, page_url: W97 + '/p12/', written_at: ago97(1), status: 'written' }]);
+  };
+
+  // ---- B1. the not-crawled queue ----
+  const plan97 = async (o = {}) => {
+    const cc = Object.assign({ known_urls: 14, crawled_known: 8, coverage_pct: 57, not_crawled: 6,
+      not_crawled_list: cov97.not_crawled_list }, o.coverage || {});
+    mock('Check Crawl', [{ json: { domain: D97, audit_level: 'site_audit', pages_crawled: 8, today: TODAY97,
+      not_crawled_checks: o.cap === undefined ? 25 : o.cap, crawl_summary: { domain_info: { checks: {} }, page_metrics: {} } } }]);
+    mock('Render Diff', [{ json: { domain: D97, probe: { findings: [], what_works: [], measurements: {} }, extra_findings: [{ category: 'Technical', severity: 'Info', title: 'an earlier finding', evidence: 'kept', why: '', fix: '', scoring: false }], extra_works: [],
+      site_structure: o.coverage === null ? undefined : { crawl_coverage: cc } } }]);
+    return (await run('Not Crawled Targets', store['Render Diff'])).map(i => i.json);
+  };
+  reset(); SIGNALS97();
+  const t97 = await plan97();
+  console.log('   queue ->', t97.map(x => x.path + (x.changed_label ? ' [' + x.changed_label + ' ' + x.changed_at + ']' : '')).join(', '));
+  check('B5-8: the pages we submitted to IndexNow or wrote in the last 7 days are read FIRST — the signal Ahrefs\' Always-On Audit uses, which we held and spent on nothing',
+    t97[0].path === '/p12/' && t97[0].changed_kind === 'written' && t97[1].path === '/p9/' && t97[1].changed_kind === 'indexnow'
+    && t97[2].path === '/news/award/' && t97[2].changed_kind === 'published',
+    JSON.stringify(t97.map(x => [x.path, x.changed_kind, x.changed_at])));
+  check('B5-8: a page submitted 40 days ago is NOT recent — the window is 7 days, and outside it the old order (the pages Google shows most often) stands',
+    !t97.some(x => x.path === '/p1/' && x.changed_kind) && t97[3].path === '/news/launch/' && t97[3].impressions === 90,
+    JSON.stringify(t97.map(x => [x.path, x.changed_kind || '-', x.impressions])));
+  const pl97 = t97[0].not_crawled_plan;
+  check('B5-8: the order carries the sentence that explains it, and the three signals are named with how many rows each one answered with',
+    /are checked first \(\/p12\/ written 2026-10-14/.test(pl97.order_note) && pl97.changed_first === 3 && pl97.changed.read === true && pl97.changed.count === 3
+    && pl97.changed.sources_read.length === 3 && /^measured: 3 page\(s\) we submitted or wrote in the last 7 days/.test(pl97.changed.basis),
+    JSON.stringify({ note: pl97.order_note, basis: pl97.changed.basis }));
+
+  // ---- B2. INVARIANTS rule 1: a signal that could not be read is NOT "nothing changed" ----
+  reset();
+  mock('Load AI Pages (Audit)', [{ json: { error: { message: 'Data table "seo_ai_pages" not found' } } }]);
+  contentLog97([]); aiTargets97([]);
+  const t97b = (await plan97())[0].not_crawled_plan;
+  check('B5-5 / B5-8 (INVARIANTS rule 1): a table that could not be READ is reported as not read, with the reason, beside the two that answered with nothing',
+    t97b.changed.read === true && t97b.changed.count === 0 && t97b.changed.not_read.length === 1
+    && /seo_ai_pages/.test(t97b.changed.not_read[0].reason) && /could not be read/.test(t97b.changed.basis)
+    && /^measured: no page was submitted or written in the last 7 days/.test(t97b.changed.basis),
+    JSON.stringify({ not_read: t97b.changed.not_read, basis: t97b.changed.basis }));
+  reset();
+  const t97c = (await plan97())[0].not_crawled_plan;     // none of the three loads exists at all
+  check('B5-8: with none of the three signals readable the order is the usual one and SAYS so — never "no page changed this week", which is a different answer',
+    t97c.changed.read === false && /^not available: none of the recent-change signals could be read/.test(t97c.changed.basis)
+    && /could not be read in this run, so the order is the usual one: the pages Google shows most often first/.test(t97c.order_note),
+    JSON.stringify({ basis: t97c.changed.basis, note: t97c.order_note }));
+  const t97cList = (await plan97()).map(x => x.path);
+  check('B5-8: and with no signal the queue is exactly what it was before this section — most impressions first, then the sitemap',
+    t97cList[0] === '/news/award/' && t97cList[1] === '/news/launch/', JSON.stringify(t97cList));
+
+  // ---- B3. the refusals: every one says which of them it was ----
+  reset(); SIGNALS97();
+  const off97 = (await plan97({ cap: 0 }))[0];
+  check('B5-5: the check can be switched off per run, and says that is what happened', off97.skip === true && /switched off for this run/.test(off97.reason), JSON.stringify(off97));
+  const none97 = (await plan97({ coverage: { not_crawled: 0, not_crawled_list: [] } }))[0];
+  check('B5-5: a crawl that reached every known URL skips with the reason, instead of fetching nothing and reporting an empty table',
+    none97.skip === true && /reached every one of the 14 known URLs/.test(none97.reason), JSON.stringify(none97));
+  const nocov97 = (await plan97({ coverage: null }))[0];
+  check('B5-5: with no coverage reading in the run there is no list to work from, and that is said rather than guessed',
+    nocov97.skip === true && /no crawl-coverage reading/.test(nocov97.reason), JSON.stringify(nocov97));
+
+  // ====================================================================
+  // C. B5-5: what the pages outside the crawl actually answer
+  // ====================================================================
+  const html97 = (o) => '<!DOCTYPE html><html><head><title>' + (o.title || 'A page') + '</title>'
+    + (o.canonical ? '<link rel="canonical" href="' + o.canonical + '">' : '')
+    + (o.robots ? '<meta name="robots" content="' + o.robots + '">' : '') + '</head><body><h1>Hello</h1></body></html>';
+  const res200 = (o) => ({ statusCode: 200, headers: Object.assign({ 'content-type': 'text/html' }, o.headers || {}), data: html97(o) });
+  reset(); SIGNALS97();
+  const WIDER97 = { known_urls: 15, not_crawled: 7, not_crawled_list: [...cov97.not_crawled_list, { url: W97 + '/p13/', source: 'sitemap', impressions: 0, clicks: 0 }] };
+  const targets97 = await plan97({ coverage: WIDER97 });
+  const answers97 = targets97.map((t) => {
+    const p = t.path;
+    if (p === '/p12/') return res200({ title: 'Written this week', canonical: t.url });
+    if (p === '/news/award/') return { statusCode: 404, headers: {}, data: 'Not found' };   // published 4 days ago, 404 today, and Google still shows it
+    if (p === '/p9/') return res200({ title: 'Submitted', robots: 'noindex, follow', canonical: t.url });
+    if (p === '/news/launch/') return { statusCode: 301, headers: { location: W97 + '/news/' }, data: '' };
+    if (p === '/p10/') return res200({ title: 'Duplicate', canonical: W97 + '/p1/' });
+    if (p === '/p11/') return { statusCode: 403, headers: {}, data: 'Forbidden' };
+    return { statusCode: 0, headers: {}, error: { message: 'ETIMEDOUT' } };                 // /p13/
+  });
+  mock('Fetch Not Crawled', answers97);
+  const NC97 = (await run('Not Crawled Check', store['Fetch Not Crawled']))[0].json;
+  const nc97 = NC97.not_crawled_check;
+  console.log('   not crawled ->', JSON.stringify({ checked: nc97.checked, of: nc97.checked_of, states: nc97.states, not_checked: nc97.not_checked }));
+  check('B5-5: every known URL outside the crawl is read and named for what it is — live, gone, noindex, redirecting or canonicalised elsewhere',
+    nc97.checked === 5 && nc97.checked_of === 7 && nc97.states.live === 1 && nc97.states.gone === 1 && nc97.states.noindex === 1
+    && nc97.states.redirect === 1 && nc97.states.canonical_elsewhere === 1,
+    JSON.stringify(nc97.states));
+  check('B5-5: a bot wall and a timeout are NOT states of the page — they are "not read", with the reason, counted apart and never used for anything',
+    nc97.not_checked === 2
+    && nc97.pages.filter(p => !p.checked).map(p => p.not_checked).join(' | ').includes('refused our request (HTTP 403)')
+    && nc97.pages.filter(p => !p.checked).some(p => /ETIMEDOUT/.test(p.not_checked))
+    && nc97.pages.filter(p => !p.checked).every(p => !p.state),
+    JSON.stringify(nc97.pages.filter(p => !p.checked).map(p => [p.path, p.not_checked])));
+  check('B5-5 (the lesson this area was taught the hard way): the "could not be read" line is an UNSCORED Info note that names each address and its reason — never a finding about a page nobody read',
+    (() => { const f = NC97.extra_findings.find(f2 => /could not be read/.test(f2.title)); return !!f && f.severity === 'Info' && f.scoring === false && /HTTP 403/.test(f.evidence) && f.affected_count === 2; })(),
+    JSON.stringify(NC97.extra_findings.map(f => [f.title, f.severity, f.scoring])));
+  const byTitle97 = (re) => NC97.extra_findings.find(f => re.test(f.title)) || {};
+  check('B5-5: a known URL that no longer answers is High when Google still shows it, with the status codes and the sample it was measured on',
+    byTitle97(/no longer answer/).severity === 'High' && /HTTP 404/.test(byTitle97(/no longer answer/).evidence)
+    && /5 of the 7 known URL\(s\) the crawl never reached were read, 2 more could not be read/.test(byTitle97(/no longer answer/).evidence)
+    && /still earn impressions in Search Console/.test(byTitle97(/no longer answer/).evidence),
+    JSON.stringify([byTitle97(/no longer answer/).severity, byTitle97(/no longer answer/).evidence]));
+  check('B5-5: a live, indexable page the crawl never reached is the finding the coverage line could only hint at — with the fix being the crawl limit and the internal links, not the page',
+    byTitle97(/Live, indexable pages/).severity === 'Medium' && /\/p12\//.test(byTitle97(/Live, indexable pages/).evidence)
+    && /Raise the crawl limit/.test(byTitle97(/Live, indexable pages/).fix),
+    JSON.stringify([byTitle97(/Live, indexable pages/).evidence, byTitle97(/Live, indexable pages/).fix]));
+  check('B5-5: noindex and a redirect are reported too, each with the address it points at and the rule that was read',
+    /noindex, follow/.test(byTitle97(/set to noindex/).evidence) && byTitle97(/set to noindex/).severity === 'Low'
+    && /\/news\/launch\/ → \/news\/ \(301\)/.test(byTitle97(/redirect somewhere else/).evidence) && byTitle97(/redirect somewhere else/).severity === 'Low',
+    JSON.stringify([byTitle97(/set to noindex/).severity, byTitle97(/set to noindex/).evidence, byTitle97(/redirect somewhere else/).evidence]));
+  check('B5-5: no finding this check raises can ship with an empty evidence string — the defect that put seven of them in front of a customer',
+    NC97.extra_findings.filter(f => f.source === 'not_crawled').every(f => String(f.evidence || '').trim().length > 20),
+    JSON.stringify(NC97.extra_findings.map(f => [f.title, (f.evidence || '').length])));
+  check('B5-5: the block says what it measured and on how many of how many, and the earlier findings of the run travel on untouched',
+    /^measured: 5 of the 7 known URL\(s\) the crawl never reached were read, 2 more could not be read\. Each one was read with a single plain GET, the pages we submitted or wrote this week first/.test(nc97.basis)
+    && nc97.available === true && NC97.extra_findings.some(f => f.title === 'an earlier finding'),
+    JSON.stringify(nc97.basis));
+
+  // ---- C2: nothing readable at all ----
+  mock('Fetch Not Crawled', targets97.map(() => ({ statusCode: 0, headers: {}, error: { message: 'EAI_AGAIN' } })));
+  const NC97b = (await run('Not Crawled Check', store['Fetch Not Crawled']))[0].json;
+  check('B5-5: with nothing readable the block refuses — available: false with the reason, no state, no count, and not one finding about a page',
+    NC97b.not_crawled_check.available === false && /^not available: none of the 7 URL\(s\) tried could be read/.test(NC97b.not_crawled_check.basis)
+    && NC97b.extra_findings.filter(f => f.source === 'not_crawled').every(f => f.scoring === false),
+    JSON.stringify(NC97b.not_crawled_check.basis));
+
+  // ====================================================================
+  // D. it reaches the scored audit, the report and the app
+  // ====================================================================
+  mock('Check Crawl', [{ json: { domain: D97, audit_level: 'site_audit', pages_crawled: 8, crawl_js: false,
+    crawl_summary: { domain_info: { checks: {} }, page_metrics: {} } } }]);
+  mock('Get Crawled Pages', { tasks: [{ result: [{ items: [] }] }] }); mock('Collect Crawl Extras', [{ json: { crawl_extras: {} } }]);
+  const merged97 = Object.assign({}, gf97, { not_crawled_check: nc97,
+    extra_findings: [...(gf97.extra_findings || []), ...NC97.extra_findings], extra_works: [...(gf97.extra_works || []), ...NC97.extra_works] });
+  const FULL97 = (await run('Build Site Issues', [{ json: merged97 }]))[0].json;
+  const BSI97 = FULL97.site_audit;
+  check('B5-5: the scored audit carries the check, and its findings are scored beside the crawl\'s own',
+    !!BSI97.not_crawled_check && BSI97.not_crawled_check.checked === 5
+    && BSI97.findings.some(f => /no longer answer/.test(f.title) && f.severity === 'High'),
+    JSON.stringify({ carried: !!BSI97.not_crawled_check, titles: BSI97.findings.map(f => f.title).slice(0, 6) }));
+  const DOC97 = decode(await run('Build Audit Report', [{ json: FULL97 }]));
+  save('audit-not-crawled-b55.doc.html', DOC97);
+  check('B5-5: the report prints the pages the crawl never reached, what each one answered, and the basis under the table',
+    /The pages the crawl never reached/.test(DOC97) && /live and indexable/.test(DOC97) && /gone \(404 \/ 410\)/.test(DOC97)
+    && /measured: 5 of the 7 known URL\(s\)/.test(DOC97) && /<b>not read<\/b>/.test(DOC97),
+    (DOC97.match(/The pages the crawl never reached[\s\S]{0,900}/) || [''])[0].slice(0, 600));
+  check('B5-8: the report prints why these pages were read in this order, naming what we submitted or wrote',
+    /are checked first \(\/p12\/ written/.test(DOC97), (DOC97.match(/are checked first[\s\S]{0,200}/) || [''])[0]);
+  const BSI97b = (await run('Build Site Issues', [{ json: Object.assign({}, gf97, { not_crawled_check: NC97b.not_crawled_check }) }]))[0].json.site_audit;
+  check('B5-5: when it could not be made, the audit lists it under "not assessed" with the reason — never silently absent',
+    BSI97b.not_assessed.some(x => /The known URLs the crawl never reached/.test(x) && /none of the 7 URL\(s\) tried could be read/.test(x)),
+    JSON.stringify(BSI97b.not_assessed.filter(x => /never reached/.test(x))));
+
+  // ====================================================================
+  // E. B5-8 at Google's own queue: the URL-Inspection rotation
+  // ====================================================================
+  reset(); SIGNALS97();
+  const INSPECT_PAGES97 = Array.from({ length: 6 }, (_, i) => ({ url: W97 + '/p' + (i + 7) + '/', status_code: 200, click_depth: i + 1,
+    resource_type: 'html', meta: { canonical: W97 + '/p' + (i + 7) + '/', inbound_links_count: 10 - i, title: 'Page ' + (i + 7) } }));
+  const inspectPlan97 = async (withSignals) => {
+    const keep = { ai: store['Load AI Pages (Audit)'], log: store['Load Content Log (Audit)'], tg: store['Load AI Targets (Audit)'] };
+    if (!withSignals) { delete store['Load AI Pages (Audit)']; delete store['Load Content Log (Audit)']; delete store['Load AI Targets (Audit)']; }
+    mock('Check Crawl', [{ json: { domain: D97, audit_level: 'site_audit', crawl_js: false, pages_crawled: 6, crawl_limit: 200, today: TODAY97 } }]);
+    mock('Get Crawled Pages', { tasks: [{ result: [{ items: INSPECT_PAGES97 }] }] });
+    mock('Site Model', [{ json: { site_model: { domain: D97, canonical_host: 'www.' + D97, pages: [] } } }]);
+    // as live: the audit item is handed over by *Full Report?* and the node's own input is the last Data Table load
+    mock('Full Report?', [{ json: { domain: D97, probe: { findings: [], what_works: [], measurements: {} }, extra_findings: [], extra_works: [] } }]);
+    const out = (await run('GSC Audit Plan', [{ json: { site_id: 's1', domain: D97, page_url: W97 + '/p12/', written_at: ago97(1) } }]))[0].json;
+    if (!withSignals) { if (keep.ai) store['Load AI Pages (Audit)'] = keep.ai; if (keep.log) store['Load Content Log (Audit)'] = keep.log; if (keep.tg) store['Load AI Targets (Audit)'] = keep.tg; }
+    return out;
+  };
+  const ip97 = await inspectPlan97(true);
+  console.log('   inspection order ->', ip97.sample.map(u => u.replace(/^https?:\/\/[^/]+/, '')).join(', '));
+  check('B5-8: Google\'s URL-Inspection rotation starts with the pages we submitted or wrote this week, instead of the oldest reading — the whole point of holding an IndexNow key for the customer',
+    ip97.sample[0] === W97 + '/p12/' && ip97.sample[1] === W97 + '/p9/' && ip97.inspect_budget.changed_first === 2,
+    JSON.stringify({ sample: ip97.sample, changed_first: ip97.inspect_budget.changed_first }));
+  check('B5-8: the audit item still reaches the node although three Data Table loads now sit in front of it — a Data Table node outputs its table, not the item that entered it',
+    ip97.domain === D97 && ip97.base && ip97.base.probe && !ip97.base.site_id,
+    JSON.stringify({ domain: ip97.domain, base_keys: Object.keys(ip97.base || {}).slice(0, 6) }));
+  check('B5-8: the quota sentence the customer reads now carries the order and its reason, and the signal block travels with it',
+    /oldest inspection first/.test(ip97.inspect_budget.note) && /are checked first/.test(ip97.inspect_budget.note)
+    && ip97.inspect_budget.changed.read === true && ip97.inspect_budget.changed.window_days === 7,
+    JSON.stringify(ip97.inspect_budget.note));
+  const ip97b = await inspectPlan97(false);
+  check('B5-8: with none of the three signals readable Google\'s rotation is byte-for-byte what it was before this section, and says the signal could not be read',
+    ip97b.sample[0] === W97 + '/p7/' && ip97b.inspect_budget.changed_first === 0 && ip97b.inspect_budget.changed.read === false
+    && /could not be read in this run, so the order is the usual one: oldest inspection first/.test(ip97b.inspect_budget.note),
+    JSON.stringify({ first: ip97b.sample[0], note: ip97b.inspect_budget.note }));
+  reset();
+});
+
+
 H.report();
 })();
