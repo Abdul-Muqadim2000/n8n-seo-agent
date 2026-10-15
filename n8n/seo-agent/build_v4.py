@@ -4233,7 +4233,9 @@ const __AI_CALLS = __AI_CALLS_JSON__;
 const __chars = (v) => v == null ? 0 : (typeof v === 'string' ? v.length : JSON.stringify(v).length);
 const __at = (o, p) => String(p).split('.').reduce((v, k) => (v == null ? v : v[k]), o);
 const __jsonOf = (n) => { try { return ($(n).all() || []).map(i => (i && i.json) || {}); } catch (e) { return null; } };
-const __qaRounds = () => { try { return Math.max(1, Number($('Content QA').first().json.qa_round) || 1); } catch (e) { return 1; } };
+// R46 (2026-10-16): a `loop` node is the Editor, and it runs once per QA round AFTER the first — QA round N follows N - 1 editor calls, which
+// Content QA states as `editor_rounds`. Live (exec 616) one editor call was priced twice from `qa_round: 2`. At least 1: the node ran.
+const __qaRounds = () => { try { const q = $('Content QA').first().json || {}; const e = Number(q.editor_rounds); return Math.max(1, Number.isFinite(e) && q.editor_rounds != null ? e : (Number(q.qa_round) || 1) - 1); } catch (e) { return 1; } };
 const __costCalls = [];
 for (const c of __AI_CALLS) {
   const answers = __jsonOf(c.node);
@@ -9249,6 +9251,65 @@ for _a103 in ['const PCD = prev.existing_page_digest', 'PC.filterText(x, PCD', '
 for _f in ('verdict.txt', 'competitor_analyzer.txt', 'copywriter.txt'):
     assert 'Ministry of Finance' in _rd0('prompts/' + _f), 'R48: ' + _f + ' does not name the accrediting body'
 log('The verdict\'s own sentences are checked too, and an ASP is not "FTA-accredited" (2026-10-16, re-rating R38 second half, R48). Parse Verdict runs every reason and risk through the page-claims kit against the existing page\'s digest and lists what it removed as page_claims_dropped; the competitor analyzer\'s output goes through the same kit in Check Page Claims. R48: the verdict called an ASP "FTA-accredited" - in the UAE the Ministry of Finance accredits e-invoicing service providers and the Federal Tax Authority administers the tax; the wording came from competitors\' snippets, so verdict.txt, competitor_analyzer.txt and (for UAE e-invoicing pages) copywriter.txt now say the Ministry, and the kit rewrites any "FTA-accredited" that still comes out of the analyzer, the verdict\'s reasons, risks and changes')
+
+
+# 100. CONTENT QA READS WHAT IT CHECKS (2026-10-16, re-rating 2026-10-15 family F8 — docs/system-review-2026-10-15/defects/
+#      A_keywords_content.md R37 R43 R44 R45). Four ways the quality gate judged something other than the page in front of it:
+#      R37 the source kit read digits only, so "Forty percent … up from 27 ..." (McKinsey's own snippet) vouched for neither 40% nor 27%
+#          and both correct figures were masked as "not carried" — the kit now reads number words and a percentage cut off by the
+#          snippet, on every path that asks it (the figure check and the money mask), and "does not carry" is said only of a whole text;
+#      R43 the draft was scored on the brief's counts and the page to beat on presence, and the two were printed as one quantity ("60%
+#          against 90%" for a draft that uses 20 of 20 terms) — both are presence now, the brief's counts are information, and the
+#          editor's length cut is told which terms it must not cut away;
+#      R44 the page to beat was the highest-coverage result of ANY kind (a guide for agencies, a listicle of other companies) and its
+#          banners and company entries became subtopics — it is now the best page of the kind being written, and subtopics exclude
+#          promotions, headings with no text under them and a list's entries;
+#      R45 a bracket counted only when it started with an upper-case letter, and the writer's [Confirm: …] notes were counted before §9b
+#          and named to nobody — every bracket is counted and named, QA's own marks once.
+# =============================================================================
+for _n100 in ('Content QA', 'Collect Facts', 'Blog Package'):
+    _c100 = code(_n100)
+    assert 'const SRC = (() => {' in _c100 and 'const spelled = (text)' in _c100 and 'cutPct(f, t)' in _c100, \
+        'R37: ' + _n100 + ' does not inline the source kit that reads number words'
+assert "reason: texts.some(t => SRC.cutShort(t)) ? 'not_in_excerpt' : 'absent'" in code('Content QA'), 'R37: the figure check no longer says why a figure is held'
+assert 'SRC.hasFigure(f, t)) return SRC.host(m[1])' in code('Content QA'), 'R37: the money mask stopped asking the same kit as the figure check'
+assert "ok: t.found > 0, present: t.found > 0" in code('Content QA') and 'coverage_compare' in code('Content QA'), \
+    'R43: Content QA measures the draft differently from the page it compares it with'
+assert 'CVG.coverageOf(benchText, termList)' in code('Content QA'), 'R43: the benchmark is no longer measured on the draft\'s own term list'
+assert 'Keep at least one use of each of these terms' in code('Content QA'), 'R43: the length cut is not told which terms coverage counts'
+assert "CVG.best(prev.competitors || [], covTerms, { kind: pageKind, keyword: prev.keyword })" in code('Parse Analysis'), \
+    'R44: Parse Analysis picks the page to beat without the kind of page being written'
+for _n100 in ('Parse Analysis', 'Content QA'):
+    assert 'const kindOf = (p) =>' in code(_n100) and 'const PROMO = ' in code(_n100), 'R44: ' + _n100 + ' carries an older coverage kit'
+assert 'names another company is not a subtopic' in nodes['Strategy Brief']['parameters']['text'], 'R44: the brief prompt lost the subtopic rule'
+assert 'a term counts once it appears' in nodes['Strategy Brief']['parameters']['text'], 'R43: the brief prompt does not say how coverage is measured'
+assert "const PH_RE = /\\[[A-Za-z][A-Za-z0-9 &/'’.,()-]{1,48}\\]/g;" in code('Content QA'), 'R45: the placeholder pattern counts upper-case brackets only'
+assert 'const review_notes = (finalBody.match(' in code('Content QA') and 'open_brackets' in code('Content QA'), \
+    'R45: review notes are counted before §9b, or the open brackets are not named'
+log('Content QA reads what it checks (2026-10-16, re-rating 2026-10-15 family F8: R37 R43 R44 R45). R37: v5/code/_sources.js reads number '
+    'words ("Forty percent", "fifty million dirhams", "a third") and a percentage cut off at the end of a snippet ("up from 27 ...") on the '
+    'text a figure is looked up in — the figure check and the money mask both ask it, Collect Facts and Blog Package inline the same kit — and '
+    '"does not carry" is said only of a whole text ("not in the excerpt the run read" otherwise). R43: draft and page to beat are both measured '
+    'by presence on one term list; the brief\'s counts are reported ("strategy used 7 times (the brief asked for 8)") and never refuse a page; '
+    'the reason names both figures and the measure; the length cut is told which terms to keep. R44: the page to beat is the best result of '
+    'the kind being written (CVG.kindOf: list / guide / service), never a listicle for a service page, and subtopics exclude promotions, '
+    'headings with no text under them and a list\'s entries. R45: every bracket left for a person is counted whatever its case and named, '
+    'with the writer\'s [Confirm: …] notes, counted after §9b; QA\'s own marks are named once.')
+
+
+# 101. THE EDITOR IS PRICED FOR THE CALLS IT MADE (2026-10-16, re-rating 2026-10-15 R46). QA round N follows N - 1 editor calls; the note
+#      said "The editor had 2 round(s)" after one call and every report builder and Run Ledger Settle priced a second one from `qa_round`.
+#      Content QA now states `editor_rounds` and the shared cost loop's `__qaRounds()` reads it (rounds - 1 for an older item).
+# =============================================================================
+_qr101 = "const __qaRounds = () => { try { const q = $('Content QA').first().json || {}; const e = Number(q.editor_rounds);"
+for _n101 in _ends51 + ['Run Ledger Settle']:
+    assert _qr101 in code(_n101), 'R46: ' + _n101 + ' still prices one Editor call per QA round'
+assert "qa_round: round, editor_rounds, meta:" in code('Content QA') and "'The editor had ' + editor_rounds" in code('Content QA'), \
+    'R46: Content QA does not state the editor calls that ran'
+assert [c['node'] for c in _AI_CALLS51 if c.get('loop')] == ['Editor'], 'R46: a node other than the Editor is priced per QA round'
+log('The Editor is priced for the calls it made (2026-10-16, re-rating 2026-10-15 R46): Content QA emits editor_rounds (QA round - 1), its '
+    'not-ready note counts them, and the cost loop of the five report builders and Run Ledger Settle multiplies the Editor by them instead '
+    'of by the QA rounds.')
 
 
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and

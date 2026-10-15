@@ -14653,5 +14653,195 @@ await guard('S125 R48 R52 the accrediting body, and the titles of the pages read
 });
 
 
+// ===================================================================================
+// S118-S121 (2026-10-16, A7 — family F8 "Content QA reads what it checks"; docs/system-review-2026-10-15/defects/A_keywords_content.md
+// R37 R43 R44 R45 R46). Replays exec 616's Content QA round 2 (the ladder page "ai consulting", refused at "60% against 90%" with two
+// correctly sourced McKinsey figures masked) and Parse Analysis on exec 616's and exec 610's competitor pages, from harness/fixtures_ra7.js.
+// Every check below fails on the build of 2026-10-16 morning.
+// ===================================================================================
+const RA7 = require('./fixtures_ra7');
+const ra7Check = (SN) => (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+// Content QA round 2 of exec 616, as it ran: the brief, the cited snippets, the competitor pool and the Editor's draft
+const ra7QA = async (over, draft, runIndex) => {
+  mock('Parse Brief', [{ json: { ...RA7.r616.parse_brief, ...(over || {}) } }]);
+  mock('Analyze Competitor Pages', [{ json: { competitors: RA7.r616.competitors } }]);
+  return (await run('Content QA', [{ json: { output: draft == null ? RA7.r616.draft_round2 : draft, critique: null } }], { runIndex: runIndex == null ? 1 : runIndex }))[0].json;
+};
+const ra7Line = (md, re) => (String(md).match(re) || [''])[0].slice(0, 400);
+
+await guard('S118 R37 figures in words and snippets cut before their unit', async () => {
+  reset(); const SN = 'S118 R37 — a figure the cited source writes in words, or states just before its snippet was cut, is the source\'s own figure';
+  begin(SN); const check = ra7Check(SN);
+  const MCK = RA7.r616.parse_brief.facts.find(f => /mckinsey\.com/.test(f.url)).text;
+  const q = async (list) => (await run('_sources', list.map(j => ({ json: j })))).map(i => i.json.found);
+  const [f40, f27, f35] = await q([{ figure: '40%', source: MCK }, { figure: '27%', source: MCK }, { figure: '35%', source: MCK }]);
+  check('R37 unit: "Forty percent of respondents …" carries 40% — the dossier\'s own acceptance test', f40 === true, JSON.stringify({ f40, MCK }));
+  check('R37 unit: "… up from 27 ... Read more" carries 27% — the number sits where the snippet was cut, a percentage is the unit the sentence uses', f27 === true, JSON.stringify({ f27 }));
+  check('R37 unit: and a percentage that excerpt does NOT state is still not carried', f35 === false, JSON.stringify({ f35 }));
+  const [w1, w2, w3, w4, w5, w6, w7] = await q([
+    { figure: 'AED 50 million', source: 'Companies with revenue above fifty million dirhams join the first phase.' },
+    { figure: 'AED 50bn', source: 'Companies with revenue above fifty million dirhams join the first phase.' },
+    { figure: '33%', source: 'PwC has a results-based pricing mix in a third of engagements.' },
+    { figure: '25%', source: 'PwC has a results-based pricing mix in a third of engagements.' },
+    { figure: '42%', source: 'Forty-two per cent of firms report it.' },
+    { figure: '27%', source: 'Forty percent of respondents report scaling agents, up from 27 respondents in the year before.' },
+    { figure: '27%', source: 'Respondents report scaling agents, up from 27 ...' }]);
+  check('R37 unit: an amount in words is an amount ("fifty million dirhams" carries AED 50 million), and its magnitude still counts (not AED 50bn)', w1 === true && w2 === false, JSON.stringify({ w1, w2 }));
+  check('R37 unit: "a third" carries 33% and not 25%; "Forty-two per cent" carries 42%', w3 === true && w4 === false && w5 === true, JSON.stringify({ w3, w4, w5 }));
+  check('R37 unit: not loosened — a bare 27 in a COMPLETE sentence vouches for nothing, nor does a cut 27 with no percentage near it', w6 === false && w7 === false, JSON.stringify({ w6, w7 }));
+
+  const out = await ra7QA();
+  const Q = out.content_qa;
+  console.log('   unverified ->', JSON.stringify(Q.unverified_figures), '| sentence ->', ra7Line(out.output, /McKinsey's 2026 State of AI[^\n]*/));
+  check('R37 node (exec 616 round 2): neither 40% nor 27% is listed as a figure mckinsey.com does not carry',
+    !(Q.unverified_figures || []).some(f => /^(40|27)%$/.test(f.figure)), JSON.stringify(Q.unverified_figures));
+  check('R37 node: the body keeps "40%" and "27%" unbracketed, and no reason the owner reads says McKinsey lacks them',
+    /reports that 40% of respondents/.test(out.output) && /up from 27% \(/.test(out.output) && !/\[Confirm: (40|27)%\]/.test(out.output)
+    && !(Q.not_ready_reasons || []).concat(Q.warnings || []).some(r => /"(40|27)%" \(mckinsey\.com\)/.test(r)),
+    ra7Line(out.output, /McKinsey's 2026 State of AI[^\n]*/));
+
+  // the money mask reads the same kit: an amount the cited source writes in words survives it
+  const URLM = 'https://mof.gov.ae/decision-e-invoicing-phases';
+  const PBM = { keyword: 'uae e invoicing phases', domain: 'techand.ai', currency: 'AED', page_type: 'Blog Post / Guide', business: 'Tech& is a UAE technology consultancy.',
+    business_facts: '', case_facts_text: '', qa_max_rounds: 2, facts: [], competitors: [], term_model: [], coverage_target: null,
+    content_brief: { target_word_count: 300, outline: [], terms_to_use: [], evidence_plan: [
+      { source_url: URLM, fact: 'Businesses with revenue of fifty million dirhams or more join the first phase of the electronic invoicing system.' },
+      { source_url: 'https://example-research.org/einvoicing-survey', fact: 'The survey of finance teams found that most expect delays ... Read more' }] } };
+  const DRAFTM = ['Title: UAE E-Invoicing Phases Explained For Finance Teams', 'Meta Description: Which UAE businesses join e-invoicing first, the revenue line that decides it and what finance teams should prepare before the deadline.',
+    'Slug: uae-e-invoicing-phases', '', '# UAE E-Invoicing Phases', '',
+    'Businesses with revenue of AED 50 million or more join first, according to [the decision](' + URLM + ').', '',
+    'Around 64% of finance teams expect delays, according to [a survey](https://example-research.org/einvoicing-survey).', '',
+    'The same decision says 18% of firms are exempt, per [the decision](' + URLM + ').', '',
+    '## Talk to us', '', 'Book a readiness check with our team.'].join('\n');
+  mock('Parse Brief', [{ json: PBM }]); delete store['Analyze Competitor Pages'];
+  const OM = (await run('Content QA', [{ json: { output: DRAFTM, critique: null } }], { runIndex: 0 }))[0].json;
+  const QM = OM.content_qa;
+  console.log('   money mask ->', JSON.stringify({ sourced: QM.sourced_amounts, flagged: QM.flagged_amounts.map(a => a.amount), unverified: QM.unverified_figures }));
+  check('R37 money mask: "AED 50 million" is kept because the cited source states "fifty million dirhams" — it was held as [Confirm: AED 50 million]',
+    /revenue of AED 50 million or more/.test(OM.output) && QM.sourced_amounts.some(a => a.amount === 'AED 50 million' && a.source === 'mof.gov.ae')
+    && !QM.flagged_amounts.some(a => a.amount === 'AED 50 million'), JSON.stringify({ sourced: QM.sourced_amounts, flagged: QM.flagged_amounts }));
+  const w64 = (QM.unverified_figures || []).find(f => f.figure === '64%'), w18 = (QM.unverified_figures || []).find(f => f.figure === '18%');
+  check('R37 wording: a figure missing from a COMPLETE source text "is not carried"; one missing from a snippet that was cut short is "not in the excerpt the run read" — both still held for review',
+    w64 && w64.reason === 'not_in_excerpt' && w18 && w18.reason === 'absent' && /\[Confirm: 64%\]/.test(OM.output) && /\[Confirm: 18%\]/.test(OM.output)
+    && (QM.warnings || []).some(w => /^Figures the cited source does not carry .*"18%"/.test(w) && !/"64%"/.test(w))
+    && (QM.warnings || []).some(w => /^Figures not in the excerpt of the cited source the run read .*"64%"/.test(w)),
+    JSON.stringify({ unverified: QM.unverified_figures, warnings: (QM.warnings || []).filter(w => /Figures/.test(w)) }));
+
+  // the kit reaches every node that inlines it: Collect Facts and Blog Package carry the same SRC, number words included
+  const fs118 = require('fs'), path118 = require('path'); const CODE118 = process.env.CODE_DIR || path118.join(__dirname, 'code');
+  const kitOf = (f) => { const s = fs118.readFileSync(path118.join(CODE118, f), 'utf8'); const a = s.indexOf('const SRC = (() => {'); const b = s.indexOf('})();', a); return a >= 0 && b > a ? s.slice(a, b) : ''; };
+  const K = ['Content_QA.js', 'Collect_Facts.js', 'Blog_Package.js', '_sources.js'].map(kitOf);
+  check('R37: Content QA, Collect Facts, Blog Package and the kit shim inline one identical SRC, and it is the one that reads number words',
+    K.every(k => k && k === K[0]) && /const spelled = /.test(K[0]) && /cutPct/.test(K[0]), JSON.stringify(K.map(k => k.length)));
+  reset();
+});
+
+await guard('S119 R43 draft coverage and the benchmark on one measure', async () => {
+  reset(); const SN = 'S119 R43 — the draft and the page to beat are measured the same way, and a length cut cannot fail coverage for terms still on the page';
+  begin(SN); const check = ra7Check(SN);
+  const out = await ra7QA(); const Q = out.content_qa, C = Q.coverage;
+  console.log('   coverage ->', JSON.stringify({ pct: Q.coverage_pct, target: Q.coverage_target_pct, best: C.best_competitor_pct, found: C.terms_found, of: C.terms_total, basis: C.basis }));
+  console.log('   reasons ->', JSON.stringify(Q.not_ready_reasons));
+  check('R43 (exec 616 round 2): on the presence measure the draft uses 20 of the 20 terms — 100%, not below the 90% target',
+    Q.coverage_pct === 100 && C.terms_found === 20 && C.terms_total === 20 && Q.coverage_target_pct === 90 && !(Q.coverage_pct < Q.coverage_target_pct),
+    JSON.stringify({ pct: Q.coverage_pct, found: C.terms_found, total: C.terms_total, target: Q.coverage_target_pct }));
+  check('R43: the benchmark is measured on the same list by the same rule — vendasta.com uses 18 of the 20 (90%), the figure the live reason quoted',
+    C.best_competitor_pct === 90 && C.best_competitor_terms_used === 18 && C.measure === 'presence', JSON.stringify({ best: C.best_competitor_pct, used: C.best_competitor_terms_used, measure: C.measure }));
+  check('R43: no reason or warning says "covers 60%", and no term that is on the page is listed as one to "work in"',
+    !(Q.not_ready_reasons || []).concat(Q.warnings || []).some(r => /covers 60%|Topic coverage 60%/.test(r)) && (Q.missing_terms || []).length === 0
+    && !(Q.warnings || []).some(w => /^Topic coverage/.test(w)), JSON.stringify({ missing: Q.missing_terms, reasons: Q.not_ready_reasons }));
+  const strat = (C.below_brief || []).find(t => t.term === 'strategy');
+  check('R43: a term used below the brief\'s count is reported as what it is — "strategy used 7 times (the brief asked for 8)" — information, never a refusal',
+    strat && strat.found === 7 && strat.target === 8 && /strategy used 7 times \(the brief asked for 8\)/.test(C.counts_note || '')
+    && !(Q.warnings || []).some(w => /used 7 times/.test(w)), JSON.stringify({ below: C.below_brief, note: C.counts_note }));
+  check('R43: the basis names the measure and both figures on it',
+    /uses 20 of the 20 terms/.test(C.basis) && /vendasta\.com.*uses 18 of the 20/.test(C.basis) && /a term counts once it appears/.test(C.basis), C.basis);
+  check('R43: the content score\'s coverage points come from the same comparison (25 of 25 at 100% against 90%)', Q.score_breakdown.coverage === 25, JSON.stringify(Q.score_breakdown));
+
+  // terms that really are absent still fail, named by the measure
+  const DROP = ['budget', 'training', 'customer service', 'custom solution'];
+  let thin = RA7.r616.draft_round2; for (const t of DROP) thin = thin.replace(new RegExp('\\b' + t.split(' ').map(w => w + '(?:s|es)?').join('[\\s-]+') + '\\b', 'gi'), 'xx');
+  const QT = (await ra7QA({}, thin)).content_qa;
+  console.log('   thin draft ->', JSON.stringify({ pct: QT.coverage_pct, missing: QT.missing_terms, reason: (QT.not_ready_reasons || []).find(r => /terms/.test(r)) }));
+  check('R43: a draft that drops four terms entirely is at 80% against 90% — the reason gives both figures on one measure and names exactly the absent terms',
+    QT.coverage_pct === 80 && JSON.stringify([...QT.missing_terms].sort()) === JSON.stringify(['budget', 'custom solutions', 'customer service', 'training'])
+    && (QT.not_ready_reasons || []).some(r => /uses 16 of the 20 terms .*\(80%\).*target of 90%.*vendasta\.com uses 18 of the 20 \(90%\)/.test(r)),
+    JSON.stringify({ pct: QT.coverage_pct, missing: QT.missing_terms, reasons: QT.not_ready_reasons }));
+
+  // the length cut is told which terms it must not cut away
+  const QL = (await ra7QA({ content_brief: { ...RA7.r616.parse_brief.content_brief, target_word_count: 1500 } })).content_qa;
+  console.log('   length instruction ->', QL.length_instruction.slice(0, 500));
+  check('R43: the editor\'s cut keeps every term the coverage counts — the instruction names the ones used only once or twice (technology, building, customer service, consulting firms)',
+    /^CUT \d+ words/.test(QL.length_instruction) && /Keep at least one use of each of these terms/.test(QL.length_instruction)
+    && ['technology', 'building', 'customer service', 'consulting firms'].every(t => QL.length_instruction.includes(t)), QL.length_instruction);
+  reset();
+});
+
+await guard('S120 R44 the benchmark page is a page like the one being written', async () => {
+  reset(); const SN = 'S120 R44 — the page to beat is a page of the type being written, and its subtopics are topics, not banners or other companies';
+  begin(SN); const check = ra7Check(SN);
+  const pa = async (fx, over) => { mock('Collect Facts', [{ json: { keyword: fx.keyword, page_type: fx.page_type, term_model: fx.term_model, competitors: fx.competitors, ...(over || {}) } }]);
+    return (await run('Parse Analysis', [{ json: { output: { recommended_word_count: 1400 } } }]))[0].json.coverage_target; };
+  const T616 = await pa(RA7.r616);
+  console.log('   616 service ->', JSON.stringify({ best: T616.best, kind: T616.page_kind, match: T616.type_match, subs: T616.subtopics }));
+  check('R44 (exec 616, a Service Page): the benchmark is a service page, not vendasta.com\'s guide for agencies on selling AI consulting',
+    T616.best.domain === 'atilab.io' && T616.best.kind === 'service' && T616.page_kind === 'service' && T616.type_match === true, JSON.stringify(T616.best));
+  check('R44: its basis says the benchmark was chosen among pages of the same type', /service page/.test(T616.basis), T616.basis);
+  check('R44: the promo banner is never a subtopic', !T616.subtopics.some(s => /Acquire and serve 10x/.test(s)), JSON.stringify(T616.subtopics));
+  const G616 = await pa(RA7.r616, { page_type: 'Blog Post' });
+  console.log('   616 guide ->', JSON.stringify({ best: G616.best.domain, subs: G616.subtopics }));
+  check('R44: writing a guide, vendasta.com\'s guide may be the page to beat — but a heading with no text under it ("Acquire and serve 10x more clients with AI-powered software") is not a subtopic, while its numbered topical steps are',
+    G616.best.domain === 'vendasta.com' && !G616.subtopics.some(s => /Acquire and serve 10x/.test(s)) && G616.subtopics.includes('1. AI Readiness Assessment'), JSON.stringify(G616.subtopics));
+  const COS = /Accenture|IBM|PwC|Cognizant|DataRobot|G42|Digis\b|FlyPix|Deloitte|Protiviti/;
+  const T610 = await pa(RA7.r610);
+  console.log('   610 service ->', JSON.stringify({ best: T610.best, subs: T610.subtopics }));
+  check('R44 (exec 610, a Service Page): the listicle "Best AI Consulting Companies in Dubai" is not the page to beat, and no subtopic names another company',
+    T610.best.domain !== 'digiscorp.com' && T610.best.kind === 'service' && !T610.subtopics.some(s => COS.test(s)), JSON.stringify({ best: T610.best, subs: T610.subtopics }));
+  const L610 = await pa(RA7.r610, { keyword: 'best ai consulting companies in dubai', page_type: 'Blog Post' });
+  console.log('   610 list keyword ->', JSON.stringify({ best: L610.best.domain, subs: L610.subtopics }));
+  check('R44: even where a list IS the right benchmark (a "best … companies" guide), its entries naming other companies are not subtopics to cover, and its topical headings are',
+    !L610.subtopics.some(s => COS.test(s)) && L610.subtopics.some(s => /How to Choose the Best AI Consulting Company in Dubai/.test(s)), JSON.stringify(L610.subtopics));
+  reset();
+});
+
+await guard('S121 R45 R46 brackets named and editor rounds counted', async () => {
+  reset(); const SN = 'S121 R45 R46 — every bracket left for the owner is counted and named, and the editor rounds are the editor calls that ran';
+  begin(SN); const check = ra7Check(SN);
+  const out = await ra7QA(); const Q = out.content_qa;
+  const toks = (Q.open_brackets || []).map(b => b.token);
+  console.log('   open brackets ->', JSON.stringify(Q.open_brackets), '| note ->', Q.placeholder_note);
+  check('R45 (exec 616 round 2): the brackets left for the owner include "[name, role]", "[date]" and "[Confirm: edition year and sample size]"',
+    ['[name, role]', '[date]', '[Confirm: edition year and sample size]'].every(t => toks.includes(t)), JSON.stringify(toks));
+  check('R45: the lower-case gaps are counted as placeholders, the image plan is not', Q.placeholder_count === 2 && !toks.some(t => /^\[Image:/.test(t)), JSON.stringify({ n: Q.placeholder_count, toks }));
+  check('R45: and they are named in what the owner reads (placeholder note and the not-ready reasons)',
+    ['[name, role]', '[date]', '[Confirm: edition year and sample size]'].every(t => Q.placeholder_note.includes(t) && (Q.not_ready_reasons || []).some(r => r.includes(t))),
+    JSON.stringify({ note: Q.placeholder_note, reasons: Q.not_ready_reasons }));
+  // review notes are counted after §9b, and QA's own [Confirm: x%] marks are not counted twice
+  const URL9 = 'https://www.mckinsey.com/capabilities/quantumblack/our-insights/the-state-of-ai';
+  const D9 = RA7.r616.draft_round2.replace('up from 27% (', 'up from 27%, and 91% plan more (');
+  const Q9 = (await ra7QA({}, D9)).content_qa;
+  console.log('   with a mark ->', JSON.stringify({ review_notes: Q9.review_notes, open: (Q9.open_brackets || []).map(b => b.token), unverified: Q9.unverified_figures }));
+  check('R45: a figure QA itself marks [Confirm: 91%] is counted among the review notes (after §9b) but named once — by the figure warning, not again as a bracket the writer left',
+    Q9.review_notes === 2 && (Q9.unverified_figures || []).some(f => f.figure === '91%')
+    && !(Q9.open_brackets || []).some(b => /91%/.test(b.token)) && (Q9.open_brackets || []).some(b => b.token === '[Confirm: edition year and sample size]'),
+    JSON.stringify({ review_notes: Q9.review_notes, open: Q9.open_brackets }));
+  check('R46: Content QA round 2 counts ONE editor call, and the not-ready note says so', Q.editor_rounds === 1 && out.editor_rounds === 1
+    && /The editor had 1 round\b/.test(Q.quality.note) && !/had 2 round/.test(Q.quality.note), JSON.stringify({ e: Q.editor_rounds, note: Q.quality.note }));
+  const Q3 = (await ra7QA({ qa_max_rounds: 3 }, null, 2)).content_qa;
+  check('R46: with three QA rounds the editor ran twice — rounds minus one, not one', Q3.editor_rounds === 2 && /The editor had 2 round/.test(Q3.quality.note), JSON.stringify({ e: Q3.editor_rounds, note: Q3.quality.note }));
+  // the ledger prices the Editor calls that ran
+  reset();
+  mock('Run Ledger Row', [{ json: { run_id: 'exec-616', key: 'app:co_1', mode: 'keyword', est_usd: 0, created_at: new Date(Date.now() - 600000).toISOString(), status: 'reserved', settled_usd: 0 } }]);
+  mock('Rate Limit', [{ json: { mode: 'keyword', domain: 'techand.ai' } }]);
+  mock('Content QA', [{ json: { qa_round: 2, editor_rounds: 1, content_qa: { round: 2, editor_rounds: 1 } } }]);
+  mock('Editor', [{ json: { output: RA7.r616.draft_round2 } }]);
+  const S = (await run('Run Ledger Settle', [{ json: {} }]))[0].json;
+  const E = (S.ai_by_node || {}).Editor || {};
+  console.log('   settle ->', JSON.stringify({ calls: S.ai_calls, editor: E.basis }));
+  check('R46: Run Ledger Settle prices the Editor once for one editor call — it priced a second round "the counter did not see"',
+    S.ai_calls === 1 && E.usd > 0 && !/repeated for the/.test(E.basis || ''), JSON.stringify({ calls: S.ai_calls, editor: E }));
+  reset();
+});
+
 H.report();
 })();
