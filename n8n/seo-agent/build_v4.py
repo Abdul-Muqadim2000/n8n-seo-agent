@@ -4233,7 +4233,9 @@ const __AI_CALLS = __AI_CALLS_JSON__;
 const __chars = (v) => v == null ? 0 : (typeof v === 'string' ? v.length : JSON.stringify(v).length);
 const __at = (o, p) => String(p).split('.').reduce((v, k) => (v == null ? v : v[k]), o);
 const __jsonOf = (n) => { try { return ($(n).all() || []).map(i => (i && i.json) || {}); } catch (e) { return null; } };
-const __qaRounds = () => { try { return Math.max(1, Number($('Content QA').first().json.qa_round) || 1); } catch (e) { return 1; } };
+// R46 (2026-10-16): a `loop` node is the Editor, and it runs once per QA round AFTER the first — QA round N follows N - 1 editor calls, which
+// Content QA states as `editor_rounds`. Live (exec 616) one editor call was priced twice from `qa_round: 2`. At least 1: the node ran.
+const __qaRounds = () => { try { const q = $('Content QA').first().json || {}; const e = Number(q.editor_rounds); return Math.max(1, Number.isFinite(e) && q.editor_rounds != null ? e : (Number(q.qa_round) || 1) - 1); } catch (e) { return 1; } };
 const __costCalls = [];
 for (const c of __AI_CALLS) {
   const answers = __jsonOf(c.node);
@@ -9147,6 +9149,65 @@ sticky("""### One AI Overview figure in one place, and a state that advances onl
 **And the class:** `state_lint.py`'s "a work-in-progress state needs a way back" was asked only of the tables someone had listed — which is how `seo_ai_targets` sat outside it for three releases. The list is now **derived from the generated workflows**, and a table whose `writing` state is read back and acted on fails the build until its way back is declared *and* built. It found a third table on its first run, `seo_case_studies`, and records the honest answer: nothing tests that row's state, so it is not this defect.""",
        -2600, -3800, 1180, 420, 3)
 log('One AI Overview figure in one place, and a state that advances only on evidence (2026-10-15, FIX_PLAN §3.16 rows B6-9 and B9-6). B6-9: v5/code/Ladder_Pool.js still multiplied the click-through rate by 0.65 when a results page carried an AI Overview - Ahrefs\' APRIL 2025 figure - after B1-3 had replaced it in _kw_inputs.js with the December 2025 per-position study (300,000 keywords, published 2026-02-04: -58.0% at position 1, -50.8% at 2, -46.4% at 3) and B6-1 in _rank_serp.js. Which kit belongs where is B6-1\'s own reasoning: a flat factor all but cancels out of a SHARE, so the share of voice needed the per-position table, while the ladder\'s traffic_potential is an ABSOLUTE top-three estimate and only the keywords whose results page has an AI Overview carried the factor - so the stale number inflated those estimates by 1.35x and moved them up the pre_score order that decides which rungs are planned. Ladder Pool now makes the same KWI.calibrate call the discovery twin Collect_Research.js makes, and the estimate carries traffic_basis / traffic_note / click_loss instead of arriving bare. The class is closed by a build-time scan that refuses the literal 0.65 within 200 characters of an AI Overview in every v5/code kit and every generated Code node, with comments stripped first so the two comments that record WHY the figure was retired survive. B9-6: the write half of "writing was a promise nobody kept" - the Content Cadence marked an AI target writing and stamped written_at when a page run STARTED, whatever the spawn did, and nothing in the system ever set written, so Growth Metrics counted written: 0 every week of its life and a refused or failed run left the question claiming work in progress for ever (R1\'s class in the one table R1 did not cover). AI Target Marks now writes the row back to queued with the error when the content run could not be started and says in the row\'s own reason that nothing exists yet; the new AI Target Settle is the only exit from writing and advances a row only against the seo_content_log row for that same run, which is R1\'s rule exactly (a page counts as written only on a written content-log row); it deliberately does not time a row out, because the 14-day requeue and its alert belong to the read half in AI Growth. The class is closed by deriving state_lint.py\'s work-in-progress registry from the generated workflows instead of hand-writing it from R1\'s one instance: every table a run moves to writing whose state is read back and acted on must declare its way back, and check B then has to find the node that writes it. On its first run the derived registry found a third table, seo_case_studies, and the honest answer is recorded rather than assumed - nothing tests that row\'s state (Brief Context hands a later page url: \'\' unless the status is published, and the Link Builder takes a case study only when it has a page_url), so it is not this defect')
+
+
+# 100. CONTENT QA READS WHAT IT CHECKS (2026-10-16, re-rating 2026-10-15 family F8 — docs/system-review-2026-10-15/defects/
+#      A_keywords_content.md R37 R43 R44 R45). Four ways the quality gate judged something other than the page in front of it:
+#      R37 the source kit read digits only, so "Forty percent … up from 27 ..." (McKinsey's own snippet) vouched for neither 40% nor 27%
+#          and both correct figures were masked as "not carried" — the kit now reads number words and a percentage cut off by the
+#          snippet, on every path that asks it (the figure check and the money mask), and "does not carry" is said only of a whole text;
+#      R43 the draft was scored on the brief's counts and the page to beat on presence, and the two were printed as one quantity ("60%
+#          against 90%" for a draft that uses 20 of 20 terms) — both are presence now, the brief's counts are information, and the
+#          editor's length cut is told which terms it must not cut away;
+#      R44 the page to beat was the highest-coverage result of ANY kind (a guide for agencies, a listicle of other companies) and its
+#          banners and company entries became subtopics — it is now the best page of the kind being written, and subtopics exclude
+#          promotions, headings with no text under them and a list's entries;
+#      R45 a bracket counted only when it started with an upper-case letter, and the writer's [Confirm: …] notes were counted before §9b
+#          and named to nobody — every bracket is counted and named, QA's own marks once.
+# =============================================================================
+for _n100 in ('Content QA', 'Collect Facts', 'Blog Package'):
+    _c100 = code(_n100)
+    assert 'const SRC = (() => {' in _c100 and 'const spelled = (text)' in _c100 and 'cutPct(f, t)' in _c100, \
+        'R37: ' + _n100 + ' does not inline the source kit that reads number words'
+assert "reason: texts.some(t => SRC.cutShort(t)) ? 'not_in_excerpt' : 'absent'" in code('Content QA'), 'R37: the figure check no longer says why a figure is held'
+assert 'SRC.hasFigure(f, t)) return SRC.host(m[1])' in code('Content QA'), 'R37: the money mask stopped asking the same kit as the figure check'
+assert "ok: t.found > 0, present: t.found > 0" in code('Content QA') and 'coverage_compare' in code('Content QA'), \
+    'R43: Content QA measures the draft differently from the page it compares it with'
+assert 'CVG.coverageOf(benchText, termList)' in code('Content QA'), 'R43: the benchmark is no longer measured on the draft\'s own term list'
+assert 'Keep at least one use of each of these terms' in code('Content QA'), 'R43: the length cut is not told which terms coverage counts'
+assert "CVG.best(prev.competitors || [], covTerms, { kind: pageKind, keyword: prev.keyword })" in code('Parse Analysis'), \
+    'R44: Parse Analysis picks the page to beat without the kind of page being written'
+for _n100 in ('Parse Analysis', 'Content QA'):
+    assert 'const kindOf = (p) =>' in code(_n100) and 'const PROMO = ' in code(_n100), 'R44: ' + _n100 + ' carries an older coverage kit'
+assert 'names another company is not a subtopic' in nodes['Strategy Brief']['parameters']['text'], 'R44: the brief prompt lost the subtopic rule'
+assert 'a term counts once it appears' in nodes['Strategy Brief']['parameters']['text'], 'R43: the brief prompt does not say how coverage is measured'
+assert "const PH_RE = /\\[[A-Za-z][A-Za-z0-9 &/'’.,()-]{1,48}\\]/g;" in code('Content QA'), 'R45: the placeholder pattern counts upper-case brackets only'
+assert 'const review_notes = (finalBody.match(' in code('Content QA') and 'open_brackets' in code('Content QA'), \
+    'R45: review notes are counted before §9b, or the open brackets are not named'
+log('Content QA reads what it checks (2026-10-16, re-rating 2026-10-15 family F8: R37 R43 R44 R45). R37: v5/code/_sources.js reads number '
+    'words ("Forty percent", "fifty million dirhams", "a third") and a percentage cut off at the end of a snippet ("up from 27 ...") on the '
+    'text a figure is looked up in — the figure check and the money mask both ask it, Collect Facts and Blog Package inline the same kit — and '
+    '"does not carry" is said only of a whole text ("not in the excerpt the run read" otherwise). R43: draft and page to beat are both measured '
+    'by presence on one term list; the brief\'s counts are reported ("strategy used 7 times (the brief asked for 8)") and never refuse a page; '
+    'the reason names both figures and the measure; the length cut is told which terms to keep. R44: the page to beat is the best result of '
+    'the kind being written (CVG.kindOf: list / guide / service), never a listicle for a service page, and subtopics exclude promotions, '
+    'headings with no text under them and a list\'s entries. R45: every bracket left for a person is counted whatever its case and named, '
+    'with the writer\'s [Confirm: …] notes, counted after §9b; QA\'s own marks are named once.')
+
+
+# 101. THE EDITOR IS PRICED FOR THE CALLS IT MADE (2026-10-16, re-rating 2026-10-15 R46). QA round N follows N - 1 editor calls; the note
+#      said "The editor had 2 round(s)" after one call and every report builder and Run Ledger Settle priced a second one from `qa_round`.
+#      Content QA now states `editor_rounds` and the shared cost loop's `__qaRounds()` reads it (rounds - 1 for an older item).
+# =============================================================================
+_qr101 = "const __qaRounds = () => { try { const q = $('Content QA').first().json || {}; const e = Number(q.editor_rounds);"
+for _n101 in _ends51 + ['Run Ledger Settle']:
+    assert _qr101 in code(_n101), 'R46: ' + _n101 + ' still prices one Editor call per QA round'
+assert "qa_round: round, editor_rounds, meta:" in code('Content QA') and "'The editor had ' + editor_rounds" in code('Content QA'), \
+    'R46: Content QA does not state the editor calls that ran'
+assert [c['node'] for c in _AI_CALLS51 if c.get('loop')] == ['Editor'], 'R46: a node other than the Editor is priced per QA round'
+log('The Editor is priced for the calls it made (2026-10-16, re-rating 2026-10-15 R46): Content QA emits editor_rounds (QA round - 1), its '
+    'not-ready note counts them, and the cost loop of the five report builders and Run Ledger Settle multiplies the Editor by them instead '
+    'of by the QA rounds.')
 
 
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
