@@ -129,6 +129,19 @@ return sites.map((s, idx) => {
   if (ck && ck.manual_action && !notices.some(n => n.kind === 'manual_action')) alerts.push({ level: 'high', text: 'Manual action reported in the ' + ck.month + ' check-in' });
   if (ck && ck.security_issue && !notices.some(n => n.kind === 'security')) alerts.push({ level: 'high', text: 'Security issue reported in the ' + ck.month + ' check-in' });
   if (found.length && detErrors.length) alerts.push({ level: 'medium', text: 'Pages found live on the site could not be recorded (' + detErrors[0] + '); report them with "I published a page"' });
+  // B7-2 (2026-10-15, benchmark area 7): a device or a country falling on its own disappears inside a site-wide total. The split is
+  // free and first-party (Search Analytics `device` / `country`), the same statistical bar as every other alert applies (ST.change),
+  // and a split Google did not answer says so instead of showing an empty table that would read as "no phone traffic".
+  const DEVICE_LABEL = { DESKTOP: 'desktop', MOBILE: 'phones', TABLET: 'tablets' };
+  for (const d of (((gsc && gsc.devices) || {}).rows || []).filter(d => d.change && d.change.real && d.change.direction === 'down').slice(0, 2))
+    alerts.push({ level: d.share >= 25 ? 'medium' : 'info', stat: 'device', key: d.key,
+      text: 'Search clicks from ' + (DEVICE_LABEL[d.key] || String(d.key).toLowerCase()) + ' fell ' + Math.abs(d.change.pct) + '% (' + d.prev_clicks + ' \u2192 ' + d.clicks
+        + ' in 28 days; ' + d.share + '% of your clicks).' + ST.tested(d.change, { source: 'Search Console clicks on ' + (DEVICE_LABEL[d.key] || String(d.key).toLowerCase()) }),
+      tested: ST.tested(d.change, { source: 'Search Console clicks on ' + (DEVICE_LABEL[d.key] || String(d.key).toLowerCase())}) });
+  for (const c of (((gsc && gsc.countries) || {}).rows || []).filter(c => c.change && c.change.real && c.change.direction === 'down' && c.share >= 10).slice(0, 1))
+    alerts.push({ level: 'info', stat: 'country', key: c.key,
+      text: 'Search clicks from ' + String(c.key).toUpperCase() + ' fell ' + Math.abs(c.change.pct) + '% (' + c.prev_clicks + ' \u2192 ' + c.clicks + ' in 28 days; ' + c.share + '% of your clicks).'
+        + ST.tested(c.change, { source: 'Search Console clicks from ' + String(c.key).toUpperCase() }) });
   if (detFail) alerts.push({ level: 'info', text: 'Publish detection failed this week (' + detFail.slice(0, 160) + '); report published pages with "I published a page"' });
   if (det && det.candidates && !(det.sitemap || {}).ok) alerts.push({ level: 'info', text: 'Publish detection could not read the sitemap (' + ((det.sitemap || {}).error || 'no sitemap') + '); report published pages with "I published a page"' });
   // ---- actions (deterministic; the AI brief words them for the owner) ----
@@ -169,6 +182,13 @@ return sites.map((s, idx) => {
   for (const t of trends.filter(t => t.direction === 'rising' && (t.rising || []).length).slice(0, 1)) actions.push({ priority: 3, type: 'trend', action: 'Interest in "' + t.keyword + '" is rising (' + (t.change_pct > 0 ? '+' : '') + t.change_pct + '% vs the 12-month average); cover the rising searches: ' + t.rising.slice(0, 3).map(r => r.query).join(', ') + '.', why: 'Google Trends, past 12 months.', keyword: t.rising[0].query, url: '', api_body: { mode: 'verdict', keyword: t.rising[0].query, ...apiBase } });
   for (const t of trends.filter(t => t.direction === 'falling').slice(0, 1)) actions.push({ priority: 4, type: 'trend', action: 'Interest in "' + t.keyword + '" is falling (' + t.change_pct + '% vs the 12-month average)' + (t.peak_date ? '; it peaked around ' + String(t.peak_date).slice(0, 7) : '') + '. Keep the page current but do not over-invest; watch the related rising searches.', why: 'Google Trends, past 12 months.', keyword: t.keyword, url: '' });
   if (!ga4) actions.push({ priority: 4, type: 'connect_ga4', action: 'Add the same service account as a Viewer of the GA4 property (Admin → Property access management), or register the site with its GA4 property ID.', why: 'Connects search visibility to visits and key events (conversions).', keyword: '', url: '' });
+  // B7-3 (2026-10-15, benchmark area 7): two of the site's own pages shown for one search, measured by Google. Never "publish
+  // another page" — the opposite of D11, and the same rule: one search, one page.
+  for (const c of ((gsc && gsc.cannibal) || []).slice(0, 2)) actions.push({ priority: 2, type: 'cannibalisation',
+    action: 'Two of your pages compete for "' + c.query + '": ' + c.pages.map(p => p.page).slice(0, 3).join(' and ')
+      + '. Decide which one answers this search, point the other one at it with a link (or merge and redirect), and give the second page its own search.',
+    why: c.basis + (c.split ? ' Google shows ' + c.preferred + ' most often, but ' + c.best.page + ' ranks better when it is shown — the two are splitting the signals for this search.' : ''),
+    keyword: c.query, url: c.preferred });
   actions.sort((a, b) => a.priority - b.priority); const acts = actions.slice(0, 12);   // the brief picks the top 5-6; the full list stays in the callback
   // ---- rows for the Data Tables ----
   const T = gsc ? gsc.totals : null; const G = ga4;
@@ -185,6 +205,48 @@ return sites.map((s, idx) => {
     audits: auditRowsAll.filter(r => r.site_id === s.site_id || normD(r.domain) === s.domain)
       .map(r => ({ audited_at: r.audited_at, report_type: r.report_type || 'site_audit', health_score: r.health_score, findings: r.findings })) });
   const data_breaks = AN.breakBetween(R.previous.start, R.current.end);
+  // ---- B7-1 (2026-10-15, benchmark area 7 — docs/system-review-2026-10-14/BENCH_AREA7_site_tracking.md): DID THE CHANGE WORK? ----
+  // Since G12 this node has inlined the change-test kit (CT) and shipped its METHOD SENTENCE in every weekly callback
+  // (`change_method`) while running no test at all: CT.compare was called by the Link Builder and by nobody else. A published
+  // method with no measurement behind it is INVARIANTS rule 4 in the one place the rubric scores impact measurement (criterion 3.4,
+  // "control group or counterfactual", capped at 3 for links only). This runs it. Each change has its own two windows, bought by
+  // GSC Requests: the clicks are read with ST.lift (rate ratio, 95% range, the control group's own noise inside it) and the
+  // position with CT.compare (the Link Builder's comparison, "too early" under 6 weeks). Either can refuse without silencing the
+  // other, and a change too new to read keeps its row with the date it can first be read — never a quiet absence.
+  const change_tests = (() => {
+    const method = ST.liftMethod + ' ' + CT.method;
+    const planned = (s.changes || []);
+    const rows = ((gsc && gsc.change_tests) || []).map(t => {
+      const upd = t.window_before && t.window_after ? ST.updatesIn({ start: t.window_before.start, end: t.window_after.end }) : [];
+      const brk = t.window_before && t.window_after ? AN.breakBetween(t.window_before.start, t.window_after.end) : [];
+      const common = { url: t.url, date: t.date, what: t.what, keyword: t.keyword, joint: !!t.joint,
+        window: t.window_before && t.window_after ? (t.window_before.start + ' to ' + t.window_before.end + ' vs ' + t.window_after.start + ' to ' + t.window_after.end) : '',
+        google_updates: upd.map(u => u.name + ' (' + u.start + ' to ' + u.end + ')'), data_breaks: brk.map(b => b.name) };
+      if (!t.read || !t.page || !t.control) return { ...common, read: false, state: 'unavailable', verdict: 'Not measured', basis: t.reason || 'this change was not measured this week' };
+      const lift = ST.lift({ clicks: t.page.clicks, prev_clicks: t.page.prev_clicks, control_clicks: t.control.clicks,
+        control_prev_clicks: t.control.prev_clicks, control_pages: t.control.pages,
+        period: 'the 28 days after the change against the 28 days before it' });
+      const weeks = Math.floor(Math.max(0, Math.round((Date.parse(R.current.end + 'T00:00:00Z') - Date.parse(t.date + 'T00:00:00Z')) / 864e5)) / 7);
+      const pos = CT.compare({ kind: 'page', weeks, joint: t.joint ? 1 : 0,
+        base: t.page.prev_impressions ? t.page.prev_position : null, now: t.page.impressions ? t.page.position : null, others: t.control.moves || [] });
+      return { ...common, read: true, state: lift.state, verdict: lift.verdict, clicks: t.page.clicks, prev_clicks: t.page.prev_clicks,
+        expected: lift.expected, lift_pct: lift.lift_pct, ci: lift.ci, z: lift.z, control_pages: t.control.pages,
+        position: pos.position, prev_position: pos.base_position, position_verdict: pos.verdict_label, position_effect: pos.effect, position_note: pos.note,
+        basis: lift.basis + (upd.length ? ' A Google ' + upd.map(u => u.name).join(' and ') + ' ran inside these windows; it moved the control group too, which is what the control group is for.' : '')
+          + (t.joint ? ' Another change to this page within 8 weeks, so the credit is shared.' : '') };
+    });
+    const pending = planned.filter(c => !c.readable).map(c => ({ url: c.url, date: c.date, what: c.what, keyword: c.keyword, read: false,
+      state: 'too_early', verdict: 'Too early to tell', basis: 'Not measured yet: ' + c.not_yet + '.' }));
+    const tested = rows.filter(r => r.read);
+    return { method, tests: rows.concat(pending).slice(0, 12), measured: tested.length, planned: planned.length,
+      helped: tested.filter(r => r.state === 'helped').length, hurt: tested.filter(r => r.state === 'hurt').length,
+      no_difference: tested.filter(r => r.state === 'no_difference').length,
+      refused: rows.filter(r => !r.read).length + pending.length,
+      read: !!(gsc && s.gsc_connected),
+      reason: !s.gsc_connected ? 'Search Console is not connected for this site, so no change can be measured.'
+        : !planned.length ? 'No page of this site has a published date on record yet, so there is no dated change to measure. Report a page with "I published a page" and the next run reads it.'
+        : !rows.length ? 'Every dated change is still too new to read: a change needs 28 complete days of final Search Console data after it.' : '' };
+  })();
   // ---- G29 (2026-10-13): where every figure in this report came from, over what period, from how big a sample ----
   const lineage = [];
   const curRange = LN.range(R.current), prevRange = LN.range(R.previous);
@@ -197,6 +259,19 @@ return sites.map((s, idx) => {
       note: 'the queries Google withholds are reported apart, never spread over the named ones' }));
     lineage.push(LN.of('Expected click-through rate for a position', 'model', { period: 'industry averages, not dated', sample: 'positions 1-10', basis: 'modelled',
       note: 'a published industry curve, not your own measured click-through rate' }));
+    // B7-2: the device and country splits say what they are, and say when they are not there at all
+    // B7-2: a split Google ANSWERED with nothing is a measured zero; only a request it did not answer has no source at all
+    const splitLineage = (blk, figure, unit) => { if (!blk) return;
+      lineage.push(blk.failed ? LN.unknown(figure, blk.reason || 'the ' + unit + ' split was not read this week')
+        : LN.of(figure, 'gsc', { period: curRange, basis: 'measured',
+          sample: LN.sample(blk.total || 0, 'clicks across ' + (blk.rows || []).length + ' ' + unit + ((blk.rows || []).length === 1 ? '' : 's')),
+          ...(blk.read ? {} : { note: blk.reason }) })); };
+    splitLineage(gsc.devices, 'Clicks by device', 'device');
+    splitLineage(gsc.countries, 'Clicks by country', 'country');
+    // B7-3: observed by Google, not inferred from a ranking check
+    if ((gsc.cannibal || []).length) lineage.push(LN.of('Searches two of your pages compete for', 'gsc', { period: curRange, basis: 'measured',
+      sample: LN.sample((gsc.cannibal_summary || {}).queries_checked || 0, 'non-brand searches checked'),
+      note: 'both pages really were shown for that search; brand searches are left out' }));
   } else lineage.push(LN.unknown('Search clicks, impressions and positions', 'Search Console is not connected for this site, so this report carries no measured search data'));
   if (ga4) lineage.push(LN.of('Organic sessions, engaged sessions and key events', 'ga4', { period: curRange, basis: 'measured',
     sample: LN.sample(ga4.organic.cur.sessions, 'organic sessions of ' + (ga4.total && ga4.total.cur ? ga4.total.cur.sessions : 0) + ' from all channels'), note: 'property ' + ga4.ga4_property_id }));
@@ -211,6 +286,11 @@ return sites.map((s, idx) => {
   if (notices.length) lineage.push(LN.of('Search Console notices', 'gsc', { period: 'the last 35 days', sample: LN.sample(notices.length, 'notification e-mails'), basis: 'reported' }));
   if (ck) lineage.push(LN.of('Manual actions, security issues and site-wide index coverage', 'you', { period: 'check-in of ' + String(ck.month || ''), sample: 'one check-in', basis: 'reported',
     note: 'Google offers no API for these, so they come from your monthly check-in' }));
+  // B7-1: the counts are measured, the expectation is modelled from the control group, and a change nobody could read says so
+  if (change_tests.measured) lineage.push(LN.of('Whether a change helped, against the rest of the site', 'gsc', { basis: 'modelled',
+    period: 'each change\'s own 28 days after against the 28 days before', sample: LN.sample(change_tests.measured, 'dated changes measured'),
+    note: 'the clicks of both windows are measured; what the page "would have done" is modelled from the site\'s other pages' }));
+  else if (change_tests.reason) lineage.push(LN.unknown('Whether a change helped, against the rest of the site', change_tests.reason));
   const metrics_row = { site_id: s.site_id, domain: s.domain, period_start: R.current.start, period_end: R.current.end, checked_at: now, gsc_connected: !!gsc, ga4_connected: !!ga4,
     clicks: T ? T.cur.clicks : 0, impressions: T ? T.cur.impressions : 0, ctr: T ? T.cur.ctr : 0, position: T ? T.cur.position : 0, prev_clicks: T ? T.prev.clicks : 0, prev_impressions: T ? T.prev.impressions : 0, prev_ctr: T ? T.prev.ctr : 0, prev_position: T ? T.prev.position : 0,
     yoy_clicks: T && T.yoy ? T.yoy.clicks : 0, yoy_impressions: T && T.yoy ? T.yoy.impressions : 0, sessions: G ? G.organic.cur.sessions : 0, engaged_sessions: G ? G.organic.cur.engaged : 0, key_events: G ? G.organic.cur.key_events : 0,
@@ -248,14 +328,18 @@ return sites.map((s, idx) => {
   return { json: { site_id: s.site_id, domain: s.domain, email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', period: R, checked_at: now, first_run: !!s.first_run, on_demand: !!s.on_demand, source: s.source, country: s.country || '',
     site: { canonical_host: model.canonical_host, home_url: SM.siteUrl(model, '/'), business_name: SM.name(model), name_source: model.name_source || '', services: SM.services(model).slice(0, 12), nav_pages: (model.nav_pages || []).slice(0, 8), nap: SM.nap(model), pages_known: SM.pages(model).length, model_updated_at: model.model_updated_at || '' },
     page_inventory: inv ? { pages: inv.total, with_queries: inv.with_queries, changed: inv.changed, by_source: inv.by_source, sitemap_read: inv.sitemap_read } : null,
-    gsc: { connected: !!gsc, property: s.gsc_property || '', permission: s.gsc_permission || '', error: s.gsc_error || null, ...(gsc ? { totals: gsc.totals, deltas: gsc.deltas, daily: gsc.daily, query_count: gsc.query_count, page_count: gsc.page_count ?? null, anonymised: gsc.anonymised || null, brand_split: gsc.brand_split || null, scraper_queries: gsc.scraper_queries || null, rows_read: gsc.rows_read ?? null, paging: gsc.paging || [], truncated: gsc.truncated || [], winners: gsc.winners, losers: gsc.losers, new_queries: gsc.new_queries, lost_queries: gsc.lost_queries, striking: gsc.striking, ctr_gaps: gsc.ctr_gaps, top_pages: gsc.pages.slice(0, 10), decaying_pages: gsc.decaying_pages, not_decay: gsc.not_decay || [], decay_summary: gsc.decay_summary || null, rising_pages: gsc.rising_pages, errors: gsc.errors } : {}) },
+    gsc: { connected: !!gsc, property: s.gsc_property || '', permission: s.gsc_permission || '', error: s.gsc_error || null, ...(gsc ? { totals: gsc.totals, deltas: gsc.deltas, daily: gsc.daily, query_count: gsc.query_count, page_count: gsc.page_count ?? null, anonymised: gsc.anonymised || null, brand_split: gsc.brand_split || null, scraper_queries: gsc.scraper_queries || null, rows_read: gsc.rows_read ?? null, paging: gsc.paging || [], truncated: gsc.truncated || [], winners: gsc.winners, losers: gsc.losers, new_queries: gsc.new_queries, lost_queries: gsc.lost_queries, striking: gsc.striking, ctr_gaps: gsc.ctr_gaps, top_pages: gsc.pages.slice(0, 10), decaying_pages: gsc.decaying_pages, not_decay: gsc.not_decay || [], decay_summary: gsc.decay_summary || null, rising_pages: gsc.rising_pages, errors: gsc.errors, cannibal: gsc.cannibal || [], cannibal_summary: gsc.cannibal_summary || null, devices: gsc.devices || null, countries: gsc.countries || null } : {}) },
     ga4: ga4 ? { connected: true, property_id: ga4.ga4_property_id, detected: ga4.ga4_detected, property_name: ga4.ga4_property_name, organic: ga4.organic, total: ga4.total, organic_share: ga4.organic_share, channels: ga4.channels, landing: ga4.landing, daily: ga4.daily, errors: ga4.errors } : { connected: false, error: acctErr || ga4Reason || 'no property id given or detected' },
     console: { notices, last_checkin: ck, checkin_due: !!s.checkin_due },
     significance: stat,   // G28: the Poisson z-test behind every traffic alert (clicks / impressions / sessions)
     index_coverage,       // G25: Google's own view of every key page (URL Inspection within the 2,000-a-day quota, oldest first)
     page_watch: watch,    // G11: the daily key-page watch — what it checks, what changed this week, what it could not read
     annotations, data_breaks, lineage,   // G12 / G29: the events of the period for every chart, and where each figure came from
-    change_method: CT.method,   // G12: how a page change is read against the site's other pages (the Link Builder measures it; the wording is shared)
+    // B7-1 (2026-10-15, benchmark area 7): the method sentence used to travel alone — the Site Tracker shipped it and ran no test.
+    change_method: change_tests.method, change_tests,
+    cannibal: (gsc && gsc.cannibal) || [], cannibal_summary: (gsc && gsc.cannibal_summary) || null,   // B7-3
+    devices: (gsc && gsc.devices) || { read: false, rows: [], reason: 'Search Console is not connected for this site' },   // B7-2
+    countries: (gsc && gsc.countries) || { read: false, rows: [], reason: 'Search Console is not connected for this site' },
     // B-G3 (2026-10-15): the rungs the read-path fit gate set aside, with the reason, so the report can say why the list is shorter
     set_aside: s.set_aside || [], set_aside_note: s.set_aside_note || '',
     tracked, ladder_pages: pages, pending_publish: (s.pending_publish || []).filter(p => !found.some(f => kwKey(f.keyword) === kwKey(p.keyword))), ladder_heads: s.ladder_heads || [], trends, alerts, actions: acts, prev_runs: prevRuns, weeks_tracked: prevRuns.length + 1, service_account_email: cfg.service_account_email || '', form_url: FORM_URL, api_url: API_URL,
