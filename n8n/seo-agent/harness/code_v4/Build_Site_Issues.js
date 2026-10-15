@@ -427,6 +427,48 @@ findings.push(...(input.extra_findings || []));
     for (const k of [exact, loose, topic]) if (k != null) at.set(k, idx); }
   findings.splice(0, findings.length, ...kept); }
 
+// ===== 4c. B5-2 (2026-10-15, benchmark area 5): one cause, not five symptoms =====
+// The crawl reads the first response unless CONFIG.crawl_js is on. Where the response-versus-render check proved that a figure is
+// written by JavaScript on at least half the key pages it read twice, the crawl-wide finding is not a second problem: it is the same
+// problem, counted over the whole crawl. Merging keeps the bigger sample and the right fix, deducts once, and keeps both titles.
+const RDF = input.render_diff || null;
+const renderMerges = [];
+if (RDF && RDF.available && RDF.crawl_js === false) {
+  const rdChecked = (RDF.pages || []).filter(p => p && p.checked);
+  const SYMPTOM_OF = {
+    h1: [/^missing h1 heading$/i],
+    words: [/^thin content/i, /^light content/i, /^very little text on the page$/i, /^low text-to-html ratio$/i],
+    title: [/^missing title tag$/i],
+    canonical: [/^missing canonical tag$/i],
+    links: [/^few internal links pointing to the page$/i, /^orphan pages/i]
+  };
+  const PROVED_SHARE = 0.5;   // on half the key pages read twice, or it is one odd page and not how the site is built
+  for (const key of Object.keys(SYMPTOM_OF)) {
+    const proved = rdChecked.filter(p => (p.js_only || []).includes(key));
+    if (!proved.length || !rdChecked.length || proved.length / rdChecked.length < PROVED_SHARE) continue;
+    const cause = findings.find(f => f.source === 'render_diff' && f.figure === key && f.scoring !== false);
+    if (!cause) continue;
+    for (let i = findings.length - 1; i >= 0; i--) {
+      const s = findings[i];
+      if (s === cause || s.source === 'render_diff' || s.scoring === false) continue;
+      if (!SYMPTOM_OF[key].some(re => re.test(String(s.title || '')))) continue;
+      if (SEV_ORDER[s.severity] < SEV_ORDER[cause.severity]) cause.severity = s.severity;
+      cause.evidence = [cause.evidence, 'the crawl of ' + total + ' pages, which read only the first response, reports "' + s.title + '" on '
+        + (s.affected_count == null ? 'them' : s.affected_count + ' of them')].filter(Boolean).join('; ');
+      if ((Number(s.affected_count) || 0) > (Number(cause.affected_count) || 0)) { cause.affected_count = s.affected_count; cause.affected_pct = s.affected_pct; }
+      cause.sample_urls = [...new Set([...(cause.sample_urls || []), ...(s.sample_urls || [])])].slice(0, 10);
+      cause.merged_titles = [...(cause.merged_titles || [cause.title]), s.title];
+      cause.caused_by = 'javascript_rendering';
+      cause.why = String(cause.why || '') + ' The crawl did not run JavaScript, so it reports this as "' + String(s.title).toLowerCase()
+        + '" on the pages it read — the same problem, seen from the other side.';
+      renderMerges.push({ figure: key, symptom: s.title, affected: s.affected_count == null ? null : s.affected_count, proved_on: proved.length, of: rdChecked.length });
+      findings.splice(i, 1);
+    }
+  }
+}
+const render_merge = renderMerges.length ? { merged: renderMerges.length, items: renderMerges,
+  method: 'A finding the crawl drew from the first response was joined to the rendering problem that causes it, where the two readings of the key pages proved the figure is written by JavaScript on at least half of them. The joined finding keeps the crawl\'s own count, the higher severity of the two and both titles, and the score deducts once for the cause instead of twice.' } : null;
+
 // ===== 5. What works =====
 const ok = (cond, text) => { if (cond) whatWorks.push(text); };
 ok(dc.ssl === true, 'Valid SSL certificate on the main domain' + (exp ? ' (expires ' + exp.slice(0, 10) + ')' : ''));
@@ -562,13 +604,14 @@ return [{
       entity: input.entity || null,
       crux: input.crux || null,
       render_diff: input.render_diff || null,
+      render_merge,
       measurements: probe.measurements || {},
       sampled_pages: (input.html_analysis || {}).sampled_pages || [],
       competitor_benchmark: input.competitor_benchmark || null,
       not_assessed,
       dataforseo_onpage_score: pm.onpage_score ?? null,
       scoring_method: (isFull ? 'Full SEO health. ' : 'Technical site health only. ') + 'Each category starts at 100. Findings written by the AI content review, and notes about data that could not be collected, are listed but do not change the score. Each other finding deducts Critical 30, High 15, Medium 7, Low 3, Info 1 points, scaled by the share of pages affected (60%-100% of the penalty); site-wide issues take the full penalty. Within a category, each further finding of the same severity counts 70% of the previous one, so many small issues cannot zero a category on their own. The score is the weighted average of category scores, capped at 70 with one critical issue, 60 with two or more, and 85 with five or more high-priority issues.',
-      notes: [probe.note, extras.errors.length ? 'Some extra crawl reports were unavailable: ' + extras.errors.join('; ') : '', (base.pages_crawled && total < base.pages_crawled) ? 'Only ' + total + ' of ' + base.pages_crawled + ' crawled pages were analysed in detail.' : ''].filter(Boolean)
+      notes: [probe.note, base.crawl_js === false ? 'Every page figure in this report was read from the first response: the crawl did not run JavaScript. That is what a crawler which does not render sees — every AI crawler today, and Google on its first pass — so a heading, a text or a link that a script writes is reported here as missing.' + (RDF && RDF.available ? ' The ' + RDF.pages_checked + ' key page(s) of the response-versus-render check were read both ways' + (render_merge ? ', and ' + render_merge.merged + ' finding(s) were joined to the rendering that causes them' : '') + '.' : '') : '', extras.errors.length ? 'Some extra crawl reports were unavailable: ' + extras.errors.join('; ') : '', (base.pages_crawled && total < base.pages_crawled) ? 'Only ' + total + ' of ' + base.pages_crawled + ' crawled pages were analysed in detail.' : ''].filter(Boolean)
     }
   }
 }];

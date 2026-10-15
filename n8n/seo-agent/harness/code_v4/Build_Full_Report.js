@@ -873,6 +873,16 @@ const renderDiffSection = (a) => {
   h += `<p class="small">${e3(rdf.method)} ${rdf.pages_checked} page(s) read twice${rdf.pages_not_checked ? `, ${rdf.pages_not_checked} not checked (the reason is in the table)` : ''}${rdf.rendered_source === 'crawl_js' ? '; the rendered reading came from the JavaScript crawl' : ''}. AI crawlers do not run JavaScript, so anything listed as coming from the rendered page is invisible to them.</p>`;
   return h;
 };
+// ---- the links nothing can follow (B5-1, 2026-10-15, benchmark area 5) ----
+const uncrawlableSection = (a) => {
+  const rdf = a.render_diff || null; const u = rdf && rdf.uncrawlable_links;
+  if (!u || !u.total) return '';
+  const e4 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const rows = (rdf.pages || []).filter(p => p.uncrawlable).map(p =>
+    `<tr><td>${e4(p.path)}</td><td>${p.uncrawlable}</td><td class="small">${e4((p.uncrawlable_samples || []).map(x => '<' + x.tag + '>' + (x.detail ? ' -> ' + x.detail : '')).join(', '))}</td></tr>`).join('');
+  return `<h3>Links nothing can follow</h3><table class="ct"><tr><th>Page</th><th>Found</th><th>Examples</th></tr>${rows}</table>`
+    + `<p class="small">${e4(u.method)}${u.orphan_pages ? ' The crawl found ' + u.orphan_pages + ' orphan page(s) with no crawlable internal link.' : ''}</p>`;
+};
 const findings = a.findings || [];
 const counts = a.issue_counts || {};
 const byCat = (cat) => findings.filter(f => f.category === cat);
@@ -1045,6 +1055,7 @@ if (ps) {
   const yps = ps.rows.find(r => r.is_you) || {};
   if ((yps.opportunities || []).length) html += '<h3>Biggest Speed Savings (your homepage)</h3><ul>' + yps.opportunities.map(o => `<li>${esc(o.title)} — about ${num(o.savings_ms)}ms</li>`).join('') + '</ul>';
 }
+html += uncrawlableSection(a);
 html += cwvSection(a) + renderDiffSection(a) + '<h3>Findings</h3>' + findingsBlock(byCat('Performance'));
 
 // ---------- 8. AI visibility ----------

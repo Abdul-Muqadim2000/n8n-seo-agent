@@ -293,12 +293,45 @@ const linkCount = (html, url) => {
   }
   return { internal, external, total: internal + external };
 };
+// ---- B5-1 (2026-10-15, benchmark area 5; Screaming Frog v24's "Find Uncrawlable Links"): link-shaped things no crawler can follow ----
+// A card, a tile, a table row or a button that navigates with a script is not a link: it carries no href, so nothing queues the page behind
+// it and no internal-link signal reaches it. It is the usual cause of the orphan pages the crawl reports ("no crawlable internal links"),
+// and until today the audit named that symptom and *guessed* the cause in its own words. This reads the HTML we have already fetched for the
+// response-versus-render diff — nothing extra is requested and nothing is paid for. Regex only: the n8n Code sandbox has no DOM.
+const UNC_KINDS = {
+  javascript_href: 'an <a href="javascript:…"> link',
+  anchor_without_href: 'an <a> with no href that navigates on click',
+  anchor_to_nowhere: 'an <a href="#"> that navigates on click',
+  element_as_link: 'an element used as a link (no <a href>)'
+};
+const looksLikeUrl = (t) => /^(?:https?:\/\/|\/)[^\s"'<>]*$/i.test(S(t));
+const uncrawlable = (html) => {
+  const out = [];
+  const navAttr = (attrs) => S(LK.attr(attrs, 'data-href') || LK.attr(attrs, 'data-url') || LK.attr(attrs, 'data-link') || '').slice(0, 120);
+  const navScript = (attrs) => S((S(attrs).match(/(?:location(?:\.href)?\s*=\s*|window\.open\s*\(\s*|navigate\s*\(\s*|router\.push\s*\(\s*)["']([^"']{1,120})["']/i) || [])[1]);
+  const target = (attrs) => navAttr(attrs) || navScript(attrs);
+  for (const m of S(html).matchAll(/<a\b([^>]*)>/gi)) {
+    const attrs = m[1]; const href = S(LK.attr(attrs, 'href'));
+    const click = /\bonclick\s*=/i.test(attrs) || /\bdata-(?:href|url|link)\s*=/i.test(attrs);
+    if (/^javascript:/i.test(href)) out.push({ kind: 'javascript_href', tag: 'a', detail: href.slice(0, 120) });
+    else if (!href && click) out.push({ kind: 'anchor_without_href', tag: 'a', detail: target(attrs) });
+    else if (/^#?$/.test(href) && href === '#' && click) out.push({ kind: 'anchor_to_nowhere', tag: 'a', detail: target(attrs) });
+  }
+  for (const m of S(html).matchAll(/<(div|span|li|button|td|tr|section|article|h[1-6])\b([^>]*(?:\bonclick\s*=|\bdata-(?:href|url|link)\s*=|\bhref\s*=)[^>]*)>/gi)) {
+    const tag = m[1].toLowerCase(); const attrs = m[2];
+    const t = target(attrs) || S(LK.attr(attrs, 'href'));
+    if (!looksLikeUrl(t)) continue;                 // a script that is not navigation, or a target we cannot read, is not counted
+    out.push({ kind: 'element_as_link', tag, detail: t.slice(0, 120) });
+  }
+  return { count: out.length, kinds: [...new Set(out.map(x => x.kind))], samples: out.slice(0, 5) };
+};
 const readHtml = (html, headers, url) => {
   const facts = LK.pageFacts(html, headers, url);
   const h1s = [...S(html).matchAll(/<h1[^>]*>([\s\S]*?)<\/h1>/gi)].map(m => LK.text(m[1])).filter(Boolean);
   const links = linkCount(html, url);
   return { ok: true, title: S(facts.title), h1: S(h1s[0]), h1_count: h1s.length, canonical: S(facts.canonical),
-    robots: robotsOf(html, headers), links: links.total, internal_links: links.internal, words: num(facts.words) || 0, js_shell: !!facts.js_shell };
+    robots: robotsOf(html, headers), links: links.total, internal_links: links.internal, words: num(facts.words) || 0, js_shell: !!facts.js_shell,
+    uncrawlable: uncrawlable(html) };
 };
 // why a reading could not be used ("not checked", never "no difference")
 const failureOf = (res, label) => {
@@ -376,15 +409,31 @@ for (let i = 0; i < targets.length; i++) {
     else if (!same(f, a, b)) { state = grew(f, a, b) ? 'js_only' : 'differs'; from = state === 'js_only' ? SOURCE_REN : 'the two readings differ'; }
     return { figure: f.label, key: f.key, raw: a, rendered: b, state, from };
   });
+  // B5-1: what a crawler cannot follow is read from the rendered page where we have one (that is the DOM Google ends up with), and from
+  // the first response otherwise. `fromCrawl` has no HTML of its own, so it carries no count and the page simply reports none.
+  const uncRen = (rendered_source === 'render_service' && rendered.uncrawlable && rendered.uncrawlable.count) ? rendered.uncrawlable : null;
+  const uncRaw = (raw.uncrawlable && raw.uncrawlable.count) ? raw.uncrawlable : null;
+  const unc = uncRen || uncRaw || { count: 0, kinds: [], samples: [] };
   pages.push({ url: t.url, path: pathOf(t.url), kind: t.kind || 'page', checked: true, not_checked: '', rendered_source,
     figures, js_only: figures.filter(f => f.state === 'js_only').map(f => f.key),
-    differs: figures.filter(f => f.state === 'differs').map(f => f.key), js_shell: !!raw.js_shell });
+    differs: figures.filter(f => f.state === 'differs').map(f => f.key), js_shell: !!raw.js_shell,
+    uncrawlable: unc.count, uncrawlable_kinds: unc.kinds, uncrawlable_samples: unc.samples,
+    uncrawlable_read_from: unc.count ? (uncRen ? 'the rendered page' : 'the first response') : '' });
 }
 
 const checked = pages.filter(p => p.checked);
 const withJs = checked.filter(p => p.js_only.length);
+// B5-1: the orphan pages the crawl found, which is what link-shaped elements without an href usually cause
+const orphanPages = crawled.filter(p => (p.checks || {}).is_orphan_page === true);
+const uncPages = checked.filter(p => (p.uncrawlable || 0) > 0);
+const uncTotal = uncPages.reduce((n, p) => n + (p.uncrawlable || 0), 0);
+const uncrawlable_links = { pages_with: uncPages.length, pages_checked: checked.length, total: uncTotal,
+  kinds: [...new Set(uncPages.flatMap(p => p.uncrawlable_kinds || []))], orphan_pages: orphanPages.length,
+  method: 'Read from the HTML of the key pages already fetched for this check: <a> tags with no href or a javascript: href that navigate on click, and elements (div, span, li, button, table rows) that carry a page address in an onclick or a data-href. A crawler follows none of them, so the pages behind them are reached only if something else links to them.' };
 const render_diff = {
   available: checked.length > 0,
+  crawl_js: !!plan.crawl_js,
+  uncrawlable_links,
   not_available: checked.length ? '' : (targets.length ? 'no key page could be read twice: ' + (notChecked[0] ? notChecked[0].not_checked : 'both readings failed') : (plan.reason || 'no page to compare')),
   pages, pages_checked: checked.length, pages_not_checked: notChecked.length, pages_with_js_only: withJs.length,
   cap: plan.cap || 0, rendered_source: checked.length ? checked[0].rendered_source : '',
@@ -396,9 +445,11 @@ const render_diff = {
 // ---- findings ----
 const findings = [];
 const works = [];
-const F = (category, severity, title, evidence, why, fix, urls, scoring) => findings.push({ category, severity, title, evidence, why, fix,
+// `figure` names the reading this finding came from (h1, words, title, canonical, robots, links, uncrawlable, all). Build Site Issues uses
+// it to join a crawl-wide symptom to its cause instead of scoring both (build section 65, B5-2).
+const F = (category, severity, title, evidence, why, fix, urls, scoring, figure) => findings.push({ category, severity, title, evidence, why, fix,
   sample_urls: (urls || []).slice(0, 5), affected_count: (urls || []).length || null, affected_pct: checked.length ? Math.round(((urls || []).length / checked.length) * 100) : null,
-  scope: 'page', scoring: scoring !== false, source: 'render_diff' });
+  scope: 'page', scoring: scoring !== false, source: 'render_diff', figure: figure || '' });
 const quote = (p, key) => { const f = p.figures.find(x => x.key === key) || {}; return p.path + ': ' + (key === 'links' || key === 'words' ? (Number(f.raw) || 0) + ' in the first response, ' + (Number(f.rendered) || 0) + ' after JavaScript' : '"' + S(f.rendered).slice(0, 70) + '" (the first response has ' + (S(f.raw) ? '"' + S(f.raw).slice(0, 70) + '"' : 'none') + ')'); };
 const only = (key) => checked.filter(p => p.js_only.includes(key));
 const differ = (key) => checked.filter(p => (p.differs || []).includes(key));
@@ -408,28 +459,28 @@ if (h1Only.length) F('Crawlability & Indexing', 'High', 'The main heading of ' +
   h1Only.map(p => quote(p, 'h1')).join(' · '),
   'The heading is the strongest on-page signal of what a page is about. A crawler that does not run JavaScript — every AI crawler today, and Google on its first pass — sees the page without it.',
   'Render the <h1> on the server (server-side rendering, static generation or a prerender layer) so it is in the HTML of the first response.',
-  h1Only.map(p => p.url));
+  h1Only.map(p => p.url), true, 'h1');
 
 const textOnly = only('words');
 if (textOnly.length) F('Crawlability & Indexing', 'High', 'The page text of ' + textOnly.length + ' page(s) only appears after JavaScript',
   textOnly.map(p => quote(p, 'words')).join(' · '),
   'A page whose text arrives only after its scripts run is an empty shell to any crawler that does not render, so it cannot be quoted, summarised or cited.',
   'Serve the main content in the first HTML response. Where that is a bigger change, add a prerender layer for crawlers first.',
-  textOnly.map(p => p.url));
+  textOnly.map(p => p.url), true, 'words');
 
 const titleBad = [...only('title'), ...differ('title')];
 if (titleBad.length) F('On-Page', 'Medium', 'The title of ' + titleBad.length + ' page(s) is written by JavaScript',
   titleBad.map(p => quote(p, 'title')).join(' · '),
   'The title is what search engines and AI answers show. When the first response carries a different title (or none), that is the one a non-rendering crawler indexes.',
   'Put the final <title> in the server response instead of setting it from a script after load.',
-  titleBad.map(p => p.url));
+  titleBad.map(p => p.url), true, 'title');
 
 const canonBad = [...only('canonical'), ...differ('canonical')];
 if (canonBad.length) F('Crawlability & Indexing', 'Medium', 'The canonical link of ' + canonBad.length + ' page(s) is not in the first response',
   canonBad.map(p => quote(p, 'canonical')).join(' · '),
   'A canonical that a script inserts is ignored by crawlers that do not render, so duplicates of the page can be indexed instead of the one you chose. (A www. host against a bare host is the same URL and is not counted here.)',
   'Output <link rel="canonical"> in the server-rendered <head>.',
-  canonBad.map(p => p.url));
+  canonBad.map(p => p.url), true, 'canonical');
 
 const robotsBad = [...only('robots'), ...differ('robots')];
 if (robotsBad.length) {
@@ -439,7 +490,7 @@ if (robotsBad.length) {
     blocksAfter.length ? 'A script adds noindex after load: the page looks indexable in the first response and asks to be dropped once rendered, and which reading wins is out of your hands.'
       : 'The indexing rules a crawler reads depend on whether it rendered the page, so two crawlers can treat the same page differently.',
     'Decide the robots directive on the server and send the same one in the first response (or as an X-Robots-Tag header).',
-    robotsBad.map(p => p.url));
+    robotsBad.map(p => p.url), true, 'robots');
 }
 
 const linksOnly = only('links');
@@ -447,20 +498,35 @@ if (linksOnly.length) F('Crawlability & Indexing', 'Medium', 'Most links of ' + 
   linksOnly.map(p => quote(p, 'links')).join(' · '),
   'Links that a script writes are not followed by crawlers that do not render, so the pages behind them can stay undiscovered.',
   'Output real <a href> links in the server response for navigation and in-content links (a script may still enhance them).',
-  linksOnly.map(p => p.url));
+  linksOnly.map(p => p.url), true, 'links');
+
+// ---- B5-1 (2026-10-15, benchmark area 5): the links a crawler cannot follow, and the orphan pages they explain ----
+// Three or more on one page, or any on two pages, is a pattern and not a stray widget. The severity follows the harm that is visible in
+// this same audit: Medium where the crawl already reports orphan pages or where most links appear only after JavaScript (the pages behind
+// them are genuinely unreachable), Low otherwise - it is still worth fixing, never worth ranking first.
+if (uncTotal >= 3 || uncPages.length >= 2) {
+  const sev = (orphanPages.length || linksOnly.length) ? 'Medium' : 'Low';
+  const kinds = uncrawlable_links.kinds.map(k => UNC_KINDS[k] || k);
+  F('Crawlability & Indexing', sev, uncTotal + ' link(s) on ' + uncPages.length + ' key page(s) are built without a real <a href>',
+    uncPages.map(p => p.path + ': ' + p.uncrawlable + ' (' + (p.uncrawlable_samples || []).map(x => '<' + x.tag + '>' + (x.detail ? ' \u2192 ' + x.detail : '')).slice(0, 3).join(', ') + ')').join(' \u00b7 ')
+      + (orphanPages.length ? ' \u2014 the crawl also found ' + orphanPages.length + ' orphan page(s) with no crawlable internal link, which is what these usually cause' : ''),
+    'A card, a tile or a button that navigates with a script is not a link: ' + kinds.join(', ') + '. No crawler queues the page behind it and no internal-link signal reaches it, so those pages are crawled rarely, rank on their own merits only, and are invisible to the AI crawlers, which do not run JavaScript at all.',
+    'Make each one a real <a href="\u2026"> to the same address (the script can stay on top of it for the behaviour you want). The crawler, the AI crawlers and keyboard users all follow it then.',
+    uncPages.map(p => p.url), true, 'uncrawlable');
+}
 
 const differsAny = checked.filter(p => p.js_only.length || (p.differs || []).length);
 if (differsAny.length) F('AI Search Readiness', 'Medium', 'AI crawlers see a different version of ' + differsAny.length + ' key page(s)',
   differsAny.map(p => p.path + ' (' + [...p.js_only, ...(p.differs || [])].map(k => (FIGURES.find(f => f.key === k) || {}).label).join(', ') + ')').join(' · '),
   'ChatGPT, Perplexity, Claude and the other AI crawlers fetch the HTML and do not run JavaScript, so anything a script adds is invisible to the answers they write.',
   'Server-render at least the title, the main heading, the opening answer and the in-content links of every page you want quoted.',
-  differsAny.map(p => p.url));
+  differsAny.map(p => p.url), true, 'all');
 
 if (notChecked.length) F('Technical', 'Info', 'The response-versus-render check could not be completed for ' + notChecked.length + ' page(s)',
   notChecked.map(p => p.path + ': ' + p.not_checked).join(' · '),
   'A reading that failed says nothing about the page: it is reported as not checked rather than as "no difference".',
   notChecked.some(p => /bot challenge/.test(p.not_checked)) ? 'Allow our crawler through the bot protection (or share a staging URL) so the two readings can be compared.' : 'Nothing to do if the page answered for visitors; the next audit tries again.',
-  notChecked.map(p => p.url), false);
+  notChecked.map(p => p.url), false, '');
 
 if (checked.length && !withJs.length && !checked.some(p => (p.differs || []).length)) {
   works.push('Every key page checked (' + checked.length + ') serves its title, heading, canonical, robots rule, links and text in the first response, so crawlers that do not run JavaScript see the same page as Google does');
