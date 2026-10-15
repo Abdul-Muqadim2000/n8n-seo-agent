@@ -1072,6 +1072,27 @@ so no area was dropped.
 
 **Deliberately refused:** a credit or unit currency of our own. Semrush and Ahrefs meter in units because they resell their own index at a margin; we resell DataForSEO and Anthropic at cost, and a synthetic currency would hide the one number a customer can check. **Where we judged the leaders wrong:** refusing a report beats Semrush-style partial delivery, and on reliability neither leader is a benchmark at all — `status.ahrefs.com` returns 404 and Semrush publishes no status page, so the comparison used is PagerDuty.
 
+### 3.16 Benchmark areas 2 and 5 (B2 / B5 items, 2026-10-15)
+
+Evidence: `../system-review-2026-10-14/BENCH_AREA2_ladders.md` (and `BENCH_AREA5_technical_audit.md`), written against the leaders' own
+documentation with every page opened. Each area's agent was briefed with the defects already closed inside it, because the 2026-10-13
+scorecard predates them — see the verification note in §3.15.
+
+| ID | Title | Impact | Where | Fix | Status |
+|---|---|---|---|---|---|
+| B2-1 | **One reach per website decided every topic's plan.** `_reach.js` cached a single 75th-percentile difficulty per site for 30 days and measured every ladder against it: exec 494 (`lad_mv5pjt5y4aoa`, "erp implementation dubai") was planned against a reach cached on 2026-10-08 during *e-invoicing* research. The leaders personalise per topic (MarketMuse PD = KD − Topic Authority; Semrush PKD falls with thematic distance) | **High** (it sets plan type, rung bands, months and the chance band) | `v5/code/_reach.js`, `Ladder_Plan.js` | `reachTopic()` measures the reach on the ladder's own topic from the `ranked` pull the run already makes, with the same `RAD.headFit` test the rungs use; used only with 5+ on-topic top-10 keywords behind it, otherwise the site reach stays, the plan names which number it used and on what topics it was measured, and calls itself the optimistic case. Absence of on-topic wins never becomes a penalty | fixed 2026-10-15 (build section 66, S76); not deployed |
+| B2-2 | **A plan never counted what the site already had on its topic**, so it could open with new pages beside live ones. MarketMuse opens from a site inventory and its effort bands start at "optimise the page you have" | Medium | `Ladder_Plan.js`, `Build_Ladder_Report.js` | `topic_authority.coverage`: pages on the topic, searches ranked for, best position, improve-vs-new split — in the notes, the callback and a report section | fixed 2026-10-15 (build section 66, S76); not deployed |
+| B2-3 | **The order of the plan was unexplained** — pages are ordered by rung band then cluster opportunity and neither was printed. Semrush names its five ranking factors per page | Medium | `Ladder_Plan.js`, `Build_Ladder_Report.js`, `Build_Ladder_Response.js`, `app/web/src/components/reports/ladder.tsx` | `why` + `why_factors` per planned page, into the report, the callback and `write_now` | fixed 2026-10-15 (build section 66, S76); not deployed |
+| B2-4 | **Rung keywords are clustered by an AI topic label, not by shared results pages** (K7). `KWI.serpClusters` exists and discovery uses it, but the ladder's pulls return no per-keyword URLs, so two searches Google answers with the same pages can become two pages | Medium | `Ladder_Requests.js`, `Ladder_Pool.js`, `Ladder_Plan.js` | a `ranked_keywords` pull for the head SERP's top 3 competitor domains (≈ $0.03–0.10 a ladder), or one SERP call per rung keyword for exactness | **open — owner decision: a new recurring paid pull on every ladder run** |
+| B2-5 | **The SERP's domain diversity never reaches the feasibility verdict** — Semrush's fifth ranking factor. The data is already in `competitors_summary`, so the build is free, but it moves a scored output | Low | `Ladder_Plan.js` feasibility | count distinct registrable domains in the head top 10 and carry it into the feasibility reasons | **open — owner decision (it changes a score)** |
+| B2-6 | **K7's anchor is out of date.** Keyword Insights, the source of the shared-URL convention, now compares the **top 7**, not the top 10, "because Google no longer reliably shows 10 traditional links", at a 40% default threshold | Low (rubric accuracy) | `CRITERIA_keywords_content.md` K7 — **frozen**, not edited | the new statement is recorded beside the old one in the benchmark file; re-baseline only on the owner's say-so | **open — owner decision (re-baseline)** |
+
+**A process defect this batch found (B-P1).** `isolation: "worktree"` cut both agents' worktrees from `edca460` — the last merge to
+`main` — which is **47 commits behind** the branch tip: no build sections 55–66, no S67–S74, and `docs/system-review-2026-10-14/` did
+not exist, so the brief's own required reading was missing. Both agents detected it independently and merged the tip before starting,
+and both were verified afterwards to contain it. **Every future agent brief must open by merging the branch tip and proving it
+(`git merge-base --is-ancestor <tip> HEAD`)**, and the orchestrator must check each worktree's base before trusting a report.
+
 ### 3.6 Cross-check: nothing from the inputs is lost
 
 | SCORECARD fix | Register items | | SCORECARD fix | Register items |

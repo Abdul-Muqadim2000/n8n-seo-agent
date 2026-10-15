@@ -684,6 +684,58 @@ function difficultyForYou(kd, reach, o) {
   const k = reachNum(kd) == null ? r + REACH_CFG.unknown_kd : Number(kd);
   return k <= r + REACH_CFG.easy ? 'easy' : k <= r + REACH_CFG.reachable ? 'reachable' : k <= r + REACH_CFG.hard ? 'hard' : 'very_hard';
 }
+// ---- B2-1 (2026-10-15, benchmark area 2): the reach measured on ONE TOPIC, not across the whole website ----
+// `reach` above is a single number per site: the 75th-percentile difficulty of everything it ranks top 10 for, cached 30 days. The same
+// number therefore decided two unrelated plans — "peppol uae" and "erp implementation dubai" (lad_mv5pjt5y4aoa, 2026-10-13: reach 10 from
+// a cached 2026-10-08 measurement). The leaders personalise per TOPIC: MarketMuse subtracts a topic-level Topic Authority from the keyword
+// difficulty ("If you have no Topic Authority, then your Personalized Difficulty = Keyword Difficulty",
+// https://docs.marketmuse.com/reference/personalized-difficulty-and-topic-authority/), and Semrush measures the thematic distance between a
+// domain's core topics and the target topic, lowering PKD the closer the match (https://www.semrush.com/blog/ai-keyword-research-updates/).
+// reachTopic() does the same from data the run already paid for: the keywords the site ALREADY ranks for that are on this topic. It is used
+// only when that evidence is as strong as the site-wide measurement demands (REACH_CFG.min_top10 keywords in the top 10 with a difficulty).
+// Below that bar the site-wide reach stays and the caller is told WHY, so no plan quietly rests on a number measured on other topics. There
+// is no third direction: absence of on-topic wins is not evidence of inability, so it never invents a penalty of its own.
+const REACH_TOPIC_CFG = { max_examples: 6, max_other: 4 };
+// the default on-topic test: half of the head's meaningful words (the shape `_radius.js` RAD.headFit uses; the ladder passes that kit in)
+const reachTopicMatch = (head) => { const h = overlapTokens(head); const need = Math.max(1, Math.ceil(h.length / 2));
+  return (kw) => { if (!h.length) return false; const t = overlapTokens(kw); return t.filter(x => h.includes(x)).length >= need; }; };
+/**
+ * ranked: [{ keyword, kd, position }] — every keyword the site ranks for that this run saw (null = the pull failed)
+ * head: the topic's head keyword · domainReach: the site-wide reach · o: { match (the on-topic test), domain }
+ * -> { used, reach, topic_reach, site_reach, on_topic, top10, sample, best, examples, other_topics, reason, note }
+ */
+function reachTopic(ranked, head, domainReach, o) {
+  const opts = o || {};
+  const site = reachNum(domainReach) == null ? reachSizeTier(0) : Number(domainReach);
+  const match = typeof opts.match === 'function' ? opts.match : reachTopicMatch(head);
+  const rows = (ranked || []).filter(r => r && r.keyword && reachNum(r.position) != null);
+  const on = rows.filter(r => { try { return !!match(String(r.keyword)); } catch (e) { return false; } });
+  const pos = (r) => Number(r.position);
+  const top10 = on.filter(r => pos(r) >= 1 && pos(r) <= 10);
+  const kds = top10.map(r => reachNum(r.kd)).filter(v => v != null).sort((a, b) => a - b);
+  let p75 = null;
+  if (kds.length >= REACH_CFG.min_top10) { const i = REACH_CFG.percentile * (kds.length - 1), lo = Math.floor(i), hi = Math.ceil(i); p75 = Math.round(kds[lo] + (kds[hi] - kds[lo]) * (i - lo)); }
+  const used = p75 != null;
+  const best = on.slice().sort((a, b) => pos(a) - pos(b))[0] || null;
+  const examples = top10.slice().sort((a, b) => pos(a) - pos(b)).slice(0, REACH_TOPIC_CFG.max_examples)
+    .map(r => ({ keyword: String(r.keyword), position: pos(r), kd: reachNum(r.kd) }));
+  const other_topics = rows.filter(r => pos(r) >= 1 && pos(r) <= 10 && on.indexOf(r) < 0).sort((a, b) => pos(a) - pos(b))
+    .slice(0, REACH_TOPIC_CFG.max_other).map(r => String(r.keyword));
+  const who = String(opts.domain || 'your site');
+  const q = '"' + String(head || '') + '"';
+  const reason = ranked == null ? 'the keywords ' + who + ' ranks for could not be read on this run'
+    : !on.length ? 'nothing ' + who + ' ranks for is on this topic'
+    : !top10.length ? on.length + ' keyword(s) on this topic rank for ' + who + ', none of them in the top 10 (best #' + (best ? pos(best) : '-') + ')'
+    : top10.length + ' keyword(s) on this topic are in the top 10' + (kds.length < top10.length ? ', ' + kds.length + ' of them with a known difficulty' : '')
+      + ' - fewer than the ' + REACH_CFG.min_top10 + ' needed to measure a reach on one topic';
+  const note = used
+    ? 'Measured on this topic: 75% of the ' + kds.length + ' keyword(s) about ' + q + ' that ' + who + ' ranks in the top 10 for have a difficulty of ' + p75
+      + ' or lower, so this plan is measured against ' + p75 + ' and not against the site-wide reach of ' + site + '.'
+    : 'This plan is measured against your site-wide reach (' + site + '), because ' + reason + '. A reach measured on other topics'
+      + (other_topics.length ? ' (' + other_topics.map(k => '"' + k + '"').join(', ') + ')' : '') + ' is weaker evidence for this one: treat the months and the chance below as the optimistic case.';
+  return { used, reach: used ? p75 : site, topic_reach: p75, site_reach: site, on_topic: on.length, top10: top10.length, sample: kds.length,
+    best: best ? { keyword: String(best.keyword), position: pos(best) } : null, examples, other_topics, reason, note, head: String(head || '') };
+}
 const reachStrong = (authority, position) => { const p = reachNum(position); return !!(authority && ((Number(authority.top10) || 0) >= 100 || (Number(authority.organic_keywords) || 0) >= 1000)) || (p != null && p >= 1 && p <= REACH_CFG.easy_position); };
 function reachPlan(difficulty, strong) {
   const plan_type = { easy: 'direct', reachable: 'short', hard: 'full', very_hard: 'full', not_realistic: 'none' }[difficulty] || 'full';
@@ -866,7 +918,11 @@ const planName = (PLAN[L.plan_type] || 'Full ladder') + (L.stretch ? ' (stretch)
 const reachHow = ri.method === 'percentile' ? '75% of the ' + num(ri.sample) + ' keywords ' + esc(L.domain) + ' ranks in the top 10 for have a difficulty of ' + ri.p75 + ' or lower'
   : ri.method === 'size' ? esc(L.domain) + ' ranks in the top 10 for ' + num(ri.top10) + ' keyword' + (ri.top10 === 1 ? '' : 's') + (ri.sample ? ' (too few with a known difficulty to measure)' : '') + '; sites of that size usually win keywords up to difficulty ' + ri.size_reach
   : 'the site\'s rankings could not be read, so the starting value for a new site is used';
-const reachText = 'Your site\'s reach is difficulty <b>' + esc(L.reach) + '</b>: ' + reachHow + (ri.cached ? ' (measured ' + esc(String(ri.cached_at || '').slice(0, 10)) + ', kept 30 days)' : '') + '.';
+// B2-1 (2026-10-15): the site-wide reach is one number for the whole website; the plan above was measured against the reach for THIS topic
+// when there was enough on-topic evidence to measure one, and `ta.note` says which of the two it was and why.
+const ta = L.topic_authority || null;
+const reachText = 'Your site\'s reach is difficulty <b>' + esc(ri.reach != null ? ri.reach : L.reach) + '</b>: ' + reachHow + (ri.cached ? ' (measured ' + esc(String(ri.cached_at || '').slice(0, 10)) + ', kept 30 days)' : '') + '.'
+  + (ta && ta.note ? ' ' + esc(ta.note) : '');
 const diffWhy = L.difficulty_for_you === 'not_realistic' ? 'people searching it look for one particular website or brand, or the verdict says to avoid it'
   : (head.your_position && head.your_position <= 20) ? 'you already rank #' + head.your_position + ' for it'
   : 'its difficulty is ' + (head.kd == null ? 'unknown (counted as ' + (Number(L.reach) + 10) + ')' : head.kd) + ' against your reach of ' + esc(L.reach);
@@ -924,18 +980,34 @@ parts.push(h2('Is the destination realistic?') +
   ((f.alternatives || []).length ? '<div class="note"><b>Realistic alternative top rungs:</b> ' + f.alternatives.map(esc).join(' · ') + '. ' + (f.status === 'unrealistic' ? 'Brand terms of other companies are navigational and out of reach; pick one of these as the destination instead.' : 'Consider one of these if authority building stalls.') + '</div>' : '') +
   kv([['Expected visits/month at #1-3', f.expected_visits_top3 != null ? num(f.expected_visits_top3) : 'N/A'], ['Time to rank (verdict estimate)', f.time_to_rank_months != null ? f.time_to_rank_months + ' months' : 'N/A']]));
 
+// B2-2 (2026-10-15, benchmark area 2): what the site already has on this topic, before the plan's new pages — the inventory the leaders
+// open a content plan with (MarketMuse site inventory; its effort bands start at "optimise the page you have if it matches the topic").
+const cov = ta && ta.coverage ? ta.coverage : null;
+if (cov) {
+  const covPages = (cov.pages || []).length
+    ? '<table class="ct"><tr><th>Page you already have on this topic</th><th>Title</th></tr>'
+      + cov.pages.map(p => '<tr><td>' + esc(p.url) + '</td><td>' + esc(p.title || '—') + '</td></tr>').join('') + '</table>'
+    : '';
+  parts.push(h2('What you already have on this topic') + '<p>' + esc(cov.summary) + '</p>' +
+    kv([['Pages on this topic', num(cov.pages_on_site)],
+      ['Searches you rank for on this topic', num(cov.ranked_keywords) + ' (' + num(cov.top10_keywords) + ' in the top 10)'],
+      ['Best position today', cov.best_position ? '#' + cov.best_position + ' for "' + esc(cov.best_keyword) + '"' : 'nothing on this topic ranks yet'],
+      ['This plan', num(cov.planned_total) + ' page(s): ' + num(cov.planned_improve) + ' improved, ' + num(cov.planned_new) + ' new']]) + covPages);
+}
+
 // 4. The ladder (only when pages were planned)
 if (planned) {
-let ladderHtml = h2('The ladder', true) + '<p class="small">One page per topic. Lower rungs are specific and winnable; each rung links up to the top page. Pages marked "improve" already exist on your site.</p>';
+let ladderHtml = h2('The ladder', true) + '<p class="small">One page per topic. Lower rungs are specific and winnable; each rung links up to the top page. Pages marked "improve" already exist on your site. "Why here" is the data that put the page in this position (B2-3).</p>';
 for (const r of rungs) {
   ladderHtml += '<h3>' + esc(r.label) + ' — ' + months(r.months) + '</h3>' +
     '<table class="ct"><tr><th>#</th><th>Page (primary keyword)</th><th>Supporting keywords</th><th>Page type</th><th>Searches/mo</th><th>Difficulty</th><th>You today</th><th>Page on site</th></tr>' +
-    r.pages.map(p => '<tr><td>' + p.page_no + '</td><td><b>' + esc(p.keyword) + '</b></td><td>' + esc((p.supporting || []).join(', ') || '—') + '</td><td>' + esc(p.page_type) + '</td><td>' + num(p.total_volume) + '</td><td>' + kdLabel(p.kd) + '</td><td>' + esc(posText(p.your_position)) + '</td><td>' + (p.exists ? '<span class="ok">improve</span><br><span class="small">' + esc(p.target_url) + '</span>' : 'new<br><span class="small">' + esc(p.target_url) + '</span>') + '</td></tr>').join('') + '</table>';
+    r.pages.map(p => '<tr><td>' + p.page_no + '</td><td><b>' + esc(p.keyword) + '</b>' + (p.why ? '<br><span class="small">' + esc(p.why) + '</span>' : '') + '</td><td>' + esc((p.supporting || []).join(', ') || '—') + '</td><td>' + esc(p.page_type) + '</td><td>' + num(p.total_volume) + '</td><td>' + kdLabel(p.kd) + '</td><td>' + esc(posText(p.your_position)) + '</td><td>' + (p.exists ? '<span class="ok">improve</span><br><span class="small">' + esc(p.target_url) + '</span>' : 'new<br><span class="small">' + esc(p.target_url) + '</span>') + '</td></tr>').join('') + '</table>';
 }
 ladderHtml += '<h3>Top — ' + esc(top.keyword) + ' — ' + months(top.months) + '</h3>' + kv([
   ['Page', (top.exists ? '<span class="ok">improve</span> ' : 'new ') + esc(top.target_url)],
   ['Page type', esc(top.page_type)], ['Supporting keywords', esc((top.supporting || []).join(', ') || '—')],
-  ['Searches/mo · difficulty', num(top.volume) + ' · ' + kdLabel(top.kd)], ['You today', esc(posText(top.your_position))], ['When', L.plan_type === 'direct' || mainOnly ? 'written first — ' + months(top.months) : months(top.months)]
+  ['Searches/mo · difficulty', num(top.volume) + ' · ' + kdLabel(top.kd)], ['You today', esc(posText(top.your_position))], ['When', L.plan_type === 'direct' || mainOnly ? 'written first — ' + months(top.months) : months(top.months)],
+  ...(top.why ? [['Why here', esc(top.why)]] : [])   // B2-3
 ]);
 parts.push(ladderHtml);
 
