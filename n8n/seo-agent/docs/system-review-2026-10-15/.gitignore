@@ -1,0 +1,3 @@
+# Run artefacts (report PDFs / Word files, drafted pages and outreach) stay local: they can hold third-party contact
+# details and the repository is public. RESULTS.md describes them; re-create them with a live re-run (FIX_PLAN.md §5.2).
+files/
