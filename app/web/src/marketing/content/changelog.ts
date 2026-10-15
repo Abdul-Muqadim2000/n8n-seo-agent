@@ -15,6 +15,20 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-15',
+    title: 'A shared report now looks like yours',
+    summary:
+      'A report you share with a client opens under your own business name and logo, with ours in a single line at the bottom. And a report the run marked unfinished tells the reader so before the first figure, instead of looking like finished work.',
+    highlights: [
+      'Your business name and logo at the head of a shared report and in the browser tab; our name is one line in the footer',
+      'Both come from the business profile you already fill in for the website — there is no second place to keep a logo up to date',
+      'No logo yet, or a logo that fails to load: the page shows your initials and still reads as finished',
+      'A draft that did not pass the quality check, a plan the engine refused, a verdict it could not check — the reader is told, in the run’s own words, above the figures',
+      'The headline figures are ordered the way the report writes them, and named in plain words instead of field names',
+    ],
+    features: ['reports'],
+  },
+  {
+    date: '2026-10-15',
     title: 'One search, one page — decided by Google’s own results, not by a label',
     summary:
       'A keyword ladder used to group its supporting keywords by what they looked like. Two searches that Google answers with exactly the same pages could therefore become two pages of yours, competing with each other. Before planning, Ascentra now reads the results page for each supporting keyword and puts the searches that share them on one page.',

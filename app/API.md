@@ -229,7 +229,17 @@ A 256-bit token goes in the URL and **only its SHA-256 is stored** (`report_shar
 the row keeps who created it, its expiry, its revocation and when it was last opened (with a counter the owner sees).
 **What a holder of the link can reach:** that one report — its title, stage, website domain, date, whether it was scheduled, its
 headline `summary` values, the company's name, and the files of *that* report (a PDF inline, everything else as a sandboxed download,
-with exactly the headers the signed-in file route uses).
+with exactly the headers the signed-in file route uses). Since B-R2 it also carries `brand` and `caveat`, and nothing else was added:
+* `brand: { name, logoUrl, initials }` — **white-label-lite**. The company's own mark at the head of the page and in the browser tab,
+  our own reduced to one footer line. It is read from the business profile the company already filled in for the engine
+  (`seo_profiles`), and **two fields of that row are used**: `business_name` and `logo_url`. The address, phone, public e-mail,
+  opening hours and author biography in the same row are never returned. The name falls back to the company's name in the app; the
+  logo must be **https**, on a dotted public host, with no credentials (`shared/src/brand.ts`), or it is `null` and the page draws a
+  monogram instead. If the engine cannot be reached the brand falls back to the company name and the page renders as before.
+* `caveat: { code, title, detail } | null` — the run's own words when it marked the work unfinished (`not_ready`, `rejected`,
+  `refused`, `unavailable`, `interim`), from the same `deliveryDecision` the delivery refuses on (B-R1). A share link is not blocked
+  for a draft — an owner may want a colleague to read one — but the reader is told before the first figure. The callback `payload`
+  itself is still never exposed.
 **What a holder can never reach:** any other report (the token resolves to one report id, and a file whose `report_id` differs is a
 404), any list of reports, runs or websites, the callback `payload` or the run's input, the company's id, members, settings, mailboxes
 or dashboards, and **no write of any kind** — the only shared routes are these two GETs. Editing the URL does not widen it: a token

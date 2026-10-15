@@ -36,6 +36,10 @@ services:
         required: false
     environment:
       NODE_ENV: development
+      # macOS bind mounts deliver no file-system events into the container, so `tsx watch` never saw a change and the API kept
+      # serving the code it started with — found on 2026-10-15, after a browser pass was run against a stale server (B-R2).
+      # The web container has had the same thing as VITE_POLL since the beginning.
+      CHOKIDAR_USEPOLLING: '1'
       # account e-mails are written to the log in development (remove to send through the n8n Gmail account)
       SEO_SMTP_HOST: ''
       DATABASE_URL: postgres://seo:seo@db:5432/seo

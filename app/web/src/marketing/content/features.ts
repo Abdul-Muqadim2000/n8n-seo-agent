@@ -647,13 +647,15 @@ export const features: Feature[] = [
       'Prioritised recommendations you can start with one click',
       'Every number says where it came from, over what period and from how big a sample',
       'A share link for one report: it expires on the day you choose, you can turn it off at any time, and the person you send it to needs no account',
+      'A shared report carries your own name and logo at the top and ours in one line at the bottom, so a client sees your report, not our tool',
+      'A report the run marked unfinished says so to the reader before the first figure, whether it is e-mailed or opened through a link',
       'Every run kept with its report and files',
     ],
     steps: [
       { title: 'Collect', body: 'Search, traffic, AI answers, links and audits feed one picture of each website.' },
       { title: 'Explain', body: 'What changed, why it matters, how sure Ascentra is — and where each number came from.' },
       { title: 'Recommend', body: 'One list of next steps across every area, ranked by impact, confidence and effort — each one ready to run.' },
-      { title: 'Share', body: 'Send one report as a link that expires, or export it as PDF or Word. Past runs keep their report and files.' },
+      { title: 'Share', body: 'Send one report as a link that expires, under your own name and logo, or export it as PDF or Word. Past runs keep their report and files.' },
     ],
     facts: [
       { value: 2, label: 'report formats: PDF and Word' },
@@ -668,7 +670,11 @@ export const features: Feature[] = [
       },
       {
         q: 'What can somebody with a share link see?',
-        a: 'That one report and its documents, read-only — its headline figures, the website it is about, when it was produced and where each number came from. Nothing else: no other report, no dashboard, no list, none of your settings or team, and nothing on the page can be changed. You see when the link was last opened, and turning it off takes one click.',
+        a: 'That one report and its documents, read-only — its headline figures, the website it is about, when it was produced and where each number came from, under your own name and logo. Nothing else: no other report, no dashboard, no list, none of your settings or team, and nothing on the page can be changed. You see when the link was last opened, and turning it off takes one click.',
+      },
+      {
+        q: 'Can a shared report carry our branding?',
+        a: 'Yes. A shared report shows your business name and logo at the head of the page and in the browser tab, and our name sits in one line in the footer. Both come from the business profile you already fill in for your website, so there is nothing extra to keep up to date; a company that has not added a logo gets its initials instead, and a logo that fails to load never breaks the page.',
       },
       { q: 'What does the Search Console alert watcher do?', a: 'It reads Google’s Search Console notification e-mails for your websites and turns them into alerts in Ascentra.' },
       { q: 'What is the monthly check-in?', a: 'A short checklist for what Google does not expose through its API, such as manual actions and security issues.' },
