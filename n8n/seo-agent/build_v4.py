@@ -6767,6 +6767,97 @@ sticky("""### One search, one page — decided by the results page, not by a lab
     pos('Ladder Cluster Requests')[0] - 60, pos('Ladder Cluster Requests')[1] + 240, 1160, 280, 4)
 log('One search, one page, decided by the results page and not by a label (2026-10-15, benchmark area 2, rows B2-4 / B2-5 with B2-6 as its convention; BENCH_AREA2_ladders.md gaps 5 and 6). B2-4: the ladder now buys ONE DataForSEO results page per rung candidate (Ladder Cluster Requests -> Cluster SERP Wanted? -> Run Ladder Cluster SERP -> Ladder Cluster Retry -> Any Cluster Retries? -> Wait Before Cluster Retry -> Run Ladder Cluster SERP (Retry) -> Ladder Clusters, on the main path between the pool and the relevance screen) and groups the rungs with KWI.serpClusters on the TOP 7 at a 40% shared-URL threshold - Keyword Insights own current numbers, approved by the owner as B2-6 - instead of on the AI topic label, so two searches Google answers with the same pages become one page; every member of a cluster takes its head keyword\'s rung, a group built on shared results pages is never split by the topic-label cap, and the plan, the report and the callback print the groups, what they merged, the cap (24 keywords, about $0.048 at $0.002 a call), what was really spent (counted once by task id, R28) and - INVARIANTS rule 1 - every keyword whose results page could not be read twice, with the provider\'s own reason, uncompared and unmerged rather than silently dropped; a free_only run, ladder_serp_checks 0 or a pool with fewer than two on-topic candidates buys nothing. The in-200 retry gate (_dfs_retry.js, R18) covers both new calls and the build proves it against harness/in200_baseline.json. B2-5: the destination\'s results page is counted for distinct REGISTRABLE domains (LK.regDomain, the helper the competitor gate has used since R21, so a rival on a subdomain is not a second site) and that moves the feasibility score by a stated rule - 6 points at five domains or fewer, 3 at six or seven, nothing at eight or more - with the count labelled measured, the adjustment labelled a stated rule and both printed in the plan notes, the feasibility section and the callback. The per-mode DataForSEO estimate for a ladder goes 0.16 -> 0.21 (exec 495 measured $0.1162 plus 24 calls at $0.002) in v5/code/_cost_cal.js and in app/shared/src/cost.ts')
 
+# =============================================================================
+# 71. A GATE THAT ONLY RAN WHEN THE ROW WAS WRITTEN (2026-10-15, FIX_PLAN.md §3.16 B-G1 / B-G2 / B-G3; INVARIANTS rule 2).
+#     The three defects section 69's gate-pair lint found on its first run, and the first three entries the ratchet gives back.
+#
+#     The shape is R16's exactly. The fit gate (`v5/code/_fit_gate.js`) refuses a keyword that is a competitor's brand, a government
+#     portal, a navigational search or off this site's topic — but only where a rung is PLANNED. `seo_ladders` still holds rows
+#     written before the gate existed (rung 2 of lad_mv40b6s9h5a8 held "facts erp", facts.ae being a competing UAE ERP vendor), and
+#     R16 taught only the Rank Tracker and the Content Cadence to ask the question again on the way out. Three later readers never
+#     learnt it, and every one of them ACTS on what it reads:
+#       * B-G1 *AI Plan*, in BOTH the AI Visibility Tracker and the AI Pulse — the question panel was built from every stored ladder
+#         keyword (`head_keyword` and every rung but rung 4), so a competitor's brand became a question asked of ChatGPT, Gemini and
+#         Google AI Mode, six mornings a week in the pulse, and the site was then scored against an answer about somebody else's
+#         product. The stored PANEL rows (`seo_ai_prompts`) predate the gate for the same reason, so they are gated too — except a
+#         question the owner wrote themselves, which is kept and only flagged: it is their deliberate choice, and hiding it would be
+#         the opposite of telling them.
+#       * B-G2 *Growth Plan* — the same rungs became "questions to win" and then pages the Content Cadence writes.
+#       * B-G3 *Site Plan* — every stored rung joined the tracked keywords, so a set-aside rung still bought a live rank check every
+#         week and still appeared in the weekly report as work in progress.
+#
+#     **One shared thing, not a fourth copy.** R16 wrote its loop around `fitStored` twice; three readers were then written without
+#     it, which is the drift this defect IS. `FITR` (in `_fit_gate.js`, beside the gate it calls) is that loop, once: `FITR.ctx`
+#     builds the context R16's two callers build by hand (own domain, declared competitors, learned AI brand names, and the head
+#     terms / services / tracked keywords PROTECTED so the ladder's own subject can never read as somebody's brand), `FITR.rungs`
+#     gates a list of stored rows and returns `{ keep, set_aside }`, and `FITR.line` writes the sentence. All three read paths call
+#     it with the same context and record the same refusal, so they cannot drift apart again.
+#
+#     **Nothing is dropped quietly** (INVARIANTS rule 1). Every refusal travels with the plan as `set_aside` — the row, the reason,
+#     the gate's own detail and the sentence to print — and reaches the human: "Not asked" in the AI visibility report and the pulse
+#     mail, "Set aside" in the AI growth report and the weekly site report. A rung whose page is already written is kept and only
+#     flagged: that page is live work. "We are not asking ChatGPT about X because it is a competitor's brand" is a better answer
+#     than a shorter list nobody can account for.
+#
+#     Section 69's lint is what holds it: these four read paths leave `harness/gate_pairs_baseline.json` for ever (the ratchet's
+#     rule — a reader that gains its gate can never come back), so a build that drops the gate again fails instead of regressing.
+# =============================================================================
+assert 'const FITR = {' in FIT_GATE_SRC and 'rungs(rows, ctx, opts)' in FIT_GATE_SRC and 'line(set_aside, what)' in FIT_GATE_SRC, \
+    'B-G1..B-G3: v5/code/_fit_gate.js does not define the shared read-path gate FITR'
+assert 'fitStored({ ...r, keyword: kw }, c)' in FIT_GATE_SRC, 'B-G1..B-G3: FITR.rungs no longer calls fitStored — it would gate nothing'
+
+_B71_PATHS = {('SEO Agent — AI Visibility Tracker', 'AI Plan'): 'asked of the AI engines or scored against',
+              ('SEO Agent — AI Pulse', 'AI Plan'): 'asked of the AI engines or scored against',
+              ('SEO Agent — AI Growth', 'Growth Plan'): 'turned into a question to win or a page to write',
+              ('SEO Agent — Site Tracker', 'Site Plan'): 'tracked or given a live rank check'}
+
+
+def _b71_checks():
+    """Runs after the sub-builds: the three read paths are written by build_monitors.py and build_site_tracker.py."""
+    _wdir71 = os.path.join(HERE0, 'workflows')
+    _seen71 = {}
+    for _f71 in sorted(os.listdir(_wdir71)):
+        if not _f71.endswith('.json') or _f71 in _NOT_GENERATED69:
+            continue
+        for _w71 in json.load(open(os.path.join(_wdir71, _f71), encoding='utf-8')):
+            for _n71 in (_w71.get('nodes') or []):
+                if (_w71.get('name'), _n71.get('name')) in _B71_PATHS and _n71.get('type') == 'n8n-nodes-base.code':
+                    _seen71[(_w71.get('name'), _n71.get('name'))] = _n71['parameters'].get('jsCode', '')
+    _missing71 = sorted('%s / %s' % k for k in _B71_PATHS if k not in _seen71)
+    assert not _missing71, 'B-G1..B-G3: read path not found in the generated workflows: %s' % ', '.join(_missing71)
+    for _k71, _phrase71 in _B71_PATHS.items():
+        _js71, _where71 = _seen71[_k71], '%s / %s' % _k71
+        # the gate, through the ONE shared loop — never a fourth hand-written copy of it
+        assert 'const FITR = {' in _js71 and 'const fitStored = ' in _js71, \
+            'B-G1..B-G3: %s does not carry the shared read-path gate' % _where71
+        # The kit is cut out before the node's OWN code is read: _fit_gate.js documents FITR.ctx / FITR.rungs / FITR.line in its own
+        # comments, so searching the whole node would find the gate in every node that merely inlines the kit — a check that passes
+        # while the call is gone is worse than none, and this one was written that way first (probe: deleting the call still built).
+        _body71 = _js71.replace(FIT_GATE_SRC, '')
+        assert _body71 != _js71, 'B-G1..B-G3: %s does not inline v5/code/_fit_gate.js verbatim' % _where71
+        assert 'FITR.ctx(' in _body71 and 'FITR.rungs(' in _body71, 'B-G1..B-G3: %s does not call FITR on the read path' % _where71
+        # and the three paths agree: the same record, and the same sentence for whoever reads it (INVARIANTS rule 1)
+        assert 'set_aside' in _body71 and 'FITR.line(' in _body71 and _phrase71 in _body71, \
+            'B-G1..B-G3: %s sets rows aside without saying so in words a reader sees' % _where71
+    # what the human actually reads: one named place per report, each carrying the rows and the reason
+    for _file71, _needle71 in (('AI_Report.js', 'Not asked'), ('Pulse_Metrics.js', 'Not asked'),
+                               ('Growth_Report.js', 'Set aside'), ('Site_Report.js', 'Set aside')):
+        _src71 = open(os.path.join(HERE0, 'v5', 'code', _file71), encoding='utf-8').read()
+        assert _needle71 in _src71 and 'set_aside' in _src71, \
+            'B-G1..B-G3: v5/code/%s never prints the set-aside rungs, so the list would only be shorter' % _file71
+    # the ratchet gave these four back, and they can never return to it
+    _base71 = json.load(open(os.path.join(HERE0, 'harness', 'gate_pairs_baseline.json'), encoding='utf-8'))
+    _listed71 = [_n for _r71 in _base71.values() if isinstance(_r71, dict) for _n in (_r71.get('ungated') or [])]
+    _back71 = sorted('%s / %s' % k for k in _B71_PATHS if '%s / %s' % k in _listed71)
+    assert not _back71, ('B-G1..B-G3: %s is still named in harness/gate_pairs_baseline.json. A read path that gains its gate leaves '
+                         'the ratchet for ever — delete the entry.' % ', '.join(_back71))
+    print('B-G1/B-G2/B-G3: %d read paths of stored ladder rungs gated through the one shared FITR, off the ratchet for good'
+          % len(_B71_PATHS))
+
+
+log('A gate that only ran on the way in (2026-10-15, FIX_PLAN §3.16 B-G1 / B-G2 / B-G3 - the three defects section 69\'s gate-pair lint found on its first run; INVARIANTS rule 2). Stored ladder rungs were read back and ACTED on with no fit gate although the write path gates them - R16\'s exact shape, fixed then for the Rank Tracker and the Content Cadence only. B-G1: AI Plan, in BOTH the AI Visibility Tracker and the AI Pulse, built the question panel from every stored ladder keyword (head_keyword and every rung but rung 4), so a competitor\'s brand or a government portal became a question asked of ChatGPT, Gemini and Google AI Mode - six mornings a week in the pulse - and the site was then scored against the answer; the stored panel rows in seo_ai_prompts are gated for the same reason, except a question the owner wrote themselves, which is kept and only flagged. B-G2: Growth Plan turned the same rungs into questions to win and then into pages the Content Cadence writes. B-G3: Site Plan added every stored rung to the tracked keywords, so a set-aside rung still bought a live rank check every week and still appeared in the weekly report. The fix is ONE shared read-path gate rather than a fourth copy: FITR in v5/code/_fit_gate.js (ctx / rungs / line) beside the fitStored it calls, used by all three - three copies of a loop are three chances to drift and that drift is this defect. Every refusal travels with the plan as set_aside (the row, the reason, the gate\'s own detail and the sentence to print) and reaches the reader: "Not asked" in the AI visibility report and the pulse mail, "Set aside" in the AI growth report and the weekly site report (INVARIANTS rule 1); a rung whose page is already written is kept and only flagged. All four read paths leave harness/gate_pairs_baseline.json for ever, so the ratchet now fails any build that drops the gate again (build section 71, harness S81)')
+
+
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:
 #     "two fixes have never come back and both are enforced by the build".
@@ -6791,9 +6882,10 @@ log('One search, one page, decided by the results page and not by a label (2026-
 #       gate kit's write entry point with its read entry point over the table it guards, and fails the build on a read path that
 #       trusts storage. Most of today's read paths do; they are a ratchet baseline (`harness/gate_pairs_baseline.json`), exactly as
 #       `retry_lint.check_in200` keeps the in-200 debt — it cannot grow, and a node that gains its gate leaves the list for ever.
-#       Three of the baselined rows are real defects and are registered as B-F6 / B-F7 / B-F8, not excused: *AI Plan* (AI Visibility
-#       and AI Pulse), *Growth Plan* and *Site Plan* each turn every stored ladder rung into a question asked, a page planned or a
-#       rank check bought, with no fit gate between — the exact shape of R16.
+#       Three of the baselined rows were real defects and were registered as such, not excused: *AI Plan* (AI Visibility and AI
+#       Pulse), *Growth Plan* and *Site Plan* each turned every stored ladder rung into a question asked, a page planned or a rank
+#       check bought, with no fit gate between — the exact shape of R16. They are **FIX_PLAN §3.16 B-G1 / B-G2 / B-G3**, fixed in
+#       section 71 the same day; all four read paths have left the baseline and may never return to it.
 # =============================================================================
 import gate_lint as _gl69
 from ladder_common import freeze_ids as _freeze69, ids_are_frozen as _frozen69
@@ -6852,7 +6944,7 @@ def _b69_checks():
           % (_pairs69, _gated69, _un69))
 
 
-log('A build that invents what it was not told, and a gate that only works one way (2026-10-15, FIX_PLAN §3.15 B-F5 + INVARIANTS rule 2). B-F5: env_settings.load_env() answered {} for a missing n8n/.env without a word, so the build baked brand "Dev SEO", a sender and an ops address belonging to nobody and an EMPTY Google service-account e-mail into eleven workflows and exited 0 - and because .env is gitignored, a git worktree never has one, so every worktree agent of the five days to 2026-10-15 built that way; the build refuses now, naming the path, the missing settings and what each is for, unless SEO_BUILD_ALLOW_DEFAULTS=1 or --no-env says the offline build is deliberate (importing env_settings from a build_*.py is itself the call, so a builder cannot forget it). The containment that was supposed to catch it - rebuild in the main worktree and read the diff - could not, because build_api.py minted a fresh uuid4 per node on every build and the two API workflows were always dirty: every node id is now uuid5(workflow + ":" + node), webhookId untouched, so an unchanged rebuild is byte-identical and a real difference is visible. INVARIANTS rule 2: gate_lint.py walks the generated workflows and fails the build when a gate applied where a table is WRITTEN is missing from a node that reads those rows back - the class behind D3, D8, P2-3, R16, R21 and R1/R15; today\'s unguarded read paths are a ratchet baseline (harness/gate_pairs_baseline.json) that cannot grow, with three of them registered as the defects B-F6 / B-F7 / B-F8 (AI Plan, Growth Plan and Site Plan each turn a stored ladder rung into a question asked, a page planned or a rank check bought, with no fit gate between)')
+log('A build that invents what it was not told, and a gate that only works one way (2026-10-15, FIX_PLAN §3.15 B-F5 + INVARIANTS rule 2). B-F5: env_settings.load_env() answered {} for a missing n8n/.env without a word, so the build baked brand "Dev SEO", a sender and an ops address belonging to nobody and an EMPTY Google service-account e-mail into eleven workflows and exited 0 - and because .env is gitignored, a git worktree never has one, so every worktree agent of the five days to 2026-10-15 built that way; the build refuses now, naming the path, the missing settings and what each is for, unless SEO_BUILD_ALLOW_DEFAULTS=1 or --no-env says the offline build is deliberate (importing env_settings from a build_*.py is itself the call, so a builder cannot forget it). The containment that was supposed to catch it - rebuild in the main worktree and read the diff - could not, because build_api.py minted a fresh uuid4 per node on every build and the two API workflows were always dirty: every node id is now uuid5(workflow + ":" + node), webhookId untouched, so an unchanged rebuild is byte-identical and a real difference is visible. INVARIANTS rule 2: gate_lint.py walks the generated workflows and fails the build when a gate applied where a table is WRITTEN is missing from a node that reads those rows back - the class behind D3, D8, P2-3, R16, R21 and R1/R15; today\'s unguarded read paths are a ratchet baseline (harness/gate_pairs_baseline.json) that cannot grow, with three of them registered as the defects FIX_PLAN §3.16 B-G1 / B-G2 / B-G3 (AI Plan in both AI workflows, Growth Plan and Site Plan each turned a stored ladder rung into a question asked, a page planned or a rank check bought, with no fit gate between) and fixed the same day in section 71, so those four read paths have left the baseline for good')
 
 
 # =============================================================================
@@ -6895,6 +6987,8 @@ _r31_checks()
 _b64_checks()
 # section 67 (B4-1 / B4-2 / B4-3): the decay test, what stores it and what acts on it, in the Site Tracker and the Cadence
 _b67_checks()
+# section 71 (B-G1 / B-G2 / B-G3): the three read paths of stored ladder rungs, gated through the one shared FITR
+_b71_checks()
 # section 69 (B-F5 + INVARIANTS rule 2): deterministic node ids over every generated workflow, the settings refusal's self-test,
 # and the gate-pair lint. Last, because the id freeze rewrites the files the checks above have just finished reading.
 _b69_checks()

@@ -41,8 +41,10 @@ NOT_GENERATED = ('SEO_Agent_v3_original_export.json',)
 # `write` / `read` are the entry points the kit exports. Where a gate has one entry point used on both sides (the link kit, the
 # competitor gate) they are the same string, and the rule reads "a reader must call the same gate the writer called".
 PAIRS = [
-    {'gate': 'keyword fit', 'kit': '_fit_gate.js', 'defines': ('function fitGate(', 'const fitStored ='),
-     'write': 'fitGate(', 'read': 'fitStored(', 'tables': ('seo_ladders',),
+    # B-G1..B-G3 (2026-10-15): the read path may call `fitStored` itself, as R16's two callers do, or the shared loop that wraps it
+    # (`FITR.rungs`, _fit_gate.js) that the four later readers use. Both ARE the gate; a node that only inlines the kit is neither.
+    {'gate': 'keyword fit', 'kit': '_fit_gate.js', 'defines': ('function fitGate(', 'const fitStored =', 'const FITR = {'),
+     'write': 'fitGate(', 'read': ('fitStored(', 'FITR.rungs('), 'tables': ('seo_ladders',),
      'why': 'a rung stored before the gate existed is still a competitor brand, a government portal or an off-topic search (D4 / D8 / R16)'},
     {'gate': 'link spam / footprint', 'kit': '_link_kit.js', 'defines': ('function footprints(', 'const isSearchPage ='),
      'write': 'LK.footprints', 'read': 'LK.footprints', 'tables': ('seo_backlinks',),
@@ -51,6 +53,34 @@ PAIRS = [
      'write': 'OK.sellsSame', 'read': 'OK.sellsSame', 'tables': ('seo_link_prospects', 'seo_link_outreach'),
      'why': 'a prospect stored before the gate (or on a rival subdomain) is pitched anyway (R21)'},
 ]
+
+
+def _reads(pair):
+    """The read entry point(s): calling any one of them IS running the gate on the way out."""
+    r = pair['read']
+    return list(r) if isinstance(r, (list, tuple)) else [r]
+
+
+def _kit_src(pair):
+    """The kit text as the builders inline it — with and without the trailing newline, because build_v4.py rstrips it and
+    build_monitors.py does not."""
+    s = open(os.path.join(V5_CODE, pair['kit']), encoding='utf-8').read()
+    return [s, s.rstrip('\n')]
+
+
+def _own(js, pair):
+    """The node's OWN code: the inlined kit cut out first.
+
+    B-G1..B-G3 (2026-10-15): a kit DOCUMENTS its own entry points — `_fit_gate.js` defines `function fitGate(` and, since the shared
+    read path `FITR` was added beside it, calls `fitStored(` inside itself. Searching the whole node therefore found the gate in
+    every node that merely inlines the kit, and two readers that call neither (*Ladder Plan*, *Rank Keywords*) flipped to "gated"
+    without a line changing. A lint that passes while the call is gone is worse than no lint, so the kit comes out before the
+    question is asked — on the write side as well, which had the same hole.
+    """
+    for src in _kit_src(pair):
+        if src and src in js:
+            return js.replace(src, '')
+    return js
 
 
 def _workflows():
@@ -104,13 +134,14 @@ def survey(workflows=None):
                         if up in seen:
                             continue
                         seen.add(up)
-                        if up in code and pair['write'] in code[up]:
+                        if up in code and pair['write'] in _own(code[up], pair):
                             writers.append(wname + ' / ' + up)
                         stack.extend(upstream.get(up, []))
                 for nm, js in code.items():              # every Code node that takes this table's rows from a loader
                     if any(("'" + ld + "'") in js for ld in loaders):
-                        readers[wname + ' / ' + nm] = pair['read'] in js
-            out[key] = {'gate': pair['gate'], 'table': table, 'write': pair['write'], 'read': pair['read'],
+                        own = _own(js, pair)
+                        readers[wname + ' / ' + nm] = any(r in own for r in _reads(pair))
+            out[key] = {'gate': pair['gate'], 'table': table, 'write': pair['write'], 'read': ' or '.join(_reads(pair)),
                         'why': pair['why'], 'writers': sorted(set(writers)), 'readers': dict(sorted(readers.items()))}
     return out
 

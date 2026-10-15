@@ -256,6 +256,8 @@ return sites.map((s, idx) => {
     page_watch: watch,    // G11: the daily key-page watch — what it checks, what changed this week, what it could not read
     annotations, data_breaks, lineage,   // G12 / G29: the events of the period for every chart, and where each figure came from
     change_method: CT.method,   // G12: how a page change is read against the site's other pages (the Link Builder measures it; the wording is shared)
+    // B-G3 (2026-10-15): the rungs the read-path fit gate set aside, with the reason, so the report can say why the list is shorter
+    set_aside: s.set_aside || [], set_aside_note: s.set_aside_note || '',
     tracked, ladder_pages: pages, pending_publish: (s.pending_publish || []).filter(p => !found.some(f => kwKey(f.keyword) === kwKey(p.keyword))), ladder_heads: s.ladder_heads || [], trends, alerts, actions: acts, prev_runs: prevRuns, weeks_tracked: prevRuns.length + 1, service_account_email: cfg.service_account_email || '', form_url: FORM_URL, api_url: API_URL,
     detected_published: found.map(f => ({ keyword: f.keyword, url: f.url, ladder_id: f.ladder_id || '', matched_by: f.matched_by, source: f.source })),
     publish_detection: det ? { checked: true, candidates: det.candidates, sitemap_ok: !!(det.sitemap || {}).ok, sitemap_urls: (det.sitemap || {}).urls || 0, sitemap_error: (det.sitemap || {}).error || '', pages_fetched: det.pages_fetched || 0, found: found.length,
