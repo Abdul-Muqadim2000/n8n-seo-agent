@@ -2421,7 +2421,13 @@ await guard('backlinks v4.10', async () => {
   const pb2 = await run('Parse Backlinks', aj2); const R2 = pb2[0].json; const LR2 = (d) => R2.ledger_rows.find(r => r.ref_domain === d) || {};
   check('second miss confirms the loss: oldsite is LOST (link removed) → high alert; DR / analyst labels kept from last week', LR2('oldsite-erp.net').status === 'lost' && LR2('oldsite-erp.net').lost_reason === 'link_removed' && R2.alerts.some(a => a.level === 'high' && /oldsite/.test(a.text)) && R2.deliver && LR2('peppol.org').dr === 77 && LR2('peppol.org').link_type === 'partner', JSON.stringify({ old: [LR2('oldsite-erp.net').status, LR2('oldsite-erp.net').lost_reason], alerts: R2.alerts.map(a => a.level), peppol: [LR2('peppol.org').dr, LR2('peppol.org').link_type] }));
   console.log('   light run lost ->', JSON.stringify(R2.lost.map(l => [l.from_domain, l.reason, l.important, l.seo_value, l.domain_rank])));
-  const ldr2 = await run('Ledger Rows', pb2); check('light run ledger: an unchanged referrer that was not re-checked is not rewritten; the confirmed loss is', !ldr2.some(r => r.json.ref_domain === 'stablevendors.org') && ldr2.some(r => r.json.ref_domain === 'oldsite-erp.net' && r.json.status === 'lost') && ldr2.length < R2.ledger_rows.length, JSON.stringify({ written: ldr2.map(r => r.json.ref_domain), all: R2.ledger_rows.length }));
+  // B10-4 (2026-10-15, benchmark area 10): `stablevendors.org` used to be in neither list — NO source reported it this run and
+  // `[].every()` is true, so it was dropped from the check queue entirely, however valuable it was. That is exactly the population
+  // the 120-day "not seen" rule then declared lost without anyone ever looking. It is re-checked now, so its row is rewritten;
+  // what this check is really about — Ledger Rows writing only the rows that changed — is unchanged.
+  check('B10-4: a valuable link that no source reported this run is re-checked on its page — it was silently dropped from the queue before, and the 4-month rule would have called it lost unseen',
+    VR2.some(x => x.purpose === 'link' && x.ref_domain === 'stablevendors.org'), JSON.stringify(VR2.filter(x => x.purpose === 'link').map(x => x.ref_domain + ':' + x.why)));
+  const ldr2 = await run('Ledger Rows', pb2); check('light run ledger: only the rows that changed are written back, and the confirmed loss is one of them', ldr2.some(r => r.json.ref_domain === 'oldsite-erp.net' && r.json.status === 'lost') && ldr2.length < R2.ledger_rows.length, JSON.stringify({ written: ldr2.map(r => r.json.ref_domain), all: R2.ledger_rows.length }));
   check('gonepartner stays lost without a new alert (lost last week)', LR2('gonepartner.com').status === 'lost' && !R2.alerts.some(a => /gonepartner/.test(a.text)), JSON.stringify(R2.alerts));
   // ---------------- no free source configured: DataForSEO alone still works ----------------
   loadAll({ ledger: [{}], prospects: [{}] }); mock('Load Link Imports', [{ json: {} }]); mock('Load Link Graph', [{ json: {} }]); mock('Load Sites', [{ json: { ...B.sites()[0].json, ga4_property_id: '' } }]);
@@ -12731,6 +12737,165 @@ await guard('b1-verdict-numbers-and-topic-reach', async () => {
   check('B1-1: and the sentence under the table says which reach it used, what the chance rests on and how the visits were computed',
     /Measured on this topic/.test(doc87) && /uncalibrated estimate until this system has measured its own ladders/.test(doc87)
     && /Click loss applied: an AI Overview/.test(doc87), (doc87.match(/Measured on this topic[\s\S]{0,300}/) || [''])[0]);
+  reset();
+});
+
+
+// ===================================================================================
+// S89 B10-1 / B10-2 / B10-3 / B10-4 (2026-10-15, benchmark programme area 10 —
+// docs/system-review-2026-10-14/BENCH_AREA10_backlinks.md): a backlink report that says how old its own evidence is, measures
+// the one thing only we can measure (is the link still on the page), computes its anchor block on ONE set, and never calls a
+// link lost because an index went quiet. Every check below fails against the code of the 2026-10-14 run: freshness was stated
+// nowhere while Ahrefs' own complete refresh "takes about two months"; criterion 4B.2's liveness rate was computed by nobody
+// ("Checked on the page 1" beside "18 checked this run", exec 529); a link farm's anchor was printed in a table whose own
+// percentages excluded it (exec 564); and a referring site no source had seen for 120 days became `status: 'lost'` with no page
+// ever fetched, no alert and a quietly smaller referring-site count.
+// ===================================================================================
+await guard('b10-backlink-freshness-and-measured-liveness', async () => {
+  const SN = 'S89 B10-1 B10-2 B10-3 B10-4 — how fresh the link data is, how much of it we measured ourselves, one set for the anchors, and a silence that is not a loss';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const SITE = 'site_northwind-erp-com', DOM = 'northwind-erp.com';
+  const NOW = new Date().toISOString(), DAY = NOW.slice(0, 10);
+  const ago89 = (d) => new Date(Date.now() - d * 864e5).toISOString();
+  const agoD89 = (d) => ago89(d).slice(0, 10);
+  const age89 = (d) => Math.max(0, Math.round((Date.now() - Date.parse(agoD89(d) + 'T00:00:00Z')) / 864e5));   // the node's own arithmetic, so the test does not depend on the hour it runs
+  const plan89 = (o = {}) => [{ json: { site_id: SITE, domain: DOM, canonical_host: DOM, mode: o.mode || 'full', on_demand: false, checked_at: NOW, since: ago89(7), country_iso: 'AE',
+    competitors: [], brand_names: ['Northwind'], assets: [{ url: 'https://' + DOM + '/', title: 'Northwind ERP' }], stored_gap: [], stored_timeseries: [],
+    previous: { mode: 'full', union_mode: 'full', union_domains: 15, referring_domains: 8, backlinks: 20, spam_score: 0, rank: 120 }, ...o } }];
+
+  // ---------- 1. B10-1: Link Merge keeps the INDEX's own last sighting, apart from everything else that moves `last_seen` ----------
+  for (const k of ['Load Backlinks', 'Load Link Imports', 'Load Link Prospects', 'Load Link Graph', 'Fetch Bing Sites']) delete store[k];
+  mock('BL Plan', plan89());
+  mock('BL Requests', [{ json: { site_id: SITE, kind: 'links' } }]);
+  const dfsItem = (d, lastSeen) => ({ domain_from: d, url_from: 'https://' + d + '/post', url_to: 'https://' + DOM + '/', anchor: 'northwind erp', dofollow: true,
+    domain_from_rank: 200, backlink_spam_score: 0, first_seen: ago89(300), last_seen: ago89(lastSeen), page_from_title: 'A post', semantic_location: 'article' });
+  mock('Run BL Requests', [{ json: { tasks: [{ status_code: 20000, result: [{ items: [dfsItem('idx-fresh.com', 3), dfsItem('idx-stale.com', 120)] }] }] } }]);
+  const lm89 = (await run('Link Merge', store['Run BL Requests']))[0].json;
+  const E89 = (d) => lm89.entries.find(e => e.ref_domain === d) || {};
+  check('B10-1: the index\'s own last sighting is kept per referring site (`dfs_last_seen`), separately from `last_seen` — which every source and our own fetch move, so it could never say how stale a crawler\'s "live" was',
+    E89('idx-fresh.com').dfs_last_seen === agoD89(3) && E89('idx-stale.com').dfs_last_seen === agoD89(120),
+    JSON.stringify(lm89.entries.map(e => [e.ref_domain, e.dfs_last_seen, e.last_seen])));
+
+  // ---------- 2. the ledger this run reads: eight links the index reports, two it does not, three farm pages, two silences ----------
+  reset();
+  const prev89 = (o = {}) => ({ status: 'live', miss_count: 0, verify: 'found', sources: 'dfs', last_seen: agoD89(1), verified_at: ago89(7), seo_value: 45, rel: 'follow', anchor: 'northwind erp', from_url: '', ...o });
+  const entry89 = (d, o = {}) => ({ ref_domain: d, kind: 'web', sources: ['dfs'], from_url: 'https://' + d + '/post', to_url: 'https://' + DOM + '/', anchor: 'northwind erp',
+    first_seen: agoD89(300), last_seen: agoD89(1), dfs_last_seen: '', authority: 200, visits: 0, visits_28d: 0, key_events: 0, pages: [{ url: 'https://' + d + '/post' }], prev: prev89(), ai_cited: false, ...o });
+  // d1 is the discriminator: our own check found it TODAY (so its row's last_seen is today) while the index last saw it 88 days ago
+  const IDX = [['d1', 88, 'found'], ['d2', 2, 'found'], ['d3', 5, 'found'], ['d4', 9, 'found'], ['d5', 14, 'missing'], ['d6', 30, 'missing'], ['d7', 45, 'blocked'], ['d8', 60, 'js']];
+  const FARM89 = ['farm1.example', 'farm2.example', 'farm3.example'];
+  const FARM_ANCHOR = 'buy cheap backlinks dofollow pbn service da50';
+  const entries89 = [
+    ...IDX.map(([d, days]) => entry89(d + '.com', { dfs_last_seen: agoD89(days) })),
+    entry89('google-sample.com', { sources: ['gsc'], anchor: 'click here' }),                                  // read and found, but no index reports it
+    entry89('carried.com', { sources: ['gsc'], anchor: 'https://' + DOM + '/', prev: prev89({ verified_at: ago89(30) }) }),   // not fetched this run: its last reading is 30 days old
+    entry89('brand-new.com', { sources: ['cc'], anchor: '', prev: null }),                                     // never read by us
+    entry89('dormant.com', { sources: [], prev: prev89({ verify: 'unchecked', verified_at: '', last_seen: agoD89(200) }) }),   // B10-4: four months of silence, never read
+    entry89('silent-and-missing.com', { sources: [], authority: 60, prev: prev89({ verify: 'missing', miss_count: 1, verified_at: ago89(150), last_seen: agoD89(200), from_url: 'https://silent-and-missing.com/post' }) }),
+    ...FARM89.map(d => entry89(d, { from_url: 'https://' + d + '/all/2835/13.html', anchor: FARM_ANCHOR, prev: prev89({ anchor: FARM_ANCHOR }) }))];
+  const vlink89 = (d, verify) => ({ site_id: SITE, purpose: 'link', ref_domain: d, url: 'https://' + d + '/post', verify,
+    ...(verify === 'found' ? { rel: 'follow', placement: 'content', to_url: 'https://' + DOM + '/', anchor: d === 'google-sample.com' ? 'click here' : 'northwind erp', title: 'A post', context: 'Our partner Northwind ERP', outbound_domains: 5 } : {}) });
+  mock('Link Merge', [{ json: { site_id: SITE, domain: DOM, mode: 'full', entries: entries89, mention_pages: [], list_pages: [], cc_gap: [],
+    sources: { gsc: { rows: 2, domains: 2, uploaded_at: ago89(12) }, cc: { release: 'cc-main-2026-jul-aug-sep', links: 1, checked_at: ago89(6) }, bing: { enabled: true, connected: true, links: 0 }, ga4: { connected: false } } } }]);
+  mock('Verify Links', [...IDX.map(([d, , v]) => vlink89(d + '.com', v)), vlink89('google-sample.com', 'found')]);
+  mock('BL Requests', [{ json: { site_id: SITE, kind: 'summary' } }, { json: { site_id: SITE, kind: 'anchors' } }]);
+  mock('Run BL Requests', [
+    { json: { tasks: [{ status_code: 20000, result: [{ rank: 120, backlinks: 20, referring_domains: 8, referring_domains_nofollow: 1, backlinks_spam_score: 63, broken_backlinks: 0, broken_pages: 0 }] }] } },
+    { json: { tasks: [{ status_code: 20000, result: [{ items: [{ anchor: 'northwind erp', referring_domains: 9, backlinks: 9 }, { anchor: FARM_ANCHOR, referring_domains: 3, backlinks: 3 }] }] }] } }]);
+  mock('BL Plan', plan89());
+  const R89 = (await run('Parse Backlinks', store['Verify Links']))[0].json;
+  const C89 = R89.coverage, CK89 = C89.check, FR89 = C89.freshness;
+  console.log('   freshness ->', JSON.stringify(FR89), '\n   check ->', JSON.stringify(CK89));
+
+  // ---------- B10-1: the report can say how old its own evidence is ----------
+  check('B10-1: the age of the index\'s view is newest / middle / oldest over the links it reports — 2, 14 and 88 days here, and the 88-day one is a link our own check found today (the row\'s `last_seen` is today, so only `dfs_last_seen` could say it)',
+    FR89.index.rows === 8 && FR89.index.newest_days === age89(2) && FR89.index.median_days === age89(14) && FR89.index.oldest_days === age89(88)
+    && (R89.ledger_rows.find(r => r.ref_domain === 'd1.com') || {}).last_seen === DAY,
+    JSON.stringify([FR89.index, (R89.ledger_rows.find(r => r.ref_domain === 'd1.com') || {}).last_seen]));
+  check('B10-1: our own reading is a separate figure — how many pages this run read, how old the confirmations are, and how many referring sites we have never read',
+    FR89.own.checked_this_run === 9 && FR89.own.median_days === age89(0) && FR89.own.oldest_days === age89(30) && FR89.own.rows === 9 && FR89.own.never_checked === 2,
+    JSON.stringify(FR89.own));
+  check('B10-1: the free sources carry their own age — Google\'s uploaded sample and the Common Crawl release',
+    FR89.gsc_days === age89(12) && FR89.cc_release === 'cc-main-2026-jul-aug-sep' && FR89.cc_days === age89(6), JSON.stringify([FR89.gsc_days, FR89.cc_release, FR89.cc_days]));
+
+  // ---------- B10-2: criterion 4B.2's own number, measured, with the unreadable counted on neither side ----------
+  check('B10-2: the share of the pages we could READ that still carry the link — 5 of 7 — and the same share over the links the index reports live, 4 of 6 (nothing computed either before: the report printed one count over a different count)',
+    CK89.read === 7 && CK89.found === 5 && CK89.precision === 71 && CK89.index_read === 6 && CK89.index_live === 4 && CK89.index_precision === 67,
+    JSON.stringify(CK89));
+  check('B10-2: a bot wall and a JavaScript-only page prove nothing either way — they are named, and counted on neither side of the rate (`coverage.blocked` was computed for nobody before)',
+    CK89.fetched === 9 && CK89.unread === 2 && CK89.unread_by.blocked === 1 && CK89.unread_by.js === 1 && CK89.read + CK89.unread === CK89.fetched,
+    JSON.stringify(CK89.unread_by));
+  mock('Verify Links', [vlink89('d1.com', 'found'), vlink89('d2.com', 'found'), vlink89('d7.com', 'blocked')]);
+  const Rfew = (await run('Parse Backlinks', store['Verify Links']))[0].json;
+  check('B10-2: under five readable checks there is NO rate at all — 100% measured on two links is not a measurement, so the figure is withheld with its reason',
+    Rfew.coverage.check.read === 2 && Rfew.coverage.check.precision === null && Rfew.coverage.check.index_precision === null && Rfew.coverage.check.min_sample === 5,
+    JSON.stringify(Rfew.coverage.check));
+  const htmlFew = (await run('BL Report', [{ json: Rfew }]))[0].json.html;
+  check('B10-2: and the report says why instead of printing a rate', /Too few pages could be read this run to state a rate \(2 read, at least 5 needed\)/.test(htmlFew),
+    (htmlFew.match(/Checked by us[\s\S]{0,220}/) || [''])[0]);
+
+  // ---------- B10-4: four months of an index saying nothing is not a lost link ----------
+  mock('Verify Links', [...IDX.map(([d, , v]) => vlink89(d + '.com', v)), vlink89('google-sample.com', 'found')]);
+  const R2 = (await run('Parse Backlinks', store['Verify Links']))[0].json;
+  const row89 = (d) => R2.ledger_rows.find(r => r.ref_domain === d) || {};
+  check('B10-4: a referring site no source has seen for four months, whose page nobody has ever read, is NOT lost — it is at risk, it keeps its place in the referring-site count, and it is named',
+    row89('dormant.com').status === 'at_risk' && row89('dormant.com').lost_reason === 'not_seen'
+    && !R2.lost.some(l => l.from_domain === 'dormant.com') && R2.dormant.some(d => d.ref_domain === 'dormant.com' && d.days >= 199)
+    && R2.coverage.union === 15, JSON.stringify([row89('dormant.com').status, R2.dormant, R2.coverage.union]));
+  check('B10-4: the same silence IS a loss once our own fetch has already failed on that page — one miss of ours plus four months of silence is the second check, and it reaches the lost table with a reason that describes what happened',
+    row89('silent-and-missing.com').status === 'lost' && R2.lost.some(l => l.from_domain === 'silent-and-missing.com' && l.reason === 'not_seen'),
+    JSON.stringify(R2.lost.map(l => [l.from_domain, l.reason])));
+  const rep89 = (await run('BL Report', [{ json: R2 }]))[0].json; const html89 = rep89.html;
+  save('backlinks-b10-report.html', html89); scanHtml('backlink report with freshness and measured liveness (B10)', html89);
+  check('B10-4: the report names the dormant link and says plainly why it is not counted as lost',
+    /No index has seen 1 link\(s\) for more than 4 months/.test(html89) && /dormant\.com \(last seen /.test(html89) && /an index that stopped re-crawling a page proves nothing/.test(html89),
+    (html89.match(/No index has seen[\s\S]{0,260}/) || [''])[0]);
+  check('B10-4: and the one that was read and failed is in the lost table with its reason',
+    /no index has seen it for 4 months, and it was not on the page when we last read it/.test(html89), (html89.match(/Links lost[\s\S]{0,420}/) || [''])[0]);
+
+  // ---------- B10-1 / B10-2 in the report the customer reads ----------
+  check('B10-1: the report prints how fresh each view is — the index\'s range, our own reading, Google\'s sample and the Common Crawl release',
+    /How fresh this is/.test(html89) && /The link index last saw these links between /.test(html89) && /have never been read by us/.test(html89)
+    && /Google's own link sample was uploaded /.test(html89) && /Common Crawl release cc-main-2026-jul-aug-sep/.test(html89),
+    (html89.match(/How fresh this is[\s\S]{0,420}/) || [''])[0]);
+  check('B10-2: the report prints the measured rate, both denominators and what could not be read — never "1" beside "18" again',
+    /Of the 7 referring pages we could read, <b>5 still carry the link \(71%\)<\/b>/.test(html89)
+    && /of the 6 the DataForSEO index reports live, 4 are live \(67%\)/.test(html89)
+    && /2 page\(s\) could not be read \(bot wall 1, needs JavaScript 1\) and count on neither side/.test(html89)
+    && /Checked on their page<\/div><div style="font-size:20px;font-weight:700">5 of 7<\/div>/.test(html89),
+    (html89.match(/Checked by us[\s\S]{0,420}/) || [''])[0]);
+  check('B10-3: the spam tile says whose 0-100 it is and what it was computed over, instead of grading it "high" against a band nobody publishes',
+    /Spam score \(the index's\)/.test(html89) && /63\/100/.test(html89) && /reported by DataForSEO over 20 links/.test(html89) && !/>high</.test(html89),
+    (html89.match(/Spam score[\s\S]{0,200}/) || [''])[0]);
+
+  // ---------- B10-3: one set for both halves of the anchor block ----------
+  const A89 = R2.anchors, kt89 = Object.values(A89.kinds).reduce((a, b) => a + b, 0);
+  check('B10-3: the percentages and the table are computed on the same set — the three link-farm sites are out of the distribution and counted beside it (before, the table printed their anchor while the percentages above it excluded them)',
+    A89.set_aside === 3 && kt89 === 12 && A89.kinds.brand === 9 && A89.kinds.generic === 1 && A89.kinds.url === 1 && !FARM89.some(d => (R2.ledger_rows.find(r => r.ref_domain === d) || {}).link_type !== 'spam'),
+    JSON.stringify([A89.kinds, A89.set_aside]));
+  check('B10-3: the farm\'s anchor is still shown — marked as what it is, not silently mixed into the table',
+    (A89.top.find(a => a.anchor === FARM_ANCHOR) || {}).farm === true && (A89.top.find(a => a.anchor === 'northwind erp') || {}).farm === false
+    && /link farm, set aside/.test(html89), JSON.stringify(A89.top));
+  check('B10-3: the ">30% keyword anchors" rule of thumb was an unsourced constant — the block now prints the measured distribution it is judged against, and names it',
+    /Linkody, 865,000 monitored backlinks, June 2026/.test(html89) && /keyword 56%, your name 18%, web address 15%, image or empty 10%, generic 1%/.test(html89)
+    && /with 3 link-farm site\(s\) left out of both the percentages and the table below/.test(html89),
+    (html89.match(/Anchor texts[\s\S]{0,520}/) || [''])[0]);
+  check('B10-1 / B10-2: both new figures carry their own lineage — the index\'s age is "reported", our rate is "measured", and the sample is the pages we read',
+    (rep89.lineage || []).some(l => /How old the link index/.test(l.figure) && l.basis === 'reported')
+    && (rep89.lineage || []).some(l => /Share of the links we read/.test(l.figure) && l.basis === 'measured' && /7 referring pages read/.test(l.sample)),
+    JSON.stringify((rep89.lineage || []).map(l => [l.figure, l.basis])));
+
+  // ---------- B10-4, the read half: something actually goes and looks ----------
+  reset();
+  const vrEntry = (d, o = {}) => ({ ref_domain: d, kind: 'web', sources: ['dfs'], from_url: 'https://' + d + '/post', to_url: 'https://' + DOM + '/', anchor: 'northwind erp',
+    first_seen: agoD89(300), last_seen: agoD89(1), authority: 100, visits: 0, pages: [{ url: 'https://' + d + '/post' }], prev: prev89({ seo_value: 10, verified_at: ago89(10) }), ...o });
+  mock('Link Merge', [{ json: { site_id: SITE, domain: DOM, mode: 'light', mention_pages: [], list_pages: [], cc_gap: [], sources: {},
+    entries: [vrEntry('dormant.com', { sources: [], prev: prev89({ status: 'at_risk', lost_reason: 'not_seen', verify: 'unchecked', verified_at: '', seo_value: 10, last_seen: agoD89(200) }) }), vrEntry('rotation.com')] } }]);
+  const vr89 = (await run('Verify Requests', store['Link Merge'])).map(x => x.json);
+  check('B10-4 (INVARIANTS rule 2, the read half): the at-risk row the other path wrote is fetched before the valuable ones and inside a LIGHT run\'s budget — otherwise it would sit at risk for ever, which is the same silence by another name',
+    vr89.some(x => x.ref_domain === 'dormant.com' && x.why === 'dormant') && !vr89.some(x => x.ref_domain === 'rotation.com'),
+    JSON.stringify(vr89.map(x => [x.ref_domain, x.why])));
   reset();
 });
 

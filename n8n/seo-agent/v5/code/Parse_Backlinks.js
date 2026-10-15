@@ -78,7 +78,7 @@ return plans.map(p => {
   for (const v of vMention) if (v.verify === 'found' && v.ref_domain && !entries.some(e => e.ref_domain === v.ref_domain)) { entries.push({ ref_domain: v.ref_domain, kind: 'web', sources: [v.source === 'news' ? 'news' : 'web'], from_url: v.url, to_url: v.to_url || '', anchor: v.anchor || '', first_seen: today, last_seen: today, authority: 0, visits: 0, visits_28d: 0, key_events: 0, pages: [{ url: v.url }], prev: null, ai_cited: false }); vLink.set(v.ref_domain, v); }
   // ---------------- the ledger ----------------
   const brands = (p.brand_names || []).filter(b => !String(b).includes('.'));
-  const ledger = [], lostNow = [], atRisk = [], relChanged = [], wins = [];
+  const ledger = [], lostNow = [], atRisk = [], relChanged = [], wins = [], dormant = [];
   for (const e of entries) {
     const pv = e.prev || {}; const v = vLink.get(e.ref_domain); const lab = labels.get(e.ref_domain) || {};
     const prevStatus = pv.status || ''; const freshEvidence = e.sources.some(s => ['dfs', 'bing', 'gsc', 'import', 'cc'].includes(s)) && !e.dfs_lost || (e.visits_28d || 0) > 0;
@@ -100,7 +100,22 @@ return plans.map(p => {
         else { status = 'at_risk'; atRisk.push({ e, v }); }
       }
     } else if (e.dfs_lost && prevStatus !== 'lost') { status = 'at_risk'; atRisk.push({ e, v: { url: e.dfs_lost.url, verify: 'unchecked' } }); }
-    else if (!e.sources.length && prevStatus !== 'lost' && String(pv.last_seen || '') && (Date.now() - new Date(pv.last_seen).getTime()) / 864e5 > 120 && !(pv.verify === 'found' && (Date.now() - new Date(pv.verified_at || 0).getTime()) / 864e5 < 60)) { status = 'lost'; lost_reason = 'not_seen'; lost_at = now; }
+    // B10-4 (2026-10-15, benchmark area 10): four months of silence from every INDEX was called a loss here - status "lost",
+    // reason "not_seen", nobody told, and the site's referring-site count quietly smaller. That is this area's founding mistake in
+    // a new place: DataForSEO reported peppol.org lost while the link was live and followed, which is why a loss needs our own
+    // eyes. A crawler that simply stopped re-visiting a page proves nothing - Ahrefs states that a complete refresh of its own
+    // index "takes about two months" (https://help.ahrefs.com/en/articles/78052-how-often-is-ahrefs-links-database-updated) and
+    // that a dropped page's link "may still exist on the page"
+    // (https://help.ahrefs.com/en/articles/920461-understanding-link-lost-reasons). So the silence is a loss only when OUR own
+    // fetch has already failed on that page (that miss plus four months of silence is the second). Otherwise the row is
+    // `at_risk`: it keeps its value and its place in the referring-site count, the report names it, and *Verify Requests* puts it
+    // at the front of the next check - the read half of INVARIANTS rule 2, so the status written here is acted on.
+    else if (!e.sources.length && prevStatus !== 'lost' && String(pv.last_seen || '') && (Date.now() - new Date(pv.last_seen).getTime()) / 864e5 > 120 && !(pv.verify === 'found' && (Date.now() - new Date(pv.verified_at || 0).getTime()) / 864e5 < 60)) {
+      const silent = Math.round((Date.now() - new Date(pv.last_seen).getTime()) / 864e5);
+      lost_reason = 'not_seen';
+      if (pv.verify === 'missing' || pv.verify === 'gone') { if (prevStatus !== 'lost') { lost_at = now; lostNow.push({ e, v: { url: pv.from_url || from_url, verify: pv.verify }, reason: 'not_seen' }); } status = 'lost'; }
+      else { status = 'at_risk'; dormant.push({ ref_domain: e.ref_domain, url: from_url || (e.pages[0] || {}).url || '', last_seen: String(pv.last_seen).slice(0, 10), days: silent, checked: String(pv.verify || 'unchecked') }); }
+    }
     else if (e.sources.length && prevStatus === 'lost' && !['link_removed', 'page_gone', 'domain_gone'].includes(pv.lost_reason)) { status = 'live'; lost_reason = ''; lost_at = ''; }
     const sources = [...new Set([...String(pv.sources || '').split(',').filter(Boolean), ...e.sources])];
     const authority = Math.max(Number(e.authority) || 0, rankOf.get(e.ref_domain) || 0, (rankOf.has(e.ref_domain) || e.authority > 0) ? 0 : Number(pv.authority) || 0);
@@ -223,12 +238,61 @@ return plans.map(p => {
   const per = {}, only = {}; for (const r of liveRows) { const s = srcNow(r); for (const x of s) per[x] = (per[x] || 0) + 1; if (s.length === 1) only[s[0]] = (only[s[0]] || 0) + 1; }
   const gscSet = new Set(liveRows.filter(r => srcNow(r).includes('gsc')).map(r => r.ref_domain));
   const dfsSet = new Set(liveRows.filter(r => srcNow(r).includes('dfs')).map(r => r.ref_domain));
+  // ---- B10-1 (2026-10-15, benchmark area 10): how old this view of the web is, per source ----
+  // Freshness is one of the three dimensions the rubric names for this area and no report of ours ever stated it. The leaders all
+  // publish theirs: Ahrefs updates "every 15-30 minutes" but a COMPLETE refresh "takes about two months", within which "some pages
+  // will be updated 60 times, others only once" (https://help.ahrefs.com/en/articles/78052-how-often-is-ahrefs-links-database-updated);
+  // Majestic's Fresh Index "contains backlinks we've seen in the past 120 days" and prints its own date range
+  // (https://majestic.com/support/glossary); Semrush "keeps its backlink database up-to-date by removing backlinks that haven't
+  // been detected in six months" (https://www.semrush.com/blog/biggest-backlink-database-study); Linkody re-checks every monitored
+  // link "every 24h" (https://www.linkody.com/en/plans). An index's "live" therefore means "live when it last crawled" - so the age
+  // of its last sighting is said out loud, beside the one figure in this report that is a measurement: our own fetch.
+  const ageOf = (d) => { const t = Date.parse(String(d || '').slice(0, 10) + 'T00:00:00Z'); return Number.isFinite(t) ? Math.max(0, Math.round((Date.now() - t) / 864e5)) : null; };
+  const sorted = (a) => a.filter(x => x != null).sort((x, y) => x - y);
+  const median = (a) => a.length ? a[Math.floor((a.length - 1) / 2)] : null;
+  const liveSet = new Set(liveRows.map(r => r.ref_domain));
+  const idxAges = sorted(entries.filter(e => e.dfs_last_seen && liveSet.has(e.ref_domain)).map(e => ageOf(e.dfs_last_seen)));
+  const ownAges = sorted(liveRows.filter(r => r.verify === 'found' && r.verified_at).map(r => ageOf(r.verified_at)));
+  const freshness = {
+    own: { checked_this_run: [...vLink.values()].length, median_days: median(ownAges), oldest_days: ownAges.length ? ownAges[ownAges.length - 1] : null, never_checked: liveRows.filter(r => !r.verified_at).length, rows: ownAges.length },
+    index: { rows: idxAges.length, newest_days: idxAges.length ? idxAges[0] : null, median_days: median(idxAges), oldest_days: idxAges.length ? idxAges[idxAges.length - 1] : null },
+    gsc_days: ageOf((((m.sources || {}).gsc) || {}).uploaded_at), cc_release: String((((m.sources || {}).cc) || {}).release || ''), cc_days: ageOf((((m.sources || {}).cc) || {}).checked_at) };
+  // ---- B10-2: live precision, measured by us, with a refusal path ----
+  // Criterion 4B.2 asks for ">= 90% of links reported live are live", checked by our own re-crawl. Nothing computed it: the report
+  // printed "Checked on the page 1" beside "18 checked this run" (exec 529, 2026-10-13) - two different denominators and no rate at
+  // all - while `coverage.blocked` was computed and shown to nobody. A page behind a bot wall, a JavaScript-only page or a fetch
+  // error proves nothing either way and is counted on neither side, the same exclusion Linkody makes in its own study ("crawl
+  // errors (13%) are excluded", https://blog.linkody.com/seo/link-building-statistics-2026-2). Under CHECK_MIN readable checks
+  // there is NO rate: 100% measured on one link is not a measurement.
+  const CHECK_MIN = 5;
+  const READ_OK = ['found', 'missing', 'gone'];
+  const readOf = (r) => { const v = vLink.get(r.ref_domain); return v && READ_OK.indexOf(v.verify) >= 0 ? v : null; };
+  const unread_by = {}; for (const v of vLink.values()) if (READ_OK.indexOf(v.verify) < 0) unread_by[v.verify || 'unchecked'] = (unread_by[v.verify || 'unchecked'] || 0) + 1;
+  const readRows = ledger.filter(r => r.kind === 'web' && readOf(r));
+  const idxRows = readRows.filter(r => (r._sources_now || []).indexOf('dfs') >= 0);
+  const rateOf = (rows) => rows.length >= CHECK_MIN ? Math.round(100 * rows.filter(r => readOf(r).verify === 'found').length / rows.length) : null;
+  const linkCheck = { fetched: [...vLink.values()].length, read: readRows.length, unread: Object.keys(unread_by).reduce((s, k) => s + unread_by[k], 0), unread_by, min_sample: CHECK_MIN,
+    found: readRows.filter(r => readOf(r).verify === 'found').length, precision: rateOf(readRows),
+    index_read: idxRows.length, index_live: idxRows.filter(r => readOf(r).verify === 'found').length, index_precision: rateOf(idxRows) };
   const coverage = { union: liveRows.length, social: ledger.filter(r => r.status !== 'lost' && r.kind === 'social').length, per_source: per, only_in: only, dfs_share: liveRows.length ? Math.round(100 * dfsSet.size / liveRows.length) : 0,
+    freshness, check: linkCheck,
     gsc_sample: gscSet.size, dfs_sees_google: gscSet.size ? Math.round(100 * [...gscSet].filter(d => dfsSet.has(d)).length / gscSet.size) : null, all_see_google: gscSet.size ? Math.round(100 * [...gscSet].filter(d => srcNow(liveRows.find(r => r.ref_domain === d)).length > 1).length / gscSet.size) : null,
     verified: liveRows.filter(r => r.verify === 'found').length, checked_now: [...vLink.values()].length, blocked: [...vLink.values()].filter(v => v.verify === 'blocked' || v.verify === 'js').length, status: m.sources || {} };
   // ---------------- anchors, pages, values ----------------
-  const kinds = {}; for (const r of liveRows) kinds[r.anchor_kind] = (kinds[r.anchor_kind] || 0) + 1;
-  const anchors = { kinds, top: ((one('anchors').res || {}).items || []).slice(0, 15).map(a => ({ anchor: String(a.anchor || '').slice(0, 80), referring_domains: Number(a.referring_domains) || 0, backlinks: Number(a.backlinks) || 0, kind: LK.anchorKind(a.anchor, p.domain, brands) })) };
+  // B10-3 (2026-10-15, benchmark area 10): the two halves of the anchor block were computed on different sets - the percentages
+  // over the ledger, the table straight out of the index - so a link farm's anchor ("High Quality Dofollow Backlinks DA 50 PA 40
+  // Premium PBN Network Service", 17 referring domains, exec 564, 2026-10-14) was printed inside a table whose own percentages had
+  // excluded it. One set for both now: the farms are out of the distribution and counted beside it, and every row of the table says
+  // whether it is one. The ">30% keyword anchors" rule of thumb under it was an unsourced constant; it now carries the only measured
+  // distribution we could open, so the customer compares against a real population instead of a number we invented.
+  const ANCHOR_BASE = { source: 'Linkody, 865,000 monitored backlinks, June 2026', url: 'https://blog.linkody.com/seo/link-building-statistics-2026-2',
+    money: 56, brand: 18, url: 15, image_or_empty: 10, generic: 1 };
+  const normA = (a) => String(a || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const cleanAnchors = liveRows.filter(r => !spamSet.has(r.ref_domain));
+  const farmAnchors = new Set(ledger.filter(r => spamSet.has(r.ref_domain)).map(r => normA(r.anchor)).filter(Boolean));
+  const kinds = {}; for (const r of cleanAnchors) kinds[r.anchor_kind] = (kinds[r.anchor_kind] || 0) + 1;
+  const anchors = { kinds, set_aside: liveRows.length - cleanAnchors.length, base: ANCHOR_BASE,
+    top: ((one('anchors').res || {}).items || []).slice(0, 15).map(a => ({ anchor: String(a.anchor || '').slice(0, 80), referring_domains: Number(a.referring_domains) || 0, backlinks: Number(a.backlinks) || 0, kind: LK.anchorKind(a.anchor, p.domain, brands), farm: farmAnchors.has(normA(a.anchor)) })) };
   const pages = ((one('pages').res || {}).items || []).slice(0, 15).map(x => ({ url: x.page, referring_domains: Number((x.page_summary || {}).referring_domains) || 0, backlinks: Number((x.page_summary || {}).backlinks) || 0, status: (vTarget.find(t => t.url === x.page) || {}).status || Number(x.status_code) || null }));
   // G18-1: a link a cap has written off (link farm, search-results page) is never one of the site's "best links" for SEO, whatever is left
   // of its score — a capped 5 above nothing is still nothing. Referral keeps every row: the visits it sends are measured, not judged.
@@ -256,7 +320,7 @@ return plans.map(p => {
   const not_compared = [];
   const spamLike = !!(prev && summary.available && sameSources.comparable && sameIndex.comparable);
   if (prev && summary.available && prev.spam_score && !spamLike) not_compared.push('Link spam score (' + prev.spam_score + ' then, ' + summary.spam_score + ' now): ' + (sameSources.comparable ? sameIndex.why : sameSources.why) + '.');
-  const REASON = { link_removed: 'link removed', page_gone: 'page gone', domain_gone: 'site gone', not_seen: 'not seen for 4 months' };
+  const REASON = { link_removed: 'link removed', page_gone: 'page gone', domain_gone: 'site gone', not_seen: 'no index has seen it for 4 months, and it was not on the page when we last read it' };
   const actionable = important_lost.filter(l => l.reason !== 'domain_gone'), siteGone = important_lost.filter(l => l.reason === 'domain_gone');
   if (actionable.length) alerts.push({ level: 'high', text: actionable.length + ' important link(s) lost (checked twice): ' + actionable.slice(0, 3).map(l => l.from_domain + ' (' + (REASON[l.reason] || l.reason) + ')').join(', ') + '.' });
   if (siteGone.length) alerts.push({ level: 'low', text: siteGone.length + ' linking site(s) no longer exist (' + siteGone.slice(0, 3).map(l => l.from_domain).join(', ') + '): those links cannot be won back.' });
@@ -297,6 +361,6 @@ return plans.map(p => {
     ...ledger.filter(r => r._new && !r._dfs_new && r.kind === 'web' && r.status !== 'lost').map(r => ({ from_domain: r.ref_domain, from_url: r.from_url, to_url: r.to_url, anchor: r.anchor, dofollow: r.rel === 'follow', domain_rank: r.authority, dr: r.dr, page_rank: 0, spam: r.spam_score, first_seen: r.first_seen, last_seen: r.last_seen, title: r.page_title, spammy: r.link_type === 'spam', sources: r.sources, verified: r.verify }))]
     .filter((x, i, a) => a.findIndex(y => LK.refKey(y.from_domain) === LK.refKey(x.from_domain)) === i);
   return { json: { ...p, competitors, summary, lost, important_lost, new_links, spammy, reclaim, refdomains: [...linking].slice(0, 2000), timeseries: ts, mentions, gap, gap_off_topic, gap_stored: gi < 0 && gapBase.length > 0, gap_checked: gi < 0 ? ((p.stored_gap || [])[0] || {}).last_seen || '' : p.checked_at.slice(0, 10),
-    lists, comp_new: compNew.slice(0, 20), coverage, anchors, pages, values, best_links, referral, wins: wins.filter(w => !spamSet.has(w.ref_domain)), at_risk: atRiskOut.map(({ e, v }) => ({ ref_domain: e.ref_domain, url: v.url, verify: v.verify })), rel_changed: relChanged.filter(r => !spamSet.has(r.ref_domain)), farms, dr_enabled: drOf.size > 0, dr_error,
+    lists, comp_new: compNew.slice(0, 20), coverage, anchors, pages, values, best_links, referral, dormant: dormant.slice(0, 25), wins: wins.filter(w => !spamSet.has(w.ref_domain)), at_risk: atRiskOut.map(({ e, v }) => ({ ref_domain: e.ref_domain, url: v.url, verify: v.verify })), rel_changed: relChanged.filter(r => !spamSet.has(r.ref_domain)), farms, dr_enabled: drOf.size > 0, dr_error,
     ledger_rows, alerts, not_compared, deliver, disavow_text, candidates, gap_error: G && !G.ok ? G.error : null, cost_usd: +cost.toFixed(4) } };
 });

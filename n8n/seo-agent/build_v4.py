@@ -7887,6 +7887,104 @@ sticky("""### The verdict’s own two numbers, and a difficulty measured on the 
 log('The keyword verdict\'s own two numbers, and a difficulty measured on the topic (2026-10-15, benchmark area 1, rows B1-1 / B1-2 / B1-3; BENCH_AREA1_keywords.md). B1-1: `expected_monthly_visits_top3` and `time_to_rank_months` came straight out of the Verdict Agent\'s JSON and reached the Word file, the PDF and the ladder card with no basis at all ("Time to rank: 6 months", exec 519) while the same run computes a month RANGE with an uncalibrated chance band (G3) and a traffic figure that says calibrated / modelled / unknown (G8) - Parse Verdict now carries for_you (difficulty for this site, plan, months, chance, and WHICH reach it was measured against), time_to_rank (the modelled range, the model\'s own number kept beside it) and expected_visits (through the click-loss model, with its basis in words), a results page that could not be read yields no visit estimate at all, and the document prints the basis next to every one. B1-2: the reach cache kept the number and threw the evidence away, so a run reusing it could not measure a topic and could not say what the number rested on - reachCacheRow now stores the top-10 keywords behind it, reachCached hands them back, and the Keyword Check and discovery measure the reach on the TOPIC asked about exactly as the ladder does (same kit, same bar, no new call; a row written before this change says it has no evidence). B1-3: the AI Overview click loss was 0.65, the April 2025 measurement, while Ahrefs\' December 2025 study (300,000 keywords, published 2026-02-04) measures -58.0% at position 1, -50.8% at 2 and -46.4% at 3 - the estimate is for a page in the top three, so their average (0.483) is the factor, every AI Overview traffic potential was ~1.5x too generous, and the four features with no verifiable measurement keep their values and are labelled a stated rule in KWI.CLICK_LOSS')
 
 
+# =============================================================================
+# 79. WHAT AN INDEX SAW LAST WEEK IS NOT WHAT IS ON THE PAGE TODAY (2026-10-15, benchmark programme area 10 —
+#     docs/system-review-2026-10-14/BENCH_AREA10_backlinks.md; register rows B10-1 / B10-2 / B10-3 / B10-4)
+#
+#     The rubric scores this area on three things: index size and freshness, lost-link verification, and spam scoring. On the
+#     second we were already ahead of every tool that was checked — a loss needs two misses and a reason, because DataForSEO
+#     reported techand.ai's strongest link (peppol.org) lost while it was live and followed. On the other two the report said
+#     nothing honest at all, and this section pays that.
+#
+#     What the leaders publish, opened 2026-10-15. Ahrefs: "updated with fresh data every 15-30 minutes", but "The complete
+#     database update ... takes about two months" and inside it "some pages will be updated 60 times, others only once"
+#     (https://help.ahrefs.com/en/articles/78052-how-often-is-ahrefs-links-database-updated); its eight "link lost" reasons include
+#     four where the link "may still exist on the page" — Noindex, Not canonical anymore, Crawl errors, Dropped
+#     (https://help.ahrefs.com/en/articles/920461-understanding-link-lost-reasons). Majestic prints its freshness as a rule and a
+#     date range: the Fresh Index "contains backlinks we've seen in the past 120 days", updated "frequently throughout the day"
+#     (https://majestic.com/support/glossary). Semrush: "a backlink index of more than 43 trillion backlinks", "refreshed at least
+#     hourly" (https://www.semrush.com/analytics/backlinks/), and it "keeps its backlink database up-to-date by removing backlinks
+#     that haven't been detected in six months" (https://www.semrush.com/blog/biggest-backlink-database-study). Linkody re-checks
+#     every monitored link "every 24h" from $14.90 a month (https://www.linkody.com/en/plans). Our own provider publishes
+#     1,981,638,221,669 live backlinks and 1,202,825,143 pages crawled in 24 hours (https://dataforseo.com/apis/backlinks-api).
+#     Nobody publishes a comparable liveness rate: the one study of monitored links that was found is Linkody's own, June 2026,
+#     865,000 links — "Only 56% of monitored backlinks are still live and correct", 21% gone within 3 months, 52% within a year,
+#     and crawl errors excluded from both sides (https://blog.linkody.com/seo/link-building-statistics-2026-2).
+#
+#     * B10-1 — **freshness was never stated.** Every figure in the backlink report was printed as if it described today, while the
+#       index behind most of it says only "live when I last crawled". The ledger already holds the dates; nothing read them.
+#       *Link Merge* now keeps the index's OWN last sighting per referring site (`dfs_last_seen`, apart from `last_seen`, which
+#       every source and our own fetch move), *Parse Backlinks* reduces it to newest / middle / oldest, and the report prints one
+#       sentence: how old the index's view is, how recently we read the pages ourselves, how many have never been read by us, and
+#       the age of Google's uploaded sample and the Common Crawl release.
+#     * B10-2 — **criterion 4B.2's own number was computed by nobody.** It asks for ">= 90% of links reported live are live",
+#       measured by our own re-crawl — and the report printed "Checked on the page 1" beside "18 checked this run" (exec 529,
+#       2026-10-13), which is two different denominators and no rate, while `coverage.blocked` was computed and shown to no one.
+#       `coverage.check` now carries fetched / read / unread-by-reason, the share of the pages we READ that still carry the link,
+#       and the same share restricted to the links the index reports live. A bot wall, a JavaScript-only page or a fetch error
+#       counts on neither side — Linkody excludes its 13% of crawl errors for the same reason — and under five readable checks
+#       there is NO rate, only the sentence saying why (INVARIANTS rule 1: a figure says what it is, or it is withheld).
+#     * B10-3 — **the anchor block was two sets pretending to be one.** The percentages came from the ledger and the table came
+#       straight out of the index, so a link farm's anchor ("High Quality Dofollow Backlinks DA 50 PA 40 Premium PBN Network
+#       Service", 17 referring domains) was printed inside a table whose own percentages had excluded it (exec 564, 2026-10-14,
+#       noted in that run's RESULTS.md and never numbered). One set for both now, the farms counted beside it and marked in the
+#       table. The ">30% keyword anchors" rule of thumb was an unsourced constant: it is now judged against the only measured
+#       distribution that could be opened (Linkody, 865,000 links, June 2026 — keyword 56%, brand 18%, URL 15%, image/empty 10%,
+#       generic 1%), printed beside the site's own. And the headline "Spam score 63/100 · high" was the index's own 0-100 with a
+#       band we invented: DataForSEO's documentation defines the field and publishes no bands
+#       (https://docs.dataforseo.com/v3/backlinks/summary/live/), so the tile now says whose number it is and what it was computed
+#       over instead of grading it.
+#     * B10-4 — **an index's silence was recorded as a loss.** A referring site no source had seen for 120 days became
+#       `status: 'lost'`, reason `not_seen` — with no page ever fetched, no alert, no row in the lost table, and the referring-site
+#       count quietly smaller on both the headline and the drop alert. That is the peppol.org mistake with the index saying nothing
+#       instead of saying "lost", and Ahrefs documents the same trap from the other side (a "Dropped" page's link "may still exist
+#       on the page"). Silence is now a loss only when our OWN fetch has already failed on that page; otherwise the row is
+#       `at_risk`, keeps its value and its place in the count, is named in the report, and *Verify Requests* raises it to priority
+#       850 — above the valuable rotation and inside the light run's budget — so the status written on one path is acted on on the
+#       other (INVARIANTS rule 2).
+# =============================================================================
+def _b79_checks():
+    """Area 10 over the generated Backlink Monitor: freshness, the measured liveness rate, one set for the anchors, and a silence
+    that is no longer a loss. Walks the built workflow, so a change that never reaches a node cannot pass."""
+    import json as _j79
+    _p79 = os.path.join(HERE0, 'workflows', 'SEO_Agent_Backlink_Monitor.json')
+    assert os.path.exists(_p79), 'SEO_Agent_Backlink_Monitor.json was not generated'
+    _code79 = {}
+    for _w79 in _j79.load(open(_p79, encoding='utf-8')):
+        for _n79 in (_w79.get('nodes') or []):
+            if (_n79.get('parameters') or {}).get('jsCode'):
+                _code79[_n79['name']] = _n79['parameters']['jsCode']
+    _want79 = {
+        'Link Merge': ('B10-1', ("dfs_last_seen: ''", "e.dfs_last_seen = ymd(x.last_seen)")),
+        'Parse Backlinks': ('B10-1 / B10-2 / B10-3 / B10-4', (
+            'const freshness = {', 'idxAges', 'e.dfs_last_seen',                      # B10-1
+            'const CHECK_MIN = 5;', 'index_precision:', 'unread_by', 'const linkCheck = {',   # B10-2
+            'const ANCHOR_BASE = {', 'farmAnchors', 'set_aside:',                     # B10-3
+            "dormant.push({", "dormant: dormant.slice(0, 25)")),                      # B10-4
+        'Verify Requests': ('B10-4', ("pv.status === 'at_risk' && pv.lost_reason === 'not_seen'", "dormant ? 850 :", "dormant ? 'dormant' :",
+                                      "!(e.sources.length && e.sources.every(s => s === 'wiki' || s === 'hn'))")),
+        'BL Report': ('B10-1 / B10-2 / B10-3', ('const CK = C.check || {}', 'Checked by us, not taken on trust', 'How fresh this is',
+                                                'at least ' + "' + n(CK.min_sample) + '", 'AB.source', 'link farm, set aside', "Spam score (the index")),
+    }
+    for _node79, (_row79, _needs79) in _want79.items():
+        _js79 = _code79.get(_node79) or ''
+        assert _js79, 'area 10: node %s not found in the Backlink Monitor' % _node79
+        for _t79 in _needs79:
+            assert _t79 in _js79, '%s: %s no longer carries %r' % (_row79, _node79, _t79)
+    # B10-4 both ways: the branch may not call a silence a loss on its own, and the row it writes has to be read somewhere
+    _pb79 = _code79['Parse Backlinks']
+    assert "{ status = 'lost'; lost_reason = 'not_seen'; lost_at = now; }" not in _pb79, \
+        'B10-4: 120 days of an index saying nothing is being recorded as a lost link again'
+    assert "dormant ? 850 :" in _code79['Verify Requests'], 'B10-4: nothing ever goes and looks at a dormant link'
+    # B10-2: the refusal path is what makes the rate honest - a rate off one link is not a measurement
+    assert 'rows.length >= CHECK_MIN ?' in _pb79 and ': null;' in _pb79, 'B10-2: the liveness rate has no refusal path'
+    # B10-3: the farms are out of the distribution AND marked in the table, or the two halves disagree again
+    assert 'const cleanAnchors = liveRows.filter(r => !spamSet.has(r.ref_domain));' in _pb79, \
+        'B10-3: the anchor percentages are being computed over the link farms again'
+
+log('What an index saw last week is not what is on the page today (2026-10-15, benchmark area 10, rows B10-1 / B10-2 / B10-3 / B10-4; BENCH_AREA10_backlinks.md). B10-1: the report never said how fresh anything was, while the index behind most of it only means "live when I last crawled" - Ahrefs states a complete refresh of its own index takes about two months, Majestic publishes a 120-day Fresh Index, Semrush drops links not detected in six months, Linkody re-checks every link every 24h; Link Merge now keeps the index\'s own last sighting per referring site (dfs_last_seen, apart from last_seen, which every source and our own fetch move) and the report prints newest / middle / oldest beside how recently we read the pages ourselves, how many we have never read, and the age of Google\'s uploaded sample and the Common Crawl release. B10-2: criterion 4B.2 asks for the share of links reported live that are live and nothing computed it - the report printed "Checked on the page 1" beside "18 checked this run", two denominators and no rate, and coverage.blocked was computed for nobody; coverage.check now carries fetched / read / unread by reason, the share of the pages we READ that still carry the link and the same share over the links the index reports live, with bot walls, JavaScript-only pages and fetch errors counted on neither side and NO rate at all under five readable checks. B10-3: the anchor percentages were computed over the ledger while the table came straight from the index, so a link farm\'s anchor was printed inside a table whose percentages had excluded it - one set for both now, the farms counted beside it and marked in the table, and the >30% keyword-anchor rule of thumb judged against the only measured distribution that could be opened (Linkody, 865,000 monitored backlinks, June 2026); the headline spam tile no longer grades the index\'s 0-100 with a band we invented, it says whose number it is and what it was computed over. B10-4: a referring site no source had seen for 120 days was recorded as lost with no page ever fetched, no alert and no row in the lost table, and the referring-site count quietly fell - the peppol.org mistake with the index saying nothing instead of saying lost; a silence is now a loss only when our own fetch has already failed on that page, otherwise the row is at_risk, keeps its value and its place in the count, is named in the report, and Verify Requests raises it to priority 850 so it is actually read on the next run (INVARIANTS rule 2, both paths)')
+
+
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:
 #     "two fixes have never come back and both are enforced by the build".
@@ -8032,5 +8130,6 @@ _b74_checks()
 _b73_checks()
 # section 69 (B-F5 + INVARIANTS rule 2): deterministic node ids over every generated workflow, the settings refusal's self-test,
 # and the gate-pair lint. Last, because the id freeze rewrites the files the checks above have just finished reading.
+_b79_checks()
 _b69_checks()
 
