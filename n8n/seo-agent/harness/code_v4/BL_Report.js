@@ -51,6 +51,7 @@ const LN = (() => {
     ai_engines: { label: 'the AI assistants themselves', how: 'the answers ChatGPT, Gemini, Google AI Mode and the others gave to the questions in your panel' },
     ai_db: { label: 'the DataForSEO AI-answer database', how: 'a database of AI answers and the brands they name' },
     own_check: { label: 'our own fetch of the page', how: 'we requested the page ourselves and read what came back' },
+    draft: { label: 'the finished draft itself', how: 'counted in the text this run wrote, before anybody published it' },
     crawl: { label: 'our crawl of your website', how: 'the pages we could reach and read on your site' },
     crux: { label: 'the Chrome User Experience Report', how: 'speed as real Chrome visitors experienced it over 28 days' },
     pagespeed: { label: 'Google PageSpeed Insights (Lighthouse)', how: 'one simulated mobile load in a lab, not what your visitors felt' },
@@ -155,6 +156,10 @@ return sites.filter(s => s.deliver).map(s => {
   let html = '<div style="font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#0f172a;max-width:900px">';
   html += '<h2 style="margin:0 0 2px;font-size:20px">' + (full ? 'Backlinks: ' : 'Backlink alert: ') + esc(s.domain) + '</h2>' + p_(esc(s.checked_at.slice(0, 10)) + ' · changes since ' + esc(s.since.slice(0, 10)) + (full ? ' · monthly report' : ' · weekly watch') + (s.on_demand ? ' · on-demand run' : ''), true);
   html += alertBox(s.alerts.filter(a => full || a.level !== 'low'));
+  // B-L5 (2026-10-15, INVARIANTS rule 1): what was NOT compared with the last snapshot, and why. A figure the two snapshots
+  // cannot be compared on is said out loud here instead of appearing as "no change".
+  if ((s.not_compared || []).length) html += '<div style="background:#fffbeb;border-left:4px solid #d97706;padding:8px 12px;margin:8px 0;font-size:13px"><b>Not compared with the last check</b><ul style="margin:4px 0 0;padding-left:18px">'
+    + s.not_compared.map(t => '<li>' + esc(t) + '</li>').join('') + '</ul></div>';
   if (s.free_only) html += p_('<b>Free sources only</b> (asked on demand): Bing, your Search Console upload, GA4, Common Crawl, Wikipedia, Hacker News, news and web search, each important link checked on its page. No DataForSEO and no AI drafts: this check cost $0.', true);
   else if (!S.available) html += p_('The DataForSEO Backlinks API returned no summary (' + esc(S.error || 'no data') + '); the other sources are below.', true);
   html += '<table style="border-collapse:collapse;margin:8px 0"><tr>' + tile('Referring sites (all sources)', n(C.union), P && P.union_domains ? dv(C.union, P.union_domains) : (S.available ? 'DataForSEO alone: ' + n(S.referring_domains) : 'free sources')) + tile('Best links', n(s.best_links), 'SEO value 50+') +

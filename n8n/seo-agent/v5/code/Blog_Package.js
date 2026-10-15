@@ -1,6 +1,7 @@
 /*__SOURCES__*/
 /*__ANCHOR__*/
 /*__SITE_MODEL__*/
+/*__LINEAGE__*/
 // Framework-agnostic blog package for every content run: the article as clean HTML (with the JSON-LD blocks), as Markdown, and a meta.json
 // (title, slug, meta description, H1, keywords, headings, links, schema, word count, content score, suggested URL, publish checklist).
 // Attached to the e-mail and returned in the API callback next to the PDF / Word report. Runs without content pass through untouched.
@@ -167,15 +168,54 @@ const cluster = () => fmt === 'html' ? clusterHtml : (clusterMd ? '\n' + cluster
 fmt = 'html'; bodyHtml = weave(bodyHtml.split('\n'), (l) => /^<h2[ >]/.test(l), (l) => /^<p><strong>Quick answer:?<\/strong>/i.test(l)).filter(x => x !== '').join('\n');
 fmt = 'md'; mdOut = weave(mdOut.split('\n'), (l) => /^##\s+/.test(l), (l) => /^\*\*Quick answer:?\*\*/i.test(l.trim())).join('\n').replace(/\n{3,}/g, '\n\n');
 const html = '<article>\n<h1>' + inline(h1 || title) + '</h1>\n' + (bylineHtml ? bylineHtml + '\n' : '') + (heroImg ? figure(heroImg, true) + '\n' : '') + (snapshotHtml ? snapshotHtml + '\n' : '') + bodyHtml + (authorBoxHtml ? '\n' + authorBoxHtml : '') + (schema.length ? '\n' + schema.map(b => '<script type="application/ld+json">' + JSON.stringify(b.json || b) + '</script>').join('\n') : '') + '\n</article>';
+// ---- B-L1 (2026-10-15, INVARIANTS rule 1, lineage_lint.py "lineage" + "withheld"): the package printed the quality figures —
+// the content score, the QA counts, topic coverage and originality — as bare numbers, with no source line, and printed them
+// whether or not the check that produced them had anything to work with. A coverage of "0%" measured against an empty term list
+// and an originality of "no overlap found" measured against no page at all read exactly like good news. Each figure now says
+// where it came from, over what sample, and how it was arrived at (LN, v5/code/_lineage.js); and a figure whose check did not
+// run is WITHHELD — null, with the reason — instead of being shown. This travels in meta.json and in the callback; it is
+// deliberately NOT written into the article, which is the customer's published page and carries no figures of ours.
+const CVR = d.content_coverage || null, ORG = d.content_originality || null;
+const qa_checked = d.qa_publishable != null || d.qa_passed != null || d.content_score != null;
+const coverage_measured = !!(CVR && Number(CVR.terms_total) > 0);
+const originality_measured = !!(ORG && Number(ORG.pages_compared) > 0);
+const content_score = qa_checked && d.content_score != null ? d.content_score : null;
+const content_score_withheld = content_score == null
+  ? (qa_checked ? 'the quality check ran but produced no score for this page' : 'the quality check did not run for this page, so there is no score to show')
+  : '';
+const lineage = [
+  content_score == null
+    ? LN.unknown('Content score (0-100)', content_score_withheld)
+    : LN.of('Content score (0-100)', 'model', { basis: 'modelled', period: LN.asOf(today), sample: LN.sample(words, 'words of the finished draft'),
+        note: 'our own score, not a Google figure: structure 25, topic coverage 25, readability 15, specificity 10, clean language 10, length 15'
+          + (d.qa_round ? ' (quality round ' + d.qa_round + ' of ' + d.qa_max_rounds + ')' : '') }),
+  coverage_measured
+    ? LN.of('Topic coverage against the top-ranking pages', 'web', { basis: 'measured', period: LN.asOf(today),
+        sample: LN.sample(CVR.terms_total, 'shared terms' + (CVR.pages_compared ? ', from ' + CVR.pages_compared + ' competitor pages read' : '')), note: String(CVR.basis || '') })
+    : LN.unknown('Topic coverage against the top-ranking pages', String((CVR && CVR.basis) || 'no competitor page could be read in this run, so coverage was not measured')),
+  originality_measured
+    ? LN.of('Originality (overlap with the pages this run read)', 'web', { basis: 'measured', period: LN.asOf(today),
+        sample: LN.sample(ORG.pages_compared, 'pages compared, ' + (ORG.draft_windows || 0) + ' word windows'), note: String(ORG.basis || '') })
+    : LN.unknown('Originality (overlap with the pages this run read)', String((ORG && ORG.basis) || 'no page text was available in this run, so nothing could be compared')),
+  LN.of('Word count, headings, links and images', 'draft', { basis: 'measured', period: LN.asOf(today), sample: LN.sample(words, 'words'),
+    note: 'counted in the finished draft itself' }),
+  d.qa_summary
+    ? LN.of('The quality check summary and what it asks you to review', 'draft', { basis: 'measured', period: LN.asOf(today),
+        sample: d.qa_round ? 'round ' + d.qa_round + ' of ' + d.qa_max_rounds : LN.sample(null), note: 'the LAST round\'s counts, not the first' })
+    : LN.unknown('The quality check summary and what it asks you to review', 'the quality check did not run for this page'),
+];
 const meta = { title, h1: h1 || title, slug, suggested_url: dom ? siteUrlOf(dom, '/' + slug + '/') : '/' + slug + '/', meta_description: description, meta_description_length: description.length, title_length: title.length,
   primary_keyword: d.keyword || metaLines['primary keyword'] || '', secondary_keywords: (Array.isArray(d.secondary_keywords) && d.secondary_keywords.length) ? d.secondary_keywords : String(metaLines['secondary keywords'] || '').split(/,\s*/).filter(Boolean),
-  page_type: d.recommended_page || '', language: d.language_name || 'English', country: d.country || '', domain: dom, word_count: words, content_score: d.content_score == null ? null : d.content_score, qa_summary: d.qa_summary || '',
+  page_type: d.recommended_page || '', language: d.language_name || 'English', country: d.country || '', domain: dom, word_count: words, content_score, content_score_withheld, quality_checked: qa_checked, qa_summary: d.qa_summary || '',
+  lineage, quality_notes: lineage.map(l => l.figure + ' — ' + LN.note(l)),
   headings, internal_links: links.filter(l => isInternal(l.url)), external_links: links.filter(l => !isInternal(l.url)), schema_blocks: schema.map(b => ({ type: b.type || ((b.json || {})['@type']) || '', json: b.json || b })),
   images, featured_image: heroImg || images[0] || null, open_graph: { 'og:title': title, 'og:description': description, 'og:image': (heroImg || images[0] || {}).path || '', 'og:image:width': 1200, 'og:image:height': 630, 'twitter:card': 'summary_large_image' },
   ladder: d.ladder_id ? { ladder_id: d.ladder_id, rung: d.ladder_rung == null ? null : d.ladder_rung, head_keyword: d.ladder_head || '' } : null, request_id: d.request_id || null, generated_at: new Date().toISOString(),
   page_role: role, article_like: articleLike,
   // FIX_PLAN G5 / G33 (2026-10-13): what the quality check measured, with its basis, so the customer sees it next to the page it judges
-  originality: d.content_originality || null, coverage: d.content_coverage || null,
+  // B-L1: a measurement nothing was measured on is not a number — the percentage is withheld and the reason kept beside it
+  originality: ORG ? { ...ORG, measured: originality_measured, highest_pct: originality_measured ? ORG.highest_pct : null, not_measured: originality_measured ? '' : String(ORG.basis || 'nothing could be compared') } : null,
+  coverage: CVR ? { ...CVR, measured: coverage_measured, pct: coverage_measured ? CVR.pct : null, not_measured: coverage_measured ? '' : String(CVR.basis || 'no competitor page could be read') } : null,
   author: articleLike ? (AU ? { name: AU.name, job_title: AU.job_title || '', bio: AU.bio || '', credentials: AU.credentials || '', url: AU.url || '', image_url: AU.image_url || '', same_as: AU.same_as || [], knows_about: AU.knows_about || [], placeholder: false } : { name: '[Author Name]', placeholder: true }) : null,
   reviewer: RV || null, updated: today, table_of_contents: tocHtml ? tocH2.map(h => ({ text: h.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1'), anchor: '#' + anchorOf(h) })) : [],
   hub: role === 'hub' ? { cluster_pages: HP, planned_pages: HPplanned, planned: HPplanned.length } : null,

@@ -105,6 +105,150 @@ const DRAFTS = (() => {
   const fresh = (d, at) => ({ outreach_subject: S((d || {}).subject).slice(0, 200), outreach_body: S((d || {}).body).slice(0, 3000), drafted_at: S(at), superseded: false, reason: '' });
   return { GATES_AT, superseded, sent, carry, fresh, reason, handedOver };
 })();
+// ---- the in-200 retry gate, for every provider that answers "failed" with HTTP 200 (R18 / R19, 2026-10-14, FIX_PLAN §3.12) ----
+// n8n's `retryOnFail` only fires when a node FAILS. DataForSEO answers a dead task with HTTP 200 and `status_code` 40101
+// ("Internal SE Server Error."), Google's URL Inspection answers HTTP 200 with an `error` object ("Internal error
+// encountered."): both look like success to n8n, so the run spent the money, got nothing, and carried on.
+//   Until 2026-10-14 the only gate of this kind was `AI_Retry_Requests.js` (the AI paths) and the 50000-only IF of build
+// section 25, which is why execution 549 billed `SERP Top 10` and `Facts SERP` for two 40101 answers, never re-sent them, and
+// planned, scored ("winnable 68") and wrote a page on a results page nobody had seen; and why the technical audit of execution
+// 550 lost 31 of 45 URL inspections and reported the 14 that answered as an improvement.
+//   This kit is that one rule. Two halves, and the second matters more:
+//     1. `RT.dfs` / `RT.google` classify an answer; `RT.retryable` says whether sending it again can help (a transient error
+//        can, a permission error or an exhausted quota cannot); `RT.plan` builds the second attempt and `RT.merge` puts its
+//        answers in the failed ones' place.
+//     2. `RT.stats` / `RT.evidence` / `RT.note` carry what was actually seen — asked, answered, failed, retried — into the
+//        report, so evidence that is missing is marked `unavailable` and nothing downstream may score on it. `RT.comparable`
+//        is the same idea for two runs: counts measured on samples of different sizes are not compared.
+const RT = (() => {
+  const S = (x) => String(x == null ? '' : x);
+  const N = (x) => { const v = Number(x); return Number.isFinite(v) ? v : 0; };
+  // an answer that can be different next time: the provider's own servers, a timeout, a rate limit. Never a wrong request.
+  const TRANSIENT = /internal (?:se )?server error|internal error|server error|timeout|timed out|temporar|try again|unavailable|service unavailable|backend|deadline exceeded|connection|socket|econn|eai_again|rate limit|too many requests|\b(?:429|500|502|503|504)\b/i;
+  const PERMANENT = /permission|forbidden|unauthor|invalid[_ ]grant|credential|not found|no access|invalid field|unknown field|unsupported|quota|resource_exhausted|insufficient funds|payment|balance/i;
+  const errText = (e) => {
+    if (!e) return '';
+    if (typeof e === 'string') return e.slice(0, 200);
+    const ctx = (e.context && e.context.data) || {};
+    const inner = (ctx.error && typeof ctx.error === 'object') ? ctx.error : null;
+    return S((inner && inner.message) || (ctx.error_description ? S(ctx.error || 'error') + ': ' + ctx.error_description : '') || e.message || e.description || e.status || JSON.stringify(e)).slice(0, 200);
+  };
+  const verdict = (why, code) => {
+    const ok = !why;
+    const perm = !ok && PERMANENT.test(why) && !TRANSIENT.test(why);
+    return { ok, why: why || '', code: code || 0, retryable: !ok && !perm, permanent: perm };
+  };
+  // the reason a report prints is the provider's OWN message ("Internal SE Server Error.", "Invalid Field: target."), never our
+  // paraphrase of it: it is what the owner would see in the provider's console, and it is what `retryable` is decided on.
+  const said = (msg, code, dflt) => S(msg).trim() ? S(msg).trim().slice(0, 160) : (code ? dflt + ' (error ' + code + ')' : dflt);
+  /** one DataForSEO answer (the whole envelope of a live endpoint). The same four cases AI_Retry_Requests.js has used since D19. */
+  const dfs = (r) => {
+    const res = r || {};
+    if (res.error) return verdict(errText(res.error) || 'the request failed');
+    if (N(res.status_code) >= 40000) return verdict(said(res.status_message, N(res.status_code), 'the search data provider reported an error'), N(res.status_code));
+    if (!Array.isArray(res.tasks) || !res.tasks.length) return verdict('no answer from the search data provider');
+    const t = res.tasks[0] || {};
+    const code = N(t.status_code);
+    if (!code) return verdict('no answer from the search data provider');
+    if (code >= 40000) return verdict(said(t.status_message, code, 'the search data provider reported an error'), code);
+    if (code === 20000 && !((t.result || [])[0])) return verdict('the search data provider returned no result', code);
+    return verdict('', code);
+  };
+  /** one Google API answer (URL Inspection, Search Analytics): an `error` object, or the field the caller expected missing. */
+  const google = (r, expect) => {
+    const res = r || {};
+    if (res.error) return verdict(errText(res.error));
+    const want = S(expect);
+    if (want && !res[want]) return verdict('no ' + want + ' in the answer');
+    return verdict('');
+  };
+  const check = (r, o) => { const opt = o || {}; return opt.api === 'google' ? google(r, opt.expect) : dfs(r); };
+  /** [answers] -> [{ i, why, retryable }] for the ones that failed (same order as the requests). */
+  const failures = (answers, o) => (answers || []).map((r, i) => ({ i, v: check(r, o) })).filter(x => !x.v.ok).map(x => ({ i: x.i, why: x.v.why, code: x.v.code, retryable: x.v.retryable, permanent: x.v.permanent }));
+  /** the second attempt: the failed requests, once, newest rule first — never more than `max`, never a permanent failure. */
+  const plan = (requests, answers, o) => {
+    const opt = o || {};
+    const max = opt.max == null ? 60 : opt.max;
+    const fails = failures(answers, opt).filter(f => !opt.only || opt.only(requests[f.i], f));
+    const retryable = fails.filter(f => f.retryable);
+    const out = retryable.slice(0, max).map(f => ({ ...(requests[f.i] || {}), retry_of: f.i, retry_reason: f.why, is_retry: true }));
+    return { items: out, failed: fails.length, retryable: retryable.length, skipped: Math.max(0, retryable.length - out.length),
+      permanent: fails.filter(f => f.permanent).map(f => f.why).slice(0, 3), reasons: fails.map(f => f.why).slice(0, 5) };
+  };
+  /** the first answers with each retry's answer in the failed one's place (the retry's own failure keeps the first reason). */
+  const merge = (answers, retryItems, retryAnswers, o) => {
+    const out = (answers || []).slice();
+    (retryItems || []).forEach((q, k) => {
+      const i = Number(q && q.retry_of);
+      const a = (retryAnswers || [])[k];
+      if (!Number.isFinite(i) || a === undefined) return;
+      if (check(a, o).ok) out[i] = a;
+    });
+    return out;
+  };
+  /** what was actually seen, in numbers a report can print. */
+  const stats = (answers, o, retryItems, retryAnswers) => {
+    const opt = o || {};
+    const first = failures(answers, opt);
+    const merged = merge(answers, retryItems, retryAnswers, opt);
+    const after = failures(merged, opt);
+    const asked = (answers || []).length;
+    const retried = (retryItems || []).length;
+    return { asked, answered: asked - after.length, failed: after.length, failed_first: first.length, retried,
+      retry_answered: Math.max(0, first.length - after.length), reasons: [...new Set(after.map(f => f.why))].slice(0, 3), answers: merged };
+  };
+  /** the same, for a path that makes ONE call and has one retry node (the SERP / facts / keyword-data gates). */
+  const one = (first, retry, o) => stats([first], o, retry == null ? [] : [{ retry_of: 0 }], retry == null ? [] : [retry]);
+  /** one sentence about those numbers, in the words the reports already use. */
+  const note = (s, what) => {
+    const st = s || {}; const thing = S(what) || 'request';
+    const plural = (n) => n === 1 ? thing : thing + 's';
+    if (!st.asked) return '';
+    if (!st.failed && !st.retried) return '';
+    if (!st.failed) return st.failed_first + ' of ' + st.asked + ' ' + plural(st.asked) + ' failed and ' + (st.retry_answered === 1 ? 'the retry answered' : 'all ' + st.retry_answered + ' answered when they were sent again') + '.';
+    return st.failed + ' of ' + st.asked + ' ' + plural(st.asked) + ' could not be checked' + (st.retried ? ' (sent again once, ' + st.retry_answered + ' answered)' : ' (no answer)')
+      + (st.reasons.length ? ': ' + st.reasons.join('; ') : '') + '. Only the ' + st.answered + ' that answered are counted below.';
+  };
+  /** the evidence block a score may be refused on: `unavailable` means nobody saw it, twice. */
+  const evidence = (what, s, extra) => {
+    const st = s || {};
+    const unavailable = !st.asked || st.answered === 0;
+    return { what: S(what), asked: st.asked || 0, checked: st.answered || 0, failed: st.failed || 0, retried: st.retried || 0,
+      retry_answered: st.retry_answered || 0, unavailable, partial: !unavailable && (st.failed || 0) > 0,
+      error: (st.reasons || [])[0] || '', note: note(st, (extra && extra.unit) || 'request'), ...(extra || {}) };
+  };
+  /** two counts measured on samples of different sizes are not a change (R19): say the sample moved instead of printing a delta.
+   *  `unit` names what the sample is made of ("pages" by default, "questions" for the AI panel, "sources" for a link snapshot). */
+  const MAX_SAMPLE_DRIFT = 0.2;
+  const comparable = (now, before, o) => {
+    const opt = o || {};
+    const tol = opt.tolerance == null ? MAX_SAMPLE_DRIFT : opt.tolerance;
+    const unit = S(opt.unit);                     // named only where the caller said what the sample is made of
+    const a = Number(now), b = Number(before);
+    if (!Number.isFinite(a) || !Number.isFinite(b) || a <= 0 || b <= 0) return { comparable: false, why: 'how many ' + (unit || 'pages') + ' each number was measured on was not recorded', drift: null };
+    const drift = Math.abs(a - b) / Math.max(a, b);
+    if (drift > tol) return { comparable: false, drift: Math.round(drift * 100) / 100,
+      why: 'the two counts were measured on different samples (' + b + (unit ? ' ' + unit : '') + ' then, ' + a + ' now), so they are not compared' };
+    return { comparable: true, drift: Math.round(drift * 100) / 100, why: '' };
+  };
+  /** the other half of like for like (R20, B-L4 / B-L5, 2026-10-15): two figures produced by runs of a DIFFERENT KIND are not a
+   *  change either. R20 was a health score chained across a technical audit and a full report; the same shape reaches the AI
+   *  panel (a weekly check asks fewer engines than the monthly full one) and the link ledger (a free_only snapshot is built from
+   *  a different set of sources than a paid one). `labels` turns the stored key into the words a customer reads. The guard is a
+   *  CALL, never an inlined kit: lineage_lint.py looks for the prefixed call, which this file never writes, so a node cannot
+   *  look guarded without using it. Keep it that way: build section 73 fails if this kit ever spells one of those calls out. */
+  const likeForLike = (now, before, o) => {
+    const opt = o || {}, lab = opt.labels || {};
+    const a = S(now).trim().toLowerCase(), b = S(before).trim().toLowerCase();
+    const what = S(opt.what) || 'these two figures';
+    const name = (k) => S(lab[k]) || k;
+    if (!a || !b) return { comparable: false, why: 'what kind of run produced ' + (b ? 'this figure' : 'the earlier figure') + ' was not recorded, so ' + what + ' are not compared', kind: a, kind_before: b };
+    if (a !== b) return { comparable: false, kind: a, kind_before: b,
+      why: 'the earlier figure came from ' + name(b) + ' and this one from ' + name(a) + ', which do not measure the same thing, so ' + what + ' are not compared' };
+    return { comparable: true, why: '', kind: a, kind_before: b };
+  };
+  return { dfs, google, check, failures, plan, merge, stats, one, note, evidence, comparable, likeForLike, errText, MAX_SAMPLE_DRIFT, TRANSIENT, PERMANENT };
+})();
 const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 let rows = []; try { rows = $('Apply Analysis').all().map(i => i.json).filter(r => !r.skip && r.engine); } catch (e) {}
 if (!rows.length) { try { rows = $('Parse AI Answers').all().map(i => i.json).filter(r => !r.skip && r.engine); } catch (e) {} }
@@ -298,7 +442,28 @@ return plans.map(p => {
   const [mention_lo, mention_hi] = wilson(mentioned, samples);
   const visWeek = visibilityScore(ans, (a) => volOf.get(a.prompt_id) || 0);
   const visibility_score = samples ? Math.round(10 * (visWeek * ans.length + PR.reduce((s, d) => s + d.visibility_score * d.samples, 0)) / samples) / 10 : 0;
-  const delta = prev ? { mention_rate: +(mention_rate - prev.mention_rate).toFixed(1), citation_rate: +(citation_rate - prev.citation_rate).toFixed(1), share_of_voice: +(share_of_voice - prev.share_of_voice).toFixed(1),
+  // ---- B-L4 (2026-10-15, INVARIANTS rule 1, lineage_lint.py "like_for_like"): a delta compares like with like, or it is not a
+  // delta. R19's shape on a different figure: the question panel is settable from 3 to 50, so a site that went from 8 questions
+  // to 20 read as a collapse in share of voice and visibility when nothing about its visibility had moved; and a weekly check
+  // asks fewer engines than the monthly full one, so the engine mix moves the same figures. Both are checked through the one
+  // shared guard (RT, v5/code/_dfs_retry.js): the KIND of run first, because it explains more, then the panel the figures were
+  // measured on, at R19's 20% drift. When they do not match there is no delta at all and `delta_not_compared` says why — the
+  // report prints the reason where the arrows would have been, and every alert that reads a delta stays silent.
+  // The KIND here is the set of engines the headline rates were counted over. It is NOT the run kind: a monthly full run asks
+  // more engines than a weekly one, but `RC` above already leaves the monthly engines out of every rate for exactly that reason,
+  // so weekly and full ARE comparable. What is not comparable is a changed engine list — switch Perplexity off and the rates move
+  // on their own. A stored row says which engines it asked: the ones it did not are marked `carried`.
+  const engSet = (obj) => Object.keys(obj || {}).filter(e => !MONTHLY.includes(e) && !(obj[e] || {}).carried).sort();
+  const engNow = engSet(engines), engBefore = engSet(prev && prev.engines);
+  const engText = (l) => l.map(e => ENG[e] || e).join(', ') || 'no engine';
+  const panel = byQ.size, panel_before = prev ? Number(prev.prompts) || 0 : 0;
+  const same_kind = prev ? RT.likeForLike(engNow.join('+'), engBefore.join('+'),
+    { labels: { [engNow.join('+')]: engText(engNow), [engBefore.join('+')]: engText(engBefore) }, what: 'this week\'s figures and the stored ones' }) : null;
+  const same_panel = prev ? RT.comparable(panel, panel_before, { unit: 'questions' }) : null;
+  const like = prev ? (same_kind.comparable ? same_panel : same_kind) : null;
+  const delta_not_compared = prev && !like.comparable
+    ? 'Not compared with ' + String(prev.checked_at || '').slice(0, 10) + ': ' + like.why + '.' : '';
+  const delta = (prev && like.comparable) ? { mention_rate: +(mention_rate - prev.mention_rate).toFixed(1), citation_rate: +(citation_rate - prev.citation_rate).toFixed(1), share_of_voice: +(share_of_voice - prev.share_of_voice).toFixed(1),
     visibility_score: prev.visibility_score == null ? null : +(visibility_score - prev.visibility_score).toFixed(1), significant: prev.samples ? significant(mentioned, samples, prev.mentioned_k, prev.samples) : null } : null;
   const alerts = [];
   if (delta && (delta.significant === true ? delta.mention_rate < 0 : (delta.significant === null && delta.mention_rate <= -15))) alerts.push({ level: 'high', text: 'AI mentions dropped ' + Math.abs(delta.mention_rate) + ' points to ' + mention_rate + '% of answers' + (delta.significant ? ' (a real change, not sampling noise: ' + samples + ' answers this week vs ' + prev.samples + ')' : '') + '.' });
@@ -307,10 +472,10 @@ return plans.map(p => {
   // D19: the failures are reported with their reason, and above 10% they are an alert of their own (every rate counts answered requests only)
   if (errors) alerts.push({ level: error_rate > 50 ? 'high' : error_rate >= 10 ? 'medium' : 'low',
     text: errors + ' of ' + Rall.length + ' AI requests failed' + (retry.asked ? ' (' + retry.answered + ' of ' + retry.asked + ' answered on the retry)' : '') + ': ' + error_list.map(e => e.engine + ' — ' + e.message).slice(0, 3).join('; ') + '. The rates below count the ' + ans.length + ' answers that came back.' });
-  const prevComp = new Map(((prev && prev.competitors) || []).map(c => [c.domain, Number(c.share) || 0]));
+  const prevComp = new Map((((prev && like.comparable) ? prev.competitors : null) || []).map(c => [c.domain, Number(c.share) || 0]));   // B-L4: a competitor's share moves with the panel too
   for (const c of comp) { const before = prevComp.get(c.domain); if (before != null && c.share - before >= 10 && c.mentions >= 5) alerts.push({ level: 'medium', text: c.domain + ' gained ' + Math.round(c.share - before) + ' points of AI share of voice (now ' + c.share + '%).' }); }
   for (const it of issues.filter(x => x.new).slice(0, 3)) alerts.push({ level: 'high', text: 'AI states something wrong about you (' + it.engines.join(', ') + '): ' + it.text });
-  if (neg && (!prev || prev.sentiment_score == null || sentiment_score < prev.sentiment_score - 20)) alerts.push({ level: 'medium', text: neg + ' AI answer(s) speak negatively about you (sentiment ' + sentiment_score + ').' });
+  if (neg && (!prev || !like.comparable || prev.sentiment_score == null || sentiment_score < prev.sentiment_score - 20)) alerts.push({ level: 'medium', text: neg + ' AI answer(s) speak negatively about you (sentiment ' + sentiment_score + ').' });
   if (acc) for (const it of acc.issues.filter(x => x.level === 'critical' || x.level === 'high')) alerts.push({ level: 'high', text: it.text });
   if (traffic && traffic.connected && traffic.prev_sessions >= 30 && traffic.change_pct != null && traffic.change_pct <= -30) alerts.push({ level: 'medium', text: 'Visits from AI assistants fell ' + Math.abs(traffic.change_pct) + '% (' + traffic.sessions + ' in the last 28 days vs ' + traffic.prev_sessions + ').' });
   // actions, most valuable first (value = the demand behind a question, or how much a fix unblocks)
@@ -353,6 +518,8 @@ return plans.map(p => {
   const aliasKeys = Object.keys(aliases).slice(-200); const aliasesTrim = Object.fromEntries(aliasKeys.map(k => [k, aliases[k]]));
   const cache_rows = Object.keys(aliasesTrim).length !== Object.keys(p.aliases || {}).length || JSON.stringify(aliasesTrim) !== JSON.stringify(p.aliases || {}) ? [{ key: 'ai_brands:' + p.site_id, kind: 'ai', site_id: p.site_id, value: J(aliasesTrim), updated_at: now }] : [];
   return { json: { ...p, metrics: { asked: RC.length, asked_all: R.length, requests: Rall.length, answered: ans.length, samples, pulse_samples: pulseN, pulse_days: PR.length, errors, error_rate, errors_list: error_list, retried: retry.asked, retry_answered: retry.answered, mentioned, cited, mention_rate, mention_ci: [mention_lo, mention_hi], citation_rate, share_of_voice, visibility_score, avg_rank: vis_row.avg_rank, aio_presence, aio_citation_rate, brand_known, brand, delta,
+    // B-L4: when the two runs are not like for like the customer is TOLD, in the place the change would have been
+    delta_not_compared, panel, panel_before, delta_basis: prev ? (like.comparable ? 'compared with ' + String(prev.checked_at || '').slice(0, 10) + ' (' + panel_before + ' questions on ' + engText(engBefore) + ')' : like.why) : 'first run (baseline)',
       sentiment_score, accuracy_issues: fact_check === 'checked' ? issues.length : null, fact_check, index_sov: vis_row.index_sov, ai_impressions, demand_total, lost_demand },
     engines, competitors: comp, sources, our_pages, questions, gaps, clusters, fanout, perception, traffic, access: acc, index, suggestions: sugg, market, alerts, actions: actions.slice(0, 10), vis_row, prospect_rows, cache_rows, cost_usd: vis_row.cost_usd, form_url: FORM_URL, api_url: API_URL } };
 });

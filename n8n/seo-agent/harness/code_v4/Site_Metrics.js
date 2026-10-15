@@ -741,6 +741,7 @@ const LN = (() => {
     ai_engines: { label: 'the AI assistants themselves', how: 'the answers ChatGPT, Gemini, Google AI Mode and the others gave to the questions in your panel' },
     ai_db: { label: 'the DataForSEO AI-answer database', how: 'a database of AI answers and the brands they name' },
     own_check: { label: 'our own fetch of the page', how: 'we requested the page ourselves and read what came back' },
+    draft: { label: 'the finished draft itself', how: 'counted in the text this run wrote, before anybody published it' },
     crawl: { label: 'our crawl of your website', how: 'the pages we could reach and read on your site' },
     crux: { label: 'the Chrome User Experience Report', how: 'speed as real Chrome visitors experienced it over 28 days' },
     pagespeed: { label: 'Google PageSpeed Insights (Lighthouse)', how: 'one simulated mobile load in a lab, not what your visitors felt' },

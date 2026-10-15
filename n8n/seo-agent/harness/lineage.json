@@ -5,15 +5,15 @@
    "subject": 2
   },
   "like_for_like": {
-   "pass": 4,
+   "pass": 6,
    "subject": 6
   },
   "lineage": {
-   "pass": 10,
+   "pass": 13,
    "subject": 16
   },
   "withheld": {
-   "pass": 3,
+   "pass": 4,
    "subject": 4
   }
  },
@@ -44,14 +44,11 @@
    "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
   },
   "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Blog Package": {
-   "fails": [
-    "lineage",
-    "withheld"
-   ],
+   "fails": [],
    "lineage": {
-    "calls": false,
-    "kit": false,
-    "travels": false
+    "calls": true,
+    "kit": true,
+    "travels": true
    },
    "markup": 25,
    "node": "Blog Package",
@@ -59,7 +56,7 @@
     "lineage",
     "withheld"
    ],
-   "withheld": false,
+   "withheld": true,
    "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
   },
   "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Build Audit Report": {
@@ -95,15 +92,13 @@
    "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
   },
   "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Build Keyword Strategy": {
-   "fails": [
-    "lineage"
-   ],
+   "fails": [],
    "lineage": {
-    "calls": false,
-    "kit": false,
-    "travels": false
+    "calls": true,
+    "kit": true,
+    "travels": true
    },
-   "markup": 44,
+   "markup": 53,
    "node": "Build Keyword Strategy",
    "subject": [
     "lineage"
@@ -135,15 +130,13 @@
    "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
   },
   "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Build Word File": {
-   "fails": [
-    "lineage"
-   ],
+   "fails": [],
    "lineage": {
-    "calls": false,
-    "kit": false,
-    "travels": false
+    "calls": true,
+    "kit": true,
+    "travels": true
    },
-   "markup": 96,
+   "markup": 104,
    "node": "Build Word File",
    "subject": [
     "lineage",
@@ -167,12 +160,10 @@
    "workflow": "SEO Agent \u2014 AI Growth"
   },
   "SEO Agent \u2014 AI Visibility Tracker / AI Metrics": {
-   "fails": [
-    "like_for_like"
-   ],
+   "fails": [],
    "like_for_like": {
-    "report_type": false,
-    "sample": false
+    "report_type": true,
+    "sample": true
    },
    "markup": 0,
    "node": "AI Metrics",
@@ -202,7 +193,7 @@
     "kit": true,
     "travels": true
    },
-   "markup": 21,
+   "markup": 24,
    "node": "BL Report",
    "subject": [
     "lineage"
@@ -210,12 +201,10 @@
    "workflow": "SEO Agent \u2014 Backlink Monitor"
   },
   "SEO Agent \u2014 Backlink Monitor / Parse Backlinks": {
-   "fails": [
-    "like_for_like"
-   ],
+   "fails": [],
    "like_for_like": {
-    "report_type": false,
-    "sample": false
+    "report_type": true,
+    "sample": true
    },
    "markup": 0,
    "node": "Parse Backlinks",
@@ -430,22 +419,6 @@
  "unpaid": {
   "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Analyze Probes": [
    "evidence"
-  ],
-  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Blog Package": [
-   "lineage",
-   "withheld"
-  ],
-  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Build Keyword Strategy": [
-   "lineage"
-  ],
-  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Build Word File": [
-   "lineage"
-  ],
-  "SEO Agent \u2014 AI Visibility Tracker / AI Metrics": [
-   "like_for_like"
-  ],
-  "SEO Agent \u2014 Backlink Monitor / Parse Backlinks": [
-   "like_for_like"
   ],
   "SEO Agent \u2014 Console Alerts / Alert Target": [
    "lineage"

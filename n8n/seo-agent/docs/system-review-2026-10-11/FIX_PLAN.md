@@ -1220,11 +1220,11 @@ The empty-string defect was real but lived elsewhere, in the seven findings abov
 
 | ID | Title | Impact | Where | Fix | Status |
 |---|---|---|---|---|---|
-| B-L4 | **AI visibility deltas are computed across panels of different sizes.** *AI Metrics* subtracts the previous run's `share_of_voice` and `visibility_score` without checking the question panel is the same size — and the panel is settable from 3 to 50, so changing it reads as a change in visibility. R19's shape on a different figure | **High** (a wrong number a customer acts on) | *AI Metrics*, AI Visibility Tracker | carry the panel size with the figure and refuse the delta when it moved, as R19 did for the URL-inspection sample | **open**, held on the ratchet |
-| B-L5 | **A spam-score alert compares two unlike snapshots.** *Parse Backlinks* alerts on a 15-point move between snapshots without checking they are the same kind; a `free_only` snapshot is built from a different set of sources than a full one. R20's shape on a different figure | **High** (a false alert about a customer's backlink profile) | *Parse Backlinks*, Backlink Monitor | compare only snapshots of the same kind, or say the kinds differ and withhold | **open**, held on the ratchet |
-| B-L1 | **The written page package prints QA counts and readability / originality scores with no source line** — and prints them whether or not the check that produced them ran | Medium | *Blog Package* | lineage on the counts, and "not checked" when the check did not run | **open**, held on the ratchet |
-| B-L2 | **The keyword strategy prints searches per month, difficulty and cost per click as facts.** They are provider estimates for a single keyword; the section says so in prose, not as lineage, and when the strategy ships on its own there is no table at all | Medium | *Build Keyword Strategy* | the G29 lineage table on the strategy document too | **open**, held on the ratchet |
-| B-L3 | **The Word attachment carries the numbers without their sources** — *Build Word File* re-prints the figures and the lineage block does not travel into the `.doc`, so the customer who opens the attachment sees figures with no provenance | Medium | *Build Word File* | carry the lineage block into the Word rendering | **open**, held on the ratchet |
+| B-L4 | **AI visibility deltas are computed across panels of different sizes.** *AI Metrics* subtracts the previous run's `share_of_voice` and `visibility_score` without checking the question panel is the same size — and the panel is settable from 3 to 50, so changing it reads as a change in visibility. R19's shape on a different figure | **High** (a wrong number a customer acts on) | *AI Metrics*, AI Visibility Tracker | carry the engine set and the panel size with the figure; compute the delta only when the **engine set matches** and the panel is within R19's 20% drift, else `delta: null` with `delta_not_compared` naming both panel sizes, and the report prints "not compared" where the arrows were (an empty tile read as "no change") | fixed 2026-10-15 (build section 73, S83); not deployed |
+| B-L5 | **A spam-score alert compares two unlike snapshots.** *Parse Backlinks* alerts on a 15-point move between snapshots without checking they are the same kind; a `free_only` snapshot is built from a different set of sources than a full one. R20's shape on a different figure | **High** (a false alert about a customer's backlink profile) | *Parse Backlinks*, Backlink Monitor | compare only snapshots built from the same source set and over an index whose link count did not drift >20%; a snapshot whose `mode` nobody recorded is **no longer assumed paid** — which is exactly how an unlike row got in | fixed 2026-10-15 (build section 73, S83); not deployed |
+| B-L1 | **The written page package prints QA counts and readability / originality scores with no source line** — and prints them whether or not the check that produced them ran | Medium | *Blog Package* | LN on the package: content score, QA summary, coverage and originality each state source / period / sample / basis, and a check that did not run yields a **withheld** figure, not a number. Deliberately not rendered into the article — that is the customer's published page | fixed 2026-10-15 (build section 73, S83); not deployed |
+| B-L2 | **The keyword strategy prints searches per month, difficulty and cost per click as facts.** They are provider estimates for a single keyword; the section says so in prose, not as lineage, and when the strategy ships on its own there is no table at all | Medium | *Build Keyword Strategy* | the G29 "Where these numbers come from" table in the strategy document and `lineage` in the callback; volume / difficulty / CPC labelled the provider's **estimate for one keyword** | fixed 2026-10-15 (build section 73, S83); not deployed |
+| B-L3 | **The Word attachment carries the numbers without their sources** — *Build Word File* re-prints the figures and the lineage block does not travel into the `.doc`, so the customer who opens the attachment sees figures with no provenance | Medium | *Build Word File* | the kit, a final lineage section in the `.doc` and `lineage` in the json — one node, so the verdict, the keyword report, the written page and the audit attachment all gain it | fixed 2026-10-15 (build section 73, S83); not deployed |
 
 The other four baseline entries are small or already covered at their sink (*Analyze Probes* delivers only through *Build Site Issues*;
 three cadence / Console Alert e-mails state counts with no source line). They stay listed rather than excused.
@@ -1252,6 +1252,24 @@ It was broken ten ways and each was caught by name — and **four of those break
 **All four INVARIANTS rules now enforce at build time**: rule 1 `lineage_lint.py` (ratcheted, 9 nodes), rule 2 `gate_lint.py` (ratcheted,
 26), rule 3 `retry_lint.py` (ratcheted, 48 for B-A10), rule 4 `state_lint.py` (**no ratchet**). Every one of them found a live defect on
 the day it landed: rule 2 found B-G1..B-G3, rule 1 found seven findings with empty evidence plus B-L4 / B-L5, rule 4 found B-S1 / B-S2.
+
+**B-L1..B-L5 closed, and the third lint hole of the day (2026-10-15, build section 73, S83).** Baseline **9 -> 4 nodes**; coverage
+lineage 10/16 -> **13/16**, like-for-like 4/6 -> **6/6**, withheld 3/4 -> **4/4**. Harness 4812.
+
+- **The orchestrator's brief got B-L4 wrong, and the agent backed it out.** The brief said to guard the delta on the run kind. *AI
+  Metrics* already excludes the monthly-only engines (`RC = R.filter(r => !MONTHLY.includes(r.engine))`) **precisely so** that a weekly
+  and a monthly run are comparable, so guarding on kind suppressed a correct comparison and broke S19 week 2. What genuinely moves the
+  rates is the **set of engines they were counted over**, which a stored row already records. Compared on that, plus the panel at R19's
+  20% drift.
+- **Two more holes in `lineage_lint.py`, the same shape as `gate_lint.py`'s and found the same day.** A kit **header comment** naming the
+  call the lint looks for answered the lint's question for every node that carried the kit — `_lineage.js` opens with "LN.block() prints
+  the whole list…" *above* `const LN = (() => {`, so the kit stripper never reached it, and *Site Report* was passing `lineage` on prose.
+  Comments are now stripped before every check (a `//` after a colon is spared so URLs survive). And a node that **renders** lineage
+  composed upstream is a use of the kit, not a gap. Guard markers are calls, never inlines.
+
+**Three lints, three holes of the same kind, in one day** (`gate_lint` counted an inlined kit as a gate; `lineage_lint` counted a kit's
+own header and then its rendered output; `state_lint` found four in itself before it was merged). The lesson is recorded here because it
+will recur: **a lint that reads generated source must strip the kit — comments included — before it asks whether a node calls a kit.**
 
 **A process defect this batch found (B-P1).** `isolation: "worktree"` cut both agents' worktrees from `edca460` — the last merge to
 `main` — which is **47 commits behind** the branch tip: no build sections 55–66, no S67–S74, and `docs/system-review-2026-10-14/` did

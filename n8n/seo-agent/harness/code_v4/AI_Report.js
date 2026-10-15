@@ -50,6 +50,7 @@ const LN = (() => {
     ai_engines: { label: 'the AI assistants themselves', how: 'the answers ChatGPT, Gemini, Google AI Mode and the others gave to the questions in your panel' },
     ai_db: { label: 'the DataForSEO AI-answer database', how: 'a database of AI answers and the brands they name' },
     own_check: { label: 'our own fetch of the page', how: 'we requested the page ourselves and read what came back' },
+    draft: { label: 'the finished draft itself', how: 'counted in the text this run wrote, before anybody published it' },
     crawl: { label: 'our crawl of your website', how: 'the pages we could reach and read on your site' },
     crux: { label: 'the Chrome User Experience Report', how: 'speed as real Chrome visitors experienced it over 28 days' },
     pagespeed: { label: 'Google PageSpeed Insights (Lighthouse)', how: 'one simulated mobile load in a lab, not what your visitors felt' },
@@ -143,7 +144,7 @@ return metrics.map((m, i) => {
   const b = briefs[i] || null; const M = m.metrics; const d = M.delta || {}; const T = m.traffic; const A = m.access; const X = m.index; const P = m.perception;
   const engs = Object.keys(m.engines);
   let html = '<div style="font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#0f172a;max-width:900px">';
-  html += '<h2 style="margin:0 0 2px;font-size:20px">AI search visibility: ' + esc(m.domain) + '</h2>' + p_(esc(m.checked_at.slice(0, 10)) + ' · ' + m.questions.length + ' buyer questions × ' + engs.length + ' AI engines · ' + n(M.samples) + ' answers counted' + (M.pulse_samples ? ' (' + n(M.pulse_samples) + ' from the daily pulse)' : '') + (m.on_demand ? ' · on-demand run' : '') + (m.previous ? ' · compared with ' + esc(String(m.previous.checked_at).slice(0, 10)) : ' · first run (baseline)'), true);
+  html += '<h2 style="margin:0 0 2px;font-size:20px">AI search visibility: ' + esc(m.domain) + '</h2>' + p_(esc(m.checked_at.slice(0, 10)) + ' · ' + m.questions.length + ' buyer questions × ' + engs.length + ' AI engines · ' + n(M.samples) + ' answers counted' + (M.pulse_samples ? ' (' + n(M.pulse_samples) + ' from the daily pulse)' : '') + (m.on_demand ? ' · on-demand run' : '') + (m.previous ? (M.delta_not_compared ? ' · ' + esc(String(M.delta_not_compared).replace(/\.$/, '')) : ' · compared with ' + esc(String(m.previous.checked_at).slice(0, 10))) : ' · first run (baseline)'), true);
   // D19: every figure counts answered requests only, so the failures are named here instead of being invisible
   if (M.errors) html += p_(M.errors + ' of ' + n(M.requests || M.asked_all) + ' requests failed this run (' + M.error_rate + '%)'
     + (M.retried ? ', ' + M.retry_answered + ' of ' + M.retried + ' answered when they were sent again' : '') + ': '
@@ -151,9 +152,13 @@ return metrics.map((m, i) => {
     + '. The rates below count the ' + n(M.answered) + ' answers that came back.', true);
   html += briefBox(b) + alertBox(m.alerts);
   const sig = d.significant === true ? ' <b>real change</b>' : d.significant === false ? ' (within noise)' : '';
-  html += '<table style="border-collapse:collapse;margin:8px 0"><tr>' + tile('Named in', M.mention_rate + '%', '95% range ' + M.mention_ci[0] + '–' + M.mention_ci[1] + '%' + (m.previous ? '<br>' + dpts(d.mention_rate) + sig : '')) +
-    tile('Visibility score', M.visibility_score + '/100', m.previous && d.visibility_score != null ? dpts(d.visibility_score) : 'position and demand weighted') + tile('Your pages cited', M.citation_rate + '%', m.previous ? dpts(d.citation_rate) : M.cited + ' answers') +
-    tile('Share of voice', M.share_of_voice + '%', m.previous ? dpts(d.share_of_voice) : 'vs ' + m.competitors.length + ' competitors') +
+  // B-L4 (2026-10-15, INVARIANTS rule 1): the panel or the run kind moved, so there is no change to print — say that in the
+  // place the arrow would have been. An empty box reads as "no change", which is the opposite of what happened.
+  const nc = '<span style="color:#b45309">not compared</span>';
+  if (M.delta_not_compared) html += p_('<b>These figures are not compared with the last check.</b> ' + esc(String(M.delta_not_compared).replace(/^Not compared with [0-9-]+: /, '')) + ' The figures below are this run\'s own measurement.', true);
+  html += '<table style="border-collapse:collapse;margin:8px 0"><tr>' + tile('Named in', M.mention_rate + '%', '95% range ' + M.mention_ci[0] + '–' + M.mention_ci[1] + '%' + (m.previous ? '<br>' + (M.delta_not_compared ? nc : dpts(d.mention_rate) + sig) : '')) +
+    tile('Visibility score', M.visibility_score + '/100', m.previous && M.delta_not_compared ? nc : (m.previous && d.visibility_score != null ? dpts(d.visibility_score) : 'position and demand weighted')) + tile('Your pages cited', M.citation_rate + '%', m.previous ? (M.delta_not_compared ? nc : dpts(d.citation_rate)) : M.cited + ' answers') +
+    tile('Share of voice', M.share_of_voice + '%', m.previous ? (M.delta_not_compared ? nc : dpts(d.share_of_voice)) : 'vs ' + m.competitors.length + ' competitors') +
     (T && T.connected ? tile('AI visits (28 days)', n(T.sessions), (T.change_pct != null ? (T.change_pct >= 0 ? '▲ ' : '▼ ') + Math.abs(T.change_pct) + '% · ' : '') + n(T.key_events) + ' key events' + (T.revenue ? ' · ' + money(T.revenue) + ' revenue' : '')) : '') +
     (M.sentiment_score != null ? tile('Sentiment', (M.sentiment_score > 0 ? '+' : '') + M.sentiment_score, P.positive + ' positive · ' + P.negative + ' negative', M.sentiment_score < 0 ? '#b91c1c' : '#15803d') : '') + '</tr><tr>' +
     tile('Avg. position', M.avg_rank ? '#' + M.avg_rank : '—', 'when named') + tile('AI Overview', M.aio_presence + '%', 'of searches show one; you cited in ' + M.aio_citation_rate + '%') +

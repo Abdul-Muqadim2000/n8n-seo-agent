@@ -8,6 +8,7 @@
 // and the learned brand names (seo_cache).
 /*__AI_STATS__*/
 /*__DRAFTS__*/
+/*__DFS_RETRY__*/
 const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 let rows = []; try { rows = $('Apply Analysis').all().map(i => i.json).filter(r => !r.skip && r.engine); } catch (e) {}
 if (!rows.length) { try { rows = $('Parse AI Answers').all().map(i => i.json).filter(r => !r.skip && r.engine); } catch (e) {} }
@@ -201,7 +202,28 @@ return plans.map(p => {
   const [mention_lo, mention_hi] = wilson(mentioned, samples);
   const visWeek = visibilityScore(ans, (a) => volOf.get(a.prompt_id) || 0);
   const visibility_score = samples ? Math.round(10 * (visWeek * ans.length + PR.reduce((s, d) => s + d.visibility_score * d.samples, 0)) / samples) / 10 : 0;
-  const delta = prev ? { mention_rate: +(mention_rate - prev.mention_rate).toFixed(1), citation_rate: +(citation_rate - prev.citation_rate).toFixed(1), share_of_voice: +(share_of_voice - prev.share_of_voice).toFixed(1),
+  // ---- B-L4 (2026-10-15, INVARIANTS rule 1, lineage_lint.py "like_for_like"): a delta compares like with like, or it is not a
+  // delta. R19's shape on a different figure: the question panel is settable from 3 to 50, so a site that went from 8 questions
+  // to 20 read as a collapse in share of voice and visibility when nothing about its visibility had moved; and a weekly check
+  // asks fewer engines than the monthly full one, so the engine mix moves the same figures. Both are checked through the one
+  // shared guard (RT, v5/code/_dfs_retry.js): the KIND of run first, because it explains more, then the panel the figures were
+  // measured on, at R19's 20% drift. When they do not match there is no delta at all and `delta_not_compared` says why — the
+  // report prints the reason where the arrows would have been, and every alert that reads a delta stays silent.
+  // The KIND here is the set of engines the headline rates were counted over. It is NOT the run kind: a monthly full run asks
+  // more engines than a weekly one, but `RC` above already leaves the monthly engines out of every rate for exactly that reason,
+  // so weekly and full ARE comparable. What is not comparable is a changed engine list — switch Perplexity off and the rates move
+  // on their own. A stored row says which engines it asked: the ones it did not are marked `carried`.
+  const engSet = (obj) => Object.keys(obj || {}).filter(e => !MONTHLY.includes(e) && !(obj[e] || {}).carried).sort();
+  const engNow = engSet(engines), engBefore = engSet(prev && prev.engines);
+  const engText = (l) => l.map(e => ENG[e] || e).join(', ') || 'no engine';
+  const panel = byQ.size, panel_before = prev ? Number(prev.prompts) || 0 : 0;
+  const same_kind = prev ? RT.likeForLike(engNow.join('+'), engBefore.join('+'),
+    { labels: { [engNow.join('+')]: engText(engNow), [engBefore.join('+')]: engText(engBefore) }, what: 'this week\'s figures and the stored ones' }) : null;
+  const same_panel = prev ? RT.comparable(panel, panel_before, { unit: 'questions' }) : null;
+  const like = prev ? (same_kind.comparable ? same_panel : same_kind) : null;
+  const delta_not_compared = prev && !like.comparable
+    ? 'Not compared with ' + String(prev.checked_at || '').slice(0, 10) + ': ' + like.why + '.' : '';
+  const delta = (prev && like.comparable) ? { mention_rate: +(mention_rate - prev.mention_rate).toFixed(1), citation_rate: +(citation_rate - prev.citation_rate).toFixed(1), share_of_voice: +(share_of_voice - prev.share_of_voice).toFixed(1),
     visibility_score: prev.visibility_score == null ? null : +(visibility_score - prev.visibility_score).toFixed(1), significant: prev.samples ? significant(mentioned, samples, prev.mentioned_k, prev.samples) : null } : null;
   const alerts = [];
   if (delta && (delta.significant === true ? delta.mention_rate < 0 : (delta.significant === null && delta.mention_rate <= -15))) alerts.push({ level: 'high', text: 'AI mentions dropped ' + Math.abs(delta.mention_rate) + ' points to ' + mention_rate + '% of answers' + (delta.significant ? ' (a real change, not sampling noise: ' + samples + ' answers this week vs ' + prev.samples + ')' : '') + '.' });
@@ -210,10 +232,10 @@ return plans.map(p => {
   // D19: the failures are reported with their reason, and above 10% they are an alert of their own (every rate counts answered requests only)
   if (errors) alerts.push({ level: error_rate > 50 ? 'high' : error_rate >= 10 ? 'medium' : 'low',
     text: errors + ' of ' + Rall.length + ' AI requests failed' + (retry.asked ? ' (' + retry.answered + ' of ' + retry.asked + ' answered on the retry)' : '') + ': ' + error_list.map(e => e.engine + ' — ' + e.message).slice(0, 3).join('; ') + '. The rates below count the ' + ans.length + ' answers that came back.' });
-  const prevComp = new Map(((prev && prev.competitors) || []).map(c => [c.domain, Number(c.share) || 0]));
+  const prevComp = new Map((((prev && like.comparable) ? prev.competitors : null) || []).map(c => [c.domain, Number(c.share) || 0]));   // B-L4: a competitor's share moves with the panel too
   for (const c of comp) { const before = prevComp.get(c.domain); if (before != null && c.share - before >= 10 && c.mentions >= 5) alerts.push({ level: 'medium', text: c.domain + ' gained ' + Math.round(c.share - before) + ' points of AI share of voice (now ' + c.share + '%).' }); }
   for (const it of issues.filter(x => x.new).slice(0, 3)) alerts.push({ level: 'high', text: 'AI states something wrong about you (' + it.engines.join(', ') + '): ' + it.text });
-  if (neg && (!prev || prev.sentiment_score == null || sentiment_score < prev.sentiment_score - 20)) alerts.push({ level: 'medium', text: neg + ' AI answer(s) speak negatively about you (sentiment ' + sentiment_score + ').' });
+  if (neg && (!prev || !like.comparable || prev.sentiment_score == null || sentiment_score < prev.sentiment_score - 20)) alerts.push({ level: 'medium', text: neg + ' AI answer(s) speak negatively about you (sentiment ' + sentiment_score + ').' });
   if (acc) for (const it of acc.issues.filter(x => x.level === 'critical' || x.level === 'high')) alerts.push({ level: 'high', text: it.text });
   if (traffic && traffic.connected && traffic.prev_sessions >= 30 && traffic.change_pct != null && traffic.change_pct <= -30) alerts.push({ level: 'medium', text: 'Visits from AI assistants fell ' + Math.abs(traffic.change_pct) + '% (' + traffic.sessions + ' in the last 28 days vs ' + traffic.prev_sessions + ').' });
   // actions, most valuable first (value = the demand behind a question, or how much a fix unblocks)
@@ -256,6 +278,8 @@ return plans.map(p => {
   const aliasKeys = Object.keys(aliases).slice(-200); const aliasesTrim = Object.fromEntries(aliasKeys.map(k => [k, aliases[k]]));
   const cache_rows = Object.keys(aliasesTrim).length !== Object.keys(p.aliases || {}).length || JSON.stringify(aliasesTrim) !== JSON.stringify(p.aliases || {}) ? [{ key: 'ai_brands:' + p.site_id, kind: 'ai', site_id: p.site_id, value: J(aliasesTrim), updated_at: now }] : [];
   return { json: { ...p, metrics: { asked: RC.length, asked_all: R.length, requests: Rall.length, answered: ans.length, samples, pulse_samples: pulseN, pulse_days: PR.length, errors, error_rate, errors_list: error_list, retried: retry.asked, retry_answered: retry.answered, mentioned, cited, mention_rate, mention_ci: [mention_lo, mention_hi], citation_rate, share_of_voice, visibility_score, avg_rank: vis_row.avg_rank, aio_presence, aio_citation_rate, brand_known, brand, delta,
+    // B-L4: when the two runs are not like for like the customer is TOLD, in the place the change would have been
+    delta_not_compared, panel, panel_before, delta_basis: prev ? (like.comparable ? 'compared with ' + String(prev.checked_at || '').slice(0, 10) + ' (' + panel_before + ' questions on ' + engText(engBefore) + ')' : like.why) : 'first run (baseline)',
       sentiment_score, accuracy_issues: fact_check === 'checked' ? issues.length : null, fact_check, index_sov: vis_row.index_sov, ai_impressions, demand_total, lost_demand },
     engines, competitors: comp, sources, our_pages, questions, gaps, clusters, fanout, perception, traffic, access: acc, index, suggestions: sugg, market, alerts, actions: actions.slice(0, 10), vis_row, prospect_rows, cache_rows, cost_usd: vis_row.cost_usd, form_url: FORM_URL, api_url: API_URL } };
 });

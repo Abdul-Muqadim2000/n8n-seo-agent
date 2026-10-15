@@ -15,6 +15,7 @@
 // sites, link-selling / gambling anchors, gambling hosts — and makes its members "spam" whatever the index or the analyst said: value 0,
 // out of best links / wins / at-risk / important-lost / prospects, on the disavow candidates (review-only), listed as farms in the report.
 /*__LINK_KIT__*/
+/*__DFS_RETRY__*/
 /*__OUTREACH_KIT__*/
 /*__SITE_MODEL__*/
 const plans = $('BL Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
@@ -235,6 +236,23 @@ return plans.map(p => {
   const referral = { visits: liveRows.reduce((s, r) => s + (Number(r.visits) || 0), 0), visits_28d: liveRows.reduce((s, r) => s + (Number(r.visits_28d) || 0), 0), key_events: liveRows.reduce((s, r) => s + (Number(r.key_events) || 0), 0) };
   // ---------------- alerts ----------------
   const prev = p.previous; const alerts = [];
+  // ---- B-L5 (2026-10-15, INVARIANTS rule 1, lineage_lint.py "like_for_like"): two snapshots are compared only when they were
+  // built the same way. R20's shape on a different figure: a free_only check reads the free sources and our own fetch of every
+  // page and buys NOTHING from DataForSEO, so its link count, its spam score and its union of referring sites come from a
+  // different set of sources than a paid run's. Subtracting one from the other measures the source set, not the link profile.
+  // The second half is R19's: the spam score is the share of the INDEX's links judged spammy, so when the index's own link count
+  // moves more than 20% between the two snapshots a 15-point move is the recrawl, not the site. Neither case is hidden: the
+  // reason goes into `not_compared`, which the snapshot carries and the report prints where the change would have been.
+  const SNAP_SOURCES = { free: 'the free sources only (no DataForSEO)', all: 'every source (DataForSEO and the free ones)' };
+  // a snapshot whose mode nobody recorded is NOT assumed to be a paid one: the guard refuses it and says so, which is the whole
+  // point — `mine.find(x => x.mode !== 'free')` in BL Plan reads an empty mode as paid, and that is how an unlike snapshot got in.
+  const sourceSetOf = (m) => { const v = String(m || '').toLowerCase().trim(); return !v ? '' : (v === 'free' ? 'free' : 'all'); };
+  const sameSources = prev ? RT.likeForLike(sourceSetOf(p.mode), sourceSetOf(prev.mode), { labels: SNAP_SOURCES, what: 'the two snapshots' }) : null;
+  const sameIndex = prev ? RT.comparable(summary.backlinks, prev.backlinks, { unit: 'links in the index' }) : null;
+  const sameUnion = prev ? RT.likeForLike(sourceSetOf(p.mode), sourceSetOf(prev.union_mode || prev.mode), { labels: SNAP_SOURCES, what: 'the two counts of referring sites' }) : null;
+  const not_compared = [];
+  const spamLike = !!(prev && summary.available && sameSources.comparable && sameIndex.comparable);
+  if (prev && summary.available && prev.spam_score && !spamLike) not_compared.push('Link spam score (' + prev.spam_score + ' then, ' + summary.spam_score + ' now): ' + (sameSources.comparable ? sameIndex.why : sameSources.why) + '.');
   const REASON = { link_removed: 'link removed', page_gone: 'page gone', domain_gone: 'site gone', not_seen: 'not seen for 4 months' };
   const actionable = important_lost.filter(l => l.reason !== 'domain_gone'), siteGone = important_lost.filter(l => l.reason === 'domain_gone');
   if (actionable.length) alerts.push({ level: 'high', text: actionable.length + ' important link(s) lost (checked twice): ' + actionable.slice(0, 3).map(l => l.from_domain + ' (' + (REASON[l.reason] || l.reason) + ')').join(', ') + '.' });
@@ -243,14 +261,15 @@ return plans.map(p => {
   if (spammy.length >= 3) alerts.push({ level: 'medium', text: spammy.length + ' new spammy links (PBN / link-farm pages) since ' + p.since.slice(0, 10) + '. Google ignores most of them; nothing to do unless you get a manual action.' });
   const newMoney = ledger.filter(r => r._new && r.anchor_kind === 'money' && (r.spam_score >= 30 || (r.relevance !== '' && r.relevance < 0.34)));
   if (newMoney.length >= 10) alerts.push({ level: 'medium', text: newMoney.length + ' new off-topic links with keyword anchors at once — a possible negative-SEO pattern. Keep watching; disavow only if a manual action follows.' });
-  if (prev && summary.available && prev.spam_score && summary.spam_score - prev.spam_score >= 15) alerts.push({ level: 'medium', text: 'Link spam score rose from ' + prev.spam_score + ' to ' + summary.spam_score + '.' });
+  if (spamLike && prev.spam_score && summary.spam_score - prev.spam_score >= 15) alerts.push({ level: 'medium', text: 'Link spam score rose from ' + prev.spam_score + ' to ' + summary.spam_score + ' (both checks read ' + SNAP_SOURCES[sourceSetOf(p.mode)] + ', over ' + prev.backlinks + ' and ' + summary.backlinks + ' links).' });
   // the drop alert counts real referring sites only: a link-farm cluster leaving is not a loss (P1-2). The stored union counted the farms, so
   // the farm pages that were live at the last check are taken off it too; the alert says so when any were.
   const farmLiveNow = ledger.filter(r => spamSet.has(r.ref_domain) && r.kind === 'web' && r.status !== 'lost').length;
   const farmLivePrev = ledger.filter(r => spamSet.has(r.ref_domain) && r.kind === 'web' && !r._new && r._prev_status !== 'lost').length;
   const cleanNow = liveRows.length - farmLiveNow, cleanPrev = Math.max(0, (prev ? Number(prev.union_domains) || 0 : 0) - farmLivePrev);
-  if (prev && cleanPrev >= 10 && cleanNow < cleanPrev * 0.9) alerts.push({ level: 'medium', text: 'Referring sites (all sources) fell from ' + cleanPrev + ' to ' + cleanNow + '.' + (farmLivePrev || farmLiveNow ? ' (Link-farm pages are not counted.)' : '') });
-  else if (prev && !prev.union_domains && summary.available && prev.referring_domains >= 10 && summary.referring_domains < prev.referring_domains * 0.9) alerts.push({ level: 'medium', text: 'Referring domains fell from ' + prev.referring_domains + ' to ' + summary.referring_domains + '.' });
+  if (prev && !sameUnion.comparable && cleanPrev >= 10) not_compared.push('Referring sites (' + cleanPrev + ' then, ' + cleanNow + ' now): ' + sameUnion.why + '.');
+  if (prev && sameUnion.comparable && cleanPrev >= 10 && cleanNow < cleanPrev * 0.9) alerts.push({ level: 'medium', text: 'Referring sites (all sources) fell from ' + cleanPrev + ' to ' + cleanNow + '.' + (farmLivePrev || farmLiveNow ? ' (Link-farm pages are not counted.)' : '') });
+  else if (prev && sameSources.comparable && !prev.union_domains && summary.available && prev.referring_domains >= 10 && summary.referring_domains < prev.referring_domains * 0.9) alerts.push({ level: 'medium', text: 'Referring domains fell from ' + prev.referring_domains + ' to ' + summary.referring_domains + '.' });
   const atRiskOut = atRisk.filter(({ e }) => !spamSet.has(e.ref_domain));   // a link-farm page is never "at risk": there is nothing to win back (D3)
   const riskImportant = atRiskOut.filter(({ e }) => { const r = ledger.find(x => x.ref_domain === e.ref_domain) || {}; return importantOf(e.prev ? { ...r, seo_value: Number(e.prev.seo_value) || r.seo_value } : r); });
   if (riskImportant.length) alerts.push({ level: 'low', text: riskImportant.length + ' valuable link(s) not found on their page this week (' + riskImportant.slice(0, 3).map(x => x.e.ref_domain).join(', ') + '); checked again next week before calling them lost.' });
@@ -276,5 +295,5 @@ return plans.map(p => {
     .filter((x, i, a) => a.findIndex(y => LK.refKey(y.from_domain) === LK.refKey(x.from_domain)) === i);
   return { json: { ...p, competitors, summary, lost, important_lost, new_links, spammy, reclaim, refdomains: [...linking].slice(0, 2000), timeseries: ts, mentions, gap, gap_off_topic, gap_stored: gi < 0 && gapBase.length > 0, gap_checked: gi < 0 ? ((p.stored_gap || [])[0] || {}).last_seen || '' : p.checked_at.slice(0, 10),
     lists, comp_new: compNew.slice(0, 20), coverage, anchors, pages, values, best_links, referral, wins: wins.filter(w => !spamSet.has(w.ref_domain)), at_risk: atRiskOut.map(({ e, v }) => ({ ref_domain: e.ref_domain, url: v.url, verify: v.verify })), rel_changed: relChanged.filter(r => !spamSet.has(r.ref_domain)), farms, dr_enabled: drOf.size > 0, dr_error,
-    ledger_rows, alerts, deliver, disavow_text, candidates, gap_error: G && !G.ok ? G.error : null, cost_usd: +cost.toFixed(4) } };
+    ledger_rows, alerts, not_compared, deliver, disavow_text, candidates, gap_error: G && !G.ok ? G.error : null, cost_usd: +cost.toFixed(4) } };
 });

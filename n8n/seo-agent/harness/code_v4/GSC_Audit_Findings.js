@@ -110,19 +110,37 @@ const RT = (() => {
       retry_answered: st.retry_answered || 0, unavailable, partial: !unavailable && (st.failed || 0) > 0,
       error: (st.reasons || [])[0] || '', note: note(st, (extra && extra.unit) || 'request'), ...(extra || {}) };
   };
-  /** two counts measured on samples of different sizes are not a change (R19): say the sample moved instead of printing a delta. */
+  /** two counts measured on samples of different sizes are not a change (R19): say the sample moved instead of printing a delta.
+   *  `unit` names what the sample is made of ("pages" by default, "questions" for the AI panel, "sources" for a link snapshot). */
   const MAX_SAMPLE_DRIFT = 0.2;
   const comparable = (now, before, o) => {
     const opt = o || {};
     const tol = opt.tolerance == null ? MAX_SAMPLE_DRIFT : opt.tolerance;
+    const unit = S(opt.unit);                     // named only where the caller said what the sample is made of
     const a = Number(now), b = Number(before);
-    if (!Number.isFinite(a) || !Number.isFinite(b) || a <= 0 || b <= 0) return { comparable: false, why: 'how many pages each number was measured on was not recorded', drift: null };
+    if (!Number.isFinite(a) || !Number.isFinite(b) || a <= 0 || b <= 0) return { comparable: false, why: 'how many ' + (unit || 'pages') + ' each number was measured on was not recorded', drift: null };
     const drift = Math.abs(a - b) / Math.max(a, b);
     if (drift > tol) return { comparable: false, drift: Math.round(drift * 100) / 100,
-      why: 'the two counts were measured on different samples (' + b + ' then, ' + a + ' now), so they are not compared' };
+      why: 'the two counts were measured on different samples (' + b + (unit ? ' ' + unit : '') + ' then, ' + a + ' now), so they are not compared' };
     return { comparable: true, drift: Math.round(drift * 100) / 100, why: '' };
   };
-  return { dfs, google, check, failures, plan, merge, stats, one, note, evidence, comparable, errText, MAX_SAMPLE_DRIFT, TRANSIENT, PERMANENT };
+  /** the other half of like for like (R20, B-L4 / B-L5, 2026-10-15): two figures produced by runs of a DIFFERENT KIND are not a
+   *  change either. R20 was a health score chained across a technical audit and a full report; the same shape reaches the AI
+   *  panel (a weekly check asks fewer engines than the monthly full one) and the link ledger (a free_only snapshot is built from
+   *  a different set of sources than a paid one). `labels` turns the stored key into the words a customer reads. The guard is a
+   *  CALL, never an inlined kit: lineage_lint.py looks for the prefixed call, which this file never writes, so a node cannot
+   *  look guarded without using it. Keep it that way: build section 73 fails if this kit ever spells one of those calls out. */
+  const likeForLike = (now, before, o) => {
+    const opt = o || {}, lab = opt.labels || {};
+    const a = S(now).trim().toLowerCase(), b = S(before).trim().toLowerCase();
+    const what = S(opt.what) || 'these two figures';
+    const name = (k) => S(lab[k]) || k;
+    if (!a || !b) return { comparable: false, why: 'what kind of run produced ' + (b ? 'this figure' : 'the earlier figure') + ' was not recorded, so ' + what + ' are not compared', kind: a, kind_before: b };
+    if (a !== b) return { comparable: false, kind: a, kind_before: b,
+      why: 'the earlier figure came from ' + name(b) + ' and this one from ' + name(a) + ', which do not measure the same thing, so ' + what + ' are not compared' };
+    return { comparable: true, why: '', kind: a, kind_before: b };
+  };
+  return { dfs, google, check, failures, plan, merge, stats, one, note, evidence, comparable, likeForLike, errText, MAX_SAMPLE_DRIFT, TRANSIENT, PERMANENT };
 })();
 // ---- the daily key-page watch and Google's view of those pages (G11 + G25, 2026-10-13; system review FIX_PLAN.md) ----
 // G11: a monthly audit cannot see a page that went noindex on the 3rd. Every day the key pages are fetched raw and cheaply (one plain GET
