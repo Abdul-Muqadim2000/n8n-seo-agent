@@ -6,6 +6,8 @@
 //   * who created it, when, and when it was last opened are recorded.
 // Nothing here talks to a database: the server's shareLinks service and the app's Share control both use these rules.
 
+import type { SharedBrand } from './brand';
+
 export const SHARE = {
   /** random bytes behind a token (256 bits, base64url -> 43 characters) */
   tokenBytes: 32,
@@ -82,6 +84,43 @@ export interface ShareLink {
   url?: string;
 }
 
+/**
+ * B-R2: the caveat a shared report carries when the run that made it said it was not finished work.
+ *
+ * The delivery rule (B-R1, `report-delivery.ts`) refuses to e-mail a report a run marked not ready, with no override even on a
+ * manual send. A share link is the same report leaving the company by another door, so it answers to the same honesty: the link is
+ * not blocked — an owner may well want a colleague to look at a draft — but the reader is told, in the run's own words, before they
+ * read a single figure.
+ */
+export interface SharedCaveat {
+  /** the hold code from `deliveryDecision` ('not_ready', 'rejected', 'refused', 'unavailable', 'interim') */
+  code: string;
+  /** the heading a reader sees */
+  title: string;
+  /** the run's own reason, in the customer's words */
+  detail: string;
+}
+
+const CAVEAT_TITLE: Record<string, string> = {
+  not_ready: 'A draft, not finished work',
+  rejected: 'This run did not produce a report',
+  refused: 'The engine refused this run',
+  unavailable: 'Some of the evidence could not be read',
+  interim: 'The work had only started',
+};
+
+/**
+ * The caveat for a decision from `deliveryDecision`, or null when the report is finished work. Codes that are about the company's
+ * own delivery settings rather than about the report ('delivery_off', 'no_channel', 'stage_not_chosen', 'already_delivered') say
+ * nothing to a reader and produce no caveat.
+ */
+export function shareCaveat(d: { deliver: boolean; reason: string; code: string | null }): SharedCaveat | null {
+  if (d.deliver || !d.code) return null;
+  const title = CAVEAT_TITLE[d.code];
+  if (!title) return null;
+  return { code: d.code, title, detail: d.reason };
+}
+
 /** What somebody holding a live link is shown: one report, read-only, with its files and nothing else. */
 export interface SharedReport {
   id: string;
@@ -95,5 +134,9 @@ export interface SharedReport {
   files: { id: string; kind: string; fileName: string; mimeType: string; size: number }[];
   /** the company's name, so the reader knows whose report this is (no other company data is exposed) */
   orgName: string;
+  /** B-R2: that company's own mark — its business name and logo, and nothing else of its profile */
+  brand: SharedBrand;
+  /** B-R2: what the run said about itself when it is not finished work, else null */
+  caveat: SharedCaveat | null;
   expiresAt: string;
 }

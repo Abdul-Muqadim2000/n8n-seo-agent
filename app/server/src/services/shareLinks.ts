@@ -1,13 +1,27 @@
 import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
-import { SHARE, shareExpiry, shareState, type ShareLink, type SharedReport } from '@seo/shared';
+import {
+  deliveryDecision,
+  SHARE,
+  shareCaveat,
+  sharedBrand,
+  shareExpiry,
+  shareState,
+  type ProfileRow,
+  type SharedBrand,
+  type ShareLink,
+  type SharedReport,
+} from '@seo/shared';
 import { db, schema } from '../db';
 import type { OrgRow, ReportShareRow, UserRow } from '../db/schema';
+import { siteRows } from '../n8n/client';
+import { summarize } from './summaries';
 import { randomToken, sha256 } from '../lib/crypto';
 import { HttpError, notFound } from '../lib/errors';
 
 /**
  * The expiring share links of one report (G15; the rules live in @seo/shared `share.ts`, this file only reads and writes the database).
- * What a holder of a link can reach: that one report's title, website domain, date, headline values and its own files — read-only.
+ * What a holder of a link can reach: that one report's title, website domain, date, headline values and its own files, plus the
+ * company's own name and logo (B-R2) and the run's own caveat when the report is not finished work — read-only.
  * What it can never reach: another report (the token resolves to one report id), any list or dashboard, the run's input, the callback
  * payload, the company's other websites, its members or its settings, and no write of any kind. The token itself is never stored.
  */
@@ -118,6 +132,47 @@ export async function markOpened(shareId: string): Promise<void> {
   }
 }
 
+/**
+ * B-R2: the company's own name and logo for the website this report is about.
+ *
+ * It reads the business profile the company already filled in for the engine and takes **two fields of it** — `business_name` and
+ * `logo_url`. The rest of that row is the company's postal address, phone, public e-mail, opening hours and the author's biography,
+ * and none of it is returned: a share link exposes one report, and a brand mark is the only thing added to that.
+ *
+ * The engine is a dependency this page must not have. If n8n is unreachable, slow, or simply has no profile for the domain, the brand
+ * falls back to the company's own name in the app and the page renders exactly as it did before. A report with no website (a keyword
+ * check, say) reads no profile at all. The read goes through the n8n client's 60-second cache, so a link passed around a client's team
+ * costs at most one request a minute.
+ */
+async function brandFor(orgName: string, domain: string | null): Promise<SharedBrand> {
+  if (!domain) return sharedBrand({ orgName });
+  try {
+    const rows = await siteRows<ProfileRow>('profiles', domain, { max: 5 });
+    return sharedBrand({ orgName, businessName: rows[0]?.business_name, logoUrl: rows[0]?.logo_url });
+  } catch {
+    return sharedBrand({ orgName });
+  }
+}
+
+/**
+ * B-R2: the headline figures in the order the run wrote them, not the order Postgres happens to return.
+ *
+ * `summary` is stored as `jsonb`, and jsonb keeps its keys sorted by length — so a shared audit led with "scoreDelta 4" and put the
+ * health score last, which is not how anybody reads a report. `summarize()` is the one place that decides what a stage's headline
+ * figures are and in which order, so the order is taken from it rather than from a second list that could drift. Anything stored but
+ * no longer produced keeps its place at the end instead of disappearing.
+ */
+function orderedSummary(stage: string, payload: unknown, stored: Record<string, string | number | boolean | null>) {
+  try {
+    const out: Record<string, string | number | boolean | null> = {};
+    for (const k of Object.keys(summarize(stage, (payload ?? {}) as Record<string, unknown>))) if (k in stored) out[k] = stored[k]!;
+    for (const [k, v] of Object.entries(stored)) if (!(k in out)) out[k] = v;
+    return out;
+  } catch {
+    return stored;
+  }
+}
+
 /** The one report a live link may show, with its files and the company's name — and nothing else from that company. */
 export async function sharedReport(share: ReportShareRow): Promise<SharedReport | null> {
   const rows = await db
@@ -129,12 +184,15 @@ export async function sharedReport(share: ReportShareRow): Promise<SharedReport 
     .limit(1);
   const row = rows[0];
   if (!row) return null;
-  const files = await db
-    .select({ id: schema.files.id, kind: schema.files.kind, fileName: schema.files.fileName, mimeType: schema.files.mimeType, size: schema.files.size })
-    .from(schema.files)
-    .where(eq(schema.files.reportId, share.reportId))
-    .orderBy(asc(schema.files.createdAt))
-    .limit(50);
+  const [files, brand] = await Promise.all([
+    db
+      .select({ id: schema.files.id, kind: schema.files.kind, fileName: schema.files.fileName, mimeType: schema.files.mimeType, size: schema.files.size })
+      .from(schema.files)
+      .where(eq(schema.files.reportId, share.reportId))
+      .orderBy(asc(schema.files.createdAt))
+      .limit(50),
+    brandFor(row.orgName ?? '', row.domain ?? null),
+  ]);
   return {
     id: row.r.id,
     stage: row.r.stage,
@@ -143,9 +201,12 @@ export async function sharedReport(share: ReportShareRow): Promise<SharedReport 
     siteDomain: row.domain ?? null,
     receivedAt: row.r.receivedAt.toISOString(),
     scheduled: row.r.scheduled,
-    summary: row.r.summary,
+    summary: orderedSummary(row.r.stage, row.r.payload, row.r.summary),
     files,
     orgName: row.orgName ?? '',
+    brand,
+    // B-R2: the same readiness rule the delivery applies, said to the reader instead of used to refuse. The payload itself never leaves.
+    caveat: shareCaveat(deliveryDecision({ stage: row.r.stage, status: row.r.status, payload: (row.r.payload ?? {}) as Record<string, unknown> })),
     expiresAt: share.expiresAt.toISOString(),
   };
 }

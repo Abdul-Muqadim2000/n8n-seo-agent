@@ -21,6 +21,7 @@ export * from './lineage';
 export * from './annotations';
 export * from './change-test';
 export * from './share';
+export * from './brand';
 export * from './queue';
 export * from './report-delivery';
 // The setup guides are imported from '@seo/shared/guides', not from here: the catalogue is a sizeable chunk of text and only

@@ -104,6 +104,22 @@ decision; there is no override. Rules and their 41 unit tests: `shared/src/repor
 E-mail delivery needs SMTP configured (`SEO_SMTP_*`); it is **not** gated on `ACCOUNT_EMAILS`, which is about verification and reset
 links. Without a mail account the page says so and the webhook still works.
 
+## Shared reports, under the customer's own name (B-R2)
+
+A report handed to somebody with no account (`/share/:token`, G15) opens under **their** supplier's mark: the business name and logo
+at the head of the page and in the browser tab, ours in one line in the footer. Both are read from the business profile the company
+already fills in for the engine (`seo_profiles`: `business_name`, `logo_url`) — **two fields of it, and no other** — so there is no
+second place to keep a logo. The name falls back to the company's name in the app, the logo must be https on a dotted public host
+(`shared/src/brand.ts`) or the page draws the company's initials, a logo that fails to load falls back the same way, and if the
+engine cannot be reached the page renders exactly as it did before. The rules are in `shared/src/brand.ts`, the read in
+`server/src/services/shareLinks.ts`, the mark in `web/src/components/share/ShareBrand.tsx`.
+
+The same page carries the **run's own caveat** when the work is not finished — a draft that failed its quality rounds, a plan the
+engine refused, a verdict it could not check — from the same `deliveryDecision` the delivery refuses on. The link is not blocked
+(an owner may want a colleague to read a draft); the reader is told before the first figure.
+
+A browser pass over the whole app, including this page, is in **`BROWSER_PASS.md`** with its screenshots.
+
 ## Cost figures: one table (B-R3)
 
 `shared/src/cost.ts` is the only place a per-mode price is written down, and it mirrors the engine's own calibrated defaults
@@ -295,6 +311,7 @@ cd app
 docker run --rm -v "$PWD":/app -w /app node:22-bookworm-slim npm test          # unit tests (shared + server)
 docker run --rm -v "$PWD":/app -w /app node:22-bookworm-slim npm run typecheck # shared + server + web
 python3 scripts/smoke.py          # API integration test against the running dev stack (auth, roles, isolation, budget, callbacks)
+node scripts/browser_pass.mjs     # the browser pass (its header says how to run it in the Playwright image) -> BROWSER_PASS.md
 # n8n contract: cd ../n8n/seo-agent/harness … scenarios_v5.js (S23 = the app's request bodies)
 ```
 
