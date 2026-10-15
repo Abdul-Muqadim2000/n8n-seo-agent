@@ -1,58 +1,58 @@
 {
  "SEO_Agent_AI_Growth.json / AI Outreach Writer": {
-  "counted": false,
+  "counted": true,
   "model": "claude-sonnet-5-5",
-  "why_not": "priced from the run RESERVATION (CC.aiRun), not from this node and not from characters: a monitor settles its reserved Claude figure and labels it ESTIMATED. Counting it needs a per-workflow call table in its own builder (build_monitors.py / build_site_tracker.py / build_api.py), which is not built \u2014 B-F1 covered the main workflow"
+  "why_not": ""
  },
  "SEO_Agent_AI_Visibility.json / AI Brief": {
-  "counted": false,
+  "counted": true,
   "model": "claude-sonnet-5-5",
-  "why_not": "priced from the run RESERVATION (CC.aiRun), not from this node and not from characters: a monitor settles its reserved Claude figure and labels it ESTIMATED. Counting it needs a per-workflow call table in its own builder (build_monitors.py / build_site_tracker.py / build_api.py), which is not built \u2014 B-F1 covered the main workflow"
+  "why_not": ""
  },
  "SEO_Agent_AI_Visibility.json / Answer Analyst": {
-  "counted": false,
+  "counted": true,
   "model": "claude-sonnet-5-5",
-  "why_not": "priced from the run RESERVATION (CC.aiRun), not from this node and not from characters: a monitor settles its reserved Claude figure and labels it ESTIMATED. Counting it needs a per-workflow call table in its own builder (build_monitors.py / build_site_tracker.py / build_api.py), which is not built \u2014 B-F1 covered the main workflow"
+  "why_not": ""
  },
  "SEO_Agent_AI_Visibility.json / Prompt Writer": {
-  "counted": false,
+  "counted": true,
   "model": "claude-sonnet-5-5",
-  "why_not": "priced from the run RESERVATION (CC.aiRun), not from this node and not from characters: a monitor settles its reserved Claude figure and labels it ESTIMATED. Counting it needs a per-workflow call table in its own builder (build_monitors.py / build_site_tracker.py / build_api.py), which is not built \u2014 B-F1 covered the main workflow"
+  "why_not": ""
  },
  "SEO_Agent_Backlink_Monitor.json / Link Analyst": {
-  "counted": false,
+  "counted": true,
   "model": "claude-sonnet-5-5",
-  "why_not": "priced from the run RESERVATION (CC.aiRun), not from this node and not from characters: a monitor settles its reserved Claude figure and labels it ESTIMATED. Counting it needs a per-workflow call table in its own builder (build_monitors.py / build_site_tracker.py / build_api.py), which is not built \u2014 B-F1 covered the main workflow"
+  "why_not": ""
  },
  "SEO_Agent_Backlink_Monitor.json / Outreach Writer": {
-  "counted": false,
+  "counted": true,
   "model": "claude-sonnet-5-5",
-  "why_not": "priced from the run RESERVATION (CC.aiRun), not from this node and not from characters: a monitor settles its reserved Claude figure and labels it ESTIMATED. Counting it needs a per-workflow call table in its own builder (build_monitors.py / build_site_tracker.py / build_api.py), which is not built \u2014 B-F1 covered the main workflow"
+  "why_not": ""
  },
  "SEO_Agent_Keyword_Check.json / Keyword Fit": {
   "counted": false,
   "model": "claude-haiku-4-5-20251001",
-  "why_not": "priced from the run RESERVATION (CC.aiRun), not from this node and not from characters: a monitor settles its reserved Claude figure and labels it ESTIMATED. Counting it needs a per-workflow call table in its own builder (build_monitors.py / build_site_tracker.py / build_api.py), which is not built \u2014 B-F1 covered the main workflow"
+  "why_not": "NOT counted: the Keyword Check answers the web app SYNCHRONOUSLY - both Haiku agents sit between the request and Respond Assess - so the two free count_tokens round-trips per agent would land on the caller's clock rather than on a schedule's, and that is a decision for whoever owns the response-time budget. build_api.py was also outside build section 84 (four agents worked in parallel). Neither agent has a thinking budget, so counting them would make them 100% measured. Proved by _b84_checks: both agents lie on a main path from the webhook to a Respond node."
  },
  "SEO_Agent_Keyword_Check.json / Keyword Fit (Text)": {
   "counted": false,
   "model": "claude-haiku-4-5-20251001",
-  "why_not": "priced from the run RESERVATION (CC.aiRun), not from this node and not from characters: a monitor settles its reserved Claude figure and labels it ESTIMATED. Counting it needs a per-workflow call table in its own builder (build_monitors.py / build_site_tracker.py / build_api.py), which is not built \u2014 B-F1 covered the main workflow"
+  "why_not": "NOT counted: the Keyword Check answers the web app SYNCHRONOUSLY - both Haiku agents sit between the request and Respond Assess - so the two free count_tokens round-trips per agent would land on the caller's clock rather than on a schedule's, and that is a decision for whoever owns the response-time budget. build_api.py was also outside build section 84 (four agents worked in parallel). Neither agent has a thinking budget, so counting them would make them 100% measured. Proved by _b84_checks: both agents lie on a main path from the webhook to a Respond node."
  },
  "SEO_Agent_Link_Builder.json / Outreach Sequence Writer": {
-  "counted": false,
+  "counted": true,
   "model": "claude-sonnet-5-5",
-  "why_not": "priced from the run RESERVATION (CC.aiRun), not from this node and not from characters: a monitor settles its reserved Claude figure and labels it ESTIMATED. Counting it needs a per-workflow call table in its own builder (build_monitors.py / build_site_tracker.py / build_api.py), which is not built \u2014 B-F1 covered the main workflow"
+  "why_not": ""
  },
  "SEO_Agent_Reply_Reader.json / Reply Reader": {
   "counted": false,
   "model": "claude-haiku-4-5-20251001",
-  "why_not": "priced from the run RESERVATION (CC.aiRun), not from this node and not from characters: a monitor settles its reserved Claude figure and labels it ESTIMATED. Counting it needs a per-workflow call table in its own builder (build_monitors.py / build_site_tracker.py / build_api.py), which is not built \u2014 B-F1 covered the main workflow"
+  "why_not": "NOT counted, and nothing to count it into: the Reply Reader has no seo_run_ledger row at all - a synchronous reply classification reserves nothing and settles nothing, so there is no figure for a measurement to replace. Proved by _b84_checks: the workflow contains no Ledger Settle node."
  },
  "SEO_Agent_Site_Tracker.json / Site Brief": {
   "counted": false,
   "model": "claude-sonnet-5-5",
-  "why_not": "priced from the run RESERVATION (CC.aiRun), not from this node and not from characters: a monitor settles its reserved Claude figure and labels it ESTIMATED. Counting it needs a per-workflow call table in its own builder (build_monitors.py / build_site_tracker.py / build_api.py), which is not built \u2014 B-F1 covered the main workflow"
+  "why_not": "NOT counted only because build_site_tracker.py was outside build section 84 (four agents worked in parallel on one branch). Nothing is in the way: Ledger Settle (Site) already carries the empty call table Monitor_Ledger_Settle.js reads, so baking Site Brief's table into it is the whole of the work. Proved by _b84_checks: that settle exists and its call table is empty."
  },
  "SEO_Agent_v4.json / Competitor Analyzer": {
   "counted": true,

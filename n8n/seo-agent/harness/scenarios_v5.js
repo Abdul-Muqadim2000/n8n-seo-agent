@@ -9950,10 +9950,15 @@ await guard('R31 R32 R33 the money a run reports is the money that happened', as
     JSON.stringify(CT.monitors['SEO Agent — Backlink Monitor'].ai_nodes));
   mock('Link Analyst', [{ json: { output: 'the five links worth keeping …' } }]);
   const paid69 = (await run('Ledger Settle (BL)', [{ json: {} }], { code: 'Ledger_Settle_BL_' }))[0].json;
-  check('R31: a run in which the Link Analyst DID run still settles the per-site reservation and still calls it an estimate (a monitor\'s agents report no token usage)',
-    paid69.ai_usd === 0.05 && paid69.ai_source === 'reserved' && eq(paid69.ai_nodes_ran, ['Link Analyst'])
-    && /Claude \$0\.0500 ESTIMATED/.test(paid69.cost_basis) && /1 model node\(s\) ran \(Link Analyst\)/.test(paid69.cost_basis),
-    JSON.stringify(paid69));
+  // B-C2 (2026-10-15, build section 84) overturned the assertion that used to stand here. R31 settled the per-site RESERVATION
+  // whenever a model node had run — the guard's figure, labelled an estimate, standing in for a measurement nobody took. The
+  // settle prices this workflow's own calls now, so with no counter mocked the run falls back to CHARACTERS, which is a model of
+  // this run rather than a number from before it: $0.0053 against the $0.05 it reserved. S94 mocks the counts and measures it.
+  check('R31 → B-C2: the run is priced from its OWN call, not from the per-mode reservation — with no token count to read it falls back to characters, and says so',
+    paid69.ai_source === 'priced' && paid69.ai_usd !== 0.05 && paid69.ai_calls === 1
+    && paid69.ai_measured === false && paid69.ai_measured_usd === 0 && eq(paid69.ai_counted_nodes, [])
+    && eq(paid69.ai_nodes_ran, ['Link Analyst']) && /^estimated: prompt and answer characters/.test(paid69.ai_basis)
+    && /Claude \$0\.0053 ESTIMATED/.test(paid69.cost_basis), JSON.stringify(paid69));
 
   // the other half: a free_only site reserves nothing in the first place
   reset();
@@ -12463,12 +12468,15 @@ await guard('B-F1 the Sonnet half, and B-A11 three nodes that advised from what 
   }
 
   // ---------- 6. what is NOT counted is recorded, not implied ----------
+  // B-C2 (2026-10-15, build section 84) closed SEVEN of the eleven this scenario recorded as a gap — the agents of the six
+  // scheduled workflows build_monitors.py writes. Four are left, and the registry now carries a reason PER WORKFLOW rather than
+  // one shared sentence, because the four are left for three different reasons and the shared one hid that (S94 proves each).
   const gapRows = Object.entries(CC86).filter(([, r]) => !r.counted);
-  check('B-F1: every Claude agent in every generated workflow is either counted on its main path or carries the reason it is not',
-    Object.keys(CC86).length === 22 && Object.values(CC86).filter(r => r.counted).length === 11
-    && gapRows.length === 11 && gapRows.every(([, r]) => /priced from the run RESERVATION/.test(r.why_not)),
-    JSON.stringify({ total: Object.keys(CC86).length, counted: Object.values(CC86).filter(r => r.counted).length }));
-  check('B-F1: and the eleven that are not counted are all OUTSIDE the main workflow — nothing in the workflow this pass covered was left behind',
+  check('B-F1 / B-C2: every Claude agent in every generated workflow is either counted on its main path or carries the reason it is not — eleven were counted here, seven more by B-C2, four are left',
+    Object.keys(CC86).length === 22 && Object.values(CC86).filter(r => r.counted).length === 18
+    && gapRows.length === 4 && gapRows.every(([, r]) => /^NOT counted/.test(r.why_not) && /Proved by _b84_checks/.test(r.why_not)),
+    JSON.stringify({ total: Object.keys(CC86).length, counted: Object.values(CC86).filter(r => r.counted).length, gap: gapRows.map(([k]) => k) }));
+  check('B-F1: and nothing in the main workflow — the one this pass covered — was left behind',
     gapRows.every(([k]) => !/^SEO_Agent_v4\.json/.test(k))
     && Object.entries(CC86).filter(([k]) => /^SEO_Agent_v4\.json/.test(k)).every(([, r]) => r.counted),
     JSON.stringify(gapRows.map(([k]) => k)));
@@ -13740,6 +13748,193 @@ await guard('ai growth benchmark (area 9)', async () => {
   reset();
 });
 
+// ===================================================================================
+// S94 (2026-10-15, FIX_PLAN.md §3.16 row B-C2; INVARIANTS.md rule 1 — build section 84)
+// A monitor's Claude figure was its RESERVATION wearing the clothes of a measurement: `CC.aiRun` was called with no figure, so
+// it returned the per-mode number the guard holds back BEFORE a run, labelled ESTIMATED, and `seo_run_ledger.ai_usd`, the day's
+// reconciliation and every report reading that row carried it. Sections 62 and 76 counted the main workflow's eleven calls and
+// recorded the other eleven as a gap; seven of them — the agents of the six scheduled workflows `build_monitors.py` writes — are
+// counted here by the same chain, driven off the generated `ledger_wiring.json` so this scenario cannot drift from the build.
+// What stays modelled is a result, not an omission: the thinking a model does before answering is billed as output and is never
+// returned by any counter, so a Sonnet node with an adaptive budget can never be 100% measured and the basis says which is which.
+// ===================================================================================
+await guard('B-C2 a monitor settles what it measured, not what it reserved', async () => {
+  reset(); const SN = 'S94 B-C2 — a monitor settles a measured Claude figure, not the reservation the guard held back';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const eq94 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const LW94 = require('./ledger_wiring.json').monitors;
+  const CC94 = require('./claude_count.json');
+  const fs94 = require('fs'), path94 = require('path');
+  const CODE94 = process.env.CODE_DIR || path94.join(__dirname, 'code');
+  // the four scheduled workflows that have a Claude agent; the Pulse and the Audit Scheduler call no model at all
+  const WFS94 = { 'SEO Agent — AI Visibility Tracker': 'AI', 'SEO Agent — Backlink Monitor': 'BL',
+                  'SEO Agent — AI Growth': 'Growth', 'SEO Agent — Link Builder': 'LB' };
+  // two sites' worth of job items per agent, so the per-item arithmetic is exercised rather than assumed. The sizes are
+  // illustrative and said to be: the figure that means something is the SHARE that moves from modelled to measured.
+  // One prompt/answer size per agent, so no two of the seven shares are the same number by accident. The sizes are illustrative
+  // and said to be: what means something is the share of each node's money that moves from modelled to measured, and the only
+  // node-specific part of what STAYS modelled is its thinking budget (max_tokens x the effort share).
+  const TOK94 = {
+    'Prompt Writer': { in: [5200, 4700], out: [1400, 1250] },
+    'Answer Analyst': { in: [9100, 8600], out: [1900, 1700] },
+    'AI Brief': { in: [3400, 3100], out: [1100, 980] },
+    'Link Analyst': { in: [4200, 3800], out: [900, 800] },
+    'Outreach Writer': { in: [3600, 3300], out: [1500, 1350] },
+    'AI Outreach Writer': { in: [2900, 2600], out: [1200, 1050] },
+    'Outreach Sequence Writer': { in: [6800, 6200], out: [2600, 2400] },
+  };
+  const answer94 = (i) => ({ output: 'answer ' + i + ' — ' + 'x'.repeat(1800) });
+  // mock one workflow's settle inputs. `counted`: give the two free probes their answers, or leave them unmocked (a counter
+  // that never ran is exactly what a counter that did not answer looks like to the settle).
+  const setup94 = (name, tag, counted, factors) => {
+    reset();
+    const w = LW94[name];
+    mock('Run Ledger Row (' + tag + ')', [{ json: { id: 73, run_id: 'test-exec', mode: w.mode, status: 'reserved',
+      cost_mode: w.mode, est_usd: w.est.ai, dfs_est_usd: w.est.dfs, created_at: '2026-10-15T07:30:00.000Z' } }]);
+    if (w.measured) mock(w.measured, [{ json: { site_id: 's1', cost_usd: 0.3 } }]);
+    if (factors) mock(w.cost_cal, [{ json: { key: 'cost:factor:claude', value: JSON.stringify(factors) } }]);
+    for (const c of w.ai_calls) {
+      mock(c.input, [0, 1].map(i => ({ json: Object.fromEntries((c.fields || []).map(f => [f, 'job ' + i + ' ' + 'y'.repeat(600)])) })));
+      mock(c.node, [0, 1].map(answer94));
+      if (counted) {
+        const t = TOK94[c.node];
+        if (!t) throw new Error('S94 has no token fixture for the agent ' + c.node + ' — a new Claude agent needs one here');
+        mock(c.count_prompt, t.in.map(v => ({ json: { input_tokens: v } })));
+        mock(c.count_answer, t.in.map((v, i) => ({ json: { input_tokens: v + t.out[i] } })));
+      }
+    }
+    return w;
+  };
+  const settle94 = async (name, tag, counted, factors) => {
+    setup94(name, tag, counted, factors);
+    return (await run('Ledger Settle (' + tag + ')', [{ json: {} }], { code: 'Ledger_Settle_' + tag + '_' }))[0].json;
+  };
+
+  // ---------- 1. the defect: before this, a monitor settled the number the guard reserved ----------
+  const shares94 = {};
+  for (const [name, tag] of Object.entries(WFS94)) {
+    const before = await settle94(name, tag, false);
+    const after = await settle94(name, tag, true);
+    const w = LW94[name];
+    for (const c of w.ai_calls) {
+      const b = (before.ai_by_node || {})[c.node] || {}, a = (after.ai_by_node || {})[c.node] || {};
+      const pct = (r) => r.usd ? Math.round(1000 * r.measured_usd / r.usd) / 10 : null;
+      shares94[c.node] = [pct(b), pct(a)];
+      console.log('   ' + tag + ' / ' + c.node + ': ' + pct(b) + '% -> ' + pct(a) + '% measured  ($' + (b.usd || 0).toFixed(4) + ' -> $' + (a.usd || 0).toFixed(4) + ')');
+    }
+    console.log('   ' + tag + ' run: reserved $' + w.est.ai.toFixed(4) + ' | before ' + before.ai_source + ' $' + before.ai_usd
+      + ' ' + before.ai_measured_share + '% | after ' + after.ai_source + ' $' + after.ai_usd + ' ' + after.ai_measured_share + '%');
+    check('B-C2 (' + tag + '): the Claude figure is this run\'s own calls now, not the per-mode reservation the guard held back',
+      before.ai_source === 'priced' && after.ai_source === 'priced'
+      && before.ai_calls === w.ai_calls.length * 2 && after.ai_calls === before.ai_calls
+      && !/the per-mode reservation/.test(after.ai_basis), JSON.stringify({ src: after.ai_source, calls: after.ai_calls, basis: after.ai_basis }));
+    check('B-C2 (' + tag + '): uncounted it measured NOTHING — every token of it came from a character model, exactly as the eight main-workflow calls did before section 76',
+      before.ai_measured_usd === 0 && before.ai_measured_share === 0 && eq94(before.ai_counted_nodes, [])
+      && /^estimated: prompt and answer characters/.test(before.ai_basis), JSON.stringify(before.ai_basis));
+    check('B-C2 (' + tag + '): counted, the majority of its money is MEASURED and the basis names what measured it',
+      after.ai_measured_usd > 0 && after.ai_measured_share > 50 && after.ai_measured_share < 100
+      && eq94(after.ai_counted_nodes.slice().sort(), w.ai_calls.map(c => c.node).slice().sort())
+      && /Anthropic \/v1\/messages\/count_tokens counted the prompt and the answer of every call/.test(after.ai_basis),
+      JSON.stringify({ m: after.ai_measured_usd, share: after.ai_measured_share, basis: after.ai_basis }));
+    check('B-C2 (' + tag + '): and what is left is the THINKING no counter can ever see — modelled from the effort budget, named as such, and never folded into the measured half',
+      after.ai_think_usd > 0 && after.ai_measured === false
+      && +(after.ai_measured_usd + after.ai_think_usd).toFixed(4) === after.ai_usd
+      && /thinking no counter can see is modelled from the effort budget/.test(after.ai_basis),
+      JSON.stringify({ measured: after.ai_measured_usd, think: after.ai_think_usd, usd: after.ai_usd }));
+  }
+  check('B-C2: all SEVEN agents of the six scheduled workflows go from 0% measured to the majority of their money measured — and none of them reaches 100%, because every one is a Sonnet node with a thinking budget no counter can see',
+    Object.keys(shares94).length === 7 && Object.keys(TOK94).length === 7
+    && Object.values(shares94).every(([b, a]) => b === 0 && a > 50 && a < 100)
+    && new Set(Object.values(shares94).map(([, a]) => a)).size >= 5, JSON.stringify(shares94));
+
+  // ---------- 2. the arithmetic: two sites, two counts, summed — and a run whose counts are a model of nothing ----------
+  const bl = await settle94('SEO Agent — Backlink Monitor', 'BL', true);
+  const la = bl.ai_by_node['Link Analyst'], laT = TOK94['Link Analyst'];
+  // 8,000 prompt tokens over two calls, 1,700 answer tokens over two calls, plus 2 x round(8192 x 0.05) of modelled thinking
+  check('B-C2: a monitor agent answers once per SITE and does not loop, so every one of its calls is on the main path — the two counts are SUMMED and all of them are measured',
+    la.in_tokens === laT.in[0] + laT.in[1] && la.out_tokens === laT.out[0] + laT.out[1] + 2 * Math.round(8192 * 0.05)
+    && la.counted === true && / across 2 call\(s\)/.test(la.basis) && !/repeated for the/.test(la.basis), JSON.stringify(la));
+  for (const [why, bad] of [['the answer count came back no larger than the prompt', laT.in.map(v => ({ json: { input_tokens: v } }))],
+                            ['the prompt count did not answer at all', laT.in.map(() => ({ json: { error: 'overloaded_error' } }))],
+                            ['only one of the two calls was counted', [{ json: { input_tokens: 4200 } }]]]) {
+    setup94('SEO Agent — Backlink Monitor', 'BL', true);
+    if (why === 'only one of the two calls was counted') mock('Count Prompt (Link Analyst)', bad);
+    else mock('Count Answer (Link Analyst)', bad);
+    const r = (await run('Ledger Settle (BL)', [{ json: {} }], { code: 'Ledger_Settle_BL_' }))[0].json;
+    const n = r.ai_by_node['Link Analyst'];
+    check('B-C2: ' + why + ' — that call falls back to its characters with the OLD basis and measures nothing, and the run is settled all the same',
+      n.counted === false && n.measured_usd === 0 && /^estimated: prompt and answer characters/.test(n.basis)
+      && r.status === 'done' && r.ai_usd > 0, JSON.stringify(n));
+  }
+
+  // ---------- 3. one engine, one price: the monthly reconciliation's factors reach a monitor too ----------
+  const plain = await settle94('SEO Agent — Backlink Monitor', 'BL', true);
+  const doubled = await settle94('SEO Agent — Backlink Monitor', 'BL', true, { sonnet: 2, note: '2026-09 Anthropic Console export' });
+  console.log('   BL with a x2 sonnet correction factor -> $' + plain.ai_usd + ' becomes $' + doubled.ai_usd);
+  check('B-C2: a monitor prices through the SAME per-model correction factors the main workflow has used since section 51 — one engine reporting one price',
+    doubled.ai_usd === +(plain.ai_usd * 2).toFixed(4) && doubled.ai_measured_usd === +(plain.ai_measured_usd * 2).toFixed(4),
+    JSON.stringify({ plain: plain.ai_usd, doubled: doubled.ai_usd }));
+  check('B-C2: and with the factors unreadable the Anthropic list prices stand rather than the run failing — the cache is free, local and optional',
+    plain.ai_usd > 0 && plain.status === 'done', JSON.stringify({ usd: plain.ai_usd }));
+
+  // ---------- 4. a run in which no model ran is still "nothing spent", not a character model of nothing (R31 kept) ----------
+  reset();
+  mock('Run Ledger Row (BL)', [{ json: { id: 74, run_id: 'test-exec', mode: 'backlinks', status: 'reserved', est_usd: 0.05, dfs_est_usd: 0 } }]);
+  mock('Parse Backlinks', [{ json: { site_id: 's1', cost_usd: 0 } }]);
+  const none94 = (await run('Ledger Settle (BL)', [{ json: {} }], { code: 'Ledger_Settle_BL_' }))[0].json;
+  check('B-C2: R31 is kept whole — a free run in which no agent ran settles $0 and says so, instead of pricing zero characters',
+    none94.ai_usd === 0 && none94.ai_source === 'none' && none94.ai_calls === 0 && none94.ai_measured === true
+    && /no model call ran in this run/.test(none94.ai_basis), JSON.stringify(none94));
+
+  // ---------- 5. the wiring: the chain is the agent's whole main path, and it hands the pipeline back untouched ----------
+  for (const [name, tag] of Object.entries(WFS94)) {
+    const w = LW94[name];
+    check('B-C2 (' + tag + '): each agent carries the four-node chain on its MAIN path and the pipeline hangs off the resume node, so nothing downstream sees the counter (a side branch runs last, or not at all — R17)',
+      w.ai_calls.length > 0 && w.ai_calls.every(c => c.count_set === 'Prompt For Count (' + c.node + ')'
+        && c.count_prompt === 'Count Prompt (' + c.node + ')' && c.count_answer === 'Count Answer (' + c.node + ')'
+        && c.count_resume === 'After Count (' + c.node + ')' && (c.after || []).length),
+      JSON.stringify(w.ai_calls.map(c => [c.node, c.after])));
+    check('B-C2 (' + tag + '): the prompt is read per ITEM through pairedItem — `first()` would price the first site\'s prompt for every site — and the output index it hangs off is recorded for the character fallback',
+      w.ai_calls.every(c => c.count_per_item === true && c.count_rounds === 0
+        && c.ref === "$('" + c.input + "').item.json" && Number.isInteger(c.branch)),
+      JSON.stringify(w.ai_calls.map(c => [c.node, c.ref, c.branch])));
+    for (const c of w.ai_calls) {
+      const src = fs94.readFileSync(path94.join(CODE94, 'After_Count_' + c.node.replace(/[^A-Za-z0-9_.-]+/g, '_') + '_.js'), 'utf8');
+      check('B-C2: After Count (' + c.node + ') hands the agent its own items straight back, in order',
+        new RegExp('return \\$\\(\'' + c.node + '\'\\)\\.all\\(\\);').test(src), src.slice(0, 200));
+    }
+    const settleSrc = fs94.readFileSync(path94.join(CODE94, 'Ledger_Settle_' + tag + '_.js'), 'utf8');
+    check('B-C2 (' + tag + '): the settle is the only node that prices, from a table baked out of this workflow\'s real agent nodes — no placeholder survives into a running node',
+      !/__AI_CALLS__|__CAL__/.test(settleSrc) && /CC\.aiRun\(\{ figure: aiFig/.test(settleSrc)
+      && w.ai_calls.every(c => settleSrc.includes('"node": "' + c.node + '"'))
+      && settleSrc.includes('"' + w.cost_cal + '"'), tag);
+  }
+  // the Pulse and the Audit Scheduler call no model: their table is empty and they keep R31's behaviour exactly
+  for (const [name, tag] of [['SEO Agent — AI Pulse', 'Pulse'], ['SEO Agent — Audit Scheduler', 'Audit']]) {
+    const src = fs94.readFileSync(path94.join(CODE94, (tag === 'Pulse' ? 'Pulse__' : '') + 'Ledger_Settle_' + tag + '_.js'), 'utf8');
+    check('B-C2: ' + name + ' calls no model at all, so its call table is empty and nothing about its settle changes',
+      /const AI_CALLS = \[\];/.test(src) && eq94((LW94[name].ai_calls || []), []), tag);
+  }
+
+  // ---------- 6. the four left behind, each with its OWN reason ----------
+  const gap94 = Object.entries(CC94).filter(([, r]) => !r.counted);
+  console.log('   still on the reservation ->', JSON.stringify(gap94.map(([k]) => k)));
+  check('B-C2: eighteen of the engine\'s twenty-two Claude agents are counted; the four that are not are named, and no two of the three workflows they sit in give the same reason',
+    Object.values(CC94).filter(r => r.counted).length === 18 && gap94.length === 4
+    && new Set(gap94.map(([k]) => k.split(' / ')[0])).size === 3
+    && new Set(gap94.map(([, r]) => r.why_not)).size === 3, JSON.stringify(gap94.map(([k, r]) => [k, r.why_not.slice(0, 40)])));
+  check('B-C2: the Reply Reader is not counted because there is nothing to count it INTO — it has no run-ledger row at all, so a measurement would have nowhere to go',
+    /no seo_run_ledger row at all/.test(CC94['SEO_Agent_Reply_Reader.json / Reply Reader'].why_not)
+    && !LW94['SEO Agent — Reply Reader'], CC94['SEO_Agent_Reply_Reader.json / Reply Reader'].why_not);
+  check('B-C2: the Keyword Check is not counted because it answers the app SYNCHRONOUSLY — two more round-trips per agent would land on the caller\'s clock, which is a decision and not an oversight',
+    ['Keyword Fit', 'Keyword Fit (Text)'].every(a => /answers the web app SYNCHRONOUSLY/.test(CC94['SEO_Agent_Keyword_Check.json / ' + a].why_not)),
+    CC94['SEO_Agent_Keyword_Check.json / Keyword Fit'].why_not);
+  check('B-C2: the Site Tracker is not counted only because its builder was outside this change — its settle already carries the empty call table, so the remaining work is the bake and nothing else',
+    /build_site_tracker\.py was outside/.test(CC94['SEO_Agent_Site_Tracker.json / Site Brief'].why_not)
+    && /const AI_CALLS = \/\*__AI_CALLS__\*\/\[\];/.test(fs94.readFileSync(path94.join(CODE94, 'Ledger_Settle_Site_.js'), 'utf8')),
+    CC94['SEO_Agent_Site_Tracker.json / Site Brief'].why_not);
+});
 
 H.report();
 })();

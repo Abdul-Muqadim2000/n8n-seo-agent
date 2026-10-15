@@ -459,18 +459,26 @@ _LEDGER_NS = _uuid.UUID('7c1f2a44-0b3e-4e6a-9d21-5e8a1c0f4b77')
 DFS_BALANCE_URL = 'https://api.dataforseo.com/v3/appendix/user_data'   # free, answers in milliseconds, no cost to the account
 
 
+# B-C2 (2026-10-15, build section 84): the one FREE Anthropic endpoint. `/v1/messages/count_tokens` costs nothing and is called on the
+# main path behind every agent to measure what that agent really sent and received. The URL is what identifies it, not the node's name,
+# so a paid call cannot slip past by being called "Count …" — the same rule R32 used for `appendix/user_data`.
+ANTHROPIC_COUNT_URL = 'https://api.anthropic.com/v1/messages/count_tokens'
+
+
 def _ai_nodes_of(wfobj):
-    """Every Claude node of this workflow, as the names that appear in the run data: an `lmChatAnthropic` model node never runs on the
-    main path (it hangs off its agent on an `ai_languageModel` connection and has no items of its own), so the AGENT is what a settle can
-    ask about; an HTTP node that carries the Anthropic credential is itself the call."""
+    """Every Claude node of this workflow that SPENDS, as the names that appear in the run data: an `lmChatAnthropic` model node never
+    runs on the main path (it hangs off its agent on an `ai_languageModel` connection and has no items of its own), so the AGENT is what
+    a settle can ask about; an HTTP node that carries the Anthropic credential is itself the call — unless it is the free token counter,
+    which bills nothing and whose presence must never be read as "a model ran" (B-C2)."""
     conns, out = wfobj.get('connections') or {}, set()
     for n in wfobj['nodes']:
         t = str(n.get('type') or '')
         if 'lmChatAnthropic' in t:
             for lst in ((conns.get(n['name']) or {}).get('ai_languageModel') or []):
                 for tgt in (lst or []): out.add(tgt['node'])
-        elif 'lmChat' not in t and any(isinstance(c, dict) and c.get('id') == 'SEOcredAnthropic'
-                                       for c in (n.get('credentials') or {}).values()):
+        elif 'lmChat' not in t and str((n.get('parameters') or {}).get('url') or '') != ANTHROPIC_COUNT_URL \
+                and any(isinstance(c, dict) and c.get('id') == 'SEOcredAnthropic'
+                        for c in (n.get('credentials') or {}).values()):
             out.add(n['name'])
     return sorted(out)
 
