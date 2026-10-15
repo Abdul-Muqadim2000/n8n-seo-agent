@@ -1,0 +1,388 @@
+{
+ "audit_schedule_est": {
+  "ai": 0.0,
+  "dfs": 0.0
+ },
+ "main": {
+  "balance_in": [
+   "Load Cost Calibration"
+  ],
+  "balance_node": "DFS Balance",
+  "balance_out": [
+   "Run Ledger Row"
+  ],
+  "balance_url": "https://api.dataforseo.com/v3/appendix/user_data",
+  "column": "dfs_balance",
+  "ledger_nodes": [
+   "Build Audit Report",
+   "Build Full Report",
+   "Build Keyword File",
+   "Build Ladder Report",
+   "Build Word File"
+  ]
+ },
+ "monitors": {
+  "SEO Agent \u2014 AI Growth": {
+   "always_output": [
+    "Ensure Run Ledger (Growth)",
+    "Reserve Run Ledger (Growth)"
+   ],
+   "ensure_out": [
+    "DFS Balance (Growth)"
+   ],
+   "est": {
+    "ai": 0.55,
+    "dfs": 0.05
+   },
+   "plan": "Growth Plan",
+   "plan_out": [
+    "Ensure Run Ledger (Growth)"
+   ],
+   "reserve_out": [
+    "After Run Ledger (Growth)"
+   ],
+   "resume": "After Run Ledger (Growth)",
+   "resume_out": [
+    "Run Allowed? (Growth)"
+   ],
+   "row_out": [
+    "Reserve Run Ledger (Growth)"
+   ],
+   "settle": "Settle Run Ledger (Growth)",
+   "settle_from": [
+    "Growth Report",
+    "Nothing To Do (Growth)",
+    "Refuse Run Ledger (Growth)"
+   ],
+   "tag": "Growth"
+  },
+  "SEO Agent \u2014 AI Pulse": {
+   "always_output": [
+    "Ensure Run Ledger (Pulse)",
+    "Reserve Run Ledger (Pulse)"
+   ],
+   "ensure_out": [
+    "DFS Balance (Pulse)"
+   ],
+   "est": {
+    "ai": 0.004,
+    "dfs": 0.08
+   },
+   "plan": "AI Plan",
+   "plan_out": [
+    "Ensure Run Ledger (Pulse)"
+   ],
+   "reserve_out": [
+    "After Run Ledger (Pulse)"
+   ],
+   "resume": "After Run Ledger (Pulse)",
+   "resume_out": [
+    "Run Allowed? (Pulse)"
+   ],
+   "row_out": [
+    "Reserve Run Ledger (Pulse)"
+   ],
+   "settle": "Settle Run Ledger (Pulse)",
+   "settle_from": [
+    "Nothing To Do (Pulse)",
+    "Pulse Alerts",
+    "Refuse Run Ledger (Pulse)"
+   ],
+   "tag": "Pulse"
+  },
+  "SEO Agent \u2014 AI Visibility Tracker": {
+   "always_output": [
+    "Ensure Run Ledger (AI)",
+    "Reserve Run Ledger (AI)"
+   ],
+   "ensure_out": [
+    "DFS Balance (AI)"
+   ],
+   "est": {
+    "ai": 0.27,
+    "dfs": 0.6
+   },
+   "plan": "AI Plan",
+   "plan_out": [
+    "Ensure Run Ledger (AI)"
+   ],
+   "reserve_out": [
+    "After Run Ledger (AI)"
+   ],
+   "resume": "After Run Ledger (AI)",
+   "resume_out": [
+    "Run Allowed? (AI)"
+   ],
+   "row_out": [
+    "Reserve Run Ledger (AI)"
+   ],
+   "settle": "Settle Run Ledger (AI)",
+   "settle_from": [
+    "AI Report",
+    "Nothing To Do (AI)",
+    "Refuse Run Ledger (AI)"
+   ],
+   "tag": "AI"
+  },
+  "SEO Agent \u2014 Audit Scheduler": {
+   "always_output": [
+    "Ensure Run Ledger (Audit)",
+    "Reserve Run Ledger (Audit)"
+   ],
+   "ensure_out": [
+    "DFS Balance (Audit)"
+   ],
+   "est": {
+    "ai": 0.0,
+    "dfs": 0.0
+   },
+   "plan": "Audit Schedule Plan",
+   "plan_out": [
+    "Ensure Run Ledger (Audit)"
+   ],
+   "reserve_out": [
+    "After Run Ledger (Audit)"
+   ],
+   "resume": "After Run Ledger (Audit)",
+   "resume_out": [
+    "Run Allowed? (Audit)"
+   ],
+   "row_out": [
+    "Reserve Run Ledger (Audit)"
+   ],
+   "settle": "Settle Run Ledger (Audit)",
+   "settle_from": [
+    "Audits Started",
+    "Refuse Run Ledger (Audit)"
+   ],
+   "tag": "Audit"
+  },
+  "SEO Agent \u2014 Backlink Monitor": {
+   "always_output": [
+    "Ensure Run Ledger (BL)",
+    "Reserve Run Ledger (BL)"
+   ],
+   "ensure_out": [
+    "DFS Balance (BL)"
+   ],
+   "est": {
+    "ai": 0.05,
+    "dfs": 0.05,
+    "dfs_full": 0.45
+   },
+   "plan": "BL Plan",
+   "plan_out": [
+    "Ensure Run Ledger (BL)"
+   ],
+   "reserve_out": [
+    "After Run Ledger (BL)"
+   ],
+   "resume": "After Run Ledger (BL)",
+   "resume_out": [
+    "Run Allowed? (BL)"
+   ],
+   "row_out": [
+    "Reserve Run Ledger (BL)"
+   ],
+   "settle": "Settle Run Ledger (BL)",
+   "settle_from": [
+    "BL Report",
+    "Nothing To Do (BL)",
+    "Refuse Run Ledger (BL)"
+   ],
+   "tag": "BL"
+  },
+  "SEO Agent \u2014 Content Cadence": {
+   "always_output": [
+    "Ensure Run Ledger (Cadence)",
+    "Reserve Run Ledger (Cadence)"
+   ],
+   "ensure_out": [
+    "DFS Balance (Cadence)"
+   ],
+   "est": {
+    "ai": 0.0,
+    "dfs": 0.0
+   },
+   "plan": "Cadence Plan",
+   "plan_out": [
+    "Ensure Run Ledger (Cadence)"
+   ],
+   "reserve_out": [
+    "After Run Ledger (Cadence)"
+   ],
+   "resume": "After Run Ledger (Cadence)",
+   "resume_out": [
+    "Run Allowed? (Cadence)"
+   ],
+   "row_out": [
+    "Reserve Run Ledger (Cadence)"
+   ],
+   "settle": "Settle Run Ledger (Cadence)",
+   "settle_from": [
+    "Cadence Note",
+    "Nothing To Write",
+    "POST Cadence Note",
+    "Planned Only",
+    "Refuse Run Ledger (Cadence)",
+    "Send Cadence Note"
+   ],
+   "tag": "Cadence"
+  },
+  "SEO Agent \u2014 Link Builder": {
+   "always_output": [
+    "Ensure Run Ledger (LB)",
+    "Reserve Run Ledger (LB)"
+   ],
+   "ensure_out": [
+    "DFS Balance (LB)"
+   ],
+   "est": {
+    "ai": 0.3,
+    "dfs": 0.05
+   },
+   "plan": "LB Plan",
+   "plan_out": [
+    "Ensure Run Ledger (LB)"
+   ],
+   "reserve_out": [
+    "After Run Ledger (LB)"
+   ],
+   "resume": "After Run Ledger (LB)",
+   "resume_out": [
+    "Run Allowed? (LB)"
+   ],
+   "row_out": [
+    "Reserve Run Ledger (LB)"
+   ],
+   "settle": "Settle Run Ledger (LB)",
+   "settle_from": [
+    "LB Report",
+    "Nothing To Do (LB)",
+    "Refuse Run Ledger (LB)"
+   ],
+   "tag": "LB"
+  },
+  "SEO Agent \u2014 Page Watch": {
+   "always_output": [
+    "Ensure Run Ledger (Watch)",
+    "Reserve Run Ledger (Watch)"
+   ],
+   "ensure_out": [
+    "DFS Balance (Watch)"
+   ],
+   "est": {
+    "ai": 0.0,
+    "dfs": 0.0
+   },
+   "plan": "Watch Plan",
+   "plan_out": [
+    "Ensure Run Ledger (Watch)"
+   ],
+   "reserve_out": [
+    "After Run Ledger (Watch)"
+   ],
+   "resume": "After Run Ledger (Watch)",
+   "resume_out": [
+    "Run Allowed? (Watch)"
+   ],
+   "row_out": [
+    "Reserve Run Ledger (Watch)"
+   ],
+   "settle": "Settle Run Ledger (Watch)",
+   "settle_from": [
+    "Nothing To Watch",
+    "Refuse Run Ledger (Watch)",
+    "Save Watch Ops Delivery",
+    "Watched"
+   ],
+   "tag": "Watch"
+  },
+  "SEO Agent \u2014 Rank Tracker": {
+   "always_output": [
+    "Ensure Run Ledger (Tracker)",
+    "Reserve Run Ledger (Tracker)"
+   ],
+   "ensure_out": [
+    "DFS Balance (Tracker)"
+   ],
+   "est": {
+    "ai": 0.0,
+    "dfs": 0.15
+   },
+   "plan": "Tracker Plan",
+   "plan_out": [
+    "Ensure Run Ledger (Tracker)"
+   ],
+   "reserve_out": [
+    "After Run Ledger (Tracker)"
+   ],
+   "resume": "After Run Ledger (Tracker)",
+   "resume_out": [
+    "Run Allowed? (Tracker)"
+   ],
+   "row_out": [
+    "Reserve Run Ledger (Tracker)"
+   ],
+   "settle": "Settle Run Ledger (Tracker)",
+   "settle_from": [
+    "Nothing To Track",
+    "Refuse Run Ledger (Tracker)",
+    "Tracker Report"
+   ],
+   "tag": "Tracker"
+  },
+  "SEO Agent \u2014 Site Tracker": {
+   "always_output": [
+    "Ensure Run Ledger (Site)",
+    "Reserve Run Ledger (Site)"
+   ],
+   "ensure_out": [
+    "DFS Balance (Site)"
+   ],
+   "est": {
+    "ai": 0.03,
+    "dfs": 0.01
+   },
+   "plan": "Site Plan",
+   "plan_out": [
+    "Ensure Run Ledger (Site)"
+   ],
+   "reserve_out": [
+    "After Run Ledger (Site)"
+   ],
+   "resume": "After Run Ledger (Site)",
+   "resume_out": [
+    "Run Allowed? (Site)"
+   ],
+   "row_out": [
+    "Reserve Run Ledger (Site)"
+   ],
+   "settle": "Settle Run Ledger (Site)",
+   "settle_from": [
+    "Nothing To Track (Site)",
+    "Refuse Run Ledger (Site)",
+    "Site Report"
+   ],
+   "tag": "Site"
+  }
+ },
+ "secrets": {
+  "hits": [],
+  "needles": [
+   "hooks.slack.com/services/",
+   "discord.com/api/webhooks/",
+   "webhook.office.com/webhookb2/",
+   "hooks.zapier.com/hooks/catch/",
+   "xoxb-",
+   "sk-ant-",
+   "AIza",
+   "-----BEGIN "
+  ],
+  "placeholder": "__SEO_ALERT_WEBHOOK_URL__",
+  "scanned": [
+   "workflows",
+   "harness/code_v4"
+  ]
+ }
+}

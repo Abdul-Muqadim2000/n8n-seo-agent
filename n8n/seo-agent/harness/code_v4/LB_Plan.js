@@ -524,16 +524,25 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   // R4 (2026-10-13): who the site actually competes with in the results, read from the rank checks of the last 90 days
   // (seo_rank_history.competitors_json, written by _rank_serp.js: `above` = the domains ahead of us, `competitors` = the top 10). Only the
   // qualification gate uses this list; the pitches still name the up-to-3 declared competitors.
+  // R21 (2026-10-14): the host the results page showed is kept, but the list is keyed on the REGISTRABLE domain - ae.invoiceq.com ranked
+  // above us for "peppol uae" and invoiceq.com was pitched anyway. And a row whose competitors_json was cut to the column limit mid-JSON
+  // (RS.pack truncates an over-long snapshot) is still read: the hosts and their positions are picked out of the text that is there.
+  const rivalHosts = (raw) => {
+    const c = parse(raw, null);
+    if (c && typeof c === 'object') return [...(c.above || []), ...(c.competitors || [])]
+      .map(x => ({ host: String((x && (x.d || x.domain)) || ''), position: Number(x && (x.p || x.position)) || 0 }));
+    return [...String(raw || '').matchAll(/"(?:d|domain)"\s*:\s*"([^"]+)"(?:\s*,\s*"(?:p|position)"\s*:\s*(\d+))?/g)]
+      .map(m => ({ host: m[1], position: Number(m[2]) || 0 }));
+  };
   const serp_rivals = (() => {
     const cut = new Date(Date.now() - 90 * 864e5).toISOString(); const byDom = new Map();
     for (const h of ranks.filter(r => normD(r.domain) === s.domain && String(r.checked_at || '') >= cut)) {
-      const c = parse(h.competitors_json, null) || {};
-      for (const x of [...(c.above || []), ...(c.competitors || [])]) {
-        const dom = String((x && (x.d || x.domain)) || '').toLowerCase().replace(/^www\./, '');
-        const pos = Number(x && (x.p || x.position)) || 0;
-        if (!dom || dom === s.domain || !/\./.test(dom)) continue;
+      for (const x of rivalHosts(h.competitors_json)) {
+        const host = String(x.host || '').toLowerCase().replace(/^www\./, '').replace(/\.$/, '');
+        const dom = LK.regDomain(host); const pos = Number(x.position) || 0;
+        if (!host || !dom || dom === LK.regDomain(s.domain) || !/\./.test(dom)) continue;
         const was = byDom.get(dom);
-        if (!was || (pos > 0 && (!was.position || pos < was.position))) byDom.set(dom, { domain: dom, position: pos || (was && was.position) || 0, keyword: String(h.keyword || '') });
+        if (!was || (pos > 0 && (!was.position || pos < was.position))) byDom.set(dom, { domain: dom, host, position: pos || (was && was.position) || 0, keyword: String(h.keyword || '') });
       }
     }
     return [...byDom.values()].sort((a, b) => (a.position || 99) - (b.position || 99)).slice(0, 40);

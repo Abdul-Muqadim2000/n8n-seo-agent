@@ -87,6 +87,31 @@ searchable catalogue of all 27 guides.
 Content is data in `shared/src/guides.ts` (imported as `@seo/shared/guides`), rendered by `web/src/components/guide/`. Adding an
 ask without a guide is a bug: see `web/CONVENTIONS.md` → "Setup guides".
 
+## Report delivery (B-R1)
+
+Company settings -> **Report delivery** (`/o/:org/settings/delivery`, owner). Finished reports are pushed out of the app instead of
+waiting to be visited: `each` report as it arrives, or a `daily` / `weekly` / `monthly` summary on a chosen day and UTC hour, by
+**e-mail** (figures in the message, PDF / Word / zip attached, both links) and / or to a **webhook** (JSON with a `text` line Slack,
+Teams and Discord render; signed with the company's own secret, sealed under `MAILBOX_KEY`). Each report can carry its G15 share
+link, so it reaches somebody with no account.
+
+**A report the run marked not ready is never delivered** — a page that failed its quality gate (R11), a ladder the engine refused to
+plan (R22 / R23), a verdict it could not check (R18), evidence it could not read, a rejected run. It keeps a `held` row with the
+reason, is named in the summary that went out beside it, and stays readable in the app. "Send it now" on a report runs the same
+decision; there is no override. Rules and their 41 unit tests: `shared/src/report-delivery.ts`; the service and the schedule:
+`server/src/services/reportDelivery.ts` (a timer every 5 minutes sends summaries and retries failures).
+
+E-mail delivery needs SMTP configured (`SEO_SMTP_*`); it is **not** gated on `ACCOUNT_EMAILS`, which is about verification and reset
+links. Without a mail account the page says so and the webhook still works.
+
+## Cost figures: one table (B-R3)
+
+`shared/src/cost.ts` is the only place a per-mode price is written down, and it mirrors the engine's own calibrated defaults
+(`n8n/seo-agent/v5/code/_cost_cal.js`). `MODES[].costUsd`, `estimateRunCost()` and `MONITOR_COSTS` all read it. The app's figure is a
+pre-flight fallback and is labelled an estimate; **the engine's number replaces it** as soon as a run publishes one
+(`run_cost_estimate_usd`), and what the run actually spent replaces both. The monthly budget and `GET .../usage` count a run the same
+way, so a finished run is no longer held against the budget at the figure that was reserved for it.
+
 ## E-mail (off for now)
 
 The platform sends no e-mail: `ENGINE_EMAILS=false` (n8n receives no address, so its "Has Email?" branches skip every report /

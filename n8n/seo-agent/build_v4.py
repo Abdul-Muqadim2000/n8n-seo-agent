@@ -925,7 +925,7 @@ store.ai_budget.spent_est = +(store.ai_budget.spent_est + est).toFixed(2);
 store.ai_budget.runs += 1;
 d.ai_spend_estimate_usd = est;
 d.ai_budget_used_est_usd = store.ai_budget.spent_est;""")
-log('AI spend guard: Rate Limit estimates Claude spend per run and refuses new runs once the period estimate would exceed ai_budget_usd (set to $3 for testing)')
+log('AI spend guard: Rate Limit estimates Claude spend per run and refuses new runs once the period estimate would exceed ai_budget_usd ($15 a day since 2026-10-15; the Anthropic Console workspace limit is the hard cap)')
 
 
 # =============================================================================
@@ -1153,7 +1153,7 @@ log('WordPress (optional, off): finished pages can be created as WordPress draft
 
 # ---------- AI budget cap: 3 → 10 on 2026-10-01 to finish the system test; set to 6 on 2026-10-02 at the user's request ----------
 patch('Normalize Input', "  ai_budget_usd: 3,                 // estimated Claude spend allowed per budget period (see Rate Limit); raise when ready",
-      "  ai_budget_usd: 6,                 // estimated Claude spend allowed per budget period (see Rate Limit); 3 → 10 on 2026-10-01 for the system test, 6 since 2026-10-02 at the user's request — the Anthropic Console workspace limit is the hard cap")
+      "  ai_budget_usd: 15,                // estimated Claude spend allowed per budget period (see Rate Limit); 3 → 10 on 2026-10-01 for the system test, 6 from 2026-10-02, 15 since 2026-10-15 at the owner's request (cost is not the constraint, the result is) — the Anthropic Console workspace limit is the hard cap")
 
 # ---------- credential slots for the nodes created in this section (the generic pass in 8c-E ran before they existed) ----------
 for n in list(nodes.values()):
@@ -2820,9 +2820,11 @@ log('What the numbers are allowed to say (2026-10-12, FIX_PLAN D20 / D21 / G9 / 
 #         "yes" to a manual action no longer raises a critical alert.
 # =============================================================================
 import url_lint as _ul41, retry_lint as _rl41
-from ladder_common import OPS_ALERTS_TABLE, OPS_ALERTS_COLS
+from ladder_common import OPS_ALERTS_TABLE, OPS_ALERTS_COLS, ALERT_WEBHOOK_PLACEHOLDER
 from env_settings import ENV as _ENV41
-ALERT_WEBHOOK_URL = _ENV41.get('SEO_ALERT_WEBHOOK_URL') or ''
+# R29 / R30 (2026-10-14): the build does not read SEO_ALERT_WEBHOOK_URL at all any more — not the value (it is a secret and this
+# repository is public) and not even whether it is set, because that made the generated files depend on the building machine. It bakes
+# ALERT_WEBHOOK_PLACEHOLDER; apply_env.py substitutes the real value into the copy it imports, on the deploying machine only.
 IMPACT_SRC = rd('code/_impact.js').rstrip('\n')
 CHECKIN_TEST_SRC = rd('code/_checkin_test.js').rstrip('\n')
 OPS_ALERT_SRC = rd('code/_ops_alert.js').rstrip('\n')
@@ -2936,7 +2938,10 @@ def _eh_link(src, dst, out=0):
     outs = _ehc.setdefault(src, {}).setdefault('main', [])
     while len(outs) <= out: outs.append([])
     if not any(t['node'] == dst for t in outs[out]): outs[out].append({'node': dst, 'type': 'main', 'index': 0})
-_eh_src = lambda p: rd(p).replace('/*__OPS_ALERT__*/', OPS_ALERT_SRC).replace('__ALERT_WEBHOOK_URL__', ALERT_WEBHOOK_URL).replace('__OPS_EMAIL__', OPS_EMAIL)
+# R29 (2026-10-14, FIX_PLAN §3.12, secret handling): the Slack webhook is a bearer URL and this repository is PUBLIC, so the build bakes
+# ALERT_WEBHOOK_PLACEHOLDER and apply_env.py substitutes the real value into the JSON it hands to the import. SEO_OPS_EMAIL and the other
+# non-secret settings are baked exactly as before.
+_eh_src = lambda p: rd(p).replace('/*__OPS_ALERT__*/', OPS_ALERT_SRC).replace('__ALERT_WEBHOOK_URL__', ALERT_WEBHOOK_PLACEHOLDER).replace('__OPS_EMAIL__', OPS_EMAIL)
 # the alert payload gains the execution mode (the webhook body and the row carry it)
 _fa41 = _ehn['Format Alert']['parameters']['jsCode']
 if 'mode,' not in _fa41:
@@ -3006,7 +3011,7 @@ assert _ca41['leftValue'].count('manual_action') == 1, 'Checkin Alert?: conditio
 _ca41['leftValue'] = "={{ !$('Parse Check-in').first().json.checkin_is_test && !!(($('Parse Check-in').first().json.checkin_row || {}).manual_action || ($('Parse Check-in').first().json.checkin_row || {}).security_issue) }}"
 
 # what the harness checks (S48): the channels, their order and the fact that the webhook does not hang off the e-mail node
-json.dump({'table': OPS_ALERTS_TABLE, 'webhook_setting': 'SEO_ALERT_WEBHOOK_URL', 'webhook_configured': bool(ALERT_WEBHOOK_URL),
+json.dump({'table': OPS_ALERTS_TABLE, 'webhook_setting': 'SEO_ALERT_WEBHOOK_URL', 'webhook_placeholder': ALERT_WEBHOOK_PLACEHOLDER,   # R30: never whether the setting is filled - that made this tracked fixture depend on the building machine's .env
            'nodes': [_n41['name'] for _n41 in _ehwf['nodes'] if _n41['type'] != 'n8n-nodes-base.stickyNote'],
            'connections': {_s41: [[_t41['node'] for _t41 in _l41] for _l41 in _o41.get('main', [])] for _s41, _o41 in _ehc.items()},
            'email': {'name': 'Email Ops', 'onError': _eho.get('onError'), 'retryOnFail': bool(_eho.get('retryOnFail')), 'maxTries': _eho.get('maxTries'),
@@ -3913,7 +3918,8 @@ assert 'rivalOf' in rd('code/_outreach_kit.js') and 'serp_rivals' in rd('code/LB
 _v48 = rd('prompts/verdict.txt')
 assert 'Never ask for FAQ schema' in _v48 and all('Never ask for FAQ schema' in _l for _l in _v48.splitlines() if 'FAQPage' in _l), 'R7: verdict.txt may name FAQPage only in the line that forbids it'
 assert 'noFaqSchema' in code('Parse Verdict'), 'R7: Parse Verdict does not strip FAQPage advice'
-assert 'rungWordTarget' in code('Ladder Plan') and 'pg.target_words = rungWordTarget' in code('Ladder Plan'), 'R8: the rung pages carry no word target'
+assert 'const rungWords = ' in code('Ladder Plan') and 'pg.target_words = rungWords.words' in code('Ladder Plan') \
+    and 'RUNG_WORDS.fallback' in code('Ladder Plan'), 'R8 / R22: a rung page gets a word target, and never 0'
 # R1's consumers: a page counts as written only when the content log says so
 assert "l.status !== 'written'" in rd('code/Cadence_Plan.js') and 'writtenOf' in rd('code/Cadence_Plan.js'), 'R1: the cadence still counts unwritten pages'
 assert 'writtenLog' in rd('code/Tracker_Report.js') and 'writtenKw' in rd('code/Site_Plan.js') and 'p.written' in rd('code/Site_Metrics.js'), 'R1: a tracker still reports an unwritten page'
@@ -4321,8 +4327,12 @@ return $input.all().map(i => { const j = i.json || {}; const fn = String(j.call 
   if (fn === 'calRow') return { json: CC.calRow(j.kind, j.mode, j.amount, cal, !!j.measured) };
   if (fn === 'split') return { json: CC.split(j.ai || {}, j.dfs || {}) };
   if (fn === 'readCal') return { json: cal };
+  // R28 (2026-10-14, section 55): the DataForSEO money — a task counted once, and the day held against the account
+  if (fn === 'dfsLedger') { const L = CC.dfsLedger(); const added = (j.answers || []).map(a => L.add(a)); return { json: { added, ...L.state } }; }
+  if (fn === 'dfsDay') return { json: CC.dfsDay(j.rows || [], j.mine || {}) };
   if (fn === 'tables') return { json: { EST: CC.EST, DFS_EST: CC.DFS_EST, PRICES: CC.PRICES, UNKNOWN: CC.UNKNOWN, CHARS_PER_TOKEN: CC.CHARS_PER_TOKEN,
-    THINK_SHARE: CC.THINK_SHARE, ALPHA: CC.ALPHA, HEADROOM: CC.HEADROOM, KEEP: CC.KEEP, CAP: CC.CAP, FACTOR_KEY: CC.FACTOR_KEY } };
+    THINK_SHARE: CC.THINK_SHARE, ALPHA: CC.ALPHA, HEADROOM: CC.HEADROOM, KEEP: CC.KEEP, CAP: CC.CAP, FACTOR_KEY: CC.FACTOR_KEY,
+    RECONCILE_TOLERANCE: CC.RECONCILE_TOLERANCE, RECONCILE_FLOOR: CC.RECONCILE_FLOOR } };
   return { json: { error: 'unknown call ' + fn } }; });
 """)
 _cw51 = {'ai_calls': _AI_CALLS51,
@@ -4693,6 +4703,1617 @@ open(os.path.join(OUT_CODE, '_podcast.js'), 'w').write(
     "  return { json: { shows: j.search ? PC.shows(j.search) : [], feed: j.xml ? PC.feed(j.xml) : null, guest: j.texts ? PC.guestSignal(j.texts) : null,\n"
     "    stale: j.last === undefined ? null : PC.stale(j.last, j.now), url: PC.searchUrl(j.topic || 'e invoicing uae', !!j.signed), stale_days: PC.STALE_DAYS } }; });\n")
 log('Two more free link sources, asset ideas from the market, and two subjects a batch (2026-10-13, FIX_PLAN L5 / L6 / L7): podcast shows that take guests (a free directory a month -> the show\'s RSS feed -> its own website; pitched only when it is on topic, still publishing, says it takes guests and has a contact on its own domain) and journalist digests (HARO / Source of Sources, parsed by the app from the customer\'s own mailbox into `digest` prospects, nothing until a mailbox is connected) both run through the same gates as every other prospect; the competitors\' most-linked pages (DataForSEO domain_pages, monthly) become at most four linkable-asset ideas, each with the pages that prove it and the referring domains they hold and never a promise of links; and the writer gives every sequence a second subject in the other style, which the draft gate checks and LB Rows hands out in turn (A, B, A, B) so the app can read the reply rate per style, with no verdict under 30 first e-mails per variant (v5/code/_ab.js, mirrored in app/shared/src/outreach.ts). The Podcast Index key stays a placeholder in .env.seo.example: its signed requests need the secret inside a node, which this instance does not allow')
+# 57. NOTHING CONFIDENT WITHOUT THE DATA UNDER IT (2026-10-14, system review FIX_PLAN.md §3.12 R23 / R22 / R26;
+#     evidence docs/system-review-2026-10-14/RESULTS.md §2.1 and §2.3)
+#     * R23 — a whole ladder planned, scored and written from ONE keyword. Exec 549: `pool_size: 1, ai_reviewed: 1, relevant: 1`,
+#       both SERP calls failed with 40101 inside an HTTP 200, `Keyword Data` answered `items_count: 0` — and the run still emitted
+#       "winnable / GO_WITH_CHANGES 68" and spawned a page for "azure api management monetization" (volume 10, trend -100%) under
+#       the head "azure cloud migration dubai": another topic, and no UAE in it. *Ladder Plan* now refuses to emit a plan (and with
+#       it the page run: `write_now` stays empty, so *Spawn Page Runs* has nothing to start and *Ladder Rows* stores nothing) when
+#       the research pool is under LADDER_MIN_POOL or the live results page could not be read; it says which, in the refusal, in the
+#       plan's label and in the report, and emits NO feasibility score for either case. Every rung keyword is additionally put
+#       through the topic radius against the head keyword (v5/code/_radius.js `RAD.headFit`, the kit the keyword research draws its
+#       radius with): the pool's own filter only asks for one shared word, so "azure" was enough — half of the head's meaningful
+#       words are needed now, and what is left out is listed with its reason in `ladder.off_topic_keywords` and in the notes.
+#     * R22 — a rung row carried `target_words: 0`, so the spawn passed `ladder_words: 0`, P2-7's clamp protected only the main page
+#       (1,800 "from the competitor analysis") and the rung page shipped 2,648 words, +47%, after two editor rounds. A rung page now
+#       takes the median length of the pages this run read on the topic's results page, and with no SERP length data falls back to
+#       the main page's target, then the competitor analysis, then a stated default — never 0 — and the plan records WHICH it was
+#       (`ladder.words.rung_source`, `page.target_words_source`). The editor-instruction half of R22 is not in this section.
+#     * R26 — a Keyword Check with `volume`, `kd`, `intent` and `cpc` all null still answered "Reachable for your site · Short
+#       ladder · 4-8 months" with "estimated chance fair (30-50%)", the missing data mentioned only in `warnings`. R3 put an unknown
+#       topic fit into the label; this puts "no search data" there too, and suppresses the chance band (there is no difficulty to
+#       estimate it from) with a sentence that says so.
+# =============================================================================
+_RADIUS57 = _rd0('code/_radius.js').rstrip('\n')
+# the radius kit goes into *Ladder Plan* beside the reach kit it needs; section 49 (G32) inlines the same kit where it is present,
+# so this never adds a second copy
+if 'const RAD = (() => {' not in code('Ladder Plan'):
+    patch('Ladder Plan', "const base = $('Parse Verdict').first().json;", _RADIUS57 + "\nconst base = $('Parse Verdict').first().json;")
+assert 'const RAD = (() => {' in code('Ladder Plan'), 'R23: the topic-radius kit (_radius.js) is not inlined into Ladder Plan'
+assert 'function difficultyForYou(' in code('Ladder Plan'), 'R23: the radius kit needs the reach kit in the same node'
+assert 'RAD.headFit(head, k.keyword)' in code('Ladder Plan'), 'R23: the topic radius is not applied to the rung keywords'
+assert 'for (const k of onTopic)' in code('Ladder Plan'), 'R23: an off-topic keyword can still reach a rung'
+for _a57 in ("const LADDER_MIN_POOL = 3, LADDER_WEAK_POOL = 5;", 'const thinPool =', "reason: 'serp_unchecked'", "reason: 'thin_data'", 'const dataRefused =',
+             "status: dataRefused ? 'not_checked' : status", 'score: dataRefused ? null :'):
+    assert _a57 in code('Ladder Plan'), 'R23: Ladder Plan is missing ' + _a57
+for _a57 in ('const RUNG_WORDS =', 'target_words_source', 'rung_source: rungWords.source'):
+    assert _a57 in code('Ladder Plan'), 'R22: Ladder Plan is missing ' + _a57
+# a refused plan cannot spawn a page: the page runs come from write_now and nothing else
+assert code('Spawn Page Runs').count('(L.write_now || []).slice(0, n)') == 1 and 'ladder_words: Number(p.target_words) || 0' in code('Spawn Page Runs'), \
+    'R23 / R22: the page runs no longer come from write_now with the rung page\'s own word target'
+assert "if (L.planned === false) return [{ json: { skip: true" in code('Ladder Rows'), 'R23: a refused ladder would still store rows'
+# the report: the refusal in its own words, and no "Winnable" on a plan nothing was measured for
+patch('Build Ladder Report', "const statusLabel = { winnable: 'Winnable', stretch: 'A stretch — possible with authority building', unrealistic: 'Not realistic as the top rung' }[f.status] || esc(f.status);",
+      "const statusLabel = { winnable: 'Winnable', stretch: 'A stretch — possible with authority building', unrealistic: 'Not realistic as the top rung',\n"
+      "  not_checked: 'Not scored — the data this rests on was missing' }[f.status] || esc(f.status);   // R23 (2026-10-14)")
+patch('Build Ladder Report', "'none — ' + esc((L.refusal || {}).reason === 'duplicate' ? 'this website already has a ladder for this keyword' : 'not realistic for this site')",
+      "'none — ' + esc((L.refusal || {}).short || ((L.refusal || {}).reason === 'duplicate' ? 'this website already has a ladder for this keyword' : 'not realistic for this site'))")
+assert 'not_checked:' in code('Build Ladder Report') and "(L.refusal || {}).short" in code('Build Ladder Report'), 'R23: the ladder report does not say why there is no plan'
+# the Keyword Check: the unknown in the label, not only in the warnings (R3's rule, one field over). *Assess Response* belongs to the
+# Keyword Check workflow (build_api.py inlines this same file), so the source is what is asserted here.
+_ASSESS57 = _rd0('code/Assess_Response.js')
+for _a57 in ("const NO_DATA = 'no search data';", 'body.search_data_known = !(a.volume == null && a.kd == null);',
+             "body.label = body.label + ' \\u00b7 ' + NO_DATA;", 'body.chance = null;', 'body.plan_assumed = true;'):
+    assert _a57 in _ASSESS57, 'R26: v5/code/Assess_Response.js is missing ' + _a57
+sticky("""### Nothing confident without the data under it (R23 · R22 · R26)
+A ladder is a bet on the competition for one search. When the **live results page could not be read**, or the keyword research came back with fewer than 5 keywords around the head term, the plan is **refused**: no rungs, no score, no page run — the reason is in the plan, in its label and in the report ("Not scored — the data this rests on was missing"). Exec 549 planned, scored *winnable 68* and wrote a page from **one** keyword on a results page that had failed twice.
+Every rung keyword is measured against the **head's own topic** (`_radius.js` `RAD.headFit`): half of the head's meaningful words have to be there. "azure api management monetization" is not a rung of "azure cloud migration dubai"; what is left out is listed with its reason.
+A rung page's **length target is never 0** — the median of the pages read on the topic's results page, else the main page's target, else the competitor analysis, else a stated default — and the plan says which. The **Keyword Check** carries "no search data" in the label and gives no chance band when volume and difficulty are both unknown.""",
+    pos('Ladder Plan')[0] - 40, pos('Ladder Plan')[1] + 260, 1120, 280, 3)
+log('Nothing confident without the data under it (2026-10-14, FIX_PLAN §3.12 R23 / R22 / R26): a keyword ladder is refused — no rungs, no feasibility score, no page run and no stored rows — when the live results page could not be read or the keyword research returned fewer than 5 keywords around the head term, with the reason in the plan, the label ("No ladder planned · …") and the report ("Not scored — the data this rests on was missing") instead of a plan with a number on it (R23); every rung keyword is put through the topic radius against the head keyword (v5/code/_radius.js RAD.headFit: half of the head\'s meaningful words, so "azure api management monetization" is no longer a rung of "azure cloud migration dubai") and what it leaves out is listed with its reason (R23); a rung page\'s word target is the median length of the pages read on the topic\'s results page, else the main page\'s target, else the competitor analysis, else a stated default — never 0 — and the plan records which (R22); and a Keyword Check with no search volume and no difficulty carries "no search data" in the label itself and gives no chance band, with a sentence saying why (R26, R3\'s rule one field over)')
+
+# =============================================================================
+# 58. A PITCH TO A COMPETITOR, A CHART MARK THAT INVENTS A MOVE, A MASKED FIGURE NOBODY IS TOLD ABOUT AND A QUOTE OF MARKUP
+#     (2026-10-14, the second re-rating: docs/system-review-2026-10-14/RESULTS.md §3.3; register rows R21 / R20 / R25 / R27 and R22's
+#     editor half in docs/system-review-2026-10-11/FIX_PLAN.md §3.12)
+#     * R21 — we pitched a competitor. `ae.invoiceq.com` sat in `seo_rank_history.competitors_json` ABOVE techand.ai for "peppol uae"
+#       on two days, and exec 561 still drafted a brand-anchor pitch asking `invoiceq.com` for a link to the home page: R4's gate
+#       matched the stored host as it stands, so a rival on a subdomain was a different site. Every host on both sides is reduced to
+#       its REGISTRABLE domain before it is matched (LB Plan keys the 90 days of SERP rivals that way and still quotes the host the
+#       check really saw; a `competitors_json` that was cut to the column limit mid-JSON is read with a regex instead of being lost),
+#       a prospect whose own page sells our service is refused on that evidence alone - with or without the declared list - and the
+#       "add us to your list" exemption only holds for a page that really is a list. The SERP rivals now reach every gate call,
+#       including the podcast, the digest, the stored-prospect sweep and the draft gate (the last check before a pitch is written).
+#     * R20 — the chart marks invented a story. The Site Tracker's annotation feed chained every audit to the one before it, whatever
+#       kind of report it was, so a full SEO report (health 68) between two technical audits (health 80) printed "80 - 68 - 24 more
+#       findings", "24 findings gone - 68 - 80" and "80 - 80" as three same-day events. D2 / R2 fixed exactly this inside the audit's
+#       own diff; the feed now computes a delta only against the previous report OF THE SAME KIND and says when the kind changed.
+#     * R25 — a masked figure went out unannounced: "Microsoft's highest APIM SLA ([Statistic])" stayed in the delivered body and the
+#       failure reasons named only the 11 profile brackets. Every body placeholder that is left is named in the reasons, whether or
+#       not the count is over `placeholder_max` - and on a page that is otherwise deliverable the Word report says it too. The R11
+#       delivery gate is untouched: PH_MAX still decides what may not be published.
+#     * R22 (editor half) — the delivered page ran 2,648 words against a 1,800 target (+47%) after two editor rounds, because being
+#       over length was only ever one warning among twenty. Content QA now computes the cut - how many words, and which sections carry
+#       them - and the editor prompt prints it as the first thing to do. (The rung's missing word target is R22's other half.)
+#     * R27 — the podcast source quoted `"b-0"> Efficient Hiring Process …`, an HTML attribute from an unrelated page, as what a show
+#       "says"; the show was offered at a 29% topic match. The quote comes from the show's OWN description first, every quote is read
+#       as prose and cut on word boundaries, a quote that is still markup is dropped, and a guest appearance needs PC.MIN_FIT (40%).
+# =============================================================================
+_K58 = {p: _rd0('code/' + p + '.js') for p in ('_outreach_kit', 'LB_Plan', 'LB_Assemble', 'LB_Draft_QA', '_draft_qa', '_annotations', 'Site_Metrics', '_podcast')}
+# R21: the registrable domain on both sides, the vendor evidence on its own, and a list exemption only for a real list
+assert 'rivalEntry' in _K58['_outreach_kit'] and 'dr === LK.regDomain(x)' in _K58['_outreach_kit'], 'R21: the rival gate does not reduce the stored host to its registrable domain'
+assert 'isRoundup' in _K58['_outreach_kit'] and 'LIST_TYPES.has(type) && isRoundup(o)' in _K58['_outreach_kit'], 'R21: a rival page still passes as a list without being one'
+assert 'theirs || topic >= 0.5' in _K58['_outreach_kit'], 'R21: a competing provider is still refused only through the declared list'
+assert 'rivalHosts' in _K58['LB_Plan'] and 'LK.regDomain(host)' in _K58['LB_Plan'], 'R21: the SERP rivals are not keyed on the registrable domain'
+assert _K58['LB_Assemble'].count('serp_rivals: p.serp_rivals') == 4 and 'fit: o.fit' in _K58['LB_Assemble'], 'R21: a gate call in LB Assemble is still blind to the SERP rivals'
+assert 'serp_rivals: p.serp_rivals || []' in _K58['LB_Draft_QA'] and 'serp_rivals: c.serp_rivals' in _K58['_draft_qa'], 'R21: the draft gate is blind to the SERP rivals'
+# R20: the report type decides what may be compared, and a change of type is said instead of scored
+assert 'kindOfAudit' in _K58['_annotations'] and 'not comparable' in _K58['_annotations'] and 'lastOf' in _K58['_annotations'], 'R20: the audit marks are still chained across report types'
+assert "report_type: r.report_type || 'site_audit'" in _K58['Site_Metrics'], 'R20: the Site Tracker does not pass the report type to the marks'
+# R27: the quote is prose from the show's own description, and the topic bar is its own number
+assert 'cleanQuote' in _K58['_podcast'] and 'pickSignal' in _K58['_podcast'] and 'MIN_FIT = 0.4' in _K58['_podcast'], 'R27: the podcast quote is still taken as it is found'
+assert 'PC.MIN_FIT' in _K58['LB_Assemble'] and 'PC.cleanQuote(' in _K58['LB_Assemble'] and 'PC.pickSignal(' in _K58['LB_Assemble'], 'R27: the show is still offered on the link-gate topic bar'
+# R25 + R22: the masked figures by name, and the cut as an instruction
+assert 'placeholder_note' in code('Content QA') and 'masked figure(s) still in the text' in code('Content QA'), 'R25: the body placeholders are not named in the reasons'
+assert 'placeholder_count > PH_MAX' in code('Content QA') and 'const too_many_placeholders' in code('Content QA'), 'R25: the R11 delivery gate was loosened'
+assert 'length_instruction' in code('Content QA') and "'CUT ' + over_words" in code('Content QA'), 'R22: Content QA does not state the cut'
+_ED58 = nodes['Editor']['parameters']['text']
+assert 'content_qa.length_instruction' in _ED58 and 'THE FIRST THING TO DO' in _ED58 and '"Main content is too long"' in _ED58, 'R22: the editor is not told to cut, only warned'
+# R25: a page that is otherwise deliverable still says which figures are masked
+patch('Build Word File', """    ...(qa.not_ready ? [['Why it is not ready', '<span class="bad">' + (qa.not_ready_reasons || []).map(esc).join('<br>') + '</span>']] : []),   // R11 (2026-10-13): the LAST round's reasons, on the page the owner reads first""",
+      """    ...(qa.not_ready ? [['Why it is not ready', '<span class="bad">' + (qa.not_ready_reasons || []).map(esc).join('<br>') + '</span>']] : []),   // R11 (2026-10-13): the LAST round's reasons, on the page the owner reads first
+    ...(qa.placeholder_note && !qa.not_ready ? [['Figures still masked', '<span class="bad">' + esc(qa.placeholder_note) + '</span>']] : []),   // R25 (2026-10-14): a masked figure in the body is named even when the page is otherwise deliverable""")
+patch('Build Word File', "    qa_placeholders: qa.placeholders_total == null ? null : qa.placeholders_total,",
+      "    qa_placeholders: qa.placeholders_total == null ? null : qa.placeholders_total,\n"
+      "    qa_placeholder_note: (qa.quality || {}).placeholder_note || '',   // R25 (2026-10-14): the app and the callback name the masked figures too")
+# the harness shim (S68): the podcast kit again, now with the quote cleaner, the signal picker and the topic bar it was given
+open(os.path.join(OUT_CODE, '_podcast.js'), 'w').write(
+    "// harness shim (written by build_v4.py section 58, R27; it replaces section 52's): the podcast kit — a search answer (Apple or\n"
+    "// Podcast Index), an RSS feed, the guest signal with the quote it may show, the choice between the feed and the website, and the\n"
+    "// staleness and topic rules\n"
+    + _K58['_podcast'] + "\nreturn $input.all().map(i => { const j = i.json || {};\n"
+    "  return { json: { shows: j.search ? PC.shows(j.search) : [], feed: j.xml ? PC.feed(j.xml) : null, guest: j.texts ? PC.guestSignal(j.texts) : null,\n"
+    "    picked: j.feed_signal || j.site_signal ? PC.pickSignal(j.feed_signal, j.site_signal) : null,\n"
+    "    quote: j.quote === undefined ? null : PC.cleanQuote(j.quote, j.max), prose: j.html_text === undefined ? null : PC.prose(j.html_text),\n"
+    "    stale: j.last === undefined ? null : PC.stale(j.last, j.now), url: PC.searchUrl(j.topic || 'e invoicing uae', !!j.signed),\n"
+    "    stale_days: PC.STALE_DAYS, min_fit: PC.MIN_FIT } }; });\n")
+_cq58 = pos('Content QA')
+sticky("""### What the second re-rating found (R21 / R20 / R25 / R27, R22's editor half — 2026-10-14)
+**R21:** a prospect is a rival when its **registrable** domain matches a declared competitor or a domain the rank checks saw above us (`ae.invoiceq.com` → `invoiceq.com`), and a page that **sells what you sell** is refused on its own evidence, list or no list; "add us to your list" survives only on a page that really is a list.
+**R20:** chart marks compare an audit only with the previous report **of the same kind** — a full report between two technical audits is marked as a different report, never as a score move.
+**R25:** every bracketed figure left in the body is named to the owner, not only when there are more than five of them (the publish gate is unchanged).
+**R22 (editor):** over length is an instruction — how many words to cut and from which sections — not one warning among twenty.
+**R27:** a show's quote is prose from its **own description**, cut on word boundaries, and a guest appearance needs a 40% topic match.""",
+    _cq58[0] - 60, _cq58[1] + 560, 1120, 240, 5)
+log('What the second re-rating found in the drafts, the marks and the quotes (2026-10-14, FIX_PLAN §3.12 R21 / R20 / R25 / R27 + R22\'s editor half): a prospect is refused as a rival when its REGISTRABLE domain matches a declared competitor or a domain the rank checks of the last 90 days saw above us (LB Plan keys seo_rank_history.competitors_json that way, reads a row that was truncated mid-JSON with a regex and keeps the host that was really seen for the reason: ae.invoiceq.com ranks #3 for "peppol uae"), a prospect whose own page sells our service is refused on that evidence alone whether or not it is on the declared list (two vendor signals, 45% of our service words and either the title or the measured topic match), the "add us to your list" exemption holds only for a page that really is a list, and the SERP rivals reach every gate call including the podcast, the digest, the stored-prospect sweep and the draft gate (R21); the chart marks compare an audit only with the previous report of the SAME report_type and say when the kind changed instead of printing a health move between unlike reports (R20); every placeholder left in the body is named in the quality reasons and in the Word report, whether or not the count is over placeholder_max, with the R11 delivery gate untouched (R25); Content QA states the cut an over-long draft needs - the words to remove and the sections that carry them - and the editor prompt prints it as the first thing to do, with its own entry in the fix list (R22, editor half); and a podcast show is quoted from its own description, as prose cut on word boundaries with any HTML attribute remains dropped, and is only offered at a 40% topic match instead of the 25% that qualifies a page for a link (R27)')
+
+# =============================================================================
+# 55. THE GUARD THAT GUARDS NOTHING, MONEY THAT DOES NOT ADD UP, AND A SECRET IN A PUBLIC REPOSITORY
+#     (2026-10-14, system review FIX_PLAN.md §3.12 R17 / R28 / R29; docs/system-review-2026-10-14/RESULTS.md §0, §2.11, §3.3, §5)
+#     * R17 **the spend guard never saw a monitor before it spent.** R9 gave every scheduled workflow a seo_run_ledger row, but hung the
+#       reserve chain BESIDE the plan node — a Data Table node answers with the row it wrote, not with its input, so the ledger was kept
+#       out of the data path. n8n's v1 execution order runs that side branch LAST: in exec 568 `Settle Run Ledger (Pulse)` ran at
+#       16:22:15.507 and matched no row, then `Reserve Run Ledger (Pulse)` inserted a fresh `reserved` one at 16:22:15.584 — after all the
+#       spending. The same shape in 561, 563, 564, 570, 572, 574, 578 and 579: every row's `created_at` was the workflow's STOP time, every
+#       row stayed `reserved` until the stale release cleared it two hours later, and the measured figure each settle had just computed
+#       ($0.7895 ai_visibility, $0.3728 backlinks, $0.0840 pulse, $0.0900 the scheduled audit) was thrown away. $1.394 of that run's
+#       $2.388 was attributed to no settled row at all.
+#       The chain is in the data path now (ladder_common.ledger_mainline, called from all three builders at write time):
+#       plan -> Ensure -> Row -> Reserve -> **After Run Ledger** -> everything the plan used to feed, where the one new Code node hands the
+#       plan's own items back so nothing downstream ever sees a Data Table row. Both Data Table nodes of the chain became
+#       `alwaysOutputData` + `continueRegularOutput` in the same move: they sit in the run's path now, so neither may end it by answering
+#       with nothing. No harness scenario can catch this — the harness runs node code, not n8n's branch ordering — so it is asserted in the
+#       build (part D below): a paid node that can be reached without passing through the reservation fails the build.
+#     * R28 **the "measured" DataForSEO figures did not reconcile with the money.** Window C of the live run moved $0.0520 while exec 579
+#       alone reported $0.09 (+73%); window A reported $0.6145 against $0.5506 (+11.6%); and the Keyword Check settled `dfs_usd: 0` while
+#       telling the caller `cost_usd: 0.026`. Three causes, three fixes:
+#       (a) a crawl is billed when the task is CREATED, and DataForSEO repeats that `tasks[].cost` in every later answer about the task —
+#           so each poll of *Get Crawl Summary* / *Get Crawled Pages* / *Run Crawl Extras* charged the engine for the same $0.09 again.
+#           CC.dfsLedger counts a task once, by its own id, and keeps the repeats visible (`dataforseo_tasks_repeated`).
+#       (b) the Audit Scheduler reserved $0.09 of DataForSEO money for a crawl it does not run: it SPAWNS audits into the main workflow,
+#           and each spawned run reserves and settles that crawl for itself. It reserves nothing now, exactly as the Content Cadence does
+#           (ladder_common.LEDGER_EST).
+#       (c) nothing ever checked the sum against the account. Every reservation now records the free `appendix/user_data` balance
+#           (*DFS Balance* -> `seo_run_ledger.dfs_balance`) and *Run Ledger Settle* holds the day's settled rows against how far the
+#           balance actually fell (CC.dfsDay). Nothing is corrected automatically: when the two disagree the row says so and names the
+#           account as the figure to believe. G23's distinction is untouched — an estimate is still labelled an estimate.
+#       And the Keyword Check settles what it told the caller: *Ledger Settle (Assess)* (build_api.py) writes the measured DataForSEO cost
+#       and the Haiku estimate, and `measured_usd + estimated_usd` equals the `cost_usd` in the 200.
+#     * R29 **a secret was baked into files this public repository tracks.** `SEO_ALERT_WEBHOOK_URL` was baked the way SEO_MAIL_FROM is, so
+#       the live Slack webhook (a bearer URL: anyone holding it can post into the channel) sat in workflows/SEO_Agent_Error_Handler.json,
+#       workflows/SEO_Agent_Page_Watch.json and harness/code_v4/EH__Alert_*.js / Watch_Ops_*.js. The build bakes
+#       ALERT_WEBHOOK_PLACEHOLDER now and **apply_env.py substitutes the real value into a copy outside the repository**, after the build
+#       and before the import — chosen over a Data Table row because the alert path must work when the Data Tables are the thing that
+#       broke, and because it keeps the deploy a single command. A node still holding the placeholder has no channel configured
+#       (OA.cfgUrl), which is what an empty setting always meant. Part E fails the build if any webhook-shaped secret reappears in
+#       workflows/ or harness/code_v4/. SEO_MAIL_FROM, SEO_OPS_EMAIL, SEO_BRAND and the Bing / Ahrefs on-flags are unchanged.
+# =============================================================================
+import retry_lint as _rl55
+from ladder_common import ALERT_WEBHOOK_PLACEHOLDER as _PH55, LEDGER_EST as _EST55
+from ladder_common import DFS_BALANCE_URL as _BALANCE_URL55   # R32 (section 59): the one free DataForSEO endpoint, read on the ledger chain
+
+# ---------- A. R28 (a): one task, one cost ----------
+_DFS_ONCE55 = r"""    const j = (it && it.json) || {}; let c = 0;
+    // R28 (2026-10-14, FIX_PLAN §3.12): count a task's cost ONCE. DataForSEO bills a crawl when the task is created and then repeats the
+    // same `tasks[].cost` in every later answer about that task, so every poll of the on_page nodes charged the engine for the same $0.09
+    // again: window C of 2026-10-14 reported $0.0900 against $0.0520 of real money (+73%), window A $0.6145 against $0.5506 (+11.6%).
+    if (Array.isArray(j.tasks)) { for (const t of j.tasks) c += __dfsOnce(t); } else if (j.cost) { c += Number(j.cost) || 0; }
+"""
+_DFS_ONCE_DECL55 = r"""
+// R28: a task is counted on its first sighting, by its own id; a repeat is counted as a repeat, and a task with no id is counted (nothing
+// identifies it) and reported, so the figure is never quietly wrong in either direction.
+const __dfsSeen = new Set(); const __dfsRepeats = { n: 0, no_id: 0 };
+const __dfsOnce = (t) => {
+  const cost = Number((t && t.cost) || 0); if (!cost) return 0;
+  const id = String((t && t.id) || '');
+  if (!id) { __dfsRepeats.no_id++; return cost; }
+  if (__dfsSeen.has(id)) { __dfsRepeats.n++; return 0; }
+  __dfsSeen.add(id); return cost;
+};
+"""
+_OLD_SUM55 = """    const j = (it && it.json) || {}; let c = 0;
+    if (Array.isArray(j.tasks)) { for (const t of j.tasks) c += Number((t && t.cost) || 0); } else if (j.cost) { c += Number(j.cost) || 0; }
+"""
+_ledger_nodes55 = sorted(nm for nm in nodes if 'const run_ledger = {' in nodes[nm]['parameters'].get('jsCode', ''))
+assert {'Build Word File', 'Build Full Report', 'Build Audit Report', 'Build Keyword File', 'Build Ladder Report'} <= set(_ledger_nodes55), _ledger_nodes55
+for _n55 in _ledger_nodes55:
+    patch(_n55, _OLD_SUM55, _DFS_ONCE55)
+    patch(_n55, "const run_ledger = { dataforseo_usd: 0,", _DFS_ONCE_DECL55 + "const run_ledger = { dataforseo_usd: 0,")
+    patch(_n55, "run_ledger.dataforseo_usd = +run_ledger.dataforseo_usd.toFixed(4);",
+          "run_ledger.dataforseo_usd = +run_ledger.dataforseo_usd.toFixed(4);\n"
+          "run_ledger.dataforseo_tasks = __dfsSeen.size;\n"
+          "run_ledger.dataforseo_tasks_repeated = __dfsRepeats.n;   // answers about a task already paid for (a crawl is billed once, at creation)\n"
+          "run_ledger.dataforseo_tasks_unidentified = __dfsRepeats.no_id;")
+    assert '__dfsOnce(' in code(_n55) and code(_n55).index('const __dfsOnce') < code(_n55).index('__dfsOnce(t'), _n55 + ': the dedupe is declared after it is used'
+
+# ---------- B. R28 (c): the account itself, read for free, on every reservation ----------
+# appendix/user_data is free and answers in milliseconds; it is the only measurement of this engine's DataForSEO spend that cannot be
+# argued with. It sits on the ledger chain (Load Cost Calibration -> DFS Balance -> Run Ledger Row), so the reading belongs to the row the
+# run reserves, and it can never fail the run: neverError + continueRegularOutput + alwaysOutputData, with G1's retry rule.
+_lcc55 = pos('Load Cost Calibration')
+add_node('DFS Balance', 'n8n-nodes-base.httpRequest', 4.5, {
+    'method': 'GET', 'url': 'https://api.dataforseo.com/v3/appendix/user_data',
+    'authentication': 'genericCredentialType', 'genericAuthType': 'httpBasicAuth',
+    'options': {'timeout': 15000, 'response': {'response': {'neverError': True}}}},
+    [_lcc55[0] + 110, _lcc55[1] + 150],
+    dict(credentials={'httpBasicAuth': {'id': 'SEOcredDataForSE', 'name': 'DataForSEO'}},
+         onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True, **_rl55.RETRY))
+disconnect('Load Cost Calibration', 'Run Ledger Row')
+connect('Load Cost Calibration', 'DFS Balance'); connect('DFS Balance', 'Run Ledger Row')
+patch('Run Ledger Row', "const HEAVY_PAGES = Number(d.heavy_audit_pages) > 0 ? Number(d.heavy_audit_pages) : 100;",
+      "// R28 (2026-10-14): the DataForSEO account balance at the moment this row is reserved, read for free from appendix/user_data, so the\n"
+      "// day's reported spend can be held against how far the account actually falls (CC.dfsDay in Run Ledger Settle) instead of trusting a\n"
+      "// sum of task costs that was up to 73% out. 0 = the probe did not answer, and the run carries on exactly as before.\n"
+      "let dfs_balance = 0;\n"
+      "try { const __b = $('DFS Balance').first().json || {}; const __t = (__b.tasks || [])[0] || {}; const __r = (__t.result || [])[0] || {};\n"
+      "  const __v = Number((__r.money || {}).balance); if (Number.isFinite(__v) && __v > 0) dfs_balance = +__v.toFixed(6); } catch (e) {}\n"
+      "const HEAVY_PAGES = Number(d.heavy_audit_pages) > 0 ? Number(d.heavy_audit_pages) : 100;")
+patch('Run Ledger Row', "  domain: String(d.domain || '').toLowerCase(), heavy, dfs_est_usd: dfs_est, dfs_usd: 0,",
+      "  domain: String(d.domain || '').toLowerCase(), heavy, dfs_est_usd: dfs_est, dfs_usd: 0, dfs_balance,")
+assert "$('DFS Balance')" in code('Run Ledger Row') and 'dfs_balance,' in code('Run Ledger Row'), 'R28: the reservation does not carry the balance'
+assert code('Run Ledger Row').index('let dfs_balance = 0;') < code('Run Ledger Row').index('dfs_balance,'), 'R28: the balance is used before it is read'
+assert 'CC.dfsDay(' in code('Run Ledger Settle'), 'R28: the settle does not reconcile the day against the account'
+
+# ---------- C. R28: the reconciliation is in the API callback and the run report too ----------
+patch('Build Webhook Response', "    run_ledger: d.run_ledger || null,", "    run_ledger: d.run_ledger || null,\n    dfs_tasks: (d.run_ledger || {}).dataforseo_tasks ?? null,")
+
+# ---------- D. R17: the build refuses a reservation that is not upstream of the first paid call ----------
+# A harness scenario cannot see this (it runs node code, not n8n's branch ordering), so it is checked here, on the generated JSON: walk the
+# main connections from every node with no main input, and refuse to walk past the reservation. Anything paid that is still reachable can
+# run before the row exists — which is exactly what R17 was.
+_PAID_CREDS55 = {'SEOcredDataForSE', 'SEOcredJinaReade', 'SEOcredPageSpeed', 'SEOcredAnthropic', 'SEOcredAhrefsDR', 'SEOcredBingWebm'}
+# a model / parser node hangs off its agent on an ai_* connection, never on `main`: the agent is the node that runs on the main path, and it
+# is the one this check cares about (its model node holds the Anthropic credential but cannot run on its own)
+_SUBNODE55 = ('lmChat', 'outputParser', 'memory', 'embeddings', 'toolWorkflow', 'vectorStore')
+def _subnode55(n): return any(k.lower() in n['type'].lower() for k in _SUBNODE55)
+def _paid55(n):
+    if _subnode55(n): return False
+    # R32 (2026-10-14, section 59): the one free DataForSEO endpoint. `appendix/user_data` is the account balance, costs nothing and is
+    # read ON the ledger chain (between Ensure and Row), so it is the single node that may carry the DataForSEO credential upstream of
+    # the reservation. The URL is checked, not the name, so a paid node cannot slip through by being called "DFS Balance".
+    if n['type'] == 'n8n-nodes-base.httpRequest' and str(n['parameters'].get('url') or '') == _BALANCE_URL55: return False
+    if n['type'] == '@n8n/n8n-nodes-langchain.agent': return True       # a model call on the main path
+    if n['type'] == 'n8n-nodes-base.executeWorkflow': return True       # it starts a run that spends
+    for c in (n.get('credentials') or {}).values():
+        if isinstance(c, dict) and c.get('id') in _PAID_CREDS55: return True
+    return False
+def _reach55(conns55, starts, stop_at):
+    seen, stack = set(starts), list(starts)
+    while stack:
+        cur = stack.pop()
+        if cur == stop_at: continue
+        for lst in ((conns55.get(cur) or {}).get('main') or []):
+            for t in (lst or []):
+                if t['node'] not in seen: seen.add(t['node']); stack.append(t['node'])
+    return seen
+def _check_ledger_order55(path, wiring):
+    wf55 = json.load(open(path, encoding='utf-8'))[0]
+    by_name = {n['name']: n for n in wf55['nodes']}
+    c55, nm55 = wf55.get('connections') or {}, wf55.get('name') or path
+    tag55 = wiring['reserve'][len('Run Ledger Row ('):-1]
+    reserve55, resume55 = 'Reserve Run Ledger (' + tag55 + ')', 'After Run Ledger (' + tag55 + ')'
+    for n55 in (wiring['plan'], 'Ensure Run Ledger (' + tag55 + ')', wiring['reserve'], reserve55, resume55, wiring['settle']):
+        assert n55 in by_name, 'R17: ' + nm55 + ' has no node "' + n55 + '"'
+    # the plan feeds the ledger and nothing else: everything it used to feed now hangs off the resume node
+    plan_out55 = [t['node'] for lst in ((c55.get(wiring['plan']) or {}).get('main') or []) for t in (lst or [])]
+    assert plan_out55 == ['Ensure Run Ledger (' + tag55 + ')'], 'R17: ' + nm55 + ': ' + wiring['plan'] + ' feeds ' + str(plan_out55) + ' beside the ledger'
+    targets55 = {t['node'] for o in c55.values() for lst in (o.get('main') or []) for t in (lst or [])}
+    # a start is a node nothing feeds on `main` that itself feeds something on `main` — the triggers, in practice; a sub-node (a model, a
+    # parser) has no main connection at all and can never start a path
+    starts55 = [n['name'] for n in wf55['nodes'] if n['name'] not in targets55 and ((c55.get(n['name']) or {}).get('main'))]
+    early55 = sorted(n for n in _reach55(c55, starts55, reserve55) if n in by_name and _paid55(by_name[n]))
+    assert not early55, 'R17: ' + nm55 + ' can spend before it reserves its ledger row: ' + ', '.join(early55)
+    after55 = _reach55(c55, [reserve55], None)
+    assert wiring['settle'] in after55, 'R17: ' + nm55 + ': ' + wiring['settle'] + ' is not downstream of ' + reserve55
+    assert reserve55 not in _reach55(c55, [wiring['settle']], None), 'R17: ' + nm55 + ': the reservation hangs off the settle'
+    return len(early55)
+
+# ---------- E. R29: no secret may reach the generated files ----------
+_SECRET_SHAPES55 = [
+    ('hooks.slack.com/services/', 'a Slack incoming webhook'),
+    ('discord.com/api/webhooks/', 'a Discord webhook'),
+    ('webhook.office.com/webhookb2/', 'a Microsoft Teams webhook'),
+    ('hooks.zapier.com/hooks/catch/', 'a Zapier catch hook'),
+    ('xoxb-', 'a Slack bot token'), ('sk-ant-', 'an Anthropic API key'), ('AIza', 'a Google API key'),
+    ('-----BEGIN ', 'a private key'),
+]
+def _secret_scan55(roots):
+    hits55 = []
+    for root55 in roots:
+        for dirpath55, _dirs55, files55 in os.walk(root55):
+            for f55 in files55:
+                if not f55.endswith(('.json', '.js', '.txt')): continue
+                fp55 = os.path.join(dirpath55, f55)
+                try: txt55 = open(fp55, encoding='utf-8', errors='ignore').read()
+                except OSError: continue
+                for needle55, what55 in _SECRET_SHAPES55:
+                    if needle55 in txt55:
+                        hits55.append(os.path.relpath(fp55, HERE0) + ': ' + what55 + ' (' + needle55 + ')')
+    return hits55
+
+def _r17_r29_checks():
+    """Run after every workflow is generated (the sub-builds run at the very end of this file)."""
+    lw55 = json.load(open(os.path.join(HERE0, 'harness', 'ledger_wiring.json'), encoding='utf-8'))
+    files55 = {w['name']: os.path.join(HERE0, 'workflows', f) for f in os.listdir(os.path.join(HERE0, 'workflows'))
+               if f.endswith('.json') for w in json.load(open(os.path.join(HERE0, 'workflows', f), encoding='utf-8'))}
+    checked55 = 0
+    for wname55, wiring55 in sorted((lw55.get('monitors') or {}).items()):
+        assert wname55 in files55, 'R17: no generated workflow called ' + wname55
+        _check_ledger_order55(files55[wname55], wiring55); checked55 += 1
+    # R32's companion (section 59): Page Watch joined the chain, so it is ten — the nine that spend plus the daily watch, which keeps a
+    # $0 row so the guard and the day's reconciliation can see that it ran at all.
+    assert checked55 == 10, 'R17: ' + str(checked55) + ' scheduled workflows checked, expected 10 (the nine of R17 plus Page Watch)'
+    hits55 = _secret_scan55([os.path.join(HERE0, 'workflows'), os.path.join(HERE0, 'harness', 'code_v4')])
+    assert not hits55, 'R29: a secret reached the generated files:\n  ' + '\n  '.join(hits55)
+    # R30 (2026-10-14): a shape scan only catches the secrets we thought of. The alert channel is checked positively as well — what is
+    # baked must be EXACTLY the placeholder, so a build on a machine whose .env holds the URL produces the same files as a build without
+    # one, and the "no webhook configured" path the harness exercises is the generated node in every checkout.
+    _baked55 = []
+    for _f55 in ('harness/code_v4/EH__Alert_Channels.js', 'harness/code_v4/EH__Alert_Record.js', 'harness/code_v4/EH__Alert_Delivery.js',
+                 'harness/code_v4/Watch_Ops_Alert.js', 'harness/code_v4/Watch_Ops_Channels.js',
+                 'harness/code_v4/EH__Alert_Retry_Plan.js'):   # B-A7 (2026-10-15): the sweep posts to the same channel
+        _t55 = open(os.path.join(HERE0, _f55), encoding='utf-8').read()
+        _m55 = re.findall(r"webhook_url[:= ]+'([^']*)'", _t55) or re.findall(r"cfgUrl\('([^']*)'\)", _t55)
+        assert _m55 and all(v == _PH55 for v in _m55), 'R30: ' + _f55 + ' does not carry the placeholder but ' + str(_m55)
+        _baked55.append(_f55)
+    assert len(_baked55) == 6, _baked55
+    # what harness S65 reads: the chain the build just proved, so the scenario can assert the shape without a workflow file
+    _main55 = json.load(open(os.path.join(HERE0, 'workflows', 'SEO_Agent_v4.json'), encoding='utf-8'))[0]
+    _mc55 = _main55['connections']
+    _chain55 = {}
+    for wname55, wiring55 in sorted((lw55.get('monitors') or {}).items()):
+        wf55 = json.load(open(files55[wname55], encoding='utf-8'))[0]
+        tag55 = wiring55['reserve'][len('Run Ledger Row ('):-1]
+        cc55 = wf55['connections']
+        out55 = lambda nd: [t['node'] for lst in ((cc55.get(nd) or {}).get('main') or []) for t in (lst or [])]
+        _chain55[wname55] = {'tag': tag55, 'plan': wiring55['plan'], 'plan_out': out55(wiring55['plan']),
+                             'ensure_out': out55('Ensure Run Ledger (' + tag55 + ')'), 'row_out': out55(wiring55['reserve']),
+                             'reserve_out': out55('Reserve Run Ledger (' + tag55 + ')'),
+                             'resume': 'After Run Ledger (' + tag55 + ')', 'resume_out': out55('After Run Ledger (' + tag55 + ')'),
+                             'settle': wiring55['settle'], 'settle_from': wiring55['settle_from'], 'est': wiring55['est'],
+                             'always_output': sorted(n['name'] for n in wf55['nodes']
+                                                     if n['name'] in ('Ensure Run Ledger (' + tag55 + ')', 'Reserve Run Ledger (' + tag55 + ')') and n.get('alwaysOutputData'))}
+    json.dump({'monitors': _chain55,
+               'main': {'balance_node': 'DFS Balance', 'balance_url': nodes['DFS Balance']['parameters']['url'],
+                        'balance_in': sorted(s for s, o in _mc55.items() for lst in (o.get('main') or []) for t in (lst or []) if t['node'] == 'DFS Balance'),
+                        'balance_out': [t['node'] for lst in ((_mc55.get('DFS Balance') or {}).get('main') or []) for t in (lst or [])],
+                        'ledger_nodes': _ledger_nodes55, 'column': 'dfs_balance'},
+               'secrets': {'placeholder': _PH55, 'needles': [n for n, _w in _SECRET_SHAPES55],
+                           'scanned': ['workflows', 'harness/code_v4'], 'hits': hits55},
+               'audit_schedule_est': _EST55['audit_schedule']},
+              open(os.path.join(HERE0, 'harness', 'ledger_order.json'), 'w'), indent=1, sort_keys=True)
+    print('ledger order (R17): ' + str(checked55) + ' scheduled workflows reserve before their first paid node; no secret in workflows/ or harness/code_v4/ (R29)')
+
+log('The guard reserves before it spends, the money adds up, and no secret reaches the repository (2026-10-14, FIX_PLAN R17 / R28 / R29). R17: every one of the nine scheduled workflows wrote its ledger row at the END of the run and never settled it, because R9 hung the reserve chain beside the plan node and n8n runs a side branch last (exec 568: the settle ran 77 ms BEFORE the reserve, both after all the spending) - the chain is on the main path now, plan -> Ensure -> Row -> Reserve -> After Run Ledger -> the pipeline, and the build refuses any workflow whose paid nodes can be reached without passing the reservation. R28: a DataForSEO task is counted once, by its id (a crawl is billed at creation and repeated in every poll - +73% in one window), the Audit Scheduler reserves nothing for the crawls it only spawns, the Keyword Check settles the figure it reported to the caller, and every reservation records the free appendix/user_data balance so the day is reconciled against the account instead of a sum of task costs - an estimate stays labelled an estimate. R29: SEO_ALERT_WEBHOOK_URL is no longer baked into generated code (it is a bearer URL and this repository is public): the build bakes ' + _PH55 + ' and apply_env.py substitutes the real value into the copy it imports, with a build-time scan that fails if a webhook or key shape ever reappears in workflows/ or harness/code_v4/')
+
+
+
+# =============================================================================
+# 56. THE ANSWER THAT ARRIVED WITH HTTP 200 AND WAS STILL A FAILURE (2026-10-14, system review FIX_PLAN.md §3.12 R18 / R19 / R24;
+#     evidence docs/system-review-2026-10-14/RESULTS.md §2.3, §2.4 and §3.3)
+#       * R18. n8n's `retryOnFail` fires only when a node FAILS. DataForSEO answers a dead task with HTTP 200 and `status_code`
+#         40101 ("Internal SE Server Error."); Google's URL Inspection answers HTTP 200 with an `error` object. Both look like
+#         success. The only gate that ever looked inside a 200 was `AI_Retry_Requests.js` (the AI paths) and the **50000-only**
+#         IF of section 25 — so in execution 549 `SERP Top 10` and `Facts SERP` both returned **40101**, were billed $0.002 each,
+#         **ran once**, and the run still planned a ladder, scored it "winnable / GO_WITH_CHANGES 68" and wrote a page on a
+#         results page nobody had seen. The rule now lives in one kit (`v5/code/_dfs_retry.js`, RT), every gate uses it, each gate
+#         pauses and re-sends once (SERP, facts search, keyword data) — and, the half that matters more, **where the retry fails
+#         too the evidence is `unavailable` and the verdict carries no number**: no score, no expected visits, no time to rank,
+#         and the reason in the first line of the reasons. A feasibility verdict computed from a SERP that errored twice is worse
+#         than no verdict.
+#       * R19. In execution 550, 31 of 45 URL inspections failed with "Internal error encountered.", were never re-sent, and the
+#         audit's indexing picture rested on 14 pages; the diff then reported `affected 4` against `affected_before 15` as an
+#         improvement **without saying the sample had shrunk from 25 pages to 14** (the full report 18 minutes later inspected all
+#         45 with 0 failures and found 18 not indexed). Now: *Inspect Retry Plan* → *Wait Before Inspect Retry* →
+#         *GSC Audit Query (Retry)* re-sends what a second attempt can fix, every inspection finding carries `checked` /
+#         `checked_of` and says so in its evidence, the count is stored on the finding row, and the diff **refuses to print a
+#         delta** when the two numbers were measured on samples more than 20% apart (RT.comparable) — it says the sample moved.
+#       * R24. One report said three things about schema: a Medium finding ranked 8th by impact ("Structured data with errors",
+#         26 of 47 pages), `not_assessed: ["Structured data (schema) …"]` and `not_compared: ["Schema"]`, while `Schema` was in
+#         neither `category_scores` nor `weights`. **The decision: a technical audit does not assess schema, so it emits no Schema
+#         finding.** It has only DataForSEO's yes/no `has_micromarkup_errors` flag per page — no property, nothing the owner can
+#         act on beyond "go and validate" — which is exactly why the audit's own `not_assessed` list says so. The flag's count now
+#         travels into that one line, and a general guard drops any scored finding in a category this audit type does not weight,
+#         so the three statements cannot diverge again. The full SEO report, which reads the HTML and checks the schema URLs,
+#         keeps Schema weighted (12) and compared.
+# =============================================================================
+DFS_RETRY_SRC = rd('code/_dfs_retry.js').rstrip('\n')
+# the one condition an IF node can carry (it cannot call the kit): the same four cases as RT.dfs, checked by harness S66
+_FAIL56 = ("($json.error || Number($json.status_code) >= 40000 || !Array.isArray($json.tasks)"
+           " || !Number((($json.tasks || [])[0] || {}).status_code)"
+           " || Number((($json.tasks || [])[0] || {}).status_code) >= 40000"
+           " || (Number((($json.tasks || [])[0] || {}).status_code) === 20000 && !(((($json.tasks || [])[0] || {}).result) || [])[0]))")
+# the provider's own message decides whether asking again can help: a dead search engine can, a wrong field or a used-up quota cannot.
+# The two regular expressions are RT.TRANSIENT and RT.PERMANENT of v5/code/_dfs_retry.js, and harness S66 fails if they ever differ.
+_MSG56 = "String((((($json.tasks || [])[0] || {}).status_message) || $json.status_message || ($json.error && ($json.error.message || $json.error)) || ''))"
+_TRANSIENT56 = (r"/internal (?:se )?server error|internal error|server error|timeout|timed out|temporar|try again|unavailable|"
+                r"backend|deadline exceeded|connection|socket|econn|eai_again|rate limit|too many requests|\b(?:429|500|502|503|504)\b/i")
+_PERMANENT56 = (r"/permission|forbidden|unauthor|invalid[_ ]grant|credential|not found|no access|invalid field|unknown field|"
+                r"unsupported|quota|resource_exhausted|insufficient funds|payment|balance/i")
+DFS_FAILED56 = ("{{ !!" + _FAIL56 + " && (!" + _PERMANENT56 + ".test(" + _MSG56 + ") || " + _TRANSIENT56 + ".test(" + _MSG56 + ")) }}")
+
+# ---------- A. every DataForSEO gate takes the widened rule, and pauses before the second attempt ----------
+_W56 = 5   # seconds between the two attempts (the AI gate waits 20 s for a batch of up to 24; one call needs less)
+def _wait56(name, at):
+    # `unit` is written out although typeVersion 1.1 defaults to seconds: the Wait node of @version 1 defaults to HOURS, so an
+    # implicit unit is one typeVersion away from pausing a customer's run for five hours.
+    return add_node(name, 'n8n-nodes-base.wait', 1.1, {'amount': _W56, 'unit': 'seconds'}, at, {'webhookId': nid(name + ':hook')})
+for _gate, _retry, _wait in (('SERP Failed?', 'SERP Top 10 (Retry)', 'Wait Before SERP Retry'),
+                             ('Facts SERP Failed?', 'Facts SERP (Retry)', 'Wait Before Facts Retry')):
+    _c56 = nodes[_gate]['parameters']['conditions']['conditions'][0]
+    assert '50000' in _c56['leftValue'] and '40000' not in _c56['leftValue'], _gate + ': the gate is not the 50000-only one of section 25'
+    _c56['leftValue'] = '=' + DFS_FAILED56
+    _p56 = pos(_retry)
+    _wait56(_wait, [_p56[0] - 150, _p56[1]])
+    disconnect(_gate, _retry); connect(_gate, _wait, 0); connect(_wait, _retry)
+    assert [t['node'] for l in conns[_gate]['main'] for t in l][0] == _wait, _gate
+
+def dfs_gate56(first, dst, gate, retry, wait, base_ref, dy=220):
+    """One DataForSEO call, its in-200 gate, a pause and one second attempt (the shape section 25 gave the SERP calls)."""
+    assert [t['node'] for l in conns[first]['main'] for t in l] == [dst], first + ': unexpected outputs'
+    p0 = pos(first)
+    if_node(gate, DFS_FAILED56, [p0[0] + 110, p0[1] + dy])
+    _wait56(wait, [p0[0] + 300, p0[1] + dy])
+    rn = copy.deepcopy(nodes[first]); rn['name'] = retry; rn['id'] = nid(retry); rn['position'] = [p0[0] + 490, p0[1] + dy]
+    body = rn['parameters']['jsonBody']
+    assert body.count('$json.') >= 3 and '$json.keyword' in body, retry + ': body anchors'
+    rn['parameters']['jsonBody'] = body.replace('$json.', base_ref + '.')   # the gate's item is the failed answer; the request is read upstream
+    rn['onError'] = 'continueRegularOutput'; rn.update(retry_lint.RETRY)
+    assert rn.get('credentials'), retry + ': credential slot'
+    nodes[retry] = rn
+    disconnect(first, dst); connect(first, gate); connect(gate, wait, 0); connect(gate, dst, 1); connect(wait, retry); connect(retry, dst)
+
+dfs_gate56('Keyword Data', 'Has Domain (Authority)?', 'Keyword Data Failed?', 'Keyword Data (Retry)', 'Wait Before Keyword Data Retry',
+           "$('Parse Analysis').first().json")
+assert "$('Parse Analysis').first().json.keyword" in nodes['Keyword Data (Retry)']['parameters']['jsonBody']
+# the cost ledger counts the third retry too (a failed DataForSEO task is billed 0, a retried one is billed once)
+_ln56 = [nm for nm in nodes if "const __LEDGER_NODES = ['SERP Top 10', " in nodes[nm]['parameters'].get('jsCode', '')]
+assert len(_ln56) >= 4, _ln56
+for nm in _ln56: patch(nm, "'Keyword Data', 'Candidate SERP'", "'Keyword Data', 'Keyword Data (Retry)', 'Candidate SERP'")
+# the harness shims: each gate's exact condition, run per item like a Code node (S66 compares them with RT.dfs)
+os.makedirs(OUT_CODE, exist_ok=True)
+for _g56 in ('SERP Failed?', 'Facts SERP Failed?', 'Keyword Data Failed?'):
+    open(os.path.join(OUT_CODE, re.sub(r'[^A-Za-z0-9_.-]+', '_', _g56) + '.js'), 'w').write(
+        "// harness shim (written by build_v4.py section 56): the IF node's condition, true = take the retry branch (R18)\n"
+        "return $input.all().map(i => { const $json = i.json; return { json: { retry: " + DFS_FAILED56[2:-2].strip() + " } }; });\n")
+open(os.path.join(OUT_CODE, '_dfs_retry.js'), 'w').write(
+    "// harness shim (written by build_v4.py section 56): the in-200 retry kit — { answer, retry, api, expect, now, before } -> the\n"
+    "// verdict on one answer, what the two attempts add up to, the sentence a report prints, the evidence block, and the sample test\n"
+    + DFS_RETRY_SRC + "\nreturn $input.all().map(i => { const j = i.json || {};\n"
+    "  const o = { api: j.api || 'dataforseo', expect: j.expect };\n"
+    "  const v = RT.check(j.answer, o); const st = RT.one(j.answer, j.retry === undefined ? null : j.retry, o);\n"
+    "  return { json: { ...v, stats: { ...st, answers: undefined }, note: RT.note(st, j.unit || 'request'),\n"
+    "    evidence: RT.evidence(j.what || 'the answer', st, { unit: j.unit || 'request' }),\n"
+    "    comparable: j.now === undefined ? null : RT.comparable(j.now, j.before), drift_limit: RT.MAX_SAMPLE_DRIFT } }; });\n")
+
+# ---------- B. what was actually seen travels with the data (RT.evidence), so a later node can refuse to score on it ----------
+setcode('Analyze Competitor Pages', DFS_RETRY_SRC + '\n' + code('Analyze Competitor Pages'))
+patch('Analyze Competitor Pages', """let serpItems = []; let seCount = null; let serpError = ''; let seenAt = new Date().toISOString();
+try {
+  let sj; try { sj = $('SERP Top 10 (Retry)').first().json; } catch (e) { sj = $('SERP Top 10').first().json; }
+  sj = sj || {}; const t0 = (Array.isArray(sj.tasks) ? sj.tasks[0] : null) || {};
+  if (sj.error || Number(sj.status_code) >= 40000 || !Array.isArray(sj.tasks) || Number(t0.status_code) >= 40000)
+    serpError = String((sj.error && (sj.error.message || sj.error)) || t0.status_message || sj.status_message || 'no answer').slice(0, 120);
+  const res = (t0.result || [])[0] || {}; serpItems = res.items || []; seCount = res.se_results_count ?? null; seenAt = serpSeenAt(sj);
+} catch (e) { serpItems = []; serpError = 'no answer'; }""",
+"""let serpItems = []; let seCount = null; let serpError = ''; let seenAt = new Date().toISOString();
+// R18 (2026-10-14): the first answer and the retry's, judged by the one shared rule (RT, v5/code/_dfs_retry.js). A task error inside
+// an HTTP 200 is a failure, whatever its number — the 50000-only test of section 25 let 40101 through twice in execution 549.
+let serpStats = { asked: 1, answered: 0, failed: 1, failed_first: 1, retried: 0, retry_answered: 0, reasons: ['no answer'], answers: [{}] };
+try {
+  const first0 = (() => { try { return $('SERP Top 10').first().json; } catch (e) { return null; } })();
+  const retry0 = (() => { try { return $('SERP Top 10 (Retry)').first().json; } catch (e) { return null; } })();
+  serpStats = RT.one(first0, retry0);
+  const sj = serpStats.answers[0] || {}; const t0 = (Array.isArray(sj.tasks) ? sj.tasks[0] : null) || {};
+  if (serpStats.failed) serpError = String(serpStats.reasons[0] || 'no answer').slice(0, 160);
+  const res = (t0.result || [])[0] || {}; serpItems = res.items || []; seCount = res.se_results_count ?? null; seenAt = serpSeenAt(sj);
+} catch (e) { serpItems = []; serpError = 'no answer'; }
+const serp_evidence = RT.evidence('the live Google results for this keyword', serpStats, { unit: 'search' });""")
+patch('Analyze Competitor Pages', "if (serpError) Object.assign(serp_features, { unavailable: true, error: serpError, ai_overview: { present: null, text: '', cited_domains: [], seen_at: null } });",
+      "if (serpError) Object.assign(serp_features, { unavailable: true, error: serpError, ai_overview: { present: null, text: '', cited_domains: [], seen_at: null } });\n"
+      "Object.assign(serp_features, { attempts: 1 + (serpStats.retried || 0), retried: !!serpStats.retried });")
+patch('Analyze Competitor Pages', "return [{ json: { ...input, competitors, competitors_read: competitors.length, retried_pages, avg_competitor_words: avg, failed_pages: failed,",
+      "return [{ json: { ...input, competitors, competitors_read: competitors.length, retried_pages, avg_competitor_words: avg, failed_pages: failed, serp_evidence,")
+patch('Analyze Competitor Pages', "const serpDigest = serpError ? 'LIVE GOOGLE RESULTS: unavailable for this run (the search data provider failed: ' + serpError + ').",
+      "const serpDigest = serpError ? 'LIVE GOOGLE RESULTS: unavailable for this run (the search data provider failed' + (serpStats.retried ? ', twice: the search was sent again once and failed again' : '') + ': ' + serpError + ').")
+
+setcode('Collect Facts', DFS_RETRY_SRC + '\n' + code('Collect Facts'))
+patch('Collect Facts', """const prev = $('Analyze Competitor Pages').first().json;
+const res = $input.first().json || {};
+const items = res.tasks?.[0]?.result?.[0]?.items || [];""",
+"""const prev = $('Analyze Competitor Pages').first().json;
+// R18 (2026-10-14): the facts search gets the same gate as the keyword's SERP. When both attempts fail, "no statistics were found"
+// would be a lie — nothing was searched — so the run carries `facts_evidence.unavailable` instead.
+const factsStats = RT.one((() => { try { return $('Facts SERP').first().json; } catch (e) { return $input.first().json || {}; } })(),
+                          (() => { try { return $('Facts SERP (Retry)').first().json; } catch (e) { return null; } })());
+const facts_evidence = RT.evidence('the statistics search for this keyword', factsStats, { unit: 'search' });
+const res = factsStats.answers[0] || $input.first().json || {};
+const items = res.tasks?.[0]?.result?.[0]?.items || [];""")
+patch('Collect Facts', "return [{ json: { ...prev, facts: kept.slice(0, 10), facts_found: facts.length,",
+      "return [{ json: { ...prev, facts: kept.slice(0, 10), facts_found: facts.length, facts_evidence,")
+
+setcode('Merge Keyword Data', DFS_RETRY_SRC + '\n' + code('Merge Keyword Data'))
+patch('Merge Keyword Data', "let res = {}; try { res = $('Keyword Data').first().json || {}; } catch (e) { res = $input.first().json || {}; }",
+      """// R18 (2026-10-14): the keyword's own search data goes through the same gate — the retry's answer when it came, and an honest
+// "could not be read" when neither attempt did (live 549: items_count 0 beside two failed SERP calls, and the run scored anyway).
+const kdStats = RT.one((() => { try { return $('Keyword Data').first().json; } catch (e) { return $input.first().json || {}; } })(),
+                       (() => { try { return $('Keyword Data (Retry)').first().json; } catch (e) { return null; } })());
+const keyword_data_evidence = RT.evidence('search volume, difficulty and cost per click for this keyword', kdStats, { unit: 'request' });
+const res = kdStats.answers[0] || {};""")
+patch('Merge Keyword Data', """} : {
+  note: 'Keyword data not available for this keyword/country'
+};""",
+"""} : {
+  note: keyword_data_evidence.unavailable
+    ? 'Search data for this keyword could not be read: ' + (keyword_data_evidence.error || 'no answer') + (kdStats.retried ? ' (the request was sent again once and failed again)' : '') + '. This is not "no demand": nothing was measured.'
+    : 'Keyword data not available for this keyword/country'
+};""")
+patch('Merge Keyword Data', """    keyword_data,
+    site_authority""", """    keyword_data,
+    keyword_data_evidence,
+    site_authority""")
+
+# ---------- C. the refusal: no score on evidence nobody could read ----------
+patch('Parse Verdict', "const EXP = (prev.existing_page && prev.existing_page.url) ? prev.existing_page : null;",
+"""// ---- R18 (2026-10-14, FIX_PLAN §3.12): a feasibility score computed on a results page nobody could read ----
+// Execution 549: both SERP calls answered 40101 inside an HTTP 200, were billed, ran once — and the run still said
+// "winnable, GO_WITH_CHANGES 68" and wrote a page. The retry is wired above; when it fails too, the competition was never seen,
+// so there is no verdict and no number — only what was tried, and the suggestion to run the check again.
+const EV56 = (() => {
+  const sf = prev.serp_features || {}; const ev = prev.serp_evidence || null; const kd = prev.keyword_data_evidence || null;
+  const out = !!(sf.unavailable || (ev && ev.unavailable));
+  const why = String((ev && ev.error) || sf.error || 'no answer from the search data provider').slice(0, 160);
+  const again = (ev && ev.retried) ? ' The search was sent again once and failed again.' : '';
+  return {
+    withheld: out,
+    evidence: { serp: out ? 'unavailable' : 'read', error: out ? why : '', asked: ev ? ev.asked : 1, checked: ev ? ev.checked : (out ? 0 : 1),
+      retried: ev ? ev.retried : 0, keyword_data: (kd && kd.unavailable) ? 'unavailable' : 'read' },
+    reason: out ? 'No score is given for this keyword: the live Google results could not be read (' + why + ').' + again
+      + ' Nobody has seen the pages that rank, the featured snippet or the AI Overview, so any number here would be invented. Run the check again.' : ''
+  };
+})();
+const EXP = (prev.existing_page && prev.existing_page.url) ? prev.existing_page : null;""")
+patch('Parse Verdict', """    verdict: verdict.verdict,
+    verdict_score: verdict.score ?? null,
+    verdict_reasons: verdict.reasons || [],""",
+"""    verdict: EV56.withheld ? 'NOT_CHECKED' : verdict.verdict,
+    verdict_score: EV56.withheld ? null : (verdict.score ?? null),
+    verdict_evidence: EV56.evidence,
+    score_withheld: EV56.withheld,
+    score_withheld_reason: EV56.reason,
+    verdict_reasons: EV56.withheld ? [EV56.reason, ...(verdict.reasons || [])] : (verdict.reasons || []),""")
+patch('Parse Verdict', """    expected_visits_top3: verdict.expected_monthly_visits_top3 ?? null,
+    time_to_rank_months: verdict.time_to_rank_months ?? null""",
+"""    expected_visits_top3: EV56.withheld ? null : (verdict.expected_monthly_visits_top3 ?? null),
+    time_to_rank_months: EV56.withheld ? null : (verdict.time_to_rank_months ?? null)""")
+# the keyword report and the callback say "not scored", never "N/A" beside a verdict that was never formed
+patch('Build Word File', "const verdictLabel = { GO: 'GO — Target This Keyword', GO_WITH_CHANGES: 'GO, WITH CHANGES', AVOID: 'AVOID' }[d.verdict] || esc(d.verdict);",
+      "const verdictLabel = { GO: 'GO — Target This Keyword', GO_WITH_CHANGES: 'GO, WITH CHANGES', AVOID: 'AVOID', NOT_CHECKED: 'NOT CHECKED — the live Google results could not be read' }[d.verdict] || esc(d.verdict);")
+patch('Build Word File', """    ['Score', d.verdict_score != null ? d.verdict_score + '/100' : 'N/A'],
+    ['Recommended Page Type', esc(d.recommended_page || d.page_type || 'N/A')],
+    ['Expected visits/month at #1-3', d.expected_visits_top3 != null ? num(d.expected_visits_top3) : 'N/A'],
+    ['Time to rank', d.time_to_rank_months != null ? d.time_to_rank_months + ' months' : 'N/A']""",
+"""    ['Score', d.verdict_score != null ? d.verdict_score + '/100' : (d.score_withheld ? 'not scored — the live Google results could not be read' : 'N/A')],
+    ['Recommended Page Type', esc(d.recommended_page || d.page_type || 'N/A')],
+    ['Expected visits/month at #1-3', d.expected_visits_top3 != null ? num(d.expected_visits_top3) : (d.score_withheld ? 'not estimated' : 'N/A')],
+    ['Time to rank', d.time_to_rank_months != null ? d.time_to_rank_months + ' months' : (d.score_withheld ? 'not estimated' : 'N/A')]""")
+patch('Build Webhook Response', "    score: d.verdict_score,", "    score: d.verdict_score,\n    score_withheld: !!d.score_withheld,\n    evidence: d.verdict_evidence || null,")
+# the ladder plan prints the same refusal where it would otherwise print "winnable (verdict …, 68/100)"
+patch('Build Ladder Report', "(f.score != null ? ' (verdict ' + esc(f.verdict) + ', ' + f.score + '/100)' : '')",
+      "(f.score != null ? ' (verdict ' + esc(f.verdict) + ', ' + f.score + '/100)' : (f.verdict === 'NOT_CHECKED' ? ' — not scored: the live Google results could not be read in this run, so the competition was never seen' : ''))")
+
+# ---------- D. R19: the failed inspections, asked again; and a count nobody can mistake for a sample ----------
+_gq56 = pos('GSC Audit Query')
+add_node('Inspect Retry Plan', 'n8n-nodes-base.code', 2, {'jsCode': DFS_RETRY_SRC + '\n' + rd('code/Inspect_Retry_Plan.js')}, [_gq56[0] + 110, _gq56[1] + 220])
+if_node('Any Inspect Retries?', '{{ !$json.skip }}', [_gq56[0] + 300, _gq56[1] + 220])
+_wait56('Wait Before Inspect Retry', [_gq56[0] + 490, _gq56[1] + 220])
+_rq56 = copy.deepcopy(nodes['GSC Audit Query']); _rq56['name'] = 'GSC Audit Query (Retry)'; _rq56['id'] = nid('GSC Audit Query (Retry)')
+_rq56['position'] = [_gq56[0] + 680, _gq56[1] + 220]
+assert _rq56.get('credentials') and _rq56['parameters']['url'] == '={{ $json.url }}', 'GSC Audit Query: the request shape moved'
+_rq56.update(retry_lint.RETRY); _rq56['onError'] = 'continueRegularOutput'
+nodes['GSC Audit Query (Retry)'] = _rq56
+disconnect('GSC Audit Query', 'GSC Sitemaps (Audit)')
+connect('GSC Audit Query', 'Inspect Retry Plan'); connect('Inspect Retry Plan', 'Any Inspect Retries?')
+connect('Any Inspect Retries?', 'Wait Before Inspect Retry', 0); connect('Any Inspect Retries?', 'GSC Sitemaps (Audit)', 1)
+connect('Wait Before Inspect Retry', 'GSC Audit Query (Retry)'); connect('GSC Audit Query (Retry)', 'GSC Sitemaps (Audit)')
+assert nodes['GSC Sitemaps (Audit)'].get('executeOnce'), 'GSC Sitemaps (Audit) must still run once whatever reaches it'
+
+setcode('GSC Audit Findings', DFS_RETRY_SRC + '\n' + code('GSC Audit Findings'))
+patch('GSC Audit Findings', "const reqs = grab('GSC Audit Requests'); const res = grab('GSC Audit Query'); const plan1 = reqs[0] || {};",
+"""const reqs = grab('GSC Audit Requests');
+// R19 (2026-10-14, FIX_PLAN §3.12): the answers of the second attempt take the failed ones' place before anything is counted
+// (31 of 45 inspections failed live in execution 550 and were never re-sent; the diff then called the 14 that answered an improvement).
+const retryQ = grab('Inspect Retry Plan').filter(q => q && !q.skip);
+const retryR = grab('GSC Audit Query (Retry)');
+const expectOf = (q) => (q && q.kind === 'inspect') ? 'inspectionResult' : '';
+const res = grab('GSC Audit Query').slice();
+let inspect_retried = 0, inspect_retry_answered = 0;
+retryQ.forEach((q, k) => {
+  const i = Number(q.retry_of); const a = retryR[k]; if (!Number.isFinite(i) || a === undefined) return;
+  const isInspect = (reqs[i] || {}).kind === 'inspect'; if (isInspect) inspect_retried++;
+  if (RT.google(a, expectOf(reqs[i])).ok) { res[i] = a; if (isInspect) inspect_retry_answered++; }
+});
+const plan1 = reqs[0] || {};""")
+patch('GSC Audit Findings', "  const ok = insp.filter(i => !i.error); const coverage = {};",
+"""  const _f19 = findings.length;   // R19: every finding below is measured on the pages Google actually answered for
+  const ok = insp.filter(i => !i.error); const coverage = {};""")
+patch('GSC Audit Findings', """    else if (mobChecked && ok.some(i => i.mobile_usable === true)) works.push('Google reports the ' + mobChecked + ' page(s) it still answers about as mobile-friendly');
+  }
+}""",
+"""    else if (mobChecked && ok.some(i => i.mobile_usable === true)) works.push('Google reports the ' + mobChecked + ' page(s) it still answers about as mobile-friendly');
+  }
+  // ---- R19: how many pages each of those numbers was measured on, said out loud and carried into the stored row and the diff ----
+  const inspection_stats = { asked: insp.length, checked: ok.length, failed: insp.length - ok.length,
+    failed_first: (insp.length - ok.length) + inspect_retry_answered, retried: inspect_retried, retry_answered: inspect_retry_answered,
+    reasons: [...new Set(insp.filter(i => i.error).map(i => String(i.not_checked || i.error)))].slice(0, 3) };
+  inspection_stats.note = RT.note({ ...inspection_stats, answered: inspection_stats.checked }, 'page');   // the kit counts "answered", the audit calls it "checked"
+  search_console.inspection_stats = inspection_stats;
+  for (let _i = _f19; _i < findings.length; _i++) {
+    const f = findings[_i]; f.checked = ok.length; f.checked_of = insp.length;
+    f.evidence = String(f.evidence || '') + ' (measured on the ' + ok.length + ' of ' + insp.length + ' page(s) Google answered for'
+      + (inspection_stats.failed ? '; ' + inspection_stats.failed + ' could not be checked' + (inspect_retried ? ' even after being asked again' : '') : '') + ')';
+  }
+  if (insp.length && inspection_stats.failed) {
+    F('Info', 'Google could not answer for part of the key pages', 'Everything this report says about indexing was measured on the pages Search Console answered for: the rest are unknown, not fine.',
+      'Nothing to fix on the site: run the audit again later, or open those URLs in Search Console\\'s URL inspection yourself.',
+      inspection_stats.note || (inspection_stats.failed + ' of ' + insp.length + ' URL inspections failed'),
+      insp.filter(i => i.error).map(i => i.url), inspection_stats.failed, Math.round(inspection_stats.failed / insp.length * 100));
+    findings[findings.length - 1].scoring = false;   // a note about missing data, never a deduction
+  }
+}""")
+
+# the stored finding row keeps the sample size, so the next audit can tell a real change from a different sample
+patch('Finding Rows', "affected_count: Number(f.affected_count) || 0, impact: Number(f.impact) || 0,",
+      "affected_count: Number(f.affected_count) || 0, checked: Number(f.checked) || 0, impact: Number(f.impact) || 0,")
+assert ('checked', 'number') in AUDIT_FINDINGS_COLS, 'R19: seo_audit_findings needs a `checked` column (ladder_common.py) — run sync_tables.py after deploying'
+
+setcode('Audit Diff', DFS_RETRY_SRC + '\n' + code('Audit Diff'))
+patch('Audit Diff', "const open = [...curKeys.entries()].filter(([k]) => prevKeys.has(k)).map(([k, f]) => { const p = prevKeys.get(k); return { title: f.title, category: f.category, severity: f.severity, was: p.severity, affected: f.affected_count ?? null, affected_before: Number(p.affected_count) || null }; }).sort((x, y) => SEV[x.severity] - SEV[y.severity]);",
+"""// R19 (2026-10-14, FIX_PLAN §3.12): two counts measured on samples of different sizes are not a change. The technical audit of
+// execution 550 reported "15 → 4 affected" as an improvement because 31 of 45 URL inspections had failed and the sample had
+// shrunk from 25 pages to 14 — nobody said so. Where the samples differ by more than RT.MAX_SAMPLE_DRIFT (20%), or where the
+// earlier audit did not record its sample at all, the delta is not printed: the report says the sample moved.
+const open = [...curKeys.entries()].filter(([k]) => prevKeys.has(k)).map(([k, f]) => {
+  const p = prevKeys.get(k);
+  const now = f.affected_count ?? null; const before = Number(p.affected_count) || null;
+  const checked = f.checked == null ? null : Number(f.checked); const checkedBefore = Number(p.checked) || null;
+  const cmp = (checked || checkedBefore) ? RT.comparable(checked, checkedBefore) : { comparable: true, why: '' };
+  const moved = !cmp.comparable;
+  return { title: f.title, category: f.category, severity: f.severity, was: p.severity, affected: now,
+    affected_before: moved ? null : before, checked: checked, checked_before: checkedBefore, sample_changed: moved,
+    sample_note: moved ? ((now == null ? '?' : now) + ' now against ' + (before == null ? '?' : before) + ' before, but ' + cmp.why) : '' };
+}).sort((x, y) => SEV[x.severity] - SEV[y.severity]);
+const sample_moved = open.filter(f => f.sample_changed).length;""")
+patch('Audit Diff', """  score_delta: (Number(a.health_score) || 0) - (Number(prev.health_score) || 0), fixed, new: added, open, not_compared,
+  summary: fixed.length + ' fixed · ' + added.length + ' new · ' + open.length + ' still open (compared with the ' + labelOf(curType) + ' of ' + String(prev.audited_at).slice(0, 10) + ')'""",
+"""  score_delta: (Number(a.health_score) || 0) - (Number(prev.health_score) || 0), fixed, new: added, open, not_compared, sample_moved,
+  summary: fixed.length + ' fixed · ' + added.length + ' new · ' + open.length + ' still open (compared with the ' + labelOf(curType) + ' of ' + String(prev.audited_at).slice(0, 10) + ')'
+    + (sample_moved ? '. ' + sample_moved + ' finding(s) are not compared as numbers: they were measured on a different number of pages this time (how many is shown with each).' : '')""")
+# R2's note on Schema is now one line shorter: a technical audit does not emit the finding at all (R24, below)
+patch('Audit Diff', "//   The decision on Schema: a technical audit does NOT get a Schema weight. It only reads DataForSEO's `has_micromarkup_errors` flag per page --\n"
+      "//   it never validates a single property, which is why its own `not_assessed` list says \"Structured data (schema) and HTML-level checks\". A flag\n"
+      "//   with no detail cannot carry a score, so Schema stays in the full report's weights only; a technical audit keeps showing the finding as an\n"
+      "//   observation and the diff leaves it out of fixed / new / still-open on BOTH sides.",
+      "//   The decision on Schema (R24, 2026-10-14): a technical audit does NOT get a Schema weight -- it only reads DataForSEO's\n"
+      "//   `has_micromarkup_errors` flag per page, never a single property -- and since 2026-10-14 it does not emit a Schema finding either\n"
+      "//   (Build Site Issues drops it and says so in `not_assessed`). Schema is assessed, weighted and compared in the full SEO report only.\n"
+      "//   This filter stays for the rows older audits stored, so a finding outside the current weights is never called \"fixed\" or \"new\".")
+# both audit reports print the moved sample instead of a delta drawn from unlike numbers
+for _rn56 in ('Build Audit Report', 'Build Full Report'):
+    patch(_rn56, "f.title + (f.affected != null && f.affected_before != null && f.affected !== f.affected_before ? ' — ' + f.affected_before + ' → ' + f.affected + ' affected' : '')",
+          "f.title + (f.sample_changed ? ' — not compared: ' + (f.sample_note || 'measured on a different number of pages') : (f.affected != null && f.affected_before != null && f.affected !== f.affected_before ? ' — ' + f.affected_before + ' → ' + f.affected + ' affected' : ''))")
+
+# ---------- E. R24: one story about schema (and about every other category the audit does not weight) ----------
+_bsi56 = code('Build Site Issues')
+_w56a = _bsi56.index('const WEIGHTS = isFull ? {')
+_w56b = _bsi56.index('\n};\n', _w56a) + len('\n};\n')
+WEIGHTS_BLOCK56 = _bsi56[_w56a:_w56b]
+assert "'Schema': 12" in WEIGHTS_BLOCK56 and WEIGHTS_BLOCK56.count('isFull') == 1, 'R24: the weights block moved'
+setcode('Build Site Issues', _bsi56.replace(WEIGHTS_BLOCK56, "// (the weights are declared above section 5b: a category this audit type does not weight must not reach the fix list either — R24)\n"))
+patch('Build Site Issues', "// ===== 6. Order by likely impact (G26, 2026-10-12)",
+"""// ===== 5b. R24 (2026-10-14, FIX_PLAN §3.12): one story about every category =====
+// The audit of execution 550 said three different things about schema in one report: a Medium finding ranked 8th by impact
+// ("Structured data with errors", 26 of 47 pages), `not_assessed: ["Structured data (schema) …"]`, and `not_compared: ["Schema"]`
+// — while Schema appeared in neither `category_scores` nor `weights`. A technical audit has only the crawler's yes/no
+// `has_micromarkup_errors` flag per page: no property, nothing to act on, nothing a score could be built from. So it assesses no
+// schema, emits no schema finding, and says so once, in `not_assessed`, with the flag's count. The full SEO report — which reads
+// the HTML and checks every schema URL — keeps Schema weighted and compared. This guard keeps the three statements together: a
+// scored finding in a category this audit type does not weight is not emitted at all, it is named in `not_assessed`.
+""" + WEIGHTS_BLOCK56 + """const unassessed_cats = {};
+for (let i = findings.length - 1; i >= 0; i--) {
+  const f = findings[i];
+  if (f.scoring === false || f.severity === 'Info' || WEIGHTS[f.category]) continue;
+  unassessed_cats[f.category] = (unassessed_cats[f.category] || 0) + 1;
+  findings.splice(i, 1);
+}
+
+// ===== 6. Order by likely impact (G26, 2026-10-12)""")
+patch('Build Site Issues', """  if (affected.length > 0) {
+    // A handful of broken URLs on a big site is serious but not "Critical" unless the homepage or >=3% of pages are hit""",
+"""  // R24 (2026-10-14): a technical audit does not assess structured data, so it emits no Schema finding — the count goes into the
+  // one line that speaks about schema there, `not_assessed`.
+  if (!isFull && c.cat === 'Schema') { if (affected.length > 0) schema_flag = { pages: affected.length, total }; continue; }
+  if (affected.length > 0) {
+    // A handful of broken URLs on a big site is serious but not "Critical" unless the homepage or >=3% of pages are hit""")
+patch('Build Site Issues', "const findings = [];\nconst whatWorks = [];",
+      "const findings = [];\nconst whatWorks = [];\nlet schema_flag = null;   // R24: the crawl's structured-data flag, reported in `not_assessed` by a technical audit")
+patch('Build Site Issues', "if (!isFull) not_assessed.push('Structured data (schema) and HTML-level checks');",
+"""if (!isFull) not_assessed.push('Structured data (schema) and HTML-level checks: a technical audit reads only the crawler\\'s yes/no flag per page'
+  + (schema_flag ? ' (it flagged ' + schema_flag.pages + ' of ' + schema_flag.total + ' crawled pages)' : '')
+  + ', never a single property, so schema is not scored, not listed as a finding and not compared here — the full SEO report checks it');
+for (const _cat of Object.keys(unassessed_cats)) not_assessed.push(_cat + ': ' + unassessed_cats[_cat] + ' observation(s) from the crawl, in a category this report does not weight — not listed as findings and not compared');""")
+
+# ---------- F. the asserts: nothing half-wired, and the lints green over the new nodes ----------
+for _n56 in ('Analyze Competitor Pages', 'Collect Facts', 'Merge Keyword Data', 'GSC Audit Findings', 'Audit Diff', 'Inspect Retry Plan'):
+    assert 'const RT = (() => {' in code(_n56), _n56 + ': the in-200 retry kit is not inlined'
+for _n56 in ('SERP Top 10 (Retry)', 'Facts SERP (Retry)', 'Keyword Data (Retry)', 'GSC Audit Query (Retry)'):
+    assert nodes[_n56].get('credentials') and nodes[_n56].get('retryOnFail'), _n56
+for _g56, _w56b2, _r56 in (('SERP Failed?', 'Wait Before SERP Retry', 'SERP Top 10 (Retry)'), ('Facts SERP Failed?', 'Wait Before Facts Retry', 'Facts SERP (Retry)'),
+                           ('Keyword Data Failed?', 'Wait Before Keyword Data Retry', 'Keyword Data (Retry)'), ('Any Inspect Retries?', 'Wait Before Inspect Retry', 'GSC Audit Query (Retry)')):
+    assert [t['node'] for t in conns[_g56]['main'][0]] == [_w56b2] and [t['node'] for t in conns[_w56b2]['main'][0]] == [_r56], _g56 + ': gate -> wait -> retry is not wired'
+    assert '40000' in json.dumps(nodes[_g56]['parameters']) or _g56 == 'Any Inspect Retries?', _g56 + ': the gate still only looks for 50000'
+assert code('Build Site Issues').count('const WEIGHTS = isFull ? {') == 1, 'R24: the weights are declared twice'
+assert 'unassessed_cats' in code('Build Site Issues') and 'schema_flag' in code('Build Site Issues'), 'R24: the schema decision did not reach Build Site Issues'
+assert 'NOT_CHECKED' in code('Parse Verdict') and 'score_withheld' in code('Build Word File'), 'R18: the refusal did not reach the report'
+retry_lint.record_gate('SEO Agent v4', ['GSC Audit Query', 'Inspect Retry Plan', 'Any Inspect Retries?', 'Wait Before Inspect Retry', 'GSC Audit Query (Retry)', 'GSC Sitemaps (Audit)'])
+url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+# INVARIANTS rule 3 (2026-10-15): a DataForSEO node needs the in-200 gate as well as retryOnFail, because the API reports most of
+# its failures inside an HTTP 200. A ratchet, not a big-bang rule: the build fails when a node appears that harness/in200_baseline.json
+# does not already excuse, so the debt R18 left behind (it gated three paths) cannot grow and shrinks as gates land.
+_g3, _u3 = retry_lint.check_in200({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+log('A DataForSEO node that fails inside an HTTP 200 (2026-10-15, INVARIANTS rule 3): the API reports most failures inside a 200, so retryOnFail does not see them - R18 gated the SERP, facts and keyword-data paths, and this measures how far that reaches. %d of the main workflow\'s %d DataForSEO calls are covered by a gate chain recorded with retry_lint.record_gate(); the rest are either ungated or gated without being recorded, and registering R18\'s chains is the next step. The build now refuses a NEW ungated node against harness/in200_baseline.json, so the class cannot grow' % (len(_g3), len(_g3) + len(_u3)))
+sticky("""### An answer that arrived with HTTP 200 and was still a failure (R18 / R19 / R24)
+**One rule, one kit** (`v5/code/_dfs_retry.js`): DataForSEO answers a dead task with `status_code` 40101 inside an HTTP 200 and Google's URL Inspection with an `error` object — n8n's `retryOnFail` never sees either. Every gate (SERP, facts search, keyword data, URL inspection) now judges the answer with `RT`, **pauses and asks once more**, and never re-sends what a second attempt cannot fix (permission, property, quota).
+**Where the retry fails too, nothing is scored on it.** The evidence is `unavailable`, the keyword verdict is **NOT CHECKED** with no score, no expected visits and no time to rank, and the first reason says why. A verdict computed on a results page nobody saw is worse than no verdict.
+**Counts carry their sample.** Every indexing finding says how many pages Google actually answered for, the number is stored on the finding row, and the next audit **refuses to print a delta** when the two counts were measured on samples more than 20% apart — it says the sample moved.
+**Schema, once:** a technical audit does not assess it (it has only the crawler's yes/no flag), so it emits no Schema finding and says so in "not assessed". The full SEO report assesses, weights and compares it.""",
+    pos('Build Site Issues')[0] - 40, pos('Build Site Issues')[1] + 340, 1180, 300, 3)
+log('An answer that arrived with HTTP 200 and was still a failure (2026-10-14, FIX_PLAN §3.12 R18 / R19 / R24): the in-200 retry rule moved out of the AI path into one kit (v5/code/_dfs_retry.js) that every DataForSEO and Search Console gate uses — the SERP, facts and keyword-data gates now fire on ANY task error (40101 passed the 50000-only test of section 25 twice in exec 549), each pauses and re-sends once, and the audit re-sends the URL inspections Google failed (31 of 45 in exec 550) unless a second attempt cannot help; where the retry fails too the evidence is marked unavailable and the keyword verdict is NOT_CHECKED with no score, no expected visits and no time to rank (a feasibility verdict on a SERP nobody saw is worse than none); every indexing finding carries how many pages Google answered for, the count is stored on the finding row (seo_audit_findings.checked), and the diff prints "not compared: the sample moved" instead of a delta when the two counts came from samples more than 20% apart; and a technical audit emits no Schema finding at all (it reads only the crawler\'s yes/no flag), naming the flag count in not_assessed, so the report can no longer say three different things about schema')
+
+# =============================================================================
+# 59. A NUMBER THE SYSTEM REPORTS ABOUT ITSELF IS THE NUMBER THAT HAPPENED
+#     (2026-10-14, system review FIX_PLAN.md §3.13 R31 / R32 / R33; evidence docs/system-review-2026-10-11/LIVE_CHECK_R17-R30_2026-10-14.md)
+#     The live check of R17-R30 cost $0.069 and found three ways the engine still told itself a number that was not the one that happened.
+#     R28 had just made a task count once and made the Keyword Check settle what it reports ($0.024 settled against $0.024 of balance
+#     movement); these are the three places the same rule had not reached.
+#     * R32 **the crawl settled the price it was QUOTED, labelled "measured".** Audit 588 settled `dfs_usd 0.09 measured` — what
+#       DataForSEO quotes when an on_page task is created for the **200 pages it was asked for** — while **47** were crawled and the
+#       account fell **$0.031950**: +181%. DataForSEO bills a crawl for the work it does and never reports that final amount per task
+#       (every later answer repeats the creation quote), so a run cannot measure it. What the run does know is the quote, the pages it
+#       asked for and the pages the crawl itself reported — the figure is priced pro rata from those three (CC.crawlCost), labelled
+#       **ESTIMATED**, and the three numbers travel in its basis. The rest of the DataForSEO money is still the cost each task reported,
+#       so the settled row now carries a measured half and an estimated half instead of one word for both.
+#     * R31 **a free run settled money it never spent.** The `free_only` backlink check of exec 586 reserved $0.05 Claude + $0.45
+#       DataForSEO and settled **$0.05 of Claude** although no model node ran at all (`Link Analyst` had an empty queue), while telling
+#       the caller `cost_usd: 0` — the ledger and the customer-facing figure said different things about the same run. Two halves: a
+#       `free_only` site now reserves **nothing** (it calls no paid API and no model), and every monitor settle knows its own Claude
+#       nodes (written in at build time from the workflow itself) and settles **$0** when none of them ran, saying so in the row.
+#     * R33 **`describe` settled its reservation while its own node reported its tokens.** Exec 591 settled the **$0.06** it reserved
+#       where *Claude — Site Describer* reports 4,874 in / 1,306 out ≈ **$0.0114** — 5.3x — with `ai_measured: false` and "this branch
+#       priced no model call of its own". G23's per-call pricing only ever ran inside the five report builders, so `describe`, `track`,
+#       `profile`, `published`, `checkin` and `case_study` never priced anything. The same call table now runs in *Run Ledger Settle*
+#       itself, over whichever Claude nodes ran in this execution, so a reservation is never settled as if it were a measurement.
+#     Also seen in the same check, and fixed here because they are the same rule:
+#     * **only main-workflow runs took a balance reading**, so a Monday of monitor spend reconciled against nothing. Every scheduled run
+#       now takes the free `appendix/user_data` reading on its own ledger chain (ladder_common.ledger_mainline; it is the one free
+#       DataForSEO endpoint, so section 55's "nothing paid before the reservation" proof exempts it **by URL**, never by name).
+#     * **Page Watch kept no ledger row at all** — the one workflow invisible to the guard, to the concurrency check and to the day's
+#       reconciliation. It reserves $0 and settles $0 (25 plain GETs), which is exactly the point: the day a check here starts calling a
+#       paid API, the guard already sees the run. The ledger-order proof therefore covers ten workflows now, not nine.
+#     * **the nine rows left `reserved` by the morning run** were R17's old shape (written at the END of a run, never settled) and are
+#       already fixed: today's rows are created before the work and settled after it. What can still leave a row open is a run that
+#       crashes before its settle, and that is what *Release Stale Runs* is for — so this section does not invent a second mechanism; it
+#       checks instead that every workflow's settle is reachable from the far side of its reservation (part D), which is what makes the
+#       stale release the only remaining way to leave one open.
+# =============================================================================
+
+# ---------- A. R32: the crawl is priced from the pages it crawled, and says so ----------
+_CRAWL_PRICE59 = r"""
+// R32 (2026-10-14, FIX_PLAN §3.13): a crawl is billed for the pages it crawls, not for the pages it was asked for. DataForSEO quotes the
+// task when it is created (audit 588: $0.0900 for the 200 pages requested) and repeats that same quote in every later answer about it,
+// while the account fell $0.0320 for the 47 pages the crawl actually did. The quote is therefore not a measurement: the crawl is priced
+// pro rata from what the crawl itself reported and labelled ESTIMATED, with the quote, the pages asked for and the pages crawled in its
+// basis. `dataforseo_estimated_usd` is the part of this run's DataForSEO money that is an estimate; the rest is what each task reported.
+run_ledger.dataforseo_estimated_usd = 0;
+const __crawlQuote = Number(run_ledger.by_node['Start Crawl'] || 0);
+if (__crawlQuote > 0) {
+  let __crawlDone = null, __crawlAsked = 0;
+  try {
+    const __cc = $('Check Crawl').all(); const __cj = (__cc[__cc.length - 1] || {}).json || {};
+    if (__cj.pages_crawled !== undefined && __cj.pages_crawled !== null) __crawlDone = Number(__cj.pages_crawled);
+    __crawlAsked = Number(__cj.crawl_max_pages) || 0;
+  } catch (e) {}
+  if (!__crawlAsked) { try { __crawlAsked = Number($('Normalize Input').first().json.crawl_max_pages) || 0; } catch (e) {} }
+  const __cp = CC.crawlCost({ quoted: __crawlQuote, pages_crawled: __crawlDone, pages_requested: __crawlAsked });
+  run_ledger.crawl_cost = __cp;
+  run_ledger.by_node['Start Crawl'] = __cp.usd;
+  run_ledger.dataforseo_usd = +(run_ledger.dataforseo_usd - __crawlQuote + __cp.usd).toFixed(4);
+  run_ledger.dataforseo_estimated_usd = __cp.usd;   // a quote is never measured money
+}
+"""
+_ledger_nodes59 = sorted(nm for nm in nodes if 'const run_ledger = {' in nodes[nm]['parameters'].get('jsCode', ''))
+assert _ledger_nodes59 == _ledger_nodes55, 'R32: the report builders that carry a run ledger moved since section 55'
+for _n59 in _ledger_nodes59:
+    patch(_n59, "run_ledger.dataforseo_tasks_unidentified = __dfsRepeats.no_id;",
+          "run_ledger.dataforseo_tasks_unidentified = __dfsRepeats.no_id;\n" + _CRAWL_PRICE59)
+    _c59 = code(_n59)
+    assert 'CC.crawlCost(' in _c59 and _c59.index('const CC = (() =>') < _c59.index('CC.crawlCost('), _n59 + ': the cost kit is not in scope where the crawl is priced'
+    assert _c59.index('run_ledger.dataforseo_usd = +run_ledger.dataforseo_usd.toFixed(4);') < _c59.index('CC.crawlCost('), _n59 + ': the crawl is priced before the total exists'
+assert 'crawlCost' in COST_SRC and 'pages_crawled' in COST_SRC, 'R32: the cost kit cannot price a crawl'
+
+# ---------- B. R33: every branch prices its own Claude calls, and a run that called none settles none ----------
+# The same call table the five report builders use (section 51, baked from the real model nodes), run in the settle itself — so the
+# branches that end nowhere near a report builder (`describe`, `track`, `profile`, `published`, `checkin`, `case_study`) stop settling
+# the figure they reserved. `__ownAi` / `__aiRan` / `__aiChecked` are declared in v5/code/Run_Ledger_Settle.js above the placeholder.
+_AI_OWN59 = ("const run_ledger = {};   // R33 (2026-10-14, FIX_PLAN §3.13): this run's own Claude calls, priced exactly as a report builder prices them\n"
+             + AI_COST_JS51.replace('__AI_CALLS_JSON__', json.dumps(_AI_CALLS51))
+             + "__ownAi = run_ledger.ai_cost;\n"
+             + "__aiRan = __costCalls.map(c => String(c.node));     // the Claude nodes that produced something in THIS execution\n"
+             + "__aiChecked = __AI_CALLS.length;                     // and how many this workflow has, so 'none ran' is a measurement, not a guess\n")
+patch('Run Ledger Settle', '/*__RUN_AI_COST__*/', _AI_OWN59)
+_rls59 = code('Run Ledger Settle')
+assert 'CC.aiRun(' in _rls59 and 'CC.runCost(' in _rls59, 'R33: the settle does not price this run\'s own Claude calls'
+assert '__AI_CALLS' in _rls59 and _rls59.index('__AI_CALLS =') < _rls59.index('__aiChecked = __AI_CALLS.length'), 'R33: the call table is used before it is declared'
+assert 'crawl_cost' in _rls59 and 'dfs_estimated_usd' in _rls59, 'R32: the settle does not carry the crawl\'s own figures'
+assert 'aiRun' in COST_SRC and 'no model call ran in this run' in COST_SRC, 'R31: the cost kit cannot settle a run that called no model'
+
+# ---------- C. R31 / R32: what the schedules now do, proved on the generated workflows ----------
+def _r31_checks():
+    """Run after the sub-builds, next to section 55's: every scheduled workflow knows its Claude nodes, takes the free balance reading,
+    and can reach its settle from the far side of its reservation."""
+    lw59 = json.load(open(os.path.join(HERE0, 'harness', 'ledger_wiring.json'), encoding='utf-8'))
+    files59 = {w['name']: os.path.join(HERE0, 'workflows', f) for f in os.listdir(os.path.join(HERE0, 'workflows'))
+               if f.endswith('.json') for w in json.load(open(os.path.join(HERE0, 'workflows', f), encoding='utf-8'))}
+    out59, open_ends59 = {}, []
+    for wname59, wiring59 in sorted((lw59.get('monitors') or {}).items()):
+        wf59 = json.load(open(files59[wname59], encoding='utf-8'))[0]
+        by59 = {n['name']: n for n in wf59['nodes']}
+        tag59 = wiring59['reserve'][len('Run Ledger Row ('):-1]
+        settle_code59 = 'Ledger Settle (' + tag59 + ')'
+        src59 = by59[settle_code59]['parameters']['jsCode']
+        assert '__AI_NODES__' not in src59, 'R31: ' + wname59 + ' settles without knowing its Claude nodes'
+        assert 'CC.aiRun(' in src59 and 'const CC = (() =>' in src59, 'R31: ' + wname59 + ' does not settle through the cost kit'
+        ai59 = wiring59.get('ai_nodes') or []
+        assert json.dumps(ai59) in src59, 'R31: ' + wname59 + ' baked a different list of Claude nodes than its wiring records'
+        for a59 in ai59: assert a59 in by59, 'R31: ' + wname59 + ' checks a Claude node it does not have: ' + a59
+        # the free balance reading, on the chain, before the row is written
+        bal59 = wiring59.get('balance') or ''
+        assert bal59 in by59, 'R32: ' + wname59 + ' takes no balance reading'
+        assert by59[bal59]['parameters']['url'] == _BALANCE_URL55, 'R32: ' + wname59 + "'s balance node is not the free endpoint"
+        assert by59[bal59].get('onError') == 'continueRegularOutput' and by59[bal59].get('alwaysOutputData'), 'R32: ' + wname59 + "'s balance reading can end the run"
+        c59 = wf59['connections']
+        outs59 = lambda nd: [t['node'] for lst in ((c59.get(nd) or {}).get('main') or []) for t in (lst or [])]
+        # B-A9 (2026-10-15, build section 64): the concurrency gate's read of the open runs sits between the balance and the row, for the
+        # same reason *Rate Limit* reads the ledger before it inserts — the row this run is about to write must not be in its own count.
+        open59 = wiring59.get('open_runs') or ''
+        assert outs59('Ensure Run Ledger (' + tag59 + ')') == [bal59] and outs59(bal59) == [open59] and outs59(open59) == [wiring59['reserve']], \
+            'R32 / B-A9: ' + wname59 + "'s balance reading and open-run read are not between the ensure and the row"
+        assert "$('" + bal59 + "')" in by59[wiring59['reserve']]['parameters']['jsCode'], 'R32: ' + wname59 + ' does not store the reading on its row'
+        # Every end of the run reaches the settle, so the only way to leave a row `reserved` is a run that crashed (which is what
+        # *Release Stale Runs* is for). Walk forward from the resume node, refusing to pass a node that feeds the settle: anything that
+        # still ends with no outgoing connection is a branch that would finish without settling — the shape that left nine rows open on
+        # 2026-10-14 (every monitor's "Nothing To Do" branch).
+        blocked59 = set(wiring59.get('settle_from') or []) | {settle_code59, wiring59['settle']}
+        reach59, stack59 = {wiring59['resume']}, [wiring59['resume']]
+        while stack59:
+            cur59 = stack59.pop()
+            if cur59 in blocked59: continue
+            for t59 in outs59(cur59):
+                if t59 not in reach59: reach59.add(t59); stack59.append(t59)
+        ends59 = sorted(n for n in reach59 if n in by59 and n not in blocked59 and not outs59(n))
+        assert not ends59, 'R31: ' + wname59 + ' can finish without settling its ledger row: ' + ', '.join(ends59)
+        if ends59: open_ends59.append([wname59, ends59])
+        out59[wname59] = {'tag': tag59, 'ai_nodes': ai59, 'balance': bal59, 'settle': wiring59['settle'],
+                          'settle_from': wiring59['settle_from'], 'est': wiring59['est'],
+                          'settle_writes': sorted((by59[wiring59['settle']]['parameters'].get('columns') or {}).get('value', {}).keys()),
+                          'dead_ends': ends59}
+    json.dump({'monitors': out59,
+               'crawl': {'ledger_nodes': _ledger_nodes59, 'quote_node': 'Start Crawl', 'pages_node': 'Check Crawl',
+                         'fields': ['crawl_cost', 'dataforseo_estimated_usd'], 'default_request': 200},
+               'settle': {'node': 'Run Ledger Settle', 'ai_calls': len(_AI_CALLS51),
+                          'ai_nodes': sorted({c['node'] for c in _AI_CALLS51}),
+                          'ends': _ends51, 'prices_every_branch': True,
+                          'writes': sorted(nodes['Settle Run Ledger']['parameters']['columns']['value'].keys())},
+               'free_only': {'reserves': 0, 'source': 'v5/code/Monitor_Ledger_Row.js'},
+               'page_watch': {'in_ledger': 'SEO Agent — Page Watch' in out59, 'est': _EST55['page_watch']},
+               'open_ends': open_ends59},
+              open(os.path.join(HERE0, 'harness', 'cost_truth.json'), 'w'), indent=1, sort_keys=True)
+    print('cost truth (R31 / R32 / R33): ' + str(len(out59)) + ' scheduled workflows know their Claude nodes and take the free balance reading; '
+          + str(sum(len(v['ai_nodes']) for v in out59.values())) + ' Claude nodes checked before a cent is settled')
+
+# ---------- D. the harness shim learns the two new calls (S69) ----------
+_shim59 = os.path.join(OUT_CODE, '_cost_cal.js')
+_shimsrc59 = open(_shim59, encoding='utf-8').read()
+_NEWCALLS59 = ("  // R31 / R32 (2026-10-14, section 59): the crawl priced from the pages it crawled, and the Claude money a run settles\n"
+               "  if (fn === 'crawlCost') return { json: CC.crawlCost(j.crawl || {}) };\n"
+               "  if (fn === 'aiRun') return { json: CC.aiRun(j.ai_run || {}) };\n")
+assert _shimsrc59.count("  if (fn === 'tables')") == 1, 'R32: the cost shim changed shape'
+open(_shim59, 'w').write(_shimsrc59.replace("  if (fn === 'tables')", _NEWCALLS59 + "  if (fn === 'tables')", 1))
+
+sticky("""### The money a run reports is the money that happened (R31 / R32 / R33, 2026-10-14)
+**A crawl is billed for what it does.** DataForSEO quotes an on_page task when it is created — $0.0900 for the **200 pages asked for** — and repeats that quote in every later answer; audit 588 settled it as *measured* while **47** pages were crawled and the account fell **$0.0320** (+181%). The crawl is priced from the pages the crawl itself reported (`CC.crawlCost`), labelled **ESTIMATED**, with the quote, the request and the pages crawled in its basis. The rest of the DataForSEO figure is still what each task reported, so a settled row carries a measured half and an estimated half.
+**A run that called no model settles nothing.** The `free_only` backlink check settled $0.05 of Claude with no model node in its trace while telling the caller $0. Every monitor settle now knows its own Claude nodes (written in at build time from the workflow) and a free site reserves nothing at all.
+**Every branch prices its own calls.** G23's per-call pricing ran only inside the five report builders, so `describe` settled the $0.06 it reserved where its Haiku node reported 4,874 / 1,306 tokens ($0.0114). The same call table runs in **Run Ledger Settle**: a reservation is a guard, a settlement is a measurement.
+**And the schedules joined the reconciliation:** every scheduled run takes the free `appendix/user_data` reading on its ledger chain, and **Page Watch** keeps a $0 row — free today, visible the day it is not.""",
+    pos('Run Ledger Settle')[0] - 120, pos('Run Ledger Settle')[1] + 200, 1120, 300, 4)
+
+log('The money a run reports is the money that happened (2026-10-14, FIX_PLAN §3.13 R31 / R32 / R33, found by the live check of R17-R30): '
+    'the on-page crawl is priced from the pages it CRAWLED and labelled ESTIMATED instead of settling the quote DataForSEO gives for the '
+    'pages it was asked for (audit 588 settled $0.0900 "measured" for 47 pages of a 200-page request while the account fell $0.0320, +181%); '
+    'a run that called no model settles nothing - every monitor settle is given its own Claude nodes at build time and a free_only site '
+    'reserves no money at all (exec 586 settled $0.05 of Claude with no model node in its 89-node trace while telling the caller $0); and '
+    'Run Ledger Settle prices every Claude node of the run with the same call table the five report builders use, so describe / track / '
+    'profile / published / checkin / case_study settle what they used rather than what they reserved (exec 591: $0.06 settled against '
+    '4,874 / 1,306 reported tokens = $0.0114, 5.3x). Also: every scheduled run takes the free appendix/user_data balance reading on its own '
+    'ledger chain (only main-workflow runs did, so a Monday of monitor spend reconciled against nothing), Page Watch keeps a $0 ledger row '
+    'so the guard and the reconciliation can see it at all, and the ledger-order proof of section 55 now covers ten workflows and exempts '
+    'the free balance endpoint by URL, never by node name')
+
+
+# =============================================================================
+# 61. THE GUARD WATCHES ALL THE MONEY, AND THE ACCOUNT IS THE LIMIT
+#     (2026-10-15, benchmark programme area 13 "Cost control & reliability";
+#      docs/system-review-2026-10-14/BENCHMARKS_2026-10-14.md, the Semrush / Ahrefs comparison)
+#     The rubric compares this area with **server-side limits**: a cap the service enforces for the account, which the customer cannot
+#     exceed and does not have to reason about. Semrush's API answers `ERROR 132 "API units balance is zero"` and, for a per-line report,
+#     returns "the number of lines for which you have enough API units"; Ahrefs charges `max(base_cost, per_row_cost x num_rows)` with a
+#     50-unit floor, reports what each call actually consumed in `x-api-units-cost-total-actual`, and refuses over the limit with a 429.
+#     In both, one meter governs the WHOLE service.
+#
+#     Ours governed a third of it. `ai_budget_usd` (the $6/day Claude guard) was the only cap that could refuse a run, while DataForSEO
+#     is where most of the money goes: **$2.3876 of the $3.63** spent by the 2026-10-14 re-rating (RESULTS §0) and $0.0560 of the $0.069
+#     of that evening's live check. R9 put `dfs_est_usd` on every ledger row and Rate Limit even computed the day's DataForSEO total
+#     (`d.dfs_budget_used_est_usd`) — but nothing ever refused on it. The only real cap was the DataForSEO account balance, and reaching
+#     it does not refuse a run: every paid call inside it starts failing, so the customer gets a part-charged, part-delivered report in
+#     the middle of the night. That is exactly the failure mode a server-side limit exists to prevent.
+#
+#     Three changes, all in the one node that already does the refusing:
+#     (a) **`dfs_budget_usd`**, the same guard over the same period for the data money, with the same shape of refusal — what the period
+#         has used, what this run would add, nothing charged, when it can run again.
+#     (b) **the account is a hard floor.** The free `appendix/user_data` reading R28 put on the ledger chain (it runs before Rate Limit:
+#         live trace of exec 588, `DFS Balance` +0.52 s -> `Run Ledger Row` +1.32 s -> `Rate Limit` +1.94 s) is now read BY the guard: a
+#         run the account cannot pay for, leaving `dfs_balance_floor_usd` behind, is refused before it spends a cent. It fails OPEN —
+#         a probe that did not answer reads 0 and refuses nothing — because a guard that cannot measure must not block the customer.
+#     (c) **the day's DataForSEO total stops reading a settled run's reservation.** It took `Number(r.dfs_usd) || Number(r.dfs_est_usd)`,
+#         so a finished run that really spent $0 fell back to what it had reserved — the free `free_only` backlink check (R31) counted
+#         $0.45 against the day for ever. It now counts a settled row's measured figure and a running one's reservation, exactly as the
+#         Claude side has since R9.
+#     And one number the caller can be told before the work: `run_cost_estimate_usd` is the engine's own calibrated figure for the whole
+#     run (Claude + DataForSEO) with the basis beside it, so what the customer is shown and what the guard reserves can be one number.
+# =============================================================================
+
+# ---------- A. the two new settings ----------
+patch('Normalize Input', "  ai_budget_period: 'day',          // 'day' | 'month' — daily window while testing; the Anthropic Console workspace limit is the hard cap\n",
+      "  ai_budget_period: 'day',          // 'day' | 'month' — daily window while testing; the Anthropic Console workspace limit is the hard cap\n"
+      "  // (2026-10-15, benchmark area 13): the same guard for the DataForSEO money, over the same period. It was unguarded until now, and it is\n"
+      "  // where most of the spend is ($2.3876 of the $3.63 the 2026-10-14 re-rating cost). `dfs_balance_floor_usd` is what the account must keep\n"
+      "  // after a run: below it the run is refused rather than started, because a run that exhausts the account mid-flight delivers half a report\n"
+      "  // and charges for all of it. A balance reading that did not answer is 0 and refuses nothing — a guard that cannot measure must not block.\n"
+      "  dfs_budget_usd: 15,\n"
+      "  dfs_balance_floor_usd: 0.5,\n")
+patch('Normalize Input', "    ai_budget_period: CONFIG.ai_budget_period,\n",
+      "    ai_budget_period: CONFIG.ai_budget_period,\n    dfs_budget_usd: CONFIG.dfs_budget_usd,\n    dfs_balance_floor_usd: CONFIG.dfs_balance_floor_usd,\n")
+
+# ---------- B. the guard itself ----------
+patch('Rate Limit', """d.ai_spend_estimate_usd = est;
+d.dfs_spend_estimate_usd = dfs_est;
+d.cost_estimate_source = __ai.source;   // 'calibrated' once the mode has settled runs, 'default' until then
+d.cost_estimate_basis = __ai.basis;
+d.dfs_budget_used_est_usd = +(earlier.filter(r => String(r.created_at || '').startsWith(period)).reduce((s, r) => s + (Number(r.dfs_usd) || Number(r.dfs_est_usd) || 0), 0) + dfs_est).toFixed(2);
+d.ai_budget_used_est_usd = +(spent_est + est).toFixed(2);""",
+      """// ---- the data money, guarded the same way (2026-10-15, benchmark area 13: Semrush / Ahrefs server-side limits) ----
+// Until now `ai_budget_usd` was the only cap that could refuse a run, and it watches CLAUDE money — a third of the bill. DataForSEO was
+// $2.3876 of the $3.63 the 2026-10-14 re-rating spent and $0.0560 of the $0.069 that evening: the larger half, with nothing in front of it
+// but the account balance, and reaching THAT does not refuse a run — it makes every paid call inside one start failing.
+// A settled row counts what it MEASURED and a running one its reservation, as on the Claude side. It used to be
+// `Number(r.dfs_usd) || Number(r.dfs_est_usd)`, so a finished run that genuinely spent $0 — a free_only backlink check (R31) — fell back to
+// the $0.45 it had reserved and held it against the day for ever.
+const dfs_spent = +earlier.filter(r => String(r.created_at || '').startsWith(period))
+  .reduce((s, r) => s + (r.status === 'done' ? (Number(r.dfs_usd) || 0) : (Number(r.dfs_est_usd) || 0)), 0).toFixed(2);
+const dfs_budget = Number(d.dfs_budget_usd || 0);
+if (dfs_budget > 0 && dfs_spent + dfs_est > dfs_budget) {
+  return [{ json: { ...d, validation_error: 'The search-data budget for this ' + (d.ai_budget_period || 'month') + ' is used up (estimated $' + dfs_spent.toFixed(2) + ' of $' + dfs_budget + '; this run would add about $' + dfs_est.toFixed(2) + '). Nothing was charged and nothing was started: this analysis can run again ' + (d.ai_budget_period === 'day' ? 'tomorrow' : 'next month') + ', or the limit for this website can be raised first.' } }];
+}
+// The account itself is the one cap nobody can argue with. *DFS Balance* reads it for free from appendix/user_data on the ledger chain,
+// before this node (exec 588: DFS Balance +0.52 s, Run Ledger Row +1.32 s, Rate Limit +1.94 s), and Run Ledger Row has already parsed it.
+// Fail OPEN: a probe that did not answer is 0 and refuses nothing.
+let dfs_balance = 0;
+try { const __rl = $('Run Ledger Row').first().json || {}; const __v = Number(__rl.dfs_balance); if (Number.isFinite(__v) && __v > 0) dfs_balance = __v; } catch (e) {}
+const dfs_floor = Number.isFinite(Number(d.dfs_balance_floor_usd)) && Number(d.dfs_balance_floor_usd) >= 0 ? Number(d.dfs_balance_floor_usd) : 0;
+if (dfs_balance > 0 && dfs_est > 0 && dfs_balance - dfs_est < dfs_floor) {
+  return [{ json: { ...d, validation_error: 'The search-data account is too low for this run ($' + dfs_balance.toFixed(2) + ' left; this run needs about $' + dfs_est.toFixed(2) + ' and ' + (dfs_floor > 0 ? '$' + dfs_floor.toFixed(2) + ' has to stay for the scheduled checks' : 'would use all of it') + '). Nothing was charged and nothing was started: a run that runs out of data credit half way through delivers half a report and charges for all of it. Top the data account up and start this again.' } }];
+}
+d.ai_spend_estimate_usd = est;
+d.dfs_spend_estimate_usd = dfs_est;
+d.cost_estimate_source = __ai.source;   // 'calibrated' once the mode has settled runs, 'default' until then
+d.cost_estimate_basis = __ai.basis;
+// one number for "what will this run cost", from the same self-correcting estimates the guard reserves against — so what the caller is
+// told before the work and what is held back against the budget can never be two different figures.
+d.run_cost_estimate_usd = +(est + dfs_est).toFixed(2);
+d.run_cost_estimate_basis = ('Claude $' + est.toFixed(2) + ' (' + __ai.basis + '); search data $' + dfs_est.toFixed(2) + ' (' + __dfs.basis + ')').slice(0, 400);
+d.dfs_account_balance_usd = dfs_balance;
+d.dfs_budget_used_est_usd = +(dfs_spent + dfs_est).toFixed(2);
+d.ai_budget_used_est_usd = +(spent_est + est).toFixed(2);""")
+
+assert 'dfs_budget_usd' in code('Rate Limit') and 'dfs_account_balance_usd' in code('Rate Limit'), 'section 61: the data-money guard is not in Rate Limit'
+assert "Number(r.dfs_usd) || Number(r.dfs_est_usd) || 0)" not in code('Rate Limit'), 'section 61: a settled row still falls back to its reservation'
+assert "r.status === 'done' ? (Number(r.dfs_usd) || 0) : (Number(r.dfs_est_usd) || 0)" in code('Rate Limit'), 'section 61: the day\'s data total does not count what a settled run measured'
+assert 'dfs_budget_usd: CONFIG.dfs_budget_usd' in code('Normalize Input'), 'section 61: the setting never reaches Rate Limit'
+
+sticky("""### The guard watches all the money, and the account is the limit (2026-10-15, benchmark area 13)
+**`ai_budget_usd` guarded a third of the bill.** DataForSEO was **$2.3876 of the $3.63** the 2026-10-14 re-rating cost, with nothing in
+front of it. `dfs_budget_usd` is the same guard over the same period for the data money, with the same refusal: what the period used,
+what this run would add, nothing charged, when it can run again.
+**The account is a hard floor.** The free `appendix/user_data` reading R28 put on the ledger chain is read by the guard now: a run the
+account cannot pay for — leaving `dfs_balance_floor_usd` for the scheduled checks — is refused **before** it spends, instead of running
+out of credit half way and delivering half a report. A probe that did not answer reads 0 and refuses nothing.
+**And a settled run stops counting its reservation:** the day's data total took `dfs_usd || dfs_est_usd`, so a free run that really spent
+$0 held its $0.45 against the day for ever.
+`run_cost_estimate_usd` carries the engine's own calibrated figure for the whole run, so what the caller is told and what the guard
+reserves are one number.""",
+    pos('Rate Limit')[0] - 40, pos('Rate Limit')[1] + 420, 1060, 300, 5)
+
+log('The spend guard covers both currencies and the account is a hard floor (2026-10-15, benchmark programme area 13 — the rubric compares '
+    'this area with Semrush / Ahrefs server-side limits, where one meter governs the whole service): ai_budget_usd refused on CLAUDE money '
+    'only, which is a third of the bill (DataForSEO was $2.3876 of the $3.63 the 2026-10-14 re-rating spent and $0.0560 of the $0.069 of the '
+    'evening live check), so CONFIG gains dfs_budget_usd ($15, the same period) and Rate Limit refuses on it in the same words; the free '
+    'appendix/user_data balance R28 put on the ledger chain is now read BY the guard, so a run the account cannot pay for is refused before '
+    'it spends rather than running out of credit half way through and charging for a half-delivered report (dfs_balance_floor_usd, $0.50, '
+    'keeps the scheduled checks alive) — and the check fails OPEN, a probe that did not answer refuses nothing; the day\'s data total counts '
+    'a settled row\'s MEASURED figure instead of falling back to its reservation (a free_only backlink run that spent $0 held $0.45 against '
+    'the day for ever); and run_cost_estimate_usd carries the whole run\'s calibrated estimate with its basis, so what the caller is told '
+    'before the work and what the guard holds back cannot be two different numbers')
+
+# =============================================================================
+# 62. THE TOKENS ANTHROPIC COUNTS, AND THE RUN THE ACCOUNT CAN ANSWER FOR
+#     (2026-10-15, benchmark programme items B-A8 and B-A5; docs/system-review-2026-10-14/INVARIANTS.md rule 1: every figure that
+#      reaches a customer is measured and says what measured it, modelled and says from what, or not available and says why.)
+#
+#     **B-A8 — the streaming nodes' token usage.** Section 51 priced every Claude call from characters because nothing the run can read
+#     reports tokens. That was checked against the running instance (n8n 2.41.4) rather than assumed, and it is worse than the note in
+#     CLAUDE.md said: it is not only the three streaming Opus nodes that go unmeasured, it is **every Claude call in the engine**.
+#       * `@langchain/anthropic` 1.5.6 `_generate`, streaming branch: `return { generations: [{ text, message }] }` — **no `llmOutput`**.
+#         The `message_delta.usage` Anthropic sends survives only on `message.usage_metadata`.
+#       * n8n's `LmChatAnthropic` `tokensUsageParser` reads `result?.llmOutput?.usage`, finds nothing and falls back to zeros, so
+#         `N8nLlmTracing.handleLLMEnd` records `tokenUsageEstimate` (a tiktoken guess) instead of `tokenUsage`. It also does
+#         `pick(g, ['text', 'generationInfo'])` first, which drops the message the usage rode in on.
+#       * and for the eight NON-streaming nodes, where n8n does record a real `tokenUsage` (exec 521: Critic 12,905 / 3,303), it lands on
+#         the model node's `ai_languageModel` connection — and `WorkflowDataProxy.getNodeExecutionData` only ever reads
+#         `taskData.data.main`, so `$('Claude — Critic')` throws "No data found from `main` input". No Code node can read one token of it.
+#     So the measurement has to arrive on the MAIN path, and now it does: Anthropic's **free** `/v1/messages/count_tokens` endpoint counts
+#     the exact prompt each streaming agent rendered and that prompt plus the exact answer it returned, in two free calls per agent. The
+#     difference is the answer's own tokens, counted by the tokeniser that bills them. What no counter can see is the thinking the model
+#     did before answering — billed as output, never returned — so that part stays modelled from the node's effort budget and is the only
+#     estimate left in those calls. `CC.callCost` splits each call into `measured_usd` and `estimated_usd` (it used to throw the whole
+#     call into one bucket), and `CC.runCost` adds the two halves per call, so a node whose tokens were counted no longer contributes its
+#     prompt and answer to the estimated half.
+#     The chains sit on the main path behind the agent (a side branch runs last, or not at all — R17), every node is
+#     `neverError` + `continueRegularOutput`, and a count that does not answer falls back to the character figure with its old basis.
+#
+#     **B-A5 — only the day was reconciled, not the run.** R28 put one free `appendix/user_data` reading on the RESERVE chain, which is
+#     enough to hold the DAY against the account (CC.dfsDay) and says nothing about any single run: a run can be 100% out while the day
+#     still agrees. Every settle now takes a SECOND free reading and reloads the ledger rows around its own window, and `CC.dfsRun`
+#     attributes the move between the two readings to the run **only when no other ledger row was open across that window**. When one
+#     was, the run keeps its per-task attribution and the row says so in words. Nothing is attributed when a reading is missing, when the
+#     account has not moved yet, or when it moved more than ten times what every task reported (something outside this engine spends on
+#     the same account) — each with its own reason. `seo_run_ledger` gains `settled_at`, `dfs_balance_end` and `dfs_source`
+#     ('account' | 'tasks'), so a reader can always tell which figure the row carries.
+# =============================================================================
+
+from ladder_common import LEDGER_WINDOW_MS as LEDGER_WINDOW_MS62
+
+# ---------- A. B-A8: the free token counter, on the main path, behind the three streaming agents ----------
+COUNT_URL62 = 'https://api.anthropic.com/v1/messages/count_tokens'
+_ANTHROPIC_CRED62 = {'anthropicApi': {'id': 'SEOcredAnthropic', 'name': 'Anthropic (SEO Agent)'}}
+_STREAM62 = [c for c in _AI_CALLS51 if c['streaming']]
+assert sorted(c['node'] for c in _STREAM62) == ['Copywriter', 'Editor', 'Strategy Brief'], _STREAM62
+_OLD_CALLS62 = json.dumps(_AI_CALLS51)   # the table section 51 / 59 baked into the six nodes, replaced below
+
+
+def _count_node62(name, body, at):
+    add_node(name, 'n8n-nodes-base.httpRequest', 4.5, {
+        'method': 'POST', 'url': COUNT_URL62,
+        'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'anthropicApi',
+        'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'anthropic-version', 'value': '2023-06-01'}]},
+        'sendBody': True, 'specifyBody': 'json', 'jsonBody': body,
+        'options': {'timeout': 20000, 'response': {'response': {'neverError': True}}}}, at,
+        dict(credentials=dict(_ANTHROPIC_CRED62), onError='continueRegularOutput', alwaysOutputData=True, **_rl55.RETRY))
+
+
+for _c62 in _STREAM62:
+    _ag62, _in62 = _c62['node'], _c62['input']
+    assert _in62 and _in62 in nodes, 'B-A8: ' + _ag62 + ' has no input node to render its prompt against'
+    # the agent's prompt is an n8n expression over `$json` — its own input item. Rendered one node later, `$json` is something else, so
+    # the same expression is re-pointed at the node that fed the agent. That is the whole rewrite, and it is asserted below.
+    _txt62 = str(nodes[_ag62]['parameters']['text'])
+    assert _txt62.startswith('='), 'B-A8: ' + _ag62 + "'s prompt is not an expression"
+    _prompt62 = re.sub(r'\$json\b', "$('" + _in62 + "').first().json", _txt62)
+    assert '$json.' not in _prompt62 and _prompt62 != _txt62, 'B-A8: ' + _ag62 + "'s prompt still reads $json after the rewrite"
+    _set62, _cp62 = 'Prompt For Count (' + _ag62 + ')', 'Count Prompt (' + _ag62 + ')'
+    _ca62, _af62 = 'Count Answer (' + _ag62 + ')', 'After Count (' + _ag62 + ')'
+    _px62, _py62 = pos(_ag62)
+    add_node(_set62, 'n8n-nodes-base.set', 3.4, {'mode': 'manual', 'includeOtherFields': True, 'options': {}, 'assignments': {'assignments': [
+        {'id': str(uuid.uuid5(uuid.NAMESPACE_URL, 'ba8:' + _ag62 + ':prompt')), 'name': '__prompt', 'value': _prompt62, 'type': 'string'},
+        {'id': str(uuid.uuid5(uuid.NAMESPACE_URL, 'ba8:' + _ag62 + ':answer')), 'name': '__answer',
+         'value': "={{ String($('" + _ag62 + "').first().json.output ?? '') }}", 'type': 'string'}]}},
+        [_px62, _py62 + 260])
+    _mdl62 = json.dumps(_c62['model'])
+    _count_node62(_cp62, '={{ JSON.stringify({ model: ' + _mdl62 + ', messages: [{ role: "user", content: String($json.__prompt || "") }] }) }}',
+                  [_px62 + 200, _py62 + 260])
+    _count_node62(_ca62, '={{ JSON.stringify({ model: ' + _mdl62 + ', messages: ['
+                  + '{ role: "user", content: String($(\'' + _set62 + '\').first().json.__prompt || "") }, '
+                  + '{ role: "assistant", content: String($(\'' + _set62 + '\').first().json.__answer || "") }] }) }}',
+                  [_px62 + 400, _py62 + 260])
+    add_node(_af62, 'n8n-nodes-base.code', 2, {'jsCode':
+        "// B-A8 (2026-10-15, section 62): the two free token counts are taken; hand " + _ag62 + "'s own items back to the pipeline,\n"
+        "// unchanged and in order, so nothing downstream sees the counter at all (the R17 resume pattern).\n"
+        "return $('" + _ag62 + "').all();\n"}, [_px62 + 600, _py62 + 260])
+    _succ62 = [t['node'] for lst in ((conns.get(_ag62) or {}).get('main') or []) for t in (lst or [])]
+    assert _succ62, 'B-A8: ' + _ag62 + ' feeds nothing'
+    for _s62 in _succ62: disconnect(_ag62, _s62)
+    connect(_ag62, _set62); connect(_set62, _cp62); connect(_cp62, _ca62); connect(_ca62, _af62)
+    for _s62 in _succ62: connect(_af62, _s62)
+    _c62['count_prompt'], _c62['count_answer'] = _cp62, _ca62
+    _c62['count_rounds'] = 1   # only the last round of a looping agent is on the main path; the rest are modelled from it
+
+# the call table and the pricing loop are re-baked into the five report builders and Run Ledger Settle
+_NEW_CALLS62 = json.dumps(_AI_CALLS51)
+assert _NEW_CALLS62 != _OLD_CALLS62 and 'count_prompt' in _NEW_CALLS62, 'B-A8: the call table did not learn about the counter'
+_OLD_PUSH62 = """  __costCalls.push({ node: c.node, model: c.model, max_tokens: c.max_tokens, effort: c.effort, streaming: c.streaming,
+    prompt_chars, output_chars, calls: answers.length * (c.loop ? __qaRounds() : 1) });"""
+_NEW_PUSH62 = """  // B-A8 (2026-10-15): the free Anthropic token counter answered for this node on the main path — the prompt it really rendered
+  // (*Count Prompt (…)*) and that prompt plus the answer it really got (*Count Answer (…)*). The difference is the answer's own tokens.
+  // `rounds` is how many of this node's calls those two counts cover: the Editor runs once per QA round and only the last round's
+  // prompt and answer are on the main path, so the rest are repeated from it and stay modelled. A count that did not answer leaves
+  // `counted` null and the call falls back to characters, with the old basis.
+  let counted = null;
+  if (c.count_prompt && c.count_answer) {
+    const p = __countOf(c.count_prompt), t = __countOf(c.count_answer);
+    if (p > 0 && t > p) counted = { prompt_tokens: p, total_tokens: t, rounds: c.count_rounds || 1, source: 'Anthropic /v1/messages/count_tokens' };
+  }
+  __costCalls.push({ node: c.node, model: c.model, max_tokens: c.max_tokens, effort: c.effort, streaming: c.streaming,
+    prompt_chars, output_chars, counted, calls: answers.length * (c.loop ? __qaRounds() : 1) });"""
+_COUNT_OF62 = """const __countOf = (n) => { const a = __jsonOf(n) || []; const v = Number(((a[a.length - 1] || {}) || {}).input_tokens); return Number.isFinite(v) && v > 0 ? v : 0; };
+const __costCalls = [];"""
+for _n62 in _ends51 + ['Run Ledger Settle']:
+    _src62 = code(_n62)
+    assert _OLD_CALLS62 in _src62 and _OLD_PUSH62 in _src62, 'B-A8: ' + _n62 + ' does not carry section 51\'s call table'
+    _src62 = _src62.replace(_OLD_CALLS62, _NEW_CALLS62).replace(_OLD_PUSH62, _NEW_PUSH62).replace('const __costCalls = [];', _COUNT_OF62)
+    setcode(_n62, _src62)
+    assert '__countOf' in code(_n62) and 'counted,' in code(_n62), _n62
+    assert code(_n62).index('const __countOf') < code(_n62).index('__countOf(c.count_prompt)'), _n62 + ': the counter helper is used before it exists'
+assert 'countUsage' in COST_SRC and 'counted_rounds' in COST_SRC, 'B-A8: the cost kit cannot price a counted call'
+
+# ---------- A2. B-A8 / B-A5: the harness shim learns the two new calls (section 51 part E wrote it) ----------
+_shim62 = os.path.join(OUT_CODE, '_cost_cal.js')
+_shim62txt = open(_shim62, encoding='utf-8').read()
+_shim62old = "  if (fn === 'dfsDay') return { json: CC.dfsDay(j.rows || [], j.mine || {}) };\n"
+assert _shim62txt.count(_shim62old) == 1, 'B-A5: the cost kit shim moved'
+open(_shim62, 'w').write(_shim62txt.replace(_shim62old, _shim62old
+    + "  // B-A8 / B-A5 (2026-10-15, section 62): the tokens Anthropic counted, and the run the account can answer for\n"
+    + "  if (fn === 'countUsage') return { json: CC.countUsage(j) || { none: true } };\n"
+    + "  if (fn === 'dfsRun') return { json: CC.dfsRun(j) };\n"))
+
+# ---------- A3. a reserved row carries the three new columns, in seo_run_ledger's own order ----------
+patch('Run Ledger Row', " ESTIMATED (' + __dfs.basis + ') - nothing measured yet' } }];",
+      " ESTIMATED (' + __dfs.basis + ') - nothing measured yet',\n"
+      "  // B-A5 (2026-10-15, section 62): the settle fills these in. `settled_at` is what lets ANOTHER run tell whether this one was open\n"
+      "  // across its window: a `done` row with no settled_at is treated as having been open the whole time, which is the safe answer.\n"
+      "  settled_at: '', dfs_balance_end: 0, dfs_source: 'tasks' } }];")
+assert "settled_at: ''" in code('Run Ledger Row'), 'B-A5: the reservation does not carry the settle columns'
+
+# ---------- B. B-A5: the second free reading, and the run the account can answer for ----------
+_sp62 = pos('Run Ledger Settle')
+add_node('DFS Balance End', 'n8n-nodes-base.httpRequest', 4.5, {
+    'method': 'GET', 'url': _BALANCE_URL55,
+    'authentication': 'genericCredentialType', 'genericAuthType': 'httpBasicAuth',
+    'options': {'timeout': 15000, 'response': {'response': {'neverError': True}}}},
+    [_sp62[0] - 440, _sp62[1] + 140],
+    dict(credentials={'httpBasicAuth': {'id': 'SEOcredDataForSE', 'name': 'DataForSEO'}},
+         onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True, **_rl55.RETRY))
+add_node('Load Run Ledger (Settle)', DT_TYPE, DT_VERSION, dt_get_all_where_params(RUN_LEDGER_TABLE, [
+    ('created_at', 'gte', '={{ new Date(Date.now() - ' + str(LEDGER_WINDOW_MS62) + ').toISOString() }}')]),
+    [_sp62[0] - 220, _sp62[1] + 140], {'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True})
+for _s62 in _from51:
+    disconnect(_s62, 'Run Ledger Settle'); connect(_s62, 'DFS Balance End')
+connect('DFS Balance End', 'Load Run Ledger (Settle)'); connect('Load Run Ledger (Settle)', 'Run Ledger Settle')
+nodes['Settle Run Ledger']['parameters']['columns']['value'].update({
+    'settled_at': '={{ $json.settled_at }}', 'dfs_balance_end': '={{ $json.dfs_balance_end }}', 'dfs_source': '={{ $json.dfs_source }}'})
+assert "CC.dfsRun(" in code('Run Ledger Settle') and "$('DFS Balance End')" in code('Run Ledger Settle'), 'B-A5: the settle does not cost the run against the account'
+assert ('settled_at', 'string') in RUN_LEDGER_COLS and ('dfs_balance_end', 'number') in RUN_LEDGER_COLS and ('dfs_source', 'string') in RUN_LEDGER_COLS, \
+    'B-A5: seo_run_ledger cannot say which figure a settled row carries (add the columns in ladder_common.py, then sync_tables.py on the next deploy)'
+assert 'dfsRun' in COST_SRC and 'other run(s) were in flight' in COST_SRC, 'B-A5: the cost kit cannot attribute a run to the account'
+
+# the whole settle chain is still what the guard proof expects: nothing paid runs before the reservation, and both new nodes are free
+assert nodes['DFS Balance End']['parameters']['url'] == _BALANCE_URL55, 'B-A5: the settle reading is not the free endpoint'
+
+# ---------- C. the wiring the harness reads (S72) ----------
+_cw51['count'] = {'url': COUNT_URL62, 'free': True,
+                  'nodes': {c['node']: {'set': 'Prompt For Count (' + c['node'] + ')', 'prompt': c['count_prompt'],
+                                        'answer': c['count_answer'], 'resume': 'After Count (' + c['node'] + ')',
+                                        'input': c['input'], 'model': c['model'], 'rounds': c['count_rounds'],
+                                        'after': [t['node'] for lst in ((conns.get('After Count (' + c['node'] + ')') or {}).get('main') or []) for t in (lst or [])]}
+                            for c in _STREAM62}}
+_cw51['run_reconcile'] = {'balance_end': 'DFS Balance End', 'load': 'Load Run Ledger (Settle)', 'settle': 'Run Ledger Settle',
+                          'window_ms': LEDGER_WINDOW_MS62,
+                          'writes': sorted(nodes['Settle Run Ledger']['parameters']['columns']['value'].keys())}
+_cw51['ai_calls'] = _AI_CALLS51
+json.dump(_cw51, open(os.path.join(HERE0, 'harness', 'cost_wiring.json'), 'w'), indent=1, sort_keys=True)
+
+sticky("""### The tokens Anthropic counts, and the run the account can answer for (B-A8 / B-A5, 2026-10-15)
+**Nothing in this engine measured a Claude token.** Checked against the running instance, not assumed: `@langchain/anthropic`'s
+streaming `_generate` returns no `llmOutput`, so n8n records a tiktoken `tokenUsageEstimate` for the three Opus nodes — and the real
+`tokenUsage` of the other eight rides the `ai_languageModel` connection, which `WorkflowDataProxy` never reads. A Code node cannot see
+one token of it.
+**So the measurement arrives on the main path.** Anthropic's **free** `count_tokens` endpoint counts the exact prompt each streaming
+agent rendered and that prompt plus the exact answer — two free calls per agent, `neverError`, falling back to characters if either is
+silent. The difference is the answer's own tokens. Only the **thinking** no counter can see stays modelled, from the effort budget, and
+it is the only estimate left in those calls: `CC.callCost` now splits every call into measured and estimated money instead of throwing
+the whole call into one bucket.
+**And the run, not only the day, is held against the account.** A second free `appendix/user_data` reading on the settle chain, the
+ledger rows reloaded around this run's window, and the move attributed to the run **only when no other row was open across it** —
+otherwise the run keeps its per-task figure and says why. `settled_at`, `dfs_balance_end` and `dfs_source` say which figure the row
+carries.""",
+    pos('Run Ledger Settle')[0] - 40, pos('Run Ledger Settle')[1] + 320, 1120, 360, 3)
+
+log('Claude tokens are counted by Anthropic and a run is costed against the account when it was alone (2026-10-15, benchmark items B-A8 '
+    'and B-A5; INVARIANTS rule 1): reading the running n8n 2.41.4 showed the engine measured NO Claude token at all - @langchain/anthropic '
+    "1.5.6's streaming _generate returns no llmOutput, so n8n's tokensUsageParser falls back to zeros and records a tiktoken "
+    'tokenUsageEstimate for Strategy Brief / Copywriter / Editor, and the real tokenUsage of the eight non-streaming nodes rides the '
+    'ai_languageModel connection, which WorkflowDataProxy never reads (it only ever reads main), so no Code node can see a token of it; the '
+    "free /v1/messages/count_tokens endpoint now counts each streaming agent's exact prompt and its prompt plus its exact answer on the main "
+    'path (Prompt For Count / Count Prompt / Count Answer / After Count, neverError, falling back to the character figure), so their prompt '
+    'and answer are MEASURED and only the thinking no counter can see is modelled from the effort budget - CC.callCost splits each call into '
+    'measured_usd and estimated_usd instead of bucketing the whole call, and CC.runCost adds the halves per call; and every settle takes a '
+    'second free appendix/user_data reading, reloads the ledger rows around its own window and attributes the move to the run only when no '
+    'other row was open across it (CC.dfsRun), keeping the per-task figure with its reason when one was, when a reading is missing, when the '
+    'account has not moved yet or when it moved more than ten times what the tasks reported - seo_run_ledger gains settled_at, '
+    'dfs_balance_end and dfs_source so a reader can always tell which figure a row carries')
+
+# =============================================================================
+# 63. THE RUN COST THE ENGINE WORKED OUT AND TOLD NOBODY, AND A REQUEST SENT TWICE
+#     (2026-10-15, benchmark programme items B-R3 and B-A6; docs/system-review-2026-10-14/INVARIANTS.md rule 1)
+#
+#     **B-R3 — the figure that reached no one.** Section 61 gave the guard one number for what a run will cost — Claude plus
+#     DataForSEO, from the same self-correcting per-mode estimates it reserves against, with the basis beside it. It then kept it.
+#     On 2026-10-15 `run_cost_estimate_usd` appeared in exactly two places in every generated workflow: the *Rate Limit* node that
+#     computes it, and a sticky note about that node. **No callback carried it**, so no caller and no customer ever saw it, and the
+#     app (`app/shared/src/cost.ts`, built to prefer the engine's figure over its own) had nothing to prefer.
+#     Two changes, and the second is the one that matters:
+#     (a) the figure is worked out BEFORE the four guards can return, so a run that is refused carries the same number as one that is
+#         accepted. It used to be assigned below them, which is part of why it never travelled: every refusal path returned without it.
+#     (b) one node, *Run Cost (Callback)*, between *Has Callback?* and *POST Callback*. Every one of the eleven `Build … Response`
+#         nodes funnels through that IF, and each builds its payload field by field — six carry `run_ledger`, five carry nothing about
+#         money at all — so stamping it there is the only place that reaches all of them, and the only place that cannot be forgotten
+#         by the twelfth builder somebody writes. *Rate Limit* is a strict chokepoint for every callback in this workflow (proved
+#         below by walking `main` from both triggers), so the node can always read it.
+#     **It arrives saying what it is.** Rule 1: measured, modelled, or not available, and which. This figure can never be a
+#     measurement — what the run really spent is `run_ledger`, settled at the end — so it travels as `run_cost_estimate_state:
+#     'modelled'` with `run_cost_estimate_basis` naming what it was modelled from, and as `'not_available'`, with the reason and a
+#     null amount, when the guard did not price the run. An estimate that arrives dressed as a measurement is worse than one that
+#     never arrives.
+#     **Where it is NOT put, deliberately:** the 202 from the API front door cannot carry it. *Rate Limit* runs inside the main
+#     workflow, which starts after the front door has already answered, and the only way to put a number on the 202 would be a second
+#     estimator in the front door — which is precisely the two-tables-that-disagree bug B-R3/B-B1 exists to kill. One estimator, told
+#     to the caller the moment it exists. The rejection callback is left alone too: `run_cost_estimate_usd` on a `status: 'rejected'`
+#     payload reads like a charge for a run that spent nothing, and the refusal already says the amount in words.
+#
+#     **B-A6 — a request sent twice ran twice.** In build_api.py; the note there carries the reasoning, including why the log is in
+#     `seo_cache` and not in `seo_run_ledger`, which would have taken B-A5's run-level attribution away the day it shipped.
+# =============================================================================
+
+# ---------- A. the estimate is worked out before any guard can return with it missing ----------
+patch('Rate Limit', """let dfs_est = __dfs.usd;     // DataForSEO money: carried on the row, settled with the measured amount (R9)""",
+      """let dfs_est = __dfs.usd;     // DataForSEO money: carried on the row, settled with the measured amount (R9)
+// B-R3 (2026-10-15, section 63): one number for "what will this run cost", from the same self-correcting estimates the guard reserves
+// against — so what the caller is told before the work and what is held back against the budget can never be two different figures.
+// It is worked out HERE, above the four refusals below, because a refused run has to carry the same figure as an accepted one: it used
+// to be assigned after them, so every `return` with a validation_error dropped it.
+// Rule 1 (INVARIANTS.md): it says what it is. This can never be a measurement — what the run really spent is settled at the end, on
+// the ledger row — so it travels as `modelled`, with the basis naming what it was modelled from.
+d.run_cost_estimate_usd = +(est + dfs_est).toFixed(2);
+d.run_cost_estimate_state = 'modelled';
+d.run_cost_estimate_basis = ('modelled before the run, from what runs of this kind have recently cost: Claude $' + est.toFixed(2)
+  + ' (' + __ai.basis + '); search data $' + dfs_est.toFixed(2) + ' (' + __dfs.basis + ')').slice(0, 400);""")
+
+patch('Rate Limit', """// one number for "what will this run cost", from the same self-correcting estimates the guard reserves against — so what the caller is
+// told before the work and what is held back against the budget can never be two different figures.
+d.run_cost_estimate_usd = +(est + dfs_est).toFixed(2);
+d.run_cost_estimate_basis = ('Claude $' + est.toFixed(2) + ' (' + __ai.basis + '); search data $' + dfs_est.toFixed(2) + ' (' + __dfs.basis + ')').slice(0, 400);
+""", """// (the run's cost estimate is set above, before the guards, so a refused run carries it too — B-R3, section 63)
+""")
+
+assert code('Rate Limit').count('d.run_cost_estimate_usd') == 1, 'B-R3: the run cost estimate is set in two places in Rate Limit'
+assert code('Rate Limit').index('d.run_cost_estimate_usd') < code('Rate Limit').index('The AI budget for this '), \
+    'B-R3: the run cost estimate is still worked out after the guards can refuse'
+
+# ---------- B. the one place every callback of this workflow passes through ----------
+RUN_COST_JS = r"""// B-R3 (2026-10-15, build section 63): the engine's own calibrated figure for this run, put on the callback.
+// Until today it reached nobody: `run_cost_estimate_usd` existed only inside *Rate Limit* and a sticky note, while the app was built
+// to prefer the engine's figure over its own pre-flight table and had nothing to prefer. Every `Build … Response` node builds its
+// payload field by field and funnels through *Has Callback?*, so this is the one node that reaches all eleven of them — and the
+// twelfth, whenever somebody writes it.
+// Rule 1 (INVARIANTS.md): measured, modelled, or not available, and it says which. This figure is MODELLED by definition — what the
+// run really spent is `run_ledger`, settled at the end from the tasks it paid for and the model calls it made. It is never called
+// anything else here, and when the guard did not price this run the amount is null and the reason travels in its place.
+const item = $input.first();
+const out = { ...(item.json || {}) };
+let rl = null;
+try { rl = $('Rate Limit').first().json || null; } catch (e) { rl = null; }
+const usd = rl ? Number(rl.run_cost_estimate_usd) : NaN;
+if (Number.isFinite(usd) && usd >= 0) {
+  out.run_cost_estimate_usd = +usd.toFixed(2);
+  out.run_cost_estimate_state = 'modelled';
+  out.run_cost_estimate_basis = String(rl.run_cost_estimate_basis || '').slice(0, 400)
+    || 'modelled before the run, from what runs of this kind have recently cost';
+} else {
+  // never a 0 here: 0 is a run that costs nothing, and "we did not price it" is a different statement.
+  out.run_cost_estimate_usd = null;
+  out.run_cost_estimate_state = 'not_available';
+  out.run_cost_estimate_basis = 'not available: this run was never priced by the spend guard'
+    + (rl ? ' (it reached the guard but carried no estimate)' : ' (the guard did not run for it)');
+}
+// files ride on the binary, not the json (the PDF and the Word document of a report): a Code node drops them unless they are returned.
+return [{ json: out, binary: item.binary }];"""
+_hc = pos('Has Callback?')
+add_node('Run Cost (Callback)', 'n8n-nodes-base.code', 2, {'jsCode': RUN_COST_JS}, [_hc[0] + 110, _hc[1] + 140])
+disconnect('Has Callback?', 'POST Callback')
+connect('Has Callback?', 'Run Cost (Callback)')
+connect('Run Cost (Callback)', 'POST Callback')
+
+# ---------- C. the build proves it, so the next builder cannot forget (INVARIANTS: the lint proves the class) ----------
+# A harness scenario runs node code, not n8n's wiring: it can prove the node stamps correctly and nothing about whether every callback
+# goes through it. That part is proved here, on the graph, exactly as section 55 proves the ledger's order.
+def _b_r3_checks63():
+    _builders63 = sorted(n for n in nodes if n.startswith('Build ') and n.endswith('Response'))
+    assert len(_builders63) >= 11, 'B-R3: expected the eleven callback builders, found ' + str(len(_builders63))
+    for _b63 in _builders63:
+        _o63 = [t['node'] for lst in ((conns.get(_b63) or {}).get('main') or []) for t in (lst or [])]
+        assert _o63 == ['Has Callback?'], 'B-R3: ' + _b63 + ' does not funnel through Has Callback? but into ' + str(_o63)
+    _hcout63 = [t['node'] for lst in ((conns.get('Has Callback?') or {}).get('main') or []) for t in (lst or [])]
+    assert _hcout63 == ['Run Cost (Callback)'], 'B-R3: Has Callback? feeds ' + str(_hcout63) + ' beside the cost stamp'
+    assert [t['node'] for lst in ((conns.get('Run Cost (Callback)') or {}).get('main') or []) for t in (lst or [])] == ['POST Callback'], \
+        'B-R3: the cost stamp does not feed POST Callback'
+    # and *Rate Limit* really is a chokepoint: walk main from every trigger, refusing to pass it, and no callback may still be reached
+    _tgt63 = {t['node'] for o in conns.values() for lst in (o.get('main') or []) for t in (lst or [])}
+    _start63 = [n for n in nodes if n not in _tgt63 and (conns.get(n) or {}).get('main')]
+    _seen63, _stack63 = set(_start63), list(_start63)
+    while _stack63:
+        _cur63 = _stack63.pop()
+        if _cur63 == 'Rate Limit': continue
+        for _lst63 in ((conns.get(_cur63) or {}).get('main') or []):
+            for _t63 in (_lst63 or []):
+                if _t63['node'] not in _seen63: _seen63.add(_t63['node']); _stack63.append(_t63['node'])
+    _loose63 = sorted(n for n in _seen63 if n == 'POST Callback' or n in _builders63)
+    assert not _loose63, 'B-R3: these can answer a caller without passing the node that prices the run: ' + ', '.join(_loose63)
+_b_r3_checks63()
+
+sticky("""### The run cost the engine worked out and told nobody (2026-10-15, B-R3)
+`run_cost_estimate_usd` — Claude plus DataForSEO, from the same self-correcting estimates the guard reserves against — existed in
+**two** places in every generated workflow: *Rate Limit*, and a sticky note about *Rate Limit*. No callback carried it, so no caller
+and no customer ever saw it, while the app had already been built to prefer the engine's figure over its own.
+It is now worked out **above** the four refusals (a refused run carried none, because every `return` happened first), and stamped on
+to every callback by **Run Cost (Callback)**, the one node between *Has Callback?* and *POST Callback* that all eleven response
+builders funnel through. The build walks `main` from both triggers and fails if a builder or *POST Callback* can be reached without
+passing *Rate Limit*, so the twelfth builder cannot quietly ship without it.
+**It says what it is** (INVARIANTS rule 1): `run_cost_estimate_state: 'modelled'`, with the basis naming what it was modelled from —
+or `'not_available'` with the reason and a **null** amount, never a 0. What the run really spent stays `run_ledger`, settled at the end.
+**Not on the 202:** *Rate Limit* runs after the front door has answered, and a second estimator there is the very bug B-R3 exists to
+kill.""",
+    _hc[0] - 40, _hc[1] + 320, 1060, 300, 5)
+
+log('The run cost the engine works out now reaches the caller, and a request sent twice runs once (2026-10-15, benchmark items B-R3 and '
+    'B-A6; INVARIANTS rule 1). B-R3: run_cost_estimate_usd - the whole run priced from the same self-correcting per-mode estimates the '
+    'guard reserves against - appeared in exactly two places in every generated workflow, the Rate Limit node that computes it and a sticky '
+    'note about that node, so no callback carried it and the app, built to prefer the engine\'s figure over its own pre-flight table, had '
+    'nothing to prefer; it is now computed ABOVE the four refusals (every refusal returned before the old assignment, so a refused run '
+    'carried no figure at all) and stamped on to every callback by one new node, Run Cost (Callback), between Has Callback? and POST '
+    'Callback - the single point all eleven Build ... Response nodes funnel through - with the build walking main from both triggers and '
+    'failing if any builder or POST Callback can be reached without passing Rate Limit; it travels as run_cost_estimate_state "modelled" '
+    'with the basis beside it, or "not_available" with the reason and a null amount (never a 0, which means a run that costs nothing), '
+    'because what the run really spent is run_ledger, settled at the end. It is deliberately NOT on the 202: Rate Limit runs after the API '
+    'front door has answered, and the only way to put a number there would be a second estimator, which is the two-tables-disagree bug '
+    'B-R3 exists to kill. B-A6: the front door had no idempotency, so an app that timed out and retried, a proxy that re-delivered or a '
+    'double submit each bought a second run - dearer since both daily ceilings went from $6 to $15 the same day; request_id could not be '
+    'the key (it is minted in Quick Validate from $execution.id and overwrites whatever the caller sent, so two deliveries have two ids by '
+    'construction), so the key is the caller\'s own request_id / idempotency_key / Idempotency-Key header, or a canonical fingerprint of '
+    'the whole body plus the caller\'s identity, logged to seo_cache (idem:, kind idem) BEFORE the 202 with insert-then-read-back and '
+    'lowest id wins - the idiom D1 put on the run ledger - so a repeat inside five minutes is answered 202 {duplicate: true, request_id: '
+    'the first run\'s id, first_seen_at, note} and starts nothing, force_new or a fresh request_id asks for a genuine second run, the log '
+    'is NOT in seo_run_ledger because a non-run row there reads as an open run to CC.dfsRun and would take B-A5\'s run-level account '
+    'attribution away, and every uncertainty - no id of its own, no earlier row, an unreadable stored value - starts the run')
+# 64. AN ALERT NOBODY RECEIVED, AND NINE SCHEDULES THAT COULD NOT BE REFUSED
+#     (2026-10-15, benchmark items B-A7 and B-A9; docs/system-review-2026-10-14/INVARIANTS.md rules 3 and 4)
+#     * B-A7 **an undelivered alert was never retried and never escalated.** D25b gave the alert path a second channel and a row of its
+#       own; R6 put the delivery result back on that row. Nothing ever acted on it: one attempt per channel, and whatever the row then
+#       said, that was the end of it — which is why the blunt fact still holds that **no ops alert has ever reached a human**. Rule 3 ends
+#       on the clause that matters: *a failure that reaches no human is not handled.* Four things change here:
+#       (a) `seo_ops_alerts` gains `attempts`, `last_attempt_at`, `next_attempt_at` and `attempt_log` — the row records EVERY attempt, one
+#           line each, not only the last one (run sync_tables.py, which apply_env.py does, to add them to the live table).
+#       (b) **the retry has no scheduler of its own: it borrows the ten that exist.** The last thing every scheduled run does — after its
+#           ledger row is settled, where it can delay nothing and spend nothing — is ask whether an alert is still waiting and re-send up
+#           to five. Page Watch runs daily at 05:45, the AI Pulse daily at 06:30, six more between 07:00 and 11:00 on Mondays, the Audit
+#           Scheduler monthly; the Error Handler carries the same chain, so a second failure sweeps the first one's undelivered alert too.
+#           N = 30 minutes between attempts (equal to OA.DEDUPE_MINUTES: the earliest moment a re-send is not a flood) and K = 3 attempts
+#           before the row is `critical` whatever it started as and the payload leads with how long it has reached nobody.
+#       (c) **a row is marked delivered only on evidence of delivery** (rule 4). *Post Alert Webhook* is `neverError`, so a 404 from a
+#           revoked Slack hook arrived as an item with no `error` and was written down as a success; `fullResponse` puts the status code on
+#           the item and AR.posted reads it. The Page Watch, which posted its digest and wrote nothing back at all, gets the same record.
+#       (d) a repeat inside the dedupe window no longer writes `deduped` over the channels that CARRIED an alert, so a delivered alert
+#           stops looking undelivered — and, the half that matters, an undelivered one stops looking handled.
+#     * B-A9 **the ten schedules sat outside every guard.** R17 proved the reservation happens before the first paid call; nothing ever
+#       LOOKED at what was already running, so a scheduled monitor could not be refused for concurrency however much was in flight. The
+#       rules now live in one kit (v5/code/_run_guard.js) used by *Rate Limit* AND by the resume node of every scheduled workflow: a run of
+#       the same monitor still in flight, P34-5's heavy crawl of the same site, more than RG.MAX_OPEN analyses at once, or an account that
+#       cannot pay for this run. It deliberately does NOT refuse a schedule on the Claude or DataForSEO budget — cost is not the
+#       constraint and a budget refusal would silently cost a customer their week; the account balance is a fact, not a policy.
+#       The gate sits where R17 put the resume node, so the ordering proof of section 55 still holds: refusal happens after the row exists
+#       and before the first paid node, and the row is marked `refused`, which every count already skips.
+# =============================================================================
+from ladder_common import ALERT_RETRY_SRC as _AR64, RUN_GUARD_SRC as _RG64, OPS_ALERTS_COLS as _OAC64
+_eh_src64 = lambda p: _eh_src(p).replace('/*__ALERT_RETRY__*/', _AR64)
+
+# ---------- A. the two kits agree on the one number they share ----------
+assert "const RETRY_MINUTES = 30;" in _AR64 and "const RETRY_MINUTES = 30;" in OPS_ALERT_SRC, \
+    'B-A7: OA.RETRY_MINUTES and AR.RETRY_MINUTES must be the same number — the first books the retry, the second acts on it'
+assert "const ESCALATE_AFTER = 3;" in _AR64 and "const MAX_ATTEMPTS = 10;" in _AR64, 'B-A7: the escalation constants moved'
+assert [c for c, _t in _OAC64][-4:] == ['attempts', 'last_attempt_at', 'next_attempt_at', 'attempt_log'], 'B-A7: seo_ops_alerts has no retry state'
+
+# ---------- B. the Error Handler: evidence of delivery, and its own sweep ----------
+_whn64 = _ehn['Post Alert Webhook']['parameters']['options']['response']['response']
+assert _whn64.get('neverError') is True, 'B-A7: Post Alert Webhook no longer answers on a non-2xx'
+_whn64['fullResponse'] = True   # the status code is the evidence; without it a 404 reads as a delivery
+_eh_add('Alert Delivery', 'n8n-nodes-base.code', 2, {'jsCode': _eh_src64('code/Alert_Delivery.js')}, _ehn['Alert Delivery']['position'])
+assert 'const AR = (() => {' in _ehn['Alert Delivery']['parameters']['jsCode'], 'B-A7: Alert Delivery does not carry the retry kit'
+_ehn['Save Alert Delivery']['parameters']['columns']['value'].update({
+    'severity': '={{ $json.severity }}', 'attempts': '={{ $json.attempts }}', 'last_attempt_at': '={{ $json.last_attempt_at }}',
+    'next_attempt_at': '={{ $json.next_attempt_at }}', 'attempt_log': '={{ $json.attempt_log }}'})
+_EHY64 = _EHY + 300
+_eh_add('Load Open Alerts', DT_TYPE, DT_VERSION, dt_get_all_where_params(OPS_ALERTS_TABLE, [
+    ('last_seen_at', 'gte', '={{ new Date(Date.now() - 7 * 864e5).toISOString() }}')]), [480, _EHY64],
+    {'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True})
+_eh_add('Alert Retry Plan', 'n8n-nodes-base.code', 2, {'jsCode': _eh_src64('code/Alert_Retry_Plan.js')
+        .replace('__LOAD__', 'Load Open Alerts').replace('__WHERE__', 'SEO Agent — Error Handler')}, [700, _EHY64],
+    {'onError': 'continueRegularOutput', 'executeOnce': True})
+_eh_add('Any Alert Retry?', 'n8n-nodes-base.if', 2.3, {'conditions': {'options': {'caseSensitive': True, 'leftValue': '', 'typeValidation': 'loose', 'version': 3},
+        'conditions': [{'id': _ehnid('Any Alert Retry?:cond'), 'leftValue': '={{ !$json.skip }}', 'rightValue': '', 'operator': {'type': 'boolean', 'operation': 'true', 'singleValue': True}}], 'combinator': 'and'},
+        'looseTypeValidation': True, 'options': {}}, [920, _EHY64])
+_eh_add('Post Alert Retry', 'n8n-nodes-base.httpRequest', 4.5, {
+    'method': 'POST', 'url': '={{ $json.webhook_url }}', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.webhook_body) }}',
+    'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 400}}, 'timeout': 15000,
+                'response': {'response': {'fullResponse': True, 'neverError': True}}}}, [1140, _EHY64],
+    dict(onError='continueRegularOutput', alwaysOutputData=True, **_rl41.RETRY))
+_eh_add('Alert Retry Result', 'n8n-nodes-base.code', 2, {'jsCode': _eh_src64('code/Alert_Retry_Result.js').replace('__PLAN__', 'Alert Retry Plan')},
+        [1360, _EHY64], {'onError': 'continueRegularOutput'})
+_eh_add('Save Alert Retry', DT_TYPE, DT_VERSION, dt_update_params(OPS_ALERTS_TABLE, OPS_ALERTS_COLS, [('alert_key', '={{ $json.alert_key }}')],
+    {'delivered': '={{ $json.delivered }}', 'channels': '={{ $json.channels }}', 'severity': '={{ $json.severity }}',
+     'attempts': '={{ $json.attempts }}', 'last_attempt_at': '={{ $json.last_attempt_at }}', 'next_attempt_at': '={{ $json.next_attempt_at }}',
+     'attempt_log': '={{ $json.attempt_log }}', 'notes': '={{ $json.notes }}'}), [1580, _EHY64],
+    {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+for _a64, _b64 in [('Save Alert Delivery', 'Load Open Alerts'), ('Load Open Alerts', 'Alert Retry Plan'), ('Alert Retry Plan', 'Any Alert Retry?'),
+                   ('Any Alert Retry?', 'Post Alert Retry'), ('Post Alert Retry', 'Alert Retry Result'), ('Alert Retry Result', 'Save Alert Retry')]:
+    _eh_link(_a64, _b64)
+_ehwf['nodes'] = list(_ehn.values())
+_ehnames64 = set(_ehn)
+for _s64, _o64 in _ehc.items():
+    assert _s64 in _ehnames64, _s64
+    for _l64 in _o64.get('main', []):
+        for _t64 in _l64: assert _t64['node'] in _ehnames64, _t64['node']
+_rl41.check(_ehwf, _ehwf.get('name') or 'SEO Agent — Error Handler')
+_ul41.check(_ehwf, _ehwf.get('name') or 'SEO Agent — Error Handler')
+json.dump(_ehw41, open(_eh41, 'w', encoding='utf-8'), indent=2, ensure_ascii=False)
+for _n64 in _ehwf['nodes']:
+    if _n64['type'] == 'n8n-nodes-base.code':
+        open(os.path.join(OUT_CODE, 'EH__' + re.sub(r'[^A-Za-z0-9_.-]+', '_', _n64['name']) + '.js'), 'w').write(_n64['parameters']['jsCode'])
+# the harness copies with a webhook configured (the harness has no n8n/.env, so these play what a filled .env gives)
+for _nm64, _fp64, _sub64 in (('Alert_Delivery', 'code/Alert_Delivery.js', {}),
+                             ('Alert_Retry_Plan', 'code/Alert_Retry_Plan.js', {'__LOAD__': 'Load Open Alerts', '__WHERE__': 'SEO Agent — Error Handler'}),
+                             ('Alert_Retry_Result', 'code/Alert_Retry_Result.js', {'__PLAN__': 'Alert Retry Plan'})):
+    _t64 = rd(_fp64).replace('/*__OPS_ALERT__*/', OPS_ALERT_SRC).replace('/*__ALERT_RETRY__*/', _AR64) \
+        .replace('__ALERT_WEBHOOK_URL__', 'https://hooks.example.test/seo-agent-alerts').replace('__OPS_EMAIL__', OPS_EMAIL)
+    for _k64, _v64 in _sub64.items(): _t64 = _t64.replace(_k64, _v64)
+    open(os.path.join(OUT_CODE, 'EH__' + _nm64 + '_Webhook.js'), 'w').write(_t64)
+
+# ---------- C. B-A9: Rate Limit and the ten schedules share one concurrency gate ----------
+setcode('Rate Limit', "// B-A9 (2026-10-15, build section 64): the concurrency rules, shared with the resume node of every scheduled workflow.\n"
+        + _RG64 + "\n" + code('Rate Limit'))
+patch('Rate Limit', """const STALE_H = Number(d.run_stale_hours) > 0 ? Number(d.run_stale_hours) : 2;
+const staleBefore = Date.now() - STALE_H * 3600000;
+const isStale = (r) => { const st = String(r.status || ''); if (st === 'stale') return true;
+  const t = Date.parse(String(r.created_at || '')); return st === 'reserved' && t > 0 && t < staleBefore; };""",
+      """const STALE_H = Number(d.run_stale_hours) > 0 ? Number(d.run_stale_hours) : RG.STALE_HOURS;
+const __now64 = Date.now();
+// B-A9 (2026-10-15): one rule, in one place (v5/code/_run_guard.js) — the ten schedules apply exactly this one now.
+const isStale = (r) => RG.isStale(r, __now64, STALE_H);""")
+patch('Rate Limit', """  const busy = earlier.find(r => String(r.status || '') === 'reserved' && yesNo(r.heavy) && String(r.domain || '').toLowerCase() === myDomain);""",
+      """  const busy = RG.heavyBusy(ledger, { now: new Date(__now64).toISOString(), my_id: myId, run_id: String($execution.id), stale_hours: STALE_H, domain: myDomain, heavy: mine.heavy });""")
+assert 'RG.isStale(' in code('Rate Limit') and 'RG.heavyBusy(' in code('Rate Limit') and 'const RG = (() => {' in code('Rate Limit'), \
+    'B-A9: Rate Limit does not use the shared gate'
+_ul41.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+
+# ---------- D. the harness shims (S74) ----------
+open(os.path.join(OUT_CODE, '_alert_retry.js'), 'w').write(
+    "// harness shim (written by build_v4.py section 64, B-A7): the retry / escalation kit as a runnable script. One item in, one call out:\n"
+    "// { call: 'plan' | 'settle' | 'posted' | 'carried' | 'retryable' | 'record' | 'tables', ... }\n"
+    + OPS_ALERT_SRC + "\n" + _AR64 + """
+return $input.all().map(i => { const j = i.json || {}; const fn = String(j.call || '');
+  if (fn === 'plan') return { json: AR.plan(j.rows || [], j.cfg || {}) };
+  if (fn === 'settle') return { json: { rows: AR.settle(j.planned || [], j.responses || []) } };
+  if (fn === 'posted') return { json: AR.posted(j.item) };
+  if (fn === 'carried') return { json: { carried: AR.carried(j.row || {}), open: AR.isOpen(j.row || {}), attempts: AR.attemptsOf(j.row || {}) } };
+  if (fn === 'retryable') return { json: { retryable: AR.retryable(j.row || {}, Date.parse(j.now) || Date.now()), due_at: new Date(AR.dueAt(j.row || {})).toISOString() } };
+  if (fn === 'record') return { json: OA.plan(j.alert || {}, j.rows || [], j.cfg || {}).row };
+  return { json: { RETRY_MINUTES: AR.RETRY_MINUTES, ESCALATE_AFTER: AR.ESCALATE_AFTER, MAX_ATTEMPTS: AR.MAX_ATTEMPTS, PER_SWEEP: AR.PER_SWEEP,
+                   DEDUPE_MINUTES: OA.DEDUPE_MINUTES, OA_RETRY_MINUTES: OA.RETRY_MINUTES } };
+});
+""")
+open(os.path.join(OUT_CODE, '_run_guard.js'), 'w').write(
+    "// harness shim (written by build_v4.py section 64, B-A9): the concurrency gate every scheduled run and every API run passes.\n"
+    "// { call: 'gate' | 'isStale' | 'heavyBusy' | 'live' | 'tables', ... }\n"
+    + _RG64 + """
+return $input.all().map(i => { const j = i.json || {}; const fn = String(j.call || '');
+  if (fn === 'gate') return { json: RG.gate(j.args || {}) };
+  if (fn === 'isStale') return { json: { stale: RG.isStale(j.row || {}, Date.parse(j.now) || Date.now(), j.stale_hours) } };
+  if (fn === 'heavyBusy') return { json: { busy: RG.heavyBusy(j.rows || [], j.args || {}) } };
+  if (fn === 'live') return { json: { live: RG.liveRuns(j.rows || [], j.args || {}).map(r => r.run_id) } };
+  return { json: { STALE_HOURS: RG.STALE_HOURS, MAX_OPEN: RG.MAX_OPEN } };
+});
+""")
+_ops64 = json.load(open(os.path.join(HERE0, 'harness', 'ops_alert_wiring.json')))
+_ops64['nodes'] = [_n64['name'] for _n64 in _ehwf['nodes'] if _n64['type'] != 'n8n-nodes-base.stickyNote']
+_ops64['connections'] = {_s64: [[_t64['node'] for _t64 in _l64] for _l64 in _o64.get('main', [])] for _s64, _o64 in _ehc.items()}
+_ops64['delivery']['writes'] = sorted(_ehn['Save Alert Delivery']['parameters']['columns']['value'].keys())
+_ops64['webhook']['full_response'] = True
+_ops64['retry'] = {'load': 'Load Open Alerts', 'plan': 'Alert Retry Plan', 'gate': 'Any Alert Retry?', 'post': 'Post Alert Retry',
+                   'result': 'Alert Retry Result', 'save': 'Save Alert Retry', 'from': 'Save Alert Delivery',
+                   'writes': sorted(_ehn['Save Alert Retry']['parameters']['columns']['value'].keys()),
+                   'post_full_response': True, 'columns': [c for c, _t in _OAC64]}
+json.dump(_ops64, open(os.path.join(HERE0, 'harness', 'ops_alert_wiring.json'), 'w'), indent=1, sort_keys=True)
+sticky("""### An alert nobody received, and nine schedules that could not be refused (B-A7 / B-A9, 2026-10-15)
+**Every alert is re-attempted until something receives it, or until the row says it gave up.** `seo_ops_alerts` carries `attempts`, `last_attempt_at`, `next_attempt_at` and one line per attempt in `attempt_log`. The retry has no schedule of its own: the last thing every scheduled run does — and every run of the Error Handler — is sweep up to 5 alerts that have reached nobody and re-send them (30 minutes between tries, `critical` from the 3rd, given up after 10 and never called delivered). A row is marked delivered **only on a 2xx**: `Post Alert Webhook` is `neverError`, so without `fullResponse` a 404 from a revoked hook read as a success.
+**The ten schedules pass the same concurrency gate as the API runs** (`v5/code/_run_guard.js`, shared with *Rate Limit*): the same monitor already in flight, a heavy crawl of the same site, more than 3 analyses at once, or an account that cannot pay for the run. A refused schedule marks its ledger row `refused` before the first paid node and ends there; it is never refused on the Claude or DataForSEO budget.""", CX - 60, CY - 660, 1040, 280, 3)
+log('An undelivered alert is retried, escalated and never called delivered, and the ten schedules pass the same concurrency gate as the API runs (2026-10-15, benchmark items B-A7 / B-A9; INVARIANTS rules 3 and 4). B-A7: seo_ops_alerts gains attempts / last_attempt_at / next_attempt_at / attempt_log (one line per attempt, so the row holds the whole history), every scheduled run and every Error Handler run ends by re-sending up to 5 alerts that have reached nobody (30 minutes apart, critical from the third attempt, given up after ten and never marked delivered), the webhook is judged on its status code instead of on the node not throwing (a 404 from a revoked hook used to count as a delivery), the Page Watch records its own delivery instead of leaving every row at "pending" for ever, and a repeat inside the dedupe window no longer writes "deduped" over the channel that carried an alert. B-A9: one concurrency gate (v5/code/_run_guard.js) used by Rate Limit and by the resume node of all ten scheduled workflows - the same monitor still running, P34-5\'s heavy crawl of the same site, more than 3 analyses at once, or an account that cannot pay for the run - refusing after the ledger row exists and before the first paid node, so section 55\'s ordering proof still holds; a schedule is never refused on a budget, because cost is not the constraint')
+
+
+def _b64_checks():
+    """Run after the sub-builds: the sweep and the gate are in every scheduled workflow, and neither can be skipped."""
+    lw64 = json.load(open(os.path.join(HERE0, 'harness', 'ledger_wiring.json'), encoding='utf-8'))
+    files64 = {w['name']: os.path.join(HERE0, 'workflows', f) for f in os.listdir(os.path.join(HERE0, 'workflows'))
+               if f.endswith('.json') for w in json.load(open(os.path.join(HERE0, 'workflows', f), encoding='utf-8'))}
+    out64 = {}
+    for wname64, wiring64 in sorted((lw64.get('monitors') or {}).items()):
+        wf64 = json.load(open(files64[wname64], encoding='utf-8'))[0]
+        by64 = {n['name']: n for n in wf64['nodes']}
+        c64 = wf64['connections']
+        outs64 = lambda nd: [t['node'] for lst in ((c64.get(nd) or {}).get('main') or []) for t in (lst or [])]
+        g64, r64 = wiring64.get('guard') or {}, wiring64.get('alert_retry') or {}
+        assert g64 and r64, 'B-A7 / B-A9: ' + wname64 + ' has neither the gate nor the sweep'
+        for nm64 in [g64['load'], g64['gate'], g64['if'], g64['refuse'], r64['load'], r64['plan'], r64['gate'], r64['post'], r64['result'], r64['save']]:
+            assert nm64 in by64, 'B-A9: ' + wname64 + ' has no node "' + nm64 + '"'
+        # the gate: the resume node carries the shared kit, and its "no" ends in the refusal, not in the pipeline
+        src64 = by64[g64['gate']]['parameters']['jsCode']
+        assert 'const RG = (() => {' in src64 and 'RG.gate(' in src64, 'B-A9: ' + wname64 + ' does not run the shared gate'
+        assert outs64(g64['gate']) == [g64['if']], 'B-A9: ' + wname64 + "'s gate does not feed its own IF"
+        if64 = [[t['node'] for t in (lst or [])] for lst in ((c64.get(g64['if']) or {}).get('main') or [])]
+        assert len(if64) == 2 and if64[1] == [g64['refuse']], 'B-A9: ' + wname64 + "'s refusal branch does not mark the row refused"
+        assert if64[0], 'B-A9: ' + wname64 + ' has no pipeline behind its gate'
+        ref64 = by64[g64['refuse']]['parameters']
+        assert [c['keyValue'] for c in ref64['filters']['conditions']][1] == 'reserved' \
+            and ref64['columns']['value']['status'] == 'refused', 'B-A9: ' + wname64 + ' does not refuse its own reserved row'
+        # the sweep: behind the settle, judged on the status code, writing the whole retry state back
+        assert r64['from'] == wiring64['settle'] and outs64(wiring64['settle'])[0] == 'Ensure Ops Alerts (' + g64['gate'][len('After Run Ledger ('):-1] + ')', \
+            'B-A7: ' + wname64 + ' does not sweep after it settles'
+        psrc64 = by64[r64['plan']]['parameters']['jsCode']
+        assert 'const AR = (() => {' in psrc64 and 'AR.plan(' in psrc64, 'B-A7: ' + wname64 + ' does not plan its retries through the kit'
+        assert ALERT_WEBHOOK_PLACEHOLDER in psrc64, 'R29 / B-A7: ' + wname64 + "'s sweep does not carry the placeholder"
+        post64 = by64[r64['post']]['parameters']['options']['response']['response']
+        assert post64.get('fullResponse') is True and post64.get('neverError') is True, \
+            'B-A7: ' + wname64 + "'s retry cannot tell a 404 from a delivery"
+        assert by64[r64['post']].get('maxTries') == 3, 'G1: ' + wname64 + "'s retry POST carries no retry rule"
+        wr64 = sorted(by64[r64['save']]['parameters']['columns']['value'].keys())
+        assert all(k in wr64 for k in ('attempts', 'attempt_log', 'next_attempt_at', 'delivered', 'severity')), \
+            'B-A7: ' + wname64 + ' does not write the retry state back: ' + str(wr64)
+        out64[wname64] = {'guard': g64, 'retry': r64, 'writes': wr64, 'if_outputs': if64,
+                          'refuse_values': sorted(ref64['columns']['value'].keys())}
+    assert len(out64) == 10, 'B-A7 / B-A9: ' + str(len(out64)) + ' scheduled workflows carry the gate and the sweep, expected 10'
+    json.dump({'monitors': out64, 'n_minutes': 30, 'k_attempts': 3, 'max_attempts': 10, 'per_sweep': 5,
+               'error_handler': _ops64['retry'], 'columns': [c for c, _t in _OAC64],
+               'page_watch_delivery': {'code': 'Watch Ops Delivery', 'save': 'Save Watch Ops Delivery'}},
+              open(os.path.join(HERE0, 'harness', 'alert_retry_wiring.json'), 'w'), indent=1, sort_keys=True)
+    print('alert retry + run guard (B-A7 / B-A9): ' + str(len(out64)) + ' scheduled workflows sweep undelivered alerts and pass the shared concurrency gate')
+
 
 # =============================================================================
 # 9. WRITE
@@ -4725,4 +6346,11 @@ import subprocess
 for _s in ('build_api.py', 'build_ladder_extras.py', 'build_site_tracker.py', 'build_monitors.py'):
     _r = subprocess.run([sys.executable, os.path.join(HERE0, _s)], cwd=HERE0)
     assert _r.returncode == 0, _s + ' failed'
+
+# section 55 (R17 / R29): both checks need every workflow on disk, so they run here, after the sub-builds
+_r17_r29_checks()
+# section 59 (R31 / R32 / R33): the same, for what the schedules settle and what they read
+_r31_checks()
+# section 64 (B-A7 / B-A9): the sweep and the concurrency gate, in every scheduled workflow
+_b64_checks()
 

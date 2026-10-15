@@ -14,7 +14,8 @@ from ladder_common import (DT_TYPE, DT_VERSION, dt_create_params, dt_insert_para
                            LINKS_TABLE, LINKS_COLS, LINK_IMPORTS_TABLE, LINK_IMPORTS_COLS, LINK_GRAPH_TABLE, LINK_GRAPH_COLS,
                            AI_PAGES_TABLE, AI_PAGES_COLS, AI_TARGETS_TABLE, AI_TARGETS_COLS, AI_GROWTH_TABLE, AI_GROWTH_COLS,
                            LINK_OUTREACH_TABLE, LINK_OUTREACH_COLS, LISTINGS_TABLE, LISTINGS_COLS, LINK_IMPACT_TABLE, LINK_IMPACT_COLS, HISTORY_TABLE, METRICS_TABLE,
-                           RUN_LEDGER_TABLE, RUN_LEDGER_COLS, dt_update_params, monitor_ledger_js, LEDGER_EST)   # R9 (2026-10-13): every scheduled run reserves and settles a ledger row
+                           RUN_LEDGER_TABLE, RUN_LEDGER_COLS, dt_update_params, monitor_ledger_js, LEDGER_EST,   # R9 (2026-10-13): every scheduled run reserves and settles a ledger row
+                           ledger_mainline)   # R17 (2026-10-14): and reserves it on the MAIN path, before the first paid call
 from env_settings import SENDER, ENV, BRAND, OPS_EMAIL
 BING_ON = bool((ENV.get('SEO_BING_WEBMASTER_API_KEY') or '').strip())   # v4.10: optional free sources, baked in at build time (apply_env.py rebuilds)
 AHREFS_ON = bool((ENV.get('SEO_AHREFS_API_KEY') or '').strip())
@@ -124,7 +125,8 @@ class WF:
         for e in ends: self.link(e, 'Ledger Settle (' + tag + ')')
         self.chain('Ledger Settle (' + tag + ')', 'Settle Run Ledger (' + tag + ')')
         LEDGER_WIRING[self.name] = {'mode': mode, 'plan': plan, 'reserve': row_node, 'settle': 'Settle Run Ledger (' + tag + ')',
-                                    'settle_from': list(ends), 'measured': measured, 'est': LEDGER_EST[mode]}
+                                    'settle_from': list(ends), 'measured': measured, 'est': LEDGER_EST[mode],
+                                    'resume': 'After Run Ledger (' + tag + ')'}   # R17: the node that hands the plan's items back
 
     def sticky(self, content, pos, w, h, color=5): return self.node('Note', 'n8n-nodes-base.stickyNote', 1, {'content': content, 'height': h, 'width': w, 'color': color}, pos)
     def link(self, a, b, out=0):
@@ -134,6 +136,9 @@ class WF:
     def chain(self, *names):
         for a, b in zip(names, names[1:]): self.link(a, b)
     def write(self, fname):
+        # R17 (2026-10-14, FIX_PLAN §3.12): the reserve chain goes on the MAIN path, now that every connection of this workflow is made
+        if self.name in LEDGER_WIRING:
+            ledger_mainline({'id': self.wid, 'name': self.name, 'nodes': self.N, 'connections': self.C}, LEDGER_WIRING[self.name])
         names = {n['name'] for n in self.N}; assert len(names) == len(self.N), 'duplicate node names in ' + fname
         for s, outs in self.C.items():
             assert s in names, s

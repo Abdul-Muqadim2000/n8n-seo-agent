@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { extractFiles } from '../src/services/files';
 import { wonLadderOf } from '../src/services/runs';
-import { ledgerCost, stageOf, summarize, titleFor } from '../src/services/summaries';
+import { engineCostEstimate, ledgerCost, stageOf, summarize, titleFor } from '../src/services/summaries';
 
 const b64 = (s: string) => Buffer.from(s).toString('base64');
 
@@ -52,8 +52,48 @@ describe('summaries', () => {
   it('titles and costs', () => {
     expect(titleFor('content', { keyword: 'erp dubai', html: '<p>x</p>' })).toBe('Page: erp dubai');
     expect(titleFor('site_audit', { domain: 'techand.ai' })).toBe('Technical audit · techand.ai');
-    expect(ledgerCost({ run_ledger: { dataforseo_usd: 0.12 } })).toBeCloseTo(0.12);
+    expect(ledgerCost({ run_ledger: { dataforseo_usd: 0.12 } })?.usd).toBeCloseTo(0.12);
     expect(ledgerCost({})).toBeNull();
+  });
+});
+
+// B-R3 — the money the app shows is the engine's, not a guess of ours
+describe('what a run reported spending', () => {
+  it('counts the model calls as well as the search data (it used to count only the search data)', () => {
+    const c = ledgerCost({ run_ledger: { dataforseo_usd: 0.0221, ai_usd: 0.587, ai_cost_estimated: true } });
+    expect(c?.usd).toBeCloseTo(0.6091, 4);
+    expect(c?.estimated).toBe(true);
+  });
+
+  it('reads the model cost out of the cost object when the flat field is missing', () => {
+    expect(ledgerCost({ run_ledger: { dataforseo_usd: 0.02, ai_cost: { usd: 0.1, estimated: false } } })?.usd).toBeCloseTo(0.12, 4);
+  });
+
+  it('calls a figure measured only when nothing in it is an estimate', () => {
+    expect(ledgerCost({ run_ledger: { dataforseo_usd: 0.09, ai_usd: 0 } })?.estimated).toBe(false);
+    // a crawl priced from a provider quote is not a measurement either (R32)
+    expect(ledgerCost({ run_ledger: { dataforseo_usd: 0.09, dataforseo_estimated_usd: 0.0212 } })?.estimated).toBe(true);
+  });
+
+  it('still understands a bare cost_usd and still says nothing when there is nothing', () => {
+    expect(ledgerCost({ cost_usd: 0.0114 })?.usd).toBeCloseTo(0.0114, 4);
+    expect(ledgerCost({ run_ledger: {} })).toBeNull();
+  });
+
+  it('reads the engine’s own calibrated estimate, with its basis', () => {
+    const e = engineCostEstimate({ run_cost_estimate_usd: 0.84, run_cost_estimate_basis: 'Claude $0.80 (calibrated, 6 runs); search data $0.04 (default)' });
+    expect(e?.usd).toBe(0.84);
+    expect(e?.basis).toContain('calibrated');
+  });
+
+  it('accepts a zero estimate (a free run reserves nothing) but not a missing one', () => {
+    expect(engineCostEstimate({ run_cost_estimate_usd: 0 })?.usd).toBe(0);
+    expect(engineCostEstimate({})).toBeNull();
+    expect(engineCostEstimate({ run_cost_estimate_usd: 'cheap' })).toBeNull();
+  });
+
+  it('falls back to the ledger’s own basis sentence when the callback carries no separate one', () => {
+    expect(engineCostEstimate({ run_ledger: { run_cost_estimate_usd: 0.2, cost_basis: 'reserved: Claude $0.16 ESTIMATED' } })?.basis).toContain('ESTIMATED');
   });
 });
 

@@ -14,6 +14,67 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2026-10-15',
+    title: 'Reports now come to you, and the ones that are not ready stay put',
+    summary:
+      'Every finished report used to wait in Ascentra until somebody logged in. You can now have each one sent as it arrives, or collected into a daily, weekly or monthly summary — by e-mail with its figures and files, or to a webhook your team already watches. The reports an analysis marked as not ready are deliberately held back, with the reason stated.',
+    highlights: [
+      'Four schedules: as each report arrives, or one summary a day, a week or a month, on the day and hour you choose',
+      'E-mail with the report’s own figures in the message, its PDF and documents attached, and both links to open it',
+      'A webhook that posts the report as JSON and also reads as a message in Slack, Teams and Discord, signed with your own secret',
+      'Each delivery can carry the expiring, revocable share link, so a report reaches a client without an account',
+      'A page that failed its quality check, a plan the engine refused or a verdict it could not check is never sent — it waits in Ascentra with the reason',
+      'A delivery log showing what went out, what was held back and what failed',
+      '“Send it now” on any report, which runs the same check before sending',
+    ],
+    features: ['report-delivery', 'reports'],
+  },
+  {
+    date: '2026-10-15',
+    title: 'One cost figure, and it is the engine’s',
+    summary:
+      'The app carried its own table of what an analysis costs, written in October 2026 and never corrected against the money. It read up to two and a half times high, which is the wrong direction for a budget: real work was refused that would have cost a fraction of what was held back. There is now one table, it matches the engine’s own calibrated figures, and the engine’s number replaces it the moment a run reports one.',
+    highlights: [
+      'A one-page keyword ladder, a technical audit, a written page and a full SEO report all cost less than the app used to claim',
+      'Every run shows what it actually cost once it finishes, model calls included — the old figure counted only the search data',
+      'Each figure says whether it is actual, the engine’s estimate or ours, with the reasoning behind it',
+      'A finished run counts against your monthly budget at what it cost, not at what was reserved for it',
+    ],
+    features: ['enterprise', 'reports'],
+  },
+  {
+    date: '2026-10-15',
+    title: 'One to-do list, ranked by what each step is worth',
+    summary:
+      'Recommendations used to be ordered by a priority label and then by the part of the system that found them, so a small technical fix could sit above a search opportunity worth ten times the clicks. Now every website has one queue across audits, search, rankings, AI answers and links, ordered by impact, confidence and effort — and every step says which figure put it there.',
+    highlights: [
+      'One list across every area, not one list per area — group it by worth, by priority or by area, whichever you prefer',
+      'Each step shows what it is worth, with the figure behind it: "340 impressions at 1.2% from position 7, against the page-one click-through benchmark"',
+      'Confidence is separate from impact: a number measured on your own Search Console data outranks the same number modelled from an index',
+      'Effort counts too, so a five-minute job beats a week-long one of the same size',
+      'Setup steps that have to happen before anything can be measured come first, and say so',
+      'A step with no measured figure behind it goes to the bottom with the reason — never a score nobody can defend',
+    ],
+    features: ['reports'],
+  },
+  {
+    date: '2026-10-14',
+    title: 'New plans, and three things we can do for you',
+    summary:
+      'Plans are simpler and cost less: Starter at $39 a month for one website and a page a week, Growth at $129 for the whole engine on up to three websites. And for teams with nobody to do the hands-on work, three done-for-you packages sit alongside them.',
+    highlights: [
+      'Starter $39 a month: one website, research, a page a week written and checked, monthly audits, tracking and the Monday report',
+      'Growth $129 a month: up to three websites, the autopilot pipeline, AI search visibility with the daily pulse, backlinks and link building',
+      'Setup done for you: we connect Search Console and Analytics, fill in your profile and style guide from one call, and run the first audit and ladder',
+      'We publish your pages: WordPress, Shopify, Webflow, Squarespace, Ghost, a headless CMS — or a pull request for a React or Next.js codebase',
+      'We fix what the audit found: the fix pack applied by a person, every change through your review, then a re-audit showing the score before and after',
+      'Managed: the Growth plan and all three services for one monthly number',
+      'A person does the service work, we only ask for access you can withdraw, and nothing goes live without your approval',
+    ],
+    features: ['guided-setup', 'content', 'technical-audits'],
+    labels: ['Pricing'],
+  },
+  {
     date: '2026-10-14',
     title: 'Every setup step now comes with a guide',
     summary:

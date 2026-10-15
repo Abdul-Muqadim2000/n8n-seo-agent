@@ -5,7 +5,9 @@
 /*__OPS_ALERT__*/
 const sites = $('Watch Compare').all().map(i => i.json).filter(s => s && !s.skip);
 let prior = []; try { prior = $('Load Ops Alerts (Watch)').all().map(i => i.json).filter(r => r && !r.error); } catch (e) {}
-const CFG = { webhook_url: '__ALERT_WEBHOOK_URL__', email_to: '' };   // baked from n8n/.env at build time ($env is blocked in nodes); the watch does not e-mail: the customer sees it in the app
+// R29 / R30 (2026-10-14): a placeholder is baked, never the URL (it is a secret and this repository is public); apply_env.py substitutes
+// the real value at import time and an un-substituted placeholder reads as "no webhook configured" (OA.cfgUrl).
+const CFG = { webhook_url: '__ALERT_WEBHOOK_URL__', email_to: '' };   // the watch does not e-mail: the customer sees it in the app
 const S = (v) => String(v == null ? '' : v).trim();
 const rows = [];
 const seen = new Set();

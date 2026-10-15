@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ContentLogRow, LadderRow, LadderSettingsRow, QueryRow, QueueItem, RankHistoryRow } from '@seo/shared';
+import { MODES, type ContentLogRow, type LadderRow, type LadderSettingsRow, type QueryRow, type QueueItem, type RankHistoryRow } from '@seo/shared';
 import { buildLadders, ladderNeedsYou, siteAutomation, type LadderSchedule, type LadderSources, type SiteRun } from '../src/services/ladders';
 import { simulateCadence } from '../src/services/cadence';
 import { cadenceSchedule, failedRuns } from '../src/services/pipeline';
@@ -130,8 +130,9 @@ describe('ladder cards: status, next step, priority', () => {
     expect([c.status, c.statusText]).toEqual(['planning', 'Planned: 4 pages, none written yet.']);
     expect(c.next).toEqual({ kind: 'write', text: 'Writes page 1: “erp dubai part 1”', at: MONDAYS[0] });
     expect(c.months).toBe('6-9');
-    // rank checks: 4 keywords x 4.33 weeks x $0.015, plus 2 pages in the next 4 weeks x $1.20
-    expect(c.monthlyCostUsd).toBe(Math.round((0.015 * 4 * 4.33 + 2 * 1.2) * 100) / 100);
+    // rank checks: 4 keywords x 4.33 weeks x $0.015, plus the 2 pages written in the next 4 weeks
+    // (B-R3: the price of a page comes from the one cost table now, never typed into a test)
+    expect(c.monthlyCostUsd).toBe(Math.round((0.015 * 4 * 4.33 + 2 * MODES.keyword.costUsd) * 100) / 100);
     const future = b.details.get('l1')!.timeline.filter((e) => e.future);
     expect(future.map((e) => [e.at, e.text])).toEqual([
       ['2026-10-05T12:00:00.000Z', 'Rank check of 4 keywords'],
@@ -251,7 +252,7 @@ describe('timeline and traffic', () => {
   });
 
   it('cost so far: a plan made outside the app at its list price, the rank checks, the app’s runs for the ladder', () => {
-    expect(d.costSoFarUsd).toBe(Math.round((1.8 + 10 * 0.015) * 100) / 100);
+    expect(d.costSoFarUsd).toBe(Math.round((MODES.ladder.costUsd + 10 * 0.015) * 100) / 100);
     const withRuns = buildLadders(
       src({
         ladders: rows,
@@ -262,7 +263,7 @@ describe('timeline and traffic', () => {
       sched(),
       { now: NOW },
     ).details.get('l1')!;
-    expect(withRuns.costSoFarUsd).toBe(Math.round((1.8 + 1.1 + 1.2) * 100) / 100);
+    expect(withRuns.costSoFarUsd).toBe(Math.round((1.8 + 1.1 + MODES.keyword.costUsd) * 100) / 100);
     expect([withRuns.planType, withRuns.expectedVisitsTop3, withRuns.pages[0].volume, withRuns.pages[0].kd]).toEqual(['full', 250, 90, 12]);
   });
 });

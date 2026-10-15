@@ -1,0 +1,74 @@
+{
+ "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content": [
+  "AI Demand",
+  "AI SERP",
+  "Ask LLMs",
+  "Backlink Gap",
+  "Backlink Summary",
+  "Candidate SERP",
+  "DFS Balance",
+  "DataForSEO Whois",
+  "Domain Overview",
+  "Facts SERP",
+  "Facts SERP (Retry)",
+  "Fallback SERP",
+  "Fetch GBP",
+  "Find Competitors",
+  "Get Crawl Summary",
+  "Get Crawled Pages",
+  "Keyword Data",
+  "Keyword Data (Retry)",
+  "Keyword Ideas",
+  "Ranked Keywords",
+  "Run Competitor Keywords",
+  "Run Crawl Extras",
+  "Run Ladder Research",
+  "Run Reach Requests",
+  "Run Research",
+  "SERP Top 10",
+  "SERP Top 10 (Retry)",
+  "Site Authority",
+  "Start Crawl"
+ ],
+ "SEO Agent \u2014 AI Growth": [
+  "DFS Balance (Growth)"
+ ],
+ "SEO Agent \u2014 AI Pulse": [
+  "DFS Balance (Pulse)"
+ ],
+ "SEO Agent \u2014 AI Visibility Tracker": [
+  "DFS Balance (AI)",
+  "Run Discovery"
+ ],
+ "SEO Agent \u2014 Audit Scheduler": [
+  "DFS Balance (Audit)"
+ ],
+ "SEO Agent \u2014 Backlink Monitor": [
+  "DFS Balance (BL)",
+  "Run Authority",
+  "Run BL Requests",
+  "Run Gap Requests"
+ ],
+ "SEO Agent \u2014 Content Cadence": [
+  "DFS Balance (Cadence)"
+ ],
+ "SEO Agent \u2014 Keyword Check": [
+  "Run Assess Requests"
+ ],
+ "SEO Agent \u2014 Link Builder": [
+  "DFS Balance (LB)",
+  "Run LB DFS"
+ ],
+ "SEO Agent \u2014 Page Watch": [
+  "DFS Balance (Watch)"
+ ],
+ "SEO Agent \u2014 Rank Tracker": [
+  "DFS Balance (Tracker)",
+  "SERP Check"
+ ],
+ "SEO Agent \u2014 Site Tracker": [
+  "DFS Balance (Site)",
+  "Google Trends",
+  "SERP Check (Site)"
+ ]
+}

@@ -5264,8 +5264,8 @@ await guard('p2-live-check', async () => {
   mock('Attach PDF Ladder', [{ json: { ladder: L7, domain: D, keyword: 'erp software uae', country: 'United Arab Emirates', location_code: LOC, language_code: 'en', email: '', callback_url: '', request_id: 'r-442' } }]);
   const rows7 = (await run('Ladder Rows', EMPTY)).map(i => i.json);
   const topRow = rows7.find(r => r.rung === 4) || {};
-  check('P2-7: the stored seo_ladders row carries target_words and has exactly the table columns (run sync_tables.py when deploying)',
-    eq(Object.keys(topRow).sort(), [...TC.LADDER].sort()) && topRow.target_words === 2100 && rows7.filter(r => r.rung !== 4).every(r => r.target_words === 0), JSON.stringify(rows7.map(r => [r.rung, r.target_words])));
+  check('P2-7 + R22: the stored seo_ladders row carries target_words and has exactly the table columns (run sync_tables.py when deploying) — the main page the verdict\'s own number, every rung page a target of its own (0 was R22, exec 549)',
+    eq(Object.keys(topRow).sort(), [...TC.LADDER].sort()) && topRow.target_words === 2100 && rows7.filter(r => r.rung !== 4).every(r => r.target_words > 0), JSON.stringify(rows7.map(r => [r.rung, r.target_words])));
   const spawn = (await run('Spawn Page Runs', [{ json: planItem }])).map(i => i.json.body);
   check('P2-7: the page run the ladder starts is given that target (ladder_words)', spawn.length >= 1 && spawn.every(b => b.ladder_words === 2100 && b.force_content === true), JSON.stringify(spawn.map(b => [b.keyword, b.ladder_words])));
   const niRun = async (body) => (await run('Normalize Input', [{ json: { headers: { 'content-type': 'application/json' }, params: {}, query: {}, body } }]))[0].json;
@@ -5711,10 +5711,19 @@ await guard('crux, impact priority, alert channels and test check-ins', async ()
     && eq(OW.connections['Save Ops Alert'][0], ['Alert Channels']) && OW.table === 'seo_ops_alerts' && OW.webhook_setting === 'SEO_ALERT_WEBHOOK_URL',
     JSON.stringify(OW.connections));
   // the channel that is not configured is skipped, and nothing fails
-  const chUnset = (await run('Alert Channels', store['Save Ops Alert'], { code: 'EH__Alert_Channels' }))[0].json;   // the generated node: no webhook URL in this worktree's .env
-  check('D25b: an unset channel is simply skipped — the generated node has no webhook URL in this worktree, so no request is built, nothing throws, the other channel still goes out and the row is still written',
+  // R30 (2026-10-14, FIX_PLAN §3.12): this read "no webhook URL in this worktree's .env" and therefore tested the ENVIRONMENT, not the
+  // behaviour — on a machine whose .env held the URL the generated node carried the live Slack webhook and this check asserted it would
+  // POST to the customer's channel. R29 bakes `__SEO_ALERT_WEBHOOK_URL__` in every build and apply_env.py substitutes the real value into
+  // the copy it imports, so the generated node is the UNSET case in every checkout and `EH__Alert_Channels_Webhook` is the configured one.
+  const chUnsetSrc = require('fs').readFileSync(require('path').join(process.env.CODE_DIR || require('path').join(__dirname, 'code'), 'EH__Alert_Channels.js'), 'utf8');
+  check('R29 / R30: what the build bakes is a placeholder, never a URL — so the generated node is the unset case in every checkout and no build can produce a node that posts to a customer\'s Slack',
+    /webhook_url: '__SEO_ALERT_WEBHOOK_URL__'/.test(chUnsetSrc) && !/https?:\/\//.test((chUnsetSrc.match(/const CFG = \{[^\n]*/) || [''])[0]),
+    (chUnsetSrc.match(/const CFG = \{[^\n]*/) || [''])[0]);
+  const chUnset = (await run('Alert Channels', store['Save Ops Alert'], { code: 'EH__Alert_Channels' }))[0].json;   // the generated node: the placeholder, which is not a channel
+  check('D25b + R30: an unset channel is simply skipped — an un-substituted placeholder is not a URL, so no request is built, nothing throws, the other channel still goes out and the row is still written',
     chUnset.send_webhook === false && chUnset.webhook_url === '' && !chUnset.channels.includes('webhook') && chUnset.channels.includes('data_table')
-    && chUnset.send_email === true && chUnset.recorded === true && chUnset.alert_key === row1.alert_key,
+    && chUnset.send_email === true && chUnset.recorded === true && chUnset.alert_key === row1.alert_key
+    && !/__SEO_ALERT_WEBHOOK_URL__/.test(JSON.stringify(chUnset)),
     JSON.stringify({ send: chUnset.send_webhook, channels: chUnset.channels, note: chUnset.note }));
   // the same failure again: counted on the row, not re-sent; the same failure after the window: sent again, first_seen_at kept
   const mins = (n) => new Date(Date.now() - n * 60000).toISOString();
@@ -6783,9 +6792,14 @@ await guard('page watch + url inspection', async () => {
     && eq(ops2.map(r => r.severity).sort(), ['critical', 'critical', 'critical', 'high', 'high']) && !ops2.some(r => /title/i.test(r.message)), JSON.stringify(ops2.map(r => [r.severity, r.node])));
   mock('Save Watch Ops Alert', ops2.map(r => ({ json: r })));
   const ch2 = (await run('Watch Ops Channels', store['Save Watch Ops Alert']))[0].json;
-  check('the webhook body carries the day\'s changes for Slack / Teams / any POST endpoint and needs no SMTP; with no webhook configured the changes are still on record',
+  // R30 (2026-10-14, FIX_PLAN §3.12): this used to compare against `WIRE.webhook_configured`, i.e. against whatever n8n/.env held on the
+  // machine that built — so the skip path was only exercised where the setting happened to be empty, and where it was set the generated
+  // node carried the live Slack URL and this check asserted it would POST to it. R29 bakes a placeholder into the generated node in every
+  // build, so the unset path is now deterministic here and the configured path is the `_Webhook` variant with its example URL.
+  check('the webhook body carries the day\'s changes for Slack / Teams / any POST endpoint and needs no SMTP; with no webhook configured (the generated node holds the placeholder) the changes are still on record',
     ch2.alerts === 5 && /key-page watch/.test(ch2.webhook_body.text) && ch2.webhook_body.alerts.length === 5 && ch2.recorded === true
-    && ch2.send_webhook === !!WIRE.webhook_configured, JSON.stringify({ send: ch2.send_webhook, note: ch2.note }));
+    && ch2.send_webhook === false && !/__SEO_ALERT_WEBHOOK_URL__/.test(JSON.stringify(ch2)) && /no alert webhook is configured/.test(ch2.note),
+    JSON.stringify({ send: ch2.send_webhook, note: ch2.note }));
   // the same changes an hour later, inside the dedupe window: recorded, not re-sent
   watchLoads({ watch: stored, cache: [{ json: { key: 'watch:' + SITE, kind: 'watch', site_id: SITE, value: cache1[0].value, updated_at: daysAgo(1) } }], ops: ops2.map(r => ({ json: { ...r, last_seen_at: new Date().toISOString() } })) });
   const ops3 = (await run('Watch Ops Alert', store['Watch Compare'])).map(x => x.json);
@@ -8137,8 +8151,8 @@ await guard('the re-rating defects R1..R9', async () => {
     g[2].refusal === '' && g[2].rival && g[2].rival.domain === 'flick.network', JSON.stringify(g[2]));
   check('R4: a subdomain of a rival is the same registrable domain, so its guide is refused too', !!g[3].refusal && /flick\.network/.test(g[3].refusal), g[3].refusal);
   check('R4: a publisher on our topic who is neither a declared competitor nor a SERP rival is still pitched', g[4].refusal === '' && g[4].rival === null, JSON.stringify(g[4]));
-  check('R4: the SERP rivals reach the gate from the plan (the last 90 days of seo_rank_history) and the assembly passes them to both gate calls',
-    /competitors_json/.test(srcOf('LB_Plan.js')) && /serp_rivals/.test(srcOf('LB_Plan.js')) && srcOf('LB_Assemble.js').split('serp_rivals: p.serp_rivals').length === 3, 'LB Plan / LB Assemble');
+  check('R4: the SERP rivals reach the gate from the plan (the last 90 days of seo_rank_history) and the assembly passes them to every gate call (two in R4, four since R21)',
+    /competitors_json/.test(srcOf('LB_Plan.js')) && /serp_rivals/.test(srcOf('LB_Plan.js')) && srcOf('LB_Assemble.js').split('serp_rivals: p.serp_rivals').length === 5, 'LB Plan / LB Assemble');
 
   // ---------- R5: a trigger-mode failure keeps its cause ----------
   const fa = async (payload) => (await run('Format Alert', [{ json: payload }], { code: 'EH__Format_Alert' }))[0].json;
@@ -8162,7 +8176,9 @@ await guard('the re-rating defects R1..R9', async () => {
     if (email !== undefined) mock('Email Ops', [{ json: email }]);
     return (await run('Alert Delivery', EMPTY, { code: 'EH__Alert_Delivery_Webhook' }))[0].json;
   };
-  const dBoth = await delivery({ ok: true }, { accepted: ['ops@example.com'], rejected: [] });
+  // B-A7 (2026-10-15): *Post Alert Webhook* is `fullResponse` now, so the webhook branch answers with a status code — that code is the
+  // evidence of delivery, and S74 checks what happens when it is a 404 (it used to be written down as a success).
+  const dBoth = await delivery({ statusCode: 200, headers: {}, body: { ok: true } }, { accepted: ['ops@example.com'], rejected: [] });
   console.log('   alert delivery ->', JSON.stringify({ delivered: dBoth.delivered, channels: dBoth.channels, notes: dBoth.notes }));
   check('R6: the row records WHICH channel carried the alert, so a delivery rate becomes measurable (all three live rows sat at "pending", two of them already accepted by Gmail)',
     dBoth.delivered === 'webhook,email' && /delivered by webhook \(sent\) and email \(accepted by 1 recipient\(s\)\)/.test(dBoth.notes)
@@ -8176,7 +8192,8 @@ await guard('the re-rating defects R1..R9', async () => {
   check('R6: a run where no channel ran at all says so instead of waiting for a delivery that can never come',
     dNone.delivered === 'not_sent' && /only on record in seo_ops_alerts/.test(dNone.notes), JSON.stringify(dNone));
   check('R6: the result is written back on the same row (alert_key) with the delivered state, the channels and the note, and every path through the two gates reaches it',
-    OW.delivery && OW.delivery.code === 'Alert Delivery' && OW.delivery.row_update === 'Save Alert Delivery' && eq(OW.delivery.writes, ['delivered', 'channels', 'notes'])
+    OW.delivery && OW.delivery.code === 'Alert Delivery' && OW.delivery.row_update === 'Save Alert Delivery'
+    && ['delivered', 'channels', 'notes'].every(k => OW.delivery.writes.includes(k))   // B-A7 adds the retry state beside them (S74)
     && eq(OW.delivery.from.slice().sort(), ['Email Ops', 'Post Alert Webhook', 'Send Email?', 'Send Webhook?']), JSON.stringify(OW.delivery));
 
   // ---------- R7: an FAQ section, never FAQPage schema ----------
@@ -8241,8 +8258,11 @@ await guard('the re-rating defects R1..R9', async () => {
     && pulseRow.dfs_est_usd === 0.16 && pulseRow.est_usd === 0.008 && pulseRow.heavy === false && pulseRow.domain === '', JSON.stringify(pulseRow));
   mock('Audit Schedule Plan', [{ json: { site_id: SITE, domain: D, run: true } }]);
   const oneSite = (await run('Run Ledger Row (Audit)', EMPTY, { code: 'Run_Ledger_Row_Audit_' }))[0].json;
-  check('R9: a run covering one website names it on the row, and the Audit Scheduler reserves the $0.09 its crawl really costs',
-    oneSite.domain === D && oneSite.dfs_est_usd === 0.09 && oneSite.est_usd === 0 && oneSite.mode === 'audit_schedule', JSON.stringify(oneSite));
+  // R28 (2026-10-14): the Audit Scheduler used to reserve $0.09 of DataForSEO money for a crawl it does not run — it SPAWNS audits into
+  // the main workflow, and each spawned run reserves and settles that crawl for itself, so the same money was on two rows. It reserves
+  // nothing now, exactly as the Content Cadence does; the guard still sees every audit, through the row the spawned run makes.
+  check('R9 + R28: a run covering one website names it on the row, and the Audit Scheduler reserves nothing for the crawls it only spawns (each spawned audit reserves its own $0.09)',
+    oneSite.domain === D && oneSite.dfs_est_usd === 0 && oneSite.est_usd === 0 && oneSite.mode === 'audit_schedule', JSON.stringify(oneSite));
   mock('Run Ledger Row (Pulse)', [{ json: { ...pulseRow, id: 7 } }]);
   mock('Pulse Metrics', [{ json: { site_id: SITE, day_row: { cost_usd: 0.0841 } } }, { json: { site_id: 'site_techand-ai', day_row: { cost_usd: 0.0802 } } }]);
   const settled = (await run('Ledger Settle (Pulse)', EMPTY, { code: 'Pulse__Ledger_Settle_Pulse_' }))[0].json;
@@ -8250,8 +8270,10 @@ await guard('the re-rating defects R1..R9', async () => {
   check('R9: the settle writes the MEASURED DataForSEO cost where the run knows it (the two sites\' tasks added up) and keeps the Claude estimate as the settled figure',
     settled.status === 'done' && settled.dfs_usd === 0.1643 && settled.dfs_measured === true && settled.settled_usd === 0.008 && settled.run_id === 'test-exec', JSON.stringify(settled));
   const settledEst = (await run('Ledger Settle (Audit)', [{ json: { ...oneSite, id: 8 } }], { code: 'Ledger_Settle_Audit_' }))[0].json;
-  check('R9: a workflow with no measured figure settles its own estimate and says so, instead of inventing a number',
-    settledEst.dfs_usd === 0.09 && settledEst.dfs_measured === false && settledEst.status === 'done', JSON.stringify(settledEst));
+  // R31 (2026-10-14, section 59): $0 is never called an estimate — a figure of nothing says "nothing spent" and carries the reason.
+  check('R9 + R28: a workflow with no measured figure settles its own estimate and says so, instead of inventing a number — and the Audit Scheduler\'s estimate is now nothing, because the crawl belongs to the run it spawned',
+    settledEst.dfs_usd === 0 && settledEst.dfs_measured === false && settledEst.status === 'done'
+    && /DataForSEO \$0\.0000 nothing spent \(this workflow reports no cost of its own\)/.test(settledEst.cost_basis), JSON.stringify(settledEst));
   // G23 (2026-10-13) moved the two estimate tables into the shared cost kit (one source for the guard, the settle, the self-correcting
   // figure and the reconciliation) and raised the Keyword Check's DataForSEO reservation to the $0.0254 a check really measured.
   check('R9: the main workflow\'s and the Keyword Check\'s own reservations carry the same two columns',
@@ -8700,12 +8722,17 @@ await guard('G23 cost and G21 delivery', async () => {
     /Claude \$[\d.]+ PARTLY ESTIMATED: \$[\d.]+ measured, \$[\d.]+ estimated/.test(st.cost_basis) && /DataForSEO \$[\d.]+ measured/.test(st.cost_basis), st.cost_basis);
   check('G23: the row carries the estimate keys it was priced on, so the settle can teach the right rolling figures',
     st.cost_mode === 'content|content', st.cost_mode);
-  // a short branch that wrote no report node falls back to its reservation and says so, instead of claiming $0 was measured
+  // R33 (2026-10-14, FIX_PLAN §3.13, build section 59): this check used to read "a branch that priced no model call settles its
+  // reservation". That was the defect: `describe` settled the $0.06 it reserved while its own Haiku node reported its tokens. A run in
+  // which no Claude node ran at all now settles NOTHING for Claude and names how many nodes it checked; the DataForSEO reservation still
+  // stands, because this branch carries no ledger of its own to measure.
   delete store['Build Word File'];
   const shortRun = (await run('Run Ledger Settle', [{ json: {} }]))[0].json;
-  check('G23: a branch that priced no model call settles its reservation and says that is what it is — never a measured $0',
-    shortRun.ai_usd === 0.8 && shortRun.ai_measured === false && shortRun.dfs_measured === false && shortRun.measured_usd === 0
-    && shortRun.estimated_usd === 0.84 && /priced no model call/.test(shortRun.ai_basis), JSON.stringify(shortRun));
+  check('G23 + R33: a branch in which no model node ran settles nothing for Claude — never the $0.80 it reserved and never a measured $0 either; it says which nodes it checked',
+    shortRun.ai_usd === 0 && shortRun.ai_source === 'none' && shortRun.ai_nodes_checked >= 11 && shortRun.ai_nodes_ran.length === 0
+    && shortRun.dfs_measured === false && shortRun.measured_usd === 0 && shortRun.estimated_usd === 0.04
+    && /no model call ran in this run/.test(shortRun.ai_basis) && /nothing is settled against the \$0\.8000 it reserved/.test(shortRun.ai_basis),
+    JSON.stringify(shortRun));
   check('G23: seo_run_ledger really has the columns that split a cost (they reach the live table through ladder_common.py + sync_tables.py)',
     ['cost_mode', 'ai_usd', 'measured_usd', 'estimated_usd', 'cost_basis'].every(c => TC.RUN_LEDGER.includes(c)), TC.RUN_LEDGER.join(','));
 
@@ -8968,7 +8995,1652 @@ await guard('l4-l7-podcasts-digests-asset-ideas-subject-ab', async () => {
     && RP61.lineage.some(l => /kind of page earns links/.test(l.figure) && /never a forecast/.test(l.note))
     && RP61.lineage.some(l => /Podcast shows/.test(l.figure) && /own domain/.test(l.note)), JSON.stringify(RP61.lineage.map(l => l.figure)));
 });
+// ===================================================================================
+// S68 R21 / R20 / R25 / R27 and R22's editor half (2026-10-14, the second re-rating: docs/system-review-2026-10-14/RESULTS.md §3.3;
+// register rows in docs/system-review-2026-10-11/FIX_PLAN.md §3.12). Every check below fails against the build of that run.
+// ===================================================================================
+await guard('r21-r20-r25-r27-r22-editor', async () => {
+  const SN = 'S68 R21 R20 R25 R27 R22e — a rival on a subdomain is refused, a full report between two audits moves no health score, a masked figure is named to the owner, an over-long draft is told what to cut, and a show is quoted from its own description';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 500))); };
+  const fs68 = require('fs'), path68 = require('path');
+  const CODE68 = process.env.CODE_DIR || path68.join(__dirname, 'code_v4');
+  const src68 = (f) => fs68.readFileSync(path68.join(CODE68, f), 'utf8');
+  const F68 = require('./fixtures_lb413'); const L68 = require('./fixtures_lb_l47');
 
+  // ---------- 1. R21: the rival on a subdomain, and the prospect that sells what we sell ----------
+  // Live (exec 561): `ae.invoiceq.com` was in seo_rank_history.competitors_json ABOVE techand.ai for "peppol uae" on 2026-10-12 and
+  // again on 2026-10-14, and invoiceq.com still got a `ready` brand-anchor pitch to our home page.
+  const RANKS68 = [
+    { json: { ladder_id: 'lad_p', keyword: 'peppol uae', checked_at: F68.iso(2), position: 47, url: F68.HUB, domain: F68.DOMAIN, rung: 1,
+      competitors_json: JSON.stringify({ our_position: 47, above: [{ d: 'ae.invoiceq.com', p: 3, t: false }, { d: 'www.cleartax.com', p: 5, t: true }], competitors: [], shares: {}, tracked: [], method: 'ctr' }) } },
+    // a row RS.pack cut to the column limit mid-JSON: the hosts are still readable, and the gate may not lose them
+    { json: { ladder_id: 'lad_t', keyword: 'e invoicing in uae', checked_at: F68.iso(3), position: 21, url: F68.HUB, domain: F68.DOMAIN, rung: 4,
+      competitors_json: '{"our_position":21,"above":[{"d":"flick.network","p":1,"t":true},{"d":"alaan.com","p":2' } },
+  ];
+  mock('Load Sites', F68.sites()); mock('Load Ladders', F68.ladders()); mock('Load Monitors', F68.monitors()); mock('Load Profiles', F68.profiles());
+  mock('Load Link Prospects', F68.prospects().map(j => ({ json: j }))); mock('Load Link Outreach', F68.outreachPrev().map(j => ({ json: j })));
+  mock('Load Listings', F68.listingsPrev().map(j => ({ json: j }))); mock('Load Link Impact', [{ json: {} }]);
+  mock('Load Backlinks', F68.ledger().map(j => ({ json: j }))); mock('Load Backlink Snapshots', F68.snaps().map(j => ({ json: j }))); mock('Load Content Log', [{ json: {} }]);
+  mock('Load AI Targets', F68.targets().map(j => ({ json: j }))); mock('Load Query History', F68.queries().map(j => ({ json: j })));
+  mock('Load Rank History', RANKS68); mock('Load Cache (Links)', F68.cache().map(j => ({ json: j }))); delete store['Manual Run'];
+  const P68 = (await run('LB Plan', store['Load Cache (Links)']))[0].json;
+  const riv68 = (d) => (P68.serp_rivals || []).find(r => r.domain === d) || null;
+  console.log('   serp rivals ->', JSON.stringify((P68.serp_rivals || []).map(r => [r.domain, r.host, r.position, r.keyword])));
+  check('R21: the SERP rivals are keyed on the REGISTRABLE domain, so a rival seen on a subdomain is the same site — and the host the check really saw is kept for the reason',
+    !!riv68('invoiceq.com') && riv68('invoiceq.com').host === 'ae.invoiceq.com' && riv68('invoiceq.com').position === 3 && riv68('invoiceq.com').keyword === 'peppol uae'
+    && !(P68.serp_rivals || []).some(r => r.domain === 'ae.invoiceq.com'), JSON.stringify(P68.serp_rivals));
+  check('R21: a competitors_json row that was cut to the column limit mid-JSON is still read, instead of silently emptying the rival list',
+    !!riv68('flick.network') && riv68('flick.network').position === 1 && !!riv68('alaan.com'), JSON.stringify((P68.serp_rivals || []).map(r => r.domain)));
+  const gate68 = async (items) => (await run('_outreach_gate', items.map(json => ({ json })))).map(i => i.json);
+  const TERMS68 = ['e invoicing', 'peppol integration', 'e invoicing consulting'];
+  const SELLS68 = 'Book a demo of our e invoicing platform. Our software connects your ERP to Peppol. Request a quote and start for free. '
+    + 'We implement e invoicing consulting projects across the UAE, with pricing plans per user / month.';
+  const g68 = await gate68([
+    { type: 'resource', domain: 'invoiceq.com', competitors: P68.competitors, serp_rivals: P68.serp_rivals, title: 'Peppol UAE guide', text: 'A guide to peppol in the uae.', terms: TERMS68, url: 'https://invoiceq.com/blog/peppol-uae/' },
+    { type: 'mention', domain: 'invoiceq.com', competitors: [], serp_rivals: P68.serp_rivals, title: 'E-invoicing providers we work with', text: 'We mention several providers.', terms: TERMS68, url: 'https://invoiceq.com/partners/' },
+    { type: 'list', domain: 'invoiceq.com', competitors: [], serp_rivals: P68.serp_rivals, title: 'Best e invoicing software in the UAE', text: 'Our pick of the best e invoicing software.', terms: TERMS68, url: 'https://invoiceq.com/best-e-invoicing-software-uae/' },
+    { type: 'resource', domain: 'deloitte.com', competitors: [], serp_rivals: [], title: 'E invoicing consulting services | Deloitte Middle East', text: SELLS68, terms: TERMS68, fit: 0.54, url: 'https://deloitte.com/ae/e-invoicing-services/' },
+    { type: 'resource', domain: 'alaan.com', competitors: [], serp_rivals: [], title: 'Alaan — spend management and e invoicing for the UAE', text: SELLS68, terms: TERMS68, fit: 0.65, url: 'https://alaan.com/e-invoicing/' },
+    { type: 'resource', domain: 'uaetaxnews.ae', competitors: [], serp_rivals: P68.serp_rivals, title: 'UAE e-invoicing resources for finance teams', text: 'Resources on e invoicing and peppol integration in the UAE for finance teams.', terms: TERMS68, fit: 0.62, url: 'https://uaetaxnews.ae/resources/' },
+  ]);
+  console.log('   gate ->', JSON.stringify(g68.map((x, i) => [i, x.refusal ? x.refusal.slice(0, 80) : 'allowed'])));
+  check('R21: the pitch to invoiceq.com is refused, naming the subdomain the rank check saw above us and the keyword (live: a `ready` brand-anchor pitch to their home page, one of nine drafts waiting for the owner)',
+    /^a competing site of yours \(invoiceq\.com\): a site that outranks you for one of your own keywords \(ae\.invoiceq\.com ranks #3 for "peppol uae"\), and a competitor does not link to your page$/.test(g68[0].refusal)
+    && g68[0].rival.domain === 'invoiceq.com' && g68[0].rival.host === 'ae.invoiceq.com', g68[0].refusal);
+  check('R21: a mention on that same rival is refused too — only a page that really is a list keeps the "add us to your list" ask',
+    !!g68[1].refusal && /invoiceq\.com/.test(g68[1].refusal) && g68[2].refusal === '' && g68[2].rival.domain === 'invoiceq.com', JSON.stringify([g68[1].refusal, g68[2].refusal]));
+  check('R21: a prospect whose own page sells what you sell is refused on that evidence alone — neither deloitte.com nor alaan.com is on any list, and both were `ready` on 2026-10-14',
+    /^a competing provider: their page sells what you sell \(\d+% of your service words, topic match 54%, "book a demo", "our software"\)$/.test(g68[3].refusal)
+    && /^a competing provider: their page sells what you sell \(\d+% of your service words, topic match 65%, "book a demo", "our software"\)$/.test(g68[4].refusal), JSON.stringify([g68[3].refusal, g68[4].refusal]));
+  check('R21: a publisher on the same topic with no vendor signals is still pitched, rival list or not',
+    g68[5].refusal === '' && g68[5].rival === null, JSON.stringify(g68[5]));
+  check('R21: every gate call of the Link Builder sees the SERP rivals — the qualification, the digest, the stored-prospect sweep and the draft gate, the last check before a pitch is written',
+    src68('LB_Assemble.js').split('serp_rivals: p.serp_rivals').length === 5 && /serp_rivals: p\.serp_rivals \|\| \[\]/.test(src68('LB_Draft_QA.js'))
+    && /serp_rivals: c\.serp_rivals/.test(src68('LB_Draft_QA.js')), 'LB Assemble / LB Draft QA');
+
+  // ---------- 2. R20: a full report between two technical audits moves no health score ----------
+  // Live 2026-10-11 the annotation feed printed three same-day events: "80 → 68 · 24 more findings", "24 findings gone — 68 → 80"
+  // and "80 → 80", because aud_mv40sm450bi (full, 68) sits between two site_audits of 80.
+  const AM68 = async (input) => (await run('_annotations', [{ json: input }]))[0].json;
+  const a68 = await AM68({ from: '2026-10-01', to: '2026-10-31', audits: [
+    { audited_at: '2026-10-11T06:00:00Z', report_type: 'site_audit', health_score: 80, findings: 44 },
+    { audited_at: '2026-10-11T09:00:00Z', report_type: 'full', health_score: 68, findings: 68 },
+    { audited_at: '2026-10-11T11:00:00Z', report_type: 'site_audit', health_score: 80, findings: 44 } ] });
+  const fx68 = a68.marks.filter(m => m.kind === 'fix');
+  console.log('   audit marks ->', JSON.stringify(fx68.map(m => [m.label, m.detail])));
+  check('R20: no mark chains the two kinds of report together — "80 → 68", "68 → 80" and the 24 findings that never moved are gone',
+    fx68.length === 3 && !fx68.some(m => /80 → 68|68 → 80|24 (more|fewer) findings/.test(m.detail))
+    && !fx68.some(m => /Audit fixes/.test(m.label)), JSON.stringify(fx68.map(m => m.detail)));
+  const full68 = fx68.find(m => m.report_type === 'full') || {}; const tech68 = fx68.filter(m => m.report_type === 'site_audit');
+  check('R20: the full SEO report is marked as the other kind of report it is, and says why its score may not be compared with the audit before it',
+    full68.label === 'Full SEO report' && /health 68\/100/.test(full68.detail)
+    && /the report before it was a technical audit \(80\/100\): different checks, so the two scores are not comparable/.test(full68.detail), full68.detail);
+  check('R20: the second technical audit is compared with the FIRST technical audit — the same 44 findings and a health score that did not move',
+    tech68.length === 2 && tech68[1].label === 'Technical audit' && /health 80 → 80/.test(tech68[1].detail) && /the same findings as the audit before/.test(tech68[1].detail)
+    && /first technical audit on record/.test(tech68[0].detail), JSON.stringify(tech68.map(m => m.detail)));
+  const a68b = await AM68({ from: '2026-08-01', to: '2026-10-31', audits: [
+    { audited_at: '2026-08-01T06:00:00Z', report_type: 'site_audit', health_score: 64, findings: 40 },
+    { audited_at: '2026-09-18T06:00:00Z', report_type: 'site_audit', health_score: 81, findings: 34 } ] });
+  const fxb68 = a68b.marks.filter(m => m.kind === 'fix');
+  check('R20: two audits of the same kind still read exactly as before — the findings cleared and the health score either side (G12 unchanged)',
+    fxb68.length === 2 && fxb68[1].label === 'Audit fixes: 6 findings gone' && /health 64 → 81/.test(fxb68[1].detail)
+    && /6 fewer findings than the audit before/.test(fxb68[1].detail), JSON.stringify(fxb68.map(m => [m.label, m.detail])));
+  check('R20: the Site Tracker hands the report type to the marks, so the feed can tell the two kinds of report apart at all',
+    /report_type: r\.report_type \|\| 'site_audit'/.test(src68('Site_Metrics.js')), 'Site Metrics');
+
+  // ---------- 3. R25 + R22 (editor half): Content QA on a draft with one masked figure, and on an over-long one ----------
+  reset(); begin(SN);
+  const D68 = 'northwind-erp.com', SITE68 = 'site_northwind-erp-com';
+  const BODY68 = (extra) => ['Title: APIM monetization: the 2026 guide',
+    'Meta Description: Monetize an Azure API Management gateway with a clear plan: products, quotas, billing rules and the questions to ask.',
+    'Slug: azure-api-management-monetization', '', '# Azure API management monetization', '',
+    'Monetizing an API programme starts with the product you sell, not with the gateway settings, and this guide walks through each decision.', '',
+    '**Quick answer:** Decide what a caller pays for, model it as a product with quotas, then wire the billing rules. Start with two tiers, measure for a month and only then add the rest.', '',
+    '## What do you actually sell?', '',
+    'A product is a bundle of APIs with one quota and one price. ' + extra, '',
+    'For example, a logistics platform sells a tracking product and a rating product separately. Keep the free tier small enough to be a trial.', '',
+    '## How do you price a tier?', '',
+    'Start from the cost per call and the value of the call. Step 1: measure the calls. Step 2: group them. Step 3: set the quota.', '',
+    '| Tier | Suits |', '|---|---|', '| Free | Trials and tests |', '| Standard | Production traffic |', '',
+    '## Which mistakes cost the most?', '',
+    'Teams publish a tier they cannot measure. A rule of thumb: no tier without a counter, and one owner per product.', '',
+    '## Talk to us', '',
+    'Book a working session and we will map your API products against your own traffic in one workshop.'].join('\n');
+  const PB68 = { keyword: 'azure api management monetization', domain: D68, country: 'United Arab Emirates', currency: 'AED', page_type: 'Service Page', page_role: 'standard', article_like: false,
+    include_content: true, qa_max_rounds: 2,
+    content_brief: { slug: 'azure-api-management-monetization', target_word_count: 240, outline: [], terms_to_use: [{ term: 'quota', min_count: 1 }], snippet_targets: [], secondary_keywords: [], evidence_plan: [] },
+    facts: [], business: 'Microsoft Dynamics 365 partner in the UAE', business_facts: '', site_profile: null, site_description: {}, internal_link_candidates: [], site_urls: [], hub_pages: [] };
+  mock('Site Model', [{ json: { site_model: { site_id: SITE68, domain: D68, canonical_host: 'www.' + D68, business_name: 'Northwind ERP', brand_names: ['Northwind ERP'], pages: [] } } }]);
+  const qa68 = async (md, runIndex, over) => { mock('Parse Brief', { ...PB68, ...(over || {}) }); return (await run('Content QA', [{ json: { output: md, critique: null } }], { runIndex }))[0].json; };
+  // the delivered body of exec 554: ONE masked figure, under the limit of five — counted, never named
+  const MASKED68 = await qa68(BODY68("Microsoft's highest APIM SLA ([Statistic]) applies to Premium deployments."), 1);
+  const QM68 = MASKED68.content_qa;
+  console.log('   masked figure ->', JSON.stringify({ ph: QM68.placeholder_count, max: QM68.placeholder_max, not_ready: QM68.not_ready, note: QM68.placeholder_note, reasons: QM68.not_ready_reasons }));
+  check('R25: the one masked figure left in the body is named to the owner although the count is under placeholder_max — live it was counted (placeholder_count: 1) and left out of every reason',
+    QM68.placeholder_count === 1 && QM68.placeholder_count <= QM68.placeholder_max && QM68.placeholders[0].token === '[Statistic]'
+    && QM68.placeholder_note === '1 masked figure(s) still in the text: [Statistic] — fill each one in, or rewrite the sentence so it does not need the figure, before you publish'
+    && QM68.not_ready_reasons.some(r => /\[Statistic\]/.test(r)) && QM68.quality.placeholders_in_body.join() === '[Statistic]', JSON.stringify(QM68.not_ready_reasons));
+  check('R25: the R11 delivery gate is untouched — one placeholder under the limit is still not what makes the page unpublishable, and over the limit still reads as the publishing bar',
+    QM68.placeholder_max === 5 && !/at most 5 can be published/.test(QM68.placeholder_note)
+    && /placeholder_count > PH_MAX/.test(src68('Content_QA.js')), JSON.stringify({ note: QM68.placeholder_note, max: QM68.placeholder_max }));
+  const CLEAN68 = await qa68(BODY68('A tier without a counter is a tier you cannot bill for.'), 0);
+  check('R25: a body with no bracket left says nothing about masked figures',
+    CLEAN68.content_qa.placeholder_count === 0 && CLEAN68.content_qa.placeholder_note === '', JSON.stringify(CLEAN68.content_qa.placeholder_note));
+  const BW68 = (await run('Build Word File', [{ json: MASKED68 }]))[0];
+  check('R25: the delivered report carries the masked figure through to the owner (the callback too), instead of only counting it',
+    BW68.json.qa_placeholder_note === QM68.placeholder_note && /\[Statistic\]/.test(Buffer.from(BW68.binary.data.data, 'base64').toString('utf8')), JSON.stringify({ note: BW68.json.qa_placeholder_note }));
+  // R22's editor half: the live page shipped 2,648 words against 1,800 (+47%) after two rounds, with over-length only a warning
+  const LONG68 = await qa68(BODY68('A tier without a counter is a tier you cannot bill for. ' + ('The quota is the unit you bill, and the product is the bundle you sell to one kind of caller. ').repeat(40)), 0,
+    { content_brief: { ...PB68.content_brief, target_word_count: 300, outline: [{ h2: 'What do you actually sell?', target_words: 120 }, { h2: 'How do you price a tier?', target_words: 90 }] } });
+  const QL68 = LONG68.content_qa;
+  console.log('   over length ->', JSON.stringify({ words: QL68.main_content_words, target: QL68.target_word_count, over: QL68.over_pct, instruction: QL68.length_instruction.slice(0, 120) }));
+  check('R22 (editor half): an over-long draft produces an instruction of its own — how many words to cut, how far over it is, and which section carries them',
+    QL68.over_words === QL68.main_content_words - QL68.target_word_count && QL68.over_pct > 25
+    && new RegExp('^CUT ' + QL68.over_words + ' words: the main content is ' + QL68.main_content_words + ' words against a target of 300 \\(\\+' + QL68.over_pct + '%\\)').test(QL68.length_instruction)
+    && /The longest sections are "What do you actually sell\?" \(\d+ words against 120\)/.test(QL68.length_instruction)
+    && /Do not add a single word, and do not stop above 330 words/.test(QL68.length_instruction), QL68.length_instruction);
+  check('R22 (editor half): a draft on target gets no cut instruction, and the editor is not asked to shorten a page that is the right length',
+    CLEAN68.content_qa.length_instruction === '' && CLEAN68.content_qa.over_words === 0, JSON.stringify({ w: CLEAN68.content_qa.main_content_words, t: CLEAN68.content_qa.target_word_count }));
+  const EP68 = src68('Editor.prompt.txt');
+  check('R22 (editor half): the editor prompt prints that instruction as the first thing to do and has its own entry for an over-long draft — it used to be one line in a list of up to twenty warnings',
+    /THE FIRST THING TO DO/.test(EP68) && /content_qa\.length_instruction/.test(EP68) && EP68.indexOf('THE FIRST THING TO DO') < EP68.indexOf('PROBLEMS TO FIX')
+    && /- "Main content is too long": take the named number of words out/.test(EP68) && /over the target by more than 10% is a failed round/.test(EP68), EP68.slice(0, 200));
+
+  // ---------- 4. R27: the show is quoted from its own description, and a 29% show is not offered ----------
+  const PC68 = async (input) => (await run('_podcast', [{ json: input }]))[0].json;
+  const DIRT68 = 'b-0"> Efficient Hiring Process We respect your time by managing streamlined, back-to-back interview schedules for every candidate we send.';
+  const q68 = await PC68({ quote: DIRT68 });
+  const pr68 = await PC68({ html_text: 'class="row b-0"> Efficient Hiring Process data-id="x7"> We run interviews every week.' });
+  console.log('   quote ->', JSON.stringify([q68.quote, pr68.prose]));
+  check('R27: the attribute fragment the live report quoted ("b-0\\"> Efficient Hiring Process …") never reaches the owner — the leftovers are stripped and the quote starts on a word',
+    !/["']\s*>/.test(String(q68.quote || '')) && !/b-0/.test(String(q68.quote || '')) && /^Efficient Hiring Process/.test(q68.quote)
+    && !/b-0|data-id/.test(pr68.prose), JSON.stringify([q68.quote, pr68.prose]));
+  const g68a = await PC68({ texts: ['<div class="t b-0"> Efficient Hiring Process We respect your time by managing streamlined, back-to-back interview schedules. We also run interviews with founders.'] });
+  check('R27: a guest signal found in a page full of markup still quotes prose, never the markup around it',
+    g68a.guest.ok === true && !/["']\s*>/.test(g68a.guest.quote) && !/b-0/.test(g68a.guest.quote), JSON.stringify(g68a.guest));
+  const pick68 = await PC68({ feed_signal: { ok: true, strength: 'interviews', quote: 'Every week Layla interviews finance leaders in the Gulf.', from: 'the show’s own description' },
+    site_signal: { ok: true, strength: 'interviews', quote: 'back-to-back interview schedules for every candidate', from: 'the show’s website' } });
+  const pick68b = await PC68({ feed_signal: { ok: true, strength: 'interviews', quote: 'We interview one practitioner a week.', from: 'the show’s own description' },
+    site_signal: { ok: true, strength: 'invites', quote: 'Be a guest on the show: pitch yourself here.', from: 'the show’s website' } });
+  check('R27: with both to choose from, the quote comes from the show\'s OWN description — the website only wins when it carries a stronger signal (a guest invitation)',
+    pick68.picked.from === 'the show’s own description' && /Layla interviews finance leaders/.test(pick68.picked.quote)
+    && pick68b.picked.strength === 'invites' && pick68b.picked.from === 'the show’s website', JSON.stringify([pick68.picked, pick68b.picked]));
+  check('R27: a guest appearance needs more of the owner\'s topic than a link does — 40%, against the 25% that qualifies a page for a link',
+    (await PC68({})).min_fit === 0.4, JSON.stringify((await PC68({})).min_fit));
+
+  // the whole podcast path, on the fixtures of S61 but with the show's website full of the markup the live site served
+  reset(); begin(SN);
+  mock('Load Sites', F68.sites()); mock('Load Ladders', F68.ladders()); mock('Load Monitors', F68.monitors()); mock('Load Profiles', F68.profiles());
+  mock('Load Link Prospects', F68.prospects().map(j => ({ json: j }))); mock('Load Link Outreach', F68.outreachPrev().map(j => ({ json: j })));
+  mock('Load Listings', F68.listingsPrev().map(j => ({ json: j }))); mock('Load Link Impact', [{ json: {} }]);
+  mock('Load Backlinks', F68.ledger().map(j => ({ json: j }))); mock('Load Backlink Snapshots', F68.snaps().map(j => ({ json: j }))); mock('Load Content Log', [{ json: {} }]);
+  mock('Load AI Targets', F68.targets().map(j => ({ json: j }))); mock('Load Query History', F68.queries().map(j => ({ json: j })));
+  mock('Load Rank History', F68.ranks().map(j => ({ json: j }))); mock('Load Cache (Links)', F68.cache().map(j => ({ json: j }))); delete store['Manual Run'];
+  const PP68 = (await run('LB Plan', store['Load Cache (Links)']))[0].json;
+  const SRP68 = (await run('LB Source Requests', [{ json: PP68 }])).map(r => r.json);
+  mock('Fetch LB Sources', SRP68.map(r => r.kind === 'podcast_search' ? L68.podcastSearch() : r.kind === 'press' ? F68.bsky([]) : r.kind === 'wayback' ? F68.cdx() : F68.searx([])));
+  const DRP68 = (await run('LB DFS Requests', [{ json: PP68 }])).map(r => r.json);
+  mock('Run LB DFS', DRP68.map(() => F68.dfsBroken()));
+  const PRP68 = (await run('LB Page Requests', [{ json: {} }])).map(r => r.json);
+  mock('Fetch LB Pages', PRP68.map(r => L68.fetchPage(r.url)));
+  const S2P68 = (await run('LB Second Requests', [{ json: {} }])).map(r => r.json);
+  // the live page of 2026-10-14: a stripper that cuts at the first ">" leaves `b-0">` in the text, and the words around it belong to a
+  // recruitment page that has nothing to do with the show
+  const DIRTY_SITE68 = '<!doctype html><html lang="en"><head><title>The Gulf Finance Podcast</title></head><body><main>'
+    + '<div class="card b-0"> Efficient Hiring Process We respect your time by managing streamlined, back-to-back interview schedules for every candidate.'
+    + '<p>Contact the host: <a href="mailto:press@gulffinancepodcast.ae">press@gulffinancepodcast.ae</a></p></div></main></body></html>';
+  mock('Fetch LB Second', S2P68.map(r => r.url === 'https://gulffinancepodcast.ae/'
+    ? { statusCode: 200, headers: { 'content-type': 'text/html' }, data: DIRTY_SITE68 } : L68.fetchPage(r.url)));
+  const ASP68 = (await run('LB Assemble', [{ json: {} }]))[0].json;
+  const pod68 = (d) => ASP68.outreach_rows.find(o => o.prospect_domain === d && o.type === 'podcast') || {};
+  console.log('   shows ->', JSON.stringify(ASP68.outreach_rows.filter(o => o.type === 'podcast').map(o => [o.prospect_domain, o.status, Math.round(o.fit * 100) + '%', (o.evidence || '').slice(0, 70)])));
+  check('R27: the show offered to the owner is quoted from its own description and says so — no attribute fragment from an unrelated page of its site reaches the report (live: `They say: "b-0\\"> Efficient Hiring Process …"`)',
+    pod68('gulffinancepodcast.ae').status === 'ready' && /They say \(the show’s own description\)/.test(pod68('gulffinancepodcast.ae').evidence)
+    && !/b-0|Efficient Hiring Process|["']\s*>/.test(pod68('gulffinancepodcast.ae').evidence)
+    && /guest/i.test(pod68('gulffinancepodcast.ae').evidence), pod68('gulffinancepodcast.ae').evidence);
+  check('R27: a show below the topic bar is not offered at all (live it was "Alchemy Uncensored" at 29%), and the reason says what a guest appearance needs',
+    pod68('deserttrailrunning.ae').status === 'not_fit' && /the show is off your topics \(\d+% match; a guest appearance needs at least 40%\)/.test(pod68('deserttrailrunning.ae').fit_reason)
+    && pod68('gulffinancepodcast.ae').fit >= 0.4, JSON.stringify([pod68('deserttrailrunning.ae').fit_reason, pod68('gulffinancepodcast.ae').fit]));
+});
+
+// ===================================================================================
+// S67 R23 R22 R26 (2026-10-14, system review FIX_PLAN.md §3.12; evidence docs/system-review-2026-10-14/RESULTS.md §2.1 and §2.3):
+// the system may say "I could not check this"; it may not quietly produce a number instead. Exec 549 planned, scored
+// ("winnable / GO_WITH_CHANGES 68") and WROTE a ladder from a pool of one keyword while both SERP calls had failed with 40101 and
+// the keyword data came back empty — the single rung, "azure api management monetization", is not even the head's topic. Every
+// check below fails against the code of that run.
+// ===================================================================================
+await guard('r23-r22-r26-no-answer-without-data', async () => {
+  const SN = 'S67 R23 R22 R26 — no ladder plan on a pool below the minimum or a results page that was never read, every rung keyword measured against the head\'s topic, no rung page with a word target of 0, and a keyword check with no search data that says so in its label';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const D = 'techand.ai', SITE = 'site_techand-ai', LOC = 2784, EMPTY = [{ json: {} }];
+  const HEAD = 'azure cloud migration dubai';
+  const OFF = 'azure api management monetization';   // the rung exec 549 planned: one word of four in common with the head
+  const ago57 = (d) => new Date(Date.now() - d * 864e5).toISOString();
+  // six pages read on the head term's results page; `wc` false = the run read no length for them (a failed or skipped page read)
+  const serp57 = (wc) => ['cloudshift.ae', 'migratenow.example', 'azurepartner.example', 'gulfcloud.ae', 'dubaicloud.example', 'cloudworks.example']
+    .map((domain, i) => ({ rank: i + 1, domain, url: 'https://' + domain + '/azure-migration', title: 'Azure cloud migration', word_count: wc ? [1200, 1500, 1600, 1800, 2000, 2400][i] : 0, headings: ['What it costs'] }));
+  const SF_OK = { se_results_count: 980000, checked_at: '2026-10-14T16:03:47.000Z', people_also_ask: ['How long does an Azure migration take?'], related_searches: ['azure migration cost'], forum_threads: [],
+    featured_snippet: null, ai_overview: { present: false, text: '', cited_domains: [], seen_at: '2026-10-14T16:03:47.000Z' }, features_present: ['people_also_ask'], video_results: false, shopping_results: false, local_pack: false };
+  const SF_OUT = { ...SF_OK, unavailable: true, error: 'Internal SE Server Error.', ai_overview: { present: null, text: '', cited_domains: [], seen_at: null } };   // DataForSEO 40101 inside an HTTP 200, exec 549
+  const PV = (o = {}) => ({ keyword: HEAD, domain: D, country: 'United Arab Emirates', location_code: LOC, language_code: 'en', goal: 'leads', email: '', callback_url: '', request_id: 'r-549', ladder_id: 'lad_s67', pages_now: 2,
+    page_type: 'Service Page', recommended_page: 'Service Page', competitors: [], competitors_summary: serp57(true), serp_features: SF_OK,
+    business: 'Microsoft cloud and ERP partner in the GCC', services: ['Azure cloud migration', 'Dynamics 365 Business Central'],
+    site_description: { business_description: 'Microsoft cloud and ERP partner in the GCC', products_or_services: ['Azure cloud migration', 'Dynamics 365 Business Central'] },
+    keyword_data: { search_volume: 170, cpc: 9.4, keyword_difficulty: 45, google_intent: 'commercial', competitor_backlink_strength: { avg_referring_domains: 30 } },
+    verdict: 'GO_WITH_CHANGES', verdict_score: 68, verdict_reasons: ['The live Google results could not be checked because the data provider failed.'],
+    verdict_changes: ['Write a service page of about 2,100 words with a cost section'], verdict_risks: [], secondary_keywords: ['azure migration dubai'],
+    competitor_analysis: { recommended_word_count: 1900 }, site_authority: { organic_keywords: 60, top3: 1, top10: 6, est_monthly_traffic: 300 },
+    site_urls: ['https://' + D + '/', 'https://' + D + '/whatwedo/'], expected_visits_top3: 60, time_to_rank_months: 6, ...o });
+  const POOL57 = ['azure cloud migration cost', 'azure migration services dubai', 'azure cloud migration checklist', 'cloud migration partner dubai', 'azure migration tools',
+    'azure cloud migration uae', 'azure migration assessment', 'cloud migration cost dubai', 'azure cloud migration case study', OFF];
+  const ladderRun = async (o = {}) => {
+    delete store['Site Model'];
+    mock('Parse Verdict', PV(o.pv || {}));
+    mock('Ladder Requests', [{ kind: 'suggestions', label: 'suggestions for ' + HEAD, body: [{ keyword: HEAD }] }, { kind: 'ranked', label: 'keywords ' + D + ' ranks for', domain: D, body: [{ target: D }] }]);
+    mock('Load Site Cache', [{ json: { id: 1, key: 'reach:' + SITE, kind: 'reach', site_id: SITE, value: JSON.stringify({ reach: 35, method: 'size', p75: null, size_reach: 35, sample: 2, top10: 6, organic_keywords: 60, location_code: LOC }), updated_at: ago57(3) } }]);
+    mock('Load Domain Ladders', EMPTY); mock('Load Domain Ladder Settings', EMPTY);
+    const lp = (await run('Ladder Pool', [V.task({ seed_keyword: HEAD, items: (o.pool || POOL57).map((k, i) => V.kwItem(k, i)) }), V.task({ target: D, items: [] })]))[0].json;
+    const ch = await run('Ladder Relevance Chunks', [{ json: lp }]);
+    mock('Ladder Keyword Relevance', ch.map(c => V.ladderRelevance(c.json)));
+    const item = (await run('Ladder Plan', store['Ladder Keyword Relevance']))[0].json;
+    return { item, L: item.ladder, pool: lp };
+  };
+
+  // ---- 1. R23: a pool below the minimum is refused — no plan, no score, no page run, no stored row ----
+  const thin = await ladderRun({ pool: [OFF] });
+  console.log('   thin pool ->', JSON.stringify({ pool: thin.L.stats.pool_size, planned: thin.L.planned, refusal: thin.L.refusal, label: thin.L.label, write_now: thin.L.write_now.length }));
+  check('R23: a ladder built on one keyword (exec 549: pool_size 1) is refused, and the reason names the count and the minimum',
+    thin.L.planned === false && thin.L.stats.pool_size === 1 && (thin.L.refusal || {}).reason === 'thin_data' && thin.L.refusal.pool_size === 1 && thin.L.refusal.minimum === 3
+    && /returned only 1 keyword around "azure cloud migration dubai"/.test(thin.L.refusal.message) && /at least 3 to pick rungs from/.test(thin.L.refusal.message), JSON.stringify(thin.L.refusal));
+  check('R23: the refused plan has no pages and no feasibility score — "winnable 68" is gone, the status says it was not checked',
+    thin.L.write_now.length === 0 && thin.L.stats.pages_total === 0 && thin.L.rungs.every(r => !r.pages.length) && thin.L.feasibility.score === null && thin.L.feasibility.status === 'not_checked'
+    && thin.L.feasibility.scored === false && thin.L.feasibility.verdict === null && /not enough data/.test(thin.L.feasibility.not_scored_reason)
+    && thin.L.label === 'No ladder planned · the keyword research returned too little data' && thin.L.chance === null, JSON.stringify({ f: thin.L.feasibility, label: thin.L.label, pages: thin.L.stats.pages_total }));
+  const spawnThin = await run('Spawn Page Runs', [{ json: thin.item }]);
+  mock('Attach PDF Ladder', [{ json: thin.item }]);
+  const rowsThin = (await run('Ladder Rows', EMPTY)).map(r => r.json);
+  check('R23: nothing is written and nothing is stored for a refused ladder (no page run, one skip row with the reason)',
+    spawnThin.length === 0 && rowsThin.length === 1 && rowsThin[0].skip === true && rowsThin[0].reason === 'thin_data', JSON.stringify({ spawn: spawnThin.length, rows: rowsThin }));
+  check('R23: the data check travels with the plan, so the app and the report can say what was missing',
+    eq(thin.L.data_check, { pool_size: 1, minimum_pool: 3, head_measured: true, serp_checked: true, serp_error: '', enough: false }), JSON.stringify(thin.L.data_check));
+
+  // the second floor: a pool that is only thin-ish is refused when the head keyword itself was never measured (exec 549:
+  // `Keyword Data` answered items_count 0), and planned when it was — a narrow topic with real data is not a refusal
+  const weak = await ladderRun({ pool: POOL57.slice(0, 4), pv: { keyword_data: { note: 'Keyword data not available for this keyword/country' } } });
+  check('R23: four keywords and no volume and no difficulty for the head term itself is "not enough data", and the reason says both',
+    weak.L.planned === false && (weak.L.refusal || {}).reason === 'thin_data' && weak.L.refusal.head_measured === false
+    && /only 4 keywords around "azure cloud migration dubai"/.test(weak.L.refusal.message) && /no search volume and no difficulty for "azure cloud migration dubai" itself/.test(weak.L.refusal.message)
+    && weak.L.feasibility.score === null, JSON.stringify(weak.L.refusal));
+  const narrow = await ladderRun({ pool: POOL57.slice(0, 4) });
+  check('R23: the same four keywords with real data for the head term are still planned — a narrow topic is not a refusal (a main page is a valid ladder)',
+    narrow.L.planned === true && narrow.L.refusal === null && narrow.L.feasibility.score === 68 && narrow.L.stats.pool_size === 4 && narrow.L.write_now.length >= 1,
+    JSON.stringify({ planned: narrow.L.planned, pool: narrow.L.stats.pool_size, write: narrow.L.write_now.map(w => w.keyword) }));
+
+  // ---- 2. R23: the live results page could not be read -> no plan and no score, whatever the research found ----
+  const noSerp = await ladderRun({ pv: { serp_features: SF_OUT, competitors_summary: [] } });
+  console.log('   serp unchecked ->', JSON.stringify({ pool: noSerp.L.stats.pool_size, planned: noSerp.L.planned, reason: (noSerp.L.refusal || {}).reason, score: noSerp.L.feasibility.score }));
+  check('R23: a ladder on a results page that failed (40101 inside an HTTP 200) is refused although the research is full, and the reason says what could not be read',
+    noSerp.L.stats.pool_size >= 5 && noSerp.L.planned === false && (noSerp.L.refusal || {}).reason === 'serp_unchecked' && /Internal SE Server Error/.test(noSerp.L.refusal.message)
+    && /none was planned/i.test(noSerp.L.refusal.message) && noSerp.L.data_check.serp_checked === false, JSON.stringify(noSerp.L.refusal));
+  check('R23: an unchecked results page produces no feasibility score, no expected visits and no page run',
+    noSerp.L.feasibility.score === null && noSerp.L.feasibility.status === 'not_checked' && noSerp.L.feasibility.expected_visits_top3 === null && noSerp.L.feasibility.time_to_rank_months === null
+    && noSerp.L.write_now.length === 0 && (await run('Spawn Page Runs', [{ json: noSerp.item }])).length === 0, JSON.stringify(noSerp.L.feasibility));
+  mock('Ladder Plan', [{ json: noSerp.item }]);
+  const htmlNo = decode(await run('Build Ladder Report', EMPTY));
+  save('ladder-plan-r23-refused.doc.html', htmlNo); scanHtml('ladder plan refused for missing data (R23)', htmlNo);
+  check('R23: the report says it plainly — not scored, no ladder, and why — instead of "Winnable" and a number',
+    /Not scored — the data this rests on was missing/.test(htmlNo) && /none — the live Google results could not be checked/.test(htmlNo)
+    && /No ladder planned\.<\/b> The live Google results for &quot;azure cloud migration dubai&quot; could not be read|No ladder planned\.<\/b> The live Google results for "azure cloud migration dubai" could not be read/.test(htmlNo)
+    && !/Winnable/.test(htmlNo) && !/68\/100/.test(htmlNo), (htmlNo.match(/Is it realistic\?[\s\S]{0,260}/) || [''])[0]);
+
+  // ---- 3. R23: the topic radius on every rung keyword, against the head ----
+  const full = await ladderRun();
+  const L3 = full.L;
+  const rungKw = L3.rungs.flatMap(r => r.pages.flatMap(p => [p.keyword, ...(p.supporting || [])]));
+  const linkKw = [...L3.top.links_to.map(l => l.keyword), ...L3.rungs.flatMap(r => r.pages.flatMap(p => (p.links_to || []).map(l => l.keyword)))];
+  console.log('   rung keywords ->', JSON.stringify(rungKw), '| off topic:', JSON.stringify(L3.off_topic_keywords));
+  check('R23 (control): the ladder pool itself still lets the off-topic keyword through — one shared word with the head is all it asks for',
+    full.pool.research.candidates.some(c => c.keyword === OFF) && full.pool.research.pool_size >= 5, JSON.stringify(full.pool.research.candidates.map(c => c.keyword)));
+  check('R23: the topic radius leaves "azure api management monetization" out of the ladder for "azure cloud migration dubai", with the reason and the words it shares',
+    L3.planned === true && !rungKw.includes(OFF) && !linkKw.includes(OFF) && !(L3.later || []).some(k => k.keyword === OFF)
+    && (L3.off_topic_keywords || []).some(x => x.keyword === OFF && /shares only "azure"/.test(x.reason) && /1 of the 4 words that matter, 2 needed/.test(x.reason) && eq(x.shared, ['azure']))
+    && L3.stats.off_topic_keywords === 1, JSON.stringify(L3.off_topic_keywords));
+  check('R23: the plan says so where the owner reads it, and the keywords that ARE on the head\'s topic still become pages',
+    L3.notes.some(n => /not on this ladder's topic \("azure cloud migration dubai"\)/.test(n) && /azure api management monetization/.test(n))
+    && rungKw.length >= 3 && rungKw.every(k => /azure|cloud|migration/.test(k)) && L3.stats.on_topic === L3.stats.relevant - 1, JSON.stringify({ notes: L3.notes, on_topic: L3.stats.on_topic, relevant: L3.stats.relevant }));
+  check('R23: with a full pool and a results page that was read, the plan is emitted and scored exactly as before',
+    L3.planned === true && L3.refusal === null && L3.feasibility.score === 68 && L3.feasibility.status === 'winnable' && L3.feasibility.scored === true
+    && L3.data_check.enough === true && L3.write_now.length === 2, JSON.stringify({ f: L3.feasibility, write: L3.write_now.map(w => w.keyword) }));
+
+  // ---- 4. R22: a rung page never carries a word target of 0, and says where the target came from ----
+  const rungPages = L3.rungs.flatMap(r => r.pages);
+  const spawn4 = (await run('Spawn Page Runs', [{ json: full.item }])).map(r => r.json.body);
+  console.log('   words ->', JSON.stringify(L3.words), '| rung targets', JSON.stringify(rungPages.map(p => p.target_words)), '| spawn', JSON.stringify(spawn4.map(b => [b.keyword, b.ladder_words])));
+  check('R22: every rung page takes the median length of the pages read on the topic\'s results page (1,700 of 6), capped by the main page\'s own target',
+    rungPages.length >= 2 && rungPages.every(p => p.target_words === 1700 && /median length of the 6 page\(s\)/.test(p.target_words_source))
+    && L3.words.rung === 1700 && L3.words.main === 2100 && L3.words.main_source === 'the verdict' && /median length of the 6 page\(s\)/.test(L3.words.rung_source), JSON.stringify({ w: L3.words, t: rungPages.map(p => p.target_words) }));
+  check('R22: the page run is started with that target — `ladder_words: 0` (exec 549) is gone',
+    spawn4.length === 2 && spawn4.every(b => Number(b.ladder_words) > 0) && L3.write_now.every(w => Number(w.target_words) > 0), JSON.stringify(spawn4.map(b => [b.keyword, b.ladder_words])));
+  const noLen = (await ladderRun({ pv: { competitors_summary: serp57(false) } })).L;
+  const noLenPages = noLen.rungs.flatMap(r => r.pages);
+  check('R22: with no length read on the results page the rung target falls back to the main page\'s own target — never 0 — and says so',
+    noLenPages.length >= 2 && noLenPages.every(p => p.target_words === 2100 && /the main page of this ladder \(no results page was read for the rung keywords\)/.test(p.target_words_source))
+    && noLen.words.rung === 2100, JSON.stringify({ w: noLen.words, t: noLenPages.map(p => [p.keyword, p.target_words]) }));
+  const noData = (await ladderRun({ pv: { competitors_summary: serp57(false), verdict_changes: ['Write a service page with a cost section'], competitor_analysis: {} } })).L;
+  const noDataPages = noData.rungs.flatMap(r => r.pages);
+  check('R22: with no length anywhere in the run the rung target is the stated default, not 0, and the plan names it as the default',
+    noDataPages.length >= 2 && noDataPages.every(p => p.target_words === 1200 && /default length for a supporting page/.test(p.target_words_source))
+    && noData.words.rung === 1200 && noData.words.main === 0 && noData.words.main_source === 'not measured', JSON.stringify({ w: noData.words, t: noDataPages.map(p => p.target_words) }));
+
+  // ---- 5. R26: a Keyword Check with no search data says so in the label and gives no chance band ----
+  const AR57 = (o = {}) => ({ ok: true, keyword: 'business central partner uae', domain: D, country: 'United Arab Emirates', location_code: LOC, language_code: 'en',
+    volume: null, kd: null, cpc: null, intent: null, known: false, position: null, position_url: null,
+    reach_info: { reach: 15, method: 'size', p75: null, size_reach: 15, sample: 2, top10: 6, organic_keywords: 60, cached: true, cached_at: ago57(3) }, reach_errors: [], cache_row: null,
+    dfs_cost: 0.026, business: 'Microsoft cloud and ERP partner in the GCC', services: ['Dynamics 365 Business Central'], existing_keywords: [], business_source: 'request', services_source: 'request', ...o });
+  const assess57 = async (o) => { mock('Assess Result', AR57(o)); return (await run('Assess Response', [{ json: { output: { fit: 2, navigational: false, alternatives: [] } } }]))[0].json.body; };
+  const bNo = await assess57();
+  console.log('   keyword check (no data) ->', JSON.stringify({ label: bNo.label, chance: bNo.chance, known: bNo.search_data_known }));
+  check('R26: "no search data" is in the label itself, where the customer reads it — not only in `warnings` (exec: "Reachable for your site · Short ladder · 4-8 months")',
+    /· no search data$/.test(bNo.label) && /^Reachable for your site · Short ladder/.test(bNo.label) && bNo.search_data_known === false && bNo.difficulty_known === false
+    && bNo.warnings.some(w => /DataForSEO has no data for this keyword/.test(w)), JSON.stringify({ label: bNo.label, warnings: bNo.warnings }));
+  check('R26: no confident chance band on a difficulty nobody measured — the band is gone and the sentence says why',
+    bNo.chance === null && /^No estimated chance: DataForSEO has no search volume and no difficulty for "business central partner uae" in United Arab Emirates/.test(bNo.chance_text)
+    && /counted as your reach \+ 10/.test(bNo.chance_text) && bNo.plan_assumed === true && !/fair \(30-50%\)/.test(bNo.chance_text), JSON.stringify({ c: bNo.chance, t: bNo.chance_text }));
+  const bOk = await assess57({ volume: 320, kd: 40, cpc: 6.5, intent: 'commercial', known: true });
+  check('R26: a keyword DataForSEO does know is untouched — the label has no suffix and the chance band is the plan\'s own',
+    !/no search data/.test(bOk.label) && bOk.search_data_known === true && bOk.difficulty_known === true && bOk.chance && bOk.chance.band && bOk.plan_assumed === undefined
+    && /^Estimated chance of reaching the top 10 within/.test(bOk.chance_text), JSON.stringify({ label: bOk.label, chance: bOk.chance }));
+  const bKd = await assess57({ volume: 320, kd: null, known: true });
+  check('R26: a keyword with a volume but no difficulty keeps its band and says what the band was computed on',
+    bKd.search_data_known === true && bKd.difficulty_known === false && bKd.chance && /DataForSEO has no difficulty for this keyword, so it was counted as your reach \+ 10\.$/.test(bKd.chance_text)
+    && bKd.plan_assumed === true, JSON.stringify({ label: bKd.label, t: bKd.chance_text }));
+});
+
+// ===================================================================================
+// S65 (2026-10-14, system review FIX_PLAN §3.12 R17 / R28 / R29; docs/system-review-2026-10-14/RESULTS.md §0, §2.11, §5)
+// The guard that guarded nothing, money that did not add up, and a secret in a public repository.
+// Every check below fails on the build of 2026-10-14 morning: the nine scheduled workflows wrote their ledger row at the END of the run
+// (exec 568: the settle at 16:22:15.507 matched nothing, the reserve inserted a fresh `reserved` row at .584 — after all the spending);
+// a crawl's $0.09 was charged again on every poll of its task (+73% in one window, +11.6% in another); the Keyword Check settled
+// `dfs_usd: 0` while telling the caller $0.026; and the live Slack webhook was baked into two workflow files and five harness files.
+// The ORDERING itself cannot be tested here — the harness runs node code, not n8n's branch ordering — so the build asserts it and this
+// scenario reads what the build proved (harness/ledger_order.json).
+// ===================================================================================
+await guard('R17 R28 R29 ledger order, money and secrets', async () => {
+  reset(); const SN = 'S65 R17 R28 R29 — the ledger row is reserved before the first paid call, a DataForSEO task is counted once and the day is checked against the account, and no secret reaches the generated files';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const LO = require('./ledger_order.json');
+  const LW = require('./ledger_wiring.json');
+  const TC65 = require('./table_cols.json');
+  const kit = async (j) => (await run('Cost Kit', [{ json: j }], { code: '_cost_cal' }))[0].json;
+
+  // ---------- 1. R28 (a): a crawl is billed when the task is created, not on every poll ----------
+  // The real shape of execution 579: on_page/task_post answers with the task and its cost, and every later answer ABOUT that task
+  // (summary, pages, extras) repeats the same cost. The old loop added it every time.
+  const CRAWL = { id: '10121234-5678-0000-0000-abcdef012345', cost: 0.09 };
+  const SERP = { id: '10121234-5678-1111-1111-abcdef012345', cost: 0.002 };
+  const answers = [
+    { tasks: [{ ...CRAWL, status_code: 20100 }] },        // Start Crawl: billed here
+    { tasks: [{ ...CRAWL, status_code: 20000 }] },        // Get Crawl Summary, poll 1
+    { tasks: [{ ...CRAWL, status_code: 20000 }] },        // Get Crawl Summary, poll 2
+    { tasks: [{ ...CRAWL, status_code: 20000 }] },        // Get Crawled Pages
+    { tasks: [{ ...CRAWL, status_code: 20000 }] },        // Run Crawl Extras
+    { tasks: [{ ...SERP, status_code: 20000 }] },         // a different task: counted
+  ];
+  const once = await kit({ call: 'dfsLedger', answers });
+  console.log('   crawl ledger ->', JSON.stringify(once));
+  check('R28: the crawl is counted ONCE, on the answer that created it — the four later answers about the same task add nothing (that is the +73% window C reported)',
+    once.usd === 0.092 && once.tasks === 2 && once.repeated === 4 && eq(once.added, [0.09, 0, 0, 0, 0, 0.002]),
+    JSON.stringify(once));
+  check('R28: the old behaviour (summing every answer) would have reported $0.452 for $0.092 of real money, so the dedupe is what the live run was missing',
+    +(answers.reduce((s, a) => s + a.tasks.reduce((x, t) => x + t.cost, 0), 0)).toFixed(4) === 0.452 && once.usd < 0.1,
+    String(once.usd));
+  const noId = await kit({ call: 'dfsLedger', answers: [{ tasks: [{ cost: 0.01 }] }, { tasks: [{ cost: 0.01 }] }] });
+  check('R28: a task with no id is counted (nothing identifies it) and reported as unidentified rather than quietly dropped or quietly doubled',
+    noId.usd === 0.02 && noId.no_id === 2 && noId.repeated === 0, JSON.stringify(noId));
+  const bare = await kit({ call: 'dfsLedger', answers: [{ cost: 0.004 }] });
+  check('R28: an answer that carries a cost but no task list (the shape some endpoints use) still counts', bare.usd === 0.004, JSON.stringify(bare));
+
+  // ---------- 2. R28 (c): the day is reconciled against the account, not against a sum of task costs ----------
+  const T65 = await kit({ call: 'tables' });
+  const day = '2026-10-14';
+  const row = (t, bal, dfs, status) => ({ run_id: 'x' + t, created_at: day + 'T16:' + t + ':00.000Z', dfs_balance: bal, dfs_usd: dfs, status: status || 'done' });
+  // the real window C: the balance moved $0.0520 while the runs in it reported $0.0900
+  const windowC = await kit({ call: 'dfsDay', rows: [row('30', 14.8, 0, 'done'), row('40', 14.748, 0.09, 'done')], mine: { created_at: day + 'T16:40:42.000Z', dfs_balance: 14.748 } });
+  console.log('   window C ->', JSON.stringify(windowC));
+  check('R28: the day is held against the account — window C of the live run reported $0.0900 while the balance fell $0.0520, and the engine now says so instead of presenting its own sum as measured',
+    windowC.comparable === true && windowC.balance_usd === 0.052 && windowC.engine_usd === 0.09 && windowC.within === false
+    && windowC.diff_usd === 0.038 && /do NOT agree/.test(windowC.basis) && /the account is the figure to believe/.test(windowC.basis),
+    JSON.stringify(windowC));
+  const agree = await kit({ call: 'dfsDay', rows: [row('00', 16.235543, 0, 'done'), row('18', 15.684953, 0.5506, 'done')], mine: { created_at: day + 'T16:18:04.000Z', dfs_balance: 15.684953 } });
+  check('R28: a day whose figures match the account is reported as agreeing, and nothing is "corrected" behind anyone\'s back',
+    agree.comparable === true && agree.within === true && agree.engine_usd === 0.5506 && agree.balance_usd === 0.5506 && /they agree/.test(agree.basis),
+    JSON.stringify(agree));
+  const oneRead = await kit({ call: 'dfsDay', rows: [row('00', 16.2, 0, 'done')], mine: { created_at: day + 'T16:00:00.000Z', dfs_balance: 16.2 } });
+  check('R28: one reading is not a comparison — the first run of the day says so instead of inventing a difference',
+    oneRead.comparable === false && oneRead.balance_usd === 0 && /only one balance reading/.test(oneRead.basis), JSON.stringify(oneRead));
+  const noRead = await kit({ call: 'dfsDay', rows: [{ run_id: 'a', created_at: day + 'T16:00:00.000Z', dfs_usd: 0.1, status: 'done' }], mine: { created_at: day + 'T16:20:00.000Z', dfs_balance: 0 } });
+  check('R28: when appendix/user_data did not answer there is nothing to reconcile against, and the row says that rather than claiming agreement',
+    noRead.comparable === false && /no balance reading/.test(noRead.basis), JSON.stringify(noRead));
+  const reserved = await kit({ call: 'dfsDay', rows: [row('00', 16.2, 0, 'done'), row('05', 16.15, 0.05, 'done'), row('10', 16.14, 0.3, 'reserved')], mine: { created_at: day + 'T16:12:00.000Z', dfs_balance: 16.14 } });
+  check('R28: a row that is still `reserved` has spent nothing yet and is left out of the day\'s reported total',
+    reserved.engine_usd === 0.05 && reserved.balance_usd === 0.06 && reserved.within === true, JSON.stringify(reserved));
+  check('R28: the tolerance is stated, not implicit — 10% of the move or two cents, whichever is larger (DataForSEO rounds each task to four decimals)',
+    T65.RECONCILE_TOLERANCE === 0.1 && T65.RECONCILE_FLOOR === 0.02, JSON.stringify({ t: T65.RECONCILE_TOLERANCE, f: T65.RECONCILE_FLOOR }));
+
+  // ---------- 3. R28: the Keyword Check settles the figure it told the caller ----------
+  const assessSettle = async (result, response) => {
+    mock('Run Ledger Row (Assess)', [{ json: { run_id: 'test-exec', mode: 'assess', est_usd: 0.002, dfs_est_usd: 0.034, cost_mode: 'assess' } }]);
+    mock('Assess Result', [{ json: result }]);
+    if (response) mock('Assess Response', [{ json: response }]); else delete store['Assess Response'];
+    return (await run('Ledger Settle (Assess)', [{ json: {} }]))[0].json;
+  };
+  const ok200 = await assessSettle({ dfs_cost: 0.0241 }, { status: 200, body: { ok: true, cost_usd: 0.0261 } });
+  console.log('   assess settle ->', JSON.stringify(ok200));
+  check('R28: the Keyword Check settles with the money it reported — the DataForSEO cost is measured, the Haiku call is the rest, and measured + estimated is exactly the cost_usd in the 200 (it used to settle dfs_usd: 0 against a reported $0.026)',
+    ok200.dfs_usd === 0.0241 && ok200.dfs_measured === true && ok200.ai_usd === 0.002 && ok200.settled_usd === 0.002
+    && ok200.measured_usd === 0.0241 && +(ok200.measured_usd + ok200.estimated_usd).toFixed(4) === 0.0261 && ok200.reported_usd === 0.0261
+    && ok200.status === 'done', JSON.stringify(ok200));
+  check('R28 / G23: the Keyword Check\'s row still keeps measured and estimated money apart in words — the Haiku call is labelled an estimate, the DataForSEO cost measured',
+    /Claude \$0\.0020 ESTIMATED/.test(ok200.cost_basis) && /DataForSEO \$0\.0241 measured/.test(ok200.cost_basis)
+    && /the same figure the 200 reported as cost_usd/.test(ok200.cost_basis), ok200.cost_basis);
+  const retried = await assessSettle({ dfs_cost: 0.0507 }, { status: 200, body: { ok: true, cost_usd: 0.0547 } });
+  check('R28: a check whose topic call needed the plain-text retry settles the two model calls it was charged for, not one',
+    retried.ai_usd === 0.004 && +(retried.measured_usd + retried.estimated_usd).toFixed(4) === 0.0547, JSON.stringify(retried));
+  const upstream = await assessSettle({ ok: false, error: 'DataForSEO keyword overview failed', dfs_cost: 0 }, null);
+  check('P1-1 + R28: a request DataForSEO failed still settles its row — at nothing spent on the model, with the measured DataForSEO cost, and it says no answer was sent',
+    upstream.status === 'done' && upstream.ai_usd === 0 && upstream.dfs_usd === 0 && upstream.reported_usd === null
+    && /no model call was made/.test(upstream.cost_basis) && /failed upstream/.test(upstream.cost_basis), JSON.stringify(upstream));
+  check('P1-1: the two ends that settle the Keyword Check are unchanged (the answer and the upstream failure); they reach the row through the node that prices the request',
+    eq(LW.assess.settle_from, ['Respond Assess', 'Respond Assess Upstream Error']) && LW.assess.settle_via === 'Ledger Settle (Assess)'
+    && eq(LW.assess.settle_conditions, [['run_id', '={{ $execution.id }}'], ['status', 'reserved']]),
+    JSON.stringify({ from: LW.assess.settle_from, via: LW.assess.settle_via }));
+  check('R28: the settle writes the figures, not the flat reservation it used to copy from the row',
+    ['settled_usd', 'ai_usd', 'dfs_usd', 'measured_usd', 'estimated_usd', 'cost_basis'].every(k => String(LW.assess.settle_values[k] || '').includes('$json.' + k)),
+    JSON.stringify(LW.assess.settle_values));
+
+  // ---------- 4. R17: what the build proved about every scheduled workflow ----------
+  const MON = Object.keys(LO.monitors).sort();
+  // R32 (2026-10-14, section 59): Page Watch joined them — free today (25 plain GETs), and the one workflow the guard and the day's
+  // reconciliation could not see at all.
+  check('R17: all ten scheduled workflows are covered — the AI Visibility Tracker, the AI Pulse, AI Growth, the Backlink Monitor, the Audit Scheduler, the Link Builder, the Rank Tracker, the Site Tracker, the Content Cadence and Page Watch',
+    MON.length === 10 && ['AI Growth', 'AI Pulse', 'AI Visibility Tracker', 'Audit Scheduler', 'Backlink Monitor', 'Content Cadence', 'Link Builder', 'Rank Tracker', 'Site Tracker', 'Page Watch']
+      .every(n => MON.some(m => m.endsWith(n))), JSON.stringify(MON));
+  const badChain = MON.filter(w => {
+    const c = LO.monitors[w];
+    // R32: the free `appendix/user_data` reading sits between the ensure and the row, so a scheduled run's spend reaches the day's
+    // reconciliation too (S69 checks the endpoint itself and that it feeds the row).
+    return !eq(c.plan_out, ['Ensure Run Ledger (' + c.tag + ')'])
+      || !eq(c.ensure_out, ['DFS Balance (' + c.tag + ')'])
+      || !eq(c.row_out, ['Reserve Run Ledger (' + c.tag + ')'])
+      || !eq(c.reserve_out, [c.resume])
+      || !c.resume_out.length;
+  });
+  check('R17: the reservation is on the MAIN path in every one of them — the plan feeds the ledger and nothing else, and everything it used to feed now hangs off "After Run Ledger", on the far side of the insert',
+    badChain.length === 0, JSON.stringify(badChain.map(w => [w, LO.monitors[w]])));
+  const notGuarded = MON.filter(w => LO.monitors[w].always_output.length !== 2);
+  check('R17: both Data Table nodes of the chain answer even when they fail — they sit in the run\'s own path now, so neither may end it by answering with nothing',
+    notGuarded.length === 0, JSON.stringify(notGuarded));
+  const noSettle = MON.filter(w => !LO.monitors[w].settle || !LO.monitors[w].settle_from.length);
+  check('R17: every one of them still settles its row at the end, with the figures the run measured (exec 568 settled before it reserved, so the settle matched nothing and the measured cost was thrown away)',
+    noSettle.length === 0, JSON.stringify(noSettle));
+  check('R28: the Audit Scheduler reserves nothing for the crawls it only spawns — each spawned audit reserves and settles that $0.09 itself, and counting it twice is what window C reported',
+    eq(LO.audit_schedule_est, { ai: 0, dfs: 0 }) && eq(LO.monitors[MON.find(m => m.endsWith('Audit Scheduler'))].est, { ai: 0, dfs: 0 }),
+    JSON.stringify(LO.audit_schedule_est));
+
+  // ---------- 5. R28 (c): the main workflow reads the account for free, before it reserves ----------
+  check('R28: the balance probe is on the ledger chain, before the row is written, and it is the free appendix/user_data endpoint',
+    LO.main.balance_url === 'https://api.dataforseo.com/v3/appendix/user_data'
+    && eq(LO.main.balance_in, ['Load Cost Calibration']) && eq(LO.main.balance_out, ['Run Ledger Row']),
+    JSON.stringify(LO.main));
+  check('R28: the reading is stored on the row (seo_run_ledger.dfs_balance), so any later run and any reader can reconcile the day',
+    TC65.RUN_LEDGER.includes('dfs_balance') && LO.main.column === 'dfs_balance', JSON.stringify(TC65.RUN_LEDGER));
+  check('R28: every report builder that carries a run ledger counts its DataForSEO tasks the deduped way',
+    LO.main.ledger_nodes.length === 5 && ['Build Word File', 'Build Full Report', 'Build Audit Report', 'Build Keyword File', 'Build Ladder Report'].every(n => LO.main.ledger_nodes.includes(n)),
+    JSON.stringify(LO.main.ledger_nodes));
+
+  // ---------- 6. R29: the secret is not in the repository, and the placeholder is not a channel ----------
+  check('R29: the build scans the generated workflows and harness code for webhook and key shapes, and found none — the live Slack URL used to sit in two workflow files and five harness files of a PUBLIC repository',
+    eq(LO.secrets.hits, []) && LO.secrets.needles.includes('hooks.slack.com/services/') && LO.secrets.needles.includes('sk-ant-')
+    && eq(LO.secrets.scanned, ['workflows', 'harness/code_v4']), JSON.stringify(LO.secrets));
+  check('R29: what is baked is a placeholder, which apply_env.py substitutes into the copy it imports — the repository never carries the value',
+    LO.secrets.placeholder === '__SEO_ALERT_WEBHOOK_URL__', LO.secrets.placeholder);
+  const src65 = require('fs').readFileSync(require('path').join(process.env.CODE_DIR || require('path').join(__dirname, 'code'), 'EH__Alert_Channels.js'), 'utf8');
+  check('R29: the generated alert node holds the placeholder and nothing that looks like a URL',
+    src65.includes("webhook_url: '__SEO_ALERT_WEBHOOK_URL__'") && !/hooks\.slack\.com/.test(src65), (src65.match(/webhook_url:[^\n]*/) || [''])[0]);
+  // the generated node (no .env in this worktree) must read the placeholder as "no channel configured" — S48 runs the same node and
+  // asserts send_webhook === false, so the two scenarios agree on what an unset channel means
+  mock('Format Alert', [{ json: { subject: 's', html: '<p>h</p>', node: 'Keyword Data', workflow: 'SEO Agent v4', execution_id: '1', execution_url: 'http://x/1', message: 'boom', mode: 'trigger', when: new Date().toISOString() } }]);
+  mock('Load Ops Alerts', [{ json: {} }]);
+  const rec65 = (await run('Alert Record', store['Load Ops Alerts'], { code: 'EH__Alert_Record' }))[0].json;
+  mock('Save Ops Alert', [{ json: { ...rec65, id: 1 } }]);
+  const ch65 = (await run('Alert Channels', store['Save Ops Alert'], { code: 'EH__Alert_Channels' }))[0].json;
+  check('R29: a node still holding the placeholder has NO webhook channel — it is not a URL, so nothing is posted to it, the alert is still recorded and the e-mail still goes out',
+    ch65.send_webhook === false && ch65.webhook_url === '' && !ch65.channels.includes('webhook') && ch65.channels.includes('data_table')
+    && ch65.recorded === true && !/__SEO_ALERT_WEBHOOK_URL__/.test(JSON.stringify(ch65)),
+    JSON.stringify({ send: ch65.send_webhook, url: ch65.webhook_url, channels: ch65.channels }));
+});
+
+
+// ===================================================================================
+// S66 R18 / R19 / R24 (2026-10-14, system review FIX_PLAN.md §3.12; evidence docs/system-review-2026-10-14/RESULTS.md §2.3, §2.4):
+// an answer that arrived with HTTP 200 and was still a failure. In execution 549 `SERP Top 10` and `Facts SERP` both returned
+// DataForSEO `status_code 40101 "Internal SE Server Error."` inside an HTTP 200, were billed, ran once — and the run still scored
+// the keyword "winnable 68" and wrote a page. In execution 550, 31 of 45 URL inspections failed with Google's "Internal error
+// encountered.", were never re-sent, and the diff reported the 14 that answered as an improvement. And one audit said three
+// different things about schema. This scenario holds the three fixes: one retry rule in one kit, evidence marked unavailable and
+// refused as a score, every indexing count carrying its sample, a diff that will not compare unlike samples, schema said once.
+// ===================================================================================
+await guard('r18-r19-r24-failures-inside-http-200', async () => {
+  const SN = 'S66 R18 R19 R24 — a task error inside HTTP 200 is retried once and then marked unavailable, no verdict score is emitted on it, every indexing finding says how many pages Google answered for, a shrunken sample is not printed as a delta, and a technical audit says one thing about schema';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 600))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const T66 = require('./fixtures_tracking');
+  const TC66 = require('./table_cols.json');
+  // DataForSEO's answer in execution 549: HTTP 200, the task dead, the call billed. 40101 passed the 50000-only gate of section 25.
+  const taskErr = (code, msg) => ({ version: '0.1.20261014', status_code: 20000, status_message: 'Ok.', cost: 0.002, tasks_count: 1, tasks_error: 1,
+    tasks: [{ id: 'x', status_code: code, status_message: msg, time: '0 sec.', cost: 0.002, result: null }] });
+  const SE_ERR = taskErr(40101, 'Internal SE Server Error.');
+
+  // ---------- 1. one rule, in the gate and in the kit ----------
+  const CASES = [
+    ['a good answer is not retried', F.serpTop, false],
+    ['40101 "Internal SE Server Error." inside HTTP 200 (exec 549: billed, never retried)', SE_ERR, true],
+    ['the 50000 envelope the old gate did catch', { version: '0.1.2026', status_code: 50000, status_message: 'Internal Server Error.', tasks: null }, true],
+    ['an HTTP-level failure the node passed through', { error: { message: 'The connection timed out' } }, true],
+    ['a task that answered 20000 with no result', { status_code: 20000, tasks: [{ status_code: 20000, status_message: 'Ok.', result: null }] }, true],
+    ['a wrong request is NOT asked again (nothing can change)', taskErr(40501, 'Invalid Field: target.'), false],
+    ['an exhausted quota is NOT asked again', taskErr(40202, 'Daily quota exceeded.'), false],
+  ];
+  const gate66 = await run('SERP Failed?', CASES.map(c => c[1]));
+  check('R18: the SERP gate fires on ANY task error inside an HTTP 200 — 40101, the one that cost execution 549 its whole SERP, included — and not on a wrong request or an exhausted quota',
+    eq(gate66.map(i => i.json.retry), CASES.map(c => c[2])), JSON.stringify(CASES.map((c, i) => [c[0], gate66[i].json.retry])));
+  const kit66 = await run('_dfs_retry', CASES.map(c => ({ answer: c[1] })));
+  check('R18: the gate expression and the shared kit (v5/code/_dfs_retry.js) decide the same thing about every one of them — one rule, not two',
+    eq(kit66.map(i => !i.json.ok && i.json.retryable), CASES.map(c => c[2])), JSON.stringify(kit66.map((i, k) => [CASES[k][0], i.json.ok, i.json.retryable, i.json.why])));
+  check('R18: the reason a report prints is the provider\'s own message, not our paraphrase of it',
+    kit66[1].json.why === 'Internal SE Server Error.' && kit66[2].json.why === 'Internal Server Error.' && kit66[5].json.why === 'Invalid Field: target.',
+    JSON.stringify(kit66.map(i => i.json.why)));
+  const gateF66 = await run('Facts SERP Failed?', [SE_ERR, V.factsSerp]);
+  const gateK66 = await run('Keyword Data Failed?', [SE_ERR, F.keywordOverview]);
+  check('R18: the facts search and the keyword data go through the same gate — the three paid DataForSEO calls of one keyword run, one rule',
+    eq(gateF66.map(i => i.json.retry), [true, false]) && eq(gateK66.map(i => i.json.retry), [true, false]),
+    JSON.stringify([gateF66.map(i => i.json.retry), gateK66.map(i => i.json.retry)]));
+  check('R18: a call that failed and failed again is one asked, none answered — "unavailable", not "none"',
+    kit66[1].json.stats.asked === 1 && kit66[1].json.stats.answered === 0 && kit66[1].json.evidence.unavailable === true,
+    JSON.stringify([kit66[1].json.stats, kit66[1].json.evidence]));
+  const answered66 = (await run('_dfs_retry', [{ answer: SE_ERR, retry: F.serpTop, unit: 'search' }]))[0].json;
+  check('R18: when the second attempt answers, the evidence is "read" again: one asked, one answered, one retried, one answered on the retry',
+    answered66.evidence.unavailable === false && answered66.stats.answered === 1 && answered66.stats.retried === 1 && answered66.stats.retry_answered === 1,
+    JSON.stringify(answered66.evidence));
+
+  // ---------- 2. the half that matters more: nothing is scored on evidence nobody could read ----------
+  reset();
+  mock('Start Form', F.forms.startVerdict);
+  const n66 = await run('Normalize Input', F.forms.pageVerdict); mock('Route Mode', n66);
+  await run('Prepare Keyword Run', n66); mock('Fetch Sitemaps', []); await run('Collect Site URLs', []);
+  mock('SERP Top 10', SE_ERR); mock('SERP Top 10 (Retry)', SE_ERR);   // execution 549: both attempts, the same 40101
+  await run('Pick Top 6', store['SERP Top 10 (Retry)']);
+  mock('Read Competitor Pages', [{ error: { message: 'Invalid URL' } }]); delete store['Retry Blocked Pages']; delete store['Blocked Page Items'];
+  await run('Find Blocked Pages', store['Read Competitor Pages']);
+  const a66 = (await run('Analyze Competitor Pages', store['Read Competitor Pages']))[0].json;
+  check('R18: after two failed attempts the live results are "unavailable" with the provider\'s own message, the attempts are counted, and the AI Overview stays unknown (null), never "not shown"',
+    a66.serp_features.unavailable === true && a66.serp_features.error === 'Internal SE Server Error.' && a66.serp_features.attempts === 2
+    && a66.serp_features.retried === true && a66.serp_features.ai_overview.present === null
+    && a66.serp_evidence.unavailable === true && a66.serp_evidence.checked === 0 && a66.serp_evidence.retried === 1,
+    JSON.stringify({ f: a66.serp_features, e: a66.serp_evidence }));
+  check('R18: the digest the analyst reads says the search failed twice and forbids any assumption about the results page',
+    /failed, twice: the search was sent again once and failed again/.test(a66.serp_digest) && /do not state or assume/.test(a66.serp_digest), a66.serp_digest.slice(0, 300));
+  mock('Facts SERP', SE_ERR); mock('Facts SERP (Retry)', SE_ERR);
+  const cf66 = (await run('Collect Facts', store['Facts SERP (Retry)']))[0].json;
+  check('R18: "no statistics were found" would be a lie when nothing was searched — the facts search carries its own evidence instead',
+    cf66.facts_found === 0 && cf66.facts_evidence.unavailable === true && cf66.facts_evidence.checked === 0, JSON.stringify(cf66.facts_evidence));
+  mock('Competitor Analyzer', { output: F.competitorAnalysis }); await run('Parse Analysis', store['Competitor Analyzer']);
+  mock('Keyword Data', SE_ERR); mock('Keyword Data (Retry)', SE_ERR);
+  const mk66 = (await run('Merge Keyword Data', store['Keyword Data (Retry)']))[0].json;
+  check('R18: search data that could not be read is not "no demand" — the note says what happened, and the evidence travels with it',
+    mk66.keyword_data_evidence.unavailable === true && /could not be read/.test(mk66.keyword_data.note) && /not "no demand"/.test(mk66.keyword_data.note)
+    && /sent again once/.test(mk66.keyword_data.note), JSON.stringify([mk66.keyword_data.note, mk66.keyword_data_evidence]));
+  mock('Verdict Agent', { output: F.verdictGo });
+  const pv66 = (await run('Parse Verdict', store['Verdict Agent']))[0].json;
+  check('R18: the model still answered "GO_WITH_CHANGES 66" and the run refuses to pass it on — NOT_CHECKED, no score, no expected visits, no time to rank (execution 549 shipped "winnable 68" on exactly this evidence)',
+    F.verdictGo.score === 66 && pv66.verdict === 'NOT_CHECKED' && pv66.verdict_score === null && pv66.expected_visits_top3 === null
+    && pv66.time_to_rank_months === null && pv66.score_withheld === true && pv66.verdict_evidence.serp === 'unavailable'
+    && pv66.verdict_evidence.keyword_data === 'unavailable',
+    JSON.stringify({ verdict: pv66.verdict, score: pv66.verdict_score, visits: pv66.expected_visits_top3, months: pv66.time_to_rank_months, ev: pv66.verdict_evidence }));
+  check('R18: and the first reason says why, in the owner\'s words, with what to do about it',
+    /^No score is given for this keyword: the live Google results could not be read \(Internal SE Server Error\.\)\./.test(pv66.verdict_reasons[0])
+    && /sent again once and failed again/.test(pv66.verdict_reasons[0]) && /Run the check again/.test(pv66.verdict_reasons[0])
+    && pv66.verdict_reasons.length === F.verdictGo.reasons.length + 1, JSON.stringify(pv66.verdict_reasons));
+  const wf66 = await run('Build Word File', [{ json: { ...pv66, include_seo_report: true } }]); const doc66 = decode(wf66);
+  const vsec66 = (doc66.match(/Keyword Verdict[\s\S]{0,1400}/) || [''])[0];
+  check('R18: the keyword report prints "NOT CHECKED" and "not scored", and no number anywhere in the verdict block',
+    /NOT CHECKED — the live Google results could not be read/.test(vsec66) && /not scored — the live Google results could not be read/.test(vsec66)
+    && !/\/100/.test(vsec66) && /not estimated/.test(vsec66), vsec66.slice(0, 600));
+  scanHtml('keyword report, verdict withheld', doc66);
+  const wr66 = (await run('Build Webhook Response', [{ json: pv66 }]))[0].json;
+  check('R18: the callback the app stores carries the same refusal — no score, the evidence beside it',
+    wr66.score === null && wr66.score_withheld === true && wr66.evidence && wr66.evidence.serp === 'unavailable',
+    JSON.stringify({ score: wr66.score, withheld: wr66.score_withheld, ev: wr66.evidence }));
+  // the second attempt answers: its data is used everywhere and the verdict is scored again
+  mock('SERP Top 10 (Retry)', F.serpTop);
+  const t66 = await run('Pick Top 6', store['SERP Top 10 (Retry)']);
+  mock('Read Competitor Pages', t66.map((t, i) => ({ page_text: F.compPage(i, 300) })));
+  await run('Find Blocked Pages', store['Read Competitor Pages']);
+  const a66b = (await run('Analyze Competitor Pages', store['Read Competitor Pages']))[0].json;
+  check('R18: when the second attempt answers, the run uses its data and says the search was read — one asked, one answered, one retried',
+    !a66b.serp_features.unavailable && a66b.serp_features.attempts === 2 && a66b.serp_evidence.checked === 1 && a66b.serp_evidence.retry_answered === 1
+    && a66b.competitors_read > 0, JSON.stringify({ f: { unavailable: a66b.serp_features.unavailable, attempts: a66b.serp_features.attempts }, e: a66b.serp_evidence }));
+  mock('Collect Facts', [{ json: { ...a66b, facts: [], facts_found: 0 } }]);
+  mock('Competitor Analyzer', { output: F.competitorAnalysis }); await run('Parse Analysis', store['Competitor Analyzer']);
+  mock('Keyword Data', F.keywordOverview); delete store['Keyword Data (Retry)'];
+  await run('Merge Keyword Data', store['Keyword Data']);
+  mock('Verdict Agent', { output: F.verdictGo });
+  const pv66b = (await run('Parse Verdict', store['Verdict Agent']))[0].json;
+  check('R18: with the results page read, the verdict and its score are emitted exactly as before — the refusal is about missing evidence, not about verdicts',
+    pv66b.verdict === 'GO_WITH_CHANGES' && pv66b.verdict_score === 66 && pv66b.score_withheld === false && pv66b.verdict_evidence.serp === 'read'
+    && pv66b.verdict_reasons.length === F.verdictGo.reasons.length, JSON.stringify({ v: pv66b.verdict, s: pv66b.verdict_score, ev: pv66b.verdict_evidence }));
+
+  // ---------- 3. R19 + R24: the technical audit — inspections asked again, the sample said out loud, schema said once ----------
+  reset();
+  mock('Start Form', F.forms.startAudit);
+  const na66 = await run('Normalize Input', F.forms.pageAuditTech); mock('Route Mode', na66);
+  await run('Save Task ID', F.crawlTaskPost); await run('Check Crawl', F.summaryDone, { runIndex: 2 });
+  // R24: the crawler flags structured-data errors on half the crawled pages — the only thing a technical audit knows about schema
+  const pages66 = JSON.parse(JSON.stringify(F.crawledPagesRes));
+  let flagged66 = 0;
+  pages66.tasks[0].result[0].items.forEach((p, i) => { if (i % 2 === 0 && p.checks) { p.checks.has_micromarkup_errors = true; flagged66++; } });
+  mock('Get Crawled Pages', pages66);
+  await run('Crawl Extra Requests', store['Get Crawled Pages']); mock('Run Crawl Extras', F.extrasRes); await run('Collect Crawl Extras', store['Run Crawl Extras']);
+  await run('Build Probes'); await run('Content Probes', store['Collect Crawl Extras']);
+  const all66 = F.probeResults('apex');
+  mock('Run Probes', [all66[0], all66[2], all66[3], all66[4]]);
+  mock('Run Content Probes', [all66[0], all66[1], all66[5], all66[6], all66[7], all66[8], ...all66.slice(9)]);
+  const ap66 = await run('Analyze Probes', store['Run Content Probes']);
+  await runGscAudit(ap66, 'ok');
+  const reqs66 = store['GSC Audit Requests'].map(i => i.json);
+  const inspectIdx = reqs66.map((q, i) => q.kind === 'inspect' ? i : -1).filter(i => i >= 0);
+  // Google's answers (exec 550): an internal error for most of the inspections, a permission error for one, and real answers for two
+  const GINT = { error: { code: 500, message: 'Internal error encountered.', status: 'INTERNAL' } };
+  const GDENY = { error: { code: 403, message: 'User does not have sufficient permission for site.', status: 'PERMISSION_DENIED' } };
+  const inspected = (url, indexed) => ({ inspectionResult: { indexStatusResult: { verdict: indexed ? 'PASS' : 'NEUTRAL',
+    coverageState: indexed ? 'Submitted and indexed' : 'Crawled - currently not indexed', robotsTxtState: 'ALLOWED', indexingState: 'INDEXING_ALLOWED',
+    lastCrawlTime: '2026-09-27T10:11:12Z', pageFetchState: indexed ? 'SUCCESSFUL' : 'PAGE_FETCH_STATE_UNSPECIFIED', googleCanonical: url, userCanonical: url, crawledAs: 'MOBILE' } } });
+  const denyAt = inspectIdx[inspectIdx.length - 1];
+  const answerAtOnce = new Set(inspectIdx.slice(0, 2));
+  const goodAnswers66 = reqs66.map((q, i) => q.kind === 'inspect' ? inspected(q.inspect_url, inspectIdx.indexOf(i) % 3 !== 1) : T66.gscAuditResponse(q));
+  mock('GSC Audit Query', goodAnswers66);
+  const skip66 = await run('Inspect Retry Plan', store['GSC Audit Query']);
+  check('R19: with every answer good, the gate skips — the second attempt costs nothing when Google answered',
+    skip66.length === 1 && skip66[0].json.skip === true && /every Search Console call answered/.test(skip66[0].json.reason), JSON.stringify(skip66[0].json));
+  const answers66 = reqs66.map((q, i) => q.kind !== 'inspect' ? T66.gscAuditResponse(q)
+    : i === denyAt ? GDENY : (answerAtOnce.has(i) ? goodAnswers66[i] : GINT));
+  mock('GSC Audit Query', answers66);
+  const plan66 = await run('Inspect Retry Plan', store['GSC Audit Query']);
+  const failedFirst66 = inspectIdx.length - answerAtOnce.size;
+  check('R19: every inspection Google failed with "Internal error encountered." is asked again once — and the one it refused for permissions is not, because asking again cannot change it',
+    plan66.length === failedFirst66 - 1 && plan66.every(q => q.json.kind === 'inspect' && q.json.url && q.json.body && Number.isFinite(q.json.retry_of))
+    && !plan66.some(q => q.json.retry_of === denyAt) && plan66[0].json.failed_total === failedFirst66
+    && /Internal error encountered/.test(plan66[0].json.retry_reason),
+    JSON.stringify({ asked: inspectIdx.length, failed: failedFirst66, retried: plan66.length, reason: plan66[0].json.retry_reason }));
+  const retryOk66 = Math.ceil(plan66.length / 2);   // half of the second attempts answer, the rest fail again
+  mock('GSC Audit Query (Retry)', plan66.map((q, k) => k < retryOk66 ? inspected(q.json.inspect_url, k % 3 !== 1) : GINT));
+  const gf66 = await run('GSC Audit Findings', store['GSC Sitemaps (Audit)']);
+  const sc66 = gf66[0].json.search_console; const is66 = sc66.inspection_stats;
+  check('R19: the second attempt\'s answers take the failed ones\' place, and the run counts what it actually saw — asked, checked, failed, retried, answered on the retry',
+    is66.asked === inspectIdx.length && is66.checked === answerAtOnce.size + retryOk66 && is66.failed === inspectIdx.length - answerAtOnce.size - retryOk66
+    && is66.retried === plan66.length && is66.retry_answered === retryOk66 && sc66.inspections.filter(i => !i.error).length === is66.checked,
+    JSON.stringify(is66));
+  check('R19: and it says so in one sentence, naming Google\'s reason — "only the ones that answered are counted below"',
+    /could not be checked \(sent again once, \d+ answered\)/.test(is66.note) && /Internal error encountered/.test(is66.note)
+    && /Only the \d+ that answered are counted below/.test(is66.note), is66.note);
+  const idxF66 = gf66[0].json.extra_findings.filter(f => f.checked != null);
+  check('R19: every finding drawn from the inspections carries the sample it was measured on — as a number of its own and in its evidence',
+    idxF66.length > 0 && idxF66.every(f => f.checked === is66.checked && f.checked_of === is66.asked)
+    && idxF66.every(f => new RegExp('measured on the ' + is66.checked + ' of ' + is66.asked + ' page\\(s\\) Google answered for').test(f.evidence))
+    && idxF66.every(f => /could not be checked even after being asked again/.test(f.evidence)),
+    JSON.stringify(idxF66.map(f => [f.title, f.checked, f.checked_of, String(f.evidence).slice(-140)])));
+  const note66 = gf66[0].json.extra_findings.find(f => /could not answer for part of the key pages/i.test(f.title));
+  check('R19: the report carries an unscored note that the rest are unknown, not fine — nobody can read the indexing picture as the whole site again',
+    !!note66 && note66.severity === 'Info' && note66.scoring === false && note66.affected_count === is66.failed && /unknown, not fine/.test(note66.why),
+    JSON.stringify(note66 && { sev: note66.severity, scoring: note66.scoring, n: note66.affected_count }));
+  const bsi66 = await run('Build Site Issues', gf66); const au66 = bsi66[0].json.site_audit;
+  check('R24: a technical audit emits NO Schema finding (it has only the crawler\'s yes/no flag), and Schema is in neither the weights nor the category scores — the three statements can no longer differ',
+    flagged66 >= 5 && !au66.findings.some(f => f.category === 'Schema') && !au66.weights.Schema && !au66.category_scores.Schema
+    && !au66.findings.some(f => /structured data with errors/i.test(f.title)),
+    JSON.stringify({ flagged: flagged66, schema: au66.findings.filter(f => f.category === 'Schema').map(f => f.title), weights: Object.keys(au66.weights) }));
+  check('R24: it says so once, in "not assessed", with the number the crawler did see — nothing is hidden, it is simply not a finding here',
+    au66.not_assessed.some(x => /^Structured data \(schema\)/.test(x) && /flagged \d+ of \d+ crawled pages/.test(x)
+      && /not scored, not listed as a finding and not compared here/.test(x) && /the full SEO report checks it/.test(x)),
+    JSON.stringify(au66.not_assessed.filter(x => /schema/i.test(x))));
+  check('R24: and every finding that IS listed sits in a category this audit type weights — the guard that keeps the three statements together',
+    au66.findings.filter(f => f.scoring !== false && f.severity !== 'Info').every(f => !!au66.weights[f.category]),
+    JSON.stringify([...new Set(au66.findings.filter(f => f.scoring !== false && f.severity !== 'Info').map(f => f.category))]));
+  const chk66 = store['Check Crawl'][0].json;
+  mock('Check Crawl', [{ json: { ...chk66, audit_level: 'full' } }]);
+  const full66 = (await run('Build Site Issues', gf66))[0].json.site_audit;
+  mock('Check Crawl', [{ json: chk66 }]);
+  check('R24: the other half of the decision — the full SEO report, which reads the HTML and checks every schema URL, DOES assess schema: the same flag is a weighted finding there, scored and compared',
+    full66.weights.Schema === 12 && full66.category_scores.Schema != null
+    && full66.findings.some(f => f.category === 'Schema' && /structured data with errors/i.test(f.title))
+    && !full66.not_assessed.some(x => /^Structured data \(schema\)/.test(x)),
+    JSON.stringify({ weight: full66.weights.Schema, score: full66.category_scores.Schema, findings: full66.findings.filter(f => f.category === 'Schema').map(f => f.title) }));
+  const adoc66 = decode(await run('Build Audit Report', bsi66));
+  check('R24: the delivered technical audit names no structured-data finding anywhere, and its "not assessed" line carries the flag count',
+    !/Structured data with errors/.test(adoc66) && /Structured data \(schema\)/.test(adoc66) && /flagged \d+ of \d+ crawled pages/.test(adoc66),
+    (adoc66.match(/Structured data[\s\S]{0,260}/) || [''])[0].slice(0, 260));
+  scanHtml('technical audit, schema said once', adoc66);
+
+  // ---------- 4. R19: a count measured on a different sample is not a change ----------
+  const D66 = 'northwind-erp.com'; const SITE66 = 'site_northwind-erp-com';
+  const WT66 = { 'Crawlability & Indexing': 22, 'On-Page': 18, 'Content': 13, 'Performance': 15, 'Security': 10, 'Images': 7, 'Technical': 5, 'AI Search Readiness': 10 };
+  const TITLE66 = 'A large share of important pages is not indexed by Google';
+  const diff66 = async (now, before) => {
+    reset();
+    mock('Check Crawl', [{ json: { domain: D66 } }]);
+    mock('Get Crawled Pages', [{ json: { tasks: [{ result: [{ items: [] }] }] } }]);
+    mock('Load Audit History', [{ json: { id: 1, site_id: SITE66, audit_id: 'aud_prev', audited_at: new Date(Date.now() - 30 * 864e5).toISOString(), report_type: 'site_audit', health_score: 80, grade: 'B', findings: 20 } }]);
+    mock('Load Audit Findings', [{ json: { id: 1, site_id: SITE66, audit_id: 'aud_prev', category: 'Crawlability & Indexing', title: TITLE66, severity: 'High',
+      finding_key: 'Crawlability & Indexing|a large share of important pages is not indexed by google', affected_count: before.affected, checked: before.checked } }]);
+    mock('Build Site Issues', [{ json: { domain: D66, site_audit: { audit_level: 'site_audit', health_score: 83, grade: 'B', weights: WT66, issue_counts: {}, findings: [
+      { category: 'Crawlability & Indexing', title: TITLE66, severity: 'High', affected_count: now.affected, affected_pct: 29, checked: now.checked }] } } }]);
+    return (await run('Audit Diff', [{ json: {} }]))[0].json.site_audit.audit_diff;
+  };
+  const shrunk66 = await diff66({ affected: 4, checked: 14 }, { affected: 15, checked: 25 });
+  check('R19: execution 550\'s own numbers — 4 affected of 14 pages checked against 15 of 25 — are NOT printed as an improvement: the finding says the sample moved and carries both sample sizes',
+    shrunk66.open[0].sample_changed === true && shrunk66.open[0].affected_before === null && shrunk66.open[0].affected === 4
+    && shrunk66.open[0].checked === 14 && shrunk66.open[0].checked_before === 25 && /4 now against 15 before/.test(shrunk66.open[0].sample_note)
+    && /different samples \(25 then, 14 now\)/.test(shrunk66.open[0].sample_note) && shrunk66.sample_moved === 1
+    && /not compared as numbers/.test(shrunk66.summary), JSON.stringify(shrunk66.open[0]));
+  const same66 = await diff66({ affected: 4, checked: 24 }, { affected: 15, checked: 25 });
+  check('R19: two counts measured on the same sample are compared exactly as before — the refusal is about unlike samples, not about progress',
+    same66.open[0].sample_changed === false && same66.open[0].affected_before === 15 && same66.open[0].affected === 4
+    && !same66.sample_moved && !/not compared as numbers/.test(same66.summary), JSON.stringify(same66.open[0]));
+  const unknown66 = await diff66({ affected: 4, checked: 14 }, { affected: 15, checked: 0 });
+  check('R19: an older audit that never stored its sample is not compared either — "how many pages each number was measured on was not recorded"',
+    unknown66.open[0].sample_changed === true && unknown66.open[0].affected_before === null && /was not recorded/.test(unknown66.open[0].sample_note),
+    JSON.stringify(unknown66.open[0]));
+  const rows66 = (await run('Finding Rows', [{ json: {} }])).map(r => r.json);
+  check('R19: the finding row stores the sample it was measured on, with exactly the columns of seo_audit_findings',
+    rows66[0].checked === 14 && rows66[0].affected_count === 4 && eq(Object.keys(rows66[0]).sort(), [...TC66.AUDIT_FINDINGS].sort()),
+    JSON.stringify(Object.keys(rows66[0])));
+  const dsh66 = await diff66({ affected: 4, checked: 14 }, { affected: 15, checked: 25 });
+  const rep66 = decode(await run('Build Audit Report', [{ json: { ...store['Audit Diff'][0].json,
+    site_audit: { ...store['Audit Diff'][0].json.site_audit, findings: [], what_works: [], category_scores: {}, weights: WT66, issue_counts: {} } } }]));
+  check('R19: and the delivered report prints "not compared" with the reason where it used to print "15 → 4 affected"',
+    /not compared: 4 now against 15 before/.test(rep66) && !/15 → 4 affected/.test(rep66) && dsh66.sample_moved === 1,
+    (rep66.match(/still open[\s\S]{0,320}/) || [''])[0].slice(0, 320));
+});
+
+// ===================================================================================
+// S69 R31 / R32 / R33 (2026-10-14, system review FIX_PLAN.md §3.13; evidence
+// docs/system-review-2026-10-11/LIVE_CHECK_R17-R30_2026-10-14.md §3 and §4)
+// A number the system reports about itself has to be the number that happened. Three places where it still was not, each check written
+// from the live shapes of that evening: audit 588 settled the $0.0900 **quote** for a 200-page request as "measured" while 47 pages were
+// crawled and the account fell $0.0320 (+181%); the free backlink check 586 settled $0.0500 of Claude with no model node anywhere in its
+// 89-node trace while telling the caller `cost_usd: 0`; and `describe` 591 settled the $0.06 it reserved where *Claude — Site Describer*
+// reported 4,874 in / 1,306 out = $0.0114 (5.3x). Every check below fails on the build of that evening.
+// ===================================================================================
+await guard('R31 R32 R33 the money a run reports is the money that happened', async () => {
+  reset(); const SN = 'S69 R31 R32 R33 — a crawl is priced from the pages it crawled, a run that called no model settles nothing, and every branch prices its own Claude calls';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const near = (a, b, tol) => Math.abs(Number(a) - Number(b)) <= (tol === undefined ? 0.0002 : tol);
+  const CT = require('./cost_truth.json');
+  const kit69 = async (j) => (await run('Cost Kit', [{ json: j }], { code: '_cost_cal' }))[0].json;
+  const fs69 = require('fs'), path69 = require('path');
+  const CODE69 = process.env.CODE_DIR || path69.join(__dirname, 'code');
+  const srcOf69 = (f) => fs69.readFileSync(path69.join(CODE69, f), 'utf8');
+
+  // ---------- 1. R32: a crawl is billed for what it does, and the quote is not a measurement ----------
+  // The real shape of audit 588: `Start Crawl` quoted $0.0900 for max_crawl_pages 200, `Check Crawl` reported 47 crawled, the account
+  // fell $0.031950. The engine used to settle the quote and call it measured.
+  const LIVE_QUOTE = 0.09, LIVE_ASKED = 200, LIVE_DONE = 47, LIVE_ACCOUNT = 0.03195;
+  const c47 = await kit69({ call: 'crawlCost', crawl: { quoted: LIVE_QUOTE, pages_crawled: LIVE_DONE, pages_requested: LIVE_ASKED } });
+  console.log('   crawl 47/200 ->', JSON.stringify(c47));
+  check('R32: the crawl of audit 588 is priced from the 47 pages it crawled, not from the 200 it asked for — $0.0212 instead of the $0.0900 quote',
+    c47.applies === true && near(c47.usd, +(LIVE_QUOTE * LIVE_DONE / LIVE_ASKED).toFixed(4)) && c47.usd < LIVE_QUOTE
+    && c47.pages_crawled === 47 && c47.pages_requested === 200 && c47.quoted === 0.09, JSON.stringify(c47));
+  check('R32: and it is five times closer to the money than the quote was (the account fell $0.0320 for that crawl; the quote was +181%)',
+    Math.abs(c47.usd - LIVE_ACCOUNT) < Math.abs(LIVE_QUOTE - LIVE_ACCOUNT) / 4, JSON.stringify({ priced: c47.usd, quote: LIVE_QUOTE, account: LIVE_ACCOUNT }));
+  check('R32: it is labelled an ESTIMATE and its basis carries all three numbers, because DataForSEO never reports what it finally charged for the task',
+    c47.estimated === true && /\$0\.0900/.test(c47.basis) && /200 pages/.test(c47.basis) && /crawled 47/.test(c47.basis)
+    && /ESTIMATED/.test(c47.basis), c47.basis);
+  const cFull = await kit69({ call: 'crawlCost', crawl: { quoted: LIVE_QUOTE, pages_crawled: 200, pages_requested: 200 } });
+  check('R32: a crawl that really did every page it asked for keeps the whole quote — and is still an estimate, never "measured"',
+    cFull.usd === LIVE_QUOTE && cFull.estimated === true, JSON.stringify(cFull));
+  const cOver = await kit69({ call: 'crawlCost', crawl: { quoted: LIVE_QUOTE, pages_crawled: 260, pages_requested: 200 } });
+  check('R32: a page count above the request cannot price the crawl above its quote',
+    cOver.usd === LIVE_QUOTE && cOver.pages_crawled === 200, JSON.stringify(cOver));
+  const cUnknown = await kit69({ call: 'crawlCost', crawl: { quoted: LIVE_QUOTE, pages_requested: 200 } });
+  check('R32: when the crawl never said how far it got, the quote stands and the row says that is what it is — nothing is invented downwards either',
+    cUnknown.usd === LIVE_QUOTE && cUnknown.estimated === true && cUnknown.pages_crawled === null && /never reported how many pages/.test(cUnknown.basis),
+    JSON.stringify(cUnknown));
+  const cNone = await kit69({ call: 'crawlCost', crawl: { quoted: 0, pages_crawled: 0, pages_requested: 200 } });
+  check('R32: a run with no crawl in it prices no crawl', cNone.applies === false && cNone.usd === 0, JSON.stringify(cNone));
+  check('R32: every report builder that carries a run ledger prices the crawl that way, from the pages `Check Crawl` reported',
+    CT.crawl.ledger_nodes.length === 5 && CT.crawl.quote_node === 'Start Crawl' && CT.crawl.pages_node === 'Check Crawl'
+    && CT.crawl.ledger_nodes.every(n => {
+      const s = srcOf69(n.replace(/[^A-Za-z0-9_.-]+/g, '_') + '.js');
+      return /CC\.crawlCost\(/.test(s) && /run_ledger\.by_node\['Start Crawl'\]/.test(s) && /\$\('Check Crawl'\)/.test(s)
+        && /run_ledger\.dataforseo_estimated_usd/.test(s);
+    }), JSON.stringify(CT.crawl));
+
+  // the settle carries that split: the crawl's money is the estimated half, the rest is what each task reported
+  const crawlFig = { quoted: 0.09, usd: 0.0212, pages_crawled: 47, pages_requested: 200, estimated: true, applies: true,
+    basis: 'the crawl was quoted $0.0900 for the 200 pages it asked for and crawled 47' };
+  mock('Run Ledger Row', [{ json: { run_id: 'test-exec', mode: 'audit', est_usd: 0, dfs_est_usd: 0.09, cost_mode: 'site_audit|crawl', dfs_balance: 0 } }]);
+  mock('Rate Limit', [{ json: { mode: 'audit', domain: 'techand.ai' } }]);
+  mock('Build Audit Report', [{ json: { run_ledger: { dataforseo_usd: 0.0212, dataforseo_calls: 7, dataforseo_tasks: 1, dataforseo_tasks_repeated: 0,
+    dataforseo_estimated_usd: 0.0212, crawl_cost: crawlFig, by_node: { 'Start Crawl': 0.0212 } } } }]);
+  const auditSettle = (await run('Run Ledger Settle', [{ json: {} }]))[0].json;
+  console.log('   audit settle ->', JSON.stringify({ dfs: auditSettle.dfs_usd, measured: auditSettle.dfs_measured, basis: auditSettle.cost_basis }));
+  check('R32: the audit settles the priced crawl and no longer calls it measured — audit 588 stored `dfs_usd 0.09 measured` for $0.0320 of real money',
+    auditSettle.dfs_usd === 0.0212 && auditSettle.dfs_measured === false && auditSettle.measured_usd === 0
+    && auditSettle.estimated_usd === 0.0212 && auditSettle.dfs_estimated_usd === 0.0212, JSON.stringify(auditSettle));
+  check('R32: and the row says in words how that figure was reached, so nobody has to go and find the crawl',
+    /DataForSEO \$0\.0212 ESTIMATED/.test(auditSettle.cost_basis) && /priced from the pages it crawled/.test(auditSettle.cost_basis)
+    && /crawled 47/.test(auditSettle.cost_basis), auditSettle.cost_basis);
+  mock('Build Audit Report', [{ json: { run_ledger: { dataforseo_usd: 0.4094, dataforseo_calls: 19, dataforseo_estimated_usd: 0,
+    by_node: { 'Ranked Keywords': 0.4094 } } } }]);
+  const paidSettle = (await run('Run Ledger Settle', [{ json: {} }]))[0].json;
+  check('R32: a run with no crawl in it is measured exactly as before — the estimated half only appears where a crawl was priced',
+    paidSettle.dfs_usd === 0.4094 && paidSettle.dfs_measured === true && paidSettle.measured_usd === 0.4094
+    && /DataForSEO \$0\.4094 measured/.test(paidSettle.cost_basis), JSON.stringify(paidSettle));
+
+  // ---------- 2. R33: every branch prices its own Claude calls ----------
+  // `describe` (exec 591): *Claude — Site Describer* reported 4,874 prompt / 1,306 completion tokens = $0.0114 at Haiku 4.5's prices,
+  // and the row settled the $0.06 the mode reserves. The prompt below is built to the same size, so the figure lands on the same cent.
+  reset();
+  const TEMPLATE69 = CT.settle.ai_calls > 0 ? 1881 : 0;   // the Site Describer prompt template, baked from the real node
+  const FIELDS69 = { domain: 'techand.ai', page_title: 'Tech&', site_pages: [] };
+  const fixed69 = TEMPLATE69 + FIELDS69.domain.length + FIELDS69.page_title.length + JSON.stringify(FIELDS69.site_pages).length;
+  mock('Site Pages', [{ json: { ...FIELDS69, site_text: 'x'.repeat(18031 - fixed69) } }]);
+  mock('Site Describer', [{ json: { output: 'y'.repeat(4832) } }]);          // 1,306 tokens of answer
+  mock('Load Cost Calibration', [{ json: {} }]);
+  mock('Run Ledger Row', [{ json: { run_id: 'test-exec', mode: 'site_description', est_usd: 0.06, dfs_est_usd: 0, cost_mode: 'describe|', dfs_balance: 0 } }]);
+  mock('Rate Limit', [{ json: { mode: 'site_description', domain: 'techand.ai' } }]);
+  const desc69 = (await run('Run Ledger Settle', [{ json: {} }]))[0].json;
+  console.log('   describe settle ->', JSON.stringify({ ai: desc69.ai_usd, calls: desc69.ai_calls, in: desc69.ai_in_tokens, out: desc69.ai_out_tokens, src: desc69.ai_source }));
+  check('R33: `describe` settles the call it made, not the $0.06 it reserved — 4,874 in / 1,306 out at Haiku 4.5\'s prices is $0.0114, which is what exec 591 really used',
+    desc69.ai_source === 'priced' && desc69.ai_calls === 1 && desc69.ai_in_tokens === 4874 && desc69.ai_out_tokens === 1306
+    && near(desc69.ai_usd, 0.0114) && desc69.settled_usd === desc69.ai_usd && desc69.ai_usd < 0.02,
+    JSON.stringify({ ai: desc69.ai_usd, in: desc69.ai_in_tokens, out: desc69.ai_out_tokens }));
+  check('R33: the node that made the call is named on the row, and the figure is still labelled an estimate — a Code node cannot read the token usage, so this is characters priced at the list prices',
+    eq(desc69.ai_nodes_ran, ['Site Describer']) && desc69.ai_estimated === true && desc69.ai_measured === false
+    && !!desc69.ai_by_node['Site Describer'] && desc69.ai_by_node['Site Describer'].estimated === true, JSON.stringify(desc69.ai_nodes_ran));
+  check('R33: the settle prices every Claude node of the workflow, not only the five report builders it used to read',
+    CT.settle.node === 'Run Ledger Settle' && CT.settle.ai_calls >= 11 && CT.settle.prices_every_branch === true
+    && CT.settle.ai_nodes.includes('Site Describer') && CT.settle.ends.length === 5
+    && /CC\.aiRun\(/.test(srcOf69('Run_Ledger_Settle.js')) && /CC\.runCost\(/.test(srcOf69('Run_Ledger_Settle.js')),
+    JSON.stringify({ calls: CT.settle.ai_calls, ends: CT.settle.ends.length }));
+  // and a branch that still ends in a report builder keeps that builder's own figure, loops and all
+  mock('Build Word File', [{ json: { run_ledger: { dataforseo_usd: 0.0221, dataforseo_calls: 7, dataforseo_estimated_usd: 0,
+    ai_cost: { usd: 0.587, measured_usd: 0.149, estimated_usd: 0.438, estimated: true, calls: 9, in_tokens: 120000, out_tokens: 30000,
+      by_node: { Copywriter: { usd: 0.3 } }, models: { opus: 0.438 }, streaming_nodes: ['Copywriter'], basis: 'estimated: prompt and answer characters' } } } }]);
+  const page69 = (await run('Run Ledger Settle', [{ json: {} }]))[0].json;
+  check('R33: a page run still settles the report builder\'s figure (its QA rounds and streaming nodes are counted there), so the new pricing adds branches instead of replacing them',
+    page69.ai_usd === 0.587 && page69.ai_calls === 9 && page69.ai_source === 'priced' && page69.measured_usd === +(0.149 + 0.0221).toFixed(4),
+    JSON.stringify({ ai: page69.ai_usd, calls: page69.ai_calls, m: page69.measured_usd }));
+
+  // ---------- 3. R31: a run that called no model settles nothing, and a free run reserves nothing ----------
+  // Backlink Monitor 586: `free_only: true`, no `Claude — …` node in the 89-node trace (`Link Analyst Jobs` → `Any Link Analyst?` empty),
+  // ledger row 73 `settled_usd 0.05, ai_usd 0.05, estimated_usd 0.05`, callback `cost_usd: 0`.
+  reset();
+  const BLROW = { run_id: 'test-exec', mode: 'backlinks', est_usd: 0.05, dfs_est_usd: 0.45, cost_mode: 'backlinks', status: 'reserved' };
+  mock('Run Ledger Row (BL)', [{ json: { ...BLROW, id: 73 } }]);
+  mock('Parse Backlinks', [{ json: { site_id: 'site_techand-ai', cost_usd: 0 } }]);
+  const free69 = (await run('Ledger Settle (BL)', [{ json: {} }], { code: 'Ledger_Settle_BL_' }))[0].json;
+  console.log('   free backlink settle ->', JSON.stringify(free69));
+  check('R31: the free backlink run settles $0 of Claude — row 73 settled $0.0500 while the callback told the caller $0, for a run with no model node in it at all',
+    free69.settled_usd === 0 && free69.ai_usd === 0 && free69.estimated_usd === 0 && free69.measured_usd === 0 && free69.status === 'done',
+    JSON.stringify(free69));
+  check('R31: and it says why, naming how many Claude nodes it checked — "nothing spent" is a measurement here, not a missing figure',
+    free69.ai_source === 'none' && free69.ai_nodes_checked === 2 && eq(free69.ai_nodes_ran, [])
+    && /no model call ran in this run/.test(free69.ai_basis) && /nothing is settled against the \$0\.0500 it reserved/.test(free69.ai_basis)
+    && /Claude \$0\.0000 nothing spent/.test(free69.cost_basis), free69.cost_basis);
+  check('R31: the workflow\'s own Claude nodes are written into the settle at build time, so the check can never go stale when a node is added or renamed',
+    eq(CT.monitors['SEO Agent — Backlink Monitor'].ai_nodes, ['Link Analyst', 'Outreach Writer'])
+    && !/__AI_NODES__/.test(srcOf69('Ledger_Settle_BL_.js'))
+    && /const AI_NODES = \["Link Analyst", ?"Outreach Writer"\]/.test(srcOf69('Ledger_Settle_BL_.js')),
+    JSON.stringify(CT.monitors['SEO Agent — Backlink Monitor'].ai_nodes));
+  mock('Link Analyst', [{ json: { output: 'the five links worth keeping …' } }]);
+  const paid69 = (await run('Ledger Settle (BL)', [{ json: {} }], { code: 'Ledger_Settle_BL_' }))[0].json;
+  check('R31: a run in which the Link Analyst DID run still settles the per-site reservation and still calls it an estimate (a monitor\'s agents report no token usage)',
+    paid69.ai_usd === 0.05 && paid69.ai_source === 'reserved' && eq(paid69.ai_nodes_ran, ['Link Analyst'])
+    && /Claude \$0\.0500 ESTIMATED/.test(paid69.cost_basis) && /1 model node\(s\) ran \(Link Analyst\)/.test(paid69.cost_basis),
+    JSON.stringify(paid69));
+
+  // the other half: a free_only site reserves nothing in the first place
+  reset();
+  mock('DFS Balance (BL)', [{ json: { tasks: [{ result: [{ money: { balance: 13.847929 } }] }] } }]);
+  mock('BL Plan', [{ json: { site_id: 'site_techand-ai', domain: 'techand.ai', mode: 'free', free_only: true } }]);
+  const freeRow = (await run('Run Ledger Row (BL)', [{ json: {} }], { code: 'Run_Ledger_Row_BL_' }))[0].json;
+  console.log('   free reservation ->', JSON.stringify(freeRow));
+  check('R31: a `free_only` backlink check reserves nothing at all — it calls no paid API and no model, and exec 586 held back $0.05 + $0.45 of the day\'s budget for it',
+    freeRow.est_usd === 0 && freeRow.dfs_est_usd === 0 && freeRow.estimated_usd === 0
+    && /free-only site\(s\) reserve nothing/.test(freeRow.cost_basis), JSON.stringify(freeRow));
+  check('R32: and a scheduled run takes the free account reading too, so a Monday of monitor spend can be reconciled against the balance',
+    freeRow.dfs_balance === 13.847929, JSON.stringify({ balance: freeRow.dfs_balance }));
+  mock('BL Plan', [{ json: { site_id: 's2', domain: 'azdan.com', mode: 'light' } }, { json: { site_id: 's3', domain: 'peppol.org', mode: 'full' } }]);
+  const paidRow = (await run('Run Ledger Row (BL)', [{ json: {} }], { code: 'Run_Ledger_Row_BL_' }))[0].json;
+  check('R31: a paid watch is unchanged — two sites, the light one at $0.05 of DataForSEO and the monthly full one at $0.45',
+    paidRow.est_usd === 0.1 && paidRow.dfs_est_usd === 0.5, JSON.stringify(paidRow));
+  mock('BL Plan', [{ json: { site_id: 's2', domain: 'azdan.com', mode: 'light' } }, { json: { site_id: 'site_techand-ai', domain: 'techand.ai', mode: 'free', free_only: true } }]);
+  const mixedRow = (await run('Run Ledger Row (BL)', [{ json: {} }], { code: 'Run_Ledger_Row_BL_' }))[0].json;
+  check('R31: a run covering one paid site and one free one reserves for the paid one only',
+    mixedRow.est_usd === 0.05 && mixedRow.dfs_est_usd === 0.05 && /1 free-only site\(s\)/.test(mixedRow.cost_basis), JSON.stringify(mixedRow));
+
+  // ---------- 4. what the build proved about the schedules (the three "also seen" items of the live check) ----------
+  const MON69 = Object.keys(CT.monitors).sort();
+  check('R32: all ten scheduled workflows take the free `appendix/user_data` reading on their own ledger chain — until now only main-workflow runs did, so the monitors (where most of the DataForSEO money goes) reconciled against nothing',
+    MON69.length === 10 && MON69.every(w => CT.monitors[w].balance === 'DFS Balance (' + CT.monitors[w].tag + ')'),
+    JSON.stringify(MON69.map(w => CT.monitors[w].balance)));
+  check('R31: every one of them settles through the shared cost kit and knows its own Claude nodes (eight across the ten workflows)',
+    MON69.every(w => Array.isArray(CT.monitors[w].ai_nodes))
+    && MON69.reduce((s, w) => s + CT.monitors[w].ai_nodes.length, 0) === 8
+    && eq(CT.monitors['SEO Agent — AI Visibility Tracker'].ai_nodes, ['AI Brief', 'Answer Analyst', 'Prompt Writer']),
+    JSON.stringify(MON69.map(w => [w, CT.monitors[w].ai_nodes])));
+  check('R31: no branch of a scheduled run can finish without settling its row any more — every "Nothing To Do" end feeds the settle, so a row left `reserved` means a run that crashed, which is what Release Stale Runs is for',
+    eq(CT.open_ends, []) && MON69.every(w => CT.monitors[w].settle_from.length >= 1)
+    && ['SEO Agent — Backlink Monitor', 'SEO Agent — AI Growth', 'SEO Agent — Rank Tracker', 'SEO Agent — Site Tracker']
+      .every(w => CT.monitors[w].settle_from.some(n => /^Nothing To /.test(n))),
+    JSON.stringify(MON69.map(w => [w, CT.monitors[w].settle_from])));
+  check('R31: and every one of them writes the whole split back on the row — the Rank Tracker and the Site Tracker used to store only the status and two figures, so the basis the settle computed was thrown away',
+    MON69.every(w => ['status', 'settled_usd', 'ai_usd', 'dfs_usd', 'cost_mode', 'measured_usd', 'estimated_usd', 'cost_basis']
+      .every(c => CT.monitors[w].settle_writes.includes(c))),
+    JSON.stringify(MON69.map(w => [w, CT.monitors[w].settle_writes.length])));
+  check('R32: Page Watch keeps a ledger row of its own — free today (25 plain GETs), and the one workflow the guard, the concurrency check and the day\'s reconciliation could not see at all',
+    CT.page_watch.in_ledger === true && eq(CT.page_watch.est, { ai: 0, dfs: 0 })
+    && eq(CT.monitors['SEO Agent — Page Watch'].ai_nodes, []), JSON.stringify(CT.page_watch));
+  const watchRow = async (plan) => { reset(); mock('DFS Balance (Watch)', [{ json: {} }]); mock('Watch Plan', plan);
+    return (await run('Run Ledger Row (Watch)', [{ json: {} }], { code: 'Run_Ledger_Row_Watch_' }))[0].json; };
+  const wrow = await watchRow([{ json: { site_id: 'site_techand-ai', domain: 'techand.ai', url: 'https://www.techand.ai/' } }]);
+  check('R32: a Page Watch run reserves $0 and names the site it watched, so the row proves the run without holding back a cent of the budget',
+    wrow.est_usd === 0 && wrow.dfs_est_usd === 0 && wrow.mode === 'page_watch' && wrow.status === 'reserved'
+    && wrow.domain === 'techand.ai' && wrow.dfs_balance === 0, JSON.stringify(wrow));
+  reset();
+  mock('Run Ledger Row (Watch)', [{ json: { run_id: 'test-exec', mode: 'page_watch', est_usd: 0, dfs_est_usd: 0, cost_mode: 'page_watch' } }]);
+  const wsettle = (await run('Ledger Settle (Watch)', [{ json: {} }], { code: 'Ledger_Settle_Watch_' }))[0].json;
+  check('R32: and it settles that row at nothing, measured — a free run is not an estimate',
+    wsettle.status === 'done' && wsettle.settled_usd === 0 && wsettle.dfs_usd === 0 && wsettle.estimated_usd === 0
+    && /nothing spent/.test(wsettle.cost_basis), JSON.stringify(wsettle));
+
+  // ---------- 5. the kit's own rule, stated once ----------
+  const noneRun = await kit69({ call: 'aiRun', ai_run: { figure: null, reserved: 0.05, ran: [], checked: 2 } });
+  const pricedRun = await kit69({ call: 'aiRun', ai_run: { figure: { usd: 0.0114, calls: 1, measured_usd: 0, estimated: true, basis: 'characters' }, reserved: 0.06, ran: ['Site Describer'], checked: 11 } });
+  const reservedRun = await kit69({ call: 'aiRun', ai_run: { figure: null, reserved: 0.05, ran: ['Link Analyst'], checked: 2 } });
+  const blindRun = await kit69({ call: 'aiRun', ai_run: { figure: null, reserved: 0.3, ran: [], checked: 0 } });
+  check('R31 / R33: one rule, in one place — a priced figure wins, a workflow whose model nodes all stayed idle settles nothing, a model that ran without a priced figure keeps the reservation labelled, and a branch with nothing to check falls back exactly as before',
+    noneRun.usd === 0 && noneRun.source === 'none' && pricedRun.usd === 0.0114 && pricedRun.source === 'priced'
+    && reservedRun.usd === 0.05 && reservedRun.source === 'reserved' && blindRun.usd === 0.3 && blindRun.source === 'reserved'
+    && /priced no model call of its own/.test(blindRun.basis),
+    JSON.stringify({ none: noneRun.usd, priced: pricedRun.usd, reserved: reservedRun.usd, blind: blindRun.usd }));
+});
+
+// ===================================================================================
+// S71 (2026-10-15, benchmark programme area 13 "Cost control & reliability", build section 61;
+//      docs/system-review-2026-10-14/BENCHMARKS_2026-10-14.md)
+// The rubric compares this area with Semrush / Ahrefs **server-side limits**: one meter that governs the whole service and that the
+// customer cannot exceed. Ours governed a third of it — `ai_budget_usd` refuses on Claude money, while DataForSEO was $2.3876 of the
+// $3.63 the 2026-10-14 re-rating spent and $0.0560 of the $0.069 of that evening's live check. The data money had a running total
+// (`dfs_budget_used_est_usd`) that nothing ever refused on, and the only real cap — the account balance — does not refuse a run at all:
+// it makes every paid call inside one start failing, which is a half-delivered report charged for in full.
+// Four rules are held here: the data money is refused on the same way, a run the account cannot pay for is refused BEFORE it spends,
+// the check fails OPEN when the free probe did not answer, and a settled run counts what it measured instead of what it reserved.
+// ===================================================================================
+await guard('S71 the guard covers both currencies and the account is a hard floor', async () => {
+  reset(); const SN = 'S71 — the spend guard covers both currencies and the account is a hard floor';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const now71 = new Date().toISOString();
+  const err71 = (r) => r[0].json.validation_error || '';
+  delete store['Start Form']; delete store['DFS Balance'];
+
+  // ---------- A. the two settings reach the guard, beside the Claude ones ----------
+  const n71 = await run('Normalize Input', F.forms.webhookVerdict);   // an API verdict run: Claude and DataForSEO money, both small
+  // The AMOUNTS are a setting the owner changes (both raised $6 -> $15 on 2026-10-15: "we don't have issues with paying more cost for
+  // SEO ... the results should be benchmarked like very good"), so this asserts that CONFIG's figures REACH the guard, not what they
+  // are this week — a test that fails when a budget is raised is testing the configuration, not the guard. The behaviour below pins
+  // its own $6 in the fixture, the way every other ledger scenario in this file already does.
+  check('the request carries the data-money budget and the account floor exactly as it carries the Claude ones — one source, Normalize Input CONFIG',
+    typeof n71[0].json.dfs_budget_usd === 'number' && n71[0].json.dfs_budget_usd > 0
+    && n71[0].json.dfs_balance_floor_usd === 0.5
+    && typeof n71[0].json.ai_budget_usd === 'number' && n71[0].json.ai_budget_usd > 0
+    && n71[0].json.ai_budget_period === 'day',
+    JSON.stringify({ dfs: n71[0].json.dfs_budget_usd, floor: n71[0].json.dfs_balance_floor_usd, ai: n71[0].json.ai_budget_usd }));
+
+  const K71 = 'owner@northwind-erp.com';
+  const IN71 = (o = {}) => [{ json: { ...n71[0].json, email: K71, ai_budget_usd: 6, dfs_budget_usd: 6, ...o } }];
+  // one fixture shape: N earlier runs of this period, each holding `est` of DataForSEO money, settled at `measured` when `status` is done
+  const dfsRows = (count, est, status, measured) => Array.from({ length: count }, () => ({
+    key: 'other@example.com', mode: 'keyword', est_usd: 0, dfs_est_usd: est, created_at: now71, status, settled_usd: 0, dfs_usd: measured }));
+
+  // ---------- B. a clean run is told ONE number for what it will cost ----------
+  ledgerReset(); const c71 = await ledgerRun(IN71());
+  const j71 = c71[0].json, DE = j71.dfs_spend_estimate_usd, money = (v) => '$' + Number(v).toFixed(2);
+  check('a clean run passes and carries one total for what it will cost — the same self-correcting estimates the guard holds back, with the basis beside them, so what the caller is told and what is reserved cannot be two numbers',
+    !err71(c71) && DE > 0 && j71.run_cost_estimate_usd === +(j71.ai_spend_estimate_usd + DE).toFixed(2)
+    && /Claude \$/.test(String(j71.run_cost_estimate_basis)) && /search data \$/.test(String(j71.run_cost_estimate_basis))
+    && j71.dfs_budget_used_est_usd === DE,
+    JSON.stringify({ e: err71(c71), total: j71.run_cost_estimate_usd, ai: j71.ai_spend_estimate_usd, dfs: DE, used: j71.dfs_budget_used_est_usd }));
+
+  // ---------- C. the data money is a budget now, not only a running total ----------
+  ledgerReset(dfsRows(3, 2, 'reserved', 0)); const d1 = await ledgerRun(IN71());
+  check('three reserved runs holding $2.00 of DataForSEO each: the day\'s $6 data budget is used up and the run is refused — nothing ever refused on this figure before section 61',
+    new RegExp('search-data budget for this day is used up \\(estimated \\$6\\.00 of \\$6; this run would add about \\' + money(DE) + '\\)').test(err71(d1))
+    && /Nothing was charged and nothing was started/.test(err71(d1)) && /run again tomorrow/.test(err71(d1)), err71(d1));
+  ledgerReset(dfsRows(3, 2, 'reserved', 0)); const d2 = await ledgerRun(IN71({ ai_budget_usd: 0 }));
+  check('and it is a guard of its own: with the Claude budget switched off the data budget still refuses, so neither currency rides on the other',
+    /search-data budget/.test(err71(d2)), err71(d2));
+  ledgerReset(dfsRows(3, 2, 'reserved', 0)); const d3 = await ledgerRun(IN71({ dfs_budget_usd: 0 }));
+  check('dfs_budget_usd 0 switches the data guard off entirely — the shape every other limit in this node already has', !err71(d3), err71(d3));
+
+  // ---------- D. a settled run counts what it MEASURED, not what it reserved ----------
+  ledgerReset(dfsRows(3, 2, 'done', 0)); const d4 = await ledgerRun(IN71());
+  check('the same three runs finished having spent nothing (done, dfs_usd 0): the day is free again — the total read `dfs_usd || dfs_est_usd`, so a free_only backlink check that really spent $0 held its reservation against the day for ever (R31)',
+    !err71(d4) && d4[0].json.dfs_budget_used_est_usd === DE, JSON.stringify([err71(d4), d4[0].json.dfs_budget_used_est_usd]));
+  ledgerReset(dfsRows(3, 0.1, 'done', 2)); const d5 = await ledgerRun(IN71());
+  check('and a settled run that really did spend counts its MEASURED figure: 3 x $2.00 measured against 3 x $0.10 reserved refuses the next run, where the reservation alone would have waved it through',
+    /search-data budget for this day is used up \(estimated \$6\.00 of \$6/.test(err71(d5)), err71(d5));
+
+  // ---------- E. the account itself: refused before it spends, and fail-open when it cannot be read ----------
+  const balance = (usd) => mock('DFS Balance', [{ json: { tasks: [{ result: [{ money: { balance: usd } }] }] }, pairedItem: 0 }]);
+  balance(0.4); ledgerReset(); const b1 = await ledgerRun(IN71());
+  check('the account holds $0.40, this run needs about ' + money(DE) + ' and $0.50 has to stay for the scheduled checks: refused BEFORE it spends, with every figure in the message',
+    new RegExp('search-data account is too low for this run \\(\\$0\\.40 left; this run needs about \\' + money(DE) + ' and \\$0\\.50 has to stay for the scheduled checks\\)').test(err71(b1))
+    && /half a report and charges for all of it/.test(err71(b1)), err71(b1));
+  balance(5); ledgerReset(); const b2 = await ledgerRun(IN71());
+  check('the account holds $5.00: the run passes and carries the reading it was judged on',
+    !err71(b2) && b2[0].json.dfs_account_balance_usd === 5, JSON.stringify([err71(b2), b2[0].json.dfs_account_balance_usd]));
+  balance(0.4); ledgerReset(); const b3 = await ledgerRun(IN71({ dfs_balance_floor_usd: 0 }));
+  check('with no floor asked for, $0.40 covers a ' + money(DE) + ' run and it passes — the floor is a setting, never a hidden rule', !err71(b3), err71(b3));
+  mock('DFS Balance', [{ json: { statusCode: 500, message: 'probe failed' } }]); ledgerReset(); const b4 = await ledgerRun(IN71());
+  check('the free balance probe did not answer: the guard FAILS OPEN and refuses nothing — a guard that cannot measure must not block a customer (the rule a failed ledger read already follows)',
+    !err71(b4) && b4[0].json.dfs_account_balance_usd === 0, JSON.stringify([err71(b4), b4[0].json.dfs_account_balance_usd]));
+  balance(0.01); ledgerReset(); const b5 = await ledgerRun(IN71({ mode: 'published' }));
+  check('a mode that spends no data money is never refused by the account floor, however low the account is — it reserves $0, so there is nothing to refuse',
+    !err71(b5) && b5[0].json.dfs_spend_estimate_usd === 0, JSON.stringify([err71(b5), b5[0].json.dfs_spend_estimate_usd]));
+
+  // ---------- F. the Claude guard is untouched ----------
+  delete store['DFS Balance'];
+  ledgerReset(Array.from({ length: 3 }, () => ({ key: 'other@example.com', mode: 'keyword', est_usd: 2, dfs_est_usd: 0, created_at: now71, status: 'reserved', settled_usd: 0, dfs_usd: 0 })));
+  const f71 = await ledgerRun(IN71());
+  check('the Claude budget still refuses in its own words, unchanged by section 61',
+    /The AI budget for this day is used up \(estimated \$6\.00 of \$6;/.test(err71(f71)), err71(f71));
+});
+
+// ===================================================================================
+// S72 (2026-10-15, benchmark items B-A8 and B-A5; docs/system-review-2026-10-14/INVARIANTS.md rule 1) — the last two figures this
+// engine reported about itself without measuring them.
+// B-A8: nothing in the engine measured a single Claude token. Checked against the running n8n 2.41.4 rather than assumed —
+// @langchain/anthropic 1.5.6's streaming `_generate` returns no `llmOutput`, so n8n's `tokensUsageParser` falls back to zeros and records
+// a tiktoken `tokenUsageEstimate` for Strategy Brief / Copywriter / Editor; and the real `tokenUsage` of the eight non-streaming nodes
+// rides the `ai_languageModel` connection, which `WorkflowDataProxy` never reads. Anthropic's free `count_tokens` endpoint now counts the
+// exact prompt and the exact answer of the three streaming agents on the main path, so only the thinking no counter can see is modelled.
+// B-A5: only the DAY was held against the account. A run is now costed from the balance when it was the only one in flight, and keeps its
+// per-task figure — saying why — when it was not.
+// Every check below fails on the build of 2026-10-15 morning.
+// ===================================================================================
+await guard('B-A8 counted tokens and B-A5 the run against the account', async () => {
+  reset(); const SN = 'S72 B-A8 B-A5 — Anthropic counts the tokens a streaming call never reports, and a run is costed against the account only when it was alone';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const fs72 = require('fs'), path72 = require('path');
+  const CODE72 = process.env.CODE_DIR || path72.join(__dirname, 'code');
+  const src72 = (f) => fs72.readFileSync(path72.join(CODE72, f), 'utf8');
+  const TC72 = require('./table_cols.json');
+  const CW72 = require('./cost_wiring.json');
+  const kit72 = async (j) => (await run('Cost Kit', [{ json: j }], { code: '_cost_cal' }))[0].json;
+  const T72 = await kit72({ call: 'tables' });
+  const OPUS = { node: 'Copywriter', model: 'claude-opus-5-5', max_tokens: 32768, effort: 'medium', streaming: true,
+    prompt_chars: 40000, output_chars: 19000 };
+  const price = (i, o) => +((i / 1e6) * 4 + (o / 1e6) * 20).toFixed(4);
+
+  // ---------- 1. a counted call: the prompt and the answer are MEASURED, only the thinking is modelled ----------
+  const counted = { prompt_tokens: 9000, total_tokens: 14000, rounds: 1, source: 'Anthropic /v1/messages/count_tokens' };
+  const c1 = await kit72({ call: 'callCost', call_spec: { ...OPUS, calls: 1, counted } });
+  console.log('   counted call ->', JSON.stringify(c1));
+  const think1 = Math.round(32768 * T72.THINK_SHARE.medium);
+  check('B-A8: the counter answered, so the call is priced from 9,000 prompt and 5,000 answer tokens — the characters are ignored exactly as a reported usage would ignore them',
+    c1.counted === true && c1.in_tokens === 9000 && c1.out_tokens === 5000 + think1 && c1.think_tokens === think1
+    && c1.usd === price(9000, 5000 + think1), JSON.stringify(c1));
+  check('B-A8: the prompt and the answer land in measured_usd and ONLY the thinking no counter can see lands in estimated_usd — before this, one modelled cent threw the whole call into the estimated half',
+    c1.measured_usd === price(9000, 5000) && c1.estimated_usd === +(c1.usd - price(9000, 5000)).toFixed(4)
+    && c1.estimated_usd > 0 && c1.measured_usd > c1.estimated_usd, JSON.stringify({ m: c1.measured_usd, e: c1.estimated_usd, usd: c1.usd }));
+  check('B-A8: a call with a modelled part is still not called "measured", and its basis names the counter, the two token counts and what the thinking costs',
+    c1.measured === false && c1.counter === 'Anthropic /v1/messages/count_tokens'
+    && /^measured: Anthropic \/v1\/messages\/count_tokens counted 9000 prompt and 5000 answer token\(s\)/.test(c1.basis)
+    && /thinking token\(s\) it cannot see are modelled from the medium effort budget/.test(c1.basis)
+    && /is modelled\)/.test(c1.basis), c1.basis);
+  const c1b = await kit72({ call: 'callCost', call_spec: { node: 'Site Describer', model: 'claude-haiku-4-5', max_tokens: 4096, prompt_chars: 9999, output_chars: 9999, calls: 1, counted } });
+  check('B-A8: a counted call on a node with no thinking budget is measured outright — nothing of it is an estimate',
+    c1b.measured === true && c1b.estimated_usd === 0 && c1b.think_tokens === 0 && c1b.measured_usd === c1b.usd, JSON.stringify(c1b));
+
+  // ---------- 2. what the counter could NOT see is never passed off as measured ----------
+  const c2 = await kit72({ call: 'callCost', call_spec: { ...OPUS, node: 'Editor', calls: 3, counted } });
+  check('B-A8: the Editor runs once per QA round and only the last round is on the main path, so the counted tokens are repeated for the other rounds and those rounds stay MODELLED',
+    c2.counted === true && c2.counted_rounds === 1 && c2.in_tokens === 27000 && c2.measured_usd === price(9000, 5000)
+    && c2.estimated_usd > c1.estimated_usd && / repeated for the 2 round\(s\) the counter did not see/.test(c2.basis), JSON.stringify(c2));
+  for (const [why, bad] of [['neither probe answered', null], ['the prompt count did not answer', { prompt_tokens: 0, total_tokens: 14000 }],
+                            ['the answer count came back no larger than the prompt', { prompt_tokens: 9000, total_tokens: 9000 }]]) {
+    const cf = await kit72({ call: 'callCost', call_spec: { ...OPUS, calls: 1, counted: bad } });
+    check('B-A8: ' + why + ' — the call falls back to the character figure, measures nothing and keeps the old basis (a count that failed must never become a measurement)',
+      cf.counted === false && cf.measured === false && cf.measured_usd === 0 && cf.estimated_usd === cf.usd
+      && cf.in_tokens === Math.ceil(40000 / T72.CHARS_PER_TOKEN) && /^estimated: prompt and answer characters/.test(cf.basis), JSON.stringify(cf));
+  }
+
+  // ---------- 3. the run figure adds the two halves per call ----------
+  const mixed = await kit72({ call: 'runCost', calls: [
+    { ...OPUS, node: 'Strategy Brief', max_tokens: 24576, calls: 1, counted: { prompt_tokens: 11000, total_tokens: 14000, rounds: 1 } },
+    { ...OPUS, node: 'Copywriter', calls: 1, counted },
+    { ...OPUS, node: 'Editor', calls: 1, counted: { prompt_tokens: 12000, total_tokens: 17000, rounds: 1 } },
+    { node: 'Critic', model: 'claude-sonnet-5-5', max_tokens: 16384, effort: 'medium', prompt_chars: 30000, output_chars: 4000, calls: 1 },
+  ] });
+  console.log('   counted page run ->', JSON.stringify({ usd: mixed.usd, m: mixed.measured_usd, e: mixed.estimated_usd, share: mixed.measured_share, counted: mixed.counted_nodes, streaming: mixed.streaming_nodes }));
+  check('B-A8: the three streaming Opus nodes of a page run are now measured apart from their thinking — the run that was 0% measured reports most of its Claude money as measured',
+    mixed.counted_nodes.length === 3 && eq(mixed.counted_nodes.slice().sort(), ['Copywriter', 'Editor', 'Strategy Brief'])
+    && mixed.measured_usd > 0 && mixed.measured_share > 50
+    && +(mixed.measured_usd + mixed.estimated_usd).toFixed(4) === mixed.usd, JSON.stringify({ m: mixed.measured_usd, e: mixed.estimated_usd, share: mixed.measured_share }));
+  check('B-A8: a node whose tokens were counted is no longer listed as "reports no token usage" — only a node nothing measured is',
+    eq(mixed.streaming_nodes, []) && mixed.by_node.Copywriter.counted === true && mixed.by_node.Critic.counted === false
+    && mixed.by_node.Copywriter.measured_usd > 0 && mixed.by_node.Critic.measured_usd === 0, JSON.stringify(mixed.by_node));
+  check('B-A8: the basis names the counter, the nodes it answered for and what is left modelled, so nobody reads the measured half as the whole figure',
+    /Anthropic \/v1\/messages\/count_tokens counted the prompt and the answer of 3 node\(s\)/.test(mixed.basis)
+    && /of thinking is modelled from the effort budget/.test(mixed.basis), mixed.basis);
+  const allCounted = await kit72({ call: 'runCost', calls: [{ ...OPUS, calls: 1, counted }] });
+  check('B-A8: a run in which every call was counted says "measured" first and names only the thinking as modelled',
+    /^measured: Anthropic \/v1\/messages\/count_tokens counted the prompt and the answer of every call/.test(allCounted.basis)
+    && /thinking no counter can see is modelled from the effort budget/.test(allCounted.basis), allCounted.basis);
+
+  // ---------- 4. the measurement is wired where the run can read it ----------
+  const CT72 = CW72.count;
+  check('B-A8: the counter is Anthropic\'s FREE token-counting endpoint, and there are exactly three chains — one per streaming agent',
+    CT72 && CT72.url === 'https://api.anthropic.com/v1/messages/count_tokens' && CT72.free === true
+    && eq(Object.keys(CT72.nodes).sort(), ['Copywriter', 'Editor', 'Strategy Brief']), JSON.stringify(CT72 && Object.keys(CT72.nodes || {})));
+  check('B-A8: each chain sits on the MAIN path behind its agent and hands the agent\'s own items back, so nothing downstream sees the counter (a side branch runs last, or not at all — R17)',
+    Object.entries(CT72.nodes).every(([ag, n]) => n.set === 'Prompt For Count (' + ag + ')' && n.prompt === 'Count Prompt (' + ag + ')'
+      && n.answer === 'Count Answer (' + ag + ')' && n.resume === 'After Count (' + ag + ')' && n.after.length && n.input),
+    JSON.stringify(CT72.nodes));
+  check('B-A8: the chain preserves the pipeline — the agent\'s old successors hang off the resume node (Strategy Brief -> Parse Brief, Copywriter -> Critic, Editor -> Content QA)',
+    eq(CT72.nodes['Strategy Brief'].after, ['Parse Brief']) && eq(CT72.nodes.Copywriter.after, ['Critic'])
+    && eq(CT72.nodes.Editor.after, ['Content QA']), JSON.stringify(Object.fromEntries(Object.entries(CT72.nodes).map(([k, v]) => [k, v.after]))));
+  const streamCalls = CW72.ai_calls.filter(c => c.streaming);
+  check('B-A8: the call table knows which count nodes belong to which agent, so the pricing reads the right two answers',
+    streamCalls.length === 3 && streamCalls.every(c => c.count_prompt === 'Count Prompt (' + c.node + ')' && c.count_answer === 'Count Answer (' + c.node + ')' && c.count_rounds === 1)
+    && CW72.ai_calls.filter(c => !c.streaming).every(c => !c.count_prompt), JSON.stringify(streamCalls.map(c => [c.node, c.count_prompt])));
+  for (const f of ['Build_Word_File.js', 'Run_Ledger_Settle.js']) {
+    const s = src72(f);
+    check('B-A8: ' + f + ' reads the counter\'s two answers before it prices anything, and uses the LAST round of a looping agent',
+      /const __countOf = /.test(s) && /__countOf\(c\.count_prompt\)/.test(s) && /a\[a\.length - 1\]/.test(s)
+      && s.indexOf('const __countOf') < s.indexOf('__countOf(c.count_prompt)'), f);
+  }
+
+  // ---------- 5. B-A5: the run against the account, and only when the account can answer for it ----------
+  const t0 = '2026-10-15T09:00:00.000Z', t1 = '2026-10-15T09:12:00.000Z';
+  const mine72 = { run_id: 'exec-900', created_at: t0, dfs_balance: 13.79, status: 'reserved' };
+  const alone = await kit72({ call: 'dfsRun', rows: [{ ...mine72 }], mine: mine72, end_balance: 13.7378, settled_at: t1, engine_usd: 0.0521 });
+  console.log('   alone ->', JSON.stringify(alone));
+  check('B-A5: this run was the only one in flight, so the $0.0522 the account actually fell IS this run\'s cost — the day reconciliation could never say that about a single run',
+    alone.alone === true && alone.attributed === true && alone.source === 'account' && alone.usd === 0.0522
+    && alone.within === true && /was the only one in flight between 09:00:00 and 09:12:00/.test(alone.basis)
+    && /the balance fell \$0\.0522/.test(alone.basis), JSON.stringify(alone));
+  const over = await kit72({ call: 'dfsRun', mine: mine72, end_balance: 13.7378, settled_at: t1, engine_usd: 0.0521,
+    rows: [{ ...mine72 }, { run_id: 'exec-901', created_at: '2026-10-15T09:05:00.000Z', status: 'reserved' }] });
+  check('B-A5: another run was open across the window, so the account\'s move is SHARED and this run keeps the cost its own tasks reported — and the row names the run it overlapped',
+    over.comparable === true && over.attributed === false && over.source === 'tasks' && over.usd === 0
+    && eq(over.overlapped, ['exec-901']) && /1 other run\(s\) were in flight at the same time \(exec-901\)/.test(over.basis)
+    && /its figure stays the \$0\.0521 its own tasks reported/.test(over.basis), JSON.stringify(over));
+  const closed = await kit72({ call: 'dfsRun', mine: mine72, end_balance: 13.7378, settled_at: t1, engine_usd: 0.0521,
+    rows: [{ ...mine72 }, { run_id: 'exec-899', created_at: '2026-10-15T08:40:00.000Z', status: 'done', settled_at: '2026-10-15T08:55:00.000Z' }] });
+  check('B-A5: a run that had already SETTLED before this one reserved did not overlap it, so the account can still answer for this run',
+    closed.attributed === true && eq(closed.overlapped, []), JSON.stringify(closed));
+  const stale = await kit72({ call: 'dfsRun', mine: mine72, end_balance: 13.7378, settled_at: t1, engine_usd: 0.0521,
+    rows: [{ ...mine72 }, { run_id: 'exec-898', created_at: '2026-10-15T08:40:00.000Z', status: 'reserved' }] });
+  check('B-A5: a row still open from before this run began overlaps it too — a reservation nobody settled is a run that may still be spending',
+    stale.attributed === false && eq(stale.overlapped, ['exec-898']), JSON.stringify(stale));
+  const noRead = await kit72({ call: 'dfsRun', rows: [{ ...mine72 }], mine: { ...mine72, dfs_balance: 0 }, end_balance: 13.7, settled_at: t1, engine_usd: 0.05 });
+  check('B-A5: a missing reading is never filled in — the run keeps its per-task figure and says which end of it the account did not answer',
+    noRead.comparable === false && noRead.attributed === false && /not read at both ends of this run \(no reading when it reserved\)/.test(noRead.basis), noRead.basis);
+  const flat = await kit72({ call: 'dfsRun', rows: [{ ...mine72 }], mine: mine72, end_balance: 13.79, settled_at: t1, engine_usd: 0.05 });
+  check('B-A5: the account had not moved when the run settled (DataForSEO posts a moment later) — nothing is attributed and the reason is in the row, never a measured $0',
+    flat.alone === true && flat.attributed === false && /had not moved when it settled/.test(flat.basis), flat.basis);
+  const freeRun = await kit72({ call: 'dfsRun', rows: [{ ...mine72 }], mine: mine72, end_balance: 13.7378, settled_at: t1, engine_usd: 0, calls: 0 });
+  check('B-A5: a run that sent no paid task cannot have moved the account, however alone it was — whatever moved it came from somewhere else and is never charged to this run',
+    freeRun.alone === true && freeRun.attributed === false && /sent no paid DataForSEO task/.test(freeRun.basis), freeRun.basis);
+  const outside = await kit72({ call: 'dfsRun', rows: [{ ...mine72 }], mine: mine72, end_balance: 11.0, settled_at: t1, engine_usd: 0.05 });
+  check('B-A5: the account fell far more than every task reported — something outside this engine spends on the same account, so nothing is attributed and the gap is reported instead',
+    outside.attributed === false && /something outside this engine is spending on the same account/.test(outside.basis), outside.basis);
+
+  // ---------- 6. the settle really does it, and the row can hold the answer ----------
+  check('B-A5: seo_run_ledger can say when a row settled, what the account read then and which figure the row carries (through ladder_common.py + sync_tables.py)',
+    ['settled_at', 'dfs_balance_end', 'dfs_source'].every(c => TC72.RUN_LEDGER.includes(c)), TC72.RUN_LEDGER.join(','));
+  check('B-A5: the settle chain takes the second FREE reading and reloads the ledger rows before it settles — the reserve-time load cannot see the runs that started after this one',
+    CW72.run_reconcile && CW72.run_reconcile.balance_end === 'DFS Balance End' && CW72.run_reconcile.load === 'Load Run Ledger (Settle)'
+    && CW72.run_reconcile.window_ms >= 2 * 60 * 60 * 1000
+    && ['settled_at', 'dfs_balance_end', 'dfs_source'].every(c => CW72.run_reconcile.writes.includes(c)), JSON.stringify(CW72.run_reconcile));
+  // the settle stamps `settled_at` from the machine's own clock, so the fixture's window has to be a real one that is now closing
+  const r0 = new Date(Date.now() - 12 * 60000).toISOString(), rMid = new Date(Date.now() - 7 * 60000).toISOString();
+  const LED72 = { run_id: 'exec-900', key: 'app:co_1', mode: 'audit', est_usd: 0, created_at: r0, status: 'reserved', settled_usd: 0,
+    domain: 'northwind-erp.com', heavy: true, dfs_est_usd: 0.09, dfs_usd: 0, dfs_balance: 13.79, cost_mode: 'site_audit|crawl' };
+  mock('Run Ledger Row', [{ json: LED72 }]);
+  mock('Rate Limit', [{ json: { mode: 'audit', domain: 'northwind-erp.com' } }]);
+  mock('Build Audit Report', [{ json: { run_ledger: { dataforseo_usd: 0.0212, dataforseo_calls: 3, dataforseo_estimated_usd: 0.0212,
+    crawl_cost: { basis: 'the crawl was quoted $0.0900 for the 200 pages it asked for and crawled 47' } } } }]);
+  mock('Load Run Ledger', [{ json: {} }]);
+  mock('DFS Balance End', [{ json: { tasks: [{ result: [{ money: { balance: 13.7378 } }] }] } }]);
+  mock('Load Run Ledger (Settle)', [{ json: { ...LED72 } }]);
+  const s1 = (await run('Run Ledger Settle', [{ json: {} }]))[0].json;
+  console.log('   settle (alone) ->', JSON.stringify({ dfs: s1.dfs_usd, src: s1.dfs_source, m: s1.measured_usd, e: s1.estimated_usd, basis: s1.cost_basis }));
+  check('B-A5: the audit that settled a $0.0212 pro-rata ESTIMATE now settles the $0.0522 the account actually lost, as a measurement — the crawl estimate is superseded by the only figure nobody can argue with',
+    s1.dfs_source === 'account' && s1.dfs_usd === 0.0522 && s1.dfs_measured === true && s1.estimated_usd === 0
+    && s1.dfs_balance_end === 13.7378 && s1.dfs_tasks_usd === 0.0212 && s1.dfs_estimated_usd === 0 && /DataForSEO \$0\.0522 measured/.test(s1.cost_basis),
+    JSON.stringify({ src: s1.dfs_source, dfs: s1.dfs_usd, e: s1.estimated_usd, basis: s1.cost_basis }));
+  check('B-A5: and the row stamps when it settled, so the next run can tell whether it overlapped this one',
+    typeof s1.settled_at === 'string' && s1.settled_at > r0 && s1.dfs_run && s1.dfs_run.attributed === true, JSON.stringify([s1.settled_at, !!s1.dfs_run]));
+  mock('Load Run Ledger (Settle)', [{ json: { ...LED72 } }, { json: { run_id: 'exec-901', created_at: rMid, status: 'reserved' } }]);
+  const s2 = (await run('Run Ledger Settle', [{ json: {} }]))[0].json;
+  console.log('   settle (shared) ->', JSON.stringify({ dfs: s2.dfs_usd, src: s2.dfs_source, basis: s2.cost_basis }));
+  check('B-A5: with another run in flight the same settle keeps the pro-rata crawl estimate, stays labelled an estimate and says in the row why the account could not answer for it',
+    s2.dfs_source === 'tasks' && s2.dfs_usd === 0.0212 && s2.estimated_usd > 0
+    && /other run\(s\) were in flight at the same time/.test(s2.cost_basis), JSON.stringify({ src: s2.dfs_source, dfs: s2.dfs_usd, basis: s2.cost_basis }));
+  delete store['DFS Balance End'];
+  const s3 = (await run('Run Ledger Settle', [{ json: {} }]))[0].json;
+  check('B-A5: the free probe did not answer — the settle carries on exactly as before, with the per-task figure and no invented reconciliation',
+    s3.dfs_source === 'tasks' && s3.dfs_usd === 0.0212 && s3.dfs_balance_end === 0 && s3.dfs_run.comparable === false, JSON.stringify({ src: s3.dfs_source, bal: s3.dfs_balance_end }));
+  reset();
+});
+
+// ===================================================================================
+// S73 (2026-10-15, benchmark items B-R3 and B-A6; docs/system-review-2026-10-14/INVARIANTS.md rule 1, build section 63)
+// Two things the engine knew and nobody else did.
+//   B-R3 — it priced every run (Claude + DataForSEO, from the self-correcting estimates its own guard reserves against) and shipped
+//          the number to no one: `run_cost_estimate_usd` lived in the *Rate Limit* node and a sticky note, and not one of the eleven
+//          callbacks carried it. Held here: a refused run carries the same figure as an accepted one (it used to be assigned below
+//          the refusals, so every `return` dropped it), the stamp reaches a callback whatever the builder put on it, and the figure
+//          arrives saying it is MODELLED — or `not_available` with a reason and a null amount, never a 0.
+//   B-A6 — the front door had no idempotency, so a retry after a timeout, a webhook delivered twice or a double submit each bought a
+//          second run, at up to $15 a day since 2026-10-15. Held here: the key cannot be `request_id` (minted from `$execution.id`
+//          and overwriting whatever the caller sent), identical requests share a key and different ones do not, a repeat is answered
+//          with the FIRST run's id, and every uncertainty starts the run rather than refusing one the customer asked for.
+// ===================================================================================
+await guard('S73 the run cost reaches the caller, and a request sent twice runs once', async () => {
+  reset(); const SN = 'S73 B-R3 B-A6 — the run cost the engine told nobody, and a request sent twice';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const TC73 = require('./table_cols.json');
+  const P73 = require('./fixtures_platform.json');
+  const base = P73.find(f => f.body.mode === 'keyword');
+  const qv = async (body, headers) => (await run('Quick Validate', { headers: headers || base.headers, body }))[0].json;
+
+  // ---------- A. B-A6: what a repeat is recognised BY ----------
+  const a1 = await qv(base.body); delete store['Start Form'];
+  const a2 = await qv(base.body); delete store['Start Form'];
+  check('B-A6: `request_id` could never have been the key — it is minted here from $execution.id and overwrites whatever the caller sent, so two real deliveries would carry two different ids while the request itself is unchanged',
+    a1.request_id === a2.request_id && a1.forward.body.request_id === a1.request_id && a1.idem_key === a2.idem_key && a1.idem_source === 'request fingerprint',
+    JSON.stringify({ rid: a1.request_id, k1: a1.idem_key, k2: a2.idem_key, src: a1.idem_source }));
+  // the body's key ORDER must not change the fingerprint: a caller that serialises its JSON differently on the retry is still the
+  // same request (canonical form, keys sorted, recursively)
+  const shuffled = Object.keys(base.body).sort().reverse().reduce((o, k) => { o[k] = base.body[k]; return o; }, {});
+  const a3 = await qv(shuffled); delete store['Start Form'];
+  check('B-A6: the same body with its keys in another order is the same request — the fingerprint is canonical, so a caller that re-serialises on the retry is not charged twice',
+    a3.idem_key === a1.idem_key, JSON.stringify({ k: a3.idem_key, want: a1.idem_key }));
+  const a4 = await qv({ ...base.body, keyword: 'erp for wholesalers' }); delete store['Start Form'];
+  const a5 = await qv(base.body, { 'x-forwarded-for': 'app:another-company' }); delete store['Start Form'];
+  check('B-A6: a different keyword is a different request, and so is the same request from a different company — anything that changes what the run does, or who it is for, runs',
+    a4.idem_key !== a1.idem_key && a5.idem_key !== a1.idem_key, JSON.stringify({ kw: a4.idem_key, co: a5.idem_key, first: a1.idem_key }));
+  const a6 = await qv({ ...base.body, request_id: 'caller-abc' }); delete store['Start Form'];
+  const a7 = await qv({ ...base.body, keyword: 'anything else', idempotency_key: 'caller-abc' }); delete store['Start Form'];
+  const a8 = (await run('Quick Validate', { headers: { ...base.headers, 'idempotency-key': 'caller-abc' }, body: base.body }))[0].json; delete store['Start Form'];
+  check('B-A6: a caller that names its own request is believed — body `request_id`, body `idempotency_key` and the `Idempotency-Key` header all key on what the caller called it, whatever else is in the body',
+    a6.idem_key === 'k:caller-abc' && a7.idem_key === 'k:caller-abc' && a8.idem_key === 'k:caller-abc' && a6.idem_source === 'caller',
+    JSON.stringify([a6.idem_key, a7.idem_key, a8.idem_key, a6.idem_source]));
+  const a9 = await qv({ ...base.body, force_new: true }); delete store['Start Form'];
+  check('B-A6: `force_new: true` asks for a genuinely new run of the same analysis and gets one — no key, so nothing can match it',
+    a9.idem_key === '' && a9.idem_source === 'force_new' && a9.ok, JSON.stringify({ k: a9.idem_key, src: a9.idem_source }));
+  check('B-A6: and the window travels with the request, so the node that decides and the answer the caller reads cannot disagree about it',
+    a1.idem_window_min === 5, String(a1.idem_window_min));
+
+  // ---------- B. the row that is written before the 202 ----------
+  const rowOf = async (q) => { mock('Quick Validate', [{ json: q }]); return (await run('Request Row', [{ json: { id: 'tbl', name: 'seo_cache' } }]))[0].json; };
+  const r1 = await rowOf(a1);
+  const eq73 = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+  check('B-A6: the request is logged with exactly the seo_cache columns in the table\'s own order — the insert auto-maps every field of the item, so an extra one would be a failed insert on the live table',
+    eq73(Object.keys(r1), TC73.CACHE) && r1.kind === 'idem' && r1.key === 'idem:' + a1.idem_key && r1.site_id === 'northwind-erp.com',
+    JSON.stringify({ cols: Object.keys(r1), want: TC73.CACHE, key: r1.key }));
+  check('B-A6: and the row carries the request id the repeat will be answered with',
+    JSON.parse(r1.value).request_id === String(a1.request_id), r1.value);
+  const r9 = await rowOf(a9);
+  check('B-A6: a `force_new` request is still recorded — a request that arrived is worth having — but under a key nothing else can ever carry, so it neither matches nor is matched',
+    /^idem:none:/.test(r9.key) && r9.key.endsWith(String(a9.request_id)), r9.key);
+
+  // ---------- C. first delivery, repeat, and every way of being unsure ----------
+  // insert-then-read-back, lowest id wins: `Record Request` is this delivery's own row, `Load Requests` the window's rows under that key
+  const decide = async (q, rowKey, mineRow, loaded) => {
+    mock('Quick Validate', [{ json: q }]);
+    mock('Request Row', [{ json: { key: rowKey } }]);
+    mock('Record Request', [{ json: mineRow }]);
+    mock('Load Requests', loaded.length ? loaded.map(x => ({ json: x })) : [{ json: {} }]);
+    return (await run('First Or Repeat', [{ json: {} }]))[0].json;
+  };
+  const KEY = 'idem:' + a1.idem_key;
+  const firstRow = { id: 41, key: KEY, kind: 'idem', updated_at: '2026-10-15T09:00:00.000Z', value: JSON.stringify({ request_id: '777', mode: 'keyword' }) };
+  const mineRow = { id: 42, key: KEY, kind: 'idem', updated_at: '2026-10-15T09:00:04.000Z' };
+
+  const c1 = await decide(a1, KEY, { id: 41, key: KEY }, [firstRow]);
+  check('B-A6: the FIRST delivery sees only its own row and starts the run, and the answer tells the caller the rule it is now under',
+    c1.duplicate === false && c1.request_id === a1.request_id && /A repeat of this exact request within 5 minutes/.test(c1.note),
+    JSON.stringify({ dup: c1.duplicate, rid: c1.request_id, note: c1.note }));
+  const c2 = await decide(a1, KEY, mineRow, [firstRow, { ...mineRow }]);
+  check('B-A6: the SECOND delivery of the same request is a repeat — it is answered with the FIRST run\'s id, not its own, and nothing is started a second time',
+    c2.duplicate === true && c2.request_id === '777' && c2.first_seen_at === '2026-10-15T09:00:00.000Z'
+    && /already received/.test(c2.note) && /force_new/.test(c2.note), JSON.stringify({ dup: c2.duplicate, rid: c2.request_id, at: c2.first_seen_at }));
+  const c3 = await decide(a1, KEY, mineRow, [firstRow, { ...mineRow }, { id: 43, key: KEY, updated_at: '2026-10-15T09:00:09.000Z', value: JSON.stringify({ request_id: '999' }) }]);
+  check('B-A6: a THIRD delivery still names the first run and not the second — lowest id wins, which is why the row is inserted before it is read (two deliveries in the same millisecond both insert, both read the same rows, and both agree)',
+    c3.duplicate === true && c3.request_id === '777', JSON.stringify({ dup: c3.duplicate, rid: c3.request_id }));
+  // ---- and every way of not being sure starts the run ----
+  const open = [
+    ['the log write did not get through, so this delivery has no id of its own and cannot be placed in the order',
+      await decide(a1, KEY, {}, [firstRow])],
+    ['the window holds nothing earlier (the first row has already aged out, or this really is the first)',
+      await decide(a1, KEY, mineRow, [{ ...mineRow }])],
+    ['the earlier row\'s stored value cannot be read, so there is no first run id to answer with — and inventing one would be worse than a second run',
+      await decide(a1, KEY, mineRow, [{ ...firstRow, value: 'not json at all' }, { ...mineRow }])],
+    ['the earlier row holds no request id',
+      await decide(a1, KEY, mineRow, [{ ...firstRow, value: JSON.stringify({ mode: 'keyword' }) }, { ...mineRow }])],
+    ['the table could not be read at all',
+      await decide(a1, KEY, mineRow, [])],
+    ['`force_new` was asked for, so the `idem:none:` key matches nothing however many rows come back',
+      await decide(a9, 'idem:none:' + a9.request_id, { id: 42, key: 'idem:none:' + a9.request_id }, [firstRow, { ...mineRow }])],
+  ];
+  for (const [why, out] of open) check('B-A6 fails open: ' + why + ' — the run starts', out.duplicate === false, JSON.stringify(out).slice(0, 200));
+
+  // ---------- D. B-R3: a refused run carries the same figure as an accepted one ----------
+  reset();
+  const n73 = await run('Normalize Input', F.forms.webhookVerdict);
+  const IN73 = (o = {}) => [{ json: { ...n73[0].json, email: 'owner@northwind-erp.com', ai_budget_usd: 6, dfs_budget_usd: 6, ...o } }];
+  const now73 = new Date().toISOString();
+  ledgerReset(); const d1 = await ledgerRun(IN73());
+  const want = d1[0].json.run_cost_estimate_usd;
+  check('B-R3: an accepted run carries one total for what it will cost, with the basis naming what it was modelled from and the state saying it is MODELLED — the engine\'s figure can never be a measurement, because what a run really spent is settled at the end',
+    want === +(d1[0].json.ai_spend_estimate_usd + d1[0].json.dfs_spend_estimate_usd).toFixed(2)
+    && d1[0].json.run_cost_estimate_state === 'modelled'
+    && /^modelled before the run/.test(String(d1[0].json.run_cost_estimate_basis))
+    && /Claude \$/.test(String(d1[0].json.run_cost_estimate_basis)) && /search data \$/.test(String(d1[0].json.run_cost_estimate_basis)),
+    JSON.stringify({ usd: want, state: d1[0].json.run_cost_estimate_state, basis: d1[0].json.run_cost_estimate_basis }));
+  const held = Array.from({ length: 3 }, () => ({ key: 'other@example.com', mode: 'keyword', est_usd: 2, dfs_est_usd: 0, created_at: now73, status: 'reserved', settled_usd: 0, dfs_usd: 0 }));
+  ledgerReset(held); const d2 = await ledgerRun(IN73());
+  check('B-R3: and a run the budget REFUSES carries the same figure — it used to be assigned below the four guards, so every refusal returned without it and the one case where a caller most wants the number was the one case that never had it',
+    /The AI budget for this day is used up/.test(d2[0].json.validation_error || '') && d2[0].json.run_cost_estimate_usd === want
+    && d2[0].json.run_cost_estimate_state === 'modelled',
+    JSON.stringify({ e: d2[0].json.validation_error, usd: d2[0].json.run_cost_estimate_usd, want }));
+
+  // ---------- E. B-R3: the stamp that puts it on the callback ----------
+  // every one of the eleven builders funnels through *Has Callback?*, and each names its fields one by one — six carry `run_ledger`,
+  // five carry nothing about money at all — so this node is the only place that reaches all of them.
+  const payload = { status: 'completed', stage: 'console_checkin', request_id: '555', domain: 'northwind-erp.com', callback_url: 'https://example.test/hook' };
+  mock('Rate Limit', [{ json: d1[0].json }]);
+  const e1 = (await run('Run Cost (Callback)', [{ json: payload, binary: { data: { data: 'AAA=', mimeType: 'application/pdf' } } }]))[0];
+  check('B-R3: a callback that carried nothing about money now carries the engine\'s own figure for the run, with its basis and its state, and every field the builder put on it is untouched',
+    e1.json.run_cost_estimate_usd === want && e1.json.run_cost_estimate_state === 'modelled'
+    && /^modelled before the run/.test(e1.json.run_cost_estimate_basis)
+    && Object.entries(payload).every(([k, v]) => e1.json[k] === v), JSON.stringify(e1.json));
+  check('B-R3: and the report\'s files still ride through on the binary — a Code node drops them unless it hands them back, and the PDF and the Word document of a report go out on this same item',
+    !!(e1.binary && e1.binary.data && e1.binary.data.data === 'AAA='), JSON.stringify(e1.binary || null));
+  delete store['Rate Limit'];
+  const e2 = (await run('Run Cost (Callback)', [{ json: payload }]))[0].json;
+  check('B-R3 (INVARIANTS rule 1): where the guard never priced the run the amount is NULL with the reason in its place — not a 0, which would say the run costs nothing, and not a figure invented to fill the field',
+    e2.run_cost_estimate_usd === null && e2.run_cost_estimate_state === 'not_available'
+    && /^not available:/.test(e2.run_cost_estimate_basis) && e2.status === 'completed', JSON.stringify(e2));
+  mock('Rate Limit', [{ json: { ...d1[0].json, run_cost_estimate_usd: undefined, run_cost_estimate_basis: undefined } }]);
+  const e3 = (await run('Run Cost (Callback)', [{ json: payload }]))[0].json;
+  check('B-R3: a run that reached the guard and came back unpriced says exactly that, and still says nothing it cannot support',
+    e3.run_cost_estimate_usd === null && e3.run_cost_estimate_state === 'not_available' && /reached the guard but carried no estimate/.test(e3.run_cost_estimate_basis), JSON.stringify(e3));
+  const e4 = (await run('Run Cost (Callback)', [{ json: { ...payload, run_cost_estimate_usd: 99, run_cost_estimate_state: 'measured' } }]))[0].json;
+  check('B-R3: and a figure a builder had put on the payload itself is replaced by the guard\'s, never left to travel as a "measured" cost of a run that has not finished',
+    e4.run_cost_estimate_usd === null && e4.run_cost_estimate_state === 'not_available', JSON.stringify(e4));
+  reset();
+});
+
+// S74 (2026-10-15, benchmark items B-A7 and B-A9; docs/system-review-2026-10-14/INVARIANTS.md rules 3 and 4)
+// An alert nobody received, and ten schedules that could not be refused.
+// Every check below fails on the build of 2026-10-15 morning: an alert got ONE attempt per channel and whatever the row then said was the
+// end of it (no ops alert has ever reached a human); a 404 from a revoked webhook was written down as a delivery because the POST node is
+// `neverError` and nothing read its status; the Page Watch posted its digest and wrote nothing back at all; a repeat inside the dedupe
+// window wrote `deduped` over the channel that had carried an alert; and a scheduled monitor could not be refused for concurrency however
+// much was already running, because the ten reserve chains R17 put on the main path never LOOKED at the ledger they wrote to.
+// ===================================================================================
+await guard('B-A7 B-A9 the alert retry, the escalation and the shared concurrency gate', async () => {
+  reset(); const SN = 'S74 B-A7 B-A9 — an undelivered alert is re-attempted by the next run of any workflow, escalated after three tries and never called delivered without a 2xx, and a scheduled monitor passes the same concurrency gate an API run passes';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const TC74 = require('./table_cols.json');
+  const WIRE74 = require('./alert_retry_wiring.json');
+  const OW74 = require('./ops_alert_wiring.json');
+  const PW74 = require('./page_watch_wiring.json');
+  const EMPTY74 = [{ json: {} }];
+  const ar = async (j) => (await run('Alert Retry', [{ json: j }], { code: '_alert_retry' }))[0].json;
+  const rg = async (j) => (await run('Run Guard', [{ json: j }], { code: '_run_guard' }))[0].json;
+  const ago = (min) => new Date(Date.now() - min * 60000).toISOString();
+  const WEBHOOK = 'https://hooks.example.test/seo-agent-alerts';
+  const ALERT_ROW = (o) => ({ alert_key: 'SEO Agent v4 | Keyword Data | dataforseo #', workflow: 'SEO Agent v4', node: 'Keyword Data',
+    message: 'DataForSEO 40101', execution_id: '549', execution_url: 'http://localhost:5678/x/549', mode: 'webhook', severity: 'high',
+    first_seen_at: ago(90), last_seen_at: ago(90), count: 1, channels: 'webhook,email,data_table', delivered: 'failed', notes: '',
+    attempts: 1, last_attempt_at: ago(90), next_attempt_at: ago(60), attempt_log: '1 ' + ago(90).replace(/\.\d+Z$/, 'Z') + ' webhook failed: ENOTFOUND', ...o });
+
+  // ---------- 0. the constants, and that the two kits agree on the one they share ----------
+  const T74 = await ar({ call: 'tables' });
+  console.log('   constants ->', JSON.stringify(T74));
+  check('B-A7: N = 30 minutes between attempts and K = 3 attempts before the alert is escalated, with a hard stop at 10 and at most 5 re-sends in one sweep',
+    T74.RETRY_MINUTES === 30 && T74.ESCALATE_AFTER === 3 && T74.MAX_ATTEMPTS === 10 && T74.PER_SWEEP === 5
+    && WIRE74.n_minutes === 30 && WIRE74.k_attempts === 3, JSON.stringify(T74));
+  check('B-A7: N is the dedupe window, so a retry can never be a flood — the one number the two kits share is the same number in both',
+    T74.RETRY_MINUTES === T74.DEDUPE_MINUTES && T74.OA_RETRY_MINUTES === T74.RETRY_MINUTES, JSON.stringify([T74.RETRY_MINUTES, T74.DEDUPE_MINUTES, T74.OA_RETRY_MINUTES]));
+  check('B-A7: seo_ops_alerts carries the retry state — how many times it was SENT (not sighted), when, when it may be tried again, and one line per attempt',
+    ['attempts', 'last_attempt_at', 'next_attempt_at', 'attempt_log'].every(c => TC74.OPS_ALERTS.includes(c))
+    && eq(TC74.OPS_ALERTS.slice(-4), ['attempts', 'last_attempt_at', 'next_attempt_at', 'attempt_log']), JSON.stringify(TC74.OPS_ALERTS));
+
+  // ---------- 1. what counts as delivered, and what counts as open ----------
+  const carried = async (row) => await ar({ call: 'carried', row });
+  const states = {};
+  for (const d of ['pending', 'failed', 'not_sent', 'deduped', 'webhook', 'email', 'webhook,email', 'abandoned']) states[d] = await carried({ ...ALERT_ROW({ delivered: d }) });
+  console.log('   open by state ->', JSON.stringify(Object.fromEntries(Object.entries(states).map(([k, v]) => [k, v.open]))));
+  check('B-A7: a row is "carried" only when `delivered` NAMES a channel — pending, failed, not_sent and deduped all mean the same thing to a human: nobody has it',
+    ['pending', 'failed', 'not_sent', 'deduped'].every(d => states[d].open === true && states[d].carried === false)
+    && ['webhook', 'email', 'webhook,email'].every(d => states[d].open === false && states[d].carried === true),
+    JSON.stringify(Object.fromEntries(Object.entries(states).map(([k, v]) => [k, [v.open, v.carried]]))));
+  check('B-A7: a row the engine gave up on is not retried again and is never called delivered either',
+    states.abandoned.open === false && states.abandoned.carried === false, JSON.stringify(states.abandoned));
+
+  // ---------- 2. when a row is due ----------
+  const due = async (row, now) => await ar({ call: 'retryable', row, now });
+  const dueNow = await due(ALERT_ROW({}), new Date().toISOString());
+  const notYet = await due(ALERT_ROW({ next_attempt_at: new Date(Date.now() + 10 * 60000).toISOString() }), new Date().toISOString());
+  const legacy = await due({ alert_key: 'k', delivered: 'pending', last_seen_at: ago(120) }, new Date().toISOString());
+  const spent = await due(ALERT_ROW({ attempts: 10 }), new Date().toISOString());
+  check('B-A7: a row whose next attempt is in the past is due; one booked for later is not',
+    dueNow.retryable === true && notYet.retryable === false, JSON.stringify([dueNow, notYet]));
+  check('B-A7: a row written before any of this existed carries no retry state at all — its last sighting schedules it, so the three alerts that have been sitting at "pending" since 2026-10-12 are picked up rather than stranded',
+    legacy.retryable === true, JSON.stringify(legacy));
+  check('B-A7: and a row that has had its ten attempts is not tried an eleventh time',
+    spent.retryable === false, JSON.stringify(spent));
+
+  // ---------- 3. the sweep itself ----------
+  const rows74 = [
+    ALERT_ROW({ alert_key: 'a1', first_seen_at: ago(200), last_seen_at: ago(200), next_attempt_at: ago(120) }),
+    ALERT_ROW({ alert_key: 'a2', next_attempt_at: ago(60) }),
+    ALERT_ROW({ alert_key: 'a3', delivered: 'webhook,email', next_attempt_at: '' }),             // carried: never re-sent
+    ALERT_ROW({ alert_key: 'a4', next_attempt_at: new Date(Date.now() + 9e5).toISOString() }),   // not due yet
+    ALERT_ROW({ alert_key: 'a5', delivered: 'abandoned', attempts: 10 }),                        // given up
+  ];
+  const sweep = await ar({ call: 'plan', rows: rows74, cfg: { webhook_url: WEBHOOK, where: 'SEO Agent — AI Pulse' } });
+  console.log('   sweep ->', JSON.stringify({ open: sweep.open, due: sweep.due, posting: sweep.posting, keys: sweep.items.map(i => i.alert_key), reason: sweep.reason }));
+  check('B-A7: the sweep takes the alerts nobody has and that are due, oldest first, and leaves the delivered, the not-yet-due and the abandoned alone',
+    eq(sweep.items.map(i => i.alert_key), ['a1', 'a2']) && sweep.open === 3 && sweep.due === 2 && sweep.posting === 2,
+    JSON.stringify({ keys: sweep.items.map(i => i.alert_key), open: sweep.open, due: sweep.due }));
+  check('B-A7: each one is posted as the NEXT attempt in its own history, not as a fresh alert',
+    sweep.items.every(i => i.attempt === 2) && sweep.items[0].webhook_body.alert.of === 10
+    && sweep.items[0].webhook_body.alert.source === 'seo-agent-alert-retry' && /Keyword Data/.test(sweep.items[0].plain),
+    JSON.stringify(sweep.items.map(i => [i.alert_key, i.attempt, i.severity])));
+  const many = await ar({ call: 'plan', rows: Array.from({ length: 12 }, (_, i) => ALERT_ROW({ alert_key: 'k' + i })), cfg: { webhook_url: WEBHOOK } });
+  check('B-A7: one run never posts more than five, so a bad day cannot turn into a hundred messages',
+    many.items.length === 5 && many.due === 12 && /retrying 5 of 12/.test(many.reason), JSON.stringify({ n: many.items.length, due: many.due, reason: many.reason }));
+  const noChannel = await ar({ call: 'plan', rows: rows74, cfg: { webhook_url: '__SEO_ALERT_WEBHOOK_URL__' } });
+  check('R29 / B-A7: a node still holding the placeholder has no channel, so nothing is posted and the reason says SEO_ALERT_WEBHOOK_URL is not set',
+    noChannel.posting === 0 && noChannel.webhook_url === '' && /SEO_ALERT_WEBHOOK_URL is not set/.test(noChannel.reason), JSON.stringify(noChannel.reason));
+  const quiet = await ar({ call: 'plan', rows: [rows74[2]], cfg: { webhook_url: WEBHOOK } });
+  check('B-A7: a sweep with nothing waiting says so and posts nothing — the common case, on every one of the ten schedules',
+    quiet.posting === 0 && quiet.open === 0 && /no alert is waiting/.test(quiet.reason), JSON.stringify(quiet.reason));
+
+  // ---------- 4. the evidence of delivery (INVARIANTS rule 4) ----------
+  const p404 = await ar({ call: 'posted', item: { statusCode: 404, body: 'no_service' } });
+  const p200 = await ar({ call: 'posted', item: { statusCode: 200, body: 'ok' } });
+  const pErr = await ar({ call: 'posted', item: { error: { message: 'getaddrinfo ENOTFOUND hooks.example.test' } } });
+  const pBare = await ar({ call: 'posted', item: { ok: true } });
+  console.log('   posted ->', JSON.stringify([p404, p200, pErr, pBare]));
+  check('B-A7 (rule 4): a 404 from a revoked webhook is a FAILURE with its reason — the POST node is `neverError`, so without the status code it arrived as an item with no error and was written down as a delivery',
+    p404.ok === false && /HTTP 404/.test(p404.detail) && /no_service/.test(p404.detail) && p200.ok === true, JSON.stringify([p404, p200]));
+  check('B-A7: a DNS failure is a failure, and so is an answer with no status at all — nothing but a 2xx is evidence that it arrived',
+    pErr.ok === false && /ENOTFOUND/.test(pErr.detail) && pBare.ok === false && /nothing confirms it arrived/.test(pBare.detail), JSON.stringify([pErr, pBare]));
+
+  // ---------- 5. what the sweep writes back: the escalation ladder, and giving up without lying ----------
+  const settle = async (rows, responses) => (await ar({ call: 'settle', planned: rows, responses })).rows;
+  const ok1 = (await settle(sweep.items, [{ statusCode: 204 }, { statusCode: 404, body: 'gone' }]));
+  console.log('   settle ->', JSON.stringify(ok1.map(r => [r.alert_key, r.delivered, r.attempts, r.severity])));
+  check('B-A7: the one that landed is recorded as delivered BY WEBHOOK, books no further attempt and says which run re-sent it',
+    ok1[0].delivered === 'webhook' && ok1[0].next_attempt_at === '' && ok1[0].attempts === 2
+    && /delivered by webhook on attempt 2/.test(ok1[0].notes) && /AI Pulse/.test(ok1[0].notes), JSON.stringify(ok1[0]));
+  check('B-A7: the one that 404ed stays "failed", books the next try and keeps BOTH attempts on the row — the history, not only its last line',
+    ok1[1].delivered === 'failed' && ok1[1].attempts === 2 && ok1[1].next_attempt_at > new Date().toISOString()
+    && ok1[1].attempt_log.split('\n').length === 2 && /^1 .* webhook failed: ENOTFOUND$/m.test(ok1[1].attempt_log)
+    && /^2 .* webhook failed: HTTP 404/m.test(ok1[1].attempt_log), JSON.stringify(ok1[1].attempt_log));
+  const third = await settle([{ ...sweep.items[1], attempt: 3, severity: 'critical', row: ALERT_ROW({ attempts: 2, severity: 'high' }) }], [{ statusCode: 500 }]);
+  check('B-A7 (K = 3): from the third failed attempt the row is `critical` whatever it started as, and the note says how long it has reached nobody',
+    third[0].severity === 'critical' && /raised to critical/.test(third[0].notes) && /3 attempts over/.test(third[0].notes), JSON.stringify(third[0].notes));
+  const escalated = await ar({ call: 'plan', rows: [ALERT_ROW({ attempts: 3, severity: 'critical', first_seen_at: ago(600), next_attempt_at: ago(5) })], cfg: { webhook_url: WEBHOOK } });
+  check('B-A7: an escalated alert leads with the outage, so when it finally lands it lands as the thing it is',
+    /^\[critical\] STILL UNDELIVERED after 4 attempts over 10 hours/.test(escalated.items[0].subject)
+    && escalated.items[0].webhook_body.alert.escalated === true && escalated.items[0].webhook_body.alert.undelivered_for_minutes === 600,
+    escalated.items[0].subject);
+  const last = await settle([{ ...sweep.items[0], attempt: 10, severity: 'critical', row: ALERT_ROW({ attempts: 9, first_seen_at: ago(3000) }) }], [{ statusCode: 500 }]);
+  check('B-A7 (rule 4): after ten attempts it stops — and says it gave up and reached nobody, which is not the same as saying it was delivered',
+    last[0].delivered === 'abandoned' && last[0].next_attempt_at === '' && /given up after 10 attempts/.test(last[0].notes)
+    && /reached nobody/.test(last[0].notes), JSON.stringify(last[0].notes));
+
+  // ---------- 6. the Error Handler: the first attempt is judged on the status, and the row books the retry ----------
+  const ALERT74 = { subject: '[SEO Agent] Run failed at "Keyword Data" — SEO Agent v4', html: '<p>x</p>', node: 'Keyword Data', workflow: 'SEO Agent v4',
+    execution_id: '412', execution_url: 'http://localhost:5678/x', message: 'DataForSEO 40100', mode: 'webhook', when: new Date().toISOString() };
+  const delivery74 = async (webhook, email) => {
+    reset(); mock('Format Alert', [{ json: ALERT74 }]); mock('Load Ops Alerts', EMPTY74);
+    if (webhook !== undefined) mock('Post Alert Webhook', [{ json: webhook }]);
+    if (email !== undefined) mock('Email Ops', [{ json: email }]);
+    return (await run('Alert Delivery', EMPTY74, { code: 'EH__Alert_Delivery_Webhook' }))[0].json;
+  };
+  const d404 = await delivery74({ statusCode: 404, body: 'no_service' }, { error: { message: 'ECONNREFUSED smtp.gmail.com' } });
+  console.log('   EH delivery (404) ->', JSON.stringify({ delivered: d404.delivered, attempts: d404.attempts, next: !!d404.next_attempt_at }));
+  check('B-A7: the live exec 516 shape — both channels refused — is recorded as failed, as attempt 1, with the next try booked 30 minutes out instead of the row simply stopping there',
+    d404.delivered === 'failed' && d404.attempts === 1 && d404.next_attempt_at > new Date().toISOString()
+    && /webhook failed \(HTTP 404/.test(d404.notes) && /tries again after 30 minutes/.test(d404.notes)
+    && /^1 \S+ webhook\+email failed: webhook HTTP 404: no_service; email ECONNREFUSED smtp\.gmail\.com$/.test(d404.attempt_log), JSON.stringify(d404));
+  const dOk = await delivery74({ statusCode: 200, body: 'ok' }, { accepted: ['ops@example.com'] });
+  check('B-A7: a delivered alert books no retry at all, so the sweep never re-sends something that arrived',
+    dOk.delivered === 'webhook,email' && dOk.next_attempt_at === '' && dOk.attempts === 1, JSON.stringify({ d: dOk.delivered, n: dOk.next_attempt_at }));
+
+  // ---------- 7. a repeat no longer writes "deduped" over the channel that carried it ----------
+  const record = async (rows) => await ar({ call: 'record', alert: ALERT74, rows, cfg: { webhook_url: WEBHOOK, email_to: 'ops@example.com' } });
+  const first74 = await record([]);
+  const repeatOfDelivered = await record([{ ...first74, delivered: 'webhook,email', last_seen_at: new Date().toISOString(), attempts: 1 }]);
+  const DUE74 = ago(1);
+  const repeatOfFailed = await record([{ ...first74, delivered: 'failed', last_seen_at: new Date().toISOString(), attempts: 1, next_attempt_at: DUE74 }]);
+  console.log('   repeat ->', JSON.stringify([repeatOfDelivered.delivered, repeatOfFailed.delivered]));
+  check('B-A7: a repeat inside the dedupe window keeps the channel that CARRIED the alert instead of writing "deduped" over it, so a delivered alert stops looking undelivered',
+    repeatOfDelivered.delivered === 'webhook,email' && repeatOfDelivered.count === 2, JSON.stringify(repeatOfDelivered));
+  check('B-A7: and a repeat of an alert that reached nobody is labelled "deduped" but is still OPEN to the sweep, with its attempt count and its booked retry untouched — the dedupe label can never turn an unhandled failure into a handled-looking one',
+    repeatOfFailed.delivered === 'deduped' && (await carried(repeatOfFailed)).open === true
+    && repeatOfFailed.attempts === 1 && repeatOfFailed.next_attempt_at === DUE74
+    && (await due(repeatOfFailed, new Date().toISOString())).retryable === true, JSON.stringify(repeatOfFailed));
+  check('B-A7: a brand new alert books its first retry before anything is sent, so a run that dies between the record and the send leaves no stranded row — and claims no attempt it has not made',
+    first74.attempts === 0 && first74.attempt_log === '' && first74.delivered === 'pending'
+    && first74.next_attempt_at > new Date().toISOString() && eq(Object.keys(first74), TC74.OPS_ALERTS), JSON.stringify(Object.keys(first74)));
+
+  // ---------- 8. the wiring: every scheduled workflow sweeps, and the Page Watch records its own delivery ----------
+  const MON74 = Object.keys(WIRE74.monitors).sort();
+  check('B-A7: all ten scheduled workflows end by sweeping the alerts nobody has — that is the retry\'s schedule: Page Watch daily at 05:45, the AI Pulse daily at 06:30, six more on Monday morning, the Audit Scheduler monthly',
+    MON74.length === 10 && ['AI Growth', 'AI Pulse', 'AI Visibility Tracker', 'Audit Scheduler', 'Backlink Monitor', 'Content Cadence', 'Link Builder', 'Rank Tracker', 'Site Tracker', 'Page Watch']
+      .every(n => MON74.some(m => m.endsWith(n))), JSON.stringify(MON74));
+  const badSweep = MON74.filter(w => { const r = WIRE74.monitors[w].retry; return !r.post_full_response && false || !['attempts', 'attempt_log', 'next_attempt_at', 'delivered', 'severity'].every(k => WIRE74.monitors[w].writes.includes(k)); });
+  check('B-A7: each of them writes the whole retry state back on the row, not just whether it worked',
+    badSweep.length === 0, JSON.stringify(badSweep));
+  check('B-A7: the Error Handler carries the same chain, so a second failure also sweeps the first one\'s undelivered alert',
+    OW74.retry && OW74.retry.from === 'Save Alert Delivery' && OW74.retry.post === 'Post Alert Retry' && OW74.retry.post_full_response === true
+    && OW74.webhook.full_response === true, JSON.stringify(OW74.retry));
+  check('B-A7: the Page Watch records what its own POST did — it used to post the day\'s digest and write nothing back, so every row it raised sat at "pending" for ever and the sweep would have re-sent a digest that had already landed',
+    PW74.nodes.includes('Watch Ops Delivery') && PW74.nodes.includes('Save Watch Ops Delivery')
+    && eq(PW74.connections['Post Watch Alert'], [['Watch Ops Delivery']]) && eq(PW74.connections['Watch Ops Delivery'], [['Save Watch Ops Delivery']]),
+    JSON.stringify(PW74.connections['Post Watch Alert']));
+
+  // ---------- 9. B-A9: the concurrency gate the ten schedules now pass ----------
+  const G74 = await rg({ call: 'tables' });
+  const row74 = (o) => ({ id: o.id, run_id: o.run_id || ('e' + o.id), mode: o.mode || 'ai_visibility', status: o.status || 'reserved',
+    created_at: o.created_at || ago(5), domain: o.domain || '', heavy: o.heavy || false });
+  const mine74 = { id: 100, run_id: 'e100', mode: 'ai_visibility', dfs_balance: 14.5, dfs_est_usd: 0.95 };
+  const gate = async (rows, extra) => await rg({ call: 'gate', args: { rows, mine: mine74, mode: 'ai_visibility', where: 'SEO Agent — AI Visibility Tracker', run_id: 'e100', ...extra } });
+  const alone = await gate([row74({ id: 1, status: 'done' })]);
+  console.log('   gate (alone) ->', JSON.stringify({ allowed: alone.allowed, open: alone.open_runs, basis: alone.basis }));
+  check('B-A9: with nothing else running the scheduled monitor goes ahead, and says what it saw — the ten schedules used to say nothing at all, because nothing ever read the ledger they wrote to',
+    alone.allowed === true && alone.open_runs === 0 && /0 other run\(s\) in flight/.test(alone.basis), JSON.stringify(alone));
+  const twin = await gate([row74({ id: 7, mode: 'ai_visibility', created_at: ago(40) })]);
+  check('B-A9: the same monitor still in flight refuses the new one — it would read the same tables, write the same rows and bill the same APIs twice, and the one still going is the one with the data',
+    twin.allowed === false && twin.reason === 'same_mode' && /previous ai visibility run \(execution e7/.test(twin.refusal)
+    && /Nothing was charged and nothing was started/.test(twin.refusal), JSON.stringify([twin.reason, twin.refusal]));
+  const staleTwin = await gate([row74({ id: 7, mode: 'ai_visibility', created_at: ago(200) })]);
+  check('B-A9: a reservation older than two hours is a crashed run, not a running one — the same rule Rate Limit uses, so a crash never blocks a schedule for ever',
+    staleTwin.allowed === true && staleTwin.stale_ignored === 1, JSON.stringify(staleTwin));
+  const crowd = await gate([row74({ id: 1, mode: 'backlinks' }), row74({ id: 2, mode: 'rank_tracker' }), row74({ id: 3, mode: 'content_cadence' })]);
+  check('B-A9: more analyses in flight than the limit refuses this one and says the next scheduled run goes ahead as usual',
+    crowd.allowed === false && crowd.reason === 'too_many_open' && crowd.open_runs === 3 && crowd.max_open === G74.MAX_OPEN
+    && /the next one goes ahead as usual/.test(crowd.refusal), JSON.stringify([crowd.reason, crowd.open_runs]));
+  const later = await gate([row74({ id: 101, mode: 'backlinks' }), row74({ id: 102, mode: 'rank_tracker' }), row74({ id: 103, mode: 'audit_schedule' })]);
+  check('B-A9: only the rows with a LOWER id than this run\'s own count, so row order decides ties and two runs starting together cannot both refuse each other',
+    later.allowed === true && later.open_runs === 0, JSON.stringify(later));
+  const heavy = await gate([row74({ id: 5, mode: 'keyword', domain: 'techand.ai', heavy: true })], { domain: 'techand.ai', heavy: true });
+  check('B-A9 (P34-5, shared with Rate Limit): a second heavy crawl of a site that is already being crawled is refused — two 200-page audits at once stalled the task runner and both were cancelled at the 90-minute timeout',
+    heavy.allowed === false && heavy.reason === 'heavy_busy' && /large audit of techand\.ai is already running/.test(heavy.refusal), JSON.stringify(heavy.reason));
+  const broke = await gate([], { balance_usd: 0.6, dfs_est_usd: 0.95, balance_floor_usd: 0.5 });
+  const probeOff = await gate([], { balance_usd: 0, dfs_est_usd: 0.95, balance_floor_usd: 0.5 });
+  check('B-A9: an account that cannot pay for the run refuses it before it spends — a run that runs out of credit half way through delivers half a report and charges for all of it',
+    broke.allowed === false && broke.reason === 'account_low' && /\$0\.60 left/.test(broke.refusal), JSON.stringify(broke.reason));
+  check('B-A9: and the balance check fails OPEN — a free probe that did not answer refuses nothing',
+    probeOff.allowed === true, JSON.stringify(probeOff));
+  const free = await gate([], { balance_usd: 0.6, dfs_est_usd: 0, balance_floor_usd: 0.5 });
+  check('B-A9: a run that spends no data money is never refused for the account (Page Watch, the Content Cadence, the Audit Scheduler)',
+    free.allowed === true, JSON.stringify(free));
+
+  // ---------- 10. the gate is wired where it can refuse before the money and never after it ----------
+  const badGate = MON74.filter(w => { const g = WIRE74.monitors[w].guard; return !g || g.kit !== 'RG' || !g.refuse || !WIRE74.monitors[w].if_outputs[0].length || !eq(WIRE74.monitors[w].if_outputs[1], [g.refuse]); });
+  check('B-A9: all ten carry the gate on the main path, with the pipeline behind "yes" and the ledger refusal behind "no" — section 55 still proves no paid node can be reached without passing the reservation, and the gate sits between the two',
+    badGate.length === 0 && MON74.every(w => WIRE74.monitors[w].guard.gate.startsWith('After Run Ledger (')), JSON.stringify(badGate));
+  check('B-A9: a refused schedule marks its own reserved row `refused` and settles nothing, so a skipped run holds no part of the day\'s budget',
+    MON74.every(w => WIRE74.monitors[w].refuse_values.includes('status') && WIRE74.monitors[w].refuse_values.includes('cost_basis')
+      && WIRE74.monitors[w].refuse_values.includes('settled_usd')), JSON.stringify(WIRE74.monitors[MON74[0]].refuse_values));
+  const rl74 = require('fs').readFileSync(require('path').join(process.env.CODE_DIR || require('path').join(__dirname, 'code'), 'Rate_Limit.js'), 'utf8');
+  check('B-A9: Rate Limit runs the SAME kit, so the API side and the schedule side cannot drift apart (INVARIANTS rule 2: a gate applied in one place is a gate that does not exist in the other)',
+    /const RG = \(\(\) => \{/.test(rl74) && /RG\.isStale\(/.test(rl74) && /RG\.heavyBusy\(/.test(rl74), (rl74.match(/RG\.[a-zA-Z]+\(/g) || []).join(' '));
+  check('B-A9: and it refuses a schedule on CONCURRENCY only — never on the Claude or DataForSEO budget, because a budget refusal would silently cost a customer their week',
+    ['same_mode', 'heavy_busy', 'too_many_open', 'account_low'].includes(twin.reason) && !/budget/i.test(JSON.stringify([twin, crowd, heavy, broke])),
+    JSON.stringify([twin.reason, crowd.reason, heavy.reason, broke.reason]));
+  reset();
+});
 
 H.report();
 })();

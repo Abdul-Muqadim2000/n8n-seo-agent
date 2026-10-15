@@ -134,8 +134,15 @@ export interface Run {
   status: RunStatus;
   requestId: string | null;
   error: string | null;
+  /** what the app reserved before the run (shared/src/cost.ts); only ever an estimate */
   estimatedCostUsd: number;
+  /** what the run reported spending, once it finished */
   actualCostUsd: number | null;
+  /** B-R3: the engine's own calibrated figure for this run, which the app shows in preference to its own */
+  engineCostEstimateUsd: number | null;
+  engineCostBasis: string | null;
+  /** part of `actualCostUsd` is the engine's own estimate (the model calls that stream report no token usage) */
+  actualCostEstimated: boolean;
   etaMinutes: number;
   input: RunInput;
   createdAt: string;

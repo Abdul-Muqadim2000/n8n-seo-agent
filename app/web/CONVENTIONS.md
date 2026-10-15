@@ -50,6 +50,13 @@ state that asks for something, add or reuse a guide in the same change.
 - Tests: `shared/src/guides.test.ts` (ids, placeholders declared and used, https links, closed markup, plain-text export, search).
   Run the browser check in `app/scripts/` style against the dev stack when the panel itself changes.
 
+## Cost figures
+
+**Rule: never write a per-mode price into a component, a test or a second table.** `shared/src/cost.ts` is the one table (it mirrors
+the engine's calibrated figures); `MODES[mode].costUsd`, `estimateRunCost()` and `MONITOR_COSTS` all read it. To show what a run
+costs, call `runCostEstimate(run)` and render `COST_SOURCE_LABEL[cost.source]` beside the number with `cost.basis` behind an
+`InfoTip` — a figure shown without saying whether it is actual, the engine's estimate or ours is a bug.
+
 ## Brand (Ascentra) — for every UI change
 Full guide: `brand/BRAND.md`; the app's tokens are in `src/index.css` (light + dark).
 - Name: **Ascentra** in all UI copy ("SEO Agent" is only the internal engine name). The logo is always one of the supplied SVGs in

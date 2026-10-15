@@ -200,11 +200,39 @@ export function titleFor(stage: string, p: P): string {
   return dom ? `${base} · ${dom}` : base;
 }
 
-/** DataForSEO spend reported by the run ledger (Claude spend is not reported for streaming calls, see CLAUDE.md). */
-export function ledgerCost(p: P): number | null {
+/**
+ * What the run reported spending — **all** of it.
+ *
+ * B-R3: this used to read `run_ledger.dataforseo_usd` only, and the comment beside it said Claude could not be reported. That is no
+ * longer true: since the engine's cost kit (`v5/code/_cost_cal.js`, 2026-10-13) every run prices its own model calls and puts them
+ * on the ledger as `ai_usd`, with `ai_cost.measured_usd` and `ai_cost.estimated_usd` kept apart and `ai_cost_estimated` saying
+ * whether any of it is an estimate. Leaving Claude out undercounted a written page by roughly the larger half of its cost.
+ *
+ * `estimated` is carried through rather than smoothed away: the model calls that stream report no token usage, so the engine prices
+ * them from the text, and the app must not present that as a measurement. A crawl's price is a provider quote in the same way
+ * (`dataforseo_estimated_usd`).
+ */
+export function ledgerCost(p: P): { usd: number; estimated: boolean } | null {
   const l = obj(p.run_ledger);
-  const d = num(l.dataforseo_usd);
+  const dfs = num(l.dataforseo_usd);
+  const ai = num(l.ai_usd) ?? num(obj(l.ai_cost).usd);
   const direct = num(p.cost_usd);
-  if (d == null && direct == null) return null;
-  return (d ?? 0) + (direct ?? 0);
+  if (dfs == null && ai == null && direct == null) return null;
+  const estimated = l.ai_cost_estimated === true || obj(l.ai_cost).estimated === true || (num(l.dataforseo_estimated_usd) ?? 0) > 0;
+  return { usd: (dfs ?? 0) + (ai ?? 0) + (direct ?? 0), estimated };
+}
+
+/**
+ * B-R3: the engine's own calibrated figure for a run, published on the callback as `run_cost_estimate_usd` with
+ * `run_cost_estimate_basis` behind it (engine build section 61, 2026-10-15). It is the number the engine's guard reserves against,
+ * so showing anything else would mean telling the customer one figure while holding back another.
+ *
+ * Read defensively: it is set in the engine's *Rate Limit* node, which runs after the API front door has already answered 202, so
+ * it can only reach the app on a callback — and the engine's callback builders name their fields one by one. Where a stage does not
+ * carry it yet, the app simply keeps its own pre-flight estimate and says so; nothing here breaks when the field is missing.
+ */
+export function engineCostEstimate(p: P): { usd: number; basis: string } | null {
+  const usd = num(p.run_cost_estimate_usd) ?? num(obj(p.run_ledger).run_cost_estimate_usd);
+  if (usd == null || usd < 0) return null;
+  return { usd, basis: str(p.run_cost_estimate_basis) ?? str(obj(p.run_ledger).cost_basis) ?? '' };
 }

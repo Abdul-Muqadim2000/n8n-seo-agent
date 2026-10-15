@@ -80,6 +80,12 @@ export const organizations = pgTable(
     /** capability token in the n8n callback URL (/api/hooks/n8n/<token>) */
     hookToken: text('hook_token').notNull(),
     monthlyBudgetUsd: doublePrecision('monthly_budget_usd').notNull(),
+    /** B-R1: where this company's finished reports are pushed (shared/src/report-delivery.ts `DeliverySettings`); the webhook's
+     *  signing secret is sealed into `deliveryWebhookSecret`, never into here, so the settings can go back to the browser as they are */
+    deliverySettings: jsonb('delivery_settings').$type<Record<string, unknown>>().notNull().default({}),
+    deliveryWebhookSecret: text('delivery_webhook_secret').notNull().default(''),
+    /** when the last scheduled summary went out, so a restart cannot send the same week twice */
+    deliveryLastRunAt: ts('delivery_last_run_at'),
     disabled: boolean('disabled').notNull().default(false),
     onboardingStep: text('onboarding_step').notNull().default('company'),
     onboardedAt: ts('onboarded_at'),
@@ -176,8 +182,15 @@ export const runs = pgTable(
     requestId: text('request_id'),
     input: jsonb('input').$type<Record<string, unknown>>().notNull(),
     error: text('error'),
+    /** what the app reserved before the run, from the one table in shared/src/cost.ts */
     estimatedCostUsd: doublePrecision('estimated_cost_usd').notNull().default(0),
     actualCostUsd: doublePrecision('actual_cost_usd'),
+    /** B-R3: the engine's own calibrated figure for this run (`run_cost_estimate_usd` on a callback) and the sentence behind it.
+     *  The app shows the engine's number whenever it has one - it is calibrated on measured runs and ours is only a mirror. */
+    engineCostEstimateUsd: doublePrecision('engine_cost_estimate_usd'),
+    engineCostBasis: text('engine_cost_basis'),
+    /** true when part of `actualCostUsd` is the engine's own estimate (streaming model calls report no token usage) */
+    actualCostEstimated: boolean('actual_cost_estimated').notNull().default(false),
     etaMinutes: integer('eta_minutes').notNull().default(0),
     lastStage: text('last_stage'),
     reportCount: integer('report_count').notNull().default(0),
@@ -431,6 +444,43 @@ export const suppressions = pgTable(
   (t) => [uniqueIndex('suppressions_org_kind_hash_idx').on(t.orgId, t.kind, t.valueHash)],
 );
 
+/**
+ * B-R1: one row per attempt to push a report out of the app - and one per report deliberately **held**, with the reason, because a
+ * report that was not sent is as much a fact as one that was. `target` is the address or the webhook's host, never a secret.
+ */
+export const reportDeliveries = pgTable(
+  'report_deliveries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    /** null for a summary that covered several reports (the ones it carried are in `meta.reportIds`) */
+    reportId: uuid('report_id').references(() => reports.id, { onDelete: 'cascade' }),
+    /** email | webhook */
+    channel: text('channel').notNull(),
+    target: text('target').notNull().default(''),
+    /** sent | failed | held | pending */
+    status: text('status').notNull(),
+    /** each | daily | weekly | monthly - which schedule produced it */
+    kind: text('kind').notNull().default('each'),
+    /** why it was held, or why the attempt failed */
+    reason: text('reason').notNull().default(''),
+    title: text('title').notNull().default(''),
+    attempts: integer('attempts').notNull().default(0),
+    meta: jsonb('meta').$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: created(),
+    sentAt: ts('sent_at'),
+    nextAttemptAt: ts('next_attempt_at'),
+  },
+  (t) => [
+    index('report_deliveries_org_created_idx').on(t.orgId, t.createdAt),
+    index('report_deliveries_report_idx').on(t.reportId),
+    // one row per report per channel: a retry updates it instead of filling the log
+    uniqueIndex('report_deliveries_once_idx').on(t.reportId, t.channel).where(sql`${t.reportId} is not null`),
+  ],
+);
+
 export type MailboxRow = typeof mailboxes.$inferSelect;
 export type OutreachSequenceRow = typeof outreachSequences.$inferSelect;
 export type OutreachMessageRow = typeof outreachMessages.$inferSelect;
@@ -442,3 +492,4 @@ export type ReportRow = typeof reports.$inferSelect;
 export type FileRow = typeof files.$inferSelect;
 export type ReportShareRow = typeof reportShares.$inferSelect;
 export type KeywordCheckRow = typeof keywordChecks.$inferSelect;
+export type ReportDeliveryRow = typeof reportDeliveries.$inferSelect;

@@ -14,6 +14,7 @@ from ladder_common import (dt_schema, LADDER_TABLE, LADDER_COLS, HISTORY_TABLE, 
                            DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_upsert_params, dt_get_where_params, dt_upsert_params_keys, dt_update_params, dt_get_recent_params)
 from ladder_common import PAGE_WATCH_TABLE, PAGE_WATCH_COLS, AUDIT_FINDINGS_TABLE, AUDIT_FINDINGS_COLS, OPS_ALERTS_TABLE, OPS_ALERTS_COLS   # G11 + G25 (2026-10-13, FIX_PLAN): the daily key-page watch
 from ladder_common import RUN_LEDGER_TABLE, RUN_LEDGER_COLS, dt_update_params, monitor_ledger_js, LEDGER_EST   # R9 (2026-10-13): every scheduled run reserves and settles a ledger row
+from ladder_common import ledger_mainline, ALERT_WEBHOOK_PLACEHOLDER   # R17 / R29 (2026-10-14)
 
 # R9 (2026-10-13, re-rating): the reserve / settle side branch, the same one build_monitors.py's WF.run_ledger builds. It hangs BESIDE the plan
 # node, never in the data path, because a Data Table node answers with the row it wrote rather than with its input.
@@ -26,16 +27,24 @@ def ledger_nodes(N_, C_, mode, tag, plan, ends, pos):
     N_.append(node('Reserve Run Ledger (' + tag + ')', DT_TYPE, DT_VERSION, dt_insert_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS), [x + 440, y], onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True))
     N_.append(node('Ledger Settle (' + tag + ')', 'n8n-nodes-base.code', 2, {'jsCode': set_js}, [x + 220, y + 160], executeOnce=True))
     N_.append(node('Settle Run Ledger (' + tag + ')', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS,
-        [('run_id', '={{ $execution.id }}'), ('status', 'reserved')], {'status': 'done', 'settled_usd': '={{ $json.settled_usd }}', 'dfs_usd': '={{ $json.dfs_usd }}'}),
+        [('run_id', '={{ $execution.id }}'), ('status', 'reserved')],
+        # R31 (2026-10-14, FIX_PLAN §3.13): these workflows wrote back only the status and two figures, so the honest split the settle
+        # computes (G23) never reached the row — the same columns build_monitors.py has always written are written here too.
+        {'status': 'done', 'settled_usd': '={{ $json.settled_usd }}', 'dfs_usd': '={{ $json.dfs_usd }}', 'ai_usd': '={{ $json.ai_usd }}',
+         'cost_mode': '={{ $json.cost_mode }}', 'measured_usd': '={{ $json.measured_usd }}', 'estimated_usd': '={{ $json.estimated_usd }}',
+         'cost_basis': '={{ $json.cost_basis }}'}),
         [x + 440, y + 160], onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True))
     for a_, b_ in ([(plan, 'Ensure Run Ledger (' + tag + ')'), ('Ensure Run Ledger (' + tag + ')', row), (row, 'Reserve Run Ledger (' + tag + ')'),
                     ('Ledger Settle (' + tag + ')', 'Settle Run Ledger (' + tag + ')')] + [(e, 'Ledger Settle (' + tag + ')') for e in ends]):
         link(C_, a_, b_)
-    return {'mode': mode, 'plan': plan, 'reserve': row, 'settle': 'Settle Run Ledger (' + tag + ')', 'settle_from': list(ends), 'measured': '', 'est': LEDGER_EST[mode]}
+    return {'mode': mode, 'plan': plan, 'reserve': row, 'settle': 'Settle Run Ledger (' + tag + ')', 'settle_from': list(ends), 'measured': '', 'est': LEDGER_EST[mode],
+            'resume': 'After Run Ledger (' + tag + ')'}   # R17 (2026-10-14): the node that hands the plan's items back to the pipeline
 
 LEDGER_WIRING = {}   # R9: merged into harness/ledger_wiring.json after the last workflow is written
 from env_settings import ENV as _ENV_PW
-ALERT_WEBHOOK_URL = _ENV_PW.get('SEO_ALERT_WEBHOOK_URL') or ''   # D25b's channel: the watch pushes the serious changes to it as well
+# D25b's channel: the watch pushes the serious changes to it as well. R29 / R30 (2026-10-14): this build reads SEO_ALERT_WEBHOOK_URL not at
+# all — neither the value (a secret, and this repository is public) nor whether it is set (that made the generated files depend on the
+# building machine). ALERT_WEBHOOK_PLACEHOLDER is baked; apply_env.py substitutes the real value into the copy it imports.
 HERE = os.path.dirname(os.path.abspath(__file__))
 V5 = os.path.join(HERE, 'v5'); OUT = os.path.join(HERE, 'workflows'); CODE = os.path.join(HERE, 'harness', 'code_v4')
 _rdt = lambda p: open(os.path.join(V5, p), encoding='utf-8').read()
@@ -76,6 +85,8 @@ def link(conns, a, b, out=0):
     while len(outs) <= out: outs.append([])
     outs[out].append({'node': b, 'type': 'main', 'index': 0})
 def write(wfobj, fname):
+    # R17 (2026-10-14, FIX_PLAN §3.12): the reserve chain goes on the MAIN path, now that every connection of this workflow is made
+    if wfobj.get('name') in LEDGER_WIRING: ledger_mainline(wfobj, LEDGER_WIRING[wfobj['name']])
     url_lint.check(wfobj, wfobj.get('name') or fname)   # D15: no node builds a site URL by hand (url_lint.py)
     retry_lint.check(wfobj, wfobj.get('name') or fname)   # G1: every external HTTP node carries the retry rule (retry_lint.py)
     for _n in wfobj['nodes']:   # e-mails retry a transient SMTP / DNS failure (live finding 2026-10-02: EAI_AGAIN smtp.gmail.com)
@@ -460,10 +471,8 @@ link(C, 'Any Ladder Marks?', 'Mark Ladder Writing', 0); link(C, 'Any Ladder Mark
 link(C, 'Any AI Marks?', 'Mark AI Target Writing', 0); link(C, 'Any AI Marks?', 'Cadence Note', 1)
 link(C, 'Has Email (Cadence)?', 'Send Cadence Note', 0); link(C, 'Has Callback (Cadence)?', 'POST Cadence Note', 0)
 LEDGER_WIRING['SEO Agent — Content Cadence'] = ledger_nodes(N, C, 'content_cadence', 'Cadence', 'Cadence Plan', ['Cadence Note'], at(11, 4))
-_lw9 = os.path.join(HERE, 'harness', 'ledger_wiring.json')
-_lwj = json.load(open(_lw9)) if os.path.exists(_lw9) else {}
-_lwj.setdefault('monitors', {}).update(LEDGER_WIRING)
-json.dump(_lwj, open(_lw9, 'w'), indent=1, sort_keys=True)
+# R31 (2026-10-14): the merge into harness/ledger_wiring.json moved to the END of this builder — ledger_mainline() fills each entry's
+# `ai_nodes` and `balance` at write time, and the Page Watch's entry does not exist until its own workflow is built below.
 # R16 (2026-10-13, FIX_PLAN §3.11, build_v4.py section 53): the cadence runs the fit gate over the STORED rungs, so a competitor's brand
 # planned before the gate existed is set aside with its reason instead of written, and the row is marked `set_aside` for everything else.
 _cadcode = {n['name']: n['parameters']['jsCode'] for n in N if n['type'] == 'n8n-nodes-base.code'}
@@ -525,7 +534,10 @@ write(wf('SEOagentConsole1', 'SEO Agent — Console Alerts', N, C), 'SEO_Agent_C
 #     re-sent. The app shows it on the Alerts page and on the technical page (seo_page_watch), and the Monday report lists the week's changes.
 # =============================================================================
 OPS_ALERT_SRC = _rdt('code/_ops_alert.js').rstrip('\n')
-wsrc = lambda p: rd(p).replace('/*__OPS_ALERT__*/', OPS_ALERT_SRC).replace('__ALERT_WEBHOOK_URL__', ALERT_WEBHOOK_URL)
+# R29 (2026-10-14, FIX_PLAN §3.12, secret handling): a placeholder is baked, never the real Slack URL — this repository is public and the
+# generated JSON and harness code are both tracked. apply_env.py substitutes the value from n8n/.env into the JSON it imports.
+ALERT_RETRY_SRC = _rdt('code/_alert_retry.js').rstrip('\n')   # B-A7 (2026-10-15, build section 64): the retry / escalation rules
+wsrc = lambda p: rd(p).replace('/*__OPS_ALERT__*/', OPS_ALERT_SRC).replace('/*__ALERT_RETRY__*/', ALERT_RETRY_SRC).replace('__ALERT_WEBHOOK_URL__', ALERT_WEBHOOK_PLACEHOLDER)
 WATCH_GET = {'method': 'GET', 'url': '={{ $json.url }}', 'sendHeaders': True,
              'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEO-Agent/4.16; +page-watch)'}, {'name': 'Accept', 'value': 'text/html,application/xhtml+xml,text/plain,*/*'}]},
              # redirects are NOT followed: a key page that starts redirecting is itself the change we are watching for
@@ -575,9 +587,18 @@ N.append(iff('Any Ops Alerts (Watch)?', '{{ !$json.skip }}', at(32, 0)))
 N.append(node('Save Watch Ops Alert', DT_TYPE, DT_VERSION, dt_upsert_params(OPS_ALERTS_TABLE, OPS_ALERTS_COLS, 'alert_key'), at(33, 0), onError='continueRegularOutput', alwaysOutputData=True))
 N.append(code('Watch Ops Channels', wsrc('code/Watch_Ops_Channels.js'), at(34, 0), **SAFE))
 N.append(iff('Send Watch Webhook?', '{{ $json.send_webhook }}', at(35, 0)))
+# B-A7 (2026-10-15, build section 64): fullResponse, so the POST's status code is on the item. Without it a 404 from a revoked webhook
+# arrived as an item with no error and the digest counted as delivered (INVARIANTS rule 4).
 N.append(node('Post Watch Alert', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.webhook_url }}', 'sendBody': True, 'specifyBody': 'json',
-    'jsonBody': '={{ JSON.stringify($json.webhook_body) }}', 'options': {'timeout': 15000, 'response': {'response': {'neverError': True}}}},
+    'jsonBody': '={{ JSON.stringify($json.webhook_body) }}', 'options': {'timeout': 15000, 'response': {'response': {'fullResponse': True, 'neverError': True}}}},
     at(36, 0), onError='continueRegularOutput', **retry_lint.RETRY))
+# B-A7: the watch posted its digest and wrote nothing back, so every row it raised stayed `pending` for ever - indistinguishable from a post
+# that never arrived, and the retry sweep would have re-sent a digest that had already landed.
+N.append(code('Watch Ops Delivery', wsrc('code/Watch_Ops_Delivery.js'), at(37, 0), **SAFE))
+N.append(node('Save Watch Ops Delivery', DT_TYPE, DT_VERSION, dt_update_params(OPS_ALERTS_TABLE, OPS_ALERTS_COLS, [('alert_key', '={{ $json.alert_key }}')],
+    {'delivered': '={{ $json.delivered }}', 'channels': '={{ $json.channels }}', 'severity': '={{ $json.severity }}', 'attempts': '={{ $json.attempts }}',
+     'last_attempt_at': '={{ $json.last_attempt_at }}', 'next_attempt_at': '={{ $json.next_attempt_at }}', 'attempt_log': '={{ $json.attempt_log }}',
+     'notes': '={{ $json.notes }}'}), at(38, 0), onError='continueRegularOutput', alwaysOutputData=True))
 N.append(node('Watched', 'n8n-nodes-base.noOp', 1, {}, at(36, 1)))
 N.append(sticky('Note Watch', f"""## SEO Agent — Page Watch (G11, v4.16)
 Runs **every day at 05:45** (n8n's clock) and on demand through *Watch Run* (`{{ domain | site_id, finding_key? }}`; the web app uses it for a single re-check). Free: one plain **GET** per key page plus `/robots.txt`, no JavaScript, no paid API, at most 25 pages a site.
@@ -596,7 +617,7 @@ for a, b in [('Daily Schedule', 'Ensure Sites Table (Watch)'), ('Watch Run', 'En
              ('Save Page Watch', 'Watch Cache Rows'), ('Watch Cache Rows', 'Save Watch Cache'), ('Save Watch Cache', 'Watch Recheck Rows'),
              ('Watch Recheck Rows', 'Any Rechecks?'), ('Save Finding Recheck', 'Watch Alerts'), ('Watch Alerts', 'Any Watch Alerts?'),
              ('Save Watch Alerts', 'Watch Ops Alert'), ('Watch Ops Alert', 'Any Ops Alerts (Watch)?'), ('Save Watch Ops Alert', 'Watch Ops Channels'),
-             ('Watch Ops Channels', 'Send Watch Webhook?')]:
+             ('Watch Ops Channels', 'Send Watch Webhook?'), ('Post Watch Alert', 'Watch Ops Delivery'), ('Watch Ops Delivery', 'Save Watch Ops Delivery')]:
     link(C, a, b)
 link(C, 'Any Watch Targets?', 'Fetch Watch Page', 0); link(C, 'Any Watch Targets?', 'Nothing To Watch', 1)
 link(C, 'Any Watch Rows?', 'Save Page Watch', 0); link(C, 'Any Watch Rows?', 'Watch Cache Rows', 1)
@@ -604,20 +625,35 @@ link(C, 'Any Rechecks?', 'Save Finding Recheck', 0); link(C, 'Any Rechecks?', 'W
 link(C, 'Any Watch Alerts?', 'Save Watch Alerts', 0); link(C, 'Any Watch Alerts?', 'Watch Ops Alert', 1)
 link(C, 'Any Ops Alerts (Watch)?', 'Save Watch Ops Alert', 0); link(C, 'Any Ops Alerts (Watch)?', 'Watched', 1)
 link(C, 'Send Watch Webhook?', 'Post Watch Alert', 0); link(C, 'Send Watch Webhook?', 'Watched', 1)
+# R32's companion (2026-10-14, FIX_PLAN §3.13, the live check's third observation): Page Watch kept no ledger row at all — it was the one
+# workflow invisible to the spend guard, to the concurrency guard and to the day's reconciliation. It is free today (25 plain GETs), which
+# is exactly why it reserves $0 and settles $0: the row proves the run happened and costs nothing, and the day a check here starts calling
+# a paid API the guard already sees it. Its ends are the three places a watch run finishes.
+LEDGER_WIRING['SEO Agent — Page Watch'] = ledger_nodes(N, C, 'page_watch', 'Watch', 'Watch Plan',
+                                                       ['Watched', 'Nothing To Watch', 'Save Watch Ops Delivery'], at(15, 4))
 _wcode = {n['name']: n['parameters'].get('jsCode', '') for n in N if n['type'] == 'n8n-nodes-base.code'}
 for _n in ('Watch Plan', 'Watch Read', 'Watch Compare', 'Watch Rows', 'Watch Alerts'):
     assert 'const PW = (() => {' in _wcode[_n], _n + ': the page-watch kit is not inlined'
 assert 'const SM = (() => {' in _wcode['Watch Plan'], 'Watch Plan: the site model kit is not inlined'
-for _n in ('Watch Ops Alert', 'Watch Ops Channels'):
+for _n in ('Watch Ops Alert', 'Watch Ops Channels', 'Watch Ops Delivery'):
     assert 'const OA = (() => {' in _wcode[_n], _n + ': the ops-alert kit is not inlined'
+assert 'const AR = (() => {' in _wcode['Watch Ops Delivery'], 'Watch Ops Delivery: the alert-retry kit is not inlined'
+assert '/*__ALERT_RETRY__*/' not in _wcode['Watch Ops Delivery'], 'Watch Ops Delivery: marker left'
 assert not any(('/*__PAGE_WATCH__*/' in c_) or ('/*__OPS_ALERT__*/' in c_) for c_ in _wcode.values()), 'placeholder left in the Page Watch'
 write(wf('SEOagentPageWch1', 'SEO Agent — Page Watch', N, C), 'SEO_Agent_Page_Watch.json')
 
 # what the harness checks (S53): the watch's wiring, its schedule and the quota the inspections live inside
 json.dump({'workflow': 'SEOagentPageWch1', 'table': PAGE_WATCH_TABLE, 'cache_kind': 'watch', 'schedule': {'hour': 5, 'minute': 45, 'every': 'day'},
-           'webhook_setting': 'SEO_ALERT_WEBHOOK_URL', 'webhook_configured': bool(ALERT_WEBHOOK_URL),
+           'webhook_setting': 'SEO_ALERT_WEBHOOK_URL', 'webhook_placeholder': ALERT_WEBHOOK_PLACEHOLDER,   # R30: never whether the setting is filled - that made this tracked fixture depend on the building machine's .env
            'nodes': [n['name'] for n in N if n['type'] != 'n8n-nodes-base.stickyNote'],
            'connections': {s_: [[t_['node'] for t_ in l_] for l_ in o_.get('main', [])] for s_, o_ in C.items()},
            'fetch': {'name': 'Fetch Watch Page', 'follows_redirects': False, 'response_format': 'text', 'retries': retry_lint.RETRY['maxTries']},
            'site_tracker_inspections': {'cap': 150, 'quota_per_day': 2000, 'rotation': 'oldest inspection first'}},
           open(os.path.join(HERE, 'harness', 'page_watch_wiring.json'), 'w'), indent=1, sort_keys=True)
+
+# R9 / R31: the ledger wiring of every workflow this builder makes, AFTER they are written — ledger_mainline() fills `resume`,
+# `ai_nodes` (R31: the Claude nodes the settle checks before it settles a cent) and `balance` (R32: the free account reading) at write time.
+_lw9 = os.path.join(HERE, 'harness', 'ledger_wiring.json')
+_lwj = json.load(open(_lw9)) if os.path.exists(_lw9) else {}
+_lwj.setdefault('monitors', {}).update(LEDGER_WIRING)
+json.dump(_lwj, open(_lw9, 'w'), indent=1, sort_keys=True)

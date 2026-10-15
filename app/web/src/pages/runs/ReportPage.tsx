@@ -10,6 +10,7 @@ import { ErrorState, Skeleton } from '@/components/ui/feedback';
 import { PageHeader } from '@/components/ui/misc';
 import { StageIcon, stageLabel } from '@/components/reports/meta';
 import { ReportView } from '@/components/reports/ReportView';
+import { SendReport } from '@/components/reports/SendReport';
 import { ShareReport } from '@/components/reports/ShareReport';
 
 export default function ReportPage() {
@@ -64,6 +65,8 @@ export default function ReportPage() {
         }
         actions={
           <span className="flex flex-wrap items-center gap-2">
+            {/* B-R1: push this one report to the company's own channels, if it is ready to leave the app */}
+            <SendReport reportId={r.id} />
             {/* G15: an expiring, read-only link for somebody with no account (admins and owners only) */}
             <ShareReport reportId={r.id} />
             {r.runId && (
