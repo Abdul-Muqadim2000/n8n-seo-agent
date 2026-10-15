@@ -5742,7 +5742,7 @@ await guard('crux, impact priority, alert channels and test check-ins', async ()
   check('D25b: the e-mail that failed on 2026-10-10 and 2026-10-12 cannot take the alert down with it — it is a parallel branch, it retries 3x 5 s apart, it reads the alert from Format Alert, and an error no longer fails the run',
     OW.email.onError === 'continueRegularOutput' && OW.email.retryOnFail === true && OW.email.maxTries === 3 && OW.email.reads_alert_from === true
     && eq(OW.connections['Alert Channels'][0], ['Send Webhook?', 'Send Email?'])
-    && eq(OW.connections['Email Ops'][0], ['Alert Delivery']) && !(OW.connections['Email Ops'][0] || []).includes('Post Alert Webhook')   // R6 (2026-10-13): the only thing after the e-mail is the delivery record; the webhook still never hangs off it
+    && eq(OW.connections['Email Ops'][0], ['Alert Channels Done']) && !(OW.connections['Email Ops'][0] || []).includes('Post Alert Webhook')   // R6 (2026-10-13): the only thing after the e-mail is the delivery record (since R79, 2026-10-16, through the merge that waits for both channels); the webhook still never hangs off it
     && OW.webhook.uses_smtp === false && OW.webhook.retryOnFail === true,
     JSON.stringify(OW));
   check('D25b: the row is written before either channel runs (Format Alert -> ensure -> load -> record -> save -> channels), so even both channels failing leaves the failure on record',
@@ -8233,7 +8233,9 @@ await guard('the re-rating defects R1..R9', async () => {
   check('R6: the result is written back on the same row (alert_key) with the delivered state, the channels and the note, and every path through the two gates reaches it',
     OW.delivery && OW.delivery.code === 'Alert Delivery' && OW.delivery.row_update === 'Save Alert Delivery'
     && ['delivered', 'channels', 'notes'].every(k => OW.delivery.writes.includes(k))   // B-A7 adds the retry state beside them (S74)
-    && eq(OW.delivery.from.slice().sort(), ['Email Ops', 'Post Alert Webhook', 'Send Email?', 'Send Webhook?']), JSON.stringify(OW.delivery));
+    // R79 (2026-10-16): every path through the two gates still reaches it — through ONE merge that waits for both branches, so it runs once
+    && eq(OW.delivery.from.slice().sort(), ['Alert Channels Done'])
+    && ['Email Ops', 'Post Alert Webhook', 'Send Email?', 'Send Webhook?'].every(n => (OW.connections[n] || []).some(l => (l || []).includes('Alert Channels Done'))), JSON.stringify(OW.delivery));
 
   // ---------- R7: an FAQ section, never FAQPage schema ----------
   const vp = srcOf('Verdict_Agent.prompt.txt');
@@ -14842,6 +14844,230 @@ await guard('S121 R45 R46 brackets named and editor rounds counted', async () =>
     S.ai_calls === 1 && E.usd > 0 && !/repeated for the/.test(E.basis || ''), JSON.stringify({ calls: S.ai_calls, editor: E }));
   reset();
 });
+
+// ===================================================================================
+// S114-S117 (2026-10-16, re-rating defects R77 / R81 / R116 / R96 / R79 / R105 / R95; docs/system-review-2026-10-15/defects/C_monitors.md
+// and D_app_reporting.md). Families F4 / F5: run identity, a refusal that reaches the customer, and ops alerts that update their own row.
+// Fixtures are cut from the saved executions 622 / 624 (the backlinks race), 620 / 623 (the AI visibility pair), 626 (the alert re-sent
+// on every run) and 593 / 630 (the pulse) — ids, timings and n8n's own public IMAP error text only.
+// ===================================================================================
+const S114_KIT = () => {
+  const out = {};
+  out.eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  out.check = (SN) => (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 450))); };
+  out.rg = async (j) => (await run('Run Guard', [{ json: j }], { code: '_run_guard' }))[0].json;
+  out.ar = async (j) => (await run('Alert Retry', [{ json: j }], { code: '_alert_retry' }))[0].json;
+  out.ago = (min) => new Date(Date.now() - min * 60000).toISOString();
+  return out;
+};
+
+await guard('S114 R77 R81 — the child monitor knows its parent, the parent settles as handed off', async () => {
+  reset(); const SN = 'S114 R77 R81 — an on-demand monitor recognises the front-door run that started it by identity (parent_run_id), a genuine twin is still refused, and the front door settles $0 as handed off';
+  begin(SN);
+  const K = S114_KIT(), check = K.check(SN), eq = K.eq, ago = K.ago;
+  // ---------- the race of 2026-10-15 19:29 (exec 622 -> 624): row 91 is the front door's, row 92 the child's ----------
+  const ROW = (o) => ({ run_id: '1', mode: 'backlinks', status: 'reserved', created_at: ago(1), domain: '', heavy: false, key: 'app:org', ...o });
+  const parent91 = ROW({ id: 91, run_id: '622', mode: 'backlinks' });
+  const mine92 = { id: 92, run_id: '624', mode: 'backlinks', key: 'parent:622', dfs_balance: 12.73, dfs_est_usd: 0.45 };
+  const child = await K.rg({ call: 'gate', args: { rows: [parent91], mine: mine92, mode: 'backlinks', where: 'SEO Agent — Backlink Monitor', run_id: '624', parent_run_id: '622' } });
+  console.log('   child gate ->', JSON.stringify({ allowed: child.allowed, reason: child.reason, basis: child.basis }));
+  check('R77: the Backlink Monitor started by the front door (exec 624) is NOT refused by its own parent\'s reserved row 91 (exec 622) — it is recognised by identity, not timing',
+    child.allowed === true && child.reason === 'ok' && child.open_runs === 0, JSON.stringify(child));
+  const twin = await K.rg({ call: 'gate', args: { rows: [ROW({ id: 90, run_id: '999', mode: 'backlinks' }), parent91], mine: mine92, mode: 'backlinks', run_id: '624', parent_run_id: '622' } });
+  check('R77: a genuine second backlinks run (exec 999, another parent) is still refused `same_mode` — the parent exemption names one run, never a mode',
+    twin.allowed === false && twin.reason === 'same_mode' && /execution 999/.test(twin.refusal), JSON.stringify([twin.reason, twin.refusal]));
+  const keyOnly = await K.rg({ call: 'gate', args: { rows: [parent91], mine: mine92, mode: 'backlinks', run_id: '624' } });
+  check('R77: the child\'s own ledger row carries the parent (key `parent:622`), so the gate recognises it even when nothing else is passed',
+    keyOnly.allowed === true, JSON.stringify(keyOnly));
+  const aiParent = ROW({ id: 90, run_id: '620', mode: 'ai_visibility' });
+  const aiMine = { id: 93, run_id: '623', mode: 'ai_visibility', key: 'parent:620' };
+  const aiChild = await K.rg({ call: 'gate', args: { rows: [aiParent], mine: aiMine, mode: 'ai_visibility', run_id: '623', parent_run_id: '620' } });
+  const aiTwin = await K.rg({ call: 'gate', args: { rows: [ROW({ id: 89, run_id: '998', mode: 'ai_visibility' }), aiParent], mine: aiMine, mode: 'ai_visibility', run_id: '623', parent_run_id: '620' } });
+  check('R77: the same pair for AI visibility (620 -> 623 passed by 0.6 s on the night): the child passes, a real twin is refused',
+    aiChild.allowed === true && aiTwin.allowed === false && aiTwin.reason === 'same_mode' && /execution 998/.test(aiTwin.refusal), JSON.stringify([aiChild.reason, aiTwin.reason]));
+
+  // ---------- the node itself, replayed: After Run Ledger (BL) / (AI) with the Manual Run item the front door sends ----------
+  const TRIG = (o) => ({ domain: 'techand.ai', site_id: 'site_techand-ai', on_demand: true, email: '', callback_url: 'http://app.example.test/api/hooks/n8n/tok',
+    request_id: '621', country: 'United Arab Emirates', location_code: 2784, language_code: 'en', competitors: [], topics: [], monitor: 'backlinks', free_only: false, ...o });
+  const replay = async (tag, plan, mode, rows, trig) => {
+    reset();
+    mock(plan, [{ json: { site_id: 'site_techand-ai', domain: 'techand.ai', mode: 'full', on_demand: true } }]);
+    mock('Load Open Runs (' + tag + ')', rows.map(r => ({ json: r })));
+    mock('Reserve Run Ledger (' + tag + ')', [{ json: { id: 92, run_id: 'test-exec', mode, status: 'reserved', key: trig ? 'parent:' + trig.parent_run_id : 'schedule:' + mode } }]);
+    mock('Run Ledger Row (' + tag + ')', [{ json: { run_id: 'test-exec', mode, key: trig ? 'parent:' + trig.parent_run_id : 'schedule:' + mode } }]);
+    if (trig) mock('Manual Run', [{ json: trig }]);
+    return (await run('After Run Ledger (' + tag + ')', [{ json: {} }], { code: 'After_Run_Ledger_' + tag + '_' }));
+  };
+  const blOk = await replay('BL', 'BL Plan', 'backlinks', [parent91], TRIG({ parent_run_id: '622' }));
+  check('R77 (dossier test a): After Run Ledger (BL) replayed with exec 624\'s rows and `parent_run_id: "622"` on the Manual Run item hands the plan on — `allowed`',
+    blOk.length === 1 && !blOk[0].json.run_refused && blOk[0].json.domain === 'techand.ai', JSON.stringify(blOk.map(i => i.json)).slice(0, 300));
+  const blTwin = await replay('BL', 'BL Plan', 'backlinks', [ROW({ id: 90, run_id: '999', mode: 'backlinks' }), parent91], TRIG({ parent_run_id: '622' }));
+  check('R77 (dossier test a): and with an extra reserved row {run_id: "999", mode: "backlinks"} it is still refused `same_mode`',
+    blTwin.length === 1 && blTwin[0].json.run_refused === true && blTwin[0].json.reason === 'same_mode', JSON.stringify(blTwin[0].json).slice(0, 300));
+  const aiOk = await replay('AI', 'AI Plan', 'ai_visibility', [aiParent], TRIG({ parent_run_id: '620', monitor: 'ai_visibility' }));
+  const aiNo = await replay('AI', 'AI Plan', 'ai_visibility', [ROW({ id: 89, run_id: '998', mode: 'ai_visibility' }), aiParent], TRIG({ parent_run_id: '620', monitor: 'ai_visibility' }));
+  check('R77 (dossier test a): the same pair for After Run Ledger (AI) — the child of 620 passes, a real twin is refused',
+    !aiOk[0].json.run_refused && aiNo[0].json.run_refused === true && aiNo[0].json.reason === 'same_mode', JSON.stringify([aiOk[0].json.run_refused, aiNo[0].json.reason]));
+
+  // ---------- the front door passes its own id, and the child stores it ----------
+  reset();
+  mock('Normalize Input', [{ json: { domain: 'techand.ai', mode: 'backlinks', request_id: '621', callback_url: 'http://app.example.test/x', competitors: [] } }]);
+  const ms = (await run('Monitor Start', [{ json: {} }]))[0].json;
+  check('R77: Monitor Start sends the front door\'s OWN execution id as `parent_run_id` (622), not the API request id (621) it already passed as request_id',
+    ms.parent_run_id === 'test-exec' && ms.request_id === '621', JSON.stringify({ parent: ms.parent_run_id, request: ms.request_id }));
+  const TC = require('./table_cols.json');
+  reset();
+  mock('BL Plan', [{ json: { site_id: 'site_techand-ai', domain: 'techand.ai', mode: 'full' } }]);
+  mock('Manual Run', [{ json: TRIG({ parent_run_id: '622' }) }]);
+  const childRow = (await run('Run Ledger Row (BL)', [{ json: {} }], { code: 'Run_Ledger_Row_BL_' }))[0].json;
+  delete store['Manual Run'];
+  const schedRow = (await run('Run Ledger Row (BL)', [{ json: {} }], { code: 'Run_Ledger_Row_BL_' }))[0].json;
+  console.log('   child row key ->', childRow.key, '| scheduled ->', schedRow.key);
+  check('R77: the child\'s ledger row names its parent (key `parent:622`), so the two rows of one request are linked in the table — a scheduled run keeps `schedule:backlinks`',
+    childRow.key === 'parent:622' && schedRow.key === 'schedule:backlinks' && eq(Object.keys(childRow), TC.RUN_LEDGER), JSON.stringify({ child: childRow.key, sched: schedRow.key }));
+
+  // ---------- R81 part 1: the front door's row settles as handed off — $0, done, naming the child ----------
+  reset();
+  mock('Run Ledger Row', [{ json: { run_id: 'test-exec', mode: 'backlinks', est_usd: 0.06, dfs_est_usd: 0.5, cost_mode: 'backlinks|backlinks', dfs_balance: 12.735491, created_at: ago(1) } }]);
+  mock('Rate Limit', [{ json: { mode: 'backlinks', domain: 'techand.ai' } }]);
+  mock('Monitor Start', [{ json: { domain: 'techand.ai', monitor: 'backlinks', request_id: '621', parent_run_id: 'test-exec' } }]);
+  mock('Monitor Started', [{ json: { mode: 'backlinks', started: true, status: 'accepted', stage: 'backlinks_started', request_id: '621' } }]);
+  mock('Load Run Ledger', [{ json: {} }]);
+  mock('Load Cost Calibration', [{ json: {} }]);
+  mock('DFS Balance End', [{ json: { tasks: [{ result: [{ money: { balance: 12.735491 } }] }] } }]);
+  const hand = (await run('Run Ledger Settle', [{ json: {} }]))[0].json;
+  console.log('   handed-off settle ->', JSON.stringify({ dfs: hand.dfs_usd, ai: hand.ai_usd, src: hand.dfs_source, basis: hand.cost_basis }));
+  check('R81: the front-door row of a hand-off settles $0 — row 91 kept "$0.5000 ESTIMATED (the per-mode reservation)" for a request whose money sits on the child\'s row, so the day counted it twice',
+    hand.status === 'done' && hand.dfs_usd === 0 && hand.settled_usd === 0 && hand.ai_usd === 0 && hand.measured_usd === 0 && hand.estimated_usd === 0,
+    JSON.stringify(hand).slice(0, 400));
+  check('R81: and it says where the money is — handed off to the Backlink Monitor, whose row carries key parent:<this run>',
+    hand.dfs_source === 'handoff' && /handed off/.test(hand.cost_basis) && /SEOagentBacklnk1/.test(hand.cost_basis) && /parent:test-exec/.test(hand.cost_basis),
+    hand.cost_basis);
+  const cal = (await run('Cost Calibration Row', [{ json: {} }]))[0].json;
+  check('R81: a hand-off teaches the cost calibration nothing (it measured no money of its own)', cal.skip === true, JSON.stringify(cal));
+  mock('Monitor Started', [{ json: { mode: 'backlinks', started: false, status: 'failed', error: 'Workflow is not active' } }]);
+  const notStarted = (await run('Run Ledger Settle', [{ json: {} }]))[0].json;
+  check('R81: a monitor that could not be started settles $0 too, and says it was not started',
+    notStarted.dfs_usd === 0 && /could not be started/.test(notStarted.cost_basis), notStarted.cost_basis);
+  reset();
+});
+
+await guard('S115 R116 R96 — a refused on-demand monitor tells its caller, and a refusal ends in seconds', async () => {
+  reset(); const SN = 'S115 R116 R96 — a refused on-demand monitor posts {stage: rejected, status: rejected, error, request_id} to its caller, and the refusal path reaches no DataForSEO node and no settle';
+  begin(SN);
+  const K = S114_KIT(), check = K.check(SN), ago = K.ago;
+  const ROW = (o) => ({ run_id: '1', mode: 'backlinks', status: 'reserved', created_at: ago(1), domain: '', heavy: false, ...o });
+  const TRIG = { domain: 'techand.ai', site_id: 'site_techand-ai', on_demand: true, callback_url: 'http://app.example.test/api/hooks/n8n/tok', request_id: '621', monitor: 'backlinks', parent_run_id: '622' };
+  // a genuine duplicate: a second app request while exec 999 (another request) still runs
+  mock('BL Plan', [{ json: { site_id: 'site_techand-ai', domain: 'techand.ai', mode: 'full' } }]);
+  mock('Load Open Runs (BL)', [{ json: ROW({ id: 90, run_id: '999' }) }, { json: ROW({ id: 91, run_id: '622' }) }]);
+  mock('Reserve Run Ledger (BL)', [{ json: { id: 92, run_id: 'test-exec', mode: 'backlinks', status: 'reserved', key: 'parent:622' } }]);
+  mock('Run Ledger Row (BL)', [{ json: { run_id: 'test-exec', mode: 'backlinks', key: 'parent:622' } }]);
+  mock('Manual Run', [{ json: TRIG }]);
+  const ref = (await run('After Run Ledger (BL)', [{ json: {} }], { code: 'After_Run_Ledger_BL_' }))[0].json;
+  check('R116: the refusal item knows who is waiting for it (callback, request id, domain) — it used to carry none of it, so nothing could answer',
+    ref.run_refused === true && ref.callback_url === TRIG.callback_url && ref.request_id === '621' && ref.domain === 'techand.ai', JSON.stringify(ref).slice(0, 400));
+  mock('Refuse Run Ledger (BL)', [{ json: { id: 92, status: 'refused' } }]);   // a Data Table node answers with the row, not the refusal
+  const note = (await run('Refusal Notice (BL)', [{ json: { id: 92, status: 'refused' } }], { code: 'Refusal_Notice_BL_' }))[0].json;
+  console.log('   refusal callback ->', JSON.stringify(note.body || note).slice(0, 300));
+  check('R116 (dossier test a): an on-demand refusal produces exactly {stage: "rejected", status: "rejected", error: <the refusal sentence>, request_id}',
+    !!note.body && note.body.stage === 'rejected' && note.body.status === 'rejected' && note.body.request_id === '621'
+    && note.body.error === ref.refusal && /execution 999/.test(note.body.error) && note.callback_url === TRIG.callback_url,
+    JSON.stringify(note).slice(0, 400));
+  check('R116: the callback names the site and the mode so the app can file it, and claims no money',
+    !!note.body && note.body.domain === 'techand.ai' && note.body.mode === 'backlinks' && note.body.cost_usd === 0 && note.body.on_demand === true, JSON.stringify(note.body));
+  delete store['Manual Run'];
+  const sched = (await run('After Run Ledger (BL)', [{ json: {} }], { code: 'After_Run_Ledger_BL_' }))[0].json;
+  const quiet = (await run('Refusal Notice (BL)', [{ json: {} }], { code: 'Refusal_Notice_BL_' }))[0].json;
+  check('R116: a SCHEDULED refusal has nobody waiting — it posts nothing (the ledger row says why)',
+    sched.run_refused === true && quiet.skip === true, JSON.stringify(quiet));
+  // ---------- the wiring of all ten: the refusal ends at its own callback, never at the balance read or the settle ----------
+  const W = require('./alert_retry_wiring.json');
+  const MON = Object.keys(W.monitors).sort();
+  const bad = MON.filter(w => { const g = W.monitors[w].guard || {}; const p = g.refusal_path;
+    return !Array.isArray(p) || !p.includes(g.notice) || !p.includes(g.post) || p.some(n => /^DFS Balance|^Load Run Ledger|^Ledger Settle|^Settle Run Ledger|^Ensure Ops Alerts/.test(n)) || g.post_max_tries !== 3; });
+  console.log('   refusal path (BL) ->', JSON.stringify((W.monitors['SEO Agent — Backlink Monitor'].guard || {}).refusal_path));
+  check('R96 (dossier test a): in all ten scheduled workflows no path from Refuse Run Ledger reaches a DataForSEO node or the settle — exec 624 waited 5 min 33 s on a balance read it did not need, then computed $0.45 and dropped it',
+    MON.length === 10 && bad.length === 0, JSON.stringify(bad));
+  check('R96: the refused row is settled by the refusal itself (status refused, $0, settled_at, the reason) — no second write is needed or attempted',
+    MON.every(w => ['status', 'settled_usd', 'dfs_usd', 'settled_at', 'cost_basis'].every(c => W.monitors[w].refuse_values.includes(c))), JSON.stringify(W.monitors[MON[0]].refuse_values));
+  reset();
+});
+
+await guard('S116 R79 R105 — one alert key, trimmed once, and the row the retry updates is the row that exists', async () => {
+  reset(); const SN = 'S116 R79 R105 — the ops-alert key is trimmed when it is built, every write-back uses the stored key byte for byte, the Error Handler sweeps once per failure, and a re-sent row records the channel that carried it';
+  begin(SN);
+  const K = S114_KIT(), check = K.check(SN), eq = K.eq, ago = K.ago;
+  const WEBHOOK = 'https://hooks.example.test/seo-agent-alerts';
+  // row 4 of seo_ops_alerts as stored on 2026-10-13: its 160-character message slice ends on a space, so the stored key is 207 characters
+  const MSG = 'The trigger node "Mailbox Trigger" failed at runtime and was deactivated — The IMAP server closed the connection without reporting an error, usually because the server (or a proxy/firewall) periodically closes long-lived connections, or was temporarily unavailable. n8n will automatically retry reactivating the workflow. — IMAP connection closed unexpectedly';
+  const STORED = 'SEO Agent — Console Alerts | Mailbox Trigger | the trigger node "x" failed at runtime and was deactivated — the imap server closed the connection without reporting an error, usually because the server (or a ';
+  const ROW4 = { id: 4, alert_key: STORED, workflow: 'SEO Agent — Console Alerts', node: 'Mailbox Trigger', message: MSG, execution_id: '', execution_url: '', mode: 'trigger',
+    severity: 'high', first_seen_at: '2026-10-13T17:52:35.392Z', last_seen_at: ago(24 * 60), count: 1, channels: 'email,data_table', delivered: 'failed',
+    notes: 'email failed (getaddrinfo ENOTFOUND smtp.gmail.com)', attempts: null, last_attempt_at: null, next_attempt_at: null, attempt_log: null };
+  check('fixture: the stored key is the 207-character one ending in a space', STORED.length === 207 && STORED.endsWith(' '), STORED.length);
+  const ALERT = { workflow: 'SEO Agent — Console Alerts', node: 'Mailbox Trigger', message: MSG, subject: '[SEO Agent] trigger failed', execution_id: '', mode: 'trigger' };
+  const fresh = await K.ar({ call: 'record', alert: ALERT, rows: [], cfg: { webhook_url: WEBHOOK } });
+  check('R79 (dossier unit test): keyOf trims after the 160-character slice — a message whose 160th character is a space no longer makes a key ending in a space',
+    fresh.alert_key === STORED.trim() && !/\s$/.test(fresh.alert_key), JSON.stringify([fresh.alert_key.length, fresh.alert_key.slice(-6)]));
+  const again = await K.ar({ call: 'record', alert: ALERT, rows: [ROW4], cfg: { webhook_url: WEBHOOK } });
+  check('R79: a repeat of row 4\'s failure is recognised as row 4 (count 2, its first sighting kept) and is written back under row 4\'s OWN stored key — the upsert updates it instead of creating a second row',
+    again.alert_key === STORED && again.count === 2 && again.first_seen_at === ROW4.first_seen_at, JSON.stringify({ len: again.alert_key.length, count: again.count, first: again.first_seen_at }));
+  const plan = await K.ar({ call: 'plan', rows: [ROW4], cfg: { webhook_url: WEBHOOK, where: 'SEO Agent — Backlink Monitor' } });
+  check('R79: the sweep plans row 4 under its stored key byte for byte (exec 626 handed 206 characters to an update filtering a 207-character key, so 14 posts updated nothing)',
+    plan.items.length === 1 && plan.items[0].alert_key === STORED, JSON.stringify(plan.items.map(i => i.alert_key.length)));
+  const set = (await K.ar({ call: 'settle', planned: plan.items, responses: [{ statusCode: 200, body: 'ok' }] })).rows;
+  check('R79 + R105: the write-back of a delivered re-send carries the stored key, `delivered: webhook`, attempts 1 — and `channels` names the webhook that carried it (rows 1-3 read "email,data_table" beside "delivered: webhook")',
+    set[0].alert_key === STORED && set[0].delivered === 'webhook' && set[0].attempts === 1 && set[0].channels.split(',').includes('webhook') && set[0].channels.split(',').includes('email'),
+    JSON.stringify({ len: set[0].alert_key.length, delivered: set[0].delivered, channels: set[0].channels }));
+  // the node itself, as the Backlink Monitor runs it (dossier test a: Alert Retry Plan (BL) -> Alert Retry Result (BL))
+  mock('Alert Retry Plan (BL)', plan.items.map(i => ({ json: i })));
+  const res = await run('Alert Retry Result (BL)', [{ json: { statusCode: 200, body: 'ok' } }], { code: 'Alert_Retry_Result_BL_' });
+  check('R79 (dossier test a): the alert_key Alert Retry Result (BL) hands to Save Alert Retry (BL) equals the stored key byte for byte',
+    res.length === 1 && res[0].json.alert_key === STORED && res[0].json.channels.split(',').includes('webhook'), JSON.stringify(res.map(r => [r.json.alert_key.length, r.json.channels])));
+  // the Page Watch's own delivery record
+  mock('Watch Ops Channels', [{ json: { webhook_body: { alerts: [{ key: STORED.trim() }] } } }]);
+  mock('Watch Ops Alert', [{ json: { ...ROW4, channels: 'email,data_table' } }]);
+  const wd = (await run('Watch Ops Delivery', [{ json: { statusCode: 200, body: 'ok' } }]))[0].json;
+  check('R105 (dossier test a) + R79: Watch Ops Delivery with stored channels "email,data_table" and a 2xx writes channels containing webhook, under the stored key',
+    wd.alert_key === STORED && wd.delivered === 'webhook' && wd.channels.split(',').includes('webhook'), JSON.stringify({ len: (wd.alert_key || '').length, ch: wd.channels }));
+  // the Error Handler: one delivery record and one sweep per failure
+  const OW = require('./ops_alert_wiring.json');
+  const into = Object.entries(OW.connections).filter(([, outs]) => outs.some(l => (l || []).includes('Alert Delivery'))).map(([s]) => s);
+  const m = OW.delivery_merge || {};
+  console.log('   EH -> Alert Delivery from', JSON.stringify(into), '| merge', JSON.stringify(m));
+  check('R79 (dossier test a): in the Error Handler exactly ONE node feeds Alert Delivery — a merge that waits for both channel branches — so the delivery is recorded once and the retry sweep behind it runs once per failure (exec 643 re-posted row 4 twice, 3 s apart)',
+    eq(into, ['Alert Channels Done']) && m.node === 'Alert Channels Done' && m.type === 'n8n-nodes-base.merge'
+    && eq(m.inputs, { 'Email Ops': 1, 'Post Alert Webhook': 0, 'Send Email?': 1, 'Send Webhook?': 0 }), JSON.stringify({ into, m }));
+  reset();
+});
+
+await guard('S117 R95 — an on-demand pulse no longer replaces the day\'s scheduled reading', async () => {
+  reset(); const SN = 'S117 R95 — a same-day on-demand AI pulse is stored beside the scheduled reading, both count in the week, and a scheduled re-run still replaces only itself';
+  begin(SN);
+  const K = S114_KIT(), check = K.check(SN);
+  const LW = require('./ledger_wiring.json');
+  const keys = ((LW.monitors['SEO Agent — AI Pulse'] || {}).daily_upsert_keys) || ['site_id', 'date'];
+  const DAY = '2026-10-15';
+  const metrics = (onDemand, samples, mentioned, at) => [{ json: { site_id: 'site_techand-ai', domain: 'techand.ai', date: DAY, on_demand: onDemand,
+    daily_row: { site_id: 'site_techand-ai', domain: 'techand.ai', date: DAY, checked_at: at, run_id: 'pulse_20261015_techand-ai', samples, mentioned, cited: 0 } } }];
+  const table = [];
+  const upsert = (rows) => { for (const r of rows) { const i = table.findIndex(t => keys.every(k => String(t[k]) === String(r[k]))); if (i >= 0) table[i] = { ...table[i], ...r }; else table.push({ ...r }); } };
+  mock('Pulse Metrics', metrics(false, 21, 0, '2026-10-15T11:11:00.000Z'));   // exec 593, scheduled 11:11 UTC
+  upsert((await run('AI Daily Rows', [{ json: {} }], { code: 'Pulse__AI_Daily_Rows' })).map(i => i.json));
+  mock('Pulse Metrics', metrics(true, 21, 1, '2026-10-15T19:42:55.988Z'));    // exec 630, on demand 19:42 UTC
+  upsert((await run('AI Daily Rows', [{ json: {} }], { code: 'Pulse__AI_Daily_Rows' })).map(i => i.json));
+  console.log('   upsert keys', JSON.stringify(keys), '-> rows', JSON.stringify(table.map(r => [r.run_id, String(r.checked_at).slice(11, 16), r.samples])));
+  check('R95 (dossier test a): replaying AI Daily Rows for 593 then 630 leaves TWO rows for 2026-10-15 — the 11:11 scheduled reading is no longer overwritten by the 19:42 on-demand one',
+    table.length === 2 && table.some(r => String(r.checked_at).startsWith('2026-10-15T11:11')) && table.some(r => String(r.checked_at).startsWith('2026-10-15T19:42')), JSON.stringify(table));
+  check('R95: the weekly figure (AI Plan sums every row of the window) counts 42 answers for the day, not 21', table.reduce((s, r) => s + r.samples, 0) === 42, table.length);
+  mock('Pulse Metrics', metrics(false, 21, 2, '2026-10-15T12:00:00.000Z'));   // a scheduled re-run the same day replaces the scheduled reading only
+  upsert((await run('AI Daily Rows', [{ json: {} }], { code: 'Pulse__AI_Daily_Rows' })).map(i => i.json));
+  check('R95: a second SCHEDULED reading of the same day still replaces the scheduled row (one scheduled reading per day, as before)',
+    table.length === 2 && keys.includes('run_id'), JSON.stringify({ keys, n: table.length }));
+  reset();
+});
+
 
 H.report();
 })();

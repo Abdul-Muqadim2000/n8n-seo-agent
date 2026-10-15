@@ -419,12 +419,27 @@ const plan = $('__PLAN__').all();
 let rows = []; try { rows = $('__LEDGER__').all().map(i => i.json).filter(r => r && r.run_id && !r.error); } catch (e) { rows = []; }
 let mine = {}; try { mine = $('__RESERVE__').first().json || {}; } catch (e) { mine = {}; }
 if (mine && mine.error) mine = {};
-const g = RG.gate({ rows, mine, mode: '__MODE__', where: '__WHERE__', run_id: String($execution.id) });
+// R77 (2026-10-16, re-rating C-1): the run that started this one, by identity. The front door's own row has the same mode and is still
+// `reserved` when an on-demand monitor reads the ledger, so the mode alone made the child refuse itself (exec 624). The child's row names
+// its parent in its key (Monitor_Ledger_Row: `parent:<id>`), and the trigger item carries it too; a genuine twin is still refused.
+// R116: and the refusal knows who is waiting for it — an on-demand run's trigger carries the caller's callback and request id.
+let __trig = {};
+for (const __n of ['Manual Run', 'Watch Run']) { try { const __t = $(__n).first(); if (__t && __t.json) { __trig = __t.json; break; } } catch (e) {} }
+if (__trig.body && typeof __trig.body === 'object') __trig = { ...__trig, ...__trig.body };
+let __row = {}; try { __row = $('__ROW__').first().json || {}; } catch (e) { __row = {}; }
+const __S = (v) => String(v == null ? '' : v).trim();
+const parent_run_id = RG.parentOf(mine) || RG.parentOf(__row) || __S(__trig.parent_run_id);
+const g = RG.gate({ rows, mine, mode: '__MODE__', where: '__WHERE__', run_id: String($execution.id), parent_run_id });
 if (g.allowed) return plan;
+let __dom = __S(__trig.domain);
+if (!__dom) { try { __dom = __S((plan[0] && plan[0].json || {}).domain); } catch (e) { __dom = ''; } }
 return [{ json: { run_refused: true, run_id: String($execution.id), refused_at: new Date().toISOString(),
   cost_basis: ('refused before any spending: ' + g.refusal + ' [' + g.basis + ']').slice(0, 400),
   reason: g.reason, refusal: g.refusal, basis: g.basis, open_runs: g.open_runs, open: g.open, max_open: g.max_open,
-  stale_ignored: g.stale_ignored, mode: g.mode, where: g.where } }];
+  stale_ignored: g.stale_ignored, mode: g.mode, where: g.where, parent_run_id,
+  // R116: who to tell. Only a run started by hand (a Manual Run with a callback) has someone waiting; a scheduled refusal has nobody.
+  callback_url: __S(__trig.callback_url), request_id: __S(__trig.request_id), domain: __dom.toLowerCase(),
+  monitor: __S(__trig.monitor) || g.mode, on_demand: !!__S(__trig.callback_url) } }];
 """
 
 # ---- B-A7 / B-A9 (2026-10-15, build section 64): the kits the ledger chain inlines, read once from v5/ ----
@@ -553,6 +568,7 @@ def ledger_mainline(wfobj, wiring):
     x, y = nodes[reserve]['position']
     wfobj['nodes'].append({'parameters': {'jsCode': inline_kits(LEDGER_RESUME_JS)
                                           .replace('__PLAN__', plan).replace('__LEDGER__', openrun).replace('__RESERVE__', reserve)
+                                          .replace('__ROW__', str(wiring['reserve']))
                                           .replace('__MODE__', str(wiring['mode'])).replace('__WHERE__', str(wfobj.get('name') or tag))},
                            'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + resume)), 'name': resume,
                            'type': 'n8n-nodes-base.code', 'typeVersion': 2, 'position': [x + 220, y]})
@@ -582,6 +598,36 @@ def ledger_mainline(wfobj, wiring):
         nodes[nm]['onError'] = 'continueRegularOutput'
     wiring['resume'] = resume
     wiring['guard'] = {'load': openrun, 'gate': resume, 'if': allow, 'refuse': refuse, 'kit': 'RG'}
+    # ---- R96 / R116 (2026-10-16, re-rating C-20 / D-20, build section 96): what a refusal does after it marks its row ----
+    # R96: the refusal used to fall into the settle chain like any other loose end — *DFS Balance End* (exec 624 waited 5 min 33 s on it
+    # behind another run's DataForSEO calls), *Load Run Ledger*, *Ledger Settle* (which computed "$0.45 estimated, done" for a run that
+    # spent nothing) and *Settle Run Ledger* (whose `status = reserved` filter then matched nothing, so the figure was dropped). The
+    # refused row is already settled by the refusal itself — `refused`, $0, `settled_at`, the reason — so the run ends at its own notice.
+    # R116: and the caller who is waiting for an on-demand run hears why it did not run: `{stage: rejected, status: rejected, error,
+    # request_id}` to the trigger's callback (v5/code/Refusal_Notice.js); a scheduled refusal posts nothing.
+    notice, tell, post = 'Refusal Notice (' + tag + ')', 'Tell Caller (' + tag + ')?', 'Post Refusal (' + tag + ')'
+    assert not any(n in nodes for n in (notice, tell, post)), 'R116: the refusal notice of ' + str(wfobj.get('name')) + ' is already built'
+    rx, ry = nodes[refuse]['position']
+    wfobj['nodes'].append({'parameters': {'jsCode': read_v5('code/Refusal_Notice.js').replace('__RESUME__', resume)},
+                           'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + notice)), 'name': notice,
+                           'type': 'n8n-nodes-base.code', 'typeVersion': 2, 'position': [rx + 220, ry],
+                           'onError': 'continueRegularOutput', 'executeOnce': True})
+    wfobj['nodes'].append({'parameters': _if_params(str(_uuid.uuid5(_LEDGER_NS, tell + ':cond')), '{{ !$json.skip }}'),
+                           'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + tell)), 'name': tell,
+                           'type': 'n8n-nodes-base.if', 'typeVersion': 2.3, 'position': [rx + 440, ry]})
+    wfobj['nodes'].append({'parameters': {'method': 'POST', 'url': '={{ $json.callback_url }}', 'sendBody': True, 'specifyBody': 'json',
+                                          'jsonBody': '={{ JSON.stringify($json.body) }}', 'options': {'timeout': 30000}},
+                           'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + post)), 'name': post,
+                           'type': 'n8n-nodes-base.httpRequest', 'typeVersion': 4.5, 'position': [rx + 660, ry - 100],
+                           'onError': 'continueRegularOutput', 'retryOnFail': True, 'maxTries': 3, 'waitBetweenTries': 5000})
+    for nm in (notice, tell, post): nodes[nm] = next(n for n in wfobj['nodes'] if n['name'] == nm)
+    conns.setdefault(refuse, {})['main'] = [[{'node': notice, 'type': 'main', 'index': 0}]]
+    conns.setdefault(notice, {})['main'] = [[{'node': tell, 'type': 'main', 'index': 0}]]
+    conns.setdefault(tell, {})['main'] = [[{'node': post, 'type': 'main', 'index': 0}], []]
+    wiring['guard'].update({'notice': notice, 'tell': tell, 'post': post, 'post_max_tries': 3})
+    # the refusal IS where a refused row is settled (it writes status, $0, settled_at and the reason), so it is one of the run's settle
+    # ends — and the walk below must not wire its branch into the balance read and the settle code
+    wiring['settle_from'] = sorted(set(wiring.get('settle_from') or []) | {refuse})
     # ---- R31 (2026-10-14, FIX_PLAN §3.13): every end of the run reaches the settle ----
     # The settle hung off the report node only, so a run that found nothing to do (the `Nothing To Do (…)` branch every monitor has)
     # reserved a row and then finished without ever settling it — the row sat `reserved` against the guard until *Release Stale Runs*
@@ -590,7 +636,7 @@ def ledger_mainline(wfobj, wiring):
     # connection is wired into the settle here, in the one place the three builders share.
     settle_code = 'Ledger Settle (' + tag + ')'
     outs_of = lambda nd: [t['node'] for lst in ((conns.get(nd) or {}).get('main') or []) for t in (lst or [])]
-    blocked = set(wiring.get('settle_from') or []) | {settle_code, wiring['settle']}
+    blocked = set(wiring.get('settle_from') or []) | {settle_code, wiring['settle']}   # R96: settle_from holds the refusal, so its branch stays apart
     seen, stack = {resume}, [resume]
     while stack:
         cur = stack.pop()
@@ -606,6 +652,18 @@ def ledger_mainline(wfobj, wiring):
     wiring['settle_from_ends'] = loose   # the branches that used to finish without settling
     _ledger_settle_chain(wfobj, wiring, tag, settle_code, conns, nodes)
     _alert_retry_chain(wfobj, wiring, tag, conns, nodes)
+    # R96: the proof, recorded for the harness (S115) — every node a refusal can reach. None of them may be a DataForSEO call, the balance
+    # read or the settle chain.
+    seen_r, stack_r = {refuse}, [refuse]
+    while stack_r:
+        for t in outs_of(stack_r.pop()):
+            if t not in seen_r: seen_r.add(t); stack_r.append(t)
+    wiring['guard']['refusal_path'] = sorted(seen_r)
+    for n in seen_r:
+        nd = nodes.get(n) or {}
+        assert 'dataforseo.com' not in str((nd.get('parameters') or {}).get('url') or ''), 'R96: the refusal of ' + str(wfobj.get('name')) + ' reaches ' + n
+        assert n not in (wiring.get('balance_end'), wiring.get('ledger_load'), settle_code, wiring['settle']), \
+            'R96: the refusal of ' + str(wfobj.get('name')) + ' reaches the settle chain at ' + n
     return resume
 
 

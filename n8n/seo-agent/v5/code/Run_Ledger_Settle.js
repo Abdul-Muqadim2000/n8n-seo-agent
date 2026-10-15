@@ -76,11 +76,30 @@ if (dfs_run.attributed) {
   dfs.basis = dfs.basis + '. ' + dfs_run.basis;
 }
 
+// R81 part 1 (2026-10-16, re-rating C-5): a monitor request is a HAND-OFF. The front door (this run) reserved a row for `ai_visibility` /
+// `backlinks`, started the monitor in its own execution (Monitor Start -> Start AI Visibility / Start Backlink Monitor) and spent nothing
+// itself — the monitor reserves and settles its own row, whose key names this run (`parent:<this run>`, R77). This row used to settle the
+// per-mode reservation ("$0.5000 ESTIMATED (the per-mode reservation: this branch carries no ledger of its own)", row 91) on top of the
+// child's measured figure, so the day counted the request twice ($2.89 reported against $1.48 moved). It now settles $0, `done`, says
+// where the money is, and teaches the cost calibration nothing.
+const __started = first('Monitor Started');
+const __handoff = !!__started && ['ai_visibility', 'backlinks'].includes(String(row.mode || req.mode || ''));
+if (__handoff) {
+  const __ms = first('Monitor Start') || {};
+  const __kind = String(__ms.monitor || row.mode || req.mode || '');
+  const __wf = __kind === 'ai_visibility' ? 'the AI Visibility Tracker (SEOagentAIVisib1)' : 'the Backlink Monitor (SEOagentBacklnk1)';
+  const __ok = __started.started !== false && !__started.error;
+  ai.usd = 0; ai.measured = true; ai.basis = 'no model call ran in this run: the work was handed off';
+  dfs.usd = 0; dfs.measured = false; dfs.measured_usd = 0;
+  dfs.basis = __ok
+    ? 'handed off to ' + __wf + ', started from this run: that run reserves and settles its own ledger row (key parent:' + String($execution.id) + ') and carries this request\'s money, so nothing is counted here'
+    : 'the monitor could not be started (' + String(__started.error || 'no execution was started').slice(0, 160) + '), so nothing was spent';
+}
 const split = CC.split(ai, dfs);
 // `cost_mode` is "<Claude estimate key>|<DataForSEO estimate key>" — the two keys whose rolling figures this run settles into
 // (Cost Calibration Row). It is on the reserved row already; it is rebuilt from the request when an older row has none.
 const cost_mode = String(row.cost_mode || (CC.pick('ai', req).key + '|' + CC.pick('dfs', req).key));
-return [{ json: {
+const __out = {
   run_id: String($execution.id), mode: String(row.mode || req.mode || ''), status: 'done', cost_mode,
   // the guard counts Claude money, so `settled_usd` stays the Claude figure — now the run's own, not a flat per-mode guess
   settled_usd: ai.usd, ai_usd: ai.usd, ai_measured: ai.measured,
@@ -103,4 +122,12 @@ return [{ json: {
   ai_estimated: !ai.measured, ai_basis: ai.basis, ai_source: ai.source, ai_nodes_ran: ai.ran, ai_nodes_checked: ai.checked,
   ai_by_node: fig ? fig.by_node : {}, ai_models: fig ? fig.models : {},
   ai_streaming_nodes: fig ? (fig.streaming_nodes || []) : [],
-} }];
+};
+if (__handoff) {
+  // R81: the whole row says one thing — $0 here, the money on the child's row — and nothing on it reads as a measurement to learn from
+  Object.assign(__out, { settled_usd: 0, ai_usd: 0, ai_measured: true, dfs_usd: 0, dfs_measured: false, measured_usd: 0, estimated_usd: 0,
+    dfs_source: 'handoff', dfs_estimated_usd: 0, dfs_tasks_usd: 0, dfs_run_reconciled: false, dfs_day_reconciled: false,
+    ai_calls: 0, ai_in_tokens: 0, ai_out_tokens: 0, ai_by_node: {}, ai_models: {},
+    cost_basis: ('Claude $0.0000, DataForSEO $0.0000: ' + dfs.basis).slice(0, 500), handed_off: true });
+}
+return [{ json: __out }];

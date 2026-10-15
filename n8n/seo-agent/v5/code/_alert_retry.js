@@ -31,6 +31,14 @@ const AR = (() => {
   const cfgUrl = (v) => { const s = S(v); return !s || /^__[A-Z0-9_]+__$/.test(s) ? '' : s; };
   // what counts as delivered: Alert Delivery writes the channels that carried it ('webhook', 'email', 'webhook,email').
   const carried = (r) => S(r && r.delivered).toLowerCase().split(',').map(x => x.trim()).some(x => x === 'webhook' || x === 'email');
+  // R79 (2026-10-16, re-rating C-3): rows are COMPARED on the trimmed key (S) but WRITTEN BACK under the key they are stored with, byte for
+  // byte: the update filters `alert_key eq …` exactly, and row 4's stored key ends in a space (written before OA.keyOf trimmed). Trimming it
+  // here made every re-send's write-back match nothing, so the row never recorded the attempt and was "due" again on the next run.
+  const storedKey = (r) => String(r == null || r.alert_key == null ? '' : r.alert_key);
+  // R105 (2026-10-16, re-rating D-9): `channels` records the channels that carried, or were tried for, the alert — rows 1-3 read
+  // "email,data_table" beside `delivered: webhook` because a re-send kept the stored list. One order, no repeats; the table is always one.
+  const withChannel = (list, ch) => { const have = new Set(S(list).toLowerCase().split(',').map(x => x.trim()).filter(Boolean).concat([S(ch), 'data_table']));
+    return ['webhook', 'email', 'data_table'].filter(x => have.has(x)).concat([...have].filter(x => x && !['webhook', 'email', 'data_table'].includes(x))).join(','); };
   const abandoned = (r) => S(r && r.delivered).toLowerCase() === 'abandoned';
   const attemptsOf = (r) => Math.max(0, n0(r && r.attempts));
   // when this row may be tried again: what the last attempt booked, else the last attempt / sighting plus the interval. A row written
@@ -95,7 +103,7 @@ const AR = (() => {
       const attempt = attemptsOf(r) + 1;
       const severity = severityFor(r, attempt);
       const p = payload(r, attempt, severity, nowMs);
-      return { alert_key: S(r.alert_key), attempt, severity, escalated: attempt >= ESCALATE_AFTER, at: iso(nowMs),
+      return { alert_key: storedKey(r), attempt, severity, escalated: attempt >= ESCALATE_AFTER, at: iso(nowMs),
         row: r, webhook_url: url, webhook_body: p.body, subject: p.subject, plain: p.plain, sweeper: S(c.where) };
     });
     return { items, open: open.length, due: ready.length, posting: url ? items.length : 0, spent: spent.length,
@@ -113,10 +121,10 @@ const AR = (() => {
     const giveUp = !res.ok && attempt >= MAX_ATTEMPTS;
     const nowMs = ms(p.at) || Date.now();
     return {
-      alert_key: S(p.alert_key),
+      alert_key: p.alert_key == null ? storedKey(r) : String(p.alert_key),   // R79: the stored key, never re-trimmed
       // Rule 4: delivered only on the evidence of a 2xx; otherwise the row keeps saying nobody has it.
       delivered: res.ok ? 'webhook' : giveUp ? 'abandoned' : 'failed',
-      channels: S(r.channels) || 'data_table',
+      channels: withChannel(r.channels, 'webhook'),   // R105: this attempt went to the webhook, delivered or not
       severity: res.ok ? sev : severityFor(r, attempt),
       attempts: attempt,
       last_attempt_at: iso(nowMs),
@@ -133,6 +141,6 @@ const AR = (() => {
     };
   });
 
-  return { plan, settle, posted, carried, isOpen, retryable, attemptsOf, dueAt, severityFor, addAttempt, logLines, cfgUrl, ageText,
+  return { plan, settle, posted, carried, storedKey, withChannel, isOpen, retryable, attemptsOf, dueAt, severityFor, addAttempt, logLines, cfgUrl, ageText,
            RETRY_MINUTES, ESCALATE_AFTER, MAX_ATTEMPTS, PER_SWEEP };
 })();

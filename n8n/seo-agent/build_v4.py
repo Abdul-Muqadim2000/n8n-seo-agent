@@ -3885,11 +3885,20 @@ _eh_add('Alert Delivery', 'n8n-nodes-base.code', 2, {'jsCode': _eh_src('code/Ale
 _eh_add('Save Alert Delivery', DT_TYPE, DT_VERSION, dt_update_params(OPS_ALERTS_TABLE, OPS_ALERTS_COLS, [('alert_key', '={{ $json.alert_key }}')],
     {'delivered': '={{ $json.delivered }}', 'channels': '={{ $json.channels }}', 'notes': '={{ $json.notes }}'}), [2240, _EHY],
     {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
-# every path through the two channel gates reaches it, so a row never stays "pending" for a delivery that can never come. It may run more
-# than once (one branch each); data only accumulates inside an execution, so the last run is the one that saw both channels.
-for _a48, _b48, _o48x in [('Post Alert Webhook', 'Alert Delivery', 0), ('Send Webhook?', 'Alert Delivery', 1),
-                          ('Email Ops', 'Alert Delivery', 0), ('Send Email?', 'Alert Delivery', 1), ('Alert Delivery', 'Save Alert Delivery', 0)]:
+# every path through the two channel gates reaches it, so a row never stays "pending" for a delivery that can never come.
+# R79 (2026-10-16, re-rating C-3, build section 96): it used to have FOUR inputs and so ran twice per failure (once per channel branch), and
+# the retry sweep chained behind it ran twice too — exec 643 re-posted one stale alert at 19:59:50 and again at 19:59:53. A Merge in front
+# of it waits for both branches (webhook side on input 0, e-mail side on input 1), so the delivery is recorded once, after both channels
+# answered, and the sweep runs once per failure.
+_eh_add('Alert Channels Done', 'n8n-nodes-base.merge', 3, {'mode': 'append'}, [1910, _EHY])
+for _a48, _o48x, _i48 in [('Post Alert Webhook', 0, 0), ('Send Webhook?', 1, 0), ('Email Ops', 0, 1), ('Send Email?', 1, 1)]:
+    _outs48 = _ehc.setdefault(_a48, {}).setdefault('main', [])
+    while len(_outs48) <= _o48x: _outs48.append([])
+    _outs48[_o48x] = [t for t in _outs48[_o48x] if t['node'] not in ('Alert Delivery', 'Alert Channels Done')] + [{'node': 'Alert Channels Done', 'type': 'main', 'index': _i48}]
+for _a48, _b48, _o48x in [('Alert Channels Done', 'Alert Delivery', 0), ('Alert Delivery', 'Save Alert Delivery', 0)]:
     _eh_link(_a48, _b48, _o48x)
+assert [s48 for s48, o48 in _ehc.items() for l48 in o48.get('main', []) for t48 in l48 if t48['node'] == 'Alert Delivery'] == ['Alert Channels Done'], \
+    'R79: Alert Delivery must have exactly one input, the merge of both channel branches'
 assert 'R5' in _ehn['Format Alert']['parameters']['jsCode'] and 'tr.error' in _ehn['Format Alert']['parameters']['jsCode'], 'R5: Format Alert cannot read a trigger-mode failure'
 _ehwf['nodes'] = list(_ehn.values())
 _ehnames48 = set(_ehn)
@@ -9310,6 +9319,51 @@ assert [c['node'] for c in _AI_CALLS51 if c.get('loop')] == ['Editor'], 'R46: a 
 log('The Editor is priced for the calls it made (2026-10-16, re-rating 2026-10-15 R46): Content QA emits editor_rounds (QA round - 1), its '
     'not-ready note counts them, and the cost loop of the five report builders and Run Ledger Settle multiplies the Editor by them instead '
     'of by the QA rounds.')
+
+
+# =============================================================================
+# 96. A RUN THAT KNOWS WHO STARTED IT, A REFUSAL THAT REACHES THE CUSTOMER, AND AN ALERT ROW THAT IS UPDATED (2026-10-16, the third
+#     re-rating's defects R77 / R81 / R116 / R96 (family F4) and R79 / R105 (family F5), plus R95; docs/system-review-2026-10-15/
+#     defects/C_monitors.md and D_app_reporting.md)
+# -----------------------------------------------------------------------------
+#  * R77 (High): an app backlinks request was refused by its OWN front-door run. The gate matched a "twin" on `mode` alone, and the front
+#    door's row (exec 622) was still `reserved` when the Backlink Monitor it had just started (exec 624) read the ledger. Fixed by identity,
+#    not timing: *Monitor Start* passes `parent_run_id` (the front door's own execution id), the child's ledger row names it in its key
+#    (`parent:<id>`), and RG.gate does not count that one run; a genuine twin with another id is still refused.
+#  * R81 part 1: the front door's row of a hand-off settled the per-mode reservation ($0.50 "ESTIMATED") beside the child's measured
+#    figure, so a request was counted twice. *Run Ledger Settle* now settles a hand-off at $0, `dfs_source: handoff`, naming the child.
+#  * R116 / R96: a refusal used to end in the settle chain — a balance read it did not need (5 min 33 s behind another run's DataForSEO
+#    calls), a settle that computed $0.45 and dropped it — and told nobody. It now ends at *Refusal Notice* -> a `rejected` callback to an
+#    on-demand caller (`{stage, status: rejected, error, request_id}`); the refused row is settled by the refusal itself. Built in
+#    ladder_common.ledger_mainline for all ten scheduled workflows and proved there (no path from the refusal reaches the settle chain).
+#  * R79 / R105: OA.keyOf trims after its 160-character slice; every write-back uses the key a row is STORED with (row 4 keeps its trailing
+#    space and is now matched byte for byte); the Error Handler's *Alert Delivery* has ONE input, a merge of both channel branches, so the
+#    retry sweep runs once per failure; a re-sent row records the webhook in `channels`.
+#  * R95: an on-demand AI pulse is stored beside the day's scheduled reading (build_monitors.py: upsert by site + date + run_id).
+# =============================================================================
+assert "parent_run_id: String($execution.id)" in code('Monitor Start'), 'R77: Monitor Start does not tell the monitor which run started it'
+assert '__handoff' in code('Run Ledger Settle') and "dfs_source: 'handoff'" in code('Run Ledger Settle'), \
+    'R81: the front door settles a monitor hand-off as if it had spent the reservation'
+assert 'dfs_source' in nodes['Settle Run Ledger']['parameters']['columns']['value'], 'R81: the settle does not write where the money is'
+from ladder_common import RUN_GUARD_SRC as _RG96, OPS_ALERT_SRC as _OA96, ALERT_RETRY_SRC as _AR96, LEDGER_RESUME_JS as _LR96
+assert 'const parentOf = ' in _RG96 and '!(parent && S(r.run_id) === parent)' in _RG96, 'R77: the gate cannot tell its parent from a twin'
+assert "'parent:' + parent_run_id" in rd('code/Monitor_Ledger_Row.js'), 'R77: the child\'s ledger row does not name its parent'
+assert 'parent_run_id })' in _LR96 and 'callback_url: __S(__trig.callback_url)' in _LR96, 'R77 / R116: the gate does not read its parent or its caller'
+assert ".slice(0, 160).trim()]" in _OA96 and 'storedKey(prior)' in _OA96, 'R79: the alert key is not trimmed once, or a repeat is written under a new key'
+assert 'alert_key: storedKey(r)' in _AR96 and "withChannel(r.channels, 'webhook')" in _AR96, 'R79 / R105: the sweep writes back under a re-trimmed key, or forgets its channel'
+# the harness (S116) reads the Error Handler's merge from ops_alert_wiring.json: which branch enters on which input
+_ow96p = os.path.join(HERE0, 'harness', 'ops_alert_wiring.json')
+_ow96 = json.load(open(_ow96p))
+_mi96 = {s96: t96['index'] for s96, o96 in _ehc.items() for l96 in o96.get('main', []) for t96 in l96 if t96['node'] == 'Alert Channels Done'}
+assert _mi96 == {'Post Alert Webhook': 0, 'Send Webhook?': 0, 'Email Ops': 1, 'Send Email?': 1}, 'R79: the merge in front of Alert Delivery is not fed one branch per input: ' + str(_mi96)
+_ow96['delivery_merge'] = {'node': 'Alert Channels Done', 'type': _ehn['Alert Channels Done']['type'], 'inputs': _mi96, 'feeds': 'Alert Delivery'}
+json.dump(_ow96, open(_ow96p, 'w'), indent=1, sort_keys=True)
+sticky("""### A run that knows who started it, a refusal that reaches the customer, an alert row that is updated (R77 / R81 / R116 / R96 / R79 / R105 / R95)
+**R77.** An on-demand AI visibility or backlinks check is started by this workflow (*Monitor Start*), whose own ledger row has the same mode. The monitor now receives `parent_run_id` (this execution's id), names it in its ledger row (`parent:<id>`) and does not count that run as "another run in flight"; a genuine second run is still refused. **R81.** This run's row then settles **$0, handed off** — the money is on the monitor's row, counted once.
+**R116 / R96.** A refused monitor ends at its own notice: an on-demand caller receives `{stage: rejected, status: rejected, error, request_id}` instead of waiting three hours; no balance read, no settle (the refusal settles its row itself).
+**R79 / R105.** The ops-alert key is trimmed once when it is built; every write-back uses the key the row is stored with, byte for byte; *Alert Delivery* has one input (a merge of both channels), so the retry sweep runs once per failure; a re-sent row records the webhook in `channels`.""",
+       -2600, -4300, 1180, 300, 3)
+log('A run that knows who started it, a refusal that reaches the customer, and an alert row that is updated (2026-10-16, re-rating R77 / R81 / R116 / R96 / R79 / R105 / R95): the on-demand monitor recognises its front-door parent by identity (parent_run_id, child key parent:<id>) and a genuine twin is still refused; the front door settles a hand-off at $0; a refused scheduled run ends at its own notice and an on-demand caller gets a rejected callback; the alert key is trimmed once and written back under the stored key; the Error Handler sweeps once per failure; a same-day on-demand pulse no longer replaces the scheduled reading')
 
 
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
