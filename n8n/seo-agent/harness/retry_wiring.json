@@ -14,7 +14,148 @@
    "Any Cluster Retries?",
    "Wait Before Cluster Retry",
    "Run Ladder Cluster SERP (Retry)",
-   "Ladder Clusters"
+   "Ladder Clusters",
+   "SERP Top 10",
+   "SERP Failed?",
+   "Wait Before SERP Retry",
+   "SERP Top 10 (Retry)",
+   "Pick Top 6",
+   "Facts SERP",
+   "Facts SERP Failed?",
+   "Wait Before Facts Retry",
+   "Facts SERP (Retry)",
+   "Collect Facts",
+   "Keyword Data",
+   "Keyword Data Failed?",
+   "Wait Before Keyword Data Retry",
+   "Keyword Data (Retry)",
+   "Has Domain (Authority)?",
+   "Find Competitors",
+   "Find Competitors Retry Plan",
+   "Any Find Competitors Retries?",
+   "Wait Before Find Competitors Retry",
+   "Find Competitors (Retry)",
+   "Find Competitors Answers",
+   "Fallback SERP",
+   "Fallback SERP Retry Plan",
+   "Any Fallback SERP Retries?",
+   "Wait Before Fallback SERP Retry",
+   "Fallback SERP (Retry)",
+   "Fallback SERP Answers",
+   "Domain Overview",
+   "Domain Overview Retry Plan",
+   "Any Domain Overview Retries?",
+   "Wait Before Domain Overview Retry",
+   "Domain Overview (Retry)",
+   "Domain Overview Answers",
+   "DataForSEO Whois",
+   "DataForSEO Whois Retry Plan",
+   "Any DataForSEO Whois Retries?",
+   "Wait Before DataForSEO Whois Retry",
+   "DataForSEO Whois (Retry)",
+   "DataForSEO Whois Answers",
+   "Ranked Keywords",
+   "Ranked Keywords Retry Plan",
+   "Any Ranked Keywords Retries?",
+   "Wait Before Ranked Keywords Retry",
+   "Ranked Keywords (Retry)",
+   "Ranked Keywords Answers",
+   "Keyword Ideas",
+   "Keyword Ideas Retry Plan",
+   "Any Keyword Ideas Retries?",
+   "Wait Before Keyword Ideas Retry",
+   "Keyword Ideas (Retry)",
+   "Keyword Ideas Answers",
+   "Run Research",
+   "Run Research Retry Plan",
+   "Any Run Research Retries?",
+   "Wait Before Run Research Retry",
+   "Run Research (Retry)",
+   "Run Research Answers",
+   "Run Competitor Keywords",
+   "Run Competitor Keywords Retry Plan",
+   "Any Run Competitor Keywords Retries?",
+   "Wait Before Run Competitor Keywords Retry",
+   "Run Competitor Keywords (Retry)",
+   "Run Competitor Keywords Answers",
+   "Run Reach Requests",
+   "Run Reach Requests Retry Plan",
+   "Any Run Reach Requests Retries?",
+   "Wait Before Run Reach Requests Retry",
+   "Run Reach Requests (Retry)",
+   "Run Reach Requests Answers",
+   "Run Ladder Research",
+   "Run Ladder Research Retry Plan",
+   "Any Run Ladder Research Retries?",
+   "Wait Before Run Ladder Research Retry",
+   "Run Ladder Research (Retry)",
+   "Run Ladder Research Answers",
+   "Candidate SERP",
+   "Candidate SERP Retry Plan",
+   "Any Candidate SERP Retries?",
+   "Wait Before Candidate SERP Retry",
+   "Candidate SERP (Retry)",
+   "Candidate SERP Answers",
+   "AI Demand",
+   "AI Demand Retry Plan",
+   "Any AI Demand Retries?",
+   "Wait Before AI Demand Retry",
+   "AI Demand (Retry)",
+   "AI Demand Answers",
+   "AI SERP",
+   "AI SERP Retry Plan",
+   "Any AI SERP Retries?",
+   "Wait Before AI SERP Retry",
+   "AI SERP (Retry)",
+   "AI SERP Answers",
+   "Ask LLMs",
+   "Ask LLMs Retry Plan",
+   "Any Ask LLMs Retries?",
+   "Wait Before Ask LLMs Retry",
+   "Ask LLMs (Retry)",
+   "Ask LLMs Answers",
+   "Site Authority",
+   "Site Authority Retry Plan",
+   "Any Site Authority Retries?",
+   "Wait Before Site Authority Retry",
+   "Site Authority (Retry)",
+   "Site Authority Answers",
+   "Backlink Summary",
+   "Backlink Summary Retry Plan",
+   "Any Backlink Summary Retries?",
+   "Wait Before Backlink Summary Retry",
+   "Backlink Summary (Retry)",
+   "Backlink Summary Answers",
+   "Backlink Gap",
+   "Backlink Gap Retry Plan",
+   "Any Backlink Gap Retries?",
+   "Wait Before Backlink Gap Retry",
+   "Backlink Gap (Retry)",
+   "Backlink Gap Answers",
+   "Fetch GBP",
+   "Fetch GBP Retry Plan",
+   "Any Fetch GBP Retries?",
+   "Wait Before Fetch GBP Retry",
+   "Fetch GBP (Retry)",
+   "Fetch GBP Answers",
+   "Get Crawled Pages",
+   "Get Crawled Pages Retry Plan",
+   "Any Get Crawled Pages Retries?",
+   "Wait Before Get Crawled Pages Retry",
+   "Get Crawled Pages (Retry)",
+   "Get Crawled Pages Answers",
+   "Run Crawl Extras",
+   "Run Crawl Extras Retry Plan",
+   "Any Run Crawl Extras Retries?",
+   "Wait Before Run Crawl Extras Retry",
+   "Run Crawl Extras (Retry)",
+   "Run Crawl Extras Answers",
+   "Start Crawl",
+   "Start Crawl Retry Plan",
+   "Any Start Crawl Retries?",
+   "Wait Before Start Crawl Retry",
+   "Start Crawl (Retry)",
+   "Start Crawl Answers"
   ],
   "SEO Agent \u2014 AI Pulse": [
    "Run AI Requests",
@@ -32,7 +173,71 @@
    "Wait Before AI Retry",
    "Run AI Retries",
    "Merge AI Answers",
-   "Parse AI Answers"
+   "Parse AI Answers",
+   "Run Discovery",
+   "Run Discovery Retry Plan",
+   "Any Run Discovery Retries?",
+   "Wait Before Run Discovery Retry",
+   "Run Discovery (Retry)",
+   "Run Discovery Answers"
+  ],
+  "SEO Agent \u2014 Backlink Monitor": [
+   "Run BL Requests",
+   "Run BL Requests Retry Plan",
+   "Any Run BL Requests Retries?",
+   "Wait Before Run BL Requests Retry",
+   "Run BL Requests (Retry)",
+   "Run BL Requests Answers",
+   "Run Gap Requests",
+   "Run Gap Requests Retry Plan",
+   "Any Run Gap Requests Retries?",
+   "Wait Before Run Gap Requests Retry",
+   "Run Gap Requests (Retry)",
+   "Run Gap Requests Answers",
+   "Run Authority",
+   "Run Authority Retry Plan",
+   "Any Run Authority Retries?",
+   "Wait Before Run Authority Retry",
+   "Run Authority (Retry)",
+   "Run Authority Answers"
+  ],
+  "SEO Agent \u2014 Keyword Check": [
+   "Run Assess Requests",
+   "Run Assess Requests Retry Plan",
+   "Any Run Assess Requests Retries?",
+   "Wait Before Run Assess Requests Retry",
+   "Run Assess Requests (Retry)",
+   "Run Assess Requests Answers"
+  ],
+  "SEO Agent \u2014 Link Builder": [
+   "Run LB DFS",
+   "Run LB DFS Retry Plan",
+   "Any Run LB DFS Retries?",
+   "Wait Before Run LB DFS Retry",
+   "Run LB DFS (Retry)",
+   "Run LB DFS Answers"
+  ],
+  "SEO Agent \u2014 Rank Tracker": [
+   "SERP Check",
+   "SERP Check Retry Plan",
+   "Any SERP Check Retries?",
+   "Wait Before SERP Check Retry",
+   "SERP Check (Retry)",
+   "SERP Check Answers"
+  ],
+  "SEO Agent \u2014 Site Tracker": [
+   "Google Trends",
+   "Google Trends Retry Plan",
+   "Any Google Trends Retries?",
+   "Wait Before Google Trends Retry",
+   "Google Trends (Retry)",
+   "Google Trends Answers",
+   "SERP Check (Site)",
+   "SERP Check (Site) Retry Plan",
+   "Any SERP Check (Site) Retries?",
+   "Wait Before SERP Check (Site) Retry",
+   "SERP Check (Site) (Retry)",
+   "SERP Check (Site) Answers"
   ]
  },
  "allow": {
@@ -558,6 +763,153 @@
     "name": "Run Ladder Cluster SERP (Retry)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Find Competitors (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fallback SERP (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Domain Overview (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DataForSEO Whois (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Ranked Keywords (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Keyword Ideas (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Run Research (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Run Competitor Keywords (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Run Reach Requests (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Run Ladder Research (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Candidate SERP (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "AI Demand (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "AI SERP (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Ask LLMs (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Site Authority (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Backlink Summary (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Backlink Gap (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch GBP (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Get Crawled Pages (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Run Crawl Extras (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Start Crawl (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 AI Growth": [
@@ -750,6 +1102,13 @@
    {
     "allowed": false,
     "maxTries": 3,
+    "name": "Run Discovery (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
     "name": "DFS Balance (AI)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
@@ -917,6 +1276,27 @@
    {
     "allowed": false,
     "maxTries": 3,
+    "name": "Run BL Requests (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Run Gap Requests (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Run Authority (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
     "name": "DFS Balance (BL)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
@@ -998,6 +1378,13 @@
     "name": "Run Assess Requests",
     "retryOnFail": true,
     "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Run Assess Requests (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 Link Builder": [
@@ -1042,6 +1429,13 @@
     "name": "POST LB Report",
     "retryOnFail": false,
     "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Run LB DFS (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    },
    {
     "allowed": false,
@@ -1135,6 +1529,13 @@
     "name": "POST Progress",
     "retryOnFail": false,
     "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "SERP Check (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    },
    {
     "allowed": false,
@@ -1273,6 +1674,20 @@
     "name": "POST Site Report",
     "retryOnFail": false,
     "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Google Trends (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "SERP Check (Site) (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    },
    {
     "allowed": false,

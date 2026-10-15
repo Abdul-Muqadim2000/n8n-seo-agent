@@ -5457,8 +5457,10 @@ retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
 # INVARIANTS rule 3 (2026-10-15): a DataForSEO node needs the in-200 gate as well as retryOnFail, because the API reports most of
 # its failures inside an HTTP 200. A ratchet, not a big-bang rule: the build fails when a node appears that harness/in200_baseline.json
 # does not already excuse, so the debt R18 left behind (it gated three paths) cannot grow and shrinks as gates land.
-_g3, _u3 = retry_lint.check_in200({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
-log('A DataForSEO node that fails inside an HTTP 200 (2026-10-15, INVARIANTS rule 3): the API reports most failures inside a 200, so retryOnFail does not see them - R18 gated the SERP, facts and keyword-data paths, and this measures how far that reaches. %d of the main workflow\'s %d DataForSEO calls are covered by a gate chain recorded with retry_lint.record_gate(); the rest are either ungated or gated without being recorded, and registering R18\'s chains is the next step. The build now refuses a NEW ungated node against harness/in200_baseline.json, so the class cannot grow' % (len(_g3), len(_g3) + len(_u3)))
+# B-A10 (2026-10-15): this is a MEASUREMENT taken half way through the build, not the gate. The gate is section 75, which runs
+# after every call of this workflow has been built and spliced; asserting here would only measure how far the file had been read.
+_g3, _u3 = retry_lint.in200_coverage({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+log('A DataForSEO node that fails inside an HTTP 200 (2026-10-15, INVARIANTS rule 3): the API reports most failures inside a 200, so retryOnFail does not see them - R18 gated the SERP, facts and keyword-data paths, and this measures how far that reaches. %d of the main workflow\'s %d DataForSEO calls are covered by a gate chain recorded with retry_lint.record_gate(); the rest are either ungated or gated without being recorded, and B-A10 (section 75) registers R18\'s chains and splices the gate around the rest. The build refuses a NEW ungated node against harness/in200_baseline.json, so the class cannot grow' % (len(_g3), len(_g3) + len(_u3)))
 sticky("""### An answer that arrived with HTTP 200 and was still a failure (R18 / R19 / R24)
 **One rule, one kit** (`v5/code/_dfs_retry.js`): DataForSEO answers a dead task with `status_code` 40101 inside an HTTP 200 and Google's URL Inspection with an `error` object — n8n's `retryOnFail` never sees either. Every gate (SERP, facts search, keyword data, URL inspection) now judges the answer with `RT`, **pauses and asks once more**, and never re-sends what a second attempt cannot fix (permission, property, quota).
 **Where the retry fails too, nothing is scored on it.** The evidence is `unavailable`, the keyword verdict is **NOT CHECKED** with no score, no expected visits and no time to rank, and the first reason says why. A verdict computed on a results page nobody saw is worse than no verdict.
@@ -6757,7 +6759,7 @@ retry_lint.record_gate('SEO Agent v4', list(retry_lint.GATES.get('SEO Agent v4')
                           'Any Cluster Retries?', 'Wait Before Cluster Retry', 'Run Ladder Cluster SERP (Retry)', 'Ladder Clusters'])
 url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
 retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
-_g70, _u70 = retry_lint.check_in200({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+_g70, _u70 = retry_lint.in200_coverage({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})   # B-A10: the gate itself is section 75
 assert 'Run Ladder Cluster SERP' in _g70 and 'Run Ladder Cluster SERP (Retry)' in _g70, 'B2-4: the new DataForSEO calls are not covered by a gate'
 sticky("""### One search, one page — decided by the results page, not by a label (B2-4 · B2-5, 2026-10-15)
 **The rungs were grouped by the AI's topic label**, because the ladder's four Labs pulls return no URLs and `Ladder Pool` left `competitors` empty — so two searches Google answers with **the same pages** could become two pages, the duplication this system forbids everywhere else.
@@ -7209,6 +7211,158 @@ sticky("""### The five defects rule 1's lint found (B-L1 … B-L5)
 log('The five real defects the rule-1 lint found when it was seeded (2026-10-15, FIX_PLAN.md §3.16 B-L1 ... B-L5; INVARIANTS.md rule 1). B-L4 (wrong number to a customer): AI Metrics subtracted the stored run\'s share_of_voice and visibility_score with no check that the two runs measured the same thing - the AI question panel is settable from 3 to 50 and the monthly full run asks more engines than the weekly one, so raising the panel from 8 to 20 (which the owner is asked to do) read as a collapse in visibility; the panel size and the run kind now travel with the stored row (AI Plan), the delta is computed only when both match - the run kind first, then R19\'s 20% sample drift, through the one shared guard RT.likeForLike / RT.comparable in v5/code/_dfs_retry.js where R19\'s comparable already lived - and when they do not match there is NO delta and the report prints "not compared" with the reason in the place the arrow would have been, with the competitor-share and sentiment comparisons held to the same test. B-L5: Parse Backlinks alerted on a 15-point spam_score move between snapshots without checking they were built the same way - a free_only check buys nothing from DataForSEO so its figures come from a different source set, and the spam score is the share of the INDEX\'s links judged spammy so it moves when the index\'s own link count moves; both halves are now checked and what was not compared is listed in the snapshot and printed in the report. B-L1: Blog Package printed the content score, the QA counts, topic coverage and originality with no source line and printed them whether or not the check behind them had anything to work with (coverage 0% against an empty term list, "no overlap found" against no page read at all); every figure now carries its source, period, sample and basis (LN) and a figure whose check did not run is withheld with its reason, in meta.json and the callback but deliberately NOT in the article, which is the customer\'s own published page. B-L2: the keyword strategy printed searches per month, difficulty and cost per click as facts about the site when they are the provider\'s estimates for a single keyword, said so in prose that no table inherits, and shipped on its own with no lineage table at all - it now carries the same "Where these numbers come from" table the full report has had since G29. B-L3: the lineage block never travelled into the .doc, so the customer who opened the attachment saw every figure without its source; Build Word File renders every report type, so one fix covers the verdict, the keyword report, the written page and the audit attachment. All five leave harness/lineage_baseline.json for ever; harness scenario S83 proves each one by running the node code')
 
 
+# =============================================================================
+# 75. AN ANSWER NOBODY ASKED TWICE FOR (2026-10-15, FIX_PLAN.md §3.14 row B-A10; docs/system-review-2026-10-14/INVARIANTS.md
+#     **rule 3** — "an external call that fails says so, loudly, once").
+#
+#     **The debt.** DataForSEO reports most of its failures *inside* an HTTP 200, where n8n's `retryOnFail` — which only fires
+#     when a node *fails* — can never see them. R18 is what that costs: in execution 549 *SERP Top 10* and *Facts SERP* both
+#     came back 40101 inside a 200, neither was re-sent, and a ladder was planned, scored "winnable 68" and written on a results
+#     page nobody had seen. R18 gated three chains by hand; `retry_lint.check_in200` then measured the rest and found **49
+#     DataForSEO nodes across 12 workflows** outside a recorded gate, 30 of them here. The build already refused a *new* ungated
+#     node, so the debt could not grow — this pays it down.
+#
+#     **One shape, spliced, not re-typed** (`dfs_gate.py`): `<X>` -> *<X> Retry Plan* -> *Any <X> Retries?* -> *Wait Before <X>
+#     Retry* -> *<X> (Retry)* -> *<X> Answers* -> whatever read `<X>` before. The plan node asks `RT.plan` which failures a
+#     second attempt can help (a provider-side error can; a wrong field or an exhausted quota cannot) and **refuses to re-send
+#     anything when the requests and the answers cannot be paired one to one** — a request re-sent in the wrong place is worse
+#     than one not re-sent. The retry node is a byte copy of the call, so the retry items (copies of the original request items)
+#     resolve `$json...` exactly as the first attempt did; no body is rewritten, which is the one place R18's hand-wired version
+#     could slip. *<X> Answers* merges, counts and attaches `RT.evidence` as `__dfs` to every item, so **rule 1** has something
+#     to refuse on: a call that failed twice is `unavailable`, with the provider's own words.
+#
+#     **The money (R28 / R31 / R32 / R33).** A failed DataForSEO task is billed 0, so re-sending a failure costs nothing; where
+#     both attempts were billed, `__dfs.cost_usd` sums **both** and counts each task **once by its own id**, and every new
+#     `(Retry)` node joins `__LEDGER_NODES`, where `__dfsOnce` applies the same rule — so a retry can neither double-charge nor
+#     go unnoticed. *Start Crawl* is the exception that proves it: `on_page/task_post` **creates** a paid task, so it re-sends
+#     only an envelope or task error and never a task that answered 20000 with an empty result (that one did the work).
+#
+#     **What stays on the ratchet, with its reason in the baseline's `why`** — an excused node is not a deleted one:
+#       * the twelve `DFS Balance …` probes. `appendix/user_data` is free, is read once on the ledger chain before the first
+#         paid call, and **fails open**: *Run Ledger Row* stores 0 when it does not answer, *Rate Limit* refuses nothing on a 0,
+#         and `CC.dfsDay` drops a 0 reading and prints "no balance reading for the day". Nothing scores, ranks or advises from
+#         it. A gate would add a 5 s wait to the critical path of every run and all ten schedules to improve a guard that
+#         already says when it could not read.
+#       * *Get Crawl Summary*. It is the poll of a crawl already paid for — *Check Crawl* -> *Wait 1 min* -> *Get Crawl Summary*
+#         re-asks up to its own limit, which is a retry loop with a longer pause than this gate's. A second gate inside it would
+#         only re-ask sooner.
+#
+#     **And a hole in the ratchet itself, found while paying it down.** `check_in200` was called on the main workflow and on no
+#     other, so the 19 DataForSEO nodes in the other eleven workflows were measured once and then guarded by nothing — a new
+#     ungated call in the Backlink Monitor or the Site Tracker would have passed in silence. `retry_lint.check_all` now walks
+#     every generated workflow after the sub-builds, and it also fails on a baseline row for a node that no longer exists.
+# =============================================================================
+import dfs_gate as _dg75
+_WF75 = 'SEO Agent v4 — Audit, Keywords, Verdict & Content'
+
+# ---------- A. R18's three chains, registered at last (they existed; the ratchet could not see them) ----------
+for _first75, _gate75n, _wait75, _retry75, _dst75 in (
+        ('SERP Top 10', 'SERP Failed?', 'Wait Before SERP Retry', 'SERP Top 10 (Retry)', 'Pick Top 6'),
+        ('Facts SERP', 'Facts SERP Failed?', 'Wait Before Facts Retry', 'Facts SERP (Retry)', 'Collect Facts'),
+        ('Keyword Data', 'Keyword Data Failed?', 'Wait Before Keyword Data Retry', 'Keyword Data (Retry)', 'Has Domain (Authority)?')):
+    for _n75 in (_first75, _gate75n, _wait75, _retry75, _dst75):
+        assert _n75 in nodes, 'B-A10: R18 chain node missing: ' + _n75
+    assert [t['node'] for l in conns[_first75]['main'] for t in l] == [_gate75n], _first75 + ': R18 gate not on its output'
+    assert [t['node'] for l in conns[_retry75]['main'] for t in l] == [_dst75], _retry75 + ': the retry does not reach the consumer'
+    retry_lint.record_gate('SEO Agent v4', [_first75, _gate75n, _wait75, _retry75, _dst75])
+
+# ---------- B. every other DataForSEO call of this workflow, through the one splice ----------
+def _gate75(http, what, unit='request', retry_empty=True, max_retries=_dg75.MAX_RETRIES):
+    view = {'name': _WF75, 'nodes': list(nodes.values()), 'connections': conns}
+    g = _dg75.splice(view, http, V5, what=what, unit=unit, code_dir=OUT_CODE, max_retries=max_retries, retry_empty=retry_empty)
+    for n in view['nodes']:
+        nodes[n['name']] = n
+    retry_lint.record_gate('SEO Agent v4', g['chain'])
+    return g
+
+# in the order the run makes them, so the gates read left to right on the canvas. `what` is what the customer would call the
+# thing that could not be read -- it is printed in the evidence, so it is never "the endpoint" or "the request".
+_GATED75 = [
+    ('Find Competitors', 'the list of sites competing for this domain', 'lookup'),
+    ('Fallback SERP', 'the live Google results used to find competitors', 'search'),
+    ('Domain Overview', "a competitor's search visibility", 'domain'),
+    ('DataForSEO Whois', "a competitor's domain registration date", 'domain'),
+    ('Ranked Keywords', 'the keywords this domain already ranks for', 'lookup'),
+    ('Keyword Ideas', 'keyword ideas for the seed terms', 'lookup'),
+    ('Run Research', 'the keyword research pulls for this run', 'request'),
+    ('Run Competitor Keywords', "the competitors' keyword pulls", 'request'),
+    ('Run Reach Requests', "what this site already ranks for, which sets the difficulty it is measured against", 'request'),
+    ('Run Ladder Research', "the keyword pulls behind this ladder's rungs", 'request'),
+    ('Candidate SERP', 'the live Google results for a candidate keyword', 'search'),
+    ('AI Demand', 'how often these keywords are asked of AI assistants', 'request'),
+    ('AI SERP', "the live Google results behind this page's AI questions", 'search'),
+    ('Ask LLMs', 'what the AI assistants answer for these questions', 'question'),
+    ('Site Authority', "this site's own search visibility", 'domain'),
+    ('Backlink Summary', "the link profile of this domain", 'domain'),
+    ('Backlink Gap', 'the sites linking to competitors but not to you', 'lookup'),
+    ('Fetch GBP', 'the Google Business Profile listing for this business', 'lookup'),
+    ('Get Crawled Pages', 'the pages the crawl read', 'page'),
+    ('Run Crawl Extras', 'the extra crawl pulls (links, resources, duplicates)', 'request'),
+]
+_g75 = {}
+for _nm75, _what75, _unit75 in _GATED75:
+    _g75[_nm75] = _gate75(_nm75, _what75, _unit75)
+# Start Crawl CREATES a paid task, so an empty result is never re-sent: a second attempt there is a second crawl.
+_g75['Start Crawl'] = _gate75('Start Crawl', 'the crawl of this website', 'crawl', retry_empty=False, max_retries=1)
+assert 'f.code >= 40000' in code('Start Crawl Retry Plan') and 'only:' in code('Start Crawl Retry Plan'), \
+    'B-A10: the crawl would be created twice on an empty result'
+
+# ---------- C. the money: every retry joins the ledger's node list, where __dfsOnce counts a task once by its own id ----------
+_ln75 = [nm for nm in nodes if "const __LEDGER_NODES = ['SERP Top 10', " in nodes[nm]['parameters'].get('jsCode', '')]
+assert len(_ln75) >= 5, _ln75
+_RETRIES75 = sorted(g['retry'] for g in _g75.values() if g['retry'] in nodes)
+for _nm75 in _ln75:
+    patch(_nm75, "const __LEDGER_NODES = ['SERP Top 10', ",
+          "const __LEDGER_NODES = [" + ''.join("'" + r + "', " for r in _RETRIES75) + "'SERP Top 10', ")
+    assert "__dfsOnce(t)" in code(_nm75), _nm75 + ': R28 dedupe missing where the retries are counted'
+    for _r75 in ('Candidate SERP (Retry)', 'Start Crawl (Retry)', 'Backlink Gap (Retry)'):
+        assert _r75 in code(_nm75), _nm75 + ': ' + _r75 + ' is not on the ledger node list, so its money would go unseen'
+
+# ---------- D. the proof, on the generated graph ----------
+for _nm75, g in _g75.items():
+    assert [t['node'] for l in conns[_nm75]['main'] for t in l] == [g['plan']], _nm75 + ': the call does not feed its gate'
+    assert [t['node'] for l in conns[g['retry']]['main'] for t in l] == [g['answers']], g['retry'] + ': the retry does not reach the merge'
+    assert sorted(t['node'] for l in conns[g['answers']]['main'] for t in l) == sorted(g['dsts']), \
+        g['answers'] + ': the merged answers do not reach what read the call before'
+    assert "RT.plan(" in code(g['plan']) and "live.length !== answers.length" in code(g['plan']), g['plan']
+    assert "RT.stats(" in code(g['answers']) and "__dfs: ev" in code(g['answers']) and 'counted once by task id' in code(g['answers']), g['answers']
+    assert nodes[g['retry']].get('credentials') and nodes[g['retry']].get('maxTries') == 3, g['retry'] + ': credential or retry slot'
+# nothing still reads the first attempt where the merged answer is what it wanted (the retry would be paid for and ignored)
+for _nm75, g in _g75.items():
+    for _o75 in nodes.values():
+        _js75 = (_o75.get('parameters') or {}).get('jsCode') or ''
+        if _o75['name'] in (g['plan'], g['answers'], g['retry']):
+            continue
+        assert ("$('" + _nm75 + "')") not in _js75, 'B-A10: %s still reads $(%r) instead of the merged answers' % (_o75['name'], _nm75)
+url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+_gg75, _uu75 = retry_lint.check_in200({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+assert sorted(_uu75) == ['DFS Balance', 'DFS Balance End', 'Get Crawl Summary'], \
+    'B-A10: the main workflow should be down to the three reasoned exclusions, not %r' % (sorted(_uu75),)
+
+
+def _b75_checks():
+    """B-A10: the ratchet over EVERY generated workflow — runs after the four sub-builds, the first moment they all exist."""
+    _cov75 = retry_lint.check_all(os.path.join(HERE0, 'workflows'))
+    _tot75 = sum(len(r['gated']) + len(r['ungated']) for r in _cov75.values())
+    _un75 = sum(len(r['ungated']) for r in _cov75.values())
+    _bad75 = {w: r['unexplained'] for w, r in _cov75.items() if r['unexplained']}
+    assert not _bad75, 'B-A10: a node is on the in-200 ratchet with no reason written beside it: %r' % _bad75
+    json.dump({w: {'gated': r['gated'], 'ungated': r['ungated'], 'excused': r['excused']} for w, r in _cov75.items()},
+              open(os.path.join(HERE0, 'harness', 'in200.json'), 'w'), indent=1, sort_keys=True)
+    print('INVARIANTS rule 3 (in-200 retry gate): %d of %d DataForSEO calls across %d workflows are inside a recorded gate; '
+          '%d stay on the ratchet, every one with its reason' % (_tot75 - _un75, _tot75, len(_cov75), _un75))
+
+
+sticky("""### An answer nobody asked twice for (B-A10, 2026-10-15)
+**DataForSEO reports most failures inside an HTTP 200**, which `retryOnFail` never sees. R18 gated three paths by hand; **49 calls across 12 workflows** were still outside a gate — the shape that planned, scored and wrote a whole ladder on two results pages that had both failed (exec 549).
+**One splice, not twenty hand-wired chains** (`dfs_gate.py`): plan → wait → one more attempt → merge. Only a failure a second attempt can help is re-sent, and **nothing at all** when the requests and the answers cannot be paired one to one.
+**A retry cannot double-charge.** A failed task is billed 0; where both attempts were billed, the cost sums both and counts each task **once by its own id**, and every retry node is on the ledger's list. *Start Crawl* never re-sends an empty result — that would be a second crawl.
+**What stays, and why.** The twelve free `appendix/user_data` balance probes (they fail open and nothing scores on them) and *Get Crawl Summary* (it is already a poll loop). Each keeps its reason in `harness/in200_baseline.json`.""",
+    pos('Candidate SERP')[0] - 60, pos('Candidate SERP')[1] - 360, 1140, 280, 3)
+log('An answer nobody asked twice for (2026-10-15, FIX_PLAN.md §3.14 row B-A10; INVARIANTS.md rule 3). DataForSEO reports most of its failures INSIDE an HTTP 200, where n8n\'s retryOnFail cannot see them - R18 proved what that costs (exec 549: SERP Top 10 and Facts SERP both 40101 inside a 200, neither re-sent, a ladder planned, scored "winnable 68" and written on a results page nobody saw) and gated three chains by hand; the ratchet then measured 49 DataForSEO nodes across 12 workflows outside a recorded gate. This pays the debt down: dfs_gate.splice() puts ONE shape around every remaining call - <X> -> Retry Plan -> Any Retries? -> Wait -> <X> (Retry) -> <X> Answers -> whatever read the call before - where RT.plan (v5/code/_dfs_retry.js) decides which failures a second attempt can help, refuses to re-send anything when the requests and the answers cannot be paired one to one, and the retry node is a byte copy of the call so no request body is ever rewritten; <X> Answers merges the two attempts, counts what really happened and attaches RT.evidence as __dfs to every item, so rule 1 has something to refuse on. The money follows R28: a failed task is billed 0, a task billed twice is counted once by its own id across both attempts, and every (Retry) node joins __LEDGER_NODES - Start Crawl is the exception, because on_page/task_post CREATES a paid task, so it re-sends only an envelope or task error and never an empty result. Deliberately left on the ratchet with the reason in the baseline\'s `why`: the twelve free appendix/user_data balance probes (read before the first paid call, failing OPEN - 0 refuses nothing, the day\'s reconciliation drops a 0 reading and says so - and nothing is scored, ranked or advised from them) and Get Crawl Summary (the poll of a crawl already paid for: Check Crawl -> Wait 1 min -> Get Crawl Summary is already a retry loop with a longer pause). And the ratchet had a hole of its own: check_in200 ran on the main workflow only, so the 19 DataForSEO nodes in the other eleven workflows were measured once and guarded by nothing - retry_lint.check_all now walks every generated workflow after the sub-builds and fails on a stale baseline row too')
+
+
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:
 #     "two fixes have never come back and both are enforced by the build".
@@ -7338,6 +7492,8 @@ _r31_checks()
 _b64_checks()
 # section 67 (B4-1 / B4-2 / B4-3): the decay test, what stores it and what acts on it, in the Site Tracker and the Cadence
 _b67_checks()
+# section 75 (B-A10, INVARIANTS rule 3): the in-200 retry ratchet over EVERY generated workflow, not the main one alone
+_b75_checks()
 # section 71 (B-G1 / B-G2 / B-G3): the three read paths of stored ladder rungs, gated through the one shared FITR
 _b71_checks()
 
