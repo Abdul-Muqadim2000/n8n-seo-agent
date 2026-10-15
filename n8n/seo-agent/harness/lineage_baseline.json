@@ -6,42 +6,6 @@
   "markup": 1,
   "why": "its findings reach a customer only through Build Site Issues, which now runs LN.evidenced over every merged finding before anything is scored. Listed rather than excused, so the next person who makes Analyze Probes deliver on its own has to read this file."
  },
- "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Blog Package": {
-  "fails": [
-   "lineage",
-   "withheld"
-  ],
-  "markup": 25,
-  "why": "B-L1 (real). The written page package prints the QA counts and the readability / originality scores with no source line, and prints them whether or not the check that produces them ran."
- },
- "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Build Keyword Strategy": {
-  "fails": [
-   "lineage"
-  ],
-  "markup": 44,
-  "why": "B-L2 (real). Searches per month, difficulty and cost per click are PROVIDER ESTIMATES for a single keyword; the section says so in prose, not as lineage, and when the strategy ships on its own there is no table at all (the full report has one since G29)."
- },
- "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Build Word File": {
-  "fails": [
-   "lineage"
-  ],
-  "markup": 96,
-  "why": "B-L3 (real). The Word rendering of every report re-prints figures the report node described, and the lineage block does not travel into the .doc: the customer who opens the attachment sees the numbers without their sources."
- },
- "SEO Agent \u2014 AI Visibility Tracker / AI Metrics": {
-  "fails": [
-   "like_for_like"
-  ],
-  "markup": 0,
-  "why": "B-L4 (real). It subtracts the previous run's share_of_voice and visibility_score without checking that the question panel is the same size; the panel is settable from 3 to 50, so a changed panel reads as a change in visibility \u2014 R19's shape on a different figure."
- },
- "SEO Agent \u2014 Backlink Monitor / Parse Backlinks": {
-  "fails": [
-   "like_for_like"
-  ],
-  "markup": 0,
-  "why": "B-L5 (real). It alerts when spam_score moves 15 points between snapshots without checking the two snapshots are the same kind: a free_only snapshot is built from a different set of sources than a full one \u2014 R20's shape on a different figure."
- },
  "SEO Agent \u2014 Console Alerts / Alert Target": {
   "fails": [
    "lineage"
@@ -63,5 +27,5 @@
   "markup": 7,
   "why": "the cadence status e-mail states the same counts with no source line."
  },
- "_note": "INVARIANTS rule 1 ratchet, seeded 2026-10-15 (build section 72, lineage_lint.py). Every entry is a node that reaches a DELIVERY node and fails one of the four checks: \"lineage\" it composes a document a customer receives without carrying v5/code/_lineage.js; \"evidence\" it hands on findings without running LN.evidenced; \"like_for_like\" it subtracts a stored earlier report figure without checking the report type and the sample size; \"withheld\" it shows a score with no path that withholds it when an input is unavailable. The lint fails the build on anything NOT listed here, so this debt cannot grow, and a node that gains its guard is dropped from the list for ever and can never come back. Five of these are real defects, named here as B-L1..B-L5 for the register (FIX_PLAN.md) rather than excused; the row in the register is the orchestrator's to add. Two debts the same inventory found were PAID in section 72 and are deliberately absent: the audit's seven site-wide findings that shipped with an empty evidence string, and the technical site audit that had no \"Where these numbers come from\" table at all. What this ratchet does NOT say: that every individual figure inside a node that passes carries its own lineage. LN.of() proves the node was built to say where a number came from, never that the number beside it did."
+ "_note": "INVARIANTS rule 1 ratchet, seeded 2026-10-15 (build section 72, lineage_lint.py). Every entry is a node that reaches a DELIVERY node and fails one of the four checks: \"lineage\" it composes a document a customer receives without carrying v5/code/_lineage.js; \"evidence\" it hands on findings without running LN.evidenced; \"like_for_like\" it subtracts a stored earlier report figure without checking the report type and the sample size; \"withheld\" it shows a score with no path that withholds it when an input is unavailable. The lint fails the build on anything NOT listed here, so this debt cannot grow, and a node that gains its guard is dropped from the list for ever and can never come back. Five of these are real defects, named here as B-L1..B-L5 for the register (FIX_PLAN.md) rather than excused; the row in the register is the orchestrator's to add. Two debts the same inventory found were PAID in section 72 and are deliberately absent: the audit's seven site-wide findings that shipped with an empty evidence string, and the technical site audit that had no \"Where these numbers come from\" table at all. What this ratchet does NOT say: that every individual figure inside a node that passes carries its own lineage. LN.of() proves the node was built to say where a number came from, never that the number beside it did. PAID AND GONE FOR EVER (build section 73, 2026-10-15): B-L1 Blog Package, B-L2 Build Keyword Strategy, B-L3 Build Word File, B-L4 AI Metrics and B-L5 Parse Backlinks each gained the guard they were listed for and left this file; the ratchet cannot let them back in. Two weaknesses in the lint itself were found while paying them and are fixed in lineage_lint.py: a kit HEADER that names the call the lint looks for (_lineage.js says \"LN.block() prints the whole list\") answered the lint's question for every node that merely carried the kit, so comments are now stripped before every check; and a node that RENDERS lineage composed upstream (Site Report prints the list Site Metrics builds) is a use of the kit, not a gap."
 }

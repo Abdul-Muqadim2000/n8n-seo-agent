@@ -85,9 +85,15 @@ COMPARED_FIGURE = re.compile(r'\b(health_score|findings|grade|\w*_score|share_of
 # the second arm, and the reason R20 cannot come back: the annotation kit's whole job is to put one report's figures beside an
 # earlier report's. Every node that inlines it is in the class, whatever it then calls its variables.
 CARRIES_MARKS_KIT = 'const AN = (() =>'
-TYPE_GUARD = re.compile(r'report_type')
+# R20: the two sides are the same KIND of thing. Either the node compares `report_type` itself (the audit diff, and the marks kit
+# whose whole job is that comparison), or it calls the shared guard. `RT.likeForLike(` is a USE, never an inline: the kit's own
+# body writes `likeForLike(` with no `RT.` prefix, and build section 73 fails if that ever stops being true — the trap gate_lint
+# fell into on 2026-10-15 was a node that merely CARRIED a kit being read as a node that used it.
+TYPE_GUARD = re.compile(r'report_type|RT\.likeForLike\(')
 # R19: a comparison may not treat a smaller sample as an improvement. Any of these says the node knows its sample can move.
-SAMPLE_GUARD = re.compile(r'checked_of|sample moved|not_compared|notCompared|sample_moved|comparable')
+# `RT.comparable(` (a call) and "not comparable" (the marks kit's own refusal text) — never the bare word `comparable`, which the
+# kit writes when it merely DEFINES the function.
+SAMPLE_GUARD = re.compile(r'RT\.comparable\(|not comparable|checked_of|sample moved|not_compared|notCompared|sample_moved')
 
 # ---- D. a score shown to a customer ------------------------------------------------------------------------------------------
 # an object key `health_score:` or an assignment `health_score =` -- never a ternary's ` : `, which is not a figure
@@ -125,10 +131,20 @@ def _delivers(node):
 # otherwise turn any node into a "report builder", and `_page_watch.js` turned eleven nodes into "delta" nodes. So every check
 # below reads the node's OWN code, with the kits stripped; only the questions that are ABOUT a kit read the whole source.
 _KIT = re.compile(r'(?ms)^const [A-Z]{2,4} = \(\(\) => \{.*?^\}\)\(\);[ \t]*$')
+# ... and a comment is not behaviour. `_lineage.js` opens with a header that says "LN.block() prints the whole list under a
+# report", and that header sits ABOVE `const LN = (() => {`, so the kit stripper never reached it: every node that merely
+# CARRIED the kit read as a node that let its lineage travel. Found on 2026-10-15 while paying B-L1 - the same trap as the one
+# gate_lint fell into the same week. `//` after a colon is left alone so a URL survives.
+_LINE_COMMENT = re.compile(r'(?m)(?<![:\w])//.*$')
+_BLOCK_COMMENT = re.compile(r'(?s)/\*.*?\*/')
+
+
+def strip_comments(js):
+    return _LINE_COMMENT.sub('', _BLOCK_COMMENT.sub('', js))
 
 
 def own_code(js):
-    return _KIT.sub('', js)
+    return strip_comments(_KIT.sub('', js))
 
 
 def _markup(js):
@@ -155,34 +171,40 @@ def survey(workflows=None):
                 continue
             raw = (n.get('parameters') or {}).get('jsCode') or ''
             js = own_code(raw)                       # the node's own code: a kit's markup is not this node's report
+            # the questions that are ABOUT a kit read the whole source -- but never its prose. A kit header that NAMES the call
+            # the lint looks for would otherwise answer the lint's question for every node that carries the kit.
+            src = strip_comments(raw)
             mk = _markup(js)
             row = {'workflow': wname, 'node': nm, 'markup': mk, 'subject': [], 'fails': []}
             # ---- A. a document a customer receives carries its lineage ----
             composes = mk >= MARKUP_MIN or (mk >= BODY_MIN and bool(BODY_FIELD.search(js)))
             if composes and nm not in NOT_A_REPORT:
                 row['subject'].append('lineage')
+                # a node either COMPOSES lineage (LN.of / LN.unknown) or RENDERS lineage composed upstream (LN.block / LN.note):
+                # Site Report is handed `m.lineage` by Site Metrics and prints the table, which is a use of the kit, not a gap.
+                # Before the comment stripper above, it passed on the kit's own header text instead, which proved nothing.
                 row['lineage'] = {'kit': 'const LN = (() =>' in raw,            # the kit question reads the whole source
-                                  'calls': ('LN.of(' in js) or ('LN.unknown(' in js),
+                                  'calls': any(c in js for c in ('LN.of(', 'LN.unknown(', 'LN.block(', 'LN.note(')),
                                   'travels': ('LN.block(' in js) or bool(re.search(r'\blineage\s*[,:]', js))}
                 if not all(row['lineage'].values()):
                     row['fails'].append('lineage')
             # ---- B. no finding ships with an empty evidence string ----
             if all(p.search(js) for p in BUILDS_FINDINGS) and HANDS_ON_FINDINGS.search(js):
                 row['subject'].append('evidence')
-                row['evidence'] = EVIDENCE_GUARD in raw
+                row['evidence'] = EVIDENCE_GUARD in src
                 if not row['evidence']:
                     row['fails'].append('evidence')
             # ---- C. a delta is computed between like and like ----
             if (COMPARES_PREVIOUS.search(js) and COMPARED_FIGURE.search(js)) or CARRIES_MARKS_KIT in raw:
                 row['subject'].append('like_for_like')
                 # the guards are read from the WHOLE source: for the marks the guard IS the kit (R20 lives in _annotations.js)
-                row['like_for_like'] = {'report_type': bool(TYPE_GUARD.search(raw)), 'sample': bool(SAMPLE_GUARD.search(raw))}
+                row['like_for_like'] = {'report_type': bool(TYPE_GUARD.search(src)), 'sample': bool(SAMPLE_GUARD.search(src))}
                 if not all(row['like_for_like'].values()):
                     row['fails'].append('like_for_like')
             # ---- D. a score with no way of being withheld ----
             if composes and nm not in NOT_A_REPORT and EMITS_SCORE.search(js):
                 row['subject'].append('withheld')
-                row['withheld'] = bool(WITHHOLD.search(raw))
+                row['withheld'] = bool(WITHHOLD.search(src))
                 if not row['withheld']:
                     row['fails'].append('withheld')
             if row['subject']:

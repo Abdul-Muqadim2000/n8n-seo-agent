@@ -3415,7 +3415,7 @@ await guard('phase 1 live-check defects (P1-1 … P1-5)', async () => {
     ...GOOD.map((d, i) => ({ site_id: SITE, purpose: 'link', ref_domain: d, url: 'https://' + d + '/partners/page-' + i, verify: 'found', rel: 'follow', placement: 'content', to_url: i === 0 ? BROKEN : 'https://' + DOM + '/', anchor: 'northwind erp', title: 'Partners', context: 'Our partner Northwind ERP', outbound_domains: 5 })),
     ...FARMS.map(d => ({ site_id: SITE, purpose: 'link', ref_domain: d, url: 'https://' + d + '/all/2835/13.html', verify: 'missing', why: 'footprint' })),
     { site_id: SITE, purpose: 'target', url: BROKEN, broken: true, status: 404, referring: 5 }];
-  const plan = (previous) => [{ json: { site_id: SITE, domain: DOM, mode: 'full', on_demand: false, checked_at: NOW, since: new Date(Date.now() - 7 * 864e5).toISOString(), country_iso: 'AE', competitors: [], brand_names: ['Northwind'], assets: [{ url: 'https://' + DOM + '/', title: 'Northwind ERP' }], stored_gap: [], stored_timeseries: [], previous } }];
+  const plan = (previous) => [{ json: { site_id: SITE, domain: DOM, mode: 'full', on_demand: false, checked_at: NOW, since: new Date(Date.now() - 7 * 864e5).toISOString(), country_iso: 'AE', competitors: [], brand_names: ['Northwind'], assets: [{ url: 'https://' + DOM + '/', title: 'Northwind ERP' }], stored_gap: [], stored_timeseries: [], previous: { mode: 'full', union_mode: 'full', ...previous } } }];
   for (const k of ['BL Requests', 'Run BL Requests', 'Gap Requests', 'Run Gap Requests', 'Authority Requests', 'Run Authority', 'DR Requests', 'Fetch DR', 'Link Analyst Jobs', 'Link Analyst']) delete store[k];
   mock('Link Merge', [{ json: { site_id: SITE, entries, mention_pages: [], list_pages: [], cc_gap: [], sources: {} } }]);
   mock('Verify Links', vl);
@@ -11777,9 +11777,11 @@ await guard('INVARIANTS rule 1 — lineage, evidence, like-for-like deltas and w
   check('rule 1: every node that fails a check is named in the ratchet baseline, so the debt cannot grow — a new one fails the build',
     unpaid82.every(x => listed82.includes(x)) && unpaid82.length === listed82.length,
     JSON.stringify(unpaid82.filter(x => !listed82.includes(x))));
-  check('rule 1: every baselined node carries the reason it is there, and the real defects are registered (B-L1..B-L5), not excused',
+  check('rule 1: every baselined node carries the reason it is there, and the five real defects (B-L1..B-L5) are PAID and gone from the ratchet for ever (build section 73), not excused',
     Object.keys(LB).filter(k => k !== '_note').every(k => String(LB[k].why || '').length > 40)
-    && ['B-L1', 'B-L2', 'B-L3', 'B-L4', 'B-L5'].every(id => JSON.stringify(LB).includes(id)), JSON.stringify(Object.keys(LB).length));
+    && ['B-L1', 'B-L2', 'B-L3', 'B-L4', 'B-L5'].every(id => !Object.keys(LB).filter(k => k !== '_note').some(k => String(LB[k].why || '').includes(id)))
+    && ['B-L1', 'B-L2', 'B-L3', 'B-L4', 'B-L5'].every(id => String(LB._note || '').includes(id)),
+    JSON.stringify(Object.keys(LB)));
   check('rule 1: the baseline says plainly what it does NOT prove — that every figure inside a passing node carries its own lineage',
     /never that the number beside it did/.test(String(LB._note || '')), String(LB._note || '').slice(0, 120));
   check('rule 1: the nine report builders that already carry lineage still do (the full report, the ladder plan, the weekly, AI visibility, AI growth, backlinks, link building, the rank tracker)',
@@ -11843,6 +11845,168 @@ await guard('INVARIANTS rule 1 — lineage, evidence, like-for-like deltas and w
     && /Where these numbers come from \(6a\)/.test(doc82) && Array.isArray(rep82[0].json.lineage), String(/Where these numbers come from/.test(doc82)));
   reset();
 });
+
+// ===================================================================================
+// S83 (2026-10-15, FIX_PLAN.md §3.16 B-L1 … B-L5 — build section 73) — the five real defects the rule-1 lint found when it was
+// seeded, each proved by running the node code rather than by reading the lint's record (that is S82's job).
+//   B-L4 the question panel grew from 8 to 20 and read as a collapse in visibility  -> no delta, and the reason said out loud
+//   B-L5 a spam-score alert between two snapshots built from different source sets  -> no alert, and the reason said out loud
+//   B-L1 the written page printed a score whose check never ran                     -> the score is withheld with its reason
+//   B-L2 provider ESTIMATES for one keyword printed as facts, with no lineage table -> the table ships with the document
+//   B-L3 the lineage never travelled into the .doc the customer opens               -> it does, for every report type
+// ===================================================================================
+await guard('B-L1..B-L5 — the five defects the rule-1 lint found', async () => {
+  reset(); const SN = 'S83 B-L1..B-L5 — a changed panel is not a change in visibility, an unlike snapshot is not a spam alert, a score whose check did not run is withheld, and the sources travel into the strategy and the Word attachment';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const decodeB83 = (it, prop) => Buffer.from(it.binary[prop].data, 'base64').toString('utf8');
+
+  // ---------- B-L4: the AI question panel is settable from 3 to 50, so its size has to travel with the figures ----------
+  const qs83 = (n) => Array.from({ length: n }, (_, i) => ({ prompt_id: 'q' + (i + 1), site_id: 'site_x', domain: 'x.com', prompt: 'best erp partner uae ' + (i + 1), kind: 'recommend', topic: 'erp', stage: 'decision', cluster: 'erp', volume: 100, source: 'ai', status: 'active' }));
+  const rows83 = (n) => qs83(n).flatMap(q => ['chatgpt', 'gemini'].map(e => ({ site_id: 'site_x', domain: 'x.com', run_id: 'r1', prompt_id: q.prompt_id, prompt: q.prompt, kind: 'recommend', topic: 'erp',
+    engine: e, checked_at: '2026-10-15T07:00:00.000Z', answered: true, mentioned: true, cited: false, rank: 2, brands: 'X Ltd', competitors: 'rival.com', sources: 'rival.com', our_urls: '', fanout: '', sentiment: 'neutral', issues: '', error: '', cited_urls: '[]', run_kind: 'weekly' })));
+  const plan83 = (n, prevPrompts, o = {}) => ({ site_id: 'site_x', domain: 'x.com', canonical_host: 'x.com', country: 'United Arab Emirates', location_code: 2784,
+    language_code: 'en', country_iso: 'AE', email: '', callback_url: '', request_id: '', on_demand: false, adhoc: false, business_name: 'X Ltd', business_type: '', city: '', profile: {},
+    services: [], business_facts: [], accreditation: null, brand_names: ['X Ltd'], competitors: ['rival.com'], configured_competitors: ['rival.com'], aliases: {}, topics: ['erp'],
+    engines: o.engines || ['chatgpt', 'gemini'], prompts_max: 50, pulse: false, prompts: qs83(n), full_due: false, run_kind: o.run_kind || 'weekly', monthly_engines: [], carried: null,
+    need_prompts: false, prompts_needed: 0, need_site_text: false, gsc_questions: [], discovery_due: false, volume_keywords: [], index_due: false, market_due: false, market_keyword: '',
+    ga4_property_id: '', pulse_rows: [], key_paths: [], set_aside: [], set_aside_note: '', run_id: 'ai_20261015_x', checked_at: '2026-10-15T07:00:00.000Z',
+    previous: { checked_at: '2026-10-08T07:00:00.000Z', mention_rate: 50, samples: 16, mentioned_k: 8, citation_rate: 25, share_of_voice: 40, avg_rank: 2,
+      prompts: prevPrompts, run_kind: 'weekly', visibility_score: 55, sentiment_score: 10, engines: o.prev_engines || { chatgpt: { asked: prevPrompts, answered: prevPrompts }, gemini: { asked: prevPrompts, answered: prevPrompts } },
+      market_month: '', market: null, index: null, perception: null, traffic: null, access: null, competitors: [{ domain: 'rival.com', share: 10 }] } });
+  const metrics83 = async (n, prevPrompts, o) => { reset(); mock('AI Plan', [{ json: plan83(n, prevPrompts, o) }]); const rs = rows83(n).map(j => ({ json: j }));
+    mock('Parse AI Answers', rs); return (await run('AI Metrics', rs))[0].json; };
+
+  const grew83 = await metrics83(20, 8);
+  console.log('   panel 8 -> 20 ->', JSON.stringify({ panel: grew83.metrics.panel, before: grew83.metrics.panel_before, delta: grew83.metrics.delta, why: grew83.metrics.delta_not_compared }));
+  check('B-L4: the owner raises the panel from 8 questions to 20 (what the app asks for, about $5 a month) — share of voice and the visibility score are NOT subtracted: there is no delta at all',
+    grew83.metrics.delta === null && grew83.metrics.panel === 20 && grew83.metrics.panel_before === 8,
+    JSON.stringify({ delta: grew83.metrics.delta, panel: grew83.metrics.panel, before: grew83.metrics.panel_before }));
+  check('B-L4: and it says why, with both panel sizes — "not compared", never a silent blank that reads as "no change"',
+    /not compared/i.test(grew83.metrics.delta_not_compared) && /8 questions then, 20 now/.test(grew83.metrics.delta_not_compared)
+    && /2026-10-08/.test(grew83.metrics.delta_not_compared), grew83.metrics.delta_not_compared);
+  check('B-L4: no alert is raised off the refused comparison either — a competitor cannot "gain 10 points of share" against a panel that moved',
+    !grew83.alerts.some(a => /share of voice/i.test(a.text)) && !grew83.alerts.some(a => /AI mentions dropped/.test(a.text)), JSON.stringify(grew83.alerts.map(a => a.text)));
+
+  const steady83 = await metrics83(20, 18);
+  check('B-L4: a panel that barely moved (18 -> 20, inside R19\'s 20%) is compared exactly as before — the refusal is about unlike samples, not about progress',
+    steady83.metrics.delta && typeof steady83.metrics.delta.significant === 'boolean' && steady83.metrics.delta.share_of_voice != null
+    && !steady83.metrics.delta_not_compared && /18 questions on ChatGPT, Gemini/.test(steady83.metrics.delta_basis),
+    JSON.stringify({ delta: steady83.metrics.delta, basis: steady83.metrics.delta_basis }));
+  const engOff83 = await metrics83(20, 20, { prev_engines: { chatgpt: { asked: 20, answered: 20 }, gemini: { asked: 20, answered: 20 }, perplexity: { asked: 20, answered: 20 } } });
+  check('B-L4: the same panel read on a DIFFERENT set of engines is not compared either — switch Perplexity off and the rates move on their own',
+    engOff83.metrics.delta === null && /Perplexity/.test(engOff83.metrics.delta_not_compared), JSON.stringify(engOff83.metrics.delta_not_compared));
+  const rep83 = await (async () => { mock('AI Metrics', [{ json: grew83 }]); mock('AI Brief', [{ json: { output: { headline: 'h', summary: 's', actions: [], watch: [] } } }]);
+    return (await run('AI Report', store['AI Brief']))[0].json; })();
+  check('B-L4: the customer reads it in the report — "not compared" stands where the arrows were, and the reason is spelled out above the tiles',
+    /not compared/i.test(rep83.html) && /These figures are not compared with the last check/.test(rep83.html) && /8 questions then, 20 now/.test(rep83.html),
+    rep83.html.slice(rep83.html.indexOf('not compared') - 200, rep83.html.indexOf('not compared') + 120));
+
+  // ---------- B-L5: a free_only snapshot is built from a different set of sources than a paid one ----------
+  const blPlan83 = (mode, prevMode, prevBacklinks = 1000) => ({ site_id: 'site_x', domain: 'x.com', canonical_host: 'x.com', country: 'United Arab Emirates', location_code: 2784,
+    language_code: 'en', email: '', callback_url: '', request_id: '', business_name: 'X Ltd', brand_names: ['X Ltd'], on_demand: false, adhoc: false, free_only: false, mode,
+    since: '2026-09-15', since_full: '2026-09-15', stored_timeseries: [], gap_due: false, stored_gap: [], competitors: [], accreditation: null, need_competitors: false,
+    assets: [], site_model: {}, profile: {}, target: 'x.com', targets: ['x.com'], key_paths: [], checked_at: '2026-10-15T07:30:00.000Z', run_id: 'bl_20261015_x', settings: {}, link_builder: false,
+    previous: { checked_at: '2026-10-08T07:30:00.000Z', mode: prevMode, union_mode: prevMode, rank: 100, backlinks: prevBacklinks, referring_domains: 50, spam_score: 20, broken_backlinks: 0, union_domains: 50, best_links: 5, referral_visits: 0 } });
+  const parse83 = async (mode, prevMode, prevBacklinks) => { reset(); mock('BL Plan', [{ json: blPlan83(mode, prevMode, prevBacklinks) }]);
+    mock('BL Requests', [{ json: { site_id: 'site_x', kind: 'summary' } }]);
+    mock('Run BL Requests', [{ json: { tasks: [{ status_code: 20000, cost: 0.01, result: [{ rank: 110, backlinks: 1050, referring_domains: 52, referring_domains_nofollow: 2, backlinks_spam_score: 40, broken_backlinks: 0, broken_pages: 0 }] }] } }]);
+    return (await run('Parse Backlinks', [{ json: {} }]))[0].json; };
+
+  const freePrev83 = await parse83('full', 'free');
+  console.log('   free -> full ->', JSON.stringify({ alerts: freePrev83.alerts.map(a => a.text), not_compared: freePrev83.not_compared }));
+  check('B-L5: a spam score of 20 in a free_only snapshot against 40 in a paid one is 20 points apart and raises NO alert — the two were built from different sets of sources',
+    freePrev83.summary.available === true && freePrev83.summary.spam_score === 40 && !freePrev83.alerts.some(a => /spam score/i.test(a.text)),
+    JSON.stringify(freePrev83.alerts.map(a => a.text)));
+  check('B-L5: and it says why, naming both source sets — held back, never hidden',
+    freePrev83.not_compared.some(t => /Link spam score \(20 then, 40 now\)/.test(t) && /free sources only/.test(t) && /every source \(DataForSEO and the free ones\)/.test(t)),
+    JSON.stringify(freePrev83.not_compared));
+  const paidPrev83 = await parse83('full', 'full');
+  check('B-L5: between two paid snapshots the same 20-point move IS the alert it always was — the guard refuses unlike snapshots, not real spam',
+    paidPrev83.alerts.some(a => /Link spam score rose from 20 to 40/.test(a.text) && /both checks read every source/.test(a.text)) && !paidPrev83.not_compared.length,
+    JSON.stringify({ alerts: paidPrev83.alerts.map(a => a.text), nc: paidPrev83.not_compared }));
+  const noMode83 = await parse83('full', '');
+  check('B-L5: a stored snapshot whose mode nobody recorded is not assumed to be a paid one — BL Plan\'s `mode !== "free"` reads an empty mode as paid, which is how an unlike snapshot got in',
+    !noMode83.alerts.some(a => /spam score/i.test(a.text)) && noMode83.not_compared.some(t => /was not recorded/.test(t)), JSON.stringify(noMode83.not_compared));
+  const drift83 = await parse83('full', 'full', 400);
+  check('B-L5 (the R19 half): the spam score is the share of the INDEX\'s links judged spammy, so when the index\'s own link count moves 400 -> 1,050 the move is the recrawl and is not alerted on',
+    !drift83.alerts.some(a => /spam score/i.test(a.text)) && drift83.not_compared.some(t => /different samples \(400 links in the index then, 1050 now\)/.test(t)),
+    JSON.stringify(drift83.not_compared));
+
+  // ---------- B-L1: a score whose check did not run is withheld, with its reason ----------
+  const MD83 = 'Title: Best ERP partner in the UAE\nMeta Description: A guide to picking an ERP partner in the UAE.\nSlug: best-erp-partner-uae\n\n# Best ERP partner in the UAE\n\n**Quick answer:** Pick a partner with local references.\n\n## What to look for\n\nSome body text that is long enough to count as a paragraph of real words on the page.\n\n## How we judge\n\nMore body text here, again long enough to be a real paragraph of words on the page.\n';
+  const pkg83 = async (extra) => { reset(); return (await run('Blog Package', [{ json: { keyword: 'best erp partner uae', domain: 'x.com', page_markdown: MD83, request_id: 'r1', ...extra } }]))[0]; };
+  const ran83 = await pkg83({ content_score: 88, qa_publishable: true, qa_summary: 'Quality check passed', qa_round: 2, qa_max_rounds: 3,
+    content_coverage: { pct: 72, terms_total: 40, pages_compared: 4, basis: '72% of the 40 terms the top pages share' },
+    content_originality: { pages_compared: 5, highest_pct: 4, passed: true, draft_windows: 200, basis: 'the share of the draft\'s 8-word windows found on one page' } });
+  const Mr83 = ran83.json.article_meta;
+  check('B-L1: when the checks ran, every quality figure in meta.json carries its source, its period and the sample it was measured on',
+    (Mr83.lineage || []).length >= 5 && Mr83.lineage.every(l => l.figure && l.source_label && l.basis_label)
+    && Mr83.lineage.some(l => /Content score/.test(l.figure) && l.basis === 'modelled' && /not a Google figure/.test(l.note))
+    && Mr83.lineage.some(l => /Topic coverage/.test(l.figure) && l.basis === 'measured' && /4 competitor pages read/.test(l.sample))
+    && (Mr83.quality_notes || []).length === Mr83.lineage.length, JSON.stringify((Mr83.lineage || []).map(l => [l.figure, l.basis, l.sample])));
+  check('B-L1: and the article itself carries none of it — the article is the customer\'s published page, not our report',
+    !/Where these numbers come from/.test(decodeB83(ran83, 'article_html')) && !/Where these numbers come from/.test(decodeB83(ran83, 'article_md')),
+    decodeB83(ran83, 'article_html').slice(0, 200));
+  const notRun83 = await pkg83({ content_score: null, qa_publishable: null, qa_summary: '',
+    content_coverage: { pct: 0, terms_total: 0, pages_compared: 0, basis: '0% of the 0 terms the top pages share; no competitor page could be read, so there is no target to compare with' },
+    content_originality: { pages_compared: 0, highest_pct: null, passed: null, draft_windows: 0, basis: 'no page text was available in this run, so nothing could be compared' } });
+  const Mn83 = notRun83.json.article_meta;
+  console.log('   package without the checks ->', JSON.stringify({ score: Mn83.content_score, why: Mn83.content_score_withheld, cov: Mn83.coverage.pct, org: Mn83.originality.highest_pct }));
+  check('B-L1: a score whose check did not run is NOT printed as a number — it is null, and the package says why',
+    Mn83.content_score === null && /did not run/.test(Mn83.content_score_withheld) && Mn83.quality_checked === false,
+    JSON.stringify({ score: Mn83.content_score, why: Mn83.content_score_withheld }));
+  check('B-L1: "0% coverage" measured against an empty term list and "no overlap found" measured against no page read at all are withheld too — both read as good news before',
+    Mn83.coverage.pct === null && Mn83.coverage.measured === false && /no competitor page could be read/.test(Mn83.coverage.not_measured)
+    && Mn83.originality.highest_pct === null && Mn83.originality.measured === false && /nothing could be compared/.test(Mn83.originality.not_measured),
+    JSON.stringify({ cov: Mn83.coverage, org: Mn83.originality }));
+  check('B-L1: each withheld figure reads "source not recorded" with its own reason, never a borrowed source',
+    Mn83.lineage.filter(l => l.source === 'none').length >= 3 && Mn83.lineage.filter(l => l.source === 'none').every(l => l.basis === 'unknown' && String(l.note).length > 10)
+    && Mn83.lineage.some(l => /Word count/.test(l.figure) && l.source === 'draft'), JSON.stringify(Mn83.lineage.map(l => [l.figure, l.source])));
+
+  // ---------- B-L2: the keyword strategy ships with its lineage, even on its own ----------
+  reset();
+  const kw83 = (k, i) => ({ keyword: k, volume: 100 * (i + 1), kd: 20, cpc: 1.5, intent: 'commercial', page_type: 'Guide', topic: 'erp', why: 'real demand', traffic_potential: 30, traffic_basis: 'modelled', opportunity: 50, source: 'ideas' });
+  mock('Rank Keywords', [{ json: { domain: 'x.com', country: 'United Arab Emirates', location_code: 2784, language_code: 'en', brand: 'Acme', seeds: ['erp uae'],
+    keyword_strategy: { keywords: ['erp uae', 'erp partner uae'].map(kw83), priority: [kw83('erp uae', 0)], quick_wins: [], questions: [], long_tail: [], competitor_gaps: [], competitor_domains: [],
+      clusters: [], by_intent: {}, by_source: { ideas: 2 }, live_checks: { planned: 1, cap: 10, done: 1 }, research_failures: [], search_console: null, serp_clusters: [], serp_overlap: null, reach: null } } }]);
+  mock('Priority Keywords', [{ json: { keyword: 'erp uae' } }]);
+  const ks83 = (await run('Build Keyword Strategy', [{ json: {} }]))[0].json;
+  const kh83 = ks83.result_html;
+  check('B-L2: the keyword strategy now carries the "Where these numbers come from" table the full report has had since G29, in the document AND in the callback',
+    /Where these numbers come from/.test(kh83) && Array.isArray(ks83.lineage) && ks83.lineage.length >= 5, JSON.stringify((ks83.lineage || []).map(l => l.figure)));
+  check('B-L2: searches per month, difficulty and cost per click are named as the data provider\'s ESTIMATE for a single keyword, not a measurement of this site',
+    ks83.lineage.some(l => /Searches per month, difficulty and cost per click/.test(l.figure) && l.source === 'kwdata' && l.basis === 'estimated'
+      && /not a measurement of your site/.test(l.note)) && /provider estimate for one keyword/.test(kh83), JSON.stringify(ks83.lineage[0]));
+  check('B-L2: what this run could not read says so with its reason — no Search Console history, no AI demand, no website — instead of a blank row',
+    ks83.lineage.filter(l => l.source === 'none').length >= 2 && ks83.lineage.filter(l => l.source === 'none').every(l => String(l.note).length > 15)
+    && /source not recorded/.test(kh83), JSON.stringify(ks83.lineage.filter(l => l.source === 'none').map(l => [l.figure, l.note])));
+
+  // ---------- B-L3: the Word attachment carries the sources of everything it prints ----------
+  reset(); mock('Normalize Input', [{ json: {} }]);
+  const wf83 = (await run('Build Word File', [{ json: { output: MD83, keyword: 'best erp partner uae', country: 'United Arab Emirates', domain: 'x.com', brand: 'Acme',
+    verdict: 'GO', verdict_score: 72, verdict_reasons: ['real demand'], recommended_page: 'Guide', include_seo_report: true, include_content: true,
+    keyword_data: { search_volume: 300, keyword_difficulty: 24, cpc: 1.2, competitor_backlink_strength: { avg_referring_domains: 10, avg_backlinks: 40, pages_checked: 10 } },
+    serp_features: { checked_at: '2026-10-15T00:00:00Z', ai_overview: { present: true, cited_domains: ['a.com'] } },
+    competitor_analysis: { top_pages: [{ rank: 1, domain: 'a.com', title: 't', word_count: 900 }], competitor_strengths: [], competitor_weaknesses: [], content_gaps: [] },
+    content_brief: { slug: 'best-erp-partner-uae' },
+    content_qa: { passed: true, content_score: 88, main_content_words: 1200, target_word_count: 1200, round: 2, max_rounds: 3,
+      readability: { flesch: 55, avg_sentence_words: 17, passive_pct: 6 },
+      coverage: { pct: 72, terms_total: 40, pages_compared: 4, basis: '72% of the 40 terms the top pages share' },
+      originality: { pages_compared: 5, highest_pct: 4, passed: true, basis: 'the share of the draft\'s 8-word windows found on one page' } } } }]))[0];
+  const doc83 = decodeB83(wf83, 'data');
+  check('B-L3: the .doc the customer opens now ends with "Where these numbers come from", and the list travels in the callback too',
+    /Where these numbers come from/.test(doc83) && Array.isArray(wf83.json.lineage) && wf83.json.lineage.length >= 8,
+    JSON.stringify((wf83.json.lineage || []).map(l => l.figure)));
+  check('B-L3: one node renders every report type, so the verdict, the keyword report and the written page each get their own rows and no others',
+    wf83.json.lineage.some(l => /verdict/.test(l.figure) && l.basis === 'modelled') && wf83.json.lineage.some(l => l.source === 'kwdata' && l.basis === 'estimated')
+    && wf83.json.lineage.some(l => /Content score/.test(l.figure)) && wf83.json.lineage.some(l => /Readability/.test(l.figure) && l.source === 'draft')
+    && !wf83.json.lineage.some(l => /site audit/i.test(l.figure)), JSON.stringify(wf83.json.lineage.map(l => [l.figure, l.source, l.basis])));
+  check('B-L3: the .doc spells out what "modelled" and "estimated" mean, so a figure cannot be read as a count of anything',
+    /provider estimate for a single keyword/.test(doc83) && /is computed, not counted/.test(doc83) && /one results page/.test(doc83), 'footer missing');
+  reset();
+});
+
 
 H.report();
 })();

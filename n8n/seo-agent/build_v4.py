@@ -3514,7 +3514,7 @@ patch('Build Word File', """    ['Topic coverage', qa.coverage_pct != null ? qa.
 patch('Build Word File', "    page_markdown: md || undefined, content_brief_slug: brief.slug || '',",
       "    content_originality: qa.originality || null, content_coverage: qa.coverage || null,\n    page_markdown: md || undefined, content_brief_slug: brief.slug || '',")
 setcode('Blog Package', rd46('code/Blog_Package.js'))
-assert "originality: d.content_originality" in code('Blog Package'), 'the package does not carry the originality figure (G5)'
+assert "ORG = d.content_originality" in code('Blog Package') and "originality: ORG ?" in code('Blog Package'), 'the package does not carry the originality figure (G5)'
 
 # ---------- G30: the three planned images are produced ----------
 # Gotenberg's screenshot route answers with the image file itself; the service is already in n8n/compose.override.yml for the PDF
@@ -4076,8 +4076,8 @@ const meta = { title, h1: h1 || title, slug, suggested_url: plannedPageUrl || (d
 patch('Blog Package', _BP_META_OLD, _BP_META_NEW)
 patch('Blog Package', "  links_to_add_when_published: HPplanned.map(p => ({ keyword: p.keyword || '', planned_url: SRC.clean(p.url), anchor: anchorText(p), note: 'Not published yet: add this link from this page once the page is live.' })),",
       "  links_to_add_when_published: plannedLinks,")
-patch('Blog Package', "word_count: words, content_score: d.content_score == null ? null : d.content_score, qa_summary: d.qa_summary || '',",
-      "word_count: words, content_score: d.content_score == null ? null : d.content_score, qa_summary: d.qa_summary || '',\n"
+patch('Blog Package', "word_count: words, content_score, content_score_withheld, quality_checked: qa_checked, qa_summary: d.qa_summary || '',",
+      "word_count: words, content_score, content_score_withheld, quality_checked: qa_checked, qa_summary: d.qa_summary || '',\n"
       "  // R11 (2026-10-13): the package says whether this page may be published as it is, with the last quality round's counts and reasons\n"
       "  publishable: d.qa_publishable == null ? null : !!d.qa_publishable, quality: d.qa_quality || null,")
 patch('Blog Package', "if (HPplanned.length) extra.push('\"links_to_add_when_published\" lists ' + HPplanned.length + ' page(s) this hub does NOT link to yet because they are not published: add the link with the anchor given once each one is live (the weekly ladder e-mail reminds you)');",
@@ -6989,6 +6989,140 @@ sticky("""### A number we report is measured, or it says what it is (INVARIANTS 
 log('A number we report is measured, or it says what it is (2026-10-15, INVARIANTS.md rule 1 - the class behind ~19 of the 81 defects). lineage_lint.py walks the GENERATED workflows the way section 55 walks the ledger ordering and gate_lint.py walks the gate pairs, and fails the build on four things: a node that composes a document a customer receives and does not carry v5/code/_lineage.js (carry it, call it, let it travel); a finding that ships with an empty evidence string (R10, promoted from one finding to every finding); a delta computed against a stored earlier report of a different report_type or over a sample that moved (R20 + R19, promoted from the chart marks and the URL inspections to every node that subtracts a stored figure, with the annotation kit itself in the class); and a score put in front of a customer with no path that withholds it when an input is unavailable (R18 / R23). Each node reads with the SHARED KITS STRIPPED OUT, because judging a node on text it did not write is how a lint starts lying - inlining _lineage.js would otherwise make any node a report builder, and _page_watch.js made eleven nodes delta nodes. Two debts the inventory found are paid rather than listed: the audit raised SEVEN site-wide findings (invalid SSL, no HTTPS redirect, no sitemap, no robots.txt, no real 404, directory browsing, no HTTP/2) with an EMPTY evidence string - scored and ranked with nothing a reader could check, R10 still live - and each now names the site-wide check that produced it, with LN.evidenced running at the sink (Build Site Issues, after every module merges and before anything is scored) and the held-back findings named in the report notes instead of vanishing; and the technical site audit, which had no lineage at all while the full report has had its "Where these numbers come from" table since G29, now carries one (health score modelled from the crawl, Search Console measured over 28 days or unavailable with Google\'s reason, URL inspection with how many pages Google answered for, CrUX measured or unavailable with why, Lighthouse as one simulated load, crawler access from our own fetch) and it travels in the callback. Everything the lint cannot yet prove is a ratchet in harness/lineage_baseline.json, named node by node, exactly as retry_lint.check_in200 and gate_lint keep theirs: the debt is visible, cannot grow, and a node that gains its guard leaves the list for ever')
 
 
+# =============================================================================
+# 73. THE FIVE REAL DEFECTS RULE 1's LINT FOUND WHEN IT WAS SEEDED (2026-10-15, FIX_PLAN.md §3.16 B-L1 … B-L5).
+#     Section 72 seeded `harness/lineage_baseline.json` with every node that fails one of the four checks. Five of those entries
+#     were named as real defects rather than excused. They are paid here, and each one leaves the ratchet FOR EVER (the baseline
+#     entry is deleted, `lineage_lint.write_baseline` can never put it back).
+#
+#     **Two were wrong numbers reaching a customer.**
+#       * **B-L4 — a changed question panel read as a change in visibility.** *AI Metrics* subtracted the previous run's
+#         `share_of_voice` and `visibility_score` with no check that the two runs measured the same thing. The AI panel is
+#         settable from **3 to 50** questions (v4.9), so a site that went from 8 questions to 20 — which the owner is asked to do,
+#         and which costs about $5 a month — read as a collapse in share of voice; and the monthly **full** run asks more engines
+#         than the weekly one, which moves the same figures again. This is R19's shape on a different figure, so it takes R19's
+#         answer: the shared guard, the 20% drift, and "not compared" with the reason in the place the arrow would have been.
+#       * **B-L5 — a spam-score alert across two different source sets.** *Parse Backlinks* alerted on a 15-point move in
+#         `spam_score` between snapshots without checking the two snapshots were built the same way. A `free_only` check buys
+#         nothing from DataForSEO (v4.10), so its figures come from a different set of sources; and the spam score is the share of
+#         the INDEX's links judged spammy, so when the index's own link count moves the score moves with it. R20's shape.
+#     Both now go through one guard, `RT.likeForLike` + `RT.comparable` (v5/code/_dfs_retry.js, where R19's `comparable` already
+#     lived). The guard is a CALL, not an inlined kit — `lineage_lint` looks for `RT.likeForLike(` / `RT.comparable(`, which the
+#     kit's own body never writes — so a node cannot look guarded without using it. Nothing is hidden: `delta_not_compared` and
+#     `not_compared` carry the reason into the report, the callback and the app.
+#
+#     **Three were figures with no provenance.**
+#       * **B-L1 — the written page package.** *Blog Package* printed the content score, the QA counts, topic coverage and
+#         originality as bare numbers, and printed them whether or not the check behind them had anything to work with: coverage
+#         "0%" against an empty term list and "no overlap found" against no page at all read as good news. Every figure now says
+#         where it came from and over what sample, and a figure whose check did not run is **withheld** (null, with the reason).
+#         The lineage travels in meta.json and in the callback — deliberately NOT into the article, which is the customer's own
+#         published page and carries no figures of ours.
+#       * **B-L2 — the keyword strategy.** Searches per month, difficulty and cost per click are the data provider's estimates
+#         for a single keyword. The methodology paragraph said so in prose, which no table of numbers inherits, and when the
+#         strategy ships on its own there was no lineage table at all — the full report has had one since G29. It has one now.
+#       * **B-L3 — the Word attachment.** Every report type renders through *Build Word File*, and the lineage block did not
+#         travel into the `.doc`: the customer who opens the attachment saw every figure without its source. One fix, every
+#         attachment.
+# =============================================================================
+# ---------- B-L1 / B-L2: proved on the generated nodes (the sources carry the kit and the figures; see v5/code/) ----------
+for _n73, _need73 in (('Blog Package', ('const LN = (() => {', 'LN.unknown(', 'content_score_withheld', 'lineage,')),
+                      ('Build Keyword Strategy', ('const LN = (() => {', 'LN.of(', 'Where these numbers come from', 'lineage,'))):
+    for _t73 in _need73:
+        assert _t73 in code(_n73), 'B-L1 / B-L2: %s no longer carries %r' % (_n73, _t73)
+assert 'LN.block(' not in _ll72.own_code(code('Blog Package')), \
+    'B-L1: the lineage table must not be rendered into the article — the article is the customer\'s published page'
+
+# ---------- B-L3: the Word document carries the sources of everything it prints ----------
+setcode('Build Word File', LINEAGE_SRC47 + '\n' + code('Build Word File'))
+_LIN73 = """
+// ---- B-L3 (2026-10-15, INVARIANTS rule 1): where the numbers in THIS document came from. Every report type renders through this
+// node — the keyword verdict, the keyword report, the written page and the audit attachment — and until today not one of them
+// carried its sources into the .doc the customer opens. Only the sections this document actually contains are listed.
+const lineage = [];
+if (wantVerdict) lineage.push(d.score_withheld
+  ? LN.unknown('The verdict, its score, expected visits and time to rank', 'the live Google results could not be read for this keyword, so nothing was scored')
+  : LN.of('The verdict, its score, expected visits and time to rank', 'model', { basis: 'modelled', period: LN.asOf(today), sample: 'one keyword in ' + String(d.country || ''),
+      note: 'our own 0-100 score from the demand, the difficulty and who ranks now; the visits are modelled from click-share curves, never measured clicks' }));
+if (wantSeo) {
+  lineage.push(LN.of('Monthly searches, keyword difficulty, cost per click and ads competition', 'kwdata', { basis: 'estimated', period: 'the provider\\'s latest 12-month average',
+    sample: 'one keyword in ' + String(d.country || ''), note: 'a provider estimate for a single keyword, not a measurement of your site' }));
+  if (kd.competitor_backlink_strength) lineage.push(LN.of('Competitor link strength', 'backlink_index', { basis: 'reported', period: LN.asOf(today),
+    sample: LN.sample((kd.competitor_backlink_strength || {}).pages_checked, 'top-ranking pages'), note: 'one crawler\\'s index of the web: it finds much of the web, never all of it' }));
+  lineage.push((sf && !sf.unavailable)
+    ? LN.of('What the results page looks like, and who ranks now', 'serp', { basis: 'one_sample', period: LN.asOf(sf.checked_at || today), sample: 'one results page',
+        note: 'read once, from ' + String(d.country || 'the chosen country') + ' on one device; a feature not seen in that one check is unknown, not absent' })
+    : LN.unknown('What the results page looks like, and who ranks now', String((sf && sf.error) || 'no live results page was read in this run')));
+  if ((ca.top_pages || []).length) lineage.push(LN.of('The competitor pages, their word counts and the content gaps', 'web', { basis: 'measured', period: LN.asOf(today),
+    sample: LN.sample((ca.top_pages || []).length, 'competitor pages read'), note: 'pages we fetched and read ourselves; the strengths and gaps are an AI reading of those pages' }));
+}
+if (wantContent) {
+  lineage.push(qa.content_score == null
+    ? LN.unknown('Content score and its breakdown', 'the quality check produced no score for this page')
+    : LN.of('Content score and its breakdown', 'model', { basis: 'modelled', period: LN.asOf(today), sample: LN.sample(qa.main_content_words, 'words of the finished draft'),
+        note: 'our own score, not a Google figure: structure 25, topic coverage 25, readability 15, specificity 10, clean language 10, length 15'
+          + (qa.round ? ' (quality round ' + qa.round + ' of ' + qa.max_rounds + ')' : '') }));
+  lineage.push(qa.readability
+    ? LN.of('Readability (Flesch, sentence length, passive voice)', 'draft', { basis: 'measured', period: LN.asOf(today), sample: LN.sample(qa.main_content_words, 'words'),
+        note: 'counted in the finished draft itself' })
+    : LN.unknown('Readability (Flesch, sentence length, passive voice)', 'the readability check did not run for this page'));
+  lineage.push((qa.coverage && Number(qa.coverage.terms_total) > 0)
+    ? LN.of('Topic coverage against the top-ranking pages', 'web', { basis: 'measured', period: LN.asOf(today),
+        sample: LN.sample(qa.coverage.terms_total, 'shared terms' + (qa.coverage.pages_compared ? ', from ' + qa.coverage.pages_compared + ' competitor pages read' : '')), note: String(qa.coverage.basis || '') })
+    : LN.unknown('Topic coverage against the top-ranking pages', String(((qa.coverage || {}).basis) || 'no competitor page could be read in this run, so coverage was not measured')));
+  lineage.push((qa.originality && Number(qa.originality.pages_compared) > 0)
+    ? LN.of('Originality (overlap with the pages this run read)', 'web', { basis: 'measured', period: LN.asOf(today),
+        sample: LN.sample(qa.originality.pages_compared, 'pages compared'), note: String(qa.originality.basis || '') })
+    : LN.unknown('Originality (overlap with the pages this run read)', String(((qa.originality || {}).basis) || 'no page text was available in this run, so nothing could be compared')));
+}
+if (wantAudit) lineage.push(d.site_audit
+  ? LN.of('The site audit findings and its health score', 'crawl', { basis: 'modelled', period: LN.asOf(today), sample: LN.sample((d.site_audit || {}).pages_crawled, 'pages crawled'),
+      note: 'our own 0-100 score: points off per finding by severity, not a Google figure' })
+  : LN.unknown('The site audit findings and its health score', 'the site audit runs separately and is sent as its own report'));
+parts.push(h2('Where these numbers come from', true)
+  + '<table class="ct"><tr><th>Figure</th><th>Source</th><th>Period</th><th>Sample</th><th>How it was arrived at</th></tr>'
+  + lineage.map(l => '<tr><td>' + esc(l.figure) + '</td><td>' + esc(l.source_label) + '</td><td>' + esc(l.period || '—') + '</td><td>' + esc(l.sample || '—') + '</td><td>' + esc([l.basis_label, l.note].filter(Boolean).join(' — ')) + '</td></tr>').join('')
+  + '</table><p class="small">A figure marked "' + esc(LN.BASIS.modelled) + '" is computed, not counted; "' + esc(LN.BASIS.estimated) + '" is the data provider\\'s own estimate for a single keyword; "'
+  + esc(LN.MISSING) + '" means the figure reached this document without its source and should be treated as unverified.</p>');
+
+"""
+patch('Build Word File', "const css = `\n@page { margin: 0.9in; }", _LIN73 + "const css = `\n@page { margin: 0.9in; }")
+patch('Build Word File', "    report_type: reportType,\n", "    report_type: reportType,\n    lineage,\n")
+assert 'const LN = (() => {' in code('Build Word File') and "parts.push(h2('Where these numbers come from'" in code('Build Word File'), \
+    'B-L3: the Word document has no lineage'
+# `ca` is the competitor analysis object the SEO section already reads; proving it exists keeps the new block from inventing a name
+assert re.search(r'^const ca = ', code('Build Word File'), re.M), 'B-L3: Build Word File no longer defines `ca`'
+
+
+def _b73_checks():
+    """B-L4 / B-L5 over the generated monitor workflows: the guard has to be a CALL, not an inlined kit (the trap gate_lint fell
+    into). `RT.likeForLike(` and `RT.comparable(` are never written by the kit's own body, so finding them is proof of use."""
+    import json as _j73
+    _want73 = {'SEO_Agent_AI_Visibility.json': ('AI Metrics', 'B-L4', ('RT.likeForLike(', 'RT.comparable(', 'delta_not_compared', 'panel_before')),
+               'SEO_Agent_Backlink_Monitor.json': ('Parse Backlinks', 'B-L5', ('RT.likeForLike(', 'RT.comparable(', 'not_compared', 'sourceSetOf'))}
+    _kit73 = open(os.path.join(HERE0, 'v5', 'code', '_dfs_retry.js'), encoding='utf-8').read()
+    for _needle73 in ('RT.likeForLike(', 'RT.comparable('):
+        assert _needle73 not in _kit73, 'B-L4 / B-L5: the kit writes %r itself, so finding it proves nothing' % _needle73
+    for _f73, (_node73, _row73, _needs73) in _want73.items():
+        _p73 = os.path.join(HERE0, 'workflows', _f73)
+        assert os.path.exists(_p73), _f73 + ' was not generated'
+        _js73 = ''
+        for _w73 in _j73.load(open(_p73, encoding='utf-8')):
+            for _n73b in (_w73.get('nodes') or []):
+                if _n73b['name'] == _node73:
+                    _js73 = (_n73b.get('parameters') or {}).get('jsCode') or ''
+        assert _js73, '%s: %s not found' % (_f73, _node73)
+        for _t73b in _needs73:
+            assert _t73b in _js73, '%s (%s): %s does not carry %r' % (_row73, _node73, _f73, _t73b)
+
+
+sticky("""### The five defects rule 1's lint found (B-L1 … B-L5)
+**Two wrong numbers reaching a customer.** *AI Metrics* subtracted the last run's **share of voice** and **visibility score** without checking the question panel was the same size — the panel is settable from **3 to 50**, so growing it read as a collapse (B-L4, R19's shape). *Parse Backlinks* alerted on a 15-point **spam score** move without checking the two snapshots were built from the same sources — a `free_only` check buys nothing from DataForSEO (B-L5, R20's shape). One guard for both: `RT.likeForLike` + `RT.comparable`, and the reason is printed where the arrow would have been.
+**Three figures with no provenance.** The written-page package (B-L1) printed the content score, topic coverage and originality whether or not the check behind them had anything to work with — a score whose check did not run is now **withheld, with the reason**. The keyword strategy (B-L2) printed provider **estimates** for a single keyword as facts and shipped with no lineage table at all. The **Word attachment** (B-L3) dropped the lineage block, so the customer who opened the file saw every number without its source — every report type renders through that one node.""",
+    pos('Build Word File')[0] - 60, pos('Build Word File')[1] - 360, 1140, 270, 4)
+log('The five real defects the rule-1 lint found when it was seeded (2026-10-15, FIX_PLAN.md §3.16 B-L1 ... B-L5; INVARIANTS.md rule 1). B-L4 (wrong number to a customer): AI Metrics subtracted the stored run\'s share_of_voice and visibility_score with no check that the two runs measured the same thing - the AI question panel is settable from 3 to 50 and the monthly full run asks more engines than the weekly one, so raising the panel from 8 to 20 (which the owner is asked to do) read as a collapse in visibility; the panel size and the run kind now travel with the stored row (AI Plan), the delta is computed only when both match - the run kind first, then R19\'s 20% sample drift, through the one shared guard RT.likeForLike / RT.comparable in v5/code/_dfs_retry.js where R19\'s comparable already lived - and when they do not match there is NO delta and the report prints "not compared" with the reason in the place the arrow would have been, with the competitor-share and sentiment comparisons held to the same test. B-L5: Parse Backlinks alerted on a 15-point spam_score move between snapshots without checking they were built the same way - a free_only check buys nothing from DataForSEO so its figures come from a different source set, and the spam score is the share of the INDEX\'s links judged spammy so it moves when the index\'s own link count moves; both halves are now checked and what was not compared is listed in the snapshot and printed in the report. B-L1: Blog Package printed the content score, the QA counts, topic coverage and originality with no source line and printed them whether or not the check behind them had anything to work with (coverage 0% against an empty term list, "no overlap found" against no page read at all); every figure now carries its source, period, sample and basis (LN) and a figure whose check did not run is withheld with its reason, in meta.json and the callback but deliberately NOT in the article, which is the customer\'s own published page. B-L2: the keyword strategy printed searches per month, difficulty and cost per click as facts about the site when they are the provider\'s estimates for a single keyword, said so in prose that no table inherits, and shipped on its own with no lineage table at all - it now carries the same "Where these numbers come from" table the full report has had since G29. B-L3: the lineage block never travelled into the .doc, so the customer who opened the attachment saw every figure without its source; Build Word File renders every report type, so one fix covers the verdict, the keyword report, the written page and the audit attachment. All five leave harness/lineage_baseline.json for ever; harness scenario S83 proves each one by running the node code')
+
+
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:
 #     "two fixes have never come back and both are enforced by the build".
@@ -7123,6 +7257,8 @@ _b71_checks()
 
 # section 72 (INVARIANTS rule 1): lineage, evidence, like-for-like deltas and withheld scores over every generated workflow
 _b72_checks()
+# section 73 (B-L1 ... B-L5): the five real defects the rule-1 lint found, each proved on the generated node
+_b73_checks()
 # section 69 (B-F5 + INVARIANTS rule 2): deterministic node ids over every generated workflow, the settings refusal's self-test,
 # and the gate-pair lint. Last, because the id freeze rewrites the files the checks above have just finished reading.
 _b69_checks()
