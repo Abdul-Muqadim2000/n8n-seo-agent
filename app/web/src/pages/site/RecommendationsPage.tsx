@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { ArrowDownCircle, Lightbulb, ListFilter, OctagonAlert, TriangleAlert } from 'lucide-react';
-import type { Priority, Recommendation, RecommendationCategory } from '@seo/shared';
+import { ArrowDownCircle, HelpCircle, Lightbulb, ListFilter, OctagonAlert, Scale, ShieldAlert, TriangleAlert } from 'lucide-react';
+import { queueBands, type Priority, type QueueBand, type Recommendation, type RecommendationCategory } from '@seo/shared';
 import { useRecommendations } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 import { EmptyState, Skeleton } from '@/components/ui/feedback';
@@ -13,7 +13,7 @@ import { CATEGORY_META, CATEGORY_ORDER, PRIORITY_ORDER, RecommendationButton, Re
 
 type CatFilter = RecommendationCategory | 'all';
 type PrioFilter = Priority | 'all';
-type GroupBy = 'priority' | 'category';
+type GroupBy = 'worth' | 'priority' | 'category';
 
 export default function RecommendationsPage() {
   const { org, site } = useSitePage();
@@ -45,7 +45,10 @@ export default function RecommendationsPage() {
 function Recommendations({ recs, refetching }: { recs: Recommendation[]; refetching: boolean }) {
   const [cat, setCat] = useState<CatFilter>('all');
   const [prio, setPrio] = useState<PrioFilter>('all');
-  const [groupBy, setGroupBy] = useState<GroupBy>('priority');
+  // REP 3.3: one queue, ordered by what each step is worth. Grouping by priority or area stays available, but the default is the
+  // queue itself — the whole point of the criterion is that a customer reads one list, not one list per area.
+  const scored = recs.some((r) => r.score);
+  const [groupBy, setGroupBy] = useState<GroupBy>(scored ? 'worth' : 'priority');
   const sorted = useMemo(() => sortRecommendations(recs), [recs]);
   const byPrio = countBy(recs, (r) => r.priority);
   // category counts follow the priority filter, priority counts follow the category filter
@@ -58,10 +61,12 @@ function Recommendations({ recs, refetching }: { recs: Recommendation[]; refetch
     (r) => r.priority,
   );
   const shown = sorted.filter((r) => (cat === 'all' || r.category === cat) && (prio === 'all' || r.priority === prio));
-  const groups: { key: string; title: string; icon: ReactNode; tone: IconTileTone; items: Recommendation[] }[] =
-    groupBy === 'priority'
-      ? PRIORITY_ORDER.map((p) => ({ key: p, ...PRIO_GROUP[p], items: shown.filter((r) => r.priority === p) }))
-      : CATEGORY_ORDER.map((c) => ({ key: c, title: CATEGORY_META[c].label, icon: CATEGORY_META[c].icon, tone: 'blue' as const, items: shown.filter((r) => r.category === c) }));
+  const groups: { key: string; title: string; description?: string; icon: ReactNode; tone: IconTileTone; items: Recommendation[] }[] =
+    groupBy === 'worth'
+      ? queueBands(shown).map((b) => ({ key: b.band, ...BAND_GROUP[b.band], description: b.note, items: b.items }))
+      : groupBy === 'priority'
+        ? PRIORITY_ORDER.map((p) => ({ key: p, ...PRIO_GROUP[p], items: shown.filter((r) => r.priority === p) }))
+        : CATEGORY_ORDER.map((c) => ({ key: c, title: CATEGORY_META[c].label, icon: CATEGORY_META[c].icon, tone: 'blue' as const, items: shown.filter((r) => r.category === c) }));
   const top = sorted[0];
   const high = byPrio.high ?? 0;
 
@@ -131,6 +136,7 @@ function Recommendations({ recs, refetching }: { recs: Recommendation[]; refetch
               value={groupBy}
               onChange={setGroupBy}
               options={[
+                ...(scored ? [{ value: 'worth' as const, label: 'Worth' }] : []),
                 { value: 'priority', label: 'Priority' },
                 { value: 'category', label: 'Area' },
               ]}
@@ -158,6 +164,7 @@ function Recommendations({ recs, refetching }: { recs: Recommendation[]; refetch
               <Panel
                 icon={g.icon}
                 iconTone={g.tone}
+                description={g.description}
                 title={
                   <span className="inline-flex items-center gap-2">
                     {g.title}
@@ -179,6 +186,12 @@ function Recommendations({ recs, refetching }: { recs: Recommendation[]; refetch
   );
 }
 
+/** The three bands of the one queue (REP 3.3, `@seo/shared/queue`), with the note that says why each exists. */
+const BAND_GROUP: Record<QueueBand, { title: string; icon: ReactNode; tone: IconTileTone }> = {
+  blocking: { title: 'Before anything can be measured', icon: <ShieldAlert />, tone: 'serious' },
+  ranked: { title: 'Ranked by what it is worth', icon: <Scale />, tone: 'blue' },
+  unranked: { title: 'Worth doing, not yet measurable', icon: <HelpCircle />, tone: 'neutral' },
+};
 /** A priority group's heading: the word and a status tile (the priority badges in the rows carry it too). */
 const PRIO_GROUP: Record<Priority, { title: string; icon: ReactNode; tone: IconTileTone }> = {
   high: { title: 'High priority', icon: <OctagonAlert />, tone: 'serious' },

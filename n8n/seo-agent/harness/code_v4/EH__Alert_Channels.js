@@ -10,6 +10,9 @@
 // simply skipped, and neither channel can fail the run.
 const OA = (() => {
   const DEDUPE_MINUTES = 30;
+  // B-A7 (2026-10-15): the moment a first attempt may be re-tried if nothing records a delivery. It must equal AR.RETRY_MINUTES — the
+  // sweep (v5/code/_alert_retry.js) is what acts on it — and build section 64 fails if the two ever drift apart.
+  const RETRY_MINUTES = 30;
   const S = (v) => String(v == null ? '' : v).trim();
   const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
   // the identity of a failure: the workflow, the node and the message with numbers, ids and quoted values removed, so "timeout after 30012ms"
@@ -17,6 +20,14 @@ const OA = (() => {
   const keyOf = (a) => [S(a.workflow) || 'unknown workflow', S(a.node) || 'unknown node',
     S(a.message).toLowerCase().replace(/\d[\d.,:]*/g, '#').replace(/["'`][^"'`]*["'`]/g, '"x"').replace(/\s+/g, ' ').slice(0, 160)].join(' | ');
   const severityOf = (a) => /credential|unauthor|forbidden|payment|credit|quota|balance/i.test(S(a.message)) ? 'critical' : 'high';
+  // B-A7: a row is "carried" when `delivered` NAMES the channel that took it ('webhook', 'email', 'webhook,email'). Everything else -
+  // pending, failed, not_sent, deduped - means the same thing to a human: nobody has it. The same rule as AR.carried.
+  const carried = (r) => S(r && r.delivered).toLowerCase().split(',').map(x => x.trim()).some(x => x === 'webhook' || x === 'email');
+  // R29 (2026-10-14, FIX_PLAN §3.12, secret handling): SEO_ALERT_WEBHOOK_URL is a bearer URL, so the build bakes a PLACEHOLDER and
+  // apply_env.py substitutes the real value into the JSON it imports — the public repository never carries the secret. A node still
+  // holding the placeholder (an un-applied build, and every harness run) has no webhook configured: it is not a URL, and posting to it
+  // would be a request to nowhere. Anything that still looks like __A_PLACEHOLDER__ therefore reads as unset.
+  const cfgUrl = (v) => { const s = S(v); return !s || /^__[A-Z0-9_]+__$/.test(s) ? '' : s; };
 
   const plan = (alert, rows, cfg) => {
     const a = alert || {}, c = cfg || {};
@@ -28,7 +39,7 @@ const OA = (() => {
     const sinceMin = prior && S(prior.last_seen_at) ? (now - new Date(S(prior.last_seen_at))) / 60000 : Infinity;
     const repeat = !!prior && Number.isFinite(sinceMin) && sinceMin < DEDUPE_MINUTES;
     const count = prior ? n0(prior.count) + 1 : 1;
-    const webhook_url = S(c.webhook_url);
+    const webhook_url = cfgUrl(c.webhook_url);   // R29: an un-substituted placeholder is not a channel
     const email_to = S(c.email_to);
     const channels = [webhook_url ? 'webhook' : '', email_to ? 'email' : '', 'data_table'].filter(Boolean);
     const notify = !repeat;
@@ -39,8 +50,18 @@ const OA = (() => {
       execution_id: S(a.execution_id), execution_url: S(a.execution_url), mode: S(a.mode), severity: severityOf(a),
       first_seen_at: prior && S(prior.first_seen_at) ? S(prior.first_seen_at) : nowIso, last_seen_at: nowIso, count,
       channels: channels.join(','),
-      delivered: notify ? 'pending' : 'deduped',
-      notes: (repeat ? 'repeat within ' + DEDUPE_MINUTES + ' minutes (' + Math.round(sinceMin) + ' min after the last one), recorded but not re-sent' : count > 1 ? 'seen ' + count + ' times, last alert more than ' + DEDUPE_MINUTES + ' minutes ago' : 'first time').slice(0, 500)
+      // B-A7 (2026-10-15): a repeat used to write `deduped` over whatever the row said, including over the channels that had CARRIED the
+      // alert — so a delivered alert looked undelivered and an undelivered one looked handled. A repeat of an alert something carried
+      // keeps that state; only an alert nobody has is marked deduped.
+      delivered: notify ? 'pending' : (prior && carried(prior) ? S(prior.delivered) : 'deduped'),
+      notes: (repeat ? 'repeat within ' + DEDUPE_MINUTES + ' minutes (' + Math.round(sinceMin) + ' min after the last one), recorded but not re-sent' : count > 1 ? 'seen ' + count + ' times, last alert more than ' + DEDUPE_MINUTES + ' minutes ago' : 'first time').slice(0, 500),
+      // B-A7: the retry state. `attempts` is 0 here on purpose — this row is written BEFORE anything is sent, and an attempt exists when it
+      // is made, not when it is planned (INVARIANTS rule 4). *Alert Delivery* writes the real count and the log a moment later; if the
+      // execution dies before it does, `next_attempt_at` has already booked the row for the next sweep, so the failure is not stranded.
+      attempts: n0(prior && prior.attempts),
+      last_attempt_at: S(prior && prior.last_attempt_at),
+      next_attempt_at: notify ? new Date(now.getTime() + RETRY_MINUTES * 60000).toISOString() : S(prior && prior.next_attempt_at),
+      attempt_log: S(prior && prior.attempt_log)
     };
     // the webhook payload: `text` works for Slack and Teams, `content` for Discord, and `alert` carries the structured fields for anything else
     const body = {
@@ -51,11 +72,14 @@ const OA = (() => {
     return { row, notify, repeat, channels, webhook_url, email_to, webhook_body: body, plain, alert_key, severity: row.severity, DEDUPE_MINUTES };
   };
 
-  return { plan, keyOf, severityOf, DEDUPE_MINUTES };
+  return { plan, keyOf, severityOf, cfgUrl, carried, DEDUPE_MINUTES, RETRY_MINUTES };
 })();
 const alert = $('Format Alert').first().json;
 let rows = []; try { rows = $('Load Ops Alerts').all().map(i => i.json).filter(r => r && !r.error); } catch (e) {}
-const CFG = { webhook_url: '', email_to: 'kinnngahmed@gmail.com' };   // baked from n8n/.env at build time ($env is blocked in nodes)
+// R29 / R30 (2026-10-14): the webhook URL is a SECRET and this repository is public, so the build bakes a placeholder and apply_env.py
+// substitutes the real value into the JSON it imports; an un-substituted placeholder reads as "no webhook configured" (OA.cfgUrl), so no
+// build can produce a node that posts to a customer's Slack. The ops address is not a secret and is baked as before ($env is blocked in nodes).
+const CFG = { webhook_url: '__SEO_ALERT_WEBHOOK_URL__', email_to: 'devaicondeveloper3@gmail.com' };
 const p = OA.plan(alert, rows, CFG);
 // did the row reach the table? (a Data Table node with onError: continueRegularOutput answers with an error item instead of failing)
 let recorded = true, record_error = '';

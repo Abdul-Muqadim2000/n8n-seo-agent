@@ -504,6 +504,28 @@ fixes.push('Generated ' + blocks.map(b => b.type).join(' + ') + ' schema');
 // itself clamped to the competitor analysis' recommendation, or to the verdict's own target, in Parse Brief).
 const too_many_placeholders = placeholder_count > PH_MAX;
 const too_long = mainWords > target * 1.25;
+// R22's editor half (2026-10-14, the second re-rating): being over length was only ever one warning among up to twenty, and the page
+// that was delivered still ran 2,648 words against its own 1,800 target (+47%) after TWO editor rounds. The cut is now an instruction of
+// its own — how many words to take out and which sections carry them (the ones furthest over their own outline target, else the longest) —
+// printed at the top of what the editor is asked to do. (The rung's missing target itself is R22's other half, in Ladder Plan.)
+const over_words = Math.max(0, mainWords - target);
+const over_pct = target ? Math.round(100 * over_words / target) : 0;
+const fat_sections = sections.map(sec => { const o = outline.find(x => x.h2 && plain(x.h2).toLowerCase() === sec.h2.toLowerCase());
+    const t = o ? Number(o.target_words) || 0 : 0; return { h2: sec.h2, words: sec.words, target: t, over: t ? sec.words - t : 0 }; })
+  .sort((a, b) => (b.over - a.over) || (b.words - a.words)).slice(0, 3).filter(x => x.over > 0 || !x.target);
+const length_instruction = (target && mainWords > target * 1.1)
+  ? 'CUT ' + over_words + ' words: the main content is ' + mainWords + ' words against a target of ' + target + ' (+' + over_pct + '%). '
+    + (fat_sections.length ? 'The longest sections are ' + fat_sections.map(x => '"' + x.h2 + '" (' + x.words + ' words' + (x.target ? ' against ' + x.target : '') + ')').join(', ') + '. ' : '')
+    + 'Cut repetition, restatements and secondary detail; keep every section, every verified fact, every source and every link. Do not add a single word, and do not stop above ' + Math.round(target * 1.1) + ' words.'
+  : '';
+// R25 (2026-10-14, the second re-rating): "Microsoft's highest APIM SLA ([Statistic]) applies to Premium deployments" went out in the
+// delivered body. `placeholder_count: 1` counted it, but the reasons the owner reads listed only the 11 brackets of the empty business
+// profile, so nobody was ever told that a figure in the text is a placeholder. Every body placeholder that is still there is named,
+// whether or not the count is over PH_MAX (the delivery gate itself is unchanged: PH_MAX still decides what cannot be published).
+const placeholder_list = placeholders.slice(0, 4).map(p => p.token + (p.count > 1 ? ' x' + p.count : '')).join(', ');
+const placeholder_note = !placeholder_count ? ''
+  : too_many_placeholders ? placeholder_count + ' placeholder(s) left in the copy (at most ' + PH_MAX + ' can be published): ' + placeholder_list
+    : placeholder_count + ' masked figure(s) still in the text: ' + placeholder_list + ' — fill each one in, or rewrite the sentence so it does not need the figure, before you publish';
 // P2-6: `passed_copy` judges the text and decides the editor round; `passed` judges the page the owner receives, so the author box's
 // bracketed fields keep it false — the honest answer to "can I publish this as it is?".
 const passed_copy = warnings.length === 0 && content_score >= 80 && Math.abs(mainWords - target) <= target * 0.25 && !too_many_placeholders && !too_long;
@@ -525,7 +547,7 @@ const max_rounds = Math.max(1, Math.round(Number(prev.qa_max_rounds) || 2));
 const rounds_left = Math.max(0, max_rounds - round);
 const not_ready = !passed && !rounds_left;   // no round left to fix it: a draft, not a publishable page
 const not_ready_reasons = !not_ready ? [] : [
-  too_many_placeholders ? placeholder_count + ' placeholder(s) left in the copy (at most ' + PH_MAX + ' can be published): ' + placeholders.slice(0, 4).map(p => p.token + (p.count > 1 ? ' x' + p.count : '')).join(', ') : '',
+  placeholder_note,   // R25: named whenever any body placeholder is left, not only above PH_MAX
   profile_placeholders ? profile_placeholders + ' bracketed field(s) in the byline, the author box and the Person schema still need your details' : '',
   too_long ? 'the main content is ' + mainWords + ' words against a target of ' + target : '',
   (!too_long && Math.abs(mainWords - target) > target * 0.25) ? 'the main content is ' + mainWords + ' words against a target of ' + target : '',
@@ -537,12 +559,14 @@ const quality_label = passed ? 'passed the quality check'
   : not_ready ? 'did not pass the quality check — not ready to publish'
     : 'needs another editing round before it can be published';
 const quality = { passed, publishable: passed, not_ready, round, max_rounds, rounds_left, label: quality_label, reasons: not_ready_reasons,
+  placeholder_note, placeholders_in_body: placeholders.map(p => p.token),   // R25: the owner is told about a masked figure even on a page that is otherwise ready
   placeholder_count, placeholders_total: placeholder_count + profile_placeholders, placeholder_max: PH_MAX, coverage_pct, coverage_target_pct, content_score,
   note: not_ready ? 'The editor had ' + max_rounds + ' round(s) and the page still fails the checks above: it is delivered as a draft to finish by hand, not as a page to publish as it is.' : '' };
 const site_profile_out = (P && Object.keys(P).some(k => k === 'address' ? Object.values(P.address || {}).some(Boolean) : String(P[k] || '').trim())) ? P : (prev.site_profile || null);
 return [{ json: { ...prev, output: md, qa_round: round, meta: { title: metaTitle, description: metaDesc, slug }, schema_blocks: blocks, critique: critique || lastCritique || null, site_profile: site_profile_out,
   content_qa: { ai_ready, round, passed, editor_needed, content_score, quality, publishable: passed, not_ready, quality_label, not_ready_reasons, max_rounds, rounds_left, score_breakdown: { structure: Math.round(structure_pts), coverage: Math.round(coverage_pts), readability: Math.round(readability_pts), specificity: Math.round(specificity_pts), clean_language: Math.round(banned_pts), length: Math.round(length_pts) },
     total_words: totalWords, main_content_words: mainWords, faq_words: faqWords, target_word_count: target, sections, placeholders, placeholder_count, placeholder_max: PH_MAX, review_notes, business_name: bizName, nap_source,
+    placeholder_note, length_instruction, over_words, over_pct, longest_sections: fat_sections,   // R25 / R22: the masked figures by name, and the cut the editor is asked to make
     passed_copy, profile_placeholders, profile_placeholder_fields: PROFILE_PH, placeholders_total: placeholder_count + profile_placeholders,
     keyword_mentions: kwCount, keyword_density_pct: density, h2_count: h2s.length, faq_count: validFaqs.length, question_headings: questionHeadings, answered_questions: answeredQuestions, internal_links: internalLinks, external_links: externalLinks, sources_cited: externalUrls.slice(0, 15),
     source_quality: externalUrls.reduce((m, e) => ({ ...m, [e.tier]: (m[e.tier] || 0) + 1 }), {}), weak_sources_unlinked: [...new Set(weakRepeats)], links_to_add_when_published: plannedLinksQA.map(p => ({ keyword: p.keyword || '', url: p.url, role: p.role, anchor: anchorText(p) })),

@@ -1,5 +1,13 @@
 {
  "ai_gate": {
+  "SEO Agent v4": [
+   "GSC Audit Query",
+   "Inspect Retry Plan",
+   "Any Inspect Retries?",
+   "Wait Before Inspect Retry",
+   "GSC Audit Query (Retry)",
+   "GSC Sitemaps (Audit)"
+  ],
   "SEO Agent \u2014 AI Pulse": [
    "Run AI Requests",
    "AI Retry Requests",
@@ -458,6 +466,27 @@
     "name": "Fetch Raw Pages",
     "retryOnFail": true,
     "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Keyword Data (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "GSC Audit Query (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 AI Growth": [
@@ -523,6 +552,27 @@
     "name": "POST Growth Report",
     "retryOnFail": false,
     "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance (Growth)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance End (Growth)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Alert Retry (Growth)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 AI Pulse": [
@@ -544,6 +594,27 @@
     "allowed": false,
     "maxTries": 3,
     "name": "Run AI Retries",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance (Pulse)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance End (Pulse)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Alert Retry (Pulse)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    }
@@ -604,6 +675,27 @@
     "name": "Run AI Retries",
     "retryOnFail": true,
     "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance (AI)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance End (AI)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Alert Retry (AI)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 API": [],
@@ -613,6 +705,27 @@
     "allowed": false,
     "maxTries": 3,
     "name": "Fetch Sitemap (Schedule)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance (Audit)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance End (Audit)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Alert Retry (Audit)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    }
@@ -729,6 +842,27 @@
     "name": "POST BL Report",
     "retryOnFail": false,
     "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance (BL)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance End (BL)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Alert Retry (BL)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 Console Alerts": [
@@ -747,6 +881,27 @@
     "name": "POST Cadence Note",
     "retryOnFail": false,
     "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance (Cadence)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance End (Cadence)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Alert Retry (Cadence)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 Error Handler": [
@@ -754,6 +909,13 @@
     "allowed": false,
     "maxTries": 3,
     "name": "Post Alert Webhook",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Alert Retry",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    }
@@ -809,6 +971,27 @@
     "name": "POST LB Report",
     "retryOnFail": false,
     "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance (LB)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance End (LB)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Alert Retry (LB)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 Link Builder API": [],
@@ -824,6 +1007,27 @@
     "allowed": false,
     "maxTries": 3,
     "name": "Post Watch Alert",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance (Watch)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance End (Watch)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Alert Retry (Watch)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    }
@@ -860,6 +1064,27 @@
     "name": "POST Progress",
     "retryOnFail": false,
     "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance (Tracker)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance End (Tracker)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Alert Retry (Tracker)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 Reply Reader": [
@@ -977,6 +1202,27 @@
     "name": "POST Site Report",
     "retryOnFail": false,
     "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance (Site)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance End (Site)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Alert Retry (Site)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 Test Runner": []

@@ -6,6 +6,7 @@ import type { Report } from './api';
 import type { ChartAnnotation } from './annotations';
 import type { PageChangeTest } from './change-test';
 import type { Lineage } from './lineage';
+import type { RecommendationScore } from './queue';
 
 export interface MetricsPoint {
   periodStart: string;
@@ -916,6 +917,9 @@ export interface Recommendation {
   /** a short evidence line, e.g. "position 11.2 · 340 impressions / week" */
   evidence?: string;
   action?: RecommendationAction;
+  /** REP 3.3 (benchmark pass 2026-10-14): what this is worth and why it sits where it does in the one queue (`queue.ts`).
+   * Absent only on rows written before the queue existed; a reader must treat a missing score as "not ranked". */
+  score?: RecommendationScore;
 }
 
 export interface OverviewData {

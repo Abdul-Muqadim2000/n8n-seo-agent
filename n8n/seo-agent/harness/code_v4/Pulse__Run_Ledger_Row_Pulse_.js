@@ -13,13 +13,35 @@ const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 let rows = [];
 try { rows = $(PLAN).all().map(i => i.json || {}).filter(r => !r.nothing_to_do && !r.skip && (r.domain || r.site_id)); } catch (e) { rows = []; }
 const full = (r) => EST.dfs_full != null && (String(r.mode || '') === 'full' || r.full === true || r.full_report === true);
-const ai = +(n0(EST.ai) * rows.length).toFixed(4);
-const dfs = +rows.reduce((s, r) => s + (full(r) ? n0(EST.dfs_full) : n0(EST.dfs)), 0).toFixed(4);
+// R31 (2026-10-14, FIX_PLAN §3.13): a `free_only` run calls no paid API and no model at all — it uses the free sources and our own link
+// check ($0, and the callback tells the caller `cost_usd: 0`). It used to reserve the full per-site figure anyway ($0.05 Claude + $0.45
+// DataForSEO on exec 586) and then settle the Claude half, so the guard held back money the run could not spend and the ledger said it
+// had. A free run reserves nothing.
+const free = (r) => r.free_only === true || r.free === true || String(r.mode || '') === 'free';
+const paid = rows.filter(r => !free(r));
+const freeRows = rows.length - paid.length;
+const ai = +(n0(EST.ai) * paid.length).toFixed(4);
+const dfs = +paid.reduce((s, r) => s + (full(r) ? n0(EST.dfs_full) : n0(EST.dfs)), 0).toFixed(4);
 // one site in the run: name it, as the main workflow's reservation does (P34-5 reads `domain` to refuse a second heavy crawl of the same site)
 const domain = rows.length === 1 ? String(rows[0].domain || '').toLowerCase() : '';
+// R32: the account balance at the moment this row is reserved, from the free appendix/user_data probe on the ledger chain.
+let dfs_balance = 0;
+try { const __b = $('DFS Balance (Pulse)').first().json || {}; const __t = (__b.tasks || [])[0] || {}; const __r = (__t.result || [])[0] || {};
+  const __v = Number((__r.money || {}).balance); if (Number.isFinite(__v) && __v > 0) dfs_balance = +__v.toFixed(6); } catch (e) {}
 return [{ json: { run_id: String($execution.id), key: 'schedule:' + MODE, mode: MODE, est_usd: ai, created_at: new Date().toISOString(),
   status: 'reserved', settled_usd: 0, domain, heavy: false, dfs_est_usd: dfs, dfs_usd: 0,
+  // R28 (2026-10-14): the DataForSEO balance at reservation time, read for free from appendix/user_data so the day's reported spend can be
+  // held against the account. R32 (2026-10-14, FIX_PLAN §3.13): a scheduled run takes the reading too — until now only main-workflow runs
+  // did, so a Monday of monitor spend reconciled against nothing at all. One free call per run (not per site); 0 = the probe did not answer.
+  dfs_balance,
   // G23 (2026-10-13): a row must say which part of its money was measured and which estimated; at reservation time none of it is measured.
   // `cost_mode` is the key of the self-correcting rolling figure in seo_cache (`cost:<kind>:<mode>`) this run will settle into.
   cost_mode: MODE, ai_usd: 0, measured_usd: 0, estimated_usd: +(ai + dfs).toFixed(4),
-  cost_basis: 'reserved: Claude $' + ai.toFixed(4) + ' ESTIMATED (' + rows.length + ' site(s) x the per-site figure), DataForSEO $' + dfs.toFixed(4) + ' ESTIMATED - nothing measured yet' } }];
+  // R31 (2026-10-14): $0 is never called an estimate - a run that reserves nothing says so, with the reason.
+  cost_basis: ((ai + dfs) > 0
+    ? 'reserved: Claude $' + ai.toFixed(4) + ' ESTIMATED (' + paid.length + ' site(s) x the per-site figure), DataForSEO $' + dfs.toFixed(4) + ' ESTIMATED - nothing measured yet'
+    : 'reserved: nothing - this run spends no model and no paid API money'
+    ) + (freeRows ? '; ' + freeRows + ' free-only site(s) reserve nothing (no paid API, no model call)' : ''),
+  // B-A5 (2026-10-15, build section 62): filled in by the settle — when it settled, what the account read then, and whether the figure
+  // the row carries is the account's ('account') or the run's own tasks' ('tasks').
+  settled_at: '', dfs_balance_end: 0, dfs_source: 'tasks' } }];

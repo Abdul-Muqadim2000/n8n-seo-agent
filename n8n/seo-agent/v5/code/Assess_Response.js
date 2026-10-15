@@ -47,4 +47,23 @@ const body = { ok: true, keyword: a.keyword, country: a.country, volume: a.volum
   chance: plan.plan_type === 'none' ? null : plan.chance, chance_text: plan.plan_type === 'none' ? '' : reachChanceText(plan), base_rate: REACH_BASE_RATE,   // G3 (2026-10-11): the estimated chance band (uncalibrated) and the 2025 base rate
   reach_info: { method: a.reach_info.method, p75: a.reach_info.p75 ?? null, size_reach: a.reach_info.size_reach ?? null, sample: a.reach_info.sample ?? null, top10: a.reach_info.top10 ?? null, cached: !!a.reach_info.cached, cached_at: a.reach_info.cached_at || null },
   business_source: a.business_source, warnings };
+// ---- R26 (2026-10-14, FIX_PLAN.md §3.12): an answer with no search data may not sound sure ----
+// Live on 2026-10-14 "business central partner uae" and "dynamics 365 partner uae" came back with volume, difficulty, intent and CPC
+// all null — DataForSEO has nothing for them in the UAE — and the answer still read "Reachable for your site · Short ladder ·
+// 4-8 months" with "estimated chance fair (30-50%)". The gap R3 closed for the topic fit, one field over: an unknown belongs in the
+// label the customer reads, and a chance band computed from a difficulty nobody measured is not an estimate, it is a guess.
+const NO_DATA = 'no search data';   // the same words in the label, the warning and the app
+body.search_data_known = !(a.volume == null && a.kd == null);
+body.difficulty_known = a.kd != null;
+if (!body.search_data_known) {
+  body.label = body.label + ' \u00b7 ' + NO_DATA;
+  body.chance = null;   // suppressed, not widened: with no volume and no difficulty there is nothing to widen around
+  body.chance_text = 'No estimated chance: DataForSEO has no search volume and no difficulty for "' + a.keyword + '" in ' + a.country
+    + ', so the difficulty this estimate rests on (counted as your reach + ' + REACH_CFG.unknown_kd + ') was never measured. The plan and the months below rest on that same assumption.';
+  body.plan_assumed = true;
+} else if (!body.difficulty_known && body.chance_text) {
+  // volume is known, the difficulty is not: the band stays (it is the plan's band), but it says what it was computed on
+  body.chance_text = body.chance_text + ' DataForSEO has no difficulty for this keyword, so it was counted as your reach + ' + REACH_CFG.unknown_kd + '.';
+  body.plan_assumed = true;
+}
 return [{ json: { status: 200, body } }];

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, type ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { ArrowLeft, Check, CheckCircle2, CircleDot, ClipboardList, Clock, Coins, ExternalLink as ExternalIcon, FileText, Flag, GitCommitVertical, Inbox, Loader2, Play, RotateCcw, Send, XCircle } from 'lucide-react';
-import { formatUsd, MODES, type Report, type Run } from '@seo/shared';
+import { COST_SOURCE_LABEL, formatUsd, MODES, runCostEstimate, type Report, type Run } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { useReport, useRun } from '@/lib/queries';
@@ -9,7 +9,7 @@ import { cn, fmtDateTime } from '@/lib/utils';
 import { RunStatusBadge } from '@/components/ui/badge';
 import { ButtonLink } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { IconTile, Stagger, type IconTileTone } from '@/components/insight';
+import { IconTile, InfoTip, Stagger, type IconTileTone } from '@/components/insight';
 import { Callout, ErrorState, Skeleton } from '@/components/ui/feedback';
 import { KeyValue, PageHeader } from '@/components/ui/misc';
 import { ReportView } from '@/components/reports/ReportView';
@@ -88,6 +88,7 @@ export default function RunDetailPage() {
       { replace: true },
     );
   const selected = reports.find((r) => r.id === selectedId) ?? null;
+  const cost = runCostEstimate(run);
   const duration = minutesBetween(run.createdAt, run.completedAt ?? (active ? now : null));
 
   return (
@@ -196,8 +197,8 @@ export default function RunDetailPage() {
             <CardTitle icon={<ClipboardList />} title="Details" />
             <div className="space-y-5 px-5 pt-3 pb-5">
               <div className="flex flex-wrap gap-1.5">
-                <RunChip icon={<Coins />} title="Estimated cost">
-                  {formatUsd(run.estimatedCostUsd)} estimated
+                <RunChip icon={<Coins />} title={cost.basis}>
+                  {formatUsd(cost.usd, cost.source === 'measured' ? 3 : 2)} {COST_SOURCE_LABEL[cost.source]}
                 </RunChip>
                 <RunChip icon={<Clock />}>{active ? `about ${run.etaMinutes} min` : fmtMinutes(duration)}</RunChip>
                 <RunChip icon={<FileText />} tone={reports.length ? 'accent' : 'neutral'}>
@@ -216,8 +217,16 @@ export default function RunDetailPage() {
                       'None (research only)'
                     ),
                   },
-                  { label: 'Estimated cost', value: <span className="tabular">{formatUsd(run.estimatedCostUsd)}</span> },
-                  ...(run.actualCostUsd != null ? [{ label: 'Data cost measured', value: <span className="tabular">{formatUsd(run.actualCostUsd, 3)} <span className="text-xs text-ink-3">(DataForSEO; AI usage not itemised)</span></span> }] : []),
+                  // B-R3: what it cost beats what the engine reserved beats what we guessed, and the label says which one this is
+                  {
+                    label: cost.source === 'measured' ? 'Cost' : 'Cost estimate',
+                    value: (
+                      <span className="tabular">
+                        {formatUsd(cost.usd, cost.source === 'measured' ? 3 : 2)}{' '}
+                        <InfoTip label="Where this figure comes from">{cost.basis}</InfoTip>
+                      </span>
+                    ),
+                  },
                   { label: active ? 'Expected time' : 'Duration', value: active ? `about ${run.etaMinutes} min` : fmtMinutes(duration) },
                   ...(run.requestId ? [{ label: 'Reference', value: <code className="text-xs text-ink-3">{run.requestId}</code> }] : []),
                 ]}

@@ -8,6 +8,7 @@ import { AuditMockup } from './mockups/AuditMockup';
 import { BacklinkLedgerMockup } from './mockups/BacklinkLedgerMockup';
 import { ContentMockup } from './mockups/ContentMockup';
 import { DashboardMockup } from './mockups/DashboardMockup';
+import { DeliveryMockup } from './mockups/DeliveryMockup';
 import { GuideMockup } from './mockups/GuideMockup';
 import { KeywordVerdictMockup } from './mockups/KeywordVerdictMockup';
 import { LadderMockup } from './mockups/LadderMockup';
@@ -36,6 +37,8 @@ export function FeatureVisual({ kind, className }: { kind: VisualKey; className?
       return <AuditMockup className={className} />;
     case 'workspace':
       return <WorkspaceMockup className={className} />;
+    case 'report-delivery':
+      return <DeliveryMockup className={className} />;
     case 'guided-setup':
       return <GuideMockup className={className} />;
     case 'growth-loop':

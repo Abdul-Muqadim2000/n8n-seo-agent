@@ -1,3 +1,5 @@
+import { modeCostUsd } from './cost';
+
 // Option lists mirror the n8n form pages and Normalize Input (n8n/seo-agent/v5 + build_v4.py), so every value the app sends
 // is one the workflow already understands. Change them together.
 
@@ -120,7 +122,8 @@ export interface ModeInfo {
   /** What arrives when it finishes. */
   delivers: string;
   category: ModeCategory;
-  /** Rough Claude + DataForSEO cost per run in USD (HANDOVER.md §4, live runs of 2026-10-02). */
+  /** Claude + search-data cost of one run in USD. One table only: `cost.ts` mirrors the engine's own calibrated figures, and the
+   *  engine's number replaces this one as soon as a run reports it (B-R3 / B-B1, benchmark area 13 §3.1). */
   costUsd: number;
   etaMinutes: number;
   /** Runs against one of the company's verified sites. */
@@ -140,7 +143,7 @@ export const MODES: Record<ModeId, ModeInfo> = {
     summary: 'Is this keyword worth writing for? Get a GO / GO WITH CHANGES / AVOID verdict with reasons and risks.',
     delivers: 'Verdict, score, reasons, risks and the recommended page (PDF)',
     category: 'keywords',
-    costUsd: 0.2,
+    costUsd: modeCostUsd('verdict'),
     etaMinutes: 4,
     siteBound: false,
     siteOptional: true,
@@ -152,7 +155,7 @@ export const MODES: Record<ModeId, ModeInfo> = {
     summary: 'Competitor research, a verdict, a keyword report and a finished, QA-checked page for one keyword.',
     delivers: 'Keyword report + page as Word, PDF, HTML, Markdown and meta.json',
     category: 'content',
-    costUsd: 1.2,
+    costUsd: modeCostUsd('keyword'),
     etaMinutes: 10,
     siteBound: false,
     siteOptional: true,
@@ -164,7 +167,7 @@ export const MODES: Record<ModeId, ModeInfo> = {
     summary: 'Multi-source keyword research for your business: opportunity scores, topic clusters, quick wins and AI search demand.',
     delivers: 'Keyword strategy (PDF) with priority keywords checked live on Google',
     category: 'keywords',
-    costUsd: 0.4,
+    costUsd: modeCostUsd('discover'),
     etaMinutes: 10,
     siteBound: false,
     siteOptional: true,
@@ -176,7 +179,7 @@ export const MODES: Record<ModeId, ModeInfo> = {
     summary: 'A structured description of your site from its homepage: what you do, for whom, offers and proof.',
     delivers: 'Site description',
     category: 'brand',
-    costUsd: 0.03,
+    costUsd: modeCostUsd('describe'),
     etaMinutes: 2,
     siteBound: true,
     finalStages: ['site_description'],
@@ -187,7 +190,7 @@ export const MODES: Record<ModeId, ModeInfo> = {
     summary: 'Technical audit (crawl, probes, scoring, fix pack) or the full SEO report with competitors, backlinks and AI visibility.',
     delivers: 'Audit report (PDF), diff since the last audit, fix pack (.zip)',
     category: 'technical',
-    costUsd: 0.1,
+    costUsd: modeCostUsd('audit'),
     etaMinutes: 20,
     siteBound: true,
     finalStages: ['site_audit', 'full_report'],
@@ -198,7 +201,7 @@ export const MODES: Record<ModeId, ModeInfo> = {
     summary: 'A keyword ladder from winnable long-tail pages up to the head term, with a link map, a timeline and the first pages written now.',
     delivers: 'Ladder plan (PDF + Word), then each page as it is written; weekly rank tracking',
     category: 'growth',
-    costUsd: 1.8,
+    costUsd: modeCostUsd('ladder'),
     etaMinutes: 8,
     siteBound: true,
     finalStages: ['ladder_plan'],
@@ -209,7 +212,7 @@ export const MODES: Record<ModeId, ModeInfo> = {
     summary: 'Weekly Search Console, GA4, Google Trends and live rank checks with actions, plus blog posts per week and growth monitors.',
     delivers: 'First tracking report in minutes, then every Monday',
     category: 'tracking',
-    costUsd: 0.1,
+    costUsd: modeCostUsd('track'),
     etaMinutes: 3,
     siteBound: true,
     finalStages: ['site_tracker_setup', 'site_tracker'],
@@ -220,7 +223,7 @@ export const MODES: Record<ModeId, ModeInfo> = {
     summary: 'Live check of a page you published (meta, schema, author, images, links, indexability); marks it published and suggests links.',
     delivers: 'Publish check with fixes and internal link suggestions',
     category: 'content',
-    costUsd: 0,
+    costUsd: modeCostUsd('published'),
     etaMinutes: 1,
     siteBound: true,
     finalStages: ['published'],
@@ -231,7 +234,7 @@ export const MODES: Record<ModeId, ModeInfo> = {
     summary: 'Monthly record of what the API cannot see: manual actions, security issues and the Pages report.',
     delivers: 'Check-in recorded; issues raised as alerts',
     category: 'tracking',
-    costUsd: 0,
+    costUsd: modeCostUsd('checkin'),
     etaMinutes: 1,
     siteBound: true,
     finalStages: ['console_checkin'],
@@ -242,7 +245,7 @@ export const MODES: Record<ModeId, ModeInfo> = {
     summary: 'Turn a client result into proof that later pages cite, and into its own case-study page.',
     delivers: 'Case-study page (Word, PDF, HTML, Markdown)',
     category: 'content',
-    costUsd: 1.2,
+    costUsd: modeCostUsd('case_study'),
     etaMinutes: 15,
     siteBound: true,
     finalStages: ['content'],
@@ -254,7 +257,7 @@ export const MODES: Record<ModeId, ModeInfo> = {
     summary: 'Author, expert reviewer and business address used for bylines, author boxes, Person and LocalBusiness schema.',
     delivers: 'Profile saved, readiness score and schema preview',
     category: 'brand',
-    costUsd: 0,
+    costUsd: modeCostUsd('profile'),
     etaMinutes: 1,
     siteBound: true,
     finalStages: ['profile'],
@@ -265,7 +268,7 @@ export const MODES: Record<ModeId, ModeInfo> = {
     summary: 'Ask buyer questions on ChatGPT, Perplexity, Gemini, Claude and Google AI: mentions, citations, share of voice, sources AI trusts.',
     delivers: 'AI visibility report (PDF) with the answer grid and actions',
     category: 'growth',
-    costUsd: 0.9,
+    costUsd: modeCostUsd('ai_visibility'),
     etaMinutes: 10,
     siteBound: true,
     finalStages: ['ai_visibility'],
@@ -277,7 +280,7 @@ export const MODES: Record<ModeId, ModeInfo> = {
     summary: 'Every link source merged (DataForSEO, Bing, your Search Console export, GA4, Common Crawl, Wikipedia, news), links checked on their pages, lost links with the reason, the gap and lists, outreach drafts.',
     delivers: 'Backlink report (PDF), prospects.csv, disavow list when needed',
     category: 'growth',
-    costUsd: 0.5,
+    costUsd: modeCostUsd('backlinks'),
     etaMinutes: 5,
     siteBound: true,
     finalStages: ['backlinks'],
@@ -335,8 +338,9 @@ export const MONITOR_COSTS = {
   /** v4.13 (LINK_BUILDER_SPEC.md §8): the sequence writer (≤ 10 a week) ≈ $0.25, competitors' broken backlinks ≈ $0.07, replies ≈ $0.001 each; the rest is free */
   linkBuilderMonthly: 0.35,
   siteTrackerMonthly: 4 * 0.03,
-  auditMonthly: 0.1,
-  blogPostEach: 1.2,
+  /** the monthly technical audit and each written page are ordinary runs: priced from the one table, never a second copy */
+  auditMonthly: modeCostUsd('audit'),
+  blogPostEach: modeCostUsd('keyword'),
   weeksPerMonth: 4.33,
 };
 

@@ -88,7 +88,7 @@ for (const p of plans) {
     // own id: the checks that need a real domain are then skipped, never failed. The topic fit and the draft gate always apply.
     const named = /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i.test(String(x.prospect_domain || ''));
     const why = (named ? (OK.noPitch(x.prospect_domain, { title: noteOf, spam: Number(x.spam_score) || 0, accredited: weAreAccredited })
-      || OK.sellsSame({ type: 'digest', domain: x.prospect_domain, competitors: p.competitors })) : '')
+      || OK.sellsSame({ type: 'digest', domain: x.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals })) : '')   // R21: a SERP rival counts here too
       || (f < 0.3 ? 'off topic for you (' + Math.round(f * 100) + '% match with your pages)' : '');
     const em = String(x.contact_email || '').toLowerCase() || (text.match(/[a-z0-9._%+-]+@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}/i) || [])[0] || '';
     const dl = (noteOf.match(/\d{4}-\d{2}-\d{2}/) || [])[0] || '';
@@ -142,7 +142,7 @@ for (const p of plans) {
     // ---- D13: who is never pitched (live 2026-10-11: competitors, bare homepages, mailbox providers and contact databases were) ----
     const bad = OK.badHost(r.prospect_domain); if (bad) reasons.push(bad);
     const onlyHome = OK.homepageOnly(r.type, r.url); if (onlyHome) reasons.push(onlyHome);
-    const competing = OK.sellsSame({ type: r.type, domain: r.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals, title: o.page_title, text: t, terms: sellTerms });   // R4: a SERP rival counts as a competitor
+    const competing = OK.sellsSame({ type: r.type, domain: r.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals, title: o.page_title, text: t, terms: sellTerms, url: r.url, fit: o.fit });   // R4: a SERP rival counts as a competitor; R21: the page's URL and the topic match it just measured
     if (competing) reasons.push(competing);
     if (!weAreAccredited && OK.accreditedList(o.page_title + ' ' + r.url))   // the page IS such a list (its title / address says so); a page that merely names accredited providers is fine
       reasons.push('a list of accredited / approved providers: you get on it by applying with the accreditation, and the facts on file do not say you hold one (asking to be added claims it)');
@@ -170,7 +170,7 @@ for (const p of plans) {
       && !myOutreach.some(o => o.prospect_domain === x.prospect_domain && o.type === x.type && o.status === 'drafted'))) {
     const why = OK.badHost(x.prospect_domain)
       || (OK.isGov(x.prospect_domain) ? 'government site: you get on its lists by applying or being accredited, not by a pitch (see the listings checklist)' : '')
-      || OK.sellsSame({ type: x.type, domain: x.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals });   // R4
+      || OK.sellsSame({ type: x.type, domain: x.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals, title: x.detail || '', url: x.page_url || '' });   // R4 / R21
     if (!why) continue;
     outreach_rows.push(base({ prospect_domain: x.prospect_domain, type: x.type, status: 'not_fit', score: Number(x.score) || 0, fit: 0, fit_reason: why,
       page_url: x.source_url || '', page_title: String(x.detail || '').slice(0, 140), evidence: String(x.detail || ''), country: OK.countryOf(x.prospect_domain), checks: { reasons: [why], read: false } }));
@@ -191,12 +191,17 @@ for (const p of plans) {
     if ((!html && e) || st === 404 || st === 410) reasons.push(st ? "the show's site answers " + st : "the show's site does not answer");
     if (html && !blocked) reasons.push(...OK.sellSignals(html, facts));
     const bad = OK.noPitch(r.prospect_domain, { title: r.show_title, accredited: weAreAccredited }); if (bad) reasons.push(bad);
-    const competing = OK.sellsSame({ type: 'podcast', domain: r.prospect_domain, competitors: p.competitors }); if (competing) reasons.push(competing);
+    const competing = OK.sellsSame({ type: 'podcast', domain: r.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals }); if (competing) reasons.push(competing);
     const fit = OK.fit([r.show_title, r.summary, t.slice(0, 3000)].join(' '), topicText, df, docs.length);
-    if (fit < OK.OFF_TOPIC) reasons.push('the show is off your topics (' + Math.round(fit * 100) + '% match)');
+    // R27 (2026-10-14): "Alchemy Uncensored" was offered to the owner at a 29% match. A guest appearance is the owner's own hour, so the
+    // show has to be on our topics by more than the 25% that qualifies a page for a link (PC.MIN_FIT).
+    if (fit < PC.MIN_FIT) reasons.push('the show is off your topics (' + Math.round(fit * 100) + '% match; a guest appearance needs at least ' + Math.round(PC.MIN_FIT * 100) + '%)');
     const quiet = PC.stale(r.last_episode, now); if (quiet) reasons.push('no new episode for ' + quiet + ' days: the show looks finished');
-    const own = t ? PC.guestSignal([t.slice(0, 20000)]) : { ok: false, strength: '', quote: '' };
-    const guest = own.ok ? own : (r.guest_strength ? { ok: true, strength: r.guest_strength, quote: r.guest_quote || '' } : { ok: false, strength: '', quote: '' });
+    // R27: the quote comes from the show's OWN description (the feed), and only then from its website, read as prose - the live report
+    // quoted `"b-0"> Efficient Hiring Process …`, an attribute fragment from an unrelated page of the site.
+    const fromFeed = r.guest_strength ? { ok: true, strength: r.guest_strength, quote: PC.cleanQuote(r.guest_quote), from: 'the show’s own description' } : { ok: false, strength: '', quote: '' };
+    const own = t ? { ...PC.guestSignal([PC.prose(t).slice(0, 20000)]), from: 'the show’s website' } : { ok: false, strength: '', quote: '' };
+    const guest = PC.pickSignal(fromFeed, own);
     if (!guest.ok) reasons.push('nothing on the show or in its feed says it takes guests: not pitched');
     const cands = [...(html && !blocked ? OK.contactsIn(html, r.prospect_domain, r.url) : []), ...(contactsBy.get(r.prospect_domain) || [])];
     if (r.owner_email) cands.push({ email: String(r.owner_email).toLowerCase(), kind: OK.kindOf(r.owner_email), own: LK.sameSite(String(r.owner_email).split('@')[1] || '', r.prospect_domain), w: 2, source_url: r.feed_url || '' });
@@ -206,11 +211,11 @@ for (const p of plans) {
     const o = { prospect_domain: r.prospect_domain, type: 'podcast', page_url: r.url, page_title: String(r.show_title || facts.title || '').slice(0, 140), fit,
       fit_reason: reasons.length ? reasons.join('; ') : 'a show on your topics (' + Math.round(fit * 100) + '% match) that ' + (guest.strength === 'invites' ? 'invites guests' : 'runs interviews'),
       evidence: [r.show_title ? '“' + r.show_title + '”' + (r.show_author ? ' by ' + r.show_author : '') : '', r.episodes ? r.episodes + ' episodes' : '', r.last_episode ? 'last episode ' + r.last_episode : '',
-        guest.quote ? 'They say: "' + String(guest.quote).replace(/\s+/g, ' ').slice(0, 220) + '"' : ''].filter(Boolean).join(' · ').slice(0, 500),
+        guest.quote ? 'They say (' + (guest.from || 'the show’s own description') + '): "' + PC.cleanQuote(guest.quote, 220) + '"' : ''].filter(Boolean).join(' · ').slice(0, 500),
       contacts, contact_form_url: form, country: OK.countryOf(r.prospect_domain), language: String(facts.lang || '').slice(0, 5),
       target_url: p.home, target_reason: 'a guest appearance names the business: the homepage', anchor_hint: 'brand',
       score: Math.round(100 * LIKELY.podcast * (0.4 + 0.6 * Math.min(1, fit + 0.2)) * (guest.strength === 'invites' ? 1.2 : 1)),
-      checks: { reasons, guest: guest.strength, episodes: r.episodes || 0, last_episode: r.last_episode || '', feed: r.feed_url || '', platform: r.platform_url || '', page_status: st || (e ? 'error' : ''), blocked } };
+      checks: { reasons, guest: guest.strength, guest_quote_from: guest.quote ? (guest.from || '') : '', episodes: r.episodes || 0, last_episode: r.last_episode || '', feed: r.feed_url || '', platform: r.platform_url || '', page_status: st || (e ? 'error' : ''), blocked } };
     o.status = reasons.length ? 'not_fit' : (contacts.length ? 'ready' : 'needs_contact');
     outreach_rows.push(base(o));
     if (!stored.prospect_domain && o.status !== 'not_fit') prospect_rows.push(newProspect({ ...o, detail: 'Podcast: ' + String(r.show_title || r.prospect_domain) + (r.episodes ? ' (' + r.episodes + ' episodes)' : ''), origin: 'podcast' }));

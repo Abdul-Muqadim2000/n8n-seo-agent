@@ -11,10 +11,15 @@ export interface StartRunResult {
   requestId: string | null;
   etaMinutes: number | null;
   error: string | null;
+  /** B-A6: the engine recognised this as a repeat of a request already running and did NOT start a second run or spend again.
+   *  `requestId` is then the FIRST run's id, so the caller must resolve to that run rather than wait for a callback of its own. */
+  duplicate: boolean;
+  firstSeenAt: string | null;
 }
 
 export async function startRun(body: Record<string, unknown>, orgId: string): Promise<StartRunResult> {
-  if (!config.n8n.webhookKey) return { ok: false, status: 0, requestId: null, etaMinutes: null, error: 'The SEO engine is not configured (SEO_API_KEY missing)' };
+  if (!config.n8n.webhookKey)
+    return { ok: false, status: 0, requestId: null, etaMinutes: null, error: 'The SEO engine is not configured (SEO_API_KEY missing)', duplicate: false, firstSeenAt: null };
   let res: Response;
   try {
     res = await fetch(config.n8n.baseUrl + config.n8n.runPath, {
@@ -29,14 +34,22 @@ export async function startRun(body: Record<string, unknown>, orgId: string): Pr
       signal: AbortSignal.timeout(30000),
     });
   } catch (err) {
-    return { ok: false, status: 0, requestId: null, etaMinutes: null, error: 'The SEO engine is not reachable right now (' + String((err as Error).message || err) + ')' };
+    return { ok: false, status: 0, requestId: null, etaMinutes: null, error: 'The SEO engine is not reachable right now (' + String((err as Error).message || err) + ')', duplicate: false, firstSeenAt: null };
   }
-  const json = (await res.json().catch(() => ({}))) as { status?: string; request_id?: unknown; estimated_minutes?: unknown; error?: string; message?: string };
+  const json = (await res.json().catch(() => ({}))) as { status?: string; request_id?: unknown; estimated_minutes?: unknown; error?: string; message?: string; duplicate?: unknown; first_seen_at?: unknown };
   if (res.status === 202 && json.status === 'accepted') {
-    return { ok: true, status: 202, requestId: json.request_id != null ? String(json.request_id) : null, etaMinutes: Number(json.estimated_minutes) || null, error: null };
+    return {
+      ok: true,
+      status: 202,
+      requestId: json.request_id != null ? String(json.request_id) : null,
+      etaMinutes: Number(json.estimated_minutes) || null,
+      error: null,
+      duplicate: json.duplicate === true,
+      firstSeenAt: json.first_seen_at != null && json.first_seen_at !== '' ? String(json.first_seen_at) : null,
+    };
   }
   const error = json.error || json.message || (res.status === 404 ? 'The SEO engine webhook is not active' : `The SEO engine answered ${res.status}`);
-  return { ok: false, status: res.status, requestId: json.request_id != null ? String(json.request_id) : null, etaMinutes: null, error };
+  return { ok: false, status: res.status, requestId: json.request_id != null ? String(json.request_id) : null, etaMinutes: null, error, duplicate: false, firstSeenAt: null };
 }
 
 export interface AssessCallResult {

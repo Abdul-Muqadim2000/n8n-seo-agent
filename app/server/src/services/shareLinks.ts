@@ -66,6 +66,28 @@ export async function createShare(o: { org: OrgRow; user: UserRow; reportId: str
   return { link: toLink(row, o.user.name, now), token };
 }
 
+/**
+ * B-R1: the link a delivery carries. Same table, same rules, same expiry and revocation as a link a person creates in the app —
+ * there is one sharing mechanism in this product and this is it. The two differences are deliberate: no `createdBy` (nobody
+ * clicked anything), and nothing is created once the report has used up its budget of live links, so a weekly summary cannot
+ * quietly spend all ten.
+ */
+export async function createShareForDelivery(orgId: string, reportId: string, days: number): Promise<{ link: ShareLink; token: string } | null> {
+  const now = new Date();
+  const live = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(schema.reportShares)
+    .where(and(eq(schema.reportShares.reportId, reportId), isNull(schema.reportShares.revokedAt), sql`${schema.reportShares.expiresAt} > now()`));
+  // only the hash of a live link was kept, so an existing one cannot be handed out again — a fresh one is made while there is room
+  if (Number(live[0]?.n ?? 0) >= SHARE.maxPerReport) return null;
+  const token = randomToken(SHARE.tokenBytes);
+  const [row] = await db
+    .insert(schema.reportShares)
+    .values({ orgId, reportId, tokenHash: sha256(token), expiresAt: shareExpiry(days, now), createdBy: null })
+    .returning();
+  return { link: toLink(row, null, now), token };
+}
+
 /** Turns a link off for good. Revoking twice is not an error; another company's link is a 404. */
 export async function revokeShare(orgId: string, reportId: string, shareId: string): Promise<ShareLink> {
   await reportOfOrg(orgId, reportId);

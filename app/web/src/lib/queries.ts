@@ -42,6 +42,9 @@ import type {
   OutreachStep,
   Usage,
   VerifyResult,
+  DeliveryRecord,
+  DeliverySettings,
+  DeliverySettingsInput,
 } from '@seo/shared';
 import { api, ApiRequestError } from './api';
 
@@ -167,6 +170,45 @@ export function useSetBudget(orgId: string) {
       qc.setQueryData(qk.org(orgId), org);
       qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'usage'] });
     },
+  });
+}
+
+// B-R1: where this company's finished reports are pushed, and the log of what went out (or was held, with the reason).
+export interface DeliveryOverview {
+  settings: DeliverySettings;
+  nextAt: string | null;
+  /** this server has a mail account, so the e-mail channel can actually send */
+  mailReady: boolean;
+  /** a webhook signing secret is stored */
+  signingReady: boolean;
+  recent: DeliveryRecord[];
+}
+
+export const useDelivery = (orgId: string) =>
+  useQuery({ queryKey: [...qk.org(orgId), 'delivery'], queryFn: () => api<DeliveryOverview>(`/api/orgs/${orgId}/delivery`) });
+
+export function useSaveDelivery(orgId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: DeliverySettingsInput) => api<DeliveryOverview>(`/api/orgs/${orgId}/delivery`, { method: 'PUT', body }),
+    onSuccess: (d) => qc.setQueryData([...qk.org(orgId), 'delivery'], d),
+  });
+}
+
+export function useTestDelivery(orgId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<{ delivered: boolean; outcomes: { channel: string; ok: boolean; target: string; error: string }[] }>(`/api/orgs/${orgId}/delivery/test`, { method: 'POST' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'delivery'] }),
+  });
+}
+
+/** Sends one report now, to the channels already set up. The server still refuses a report the run marked not ready. */
+export function useDeliverReport(orgId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (reportId: string) => api<{ delivered: boolean; reason: string }>(`/api/orgs/${orgId}/reports/${reportId}/deliver`, { method: 'POST' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'delivery'] }),
   });
 }
 

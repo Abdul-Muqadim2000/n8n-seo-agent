@@ -41,12 +41,14 @@ import { paths } from '@/lib/paths';
 import { qk, useDeleteOrg, useMembers, useSetBudget, useTeamMutation, useUpdateOrg, useUsage } from '@/lib/queries';
 import { fmtAgo, fmtDate, fmtDay } from '@/lib/utils';
 import { RoleChip, ROLE_ICON, SettingsCard } from './_components/SettingsCard';
+import { DeliveryTab } from './_components/DeliveryTab';
 import { MailboxesTab } from './_components/MailboxesTab';
 
 const TABS = [
   { id: 'company', label: 'Company', description: 'Your company’s details, websites and setup.' },
   { id: 'team', label: 'Team', description: 'Who can see and change your company’s SEO work.' },
   { id: 'usage', label: 'Usage & budget', description: 'What this month’s analyses cost, and the monthly budget that caps them.' },
+  { id: 'delivery', label: 'Report delivery', description: 'Where your finished reports are sent, and on what schedule.' },
   { id: 'mailboxes', label: 'Mailboxes', description: 'The mailboxes link-building pitches go out from, and your opt-out list.' },
 ] as const;
 
@@ -71,6 +73,7 @@ export default function OrgSettingsPage() {
       {current.id === 'company' && <CompanyTab />}
       {current.id === 'team' && <TeamTab />}
       {current.id === 'usage' && <UsageTab />}
+      {current.id === 'delivery' && <DeliveryTab />}
       {current.id === 'mailboxes' && <MailboxesTab />}
     </div>
   );

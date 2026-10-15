@@ -7,6 +7,7 @@ import {
   ChartNoAxesColumnIncreasing,
   FileText,
   LifeBuoy,
+  Send,
   Link2,
   PenLine,
   ScanSearch,
@@ -28,6 +29,7 @@ export type VisualKey =
   | 'audit'
   | 'workspace'
   | 'guided-setup'
+  | 'report-delivery'
   | 'growth-loop'
   | 'link-sources'
   | 'ai-engines';
@@ -123,7 +125,7 @@ export const features: Feature[] = [
       { q: 'What happens on Manual?', a: 'The step waits in “Needs you” until someone on your team approves it. Nothing is written before that.' },
       {
         q: 'Does Ascentra publish to my site by itself?',
-        a: 'No. It prepares a publish-ready package — HTML, Markdown and meta data — and can create WordPress drafts. Your team publishes; Ascentra then checks the live page.',
+        a: 'No. It prepares a publish-ready package — HTML, Markdown and meta data — and can create WordPress drafts. Your team publishes; Ascentra then checks the live page. If you would rather not, publishing is one of the done-for-you services on the pricing page.',
       },
       { q: 'Can I change the pace later?', a: 'Yes. Posts per week, the default mode and the ladder limits are website settings you can change at any time.' },
     ],
@@ -635,6 +637,8 @@ export const features: Feature[] = [
       'A Monday report: rankings, traffic, AI visibility and links in one read',
       'A Search Console alert watcher for Google’s notification e-mails',
       'A monthly check-in for manual actions and security issues',
+      'One to-do list across audits, search, rankings, AI answers and links — ranked by what each step is worth, not by which part of the system found it',
+      'Every step shows the figure behind it, how confident Ascentra is and how much work it is; a step nothing has measured yet says so instead of being given a score',
       'Prioritised recommendations you can start with one click',
       'Every number says where it came from, over what period and from how big a sample',
       'A share link for one report: it expires on the day you choose, you can turn it off at any time, and the person you send it to needs no account',
@@ -643,7 +647,7 @@ export const features: Feature[] = [
     steps: [
       { title: 'Collect', body: 'Search, traffic, AI answers, links and audits feed one picture of each website.' },
       { title: 'Explain', body: 'What changed, why it matters, how sure Ascentra is — and where each number came from.' },
-      { title: 'Recommend', body: 'A prioritised list of next steps, each one ready to run.' },
+      { title: 'Recommend', body: 'One list of next steps across every area, ranked by impact, confidence and effort — each one ready to run.' },
       { title: 'Share', body: 'Send one report as a link that expires, or export it as PDF or Word. Past runs keep their report and files.' },
     ],
     facts: [
@@ -665,7 +669,7 @@ export const features: Feature[] = [
       { q: 'What is the monthly check-in?', a: 'A short checklist for what Google does not expose through its API, such as manual actions and security issues.' },
       {
         q: 'Are recommendations ranked?',
-        a: 'Yes. Recommendations are listed in priority order, and each one can be started as a run with its cost shown first.',
+        a: 'Yes, and it is one list, not one list per area. Every step carries what it is worth — the impact, how confident Ascentra is in the figure behind it, and how much work it is — and the list is ordered by all three. Setup steps that have to happen before anything can be measured come first and say why. A step with no measured figure behind it is put at the bottom with the reason, rather than given a number nobody can defend. Each step can be started as a run with its cost shown first.',
       },
       {
         q: 'Can I see where a number came from?',
@@ -733,6 +737,60 @@ export const features: Feature[] = [
       eyebrow: 'Why it matters',
       title: 'What stalls the work is never the SEO.',
       body: 'It is the Google permission nobody has, the DNS record that needs a colleague, the file that has to sit at the root of the site. Ascentra treats that as part of the product: every ask carries its steps, your own values and a way to hand it to the person who can do it.',
+    },
+  },
+  {
+    slug: 'report-delivery',
+    name: 'Report delivery',
+    shortName: 'Delivery',
+    tagline: 'Your reports arrive where you already are — and the ones that are not ready do not.',
+    summary:
+      'A report nobody opens is worth nothing. Every finished report can be sent to you as it arrives, or collected into a daily, weekly or monthly summary: by e-mail with its figures and its files, or to a webhook your team already watches. And the report an analysis itself marked as not ready is never sent — it waits in Ascentra with the reason on it.',
+    icon: Send,
+    benefits: [
+      'As each report arrives, or one summary a day, a week or a month — on the day and at the hour you choose',
+      'By e-mail with the report’s own figures in the message, its PDF and documents attached, and a link that opens it',
+      'To a webhook as JSON your systems can read, which Slack, Teams and Discord also render as a message',
+      'Every message can carry an expiring, revocable link so a report can be forwarded to a client or a colleague with no account',
+      'A report that failed its own quality check, a plan the engine refused or a figure it could not verify is held back, and the reason is stated rather than hidden',
+      'A log of everything sent, everything held and everything that failed — so you can tell the difference between quiet and broken',
+    ],
+    steps: [
+      { title: 'Choose when and where', body: 'A frequency, the people who should receive it, a webhook if your team lives in one — and which reports you actually want.' },
+      { title: 'A report finishes', body: 'The work runs on its own schedule: the Monday tracking report, the monthly audit, a page that was written for you.' },
+      { title: 'It is checked before it is sent', body: 'Anything the analysis marked as not ready stays here. Everything else goes out with its figures, its files and its link.' },
+      { title: 'You read it where you already were', body: 'In your inbox or your team channel. Open the full report in Ascentra, or forward the link to somebody without an account.' },
+    ],
+    facts: [
+      { value: 'Four', label: 'schedules: each report, daily, weekly or monthly' },
+      { value: 'Two', label: 'channels: e-mail and webhook, at the same time' },
+      { value: 'Never', label: 'a report the analysis marked as not ready' },
+    ],
+    faqs: [
+      {
+        q: 'What does “not ready” actually mean?',
+        a: 'It is the analysis’s own verdict, not a guess by the delivery. A written page that used up its quality rounds and still failed, a keyword plan the engine refused to make, a verdict it could not check because the search results could not be read, a run that was rejected. Each of those is still in Ascentra, with what went wrong on it — it is simply not pushed to anyone as finished work.',
+      },
+      {
+        q: 'Can somebody outside the company read the report?',
+        a: 'Only if you let them. Each delivery can carry a link that opens one report and nothing else: no dashboard, no other report, no settings, read-only, expiring, and revocable at any time. Leave it switched off and the message only links back into Ascentra, where an account is needed.',
+      },
+      {
+        q: 'What arrives at the webhook?',
+        a: 'A JSON POST with the report, its figures, its files and its links, plus a plain summary line so Slack, Teams and Discord show something readable with no mapping. Set a signing secret and every body is signed, so your receiver can tell the message came from us.',
+      },
+      {
+        q: 'Will this send me something every day?',
+        a: 'Only what you ask for. You can pick the reports you care about — the weekly tracking report but not every rank check, say — and collect the rest into one summary. The default is off: nothing is sent until you switch a channel on.',
+      },
+    ],
+    related: ['reports', 'site-tracking', 'enterprise'],
+    image: 'teamAtDesks',
+    visual: 'report-delivery',
+    story: {
+      eyebrow: 'Why it matters',
+      title: 'The best report is the one that reached you.',
+      body: 'Work that lands in a dashboard waits to be discovered. Work that lands in your inbox or your team channel gets read, argued with and acted on — which is the only way an SEO programme ever turns into traffic.',
     },
   },
   {

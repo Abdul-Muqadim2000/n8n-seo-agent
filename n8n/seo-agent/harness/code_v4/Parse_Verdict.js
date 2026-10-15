@@ -78,6 +78,23 @@ const noFaqSchema = (line) => {
 verdict.risks = (Array.isArray(verdict.risks) ? verdict.risks : []).map(noFaqSchema);
 verdict.reasons = (Array.isArray(verdict.reasons) ? verdict.reasons : []).map(noFaqSchema);
 
+// ---- R18 (2026-10-14, FIX_PLAN §3.12): a feasibility score computed on a results page nobody could read ----
+// Execution 549: both SERP calls answered 40101 inside an HTTP 200, were billed, ran once — and the run still said
+// "winnable, GO_WITH_CHANGES 68" and wrote a page. The retry is wired above; when it fails too, the competition was never seen,
+// so there is no verdict and no number — only what was tried, and the suggestion to run the check again.
+const EV56 = (() => {
+  const sf = prev.serp_features || {}; const ev = prev.serp_evidence || null; const kd = prev.keyword_data_evidence || null;
+  const out = !!(sf.unavailable || (ev && ev.unavailable));
+  const why = String((ev && ev.error) || sf.error || 'no answer from the search data provider').slice(0, 160);
+  const again = (ev && ev.retried) ? ' The search was sent again once and failed again.' : '';
+  return {
+    withheld: out,
+    evidence: { serp: out ? 'unavailable' : 'read', error: out ? why : '', asked: ev ? ev.asked : 1, checked: ev ? ev.checked : (out ? 0 : 1),
+      retried: ev ? ev.retried : 0, keyword_data: (kd && kd.unavailable) ? 'unavailable' : 'read' },
+    reason: out ? 'No score is given for this keyword: the live Google results could not be read (' + why + ').' + again
+      + ' Nobody has seen the pages that rank, the featured snippet or the AI Overview, so any number here would be invented. Run the check again.' : ''
+  };
+})();
 const EXP = (prev.existing_page && prev.existing_page.url) ? prev.existing_page : null;
 let verdict_changes = Array.isArray(verdict.what_must_change) ? verdict.what_must_change.map(x => noFaqSchema(x)).filter(Boolean) : [];   // R7: never FAQPage schema
 let existing_page_action = null;
@@ -100,16 +117,19 @@ if (EXP) {
 return [{
   json: {
     ...prev,
-    verdict: verdict.verdict,
-    verdict_score: verdict.score ?? null,
-    verdict_reasons: verdict.reasons || [],
+    verdict: EV56.withheld ? 'NOT_CHECKED' : verdict.verdict,
+    verdict_score: EV56.withheld ? null : (verdict.score ?? null),
+    verdict_evidence: EV56.evidence,
+    score_withheld: EV56.withheld,
+    score_withheld_reason: EV56.reason,
+    verdict_reasons: EV56.withheld ? [EV56.reason, ...(verdict.reasons || [])] : (verdict.reasons || []),
     verdict_risks: verdict.risks || [],
     recommended_page: PT.of(verdict.recommended_page || prev.page_type, prev.page_type),
     page_notes: PT.notes(verdict.recommended_page, PT.of(verdict.recommended_page || prev.page_type, prev.page_type)),
     secondary_keywords: verdict.secondary_keywords || [],
     verdict_changes,
     existing_page_action,
-    expected_visits_top3: verdict.expected_monthly_visits_top3 ?? null,
-    time_to_rank_months: verdict.time_to_rank_months ?? null
+    expected_visits_top3: EV56.withheld ? null : (verdict.expected_monthly_visits_top3 ?? null),
+    time_to_rank_months: EV56.withheld ? null : (verdict.time_to_rank_months ?? null)
   }
 }];
