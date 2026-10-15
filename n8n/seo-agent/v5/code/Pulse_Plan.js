@@ -42,7 +42,11 @@ for (const s of sites.slice(0, CONFIG.max_sites_per_run)) {
   const autoRivals = prev ? (parse(prev.competitors_json, []) || []).filter(c => c && c.domain && c.auto && (c.mentions || 0) >= 2 && /\./.test(c.domain)).map(c => c.domain) : [];
   const aliasRow = cache.find(c => c.key === 'ai_brands:' + s.site_id);
   const baseline = daily.filter(d => d.site_id === s.site_id && String(d.date) < today).sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, CONFIG.baseline_days)
-    .map(d => ({ date: d.date, samples: Number(d.samples) || 0, mentioned: Number(d.mentioned) || 0, mention_rate: Number(d.mention_rate) || 0, prompts: parse(d.prompts_json, {}), competitors: parse(d.competitors_json, {}) }));
+    .map(d => { const eng = parse(d.engines_json, {}), pr = parse(d.prompts_json, {});
+      return { date: d.date, samples: Number(d.samples) || 0, mentioned: Number(d.mentioned) || 0, mention_rate: Number(d.mention_rate) || 0, prompts: pr, competitors: parse(d.competitors_json, {}),
+        // B8-2 (2026-10-15, benchmark area 8, INVARIANTS rule 1): what that morning was actually measured on. Without it the
+        // z-test below pooled seven days of a DIFFERENT panel and called the result "a real drop, not sampling noise".
+        engines: Object.keys(eng).filter(e => (Number((eng[e] || {}).answered) || 0) > 0).sort(), panel: Object.keys(pr).length }; });
   const location_code = Number(s.location_code) || 2840;
   out.push({ json: { site_id: s.site_id, domain: s.domain, country: s.country || '', location_code, language_code: s.language_code || 'en', country_iso: isoOf(location_code), email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '',
     on_demand, business_name: s.profile.business_name || '', brand_names, competitors: [...new Set([...s.settings.competitors, ...autoRivals])].slice(0, 8), configured_competitors: s.settings.competitors, aliases: aliasRow ? parse(aliasRow.value, {}) : {},

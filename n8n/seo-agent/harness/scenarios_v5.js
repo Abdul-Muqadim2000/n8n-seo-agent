@@ -13091,6 +13091,151 @@ await guard('b10-backlink-freshness-and-measured-liveness', async () => {
   reset();
 });
 
+// ===================================================================================
+// S91 B8-1 / B8-2 / B8-3 / B8-4 / B8-5 (2026-10-15, benchmark programme area 8 —
+// docs/system-review-2026-10-14/BENCH_AREA8_ai_visibility.md). The area's whole value is honest measurement of a signal that is
+// non-deterministic by construction: SparkToro and Gumshoe measured the same brand list coming back from ChatGPT or Google under
+// 1% of the time over 2,961 runs. Profound ran 989,000 AI responses to decompose that variance and ships none of it — its v2
+// visibility endpoint returns three floats with no denominator, no standard error and no interval; Semrush defines its whole
+// change method as "the change in your brand mentions since the last update". We already had the Wilson range and the z-test on
+// ONE of four headline figures. This proves the other three, the per-question rate, the daily baseline and the two silences.
+await guard('AI visibility — every change tested (B8)', async () => {
+  reset(); const SN = 'S91 B8-1 B8-2 B8-3 B8-4 B8-5 — every headline change tested or named untested, a per-question rate with a floor, a daily baseline that measured the same thing, a pulse morning nobody could read, and the requests the cap never sent';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 500), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 320))); };
+  const SID = 'site_northwind-erp-com', DOM = 'northwind-erp.com';
+  const NOW = new Date().toISOString();
+  const ENGS = ['chatgpt', 'gemini', 'perplexity', 'ai_mode'];
+  const QN = 10;
+  const prompts = [];
+  for (let q = 0; q < QN; q++) prompts.push({ prompt_id: 'q' + q, prompt: 'Which UAE firms handle e-invoicing question ' + q + '?', kind: 'recommend', topic: 'e invoicing', keyword: 'e invoicing uae ' + q, source: 'auto', stage: 'decision', cluster: 'e invoicing', volume: 100 + q * 50, origin: 'writer', created_at: '2026-10-01' });
+  // one extra question asked ONCE: the shape B8-4 is about (1 of 1 is not a rate, and it must not pick an action)
+  const lone = { prompt_id: 'qlone', prompt: 'Who should a Dubai distributor pick for Peppol?', kind: 'recommend', topic: 'peppol', keyword: 'peppol uae', source: 'auto', stage: 'decision', cluster: 'peppol', volume: 900, origin: 'writer', created_at: '2026-10-01' };
+  const row = (o) => ({ json: { site_id: SID, domain: DOM, run_id: 'ai_s91', checked_at: NOW, prompt_id: o.prompt_id, prompt: o.prompt, kind: 'recommend', topic: o.topic || 'e invoicing', engine: o.engine,
+    answered: o.answered !== false, mentioned: !!o.mentioned, cited: !!o.cited, rank: o.mentioned ? 1 : 0, our_urls: o.cited ? 'https://' + DOM + '/e-invoicing-uae/' : '',
+    competitors: 'rival.com', sources: 'mof.gov.ae', excerpt: 'an answer', cost: 0.004, error: o.error || '', run_kind: 'weekly', sentiment: '', brands: '', issues: '', fanout: '', cited_urls: '[]' } });
+  // `want` mentions and `cited` citations spread over the first questions, so the later ones are decided losses (real gaps)
+  const answers = (want, cited) => { const out = []; let k = 0;
+    for (let q = 0; q < QN; q++) for (const e of ENGS) { const p0 = prompts[q]; out.push(row({ prompt_id: p0.prompt_id, prompt: p0.prompt, engine: e, mentioned: k < want, cited: k < cited })); k++; }
+    out.push(row({ prompt_id: lone.prompt_id, prompt: lone.prompt, topic: 'peppol', engine: 'chatgpt', mentioned: false, cited: false }));   // asked once, lost once
+    return out; };
+  const engObj = (asked) => Object.fromEntries(ENGS.map(e => [e, { name: e, asked, answered: asked, samples: asked, mentioned: 0, cited: 0, mention_rate: 0, citation_rate: 0, errors: 0 }]));
+  const plan = (o) => [{ json: { site_id: SID, domain: DOM, canonical_host: DOM, country: 'United Arab Emirates', location_code: 2784, language_code: 'en', country_iso: 'AE', email: '', callback_url: '', request_id: '',
+    on_demand: false, adhoc: false, business_name: 'Northwind ERP', business_type: '', city: 'Dubai', profile: {}, services: [], business_facts: [], accreditation: '',
+    brand_names: [DOM, 'Northwind ERP'], competitors: ['rival.com'], configured_competitors: ['rival.com'], aliases: {}, topics: ['e invoicing'], engines: ENGS, prompts_max: 20, pulse: true,
+    prompts: [...prompts, lone], full_due: false, run_kind: 'weekly', monthly_engines: [], carried: null, need_prompts: false, prompts_needed: 0, need_site_text: false, gsc_questions: [],
+    discovery_due: false, volume_keywords: [], index_due: false, market_due: false, market_keyword: 'e invoicing', ga4_property_id: '', pulse_rows: (o && o.pulse_rows) || [], key_paths: [], set_aside: [], set_aside_note: '',
+    previous: (o && o.previous !== undefined) ? o.previous : { checked_at: '2026-10-06T07:00:00.000Z', mention_rate: 48, samples: 40, mentioned_k: 19, prompts: 11, run_kind: 'weekly',
+      citation_rate: 18, share_of_voice: 40, avg_rank: 1, visibility_score: 41, sentiment_score: null, engines: engObj(10), market_month: '', market: null, index: null, perception: null, traffic: null, access: null,
+      competitors: [{ domain: 'rival.com', mentions: 28, share: 60 }] },
+    run_id: 'ai_s91', checked_at: NOW } }];
+  const drive = async (o) => { reset(); mock('AI Plan', plan(o)); mock('Apply Analysis', (o && o.rows) || answers(20, 8));
+    mock('AI Requests', (o && o.requests) || [{ json: { site_id: SID, engine: 'chatgpt' } }]); mock('Run AI Requests', [{ json: {} }]);
+    return (await run('AI Metrics', store['Apply Analysis']))[0].json; };
+
+  // ---------------- B8-1: a small move in every figure is a move nobody can call ----------------
+  const X = await drive({});
+  const XM = X.metrics, T1 = XM.tests;
+  console.log('   quiet week ->', JSON.stringify({ samples: XM.samples, mention: XM.mention_rate, cited: XM.citation_rate, sov: XM.share_of_voice, score: XM.visibility_score, band: XM.score_band && XM.score_band.half }));
+  console.log('   tests ->', JSON.stringify(Object.fromEntries(Object.entries(T1 || {}).map(([k, v]) => [k, v.significant + ' | ' + String(v.why).slice(0, 70)]))));
+  check('B8-1: all FOUR headline figures carry a test, not just "named in" — each with its verdict and the words for why', T1 && ['mention_rate', 'citation_rate', 'share_of_voice', 'visibility_score'].every(k => T1[k] && 'significant' in T1[k] && T1[k].why && T1[k].basis), JSON.stringify(T1));
+  check('B8-1: a 2-point move on 41 answers is within sampling noise on every one of them, and the z it was judged on is kept', T1.mention_rate.significant === false && T1.citation_rate.significant === false && T1.share_of_voice.significant === false && typeof T1.mention_rate.z === 'number' && /within sampling noise/.test(T1.mention_rate.why), JSON.stringify({ m: T1.mention_rate, c: T1.citation_rate }));
+  check('B8-1: the share of voice is tested on ITS own denominator (yours plus the competitors\' mentions), not on the answer count', T1.share_of_voice.samples === XM.sov_denominator && XM.sov_denominator !== XM.samples, JSON.stringify({ sov_n: T1.share_of_voice.samples, denom: XM.sov_denominator, samples: XM.samples }));
+  check('B8-1: the two tiles that had no interval at all now have one, inside which their own rate sits', XM.citation_ci[0] <= XM.citation_rate && XM.citation_rate <= XM.citation_ci[1] && XM.sov_ci[0] <= XM.share_of_voice && XM.share_of_voice <= XM.sov_ci[1], JSON.stringify({ cci: XM.citation_ci, rate: XM.citation_rate, sci: XM.sov_ci, sov: XM.share_of_voice }));
+  check('B8-1: the visibility score is a weighted mean, so it is MODELLED with a 95% band over an effective sample — never a Wilson range', XM.score_band.basis === 'modelled' && XM.score_band.half > 0 && XM.score_band.n_eff > 0 && XM.score_band.n_eff <= XM.score_band.n && T1.visibility_score.basis === 'modelled' && /band/.test(T1.visibility_score.why), JSON.stringify(XM.score_band));
+  check('B8-1: a competitor "gaining 10+ points" is z-tested too — the old fixed rule raised it beside a change that had been tested', !X.alerts.some(a => /gained .* points of AI share/.test(a.text)), JSON.stringify(X.alerts.map(a => a.text.slice(0, 70))));
+
+  // ---------------- B8-4: a question answered once is not a question we lose ----------------
+  const qlone = X.questions.find(q => q.prompt_id === 'qlone');
+  console.log('   one-answer question ->', JSON.stringify({ samples: qlone.samples, win_rate: qlone.win_rate, enough: qlone.win.enough, why: qlone.win.why }));
+  check('B8-4: a question with one answer has a rate of 0% and is marked as not enough to say so, with what it would need', qlone.samples === 1 && qlone.win.enough === false && qlone.decided === false && /a rate needs 4/.test(qlone.win.why), JSON.stringify(qlone.win));
+  check('B8-4: it is NOT in the gaps, so it picks no action and ships no ready-to-send API body — it is listed as undecided instead', !X.gaps.some(g => g.prompt_id === 'qlone') && X.undecided.some(u => u.prompt_id === 'qlone') && !X.actions.some(a => a.api_body && a.api_body.ai_target && /Peppol/.test(a.api_body.ai_target.question)), JSON.stringify({ gaps: X.gaps.map(g => g.prompt_id), undecided: X.undecided.map(u => u.prompt_id) }));
+  check('B8-4: a question with enough answers still becomes a gap and still carries its action', X.gaps.length > 0 && X.gaps.every(g => g.decided && g.samples >= 4) && X.actions.some(a => a.type === 'content'), JSON.stringify(X.gaps.map(g => g.prompt_id + ':' + g.samples)));
+
+  // ---------------- the report: the verdict is beside the arrow, and in the subject ----------------
+  const rep = async (m) => { mock('AI Metrics', [{ json: m }]); return (await run('AI Report', store['AI Metrics']))[0].json; };
+  const R1 = await rep(X); const H1 = R1.html; save('ai-visibility-s91-quiet.html', H1);
+  const def1 = scanHtml('ai visibility B8 quiet', H1);
+  check('B8-1: the report prints the verdict beside every arrow and a 95% range on every rate — never a bare delta again', !def1.length && (H1.match(/within noise/g) || []).length >= 3 && (H1.match(/95% range/g) || []).length >= 3 && /95% band ±/.test(H1), def1.join(', ') + ' | noise=' + (H1.match(/within noise/g) || []).length + ' ranges=' + (H1.match(/95% range/g) || []).length);
+  check('B8-1: the SUBJECT LINE — the one line everybody reads — says which kind of change it is', /within noise/.test(R1.subject), R1.subject);
+  check('B8-4: the answer grid says "too few" with the reason instead of printing 0% as a result, and the undecided block is named', /too few/.test(H1) && /Not enough answers to tell yet/.test(H1), H1.slice(H1.indexOf('Answer by answer'), H1.indexOf('Answer by answer') + 200));
+  check('B8-1: the lineage block carries every range and names the test, so the app and the PDF can show the same', R1.lineage.some(l => /95% range/.test(String(l.note)) && /z-tested/.test(String(l.note))), JSON.stringify(R1.lineage[0]));
+
+  // ---------------- B8-1: a real change is still called one ----------------
+  const Y = await drive({ rows: answers(35, 30) });
+  const T2 = Y.metrics.tests;
+  console.log('   real change ->', JSON.stringify({ mention: Y.metrics.mention_rate, sig: T2.mention_rate.significant, z: T2.mention_rate.z, cited: Y.metrics.citation_rate, csig: T2.citation_rate.significant }));
+  check('B8-1: a 37-point rise IS called a real change, on the mention rate and on the citation rate, each with its own z', T2.mention_rate.significant === true && T2.citation_rate.significant === true && /beyond sampling noise/.test(T2.citation_rate.why), JSON.stringify({ m: T2.mention_rate, c: T2.citation_rate }));
+  const R2 = await rep(Y);
+  check('B8-1: and the report and the subject say so', /real change/.test(R2.html) && /real change/.test(R2.subject), R2.subject);
+
+  // ---------------- B8-5: the requests the cap never sent ----------------
+  const Z = await drive({ requests: [{ json: { site_id: SID, engine: 'chatgpt', skipped_by_cap: [DOM + ':perplexity', DOM + ':perplexity', DOM + ':claude', 'other.com:chatgpt'] } }] });
+  console.log('   capped ->', JSON.stringify(Z.metrics.capped));
+  check('B8-5: what the cost / request cap dropped is read at last, counted per engine, and only for THIS site', Z.metrics.capped && Z.metrics.capped.requests === 3 && Z.metrics.capped.basis === 'not_available' && Z.metrics.capped.engines.find(e => e.engine === 'Perplexity').requests === 2, JSON.stringify(Z.metrics.capped));
+  const R3 = await rep(Z);
+  check('B8-5: the report says plainly that not everything was asked, and the lineage records it as evidence nobody gathered', /Not everything was asked/.test(R3.html) && R3.lineage.some(l => /did not reach/.test(String(l.figure)) && l.basis === 'unknown'), JSON.stringify(R3.lineage.map(l => l.figure + ':' + l.basis)));
+
+  // ---------------- B8-3 (the weekly half): a pulse morning that did not reach every engine ----------------
+  const pday = (date, o) => ({ date, checked_at: date + 'T06:31:00.000Z', samples: o.samples, mentioned: o.mentioned, cited: 2, mention_rate: Math.round(1000 * o.mentioned / o.samples) / 10, visibility_score: 40,
+    engines: o.engines, prompts: {}, competitors: {}, sources: {} });
+  const full = { chatgpt: { asked: 7, answered: 7 }, gemini: { asked: 7, answered: 7 }, ai_mode: { asked: 7, answered: 7 } };
+  const broken = { chatgpt: { asked: 7, answered: 7 }, gemini: { asked: 7, answered: 0 }, ai_mode: { asked: 7, answered: 7 } };
+  const W = await drive({ pulse_rows: [pday('2026-10-12', { samples: 21, mentioned: 10, engines: full }), pday('2026-10-13', { samples: 14, mentioned: 2, engines: broken })] });
+  const PB = W.metrics.pulse_basis;
+  console.log('   pulse basis ->', JSON.stringify(PB));
+  check('B8-3: the week says how many of its answers came from the daily pulse, and which morning did not reach every engine', PB && PB.days === 2 && PB.answers === 35 && PB.partial_days.length === 1 && PB.partial_days[0].date === '2026-10-13' && PB.partial_days[0].missing.includes('Gemini') && PB.partial_answers === 14, JSON.stringify(PB));
+  const R4 = await rep(W);
+  check('B8-3: and the report prints it where the figures are read, not in a footnote nobody opens', /did not reach every engine/.test(R4.html) && /2026-10-13/.test(R4.html) && R4.lineage.some(l => /pulse day/.test(String(l.note))), R4.html.indexOf('did not reach every engine'));
+
+  // ---------------- B8-2 / B8-3 (the pulse itself) ----------------
+  const PM = { code: 'Pulse__Pulse_Metrics' }, PPL = { code: 'Pulse__AI_Plan' };
+  const PENG = ['chatgpt', 'gemini', 'ai_mode'];
+  const pq = prompts.slice(0, 7);
+  const prow = (o) => ({ json: { site_id: SID, domain: DOM, run_id: 'pulse_s91', checked_at: NOW, prompt_id: o.prompt_id, prompt: o.prompt, kind: 'recommend', topic: 'e invoicing', engine: o.engine,
+    answered: o.answered !== false, mentioned: !!o.mentioned, cited: false, rank: 0, our_urls: '', competitors: 'rival.com', sources: 'mof.gov.ae', excerpt: 'x', cost: 0.004, error: o.error || '', run_kind: 'pulse', sentiment: '', brands: '', issues: '', fanout: '', cited_urls: '[]' } });
+  const pAnswers = (o) => { const out = []; const bad = (o && o.allFail) || false;
+    for (const q of pq) for (const e of PENG) out.push(prow({ prompt_id: q.prompt_id, prompt: q.prompt, engine: e, mentioned: false, answered: !bad, error: bad ? 'Internal SE Server Error.' : '' })); return out; };
+  const bday = (date, o) => ({ date, samples: o.samples, mentioned: o.mentioned, mention_rate: Math.round(1000 * o.mentioned / o.samples) / 10, prompts: {}, competitors: { 'rival.com': 9 }, engines: o.engines, panel: o.panel || 7 });
+  const pplan = (baseline) => [{ json: { site_id: SID, domain: DOM, country: 'United Arab Emirates', location_code: 2784, language_code: 'en', country_iso: 'AE', email: 'me@' + DOM, callback_url: '', request_id: '',
+    on_demand: false, business_name: 'Northwind ERP', brand_names: [DOM], competitors: ['rival.com'], configured_competitors: ['rival.com'], aliases: {}, engines: PENG, pulse_engines: PENG,
+    prompts: pq, prompts_max: 20, pulse_run: true, full_due: false, run_kind: 'pulse', monthly_engines: [], baseline, date: '2026-10-15', set_aside: [], set_aside_note: '', run_id: 'pulse_s91', checked_at: NOW } }];
+  const pdrive = async (baseline, o) => { reset(); mock('AI Plan', pplan(baseline)); mock('Parse AI Answers', pAnswers(o));
+    return (await run('Pulse Metrics', store['Parse AI Answers'], PM))[0].json; };
+  // four comparable mornings and three that are not: a different engine set, and a panel that more than doubled
+  const sameDays = ['2026-10-14', '2026-10-13', '2026-10-12', '2026-10-11'].map(d => bday(d, { samples: 21, mentioned: 14, engines: PENG.slice().sort() }));
+  const otherEngines = bday('2026-10-10', { samples: 20, mentioned: 14, engines: ['chatgpt', 'gemini'] });
+  const otherPanel = bday('2026-10-09', { samples: 54, mentioned: 36, engines: PENG.slice().sort(), panel: 18 });
+  const noRecord = bday('2026-10-08', { samples: 21, mentioned: 14, engines: [] });
+  const P1 = await pdrive([...sameDays, otherEngines, otherPanel, noRecord]);
+  console.log('   pulse baseline ->', JSON.stringify({ kept: P1.baseline_days, of: P1.baseline_of, aside: P1.baseline_set_aside, alerts: P1.alerts.map(a => a.text.slice(0, 70)) }));
+  check('B8-2: only the mornings that asked the same questions of the same engines feed the daily test — the other three are named with their reason', P1.baseline_of === 7 && P1.baseline_days === 4 && P1.baseline_set_aside.length === 3
+    && P1.baseline_set_aside.some(x => x.date === '2026-10-10' && /answered by chatgpt, gemini/.test(x.why)) && P1.baseline_set_aside.some(x => x.date === '2026-10-09' && /different panel/.test(x.why)) && P1.baseline_set_aside.some(x => x.date === '2026-10-08' && /not recorded/.test(x.why)), JSON.stringify(P1.baseline_set_aside));
+  check('B8-2: the drop is still called when there IS a comparable baseline, and it says how many days it was measured against', P1.alerts.some(a => a.level === 'high' && /a real drop, not sampling noise/.test(a.text) && /over 4 comparable day\(s\)/.test(a.text)), JSON.stringify(P1.alerts.map(a => a.text)));
+  check('B8-2: and the mail says which mornings were left out — a shorter baseline with no explanation is the defect, not the fix', /left out/.test(P1.html) && /2026-10-09/.test(P1.html), P1.baseline_note);
+  // the whole baseline moved: the panel went from 7 questions to 18, which B-L4 fixed on the weekly run and left here
+  const P2 = await pdrive([otherPanel, bday('2026-10-08', { samples: 54, mentioned: 36, engines: PENG.slice().sort(), panel: 18 }), bday('2026-10-07', { samples: 54, mentioned: 36, engines: PENG.slice().sort(), panel: 18 })]);
+  console.log('   panel moved ->', JSON.stringify({ kept: P2.baseline_days, note: P2.baseline_note, alerts: P2.alerts.map(a => a.text.slice(0, 60)) }));
+  check('B8-2: when NO earlier morning is comparable there is no drop alert at all — the 99% z-test used to fire on a bigger panel', P2.baseline_days === 0 && !P2.alerts.some(a => /real drop/.test(a.text)) && /not compared with any earlier day/.test(P2.baseline_note), JSON.stringify({ kept: P2.baseline_days, alerts: P2.alerts.map(a => a.text.slice(0, 80)) }));
+  check('B8-2: and it says so to the owner instead of going quiet, which would read as "nothing changed"', /not compared with any earlier day/.test(P2.html), P2.html.slice(0, 120));
+  // a morning nobody could read at all
+  const P3 = await pdrive(sameDays, { allFail: true });
+  console.log('   unreadable morning ->', JSON.stringify({ unavailable: P3.readable.unavailable, checked: P3.readable.checked, failed: P3.readable.failed, alerts: P3.alerts.map(a => a.level) }));
+  check('B8-3: a morning where every request failed is "unavailable", not a 0% mention rate, and it carries what was asked and what came back', P3.readable.unavailable === true && P3.readable.asked === 21 && P3.readable.checked === 0 && P3.readable.failed === 21 && /no figures/.test(P3.readable.note), JSON.stringify(P3.readable));
+  check('B8-3: it ALWAYS reaches a human — a quiet day and a broken one used to look identical from the outside (INVARIANTS rule 3)', P3.alerts.some(a => a.level === 'high' && /No answer came back at all today/.test(a.text)) && /No answer came back at all today/.test(P3.html), JSON.stringify(P3.alerts.map(a => a.text.slice(0, 90))));
+  check('B8-3: and no statistical drop is raised from a day nobody could read', !P3.alerts.some(a => /real drop/.test(a.text)), JSON.stringify(P3.alerts.map(a => a.text.slice(0, 60))));
+  // B8-2's other half: the pulse PLAN records what each stored morning was measured on, or the guard above has nothing to read
+  const M91 = require('./fixtures_monitors'); const A91 = require('./fixtures_ai49');
+  reset();
+  mock('Load Sites', M91.sites()); mock('Load Ladders', M91.ladders()); mock('Load Monitors', M91.monitors()); mock('Load Profiles', M91.profiles());
+  mock('Load AI Prompts', pq.map(q => ({ json: { ...q, site_id: SID, domain: DOM, status: 'active' } })));
+  mock('Load AI Visibility', [{ json: {} }]); mock('Load Cache (AI)', [{ json: {} }]);
+  mock('Load AI Daily', [A91.dailyRow('2026-10-14', { samples: 21, mentioned: 13, prompts: Object.fromEntries(pq.map(q => [q.prompt_id, { chatgpt: 'a' }])) })]);
+  const PP = (await run('AI Plan', store['Load Cache (AI)'], PPL))[0].json;
+  console.log('   pulse plan basis ->', JSON.stringify(PP.baseline[0] && { engines: PP.baseline[0].engines, panel: PP.baseline[0].panel, samples: PP.baseline[0].samples }));
+  check('B8-2: the plan carries each stored morning\'s own engine set and panel size — without them the guard has nothing to judge', PP.baseline.length === 1 && JSON.stringify(PP.baseline[0].engines) === JSON.stringify(['ai_mode', 'chatgpt', 'gemini']) && PP.baseline[0].panel === 7, JSON.stringify(PP.baseline[0]));
+});
+
 
 H.report();
 })();

@@ -8057,6 +8057,150 @@ def _b79_checks():
 log('What an index saw last week is not what is on the page today (2026-10-15, benchmark area 10, rows B10-1 / B10-2 / B10-3 / B10-4; BENCH_AREA10_backlinks.md). B10-1: the report never said how fresh anything was, while the index behind most of it only means "live when I last crawled" - Ahrefs states a complete refresh of its own index takes about two months, Majestic publishes a 120-day Fresh Index, Semrush drops links not detected in six months, Linkody re-checks every link every 24h; Link Merge now keeps the index\'s own last sighting per referring site (dfs_last_seen, apart from last_seen, which every source and our own fetch move) and the report prints newest / middle / oldest beside how recently we read the pages ourselves, how many we have never read, and the age of Google\'s uploaded sample and the Common Crawl release. B10-2: criterion 4B.2 asks for the share of links reported live that are live and nothing computed it - the report printed "Checked on the page 1" beside "18 checked this run", two denominators and no rate, and coverage.blocked was computed for nobody; coverage.check now carries fetched / read / unread by reason, the share of the pages we READ that still carry the link and the same share over the links the index reports live, with bot walls, JavaScript-only pages and fetch errors counted on neither side and NO rate at all under five readable checks. B10-3: the anchor percentages were computed over the ledger while the table came straight from the index, so a link farm\'s anchor was printed inside a table whose percentages had excluded it - one set for both now, the farms counted beside it and marked in the table, and the >30% keyword-anchor rule of thumb judged against the only measured distribution that could be opened (Linkody, 865,000 monitored backlinks, June 2026); the headline spam tile no longer grades the index\'s 0-100 with a band we invented, it says whose number it is and what it was computed over. B10-4: a referring site no source had seen for 120 days was recorded as lost with no page ever fetched, no alert and no row in the lost table, and the referring-site count quietly fell - the peppol.org mistake with the index saying nothing instead of saying lost; a silence is now a loss only when our own fetch has already failed on that page, otherwise the row is at_risk, keeps its value and its place in the count, is named in the report, and Verify Requests raises it to priority 850 so it is actually read on the next run (INVARIANTS rule 2, both paths)')
 
 
+# 81. A RATE WITHOUT ITS SAMPLE, AND A CHANGE WITHOUT A TEST (2026-10-15, benchmark programme area 8 —
+#     docs/system-review-2026-10-14/BENCH_AREA8_ai_visibility.md; register rows B8-1 / B8-2 / B8-3 / B8-4 / B8-5)
+#
+#     This area measures a signal that is non-deterministic by construction. SparkToro and Gumshoe ran 2,961 prompt executions
+#     across 600 volunteers and found an identical brand list comes back from ChatGPT or Google's AI under 1% of the time, and
+#     the same list IN THE SAME ORDER about once in 1,000 runs; presence is far more stable than rank (City of Hope was mentioned
+#     in 69 of 71 ChatGPT responses and ranked first in 25). Their advice to buyers, verbatim: "stop throwing money at AI tracking
+#     products that don't provide stats-backed, publicly-reviewable research ... make sure your provider answers the questions
+#     we've surfaced here and shows their math"
+#     (https://sparktoro.com/blog/new-research-ais-are-highly-inconsistent-when-recommending-brands-or-products-marketers-should-take-care-when-tracking-ai-visibility/).
+#
+#     What the leaders actually ship, read on their own pages and API docs on 2026-10-15. **Profound** — still the leader, $180M
+#     Series D at $1.8bn on 15 Sep 2026 — ran the only proper variance study in the market: 753 prompts x 7 platforms, ~989,000
+#     AI responses over two weeks, decomposing daily variance into V(Mn) = S/n + D with Wald SDs, bootstrap SDs and a quadrature
+#     total SE (https://www.tryprofound.com/blog/is-once-a-day-enough). Its product then exposes NONE of it: the v2 visibility
+#     endpoint returns `visibility_score`, `share_of_voice` and `average_position` and no denominator, no standard error, no
+#     interval (https://docs.tryprofound.com/rest-api/reports/query-visibility-v2.md), and no delta or significance rule is
+#     defined anywhere (https://docs.tryprofound.com/cookbook/metrics/how-metrics-are-calculated.md). It is also actively worse
+#     than neutral on comparability: the CURRENT configuration is applied retroactively to stored answers at request time, so
+#     adding, pausing, deleting or retagging a prompt changes past numbers, "Reports reflect the current configuration only. An
+#     older configuration cannot be viewed", and a newly added model gets no backfill while the cross-model average silently
+#     changes denominator (https://docs.tryprofound.com/cookbook/metrics/why-past-numbers-change.md). **Semrush** — now an Adobe
+#     subsidiary, acquisition closed and announced 2026-04-28 (https://www.semrush.com/news/455963-faq-for-customers-adobe-
+#     acquires-semrush/) — tracks 25 prompts per account and defines its change column, in full, as "The change in your brand
+#     mentions since the last update" (https://www.semrush.com/kb/1503-ai-search-tracking). **Ahrefs Brand Radar** never uses the
+#     words variance, noise, sample size or confidence on its product or methodology page, and sells 5 prompts on Lite and 20 on
+#     Advanced (https://ahrefs.com/brand-radar, https://ahrefs.com/blog/brand-radar-methodology/). **Evertune** publishes real
+#     margins of error - one prompt asked once is +/-44 points, 100 prompts asked once is +/-9 overall but +/-31 at topic level -
+#     and then marks "Statistical significance" with a dash on its $60 Starter tier, selling it at $800
+#     (https://www.evertune.ai/platform/methodology, https://www.evertune.ai/pricing).
+#
+#     So the bar is not "add more engines". Not one tool in this market puts a sample size or an interval next to a rate, and
+#     none refuses a delta when the panel or the engine set moved underneath it. We already did that for ONE of four headline
+#     figures. This section does it for the rest, and for the two silences.
+#
+#     * B8-1 - **three of the four headline tiles printed an untested arrow beside a tested one.** "Named in" carried a 95%
+#       Wilson range and a two-proportion z-test from v4.9; "Your pages cited", "Share of voice" and the visibility score were
+#       bare subtractions in the same row, in the same type, off the same 33-54 answers (exec 526 measured 54, exec 556 measured
+#       41) - and the SUBJECT LINE put the untested points in front of every reader before they opened the mail. All four now go
+#       through one shared test (`changeOf`, `_ai_stats.js`) and print real change / within noise / not tested. The share of voice
+#       is tested on its own denominator - yours out of yours plus the competitors' mentions - and the earlier run's competitor
+#       counts come from the stored row rather than from reconstructing them out of a rounded percentage. The visibility score is
+#       a WEIGHTED MEAN, so Wilson does not apply: it gets the standard error of that mean over Kish's effective sample size
+#       (`scoreBand`), is labelled modelled, and a move inside its own 95% band is not called a change. The "a competitor gained
+#       10+ points" alert, a fixed rule since v4.9, is z-tested on the same denominator.
+#     * B8-2 - **the daily pulse pooled seven days of baseline with no check that they measured the same thing.** B-L4 put exactly
+#       this guard on the weekly tracker on 2026-10-15 and left the pulse without it, so raising the panel from 8 questions to 20
+#       - which the owner is being asked to do (G20) - or switching an engine on would move the pooled rate and fire a 99%
+#       "a real drop, not sampling noise" at a site whose visibility had not moved. A morning is pooled only when the same engines
+#       answered it and it was measured on a comparable number of answers (`sameBasis`, R19's 20% drift); every day left out is
+#       named with its reason, and with no comparable day there is no test at all and the mail says so.
+#     * B8-3 - **a morning nobody could read was indistinguishable from a quiet one.** The pulse sends mail only when it has an
+#       alert, so a day on which every request failed sent nothing: rule 3's "a failure that reaches no human is not handled".
+#       Today's readability is now its own evidence block (`unavailable`, asked / checked / failed / retried), an unreadable
+#       morning always reaches a human, a silent engine is a medium alert, and no statistical drop is drawn from a day that could
+#       not be read. The weekly half: the tracker pools the pulse mornings straight into `samples` and `mentioned`, and a morning
+#       that reached only two of three engines is a different mix - it is still pooled, and the report now says how many answers
+#       came from such a day, by date, with the engine that was silent.
+#     * B8-4 - **a per-question win rate had no floor and picked the actions.** With an 8-question panel on the weekly engines a
+#       question can carry one answer, and "0%" read exactly like a question the business reliably loses - which then became a
+#       gap, an action and a ready-to-send API body telling the owner to write a page. A question needs four answers before its
+#       rate says anything; below that it is listed as undecided with what it would need, and it picks nothing.
+#     * B8-5 - **`skipped_by_cap` was written by *AI Requests* and read by nobody.** At 900 requests or $15 ($4 on the pulse) the
+#       run stops asking, every rate is measured on what was left, and the panel simply looked shorter. It is counted per engine,
+#       printed in the report and recorded in the lineage as evidence nobody gathered.
+# =============================================================================
+def _b81_checks():
+    """Area 8 over the generated AI Visibility Tracker and AI Pulse. Walks the built workflows, so a change that never reaches a
+    node cannot pass, and proves the ORDER of the two guards: a basis filter that runs after its own z-test guards nothing."""
+    import json as _j81
+    _code81 = {}
+    for _f81 in ('SEO_Agent_AI_Visibility.json', 'SEO_Agent_AI_Pulse.json'):
+        _p81 = os.path.join(HERE0, 'workflows', _f81)
+        assert os.path.exists(_p81), '%s was not generated' % _f81
+        for _w81 in _j81.load(open(_p81, encoding='utf-8')):
+            for _n81 in (_w81.get('nodes') or []):
+                if (_n81.get('parameters') or {}).get('jsCode'):
+                    _code81[_f81.replace('SEO_Agent_', '').replace('.json', '') + ' / ' + _n81['name']] = _n81['parameters']['jsCode']
+    _want81 = {
+        'AI_Visibility / AI Metrics': ('B8-1 / B8-3 / B8-4 / B8-5', (
+            'const tests = (prev && like.comparable) ? {',                       # B8-1
+            'changeOf(cited, samples, citedBefore, prev.samples)',
+            'changeOf(mentioned, mentioned + compTotal, prev.mentioned_k, prev.mentioned_k + compTotalBefore)',
+            'const score_band = scoreBand(ans,', 'scoreChange(visibility_score, prev.visibility_score, score_band)',
+            "changeOf(c.mentions, mentioned + compTotal, Number(b0.mentions) || 0, prev.mentioned_k + compTotalBefore, { min_points: 10 })",
+            'citation_ci: wilson(cited, samples), sov_ci: wilson(mentioned, mentioned + compTotal)',
+            'win: rateOf(q.m, q.n, { min: MIN_Q_SAMPLES }), decided: q.n >= MIN_Q_SAMPLES',   # B8-4
+            'const gaps = lostQ.filter(q => q.decided).slice(0, 8);', 'const undecided = lostQ.filter(q => !q.decided)',
+            'const pulse_basis = PR.length ?', 'partial_days:', 'const capped = (()',          # B8-3 / B8-5
+            'cited === 0 && samples >= MIN_RATE_SAMPLES')),
+        'AI_Visibility / AI Report': ('B8-1 / B8-3 / B8-4 / B8-5', (
+            'const verdict = (t) =>', 'const chg = (key, first) =>', 'within noise', ' (not tested)',
+            "'95% range ' + cci[0]", "'95% range ' + sci[0]", "'95% band ±'",
+            'const subjChange =', 'Not enough answers to tell yet', 'too few',
+            'Too few answers to draw a rate from', 'Not everything was asked',
+            "LN.unknown('The engines and questions this run did not reach'")),
+        'AI_Pulse / Pulse Metrics': ('B8-2 / B8-3', (
+            'const readable = {', 'unavailable: !R.length || n === 0', 'could not be read',
+            'No answer came back at all today',
+            'const judged = (p.baseline || []).map(d => ({ d, v: sameBasis({ engines: d.engines, size: d.samples, panel: d.panel }, nowBasis) }));',
+            'const B = judged.filter(x => x.v.ok).map(x => x.d);', 'const baseline_set_aside =', 'const baseline_note =',
+            '!readable.unavailable && todayRate.enough && n >= 20 && bn >= 40')),
+        'AI_Pulse / AI Plan': ('B8-2', (
+            'engines: Object.keys(eng).filter(e => (Number((eng[e] || {}).answered) || 0) > 0).sort(), panel: Object.keys(pr).length',)),
+    }
+    for _node81, (_row81, _needs81) in _want81.items():
+        _js81 = _code81.get(_node81) or ''
+        assert _js81, 'area 8: node %s not found in the generated workflows' % _node81
+        for _t81 in _needs81:
+            assert _t81 in _js81, '%s: %s no longer carries %r' % (_row81, _node81, _t81)
+    # the shared kit reaches BOTH workflows, or one of them silently loses every guard it defines
+    for _n81 in ('AI_Visibility / AI Metrics', 'AI_Pulse / Pulse Metrics'):
+        for _d81 in ('const rateOf = (k, n, o) =>', 'const changeOf = (k1, n1, k2, n2, o) =>',
+                     'const scoreBand = (answers, volumeOf) =>', 'const sameBasis = (day, now) =>', 'const MIN_RATE_SAMPLES ='):
+            assert _d81 in _code81[_n81], 'area 8: %s does not carry _ai_stats.js definition %r' % (_n81, _d81)
+    # ---- the ordering proof: a guard that runs after the test it guards is not a guard -------------------------------------
+    _pm81 = _code81['AI_Pulse / Pulse Metrics']
+    _basis81 = _pm81.index('const B = judged.filter(x => x.v.ok)')
+    _ztest81 = _pm81.index('zTest(m, n, bm, bn)')
+    assert _basis81 < _ztest81, 'B8-2: the daily z-test runs before the comparable-baseline filter, so it still pools every day'
+    assert _pm81.index('const readable = {') < _ztest81, 'B8-3: the drop is tested before anything asks whether the day could be read'
+    _am81 = _code81['AI_Visibility / AI Metrics']
+    assert _am81.index('const tests = (prev && like.comparable)') < _am81.index('const alerts = [];'), \
+        'B8-1: the alerts are built before the tests they are supposed to read'
+    assert _am81.index('const gaps = lostQ.filter(q => q.decided)') < _am81.index('const actions = [];'), \
+        'B8-4: the actions are built before the sample floor that decides what counts as a gap'
+    # ---- and the shapes that were wrong are gone, not merely shadowed -------------------------------------------------------
+    assert 'c.share - before >= 10 && c.mentions >= 5' not in _am81, \
+        'B8-1: the competitor share alert is back on the fixed 10-point rule, with no test'
+    assert "const gaps = questions.filter(q => !q.won && q.kind !== 'brand' && q.competitors.length)" not in _am81, \
+        'B8-4: a question with one answer can become a gap again'
+    assert 'const B = p.baseline || [];' not in _pm81, \
+        'B8-2: the pulse is pooling its whole baseline again with no check that it measured the same thing'
+    _ar81 = _code81['AI_Visibility / AI Report']
+    assert "(d.significant === true ? ', real change' : '')" not in _ar81, \
+        'B8-1: the subject line prints the points again with no word about the test'
+    assert "q.samples ? q.win_rate + '%' + muted(q.samples + ' answers')" not in _ar81, \
+        'B8-4: the answer grid prints a one-answer question as a rate again'
+    return len(_want81)
+
+
+_b81_log = lambda _b81_n: log('A rate without its sample, and a change without a test (2026-10-15, benchmark area 8, rows B8-1 / B8-2 / B8-3 / B8-4 / B8-5; BENCH_AREA8_ai_visibility.md). The signal is non-deterministic by construction - SparkToro and Gumshoe measured an identical brand list coming back under 1% of the time over 2,961 runs - and not one tool in this market puts a sample size or an interval beside a rate: Profound ran ~989,000 AI responses to decompose the variance (V(Mn) = S/n + D, Wald and bootstrap SDs) and its v2 visibility endpoint returns three floats with no denominator and no standard error; Semrush, now an Adobe subsidiary, defines its whole change method as "the change in your brand mentions since the last update"; Ahrefs Brand Radar never uses the word variance; Evertune publishes +/-44 points for one prompt asked once and sells "statistical significance" as an $800 tier. B8-1: three of our four headline tiles printed an untested arrow beside a tested one, and the subject line printed the points with no word about the test - all four now go through one shared two-proportion z-test, the share of voice on its own denominator, the visibility score (a weighted mean, not a proportion) with the standard error of that mean over Kish\'s effective sample size and no change called inside its own band, and the competitor-share alert off its fixed 10-point rule. B8-2: the daily pulse pooled seven days of baseline with no check that they measured the same thing - B-L4 guarded the weekly run the same day and left this one, so raising the panel 8 to 20 or adding an engine would have fired a 99% "real drop" at a site whose visibility had not moved; a morning is pooled only when the same engines answered it on a comparable number of answers, every day left out is named with its reason, and with no comparable day there is no test. B8-3: a morning nobody could read sent nothing at all, which looked exactly like a quiet one - today\'s readability is its own evidence block, an unreadable morning always reaches a human, and the weekly report says how many of its answers came from a pulse day that did not reach every engine. B8-4: a per-question rate had no floor and picked the actions, so a question asked once and lost once became a gap, an action and a ready-to-send API body - four answers now, or it is listed as undecided and picks nothing. B8-5: skipped_by_cap was written by AI Requests and read by nobody; it is counted per engine, printed, and recorded as evidence nobody gathered. proved against the generated workflows, with the ordering of both new guards walked: ' + str(_b81_n) + ' node group(s) checked')
+
+
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:
 #     "two fixes have never come back and both are enforced by the build".
@@ -8205,6 +8349,9 @@ _b78_checks()
 
 # section 69 (B-F5 + INVARIANTS rule 2): deterministic node ids over every generated workflow, the settings refusal's self-test,
 # and the gate-pair lint. Last, because the id freeze rewrites the files the checks above have just finished reading.
+# section 81 (benchmark area 8): the AI Visibility Tracker and the AI Pulse are written by build_monitors.py above, so
+# like every check in this block it runs here and not where it is defined.
+_b81_log(_b81_checks())
 _b79_checks()
 _b69_checks()
 
