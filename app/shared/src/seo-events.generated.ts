@@ -14,42 +14,62 @@ export interface SeoEvent {
 }
 
 export const SEO_EVENTS: { updated: string; googleUpdates: readonly SeoEvent[]; dataBreaks: readonly SeoEvent[] } = {
-  "updated": "2026-10-13",
+  "updated": "2026-10-15",
   "googleUpdates": [
     {
       "name": "March 2025 core update",
       "start": "2025-03-13",
-      "end": "2025-03-27"
+      "end": "2025-03-26"
     },
     {
       "name": "June 2025 core update",
       "start": "2025-06-30",
-      "end": "2025-07-17"
+      "end": "2025-07-16"
     },
     {
       "name": "August 2025 spam update",
       "start": "2025-08-26",
-      "end": "2025-09-22"
+      "end": "2025-09-21"
     },
     {
       "name": "December 2025 core update",
-      "start": "2025-12-02",
-      "end": "2025-12-18"
+      "start": "2025-12-11",
+      "end": "2025-12-29"
+    },
+    {
+      "name": "February 2026 Discover update",
+      "start": "2026-02-05",
+      "end": "2026-02-26"
+    },
+    {
+      "name": "March 2026 spam update",
+      "start": "2026-03-24",
+      "end": "2026-03-24"
     },
     {
       "name": "March 2026 core update",
-      "start": "2026-03-10",
-      "end": "2026-03-26"
+      "start": "2026-03-27",
+      "end": "2026-04-08"
     },
     {
-      "name": "June 2026 core update",
-      "start": "2026-06-23",
-      "end": "2026-07-08"
+      "name": "May 2026 core update",
+      "start": "2026-05-21",
+      "end": "2026-06-01"
     },
     {
-      "name": "September 2026 core update",
-      "start": "2026-09-15",
-      "end": "2026-09-30"
+      "name": "June 2026 spam update",
+      "start": "2026-06-24",
+      "end": "2026-06-26"
+    },
+    {
+      "name": "August 2026 spam update",
+      "start": "2026-08-18",
+      "end": "2026-08-20"
+    },
+    {
+      "name": "September 2026 spam update",
+      "start": "2026-09-24",
+      "end": "2026-10-07"
     }
   ],
   "dataBreaks": [

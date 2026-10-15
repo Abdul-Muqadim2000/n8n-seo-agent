@@ -45,7 +45,9 @@ describe('chart annotations (G12)', () => {
   it('marks a Google update with its own start and end, and never claims it caused anything', () => {
     const marks = buildAnnotations(window).filter((m) => m.kind === 'google_update');
     expect(marks).toHaveLength(1);
-    expect(marks[0]).toMatchObject({ label: 'Google: September 2026 core update', date: '2026-09-15', dateEnd: '2026-09-30', tone: 'warning' });
+    // B6-4 (2026-10-15, benchmark area 6): the registry used to carry a "September 2026 core update" (2026-09-15 to 2026-09-30) that
+    // Google never ran. Its ranking history has a September 2026 SPAM update from 24 Sep, and the two are different systems.
+    expect(marks[0]).toMatchObject({ label: 'Google: September 2026 spam update', date: '2026-09-24', dateEnd: '2026-10-07', tone: 'warning' });
     expect(marks[0]!.detail).toContain('cannot be proven from these numbers');
   });
 
