@@ -534,6 +534,8 @@ is R77).
 
 ## 3. Defects found by this run (R34–R116)
 
+> **Re-verified 2026-10-16** (`DEFECTS.md`, `defects/`): R43 and R66 raised to High, R102 lowered to Medium, R69 / R93 raised to Medium, R42 / R50 / R105 lowered to Low, R53 withdrawn, R117–R119 added. The table below is the register as the run recorded it and as the scorer read it.
+
 Numbering continues from R33. "Part id" is the id inside the part files. Severity: **High** = wrong advice or a wrong number shown to a
 customer, or a feature that does not run; Medium = misleading, or missing something the run claims; Low = cosmetic or cost-only.
 
