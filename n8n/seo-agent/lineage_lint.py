@@ -23,6 +23,10 @@ asserted one instance at a time:
                      for URL inspection).
   D. **withheld**    no score is emitted when its inputs carry `unavailable`: every node that puts a score in front of a customer
                      carries a path that withholds it and says why (R18 / R23 asserted this for the ladder and the verdict).
+  E. **refusal**     nothing scores, ranks or advises from evidence that could not be read: every node that reads a `<X> Answers`
+                     node -- the output of rule 3's in-200 retry gate, which attaches `RT.evidence` to every item as `__dfs` --
+                     carries a way of saying "could not be read" (B-A11 asserted this for three nodes; the nine that already did
+                     it are what the check is calibrated on).
 
 **It is a ratchet where it cannot yet be a rule** -- the same shape as `retry_lint.check_in200` + `harness/in200_baseline.json` and
 `gate_lint` + `harness/gate_pairs_baseline.json`. `harness/lineage_baseline.json` names every node that fails one of the four
@@ -99,6 +103,23 @@ SAMPLE_GUARD = re.compile(r'RT\.comparable\(|not comparable|checked_of|sample mo
 # an object key `health_score:` or an assignment `health_score =` -- never a ternary's ` : `, which is not a figure
 EMITS_SCORE = re.compile(r'\b\w*_score:|\b\w*_score\s*=[^=]|\bscore:')
 WITHHOLD = re.compile(r'score_withheld|NOT_CHECKED|not_checked|withheld|unavailable|could not be (read|checked)|not available')
+
+# ---- E. a node that acts on a gated read (B-A11, 2026-10-15) ------------------------------------------------------------------
+# Rule 3 put the in-200 retry gate on 72 DataForSEO calls, and every `<X> Answers` node it splices in attaches `RT.evidence` to
+# each item as `__dfs`: asked, answered, failed, retried, `unavailable`. Rule 1 is the other end of that sentence -- "nothing
+# downstream may score, rank or advise from `unavailable` evidence" -- and until B-A11 nothing checked it. The class is exactly
+# the three nodes B-A11 names: *Pick Competitors* ranked rivals, *Competitor Analysis* raised a High "does not rank in Google's
+# top 10 for any keyword" and *Analyze Keywords* raised a keyword gap, each from answers that may have failed TWICE, each
+# printing a measured-looking zero. The nine that already refuse (Parse Positions, Site SERP, Trends, Assess Result, Build
+# Keyword Strategy, Collect Research, Analyze Backlinks, Merge Keyword Data, Save Task ID) are what the vocabulary below is
+# calibrated on: either the node carries the gate's own evidence block forward, or it says in words that something was not read.
+READS_GATED = re.compile(r"\$\('[^']+ Answers'\)")
+# `available: false` is in the list because *Analyze Backlinks* refuses in its own words rather than the kit's -- a row it could
+# not read is `{ available: false, error: <the provider's message> }` and every figure beside it is null, which is the rule kept.
+# A lint that measured only the kit's vocabulary would have called that node a breach, and would have been measuring less than it
+# claims: it would be checking which helper a node imported, not whether it can refuse.
+REFUSAL = re.compile(r'__dfs\b|RT\.evidence\(|RT\.one\(|RT\.stats\(|\bunavailable\b|could not be (?:read|checked)'
+                     r"|\bavailable\s*:\s*false")
 
 
 def _workflows():
@@ -207,6 +228,12 @@ def survey(workflows=None):
                 row['withheld'] = bool(WITHHOLD.search(src))
                 if not row['withheld']:
                     row['fails'].append('withheld')
+            # ---- E. a node that acts on a gated read can say it could not be read ----
+            if READS_GATED.search(js):
+                row['subject'].append('refusal')
+                row['refusal'] = bool(REFUSAL.search(src))
+                if not row['refusal']:
+                    row['fails'].append('refusal')
             if row['subject']:
                 out[wname + ' / ' + nm] = row
     return out
@@ -229,6 +256,8 @@ WHY = {
     'evidence': 'a finding with an empty evidence string was raised on 45 of 47 pages and ranked second of 60 by impact (R10)',
     'like_for_like': 'a health score chained across unlike report types (R20), and a smaller sample read as an improvement (R19)',
     'withheld': '"winnable 68" was scored from two SERP calls that both failed (R18 / R23): a score needs a way of not being shown',
+    'refusal': 'the in-200 gate marks an answer `unavailable` and three nodes carried on regardless (B-A11): a High "does not '
+               'rank in the top 10 for any keyword" from a read that failed twice is a measured-looking zero',
 }
 FIX = {
     'lineage': 'inline v5/code/_lineage.js (LINEAGE_SRC) into the node, describe each figure group with LN.of() / LN.unknown(), '
@@ -238,6 +267,8 @@ FIX = {
     'like_for_like': 'compare only with a stored row of the same report_type, and say "not compared: the sample moved" when the '
                      'sample size drifted (checked / checked_of)',
     'withheld': 'carry a refusal: no score, no visits, no timeline when an input is unavailable — "could not be read", never "no demand"',
+    'refusal': 'read the gate\'s own `__dfs` block off the answers (or RT.evidence / RT.one over them), and when it is '
+               '`unavailable` hand on nulls and a reason instead of a zero — "could not be read", never "none found"',
 }
 
 
@@ -275,7 +306,7 @@ def check(write_record=True):
 
 def counts(sv):
     out = {}
-    for c in ('lineage', 'evidence', 'like_for_like', 'withheld'):
+    for c in ('lineage', 'evidence', 'like_for_like', 'withheld', 'refusal'):
         subject = [k for k, r in sv.items() if c in r['subject']]
         out[c] = {'subject': len(subject), 'pass': sum(1 for k in subject if c not in sv[k]['fails'])}
     return out
@@ -341,6 +372,12 @@ def selftest():
         good + "\nconst prev = rows.find(r => r.report_type === cur);\nconst move = prev ? now - prev.health_score : null;"
                "\nconst not_compared = prev && prev.checked_of !== checked_of ? 'the sample moved' : '';",
         'like_for_like', False)
+    one('acts_on_a_gated_read_with_no_refusal',
+        good + "\nconst ov = $('Domain Overview Answers').all().map(i => i.json);\nconst top10 = ov[0].metrics.pos_1 || 0;",
+        'refusal', True)
+    one('acts_on_a_gated_read_and_can_refuse',
+        good + "\nconst ov = $('Domain Overview Answers').all().map(i => i.json);\nconst ev = (ov.find(x => x && x.__dfs) || {}).__dfs;\n"
+             + "const top10 = ev && !ev.unavailable ? (ov[0].metrics.pos_1 || 0) : null;", 'refusal', False)
     one('a_score_that_cannot_be_withheld', good + "\nconst winnable_score = 68;", 'withheld', True)
     one('a_score_that_can_be_withheld', good + "\nconst winnable_score = serpFailed ? null : 68; const not_checked = serpFailed;",
         'withheld', False)
