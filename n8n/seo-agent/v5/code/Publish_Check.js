@@ -124,7 +124,8 @@ if (ladder) for (const l of ladders.filter(l => normD(l.domain) === domain && l.
 // ---- rows (v4.8: the same builder as the Site Tracker's publish detection, so reported and detected pages are stored alike) ----
 /*__PUBLISH_ROWS__*/
 const keyword = (log || ladder || {}).keyword || String(d.keyword || '').trim() || kw;
-const { log_row, ladder_row } = publishedRows({ site_id, domain, keyword, url, log, ladder, request_id: rid, now });
+// INVARIANTS rule 4: `live` is the proof — HTTP 200 from this very URL in this run. Without it nothing here says the page exists.
+const { log_row, ladder_row } = publishedRows({ site_id, domain, keyword, url, log, ladder, request_id: rid, now, live });
 const checksFinal = checksOut; const passed = checksFinal.filter(c => c.ok === true).length; const failed = checksFinal.filter(c => c.ok === false);
 const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const path = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/, '') || '/';

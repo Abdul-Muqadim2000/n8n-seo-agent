@@ -1,0 +1,511 @@
+{
+ "counts": {
+  "builders": {
+   "pass": 2,
+   "subject": 2
+  },
+  "delivery": {
+   "pass": 15,
+   "subject": 15
+  },
+  "promise": {
+   "pass": 4,
+   "subject": 4
+  },
+  "reversal": {
+   "pass": 1,
+   "subject": 1
+  },
+  "stored": {
+   "pass": 2,
+   "subject": 2
+  },
+  "verdict": {
+   "pass": 1,
+   "subject": 1
+  }
+ },
+ "rows": {
+  "builders": [
+   {
+    "builder": "publishedRows(",
+    "fail": "",
+    "how": "pass `live:` (what proved the page is there) at every call site; the builder keeps the row at its earlier state and says why when the proof is absent",
+    "node": "Detect Published",
+    "ok": true,
+    "why": "*Publish Check* called it unconditionally: an owner reporting a page whose URL answered 404 still got `status: 'published'`, `published_url`, `page_exists: true` in seo_content_log and seo_ladders -- while the very same run told them \"the page could not be fetched\"",
+    "workflow": "SEO Agent \u2014 Site Tracker"
+   },
+   {
+    "builder": "publishedRows(",
+    "fail": "",
+    "how": "pass `live:` (what proved the page is there) at every call site; the builder keeps the row at its earlier state and says why when the proof is absent",
+    "node": "Publish Check",
+    "ok": true,
+    "why": "*Publish Check* called it unconditionally: an owner reporting a page whose URL answered 404 still got `status: 'published'`, `published_url`, `page_exists: true` in seo_content_log and seo_ladders -- while the very same run told them \"the page could not be fetched\"",
+    "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+   }
+  ],
+  "delivery": [
+   {
+    "blind_sources": [],
+    "fail": "",
+    "how": "judge the POST on its status code (AR.posted reads `statusCode`), and give the HTTP node `fullResponse: true` whenever it is `neverError`",
+    "judges": [
+     "AR.settle("
+    ],
+    "node": "Alert Retry Result (Growth)",
+    "ok": true,
+    "opener": false,
+    "why": "B-F2: *Post Alert Webhook* was neverError with no fullResponse, so a 404 from a revoked Slack hook arrived as an item with no error and was written down as a delivery. R6 / R30: an alert recorded as sent that was never sent.",
+    "workflow": "SEO Agent \u2014 AI Growth"
+   },
+   {
+    "blind_sources": [],
+    "fail": "",
+    "how": "judge the POST on its status code (AR.posted reads `statusCode`), and give the HTTP node `fullResponse: true` whenever it is `neverError`",
+    "judges": [
+     "AR.settle("
+    ],
+    "node": "Alert Retry Result (Pulse)",
+    "ok": true,
+    "opener": false,
+    "why": "B-F2: *Post Alert Webhook* was neverError with no fullResponse, so a 404 from a revoked Slack hook arrived as an item with no error and was written down as a delivery. R6 / R30: an alert recorded as sent that was never sent.",
+    "workflow": "SEO Agent \u2014 AI Pulse"
+   },
+   {
+    "blind_sources": [],
+    "fail": "",
+    "how": "judge the POST on its status code (AR.posted reads `statusCode`), and give the HTTP node `fullResponse: true` whenever it is `neverError`",
+    "judges": [
+     "AR.settle("
+    ],
+    "node": "Alert Retry Result (AI)",
+    "ok": true,
+    "opener": false,
+    "why": "B-F2: *Post Alert Webhook* was neverError with no fullResponse, so a 404 from a revoked Slack hook arrived as an item with no error and was written down as a delivery. R6 / R30: an alert recorded as sent that was never sent.",
+    "workflow": "SEO Agent \u2014 AI Visibility Tracker"
+   },
+   {
+    "blind_sources": [],
+    "fail": "",
+    "how": "judge the POST on its status code (AR.posted reads `statusCode`), and give the HTTP node `fullResponse: true` whenever it is `neverError`",
+    "judges": [
+     "AR.settle("
+    ],
+    "node": "Alert Retry Result (Audit)",
+    "ok": true,
+    "opener": false,
+    "why": "B-F2: *Post Alert Webhook* was neverError with no fullResponse, so a 404 from a revoked Slack hook arrived as an item with no error and was written down as a delivery. R6 / R30: an alert recorded as sent that was never sent.",
+    "workflow": "SEO Agent \u2014 Audit Scheduler"
+   },
+   {
+    "blind_sources": [],
+    "fail": "",
+    "how": "judge the POST on its status code (AR.posted reads `statusCode`), and give the HTTP node `fullResponse: true` whenever it is `neverError`",
+    "judges": [
+     "AR.settle("
+    ],
+    "node": "Alert Retry Result (BL)",
+    "ok": true,
+    "opener": false,
+    "why": "B-F2: *Post Alert Webhook* was neverError with no fullResponse, so a 404 from a revoked Slack hook arrived as an item with no error and was written down as a delivery. R6 / R30: an alert recorded as sent that was never sent.",
+    "workflow": "SEO Agent \u2014 Backlink Monitor"
+   },
+   {
+    "blind_sources": [],
+    "fail": "",
+    "how": "judge the POST on its status code (AR.posted reads `statusCode`), and give the HTTP node `fullResponse: true` whenever it is `neverError`",
+    "judges": [
+     "AR.settle("
+    ],
+    "node": "Alert Retry Result (Cadence)",
+    "ok": true,
+    "opener": false,
+    "why": "B-F2: *Post Alert Webhook* was neverError with no fullResponse, so a 404 from a revoked Slack hook arrived as an item with no error and was written down as a delivery. R6 / R30: an alert recorded as sent that was never sent.",
+    "workflow": "SEO Agent \u2014 Content Cadence"
+   },
+   {
+    "blind_sources": [],
+    "fail": "",
+    "how": "judge the POST on its status code (AR.posted reads `statusCode`), and give the HTTP node `fullResponse: true` whenever it is `neverError`",
+    "judges": [
+     "AR.posted("
+    ],
+    "node": "Alert Delivery",
+    "ok": true,
+    "opener": false,
+    "why": "B-F2: *Post Alert Webhook* was neverError with no fullResponse, so a 404 from a revoked Slack hook arrived as an item with no error and was written down as a delivery. R6 / R30: an alert recorded as sent that was never sent.",
+    "workflow": "SEO Agent \u2014 Error Handler"
+   },
+   {
+    "blind_sources": [],
+    "fail": "",
+    "how": "judge the POST on its status code (AR.posted reads `statusCode`), and give the HTTP node `fullResponse: true` whenever it is `neverError`",
+    "judges": [
+     "AR.settle("
+    ],
+    "node": "Alert Retry Result",
+    "ok": true,
+    "opener": false,
+    "why": "B-F2: *Post Alert Webhook* was neverError with no fullResponse, so a 404 from a revoked Slack hook arrived as an item with no error and was written down as a delivery. R6 / R30: an alert recorded as sent that was never sent.",
+    "workflow": "SEO Agent \u2014 Error Handler"
+   },
+   {
+    "fail": "",
+    "how": "follow the POST with a node that calls AR.posted( and writes the result back to seo_ops_alerts",
+    "node": "(workflow)",
+    "ok": true,
+    "opener": true,
+    "opens": [
+     "Alert Channels",
+     "Alert Delivery",
+     "Alert Record"
+    ],
+    "settles": [
+     "Alert Delivery"
+    ],
+    "why": "B-F3: Page Watch posted its digest and wrote nothing back, so every row it opened sat at `delivered: \"pending\"` for ever and the delivery rate could never be measured",
+    "workflow": "SEO Agent \u2014 Error Handler"
+   },
+   {
+    "blind_sources": [],
+    "fail": "",
+    "how": "judge the POST on its status code (AR.posted reads `statusCode`), and give the HTTP node `fullResponse: true` whenever it is `neverError`",
+    "judges": [
+     "AR.settle("
+    ],
+    "node": "Alert Retry Result (LB)",
+    "ok": true,
+    "opener": false,
+    "why": "B-F2: *Post Alert Webhook* was neverError with no fullResponse, so a 404 from a revoked Slack hook arrived as an item with no error and was written down as a delivery. R6 / R30: an alert recorded as sent that was never sent.",
+    "workflow": "SEO Agent \u2014 Link Builder"
+   },
+   {
+    "blind_sources": [],
+    "fail": "",
+    "how": "judge the POST on its status code (AR.posted reads `statusCode`), and give the HTTP node `fullResponse: true` whenever it is `neverError`",
+    "judges": [
+     "AR.settle("
+    ],
+    "node": "Alert Retry Result (Watch)",
+    "ok": true,
+    "opener": false,
+    "why": "B-F2: *Post Alert Webhook* was neverError with no fullResponse, so a 404 from a revoked Slack hook arrived as an item with no error and was written down as a delivery. R6 / R30: an alert recorded as sent that was never sent.",
+    "workflow": "SEO Agent \u2014 Page Watch"
+   },
+   {
+    "blind_sources": [],
+    "fail": "",
+    "how": "judge the POST on its status code (AR.posted reads `statusCode`), and give the HTTP node `fullResponse: true` whenever it is `neverError`",
+    "judges": [
+     "AR.posted("
+    ],
+    "node": "Watch Ops Delivery",
+    "ok": true,
+    "opener": false,
+    "why": "B-F2: *Post Alert Webhook* was neverError with no fullResponse, so a 404 from a revoked Slack hook arrived as an item with no error and was written down as a delivery. R6 / R30: an alert recorded as sent that was never sent.",
+    "workflow": "SEO Agent \u2014 Page Watch"
+   },
+   {
+    "fail": "",
+    "how": "follow the POST with a node that calls AR.posted( and writes the result back to seo_ops_alerts",
+    "node": "(workflow)",
+    "ok": true,
+    "opener": true,
+    "opens": [
+     "Watch Ops Alert"
+    ],
+    "settles": [
+     "Watch Ops Delivery"
+    ],
+    "why": "B-F3: Page Watch posted its digest and wrote nothing back, so every row it opened sat at `delivered: \"pending\"` for ever and the delivery rate could never be measured",
+    "workflow": "SEO Agent \u2014 Page Watch"
+   },
+   {
+    "blind_sources": [],
+    "fail": "",
+    "how": "judge the POST on its status code (AR.posted reads `statusCode`), and give the HTTP node `fullResponse: true` whenever it is `neverError`",
+    "judges": [
+     "AR.settle("
+    ],
+    "node": "Alert Retry Result (Tracker)",
+    "ok": true,
+    "opener": false,
+    "why": "B-F2: *Post Alert Webhook* was neverError with no fullResponse, so a 404 from a revoked Slack hook arrived as an item with no error and was written down as a delivery. R6 / R30: an alert recorded as sent that was never sent.",
+    "workflow": "SEO Agent \u2014 Rank Tracker"
+   },
+   {
+    "blind_sources": [],
+    "fail": "",
+    "how": "judge the POST on its status code (AR.posted reads `statusCode`), and give the HTTP node `fullResponse: true` whenever it is `neverError`",
+    "judges": [
+     "AR.settle("
+    ],
+    "node": "Alert Retry Result (Site)",
+    "ok": true,
+    "opener": false,
+    "why": "B-F2: *Post Alert Webhook* was neverError with no fullResponse, so a 404 from a revoked Slack hook arrived as an item with no error and was written down as a delivery. R6 / R30: an alert recorded as sent that was never sent.",
+    "workflow": "SEO Agent \u2014 Site Tracker"
+   }
+  ],
+  "promise": [
+   {
+    "evidence_found": [
+     "detected"
+    ],
+    "fail": "",
+    "how": "read what proves the page is live: the status of a fetch of that URL, or a stored published_url something already confirmed",
+    "node": "Inspect Requests",
+    "ok": true,
+    "state": "published",
+    "tables": [
+     "seo_ops_alerts",
+     "seo_page_watch",
+     "seo_pages",
+     "seo_query_history",
+     "seo_rank_history",
+     "seo_run_ledger",
+     "seo_site_metrics",
+     "seo_sites",
+     "seo_trends"
+    ],
+    "why": "a row saying a page is live, written from the owner having SAID so, is the same promise with a different author",
+    "workflow": "SEO Agent \u2014 Site Tracker"
+   },
+   {
+    "evidence_found": [
+     "published_url",
+     "detected"
+    ],
+    "fail": "",
+    "how": "read what proves the page is live: the status of a fetch of that URL, or a stored published_url something already confirmed",
+    "node": "Site Metrics",
+    "ok": true,
+    "state": "published",
+    "tables": [
+     "seo_ops_alerts",
+     "seo_query_history",
+     "seo_run_ledger",
+     "seo_site_metrics",
+     "seo_sites",
+     "seo_trends"
+    ],
+    "why": "a row saying a page is live, written from the owner having SAID so, is the same promise with a different author",
+    "workflow": "SEO Agent \u2014 Site Tracker"
+   },
+   {
+    "evidence_found": [
+     "published_url"
+    ],
+    "fail": "",
+    "how": "read what proves the page is live: the status of a fetch of that URL, or a stored published_url something already confirmed",
+    "node": "Site Plan",
+    "ok": true,
+    "state": "published",
+    "tables": [
+     "seo_case_studies",
+     "seo_content_log",
+     "seo_ladders",
+     "seo_ops_alerts",
+     "seo_page_watch",
+     "seo_pages",
+     "seo_query_history",
+     "seo_rank_history",
+     "seo_run_ledger",
+     "seo_site_metrics",
+     "seo_sites",
+     "seo_trends"
+    ],
+    "why": "a row saying a page is live, written from the owner having SAID so, is the same promise with a different author",
+    "workflow": "SEO Agent \u2014 Site Tracker"
+   },
+   {
+    "evidence_found": [
+     "article_html",
+     "page_markdown",
+     "$('Blog Package')"
+    ],
+    "fail": "",
+    "how": "read the artefact itself -- the page text from the node that produced it -- and emit no row when it is empty (*Content Log Row* does exactly this: no article_html and no page_markdown means 'report only')",
+    "node": "Content Log Row",
+    "ok": true,
+    "state": "written",
+    "tables": [
+     "seo_content_log"
+    ],
+    "why": "D10 / R1: a row saying a page was written while no page was written is read by the ladder plan, the Rank Tracker and the Content Cadence as a page that exists -- the cadence paused itself on pages nobody had",
+    "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+   }
+  ],
+  "reversal": [
+   {
+    "back": "planned",
+    "fail": "",
+    "forward": "writing",
+    "how": "keep a node that writes the row back to `planned` with its reason in `status_note` (*Refused Ladder Row*)",
+    "ok": true,
+    "table": "seo_ladders",
+    "why": "R1: the budget guard refused execution 500 and row 19 stayed \"writing\", so within 90 seconds the ladder plan promised the page, the Rank Tracker said \"already written -- publish it\" and the cadence counted it among the pages waiting for publication and paused itself. fix_phantom_pages.py exists because of this.",
+    "writers": [
+     "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Refused Ladder Row"
+    ]
+   }
+  ],
+  "stored": [
+   {
+    "fail": "",
+    "gates": [
+     "Any Case Studies Detected?"
+    ],
+    "how": "put the write behind an IF that reads what proved it (*Any Case Studies Detected?* and *Ladder Page?* both do), or let a Code node build the row so the state can be refused there",
+    "mints": [
+     "status"
+    ],
+    "node": "Mark Case Study Published (Detect)",
+    "ok": true,
+    "proven_by": [
+     "Any Case Studies Detected?"
+    ],
+    "table": "seo_case_studies",
+    "why": "a Data Table node writes its literal into the row with no code in between, so nothing above can refuse it: *Mark Case Study Published* marked the case study live the moment the owner said so, whatever the page answered",
+    "workflow": "SEO Agent \u2014 Site Tracker"
+   },
+   {
+    "fail": "",
+    "gates": [
+     "Page Live? (Published)"
+    ],
+    "how": "put the write behind an IF that reads what proved it (*Any Case Studies Detected?* and *Ladder Page?* both do), or let a Code node build the row so the state can be refused there",
+    "mints": [
+     "status"
+    ],
+    "node": "Mark Case Study Published",
+    "ok": true,
+    "proven_by": [
+     "Page Live? (Published)"
+    ],
+    "table": "seo_case_studies",
+    "why": "a Data Table node writes its literal into the row with no code in between, so nothing above can refuse it: *Mark Case Study Published* marked the case study live the moment the owner said so, whatever the page answered",
+    "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+   }
+  ],
+  "verdict": [
+   {
+    "fail": "",
+    "gate": "content quality",
+    "how": "set every one of those fields when the gate refuses (v5/code/Originality_Check.js does it), never only the flag",
+    "missing": [],
+    "node": "Originality Check",
+    "ok": true,
+    "touched": [
+     "publishable",
+     "not_ready",
+     "quality_label",
+     "not_ready_reasons",
+     "quality",
+     "passed"
+    ],
+    "why": "B3-3: the originality gate ran AFTER *Content QA* had finalised the delivery gate and set only `qa.passed`, so a draft 100% identical to a competitor page came out `publishable: true`, `not_ready: false`, \"passed the quality check\" -- which is what the -DRAFT file name, the package banner, meta.json, the callback and the app all read. A gate that fails is a refusal, not a label.",
+    "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+   }
+  ]
+ },
+ "selftest": {
+  "a_404_from_a_revoked_webhook_counted_as_a_delivery": {
+   "caught": true,
+   "fail": "reads Post Alert, which is neverError with no fullResponse, so a 404 arrives looking like a success",
+   "ok": false
+  },
+  "a_delivery_judged_on_its_status_code": {
+   "caught": true,
+   "fail": "",
+   "ok": true
+  },
+  "a_delivery_recorded_without_reading_anything": {
+   "caught": true,
+   "fail": "writes `delivered` without reading a status code; ",
+   "ok": false
+  },
+  "a_gate_added_while_the_old_direct_path_is_left_wired": {
+   "caught": true,
+   "fail": "writes status=\"published\" into seo_case_studies as a literal, and a path reaches it (through Rows) with no IF that reads the proof (live, skip, detected, page_exists, error, found)",
+   "ok": false
+  },
+  "a_later_gate_that_flips_one_internal_flag": {
+   "caught": true,
+   "fail": "runs after *Content QA* and sets passed but not publishable, not_ready, quality_label, not_ready_reasons, quality \u2014 the fields the file name, the package banner, meta.json, the callback and the app read keep saying the page passed",
+   "missing": [
+    "publishable",
+    "not_ready",
+    "quality_label",
+    "not_ready_reasons",
+    "quality"
+   ],
+   "ok": false
+  },
+  "a_later_gate_that_refuses_everywhere": {
+   "caught": true,
+   "fail": "",
+   "missing": [],
+   "ok": true
+  },
+  "a_refusal_puts_the_row_back": {
+   "caught": true,
+   "fail": "",
+   "ok": true
+  },
+  "a_table_node_behind_a_gate_that_reads_the_proof": {
+   "caught": true,
+   "fail": "",
+   "ok": true
+  },
+  "a_table_node_that_mints_published_with_no_gate_at_all": {
+   "caught": true,
+   "fail": "writes status=\"published\" into seo_case_studies as a literal, and a path reaches it (through Rows) with no IF that reads the proof (live, skip, detected, page_exists, error, found)",
+   "ok": false
+  },
+  "a_written_row_that_read_nothing": {
+   "caught": true,
+   "fail": "mints status \"written\" into seo_content_log and reads none of the evidence for it (article_html, page_markdown, $('Blog Package'), $('Build Word File'))",
+   "ok": false
+  },
+  "a_written_row_that_read_the_page": {
+   "caught": true,
+   "fail": "",
+   "ok": true
+  },
+  "nothing_puts_the_row_back": {
+   "caught": true,
+   "fail": "a row can be moved to \"writing\" and nothing can move it back to \"planned\" with a reason in `status_note`",
+   "ok": false
+  },
+  "published_rows_called_on_nothing": {
+   "caught": true,
+   "fail": "calls publishedRows( without passing `live:` \u2014 the row claims the page exists on nothing but the caller having asked",
+   "ok": false
+  },
+  "published_rows_handed_the_proof": {
+   "caught": true,
+   "fail": "",
+   "ok": true
+  },
+  "the_builder_renames_itself": {
+   "caught": true
+  },
+  "the_digest_is_posted_and_nothing_written_back": {
+   "caught": true,
+   "fail": "opens a delivery record (Opener) and no node settles it from a status code",
+   "ok": false
+  },
+  "the_digest_is_posted_and_settled": {
+   "caught": true,
+   "fail": "",
+   "ok": true
+  },
+  "the_verdict_field_list_goes_stale": {
+   "caught": true
+  }
+ },
+ "unpaid": []
+}

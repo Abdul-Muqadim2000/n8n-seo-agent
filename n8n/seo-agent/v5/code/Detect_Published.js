@@ -36,7 +36,12 @@ const out = state.map(st => {
     const p = matched.get(c.key); if (!p) continue;
     const keyword = (c.log || c.ladder || {}).keyword || c.keyword;
     // the content-log row keeps its own site_id: the upsert (site_id + keyword) must hit the row the Content Cadence wrote
-    const { log_row, ladder_row } = publishedRows({ site_id: (c.log && c.log.site_id) || st.site_id, domain: st.domain, keyword, url: p.url, log: c.log, ladder: c.ladder, request_id: '', now });
+    // INVARIANTS rule 4: what proves this page is there — HTTP 200 for the pages this run fetched (a title match), and the site's own
+    // sitemap for a slug match, which is the site declaring the page exists. Either way it is evidence from outside this run.
+    const pgLive = pages.get(p.url);
+    const live = pgLive ? !!pgLive.ok : true;
+    const { log_row, ladder_row } = publishedRows({ site_id: (c.log && c.log.site_id) || st.site_id, domain: st.domain, keyword, url: p.url, log: c.log, ladder: c.ladder, request_id: '', now, live });
+    if (!live) continue;
     log_rows.push(log_row); if (ladder_row) ladder_rows.push(ladder_row);
     if (log_row.source === 'case_study' || /case stud/i.test(log_row.page_type)) case_rows.push({ site_id: log_row.site_id, keyword: log_row.keyword, page_url: p.url });
     detected.push({ keyword, url: p.url, ladder_id: log_row.ladder_id || (c.ladder ? c.ladder.ladder_id : ''), matched_by: p.matched_by, source: c.source });

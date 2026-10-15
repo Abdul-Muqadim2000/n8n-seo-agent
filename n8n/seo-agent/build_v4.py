@@ -6989,6 +6989,93 @@ sticky("""### A number we report is measured, or it says what it is (INVARIANTS 
 log('A number we report is measured, or it says what it is (2026-10-15, INVARIANTS.md rule 1 - the class behind ~19 of the 81 defects). lineage_lint.py walks the GENERATED workflows the way section 55 walks the ledger ordering and gate_lint.py walks the gate pairs, and fails the build on four things: a node that composes a document a customer receives and does not carry v5/code/_lineage.js (carry it, call it, let it travel); a finding that ships with an empty evidence string (R10, promoted from one finding to every finding); a delta computed against a stored earlier report of a different report_type or over a sample that moved (R20 + R19, promoted from the chart marks and the URL inspections to every node that subtracts a stored figure, with the annotation kit itself in the class); and a score put in front of a customer with no path that withholds it when an input is unavailable (R18 / R23). Each node reads with the SHARED KITS STRIPPED OUT, because judging a node on text it did not write is how a lint starts lying - inlining _lineage.js would otherwise make any node a report builder, and _page_watch.js made eleven nodes delta nodes. Two debts the inventory found are paid rather than listed: the audit raised SEVEN site-wide findings (invalid SSL, no HTTPS redirect, no sitemap, no robots.txt, no real 404, directory browsing, no HTTP/2) with an EMPTY evidence string - scored and ranked with nothing a reader could check, R10 still live - and each now names the site-wide check that produced it, with LN.evidenced running at the sink (Build Site Issues, after every module merges and before anything is scored) and the held-back findings named in the report notes instead of vanishing; and the technical site audit, which had no lineage at all while the full report has had its "Where these numbers come from" table since G29, now carries one (health score modelled from the crawl, Search Console measured over 28 days or unavailable with Google\'s reason, URL inspection with how many pages Google answered for, CrUX measured or unavailable with why, Lighthouse as one simulated load, crawler access from our own fetch) and it travels in the callback. Everything the lint cannot yet prove is a ratchet in harness/lineage_baseline.json, named node by node, exactly as retry_lint.check_in200 and gate_lint keep theirs: the debt is visible, cannot grow, and a node that gains its guard leaves the list for ever')
 
 
+# 74. NOTHING IS PROMISED UNTIL IT EXISTS (2026-10-15, docs/system-review-2026-10-14/INVARIANTS.md rule 4).
+#     The last of the four lints the INVARIANTS note argues for, and the one whose defects a customer feels directly: a page
+#     delivered with 50 placeholders (D10), and again with 12 after its own gate had failed twice (R11); a ladder row claiming a
+#     page nobody wrote (R1 — `fix_phantom_pages.py` is still in the repository); a masked figure shipped without telling the
+#     owner (R25); 23 reports that reached the app and no human (B-R1); an alert recorded as sent that was never sent (R6 / R30);
+#     a 404 from a revoked webhook recorded as a delivery (B-F2); Page Watch posting its digest and writing nothing back, so its
+#     rows sat `pending` for ever (B-F3); and a draft 100% identical to a competitor's page delivered `publishable: true`,
+#     `not_ready: false`, "passed the quality check", because the originality gate ran after *Content QA* had finalised those
+#     fields and flipped only an internal flag (B3-3).
+#
+#     `state_lint.py` walks the GENERATED workflows — the way section 55 walks the ledger ordering, `gate_lint.py` the gate pairs
+#     and `lineage_lint.py` the figures — and asks six questions of the class instead of the instance:
+#       A1 **promise**   a Code node may not mint `written` / `published` into a stored row without reading the evidence for it.
+#       A2 **builder**   every caller of the shared published-row builder must HAND it the proof, and the builder refuses without.
+#       A3 **stored**    a Data Table node that mints a forward state in its own `defineBelow` parameters must sit behind an IF
+#                        that reads the proof — it writes its literal into the row with no code in between, so nothing else can.
+#       B  **reversal**  a state that promises work in progress must have a way back, with a reason (R1).
+#       C  **delivery**  a node may not write `delivered` to a value meaning "somebody has it" without judging a status code, an
+#                        HTTP node it reads may not be `neverError` without `fullResponse` (B-F2 is exactly that pair), and a
+#                        workflow that OPENS a delivery record must contain the node that settles it (B-F3).
+#       D  **verdict**   a gate that refuses must set every field a consumer reads, never only the internal flag (B3-3).
+#
+#     **Two live defects of this class, found by seeding the lint and fixed here** — both the same mistake as B3-3, in the path
+#     that records a page as live:
+#       * **"I published a page" believed the owner.** *Publish Check* fetches the URL and knows perfectly well whether it
+#         answered (`live`), says so to the owner in words — "Recorded, but the page could not be fetched … the Site Tracker
+#         checks it again on Monday" — and then called `publishedRows()` **unconditionally**, writing `status: 'published'`, the
+#         URL and `page_exists: true` into seo_content_log and seo_ladders for a page that had just answered 404. Every reader of
+#         those two tables (the ladder plan, the Rank Tracker, the Content Cadence's pile-up guard, the Site Tracker, the app)
+#         then treated an unreachable page as live. Its twin, *Detect Published*, never had the bug — it only calls the builder
+#         for a page that answered 200 — which is the whole argument for the lint: one copy was right and nothing said the other
+#         was wrong. The builder now TAKES the proof and refuses without it (the row keeps the state it had, records no URL and no
+#         date, and the ladder row is not touched at all), and both call sites name what proved it.
+#       * **the case study was marked live by a Data Table node with no gate at all.** *Mark Case Study Published* wrote
+#         `status: 'published'` straight into seo_case_studies the moment the request arrived. Its twin in the Site Tracker sits
+#         behind *Any Case Studies Detected?*; this one sat behind nothing. It now sits behind *Page Live? (Published)*.
+#
+#     **What it proves and what it only ratchets.** It PROVES, with no baseline, that no caller of the row builder can omit the
+#     proof, that the builder still refuses without it, that no Data Table node can mint a forward state with no gate, that the
+#     reversal path exists, that no node can record a delivery without reading a status code, that no delivery POST can be
+#     `neverError` without `fullResponse`, that a workflow which opens a delivery record settles it, and that no node after a
+#     verdict node can touch one verdict field without setting all of them. It RATCHETS A1 in
+#     `harness/rule4_baseline.json` — today empty, and an empty ratchet with a named note is the honest shape, not a claim of
+#     perfection — and it does NOT prove that the row a passing node wrote is the row its evidence covers: reading `statusCode`
+#     says the node was built to look, not that it looked at this page. The app-side half of B-R1 (a report that reaches the app
+#     and no human) is enforced in `app/`, outside any build-time walk of workflow JSON, and the baseline's note says so rather
+#     than letting silence imply coverage.
+# =============================================================================
+import state_lint as _sl74
+
+# ---------- the case study is marked live only when something proved it (A3) ----------
+_mcs74 = pos('Mark Case Study Published')
+if_node('Page Live? (Published)', "{{ $('Publish Check').first().json.live }}", [_mcs74[0] - 170, _mcs74[1]])
+disconnect('Save Published (Log)', 'Mark Case Study Published')
+connect('Save Published (Log)', 'Page Live? (Published)')
+connect('Page Live? (Published)', 'Mark Case Study Published', 0)
+connect('Page Live? (Published)', 'Published Ladder Row', 1)   # not live: the chain goes on, the row is left alone
+
+# ---------- what the two fixes must keep (the v5 sources carry them; these fail the build if they are undone) ----------
+for _n74 in ('Publish Check', 'Detect Published'):
+    _c74 = code(_n74) if _n74 in nodes else None
+    if _c74 is not None:
+        assert re.search(r'publishedRows\(\{[^}]*\blive\b', _c74), \
+            'rule 4: %s calls publishedRows() without handing it the proof that the page is there' % _n74
+assert "status: live ? 'published'" in code('Publish Check'), \
+    'rule 4: the published-row builder advances the state without proof again (v5/code/_publish_rows.js)'
+assert "(ladder && live)" in code('Publish Check'), \
+    'rule 4: a ladder row can be marked published for a page nothing reached (v5/code/_publish_rows.js)'
+
+
+def _b74_checks():
+    """INVARIANTS rule 4 over every generated workflow. Runs after the four sub-builds, beside section 55's ordering proof."""
+    _sv74, _unpaid74 = _sl74.check()
+    _c74 = _sl74.counts(_sv74)
+    print('INVARIANTS rule 4 (promises and deliveries): ' + ', '.join(
+        '%s %d/%d' % (k, v['pass'], v['subject']) for k, v in sorted(_c74.items()))
+        + '; %d row(s) on the ratchet baseline' % len(_unpaid74))
+
+
+sticky("""### Nothing is promised until it exists, and nothing exists until it is delivered (INVARIANTS rule 4)
+`state_lint.py` walks the **generated** workflows at build time and fails the build on six things: a node that mints `written` / `published` into a stored row without reading the evidence; a call of the shared published-row builder that does not **hand it the proof**; a **Data Table node** that mints a forward state with no gate in front of it; a `writing` state with no way back; a **delivery written down without a status code** (or read from an HTTP node that is `neverError` with no `fullResponse` — how a 404 from a revoked webhook was recorded as a delivery); and a later gate that refuses on one field while the fields the file name, the banner, meta.json, the callback and the app read still say the page passed.
+**Found and paid here:** "I published a page" wrote `status: 'published'`, the URL and `page_exists: true` for a page that had just answered **404** — while telling the owner, in the same run, that it could not be fetched; and *Mark Case Study Published* marked the case study live with no gate at all. Both now need the proof.
+**Ratcheted, not proven:** `harness/rule4_baseline.json` (empty today). The lint does not prove the row a passing node wrote is the row its evidence covers, and the app-side half of B-R1 is enforced in `app/`.""",
+    _mcs74[0] - 180, _mcs74[1] + 170, 1140, 290, 4)
+log('Nothing is promised until it exists, and nothing exists until it is delivered (2026-10-15, INVARIANTS.md rule 4 - the class behind ~8 of the 81 defects, and the ones a customer feels: a page delivered with 50 placeholders (D10) and again with 12 after its own gate had failed twice (R11), a ladder row claiming a page nobody wrote (R1), a masked figure shipped without telling the owner (R25), 23 reports that reached the app and no human (B-R1), an alert recorded as sent that was never sent (R6 / R30), a 404 from a revoked webhook recorded as a DELIVERY (B-F2), Page Watch posting its digest and writing nothing back so its rows sat pending for ever (B-F3), and a draft 100% identical to a competitor page delivered "publishable: true" because the originality gate ran after Content QA had finalised that field and flipped only an internal flag (B3-3)). state_lint.py walks the GENERATED workflows the way section 55 walks the ledger ordering, gate_lint.py the gate pairs and lineage_lint.py the figures, and fails the build on six things: a Code node that mints written / published into a stored row without reading the evidence for it; a caller of the shared published-row builder that does not hand it the proof; a Data Table node that mints a forward state in its own defineBelow parameters with no IF in front of it that reads the proof; a state promising work in progress with no path that writes the row back with a reason; a node that writes "delivered" to a value meaning somebody has it without judging a status code, or that reads an HTTP node which is neverError with no fullResponse (literally the B-F2 pair), or a workflow that opens a delivery record and never settles it; and a node after a verdict node that touches one verdict field without setting all of them. Every question is asked of each node\'s OWN code with the shared kits cut out first, because gate_lint had a hole of exactly that kind within hours of landing - it counted a node that merely inlined a kit as guarded. TWO LIVE DEFECTS were found seeding it and are fixed here, both the same mistake as B3-3 in the path that records a page as live: "I published a page" (Publish Check) fetched the URL, knew it had answered 404, said so to the owner in words - and still called publishedRows() unconditionally, writing status published, the URL and page_exists true into seo_content_log and seo_ladders, so the ladder plan, the Rank Tracker, the cadence pile-up guard, the Site Tracker and the app all treated an unreachable page as live (its twin Detect Published never had the bug - it only calls the builder for a page that answered 200 - which is the whole argument for a lint: one copy was right and nothing said the other was wrong); and Mark Case Study Published wrote status published straight into seo_case_studies with no gate of any kind, while its Site Tracker twin sits behind Any Case Studies Detected?. The builder now TAKES the proof and refuses without it (the row keeps the state it had, records no URL and no date, the ladder row is not touched at all), both call sites name what proved it, and the case-study write sits behind the new IF Page Live? (Published). What the lint only ratchets is named in harness/rule4_baseline.json, empty today, with a note saying plainly what it does not prove: that the row a passing node wrote is the row its evidence covers, and the app-side half of B-R1, which lives in app/ and no walk of workflow JSON can reach')
+
+
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:
 #     "two fixes have never come back and both are enforced by the build".
@@ -7123,6 +7210,8 @@ _b71_checks()
 
 # section 72 (INVARIANTS rule 1): lineage, evidence, like-for-like deltas and withheld scores over every generated workflow
 _b72_checks()
+# section 74 (INVARIANTS rule 4): promises that need their evidence, and deliveries that need an acknowledgement
+_b74_checks()
 # section 69 (B-F5 + INVARIANTS rule 2): deterministic node ids over every generated workflow, the settings refusal's self-test,
 # and the gate-pair lint. Last, because the id freeze rewrites the files the checks above have just finished reading.
 _b69_checks()
