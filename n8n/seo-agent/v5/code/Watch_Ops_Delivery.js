@@ -17,9 +17,11 @@ return sent.map(key => {
   const attempt = AR.attemptsOf(r) + 1;
   const giveUp = !res.ok && attempt >= AR.MAX_ATTEMPTS;
   return { json: {
-    alert_key: key,
+    // R79 (2026-10-16): the row is written back under the key it is STORED with (the digest carries the trimmed form), so the update
+    // matches it byte for byte even for a row written before OA.keyOf trimmed its keys
+    alert_key: r.alert_key == null ? key : AR.storedKey(r),
     delivered: res.ok ? 'webhook' : giveUp ? 'abandoned' : 'failed',
-    channels: S(r.channels) || 'webhook,data_table',
+    channels: AR.withChannel(r.channels, 'webhook'),   // R105: the channel this digest went to, beside what the row already said
     severity: res.ok ? (S(r.severity) || 'high') : AR.severityFor(r, attempt),
     attempts: attempt,
     last_attempt_at: now,
