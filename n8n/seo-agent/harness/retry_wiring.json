@@ -1049,6 +1049,13 @@
    {
     "allowed": false,
     "maxTries": 3,
+    "name": "Fetch As AI Bots (Growth)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
     "name": "Fetch Cited Pages",
     "retryOnFail": true,
     "waitBetweenTries": 5000
@@ -1852,6 +1859,34 @@
     "allowed": false,
     "maxTries": 3,
     "name": "Fetch Reply Pages",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Count Prompt (Reply Reader)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Count Answer (Reply Reader)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Refusal (Reply)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Alert Retry (Reply)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    }

@@ -13,6 +13,9 @@ const robots = (() => { try { return $('Robots Verdicts (Growth)').all().map(i =
 const reqs = (() => { try { return $('Page Requests (Growth)').all().map(i => i.json); } catch (e) { return []; } })();
 const res = (() => { try { return $('Fetch Key Pages').all().map(i => i.json); } catch (e) { return []; } })();
 const plans = $('Growth Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
+// B9-8: the same page fetched as the AI answer fetchers (Fetcher Requests / Fetch As AI Bots); paired by position, like the browser fetch
+let fq = [], fr = []; try { fq = $('Fetcher Requests (Growth)').all().map(i => i.json); fr = $('Fetch As AI Bots (Growth)').all().map(i => i.json); } catch (e) {}
+const CHALLENGE = /just a moment|cf-chl|challenge-platform|attention required|access denied|captcha|are you a robot|bot detection|request blocked|forbidden/i;
 let bq = [], br = []; try { bq = $('Bing Growth Requests').all().map(i => i.json); br = $('Fetch Bing Growth').all().map(i => i.json); } catch (e) {}
 const jsonOf = (r) => { if (!r) return {}; if (r.d !== undefined) return r; const b = r.body ?? r.data; if (b && typeof b === 'object') return b; try { return JSON.parse(b || '{}'); } catch (e) { return {}; } };
 const dateOfMs = (v) => { const m = String(v || '').match(/Date\((-?\d+)/); if (!m) return ''; const t = Number(m[1]); return t > 946684800000 ? new Date(t).toISOString() : ''; };
@@ -104,10 +107,30 @@ reqs.forEach((q, i) => {
   } else if (robots_note) {
     checks.push({ key: 'ai_fetchable', ok: 'partial', weight: 0, label: 'Not checked: ' + robots_note, fix: 'Make /robots.txt answer 200 (or 404 when there are no rules) so what the AI fetchers may read can be checked.', detail: '' });
   }
+  // ---- B9-8: a page that answers a browser and refuses the AI fetchers is a HIGH finding, not a score ----
+  // Only judged against a page the browser could read; "no answer" from a fetcher (timeout) is not a refusal, it is not checked.
+  const fetchTests = fq.map((x, k) => ({ x, r: fr[k] || {} })).filter(y => y.x && !y.x.skip && y.x.site_id === q.site_id && keyOf(y.x.url) === keyOf(q.url)).map(({ x, r }) => {
+    const st = Number(r.statusCode || r.status) || 0; const body = String(r.body ?? r.data ?? '').slice(0, 4000); const hh = r.headers || {}; const mit = Object.keys(hh).some(k => k.toLowerCase() === 'cf-mitigated');
+    const challenge = mit || (st >= 400 && CHALLENGE.test(body)) || (st === 200 && body.length < 4000 && /just a moment|cf-chl|challenge-platform/i.test(body));
+    return { bot: x.bot, status: st, challenge, refused: reachable && (st >= 400 || challenge), unread: st === 0 && !challenge }; });
+  const fetchers_checked = reachable && fetchTests.length > 0 && fetchTests.some(t => !t.unread);
+  const fetchers_refused = fetchTests.filter(t => t.refused);
+  const fetchers_note = !fetchTests.length ? 'not fetched as the AI fetchers this run' : !reachable ? 'the page did not answer a browser either, so a refusal by the fetchers cannot be told apart' : fetchTests.every(t => t.unread) ? 'the AI fetchers got no answer (timeouts): not checked' : '';
+  const findings = [];
+  if (fetchers_checked && fetchers_refused.length) {
+    const txt = 'This page answers a browser (HTTP ' + status + ') but ' + fetchers_refused.map(t => t.bot + ' ' + (t.challenge ? 'gets a bot challenge' : 'gets HTTP ' + t.status)).join(', ') + ': a firewall or CDN rule is turning the AI answer fetchers away, so those assistants cannot read or quote it whatever is on it (possible: this test runs from our server, not from the bots\' addresses).';
+    findings.push({ level: 'high', key: 'ai_fetchers_refused', text: txt, bots: fetchers_refused.map(t => t.bot),
+      fix: 'Check the CDN / firewall bot settings (e.g. Cloudflare "Block AI bots" or "AI Crawl Control"): allow the verified AI search bots OAI-SearchBot, ChatGPT-User, PerplexityBot and Claude-User for this page; training crawlers can stay blocked.' });
+    checks.push({ key: 'ai_fetchers', ok: false, weight: 0, label: fetchers_refused.length + ' of ' + fetchTests.length + ' AI fetchers refused (a browser is served)', fix: findings[0].fix, detail: fetchers_refused.map(t => t.bot + ' ' + (t.challenge ? 'challenge' : t.status)).join(', ') });
+    issuesFirst.push(txt);
+    score_withheld = (score_withheld ? score_withheld + '; ' : '') + 'the page answers a browser but refuses ' + fetchers_refused.map(t => t.bot).join(', ') + ' (a high finding, not a score)';
+    score = null;
+  }
   const bi = bq.findIndex(x => x && x.kind === 'info' && x.site_id === q.site_id && keyOf(x.page) === keyOf(q.url)); const bd = bi >= 0 ? (jsonOf(br[bi]).d || null) : null;
   const pr = (p.stored_pages || []).find(x => x.key === keyOf(q.url)) || {};
   const issues = [...issuesFirst, ...checks.filter(c => c.ok !== true && c.weight > 0).sort((a, b) => b.weight - a.weight).map(c => c.fix)];
   out.push({ json: { site_id: q.site_id, domain: p.domain, url: q.url, kind: q.kind, checked_at: iso, status, score, checks, issues, words_raw, title, h1, updated_on, updated_visible,
+    fetchers_checked, fetchers: fetchTests, fetchers_note, findings,   // B9-8
     robots_checked, robots_blocked, robots_rule, robots_note, score_withheld,   // B9-3: a score is withheld, never guessed, when no AI fetcher may read the page
     bing_known: !!bd, bing_crawled_at: bd ? dateOfMs(bd.LastCrawledDate) : (pr.bing_crawled_at || ''), bing_status: bd ? (Number(bd.HttpStatus) || 0) : (Number(pr.bing_status) || 0), bing_discovered_at: bd ? dateOfMs(bd.DiscoveryDate) : '' } });
 });

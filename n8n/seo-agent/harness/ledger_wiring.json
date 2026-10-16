@@ -155,7 +155,7 @@
      "node": "AI Outreach Writer",
      "ref": "$('Any AI Outreach?').item.json",
      "streaming": false,
-     "template_chars": 2633
+     "template_chars": 3196
     }
    ],
    "ai_nodes": [
@@ -960,6 +960,97 @@
    "settle_from_ends": [
     "Nothing To Track"
    ]
+  },
+  "SEO Agent \u2014 Reply Reader": {
+   "ai_calls": [
+    {
+     "after": [
+      "Reply Result"
+     ],
+     "branch": 0,
+     "count_answer": "Count Answer (Reply Reader)",
+     "count_per_item": true,
+     "count_prompt": "Count Prompt (Reply Reader)",
+     "count_resume": "After Count (Reply Reader)",
+     "count_rounds": 0,
+     "count_set": "Prompt For Count (Reply Reader)",
+     "effort": "",
+     "fields": [
+      "business",
+      "domain",
+      "facts",
+      "link_note",
+      "our_body",
+      "our_subject",
+      "reply_from",
+      "reply_subject",
+      "reply_text",
+      "signer"
+     ],
+     "from": [],
+     "input": "Reply Classify Input",
+     "max_tokens": 1500,
+     "model": "claude-haiku-4-5-20251001",
+     "model_node": "Claude \u2014 Reply Reader",
+     "node": "Reply Reader",
+     "ref": "$('Reply Classify Input').item.json",
+     "streaming": false,
+     "template_chars": 3020
+    }
+   ],
+   "ai_nodes": [
+    "Reply Reader"
+   ],
+   "alert_retry": {
+    "from": "Settle Run Ledger (Reply)",
+    "gate": "Any Alert Retry (Reply)?",
+    "load": "Load Open Alerts (Reply)",
+    "plan": "Alert Retry Plan (Reply)",
+    "post": "Post Alert Retry (Reply)",
+    "result": "Alert Retry Result (Reply)",
+    "save": "Save Alert Retry (Reply)",
+    "table": "seo_ops_alerts"
+   },
+   "balance": "DFS Balance (Reply)",
+   "balance_end": "DFS Balance End (Reply)",
+   "catchup_records": "",
+   "cost_cal": "Load Cost Factors (Reply)",
+   "est": {
+    "ai": 0.003,
+    "dfs": 0.0
+   },
+   "guard": {
+    "gate": "After Run Ledger (Reply)",
+    "if": "Run Allowed? (Reply)",
+    "kit": "RG",
+    "load": "Load Open Runs (Reply)",
+    "notice": "Refusal Notice (Reply)",
+    "post": "Post Refusal (Reply)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Reply)",
+     "Refusal Notice (Reply)",
+     "Refuse Run Ledger (Reply)",
+     "Tell Caller (Reply)?"
+    ],
+    "refuse": "Refuse Run Ledger (Reply)",
+    "tell": "Tell Caller (Reply)?"
+   },
+   "ledger_load": "Load Run Ledger (Reply)",
+   "measured": "",
+   "mode": "reply_read",
+   "no_dfs": true,
+   "no_gate": true,
+   "open_runs": "Load Open Runs (Reply)",
+   "plan": "Reply Plan",
+   "reserve": "Run Ledger Row (Reply)",
+   "resume": "After Run Ledger (Reply)",
+   "settle": "Settle Run Ledger (Reply)",
+   "settle_from": [
+    "Refuse Run Ledger (Reply)",
+    "Reply Result"
+   ],
+   "settle_from_ends": []
   },
   "SEO Agent \u2014 Site Tracker": {
    "ai_calls": [

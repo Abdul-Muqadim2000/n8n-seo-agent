@@ -15,6 +15,9 @@
   "SEO_Agent_Link_Builder.json": {
    "Outreach Sequence Writer": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($json.output) }}"
   },
+  "SEO_Agent_Reply_Reader.json": {
+   "Reply Reader": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($json.output) }}"
+  },
   "SEO_Agent_Site_Tracker.json": {
    "Site Brief": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($json.output) }}"
   },
@@ -86,6 +89,12 @@
   ],
   "SEO Agent \u2014 Page Watch": [],
   "SEO Agent \u2014 Rank Tracker": [],
+  "SEO Agent \u2014 Reply Reader": [
+   {
+    "model_node": "Claude \u2014 Reply Reader",
+    "node": "Reply Reader"
+   }
+  ],
   "SEO Agent \u2014 Site Tracker": [
    {
     "model_node": "Claude \u2014 Site Brief",
@@ -584,6 +593,7 @@
   "SEO Agent \u2014 Link Builder": "!Run LB DFS Answers",
   "SEO Agent \u2014 Page Watch": "",
   "SEO Agent \u2014 Rank Tracker": "Tracker Report",
+  "SEO Agent \u2014 Reply Reader": "",
   "SEO Agent \u2014 Site Tracker": "!SERP Check (Site) Answers|Google Trends Answers"
  }
 }

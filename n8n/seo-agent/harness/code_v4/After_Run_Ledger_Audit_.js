@@ -323,7 +323,7 @@ if (__SCHED.trigger && __SCHED.cron) {
   }
 }
 const g = RG.gate({ rows, mine, mode: 'audit_schedule', where: 'SEO Agent — Audit Scheduler', run_id: String($execution.id), caught_up: __caught, parent_run_id });
-if (g.allowed) return plan;
+if (g.allowed || false) return plan;   // W3-F: a synchronous caller is waiting (the Reply Reader): it keeps its row but is never refused by what else is running
 let __dom = __S(__trig.domain);
 if (!__dom) { try { __dom = __S((plan[0] && plan[0].json || {}).domain); } catch (e) { __dom = ''; } }
 return [{ json: { run_refused: true, run_id: String($execution.id), refused_at: new Date().toISOString(),
