@@ -71,7 +71,14 @@ return sites.map((s, idx) => {
       serp_position: sp ? sp.position : null, serp_url: sp ? sp.url : '', serp_checked_at: sp ? sp.checked_at : '', history: hist }; });
   // pages found live this week replace their planned entry (live URL, published) or are added; they were inspected in this run
   const det = detAll.find(x => x.site_id === s.site_id) || null; const found = det ? det.detected : [];
-  const basePages = (s.ladder_pages || []).map(p => { const f = found.find(f => kwKey(f.keyword) === kwKey(p.keyword) && (!f.ladder_id || !p.ladder_id || f.ladder_id === p.ladder_id)); return f ? { ...p, url: f.url, status: 'published', page_exists: true, detected: true } : promised(p); });
+  // R92 part 4 (2026-10-16, re-rating 2026-10-15): ONE rule with the Rank Tracker (Tracker_Report.js `coveredBy`): a ladder target that
+  // a live page of the site already answers (SM.matchPage over this week's inventory) is reported AS that page. Before, this table read
+  // only the ladder row ("/peppol-uae/ | writing | no page was written yet") while the Rank Tracker of the same morning said "the main
+  // page is live: improve …/top-peppol-e-invoicing-software-features…". The planned URL and the ladder row's own state travel with it, so
+  // a page written for that target is still told "do not publish it as a second URL" (D11) below.
+  const coverLive = (p) => { if (!p || p.page_exists || p.status === 'published') return p; const c = covered(p.keyword, p.url); if (!c) return promised(p);
+    return { ...p, url: c.url, planned_url: onHost(p.url), ladder_status: p.status, status: 'live (existing page)', page_exists: true, covered_by: c.url, covered_match: c.matched_by || '' }; };
+  const basePages = (s.ladder_pages || []).map(p => { const f = found.find(f => kwKey(f.keyword) === kwKey(p.keyword) && (!f.ladder_id || !p.ladder_id || f.ladder_id === p.ladder_id)); return f ? { ...p, url: f.url, status: 'published', page_exists: true, detected: true } : coverLive(p); });
   for (const f of found) if (!basePages.some(p => ukey(p.url) === ukey(f.url))) basePages.push({ url: f.url, keyword: f.keyword, rung: 0, status: 'published', ladder_id: f.ladder_id || '', page_exists: true, detected: true });
   // G25 (2026-10-13): an inspection the quota did not reach, or one that failed, is "not checked" — never "not indexed" (`skipped` / `not_checked`)
   const pages = basePages.map(p => { const i = insp.find(x => x.url === p.url && !x.skipped && !x.inspect_error) || insp.find(x => x.url === p.url); const asked = !!i && !i.skipped && !i.inspect_error;
@@ -81,7 +88,9 @@ return sites.map((s, idx) => {
   // pages not live yet are reported as such, never as 'not indexed'
   // R1 (2026-10-13): "written, not published yet" only when seo_content_log says the page was written (Site Plan's `written`); a ladder row
   // that merely says `writing` is a promise — a refused page run leaves exactly that, and the note says what happened.
-  for (const p of pages) if (!(p.page_exists || p.status === 'published')) { p.inspect_error = (p.status === 'writing' && p.written) ? 'written, not published yet' : p.status === 'writing' ? ('no page was written yet' + (p.status_note ? ': ' + String(p.status_note).slice(0, 160) : '')) : 'planned, not written yet'; p.indexed = null; }
+  // R111 (2026-10-16): a draft whose last quality round failed is neither "written, not published yet" nor "no page was written yet"
+  for (const p of pages) if (!(p.page_exists || p.status === 'published')) { p.inspect_error = (p.status === 'writing' && p.written) ? 'written, not published yet' : (p.status === 'writing' && p.not_ready) ? ('written, but the draft did not pass the quality check — fix it and run it again' + ((p.qa_reasons || []).length ? ': ' + String(p.qa_reasons[0]).slice(0, 160) : '')) : p.status === 'writing' ? ('no page was written yet' + (p.status_note ? ': ' + String(p.status_note).slice(0, 160) : '')) : 'planned, not written yet'; p.indexed = null; }
+  for (const p of pages) if (p.covered_by && !p.inspected) p.inspect_error = 'not inspected this week; this existing page answers the search the ladder planned ' + (p.planned_url || 'a new page') + ' for';
   // ---- alerts ----
   // G28: `drop` is no longer the test, it is the line between a medium and a high alert. The test is ST.change: enough events in the two
   // periods together (min_events), a change beyond 95% sampling noise (|z| >= 1.96) and a size worth reporting (min_pct).
@@ -110,6 +119,21 @@ return sites.map((s, idx) => {
   if (ga4 && ga4.errors.length) alerts.push({ level: 'medium', text: 'Some GA4 requests failed: ' + ga4.errors.slice(0, 3).join('; ') });
   for (const p of pages) if (p.inspected && p.indexed === false && (p.page_exists || p.status === 'published')) alerts.push({ level: p.detected ? 'info' : 'high', text: 'Page not indexed: ' + p.url + ' (' + (p.coverage || p.verdict || 'not indexed') + ')' + (p.detected ? ' — found live this week; request indexing to speed it up' : '') });   // a page that just went live is not alarming yet
   for (const p of pages) if (p.inspected && p.indexed && p.canonical_ok === false) alerts.push({ level: 'medium', text: 'Google picked another canonical for ' + p.url });
+  // R59 (2026-10-16, re-rating 2026-10-15; the Site Tracker's path of the audit's defect): the canonical alert above looks only at INDEXED
+  // pages, and the inspection's `canonical_ok` is host-AGNOSTIC (_page_watch.js) — so a page Google keeps under the bare host while the
+  // site redirects to and names www (exec 634: three pages "Duplicate, Google chose different canonical than user", Google's canonical
+  // https://techand.ai/…) could never raise anything here. Every inspected page of this run is read, not only the ladder pages, and the
+  // split is named for what it is: Google chose the other host, so the fix is the sitemap and the internal links, not "request indexing".
+  const hostSplit = (() => { const own = SM.helpers.bare(model.canonical_host || s.domain); const want = String(model.canonical_host || '').toLowerCase();
+    const rows = insp.filter(x => x && x.url && x.google_canonical && !x.skipped && !x.inspect_error).filter(x => {
+      const hu = String(SM.helpers.hostOf(x.url) || '').toLowerCase(), hg = String(SM.helpers.hostOf(x.google_canonical) || '').toLowerCase();
+      return hu && hg && hu !== hg && SM.helpers.bare(hu) === own && SM.helpers.bare(hg) === own && ukey(x.url) === ukey(x.google_canonical); });
+    const hosts = [...new Set(rows.map(x => String(SM.helpers.hostOf(x.google_canonical)).toLowerCase()))];
+    const origin = (u) => (String(u || '').match(/^https?:\/\/[^\/?#]+/i) || [''])[0];   // an observed URL's own scheme and host, never rebuilt by hand (D15)
+    return rows.length ? { pages: rows.map(x => ({ url: x.url, google_canonical: x.google_canonical, indexed: !!x.indexed, coverage: x.coverage || '' })), google_host: hosts[0], site_host: want || String(SM.helpers.hostOf(rows[0].url)).toLowerCase(),
+      google_home: origin(rows[0].google_canonical), site_home: SM.siteUrl(model, '/').replace(/\/$/, ''), checked: insp.filter(x => !x.skipped && !x.inspect_error).length } : null; })();
+  if (hostSplit) alerts.push({ level: 'medium', stat: 'host_split', text: 'Google keeps ' + hostSplit.pages.length + ' of the ' + hostSplit.checked + ' pages it was asked about under ' + hostSplit.google_home + ' — the other host — although your site serves and names ' + hostSplit.site_home + ' as canonical (Google chose a different canonical than yours): '
+    + hostSplit.pages.slice(0, 3).map(x => x.google_canonical).join(', ') + (hostSplit.pages.length > 3 ? ' and ' + (hostSplit.pages.length - 3) + ' more' : '') + '. Those pages are shown under the other host, not missing from Google.' });
   // G28 follow-up (2026-10-13): the last fixed threshold in the site tracking. Search Console's position is an impression-weighted 28-day
   // average, so "5 places" on 12 impressions is one search, not a drop. ST.position needs min_impressions in BOTH periods before it calls a
   // move real, tests the same keyword's clicks over the same two periods, and the alert says what was tested and how sure it is.
@@ -160,9 +184,22 @@ return sites.map((s, idx) => {
   if (!s.gsc_connected) actions.push({ priority: 1, type: 'connect_gsc', action: 'Add ' + sa + ' as a user (Full) of ' + s.domain + ' in Search Console → Settings → Users and permissions.', why: 'Without it the report has no real query, click or index data.', keyword: '', url: '' });
   for (const p of pages.filter(p => p.inspected && p.indexed === false && (p.page_exists || p.status === 'published')).slice(0, 3)) actions.push({ priority: 1, type: 'index', action: 'Request indexing for ' + p.url + ' in Search Console (URL inspection → Request indexing) and link to it from 2-3 existing pages.', why: (p.rung ? 'Ladder rung ' + p.rung + ' for "' + p.keyword + '"' : 'The page for "' + p.keyword + '"') + ' cannot rank until Google indexes it (' + (p.coverage || p.verdict || 'not indexed') + ').', keyword: p.keyword, url: p.url });
   // D11: a page written for a keyword a LIVE page already answers must not go up as a second page — it is folded into the page that exists
-  for (const p of pages.filter(p => p.status === 'writing' && p.written && !p.page_exists).slice(0, 3)) { const c = covered(p.keyword, p.url);   // R1: only a page the content log says was written
+  // R111 (2026-10-16): a draft whose last quality round failed gets `fix_draft` — the reasons, and the body that writes it again —
+  // never `publish` (exec 634 put "P1 Publish the written page for \"ai consulting\"" on top with an "I published it" button)
+  const fixed = new Set();
+  const fixDraft = (keyword, url, reasons, page_type) => { const k = kwKey(keyword); if (!k || fixed.has(k)) return; fixed.add(k);
+    actions.push({ priority: 1, type: 'fix_draft', keyword, url: url || '', reasons: (reasons || []).slice(0, 6),
+      action: 'Fix the draft for "' + keyword + '" and run it again — it did not pass the quality check' + ((reasons || []).length ? ' (' + reasons.slice(0, 2).join('; ').slice(0, 300) + ')' : '') + '. Do not publish it as it is.',
+      why: 'The last quality round found what is listed; a page that fails it is a draft to finish, not a page to put live.', api_body: pageBody(keyword, '', page_type || 'Service Page') }); };
+  for (const p of pages.filter(p => (p.ladder_status || p.status) === 'writing' && p.not_ready && !p.written && !p.covered_by).slice(0, 3)) fixDraft(p.keyword, p.url, p.qa_reasons, '');
+  for (const f of (s.needs_fix || []).filter(f => !found.some(x => kwKey(x.keyword) === kwKey(f.keyword))).slice(0, 3)) fixDraft(f.keyword, '', f.reasons, f.page_type);
+  for (const p of pages.filter(p => (p.ladder_status || p.status) === 'writing' && p.written && (p.covered_by || !p.page_exists)).slice(0, 3)) { const c = p.covered_by ? { url: p.covered_by, matched_by: p.covered_match || 'slug' } : covered(p.keyword, p.url);   // R1: only a page the content log says was written
     if (c) actions.push({ priority: 1, type: 'refresh_existing', action: 'Do not publish the new page for "' + p.keyword + '" as a second URL: ' + c.url + ' already answers this search. Use the new text to refresh that page instead.', why: 'Two pages for one search split the signals and neither ranks (the live page was found ' + (c.matched_by === 'query' ? 'in Search Console with ' + c.impressions + ' impressions for this query' : 'in the site\'s page list') + ').', keyword: p.keyword, url: c.url });
     else actions.push({ priority: 1, type: 'publish', action: 'Publish the written page for "' + p.keyword + '" (planned URL ' + p.url + ') and report the link with "I published a page".', why: 'It is written but not live yet; nothing can be indexed or ranked before it is published.', keyword: p.keyword, url: p.url }); }
+  // R59: the host split, as one piece of work — the sitemap Google reads and the internal links, never "request indexing" page by page
+  if (hostSplit) actions.push({ priority: 2, type: 'host_split', keyword: '', url: SM.siteUrl(model, '/'),
+    action: 'Make Google use ' + hostSplit.site_home + ': submit the sitemap on ' + hostSplit.site_home + ' in Search Console (in place of one on ' + hostSplit.google_home + '), change the internal links that still point at ' + hostSplit.google_home + ', keep the redirects, and watch these pages move over.',
+    why: hostSplit.pages.length + ' inspected page(s) are shown by Google under ' + hostSplit.google_home + ' (its chosen canonical), e.g. ' + hostSplit.pages[0].google_canonical + '.' });
   for (const q of ((gsc && gsc.striking) || []).slice(0, 3)) actions.push({ priority: 2, type: 'striking', action: 'Push "' + q.query + '" from #' + r1(q.position) + ' into the top 3: expand ' + (q.page || 'the ranking page') + ' with the missing sub-topics, add an FAQ and 2-3 internal links to it.', why: q.impressions + ' impressions in 28 days at position ' + r1(q.position) + ' (' + q.clicks + ' clicks); a top-3 spot typically triples the clicks.', keyword: q.query, url: q.page || '', api_body: pageBody(q.query, q.page, 'Service Page') });
   for (const q of ((gsc && gsc.ctr_gaps) || []).slice(0, 2)) actions.push({ priority: 2, type: 'ctr', action: 'Rewrite the title and meta description of ' + (q.page || 'the ranking page') + ' for "' + q.query + '" (lead with the outcome and a number).', why: 'Position ' + r1(q.position) + ' with ' + q.impressions + ' impressions but CTR ' + (q.ctr * 100).toFixed(1) + '% vs about ' + Math.round(q.expected_ctr * 100) + '% expected.', keyword: q.query, url: q.page || '' });
   // B4-1 / B4-3 (2026-10-15, benchmark area 4): a decaying page is a TESTED, SEASONALLY CHECKED judgement, it is ranked by the
@@ -264,7 +301,7 @@ return sites.map((s, idx) => {
     const splitLineage = (blk, figure, unit) => { if (!blk) return;
       lineage.push(blk.failed ? LN.unknown(figure, blk.reason || 'the ' + unit + ' split was not read this week')
         : LN.of(figure, 'gsc', { period: curRange, basis: 'measured',
-          sample: LN.sample(blk.total || 0, 'clicks across ' + (blk.rows || []).length + ' ' + unit + ((blk.rows || []).length === 1 ? '' : 's')),
+          sample: LN.sample(blk.total || 0, 'clicks across ' + (blk.rows || []).length + ' ' + ((blk.rows || []).length === 1 ? unit : (unit === 'country' ? 'countries' : unit + 's'))),   // R92 part 3: never "countrys"
           ...(blk.read ? {} : { note: blk.reason }) })); };
     splitLineage(gsc.devices, 'Clicks by device', 'device');
     splitLineage(gsc.countries, 'Clicks by country', 'country');
@@ -342,7 +379,9 @@ return sites.map((s, idx) => {
     countries: (gsc && gsc.countries) || { read: false, rows: [], reason: 'Search Console is not connected for this site' },
     // B-G3 (2026-10-15): the rungs the read-path fit gate set aside, with the reason, so the report can say why the list is shorter
     set_aside: s.set_aside || [], set_aside_note: s.set_aside_note || '',
-    tracked, ladder_pages: pages, pending_publish: (s.pending_publish || []).filter(p => !found.some(f => kwKey(f.keyword) === kwKey(p.keyword))), ladder_heads: s.ladder_heads || [], trends, alerts, actions: acts, prev_runs: prevRuns, weeks_tracked: prevRuns.length + 1, service_account_email: cfg.service_account_email || '', form_url: FORM_URL, api_url: API_URL,
+    tracked, ladder_pages: pages, pending_publish: (s.pending_publish || []).filter(p => !found.some(f => kwKey(f.keyword) === kwKey(p.keyword))),
+    needs_fix: (s.needs_fix || []).filter(p => !found.some(f => kwKey(f.keyword) === kwKey(p.keyword))),   // R111 drafts that failed their last quality round; R59 host_split below: pages Google keeps under the other host
+    host_split: hostSplit, ladder_heads: s.ladder_heads || [], trends, alerts, actions: acts, prev_runs: prevRuns, weeks_tracked: prevRuns.length + 1, service_account_email: cfg.service_account_email || '', form_url: FORM_URL, api_url: API_URL,
     detected_published: found.map(f => ({ keyword: f.keyword, url: f.url, ladder_id: f.ladder_id || '', matched_by: f.matched_by, source: f.source })),
     publish_detection: det ? { checked: true, candidates: det.candidates, sitemap_ok: !!(det.sitemap || {}).ok, sitemap_urls: (det.sitemap || {}).urls || 0, sitemap_error: (det.sitemap || {}).error || '', pages_fetched: det.pages_fetched || 0, found: found.length,
       still_waiting: (det.unmatched || []).length, recorded: found.length ? !detErrors.length : null, error: found.length && detErrors.length ? detErrors.slice(0, 3).join('; ').slice(0, 300) : '' } : { checked: false, candidates: 0, found: 0, reason: detFail ? 'detection failed: ' + detFail.slice(0, 200) : 'no written page waiting for publication' },

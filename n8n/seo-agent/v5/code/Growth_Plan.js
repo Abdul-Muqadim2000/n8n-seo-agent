@@ -130,7 +130,10 @@ for (const s of sites) {
     // never be queued again. The read path checks the evidence: a content-log row for the same run that really says written or
     // published. Without one, after two weeks the question goes back in the queue and says why. (The write-side release belongs
     // to the cadence — registered as B9-6 for area 4.)
-    const stalled = (() => { if (old.status !== 'writing') return null;
+    // R111 (2026-10-16): a run that left a draft which failed its quality check is not stalled (nothing would be gained by writing the
+    // question again from nothing) and it is not written either — the row stays `writing` and says the draft needs a fix
+    const draftFailed = old.status === 'writing' && String((logByReq.get(String(old.request_id || '')) || {}).status || '') === 'not_ready';
+    const stalled = (() => { if (old.status !== 'writing' || draftFailed) return null;
       const l = logByReq.get(String(old.request_id || ''));
       if (l && ['written', 'published'].includes(String(l.status))) return null;
       const since = old.written_at || old.updated_at || '';
@@ -143,7 +146,7 @@ for (const s of sites) {
     targets.push({ target_id, site_id: s.site_id, domain: dom, prompt_id: pid, question: g.prompt, keyword, kind, page_url: page ? page.url : '', page_type: kind === 'refresh' ? '' : (PT[g.kind] || 'Guide'),
       fanout: (g.fanout || []).slice(0, 8).join(' | '), sources_json: JSON.stringify((g.cited_urls || []).slice(0, 6).map(c => ({ u: c.u, t: c.t || '', n: c.n || 1 }))), competitors: (g.competitors || []).slice(0, 8).join(', '),
       engines: engines.join(', '), stage: g.stage || '', value, status,
-      reason: (stalled ? 'the page run started on ' + stalled.since + ' never produced a page (' + stalled.log + '): queued again. ' : '') + (lostAgain ? 'AI named you for this question and has stopped (won ' + (lostAgain.won_at || 'earlier') + ', lost again in the check of ' + lostAgain.lost_at + '; ' + lostAgain.observed + '). ' : '') + (ladderPage ? 'written as the keyword ladder page "' + ladderPage.keyword + '" (one search, one page)' : status === 'skipped' && kind === 'refresh' ? 'the page is fresh (updated ' + String(pr && pr.updated_on || '').slice(0, 10) + ') and AI-ready (' + (pr && pr.score) + '/100)' : page ? 'refresh ' + page.url + ' (' + page.how + (stale ? '; not updated in 90+ days' : '') + (weak ? '; AI-readiness ' + (pr ? pr.score + '/100' : 'not checked yet') : '') + ')' : 'no page answers it yet'),
+      reason: (draftFailed ? 'the page written for this question did not pass the quality check: fix the draft and run it again (it is not offered as a page that answers the question until it passes). ' : '') + (stalled ? 'the page run started on ' + stalled.since + ' never produced a page (' + stalled.log + '): queued again. ' : '') + (lostAgain ? 'AI named you for this question and has stopped (won ' + (lostAgain.won_at || 'earlier') + ', lost again in the check of ' + lostAgain.lost_at + '; ' + lostAgain.observed + '). ' : '') + (ladderPage ? 'written as the keyword ladder page "' + ladderPage.keyword + '" (one search, one page)' : status === 'skipped' && kind === 'refresh' ? 'the page is fresh (updated ' + String(pr && pr.updated_on || '').slice(0, 10) + ') and AI-ready (' + (pr && pr.score) + '/100)' : page ? 'refresh ' + page.url + ' (' + page.how + (stale ? '; not updated in 90+ days' : '') + (weak ? '; AI-readiness ' + (pr ? pr.score + '/100' : 'not checked yet') : '') + ')' : 'no page answers it yet'),
       created_at: old.created_at || iso, updated_at: iso, request_id: old.request_id || '', written_at: old.written_at || '', won_at: old.won_at || '' });
     if (page) addPage(page.url, 'target', 'answers "' + g.prompt.slice(0, 80) + '"', { question: g.prompt });
   }

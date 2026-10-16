@@ -13,6 +13,10 @@ const { list, on_demand, want, total } = monitorSites('links');   // `trigger` c
 if (!list.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'no site matches "' + want + '"' : (total ? 'the Link Builder is switched off for every site' : 'no sites yet') } }];
 const prospects = rowsOf('Load Link Prospects'), outreach = rowsOf('Load Link Outreach'), ladders = rowsOf('Load Ladders'), logs = rowsOf('Load Content Log'), snaps = rowsOf('Load Backlink Snapshots');
 const profiles = rowsOf('Load Profiles'), cache = rowsOf('Load Cache (Links)'), targets = rowsOf('Load AI Targets'), ledger = rowsOf('Load Backlinks'), queries = rowsOf('Load Query History'), ranks = rowsOf('Load Rank History');
+// R93 (2026-10-16, re-rating 2026-10-15): the site's page inventory (seo_pages: each page's real <title> / H1). A target page used to be named
+// by the first Search Console query of the page — 13 of 16 targets in exec 628 had a query as their "title", so the writer's anchor hint
+// "title" meant an exact-match keyword link, against the product's own "brand / title / URL, never a keyword" rule.
+const invRows = rowsOf('Load Pages (LB)').filter(r => r.url);
 const now = new Date(); const iso = now.toISOString();
 const parse = (t, d) => { try { return JSON.parse(t || ''); } catch (e) { return d; } };
 const countryOf = (code) => { const e = Object.entries(typeof COUNTRIES === 'object' ? COUNTRIES : {}).find(([, c]) => Number(c.code) === Number(code)); return e ? { name: e[0], iso: String(e[1].iso || '').toUpperCase() } : { name: '', iso: '' }; };
@@ -85,14 +89,23 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const month = iso.slice(0, 7);
   const pitched = (u) => outreach.filter(o => o.site_id === s.site_id && pathKey(o.target_url) === pathKey(u) && String(o.drafted_at || '').slice(0, 7) === month).length;
   const pages = [];
-  const addPage = (url0, title, keyword, kind, page_type) => { const url = ourUrl(url0); if (!url || pages.some(p => pathKey(p.url) === pathKey(url))) return; pages.push({ url, title: String(title || '').slice(0, 140), keyword: String(keyword || '').slice(0, 100), kind, page_type: page_type || '',
+  // R93: a page's title is its own title — the inventory's <title> / H1, else the menu text the site model read — never a search query.
+  // A page whose title is not on record gets none (the writer then offers the brand as link text); the query stays its `keyword`.
+  const invTitle = new Map(invRows.filter(r => r.site_id === s.site_id || normD(r.url) === s.domain).map(r => [pathKey(r.url), String(r.title || r.h1 || '').trim()]));
+  for (const n of (site_model.nav_pages || [])) { const k = pathKey(SM.siteUrl(site_model, n.path || '/')); if (n.title && !invTitle.get(k)) invTitle.set(k, String(n.title)); }
+  const realTitle = (u) => invTitle.get(pathKey(ourUrl(u))) || '';
+  const addPage = (url0, title, keyword, kind, page_type) => { const url = ourUrl(url0); if (!url || pages.some(p => pathKey(p.url) === pathKey(url))) return; pages.push({ url, title: String(realTitle(url) || (kind === 'home' ? title : '') || '').slice(0, 140), keyword: String(keyword || '').slice(0, 100), kind, page_type: page_type || '',
     position: posFor(url, keyword), rds: rdsTo(url), kw_share: Math.round(100 * kwShare(url)) / 100, pitched: pitched(url) }); };
   addPage(home, brand, brand, 'home');
   for (const l of lad.filter(l => l.target_url && (l.status === 'published' || l.page_exists === true || l.page_exists === 'true')).sort((a, b) => (Number(b.rung) || 0) - (Number(a.rung) || 0)))
     addPage(l.target_url, l.keyword, l.keyword, Number(l.rung) === 4 ? 'hub' : /service|product|landing|pricing/i.test(l.page_type || '') ? 'money' : 'guide', l.page_type);
   for (const t of targets.filter(t => t.site_id === s.site_id && t.page_url && ['won', 'writing', 'written', 'done'].includes(String(t.status || '')))) addPage(t.page_url, t.question, t.keyword || t.question, 'answer');
   for (const l of logs.filter(l => normD(l.domain) === s.domain && l.published_url)) addPage(l.published_url, l.keyword, l.keyword, /service|product|landing/i.test(l.page_type || '') ? 'money' : 'article', l.page_type);
-  for (const [k, n] of [...imp.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15)) { const q = myQ.find(x => pathKey(x.page) === k && String(x.period_end) === lastPeriod); addPage(q.page, q.query, q.query, 'page'); }
+  // R93: a Search Console page is named by its real title (or none); its strongest TOPICAL query is its keyword — a navigational query
+  // ("techandkey com": a domain typed as a search) says nothing about the page's topic and is skipped when another query exists
+  const navQ = (q) => /\b(com|net|org|www|ae|io|ai)\b/.test(String(q || '').toLowerCase()) && String(q || '').trim().split(/\s+/).length <= 3;
+  for (const [k, n] of [...imp.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15)) { const qs = myQ.filter(x => pathKey(x.page) === k && String(x.period_end) === lastPeriod).sort((a, b) => (Number(b.impressions) || 0) - (Number(a.impressions) || 0));
+    const q = qs.find(x => !navQ(x.query)) || qs[0]; addPage(q.page, '', q.query, 'page'); }
   const mineP = prospects.filter(p => p.site_id === s.site_id);
   const mineO = outreach.filter(o => o.site_id === s.site_id);
   return { json: { site_id: s.site_id, domain: s.domain, country: s.country || c.name || '', country_iso: c.iso, location_code: Number(s.location_code) || 2840, language_code: s.language_code || 'en',

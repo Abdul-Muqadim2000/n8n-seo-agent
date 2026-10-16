@@ -7,7 +7,10 @@ const out = [];
 for (const s of sites) {
   if (!s.jobs.length) continue;
   const p = plans.find(x => x.site_id === s.site_id) || {}; const pr = p.profile || {};
-  const titleOf = (u) => ((p.pages || []).find(x => String(x.url).replace(/\/+$/, '') === String(u || '').replace(/\/+$/, '')) || {}).title || '';
+  // R93 (2026-10-16): the page's own title, matched host-agnostically (the stored pitch rows mix www and the bare host). A page whose title
+  // is not on record is offered with the brand as link text — never a keyword (LB Plan no longer puts a search query in `title`).
+  const pk = (u) => String(u || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  const titleOf = (u) => ((p.pages || []).find(x => pk(x.url) === pk(u)) || {}).title || '';
   // D13: the business name comes from the site model (LB Plan), never from the domain label; with no name on file the e-mails carry a bracket
   // the owner fills in, and the draft gate holds them until then.
   const business = p.brand_known ? p.brand : '[Confirm: the business name]';
@@ -22,6 +25,6 @@ for (const s of sites) {
     jobs: s.jobs.map((j, i) => { const ck = parse(j.checks_json, {}) || {}; const c = (parse(j.contacts_json, []) || [])[0] || {};
       return { n: i + 1, prospect_domain: j.prospect_domain, type: j.type, angle: ck.angle === 'broken' || j.type === 'broken' ? 'broken' : j.type, page_url: j.page_url, page_title: j.page_title, evidence: j.evidence,
         dead: ck.dead || null, competitors_named: ck.competitors_named || [], contact: c.kind ? c.kind + (c.own ? ' on their site' : '') : 'contact form', to: c.email || '', deadline: j.deadline || '',
-        target_url: j.target_url, target_title: titleOf(j.target_url), anchor_hint: j.anchor_hint }; }) } });
+        target_url: j.target_url, target_title: titleOf(j.target_url), anchor_hint: (j.anchor_hint === 'title' && !titleOf(j.target_url)) ? 'brand' : j.anchor_hint }; }) } });
 }
 return out.length ? out : [{ json: { skip: true } }];

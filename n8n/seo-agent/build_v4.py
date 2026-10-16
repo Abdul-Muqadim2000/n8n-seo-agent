@@ -9149,6 +9149,109 @@ sticky("""### One AI Overview figure in one place, and a state that advances onl
 log('One AI Overview figure in one place, and a state that advances only on evidence (2026-10-15, FIX_PLAN §3.16 rows B6-9 and B9-6). B6-9: v5/code/Ladder_Pool.js still multiplied the click-through rate by 0.65 when a results page carried an AI Overview - Ahrefs\' APRIL 2025 figure - after B1-3 had replaced it in _kw_inputs.js with the December 2025 per-position study (300,000 keywords, published 2026-02-04: -58.0% at position 1, -50.8% at 2, -46.4% at 3) and B6-1 in _rank_serp.js. Which kit belongs where is B6-1\'s own reasoning: a flat factor all but cancels out of a SHARE, so the share of voice needed the per-position table, while the ladder\'s traffic_potential is an ABSOLUTE top-three estimate and only the keywords whose results page has an AI Overview carried the factor - so the stale number inflated those estimates by 1.35x and moved them up the pre_score order that decides which rungs are planned. Ladder Pool now makes the same KWI.calibrate call the discovery twin Collect_Research.js makes, and the estimate carries traffic_basis / traffic_note / click_loss instead of arriving bare. The class is closed by a build-time scan that refuses the literal 0.65 within 200 characters of an AI Overview in every v5/code kit and every generated Code node, with comments stripped first so the two comments that record WHY the figure was retired survive. B9-6: the write half of "writing was a promise nobody kept" - the Content Cadence marked an AI target writing and stamped written_at when a page run STARTED, whatever the spawn did, and nothing in the system ever set written, so Growth Metrics counted written: 0 every week of its life and a refused or failed run left the question claiming work in progress for ever (R1\'s class in the one table R1 did not cover). AI Target Marks now writes the row back to queued with the error when the content run could not be started and says in the row\'s own reason that nothing exists yet; the new AI Target Settle is the only exit from writing and advances a row only against the seo_content_log row for that same run, which is R1\'s rule exactly (a page counts as written only on a written content-log row); it deliberately does not time a row out, because the 14-day requeue and its alert belong to the read half in AI Growth. The class is closed by deriving state_lint.py\'s work-in-progress registry from the generated workflows instead of hand-writing it from R1\'s one instance: every table a run moves to writing whose state is read back and acted on must declare its way back, and check B then has to find the node that writes it. On its first run the derived registry found a third table, seo_case_studies, and the honest answer is recorded rather than assumed - nothing tests that row\'s state (Brief Context hands a later page url: \'\' unless the status is published, and the Link Builder takes a case study only when it has a page_url), so it is not this defect')
 
 
+# 94. A DRAFT THAT FAILED ITS QUALITY CHECK IS NOT A PAGE TO PUBLISH (2026-10-16, re-rating 2026-10-15 — R111, High; defects
+#     dossier docs/system-review-2026-10-15/defects/D_app_reporting.md; INVARIANTS rule 4).
+#
+#     *Content Log Row* wrote `status: written` whenever the blog package held article text. It never read the quality verdict, although
+#     the verdict was on the package one hop away (*Content QA* decides it, *Originality Check* re-decides it when it invalidates the gate,
+#     *Build Word File* carries it as `qa_not_ready` / `qa_reasons`, *Blog Package* passes it on). Nine readers turn `written` into
+#     "publish it": the weekly site report put "P1 Publish the written page for "ai consulting"" on top with an "I published it" button
+#     (exec 634), the Rank Tracker said "already written — publish it" for two drafts their own quality check had refused (632), the
+#     cadence's pile-up note said "publish them to continue" (638), and the Claude site brief was told to ask for them to be published.
+#     Now: the row says `not_ready` with the last round's reasons in the new `qa_reasons` column, and every engine reader says "fix the
+#     draft and run it again" — Site Plan (`needs_fix`), Site Metrics (`fix_draft`, never `publish`), Brief Input
+#     (`drafts_to_fix_not_publish`), Tracker Report, Cadence Plan (counted by the pile-up guard, named "needs a fix"), AI Target Settle
+#     (never advanced to `written`), Growth Plan (not stalled, not answered); Publish Candidates still watches it. The app's mirror
+#     (`app/server/src/services/cadence.ts`) changed with Cadence_Plan.js. The rows written before this deploy are repaired by
+#     `fix_not_ready_drafts.py` (dry run by default).
+#
+#     Proved offline by harness S110 on exec 616's own verdict and exec 632 / 638's own inputs; the generated workflows are checked by
+#     section 95 below.
+_cl94 = code('Content Log Row')
+assert "page.qa_not_ready === true" in _cl94 and "status: notReady ? 'not_ready' : 'written'" in _cl94 and "qa_reasons: notReady ?" in _cl94, \
+    'R111: Content Log Row writes `written` without reading the page\'s final quality verdict'
+assert "qa_not_ready: !!qa.not_ready" in code('Build Word File') and 'qa_reasons: qa.not_ready_reasons' in code('Build Word File'), \
+    'R111: the final verdict no longer reaches the package under the names Content Log Row reads (qa_not_ready / qa_reasons)'
+from ladder_common import LOG_COLS as _LOGC94
+assert ('qa_reasons', 'string') in _LOGC94, 'R111: seo_content_log has no qa_reasons column (ladder_common.LOG_COLS; sync_tables.py adds it live)'
+for _f94, _n94, _m94 in (('code/Site_Plan.js', 'const needs_fix = blogs.filter(b => b.status === \'not_ready\'', 'Site Plan does not list the failed drafts apart'),
+                         ('code/Site_Metrics.js', "type: 'fix_draft'", 'Site Metrics has no "fix the draft" action'),
+                         ('code/Brief_Input.js', 'drafts_to_fix_not_publish', 'the site brief is not told which drafts failed'),
+                         ('code/Tracker_Report.js', 'const notReadyLog = ', 'the Rank Tracker cannot tell a failed draft from a written page'),
+                         ('code/Cadence_Plan.js', 'needs_fix_keywords', 'the pile-up guard does not name the drafts that need a fix'),
+                         ('code/AI_Target_Settle.js', 'not_ready: 1.5', 'AI Target Settle does not know a failed draft'),
+                         ('code/Growth_Plan.js', 'const draftFailed = ', 'AI Growth would requeue (or count as answered) a question whose draft failed'),
+                         ('code/Publish_Candidates.js', 'qa_failed: ', 'publish detection loses the failed-draft flag')):
+    assert _n94 in rd(_f94), 'R111: ' + _m94 + ' (' + _f94 + ')'
+assert os.path.exists(os.path.join(HERE0, 'fix_not_ready_drafts.py')) and os.path.exists(os.path.join(HERE0, 'test_fix_not_ready_drafts.py')), \
+    'R111: the repair of the rows written before this deploy (fix_not_ready_drafts.py + its test) is missing'
+sticky("""### A draft that failed its quality check is not a page to publish (R111, 2026-10-16)
+*Content Log Row* stores `not_ready` + the last round's reasons (`qa_reasons`) when the page's **final** quality verdict failed; `written` keeps meaning "passed QA, waiting to be published". Every reader says **"fix the draft and run it again"** instead of "publish it": the weekly site report (`fix_draft`), the Rank Tracker, the cadence's pile-up note ("needs a fix", still counted), the site brief, the AI targets. Publish detection still finds one the owner publishes anyway. Rows written before this deploy: `fix_not_ready_drafts.py` (dry run by default).""",
+       -2600, -4100, 1180, 220, 3)
+log('A draft that failed its quality check is not a page to publish (2026-10-16, re-rating 2026-10-15, R111 High): Content Log Row wrote `written` whenever the package held article text and never read the final quality verdict, so nine readers told the owner to publish two drafts their own quality check had refused (exec 634 "P1 Publish the written page for \\"ai consulting\\"", 632 "already written - publish it", 638 "publish them to continue", the site brief). The row is now `not_ready` with the reasons in a new qa_reasons column, and Site Plan / Site Metrics (fix_draft) / Brief Input / Tracker Report / Cadence Plan (counted, "needs a fix") / AI Target Settle / Growth Plan / Publish Candidates and the app\'s cadence mirror read it; fix_not_ready_drafts.py repairs the rows written before (dry run by default)')
+
+
+# 95. THE RANK TRACKER, THE CADENCE AND THE LINK BUILDER READ ONE PICTURE OF THE RESULTS PAGE AND OF OUR OWN PAGES (2026-10-16,
+#     re-rating 2026-10-15 — R87, R88, R90, R91, R93, R92 parts 3-4, R59's Site Tracker path; dossiers C_monitors.md and B_technical.md).
+#
+#     * R87: the Rank Tracker report joined the answer's "above" list and its competitor list, so every domain on page 1 was counted twice
+#       and "e invoicing in uae" (tax.gov.ae #1, mof.gov.ae #2: two government sites of the five the rule reads; it needs three) was set
+#       aside as a government query — and then pursued anyway, because nothing wrote the set-aside back and the cadence queued four rungs.
+#       Now one reading is read one entry per position (RS.serpHosts), a head set aside pauses its ladder everywhere (report, ladder row
+#       via *Tracker Ladder Marks* -> *Mark Set Aside (Tracker)*, plan, cadence, the app's mirror), and the report tells a keyword set
+#       aside BY this check from one set aside before any check.
+#     * R90: "facts erp" was planned for another month because the gate of a stored rung never saw the head's results page (facts.ae #6).
+#       The plan and the cadence give it the ladder's stored results pages, the rung's own stored page, and the names AI uses for other
+#       companies (*Load AI Brands (Tracker)* / *(Cadence)*).
+#     * R88: one keyword, one run, one baseline (RS.prevReading: the newest earlier desktop reading for the site, whoever bought it), and a
+#       change no larger than two readings of one moment show is labelled noise (RS.noise / RS.withNoise), never "high".
+#     * R91: the subject names the depth every check asked for. R93: our pages are named by their real titles (*Load Pages (LB)*), never
+#       by a search query. R92 parts 3-4 and R59 (Site Tracker path): "countries", a ladder target a live page answers is reported as
+#       that page (the Rank Tracker's rule), and a bare-host / www split Google chose raises one alert and one action.
+def _b95_checks():
+    """R87 / R90 / R93 on the GENERATED Rank Tracker, Content Cadence and Link Builder: the new nodes exist and are wired on the path
+    that feeds the node which reads them (R17's lesson: the code can be right while the wiring is not)."""
+    import json as _j95
+    def _wf95(f):
+        return _j95.load(open(os.path.join(HERE0, 'workflows', f), encoding='utf-8'))[0]
+    def _down95(w):
+        d = {}
+        for s_, o_ in (w.get('connections') or {}).items():
+            for l_ in (o_.get('main') or []):
+                for t_ in (l_ or []):
+                    d.setdefault(s_, []).append(t_['node'])
+        return d
+    _rt = _wf95('SEO_Agent_Rank_Tracker.json'); _rtd = _down95(_rt); _rtn = {n['name']: n for n in _rt['nodes']}
+    for _a, _b in (('Load Monitors (Tracker)', 'Load AI Brands (Tracker)'), ('Load AI Brands (Tracker)', 'Tracker Plan'),
+                   ('Tracker Report', 'Tracker Ladder Marks'), ('Tracker Ladder Marks', 'Any Tracker Marks?'), ('Any Tracker Marks?', 'Mark Set Aside (Tracker)')):
+        assert _b in (_rtd.get(_a) or []), 'R87 / R90: %s does not feed %s in the Rank Tracker' % (_a, _b)
+    _v95 = ((_rtn['Mark Set Aside (Tracker)'].get('parameters') or {}).get('columns') or {}).get('value') or {}
+    assert _v95.get('status') == '={{ $json.status }}' and _v95.get('status_note') == '={{ $json.status_note }}', \
+        'R87: Mark Set Aside (Tracker) writes a literal state instead of the one Tracker Ladder Marks built'
+    assert "m.status !== 'set_aside'" in _rtn['Tracker Ladder Marks']['parameters']['jsCode'], 'R87: Tracker Ladder Marks could write a state other than set_aside'
+    _cd = _wf95('SEO_Agent_Content_Cadence.json'); _cdd = _down95(_cd)
+    assert 'Cadence Plan' in (_cdd.get('Load AI Brands (Cadence)') or []) and 'Load AI Brands (Cadence)' in (_cdd.get('Load Pages (Cadence)') or []), \
+        'R90: the AI brand names do not reach the Content Cadence plan'
+    _lb = _wf95('SEO_Agent_Link_Builder.json'); _lbn = {n['name'] for n in _lb['nodes']}
+    assert 'Load Pages (LB)' in _lbn and any('Load Pages (LB)' in (v or []) or k == 'Load Pages (LB)' for k, v in _down95(_lb).items()), \
+        'R93: the Link Builder does not load the page inventory, so a target page is named by a search query'
+    _st = _wf95('SEO_Agent_Site_Tracker.json'); _stc = {n['name']: n['parameters'].get('jsCode', '') for n in _st['nodes'] if n['type'] == 'n8n-nodes-base.code'}
+    for _t95, _m95 in (("stat: 'host_split'", 'R59: a bare-host / www split Google chose raises no alert in the Site Tracker'),
+                       ("type: 'host_split'", 'R59: the host split has no action'),
+                       ("unit === 'country' ? 'countries'", 'R92 part 3: "countrys" again'),
+                       ("status: 'live (existing page)'", 'R92 part 4: a ladder target a live page answers is not reported as that page'),
+                       ("type: 'fix_draft'", 'R111: the Site Tracker still has no "fix the draft" action')):
+        assert _t95 in _stc['Site Metrics'], _m95
+    print('R111 / R87 / R88 / R90 / R91 / R93 / R92 / R59: the content log carries the quality verdict; the Rank Tracker writes back what '
+          'it sets aside and reads one results page per position; the cadence and the Link Builder load what their gates and titles need')
+
+
+sticky("""### One picture of the results page and of our own pages (R87 R88 R90 R91 R93 R92 R59, 2026-10-16)
+**R87:** one results page is read **one entry per position** (the report counted every page-1 domain twice and set "e invoicing in uae" aside as government on two government sites of five); a head that IS set aside **pauses its ladder** — report, ladder row (*Tracker Ladder Marks*), plan, cadence, app. **R90:** a stored rung is judged against its ladder's stored results pages and the AI brand names ("facts erp" / facts.ae). **R88:** one baseline per keyword per run, and a change no larger than two readings of one moment is "noise". **R91:** "top 50". **R93:** our pages by their real titles. **R92 / R59:** "countries", a covered ladder target reported as the live page, the bare-host / www split Google chose named with its fix.""",
+       -2600, -3860, 1180, 220, 3)
+log('One picture of the results page and of our own pages (2026-10-16, re-rating 2026-10-15: R87, R88, R90, R91, R93, R92 parts 3-4, R59 Site Tracker path): the Rank Tracker report counted every domain of page 1 twice and set "e invoicing in uae" aside as a government query on two government sites of five, and nothing wrote a set-aside back, so the cadence queued its rungs; "facts erp" was planned for another month because the gate never saw the head\'s results page; one keyword got two movement figures in one run; the subject said top 100 for top-50 checks; Link Builder pitches named our pages by search queries. RS.serpHosts / prevReading / noise are the one reading rule, a set-aside head pauses its ladder everywhere (Tracker Ladder Marks -> Mark Set Aside), the gates get the ladder\'s stored pages and the AI brand names, and the Site Tracker names a bare-host / www split Google chose')
+
+
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:
 #     "two fixes have never come back and both are enforced by the build".
@@ -9318,5 +9421,7 @@ _b85_checks()
 
 # section 86 (B6-7): benchmark area 6's structural gap - the keywords the customer named, on the generated Rank Tracker
 _b86_checks()
+# section 95 (R87 / R90 / R93 / R59 / R92 / R111): the new nodes and their wiring, on the generated workflows
+_b95_checks()
 _b69_checks()
 

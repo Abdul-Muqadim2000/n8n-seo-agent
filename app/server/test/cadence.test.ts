@@ -325,3 +325,34 @@ describe('cadence mirror: a page losing traffic is refreshed (B4-3)', () => {
     expect(p.picks.map((x) => x.source)).toEqual(['decay']);
   });
 });
+
+describe('cadence mirror: a failed draft and a set-aside main keyword (R111, R87 — 2026-10-16)', () => {
+  // R111: the content log says `not_ready` when the page's LAST quality round failed (Content_Log_Row.js). Cadence_Plan.js counts such a
+  // draft in the pile-up guard — it is written and not live — and names it as needing a fix, never as a page to publish.
+  it('R111: a not_ready draft counts toward the pile-up limit and is named in needsFix; a written one is not', () => {
+    const logs = [logRow('erp software uae'), logRow('service industry erp software'), logRow('ai consulting', { status: 'not_ready' })];
+    const p = planCadence(input({ ladders: A(), logs }), NOW);
+    expect([p.pausedReason, p.waitingPublish]).toEqual(['pileup', 3]);
+    expect(p.needsFix).toEqual(['ai consulting']);
+    expect(p.waitingKeywords).toContain('ai consulting');
+    expect(p.picks).toEqual([]);
+  });
+
+  it('R111: a ladder row “writing” whose log row is not_ready waits as a draft to fix (counted once)', () => {
+    const p = planCadence(input({ ladders: A({ a: 'writing' }), logs: [logRow('peppol uae cost', { status: 'not_ready', ladder_id: 'lad_A' })], settings: noGuard }), NOW);
+    expect([p.waitingPublish, p.needsFix]).toEqual([1, ['peppol uae cost']]);
+  });
+
+  // R87: n8n writes `set_aside` back on the main keyword's row when it is not a search the site should target (Tracker Ladder Marks /
+  // Ladder Marks). The ladder's rungs exist only to climb towards it, so the Monday run writes none of them and the app shows it paused.
+  it('R87: a ladder whose main keyword row says set_aside is paused: no rung written or queued, the reason kept', () => {
+    const note = '"peppol uae" is not a search this website should target: the results page belongs to government sites (government)';
+    const ladders = [...A(), ...B()].map((r) => (r.ladder_id === 'lad_A' && r.rung === 4 ? ({ ...r, status: 'set_aside', status_note: note } as LadderRow) : r));
+    const p = planCadence(input({ ladders, settings: noGuard }), NOW);
+    expect(p.picks.some((x) => x.ladder?.id === 'lad_A')).toBe(false);
+    expect(p.candidates.some((x) => x.ladder?.id === 'lad_A')).toBe(false);
+    const la = p.ladders.find((l) => l.id === 'lad_A');
+    expect([la?.role, la?.headSetAside, la?.remaining.length]).toEqual(['paused', note, 0]);
+    expect(p.ladders.find((l) => l.id === 'lad_B')?.headSetAside).toBe('');
+  });
+});
