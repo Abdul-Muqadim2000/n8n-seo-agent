@@ -142,7 +142,7 @@ const RT = (() => {
   };
   return { dfs, google, check, failures, plan, merge, stats, one, note, evidence, comparable, likeForLike, errText, MAX_SAMPLE_DRIFT, TRANSIENT, PERMANENT };
 })();
-const prev = $('Parse Analysis').first().json;
+const prev = $('Check Page Claims').first().json;
 // R18 (2026-10-14): the keyword's own search data goes through the same gate — the retry's answer when it came, and an honest
 // "could not be read" when neither attempt did (live 549: items_count 0 beside two failed SERP calls, and the run scored anyway).
 const kdStats = RT.one((() => { try { return $('Keyword Data').first().json; } catch (e) { return $input.first().json || {}; } })(),

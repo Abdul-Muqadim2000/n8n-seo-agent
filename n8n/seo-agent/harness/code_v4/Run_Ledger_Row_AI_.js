@@ -28,7 +28,15 @@ const domain = rows.length === 1 ? String(rows[0].domain || '').toLowerCase() : 
 let dfs_balance = 0;
 try { const __b = $('DFS Balance (AI)').first().json || {}; const __t = (__b.tasks || [])[0] || {}; const __r = (__t.result || [])[0] || {};
   const __v = Number((__r.money || {}).balance); if (Number.isFinite(__v) && __v > 0) dfs_balance = +__v.toFixed(6); } catch (e) {}
-return [{ json: { run_id: String($execution.id), key: 'schedule:' + MODE, mode: MODE, est_usd: ai, created_at: new Date().toISOString(),
+// R77 (2026-10-16, re-rating C-1): an on-demand run started by the main workflow's front door carries that run's execution id as
+// `parent_run_id` on its trigger item (Monitor Start). The row names it in its key — `parent:<id>` instead of `schedule:<mode>` — so the gate
+// (RG.parentOf) does not count the parent's own reserved row as a twin, and the two rows of one request are linked in the table (R81: the
+// parent settles $0 as handed off; the money is on this row). A scheduled run has no trigger item and keeps `schedule:<mode>`.
+let __trig = {};
+for (const __n of ['Manual Run', 'Watch Run']) { try { const __t = $(__n).first(); if (__t && __t.json) { __trig = __t.json; break; } } catch (e) {} }
+if (__trig.body && typeof __trig.body === 'object') __trig = { ...__trig, ...__trig.body };
+const parent_run_id = String(__trig.parent_run_id == null ? '' : __trig.parent_run_id).trim();
+return [{ json: { run_id: String($execution.id), key: parent_run_id ? 'parent:' + parent_run_id : 'schedule:' + MODE, mode: MODE, est_usd: ai, created_at: new Date().toISOString(),
   status: 'reserved', settled_usd: 0, domain, heavy: false, dfs_est_usd: dfs, dfs_usd: 0,
   // R28 (2026-10-14): the DataForSEO balance at reservation time, read for free from appendix/user_data so the day's reported spend can be
   // held against the account. R32 (2026-10-14, FIX_PLAN §3.13): a scheduled run takes the reading too — until now only main-workflow runs

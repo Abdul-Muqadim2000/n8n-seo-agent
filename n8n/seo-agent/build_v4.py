@@ -3885,11 +3885,20 @@ _eh_add('Alert Delivery', 'n8n-nodes-base.code', 2, {'jsCode': _eh_src('code/Ale
 _eh_add('Save Alert Delivery', DT_TYPE, DT_VERSION, dt_update_params(OPS_ALERTS_TABLE, OPS_ALERTS_COLS, [('alert_key', '={{ $json.alert_key }}')],
     {'delivered': '={{ $json.delivered }}', 'channels': '={{ $json.channels }}', 'notes': '={{ $json.notes }}'}), [2240, _EHY],
     {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
-# every path through the two channel gates reaches it, so a row never stays "pending" for a delivery that can never come. It may run more
-# than once (one branch each); data only accumulates inside an execution, so the last run is the one that saw both channels.
-for _a48, _b48, _o48x in [('Post Alert Webhook', 'Alert Delivery', 0), ('Send Webhook?', 'Alert Delivery', 1),
-                          ('Email Ops', 'Alert Delivery', 0), ('Send Email?', 'Alert Delivery', 1), ('Alert Delivery', 'Save Alert Delivery', 0)]:
+# every path through the two channel gates reaches it, so a row never stays "pending" for a delivery that can never come.
+# R79 (2026-10-16, re-rating C-3, build section 96): it used to have FOUR inputs and so ran twice per failure (once per channel branch), and
+# the retry sweep chained behind it ran twice too — exec 643 re-posted one stale alert at 19:59:50 and again at 19:59:53. A Merge in front
+# of it waits for both branches (webhook side on input 0, e-mail side on input 1), so the delivery is recorded once, after both channels
+# answered, and the sweep runs once per failure.
+_eh_add('Alert Channels Done', 'n8n-nodes-base.merge', 3, {'mode': 'append'}, [1910, _EHY])
+for _a48, _o48x, _i48 in [('Post Alert Webhook', 0, 0), ('Send Webhook?', 1, 0), ('Email Ops', 0, 1), ('Send Email?', 1, 1)]:
+    _outs48 = _ehc.setdefault(_a48, {}).setdefault('main', [])
+    while len(_outs48) <= _o48x: _outs48.append([])
+    _outs48[_o48x] = [t for t in _outs48[_o48x] if t['node'] not in ('Alert Delivery', 'Alert Channels Done')] + [{'node': 'Alert Channels Done', 'type': 'main', 'index': _i48}]
+for _a48, _b48, _o48x in [('Alert Channels Done', 'Alert Delivery', 0), ('Alert Delivery', 'Save Alert Delivery', 0)]:
     _eh_link(_a48, _b48, _o48x)
+assert [s48 for s48, o48 in _ehc.items() for l48 in o48.get('main', []) for t48 in l48 if t48['node'] == 'Alert Delivery'] == ['Alert Channels Done'], \
+    'R79: Alert Delivery must have exactly one input, the merge of both channel branches'
 assert 'R5' in _ehn['Format Alert']['parameters']['jsCode'] and 'tr.error' in _ehn['Format Alert']['parameters']['jsCode'], 'R5: Format Alert cannot read a trigger-mode failure'
 _ehwf['nodes'] = list(_ehn.values())
 _ehnames48 = set(_ehn)
@@ -4233,7 +4242,9 @@ const __AI_CALLS = __AI_CALLS_JSON__;
 const __chars = (v) => v == null ? 0 : (typeof v === 'string' ? v.length : JSON.stringify(v).length);
 const __at = (o, p) => String(p).split('.').reduce((v, k) => (v == null ? v : v[k]), o);
 const __jsonOf = (n) => { try { return ($(n).all() || []).map(i => (i && i.json) || {}); } catch (e) { return null; } };
-const __qaRounds = () => { try { return Math.max(1, Number($('Content QA').first().json.qa_round) || 1); } catch (e) { return 1; } };
+// R46 (2026-10-16): a `loop` node is the Editor, and it runs once per QA round AFTER the first — QA round N follows N - 1 editor calls, which
+// Content QA states as `editor_rounds`. Live (exec 616) one editor call was priced twice from `qa_round: 2`. At least 1: the node ran.
+const __qaRounds = () => { try { const q = $('Content QA').first().json || {}; const e = Number(q.editor_rounds); return Math.max(1, Number.isFinite(e) && q.editor_rounds != null ? e : (Number(q.qa_round) || 1) - 1); } catch (e) { return 1; } };
 const __costCalls = [];
 for (const c of __AI_CALLS) {
   const answers = __jsonOf(c.node);
@@ -9147,6 +9158,212 @@ sticky("""### One AI Overview figure in one place, and a state that advances onl
 **And the class:** `state_lint.py`'s "a work-in-progress state needs a way back" was asked only of the tables someone had listed — which is how `seo_ai_targets` sat outside it for three releases. The list is now **derived from the generated workflows**, and a table whose `writing` state is read back and acted on fails the build until its way back is declared *and* built. It found a third table on its first run, `seo_case_studies`, and records the honest answer: nothing tests that row's state, so it is not this defect.""",
        -2600, -3800, 1180, 420, 3)
 log('One AI Overview figure in one place, and a state that advances only on evidence (2026-10-15, FIX_PLAN §3.16 rows B6-9 and B9-6). B6-9: v5/code/Ladder_Pool.js still multiplied the click-through rate by 0.65 when a results page carried an AI Overview - Ahrefs\' APRIL 2025 figure - after B1-3 had replaced it in _kw_inputs.js with the December 2025 per-position study (300,000 keywords, published 2026-02-04: -58.0% at position 1, -50.8% at 2, -46.4% at 3) and B6-1 in _rank_serp.js. Which kit belongs where is B6-1\'s own reasoning: a flat factor all but cancels out of a SHARE, so the share of voice needed the per-position table, while the ladder\'s traffic_potential is an ABSOLUTE top-three estimate and only the keywords whose results page has an AI Overview carried the factor - so the stale number inflated those estimates by 1.35x and moved them up the pre_score order that decides which rungs are planned. Ladder Pool now makes the same KWI.calibrate call the discovery twin Collect_Research.js makes, and the estimate carries traffic_basis / traffic_note / click_loss instead of arriving bare. The class is closed by a build-time scan that refuses the literal 0.65 within 200 characters of an AI Overview in every v5/code kit and every generated Code node, with comments stripped first so the two comments that record WHY the figure was retired survive. B9-6: the write half of "writing was a promise nobody kept" - the Content Cadence marked an AI target writing and stamped written_at when a page run STARTED, whatever the spawn did, and nothing in the system ever set written, so Growth Metrics counted written: 0 every week of its life and a refused or failed run left the question claiming work in progress for ever (R1\'s class in the one table R1 did not cover). AI Target Marks now writes the row back to queued with the error when the content run could not be started and says in the row\'s own reason that nothing exists yet; the new AI Target Settle is the only exit from writing and advances a row only against the seo_content_log row for that same run, which is R1\'s rule exactly (a page counts as written only on a written content-log row); it deliberately does not time a row out, because the 14-day requeue and its alert belong to the read half in AI Growth. The class is closed by deriving state_lint.py\'s work-in-progress registry from the generated workflows instead of hand-writing it from R1\'s one instance: every table a run moves to writing whose state is read back and acted on must declare its way back, and check B then has to find the node that writes it. On its first run the derived registry found a third table, seo_case_studies, and the honest answer is recorded rather than assumed - nothing tests that row\'s state (Brief Context hands a later page url: \'\' unless the status is published, and the Link Builder takes a case study only when it has a page_url), so it is not this defect')
+
+
+# 102. THE VERDICT READS THE WHOLE PAGE BEFORE IT SAYS WHAT THE PAGE LACKS (2026-10-16, re-rating R38 / R52;
+#      docs/system-review-2026-10-15/defects/A_keywords_content.md).
+#
+#      * R38 **a false statement about the customer's own page.** Exec 608 told the owner their article "has no mandate dates, no PINT-AE
+#        or 5-corner explanation, no tables, no lead CTA and no author or date"; it has the dates, three tables and a byline. Three cuts
+#        (9,000 characters in *Collect Client Pages*, 3,500 in the analyzer's prompt, 5,000 in the copywriter's) hid them, the text reader
+#        (Jina, header / aside selectors removed) flattens tables into plain lines and drops bylines anyway, and the analyzer's "in the
+#        excerpt provided" hedge was lost when the verdict restated the gap as fact. Now: *Read Client Page HTML* (a free GET of the pages
+#        the run reads) -> *Collect Client Pages* measures the page's FACTS on the WHOLE page (dates in the text, tables, byline,
+#        publication date, call to action, schema types; `structure_reliable` says whether the HTML was real) and keeps 24,000 characters
+#        of the existing page; the analyzer, the verdict and the copywriter read the facts and the tables as rows; *Check Page Claims*
+#        (new, between *Parse Analysis* and *Keyword Data*) removes any analyzer gap the facts contradict or could not check, and *Merge
+#        Keyword Data* reads the checked analysis. Section 103 closes the verdict's own text.
+#      * R52 the description's "Pages read" printed the client-rendered application's generic title for every menu page (v5/code/Site_Pages.js).
+_PC102 = _rd0('code/_page_claims.js').rstrip('\n')
+assert 'const PC = (() => {' in _PC102
+
+# --- the pages' own HTML: one free GET per page the run reads, in front of Collect Client Pages ---
+_rcp = pos('Read Client Pages')
+add_node('Read Client Page HTML', 'n8n-nodes-base.httpRequest', 4.5, {
+    # only the run's own host is fetched directly (the URL comes from a sitemap the site's owner controls); anything else gets an inert reserved URL and reads as "not read"
+    'url': "={{ (() => { const u = String($('Client Page Requests').all()[$itemIndex].json.url || ''); const h = (u.match(/^https?:\\/\\/([^\\/:?#]+)/i) || [])[1] || ''; const n = (x) => String(x).toLowerCase().replace(/^www\\./, ''); return (h && n(h) === n($('Collect Site URLs').first().json.domain || '')) ? u : 'https://example.com/'; })() }}",
+    'sendHeaders': True,
+    'headerParameters': {'parameters': [
+        {'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEO-Agent/4.14; +https://example.com/bot)'},
+        {'name': 'Accept', 'value': 'text/html,application/xhtml+xml'}]},
+    'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 500}},
+                'response': {'response': {'neverError': True, 'responseFormat': 'text', 'outputPropertyName': 'page_html'}},
+                'timeout': 20000}},
+    [_rcp[0] + 200, _rcp[1] + 160],
+    {'onError': 'continueRegularOutput', 'retryOnFail': True, 'maxTries': 3, 'waitBetweenTries': 5000})
+assert 'example.com' in nodes['Read Client Page HTML']['parameters']['url'] and 'Collect Site URLs' in nodes['Read Client Page HTML']['parameters']['url'], 'R38: the HTML read is not limited to the run\'s own host'
+disconnect('Read Client Pages', 'Collect Client Pages')
+connect('Read Client Pages', 'Read Client Page HTML'); connect('Read Client Page HTML', 'Collect Client Pages')
+setcode('Collect Client Pages', rd('code/Collect_Client_Pages.js'))
+assert "$('Read Client Pages').all()" in code('Collect Client Pages') and 'existing_page_digest' in code('Collect Client Pages'), 'R38: Collect Client Pages does not measure the page'
+assert "slice(0, r.kind === 'existing' ? 9000 : 6000)" not in code('Collect Client Pages'), 'R38: the 9,000 character cut is back'
+
+# --- the analyzer's claims about the client's page are checked against the page's facts ---
+add_node('Check Page Claims', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Check_Page_Claims.js').replace('/*__PAGE_CLAIMS__*/', _PC102)},
+         [pos('Parse Analysis')[0] + 200, pos('Parse Analysis')[1] + 160])
+assert 'const PC = (() => {' in code('Check Page Claims') and '/*__PAGE_CLAIMS__*/' not in code('Check Page Claims')
+_pa_out = [t['node'] for lst in conns.get('Parse Analysis', {}).get('main', []) for t in lst]
+assert _pa_out == ['Keyword Data'], 'R38: Parse Analysis feeds %r, expected only Keyword Data' % (_pa_out,)
+disconnect('Parse Analysis', 'Keyword Data')
+connect('Parse Analysis', 'Check Page Claims'); connect('Check Page Claims', 'Keyword Data')
+_mkd = code('Merge Keyword Data')
+assert _mkd.count("$('Parse Analysis')") == 1, 'R38: Merge Keyword Data reads Parse Analysis %dx' % _mkd.count("$('Parse Analysis')")
+setcode('Merge Keyword Data', _mkd.replace("$('Parse Analysis')", "$('Check Page Claims')"))
+for _n in nodes:   # nothing else may read the unchecked analysis by name (Keyword Data (Retry) reads only the keyword)
+    _blob = json.dumps(nodes[_n]['parameters'])
+    if "$('Parse Analysis')" in _blob and _n not in ('Keyword Data (Retry)',):
+        raise AssertionError('R38: %s still reads the unchecked analysis' % _n)
+assert 'existing_page_facts_text' in nodes['Competitor Analyzer']['parameters']['text'] and '14000' in nodes['Competitor Analyzer']['parameters']['text'], 'R38: the analyzer prompt is not the whole-page one'
+assert '.slice(0, 3500)' not in nodes['Competitor Analyzer']['parameters']['text'], 'R38: the 3,500 character cut is back'
+assert 'existing_page_facts_text' in nodes['Verdict Agent']['parameters']['text'], 'R38: the verdict does not read the page facts'
+assert '16000' in nodes['Copywriter']['parameters']['text'] and '.slice(0, 5000)' not in nodes['Copywriter']['parameters']['text'], 'R38: the copywriter still cuts the page at 5,000 characters'
+
+# --- R52: the titles of the pages read ---
+assert 'pageTitle(' in code('Site Pages') and 'titleCount' in code('Site Pages'), 'R52: Site Pages still prints the reader title'
+
+sticky("""### The verdict reads the whole page before it says what the page lacks (R38, R52)
+**R38 (High).** The report told a customer that their article had *no mandate dates, no tables, no author or date* — it has all three. Three cuts hid them (9,000, 3,500 and 5,000 characters), and the text reader flattens tables and drops bylines whatever the cut. The run now reads the page's own HTML for free (*Read Client Page HTML*), **measures the page's facts on the whole page** (*Collect Client Pages*: dates in the text, tables, byline, publication date, call to action; "NOT CHECKED" when the HTML was only a script shell), the analyzer / verdict / copywriter read those facts, **Check Page Claims** removes any analyzer gap the facts contradict, and *Parse Verdict* does the same to the verdict's own sentences (`v5/code/_page_claims.js`). A claim the page could not be checked for is not made.
+**R52.** *Site Pages* named every menu page by the reader's title; on a client-rendered site that is one generic title. A title the homepage carries, or two pages share, is replaced by the menu link text.""",
+       -1800, -3800, 1180, 360, 3)
+log('The verdict reads the whole page before it says what the page lacks (2026-10-16, re-rating R38 / R52). R38: a keyword report told a customer their own article had "no mandate dates, no PINT-AE or 5-corner explanation, no tables, no lead CTA and no author or date" - it states the dates in its text, has three tables and a byline; three cuts (9,000 characters in Collect Client Pages, 3,500 in the competitor analyzer\'s prompt, 5,000 in the copywriter\'s), a text reader that flattens tables and drops bylines, and an "in the excerpt provided" hedge lost when the verdict restated the analyzer\'s gap as fact. New node Read Client Page HTML (one free GET per page the run reads); Collect Client Pages keeps 24,000 characters of the existing page and measures its facts on the whole page (dates in the text, tables with their rows, byline, publication date, call to action, schema types, with structure_reliable false and "NOT CHECKED" when the HTML was a script shell); the analyzer, verdict and copywriter prompts read those facts; new node Check Page Claims (v5/code/_page_claims.js) removes any analyzer gap the facts contradict or could not check, and Merge Keyword Data reads the checked analysis. R52: Site Pages named each menu page by the reader\'s Title line - one generic title five times on a client-rendered site - and now uses the menu link text, then the first heading, when the reader title is the homepage\'s or is shared')
+
+
+# 103. THE VERDICT'S OWN SENTENCES ARE CHECKED TOO, AND AN ASP IS NOT "FTA-ACCREDITED" (2026-10-16, re-rating R38 second half, R48).
+#      * R38 the analyzer is only one author of a claim about the client's page: the Verdict Agent writes its own reasons and risks. Parse
+#        Verdict now runs every reason and risk through the same kit, sentence by sentence, against `existing_page_digest` and records
+#        what it removed as `page_claims_dropped` (nothing is removed when no digest exists: a page nobody read makes no claim to check).
+#      * R48 the verdict called an ASP "FTA-accredited"; in the UAE the Ministry of Finance accredits e-invoicing service providers and the
+#        Federal Tax Authority administers the tax. The wording came from competitors' pages (their snippets say "FTA-accredited"), so the
+#        prompts say it (verdict.txt, competitor_analyzer.txt, copywriter.txt) and the kit rewrites it in the verdict's reasons, risks and
+#        changes and in the analyzer's output.
+_pv = code('Parse Verdict')
+_a = "verdict.reasons = (Array.isArray(verdict.reasons) ? verdict.reasons : []).map(noFaqSchema);"
+assert _pv.count(_a) == 1
+patch('Parse Verdict', _a, _a + "\n" + _PC102 + """
+// ---- R38 / R48 (2026-10-16): what the verdict says about the client's own page is checked against what was measured on that page ----
+// Exec 608: reasons[3] said "Its visible text has no mandate dates, ... no tables, ... no author or date" about a page that has all three.
+// The Verdict Agent now reads the page's facts; this removes any sentence of its reasons / risks that the digest still contradicts (or that
+// the digest says could not be checked) and says so in `page_claims_dropped`. R48: "FTA-accredited" -> the Ministry of Finance's framework.
+const PCD = prev.existing_page_digest || null;
+const page_claims_dropped = [];
+const pcClean = (arr) => (Array.isArray(arr) ? arr : []).map(x => { const r = PC.filterText(x, PCD, {}); r.dropped.forEach(d => page_claims_dropped.push(d)); return PC.fta(r.text); }).filter(Boolean);
+verdict.risks = pcClean(verdict.risks);
+verdict.reasons = pcClean(verdict.reasons);""")
+_b = "let verdict_changes = Array.isArray(verdict.what_must_change) ? verdict.what_must_change.map(x => noFaqSchema(x)).filter(Boolean) : [];"
+assert code('Parse Verdict').count(_b) == 1
+patch('Parse Verdict', _b, "let verdict_changes = Array.isArray(verdict.what_must_change) ? verdict.what_must_change.map(x => PC.fta(noFaqSchema(x))).filter(Boolean) : [];")
+_c = "    verdict_changes,\n    existing_page_action,"
+assert code('Parse Verdict').count(_c) == 1
+patch('Parse Verdict', _c, "    verdict_changes,\n    page_claims_dropped,\n    existing_page_action,")
+for _a103 in ['const PCD = prev.existing_page_digest', 'PC.filterText(x, PCD', 'PC.fta(noFaqSchema(x))', 'page_claims_dropped,']:
+    assert _a103 in code('Parse Verdict'), 'R38 / R48: Parse Verdict is missing ' + _a103
+for _f in ('verdict.txt', 'competitor_analyzer.txt', 'copywriter.txt'):
+    assert 'Ministry of Finance' in _rd0('prompts/' + _f), 'R48: ' + _f + ' does not name the accrediting body'
+log('The verdict\'s own sentences are checked too, and an ASP is not "FTA-accredited" (2026-10-16, re-rating R38 second half, R48). Parse Verdict runs every reason and risk through the page-claims kit against the existing page\'s digest and lists what it removed as page_claims_dropped; the competitor analyzer\'s output goes through the same kit in Check Page Claims. R48: the verdict called an ASP "FTA-accredited" - in the UAE the Ministry of Finance accredits e-invoicing service providers and the Federal Tax Authority administers the tax; the wording came from competitors\' snippets, so verdict.txt, competitor_analyzer.txt and (for UAE e-invoicing pages) copywriter.txt now say the Ministry, and the kit rewrites any "FTA-accredited" that still comes out of the analyzer, the verdict\'s reasons, risks and changes')
+
+
+# 100. CONTENT QA READS WHAT IT CHECKS (2026-10-16, re-rating 2026-10-15 family F8 — docs/system-review-2026-10-15/defects/
+#      A_keywords_content.md R37 R43 R44 R45). Four ways the quality gate judged something other than the page in front of it:
+#      R37 the source kit read digits only, so "Forty percent … up from 27 ..." (McKinsey's own snippet) vouched for neither 40% nor 27%
+#          and both correct figures were masked as "not carried" — the kit now reads number words and a percentage cut off by the
+#          snippet, on every path that asks it (the figure check and the money mask), and "does not carry" is said only of a whole text;
+#      R43 the draft was scored on the brief's counts and the page to beat on presence, and the two were printed as one quantity ("60%
+#          against 90%" for a draft that uses 20 of 20 terms) — both are presence now, the brief's counts are information, and the
+#          editor's length cut is told which terms it must not cut away;
+#      R44 the page to beat was the highest-coverage result of ANY kind (a guide for agencies, a listicle of other companies) and its
+#          banners and company entries became subtopics — it is now the best page of the kind being written, and subtopics exclude
+#          promotions, headings with no text under them and a list's entries;
+#      R45 a bracket counted only when it started with an upper-case letter, and the writer's [Confirm: …] notes were counted before §9b
+#          and named to nobody — every bracket is counted and named, QA's own marks once.
+# =============================================================================
+for _n100 in ('Content QA', 'Collect Facts', 'Blog Package'):
+    _c100 = code(_n100)
+    assert 'const SRC = (() => {' in _c100 and 'const spelled = (text)' in _c100 and 'cutPct(f, t)' in _c100, \
+        'R37: ' + _n100 + ' does not inline the source kit that reads number words'
+assert "reason: texts.some(t => SRC.cutShort(t)) ? 'not_in_excerpt' : 'absent'" in code('Content QA'), 'R37: the figure check no longer says why a figure is held'
+assert 'SRC.hasFigure(f, t)) return SRC.host(m[1])' in code('Content QA'), 'R37: the money mask stopped asking the same kit as the figure check'
+assert "ok: t.found > 0, present: t.found > 0" in code('Content QA') and 'coverage_compare' in code('Content QA'), \
+    'R43: Content QA measures the draft differently from the page it compares it with'
+assert 'CVG.coverageOf(benchText, termList)' in code('Content QA'), 'R43: the benchmark is no longer measured on the draft\'s own term list'
+assert 'Keep at least one use of each of these terms' in code('Content QA'), 'R43: the length cut is not told which terms coverage counts'
+assert "CVG.best(prev.competitors || [], covTerms, { kind: pageKind, keyword: prev.keyword })" in code('Parse Analysis'), \
+    'R44: Parse Analysis picks the page to beat without the kind of page being written'
+for _n100 in ('Parse Analysis', 'Content QA'):
+    assert 'const kindOf = (p) =>' in code(_n100) and 'const PROMO = ' in code(_n100), 'R44: ' + _n100 + ' carries an older coverage kit'
+assert 'names another company is not a subtopic' in nodes['Strategy Brief']['parameters']['text'], 'R44: the brief prompt lost the subtopic rule'
+assert 'a term counts once it appears' in nodes['Strategy Brief']['parameters']['text'], 'R43: the brief prompt does not say how coverage is measured'
+assert "const PH_RE = /\\[[A-Za-z][A-Za-z0-9 &/'’.,()-]{1,48}\\]/g;" in code('Content QA'), 'R45: the placeholder pattern counts upper-case brackets only'
+assert 'const review_notes = (finalBody.match(' in code('Content QA') and 'open_brackets' in code('Content QA'), \
+    'R45: review notes are counted before §9b, or the open brackets are not named'
+log('Content QA reads what it checks (2026-10-16, re-rating 2026-10-15 family F8: R37 R43 R44 R45). R37: v5/code/_sources.js reads number '
+    'words ("Forty percent", "fifty million dirhams", "a third") and a percentage cut off at the end of a snippet ("up from 27 ...") on the '
+    'text a figure is looked up in — the figure check and the money mask both ask it, Collect Facts and Blog Package inline the same kit — and '
+    '"does not carry" is said only of a whole text ("not in the excerpt the run read" otherwise). R43: draft and page to beat are both measured '
+    'by presence on one term list; the brief\'s counts are reported ("strategy used 7 times (the brief asked for 8)") and never refuse a page; '
+    'the reason names both figures and the measure; the length cut is told which terms to keep. R44: the page to beat is the best result of '
+    'the kind being written (CVG.kindOf: list / guide / service), never a listicle for a service page, and subtopics exclude promotions, '
+    'headings with no text under them and a list\'s entries. R45: every bracket left for a person is counted whatever its case and named, '
+    'with the writer\'s [Confirm: …] notes, counted after §9b; QA\'s own marks are named once.')
+
+
+# 101. THE EDITOR IS PRICED FOR THE CALLS IT MADE (2026-10-16, re-rating 2026-10-15 R46). QA round N follows N - 1 editor calls; the note
+#      said "The editor had 2 round(s)" after one call and every report builder and Run Ledger Settle priced a second one from `qa_round`.
+#      Content QA now states `editor_rounds` and the shared cost loop's `__qaRounds()` reads it (rounds - 1 for an older item).
+# =============================================================================
+_qr101 = "const __qaRounds = () => { try { const q = $('Content QA').first().json || {}; const e = Number(q.editor_rounds);"
+for _n101 in _ends51 + ['Run Ledger Settle']:
+    assert _qr101 in code(_n101), 'R46: ' + _n101 + ' still prices one Editor call per QA round'
+assert "qa_round: round, editor_rounds, meta:" in code('Content QA') and "'The editor had ' + editor_rounds" in code('Content QA'), \
+    'R46: Content QA does not state the editor calls that ran'
+assert [c['node'] for c in _AI_CALLS51 if c.get('loop')] == ['Editor'], 'R46: a node other than the Editor is priced per QA round'
+log('The Editor is priced for the calls it made (2026-10-16, re-rating 2026-10-15 R46): Content QA emits editor_rounds (QA round - 1), its '
+    'not-ready note counts them, and the cost loop of the five report builders and Run Ledger Settle multiplies the Editor by them instead '
+    'of by the QA rounds.')
+
+
+# =============================================================================
+# 96. A RUN THAT KNOWS WHO STARTED IT, A REFUSAL THAT REACHES THE CUSTOMER, AND AN ALERT ROW THAT IS UPDATED (2026-10-16, the third
+#     re-rating's defects R77 / R81 / R116 / R96 (family F4) and R79 / R105 (family F5), plus R95; docs/system-review-2026-10-15/
+#     defects/C_monitors.md and D_app_reporting.md)
+# -----------------------------------------------------------------------------
+#  * R77 (High): an app backlinks request was refused by its OWN front-door run. The gate matched a "twin" on `mode` alone, and the front
+#    door's row (exec 622) was still `reserved` when the Backlink Monitor it had just started (exec 624) read the ledger. Fixed by identity,
+#    not timing: *Monitor Start* passes `parent_run_id` (the front door's own execution id), the child's ledger row names it in its key
+#    (`parent:<id>`), and RG.gate does not count that one run; a genuine twin with another id is still refused.
+#  * R81 part 1: the front door's row of a hand-off settled the per-mode reservation ($0.50 "ESTIMATED") beside the child's measured
+#    figure, so a request was counted twice. *Run Ledger Settle* now settles a hand-off at $0, `dfs_source: handoff`, naming the child.
+#  * R116 / R96: a refusal used to end in the settle chain — a balance read it did not need (5 min 33 s behind another run's DataForSEO
+#    calls), a settle that computed $0.45 and dropped it — and told nobody. It now ends at *Refusal Notice* -> a `rejected` callback to an
+#    on-demand caller (`{stage, status: rejected, error, request_id}`); the refused row is settled by the refusal itself. Built in
+#    ladder_common.ledger_mainline for all ten scheduled workflows and proved there (no path from the refusal reaches the settle chain).
+#  * R79 / R105: OA.keyOf trims after its 160-character slice; every write-back uses the key a row is STORED with (row 4 keeps its trailing
+#    space and is now matched byte for byte); the Error Handler's *Alert Delivery* has ONE input, a merge of both channel branches, so the
+#    retry sweep runs once per failure; a re-sent row records the webhook in `channels`.
+#  * R95: an on-demand AI pulse is stored beside the day's scheduled reading (build_monitors.py: upsert by site + date + run_id).
+# =============================================================================
+assert "parent_run_id: String($execution.id)" in code('Monitor Start'), 'R77: Monitor Start does not tell the monitor which run started it'
+assert '__handoff' in code('Run Ledger Settle') and "dfs_source: 'handoff'" in code('Run Ledger Settle'), \
+    'R81: the front door settles a monitor hand-off as if it had spent the reservation'
+assert 'dfs_source' in nodes['Settle Run Ledger']['parameters']['columns']['value'], 'R81: the settle does not write where the money is'
+from ladder_common import RUN_GUARD_SRC as _RG96, OPS_ALERT_SRC as _OA96, ALERT_RETRY_SRC as _AR96, LEDGER_RESUME_JS as _LR96
+assert 'const parentOf = ' in _RG96 and '!(parent && S(r.run_id) === parent)' in _RG96, 'R77: the gate cannot tell its parent from a twin'
+assert "'parent:' + parent_run_id" in rd('code/Monitor_Ledger_Row.js'), 'R77: the child\'s ledger row does not name its parent'
+assert 'parent_run_id })' in _LR96 and 'callback_url: __S(__trig.callback_url)' in _LR96, 'R77 / R116: the gate does not read its parent or its caller'
+assert ".slice(0, 160).trim()]" in _OA96 and 'storedKey(prior)' in _OA96, 'R79: the alert key is not trimmed once, or a repeat is written under a new key'
+assert 'alert_key: storedKey(r)' in _AR96 and "withChannel(r.channels, 'webhook')" in _AR96, 'R79 / R105: the sweep writes back under a re-trimmed key, or forgets its channel'
+# the harness (S116) reads the Error Handler's merge from ops_alert_wiring.json: which branch enters on which input
+_ow96p = os.path.join(HERE0, 'harness', 'ops_alert_wiring.json')
+_ow96 = json.load(open(_ow96p))
+_mi96 = {s96: t96['index'] for s96, o96 in _ehc.items() for l96 in o96.get('main', []) for t96 in l96 if t96['node'] == 'Alert Channels Done'}
+assert _mi96 == {'Post Alert Webhook': 0, 'Send Webhook?': 0, 'Email Ops': 1, 'Send Email?': 1}, 'R79: the merge in front of Alert Delivery is not fed one branch per input: ' + str(_mi96)
+_ow96['delivery_merge'] = {'node': 'Alert Channels Done', 'type': _ehn['Alert Channels Done']['type'], 'inputs': _mi96, 'feeds': 'Alert Delivery'}
+json.dump(_ow96, open(_ow96p, 'w'), indent=1, sort_keys=True)
+sticky("""### A run that knows who started it, a refusal that reaches the customer, an alert row that is updated (R77 / R81 / R116 / R96 / R79 / R105 / R95)
+**R77.** An on-demand AI visibility or backlinks check is started by this workflow (*Monitor Start*), whose own ledger row has the same mode. The monitor now receives `parent_run_id` (this execution's id), names it in its ledger row (`parent:<id>`) and does not count that run as "another run in flight"; a genuine second run is still refused. **R81.** This run's row then settles **$0, handed off** — the money is on the monitor's row, counted once.
+**R116 / R96.** A refused monitor ends at its own notice: an on-demand caller receives `{stage: rejected, status: rejected, error, request_id}` instead of waiting three hours; no balance read, no settle (the refusal settles its row itself).
+**R79 / R105.** The ops-alert key is trimmed once when it is built; every write-back uses the key the row is stored with, byte for byte; *Alert Delivery* has one input (a merge of both channels), so the retry sweep runs once per failure; a re-sent row records the webhook in `channels`.""",
+       -2600, -4300, 1180, 300, 3)
+log('A run that knows who started it, a refusal that reaches the customer, and an alert row that is updated (2026-10-16, re-rating R77 / R81 / R116 / R96 / R79 / R105 / R95): the on-demand monitor recognises its front-door parent by identity (parent_run_id, child key parent:<id>) and a genuine twin is still refused; the front door settles a hand-off at $0; a refused scheduled run ends at its own notice and an on-demand caller gets a rejected callback; the alert key is trimmed once and written back under the stored key; the Error Handler sweeps once per failure; a same-day on-demand pulse no longer replaces the scheduled reading')
 
 
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and

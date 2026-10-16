@@ -5742,7 +5742,7 @@ await guard('crux, impact priority, alert channels and test check-ins', async ()
   check('D25b: the e-mail that failed on 2026-10-10 and 2026-10-12 cannot take the alert down with it — it is a parallel branch, it retries 3x 5 s apart, it reads the alert from Format Alert, and an error no longer fails the run',
     OW.email.onError === 'continueRegularOutput' && OW.email.retryOnFail === true && OW.email.maxTries === 3 && OW.email.reads_alert_from === true
     && eq(OW.connections['Alert Channels'][0], ['Send Webhook?', 'Send Email?'])
-    && eq(OW.connections['Email Ops'][0], ['Alert Delivery']) && !(OW.connections['Email Ops'][0] || []).includes('Post Alert Webhook')   // R6 (2026-10-13): the only thing after the e-mail is the delivery record; the webhook still never hangs off it
+    && eq(OW.connections['Email Ops'][0], ['Alert Channels Done']) && !(OW.connections['Email Ops'][0] || []).includes('Post Alert Webhook')   // R6 (2026-10-13): the only thing after the e-mail is the delivery record (since R79, 2026-10-16, through the merge that waits for both channels); the webhook still never hangs off it
     && OW.webhook.uses_smtp === false && OW.webhook.retryOnFail === true,
     JSON.stringify(OW));
   check('D25b: the row is written before either channel runs (Format Alert -> ensure -> load -> record -> save -> channels), so even both channels failing leaves the failure on record',
@@ -8233,7 +8233,9 @@ await guard('the re-rating defects R1..R9', async () => {
   check('R6: the result is written back on the same row (alert_key) with the delivered state, the channels and the note, and every path through the two gates reaches it',
     OW.delivery && OW.delivery.code === 'Alert Delivery' && OW.delivery.row_update === 'Save Alert Delivery'
     && ['delivered', 'channels', 'notes'].every(k => OW.delivery.writes.includes(k))   // B-A7 adds the retry state beside them (S74)
-    && eq(OW.delivery.from.slice().sort(), ['Email Ops', 'Post Alert Webhook', 'Send Email?', 'Send Webhook?']), JSON.stringify(OW.delivery));
+    // R79 (2026-10-16): every path through the two gates still reaches it — through ONE merge that waits for both branches, so it runs once
+    && eq(OW.delivery.from.slice().sort(), ['Alert Channels Done'])
+    && ['Email Ops', 'Post Alert Webhook', 'Send Email?', 'Send Webhook?'].every(n => (OW.connections[n] || []).some(l => (l || []).includes('Alert Channels Done'))), JSON.stringify(OW.delivery));
 
   // ---------- R7: an FAQ section, never FAQPage schema ----------
   const vp = srcOf('Verdict_Agent.prompt.txt');
@@ -14624,6 +14626,549 @@ await guard('S109 R113 site report subject follows the significance test', async
   check('R113: without a significance block (older runs) the subject keeps today\'s form', /32 clicks ▲ 52%/.test(repN.subject), repN.subject);
   reset();
 });
+
+// ---------- S122-S125 (fixer A8, 2026-10-16): the verdict reads the whole customer page before it says what the page lacks (R38), the accrediting body (R48), the pages-read titles (R52) ----------
+const A8 = require('./fixtures_r_a8');
+const a8fs = require('fs'), a8path = require('path'); const A8CD = process.env.CODE_DIR || a8path.join(__dirname, 'code_v4');
+// the prompt a node would send: each {{ expression }} evaluated against the node's input, as n8n does (an expression that throws renders empty)
+const a8render = (file, $json) => a8fs.readFileSync(a8path.join(A8CD, file), 'utf8').replace(/\{\{([\s\S]*?)\}\}/g, (m, ex) => { try { const v = new Function('$json', 'return (' + ex + ')')($json); return v == null ? '' : String(v); } catch (e) { return ''; } });
+const a8reqs = [{ kind: 'existing', url: A8.EXISTING }, { kind: 'home', url: A8.W + '/' }, { kind: 'related', url: A8.W + '/insights/the-cost-of-non-compliance' }];
+const a8ctx = { keyword: 'e invoicing software uae', domain: 'techand.ai', country: 'United Arab Emirates', mode: 'verdict', page_type: 'Service Page', location_code: 2784, existing_page: { url: A8.EXISTING, source: 'page inventory' }, existing_page_url: A8.EXISTING };
+const a8collect = async (htmlItems) => {
+  mock('Collect Site URLs', [{ json: a8ctx }]);
+  mock('Client Page Requests', a8reqs.map(r => ({ json: r })));
+  mock('Read Client Pages', [{ page_text: A8.readerText }, { page_text: 'Title: Home\n\nMarkdown Content:\n' + A8.readerText.slice(0, 1200) }, { page_text: 'Title: Related\n\nMarkdown Content:\n' + A8.readerText.slice(0, 1500) }]);
+  mock('Read Client Page HTML', htmlItems);
+  return (await run('Collect Client Pages', store['Read Client Page HTML']))[0].json;
+};
+await guard('S122 R38 the whole existing page is read and its facts measured', async () => {
+  reset(); const SN = 'S122 R38 the whole existing page is read and its facts measured';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 500), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const wordsOf = (t) => String(t || '').split(/\s+/).filter(Boolean).length;
+  const c = await a8collect([{ page_html: A8.html }, { page_html: A8.shellHtml }, { error: { message: 'timeout' } }]);
+  const d = c.existing_page_digest || {};
+  check('R38: the existing page is kept whole, well past the live 9,000-character cut (exec 608 lost 1/3 of a ~2,100-word page)', c.existing_page_text.length > 13000 && wordsOf(c.existing_page_text) >= 2000, JSON.stringify({ chars: c.existing_page_text.length, words: wordsOf(c.existing_page_text) }));
+  check('R38: the digest has the dates written in the body text (the live ones sat at character ~7,000)', Array.isArray(d.dates) && d.dates.includes('30 October 2026') && d.dates.includes('1 January 2027'), JSON.stringify(d.dates));
+  check('R38: the digest counts the 3 tables from the page\'s own HTML (the reader flattens them to plain lines)', d.tables === 3 && d.structure_reliable === true && d.tables_text.length === 3, JSON.stringify({ tables: d.tables, reliable: d.structure_reliable }));
+  check('R38: the digest finds the byline, the publication date and the call to action outside the site header', d.author === 'A. Author' && d.published === '2026-09-26' && d.cta === false, JSON.stringify({ author: d.author, published: d.published, cta: d.cta }));
+  check('R38: the facts the models read are in words: dates, "Tables on the page: 3", the author, the publication date', /30 October 2026/.test(c.existing_page_facts_text) && /Tables on the page: 3/.test(c.existing_page_facts_text) && /Author \/ byline: A\. Author/.test(c.existing_page_facts_text) && /published 2026-09-26/.test(c.existing_page_facts_text), c.existing_page_facts_text);
+  check('R38: the tables come back as rows, for the prompts (existing_page_tables)', /TABLES ON THE PAGE/.test(c.existing_page_tables) && /Structured invoicing 1 \| Creates machine-readable invoice data/.test(c.existing_page_tables), c.existing_page_tables.slice(0, 200));
+  const cShell = await a8collect([{ page_html: A8.shellHtml }, { page_html: A8.shellHtml }, { page_html: A8.shellHtml }]);
+  const ds = cShell.existing_page_digest;
+  check('R38: a client-rendered shell cannot prove an absence: tables / author / date are NOT CHECKED, never "none found"', ds.structure_reliable === false && ds.tables === null && ds.author === '' && /NOT CHECKED/.test(cShell.existing_page_facts_text) && !/Tables on the page/.test(cShell.existing_page_facts_text), cShell.existing_page_facts_text);
+  const cFail = await a8collect([{ error: { message: 'timeout' } }, { error: { message: 'timeout' } }, { error: { message: 'timeout' } }]);
+  check('R38: a failed HTML read leaves the text path as it was (whole text, dates, NOT CHECKED for structure)', cFail.existing_page_text.length > 13000 && cFail.existing_page_digest.dates.includes('30 October 2026') && cFail.existing_page_digest.structure_reliable === false, JSON.stringify({ n: cFail.existing_page_text.length }));
+  const cPlain = await a8collect([{ page_html: A8.plainHtml }, { page_html: A8.plainHtml }, { page_html: A8.plainHtml }]);
+  check('R38: a page whose real HTML has no table and no byline says "none found" (the absence is provable, so it stays claimable)', cPlain.existing_page_digest.tables === 0 && cPlain.existing_page_digest.author === '' && cPlain.existing_page_digest.structure_reliable === true && /Tables on the page: 0/.test(cPlain.existing_page_facts_text) && /none found in the page's HTML/.test(cPlain.existing_page_facts_text), cPlain.existing_page_facts_text);
+  // the older wiring (the Jina answers straight into the node) still works: no digest HTML, the text still whole
+  mock('Read Client Pages', [{ page_text: A8.readerText }]); mock('Client Page Requests', [{ json: a8reqs[0] }]);
+  const cOld = (await run('Collect Client Pages', store['Read Client Pages']))[0].json;
+  check('R38: fed Jina directly (no HTML node) the node still returns the whole text and marks the structure NOT CHECKED', cOld.existing_page_text.length > 13000 && cOld.existing_page_digest.structure_reliable === false, JSON.stringify({ n: cOld.existing_page_text.length }));
+});
+
+await guard('S123 R38 the analyzer, the verdict and the copywriter are given the page', async () => {
+  reset(); const SN = 'S123 R38 the analyzer, the verdict and the copywriter are given the page';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 500), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const c = await a8collect([{ page_html: A8.html }, { page_html: A8.shellHtml }, { page_html: A8.shellHtml }]);
+  const pa = a8render('Competitor_Analyzer.prompt.txt', { ...c, competitors_read: 6, avg_competitor_words: 1800, serp_digest: 'x', facts: [], competitor_digest: 'x', language_name: 'English' });
+  check('R38 (acceptance a): the rendered analyzer prompt contains "30 October 2026" (it was beyond the 3,500-character slice)', /30 October 2026/.test(pa), pa.slice(pa.indexOf('CLIENT'), pa.indexOf('CLIENT') + 200));
+  check('R38: the analyzer prompt carries the measured tables and byline, and the page text well past 3,500 characters', /Tables on the page: 3/.test(pa) && /Author \/ byline: A\. Author/.test(pa) && /TABLES ON THE PAGE/.test(pa) && pa.indexOf('In the UAE, an amendment moved the ASP') > 0 && /Tech& AI can support the broader technology conversation/.test(pa), pa.length);
+  check('R38: the analyzer is told it may claim only the absences the facts prove, and never to write "in the excerpt provided"', /only claim an ABSENCE that PAGE FACTS and the text above prove/.test(pa) && /never write "in the excerpt provided"/.test(pa), '');
+  const pv = a8render('Verdict_Agent.prompt.txt', { ...c, keyword: 'e invoicing software uae', competitor_analysis: { existing_page_gaps: [] }, competitors_summary: [], keyword_data: {}, language_name: 'English' });
+  check('R38: the verdict prompt carries WHAT THE CLIENT\'S PAGE HAS (the same facts) and the rule that only they may say what the page lacks', /WHAT THE CLIENT'S PAGE HAS/.test(pv) && /Tables on the page: 3/.test(pv) && /Never state as a fact that the client's own page lacks something/.test(pv), pv.slice(0, 80));
+  const pw = a8render('Copywriter.prompt.txt', { ...c, content_brief: {}, site_description: {}, spelling: 'British English' });
+  check('R38: the copywriter rewriting the page sees past 5,000 characters (its "keep every true fact" could not keep facts it never saw), with the facts and the tables', /30 October 2026/.test(pw) && /Tech& AI can support the broader technology conversation|ASP appointment deadline/.test(pw) && /TABLES ON THE PAGE/.test(pw), pw.length);
+});
+
+const a8pv = async (prev, answer) => { mock('Merge Keyword Data', [{ json: prev }]); return (await run('Parse Verdict', [{ json: { output: JSON.stringify(answer) } }]))[0].json; };
+const A8_LIVE = { verdict: 'GO_WITH_CHANGES', score: 58, risks: [], recommended_page: 'Service Page', expected_monthly_visits_top3: 90, time_to_rank_months: 8, secondary_keywords: ['e invoicing software dubai'],
+  reasons: ['The existing insights article at the target URL is a CFO-framed Peppol features piece. Its visible text has no mandate dates, no PINT-AE or 5-corner explanation, no tables, no lead CTA and no author or date. Its intent is a poor match for a service page, so the page needs rework before it can rank.',
+    'The top pages are service pages from ASPs, and competitor pages have no author boxes.'],
+  what_must_change: ['Rework the page into a service page'] };
+await guard('S124 R38 a claim about the customer\'s page that the page contradicts never reaches the customer', async () => {
+  reset(); const SN = 'S124 R38 a claim about the customer\'s page that the page contradicts never reaches the customer';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 500), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const c = await a8collect([{ page_html: A8.html }, { page_html: A8.shellHtml }, { page_html: A8.shellHtml }]);
+  const GAPS = ['The visible text does not state the mandate dates, such as 30 Oct 2026 or 1 Jan 2027, in the excerpt provided.', 'No comparison table is visible in the text provided.',
+    'No visible trust signals: author, date or reviewer.', 'There is no PINT-AE or 5-corner explanation.', 'The page has no section on penalties.'];
+  // 1. the analyzer's gaps, checked before Keyword Data / Merge Keyword Data / the verdict read them
+  mock('Parse Analysis', [{ json: { ...c, competitor_analysis: { existing_page_gaps: GAPS, search_intent: 'commercial', trust_signals_needed: ['Accredited ASP status (an FTA-accredited provider)'] } } }]);
+  const cc = (await run('Check Page Claims', store['Parse Analysis']))[0].json;
+  const kept = cc.competitor_analysis.existing_page_gaps;
+  check('R38: the three false gaps (dates, table, author / date) are removed from the analysis; the two that are true (no PINT-AE, no penalties section) stay', kept.length === 2 && kept.some(g => /PINT-AE/.test(g)) && kept.some(g => /penalties/.test(g)), JSON.stringify(kept));
+  check('R38: what was removed is recorded with the reason (page_claims_dropped), for the run record', cc.page_claims_dropped.length === 3 && cc.page_claims_dropped.every(x => x.why && x.topic), JSON.stringify(cc.page_claims_dropped.map(x => x.topic + ': ' + x.why)));
+  check('R38: the rest of the item travels on unchanged (keyword, digest, other analysis fields)', cc.keyword === c.keyword && cc.existing_page_digest.tables === 3 && cc.competitor_analysis.search_intent === 'commercial', JSON.stringify(Object.keys(cc).slice(0, 8)));
+  check('R48: the analyzer\'s own wording is corrected as well ("FTA-accredited" -> the Ministry of Finance\'s accreditation)', /Ministry of Finance-accredited provider/.test(cc.competitor_analysis.trust_signals_needed[0]) && !/FTA-accredited/.test(JSON.stringify(cc)), JSON.stringify(cc.competitor_analysis.trust_signals_needed));
+  // an analysis with no page to compare: nothing to check, nothing changed
+  mock('Parse Analysis', [{ json: { keyword: 'k', competitor_analysis: { existing_page_gaps: [] } } }]);
+  check('R38: a run with no existing page passes through', (await run('Check Page Claims', store['Parse Analysis']))[0].json.page_claims_dropped.length === 0, '');
+  // negative control: the claim is true when the page has none of it and the HTML was read in full
+  const cp = await a8collect([{ page_html: A8.plainHtml }, { page_html: A8.shellHtml }, { page_html: A8.shellHtml }]);
+  mock('Parse Analysis', [{ json: { ...cp, existing_page_digest: { ...cp.existing_page_digest, dates: [] }, competitor_analysis: { existing_page_gaps: ['No comparison table is visible on the page.', 'No visible author or date.'] } } }]);
+  const ccp = (await run('Check Page Claims', store['Parse Analysis']))[0].json;
+  check('R38: an absence the digest PROVES (HTML read in full: 0 tables, no byline) is not removed - the check is not a gag', ccp.competitor_analysis.existing_page_gaps.length === 2 && ccp.page_claims_dropped.length === 0, JSON.stringify(ccp.page_claims_dropped));
+  // 2. the verdict's own sentences (acceptance b: the verdict makes no claim that the page lacks dates, tables or an author)
+  const CTX = { keyword: 'e invoicing software uae', domain: 'techand.ai', country: 'United Arab Emirates', location_code: 2784, page_type: 'Service Page', existing_page: { url: A8.EXISTING, source: 'page inventory', matched_by: 'slug', match: 1 } };
+  const out = await a8pv({ ...CTX, existing_page_digest: c.existing_page_digest }, A8_LIVE);
+  const reasons = out.verdict_reasons.join(' ');
+  check('R38 (acceptance b): the verdict\'s reason no longer says the page has no dates, no tables, no author or date', !/no mandate dates|no tables|no lead CTA|no author or date/i.test(reasons), JSON.stringify(out.verdict_reasons));
+  check('R38: what the verdict said about the page that is NOT a false absence survives (the article\'s type and the intent mismatch)', /CFO-framed Peppol features piece/.test(reasons) && /intent is a poor match for a service page/.test(reasons), JSON.stringify(out.verdict_reasons));
+  check('R38: a sentence about the COMPETITORS ("competitor pages have no author boxes") is not a claim about the client\'s page and stays', /competitor pages have no author boxes/.test(reasons), JSON.stringify(out.verdict_reasons));
+  check('R38: the dropped sentence is listed (page_claims_dropped) with its reason', out.page_claims_dropped.length >= 1 && out.page_claims_dropped.some(x => /table|date|author/.test(x.topic) && x.why), JSON.stringify(out.page_claims_dropped));
+  const outNone = await a8pv(CTX, A8_LIVE);
+  check('R38: with no digest (nobody read the page) the verdict is exactly what the model wrote - no claim is checked that cannot be', outNone.verdict_reasons.join(' ').includes('no mandate dates, no PINT-AE') && outNone.page_claims_dropped.length === 0, JSON.stringify(outNone.verdict_reasons));
+  const outShell = await a8pv({ ...CTX, existing_page_digest: { ...c.existing_page_digest, dates: [], published: '', structure_reliable: false, tables: null, author: '', cta: null } }, { ...A8_LIVE, reasons: ['The existing page has no tables and no author.'] });
+  check('R38: when the page\'s HTML could not be read, "the page has no tables / no author" is not said at all (could not be checked)', outShell.verdict_reasons.length === 0 && outShell.page_claims_dropped.length === 1 && /could not be checked/.test(outShell.page_claims_dropped[0].why), JSON.stringify({ r: outShell.verdict_reasons, d: outShell.page_claims_dropped }));
+});
+
+await guard('S125 R48 R52 the accrediting body, and the titles of the pages read', async () => {
+  reset(); const SN = 'S125 R48 R52 the accrediting body, and the titles of the pages read';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 500), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  // ---- R48 ----
+  const CTX = { keyword: 'e invoicing software uae', domain: 'techand.ai', country: 'United Arab Emirates', location_code: 2784, page_type: 'Service Page' };
+  const out = await a8pv(CTX, { verdict: 'GO_WITH_CHANGES', score: 60, reasons: ['Businesses must appoint an FTA-accredited ASP, and every ranking page says so.'], risks: ['Tech& must be honest about its accreditation. If it is not an FTA-accredited ASP, the page has to position it as an implementation partner.'],
+    recommended_page: 'Service Page', what_must_change: ['State plainly whether Tech& is an FTA accredited provider or a partner of one'], secondary_keywords: [] });
+  const all = JSON.stringify([out.verdict_reasons, out.verdict_risks, out.verdict_changes]);
+  check('R48: the verdict no longer calls an ASP "FTA-accredited" in its reasons, risks or changes (accreditation is the Ministry of Finance\'s)', !/FTA[- ]accredited/i.test(all) && /Ministry of Finance-accredited ASP/.test(out.verdict_reasons[0]) && /Ministry of Finance-accredited ASP/.test(out.verdict_risks[0]), all);
+  const pv = a8fs.readFileSync(a8path.join(A8CD, 'Verdict_Agent.prompt.txt'), 'utf8'), pa = a8fs.readFileSync(a8path.join(A8CD, 'Competitor_Analyzer.prompt.txt'), 'utf8'), pw = a8fs.readFileSync(a8path.join(A8CD, 'Copywriter.prompt.txt'), 'utf8');
+  check('R48: the verdict, analyzer and copywriter prompts all say the Ministry of Finance accredits e-invoicing service providers',
+    [pv, pa, pw].every(p => /Ministry of Finance/.test(p) && /FTA-accredited/.test(p)), '');
+  // ---- R52 ----
+  mock('Clean Site Text', [{ json: { domain: 'techand.ai', page_title: A8.HOME_TITLE, site_text: '## Home\n\nEmpowering enterprise transformation.' } }]);
+  mock('Nav Pages Plan', A8.navPlan.map(p => ({ json: p })));
+  mock('Read Nav Pages', A8.navReads);
+  const sp = (await run('Site Pages', store['Read Nav Pages']))[0].json;
+  const titles = sp.site_pages.filter(p => p.kind === 'nav').map(p => p.title);
+  console.log('   pages read ->', JSON.stringify(titles));
+  check('R52: five menu pages the reader titled with the application\'s one generic title are named by five different titles', new Set(titles).size === 5 && !titles.some(t => t === A8.GENERIC), JSON.stringify(titles));
+  check('R52: the title is the menu link text, and a link text too short to name a page ("AI") gives way to the page\'s own first heading', titles.includes('Banking Financial Services') && titles.includes('Cloud Services') && titles.includes('Business Applications') && titles.includes('Tech& Capabilities') && !titles.includes('AI'), JSON.stringify(titles));
+  check('R52: the PAGE blocks the describer reads carry the same titles', /--- PAGE: Banking Financial Services \(/.test(sp.pages_text) && !new RegExp('--- PAGE: ' + A8.GENERIC.replace(/[|&]/g, '\\$&')).test(sp.pages_text), sp.pages_text.slice(0, 120));
+  // a title the page really has is kept
+  mock('Read Nav Pages', A8.navReads.map((r, i) => ({ page_text: r.page_text.replace(A8.GENERIC, ['Industries We Serve | Tech&', 'Cloud Services | Tech&', 'Capabilities | Tech&', 'Business Applications | Tech&', 'Data & Analytics | Tech&'][i]) })));
+  const sp2 = (await run('Site Pages', store['Read Nav Pages']))[0].json;
+  check('R52: when each page has its own title (as the live server HTML does) the reader\'s title is kept untouched', JSON.stringify(sp2.site_pages.filter(p => p.kind === 'nav').map(p => p.title)) === JSON.stringify(['Industries We Serve | Tech&', 'Cloud Services | Tech&', 'Capabilities | Tech&', 'Business Applications | Tech&', 'Data & Analytics | Tech&']), JSON.stringify(sp2.site_pages.map(p => p.title)));
+  const sp3 = (await (async () => { mock('Read Nav Pages', A8.navReads.map((r, i) => ({ page_text: r.page_text.replace(A8.GENERIC, i === 0 ? A8.HOME_TITLE : 'Distinct page ' + i) }))); return run('Site Pages', store['Read Nav Pages']); })())[0].json;
+  check('R52: a reader title that is the HOMEPAGE\'s title is the site\'s, not the page\'s, and is replaced too', sp3.site_pages[1].title === 'Banking Financial Services' && sp3.site_pages[2].title === 'Distinct page 1', JSON.stringify(sp3.site_pages.map(p => p.title)));
+});
+
+
+// ===================================================================================
+// S118-S121 (2026-10-16, A7 — family F8 "Content QA reads what it checks"; docs/system-review-2026-10-15/defects/A_keywords_content.md
+// R37 R43 R44 R45 R46). Replays exec 616's Content QA round 2 (the ladder page "ai consulting", refused at "60% against 90%" with two
+// correctly sourced McKinsey figures masked) and Parse Analysis on exec 616's and exec 610's competitor pages, from harness/fixtures_ra7.js.
+// Every check below fails on the build of 2026-10-16 morning.
+// ===================================================================================
+const RA7 = require('./fixtures_ra7');
+const ra7Check = (SN) => (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+// Content QA round 2 of exec 616, as it ran: the brief, the cited snippets, the competitor pool and the Editor's draft
+const ra7QA = async (over, draft, runIndex) => {
+  mock('Parse Brief', [{ json: { ...RA7.r616.parse_brief, ...(over || {}) } }]);
+  mock('Analyze Competitor Pages', [{ json: { competitors: RA7.r616.competitors } }]);
+  return (await run('Content QA', [{ json: { output: draft == null ? RA7.r616.draft_round2 : draft, critique: null } }], { runIndex: runIndex == null ? 1 : runIndex }))[0].json;
+};
+const ra7Line = (md, re) => (String(md).match(re) || [''])[0].slice(0, 400);
+
+await guard('S118 R37 figures in words and snippets cut before their unit', async () => {
+  reset(); const SN = 'S118 R37 — a figure the cited source writes in words, or states just before its snippet was cut, is the source\'s own figure';
+  begin(SN); const check = ra7Check(SN);
+  const MCK = RA7.r616.parse_brief.facts.find(f => /mckinsey\.com/.test(f.url)).text;
+  const q = async (list) => (await run('_sources', list.map(j => ({ json: j })))).map(i => i.json.found);
+  const [f40, f27, f35] = await q([{ figure: '40%', source: MCK }, { figure: '27%', source: MCK }, { figure: '35%', source: MCK }]);
+  check('R37 unit: "Forty percent of respondents …" carries 40% — the dossier\'s own acceptance test', f40 === true, JSON.stringify({ f40, MCK }));
+  check('R37 unit: "… up from 27 ... Read more" carries 27% — the number sits where the snippet was cut, a percentage is the unit the sentence uses', f27 === true, JSON.stringify({ f27 }));
+  check('R37 unit: and a percentage that excerpt does NOT state is still not carried', f35 === false, JSON.stringify({ f35 }));
+  const [w1, w2, w3, w4, w5, w6, w7] = await q([
+    { figure: 'AED 50 million', source: 'Companies with revenue above fifty million dirhams join the first phase.' },
+    { figure: 'AED 50bn', source: 'Companies with revenue above fifty million dirhams join the first phase.' },
+    { figure: '33%', source: 'PwC has a results-based pricing mix in a third of engagements.' },
+    { figure: '25%', source: 'PwC has a results-based pricing mix in a third of engagements.' },
+    { figure: '42%', source: 'Forty-two per cent of firms report it.' },
+    { figure: '27%', source: 'Forty percent of respondents report scaling agents, up from 27 respondents in the year before.' },
+    { figure: '27%', source: 'Respondents report scaling agents, up from 27 ...' }]);
+  check('R37 unit: an amount in words is an amount ("fifty million dirhams" carries AED 50 million), and its magnitude still counts (not AED 50bn)', w1 === true && w2 === false, JSON.stringify({ w1, w2 }));
+  check('R37 unit: "a third" carries 33% and not 25%; "Forty-two per cent" carries 42%', w3 === true && w4 === false && w5 === true, JSON.stringify({ w3, w4, w5 }));
+  check('R37 unit: not loosened — a bare 27 in a COMPLETE sentence vouches for nothing, nor does a cut 27 with no percentage near it', w6 === false && w7 === false, JSON.stringify({ w6, w7 }));
+
+  const out = await ra7QA();
+  const Q = out.content_qa;
+  console.log('   unverified ->', JSON.stringify(Q.unverified_figures), '| sentence ->', ra7Line(out.output, /McKinsey's 2026 State of AI[^\n]*/));
+  check('R37 node (exec 616 round 2): neither 40% nor 27% is listed as a figure mckinsey.com does not carry',
+    !(Q.unverified_figures || []).some(f => /^(40|27)%$/.test(f.figure)), JSON.stringify(Q.unverified_figures));
+  check('R37 node: the body keeps "40%" and "27%" unbracketed, and no reason the owner reads says McKinsey lacks them',
+    /reports that 40% of respondents/.test(out.output) && /up from 27% \(/.test(out.output) && !/\[Confirm: (40|27)%\]/.test(out.output)
+    && !(Q.not_ready_reasons || []).concat(Q.warnings || []).some(r => /"(40|27)%" \(mckinsey\.com\)/.test(r)),
+    ra7Line(out.output, /McKinsey's 2026 State of AI[^\n]*/));
+
+  // the money mask reads the same kit: an amount the cited source writes in words survives it
+  const URLM = 'https://mof.gov.ae/decision-e-invoicing-phases';
+  const PBM = { keyword: 'uae e invoicing phases', domain: 'techand.ai', currency: 'AED', page_type: 'Blog Post / Guide', business: 'Tech& is a UAE technology consultancy.',
+    business_facts: '', case_facts_text: '', qa_max_rounds: 2, facts: [], competitors: [], term_model: [], coverage_target: null,
+    content_brief: { target_word_count: 300, outline: [], terms_to_use: [], evidence_plan: [
+      { source_url: URLM, fact: 'Businesses with revenue of fifty million dirhams or more join the first phase of the electronic invoicing system.' },
+      { source_url: 'https://example-research.org/einvoicing-survey', fact: 'The survey of finance teams found that most expect delays ... Read more' }] } };
+  const DRAFTM = ['Title: UAE E-Invoicing Phases Explained For Finance Teams', 'Meta Description: Which UAE businesses join e-invoicing first, the revenue line that decides it and what finance teams should prepare before the deadline.',
+    'Slug: uae-e-invoicing-phases', '', '# UAE E-Invoicing Phases', '',
+    'Businesses with revenue of AED 50 million or more join first, according to [the decision](' + URLM + ').', '',
+    'Around 64% of finance teams expect delays, according to [a survey](https://example-research.org/einvoicing-survey).', '',
+    'The same decision says 18% of firms are exempt, per [the decision](' + URLM + ').', '',
+    '## Talk to us', '', 'Book a readiness check with our team.'].join('\n');
+  mock('Parse Brief', [{ json: PBM }]); delete store['Analyze Competitor Pages'];
+  const OM = (await run('Content QA', [{ json: { output: DRAFTM, critique: null } }], { runIndex: 0 }))[0].json;
+  const QM = OM.content_qa;
+  console.log('   money mask ->', JSON.stringify({ sourced: QM.sourced_amounts, flagged: QM.flagged_amounts.map(a => a.amount), unverified: QM.unverified_figures }));
+  check('R37 money mask: "AED 50 million" is kept because the cited source states "fifty million dirhams" — it was held as [Confirm: AED 50 million]',
+    /revenue of AED 50 million or more/.test(OM.output) && QM.sourced_amounts.some(a => a.amount === 'AED 50 million' && a.source === 'mof.gov.ae')
+    && !QM.flagged_amounts.some(a => a.amount === 'AED 50 million'), JSON.stringify({ sourced: QM.sourced_amounts, flagged: QM.flagged_amounts }));
+  const w64 = (QM.unverified_figures || []).find(f => f.figure === '64%'), w18 = (QM.unverified_figures || []).find(f => f.figure === '18%');
+  check('R37 wording: a figure missing from a COMPLETE source text "is not carried"; one missing from a snippet that was cut short is "not in the excerpt the run read" — both still held for review',
+    w64 && w64.reason === 'not_in_excerpt' && w18 && w18.reason === 'absent' && /\[Confirm: 64%\]/.test(OM.output) && /\[Confirm: 18%\]/.test(OM.output)
+    && (QM.warnings || []).some(w => /^Figures the cited source does not carry .*"18%"/.test(w) && !/"64%"/.test(w))
+    && (QM.warnings || []).some(w => /^Figures not in the excerpt of the cited source the run read .*"64%"/.test(w)),
+    JSON.stringify({ unverified: QM.unverified_figures, warnings: (QM.warnings || []).filter(w => /Figures/.test(w)) }));
+
+  // the kit reaches every node that inlines it: Collect Facts and Blog Package carry the same SRC, number words included
+  const fs118 = require('fs'), path118 = require('path'); const CODE118 = process.env.CODE_DIR || path118.join(__dirname, 'code');
+  const kitOf = (f) => { const s = fs118.readFileSync(path118.join(CODE118, f), 'utf8'); const a = s.indexOf('const SRC = (() => {'); const b = s.indexOf('})();', a); return a >= 0 && b > a ? s.slice(a, b) : ''; };
+  const K = ['Content_QA.js', 'Collect_Facts.js', 'Blog_Package.js', '_sources.js'].map(kitOf);
+  check('R37: Content QA, Collect Facts, Blog Package and the kit shim inline one identical SRC, and it is the one that reads number words',
+    K.every(k => k && k === K[0]) && /const spelled = /.test(K[0]) && /cutPct/.test(K[0]), JSON.stringify(K.map(k => k.length)));
+  reset();
+});
+
+await guard('S119 R43 draft coverage and the benchmark on one measure', async () => {
+  reset(); const SN = 'S119 R43 — the draft and the page to beat are measured the same way, and a length cut cannot fail coverage for terms still on the page';
+  begin(SN); const check = ra7Check(SN);
+  const out = await ra7QA(); const Q = out.content_qa, C = Q.coverage;
+  console.log('   coverage ->', JSON.stringify({ pct: Q.coverage_pct, target: Q.coverage_target_pct, best: C.best_competitor_pct, found: C.terms_found, of: C.terms_total, basis: C.basis }));
+  console.log('   reasons ->', JSON.stringify(Q.not_ready_reasons));
+  check('R43 (exec 616 round 2): on the presence measure the draft uses 20 of the 20 terms — 100%, not below the 90% target',
+    Q.coverage_pct === 100 && C.terms_found === 20 && C.terms_total === 20 && Q.coverage_target_pct === 90 && !(Q.coverage_pct < Q.coverage_target_pct),
+    JSON.stringify({ pct: Q.coverage_pct, found: C.terms_found, total: C.terms_total, target: Q.coverage_target_pct }));
+  check('R43: the benchmark is measured on the same list by the same rule — vendasta.com uses 18 of the 20 (90%), the figure the live reason quoted',
+    C.best_competitor_pct === 90 && C.best_competitor_terms_used === 18 && C.measure === 'presence', JSON.stringify({ best: C.best_competitor_pct, used: C.best_competitor_terms_used, measure: C.measure }));
+  check('R43: no reason or warning says "covers 60%", and no term that is on the page is listed as one to "work in"',
+    !(Q.not_ready_reasons || []).concat(Q.warnings || []).some(r => /covers 60%|Topic coverage 60%/.test(r)) && (Q.missing_terms || []).length === 0
+    && !(Q.warnings || []).some(w => /^Topic coverage/.test(w)), JSON.stringify({ missing: Q.missing_terms, reasons: Q.not_ready_reasons }));
+  const strat = (C.below_brief || []).find(t => t.term === 'strategy');
+  check('R43: a term used below the brief\'s count is reported as what it is — "strategy used 7 times (the brief asked for 8)" — information, never a refusal',
+    strat && strat.found === 7 && strat.target === 8 && /strategy used 7 times \(the brief asked for 8\)/.test(C.counts_note || '')
+    && !(Q.warnings || []).some(w => /used 7 times/.test(w)), JSON.stringify({ below: C.below_brief, note: C.counts_note }));
+  check('R43: the basis names the measure and both figures on it',
+    /uses 20 of the 20 terms/.test(C.basis) && /vendasta\.com.*uses 18 of the 20/.test(C.basis) && /a term counts once it appears/.test(C.basis), C.basis);
+  check('R43: the content score\'s coverage points come from the same comparison (25 of 25 at 100% against 90%)', Q.score_breakdown.coverage === 25, JSON.stringify(Q.score_breakdown));
+
+  // terms that really are absent still fail, named by the measure
+  const DROP = ['budget', 'training', 'customer service', 'custom solution'];
+  let thin = RA7.r616.draft_round2; for (const t of DROP) thin = thin.replace(new RegExp('\\b' + t.split(' ').map(w => w + '(?:s|es)?').join('[\\s-]+') + '\\b', 'gi'), 'xx');
+  const QT = (await ra7QA({}, thin)).content_qa;
+  console.log('   thin draft ->', JSON.stringify({ pct: QT.coverage_pct, missing: QT.missing_terms, reason: (QT.not_ready_reasons || []).find(r => /terms/.test(r)) }));
+  check('R43: a draft that drops four terms entirely is at 80% against 90% — the reason gives both figures on one measure and names exactly the absent terms',
+    QT.coverage_pct === 80 && JSON.stringify([...QT.missing_terms].sort()) === JSON.stringify(['budget', 'custom solutions', 'customer service', 'training'])
+    && (QT.not_ready_reasons || []).some(r => /uses 16 of the 20 terms .*\(80%\).*target of 90%.*vendasta\.com uses 18 of the 20 \(90%\)/.test(r)),
+    JSON.stringify({ pct: QT.coverage_pct, missing: QT.missing_terms, reasons: QT.not_ready_reasons }));
+
+  // the length cut is told which terms it must not cut away
+  const QL = (await ra7QA({ content_brief: { ...RA7.r616.parse_brief.content_brief, target_word_count: 1500 } })).content_qa;
+  console.log('   length instruction ->', QL.length_instruction.slice(0, 500));
+  check('R43: the editor\'s cut keeps every term the coverage counts — the instruction names the ones used only once or twice (technology, building, customer service, consulting firms)',
+    /^CUT \d+ words/.test(QL.length_instruction) && /Keep at least one use of each of these terms/.test(QL.length_instruction)
+    && ['technology', 'building', 'customer service', 'consulting firms'].every(t => QL.length_instruction.includes(t)), QL.length_instruction);
+  reset();
+});
+
+await guard('S120 R44 the benchmark page is a page like the one being written', async () => {
+  reset(); const SN = 'S120 R44 — the page to beat is a page of the type being written, and its subtopics are topics, not banners or other companies';
+  begin(SN); const check = ra7Check(SN);
+  const pa = async (fx, over) => { mock('Collect Facts', [{ json: { keyword: fx.keyword, page_type: fx.page_type, term_model: fx.term_model, competitors: fx.competitors, ...(over || {}) } }]);
+    return (await run('Parse Analysis', [{ json: { output: { recommended_word_count: 1400 } } }]))[0].json.coverage_target; };
+  const T616 = await pa(RA7.r616);
+  console.log('   616 service ->', JSON.stringify({ best: T616.best, kind: T616.page_kind, match: T616.type_match, subs: T616.subtopics }));
+  check('R44 (exec 616, a Service Page): the benchmark is a service page, not vendasta.com\'s guide for agencies on selling AI consulting',
+    T616.best.domain === 'atilab.io' && T616.best.kind === 'service' && T616.page_kind === 'service' && T616.type_match === true, JSON.stringify(T616.best));
+  check('R44: its basis says the benchmark was chosen among pages of the same type', /service page/.test(T616.basis), T616.basis);
+  check('R44: the promo banner is never a subtopic', !T616.subtopics.some(s => /Acquire and serve 10x/.test(s)), JSON.stringify(T616.subtopics));
+  const G616 = await pa(RA7.r616, { page_type: 'Blog Post' });
+  console.log('   616 guide ->', JSON.stringify({ best: G616.best.domain, subs: G616.subtopics }));
+  check('R44: writing a guide, vendasta.com\'s guide may be the page to beat — but a heading with no text under it ("Acquire and serve 10x more clients with AI-powered software") is not a subtopic, while its numbered topical steps are',
+    G616.best.domain === 'vendasta.com' && !G616.subtopics.some(s => /Acquire and serve 10x/.test(s)) && G616.subtopics.includes('1. AI Readiness Assessment'), JSON.stringify(G616.subtopics));
+  const COS = /Accenture|IBM|PwC|Cognizant|DataRobot|G42|Digis\b|FlyPix|Deloitte|Protiviti/;
+  const T610 = await pa(RA7.r610);
+  console.log('   610 service ->', JSON.stringify({ best: T610.best, subs: T610.subtopics }));
+  check('R44 (exec 610, a Service Page): the listicle "Best AI Consulting Companies in Dubai" is not the page to beat, and no subtopic names another company',
+    T610.best.domain !== 'digiscorp.com' && T610.best.kind === 'service' && !T610.subtopics.some(s => COS.test(s)), JSON.stringify({ best: T610.best, subs: T610.subtopics }));
+  const L610 = await pa(RA7.r610, { keyword: 'best ai consulting companies in dubai', page_type: 'Blog Post' });
+  console.log('   610 list keyword ->', JSON.stringify({ best: L610.best.domain, subs: L610.subtopics }));
+  check('R44: even where a list IS the right benchmark (a "best … companies" guide), its entries naming other companies are not subtopics to cover, and its topical headings are',
+    !L610.subtopics.some(s => COS.test(s)) && L610.subtopics.some(s => /How to Choose the Best AI Consulting Company in Dubai/.test(s)), JSON.stringify(L610.subtopics));
+  reset();
+});
+
+await guard('S121 R45 R46 brackets named and editor rounds counted', async () => {
+  reset(); const SN = 'S121 R45 R46 — every bracket left for the owner is counted and named, and the editor rounds are the editor calls that ran';
+  begin(SN); const check = ra7Check(SN);
+  const out = await ra7QA(); const Q = out.content_qa;
+  const toks = (Q.open_brackets || []).map(b => b.token);
+  console.log('   open brackets ->', JSON.stringify(Q.open_brackets), '| note ->', Q.placeholder_note);
+  check('R45 (exec 616 round 2): the brackets left for the owner include "[name, role]", "[date]" and "[Confirm: edition year and sample size]"',
+    ['[name, role]', '[date]', '[Confirm: edition year and sample size]'].every(t => toks.includes(t)), JSON.stringify(toks));
+  check('R45: the lower-case gaps are counted as placeholders, the image plan is not', Q.placeholder_count === 2 && !toks.some(t => /^\[Image:/.test(t)), JSON.stringify({ n: Q.placeholder_count, toks }));
+  check('R45: and they are named in what the owner reads (placeholder note and the not-ready reasons)',
+    ['[name, role]', '[date]', '[Confirm: edition year and sample size]'].every(t => Q.placeholder_note.includes(t) && (Q.not_ready_reasons || []).some(r => r.includes(t))),
+    JSON.stringify({ note: Q.placeholder_note, reasons: Q.not_ready_reasons }));
+  // review notes are counted after §9b, and QA's own [Confirm: x%] marks are not counted twice
+  const URL9 = 'https://www.mckinsey.com/capabilities/quantumblack/our-insights/the-state-of-ai';
+  const D9 = RA7.r616.draft_round2.replace('up from 27% (', 'up from 27%, and 91% plan more (');
+  const Q9 = (await ra7QA({}, D9)).content_qa;
+  console.log('   with a mark ->', JSON.stringify({ review_notes: Q9.review_notes, open: (Q9.open_brackets || []).map(b => b.token), unverified: Q9.unverified_figures }));
+  check('R45: a figure QA itself marks [Confirm: 91%] is counted among the review notes (after §9b) but named once — by the figure warning, not again as a bracket the writer left',
+    Q9.review_notes === 2 && (Q9.unverified_figures || []).some(f => f.figure === '91%')
+    && !(Q9.open_brackets || []).some(b => /91%/.test(b.token)) && (Q9.open_brackets || []).some(b => b.token === '[Confirm: edition year and sample size]'),
+    JSON.stringify({ review_notes: Q9.review_notes, open: Q9.open_brackets }));
+  check('R46: Content QA round 2 counts ONE editor call, and the not-ready note says so', Q.editor_rounds === 1 && out.editor_rounds === 1
+    && /The editor had 1 round\b/.test(Q.quality.note) && !/had 2 round/.test(Q.quality.note), JSON.stringify({ e: Q.editor_rounds, note: Q.quality.note }));
+  const Q3 = (await ra7QA({ qa_max_rounds: 3 }, null, 2)).content_qa;
+  check('R46: with three QA rounds the editor ran twice — rounds minus one, not one', Q3.editor_rounds === 2 && /The editor had 2 round/.test(Q3.quality.note), JSON.stringify({ e: Q3.editor_rounds, note: Q3.quality.note }));
+  // the ledger prices the Editor calls that ran
+  reset();
+  mock('Run Ledger Row', [{ json: { run_id: 'exec-616', key: 'app:co_1', mode: 'keyword', est_usd: 0, created_at: new Date(Date.now() - 600000).toISOString(), status: 'reserved', settled_usd: 0 } }]);
+  mock('Rate Limit', [{ json: { mode: 'keyword', domain: 'techand.ai' } }]);
+  mock('Content QA', [{ json: { qa_round: 2, editor_rounds: 1, content_qa: { round: 2, editor_rounds: 1 } } }]);
+  mock('Editor', [{ json: { output: RA7.r616.draft_round2 } }]);
+  const S = (await run('Run Ledger Settle', [{ json: {} }]))[0].json;
+  const E = (S.ai_by_node || {}).Editor || {};
+  console.log('   settle ->', JSON.stringify({ calls: S.ai_calls, editor: E.basis }));
+  check('R46: Run Ledger Settle prices the Editor once for one editor call — it priced a second round "the counter did not see"',
+    S.ai_calls === 1 && E.usd > 0 && !/repeated for the/.test(E.basis || ''), JSON.stringify({ calls: S.ai_calls, editor: E }));
+  reset();
+});
+
+// ===================================================================================
+// S114-S117 (2026-10-16, re-rating defects R77 / R81 / R116 / R96 / R79 / R105 / R95; docs/system-review-2026-10-15/defects/C_monitors.md
+// and D_app_reporting.md). Families F4 / F5: run identity, a refusal that reaches the customer, and ops alerts that update their own row.
+// Fixtures are cut from the saved executions 622 / 624 (the backlinks race), 620 / 623 (the AI visibility pair), 626 (the alert re-sent
+// on every run) and 593 / 630 (the pulse) — ids, timings and n8n's own public IMAP error text only.
+// ===================================================================================
+const S114_KIT = () => {
+  const out = {};
+  out.eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  out.check = (SN) => (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 450))); };
+  out.rg = async (j) => (await run('Run Guard', [{ json: j }], { code: '_run_guard' }))[0].json;
+  out.ar = async (j) => (await run('Alert Retry', [{ json: j }], { code: '_alert_retry' }))[0].json;
+  out.ago = (min) => new Date(Date.now() - min * 60000).toISOString();
+  return out;
+};
+
+await guard('S114 R77 R81 — the child monitor knows its parent, the parent settles as handed off', async () => {
+  reset(); const SN = 'S114 R77 R81 — an on-demand monitor recognises the front-door run that started it by identity (parent_run_id), a genuine twin is still refused, and the front door settles $0 as handed off';
+  begin(SN);
+  const K = S114_KIT(), check = K.check(SN), eq = K.eq, ago = K.ago;
+  // ---------- the race of 2026-10-15 19:29 (exec 622 -> 624): row 91 is the front door's, row 92 the child's ----------
+  const ROW = (o) => ({ run_id: '1', mode: 'backlinks', status: 'reserved', created_at: ago(1), domain: '', heavy: false, key: 'app:org', ...o });
+  const parent91 = ROW({ id: 91, run_id: '622', mode: 'backlinks' });
+  const mine92 = { id: 92, run_id: '624', mode: 'backlinks', key: 'parent:622', dfs_balance: 12.73, dfs_est_usd: 0.45 };
+  const child = await K.rg({ call: 'gate', args: { rows: [parent91], mine: mine92, mode: 'backlinks', where: 'SEO Agent — Backlink Monitor', run_id: '624', parent_run_id: '622' } });
+  console.log('   child gate ->', JSON.stringify({ allowed: child.allowed, reason: child.reason, basis: child.basis }));
+  check('R77: the Backlink Monitor started by the front door (exec 624) is NOT refused by its own parent\'s reserved row 91 (exec 622) — it is recognised by identity, not timing',
+    child.allowed === true && child.reason === 'ok' && child.open_runs === 0, JSON.stringify(child));
+  const twin = await K.rg({ call: 'gate', args: { rows: [ROW({ id: 90, run_id: '999', mode: 'backlinks' }), parent91], mine: mine92, mode: 'backlinks', run_id: '624', parent_run_id: '622' } });
+  check('R77: a genuine second backlinks run (exec 999, another parent) is still refused `same_mode` — the parent exemption names one run, never a mode',
+    twin.allowed === false && twin.reason === 'same_mode' && /execution 999/.test(twin.refusal), JSON.stringify([twin.reason, twin.refusal]));
+  const keyOnly = await K.rg({ call: 'gate', args: { rows: [parent91], mine: mine92, mode: 'backlinks', run_id: '624' } });
+  check('R77: the child\'s own ledger row carries the parent (key `parent:622`), so the gate recognises it even when nothing else is passed',
+    keyOnly.allowed === true, JSON.stringify(keyOnly));
+  const aiParent = ROW({ id: 90, run_id: '620', mode: 'ai_visibility' });
+  const aiMine = { id: 93, run_id: '623', mode: 'ai_visibility', key: 'parent:620' };
+  const aiChild = await K.rg({ call: 'gate', args: { rows: [aiParent], mine: aiMine, mode: 'ai_visibility', run_id: '623', parent_run_id: '620' } });
+  const aiTwin = await K.rg({ call: 'gate', args: { rows: [ROW({ id: 89, run_id: '998', mode: 'ai_visibility' }), aiParent], mine: aiMine, mode: 'ai_visibility', run_id: '623', parent_run_id: '620' } });
+  check('R77: the same pair for AI visibility (620 -> 623 passed by 0.6 s on the night): the child passes, a real twin is refused',
+    aiChild.allowed === true && aiTwin.allowed === false && aiTwin.reason === 'same_mode' && /execution 998/.test(aiTwin.refusal), JSON.stringify([aiChild.reason, aiTwin.reason]));
+
+  // ---------- the node itself, replayed: After Run Ledger (BL) / (AI) with the Manual Run item the front door sends ----------
+  const TRIG = (o) => ({ domain: 'techand.ai', site_id: 'site_techand-ai', on_demand: true, email: '', callback_url: 'http://app.example.test/api/hooks/n8n/tok',
+    request_id: '621', country: 'United Arab Emirates', location_code: 2784, language_code: 'en', competitors: [], topics: [], monitor: 'backlinks', free_only: false, ...o });
+  const replay = async (tag, plan, mode, rows, trig) => {
+    reset();
+    mock(plan, [{ json: { site_id: 'site_techand-ai', domain: 'techand.ai', mode: 'full', on_demand: true } }]);
+    mock('Load Open Runs (' + tag + ')', rows.map(r => ({ json: r })));
+    mock('Reserve Run Ledger (' + tag + ')', [{ json: { id: 92, run_id: 'test-exec', mode, status: 'reserved', key: trig ? 'parent:' + trig.parent_run_id : 'schedule:' + mode } }]);
+    mock('Run Ledger Row (' + tag + ')', [{ json: { run_id: 'test-exec', mode, key: trig ? 'parent:' + trig.parent_run_id : 'schedule:' + mode } }]);
+    if (trig) mock('Manual Run', [{ json: trig }]);
+    return (await run('After Run Ledger (' + tag + ')', [{ json: {} }], { code: 'After_Run_Ledger_' + tag + '_' }));
+  };
+  const blOk = await replay('BL', 'BL Plan', 'backlinks', [parent91], TRIG({ parent_run_id: '622' }));
+  check('R77 (dossier test a): After Run Ledger (BL) replayed with exec 624\'s rows and `parent_run_id: "622"` on the Manual Run item hands the plan on — `allowed`',
+    blOk.length === 1 && !blOk[0].json.run_refused && blOk[0].json.domain === 'techand.ai', JSON.stringify(blOk.map(i => i.json)).slice(0, 300));
+  const blTwin = await replay('BL', 'BL Plan', 'backlinks', [ROW({ id: 90, run_id: '999', mode: 'backlinks' }), parent91], TRIG({ parent_run_id: '622' }));
+  check('R77 (dossier test a): and with an extra reserved row {run_id: "999", mode: "backlinks"} it is still refused `same_mode`',
+    blTwin.length === 1 && blTwin[0].json.run_refused === true && blTwin[0].json.reason === 'same_mode', JSON.stringify(blTwin[0].json).slice(0, 300));
+  const aiOk = await replay('AI', 'AI Plan', 'ai_visibility', [aiParent], TRIG({ parent_run_id: '620', monitor: 'ai_visibility' }));
+  const aiNo = await replay('AI', 'AI Plan', 'ai_visibility', [ROW({ id: 89, run_id: '998', mode: 'ai_visibility' }), aiParent], TRIG({ parent_run_id: '620', monitor: 'ai_visibility' }));
+  check('R77 (dossier test a): the same pair for After Run Ledger (AI) — the child of 620 passes, a real twin is refused',
+    !aiOk[0].json.run_refused && aiNo[0].json.run_refused === true && aiNo[0].json.reason === 'same_mode', JSON.stringify([aiOk[0].json.run_refused, aiNo[0].json.reason]));
+
+  // ---------- the front door passes its own id, and the child stores it ----------
+  reset();
+  mock('Normalize Input', [{ json: { domain: 'techand.ai', mode: 'backlinks', request_id: '621', callback_url: 'http://app.example.test/x', competitors: [] } }]);
+  const ms = (await run('Monitor Start', [{ json: {} }]))[0].json;
+  check('R77: Monitor Start sends the front door\'s OWN execution id as `parent_run_id` (622), not the API request id (621) it already passed as request_id',
+    ms.parent_run_id === 'test-exec' && ms.request_id === '621', JSON.stringify({ parent: ms.parent_run_id, request: ms.request_id }));
+  const TC = require('./table_cols.json');
+  reset();
+  mock('BL Plan', [{ json: { site_id: 'site_techand-ai', domain: 'techand.ai', mode: 'full' } }]);
+  mock('Manual Run', [{ json: TRIG({ parent_run_id: '622' }) }]);
+  const childRow = (await run('Run Ledger Row (BL)', [{ json: {} }], { code: 'Run_Ledger_Row_BL_' }))[0].json;
+  delete store['Manual Run'];
+  const schedRow = (await run('Run Ledger Row (BL)', [{ json: {} }], { code: 'Run_Ledger_Row_BL_' }))[0].json;
+  console.log('   child row key ->', childRow.key, '| scheduled ->', schedRow.key);
+  check('R77: the child\'s ledger row names its parent (key `parent:622`), so the two rows of one request are linked in the table — a scheduled run keeps `schedule:backlinks`',
+    childRow.key === 'parent:622' && schedRow.key === 'schedule:backlinks' && eq(Object.keys(childRow), TC.RUN_LEDGER), JSON.stringify({ child: childRow.key, sched: schedRow.key }));
+
+  // ---------- R81 part 1: the front door's row settles as handed off — $0, done, naming the child ----------
+  reset();
+  mock('Run Ledger Row', [{ json: { run_id: 'test-exec', mode: 'backlinks', est_usd: 0.06, dfs_est_usd: 0.5, cost_mode: 'backlinks|backlinks', dfs_balance: 12.735491, created_at: ago(1) } }]);
+  mock('Rate Limit', [{ json: { mode: 'backlinks', domain: 'techand.ai' } }]);
+  mock('Monitor Start', [{ json: { domain: 'techand.ai', monitor: 'backlinks', request_id: '621', parent_run_id: 'test-exec' } }]);
+  mock('Monitor Started', [{ json: { mode: 'backlinks', started: true, status: 'accepted', stage: 'backlinks_started', request_id: '621' } }]);
+  mock('Load Run Ledger', [{ json: {} }]);
+  mock('Load Cost Calibration', [{ json: {} }]);
+  mock('DFS Balance End', [{ json: { tasks: [{ result: [{ money: { balance: 12.735491 } }] }] } }]);
+  const hand = (await run('Run Ledger Settle', [{ json: {} }]))[0].json;
+  console.log('   handed-off settle ->', JSON.stringify({ dfs: hand.dfs_usd, ai: hand.ai_usd, src: hand.dfs_source, basis: hand.cost_basis }));
+  check('R81: the front-door row of a hand-off settles $0 — row 91 kept "$0.5000 ESTIMATED (the per-mode reservation)" for a request whose money sits on the child\'s row, so the day counted it twice',
+    hand.status === 'done' && hand.dfs_usd === 0 && hand.settled_usd === 0 && hand.ai_usd === 0 && hand.measured_usd === 0 && hand.estimated_usd === 0,
+    JSON.stringify(hand).slice(0, 400));
+  check('R81: and it says where the money is — handed off to the Backlink Monitor, whose row carries key parent:<this run>',
+    hand.dfs_source === 'handoff' && /handed off/.test(hand.cost_basis) && /SEOagentBacklnk1/.test(hand.cost_basis) && /parent:test-exec/.test(hand.cost_basis),
+    hand.cost_basis);
+  const cal = (await run('Cost Calibration Row', [{ json: {} }]))[0].json;
+  check('R81: a hand-off teaches the cost calibration nothing (it measured no money of its own)', cal.skip === true, JSON.stringify(cal));
+  mock('Monitor Started', [{ json: { mode: 'backlinks', started: false, status: 'failed', error: 'Workflow is not active' } }]);
+  const notStarted = (await run('Run Ledger Settle', [{ json: {} }]))[0].json;
+  check('R81: a monitor that could not be started settles $0 too, and says it was not started',
+    notStarted.dfs_usd === 0 && /could not be started/.test(notStarted.cost_basis), notStarted.cost_basis);
+  reset();
+});
+
+await guard('S115 R116 R96 — a refused on-demand monitor tells its caller, and a refusal ends in seconds', async () => {
+  reset(); const SN = 'S115 R116 R96 — a refused on-demand monitor posts {stage: rejected, status: rejected, error, request_id} to its caller, and the refusal path reaches no DataForSEO node and no settle';
+  begin(SN);
+  const K = S114_KIT(), check = K.check(SN), ago = K.ago;
+  const ROW = (o) => ({ run_id: '1', mode: 'backlinks', status: 'reserved', created_at: ago(1), domain: '', heavy: false, ...o });
+  const TRIG = { domain: 'techand.ai', site_id: 'site_techand-ai', on_demand: true, callback_url: 'http://app.example.test/api/hooks/n8n/tok', request_id: '621', monitor: 'backlinks', parent_run_id: '622' };
+  // a genuine duplicate: a second app request while exec 999 (another request) still runs
+  mock('BL Plan', [{ json: { site_id: 'site_techand-ai', domain: 'techand.ai', mode: 'full' } }]);
+  mock('Load Open Runs (BL)', [{ json: ROW({ id: 90, run_id: '999' }) }, { json: ROW({ id: 91, run_id: '622' }) }]);
+  mock('Reserve Run Ledger (BL)', [{ json: { id: 92, run_id: 'test-exec', mode: 'backlinks', status: 'reserved', key: 'parent:622' } }]);
+  mock('Run Ledger Row (BL)', [{ json: { run_id: 'test-exec', mode: 'backlinks', key: 'parent:622' } }]);
+  mock('Manual Run', [{ json: TRIG }]);
+  const ref = (await run('After Run Ledger (BL)', [{ json: {} }], { code: 'After_Run_Ledger_BL_' }))[0].json;
+  check('R116: the refusal item knows who is waiting for it (callback, request id, domain) — it used to carry none of it, so nothing could answer',
+    ref.run_refused === true && ref.callback_url === TRIG.callback_url && ref.request_id === '621' && ref.domain === 'techand.ai', JSON.stringify(ref).slice(0, 400));
+  mock('Refuse Run Ledger (BL)', [{ json: { id: 92, status: 'refused' } }]);   // a Data Table node answers with the row, not the refusal
+  const note = (await run('Refusal Notice (BL)', [{ json: { id: 92, status: 'refused' } }], { code: 'Refusal_Notice_BL_' }))[0].json;
+  console.log('   refusal callback ->', JSON.stringify(note.body || note).slice(0, 300));
+  check('R116 (dossier test a): an on-demand refusal produces exactly {stage: "rejected", status: "rejected", error: <the refusal sentence>, request_id}',
+    !!note.body && note.body.stage === 'rejected' && note.body.status === 'rejected' && note.body.request_id === '621'
+    && note.body.error === ref.refusal && /execution 999/.test(note.body.error) && note.callback_url === TRIG.callback_url,
+    JSON.stringify(note).slice(0, 400));
+  check('R116: the callback names the site and the mode so the app can file it, and claims no money',
+    !!note.body && note.body.domain === 'techand.ai' && note.body.mode === 'backlinks' && note.body.cost_usd === 0 && note.body.on_demand === true, JSON.stringify(note.body));
+  delete store['Manual Run'];
+  const sched = (await run('After Run Ledger (BL)', [{ json: {} }], { code: 'After_Run_Ledger_BL_' }))[0].json;
+  const quiet = (await run('Refusal Notice (BL)', [{ json: {} }], { code: 'Refusal_Notice_BL_' }))[0].json;
+  check('R116: a SCHEDULED refusal has nobody waiting — it posts nothing (the ledger row says why)',
+    sched.run_refused === true && quiet.skip === true, JSON.stringify(quiet));
+  // ---------- the wiring of all ten: the refusal ends at its own callback, never at the balance read or the settle ----------
+  const W = require('./alert_retry_wiring.json');
+  const MON = Object.keys(W.monitors).sort();
+  const bad = MON.filter(w => { const g = W.monitors[w].guard || {}; const p = g.refusal_path;
+    return !Array.isArray(p) || !p.includes(g.notice) || !p.includes(g.post) || p.some(n => /^DFS Balance|^Load Run Ledger|^Ledger Settle|^Settle Run Ledger|^Ensure Ops Alerts/.test(n)) || g.post_max_tries !== 3; });
+  console.log('   refusal path (BL) ->', JSON.stringify((W.monitors['SEO Agent — Backlink Monitor'].guard || {}).refusal_path));
+  check('R96 (dossier test a): in all ten scheduled workflows no path from Refuse Run Ledger reaches a DataForSEO node or the settle — exec 624 waited 5 min 33 s on a balance read it did not need, then computed $0.45 and dropped it',
+    MON.length === 10 && bad.length === 0, JSON.stringify(bad));
+  check('R96: the refused row is settled by the refusal itself (status refused, $0, settled_at, the reason) — no second write is needed or attempted',
+    MON.every(w => ['status', 'settled_usd', 'dfs_usd', 'settled_at', 'cost_basis'].every(c => W.monitors[w].refuse_values.includes(c))), JSON.stringify(W.monitors[MON[0]].refuse_values));
+  reset();
+});
+
+await guard('S116 R79 R105 — one alert key, trimmed once, and the row the retry updates is the row that exists', async () => {
+  reset(); const SN = 'S116 R79 R105 — the ops-alert key is trimmed when it is built, every write-back uses the stored key byte for byte, the Error Handler sweeps once per failure, and a re-sent row records the channel that carried it';
+  begin(SN);
+  const K = S114_KIT(), check = K.check(SN), eq = K.eq, ago = K.ago;
+  const WEBHOOK = 'https://hooks.example.test/seo-agent-alerts';
+  // row 4 of seo_ops_alerts as stored on 2026-10-13: its 160-character message slice ends on a space, so the stored key is 207 characters
+  const MSG = 'The trigger node "Mailbox Trigger" failed at runtime and was deactivated — The IMAP server closed the connection without reporting an error, usually because the server (or a proxy/firewall) periodically closes long-lived connections, or was temporarily unavailable. n8n will automatically retry reactivating the workflow. — IMAP connection closed unexpectedly';
+  const STORED = 'SEO Agent — Console Alerts | Mailbox Trigger | the trigger node "x" failed at runtime and was deactivated — the imap server closed the connection without reporting an error, usually because the server (or a ';
+  const ROW4 = { id: 4, alert_key: STORED, workflow: 'SEO Agent — Console Alerts', node: 'Mailbox Trigger', message: MSG, execution_id: '', execution_url: '', mode: 'trigger',
+    severity: 'high', first_seen_at: '2026-10-13T17:52:35.392Z', last_seen_at: ago(24 * 60), count: 1, channels: 'email,data_table', delivered: 'failed',
+    notes: 'email failed (getaddrinfo ENOTFOUND smtp.gmail.com)', attempts: null, last_attempt_at: null, next_attempt_at: null, attempt_log: null };
+  check('fixture: the stored key is the 207-character one ending in a space', STORED.length === 207 && STORED.endsWith(' '), STORED.length);
+  const ALERT = { workflow: 'SEO Agent — Console Alerts', node: 'Mailbox Trigger', message: MSG, subject: '[SEO Agent] trigger failed', execution_id: '', mode: 'trigger' };
+  const fresh = await K.ar({ call: 'record', alert: ALERT, rows: [], cfg: { webhook_url: WEBHOOK } });
+  check('R79 (dossier unit test): keyOf trims after the 160-character slice — a message whose 160th character is a space no longer makes a key ending in a space',
+    fresh.alert_key === STORED.trim() && !/\s$/.test(fresh.alert_key), JSON.stringify([fresh.alert_key.length, fresh.alert_key.slice(-6)]));
+  const again = await K.ar({ call: 'record', alert: ALERT, rows: [ROW4], cfg: { webhook_url: WEBHOOK } });
+  check('R79: a repeat of row 4\'s failure is recognised as row 4 (count 2, its first sighting kept) and is written back under row 4\'s OWN stored key — the upsert updates it instead of creating a second row',
+    again.alert_key === STORED && again.count === 2 && again.first_seen_at === ROW4.first_seen_at, JSON.stringify({ len: again.alert_key.length, count: again.count, first: again.first_seen_at }));
+  const plan = await K.ar({ call: 'plan', rows: [ROW4], cfg: { webhook_url: WEBHOOK, where: 'SEO Agent — Backlink Monitor' } });
+  check('R79: the sweep plans row 4 under its stored key byte for byte (exec 626 handed 206 characters to an update filtering a 207-character key, so 14 posts updated nothing)',
+    plan.items.length === 1 && plan.items[0].alert_key === STORED, JSON.stringify(plan.items.map(i => i.alert_key.length)));
+  const set = (await K.ar({ call: 'settle', planned: plan.items, responses: [{ statusCode: 200, body: 'ok' }] })).rows;
+  check('R79 + R105: the write-back of a delivered re-send carries the stored key, `delivered: webhook`, attempts 1 — and `channels` names the webhook that carried it (rows 1-3 read "email,data_table" beside "delivered: webhook")',
+    set[0].alert_key === STORED && set[0].delivered === 'webhook' && set[0].attempts === 1 && set[0].channels.split(',').includes('webhook') && set[0].channels.split(',').includes('email'),
+    JSON.stringify({ len: set[0].alert_key.length, delivered: set[0].delivered, channels: set[0].channels }));
+  // the node itself, as the Backlink Monitor runs it (dossier test a: Alert Retry Plan (BL) -> Alert Retry Result (BL))
+  mock('Alert Retry Plan (BL)', plan.items.map(i => ({ json: i })));
+  const res = await run('Alert Retry Result (BL)', [{ json: { statusCode: 200, body: 'ok' } }], { code: 'Alert_Retry_Result_BL_' });
+  check('R79 (dossier test a): the alert_key Alert Retry Result (BL) hands to Save Alert Retry (BL) equals the stored key byte for byte',
+    res.length === 1 && res[0].json.alert_key === STORED && res[0].json.channels.split(',').includes('webhook'), JSON.stringify(res.map(r => [r.json.alert_key.length, r.json.channels])));
+  // the Page Watch's own delivery record
+  mock('Watch Ops Channels', [{ json: { webhook_body: { alerts: [{ key: STORED.trim() }] } } }]);
+  mock('Watch Ops Alert', [{ json: { ...ROW4, channels: 'email,data_table' } }]);
+  const wd = (await run('Watch Ops Delivery', [{ json: { statusCode: 200, body: 'ok' } }]))[0].json;
+  check('R105 (dossier test a) + R79: Watch Ops Delivery with stored channels "email,data_table" and a 2xx writes channels containing webhook, under the stored key',
+    wd.alert_key === STORED && wd.delivered === 'webhook' && wd.channels.split(',').includes('webhook'), JSON.stringify({ len: (wd.alert_key || '').length, ch: wd.channels }));
+  // the Error Handler: one delivery record and one sweep per failure
+  const OW = require('./ops_alert_wiring.json');
+  const into = Object.entries(OW.connections).filter(([, outs]) => outs.some(l => (l || []).includes('Alert Delivery'))).map(([s]) => s);
+  const m = OW.delivery_merge || {};
+  console.log('   EH -> Alert Delivery from', JSON.stringify(into), '| merge', JSON.stringify(m));
+  check('R79 (dossier test a): in the Error Handler exactly ONE node feeds Alert Delivery — a merge that waits for both channel branches — so the delivery is recorded once and the retry sweep behind it runs once per failure (exec 643 re-posted row 4 twice, 3 s apart)',
+    eq(into, ['Alert Channels Done']) && m.node === 'Alert Channels Done' && m.type === 'n8n-nodes-base.merge'
+    && eq(m.inputs, { 'Email Ops': 1, 'Post Alert Webhook': 0, 'Send Email?': 1, 'Send Webhook?': 0 }), JSON.stringify({ into, m }));
+  reset();
+});
+
+await guard('S117 R95 — an on-demand pulse no longer replaces the day\'s scheduled reading', async () => {
+  reset(); const SN = 'S117 R95 — a same-day on-demand AI pulse is stored beside the scheduled reading, both count in the week, and a scheduled re-run still replaces only itself';
+  begin(SN);
+  const K = S114_KIT(), check = K.check(SN);
+  const LW = require('./ledger_wiring.json');
+  const keys = ((LW.monitors['SEO Agent — AI Pulse'] || {}).daily_upsert_keys) || ['site_id', 'date'];
+  const DAY = '2026-10-15';
+  const metrics = (onDemand, samples, mentioned, at) => [{ json: { site_id: 'site_techand-ai', domain: 'techand.ai', date: DAY, on_demand: onDemand,
+    daily_row: { site_id: 'site_techand-ai', domain: 'techand.ai', date: DAY, checked_at: at, run_id: 'pulse_20261015_techand-ai', samples, mentioned, cited: 0 } } }];
+  const table = [];
+  const upsert = (rows) => { for (const r of rows) { const i = table.findIndex(t => keys.every(k => String(t[k]) === String(r[k]))); if (i >= 0) table[i] = { ...table[i], ...r }; else table.push({ ...r }); } };
+  mock('Pulse Metrics', metrics(false, 21, 0, '2026-10-15T11:11:00.000Z'));   // exec 593, scheduled 11:11 UTC
+  upsert((await run('AI Daily Rows', [{ json: {} }], { code: 'Pulse__AI_Daily_Rows' })).map(i => i.json));
+  mock('Pulse Metrics', metrics(true, 21, 1, '2026-10-15T19:42:55.988Z'));    // exec 630, on demand 19:42 UTC
+  upsert((await run('AI Daily Rows', [{ json: {} }], { code: 'Pulse__AI_Daily_Rows' })).map(i => i.json));
+  console.log('   upsert keys', JSON.stringify(keys), '-> rows', JSON.stringify(table.map(r => [r.run_id, String(r.checked_at).slice(11, 16), r.samples])));
+  check('R95 (dossier test a): replaying AI Daily Rows for 593 then 630 leaves TWO rows for 2026-10-15 — the 11:11 scheduled reading is no longer overwritten by the 19:42 on-demand one',
+    table.length === 2 && table.some(r => String(r.checked_at).startsWith('2026-10-15T11:11')) && table.some(r => String(r.checked_at).startsWith('2026-10-15T19:42')), JSON.stringify(table));
+  check('R95: the weekly figure (AI Plan sums every row of the window) counts 42 answers for the day, not 21', table.reduce((s, r) => s + r.samples, 0) === 42, table.length);
+  mock('Pulse Metrics', metrics(false, 21, 2, '2026-10-15T12:00:00.000Z'));   // a scheduled re-run the same day replaces the scheduled reading only
+  upsert((await run('AI Daily Rows', [{ json: {} }], { code: 'Pulse__AI_Daily_Rows' })).map(i => i.json));
+  check('R95: a second SCHEDULED reading of the same day still replaces the scheduled row (one scheduled reading per day, as before)',
+    table.length === 2 && keys.includes('run_id'), JSON.stringify({ keys, n: table.length }));
+  reset();
+});
+
 
 H.report();
 })();

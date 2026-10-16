@@ -19,8 +19,15 @@ const OA = (() => {
   const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
   // the identity of a failure: the workflow, the node and the message with numbers, ids and quoted values removed, so "timeout after 30012ms"
   // and "timeout after 31004ms" at the same node are one alert
+  // R79 (2026-10-16, re-rating C-3): the slice used to keep a trailing space when the 160th character was one, so row 4 was stored under a
+  // 207-character key ending in a space while every reader trimmed it to 206 — the retry's update matched no row and the alert was re-sent to
+  // Slack on every run of every monitor (14 posts on 2026-10-15). The key is trimmed after the slice: ONE normal form, built here only.
   const keyOf = (a) => [S(a.workflow) || 'unknown workflow', S(a.node) || 'unknown node',
-    S(a.message).toLowerCase().replace(/\d[\d.,:]*/g, '#').replace(/["'`][^"'`]*["'`]/g, '"x"').replace(/\s+/g, ' ').slice(0, 160)].join(' | ');
+    S(a.message).toLowerCase().replace(/\d[\d.,:]*/g, '#').replace(/["'`][^"'`]*["'`]/g, '"x"').replace(/\s+/g, ' ').slice(0, 160).trim()].join(' | ');
+  // R79: a stored row is matched on the normal form (trimmed), but it is WRITTEN BACK under the key it is stored with, byte for byte — rows
+  // written before the trim (row 4) keep their trailing space, and a Data Table update / upsert filters on exact equality. Normalise on
+  // read, write back the identity: no migration of the stored keys is needed, and no second row is ever created beside an old one.
+  const storedKey = (r) => String(r == null || r.alert_key == null ? '' : r.alert_key);
   const severityOf = (a) => /credential|unauthor|forbidden|payment|credit|quota|balance/i.test(S(a.message)) ? 'critical' : 'high';
   // B-A7: a row is "carried" when `delivered` NAMES the channel that took it ('webhook', 'email', 'webhook,email'). Everything else -
   // pending, failed, not_sent, deduped - means the same thing to a human: nobody has it. The same rule as AR.carried.
@@ -35,9 +42,10 @@ const OA = (() => {
     const a = alert || {}, c = cfg || {};
     const now = new Date();
     const nowIso = now.toISOString();
-    const alert_key = keyOf(a);
-    const prior = (rows || []).filter(r => r && S(r.alert_key) === alert_key)
+    const fresh = keyOf(a);
+    const prior = (rows || []).filter(r => r && S(r.alert_key) === fresh)
       .sort((x, y) => S(y.last_seen_at).localeCompare(S(x.last_seen_at)))[0] || null;
+    const alert_key = prior ? storedKey(prior) : fresh;   // R79: the row that exists, under the key it is stored with
     const sinceMin = prior && S(prior.last_seen_at) ? (now - new Date(S(prior.last_seen_at))) / 60000 : Infinity;
     const repeat = !!prior && Number.isFinite(sinceMin) && sinceMin < DEDUPE_MINUTES;
     const count = prior ? n0(prior.count) + 1 : 1;
@@ -74,7 +82,7 @@ const OA = (() => {
     return { row, notify, repeat, channels, webhook_url, email_to, webhook_body: body, plain, alert_key, severity: row.severity, DEDUPE_MINUTES };
   };
 
-  return { plan, keyOf, severityOf, cfgUrl, carried, DEDUPE_MINUTES, RETRY_MINUTES };
+  return { plan, keyOf, storedKey, severityOf, cfgUrl, carried, DEDUPE_MINUTES, RETRY_MINUTES };
 })();
 // ---- B-A7 (2026-10-15, build section 64): an undelivered alert is re-attempted, escalated, and never called delivered ----
 // D25b gave the alert a second channel and a row of its own; R6 put the delivery result back on that row. Nothing ever acted on it: one
@@ -109,6 +117,14 @@ const AR = (() => {
   const cfgUrl = (v) => { const s = S(v); return !s || /^__[A-Z0-9_]+__$/.test(s) ? '' : s; };
   // what counts as delivered: Alert Delivery writes the channels that carried it ('webhook', 'email', 'webhook,email').
   const carried = (r) => S(r && r.delivered).toLowerCase().split(',').map(x => x.trim()).some(x => x === 'webhook' || x === 'email');
+  // R79 (2026-10-16, re-rating C-3): rows are COMPARED on the trimmed key (S) but WRITTEN BACK under the key they are stored with, byte for
+  // byte: the update filters `alert_key eq …` exactly, and row 4's stored key ends in a space (written before OA.keyOf trimmed). Trimming it
+  // here made every re-send's write-back match nothing, so the row never recorded the attempt and was "due" again on the next run.
+  const storedKey = (r) => String(r == null || r.alert_key == null ? '' : r.alert_key);
+  // R105 (2026-10-16, re-rating D-9): `channels` records the channels that carried, or were tried for, the alert — rows 1-3 read
+  // "email,data_table" beside `delivered: webhook` because a re-send kept the stored list. One order, no repeats; the table is always one.
+  const withChannel = (list, ch) => { const have = new Set(S(list).toLowerCase().split(',').map(x => x.trim()).filter(Boolean).concat([S(ch), 'data_table']));
+    return ['webhook', 'email', 'data_table'].filter(x => have.has(x)).concat([...have].filter(x => x && !['webhook', 'email', 'data_table'].includes(x))).join(','); };
   const abandoned = (r) => S(r && r.delivered).toLowerCase() === 'abandoned';
   const attemptsOf = (r) => Math.max(0, n0(r && r.attempts));
   // when this row may be tried again: what the last attempt booked, else the last attempt / sighting plus the interval. A row written
@@ -173,7 +189,7 @@ const AR = (() => {
       const attempt = attemptsOf(r) + 1;
       const severity = severityFor(r, attempt);
       const p = payload(r, attempt, severity, nowMs);
-      return { alert_key: S(r.alert_key), attempt, severity, escalated: attempt >= ESCALATE_AFTER, at: iso(nowMs),
+      return { alert_key: storedKey(r), attempt, severity, escalated: attempt >= ESCALATE_AFTER, at: iso(nowMs),
         row: r, webhook_url: url, webhook_body: p.body, subject: p.subject, plain: p.plain, sweeper: S(c.where) };
     });
     return { items, open: open.length, due: ready.length, posting: url ? items.length : 0, spent: spent.length,
@@ -191,10 +207,10 @@ const AR = (() => {
     const giveUp = !res.ok && attempt >= MAX_ATTEMPTS;
     const nowMs = ms(p.at) || Date.now();
     return {
-      alert_key: S(p.alert_key),
+      alert_key: p.alert_key == null ? storedKey(r) : String(p.alert_key),   // R79: the stored key, never re-trimmed
       // Rule 4: delivered only on the evidence of a 2xx; otherwise the row keeps saying nobody has it.
       delivered: res.ok ? 'webhook' : giveUp ? 'abandoned' : 'failed',
-      channels: S(r.channels) || 'data_table',
+      channels: withChannel(r.channels, 'webhook'),   // R105: this attempt went to the webhook, delivered or not
       severity: res.ok ? sev : severityFor(r, attempt),
       attempts: attempt,
       last_attempt_at: iso(nowMs),
@@ -211,7 +227,7 @@ const AR = (() => {
     };
   });
 
-  return { plan, settle, posted, carried, isOpen, retryable, attemptsOf, dueAt, severityFor, addAttempt, logLines, cfgUrl, ageText,
+  return { plan, settle, posted, carried, storedKey, withChannel, isOpen, retryable, attemptsOf, dueAt, severityFor, addAttempt, logLines, cfgUrl, ageText,
            RETRY_MINUTES, ESCALATE_AFTER, MAX_ATTEMPTS, PER_SWEEP };
 })();
 const S = (v) => String(v == null ? '' : v).trim();
@@ -226,9 +242,11 @@ return sent.map(key => {
   const attempt = AR.attemptsOf(r) + 1;
   const giveUp = !res.ok && attempt >= AR.MAX_ATTEMPTS;
   return { json: {
-    alert_key: key,
+    // R79 (2026-10-16): the row is written back under the key it is STORED with (the digest carries the trimmed form), so the update
+    // matches it byte for byte even for a row written before OA.keyOf trimmed its keys
+    alert_key: r.alert_key == null ? key : AR.storedKey(r),
     delivered: res.ok ? 'webhook' : giveUp ? 'abandoned' : 'failed',
-    channels: S(r.channels) || 'webhook,data_table',
+    channels: AR.withChannel(r.channels, 'webhook'),   // R105: the channel this digest went to, beside what the row already said
     severity: res.ok ? (S(r.severity) || 'high') : AR.severityFor(r, attempt),
     attempts: attempt,
     last_attempt_at: now,

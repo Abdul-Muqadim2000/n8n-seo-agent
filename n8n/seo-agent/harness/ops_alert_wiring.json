@@ -7,6 +7,11 @@
     "Send Email?"
    ]
   ],
+  "Alert Channels Done": [
+   [
+    "Alert Delivery"
+   ]
+  ],
   "Alert Delivery": [
    [
     "Save Alert Delivery"
@@ -34,7 +39,7 @@
   ],
   "Email Ops": [
    [
-    "Alert Delivery"
+    "Alert Channels Done"
    ]
   ],
   "Ensure Ops Alerts Table": [
@@ -69,7 +74,7 @@
   ],
   "Post Alert Webhook": [
    [
-    "Alert Delivery"
+    "Alert Channels Done"
    ]
   ],
   "Save Alert Delivery": [
@@ -87,7 +92,7 @@
     "Email Ops"
    ],
    [
-    "Alert Delivery"
+    "Alert Channels Done"
    ]
   ],
   "Send Webhook?": [
@@ -95,17 +100,14 @@
     "Post Alert Webhook"
    ],
    [
-    "Alert Delivery"
+    "Alert Channels Done"
    ]
   ]
  },
  "delivery": {
   "code": "Alert Delivery",
   "from": [
-   "Email Ops",
-   "Post Alert Webhook",
-   "Send Email?",
-   "Send Webhook?"
+   "Alert Channels Done"
   ],
   "row_update": "Save Alert Delivery",
   "writes": [
@@ -118,6 +120,17 @@
    "notes",
    "severity"
   ]
+ },
+ "delivery_merge": {
+  "feeds": "Alert Delivery",
+  "inputs": {
+   "Email Ops": 1,
+   "Post Alert Webhook": 0,
+   "Send Email?": 1,
+   "Send Webhook?": 0
+  },
+  "node": "Alert Channels Done",
+  "type": "n8n-nodes-base.merge"
  },
  "email": {
   "maxTries": 3,
@@ -145,7 +158,8 @@
   "Any Alert Retry?",
   "Post Alert Retry",
   "Alert Retry Result",
-  "Save Alert Retry"
+  "Save Alert Retry",
+  "Alert Channels Done"
  ],
  "retry": {
   "columns": [
