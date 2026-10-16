@@ -19,10 +19,13 @@ from ladder_common import ledger_mainline, ALERT_WEBHOOK_PLACEHOLDER   # R17 / R
 
 # R9 (2026-10-13, re-rating): the reserve / settle side branch, the same one build_monitors.py's WF.run_ledger builds. It hangs BESIDE the plan
 # node, never in the data path, because a Data Table node answers with the row it wrote rather than with its input.
-def ledger_nodes(N_, C_, mode, tag, plan, ends, pos):
+def ledger_nodes(N_, C_, mode, tag, plan, ends, pos, measured=''):
     x, y = pos
     row = 'Run Ledger Row (' + tag + ')'
-    res_js, set_js = monitor_ledger_js(V5, mode, plan, row, '')
+    # R82 (2026-10-16, re-rating C-6): `measured` names the node(s) carrying this run's own DataForSEO cost ('A|B'; a leading '!' = every
+    # paid call of the workflow, so none having run settles $0). It was always '' here, so the Site Tracker settled its $0.01 reservation
+    # "ESTIMATED" while its SERP checks and Trends lookups reported $0.0310 (row 98).
+    res_js, set_js = monitor_ledger_js(V5, mode, plan, row, measured)
     N_.append(node('Ensure Run Ledger (' + tag + ')', DT_TYPE, DT_VERSION, dt_create_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS), [x, y], onError='continueRegularOutput', executeOnce=True))
     N_.append(node(row, 'n8n-nodes-base.code', 2, {'jsCode': res_js}, [x + 220, y], executeOnce=True))
     N_.append(node('Reserve Run Ledger (' + tag + ')', DT_TYPE, DT_VERSION, dt_insert_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS), [x + 440, y], onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True))
@@ -38,10 +41,16 @@ def ledger_nodes(N_, C_, mode, tag, plan, ends, pos):
     for a_, b_ in ([(plan, 'Ensure Run Ledger (' + tag + ')'), ('Ensure Run Ledger (' + tag + ')', row), (row, 'Reserve Run Ledger (' + tag + ')'),
                     ('Ledger Settle (' + tag + ')', 'Settle Run Ledger (' + tag + ')')] + [(e, 'Ledger Settle (' + tag + ')') for e in ends]):
         link(C_, a_, b_)
-    return {'mode': mode, 'plan': plan, 'reserve': row, 'settle': 'Settle Run Ledger (' + tag + ')', 'settle_from': list(ends), 'measured': '', 'est': LEDGER_EST[mode],
+    return {'mode': mode, 'plan': plan, 'reserve': row, 'settle': 'Settle Run Ledger (' + tag + ')', 'settle_from': list(ends), 'measured': measured, 'est': LEDGER_EST[mode],
             'resume': 'After Run Ledger (' + tag + ')'}   # R17 (2026-10-14): the node that hands the plan's items back to the pipeline
 
 LEDGER_WIRING = {}   # R9: merged into harness/ledger_wiring.json after the last workflow is written
+import monitor_cost   # A9 (2026-10-16, F6): Site Brief's token count (R82) and the callbacks that wait for the settle (R115)
+# R82: the Claude agents of these workflows counted on their main path and priced into their settle (Site Brief was on its reservation)
+COUNTED = {'SEO Agent — Site Tracker': ['Site Brief']}
+# R115 (2026-10-16, re-rating D-19): each callback is posted after its run's settle and carries the settled run_ledger
+CALLBACKS = {'SEO Agent — Site Tracker': [('Has Callback (Site)?', 'POST Site Report')],
+             'SEO Agent — Content Cadence': [('Has Callback (Cadence)?', 'POST Cadence Note')]}
 from env_settings import ENV as _ENV_PW
 # D25b's channel: the watch pushes the serious changes to it as well. R29 / R30 (2026-10-14): this build reads SEO_ALERT_WEBHOOK_URL not at
 # all — neither the value (a secret, and this repository is public) nor whether it is set (that made the generated files depend on the
@@ -87,7 +96,17 @@ def link(conns, a, b, out=0):
     outs[out].append({'node': b, 'type': 'main', 'index': 0})
 def write(wfobj, fname):
     # R17 (2026-10-14, FIX_PLAN §3.12): the reserve chain goes on the MAIN path, now that every connection of this workflow is made
-    if wfobj.get('name') in LEDGER_WIRING: ledger_mainline(wfobj, LEDGER_WIRING[wfobj['name']])
+    if wfobj.get('name') in LEDGER_WIRING:
+        _w = LEDGER_WIRING[wfobj['name']]
+        _declared = list(_w['settle_from'])   # R115: the report ends this workflow declared, before ledger_mainline adds the loose ends
+        _table = monitor_cost.count_chain(wfobj, COUNTED[wfobj['name']]) if wfobj['name'] in COUNTED else None
+        ledger_mainline(wfobj, _w)
+        if _table is not None:
+            monitor_cost.bake_calls(wfobj, 'Ledger Settle (' + _w['reserve'][len('Run Ledger Row ('):-1] + ')', _table)
+            assert sorted(c['node'] for c in _table) == sorted(_w['ai_nodes']), 'R82: ' + wfobj['name'] + ' prices ' + str(_table) + ' but sweeps ' + str(_w['ai_nodes'])
+            _w['ai_calls'] = _table
+        for _h, _p in CALLBACKS.get(wfobj['name'], []):
+            monitor_cost.callback_after_settle(wfobj, _w, _h, _p, V5, _declared)
     url_lint.check(wfobj, wfobj.get('name') or fname)   # D15: no node builds a site URL by hand (url_lint.py)
     retry_lint.check(wfobj, wfobj.get('name') or fname)   # G1: every external HTTP node carries the retry rule (retry_lint.py)
     for _n in wfobj['nodes']:   # e-mails retry a transient SMTP / DNS failure (live finding 2026-10-02: EAI_AGAIN smtp.gmail.com)
@@ -364,7 +383,8 @@ for _n in ('Inspect Requests', 'Parse Inspection', 'Inspect Rows (Site)', 'Site 
 assert not any('/*__PAGE_WATCH__*/' in c_ for c_ in _code.values()), 'page-watch placeholder left in the Site Tracker'
 assert 'PW.inspectBudget(' in _code['Inspect Requests'] and 'inspect_at' in _code['Inspect Requests'], 'G25: the inspections do not rotate within the quota'
 assert 'index_coverage' in _code['Site Metrics'] and 'page_watch: watch' in _code['Site Metrics'], 'G11 / G25: the weekly item carries neither the index view nor the watch'
-LEDGER_WIRING['SEO Agent — Site Tracker'] = ledger_nodes(N, C, 'site_tracker', 'Site', 'Site Plan', ['Site Report'], at(11, 9))
+LEDGER_WIRING['SEO Agent — Site Tracker'] = ledger_nodes(N, C, 'site_tracker', 'Site', 'Site Plan', ['Site Report'], at(11, 9),
+                                                         measured='!SERP Check (Site) Answers|Google Trends Answers')
 # ---- B-A10 (2026-10-15, INVARIANTS rule 3): the two paid DataForSEO calls of the week go through the in-200 retry gate ----
 # Both reading sides were already honest about a task error inside a 200 (Parse Trends -> `DataForSEO <code>`, Parse Site SERP ->
 # RS.read -> position -1, "check failed" and never "not in the top 50"); what neither had was a second attempt. A trend that
@@ -482,7 +502,7 @@ N.append(code('Cadence Note', urls(rd('code/Cadence_Note.js')), at(19, 0)))
 N.append(iff('Has Email (Cadence)?', '{{ !!$json.email }}', at(20, -1)))
 N.append(node('Send Cadence Note', 'n8n-nodes-base.emailSend', 2.1, {'fromEmail': SENDER, 'toEmail': '={{ $json.email }}', 'subject': '={{ $json.subject }}', 'emailFormat': 'html', 'html': '={{ $json.html }}', 'options': {'appendAttribution': False}}, at(21, -1), credentials=SMTP, onError='continueRegularOutput'))
 N.append(iff('Has Callback (Cadence)?', '{{ !!$json.callback_url }}', at(20, 1)))
-N.append(node('POST Cadence Note', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.callback_url }}', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': "={{ JSON.stringify({ status: 'progress', stage: 'content_cadence', request_id: $json.request_id, site_id: $json.site_id, domain: $json.domain, week: $json.week, pages: $json.pages, upcoming: $json.upcoming, pending_publish: $json.pending_publish, candidates: $json.candidates, paused_reason: $json.paused_reason || '', waiting_publish: $json.waiting_publish || 0, max_waiting: $json.max_waiting || 0, awaiting_approval: $json.awaiting_approval || [], suggestions: $json.suggestions || [], queued_ladders: $json.queued_ladders || [], won_ladders: $json.won_ladders || [], waiting_for_support: $json.waiting_for_support || [] }) }}", 'options': {'timeout': 20000}}, at(21, 1), onError='continueRegularOutput'))
+N.append(node('POST Cadence Note', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.callback_url }}', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': "={{ JSON.stringify({ status: 'progress', stage: 'content_cadence', request_id: $json.request_id, site_id: $json.site_id, domain: $json.domain, week: $json.week, pages: $json.pages, upcoming: $json.upcoming, pending_publish: $json.pending_publish, candidates: $json.candidates, paused_reason: $json.paused_reason || '', waiting_publish: $json.waiting_publish || 0, max_waiting: $json.max_waiting || 0, awaiting_approval: $json.awaiting_approval || [], suggestions: $json.suggestions || [], queued_ladders: $json.queued_ladders || [], won_ladders: $json.won_ladders || [], waiting_for_support: $json.waiting_for_support || [], run_ledger: $json.run_ledger || null }) }}", 'options': {'timeout': 20000}}, at(21, 1), onError='continueRegularOutput'))
 N.append(sticky('Note', f"""## SEO Agent — Content Cadence (v4.3, pipeline rules v4.8)
 Runs **every Monday 10:00** (after the trackers) and on demand through *Manual Run* (`{{ site_id | domain, pages?, dry_run?, force? }}`). For every site with a cadence in `{CADENCE_TABLE}` (set by "Track my site" / API `blogs_per_week`, or Site Admin `cadence`; 1-3 per week) it picks the week's topics in this order: the keyword ladder's next **planned** pages (rung order, with the ladder's internal links), **striking-distance** queries from `{QUERY_TABLE}` (positions 4-20 with impressions: the page that already ranks gets strengthened), **rising** related searches from `{TRENDS_TABLE}`. Keywords written in the last 90 days, written/published ladder pages, brand queries and paused sites are skipped.
 Each pick starts a content run in SEO Agent v4 (`mode: keyword`, `force_content`, internal rate-limit key `cadence:<site>`) that delivers the PDF/Word report **plus the blog package** (article HTML, Markdown, meta.json) by e-mail / callback (`stage: content`). The run is logged in `{LOG_TABLE}` (status started), ladder rows go to *writing*, and one note per site goes out (`stage: content_cadence`): this week's pages and why, what comes next, pages still waiting for a publish link.

@@ -9,6 +9,7 @@ import env_settings as _env   # B-F5 (2026-10-15): a build with no n8n/.env must
 _env.require_settings('build_monitors.py')
 import retry_lint   # G1 (2026-10-11 system review): one retry rule for every external HTTP node
 import dfs_gate     # B-A10 (2026-10-15): INVARIANTS rule 3 — the in-200 retry gate, one shape for every DataForSEO call
+import monitor_cost # A9 (2026-10-16, F6): the count_tokens answer expression, and the callback that waits for the settle (R115)
 from ladder_common import (DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_upsert_params, dt_upsert_params_keys,
                            SITES_TABLE, SITES_COLS, LADDER_TABLE, LADDER_COLS, LOG_TABLE, LOG_COLS, PROFILE_TABLE, PROFILE_COLS, CASE_TABLE, CASE_COLS,
                            MONITORS_TABLE, MONITORS_COLS, AI_PROMPTS_TABLE, AI_PROMPTS_COLS, AI_ANSWERS_TABLE, AI_ANSWERS_COLS, AI_VIS_TABLE, AI_VIS_COLS,
@@ -147,7 +148,7 @@ class WF:
                 self.node(set_n, 'n8n-nodes-base.set', 3.4, {'mode': 'manual', 'includeOtherFields': True, 'options': {}, 'assignments': {'assignments': [
                     {'id': str(uuid.uuid5(NS, 'bc2:' + self.prefix + ':' + ag + ':prompt')), 'name': '__prompt', 'value': prompt, 'type': 'string'},
                     {'id': str(uuid.uuid5(NS, 'bc2:' + self.prefix + ':' + ag + ':answer')), 'name': '__answer',
-                     'value': "={{ String($json.output ?? '') }}", 'type': 'string'}]}},
+                     'value': monitor_cost.answer_expr('$json.output'), 'type': 'string'}]}},   # R47 / R80 (2026-10-16): an object as its JSON
                     [px, py + 320], onError='continueRegularOutput', alwaysOutputData=True)
                 mdl, own = json.dumps(model), "$('" + set_n + "').item.json"
                 self.count_node(cp, '={{ JSON.stringify({ model: ' + mdl + ', messages: [{ role: "user", content: String($json.__prompt || "") }] }) }}',
@@ -165,7 +166,7 @@ class WF:
                 self.C[ag]['main'] = [[]]
                 self.link(ag, set_n); self.chain(set_n, cp, ca, af)
                 for s in succ: self.link(af, s)
-                table.append({'node': ag, 'model': model, 'max_tokens': int(o.get('maxTokensToSample') or 0),
+                table.append({'node': ag, 'model': model, 'model_node': mn, 'max_tokens': int(o.get('maxTokensToSample') or 0),   # R57: its runs price a retry
                               'effort': o.get('effort') or '', 'streaming': bool(o.get('streaming')),
                               'template_chars': len(txt), 'input': fed, 'branch': branch, 'ref': ref,
                               'fields': _roots(re.findall(r"\$json\.([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)", txt)),
@@ -200,6 +201,8 @@ class WF:
         self.code('Attach PDF ' + tag, "// Attach the PDF (when the renderer succeeded) next to the report's other files, per site; a renderer failure never fails the run.\nconst src = $('Prepare PDF " + tag + "').all(); const got = $input.all();\nreturn src.map((s, i) => { const g = got[i] || {}; const pdf = (g.binary && g.binary.pdf && !(g.json && g.json.error)) ? g.binary.pdf : null;\n  const name = String(s.json.file_name || 'report.html').replace(/\\.html?$/i, '') + '.pdf'; const binary = { ...(s.binary || {}) }; delete binary.html;\n  if (pdf) binary.pdf = { ...pdf, fileName: name, mimeType: 'application/pdf', fileExtension: 'pdf' };\n  return { json: { ...s.json, pdf_ready: !!pdf, pdf_file_name: pdf ? name : null }, binary }; });", [x + 440, y])
     def deliver(self, tag, pos, attach_expr):
         x, y = pos
+        # R115 (2026-10-16): remembered, so write() can put this callback behind the run's settle once the settle chain exists
+        self.deliveries = list(getattr(self, 'deliveries', [])) + [tag]
         self.iff('Has Email (' + tag + ')?', '{{ !!$json.email }}', [x, y])
         self.node('Send ' + tag + ' Report', 'n8n-nodes-base.emailSend', 2.1, {'fromEmail': SENDER, 'toEmail': '={{ $json.email }}', 'subject': '={{ $json.subject }}', 'emailFormat': 'html', 'html': '={{ $json.html }}', 'options': {'appendAttribution': False, **({'fileAttachments': attach_expr} if attach_expr else {})}}, [x + 220, y], credentials=SMTP, onError='continueRegularOutput', retryOnFail=True, maxTries=3, waitBetweenTries=5000)
         self.iff('Has Callback (' + tag + ')?', '{{ !!$json.callback_url }}', [x + 220, y + 200])
@@ -277,8 +280,14 @@ class WF:
         # HAS a ledger row, because a measurement with nowhere to settle is a number nobody reads.
         if self.name in LEDGER_WIRING:
             AI_CALLS[self.name] = self.count_chain()
+            _declared = list(LEDGER_WIRING[self.name]['settle_from'])   # R115: the report ends run_ledger() was given, before the loose ends join
             ledger_mainline({'id': self.wid, 'name': self.name, 'nodes': self.N, 'connections': self.C}, LEDGER_WIRING[self.name])
             self.bake_calls()   # after ledger_mainline: it is what fills in __AI_NODES__, and the two lists are asserted equal
+            # R115 (2026-10-16, re-rating D-19): the callback is posted AFTER the settle and carries the settled run_ledger — it used to
+            # leave 1.1 s before the settle (exec 623) with the report's DataForSEO-only cost_usd as its only figure
+            for _tag in getattr(self, 'deliveries', []):
+                monitor_cost.callback_after_settle({'id': self.wid, 'name': self.name, 'nodes': self.N, 'connections': self.C},
+                                                   LEDGER_WIRING[self.name], 'Has Callback (' + _tag + ')?', 'POST ' + _tag + ' Report', V5, _declared)
         names = {n['name'] for n in self.N}; assert len(names) == len(self.N), 'duplicate node names in ' + fname
         for s, outs in self.C.items():
             assert s in names, s
@@ -719,7 +728,10 @@ lstep('Impact Rows', 'Any Impact Rows?', 'Save Link Impact', 'LB Cache Rows')
 lstep('LB Cache Rows', 'Any LB Cache?', 'Save LB Cache', 'LB Report')
 L.chain('LB Report', 'LB Doc', 'Prepare PDF LB', 'Render PDF LB', 'Attach PDF LB')   # L3
 L.link('Attach PDF LB', 'Has Email (LB)?'); L.link('Attach PDF LB', 'Build LB Callback'); L.link('Build LB Callback', 'Has Callback (LB)?')
-L.run_ledger('link_builder', 'LB', 'LB Plan', ['LB Report'], at(17, 4))
+# R82 (2026-10-16, re-rating C-6): the Link Builder settled its $0.05 reservation "ESTIMATED" while *Run LB DFS* reported $0.0498. Its
+# one paid call is measured now from the gate's merged answers (each answer's own `__dfs_cost_usd`); the leading '!' says it is the
+# workflow's ONLY paid call, so a week with no DataForSEO pull settles $0 rather than the reservation.
+L.run_ledger('link_builder', 'LB', 'LB Plan', ['LB Report'], at(17, 4), measured='!Run LB DFS Answers')
 # B-A10 (2026-10-15, INVARIANTS rule 3): the one paid DataForSEO pull of the week's link building — competitors' broken links
 # and their most-linked pages. A failure inside a 200 is a week with fewer opportunities and nobody told; the whole point of
 # this workflow is the pitch it ends with, so the evidence behind one has to be evidence that was really read.

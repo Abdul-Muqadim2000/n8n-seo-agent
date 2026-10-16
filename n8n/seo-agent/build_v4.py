@@ -5186,7 +5186,7 @@ _FAIL56 = ("($json.error || Number($json.status_code) >= 40000 || !Array.isArray
 _MSG56 = "String((((($json.tasks || [])[0] || {}).status_message) || $json.status_message || ($json.error && ($json.error.message || $json.error)) || ''))"
 _TRANSIENT56 = (r"/internal (?:se )?server error|internal error|server error|timeout|timed out|temporar|try again|unavailable|"
                 r"backend|deadline exceeded|connection|socket|econn|eai_again|rate limit|too many requests|\b(?:429|500|502|503|504)\b/i")
-_PERMANENT56 = (r"/permission|forbidden|unauthor|invalid[_ ]grant|credential|not found|no access|invalid field|unknown field|"
+_PERMANENT56 = (r"/permission|forbidden|unauthor|invalid[_ ]grant|credential|not found|no search results|no access|invalid field|unknown field|"
                 r"unsupported|quota|resource_exhausted|insufficient funds|payment|balance/i")
 DFS_FAILED56 = ("{{ !!" + _FAIL56 + " && (!" + _PERMANENT56 + ".test(" + _MSG56 + ") || " + _TRANSIENT56 + ".test(" + _MSG56 + ")) }}")
 
@@ -5862,6 +5862,7 @@ log('The spend guard covers both currencies and the account is a hard floor (202
 # =============================================================================
 
 from ladder_common import LEDGER_WINDOW_MS as LEDGER_WINDOW_MS62
+from monitor_cost import answer_expr as _answer_expr104   # R47 / R69 / R80 (section 104): one answer expression for every builder
 
 # ---------- A. B-A8: the free token counter, on the main path, behind the three streaming agents ----------
 COUNT_URL62 = 'https://api.anthropic.com/v1/messages/count_tokens'
@@ -5896,7 +5897,8 @@ for _c62 in _STREAM62:
     add_node(_set62, 'n8n-nodes-base.set', 3.4, {'mode': 'manual', 'includeOtherFields': True, 'options': {}, 'assignments': {'assignments': [
         {'id': str(uuid.uuid5(uuid.NAMESPACE_URL, 'ba8:' + _ag62 + ':prompt')), 'name': '__prompt', 'value': _prompt62, 'type': 'string'},
         {'id': str(uuid.uuid5(uuid.NAMESPACE_URL, 'ba8:' + _ag62 + ':answer')), 'name': '__answer',
-         'value': "={{ String($('" + _ag62 + "').first().json.output ?? '') }}", 'type': 'string'}]}},
+         # R47 / R69 / R80 (2026-10-16): the answer as the model returned it — a parsed object as its JSON, never "[object Object]"
+         'value': _answer_expr104("$('" + _ag62 + "').first().json.output"), 'type': 'string'}]}},
         [_px62, _py62 + 260])
     _mdl62 = json.dumps(_c62['model'])
     _count_node62(_cp62, '={{ JSON.stringify({ model: ' + _mdl62 + ', messages: [{ role: "user", content: String($json.__prompt || "") }] }) }}',
@@ -7555,7 +7557,7 @@ for _c76 in _NS76:
     add_node(_set76, 'n8n-nodes-base.set', 3.4, {'mode': 'manual', 'includeOtherFields': True, 'options': {}, 'assignments': {'assignments': [
         {'id': str(uuid.uuid5(uuid.NAMESPACE_URL, 'bf1:' + _ag76 + ':prompt')), 'name': '__prompt', 'value': _prompt76, 'type': 'string'},
         {'id': str(uuid.uuid5(uuid.NAMESPACE_URL, 'bf1:' + _ag76 + ':answer')), 'name': '__answer',
-         'value': "={{ String($json.output ?? '') }}", 'type': 'string'}]}},
+         'value': _answer_expr104('$json.output'), 'type': 'string'}]}},   # R47 / R69 / R80: an object as its JSON
         [_px76, _py76 + 300], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
     _mdl76 = json.dumps(_c76['model'])
     _own76 = "$('" + _set76 + "')." + ('item' if _multi76 else 'first()') + ".json"
@@ -8934,10 +8936,8 @@ _GAP84 = {
         'and that is a decision for whoever owns the response-time budget. build_api.py was also outside build section 84 (four '
         'agents worked in parallel). Neither agent has a thinking budget, so counting them would make them 100% measured. Proved by '
         '_b84_checks: both agents lie on a main path from the webhook to a Respond node.',
-    'SEO_Agent_Site_Tracker.json':
-        'NOT counted only because build_site_tracker.py was outside build section 84 (four agents worked in parallel on one branch). '
-        'Nothing is in the way: Ledger Settle (Site) already carries the empty call table Monitor_Ledger_Settle.js reads, so baking '
-        "Site Brief's table into it is the whole of the work. Proved by _b84_checks: that settle exists and its call table is empty.",
+    # R82 (2026-10-16, section 104): Site Brief is counted now (build_site_tracker.py, monitor_cost.count_chain), so the Site Tracker
+    # left this list — a gap that was paid leaves it for ever (_b76_checks).
 }
 _cw51['count_gap'] = {'why': _WHY_NOT76, 'workflows': sorted(_GAP84), 'reasons': _GAP84,
                       'counted_here': ['SEO_Agent_AI_Growth.json', 'SEO_Agent_AI_Visibility.json',
@@ -9023,12 +9023,13 @@ def _b84_checks():
     for _ag84 in ('Keyword Fit', 'Keyword Fit (Text)'):
         assert _resp84 & _reach55(_kcc84, [_ag84], None), \
             'B-C2: ' + _ag84 + ' no longer answers the caller synchronously, so its recorded reason is stale'
+    # R82 (2026-10-16, section 104): the Site Tracker's reason was "nobody owned the file" — it is counted now, and priced from the count
     _st84 = _load84('SEO_Agent_Site_Tracker.json')
     _sj84 = next(n['parameters']['jsCode'] for n in _st84['nodes'] if n['name'] == 'Ledger Settle (Site)')
-    assert 'const AI_CALLS = /*__AI_CALLS__*/[];' in _sj84 and "const CAL = /*__CAL__*/'';" in _sj84, \
-        'B-C2: the Site Tracker settle no longer carries the empty call table, so its recorded reason is stale'
+    assert '/*__AI_CALLS__*/' not in _sj84 and '"node": "Site Brief"' in _sj84 and 'CC.runCost(__costCalls' in _sj84, \
+        'R82: the Site Tracker settle still prices Site Brief from its reservation'
     print('B-C2 (a monitor settles a measurement, not its reservation): %d Claude agent(s) across %d scheduled workflow(s) are '
-          'counted on the main path and priced into their ledger row; 4 stay on the reservation, each with its own recorded reason'
+          'counted on the main path and priced into their ledger row; 3 stay on the reservation (Site Brief left the list, R82), each with its own recorded reason'
           % (_n84, len([a for a in _want84.values() if a])))
 
 
@@ -9956,6 +9957,295 @@ def _b98_catchup():
 log('A schedule that never fired, and a restart that threw its fire away (2026-10-16, re-rating 2026-10-15 R94, High). In the 21 days to 2026-10-15 the Rank Tracker, the Site Tracker, AI Growth, the Content Cadence and the Link Builder had 8 due fires and none fired; the cause, read in n8n\'s own code, is that a cron fire lives only in memory and every restart, deploy or re-publish re-arms the schedule for its next future time, so the 2026-10-12 16:38 deploy restart threw away the five Monday runs the Mac\'s sleep had pushed past it. New workflow SEO Agent - Schedule Catch-up (build_catchup.py, SEOagentCatchUp1; kit v5/code/_catchup.js): n8n\'s Instance Started event plus an hourly sweep read each of the ten schedules\' latest due time in GENERIC_TIMEZONE, the workflow\'s executions with mode trigger through n8n\'s public API (an on-demand run does not count - an owner decision) and the catch-up\'s own seo_cache records, and start a missed fire ONCE through the workflow\'s own manual entry with no site, recording catchup:<workflow>:<due ISO> before the start; only fires due in the last 36 h (weekly / monthly) or 20 h (daily), never before the catch-up first ran, at most three a sweep 60 s apart and never more than the run guard has room for; a fire the schedule still holds is left to it until 6 h late so a week never runs twice. apply_env.py refuses a deploy on Monday 07:00-12:00 in the schedules\' time zone (--force-monday overrides), n8n/compose.yml sets GENERIC_TIMEZONE explicitly (America/New_York, what it was while unset), sync_credentials.py writes the n8n API credential from N8N_API_KEY, and AI Growth gained dry_run: true, which sends nothing to Bing or IndexNow and says so in the report (section 99)')
 
 
+# =============================================================================
+# 104. A COST THE SYSTEM REPORTS ABOUT ITSELF IS WHAT HAPPENED (1): THE ANSWER THE COUNTER COUNTS, THE RETRY THE MODEL MADE, AND THE
+#      CALLBACK THAT WAITS FOR THE SETTLE (2026-10-16, re-rating 2026-10-15 family F6 — R47 = R69 = R80, R57, R82, R101, R115; agent A9;
+#      docs/system-review-2026-10-15/defects/{A_keywords_content,B_technical,C_monitors,D_app_reporting}.md)
+#
+#     **R47 = R69 = R80 — one root cause, 16 agents.** *Prompt For Count (…)* sent the counter `String(output)`. For every agent with an
+#     output parser `output` is an object, so Anthropic's count_tokens was asked to count the 15 characters "[object Object]" and answered
+#     4-6 tokens, which the ledger then called "measured" — 15-67% low on every run that touched one of them (606, 608, 610, 612, 614,
+#     615, 616, 623, 628). The answer is now sent as the run received it, through ONE expression (monitor_cost.answer_expr) in all three
+#     builders — sections 62 and 76 here, WF.count_chain in build_monitors.py — and in the Site Tracker's new chain; `_b104_checks`
+#     reads every *Prompt For Count* of every generated workflow and fails the build on a `String(…output)` without a JSON branch.
+#     And the kit has a net under it (CC.callCost): a count far below what the answer's own characters can hold did not see the answer,
+#     so the call falls back to characters and says why, instead of calling a wrong number measured.
+#
+#     **R57 — a retry the model made was never priced.** Every agent is built `retryOnFail` (maxTries 2): a parser that refuses the
+#     format re-runs the agent, n8n keeps the successful run of the AGENT node, and the cost loop counted `answers.length` — exec 616's
+#     Strategy Brief made two Opus calls and was priced for one. No Code node can read a model node's data (it rides `ai_languageModel`,
+#     the data proxy reads `main`), but `$node['<model node>'].runIndex` is the index of that node's last run — read from the run data
+#     itself (n8n-workflow WorkflowDataProxy, the `runIndex` property; the task runner sends all nodes' run data when a node uses `$node`).
+#     Every call-table row now names its `model_node`, and `calls = max(answers, model runs)` with `retries` in the basis.
+#
+#     **R115 (engine side) — the describe branch.** "Describe my website" posted `run_ledger: null`: the branch carries no report
+#     builder, so nothing priced it before the POST, while *Run Ledger Settle* priced its Haiku call right after. *Build Description Page*
+#     now feeds only the settle chain, and *Describe Ledger* — behind *Run Ledger Settle* — hands the description to *Via Webhook
+#     (Describe)?* with the settled figure. The monitors' callbacks are moved behind their settle by monitor_cost.callback_after_settle()
+#     in their own builders; `_b104_checks` proves the order on every generated workflow.
+# =============================================================================
+import monitor_cost as _mc104
+LCB_SRC104 = _rd0('code/_ledger_cb.js').rstrip('\n')
+
+# ---------- A. R47 / R69 / R80: every counted answer of this workflow is the answer the model returned ----------
+_pfc104 = sorted(nm for nm in nodes if nm.startswith('Prompt For Count ('))
+assert len(_pfc104) == len(_AI_CALLS51) == 11, ('R47: the main workflow counts %d agents, expected the 11 of its call table' % len(_pfc104), _pfc104)
+for _nm104 in _pfc104:
+    _v104 = next(a['value'] for a in nodes[_nm104]['parameters']['assignments']['assignments'] if a['name'] == '__answer')
+    assert _mc104.answer_expr_ok(_v104), 'R47: ' + _nm104 + ' still sends String(output) to the counter: ' + _v104
+
+# ---------- B. R57: a retry the model made is priced ----------
+_mn104 = {}
+for _m104, _n104 in sorted(nodes.items()):
+    if _n104['type'] != '@n8n/n8n-nodes-langchain.lmChatAnthropic':
+        continue
+    for _ag104 in [t['node'] for l in ((conns.get(_m104) or {}).get('ai_languageModel') or [[]]) for t in (l or [])]:
+        assert _ag104 not in _mn104, 'R57: ' + _ag104 + ' has two model nodes, so their runs cannot be read as its calls'
+        _mn104[_ag104] = _m104
+for _m104 in set(_mn104.values()):
+    assert list(_mn104.values()).count(_m104) == 1, 'R57: ' + _m104 + ' feeds two agents, so its runs are not one agent\'s calls'
+_OLD104 = json.dumps(_AI_CALLS51)
+for _c104 in _AI_CALLS51:
+    assert _c104['node'] in _mn104, 'R57: no model node for ' + _c104['node']
+    _c104['model_node'] = _mn104[_c104['node']]
+_NEW104 = json.dumps(_AI_CALLS51)
+_OLD_PUSH104 = """  __costCalls.push({ node: c.node, model: c.model, max_tokens: c.max_tokens, effort: c.effort, streaming: c.streaming,
+    prompt_chars, output_chars, counted, calls: answers.length * (c.loop ? __qaRounds() : 1) });"""
+_NEW_PUSH104 = """  // R57 (2026-10-16, re-rating A-24): a parser that refused the format re-ran the agent (retryOnFail), n8n kept ONE answer and the loop
+  // priced one call — exec 616's Strategy Brief made two Opus calls. The model node records every call as a run of its own.
+  const __base104 = answers.length * (c.loop ? __qaRounds() : 1), __runs104 = __modelRuns(c.model_node);
+  __costCalls.push({ node: c.node, model: c.model, max_tokens: c.max_tokens, effort: c.effort, streaming: c.streaming,
+    prompt_chars, output_chars, counted, calls: Math.max(__base104, __runs104), retries: Math.max(0, __runs104 - __base104) });"""
+_RUNS104 = """
+// R57: how many calls a model node made in THIS execution. A Code node cannot read its data (it rides `ai_languageModel`), but
+// `$node[…].runIndex` is the index of its last run; 0 when the node never ran or the proxy is not there (the offline harness).
+const __modelRuns = (n) => { try { if (!n || typeof $node === 'undefined') return 0; const r = Number($node[n].runIndex); return Number.isFinite(r) && r >= 0 ? r + 1 : 0; } catch (e) { return 0; } };"""
+for _n104 in _ends51 + ['Run Ledger Settle']:
+    _s104 = code(_n104)
+    assert _s104.count(_OLD104) == 1 and _s104.count(_OLD_PUSH104) == 1 and _s104.count(_NEW_COUNTOF76) == 1, \
+        'R57: ' + _n104 + ' does not carry the call table / the pricing push / the counter helper of section 76'
+    setcode(_n104, _s104.replace(_OLD104, _NEW104).replace(_OLD_PUSH104, _NEW_PUSH104).replace(_NEW_COUNTOF76, _NEW_COUNTOF76 + _RUNS104))
+    assert 'Math.max(__base104, __runs104)' in code(_n104) and '"model_node": "' in code(_n104), _n104
+    # R46's helper is not this section's to change: its body must still be the one section 101 asserts
+    assert "const __qaRounds = () => { try { const q = $('Content QA').first().json || {}; const e = Number(q.editor_rounds);" in code(_n104), _n104
+assert 'retries' in COST_SRC and 'were a retry after a failed answer' in COST_SRC, 'R57: the cost kit cannot price a retried call'
+assert 'did not see the answer' in COST_SRC, 'R47: the cost kit takes a count of "[object Object]" as a measurement'
+assert "!k.includes('describe')" in COST_SRC, 'R101: a describe run is still priced describe + describe'
+
+# ---------- C. R115: "Describe my website" posts after the settle and carries what it settled ----------
+_bdp104 = [t['node'] for l in ((conns.get('Build Description Page') or {}).get('main') or []) for t in (l or [])]
+assert sorted(_bdp104) == ['DFS Balance End', 'Via Webhook (Describe)?'], 'R115: Build Description Page feeds ' + str(_bdp104)
+disconnect('Build Description Page', 'Via Webhook (Describe)?')
+_rls104 = pos('Run Ledger Settle')
+add_node('Describe Ledger', 'n8n-nodes-base.code', 2, {'jsCode': _rd0('code/Describe_Ledger.js').replace('/*__LEDGER_CB__*/', LCB_SRC104)},
+         [_rls104[0] + 220, _rls104[1] + 300])
+connect('Run Ledger Settle', 'Describe Ledger')
+connect('Describe Ledger', 'Via Webhook (Describe)?')
+assert '/*__LEDGER_CB__*/' not in code('Describe Ledger') and 'LCB.fromSettle(settled)' in code('Describe Ledger'), 'R115: Describe Ledger has no ledger kit'
+assert [t['node'] for l in conns['Build Description Page']['main'] for t in l] == ['DFS Balance End'], 'R115: the description still reaches the caller beside the settle'
+assert 'ai_measured_usd:' in code('Run Ledger Settle'), 'R115: the settle does not say which part of its Claude money is measured'
+assert "run_ledger: d.run_ledger || null" in code('Build Describe Response'), 'R115: Build Describe Response no longer passes run_ledger on'
+
+log('A cost the system reports about itself is what happened (2026-10-16, re-rating 2026-10-15 R47 = R69 = R80, R57, R101, R115; agent A9). '
+    'The free token counter was sent String(output), so all 16 structured agents were counted as "[object Object]" (4-6 tokens, labelled '
+    'measured, 15-67% low): every builder now sends the answer as the run received it (monitor_cost.answer_expr) and the cost kit refuses a '
+    'count far below what the answer\'s own characters hold. A parser retry (exec 616: two Opus Strategy Brief calls, one priced) is priced '
+    'from the model node\'s own run count ($node[...].runIndex). A describe run is no longer estimated describe + describe. And "Describe my '
+    'website" posts its callback after the settle, carrying the settled run_ledger, as every monitor callback now does.')
+
+
+# =============================================================================
+# 105. A COST THE SYSTEM REPORTS ABOUT ITSELF IS WHAT HAPPENED (2): EVERY PAID CALL IN THE RUN'S COST, NONE PAID FOR NOTHING
+#      (2026-10-16, re-rating 2026-10-15 R68 / R82 audit half, R70; agent A9)
+#
+#     **R68 / R82 — the hand-written list missed the first attempts.** `__LEDGER_NODES` (section 8b, the retries prepended by section
+#     75) held *Fetch GBP (Retry)* but not *Fetch GBP*, and the same for *Run Ladder Research* and *Run Reach Requests*: every audit's
+#     cost missed $0.0108 (595 and 641 settled $0.0265 where $0.0373 moved). The list is now DERIVED: every paid DataForSEO HTTP node a
+#     report builder's run can reach (walking `main` backwards from the builder; the free appendix/user_data probes excluded) is on that
+#     builder's list, and the build fails if one is not. `__dfsOnce` still counts a task once by its id, so a node listed twice or an
+#     attempt and its retry cannot double-charge. The other half — DataForSEO's 40102 "No Search Results." retried and paid again — is
+#     fixed in the kit (v5/code/_dfs_retry.js: a final, valid empty answer) and in the IF gates' copy of RT.PERMANENT (section 56).
+#
+#     **R70 — competitor discovery paid for and thrown away.** With competitors named in the request, *Pick Competitors* takes them as
+#     given ("provided by user") — after *Find Competitors* ($0.012) and three *Fallback SERP* calls ($0.012) had run. Both are skipped
+#     now when the request names a competitor (the same test Pick Competitors applies); *Fallback Queries* still runs on both paths,
+#     because Analyze Keywords and the full report seed their keyword research from it (R60).
+# =============================================================================
+# ---------- A. R70: named competitors skip the paid discovery ----------
+_NAMED105 = ("{{ (Array.isArray($('Schema Findings').first().json.competitors) ? $('Schema Findings').first().json.competitors : [])"
+             ".map(d => String(d || '').toLowerCase().replace(/^www\\./, ''))"
+             ".filter(d => d && d !== String($('Schema Findings').first().json.domain || '').toLowerCase()"
+             " && !d.endsWith('.' + String($('Schema Findings').first().json.domain || '').toLowerCase())).length > 0 }}")
+assert [t['node'] for l in conns['Schema Findings']['main'] for t in l] == ['Find Competitors'], 'R70: Schema Findings no longer feeds Find Competitors'
+assert [t['node'] for l in conns['Find Competitors Answers']['main'] for t in l] == ['Fallback Queries'], 'R70: the competitor answers no longer feed Fallback Queries'
+assert [t['node'] for l in conns['Fallback Queries']['main'] for t in l] == ['Fallback SERP'], 'R70: Fallback Queries no longer feeds Fallback SERP'
+assert "const manual = (base.competitors || []).map(clean).filter(d => d && !isOurs(d));" in code('Pick Competitors') \
+    and "const clean = (d) => String(d || '').toLowerCase().replace(/^www\\./, '');" in code('Pick Competitors'), \
+    'R70: Pick Competitors decides "provided by user" differently from the gate that skips the discovery'
+_fc105, _fq105 = pos('Find Competitors'), pos('Fallback SERP')
+if_node('Competitors Named?', _NAMED105, [_fc105[0] - 220, _fc105[1] - 180])
+if_node('Competitors Named? (SERP)', _NAMED105, [_fq105[0] - 220, _fq105[1] - 180])
+disconnect('Schema Findings', 'Find Competitors')
+connect('Schema Findings', 'Competitors Named?')
+connect('Competitors Named?', 'Fallback Queries', 0)        # named: no discovery, the seeds are still built
+connect('Competitors Named?', 'Find Competitors', 1)        # not named: discover them, as before
+disconnect('Fallback Queries', 'Fallback SERP')
+connect('Fallback Queries', 'Competitors Named? (SERP)')
+connect('Competitors Named? (SERP)', 'Pick Competitors', 0)  # named: Pick Competitors takes them as given
+connect('Competitors Named? (SERP)', 'Fallback SERP', 1)
+# Pick Competitors read the discovery's answers unguarded; on the named path that node never ran
+patch('Pick Competitors', "const labsItems = $('Find Competitors Answers').first().json.tasks?.[0]?.result?.[0]?.items || [];",
+      "// R70 (2026-10-16): with competitors named the discovery is not paid for, so its answers may not exist\n"
+      "let labsItems = []; try { labsItems = $('Find Competitors Answers').first().json.tasks?.[0]?.result?.[0]?.items || []; } catch (e) { labsItems = []; }")
+
+# ---------- B. R68 / R82: every paid DataForSEO node a report builder's run can reach is in that builder's cost ----------
+def _paid105(n):
+    return (n['type'] == 'n8n-nodes-base.httpRequest'
+            and ((n.get('credentials') or {}).get('httpBasicAuth') or {}).get('id') == 'SEOcredDataForSE'
+            and 'appendix/user_data' not in str((n.get('parameters') or {}).get('url') or ''))
+_PAID105 = sorted(nm for nm, n in nodes.items() if _paid105(n))
+_rev105 = {}
+for _s105, _o105 in conns.items():
+    for _l105 in (_o105.get('main') or []):
+        for _t105 in (_l105 or []):
+            _rev105.setdefault(_t105['node'], set()).add(_s105)
+def _anc105(start):
+    seen, stack = set(), [start]
+    while stack:
+        for p in _rev105.get(stack.pop(), ()):
+            if p not in seen: seen.add(p); stack.append(p)
+    return seen
+_LRE105 = re.compile(r"const __LEDGER_NODES = \[([^\]]*)\];")
+_ln105 = sorted(nm for nm in nodes if _LRE105.search(nodes[nm]['parameters'].get('jsCode', '') or ''))
+assert set(_ends51) <= set(_ln105), ('R68: a report builder carries no cost list', _ends51, _ln105)
+_LISTS105 = {}
+for _nm105 in _ln105:
+    _m105 = _LRE105.search(code(_nm105))
+    _listed105 = re.findall(r"'([^']+)'", _m105.group(1))
+    _reach105 = sorted(set(_PAID105) & _anc105(_nm105))
+    _missing105 = [x for x in _reach105 if x not in _listed105]
+    _new105 = _listed105 + _missing105
+    setcode(_nm105, code(_nm105).replace(_m105.group(0), "const __LEDGER_NODES = [" + ', '.join("'" + x + "'" for x in _new105) + "];", 1))
+    assert set(_reach105) <= set(re.findall(r"'([^']+)'", _LRE105.search(code(_nm105)).group(1))), 'R68: ' + _nm105 + ' still misses a paid node'
+    assert "__dfsOnce(t)" in code(_nm105), 'R68: ' + _nm105 + ' would count an attempt and its retry twice'
+    _LISTS105[_nm105] = {'reachable_paid': _reach105, 'added': _missing105}
+# the three first attempts the dossier names: each is reached by at least one builder, and is on that builder's list now
+for _first105 in ('Fetch GBP', 'Run Ladder Research', 'Run Reach Requests'):
+    _by105 = sorted(nm for nm, v in _LISTS105.items() if _first105 in v['reachable_paid'])
+    assert _by105, 'R68: no report builder reaches ' + _first105 + ' — re-check the dossier claim'
+    print('R68: ' + _first105 + ' is reached by ' + ', '.join(_by105))
+assert 'Fetch GBP' in _LISTS105['Build Audit Report']['reachable_paid'], 'R68: the audit no longer reaches Fetch GBP'
+assert 'no search results' in _PERMANENT56, 'R68: the IF gates would still re-send a 40102 "No Search Results." the kit now takes as final'
+assert 'NO_RESULTS' in DFS_RETRY_SRC or 'NO_RESULTS' in _rd0('code/_dfs_retry.js'), 'R68: the retry kit still treats "No Search Results." as retryable'
+_A9_MAIN105 = {'ledger_lists': _LISTS105, 'paid_nodes': _PAID105,
+               'competitors': {'gate': 'Competitors Named?', 'serp_gate': 'Competitors Named? (SERP)', 'expr': _NAMED105,
+                               'schema_findings': [t['node'] for l in conns['Schema Findings']['main'] for t in l],
+                               'gate_true': [t['node'] for t in conns['Competitors Named?']['main'][0]],
+                               'gate_false': [t['node'] for t in conns['Competitors Named?']['main'][1]],
+                               'serp_gate_true': [t['node'] for t in conns['Competitors Named? (SERP)']['main'][0]],
+                               'serp_gate_false': [t['node'] for t in conns['Competitors Named? (SERP)']['main'][1]],
+                               'fallback_queries_from': sorted(s for s, o in conns.items() for l in (o.get('main') or []) for t in (l or []) if t['node'] == 'Fallback Queries')},
+               'describe': {'build_description_page': [t['node'] for l in conns['Build Description Page']['main'] for t in l],
+                            'describe_ledger_from': sorted(s for s, o in conns.items() for l in (o.get('main') or []) for t in (l or []) if t['node'] == 'Describe Ledger'),
+                            'describe_ledger_to': [t['node'] for l in conns['Describe Ledger']['main'] for t in l]},
+               'model_nodes': _mn104}
+log('Every paid call in the run\'s cost, none paid for nothing (2026-10-16, re-rating 2026-10-15 R68 / R82 / R70; agent A9): each report '
+    'builder\'s DataForSEO cost list is now derived from the workflow - every paid node its run can reach (' + ', '.join(sorted({x for v in _LISTS105.values() for x in v['added']}))
+    + ' were missing) - and the build fails on a gap; 40102 "No Search Results." is a final answer, never re-sent; and with competitors '
+    'named in the request, Find Competitors and the three Fallback SERP calls are skipped while Fallback Queries still seeds the keywords.')
+
+
+def _b104_checks():
+    """R47 / R57 / R82 / R115 over EVERY generated workflow (the monitors are written by the sub-builds): every counted answer is the
+    answer, every monitor callback waits for its settle and carries what it settled, the Site Tracker prices Site Brief and its own
+    DataForSEO calls, and the Keyword Check stamps when it settled. Writes harness/a9_cost_wiring.json for S130-S133."""
+    _dir = os.path.join(HERE0, 'workflows')
+    _wfs = {}
+    for _f in sorted(os.listdir(_dir)):
+        if _f.endswith('.json') and _f not in _NOT_GENERATED69:
+            for _w in json.load(open(os.path.join(_dir, _f), encoding='utf-8')):
+                _wfs[_f] = _w
+    _answers = {}
+    for _f, _w in _wfs.items():
+        for _n in _w['nodes']:
+            if _n['name'].startswith('Prompt For Count ('):
+                _v = next(a['value'] for a in _n['parameters']['assignments']['assignments'] if a['name'] == '__answer')
+                assert _mc104.answer_expr_ok(_v), 'R47: ' + _f + ' / ' + _n['name'] + ' still sends String(output) to the counter'
+                _answers.setdefault(_f, {})[_n['name'][len('Prompt For Count ('):-1]] = _v
+    # the 16 structured agents of R80's list, Site Brief (R82) and the two text agents — each counted, each through the one expression
+    _want = {'SEO_Agent_v4.json': ['Site Describer', 'Competitor Analyzer', 'Strategy Brief', 'Content Reviewer', 'Keyword Seeds',
+                                   'Verdict Agent', 'Keyword Relevance', 'Critic', 'Ladder Keyword Relevance', 'Copywriter', 'Editor'],
+             'SEO_Agent_AI_Visibility.json': ['Prompt Writer', 'Answer Analyst', 'AI Brief'],
+             'SEO_Agent_Backlink_Monitor.json': ['Link Analyst', 'Outreach Writer'],
+             'SEO_Agent_Link_Builder.json': ['Outreach Sequence Writer'], 'SEO_Agent_AI_Growth.json': ['AI Outreach Writer'],
+             'SEO_Agent_Site_Tracker.json': ['Site Brief']}
+    for _f, _ags in _want.items():
+        _miss = [a for a in _ags if a not in _answers.get(_f, {})]
+        assert not _miss, 'R47 / R80 / R82: ' + _f + ' does not count ' + str(_miss)
+    # R57: every monitor settle's call table names the model node whose runs are its calls
+    _lw = json.load(open(os.path.join(HERE0, 'harness', 'ledger_wiring.json'), encoding='utf-8'))
+    _byname = {w['name']: (f, w) for f, w in _wfs.items()}
+    _tables = {}
+    for _wn, _wi in sorted((_lw.get('monitors') or {}).items()):
+        _f, _w = _byname[_wn]
+        _tag = _wi['reserve'][len('Run Ledger Row ('):-1]
+        _src = next((n['parameters']['jsCode'] for n in _w['nodes'] if n['name'] == 'Ledger Settle (' + _tag + ')'), '')
+        _m = re.search(r'const AI_CALLS = (\[.*?\]);\n', _src, re.S)
+        _tbl = json.loads(_m.group(1)) if _m else []
+        _models = {n['name'] for n in _w['nodes'] if n['type'] == '@n8n/n8n-nodes-langchain.lmChatAnthropic'}
+        for _c in _tbl:
+            assert _c.get('model_node') in _models, 'R57: ' + _wn + ' prices ' + _c['node'] + ' without the model node whose runs are its calls'
+        assert '__modelRuns(c.model_node)' in _src or not _tbl, 'R57: ' + _wn + "'s settle does not read the model node's runs"
+        _tables[_wn] = [{'node': _c['node'], 'model_node': _c.get('model_node')} for _c in _tbl]
+    assert [c['node'] for c in _tables.get('SEO Agent — Site Tracker', [])] == ['Site Brief'], 'R82: the Site Tracker does not price Site Brief'
+    # R82: the Site Tracker and the Link Builder settle what their own DataForSEO calls reported
+    assert (_lw['monitors']['SEO Agent — Site Tracker'].get('measured') or '') == '!SERP Check (Site) Answers|Google Trends Answers', 'R82: Site Tracker measured'
+    assert (_lw['monitors']['SEO Agent — Link Builder'].get('measured') or '') == '!Run LB DFS Answers', 'R82: Link Builder measured'
+    for _wn, _paid in (('SEO Agent — Site Tracker', ['Google Trends', 'SERP Check (Site)']), ('SEO Agent — Link Builder', ['Run LB DFS'])):
+        _f, _w = _byname[_wn]
+        _have = sorted(n['name'] for n in _w['nodes'] if n['type'] == 'n8n-nodes-base.httpRequest'
+                       and ((n.get('credentials') or {}).get('httpBasicAuth') or {}).get('id') == 'SEOcredDataForSE'
+                       and 'appendix/user_data' not in str(n['parameters'].get('url')) and not n['name'].endswith('(Retry)'))
+        assert _have == sorted(_paid), 'R82: ' + _wn + "'s measured list says it names every paid call, but the workflow has " + str(_have)
+    # R115: every monitor callback waits for its settle — the order proved on the generated graph
+    _cbs = {}
+    for _wn, _wi in sorted((_lw.get('monitors') or {}).items()):
+        for _cb in (_wi.get('callbacks') or []):
+            _f, _w = _byname[_wn]
+            _facts = _mc104.prove_after_settle(_w, _cb)
+            assert _facts['reachable'] and not _facts['bypass'], 'R115: ' + _wn + ' can post ' + _cb['post'] + ' without passing ' + _cb['join']
+            assert _facts['merge'] and _facts['input1'] == [_cb['settle']], 'R115: ' + _cb['join'] + ' does not wait for ' + _cb['settle'] + ': ' + str(_facts)
+            assert sorted(_facts['input0']) == sorted(_facts['preds']), 'R115: ' + _cb['join'] + "'s first input is not the callback builders: " + str(_facts)
+            _cl = next(n['parameters']['jsCode'] for n in _w['nodes'] if n['name'] == _cb['ledger'])
+            assert 'LCB.fromSettle(settled)' in _cl and "'" + _cb['settle'] + "'" in _cl, 'R115: ' + _cb['ledger'] + ' does not read the settle'
+            _cbs.setdefault(_wn, []).append({**_cb, 'proof': _facts})
+    _want_cb = {'SEO Agent — AI Visibility Tracker', 'SEO Agent — Backlink Monitor', 'SEO Agent — AI Pulse', 'SEO Agent — AI Growth',
+                'SEO Agent — Link Builder', 'SEO Agent — Site Tracker', 'SEO Agent — Content Cadence'}
+    assert _want_cb <= set(_cbs), 'R115: these monitors still post before they settle: ' + str(sorted(_want_cb - set(_cbs)))
+    # every OTHER workflow that posts a report callback and keeps a ledger is either moved or recorded here with its reason
+    _gap = {'SEO Agent — Rank Tracker': 'build_ladder_extras.py was outside this change (agent A9 owned build_monitors.py and '
+                                        'build_site_tracker.py): one call of monitor_cost.callback_after_settle() at its write time does it'}
+    for _wn, _wi in sorted((_lw.get('monitors') or {}).items()):
+        _f, _w = _byname[_wn]
+        _posts = [n['name'] for n in _w['nodes'] if n['type'] == 'n8n-nodes-base.httpRequest' and 'callback_url' in str(n['parameters'].get('url'))
+                  and not n['name'].startswith('Post Refusal')]
+        if _posts and _wn not in _cbs:
+            assert _wn in _gap, 'R115: ' + _wn + ' posts ' + str(_posts) + ' with no settled run_ledger and no recorded reason'
+    for _wn in _gap:
+        assert _wn not in _cbs, 'R115: ' + _wn + ' is fixed now — take it off the recorded gap'
+    # R81 part 2: the Keyword Check stamps when it settled, so no other run counts it as in flight for ever
+    _kc = _wfs['SEO_Agent_Keyword_Check.json']
+    _sv = next(n for n in _kc['nodes'] if n['name'] == 'Settle Run Ledger (Assess)')['parameters']['columns']['value']
+    assert '$json.settled_at' in str(_sv.get('settled_at')) and '$json.dfs_source' in str(_sv.get('dfs_source')), 'R81: Settle Run Ledger (Assess) drops settled_at / dfs_source'
+    _out = {'answers': _answers, 'call_tables': _tables, 'callbacks': _cbs, 'callback_gap': _gap,
+            'assess_settle_columns': sorted(_sv), 'main': _A9_MAIN105,
+            'measured': {w: _lw['monitors'][w].get('measured') or '' for w in sorted(_lw.get('monitors') or {})}}
+    json.dump(_out, open(os.path.join(HERE0, 'harness', 'a9_cost_wiring.json'), 'w'), indent=1, sort_keys=True)
+    print('A9 (F6, cost truth): %d counted answers across %d workflows send the answer the model returned; %d monitor callback(s) wait for '
+          'their settle (%s) and carry its run_ledger; %d recorded gap(s)'
+          % (sum(len(v) for v in _answers.values()), len(_answers), sum(len(v) for v in _cbs.values()), ', '.join(sorted(_cbs)), len(_gap)))
+
+
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:
 #     "two fixes have never come back and both are enforced by the build".
@@ -10128,5 +10418,7 @@ _b85_checks()
 _b86_checks()
 # section 95 (R87 / R90 / R93 / R59 / R92 / R111): the new nodes and their wiring, on the generated workflows
 _b95_checks()
+# sections 104-105 (A9, F6): the answer the counter counts, the callbacks that wait for the settle, the Keyword Check's stamp
+_b104_checks()
 _b69_checks()
 

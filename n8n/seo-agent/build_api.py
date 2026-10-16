@@ -361,7 +361,10 @@ _AN = [
   _an('Settle Run Ledger (Assess)', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS, [('run_id', '={{ $execution.id }}'), ('status', 'reserved')],
       {'status': 'done', 'settled_usd': '={{ $json.settled_usd }}', 'ai_usd': '={{ $json.ai_usd }}', 'dfs_usd': '={{ $json.dfs_usd }}',
        'cost_mode': '={{ $json.cost_mode }}', 'measured_usd': '={{ $json.measured_usd }}', 'estimated_usd': '={{ $json.estimated_usd }}',
-       'cost_basis': '={{ $json.cost_basis }}'}), [2740, -400], onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True),
+       'cost_basis': '={{ $json.cost_basis }}',
+       # R81 part 2 (2026-10-16, re-rating C-5): Assess_Ledger_Settle.js stamped `settled_at` and `dfs_source` and this update dropped them,
+       # so every Keyword Check row stayed `done` with no `settled_at` and every other run's settle counted it as in flight for ever
+       'settled_at': '={{ $json.settled_at }}', 'dfs_source': '={{ $json.dfs_source }}'}), [2740, -400], onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True),
   _arespond('Respond Assess Bad Request', "={{ JSON.stringify({ ok: false, error: $json.error, errors: $json.errors }) }}", 400, [660, 320]),
   _an('Ensure Cache Table (Assess)', DT_TYPE, DT_VERSION, dt_create_params(CACHE_TABLE, CACHE_COLS), [660, -100], onError='continueRegularOutput', executeOnce=True),
   _an('Load Assess Cache', DT_TYPE, DT_VERSION, dt_get_any_params(CACHE_TABLE, [('key', "={{ 'reach:' + $('Assess Validate').first().json.site_id }}"), ('key', "={{ 'desc:' + $('Assess Validate').first().json.domain }}")]), [880, -100], **_LOAD),
