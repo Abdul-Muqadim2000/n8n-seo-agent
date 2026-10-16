@@ -54,7 +54,10 @@ SITES_COLS = [('site_id', 'string'), ('domain', 'string'), ('gsc_property', 'str
               # nav_pages_json are JSON strings; brand_names / competitors are comma-separated.
               ('canonical_host', 'string'), ('business_name', 'string'), ('logo_url', 'string'), ('nap_json', 'string'), ('services_json', 'string'),
               ('nav_pages_json', 'string'), ('business_facts', 'string'), ('cta', 'string'), ('brand_names', 'string'), ('competitors', 'string'),
-              ('accreditation', 'string'), ('model_updated_at', 'string')]
+              ('accreditation', 'string'), ('model_updated_at', 'string'),
+              # B7-5 (W3-D, 2026-10-17): content groups -- a JSON list [{name, pattern}] of regexes over page paths, set through Site Admin
+              # (action content_groups); the Site Tracker reports each group's Search Console clicks with the same statistical bar
+              ('content_groups_json', 'string')]
 # v4.15 (G19): the site's page inventory -- one row per site and URL (sitemap, Search Console, AI Growth key pages, publish detection), filled
 # by D11; `queries_json` holds the Search Console queries the page gets impressions for. SM.matchPage() reads it.
 PAGES_TABLE = 'seo_pages'

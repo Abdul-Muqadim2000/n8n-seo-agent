@@ -10579,6 +10579,24 @@ log('A pre-release check a build can use (2026-10-16, benchmark area 5, B5-7): P
 
 
 
+# 118. SITE TRACKING, THE THIRD WAVE (2026-10-17, agent W3-D, benchmark area 7: B7-4 Discover / Google News, B7-5 content groups, B7-8 the
+#      latest days from preliminary data, B3-12 the generative-AI report). GSC Requests asks for the `discover` and `googleNews` search types
+#      (one daily series each) and for `dataState: all` over the days after the final window; Parse GSC turns them into search_types /
+#      recent / content_groups; the report prints "no Discover data" as one sentence, the preliminary days apart from every tested figure, and
+#      says once that Search Console's generative-AI report has no API (the Search Analytics `type` / dimension lists name none).
+_gr118 = rd('code/GSC_Requests.js'); _pg118 = rd('code/Parse_GSC.js'); _sr118 = rd('code/Site_Report.js')
+assert "type: 'discover'" in _gr118 and "type: 'googleNews'" in _gr118 and "dataState: 'all'" in _gr118, 'B7-4 / B7-8: GSC Requests lost the Discover / News / preliminary requests'
+assert 'search_types' in _pg118 and 'content_groups' in _pg118 and 'still being collected and might change' in _pg118, 'B7-4/5/8: Parse GSC lost its blocks'
+assert 'generative-AI performance report' in _sr118 and 'Since the report window' in _sr118, 'B3-12 / B7-8: the report lost its lines'
+log('Site tracking, third wave (2026-10-17, B7-4 / B7-5 / B7-8 / B3-12): Discover and Google News are requested as their own search types and printed only where the property has them ("this property has no Discover data" otherwise); content groups (a regular expression per group, set through Site Admin content_groups, stored in seo_sites.content_groups_json) are tested on the same bar as every alert; the days after the final-data window are shown from preliminary data, labelled in Google\'s words and never mixed into a tested figure; the report says the generative-AI performance report has no API.')
+
+# 119. BRAND IN ONE PLACE, THE OWNER'S NOTES AS MARKS, AND A PAGE ON THE WRONG HOST (2026-10-17, agent W3-D: B7-6, B7-7, R92 part 2).
+_sm119 = rd('code/Site_Metrics.js'); _an119 = rd('code/_annotations.js'); _ga119 = rd('code/Parse_GA4.js')
+assert 'brand_series' in _sm119 and 'ai_referrals' in _ga119 and 'direct' in _ga119, 'B7-6: the brand series lost a line'
+assert "mark('note'" in _an119 and 'OWN_NOTES_LINE' in _an119, 'B7-7: the owner notes / annotation line are gone'
+assert 'other_host' in _sr118 and 'path = (u, row)' in _sr118, 'R92 part 2: Site Report path() lost the host rule'
+log('Brand series, notes and hosts (2026-10-17, B7-6 / B7-7 / R92): branded Search Console clicks, GA4 direct sessions and AI-assistant referral sessions are one series set in the weekly report, each with its own source and basis and never added together; the owner\'s dated check-in notes are chart marks and the report says once that Search Console\'s own annotations stay in Search Console; a page row on a non-canonical host prints its full URL.')
+
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:
 #     "two fixes have never come back and both are enforced by the build".

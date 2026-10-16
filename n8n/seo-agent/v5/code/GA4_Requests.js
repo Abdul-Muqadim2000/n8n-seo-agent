@@ -12,6 +12,9 @@ const detect = (domain) => {
 };
 const METRICS = [{ name: 'sessions' }, { name: 'engagedSessions' }, { name: 'keyEvents' }, { name: 'totalUsers' }];
 const ORGANIC = { filter: { fieldName: 'sessionDefaultChannelGroup', stringFilter: { matchType: 'EXACT', value: 'Organic Search' } } };
+// B7-6: sessions whose source is an AI assistant (referrer host) or GA4's own ai-assistant medium
+const AI_SOURCE_RE = 'chatgpt|openai|perplexity|gemini\\.google|bard\\.google|copilot|edgeservices\\.bing|claude\\.ai|anthropic|deepseek|grok\\.com|meta\\.ai|you\\.com|poe\\.com|phind|mistral|kagi|felo\\.ai|duck\\.ai';
+const AI_REF_FILTER = { orGroup: { expressions: [{ filter: { fieldName: 'sessionSource', stringFilter: { matchType: 'PARTIAL_REGEXP', value: AI_SOURCE_RE, caseSensitive: false } } }, { filter: { fieldName: 'sessionMedium', stringFilter: { matchType: 'EXACT', value: 'ai-assistant' } } }] } };
 const out = [];
 sites.forEach((s, idx) => {
   const given = String(s.ga4_property_id || '').replace(/^properties\//, '').trim();
@@ -23,6 +26,8 @@ sites.forEach((s, idx) => {
   const req = (kind, body) => out.push({ json: { site_idx: idx, site_id: s.site_id, kind, url, body, ga4_property_id: pid, ga4_detected: !given, ga4_property_name: det ? det.name : '' } });
   req('channels', { dateRanges: two, dimensions: [{ name: 'sessionDefaultChannelGroup' }], metrics: METRICS, limit: 50 });
   req('landing', { dateRanges: two, dimensions: [{ name: 'landingPage' }], metrics: METRICS, dimensionFilter: ORGANIC, orderBys: [{ metric: { metricName: 'sessions' }, desc: true }], limit: 40 });
+  // B7-6 (W3-D): sessions from AI assistants (the same source list the AI traffic report uses, Traffic_Requests.js), both periods, no other dimension
+  req('ai_ref', { dateRanges: two, metrics: [{ name: 'sessions' }], dimensionFilter: AI_REF_FILTER, limit: 10 });
   req('daily', { dateRanges: [{ startDate: R.previous.start, endDate: R.current.end }], dimensions: [{ name: 'date' }], metrics: METRICS, dimensionFilter: ORGANIC, orderBys: [{ dimension: { dimensionName: 'date' } }], limit: 100 });
 });
 return out.length ? out : [{ json: { skip: true, reason: acctErr ? 'GA4 account list: ' + acctErr : 'no GA4 property id given or detected for any site' } }];
