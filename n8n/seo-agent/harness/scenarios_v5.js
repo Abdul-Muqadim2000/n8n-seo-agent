@@ -14524,5 +14524,106 @@ await guard('the pages the crawl never reached, and a queue that starts with wha
 });
 
 
+// ===================================================================================
+// S106-S109 (agent A3, 2026-10-16): the weekly site report's monitor block compares like with like (R78), shows one backlink count
+// (R112), and its subject line follows its own significance test (R113). Fixtures: harness/fixtures_ra3.js (exec 634's rows).
+const RA3 = require('./fixtures_ra3');
+const a3Check = (SN) => (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 500), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+const a3Report = async (o = {}) => {
+  reset();
+  mock('Site Metrics', [{ json: o.m || RA3.siteMetrics(o.metrics || {}) }]);
+  mock('Site Brief', [{ json: { error: 'no model in this test' } }]);
+  mock('Load Audits (Site)', (o.audits || RA3.audits).map(j => ({ json: j })));
+  mock('Load Backlink Snapshots (Site)', (o.snapshots || RA3.snapshots).map(j => ({ json: j })));
+  mock('Load AI Visibility (Site)', (o.ai || RA3.aiRows).map(j => ({ json: j })));
+  return (await run('Site Report', store['Site Metrics']))[0].json;
+};
+const a3Row = (html, label) => { const m = html.match(new RegExp('<td[^>]*><b>' + label + '</b>[\\s\\S]*?</tr>')); return m ? m[0] : ''; };
+const a3Arrow = (s) => /[▲▼]/.test(s);
+
+await guard('S106 R78 site report audit row compares within one report type', async () => {
+  const SN = 'S106 R78 site report audit row compares within one report type'; begin(SN); const check = a3Check(SN);
+  // exec 634's rows, newest last but handed over in table order with the full report LAST (as live) and shuffled once more
+  const rep = await a3Report({ audits: [RA3.audits[4], RA3.audits[0], RA3.audits[3], RA3.audits[2], RA3.audits[1]] });
+  const tech = a3Row(rep.html, 'Technical audit'), full = a3Row(rep.html, 'Full SEO report');
+  console.log('   technical ->', tech.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 160));
+  console.log('   full      ->', full.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 160));
+  check('R78: the technical audit row is the newest TECHNICAL audit (83/100, 2026-10-15) with no arrow — 83 against the technical audit before it, 83',
+    /2026-10-15/.test(tech) && /health 83\/100/.test(tech) && !a3Arrow(tech), tech);
+  check('R78: the full report is labelled a full SEO report, never "Technical audit", and is compared with the previous full report (69 → 70, ▲1)',
+    /2026-10-15/.test(full) && /health 70\/100/.test(full) && /▲1</.test(full) && !/Technical audit[^<]*<\/b>[^<]*\(2026-10-15\)[\s\S]{0,80}health 70/.test(rep.html), full);
+  check('R78: no arrow joins two report types — the "▼13" of exec 634 (83 → 70) is gone',
+    !/▼13/.test(rep.html), (rep.html.match(/AI search, backlinks and technical health[\s\S]{0,900}/) || [''])[0].replace(/<[^>]+>/g, ' ').slice(0, 400));
+  // rows written before v4.5 carry no report type: shown, compared with nothing (the engine's own diff skips them too)
+  const old = [{ site_id: RA3.SITE, audited_at: '2026-09-01T06:00:00Z', health_score: 64, grade: 'C', critical: 1, high: 4, medium: 6, pages_crawled: 58 },
+    { site_id: RA3.SITE, audited_at: '2026-09-20T06:00:00Z', health_score: 72, grade: 'C', critical: 0, high: 3, medium: 6, pages_crawled: 58 }];
+  const repOld = await a3Report({ audits: old });
+  const oldRow = a3Row(repOld.html, 'Audit');
+  check('R78: an audit row without a report type is labelled "Audit" and carries no delta (64 → 72 is not printed as ▲8)',
+    /health 72\/100/.test(oldRow) && !a3Arrow(oldRow), oldRow);
+  reset();
+});
+
+await guard('S107 R78 R112 site report backlink row: one count, like-for-like snapshots', async () => {
+  const SN = 'S107 R78 R112 site report backlink row: one count, like-for-like snapshots'; begin(SN); const check = a3Check(SN);
+  const rep = await a3Report({ snapshots: [RA3.snapshots[3], RA3.snapshots[2], RA3.snapshots[0], RA3.snapshots[1]] });
+  const bl = a3Row(rep.html, 'Backlinks');
+  console.log('   backlinks ->', bl.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 220));
+  check('R112: the row leads with the merged count (3 linking sites, all sources) — the count the backlinks report itself uses',
+    /3 linking sites \(all sources\)/.test(bl), bl);
+  check('R112: DataForSEO\'s 18 is printed as the index\'s own count, never as "18 referring domains"',
+    /DataForSEO's index: 18/.test(bl) && !/18 referring domains/.test(bl), bl);
+  check('R78: the full snapshot is compared with the last snapshot that read the same sources (the full one of 2026-10-14, 3 → 3): no arrow, and no "▲18" from the free check',
+    !a3Arrow(bl) && !/▲18/.test(rep.html), bl);
+  // a change against a like snapshot is still printed
+  const grown = RA3.snapshots.map(s => s.checked_at.startsWith('2026-10-15') ? { ...s, union_domains: 5 } : s);
+  const blG = a3Row((await a3Report({ snapshots: grown })).html, 'Backlinks');
+  check('R78: a real move between two snapshots of the same sources still gets its arrow (3 → 5, ▲2)', /▲2</.test(blG), blG);
+  // the newest check is free_only: it has no DataForSEO figure and no baseline among the full ones
+  const freeLast = [RA3.snapshots[1], { ...RA3.snapshots[2], checked_at: '2026-10-16T08:00:00.000Z', union_domains: 4 }];
+  const blF = a3Row((await a3Report({ snapshots: freeLast })).html, 'Backlinks');
+  check('R78: a free_only check is never compared with a full one and prints no index figures (no spam score 0, no "0 referring domains")',
+    /4 linking sites \(all sources\)/.test(blF) && !a3Arrow(blF) && !/spam score 0/.test(blF) && !/0 referring domains/.test(blF), blF);
+  // a site that has only ever had free checks: no delta at all (not "0")
+  const onlyFree = [{ ...RA3.snapshots[2], checked_at: '2026-10-08T08:48:08.250Z', union_domains: 1 }, RA3.snapshots[2]];
+  const blO = a3Row((await a3Report({ snapshots: onlyFree })).html, 'Backlinks');
+  check('R78: two free checks are like for like with each other (1 → 3, ▲2), and the index\'s figures are still not printed',
+    /▲2</.test(blO) && !/spam score/.test(blO), blO);
+  reset();
+});
+
+await guard('S108 R78 site report AI row compares the same engines and panel only', async () => {
+  const SN = 'S108 R78 site report AI row compares the same engines and panel only'; begin(SN); const check = a3Check(SN);
+  const base = RA3.aiRows[0], cur = RA3.aiRows[1];
+  const same = [{ ...base, mention_rate: 10 }, { ...cur, mention_rate: 25 }];
+  const avS = a3Row((await a3Report({ ai: same })).html, 'AI answers');
+  check('R78: two runs over the same engines and the same panel keep their arrow (10% → 25%, ▲15)', /▲15</.test(avS), avS);
+  const fewer = JSON.parse(base.engines_json); delete fewer.perplexity;
+  const changed = [{ ...base, mention_rate: 10, engines_json: JSON.stringify(fewer) }, { ...cur, mention_rate: 25 }];
+  const avC = a3Row((await a3Report({ ai: changed })).html, 'AI answers');
+  console.log('   ai (engine set changed) ->', avC.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 200));
+  check('R78: a run with a different engine set is not a baseline — no arrow, and the row says why', !a3Arrow(avC) && /not compared/i.test(avC), avC);
+  const panel = [{ ...base, mention_rate: 10, prompts: 20 }, { ...cur, mention_rate: 25 }];
+  const avP = a3Row((await a3Report({ ai: panel })).html, 'AI answers');
+  check('R78: a run over a different question panel (20 vs 8 questions) is not a baseline either', !a3Arrow(avP) && /not compared/i.test(avP), avP);
+  reset();
+});
+
+await guard('S109 R113 site report subject follows the significance test', async () => {
+  const SN = 'S109 R113 site report subject follows the significance test'; begin(SN); const check = a3Check(SN);
+  const rep = await a3Report();
+  console.log('   subject ->', rep.subject);
+  check('R113: the subject carries no bare "▲ 52%" for a clicks change its own test calls not real', !/▲ 52%/.test(rep.subject), rep.subject);
+  check('R113: the subject says the clicks are within normal variation and leads with the change that IS real (impressions ▲ 224%)',
+    /32 clicks/.test(rep.subject) && /within normal variation/.test(rep.subject) && /impressions ▲ 224%/.test(rep.subject), rep.subject);
+  const realM = RA3.siteMetrics({ significance: { ...RA3.significance, clicks: { ...RA3.significance.clicks, real: true, significant: true, watch: false } } });
+  const repR = await a3Report({ m: realM });
+  check('R113: a clicks change the test calls real keeps its arrow in the subject', /32 clicks ▲ 52%/.test(repR.subject), repR.subject);
+  const noSig = RA3.siteMetrics(); delete noSig.significance;
+  const repN = await a3Report({ m: noSig });
+  check('R113: without a significance block (older runs) the subject keeps today\'s form', /32 clicks ▲ 52%/.test(repN.subject), repN.subject);
+  reset();
+});
+
 H.report();
 })();
