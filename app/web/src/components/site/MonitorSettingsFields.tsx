@@ -1,3 +1,4 @@
+import { PRICES } from '@/lib/prices';
 import { useId, type ReactNode } from 'react';
 import { Bot, Gauge, Link2, Send, Wallet } from 'lucide-react';
 import {
@@ -131,7 +132,7 @@ export function MonitorSettingsFields({
                   onChange={(e) => set({ aiGrowth: e.target.checked })}
                 />
                 {value.aiGrowth && (
-                  <Field label="AI answer pages a month" hint="Written by the Monday content run for the questions AI answers without you — a new answer page or a refresh of your page. About $1.20 each, on top of the blog posts." className="max-w-xs">
+                  <Field label="AI answer pages a month" hint={`Written by the Monday content run for the questions AI answers without you — a new answer page or a refresh of your page. About ${PRICES.page()} each, on top of the blog posts.`} className="max-w-xs">
                     {(p) => (
                       <Select {...p} value={value.aiPagesPerMonth} disabled={disabled} onChange={(e) => set({ aiPagesPerMonth: Number(e.target.value) })}>
                         {[...new Set([0, 1, 2, 3, 4, 6, 8, value.aiPagesPerMonth])].sort((x, y) => x - y).filter((n) => n <= AI_PAGES_MAX).map((n) => (

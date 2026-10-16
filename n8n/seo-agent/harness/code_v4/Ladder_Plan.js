@@ -1154,7 +1154,13 @@ const KWI = (() => {
 // constructor and no DOM. Hosts are compared without "www." (crawls report www. URLs while canonicals often use the bare host).
 const LK = (() => {
   const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr', 'param']);
-  const ent = (s) => String(s || '').replace(/&amp;/gi, '&').replace(/&quot;/gi, '"').replace(/&#0?39;|&apos;/gi, "'").replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&nbsp;|&#160;/gi, ' ').replace(/&#(\d+);/g, (m, d) => { try { return String.fromCodePoint(Number(d)); } catch (e) { return m; } });
+  const ent = (() => {
+    const N = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', nbsp: ' ', rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“', ndash: '–', mdash: '—', hellip: '…', copy: '©', reg: '®', trade: '™', bull: '•', middot: '·', laquo: '«', raquo: '»', euro: '€', pound: '£', deg: '°' };
+    return (s) => String(s == null ? '' : s).replace(/&(?:#[xX]([0-9a-fA-F]+)|#(\d+)|([a-zA-Z][a-zA-Z0-9]*));/g, (m, h, d, n) => {
+      if (h !== undefined || d !== undefined) { const cp = h !== undefined ? parseInt(h, 16) : Number(d); if (cp === 160) return ' '; try { return cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : m; } catch (e) { return m; } }
+      const k = n.toLowerCase(); return Object.prototype.hasOwnProperty.call(N, k) ? N[k] : m;
+    });
+  })();   // R62: named + decimal + hex, one pass (the same body as v5/code/_entities.js)
   const text = (s) => ent(String(s || '').replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<noscript[\s\S]*?<\/noscript>/gi, ' ').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
   const attr = (attrs, name) => { const m = String(attrs || '').match(new RegExp('\\b' + name + '\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\'|([^\\s>]+))', 'i')); return m ? ent(m[1] ?? m[2] ?? m[3] ?? '') : null; };
   const hostOf = (u) => { const m = String(u || '').trim().match(/^(?:[a-z][a-z0-9+.-]*:)?\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i); return m ? m[1].toLowerCase().replace(/^www\./, '').replace(/\.$/, '') : ''; };
@@ -1427,6 +1433,26 @@ const others = rowsOf('Load Domain Ladders').filter(r => r.ladder_id && String(r
 const otherHeads = new Map(); for (const r of others) { const h = String(r.head_keyword || (Number(r.rung) === 4 ? r.keyword : '') || '').toLowerCase().trim(); if (h && !otherHeads.has(String(r.ladder_id))) otherHeads.set(String(r.ladder_id), h); }
 const taken = []; const seenTaken = new Set();
 for (const r of others) for (const k of [r.keyword, r.head_keyword]) { const kw = String(k || '').toLowerCase().trim(); const sig = r.ladder_id + '|' + kw; if (kw && !seenTaken.has(sig)) { seenTaken.add(sig); taken.push({ keyword: kw, tokens: overlapTokens(kw), ladder_id: String(r.ladder_id), head: otherHeads.get(String(r.ladder_id)) || '' }); } }
+// ---- R42 (2026-10-16, A14): pages already written and still unpublished, against the site's pile-up limit ----
+// The Content Cadence stops at `max_waiting` (the `_site` row of seo_ladder_settings, default 3, pages written + not_ready in the last 120
+// days); a ladder run used to write its page on top without a word about it. The report says so (Build_Ladder_Report.js).
+const pile_up = (() => {
+  const normK = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const siteRow = settingsRows.find(r => String(r.ladder_id) === '_site') || {};
+  const limit = Math.max(1, Math.min(100, Math.round(Number(siteRow.max_waiting)) || 3));
+  const dom = reachDomain(domain); const now = Date.now();
+  const log = rowsOf('Load Content Log (Ladder)').filter(r => reachDomain(r.domain) === dom);
+  const published = new Set(log.filter(l => l.status === 'published' || String(l.published_url || '').trim()).map(l => normK(l.keyword)));
+  const w = new Map();
+  for (const l of log) {
+    if (l.status !== 'written' && l.status !== 'not_ready') continue;
+    const at = Date.parse(String(l.started_at || '')); if (!Number.isFinite(at) || now - at > 120 * 864e5) continue;
+    const k = normK(l.keyword); if (!k || w.has(k) || published.has(k)) continue;
+    w.set(k, { keyword: l.keyword, needs_fix: l.status === 'not_ready' });
+  }
+  const list = [...w.values()];
+  return { waiting: list.length, needs_fix: list.filter(x => x.needs_fix).length, limit, keywords: list.slice(0, 10).map(x => x.keyword), at_limit: list.length >= limit, loaded: rowsOf('Load Content Log (Ladder)').length > 0 };
+})();
 const takenBy = (kw) => { const t = overlapTokens(kw); return taken.find(x => overlapScore(t, x.tokens) >= 0.75) || null; };
 const dupHead = [...otherHeads.entries()].map(([id, h]) => ({ ladder_id: id, head: h })).find(x => keywordsOverlap(x.head, head)) || null;
 const headTakenAsPage = !dupHead ? takenBy(head) : null;
@@ -1917,6 +1943,7 @@ const ladder = { ladder_id: ladderId, head: { keyword: head, volume: top.volume,
   label: planned ? reachLabel(difficulty_for_you, plan) : dataRefused ? ('No ladder planned · ' + refusal.short) : (REACH_DIFF_LABEL[difficulty_for_you] + ' · no ladder'),
   chance: planned ? plan.chance : null, chance_text: planned ? reachChanceText(plan) : '', base_rate: REACH_BASE_RATE, refused_keywords: poolRefused.slice(0, 40),
   reach_info: { reach: reachInfo.reach, method: reachInfo.method, p75: reachInfo.p75 ?? null, size_reach: reachInfo.size_reach ?? null, sample: reachInfo.sample ?? null, top10: reachInfo.top10 ?? null, organic_keywords: reachInfo.organic_keywords ?? null, cached: !!reachInfo.cached, cached_at: reachInfo.cached_at || null },   // B2-1: the SITE-wide measurement; `reach` above is what this topic was measured against
+  pile_up,   // R42
   topic_authority,   // B2-1: what this site already wins on THIS topic, what it already has written about it, and which reach the plan used
   serp_clusters: SERP_CL,   // B2-4: the results pages this run read, the groups they made, what could not be compared and what it cost
   serp_cluster_rungs: clusterRungs.slice(0, 12), serp_diversity,   // B2-5: how many different sites own the destination's results page, and the stated adjustment

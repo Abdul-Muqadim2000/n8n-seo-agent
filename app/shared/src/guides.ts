@@ -246,7 +246,7 @@ export const GUIDES = [
       { title: 'Open Admin → Property details', body: 'In **Google Analytics**, click **Admin** (the gear, bottom left), then **Property details** in the Property column.', link: { label: 'Open Google Analytics', href: 'https://analytics.google.com/' } },
       {
         title: 'Copy the number at the top right',
-        body: 'The **PROPERTY ID** is nine or ten digits, for example `543096312`. Paste it here.',
+        body: 'The **PROPERTY ID** is nine or ten digits, for example `123456789`. Paste it here.',
         warn: 'It is not the `G-XXXXXXX` measurement ID — that one sits on your website and cannot be used to read reports.',
       },
       { title: 'Check it is the right property', body: 'In **Data streams**, the stream of that property should show {{domain}} as its website URL.' },
@@ -800,7 +800,7 @@ export const GUIDES = [
       },
       {
         title: 'Write the credentials, not the adjectives',
-        body: 'The credentials box is for checkable experience: “12 years in VAT compliance, led 40 e-invoicing rollouts, chartered accountant”. The pages draw on it when they explain why an answer is trustworthy.',
+        body: 'The credentials box is for checkable experience: “12 years in VAT compliance, led 40 ERP rollouts, chartered accountant”. The pages draw on it when they explain why an answer is trustworthy.',
       },
       {
         title: 'Point the byline at a real page',
@@ -868,7 +868,7 @@ export const GUIDES = [
     steps: [
       {
         title: 'Write your name exactly as it is written',
-        body: 'Capitals, ampersands, spacing — `Tech&`, not “Tech and” and not “techand”. Titles, meta descriptions and body text all follow it, and a draft that gets your own name wrong is a real quality finding.',
+        body: 'Capitals, ampersands, spacing — `Northwind & Co`, not “Northwind and Co” and not “northwindco”. Titles, meta descriptions and body text all follow it, and a draft that gets your own name wrong is a real quality finding.',
       },
       {
         title: 'Add the wrong spellings you keep seeing',
@@ -918,7 +918,7 @@ export const GUIDES = [
     id: 'brand-names',
     area: 'business',
     title: 'Tell the AI monitor what your company is called',
-    why: 'The monitor reads AI answers looking for you. A short name is the problem: “techand” matches a dozen unrelated companies, and the result is either credit you did not earn or a miss nobody notices.',
+    why: 'The monitor reads AI answers looking for you. A short name is the problem: “northwind” matches a dozen unrelated companies, and the result is either credit you did not earn or a miss nobody notices.',
     where: 'Website settings → Monitors',
     minutes: 5,
     vars: [V.domain],

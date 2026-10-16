@@ -2,8 +2,12 @@ import { and, asc, desc, eq, gt, gte, isNull, ne } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
+  countedRunCost,
   createOrgSchema,
   estimateMonitoringCost,
+  MODE_IDS,
+  modeCostUsd,
+  type CostTableInfo,
   inviteSchema,
   updateMemberSchema,
   updateOrgSchema,
@@ -25,6 +29,7 @@ import { badRequest, conflict, forbidden, notFound, parse } from '../lib/errors'
 import { siteRows } from '../n8n/client';
 import { stopInEngine } from './sites';
 import { monitorsFromRow } from '../services/data';
+import { engineCostTable } from '../services/engineCost';
 import { sendMail } from '../lib/mailer';
 import { acceptInvitation } from '../services/invitations';
 import { deliveryOverview, listDeliveries, saveSettings, sendTest } from '../services/reportDelivery';
@@ -131,18 +136,28 @@ export async function orgRoutes(app: FastifyInstance) {
     return toOrg(o, a.role);
   });
 
+  // R100: the prices the forms show before a run and the budget check holds — the engine's own rolling figures (read from its store,
+  // cached), or the shipped table, labelled, when n8n cannot be read. `modes` is each mode's request-free price under that source;
+  // clients with form values call `estimateRunCost(mode, values, calibration)` for the exact figure.
+  app.get('/api/orgs/:orgId/costs', async (req): Promise<CostTableInfo & { modes: Record<string, number> }> => {
+    await orgAccess(req, (req.params as { orgId: string }).orgId);
+    const info = await engineCostTable();
+    return { ...info, modes: Object.fromEntries(MODE_IDS.map((m) => [m, modeCostUsd(m, info.calibration)])) };
+  });
+
   app.get('/api/orgs/:orgId/usage', async (req): Promise<Usage> => {
     const a = await orgAccess(req, (req.params as { orgId: string }).orgId);
     const since = monthStart();
     const runs = await db
-      .select({ mode: schema.runs.mode, own: schema.runs.estimatedCostUsd, engine: schema.runs.engineCostEstimateUsd, act: schema.runs.actualCostUsd, status: schema.runs.status, createdAt: schema.runs.createdAt })
+      .select({ mode: schema.runs.mode, own: schema.runs.estimatedCostUsd, engine: schema.runs.engineCostEstimateUsd, act: schema.runs.actualCostUsd, partial: schema.runs.actualCostPartial, status: schema.runs.status, createdAt: schema.runs.createdAt })
       .from(schema.runs)
       .where(and(eq(schema.runs.orgId, a.org.id), gte(schema.runs.createdAt, since), ne(schema.runs.status, 'failed')));
     const byMode = new Map<string, { runs: number; est: number }>();
     const daily = new Map<string, { runs: number; est: number }>();
     // B-R3: a run counts at what it cost, else at the engine's own calibrated figure, else at ours - the same order as the budget
     // check in spend.ts and as the figure shown on the run itself, so the three can never disagree.
-    const costOf = (r: { own: number; engine: number | null; act: number | null }) => r.act ?? r.engine ?? r.own;
+    // R102: a run that reported search data only never counts for less than the best whole-run estimate, and is not "actual".
+    const costOf = (r: { own: number; engine: number | null; act: number | null; partial: boolean }) => countedRunCost({ actual: r.act, partial: r.partial, engine: r.engine, own: r.own });
     for (const r of runs) {
       const m = byMode.get(r.mode) ?? { runs: 0, est: 0 };
       m.runs += 1;
@@ -182,7 +197,9 @@ export async function orgRoutes(app: FastifyInstance) {
       month: since.toISOString().slice(0, 7),
       budgetUsd: a.org.monthlyBudgetUsd,
       estimatedUsd: round(estimated),
-      actualUsd: round(runs.reduce((t, r) => t + (r.act ?? 0), 0)),
+      actualUsd: round(runs.reduce((t, r) => t + (r.partial ? 0 : (r.act ?? 0)), 0)),
+      actualPartialUsd: round(runs.reduce((t, r) => t + (r.partial ? (r.act ?? 0) : 0), 0)),
+      actualPartialRuns: runs.filter((r) => r.partial && r.act != null).length,
       remainingUsd: round(Math.max(0, a.org.monthlyBudgetUsd - estimated)),
       runs: runs.length,
       byMode: [...byMode.entries()].map(([mode, v]) => ({ mode: mode as ModeId, runs: v.runs, estimatedUsd: round(v.est) })).sort((x, y) => y.estimatedUsd - x.estimatedUsd),

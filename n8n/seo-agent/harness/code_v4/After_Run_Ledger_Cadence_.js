@@ -6,6 +6,168 @@
 // passes (*Rate Limit*) had no counterpart here. The rules are shared with it (v5/code/_run_guard.js): a run of the same monitor still in
 // flight, a heavy crawl of the same site, too many analyses at once, or an account that cannot pay for this run. A refusal costs nothing -
 // it happens after the row exists and before the first paid node, and the row is marked `refused` so it never holds a cent of the day.
+// ---- R94 (2026-10-16, build section 98): the schedule catch-up planner. Pure: schedules x time zone x now x evidence -> missed fires ----
+// Five of the ten schedules had never fired on their own (21 days to 2026-10-15), the rest fired late. Two mechanisms, both read in
+// n8n's own code: a cron fire lives only in memory, and every restart / re-activation re-arms the cron for the NEXT future time, so a
+// fire that was due and not yet delivered is thrown away (the 2026-10-12 16:38 deploy restart dropped five Monday runs); and while
+// the Mac sleeps the VM's timers do not advance, so a fire is late by the sleep accumulated since the cron was armed.
+// This kit decides, for each schedule, whether its latest due fire happened, and if not whether it is certainly LOST (the cron was
+// re-armed after the due time: a restart, a deploy, a re-activation) or only LATE (the cron armed before the due time still holds
+// it). A lost fire is started once; a late one is left to the schedule unless it is later than CFG.late_hours, because starting it
+// AND letting the delayed timer fire would run the week twice.
+//
+// Evidence of a fire is the workflow's executions with mode `trigger` (n8n public API) - an on-demand run (`integrated`, `webhook`)
+// is NOT the week's scheduled run unless CFG.count_on_demand says so (an owner decision) - and the catch-up's own record in seo_cache
+// (`catchup:<workflow id>:<due ISO>`), written BEFORE the start, so a restart plus a sweep can never start the same fire twice.
+// Nothing here reads the clock, the network or a table: every input is handed in, so the harness can replay 2026-10-12 exactly.
+const CU = (() => {
+  const S = (v) => String(v == null ? '' : v).trim();
+  const ms = (v) => { if (typeof v === 'number') return Number.isFinite(v) ? v : 0; const t = Date.parse(S(v)); return Number.isFinite(t) && t > 0 ? t : 0; };
+  const iso = (t) => new Date(t).toISOString();
+  const H = 3600000, MIN = 60000;
+  const DEFAULTS = {
+    window_hours: { daily: 20, weekly: 36, monthly: 36 },   // only fires due this recently are caught up; older ones are reported, never started
+    grace_minutes: 1,          // a fire due less than this ago may still be on its way
+    fired_slack_minutes: 5,    // a trigger execution this long BEFORE the due time still counts (the cron's second, clock skew)
+    late_hours: 6,             // a fire the schedule still holds is started by the sweep only once it is this late (see the header)
+    max_starts: 3,             // starts per sweep, spaced by the workflow; the rest wait for the next sweep
+    max_attempts: 2,           // a start that failed or that the target's own gate refused is tried once more, then reported
+    refusal_minutes: 20,       // a ledger row of the target's mode refused this soon after our start is our start's refusal
+    count_on_demand: false,    // OWNER DECISION: does an on-demand run after the due time count as the week's scheduled run?
+    max_open: 3,               // the run guard's limit (RG.MAX_OPEN); the planner never starts into a refusal it can see
+  };
+  // ---- time: a wall-clock time in a time zone -> UTC, with the platform's own tz database (Intl), no library ----
+  const fmts = {};
+  const fmt = (tz) => fmts[tz] || (fmts[tz] = new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit',
+    day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+  const parts = (tz, t) => { const o = {}; for (const p of fmt(tz).formatToParts(new Date(t))) o[p.type] = p.value;
+    return { y: +o.year, mo: +o.month, d: +o.day, h: (+o.hour) % 24, mi: +o.minute, s: +o.second }; };
+  const offset = (tz, t) => { const p = parts(tz, t); return Date.UTC(p.y, p.mo - 1, p.d, p.h, p.mi, p.s) - Math.floor(t / 1000) * 1000; };
+  const zonedToUtc = (tz, y, mo, d, h, mi) => { const guess = Date.UTC(y, mo - 1, d, h, mi); let t = guess - offset(tz, guess);
+    const o2 = offset(tz, t); if (guess - o2 !== t) t = guess - o2; return t; };
+  // ---- cron: five fields (minute hour day-of-month month day-of-week), lists, ranges and steps; the ten schedules use nothing else ----
+  const field = (src, lo, hi) => {
+    const s = S(src); if (s === '*' || s === '?') return null;   // null = any
+    const out = new Set();
+    for (const part of s.split(',')) {
+      const m = part.match(/^(\*|\d+)(?:-(\d+))?(?:\/(\d+))?$/); if (!m) throw new Error('cron field "' + s + '" is not understood');
+      const a = m[1] === '*' ? lo : +m[1], b = m[2] != null ? +m[2] : (m[1] === '*' || m[3] ? hi : a), st = m[3] ? +m[3] : 1;
+      for (let v = a; v <= b; v += st) out.add(v);
+    }
+    return out;
+  };
+  const parse = (cron) => {
+    const f = S(cron).split(/\s+/); const x = f.length === 6 ? f.slice(1) : f;   // a seconds field is dropped: the slack covers it
+    if (x.length !== 5) throw new Error('cron "' + cron + '" does not have five fields');
+    const dow = field(x[4], 0, 7); if (dow && dow.has(7)) dow.add(0);
+    return { min: field(x[0], 0, 59), hour: field(x[1], 0, 23), dom: field(x[2], 1, 31), mon: field(x[3], 1, 12), dow };
+  };
+  const listOf = (set, lo, hi) => { const a = []; for (let v = hi; v >= lo; v--) if (!set || set.has(v)) a.push(v); return a; };   // descending
+  const dayOk = (c, y, mo, d) => {
+    if (c.mon && !c.mon.has(mo)) return false;
+    const wd = new Date(Date.UTC(y, mo - 1, d)).getUTCDay();
+    if (c.dom && c.dow) return c.dom.has(d) || c.dow.has(wd);   // cron's own rule when both are restricted
+    if (c.dom) return c.dom.has(d);
+    if (c.dow) return c.dow.has(wd);
+    return true;
+  };
+  // the latest fire of `cron` in `tz` at or before `t` (0 when none in the last 62 days)
+  const lastDue = (cron, tz, t) => {
+    const c = typeof cron === 'string' ? parse(cron) : cron, p = parts(tz, t);
+    const hours = listOf(c.hour, 0, 23), mins = listOf(c.min, 0, 59);
+    for (let k = 0; k <= 62; k++) {
+      const day = new Date(Date.UTC(p.y, p.mo - 1, p.d - k)); const y = day.getUTCFullYear(), mo = day.getUTCMonth() + 1, d = day.getUTCDate();
+      if (!dayOk(c, y, mo, d)) continue;
+      for (const h of hours) for (const mi of mins) { const u = zonedToUtc(tz, y, mo, d, h, mi); if (u <= t) return u; }
+    }
+    return 0;
+  };
+  const parseValue = (v) => { if (v && typeof v === 'object') return v; try { return JSON.parse(S(v) || '{}'); } catch (e) { return {}; } };
+  const live = (rows, now, staleH) => (rows || []).filter(r => r && !r.error && S(r.run_id) && S(r.mode) !== 'assess' && S(r.status) === 'reserved'
+    && ms(r.created_at) > now - (staleH || 2) * H);
+
+  // o: { schedules, tz, now, entry ('init' | 'sweep' | 'manual'), workflows {id: {ok, active, createdAt, updatedAt, error}},
+  //      runs {id: {ok, full, oldest, data: [{id, mode, status, startedAt}], error}}, records [{key, value}], ledger [rows],
+  //      instance_started_at, dry_run, plan_only, config, live_runs (optional: the run guard's own count) }
+  const plan = (o) => {
+    const c = o || {}, cfg = { ...DEFAULTS, ...(c.config || {}), window_hours: { ...DEFAULTS.window_hours, ...((c.config || {}).window_hours || {}) } };
+    const now = ms(c.now) || Date.now(), entry = S(c.entry) || 'sweep', dry = c.dry_run === true, prefix = dry ? 'catchup_dry:' : 'catchup:';
+    const recs = new Map((c.records || []).filter(r => r && S(r.key)).map(r => [S(r.key), parseValue(r.value)]));
+    const armRec = recs.get('catchup:armed') || {}, instRec = recs.get('catchup:instance') || {};
+    const armed = ms(armRec.armed_at) || now;   // never before the catch-up first ran on this instance; the first run arms and starts nothing
+    const instance = entry === 'init' ? now : ms(c.instance_started_at) || ms(instRec.started_at);
+    const ledger = (c.ledger || []).filter(r => r && !r.error);
+    const open = c.live_runs != null ? (c.live_runs || []) : live(ledger, now);
+    const rows = [], cands = [];
+    for (const s of (c.schedules || [])) {
+      const row = { workflow_id: s.id, label: s.label, mode: s.mode, cron: s.cron, kind: s.kind, due: '', verdict: '', reason: '' };
+      rows.push(row);
+      const say = (verdict, reason, extra) => { row.verdict = verdict; row.reason = reason; Object.assign(row, extra || {}); return row; };
+      let due = 0;
+      try { due = lastDue(s.cron, s.tz || c.tz, now); } catch (e) { say('blind', 'the schedule or its time zone could not be read: ' + S(e.message)); continue; }
+      if (!due) { say('not_due', 'no fire due in the last 62 days'); continue; }
+      row.due = iso(due);
+      const win = (cfg.window_hours[s.kind] || 36) * H, age = now - due;
+      if (age > win) { say('out_of_window', 'the last fire was due ' + Math.round(age / H) + ' h ago; only fires due in the last ' + (win / H) + ' h are caught up'); continue; }
+      if (age < cfg.grace_minutes * MIN) { say('not_due', 'due ' + Math.round(age / 1000) + ' s ago - it may still be on its way'); continue; }
+      const wf = (c.workflows || {})[s.id] || {};
+      if (!wf.ok) { say('blind', 'the workflow could not be read (' + (S(wf.error) || 'no answer') + '), so nothing was started'); continue; }
+      if (wf.active === false) { say('inactive', 'the workflow is switched off, so its schedule is not expected to fire'); continue; }
+      if (ms(wf.createdAt) > due) { say('not_created', 'the workflow did not exist yet when this fire was due'); continue; }
+      if (due < armed) { say('before_arm', 'due before the catch-up was first armed (' + iso(armed) + ')'); continue; }
+      const key = prefix + s.id + ':' + iso(due), rec = recs.get(key);
+      let attempt = 1;
+      if (rec) {
+        const att = Number(rec.attempts) || 1, st = S(rec.status), at = ms(rec.started_at);
+        const mine = ledger.filter(r => S(r.mode) === s.mode && ms(r.created_at) >= at - 5000 && ms(r.created_at) <= at + cfg.refusal_minutes * MIN);
+        const refused = mine.length > 0 && mine.every(r => S(r.status) === 'refused');
+        if (st === 'start_failed' || refused) {
+          if (att >= cfg.max_attempts) { say('gave_up', (refused ? 'the catch-up start was refused by the workflow\'s own gate' : 'the catch-up start failed: ' + S(rec.error)) + ' - ' + att + ' attempt(s), no more'); continue; }
+          attempt = att + 1; row.retry_of = refused ? 'refused by the workflow\'s own gate' : 'start failed: ' + S(rec.error);
+        } else { say('caught_up', 'already started by the catch-up at ' + S(rec.started_at) + ' (' + (S(rec.entry) || 'catch-up') + ')', { key }); continue; }
+      }
+      const run = (c.runs || {})[s.id] || {};
+      if (!run.ok) { say('blind', 'its executions could not be read (' + (S(run.error) || 'no answer') + '), so nothing was started'); continue; }
+      const after = (run.data || []).filter(x => ms(x.startedAt) >= due - cfg.fired_slack_minutes * MIN);
+      const fire = after.filter(x => S(x.mode) === 'trigger' && S(x.status) !== 'crashed').sort((a, b) => ms(a.startedAt) - ms(b.startedAt))[0];
+      if (fire) { const late = Math.round((ms(fire.startedAt) - due) / MIN); say('fired', late > 5 ? 'fired ' + late + ' min late (execution ' + S(fire.id) + ')' : 'fired on time (execution ' + S(fire.id) + ')', { fired_at: S(fire.startedAt), late_min: Math.max(0, late) }); continue; }
+      const other = after.filter(x => S(x.mode) !== 'trigger' && S(x.mode) !== 'manual');
+      if (cfg.count_on_demand && other.length) { say('fired', 'an on-demand run counted as the scheduled one (execution ' + S(other[0].id) + ')'); continue; }
+      if (run.full && ms(run.oldest) >= due - cfg.fired_slack_minutes * MIN) { say('blind', 'more executions since the due time than one page reads, so a fire could not be ruled out'); continue; }
+      const crashed = after.some(x => S(x.mode) === 'trigger' && S(x.status) === 'crashed');
+      // lost or late: the cron of this workflow was (re)armed at the later of the instance start and its last publish
+      const armedW = entry === 'init' ? now : Math.max(instance || 0, ms(wf.updatedAt));
+      const lost = due < armedW || crashed;
+      const why = crashed ? 'the scheduled run crashed (n8n stopped under it)'
+        : entry === 'init' ? 'n8n restarted after it was due, which re-arms every schedule for its next time'
+        : lost ? 'the schedule was re-armed at ' + iso(armedW) + ', after it was due (a restart or a re-publish), so it will not fire'
+        : 'it is ' + Math.round(age / MIN) + ' min late and the schedule has not fired it';
+      if (!lost && age < cfg.late_hours * H) { say('late_pending', 'the schedule still holds this fire (armed ' + (armedW ? iso(armedW) : 'before it was due') + '), it is ' + Math.round(age / MIN) + ' min late; starting it now would run the week twice when the delayed timer fires, so it is left to the schedule until ' + cfg.late_hours + ' h late'); continue; }
+      const twin = open.find(r => S(r.mode) === s.mode);
+      if (twin) { say('running', 'a ' + s.mode.replace(/_/g, ' ') + ' run is in flight now (execution ' + S(twin.run_id) + ') - it may be this fire, late; looked at again next sweep'); continue; }
+      say('missed', why, { key, attempt });
+      cands.push({ row, s, due, key, attempt, why });
+    }
+    // capacity: the run guard refuses a run when max_open others are live, so the planner never starts more than it can see room for
+    cands.sort((a, b) => a.due - b.due);
+    const room = Math.max(0, cfg.max_open - open.length), take = Math.min(cfg.max_starts, room);
+    const start = [];
+    for (const k of cands) {
+      if (dry && !k.s.dry_run_ok) { k.row.verdict = 'dry_run_skipped'; k.row.reason = 'missed (' + k.why + ') - a dry run starts only the workflows with a dry-run switch'; continue; }
+      if (start.length >= take) { k.row.verdict = 'missed_waiting'; k.row.reason = 'missed (' + k.why + ') - waits for the next sweep: ' + open.length + ' run(s) in flight, ' + take + ' start(s) this sweep'; continue; }
+      if (c.plan_only) { k.row.verdict = 'missed_plan_only'; continue; }
+      k.row.verdict = 'start';
+      start.push({ workflow_id: k.s.id, label: k.s.label, mode: k.s.mode, entry_node: k.s.entry_node, scheduled_for: iso(k.due), key: k.key, attempt: k.attempt,
+        why: k.why, entry, dry_run: dry, retry_of: k.row.retry_of || '' });
+    }
+    const counts = rows.reduce((m, r) => { m[r.verdict] = (m[r.verdict] || 0) + 1; return m; }, {});
+    const blind = rows.filter(r => r.verdict === 'blind').length;
+    return { entry, now: iso(now), tz: c.tz, armed_at: iso(armed), arm_new: !ms(armRec.armed_at), instance_started_at: instance ? iso(instance) : '',
+      dry_run: dry, plan_only: !!c.plan_only, open_runs: open.length, max_open: cfg.max_open, room, rows, start, counts, blind,
+      basis: rows.length + ' schedule(s) read; ' + start.length + ' start(s), ' + (counts.late_pending || 0) + ' late but still held by the schedule, ' + blind + ' could not be read' };
+  };
+  return { plan, lastDue, parse, zonedToUtc, offset, DEFAULTS };
+})();
 // ---- B-A9 (2026-10-15, build section 64): the ten schedules go through the same gate the API runs use ----
 // Every run started through the API passes *Rate Limit*: it reserves a seo_run_ledger row, counts the rows with a lower id, drops the stale
 // ones, refuses a second heavy crawl of a site that is already being crawled, and refuses a run the DataForSEO account cannot pay for.
@@ -61,6 +223,21 @@ const RG = (() => {
     return liveRuns(rows, c).find(r => yesNo(r.heavy) && S(r.domain).toLowerCase() === dom) || null;
   };
 
+  // R94 follow-up (2026-10-16): did the schedule catch-up already run this slot? `records` are seo_cache rows (key, value as JSON text),
+  // `due` the slot's ISO time. A record whose start FAILED does not count (the planner tries it again); any other status does, exactly as
+  // the planner reads it (_catchup.js: a record that is not start_failed / refused is `caught_up`).
+  const caughtUp = (o) => {
+    const c = o || {}, wf = S(c.workflow_id), due = S(c.due);
+    if (!wf || !due) return null;
+    const key = 'catchup:' + wf + ':' + due;
+    const row = (c.records || []).find(r => r && S(r.key) === key);
+    if (!row) return null;
+    let v = row.value; if (typeof v === 'string') { try { v = JSON.parse(v); } catch (e) { v = {}; } }
+    v = v && typeof v === 'object' ? v : {};
+    if (S(v.status) === 'start_failed') return null;
+    return { key, due, started_at: S(v.started_at), status: S(v.status), entry: S(v.entry) };
+  };
+
   const at = (r) => S(r && r.created_at).slice(11, 16);
 
   // the gate a scheduled run passes. `mine` is the row this run just reserved (its id breaks ties).
@@ -80,6 +257,10 @@ const RG = (() => {
       + (parentOpen ? ', the run that started this one (execution ' + parent_run_id + ') not counted' : '') + '; the limit is ' + max_open;
     const refuse = (reason, detail) => ({ allowed: false, reason, refusal: detail, open_runs: live.length, open: live.map(r => ({ mode: S(r.mode), run_id: S(r.run_id), at: at(r) })),
       stale_ignored: stale, max_open, mode, where, basis, checked_at: ctx.now, parent_run_id });
+
+    // 0. R94 follow-up: this is the delayed timer of a slot the catch-up already ran - the week would run twice.
+    if (c.caught_up) return refuse('caught_up', 'The catch-up already ran this scheduled slot (due ' + S(c.caught_up.due) + ', started ' + (S(c.caught_up.started_at) || 'earlier')
+      + '), so this late fire of the same schedule was not run a second time. Nothing was charged and nothing was started.');
 
     // 1. the same monitor is still running. A weekly check that overlaps its own previous run reads the same tables twice, writes the same
     //    rows twice and bills the same APIs twice; the one still going is the one with the data.
@@ -108,7 +289,7 @@ const RG = (() => {
       stale_ignored: stale, max_open, mode, where, basis, checked_at: ctx.now, parent_run_id };
   };
 
-  return { gate, liveRuns, heavyBusy, isStale, parentOf, STALE_HOURS, MAX_OPEN };
+  return { gate, liveRuns, heavyBusy, isStale, parentOf, caughtUp, STALE_HOURS, MAX_OPEN };
 })();
 const plan = $('Cadence Plan').all();
 let rows = []; try { rows = $('Load Open Runs (Cadence)').all().map(i => i.json).filter(r => r && r.run_id && !r.error); } catch (e) { rows = []; }
@@ -124,7 +305,24 @@ if (__trig.body && typeof __trig.body === 'object') __trig = { ...__trig, ...__t
 let __row = {}; try { __row = $('Run Ledger Row (Cadence)').first().json || {}; } catch (e) { __row = {}; }
 const __S = (v) => String(v == null ? '' : v).trim();
 const parent_run_id = RG.parentOf(mine) || RG.parentOf(__row) || __S(__trig.parent_run_id);
-const g = RG.gate({ rows, mine, mode: 'content_cadence', where: 'SEO Agent — Content Cadence', run_id: String($execution.id), parent_run_id });
+// R94 follow-up (2026-10-16, A14): a run started by its OWN Schedule Trigger whose latest due slot the catch-up already ran (seo_cache
+// `catchup:<workflow id>:<due ISO>`, written before it starts) is the delayed timer of a week that is done - a sleeping Mac delivers a
+// fire hours late, and the catch-up starts it after 6 h, so without this the week ran twice. A catch-up start enters through the Execute
+// Workflow Trigger, so the Schedule Trigger node has no data in it and nothing is checked.
+const __SCHED = {"trigger": "Weekly Schedule", "cron": "0 10 * * 1", "tz": "America/New_York", "wf": "SEOagentCadence1"};
+let __caught = null;
+if (__SCHED.trigger && __SCHED.cron) {
+  let __fire = null; try { const __t = $(__SCHED.trigger).first(); __fire = __t && __t.json ? __t.json : null; } catch (e) { __fire = null; }
+  if (__fire) {
+    try {
+      const __ft = Date.parse(String(__fire.timestamp || '')) || Date.now();
+      const __due = CU.lastDue(__SCHED.cron, __SCHED.tz, __ft);
+      let __recs = []; try { __recs = $('Load Catch-up Records (Cadence)').all().map(i => i.json).filter(r => r && r.key && !r.error); } catch (e) { __recs = []; }
+      __caught = RG.caughtUp({ records: __recs, workflow_id: __SCHED.wf, due: __due ? new Date(__due).toISOString() : '' });
+    } catch (e) { __caught = null; }   // fail OPEN: a scheduled run is never refused for a lookup that did not work
+  }
+}
+const g = RG.gate({ rows, mine, mode: 'content_cadence', where: 'SEO Agent — Content Cadence', run_id: String($execution.id), caught_up: __caught, parent_run_id });
 if (g.allowed) return plan;
 let __dom = __S(__trig.domain);
 if (!__dom) { try { __dom = __S((plan[0] && plan[0].json || {}).domain); } catch (e) { __dom = ''; } }

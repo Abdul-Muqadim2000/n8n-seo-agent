@@ -2020,8 +2020,10 @@ add_node('Ensure Ladder Table (Plan)', DT_TYPE, DT_VERSION, dt_create_params(LAD
 add_node('Load Domain Ladders', DT_TYPE, DT_VERSION, dt_get_any_params(LADDER_TABLE, [('domain', DOMAIN_PV), ('domain', "={{ 'www.' + String($('Parse Verdict').first().json.domain || '').toLowerCase() }}")]), [LX22 + 220, LY22], LOAD18)
 add_node('Ensure Ladder Settings Table (Ladder)', DT_TYPE, DT_VERSION, dt_create_params(LADDER_SETTINGS_TABLE, LADDER_SETTINGS_COLS), [LX22 + 440, LY22], {'onError': 'continueRegularOutput', 'executeOnce': True})
 add_node('Load Domain Ladder Settings', DT_TYPE, DT_VERSION, dt_get_any_params(LADDER_SETTINGS_TABLE, [('domain', DOMAIN_PV), ('site_id', "={{ 'site_' + String($('Parse Verdict').first().json.domain || '').toLowerCase().replace(/^www\\./, '').replace(/[^a-z0-9]+/g, '-') }}")]), [LX22 + 660, LY22], LOAD18)
+# R42 (A14): the site's content log, so the ladder report can say the pile-up limit is reached (Ladder_Plan.js `pile_up`)
+add_node('Load Content Log (Ladder)', DT_TYPE, DT_VERSION, dt_get_any_params(LOG_TABLE, [('domain', DOMAIN_PV), ('domain', "={{ 'www.' + String($('Parse Verdict').first().json.domain || '').toLowerCase() }}")]), [LX22 + 880, LY22], LOAD18)
 connect('Ladder Mode?', 'Ensure Ladder Table (Plan)', 0)
-for a, b in [('Ensure Ladder Table (Plan)', 'Load Domain Ladders'), ('Load Domain Ladders', 'Ensure Ladder Settings Table (Ladder)'), ('Ensure Ladder Settings Table (Ladder)', 'Load Domain Ladder Settings'), ('Load Domain Ladder Settings', 'Ladder Requests')]:
+for a, b in [('Ensure Ladder Table (Plan)', 'Load Domain Ladders'), ('Load Domain Ladders', 'Ensure Ladder Settings Table (Ladder)'), ('Ensure Ladder Settings Table (Ladder)', 'Load Domain Ladder Settings'), ('Load Domain Ladder Settings', 'Load Content Log (Ladder)'), ('Load Content Log (Ladder)', 'Ladder Requests')]:
     connect(a, b)
 # ---------- C. ladder: a newly measured reach is stored for discovery and the keyword check ----------
 _lp = pos('Ladder Plan')
@@ -5647,7 +5649,9 @@ def _r31_checks():
         # B-A9 (2026-10-15, build section 64): the concurrency gate's read of the open runs sits between the balance and the row, for the
         # same reason *Rate Limit* reads the ledger before it inserts — the row this run is about to write must not be in its own count.
         open59 = wiring59.get('open_runs') or ''
-        assert outs59('Ensure Run Ledger (' + tag59 + ')') == [bal59] and outs59(bal59) == [open59] and outs59(open59) == [wiring59['reserve']], \
+        cr59 = wiring59.get('catchup_records') or ''   # R94 follow-up (A14): a scheduled workflow reads the catch-up's records between the open-run read and the row
+        assert outs59('Ensure Run Ledger (' + tag59 + ')') == [bal59] and outs59(bal59) == [open59] and outs59(open59) == ([cr59] if cr59 else [wiring59['reserve']]) \
+            and (not cr59 or outs59(cr59) == [wiring59['reserve']]), \
             'R32 / B-A9: ' + wname59 + "'s balance reading and open-run read are not between the ensure and the row"
         assert "$('" + bal59 + "')" in by59[wiring59['reserve']]['parameters']['jsCode'], 'R32: ' + wname59 + ' does not store the reading on its row'
         # Every end of the run reaches the settle, so the only way to leave a row `reserved` is a run that crashed (which is what
@@ -10244,6 +10248,150 @@ def _b104_checks():
     print('A9 (F6, cost truth): %d counted answers across %d workflows send the answer the model returned; %d monitor callback(s) wait for '
           'their settle (%s) and carry its run_ledger; %d recorded gap(s)'
           % (sum(len(v) for v in _answers.values()), len(_answers), sum(len(v) for v in _cbs.values()), ', '.join(sorted(_cbs)), len(_gap)))
+
+
+# 110. THE LEFTOVER HALVES OF THE FIRST WAVE (2026-10-16, agent A14: R50 / R51 / R42 / R111 / R87 / R58 / R40 — the parts the first wave's
+#      agents reported as "needs elsewhere").
+#      * R50 the Keyword Check loads the domain's ladders and content log (build_api.py: Load Ladders (Assess) / Load Content Log (Assess),
+#        before Assess Requests) — Assess_Response.js had read both by name since the first wave and found nothing.
+#      * R51 the relevance prompt (shared by Keyword Relevance and Ladder Keyword Relevance) rates a keyword naming an industry the site does
+#        not list as adjacent (1), never core (2); its output schema is unchanged.
+#      * R42 a ladder run that writes a page while the site already holds its limit of written-but-unpublished pages says so: Ladder Plan
+#        reads the content log (Load Content Log (Ladder), in the ladder path before Ladder Requests) and Build Ladder Report words it.
+#      * R111 / R87 the cadence's status mail and note render `needs_fix` and `paused_ladders`; R58 / R40 the idea response carries
+#        `trend_note`, `tier_note` and `grouped_by`.
+for _f110, _tok110 in (('code/Assess_Response.js', "rowsOf('Load Ladders (Assess)')"), ('code/Assess_Response.js', "rowsOf('Load Content Log (Assess)')"),
+                       ('code/Ladder_Plan.js', "rowsOf('Load Content Log (Ladder)')"), ('code/Ladder_Plan.js', 'const pile_up = '),
+                       ('code/Build_Ladder_Report.js', 'L.pile_up.at_limit'), ('code/Cadence_Status.js', 'paused_ladders'), ('code/Cadence_Note.js', 'paused_ladders'),
+                       ('code/Build_Ideas_Response.js', 'trend_note'), ('code/Build_Ideas_Response.js', 'tier_note')):
+    assert _tok110 in _rd0(_f110), 'A14 / ' + _f110 + ' does not carry ' + _tok110
+_api110 = open(os.path.join(HERE0, 'build_api.py'), encoding='utf-8').read()
+for _n110 in ('Load Ladders (Assess)', 'Load Content Log (Assess)'):
+    assert "_an('" + _n110 + "'" in _api110 and "('" + _n110 + "', " in _api110 or "'" + _n110 + "')" in _api110, 'R50: the Keyword Check does not load ' + _n110
+assert "('Load Content Log (Assess)', 'Assess Requests')" in _api110, 'R50: the loads are not in front of Assess Requests'
+assert 'Load Content Log (Ladder)' in open(os.path.join(HERE0, 'build_v4.py'), encoding='utf-8').read(), 'R42: the ladder path does not load the content log'
+assert 'never 2' in _rd0('prompts/keyword_relevance.txt') and 'Return ONLY valid JSON: {"items"' in _rd0('prompts/keyword_relevance.txt'), 'R51: the relevance prompt'
+json.dump({'relevance_prompt': _rd0('prompts/keyword_relevance.txt'),
+           'assess_chain': [n for n in ('Load Assess Cache', 'Load Ladders (Assess)', 'Load Content Log (Assess)', 'Assess Requests') if "'" + n + "'" in _api110],
+           'ladder_chain': [n for n in ('Load Domain Ladder Settings', 'Load Content Log (Ladder)', 'Ladder Requests') if "'" + n + "'" in open(os.path.join(HERE0, 'build_v4.py'), encoding='utf-8').read()]},
+          open(os.path.join(HERE0, 'harness', 'a14_wiring.json'), 'w'), indent=1, sort_keys=True)   # harness S143 / S144 read it
+log('The leftover halves of the first wave (2026-10-16, agent A14): the Keyword Check loads the ladders and the content log, so its answer names the ladder and the page that already hold the search (R50); a keyword that names an industry the site does not list is adjacent, never core (R51); a ladder run that writes a page on top of a full pile says "you have N pages waiting (limit L); this writes page N+1" (R42); the cadence mails name the drafts that need a fix and the paused ladders (R111 / R87); the idea response carries the trend, tier and grouping notes (R51 / R58 / R40).')
+
+
+# 111. A SLEEP-DELAYED TIMER MUST NOT RUN THE WEEK TWICE (2026-10-16, agent A14, the R94 follow-up the first wave left open).
+#      The catch-up starts a fire the schedule still holds only after 6 h (late_hours); the delayed timer then fires anyway. The resume
+#      node of every scheduled workflow (ladder_common.LEDGER_RESUME_JS) now computes the due slot of a run started by its OWN Schedule
+#      Trigger (CU.lastDue on the trigger's timestamp) and refuses it, reason `caught_up`, when seo_cache holds `catchup:<workflow>:<due ISO>`
+#      (the key build_catchup.py writes) whose start did not fail. A catch-up start enters through the Execute Workflow Trigger, so the
+#      Schedule Trigger node has no data in it and nothing is checked; a lookup that fails refuses nothing.
+from ladder_common import LEDGER_RESUME_JS as _LR111, RUN_GUARD_SRC as _RG111
+for _t111 in ('__SCHED_JSON__', '__CATCHREC__', 'RG.caughtUp(', 'CU.lastDue(', '/*__CATCHUP__*/', 'caught_up: __caught'):
+    assert _t111 in _LR111, 'R94: the resume node does not carry ' + _t111
+assert "'catchup:' + wf + ':' + due" in _RG111 and "S(v.status) === 'start_failed'" in _RG111 and "refuse('caught_up'" in _RG111, 'R94: the run guard does not read the catch-up record the way the planner writes it'
+assert "prefix = dry ? 'catchup_dry:' : 'catchup:'" in _rd0('code/_catchup.js') and 'iso(due)' in _rd0('code/_catchup.js'), 'R94: the catch-up key format moved - RG.caughtUp must follow it'
+log('A sleep-delayed timer no longer runs the week twice (2026-10-16, agent A14, R94 follow-up): a scheduled run started by its own Schedule Trigger works out its due slot and refuses (reason "caught up", nothing charged) when the catch-up already started that slot; a catch-up start, a manual run and a failed lookup are never refused by it.')
+
+
+# 108. THE TECHNICAL AUDIT COUNTS PAGES, NAMES WHAT IT FLAGS AND READS THE SAME TEXT THE BROWSER SHOWS (2026-10-16, re-rating 2026-10-15
+#      family F9: R62 R63 R64 R71 R72 R76 R118). Seven small, separate causes in the same few nodes, all measured on the 2026-10-16 crawl (exec 648):
+#      R63  the crawl's two 308 redirect items were counted as pages (47, not 45) and judged by every page rule — "No compression", "Missing
+#           canonical", "Missing Open Graph", "Missing Twitter card", "Long or messy URLs" all named a URL that is a redirect with no HTML.
+#      R64  the four extra crawl reports (duplicate titles / descriptions, non-indexable, redirect chains) were requested with the id of the pages
+#           ANSWER (which has none) — 40401 "Task Not Found" on every audit since v3, so no such finding has ever been produced.
+#      R71  "Deprecated HTML tags" came from the crawler's boolean alone: the page's only tag was <u>, which the HTML standard defines.
+#      R72  "1 of 47 pages (20%)": a share of the 5 key pages read twice, printed against the crawl.
+#      R118 "Pages with duplicate content" was a whole-site finding with no page named (third in the fix list); every page item says whether it is one.
+#      R62  hex entities (&#x27;) were not decoded: a false "AI crawlers see a different version" finding, and a review finding about "an unescaped
+#           entity"; the content nodes now decode named, decimal and hex entities in one pass.
+#      R76  the content review never saw an image's alt text, so it said "no badges" over a Microsoft Partner badge.
+ENT_SRC108 = _rd0('code/_entities.js').split('/*__ENT_BEGIN__*/')[1].split('/*__ENT_END__*/')[0].strip()
+
+# --- R64: the extra reports are asked for the CRAWL, by its id (Check Crawl / Save Task ID carry it; the pages answer does not)
+patch('Crawl Extra Requests', "const id = d.crawl_task_id;",
+      "let id = d.crawl_task_id;   // R64: the pages answer has no id — the crawl's id is on Check Crawl / Save Task ID\n"
+      "try { id = id || $('Check Crawl').first().json.crawl_task_id; } catch (e) {}\n"
+      "try { id = id || $('Save Task ID').first().json.crawl_task_id; } catch (e) {}")
+
+# --- R63: a redirect item is not a page
+patch('Build Site Issues', "const pages = $('Get Crawled Pages Answers').first().json.tasks?.[0]?.result?.[0]?.items || [];",
+      "const crawlItems = $('Get Crawled Pages Answers').first().json.tasks?.[0]?.result?.[0]?.items || [];\n"
+      "// R63 (2026-10-16): a redirect response (resource_type \"redirect\", HTTP 3xx) has no HTML and no meta: it is not a page. Counting it made 47 pages of 45, and every page\n"
+      "// rule (compression, canonical, Open Graph, Twitter card, outbound links, URL shape) then judged a response that has none of those things.\n"
+      "const isRedirectItem = (p) => !!p && (p.resource_type === 'redirect' || (Number(p.status_code) >= 300 && Number(p.status_code) < 400));\n"
+      "const pages = crawlItems.filter(p => !isRedirectItem(p));\n"
+      "const redirectItems = crawlItems.filter(isRedirectItem);\n"
+      "// R71: the crawler's \"deprecated\" list includes elements the HTML standard still defines (<u>, <s>, <small>, <b>, <i> ...); only the tags that really are obsolete count\n"
+      "const CONFORMING_TAGS = new Set(['u', 's', 'small', 'b', 'i', 'em', 'strong', 'mark', 'cite', 'q', 'abbr', 'time', 'data', 'wbr', 'bdi', 'bdo', 'ruby', 'rt', 'rp', 'kbd', 'samp', 'var', 'sub', 'sup', 'dfn', 'del', 'ins', 'code', 'pre', 'span', 'div']);\n"
+      "const obsoleteTags = (p) => { const t = p && p.meta && p.meta.deprecated_tags; return Array.isArray(t) ? [...new Set(t.map(x => String(x).toLowerCase().replace(/[<>\\/]/g, '')))].filter(x => x && !CONFORMING_TAGS.has(x)) : null; };")
+patch('Build Site Issues', "for (const c of CATALOG) {\n  const affected = pages.filter(p => {\n    const v = p.checks ? p.checks[c.key] : undefined;\n    if (v === undefined || v === null) return false;\n    return c.invert ? v === false : v === true;\n  });",
+      "for (const c of CATALOG) {\n  const pool = (c.key === 'is_redirect' || c.key === 'has_links_to_redirects') ? redirectItems.concat(pages) : pages;   // R63: only the two redirect checks look at redirect items\n"
+      "  const affected = pool.filter(p => {\n    const v = p.checks ? p.checks[c.key] : undefined;\n    if (v === undefined || v === null) return false;\n"
+      "    if (c.key === 'deprecated_html_tags' && v === true) { const t = obsoleteTags(p); if (t && !t.length) return false; }   // R71\n"
+      "    return c.invert ? v === false : v === true;\n  });\n"
+      "  const redirOnly = (c.key === 'is_redirect' || c.key === 'has_links_to_redirects') && affected.length > 0 && affected.every(isRedirectItem);")
+patch('Build Site Issues', "      evidence: affected.length + ' of ' + total + ' crawled pages',\n      affected_count: affected.length,",
+      "      evidence: c.key === 'has_links_to_redirects' && redirOnly ? affected.length + ' internal URL(s) that redirect are linked from the site (the crawl does not say which page holds each link)'\n"
+      "        : redirOnly ? affected.length + ' of ' + (total + redirectItems.length) + ' crawled URLs redirect' : affected.length + ' of ' + total + ' crawled pages',\n"
+      "      affected_count: affected.length,")
+patch('Build Site Issues', "      sample_urls: affected.slice(0, 10).map(p => p.url),",
+      "      sample_urls: affected.slice(0, 10).map(p => { const ot = c.key === 'deprecated_html_tags' ? obsoleteTags(p) : null; return ot && ot.length ? p.url + ' — <' + ot.join('>, <') + '>' : p.url; }),")
+
+# --- R118: duplicate content names its pages (every page item carries duplicate_content); a count with no page named is Low and says so
+patch('Build Site Issues',
+      "addCount(cnt(pm.duplicate_content), 'Content', 'Medium', 'Pages with duplicate content', 'Near-identical pages compete with each other and dilute ranking signals.', 'Consolidate duplicates with a canonical tag or a 301 redirect, or make each page substantively different.', cnt(pm.duplicate_content) + ' pages with duplicate content');",
+      "const dupPages = pages.filter(p => p.duplicate_content === true);\n"
+      "if (dupPages.length) findings.push({ category: 'Content', severity: 'Medium', title: 'Pages with duplicate content', why: 'Near-identical pages compete with each other and dilute ranking signals.', fix: 'Consolidate duplicates with a canonical tag or a 301 redirect, or make each page substantively different. Check first that they really are the same page: a set of service pages built on one template can be flagged for its layout and not its words.',\n"
+      "  evidence: dupPages.length + ' of ' + total + ' crawled pages are flagged by the crawler as near-identical to another page of the site', affected_count: dupPages.length, affected_pct: Math.round(dupPages.length / total * 100), sample_urls: dupPages.slice(0, 10).map(p => p.url), scope: 'page' });   // R118\n"
+      "else addCount(cnt(pm.duplicate_content), 'Content', 'Low', 'Pages with duplicate content', 'Near-identical pages compete with each other and dilute ranking signals.', 'Consolidate duplicates with a canonical tag or a 301 redirect, or make each page substantively different.', cnt(pm.duplicate_content) + ' pages counted by the crawler as duplicate content; it did not name them, so the pages are not known');")
+
+# --- R72: a share of a sample is not a share of the site (the score takes the pages counted against the whole crawl)
+patch('Build Site Issues', "    const pct = f.affected_pct == null ? 100 : f.affected_pct;",
+      "    let pct = f.affected_pct == null ? 100 : f.affected_pct;\n"
+      "    if (f.affected_of && f.affected_count && f.scope !== 'site') pct = Math.min(pct, Math.round(f.affected_count / total * 100));   // R72: 1 of the 5 key pages read twice is at least 1 of the whole crawl, not 20% of it")
+# ... and the two reports print the denominator the percentage was taken on
+for _n108 in ('Build Audit Report', 'Build Full Report'):
+    patch(_n108, "`${f.affected_count} of ${a.pages_crawled} pages (${f.affected_pct}%)`",
+          "`${f.affected_count} of ${f.affected_of || a.pages_crawled} ${f.affected_of ? (f.affected_unit || 'items') : 'pages'} (${f.affected_pct}%)`")
+
+# --- R62 + R76: the text the content review reads
+patch('Build Content Prompt', "const strip = (s) => String(s || '')\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ').replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n  .replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\\s+/g, ' ').trim();",
+      "const entDecode = " + ENT_SRC108 + ";   // R62: named + decimal + hex entities, one pass (v5/code/_entities.js)\n"
+      "const strip = (s) => entDecode(String(s || '')\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ').replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n  .replace(/<[^>]+>/g, ' ')).replace(/\\s+/g, ' ').trim();\n"
+      "// R76: the alt text of the images (a partner badge, a client logo, a certification mark is usually an image) was thrown away with the tags, so the review said \"no badges\" over a badge\n"
+      "const altsOf = (html) => { const seen = new Set(); const out = []; for (const m of String(html || '').matchAll(/<img\\b[^>]*>/gi)) { const am = m[0].match(/\\balt\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)')/i); const t = am ? entDecode(am[1] ?? am[2] ?? '').replace(/\\s+/g, ' ').trim() : ''; if (t.length < 3 || t.length > 100) continue; const k = t.toLowerCase(); if (seen.has(k)) continue; seen.add(k); out.push(t); if (out.length >= 20) break; } return out; };")
+patch('Build Content Prompt', "  parts.push('=== ' + String(p.kind || 'page').toUpperCase() + ': ' + p.url + ' ===\\n' + text.slice(0, 2500));",
+      "  const alts = altsOf(f.html || f.body || f.data || '');\n"
+      "  parts.push('=== ' + String(p.kind || 'page').toUpperCase() + ': ' + p.url + ' ===\\n' + text.slice(0, 2500) + (alts.length ? '\\nImages on the page (alt text): ' + alts.map(t => '[image: ' + t + ']').join(' ') : ''));")
+patch('Build Content Prompt', ".replace(/!\\[[^\\]]*\\]\\([^)]*\\)/g, '')",
+      ".replace(/!\\[([^\\]]{3,100})\\]\\([^)]*\\)/g, ' [image: $1] ').replace(/!\\[[^\\]]*\\]\\([^)]*\\)/g, '')")
+patch('Analyze HTML', "const strip = (s) => String(s || '')\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ').replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n  .replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')\n  .replace(/&#x27;|&#39;/g, \"'\").replace(/&quot;/g, '\"').replace(/\\s+/g, ' ').trim();",
+      "const entDecode = " + ENT_SRC108 + ";   // R62: named + decimal + hex entities, one pass (v5/code/_entities.js)\n"
+      "const strip = (s) => entDecode(String(s || '')\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ').replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n  .replace(/<[^>]+>/g, ' ')).replace(/\\s+/g, ' ').trim();")
+
+log('Technical audit accuracy (2026-10-16, re-rating 2026-10-15 R62 R63 R64 R71 R72 R76 R118): a crawl redirect (resource_type "redirect" / 3xx) is no longer a page — the audit counts 45 pages, not 47, and only the two redirect checks read redirect items; the four extra crawl reports are requested with the crawl\'s id (Check Crawl / Save Task ID) instead of the pages answer\'s (none), so duplicate titles / descriptions, non-indexable pages and redirect chains can be reported at last; "Deprecated HTML tags" reads the crawler\'s tag list and names only tags the HTML standard made obsolete; a percentage taken on the 5 key pages read twice prints its own denominator ("1 of 5 key pages read twice") and is scored as a share of the whole crawl; "Pages with duplicate content" names the pages the crawler flagged on each page item (a count with no names is Low and says so); the content review decodes named, decimal and hex entities in one pass (the link kit and the two content nodes share one decoder) and sees the alt text of the images')
+
+# 109. WHO THE AUDIT'S RAW FETCH SAYS IT IS (2026-10-16, re-rating 2026-10-15 R119, investigated). Fetch Raw Pages and Fetch Not Crawled sent
+#      "Mozilla/5.0 (compatible; SEOAgentAudit/1.0; +https://www.google.com/bot.html)" — our own product token followed by the info URL of GOOGLE's crawler,
+#      the address the real Googlebot user agent carries. Findings: (1) on techand.ai the three user agents tried (that one, GPTBot's, a bare one) get the same
+#      200 / 219,172 bytes, so no figure the audit printed was wrong; (2) the claim is still false and risky — a request that names Google's bot page while
+#      not coming from Google's network is exactly what a WAF's "fake Googlebot" rule challenges (the reading would then be "not checked", never wrong), and a
+#      customer's logs show us as Google; (3) the diff is described as what "a crawler that does not render" receives, which is true of a plain request
+#      under any name but not of a site that answers named AI bots differently — that is the AI crawler access check's finding (robots.txt per bot, CDN
+#      block test), and the render diff's method now says so. So: the identity is honest, and nothing else changes.
+_UA109 = 'Mozilla/5.0 (compatible; SEOAgentAudit/1.0)'
+_ua_out109 = {}
+for _n109 in ('Fetch Raw Pages', 'Fetch Not Crawled'):
+    _hp109 = nodes[_n109]['parameters']['headerParameters']['parameters']
+    _u109 = [h for h in _hp109 if h['name'] == 'User-Agent']
+    assert len(_u109) == 1 and 'google.com/bot.html' in _u109[0]['value'], 'R119: ' + _n109 + ' no longer carries the expected User-Agent'
+    _u109[0]['value'] = _UA109
+    _ua_out109[_n109] = _UA109
+assert 'google.com/bot.html' not in json.dumps([nodes[n] for n in ('Fetch Raw Pages', 'Fetch Not Crawled')]), 'R119: Google\'s bot page is still named'
+# the wiring the harness checks (S141) and the proof that the R64 / R63 patches are in the generated nodes
+assert "$('Check Crawl')" in code('Crawl Extra Requests') and 'isRedirectItem' in code('Build Site Issues') and 'entDecode' in code('Build Content Prompt') and 'entDecode' in code('Analyze HTML'), 'A11: a patch of build section 108 is missing from the generated code'
+json.dump({'user_agents': _ua_out109, 'crawl_extra_requests_reads': ['Check Crawl', 'Save Task ID'], 'redirect_items_excluded_from_pages': True},
+          open(os.path.join(HERE0, 'harness', 'a11_wiring.json'), 'w'), indent=1, sort_keys=True)
+log('The audit\'s raw fetches (Fetch Raw Pages, Fetch Not Crawled) name themselves "SEOAgentAudit/1.0" and no longer carry the info address of Google\'s crawler (R119, investigated 2026-10-16: techand.ai answers the same 219,172 bytes to Google-style, GPTBot and bare agents, so no printed figure was wrong; the identity was false and a WAF may challenge it); the render diff\'s method states that a site answering named AI bots differently is the AI crawler access check\'s finding')
 
 
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and

@@ -215,14 +215,19 @@ export function titleFor(stage: string, p: P): string {
  * them from the text, and the app must not present that as a measurement. A crawl's price is a provider quote in the same way
  * (`dataforseo_estimated_usd`).
  */
-export function ledgerCost(p: P): { usd: number; estimated: boolean } | null {
+export function ledgerCost(p: P): { usd: number; estimated: boolean; partial: boolean } | null {
   const l = obj(p.run_ledger);
   const dfs = num(l.dataforseo_usd);
   const ai = num(l.ai_usd) ?? num(obj(l.ai_cost).usd);
   const direct = num(p.cost_usd);
   if (dfs == null && ai == null && direct == null) return null;
   const estimated = l.ai_cost_estimated === true || obj(l.ai_cost).estimated === true || (num(l.dataforseo_estimated_usd) ?? 0) > 0;
-  return { usd: (dfs ?? 0) + (ai ?? 0) + (direct ?? 0), estimated };
+  // R102 / R115: a ledger with no model-call figure at all ("ai_usd" absent or null) did not report its model calls, so what it
+  // carries is the search data only — partial, never the run's whole cost. `ai_usd: 0` is a real $0 (an audit calls no model) and is
+  // not flagged. A bare `cost_usd` (the old monitor callbacks) is DataForSEO money only, so it is partial too; and it is a fallback,
+  // not an addend: when the ledger has its own search-data figure, `cost_usd` is the same money and must not be counted twice.
+  const partial = ai == null;
+  return { usd: (dfs ?? direct ?? 0) + (ai ?? 0), estimated, partial };
 }
 
 /**

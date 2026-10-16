@@ -7,7 +7,7 @@ import { trackFormSchema, type TrackFormOutput } from '@/components/site/Trackin
 export const STEPS = [
   { id: 'company', label: 'Company', hint: 'Name and size' },
   { id: 'website', label: 'Website', hint: 'Address and market' },
-  { id: 'verify', label: 'Verify ownership', hint: 'Search Console, DNS or meta tag' },
+  { id: 'verify', label: 'Verify ownership', hint: 'Prove you own the site' },
   { id: 'business', label: 'Business details', hint: 'Facts every page uses' },
   { id: 'profile', label: 'Author & profile', hint: 'E-E-A-T trust signals' },
   { id: 'tracking', label: 'Tracking', hint: 'Keywords and monitors' },

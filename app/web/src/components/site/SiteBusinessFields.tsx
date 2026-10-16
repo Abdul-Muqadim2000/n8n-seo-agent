@@ -142,7 +142,7 @@ export function SiteBusinessForm({
           hint={`One or two sentences: what you offer and what makes it different. ${businessLen}/500`}
           error={errors.business?.message}
         >
-          {(p) => <Textarea {...p} rows={3} maxLength={500} placeholder="We build e-invoicing software for small and mid-sized businesses in the UAE, approved for FTA Phase 2." {...register('business')} />}
+          {(p) => <Textarea {...p} rows={3} maxLength={500} placeholder="We build accounting software for small and mid-sized businesses in Dubai." {...register('business')} />}
         </Field>
 
         <Field label="Who your customers are" hint="The people who buy from you: role, company type, location." error={errors.customers?.message}>
@@ -254,7 +254,7 @@ export function SiteBusinessForm({
                 <Field
                   label="Brand names"
                   optional
-                  hint="Names people use for your company, like 'Techand AI'. A short name that other companies share can be confused in AI answers, so list the full names."
+                  hint="Names people use for your company, like 'Northwind Trading'. A short name that other companies share can be confused in AI answers, so list the full names."
                   labelAction={<GuideButton id="brand-names" vars={{ domain: site?.domain ?? domain }} variant="link" label="How should I write these?" />}
                   error={errorText(fieldState.error)}
                 >

@@ -247,10 +247,16 @@ const picked = $('Pick Key Pages').all().map(i => i.json);
 const res = $input.all().map(i => i.json);
 const nowYear = new Date().getFullYear();
 
-const strip = (s) => String(s || '')
+const entDecode = (() => {
+  const N = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', nbsp: ' ', rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“', ndash: '–', mdash: '—', hellip: '…', copy: '©', reg: '®', trade: '™', bull: '•', middot: '·', laquo: '«', raquo: '»', euro: '€', pound: '£', deg: '°' };
+  return (s) => String(s == null ? '' : s).replace(/&(?:#[xX]([0-9a-fA-F]+)|#(\d+)|([a-zA-Z][a-zA-Z0-9]*));/g, (m, h, d, n) => {
+    if (h !== undefined || d !== undefined) { const cp = h !== undefined ? parseInt(h, 16) : Number(d); if (cp === 160) return ' '; try { return cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : m; } catch (e) { return m; } }
+    const k = n.toLowerCase(); return Object.prototype.hasOwnProperty.call(N, k) ? N[k] : m;
+  });
+})();   // R62: named + decimal + hex entities, one pass (v5/code/_entities.js)
+const strip = (s) => entDecode(String(s || '')
   .replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ')
-  .replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
-  .replace(/&#x27;|&#39;/g, "'").replace(/&quot;/g, '"').replace(/\s+/g, ' ').trim();
+  .replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
 const attr = (tag, name) => { const m = tag.match(new RegExp('\\s' + name + '\\s*=\\s*["\']([^"\']*)["\']', 'i')); return m ? m[1] : null; };
 const asArr = (v) => v == null ? [] : (Array.isArray(v) ? v : [v]);
 const typesOf = (n) => asArr(n['@type']).map(String);

@@ -1,3 +1,4 @@
+import { PRICES } from '@/lib/prices';
 import { useState } from 'react';
 import { Callout } from '@/components/ui/feedback';
 import { useForm, type DefaultValues } from 'react-hook-form';
@@ -211,7 +212,7 @@ export function KeywordForm({ initialSiteId, prefill }: ToolFormProps) {
             description="Copy written from the brief, edited and checked (title, meta, headings, links, schema, images plan): Word, PDF, HTML, Markdown and meta.json."
           />
           {errMsg(e.receiveContent) && <p className="text-[13px] text-critical-text">{errMsg(e.receiveContent)}</p>}
-          {!v.receiveContent && <p className="text-[13px] text-ink-3">Report only: about $0.40 instead of $1.20.</p>}
+          {!v.receiveContent && <p className="text-[13px] text-ink-3">Report only: about {PRICES.report()} instead of {PRICES.page()}.</p>}
         </div>
       </FormCard>
 
@@ -351,7 +352,7 @@ export function DiscoverForm({ initialSiteId, prefill }: ToolFormProps) {
           rows={3}
           max={500}
           value={v.business}
-          placeholder="e.g. ERP implementation and e-invoicing compliance for UAE businesses"
+          placeholder="e.g. accounting software and VAT compliance for small businesses in Dubai"
           hint={site ? `Leave empty to use ${site.domain}'s description (read from its homepage).` : 'Required without a website: the research starts from this description.'}
         />
         <TextField
@@ -372,14 +373,14 @@ export function DiscoverForm({ initialSiteId, prefill }: ToolFormProps) {
       <FormCard title="Follow-ups" description="Optional extra reports, each delivered separately when ready.">
         <div className="space-y-2.5">
           <Checkbox {...form.register('receiveReport')} className={OPTION_BOX} label="Keyword report for the best keyword" description="Competitors, verdict and keyword data for the keyword the strategy says to start with." />
-          <Checkbox {...form.register('receiveContent')} className={OPTION_BOX} label="Write the page for the best keyword (+$1.20)" description="The full page run for that keyword: brief, copy, edit and QA." />
+          <Checkbox {...form.register('receiveContent')} className={OPTION_BOX} label={`Write the page for the best keyword (+${PRICES.page()})`} description="The full page run for that keyword: brief, copy, edit and QA." />
         </div>
         <div>
           <p className="mb-1.5 text-[13px] font-medium text-ink">Audit the website too</p>
           <div role="radiogroup" aria-label="Audit the website too" className="grid gap-2 sm:grid-cols-3">
             <ChoiceCard selected={audit === 'none'} onSelect={() => setAudit('none')} title="No audit" />
-            <ChoiceCard selected={audit === 'technical'} onSelect={() => setAudit('technical')} title="Technical (+$0.10)" description="Crawl, indexing and fix pack" disabled={!site} />
-            <ChoiceCard selected={audit === 'full'} onSelect={() => setAudit('full')} title="Full report (+$0.90)" description="Adds competitors, backlinks, AI" disabled={!site} />
+            <ChoiceCard selected={audit === 'technical'} onSelect={() => setAudit('technical')} title={`Technical (+${PRICES.followTechnical()})`} description="Crawl, indexing and fix pack" disabled={!site} />
+            <ChoiceCard selected={audit === 'full'} onSelect={() => setAudit('full')} title={`Full report (+${PRICES.followFull()})`} description="Adds competitors, backlinks, AI" disabled={!site} />
           </div>
           {errMsg(e.siteAudit) ? <p className="mt-1.5 text-[13px] text-critical-text">{errMsg(e.siteAudit)}</p> : !site && <p className="mt-1.5 text-[13px] text-ink-3">Choose your website to add an audit.</p>}
         </div>

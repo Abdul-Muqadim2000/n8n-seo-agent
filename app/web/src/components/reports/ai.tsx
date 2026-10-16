@@ -9,7 +9,7 @@ import { CountUp, HeroStat, InsightItem, MetricCard, Stagger } from '@/component
 import { DataTable, type Column } from '@/components/ui/table';
 import { ShareBars } from '@/components/charts';
 import { ActionList, BriefCard } from './actions';
-import { AlertList, arr, Block, Chips, Empty, Facts, has, n, num, obj, objs, pct, SectionTitle, shortUrl, str, strs, type P } from './kit';
+import { AlertList, arr, Block, Chips, Empty, Facts, has, LedgerCard, n, num, obj, objs, pct, SectionTitle, shortUrl, str, strs, type P } from './kit';
 import { ReportHero, ScoreMark } from './visuals';
 
 const ENGINE_ORDER = AI_ENGINES.map((e) => e.value as string);
@@ -282,6 +282,7 @@ export function AiVisibilityReport({ report }: { report: ReportDetail }) {
         </Block>
       )}
       {str(market.error) && <Callout tone="warning">Market data was not available: {str(market.error)}</Callout>}
+      <LedgerCard ledger={p.run_ledger} extraCost={num(p.cost_usd)} />
     </Stagger>
   );
 }
@@ -421,6 +422,7 @@ export function AiPulseReport({ report }: { report: ReportDetail }) {
         </Block>
       )}
       <p className="text-xs text-ink-3">The AI pulse asks your tracked questions every day except Monday; Monday's AI visibility report adds these answers to its figures. A message is sent only when a change is beyond normal answer-to-answer variation.</p>
+      <LedgerCard ledger={p.run_ledger} extraCost={num(p.cost_usd)} />
     </Stagger>
   );
 }
@@ -522,6 +524,7 @@ export function AiGrowthReport({ report }: { report: ReportDetail }) {
           </ul>
         </Block>
       )}
+      <LedgerCard ledger={p.run_ledger} extraCost={num(p.cost_usd)} />
     </Stagger>
   );
 }

@@ -252,7 +252,7 @@
    "model": "claude-sonnet-5-5",
    "node": "Keyword Relevance",
    "streaming": false,
-   "template_chars": 2242
+   "template_chars": 2468
   },
   {
    "count_answer": "Count Answer (Ladder Keyword Relevance)",
@@ -279,7 +279,7 @@
    "model": "claude-sonnet-5-5",
    "node": "Ladder Keyword Relevance",
    "streaming": false,
-   "template_chars": 2242
+   "template_chars": 2468
   },
   {
    "count_answer": "Count Answer (Site Describer)",

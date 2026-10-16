@@ -282,7 +282,15 @@ const input = $input.first().json;
 const summary = base.crawl_summary || {};
 const di = summary.domain_info || {};
 const pm = summary.page_metrics || {};
-const pages = $('Get Crawled Pages Answers').first().json.tasks?.[0]?.result?.[0]?.items || [];
+const crawlItems = $('Get Crawled Pages Answers').first().json.tasks?.[0]?.result?.[0]?.items || [];
+// R63 (2026-10-16): a redirect response (resource_type "redirect", HTTP 3xx) has no HTML and no meta: it is not a page. Counting it made 47 pages of 45, and every page
+// rule (compression, canonical, Open Graph, Twitter card, outbound links, URL shape) then judged a response that has none of those things.
+const isRedirectItem = (p) => !!p && (p.resource_type === 'redirect' || (Number(p.status_code) >= 300 && Number(p.status_code) < 400));
+const pages = crawlItems.filter(p => !isRedirectItem(p));
+const redirectItems = crawlItems.filter(isRedirectItem);
+// R71: the crawler's "deprecated" list includes elements the HTML standard still defines (<u>, <s>, <small>, <b>, <i> ...); only the tags that really are obsolete count
+const CONFORMING_TAGS = new Set(['u', 's', 'small', 'b', 'i', 'em', 'strong', 'mark', 'cite', 'q', 'abbr', 'time', 'data', 'wbr', 'bdi', 'bdo', 'ruby', 'rt', 'rp', 'kbd', 'samp', 'var', 'sub', 'sup', 'dfn', 'del', 'ins', 'code', 'pre', 'span', 'div']);
+const obsoleteTags = (p) => { const t = p && p.meta && p.meta.deprecated_tags; return Array.isArray(t) ? [...new Set(t.map(x => String(x).toLowerCase().replace(/[<>\/]/g, '')))].filter(x => x && !CONFORMING_TAGS.has(x)) : null; };
 const probe = input.probe || { findings: [], what_works: [], measurements: {} };
 let extras = { duplicate_title: [], duplicate_description: [], non_indexable: [], redirect_chains: [], errors: [] };
 try { extras = { ...extras, ...($('Collect Crawl Extras').first().json.crawl_extras || {}) }; } catch (e) {}
@@ -337,11 +345,14 @@ const whatWorks = [];
 let schema_flag = null;   // R24: the crawl's structured-data flag, reported in `not_assessed` by a technical audit
 
 for (const c of CATALOG) {
-  const affected = pages.filter(p => {
+  const pool = (c.key === 'is_redirect' || c.key === 'has_links_to_redirects') ? redirectItems.concat(pages) : pages;   // R63: only the two redirect checks look at redirect items
+  const affected = pool.filter(p => {
     const v = p.checks ? p.checks[c.key] : undefined;
     if (v === undefined || v === null) return false;
+    if (c.key === 'deprecated_html_tags' && v === true) { const t = obsoleteTags(p); if (t && !t.length) return false; }   // R71
     return c.invert ? v === false : v === true;
   });
+  const redirOnly = (c.key === 'is_redirect' || c.key === 'has_links_to_redirects') && affected.length > 0 && affected.every(isRedirectItem);
   // R24 (2026-10-14): a technical audit does not assess structured data, so it emits no Schema finding — the count goes into the
   // one line that speaks about schema there, `not_assessed`.
   if (!isFull && c.cat === 'Schema') { if (affected.length > 0) schema_flag = { pages: affected.length, total }; continue; }
@@ -351,10 +362,11 @@ for (const c of CATALOG) {
     if (sev === 'Critical' && affected.length / total < 0.03 && !affected.some(p => /^https?:\/\/[^\/]+\/?$/.test(p.url))) sev = 'High';
     findings.push({
       category: c.cat, severity: sev, title: c.title, why: c.why, fix: c.fix,
-      evidence: affected.length + ' of ' + total + ' crawled pages',
+      evidence: c.key === 'has_links_to_redirects' && redirOnly ? affected.length + ' internal URL(s) that redirect are linked from the site (the crawl does not say which page holds each link)'
+        : redirOnly ? affected.length + ' of ' + (total + redirectItems.length) + ' crawled URLs redirect' : affected.length + ' of ' + total + ' crawled pages',
       affected_count: affected.length,
       affected_pct: Math.round(affected.length / total * 100),
-      sample_urls: affected.slice(0, 10).map(p => p.url),
+      sample_urls: affected.slice(0, 10).map(p => { const ot = c.key === 'deprecated_html_tags' ? obsoleteTags(p) : null; return ot && ot.length ? p.url + ' — <' + ot.join('>, <') + '>' : p.url; }),
       scope: 'page'
     });
   }
@@ -505,7 +517,10 @@ const addCount = (n, cat, sev, title, why, fix, evidence) => {
 };
 addCount(cnt(pm.broken_links), 'Crawlability & Indexing', cnt(pm.broken_links) > 20 ? 'High' : 'Medium', 'Broken internal links', 'Links to pages that no longer exist waste crawl budget and send users to dead ends.', 'Export the broken links from the crawl and fix or remove each one; redirect deleted pages to the closest live page.', cnt(pm.broken_links) + ' broken links across ' + total + ' pages');
 addCount(cnt(pm.broken_resources), 'Performance', 'Medium', 'Broken images, scripts or stylesheets', 'Missing resources cause layout breakage and slow the page while the browser waits.', 'Fix or remove references to resources that return errors.', cnt(pm.broken_resources) + ' broken resources referenced');
-addCount(cnt(pm.duplicate_content), 'Content', 'Medium', 'Pages with duplicate content', 'Near-identical pages compete with each other and dilute ranking signals.', 'Consolidate duplicates with a canonical tag or a 301 redirect, or make each page substantively different.', cnt(pm.duplicate_content) + ' pages with duplicate content');
+const dupPages = pages.filter(p => p.duplicate_content === true);
+if (dupPages.length) findings.push({ category: 'Content', severity: 'Medium', title: 'Pages with duplicate content', why: 'Near-identical pages compete with each other and dilute ranking signals.', fix: 'Consolidate duplicates with a canonical tag or a 301 redirect, or make each page substantively different. Check first that they really are the same page: a set of service pages built on one template can be flagged for its layout and not its words.',
+  evidence: dupPages.length + ' of ' + total + ' crawled pages are flagged by the crawler as near-identical to another page of the site', affected_count: dupPages.length, affected_pct: Math.round(dupPages.length / total * 100), sample_urls: dupPages.slice(0, 10).map(p => p.url), scope: 'page' });   // R118
+else addCount(cnt(pm.duplicate_content), 'Content', 'Low', 'Pages with duplicate content', 'Near-identical pages compete with each other and dilute ranking signals.', 'Consolidate duplicates with a canonical tag or a 301 redirect, or make each page substantively different.', cnt(pm.duplicate_content) + ' pages counted by the crawler as duplicate content; it did not name them, so the pages are not known');
 addCount(cnt(pm.redirect_loop), 'Crawlability & Indexing', 'Critical', 'Redirect loops', 'Looping redirects make pages unreachable for users and crawlers.', 'Break the loop so every redirect ends at a live 200 page.', cnt(pm.redirect_loop) + ' redirect loops');
 
 // ===== 3c. Extra On-Page reports (duplicate tags, non-indexable, redirect chains) =====
@@ -683,7 +698,8 @@ for (const cat of Object.keys(WEIGHTS)) {
   const list = findings.filter(f => f.category === cat && f.scoring !== false)
     .sort((a, b) => (SEV_ORDER[a.severity] - SEV_ORDER[b.severity]) || ((b.affected_pct || 0) - (a.affected_pct || 0)));
   for (const f of list) {
-    const pct = f.affected_pct == null ? 100 : f.affected_pct;
+    let pct = f.affected_pct == null ? 100 : f.affected_pct;
+    if (f.affected_of && f.affected_count && f.scope !== 'site') pct = Math.min(pct, Math.round(f.affected_count / total * 100));   // R72: 1 of the 5 key pages read twice is at least 1 of the whole crawl, not 20% of it
     const factor = f.scope === 'site' ? 1 : (0.6 + 0.4 * (pct / 100));
     const n = seenSev[f.severity] = (seenSev[f.severity] || 0) + 1;
     score -= (PEN2[f.severity] || 0) * factor * Math.pow(DECAY, n - 1);

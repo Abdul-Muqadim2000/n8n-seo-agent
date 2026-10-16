@@ -85,10 +85,16 @@ plan.forEach((p, i) => {
   pages.push({ url, status: st, checked: true, error: '', noindex: !!sig.noindex, canonical: S(sig.canonical), title: S(sig.title), h1: S(sig.h1), bytes: Number(sig.bytes) || 0, checks });
 });
 // what a release candidate cannot be asked, whatever we do — said once, with the reason (never reported as "fine")
-const cannot = [
+// R75 (2026-10-16): the wording follows the run. On a staging run the reasons are about a staging host; on a production check (`staging: false`)
+// nothing here is about staging — the reasons say why THIS check does not ask, which is by design: it reads only the pages it is given.
+const cannot = staging ? [
   { check: 'index_coverage', reason: 'Search Console can only answer for URLs Google has seen; a staging URL has never been crawled, so indexing, the canonical Google picked and the rich results are checked by the daily watch and the audit after the release' },
   { check: 'real_user_speed', reason: 'the Chrome UX Report has no real visitors for a staging host, so Core Web Vitals are measured after the release' },
   { check: 'positions', reason: 'a position exists only for a live URL' },
+] : [
+  { check: 'index_coverage', reason: 'this check reads only the pages it is given (by design, it asks Google nothing): indexing, the canonical Google picked and the rich results are checked by the daily page watch and the monthly audit' },
+  { check: 'real_user_speed', reason: 'this check reads only the pages it is given (by design): Core Web Vitals from real visitors (the Chrome UX Report) are in the audit and the site check' },
+  { check: 'positions', reason: 'this check reads only the pages it is given (by design): rankings are tracked by the weekly rank tracker, not by a release check' },
 ];
 const counts = { pages: pages.length, pages_read: pages.filter(p => p.checked).length, checks: pages.reduce((n, p) => n + p.checks.length, 0),
   passed: pages.reduce((n, p) => n + p.checks.filter(c => c.state === 'pass').length, 0), failed: failures.length, warned: warnings.length,

@@ -1,3 +1,4 @@
+import { PRICES } from '@/lib/prices';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
@@ -168,7 +169,7 @@ function FindKeywordsLink({ label = 'Find keywords for me', variant = 'secondary
   const { site } = useSiteCtx();
   if (!can('member')) return null;
   return (
-    <ButtonLink to={paths.tool(org.id, 'discover', { siteId: site.id, prefill: { receiveReport: false } })} variant={variant} size="sm" icon={<Search className="size-4" />} title="Keyword research for your website: about $0.40 and 10 minutes">
+    <ButtonLink to={paths.tool(org.id, 'discover', { siteId: site.id, prefill: { receiveReport: false } })} variant={variant} size="sm" icon={<Search className="size-4" />} title={`Keyword research for your website: about ${PRICES.research()} and 10 minutes`}>
       {label}
     </ButtonLink>
   );
@@ -201,7 +202,7 @@ function Recommended({ recommended, preset, onChoose, onCheckOwn }: { recommende
         <EmptyState
           icon={<Search className="size-5" />}
           title={r?.reportId ? 'Your keyword research found nothing to suggest' : `No keyword suggestions for ${site.domain} yet`}
-          description="Keyword research finds the searches your buyers use and rates each one for your website: easy, reachable or hard. It takes about 10 minutes and costs about $0.40. Or check a keyword you already have in mind."
+          description={`Keyword research finds the searches your buyers use and rates each one for your website: easy, reachable or hard. It takes about 10 minutes and costs about ${PRICES.research()}. Or check a keyword you already have in mind.`}
           action={
             <>
               <FindKeywordsLink variant="primary" />
@@ -225,7 +226,7 @@ function Recommended({ recommended, preset, onChoose, onCheckOwn }: { recommende
     <div className="space-y-4">
       {r.stale && (
         <Callout tone="warning" title="These suggestions are getting old" action={<FindKeywordsLink label="Find fresh keywords" />}>
-          They come from your keyword research of {fmtDate(r.receivedAt)}. Searches and your website have changed since; fresh research costs about $0.40.
+          They come from your keyword research of {fmtDate(r.receivedAt)}. Searches and your website have changed since; fresh research costs about {PRICES.research()}.
         </Callout>
       )}
       <div className="flex flex-col gap-3 rounded-xl border border-accent/30 bg-accent-soft/50 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -330,7 +331,7 @@ function CheckPanel({ initialKeyword, initialCountry, ladders, onChoose }: { ini
           className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,13rem)_auto] sm:items-start"
         >
           <Field label="Your keyword" error={fieldError} hint="The search you want to rank for, as people type it.">
-            {(p) => <Input {...p} value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="e.g. e invoicing software uae" maxLength={100} autoComplete="off" />}
+            {(p) => <Input {...p} value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="e.g. accounting software dubai" maxLength={100} autoComplete="off" />}
           </Field>
           <Field label="Country">
             {(p) => (
@@ -351,7 +352,7 @@ function CheckPanel({ initialKeyword, initialCountry, ladders, onChoose }: { ini
         <p className="mt-3 flex items-start gap-1.5 text-[13px] leading-snug text-ink-3">
           <Coins className="mt-0.5 size-3.5 shrink-0" aria-hidden />
           <span>
-            A check costs <span className="font-medium text-ink-2">about $0.05</span> (counted in your monthly budget) and takes up to 20 seconds. A keyword you checked in the last 7 days is shown again for
+            A check costs <span className="font-medium text-ink-2">about {PRICES.check()}</span> (counted in your monthly budget) and takes up to 20 seconds. A keyword you checked in the last 7 days is shown again for
             free.
           </span>
         </p>
@@ -464,7 +465,7 @@ function CheckResult({ check, ladders, onChoose, onCheck }: { check: KeywordChec
               );
             })}
           </ul>
-          <p className="mt-2 text-xs text-ink-3">Each check costs about $0.05.</p>
+          <p className="mt-2 text-xs text-ink-3">Each check costs about {PRICES.check()}.</p>
         </section>
       )}
     </div>
@@ -644,7 +645,7 @@ function ReviewStep({
           )}
         </Section>
 
-        <Section icon={<PenSquare />} title="Pages to write now" description="The plan costs about $0.60; each page written now adds about $1.20 and 10 minutes and arrives as its own report. The rest follow on Mondays.">
+        <Section icon={<PenSquare />} title="Pages to write now" description={`The plan costs about ${PRICES.plan()}; each page written now adds about ${PRICES.page()} and 10 minutes and arrives as its own report. The rest follow on Mondays.`}>
           <div role="radiogroup" aria-label="Pages to write now" className="grid gap-2 sm:grid-cols-3">
             {([1, 2, 3] as const).map((n) => (
               <ChoiceCard
