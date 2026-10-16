@@ -134,6 +134,10 @@
               {
                 "name": "week",
                 "type": "string"
+              },
+              {
+                "name": "qa_reasons",
+                "type": "string"
               }
             ]
           },
@@ -2296,6 +2300,16 @@
               {
                 "id": "week",
                 "displayName": "week",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "qa_reasons",
+                "displayName": "qa_reasons",
                 "required": false,
                 "defaultMatch": false,
                 "display": true,

@@ -285,22 +285,77 @@ const RS = (() => {
   const churnText = (ch) => {
     if (!ch || !ch.available) return 'How much the results page itself moved: not available — ' + ((ch && ch.reason) || 'no comparison was possible') + '.';
     const when = ch.from ? ' since the reading of ' + String(ch.from).slice(0, 10) : ' since the previous reading';
-    const band = ch.band === 'high' ? 'the whole results page moved' : ch.band === 'some' ? 'part of the results page moved' : 'the results page barely moved';
+    const band = ch.band === 'noise' ? 'the results page changed no more than two readings of the same moment do' : ch.band === 'high' ? 'the whole results page moved' : ch.band === 'some' ? 'part of the results page moved' : 'the results page barely moved';
     return band + ': ' + ch.changed + ' of the top ' + ch.depth + ' places changed' + when
       + (ch.entered ? ', ' + ch.entered + ' new page' + (ch.entered === 1 ? '' : 's') + ' came in' : '')
       + (ch.mean_move ? ', and the pages present in both readings moved ' + ch.mean_move + ' place' + (ch.mean_move === 1 ? '' : 's') + ' on average' : '')
-      + ' (measured by comparing the two stored readings; ' + ch.labels_basis + ').';
+      + ' (measured by comparing the two stored readings; ' + ch.labels_basis + (ch.noise ? '; ' + ch.noise.text : '') + ').';
   };
   // the clause that goes beside a gain or a drop, so a move is never reported without the context that decides what it means
   const moveNote = (delta, ch) => {
     if (delta == null) return '';
     if (!ch || !ch.available) return 'whether the results page itself moved cannot be told — ' + ((ch && ch.reason) || 'no earlier reading stored');
+    if (ch.band === 'noise') return 'the results page changed no more than two readings of the same moment do (' + ch.changed + ' of the top ' + ch.depth + ' places; ' + ((ch.noise || {}).text || '') + '), so this is one reading against one reading, not movement';
     if (ch.band === 'high') return 'the whole results page moved that week (' + ch.changed + ' of the top ' + ch.depth + ' places changed), so this is not necessarily about your page';
     if (ch.band === 'some') return 'part of the results page moved too (' + ch.changed + ' of the top ' + ch.depth + ' places changed)';
     return 'the rest of the results page barely moved (' + ch.changed + ' of the top ' + ch.depth + ' places changed), so this move is your page';
   };
+  // ---- R87 / R90 / R88 (2026-10-16, re-rating 2026-10-15): one reading of a stored results page, read the same way everywhere ----
+  // serpHosts: the hosts of ONE stored reading in rank order, one entry per position — the snapshot's own top ten (a domain holding
+  // three positions appears three times, which the fit gate's "holds 3 of the top 5" rule needs), else the `above` list. Never the
+  // `above` list AND the competitor list of the same answer together: the Rank Tracker report did that, so tax.gov.ae (#1) and
+  // mof.gov.ae (#2) were each counted twice and "e invoicing in uae" — two government sites in its top five, the rule asks for three —
+  // was set aside as a government query (exec 632).
+  const serpHosts = (row, depth) => {
+    const r = row || {}; const n = depth || 10;
+    const snap = unpack(r.snapshot_json, null);
+    const top = (snap && !snap.unavailable && Array.isArray(snap.top) ? snap.top : []).map(e => ({ p: Number(e && e.p) || 0, h: bare(hostOf(S(e && e.u))) }))
+      .filter(e => e.p > 0 && e.h).sort((a, b) => a.p - b.p);
+    if (top.length) return top.filter(e => e.p <= n).map(e => e.h);
+    const c = unpack(r.competitors_json, null);
+    return ((c && Array.isArray(c.above)) ? c.above : []).map(x => ({ p: Number(x && x.p) || 0, h: bare(S(x && x.d)) })).filter(e => e.p > 0 && e.p <= n && e.h)
+      .sort((a, b) => a.p - b.p).map(e => e.h);
+  };
+  const isDesk = (h) => S((h || {}).device || 'desktop') !== 'mobile';
+  const kwKey = (k) => S(k).toLowerCase().replace(/\s+/g, ' ').trim();
+  // the newest stored DESKTOP reading of one keyword for one site, taken before `before` — whichever workflow bought it (a ladder, the
+  // weekly site check, the tracker's own list). R88: the ladder report used its own ladder's rows only and the tracked-keyword report
+  // any reading of the site, so one keyword in one run got "3 of top 8 changed" and "5 of top 8 changed". o: { keyword, domain, before,
+  // valid (default: a real position, 0 = not in the top 50; -1 = a failed check is never a baseline), withSnapshot (a stored page: snapshot or competitor list) }
+  const prevReading = (rows, o) => {
+    const q = o || {}; const kw = kwKey(q.keyword), dom = bare(q.domain); const before = S(q.before || '9999');
+    return (rows || []).filter(h => h && isDesk(h) && kwKey(h.keyword) === kw && (!dom || bare(h.domain) === dom) && S(h.checked_at) && S(h.checked_at) < before
+      && h.position !== '' && h.position != null && Number(h.position) >= 0 && (!q.withSnapshot || !!unpack(h.snapshot_json, null) || !!unpack(h.competitors_json, null)))
+      .sort((a, b) => S(b.checked_at).localeCompare(S(a.checked_at)))[0] || null;
+  };
+  // how much two readings of the SAME results page differ when nothing can have changed: stored desktop readings of the keyword for the
+  // site taken within `minutes` of each other (the Rank Tracker and the weekly site check often read the same page minutes apart). Exec
+  // 632 / 634 read "erp implementation dubai" 32 seconds apart and led with different pages. The largest such difference is the noise a
+  // single reading against a single reading carries; a change no larger than it is not called movement. null when no such pair exists.
+  const noise = (rows, o) => {
+    const q = o || {}; const kw = kwKey(q.keyword), dom = bare(q.domain); const win = (Number(q.minutes) || 15) * 60e3;
+    const rs = (rows || []).filter(h => h && isDesk(h) && kwKey(h.keyword) === kw && (!dom || bare(h.domain) === dom) && unpack(h.snapshot_json, null))
+      .sort((a, b) => S(a.checked_at).localeCompare(S(b.checked_at)));
+    let best = null;
+    for (let i = 1; i < rs.length; i++) {
+      const gap = Date.parse(S(rs[i].checked_at)) - Date.parse(S(rs[i - 1].checked_at));
+      if (!(gap >= 0 && gap <= win)) continue;
+      const ch = churn(rs[i - 1].snapshot_json, rs[i].snapshot_json, {});
+      if (!ch.available) continue;
+      if (!best || ch.changed > best.changed) best = { changed: ch.changed, depth: ch.depth, minutes: Math.round(gap / 6e4 * 10) / 10, at: S(rs[i].checked_at) };
+    }
+    if (!best) return null;
+    return { ...best, text: 'two readings of this results page taken ' + best.minutes + ' minutes apart (' + best.at.slice(0, 10) + ') already differed in ' + best.changed + ' of the top ' + best.depth + ' places' };
+  };
+  // a measured change, judged against that noise: no larger than it = 'noise', and every severity word is withheld
+  const withNoise = (ch, nz) => {
+    if (!ch || !ch.available || !nz) return ch;
+    const out = { ...ch, noise: nz };
+    if (ch.changed <= nz.changed) { out.band = 'noise'; out.within_noise = true; }
+    return out;
+  };
   return { CTR, SUM_CTR, METHOD, AIO_KEEP, AIO_SOURCE, keepAt, CHURN, read, features, typeList, ourRank, landscape, voice, snapshot, pack, unpack,
-    featureLine, featureChips, churn, churnNone, churnText, moveNote, bare, hostOf, isOurs, listOf, weight, urlKey };
+    featureLine, featureChips, churn, churnNone, churnText, moveNote, bare, hostOf, isOurs, listOf, weight, urlKey, serpHosts, prevReading, noise, withNoise };
 })();
 // Locates the site in each SERP (top 50): one seo_rank_history row per keyword (ladder_id = site id, rung 0). position 0 = not in the top 50, -1 = check failed.
 // G6 (2026-10-12 system review): the row carries the whole results page of the same call, like the Rank Tracker's rows — the features it

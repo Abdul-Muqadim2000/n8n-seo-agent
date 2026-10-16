@@ -7685,6 +7685,10 @@
               {
                 "name": "week",
                 "type": "string"
+              },
+              {
+                "name": "qa_reasons",
+                "type": "string"
               }
             ]
           },
@@ -8010,6 +8014,16 @@
               {
                 "id": "week",
                 "displayName": "week",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "qa_reasons",
+                "displayName": "qa_reasons",
                 "required": false,
                 "defaultMatch": false,
                 "display": true,
@@ -10879,6 +10893,10 @@
               {
                 "name": "week",
                 "type": "string"
+              },
+              {
+                "name": "qa_reasons",
+                "type": "string"
               }
             ]
           },
@@ -11325,6 +11343,16 @@
               {
                 "id": "week",
                 "displayName": "week",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "qa_reasons",
+                "displayName": "qa_reasons",
                 "required": false,
                 "defaultMatch": false,
                 "display": true,
@@ -16718,6 +16746,10 @@
               {
                 "name": "week",
                 "type": "string"
+              },
+              {
+                "name": "qa_reasons",
+                "type": "string"
               }
             ]
           },
@@ -16761,7 +16793,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// One seo_content_log row per content run (v4.14, FIX_PLAN D5). Every page the system writes passes through this workflow — the keyword\n// ladder's own page runs, the app's \"Write now\" and the Content Cadence's Monday pages — so the row is written here, once, for all three.\n// Before this, ladder pages were never logged: the pile-up guard counted 2 pages waiting while 4 were written and unpublished, and planned\n// two more for the Monday after (execution 380).\n// The row is upserted by site_id + keyword and carries exactly the table's columns. Status: started (the cadence / the app at the spawn)\n// -> written (here, when the page exists) -> published (publish detection and \"I published a page\" close it).\n// An existing row keeps what it already knows: its site id and keyword spelling (so the upsert matches it), where the keyword came from\n// (`source` — the cadence's ai_answer / ai_refresh / striking / trend must survive) and the last published URL. A page that is written\n// again (a refresh, a rewrite) goes back to `written`: the new text still waits for the owner to publish it.\nconst d = $('Normalize Input').first().json;\nconst rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error); } catch (e) { return []; } };\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\n// Report-only runs (a keyword report, a verdict) take the same delivery path, so the article itself has to say that a page exists:\n// the Blog Package passes a run without content through untouched.\nlet page = {}; try { page = (($('Blog Package').first() || {}).json) || {}; } catch (e) { page = {}; }\nif (!String(page.article_html || page.page_markdown || '').trim()) return [{ json: { skip: true, reason: 'no page was written in this run (report only)' } }];\nconst domain = normD(d.domain), keyword = String(d.keyword || '').trim();\nif (!domain || !keyword) return [{ json: { skip: true, reason: 'no website or no keyword: there is nothing to follow to publication' } }];\nconst now = new Date().toISOString();\nconst logs = rowsOf('Load Content Log (Run)').filter(r => r.keyword && normD(r.domain) === domain);\nconst rid = String(d.request_id || '');\n// the row this run already has (the cadence and the app write one when they start the run), else the newest row for the same keyword\nconst prior = (rid ? logs.find(r => String(r.request_id) === rid) : null) ||\n  logs.filter(r => norm(r.keyword) === norm(keyword)).sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0] || null;\nconst ip = String(d.client_ip || '');\nconst source = (prior && prior.source) || (/^cadence:/i.test(ip) ? 'cadence' : /^app:/i.test(ip) ? 'app' : (/^ladder:/i.test(ip) || d.ladder_id) ? 'ladder' : 'manual');\nconst sameRun = !!prior && !!rid && String(prior.request_id) === rid;   // the run that opened the row: keep when it started\nconst rung = Number(d.ladder_rung != null && d.ladder_rung !== '' ? d.ladder_rung : (prior && prior.rung)) || 0;\nreturn [{ json: {\n  site_id: String((prior && prior.site_id) || ('site_' + domain.replace(/[^a-z0-9]+/g, '-'))),\n  domain,\n  keyword: String((prior && prior.keyword) || keyword),\n  source,\n  page_type: String(d.page_type || (prior && prior.page_type) || ''),\n  existing_page_url: String(d.existing_page_url || (prior && prior.existing_page_url) || ''),\n  rung,\n  ladder_id: String(d.ladder_id || (prior && prior.ladder_id) || ''),\n  request_id: rid || String((prior && prior.request_id) || ''),\n  started_at: sameRun ? String(prior.started_at || now) : now,\n  status: 'written',\n  published_url: String((prior && prior.published_url) || ''),\n  published_at: String((prior && prior.published_at) || ''),\n  week: sameRun ? String(prior.week || now.slice(0, 10)) : now.slice(0, 10)\n} }];\n"
+          "jsCode": "// One seo_content_log row per content run (v4.14, FIX_PLAN D5). Every page the system writes passes through this workflow — the keyword\n// ladder's own page runs, the app's \"Write now\" and the Content Cadence's Monday pages — so the row is written here, once, for all three.\n// Before this, ladder pages were never logged: the pile-up guard counted 2 pages waiting while 4 were written and unpublished, and planned\n// two more for the Monday after (execution 380).\n// The row is upserted by site_id + keyword and carries exactly the table's columns. Status: started (the cadence / the app at the spawn)\n// -> written (here, when the page exists and passed its last quality round) or not_ready (it failed it: R111) -> published (publish detection and \"I published a page\" close it).\n// An existing row keeps what it already knows: its site id and keyword spelling (so the upsert matches it), where the keyword came from\n// (`source` — the cadence's ai_answer / ai_refresh / striking / trend must survive) and the last published URL. A page that is written\n// again (a refresh, a rewrite) goes back to `written`: the new text still waits for the owner to publish it.\nconst d = $('Normalize Input').first().json;\nconst rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error); } catch (e) { return []; } };\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\n// Report-only runs (a keyword report, a verdict) take the same delivery path, so the article itself has to say that a page exists:\n// the Blog Package passes a run without content through untouched.\nlet page = {}; try { page = (($('Blog Package').first() || {}).json) || {}; } catch (e) { page = {}; }\nif (!String(page.article_html || page.page_markdown || '').trim()) return [{ json: { skip: true, reason: 'no page was written in this run (report only)' } }];\nconst domain = normD(d.domain), keyword = String(d.keyword || '').trim();\nif (!domain || !keyword) return [{ json: { skip: true, reason: 'no website or no keyword: there is nothing to follow to publication' } }];\nconst now = new Date().toISOString();\nconst logs = rowsOf('Load Content Log (Run)').filter(r => r.keyword && normD(r.domain) === domain);\nconst rid = String(d.request_id || '');\n// the row this run already has (the cadence and the app write one when they start the run), else the newest row for the same keyword\nconst prior = (rid ? logs.find(r => String(r.request_id) === rid) : null) ||\n  logs.filter(r => norm(r.keyword) === norm(keyword)).sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0] || null;\nconst ip = String(d.client_ip || '');\nconst source = (prior && prior.source) || (/^cadence:/i.test(ip) ? 'cadence' : /^app:/i.test(ip) ? 'app' : (/^ladder:/i.test(ip) || d.ladder_id) ? 'ladder' : 'manual');\nconst sameRun = !!prior && !!rid && String(prior.request_id) === rid;   // the run that opened the row: keep when it started\nconst rung = Number(d.ladder_rung != null && d.ladder_rung !== '' ? d.ladder_rung : (prior && prior.rung)) || 0;\n// R111 (2026-10-16, re-rating 2026-10-15): the row used to say `written` whenever the package held article text, whatever the page's\n// LAST quality round decided — and nine readers turn `written` into \"publish it\" (exec 634's top action, exec 632's \"already written —\n// publish it\", the cadence's pile-up note, the Claude site brief). The verdict is already on the package: *Content QA* decides it and\n// *Originality Check* re-decides it when it invalidates the gate (B3-3); *Build Word File* carries it as `qa_not_ready` / `qa_reasons`\n// and *Blog Package* passes it on. A draft that failed is `not_ready` with the reasons, so every reader can say \"fix it and run it\n// again\" instead; `written` keeps meaning exactly \"passed QA, waiting to be published\". A package with no verdict at all (an older\n// path) is never invented as failed.\nconst meta = page.article_meta || {};\nconst notReady = page.qa_not_ready === true || (page.qa_not_ready == null && !!(meta.quality && meta.quality.not_ready === true));\nconst reasons = (Array.isArray(page.qa_reasons) ? page.qa_reasons : (meta.quality && Array.isArray(meta.quality.reasons) ? meta.quality.reasons : []))\n  .map(x => String(x || '').trim()).filter(Boolean);\nreturn [{ json: {\n  site_id: String((prior && prior.site_id) || ('site_' + domain.replace(/[^a-z0-9]+/g, '-'))),\n  domain,\n  keyword: String((prior && prior.keyword) || keyword),\n  source,\n  page_type: String(d.page_type || (prior && prior.page_type) || ''),\n  existing_page_url: String(d.existing_page_url || (prior && prior.existing_page_url) || ''),\n  rung,\n  ladder_id: String(d.ladder_id || (prior && prior.ladder_id) || ''),\n  request_id: rid || String((prior && prior.request_id) || ''),\n  started_at: sameRun ? String(prior.started_at || now) : now,\n  status: notReady ? 'not_ready' : 'written',\n  published_url: String((prior && prior.published_url) || ''),\n  published_at: String((prior && prior.published_at) || ''),\n  week: sameRun ? String(prior.week || now.slice(0, 10)) : now.slice(0, 10),\n  qa_reasons: notReady ? reasons.join('; ').slice(0, 1500) : ''\n} }];\n"
         },
         "id": "3a32dca6-8aa5-57da-b858-ca398aa373e1",
         "name": "Content Log Row",
@@ -16969,6 +17001,16 @@
               {
                 "id": "week",
                 "displayName": "week",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "qa_reasons",
+                "displayName": "qa_reasons",
                 "required": false,
                 "defaultMatch": false,
                 "display": true,
@@ -24212,6 +24254,38 @@
         "position": [
           -2600,
           -4300
+        ]
+      },
+      {
+        "parameters": {
+          "content": "### A draft that failed its quality check is not a page to publish (R111, 2026-10-16)\n*Content Log Row* stores `not_ready` + the last round's reasons (`qa_reasons`) when the page's **final** quality verdict failed; `written` keeps meaning \"passed QA, waiting to be published\". Every reader says **\"fix the draft and run it again\"** instead of \"publish it\": the weekly site report (`fix_draft`), the Rank Tracker, the cadence's pile-up note (\"needs a fix\", still counted), the site brief, the AI targets. Publish detection still finds one the owner publishes anyway. Rows written before this deploy: `fix_not_ready_drafts.py` (dry run by default).",
+          "height": 220,
+          "width": 1180,
+          "color": 3
+        },
+        "id": "a756485e-0c2f-56e6-9939-a873337622c0",
+        "name": "Note 59",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -2600,
+          -4100
+        ]
+      },
+      {
+        "parameters": {
+          "content": "### One picture of the results page and of our own pages (R87 R88 R90 R91 R93 R92 R59, 2026-10-16)\n**R87:** one results page is read **one entry per position** (the report counted every page-1 domain twice and set \"e invoicing in uae\" aside as government on two government sites of five); a head that IS set aside **pauses its ladder** — report, ladder row (*Tracker Ladder Marks*), plan, cadence, app. **R90:** a stored rung is judged against its ladder's stored results pages and the AI brand names (\"facts erp\" / facts.ae). **R88:** one baseline per keyword per run, and a change no larger than two readings of one moment is \"noise\". **R91:** \"top 50\". **R93:** our pages by their real titles. **R92 / R59:** \"countries\", a covered ladder target reported as the live page, the bare-host / www split Google chose named with its fix.",
+          "height": 220,
+          "width": 1180,
+          "color": 3
+        },
+        "id": "74cfc727-5f8f-5ef8-a568-475132f0de5b",
+        "name": "Note 60",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -2600,
+          -3860
         ]
       }
     ],

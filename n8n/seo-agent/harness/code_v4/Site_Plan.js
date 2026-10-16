@@ -346,7 +346,11 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   // asked the owner to publish it. A `started` row is a run that opened the row and never finished.
   const normKw = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   const writtenKw = new Set(blogs.filter(b => b.status === 'written' || b.status === 'published' || String(b.published_url || '').trim()).map(b => normKw(b.keyword)));
-  for (const l of lrows) { const u = String(l.target_url || '').trim(); if (u && /^https?:\/\//.test(u) && !seenU.has(u)) { seenU.add(u); pages.push({ url: u, keyword: l.keyword, rung: Number(l.rung) || 0, status: l.status || '', ladder_id: l.ladder_id, page_exists: !!l.page_exists, written: writtenKw.has(normKw(l.keyword)), status_note: String(l.status_note || '') }); } }
+  // R111 (2026-10-16): a page whose last quality round failed is a draft to fix, never a page to publish. Its keyword is not `written`
+  // (that word means "passed QA, waiting to be published"); it is carried as `not_ready` with the quality check's own reasons.
+  const notReadyOf = new Map(blogs.filter(b => b.status === 'not_ready' && !String(b.published_url || '').trim()).map(b => [normKw(b.keyword), b]));
+  const reasonsOf = (b) => String((b && b.qa_reasons) || '').split(/;\s+/).map(x => x.trim()).filter(Boolean);
+  for (const l of lrows) { const u = String(l.target_url || '').trim(); if (u && /^https?:\/\//.test(u) && !seenU.has(u)) { seenU.add(u); const nr = notReadyOf.get(normKw(l.keyword)) || null; pages.push({ url: u, keyword: l.keyword, rung: Number(l.rung) || 0, status: l.status || '', ladder_id: l.ladder_id, page_exists: !!l.page_exists, written: writtenKw.has(normKw(l.keyword)), not_ready: !!nr && !writtenKw.has(normKw(l.keyword)), qa_reasons: nr ? reasonsOf(nr) : [], status_note: String(l.status_note || '') }); } }
   for (const b of blogs) { const k = String(b.keyword).toLowerCase().trim(); if (!seen.has(k)) { seen.add(k); tracked.push({ keyword: k, source: 'blog', rung: 0, ladder_id: b.ladder_id || '', head_keyword: '' }); } }
   for (const b of blogs) { const u = String(b.published_url || '').trim(); if (u && /^https?:\/\//.test(u) && !seenU.has(u)) { seenU.add(u); pages.push({ url: u, keyword: b.keyword, rung: 0, status: 'published', ladder_id: b.ladder_id || '', page_exists: true, written: true, status_note: '', published_at: b.published_at || '' }); } }
   // R1 (2026-10-13): only a row that says `written` waits for the owner's publish link — a `started` row is a run that never finished, and
@@ -354,6 +358,10 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   // .map(), which an inline // swallows, so every row kept the raw content-log shape and the report said "(undefined days ago)".
   const pending_publish = blogs.filter(b => b.status === 'written' && !b.published_url)
     .map(b => ({ keyword: b.keyword, started_at: b.started_at || '', days: Math.round((Date.now() - new Date(b.started_at || now).getTime()) / 864e5) }));
+  // R111: the drafts that failed their last quality round — "fix it and run it again", with the reasons, never "publish it"
+  const needs_fix = blogs.filter(b => b.status === 'not_ready' && !String(b.published_url || '').trim())
+    .map(b => ({ keyword: b.keyword, started_at: b.started_at || '', days: Math.round((Date.now() - new Date(b.started_at || now).getTime()) / 864e5),
+      ladder_id: b.ladder_id || '', rung: Number(b.rung) || 0, page_type: b.page_type || '', reasons: reasonsOf(b) }));
   // B7-1 (2026-10-15, benchmark area 7): the dated changes this run can actually test. A change needs 28 COMPLETE days of final
   // Search Console data after it and 28 before it, so the test gets its own two windows instead of borrowing the report's 28-v-28
   // — which both sit after a change made three months ago and would therefore measure nothing. Everything too new is kept out with
@@ -391,5 +399,5 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
     // B7-1: the dated changes, readable ones first; GSC Requests buys the two windows of the first `max_change_tests`, the rest
     // travel with the reason they could not be read so the report says so instead of showing a shorter list
     changes: changes.slice(0, Math.max(CONFIG.max_change_tests, 12)),
-    serp_positions: serp, pending_publish, console_alerts, last_checkin, checkin_due, ranges, on_demand, checked_at: now, config: CONFIG } };
+    serp_positions: serp, pending_publish, needs_fix, console_alerts, last_checkin, checkin_due, ranges, on_demand, checked_at: now, config: CONFIG } };
 });

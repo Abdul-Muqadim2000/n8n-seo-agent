@@ -507,6 +507,365 @@ const FITR = {
       + '. They were planned before this rule existed; a page that is already written is kept and only flagged.';
   }
 };
+// ---- results-page observations (2026-10-11, FIX_PLAN D26): an AI Overview (and every other SERP feature) is what ONE Google query showed at
+// ONE moment — live, the ladder plan said "no AI Overview" and the page run minutes later "cites 11 domains". Inlined by the build
+// (the SERP_OBS placeholder) into Analyze Competitor Pages (the digest the verdict reads), Build Keyword Strategy (stored vs live checks) and Build
+// Ladder Report; the keyword report's row is patched by build_v4.py. Every text says WHEN it was seen ("seen in the check at 15:58 UTC on
+// 2026-10-11") or "seen in N of M checks", and that AI Overviews vary between searches — never "there is no AI Overview".
+// the time of a DataForSEO SERP answer (result datetime "2026-10-11 15:58:12 +00:00", else the task time, else now) as ISO
+const serpSeenAt = (res) => {
+  try {
+    const t0 = ((res || {}).tasks || [])[0] || {}; const r0 = (t0.result || [])[0] || {};
+    const raw = String(r0.datetime || t0.time || r0.check_url_time || '');
+    const m = raw.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::(\d{2}))?(?:\.\d+)?\s*(?:Z|([+-]\d{2}):?(\d{2}))?/);
+    if (m) { const d = new Date(m[1] + 'T' + m[2] + ':' + (m[3] || '00') + (m[4] ? m[4] + ':' + m[5] : 'Z')); if (!isNaN(d.getTime())) return d.toISOString(); }
+  } catch (e) {}
+  return new Date().toISOString();
+};
+// "15:58 UTC on 2026-10-11"
+const obsClock = (iso) => { const d = iso ? new Date(iso) : null; if (!d || isNaN(d.getTime())) return 'an unknown time'; const z = d.toISOString(); return z.slice(11, 16) + ' UTC on ' + z.slice(0, 10); };
+// obs: [{ seen: true | false | null, at: iso, source }] -> { count, seen, text }; null = that check could not read the results page (not counted)
+const aioObserved = (obs) => {
+  const known = (obs || []).filter(o => o && o.seen != null);
+  if (!known.length) return { count: 0, seen: 0, text: 'unknown — the results page could not be read' };
+  const seen = known.filter(o => o.seen);
+  const one = (o) => (o.seen ? 'seen' : 'not seen') + ' in the check at ' + obsClock(o.at) + (o.source ? ' (' + o.source + ')' : '');
+  if (known.length === 1) return { count: 1, seen: seen.length, text: one(known[0]) + ' — AI Overviews vary between searches, so this is one observation, not a fixed feature of the query' };
+  return { count: known.length, seen: seen.length, text: 'seen in ' + seen.length + ' of ' + known.length + ' checks (' + known.map(one).join('; ') + ') — AI Overviews vary between searches' };
+};
+// ---- what one rank check's results page showed (G6, 2026-10-12, system review FIX_PLAN) ----
+// Every rank check already pays for one SERP call. Until now we kept three things from it: our position, our ranking URL and a
+// comma-joined list of item types. The leaders (Semrush Position Tracking, Ahrefs Rank Tracker, AccuRanker, SE Ranking) keep the
+// whole page: the AI Overview (shown, and whether it cites us), the featured snippet, People Also Ask, the local pack, video and
+// shopping blocks, the other domains on page 1 with their positions, a share of voice, and a stored snapshot as proof of the reading
+// (criteria 2.2, 2.5, 2.6, 2.13 of CRITERIA_technical_tracking_reporting_ai_links.md). This kit reads all of it from the answer we
+// already have, so the depth-50 check costs exactly what it cost before.
+// Rules it keeps:
+//   * a call that failed is never turned into a fact: `unavailable` is set and every flag is null — "check again", like position -1,
+//     never "no AI Overview" / "does not rank" (the live lesson of 2026-10-09 and D26);
+//   * an AI Overview Google loads asynchronously comes back without its sources unless we pay extra for them, so "cites us" is then
+//     null (unknown), never false;
+//   * the share of voice is a MODEL built on a published CTR curve, not measured clicks, and says so in `method`.
+// Needs serpSeenAt / aioObserved from _serp_obs.js, which the build inlines above it.
+const RS = (() => {
+  // the same CTR-by-position curve the Search Console report uses (v5/code/Parse_GSC.js EXPECTED_CTR): industry averages, a model
+  const CTR = [0.28, 0.15, 0.11, 0.08, 0.07, 0.05, 0.04, 0.035, 0.03, 0.025];
+  const SUM_CTR = CTR.reduce((s, x) => s + x, 0);
+  // B6-1 (2026-10-15, benchmark area 6 — docs/system-review-2026-10-14/BENCH_AREA6_rank_tracking.md): the AI Overview factor here
+  // was 0.65, a flat 35% loss, taken from Ahrefs' MARCH 2025 study. The current study — same publisher, 300,000 keywords, December
+  // 2025 data, published 2026-02-04 (https://ahrefs.com/blog/ai-overviews-reduce-clicks-update/) — measures the loss POSITION BY
+  // POSITION, and it is both larger and very uneven: 58.0% of the clicks gone at #1, 50.8% at #2, 46.4% at #3 … 19.4% at #10. A
+  // flat factor is wrong twice over: it understated the loss by about half, and because it hit every position equally it almost
+  // cancelled out of a share, so an AI Overview cost the top of page 1 nothing in our numbers. The same correction was made to the
+  // keyword research's click-loss model on 2026-10-15 (B1-3, `_kw_inputs.js`) and this is the other place the old figure lived.
+  // AIO_KEEP[p - 1] = the share of its clicks position p KEEPS when an AI Overview is on the page (1 - the measured loss).
+  const AIO_KEEP = [0.420, 0.492, 0.536, 0.612, 0.674, 0.695, 0.703, 0.712, 0.703, 0.806];
+  const AIO_SOURCE = 'Ahrefs, 300,000 keywords, December 2025 data (published 2026-02-04)';
+  const keepAt = (p, aio) => { if (!aio) return 1; const i = Math.max(1, Number(p) || 1) - 1; return AIO_KEEP[i] == null ? AIO_KEEP[AIO_KEEP.length - 1] : AIO_KEEP[i]; };
+  const SNIPPET_BONUS = 0.10;
+  const METHOD = 'modelled: clicks by position from a published CTR curve (28/15/11/8/7/5/4/3.5/3/2.5%); when an AI Overview is shown each position keeps only what was measured for it (58.0% of the clicks gone at #1, 50.8% at #2, 46.4% at #3, 19.4% at #10 — ' + AIO_SOURCE + ', https://ahrefs.com/blog/ai-overviews-reduce-clicks-update/) and what the overview takes is shared between the pages it cites; +0.10 for the featured snippet, which is a stated rule with no measurement behind it. Not measured clicks.';
+  const S = (v) => String(v == null ? '' : v).trim();
+  const bare = (v) => S(v).toLowerCase().replace(/^https?:\/\//, '').replace(/[\/?#].*$/, '').replace(/:\d+$/, '').replace(/^www\./, '');
+  const hostOf = (u) => bare((S(u).match(/^https?:\/\/([^\/?#]+)/i) || [])[1] || '');   // the n8n Code sandbox has no URL constructor
+  const isOurs = (d, our) => !!d && !!our && (d === our || d.endsWith('.' + our));
+  const listOf = (v) => [...new Set((Array.isArray(v) ? v : S(v).split(/[\n,;|]+/)).map(x => bare(x)).filter(Boolean))];
+  const weight = (p) => (p >= 1 && p <= CTR.length) ? CTR[p - 1] : 0;
+  const r1 = (x) => Math.round(x * 10) / 10;
+
+  // one SERP answer -> { ok, error, seen_at, items, results_count }. A DataForSEO task error inside an HTTP 200 counts as failed.
+  const read = (res) => {
+    const r = res || {}; const t0 = (Array.isArray(r.tasks) ? r.tasks[0] : null) || {};
+    let error = '';
+    if (r.error || Number(r.status_code) >= 40000 || !Array.isArray(r.tasks) || Number(t0.status_code) >= 40000)
+      error = S((r.error && (r.error.message || r.error)) || t0.status_message || r.status_message || 'no answer').slice(0, 120);
+    const result = (t0.result || [])[0] || {};
+    return { ok: !error, error, seen_at: serpSeenAt(r), items: Array.isArray(result.items) ? result.items : [],
+      results_count: result.se_results_count == null ? null : Number(result.se_results_count) };
+  };
+
+  const unknownFeatures = (a) => ({ unavailable: true, error: (a && a.error) || 'no answer', checked_at: null, types: [], results_count: null,
+    ai_overview: { shown: null, cites_us: null, content_loaded: false, cited_domains: [], seen_at: null },
+    featured_snippet: { shown: null, ours: null, domain: '' }, people_also_ask: { shown: null, count: 0, questions: [] },
+    local_pack: { shown: null, ours: null }, video: { shown: null }, shopping: { shown: null } });
+
+  // the features the page showed, from the same answer
+  const features = (a, ourDomain) => {
+    if (!a || !a.ok) return unknownFeatures(a);
+    const our = bare(ourDomain);
+    const types = [...new Set(a.items.map(x => S(x && x.type)))].filter(Boolean);
+    const has = (...t) => t.some(x => types.includes(x));
+    const aioItem = a.items.find(x => x && x.type === 'ai_overview') || null;
+    let refs = []; let texts = 0;
+    if (aioItem) {
+      ((aioItem.references) || []).forEach(r => refs.push(bare(r && r.domain) || hostOf(r && r.url)));
+      ((aioItem.items) || []).forEach(x => {
+        if (x && (x.text || x.title || x.markdown)) texts++;
+        (((x || {}).references) || []).forEach(r => refs.push(bare(r && r.domain) || hostOf(r && r.url)));
+        (((x || {}).links) || []).forEach(l => refs.push(hostOf(l && l.url)));
+      });
+      refs = [...new Set(refs.filter(Boolean))];
+    }
+    // Google loads some AI Overviews asynchronously: the item is there, its sources are not (loading them costs extra, so we do not).
+    const sourcesUnknown = !!aioItem && (aioItem.asynchronous_ai_overview === true || (!refs.length && !texts));
+    const fs = a.items.find(x => x && x.type === 'featured_snippet') || null;
+    const fsDom = fs ? (bare(fs.domain) || hostOf(fs.url)) : '';
+    const paaItem = a.items.find(x => x && x.type === 'people_also_ask') || null;
+    const paa = paaItem ? ((paaItem.items) || []).map(q => S(q && (q.title || q.question))).filter(Boolean) : [];
+    const lp = a.items.find(x => x && (x.type === 'local_pack' || x.type === 'map')) || null;
+    const lpOurs = lp ? [...((lp.items) || []), lp].some(x => isOurs(bare(x && x.domain) || hostOf(x && x.url), our)) : null;
+    return { unavailable: false, error: '', checked_at: a.seen_at, types, results_count: a.results_count,
+      ai_overview: { shown: !!aioItem, content_loaded: !!aioItem && !sourcesUnknown,
+        cites_us: !aioItem ? false : (sourcesUnknown ? null : refs.some(d => isOurs(d, our))),
+        cited_domains: refs.slice(0, 12), seen_at: a.seen_at },
+      featured_snippet: { shown: !!fs, ours: fs ? isOurs(fsDom, our) : false, domain: fsDom },
+      people_also_ask: { shown: !!paaItem, count: paa.length, questions: paa.slice(0, 6) },
+      local_pack: { shown: !!lp, ours: lpOurs }, video: { shown: has('video', 'short_videos') },
+      shopping: { shown: has('shopping', 'popular_products') } };
+  };
+
+  // the comma list the serp_features column has always held (kept so nothing that reads it changes)
+  const typeList = (a) => (!a || !a.ok) ? '' : [...new Set(a.items.map(x => S(x && x.type)))].filter(t => t && t !== 'organic').join(',');
+
+  // our position over the whole depth that was bought (0 = not in it, so the caller can tell it from "the check failed")
+  const ourRank = (a, ourDomain) => {
+    if (!a || !a.ok) return { position: -1, url: '' };
+    const our = bare(ourDomain);
+    const mine = a.items.filter(x => x && x.type === 'organic').find(o => isOurs(bare(o.domain) || hostOf(o.url), our));
+    return mine ? { position: Number(mine.rank_group) || 0, url: S(mine.url) } : { position: 0, url: '' };
+  };
+
+  // page 1: one row per domain (the best position it holds), plus every tracked competitor's best position over the whole answer
+  const landscape = (a, ourDomain, competitorList, ourPosition) => {
+    const our = bare(ourDomain);
+    const comps = listOf(competitorList).filter(d => d && !isOurs(d, our));
+    if (!a || !a.ok) return { unavailable: true, top: [], above: [], competitors: comps.map(domain => ({ domain, position: null, tracked: true })), tracked: comps };
+    const organic = a.items.filter(x => x && x.type === 'organic').map((o, i) => ({
+      position: Number(o.rank_group) || i + 1, domain: bare(o.domain) || hostOf(o.url), url: S(o.url), title: S(o.title).slice(0, 110) }))
+      .filter(o => o.domain);
+    const best = new Map();
+    for (const o of organic) { const prev = best.get(o.domain); if (!prev || o.position < prev.position) best.set(o.domain, o); }
+    const top = [...best.values()].filter(o => o.position >= 1 && o.position <= 10).sort((x, y) => x.position - y.position)
+      .map(o => ({ ...o, ours: isOurs(o.domain, our) }));
+    const mine = Number(ourPosition) > 0 ? Number(ourPosition) : null;
+    const above = top.filter(t => !t.ours && (mine == null || t.position < mine)).map(t => ({ domain: t.domain, position: t.position, url: t.url, tracked: comps.includes(t.domain) }));
+    const competitors = comps.map(domain => { const hit = best.get(domain) || [...best.entries()].filter(([d]) => d.endsWith('.' + domain)).map(([, v]) => v)[0];
+      return { domain, position: hit ? hit.position : null, url: hit ? hit.url : '', tracked: true }; });
+    // domains on page 1 that nobody named as a competitor but outrank us every week are worth naming too
+    for (const t of top) if (!t.ours && !comps.includes(t.domain) && competitors.length < 20) competitors.push({ domain: t.domain, position: t.position, url: t.url, tracked: false });
+    return { unavailable: false, top, above, competitors, tracked: comps };
+  };
+
+  // CTR- and feature-weighted share of voice over page 1 (a model: see METHOD)
+  const voice = (land, feats, ourDomain, ourPosition) => {
+    const our = bare(ourDomain);
+    if (!land || land.unavailable || !feats || feats.unavailable) return { ours: null, shares: [], method: METHOD, unavailable: true, aio_sources_unknown: false };
+    const aio = feats.ai_overview.shown === true;
+    const sourcesUnknown = aio && !feats.ai_overview.content_loaded;
+    const cited = aio && !sourcesUnknown ? (feats.ai_overview.cited_domains || []) : [];
+    const snipDom = feats.featured_snippet.shown ? feats.featured_snippet.domain : '';
+    const w = new Map();
+    const add = (d, v) => { if (!d || !(v > 0)) return; w.set(d, (w.get(d) || 0) + v); };
+    // B6-1: every position keeps what was measured FOR THAT POSITION, and what it loses is what the overview took
+    for (const t of land.top) add(t.domain, weight(t.position) * keepAt(t.position, aio));
+    let aioPool = 0;
+    if (aio) for (let p = 1; p <= CTR.length; p++) aioPool += CTR[p - 1] * (1 - keepAt(p, true));
+    if (snipDom) { const k = keepAt(1, aio); add(snipDom, SNIPPET_BONUS * k); aioPool += SNIPPET_BONUS * (1 - k); }
+    if (cited.length) { const each = aioPool / cited.length; for (const d of cited) add(d, each); }
+    // the clicks the AI Overview keeps when we do not know which pages it cites belong to nobody on the page: they stay in the
+    // denominator, so everyone's share drops (without this the loss would cancel out and an AI Overview would cost nothing)
+    const unattributed = (aio && !cited.length) ? aioPool : 0;
+    const total = [...w.values()].reduce((s, x) => s + x, 0) + unattributed;
+    if (!(total > 0)) return { ours: 0, shares: [], method: METHOD, unavailable: false, aio_sources_unknown: sourcesUnknown };
+    const shares = [...w.entries()].map(([domain, v]) => ({ domain, pct: r1(v / total * 100), ours: isOurs(domain, our) })).sort((x, y) => y.pct - x.pct);
+    const mineRow = shares.find(x => x.ours);
+    return { ours: mineRow ? mineRow.pct : 0, shares: shares.slice(0, 12), method: METHOD, unavailable: false,
+      aio_sources_unknown: sourcesUnknown, our_position: Number(ourPosition) > 0 ? Number(ourPosition) : null };
+  };
+
+  // the proof we keep of the reading: the top 10 with their URLs and trimmed titles, the features seen, and when
+  const snapshot = (a, land, feats, device) => ({ at: (a && a.seen_at) || null, device: device || 'desktop',
+    results: (a && a.results_count) || null, unavailable: !a || !a.ok, error: a && a.ok ? '' : ((a && a.error) || 'no answer'),
+    features: feats && !feats.unavailable ? (feats.types || []).filter(t => t !== 'organic').slice(0, 12) : [],
+    top: ((land && land.top) || []).map(t => ({ p: t.position, u: S(t.url).slice(0, 180), t: S(t.title).slice(0, 80) })) });
+
+  // a JSON string that stays small: titles go first, then the tail of the list (a snapshot is proof, not an archive)
+  const pack = (obj, max) => {
+    const limit = Number(max) || 1800;
+    let s = JSON.stringify(obj || null);
+    if (s.length <= limit) return s;
+    const o = JSON.parse(s);
+    if (Array.isArray(o.top)) { o.top = o.top.map(t => ({ p: t.p, u: t.u })); o.trimmed = 'titles'; }
+    s = JSON.stringify(o);
+    while (s.length > limit && Array.isArray(o.top) && o.top.length > 1) { o.top.pop(); o.trimmed = 'titles+tail'; s = JSON.stringify(o); }
+    // B6-7 (2026-10-15, benchmark area 6): found while giving the customer's own keywords the same depth a rung gets. A column with
+    // no `top` to trim was cut mid-string — `competitors_json` on any results page with a full top ten and a long method sentence —
+    // and a sliced JSON string is not JSON, so RS.unpack handed back the default and the WHOLE reading vanished: the "Above you"
+    // column was empty, and nothing anywhere said a thing had been dropped (INVARIANTS rule 1). Nothing is sliced now. The method
+    // sentence goes first (it is a constant every reader already falls back to), then the tails of the lists, longest first, and the
+    // last resort is a small VALID object that says the reading was too long to store.
+    const cut = new Set(String(o.trimmed || '').split('+').filter(Boolean));
+    if (s.length > limit && typeof o.method === 'string') { delete o.method; cut.add('method'); o.trimmed = [...cut].join('+'); s = JSON.stringify(o); }
+    const lists = Object.keys(o).filter(k => k !== 'top' && Array.isArray(o[k]));
+    while (s.length > limit && lists.some(k => o[k].length)) {
+      const k = lists.filter(x => o[x].length).sort((a, b) => o[b].length - o[a].length)[0];
+      o[k].pop(); cut.add('lists'); o.trimmed = [...cut].join('+'); s = JSON.stringify(o);
+    }
+    return s.length <= limit ? s : JSON.stringify({ trimmed: 'overflow', note: 'this reading was too long to store in one column' });
+  };
+  const unpack = (v, dflt) => { if (v && typeof v === 'object') return v; try { const o = JSON.parse(S(v) || 'null'); return o == null ? dflt : o; } catch (e) { return dflt; } };
+
+  // one line a person can read, in the observation form D26 asks for (an AI Overview is what one search showed at one moment)
+  const featureLine = (feats, obs) => {
+    if (!feats || feats.unavailable) return 'Results page: could not be read in this check (' + ((feats && feats.error) || 'no answer') + ') — nothing about the page is claimed.';
+    const parts = ['AI Overview ' + aioObserved(obs && obs.length ? obs : [{ seen: feats.ai_overview.shown, at: feats.ai_overview.seen_at, source: 'rank check' }]).text];
+    if (feats.ai_overview.shown) parts.push(feats.ai_overview.cites_us === null ? 'whether it cites you was not loaded (loading an AI Overview\'s sources costs extra, so we do not buy it)'
+      : feats.ai_overview.cites_us ? 'it cited your site in that check' : 'it did not cite your site in that check'
+        + (feats.ai_overview.cited_domains.length ? ' (it cited ' + feats.ai_overview.cited_domains.slice(0, 5).join(', ') + ')' : ''));
+    if (feats.featured_snippet.shown) parts.push(feats.featured_snippet.ours ? 'you hold the featured snippet' : 'featured snippet held by ' + (feats.featured_snippet.domain || 'another site'));
+    if (feats.people_also_ask.shown) parts.push('People Also Ask with ' + feats.people_also_ask.count + ' question' + (feats.people_also_ask.count === 1 ? '' : 's'));
+    if (feats.local_pack.shown) parts.push(feats.local_pack.ours ? 'local pack, your listing in it' : 'local pack');
+    if (feats.video.shown) parts.push('video results');
+    if (feats.shopping.shown) parts.push('shopping results');
+    return parts.join('; ') + '.';
+  };
+  // the short labels the e-mail and the app show
+  const featureChips = (feats) => {
+    if (!feats || feats.unavailable) return ['not read'];
+    const c = [];
+    if (feats.ai_overview.shown) c.push('AI Overview' + (feats.ai_overview.cites_us === true ? ' (cites you)' : feats.ai_overview.cites_us === null ? ' (sources not loaded)' : ''));
+    if (feats.featured_snippet.shown) c.push('Snippet' + (feats.featured_snippet.ours ? ' (yours)' : ''));
+    if (feats.people_also_ask.shown) c.push('PAA');
+    if (feats.local_pack.shown) c.push('Local pack' + (feats.local_pack.ours ? ' (yours)' : ''));
+    if (feats.video.shown) c.push('Video');
+    if (feats.shopping.shown) c.push('Shopping');
+    return c;
+  };
+
+  // ---- B6-2 (2026-10-15, benchmark area 6): HOW MUCH THE RESULTS PAGE ITSELF MOVED, AND WHAT A DROP THEREFORE MEANS ----
+  // The question the rank trackers are judged on is what they do on a volatile day. The leaders answer it with a MARKET-WIDE index
+  // computed on somebody else's keywords — Semrush's Sensor is "SERP volatility on a scale of 0-10" over a fixed keyword set
+  // (https://www.semrush.com/kb/652-sensor), AccuRanker's Google Grump "calculates the average number of rank changes across the top
+  // 30 results for ~1,000,000 high-volume keywords" (https://accuranker.com/grump). Neither tells the owner whether THEIR results
+  // page moved, and ours said nothing at all: a fall of seven places read exactly the same whether our page had slipped or the whole
+  // page had been rewritten under it.
+  // We already store the proof we need: `snapshot_json` keeps the top 10 with their URLs for every reading (criterion 2.2). Comparing
+  // this reading with the previous one for the SAME keyword and the SAME device is a measurement of the page's own movement, free,
+  // and specific to the keyword instead of to a market. What is measured: how many places changed occupant, how many URLs left and
+  // entered, and how far the URLs present in both readings moved. What is NOT measured is the three labels (still / some / high):
+  // nobody publishes a per-keyword threshold, so they are a STATED RULE and say so.
+  // Rules it keeps: a missing or unreadable snapshot gives `available: false` with the reason — never a quiet 0, which would read as
+  // "the page did not move"; two readings on different devices are not comparable; `RS.pack` can trim a long snapshot's tail, so the
+  // comparison only runs over the depth BOTH readings kept and reports that depth.
+  const urlKey = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  const CHURN = { still_pct: 20, high_pct: 50, min_depth: 5, stale_days: 10,
+    labels_basis: 'the still / some / high labels are a stated rule, not a measurement: no tool publishes a per-keyword threshold' };
+  const churnNone = (reason) => ({ available: false, reason: S(reason) || 'not available', basis: 'not available', measured: false,
+    depth: 0, changed: null, changed_pct: null, entered: null, gone: null, moved: null, mean_move: null, band: null,
+    from: null, to: null, device: '', labels_basis: CHURN.labels_basis });
+  const snapOf = (v) => { const x = (v && typeof v === 'object' && !Array.isArray(v)) ? v : unpack(v, null);
+    if (!x || x.unavailable) return null;
+    const top = (Array.isArray(x.top) ? x.top : []).map(e => ({ p: Number(e && e.p) || 0, k: urlKey(e && e.u) })).filter(e => e.p > 0 && e.k);
+    return top.length ? { top, at: x.at || null, device: S(x.device) || 'desktop', trimmed: S(x.trimmed) } : null; };
+  // prev / cur: a stored snapshot (the packed string or the object). o: { min_depth }
+  const churn = (prev, cur, o) => {
+    const c = { ...CHURN, ...(o || {}) };
+    const A = snapOf(prev), B = snapOf(cur);
+    if (!B) return churnNone('this check could not read the results page, so nothing can be compared');
+    if (!A) return churnNone('no earlier reading of this results page is stored, so how much it moved cannot be told yet');
+    if (A.device !== B.device) return churnNone('the two readings are of different devices (' + A.device + ' and ' + B.device + ')');
+    const depth = Math.min(A.top.length, B.top.length, CTR.length);
+    if (depth < c.min_depth) return churnNone('only ' + depth + ' result' + (depth === 1 ? '' : 's') + ' were kept in both readings, too few to compare');
+    const a = A.top.filter(e => e.p <= depth), b = B.top.filter(e => e.p <= depth);
+    const aAt = new Map(a.map(e => [e.p, e.k])), bAt = new Map(b.map(e => [e.p, e.k]));
+    const aPos = new Map(a.map(e => [e.k, e.p]));
+    let changed = 0;
+    for (let p = 1; p <= depth; p++) if ((aAt.get(p) || '') !== (bAt.get(p) || '')) changed++;
+    const gone = a.filter(e => !b.some(x => x.k === e.k)).length;
+    const entered = b.filter(e => !aPos.has(e.k)).length;
+    const moves = b.filter(e => aPos.has(e.k)).map(e => Math.abs(e.p - aPos.get(e.k)));
+    const changed_pct = Math.round(changed / depth * 100);
+    return { available: true, reason: '', basis: 'measured', measured: true, depth,
+      changed, changed_pct, entered, gone, moved: moves.filter(m => m > 0).length,
+      mean_move: moves.length ? r1(moves.reduce((s, x) => s + x, 0) / moves.length) : 0,
+      band: changed_pct >= c.high_pct ? 'high' : changed_pct >= c.still_pct ? 'some' : 'still',
+      from: A.at, to: B.at, device: B.device, trimmed: !!(A.trimmed || B.trimmed), labels_basis: c.labels_basis };
+  };
+  // "7 of 10 places on the results page changed since 2026-10-07" — the measured sentence, with its basis
+  const churnText = (ch) => {
+    if (!ch || !ch.available) return 'How much the results page itself moved: not available — ' + ((ch && ch.reason) || 'no comparison was possible') + '.';
+    const when = ch.from ? ' since the reading of ' + String(ch.from).slice(0, 10) : ' since the previous reading';
+    const band = ch.band === 'noise' ? 'the results page changed no more than two readings of the same moment do' : ch.band === 'high' ? 'the whole results page moved' : ch.band === 'some' ? 'part of the results page moved' : 'the results page barely moved';
+    return band + ': ' + ch.changed + ' of the top ' + ch.depth + ' places changed' + when
+      + (ch.entered ? ', ' + ch.entered + ' new page' + (ch.entered === 1 ? '' : 's') + ' came in' : '')
+      + (ch.mean_move ? ', and the pages present in both readings moved ' + ch.mean_move + ' place' + (ch.mean_move === 1 ? '' : 's') + ' on average' : '')
+      + ' (measured by comparing the two stored readings; ' + ch.labels_basis + (ch.noise ? '; ' + ch.noise.text : '') + ').';
+  };
+  // the clause that goes beside a gain or a drop, so a move is never reported without the context that decides what it means
+  const moveNote = (delta, ch) => {
+    if (delta == null) return '';
+    if (!ch || !ch.available) return 'whether the results page itself moved cannot be told — ' + ((ch && ch.reason) || 'no earlier reading stored');
+    if (ch.band === 'noise') return 'the results page changed no more than two readings of the same moment do (' + ch.changed + ' of the top ' + ch.depth + ' places; ' + ((ch.noise || {}).text || '') + '), so this is one reading against one reading, not movement';
+    if (ch.band === 'high') return 'the whole results page moved that week (' + ch.changed + ' of the top ' + ch.depth + ' places changed), so this is not necessarily about your page';
+    if (ch.band === 'some') return 'part of the results page moved too (' + ch.changed + ' of the top ' + ch.depth + ' places changed)';
+    return 'the rest of the results page barely moved (' + ch.changed + ' of the top ' + ch.depth + ' places changed), so this move is your page';
+  };
+  // ---- R87 / R90 / R88 (2026-10-16, re-rating 2026-10-15): one reading of a stored results page, read the same way everywhere ----
+  // serpHosts: the hosts of ONE stored reading in rank order, one entry per position — the snapshot's own top ten (a domain holding
+  // three positions appears three times, which the fit gate's "holds 3 of the top 5" rule needs), else the `above` list. Never the
+  // `above` list AND the competitor list of the same answer together: the Rank Tracker report did that, so tax.gov.ae (#1) and
+  // mof.gov.ae (#2) were each counted twice and "e invoicing in uae" — two government sites in its top five, the rule asks for three —
+  // was set aside as a government query (exec 632).
+  const serpHosts = (row, depth) => {
+    const r = row || {}; const n = depth || 10;
+    const snap = unpack(r.snapshot_json, null);
+    const top = (snap && !snap.unavailable && Array.isArray(snap.top) ? snap.top : []).map(e => ({ p: Number(e && e.p) || 0, h: bare(hostOf(S(e && e.u))) }))
+      .filter(e => e.p > 0 && e.h).sort((a, b) => a.p - b.p);
+    if (top.length) return top.filter(e => e.p <= n).map(e => e.h);
+    const c = unpack(r.competitors_json, null);
+    return ((c && Array.isArray(c.above)) ? c.above : []).map(x => ({ p: Number(x && x.p) || 0, h: bare(S(x && x.d)) })).filter(e => e.p > 0 && e.p <= n && e.h)
+      .sort((a, b) => a.p - b.p).map(e => e.h);
+  };
+  const isDesk = (h) => S((h || {}).device || 'desktop') !== 'mobile';
+  const kwKey = (k) => S(k).toLowerCase().replace(/\s+/g, ' ').trim();
+  // the newest stored DESKTOP reading of one keyword for one site, taken before `before` — whichever workflow bought it (a ladder, the
+  // weekly site check, the tracker's own list). R88: the ladder report used its own ladder's rows only and the tracked-keyword report
+  // any reading of the site, so one keyword in one run got "3 of top 8 changed" and "5 of top 8 changed". o: { keyword, domain, before,
+  // valid (default: a real position, 0 = not in the top 50; -1 = a failed check is never a baseline), withSnapshot (a stored page: snapshot or competitor list) }
+  const prevReading = (rows, o) => {
+    const q = o || {}; const kw = kwKey(q.keyword), dom = bare(q.domain); const before = S(q.before || '9999');
+    return (rows || []).filter(h => h && isDesk(h) && kwKey(h.keyword) === kw && (!dom || bare(h.domain) === dom) && S(h.checked_at) && S(h.checked_at) < before
+      && h.position !== '' && h.position != null && Number(h.position) >= 0 && (!q.withSnapshot || !!unpack(h.snapshot_json, null) || !!unpack(h.competitors_json, null)))
+      .sort((a, b) => S(b.checked_at).localeCompare(S(a.checked_at)))[0] || null;
+  };
+  // how much two readings of the SAME results page differ when nothing can have changed: stored desktop readings of the keyword for the
+  // site taken within `minutes` of each other (the Rank Tracker and the weekly site check often read the same page minutes apart). Exec
+  // 632 / 634 read "erp implementation dubai" 32 seconds apart and led with different pages. The largest such difference is the noise a
+  // single reading against a single reading carries; a change no larger than it is not called movement. null when no such pair exists.
+  const noise = (rows, o) => {
+    const q = o || {}; const kw = kwKey(q.keyword), dom = bare(q.domain); const win = (Number(q.minutes) || 15) * 60e3;
+    const rs = (rows || []).filter(h => h && isDesk(h) && kwKey(h.keyword) === kw && (!dom || bare(h.domain) === dom) && unpack(h.snapshot_json, null))
+      .sort((a, b) => S(a.checked_at).localeCompare(S(b.checked_at)));
+    let best = null;
+    for (let i = 1; i < rs.length; i++) {
+      const gap = Date.parse(S(rs[i].checked_at)) - Date.parse(S(rs[i - 1].checked_at));
+      if (!(gap >= 0 && gap <= win)) continue;
+      const ch = churn(rs[i - 1].snapshot_json, rs[i].snapshot_json, {});
+      if (!ch.available) continue;
+      if (!best || ch.changed > best.changed) best = { changed: ch.changed, depth: ch.depth, minutes: Math.round(gap / 6e4 * 10) / 10, at: S(rs[i].checked_at) };
+    }
+    if (!best) return null;
+    return { ...best, text: 'two readings of this results page taken ' + best.minutes + ' minutes apart (' + best.at.slice(0, 10) + ') already differed in ' + best.changed + ' of the top ' + best.depth + ' places' };
+  };
+  // a measured change, judged against that noise: no larger than it = 'noise', and every severity word is withheld
+  const withNoise = (ch, nz) => {
+    if (!ch || !ch.available || !nz) return ch;
+    const out = { ...ch, noise: nz };
+    if (ch.changed <= nz.changed) { out.band = 'noise'; out.within_noise = true; }
+    return out;
+  };
+  return { CTR, SUM_CTR, METHOD, AIO_KEEP, AIO_SOURCE, keepAt, CHURN, read, features, typeList, ourRank, landscape, voice, snapshot, pack, unpack,
+    featureLine, featureChips, churn, churnNone, churnText, moveNote, bare, hostOf, isOurs, listOf, weight, urlKey, serpHosts, prevReading, noise, withNoise };
+})();
 const CONFIG = { default_pages_per_week: 1, max_pages_per_week: 3, skip_recent_days: 90, striking_min_impressions: 30, striking_min_position: 4, striking_max_position: 20, publish_reminder_days: 7, upcoming: 4,
   max_active: 2, max_waiting: 3, waiting_days: 120, gate_head_position: 30, won_checks: 4, won_position: 3, suggestions: 5,
   // B4-3 (2026-10-15, benchmark area 4): at most this many refreshes of decaying pages offered in one week, and the days a page
@@ -530,6 +889,8 @@ const headRanks = allRanks.filter(r => Number(r.rung) === 4 || r.rung === '' || 
 const pageRows = rowsOf('Load Pages (Cadence)').filter(r => r.site_id && r.url);
 // v4.12 (AI_GROWTH_SPEC.md): the AI targets the AI Growth loop queued (questions AI answers without the business) and each site's AI pages a month
 const aiTargets = rowsOf('Load AI Targets (Cadence)').filter(r => r.target_id && r.status === 'queued'), monitors = rowsOf('Load Monitors (Cadence)');
+// R90 (2026-10-16): the names AI uses for other companies (seo_cache ai_brands:<site>), for the fit gate of the stored rungs
+const aiBrandRows = rowsOf('Load AI Brands (Cadence)').filter(r => r.key);
 const aiQuotaOf = (siteId) => { const m = monitors.find(x => x.site_id === siteId) || {}; const on = (v) => !(v === false || /^(false|0|no|off)$/i.test(String(v == null ? '' : v))); if (!on(m.ai_visibility) || !on(m.ai_growth)) return 0; return m.ai_pages_month === '' || m.ai_pages_month == null || !Number.isFinite(Number(m.ai_pages_month)) ? 2 : Math.min(8, Math.max(0, Math.round(Number(m.ai_pages_month)))); };
 const cadOf = new Map(cad.map(c => [c.site_id, c]));
 const want = normD(trigger.domain) || String(trigger.site_id || '').trim(); const on_demand = !!want; const dry_run = !!trigger.dry_run;
@@ -565,29 +926,24 @@ for (const s of list) {
   // terms and the site's services. A rung whose page is already written or published is kept (fitStored) and only flagged.
   const monRow = monitors.find(m => m.site_id === s.site_id || normD(m.domain) === s.domain) || {};
   const fitModel = (() => { try { return SM.from(s, { monitors: monRow }); } catch (e) { return null; } })();
-  const fitCtx = { own_domain: s.domain, brands: {},
+  const fitCtx = { own_domain: s.domain, brands: fitLearnedBrands(aiBrandRows.filter(r => String(r.key || '') === 'ai_brands:' + s.site_id)),
     competitors: fitModel ? fitModel.competitors : String(monRow.competitors || '').split(',').map(x => normD(x)).filter(Boolean),
     protect: [...new Set([...lrows.map(l => String(l.head_keyword || '')), ...(fitModel ? fitModel.services : [])].filter(Boolean))] };
   // the results page the Rank Tracker stored for this very keyword (G6 `competitors_json` / `snapshot_json`, written two hours earlier on
   // the same Monday): the domains that really rank for it, in rank order — the evidence that makes "facts erp" a brand query
-  const serpFor = (kw) => {
-    const best = new Map();
-    for (const h of allRanks.filter(h => norm(h.keyword) === norm(kw))) {
-      for (const col of ['competitors_json', 'snapshot_json']) {
-        let o = null; try { o = JSON.parse(h[col] || 'null'); } catch (e) { o = null; }
-        if (!o || typeof o !== 'object') continue;
-        for (const x of [...(o.above || []), ...(o.competitors || []), ...(o.top || [])]) {
-          const d = normD(x.d || x.domain || x.u || x.url), p = Number(x.p || x.position);
-          if (d && Number.isFinite(p) && p > 0) best.set(d, Math.min(best.get(d) == null ? 999 : best.get(d), p));
-        }
-      }
-    }
-    return [...best.entries()].sort((a, b) => a[1] - b[1]).map(e => e[0]);
-  };
+  // R87 / R90 (2026-10-16, re-rating 2026-10-15): ONE stored reading — the newest desktop reading of the keyword for this site within 60
+  // days, whichever workflow bought it — read one entry per position (RS.serpHosts, the same rule as the Rank Tracker). The old reader merged
+  // every reading the keyword ever had into one list of best positions: an October page and a September page judged as one.
+  const serpFor = (kw) => { const h = RS.prevReading(allRanks, { keyword: kw, domain: s.domain, before: nowIso, withSnapshot: true });
+    return (h && (now - new Date(h.checked_at)) <= 60 * 864e5) ? RS.serpHosts(h, 10) : []; };
+  // R90: every stored rung of a ladder is also judged against the domains of its LADDER's stored results pages (the head's above all):
+  // "facts erp" has no reading of its own, but facts.ae stands on its head's page ("erp software uae", #6 on 2026-10-14)
+  const ladderDoms = new Map();
+  for (const l of lrows) { const d0 = ladderDoms.get(l.ladder_id) || new Set(); for (const h of serpFor(l.keyword)) d0.add(h); ladderDoms.set(l.ladder_id, d0); }
   const fitOf = new Map(); const set_aside = [];
   for (const l of lrows) {
     const serp = serpFor(l.keyword);
-    const g = fitStored(l, { ...fitCtx, serp, serp_domains: serp }); fitOf.set(l, g);
+    const g = fitStored(l, { ...fitCtx, serp, serp_domains: [...new Set([...serp, ...(ladderDoms.get(l.ladder_id) || [])])].filter(h => normD(h) !== s.domain) }); fitOf.set(l, g);
     if (!g.flagged) continue;
     set_aside.push({ ladder_id: l.ladder_id, keyword: l.keyword, rung: Number(l.rung) || 0, page_no: Number(l.page_no) || 0, head: l.head_keyword || '',
       reason: g.reason, detail: g.detail, note: g.note, written: !!g.live, dropped: !g.ok });
@@ -617,6 +973,13 @@ for (const s of list) {
     const remaining = ordered.filter(open);
     const eligible = remaining.filter(r => !isTop(r) || gate_open);
     const main_waiting = !gate_open && remaining.some(isTop) && !eligible.length;   // blocked on publishing: the gated main page is all that is left
+    // R87 (2026-10-16): a ladder whose MAIN keyword is set aside — its row says `set_aside` (the Rank Tracker and *Ladder Marks* write it
+    // back with the reason), or the gate refuses it now on its stored results page — is paused. Its rungs exist to climb towards that
+    // keyword, so none of them is written or queued (exec 638 queued four rungs of a ladder whose head the Rank Tracker had just set aside).
+    const hf = top ? fitOf.get(top) : null;
+    const head_aside = top && (String(top.status || '') === 'set_aside' || (hf && hf.flagged && !hf.ok))
+      ? { keyword: top.keyword, reason: String(top.status || '') === 'set_aside' ? String(top.status_note || 'its main keyword was set aside') : (hf.detail + ' (' + hf.reason + ')') } : null;
+    if (head_aside) return { id, rows, top, head, mode, status, plan_type, priority, start, head_position, won, won_checks: lastN.length, support: support.length, published, gate_open, main_waiting: false, remaining: [], eligible: [], head_aside };
     return { id, rows, top, head, mode, status, plan_type, priority, start, head_position, won, won_checks: lastN.length, support: support.length, published, gate_open, main_waiting, remaining, eligible };
   }).sort((a, b) => a.priority - b.priority || String(a.start).localeCompare(String(b.start)) || String(a.id).localeCompare(String(b.id)));
   const writable = info.filter(x => ['active', 'queued'].includes(x.status) && !x.won);
@@ -693,13 +1056,17 @@ for (const s of list) {
   // R1 (2026-10-13, re-rating): `written` in the content log is the only proof that a page exists. A `started` row is a run that opened the
   // row and never finished, and a ladder row saying `writing` is a promise, not a page: live, a page run the budget guard refused left row 19
   // "writing" with a `started` log row, and this guard counted it as one of 6 pages waiting and paused the site's writing for a week.
-  const writtenOf = (k) => slog.filter(r => norm(r.keyword) === k && (r.status === 'written' || r.status === 'published' || String(r.published_url || '').trim()))
+  // R111 (2026-10-16): a draft whose LAST quality round failed (`not_ready`) still counts — it is written and not live — but it is
+  // labelled "needs a fix": it can only leave the queue by being fixed and run again, never by being published as it is.
+  const WAITS = new Set(['written', 'not_ready']);
+  const writtenOf = (k) => slog.filter(r => norm(r.keyword) === k && (WAITS.has(r.status) || r.status === 'published' || String(r.published_url || '').trim()))
     .sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0] || null;
-  for (const l of slog) { if (l.status !== 'written' || !freshW(l.started_at)) continue; const k = norm(l.keyword); if (!k || waitingMap.has(k)) continue; waitingMap.set(k, { keyword: l.keyword, written_at: String(l.started_at || ''), source: String(l.source || '') }); }
+  const fixOf = (l) => l && l.status === 'not_ready' ? { needs_fix: true, reasons: String(l.qa_reasons || '').split(/;\s+/).filter(Boolean).slice(0, 3) } : {};
+  for (const l of slog) { if ((l.status !== 'written' && l.status !== 'not_ready') || !freshW(l.started_at)) continue; const k = norm(l.keyword); if (!k || waitingMap.has(k)) continue; waitingMap.set(k, { keyword: l.keyword, written_at: String(l.started_at || ''), source: String(l.source || ''), ...fixOf(l) }); }
   for (const l of lrows) { if (l.status !== 'writing') continue; const k = norm(l.keyword); if (!k || waitingMap.has(k) || publishedKw.has(k)) continue;
     const lg = writtenOf(k); if (!lg) continue;   // R1: no `written` log row = the page was never written (the refusal path resets such a row to `planned`)
     const at = String(lg.started_at || l.start_date || ''); if (!freshW(at)) continue;
-    waitingMap.set(k, { keyword: l.keyword, written_at: at, source: 'ladder' }); }
+    waitingMap.set(k, { keyword: l.keyword, written_at: at, source: 'ladder', ...fixOf(lg) }); }
   const waiting = [...waitingMap.values()].sort((a, b) => String(a.written_at).localeCompare(String(b.written_at)));
   const waitingKw = new Set(waitingMap.keys());
   const pileup = waitingKw.size >= cfg.max_waiting;
@@ -733,9 +1100,12 @@ for (const s of list) {
   if (aiPick) picks.push(aiPick);
   const fromUniq = paused_reason ? 0 : Math.min(pages, uniq.length);   // the AI page (v4.12) is not one of uniq
   const upcoming = uniq.slice(fromUniq, fromUniq + CONFIG.upcoming).map(x => ({ keyword: x.keyword, source: x.source, why: x.why }));
-  const pending = waiting.map(w => ({ keyword: w.keyword, started_at: w.written_at, days: Math.round((now - new Date(w.written_at || nowIso)) / 864e5) })).filter(p => p.days >= CONFIG.publish_reminder_days);   // D5: ladder pages are in `waiting` too
+  const pending = waiting.filter(w => !w.needs_fix).map(w => ({ keyword: w.keyword, started_at: w.written_at, days: Math.round((now - new Date(w.written_at || nowIso)) / 864e5) })).filter(p => p.days >= CONFIG.publish_reminder_days);   // D5: ladder pages are in `waiting` too; R111: a failed draft is never a publish reminder
+  const needs_fix = waiting.filter(w => w.needs_fix).map(w => ({ keyword: w.keyword, written_at: w.written_at, reasons: w.reasons || [] }));   // R111
   const awaiting_approval = manualL.filter(x => x.eligible.length).map(x => { const l = x.eligible[0]; return { ladder_id: x.id, head: x.head, keyword: l.keyword, rung: Number(l.rung) || 0, page_no: Number(l.page_no) || 0, page_type: l.page_type || 'Service Page', existing_page_url: l.page_exists ? (l.target_url || '') : '' }; });
   const facts = { set_aside, covered_by_live_pages: covered.slice(0, 10), paused_reason, waiting_publish: waitingKw.size,
+    needs_fix, needs_fix_keywords: needs_fix.map(w => w.keyword),   // R111: of the waiting pages, the drafts that failed their quality check
+    paused_ladders: info.filter(x => x.head_aside).map(x => ({ ladder_id: x.id, head: x.head, reason: x.head_aside.reason })),   // R87
     // B4-3: what the week knows about pages losing traffic, whether or not one was picked — `decaying` is how many the Site
     // Tracker's test confirmed, `skipped` how many of those were left alone (refreshed recently, or no search to refresh for)
     decay: { decaying: decayRows.length, queued: decayCands.length, skipped: decay_skipped,
@@ -750,8 +1120,10 @@ for (const s of list) {
         ...(p.ai_target ? { ai_target: p.ai_target } : {}),
         ...(p.source === 'ladder' ? { ladder_id: p.ladder_id, ladder_rung: p.rung, ladder_head: p.head, ladder_page_no: p.page_no, ladder_target_url: p.target_url || '', ladder_links: (p.links || []).map(l => ({ url: l.url, path: String(l.url).replace(/^https?:\/\/[^\/]+/i, '') || '/', role: l.role, keyword: l.keyword, planned: true })) } : {}) } } }); });
   const dropped = set_aside.filter(x => x.dropped);   // R16: a rung nobody should write is a reason to report, not to go quiet
-  if (!picks.length && (paused_reason || awaiting_approval.length || suggestions.length || facts.waiting_for_support.length || dropped.length)) {
-    const reason = paused_reason ? waitingKw.size + ' written pages waiting for publication (pile-up guard, limit ' + cfg.max_waiting + '): ' + facts.waiting_keywords.slice(0, 6).map(k => '"' + k + '"').join(', ') + ' — publish them to continue'
+  if (!picks.length && (paused_reason || awaiting_approval.length || suggestions.length || facts.waiting_for_support.length || dropped.length || facts.paused_ladders.length)) {
+    const fixK = new Set(needs_fix.map(w => norm(w.keyword)));
+    const reason = paused_reason ? waitingKw.size + ' written pages waiting for publication (pile-up guard, limit ' + cfg.max_waiting + '): ' + facts.waiting_keywords.slice(0, 6).map(k => '"' + k + '"' + (fixK.has(norm(k)) ? ' (needs a fix: it did not pass the quality check)' : '')).join(', ')
+        + (needs_fix.length ? ' — publish the ones that passed, and fix the ' + needs_fix.length + ' that need a fix and run them again, to continue' : ' — publish them to continue')
       : dropped.length ? 'nothing to write automatically this week; ' + dropped.length + ' planned page(s) set aside: ' + dropped.slice(0, 3).map(x => x.note).join(' | ')
       : 'nothing to write automatically this week';
     out.push({ json: { nothing_to_do: true, report_only: true, reason, site_id: s.site_id, domain: s.domain, email: s.email || '', callback_url: s.callback_url || '', country: s.country || '', request_id: 'cad_' + week.replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, '') + '_0',

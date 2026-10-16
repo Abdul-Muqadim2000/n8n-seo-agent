@@ -3,7 +3,7 @@
 // Before this, ladder pages were never logged: the pile-up guard counted 2 pages waiting while 4 were written and unpublished, and planned
 // two more for the Monday after (execution 380).
 // The row is upserted by site_id + keyword and carries exactly the table's columns. Status: started (the cadence / the app at the spawn)
-// -> written (here, when the page exists) -> published (publish detection and "I published a page" close it).
+// -> written (here, when the page exists and passed its last quality round) or not_ready (it failed it: R111) -> published (publish detection and "I published a page" close it).
 // An existing row keeps what it already knows: its site id and keyword spelling (so the upsert matches it), where the keyword came from
 // (`source` — the cadence's ai_answer / ai_refresh / striking / trend must survive) and the last published URL. A page that is written
 // again (a refresh, a rewrite) goes back to `written`: the new text still waits for the owner to publish it.
@@ -27,6 +27,17 @@ const ip = String(d.client_ip || '');
 const source = (prior && prior.source) || (/^cadence:/i.test(ip) ? 'cadence' : /^app:/i.test(ip) ? 'app' : (/^ladder:/i.test(ip) || d.ladder_id) ? 'ladder' : 'manual');
 const sameRun = !!prior && !!rid && String(prior.request_id) === rid;   // the run that opened the row: keep when it started
 const rung = Number(d.ladder_rung != null && d.ladder_rung !== '' ? d.ladder_rung : (prior && prior.rung)) || 0;
+// R111 (2026-10-16, re-rating 2026-10-15): the row used to say `written` whenever the package held article text, whatever the page's
+// LAST quality round decided — and nine readers turn `written` into "publish it" (exec 634's top action, exec 632's "already written —
+// publish it", the cadence's pile-up note, the Claude site brief). The verdict is already on the package: *Content QA* decides it and
+// *Originality Check* re-decides it when it invalidates the gate (B3-3); *Build Word File* carries it as `qa_not_ready` / `qa_reasons`
+// and *Blog Package* passes it on. A draft that failed is `not_ready` with the reasons, so every reader can say "fix it and run it
+// again" instead; `written` keeps meaning exactly "passed QA, waiting to be published". A package with no verdict at all (an older
+// path) is never invented as failed.
+const meta = page.article_meta || {};
+const notReady = page.qa_not_ready === true || (page.qa_not_ready == null && !!(meta.quality && meta.quality.not_ready === true));
+const reasons = (Array.isArray(page.qa_reasons) ? page.qa_reasons : (meta.quality && Array.isArray(meta.quality.reasons) ? meta.quality.reasons : []))
+  .map(x => String(x || '').trim()).filter(Boolean);
 return [{ json: {
   site_id: String((prior && prior.site_id) || ('site_' + domain.replace(/[^a-z0-9]+/g, '-'))),
   domain,
@@ -38,8 +49,9 @@ return [{ json: {
   ladder_id: String(d.ladder_id || (prior && prior.ladder_id) || ''),
   request_id: rid || String((prior && prior.request_id) || ''),
   started_at: sameRun ? String(prior.started_at || now) : now,
-  status: 'written',
+  status: notReady ? 'not_ready' : 'written',
   published_url: String((prior && prior.published_url) || ''),
   published_at: String((prior && prior.published_at) || ''),
-  week: sameRun ? String(prior.week || now.slice(0, 10)) : now.slice(0, 10)
+  week: sameRun ? String(prior.week || now.slice(0, 10)) : now.slice(0, 10),
+  qa_reasons: notReady ? reasons.join('; ').slice(0, 1500) : ''
 } }];

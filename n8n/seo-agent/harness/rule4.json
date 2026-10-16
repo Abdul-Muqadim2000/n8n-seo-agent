@@ -13,8 +13,8 @@
    "subject": 15
   },
   "promise": {
-   "pass": 5,
-   "subject": 5
+   "pass": 4,
+   "subject": 4
   },
   "reversal": {
    "pass": 2,
@@ -394,23 +394,6 @@
     ],
     "why": "a row saying a page is live, written from the owner having SAID so, is the same promise with a different author",
     "workflow": "SEO Agent \u2014 Site Tracker"
-   },
-   {
-    "evidence_found": [
-     "article_html",
-     "page_markdown",
-     "$('Blog Package')"
-    ],
-    "fail": "",
-    "how": "read the artefact itself -- the page text from the node that produced it -- and emit no row when it is empty (*Content Log Row* does exactly this: no article_html and no page_markdown means 'report only')",
-    "node": "Content Log Row",
-    "ok": true,
-    "state": "written",
-    "tables": [
-     "seo_content_log"
-    ],
-    "why": "D10 / R1: a row saying a page was written while no page was written is read by the ladder plan, the Rank Tracker and the Content Cadence as a page that exists -- the cadence paused itself on pages nobody had",
-    "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
    }
   ],
   "reversal": [

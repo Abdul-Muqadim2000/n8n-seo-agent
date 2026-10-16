@@ -878,6 +878,10 @@
               {
                 "name": "week",
                 "type": "string"
+              },
+              {
+                "name": "qa_reasons",
+                "type": "string"
               }
             ]
           },

@@ -342,7 +342,8 @@
   "status",
   "published_url",
   "published_at",
-  "week"
+  "week",
+  "qa_reasons"
  ],
  "LADDER": [
   "ladder_id",
