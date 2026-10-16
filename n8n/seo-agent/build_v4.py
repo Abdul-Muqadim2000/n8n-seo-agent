@@ -9956,6 +9956,108 @@ def _b98_catchup():
 log('A schedule that never fired, and a restart that threw its fire away (2026-10-16, re-rating 2026-10-15 R94, High). In the 21 days to 2026-10-15 the Rank Tracker, the Site Tracker, AI Growth, the Content Cadence and the Link Builder had 8 due fires and none fired; the cause, read in n8n\'s own code, is that a cron fire lives only in memory and every restart, deploy or re-publish re-arms the schedule for its next future time, so the 2026-10-12 16:38 deploy restart threw away the five Monday runs the Mac\'s sleep had pushed past it. New workflow SEO Agent - Schedule Catch-up (build_catchup.py, SEOagentCatchUp1; kit v5/code/_catchup.js): n8n\'s Instance Started event plus an hourly sweep read each of the ten schedules\' latest due time in GENERIC_TIMEZONE, the workflow\'s executions with mode trigger through n8n\'s public API (an on-demand run does not count - an owner decision) and the catch-up\'s own seo_cache records, and start a missed fire ONCE through the workflow\'s own manual entry with no site, recording catchup:<workflow>:<due ISO> before the start; only fires due in the last 36 h (weekly / monthly) or 20 h (daily), never before the catch-up first ran, at most three a sweep 60 s apart and never more than the run guard has room for; a fire the schedule still holds is left to it until 6 h late so a week never runs twice. apply_env.py refuses a deploy on Monday 07:00-12:00 in the schedules\' time zone (--force-monday overrides), n8n/compose.yml sets GENERIC_TIMEZONE explicitly (America/New_York, what it was while unset), sync_credentials.py writes the n8n API credential from N8N_API_KEY, and AI Growth gained dry_run: true, which sends nothing to Bing or IndexNow and says so in the report (section 99)')
 
 
+# 108. THE TECHNICAL AUDIT COUNTS PAGES, NAMES WHAT IT FLAGS AND READS THE SAME TEXT THE BROWSER SHOWS (2026-10-16, re-rating 2026-10-15
+#      family F9: R62 R63 R64 R71 R72 R76 R118). Seven small, separate causes in the same few nodes, all measured on the 2026-10-16 crawl (exec 648):
+#      R63  the crawl's two 308 redirect items were counted as pages (47, not 45) and judged by every page rule — "No compression", "Missing
+#           canonical", "Missing Open Graph", "Missing Twitter card", "Long or messy URLs" all named a URL that is a redirect with no HTML.
+#      R64  the four extra crawl reports (duplicate titles / descriptions, non-indexable, redirect chains) were requested with the id of the pages
+#           ANSWER (which has none) — 40401 "Task Not Found" on every audit since v3, so no such finding has ever been produced.
+#      R71  "Deprecated HTML tags" came from the crawler's boolean alone: the page's only tag was <u>, which the HTML standard defines.
+#      R72  "1 of 47 pages (20%)": a share of the 5 key pages read twice, printed against the crawl.
+#      R118 "Pages with duplicate content" was a whole-site finding with no page named (third in the fix list); every page item says whether it is one.
+#      R62  hex entities (&#x27;) were not decoded: a false "AI crawlers see a different version" finding, and a review finding about "an unescaped
+#           entity"; the content nodes now decode named, decimal and hex entities in one pass.
+#      R76  the content review never saw an image's alt text, so it said "no badges" over a Microsoft Partner badge.
+ENT_SRC108 = _rd0('code/_entities.js').split('/*__ENT_BEGIN__*/')[1].split('/*__ENT_END__*/')[0].strip()
+
+# --- R64: the extra reports are asked for the CRAWL, by its id (Check Crawl / Save Task ID carry it; the pages answer does not)
+patch('Crawl Extra Requests', "const id = d.crawl_task_id;",
+      "let id = d.crawl_task_id;   // R64: the pages answer has no id — the crawl's id is on Check Crawl / Save Task ID\n"
+      "try { id = id || $('Check Crawl').first().json.crawl_task_id; } catch (e) {}\n"
+      "try { id = id || $('Save Task ID').first().json.crawl_task_id; } catch (e) {}")
+
+# --- R63: a redirect item is not a page
+patch('Build Site Issues', "const pages = $('Get Crawled Pages Answers').first().json.tasks?.[0]?.result?.[0]?.items || [];",
+      "const crawlItems = $('Get Crawled Pages Answers').first().json.tasks?.[0]?.result?.[0]?.items || [];\n"
+      "// R63 (2026-10-16): a redirect response (resource_type \"redirect\", HTTP 3xx) has no HTML and no meta: it is not a page. Counting it made 47 pages of 45, and every page\n"
+      "// rule (compression, canonical, Open Graph, Twitter card, outbound links, URL shape) then judged a response that has none of those things.\n"
+      "const isRedirectItem = (p) => !!p && (p.resource_type === 'redirect' || (Number(p.status_code) >= 300 && Number(p.status_code) < 400));\n"
+      "const pages = crawlItems.filter(p => !isRedirectItem(p));\n"
+      "const redirectItems = crawlItems.filter(isRedirectItem);\n"
+      "// R71: the crawler's \"deprecated\" list includes elements the HTML standard still defines (<u>, <s>, <small>, <b>, <i> ...); only the tags that really are obsolete count\n"
+      "const CONFORMING_TAGS = new Set(['u', 's', 'small', 'b', 'i', 'em', 'strong', 'mark', 'cite', 'q', 'abbr', 'time', 'data', 'wbr', 'bdi', 'bdo', 'ruby', 'rt', 'rp', 'kbd', 'samp', 'var', 'sub', 'sup', 'dfn', 'del', 'ins', 'code', 'pre', 'span', 'div']);\n"
+      "const obsoleteTags = (p) => { const t = p && p.meta && p.meta.deprecated_tags; return Array.isArray(t) ? [...new Set(t.map(x => String(x).toLowerCase().replace(/[<>\\/]/g, '')))].filter(x => x && !CONFORMING_TAGS.has(x)) : null; };")
+patch('Build Site Issues', "for (const c of CATALOG) {\n  const affected = pages.filter(p => {\n    const v = p.checks ? p.checks[c.key] : undefined;\n    if (v === undefined || v === null) return false;\n    return c.invert ? v === false : v === true;\n  });",
+      "for (const c of CATALOG) {\n  const pool = (c.key === 'is_redirect' || c.key === 'has_links_to_redirects') ? redirectItems.concat(pages) : pages;   // R63: only the two redirect checks look at redirect items\n"
+      "  const affected = pool.filter(p => {\n    const v = p.checks ? p.checks[c.key] : undefined;\n    if (v === undefined || v === null) return false;\n"
+      "    if (c.key === 'deprecated_html_tags' && v === true) { const t = obsoleteTags(p); if (t && !t.length) return false; }   // R71\n"
+      "    return c.invert ? v === false : v === true;\n  });\n"
+      "  const redirOnly = (c.key === 'is_redirect' || c.key === 'has_links_to_redirects') && affected.length > 0 && affected.every(isRedirectItem);")
+patch('Build Site Issues', "      evidence: affected.length + ' of ' + total + ' crawled pages',\n      affected_count: affected.length,",
+      "      evidence: c.key === 'has_links_to_redirects' && redirOnly ? affected.length + ' internal URL(s) that redirect are linked from the site (the crawl does not say which page holds each link)'\n"
+      "        : redirOnly ? affected.length + ' of ' + (total + redirectItems.length) + ' crawled URLs redirect' : affected.length + ' of ' + total + ' crawled pages',\n"
+      "      affected_count: affected.length,")
+patch('Build Site Issues', "      sample_urls: affected.slice(0, 10).map(p => p.url),",
+      "      sample_urls: affected.slice(0, 10).map(p => { const ot = c.key === 'deprecated_html_tags' ? obsoleteTags(p) : null; return ot && ot.length ? p.url + ' — <' + ot.join('>, <') + '>' : p.url; }),")
+
+# --- R118: duplicate content names its pages (every page item carries duplicate_content); a count with no page named is Low and says so
+patch('Build Site Issues',
+      "addCount(cnt(pm.duplicate_content), 'Content', 'Medium', 'Pages with duplicate content', 'Near-identical pages compete with each other and dilute ranking signals.', 'Consolidate duplicates with a canonical tag or a 301 redirect, or make each page substantively different.', cnt(pm.duplicate_content) + ' pages with duplicate content');",
+      "const dupPages = pages.filter(p => p.duplicate_content === true);\n"
+      "if (dupPages.length) findings.push({ category: 'Content', severity: 'Medium', title: 'Pages with duplicate content', why: 'Near-identical pages compete with each other and dilute ranking signals.', fix: 'Consolidate duplicates with a canonical tag or a 301 redirect, or make each page substantively different. Check first that they really are the same page: a set of service pages built on one template can be flagged for its layout and not its words.',\n"
+      "  evidence: dupPages.length + ' of ' + total + ' crawled pages are flagged by the crawler as near-identical to another page of the site', affected_count: dupPages.length, affected_pct: Math.round(dupPages.length / total * 100), sample_urls: dupPages.slice(0, 10).map(p => p.url), scope: 'page' });   // R118\n"
+      "else addCount(cnt(pm.duplicate_content), 'Content', 'Low', 'Pages with duplicate content', 'Near-identical pages compete with each other and dilute ranking signals.', 'Consolidate duplicates with a canonical tag or a 301 redirect, or make each page substantively different.', cnt(pm.duplicate_content) + ' pages counted by the crawler as duplicate content; it did not name them, so the pages are not known');")
+
+# --- R72: a share of a sample is not a share of the site (the score takes the pages counted against the whole crawl)
+patch('Build Site Issues', "    const pct = f.affected_pct == null ? 100 : f.affected_pct;",
+      "    let pct = f.affected_pct == null ? 100 : f.affected_pct;\n"
+      "    if (f.affected_of && f.affected_count && f.scope !== 'site') pct = Math.min(pct, Math.round(f.affected_count / total * 100));   // R72: 1 of the 5 key pages read twice is at least 1 of the whole crawl, not 20% of it")
+# ... and the two reports print the denominator the percentage was taken on
+for _n108 in ('Build Audit Report', 'Build Full Report'):
+    patch(_n108, "`${f.affected_count} of ${a.pages_crawled} pages (${f.affected_pct}%)`",
+          "`${f.affected_count} of ${f.affected_of || a.pages_crawled} ${f.affected_of ? (f.affected_unit || 'items') : 'pages'} (${f.affected_pct}%)`")
+
+# --- R62 + R76: the text the content review reads
+patch('Build Content Prompt', "const strip = (s) => String(s || '')\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ').replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n  .replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\\s+/g, ' ').trim();",
+      "const entDecode = " + ENT_SRC108 + ";   // R62: named + decimal + hex entities, one pass (v5/code/_entities.js)\n"
+      "const strip = (s) => entDecode(String(s || '')\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ').replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n  .replace(/<[^>]+>/g, ' ')).replace(/\\s+/g, ' ').trim();\n"
+      "// R76: the alt text of the images (a partner badge, a client logo, a certification mark is usually an image) was thrown away with the tags, so the review said \"no badges\" over a badge\n"
+      "const altsOf = (html) => { const seen = new Set(); const out = []; for (const m of String(html || '').matchAll(/<img\\b[^>]*>/gi)) { const am = m[0].match(/\\balt\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)')/i); const t = am ? entDecode(am[1] ?? am[2] ?? '').replace(/\\s+/g, ' ').trim() : ''; if (t.length < 3 || t.length > 100) continue; const k = t.toLowerCase(); if (seen.has(k)) continue; seen.add(k); out.push(t); if (out.length >= 20) break; } return out; };")
+patch('Build Content Prompt', "  parts.push('=== ' + String(p.kind || 'page').toUpperCase() + ': ' + p.url + ' ===\\n' + text.slice(0, 2500));",
+      "  const alts = altsOf(f.html || f.body || f.data || '');\n"
+      "  parts.push('=== ' + String(p.kind || 'page').toUpperCase() + ': ' + p.url + ' ===\\n' + text.slice(0, 2500) + (alts.length ? '\\nImages on the page (alt text): ' + alts.map(t => '[image: ' + t + ']').join(' ') : ''));")
+patch('Build Content Prompt', ".replace(/!\\[[^\\]]*\\]\\([^)]*\\)/g, '')",
+      ".replace(/!\\[([^\\]]{3,100})\\]\\([^)]*\\)/g, ' [image: $1] ').replace(/!\\[[^\\]]*\\]\\([^)]*\\)/g, '')")
+patch('Analyze HTML', "const strip = (s) => String(s || '')\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ').replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n  .replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')\n  .replace(/&#x27;|&#39;/g, \"'\").replace(/&quot;/g, '\"').replace(/\\s+/g, ' ').trim();",
+      "const entDecode = " + ENT_SRC108 + ";   // R62: named + decimal + hex entities, one pass (v5/code/_entities.js)\n"
+      "const strip = (s) => entDecode(String(s || '')\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ').replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n  .replace(/<[^>]+>/g, ' ')).replace(/\\s+/g, ' ').trim();")
+
+log('Technical audit accuracy (2026-10-16, re-rating 2026-10-15 R62 R63 R64 R71 R72 R76 R118): a crawl redirect (resource_type "redirect" / 3xx) is no longer a page — the audit counts 45 pages, not 47, and only the two redirect checks read redirect items; the four extra crawl reports are requested with the crawl\'s id (Check Crawl / Save Task ID) instead of the pages answer\'s (none), so duplicate titles / descriptions, non-indexable pages and redirect chains can be reported at last; "Deprecated HTML tags" reads the crawler\'s tag list and names only tags the HTML standard made obsolete; a percentage taken on the 5 key pages read twice prints its own denominator ("1 of 5 key pages read twice") and is scored as a share of the whole crawl; "Pages with duplicate content" names the pages the crawler flagged on each page item (a count with no names is Low and says so); the content review decodes named, decimal and hex entities in one pass (the link kit and the two content nodes share one decoder) and sees the alt text of the images')
+
+# 109. WHO THE AUDIT'S RAW FETCH SAYS IT IS (2026-10-16, re-rating 2026-10-15 R119, investigated). Fetch Raw Pages and Fetch Not Crawled sent
+#      "Mozilla/5.0 (compatible; SEOAgentAudit/1.0; +https://www.google.com/bot.html)" — our own product token followed by the info URL of GOOGLE's crawler,
+#      the address the real Googlebot user agent carries. Findings: (1) on techand.ai the three user agents tried (that one, GPTBot's, a bare one) get the same
+#      200 / 219,172 bytes, so no figure the audit printed was wrong; (2) the claim is still false and risky — a request that names Google's bot page while
+#      not coming from Google's network is exactly what a WAF's "fake Googlebot" rule challenges (the reading would then be "not checked", never wrong), and a
+#      customer's logs show us as Google; (3) the diff is described as what "a crawler that does not render" receives, which is true of a plain request
+#      under any name but not of a site that answers named AI bots differently — that is the AI crawler access check's finding (robots.txt per bot, CDN
+#      block test), and the render diff's method now says so. So: the identity is honest, and nothing else changes.
+_UA109 = 'Mozilla/5.0 (compatible; SEOAgentAudit/1.0)'
+_ua_out109 = {}
+for _n109 in ('Fetch Raw Pages', 'Fetch Not Crawled'):
+    _hp109 = nodes[_n109]['parameters']['headerParameters']['parameters']
+    _u109 = [h for h in _hp109 if h['name'] == 'User-Agent']
+    assert len(_u109) == 1 and 'google.com/bot.html' in _u109[0]['value'], 'R119: ' + _n109 + ' no longer carries the expected User-Agent'
+    _u109[0]['value'] = _UA109
+    _ua_out109[_n109] = _UA109
+assert 'google.com/bot.html' not in json.dumps([nodes[n] for n in ('Fetch Raw Pages', 'Fetch Not Crawled')]), 'R119: Google\'s bot page is still named'
+# the wiring the harness checks (S141) and the proof that the R64 / R63 patches are in the generated nodes
+assert "$('Check Crawl')" in code('Crawl Extra Requests') and 'isRedirectItem' in code('Build Site Issues') and 'entDecode' in code('Build Content Prompt') and 'entDecode' in code('Analyze HTML'), 'A11: a patch of build section 108 is missing from the generated code'
+json.dump({'user_agents': _ua_out109, 'crawl_extra_requests_reads': ['Check Crawl', 'Save Task ID'], 'redirect_items_excluded_from_pages': True},
+          open(os.path.join(HERE0, 'harness', 'a11_wiring.json'), 'w'), indent=1, sort_keys=True)
+log('The audit\'s raw fetches (Fetch Raw Pages, Fetch Not Crawled) name themselves "SEOAgentAudit/1.0" and no longer carry the info address of Google\'s crawler (R119, investigated 2026-10-16: techand.ai answers the same 219,172 bytes to Google-style, GPTBot and bare agents, so no printed figure was wrong; the identity was false and a WAF may challenge it); the render diff\'s method states that a site answering named AI bots differently is the AI crawler access check\'s finding')
+
+
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:
 #     "two fixes have never come back and both are enforced by the build".
