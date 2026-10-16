@@ -1855,6 +1855,22 @@
     "waitBetweenTries": 5000
    }
   ],
+  "SEO Agent \u2014 Schedule Catch-up": [
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Read Workflows (Catch-up)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Read Executions (Catch-up)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   }
+  ],
   "SEO Agent \u2014 Site Admin": [],
   "SEO Agent \u2014 Site Tracker": [
    {
