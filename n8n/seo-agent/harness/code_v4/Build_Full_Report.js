@@ -950,7 +950,7 @@ const counts = a.issue_counts || {};
 const byCat = (cat) => findings.filter(f => f.category === cat);
 
 function card(f) {
-  const scope = f.scope === 'site' ? 'Whole website' : `${f.affected_count} of ${a.pages_crawled} pages (${f.affected_pct}%)`;
+  const scope = f.scope === 'site' ? 'Whole website' : `${f.affected_count} of ${f.affected_of || a.pages_crawled} ${f.affected_of ? (f.affected_unit || 'items') : 'pages'} (${f.affected_pct}%)`;
   const urls = f.sample_urls || [];
   return `<div class="finding" style="border-left-color:${SEV_COLOR[f.severity]}">
     <div class="ftitle"><span class="badge" style="background:${SEV_COLOR[f.severity]}">${f.severity}</span> ${esc(f.title)}</div>

@@ -3,7 +3,13 @@
 // constructor and no DOM. Hosts are compared without "www." (crawls report www. URLs while canonicals often use the bare host).
 const LK = (() => {
   const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr', 'param']);
-  const ent = (s) => String(s || '').replace(/&amp;/gi, '&').replace(/&quot;/gi, '"').replace(/&#0?39;|&apos;/gi, "'").replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&nbsp;|&#160;/gi, ' ').replace(/&#(\d+);/g, (m, d) => { try { return String.fromCodePoint(Number(d)); } catch (e) { return m; } });
+  const ent = (() => {
+    const N = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', nbsp: ' ', rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“', ndash: '–', mdash: '—', hellip: '…', copy: '©', reg: '®', trade: '™', bull: '•', middot: '·', laquo: '«', raquo: '»', euro: '€', pound: '£', deg: '°' };
+    return (s) => String(s == null ? '' : s).replace(/&(?:#[xX]([0-9a-fA-F]+)|#(\d+)|([a-zA-Z][a-zA-Z0-9]*));/g, (m, h, d, n) => {
+      if (h !== undefined || d !== undefined) { const cp = h !== undefined ? parseInt(h, 16) : Number(d); if (cp === 160) return ' '; try { return cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : m; } catch (e) { return m; } }
+      const k = n.toLowerCase(); return Object.prototype.hasOwnProperty.call(N, k) ? N[k] : m;
+    });
+  })();   // R62: named + decimal + hex, one pass (the same body as v5/code/_entities.js)
   const text = (s) => ent(String(s || '').replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<noscript[\s\S]*?<\/noscript>/gi, ' ').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
   const attr = (attrs, name) => { const m = String(attrs || '').match(new RegExp('\\b' + name + '\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\'|([^\\s>]+))', 'i')); return m ? ent(m[1] ?? m[2] ?? m[3] ?? '') : null; };
   const hostOf = (u) => { const m = String(u || '').trim().match(/^(?:[a-z][a-z0-9+.-]*:)?\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i); return m ? m[1].toLowerCase().replace(/^www\./, '').replace(/\.$/, '') : ''; };
@@ -241,6 +247,8 @@ const LK = (() => {
 //   * a reading that failed is "not checked" with the reason (a bot challenge, an HTTP error, a DNS failure, an empty body) — never
 //     "no difference". A crawl run without JavaScript is not a rendered reading and never stands in for one.
 //   * nothing here can fail the audit.
+//   * R119 (2026-10-16): the first response is read as a plain request under our own audit user agent — it no longer carries Google's bot page. A site that
+//     answers named AI crawlers differently is the AI crawler access check's finding (robots.txt per bot, CDN block test), not this diff's.
 /*__LINK_KIT__*/
 let prev = {};
 try { prev = $('Analyze CrUX').first().json || {}; } catch (e) {}
@@ -437,7 +445,7 @@ const render_diff = {
   not_available: checked.length ? '' : (targets.length ? 'no key page could be read twice: ' + (notChecked[0] ? notChecked[0].not_checked : 'both readings failed') : (plan.reason || 'no page to compare')),
   pages, pages_checked: checked.length, pages_not_checked: notChecked.length, pages_with_js_only: withJs.length,
   cap: plan.cap || 0, rendered_source: checked.length ? checked[0].rendered_source : '',
-  method: 'Each page was read twice: a plain GET of the page (the first response, what a crawler that does not run JavaScript receives) and the same page after its scripts ran. Title, main heading, canonical link, robots meta, links and text length are read from both with the same parser, and URLs are compared without the www. prefix.',
+  method: 'Each page was read twice: a plain GET of the page under our own audit user agent (the first response, what a crawler that does not run JavaScript receives from a plain request; a site that answers named AI bots differently is read by the AI crawler access check, not here) and the same page after its scripts ran. Title, main heading, canonical link, robots meta, links and text length are read from both with the same parser, and URLs are compared without the www. prefix.',
   figures: FIGURES.map(f => f.label),
   checked_at: new Date().toISOString()
 };
@@ -449,6 +457,7 @@ const works = [];
 // it to join a crawl-wide symptom to its cause instead of scoring both (build section 65, B5-2).
 const F = (category, severity, title, evidence, why, fix, urls, scoring, figure) => findings.push({ category, severity, title, evidence, why, fix,
   sample_urls: (urls || []).slice(0, 5), affected_count: (urls || []).length || null, affected_pct: checked.length ? Math.round(((urls || []).length / checked.length) * 100) : null,
+  affected_of: checked.length, affected_unit: 'key pages read twice',   // R72: the percentage is a share of the key pages read twice, not of the crawl
   scope: 'page', scoring: scoring !== false, source: 'render_diff', figure: figure || '' });
 const quote = (p, key) => { const f = p.figures.find(x => x.key === key) || {}; return p.path + ': ' + (key === 'links' || key === 'words' ? (Number(f.raw) || 0) + ' in the first response, ' + (Number(f.rendered) || 0) + ' after JavaScript' : '"' + S(f.rendered).slice(0, 70) + '" (the first response has ' + (S(f.raw) ? '"' + S(f.raw).slice(0, 70) + '"' : 'none') + ')'); };
 const only = (key) => checked.filter(p => p.js_only.includes(key));

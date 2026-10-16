@@ -1,0 +1,11 @@
+{
+ "crawl_extra_requests_reads": [
+  "Check Crawl",
+  "Save Task ID"
+ ],
+ "redirect_items_excluded_from_pages": true,
+ "user_agents": {
+  "Fetch Not Crawled": "Mozilla/5.0 (compatible; SEOAgentAudit/1.0)",
+  "Fetch Raw Pages": "Mozilla/5.0 (compatible; SEOAgentAudit/1.0)"
+ }
+}

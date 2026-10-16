@@ -1000,7 +1000,7 @@ for (const sev of SEV) {
   html += `<h3 style="color:${SEV_COLOR[sev]}">${sev} Priority (${list.length})</h3>`;
   for (const f of list) {
     const scope = f.scope === 'site' ? 'Whole website'
-      : `${f.affected_count} of ${a.pages_crawled} pages (${f.affected_pct}%)`;
+      : `${f.affected_count} of ${f.affected_of || a.pages_crawled} ${f.affected_of ? (f.affected_unit || 'items') : 'pages'} (${f.affected_pct}%)`;
     const urls = f.sample_urls || [];
     html += `<div class="finding" style="border-left-color:${SEV_COLOR[sev]}">
       <div class="ftitle"><span class="badge" style="background:${SEV_COLOR[sev]}">${sev}</span> ${esc(f.title)}</div>
