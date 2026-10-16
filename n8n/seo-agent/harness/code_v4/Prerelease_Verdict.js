@@ -455,6 +455,23 @@ plan.forEach((p, i) => {
   }
   pages.push({ url, status: st, checked: true, error: '', noindex: !!sig.noindex, canonical: S(sig.canonical), title: S(sig.title), h1: S(sig.h1), bytes: Number(sig.bytes) || 0, checks });
 });
+// ---- B5-7: `fail_on` and the `expected` list (see Prerelease_Validate.js). Without either the verdict is exactly what it was: any failure fails. ----
+const SEV_RANK = { low: 1, medium: 2, high: 3, critical: 4 };
+const failOn = S(first.fail_on) || 'any';
+const threshold = failOn === 'any' ? 1 : (SEV_RANK[failOn] || 1);
+const expectedList = Array.isArray(first.expected) ? first.expected : [];
+const trimP = (x) => (PW.helpers.pathOf(x).replace(/\/+$/, '') || '/').toLowerCase();
+const used = new Set(); const acceptedFailures = []; const belowThreshold = []; const failList = [];
+for (const f of failures) {
+  const pth = trimP(f.url);
+  const ei = expectedList.findIndex(e => e.path === pth && (!e.check || e.check === f.check));
+  if (ei >= 0) { used.add(ei); acceptedFailures.push({ ...f, expected_reason: S(expectedList[ei].reason) }); continue; }
+  if ((SEV_RANK[f.severity] || 3) < threshold) { belowThreshold.push(f); continue; }
+  failList.push(f);
+}
+// the page's own check list shows what was accepted, so nobody has to cross-read two arrays
+for (const f of [...acceptedFailures, ...belowThreshold]) { const pg = pages.find(p => p.url === f.url); const ck = pg && pg.checks.find(c => c.check === f.check); if (ck) ck.accepted = acceptedFailures.includes(f) ? 'expected_change' : 'below_fail_on'; }
+const expectedUnused = expectedList.filter((e, i) => !used.has(i)).map(e => ({ path: e.path, check: e.check, reason: e.reason, note: 'matched no failure: the change did not happen on this page, or the entry is stale' }));
 // what a release candidate cannot be asked, whatever we do — said once, with the reason (never reported as "fine")
 // R75 (2026-10-16): the wording follows the run. On a staging run the reasons are about a staging host; on a production check (`staging: false`)
 // nothing here is about staging — the reasons say why THIS check does not ask, which is by design: it reads only the pages it is given.
@@ -468,21 +485,22 @@ const cannot = staging ? [
   { check: 'positions', reason: 'this check reads only the pages it is given (by design): rankings are tracked by the weekly rank tracker, not by a release check' },
 ];
 const counts = { pages: pages.length, pages_read: pages.filter(p => p.checked).length, checks: pages.reduce((n, p) => n + p.checks.length, 0),
-  passed: pages.reduce((n, p) => n + p.checks.filter(c => c.state === 'pass').length, 0), failed: failures.length, warned: warnings.length,
+  passed: pages.reduce((n, p) => n + p.checks.filter(c => c.state === 'pass').length, 0), failed: failList.length, expected_changes: acceptedFailures.length, below_threshold: belowThreshold.length, warned: warnings.length,
   not_checked: notChecked.length + cannot.length };
-const fail = failures.length > 0;
+const fail = failList.length > 0;
 // a run that could read nothing is NOT a pass: CI would take exit code 0 as "the release is fine" when in truth nothing was checked
 const blind = !fail && counts.pages > 0 && counts.pages_read === 0;
 const verdict = fail ? 'fail' : blind ? 'not_checked' : 'pass';
+const extraNote = (acceptedFailures.length ? ', ' + acceptedFailures.length + ' expected change(s) accepted' : '') + (belowThreshold.length ? ', ' + belowThreshold.length + ' below fail_on=' + failOn : '');
 const summary = fail
-  ? counts.failed + ' check(s) failed on ' + [...new Set(failures.map(f => f.url))].length + ' of ' + counts.pages + ' page(s): ' + failures.slice(0, 3).map(f => f.label + ' (' + f.url + ')').join('; ')
+  ? counts.failed + ' check(s) failed on ' + [...new Set(failList.map(f => f.url))].length + ' of ' + counts.pages + ' page(s): ' + failList.slice(0, 3).map(f => f.label + ' (' + f.url + ')').join('; ') + extraNote
   : blind
     ? 'none of the ' + counts.pages + ' page(s) could be read, so nothing was checked: ' + (notChecked.map(n => n.reason)[0] || 'no answer')
     : counts.pages_read + ' of ' + counts.pages + ' page(s) read, ' + counts.passed + ' check(s) passed'
-      + (counts.warned ? ', ' + counts.warned + ' warning(s)' : '') + (counts.not_checked ? ', ' + counts.not_checked + ' not checked' : '');
+      + (counts.warned ? ', ' + counts.warned + ' warning(s)' : '') + extraNote + (counts.not_checked ? ', ' + counts.not_checked + ' not checked' : '');
 return [{ json: { status: 200, body: {
   ok: !fail && !blind, verdict, exit_code: fail ? 1 : blind ? 2 : 0, summary, checked_at, request_id: S(first.request_id),
-  staging, live_host: liveHost, writes: 'none', counts, failures, warnings,
+  staging, live_host: liveHost, writes: 'none', fail_on: failOn, counts, failures: failList, expected_changes: acceptedFailures, below_threshold: belowThreshold, expected_unused: expectedUnused, warnings,
   not_checked: [...notChecked, ...cannot.map(c => ({ url: '', check: c.check, label: c.check, reason: c.reason }))],
   pages, checks_run: Object.keys(CHECKS),
 } } }];

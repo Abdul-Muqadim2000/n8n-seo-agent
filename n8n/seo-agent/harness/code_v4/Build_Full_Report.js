@@ -960,8 +960,8 @@ const renderDiffSection = (a) => {
   }
   h += rows.length
     ? `<table class="ct"><tr><th>Page</th><th>Figure</th><th>In the first response</th><th>After JavaScript</th><th>Taken from</th></tr>` + rows.join('') + `</table>`
-    : `<p><span class="ok">No difference</span> on any of the ${rdf.pages_checked} key page(s) checked: title, main heading, canonical link, robots rule, links and text are all in the first response.</p>`;
-  h += `<p class="small">${e3(rdf.method)} ${rdf.pages_checked} page(s) read twice${rdf.pages_not_checked ? `, ${rdf.pages_not_checked} not checked (the reason is in the table)` : ''}${rdf.rendered_source === 'crawl_js' ? '; the rendered reading came from the JavaScript crawl' : ''}. AI crawlers do not run JavaScript, so anything listed as coming from the rendered page is invisible to them.</p>`;
+    : `<p><span class="ok">No difference</span> on any of the ${rdf.pages_checked} ${rdf.paired_with_crawl ? '' : 'key '}page(s) checked: title, main heading, canonical link, robots rule, links and text are all in the first response.</p>`;
+  h += `<p class="small">${e3(rdf.method)} ${rdf.pages_checked} page(s) read twice${rdf.pages_not_checked ? `, ${rdf.pages_not_checked} not checked (the reason is in the table)` : ''}${rdf.rendered_source === 'crawl_js' ? '; the rendered reading came from the JavaScript crawl' : ''}${rdf.paired_with_crawl ? '; ' + rdf.paired_with_crawl + ' of them were paired with the JavaScript crawl instead of being rendered again' : (rdf.crawl_js === false && rdf.paired_note ? '; ' + e3(rdf.paired_note) : '')}. AI crawlers do not run JavaScript, so anything listed as coming from the rendered page is invisible to them.</p>`;
   return h;
 };
 // ---- the links nothing can follow (B5-1, 2026-10-15, benchmark area 5) ----
@@ -973,6 +973,22 @@ const uncrawlableSection = (a) => {
     `<tr><td>${e4(p.path)}</td><td>${p.uncrawlable}</td><td class="small">${e4((p.uncrawlable_samples || []).map(x => '<' + x.tag + '>' + (x.detail ? ' -> ' + x.detail : '')).join(', '))}</td></tr>`).join('');
   return `<h3>Links nothing can follow</h3><table class="ct"><tr><th>Page</th><th>Found</th><th>Examples</th></tr>${rows}</table>`
     + `<p class="small">${e4(u.method)}${u.orphan_pages ? ' The crawl found ' + u.orphan_pages + ' orphan page(s) with no crawlable internal link.' : ''}</p>`;
+};
+// ---- B5-4 (2026-10-16): the language versions the site declares. Not printed at all when no page read declares any. ----
+const hreflangSection = (a) => {
+  const hl = a.render_diff && a.render_diff.hreflang; if (!hl) return '';
+  const e6 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const L = { invalid: 'Codes that are not valid', relative: 'Addresses that are not absolute', no_self: 'Pages that do not list themselves', no_return: 'Alternates that do not link back',
+    duplicate: 'One language, two addresses', no_default: 'Sets without an x-default' };
+  const rows = Object.keys(L).map(k => `<tr><td>${L[k]}</td><td>${Number((hl.problems || {})[k]) || 0}</td></tr>`).join('');
+  return `<h3>Language versions (hreflang)</h3><p>${hl.declared_on} of ${hl.pages_read} page(s) read declare hreflang.</p><table class="ct"><tr><th>Check</th><th>Pages</th></tr>${rows}</table><p class="small">${e6(hl.method)}</p>`;
+};
+// ---- R67 (2026-10-16): the severity table counts findings the score does not use; it says so ----
+const unscoredNote = (a) => {
+  const u = (a.findings || []).filter(f => f && f.scoring === false); if (!u.length) return '';
+  const k = u.filter(f => f.source === 'ai_review').length; const n = u.length;
+  const label = k === n ? 'AI-review finding' : 'unscored finding';
+  return `<p class="small">${n} ${label}${n === 1 ? ' is' : 's are'}${k && k < n ? ' (' + k + ' from the AI review)' : ''} counted here and ${n === 1 ? 'is' : 'are'} not part of the score.</p>`;
 };
 // ---- the known URLs the crawl never reached (B5-5, 2026-10-15, benchmark area 5) ----
 const notCrawledSection = (a) => {
@@ -1053,6 +1069,7 @@ ${cr && cr.business_context ? '<p><b>About the site:</b> ' + esc(cr.business_con
 <div class="callout"><b>The main thing holding this site back:</b> ${esc(binding)}</div>
 <table class="ct"><tr>${SEV.map(s => `<th style="background:${SEV_COLOR[s]}">${s}</th>`).join('')}</tr>
 <tr>${SEV.map(s => `<td style="text-align:center;font-size:14pt"><b>${counts[s] || 0}</b></td>`).join('')}</tr></table>
+${unscoredNote(a)}
 ${a.score_cap_reason ? `<div class="note"><b>Score limit applied:</b> ${esc(a.score_cap_reason)}. Calculated score before the limit: ${esc(a.raw_score)}/100.</div>` : ''}
 <h3>Key Numbers: You vs Competitors</h3>
 <table class="ct"><tr><th>Metric</th><th>You</th><th>Competitor median</th></tr>
@@ -1169,6 +1186,7 @@ if (ps) {
 }
 html += notCrawledSection(a);
 html += uncrawlableSection(a);
+html += hreflangSection(a);
 html += cwvSection(a) + renderDiffSection(a) + '<h3>Findings</h3>' + findingsBlock(byCat('Performance'));
 
 // ---------- 8. AI visibility ----------
