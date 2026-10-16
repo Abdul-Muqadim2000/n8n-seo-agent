@@ -1,3 +1,4 @@
+import { PRICES } from '@/lib/prices';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { toast } from 'sonner';
@@ -493,7 +494,7 @@ function CadenceCard({ cadence, on }: { cadence: ContentData['cadence']; on: boo
       <p className="mt-3 text-[13px] leading-relaxed text-ink-2">
         {on
           ? 'Each Monday the engine picks the next pages in this order: the next rung of your keyword ladder, queries in striking distance (positions 4–20), then rising Google Trends searches. Each post arrives as HTML, Markdown and meta.json, ready to publish.'
-          : 'Turn on 1–3 posts a week and the engine writes them every Monday from your ladder, striking-distance queries and rising searches — about $1.20 per post.'}
+          : `Turn on 1–3 posts a week and the engine writes them every Monday from your ladder, striking-distance queries and rising searches — about ${PRICES.page()} per post.`}
       </p>
     </Panel>
   );

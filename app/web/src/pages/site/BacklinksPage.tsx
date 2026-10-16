@@ -1,3 +1,4 @@
+import { PRICES } from '@/lib/prices';
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { ArrowUpDown, AtSign, BarChart3, BellRing, Bot, CalendarRange, CheckCircle2, Clock, Download, ExternalLink as ExternalIcon, FileText, FileUp, Globe, Link2, ListOrdered, Mail, Network, Plug, Quote, Send, ShieldAlert, Sparkles, Swords, Target, TriangleAlert, Trophy, Unlink, Wrench } from 'lucide-react';
@@ -92,7 +93,7 @@ function Backlinks({ d, refetching }: { d: BacklinksData; refetching: boolean })
       <EmptyState
         icon={<Link2 className="size-5" />}
         title="No backlink check yet"
-        description="The check merges every source we can read (DataForSEO, Bing, your Search Console export, GA4 visits, the Common Crawl web graph, Wikipedia, news), checks the important links on their pages, and drafts the outreach. About $0.50 a month for the full check; a light weekly watch in between."
+        description={`The check merges every source we can read (DataForSEO, Bing, your Search Console export, GA4 visits, the Common Crawl web graph, Wikipedia, news), checks the important links on their pages, and drafts the outreach. About ${PRICES.backlinksFull()} a month for the full check; a light weekly watch in between.`}
         action={
           <>
             <ToolButton mode="backlinks" variant="primary">
