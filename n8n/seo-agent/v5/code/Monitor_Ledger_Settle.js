@@ -28,19 +28,31 @@ const BAL_END = '__BAL_END__';     // the free balance probe on the settle chain
 const LEDGER = '__LEDGER__';       // the run-ledger rows around this run's window
 const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
 let row = {}; try { row = $(ROW).first().json || {}; } catch (e) { row = {}; }
+// R82 (2026-10-16, re-rating C-6): MEASURED may name several nodes ('A|B'), and a leading '!' says they are EVERY paid DataForSEO call of
+// this workflow — so a run in which none of them ran sent no paid task and settles $0, instead of the per-mode reservation (the Site
+// Tracker settled $0.0100 "ESTIMATED" while its SERP checks and Trends lookups reported $0.0310, row 98). A gated call's *… Answers* node
+// carries the call's whole cost on every item's `__dfs` (`cost_usd`: both attempts, each task once by its own id), so that figure is read
+// ONCE per node — never added up per item, and never read as one item's cost.
+const MEASURED_ALL = MEASURED.charAt(0) === '!';
+const MEASURED_NODES = MEASURED.replace(/^!/, '').split('|').map(s => s.trim()).filter(Boolean);
 const costOf = (x) => {
   if (!x || typeof x !== 'object') return null;
   const direct = n0(x.cost_usd); if (direct != null) return direct;
-  for (const k of Object.keys(x)) { const v = x[k]; if (v && typeof v === 'object' && !Array.isArray(v)) { const n = n0(v.cost_usd); if (n != null) return n; } }
+  for (const k of Object.keys(x)) { if (k === '__dfs') continue; const v = x[k]; if (v && typeof v === 'object' && !Array.isArray(v)) { const n = n0(v.cost_usd); if (n != null) return n; } }
   return null;
 };
 let measured = null;
-if (MEASURED) {
-  try {
-    const vals = $(MEASURED).all().map(i => costOf(i.json)).filter(v => v != null);
-    if (vals.length) measured = +vals.reduce((s, v) => s + v, 0).toFixed(4);
-  } catch (e) { measured = null; }
+for (const __mn of MEASURED_NODES) {
+  let __items = null;
+  try { __items = $(__mn).all().map(i => i.json || {}); } catch (e) { __items = null; }   // this call did not run in this execution
+  if (!__items) continue;
+  // a node that states its own cost (AI Metrics, Pulse Metrics, Parse Backlinks, Growth Metrics) is read as it always was
+  const __direct = __items.map(costOf).filter(v => v != null);
+  const __gate = __items.find(j => j && j.__dfs && typeof j.__dfs === 'object' && n0(j.__dfs.cost_usd) != null);
+  const vals = __direct.length ? __direct : (__gate ? [n0(__gate.__dfs.cost_usd)] : []);
+  if (vals.length) measured = +((measured || 0) + vals.reduce((s, v) => s + v, 0)).toFixed(4);
 }
+if (measured == null && MEASURED_ALL && MEASURED_NODES.length) measured = 0;   // none of this workflow's paid calls ran: it sent no paid task
 // which Claude nodes actually ran in THIS execution (a node that never ran has no data and throws)
 const ranAi = AI_NODES.filter(n => { try { return ($(n).all() || []).length > 0; } catch (e) { return false; } });
 
@@ -64,23 +76,29 @@ const __jsonOf = (n, idx) => { try { return ((idx == null ? $(n).all() : $(n).al
 const __chars = (v) => v == null ? 0 : (typeof v === 'string' ? v.length : JSON.stringify(v).length);
 const __at = (o, p) => String(p).split('.').reduce((v, k) => (v == null ? v : v[k]), o);
 const __countOf = (n) => { let sum = 0, k = 0; for (const j of (__jsonOf(n) || [])) { const v = Number((j || {}).input_tokens); if (Number.isFinite(v) && v > 0) { sum += v; k++; } } return { sum: sum, n: k }; };
+// R57 (2026-10-16, re-rating A-24): an agent n8n re-ran after a failed answer (its parser refused the format; `retryOnFail`) called its model
+// twice and kept ONE answer, so `answers.length` priced one call. The model node itself records every call it made as a run of its own;
+// a Code node cannot read that node's data (it rides `ai_languageModel`, not `main`), but `$node[…].runIndex` is the index of its last run.
+const __modelRuns = (n) => { try { if (!n || typeof $node === 'undefined') return 0; const r = Number($node[n].runIndex); return Number.isFinite(r) && r >= 0 ? r + 1 : 0; } catch (e) { return 0; } };
 const __costCalls = [];
 for (const c of AI_CALLS) {
   const answers = __jsonOf(c.node);
   if (!answers || !answers.length) continue;   // this agent did not run in this execution
-  const calls = answers.length;                // an n8n agent answers once per input item, and these are fed one job per site
+  // an n8n agent answers once per input item, and these are fed one job per site — plus any retry its model node recorded (R57)
+  const __answered = answers.length, __runs = __modelRuns(c.model_node);
+  const calls = Math.max(__answered, __runs);
   // the characters are the FALLBACK, and they are read per call: the job items differ per site, so one item's fields are not the run's.
   // The output index is spelled out — `$('X').all()` would otherwise default to the output the ACTIVE node is connected to, and the
   // settle is connected to none of these (the trap that caught build section 62 out with *Keyword Seeds* on output 1).
   const fed = c.input ? (__jsonOf(c.input, c.branch) || []) : [];
   let prompt_chars = 0;
-  for (let k = 0; k < calls; k++) {
+  for (let k = 0; k < __answered; k++) {
     let pc = c.template_chars;
     const own = fed[k] || fed[0] || {};
     for (const f of (c.fields || [])) pc += __chars(__at(own, f));
     prompt_chars += pc;
   }
-  for (const p of (c.from || [])) prompt_chars += __chars(__at((__jsonOf(p[0]) || [])[0] || {}, p[1])) * calls;
+  for (const p of (c.from || [])) prompt_chars += __chars(__at((__jsonOf(p[0]) || [])[0] || {}, p[1])) * __answered;
   const output_chars = answers.reduce((s, j) => s + (typeof j.output === 'string' ? j.output.length : __chars(j)), 0);
   let counted = null;
   if (c.count_prompt && c.count_answer) {
@@ -89,7 +107,7 @@ for (const c of AI_CALLS) {
       counted = { prompt_tokens: p.sum, total_tokens: t.sum, rounds: p.n, source: 'Anthropic /v1/messages/count_tokens' };
   }
   __costCalls.push({ node: c.node, model: c.model, max_tokens: c.max_tokens, effort: c.effort, streaming: c.streaming,
-    prompt_chars, output_chars, counted, calls });
+    prompt_chars, output_chars, counted, calls, retries: Math.max(0, calls - __answered) });
 }
 // the same per-model correction factors the main workflow prices with, so one engine reports one price (seo_cache `cost:factor:claude`,
 // written by reconcile_claude_cost.py). Unreadable or absent, the list prices stand.

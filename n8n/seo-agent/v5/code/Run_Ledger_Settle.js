@@ -103,6 +103,8 @@ const __out = {
   run_id: String($execution.id), mode: String(row.mode || req.mode || ''), status: 'done', cost_mode,
   // the guard counts Claude money, so `settled_usd` stays the Claude figure — now the run's own, not a flat per-mode guess
   settled_usd: ai.usd, ai_usd: ai.usd, ai_measured: ai.measured,
+  // R115 (2026-10-16): the measured half of the Claude money, so a callback built from this row can split it (v5/code/_ledger_cb.js)
+  ai_measured_usd: +Number(ai.measured_usd || 0).toFixed(4),
   dfs_usd: dfs.usd, dfs_measured: dfs.measured,
   measured_usd: split.measured_usd, estimated_usd: split.estimated_usd,
   // the day's reconciliation rides on the row's own basis line, so nobody has to go looking for it
@@ -125,7 +127,7 @@ const __out = {
 };
 if (__handoff) {
   // R81: the whole row says one thing — $0 here, the money on the child's row — and nothing on it reads as a measurement to learn from
-  Object.assign(__out, { settled_usd: 0, ai_usd: 0, ai_measured: true, dfs_usd: 0, dfs_measured: false, measured_usd: 0, estimated_usd: 0,
+  Object.assign(__out, { settled_usd: 0, ai_usd: 0, ai_measured: true, ai_measured_usd: 0, dfs_usd: 0, dfs_measured: false, measured_usd: 0, estimated_usd: 0,
     dfs_source: 'handoff', dfs_estimated_usd: 0, dfs_tasks_usd: 0, dfs_run_reconciled: false, dfs_day_reconciled: false,
     ai_calls: 0, ai_in_tokens: 0, ai_out_tokens: 0, ai_by_node: {}, ai_models: {},
     cost_basis: ('Claude $0.0000, DataForSEO $0.0000: ' + dfs.basis).slice(0, 500), handed_off: true });

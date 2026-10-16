@@ -8311,8 +8311,10 @@ await guard('the re-rating defects R1..R9', async () => {
   mock('Pulse Metrics', [{ json: { site_id: SITE, day_row: { cost_usd: 0.0841 } } }, { json: { site_id: 'site_techand-ai', day_row: { cost_usd: 0.0802 } } }]);
   const settled = (await run('Ledger Settle (Pulse)', EMPTY, { code: 'Pulse__Ledger_Settle_Pulse_' }))[0].json;
   console.log('   pulse settle ->', JSON.stringify(settled));
-  check('R9: the settle writes the MEASURED DataForSEO cost where the run knows it (the two sites\' tasks added up) and keeps the Claude estimate as the settled figure',
-    settled.status === 'done' && settled.dfs_usd === 0.1643 && settled.dfs_measured === true && settled.settled_usd === 0.008 && settled.run_id === 'test-exec', JSON.stringify(settled));
+  // R82 (2026-10-16, agent A9): this check read "keeps the Claude estimate as the settled figure" ($0.008). The AI Pulse has NO Claude node,
+  // so that estimate was a charge for nothing (row 95: "$0.004 ESTIMATED (the per-mode reservation …)"); it settles $0 now and says why.
+  check('R9 + R82: the settle writes the MEASURED DataForSEO cost where the run knows it (the two sites\' tasks added up) and settles no Claude money — the pulse has no Claude node',
+    settled.status === 'done' && settled.dfs_usd === 0.1643 && settled.dfs_measured === true && settled.settled_usd === 0 && settled.ai_source === 'none' && settled.run_id === 'test-exec', JSON.stringify(settled));
   const settledEst = (await run('Ledger Settle (Audit)', [{ json: { ...oneSite, id: 8 } }], { code: 'Ledger_Settle_Audit_' }))[0].json;
   // R31 (2026-10-14, section 59): $0 is never called an estimate — a figure of nothing says "nothing spent" and carries the reason.
   check('R9 + R28: a workflow with no measured figure settles its own estimate and says so, instead of inventing a number — and the Audit Scheduler\'s estimate is now nothing, because the crawl belongs to the run it spawned',
@@ -10031,12 +10033,16 @@ await guard('R31 R32 R33 the money a run reports is the money that happened', as
   const noneRun = await kit69({ call: 'aiRun', ai_run: { figure: null, reserved: 0.05, ran: [], checked: 2 } });
   const pricedRun = await kit69({ call: 'aiRun', ai_run: { figure: { usd: 0.0114, calls: 1, measured_usd: 0, estimated: true, basis: 'characters' }, reserved: 0.06, ran: ['Site Describer'], checked: 11 } });
   const reservedRun = await kit69({ call: 'aiRun', ai_run: { figure: null, reserved: 0.05, ran: ['Link Analyst'], checked: 2 } });
-  const blindRun = await kit69({ call: 'aiRun', ai_run: { figure: null, reserved: 0.3, ran: [], checked: 0 } });
-  check('R31 / R33: one rule, in one place — a priced figure wins, a workflow whose model nodes all stayed idle settles nothing, a model that ran without a priced figure keeps the reservation labelled, and a branch with nothing to check falls back exactly as before',
+  // R82 (2026-10-16, agent A9): `blindRun` used to pass `checked: 0` and expect the reservation. A caller that LOOKED and found no Claude node
+  // (the AI Pulse) has measured that nothing was spent on Claude — that is the R82 fix (`noNodes`); "nothing to check" is a caller that did
+  // not say how many nodes it checked, and that one still falls back exactly as before.
+  const blindRun = await kit69({ call: 'aiRun', ai_run: { figure: null, reserved: 0.3, ran: [] } });
+  const noNodes = await kit69({ call: 'aiRun', ai_run: { figure: null, reserved: 0.004, ran: [], checked: 0 } });
+  check('R31 / R33 / R82: one rule, in one place — a priced figure wins, a workflow whose model nodes all stayed idle settles nothing, a workflow with no Claude node settles nothing, a model that ran without a priced figure keeps the reservation labelled, and a branch with nothing to check falls back exactly as before',
     noneRun.usd === 0 && noneRun.source === 'none' && pricedRun.usd === 0.0114 && pricedRun.source === 'priced'
     && reservedRun.usd === 0.05 && reservedRun.source === 'reserved' && blindRun.usd === 0.3 && blindRun.source === 'reserved'
-    && /priced no model call of its own/.test(blindRun.basis),
-    JSON.stringify({ none: noneRun.usd, priced: pricedRun.usd, reserved: reservedRun.usd, blind: blindRun.usd }));
+    && /priced no model call of its own/.test(blindRun.basis) && noNodes.usd === 0 && noNodes.source === 'none' && /has no Claude node/.test(noNodes.basis),
+    JSON.stringify({ none: noneRun.usd, priced: pricedRun.usd, reserved: reservedRun.usd, blind: blindRun.usd, noNodes }));
 });
 
 // ===================================================================================
@@ -12486,9 +12492,10 @@ await guard('B-F1 the Sonnet half, and B-A11 three nodes that advised from what 
   // scheduled workflows build_monitors.py writes. Four are left, and the registry now carries a reason PER WORKFLOW rather than
   // one shared sentence, because the four are left for three different reasons and the shared one hid that (S94 proves each).
   const gapRows = Object.entries(CC86).filter(([, r]) => !r.counted);
-  check('B-F1 / B-C2: every Claude agent in every generated workflow is either counted on its main path or carries the reason it is not — eleven were counted here, seven more by B-C2, four are left',
-    Object.keys(CC86).length === 22 && Object.values(CC86).filter(r => r.counted).length === 18
-    && gapRows.length === 4 && gapRows.every(([, r]) => /^NOT counted/.test(r.why_not) && /Proved by _b84_checks/.test(r.why_not)),
+  // R82 (2026-10-16, agent A9, build section 104): Site Brief is counted now — nineteen counted, three left (the Reply Reader, the Keyword Check's two)
+  check('B-F1 / B-C2 / R82: every Claude agent in every generated workflow is either counted on its main path or carries the reason it is not — eleven were counted here, seven more by B-C2, Site Brief by R82, three are left',
+    Object.keys(CC86).length === 22 && Object.values(CC86).filter(r => r.counted).length === 19
+    && gapRows.length === 3 && gapRows.every(([, r]) => /^NOT counted/.test(r.why_not) && /Proved by _b84_checks/.test(r.why_not)),
     JSON.stringify({ total: Object.keys(CC86).length, counted: Object.values(CC86).filter(r => r.counted).length, gap: gapRows.map(([k]) => k) }));
   check('B-F1: and nothing in the main workflow — the one this pass covered — was left behind',
     gapRows.every(([k]) => !/^SEO_Agent_v4\.json/.test(k))
@@ -13934,20 +13941,22 @@ await guard('B-C2 a monitor settles what it measured, not what it reserved', asy
   // ---------- 6. the four left behind, each with its OWN reason ----------
   const gap94 = Object.entries(CC94).filter(([, r]) => !r.counted);
   console.log('   still on the reservation ->', JSON.stringify(gap94.map(([k]) => k)));
-  check('B-C2: eighteen of the engine\'s twenty-two Claude agents are counted; the four that are not are named, and no two of the three workflows they sit in give the same reason',
-    Object.values(CC94).filter(r => r.counted).length === 18 && gap94.length === 4
-    && new Set(gap94.map(([k]) => k.split(' / ')[0])).size === 3
-    && new Set(gap94.map(([, r]) => r.why_not)).size === 3, JSON.stringify(gap94.map(([k, r]) => [k, r.why_not.slice(0, 40)])));
+  // R82 (2026-10-16, agent A9): Site Brief left this list — nineteen counted, three left in two workflows, each workflow with its own reason
+  check('B-C2 / R82: nineteen of the engine\'s twenty-two Claude agents are counted; the three that are not are named, and the two workflows they sit in give different reasons',
+    Object.values(CC94).filter(r => r.counted).length === 19 && gap94.length === 3
+    && new Set(gap94.map(([k]) => k.split(' / ')[0])).size === 2
+    && new Set(gap94.map(([, r]) => r.why_not)).size === 2, JSON.stringify(gap94.map(([k, r]) => [k, r.why_not.slice(0, 40)])));
   check('B-C2: the Reply Reader is not counted because there is nothing to count it INTO — it has no run-ledger row at all, so a measurement would have nowhere to go',
     /no seo_run_ledger row at all/.test(CC94['SEO_Agent_Reply_Reader.json / Reply Reader'].why_not)
     && !LW94['SEO Agent — Reply Reader'], CC94['SEO_Agent_Reply_Reader.json / Reply Reader'].why_not);
   check('B-C2: the Keyword Check is not counted because it answers the app SYNCHRONOUSLY — two more round-trips per agent would land on the caller\'s clock, which is a decision and not an oversight',
     ['Keyword Fit', 'Keyword Fit (Text)'].every(a => /answers the web app SYNCHRONOUSLY/.test(CC94['SEO_Agent_Keyword_Check.json / ' + a].why_not)),
     CC94['SEO_Agent_Keyword_Check.json / Keyword Fit'].why_not);
-  check('B-C2: the Site Tracker is not counted only because its builder was outside this change — its settle already carries the empty call table, so the remaining work is the bake and nothing else',
-    /build_site_tracker\.py was outside/.test(CC94['SEO_Agent_Site_Tracker.json / Site Brief'].why_not)
-    && /const AI_CALLS = \/\*__AI_CALLS__\*\/\[\];/.test(fs94.readFileSync(path94.join(CODE94, 'Ledger_Settle_Site_.js'), 'utf8')),
-    CC94['SEO_Agent_Site_Tracker.json / Site Brief'].why_not);
+  // R82 (2026-10-16, agent A9): the remaining work was the bake, and it is done — this check used to prove the gap; it proves the fix
+  check('R82: the Site Tracker\'s Site Brief is counted on its main path and its settle carries the baked call table',
+    CC94['SEO_Agent_Site_Tracker.json / Site Brief'].counted === true
+    && /"node": "Site Brief"/.test(fs94.readFileSync(path94.join(CODE94, 'Ledger_Settle_Site_.js'), 'utf8')),
+    JSON.stringify(CC94['SEO_Agent_Site_Tracker.json / Site Brief']));
 });
 
 // S95 (2026-10-15, FIX_PLAN §3.16 rows B6-9 and B9-6 — build section 85) — one AI Overview figure in one place, and a state
@@ -16177,6 +16186,270 @@ await guard('S142 R49 verdict path, ladder report band, byline entities', async 
   check('R49: the verdict passes the measured flag to reachPlan', /reachPlan\(DIFF77, reachStrong\(RI77, null\), reachMeasured\(/.test(pv));
   check('R49: the ladder report prints the no-band sentence for an unmeasured chance', /L\.chance\.band === 'unmeasured'/.test(bl) && /L\.chance_text/.test(bl));
   check('byline: entities are decoded before the author is stored', /author = textOfHtml\(author\)/.test(cc));
+});
+
+// ===================================================================================================================================
+// S130-S133 (2026-10-16, agent A9 — re-rating 2026-10-15 family F6, "a cost the system reports about itself is what happened"):
+// R47 = R69 = R80, R57, R68, R70, R81 parts 2-3, R82, R101, R115. Fixtures cut from execs 595 / 623 / 628 / 634 (harness/fixtures_r_a9.js);
+// the wiring the build proved is read from harness/a9_cost_wiring.json (written by build section 104's _b104_checks).
+// ===================================================================================================================================
+const A9 = (() => { try { return require('./fixtures_r_a9'); } catch (e) { return null; } })();
+const a9wiring = () => { try { return JSON.parse(require('fs').readFileSync(require('path').join(__dirname, 'a9_cost_wiring.json'), 'utf8')); } catch (e) { return null; } };
+const a9check = (SN) => (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log((ok ? '   ok   ' : '   FAIL ') + label + (ok ? '' : ' :: ' + String(detail || '').slice(0, 300))); };
+const a9eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const a9kit = async (j) => (await run('Cost Kit', [{ json: j }], { code: '_cost_cal' }))[0].json;
+const a9eval = (expr, output) => { const body = String(expr || '').replace(/^=\{\{\s*/, '').replace(/\s*\}\}$/, '');
+  const $json = { output }; const $ = () => ({ first: () => ({ json: { output } }), item: { json: { output } } });
+  return Function('$json', '$', 'return (' + body + ');')($json, $); };
+const a9node = (runs) => { globalThis.$node = new Proxy({}, { get: (t, n) => ({ runIndex: (runs[n] || 0) - 1 }) }); };
+const a9nodeOff = () => { try { delete globalThis.$node; } catch (e) {} };
+
+await guard('S130 R47 R69 R80 R82 the counted answer is the answer, and no Claude charge without a Claude node', async () => {
+  const SN = 'S130 R47 R69 R80 R82 — the token counter is sent the answer the model returned (all 16 structured agents + Site Brief), a count of "[object Object]" is never called measured, and the AI Pulse settles no Claude money';
+  reset(); begin(SN); const check = a9check(SN);
+  if (!A9) { check('the A9 fixtures are readable', false, 'missing fixtures_r_a9.js'); return; }
+  const W = a9wiring();
+  check('R47: the build proved every counted answer (harness/a9_cost_wiring.json exists)', !!W, 'a9_cost_wiring.json missing — build section 104 never ran');
+  const AG = { 'SEO_Agent_v4.json': ['Site Describer', 'Competitor Analyzer', 'Strategy Brief', 'Content Reviewer', 'Keyword Seeds', 'Verdict Agent', 'Keyword Relevance', 'Critic', 'Ladder Keyword Relevance'],
+    'SEO_Agent_AI_Visibility.json': ['Prompt Writer', 'Answer Analyst', 'AI Brief'], 'SEO_Agent_Backlink_Monitor.json': ['Link Analyst', 'Outreach Writer'],
+    'SEO_Agent_Link_Builder.json': ['Outreach Sequence Writer'], 'SEO_Agent_AI_Growth.json': ['AI Outreach Writer'], 'SEO_Agent_Site_Tracker.json': ['Site Brief'] };
+  const OBJ = A9.ai_brief_output, bad = [], seen = [];
+  for (const [f, ags] of Object.entries(AG)) for (const a of ags) {
+    const e = W && W.answers && W.answers[f] && W.answers[f][a];
+    if (!e) { bad.push(f + ' / ' + a + ': not counted'); continue; }
+    let v = null; try { v = a9eval(e, OBJ); } catch (err) { v = 'THREW ' + err.message; }
+    seen.push(a);
+    if (typeof v !== 'string' || !v.startsWith('{"headline"') || v.length < 1000 || v === '[object Object]') bad.push(f + ' / ' + a + ': ' + String(v).slice(0, 40));
+  }
+  console.log('   counted answers ->', seen.length, 'agents');
+  check('R47 / R69 / R80: all 16 structured agents (main 9, AI Visibility 3, Backlinks 2, Link Builder 1, AI Growth 1) and Site Brief send the counter the answer as JSON — exec 623\'s AI Brief object serialises to its 2,957 characters, never "[object Object]"',
+    W && !bad.length && seen.length === 17, bad.join(' | '));
+  const text = W && W.answers && W.answers['SEO_Agent_v4.json'] && W.answers['SEO_Agent_v4.json']['Copywriter'];
+  check('R47: a text answer (Copywriter, Editor) is still sent as the text itself, and a missing answer as an empty string',
+    !!text && a9eval(text, 'plain draft text') === 'plain draft text' && a9eval(text, null) === '', String(text).slice(0, 120));
+  // the kit's net: exec 623's AI Brief counts (4830 -> 4835: "5 answer tokens" for 2,957 characters) are not a measurement
+  const c = A9.ai_brief_counts;
+  const brokenCount = await a9kit({ call: 'callCost', call_spec: { node: 'AI Brief', model: 'claude-sonnet-5-5', max_tokens: 8192, effort: 'low', streaming: false,
+    prompt_chars: 17500, output_chars: JSON.stringify({ output: OBJ }).length, calls: 1, counted: { prompt_tokens: c.prompt, total_tokens: c.answer, rounds: 1 } } });
+  console.log('   623 AI Brief re-priced ->', JSON.stringify({ counted: brokenCount.counted, usd: brokenCount.usd, m: brokenCount.measured_usd, basis: brokenCount.basis }));
+  check('R47: a count of 5 answer tokens for a 2,969-character answer did not see the answer — it is priced from characters and the basis says why, never "measured: … counted 4830 prompt and 5 answer token(s)"',
+    brokenCount.counted === false && brokenCount.measured_usd === 0 && /did not see the answer/.test(brokenCount.basis) && !/counted 4830 prompt and 5 answer/.test(brokenCount.basis), JSON.stringify(brokenCount));
+  const goodCount = await a9kit({ call: 'callCost', call_spec: { node: 'AI Brief', model: 'claude-sonnet-5-5', max_tokens: 8192, effort: 'low', streaming: false,
+    prompt_chars: 17500, output_chars: JSON.stringify({ output: OBJ }).length, calls: 1, counted: { prompt_tokens: c.prompt, total_tokens: c.prompt + 760, rounds: 1 } } });
+  check('R47: a count that did see the answer (760 tokens for those characters) is still the measurement it was',
+    goodCount.counted === true && goodCount.measured_usd > 0 && /counted 4830 prompt and 760 answer token/.test(goodCount.basis), goodCount.basis);
+  // R82: the AI Pulse has no Claude node, so it settles none of its $0.004 Claude reservation
+  const SITE = 'site_techand-ai';
+  mock('Run Ledger Row (Pulse)', [{ json: { run_id: 'test-exec', key: 'schedule:ai_pulse', mode: 'ai_pulse', est_usd: 0.004, dfs_est_usd: 0.08, status: 'reserved', created_at: new Date().toISOString(), cost_mode: 'ai_pulse' } }]);
+  mock('Pulse Metrics', [{ json: { site_id: SITE, day_row: { cost_usd: 0.084 } } }]);
+  const pulse = (await run('Ledger Settle (Pulse)', [{ json: {} }], { code: 'Pulse__Ledger_Settle_Pulse_' }))[0].json;
+  console.log('   pulse settle ->', JSON.stringify({ ai: pulse.ai_usd, src: pulse.ai_source, basis: pulse.ai_basis }));
+  check('R82: the AI Pulse settles $0 of Claude — it has no Claude node (row 95 settled "$0.004 ESTIMATED (the per-mode reservation …)")',
+    pulse.ai_usd === 0 && pulse.settled_usd === 0 && pulse.ai_source === 'none' && /has no Claude node/.test(pulse.ai_basis) && /Claude \$0\.0000 nothing spent/.test(pulse.cost_basis), JSON.stringify(pulse));
+});
+
+await guard('S131 R57 a retry the model made is priced', async () => {
+  const SN = 'S131 R57 — an agent n8n re-ran after its parser refused the format is priced for both model calls (exec 616: Strategy Brief, two Opus calls, one priced), in the main settle and in a monitor settle';
+  reset(); begin(SN); const check = a9check(SN);
+  if (!A9) { check('the A9 fixtures are readable', false, 'missing fixtures_r_a9.js'); return; }
+  // ---- the main workflow: Run Ledger Settle prices this run's own calls (section 59) ----
+  const LED = { run_id: 'test-exec', key: 'app:co_1', mode: 'keyword', est_usd: 0.8, created_at: new Date().toISOString(), status: 'reserved', settled_usd: 0,
+    domain: 'techand.ai', heavy: false, dfs_est_usd: 0.04, dfs_usd: 0, cost_mode: 'content|content' };
+  mock('Run Ledger Row', [{ json: LED }]);
+  mock('Rate Limit', [{ json: { mode: 'keyword', include_content: true, domain: 'techand.ai' } }]);
+  mock('Strategy Brief', [{ json: { output: { outline: [{ h2: 'What an AI consulting engagement covers', points: ['scope', 'data', 'pilots'] }], angle: 'x'.repeat(2400) } } }]);
+  mock('Count Prompt (Strategy Brief)', [{ json: { input_tokens: 16567 } }]);
+  mock('Count Answer (Strategy Brief)', [{ json: { input_tokens: 16567 + 900 } }]);
+  a9nodeOff();
+  const once = (await run('Run Ledger Settle', [{ json: {} }]))[0].json;
+  a9node({ 'Claude — Strategy Brief': 2 });
+  let twice = null; try { twice = (await run('Run Ledger Settle', [{ json: {} }]))[0].json; } finally { a9nodeOff(); }
+  const b1 = (once.ai_by_node || {})['Strategy Brief'] || {}, b2 = (twice.ai_by_node || {})['Strategy Brief'] || {};
+  console.log('   Strategy Brief once ->', JSON.stringify({ in: b1.in_tokens, usd: b1.usd }), ' with a retry ->', JSON.stringify({ in: b2.in_tokens, usd: b2.usd, basis: b2.basis }));
+  check('R57: with the model node showing two runs, the Strategy Brief is priced for two calls — twice the counted prompt — and the basis names the retry',
+    b1.in_tokens === 16567 && b2.in_tokens === 2 * 16567 && b2.usd > b1.usd * 1.9 && /1 of the 2 model call\(s\) were a retry after a failed answer/.test(b2.basis || ''), JSON.stringify({ b1, b2 }));
+  check('R57: the measured half stays the one call the counter saw; the retry is a modelled repeat of it',
+    b2.measured_usd === b1.measured_usd && b2.estimated_usd > b1.estimated_usd, JSON.stringify({ m1: b1.measured_usd, m2: b2.measured_usd, e1: b1.estimated_usd, e2: b2.estimated_usd }));
+  // ---- a monitor: the AI Visibility Tracker's settle ----
+  reset();
+  mock('Run Ledger Row (AI)', [{ json: { run_id: 'test-exec', key: 'schedule:ai_visibility', mode: 'ai_visibility', est_usd: 0.27, dfs_est_usd: 0.6, status: 'reserved', created_at: new Date().toISOString(), cost_mode: 'ai_visibility' } }]);
+  mock('AI Metrics', [{ json: { site_id: 'site_techand-ai', cost_usd: 0.7794 } }]);
+  mock('AI Brief', [{ json: { output: A9.ai_brief_output } }]);
+  mock('Count Prompt (AI Brief)', [{ json: { input_tokens: 4830 } }]);
+  mock('Count Answer (AI Brief)', [{ json: { input_tokens: 4830 + 760 } }]);
+  a9node({ 'Claude — AI Brief': 2 });
+  let mon = null; try { mon = (await run('Ledger Settle (AI)', [{ json: {} }], { code: 'Ledger_Settle_AI_' }))[0].json; } finally { a9nodeOff(); }
+  const bb = (mon.ai_by_node || {})['AI Brief'] || {};
+  console.log('   AI Brief with a retry ->', JSON.stringify({ calls: mon.ai_calls, in: bb.in_tokens, basis: bb.basis }));
+  check('R57: a monitor agent re-run by retryOnFail is priced for both calls (the call table names its model node)',
+    mon.ai_calls === 2 && bb.in_tokens === 2 * 4830 && /retry after a failed answer/.test(bb.basis || ''), JSON.stringify({ calls: mon.ai_calls, bb }));
+});
+
+await guard('S132 R68 R70 R81 R82 R101 every paid call in the cost, none paid for nothing, finished runs closed', async () => {
+  const SN = 'S132 R68 R70 R81 R82 R101 — the audit counts its first GBP lookups and never re-sends a 40102, named competitors skip the paid discovery, finished / refused / parent rows are closed, the Site Tracker and Link Builder settle what their tasks reported, a describe run is priced once';
+  reset(); begin(SN); const check = a9check(SN);
+  if (!A9) { check('the A9 fixtures are readable', false, 'missing fixtures_r_a9.js'); return; }
+  const fs = require('fs'), path = require('path'), CD = process.env.CODE_DIR || path.join(__dirname, 'code_v4');
+  // ---- R68: 40102 "No Search Results." is a final answer ----
+  const v = (await run('_dfs_retry', [{ json: { answer: A9.gbp_595[0] } }]))[0].json;
+  console.log('   40102 verdict ->', JSON.stringify({ ok: v.ok, retryable: v.retryable, empty: v.empty, why: v.why }));
+  check('R68: DataForSEO\'s 40102 "No Search Results." (the "Tech& Dubai" GBP lookup of 595 / 641) is a final, valid empty answer — not retried, not a failure',
+    v.ok === true && v.retryable === false && v.empty === true && v.stats && v.stats.failed === 0, JSON.stringify(v));
+  const v2 = (await run('_dfs_retry', [{ json: { answer: { status_code: 20000, tasks: [{ id: 't', status_code: 40101, status_message: 'Internal SE Server Error.' }] } } }]))[0].json;
+  check('R68: a real server error inside a 200 is still retried', v2.ok === false && v2.retryable === true, JSON.stringify(v2));
+  // ---- R68 / R82: the audit's cost walk, on exec 595's GBP answers and crawl ----
+  const walk = (file) => {
+    const src = fs.readFileSync(path.join(CD, file), 'utf8');
+    const a = src.indexOf('const CC = (() => {'), b = src.indexOf('})();', a) + 5;
+    const s = src.indexOf('const __LEDGER_NODES = ['), e = src.indexOf('// ---- what Claude cost this run', s);
+    if (a < 0 || s < 0 || e < 0) return { error: 'cost walk not found in ' + file };
+    const data = { 'Fetch GBP': A9.gbp_595, 'Fetch GBP (Retry)': A9.gbp_retry_595, 'Start Crawl': A9.start_crawl_595, 'Check Crawl': [A9.check_crawl_595], 'Normalize Input': [{ crawl_max_pages: 200 }] };
+    const $ = (n) => { if (!data[n]) throw new Error('no data ' + n); const arr = data[n].map(j => ({ json: j })); return { all: () => arr, first: () => arr[0] }; };
+    const listed = (src.slice(s, src.indexOf('];', s)).match(/'([^']+)'/g) || []).map(x => x.slice(1, -1));
+    return { ...Function('$', src.slice(a, b) + '\n' + src.slice(s, e) + '\nreturn run_ledger;')($), listed };
+  };
+  const rl = walk('Build_Audit_Report.js');
+  console.log('   audit 595 cost ->', JSON.stringify({ usd: rl.dataforseo_usd, by: rl.by_node }));
+  check('R68 / R82: the audit\'s DataForSEO cost on exec 595 is $0.0373 — the crawl\'s $0.0211 estimate plus all three GBP lookups — not the $0.0265 it settled (the first "Fetch GBP" was not on the list)',
+    rl.dataforseo_usd === 0.0373 && rl.by_node && rl.by_node['Fetch GBP'] === 0.0108 && rl.by_node['Fetch GBP (Retry)'] === 0.0054, JSON.stringify(rl));
+  const lists = ['Build_Audit_Report.js', 'Build_Full_Report.js', 'Build_Ladder_Report.js', 'Build_Keyword_File.js'].map(f => [f, walk(f).listed || []]);
+  // the dossier also named Run Ladder Research and Run Reach Requests; re-checked in the code, the builders whose runs reach them
+  // (the ladder report and the keyword file) already listed them — only Fetch GBP was missing, from the audit and the full report
+  check('R68: the first attempts are on the cost list of every builder whose run reaches them (Fetch GBP: audit + full report; Run Ladder Research: ladder; Run Reach Requests: keyword file)',
+    lists[0][1].includes('Fetch GBP') && lists[1][1].includes('Fetch GBP') && lists[2][1].includes('Run Ladder Research') && lists[3][1].includes('Run Reach Requests'),
+    JSON.stringify(lists.map(([f, l]) => [f, ['Fetch GBP', 'Run Ladder Research', 'Run Reach Requests'].filter(x => !l.includes(x))])));
+  const W = a9wiring();
+  const LL = (W && W.main && W.main.ledger_lists) || {};
+  check('R68: the build derived every list from the workflow — every paid DataForSEO node a builder\'s run can reach is on its list',
+    Object.keys(LL).length >= 5 && Object.values(LL).every(x => Array.isArray(x.reachable_paid) && x.reachable_paid.length > 0), JSON.stringify(Object.keys(LL)));
+  // ---- R70: named competitors skip the paid discovery ----
+  const C = (W && W.main && W.main.competitors) || {};
+  check('R70: with competitors named, Schema Findings goes past Find Competitors straight to Fallback Queries, and Fallback Queries past Fallback SERP straight to Pick Competitors',
+    a9eq(C.schema_findings, ['Competitors Named?']) && a9eq(C.gate_true, ['Fallback Queries']) && a9eq(C.gate_false, ['Find Competitors'])
+    && a9eq(C.serp_gate_true, ['Pick Competitors']) && a9eq(C.serp_gate_false, ['Fallback SERP']) && a9eq(C.fallback_queries_from, ['Competitors Named?', 'Find Competitors Answers']), JSON.stringify(C));
+  const ifv = (sf) => { if (!C.expr) return null; const body = C.expr.replace(/^\{\{\s*/, '').replace(/\s*\}\}$/, ''); return Function('$', 'return (' + body + ');')(() => ({ first: () => ({ json: sf }) })); };
+  check('R70: the gate applies Pick Competitors\' own test — a named rival skips, none or only our own domain does not',
+    ifv({ domain: 'techand.ai', competitors: ['www.cleartax.com'] }) === true && ifv({ domain: 'techand.ai', competitors: [] }) === false
+    && ifv({ domain: 'techand.ai', competitors: ['techand.ai', 'blog.techand.ai'] }) === false && ifv({ domain: 'techand.ai' }) === false, JSON.stringify(C.expr));
+  reset();
+  mock('Schema Findings', [{ json: { domain: 'techand.ai', competitors: ['cleartax.com', 'avalara.com'] } }]);
+  mock('Fallback Queries', [{ json: { query: 'e invoicing software uae', source: 'your services' } }]);
+  let pc = null; try { pc = await run('Pick Competitors', store['Fallback Queries']); } catch (e) { pc = null; }
+  check('R70: Pick Competitors runs on the named path, where the discovery\'s answers do not exist, and takes the request\'s competitors as given',
+    !!pc && pc[0].json.method === 'provided by user' && a9eq(pc.slice(1).map(i => i.json.domain), ['cleartax.com', 'avalara.com']), JSON.stringify(pc && pc.map(i => i.json.domain)));
+  // ---- R81 parts 2-3: finished, refused and parent rows are closed ----
+  const T = (hms) => '2026-10-15T' + hms + '.000Z';
+  const assess = ['598', '599', '600'].map((id, i) => ({ id: 80 + i, run_id: id, mode: 'assess', status: 'done', created_at: T('19:01:0' + i), settled_at: '', updatedAt: T('19:02:1' + i) }));
+  const refused = { id: 92, run_id: '624', mode: 'backlinks', status: 'refused', created_at: T('19:29:30'), settled_at: T('19:29:39') };
+  const mine628 = { id: 96, run_id: '628', key: 'schedule:link_builder', mode: 'link_builder', status: 'reserved', created_at: T('19:30:00'), dfs_balance: 11.4 };
+  const r1 = await a9kit({ call: 'dfsRun', rows: [...assess, refused, mine628], mine: mine628, end_balance: 11.3502, settled_at: T('19:36:00'), engine_usd: 0.0498, calls: 1 });
+  console.log('   628 alone? ->', JSON.stringify({ overlapped: r1.overlapped, attributed: r1.attributed, usd: r1.usd }));
+  check('R81: three Keyword Check rows that finished at 19:02 (done, no settled_at) and a backlinks run refused at 19:29:39 are not "in flight" for a run that reserved at 19:30 — it is measured against the account',
+    a9eq(r1.overlapped, []) && r1.attributed === true && r1.usd === 0.0498 && !/were in flight/.test(r1.basis), JSON.stringify(r1));
+  const parent = { id: 90, run_id: '620', key: 'app:co_1', mode: 'ai_visibility', status: 'reserved', created_at: T('19:19:58') };
+  const handoff = { id: 89, run_id: '619', key: 'app:co_1', mode: 'backlinks', status: 'done', dfs_source: 'handoff', created_at: T('19:19:00'), settled_at: T('19:25:00') };
+  const child = { id: 93, run_id: '623', key: 'parent:620', mode: 'ai_visibility', status: 'reserved', created_at: T('19:20:00'), dfs_balance: 12.3 };
+  const r2 = await a9kit({ call: 'dfsRun', rows: [parent, handoff, child], mine: child, end_balance: 11.5206, settled_at: T('19:26:00'), engine_usd: 0.7794, calls: 1 });
+  check('R81 (A5\'s note): the parent that started this run (its key parent:620) and a hand-off row spend nothing — a child can be measured alone',
+    a9eq(r2.overlapped, []) && r2.attributed === true, JSON.stringify(r2));
+  const other = { id: 97, run_id: '700', mode: 'keyword', status: 'reserved', created_at: T('19:31:00') };
+  const r3 = await a9kit({ call: 'dfsRun', rows: [...assess, refused, mine628, other], mine: mine628, end_balance: 11.3502, settled_at: T('19:36:00'), engine_usd: 0.0498, calls: 1 });
+  check('R81: a run that really is still reserved inside the window is still in flight — the account is not attributed', a9eq(r3.overlapped, ['700']) && r3.attributed === false, JSON.stringify(r3.overlapped));
+  check('R81 part 2: Settle Run Ledger (Assess) writes settled_at and dfs_source (it dropped both, so every Keyword Check row stayed open for ever)',
+    W && ['settled_at', 'dfs_source'].every(k => (W.assess_settle_columns || []).includes(k)), JSON.stringify(W && W.assess_settle_columns));
+  // ---- R82: the Site Tracker and the Link Builder settle what their own tasks reported ----
+  reset();
+  mock('Run Ledger Row (Site)', [{ json: { run_id: 'test-exec', key: 'schedule:site_tracker', mode: 'site_tracker', est_usd: 0.03, dfs_est_usd: 0.01, status: 'reserved', created_at: new Date().toISOString(), cost_mode: 'site_tracker' } }]);
+  mock('SERP Check (Site) Answers', A9.site_serp_634.map(j => ({ json: j })));
+  mock('Google Trends Answers', A9.site_trends_634.map(j => ({ json: j })));
+  mock('Site Brief', [{ json: { output: { headline: 'A quiet week', summary: 'x'.repeat(1400), highlights: ['a', 'b'] } } }]);
+  mock('Count Prompt (Site Brief)', [{ json: { input_tokens: 5200 } }]);
+  mock('Count Answer (Site Brief)', [{ json: { input_tokens: 5200 + 420 } }]);
+  const site = (await run('Ledger Settle (Site)', [{ json: {} }], { code: 'Ledger_Settle_Site_' }))[0].json;
+  console.log('   site settle ->', JSON.stringify({ dfs: site.dfs_usd, m: site.dfs_measured, ai: site.ai_usd, src: site.ai_source, counted: site.ai_counted_nodes }));
+  check('R82: the Site Tracker settles the $0.0310 its SERP checks ($0.02) and Trends lookup ($0.011) reported, measured — not its $0.0100 reservation (row 98)',
+    site.dfs_usd === 0.031 && site.dfs_measured === true, JSON.stringify(site));
+  check('R82: and its Site Brief is priced from the token counter, not from the $0.03 per-mode reservation',
+    site.ai_source === 'priced' && a9eq(site.ai_counted_nodes, ['Site Brief']) && site.ai_usd !== 0.03 && site.ai_measured_usd > 0, JSON.stringify({ src: site.ai_source, ai: site.ai_usd, basis: site.ai_basis }));
+  reset();
+  mock('Run Ledger Row (LB)', [{ json: { run_id: 'test-exec', key: 'schedule:link_builder', mode: 'link_builder', est_usd: 0.3, dfs_est_usd: 0.05, status: 'reserved', created_at: new Date().toISOString(), cost_mode: 'link_builder' } }]);
+  mock('Run LB DFS Answers', A9.lb_dfs_628.map(j => ({ json: j })));
+  const lb = (await run('Ledger Settle (LB)', [{ json: {} }], { code: 'Ledger_Settle_LB_' }))[0].json;
+  delete store['Run LB DFS Answers'];
+  const lb0 = (await run('Ledger Settle (LB)', [{ json: {} }], { code: 'Ledger_Settle_LB_' }))[0].json;
+  console.log('   LB settle ->', JSON.stringify({ dfs: lb.dfs_usd, m: lb.dfs_measured }), ' no pull ->', JSON.stringify({ dfs: lb0.dfs_usd, m: lb0.dfs_measured }));
+  check('R82: the Link Builder settles the $0.0498 its one paid pull reported (both attempts, each task once), measured — read once from the gate, never once per answer',
+    lb.dfs_usd === 0.0498 && lb.dfs_measured === true, JSON.stringify(lb));
+  check('R82: a week in which that pull never ran sent no paid task and settles $0, not the $0.05 reservation',
+    lb0.dfs_usd === 0 && lb0.dfs_measured === true && /DataForSEO \$0\.0000 nothing spent/.test(lb0.cost_basis), JSON.stringify(lb0));
+  // ---- R101: a describe run is priced once ----
+  const d1 = await a9kit({ call: 'pick', kind: 'ai', request: { mode: 'site_description', need_site_description: true } });
+  const d2 = await a9kit({ call: 'pick', kind: 'ai', request: { mode: 'keyword', verdict_only: true, need_site_description: true } });
+  check('R101: "Describe my website" reserves the describe step once ($0.03), not describe + describe ($0.06)', d1.usd === 0.03 && a9eq(d1.keys, ['describe']), JSON.stringify(d1));
+  check('R101: another mode that must also describe the site still adds the describe step', a9eq(d2.keys, ['verdict', 'describe']) && d2.usd === 0.19, JSON.stringify(d2));
+});
+
+await guard('S133 R115 a monitor callback carries the settled run_ledger, posted after the settle', async () => {
+  const SN = 'S133 R115 — every monitor callback (and "Describe my website") waits for its run\'s settle and carries the settled run_ledger in the main workflow\'s field names; a run whose model calls were not priced omits ai_usd';
+  reset(); begin(SN); const check = a9check(SN);
+  const W = a9wiring();
+  const WANT = ['SEO Agent — AI Visibility Tracker', 'SEO Agent — Backlink Monitor', 'SEO Agent — AI Pulse', 'SEO Agent — AI Growth', 'SEO Agent — Link Builder', 'SEO Agent — Site Tracker', 'SEO Agent — Content Cadence'];
+  const CB = (W && W.callbacks) || {};
+  const bad = WANT.filter(w => !(CB[w] || []).length || !(CB[w] || []).every(c => c.proof && c.proof.reachable && !c.proof.bypass && c.proof.merge && a9eq(c.proof.input1, [c.settle])));
+  check('R115: in all seven monitors that post a report the POST is reached only through a Merge whose second input is the run\'s settle (exec 623 posted 1.1 s before it settled)',
+    !!W && !bad.length, 'not proved: ' + bad.join(', '));
+  check('R115: the one monitor still posting before its settle is recorded with its reason (the Rank Tracker — build_ladder_extras.py)',
+    W && a9eq(Object.keys(W.callback_gap || {}), ['SEO Agent — Rank Tracker']), JSON.stringify(W && W.callback_gap));
+  // the Join (a Merge, append) hands this node the callback items of ONE arrival (input 0) followed by the settle's answer (input 1)
+  const SETTLED = { run_id: '623', status: 'done', settled_usd: 0.0678, cost_mode: 'ai_visibility', dfs_usd: 0.7794, dfs_measured: true, ai_usd: 0.0678, ai_measured: false, ai_measured_usd: 0.0514, ai_source: 'priced',
+    ai_basis: 'measured: Anthropic /v1/messages/count_tokens counted the prompt and the answer of every call', settled_at: '2026-10-15T19:30:12.000Z', dfs_source: 'tasks',
+    cost_basis: 'Claude $0.0678 PARTLY ESTIMATED: $0.0514 measured, $0.0164 estimated (…); DataForSEO $0.7794 measured' };
+  const AICB = { status: 'progress', stage: 'ai_visibility', request_id: 'r1', domain: 'techand.ai', cost_usd: 0.7794, callback_url: 'https://app.example.test/hook' };
+  const join = (cbs, settle) => [...cbs.map(j => ({ json: j })), ...(settle ? [{ json: settle }] : [])];
+  let out = []; try { out = await run('Callback Ledger (AI)', join([AICB], SETTLED), { code: 'Callback_Ledger_AI_' }); } catch (e) { out = []; }
+  const rl = out[0] && out[0].json && out[0].json.run_ledger;
+  console.log('   AI callback run_ledger ->', JSON.stringify(rl));
+  check('R115: the AI visibility callback carries run_ledger = { dataforseo_usd, dataforseo_estimated_usd, ai_usd, ai_cost: { usd, measured_usd, estimated_usd, estimated }, ai_cost_estimated, cost_basis, settled: true } from the settle — and only the callback item is posted, never the settle\'s row',
+    out.length === 1 && !!rl && rl.dataforseo_usd === 0.7794 && rl.dataforseo_estimated_usd === 0 && rl.ai_usd === 0.0678 && rl.ai_cost && rl.ai_cost.usd === 0.0678
+    && rl.ai_cost.measured_usd === 0.0514 && rl.ai_cost.estimated_usd === 0.0164 && rl.ai_cost.estimated === true && rl.ai_cost_estimated === true
+    && rl.cost_basis === SETTLED.cost_basis && rl.settled === true && out[0].json.callback_url === 'https://app.example.test/hook' && out[0].json.stage === 'ai_visibility', JSON.stringify(out.map(i => i.json)));
+  const res = (await run('Callback Ledger (AI)', join([AICB], { ...SETTLED, ai_usd: 0.27, ai_measured_usd: 0, ai_source: 'reserved', ai_basis: 'the per-mode reservation: 1 model node(s) ran' }), { code: 'Callback_Ledger_AI_' }))[0].json.run_ledger;
+  check('R115: a run whose model calls were not priced OMITS ai_usd (0 would read as "no model call") and says why',
+    !('ai_usd' in res) && res.ai_cost && res.ai_cost.reported === false && !('usd' in res.ai_cost) && res.ai_cost_estimated === true && /not priced/.test(res.ai_cost.basis), JSON.stringify(res));
+  const none = (await run('Callback Ledger (AI)', join([AICB], { ...SETTLED, ai_usd: 0, ai_measured: true, ai_measured_usd: 0, ai_source: 'none', ai_basis: 'no model call ran in this run' }), { code: 'Callback_Ledger_AI_' }))[0].json.run_ledger;
+  check('R115: a run with genuinely no model call sends ai_usd: 0', none.ai_usd === 0 && none.ai_cost.usd === 0 && none.ai_cost_estimated === false, JSON.stringify(none));
+  const again = await run('Callback Ledger (AI)', join([], SETTLED), { code: 'Callback_Ledger_AI_' });
+  check('R115: a second settle answer with no callback items behind it (a branch that reached the settle twice) posts nothing', again.length === 0, JSON.stringify(again));
+  delete store['Ledger Settle (AI)'];
+  const unsettled = await run('Callback Ledger (AI)', join([AICB], null), { code: 'Callback_Ledger_AI_' });
+  check('R115: a settle that failed never costs the customer the report — released at the end, the callback still goes out, saying it carries no settled figure',
+    unsettled.length === 1 && unsettled[0].json.run_ledger.settled === false && !('ai_usd' in unsettled[0].json.run_ledger) && unsettled[0].json.stage === 'ai_visibility', JSON.stringify(unsettled.map(i => i.json.run_ledger)));
+  // the Content Cadence: two builders one weekly run can both use — each arrival is posted once, with the settled figure
+  reset();
+  const CSET = { ...SETTLED, run_id: '638', cost_mode: 'content_cadence', dfs_usd: 0, ai_usd: 0, ai_measured_usd: 0, ai_source: 'none', cost_basis: 'Claude $0.0000 nothing spent; DataForSEO $0.0000 nothing spent' };
+  mock('Ledger Settle (Cadence)', [{ json: CSET }]);
+  const note = await run('Callback Ledger (Cadence)', join([{ stage: 'content_cadence', site_id: 's1', callback_url: 'https://app.example.test/a' }], CSET), { code: 'Callback_Ledger_Cadence_' });
+  const status = await run('Callback Ledger (Cadence)', join([{ stage: 'content_cadence', site_id: 's2', callback_url: 'https://app.example.test/b' }], null), { code: 'Callback_Ledger_Cadence_' });
+  check('R115: the Cadence posts the Cadence Note sites AND the Cadence Status sites of one run — the second arrival, released at the end, carries the settle that ran',
+    note.length === 1 && status.length === 1 && note[0].json.site_id === 's1' && status[0].json.site_id === 's2'
+    && note[0].json.run_ledger.settled === true && status[0].json.run_ledger.settled === true && status[0].json.run_ledger.ai_usd === 0, JSON.stringify([note, status].map(x => x.map(i => i.json.run_ledger))));
+  // Pulse: the callback builder is an IF's true branch
+  reset();
+  const pu = await run('Callback Ledger (Pulse)', join([{ stage: 'ai_pulse', callback_url: 'https://app.example.test/hook', alerts: [1] }], { ...SETTLED, run_id: '630', cost_mode: 'ai_pulse', dfs_usd: 0.084, ai_usd: 0, ai_measured_usd: 0, ai_source: 'none' }), { code: 'Pulse__Callback_Ledger_Pulse_' });
+  check('R115: the AI Pulse callback carries its settled DataForSEO money and Claude $0', pu.length === 1 && pu[0].json.run_ledger.dataforseo_usd === 0.084 && pu[0].json.run_ledger.ai_usd === 0, JSON.stringify(pu.map(i => i.json.run_ledger)));
+  // Describe my website: through the settle first
+  const D = (W && W.main && W.main.describe) || {};
+  check('R115: Build Description Page feeds only the settle chain, and Describe Ledger hands the description on from Run Ledger Settle',
+    a9eq(D.build_description_page, ['DFS Balance End']) && a9eq(D.describe_ledger_from, ['Run Ledger Settle']) && a9eq(D.describe_ledger_to, ['Via Webhook (Describe)?']), JSON.stringify(D));
+  reset();
+  mock('Build Description Page', [{ json: { domain: 'techand.ai', request_id: 'r2', callback_url: 'https://app.example.test/hook', site_description: { business_description: 'ERP and AI consulting' }, via_webhook: true } }]);
+  mock('Run Ledger Settle', [{ json: { run_id: '606', ai_usd: 0.0117, ai_measured: true, ai_measured_usd: 0.0117, ai_source: 'priced', dfs_usd: 0, dfs_measured: false, dfs_estimated_usd: 0,
+    cost_basis: 'Claude $0.0117 measured; DataForSEO $0.0000 nothing spent', settled_at: '2026-10-15T19:05:00.000Z' } }]);
+  let dl = []; try { dl = await run('Describe Ledger', [{ json: {} }]); } catch (e) { dl = []; }
+  const resp = dl.length ? (await run('Build Describe Response', dl))[0].json : {};
+  console.log('   describe callback run_ledger ->', JSON.stringify(resp.run_ledger));
+  check('R115: the describe callback carries the settled run_ledger (exec 606 sent run_ledger: null)',
+    !!resp.run_ledger && resp.run_ledger.ai_usd === 0.0117 && resp.run_ledger.ai_cost.measured_usd === 0.0117 && resp.run_ledger.dataforseo_usd === 0 && resp.run_ledger.settled === true, JSON.stringify(resp));
 });
 
 // ===================================================================================
