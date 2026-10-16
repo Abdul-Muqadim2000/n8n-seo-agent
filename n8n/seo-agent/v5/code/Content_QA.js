@@ -47,6 +47,20 @@ const addSrc = (u, t) => { const k = SRC.key(u); if (!k || !String(t || '').trim
 (prev.facts || []).forEach(f => addSrc(f && f.url, [f && f.text, f && f.claim, f && f.title].filter(Boolean).join(' ')));
 (brief.evidence_plan || []).forEach(e => addSrc(e && e.source_url, e && e.fact));
 (prev.competitors || []).forEach(c => addSrc(c && c.url, [c && c.content_full, c && c.content, c && c.snippet].filter(Boolean).join(' ')));
+// B3-8 (2026-10-16, benchmark area 3 / area 4): a REFRESH re-reads the sources the live page cites (*Refresh Source Plan* -> *Fetch
+// Refresh Sources* -> *Refresh Sources*, in front of this node). A page rewritten on top of its live version used to keep every figure
+// it carried with its old citation unchecked: §9b looks a figure up only in a source the run read, and the run never read the live
+// page's own sources, so "the source was never fetched" let them all through. The re-read text is the whole page as it reads today
+// (cut only at FRESH_CAP characters, and then said so), so a figure missing from it is missing from the source, not from an excerpt.
+let RS = null; try { RS = ($('Refresh Sources').first().json || {}).refresh_sources || null; } catch (e) { RS = null; }
+const FRESH_CAP = 40000;
+const freshRead = new Map();   // key -> { cut } for every source re-read whole on this refresh
+// The whole page supersedes any snippet of it the run held, and an ellipsis or a "Read more" link inside a page read whole is page
+// furniture, not a cut: it is neutralised, so R37's "not in the excerpt" is said only when FRESH_CAP really cut the text (then " …").
+if (RS && RS.refresh) (RS.sources || []).filter(s => s && s.ok && String(s.text || '').trim()).forEach(s => { const k = SRC.key(s.url); if (!k) return;
+  const whole = String(s.text).replace(/\.{3}|…|\bread more\b/gi, ' ');
+  const cut = !!s.cut || whole.length > FRESH_CAP;
+  srcText.set(k, whole.slice(0, FRESH_CAP) + (cut ? ' …' : '')); freshRead.set(k, { cut }); });
 // the sources a sentence itself cites, and whether one of them states this amount (same rule as §9b: the figure is looked up only in the
 // pages that sentence links to, never in the whole run's reading).
 // A link target is full of full stops (`…/cabinet-decision-106.pdf`), and a sentence finder that splits on "." splits inside it — which
@@ -242,33 +256,65 @@ const stats = [...statHits].filter(s => !/^(19|20)\d\d/.test(s)).filter(s => !cl
 //     the client's own facts carry needs no external source; a sentence whose sources we never read is left alone (nothing to check against).
 // (`srcText` / `ownFacts` are built in §2b, above the money mask, so both checks read the same source corpus — B3-1.)
 const unverified_figures = [];
-{
+// B3-8: the check is one function, so the live page a refresh starts from is checked by exactly the rule the draft is
+const citedFigureCheck = (text, limit) => {
   const pad = (x) => ' '.repeat(x.length);
   // a full stop between two digits is a decimal point, not the end of a sentence ("23.5%" must stay whole)
   const isBreak = (t, i) => { const c = t[i]; if (c === '\n' || c === '|' || c === '!' || c === '?') return true; if (c !== '.') return false; return !(/\d/.test(t[i - 1] || '') && /\d/.test(t[i + 1] || '')); };
-  const bounds = (text, at, len) => { let a = at, b = at + len; while (a > 0 && !isBreak(text, a - 1)) a--; while (b < text.length && !isBreak(text, b)) b++; return [a, b]; };
-  const seen = new Set(); const marks = [];
-  for (const m of [...md.matchAll(/\[[^\[\]]+\]\((https?:\/\/[^)\s]+)\)/g)]) {
-    const [a, b] = bounds(md, m.index, m[0].length); const id = a + ':' + b; if (seen.has(id)) continue; seen.add(id);
-    const sent = md.slice(a, b);
+  const bounds = (t, at, len) => { let a = at, b = at + len; while (a > 0 && !isBreak(t, a - 1)) a--; while (b < t.length && !isBreak(t, b)) b++; return [a, b]; };
+  const seen = new Set(); const found = []; let checked = 0;
+  for (const m of [...String(text).matchAll(/\[[^\[\]]+\]\((https?:\/\/[^)\s]+)\)/g)]) {
+    const [a, b] = bounds(text, m.index, m[0].length); const id = a + ':' + b; if (seen.has(id)) continue; seen.add(id);
+    const sent = text.slice(a, b);
     const urls = [...sent.matchAll(/\]\((https?:\/\/[^)\s]+)\)/g)].map(x => x[1]);
     const texts = urls.map(u => srcText.get(SRC.key(u)) || '').filter(Boolean);
     if (!texts.length) continue;   // the source was never fetched: nothing to look the figure up in
     const body = sent.replace(/\[[^\[\]]*\]\([^)]*\)/g, pad).replace(/\[[^\[\]]*\]/g, pad);   // anchors, URLs and existing [Confirm: …] / [Price] markers are not claims
+    // R37 (2026-10-16): "does not carry" is said only of a source text the run read whole; a figure missing from a search snippet that
+    // was cut short ("…", "Read more") is "not in the excerpt the run read" — still held for review, but never blamed on the source.
+    // (B3-8: a source a refresh re-read whole carries no cut marker unless FRESH_CAP cut it — see §2b.)
     for (const f of SRC.figures(body)) {
+      checked++;
       if (texts.some(t => SRC.hasFigure(f, t))) continue;
       if (SRC.hasFigure(f, ownFacts) || clientNums.includes(String(f.raw).toLowerCase())) continue;
-      // R37 (2026-10-16): "does not carry" is said only of a source text the run read whole; a figure missing from a search snippet that
-      // was cut short ("…", "Read more") is "not in the excerpt the run read" — still held for review, but never blamed on the source.
-      unverified_figures.push({ figure: f.raw, sources: [...new Set(urls.map(u => SRC.host(u)))], reason: texts.some(t => SRC.cutShort(t)) ? 'not_in_excerpt' : 'absent' });
-      marks.push({ start: a + f.index, end: a + f.index + f.length, raw: f.raw });
-      if (marks.length >= 12) break;
+      found.push({ figure: f.raw, sources: [...new Set(urls.map(u => SRC.host(u)))], reason: texts.some(t => SRC.cutShort(t)) ? 'not_in_excerpt' : 'absent',
+        start: a + f.index, end: a + f.index + f.length, raw: f.raw, context: plain(sent).slice(0, 160),
+        refreshed: urls.some(u => freshRead.has(SRC.key(u))) });
+      if (found.length >= limit) break;
     }
-    if (marks.length >= 12) break;
+    if (found.length >= limit) break;
   }
+  return { found, checked };
+};
+{
+  const r9b = citedFigureCheck(md, 12);
+  const marks = r9b.found.map(x => ({ start: x.start, end: x.end, raw: x.raw }));
+  r9b.found.forEach(x => unverified_figures.push({ figure: x.figure, sources: x.sources, reason: x.reason, ...(x.refreshed ? { refreshed_source: true } : {}) }));
   marks.sort((x, y) => y.start - x.start);
   for (const t of marks) md = md.slice(0, t.start) + '[Confirm: ' + t.raw + ']' + md.slice(t.end);
   if (marks.length) fixes.push(`Marked ${marks.length} figure(s) that the cited source does not carry, or that the excerpt of it the run read does not show, as [Confirm: …] for review`);
+}
+// 9c. B3-8: on a refresh, the LIVE page is checked against its own cited sources as they read today — by the same rule (§9b), report
+//     only: the live copy is not ours to mark, the draft above is. What the owner is told: which figures the page has been showing that
+//     its own sources no longer state, and whether the refreshed draft still repeats them (then they are marked [Confirm: …] above).
+let refresh_check = null;
+if (RS && RS.refresh) {
+  const srcs = Array.isArray(RS.sources) ? RS.sources : [];
+  const okS = srcs.filter(s => s && s.ok), failS = srcs.filter(s => s && !s.ok);
+  const live = RS.live_read && String(RS.live_markdown || '').trim() ? citedFigureCheck(String(RS.live_markdown), 20) : null;
+  const liveBad = live ? live.found.filter(x => x.refreshed) : [];
+  const draftFigs = new Set(unverified_figures.map(f => String(f.figure)));
+  refresh_check = {
+    refresh: true, page_url: String(RS.page_url || ''), live_read: !!RS.live_read,
+    sources_cited: Number(RS.cited) || srcs.length, sources_read: okS.length,
+    sources_failed: failS.map(s => ({ url: String(s.url || ''), reason: String(s.error || 'could not be read') })).slice(0, 8),
+    live_figures_checked: live ? live.checked : 0,
+    live_figures_unverified: liveBad.map(x => ({ figure: x.figure, sources: x.sources, reason: x.reason, context: x.context, still_in_draft: draftFigs.has(String(x.figure)) })).slice(0, 12),
+    draft_figures_on_refreshed_sources: unverified_figures.filter(f => f.refreshed_source).length,
+    basis: !RS.live_read ? 'the live page could not be read in this run, so its cited sources are unknown and nothing was re-checked'
+      : !srcs.length ? 'the live page cites no external source next to a figure, so there was nothing to re-check'
+        : 'the live page\'s ' + srcs.length + ' cited source(s) next to a figure were re-read today (' + okS.length + ' read' + (failS.length ? ', ' + failS.length + ' could not be read and were not checked' : '') + '); every figure of a sentence citing one was looked up in that source\'s text as it reads now, by the same rule as the draft'
+  };
 }
 
 // 10. Banned phrases (AI clichés and filler)
@@ -278,16 +324,33 @@ const banned_found = BANNED.map(p => ({ phrase: p, count: (lower.match(new RegEx
 const bannedCount = banned_found.reduce((s, x) => s + x.count, 0);
 
 // 11. Readability (Flesch reading ease, approximate syllables), sentence length, passive voice
-const sentences = bodyPlain.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(s => countWords(s) >= 3);
-const sentWords = sentences.map(countWords);
-const avgSentence = sentWords.length ? +(sentWords.reduce((a, b) => a + b, 0) / sentWords.length).toFixed(1) : 0;
-const longSentences = sentWords.filter(n => n > 28).length;
-const syl = (w) => { w = w.toLowerCase().replace(/[^a-z]/g, ''); if (!w) return 0; if (w.length <= 3) return 1; const m = w.replace(/(?:[^laeiouy]es|ed|[^laeiouy]e)$/, '').replace(/^y/, '').match(/[aeiouy]{1,2}/g); return m ? m.length : 1; };
+// B3-4 (2026-10-16): one formula, in the coverage kit, for the draft and for the competitor pages the band is read from (CVG.readability)
+const RD = CVG.readability(bodyPlain);
+const sentences = RD.sentences;
+const avgSentence = RD.avg_sentence_words;
+const longSentences = RD.long_sentences;
 const wordsArr = bodyPlain.split(/\s+/).filter(Boolean);
-const syllables = wordsArr.reduce((s, w) => s + syl(w), 0);
-const flesch = wordsArr.length && sentences.length ? +(206.835 - 1.015 * (wordsArr.length / sentences.length) - 84.6 * (syllables / wordsArr.length)).toFixed(1) : null;
+const flesch = RD.flesch;
 const passive = sentences.filter(s => /\b(is|are|was|were|been|being|be)\s+(\w+ed|built|made|done|seen|known|given|taken|chosen|written)\b/i.test(s)).length;
 const passive_pct = sentences.length ? Math.round(passive / sentences.length * 100) : 0;
+// 11b. B3-4: the band the draft is scored against comes from the pages that rank for this search (the same pool the coverage target
+//      reads), measured exactly as the draft is. It is ADVICE, never a refusal: it moves the 15 readability points and is reported with
+//      its basis, but it adds nothing to `warnings`. With too few competitor pages to measure, today's fixed band applies — and says so.
+let readPool = [];
+try { readPool = ($('Analyze Competitor Pages').first().json || {}).competitors || []; } catch (e) { readPool = []; }
+if (!readPool.length) readPool = prev.competitors || [];
+const RBAND = CVG.readBand(readPool);
+const read_position = flesch == null || !RBAND.ok ? null : (flesch < RBAND.low ? 'harder' : (flesch > RBAND.high ? 'easier' : 'in_band'));
+const read_band_line = !RBAND.ok ? ''
+  : 'the ' + RBAND.pages_measured + ' competitor pages read score Flesch ' + RBAND.p25 + '-' + RBAND.p75 + ' (median ' + RBAND.median + '); the band is ' + RBAND.low + '-' + RBAND.high
+    + (RBAND.clamped ? ' (its lower edge kept inside ' + CVG.BAND_FLOOR + '-' + CVG.BAND_CEIL + ')' : '');
+const read_basis = RBAND.ok
+  ? 'scored against the pages that rank for this search, measured the same way as the draft: ' + read_band_line + ', from ' + CVG.BAND_HARDER + ' points harder to ' + CVG.BAND_EASIER + ' points easier than their median'
+  : 'no band from the pages that rank (' + RBAND.reason + '), so the fixed band is used: Flesch 40+ with sentences of 22 words or fewer scores full marks';
+const read_note = flesch == null || !RBAND.ok ? ''
+  : read_position === 'harder' ? 'Readability: Flesch ' + flesch + ' is harder to read than the pages that rank (' + read_band_line + ') — shorter sentences and plainer words would bring it into the band. Advice, not a blocker.'
+    : read_position === 'easier' ? 'Readability: Flesch ' + flesch + ' is plainer than the pages that rank (' + read_band_line + ') — easy reading is good for readers; check the page still carries the technical precision its search expects. Advice, not a blocker.'
+      : '';
 
 // 12. Term coverage (brief terms first, else the competitor term model)
 const termList = (brief.terms_to_use || []).map(t => ({ term: String(t.term || t).toLowerCase(), min: Number(t.min_count) || 1 }))
@@ -387,15 +450,27 @@ if (!/\|.*\|/.test(md)) warnings.push('Comparison table missing');
 // v4.12: an AI answer target — the answer sits where an assistant reads first, and every search the assistants run before answering has a section
 const AT = prev.ai_target && prev.ai_target.question ? prev.ai_target : null;
 let ai_ready = null;
+// B3-6 (2026-10-16, benchmark area 3): does the page answer its own question early, and are its headings the questions readers ask?
+// Both used to be measured only inside the AI-target branch below, so a page with no `ai_target` — most pages — was never checked for
+// it (Surfer made answering up front half of its AI Search Score on 2026-10-01). They are measured on every draft now. The limit is
+// the Quick answer within ANSWER_FIRST_MAX words after the H1: 60 for an AI answer target (assistants read the first ~200 characters),
+// 120 for every other page (the copywriter writes a short introduction first, and the reader still meets the answer on the first screen).
+const h1At = withoutMeta.search(/^# .+$/m); const qaAt = qaMatch ? withoutMeta.indexOf(qaMatch[0]) : -1;
+const before = h1At >= 0 && qaAt > h1At ? countWords(plain(withoutMeta.slice(h1At, qaAt).replace(/^# .+$/m, ''))) : null;
+const heads = (md.match(/^#{2,3} .+$/gm) || []).map(h => plain(h.replace(/^#+\s*/, '')).toLowerCase());
+const qHeads = heads.filter(h => /\?\s*$/.test(h) || /^(how|what|which|why|when|where|who|is|are|can|does|do|should)\b/.test(h)).length;
+const ANSWER_FIRST_MAX = AT ? 60 : 120;
+const intent = { words_before_answer: before, answer_limit_words: ANSWER_FIRST_MAX, answer_first: before == null ? null : before <= ANSWER_FIRST_MAX,
+  question_headings: qHeads, quick_answer_words: answerWords, ai_target: !!AT,
+  basis: qaMatch ? 'the words between the H1 and the Quick answer, and the H2 / H3 headings phrased as questions, counted in the draft itself'
+    : 'no Quick answer line in the draft, so where the answer sits could not be measured (the missing block is its own warning)' };
+if (!AT && before != null && before > ANSWER_FIRST_MAX) warnings.push('Answer first: the Quick answer comes after ' + before + ' words of introduction — move it up so the page answers its own question within the first ' + ANSWER_FIRST_MAX + ' words under the H1');
+if (!AT && qHeads < 2 && answeredQuestions >= 3) warnings.push('Phrase at least 2 H2 / H3 headings as the questions readers ask (' + qHeads + ' now; the FAQ answers count elsewhere, but a question heading with its answer right under it is what search and AI answers quote)');
 if (AT) {
-  const h1At = withoutMeta.search(/^# .+$/m); const qaAt = qaMatch ? withoutMeta.indexOf(qaMatch[0]) : -1;
-  const before = h1At >= 0 && qaAt > h1At ? countWords(plain(withoutMeta.slice(h1At, qaAt).replace(/^# .+$/m, ''))) : null;
-  const heads = (md.match(/^#{2,3} .+$/gm) || []).map(h => plain(h.replace(/^#+\s*/, '')).toLowerCase());
   const STOPW = new Set(['the', 'and', 'for', 'with', 'what', 'how', 'which', 'are', 'can', 'does', 'your', 'you', 'that', 'this', 'from', 'into', 'best', '2024', '2025', '2026', '2027', 'list', 'official']);
   const tk = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter(w => w.length > 3 && !STOPW.has(w));
   const fan = (AT.fanout || []).filter(Boolean);
   const covered = fan.filter(f => { const T = tk(f); if (!T.length) return true; return heads.some(h => T.filter(w => h.includes(w)).length / T.length >= 0.5); });
-  const qHeads = heads.filter(h => /\?\s*$/.test(h) || /^(how|what|which|why|when|where|who|is|are|can|does|do|should)\b/.test(h)).length;
   ai_ready = { quick_answer_words: answerWords, words_before_answer: before, question_headings: qHeads, fanout_total: fan.length, fanout_covered: covered.length, missing: fan.filter(f => !covered.includes(f)) };
   if (before != null && before > 60) warnings.push('AI target: move the Quick answer right under the H1 (' + before + ' words come first; assistants read the first ~200 characters)');
   if (fan.length && covered.length < Math.ceil(fan.length / 2)) warnings.push('AI target: give these searches the assistants run their own question-style H2: ' + ai_ready.missing.slice(0, 4).map(f => '"' + f + '"').join(', '));
@@ -409,7 +484,7 @@ if (figExcerpt.length) warnings.push('Figures not in the excerpt of the cited so
 if (weakRepeats.length) warnings.push('A source with no independent authority was cited more than once (' + [...new Set(weakRepeats)].join(', ') + '): the repeats were unlinked — cite an official, standards, research or major-press source instead');
 if ((prev.internal_link_candidates || []).length > 1 && internalLinks === 0) warnings.push('No internal links to existing pages on the site');
 if (bannedCount) warnings.push('Filler / AI-cliché phrases to rewrite (' + bannedCount + '): ' + banned_found.slice(0, 8).map(b => '"' + b.phrase + '"' + (b.count > 1 ? ' x' + b.count : '')).join(', '));
-if (flesch != null && flesch < 30) warnings.push(`Hard to read (Flesch ${flesch}, average sentence ${avgSentence} words) — shorten sentences and use plainer words`);
+if (flesch != null && flesch < 30 && !RBAND.ok) warnings.push(`Hard to read (Flesch ${flesch}, average sentence ${avgSentence} words) — shorten sentences and use plainer words`);
 if (longSentences > Math.max(3, sentences.length * 0.12)) warnings.push(`${longSentences} sentences longer than 28 words — split them`);
 if (passive_pct > 25) warnings.push(`Passive voice in about ${passive_pct}% of sentences — rewrite in active voice`);
 if (termCoverage.length >= 8 && coverage_target_pct && coverage_pct < coverage_target_pct)
@@ -454,7 +529,10 @@ const structure_pts = 25 * structuralChecks.filter(Boolean).length / structuralC
 // FIX_PLAN G33: the 25 coverage points are measured against the best competitor's coverage (clamped 60-90%), not against a silent 100%.
 // With no competitor page read, coverage_ratio is the plain share, exactly as before.
 const coverage_pts = 25 * coverage_ratio;
-const readability_pts = flesch == null ? 10 : (flesch >= 40 && avgSentence <= 22 ? 15 : (flesch >= 30 && avgSentence <= 26 ? 10 : 4));   // B2B copy normally scores 30-55
+// B3-4: against the band the pages that rank set (in the band or plainer: 15; up to 10 points harder than its lower edge: 10; else 4);
+// with no band, today's fixed one (B2B copy normally scores 30-55)
+const readability_pts = flesch == null ? 10 : RBAND.ok ? (flesch >= RBAND.low ? 15 : (flesch >= RBAND.low - 10 ? 10 : 4))
+  : (flesch >= 40 && avgSentence <= 22 ? 15 : (flesch >= 30 && avgSentence <= 26 ? 10 : 4));
 const specificity_pts = 10 * Math.min(1, specificity / 0.8);
 const banned_pts = Math.max(0, 10 - 2 * bannedCount);
 const length_pts = 15 * (1 - Math.min(1, Math.abs(mainWords - target) / target));
@@ -564,6 +642,11 @@ if (AU && !AU.has_author_page) eeat_notes.push('The author has no profile page U
 if (AU && !(AU.same_as || []).length) eeat_notes.push('Add the author\'s LinkedIn or other public profiles (sameAs) to the business profile.');
 const insightPrompts = (md.match(/\[Author insight:[^\]]*\]/gi) || []).length;
 if (insightPrompts) eeat_notes.push(insightPrompts + ' [Author insight: ...] line(s) for the author to complete with first-hand experience before publishing.');
+// B3-8: what the refresh found on the live page (a note for the report, never an editor round: the draft is what the gate judges)
+if (refresh_check && refresh_check.live_figures_unverified.length) { const lf = refresh_check.live_figures_unverified;
+  eeat_notes.push('Refresh: the live page shows ' + lf.length + ' figure(s) its own cited source no longer states as it reads today: ' + lf.slice(0, 4).map(x => '"' + x.figure + '" (' + x.sources.join(', ') + ')').join('; ')
+    + (lf.some(x => x.still_in_draft) ? ' — the refreshed draft still carries ' + lf.filter(x => x.still_in_draft).length + ' of them, marked [Confirm: …]: quote the source\'s current figure or drop the claim' : ' — the refreshed draft no longer repeats them') + '.'); }
+if (refresh_check && refresh_check.sources_failed.length) eeat_notes.push('Refresh: ' + refresh_check.sources_failed.length + ' source(s) the live page cites could not be re-read today, so the figures citing them were not re-checked: ' + refresh_check.sources_failed.slice(0, 3).map(x => x.url).join(', ') + '.');
 if (role === 'local' && !(P.phone && PA.street)) eeat_notes.push('Local page without a full address and phone on file: fill in the business profile so the NAP block and LocalBusiness schema are complete.');
 if (V && (V.missing || []).length) eeat_notes.push('Video: missing ' + V.missing.join(', ') + (V.missing.includes('transcript') ? ' (paste the transcript from YouTube Studio → Subtitles)' : '') + '.');
 if (role === 'hub' && HPplanned.length) eeat_notes.push(HPplanned.length + ' cluster page(s) are planned and not live yet: this page links to none of them. They are listed in the package as "links to add when published" — add the link once each one is live.');
@@ -662,6 +745,10 @@ return [{ json: { ...prev, output: md, qa_round: round, editor_rounds, meta: { t
     keyword_mentions: kwCount, keyword_density_pct: density, h2_count: h2s.length, faq_count: validFaqs.length, question_headings: questionHeadings, answered_questions: answeredQuestions, internal_links: internalLinks, external_links: externalLinks, sources_cited: externalUrls.slice(0, 15),
     source_quality: externalUrls.reduce((m, e) => ({ ...m, [e.tier]: (m[e.tier] || 0) + 1 }), {}), weak_sources_unlinked: [...new Set(weakRepeats)], links_to_add_when_published: plannedLinksQA.map(p => ({ keyword: p.keyword || '', url: p.url, role: p.role, anchor: anchorText(p) })),
     answer_block_words: answerWords, meta_title_length: metaTitle.length, meta_description_length: metaDesc.length, unverified_statistics: stats, unverified_figures,
-    trusted_sources, banned_phrases: banned_found, readability: { flesch, avg_sentence_words: avgSentence, long_sentences: longSentences, passive_pct }, term_coverage: termCoverage, coverage_pct, coverage: coverage_report, coverage_target_pct, missing_terms: missingTerms, missing_subtopics: missingSubtopics, specificity_per_100_words: specificity,
+    trusted_sources, banned_phrases: banned_found, readability: { flesch, avg_sentence_words: avgSentence, long_sentences: longSentences, passive_pct, position: read_position, basis: read_basis, band_line: read_band_line, note: read_note,
+      band: RBAND.ok ? { low: RBAND.low, high: RBAND.high, median: RBAND.median, p25: RBAND.p25, p75: RBAND.p75, pages_measured: RBAND.pages_measured, pages: RBAND.pages, clamped: RBAND.clamped } : null,
+      band_source: RBAND.ok ? 'competitor_pages' : 'fixed', advice_only: true },   // B3-4: the band and its basis; advice, never in `warnings`
+    intent, refresh_check,   // B3-6 (every draft) / B3-8 (a refresh: the live page against its re-read sources)
+    term_coverage: termCoverage, coverage_pct, coverage: coverage_report, coverage_target_pct, missing_terms: missingTerms, missing_subtopics: missingSubtopics, specificity_per_100_words: specificity,
     critic_score: (critique || lastCritique || {}).score ?? null, critic_verdict: (critique || lastCritique || {}).verdict || null,
     schema_types: blocks.map(b => b.type), eeat_notes, page_role: role, auto_fixes: fixes, warnings } } }];

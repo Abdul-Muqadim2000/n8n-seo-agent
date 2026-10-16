@@ -16990,5 +16990,180 @@ await guard('S141 R75 R119 the pre-release reasons follow `staging`; the raw fet
 });
 
 
+// ===================================================================================
+// S151-S154 (2026-10-16, W3-B — benchmark area 3 rows B3-4, B3-6, B3-7, B3-8; FIX_PLAN.md §3.16). Content quality: a readability band
+// read off the pages that rank, answer-first measured on every page, the content gate as a read-only publish check, and a refresh
+// that re-reads the sources the live page cites. Replays exec 616's Content QA inputs (harness/fixtures_ra7.js) where a real page helps.
+// ===================================================================================
+const w3bCheck = (SN) => (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+const W3B_RA7 = require('./fixtures_ra7');
+const w3bQA = async (over, draft, comps) => {
+  mock('Parse Brief', [{ json: { ...W3B_RA7.r616.parse_brief, ...(over || {}) } }]);
+  mock('Analyze Competitor Pages', [{ json: { competitors: comps == null ? W3B_RA7.r616.competitors : comps } }]);
+  delete store['Refresh Sources'];
+  return (await run('Content QA', [{ json: { output: draft == null ? W3B_RA7.r616.draft_round2 : draft, critique: null } }], { runIndex: 0 }))[0].json;
+};
+const w3bRepeat = (s, words) => { const out = []; while (out.join(' ').split(/\s+/).length < words) out.push(s); return out.join(' '); };
+const W3B_EASY = w3bRepeat('You can cook rice in a pot. Add salt and some water. Then wait for ten minutes. It is done when it is soft.', 220);
+const W3B_HARD = w3bRepeat('Organisational interoperability requirements necessitate comprehensive infrastructural standardisation across heterogeneous enterprise architectures, particularly regarding authentication, authorisation and administrative accountability obligations.', 220);
+const w3bPool = (text) => [1, 2, 3, 4].map(i => ({ url: 'https://rival' + i + '.example/page', domain: 'rival' + i + '.example', rank: i, content_full: '## Section\n' + text, content: text }));
+
+await guard('S151 B3-4 the readability band is read off the pages that rank, never a refusal', async () => {
+  reset(); const SN = 'S151 B3-4 — readability band from the competitor pages'; begin(SN); const check = w3bCheck(SN);
+  const out = await w3bQA();
+  const R = out.content_qa.readability || {};
+  console.log('   readability ->', JSON.stringify({ flesch: R.flesch, band: R.band, position: R.position, source: R.band_source, pts: (out.content_qa.score_breakdown || {}).readability }));
+  check('B3-4: exec 616\'s competitor pages give a band (median, low, high) and the basis names them', R.band_source === 'competitor_pages' && R.band && R.band.pages_measured >= 3
+    && R.band.low <= R.band.median && R.band.high >= R.band.median && /pages that rank for this search/.test(R.basis || ''), JSON.stringify(R));
+  check('B3-4: the band is the median Flesch of the pages read, 10 harder to 15 easier, lower edge inside 20-60',
+    R.band && R.band.low === Math.min(60, Math.max(20, Math.round(R.band.median - 10))) && R.band.high === Math.max(R.band.low, Math.round(R.band.median + 15)), JSON.stringify(R.band));
+  const pts = (out.content_qa.score_breakdown || {}).readability;
+  check('B3-4: the 15 readability points follow the band (in band or plainer 15, up to 10 harder 10, else 4)',
+    pts === (R.flesch >= R.band.low ? 15 : (R.flesch >= R.band.low - 10 ? 10 : 4)), JSON.stringify({ pts, flesch: R.flesch, band: R.band }));
+  // the same draft, two results pages: the band moves with the topic (a constant band could not)
+  // exec 616's draft reads at Flesch ~60, at the top of any band (the lower edge stops at 60); the same draft with one dense passage reads
+  // like a specialist page, and that is the draft whose verdict a constant band could not move
+  const medDraft = W3B_RA7.r616.draft_round2.replace(/\*\*Quick answer:\*\*/, w3bRepeat(W3B_HARD, 150) + '\n\n**Quick answer:**');
+  const easy = (await w3bQA(null, medDraft, w3bPool(W3B_EASY))).content_qa, hard = (await w3bQA(null, medDraft, w3bPool(W3B_HARD))).content_qa;
+  console.log('   easy pool ->', JSON.stringify(easy.readability.band), easy.score_breakdown.readability, '| hard pool ->', JSON.stringify(hard.readability.band), hard.score_breakdown.readability);
+  check('B3-4: against a results page of plain prose the draft is "harder" and loses points; against specialist prose it is in the band (or plainer) and keeps 15',
+    easy.readability.flesch >= 20 && easy.readability.flesch < 60 && easy.readability.position === 'harder' && easy.score_breakdown.readability < 15 && hard.score_breakdown.readability === 15 && hard.readability.position !== 'harder', JSON.stringify([easy.readability, hard.readability]));
+  check('B3-4: the band is clamped — very plain competitors do not ask for more than 60, specialist ones do not allow less than 20',
+    easy.readability.band.low === 60 && hard.readability.band.low === 20 && easy.readability.band.clamped && hard.readability.band.clamped, JSON.stringify([easy.readability.band, hard.readability.band]));
+  check('B3-4: "harder than the band" is advice in the readability note, never a warning (no refusal)',
+    /Advice, not a blocker/.test(easy.readability.note || '') && !(easy.warnings || []).some(w => /Hard to read|Readability/.test(w)), JSON.stringify([easy.readability.note, easy.warnings]));
+  // the same hard-to-read draft: with a band it is advice; with no competitor page it is today's fixed band and its warning
+  const hardDraft = W3B_RA7.r616.draft_round2.replace(/\*\*Quick answer:\*\*/, w3bRepeat(W3B_HARD, 3000) + '\n\n**Quick answer:**');
+  const withBand = (await w3bQA(null, hardDraft, w3bPool(W3B_EASY))).content_qa;
+  const noBand = (await w3bQA({ competitors: [] }, hardDraft, [])).content_qa;
+  console.log('   hard draft ->', withBand.readability.flesch, withBand.readability.position, '| no band ->', noBand.readability.band_source, noBand.readability.flesch);
+  check('B3-4: a draft below Flesch 30 with a band from the pages that rank gets no "Hard to read" warning', withBand.readability.flesch < 30 && !(withBand.warnings || []).some(w => /^Hard to read/.test(w)), JSON.stringify(withBand.warnings));
+  check('B3-4: with no competitor page the fixed band applies and says so, and its warning is unchanged',
+    noBand.readability.band_source === 'fixed' && /fixed band is used/.test(noBand.readability.basis || '') && /no competitor page text was read/.test(noBand.readability.basis || '')
+    && (noBand.warnings || []).some(w => /^Hard to read \(Flesch/.test(w)), JSON.stringify([noBand.readability.basis, noBand.warnings]));
+  check('B3-4: the formula lives once, in the coverage kit, for both sides', /CVG\.readability\(bodyPlain\)/.test(require('fs').readFileSync(require('path').join(process.env.CODE_DIR || require('path').join(__dirname, 'code_v4'), 'Content_QA.js'), 'utf8')), '');
+});
+
+await guard('S152 B3-6 answer-first and question headings on every draft, not only AI targets', async () => {
+  reset(); const SN = 'S152 B3-6 — intent alignment on every draft'; begin(SN); const check = w3bCheck(SN);
+  const base = await w3bQA();
+  const I = base.content_qa.intent || null;
+  console.log('   intent ->', JSON.stringify(I), '| ai_target', !!W3B_RA7.r616.parse_brief.ai_target);
+  check('B3-6: a draft with no ai_target is measured — words before the Quick answer and question headings', !!I && I.ai_target === false && typeof I.words_before_answer === 'number' && typeof I.question_headings === 'number' && I.answer_limit_words === 120, JSON.stringify(I));
+  check('B3-6: exec 616\'s draft answers within the limit (its intro is short) and gets no answer-first warning', I && I.answer_first === true && !(base.content_qa.warnings || []).some(w => /^Answer first/.test(w)), JSON.stringify([I, base.content_qa.warnings]));
+  const filler = w3bRepeat('This introduction keeps talking about the background of the topic before it gets to the point.', 170);
+  const late = W3B_RA7.r616.draft_round2.replace(/\*\*Quick answer:\*\*/, filler + '\n\n**Quick answer:**');
+  const L = (await w3bQA(null, late)).content_qa;
+  console.log('   late answer ->', JSON.stringify(L.intent), (L.warnings || []).filter(w => /Answer first|AI target/.test(w)));
+  check('B3-6: an answer after 170+ words of introduction is a warning on a page with no AI target', L.intent.words_before_answer > 120 && L.intent.answer_first === false && (L.warnings || []).some(w => /^Answer first: the Quick answer comes after \d+ words/.test(w)), JSON.stringify(L.warnings));
+  const LA = (await w3bQA({ ai_target: { question: 'what does an ai consultant do', fanout: [] } }, late)).content_qa;
+  check('B3-6: an AI target keeps its own, stricter rule (60 words) and its own wording — never both warnings',
+    LA.intent.answer_limit_words === 60 && (LA.warnings || []).some(w => /^AI target: move the Quick answer/.test(w)) && !(LA.warnings || []).some(w => /^Answer first/.test(w)) && LA.ai_ready && LA.ai_ready.words_before_answer === LA.intent.words_before_answer, JSON.stringify([LA.intent, LA.warnings]));
+  // headings that are not questions, with three FAQ answers (so the older "answered questions" rule is satisfied)
+  const noQ = W3B_RA7.r616.draft_round2.replace(/^(#{2,3}) (.+)$/gm, (m, h, t) => h + ' Part ' + t.replace(/[?]/g, '').replace(/^(how|what|which|why|when|where|who|is|are|can|does|do|should|will)\b\s*/i, ''))
+    + '\n\n## FAQs\n\n' + [1, 2, 3].map(i => '**Q' + i + ': Question number ' + i + ' about the service?**\nA' + i + ': ' + w3bRepeat('This answer explains the point clearly in plain words for the reader.', 20)).join('\n\n');
+  const Q = (await w3bQA(null, noQ)).content_qa;
+  console.log('   no question headings ->', Q.intent.question_headings, Q.answered_questions, (Q.warnings || []).filter(w => /question/i.test(w)));
+  check('B3-6: no question-style H2 / H3 on a page with no AI target is now a warning (FAQ answers do not stand in for it)',
+    Q.intent.question_headings < 2 && Q.answered_questions >= 3 && (Q.warnings || []).some(w => /^Phrase at least 2 H2 \/ H3 headings as the questions/.test(w)), JSON.stringify(Q.warnings));
+});
+
+await guard('S153 B3-7 the content gate as a read-only publish check', async () => {
+  reset(); const SN = 'S153 B3-7 — publish check over supplied markdown'; begin(SN); const check = w3bCheck(SN);
+  const W = (() => { try { return require('./pubcheck_wiring.json'); } catch (e) { return null; } })();
+  check('B3-7: the build wrote the publish check (POST seo-publish-check, header auth, answered by its own node)', !!W && W.path === 'seo-publish-check' && W.authentication === 'headerAuth' && W.response_mode === 'responseNode' && W.credential === 'SEOcredApiHeader', JSON.stringify(W));
+  check('B3-7: it runs the content run\'s own Content QA and Originality Check (asserted identical by the build) and writes / fetches / calls nothing',
+    W && W.same_gate_as_content_run && W.same_gate_as_content_run['Content QA'] && W.same_gate_as_content_run['Originality Check'] && Array.isArray(W.writes) && !W.writes.length
+    && !W.node_types.some(t => /dataTable|executeWorkflow|httpRequest|emailSend|langchain/i.test(t)) && W.responses['Respond Publish Check'] === 200 && W.responses['Respond Publish Check Bad Request'] === 400, JSON.stringify(W));
+  const pc = async (body) => { reset();
+    const pb = (await run('Parse Brief', [{ json: { body, headers: {} } }], { code: 'PubCheck__Parse_Brief' }))[0].json;
+    if (!pb.ok) return { pb };
+    const qa = await run('Content QA', [{ json: pb }]); const oc = await run('Originality Check', qa); const vd = (await run('Publish Check Verdict', oc))[0].json.body;
+    return { pb, qa: qa[0].json, oc: oc[0].json, vd }; };
+  const bad = await pc({ keyword: '', markdown: 'too short' });
+  check('B3-7: a request with no keyword and no page is refused with each field error (400 path)', bad.pb.ok === false && bad.pb.errors.some(e => /keyword is required/.test(e)) && bad.pb.errors.some(e => /fewer than 50 words/.test(e)), JSON.stringify(bad.pb.errors));
+  const R6 = W3B_RA7.r616;
+  const body = { markdown: R6.draft_round2, keyword: R6.keyword || 'ai consulting', domain: 'techand.ai', page_type: R6.page_type || 'Service Page', target_words: (R6.parse_brief.content_brief || {}).target_word_count || 1800,
+    terms: (R6.term_model || []).slice(0, 25).map(t => t.term || t), competitors: R6.competitors.map(c => ({ url: c.url, content: c.content_full || c.content, rank: c.rank, title: c.title })), currency: 'AED' };
+  const r = await pc(body);
+  console.log('   verdict ->', JSON.stringify({ publishable: r.vd.publishable, exit: r.vd.exit_code, score: r.vd.content_score, reasons: (r.vd.reasons || []).slice(0, 2), nc: r.vd.not_checked.map(x => x.check) }));
+  check('B3-7: the answer is machine-readable: publishable, verdict, exit_code 0/1 agree with each other and with the gate the content run reached',
+    typeof r.vd.publishable === 'boolean' && r.vd.exit_code === (r.vd.publishable ? 0 : 1) && r.vd.verdict === (r.vd.publishable ? 'publishable' : 'not_publishable')
+    && r.vd.publishable === (r.oc.content_qa.publishable === true && r.oc.content_qa.not_ready !== true) && r.vd.writes === 'none' && r.vd.cost_usd === 0, JSON.stringify(r.vd).slice(0, 400));
+  check('B3-7: one round only — "not publishable" here is the content run\'s "not ready to publish" (rounds_left 0)', r.qa.content_qa.max_rounds === 1 && r.qa.content_qa.rounds_left === 0 && (r.vd.publishable || r.qa.content_qa.not_ready === true), JSON.stringify(r.qa.content_qa.quality));
+  check('B3-7: what it could not look at is listed with the reason, never as a pass (the editor review always; figures without source text)',
+    r.vd.not_checked.some(x => x.check === 'editor_review' && /model call/.test(x.reason)) && r.vd.not_checked.some(x => x.check === 'figures_against_sources') && !r.vd.not_checked.some(x => x.check === 'topic_coverage'), JSON.stringify(r.vd.not_checked));
+  check('B3-7: the readability band, the answer position and the coverage target come back too (the same checks as a content run)',
+    r.vd.checks.readability.band_source === 'competitor_pages' && r.vd.checks.intent && typeof r.vd.checks.intent.words_before_answer === 'number' && r.vd.checks.coverage && r.vd.checks.coverage.target_pct != null, JSON.stringify(r.vd.checks.coverage).slice(0, 300));
+  // a page with seven invented prices can never be published
+  const priced = R6.draft_round2.replace(/\*\*Quick answer:\*\*/, [1, 2, 3, 4, 5, 6, 7].map(i => 'Our package ' + i + ' costs AED ' + (i * 1000 + 500) + ' per month.').join(' ') + '\n\n**Quick answer:**');
+  const p = await pc({ ...body, markdown: priced });
+  console.log('   priced ->', p.vd.publishable, p.vd.checks.placeholders.count, (p.vd.reasons || [])[0]);
+  check('B3-7: seven invented prices become seven [Price] gaps and the page is not publishable, the reason named', p.vd.publishable === false && p.vd.exit_code === 1 && p.vd.checks.placeholders.count >= 7
+    && (p.vd.reasons || []).some(x => /placeholder/.test(x)) && /\[Price\]/.test(p.vd.fixed_markdown), JSON.stringify(p.vd.reasons));
+  // no competitors, no terms: still an answer, and it says what it did not have
+  const bare = await pc({ markdown: R6.draft_round2, keyword: 'ai consulting' });
+  check('B3-7: with only markdown + keyword it still answers, and lists coverage, originality, length as not checked', bare.vd && bare.vd.ok === true
+    && ['topic_coverage', 'originality', 'length'].every(c => bare.vd.not_checked.some(x => x.check === c)) && bare.vd.checks.readability.band_source === 'fixed', JSON.stringify(bare.vd && bare.vd.not_checked));
+});
+
+await guard('S154 B3-8 a refresh re-reads the live page\'s sources and re-checks its figures', async () => {
+  reset(); const SN = 'S154 B3-8 — refresh re-checks the facts'; begin(SN); const check = w3bCheck(SN);
+  const W = (() => { try { return require('./w3b_wiring.json'); } catch (e) { return null; } })();
+  check('B3-8: the build puts the re-read between Parse Critique and Content QA', !!W && JSON.stringify(W.connections['Parse Critique']) === JSON.stringify([['Refresh Source Plan']])
+    && JSON.stringify(W.connections['Refresh Sources?']) === JSON.stringify([['Fetch Refresh Sources'], ['Refresh Sources']]) && JSON.stringify(W.connections['Refresh Sources']) === JSON.stringify([['Content QA']])
+    && W.fetch.retries >= 3 && W.fetch.credential === 'SEOcredJinaReade' && /r\.jina\.ai/.test(W.fetch.url), JSON.stringify(W));
+  const PAGE = 'https://techand.ai/uae-e-invoicing-penalties/';
+  const FTA = 'https://tax.gov.ae/en/news/e-invoicing-readiness', MOF = 'https://mof.gov.ae/decision-e-invoicing-penalties.pdf';
+  const LIVE = ['# UAE E-Invoicing Penalties', '', 'The FTA reported that 42% of businesses had started their e-invoicing project ([FTA](' + FTA + ')).', '',
+    'A late registration is fined AED 5,000 for each month ([the decision](' + MOF + ')).', '', 'Read the standard on [Peppol](https://peppol.org/).', '',
+    'Follow us on [LinkedIn](https://www.linkedin.com/company/x) and see [our services](https://techand.ai/services/) — 12% faster ([us](https://techand.ai/about/)).', '',
+    w3bRepeat('The page goes on to explain what each phase means for finance teams and what to prepare.', 60)].join('\n');
+  const PB = { keyword: 'uae e invoicing penalties', domain: 'techand.ai', currency: 'AED', page_type: 'Blog Post / Guide', business: 'Tech& is a UAE technology consultancy.',
+    business_facts: '', case_facts_text: '', qa_max_rounds: 2, facts: [], competitors: [], term_model: [], coverage_target: null,
+    existing_page: { url: PAGE }, existing_page_url: PAGE, content_brief: { target_word_count: 300, outline: [], terms_to_use: [], evidence_plan: [] } };
+  // not a refresh: one skip item, nothing to fetch
+  mock('Parse Brief', [{ json: { ...PB, existing_page: null, existing_page_url: '' } }]);
+  const sk = (await run('Refresh Source Plan', [{ json: { output: 'x' } }])).map(x => x.json);
+  check('B3-8: a run that improves no live page re-reads nothing (one skip item, no URL)', sk.length === 1 && sk[0].skip === true && !sk[0].url && /not a refresh/.test(sk[0].reason), JSON.stringify(sk));
+  mock('Parse Brief', [{ json: PB }]);
+  mock('Client Page Requests', [{ json: { kind: 'existing', url: PAGE } }, { json: { kind: 'home', url: 'https://techand.ai/' } }]);
+  mock('Read Client Pages', [{ json: { page_text: LIVE } }, { json: { page_text: 'home' } }]);
+  const plan = (await run('Refresh Source Plan', [{ json: { output: 'x' } }])).map(x => x.json);
+  console.log('   plan ->', JSON.stringify(plan.map(p => p.url)));
+  check('B3-8: the plan picks the live page\'s external sources that sit next to a figure — not a link with no figure, not social, not the site\'s own pages',
+    plan.length === 2 && plan.map(p => p.url).sort().join(' ') === [FTA, MOF].sort().join(' ') && plan.every(p => p.refresh && !p.skip && p.page_url === PAGE), JSON.stringify(plan));
+  // the FTA page today says 38%, not 42%; the decision still states the AED 5,000 fine (and its page carries a "Read more" link)
+  mock('Fetch Refresh Sources', [{ json: { page_text: 'Title: Readiness\n\n' + w3bRepeat('The FTA published its readiness survey for the e-invoicing programme.', 60) + ' It found that 38% of businesses had started their project.' } },
+    { json: { page_text: w3bRepeat('Cabinet decision on administrative penalties for the electronic invoicing system.', 15) + ' A late registration is fined AED 5,000 for each month of delay. Read more' } }]);
+  const DRAFT = ['Title: UAE E-Invoicing Penalties Explained For Finance Teams', 'Meta Description: What the UAE e-invoicing penalties are, what each one costs and how finance teams avoid them before the deadline.', 'Slug: uae-e-invoicing-penalties', '',
+    '# UAE E-Invoicing Penalties', '', 'The FTA reported that 42% of businesses had started their e-invoicing project ([FTA](' + FTA + ')).', '',
+    'A late registration is fined AED 5,000 for each month ([the decision](' + MOF + ')).', '', 'About 35% of penalties are for late registration ([the decision](' + MOF + ')).', '', '## Talk to us', '', 'Book a readiness check.'].join('\n');
+  mock('Parse Critique', [{ json: { output: DRAFT, critique: null } }]);
+  const rs = (await run('Refresh Sources', store['Fetch Refresh Sources']))[0].json;
+  check('B3-8: Refresh Sources hands Content QA the critique item untouched, with the re-read sources beside it',
+    rs.output === DRAFT && rs.critique === null && rs.refresh_sources && rs.refresh_sources.refresh === true && rs.refresh_sources.sources.length === 2 && rs.refresh_sources.sources.every(s => s.ok) && rs.refresh_sources.live_read === true && /42%/.test(rs.refresh_sources.live_markdown), JSON.stringify(rs.refresh_sources).slice(0, 300));
+  delete store['Analyze Competitor Pages'];
+  const q = (await run('Content QA', [{ json: rs }], { runIndex: 0 }))[0].json;
+  const Q = q.content_qa, RC = Q.refresh_check || {};
+  console.log('   unverified ->', JSON.stringify(Q.unverified_figures), '| refresh ->', JSON.stringify(RC).slice(0, 400));
+  check('B3-8: the draft\'s 42% citing the FTA page is checked against the page as it reads today and held — "absent", from a source re-read whole',
+    (Q.unverified_figures || []).some(f => f.figure === '42%' && f.reason === 'absent' && f.refreshed_source) && /\[Confirm: 42%\]/.test(q.output), JSON.stringify(Q.unverified_figures));
+  check('B3-8: a page read whole is not "an excerpt": the 35% the decision does not state is "absent" although that page carries a "Read more" link',
+    (Q.unverified_figures || []).some(f => f.figure === '35%' && f.reason === 'absent'), JSON.stringify(Q.unverified_figures));
+  check('B3-8: the fine the decision still states is kept, vouched for by the re-read source (money mask and figure check read the same text)',
+    /fined AED 5,000 for each month/.test(q.output) && (Q.sourced_amounts || []).some(a => /5,000/.test(a.amount) && a.source === 'mof.gov.ae'), JSON.stringify([Q.sourced_amounts, Q.masked_amounts, Q.flagged_amounts]));
+  check('B3-8: the live page itself is checked by the same rule: its 42% is a figure its source no longer states, still in the draft',
+    RC.refresh === true && RC.sources_read === 2 && RC.live_figures_checked >= 2 && (RC.live_figures_unverified || []).some(x => x.figure === '42%' && x.still_in_draft) && !(RC.live_figures_unverified || []).some(x => /5,000/.test(x.figure)), JSON.stringify(RC));
+  check('B3-8: the owner is told in the "Before publishing" notes, never as an editor round', (Q.eeat_notes || []).some(n => /^Refresh: the live page shows 1 figure/.test(n) && /42%/.test(n)) && !(Q.warnings || []).some(w => /^Refresh:/.test(w)), JSON.stringify(Q.eeat_notes));
+  // a source that could not be re-read is named, and its figures are not checked (never "absent")
+  mock('Fetch Refresh Sources', [{ json: { error: { message: 'timeout' } } }, { json: { page_text: w3bRepeat('Cabinet decision on administrative penalties for the electronic invoicing system.', 15) + ' A late registration is fined AED 5,000 for each month of delay.' } }]);
+  const rs2 = (await run('Refresh Sources', store['Fetch Refresh Sources']))[0].json;
+  const Q2 = (await run('Content QA', [{ json: rs2 }], { runIndex: 0 }))[0].json.content_qa;
+  check('B3-8: a source the reader could not fetch is reported and its figure is not judged', (Q2.refresh_check.sources_failed || []).some(s => s.url === FTA) && !(Q2.unverified_figures || []).some(f => f.figure === '42%')
+    && (Q2.eeat_notes || []).some(n => /could not be re-read today/.test(n)), JSON.stringify([Q2.refresh_check, Q2.unverified_figures]));
+});
+
+
 H.report();
 })();
