@@ -7217,7 +7217,7 @@ await guard('response-vs-render diff and the stored style guide', async () => {
       totals: { clicks: 980, impressions: 24000, ctr: 0.04, position: 18.2, period: { start: '2026-09-14', end: '2026-10-11' } },
       pages_with_impressions: 12, queries_with_impressions: 300, sitemaps: [], coverage: {}, not_indexed: [], canonical_mismatch: [], rich_results: [] }, ...o.over });
   const setCrawl = (o = {}) => {
-    mock('Check Crawl', [{ json: { domain: D, crawl_js: o.crawl_js !== false, render_diff_pages: o.cap || 5, crawl_max_pages: 200, audit_level: 'site_audit', crawl_summary: { domain_info: { checks: {} }, page_metrics: {} } } }]);
+    mock('Check Crawl', [{ json: { domain: D, crawl_js: o.crawl_js !== false, render_diff_pages: o.cap || 5, render_diff_raw_pages: o.rawcap || 5 /* B5-6: this G14 scenario is about the five rendered pages; S148 covers the crawl pairing */, crawl_max_pages: 200, audit_level: 'site_audit', crawl_summary: { domain_info: { checks: {} }, page_metrics: {} } } }]);
     mock('Get Crawled Pages', F.crawledPagesRes);
     mock('Collect Crawl Extras', [{ json: { crawl_extras: {} } }]);
     mock('Site Model', [{ json: { site_model: { domain: D, canonical_host: 'www.' + D, business_name: 'Northwind ERP', pages: [] } } }]);
@@ -7332,7 +7332,7 @@ await guard('response-vs-render diff and the stored style guide', async () => {
     a2.not_assessed.some(x => /before JavaScript runs/.test(x) && /no key page could be read twice/.test(x)), JSON.stringify(a2.not_assessed.filter(x => /JavaScript/.test(x))));
 
   // ---------- C. a site that server-renders everything: the rendered reading may come from the JavaScript crawl ----------
-  reset(); setCrawl({ cap: 2 });
+  reset(); setCrawl({ cap: 2, rawcap: 2 });
   const prev3 = prevOf();
   mock('Analyze CrUX', [{ json: prev3 }]);
   const T3 = await run('Render Diff Targets', [{ json: prev3 }]);
@@ -16987,6 +16987,186 @@ await guard('S141 R75 R119 the pre-release reasons follow `staging`; the raw fet
   check('R119: no audit fetch presents itself with Google\'s bot page (the address the real Googlebot user agent carries); each names itself', W && Object.values(W.user_agents).length >= 2 && Object.values(W.user_agents).every(ua => !/google\.com\/bot\.html|googlebot/i.test(ua) && /SEOAgentAudit/.test(ua)), JSON.stringify(W && W.user_agents));
   const rdSrc = a11code('Render_Diff.js');
   check('R119: the render diff says what the first response is — a plain request under our own audit user agent; a site that treats named AI bots differently is the crawler-access check\'s job', /our own audit user agent/.test(rdSrc) && /crawler access/i.test(rdSrc), '');
+});
+
+
+// ===================================================================================
+// W3-A (2026-10-16, third wave, technical audit): B5-4 hreflang, B5-6 response-vs-render across the crawl, B5-7 the pre-release check a build can use,
+// B5-12 GA4 key events in the impact weight, R67 the report half.
+//   S147 B5-4        hreflang: silent when none declared; invalid / relative / no self / no return / no x-default named; a clean set has no finding
+//   S148 B5-6        a JavaScript crawl pairs up to 25 pages with a free raw GET; without JavaScript nothing is paired and the report says why
+//   S149 B5-7        fail_on and the expected list: a threshold, a planned-change list, nothing hidden, bad input refused
+//   S150 B5-12 R67   GA4 key events join the impact weight and the basis says which was used; the severity table says what the score does not count
+// ===================================================================================
+await guard('S147 B5-4 hreflang: valid codes, absolute addresses, self-reference, return links, silent when none declared', async () => {
+  reset(); const SN = 'S147 B5-4 — hreflang'; begin(SN); const check = a11check(SN);
+  const D = 'northwind-erp.com';
+  const U1 = 'https://' + D + '/', U2 = 'https://' + D + '/ar/';
+  const page = (alts) => '<!DOCTYPE html><html><head><title>Northwind ERP</title><link rel="canonical" href="https://' + D + '/">' + alts.map(a => '<link rel="alternate" hreflang="' + a[0] + '" href="' + a[1] + '">').join('') + '</head><body><h1>ERP</h1><p>' + F.words(200) + '</p><a href="/a">a</a></body></html>';
+  const ok = (h) => ({ statusCode: 200, headers: { 'content-type': 'text/html' }, data: h });
+  const rd = async (rawHtmls) => {
+    mock('Analyze CrUX', [{ json: { domain: D, probe: { findings: [], what_works: [], measurements: {} }, extra_findings: [], crux: null, crawl_extras: {} } }]);
+    mock('Check Crawl', [{ json: { domain: D, crawl_js: false, render_diff_pages: 5, audit_level: 'site_audit', crawl_summary: { domain_info: { checks: {} }, page_metrics: {} } } }]);
+    mock('Get Crawled Pages', [{ json: { tasks: [{ result: [{ items: [] }] }] } }]); mock('Collect Crawl Extras', [{ json: { crawl_extras: {} } }]);
+    const plan = { pages: 2, cap: 5, crawl_js: false, figures: [] };
+    mock('Render Diff Targets', [{ json: { url: U1, render_plan: plan } }, { json: { url: U2, render_plan: plan } }]);
+    mock('Render Key Pages', rawHtmls.map(ok)); mock('Fetch Raw Pages', rawHtmls.map(ok));
+    return (await run('Render Diff', store['Fetch Raw Pages']))[0].json;
+  };
+  const hf = (r) => (r.extra_findings || []).filter(f => f.figure === 'hreflang');
+  // none declared
+  const none = await rd([page([]), page([])]);
+  check('B5-4: a site that declares no hreflang gets no finding and no block (silent)', none.render_diff.hreflang === null && hf(none).length === 0, JSON.stringify(none.render_diff.hreflang));
+  // a clean set
+  const clean = await rd([page([['en', U1], ['ar', U2], ['x-default', U1]]), page([['en', U1], ['ar', U2], ['x-default', U1]])]);
+  check('B5-4: a complete set (self, alternates, x-default, return links) has no finding', hf(clean).length === 0 && clean.render_diff.hreflang && clean.render_diff.hreflang.declared_on === 2, JSON.stringify(clean.render_diff.hreflang && clean.render_diff.hreflang.problems));
+  // a broken set: page 1 has a bad code, a relative address and no x-default; page 2 declares only itself, so it does not link back to page 1
+  const bad = await rd([page([['en', U1], ['ar', U2], ['en_GB', 'https://' + D + '/uk/'], ['fr', '/fr/']]), page([['ar', U2]])]);
+  const titles = hf(bad).map(f => f.title);
+  console.log('   hreflang findings ->', JSON.stringify(titles), JSON.stringify(bad.render_diff.hreflang && bad.render_diff.hreflang.problems));
+  check('B5-4: an invalid code is named (en_GB)', hf(bad).some(f => /code Google does not accept/.test(f.title) && /en_GB/.test(f.evidence)), JSON.stringify(titles));
+  check('B5-4: a relative address is named', hf(bad).some(f => /not absolute/.test(f.title) && /\/fr\//.test(f.evidence)), JSON.stringify(titles));
+  check('B5-4: an alternate that does not link back is named (page 2 gives no return link to page 1)', hf(bad).some(f => /return links/.test(f.title)), JSON.stringify(titles));
+  check('B5-4: pages that do list themselves are not flagged for it', hf(bad).some(f => /do not point to themselves/.test(f.title)) === false, JSON.stringify(titles));
+  check('B5-4: a missing x-default is Low, the others Medium', hf(bad).some(f => /no x-default/.test(f.title) && f.severity === 'Low') && hf(bad).filter(f => !/x-default/.test(f.title)).every(f => f.severity === 'Medium'), JSON.stringify(hf(bad).map(f => f.severity)));
+  check('B5-4: every finding carries evidence and the Technical category', hf(bad).length >= 4 && hf(bad).every(f => f.evidence && f.category === 'Technical' && f.scoring === true), JSON.stringify(hf(bad).map(f => f.category)));
+  const selfless = await rd([page([['ar', U2]]), page([['en', U1], ['ar', U2]])]);
+  check('B5-4: a page that lists only other pages is "not pointing to itself"', hf(selfless).some(f => /do not point to themselves/.test(f.title)), JSON.stringify(hf(selfless).map(f => f.title)));
+});
+
+await guard('S148 B5-6 a JavaScript crawl is paired with a free raw GET of up to 25 pages; without JavaScript nothing is paired', async () => {
+  reset(); const SN = 'S148 B5-6 — response vs render across the crawl'; begin(SN); const check = a11check(SN);
+  const D = 'northwind-erp.com';
+  const mkPage = (i) => ({ url: 'https://' + D + (i === 0 ? '/' : '/p' + i + '/'), status_code: 200, resource_type: 'html', checks: {},
+    meta: { title: 'Page ' + i, internal_links_count: 30 - i % 7, external_links_count: 2, canonical: 'https://' + D + (i === 0 ? '/' : '/p' + i + '/'), htags: { h1: ['Heading ' + i] }, content: { plain_text_word_count: 400 } } });
+  const crawled40 = Array.from({ length: 40 }, (_, i) => mkPage(i));
+  const prevAudit = { domain: D, audit_level: 'site_audit', probe: { findings: [], what_works: [], measurements: {} }, extra_findings: [], crux: null, crawl_extras: {} };
+  const setup = (js, n) => {
+    mock('Analyze CrUX', [{ json: prevAudit }]);
+    mock('Check Crawl', [{ json: { domain: D, crawl_js: js, render_diff_pages: 5, audit_level: 'site_audit', crawl_summary: { domain_info: { checks: {} }, page_metrics: {} } } }]);
+    mock('Get Crawled Pages', [{ json: { tasks: [{ result: [{ items: crawled40.slice(0, n) }] }] } }]);
+  };
+  // with JavaScript: 5 rendered + up to 20 raw-only
+  setup(true, 40);
+  const T = await run('Render Diff Targets', [{ json: prevAudit }]);
+  const plan = T[0].json.render_plan;
+  check('B5-6: with a JavaScript crawl the render path still gets only the 5 key pages', T.length === 5, T.length);
+  check('B5-6: 20 more pages are listed for a raw GET (25 in all)', plan.raw_extra.length === 20 && plan.raw_pairs === 20 && plan.raw_cap === 25, JSON.stringify([plan.raw_extra.length, plan.raw_cap]));
+  check('B5-6: no page is in both lists', new Set([...T.map(x => x.json.url), ...plan.raw_extra.map(x => x.url)]).size === 25, '');
+  const RAW = await run('Raw Page Targets', T);
+  check('B5-6: the raw request reads 25 pages, the rendered five first, then the paired ones in order', RAW.length === 25 && RAW.every((r, i) => r.json.index === i) && RAW.slice(5).every(r => r.json.raw_only === true), JSON.stringify(RAW.map(r => r.json.index)));
+  // the answers: every page equal to the crawl, except p21 whose raw HTML is a shell (the crawl saw 400 words and a heading after its scripts)
+  const html = (url, shell) => '<!DOCTYPE html><html><head><title>' + (url === 'https://' + D + '/p21/' ? 'Page 21' : 'T') + '</title></head><body>' + (shell ? '<div id="root"></div>' : '<h1>H</h1><p>' + F.words(400) + '</p>') + '</body></html>';
+  const answer = (url) => { const shell = url === 'https://' + D + '/p21/'; return { statusCode: 200, headers: { 'content-type': 'text/html' }, data: html(url, shell) }; };
+  const rawAll = RAW.map(r => answer(r.json.url));
+  const renAll = T.map(x => ({ statusCode: 200, headers: {}, data: html(x.json.url, false) }));
+  mock('Render Key Pages', renAll); mock('Fetch Raw Pages', rawAll);
+  const out = (await run('Render Diff', store['Fetch Raw Pages']))[0].json; const rdf = out.render_diff;
+  console.log('   paired ->', rdf.pages_checked, 'checked,', rdf.paired_with_crawl, 'with the crawl; js_only', rdf.pages.filter(p => p.js_only.length).map(p => p.path + ':' + p.js_only.join('+')).join(' '));
+  check('B5-6: 25 pages were compared (not 5), 20 of them against the crawl', rdf.pages_checked === 25 && rdf.paired_with_crawl === 20, JSON.stringify([rdf.pages_checked, rdf.paired_with_crawl]));
+  const p21 = rdf.pages.find(p => p.path === '/p21/') || { js_only: [] };
+  check('B5-6: a page whose text only exists after the scripts ran is found in the crawl pairing (text length, heading)', p21.js_only.includes('words') && p21.paired_with_crawl === true && p21.rendered_source === 'crawl_js', JSON.stringify(p21.js_only));
+  check('B5-6: the finding carries the denominator of 25 pages read twice, not "key pages"', (out.extra_findings || []).some(f => f.figure === 'words' && f.affected_of === 25 && f.affected_unit === 'pages read twice'), JSON.stringify((out.extra_findings || []).map(f => [f.figure, f.affected_of, f.affected_unit])));
+  check('B5-6: the method says which pages were paired with the crawl', /paired with the crawl itself/.test(rdf.method), rdf.method.slice(0, 200));
+  // without JavaScript: nothing is paired, and it says why
+  setup(false, 40);
+  const T2 = await run('Render Diff Targets', [{ json: prevAudit }]);
+  const plan2 = T2[0].json.render_plan;
+  check('B5-6: a crawl without JavaScript pairs nothing (it is the first response too) and says so', plan2.raw_extra.length === 0 && /compare a page with itself/.test(plan2.raw_pairs_note), JSON.stringify(plan2.raw_pairs_note));
+  const RAW2 = await run('Raw Page Targets', T2);
+  check('B5-6: ...so the raw request stays at the five rendered pages', RAW2.length === 5, RAW2.length);
+  // fewer live pages than the cap: only what exists
+  setup(true, 9);
+  const T3 = await run('Render Diff Targets', [{ json: prevAudit }]);
+  check('B5-6: a 9-page crawl pairs the 4 remaining pages, not 20', T3[0].json.render_plan.raw_extra.length === 4, T3[0].json.render_plan.raw_extra.length);
+});
+
+await guard('S149 B5-7 the pre-release check: fail_on, the expected-change list, nothing hidden', async () => {
+  reset(); const SN = 'S149 B5-7 — pre-release threshold and expected changes'; begin(SN); const check = a11check(SN);
+  const html = (o = {}) => '<html><head>' + (o.title === false ? '' : '<title>T</title>') + (o.canonical === false ? '' : '<link rel="canonical" href="https://example.com' + (o.path || '/') + '">') + '<meta name="description" content="d"></head><body><h1>H</h1></body></html>';
+  const run149 = async (body) => {
+    reset();
+    const v = await run('Prerelease Validate', [{ json: { body: { base_url: 'https://staging.example.com', paths: ['/', '/p', '/q'], live_host: 'example.com', ...body }, headers: {} } }]);
+    const items = v.map(x => x.json);
+    if (items[0].ok === false) return { bad: items[0] };
+    // '/' has no canonical (high), '/p' answers 404 (critical), '/q' has no title (high) and a canonical to another page is not used here
+    mock('Fetch Release Pages', items.map(it => {
+      if (it.kind === 'robots') return { statusCode: 200, headers: {}, data: 'User-agent: *\nAllow: /\n' };
+      const p = it.url.replace(/^https?:\/\/[^/]+/, '');
+      if (p === '/') return { statusCode: 200, headers: { 'content-type': 'text/html' }, data: html({ canonical: false }) };
+      if (p === '/p') return { statusCode: 404, headers: { 'content-type': 'text/html' }, data: '<html><head><title>x</title></head></html>' };
+      return { statusCode: 200, headers: { 'content-type': 'text/html' }, data: html({ title: false, path: '/q' }) };
+    }));
+    return { body: (await run('Prerelease Verdict', store['Fetch Release Pages']))[0].json.body, items };
+  };
+  const base = await run149({});
+  const keys = (b) => b.failures.map(f => f.check + '@' + f.url.replace(/^https?:\/\/[^/]+/, ''));
+  console.log('   default failures ->', JSON.stringify(keys(base.body)));
+  check('B5-7: with no options every failure fails the build (behaviour unchanged)', base.body.exit_code === 1 && keys(base.body).length >= 3 && base.body.fail_on === 'any' && base.body.expected_changes.length === 0 && base.body.below_threshold.length === 0, JSON.stringify(keys(base.body)));
+  const crit = await run149({ fail_on: 'critical' });
+  check('B5-7: fail_on critical: only the page that does not answer fails', crit.body.exit_code === 1 && keys(crit.body).every(k => /^page_answers@\/p$/.test(k)) && crit.body.below_threshold.length >= 2, JSON.stringify([keys(crit.body), crit.body.below_threshold.length]));
+  check('B5-7: ...and what fell below the threshold is returned, not hidden', crit.body.below_threshold.some(f => f.check === 'canonical') && /below fail_on=critical/.test(crit.body.summary), crit.body.summary);
+  const only404 = await run149({ fail_on: 'critical', expected: ['/p'] });
+  check('B5-7: an expected change on the 404 page lets the release pass, with the failure listed under expected_changes', only404.body.exit_code === 0 && only404.body.verdict === 'pass' && only404.body.expected_changes.length >= 1 && only404.body.expected_changes.every(f => f.url.endsWith('/p')), JSON.stringify([only404.body.exit_code, only404.body.expected_changes.length]));
+  const oneCheck = await run149({ expected: ['/:canonical', { path: '/q', check: 'title', reason: 'new title ships in the next release' }, '/gone'] });
+  check('B5-7: "/path:check" accepts that check only — the 404 still fails', oneCheck.body.exit_code === 1 && keys(oneCheck.body).includes('page_answers@/p') && !keys(oneCheck.body).includes('canonical@/') && !keys(oneCheck.body).includes('title@/q'), JSON.stringify(keys(oneCheck.body)));
+  check('B5-7: the reason travels with the accepted change', oneCheck.body.expected_changes.some(f => f.check === 'title' && /next release/.test(f.expected_reason)), JSON.stringify(oneCheck.body.expected_changes.map(f => f.expected_reason)));
+  check('B5-7: an entry that matched nothing is returned as expected_unused', oneCheck.body.expected_unused.length === 1 && oneCheck.body.expected_unused[0].path === '/gone', JSON.stringify(oneCheck.body.expected_unused));
+  const pg = oneCheck.body.pages.find(p => p.url.endsWith('/q'));
+  check('B5-7: the page\'s own check list marks the accepted check', pg && pg.checks.some(c => c.check === 'title' && c.accepted === 'expected_change'), JSON.stringify(pg && pg.checks.map(c => [c.check, c.accepted])));
+  const all = await run149({ expected: ['/', '/p', '/q'] });
+  check('B5-7: every failure accepted = pass, counts say how many were accepted', all.body.exit_code === 0 && all.body.counts.failed === 0 && all.body.counts.expected_changes >= 3, JSON.stringify(all.body.counts));
+  const badLevel = await run149({ fail_on: 'severe' });
+  check('B5-7: an unknown fail_on is refused (exit 2, 400)', badLevel.bad && badLevel.bad.status === 400 && /fail_on/.test(badLevel.bad.error), JSON.stringify(badLevel.bad));
+  const badCheck = await run149({ expected: ['/p:colour'] });
+  check('B5-7: an unknown check in the expected list is refused', badCheck.bad && badCheck.bad.status === 400 && /not a check/.test(badCheck.bad.error), JSON.stringify(badCheck.bad));
+});
+
+await guard('S150 B5-12 R67 GA4 key events join the impact weight and the basis says which was used; the severity table says what the score does not count', async () => {
+  reset(); const SN = 'S150 B5-12 R67 — GA4 weight, unscored note'; begin(SN); const check = a11check(SN);
+  // ---- the GA4 request and its parse ----
+  mock('Check Crawl', [{ json: { domain: 'northwind-erp.com', ga4_property_id: 'properties/543096312' } }]);
+  const plan = (await run('GA4 Key Events Plan', [{ json: { domain: 'northwind-erp.com' } }]))[0].json;
+  check('B5-12: the request goes to the GA4 Data API for that property, organic landing pages, key events and sessions, 28 days', plan.skip === false && /properties\/543096312:runReport$/.test(plan.url) && plan.body.dimensions[0].name === 'landingPage' && plan.body.metrics.map(m => m.name).join() === 'keyEvents,sessions' && plan.period.days === 28, JSON.stringify(plan));
+  mock('Check Crawl', [{ json: { domain: 'northwind-erp.com' } }]);
+  const noId = (await run('GA4 Key Events Plan', [{ json: { domain: 'northwind-erp.com' } }]))[0].json;
+  check('B5-12: no property id = no request, with the reason in plain words', noId.skip === true && /no GA4 property id/.test(noId.reason), JSON.stringify(noId));
+  mock('Not Crawled Check', [{ json: { domain: 'northwind-erp.com', marker: 'carried' } }]);
+  mock('GA4 Key Events Plan', [{ json: plan }]);
+  const rowsAns = { rows: [{ dimensionValues: [{ value: '/whatwedo/?utm=x' }], metricValues: [{ value: '12' }, { value: '300' }] }, { dimensionValues: [{ value: '/whatwedo' }], metricValues: [{ value: '3' }, { value: '40' }] }, { dimensionValues: [{ value: '/blog/a/' }], metricValues: [{ value: '1' }, { value: '90' }] }], rowCount: 3, totals: [{ metricValues: [{ value: '16' }, { value: '430' }] }] };
+  const parsed = (await run('GA4 Key Events', [{ json: rowsAns }]))[0].json;
+  const g = parsed.ga4_key_events;
+  check('B5-12: the answer is summed by path (query and trailing slash ignored) and the audit item is carried on', parsed.marker === 'carried' && g.connected && g.usable === true && g.rows[0][0] === '/whatwedo' && g.rows[0][1] === 15 && g.total_key_events === 16 && g.rows_complete === true, JSON.stringify(g));
+  const zero = (await run('GA4 Key Events', [{ json: { rows: [{ dimensionValues: [{ value: '/' }], metricValues: [{ value: '0' }, { value: '50' }] }], rowCount: 1, totals: [{ metricValues: [{ value: '0' }, { value: '50' }] }] } }]))[0].json.ga4_key_events;
+  check('B5-12: a property with no key events is NOT used as a weight, and says why', zero.connected === true && zero.usable === false && /no key events/.test(zero.reason), JSON.stringify(zero));
+  const denied = (await run('GA4 Key Events', [{ json: { error: { message: 'User does not have sufficient permissions for this property' } } }]))[0].json.ga4_key_events;
+  check('B5-12: a refused request is "not connected" with GA4\'s own words', denied.connected === false && /sufficient permissions/.test(denied.reason), JSON.stringify(denied));
+  // ---- the weight, on the real fixture of exec 648 ----
+  const plain = await a11bsi('e648');
+  const target = plain.a.findings.find(f => f.scope !== 'site' && (f.sample_urls || []).length && f.severity !== 'Info' && f.scoring !== false);
+  const tpath = String(target.sample_urls[0]).split(' — ')[0].replace(/^https?:\/\/[^/]+/, '').replace(/\/$/, '') || '/';
+  check('B5-12: without GA4 the priority text says the weight was Search Console only, and why GA4 was not used', /Weight used: Search Console clicks and impressions only/.test(plain.a.priority_method) && /GA4 key events were not used: GA4 was not read in this audit/.test(plain.a.priority_method) && plain.a.impact_weight.source === 'search_console' && target.impact_source === 'search_console', plain.a.priority_method.slice(-260));
+  const withKe = await a11bsi('e648', null, (bi) => { bi.ga4_key_events = { connected: true, usable: true, rows_complete: true, total_key_events: 40, total_sessions: 900, period: { start: '2026-09-18', end: '2026-10-15', days: 28 }, rows: [[tpath, 40, 400]] }; });
+  const t2 = withKe.a.findings.find(f => f.title === target.title) || {};
+  console.log('   weight ->', JSON.stringify([plain.a.impact_weight.source, withKe.a.impact_weight.source]), '| impact', target.impact, '->', t2.impact, '|', (t2.impact_basis || '').slice(-140));
+  check('B5-12: with key events the weight says Search Console + GA4 and the finding says which it used', withKe.a.impact_weight.source === 'search_console_and_ga4_key_events' && t2.impact_source === 'search_console_and_ga4_key_events' && /GA4 key events in the last 28 days/.test(t2.impact_basis) && /plus GA4 key events per organic landing page/.test(withKe.a.priority_method), JSON.stringify([t2.impact_source, withKe.a.priority_method.slice(-200)]));
+  check('B5-12: a finding on the page that earns the key events weighs more than before', t2.impact > target.impact, JSON.stringify([target.impact, t2.impact]));
+  check('B5-12: the key events behind a finding are stored with it, capped at the property\'s total', t2.impact_traffic && t2.impact_traffic.key_events > 0 && t2.impact_traffic.key_events <= 40, JSON.stringify(t2.impact_traffic));
+  const unused = await a11bsi('e648', null, (bi) => { bi.ga4_key_events = { connected: true, usable: false, reason: 'GA4 recorded no key events from organic search in the last 28 days (none configured, or none happened), so they cannot rank the findings', rows: [], total_key_events: 0 }; });
+  check('B5-12: an unusable GA4 answer falls back to clicks and impressions and prints GA4\'s own reason', unused.a.impact_weight.source === 'search_console' && /GA4 recorded no key events/.test(unused.a.priority_method) && unused.a.findings.every(f => f.impact_source === 'search_console' || f.impact_source === 'none'), unused.a.priority_method.slice(-220));
+  check('B5-12: the order of the main fix list is unchanged when GA4 is unusable', JSON.stringify(unused.a.findings.map(f => f.title)) === JSON.stringify(plain.a.findings.map(f => f.title)), '');
+  // ---- R67: the severity table says what the score does not count ----
+  const rev = (await a11bsi('e648', null, (bi) => { bi.extra_findings = [...(bi.extra_findings || []),
+    { category: 'Content', severity: 'High', title: 'Review: claims without a source', evidence: 'p1', why: 'w', fix: 'f', sample_urls: [], affected_count: null, affected_pct: 100, scope: 'site', scoring: false, source: 'ai_review' },
+    { category: 'Content', severity: 'Medium', title: 'Review: thin author box', evidence: 'p2', why: 'w', fix: 'f', sample_urls: [], affected_count: null, affected_pct: 100, scope: 'site', scoring: false, source: 'ai_review' }]; }));
+  console.log('   R67 fixture ->', JSON.stringify(rev.a.findings.filter(f => f.scoring === false).map(f => [f.title, f.severity])), JSON.stringify(rev.a.issue_counts));
+  const docR = decode(await run('Build Audit Report', rev.out));
+  const noteR = (docR.match(/[^>]{0,40}AI-review findings? (?:is|are) counted here[^<]*/g) || []).join(' | ');
+  console.log('   R67 note ->', noteR);
+  check('R67: the technical report says "3 unscored findings (2 from the AI review) are counted here and are not part of the score" under the severity table', /3 unscored findings are \(2 from the AI review\) counted here and are not part of the score/.test(docR), noteR);
+  const docP = decode(await run('Build Audit Report', plain.out));
+  check('R67: the audit\'s own Info note (unscored) is named too, in the singular', /1 unscored finding is counted here and is not part of the score/.test(docP), '');
+  check('R67: the full report carries the same note (same template)', /unscoredNote\(a\)/.test(a11code('Build_Full_Report.js')) && /counted here and \$\{n === 1/.test(a11code('Build_Full_Report.js')), '');
 });
 
 

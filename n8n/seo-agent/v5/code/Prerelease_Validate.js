@@ -7,6 +7,14 @@
 // `live_host` is the address the pages will have in production: with it the canonical can be judged, and `noindex` / a robots.txt
 // disallow on the staging host are read as the deliberate staging guard they usually are (a warning that names the live page), not as a
 // failure. Pass `staging: false` (or point the check at the live host) to have them fail.
+// B5-7 (2026-10-16, benchmark area 5; Lumar Protect blocks a build on a threshold, Sitebulb's Release Check keeps a list of planned changes):
+//   `fail_on`   — 'any' (default: every failure fails the build), 'low' | 'medium' | 'high' | 'critical': only failures of that severity or
+//                 above fail; the others are returned as `below_threshold` and never hidden.
+//   `expected`  — the changes this release makes ON PURPOSE, so an intentional release does not fail its own check: strings "/path" (every
+//                 failure on that page) or "/path:check" (one check: page_answers, no_redirect, indexable, robots_allows, canonical, title, h1,
+//                 description), or objects { path | url, check?, reason? }. Matching failures come back as `expected_changes` with the reason;
+//                 an entry that matched nothing is returned as `expected_unused` (the change did not happen, or the list is stale).
+// The recipe for a CI job is in docs/PRERELEASE_CI.md.
 /*__PAGE_WATCH__*/
 const raw = $input.first().json || {};
 const b = (raw.body && typeof raw.body === 'object' && !Array.isArray(raw.body)) ? raw.body : {};
@@ -41,9 +49,24 @@ const liveHost = bare(S(b.live_host));
 const hosts = [...new Set(urls.map(u => hostOf(u)).filter(Boolean))];
 // staging unless the caller says otherwise, or unless every URL is already on the live host
 const staging = b.staging === false ? false : (b.staging === true ? true : !(liveHost && hosts.every(h => bare(h) === liveHost)));
+const CHECK_IDS = ['page_answers', 'no_redirect', 'indexable', 'robots_allows', 'canonical', 'title', 'h1', 'description'];
+const failOn = S(b.fail_on).toLowerCase() || 'any';
+if (!['any', 'low', 'medium', 'high', 'critical'].includes(failOn)) errors.push('fail_on must be one of any, low, medium, high, critical (given "' + failOn.slice(0, 20) + '")');
+const trimPath = (x) => { const p = S(x).replace(/^https?:\/\/[^\/]+/i, '').replace(/[?#].*$/, '').toLowerCase(); return (p.replace(/\/+$/, '') || '/'); };
+const expRaw = Array.isArray(b.expected) ? b.expected : (S(b.expected) ? S(b.expected).split(/[\s,]+/) : []);
+if (expRaw.length > 100) errors.push('expected takes at most 100 entries (' + expRaw.length + ' given)');
+const expected = [];
+for (const e of expRaw.slice(0, 100)) {
+  let path = '', check = '', reason = '';
+  if (e && typeof e === 'object') { path = S(e.path || e.url); check = S(e.check).toLowerCase(); reason = S(e.reason).slice(0, 200); }
+  else { const m = S(e).match(/^(.*?)(?::([a-z0-9_]+))?$/i); path = m ? S(m[1]) : S(e); check = m && m[2] ? S(m[2]).toLowerCase() : ''; if (/^https?$/i.test(path) && m && m[2]) { path = S(e); check = ''; } }
+  if (!path) { errors.push('expected: an entry has no path'); continue; }
+  if (check && !CHECK_IDS.includes(check)) { errors.push('expected: "' + check + '" is not a check (' + CHECK_IDS.join(', ') + ')'); continue; }
+  expected.push({ path: trimPath(path), check, reason });
+}
 if (errors.length) return [{ json: { ok: false, status: 400, verdict: 'error', exit_code: 2, error: errors.join('; '), errors, writes: 'none' } }];
 const checked_at = new Date().toISOString();
-const items = urls.map((url, i) => ({ json: { ok: true, kind: 'page', url, idx: i, host: hostOf(url), live_host: liveHost, staging, checked_at, pages: urls.length, request_id: $execution.id } }));
+const items = urls.map((url, i) => ({ json: { ok: true, kind: 'page', url, idx: i, host: hostOf(url), live_host: liveHost, staging, checked_at, pages: urls.length, request_id: $execution.id, fail_on: failOn, expected } }));
 // one robots.txt per host, so "is this page allowed to be crawled" can be answered from the same fetches
-hosts.forEach((h, j) => items.push({ json: { ok: true, kind: 'robots', url: 'https://' + h + '/robots.txt', idx: urls.length + j, host: h, live_host: liveHost, staging, checked_at, pages: urls.length, request_id: $execution.id } }));
+hosts.forEach((h, j) => items.push({ json: { ok: true, kind: 'robots', url: 'https://' + h + '/robots.txt', idx: urls.length + j, host: h, live_host: liveHost, staging, checked_at, pages: urls.length, request_id: $execution.id, fail_on: failOn, expected } }));
 return items;

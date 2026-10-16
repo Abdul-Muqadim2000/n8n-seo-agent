@@ -10499,6 +10499,86 @@ log('The audit\'s raw fetches (Fetch Raw Pages, Fetch Not Crawled) name themselv
 
 
 
+# 112. THE TECHNICAL AUDIT, THE THIRD WAVE (2026-10-16, benchmark area 5: B5-4 hreflang, B5-6 response-vs-render across the crawl, B5-12 GA4 key
+#      events in the impact weight, and the R67 report half). Four changes, each with its own honesty rule:
+#      * B5-4  — `Render Diff` reads the hreflang set of every page whose first response it holds (<link rel="alternate" hreflang> and the Link
+#        header) and checks: valid codes, absolute addresses, a self-reference, one address per language, an x-default (Low), return links between
+#        the pages held. SILENT when no page declares any (`render_diff.hreflang` is null, no finding, no report block).
+#      * B5-6  — with a JavaScript crawl the crawl IS the rendered reading of every page: *Render Diff Targets* keeps the 5 pages that go to the
+#        render service and adds up to 20 more that are only fetched raw (*Raw Page Targets* emits them after the rendered ones) and paired with
+#        the crawl. Without JavaScript the crawl is the first response too, so nothing is paired and the report says why.
+#      * B5-12 — *GA4 Key Events Plan -> GA4 Key Events (Audit) -> GA4 Key Events* (between *Not Crawled Check* and *Build Site Issues*) read the key
+#        events per organic landing page (free) when the request carries the GA4 property id; `IMP.rank` adds them to the traffic term (a key
+#        event = ten clicks) and `priority_method` says which weight was used, and why GA4 was not when it was not.
+#      * R67   — both reports print "N AI-review findings are counted here and are not part of the score" under the severity table when
+#        `issue_counts` includes unscored findings (the stored audit row counts only what it stores).
+import retry_lint as _rl112
+_nc112 = pos('Not Crawled Check'); GX, GY = _nc112[0] + 220, _nc112[1]
+disconnect('Not Crawled Check', 'Build Site Issues')
+add_node('GA4 Key Events Plan', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/GA4_Audit_Plan.js')}, [GX, GY])
+if_node('Any GA4 Key Events?', '{{ !$json.skip }}', [GX + 220, GY])
+add_node('GA4 Key Events (Audit)', 'n8n-nodes-base.httpRequest', 4.5, {
+    'method': 'POST', 'url': '={{ $json.url }}', 'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'googleApi',
+    'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.body) }}',
+    'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 150}}, 'timeout': 60000, 'response': {'response': {'neverError': True}}}},
+    [GX + 440, GY - 160], dict(onError='continueRegularOutput', alwaysOutputData=True, credentials=GOOGLE14, **_rl112.RETRY))
+add_node('GA4 Key Events', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/GA4_Audit_Parse.js')}, [GX + 660, GY])
+for _a112, _b112 in [('Not Crawled Check', 'GA4 Key Events Plan'), ('GA4 Key Events Plan', 'Any GA4 Key Events?'),
+                     ('GA4 Key Events (Audit)', 'GA4 Key Events'), ('GA4 Key Events', 'Build Site Issues')]:
+    connect(_a112, _b112)
+connect('Any GA4 Key Events?', 'GA4 Key Events (Audit)', 0); connect('Any GA4 Key Events?', 'GA4 Key Events', 1)
+
+patch('Build Site Issues', "IMP.rank(findings, { total_pages: total, search_console: input.search_console || null,",
+      "IMP.rank(findings, { total_pages: total, search_console: input.search_console || null, ga4_key_events: input.ga4_key_events || null,")
+patch('Build Site Issues', "      priority_method: IMP.method,\n",
+      "      priority_method: IMP.method + ' ' + IMP.weightBasis({ search_console: input.search_console || null, ga4_key_events: input.ga4_key_events || null }).text,\n"
+      "      impact_weight: IMP.weightBasis({ search_console: input.search_console || null, ga4_key_events: input.ga4_key_events || null }),\n")
+
+HREFLANG_SECTION_JS = r"""// ---- B5-4 (2026-10-16): the language versions the site declares. Not printed at all when no page read declares any. ----
+const hreflangSection = (a) => {
+  const hl = a.render_diff && a.render_diff.hreflang; if (!hl) return '';
+  const e6 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const L = { invalid: 'Codes that are not valid', relative: 'Addresses that are not absolute', no_self: 'Pages that do not list themselves', no_return: 'Alternates that do not link back',
+    duplicate: 'One language, two addresses', no_default: 'Sets without an x-default' };
+  const rows = Object.keys(L).map(k => `<tr><td>${L[k]}</td><td>${Number((hl.problems || {})[k]) || 0}</td></tr>`).join('');
+  return `<h3>Language versions (hreflang)</h3><p>${hl.declared_on} of ${hl.pages_read} page(s) read declare hreflang.</p><table class="ct"><tr><th>Check</th><th>Pages</th></tr>${rows}</table><p class="small">${e6(hl.method)}</p>`;
+};
+// ---- R67 (2026-10-16): the severity table counts findings the score does not use; it says so ----
+const unscoredNote = (a) => {
+  const u = (a.findings || []).filter(f => f && f.scoring === false); if (!u.length) return '';
+  const k = u.filter(f => f.source === 'ai_review').length; const n = u.length;
+  const label = k === n ? 'AI-review finding' : 'unscored finding';
+  return `<p class="small">${n} ${label}${n === 1 ? ' is' : 's are'}${k && k < n ? ' (' + k + ' from the AI review)' : ''} counted here and ${n === 1 ? 'is' : 'are'} not part of the score.</p>`;
+};
+"""
+for _rn112 in ('Build Audit Report', 'Build Full Report'):
+    patch(_rn112, "// ---- the known URLs the crawl never reached (B5-5", HREFLANG_SECTION_JS + "// ---- the known URLs the crawl never reached (B5-5")
+    patch(_rn112, "html += uncrawlableSection(a);", "html += uncrawlableSection(a);\nhtml += hreflangSection(a);")
+    patch(_rn112, "${counts[s] || 0}</b></td>`).join('')}</tr></table>\n", "${counts[s] || 0}</b></td>`).join('')}</tr></table>\n${unscoredNote(a)}\n")
+    patch(_rn112, "on any of the ${rdf.pages_checked} key page(s) checked:", "on any of the ${rdf.pages_checked} ${rdf.paired_with_crawl ? '' : 'key '}page(s) checked:")
+    patch(_rn112, "${rdf.rendered_source === 'crawl_js' ? '; the rendered reading came from the JavaScript crawl' : ''}.",
+          "${rdf.rendered_source === 'crawl_js' ? '; the rendered reading came from the JavaScript crawl' : ''}${rdf.paired_with_crawl ? '; ' + rdf.paired_with_crawl + ' of them were paired with the JavaScript crawl instead of being rendered again' : (rdf.crawl_js === false && rdf.paired_note ? '; ' + e3(rdf.paired_note) : '')}.")
+
+assert 'GA4 Key Events Plan' in nodes and 'ga4_key_events' in code('Build Site Issues') and 'IMP.weightBasis' in code('Build Site Issues'), 'B5-12: the GA4 key events are not wired into the impact weight'
+assert 'KE_W' in code('Build Site Issues') and 'raw_extra' in code('Render Diff Targets') and 'raw_extra' in code('Raw Page Targets') and 'hreflangOf' in code('Render Diff'), 'B5-4 / B5-6: the pairing or the hreflang check is missing'
+assert 'unscoredNote(a)' in code('Build Audit Report') and 'unscoredNote(a)' in code('Build Full Report') and 'hreflangSection(a)' in code('Build Audit Report'), 'R67 / B5-4: the report halves are missing'
+assert not _rl112.weak(nodes['GA4 Key Events (Audit)']), 'GA4 Key Events (Audit): the G1 retry rule is missing'
+log('The technical audit, third wave (2026-10-16, benchmark area 5, B5-4 / B5-6 / B5-12 + R67): Render Diff reads the hreflang set of every page it holds (valid codes, absolute addresses, self-reference, one address per language, x-default, return links) and is silent when the site declares none; with a JavaScript crawl up to 25 pages (not 5) are compared, the 5 key pages rendered and up to 20 more fetched raw and paired with the crawl itself, free, and without JavaScript nothing is paired and the report says why; GA4 key events per organic landing page (free, when the request carries the GA4 property id) join the impact weight (one key event = ten clicks) and the fix list says which weight it used and why GA4 was not when it was not; both reports say how many unscored findings the severity table counts and that they are not part of the score')
+
+
+
+# 113. THE PRE-RELEASE CHECK A BUILD CAN USE (2026-10-16, benchmark area 5, B5-7). `SEOagentPreRel1` (built by build_api.py from
+#      v5/code/Prerelease_Validate.js / Prerelease_Verdict.js) takes `fail_on` (only failures of that severity or above fail; the rest are returned
+#      as `below_threshold`) and `expected` (the changes a release makes on purpose; returned as `expected_changes`, and an entry that matched
+#      nothing as `expected_unused`), and docs/PRERELEASE_CI.md holds the CI recipe. Nothing is hidden: an accepted or below-threshold failure is
+#      still in the response. The workflow itself is unchanged in shape (it still writes nothing), so this section only proves the sources.
+_pv113 = rd('code/Prerelease_Validate.js'); _pd113 = rd('code/Prerelease_Verdict.js')
+assert 'fail_on' in _pv113 and 'expected' in _pv113 and 'fail_on' in _pd113 and 'expected_unused' in _pd113 and 'below_threshold' in _pd113, 'B5-7: the pre-release check lost fail_on / expected'
+assert os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'docs', 'PRERELEASE_CI.md')), 'B5-7: docs/PRERELEASE_CI.md (the CI recipe) is missing'
+log('A pre-release check a build can use (2026-10-16, benchmark area 5, B5-7): POST /webhook/seo-prerelease takes fail_on (any | low | medium | high | critical: only failures of that severity or above fail, the rest come back as below_threshold) and expected (the changes the release makes on purpose, "/path" or "/path:check" or {path, check, reason}, returned as expected_changes; an entry that matched nothing as expected_unused), nothing accepted is hidden, and docs/PRERELEASE_CI.md holds a GitHub Actions job and a one-line shell recipe')
+
+
+
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:
 #     "two fixes have never come back and both are enforced by the build".

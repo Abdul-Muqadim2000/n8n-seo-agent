@@ -57,6 +57,26 @@ const IMP = (() => {
     return by;
   };
 
+  // ---- B5-12 (2026-10-16, benchmark area 5; Conductor weights by page views and conversion rate): GA4 key events per page ----
+  // For a lead-generation site an impression is a weak proxy for value; the key events (the visits that did what the site exists for) on the
+  // organic landing pages say which pages earn. When the audit read them (`ga4_key_events`, usable only with at least one key event in the
+  // 28 days) they add to the traffic term: one key event counts as KE_W = 100 points, the same as ten clicks (a click is 10, an impression 1).
+  // Without them the weight is exactly what it was, and the report says which basis it used. Never a guess: a property with no key events is
+  // not a property where every page is worth nothing, so it falls back and says why.
+  const KE_W = 100;
+  const ga4Of = (ctx) => { const g = ctx && ctx.ga4_key_events; return (g && g.connected && g.usable === true && Array.isArray(g.rows) && g.rows.length) ? g : null; };
+  const ga4Index = (g) => { const by = new Map(); for (const r of ((g || {}).rows || [])) { if (!Array.isArray(r)) continue; const p = pathOf(r[0]); const cur = by.get(p) || { ke: 0, sessions: 0 }; by.set(p, { ke: cur.ke + n0(r[1]), sessions: cur.sessions + n0(r[2]) }); } return by; };
+  // which weight the list used, in one sentence (printed in the report next to the method) and as a short code
+  const weightBasis = (ctx) => {
+    const g = ga4Of(ctx); const sc = (ctx && ctx.search_console && ctx.search_console.connected);
+    const gx = ctx && ctx.ga4_key_events;
+    if (g) return { source: sc ? 'search_console_and_ga4_key_events' : 'ga4_key_events',
+      text: 'Weight used: ' + (sc ? 'Search Console clicks and impressions plus ' : '') + 'GA4 key events per organic landing page (' + fmt(g.total_key_events) + ' key events in the last 28 days, one key event counted as ten clicks).' };
+    return { source: sc ? 'search_console' : 'none',
+      text: 'Weight used: ' + (sc ? 'Search Console clicks and impressions only' : 'the pages affected and their place in the site only (no Search Console data)') + ' — GA4 key events were not used: '
+        + S((gx && gx.reason) || 'GA4 was not read in this audit') + '.' };
+  };
+
   // G18-2: is this finding minor (foldable)? Derived from the severity and the impact weight alone, so the app can apply the same rule to a
   // stored seo_audit_findings row without a new column.
   const isMinor = (f) => {
@@ -85,6 +105,10 @@ const IMP = (() => {
     const avgClicks = totals ? n0(totals.clicks) / knownPages : 0;
     const avgImpr = totals ? n0(totals.impressions) / knownPages : 0;
     const keyPaths = new Set([...((ctx && ctx.key_pages) || []).map(pathOf), '/']);
+    const ga = ga4Of(ctx);                 // B5-12: null unless GA4 key events were read and there is at least one
+    const gaBy = ga ? ga4Index(ga) : null;
+    const gaComplete = !!(ga && ga.rows_complete === true);
+    const gaAvg = ga ? n0(ga.total_key_events) / Math.max(1, gaBy.size) : 0;
 
     for (const f of list) {
       const sev = SEV_W[f.severity] != null ? SEV_W[f.severity] : 1;
@@ -112,14 +136,31 @@ const IMP = (() => {
       // 22,860 impressions in the last 28 days" for a property that measured 38 clicks and 5,295 in that period (the mobile-usability
       // finding, 45 of 47 pages). No finding can put more traffic at risk than the whole property has, so every basis — measured,
       // scaled or averaged — is capped at Search Console's own 28-day totals, and the line says when the cap bit.
+      // B5-12: key events of the affected pages, by the same rules as clicks (named pages measured, scaled to the pages affected, the property's
+      // average per landing page otherwise, never more than the property's total)
+      let keyEvents = 0, keMeasured = 0, keCapped = false;
+      if (ga) {
+        if (siteWide) { keyEvents = n0(ga.total_key_events); keMeasured = gaBy.size; }
+        else {
+          const urls = (Array.isArray(f.affected_urls) && f.affected_urls.length) ? f.affected_urls : (f.sample_urls || []);
+          for (const u of urls) {
+            const raw = S(u).split(' \u2014 ')[0].trim(); const hit = gaBy.get(pathOf(raw));
+            if (hit) { keyEvents += hit.ke; keMeasured++; }
+            else if (gaComplete && /^https?:\/\/[^\s]+$/i.test(raw)) keMeasured++;
+          }
+          if (keMeasured && affected > keMeasured) keyEvents = Math.round(keyEvents * affected / keMeasured);
+          if (!keMeasured) keyEvents = Math.round(gaAvg * affected);
+        }
+        if (keyEvents > n0(ga.total_key_events)) { keyEvents = n0(ga.total_key_events); keCapped = true; }
+      }
       let capped = false;
       if (totals) {
         const totC = n0(totals.clicks), totI = n0(totals.impressions);
         if (clicks > totC) { clicks = totC; capped = true; }
         if (impressions > totI) { impressions = totI; capped = true; }
       }
-      const traffic = clicks * 10 + impressions;
-      const trafficFactor = sc ? 1 + Math.log10(1 + traffic) : 1;
+      const traffic = clicks * 10 + impressions + keyEvents * KE_W;
+      const trafficFactor = (sc || ga) ? 1 + Math.log10(1 + traffic) : 1;
       const onKeyPage = siteWide || (f.sample_urls || []).some(u => keyPaths.has(pathOf(S(u).split(' — ')[0])));
       const placeFactor = onKeyPage ? 1.3 : 1;
       const blocker = BLOCKER.test(S(f.title)) && (f.category === 'Crawlability & Indexing' || f.category === 'Security' || f.category === 'Technical');
@@ -132,13 +173,16 @@ const IMP = (() => {
       // High somewhere else just because it touches indexing
       f.impact_band = f.severity === 'Info' ? 0 : (blocker && sev >= SEV_W.Medium) ? 3 : cosmetic ? 1 : 2;
       f.impact_traffic = sc ? { clicks, impressions, estimated: !measured && !siteWide, capped, period_days: 28,
-        property_totals: totals ? { clicks: n0(totals.clicks), impressions: n0(totals.impressions) } : null } : null;
+        property_totals: totals ? { clicks: n0(totals.clicks), impressions: n0(totals.impressions) } : null,
+        ...(ga ? { key_events: keyEvents, key_events_estimated: !keMeasured && !siteWide, key_events_capped: keCapped } : {}) } : (ga ? { clicks: 0, impressions: 0, estimated: false, capped: false, period_days: 28, property_totals: null, key_events: keyEvents, key_events_estimated: !keMeasured && !siteWide, key_events_capped: keCapped } : null);
+      f.impact_source = ga ? (sc ? 'search_console_and_ga4_key_events' : 'ga4_key_events') : (sc ? 'search_console' : 'none');   // B5-12: which weight this finding used
       f.minor = isMinor(f);   // G18-2: folded in the reports and in the app, never removed
       f.impact_basis = [
         blocker ? 'Google cannot index or follow these pages' : '',
         siteWide ? 'the whole website' : affected + ' of ' + total + ' crawled pages',
         sc ? (measured || siteWide ? 'about ' : 'an estimated ') + fmt(clicks) + ' clicks and ' + fmt(impressions) + ' impressions in the last 28 days'
           + (capped ? ' (capped at everything the whole website measured in that period: the pages affected cannot put more at risk)' : '') : 'no Search Console data, so the pages affected and their place in the site decide the order',
+        ga ? (keMeasured || siteWide ? 'about ' : 'an estimated ') + fmt(keyEvents) + ' GA4 key events in the last 28 days' + (keCapped ? ' (capped at the whole website\'s total)' : '') : '',
         onKeyPage && !siteWide ? 'the homepage or a key page is affected' : '',
         f.severity + ' severity',
         cosmetic ? 'cosmetic, so it is never ranked first' : ''
@@ -161,5 +205,5 @@ const IMP = (() => {
       + (next ? ' — impact score ' + f.impact + ' against ' + next.impact + ' for "' + S(next.title) + '"' : '') + '.';
   };
 
-  return { rank, method, firstReason, isMinor, fold, foldNote, MINOR_RULES, MINOR_MAX, MINOR_RULE_MAX, SEV_W, BLOCKER, COSMETIC };
+  return { rank, method, weightBasis, firstReason, isMinor, fold, foldNote, MINOR_RULES, MINOR_MAX, MINOR_RULE_MAX, SEV_W, BLOCKER, COSMETIC };
 })();
