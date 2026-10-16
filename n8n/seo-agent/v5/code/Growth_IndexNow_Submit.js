@@ -3,6 +3,9 @@
 // about whether to index it" (www.indexnow.org/faq); the participating engines it lists are Amazon, Bing, Naver, Seznam.cz,
 // Yandex and Yep — Google is not among them. The report says notified, never indexed.
 const plans = $('Growth Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
+// R94 (2026-10-16): a test run never notifies IndexNow either (see Growth_Bing_Submit.js): what would have been sent is handed on.
+const DRY_RUN = (() => { try { let t = $('Manual Run').first().json || {}; if (t.body && typeof t.body === 'object') t = { ...t, ...t.body };
+  return t.dry_run === true || /^(true|1|yes|on)$/i.test(String(t.dry_run ?? '')); } catch (e) { return false; } })();
 let reqs = [], res = []; try { reqs = $('IndexNow Key Requests').all().map(i => i.json); res = $('Fetch IndexNow Key').all().map(i => i.json); } catch (e) {}
 const robots = (() => { try { return $('Robots Verdicts (Growth)').all().map(i => i.json).filter(x => x && !x.skip); } catch (e) { return []; } })();
 const keyOf = (u) => { const m = String(u || '').trim().match(/^https?:\/\/(?:www\.)?([^\/?#]+)([^?#]*)/i); if (!m) return ''; return m[1].toLowerCase() + ((m[2] || '/').replace(/\/+$/, '') || '/'); };
@@ -17,6 +20,7 @@ for (const p of plans) {
   const refused = p.submit.filter(x => blocked(x.url)).map(x => ({ url: x.url, reason: 'robots.txt blocks every AI search fetcher' }));
   const urls = p.submit.filter(x => !blocked(x.url)).map(x => x.url);
   if (!urls.length) { if (refused.length) out.push({ json: { site_id: p.site_id, skip: true, refused } }); continue; }
+  if (DRY_RUN) { out.push({ json: { site_id: p.site_id, skip: true, dry_run: true, would_submit: urls.slice(0, 10000), refused } }); continue; }
   out.push({ json: { site_id: p.site_id, url: 'https://api.indexnow.org/indexnow', urls, refused, body: { host: p.site_host, key: p.indexnow_key, keyLocation: reqs[i].url, urlList: urls.slice(0, 10000) } } });
 }
 return out.length ? out : [{ json: { skip: true } }];

@@ -34,6 +34,9 @@ CREDS = [
     # v4.10 (BACKLINKS_SPEC.md): optional free link sources; without the key the Backlink Monitor is built with the source switched off
     ('SEOcredBingWebm', 'Bing Webmaster API', 'httpQueryAuth', {'value': 'SEO_BING_WEBMASTER_API_KEY'}, {'name': 'apikey'}),
     ('SEOcredAhrefsDR', 'Ahrefs (free Domain Rating)', 'httpHeaderAuth', {'value': 'SEO_AHREFS_API_KEY'}, {'name': 'Authorization'}),
+    # R94 (2026-10-16): the Schedule Catch-up reads n8n's own public API (each scheduled workflow and its executions) to tell a fired
+    # schedule from a lost one. Same key the linkgraph container and sync_tables.py use (Settings -> n8n API in the n8n UI).
+    ('SEOcredN8nApiKey', 'n8n API (SEO Agent catch-up)', 'httpHeaderAuth', {'value': 'N8N_API_KEY'}, {'name': 'X-N8N-API-KEY'}),
 ]
 PREFIX = {('SEOcredJinaReade', 'value'): 'Bearer ', ('SEOcredAhrefsDR', 'value'): 'Bearer '}   # header value = 'Bearer ' + key
 # Trigger authentication (webhook header auth, form basic auth) is checked outside an execution context, where n8n does not resolve

@@ -85,6 +85,11 @@ services:
     ports:
       - '5678:5678' # the only port that should be internet-facing
     env_file: .env
+    environment:
+      # SEO Agent R94 (2026-10-16): the time zone every Schedule Trigger fires in, made a decision instead of n8n's default. Unset it
+      # was America/New_York, so that stays the default; the Schedule Catch-up is built with the same value (build_catchup.py).
+      # Changing it: set GENERIC_TIMEZONE in n8n/.env, run apply_env.py (it rebuilds and recreates the container).
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-America/New_York}
     volumes:
       - n8n-data:/home/node/.n8n
 
