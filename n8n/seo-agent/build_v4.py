@@ -4865,7 +4865,10 @@ assert 'rivalEntry' in _K58['_outreach_kit'] and 'dr === LK.regDomain(x)' in _K5
 assert 'isRoundup' in _K58['_outreach_kit'] and 'LIST_TYPES.has(type) && isRoundup(o)' in _K58['_outreach_kit'], 'R21: a rival page still passes as a list without being one'
 assert 'theirs || topic >= 0.5' in _K58['_outreach_kit'], 'R21: a competing provider is still refused only through the declared list'
 assert 'rivalHosts' in _K58['LB_Plan'] and 'LK.regDomain(host)' in _K58['LB_Plan'], 'R21: the SERP rivals are not keyed on the registrable domain'
-assert _K58['LB_Assemble'].count('serp_rivals: p.serp_rivals') == 4 and 'fit: o.fit' in _K58['LB_Assemble'], 'R21: a gate call in LB Assemble is still blind to the SERP rivals'
+# W3-F (2026-10-17): the count is of what is really there - four gate calls pass `serp_rivals: p.serp_rivals` and the fifth (the digest re-check) passes it
+# through the local alias `storedRivals = p.serp_rivals`; the old assert counted only the first spelling and expected exactly four
+assert _K58['LB_Assemble'].count('serp_rivals: p.serp_rivals') == 4 and 'const storedRivals = p.serp_rivals' in _K58['LB_Assemble'] \
+    and _K58['LB_Assemble'].count('serp_rivals: storedRivals') == 1 and 'fit: o.fit' in _K58['LB_Assemble'], 'R21: a gate call in LB Assemble is still blind to the SERP rivals'
 assert 'serp_rivals: p.serp_rivals || []' in _K58['LB_Draft_QA'] and 'serp_rivals: c.serp_rivals' in _K58['_draft_qa'], 'R21: the draft gate is blind to the SERP rivals'
 # R20: the report type decides what may be compared, and a change of type is said instead of scored
 assert 'kindOfAudit' in _K58['_annotations'] and 'not comparable' in _K58['_annotations'] and 'lastOf' in _K58['_annotations'], 'R20: the audit marks are still chained across report types'
@@ -5102,7 +5105,7 @@ def _r17_r29_checks():
         _check_ledger_order55(files55[wname55], wiring55); checked55 += 1
     # R32's companion (section 59): Page Watch joined the chain, so it is ten — the nine that spend plus the daily watch, which keeps a
     # $0 row so the guard and the day's reconciliation can see that it ran at all.
-    assert checked55 == 10, 'R17: ' + str(checked55) + ' scheduled workflows checked, expected 10 (the nine of R17 plus Page Watch)'
+    assert checked55 == 11, 'R17: ' + str(checked55) + ' workflows checked, expected 11 (the nine of R17, Page Watch, and the Reply Reader since W3-F)'
     hits55 = _secret_scan55([os.path.join(HERE0, 'workflows'), os.path.join(HERE0, 'harness', 'code_v4')])
     assert not hits55, 'R29: a secret reached the generated files:\n  ' + '\n  '.join(hits55)
     # R30 (2026-10-14): a shape scan only catches the secrets we thought of. The alert channel is checked positively as well — what is
@@ -5642,7 +5645,7 @@ def _r31_checks():
         # the free balance reading, on the chain, before the row is written
         bal59 = wiring59.get('balance') or ''
         assert bal59 in by59, 'R32: ' + wname59 + ' takes no balance reading'
-        assert by59[bal59]['parameters']['url'] == _BALANCE_URL55, 'R32: ' + wname59 + "'s balance node is not the free endpoint"
+        assert wiring59.get('no_dfs') or by59[bal59]['parameters']['url'] == _BALANCE_URL55, 'R32: ' + wname59 + "'s balance node is not the free endpoint"
         assert by59[bal59].get('onError') == 'continueRegularOutput' and by59[bal59].get('alwaysOutputData'), 'R32: ' + wname59 + "'s balance reading can end the run"
         c59 = wf59['connections']
         outs59 = lambda nd: [t['node'] for lst in ((c59.get(nd) or {}).get('main') or []) for t in (lst or [])]
@@ -6382,7 +6385,7 @@ def _b64_checks():
             'B-A7: ' + wname64 + ' does not write the retry state back: ' + str(wr64)
         out64[wname64] = {'guard': g64, 'retry': r64, 'writes': wr64, 'if_outputs': if64,
                           'refuse_values': sorted(ref64['columns']['value'].keys())}
-    assert len(out64) == 10, 'B-A7 / B-A9: ' + str(len(out64)) + ' scheduled workflows carry the gate and the sweep, expected 10'
+    assert len(out64) == 11, 'B-A7 / B-A9: ' + str(len(out64)) + ' workflows carry the gate and the sweep, expected 11 (the ten schedules and the Reply Reader since W3-F)'
     json.dump({'monitors': out64, 'n_minutes': 30, 'k_attempts': 3, 'max_attempts': 10, 'per_sweep': 5,
                'error_handler': _ops64['retry'], 'columns': [c for c, _t in _OAC64],
                'page_watch_delivery': {'code': 'Watch Ops Delivery', 'save': 'Save Watch Ops Delivery'}},
@@ -8930,10 +8933,7 @@ assert COUNT_URL62 == _lc84.ANTHROPIC_COUNT_URL, 'B-C2: the free counter endpoin
 # Why each remaining workflow is not counted. One sentence per workflow, not one shared sentence for all of them: the reasons are
 # genuinely different, and a shared one would hide that three of these four need no work beyond someone owning the file.
 _GAP84 = {
-    'SEO_Agent_Reply_Reader.json':
-        'NOT counted, and nothing to count it into: the Reply Reader has no seo_run_ledger row at all - a synchronous reply '
-        'classification reserves nothing and settles nothing, so there is no figure for a measurement to replace. Proved by '
-        '_b84_checks: the workflow contains no Ledger Settle node.',
+    # W3-F (2026-10-17): the Reply Reader left this list - it reserves and settles a run-ledger row now and is counted like the monitors
     'SEO_Agent_Keyword_Check.json':
         'NOT counted: the Keyword Check answers the web app SYNCHRONOUSLY - both Haiku agents sit between the request and Respond '
         "Assess - so the two free count_tokens round-trips per agent would land on the caller's clock rather than on a schedule's, "
@@ -9019,8 +9019,9 @@ def _b84_checks():
             assert 'Count Prompt (' + _c['node'] + ')' in _after84, 'B-C2: ' + _c['node'] + "'s counter runs before the run is allowed"
     # ---- the four left behind, each still able to show its reason ----
     _rr84 = _load84('SEO_Agent_Reply_Reader.json')
-    assert not [n for n in _rr84['nodes'] if n['name'].startswith('Ledger Settle (')], \
-        'B-C2: the Reply Reader has a settle now, so its recorded reason ("no ledger row to settle into") is stale'
+    assert [n for n in _rr84['nodes'] if n['name'].startswith('Ledger Settle (')] and \
+        [n for n in _rr84['nodes'] if n['name'].startswith('Count Prompt (')], \
+        'W3-F: the Reply Reader must reserve, count and settle its Haiku call (it left the count gap)'
     _kc84 = _load84('SEO_Agent_Keyword_Check.json')
     _kcc84 = _kc84.get('connections') or {}
     _resp84 = {n['name'] for n in _kc84['nodes'] if n['type'] == 'n8n-nodes-base.respondToWebhook'}
@@ -10660,6 +10661,102 @@ def _b116_checks():
     log('Rank Tracker (B6-6 / B6-8 / B6-10 / B6-14): two of the site\'s own pages on one results page are named with the one Google prefers today, a move is the page\'s own only when it beats the other results\' churn (our own move left out of the yardstick), the domains that moved above the target URL are named, and the share of voice across keywords is weighted by the site\'s Search Console impressions or labelled unweighted')
 
 
+# 122. AI GROWTH, THE THIRD WAVE (2026-10-17, agent W3-F, benchmark area 9: B9-7 a correction target per wrong claim, B9-8 the key pages fetched as the
+#      AI answer fetchers, B9-10 Bing's own AI citation report named). Build-time proof that the pieces are wired, not only present:
+#      * B9-7 - the Growth Plan reads `perception_json` and builds corrections with the fact ON FILE (a claim without one is "needs your fact" and is never
+#        drafted); Earned Media drafts only through the Link Builder's one outreach writer (the AI Outreach Writer's job list, or a hand-over prospect row
+#        when the Link Builder is on) and only for a page whose own text carries the claim; the writer's prompt knows the correction kind and may use only the
+#        fact on file; Growth Metrics prints the draft and never sends it.
+#      * B9-8 - a second fetch of every key page with the four AI answer fetchers' user agents, between the browser fetch and the earned-media step; a page that
+#        answers a browser and refuses the fetchers is a HIGH finding and has its score withheld.
+#      * B9-10 - the report names AI Performance and Topics Portfolio, and says no API returns them.
+# =============================================================================
+def _w3f122_checks():
+    gp, em, gm, gr, rdy = (_rd0('code/' + f) for f in ('Growth_Plan.js', 'Earned_Media.js', 'Growth_Metrics.js', 'Growth_Report.js', 'AI_Readiness.js'))
+    assert "parse(v.perception_json, null)" in gp and "perc.fact_check === 'checked'" in gp and 'fact_on_file' in gp and "status: onFile ? 'ready' : 'needs_fact'" in gp, 'B9-7: the Growth Plan does not build corrections from the checked perception'
+    assert 'needs your fact' in gp, 'B9-7: a claim with no fact on file must say "needs your fact"'
+    assert 'if (c.fact_on_file) {' in em and 'pg.carries_claim === true' in em and "kind: 'correction'" in em, 'B9-7: Earned Media drafts for a claim without its fact or for a page that does not say it'
+    assert "p.link_builder) { status = 'handed_over'" in em, 'B9-7: with the Link Builder on a correction must be handed over, not written a second time (one writer)'
+    assert "$('AI Outreach Writer')" not in em and 'jobs.push(draft_job)' in em, 'B9-7: Earned Media must feed the existing writer through its job list, not call another'
+    assert 'CORRECTION' in _rd0('prompts/ai_outreach.txt') and 'ONLY the fact written after' in _rd0('prompts/ai_outreach.txt'), 'B9-7: the writer prompt does not restrict a correction to the fact on file'
+    assert 'corrections' in gm and "j.kind !== 'correction'" in gm and "(never sent)" in gr, 'B9-7: the corrections do not reach the report as drafts that are never sent'
+    _gw = json.load(open(os.path.join(HERE0, 'workflows', 'SEO_Agent_AI_Growth.json'), encoding='utf-8'))[0]
+    _GROW122 = {n['name'] for n in _gw['nodes']}
+    _gc = _gw['connections']
+    assert 'Fetcher Requests (Growth)' in [x['node'] for l in _gc['Fetch Key Pages']['main'] for x in l], 'B9-8: the fetchers step does not follow the browser fetch'
+    for nm in ('Fetcher Requests (Growth)', 'Any Fetchers (Growth)?', 'Fetch As AI Bots (Growth)'):
+        assert nm in _GROW122, 'B9-8: AI Growth has no node "' + nm + '"'
+    for ua in ('OAI-SearchBot', 'ChatGPT-User', 'PerplexityBot', 'Claude-User'):
+        assert ua in _rd0('code/Growth_Fetcher_Requests.js'), 'B9-8: the key pages are not fetched as ' + ua
+    assert "fetchers_refused.length" in rdy and "level: 'high'" in rdy and 'score = null' in rdy, 'B9-8: a page that answers a browser and refuses the fetchers must be a high finding with no score'
+    assert 'AI Performance' in gr and 'Topics Portfolio' in gr and 'No API returns the AI Performance report' in gr, 'B9-10: the report does not name Bing\'s AI Performance report and Topics Portfolio'
+    log('AI Growth, third wave (2026-10-17, benchmark area 9: B9-7 / B9-8 / B9-10): a wrong claim AI makes about the business becomes a correction target - the claim, the true fact from the profile (a claim with no fact on file says "needs your fact" and nothing is drafted) and the cited pages that carry it, drafted by the one outreach writer (or handed to the Link Builder when it is on) only for a page whose own text says it, and never sent; every key page is fetched a second time as OAI-SearchBot, ChatGPT-User, PerplexityBot and Claude-User, and a page that answers a browser but refuses them is a high finding with its score withheld; the report names Bing Webmaster Tools\' AI Performance report and Topics Portfolio and says plainly that no API returns them')
+
+
+# 123. ONE ROBOTS.TXT MATCHER (2026-10-17, agent W3-F, B9-9). `AI_Access.js` (AI Visibility Tracker) and `Growth_Robots.js` (AI Growth) each carried their own
+#      parser, group selection and longest-rule match; both now inline `v5/code/_ai_access_kit.js` and the build fails if either defines a copy again.
+# =============================================================================
+def _w3f123_checks():
+    kit = _rd0('code/_ai_access_kit.js')
+    for tok in ('const parse = (txt)', 'const rulesFor = (groups, bot)', 'const matches = (pattern, path)', 'const allowed = (rules, path)'):
+        assert tok in kit, 'B9-9: the kit lost ' + tok
+    for f in ('AI_Access.js', 'Growth_Robots.js'):
+        code = _rd0('code/' + f)
+        assert '/*__AI_ACCESS_KIT__*/' in code, 'B9-9: ' + f + ' does not inline the one robots.txt kit'
+        for own in ('function parseRobots', 'const matches = ', 'const rulesFor = (groups, bot) => { const b'):
+            assert own not in code, 'B9-9: ' + f + ' carries its own copy of the robots.txt matcher again (' + own + ')'
+    assert 'AI_ACCESS_KIT' in _rd0('../build_monitors.py'), 'B9-9: build_monitors.py no longer inlines the kit'
+    for gen in ('AI_Access.js', 'Robots_Verdicts_Growth_.js'):
+        fp = os.path.join(HERE0, 'harness', 'code_v4', gen)
+        assert os.path.exists(fp), 'B9-9: the generated node ' + gen + ' is missing'
+        out = open(fp, encoding='utf-8').read()
+        assert out.count('const AK = (() => {') == 1 and '/*__AI_ACCESS_KIT__*/' not in out, 'B9-9: ' + gen + ' was generated without exactly one copy of the kit'
+    log('One robots.txt matcher (2026-10-17, B9-9): the parser, the most-specific-group choice and the longest-rule match live in v5/code/_ai_access_kit.js and are inlined into both the AI Visibility Tracker\'s AI Access node and AI Growth\'s Robots Verdicts node, so the two can no longer answer differently; the build fails if either carries its own copy again')
+
+
+# 126. SMALL LEFTOVERS OF THE DEFECT WAVES (2026-10-17, agent W3-F): `_page_watch.js` decodes entities with the shared expression of `_entities.js` (named, decimal
+#      AND hex, one pass) - the kit is inlined into it between the same markers and the build proves the two copies identical.
+# =============================================================================
+def _w3f126_checks():
+    ent = _rd0('code/_entities.js').split('/*__ENT_BEGIN__*/')[1].split('/*__ENT_END__*/')[0].strip()
+    pw = _rd0('code/_page_watch.js')
+    assert '/*__ENT_BEGIN__*/' in pw, '_page_watch.js: the shared entity decoder is not inlined'
+    assert pw.split('/*__ENT_BEGIN__*/')[1].split('/*__ENT_END__*/')[0].strip() == ent, '_page_watch.js: its entity decoder drifted from v5/code/_entities.js'
+    assert "replace(/&nbsp;|&#160;/gi, ' ').replace(/&amp;/gi, '&')" not in pw, '_page_watch.js: strip decodes only three entities again'
+    log('Page watch decodes every entity (2026-10-17): the title and H1 the daily key-page watch compares are read through the shared decoder (named, decimal and hex, one pass), so "&#x27;" is an apostrophe and not a change of title')
+
+
+# 127. THE REPLY READER HAS A LEDGER ROW (2026-10-17, agent W3-F). Its Haiku call was recorded nowhere. It reserves a seo_run_ledger row on the main path behind the
+#      request check (a bad request reserves nothing) and before the model call, counts the call with the free token counter, and settles beside the answer;
+#      the web app is waiting, so the concurrency gate never refuses it (`no_gate`), and it calls no DataForSEO, so its two balance probes are no-ops.
+# =============================================================================
+def _w3f127_checks():
+    wf = json.load(open(os.path.join(HERE0, 'workflows', 'SEO_Agent_Reply_Reader.json'), encoding='utf-8'))[0]
+    nodes = {n['name']: n for n in wf['nodes']}; conns = wf['connections']
+    for nm in ('Reserve Run Ledger (Reply)', 'Ledger Settle (Reply)', 'Settle Run Ledger (Reply)', 'After Run Ledger (Reply)', 'Count Prompt (Reply Reader)'):
+        assert nm in nodes, 'W3-F: the Reply Reader has no node "' + nm + '"'
+    assert not [n for n in wf['nodes'] if 'dataforseo.com' in str((n.get('parameters') or {}).get('url') or '')], 'W3-F: the Reply Reader must call no DataForSEO (the in-200 ratchet would grow)'
+    outs = lambda nd: [t['node'] for lst in ((conns.get(nd) or {}).get('main') or []) for t in (lst or [])]
+    seen, stack = set(), ['Reply Webhook']
+    while stack:
+        c = stack.pop()
+        if c in seen: continue
+        seen.add(c)
+        if c == 'Reply Reader': break
+        stack.extend(outs(c))
+    # the reservation is behind every path from the webhook to the model: walking main and refusing to pass the reserve must not reach the agent
+    seen2, stack2 = set(), ['Reply Webhook']
+    while stack2:
+        c = stack2.pop()
+        if c in seen2 or c == 'Reserve Run Ledger (Reply)': continue
+        seen2.add(c); stack2.extend(outs(c))
+    assert 'Reply Reader' not in seen2, 'W3-F: the Reply Reader can reach its model call without reserving its ledger row'
+    assert 'Reply OK?' in seen2 and 'Respond Reply Bad Request' in seen2, 'W3-F: a bad request must be answered without a reservation'
+    lw = json.load(open(os.path.join(HERE0, 'harness', 'ledger_wiring.json'), encoding='utf-8'))['monitors']
+    assert lw['SEO Agent — Reply Reader']['no_gate'] is True and lw['SEO Agent — Reply Reader']['mode'] == 'reply_read', 'W3-F: the Reply Reader wiring lost its mode / no_gate'
+    log('Reply Reader ledger (2026-10-17): the Haiku call that classifies a reply is recorded - a seo_run_ledger row is reserved on the main path behind the request check and before the model call, the call is counted with the free token counter and priced through the cost kit, and the row settles beside the answer; the web app is waiting, so the concurrency gate never refuses a reply, and the workflow calls no DataForSEO')
+
+
 
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:
@@ -10809,6 +10906,8 @@ _b73_checks()
 _b78_checks()
 # section 82 (B9-1 ... B9-5): benchmark area 9, on the generated AI Growth workflow and its main-path wiring
 _b82_checks()
+# sections 122 / 123 / 126 / 127 (W3-F): AI growth's third wave, the one robots.txt matcher, the page-watch decoder, the Reply Reader's ledger row
+_w3f122_checks(); _w3f123_checks(); _w3f126_checks(); _w3f127_checks()
 
 # section 80 (B7-1 ... B7-3): benchmark area 7, on the generated Site Tracker
 _b80_checks()
