@@ -8,7 +8,8 @@
 //       fetched next — at most 5 per candidate, 15 per site, 100 per run — and Detect Published accepts a <title> or first <h1> holding >= 80%.
 //   Never claimed: URLs of other pages of the site (published, or existing before), URLs last changed before the page was written (lastmod;
 //   one day of slack for time zones). One URL per candidate and one candidate per URL, best score first.
-const CONFIG = { max_urls_per_site: 20000, max_body_chars: 5000000, title_candidates: 10, options_per_candidate: 5, max_fetches_per_site: 15, max_fetches_per_run: 100, slug_share: 0.6, max_inventory: 2000 };
+const CONFIG = { max_urls_per_site: 20000, max_body_chars: 5000000, title_candidates: 10, options_per_candidate: 5, max_fetches_per_site: 15, max_fetches_per_run: 100, slug_share: 0.6, max_inventory: 2000,
+  title_fill_per_site: 40, title_fill_per_run: 120 };   // R34: the weekly read of the titles the inventory does not have (plain GETs of the site's own pages)
 // 2026-10-12 (FIX_PLAN D11): the same sitemap read also yields the week's page inventory (`inventory`), which Page Inventory (Site)
 // turns into seo_pages rows. It is the whole URL list of the site, not only the pages this detection is matching.
 /*__OVERLAP__*/
@@ -29,7 +30,12 @@ const day = (s) => String(s || '').slice(0, 10);
 const dayBefore = (s) => { const t = Date.parse(day(s)); return isNaN(t) ? '' : new Date(t - 864e5).toISOString().slice(0, 10); };
 const tokHit = (t, set) => set.some(x => x === t || (t.length >= 5 && x.length >= 5 && (x.startsWith(t) || t.startsWith(x))));
 const shareOf = (kwT, other) => kwT.length ? kwT.filter(t => tokHit(t, other)).length / kwT.length : 0;
-let runFetches = 0;
+let runFetches = 0, runFills = 0;
+// R34: the inventory as stored (titles / H1s read before) and AI Growth's key pages (they carry their title already)
+const storedAll = grab('Load Pages (Site)').filter(r => r && r.url && !r.error);
+// the fill needs to know which titles are on file: with no inventory read in this run (an older wiring, a failed load) nothing is filled
+const storedRan = (() => { try { $('Load Pages (Site)').all(); return true; } catch (e) { return false; } })();
+const aiAll = grab('Load AI Pages (Site)').filter(r => r && r.url && !r.error);
 const state = sites.map((s, i) => {
   const d = s.domain;
   // ---- the sitemap: /sitemap.xml, or the children of its index ----
@@ -85,7 +91,25 @@ const state = sites.map((s, i) => {
     fset.add(o.ukey); fetches.push(o.url); runFetches++;
   }
   const inventory = list.slice(0, CONFIG.max_inventory).map(u => ({ url: u.url, lastmod: u.lastmod || '' }));
-  return { site_idx: s.site_idx, site_id: s.site_id, domain: d, candidates: s.candidates || [], sitemap, slug_matches: [...matched.values()], title_checks, fetches, notes, inventory };
+  // ---- (c) R34 (2026-10-16): the titles the inventory does not have ----
+  // seo_pages held a <title> only for the <= 15 pages (b) read and for AI Growth's key pages, so 25 of techand.ai's 45 rows had none and
+  // SM.matchPage could only read their address: /ai-copilot-advisory-uae ("AI Consulting & Copilot Advisory UAE") was invisible to
+  // "ai consulting", and the ladder planned and wrote a second page. The same plain GET of the site's own pages now also reads, per week,
+  // up to CONFIG.title_fill_per_site of the sitemap pages whose title (first) or H1 (then) is not on file, or that changed since they were
+  // read (sitemap lastmod after the stored row) — free, bounded, and the count left for next week travels on the state, so the inventory
+  // can name the pages it still judges by their address only (Page Inventory (Site) `title_unknown`).
+  const storedBy = new Map(storedAll.filter(r => r.site_id === s.site_id || keyOf(r.url).split('/')[0] === d).map(r => [keyOf(r.url), r]));
+  const aiTitled = new Set(aiAll.filter(r => (r.site_id === s.site_id || keyOf(r.url).split('/')[0] === d) && String(r.title || '').trim()).map(r => keyOf(r.url)));
+  const need = list.map(u => { const r = storedBy.get(u.key); const title = String((r && r.title) || '').trim(), h1 = String((r && r.h1) || '').trim();
+    const why = !title && !aiTitled.has(u.key) ? 'no title' : !h1 ? 'no H1' : (u.lastmod && r && r.updated_at && day(u.lastmod) > day(r.updated_at)) ? 'changed' : '';
+    return { u, why, imp: Number(r && r.impressions) || 0 }; }).filter(x => storedRan && x.why && !fset.has(x.u.key));
+  const RANK = { 'no title': 0, changed: 1, 'no H1': 2 };
+  need.sort((a, b) => RANK[a.why] - RANK[b.why] || b.imp - a.imp || String(b.u.lastmod).localeCompare(String(a.u.lastmod)));
+  const fill = [];
+  for (const x of need) { if (fill.length >= CONFIG.title_fill_per_site || runFills >= CONFIG.title_fill_per_run) break; fill.push(x); fset.add(x.u.key); fetches.push(x.u.url); runFills++; }
+  const title_fill = { cap: CONFIG.title_fill_per_site, wanted: need.length, planned: fill.length, left: need.length - fill.length,
+    by_reason: fill.reduce((m, x) => { m[x.why] = (m[x.why] || 0) + 1; return m; }, {}) };
+  return { site_idx: s.site_idx, site_id: s.site_id, domain: d, candidates: s.candidates || [], sitemap, slug_matches: [...matched.values()], title_checks, fetches, notes, inventory, title_fill };
 });
 const items = state.flatMap(st => st.fetches.map(url => ({ fetch: true, site_idx: st.site_idx, site_id: st.site_id, url })));
 // the per-site state rides on the first item for Detect Published (the HTTP node only reads `url`)

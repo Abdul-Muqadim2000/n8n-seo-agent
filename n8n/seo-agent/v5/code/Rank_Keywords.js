@@ -49,7 +49,7 @@ const topicReachOf = (topic, head) => { if (!R) return null; const key = String(
   if (!taCacheD.has(key)) taCacheD.set(key, reachTopic(reachRanked, key, R.reach, { domain: base.domain || '', reason_missing: reachMissingWhy }));
   return taCacheD.get(key); };
 const forYou = (kd, ta) => { if (!R) return {}; const r = ta && reachNum(ta.reach) != null ? ta.reach : R.reach;
-  const diff = difficultyForYou(kd, r, {}); const plan = reachPlan(diff, strongR);
+  const diff = difficultyForYou(kd, r, {}); const plan = reachPlan(diff, strongR, reachMeasured((ta && ta.used) ? { used: true } : R, null));   // R49: no band on an unmeasured reach
   return { difficulty_for_you: diff, plan_type: plan.plan_type, months: plan.months, for_you_label: reachLabel(diff, plan), chance: plan.chance,
     reach_used: r, reach_basis: (ta && ta.used) ? 'topic' : 'site', topic_reach: (ta && ta.used) ? ta.topic_reach : null }; };
 const winnableFor = (diff, kd) => R ? (diff === 'easy' || diff === 'reachable') : (kd == null || kd <= 55);
@@ -63,7 +63,18 @@ const fitCtx = { own_domain: base.domain || '', competitors: (base.competitors |
 // signals. The keyword stays in the list, so the owner can see it and refresh the page that exists.
 const siteModelD = (() => { try { const m = $('Site Model').first().json.site_model; return (m && typeof m === 'object') ? m : null; } catch (e) { return null; } })();
 const pageModelD = SM.withPages(siteModelD || SM.from({ domain: base.domain || '' }, {}), (base.site_urls || []).map(u => ({ url: u, source: 'sitemap' })));
-const coveredBy = (kw) => { if (!SM.pages(pageModelD).length) return null; const m = SM.matchPage(pageModelD, kw); return m ? { url: m.url, title: m.title || '', matched_by: m.matched_by } : null; };
+// R36 (2026-10-16, re-rating 2026-10-15): the keyword's OWN Search Console row was never consulted, so six searches the site already ranks
+// for with /dynamics-365-finance-and-operations-uae (one at #6.2) were offered as new "Landing / Location Page" cards. A Search Console row
+// whose page is on this site is the strongest evidence there is: the keyword is covered by that page (with its position), and only a
+// listing page (the blog index) gives way to the dedicated page the inventory matches (R56).
+const siteHostD = String(base.domain || '').toLowerCase().replace(/^www\./, '');
+const onSiteD = (u) => { const m = String(u || '').toLowerCase().match(/^https?:\/\/([^\/?#:]+)/); const h = m ? m[1].replace(/^www\./, '') : ''; return !!h && !!siteHostD && (h === siteHostD || h.endsWith('.' + siteHostD)); };
+const coveredBy = (kw, gsc) => {
+  const m = SM.pages(pageModelD).length ? SM.matchPage(pageModelD, kw, gsc && gsc.page) : null;
+  const g = gsc && onSiteD(gsc.page) ? gsc : null;
+  if (g && !(m && SM.isListing(g.page) && !SM.isListing(m.url))) return { url: SM.canonUrl(pageModelD, g.page), title: '', matched_by: 'search console', position: g.position ?? null,
+    impressions: g.impressions ?? null, ...(m && SM.canonUrl(pageModelD, m.url) !== SM.canonUrl(pageModelD, g.page) ? { inventory_match: SM.canonUrl(pageModelD, m.url) } : {}) };
+  return m ? { url: SM.canonUrl(pageModelD, m.url), title: m.title || '', matched_by: m.matched_by, ...(g ? { position: g.position ?? null } : {}), ...(m.listing ? { listing: m.listing } : {}) } : null; };
 // 2026-10-12 (FIX_PLAN D20): discovery now loads the site's own keyword ladders too (Load Domain Ladders (Discovery), the archived ones skipped
 // through seo_ladder_settings). A keyword a ladder head or one of its rungs already covers is marked `ladder_covered` instead of being
 // recommended as a new page: the live run offered "e invoicing" as the top pick while the ladder head "e invoicing in uae" was already running.
@@ -87,7 +98,7 @@ const kws = (base.research.candidates || []).map(k => {
   const r = rel.get(k.keyword) || { relevance: 1, intent: k.intent, page_type: '', topic: '' };
   const intent = INTENTS.includes(r.intent) ? r.intent : k.intent;
   const page_type = PAGES.includes(r.page_type) ? r.page_type : defaultPage(intent);
-  return { ...k, intent, relevance: r.relevance, page_type, topic: r.topic || k.keyword.split(' ').slice(0, 3).join(' '), opportunity: +(k.pre_score * (RELF[r.relevance] ?? 0.45)).toFixed(1), competitors_in_top20: k.competitors.length, covered_by: coveredBy(k.keyword), ladder_covered: ladderCovers(k.keyword), ...forYou(k.kd, topicReachOf(r.topic, k.keyword)) };
+  return { ...k, intent, relevance: r.relevance, page_type, topic: r.topic || k.keyword.split(' ').slice(0, 3).join(' '), opportunity: +(k.pre_score * (RELF[r.relevance] ?? 0.45)).toFixed(1), competitors_in_top20: k.competitors.length, covered_by: coveredBy(k.keyword, k.gsc), ladder_covered: ladderCovers(k.keyword), ...forYou(k.kd, topicReachOf(r.topic, k.keyword)) };
 }).filter(k => k.relevance > 0 && k.intent !== 'navigational').filter(k => {
   const g = fitGate(k.keyword, { ...fitCtx, intent: k.intent });
   if (!g.ok) refused.push({ keyword: k.keyword, volume: k.volume, reason: g.reason, detail: g.detail });
@@ -105,17 +116,23 @@ const serpHeadOf = new Map();
 for (const cl of serpOverlap.clusters) for (const m of cl.keywords) serpHeadOf.set(m.keyword, { head_keyword: cl.head_keyword, shared_urls: m.shared_urls, keyword_count: cl.keyword_count });
 for (const k of kws) { const h = serpHeadOf.get(k.keyword); k.serp_cluster = (h && h.head_keyword !== k.keyword) ? h : null; }
 
-// ---- clusters (topic label from the AI pass) ----
+// ---- clusters: R40 (2026-10-16) — the one grouping rule the ladder uses too (KWI.pageGroup) ----
+// A topic label used to group every keyword that shared it, including keywords whose results pages were compared above and found
+// different. Now Google's own answer decides where it was read: a SERP cluster is one page, a keyword compared and shared with no one is
+// its own page, and only a keyword whose results page could not be compared is grouped on the AI's topic label.
+const comparedD = new Set(serpOverlap.compared_keywords || []);
 const cl = new Map();
 for (const k of kws) {
-  const key = k.topic || 'other';
-  if (!cl.has(key)) cl.set(key, { topic: key, keywords: [], total_volume: 0, total_opportunity: 0, page_types: {}, intents: {} });
+  const head = serpHeadOf.get(k.keyword);
+  const g = KWI.pageGroup({ keyword: k.keyword, topic: k.topic || 'other', page_type: '', serp_head: head && head.keyword_count > 1 ? head.head_keyword : '', compared: comparedD.has(k.keyword) });
+  const key = g.key;
+  if (!cl.has(key)) cl.set(key, { topic: k.topic || 'other', grouped_by: g.by, keywords: [], total_volume: 0, total_opportunity: 0, page_types: {}, intents: {} });
   const c = cl.get(key); c.keywords.push(k); c.total_volume += k.volume; c.total_opportunity += k.opportunity;
   c.page_types[k.page_type] = (c.page_types[k.page_type] || 0) + 1; c.intents[k.intent] = (c.intents[k.intent] || 0) + 1;
 }
 const mode = (o) => (Object.entries(o).sort((a, b) => b[1] - a[1])[0] || [''])[0];
 const clusters = [...cl.values()].map(c => { const p = c.keywords[0]; const taC = topicReachOf(c.topic, p.keyword); return {
-  topic: c.topic, primary_keyword: p.keyword, page_type: mode(c.page_types), intent: mode(c.intents), keyword_count: c.keywords.length,
+  topic: c.topic, grouped_by: c.grouped_by, primary_keyword: p.keyword, page_type: mode(c.page_types), intent: mode(c.intents), keyword_count: c.keywords.length,
   total_volume: c.total_volume, total_opportunity: +c.total_opportunity.toFixed(1), primary_kd: p.kd, primary_volume: p.volume, primary_cpc: p.cpc,
   supporting: c.keywords.slice(1, 9).map(k => k.keyword), keywords: c.keywords.slice(0, 12).map(k => ({ keyword: k.keyword, volume: k.volume, kd: k.kd, intent: k.intent, opportunity: k.opportunity })),
   suggested_title: p.keyword.replace(/\b\w/g, m => m.toUpperCase()), covered_by: p.covered_by || null, ladder_covered: p.ladder_covered || null,
@@ -127,12 +144,17 @@ const buyerIntent = (c) => c.intent === 'commercial' || c.intent === 'transactio
 const ordered = goalNow === 'traffic' ? clusters : [...clusters.filter(buyerIntent), ...clusters.filter(c => !buyerIntent(c))];
 let now = 0, nxt = 0;
 ordered.forEach(c => {
+  // R58 (2026-10-16): a topic one of the site's ladders or one of its live pages already covers is not "Now" / "Build first" - the report's
+  // own header said "let that ladder finish" while the plan's first Now row was the same search. It is listed, with what to do instead.
+  if (c.ladder_covered || c.covered_by) { c.tier = 'Covered';
+    c.tier_note = c.ladder_covered ? 'in your ladder "' + c.ladder_covered.head_keyword + '" (' + c.ladder_covered.how + ') - let that ladder write it'
+      : 'improve the page you have: ' + c.covered_by.url + (c.covered_by.position ? ' (you rank #' + c.covered_by.position + ')' : ''); return; }
   const winnable = winnableFor(c.difficulty_for_you, c.primary_kd);   // v4.8: easy or reachable for this site (fixed 55 without a website)
   if (now < 5 && winnable && (goalNow === 'traffic' || buyerIntent(c) || now >= 4)) { c.tier = 'Now'; now++; }
   else if (nxt < 8) { c.tier = 'Next'; nxt++; }
   else c.tier = 'Later';
 });
-clusters.sort((a, b) => ({ Now: 0, Next: 1, Later: 2 }[a.tier] - { Now: 0, Next: 1, Later: 2 }[b.tier]) || b.total_opportunity - a.total_opportunity);
+clusters.sort((a, b) => ({ Now: 0, Next: 1, Later: 2, Covered: 3 }[a.tier] - { Now: 0, Next: 1, Later: 2, Covered: 3 }[b.tier]) || b.total_opportunity - a.total_opportunity);
 
 // ---- G32 / K12: the site's topic radius — in reach, a stretch, or out of reach for now, with the evidence per topic ----
 const bestPosD = (c) => { const ps = (c.keywords || []).map(k => { const f = kws.find(x => x.keyword === k.keyword) || {}; const p = Number((f.live && f.live.your_position) || f.your_position || 0); return p > 0 ? p : null; }).filter(p => p != null); return ps.length ? Math.min(...ps) : null; };
@@ -163,13 +185,21 @@ const goal = base.goal || 'leads';
 const want = goal === 'traffic' ? ['informational', 'commercial'] : goal === 'brand' ? ['informational', 'commercial', 'transactional'] : ['commercial', 'transactional'];
 const fits = (k) => k.relevance === 2 && want.includes(k.intent) && winnableFor(k.difficulty_for_you, k.kd);
 const free = (k) => !k.covered_by && !k.ladder_covered;   // D11: a live page already answers it; D20: one of the site's ladders already covers it
-const pipeline = kws.find(k => fits(k) && free(k)) || kws.find(k => fits(k) && !k.covered_by) || kws.find(fits) || priority.find(free) || priority.find(k => !k.covered_by) || priority[0] || kws[0] || null;
+// R51 (2026-10-16): "where to start" was "construction project erp", whose searches fell 73% in a year (its own follow-up report advised
+// against it). A keyword falling by more than FALLING_PCT a year is the pick only when nothing else qualifies, and then it says so.
+const FALLING_PCT = -50;
+const falling = (k) => Number(k.trend_yearly) <= FALLING_PCT;
+const steady = (k) => !falling(k);
+const pick0 = kws.find(k => fits(k) && free(k) && steady(k)) || kws.find(k => fits(k) && free(k)) || kws.find(k => fits(k) && !k.covered_by && steady(k)) || kws.find(k => fits(k) && !k.covered_by)
+  || kws.find(k => fits(k) && steady(k)) || kws.find(fits) || priority.find(k => free(k) && steady(k)) || priority.find(free) || priority.find(k => !k.covered_by) || priority[0] || kws[0] || null;
+const pipeline = pick0 && falling(pick0) ? { ...pick0, trend_note: 'falling ' + pick0.trend_yearly + '% a year - picked only because no steadier keyword qualified' } : pick0;
 
 return [{ json: { ...base, keyword_strategy: {
   goal, pool_size: base.research.pool_size, ai_reviewed, total_relevant: kws.length, keywords: kws.slice(0, 200),
   clusters, quick_wins, questions, long_tail, competitor_gaps, by_intent, priority, pipeline_keyword: pipeline, topic_radius,
   competitor_domains: base.research.competitor_domains, by_source: base.research.by_source, research_failures: base.research.failures, refused: refused.slice(0, 60),
-  covered: kws.filter(k => k.covered_by).slice(0, 20).map(k => ({ keyword: k.keyword, volume: k.volume, url: k.covered_by.url, matched_by: k.covered_by.matched_by })), pages_known: SM.pages(pageModelD).length,
+  covered: kws.filter(k => k.covered_by).slice(0, 20).map(k => ({ keyword: k.keyword, volume: k.volume, url: k.covered_by.url, matched_by: k.covered_by.matched_by, position: k.covered_by.position ?? null })), pages_known: SM.pages(pageModelD).length,
+  title_gap: SM.titleGap(pageModelD),   // R34: the pages whose title is not on file (judged by their address only)
   ladder_covered: kws.filter(k => k.ladder_covered).slice(0, 20).map(k => ({ keyword: k.keyword, volume: k.volume, ladder_id: k.ladder_covered.ladder_id, head_keyword: k.ladder_covered.head_keyword, ladder_keyword: k.ladder_covered.ladder_keyword, part: k.ladder_covered.part, rung: k.ladder_covered.rung, status: k.ladder_covered.status, target_url: k.ladder_covered.target_url, how: k.ladder_covered.how })), ladders_known: [...new Set(ladderKwsD.map(x => x.ladder_id))].length,
   reach: R ? { reach: R.reach, method: R.method, p75: R.p75 ?? null, size_reach: R.size_reach ?? null, sample: R.sample ?? null, top10: R.top10 ?? null, organic_keywords: R.organic_keywords ?? null, cached: !!R.cached, cached_at: R.cached_at || null, strong: strongR,
     // B1-1 / B1-2: the site-wide number is only as good as what it was measured on, so the report can name those searches; and how many
@@ -180,10 +210,10 @@ return [{ json: { ...base, keyword_strategy: {
   // ---- G8 (2026-10-13): the three new inputs, carried into the report, the callback and the app ----
   // K7: which keywords Google answers with the same pages (recomputed in Build Keyword Strategy once the live checks are in)
   serp_clusters: serpOverlap.clusters.slice(0, 15),
-  serp_overlap: { keywords_compared: serpOverlap.keywords_compared, clustered: serpOverlap.clustered, min_shared_urls: serpOverlap.min_shared_urls, source: 'competitor rankings' },
+  serp_overlap: { keywords_compared: serpOverlap.keywords_compared, compared_keywords: (serpOverlap.compared_keywords || []).slice(0, 300), clustered: serpOverlap.clustered, min_shared_urls: serpOverlap.min_shared_urls, source: 'competitor rankings' },
   // K6: the site's own Search Console queries that seeded this research, and what they measured
   search_console: (base.search_console && typeof base.search_console === 'object')
-    ? { ...base.search_console, seeded: (base.gsc_seeds || []), from_research: (base.research || {}).search_console || null }
+    ? (({ measured, ...sc }) => ({ ...sc, seeded: (base.gsc_seeds || []), from_research: (base.research || {}).search_console || null }))(base.search_console)   // R36: `measured` stays internal (it can hold 500 rows)
     : null,
   // K4: how many keywords this run checked live on Google
   live_checks: { planned: priority.length, cap: LIVE_N, per_topic: PER_TOPIC, est_cost_usd: +(priority.length * 0.002).toFixed(3) }

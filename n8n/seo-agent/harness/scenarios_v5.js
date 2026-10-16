@@ -1928,7 +1928,7 @@ await guard('pipeline phase 3', async () => {
   console.log('   tiers with reach 10 ->', JSON.stringify(Wl.rk.clusters.slice(0, 8).map(c => c.tier + ':' + c.primary_kd + ':' + c.difficulty_for_you)));
   check('discovery for a small site (reach 10): Now only up to difficulty 30 — topics v4.7 put in Now move to Next', nowL.every(c => c.primary_kd == null || c.primary_kd <= 30) && legacyNow.some(t => !nowL.some(c => c.topic === t)), JSON.stringify({ now: nowL.map(c => c.primary_kd), legacyNow }));
   const N0 = await discover(false, null, { base: { live_serp_checks: 8 } });
-  const strip = (o) => JSON.parse(JSON.stringify(o, (k, v) => ['difficulty_for_you', 'plan_type', 'months', 'for_you_label', 'reach', 'chance', 'refused', 'why', 'live', 'covered_by', 'covered', 'pages_known', 'ladder_covered', 'ladders_known', 'traffic_basis', 'traffic_note', 'modelled_traffic_potential', 'gsc', 'serp_cluster', 'serp_clusters', 'serp_overlap', 'search_console', 'live_checks', 'topic_radius', 'radius', 'radius_reason'].includes(k) ? undefined : v));   // 2026-10-13: topic_radius / radius / radius_reason are G32's block (drawn from the reach, so empty verdicts without a website); 2026-10-11: chance / refused (G3, D4) are new fields; why / live changed on purpose (D26: the AI Overview as a timed observation, D20: deduplicated domains); 2026-10-12: covered_by / covered / pages_known are D11's labels (null / empty without a page inventory) and ladder_covered / ladders_known are D20's (null / 0 without a ladder); 2026-10-13: traffic_basis / traffic_note / modelled_traffic_potential / gsc / serp_cluster / serp_clusters / serp_overlap / search_console / live_checks are G8's new fields (the traffic number itself is unchanged without Search Console data, which is what this check proves)
+  const strip = (o) => JSON.parse(JSON.stringify(o, (k, v) => ['difficulty_for_you', 'plan_type', 'months', 'for_you_label', 'reach', 'chance', 'refused', 'why', 'live', 'covered_by', 'covered', 'pages_known', 'ladder_covered', 'ladders_known', 'traffic_basis', 'traffic_note', 'modelled_traffic_potential', 'gsc', 'serp_cluster', 'serp_clusters', 'serp_overlap', 'search_console', 'live_checks', 'topic_radius', 'radius', 'radius_reason', 'grouped_by', 'title_gap', 'tier_note', 'trend_note'].includes(k) ? undefined : v));   // 2026-10-16 (R40 / R34 / R58 / R51): grouped_by / title_gap / tier_note / trend_note are new labels; 2026-10-13: topic_radius / radius / radius_reason are G32's block (drawn from the reach, so empty verdicts without a website); 2026-10-11: chance / refused (G3, D4) are new fields; why / live changed on purpose (D26: the AI Overview as a timed observation, D20: deduplicated domains); 2026-10-12: covered_by / covered / pages_known are D11's labels (null / empty without a page inventory) and ladder_covered / ladders_known are D20's (null / 0 without a ladder); 2026-10-13: traffic_basis / traffic_note / modelled_traffic_potential / gsc / serp_cluster / serp_clusters / serp_overlap / search_console / live_checks are G8's new fields (the traffic number itself is unchanged without Search Console data, which is what this check proves)
   check('discovery without a website: no reach call, no labels', N0.rq[0].json.skip && N0.rd.reach === null && N0.rk.reach === null && N0.rk.keywords.every(k => k.difficulty_for_you === undefined), JSON.stringify(N0.rd));
   check('discovery without a website = v4.7 (tiers with difficulty <= 55, priority, pipeline keyword)', eq(strip(N0.rk), strip(N0.legacy)) && eq(N0.ks.choice_options, N0.legacyKs.choice_options) && eq(strip(N0.ks.keyword_strategy), strip(N0.legacyKs.keyword_strategy)), 'differs from the frozen v4.7 Rank Keywords / Build Keyword Strategy');
   check('callback without a website: the new fields are null', N0.ir.reach === null && N0.ir.priority.every(k => k.difficulty_for_you === null && k.label === null && k.plan_type === null) && !/For your site/.test(N0.ks.result_html), JSON.stringify(N0.ir.priority[0]).slice(0, 200));
@@ -3249,7 +3249,7 @@ await guard('fix plan phase 1 — keywords and ladders', async () => {
   mock('Parse Verdict', PV);
   const POOL = ['best erp software in dubai', 'erp software dubai', 'facts erp', 'zoho books erp', 'erp software uae pricing', 'erp system examples', 'erp meaning', 'erp software company in uae', 'top 10 erp software in uae', 'erp software for small business uae', 'sap erp implementation dubai', 'erp software login', 'erp software for manufacturing uae', 'cloud erp software uae', 'erp software price in uae', 'erp software for trading company uae'];
   mock('Ladder Requests', [{ kind: 'suggestions', label: 'suggestions for erp software uae', body: [{ keyword: 'erp software uae' }] }, { kind: 'ranked', label: 'keywords ' + D + ' ranks for', domain: D, body: [{ target: D }] }]);
-  mock('Load Site Cache', [{ json: { id: 1, key: 'reach:' + SITE, kind: 'reach', site_id: SITE, value: JSON.stringify({ reach: 10, method: 'size', p75: null, size_reach: 10, sample: 0, top10: 0, organic_keywords: 12, location_code: LOC }), updated_at: daysAgo(3) } },
+  mock('Load Site Cache', [{ json: { id: 1, key: 'reach:' + SITE, kind: 'reach', site_id: SITE, value: JSON.stringify({ reach: 10, method: 'size', p75: null, size_reach: 10, sample: 0, top10: 3, organic_keywords: 12, location_code: LOC }), updated_at: daysAgo(3) } },   // R49 (2026-10-16): top10 3, not 0 — a band now needs a measured ranking (S101 covers the 0 case)
     { json: { id: 2, key: 'ai_brands:' + SITE, kind: 'ai', site_id: SITE, value: JSON.stringify({ 'Zoho Books': 'zoho.com', 'Microsoft Dynamics 365': 'microsoft.com' }), updated_at: daysAgo(3) } }]);
   mock('Load Domain Ladders', EMPTY); mock('Load Domain Ladder Settings', EMPTY);
   const lp = (await run('Ladder Pool', [V.task({ seed_keyword: 'erp software uae', items: POOL.map((k, i) => V.kwItem(k, i)) }), V.task({ target: D, items: [] })]))[0].json;
@@ -8552,16 +8552,19 @@ await guard('r10-r15-rerating-completion-defects', async () => {
   ];
   mock('Load Query History (Discovery)', QR59);
   const S12 = (await run('Search Console Seeds (Discovery)', QR59))[0].json.search_console;
-  const mis = (S12.mismatch || [])[0] || {};
+  // R35 (2026-10-16) changed the second half of R12 on purpose: the row is still answered BY the page that earns the impressions, but it is
+  // no longer called a page that "does not target" the search — that claim rested on a literal word match, and the page's own title holds
+  // the subject of the search (dynamics 365 finance ... uae). It reads as the page that ranks #6.2 for it.
+  const mis = [...(S12.queries || []), ...(S12.answered || [])].find(q => q.keyword === 'which dynamics 365 finance partner can help migrate a retail business in the uae') || {};
   console.log('   gsc rows ->', JSON.stringify(S12.queries.map(q => [q.keyword.slice(0, 40), q.kinds, q.why])));
   check('R12: the row that names a live page of the site is answered BY that page — never "no page of yours answers this search" (live: 11 of 25 rows, one of them ranking #6.2)',
-    mis.keyword === 'which dynamics 365 finance partner can help migrate a retail business in the uae' && eq(mis.kinds, ['page_mismatch'])
-    && mis.answered_by.url === W59 + '/dynamics-365-finance-and-operations-uae/' && mis.answered_by.matched_by === 'impressions'
-    && /the page that gets the impressions does not target this search/.test(mis.why) && /#6\.2/.test(mis.why)
-    && !S12.queries.some(q => q.page && /no page of yours answers this search/.test(q.why)), JSON.stringify(mis));
+    !(mis.kinds || []).includes('page_mismatch') && !(mis.kinds || []).includes('no_page')
+    && mis.answered_by && mis.answered_by.url === W59 + '/dynamics-365-finance-and-operations-uae/' && mis.answered_by.matched_by === 'search console'
+    && !/does not target/.test(mis.why) && /#6\.2/.test(mis.why)
+    && ![...S12.queries, ...S12.answered].some(q => q.page && /no page of yours answers this search/.test(q.why)), JSON.stringify(mis));
   check('R12: a search with no page at all is still "no page of yours answers this search" and still comes first in the seeds, and the page that does target its search is left alone',
-    S12.no_page.length === 1 && S12.no_page[0].keyword === 'warehouse management software uae' && /no page of yours answers this search/.test(S12.no_page[0].why)
-    && S12.answered.length === 1 && S12.answered[0].keyword === 'erp software uae' && /already answers/.test(S12.answered[0].why), JSON.stringify({ np: S12.no_page.map(q => q.keyword), ans: S12.answered.map(q => q.keyword) }));
+    S12.no_page.length === 1 && S12.no_page[0].keyword === 'warehouse management software uae' && /no page of yours answers this search/.test(S12.no_page[0].why) && (S12.seeded || [])[0] === 'warehouse management software uae'
+    && S12.answered.some(q => q.keyword === 'erp software uae' && /already answers/.test(q.why)), JSON.stringify({ np: S12.no_page.map(q => q.keyword), ans: S12.answered.map(q => q.keyword) }));
 
   // ---- 6. R13: brands and off-topic searches never reach a recommendation list ----
   const fitRun = async (keyword, ctx) => (await run('_fit_gate', [{ json: { keyword, ctx } }]))[0].json;
@@ -11008,9 +11011,11 @@ await guard('b2-topic-authority-inventory-and-order', async () => {
     COV.planned_total === (proven.L.stats || {}).pages_total && COV.planned_improve + COV.planned_new === COV.planned_total && COV.planned_total > 0
     && /Of the \d+ page\(s\) in this plan/.test(COV.summary) && /never given a second page/.test(COV.summary), JSON.stringify([COV.planned_total, COV.planned_improve, COV.planned_new]));
   check('B2-2: a site starting the topic from zero is told exactly that — and its homepage, which has no words of its own, is not counted as a page about the topic',
+    // R34 (2026-10-16): this fixture's two pages have no title on file, so "Nothing on techand.ai is about it" would claim a reading
+    // that never happened (the exec-610 defect); the zero is now stated with the pages it could only judge by their address
     (TC.coverage || {}).pages_on_site === 0 && (TC.coverage || {}).ranked_keywords === 0
-    && /Nothing on techand\.ai is about "erp implementation dubai" yet/.test((TC.coverage || {}).summary)
-    && /starts from zero/.test((TC.coverage || {}).summary), JSON.stringify((TC.coverage || {}).summary));
+    && /No page of techand\.ai is about "erp implementation dubai" by its title or address, and it ranks for no keyword on it/.test((TC.coverage || {}).summary)
+    && /2 of the 2 pages of the site have no title on file yet/.test((TC.coverage || {}).summary) && /planned as new/.test((TC.coverage || {}).summary), JSON.stringify((TC.coverage || {}).summary));
 
   // ---------- 4. B2-3: every planned page carries the figures that put it there ----------
   const planned76 = [...proven.L.rungs.flatMap(r => r.pages), proven.L.top];
@@ -15068,6 +15073,217 @@ await guard('S117 R95 — an on-demand pulse no longer replaces the day\'s sched
   reset();
 });
 
+
+// ===================================================================================
+// S98-S101 (2026-10-16, fixer A1 — family F1 "know the customer's own site before advising"; dossier
+// docs/system-review-2026-10-15/defects/A_keywords_content.md R34 R35 R36 R40 R41 R49 R50 R51 R55 R56 R58)
+// The fixtures are cut from the 2026-10-15 re-rating's own executions (harness/fixtures_live/r_a1_*.json.gz: exec 610 the ladder
+// "ai consulting dubai", exec 612 discover, exec 598 the Keyword Check "erp software uae"), e-mail addresses / phones / callbacks removed.
+// ===================================================================================
+const A1FX = (() => { const zlib = require('zlib'), fs = require('fs'), path = require('path');
+  const rd = (n) => JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(__dirname, 'fixtures_live', n))).toString('utf8'));
+  return { L610: rd('r_a1_ladder610.json.gz'), D612: rd('r_a1_discover612.json.gz'), K598: rd('r_a1_assess598.json.gz') }; })();
+const A1W = 'https://www.techand.ai', A1ACU = A1W + '/ai-copilot-advisory-uae', A1SITE = 'site_techand-ai', A1D = 'techand.ai';
+const A1_LIVE_T = 'AI Consulting &amp; Copilot Advisory UAE | Tech&amp;', A1_LIVE_H1 = 'AI Consulting &amp; Copilot Advisory Services in UAE';
+const a1Check = (SN) => (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+// the exec-610 Ladder Plan, replayed on its own inputs; `titled` puts the live title / H1 on the /ai-copilot-advisory-uae inventory row
+const a1Ladder = async (titled) => {
+  const L = A1FX.L610;
+  const model = JSON.parse(JSON.stringify(L.site_model));
+  if (titled) for (const p of model.pages) if (p.url === A1ACU) { p.title = 'AI Consulting & Copilot Advisory UAE | Tech&'; p.h1 = 'AI Consulting & Copilot Advisory Services in UAE'; }
+  mock('Parse Verdict', [{ json: L.parse_verdict }]); mock('Ladder Pool', [{ json: L.ladder_pool }]); mock('Ladder Clusters', [{ json: L.ladder_clusters }]);
+  mock('Ladder Relevance Chunks', L.chunks.map(c => ({ json: c }))); mock('Site Model', [{ json: { site_model: model } }]);
+  mock('Load Site Cache', L.site_cache.length ? L.site_cache.map(r => ({ json: r })) : [{ json: {} }]);
+  mock('Load Domain Ladders', L.domain_ladders.map(r => ({ json: r }))); mock('Load Domain Ladder Settings', L.ladder_settings.map(r => ({ json: r })));
+  return (await run('Ladder Plan', L.relevance.map(o => ({ json: o }))))[0].json.ladder;
+};
+
+await guard('S98 R34 R40 R41 every page title, the ladder sees the page the site already has', async () => {
+  const SN = 'S98 R34 R40 R41 — the page inventory reads every live title (bounded, and says what it did not read), and the ladder improves the live "AI Consulting" page instead of planning a second one';
+  reset(); begin(SN); const check = a1Check(SN);
+  const L = A1FX.L610, EMPTY = [{ json: {} }];
+  const inv45 = L.site_model.pages;
+  const untitled = inv45.filter(p => !p.title).map(p => p.url);
+  // ---- 1. the Site Tracker reads the titles it does not have (R34 root cause 1: only the <= 15 detection fetches and AI Growth's pages carried one) ----
+  const sitemap = '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + inv45.map(p => '<url><loc>' + p.url + '</loc><lastmod>2026-10-01</lastmod></url>').join('') + '</urlset>';
+  const storedRows = inv45.map(p => ({ json: { site_id: A1SITE, url: p.url, title: p.title, h1: p.h1 || '', source: 'sitemap', lastmod: '2026-10-01', queries_json: JSON.stringify(p.queries || []), updated_at: '2026-10-12T09:00:00.000Z' } }));
+  mock('Publish Candidates', [{ json: { site_idx: 0, site_id: A1SITE, domain: A1D, sitemap_url: A1W + '/sitemap.xml', candidates: [], known: [], detect: false } }]);
+  mock('Fetch Sitemap (Detect)', [{ json: { statusCode: 200, data: sitemap } }]);
+  mock('Load Pages (Site)', storedRows); mock('Load AI Pages (Site)', EMPTY);
+  const ms = (await run('Match Slugs (Detect)', store['Publish Candidates'])).map(x => x.json);
+  const fetched = ms.filter(x => x.fetch).map(x => x.url);
+  const st = ((ms[0] || {}).sites || [])[0] || {};
+  check('R34: with no page waiting to be detected, the week still reads the title of every inventory page that has none — /ai-copilot-advisory-uae among them',
+    fetched.includes(A1ACU) && untitled.every(u => fetched.includes(u)), JSON.stringify({ fetched: fetched.length, untitled: untitled.length, missing: untitled.filter(u => !fetched.includes(u)).slice(0, 5) }));
+  check('R34: the read is bounded and says so (count per site, what is left for next week)',
+    st.title_fill && st.title_fill.cap > 0 && fetched.length <= st.title_fill.cap && st.title_fill.planned === fetched.length && typeof st.title_fill.left === 'number' && !st.title_checks.length && !st.slug_matches.length,
+    JSON.stringify(st.title_fill || null));
+  // the pages answer; the live page's real <title> and <h1>
+  mock('Fetch Pages (Detect)', ms.filter(x => x.fetch).map(x => ({ json: { statusCode: 200, data: '<html><head><title>' + (x.url === A1ACU ? A1_LIVE_T : 'Page ' + x.url.split('/').pop()) + '</title></head><body><h1>' + (x.url === A1ACU ? A1_LIVE_H1 : 'Heading') + '</h1></body></html>' } })));
+  const det = (await run('Detect Published', store['Fetch Pages (Detect)']))[0].json;
+  mock('Resolve Properties', [{ json: { site_id: A1SITE, domain: A1D } }]);
+  mock('Site Model (Site)', [{ json: { site_id: A1SITE, domain: A1D, model: { ...L.site_model, pages: [] } } }]);
+  mock('Parse GSC', EMPTY);
+  const inv = (await run('Page Inventory (Site)', store['Resolve Properties']))[0].json;
+  const acuRow = inv.rows.find(r => r.url === A1ACU) || {};
+  check('R34: the stored row of /ai-copilot-advisory-uae now carries its live title and H1',
+    /AI Consulting/.test(acuRow.title) && /AI Consulting/.test(acuRow.h1), JSON.stringify({ title: acuRow.title, h1: acuRow.h1, pages_fetched: det.pages_fetched }));
+  check('R34: every inventory page has a title after the week — none is left to slug-only matching',
+    inv.pages.length === 45 && inv.pages.every(p => p.title) && inv.title_unknown && inv.title_unknown.count === 0, JSON.stringify(inv.title_unknown || null));
+  // only the first 15 pages answer: the rest are named "title unknown", never silently matched on their slug
+  mock('Detect Published', [{ json: { ...det, page_titles: det.page_titles.filter(t => t.url !== A1ACU).slice(0, 14) } }]);
+  const invPart = (await run('Page Inventory (Site)', store['Resolve Properties']))[0].json;
+  check('R34: pages whose title could not be read are listed as "title unknown" with the reason, the AI consulting page among them',
+    invPart.title_unknown && invPart.title_unknown.count === inv45.length - invPart.pages.filter(p => p.title).length && invPart.title_unknown.count >= 10
+    && invPart.title_unknown.urls.includes(A1ACU) && /title/.test(invPart.title_unknown.note), JSON.stringify(invPart.title_unknown || null));
+
+  // ---- 2. the ladder, replayed on exec 610's own inputs ----
+  const Lbefore = await a1Ladder(false);
+  check('R34: before the title is known, the plan says which pages it could only judge by their address — never "Nothing on techand.ai is about it" as if it had read them',
+    !/Nothing on techand\.ai is about/.test(Lbefore.topic_authority.coverage.summary) && /title/.test(Lbefore.topic_authority.coverage.summary), Lbefore.topic_authority.coverage.summary);
+  const Lx = await a1Ladder(true);
+  const pages = Lx.rungs.flatMap(r => r.pages);
+  console.log('   ladder 610 replayed ->', JSON.stringify({ top: [Lx.top.status, Lx.top.target_url, Lx.top.traffic_potential, Lx.top.supporting], pages: pages.map(p => [p.rung, p.keyword, p.status, p.grouped_by.slice(0, 16), p.supporting.length]),
+    folded: (Lx.folded || []).map(f => f.keyword), not_planned: Lx.rungs.map(r => (r.not_planned || []).map(k => k.keyword)), chance: Lx.chance && Lx.chance.band, coverage: Lx.topic_authority.coverage.summary.slice(0, 160) }));
+  const rung1 = pages.find(p => p.keyword === 'ai consulting');
+  const folded = (Lx.folded || []).find(f => f.keyword === 'ai consulting');
+  check('R34: "ai consulting" improves /ai-copilot-advisory-uae (a rung with exists:true, or folded into the main page that improves it) — no /ai-consulting/ page is planned',
+    (rung1 && rung1.exists === true && rung1.target_url === A1ACU) || (folded && folded.url === A1ACU && Lx.top.exists === true && Lx.top.target_url === A1ACU),
+    JSON.stringify({ rung1: rung1 && [rung1.status, rung1.target_url], folded, top: [Lx.top.status, Lx.top.target_url] }));
+  check('R34: no planned page URL duplicates the live page, and none is the /ai-consulting/ address the run wrote',
+    pages.filter(p => p.target_url === A1ACU).length + (Lx.top.target_url === A1ACU ? 1 : 0) === 1 && !pages.some(p => /\/ai-consulting\/$/.test(p.target_url)),
+    JSON.stringify(pages.map(p => [p.keyword, p.status, p.target_url]).concat([['top', Lx.top.status, Lx.top.target_url]])));
+  check('R34: the coverage count finds the page and the note names it',
+    Lx.topic_authority.coverage.pages_on_site >= 1 && Lx.topic_authority.coverage.pages.some(p => p.url === A1ACU) && !/Nothing on/.test(Lx.topic_authority.coverage.summary),
+    JSON.stringify(Lx.topic_authority.coverage));
+  // R40: the results pages of the rung keywords were compared and none overlapped, so no two of them share a page on a topic label
+  check('R40: no page groups two keywords on the AI\'s topic label when their results pages were compared and found different',
+    !pages.some(p => /topic label \(no search Google answers/.test(p.grouped_by) && p.supporting.length > 0),
+    JSON.stringify(pages.map(p => [p.keyword, p.grouped_by, p.supporting])));
+  const firm = pages.find(p => p.keyword === 'ai consulting firm');
+  check('R40: "openai consulting" (0 shared results with "ai consulting firm") is not a supporting keyword of it',
+    !firm || !firm.supporting.includes('openai consulting'), JSON.stringify(firm && firm.supporting));
+  check('R40: keywords that lost their page to the rung limit are named, not silently dropped',
+    Lx.rungs.every(r => Array.isArray(r.not_planned)) && Lx.rungs.reduce((n, r) => n + r.pages.length + r.not_planned.length, 0) >= pages.length,
+    JSON.stringify(Lx.rungs.map(r => [r.rung, r.pages.length, (r.not_planned || []).length])));
+  // R41: one traffic figure for the head term — the verdict's (6, after the AI Overview's click loss), not 40 x 0.3 = 12
+  check('R41: the main page\'s traffic is the verdict\'s figure after the click loss (6), with its basis — not the 12 the plan used to print',
+    Lx.top.traffic_potential === L.parse_verdict.expected_visits.visits && Lx.top.traffic_potential === 6 && /AI Overview/.test(Lx.top.traffic_loss || Lx.top.traffic_note || ''),
+    JSON.stringify({ top: Lx.top.traffic_potential, note: Lx.top.traffic_note, loss: Lx.top.traffic_loss, verdict: L.parse_verdict.expected_visits.visits }));
+
+  // ---- 3. the page run's own lookup (Client Page Requests) finds the page too ----
+  const model = JSON.parse(JSON.stringify(L.site_model)); for (const p of model.pages) if (p.url === A1ACU) { p.title = 'AI Consulting & Copilot Advisory UAE | Tech&'; }
+  mock('Site Model', [{ json: { site_model: model } }]);
+  const cpr = (await run('Client Page Requests', [{ json: { domain: A1D, keyword: 'ai consulting', internal_link_candidates: [] } }])).map(x => x.json);
+  check('R34: the page run for "ai consulting" reads /ai-copilot-advisory-uae as the EXISTING page (exec 616 carried existing_page: null)',
+    cpr[0] && cpr[0].kind === 'existing' && cpr[0].url === A1ACU && cpr[0].existing_page && cpr[0].existing_page.url === A1ACU, JSON.stringify(cpr));
+  reset();
+});
+
+await guard('S99 R35 R36 R55 R56 discovery reads the site\'s own pages', async () => {
+  const SN = 'S99 R35 R36 R55 R56 — discovery never says a page "does not target" a search on a literal word match, never offers a new page for a search the site ranks for with a page, prints one host, and names the dedicated article over the blog index';
+  reset(); begin(SN); const check = a1Check(SN);
+  const X = A1FX.D612;
+  const FO = A1W + '/dynamics-365-finance-and-operations-uae';
+  mock('Seed List', [{ json: X.seed_list }]); mock('Site Model', [{ json: { site_model: X.site_model } }]);
+  mock('Load Query History (Discovery)', X.query_history.map(r => ({ json: r })));
+  const SC = (await run('Search Console Seeds (Discovery)', store['Seed List']))[0].json.search_console;
+  const all = [...(SC.queries || []), ...(SC.answered || [])];
+  const fo = all.filter(q => /dynamics-365-finance-and-operations-uae\/?$/.test(q.page || ''));
+  check('R35: no Search Console row whose page is /dynamics-365-finance-and-operations-uae is called a page that "does not target" the search',
+    fo.length > 0 && fo.every(q => !(q.kinds || []).includes('page_mismatch') && !/does not target/.test(q.why || '')), JSON.stringify(fo.filter(q => (q.kinds || []).includes('page_mismatch') || /does not target/.test(q.why || '')).slice(0, 4).map(q => [q.keyword, q.why])));
+  // the F&O page's own rows alone (the full table lists the 60 strongest "already answered" rows; this one has 11 impressions)
+  mock('Load Query History (Discovery)', X.query_history.filter(r => /dynamics-365-finance-and-operations-uae\/?$/.test(r.page)).map(r => ({ json: r })));
+  const SCfo = (await run('Search Console Seeds (Discovery)', store['Seed List']))[0].json.search_console;
+  const allFo = [...(SCfo.queries || []), ...(SCfo.answered || [])];
+  check('R35: none of the F&O page\'s own ' + allFo.length + ' rows is called "does not target" / page_mismatch',
+    allFo.length >= 15 && allFo.every(q => !(q.kinds || []).includes('page_mismatch') && !/does not target/.test(q.why || '')), JSON.stringify(allFo.filter(q => (q.kinds || []).includes('page_mismatch')).slice(0, 3).map(q => [q.keyword, q.why])));
+  const d365 = allFo.find(q => q.keyword === 'd365 finance dubai');
+  check('R35: "d365 finance dubai" reads as ranking #43.6 with that page — d365 = dynamics 365, Dubai is in the UAE',
+    d365 && /#43\.6/.test(d365.why) && !/does not target/.test(d365.why) && d365.answered_by && /dynamics-365-finance-and-operations-uae/.test(d365.answered_by.url), JSON.stringify(d365));
+  check('R35: a page is called off-target only on evidence about the page itself — every remaining page_mismatch row says what was compared',
+    (SC.mismatch || []).every(q => /title/.test(q.why) && /share/.test(q.why)), JSON.stringify((SC.mismatch || []).slice(0, 3).map(q => q.why)));
+  const hosts = all.filter(q => q.answered_by).map(q => q.answered_by.url);
+  check('R55: every page the Search Console table names is on the canonical host www.techand.ai (the bare host stays only as gsc_page)',
+    hosts.length > 0 && hosts.every(u => u.indexOf(A1W + '/') === 0 || u === A1W), JSON.stringify(hosts.filter(u => u.indexOf(A1W) !== 0).slice(0, 5)));
+  const vat = all.find(q => q.keyword === 'dynamics 365 finance vat compliance uae');
+  check('R56: "dynamics 365 finance vat compliance uae" names the dedicated article, not the /insights index — and keeps that Google shows the index for it',
+    vat && vat.answered_by && /how-microsoft-dynamics-365-finance-operations-supports-uae-vat-compliance/.test(vat.answered_by.url),
+    JSON.stringify(vat));
+  // the page run's lookup (SM.matchPage) gives the same answer, with the index kept as context
+  const cpr = (await run('Client Page Requests', [{ json: { domain: A1D, keyword: 'dynamics 365 finance vat compliance uae', internal_link_candidates: [] } }])).map(x => x.json);
+  check('R56: SM.matchPage itself returns the article and names the index Google shows',
+    cpr[0] && cpr[0].kind === 'existing' && /supports-uae-vat-compliance/.test(cpr[0].url) && /insights\/?$/.test(((cpr[0].existing_page || {}).listing || {}).url || ''), JSON.stringify(cpr[0]));
+  // ---- R36: Rank Keywords on exec 612's own research ----
+  mock('Collect Research', [{ json: X.collect_research }]); mock('Relevance Chunks', X.chunks.map(c => ({ json: c })));
+  mock('Reach (Discovery)', [{ json: X.reach }]); mock('Load Site Cache', X.site_cache.length ? X.site_cache.map(r => ({ json: r })) : [{ json: {} }]);
+  mock('Load Domain Ladders (Discovery)', X.domain_ladders.map(r => ({ json: r }))); mock('Load Ladder Settings (Discovery)', X.ladder_settings.map(r => ({ json: r })));
+  const KS = (await run('Rank Keywords', X.relevance.map(o => ({ json: o }))))[0].json.keyword_strategy;
+  const onSite = (u) => /^https?:\/\/(www\.)?techand\.ai(\/|$)/.test(String(u || ''));
+  const loose = KS.keywords.filter(k => k.gsc && onSite(k.gsc.page) && !k.covered_by);
+  check('R36: no keyword whose Search Console row names a page on techand.ai is offered as a new page (covered_by null)',
+    !loose.length && !KS.priority.some(k => k.gsc && onSite(k.gsc.page) && !k.covered_by), JSON.stringify(loose.slice(0, 5).map(k => [k.keyword, k.gsc.page])));
+  const k13 = KS.keywords.find(k => k.keyword === 'which dynamics 365 finance partner can help migrate a retail business in the uae');
+  check('R36: priority #13 of the run ("which dynamics 365 finance partner …", Search Console #6.2) is covered by its page, with the position',
+    !k13 || (k13.covered_by && /dynamics-365-finance-and-operations-uae/.test(k13.covered_by.url) && k13.covered_by.matched_by === 'search console' && k13.covered_by.position === 6.2 && k13.covered_by.url.indexOf(A1W) === 0),
+    JSON.stringify(k13 && k13.covered_by));
+  check('R36: the pick for the content pipeline is not a keyword the site already ranks for with a page',
+    !KS.pipeline_keyword || !(KS.pipeline_keyword.gsc && onSite(KS.pipeline_keyword.gsc.page)), JSON.stringify(KS.pipeline_keyword && [KS.pipeline_keyword.keyword, KS.pipeline_keyword.gsc]));
+  reset();
+});
+
+await guard('S100 R40 R51 R58 discovery\'s plan: one overlap rule, no falling pick, nothing a ladder covers in "Now"', async () => {
+  const SN = 'S100 R40 R51 R58 — discovery groups only what Google answers with the same pages, never starts with a keyword in steep decline unless it says so, and never puts a topic a ladder or a live page covers in "Now"';
+  reset(); begin(SN); const check = a1Check(SN);
+  const X = A1FX.D612;
+  mock('Seed List', [{ json: X.seed_list }]); mock('Site Model', [{ json: { site_model: X.site_model } }]);
+  mock('Collect Research', [{ json: X.collect_research }]); mock('Relevance Chunks', X.chunks.map(c => ({ json: c })));
+  mock('Reach (Discovery)', [{ json: X.reach }]); mock('Load Site Cache', X.site_cache.length ? X.site_cache.map(r => ({ json: r })) : [{ json: {} }]);
+  mock('Load Domain Ladders (Discovery)', X.domain_ladders.map(r => ({ json: r }))); mock('Load Ladder Settings (Discovery)', X.ladder_settings.map(r => ({ json: r })));
+  const KS = (await run('Rank Keywords', X.relevance.map(o => ({ json: o }))))[0].json.keyword_strategy;
+  const coveredNow = KS.clusters.filter(c => c.tier === 'Now' && (c.ladder_covered || c.covered_by));
+  check('R58: no cluster a ladder or a live page already covers is in "Now" (the run put "erp software uae" first)',
+    !coveredNow.length && KS.clusters.some(c => c.ladder_covered && c.primary_keyword === 'best erp software in uae'), JSON.stringify(coveredNow.map(c => [c.topic, c.primary_keyword, c.tier])));
+  const cov = KS.clusters.find(c => c.primary_keyword === 'best erp software in uae') || {};
+  check('R58: such a cluster says why it is not to be built (in your ladder / improve the page)',
+    cov.tier !== 'Now' && /ladder|improve/i.test(cov.tier_note || ''), JSON.stringify({ tier: cov.tier, note: cov.tier_note }));
+  const P = KS.pipeline_keyword || {};
+  check('R51: "where to start" is not "construction project erp" (-73% a year), or it says it is falling',
+    P.keyword !== 'construction project erp' || /falling/.test(P.trend_note || ''), JSON.stringify({ keyword: P.keyword, trend: P.trend_yearly, note: P.trend_note }));
+  check('R51: the pick is not in steep decline unless nothing else qualifies, and then it is labelled',
+    !(Number(P.trend_yearly) <= -50) || /falling/.test(P.trend_note || ''), JSON.stringify({ keyword: P.keyword, trend: P.trend_yearly, note: P.trend_note }));
+  // R40 (discovery half): a topic label groups only keywords whose results pages could not be compared
+  const cmp = new Set(KS.serp_overlap.compared_keywords || []);
+  const mixed = KS.clusters.filter(c => c.grouped_by === 'topic label' && (c.keywords || []).filter(k => cmp.has(k.keyword)).length > 1);
+  check('R40: discovery\'s topic clusters never merge two keywords whose results pages were compared and found different',
+    Array.isArray(KS.serp_overlap.compared_keywords) && !mixed.length, JSON.stringify(mixed.slice(0, 3).map(c => [c.topic, c.keywords.map(k => k.keyword)])));
+  check('R40: every cluster says what it was grouped on', KS.clusters.every(c => ['shared results page', 'own results page', 'topic label'].includes(c.grouped_by)), JSON.stringify([...new Set(KS.clusters.map(c => c.grouped_by))]));
+  reset();
+});
+
+await guard('S101 R49 R50 the keyword check: a chance band only on a measured reach, and the ladder you already have', async () => {
+  const SN = 'S101 R49 R50 — no "good (50-70%)" chance for a site whose reach rests on no measured ranking (engine and app agree), and the Keyword Check names the ladder that already holds the keyword';
+  reset(); begin(SN); const check = a1Check(SN);
+  const K = A1FX.K598;
+  mock('Assess Result', [{ json: K.assess_result }]);
+  const body = (await run('Assess Response', [{ json: { output: { fit: 2, navigational: false, alternatives: '' } } }]))[0].json.body;
+  check('R49: exec 598 (reach by size, 0 keywords in the top 10) shows no "good (50-70%)" band',
+    !(body.chance && body.chance.band === 'good') && !/good \(50-70%/.test(body.chance_text || '') && !/50-70/.test(JSON.stringify(body.chance || {})), JSON.stringify({ chance: body.chance, text: body.chance_text }));
+  check('R49: the answer says why — the reach rests on no measured ranking — and keeps the plan, the months and the base rate',
+    body.plan_type === 'direct' && body.months === '2-4' && /no (measured )?ranking|not measured|no keyword .*top 10/i.test(body.chance_text || '') && /1\.74%/.test(body.chance_text || ''), JSON.stringify(body.chance_text));
+  // the same site with a measured reach keeps its band
+  mock('Assess Result', [{ json: { ...K.assess_result, reach_info: { ...K.assess_result.reach_info, method: 'percentile', p75: 12, sample: 14, top10: 14 } } }]);
+  const measured = (await run('Assess Response', [{ json: { output: { fit: 2, navigational: false, alternatives: '' } } }]))[0].json.body;
+  check('R49: a reach measured on ranked keywords keeps its band (the table is not removed, only conditioned)',
+    measured.chance && measured.chance.band !== 'unmeasured' && measured.chance.range[1] > 0, JSON.stringify(measured.chance));
+  check('R50: "erp software uae" is the head of an existing ladder — the answer says so (exec 598 said nothing)',
+    body.existing && body.existing.keyword === 'erp software uae' && /ladder|already/i.test(body.label + ' ' + (body.existing.note || '')), JSON.stringify({ existing: body.existing, label: body.label }));
+  // R49 in the ladder: exec 610's reach is by size with no ranked keyword either
+  const Lx = await a1Ladder(true);
+  check('R49: the ladder on the same unmeasured reach shows no uncalibrated band either',
+    !Lx.chance || Lx.chance.band === 'unmeasured' || Lx.chance.band === 'none', JSON.stringify(Lx.chance));
+  reset();
+});
 
 H.report();
 })();

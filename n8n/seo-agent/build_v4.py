@@ -6743,9 +6743,9 @@ for _a70 in ('out.not_compared.push(', 'retried: retryItems.some(', "out.availab
     assert _a70 in code('Ladder Clusters'), 'B2-4 / rule 1: Ladder Clusters is missing ' + _a70
 assert 'serp_not_compared' in code('Ladder Plan') and 'notCompared' in code('Ladder Plan'), 'B2-4 / rule 1: the plan does not carry what could not be compared'
 # the grouping itself, and the rung it decides
-for _a70 in ("k.serp_group ? 'serp|' + k.serp_group", 'const rungMap = new Map(', 'clusterRungs.push({'):
+for _a70 in ("serp_head: k.serp_group && (k.serp_cluster_size || 0) > 1 ? k.serp_group : ''", 'const rungMap = new Map(', 'clusterRungs.push({'):
     assert _a70 in code('Ladder Plan'), 'B2-4: Ladder Plan is missing ' + _a70
-assert "if (String(key).indexOf('serp|') === 0) { groups.push(sorted); continue; }" in code('Ladder Plan'), \
+assert "if (byOf.get(key) !== 'topic label') { groups.push(sorted); continue; }" in code('Ladder Plan'), \
     'B2-4: a group built on shared results pages must not be split into two pages by the topic-label cap'
 # B2-5 in the plan: measured count, stated adjustment, both printed
 for _a70 in ('const serp_diversity = {', 'DIVERSITY_PENALTY', 'score_before: scoreBefore', 'score: dataRefused ? null : scoreAfter'):
@@ -9364,6 +9364,49 @@ sticky("""### A run that knows who started it, a refusal that reaches the custom
 **R79 / R105.** The ops-alert key is trimmed once when it is built; every write-back uses the key the row is stored with, byte for byte; *Alert Delivery* has one input (a merge of both channels), so the retry sweep runs once per failure; a re-sent row records the webhook in `channels`.""",
        -2600, -4300, 1180, 300, 3)
 log('A run that knows who started it, a refusal that reaches the customer, and an alert row that is updated (2026-10-16, re-rating R77 / R81 / R116 / R96 / R79 / R105 / R95): the on-demand monitor recognises its front-door parent by identity (parent_run_id, child key parent:<id>) and a genuine twin is still refused; the front door settles a hand-off at $0; a refused scheduled run ends at its own notice and an on-demand caller gets a rejected callback; the alert key is trimmed once and written back under the stored key; the Error Handler sweeps once per failure; a same-day on-demand pulse no longer replaces the scheduled reading')
+
+
+# 88. KNOW THE CUSTOMER'S OWN SITE BEFORE ADVISING (2026-10-16, the third re-rating's family F1 — docs/system-review-2026-10-15/
+#     defects/A_keywords_content.md R34 R35 R36 R40 R41 R49 R50 R51 R55 R56 R58). The code lives in v5/code; this section only proves
+#     that every path the dossiers name runs it, because three fixes of 2026-10-15 failed live by reaching one path of several.
+#     R34: SM.titleGap / the coverage count over the whole inventory (Ladder Plan); the Site Tracker's title read is asserted in
+#          build_site_tracker.py. R35/R55/R56: SM.matchPage (synonyms, stems, emirates, listing pages, a preferred page) and
+#          SM.canonUrl in every caller. R36: Search Console's own page in Rank Keywords. R40: KWI.pageGroup in the ladder AND discovery.
+#     R41: the head term's traffic through the click-loss model. R49: reachPlan(…, reachMeasured(…)) in every caller of v5/code.
+#     R50: the Keyword Check names the ladder. R51: the falling pick. R58: no covered topic in "Now".
+_F1 = {
+    'Ladder Plan': ('const KWI = (() =>', 'KWI.pageGroup({', 'reachMeasured(', 'folded.push({', 'const headTraffic', 'SM.titleGap(pageModel)', 'not_planned: notPlanned[r]'),
+    'Rank Keywords': ('KWI.pageGroup({', "c.tier = 'Covered'", 'FALLING_PCT', 'coveredBy(k.keyword, k.gsc)', 'reachMeasured('),
+    'Search Console Seeds (Discovery)': ('SM.canonUrl(model, u)', 'pageTitleShare', 'SM.matchPage(model, kw, rowPage)'),
+    'Client Page Requests': ('SM.matchPage(SITE_MODEL, d.keyword)', 'SM.canonUrl(SITE_MODEL, m.url)'),
+    'Collect Research': ('SC.measured', 'Math.max(-0.7,'),
+    'Ladder Pool': ('Math.max(-0.7,',),
+    'Build Keyword Strategy': ('reachMeasured(RR, p)', 'pipeline.trend_note', 'c.tier_note'),
+}
+for _n88, _need88 in _F1.items():
+    for _s88 in _need88:
+        assert _s88 in code(_n88), 'F1 (R34-R58): %s is missing %s' % (_n88, _s88)
+for _n88 in ('Ladder Plan', 'Rank Keywords', 'Search Console Seeds (Discovery)', 'Client Page Requests', 'Collect Research'):
+    for _s88 in ('const titleShare = ', 'const canonUrl = ', 'const isListing = '):
+        assert _s88 not in code(_n88) or 'const SM = (() => {' in code(_n88), _n88 + ': the site-model kit is half inlined'
+_ASSESS88 = _rd0('code/Assess_Response.js')
+assert 'reachMeasured(topic.used' in _ASSESS88 and 'existing,   // R50' in _ASSESS88, 'R49 / R50: the Keyword Check (build_api.py) lost its fix'
+# R49, every caller in v5/code: a reachPlan(...) call with two arguments would show a chance band on an unmeasured reach again
+import glob as _glob88
+_two88 = []
+for _f88 in sorted(_glob88.glob(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'v5', 'code', '*.js'))):
+    if os.path.basename(_f88) == '_reach.js':
+        continue
+    for _m88 in re.finditer(r'reachPlan\(([^()]*(?:\([^()]*\)[^()]*)*)\)', open(_f88, encoding='utf-8').read()):
+        if re.sub(r'\([^()]*\)', '', _m88.group(1)).count(',') < 2:   # top-level arguments only
+            _two88.append(os.path.basename(_f88))
+assert not _two88, 'R49: reachPlan without the measured flag in ' + ', '.join(sorted(set(_two88)))
+log('Know the customer\'s own site before advising (2026-10-16, family F1: R34 R35 R36 R40 R41 R49 R50 R51 R55 R56 R58): the Site Tracker reads the '
+    'titles its inventory lacks (40 a site a week, free) and names the rest "title unknown"; SM.matchPage reads d365 = dynamics 365, emirate within '
+    'the UAE and light stems, prefers the page Search Console credits and the dedicated page over a listing; discovery calls a ranking page '
+    'off-target only on its own title and prints one host; a search the site ranks for with a page is covered by it; one grouping rule '
+    '(KWI.pageGroup) for ladder and discovery; the head term\'s traffic after the click loss; no chance band on an unmeasured reach; the Keyword '
+    'Check names the ladder; no falling "where to start" without a label; nothing a ladder or a page covers is "Now"')
 
 
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and

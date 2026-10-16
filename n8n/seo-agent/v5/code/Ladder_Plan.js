@@ -3,6 +3,7 @@
 /*__FIT_GATE__*/
 /*__PAGE_TYPE__*/
 /*__SITE_MODEL__*/
+/*__KW_INPUTS__*/
 // Ladder mode: applies the AI relevance screen, assigns keywords to rungs by difficulty, builds one page per topic
 // cluster, maps internal links, matches existing pages, estimates the timeline and picks the pages to write now.
 // v4.8 (PIPELINE_FEATURE_SPEC §5.3-5.5): everything is measured against the site's REACH (stored 30 days in seo_cache, else measured from this
@@ -120,6 +121,10 @@ for (const k of onTopic) {
   k.serp_cluster = c && c.head_keyword !== k.keyword ? c : null;
   k.serp_cluster_size = c ? c.keyword_count : 0;
   k.serp_checked = !!SERP_CL && SERP_CL.asked > 0 && !notCompared.has(k.keyword) && (!!c || SERP_CL.compared > 0);
+  // R40: "compared" must mean THIS keyword's results page was read - by name when the cluster step lists them, else only when it left
+  // nothing uncompared (a keyword past the cap was never asked, so it may still share a topic label)
+  const listed = Array.isArray((SERP_CL || {}).compared_keywords) ? SERP_CL.compared_keywords.map(x => String(x).toLowerCase()) : null;
+  k.serp_compared = !!(SERP_CL && SERP_CL.available) && !notCompared.has(k.keyword) && (listed ? listed.includes(k.keyword) : (k.serp_checked && !(Number(SERP_CL.left_uncompared) > 0)));
   k.serp_not_compared = notCompared.has(k.keyword);
 }
 
@@ -169,18 +174,26 @@ const plannedUrl = (kw) => homeUrl + slug(kw) + '/';
 
 // ---- one page per topic cluster inside each rung ----
 const LIMIT = { 1: 4, 2: 4, 3: 3 };
+const notPlanned = { 1: [], 2: [], 3: [] };
 const MAX_CLUSTER = 6;   // a coarse AI topic label must not swallow a whole rung: split by page type, then into groups of 6
 const makePages = (list, rung) => {
   const cl = new Map();
   // B2-4: a shared results page beats the AI's topic label. Keywords Google answers with the same pages share one key (and one page);
   // everything else keeps the old topic|page_type key. A keyword whose results page could not be read is in neither - it keeps its own.
-  for (const k of list) { const key = k.serp_group ? 'serp|' + k.serp_group : (k.topic || k.keyword) + '|' + k.page_type; if (!cl.has(key)) cl.set(key, []); cl.get(key).push(k); }
+  // R40 (2026-10-16): the one rule discovery uses too (KWI.pageGroup) - a SERP cluster is one page, a keyword whose results page was
+  // compared and shared with no one is its OWN page, and only a keyword whose results page could not be compared joins a topic label
+  // (exec 610: "openai consulting" was merged into "ai consulting firm" on the label although they share 0 of their top-7 results).
+  const byOf = new Map();
+  for (const k of list) { const g = KWI.pageGroup({ keyword: k.keyword, topic: k.topic || k.keyword, page_type: k.page_type, serp_head: k.serp_group && (k.serp_cluster_size || 0) > 1 ? k.serp_group : '', compared: k.serp_compared });
+    const key = g.key; byOf.set(key, g.by); if (!cl.has(key)) cl.set(key, []); cl.get(key).push(k); }
   const groups = [];
   // a SERP group is evidence, not a label, so it is never split into two pages; an AI-label group still is (MAX_CLUSTER)
   for (const [key, ks] of cl) { const sorted = ks.slice().sort((a, b) => b.opportunity - a.opportunity);
-    if (String(key).indexOf('serp|') === 0) { groups.push(sorted); continue; }
+    if (byOf.get(key) !== 'topic label') { groups.push(sorted); continue; }
     for (let i = 0; i < sorted.length; i += MAX_CLUSTER) groups.push(sorted.slice(i, i + MAX_CLUSTER)); }
   const clusters = groups.map(ks => ({ ks, opp: ks.reduce((s, k) => s + k.opportunity, 0) })).sort((a, b) => b.opp - a.opp);
+  // R40: the keywords that lost their page to the rung limit are named ("not worth a page now"), never silently gone
+  notPlanned[rung] = clusters.slice(LIMIT[rung]).flatMap(({ ks }) => ks.map(k => ({ keyword: k.keyword, volume: k.volume, kd: k.kd, reason: 'the rung holds ' + LIMIT[rung] + ' pages and ' + clusters.length + ' were possible; the stronger ones were kept' })));
   return clusters.slice(0, LIMIT[rung]).map(({ ks }) => {
     const p = ks[0];
     const ex = findExisting(p.keyword, p.your_url);
@@ -190,7 +203,8 @@ const makePages = (list, rung) => {
     const ptype = PT.of(p.page_type, defaultPage(p.intent));
     // B2-4: what the group was built on - the shared results page, or the AI's topic label when no results page could be read
     const shared = ks.filter(k => k.serp_group === p.serp_group && k.keyword !== p.keyword).map(k => ({ keyword: k.keyword, shared_urls: (k.serp_cluster || {}).shared_urls || null }));
-    const grouped_by = p.serp_group && ks.length > 1 ? 'shared results page' : (SERP_CL && SERP_CL.available ? 'topic label (no search Google answers with the same pages)' : 'topic label (results pages not compared)');
+    const grouped_by = p.serp_group && ks.length > 1 ? 'shared results page'
+      : p.serp_compared ? 'own results page (no other search Google answers with the same pages)' : 'topic label (results pages not compared)';
     return { rung, keyword: p.keyword, topic: p.topic, page_type: ptype, page_notes: PT.notes(p.page_type, ptype), intent: p.intent, volume: p.volume, kd: p.kd, cpc: p.cpc, opportunity: p.opportunity,
       grouped_by, serp_cluster: p.serp_group && ks.length > 1 ? { head_keyword: p.serp_group, keyword_count: ks.length, shared, urls_compared: ((clusterOf[p.keyword] || {}).urls_compared) || null, min_shared_urls: (SERP_CL || {}).min_shared_urls || null, top_n: (SERP_CL || {}).top_n || null } : null,
       serp_not_compared: !!p.serp_not_compared,
@@ -201,7 +215,7 @@ const makePages = (list, rung) => {
   });
 };
 const bandLabel = (r) => r === 1 ? 'Rung 1 — long-tail pages (difficulty up to ' + BAND[1] + ')' : r === 2 ? 'Rung 2 — mid-difficulty pages (' + (BAND[1] + 1) + '-' + BAND[2] + ')' : 'Rung 3 — strong pages (' + (BAND[2] + 1) + '-' + BAND[3] + ')';
-const rungs = [1, 2, 3].map(r => ({ rung: r, label: bandLabel(r), band_max: BAND[r], pages: makePages(byRung[r], r), available: byRung[r].length }));
+const rungs = [1, 2, 3].map(r => ({ rung: r, label: bandLabel(r), band_max: BAND[r], pages: makePages(byRung[r], r), available: byRung[r].length, not_planned: notPlanned[r] }));
 
 // ---- the main keyword for this site: difficulty, plan type, months ----
 const kd = base.keyword_data || {}; const headRank = SR.head || null;
@@ -214,10 +228,20 @@ const other_brand = !headGate.ok && headGate.reason === 'other brand';
 const navigational = /navigational/i.test(String(kd.google_intent || '')) || (base.verdict_reasons || []).some(r => /navigational|brand (term|name|search)|another company/i.test(String(r))) || (!headGate.ok && ['navigational', 'own brand', 'government', 'portal'].includes(headGate.reason));
 const difficulty_for_you = difficultyForYou(kd.keyword_difficulty ?? null, reach, { navigational, other_brand, verdict, position: headRank ? headRank.position : null });
 const strongSite = reachStrong(sa, headRank ? headRank.position : null);
-const plan = reachPlan(difficulty_for_you, strongSite);
+// R49 (2026-10-16): no chance band when the reach rests on no measured ranking (exec 610: size tier, 0 keywords in the top 10)
+const plan = reachPlan(difficulty_for_you, strongSite, reachMeasured(topic_authority.used ? { used: true } : reachInfo, headRank ? headRank.position : null));
 const topType = PT.of(base.recommended_page || base.page_type, base.page_type);
 const top = { rung: 4, keyword: head, page_type: topType, page_notes: PT.notes(base.recommended_page || base.page_type, topType), intent: kd.google_intent || null, volume: kd.search_volume ?? null, kd: kd.keyword_difficulty ?? null, cpc: kd.cpc ?? null,
-  supporting: (base.secondary_keywords || []).slice(0, 6), traffic_potential: kd.search_volume ? Math.round(kd.search_volume * 0.3) : null, your_position: headRank ? headRank.position : null };
+  supporting: (base.secondary_keywords || []).slice(0, 6), your_position: headRank ? headRank.position : null };
+// R41 (2026-10-16, B6-15): the head term's traffic was volume x 0.3 with NO click loss (40 -> 12) while the rungs and the verdict beside it
+// applied the results page's click loss (the verdict said 6). One figure per keyword per report: the verdict's own estimate when it made
+// one, else the same model (KWI.calibrate on the head's volume and this results page's features) - with its basis either way.
+const headTraffic = (() => { const ev = base.expected_visits;
+  if (ev && typeof ev === 'object' && (ev.visits != null || ev.basis === 'unknown')) return { visits: ev.visits ?? null, basis: ev.basis || '', note: ev.note || ev.basis_text || '', loss: ev.loss_applied || '' };
+  const feats = ((base.serp_features || {}).features_present) || [];
+  const c = KWI.calibrate({ volume: kd.search_volume ?? null, serp_types: feats }, {});
+  return { visits: c.traffic_potential ?? null, basis: c.traffic_basis, note: c.traffic_note || '', loss: KWI.lossText(feats) }; })();
+Object.assign(top, { traffic_potential: headTraffic.visits, traffic_basis: headTraffic.basis, traffic_note: headTraffic.note, traffic_loss: headTraffic.loss });
 // P2-7 (2026-10-12, Phase 2 live check §3): the length the verdict asked for is stored with the main page, so a later page run still has a
 // target when *Parse Analysis* does not run (a `force_content` run: the app's "Write now", the Content Cadence). Run 442 wrote 3,864 words
 // for the page the ladder verdict had set at 2,100 — +84% — because nothing remembered that number.
@@ -268,6 +292,19 @@ const dataRefused = !!(refusal && (refusal.reason === 'serp_unchecked' || refusa
 const plan_type = refusal ? 'none' : plan.plan_type;
 const planned = !refusal;
 
+// ---- R34 (2026-10-16): one live page, one plan entry ----
+// With the page inventory's titles read, the same existing page can answer the main keyword and a rung keyword ("ai consulting dubai"
+// and "ai consulting" both -> /ai-copilot-advisory-uae). Improving one page twice is not two pages: a rung page whose existing URL is
+// already claimed (by the main page first, then by a stronger rung page) is folded into that entry as a supporting keyword, and said so.
+const folded = [];
+{ const ukeyF = (u) => String(u || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/$/, '');
+  const claim = new Map(); if (top.exists) claim.set(ukeyF(top.target_url), top);
+  for (const r of rungs) r.pages = r.pages.filter(p => { if (!p.exists) return true; const k = ukeyF(p.target_url); const owner = claim.get(k);
+    if (!owner) { claim.set(k, p); return true; }
+    owner.supporting = [...new Set([...(owner.supporting || []), p.keyword, ...(p.supporting || [])])];
+    folded.push({ keyword: p.keyword, rung: r.rung, url: p.target_url, into: owner === top ? 'main page' : owner.keyword, traffic_potential: p.traffic_potential || 0,
+      note: '"' + p.keyword + '" is answered by the same live page as ' + (owner === top ? 'the main keyword' : '"' + owner.keyword + '"') + ' (' + p.target_url + '), so it is a supporting keyword of that page, not a second page' });
+    return false; }); }
 // ---- pages per plan type: direct 2-3 supporting pages, short 3-5, full as before (rung limits); the rest is kept for later ----
 const CAP = { direct: 3, short: 5, full: Infinity, none: 0 }[plan_type];
 let kept = 0;
@@ -408,19 +445,25 @@ requirements.push({ item: 'Publish on schedule and interlink', detail: 'Each run
 const onTopicPage = (p) => { try { const txt = [p.title || '', String(p.url || '').replace(/^https?:\/\/[^/]+/i, '').replace(/[^A-Za-z0-9]+/g, ' ')].join(' ');
   return RAD.tokens(txt).length > 0 && RAD.headFit(head, txt).ok; } catch (e) { return false; } };
 const pagesOnTopic = []; const seenPg = new Set();
-for (const p of invPages) { const u = String(p.url || ''); if (!u || seenPg.has(u) || !onTopicPage(p)) continue; seenPg.add(u); pagesOnTopic.push({ url: u, title: String(p.title || '') }); }
+// R34 (2026-10-16): the count read only this run's sitemap URLs and link candidates (`invPages`), never the page inventory and its titles,
+// so a live page titled "AI Consulting & Copilot Advisory UAE" was not "about" the topic. It reads the whole site model now, title + H1.
+for (const p of SM.pages(pageModel)) { const u = String(p.url || ''); if (!u || seenPg.has(u) || !onTopicPage({ ...p, title: [p.title, p.h1].filter(Boolean).join(' ') })) continue; seenPg.add(u); pagesOnTopic.push({ url: u, title: String(p.title || '') }); }
+const titleGapL = SM.titleGap(pageModel);
 const allPlanned = planned ? [...rungPages, top] : [];
 const nImprove = allPlanned.filter(p => p.exists).length, nNew = allPlanned.length - nImprove;
 const bestPos = topic_authority.best;
-topic_authority.coverage = { pages_on_site: pagesOnTopic.length, pages: pagesOnTopic.slice(0, 8), ranked_keywords: topic_authority.on_topic,
+topic_authority.coverage = { pages_on_site: pagesOnTopic.length, pages: pagesOnTopic.slice(0, 8), ranked_keywords: topic_authority.on_topic, title_gap: titleGapL, folded,
   top10_keywords: topic_authority.top10, best_position: bestPos ? bestPos.position : null, best_keyword: bestPos ? bestPos.keyword : '',
   planned_total: allPlanned.length, planned_improve: nImprove, planned_new: nNew,
   summary: !planned ? 'No pages were planned, so there is nothing to compare with what the site already has.'
     : (!pagesOnTopic.length && !topic_authority.on_topic
-      ? 'Nothing on ' + domain + ' is about "' + head + '" yet — no page and no keyword it ranks for — so all ' + allPlanned.length + ' page(s) in this plan are new and this topic starts from zero.'
+      ? (titleGapL.untitled
+        ? 'No page of ' + domain + ' is about "' + head + '" by its title or address, and it ranks for no keyword on it — but ' + titleGapL.note + ' (e.g. ' + titleGapL.urls.slice(0, 3).join(', ') + '). So all ' + allPlanned.length + ' page(s) in this plan are planned as new; check those pages first.'
+        : 'Nothing on ' + domain + ' is about "' + head + '" yet — no page and no keyword it ranks for — so all ' + allPlanned.length + ' page(s) in this plan are new and this topic starts from zero.')
       : domain + ' already has ' + pagesOnTopic.length + ' page(s) about "' + head + '" and ranks for ' + topic_authority.on_topic + ' keyword(s) on it ('
         + topic_authority.top10 + ' in the top 10' + (bestPos ? ', best #' + bestPos.position + ' for "' + bestPos.keyword + '"' : '') + '). Of the '
-        + allPlanned.length + ' page(s) in this plan, ' + nImprove + ' improve' + (nImprove === 1 ? 's' : '') + ' a page you already have and ' + nNew + ' ' + (nNew === 1 ? 'is' : 'are') + ' new.')
+        + allPlanned.length + ' page(s) in this plan, ' + nImprove + ' improve' + (nImprove === 1 ? 's' : '') + ' a page you already have and ' + nNew + ' ' + (nNew === 1 ? 'is' : 'are') + ' new.'
+        + (titleGapL.untitled ? ' Note: ' + titleGapL.note + '.' : ''))   // R34: what was judged on the address alone is said, in both branches
       + ' A search that an existing page already answers is never given a second page.' };
 // ---- B2-3 (2026-10-15, benchmark area 2): every planned page says why it sits where it sits ----
 // Semrush's Keyword Strategy Builder ranks the pages of a plan on five stated factors — relevance to the seed, search volume, keyword
@@ -457,7 +500,7 @@ const write_now = order.slice(0, pagesNow).map(p => ({ page_no: p.page_no, rung:
 const pages_total = planned ? rungPages.length + 1 : 0;
 const stats = { pool_size: (pool.research || {}).pool_size || 0, ai_reviewed: rel.size, relevant: kws.length, pages_total, rung_pages: planned ? rungPages.length : 0,
   keywords_covered: planned ? rungPages.reduce((s, p) => s + 1 + p.supporting.length, 0) + 1 + top.supporting.length : 0,
-  traffic_potential_total: planned ? rungPages.reduce((s, p) => s + (p.traffic_potential || 0), 0) + (top.traffic_potential || 0) : 0,
+  traffic_potential_total: planned ? rungPages.reduce((s, p) => s + (p.traffic_potential || 0), 0) + (top.traffic_potential || 0) + folded.reduce((s, f) => s + (f.traffic_potential || 0), 0) : 0,   // R34: a folded keyword still counts once
   site_rankings_found: SR.count || 0, research_failures: (pool.research || {}).failures || [], excluded_keywords: excluded.length, refused_keywords: poolRefused.length,
   off_topic_keywords: offTopic.length, on_topic: onTopic.length,
   // B2-4: what the results-page comparison cost and what it changed; B2-5: how many sites own the destination's results page
@@ -478,6 +521,7 @@ if (refusal) notes.push(refusal.message);
 // B2-1 / B2-2: which reach this plan was measured against, and what the site already has on the topic — both in the owner's reading
 notes.push(topic_authority.note);
 if (planned) notes.push(topic_authority.coverage.summary);
+if (planned) for (const f of folded) notes.push(f.note + '.');   // R34
 // B2-4: what Google itself said about which of these searches want the same page, what it cost, and what could not be compared
 if (SERP_CL && SERP_CL.note) notes.push(SERP_CL.note
   + (planned && clusterRungs.length ? ' In this plan ' + clusterRungs.length + ' group(s) became one page each instead of several: '
@@ -497,7 +541,7 @@ if (headTakenAsPage) notes.push('The main keyword is also planned as a page of t
 if (plan.stretch && planned) notes.push('Very hard for this site today: consider one of the alternatives first (' + alternatives.join(', ') + ').');
 const order_text = !planned ? 'no pages' : plan_type === 'direct' ? 'main page first, then the supporting pages that link to it' : !rungPages.length ? 'the main page only for now (no supporting keywords in the data), written first' : plan_type === 'short' ? 'supporting pages first, then the main page once half of them are live' : 'rung by rung from the easiest pages, the main page last';
 const ladder = { ladder_id: ladderId, head: { keyword: head, volume: top.volume, kd: top.kd, cpc: top.cpc, intent: top.intent, your_position: top.your_position },
-  domain, country: base.country, goal: base.goal || 'leads', feasibility, rungs, top, link_map, timeline, write_now, pages_now: pagesNow,
+  domain, country: base.country, goal: base.goal || 'leads', feasibility, rungs, top, folded, link_map, timeline, write_now, pages_now: pagesNow,
   later: later.slice(0, 12).map(k => ({ keyword: k.keyword, volume: k.volume, kd: k.kd, ...(k.held_back ? { held_back: true } : {}) })), requirements, stats, notes,
   plan_type, difficulty_for_you, reach, months: planned ? plan.months : '', months_range: planned ? plan.months_range : null, stretch: planned && plan.stretch, planned, refusal, order: order_text,
   label: planned ? reachLabel(difficulty_for_you, plan) : dataRefused ? ('No ladder planned · ' + refusal.short) : (REACH_DIFF_LABEL[difficulty_for_you] + ' · no ladder'),
