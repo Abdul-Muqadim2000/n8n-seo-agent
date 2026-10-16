@@ -6,6 +6,7 @@ import url_lint   # D15 (2026-10-11 system review): the canonical-host lint
 import env_settings as _env   # B-F5 (2026-10-15): a build with no n8n/.env must refuse, not bake its fallbacks
 _env.require_settings('build_ladder_extras.py')
 import retry_lint   # G1 (2026-10-11 system review): one retry rule for every external HTTP node
+import monitor_cost   # R115 (2026-10-16): callbacks behind the settle, carrying run_ledger
 import dfs_gate     # B-A10 (2026-10-15): INVARIANTS rule 3 — the in-200 retry gate, one shape for every DataForSEO call
 from ladder_common import (LADDER_TABLE, HISTORY_TABLE, LADDER_COLS, HISTORY_COLS, LOG_TABLE, PAGES_TABLE, PAGES_COLS, SITES_TABLE, SITES_COLS,
                            MONITORS_TABLE, MONITORS_COLS, DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_get_where_params,
@@ -50,7 +51,12 @@ LEDGER_WIRING = {}   # R9: filled in when the Rank Tracker's ledger nodes are ad
 
 def write(wfobj, fname):
     # R17 (2026-10-14, FIX_PLAN §3.12): the reserve chain goes on the MAIN path, now that every connection of this workflow is made
-    if wfobj.get('name') in LEDGER_WIRING: ledger_mainline(wfobj, LEDGER_WIRING[wfobj['name']])
+    if wfobj.get('name') in LEDGER_WIRING:
+        _w = LEDGER_WIRING[wfobj['name']]
+        _declared = list(_w['settle_from'])   # R115: the report ends this workflow declared, before ledger_mainline adds the loose ends
+        ledger_mainline(wfobj, _w)
+        if 'Has Callback (Tracker)?' in {n['name'] for n in wfobj['nodes']}:   # R115 (2026-10-16): the Rank Tracker's callback waits for its settle and carries it
+            monitor_cost.callback_after_settle(wfobj, _w, 'Has Callback (Tracker)?', 'POST Progress', V5, _declared)
     url_lint.check(wfobj, wfobj.get('name') or fname)   # D15: no node builds a site URL by hand (url_lint.py)
     retry_lint.check(wfobj, wfobj.get('name') or fname)   # G1: every external HTTP node carries the retry rule (retry_lint.py)
     for _n in wfobj['nodes']:   # e-mails retry a transient SMTP / DNS failure (live finding 2026-10-02: EAI_AGAIN smtp.gmail.com)
@@ -109,7 +115,7 @@ N.append(iff('Has Report?', '{{ !$json.nothing_to_do }}', [2440, 0]))
 N.append(iff('Has Email (Tracker)?', '{{ !!$json.email }}', [2660, -100]))
 N.append(node('Send Progress Email', 'n8n-nodes-base.emailSend', 2.1, {'fromEmail': SENDER, 'toEmail': '={{ $json.email }}', 'subject': '={{ $json.subject }}', 'emailFormat': 'html', 'html': '={{ $json.html }}', 'options': {'appendAttribution': False}}, [2880, -100], credentials=SMTP, onError='continueRegularOutput'))
 N.append(iff('Has Callback (Tracker)?', '{{ !!$json.callback_url }}', [2660, 120]))
-N.append(node('POST Progress', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.callback_url }}', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': "={{ JSON.stringify({ status: 'progress', stage: 'rank_tracker', request_id: $json.request_id || null, ladder_id: $json.ladder_id, domain: $json.domain, watchlist: !!$json.watchlist, site_id: $json.site_id || null, not_checked: $json.not_checked || [], set_aside: $json.set_aside || [], head_keyword: $json.head_keyword, checked_at: $json.checked_at, positions: $json.positions, rungs: $json.rungs, gains: $json.gains, drops: $json.drops, serp_summary: $json.serp_summary, next_step: $json.next_step, links_to_add: $json.links_to_add || [], api_body: $json.api_body, done: $json.done, won: !!$json.won, stuck: !!$json.stuck }) }}", 'options': {'timeout': 20000}}, [2880, 120], onError='continueRegularOutput'))
+N.append(node('POST Progress', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.callback_url }}', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': "={{ JSON.stringify({ status: 'progress', stage: 'rank_tracker', request_id: $json.request_id || null, ladder_id: $json.ladder_id, domain: $json.domain, watchlist: !!$json.watchlist, site_id: $json.site_id || null, not_checked: $json.not_checked || [], set_aside: $json.set_aside || [], head_keyword: $json.head_keyword, checked_at: $json.checked_at, positions: $json.positions, rungs: $json.rungs, gains: $json.gains, drops: $json.drops, serp_summary: $json.serp_summary, next_step: $json.next_step, links_to_add: $json.links_to_add || [], api_body: $json.api_body, done: $json.done, won: !!$json.won, stuck: !!$json.stuck, run_ledger: $json.run_ledger || null }) }}", 'options': {'timeout': 20000}}, [2880, 120], onError='continueRegularOutput'))
 N.append(node('Nothing To Track', 'n8n-nodes-base.noOp', 1, {}, [1560, 260]))
 N.append(sticky('Note', f"""## SEO Agent — Rank Tracker
 Runs **weekly (Monday 08:00)** and on demand through *Manual Run* (Execute Workflow Trigger). Reads every ladder from the Data Table `{LADDER_TABLE}` (written by the ladder mode of SEO Agent v4; both tables are created on first use), checks the Google top 50 for each page's primary keyword and the head term (DataForSEO SERP live, about $0.015 per keyword; a 9-page ladder costs about $0.60 per month), appends `{HISTORY_TABLE}`, and sends one progress e-mail / callback per ladder: positions vs the previous check, rungs in the top 10 / top 3, drops of 5+ positions, and the **recommended next rung** with a form link and a ready-to-send API body (recommend-only mode).

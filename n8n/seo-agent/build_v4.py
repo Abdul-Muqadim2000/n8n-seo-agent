@@ -10224,11 +10224,10 @@ def _b104_checks():
             assert 'LCB.fromSettle(settled)' in _cl and "'" + _cb['settle'] + "'" in _cl, 'R115: ' + _cb['ledger'] + ' does not read the settle'
             _cbs.setdefault(_wn, []).append({**_cb, 'proof': _facts})
     _want_cb = {'SEO Agent — AI Visibility Tracker', 'SEO Agent — Backlink Monitor', 'SEO Agent — AI Pulse', 'SEO Agent — AI Growth',
-                'SEO Agent — Link Builder', 'SEO Agent — Site Tracker', 'SEO Agent — Content Cadence'}
+                'SEO Agent — Link Builder', 'SEO Agent — Site Tracker', 'SEO Agent — Content Cadence', 'SEO Agent — Rank Tracker'}
     assert _want_cb <= set(_cbs), 'R115: these monitors still post before they settle: ' + str(sorted(_want_cb - set(_cbs)))
     # every OTHER workflow that posts a report callback and keeps a ledger is either moved or recorded here with its reason
-    _gap = {'SEO Agent — Rank Tracker': 'build_ladder_extras.py was outside this change (agent A9 owned build_monitors.py and '
-                                        'build_site_tracker.py): one call of monitor_cost.callback_after_settle() at its write time does it'}
+    _gap = {}   # R115 (2026-10-16): the Rank Tracker was the last one — build_ladder_extras.py now calls callback_after_settle() too
     for _wn, _wi in sorted((_lw.get('monitors') or {}).items()):
         _f, _w = _byname[_wn]
         _posts = [n['name'] for n in _w['nodes'] if n['type'] == 'n8n-nodes-base.httpRequest' and 'callback_url' in str(n['parameters'].get('url'))

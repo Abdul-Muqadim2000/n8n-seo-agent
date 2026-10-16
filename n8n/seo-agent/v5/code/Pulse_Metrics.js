@@ -51,7 +51,7 @@ return plans.map(p => {
   const bn = B.reduce((s, d) => s + d.samples, 0), bm = B.reduce((s, d) => s + d.mentioned, 0);
   const baseline_note = !judged.length ? 'There is no earlier pulse day to compare today with.'
     : !B.length ? 'Today is not compared with any earlier day: ' + baseline_set_aside.slice(0, 3).map(x => x.date + ' — ' + x.why).join('; ') + '.'
-    : baseline_set_aside.length ? B.length + ' of the past ' + judged.length + ' days are comparable; ' + baseline_set_aside.length + ' left out (' + baseline_set_aside.slice(0, 3).map(x => x.date + ' — ' + x.why).join('; ') + ').' : '';
+    : baseline_set_aside.length ? new Set(B.map(x => x.date)).size + ' of the past ' + new Set(judged.map(x => x.d.date)).size + ' days are comparable (readings: ' + B.length + ' of ' + judged.length + '); ' + baseline_set_aside.length + ' left out (' + baseline_set_aside.slice(0, 3).map(x => x.date + ' — ' + x.why).join('; ') + ').' : '';
   const alerts = [];
   // a drop is only called one from a day we could read, on a baseline measured the same way
   if (!readable.unavailable && todayRate.enough && n >= 20 && bn >= 40 && Math.abs(zTest(m, n, bm, bn)) >= 2.58 && pct(m, n) < pct(bm, bn) - 10) alerts.push({ level: 'high', text: 'Named in ' + pct(m, n) + '% of today\'s AI answers vs ' + pct(bm, bn) + '% over ' + B.length + ' comparable day(s) (' + n + ' answers today; a real drop, not sampling noise).' });

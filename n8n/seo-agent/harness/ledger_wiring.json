@@ -330,7 +330,7 @@
      "node": "AI Brief",
      "ref": "$('AI Brief Input').item.json",
      "streaming": false,
-     "template_chars": 1497
+     "template_chars": 1636
     },
     {
      "after": [
@@ -906,6 +906,22 @@
    },
    "balance": "DFS Balance (Tracker)",
    "balance_end": "DFS Balance End (Tracker)",
+   "callbacks": [
+    {
+     "fed_settle_directly": [],
+     "has_callback": "Has Callback (Tracker)?",
+     "join": "Ledger Join (Tracker)",
+     "ledger": "Callback Ledger (Tracker)",
+     "post": "POST Progress",
+     "preds": [
+      [
+       "Has Report?",
+       0
+      ]
+     ],
+     "settle": "Ledger Settle (Tracker)"
+    }
+   ],
    "catchup_records": "Load Catch-up Records (Tracker)",
    "est": {
     "ai": 0.0,

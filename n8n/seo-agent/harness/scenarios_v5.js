@@ -16398,8 +16398,8 @@ await guard('S133 R115 a monitor callback carries the settled run_ledger, posted
   const bad = WANT.filter(w => !(CB[w] || []).length || !(CB[w] || []).every(c => c.proof && c.proof.reachable && !c.proof.bypass && c.proof.merge && a9eq(c.proof.input1, [c.settle])));
   check('R115: in all seven monitors that post a report the POST is reached only through a Merge whose second input is the run\'s settle (exec 623 posted 1.1 s before it settled)',
     !!W && !bad.length, 'not proved: ' + bad.join(', '));
-  check('R115: the one monitor still posting before its settle is recorded with its reason (the Rank Tracker — build_ladder_extras.py)',
-    W && a9eq(Object.keys(W.callback_gap || {}), ['SEO Agent — Rank Tracker']), JSON.stringify(W && W.callback_gap));
+  check('R115: no monitor posts before its settle any more — the Rank Tracker too (build_ladder_extras.py, 2026-10-16)',
+    W && a9eq(Object.keys(W.callback_gap || {}), []) && !!(W.callbacks || {})['SEO Agent — Rank Tracker'], JSON.stringify(W && W.callback_gap));
   // the Join (a Merge, append) hands this node the callback items of ONE arrival (input 0) followed by the settle's answer (input 1)
   const SETTLED = { run_id: '623', status: 'done', settled_usd: 0.0678, cost_mode: 'ai_visibility', dfs_usd: 0.7794, dfs_measured: true, ai_usd: 0.0678, ai_measured: false, ai_measured_usd: 0.0514, ai_source: 'priced',
     ai_basis: 'measured: Anthropic /v1/messages/count_tokens counted the prompt and the answer of every call', settled_at: '2026-10-15T19:30:12.000Z', dfs_source: 'tasks',

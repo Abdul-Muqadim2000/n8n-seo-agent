@@ -93,9 +93,7 @@
    }
   ]
  },
- "callback_gap": {
-  "SEO Agent \u2014 Rank Tracker": "build_ladder_extras.py was outside this change (agent A9 owned build_monitors.py and build_site_tracker.py): one call of monitor_cost.callback_after_settle() at its write time does it"
- },
+ "callback_gap": {},
  "callbacks": {
   "SEO Agent \u2014 AI Growth": [
    {
@@ -289,6 +287,37 @@
      "settle": "Ledger Settle (LB)"
     },
     "settle": "Ledger Settle (LB)"
+   }
+  ],
+  "SEO Agent \u2014 Rank Tracker": [
+   {
+    "fed_settle_directly": [],
+    "has_callback": "Has Callback (Tracker)?",
+    "join": "Ledger Join (Tracker)",
+    "ledger": "Callback Ledger (Tracker)",
+    "post": "POST Progress",
+    "preds": [
+     [
+      "Has Report?",
+      0
+     ]
+    ],
+    "proof": {
+     "bypass": false,
+     "input0": [
+      "Has Report?"
+     ],
+     "input1": [
+      "Ledger Settle (Tracker)"
+     ],
+     "merge": true,
+     "preds": [
+      "Has Report?"
+     ],
+     "reachable": true,
+     "settle": "Ledger Settle (Tracker)"
+    },
+    "settle": "Ledger Settle (Tracker)"
    }
   ],
   "SEO Agent \u2014 Site Tracker": [
