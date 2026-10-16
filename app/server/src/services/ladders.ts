@@ -405,6 +405,8 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
         volume: m?.volume ?? null,
         kd: m?.kd ?? null,
         supporting: splitList(r.supporting),
+        // R111 (2026-10-16): a draft whose last QA round failed is a page to fix and run again, never one to report as published
+        ...(state === 'waiting' ? ((q) => (q.needsFix ? { needsFix: true, qaReasons: q.reasons } : {}))(draftQa(logs)) : {}),
       };
     });
     const planType = asPlan(st?.plan_type) ?? plan?.planType ?? null;

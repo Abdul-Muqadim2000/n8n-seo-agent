@@ -165,7 +165,9 @@ const KIND_ICON: Record<NeedsYouItem['kind'], ReactNode> = {
 /** Older servers: the pages waiting to be published. */
 export function needsYouOf(data: PipelineData): NeedsYouItem[] {
   if (data.needsYou) return data.needsYou;
+  // R111: a draft that failed the quality check is not offered as "publish it" (the server's own Needs-you list words it as a fix)
   return [...(data.queue?.waiting ?? [])]
+    .filter((w) => !(w as { needsFix?: boolean }).needsFix)
     .sort((a, b) => b.days - a.days)
     .map((w) => ({
       id: `publish:${w.keyword}`,

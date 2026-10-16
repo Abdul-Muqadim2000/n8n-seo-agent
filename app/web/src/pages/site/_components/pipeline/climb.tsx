@@ -165,7 +165,7 @@ function PagePanel({ page: p, ladder, onClose, onWrite }: { page: LadderPage; la
               Open the page and files
             </ButtonLink>
           )}
-          {p.state === 'waiting' && can('member') && (
+          {p.state === 'waiting' && !p.needsFix && can('member') && (
             <ButtonLink to={paths.tool(org.id, 'published', { siteId: site.id, prefill: { keyword: p.keyword } })} size="sm" icon={<Inbox className="size-4" />}>
               I published it
             </ButtonLink>

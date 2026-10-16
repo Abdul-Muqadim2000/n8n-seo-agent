@@ -42,7 +42,8 @@ function useThemeTokens(): Tokens {
   return tokens;
 }
 
-const PLACEHOLDER = /\[[A-Z][A-Za-z0-9 &/'’.,()-]{1,48}\]/g;
+// R45 (2026-10-16): Content QA counts every bracket left for the owner whatever its case (`[name, role]`, `[date]`), so the view highlights the same set
+const PLACEHOLDER = /\[[A-Za-z][A-Za-z0-9 &/'’.,()-]{1,48}\]/g;
 
 /** Counts [Placeholders] anywhere in the HTML (text and attributes). */
 export function findPlaceholders(html: string): { token: string; count: number }[] {

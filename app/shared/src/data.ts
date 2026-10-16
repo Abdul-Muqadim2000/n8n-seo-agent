@@ -1100,6 +1100,9 @@ export interface LadderPage {
   volume: number | null;
   kd: number | null;
   supporting: string[];
+  /** R111: written, but the draft did not pass the quality check — fix it and run it again (never "I published it") */
+  needsFix?: boolean;
+  qaReasons?: string[];
 }
 
 export interface LadderOverlap {
