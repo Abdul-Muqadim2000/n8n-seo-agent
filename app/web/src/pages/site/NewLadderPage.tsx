@@ -1,3 +1,4 @@
+import { useEngineCal } from '@/lib/engine-cal';
 import { PRICES } from '@/lib/prices';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
@@ -58,6 +59,7 @@ export interface LadderChoices {
 const ladderKeywords = (d: PipelineData | undefined): LadderKeywords[] => (d?.ladders ?? []).map((l) => ({ id: l.id, head: l.head, keywords: l.keywords ?? l.planned.map((p) => p.keyword) }));
 
 export default function NewLadderPage() {
+  useEngineCal();   // R99 / R100: re-render with the engine's own prices once they arrive
   const { org, can } = useOrgCtx();
   const { site } = useSiteCtx();
   const [params] = useSearchParams();

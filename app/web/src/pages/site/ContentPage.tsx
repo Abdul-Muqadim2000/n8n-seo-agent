@@ -1,3 +1,4 @@
+import { useEngineCal } from '@/lib/engine-cal';
 import { PRICES } from '@/lib/prices';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
@@ -25,6 +26,7 @@ import { FileLinks } from './_components/reports';
 import { verdictLabel } from '@/components/reports/kit';
 
 export default function ContentPage() {
+  useEngineCal();   // R99 / R100: re-render with the engine's own prices once they arrive
   const { org, site } = useSitePage();
   const q = useSiteData(org.id, site.id, 'content');
   return (

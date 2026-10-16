@@ -1,3 +1,4 @@
+import { useEngineCal } from '@/lib/engine-cal';
 import { useState, type ReactNode } from 'react';
 import { Link, Navigate, useParams, useSearchParams } from 'react-router';
 import { ArrowLeft, History, Plus, Wand2 } from 'lucide-react';
@@ -34,6 +35,7 @@ const FORMS: Partial<Record<ModeId, (p: ToolFormProps) => ReactNode>> = {
 const SETTINGS_TAB: Partial<Record<ModeId, string>> = { profile: 'settings/profile', track: 'settings/tracking' };
 
 export default function ToolFormPage() {
+  useEngineCal();   // R99 / R100: re-render with the engine's own prices once they arrive
   const providers = useProviders();
   const { mode = '' } = useParams();
   const [params] = useSearchParams();

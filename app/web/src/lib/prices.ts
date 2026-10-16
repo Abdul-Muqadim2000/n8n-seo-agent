@@ -1,4 +1,9 @@
-import { estimateRunCost, formatUsd, keyCost, MONITOR_COSTS } from '@seo/shared';
+import { estimateRunCost as est, formatUsd, keyCost as kc, MONITOR_COSTS, type CostKey, type ModeId } from '@seo/shared';
+import { engineCal } from './engine-cal';
+
+// R100: every figure follows the engine's own calibration when the app could read it (lib/engine-cal.ts), the shipped table otherwise
+const keyCost = (k: CostKey) => kc(k, engineCal());
+const estimateRunCost = (m: ModeId, v: Record<string, unknown> = {}) => est(m, v, engineCal());
 
 /**
  * Prices shown inside sentences, all read from the shared cost table (`@seo/shared` cost.ts, which follows the engine's own

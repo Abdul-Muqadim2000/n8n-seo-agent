@@ -1,3 +1,4 @@
+import { useEngineCal } from '@/lib/engine-cal';
 import { PRICES } from '@/lib/prices';
 import { useId, type ReactNode } from 'react';
 import { Bot, Gauge, Link2, Send, Wallet } from 'lucide-react';
@@ -63,6 +64,7 @@ export function MonitorSettingsFields({
   showBrandNames?: boolean;
   enginesError?: string;
 }) {
+  useEngineCal();   // R99 / R100: re-render with the engine's own prices once they arrive
   const set = (patch: Partial<MonitorSettings>) => onChange({ ...value, ...patch });
   const enginesId = useId();
 

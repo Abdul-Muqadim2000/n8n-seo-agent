@@ -41,7 +41,7 @@ describe('no per-mode price is typed into a component (R99)', () => {
 
 describe('no other customer\'s identifiers as examples (R109)', () => {
   // ProfileForm.tsx and pages/site/_components/ai.tsx are in another agent's wave: listed so the guard shrinks, never grows
-  const PENDING = new Set(['components/site/ProfileForm.tsx', 'pages/site/_components/ai.tsx']);
+  const PENDING = new Set<string>([]);
   it('no 543096312 / techand / e-invoicing example in the app or the guides', () => {
     const bad: string[] = [];
     for (const f of [...appFiles, join(SHARED, 'guides.ts')]) {

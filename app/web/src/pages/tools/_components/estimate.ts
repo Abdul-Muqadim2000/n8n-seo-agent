@@ -1,10 +1,11 @@
 import { estimateRunCost, estimateRunMinutes, type ModeId } from '@seo/shared';
+import { engineCal } from '../../../lib/engine-cal';
 
 // The shared estimate (@seo/shared estimate.ts) the server's budget check uses, so the form shows the same amount.
 
 type V = Record<string, unknown>;
 
-export const estimateCost = (mode: ModeId, v: V): number => estimateRunCost(mode, v);
+export const estimateCost = (mode: ModeId, v: V): number => estimateRunCost(mode, v, engineCal());   // R100: the engine's calibrated figure, as the budget check
 export const estimateEta = (mode: ModeId, v: V): number => estimateRunMinutes(mode, v);
 
 export const costLabel = (usd: number) => (usd <= 0 ? 'Free' : `about $${usd.toFixed(2)}`);

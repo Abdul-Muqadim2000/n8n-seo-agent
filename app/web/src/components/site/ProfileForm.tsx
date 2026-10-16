@@ -247,7 +247,7 @@ export function ProfileForm({
           </Field>
         </div>
         <Field label="Credentials and experience" optional hint="Qualifications, certifications, years of hands-on work. Real facts only." error={errors.author?.credentials?.message}>
-          {(p) => <Textarea {...p} rows={2} maxLength={600} placeholder="ACCA, 12 years advising UAE companies on VAT and e-invoicing" {...register('author.credentials')} />}
+          {(p) => <Textarea {...p} rows={2} maxLength={600} placeholder="ACCA, 12 years advising companies on VAT and payroll" {...register('author.credentials')} />}
         </Field>
         <Field label="Short bio" optional hint="Two to four sentences for the author box." error={errors.author?.bio?.message}>
           {(p) => <Textarea {...p} rows={3} maxLength={1200} {...register('author.bio')} />}
@@ -275,7 +275,7 @@ export function ProfileForm({
                   onChange={field.onChange}
                   max={12}
                   normalize={(s) => s.trim().slice(0, 80)}
-                  placeholder="VAT, e-invoicing, then Enter"
+                  placeholder="VAT, payroll, then Enter"
                 />
               )}
             </Field>
@@ -380,10 +380,10 @@ export function ProfileForm({
         <Field
           label="How your brand name is written"
           optional
-          hint="Exactly as it must appear, for example Tech& — never “Tech and” or “techand”."
+          hint="Exactly as it must appear, for example Northwind & Co — never “Northwind and Co” or “northwindco”."
           error={errors.style?.brandForm?.message}
         >
-          {(p) => <Input {...p} placeholder="Tech&" {...register('style.brandForm')} />}
+          {(p) => <Input {...p} placeholder="Northwind & Co" {...register('style.brandForm')} />}
         </Field>
         <Controller
           control={control}
@@ -392,7 +392,7 @@ export function ProfileForm({
             <Field
               label="Other spellings of your name to catch"
               optional
-              hint="“Tech and”, “techand” and “Tech-and” are caught already. Add anything else people get wrong."
+              hint="Spelling variants of your name (for example “Northwind and Co”, “northwindco”) are caught already. Add anything else people get wrong."
               error={errorText(fieldState.error)}
             >
               {(p) => (

@@ -1,3 +1,4 @@
+import { useEngineCal } from '@/lib/engine-cal';
 // The person's controls over the keyword ladders (admins): Auto / Manual, Pause / Resume, the priority order, delete — and the
 // website's pipeline settings. Everything is written to the SEO engine's ladder settings and read by the Monday run.
 import { PRICES } from '@/lib/prices';
@@ -189,6 +190,7 @@ export function PipelineSettingsButton({ automation, autoStartEnabled = true }: 
 }
 
 function PipelineSettingsDialog({ automation, autoStartEnabled, onClose }: { automation: SiteAutomation; autoStartEnabled: boolean; onClose: () => void }) {
+  useEngineCal();   // R99 / R100: re-render with the engine's own prices once they arrive
   const { org } = useOrgCtx();
   const { site } = useSiteCtx();
   const save = useUpdateAutomation(org.id, site.id);

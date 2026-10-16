@@ -1,3 +1,4 @@
+import { useEngineCal } from '@/lib/engine-cal';
 import { PRICES } from '@/lib/prices';
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
@@ -43,6 +44,7 @@ const VERIFY: Record<string, { tone: Tone; label: string }> = {
 const verifyOf = (v: string) => VERIFY[v] ?? VERIFY.unchecked!;
 
 export default function BacklinksPage() {
+  useEngineCal();   // R99 / R100: re-render with the engine's own prices once they arrive
   const { org, site } = useSitePage();
   const q = useSiteData(org.id, site.id, 'backlinks');
   const r = q.data?.report;

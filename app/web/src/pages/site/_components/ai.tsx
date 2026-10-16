@@ -420,7 +420,7 @@ export function QuestionManager({ prompts }: { prompts: readonly Prompt[] }) {
       <p className="text-xs text-ink-3">{active} active {active === 1 ? 'question is' : 'questions are'} asked on every engine each Monday at 07:00, and on ChatGPT, Gemini and Google AI Mode every other day when the daily pulse is on. New ones come from real AI searches and your Search Console queries on the month’s first run.</p>
       {isAdmin && (
         <div className="rounded-xl border border-dashed border-line-strong p-4">
-          <Field label="Add buyer questions" hint="One per line, the way a buyer would ask an assistant, e.g. “Which companies can help us get e-invoicing compliant in the UAE?”" error={error ?? undefined}>
+          <Field label="Add buyer questions" hint="One per line, the way a buyer would ask an assistant, e.g. “Which accounting firms in Dubai handle VAT registration for small businesses?”" error={error ?? undefined}>
             {(p) => <Textarea {...p} rows={3} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Which … should I hire for …?" />}
           </Field>
           <div className="mt-3 flex justify-end">

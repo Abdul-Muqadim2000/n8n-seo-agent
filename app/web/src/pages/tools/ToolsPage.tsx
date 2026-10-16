@@ -1,3 +1,4 @@
+import { useEngineCal } from '@/lib/engine-cal';
 import { PRICES } from '@/lib/prices';
 import type { ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
@@ -47,6 +48,7 @@ function recommendedMode(site: Site | null): ModeId | null {
 }
 
 export default function ToolsPage() {
+  useEngineCal();   // R99 / R100: re-render with the engine's own prices once they arrive
   const { org, sites, can } = useOrgCtx();
   const [params, setParams] = useSearchParams();
   const remembered = lastSite(org.id);
