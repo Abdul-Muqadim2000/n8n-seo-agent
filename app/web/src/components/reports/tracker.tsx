@@ -168,23 +168,33 @@ export function SiteTrackerReport({ report }: { report: ReportDetail }) {
       {pending.length > 0 && (
         <Block title="Written, waiting to be published" description="Nothing can rank before it is published" icon={<Rocket />} iconTone="warning" flush>
           <ul className="divide-y divide-line">
-            {pending.map((x, i) => (
-              <InsightItem
-                key={i}
-                tone="warning"
-                icon={<Rocket />}
-                title={str(x.keyword)}
-                description={`written ${num(x.days) ?? 0} days ago`}
-                action={
-                  can('member') && (
-                    <ButtonLink to={paths.tool(org.id, 'published', { siteId: report.siteId, prefill: { keyword: str(x.keyword) } })} size="sm" variant="secondary">
-                      I published it
-                    </ButtonLink>
-                  )
-                }
-                actionPosition="side"
-              />
-            ))}
+            {pending.map((x, i) => {
+              // R111: a draft whose last quality round failed is never offered for publishing, even if an engine lists it here
+              const fix = str(x.status) === 'not_ready' || x.needs_fix === true;
+              const why = str(x.qa_reasons);
+              return (
+                <InsightItem
+                  key={i}
+                  tone="warning"
+                  icon={<Rocket />}
+                  title={str(x.keyword)}
+                  description={fix ? `did not pass the quality check${why ? `: ${why}` : ''} — fix it and run it again` : `written ${num(x.days) ?? 0} days ago`}
+                  action={
+                    can('member') &&
+                    (fix ? (
+                      <ButtonLink to={paths.tool(org.id, 'keyword', { siteId: report.siteId, prefill: { keyword: str(x.keyword) } })} size="sm" variant="secondary">
+                        Run it again
+                      </ButtonLink>
+                    ) : (
+                      <ButtonLink to={paths.tool(org.id, 'published', { siteId: report.siteId, prefill: { keyword: str(x.keyword) } })} size="sm" variant="secondary">
+                        I published it
+                      </ButtonLink>
+                    ))
+                  }
+                  actionPosition="side"
+                />
+              );
+            })}
           </ul>
         </Block>
       )}
