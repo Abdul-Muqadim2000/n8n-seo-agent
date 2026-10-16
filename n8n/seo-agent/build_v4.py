@@ -10578,6 +10578,29 @@ assert os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), '
 log('A pre-release check a build can use (2026-10-16, benchmark area 5, B5-7): POST /webhook/seo-prerelease takes fail_on (any | low | medium | high | critical: only failures of that severity or above fail, the rest come back as below_threshold) and expected (the changes the release makes on purpose, "/path" or "/path:check" or {path, check, reason}, returned as expected_changes; an entry that matched nothing as expected_unused), nothing accepted is hidden, and docs/PRERELEASE_CI.md holds a GitHub Actions job and a one-line shell recipe')
 
 
+# 120. AI VISIBILITY: EVERY ALERT FROM ITS OWN SAMPLE, AND ONE CORRECTION FOR ALL OF THEM (2026-10-17, wave 3, agent W3-E, benchmark area 8:
+#      B8-8 / B8-9 / B8-10 - docs/system-review-2026-10-14/BENCH_AREA8_ai_visibility.md). Three rules in the AI Visibility Tracker and the
+#      AI Pulse were verdicts with no test behind them, or tests with no correction between them:
+#      * B8-8 - "X no longer cites any of your pages" fired on `cited > 0` then `cited === 0` whatever that engine's own sample was (2
+#        citations in 6 Gemini answers, then none in 10). Every engine that cited the site is now judged by `changeOf` on its own answers
+#        (this run + the pulse mornings), and below MIN_ENGINE_SAMPLES on either side it is "too few answers from this engine to tell".
+#      * B8-9 - the tested alerts of one run share one sample and were each judged at 95%, so a quiet week raised a false one often. They
+#        are one family, Holm-adjusted (5% family-wise weekly, 1% on the pulse), and each alert states the threshold it cleared.
+#      * B8-10 - brand recognition was a 2-of-5 majority rule raised as an alert; it is a count with its denominator and a Wilson range.
+#      The kit (`holm`, `pTwo`, `zFor`, `engineChange`) lives in v5/code/_ai_stats.js, inlined into both workflows by build_monitors.py.
+_st120 = rd('code/_ai_stats.js'); _am120 = rd('code/AI_Metrics.js'); _pm120 = rd('code/Pulse_Metrics.js'); _ar120 = rd('code/AI_Report.js')
+for _d120 in ('const holm = (tests, alpha) =>', 'const pTwo = (z) =>', 'const zFor = (p) =>', 'const holmWords = (h, id) =>', 'const engineChange = (kNow, nNow, kBefore, nBefore, o) =>', 'const MIN_ENGINE_SAMPLES ='):
+    assert _d120 in _st120, 'B8-8 / B8-9: _ai_stats.js lost %r' % _d120
+assert "(v.cited || 0) > 0 && engines[e] && engines[e].answered && !engines[e].cited" not in _am120, 'B8-8: the untested "no longer cites" rule is back'
+assert 'engineChange(x.cited || 0, nN, Number(v.cited) || 0, nB)' in _am120, 'B8-8: the per-engine change is not tested on the engine\'s own sample'
+assert 'brand.known * 2 >= brand.answered' not in _am120 and 'Only \' + brand.known' not in _am120, 'B8-10: the brand-recognition majority rule / alert is back'
+assert 'brand.ci = brand.answered ? wilson(brand.known, brand.answered) : null;' in _am120, 'B8-10: brand recognition lost its Wilson range'
+assert 'const multiple_tests = holm(family, 0.05);' in _am120 and 'const multiple_tests = holm(pfam, 0.01);' in _pm120, 'B8-9: a workflow does not correct its tested alerts together'
+assert _am120.index('const multiple_tests = holm(family') < _am120.index('const alerts = [];'), 'B8-9: the weekly alerts are built before the correction they must read'
+assert _pm120.index('const multiple_tests = holm(pfam') < _pm120.index('const alerts = [];'), 'B8-9: the pulse alerts are built before the correction they must read'
+assert 'M.multiple_tests.note' in _ar120 and 'M.engine_changes' in _ar120 and 'M.brand.ci' in _ar120, 'B8-8 / B8-9 / B8-10: the AI visibility report does not print the new evidence'
+log('AI visibility, every alert from its own sample (2026-10-17, benchmark area 8, B8-8 / B8-9 / B8-10): "no longer cites your pages" is a two-proportion test on that engine\'s own answers and says "too few answers from this engine to tell" under %d on either side; the tested alerts of one run (the mention drop, each engine\'s citation drop, each competitor\'s share gain; on the pulse today\'s drop and a business suddenly named) are Holm-adjusted together at 5%% / 1%% family-wise and each states the threshold it cleared; brand recognition is a count with its denominator and a 95%% Wilson range, no majority verdict and no alert' % 12)
+
 
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:

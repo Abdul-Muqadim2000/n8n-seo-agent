@@ -178,7 +178,17 @@ return plans.map(p => {
   const bAns = RB.filter(r => r.answered); let brand = { asked: RB.length, answered: bAns.length, known: bAns.filter(r => r.mentioned).length, engines: bAns.filter(r => r.mentioned).map(r => ENG[r.engine] || r.engine) };
   if (!RB.length && p.carried) { const kb = Object.entries(carriedE).filter(([, v]) => v && v.knows_brand != null); brand = { asked: 0, answered: kb.length, known: kb.filter(([, v]) => v.knows_brand).length, engines: kb.filter(([, v]) => v.knows_brand).map(([k]) => ENG[k] || k), carried: true, checked_at: p.carried.checked_at };
     for (const [k, v] of kb) if (engines[k] && !engines[k].carried) engines[k].knows_brand = v.knows_brand; }
-  const brand_known = brand.answered ? brand.known * 2 >= brand.answered : null;   // this month's brand check (asked now or carried from the full run)
+  // ---- B8-10 (2026-10-17, wave 3, benchmark area 8): recognition was a 2-of-5 MAJORITY RULE over at most six engines, one answer each,
+  // with no interval - and it raised "Only N of M AI assistants recognise ..." as a medium alert. It is now what it is: a count with
+  // its denominator and the same 95% Wilson range every other rate carries, and no verdict. `brand_known` stays in the payload as
+  // null (no verdict drawn), so nothing downstream reads a majority it was never entitled to.
+  brand.ci = brand.answered ? wilson(brand.known, brand.answered) : null;
+  brand.basis = brand.answered ? (brand.carried ? 'carried' : 'measured') : 'not_available';
+  brand.note = !brand.answered ? 'The brand question was not answered this month, so recognition was not measured.'
+    : brand.known + ' of ' + brand.answered + ' AI assistant' + (brand.answered === 1 ? '' : 's') + ' asked directly about ' + (p.business_name || p.domain) + ' named it (95% range ' + brand.ci[0] + '–' + brand.ci[1] + '%'
+      + (brand.carried ? ', from the month\'s full run of ' + String(brand.checked_at || '').slice(0, 10) : '') + ').'
+      + (brand.answered < MIN_RATE_SAMPLES ? ' One answer per assistant is too few to call this a rate, so no verdict is drawn from it.' : '');
+  const brand_known = null;   // B8-10: no verdict (it was a majority of the assistants asked)
   // perception: sentiment of the answers that name the business, the words AI uses for it, wrong claims (Answer Analyst)
   const sRows = ansAll.filter(r => r.mentioned && r.sentiment);
   const pos = sRows.filter(r => r.sentiment === 'positive').length, neg = sRows.filter(r => r.sentiment === 'negative').length;
@@ -331,19 +341,45 @@ return plans.map(p => {
     stored_positive: volStored.filter(q => Number(q.volume) > 0).length, questions: volStored.length,
     note: volBad.length ? 'AI search volume could not be read this run (DataForSEO failed' + (volRetried ? ' twice' : '') + ': ' + innerMsg(volBad[0].r) + ')'
       + ', so the volumes shown are the ones stored from an earlier run, not this month\'s.' : '' };
+  // ---- B8-8 (2026-10-17, wave 3, benchmark area 8): "X no longer cites any of your pages" fired on `cited > 0` then `cited === 0`
+  // whatever that engine's own sample was - 2 citations in 6 Gemini answers, then none in 10, is not evidence Gemini stopped citing
+  // anyone. Every engine that cited the site last time is now judged by the same `changeOf` on ITS OWN answers (this run + the pulse
+  // mornings), and under MIN_ENGINE_SAMPLES on either side it is "too few answers from this engine to tell", in those words.
+  // A changed question panel moves every engine's rate on its own (B-L4), so the per-engine comparison needs the same panel.
+  const engine_changes = {};
+  if (prev && prev.engines) for (const [e, v] of Object.entries(prev.engines)) { const x = engines[e];
+    if (!x || x.carried || !v || v.carried || !((Number(v.cited) || 0) > 0)) continue;
+    const nB = Number(v.samples != null ? v.samples : v.answered) || 0, nN = Number(x.samples != null ? x.samples : x.answered) || 0;
+    const fell = nN ? (x.cited || 0) / nN < (Number(v.cited) || 0) / (nB || 1) : true;
+    if (!(same_panel && same_panel.comparable)) { engine_changes[e] = { name: ENG[e] || e, tested: false, fell, samples: nN, samples_before: nB, k: x.cited || 0, k_before: Number(v.cited) || 0, why: 'not compared: ' + (same_panel ? same_panel.why : 'no earlier run') }; continue; }
+    engine_changes[e] = { name: ENG[e] || e, fell, ...engineChange(x.cited || 0, nN, Number(v.cited) || 0, nB) }; }
+  // ---- B8-9 (2026-10-17, wave 3, benchmark area 8): the alerts below that rest on a test share ONE sample, so they are one family and
+  // are corrected together (Holm, 5% family-wise). A test joins the family when its alert could fire on it - the change points the way
+  // the alert reads - and each alert that fires states the adjusted threshold it cleared.
+  const prevComp = new Map((((prev && like.comparable) ? prev.competitors : null) || []).map(c => [c.domain, c]));   // B-L4: a competitor's share moves with the panel too
+  const family = [];
+  if (tests && tests.mention_rate && tests.mention_rate.z != null && tests.mention_rate.delta < 0) family.push({ id: 'mention_rate', label: 'AI mentions', z: tests.mention_rate.z });
+  for (const [e, c] of Object.entries(engine_changes)) if (c.tested && c.z != null && c.delta < 0) family.push({ id: 'engine:' + e, label: c.name + ' citations', z: c.z });
+  // B8-1: "gained 10+ points" was a fixed rule over two noisy samples, raised beside a mention-rate change that had been z-tested.
+  // The same test, on the same denominator as the share it is about.
+  const compTests = [];
+  for (const c of comp) { const b0 = prevComp.get(c.domain); if (!b0) continue; const t = changeOf(c.mentions, mentioned + compTotal, Number(b0.mentions) || 0, prev.mentioned_k + compTotalBefore, { min_points: 10 });
+    if (t.z != null && t.delta > 0 && c.mentions >= 5) { compTests.push({ c, t }); family.push({ id: 'comp:' + c.domain, label: c.domain + ' share of voice', z: t.z }); } }
+  const multiple_tests = holm(family, 0.05);
+  const passes = (id) => !!(multiple_tests.by[id] && multiple_tests.by[id].reject);
   const alerts = [];
-  if (delta && (delta.significant === true ? delta.mention_rate < 0 : (delta.significant === null && delta.mention_rate <= -15))) alerts.push({ level: 'high', text: 'AI mentions dropped ' + Math.abs(delta.mention_rate) + ' points to ' + mention_rate + '% of answers' + (delta.significant ? ' (a real change, not sampling noise: ' + samples + ' answers this week vs ' + prev.samples + ')' : '') + '.' });
-  if (prev && prev.engines) for (const [e, v] of Object.entries(prev.engines)) if ((v.cited || 0) > 0 && engines[e] && engines[e].answered && !engines[e].cited) alerts.push({ level: 'medium', text: (ENG[e] || e) + ' no longer cites any of your pages (cited ' + v.cited + ' times last time).' });
-  if (brand_known === false && !brand.carried) alerts.push({ level: 'medium', text: 'Only ' + brand.known + ' of ' + brand.answered + ' AI assistants recognise ' + (p.business_name || p.domain) + ' when asked about it directly.' });
+  if (delta) { const mT = tests.mention_rate;
+    if (mT && mT.z != null ? (passes('mention_rate') && mT.delta < 0 && Math.abs(mT.delta) >= (mT.min_points || 5)) : delta.mention_rate <= -15)
+      alerts.push({ level: 'high', text: 'AI mentions dropped ' + Math.abs(delta.mention_rate) + ' points to ' + mention_rate + '% of answers'
+        + (mT && mT.z != null ? ' (a real change, not sampling noise: ' + samples + ' answers this week vs ' + prev.samples + '; ' + holmWords(multiple_tests, 'mention_rate') + ')' : ' (not tested: the earlier run recorded no sample size)') + '.' }); }
+  for (const [e, c] of Object.entries(engine_changes)) if (c.tested && passes('engine:' + e) && c.delta < 0 && Math.abs(c.delta) >= (c.min_points || 5))
+    alerts.push({ level: 'medium', text: c.name + (c.k === 0 ? ' no longer cites any of your pages: ' : ' cites your pages less: ') + c.k + ' of ' + c.samples + ' answers this week vs ' + c.k_before + ' of ' + c.samples_before + ' before (a real drop on this engine\'s own answers; ' + holmWords(multiple_tests, 'engine:' + e) + ').' });
   // D19: the failures are reported with their reason, and above 10% they are an alert of their own (every rate counts answered requests only)
   if (errors) alerts.push({ level: error_rate > 50 ? 'high' : error_rate >= 10 ? 'medium' : 'low',
     text: errors + ' of ' + Rall.length + ' AI requests failed' + (retry.asked ? ' (' + retry.answered + ' of ' + retry.asked + ' answered on the retry)' : '') + ': ' + error_list.map(e => e.engine + ' — ' + e.message).slice(0, 3).join('; ') + '. ' + came_back + ' of ' + Rall.length + ' came back; the rates below count ' + headline.text + '.' });
   if (volume_lookup.note) alerts.push({ level: 'low', text: volume_lookup.note });
-  const prevComp = new Map((((prev && like.comparable) ? prev.competitors : null) || []).map(c => [c.domain, c]));   // B-L4: a competitor's share moves with the panel too
-  // B8-1: "gained 10+ points" was a fixed rule over two noisy samples, raised beside a mention-rate change that had been z-tested.
-  // The same test, on the same denominator as the share it is about.
-  for (const c of comp) { const b0 = prevComp.get(c.domain); if (!b0) continue; const t = changeOf(c.mentions, mentioned + compTotal, Number(b0.mentions) || 0, prev.mentioned_k + compTotalBefore, { min_points: 10 });
-    if (t.significant === true && t.delta > 0 && c.mentions >= 5) alerts.push({ level: 'medium', text: c.domain + ' gained ' + Math.round(t.delta) + ' points of AI share of voice (now ' + c.share + '%) — ' + t.why + '.' }); }
+  for (const { c, t } of compTests) if (passes('comp:' + c.domain) && t.significant === true)
+    alerts.push({ level: 'medium', text: c.domain + ' gained ' + Math.round(t.delta) + ' points of AI share of voice (now ' + c.share + '%) — ' + t.why + '; ' + holmWords(multiple_tests, 'comp:' + c.domain) + '.' });
   for (const it of issues.filter(x => x.new).slice(0, 3)) alerts.push({ level: 'high', text: 'AI states something wrong about you (' + it.engines.join(', ') + '): ' + it.text });
   if (neg && (!prev || !like.comparable || prev.sentiment_score == null || sentiment_score < prev.sentiment_score - 20)) alerts.push({ level: 'medium', text: neg + ' AI answer(s) speak negatively about you (sentiment ' + sentiment_score + ').' });
   if (acc) for (const it of acc.issues.filter(x => x.level === 'critical' || x.level === 'high')) alerts.push({ level: 'high', text: it.text });
@@ -361,7 +397,7 @@ return plans.map(p => {
   if (plat.length) actions.push({ priority: 3, type: 'platform', action: 'Publish where AI looks: ' + plat.map(s => s.domain).join(', '), why: 'AI answers cite these platforms ' + plat.reduce((n, s) => n + s.citations, 0) + ' times for your topics (e.g. a short explainer video, a LinkedIn article, an answer in a relevant thread).' });
   const off = sources.filter(s => s.kind === 'official').slice(0, 2);
   if (off.length) actions.push({ priority: 3, type: 'official', action: 'Be listed on ' + off.map(s => s.domain).join(', '), why: 'Official sources AI trusts for this topic; registry listings (e.g. accredited-provider lists) are cited directly.' });
-  if (brand_known === false) actions.push({ priority: 2, type: 'entity', action: 'Make the brand recognisable to AI', why: 'Complete the business profile, add Organization schema with sameAs (LinkedIn, Google Business Profile), keep name / address / phone identical everywhere, publish an About page and get listed on the sources above.' });
+  if (brand.answered && brand.known < brand.answered) actions.push({ priority: 2, type: 'entity', action: 'Make the brand recognisable to AI', why: (brand.answered - brand.known) + ' of ' + brand.answered + ' AI assistants asked directly did not name you' + (brand.carried ? ' (the month\'s full run)' : '') + '. Complete the business profile, add Organization schema with sameAs (LinkedIn, Google Business Profile), keep name / address / phone identical everywhere, publish an About page and get listed on the sources above.' });
   if (cited === 0 && samples >= MIN_RATE_SAMPLES) actions.push({ priority: 2, type: 'citable', action: 'Give AI something to cite', why: 'No answer cited your pages across ' + samples + ' answers. Pages with a direct 40-60 word answer, a dated fact table and clear headings (every page the agent writes has them) are the ones assistants quote.' });
   if (fanout.length && gaps.length) actions.push({ priority: 3, type: 'fanout', action: 'Answer what AI searches for: "' + fanout.slice(0, 3).map(f => f.query).join('", "') + '"', why: 'Before answering your buyers\' questions the assistants ran these searches; a page that ranks for them is the page they read and cite.' });
   // seo_ai_visibility row (exact columns), ai_source prospects (status kept), learned brand names (seo_cache)
@@ -372,7 +408,8 @@ return plans.map(p => {
     alerts: alerts.map(a => a.level + ': ' + a.text).join(' | '),
     run_kind: p.run_kind || 'weekly', samples, visibility_score, mention_lo, mention_hi, sentiment_score, accuracy_issues: fact_check === 'checked' ? issues.length : null, ai_sessions: traffic && traffic.connected ? traffic.sessions || 0 : null, ai_conversions: traffic && traffic.connected ? traffic.key_events || 0 : null, ai_revenue: traffic && traffic.connected ? Math.round(100 * (traffic.revenue || 0)) / 100 : null,
     index_sov: index && index.sov != null ? index.sov : null, ai_impressions: ai_impressions || null, perception_json: J(perception), traffic_json: traffic ? J(traffic) : '', access_json: acc ? J({ checked_at: acc.checked_at, robots: acc.robots, llms_txt: acc.llms_txt, bots: acc.bots.map(b => ({ bot: b.bot, owner: b.owner, group: b.group, allowed: b.allowed_root, rule: b.rule, blocked_paths: b.blocked_paths })), fetch: acc.fetch, issues: acc.issues, ok: acc.ok }) : '',
-    index_json: index ? J({ ...index, suggestions: sugg, fanout, demand: { total: demand_total, named: ai_impressions, lost: lost_demand } }) : J({ suggestions: sugg, fanout, demand: { total: demand_total, named: ai_impressions, lost: lost_demand } }), clusters_json: J(clusters) };
+    index_json: index ? J({ ...index, suggestions: sugg, fanout, demand: { total: demand_total, named: ai_impressions, lost: lost_demand } }) : J({ suggestions: sugg, fanout, demand: { total: demand_total, named: ai_impressions, lost: lost_demand } }), clusters_json: J(clusters),
+    rival_sources_json: J(rival_sources) };   // wave 3 (W3-F): AI Growth reads the rival businesses AI cites from the latest row
   const now = p.checked_at;
   const prospect_rows = sources.filter(s => !['platform', 'authority'].includes(s.kind) && s.citations >= 1).slice(0, 10).map(s => { const old = prospects.find(x => x.site_id === p.site_id && x.prospect_domain === s.domain && x.type === 'ai_source') || {};
     const top = (s.urls || [])[0] || null;   // v4.12: the exact page AI cites on that site (the one to be named on)
@@ -395,6 +432,8 @@ return plans.map(p => {
     citation_ci: wilson(cited, samples), sov_ci: wilson(mentioned, mentioned + compTotal), sov_denominator: mentioned + compTotal,
     score_band, tests: delta ? delta.tests : null, enough_samples: samples >= MIN_RATE_SAMPLES, min_samples: MIN_RATE_SAMPLES,
     sample_note: samples >= MIN_RATE_SAMPLES ? '' : rateOf(mentioned, samples).why, pulse_basis, capped, undecided_questions: undecided.length,
+    // B8-8 / B8-9: each engine's own change test (or why it was not tested), and the one correction the tested alerts were judged by
+    engine_changes, min_engine_samples: MIN_ENGINE_SAMPLES, multiple_tests: { method: multiple_tests.method, alpha: multiple_tests.alpha, tests: multiple_tests.tests, threshold_p: multiple_tests.threshold_p, threshold_z: multiple_tests.threshold_z, rejected: multiple_tests.rejected, results: multiple_tests.results, note: multiple_tests.note },
       sentiment_score, accuracy_issues: fact_check === 'checked' ? issues.length : null, fact_check, index_sov: vis_row.index_sov, ai_impressions, demand_total, lost_demand },
     engines, competitors: comp, sources, rival_sources, our_pages, questions, gaps, undecided, clusters, fanout, perception, traffic, access: acc, index, suggestions: sugg, market, alerts, actions: actions.slice(0, 10), vis_row, prospect_rows, cache_rows, cost_usd: vis_row.cost_usd, form_url: FORM_URL, api_url: API_URL } };
 });

@@ -2,7 +2,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { AlertTriangle, CalendarClock, CheckCircle2, CircleX, Link2, Minus, Plus, Power } from 'lucide-react';
-import { AI_ENGINES, compactNumber, titleCase, type AiData } from '@seo/shared';
+import { AI_ENGINES, compactNumber, questionWin, titleCase, type AiData } from '@seo/shared';
 import { errorMessage } from '@/lib/api';
 import { useSiteAdmin } from '@/lib/queries';
 import { cn, fmtAgo, fmtDate } from '@/lib/utils';
@@ -55,16 +55,30 @@ export function GridCell({ value, fill }: { value: string | undefined; /** stret
   );
 }
 
-/** "This week" share of answers that name you, as a heat chip on the same blue scale. */
-function RateCell({ rate, samples }: { rate: number; samples: number }) {
-  const r = Math.round(rate);
+/**
+ * "This week" share of answers that name you, as a heat chip on the same blue scale, with its 95% range (B8-6). Under the engine's
+ * floor (a few answers) it says "too few" instead of printing 0% or 100% as if it were a result.
+ */
+function RateCell({ q }: { q: { winRate: number | null; samples: number; win?: { ci?: unknown; enough?: unknown; why?: unknown } | null } }) {
+  const w = questionWin(q);
+  if (!w.enough || w.rate == null) {
+    return (
+      <span className="inline-flex min-w-[3.25rem] flex-col items-end rounded-md px-2 py-1 tabular ring-1 ring-line ring-inset" title={w.why}>
+        <span className="text-[12px] font-medium text-ink-2">Too few</span>
+        <span className="text-[11px] text-ink-3">{w.samples} {w.samples === 1 ? 'answer' : 'answers'}</span>
+      </span>
+    );
+  }
+  const r = Math.round(w.rate);
+  const range = w.ci ? `${Math.round(w.ci[0])}–${Math.round(w.ci[1])}%` : null;
   return (
     <span
       className={cn('inline-flex min-w-[3.25rem] flex-col items-end rounded-md px-2 py-1 tabular', r >= 50 ? 'bg-accent text-accent-ink' : r > 0 ? 'bg-accent-soft text-accent-text' : 'bg-surface-2 text-ink-2')}
-      title={`${samples} answers`}
+      title={`${w.samples} answers${range ? ` · 95% range ${range}: where the true rate most likely lies` : ''}`}
     >
       <span className="text-[13px] font-semibold">{r}%</span>
-      <span className={cn('text-[11px]', r >= 50 ? 'text-accent-ink/80' : 'text-ink-3')}>{samples} answers</span>
+      {range && <span className={cn('text-[11px]', r >= 50 ? 'text-accent-ink/80' : 'text-ink-3')}>{range}</span>}
+      <span className={cn('text-[11px]', r >= 50 ? 'text-accent-ink/80' : 'text-ink-3')}>{w.samples} answers</span>
     </span>
   );
 }
@@ -136,7 +150,7 @@ export function QuestionGrid({ questions, engineNames }: { questions: readonly Q
                 </th>
                 <td className="px-2 py-2.5 text-right align-top">
                   {q.winRate != null && q.samples ? (
-                    <RateCell rate={q.winRate} samples={q.samples} />
+                    <RateCell q={q} />
                   ) : (
                     <span className="text-xs text-ink-3">–</span>
                   )}

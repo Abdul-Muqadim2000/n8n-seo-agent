@@ -1084,8 +1084,8 @@ await guard('ai visibility', async () => {
   const same2 = (a, b) => a.length === b.length && a.every(k => b.includes(k));
   const ANS = ['site_id', 'domain', 'run_id', 'checked_at', 'prompt_id', 'prompt', 'kind', 'topic', 'engine', 'answered', 'mentioned', 'cited', 'rank', 'our_urls', 'competitors', 'sources', 'excerpt', 'cost', 'error', 'run_kind', 'sentiment', 'brands', 'issues', 'fanout', 'cited_urls'];
   const VIS = ['site_id', 'domain', 'run_id', 'checked_at', 'prompts', 'answers', 'mention_rate', 'citation_rate', 'share_of_voice', 'avg_rank', 'aio_presence', 'aio_citation_rate', 'engines_json', 'competitors_json', 'sources_json', 'pages_json', 'gaps_json', 'market_json', 'market_month', 'cost_usd', 'alerts',
-    'run_kind', 'samples', 'visibility_score', 'mention_lo', 'mention_hi', 'sentiment_score', 'accuracy_issues', 'ai_sessions', 'ai_conversions', 'ai_revenue', 'index_sov', 'ai_impressions', 'perception_json', 'traffic_json', 'access_json', 'index_json', 'clusters_json'];
-  const PRC = ['prompt_id', 'site_id', 'domain', 'prompt', 'kind', 'topic', 'keyword', 'source', 'status', 'created_at', 'stage', 'cluster', 'volume', 'origin', 'updated_at'];
+    'run_kind', 'samples', 'visibility_score', 'mention_lo', 'mention_hi', 'sentiment_score', 'accuracy_issues', 'ai_sessions', 'ai_conversions', 'ai_revenue', 'index_sov', 'ai_impressions', 'perception_json', 'traffic_json', 'access_json', 'index_json', 'clusters_json', 'rival_sources_json'];
+  const PRC =['prompt_id', 'site_id', 'domain', 'prompt', 'kind', 'topic', 'keyword', 'source', 'status', 'created_at', 'stage', 'cluster', 'volume', 'origin', 'updated_at'];
   const PROS = ['site_id', 'domain', 'prospect_domain', 'type', 'rank', 'spam_score', 'detail', 'source_url', 'target_url', 'status', 'first_seen', 'last_seen', 'won_at', 'outreach_subject', 'outreach_body', 'note',
     'score', 'origin', 'contact_email', 'contact_url', 'contacted_at', 'followup_step', 'followup_subject', 'followup_body', 'verified_at', 'drafted_at'];   // v4.10 columns kept by the AI tracker since v4.12; drafted_at since P34-1
   const CACHE = ['key', 'kind', 'site_id', 'value', 'updated_at'];
@@ -17167,6 +17167,126 @@ await guard('S150 B5-12 R67 GA4 key events join the impact weight and the basis 
   const docP = decode(await run('Build Audit Report', plain.out));
   check('R67: the audit\'s own Info note (unscored) is named too, in the singular', /1 unscored finding is counted here and is not part of the score/.test(docP), '');
   check('R67: the full report carries the same note (same template)', /unscoredNote\(a\)/.test(a11code('Build_Full_Report.js')) && /counted here and \$\{n === 1/.test(a11code('Build_Full_Report.js')), '');
+});
+
+
+// ===================================================================================
+// S163-S166 (2026-10-17, wave 3, agent W3-E - benchmark area 8, docs/system-review-2026-10-14/BENCH_AREA8_ai_visibility.md rows
+// B8-8 / B8-9 / B8-10; B8-6 / B8-7 are app rows, proven by app/shared/src/ai-visibility.test.ts). One fixture for the three engine
+// rows: a site with four weekly engines over 11 questions, a pulse morning on two of them, and a stored week whose per-engine
+// citation counts are chosen so that each engine test sits where the row says it fails today.
+const W3E = (() => {
+  const SID = 'site_northwind-erp-com', DOM = 'northwind-erp.com';
+  const ENGS = ['chatgpt', 'gemini', 'perplexity', 'ai_mode'];
+  const QN = 10;
+  const prompts = [];
+  for (let q = 0; q < QN; q++) prompts.push({ prompt_id: 'q' + q, prompt: 'Which UAE firms handle e-invoicing question ' + q + '?', kind: 'recommend', topic: 'e invoicing', keyword: 'e invoicing uae ' + q, source: 'auto', stage: 'decision', cluster: 'e invoicing', volume: 100 + q * 50, origin: 'writer', created_at: '2026-10-01' });
+  const lone = { prompt_id: 'qlone', prompt: 'Who should a Dubai distributor pick for Peppol?', kind: 'recommend', topic: 'peppol', keyword: 'peppol uae', source: 'auto', stage: 'decision', cluster: 'peppol', volume: 900, origin: 'writer', created_at: '2026-10-01' };
+  const brandQ = { prompt_id: 'qbrand', prompt: 'What is Northwind ERP?', kind: 'brand', topic: 'brand', keyword: 'northwind erp', source: 'auto', stage: 'awareness', cluster: 'brand', volume: null, origin: 'writer', created_at: '2026-10-01' };
+  const NOW = new Date().toISOString();
+  const row = (o) => ({ json: { site_id: SID, domain: DOM, run_id: 'ai_w3e', checked_at: NOW, prompt_id: o.prompt_id, prompt: o.prompt, kind: o.kind || 'recommend', topic: o.topic || 'e invoicing', engine: o.engine,
+    answered: o.answered !== false, mentioned: !!o.mentioned, cited: !!o.cited, rank: o.mentioned ? 1 : 0, our_urls: o.cited ? 'https://' + DOM + '/e-invoicing-uae/' : '',
+    competitors: 'rival.com', sources: 'mof.gov.ae', excerpt: 'an answer', cost: 0.004, error: '', run_kind: 'weekly', sentiment: '', brands: '', issues: '', fanout: '', cited_urls: '[]' } });
+  const answers = (want, o) => { const out = []; let k = 0; const opt = o || {};
+    for (let q = 0; q < QN; q++) for (const e of ENGS) { const p0 = prompts[q]; out.push(row({ prompt_id: p0.prompt_id, prompt: p0.prompt, engine: e, mentioned: k < want, cited: !!(opt.cite && opt.cite(e, q)) })); k++; }
+    out.push(row({ prompt_id: lone.prompt_id, prompt: lone.prompt, topic: 'peppol', engine: 'chatgpt', mentioned: false, cited: false }));
+    if (opt.brandKnown != null) ENGS.forEach((e, i) => out.push(row({ prompt_id: brandQ.prompt_id, prompt: brandQ.prompt, kind: 'brand', topic: 'brand', engine: e, mentioned: i < opt.brandKnown })));
+    return out; };
+  // one pulse morning on ChatGPT and AI Mode: it lifts those two engines to 30 answers each, over the per-engine floor
+  const pulseDay = (o) => ({ date: '2026-10-14', checked_at: '2026-10-14T06:31:00.000Z', samples: 39, mentioned: o.mentioned, cited: 0, mention_rate: Math.round(1000 * o.mentioned / 39) / 10, visibility_score: 30,
+    engines: { chatgpt: { asked: 19, answered: 19, mentioned: Math.ceil(o.mentioned / 2), cited: 0 }, ai_mode: { asked: 20, answered: 20, mentioned: Math.floor(o.mentioned / 2), cited: 0 } }, prompts: {}, competitors: {}, sources: {} });
+  const eng = (samples, cited) => ({ name: 'x', asked: samples, answered: samples, samples, mentioned: 0, cited, mention_rate: 0, citation_rate: samples ? Math.round(1000 * cited / samples) / 10 : 0, errors: 0 });
+  const previous = (o) => ({ checked_at: '2026-10-06T07:00:00.000Z', mention_rate: Math.round(1000 * o.mk / 80) / 10, samples: 80, mentioned_k: o.mk, prompts: o.prompts || 11, run_kind: 'weekly',
+    citation_rate: 12.5, share_of_voice: 40, avg_rank: 1, visibility_score: 41, sentiment_score: null, engines: o.engines, market_month: '', market: null, index: null, perception: null, traffic: null, access: null, competitors: [] });
+  const plan = (o) => [{ json: { site_id: SID, domain: DOM, canonical_host: DOM, country: 'United Arab Emirates', location_code: 2784, language_code: 'en', country_iso: 'AE', email: '', callback_url: '', request_id: '',
+    on_demand: false, adhoc: false, business_name: 'Northwind ERP', business_type: '', city: 'Dubai', profile: {}, services: [], business_facts: [], accreditation: '',
+    brand_names: [DOM, 'Northwind ERP'], competitors: ['rival.com'], configured_competitors: ['rival.com'], aliases: {}, topics: ['e invoicing'], engines: ENGS, prompts_max: 20, pulse: true,
+    prompts: [...prompts, lone, ...(o.brand ? [brandQ] : [])], full_due: !!o.brand, run_kind: o.brand ? 'full' : 'weekly', monthly_engines: [], carried: null, need_prompts: false, prompts_needed: 0, need_site_text: false, gsc_questions: [],
+    discovery_due: false, volume_keywords: [], index_due: false, market_due: false, market_keyword: 'e invoicing', ga4_property_id: '', pulse_rows: o.pulse_rows || [], key_paths: [], set_aside: [], set_aside_note: '',
+    previous: o.previous, run_id: 'ai_w3e', checked_at: NOW } }];
+  const drive = async (o) => { reset(); mock('AI Plan', plan(o)); mock('Apply Analysis', o.rows);
+    mock('AI Requests', [{ json: { site_id: SID, engine: 'chatgpt' } }]); mock('Run AI Requests', [{ json: {} }]);
+    return (await run('AI Metrics', store['Apply Analysis']))[0].json; };
+  const rep = async (m) => { mock('AI Metrics', [{ json: m }]); return (await run('AI Report', store['AI Metrics']))[0].json; };
+  const mkCheck = (SN) => (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 500), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 320))); };
+  return { SID, DOM, ENGS, prompts, NOW, answers, pulseDay, eng, previous, drive, rep, mkCheck };
+})();
+
+await guard('S163 B8-8 a per-engine change is tested on that engine\'s own sample', async () => {
+  const SN = 'S163 B8-8 - "no longer cites" only from a test on the engine\'s own answers; below the floor it says too few to tell'; begin(SN); const check = W3E.mkCheck(SN);
+  // Gemini cited the site 2 times in 6 answers last week and 0 in 10 now: the old rule raised "no longer cites any of your pages"
+  const X = await W3E.drive({ rows: W3E.answers(15), pulse_rows: [W3E.pulseDay({ mentioned: 10 })],
+    previous: W3E.previous({ mk: 25, engines: { chatgpt: W3E.eng(30, 15), gemini: W3E.eng(6, 2), perplexity: W3E.eng(10, 0), ai_mode: W3E.eng(30, 0) } }) });
+  const EC = X.metrics.engine_changes || {};
+  console.log('   engine changes ->', JSON.stringify(Object.fromEntries(Object.entries(EC).map(([k, v]) => [k, [v.tested, v.samples, v.samples_before, v.z, String(v.why || '').slice(0, 70)]]))));
+  console.log('   alerts ->', JSON.stringify(X.alerts.map(a => a.text.slice(0, 110))));
+  check('B8-8: 2 citations in 6 Gemini answers, then none in 10, raises NO alert - it is not evidence Gemini stopped citing you', !X.alerts.some(a => /^Gemini/.test(a.text)), JSON.stringify(X.alerts.map(a => a.text)));
+  check('B8-8: instead Gemini is marked untested with "too few answers from this engine to tell" and both sample sizes', EC.gemini && EC.gemini.tested === false && /too few answers from this engine to tell/.test(EC.gemini.why) && EC.gemini.samples === 10 && EC.gemini.samples_before === 6, JSON.stringify(EC.gemini));
+  check('B8-8: ChatGPT (15 of 30 before, 0 of 30 now) is tested on its own 30 + 30 answers and IS called a real drop', EC.chatgpt && EC.chatgpt.tested === true && EC.chatgpt.samples === 30 && EC.chatgpt.samples_before === 30 && EC.chatgpt.z < -4 && X.alerts.some(a => /^ChatGPT no longer cites any of your pages/.test(a.text) && /0 of 30/.test(a.text) && /15 of 30/.test(a.text)), JSON.stringify({ c: EC.chatgpt, a: X.alerts.map(a => a.text) }));
+  check('B8-8: an engine that never cited the site has nothing to lose and is not tested at all', !EC.ai_mode || EC.ai_mode.tested !== true, JSON.stringify(EC.ai_mode));
+  const R = await W3E.rep(X);
+  const be = R.html.indexOf('By engine');
+  check('B8-8: the report prints the untested engine with its reason where the engines are read', be > 0 && /too few answers from this engine to tell/.test(R.html.slice(be)) && /Gemini/.test(R.html.slice(be)), R.html.slice(be, be + 400));
+});
+
+await guard('S164 B8-9 the tested alerts of one run share one Holm correction', async () => {
+  const SN = 'S164 B8-9 - three marginal tests that would each fire at 95% fire none at the Holm-adjusted threshold; a strong one still fires, and says the threshold'; begin(SN); const check = W3E.mkCheck(SN);
+  // mention rate 25 of 80 vs 38 of 80 (z -2.10), ChatGPT and AI Mode 0 of 30 vs 5 of 30 (z -2.34 each): each alone clears 1.96
+  const X = await W3E.drive({ rows: W3E.answers(15), pulse_rows: [W3E.pulseDay({ mentioned: 10 })],
+    previous: W3E.previous({ mk: 38, engines: { chatgpt: W3E.eng(30, 5), gemini: W3E.eng(10, 0), perplexity: W3E.eng(10, 0), ai_mode: W3E.eng(30, 5) } }) });
+  const MT = X.metrics.multiple_tests || {};
+  console.log('   family ->', JSON.stringify({ method: MT.method, m: MT.tests, alpha: MT.alpha, thr: MT.threshold_p, z: MT.threshold_z, res: (MT.results || []).map(r => [r.id, r.p, r.threshold_p, r.reject]) }));
+  console.log('   alerts ->', JSON.stringify(X.alerts.map(a => a.text.slice(0, 110))));
+  check('B8-9: the family is the three tested alerts of this run (the mention drop and the two engine drops), corrected by Holm at 5% family-wise', MT.method === 'holm' && MT.tests === 3 && MT.alpha === 0.05 && (MT.results || []).length === 3, JSON.stringify(MT));
+  check('B8-9: each of them clears 95% on its own - that is why a quiet week used to raise them', X.metrics.tests && X.metrics.tests.mention_rate.z <= -1.96 && (MT.results || []).length === 3 && (MT.results || []).every(r => r.p < 0.05), JSON.stringify((MT.results || []).map(r => r.p)));
+  check('B8-9: and none of them clears the Holm-adjusted threshold, so none is raised', (MT.results || []).length === 3 && (MT.results || []).every(r => r.reject === false) && !X.alerts.some(a => /AI mentions dropped|no longer cites|cites your pages less/.test(a.text)), JSON.stringify(X.alerts.map(a => a.text)));
+  check('B8-9: the adjusted threshold is stated in words (the strictest step: p at most 0.05 / 3)', Math.abs(MT.threshold_p - 0.05 / 3) < 1e-4 && MT.threshold_z > 2.3 && /Holm/.test(MT.note || '') && /3 tested/.test(MT.note || ''), JSON.stringify(MT));
+  // a strong change in the same family still fires, and its text names the correction
+  const Y = await W3E.drive({ rows: W3E.answers(15), pulse_rows: [W3E.pulseDay({ mentioned: 10 })],
+    previous: W3E.previous({ mk: 25, engines: { chatgpt: W3E.eng(30, 15), gemini: W3E.eng(10, 0), perplexity: W3E.eng(10, 0), ai_mode: W3E.eng(30, 0) } }) });
+  const MY = Y.metrics.multiple_tests || {};
+  check('B8-9: ChatGPT 15 of 30 -> 0 of 30 is rejected by Holm and its alert states the adjusted threshold it cleared', MY.tests >= 1 && (MY.results || []).some(r => r.id === 'engine:chatgpt' && r.reject) && Y.alerts.some(a => /ChatGPT no longer cites/.test(a.text) && /Holm/.test(a.text) && /p ≤ 0\.0/.test(a.text)), JSON.stringify({ MY, a: Y.alerts.map(a => a.text) }));
+  const R = await W3E.rep(X);
+  check('B8-9: the report says how many tests the alerts were judged across, and at what threshold', /Holm/.test(R.html) && /3 tested/.test(R.html), R.html.slice(0, 200));
+  // the pulse: today's drop and a business suddenly named are one family at 1% family-wise
+  const PENG = ['chatgpt', 'gemini', 'ai_mode']; const pq = W3E.prompts.slice(0, 7);
+  const prow = (q, e) => ({ json: { site_id: W3E.SID, domain: W3E.DOM, run_id: 'pulse_w3e', checked_at: W3E.NOW, prompt_id: q.prompt_id, prompt: q.prompt, kind: 'recommend', topic: 'e invoicing', engine: e,
+    answered: true, mentioned: false, cited: false, rank: 0, our_urls: '', competitors: 'rival.com, newco.com', sources: 'mof.gov.ae', excerpt: 'x', cost: 0.004, error: '', run_kind: 'pulse', sentiment: '', brands: '', issues: '', fanout: '', cited_urls: '[]' } });
+  const bday = (date) => ({ date, samples: 21, mentioned: 14, mention_rate: 66.7, prompts: {}, competitors: { 'rival.com': 9 }, engines: PENG.slice().sort(), panel: 7 });
+  reset();
+  mock('AI Plan', [{ json: { site_id: W3E.SID, domain: W3E.DOM, country: 'United Arab Emirates', location_code: 2784, language_code: 'en', country_iso: 'AE', email: 'me@' + W3E.DOM, callback_url: '', request_id: '',
+    on_demand: false, business_name: 'Northwind ERP', brand_names: [W3E.DOM], competitors: ['rival.com'], configured_competitors: ['rival.com'], aliases: {}, engines: PENG, pulse_engines: PENG,
+    prompts: pq, prompts_max: 20, pulse_run: true, full_due: false, run_kind: 'pulse', monthly_engines: [], baseline: ['2026-10-14', '2026-10-13', '2026-10-12', '2026-10-11'].map(bday), date: '2026-10-15', set_aside: [], set_aside_note: '', run_id: 'pulse_w3e', checked_at: W3E.NOW } }]);
+  mock('Parse AI Answers', pq.flatMap(q => PENG.map(e => prow(q, e))));
+  const P = (await run('Pulse Metrics', store['Parse AI Answers'], { code: 'Pulse__Pulse_Metrics' }))[0].json;
+  const PT = P.multiple_tests || {};
+  console.log('   pulse family ->', JSON.stringify({ m: PT.tests, alpha: PT.alpha, res: (PT.results || []).map(r => [r.id, r.reject]), alerts: P.alerts.map(a => a.text.slice(0, 90)) }));
+  check('B8-9: the pulse corrects its own tested alerts (today\'s drop + the business suddenly named) at 1% family-wise', PT.method === 'holm' && PT.alpha === 0.01 && PT.tests === 2 && (PT.results || []).every(r => r.reject), JSON.stringify(PT));
+  check('B8-9: and the alerts and the mail state the adjusted threshold', P.alerts.some(a => /real drop/.test(a.text) && /Holm/.test(a.text)) && P.alerts.some(a => /newco\.com/.test(a.text) && /Holm/.test(a.text)) && /Holm/.test(P.html), JSON.stringify(P.alerts.map(a => a.text)));
+});
+
+await guard('S165 B8-10 brand recognition is a count with its denominator, not a majority verdict', async () => {
+  const SN = 'S165 B8-10 - 1 of 4 assistants naming the brand is reported as 1 of 4 with its range; no "Only N of M recognise" alert'; begin(SN); const check = W3E.mkCheck(SN);
+  const X = await W3E.drive({ brand: true, rows: W3E.answers(20, { brandKnown: 1 }),
+    previous: W3E.previous({ mk: 25, prompts: 12, engines: { chatgpt: W3E.eng(10, 0), gemini: W3E.eng(10, 0), perplexity: W3E.eng(10, 0), ai_mode: W3E.eng(10, 0) } }) });
+  const B = X.metrics.brand || {};
+  console.log('   brand ->', JSON.stringify({ B, known: X.metrics.brand_known, alerts: X.alerts.map(a => a.text.slice(0, 80)) }));
+  check('B8-10: no "Only N of M AI assistants recognise" alert from a 2-of-5 majority rule', !X.alerts.some(a => /recognise/.test(a.text)), JSON.stringify(X.alerts.map(a => a.text)));
+  check('B8-10: recognition is 1 of 4 with a 95% Wilson range, measured, and no verdict', B.known === 1 && B.answered === 4 && Array.isArray(B.ci) && B.ci[0] <= 25 && B.ci[1] >= 25 && B.basis === 'measured' && X.metrics.brand_known === null && /1 of 4/.test(B.note || ''), JSON.stringify(B));
+  check('B8-10: the action to make the brand recognisable still comes, from the count (3 assistants did not name it)', X.actions.some(a => a.type === 'entity' && /3 of 4/.test(a.why)), JSON.stringify(X.actions.filter(a => a.type === 'entity')));
+  const R = await W3E.rep(X);
+  const tileAt = R.html.indexOf('Brand recognised');
+  check('B8-10: the report tile prints "1 of 4" with its range, in neutral colour, not the red verdict colour', tileAt > 0 && /95% range/.test(R.html.slice(tileAt, tileAt + 400)) && !/#b91c1c/.test(R.html.slice(Math.max(0, tileAt - 200), tileAt + 200)), R.html.slice(Math.max(0, tileAt - 200), tileAt + 400));
+});
+
+await guard('S166 B8-8 B8-9 B8-10 the build carries the three engine fixes in both workflows', async () => {
+  const SN = 'S166 B8-8 B8-9 B8-10 - generated code carries the per-engine test, the Holm kit and the brand count'; begin(SN); const check = W3E.mkCheck(SN);
+  const fs0 = require('fs'), path0 = require('path'); const CD = process.env.CODE_DIR || path0.join(__dirname, 'code_v4');
+  const rdC = (f) => { try { return fs0.readFileSync(path0.join(CD, f), 'utf8'); } catch (e) { return ''; } };
+  const AM = rdC('AI_Metrics.js'), PM = rdC('Pulse__Pulse_Metrics.js');
+  check('B8-9: the Holm kit (holm, pTwo, zFor) is inlined into AI Metrics and Pulse Metrics', [AM, PM].every(s => /const holm = \(/.test(s) && /const pTwo = \(/.test(s) && /const zFor = \(/.test(s)), [AM.length, PM.length].join(','));
+  check('B8-8: the old cited > 0 then cited === 0 rule is gone from AI Metrics', AM && !/\(v\.cited \|\| 0\) > 0 && engines\[e\] && engines\[e\]\.answered && !engines\[e\]\.cited/.test(AM), '');
+  check('B8-10: the majority rule brand.known * 2 >= brand.answered is gone', AM && !/brand\.known \* 2 >= brand\.answered/.test(AM), '');
 });
 
 
