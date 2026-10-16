@@ -4,6 +4,12 @@
 /*__REPORT_KIT__*/
 /*__LINEAGE__*/
 const KIND = { list: '"Best of" list', article: 'Article', news: 'News', review: 'Review site', forum: 'Forum thread', video: 'Video', social: 'Social post', official: 'Official list', encyclopedia: 'Encyclopedia', competitor: 'Competitor page' };
+// R94 (2026-10-16): a dry run (`dry_run: true` on the Manual Run - a test, never the weekly run) sends nothing to Bing or IndexNow;
+// the request nodes hand on what WOULD have been sent, and the report says so first, instead of "nothing new to send".
+const DRY_OF = (sid) => { const pick = (nm) => { try { return $(nm).all().map(i => i.json || {}).find(x => x.dry_run && x.site_id === sid) || null; } catch (e) { return null; } };
+  let on = false; try { let t = $('Manual Run').first().json || {}; if (t.body && typeof t.body === 'object') t = { ...t, ...t.body }; on = t.dry_run === true || /^(true|1|yes|on)$/i.test(String(t.dry_run ?? '')); } catch (e) {}
+  const b = pick('Bing Submit Requests'), x = pick('IndexNow Requests');
+  return (on || b || x) ? { bing: b ? (b.would_submit || []).length : 0, indexnow: x ? (x.would_submit || []).length : 0 } : null; };
 // reads Growth Metrics explicitly: the node before it saves a Data Table row and outputs that row, not the summary
 return $('Growth Metrics').all().map(i => i.json).filter(m => !m.skip).map(m => {
   const B = m.submitted.bing, X = m.submitted.indexnow;
@@ -21,6 +27,9 @@ return $('Growth Metrics').all().map(i => i.json).filter(m => !m.skip).map(m => 
       + (m.withheld_scores ? ', ' + n(m.withheld_scores) + ' not scored: robots.txt lets no AI search fetcher read them' : ''),
     n(m.earned.length) + ' page(s) AI cites without naming you' + (m.drafts_written ? ', ' + n(m.drafts_written) + ' outreach draft(s) written' : (m.handed_over ? ', ' + n(m.handed_over) + ' handed to the Link Builder (one writer): approve the pitches on the Link building page' : '')),   // P34-1: only the drafts THIS run wrote are counted; the stored ones of earlier runs are not this week's work
     n(m.targets.filter(t => t.status === 'queued').length) + ' question(s) queued for an AI answer page or refresh' + (m.ai_pages_month > 0 ? ' (' + m.ai_pages_month + ' a month, written by the Monday content run)' : ' (AI pages are off)')];
+  const DRY = DRY_OF(m.site_id);
+  const dry_run_note = DRY ? 'DRY RUN — nothing was submitted: ' + n(DRY.bing) + ' page(s) would have been sent to Bing and ' + n(DRY.indexnow) + ' notified through IndexNow (a test run; the weekly run submits)' : '';
+  if (DRY) done.splice(0, 2, '<b>' + dry_run_note + '</b>');
   let html = '<div style="font-family:Arial,Helvetica,sans-serif;max-width:860px;color:#0f172a">';
   html += '<h2 style="margin:0 0 4px">AI growth — ' + esc(m.domain) + '</h2>' + p_(esc(m.checked_at.slice(0, 10)) + ' · the weekly work that gets you named and cited in AI answers', true);
   html += alertBox(m.alerts.filter(a => a.level !== 'good'));
@@ -62,5 +71,5 @@ return $('Growth Metrics').all().map(i => i.json).filter(m => !m.skip).map(m => 
   html += LN.block(lineage) + '</div>';
   const subject = '[AI growth] ' + m.domain + ' — ' + (m.actions.filter(a => a.priority === 1).length ? m.actions.filter(a => a.priority === 1).length + ' high-value action(s)' : 'done for you this week') + (m.alerts.some(a => a.level === 'good') ? ' · a win' : '');
   const file_name = 'ai-growth-' + m.domain.replace(/[^a-z0-9]+/gi, '-') + '-' + m.checked_at.slice(0, 10) + '.html';
-  return { json: { ...m, lineage, subject, html, file_name, status: 'progress', stage: 'ai_growth' }, binary: { data: { data: b64(wrapDoc(subject, html)), mimeType: 'text/html', fileName: file_name, fileExtension: 'html' } } };
+  return { json: { ...m, lineage, subject, html, file_name, status: 'progress', stage: 'ai_growth', ...(DRY ? { dry_run: true, dry_run_note } : {}) }, binary: { data: { data: b64(wrapDoc(subject, html)), mimeType: 'text/html', fileName: file_name, fileExtension: 'html' } } };
 });

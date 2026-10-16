@@ -587,10 +587,10 @@ G.code('Earned Requests', 'Growth_Earned_Requests.js', at(20, 0)); G.iff('Any Ea
 g_http('Fetch Cited Pages', at(22, -1), batch=4, interval=300, timeout=20000, text=True, headers={'User-Agent': BROWSER_UA, 'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8', 'Accept-Language': 'en-US,en;q=0.8'})
 G.code('Bing Sites (Growth)', 'Growth_Bing_Sites.js', at(23, 0)); G.iff('Any Bing (Growth)?', '{{ !$json.skip }}', at(24, 0)); g_http('Fetch Bing Sites (Growth)', at(25, -1), cred=BING)
 G.code('Bing Growth Requests', 'Growth_Bing_Requests.js', at(26, 0)); G.iff('Any Bing Requests (Growth)?', '{{ !$json.skip }}', at(27, 0)); g_http('Fetch Bing Growth', at(28, -1), interval=400, cred=BING)
-G.code('Bing Submit Requests', 'Growth_Bing_Submit.js', at(29, 0)); G.iff('Any Bing Submit?', '{{ !$json.skip }}', at(30, 0))
+G.code('Bing Submit Requests', 'Growth_Bing_Submit.js', at(29, 0)); G.iff('Any Bing Submit?', '{{ !$json.skip && !$json.dry_run }}', at(30, 0))   # R94: a dry run (a test) never reaches SubmitUrlBatch
 g_http('Submit to Bing', at(31, -1), method='POST', body='={{ JSON.stringify($json.body) }}', interval=600, cred=BING)
 G.code('IndexNow Key Requests', 'Growth_IndexNow_Keys.js', at(32, 0)); G.iff('Any IndexNow Keys?', '{{ !$json.skip }}', at(33, 0)); g_http('Fetch IndexNow Key', at(34, -1), timeout=15000, text=True, headers={'User-Agent': BOT_UA})
-G.code('IndexNow Requests', 'Growth_IndexNow_Submit.js', at(35, 0)); G.iff('Any IndexNow?', '{{ !$json.skip }}', at(36, 0))
+G.code('IndexNow Requests', 'Growth_IndexNow_Submit.js', at(35, 0)); G.iff('Any IndexNow?', '{{ !$json.skip && !$json.dry_run }}', at(36, 0))   # R94: nor IndexNow
 g_http('Submit IndexNow', at(37, -1), method='POST', body='={{ JSON.stringify($json.body) }}', text=True, headers={'Content-Type': 'application/json; charset=utf-8'})
 G.code('Entity Requests', 'Growth_Entity_Requests.js', at(38, 0)); G.iff('Any Entity?', '{{ !$json.skip }}', at(39, 0)); g_http('Fetch Wikidata', at(40, -1), interval=1100, headers={'User-Agent': WIKI_UA, 'Accept': 'application/json'})
 G.code('AI Readiness', 'AI_Readiness.js', at(41, 0)); G.code('Earned Media', 'Earned_Media.js', at(42, 0))

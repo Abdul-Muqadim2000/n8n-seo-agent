@@ -9830,6 +9830,132 @@ sticky("""### One picture of the results page and of our own pages (R87 R88 R90 
 log('One picture of the results page and of our own pages (2026-10-16, re-rating 2026-10-15: R87, R88, R90, R91, R93, R92 parts 3-4, R59 Site Tracker path): the Rank Tracker report counted every domain of page 1 twice and set "e invoicing in uae" aside as a government query on two government sites of five, and nothing wrote a set-aside back, so the cadence queued its rungs; "facts erp" was planned for another month because the gate never saw the head\'s results page; one keyword got two movement figures in one run; the subject said top 100 for top-50 checks; Link Builder pitches named our pages by search queries. RS.serpHosts / prevReading / noise are the one reading rule, a set-aside head pauses its ladder everywhere (Tracker Ladder Marks -> Mark Set Aside), the gates get the ladder\'s stored pages and the AI brand names, and the Site Tracker names a bare-host / www split Google chose')
 
 
+# 98. A SCHEDULE THAT NEVER FIRED, AND A RESTART THAT THREW ITS FIRE AWAY (2026-10-16, re-rating 2026-10-15 R94, High;
+#     docs/system-review-2026-10-15/defects/C_monitors.md). In the 21 days to 2026-10-15 the Rank Tracker, the Site Tracker, AI Growth,
+#     the Content Cadence and the Link Builder had 8 due fires between them and NONE fired; AI Visibility and Backlinks fired 1 of 2,
+#     the AI Pulse 6 of 7 and every one late. Read in n8n's own code: a cron fire lives only in memory (cron@4 arms ONE setTimeout to
+#     the next occurrence), and a restart, a deploy or a re-publish re-arms every schedule for its NEXT future time - so a fire that
+#     was due and not yet delivered is thrown away. The 2026-10-12 16:38 deploy restart dropped all five Monday runs that the Mac's
+#     sleep had pushed past it. staticData / recurrenceRules play no part (a weekly interval of 1 is never recurrence-checked).
+#     * **The catch-up** (build_catchup.py, workflow SEOagentCatchUp1, kit v5/code/_catchup.js): n8n's *Instance Started* event and an
+#       hourly sweep; per schedule the latest due time in GENERIC_TIMEZONE, the workflow's executions with mode `trigger` (n8n's public
+#       API), the catch-up's own records; a missed fire is started ONCE through the workflow's own manual entry with no site - record
+#       first (`catchup:<workflow>:<due ISO>` in seo_cache), then start - within 36 h (weekly / monthly) or 20 h (daily), never before
+#       the catch-up first ran, at most three a sweep, never more than the run guard has room for. A fire the schedule still holds (its
+#       cron was armed before the due time) is LATE, not lost, and is left to the schedule until it is 6 h late: starting it at once
+#       would run the week twice when the delayed timer fires.
+#     * **What this section proves on the generated files** (a fix on one path of several is how three fixes failed live this week):
+#       the ten schedules the catch-up carries are exactly the generated workflows with a Schedule Trigger, each with a manual entry that
+#       feeds the schedule's own first node; every path to *Start Missed Run* passes *Save Catch-up Record* (record-then-start, by graph
+#       walk with the save removed); the start does not wait for the run; the catch-up and every workflow it starts are imported and
+#       published by apply_env.py; the time zone it was built with is the one n8n/compose.yml gives n8n; the credential exists in
+#       sync_credentials.py; and apply_env.py's Monday guard refuses inside the window and lets a deploy through outside it (self-test,
+#       summer and winter time).
+# 99. A TEST RUN THAT SUBMITS TO BING (R94's companion). AI Growth submits to Bing Webmaster and IndexNow, so the re-rating could not run it
+#     at all. `dry_run: true` on its manual entry (only a catch-up test passes it) keeps SubmitUrlBatch and IndexNow unsent - the request
+#     nodes hand on what WOULD have been sent, the IF in front of each submit refuses a dry item, and the report says "DRY RUN - nothing
+#     was submitted" first. Proved here on the generated AI Growth workflow; harness S129 runs the nodes.
+# =============================================================================
+def _b98_catchup():
+    """Runs right after the four sub-builds (the catch-up reads their generated workflows), before every lint that walks workflows/."""
+    import ast as _ast98, datetime as _dt98
+    _r98 = subprocess.run([sys.executable, os.path.join(HERE0, 'build_catchup.py')], cwd=HERE0)
+    assert _r98.returncode == 0, 'build_catchup.py failed'
+    _wd98 = os.path.join(HERE0, 'workflows')
+    _wire98 = json.load(open(os.path.join(HERE0, 'harness', 'catchup_wiring.json'), encoding='utf-8'))
+    _cu98 = json.load(open(os.path.join(_wd98, _wire98['workflow']['file']), encoding='utf-8'))[0]
+    _by98 = {n['name']: n for n in _cu98['nodes']}
+    _out98 = lambda c, nd: [t['node'] for lst in ((c.get(nd) or {}).get('main') or []) for t in (lst or [])]
+    # ---------- A. the schedule table is every generated schedule, each with a manual entry on the schedule's own path ----------
+    _sched98 = {}
+    for _f98 in sorted(os.listdir(_wd98)):
+        if not _f98.endswith('.json') or _f98 in _NOT_GENERATED69 or _f98 == _wire98['workflow']['file']:
+            continue
+        for _w98 in json.load(open(os.path.join(_wd98, _f98), encoding='utf-8')):
+            _t98 = [n for n in _w98['nodes'] if n['type'] == 'n8n-nodes-base.scheduleTrigger']
+            if _t98:
+                _sched98[_w98['id']] = (_w98, _t98[0]['name'])
+    _baked98 = {s['id']: s for s in _wire98['schedules']}
+    assert sorted(_sched98) == sorted(_baked98), 'R94: the catch-up carries %s but the generated schedules are %s' % (sorted(_baked98), sorted(_sched98))
+    for _id98, (_w98, _tn98) in _sched98.items():
+        _c98 = _w98['connections']
+        _e98 = _baked98[_id98]['entry_node']
+        assert sorted(_out98(_c98, _e98)) == sorted(_out98(_c98, _tn98)) and _out98(_c98, _tn98), \
+            'R94: %s - its manual entry "%s" does not feed the schedule\'s own first node, so a catch-up would not run the scheduled path' % (_id98, _e98)
+    # ---------- B. the three doors, and RECORD-then-start by graph walk ----------
+    assert _by98['Instance Started']['type'] == 'n8n-nodes-base.n8nTrigger' and _by98['Instance Started']['parameters']['events'] == ['init'], 'R94: no Instance Started door'
+    assert _by98['Hourly Sweep']['type'] == 'n8n-nodes-base.scheduleTrigger', 'R94: no hourly sweep'
+    _st98 = _by98['Start Missed Run']['parameters']
+    assert _st98['options'].get('waitForSubWorkflow') is False and _st98['workflowId']['value'] == '={{ $json.workflow_id }}', 'R94: the start waits, or starts a fixed workflow'
+    _cc98 = _cu98['connections']
+
+    def _reach98(start, blocked):
+        seen, todo = set(), [start]
+        while todo:
+            nd = todo.pop()
+            if nd in seen or nd == blocked:
+                continue
+            seen.add(nd); todo.extend(_out98(_cc98, nd))
+        return seen
+    for _door98 in ('Instance Started', 'Hourly Sweep', 'Catch-up Run'):
+        assert 'Start Missed Run' in _reach98(_door98, None), 'R94: ' + _door98 + ' never reaches the start'
+        assert 'Start Missed Run' not in _reach98(_door98, 'Save Catch-up Record'), \
+            'R94: ' + _door98 + ' can reach Start Missed Run without passing Save Catch-up Record - the start must come after its record'
+    assert 'Catch-up Payload' in _out98(_cc98, 'Save Catch-up Record'), 'R94: the payload is not built from the saved record'
+    # ---------- C. deployment: imported, published, credential, time zone ----------
+    _ae98 = open(os.path.join(HERE0, 'apply_env.py'), encoding='utf-8').read()
+    _tree98 = _ast98.parse(_ae98)
+    _lists98 = {t.id: [e.value for e in n.value.elts] for n in _tree98.body if isinstance(n, _ast98.Assign) and isinstance(n.value, _ast98.List)
+                for t in n.targets if isinstance(t, _ast98.Name)}
+    assert _wire98['workflow']['file'] in _lists98['WORKFLOWS'] and _wire98['workflow']['id'] in _lists98['PUBLISH'], 'R94: apply_env.py does not import / publish the catch-up'
+    _unpub98 = [i for i in _baked98 if i not in _lists98['PUBLISH']]
+    assert not _unpub98, 'R94: the catch-up would start %s, which apply_env.py does not publish ("Workflow is not active")' % _unpub98
+    _sc98 = open(os.path.join(HERE0, 'sync_credentials.py'), encoding='utf-8').read()
+    assert re.search(r"\('%s', '[^']+', 'httpHeaderAuth', \{'value': 'N8N_API_KEY'\}, \{'name': 'X-N8N-API-KEY'\}\)" % _wire98['credential'], _sc98), \
+        'R94: sync_credentials.py does not write the catch-up credential from N8N_API_KEY'
+    _comp98 = open(os.path.join(HERE0, '..', 'compose.yml'), encoding='utf-8').read()
+    _tzm98 = re.search(r'GENERIC_TIMEZONE: \$\{GENERIC_TIMEZONE:-([A-Za-z_/]+)\}', _comp98)
+    assert _tzm98 and _tzm98.group(1) == _wire98['default_tz'], 'R94: n8n/compose.yml does not set GENERIC_TIMEZONE with the default the catch-up is built with'
+    _ex98 = open(os.path.join(HERE0, '..', '.env.seo.example'), encoding='utf-8').read()
+    assert re.search(r'(?m)^N8N_API_KEY=$', _ex98) and re.search(r'(?m)^GENERIC_TIMEZONE=' + re.escape(_wire98['default_tz']) + '$', _ex98), \
+        'R94: n8n/.env.seo.example does not name N8N_API_KEY / GENERIC_TIMEZONE'
+    # ---------- D. the Monday deploy guard: the function apply_env.py runs, self-tested in isolation ----------
+    _fn98 = next(n for n in _tree98.body if isinstance(n, _ast98.FunctionDef) and n.name == 'deploy_window')
+    _ns98 = {'DEFAULT_TZ': 'America/New_York'}
+    exec(compile(_ast98.Module(body=[_fn98], type_ignores=[]), 'apply_env.py:deploy_window', 'exec'), _ns98)
+    _U98 = lambda *a: _dt98.datetime(*a, tzinfo=_dt98.timezone.utc)
+    _cases98 = {'mon_2026-10-19_12:00Z_summer': (_U98(2026, 10, 19, 12, 0), True), 'mon_2026-10-19_10:59Z_before': (_U98(2026, 10, 19, 10, 59), False),
+                'mon_2026-10-19_16:30Z_after': (_U98(2026, 10, 19, 16, 30), False), 'tue_2026-10-20_12:00Z': (_U98(2026, 10, 20, 12, 0), False),
+                'fri_2026-10-16_12:00Z_today': (_U98(2026, 10, 16, 12, 0), False), 'mon_2026-11-02_16:30Z_winter': (_U98(2026, 11, 2, 16, 30), True),
+                'mon_2026-11-02_11:30Z_winter_before': (_U98(2026, 11, 2, 11, 30), False)}
+    _guard98 = {}
+    for _k98, (_t98, _want98) in _cases98.items():
+        _in98, _a98, _b98 = _ns98['deploy_window'](_t98, 'America/New_York')
+        assert _in98 is _want98, 'R94: apply_env.deploy_window(%s) answered %s, expected %s' % (_k98, _in98, _want98)
+        _guard98[_k98] = {'inside': _in98, 'window_utc': _a98.strftime('%a %H:%M') + '-' + _b98.strftime('%H:%M')}
+    assert "'--force-monday' not in args" in _ae98 and 'sys.exit(' in _ae98.split('deploy_window(tz_name=')[1][:400], 'R94: apply_env.py does not refuse inside the window'
+    # ---------- 99. AI Growth: a dry item never reaches a submission ----------
+    _g98 = json.load(open(os.path.join(_wd98, 'SEO_Agent_AI_Growth.json'), encoding='utf-8'))[0]
+    _gn98 = {n['name']: n for n in _g98['nodes']}
+    _growth98 = {}
+    for _if98, _sub98, _req98 in (('Any Bing Submit?', 'Submit to Bing', 'Bing Submit Requests'), ('Any IndexNow?', 'Submit IndexNow', 'IndexNow Requests')):
+        _lv98 = _gn98[_if98]['parameters']['conditions']['conditions'][0]['leftValue']
+        assert '!$json.dry_run' in _lv98 and '!$json.skip' in _lv98, 'R94: ' + _if98 + ' lets a dry item through: ' + _lv98
+        _feeds98 = sorted(s for s, o in _g98['connections'].items() for i, lst in enumerate(o.get('main') or []) for t in (lst or []) if t['node'] == _sub98)
+        assert _feeds98 == [_if98] and _out98(_g98['connections'], _if98)[0] == _sub98, 'R94: ' + _sub98 + ' is reachable other than through ' + _if98
+        assert 'DRY_RUN' in _gn98[_req98]['parameters']['jsCode'] and 'would_submit' in _gn98[_req98]['parameters']['jsCode'], 'R94: ' + _req98 + ' has no dry-run switch'
+        _growth98[_sub98] = {'gate': _if98, 'expr': _lv98}
+    assert 'dry_run_note' in _gn98['Growth Report']['parameters']['jsCode'], 'R94: the AI Growth report does not say it was a dry run'
+    _wire98.update({'deploy_guard': _guard98, 'growth_dry_run': _growth98, 'record_then_start': True,
+                    'published': sorted(_baked98), 'compose_tz_default': _tzm98.group(1)})
+    json.dump(_wire98, open(os.path.join(HERE0, 'harness', 'catchup_wiring.json'), 'w'), indent=1, sort_keys=True)
+    print('R94: the Schedule Catch-up carries the %d generated schedules (%s), records before it starts, and every target is published; '
+          'apply_env.py refuses a Monday deploy (%d guard cases); AI Growth submits nothing on a dry run' % (len(_baked98), _wire98['tz'], len(_guard98)))
+
+
+log('A schedule that never fired, and a restart that threw its fire away (2026-10-16, re-rating 2026-10-15 R94, High). In the 21 days to 2026-10-15 the Rank Tracker, the Site Tracker, AI Growth, the Content Cadence and the Link Builder had 8 due fires and none fired; the cause, read in n8n\'s own code, is that a cron fire lives only in memory and every restart, deploy or re-publish re-arms the schedule for its next future time, so the 2026-10-12 16:38 deploy restart threw away the five Monday runs the Mac\'s sleep had pushed past it. New workflow SEO Agent - Schedule Catch-up (build_catchup.py, SEOagentCatchUp1; kit v5/code/_catchup.js): n8n\'s Instance Started event plus an hourly sweep read each of the ten schedules\' latest due time in GENERIC_TIMEZONE, the workflow\'s executions with mode trigger through n8n\'s public API (an on-demand run does not count - an owner decision) and the catch-up\'s own seo_cache records, and start a missed fire ONCE through the workflow\'s own manual entry with no site, recording catchup:<workflow>:<due ISO> before the start; only fires due in the last 36 h (weekly / monthly) or 20 h (daily), never before the catch-up first ran, at most three a sweep 60 s apart and never more than the run guard has room for; a fire the schedule still holds is left to it until 6 h late so a week never runs twice. apply_env.py refuses a deploy on Monday 07:00-12:00 in the schedules\' time zone (--force-monday overrides), n8n/compose.yml sets GENERIC_TIMEZONE explicitly (America/New_York, what it was while unset), sync_credentials.py writes the n8n API credential from N8N_API_KEY, and AI Growth gained dry_run: true, which sends nothing to Bing or IndexNow and says so in the report (section 99)')
+
+
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:
 #     "two fixes have never come back and both are enforced by the build".
@@ -9950,6 +10076,7 @@ import subprocess
 for _s in ('build_api.py', 'build_ladder_extras.py', 'build_site_tracker.py', 'build_monitors.py'):
     _r = subprocess.run([sys.executable, os.path.join(HERE0, _s)], cwd=HERE0)
     assert _r.returncode == 0, _s + ' failed'
+_b98_catchup()   # R94 (sections 98-99): build the Schedule Catch-up (build_catchup.py) from the workflows just written, and prove it
 
 # section 55 (R17 / R29): both checks need every workflow on disk, so they run here, after the sub-builds
 _r17_r29_checks()
