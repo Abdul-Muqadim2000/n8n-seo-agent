@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { AutomationInfo } from '@seo/shared';
-import { SCHEDULE_GRACE_MINUTES, STUCK_MINUTES, TARGET_PCT, alertDelivery, deliveryReport, onDemandWeek, scheduledTimes, scheduledWeek, weekStart, weeksBack } from '../src/services/delivery';
+import { AUTOMATIONS, SCHEDULES, type AutomationInfo } from '@seo/shared';
+import { SCHEDULE_GRACE_MINUTES, STUCK_MINUTES, TARGET_PCT, alertDelivery, deliveryReport, onDemandWeek, scheduleState, scheduledTimes, scheduledWeek, weekStart, weeksBack } from '../src/services/delivery';
 
 // G21 (2026-10-13, system review FIX_PLAN G21): the delivery rate — did what should have run, run, and did it reach the customer?
 // Nothing measured either before this. The arithmetic is tested on its own: a week where every schedule fired and every run was
@@ -182,5 +182,98 @@ describe('G21 delivery rate: the whole report', () => {
     expect(report.notes.join(' ')).toMatch(/unmeasured, not perfect/);
     expect(report.notes.join(' ')).toMatch(/no alert delivery rate/);
     expect(report.weeks[0].onDemand.ratePct).toBeNull();
+  });
+});
+
+// R103 / R104 (2026-10-16): a schedule is not "missed" before it existed; Page Watch is the tenth schedule; only the schedule's own
+// executions count as its fires; the Pipeline's "last run" is the last SCHEDULED fire, and an on-demand run is labelled as one.
+describe('R103 delivery rate: schedules are counted from the day they existed, and only their own fires count', () => {
+  const NOW = new Date('2026-10-15T19:14:00Z');
+  const run103 = (createdAt: string) => run({ createdAt: new Date(createdAt), completedAt: new Date(createdAt) });
+
+  it('lists ten schedules: the nine automations and the daily Page Watch (05:45 every day)', () => {
+    expect(SCHEDULES).toHaveLength(10);
+    expect(AUTOMATIONS).toHaveLength(9);
+    const pw = SCHEDULES.find((s) => s.id === 'page_watch')!;
+    expect(pw.workflow).toBe('SEOagentPageWch1');
+    expect(pw.schedule).toEqual({ kind: 'daily', weekdays: [0, 1, 2, 3, 4, 5, 6], hour: 5, minute: 45 });
+    expect(SCHEDULES.every((s) => !!s.since)).toBe(true);
+  });
+
+  it('week 2026-09-28: every schedule was created later, so 5 of 5 on-demand runs delivered read 100% (it read 26.3%)', () => {
+    const r = deliveryReport({
+      now: NOW,
+      weeks: 4,
+      timezone: TZ,
+      execs: Object.fromEntries(SCHEDULES.map((s) => [s.workflow, []])),
+      alerts: [],
+      runs: ['2026-09-29T10:00:00Z', '2026-09-30T10:00:00Z', '2026-10-01T10:00:00Z', '2026-10-02T10:00:00Z', '2026-10-03T10:00:00Z'].map(run103),
+    });
+    const w = r.weeks.find((x) => x.week === '2026-09-28')!;
+    // Rank Tracker existed from 2026-10-01 12:06, but its Monday fire of 09-28 came before that; the 1st-of-month audit fire of
+    // 2026-10-01 06:00 New York came before the Audit Scheduler existed (2026-10-02)
+    expect(w.scheduled).toMatchObject({ started: 0, settled: 0, ratePct: null });
+    expect(w.missed).toEqual([]);
+    expect(w.overallPct).toBe(100);
+    expect(r.notes.join(' ')).toMatch(/counted from the day it was created/);
+  });
+
+  it('weeks before the first schedule existed have no scheduled measurement at all (unmeasured, not 0%)', () => {
+    const r = deliveryReport({ now: NOW, weeks: 6, timezone: TZ, execs: Object.fromEntries(SCHEDULES.map((s) => [s.workflow, []])), alerts: [], runs: [] });
+    for (const wk of ['2026-09-07', '2026-09-14', '2026-09-21']) {
+      const w = r.weeks.find((x) => x.week === wk)!;
+      expect(w.scheduled.started).toBe(0);
+      expect(w.overallPct).toBeNull();
+    }
+  });
+
+  it('Page Watch fires are counted: a day it did not run is a missed fire with its own name', () => {
+    const from = new Date('2026-10-13T00:00:00Z'), to = new Date('2026-10-14T00:00:00Z');
+    const pw = SCHEDULES.find((s) => s.id === 'page_watch')!;
+    const r = scheduledWeek([pw], { SEOagentPageWch1: [] }, TZ, from, to, new Date('2026-10-14T12:00:00Z'));
+    expect(r.missed.map((m) => m.automation)).toEqual(['page_watch']);
+    // 2026-10-13 05:45 New York = 09:45 UTC, after the workflow was created (06:16 UTC)
+    expect(r.missed[0].expectedAt).toBe('2026-10-13T09:45:00.000Z');
+  });
+
+  it('a Test Runner or on-demand execution near the due time does not hide a missed fire — only mode "trigger" counts', () => {
+    const from = new Date('2026-10-12T00:00:00Z'), to = new Date('2026-10-19T00:00:00Z');
+    const testRun = { id: 't', workflowId: 'x', status: 'success', startedAt: '2026-10-12T13:20:00.000Z', mode: 'integrated' };
+    const r = scheduledWeek([WEEKLY], { SEOagentSiteTrk1: [testRun] }, TZ, from, to, new Date('2026-10-19T00:00:00Z'));
+    expect(r.missed).toHaveLength(1);
+    expect(r.counts).toMatchObject({ delivered: 0, stuck: 1 });
+  });
+
+  it('the workflow\'s own createdAt, when the engine reports it, is used when it is later than the built-in date', () => {
+    const from = new Date('2026-10-12T00:00:00Z'), to = new Date('2026-10-19T00:00:00Z');
+    const r = scheduledWeek([WEEKLY], { SEOagentSiteTrk1: [] }, TZ, from, to, new Date('2026-10-19T00:00:00Z'), { SEOagentSiteTrk1: '2026-10-13T00:00:00Z' });
+    expect(r.missed).toEqual([]);
+  });
+});
+
+describe('R104 the Pipeline: the last SCHEDULED fire, a missed due time, and on-demand runs named as such', () => {
+  const RT = AUTOMATIONS.find((a) => a.id === 'rank_tracker')!;
+  // Monday 2026-10-12 08:00 New York = 12:00 UTC
+  const MON = '2026-10-12T12:00:00.000Z';
+
+  it('only an on-demand ("integrated") run on Monday at 19:48: no scheduled last run, the Monday fire is missed, the run is on demand', () => {
+    const st = scheduleState(RT, [{ id: 'i', workflowId: RT.workflow, status: 'success', startedAt: '2026-10-12T19:48:00.000Z', mode: 'integrated' }], TZ, new Date('2026-10-15T19:14:00Z'), '2026-10-12T19:48:00.000Z');
+    expect(st.lastScheduledAt).toBeNull();
+    expect(st.missedAt).toBe(MON);
+    expect(st.onDemandAt).toBe('2026-10-12T19:48:00.000Z');
+    expect(st.note).toMatch(/scheduled run missed on 2026-10-12/);
+    expect(st.note).toMatch(/on demand/);
+  });
+
+  it('a scheduled fire 4 hours late is a fire (late, not missed), and the data it wrote is that fire, not an on-demand run', () => {
+    const st = scheduleState(RT, [{ id: 'f', workflowId: RT.workflow, status: 'success', startedAt: '2026-10-12T16:00:00.000Z', mode: 'trigger' }], TZ, new Date('2026-10-15T19:14:00Z'), '2026-10-12T16:05:00.000Z');
+    expect(st.lastScheduledAt).toBe('2026-10-12T16:00:00.000Z');
+    expect(st.missedAt).toBeNull();
+    expect(st.onDemandAt).toBeNull();
+  });
+
+  it('no execution history from the engine: nothing is claimed either way', () => {
+    const st = scheduleState(RT, undefined, TZ, new Date('2026-10-15T19:14:00Z'), '2026-10-12T19:48:00.000Z');
+    expect(st).toMatchObject({ known: false, lastScheduledAt: null, missedAt: null, onDemandAt: null, note: '' });
   });
 });

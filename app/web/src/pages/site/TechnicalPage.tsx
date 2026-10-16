@@ -106,7 +106,12 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
     );
 
   const sel: AuditPoint = audits.find((a) => a.auditId === d.selectedAuditId) ?? audits[audits.length - 1];
-  const prev: AuditPoint | null = audits.find((a) => a.auditId === d.previousAuditId) ?? (audits.indexOf(sel) > 0 ? audits[audits.indexOf(sel) - 1] : null);
+  // R66: compare only with the audit the server chose — the previous one of the same report type. The old fallback to the list
+  // neighbour is gone: a full report and a technical audit score different findings on different weights, so the neighbour of the
+  // other type is not a baseline (it gave "25 new issues" and "down from 83 to 70").
+  const prev: AuditPoint | null = audits.find((a) => a.auditId === d.previousAuditId) ?? null;
+  // one score scale per chart: the trend lines hold the selected audit's own type only
+  const trend = audits.filter((a) => a.reportType === sel.reportType);
   const st = countBy(d.findings, (f) => f.status);
   const tone = scoreTone(sel.healthScore);
   const fixReport = sortByDate(d.reports, (r) => r.receivedAt, 'desc').find((r) => r.files.some(isFixPackFile));
@@ -124,8 +129,10 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
         title={healthHeadline(sel)}
         description={
           prev
-            ? `Since the audit of ${fmtDate(prev.auditedAt)}: ${plural(st.fixed ?? 0, 'issue')} fixed, ${plural(st.new ?? 0, 'new issue')}, ${st.open ?? 0} still open. Health score ${sel.healthScore >= prev.healthScore ? 'up' : 'down'} from ${prev.healthScore} to ${sel.healthScore}.`
-            : 'The first audit of this website. The next one shows what you fixed.'
+            ? `Since the ${reportTypeLabel(prev.reportType).toLowerCase()} of ${fmtDate(prev.auditedAt)}: ${plural(st.fixed ?? 0, 'issue')} fixed, ${plural(st.new ?? 0, 'new issue')}, ${st.open ?? 0} still open. Health score ${sel.healthScore >= prev.healthScore ? 'up' : 'down'} from ${prev.healthScore} to ${sel.healthScore}.`
+            : audits.some((a) => a !== sel && a.reportType !== sel.reportType)
+              ? `The first ${reportTypeLabel(sel.reportType).toLowerCase()} of this website. It is not compared with the ${/full/i.test(sel.reportType) ? 'technical audits' : 'full SEO reports'}: they check different things and score on different weights.`
+              : 'The first audit of this website. The next one shows what you fixed.'
         }
         aside={
           <div className="flex items-center gap-4 md:flex-col md:gap-2">
@@ -158,7 +165,7 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
           }
           delta={<Delta value={scoreDelta} suffix=" pts" digits={0} />}
           deltaLabel={prev ? `vs ${fmtDate(prev.auditedAt)}` : 'first audit'}
-          sparkline={<Sparkline data={audits.map((a) => ({ healthScore: a.healthScore }))} dataKey="healthScore" />}
+          sparkline={<Sparkline data={trend.map((a) => ({ healthScore: a.healthScore }))} dataKey="healthScore" />}
           info="80 and above is good, 60–79 needs work, below 60 is poor"
           meta={
             <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -172,8 +179,8 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
           icon={<ListChecks />}
           value={<CountUp value={sel.findings} />}
           delta={<Delta value={diff(sel.findings, prev?.findings)} suffix="" digits={0} upIsGood={false} />}
-          deltaLabel={prev ? 'vs previous audit' : undefined}
-          sparkline={<Sparkline data={audits.map((a) => ({ findings: a.findings }))} dataKey="findings" invert />}
+          deltaLabel={prev ? `vs previous ${reportTypeLabel(prev.reportType).toLowerCase()}` : undefined}
+          sparkline={<Sparkline data={trend.map((a) => ({ findings: a.findings }))} dataKey="findings" invert />}
           meta={prev ? `${st.new ?? 0} new · ${st.fixed ?? 0} fixed · ${st.open ?? 0} still open` : 'The next audit shows what you fixed'}
         />
         <MetricCard
@@ -200,7 +207,7 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
           label="Pages crawled"
           icon={<FileSearch />}
           value={<CountUp value={sel.pagesCrawled} />}
-          sparkline={audits.length > 1 ? <Sparkline data={audits.map((a) => ({ pagesCrawled: a.pagesCrawled }))} dataKey="pagesCrawled" /> : undefined}
+          sparkline={trend.length > 1 ? <Sparkline data={trend.map((a) => ({ pagesCrawled: a.pagesCrawled }))} dataKey="pagesCrawled" /> : undefined}
           meta={`${reportTypeLabel(sel.reportType)} · ${sel.scheduled ? 'monthly schedule' : 'run on demand'} · ${fmtDate(sel.auditedAt)}`}
         />
       </div>
@@ -247,21 +254,21 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <ChartCard
           title={<ChartTitle icon={<TrendingUp />}>Health score over time</ChartTitle>}
-          description={`${plural(audits.length, 'audit')} · 80 and above is good`}
+          description={`${plural(trend.length, reportTypeLabel(sel.reportType).toLowerCase())} · 80 and above is good${trend.length < audits.length ? ' · other report types score on other weights and are left out' : ''}`}
           loading={refetching}
           table={{
             columns: [
-              { key: 'auditedAt', label: 'Audit', format: (v) => dateLabelFormat(audits.map((a) => a.auditedAt))(String(v)) },
+              { key: 'auditedAt', label: 'Audit', format: (v) => dateLabelFormat(trend.map((a) => a.auditedAt))(String(v)) },
               { key: 'healthScore', label: 'Score', align: 'right' },
               { key: 'grade', label: 'Grade' },
               { key: 'findings', label: 'Issues', align: 'right' },
               { key: 'pagesCrawled', label: 'Pages', align: 'right' },
             ],
-            rows: [...audits].reverse().map((a) => ({ ...a })),
+            rows: [...trend].reverse().map((a) => ({ ...a })),
           }}
         >
           <FillHeight min={240}>
-            {(h) => <TimeSeriesChart data={audits.map((a) => ({ auditedAt: a.auditedAt, healthScore: a.healthScore }))} xKey="auditedAt" xFormat={timeAxisFormat(audits.map((a) => a.auditedAt))} series={[{ key: 'healthScore', label: 'Health score', format: (v) => `${v}/100` }]} yDomain={[0, 100]} reference={{ y: 80, label: 'Good' }} area height={h} />}
+            {(h) => <TimeSeriesChart data={trend.map((a) => ({ auditedAt: a.auditedAt, healthScore: a.healthScore }))} xKey="auditedAt" xFormat={timeAxisFormat(trend.map((a) => a.auditedAt))} series={[{ key: 'healthScore', label: 'Health score', format: (v) => `${v}/100` }]} yDomain={[0, 100]} reference={{ y: 80, label: 'Good' }} area height={h} />}
           </FillHeight>
         </ChartCard>
         <CategoryChart rows={d.byCategory} loading={refetching} />

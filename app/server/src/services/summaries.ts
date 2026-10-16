@@ -84,7 +84,10 @@ export function summarize(stage: string, p: P): Summary {
       const t = obj(obj(g.totals).cur);
       put('clicks', num(t.clicks));
       put('impressions', num(t.impressions));
-      put('clicksPct', num(obj(g.deltas).clicks_pct));
+      // R113: a clicks change the report's own significance test calls not real is not a figure to print beside the count
+      const ct = obj(obj(p.significance).clicks);
+      if (ct.real === false) put('clicksChange', 'within normal variation');
+      else put('clicksPct', num(obj(g.deltas).clicks_pct));
       put('sessions', num(obj(obj(obj(p.ga4).organic).cur).sessions));
       put('actions', len(p.actions));
       put('subject', str(p.subject));

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { Activity, BarChart3, ClipboardCheck, Eye, Flame, LineChart, MousePointerClick, Rocket, ScanSearch, Search, Target, TrendingUp, Users } from 'lucide-react';
-import { formatPosition, pctChange, type ReportDetail } from '@seo/shared';
+import { clicksHeadline, formatPosition, pctChange, type ReportDetail } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { fmtDate } from '@/lib/utils';
@@ -17,15 +17,8 @@ import { ActionList, ActionRunButton, BriefCard, sortActions } from './actions';
 import { AlertList, Block, Empty, has, n, num, obj, objs, pct, pctRatio, SectionTitle, shortUrl, str, strs, type P } from './kit';
 import { ChartTitle, PositionPill, ReportHero } from './visuals';
 
-/** The hero's headline: how clicks from Google moved against the 28 days before. */
-function clicksHeadline(clicks: number | null, pctCh: number | null): string {
-  if (clicks == null) return 'Weekly site report';
-  const c = n(clicks);
-  if (pctCh == null) return `${c} ${clicks === 1 ? 'click' : 'clicks'} from Google in the last 28 days`;
-  if (pctCh >= 0.5) return `Clicks from Google are up ${Math.round(pctCh)}% to ${c}`;
-  if (pctCh <= -0.5) return `Clicks from Google are down ${Math.abs(Math.round(pctCh))}% to ${c}`;
-  return `Clicks from Google are steady at ${c}`;
-}
+// The hero's headline (R113): `clicksHeadline` in @seo/shared follows the report's own significance test — a clicks change the test
+// calls not real reads "within normal variation", and a change that is real leads.
 
 type Metric = 'clicks' | 'impressions' | 'position';
 
@@ -60,7 +53,7 @@ export function SiteTrackerReport({ report }: { report: ReportDetail }) {
       <ReportHero
         report={report}
         eyebrow={str(period.start) ? `${fmtDate(str(period.start))} – ${fmtDate(str(period.end))}` : undefined}
-        title={gsc.connected === false ? 'Search Console is not connected' : clicksHeadline(num(cur.clicks), num(deltas.clicks_pct))}
+        title={gsc.connected === false ? 'Search Console is not connected' : clicksHeadline(num(cur.clicks), num(deltas.clicks_pct), p.significance)}
         description={[
           actions.length ? `${actions.length} recommended ${actions.length === 1 ? 'action' : 'actions'}` : 'No new actions this week',
           found ? `${found} written ${found === 1 ? 'page' : 'pages'} found live` : '',

@@ -260,14 +260,23 @@ async function recordPageInEngine(site: SiteRow, input: Extract<RunInput, { mode
     );
 }
 
-/** Runs n8n accepted but never answered (a failed execution only e-mails ops): failed after 3 h or 6x their expected time. */
+/**
+ * R116 (2026-10-16): what an expired run says. The old sentence claimed "the run may have failed in n8n (ops were e-mailed)" — but the
+ * app cannot know an e-mail was sent: the engine's failure watcher (engineFailures.ts) closes a run whose execution FAILED long before
+ * this, so a run that reaches the expiry is one whose execution ended without a word to us (a refusal posted nowhere, a stop, a lost
+ * callback). It says what is known and nothing more.
+ */
+export const STALE_RUN_ERROR =
+  'No result arrived from the SEO engine in time, and the engine did not report a failure for this run. It may have been refused or stopped without a report; start it again, or check its execution in n8n.';
+
+/** Runs n8n accepted but never answered: failed after 3 h or 6x their expected time. */
 export async function expireStaleRuns(): Promise<number> {
   const rows = await db
     .update(schema.runs)
     .set({
       status: 'failed',
       completedAt: new Date(),
-      error: 'No result arrived from the SEO engine in time. The run may have failed in n8n (ops were e-mailed); start it again or check the execution in n8n.',
+      error: STALE_RUN_ERROR,
     })
     .where(
       and(
@@ -378,6 +387,28 @@ const deliveryLog = {
   error: (o: object, msg: string) => console.error(JSON.stringify({ level: 'error', msg, ...o })),
 };
 
+/**
+ * How one callback moves its run (pure, so it is tested without a database). A `rejected` callback closes the run as failed with the
+ * engine's own sentence — R116: an on-demand monitor the run guard refused after its "started" note now posts exactly that
+ * (`{stage:'rejected', status:'rejected', error, request_id}`), so the customer reads why instead of waiting for a report that never
+ * comes. A final stage completes it; anything else marks an accepted run as running. A completed run is never reopened.
+ */
+export function runOutcome(
+  runStatus: string,
+  finalStages: readonly string[],
+  stage: string,
+  body: Record<string, unknown>,
+): { status?: string; error?: string | null; completedAt?: Date } {
+  if (stage === 'rejected' || String(body.status ?? '').toLowerCase() === 'rejected') {
+    if (runStatus === 'completed') return {};
+    const why = typeof body.error === 'string' && body.error.trim() ? body.error.trim() : typeof body.validation_error === 'string' && body.validation_error.trim() ? body.validation_error.trim() : 'Rejected by the SEO engine';
+    return { status: 'failed', error: why, completedAt: new Date() };
+  }
+  if (finalStages.includes(stage)) return runStatus === 'completed' ? {} : { status: 'completed', completedAt: new Date(), error: null };
+  if (runStatus === 'accepted' || runStatus === 'submitting') return { status: 'running' };
+  return {};
+}
+
 export async function ingestCallback(
   org: OrgRow,
   body: Record<string, unknown>,
@@ -435,13 +466,7 @@ export async function ingestCallback(
         patch.engineCostEstimateUsd = engineEstimate.usd;
         if (engineEstimate.basis) patch.engineCostBasis = engineEstimate.basis.slice(0, 500);
       }
-      if (stage === 'rejected') {
-        if (run.status !== 'completed') Object.assign(patch, { status: 'failed', error: String(body.error ?? 'Rejected by the SEO engine'), completedAt: new Date() });
-      } else if (info?.finalStages.includes(stage)) {
-        if (run.status !== 'completed') Object.assign(patch, { status: 'completed', completedAt: new Date(), error: null });
-      } else if (run.status === 'accepted' || run.status === 'submitting') {
-        patch.status = 'running';
-      }
+      Object.assign(patch, runOutcome(run.status, info?.finalStages ?? [], stage, body));
       await tx.update(schema.runs).set(patch).where(eq(schema.runs.id, run.id));
     }
     if (site && (stage === 'site_tracker_setup' || stage === 'site_tracker') && site.trackingStatus === 'not_started')
