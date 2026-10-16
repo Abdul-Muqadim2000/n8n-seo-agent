@@ -30,8 +30,21 @@ const cur = (a.findings || []).filter(f => f.scoring !== false && f.severity !==
 const not_compared = [...new Set((a.findings || []).filter(f => f.scoring !== false && f.severity !== 'Info' && !inScope(f)).map(f => String(f.category || '')))].filter(Boolean);
 const curKeys = new Map(cur.map(f => [keyOf(f), f])); const prevKeys = new Map(prevF.map(f => [f.finding_key, f]));
 const SEV = { Critical: 0, High: 1, Medium: 2, Low: 3, Info: 4 };
-const fixed = [...prevKeys.entries()].filter(([k]) => !curKeys.has(k)).map(([, f]) => ({ title: f.title, category: f.category, severity: f.severity })).sort((x, y) => SEV[x.severity] - SEV[y.severity]);
-const added = [...curKeys.entries()].filter(([k]) => prev && !prevKeys.has(k)).map(([, f]) => ({ title: f.title, category: f.category, severity: f.severity })).sort((x, y) => SEV[x.severity] - SEV[y.severity]);
+// R74 (2026-10-16, re-rating of 2026-10-15): a finding that rests on ONE outside reading — one results page ("does not rank at the top
+// for its own brand name"), one AI answer, one AI Overview, one content review written by a model — can disappear because that reading
+// changed, not because anything was fixed: exec 614 called the brand finding "fixed" one day after exec 566 on two single results-page
+// reads (not in the top 20, then #1). Such a finding is "no longer seen", never "fixed"; a new one is marked as resting on one reading.
+// The stored rows carry no source, so the class is read from the title (and, for the content review, from the category of a full report
+// whose review ran: its titles are written fresh by a model every run, so they never match by key).
+const ONE_READING = /own brand name|recommends other providers|AI Overviews?|ChatGPT|Perplexity|Gemini|\bClaude\b|Copilot answers|AI Mode|AI answers?|named in AI|cited by AI/i;
+const MEASURED_CONTENT = /duplicate content|text-to-html|hard-to-read|readab|light content|thin content|lorem|placeholder|named human author|freshness|phone number|word count|outbound links|images?\b|headings?\b|H1\b/i;
+const reviewRan = (a.findings || []).some(f => f && f.source === 'ai_review');
+const oneReading = (f) => !!f && (f.source === 'ai_review' || ONE_READING.test(String(f.title || ''))
+  || (reviewRan && String(f.category || '') === 'Content' && !MEASURED_CONTENT.test(String(f.title || ''))));
+const gone = [...prevKeys.entries()].filter(([k]) => !curKeys.has(k)).map(([, f]) => ({ title: f.title, category: f.category, severity: f.severity, one_reading: oneReading(f) })).sort((x, y) => SEV[x.severity] - SEV[y.severity]);
+const fixed = gone.filter(f => !f.one_reading).map(({ one_reading, ...f }) => f);
+const no_longer_seen = gone.filter(f => f.one_reading).map(({ one_reading, ...f }) => ({ ...f, why: 'it rested on a single outside reading (a results page, an AI answer or a content review) that did not repeat this time; nothing on the site has to have changed' }));
+const added = [...curKeys.entries()].filter(([k]) => prev && !prevKeys.has(k)).map(([, f]) => ({ title: f.title, category: f.category, severity: f.severity, ...(oneReading(f) ? { one_reading: true } : {}) })).sort((x, y) => SEV[x.severity] - SEV[y.severity]);
 const open = [...curKeys.entries()].filter(([k]) => prevKeys.has(k)).map(([k, f]) => { const p = prevKeys.get(k); return { title: f.title, category: f.category, severity: f.severity, was: p.severity, affected: f.affected_count ?? null, affected_before: Number(p.affected_count) || null }; }).sort((x, y) => SEV[x.severity] - SEV[y.severity]);
 const audit_id = 'aud_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 const audited_at = new Date().toISOString();
