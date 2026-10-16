@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { deliveryDecision, type AuditPoint, type AutomationStatus, type ContentLogRow, type LadderRow } from '@seo/shared';
 import type { SiteRow } from '../src/db/schema';
-import { aiDailySeries, previousOfType } from '../src/services/data';
+import { aiDailySeries, oneReadingFinding, previousOfType } from '../src/services/data';
 import { buildLadders, draftQa, ladderNeedsYou, type LadderSources } from '../src/services/ladders';
 import { cadenceDetail, publishStage, pulseLastRun, waitingPages, withScheduleTruth } from '../src/services/pipeline';
 import { recommend, type SiteBundle } from '../src/services/recommendations';
@@ -130,6 +130,16 @@ describe('R66 — an audit is compared only with the previous audit of the same 
     // a real fall within one type still fires
     const fell = bundleWith({ audits: [...points, pt('aud_next', '2026-10-16T08:00:00Z', 'site_audit', 70)] });
     expect(recommend(SITE, fell).find((r) => r.id === 'tech:score-drop')?.title).toBe('Health score fell from 83 to 70');
+  });
+});
+
+describe('R74 — a finding that rested on one outside reading is not "fixed" when it is no longer seen', () => {
+  it('follows the engine\'s rule: brand / AI readings and a full report\'s model-written review are one reading; measured findings are not', () => {
+    expect(oneReadingFinding({ title: 'Does not rank at the top for its own brand name', category: 'Authority' }, 'full')).toBe(true);
+    expect(oneReadingFinding({ title: 'ChatGPT recommends other providers', category: 'AI' }, 'full')).toBe(true);
+    expect(oneReadingFinding({ title: 'Contact page has an unescaped entity', category: 'Content' }, 'full')).toBe(true);
+    expect(oneReadingFinding({ title: 'Placeholder (lorem ipsum) text is live', category: 'Content' }, 'full')).toBe(false);
+    expect(oneReadingFinding({ title: 'Missing meta description', category: 'On-Page' }, 'site_audit')).toBe(false);
   });
 });
 
