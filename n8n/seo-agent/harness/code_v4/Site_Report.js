@@ -280,7 +280,17 @@ return metrics.map((m, i) => {
       + '<p style="font-size:12px;color:#64748b">' + esc(CTST.method) + '</p>';
   } else if (CTST && CTST.reason) html += h3('Did it work? Your changes against the rest of the site')
     + '<p style="font-size:13px;color:#b45309">' + esc(CTST.reason) + '</p>';
-  const acts = (b && Array.isArray(b.actions) && b.actions.length) ? b.actions.slice(0, 6).map(a => ({ action: a.action, why: a.why, keyword: a.keyword, url: a.url })) : m.actions.slice(0, 6);
+  // R111 / R59 (2026-10-16): the Site Tracker emits `fix_draft` (a draft whose last quality round failed: fix it and run it again,
+  // never "publish it") and `host_split` (Google serves the bare host and www apart). Either may arrive without a sentence of its own,
+  // so the report words it from its fields instead of printing an empty bullet.
+  const reasonsOf = (a) => (Array.isArray(a.reasons) ? a.reasons : String(a.reasons || '').split(';')).map(x => String(x).trim()).filter(Boolean);
+  const wordAction = (a) => {
+    if (a.action) return a;
+    if (a.type === 'fix_draft') return { ...a, action: 'Fix the draft for "' + (a.keyword || 'this page') + '" and run it again: it did not pass the quality check, so it is not ready to publish', why: a.why || (reasonsOf(a).length ? 'The quality check found: ' + reasonsOf(a).slice(0, 3).join('; ') + '.' : '') };
+    if (a.type === 'host_split') return { ...a, action: 'Make one host the only one Google serves: some pages appear under the bare domain and others under www', why: a.why || 'Redirect the other host to the canonical one, so the two versions stop splitting clicks and indexing.' };
+    return a;
+  };
+  const acts = ((b && Array.isArray(b.actions) && b.actions.length) ? b.actions.slice(0, 6).map(a => ({ action: a.action, why: a.why, keyword: a.keyword, url: a.url, type: a.type, reasons: a.reasons })) : m.actions.slice(0, 6)).map(wordAction).filter(a => a.action);
   const withBody = m.actions.filter(a => a.api_body);
   html += h3('Do this week') + (acts.length ? '<ol style="margin:4px 0;padding-left:20px;font-size:14px">' + acts.map(a => '<li style="margin:4px 0"><b>' + esc(a.action) + '</b>' + (a.why ? '<br><span style="color:#475569;font-size:13px">' + esc(a.why) + '</span>' : '') + '</li>').join('') + '</ol>' : '<p style="font-size:13px;color:#64748b">Nothing urgent this week.</p>');
   if (withBody.length) html += '<p style="font-size:13px">Start the work with one click: open the <a href="' + esc(m.form_url) + '">SEO Assistant form</a> ("I know my keyword") or send one of these to the API (' + esc(m.api_url) + '):</p>' + withBody.slice(0, 3).map(a => '<pre style="background:#f1f5f9;padding:8px;font-size:11px;white-space:pre-wrap">' + esc(JSON.stringify(a.api_body)) + '</pre>').join('');
