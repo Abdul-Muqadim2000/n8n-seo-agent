@@ -10,7 +10,7 @@ import { DataTable, type Column } from '@/components/ui/table';
 import { Tab, TabList, TabPanel, Tabs } from '@/components/ui/tabs';
 import { ChartCard, TimeSeriesChart } from '@/components/charts';
 import { FileButton } from './files';
-import { AlertList, Block, CodeBlock, Disclosure, Empty, has, n, num, obj, objs, shortUrl, str, strs, type P } from './kit';
+import { AlertList, Block, CodeBlock, Disclosure, Empty, has, LedgerCard, n, num, obj, objs, shortUrl, str, strs, type P } from './kit';
 import { ChartTitle, HeroFileButton, ReportHero, ScoreMark } from './visuals';
 
 const monthLabel = (m: unknown) => {
@@ -418,6 +418,7 @@ export function BacklinksReport({ report }: { report: ReportDetail }) {
       )}
 
       {!full && !has(p.gap) && <p className="text-xs text-ink-3">This was the weekly light check (lost, new and spammy links; the valuable links re-checked on their pages). The monthly full report adds every source, the link gap, lists, reclaims and outreach prospects.</p>}
+      <LedgerCard ledger={p.run_ledger} extraCost={num(p.cost_usd)} />
     </Stagger>
   );
 }

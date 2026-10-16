@@ -143,6 +143,8 @@ export interface Run {
   engineCostBasis: string | null;
   /** part of `actualCostUsd` is the engine's own estimate (the model calls that stream report no token usage) */
   actualCostEstimated: boolean;
+  /** R102 / R115: `actualCostUsd` is search data only; the run did not report its model calls, so it is not the whole cost */
+  actualCostPartial: boolean;
   etaMinutes: number;
   input: RunInput;
   createdAt: string;
@@ -220,7 +222,11 @@ export interface Usage {
   month: string;
   budgetUsd: number;
   estimatedUsd: number;
+  /** runs that reported their whole cost (search data and model calls) */
   actualUsd: number;
+  /** R102: runs that reported search data only; counted in `estimatedUsd` at the best whole-run estimate, never in `actualUsd` */
+  actualPartialUsd: number;
+  actualPartialRuns: number;
   remainingUsd: number;
   runs: number;
   byMode: { mode: ModeId; runs: number; estimatedUsd: number }[];

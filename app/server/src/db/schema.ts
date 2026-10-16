@@ -191,6 +191,8 @@ export const runs = pgTable(
     engineCostBasis: text('engine_cost_basis'),
     /** true when part of `actualCostUsd` is the engine's own estimate (streaming model calls report no token usage) */
     actualCostEstimated: boolean('actual_cost_estimated').notNull().default(false),
+    /** R102 / R115: true when the settled figure has no model-call part (the callback did not report its model calls): search data only */
+    actualCostPartial: boolean('actual_cost_partial').notNull().default(false),
     etaMinutes: integer('eta_minutes').notNull().default(0),
     lastStage: text('last_stage'),
     reportCount: integer('report_count').notNull().default(0),

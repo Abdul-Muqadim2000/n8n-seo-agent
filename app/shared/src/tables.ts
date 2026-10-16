@@ -308,5 +308,7 @@ export const TABLES = {
   linkOutreach: 'seo_link_outreach',
   listings: 'seo_listings',
   linkImpact: 'seo_link_impact',
+  /** the engine's key/value store; the app reads only its `cost:*` rows (the rolling per-mode figures the engine reserves, R100) */
+  cache: 'seo_cache',
 } as const;
 export type TableKey = keyof typeof TABLES;

@@ -198,7 +198,7 @@ export default function RunDetailPage() {
             <div className="space-y-5 px-5 pt-3 pb-5">
               <div className="flex flex-wrap gap-1.5">
                 <RunChip icon={<Coins />} title={cost.basis}>
-                  {formatUsd(cost.usd, cost.source === 'measured' ? 3 : 2)} {COST_SOURCE_LABEL[cost.source]}
+                  {formatUsd(cost.usd, cost.source === 'measured' || cost.source === 'partial' ? 3 : 2)} {COST_SOURCE_LABEL[cost.source]}
                 </RunChip>
                 <RunChip icon={<Clock />}>{active ? `about ${run.etaMinutes} min` : fmtMinutes(duration)}</RunChip>
                 <RunChip icon={<FileText />} tone={reports.length ? 'accent' : 'neutral'}>
@@ -219,10 +219,10 @@ export default function RunDetailPage() {
                   },
                   // B-R3: what it cost beats what the engine reserved beats what we guessed, and the label says which one this is
                   {
-                    label: cost.source === 'measured' ? 'Cost' : 'Cost estimate',
+                    label: cost.source === 'measured' ? 'Cost' : cost.source === 'partial' ? 'Cost so far (search data only)' : 'Cost estimate',
                     value: (
                       <span className="tabular">
-                        {formatUsd(cost.usd, cost.source === 'measured' ? 3 : 2)}{' '}
+                        {formatUsd(cost.usd, cost.source === 'measured' || cost.source === 'partial' ? 3 : 2)}{' '}
                         <InfoTip label="Where this figure comes from">{cost.basis}</InfoTip>
                       </span>
                     ),

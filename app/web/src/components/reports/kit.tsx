@@ -1,6 +1,6 @@
 import { Component, useId, useState, type ErrorInfo, type ReactNode } from 'react';
 import { AlertTriangle, BellRing, Bot, CheckCircle2, ChevronDown, CircleMinus, Clock, Coins, Receipt, XCircle } from 'lucide-react';
-import { compactNumber, formatUsd } from '@seo/shared';
+import { compactNumber, formatUsd, ledgerBreakdown } from '@seo/shared';
 import { cn, downloadText, fmtDateTime } from '@/lib/utils';
 import { StatusBadge, verdictTone, type Tone } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -283,12 +283,38 @@ export function LedgerCard({ ledger, extraCost }: { ledger: unknown; extraCost?:
     .map(([k, v]) => ({ k, v: num(v) ?? 0 }))
     .sort((a, b) => b.v - a.v);
   const aiNodes = strs(l.ai_nodes);
+  const cost = ledgerBreakdown(l, extraCost);
   return (
-    <Block title="Run ledger" icon={<Receipt />} iconTone="neutral" description="What this run used." info="Claude usage is billed by the token and is not itemised here.">
+    <Block
+      title="Run ledger"
+      icon={<Receipt />}
+      iconTone="neutral"
+      description="What this run used."
+      info="Search data is what the data provider charged; model calls are priced from the usage the run reported. Each line says whether its figure is measured or estimated, and a run that did not report its model calls shows search data only."
+    >
       <Facts
-        cols="sm:grid-cols-4"
+        cols="sm:grid-cols-3 lg:grid-cols-6"
         items={[
-          { icon: <Coins />, label: 'Data cost (DataForSEO)', value: num(l.dataforseo_usd) != null ? usd(l.dataforseo_usd, 3) : extraCost != null ? usd(extraCost, 3) : null, hint: num(l.dataforseo_calls) != null ? plural(num(l.dataforseo_calls)!, 'API call') : undefined },
+          {
+            icon: <Coins />,
+            label: 'Search data (DataForSEO)',
+            value: cost.data.usd != null ? `${usd(cost.data.usd, 3)}` : null,
+            hint: [cost.data.usd != null && cost.data.state !== 'measured' ? cost.data.state : '', num(l.dataforseo_calls) != null ? plural(num(l.dataforseo_calls)!, 'API call') : ''].filter(Boolean).join(' · ') || undefined,
+            info: cost.data.note,
+          },
+          {
+            icon: <Bot />,
+            label: 'Model calls (Claude)',
+            value: cost.model.usd != null ? usd(cost.model.usd, 3) : 'Not reported',
+            hint: cost.model.usd != null && cost.model.usd > 0 && cost.model.state !== 'measured' ? cost.model.state : undefined,
+            info: cost.model.note,
+          },
+          {
+            icon: <Coins />,
+            label: cost.partial ? 'Total (search data only)' : 'Total',
+            value: cost.total != null ? usd(cost.total, 3) : null,
+            info: cost.partial ? 'This run did not report its model calls, so this is not the whole cost.' : undefined,
+          },
           { icon: <Bot />, label: 'AI steps', value: num(l.ai_calls) != null ? String(l.ai_calls) : null },
           { icon: <Clock />, label: 'Duration', value: num(l.duration_min) != null ? `${num(l.duration_min)} min` : null },
           { icon: <CheckCircle2 />, label: 'Finished', value: str(l.finished_at) ? fmtDateTime(str(l.finished_at)) : null },
