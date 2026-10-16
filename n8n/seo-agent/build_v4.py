@@ -10659,6 +10659,64 @@ def _b116_checks():
         assert _f in _post, 'B6-8: the callback does not carry ' + _f
     log('Rank Tracker (B6-6 / B6-8 / B6-10 / B6-14): two of the site\'s own pages on one results page are named with the one Google prefers today, a move is the page\'s own only when it beats the other results\' churn (our own move left out of the yardstick), the domains that moved above the target URL are named, and the share of voice across keywords is weighted by the site\'s Search Console impressions or labelled unweighted')
 
+# 114. A REFRESH RE-CHECKS ITS FACTS; READABILITY AND ANSWER-FIRST ARE MEASURED FOR EVERY PAGE (2026-10-16, FIX_PLAN.md §3.16 rows
+#      B3-4, B3-6, B3-8; docs/system-review-2026-10-14/BENCH_AREA3_content.md and BENCH_AREA4_cadence.md).
+#      B3-8: a page rewritten on top of its live version (the cadence's decay refresh, an AI refresh, any `existing_page_url` run) kept
+#            every figure it carried with its old citation unchecked — Content QA §9b looks a figure up only in a source the run READ,
+#            and no run ever read the sources the live page cites. *Refresh Source Plan* now picks the live page's external links that
+#            sit next to a figure (from the Jina answer *Read Client Pages* already holds, links intact), *Fetch Refresh Sources* re-reads
+#            them (Jina Reader, the competitor pages' reader and retry rule), *Refresh Sources* hands them on, and Content QA checks the
+#            draft against them (§2b) and the live page itself against them (§9c, report only). Not a refresh: one skip item, the IF
+#            routes around the fetch, nothing is fetched and nothing costs anything.
+#      B3-4: the readability band is read off the competitor pages the run holds (v5/code/_coverage.js CVG.readBand), measured as the
+#            draft is, reported with its basis; advice only — it moves the 15 points and never adds a warning. Fallback: the fixed band.
+#      B3-6: the answer position and the question headings are measured on every draft, not only on an AI-answer target.
+# =============================================================================
+_cqp114 = pos('Content QA')
+add_node('Refresh Source Plan', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Refresh_Source_Plan.js')}, [_cqp114[0] - 660, _cqp114[1] + 360])
+if_node('Refresh Sources?', '{{ !!$json.url && !$json.skip }}', [_cqp114[0] - 440, _cqp114[1] + 360])
+_frs114 = copy.deepcopy(nodes['Read Competitor Pages']); _frs114['name'] = 'Fetch Refresh Sources'; _frs114['id'] = nid('Fetch Refresh Sources')
+_frs114['position'] = [_cqp114[0] - 220, _cqp114[1] + 280]
+_frs114['onError'] = 'continueRegularOutput'; _frs114['alwaysOutputData'] = True
+nodes['Fetch Refresh Sources'] = _frs114
+add_node('Refresh Sources', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Refresh_Sources.js')}, [_cqp114[0] - 20, _cqp114[1] + 360])
+disconnect('Parse Critique', 'Content QA')
+connect('Parse Critique', 'Refresh Source Plan'); connect('Refresh Source Plan', 'Refresh Sources?')
+connect('Refresh Sources?', 'Fetch Refresh Sources', 0); connect('Refresh Sources?', 'Refresh Sources', 1)
+connect('Fetch Refresh Sources', 'Refresh Sources'); connect('Refresh Sources', 'Content QA')
+for _k114 in ('retryOnFail', 'maxTries', 'waitBetweenTries'):
+    assert _frs114.get(_k114), 'B3-8: Fetch Refresh Sources lost the retry rule of the reader it copies (' + _k114 + ')'
+assert (_frs114.get('credentials') or {}).get('httpHeaderAuth', {}).get('id') == 'SEOcredJinaReade', 'B3-8: the source re-read has no Jina credential slot'
+assert 'const SRC = (() =>' in code('Refresh Source Plan') and "$('Read Client Pages').all()" in code('Refresh Source Plan'), 'B3-8: the plan does not read the live page with its links'
+assert "$('Parse Critique').first().json" in code('Refresh Sources'), 'B3-8: Refresh Sources must hand Content QA the critique item untouched'
+assert "$('Refresh Sources').first().json" in code('Content QA') and 'const citedFigureCheck = (text, limit)' in code('Content QA'), 'B3-8: Content QA does not check against the re-read sources'
+assert code('Content QA').count('const citedFigureCheck') == 1 and 'citedFigureCheck(String(RS.live_markdown), 20)' in code('Content QA'), 'B3-8: the live page is not checked by the same rule as the draft'
+assert not any(t['node'] == 'Content QA' for lst in conns.get('Parse Critique', {}).get('main', []) for t in lst), 'B3-8: Parse Critique still skips the re-read'
+_qa114 = code('Content QA')
+assert 'CVG.readBand(readPool)' in _qa114 and 'CVG.readability(bodyPlain)' in _qa114 and 'const readBand = (pages) =>' in _qa114, 'B3-4: the readability band is not read off the competitor pages'
+assert 'flesch < 30 && !RBAND.ok' in _qa114, 'B3-4: the competitor band must never add a warning (advice, not a refusal)'
+_atAt114 = _qa114.index('if (AT) {\n  const STOPW')
+assert _qa114.index('const before = h1At >= 0') < _atAt114 and _qa114.index('const qHeads = heads.filter') < _atAt114, 'B3-6: the answer position is still measured only for AI targets'
+assert 'intent, refresh_check,' in _qa114, 'B3-6 / B3-8: content_qa does not carry intent / refresh_check'
+json.dump({'chain': ['Parse Critique', 'Refresh Source Plan', 'Refresh Sources?', 'Fetch Refresh Sources', 'Refresh Sources', 'Content QA'],
+           'connections': {k: [[t['node'] for t in (l or [])] for l in conns[k]['main']] for k in ('Parse Critique', 'Refresh Source Plan', 'Refresh Sources?', 'Fetch Refresh Sources', 'Refresh Sources')},
+           'fetch': {'url': _frs114['parameters']['url'], 'retries': _frs114.get('maxTries'), 'on_error': _frs114.get('onError'), 'credential': _frs114['credentials']['httpHeaderAuth']['id']}},
+          open(os.path.join(HERE0, 'harness', 'w3b_wiring.json'), 'w'), indent=1, sort_keys=True)
+sticky("""## A refresh re-checks its facts (B3-8, 2026-10-16)
+A page rewritten on top of its live version (the cadence's **decay** refresh, an AI refresh, any `existing_page_url` run) used to keep every figure it carried with its old citation unchecked: the figure check looks a number up only in a source the run read, and nobody read the live page's own sources.
+*Refresh Source Plan* picks the live page's external links that sit **next to a figure** (max 8), *Fetch Refresh Sources* re-reads them with Jina, *Refresh Sources* passes them on. **Content QA** checks the draft against them (a missing figure becomes `[Confirm: …]`) and the **live page itself** (`content_qa.refresh_check`, report only). Not a refresh: nothing is fetched.""",
+       _cqp114[0] - 700, _cqp114[1] + 520, 760, 220, 4)
+log('A refresh re-checks its facts, and two content checks that used to be special cases are measured on every page (2026-10-16, benchmark rows B3-8 / B3-4 / B3-6): a run that improves a live page (the cadence\'s decay refresh, an AI refresh, any existing_page_url run) re-reads the sources that page cites next to a figure (Refresh Source Plan -> Fetch Refresh Sources -> Refresh Sources, Jina Reader, at most 8) and Content QA checks the draft against them and reports the live page\'s own figures its sources no longer state (content_qa.refresh_check, a "Before publishing" note); the readability band is read off the competitor pages the run read, measured the same way as the draft (CVG.readBand: median Flesch, 10 points harder to 15 easier, lower edge kept inside 20-60, at least 3 pages of 150+ words), reported with its basis and never a refusal, falling back to the fixed band and saying so; and the Quick answer position and the question headings are checked on every draft (120 words after the H1, 60 for an AI answer target)')
+
+# 115. WHAT THE OWNER READS ABOUT READABILITY (B3-4): the Word report prints the band and where it came from, and the lineage of the
+#      readability figure names its comparison.
+patch('Build Word File', "['Readability', qa.readability ? 'Flesch ' + qa.readability.flesch + ' · ' + qa.readability.avg_sentence_words + ' words per sentence · passive voice ' + qa.readability.passive_pct + '%' : 'N/A'],",
+      "['Readability', qa.readability ? 'Flesch ' + qa.readability.flesch + ' · ' + qa.readability.avg_sentence_words + ' words per sentence · passive voice ' + qa.readability.passive_pct + '%'"
+      " + (qa.readability.band_line ? ' · ' + esc(qa.readability.band_line) : (qa.readability.basis ? ' · ' + esc(qa.readability.basis) : ''))"
+      " + (qa.readability.note ? '<br><span class=\"small\">' + esc(qa.readability.note) + '</span>' : '') : 'N/A'],   // B3-4: the band and its basis")
+patch('Build Word File', "        note: 'counted in the finished draft itself' })",
+      "        note: 'counted in the finished draft itself' + ((qa.readability || {}).basis ? '; ' + qa.readability.basis : '') })   // B3-4: what it was compared with")
+log('The Word report prints the readability band the draft was scored against and its basis (the competitor pages read, or the fixed band when too few could be measured), and the readability lineage names that comparison (B3-4)')
 
 
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
@@ -10707,7 +10765,7 @@ def _b69_checks():
     assert not _u469, ('B-F5: %s mints a random node id (uuid.uuid4). A node id is uuid5(workflow + ":" + node) — use '
                        'ladder_common.node_id / freeze_ids, so that an unchanged rebuild stays byte-identical.' % ', '.join(_u469))
     _wdir69 = os.path.join(HERE0, 'workflows')
-    _SELF_FROZEN69 = ('SEO_Agent_API.json', 'SEO_Agent_Admin_API.json', 'SEO_Agent_Keyword_Check.json', 'SEO_Agent_Prerelease.json')
+    _SELF_FROZEN69 = ('SEO_Agent_API.json', 'SEO_Agent_Admin_API.json', 'SEO_Agent_Keyword_Check.json', 'SEO_Agent_Prerelease.json', 'SEO_Agent_Publish_Check.json')
     _froze69 = 0
     for _f69 in sorted(os.listdir(_wdir69)):
         if not _f69.endswith('.json') or _f69 in _NOT_GENERATED69:
