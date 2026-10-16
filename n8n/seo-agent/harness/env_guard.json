@@ -63,7 +63,7 @@
  ],
  "this_build": {
   "file_present": true,
-  "frozen_workflows": 23,
+  "frozen_workflows": 24,
   "missing": [],
   "opt_out": ""
  }

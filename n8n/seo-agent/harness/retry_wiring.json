@@ -1786,6 +1786,7 @@
     "waitBetweenTries": 5000
    }
   ],
+  "SEO Agent \u2014 Publish Check": [],
   "SEO Agent \u2014 Publish to WordPress": [
    {
     "allowed": true,

@@ -1015,7 +1015,7 @@ if (wantContent) {
     ['Originality', qa.originality ? (qa.originality.passed === null ? 'Could not be checked: no competitor or own page text was available in this run'
       : (qa.originality.highest_pct != null ? qa.originality.highest_pct + '% of the page matches ' + esc(qa.originality.highest_source || 'another page') + ' word for word (limit ' + qa.originality.threshold_pct + '%' + (qa.originality.passed ? '' : ' — EXCEEDED') + ')' : 'No overlap found')
         + ' · ' + esc(qa.originality.basis)) : 'N/A'],
-    ['Readability', qa.readability ? 'Flesch ' + qa.readability.flesch + ' · ' + qa.readability.avg_sentence_words + ' words per sentence · passive voice ' + qa.readability.passive_pct + '%' : 'N/A'],
+    ['Readability', qa.readability ? 'Flesch ' + qa.readability.flesch + ' · ' + qa.readability.avg_sentence_words + ' words per sentence · passive voice ' + qa.readability.passive_pct + '%' + (qa.readability.band_line ? ' · ' + esc(qa.readability.band_line) : (qa.readability.basis ? ' · ' + esc(qa.readability.basis) : '')) + (qa.readability.note ? '<br><span class="small">' + esc(qa.readability.note) + '</span>' : '') : 'N/A'],   // B3-4: the band and its basis
     ['Filler phrases left', (qa.banned_phrases || []).length ? esc(qa.banned_phrases.map(b => b.phrase).slice(0, 6).join(', ')) : 'none'],
     ['Editorial review', qa.critic_score != null ? qa.critic_score + '/100 — ' + esc(qa.critic_verdict || '') : 'N/A']
   ]) + ((qa.warnings && qa.warnings.length) ? '<h3>Warnings (please review before publishing)</h3>' + ul(qa.warnings) : '') +
@@ -1113,7 +1113,7 @@ if (wantContent) {
           + (qa.round ? ' (quality round ' + qa.round + ' of ' + qa.max_rounds + ')' : '') }));
   lineage.push(qa.readability
     ? LN.of('Readability (Flesch, sentence length, passive voice)', 'draft', { basis: 'measured', period: LN.asOf(today), sample: LN.sample(qa.main_content_words, 'words'),
-        note: 'counted in the finished draft itself' })
+        note: 'counted in the finished draft itself' + ((qa.readability || {}).basis ? '; ' + qa.readability.basis : '') })   // B3-4: what it was compared with
     : LN.unknown('Readability (Flesch, sentence length, passive voice)', 'the readability check did not run for this page'));
   lineage.push((qa.coverage && Number(qa.coverage.terms_total) > 0)
     ? LN.of('Topic coverage against the top-ranking pages', 'web', { basis: 'measured', period: LN.asOf(today),
