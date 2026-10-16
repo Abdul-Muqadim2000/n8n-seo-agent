@@ -118,7 +118,26 @@ const CC = (() => {
     const factor = n0(f[fam]) > 0 ? Number(f[fam]) : 1;
     const calls = Math.max(1, Math.round(n0(c.calls) || 1));
     const u = c.usage && (n0(c.usage.promptTokens) || n0(c.usage.completionTokens)) ? c.usage : null;
-    const cnt = u ? null : countUsage(c);
+    let cnt = u ? null : countUsage(c);
+    // R47 / R69 / R80 (2026-10-16, re-rating 2026-10-15): the counter was sent `String(output)`, so every STRUCTURED answer reached it as
+    // the 15 characters "[object Object]" and came back as 4-6 answer tokens labelled "measured" — 16 agents, 15-67% low. The builders
+    // now send the answer as the model wrote it (JSON for a parsed object); this is the net under that fix. A count that saw far fewer
+    // answer tokens than the answer's own characters can hold (under a quarter of the characters-a-token figure, on an answer of more
+    // than 200 characters a call) did not see the answer, so it is not a measurement: the call falls back to characters and says why.
+    let unseen = '';
+    if (cnt) {
+      const cov = Math.max(1, Math.round(n0((c.counted || {}).rounds) || 1));
+      const perChars = n0(c.output_chars) / cov, perCounted = cnt.out_tokens / cov;
+      if (perChars > 200 && perCounted < (perChars / CHARS_PER_TOKEN) * 0.25) {
+        unseen = 'the token counter answered for ' + cnt.out_tokens + ' answer token(s) where the answer holds ' + Math.round(n0(c.output_chars))
+          + ' characters, so it did not see the answer and is not used';
+        cnt = null;
+      }
+    }
+    // R57 (2026-10-16): an agent that n8n re-ran after a failed answer (a parser that refused the format; `retryOnFail`) called its model
+    // twice and kept one answer. `retries` is how many extra model runs the model node itself recorded; they are in `calls` and priced
+    // as repeats of the call the run can see.
+    const retries = Math.max(0, Math.round(n0(c.retries)));
     // how many of this node's `calls` the two counts actually cover, and what ONE of those calls cost in tokens.
     // B-F1 (2026-10-15, build section 76): `counted` carries the TOTAL the counter answered with and `rounds` says how many calls
     // that total covers, because a node may answer once per item — the keyword screen runs once per chunk of 80 candidates, so its
@@ -138,18 +157,20 @@ const CC = (() => {
     // saw, minus the thinking it cannot see; a character-priced call measures nothing.
     const measured_usd = u ? usd : cnt ? price1(Math.round(perIn * rounds), Math.round(perOut * rounds)) : 0;
     const estimated_usd = r4(usd - measured_usd);
-    return { node: String(c.node || ''), model, family: fam, calls, in_tokens: inTok, out_tokens: outTok, think_tokens: think,
+    const retried = retries > 0 ? '; ' + retries + ' of the ' + calls + ' model call(s) were a retry after a failed answer (n8n asked again), priced as a repeat' : '';
+    return { node: String(c.node || ''), model, family: fam, calls, retries, in_tokens: inTok, out_tokens: outTok, think_tokens: think,
       usd, measured_usd, estimated_usd, measured: !!(u || cnt) && estimated_usd <= 0,
-      counted: !!cnt, counted_rounds: rounds, counter: cnt ? cnt.source : '', streaming: !!c.streaming, factor,
-      basis: u ? 'measured: the token usage this call reported'
+      counted: !!cnt, counted_rounds: rounds, counter: cnt ? cnt.source : '', streaming: !!c.streaming, factor, count_unseen: !!unseen,
+      basis: u ? 'measured: the token usage this call reported' + retried
         : cnt ? 'measured: ' + cnt.source + ' counted ' + cnt.in_tokens + ' prompt and ' + cnt.out_tokens + ' answer token(s)'
             + (covers > 1 ? ' across ' + covers + ' call(s)' : '')
             + (calls > rounds ? ', repeated for the ' + (calls - rounds) + ' round(s) the counter did not see' : '')
             + (think > 0 ? '; the ' + think + ' thinking token(s) it cannot see are modelled from the '
               + String(c.effort) + ' effort budget' : '')
+            + retried
             + (estimated_usd > 0 ? ' ($' + estimated_usd.toFixed(4) + ' of $' + usd.toFixed(4) + ' is modelled)' : '')
         : 'estimated: prompt and answer characters at ' + CHARS_PER_TOKEN + ' characters a token'
-            + (think > 0 ? ' plus the thinking budget' : '') };
+            + (think > 0 ? ' plus the thinking budget' : '') + retried + (unseen ? '; ' + unseen : '') };
   };
 
   // ---- 2. one run's Claude cost ---------------------------------------------------------------------------------------------
@@ -240,7 +261,9 @@ const CC = (() => {
         : m === 'keyword' ? [r.verdict_only ? 'verdict' : (r.include_content ? 'content' : 'report')]
         : m === 'backlinks' ? (r.free_only ? [] : ['backlinks'])
         : (m && EST[m] !== undefined) ? [m] : [];
-      if (r.need_site_description) k.push('describe');
+      // R101 (2026-10-16, re-rating D-5): a describe run keeps `need_site_description` on (Use Cached Description leaves it set for
+      // `site_description`), so its estimate was describe + describe ($0.06 for a $0.03 mode). The extra key is for OTHER modes only.
+      if (r.need_site_description && !k.includes('describe')) k.push('describe');
       return k;
     }
     return m === 'audit' ? (r.include_full_report ? ['full'] : ['crawl'])
@@ -422,6 +445,12 @@ const CC = (() => {
     // a priced figure wins: calls it counted are calls that happened, whatever the node-by-node sweep could see
     if (fig && n0(fig.calls) > 0) return { usd: r4(fig.usd), measured: fig.estimated === false, measured_usd: r4(fig.measured_usd),
       source: 'priced', ran, checked, basis: String(fig.basis || '') };
+    // R82 (2026-10-16, re-rating C-6): a workflow that HAS no Claude node (the AI Pulse, the Rank Tracker) settled its per-mode Claude
+    // reservation ($0.004 a day for the pulse) because the rule below only fired when the workflow had model nodes. `checked: 0`, said
+    // explicitly by a caller that looked, is a measurement too: nothing can have been spent on Claude.
+    if (x.checked != null && Math.round(n0(x.checked)) === 0 && !ran.length) return { usd: 0, measured: true, measured_usd: 0, source: 'none',
+      ran, checked: 0, basis: 'this workflow has no Claude node, so no model call can have run'
+        + (reserved > 0 ? ' and nothing is settled against the $' + reserved.toFixed(4) + ' it reserved' : '') };
     if (checked > 0 && !ran.length) return { usd: 0, measured: true, measured_usd: 0, source: 'none', ran, checked,
       basis: 'no model call ran in this run (all ' + checked + ' Claude node(s) of this workflow were checked)'
         + (reserved > 0 ? ', so nothing is settled against the $' + reserved.toFixed(4) + ' it reserved' : '') };
@@ -487,14 +516,26 @@ const CC = (() => {
       diff_usd: 0, diff_pct: null, within: true, overlapped: [], overlapped_n: 0, from, to,
       start_balance: +start.toFixed(6), end_balance: +end.toFixed(6), source: 'tasks', basis: '' };
     const mineId = String(mine.run_id || '');
+    // R81 parts 2-3 (2026-10-16, re-rating C-5): the request that STARTED this run is not another run. A monitor started by the main
+    // workflow's front door names that run in its own key (`parent:<id>`, Monitor_Ledger_Row / R77); the parent spends nothing itself and
+    // settles $0 as a hand-off (`dfs_source: handoff`, R81 part 1), so neither its row nor any hand-off row can share this run's money.
+    const mineKey = String(mine.key || '');
+    const parentId = mineKey.indexOf('parent:') === 0 ? mineKey.slice(7).trim() : String(x.parent_run_id || '').trim();
+    // when a row CLOSED. A settled row stamps `settled_at`; a refused or released row was closed when it was marked (its `settled_at`
+    // when the refusal stamped one); and a `done` row with no stamp (the Keyword Check settled without one until 2026-10-16, and old
+    // rows never had the column) closed when the table last wrote it (`updatedAt`) — or, failing that, when it was reserved. A row
+    // with no end at all was "open for ever", which named finished runs as "in flight" all day (598, 599, 600, 624).
+    const closedAt = (r) => String(r.settled_at || r.updatedAt || r.updated_at || r.created_at || '');
     // every other row that was open while this run was in flight
     const open = (x.rows || []).filter((r) => {
       if (!r || !r.run_id || r.error || String(r.run_id) === mineId) return false;
+      if (String(r.dfs_source || '') === 'handoff' || (parentId && String(r.run_id) === parentId)) return false;
       const c = String(r.created_at || '');
       if (!c || (to && c >= to)) return false;                       // reserved after this run had already settled
-      if (String(r.status || '') !== 'done') return true;            // still reserved or stale: it was open the whole time
-      const s = String(r.settled_at || '');
-      return !s || !from || s > from;                                // settled, but only after this run reserved: it overlapped
+      const st = String(r.status || '');
+      if (st === 'reserved' || st === '') return true;               // still reserved: it was open the whole time
+      const s = closedAt(r);
+      return !from || s > from;                                      // closed, but only after this run reserved: it overlapped
     });
     out.overlapped = open.map((r) => String(r.run_id)).slice(0, 20);
     out.overlapped_n = open.length;
@@ -554,19 +595,31 @@ const BAL_END = 'DFS Balance End (Cadence)';     // the free balance probe on th
 const LEDGER = 'Load Run Ledger (Cadence)';       // the run-ledger rows around this run's window
 const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
 let row = {}; try { row = $(ROW).first().json || {}; } catch (e) { row = {}; }
+// R82 (2026-10-16, re-rating C-6): MEASURED may name several nodes ('A|B'), and a leading '!' says they are EVERY paid DataForSEO call of
+// this workflow — so a run in which none of them ran sent no paid task and settles $0, instead of the per-mode reservation (the Site
+// Tracker settled $0.0100 "ESTIMATED" while its SERP checks and Trends lookups reported $0.0310, row 98). A gated call's *… Answers* node
+// carries the call's whole cost on every item's `__dfs` (`cost_usd`: both attempts, each task once by its own id), so that figure is read
+// ONCE per node — never added up per item, and never read as one item's cost.
+const MEASURED_ALL = MEASURED.charAt(0) === '!';
+const MEASURED_NODES = MEASURED.replace(/^!/, '').split('|').map(s => s.trim()).filter(Boolean);
 const costOf = (x) => {
   if (!x || typeof x !== 'object') return null;
   const direct = n0(x.cost_usd); if (direct != null) return direct;
-  for (const k of Object.keys(x)) { const v = x[k]; if (v && typeof v === 'object' && !Array.isArray(v)) { const n = n0(v.cost_usd); if (n != null) return n; } }
+  for (const k of Object.keys(x)) { if (k === '__dfs') continue; const v = x[k]; if (v && typeof v === 'object' && !Array.isArray(v)) { const n = n0(v.cost_usd); if (n != null) return n; } }
   return null;
 };
 let measured = null;
-if (MEASURED) {
-  try {
-    const vals = $(MEASURED).all().map(i => costOf(i.json)).filter(v => v != null);
-    if (vals.length) measured = +vals.reduce((s, v) => s + v, 0).toFixed(4);
-  } catch (e) { measured = null; }
+for (const __mn of MEASURED_NODES) {
+  let __items = null;
+  try { __items = $(__mn).all().map(i => i.json || {}); } catch (e) { __items = null; }   // this call did not run in this execution
+  if (!__items) continue;
+  // a node that states its own cost (AI Metrics, Pulse Metrics, Parse Backlinks, Growth Metrics) is read as it always was
+  const __direct = __items.map(costOf).filter(v => v != null);
+  const __gate = __items.find(j => j && j.__dfs && typeof j.__dfs === 'object' && n0(j.__dfs.cost_usd) != null);
+  const vals = __direct.length ? __direct : (__gate ? [n0(__gate.__dfs.cost_usd)] : []);
+  if (vals.length) measured = +((measured || 0) + vals.reduce((s, v) => s + v, 0)).toFixed(4);
 }
+if (measured == null && MEASURED_ALL && MEASURED_NODES.length) measured = 0;   // none of this workflow's paid calls ran: it sent no paid task
 // which Claude nodes actually ran in THIS execution (a node that never ran has no data and throws)
 const ranAi = AI_NODES.filter(n => { try { return ($(n).all() || []).length > 0; } catch (e) { return false; } });
 
@@ -590,23 +643,29 @@ const __jsonOf = (n, idx) => { try { return ((idx == null ? $(n).all() : $(n).al
 const __chars = (v) => v == null ? 0 : (typeof v === 'string' ? v.length : JSON.stringify(v).length);
 const __at = (o, p) => String(p).split('.').reduce((v, k) => (v == null ? v : v[k]), o);
 const __countOf = (n) => { let sum = 0, k = 0; for (const j of (__jsonOf(n) || [])) { const v = Number((j || {}).input_tokens); if (Number.isFinite(v) && v > 0) { sum += v; k++; } } return { sum: sum, n: k }; };
+// R57 (2026-10-16, re-rating A-24): an agent n8n re-ran after a failed answer (its parser refused the format; `retryOnFail`) called its model
+// twice and kept ONE answer, so `answers.length` priced one call. The model node itself records every call it made as a run of its own;
+// a Code node cannot read that node's data (it rides `ai_languageModel`, not `main`), but `$node[…].runIndex` is the index of its last run.
+const __modelRuns = (n) => { try { if (!n || typeof $node === 'undefined') return 0; const r = Number($node[n].runIndex); return Number.isFinite(r) && r >= 0 ? r + 1 : 0; } catch (e) { return 0; } };
 const __costCalls = [];
 for (const c of AI_CALLS) {
   const answers = __jsonOf(c.node);
   if (!answers || !answers.length) continue;   // this agent did not run in this execution
-  const calls = answers.length;                // an n8n agent answers once per input item, and these are fed one job per site
+  // an n8n agent answers once per input item, and these are fed one job per site — plus any retry its model node recorded (R57)
+  const __answered = answers.length, __runs = __modelRuns(c.model_node);
+  const calls = Math.max(__answered, __runs);
   // the characters are the FALLBACK, and they are read per call: the job items differ per site, so one item's fields are not the run's.
   // The output index is spelled out — `$('X').all()` would otherwise default to the output the ACTIVE node is connected to, and the
   // settle is connected to none of these (the trap that caught build section 62 out with *Keyword Seeds* on output 1).
   const fed = c.input ? (__jsonOf(c.input, c.branch) || []) : [];
   let prompt_chars = 0;
-  for (let k = 0; k < calls; k++) {
+  for (let k = 0; k < __answered; k++) {
     let pc = c.template_chars;
     const own = fed[k] || fed[0] || {};
     for (const f of (c.fields || [])) pc += __chars(__at(own, f));
     prompt_chars += pc;
   }
-  for (const p of (c.from || [])) prompt_chars += __chars(__at((__jsonOf(p[0]) || [])[0] || {}, p[1])) * calls;
+  for (const p of (c.from || [])) prompt_chars += __chars(__at((__jsonOf(p[0]) || [])[0] || {}, p[1])) * __answered;
   const output_chars = answers.reduce((s, j) => s + (typeof j.output === 'string' ? j.output.length : __chars(j)), 0);
   let counted = null;
   if (c.count_prompt && c.count_answer) {
@@ -615,7 +674,7 @@ for (const c of AI_CALLS) {
       counted = { prompt_tokens: p.sum, total_tokens: t.sum, rounds: p.n, source: 'Anthropic /v1/messages/count_tokens' };
   }
   __costCalls.push({ node: c.node, model: c.model, max_tokens: c.max_tokens, effort: c.effort, streaming: c.streaming,
-    prompt_chars, output_chars, counted, calls });
+    prompt_chars, output_chars, counted, calls, retries: Math.max(0, calls - __answered) });
 }
 // the same per-model correction factors the main workflow prices with, so one engine reports one price (seo_cache `cost:factor:claude`,
 // written by reconcile_claude_cost.py). Unreadable or absent, the list prices stand.

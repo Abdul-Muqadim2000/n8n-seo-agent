@@ -18,7 +18,12 @@ const RT = (() => {
   const N = (x) => { const v = Number(x); return Number.isFinite(v) ? v : 0; };
   // an answer that can be different next time: the provider's own servers, a timeout, a rate limit. Never a wrong request.
   const TRANSIENT = /internal (?:se )?server error|internal error|server error|timeout|timed out|temporar|try again|unavailable|service unavailable|backend|deadline exceeded|connection|socket|econn|eai_again|rate limit|too many requests|\b(?:429|500|502|503|504)\b/i;
-  const PERMANENT = /permission|forbidden|unauthor|invalid[_ ]grant|credential|not found|no access|invalid field|unknown field|unsupported|quota|resource_exhausted|insufficient funds|payment|balance/i;
+  const PERMANENT = /permission|forbidden|unauthor|invalid[_ ]grant|credential|not found|no search results|no access|invalid field|unknown field|unsupported|quota|resource_exhausted|insufficient funds|payment|balance/i;
+  // R68 (2026-10-16, re-rating B-10): 40102 "No Search Results." is DataForSEO's FINAL answer that the search has no results — the Google
+  // Business Profile lookup for "Tech& Dubai" in execs 595 / 641 — not a failure. It was neither TRANSIENT nor PERMANENT, so it counted as
+  // retryable: *Fetch GBP (Retry)* re-sent it and paid $0.0054 for the same 40102 every audit. It is a valid empty answer now: never
+  // re-sent, never counted as a failure (Entity_Check already reads it as "no listing"), and marked `empty` so a reader can tell.
+  const NO_RESULTS = 40102;
   const errText = (e) => {
     if (!e) return '';
     if (typeof e === 'string') return e.slice(0, 200);
@@ -38,11 +43,14 @@ const RT = (() => {
   const dfs = (r) => {
     const res = r || {};
     if (res.error) return verdict(errText(res.error) || 'the request failed');
+    if (N(res.status_code) === NO_RESULTS) return { ...verdict('', NO_RESULTS), empty: true, permanent: true, said: S(res.status_message) || 'No Search Results.' };
     if (N(res.status_code) >= 40000) return verdict(said(res.status_message, N(res.status_code), 'the search data provider reported an error'), N(res.status_code));
     if (!Array.isArray(res.tasks) || !res.tasks.length) return verdict('no answer from the search data provider');
     const t = res.tasks[0] || {};
     const code = N(t.status_code);
     if (!code) return verdict('no answer from the search data provider');
+    if (code === NO_RESULTS || (code >= 40000 && /no search results/i.test(S(t.status_message))))
+      return { ...verdict('', code), empty: true, permanent: true, said: S(t.status_message) || 'No Search Results.' };
     if (code >= 40000) return verdict(said(t.status_message, code, 'the search data provider reported an error'), code);
     if (code === 20000 && !((t.result || [])[0])) return verdict('the search data provider returned no result', code);
     return verdict('', code);
@@ -140,7 +148,7 @@ const RT = (() => {
       why: 'the earlier figure came from ' + name(b) + ' and this one from ' + name(a) + ', which do not measure the same thing, so ' + what + ' are not compared' };
     return { comparable: true, why: '', kind: a, kind_before: b };
   };
-  return { dfs, google, check, failures, plan, merge, stats, one, note, evidence, comparable, likeForLike, errText, MAX_SAMPLE_DRIFT, TRANSIENT, PERMANENT };
+  return { dfs, google, check, failures, plan, merge, stats, one, note, evidence, comparable, likeForLike, errText, MAX_SAMPLE_DRIFT, TRANSIENT, PERMANENT, NO_RESULTS };
 })();
 // B-A10 (2026-10-15, INVARIANTS rule 3): the second attempt for *SERP Check*. DataForSEO answers a dead task with HTTP 200,
 // which n8n's retryOnFail never sees (R18: a ladder was planned, scored and written on two results pages that both failed).

@@ -57,9 +57,11 @@
    "ai_usd": "={{ $json.ai_usd }}",
    "cost_basis": "={{ $json.cost_basis }}",
    "cost_mode": "={{ $json.cost_mode }}",
+   "dfs_source": "={{ $json.dfs_source }}",
    "dfs_usd": "={{ $json.dfs_usd }}",
    "estimated_usd": "={{ $json.estimated_usd }}",
    "measured_usd": "={{ $json.measured_usd }}",
+   "settled_at": "={{ $json.settled_at }}",
    "settled_usd": "={{ $json.settled_usd }}",
    "status": "done"
   },
@@ -149,6 +151,7 @@
      "input": "Any AI Outreach?",
      "max_tokens": 6000,
      "model": "claude-sonnet-5-5",
+     "model_node": "Claude \u2014 AI Outreach Writer",
      "node": "AI Outreach Writer",
      "ref": "$('Any AI Outreach?').item.json",
      "streaming": false,
@@ -170,6 +173,22 @@
    },
    "balance": "DFS Balance (Growth)",
    "balance_end": "DFS Balance End (Growth)",
+   "callbacks": [
+    {
+     "fed_settle_directly": [],
+     "has_callback": "Has Callback (Growth)?",
+     "join": "Ledger Join (Growth)",
+     "ledger": "Callback Ledger (Growth)",
+     "post": "POST Growth Report",
+     "preds": [
+      [
+       "Build Growth Callback",
+       0
+      ]
+     ],
+     "settle": "Ledger Settle (Growth)"
+    }
+   ],
    "catchup_records": "Load Catch-up Records (Growth)",
    "cost_cal": "Load Cost Factors (Growth)",
    "est": {
@@ -225,6 +244,22 @@
    },
    "balance": "DFS Balance (Pulse)",
    "balance_end": "DFS Balance End (Pulse)",
+   "callbacks": [
+    {
+     "fed_settle_directly": [],
+     "has_callback": "Has Callback (Pulse)?",
+     "join": "Ledger Join (Pulse)",
+     "ledger": "Callback Ledger (Pulse)",
+     "post": "POST Pulse Report",
+     "preds": [
+      [
+       "Any Pulse Alerts?",
+       0
+      ]
+     ],
+     "settle": "Ledger Settle (Pulse)"
+    }
+   ],
    "catchup_records": "Load Catch-up Records (Pulse)",
    "cost_cal": "Load Cost Factors (Pulse)",
    "daily_upsert_keys": [
@@ -291,6 +326,7 @@
      "input": "AI Brief Input",
      "max_tokens": 8192,
      "model": "claude-sonnet-5-5",
+     "model_node": "Claude \u2014 AI Brief",
      "node": "AI Brief",
      "ref": "$('AI Brief Input').item.json",
      "streaming": false,
@@ -319,6 +355,7 @@
      "input": "Any Analyst Jobs?",
      "max_tokens": 8192,
      "model": "claude-sonnet-5-5",
+     "model_node": "Claude \u2014 Answer Analyst",
      "node": "Answer Analyst",
      "ref": "$('Any Analyst Jobs?').item.json",
      "streaming": false,
@@ -354,6 +391,7 @@
      "input": "Any Prompt Jobs?",
      "max_tokens": 8192,
      "model": "claude-sonnet-5-5",
+     "model_node": "Claude \u2014 Prompt Writer",
      "node": "Prompt Writer",
      "ref": "$('Any Prompt Jobs?').item.json",
      "streaming": false,
@@ -377,6 +415,22 @@
    },
    "balance": "DFS Balance (AI)",
    "balance_end": "DFS Balance End (AI)",
+   "callbacks": [
+    {
+     "fed_settle_directly": [],
+     "has_callback": "Has Callback (AI)?",
+     "join": "Ledger Join (AI)",
+     "ledger": "Callback Ledger (AI)",
+     "post": "POST AI Report",
+     "preds": [
+      [
+       "Build AI Callback",
+       0
+      ]
+     ],
+     "settle": "Ledger Settle (AI)"
+    }
+   ],
    "catchup_records": "Load Catch-up Records (AI)",
    "cost_cal": "Load Cost Factors (AI)",
    "est": {
@@ -493,6 +547,7 @@
      "input": "Any Link Analyst?",
      "max_tokens": 8192,
      "model": "claude-sonnet-5-5",
+     "model_node": "Claude \u2014 Link Analyst",
      "node": "Link Analyst",
      "ref": "$('Any Link Analyst?').item.json",
      "streaming": false,
@@ -520,6 +575,7 @@
      "input": "Any Outreach?",
      "max_tokens": 8192,
      "model": "claude-sonnet-5-5",
+     "model_node": "Claude \u2014 Outreach Writer",
      "node": "Outreach Writer",
      "ref": "$('Any Outreach?').item.json",
      "streaming": false,
@@ -542,6 +598,22 @@
    },
    "balance": "DFS Balance (BL)",
    "balance_end": "DFS Balance End (BL)",
+   "callbacks": [
+    {
+     "fed_settle_directly": [],
+     "has_callback": "Has Callback (BL)?",
+     "join": "Ledger Join (BL)",
+     "ledger": "Callback Ledger (BL)",
+     "post": "POST BL Report",
+     "preds": [
+      [
+       "Build BL Callback",
+       0
+      ]
+     ],
+     "settle": "Ledger Settle (BL)"
+    }
+   ],
    "catchup_records": "Load Catch-up Records (BL)",
    "cost_cal": "Load Cost Factors (BL)",
    "est": {
@@ -597,6 +669,28 @@
    },
    "balance": "DFS Balance (Cadence)",
    "balance_end": "DFS Balance End (Cadence)",
+   "callbacks": [
+    {
+     "fed_settle_directly": [
+      "Cadence Status"
+     ],
+     "has_callback": "Has Callback (Cadence)?",
+     "join": "Ledger Join (Cadence)",
+     "ledger": "Callback Ledger (Cadence)",
+     "post": "POST Cadence Note",
+     "preds": [
+      [
+       "Cadence Note",
+       0
+      ],
+      [
+       "Cadence Status",
+       0
+      ]
+     ],
+     "settle": "Ledger Settle (Cadence)"
+    }
+   ],
    "catchup_records": "Load Catch-up Records (Cadence)",
    "est": {
     "ai": 0.0,
@@ -668,6 +762,7 @@
      "input": "Any LB Writing?",
      "max_tokens": 16000,
      "model": "claude-sonnet-5-5",
+     "model_node": "Claude \u2014 Outreach Sequence Writer",
      "node": "Outreach Sequence Writer",
      "ref": "$('Any LB Writing?').item.json",
      "streaming": false,
@@ -689,6 +784,22 @@
    },
    "balance": "DFS Balance (LB)",
    "balance_end": "DFS Balance End (LB)",
+   "callbacks": [
+    {
+     "fed_settle_directly": [],
+     "has_callback": "Has Callback (LB)?",
+     "join": "Ledger Join (LB)",
+     "ledger": "Callback Ledger (LB)",
+     "post": "POST LB Report",
+     "preds": [
+      [
+       "Build LB Callback",
+       0
+      ]
+     ],
+     "settle": "Ledger Settle (LB)"
+    }
+   ],
    "catchup_records": "Load Catch-up Records (LB)",
    "cost_cal": "Load Cost Factors (LB)",
    "est": {
@@ -713,7 +824,7 @@
     "tell": "Tell Caller (LB)?"
    },
    "ledger_load": "Load Run Ledger (LB)",
-   "measured": "",
+   "measured": "!Run LB DFS Answers",
    "mode": "link_builder",
    "open_runs": "Load Open Runs (LB)",
    "plan": "LB Plan",
@@ -835,6 +946,33 @@
    ]
   },
   "SEO Agent \u2014 Site Tracker": {
+   "ai_calls": [
+    {
+     "after": [
+      "Site Report"
+     ],
+     "branch": 0,
+     "count_answer": "Count Answer (Site Brief)",
+     "count_per_item": true,
+     "count_prompt": "Count Prompt (Site Brief)",
+     "count_resume": "After Count (Site Brief)",
+     "count_rounds": 0,
+     "count_set": "Prompt For Count (Site Brief)",
+     "effort": "low",
+     "fields": [
+      "facts"
+     ],
+     "from": [],
+     "input": "Brief Input",
+     "max_tokens": 8192,
+     "model": "claude-sonnet-5-5",
+     "model_node": "Claude \u2014 Site Brief",
+     "node": "Site Brief",
+     "ref": "$('Brief Input').item.json",
+     "streaming": false,
+     "template_chars": 3008
+    }
+   ],
    "ai_nodes": [
     "Site Brief"
    ],
@@ -850,6 +988,22 @@
    },
    "balance": "DFS Balance (Site)",
    "balance_end": "DFS Balance End (Site)",
+   "callbacks": [
+    {
+     "fed_settle_directly": [],
+     "has_callback": "Has Callback (Site)?",
+     "join": "Ledger Join (Site)",
+     "ledger": "Callback Ledger (Site)",
+     "post": "POST Site Report",
+     "preds": [
+      [
+       "Build Site Callback",
+       0
+      ]
+     ],
+     "settle": "Ledger Settle (Site)"
+    }
+   ],
    "catchup_records": "Load Catch-up Records (Site)",
    "est": {
     "ai": 0.03,
@@ -873,7 +1027,7 @@
     "tell": "Tell Caller (Site)?"
    },
    "ledger_load": "Load Run Ledger (Site)",
-   "measured": "",
+   "measured": "!SERP Check (Site) Answers|Google Trends Answers",
    "mode": "site_tracker",
    "open_runs": "Load Open Runs (Site)",
    "plan": "Site Plan",

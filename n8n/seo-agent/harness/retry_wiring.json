@@ -1995,6 +1995,20 @@
    {
     "allowed": false,
     "maxTries": 3,
+    "name": "Count Prompt (Site Brief)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Count Answer (Site Brief)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
     "name": "DFS Balance (Site)",
     "retryOnFail": true,
     "waitBetweenTries": 5000

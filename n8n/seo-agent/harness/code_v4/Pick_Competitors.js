@@ -1,6 +1,7 @@
 const base = $('Schema Findings').first().json;
 const ours = base.domain;
-const labsItems = $('Find Competitors Answers').first().json.tasks?.[0]?.result?.[0]?.items || [];
+// R70 (2026-10-16): with competitors named the discovery is not paid for, so its answers may not exist
+let labsItems = []; try { labsItems = $('Find Competitors Answers').first().json.tasks?.[0]?.result?.[0]?.items || []; } catch (e) { labsItems = []; }
 const queries = $('Fallback Queries').all().map(i => i.json.query);
 const serps = $input.all().map(i => i.json);
 // B-A11 (2026-10-15, INVARIANTS rule 1): the in-200 retry gate (rule 3) marks an answer `unavailable` when BOTH attempts

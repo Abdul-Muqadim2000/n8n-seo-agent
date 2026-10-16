@@ -1,0 +1,560 @@
+{
+ "answers": {
+  "SEO_Agent_AI_Growth.json": {
+   "AI Outreach Writer": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($json.output) }}"
+  },
+  "SEO_Agent_AI_Visibility.json": {
+   "AI Brief": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($json.output) }}",
+   "Answer Analyst": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($json.output) }}",
+   "Prompt Writer": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($json.output) }}"
+  },
+  "SEO_Agent_Backlink_Monitor.json": {
+   "Link Analyst": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($json.output) }}",
+   "Outreach Writer": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($json.output) }}"
+  },
+  "SEO_Agent_Link_Builder.json": {
+   "Outreach Sequence Writer": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($json.output) }}"
+  },
+  "SEO_Agent_Site_Tracker.json": {
+   "Site Brief": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($json.output) }}"
+  },
+  "SEO_Agent_v4.json": {
+   "Competitor Analyzer": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($json.output) }}",
+   "Content Reviewer": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($json.output) }}",
+   "Copywriter": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($('Copywriter').first().json.output) }}",
+   "Critic": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($json.output) }}",
+   "Editor": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($('Editor').first().json.output) }}",
+   "Keyword Relevance": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($json.output) }}",
+   "Keyword Seeds": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($json.output) }}",
+   "Ladder Keyword Relevance": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($json.output) }}",
+   "Site Describer": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($json.output) }}",
+   "Strategy Brief": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($('Strategy Brief').first().json.output) }}",
+   "Verdict Agent": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($json.output) }}"
+  }
+ },
+ "assess_settle_columns": [
+  "ai_usd",
+  "cost_basis",
+  "cost_mode",
+  "dfs_source",
+  "dfs_usd",
+  "estimated_usd",
+  "measured_usd",
+  "settled_at",
+  "settled_usd",
+  "status"
+ ],
+ "call_tables": {
+  "SEO Agent \u2014 AI Growth": [
+   {
+    "model_node": "Claude \u2014 AI Outreach Writer",
+    "node": "AI Outreach Writer"
+   }
+  ],
+  "SEO Agent \u2014 AI Pulse": [],
+  "SEO Agent \u2014 AI Visibility Tracker": [
+   {
+    "model_node": "Claude \u2014 AI Brief",
+    "node": "AI Brief"
+   },
+   {
+    "model_node": "Claude \u2014 Answer Analyst",
+    "node": "Answer Analyst"
+   },
+   {
+    "model_node": "Claude \u2014 Prompt Writer",
+    "node": "Prompt Writer"
+   }
+  ],
+  "SEO Agent \u2014 Audit Scheduler": [],
+  "SEO Agent \u2014 Backlink Monitor": [
+   {
+    "model_node": "Claude \u2014 Link Analyst",
+    "node": "Link Analyst"
+   },
+   {
+    "model_node": "Claude \u2014 Outreach Writer",
+    "node": "Outreach Writer"
+   }
+  ],
+  "SEO Agent \u2014 Content Cadence": [],
+  "SEO Agent \u2014 Link Builder": [
+   {
+    "model_node": "Claude \u2014 Outreach Sequence Writer",
+    "node": "Outreach Sequence Writer"
+   }
+  ],
+  "SEO Agent \u2014 Page Watch": [],
+  "SEO Agent \u2014 Rank Tracker": [],
+  "SEO Agent \u2014 Site Tracker": [
+   {
+    "model_node": "Claude \u2014 Site Brief",
+    "node": "Site Brief"
+   }
+  ]
+ },
+ "callback_gap": {
+  "SEO Agent \u2014 Rank Tracker": "build_ladder_extras.py was outside this change (agent A9 owned build_monitors.py and build_site_tracker.py): one call of monitor_cost.callback_after_settle() at its write time does it"
+ },
+ "callbacks": {
+  "SEO Agent \u2014 AI Growth": [
+   {
+    "fed_settle_directly": [],
+    "has_callback": "Has Callback (Growth)?",
+    "join": "Ledger Join (Growth)",
+    "ledger": "Callback Ledger (Growth)",
+    "post": "POST Growth Report",
+    "preds": [
+     [
+      "Build Growth Callback",
+      0
+     ]
+    ],
+    "proof": {
+     "bypass": false,
+     "input0": [
+      "Build Growth Callback"
+     ],
+     "input1": [
+      "Ledger Settle (Growth)"
+     ],
+     "merge": true,
+     "preds": [
+      "Build Growth Callback"
+     ],
+     "reachable": true,
+     "settle": "Ledger Settle (Growth)"
+    },
+    "settle": "Ledger Settle (Growth)"
+   }
+  ],
+  "SEO Agent \u2014 AI Pulse": [
+   {
+    "fed_settle_directly": [],
+    "has_callback": "Has Callback (Pulse)?",
+    "join": "Ledger Join (Pulse)",
+    "ledger": "Callback Ledger (Pulse)",
+    "post": "POST Pulse Report",
+    "preds": [
+     [
+      "Any Pulse Alerts?",
+      0
+     ]
+    ],
+    "proof": {
+     "bypass": false,
+     "input0": [
+      "Any Pulse Alerts?"
+     ],
+     "input1": [
+      "Ledger Settle (Pulse)"
+     ],
+     "merge": true,
+     "preds": [
+      "Any Pulse Alerts?"
+     ],
+     "reachable": true,
+     "settle": "Ledger Settle (Pulse)"
+    },
+    "settle": "Ledger Settle (Pulse)"
+   }
+  ],
+  "SEO Agent \u2014 AI Visibility Tracker": [
+   {
+    "fed_settle_directly": [],
+    "has_callback": "Has Callback (AI)?",
+    "join": "Ledger Join (AI)",
+    "ledger": "Callback Ledger (AI)",
+    "post": "POST AI Report",
+    "preds": [
+     [
+      "Build AI Callback",
+      0
+     ]
+    ],
+    "proof": {
+     "bypass": false,
+     "input0": [
+      "Build AI Callback"
+     ],
+     "input1": [
+      "Ledger Settle (AI)"
+     ],
+     "merge": true,
+     "preds": [
+      "Build AI Callback"
+     ],
+     "reachable": true,
+     "settle": "Ledger Settle (AI)"
+    },
+    "settle": "Ledger Settle (AI)"
+   }
+  ],
+  "SEO Agent \u2014 Backlink Monitor": [
+   {
+    "fed_settle_directly": [],
+    "has_callback": "Has Callback (BL)?",
+    "join": "Ledger Join (BL)",
+    "ledger": "Callback Ledger (BL)",
+    "post": "POST BL Report",
+    "preds": [
+     [
+      "Build BL Callback",
+      0
+     ]
+    ],
+    "proof": {
+     "bypass": false,
+     "input0": [
+      "Build BL Callback"
+     ],
+     "input1": [
+      "Ledger Settle (BL)"
+     ],
+     "merge": true,
+     "preds": [
+      "Build BL Callback"
+     ],
+     "reachable": true,
+     "settle": "Ledger Settle (BL)"
+    },
+    "settle": "Ledger Settle (BL)"
+   }
+  ],
+  "SEO Agent \u2014 Content Cadence": [
+   {
+    "fed_settle_directly": [
+     "Cadence Status"
+    ],
+    "has_callback": "Has Callback (Cadence)?",
+    "join": "Ledger Join (Cadence)",
+    "ledger": "Callback Ledger (Cadence)",
+    "post": "POST Cadence Note",
+    "preds": [
+     [
+      "Cadence Note",
+      0
+     ],
+     [
+      "Cadence Status",
+      0
+     ]
+    ],
+    "proof": {
+     "bypass": false,
+     "input0": [
+      "Cadence Note",
+      "Cadence Status"
+     ],
+     "input1": [
+      "Ledger Settle (Cadence)"
+     ],
+     "merge": true,
+     "preds": [
+      "Cadence Note",
+      "Cadence Status"
+     ],
+     "reachable": true,
+     "settle": "Ledger Settle (Cadence)"
+    },
+    "settle": "Ledger Settle (Cadence)"
+   }
+  ],
+  "SEO Agent \u2014 Link Builder": [
+   {
+    "fed_settle_directly": [],
+    "has_callback": "Has Callback (LB)?",
+    "join": "Ledger Join (LB)",
+    "ledger": "Callback Ledger (LB)",
+    "post": "POST LB Report",
+    "preds": [
+     [
+      "Build LB Callback",
+      0
+     ]
+    ],
+    "proof": {
+     "bypass": false,
+     "input0": [
+      "Build LB Callback"
+     ],
+     "input1": [
+      "Ledger Settle (LB)"
+     ],
+     "merge": true,
+     "preds": [
+      "Build LB Callback"
+     ],
+     "reachable": true,
+     "settle": "Ledger Settle (LB)"
+    },
+    "settle": "Ledger Settle (LB)"
+   }
+  ],
+  "SEO Agent \u2014 Site Tracker": [
+   {
+    "fed_settle_directly": [],
+    "has_callback": "Has Callback (Site)?",
+    "join": "Ledger Join (Site)",
+    "ledger": "Callback Ledger (Site)",
+    "post": "POST Site Report",
+    "preds": [
+     [
+      "Build Site Callback",
+      0
+     ]
+    ],
+    "proof": {
+     "bypass": false,
+     "input0": [
+      "Build Site Callback"
+     ],
+     "input1": [
+      "Ledger Settle (Site)"
+     ],
+     "merge": true,
+     "preds": [
+      "Build Site Callback"
+     ],
+     "reachable": true,
+     "settle": "Ledger Settle (Site)"
+    },
+    "settle": "Ledger Settle (Site)"
+   }
+  ]
+ },
+ "main": {
+  "competitors": {
+   "expr": "{{ (Array.isArray($('Schema Findings').first().json.competitors) ? $('Schema Findings').first().json.competitors : []).map(d => String(d || '').toLowerCase().replace(/^www\\./, '')).filter(d => d && d !== String($('Schema Findings').first().json.domain || '').toLowerCase() && !d.endsWith('.' + String($('Schema Findings').first().json.domain || '').toLowerCase())).length > 0 }}",
+   "fallback_queries_from": [
+    "Competitors Named?",
+    "Find Competitors Answers"
+   ],
+   "gate": "Competitors Named?",
+   "gate_false": [
+    "Find Competitors"
+   ],
+   "gate_true": [
+    "Fallback Queries"
+   ],
+   "schema_findings": [
+    "Competitors Named?"
+   ],
+   "serp_gate": "Competitors Named? (SERP)",
+   "serp_gate_false": [
+    "Fallback SERP"
+   ],
+   "serp_gate_true": [
+    "Pick Competitors"
+   ]
+  },
+  "describe": {
+   "build_description_page": [
+    "DFS Balance End"
+   ],
+   "describe_ledger_from": [
+    "Run Ledger Settle"
+   ],
+   "describe_ledger_to": [
+    "Via Webhook (Describe)?"
+   ]
+  },
+  "ledger_lists": {
+   "Build Audit Report": {
+    "added": [
+     "Fetch GBP"
+    ],
+    "reachable_paid": [
+     "AI SERP",
+     "AI SERP (Retry)",
+     "Ask LLMs",
+     "Ask LLMs (Retry)",
+     "Backlink Gap",
+     "Backlink Gap (Retry)",
+     "Backlink Summary",
+     "Backlink Summary (Retry)",
+     "DataForSEO Whois",
+     "DataForSEO Whois (Retry)",
+     "Domain Overview",
+     "Domain Overview (Retry)",
+     "Fallback SERP",
+     "Fallback SERP (Retry)",
+     "Fetch GBP",
+     "Fetch GBP (Retry)",
+     "Find Competitors",
+     "Find Competitors (Retry)",
+     "Get Crawl Summary",
+     "Get Crawled Pages",
+     "Get Crawled Pages (Retry)",
+     "Keyword Ideas",
+     "Keyword Ideas (Retry)",
+     "Ranked Keywords",
+     "Ranked Keywords (Retry)",
+     "Run Crawl Extras",
+     "Run Crawl Extras (Retry)",
+     "Start Crawl",
+     "Start Crawl (Retry)"
+    ]
+   },
+   "Build Full Report": {
+    "added": [
+     "Fetch GBP"
+    ],
+    "reachable_paid": [
+     "AI SERP",
+     "AI SERP (Retry)",
+     "Ask LLMs",
+     "Ask LLMs (Retry)",
+     "Backlink Gap",
+     "Backlink Gap (Retry)",
+     "Backlink Summary",
+     "Backlink Summary (Retry)",
+     "DataForSEO Whois",
+     "DataForSEO Whois (Retry)",
+     "Domain Overview",
+     "Domain Overview (Retry)",
+     "Fallback SERP",
+     "Fallback SERP (Retry)",
+     "Fetch GBP",
+     "Fetch GBP (Retry)",
+     "Find Competitors",
+     "Find Competitors (Retry)",
+     "Get Crawl Summary",
+     "Get Crawled Pages",
+     "Get Crawled Pages (Retry)",
+     "Keyword Ideas",
+     "Keyword Ideas (Retry)",
+     "Ranked Keywords",
+     "Ranked Keywords (Retry)",
+     "Run Crawl Extras",
+     "Run Crawl Extras (Retry)",
+     "Start Crawl",
+     "Start Crawl (Retry)"
+    ]
+   },
+   "Build Keyword File": {
+    "added": [],
+    "reachable_paid": [
+     "AI Demand",
+     "AI Demand (Retry)",
+     "Candidate SERP",
+     "Candidate SERP (Retry)",
+     "Run Competitor Keywords",
+     "Run Competitor Keywords (Retry)",
+     "Run Reach Requests",
+     "Run Reach Requests (Retry)",
+     "Run Research",
+     "Run Research (Retry)"
+    ]
+   },
+   "Build Ladder Report": {
+    "added": [],
+    "reachable_paid": [
+     "Facts SERP",
+     "Facts SERP (Retry)",
+     "Keyword Data",
+     "Keyword Data (Retry)",
+     "Run Ladder Cluster SERP",
+     "Run Ladder Cluster SERP (Retry)",
+     "Run Ladder Research",
+     "Run Ladder Research (Retry)",
+     "SERP Top 10",
+     "SERP Top 10 (Retry)",
+     "Site Authority",
+     "Site Authority (Retry)"
+    ]
+   },
+   "Build Word File": {
+    "added": [],
+    "reachable_paid": [
+     "Facts SERP",
+     "Facts SERP (Retry)",
+     "Keyword Data",
+     "Keyword Data (Retry)",
+     "SERP Top 10",
+     "SERP Top 10 (Retry)",
+     "Site Authority",
+     "Site Authority (Retry)"
+    ]
+   }
+  },
+  "model_nodes": {
+   "Competitor Analyzer": "Claude \u2014 Competitor Analyzer",
+   "Content Reviewer": "Claude \u2014 Content Reviewer",
+   "Copywriter": "Claude \u2014 Copywriter",
+   "Critic": "Claude \u2014 Critic",
+   "Editor": "Claude \u2014 Editor",
+   "Keyword Relevance": "Claude \u2014 Keyword Relevance",
+   "Keyword Seeds": "Anthropic Chat Model",
+   "Ladder Keyword Relevance": "Claude \u2014 Ladder Relevance",
+   "Site Describer": "Claude \u2014 Site Describer",
+   "Strategy Brief": "Claude \u2014 Strategy Brief",
+   "Verdict Agent": "Verdict Chat Model"
+  },
+  "paid_nodes": [
+   "AI Demand",
+   "AI Demand (Retry)",
+   "AI SERP",
+   "AI SERP (Retry)",
+   "Ask LLMs",
+   "Ask LLMs (Retry)",
+   "Backlink Gap",
+   "Backlink Gap (Retry)",
+   "Backlink Summary",
+   "Backlink Summary (Retry)",
+   "Candidate SERP",
+   "Candidate SERP (Retry)",
+   "DataForSEO Whois",
+   "DataForSEO Whois (Retry)",
+   "Domain Overview",
+   "Domain Overview (Retry)",
+   "Facts SERP",
+   "Facts SERP (Retry)",
+   "Fallback SERP",
+   "Fallback SERP (Retry)",
+   "Fetch GBP",
+   "Fetch GBP (Retry)",
+   "Find Competitors",
+   "Find Competitors (Retry)",
+   "Get Crawl Summary",
+   "Get Crawled Pages",
+   "Get Crawled Pages (Retry)",
+   "Keyword Data",
+   "Keyword Data (Retry)",
+   "Keyword Ideas",
+   "Keyword Ideas (Retry)",
+   "Ranked Keywords",
+   "Ranked Keywords (Retry)",
+   "Run Competitor Keywords",
+   "Run Competitor Keywords (Retry)",
+   "Run Crawl Extras",
+   "Run Crawl Extras (Retry)",
+   "Run Ladder Cluster SERP",
+   "Run Ladder Cluster SERP (Retry)",
+   "Run Ladder Research",
+   "Run Ladder Research (Retry)",
+   "Run Reach Requests",
+   "Run Reach Requests (Retry)",
+   "Run Research",
+   "Run Research (Retry)",
+   "SERP Top 10",
+   "SERP Top 10 (Retry)",
+   "Site Authority",
+   "Site Authority (Retry)",
+   "Start Crawl",
+   "Start Crawl (Retry)"
+  ]
+ },
+ "measured": {
+  "SEO Agent \u2014 AI Growth": "Growth Metrics",
+  "SEO Agent \u2014 AI Pulse": "Pulse Metrics",
+  "SEO Agent \u2014 AI Visibility Tracker": "AI Metrics",
+  "SEO Agent \u2014 Audit Scheduler": "",
+  "SEO Agent \u2014 Backlink Monitor": "Parse Backlinks",
+  "SEO Agent \u2014 Content Cadence": "",
+  "SEO Agent \u2014 Link Builder": "!Run LB DFS Answers",
+  "SEO Agent \u2014 Page Watch": "",
+  "SEO Agent \u2014 Rank Tracker": "Tracker Report",
+  "SEO Agent \u2014 Site Tracker": "!SERP Check (Site) Answers|Google Trends Answers"
+ }
+}
