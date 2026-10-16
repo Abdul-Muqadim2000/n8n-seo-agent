@@ -90,7 +90,10 @@ LOG_TABLE = 'seo_content_log'
 TRENDS_TABLE = 'seo_trends'
 CADENCE_TABLE = 'seo_cadence'
 LOG_COLS = [('site_id', 'string'), ('domain', 'string'), ('keyword', 'string'), ('source', 'string'), ('page_type', 'string'), ('existing_page_url', 'string'), ('rung', 'number'), ('ladder_id', 'string'),
-            ('request_id', 'string'), ('started_at', 'string'), ('status', 'string'), ('published_url', 'string'), ('published_at', 'string'), ('week', 'string')]
+            ('request_id', 'string'), ('started_at', 'string'), ('status', 'string'), ('published_url', 'string'), ('published_at', 'string'), ('week', 'string'),
+            # R111 (2026-10-16, re-rating 2026-10-15): a page whose FINAL quality round failed is stored `status: 'not_ready'` (a draft to fix
+            # and run again, never "publish it") and carries the last round's reasons here, '; '-joined (Content_Log_Row.js)
+            ('qa_reasons', 'string')]
 TRENDS_COLS = [('site_id', 'string'), ('domain', 'string'), ('keyword', 'string'), ('checked_at', 'string'), ('period_end', 'string'), ('direction', 'string'), ('change_pct', 'number'), ('peak_date', 'string'),
                ('latest', 'number'), ('average', 'number'), ('rising', 'string'), ('top', 'string')]
 CADENCE_COLS = [('site_id', 'string'), ('domain', 'string'), ('pages_per_week', 'number'), ('status', 'string'), ('updated_at', 'string'), ('request_id', 'string')]

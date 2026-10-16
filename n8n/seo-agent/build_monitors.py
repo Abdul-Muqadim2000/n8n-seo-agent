@@ -658,13 +658,15 @@ def x_http(W, name, pos, url='={{ $json.url }}', batch=1, interval=300, timeout=
 LB_UA = 'SEOAgentLinkBuilder/4.13 (' + BRAND + '; link opportunities; mailto:' + OPS_EMAIL + ')'
 PAGE_H = {'User-Agent': BROWSER_UA, 'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8', 'Accept-Language': 'en-US,en;q=0.8'}
 API_KEY_CRED = {'httpHeaderAuth': {'id': 'SEOcredApiHeader', 'name': 'SEO API Key'}}
+from ladder_common import PAGES_TABLE   # R93 (2026-10-16): the Link Builder reads the page inventory for our pages' real titles
 L = WF('SEOagentLinkBld1', 'SEO Agent — Link Builder', 'linkbld', 3600)
 TRIGGER(L, 11, 0); L.node('Manual Run', 'n8n-nodes-base.executeWorkflowTrigger', 1.2, {'inputSource': 'passthrough'}, at(0, 1))
 ens = [('Ensure Monitors Table', MONITORS_TABLE, MONITORS_COLS), ('Ensure Prospects Table', PROSPECT_TABLE, PROSPECT_COLS), ('Ensure Link Outreach Table', LINK_OUTREACH_TABLE, LINK_OUTREACH_COLS),
        ('Ensure Listings Table', LISTINGS_TABLE, LISTINGS_COLS), ('Ensure Link Impact Table', LINK_IMPACT_TABLE, LINK_IMPACT_COLS), ('Ensure Cache Table', CACHE_TABLE, CACHE_COLS)]
 for i, (nm, t, c) in enumerate(ens): L.ensure(nm, t, c, at(1 + i, 0))
 loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load Link Prospects', PROSPECT_TABLE), ('Load Link Outreach', LINK_OUTREACH_TABLE),
-         ('Load Listings', LISTINGS_TABLE), ('Load Link Impact', LINK_IMPACT_TABLE), ('Load Backlinks', LINKS_TABLE), ('Load Backlink Snapshots', BL_SNAP_TABLE), ('Load Content Log', LOG_TABLE), ('Load AI Targets', AI_TARGETS_TABLE)]
+         ('Load Listings', LISTINGS_TABLE), ('Load Link Impact', LINK_IMPACT_TABLE), ('Load Backlinks', LINKS_TABLE), ('Load Backlink Snapshots', BL_SNAP_TABLE), ('Load Content Log', LOG_TABLE), ('Load AI Targets', AI_TARGETS_TABLE),
+         ('Load Pages (LB)', PAGES_TABLE)]   # R93 (2026-10-16): our pages' real titles (seo_pages), so a target page is never named by a search query
 for i, (nm, t) in enumerate(loads): L.load(nm, t, at(1 + i, 1))
 L.node('Load Query History', DT_TYPE, DT_VERSION, dt_get_all_where_params(QUERY_TABLE, [('period_end', 'gte', SINCE(200))]), at(13, 1), **LOAD)
 L.node('Load Rank History', DT_TYPE, DT_VERSION, dt_get_all_where_params(HISTORY_TABLE, [('checked_at', 'gte', SINCE(60))]), at(14, 1), **LOAD)

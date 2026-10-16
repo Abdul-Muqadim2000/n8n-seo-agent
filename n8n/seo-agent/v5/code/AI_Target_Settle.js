@@ -18,7 +18,8 @@ const itemsOf = (get) => { try { return get().all().map(i => i.json).filter(r =>
 const writing = itemsOf(() => $('Load AI Targets Writing (Cadence)')).filter(t => t.target_id && String(t.status || '') === 'writing');
 const logs = itemsOf(() => $('Load Content Log'));
 // the strongest evidence on record per run: published beats written beats started (a run can leave more than one row over time)
-const RANK = { started: 1, written: 2, published: 3 };
+// R111 (2026-10-16): `not_ready` is a draft whose last quality round failed — evidence that the run ended, never that a page exists
+const RANK = { started: 1, not_ready: 1.5, written: 2, published: 3 };
 const byReq = new Map();
 for (const l of logs) {
   const rid = String(l.request_id || ''); if (!rid) continue;
@@ -30,7 +31,7 @@ for (const t of writing) {
   const rid = String(t.request_id || '');
   const l = rid ? byReq.get(rid) : null;
   const st = l ? String(l.status || '') : '';
-  if (st !== 'written' && st !== 'published') continue;   // no page on record: the row stays `writing` and says so
+  if (st !== 'written' && st !== 'published') continue;   // no page on record (or R111: only a draft that failed its quality check): the row stays `writing`
   out.push({ json: { target_id: t.target_id, status: 'written', at: now,
     // the moment the page existed is the moment its run was logged, not the moment we read the row back
     written_at: String(l.started_at || t.written_at || now),

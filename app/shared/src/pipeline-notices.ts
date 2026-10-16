@@ -251,6 +251,28 @@ export function pipelineNotices(
       });
   }
 
+  // ---- R42 (2026-10-16, re-rating 2026-10-15): the pile-up limit, before a page is written on request ----
+  // The weekly posts stop while `maxWaiting` pages wait to be published (the pile-up guard, Cadence_Plan.js). A run started here is the
+  // person's explicit request, so it is never blocked — but it is told: the live "ai consulting" ladder wrote a 4th waiting page at a
+  // limit of 3 and said nothing. A page counts once it is written and not live (a draft that failed its quality check included).
+  const writesPage = (mode === 'ladder' && !!kw) || (mode === 'keyword' && !!kw && input.receiveContent !== false);
+  const waiting = data.queue.waiting ?? [];
+  const maxWaiting = Math.max(1, Number(data.automation?.maxWaiting) || 3);
+  if (writesPage && !same && waiting.length >= maxWaiting) {
+    const names = waiting.slice(0, 4).map((w) => `“${w.keyword}”`).join(', ') + (waiting.length > 4 ? ` and ${waiting.length - 4} more` : '');
+    out.push({
+      id: `pileup:${kw}`,
+      tone: 'warning',
+      title: `${waiting.length} page${waiting.length === 1 ? ' is' : 's are'} already waiting to be published`,
+      body:
+        `${names} ${waiting.length === 1 ? 'is' : 'are'} written and not live yet, and your limit is ${maxWaiting}: the weekly posts are paused until fewer pages wait. ` +
+        `This run writes ${mode === 'ladder' ? 'the ladder’s first page' : 'one more page'} on top of them (page ${waiting.length + 1} waiting). Publish the waiting pages first, or start it anyway.`,
+      short: `${waiting.length} pages already waiting`,
+      confirm: 'Write it anyway',
+      link: { label: 'Open the pipeline', page: 'pipeline' },
+    });
+  }
+
   return out.sort((a, b) => (a.tone === b.tone ? 0 : a.tone === 'warning' ? -1 : 1));
 }
 

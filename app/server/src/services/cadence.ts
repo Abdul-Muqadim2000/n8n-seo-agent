@@ -27,7 +27,11 @@ import {
 // - pile-up guard (v4.14, FIX_PLAN D5): max_waiting or more distinct keywords written but not published -> nothing is written that
 //   week. A keyword waits when a content-log row of the last 120 days has any status but published (every content run writes one:
 //   the ladder's page runs, the app's "Write now", the cadence), or a ladder row is still 'writing' and its keyword has no
-//   published page;
+//   published page; R111 (2026-10-16): a row `not_ready` (the page's last quality round failed) counts too, and is named in
+//   `needsFix` — it leaves the queue by being fixed and run again, never by being published as it is;
+// - R87 (2026-10-16): a ladder whose MAIN keyword row says `set_aside` (n8n writes it back with the reason: the Rank Tracker's
+//   *Mark Set Aside* and the cadence's *Ladder Marks*) is paused — none of its rungs is written or queued, the reason is in
+//   `headSetAside`;
 // - v4.16 (B4-3, benchmark area 4): a page the Site Tracker's decay test confirmed is losing traffic (seo_pages.decay_state ===
 //   'decaying') is queued as a REFRESH ahead of striking distance and rising trends, ranked by the clicks actually lost, at most
 //   CADENCE.decayPerWeek a week, and never if that page was refreshed in the last CADENCE.decayRefreshDays days. 'seasonal',
@@ -169,6 +173,8 @@ export interface CadenceLadder {
   eligible: QueueItem[];
   /** what the coming run does with it */
   role: 'active' | 'queued' | 'manual' | 'paused' | 'won' | 'done';
+  /** R87: '' or why the ladder is paused — its main keyword's row says `set_aside` (the stored reason) */
+  headSetAside: string;
 }
 
 export interface CadencePlan {
@@ -191,6 +197,8 @@ export interface CadencePlan {
   waitingPublish: number;
   /** those keywords, oldest first (v4.14, D5: ladder pages included) */
   waitingKeywords: string[];
+  /** R111: of those, the drafts whose last quality round failed (content log `not_ready`): "fix it and run it again", never "publish it" */
+  needsFix: string[];
   /** v4.15 (D11): candidates a live page of the website already answers (refreshed or left out, never written as a second page) */
   coveredByLivePages: Array<{ keyword: string; source: QueueItem['source']; url: string }>;
 }
@@ -246,10 +254,12 @@ export function planCadence(input: CadenceInput, now: number): CadencePlan {
       const published = support.filter((r) => r.status === 'published' || publishedKw.has(norm(r.keyword))).length;
       const gateOpen = planType === 'direct' || !support.length || published * 2 >= support.length || (headPosition != null && headPosition >= 1 && headPosition <= CADENCE.gateHeadPosition);
       const ordered = planType === 'direct' ? [...rows.filter(isTop), ...rows.filter((r) => !isTop(r))] : rows;
-      const remaining = ordered.filter(open);
+      // R87 (Cadence_Plan.js `head_aside`): a ladder whose main keyword is set aside is paused — its rungs only climb towards it
+      const headSetAside = top && String(top.status || '') === 'set_aside' ? String((top as LadderRow & { status_note?: string }).status_note || '') || 'its main keyword was set aside' : '';
+      const remaining = headSetAside ? [] : ordered.filter(open);
       const eligible = remaining.filter((r) => !isTop(r) || gateOpen);
-      const mainWaiting = !gateOpen && remaining.some(isTop) && !eligible.length;
-      return { id, head, mode, status, planType, prio, start, headPosition, won, supporting: support.length, published, gateOpen, mainWaiting, remaining, eligible };
+      const mainWaiting = !headSetAside && !gateOpen && remaining.some(isTop) && !eligible.length;
+      return { id, head, mode, status, planType, prio, start, headPosition, won, supporting: support.length, published, gateOpen, mainWaiting, remaining, eligible, headSetAside };
     })
     .sort((a, b) => a.prio - b.prio || a.start.localeCompare(b.start) || a.id.localeCompare(b.id));
 
@@ -390,13 +400,15 @@ export function planCadence(input: CadenceInput, now: number): CadencePlan {
   // opened the row and never finished, and a ladder row saying `writing` is a promise, not a page — live, a page run the budget guard
   // refused left row 19 "writing" with a `started` log row, and this guard counted it among 6 pages waiting and paused the site.
   const freshW = (t: unknown) => { const x = ms(t); return x > 0 && now - x < CADENCE.waitingDays * 864e5; };
-  const isWritten = (l: ContentLogRow) => l.status === 'written' || l.status === 'published' || !!String(l.published_url ?? '').trim();
-  const waitingMap = new Map<string, { keyword: string; writtenAt: string }>();
+  // R111 (Cadence_Plan.js `WAITS`): a draft whose last quality round failed (`not_ready`) is written and not live, so it counts — labelled
+  const waits = (st: unknown) => st === 'written' || st === 'not_ready';
+  const isWritten = (l: ContentLogRow) => waits(l.status) || l.status === 'published' || !!String(l.published_url ?? '').trim();
+  const waitingMap = new Map<string, { keyword: string; writtenAt: string; needsFix: boolean }>();
   for (const l of logs) {
-    if (l.status !== 'written' || !freshW(l.started_at)) continue;
+    if (!waits(l.status) || !freshW(l.started_at)) continue;
     const k = norm(l.keyword);
     if (!k || waitingMap.has(k)) continue;
-    waitingMap.set(k, { keyword: l.keyword, writtenAt: String(l.started_at || '') });
+    waitingMap.set(k, { keyword: l.keyword, writtenAt: String(l.started_at || ''), needsFix: l.status === 'not_ready' });
   }
   for (const l of lrows) {
     if (l.status !== 'writing') continue;
@@ -407,10 +419,11 @@ export function planCadence(input: CadenceInput, now: number): CadencePlan {
     if (!lg) continue;
     const at = String(lg.started_at || l.start_date || '');
     if (!freshW(at)) continue;
-    waitingMap.set(k, { keyword: l.keyword, writtenAt: at });
+    waitingMap.set(k, { keyword: l.keyword, writtenAt: at, needsFix: lg.status === 'not_ready' });
   }
   const waitingKw = new Set(waitingMap.keys());
   const waitingKeywords = [...waitingMap.values()].sort((a, b) => a.writtenAt.localeCompare(b.writtenAt)).map((w) => w.keyword);
+  const needsFix = [...waitingMap.values()].filter((w) => w.needsFix).sort((a, b) => a.writtenAt.localeCompare(b.writtenAt)).map((w) => w.keyword);
   const pausedReason = pages > 0 && waitingKw.size >= cfg.maxWaiting ? 'pileup' : '';
   const picks = pausedReason ? [] : candidates.slice(0, pages);
 
@@ -471,7 +484,8 @@ export function planCadence(input: CadenceInput, now: number): CadencePlan {
     mainWaiting: x.mainWaiting,
     remaining: x.remaining.map(ladderItem),
     eligible: x.eligible.map(ladderItem),
-    role: x.won || x.status === 'won' ? 'won' : !['active', 'queued'].includes(x.status) ? 'paused' : x.mode === 'manual' ? 'manual' : activeIds.has(x.id) ? 'active' : queuedIds.has(x.id) ? 'queued' : 'done',
+    role: x.won || x.status === 'won' ? 'won' : !['active', 'queued'].includes(x.status) || x.headSetAside ? 'paused' : x.mode === 'manual' ? 'manual' : activeIds.has(x.id) ? 'active' : queuedIds.has(x.id) ? 'queued' : 'done',
+    headSetAside: x.headSetAside,
   }));
   return {
     config: cfg,
@@ -486,6 +500,7 @@ export function planCadence(input: CadenceInput, now: number): CadencePlan {
     pausedReason,
     waitingPublish: waitingKw.size,
     waitingKeywords,
+    needsFix,
     coveredByLivePages,
   };
 }

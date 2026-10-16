@@ -25,6 +25,15 @@ const pubLog = logRows.filter(r => r.published_url);
 // run of row 19, this report told the owner "already written — publish it" about a page nobody had written. `written` in seo_content_log is the
 // proof (the content run upserts it when the article exists); a `started` row is a run that opened the row and never finished.
 const writtenLog = logRows.filter(r => r.status === 'written' || r.status === 'published' || String(r.published_url || '').trim());
+// R111 (2026-10-16, re-rating 2026-10-15): a draft whose LAST quality round failed is `not_ready` in the content log. It is not "written"
+// (that word means "passed QA, waiting to be published"): ladders 609 and 548 told the owner "already written — publish it" about two
+// drafts their own quality check had refused. Such a rung is "fix the draft and run it again", with the quality check's reasons.
+const notReadyLog = logRows.filter(r => r.status === 'not_ready' && !String(r.published_url || '').trim());
+// R87 (2026-10-16): ladders the plan found paused (their main keyword set aside), and the AI brand names for the gate (R90)
+const pausedAll = ((plan[0] || {}).paused_ladders) || [];
+let aiBrandRowsT = []; try { aiBrandRowsT = $('Load AI Brands (Tracker)').all().map(i => i.json).filter(r => r && r.key && !r.error); } catch (e) {}
+// R91 (2026-10-16): the depth every check really asked for (Tracker Plan's request body), never a number written into a sentence
+const depthAsked = Number((((plan.find(p => p && Array.isArray(p.body)) || {}).body || [])[0] || {}).depth) || 50;
 let ladderRows = []; try { ladderRows = $('Load Ladders').all().map(i => i.json).filter(r => r && r.ladder_id && r.keyword); } catch (e) {}
 // 2026-10-12 (FIX_PLAN D11): the site's page inventory (seo_pages, filled weekly by the Site Tracker). A ladder keyword that a live page
 // already answers is never "write it" or "publish it": the next step names that page and asks for a refresh, because a second page for the
@@ -59,11 +68,16 @@ for (const d of ((plan[0] || {}).deferred_pages || [])) { if (isMob(d) || !byLad
 // R16 (2026-10-13, FIX_PLAN §3.11): rungs the fit gate set aside (a competitor's brand, a government portal, stored before the rule).
 // No check was bought for them, so they are not in `positions`; the report names them with the reason instead of promising a page.
 const asideAll = ((plan[0] || {}).set_aside_pages) || [];
+const asideAllOf = (id) => asideAll.filter(x => x && x.ladder_id === id);
 const out = [];
 for (const [id, items] of byLadder) {
   // B6-2 (2026-10-15, benchmark area 6): the whole previous row, not only its position — its snapshot is what says how much the
   // results page itself moved, and its date is what says how old the "Before" column really is.
-  const prevRowOf = (kw) => deskHist.filter(x => x.ladder_id === id && x.keyword === kw && String(x.checked_at) < nowCheck && Number(x.position) >= 0).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)))[0] || null;
+  // R88 (2026-10-16, re-rating 2026-10-15): ONE baseline per keyword per run — the newest earlier desktop reading of the keyword for this
+  // site, whichever workflow bought it (RS.prevReading). This used to read this ladder's own rows only while the tracked-keyword block
+  // below read any reading of the site, so "erp implementation dubai" was "3 of top 8 changed" in one and "5 of top 8 changed" in the other.
+  const ladDomain = (items[0] || {}).domain || '';
+  const prevRowOf = (kw) => RS.prevReading(deskHist, { keyword: kw, domain: ladDomain, before: nowCheck });
   const prevOf = (kw) => { const h = prevRowOf(kw); return h ? Number(h.position) : null; };
   const rowsK = items.map(it => { const pr = it.deferred ? null : prevRowOf(it.keyword); const cur = Number(it.result.position); const prev = it.deferred ? cur : (pr ? Number(pr.position) : null);
     const delta = (cur > 0 && prev > 0) ? prev - cur : (cur > 0 && prev === 0) ? 100 : (cur === 0 && prev > 0) ? -100 : null;
@@ -93,7 +107,7 @@ for (const [id, items] of byLadder) {
   // page that slipped and a page that was simply pushed down by a rewritten results page read identically. The proof was already
   // stored (criterion 2.2): `snapshot_json` keeps the top 10 with their URLs for every check. Nothing extra is bought.
   const changes = new Map(rowsK.map(r => [r.keyword, r.deferred ? RS.churnNone('no check was bought for this keyword this week — it is checked monthly until its page is live')
-    : RS.churn(r.prev_row ? r.prev_row.snapshot_json : null, r.result.snapshot_json, {})]));
+    : RS.withNoise(RS.churn(r.prev_row ? r.prev_row.snapshot_json : null, r.result.snapshot_json, {}), RS.noise(deskHist, { keyword: r.keyword, domain: ladDomain }))]));   // R88: judged against what two readings of one moment show
   const moveNoteOf = (r) => RS.moveNote(r.delta, changes.get(r.keyword));
   const withMove = (r) => { const n = moveNoteOf(r); return r.keyword + ' (' + posText(r.previous) + ' \u2192 ' + posText(r.current) + (n ? '; ' + n : '') + ')'; };
   // how old the oldest reading this report compares against is, and what Google did in between (criterion 2.12)
@@ -121,19 +135,34 @@ for (const [id, items] of byLadder) {
   // results is what makes it a brand query. The check was already paid for, so the position stays in the table — but the rung is taken
   // out of "write or improve" and named with its reason. A rung whose page is already written is kept and only flagged.
   const trackedComps = [...new Set(rowsK.flatMap(r => ((serps.get(r.keyword) || {}).competitors || []).filter(c => c.tracked).map(c => c.domain)))];
+  // R87 (2026-10-16): the results page is read ONE entry per position (RS.serpHosts: the snapshot's own top ten). The old line joined the
+  // answer's "above" list with its competitor list, so every domain on page 1 was counted twice and "e invoicing in uae" — tax.gov.ae #1
+  // and mof.gov.ae #2, two government sites of the five the rule reads, it needs three — was set aside as a government query (exec 632).
+  // R90: a rung is also judged against the HEAD's page of this check (the brands that compete for the ladder's own subject) and the
+  // names AI uses for other companies; the ladder heads of the site stay protected, so its own subject is never read as a brand.
+  const headDoms = RS.serpHosts(head.deferred ? null : head.result, 10);
+  const sidF = 'site_' + normD(head.domain).replace(/[^a-z0-9]+/g, '-');
+  const brandsF = fitLearnedBrands(aiBrandRowsT.filter(r => String(r.key || '') === 'ai_brands:' + sidF));
+  const protectF = [...new Set([head.head_keyword || '', ...ladderRows.filter(l => normD(l.domain) === normD(head.domain)).map(l => String(l.head_keyword || ''))].filter(Boolean))];
   const fitAside = []; const asideKw = new Set();
   for (const r of rowsK) {
     const s = serps.get(r.keyword); if (!s) continue;
-    const doms = [...(s.above || []), ...(s.competitors || [])].filter(x => x && x.domain && Number(x.position) > 0)
-      .sort((a, b) => Number(a.position) - Number(b.position)).map(x => x.domain);
+    const doms = RS.serpHosts(r.result, 10);
     const lr = rowOf(r.keyword);
     const g = fitStored({ keyword: r.keyword, status: r.status, page_exists: lr.page_exists, published_url: (logOf(r.keyword) || {}).published_url },
-      { own_domain: normD(head.domain), brands: {}, competitors: trackedComps, serp: doms, serp_domains: doms, protect: [head.head_keyword || ''] });
+      { own_domain: normD(head.domain), brands: brandsF, competitors: trackedComps, serp: doms, serp_domains: doms.concat(headDoms).filter((h, i, a) => a.indexOf(h) === i), protect: protectF });
     if (!g.flagged) continue;
     fitAside.push({ ladder_id: id, keyword: r.keyword, rung: r.rung, page_no: r.page_no, status: r.status || '', target_url: lr.target_url || '',
       reason: g.reason, detail: g.detail, note: g.note, written: !!g.live, dropped: !g.ok, seen: 'this check' });
     if (!g.ok) asideKw.add(r.keyword);
   }
+  // R87: a ladder whose MAIN keyword is set aside — by this check, by the plan, or already on its row — is paused: nothing asks for its
+  // rungs (they exist only to climb towards that keyword), the head's row is written back `set_aside` with the reason, and the next step
+  // says so and offers a re-plan. Setting the head aside is not dropping the topic: nothing is deleted.
+  const headAsideNow = fitAside.find(x => x.rung === 4 && x.dropped) || (asideAllOf(id).find(x => Number(x.rung) === 4 && x.dropped)) || null;
+  const pausedPlan = pausedAll.find(x => x && x.ladder_id === id) || null;
+  const paused = headAsideNow ? { keyword: headAsideNow.keyword, reason: headAsideNow.reason, detail: headAsideNow.detail, note: headAsideNow.note, seen: headAsideNow.seen || 'before this check' }
+    : pausedPlan ? { keyword: pausedPlan.head_keyword, reason: pausedPlan.reason, detail: pausedPlan.detail, note: pausedPlan.note, seen: 'stored', held: pausedPlan.held || [] } : null;
   const isTop = (r) => r.rung === 4;
   const topRow = rowsK.find(isTop) || null;
   const invModel = pageRows.length ? modelFor(head.domain) : null;
@@ -142,22 +171,31 @@ for (const [id, items] of byLadder) {
   const coveredBy = (r) => { if (!invModel) return null; const m = SM.matchPage(invModel, r.keyword); return (m && ukeyT(m.url) !== ukeyT(r.target_url)) ? m : null; };
   const liveOf = (r) => { const lr = rowOf(r.keyword); return r.status === 'published' || !!logOf(r.keyword) || lr.page_exists === true || lr.page_exists === 'true' || r.current > 0 || !!coveredBy(r); };
   const writtenOf = (kw) => writtenLog.some(l => normK(l.keyword) === normK(kw) && (!l.domain || normD(l.domain) === normD(head.domain)));   // R1
+  const notReadyOf = (kw) => (writtenOf(kw) ? null : notReadyLog.filter(l => normK(l.keyword) === normK(kw) && (!l.domain || normD(l.domain) === normD(head.domain))).sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0]) || null;   // R111
+  const fixText = (kw) => { const l = notReadyOf(kw); const why = String((l && l.qa_reasons) || '').split(/;\s+/).filter(Boolean).slice(0, 2).join('; ');
+    return 'written, but the draft did not pass the quality check' + (why ? ' (' + why.slice(0, 220) + ')' : '') + ' — fix it and run it again; do not publish it as it is'; };
   const mainLive = !!topRow && liveOf(topRow), mainWritten = !!topRow && (mainLive || (topRow.status === 'writing' && writtenOf(topRow.keyword)));
   const mainFirst = !!topRow && (Number(topRow.page_no) === 1 || !rungs.length);
   const allIn = rungs.length > 0 && rungs.every(r => r.reached);
   const pending = rungs.find(r => !r.reached) || null;
   const pageOf = (t) => ({ keyword: t.keyword, page_type: t.page_type, target_url: t.target_url, status: t.status });
   let next;
-  if (done) next = { action: 'complete', rung: 4, text: 'The top rung "' + head.keyword + '" has held the top 3 for 4 checks. From now on it is checked once a month with the published pages, so a drop is noticed; keep the pages fresh and the links growing.', pages: [] };
+  const mainNotReady = !!topRow && !mainLive && !mainWritten && topRow.status === 'writing' && !!notReadyOf(topRow.keyword);   // R111
+  if (paused) next = { action: 'paused', rung: 4, main_page: mainLive ? 'live' : 'planned', reason: paused.reason,
+    text: 'This ladder is paused: its main keyword "' + paused.keyword + '" is not a search this website should target (' + (paused.detail || paused.reason) + ')'
+      + (paused.seen === 'this check' ? ', as this week\'s check of its results page showed' : '') + '. None of its pages is written or asked for until you re-plan the ladder towards another main keyword, or tell us the keyword is deliberate; the pages that are already live keep being checked.', pages: [] };
+  else if (done) next = { action: 'complete', rung: 4, text: 'The top rung "' + head.keyword + '" has held the top 3 for 4 checks. From now on it is checked once a month with the published pages, so a drop is noticed; keep the pages fresh and the links growing.', pages: [] };
   else if (topRow && !mainWritten && (mainFirst || allIn)) next = { action: 'write_top', rung: 4, main_page: 'planned',
     text: (mainFirst ? (rungs.length ? 'This plan writes the main page first: ' : 'The main page is the whole ladder for now: ') : 'Every rung is in the top 10: ') + 'write the main page "' + head.keyword + '"' + (rungs.length && mainFirst ? '; its supporting pages follow once it is live' : '') + '.', pages: [pageOf(topRow)] };
+  else if (mainNotReady && (mainFirst || allIn)) next = { action: 'fix_top', rung: 4, main_page: 'not_ready',
+    text: 'The main page "' + head.keyword + '" is ' + fixText(topRow.keyword) + '.', pages: [pageOf(topRow)] };
   else if (topRow && mainWritten && !mainLive && (mainFirst || allIn)) next = { action: 'publish_top', rung: 4, main_page: 'written', publish_url: topRow.target_url || '',
     text: 'The main page "' + head.keyword + '" is written but not live yet: publish it' + (topRow.target_url ? ' at ' + topRow.target_url : '') + '. Nothing climbs until it is published' + (rungs.length && mainFirst ? ', and its supporting pages wait for it' : '') + '.', pages: [] };
   else if (pending) {
     const target = rowsK.filter(x => x.rung === pending.rung && !asideKw.has(x.keyword));   // R16: never ask for a page we should not write
     next = { action: 'write_rung_' + pending.rung, rung: pending.rung, main_page: mainLive ? 'live' : mainWritten ? 'written' : 'planned',
       text: 'Work on rung ' + pending.rung + ': ' + (pending.top10 ? pending.top10 + ' of ' + pending.pages + ' pages are in the top 10. ' : 'none of its pages is in the top 10 yet. ') + 'Write or improve: ' + target.map(t => { const c = coveredBy(t);
-        return '"' + t.keyword + '"' + (c ? ' (' + c.url + ' already answers this search — refresh that page, do not publish a second one)' : (t.status === 'writing' && writtenOf(t.keyword)) ? ' (already written — publish it)' : t.status === 'writing' ? ' (a page run was started for it but no page was written — it is written again)' : ''); }).join(', ') + '.',
+        return '"' + t.keyword + '"' + (c ? ' (' + c.url + ' already answers this search — refresh that page, do not publish a second one)' : (t.status === 'writing' && writtenOf(t.keyword)) ? ' (already written — publish it)' : (t.status === 'writing' && notReadyOf(t.keyword)) ? ' (' + fixText(t.keyword) + ')' : t.status === 'writing' ? ' (a page run was started for it but no page was written — it is written again)' : ''); }).join(', ') + '.',
       pages: target.map(t => { const c = coveredBy(t); return c ? { ...pageOf(t), status: 'improve', target_url: c.url, covered_by: c.url } : pageOf(t); }) };
   } else { const cTop = topRow ? coveredBy(topRow) : null;   // D11: the page that answers the main keyword may be one the site already had
     next = { action: 'improve_top', rung: 4, main_page: 'live',
@@ -195,7 +233,7 @@ for (const [id, items] of byLadder) {
   const remindHtml = links_to_add.length ? '<p><b>Now live — add the links:</b> ' + links_to_add.map(x => '"' + esc(x.anchor) + '" (' + esc(x.url) + ')').join(', ') + '. ' +
     'Each of these pages was published since the last check, so the other ladder pages do not link to it yet: add one link from ' + (links_to_add.some(x => x.rung !== 4) ? 'the main page "' + esc(head.head_keyword) + '"' : 'the pages that cover the same topic') + ' using the anchor shown.</p>' : '';
   const firstPending = (next.pages || []).find(p => !(p.status === 'writing' && writtenOf(p.keyword))) || (next.pages || [])[0];   // R1: a `writing` row with no written page is still to be written
-  const apiBody = firstPending ? { mode: 'keyword', keyword: firstPending.keyword, page_type: firstPending.page_type || 'Service Page', country: head.country || '', domain: head.domain, existing_page_url: (next.action === 'improve_top' || firstPending.covered_by) ? (firstPending.target_url || '') : '', email: head.email, ladder_id: id, ladder_rung: next.rung, ladder_head: head.head_keyword, force_content: true } : null;   // D11: a covered keyword is written as a refresh of the page that exists
+  const apiBody = (firstPending && next.action !== 'paused') ? { mode: 'keyword', keyword: firstPending.keyword, page_type: firstPending.page_type || 'Service Page', country: head.country || '', domain: head.domain, existing_page_url: (next.action === 'improve_top' || firstPending.covered_by) ? (firstPending.target_url || '') : '', email: head.email, ladder_id: id, ladder_rung: next.rung, ladder_head: head.head_keyword, force_content: true } : null;   // D11: a covered keyword is written as a refresh of the page that exists
   const formLink = FORM_URL + '?' + encodeURIComponent('What do you want?') + '=' + encodeURIComponent('I know my keyword');
   // B6-2: a reading from a month ago is not "before" in the sense a weekly table implies — a won ladder and an unpublished rung are
   // both checked monthly, and the column said nothing about it.
@@ -262,11 +300,21 @@ for (const [id, items] of byLadder) {
   ];
   // R16: this ladder's set-aside rungs, with the reason, before the next step (so nothing in the report asks for that page) — the ones
   // the plan never checked and the ones this run's results page revealed
-  const aside = [...asideAll.filter(x => x && x.ladder_id === id), ...fitAside];
-  const asideHtml = aside.length ? '<p style="color:#b45309"><b>Set aside</b> (planned before the keyword rule existed, no position checked and no page to write): '
-    + aside.map(x => esc(x.note || x.keyword)).join(' | ') + '</p>' : '';
-  const subject = '[Keyword ladder] ' + head.head_keyword + ' — ' + head.domain + ': ' + (head.current > 0 ? 'top page at #' + head.current : 'top page not yet in the top 100') + (drops.length ? ' · ' + drops.length + ' drop(s)' : '');
-  const html = '<p>Hi,</p><p>Position check for your keyword ladder towards <b>' + esc(head.head_keyword) + '</b> on <b>' + esc(head.domain) + '</b> (' + rowsK.length + ' keywords, Google top 50).</p>' + table +
+  const aside = [...asideAllOf(id), ...fitAside];
+  // R87 (2026-10-16): a keyword set aside BEFORE any check and one set aside BY this week's check are not the same sentence — the second
+  // one's position is in the table above, so "no position checked" was false for it
+  const asideBefore = aside.filter(x => x.seen !== 'this check'), asideNow = aside.filter(x => x.seen === 'this check');
+  const asideHtml = (asideBefore.length ? '<p style="color:#b45309"><b>Set aside before any check</b> (planned before the keyword rule existed, no position checked and no page to write): '
+    + asideBefore.map(x => esc(x.note || x.keyword)).join(' | ') + '</p>' : '')
+    + (asideNow.length ? '<p style="color:#b45309"><b>Set aside by this week\'s check</b> (its position is in the table above; this results page shows it is not a search to write for, so no page is written for it): '
+    + asideNow.map(x => esc(x.note || x.keyword)).join(' | ') + '</p>' : '');
+  // R87: the rows to write back (Tracker Ladder Marks -> Mark Set Aside (Tracker)): every rung refused that has no page yet, and the head of
+  // a paused ladder with the reason, so the cadence and the app stop treating the ladder as one to write
+  const ladder_marks = aside.filter(x => x && x.dropped && !x.written && x.keyword).map(x => ({ ladder_id: id, keyword: x.keyword, status: 'set_aside',
+    status_note: String((x.note || x.detail || x.reason || 'set aside by the keyword rule') + (Number(x.rung) === 4 ? ' — the ladder is paused until it is re-planned' : '')).slice(0, 300) }))
+    .filter((m, i, a) => a.findIndex(o => o.keyword === m.keyword) === i);
+  const subject = '[Keyword ladder] ' + head.head_keyword + ' — ' + head.domain + ': ' + (head.current > 0 ? 'top page at #' + head.current : 'top page not yet in the top ' + depthAsked) + (drops.length ? ' · ' + drops.length + ' drop(s)' : '');
+  const html = '<p>Hi,</p><p>Position check for your keyword ladder towards <b>' + esc(head.head_keyword) + '</b> on <b>' + esc(head.domain) + '</b> (' + rowsK.length + ' keywords, Google top ' + depthAsked + ').</p>' + table +
     '<p><b>Rungs:</b> ' + (rungs.map(r => 'Rung ' + r.rung + ': ' + r.top10 + '/' + r.pages + ' in top 10, ' + r.top3 + ' in top 3' + (r.reached ? ' ✓ reached' : '')).join(' · ') || 'no rung pages tracked') + '</p>' +
     (gains.length ? '<p style="color:#15803d"><b>Gains:</b> ' + esc(gains.join('; ')) + '</p>' : '') + (drops.length ? '<p style="color:#b91c1c"><b>Drops to look at:</b> ' + esc(drops.join('; ')) + '</p>' : '') +
     serpHtml + remindHtml + RP.block(replan) + asideHtml + '<p><b>Next step:</b> ' + esc(next.text) + '</p>' + (next.publish_url ? '<p>Page to publish: <a href="' + esc(next.publish_url) + '">' + esc(next.publish_url) + '</a></p>' : '') +
@@ -295,6 +343,7 @@ for (const [id, items] of byLadder) {
     page_movement: { compared: [...changes.values()].filter(c => c.available).length, not_available: [...changes.values()].filter(c => !c.available).length,
       high: [...changes.values()].filter(c => c.available && c.band === 'high').length, some: [...changes.values()].filter(c => c.available && c.band === 'some').length,
       still: [...changes.values()].filter(c => c.available && c.band === 'still').length,
+      noise: [...changes.values()].filter(c => c.available && c.band === 'noise').length,   // R88: no larger than two readings of one moment
       basis: 'measured: the stored top ten of this reading against the stored top ten of the previous one', labels_basis: RS.CHURN.labels_basis,
       window_from: windowStart || null, head: headChange },
     updates_in_window: sinceMarks, update_note: updateLine,
@@ -309,7 +358,7 @@ for (const [id, items] of byLadder) {
         share_of_voice: s ? s.share_of_voice : null, above: s ? s.above : [], competitors: s ? s.competitors : [], snapshot_at: s ? s.snapshot_at : null,
         previous_checked_at: r.prev_at || null, previous_is_stale: staleRead(r),
         serp_change: changes.get(r.keyword) || null, move_note: moveNoteOf(r) }; }),
-    rungs, gains, drops, serp_summary, annotations: marks, lineage, next_step: next, links_to_add, set_aside: aside, api_body: apiBody, done, won, stuck,
+    rungs, gains, drops, serp_summary, annotations: marks, lineage, next_step: next, links_to_add, set_aside: aside, ladder_marks, paused, api_body: apiBody, done, won, stuck,
     stuck_weeks: stuckWeeks, replan } });   // G32: the proposal, never applied here
 }
 // ====================================================================================================================
@@ -349,11 +398,11 @@ if (watchMeta && (watchMeta.sites || []).length) {
       const kw = String(sd.keyword).toLowerCase();
       const read = !!sd.row && sd.row.position != null && sd.row.position !== '';
       const current = read ? Number(sd.row.position) : null;
-      const prev = read ? (series(kw).filter(h => String(h.checked_at) < String(sd.at || nowCheck))[0] || null) : null;
+      const prev = read ? RS.prevReading(deskHist, { keyword: kw, domain: dom, before: String(sd.at || nowCheck) }) : null;   // R88: the ladder report's baseline, one rule
       const previous = prev ? Number(prev.position) : null;
       const delta = (current > 0 && previous > 0) ? previous - current : (current > 0 && previous === 0) ? 100 : (current === 0 && previous > 0) ? -100 : null;
       const change = !read ? RS.churnNone('no live reading of this results page is stored for this keyword yet')
-        : RS.churn(prev ? prev.snapshot_json : null, sd.row.snapshot_json, {});
+        : RS.withNoise(RS.churn(prev ? prev.snapshot_json : null, sd.row.snapshot_json, {}), RS.noise(deskHist, { keyword: kw, domain: dom }));
       const f = read ? RS.unpack(sd.row.features_json, null) : null;
       const c = read ? RS.unpack(sd.row.competitors_json, null) : null;
       const sov = (read && sd.row.share_of_voice != null && Number(sd.row.share_of_voice) >= 0) ? Number(sd.row.share_of_voice) : null;

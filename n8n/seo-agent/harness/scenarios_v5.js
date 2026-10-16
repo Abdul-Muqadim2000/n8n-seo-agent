@@ -15522,5 +15522,245 @@ await guard('S105 R73 R74 lineage that matches the page, and a single reading is
 });
 
 
+// ===================================================================================
+// S110-S113 (2026-10-16, re-rating 2026-10-15 — defects R111, R87, R88, R90, R91, R92 parts 3-4, R93, R59 (Site Tracker path), R42):
+// fixtures cut from the live executions 632 (Rank Tracker), 638 (Content Cadence dry run) and 616 (the "ai consulting" page run whose
+// last quality round failed), scrubbed (no e-mail address, no hook URL): harness/fixtures_live/r_a4_live.json.gz
+// ===================================================================================
+const A4 = (() => { try { return JSON.parse(require('zlib').gunzipSync(require('fs').readFileSync(require('path').join(__dirname, 'fixtures_live', 'r_a4_live.json.gz'))).toString()); } catch (e) { return null; } })();
+const A4J = (rows) => (rows || []).map(j => ({ json: JSON.parse(JSON.stringify(j)) }));
+const A4E = [{ json: {} }];
+// the two drafts whose LAST quality round failed (exec 616 "ai consulting", 2026-10-14 exec 554 "azure api management monetization"), as
+// the fixed Content Log Row now stores them; rows 3 and 4 (erp software uae, service industry erp software) passed and stay `written`
+const A4_FAILED = { 'ai consulting': 'it covers 60% of the terms the best-ranking page covers, against a target of 90%; External links to sources not in the evidence plan: centralbank.ae, difc.com, adgm.com — verify each one',
+  'azure api management monetization': 'the main content is 3,180 words against a target of 2,100' };
+const A4log = (o = {}) => A4.rank632.log.map(r => (A4_FAILED[r.keyword] && o.failed !== false) ? { ...r, status: 'not_ready', qa_reasons: A4_FAILED[r.keyword] } : { ...r });
+const a4check = (SN, w = 600) => (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, w), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+// one Rank Tracker report run on exec 632's own inputs (its plan, the answers it read, the tables it loaded)
+const a4Tracker = async (o = {}) => {
+  const R = A4.rank632;
+  mock('Tracker Plan', A4J(o.plan || R.plan)); mock('Parse Positions', A4J(o.positions || R.positions)); mock('Save History', A4J(o.positions || R.positions));
+  mock('Load History', A4J(R.history)); mock('Load Content Log (Tracker)', A4J(o.log || R.log)); mock('Load Ladders', A4J(o.ladders || R.ladders));
+  mock('Load Pages (Tracker)', A4J(R.pages)); mock('Load Monitors (Tracker)', A4J(R.monitors)); mock('Load Sites (Tracker)', A4J(R.sites));
+  mock('SERP Check Answers', [{ json: { __dfs: R.answers_dfs } }]); mock('Load AI Brands (Tracker)', o.brands || A4E);
+  return (await run('Tracker Report', store['Save History'])).map(x => x.json);
+};
+
+await guard('S110 R111 a draft that failed its quality check is never "publish it"', async () => {
+  const SN = 'S110 R111 — a page whose LAST quality round failed is stored not_ready with its reasons, and every reader says "fix it and run it again", never "publish it"; it is still counted by the pile-up guard and still found if it goes live';
+  reset(); begin(SN); const check = a4check(SN);
+  if (!A4) { check('the live fixture harness/fixtures_live/r_a4_live.json.gz is readable', false, 'missing'); return; }
+  const LOGCOLS = require('./table_cols.json').LOG; const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const D = 'techand.ai', SITE = 'site_techand-ai';
+  // ---------- (a) the writer of the row: exec 616's final verdict ----------
+  const QA616 = { qa_not_ready: true, qa_publishable: false, qa_label: 'did not pass the quality check — not ready to publish',
+    qa_reasons: ['it covers 60% of the terms the best-ranking page covers, against a target of 90%', 'External links to sources not in the evidence plan: centralbank.ae, difc.com, adgm.com — verify each one'] };
+  const logRow = async (pkg) => { mock('Normalize Input', [{ json: { mode: 'keyword', domain: D, keyword: 'ai consulting', page_type: 'Service Page', request_id: '609', client_ip: 'ladder:lad_mv9wshpdy2jf', ladder_id: 'lad_mv9wshpdy2jf', ladder_rung: 1 } }]);
+    mock('Blog Package', [{ json: { article_html: '<h1>AI consulting</h1>', page_markdown: '# AI consulting', ...pkg } }]); mock('Load Content Log (Run)', A4J(A4.rank632.log));
+    return (await run('Content Log Row', store['Load Content Log (Run)']))[0].json; };
+  const r616 = await logRow(QA616);
+  console.log('   616 row ->', JSON.stringify({ status: r616.status, qa_reasons: String(r616.qa_reasons || '').slice(0, 120) }));
+  check('R111: the page run whose last quality round failed (exec 616) is stored `not_ready` with the reasons \'; \'-joined — `written` would read as "passed QA, waiting to be published" to nine readers',
+    r616.status === 'not_ready' && r616.qa_reasons === QA616.qa_reasons.join('; ') && r616.request_id === '609' && r616.started_at === '2026-10-15T19:22:58.287Z', JSON.stringify(r616));
+  check('R111: the row is still exactly the table\'s columns (qa_reasons is a column of seo_content_log, ladder_common.LOG_COLS)', eq(Object.keys(r616).sort(), LOGCOLS.slice().sort()) && LOGCOLS.includes('qa_reasons'), JSON.stringify(Object.keys(r616)));
+  const rOk = await logRow({ qa_not_ready: false, qa_publishable: true, qa_reasons: [] });
+  check('R111: a page that passed stays `written` (= passed QA, waiting to be published) with no reasons', rOk.status === 'written' && rOk.qa_reasons === '', JSON.stringify({ status: rOk.status, r: rOk.qa_reasons }));
+  const rNoQa = await logRow({});
+  check('R111: a page with no quality verdict at all (an old package) stays `written`, never invented as failed', rNoQa.status === 'written', rNoQa.status);
+  // ---------- (b) the Site Tracker: plan, metrics (actions), brief ----------
+  const R = A4.rank632; const logs = A4log();
+  mock('Manual Run', A4E); mock('Load Sites', A4J(R.sites)); mock('Load Ladders', A4J(R.ladders)); mock('Load Rank History', A4E); mock('Load Site Metrics', A4E); mock('Load Query History', A4E);
+  mock('Load Content Log', A4J(logs)); mock('Load Console Alerts', A4E); mock('Load Check-ins', A4E); mock('Load Profiles (Site)', A4E); mock('Load Monitors (Site)', A4J(R.monitors));
+  const plan = await run('Site Plan', A4E); const sp = plan[0].json;
+  console.log('   site plan ->', JSON.stringify({ pending: (sp.pending_publish || []).map(p => p.keyword), needs_fix: (sp.needs_fix || []).map(p => p.keyword) }));
+  check('R111: Site Plan waits for a publish link only for the two drafts that passed (rows 3 and 4), and lists the two failed drafts apart as needing a fix, with their reasons',
+    eq((sp.pending_publish || []).map(p => p.keyword).sort(), ['erp software uae', 'service industry erp software'])
+    && eq((sp.needs_fix || []).map(p => p.keyword).sort(), ['ai consulting', 'azure api management monetization'])
+    && (sp.needs_fix || []).every(p => (p.reasons || []).length > 0), JSON.stringify({ pending: sp.pending_publish, needs_fix: sp.needs_fix }));
+  mock('Resolve Properties', plan.map(p => ({ json: { ...p.json, gsc_connected: false, gsc_property: '', gsc_error: 'not connected in this test' } })));
+  const sm = (await run('Site Metrics', store['Resolve Properties']))[0].json;
+  const act = (kw) => sm.actions.filter(a => a.keyword === kw);
+  console.log('   actions ->', JSON.stringify(sm.actions.map(a => [a.type, a.keyword])));
+  check('R111: the weekly site report gives NO "publish" action for a draft that failed its quality check (exec 634 put "P1 Publish the written page for \\"ai consulting\\"" on top, with an "I published it" button)',
+    !sm.actions.some(a => a.type === 'publish' && (a.keyword === 'ai consulting' || a.keyword === 'azure api management monetization')) && !sm.actions.some(a => /Publish the written page for "ai consulting"/.test(a.action)), JSON.stringify(sm.actions.map(a => [a.type, a.keyword])));
+  check('R111: it gives a `fix_draft` action instead — keyword, the planned URL, and the quality check\'s own reasons',
+    ['ai consulting', 'azure api management monetization'].every(k => act(k).some(a => a.type === 'fix_draft' && Array.isArray(a.reasons) && a.reasons.length && /did not pass the quality check/.test(a.action) && /run it again/.test(a.action)))
+    && act('ai consulting').find(a => a.type === 'fix_draft').reasons.some(x => /60% of the terms/.test(x)), JSON.stringify(sm.actions.filter(a => a.type === 'fix_draft')));
+  check('R111: a draft that passed is still "publish it" — the fix is about failed drafts only', act('erp software uae').some(a => a.type === 'publish' || a.type === 'refresh_existing'), JSON.stringify(act('erp software uae')));
+  const lpAi = sm.ladder_pages.find(p => p.keyword === 'ai consulting') || {};
+  check('R111: the ladder page table says the draft did not pass the quality check — not "written, not published yet"', /did not pass the quality check/.test(lpAi.inspect_error || '') && !/written, not published yet/.test(lpAi.inspect_error || ''), JSON.stringify(lpAi));
+  const bi = await run('Brief Input', [{ json: sm }]); const facts = JSON.parse(bi[0].json.facts);
+  console.log('   brief ->', JSON.stringify({ waiting: facts.pages_waiting_for_publish_link, fix: facts.drafts_to_fix_not_publish }));
+  check('R111: the Claude site brief is never told to ask for the failed drafts to be published (exec 634: "Publish the three written pages: /ai-consulting/ …"); it gets them as drafts to fix, with the reasons',
+    !(facts.pages_waiting_for_publish_link || []).some(x => /ai consulting|azure api management/.test(x)) && (facts.drafts_to_fix_not_publish || []).length === 2
+    && (facts.drafts_to_fix_not_publish || []).some(x => /ai consulting/.test(x) && /60%/.test(x)), JSON.stringify({ w: facts.pages_waiting_for_publish_link, f: facts.drafts_to_fix_not_publish }));
+  // ---------- (c) the Rank Tracker on exec 632's own inputs ----------
+  const tr = await a4Tracker({ log: logs });
+  const rep = (id) => tr.find(x => x.ladder_id === id) || {};
+  const ai = rep('lad_mv9wshpdy2jf'), az = rep('lad_mv8auur8kz49');
+  console.log('   next ai consulting ->', String((ai.next_step || {}).text || '').slice(0, 260));
+  check('R111: the Rank Tracker never says "already written — publish it" for a failed draft (ladders 609 and 548 did), and says what to do instead',
+    !/"ai consulting" \(already written — publish it\)/.test(ai.html || '') && !/"azure api management monetization" \(already written — publish it\)/.test(az.html || '')
+    && /"ai consulting" \([^)]*did not pass the quality check/.test((ai.next_step || {}).text || '') && /did not pass the quality check/.test((az.next_step || {}).text || ''),
+    JSON.stringify({ ai: (ai.next_step || {}).text, az: (az.next_step || {}).text }));
+  check('R111: a draft that passed QA is still "already written — publish it" (service industry erp software, ladder lad_mv5pjt5y4aoa)', /"service industry erp software" \(already written — publish it\)/.test((rep('lad_mv5pjt5y4aoa').next_step || {}).text || '') || /service industry erp software/.test(JSON.stringify(rep('lad_mv5pjt5y4aoa').next_step || {})), JSON.stringify(rep('lad_mv5pjt5y4aoa').next_step));
+  // ---------- (d) the Content Cadence (exec 638's dry run) ----------
+  const C = A4.cadence638;
+  const cadence = async (o = {}) => { mock('Manual Run', A4J(C.manual)); mock('Load Sites', A4J(C.sites)); mock('Load Cadence', A4J(C.cadence)); mock('Load Ladders', A4J(o.ladders || C.ladders));
+    mock('Load Query History', A4E); mock('Load Trends', A4J(C.trends)); mock('Load Content Log', A4J(o.log || C.log)); mock('Load Ladder Settings', A4J(C.settings));
+    mock('Load Main Keyword Ranks', A4J(o.ranks || C.ranks)); mock('Load AI Targets (Cadence)', A4J(C.targets)); mock('Load Monitors (Cadence)', A4J(C.monitors)); mock('Load Pages (Cadence)', A4J(C.pages));
+    mock('Load AI Brands (Cadence)', A4E);
+    return (await run('Cadence Plan', store['Load Pages (Cadence)'])).map(x => x.json); };
+  const cp = await cadence({ log: A4log() }); const st = cp.find(x => x.report_only) || cp[0];
+  console.log('   cadence ->', JSON.stringify({ reason: st.reason, waiting: st.waiting_publish, fix: st.needs_fix_keywords }));
+  check('R111: the pile-up guard still counts the two failed drafts (4 waiting at limit 3), and names them as needing a fix, not as pages to publish',
+    st.paused_reason === 'pileup' && st.waiting_publish === 4 && eq((st.needs_fix_keywords || []).slice().sort(), ['ai consulting', 'azure api management monetization'])
+    && /needs a fix|need a fix/.test(st.reason) && /^4 written pages waiting for publication \(pile-up guard, limit 3\): /.test(st.reason), JSON.stringify({ reason: st.reason, fix: st.needs_fix_keywords }));
+  // ---------- (e) publish detection still sees it; an AI target is never advanced by it ----------
+  mock('Site Plan', [{ json: { site_id: SITE, domain: D } }]); mock('Load Content Log', A4J(A4log())); mock('Load Ladders', A4J(R.ladders));
+  const pc = await run('Publish Candidates', store['Load Ladders']);
+  const cAi = ((pc[0] || {}).json.candidates || []).find(c => c.keyword === 'ai consulting');
+  check('R111: publish detection still watches a failed draft, so one the owner publishes anyway is found — and it carries the flag', !!cAi && cAi.qa_failed === true, JSON.stringify(cAi && { k: cAi.keyword, f: cAi.qa_failed }));
+  mock('Load AI Targets Writing (Cadence)', [{ json: { target_id: 'ait_x', status: 'writing', request_id: '609', written_at: '2026-10-15T19:22:58.287Z' } }]);
+  mock('Load Content Log', A4J(A4log()));
+  const ats = (await run('AI Target Settle', store['Load Content Log'])).map(x => x.json);
+  check('R111: an AI target whose page run left a failed draft is NOT advanced to `written` (only a page that passed counts)', !ats.some(x => x.target_id === 'ait_x' && x.status === 'written'), JSON.stringify(ats));
+  mock('Load Content Log', A4J(A4log({ failed: false })));
+  const ats2 = (await run('AI Target Settle', store['Load Content Log'])).map(x => x.json);
+  check('R111: the same target IS advanced when its page passed', ats2.some(x => x.target_id === 'ait_x' && x.status === 'written'), JSON.stringify(ats2));
+});
+
+await guard('S111 R87 R90 R91 a set-aside head pauses its ladder; the stored rungs see the head\'s results page', async () => {
+  const SN = 'S111 R87 R90 R91 — the Rank Tracker plans and reports on exec 632\'s inputs: "facts erp" is set aside by the head\'s own stored results page, a head set aside by THIS check pauses its ladder (report, ladder row, cadence) and says it was checked, two readings of one domain are not counted twice, and the subject names the depth really asked for';
+  reset(); begin(SN); const check = a4check(SN);
+  if (!A4) { check('the live fixture is readable', false, 'missing'); return; }
+  const R = A4.rank632; const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  // ---------- R90: the plan ----------
+  mock('Load Ladders', A4J(R.ladders)); mock('Load History', A4J(R.history)); mock('Load Content Log (Tracker)', A4J(R.log)); mock('Load Pages (Tracker)', A4J(R.pages));
+  mock('Load Sites (Tracker)', A4J(R.sites)); mock('Load Monitors (Tracker)', A4J(R.monitors)); mock('Load AI Brands (Tracker)', A4E);
+  const tp = (await run('Tracker Plan', store['Load Monitors (Tracker)'])).map(x => x.json);
+  const aside = (tp[0] || {}).set_aside_pages || [];
+  console.log('   set aside ->', JSON.stringify(aside.map(a => [a.keyword, a.reason, a.detail])));
+  const facts = aside.find(a => a.keyword === 'facts erp');
+  check('R90: "facts erp" (rung 2 of "erp software uae") is set aside by the plan — facts.ae is on the HEAD\'s stored results page (#6 on 2026-10-14) — with the reason "other brand", and no check is bought for it',
+    !!facts && facts.reason === 'other brand' && /facts/.test(facts.detail) && /facts\.ae/.test(facts.detail) && facts.dropped === true && !tp.some(c => c.keyword === 'facts erp'), JSON.stringify(facts));
+  check('R90: the head\'s results page sets aside nothing else on techand.ai\'s ladders — the ladder heads and the services stay protected ("erp", "azure", "dynamics" are the site\'s own subject)',
+    eq(aside.filter(a => a.dropped).map(a => a.keyword), ['facts erp']), JSON.stringify(aside.map(a => a.keyword)));
+  // ---------- R87 (part 1): the head was not a government query at all ----------
+  const tr = await a4Tracker();
+  const ei = tr.find(x => x.ladder_id === 'lad_mupia2l2c0tp') || {};
+  console.log('   e-invoicing set aside ->', JSON.stringify((ei.set_aside || []).map(a => [a.keyword, a.reason, a.seen])));
+  check('R87: "e invoicing in uae" is NOT set aside on exec 632\'s results page — only tax.gov.ae (#1) and mof.gov.ae (#2) of the top five are government, under the rule\'s three; the report counted each of them twice (the "above" list and the competitor list of the same answer)',
+    !(ei.set_aside || []).some(a => a.keyword === 'e invoicing in uae'), JSON.stringify(ei.set_aside));
+  // ---------- R91: the subject names the depth that was asked for ----------
+  check('R91: every ladder subject says "top 50" — the depth every check asks for — never "top 100"', tr.filter(x => x.ladder_id).every(x => !/top 100/.test(x.subject)) && tr.some(x => /not yet in the top 50/.test(x.subject || '')), JSON.stringify(tr.map(x => x.subject)));
+  // ---------- R87 (part 2): a head really set aside by THIS check pauses its ladder ----------
+  const i0 = R.plan.findIndex(p => p.keyword === 'e invoicing in uae' && p.device === 'desktop');
+  const pos = JSON.parse(JSON.stringify(R.positions));
+  const GOV = ['tax.gov.ae', 'mof.gov.ae', 'u.ae', 'grantthornton.ae', 'edicomgroup.com', 'cleartax.com'];
+  const snap = JSON.parse(pos[i0].snapshot_json); snap.top = GOV.map((d, i) => ({ p: i + 1, u: 'https://' + d + '/e-invoicing/', t: 'e-invoicing (' + d + ')' })); pos[i0].snapshot_json = JSON.stringify(snap);
+  const cj = JSON.parse(pos[i0].competitors_json); cj.above = GOV.map((d, i) => ({ d, p: i + 1, t: d === 'cleartax.com' })); pos[i0].competitors_json = JSON.stringify(cj);
+  const tr2 = await a4Tracker({ positions: pos });
+  const e2 = tr2.find(x => x.ladder_id === 'lad_mupia2l2c0tp') || {};
+  console.log('   paused ->', JSON.stringify({ next: e2.next_step, marks: e2.ladder_marks }));
+  check('R87: a head set aside by THIS week\'s check (three government sites in the top five) is reported as checked — "set aside by this week\'s check" — never "no position checked"',
+    /set aside by this week\S*s check/i.test(e2.html || '') && !/no position checked and no page to write\)[^|]*e invoicing in uae/.test(e2.html || ''), String(e2.html || '').match(/Set aside[^<]*/g));
+  check('R87: its ladder is paused: the next step asks for none of its rungs ("e invoicing uae fta", "accredited service provider …"), and says why',
+    (e2.next_step || {}).action === 'paused' && !/e invoicing uae fta|accredited service provider/.test((e2.next_step || {}).text || '') && /paused/.test((e2.next_step || {}).text || '') && !e2.api_body, JSON.stringify(e2.next_step));
+  check('R87: the head\'s ladder row is written back `set_aside` with its reason (the Rank Tracker had no node for it, so the cadence kept queuing the rungs)',
+    (e2.ladder_marks || []).some(m => m.ladder_id === 'lad_mupia2l2c0tp' && m.keyword === 'e invoicing in uae' && m.status === 'set_aside' && /government/.test(m.status_note)), JSON.stringify(e2.ladder_marks));
+  const marks = (await run('Tracker Ladder Marks', tr2.map(j => ({ json: j })))).map(x => x.json);
+  check('R87: Tracker Ladder Marks hands exactly the rows to update to the Data Table node (ladder_id, keyword, status, status_note)', marks.some(m => m.keyword === 'e invoicing in uae' && m.status === 'set_aside') && marks.every(m => m.skip || eq(Object.keys(m).sort(), ['keyword', 'ladder_id', 'status', 'status_note'])), JSON.stringify(marks));
+  // ---------- R87 (part 3) + R90: the Content Cadence ----------
+  const C = A4.cadence638;
+  const cadence = async (o = {}) => { mock('Manual Run', A4J(C.manual)); mock('Load Sites', A4J(C.sites)); mock('Load Cadence', A4J(C.cadence)); mock('Load Ladders', A4J(o.ladders || C.ladders));
+    mock('Load Query History', A4E); mock('Load Trends', A4J(C.trends)); mock('Load Content Log', A4J(o.log || C.log)); mock('Load Ladder Settings', A4J(C.settings));
+    mock('Load Main Keyword Ranks', A4J(C.ranks)); mock('Load AI Targets (Cadence)', A4J(C.targets)); mock('Load Monitors (Cadence)', A4J(C.monitors)); mock('Load Pages (Cadence)', A4J(C.pages)); mock('Load AI Brands (Cadence)', A4E);
+    return (await run('Cadence Plan', store['Load Pages (Cadence)'])).map(x => x.json); };
+  const ladSet = C.ladders.map(l => (l.keyword === 'e invoicing in uae' && l.ladder_id === 'lad_mupia2l2c0tp') ? { ...l, status: 'set_aside', status_note: '"e invoicing in uae" is not a search this website should target: the results page belongs to government sites (tax.gov.ae, mof.gov.ae, u.ae) (government)' } : l);
+  const cp = await cadence({ ladders: ladSet }); const st = cp.find(x => x.report_only) || cp[0];
+  console.log('   cadence upcoming ->', JSON.stringify((st.upcoming || []).map(u => u.keyword)), 'paused ->', JSON.stringify(st.paused_ladders));
+  check('R87: once the head\'s row says `set_aside`, the cadence queues none of that ladder\'s rungs (exec 638 queued four) and names the ladder as paused with the reason',
+    !(st.upcoming || []).some(u => /e invoicing/.test(u.keyword) && /towards "e invoicing in uae"/.test(u.why)) && (st.paused_ladders || []).some(p => p.ladder_id === 'lad_mupia2l2c0tp' && /government/.test(p.reason)), JSON.stringify({ up: st.upcoming, paused: st.paused_ladders }));
+  const cp0 = await cadence({}); const st0 = cp0.find(x => x.report_only) || cp0[0];
+  console.log('   cadence set aside ->', JSON.stringify((st0.set_aside || []).map(a => [a.keyword, a.reason])));
+  check('R90: the cadence sets "facts erp" aside too — by the head\'s stored results page (facts.ae), not only by its own (it has none)', (st0.set_aside || []).some(a => a.keyword === 'facts erp' && a.reason === 'other brand' && a.dropped), JSON.stringify(st0.set_aside));
+  check('R87: with the head row untouched the e-invoicing ladder is NOT paused on exec 638\'s data — the head is a topic, not a government query', !(st0.paused_ladders || []).some(p => p.ladder_id === 'lad_mupia2l2c0tp'), JSON.stringify(st0.paused_ladders));
+});
+
+await guard('S112 R88 one baseline per keyword per run', async () => {
+  const SN = 'S112 R88 — one keyword, one run, one baseline: the ladder report and the tracked-keyword report compare this reading with the same earlier reading of the domain, whoever took it, and a change no larger than two readings of the same moment show is not called movement';
+  reset(); begin(SN); const check = a4check(SN);
+  if (!A4) { check('the live fixture is readable', false, 'missing'); return; }
+  const tr = await a4Tracker();
+  const lad = tr.find(x => x.ladder_id === 'lad_mv5pjt5y4aoa') || {}; const wl = tr.find(x => x.watchlist) || {};
+  const pl = (lad.positions || []).find(p => p.keyword === 'erp implementation dubai') || {}; const pw = (wl.positions || []).find(p => p.keyword === 'erp implementation dubai') || {};
+  console.log('   ladder ->', JSON.stringify({ prev: pl.previous_checked_at, ch: pl.serp_change && [pl.serp_change.changed, pl.serp_change.depth, pl.serp_change.band] }), ' tracked ->', JSON.stringify({ prev: pw.previous_checked_at, ch: pw.serp_change && [pw.serp_change.changed, pw.serp_change.depth, pw.serp_change.band] }));
+  check('R88: "erp implementation dubai" shows ONE movement figure in both reports of exec 632 (it showed "3 of top 8 changed (some)" and "5 of top 8 changed (high)")',
+    pl.serp_change && pw.serp_change && pl.serp_change.available && pw.serp_change.available && pl.serp_change.changed === pw.serp_change.changed && pl.serp_change.depth === pw.serp_change.depth,
+    JSON.stringify({ ladder: pl.serp_change, tracked: pw.serp_change }));
+  check('R88: both compare against the same earlier reading — the newest earlier desktop reading of the keyword for the domain, whichever workflow took it (2026-10-14 16:31, the weekly site check)',
+    pl.previous_checked_at && pl.previous_checked_at === pw.previous_checked_at && /^2026-10-14T16:31/.test(pl.previous_checked_at), JSON.stringify([pl.previous_checked_at, pw.previous_checked_at]));
+  check('R88: the movement line carries the variation two readings of the same results page minutes apart showed (2026-10-14 16:21 vs 16:31), so one reading against one reading is never sold as a trend',
+    pl.serp_change && pl.serp_change.noise && Number.isFinite(pl.serp_change.noise.changed) && /minutes apart/.test(pl.serp_change.noise.text || ''), JSON.stringify(pl.serp_change));
+});
+
+await guard('S113 R59 R92 R93 the site picture: host split, countries, a covered ladder page, the link target\'s real title', async () => {
+  const SN = 'S113 R59 R92 R93 — the Site Tracker names a bare-host / www split Google chose (exec 634), pluralises "countries", reports a ladder target a live page answers as that page, and the Link Builder names our pages by their titles, never by a search query';
+  reset(); begin(SN); const check = a4check(SN);
+  if (!A4) { check('the live fixture is readable', false, 'missing'); return; }
+  const R = A4.rank632; const D = 'techand.ai', SITE = 'site_techand-ai', W = 'https://www.techand.ai';
+  mock('Manual Run', A4E); mock('Load Sites', A4J(R.sites)); mock('Load Ladders', A4J(R.ladders)); mock('Load Rank History', A4E); mock('Load Site Metrics', A4E); mock('Load Query History', A4E);
+  mock('Load Content Log', A4J(R.log)); mock('Load Console Alerts', A4E); mock('Load Check-ins', A4E); mock('Load Profiles (Site)', A4E); mock('Load Monitors (Site)', A4J(R.monitors));
+  const plan = await run('Site Plan', A4E);
+  mock('Resolve Properties', plan.map(p => ({ json: { ...p.json, gsc_connected: true, gsc_property: 'sc-domain:' + D } })));
+  mock('Site Model (Site)', [{ json: { site_id: SITE, model: { site_id: SITE, domain: D, canonical_host: 'www.' + D } } }]);
+  mock('Page Inventory (Site)', [{ json: { site_id: SITE, pages: R.pages, total: R.pages.length, with_queries: 0, changed: 0, by_source: {}, sitemap_read: true } }]);
+  // exec 634: three pages Google indexes under the bare host while the site serves and names www (canonical_ok came back true: host-agnostic)
+  const SPLIT = ['/d365-finance-operations-implementation-rollout-uae', '/insights/how-microsoft-dynamics-365-finance-operations-supports-uae-vat-compliance', '/insights/the-financial-reporting-trap-why-d365-fo-users-still-reach-for-excel'];
+  const insp = [...SPLIT.map(p => ({ site_idx: 0, site_id: SITE, url: W + p, kind: 'search', verdict: 'NEUTRAL', indexed: false, coverage: 'Duplicate, Google chose different canonical than user', canonical_ok: true, google_canonical: 'https://techand.ai' + p, user_canonical: W + p, inspect_error: '', not_checked: '' })),
+    { site_idx: 0, site_id: SITE, url: W + '/', kind: 'home', verdict: 'PASS', indexed: true, coverage: 'Submitted and indexed', canonical_ok: true, google_canonical: W + '/', inspect_error: '', not_checked: '' }];
+  mock('Parse Inspection', insp.map(j => ({ json: j })));
+  const zero = { clicks: 0, impressions: 0, ctr: 0, position: 0 };
+  mock('Parse GSC', [{ json: { site_idx: 0, totals: { cur: { clicks: 32, impressions: 5715, ctr: 0.0056, position: 18 }, prev: { ...zero, clicks: 30, impressions: 5000 } }, deltas: {}, daily: [], errors: [], striking: [], ctr_gaps: [], decaying_pages: [], not_decay: [], cannibal: [], queries: [], tracked: [], top_pages: [], pages: [],
+    winners: [], losers: [], new_queries: [], lost_queries: [], rows_read: 539, query_count: 539, truncated: [], devices: { read: true, rows: [{ key: 'DESKTOP', clicks: 30, prev_clicks: 28, share: 90 }], total: 30 },
+    countries: { read: true, rows: Array.from({ length: 10 }, (_, i) => ({ key: 'c' + i, clicks: 1, prev_clicks: 1, share: 10 })), total: 10 } } }]);
+  const sm = (await run('Site Metrics', store['Parse Inspection']))[0].json;
+  const split = sm.alerts.find(a => /techand\.ai\//.test(a.text) && /other host|bare host|host/.test(a.text) && /canonical/i.test(a.text));
+  console.log('   host split alert ->', split && split.text);
+  check('R59 (Site Tracker path): three pages Google shows under https://techand.ai while the site names www raise ONE alert that names the host split — the canonical alert used to look at indexed pages only, so it never fired',
+    !!split && /3 /.test(split.text) && /https:\/\/techand\.ai/.test(split.text) && split.level !== 'info', JSON.stringify(sm.alerts.map(a => a.text)));
+  check('R59: the action says what to do about a host split (submit the www sitemap, point internal links at www) — not "request indexing" page by page',
+    sm.actions.some(a => a.type === 'host_split' && /sitemap/.test(a.action) && /internal links/.test(a.action)), JSON.stringify(sm.actions.map(a => [a.type, a.action])));
+  const ctry = sm.lineage.find(l => /Clicks by country/.test(JSON.stringify(l)));
+  check('R92 part 3: "across 10 countries", never "countrys"', !/countrys/.test(JSON.stringify(sm.lineage)) && /10 countries/.test(JSON.stringify(ctry)), JSON.stringify(ctry));
+  const pep = sm.ladder_pages.find(p => p.keyword === 'peppol uae') || {};
+  console.log('   peppol main page ->', JSON.stringify(pep));
+  check('R92 part 4: the peppol main page is reported as the live page that answers it (the Rank Tracker\'s rule), not "/peppol-uae/ | writing | no page was written yet"',
+    /top-peppol-e-invoicing-software-features/.test(pep.url || '') && pep.covered_by && !/no page was written yet/.test(pep.inspect_error || '') && /live/.test(pep.status || ''), JSON.stringify(pep));
+  // ---------- R93: the Link Builder names a target page by its real title ----------
+  const F = require('./fixtures_lb413');
+  const loadAll = () => { mock('Load Sites', F.sites()); mock('Load Ladders', F.ladders()); mock('Load Monitors', F.monitors()); mock('Load Profiles', F.profiles());
+    mock('Load Link Prospects', F.prospects().map(j => ({ json: j }))); mock('Load Link Outreach', F.outreachPrev().map(j => ({ json: j }))); mock('Load Listings', F.listingsPrev().map(j => ({ json: j }))); mock('Load Link Impact', A4E);
+    mock('Load Backlinks', F.ledger().map(j => ({ json: j }))); mock('Load Backlink Snapshots', F.snaps().map(j => ({ json: j }))); mock('Load Content Log', A4E); mock('Load AI Targets', F.targets().map(j => ({ json: j })));
+    mock('Load Query History', F.queries().map(j => ({ json: j }))); mock('Load Rank History', F.ranks().map(j => ({ json: j }))); mock('Load Cache (Links)', F.cache().map(j => ({ json: j }))); };
+  loadAll(); delete store['Manual Run'];
+  const TITLES = { [F.GUIDE]: 'Accredited Peppol service providers in the UAE: how to choose one | Tech&', [F.HUB]: 'E-invoicing in the UAE: the 2026-2027 timeline explained | Tech&', [F.SERVICE]: 'E-invoicing services for UAE businesses | Tech&' };
+  mock('Load Pages (LB)', Object.entries(TITLES).map(([url, title]) => ({ json: { site_id: F.SITE, url: url.replace('https://techand.ai', 'https://www.techand.ai'), title, h1: '', source: 'sitemap' } })));
+  const P = (await run('LB Plan', store['Load Cache (Links)']))[0].json;
+  const pg = (u) => P.pages.find(x => x.url.replace(/^https:\/\/(www\.)?/, '') === u.replace(/^https:\/\/(www\.)?/, '')) || {};
+  console.log('   LB titles ->', JSON.stringify(P.pages.map(p => [p.url, p.title, p.keyword])));
+  check('R93: a target page\'s title is its real title from the page inventory — the query that brought it impressions stays its keyword, never its name (exec 628: 13 of 16 titles were queries)',
+    pg(F.GUIDE).title === TITLES[F.GUIDE] && pg(F.GUIDE).keyword === 'peppol accredited service providers uae' && pg(F.SERVICE).title === TITLES[F.SERVICE], JSON.stringify([pg(F.GUIDE), pg(F.SERVICE)]));
+  check('R93: no Search Console page is named by a search query — a page with no title on record gets none, never the query', P.pages.filter(p => p.kind === 'page').every(p => !p.title || p.title !== p.keyword), JSON.stringify(P.pages.filter(p => p.kind === 'page').map(p => [p.url, p.title])));
+  mock('LB Assemble', [{ json: { site_id: F.SITE, domain: F.DOMAIN, jobs: [{ prospect_domain: 'example-list.ae', type: 'list', page_url: 'https://example-list.ae/x', page_title: 'x', evidence: 'x', checks_json: '{}', contacts_json: '[]', target_url: pg(F.GUIDE).url, anchor_hint: 'title' },
+    { prospect_domain: 'example-two.ae', type: 'list', page_url: 'https://example-two.ae/y', page_title: 'y', evidence: 'y', checks_json: '{}', contacts_json: '[]', target_url: W + '/insights/vat-uae', anchor_hint: 'title' }] } }]);
+  mock('LB Plan', [{ json: P }]);
+  const WI = (await run('LB Writer Input', [{ json: {} }]))[0].json;
+  console.log('   writer jobs ->', JSON.stringify(WI.jobs.map(j => [j.target_url, j.target_title, j.anchor_hint])));
+  check('R93: the writer is given the page\'s real title as `target_title`, and a page whose title is unknown is offered with the brand as link text — never an exact-match keyword',
+    WI.jobs[0].target_title === TITLES[F.GUIDE] && WI.jobs[0].anchor_hint === 'title' && WI.jobs[1].target_title === '' && WI.jobs[1].anchor_hint === 'brand', JSON.stringify(WI.jobs));
+});
+
 H.report();
 })();

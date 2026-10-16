@@ -430,7 +430,7 @@ def mark_plan(kept, logs, now_iso=''):
                'existing_page_url': str((prior or {}).get('existing_page_url') or ''),
                'rung': int((prior or {}).get('rung') or r.get('rung') or 0) or 0, 'ladder_id': str(r.get('ladder_id') or ''),
                'request_id': str((prior or {}).get('request_id') or proof_id or ''), 'started_at': when, 'status': 'written',
-               'published_url': '', 'published_at': '', 'week': str((prior or {}).get('week') or when)[:10]}
+               'published_url': '', 'published_at': '', 'week': str((prior or {}).get('week') or when)[:10], 'qa_reasons': ''}   # R111: the column exists since 2026-10-16; a proven page carries no failed-QA reasons
         note = ('written %s, awaiting the owner\'s publication decision%s. Proof: %s. Page: %s'
                 % (str(when)[:10], ' (FIX_PLAN O9)' if normk(kw) in O9_PENDING else '',
                    next((p for p in proofs if 'wrote the page' in p or 'finished page' in p), proofs[0]),

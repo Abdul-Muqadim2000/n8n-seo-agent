@@ -10,7 +10,8 @@ import dfs_gate     # B-A10 (2026-10-15): INVARIANTS rule 3 — the in-200 retry
 from ladder_common import (LADDER_TABLE, HISTORY_TABLE, LADDER_COLS, HISTORY_COLS, LOG_TABLE, PAGES_TABLE, PAGES_COLS, SITES_TABLE, SITES_COLS,
                            MONITORS_TABLE, MONITORS_COLS, DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_get_where_params,
                            RUN_LEDGER_TABLE, RUN_LEDGER_COLS, dt_update_params, monitor_ledger_js, LEDGER_EST,   # R9 (2026-10-13)
-                           ledger_mainline)   # R17 (2026-10-14): the reserve chain sits on the MAIN path, before the first paid call
+                           ledger_mainline,   # R17 (2026-10-14): the reserve chain sits on the MAIN path, before the first paid call
+                           CACHE_TABLE)       # R90 (2026-10-16): the names AI uses for other companies (seo_cache ai_brands:<site>)
 HERE = os.path.dirname(os.path.abspath(__file__))
 V5 = os.path.join(HERE, 'v5'); OUT = os.path.join(HERE, 'workflows'); CODE = os.path.join(HERE, 'harness', 'code_v4')
 _rd0 = lambda p: open(os.path.join(V5, p), encoding='utf-8').read()
@@ -89,12 +90,21 @@ N.append(node('Ensure Sites Table (Tracker)', DT_TYPE, DT_VERSION, dt_create_par
 N.append(node('Load Sites (Tracker)', DT_TYPE, DT_VERSION, dt_get_all_params(SITES_TABLE), [1120, 540], alwaysOutputData=True, executeOnce=True, onError='continueRegularOutput'))
 N.append(node('Ensure Monitors Table (Tracker)', DT_TYPE, DT_VERSION, dt_create_params(MONITORS_TABLE, MONITORS_COLS), [1010, 680], onError='continueRegularOutput'))
 N.append(node('Load Monitors (Tracker)', DT_TYPE, DT_VERSION, dt_get_all_params(MONITORS_TABLE), [1120, 680], alwaysOutputData=True, executeOnce=True, onError='continueRegularOutput'))
+# R90 (2026-10-16, re-rating 2026-10-15): the fit gate of the stored rungs is given the names AI uses for other companies, as Ladder Pool
+# and Rank Keywords already are (seo_cache rows of kind 'ai', key ai_brands:<site_id>, written by the AI Visibility Tracker)
+N.append(node('Load AI Brands (Tracker)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'ai'), [1120, 820], alwaysOutputData=True, executeOnce=True, onError='continueRegularOutput'))
 N.append(code('Tracker Plan', rd('code/Tracker_Plan.js'), [1120, 100]))
 N.append(iff('Any Checks?', '{{ !$json.nothing_to_do }}', [1340, 100]))
 N.append(node('SERP Check', 'n8n-nodes-base.httpRequest', 4.5, DFS_HTTP, [1560, 0], credentials=DFS, onError='continueRegularOutput', **retry_lint.RETRY))
 N.append(code('Parse Positions', rd('code/Parse_Positions.js'), [1780, 0]))
 N.append(node('Save History', DT_TYPE, DT_VERSION, dt_insert_params(HISTORY_TABLE, HISTORY_COLS), [2000, 0], onError='continueRegularOutput'))
 N.append(code('Tracker Report', tracker_report, [2220, 0], executeOnce=True))
+# R87 (2026-10-16): what the report set aside is written back on its seo_ladders row (status set_aside + the reason), so the Content
+# Cadence and the app stop treating a paused ladder's rungs as pages to write (exec 632 set the head aside, exec 638 queued four rungs)
+N.append(code('Tracker Ladder Marks', rd('code/Tracker_Ladder_Marks.js'), [2440, 300]))
+N.append(iff('Any Tracker Marks?', '{{ !$json.skip }}', [2660, 300]))
+N.append(node('Mark Set Aside (Tracker)', DT_TYPE, DT_VERSION, dt_update_params(LADDER_TABLE, LADDER_COLS, [('ladder_id', '={{ $json.ladder_id }}'), ('keyword', '={{ $json.keyword }}')],
+    {'status': '={{ $json.status }}', 'status_note': '={{ $json.status_note }}'}), [2880, 300], alwaysOutputData=True, onError='continueRegularOutput'))
 N.append(iff('Has Report?', '{{ !$json.nothing_to_do }}', [2440, 0]))
 N.append(iff('Has Email (Tracker)?', '{{ !!$json.email }}', [2660, -100]))
 N.append(node('Send Progress Email', 'n8n-nodes-base.emailSend', 2.1, {'fromEmail': SENDER, 'toEmail': '={{ $json.email }}', 'subject': '={{ $json.subject }}', 'emailFormat': 'html', 'html': '={{ $json.html }}', 'options': {'appendAttribution': False}}, [2880, -100], credentials=SMTP, onError='continueRegularOutput'))
@@ -113,9 +123,11 @@ Form: {FORM_URL} · API: {API_URL}""", [-40, -560], 1000, 600))
 for a, b in [('Weekly Schedule', 'Ensure Ladder Table'), ('Manual Run', 'Ensure Ladder Table'), ('Ensure Ladder Table', 'Ensure History Table'), ('Ensure History Table', 'Load Ladders'), ('Load Ladders', 'Load History'), ('Load History', 'Load Content Log (Tracker)'), ('Load Content Log (Tracker)', 'Ensure Pages Table (Tracker)'), ('Ensure Pages Table (Tracker)', 'Load Pages (Tracker)'),
                  ('Load Pages (Tracker)', 'Ensure Sites Table (Tracker)'), ('Ensure Sites Table (Tracker)', 'Load Sites (Tracker)'),
                  ('Load Sites (Tracker)', 'Ensure Monitors Table (Tracker)'), ('Ensure Monitors Table (Tracker)', 'Load Monitors (Tracker)'),
-                 ('Load Monitors (Tracker)', 'Tracker Plan'), ('Tracker Plan', 'Any Checks?'), ('SERP Check', 'Parse Positions'), ('Parse Positions', 'Save History'), ('Save History', 'Tracker Report'), ('Tracker Report', 'Has Report?')]:
+                 ('Load Monitors (Tracker)', 'Load AI Brands (Tracker)'), ('Load AI Brands (Tracker)', 'Tracker Plan'), ('Tracker Plan', 'Any Checks?'),
+                 ('Tracker Report', 'Tracker Ladder Marks'), ('Tracker Ladder Marks', 'Any Tracker Marks?'), ('SERP Check', 'Parse Positions'), ('Parse Positions', 'Save History'), ('Save History', 'Tracker Report'), ('Tracker Report', 'Has Report?')]:
     link(C, a, b)
 link(C, 'Any Checks?', 'SERP Check', 0); link(C, 'Any Checks?', 'Nothing To Track', 1)
+link(C, 'Any Tracker Marks?', 'Mark Set Aside (Tracker)', 0)
 link(C, 'Has Report?', 'Has Email (Tracker)?', 0); link(C, 'Has Report?', 'Has Callback (Tracker)?', 0)
 link(C, 'Has Email (Tracker)?', 'Send Progress Email', 0); link(C, 'Has Callback (Tracker)?', 'POST Progress', 0)
 # G6 (2026-10-12, FIX_PLAN): the two kits the tracker path needs must really be inlined (a left-over placeholder would ship a broken node),
@@ -131,7 +143,15 @@ assert 'const RP = (() => {' in _tracker_nodes['Tracker Report'], 'Tracker Repor
 assert 'RP.propose(' in _tracker_nodes['Tracker Report'] and 'RP.block(replan)' in _tracker_nodes['Tracker Report'], 'Tracker Report: the re-plan proposal is not built or not shown'
 assert 'applied: false' in _tracker_nodes['Tracker Report'], 'G32: a re-plan must say that nothing was applied'
 # R16 (2026-10-13, FIX_PLAN §3.11, build_v4.py section 53): a stored rung that names another company is set aside, not checked and not reported as a page to write
-assert 'const fitStored = ' in _tracker_nodes['Tracker Plan'] and 'fitStored(p, fitCtx)' in _tracker_nodes['Tracker Plan'], 'R16: the Rank Tracker does not run the fit gate over the stored rungs'
+assert 'const fitStored = ' in _tracker_nodes['Tracker Plan'] and 'fitStored(p, { ...fitCtx, serp: RS.serpHosts(' in _tracker_nodes['Tracker Plan'], 'R16 / R90: the Rank Tracker does not run the fit gate over the stored rungs with their stored results page'
+# R90 / R87 (2026-10-16): the gate of the stored rungs sees the ladder's stored results pages, the learned AI brands and a paused head
+assert 'const RS = (() => {' in _tracker_nodes['Tracker Plan'] and 'serp_domains' in _tracker_nodes['Tracker Plan'] and "$('Load AI Brands (Tracker)')" not in _tracker_nodes['Tracker Plan'] and "rowsOf('Load AI Brands (Tracker)')" in _tracker_nodes['Tracker Plan'], 'R90: the plan does not give the gate the ladder\'s stored results pages and the AI brand names'
+assert 'pausedLadders.push(headAside)' in _tracker_nodes['Tracker Plan'] and 'paused_ladders: pausedLadders' in _tracker_nodes['Tracker Plan'], 'R87: a ladder whose head is set aside still buys checks for its rungs'
+assert "RS.serpHosts(r.result, 10)" in _tracker_nodes['Tracker Report'] and '[...(s.above || []), ...(s.competitors || [])]' not in _tracker_nodes['Tracker Report'], 'R87: the report counts every domain of the results page twice again'
+assert "action: 'paused'" in _tracker_nodes['Tracker Report'] and 'ladder_marks' in _tracker_nodes['Tracker Report'] and 'Set aside by this week' in _tracker_nodes['Tracker Report'], 'R87: a set-aside head does not pause its ladder, or the report does not tell a checked keyword from an unchecked one'
+assert "'top page not yet in the top ' + depthAsked" in _tracker_nodes['Tracker Report'] and 'not yet in the top 100' not in _tracker_nodes['Tracker Report'], 'R91: the subject names a depth nobody asked for'
+assert 'RS.prevReading(deskHist, { keyword: kw, domain: ladDomain' in _tracker_nodes['Tracker Report'] and 'RS.prevReading(deskHist, { keyword: kw, domain: dom' in _tracker_nodes['Tracker Report'], 'R88: the two reports compare one keyword against different baselines again'
+assert "notReadyOf(t.keyword)) ? ' (' + fixText(t.keyword)" in _tracker_nodes['Tracker Report'], 'R111: a failed draft is told "publish it" again'
 assert 'const fitStored = ' in _tracker_nodes['Tracker Report'] and 'serp_domains: doms' in _tracker_nodes['Tracker Report'], 'R16: the Rank Tracker report does not judge the rungs against the results page it just read'
 assert 'set_aside_pages' in _tracker_nodes['Tracker Plan'] and 'set_aside_pages' in _tracker_nodes['Tracker Report'] and 'Set aside' in _tracker_nodes['Tracker Report'], 'R16: the set-aside rungs do not reach the report'
 for _c, _t in HISTORY_COLS:

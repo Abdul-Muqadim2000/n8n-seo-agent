@@ -23,6 +23,10 @@ return $('Site Metrics').all().map(i => { const m = i.json; const G = m.gsc, A =
     trends: m.trends.map(t => { const thin = t.direction === 'sparse' || t.change_pct == null;
       return { keyword: t.keyword, direction: t.direction, ...(thin ? { change: 'too little search data for a percentage' } : { change_pct: t.change_pct }), peak: t.peak_date, rising_searches: (t.rising || []).slice(0, 5).map(r => r.query) }; }),
     pages_waiting_for_publish_link: (m.pending_publish || []).map(p => p.keyword + ' (' + p.days + ' days)'),
+    // R111 (2026-10-16): the drafts whose last quality round failed — never to be called pages to publish (exec 634's brief told the owner
+    // to "publish the three written pages", two of them refused by their own quality check). The reasons travel with them.
+    ...((m.needs_fix || []).length ? { drafts_to_fix_not_publish: m.needs_fix.map(p => p.keyword + ' (did not pass the quality check: ' + ((p.reasons || []).slice(0, 2).join('; ') || 'see the page report').slice(0, 240) + ')'),
+      drafts_note: 'These pages were written but did NOT pass the quality check. Never tell the owner to publish them: tell them to fix the listed points and run the page again.' } : {}),
     ...((m.detected_published || []).length ? { pages_found_live_this_week: m.detected_published.map(f => f.keyword + ' -> ' + f.url + ' (tracking started)') } : {}),   // v4.8 publish detection
     search_console_notices: ((m.console || {}).notices || []).map(x => x.severity + ': ' + x.kind + ' — ' + x.subject + ' (' + String(x.received_at).slice(0, 10) + ')'),
     monthly_checkin: (m.console || {}).last_checkin ? { month: m.console.last_checkin.month, manual_action: m.console.last_checkin.manual_action, security_issue: m.console.last_checkin.security_issue, pages_not_indexed_sitewide: m.console.last_checkin.not_indexed_total >= 0 ? m.console.last_checkin.not_indexed_total : null, top_reasons: ((m.console.last_checkin.coverage || {}).reasons || []).slice(0, 3) } : (m.console && m.console.checkin_due ? 'due (not submitted this month)' : null),
