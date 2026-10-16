@@ -16164,5 +16164,20 @@ await guard('S113 R59 R92 R93 the site picture: host split, countries, a covered
     WI.jobs[0].target_title === TITLES[F.GUIDE] && WI.jobs[0].anchor_hint === 'title' && WI.jobs[1].target_title === '' && WI.jobs[1].anchor_hint === 'brand', JSON.stringify(WI.jobs));
 });
 
+// S142 (2026-10-16, orchestrator, after the live check of exec 658): R49's verdict path — Parse Verdict's own `for_you.chance` still printed
+// "good (50-70%)" on a reach no measured ranking supports (A1 fixed every other caller); the ladder report prints the no-band sentence; and
+// the page digest's byline is entity-decoded (exec 658 read "Tech&amp;"). Source-level checks on the generated code.
+await guard('S142 R49 verdict path, ladder report band, byline entities', async () => {
+  const fs = require('fs'), path = require('path'), CD = process.env.CODE_DIR || path.join(__dirname, 'code_v4');
+  const SN = 'S142 R49 verdict path, ladder report band, byline entities';
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label); };
+  const pv = fs.readFileSync(path.join(CD, 'Parse_Verdict.js'), 'utf8');
+  const bl = fs.readFileSync(path.join(CD, 'Build_Ladder_Report.js'), 'utf8');
+  const cc = fs.readFileSync(path.join(CD, 'Collect_Client_Pages.js'), 'utf8');
+  check('R49: the verdict passes the measured flag to reachPlan', /reachPlan\(DIFF77, reachStrong\(RI77, null\), reachMeasured\(/.test(pv));
+  check('R49: the ladder report prints the no-band sentence for an unmeasured chance', /L\.chance\.band === 'unmeasured'/.test(bl) && /L\.chance_text/.test(bl));
+  check('byline: entities are decoded before the author is stored', /author = textOfHtml\(author\)/.test(cc));
+});
+
 H.report();
 })();

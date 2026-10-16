@@ -61,7 +61,7 @@ const htmlFacts = (html) => {
   const meta = (re) => ((h.match(re) || [])[1] || '').trim();
   let author = nameOf(article.author) || meta(/<meta[^>]+name=["']author["'][^>]+content=["']([^"']+)["']/i) || meta(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']author["']/i);
   if (!author) { const m = h.match(/<(?:a|span|p|div|address|strong|li)[^>]*(?:class|rel)=["'][^"']*(?:author|byline|by-line)[^"']*["'][^>]*>([\s\S]{1,300}?)<\/(?:a|span|p|div|address|strong|li)>/i); if (m) author = textOfHtml(m[1]); }
-  author = author.replace(/^\s*(?:by|written by|author)[:\s]+/i, '').trim();
+  author = textOfHtml(author).replace(/^\s*(?:by|written by|author)[:\s]+/i, '').trim();   // entities decoded (a byline read "Tech&amp;" live, 2026-10-16)
   if (author.length > 80 || /^(?:admin|administrator)$/i.test(author)) author = '';   // a platform's default login is not a byline
   const published = String(article.datePublished || meta(/<meta[^>]+property=["']article:published_time["'][^>]+content=["']([^"']+)["']/i) || meta(/<time[^>]+datetime=["']([^"']+)["']/i) || '').slice(0, 10);
   const modified = String(article.dateModified || meta(/<meta[^>]+property=["']article:modified_time["'][^>]+content=["']([^"']+)["']/i) || '').slice(0, 10);

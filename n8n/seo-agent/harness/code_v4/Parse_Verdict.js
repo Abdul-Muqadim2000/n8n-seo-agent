@@ -707,7 +707,7 @@ const TA77 = reachTopic(RI77.ranked === undefined ? null : RI77.ranked, prev.key
   reason_missing: RI77.cached ? 'the reach stored on ' + String(RI77.cached_at || '').slice(0, 10) + ' was kept without the keywords behind it, so this report has no topic evidence to read'
     : 'a keyword report does not buy the list of keywords your site ranks for (the keyword research and the ladder do)' });
 const DIFF77 = prev.domain ? difficultyForYou(KD77, TA77.reach, {}) : null;
-const PLAN77 = DIFF77 ? reachPlan(DIFF77, reachStrong(RI77, null)) : null;
+const PLAN77 = DIFF77 ? reachPlan(DIFF77, reachStrong(RI77, null), reachMeasured(TA77 && TA77.used ? { used: true } : RI77, null)) : null;   // R49: no chance band on a reach no measured ranking supports
 const FORYOU77 = !DIFF77 ? null : { difficulty_for_you: DIFF77, plan_type: PLAN77.plan_type, months: PLAN77.months, months_range: PLAN77.months_range,
   stretch: PLAN77.stretch, chance: PLAN77.chance, reach_used: TA77.reach, reach_basis: TA77.used ? 'topic' : 'site',
   site_reach: TA77.site_reach, topic_reach: TA77.topic_reach, kd_known: KD77 != null,
