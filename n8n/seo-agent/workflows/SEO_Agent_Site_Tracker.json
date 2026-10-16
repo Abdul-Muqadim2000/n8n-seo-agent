@@ -1000,6 +1000,10 @@
               {
                 "name": "clusters_json",
                 "type": "string"
+              },
+              {
+                "name": "rival_sources_json",
+                "type": "string"
               }
             ]
           },
