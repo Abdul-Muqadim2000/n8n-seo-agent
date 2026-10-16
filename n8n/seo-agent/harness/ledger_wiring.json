@@ -170,6 +170,7 @@
    },
    "balance": "DFS Balance (Growth)",
    "balance_end": "DFS Balance End (Growth)",
+   "catchup_records": "Load Catch-up Records (Growth)",
    "cost_cal": "Load Cost Factors (Growth)",
    "est": {
     "ai": 0.55,
@@ -224,6 +225,7 @@
    },
    "balance": "DFS Balance (Pulse)",
    "balance_end": "DFS Balance End (Pulse)",
+   "catchup_records": "Load Catch-up Records (Pulse)",
    "cost_cal": "Load Cost Factors (Pulse)",
    "daily_upsert_keys": [
     "site_id",
@@ -375,6 +377,7 @@
    },
    "balance": "DFS Balance (AI)",
    "balance_end": "DFS Balance End (AI)",
+   "catchup_records": "Load Catch-up Records (AI)",
    "cost_cal": "Load Cost Factors (AI)",
    "est": {
     "ai": 0.27,
@@ -429,6 +432,7 @@
    },
    "balance": "DFS Balance (Audit)",
    "balance_end": "DFS Balance End (Audit)",
+   "catchup_records": "Load Catch-up Records (Audit)",
    "cost_cal": "Load Cost Factors (Audit)",
    "est": {
     "ai": 0.0,
@@ -538,6 +542,7 @@
    },
    "balance": "DFS Balance (BL)",
    "balance_end": "DFS Balance End (BL)",
+   "catchup_records": "Load Catch-up Records (BL)",
    "cost_cal": "Load Cost Factors (BL)",
    "est": {
     "ai": 0.05,
@@ -592,6 +597,7 @@
    },
    "balance": "DFS Balance (Cadence)",
    "balance_end": "DFS Balance End (Cadence)",
+   "catchup_records": "Load Catch-up Records (Cadence)",
    "est": {
     "ai": 0.0,
     "dfs": 0.0
@@ -683,6 +689,7 @@
    },
    "balance": "DFS Balance (LB)",
    "balance_end": "DFS Balance End (LB)",
+   "catchup_records": "Load Catch-up Records (LB)",
    "cost_cal": "Load Cost Factors (LB)",
    "est": {
     "ai": 0.3,
@@ -736,6 +743,7 @@
    },
    "balance": "DFS Balance (Watch)",
    "balance_end": "DFS Balance End (Watch)",
+   "catchup_records": "Load Catch-up Records (Watch)",
    "est": {
     "ai": 0.0,
     "dfs": 0.0
@@ -787,6 +795,7 @@
    },
    "balance": "DFS Balance (Tracker)",
    "balance_end": "DFS Balance End (Tracker)",
+   "catchup_records": "Load Catch-up Records (Tracker)",
    "est": {
     "ai": 0.0,
     "dfs": 0.015
@@ -841,6 +850,7 @@
    },
    "balance": "DFS Balance (Site)",
    "balance_end": "DFS Balance End (Site)",
+   "catchup_records": "Load Catch-up Records (Site)",
    "est": {
     "ai": 0.03,
     "dfs": 0.01

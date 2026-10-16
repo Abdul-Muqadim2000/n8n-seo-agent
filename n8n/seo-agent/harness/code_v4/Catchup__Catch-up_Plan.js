@@ -219,6 +219,21 @@ const RG = (() => {
     return liveRuns(rows, c).find(r => yesNo(r.heavy) && S(r.domain).toLowerCase() === dom) || null;
   };
 
+  // R94 follow-up (2026-10-16): did the schedule catch-up already run this slot? `records` are seo_cache rows (key, value as JSON text),
+  // `due` the slot's ISO time. A record whose start FAILED does not count (the planner tries it again); any other status does, exactly as
+  // the planner reads it (_catchup.js: a record that is not start_failed / refused is `caught_up`).
+  const caughtUp = (o) => {
+    const c = o || {}, wf = S(c.workflow_id), due = S(c.due);
+    if (!wf || !due) return null;
+    const key = 'catchup:' + wf + ':' + due;
+    const row = (c.records || []).find(r => r && S(r.key) === key);
+    if (!row) return null;
+    let v = row.value; if (typeof v === 'string') { try { v = JSON.parse(v); } catch (e) { v = {}; } }
+    v = v && typeof v === 'object' ? v : {};
+    if (S(v.status) === 'start_failed') return null;
+    return { key, due, started_at: S(v.started_at), status: S(v.status), entry: S(v.entry) };
+  };
+
   const at = (r) => S(r && r.created_at).slice(11, 16);
 
   // the gate a scheduled run passes. `mine` is the row this run just reserved (its id breaks ties).
@@ -238,6 +253,10 @@ const RG = (() => {
       + (parentOpen ? ', the run that started this one (execution ' + parent_run_id + ') not counted' : '') + '; the limit is ' + max_open;
     const refuse = (reason, detail) => ({ allowed: false, reason, refusal: detail, open_runs: live.length, open: live.map(r => ({ mode: S(r.mode), run_id: S(r.run_id), at: at(r) })),
       stale_ignored: stale, max_open, mode, where, basis, checked_at: ctx.now, parent_run_id });
+
+    // 0. R94 follow-up: this is the delayed timer of a slot the catch-up already ran - the week would run twice.
+    if (c.caught_up) return refuse('caught_up', 'The catch-up already ran this scheduled slot (due ' + S(c.caught_up.due) + ', started ' + (S(c.caught_up.started_at) || 'earlier')
+      + '), so this late fire of the same schedule was not run a second time. Nothing was charged and nothing was started.');
 
     // 1. the same monitor is still running. A weekly check that overlaps its own previous run reads the same tables twice, writes the same
     //    rows twice and bills the same APIs twice; the one still going is the one with the data.
@@ -266,7 +285,7 @@ const RG = (() => {
       stale_ignored: stale, max_open, mode, where, basis, checked_at: ctx.now, parent_run_id };
   };
 
-  return { gate, liveRuns, heavyBusy, isStale, parentOf, STALE_HOURS, MAX_OPEN };
+  return { gate, liveRuns, heavyBusy, isStale, parentOf, caughtUp, STALE_HOURS, MAX_OPEN };
 })();
 const SCHEDULES = [{"id": "SEOagentAIGrow1", "label": "AI Growth", "mode": "ai_growth", "cron": "30 9 * * 1", "kind": "weekly", "tz": "America/New_York", "entry_node": "Manual Run", "dry_run_ok": true}, {"id": "SEOagentAIPulse1", "label": "AI Pulse", "mode": "ai_pulse", "cron": "30 6 * * 0,2-6", "kind": "daily", "tz": "America/New_York", "entry_node": "Manual Run", "dry_run_ok": false}, {"id": "SEOagentAIVisib1", "label": "AI Visibility Tracker", "mode": "ai_visibility", "cron": "0 7 * * 1", "kind": "weekly", "tz": "America/New_York", "entry_node": "Manual Run", "dry_run_ok": false}, {"id": "SEOagentAuditSc1", "label": "Audit Scheduler", "mode": "audit_schedule", "cron": "0 6 1 * *", "kind": "monthly", "tz": "America/New_York", "entry_node": "Manual Run", "dry_run_ok": false}, {"id": "SEOagentBacklnk1", "label": "Backlink Monitor", "mode": "backlinks", "cron": "30 7 * * 1", "kind": "weekly", "tz": "America/New_York", "entry_node": "Manual Run", "dry_run_ok": false}, {"id": "SEOagentCadence1", "label": "Content Cadence", "mode": "content_cadence", "cron": "0 10 * * 1", "kind": "weekly", "tz": "America/New_York", "entry_node": "Manual Run", "dry_run_ok": true}, {"id": "SEOagentLinkBld1", "label": "Link Builder", "mode": "link_builder", "cron": "0 11 * * 1", "kind": "weekly", "tz": "America/New_York", "entry_node": "Manual Run", "dry_run_ok": false}, {"id": "SEOagentPageWch1", "label": "Page Watch", "mode": "page_watch", "cron": "45 5 * * *", "kind": "daily", "tz": "America/New_York", "entry_node": "Watch Run", "dry_run_ok": false}, {"id": "SEOagentTracker1", "label": "Rank Tracker", "mode": "rank_tracker", "cron": "0 8 * * 1", "kind": "weekly", "tz": "America/New_York", "entry_node": "Manual Run", "dry_run_ok": false}, {"id": "SEOagentSiteTrk1", "label": "Site Tracker", "mode": "site_tracker", "cron": "0 9 * * 1", "kind": "weekly", "tz": "America/New_York", "entry_node": "Manual Run", "dry_run_ok": false}];
 const TZ = 'America/New_York';

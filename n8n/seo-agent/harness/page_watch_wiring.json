@@ -132,6 +132,11 @@
     "Settle Run Ledger (Watch)"
    ]
   ],
+  "Load Catch-up Records (Watch)": [
+   [
+    "Run Ledger Row (Watch)"
+   ]
+  ],
   "Load Ladders (Watch)": [
    [
     "Load Pages (Watch)"
@@ -144,7 +149,7 @@
   ],
   "Load Open Runs (Watch)": [
    [
-    "Run Ledger Row (Watch)"
+    "Load Catch-up Records (Watch)"
    ]
   ],
   "Load Ops Alerts (Watch)": [
@@ -391,6 +396,7 @@
   "Settle Run Ledger (Watch)",
   "DFS Balance (Watch)",
   "Load Open Runs (Watch)",
+  "Load Catch-up Records (Watch)",
   "After Run Ledger (Watch)",
   "Run Allowed? (Watch)",
   "Refuse Run Ledger (Watch)",

@@ -8,7 +8,7 @@ const pick = (k) => ({ keyword: k.keyword, volume: k.volume, kd: k.kd, cpc: cpc2
   covered_by: k.covered_by || null, ladder_covered: k.ladder_covered || null,
   // G8 (2026-10-13): whether the traffic number was calibrated against this site's Search Console data or modelled (K2), what
   // Search Console measured for the search (K6), and the keywords that share its results page (K7)
-  traffic_basis: k.traffic_basis || null, traffic_note: k.traffic_note || null, modelled_traffic_potential: k.modelled_traffic_potential ?? null,
+  traffic_basis: k.traffic_basis || null, traffic_note: k.traffic_note || null, trend_note: k.trend_note || null, modelled_traffic_potential: k.modelled_traffic_potential ?? null,
   gsc: k.gsc || null, serp_cluster: k.serp_cluster || null });   // D11 / D20: a live page or one of the site's ladders already covers this search   // v4.8: for this site (null without a website); G3: the chance band
 const pdfData = bin.pdf ? await b64('pdf', bin.pdf) : null;
 const docData = bin.data ? await b64('data', bin.data) : null;
@@ -18,7 +18,7 @@ return [{ json: {
   start_with: ks.pipeline_keyword ? pick(ks.pipeline_keyword) : null,
   priority: (ks.priority || []).map(pick),
   content_plan: (ks.clusters || []).slice(0, 20).map(c => ({ tier: c.tier, topic: c.topic, primary_keyword: c.primary_keyword, page_type: c.page_type, keyword_count: c.keyword_count, total_volume: c.total_volume, supporting: c.supporting,
-    primary_kd: c.primary_kd ?? null, difficulty_for_you: c.difficulty_for_you || null, plan_type: c.plan_type || null, months: c.months || null, label: c.for_you_label || null })),
+    tier_note: c.tier_note || null, grouped_by: c.grouped_by || null, primary_kd: c.primary_kd ?? null, difficulty_for_you: c.difficulty_for_you || null, plan_type: c.plan_type || null, months: c.months || null, label: c.for_you_label || null })),
   reach: ks.reach || null,
   quick_wins: (ks.quick_wins || []).map(pick), questions: (ks.questions || []).map(k => k.keyword), competitor_gaps: (ks.competitor_gaps || []).slice(0, 15).map(pick),
   ai_demand: ks.ai_demand || null, research_failures: ks.research_failures || [], refused: ks.refused || [], covered: ks.covered || [], ladder_covered: ks.ladder_covered || [],   // D4 (2026-10-11): government / portal / other-brand keywords left out, with a reason
