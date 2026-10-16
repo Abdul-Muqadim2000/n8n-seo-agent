@@ -771,6 +771,10 @@
               {
                 "name": "model_updated_at",
                 "type": "string"
+              },
+              {
+                "name": "content_groups_json",
+                "type": "string"
               }
             ]
           },

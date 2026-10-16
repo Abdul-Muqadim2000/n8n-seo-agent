@@ -273,6 +273,10 @@
               {
                 "name": "model_updated_at",
                 "type": "string"
+              },
+              {
+                "name": "content_groups_json",
+                "type": "string"
               }
             ]
           },
@@ -597,7 +601,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// Site admin: delete | pause | resume | cadence (pages_per_week 0-3) | unpublish (keyword) | monitors (AI visibility / backlinks / monthly audit settings)\n// | prospect (prospect_domain + status contacted / replied / won / rejected / ignored / new, note, contact_email; replied: v4.13) | ai_prompts (add custom questions, switch some off) — by site_id or domain.\n// The table-ensure nodes before this one output table objects, so the request is read from the trigger (live finding 2026-10-02).\nlet t = {}; try { t = (($('Admin Run').first() || {}).json) || {}; } catch (e) { t = ($input.first() || {}).json || {}; }\nif (t.body && typeof t.body === 'object') t = { ...t, ...t.body };\nconst action = String(t.action || '').toLowerCase();\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst domain = normD(t.domain) || String(t.site_id || '').replace(/^site_/, '').replace(/-/g, '.');\nconst site_id = String(t.site_id || '').trim() || (normD(t.domain) ? 'site_' + normD(t.domain).replace(/[^a-z0-9]+/g, '-') : '');\nif (!['delete', 'pause', 'resume', 'cadence', 'unpublish', 'monitors', 'prospect', 'ai_prompts'].includes(action)) throw new Error('action must be delete, pause, resume, cadence, unpublish, monitors, prospect or ai_prompts');\nif (!site_id) throw new Error('site_id or domain is required');\nconst pages = Math.min(3, Math.max(0, Number(t.pages_per_week == null ? t.blogs_per_week : t.pages_per_week) || 0));\nif (action === 'cadence' && t.pages_per_week == null && t.blogs_per_week == null) throw new Error('pages_per_week (0-3) is required for action cadence');\nconst keyword = String(t.keyword || '').trim().toLowerCase().replace(/\\s+/g, ' ');\nif (action === 'unpublish' && !keyword) throw new Error('keyword is required for action unpublish');\nconst prospect_domain = normD(t.prospect_domain);\nconst pstatus = String(t.status || '').toLowerCase();\nif (action === 'prospect' && !prospect_domain) throw new Error('prospect_domain is required for action prospect');\nif (action === 'prospect' && pstatus && !['new', 'contacted', 'replied', 'won', 'rejected', 'ignored'].includes(pstatus)) throw new Error('status must be new, contacted, replied, won, rejected or ignored');\nconst add_prompts = (Array.isArray(t.add) ? t.add : (Array.isArray(t.prompts) ? t.prompts : [])).map(x => String(typeof x === 'object' ? x.prompt : x).trim()).filter(x => x.length >= 10).slice(0, 15);\nconst off_prompts = (Array.isArray(t.remove) ? t.remove : []).map(x => String(x).trim()).filter(Boolean);\nif (action === 'ai_prompts' && !add_prompts.length && !off_prompts.length) throw new Error('add (questions to track) or remove (prompt ids or texts) is required for action ai_prompts');\nconst monitors = (t.monitors && typeof t.monitors === 'object') ? t.monitors : (action === 'monitors' ? t : {});\nreturn [{ json: { action, site_id, domain: normD(t.domain) || '', status: action === 'pause' ? 'paused' : 'active', pages_per_week: pages, cadence_status: pages > 0 ? 'active' : 'off', keyword, prospect_domain, prospect_type: String(t.type || '').toLowerCase(), prospect_status: pstatus, contact_email: /^[^@\\s]+@[^@\\s]+\\.[a-z]{2,}$/i.test(String(t.contact_email || '').trim()) ? String(t.contact_email).trim().toLowerCase() : '', note: t.note == null ? null : String(t.note).slice(0, 500), add_prompts, off_prompts, monitors, updated_at: new Date().toISOString(), request_id: String(t.request_id || '') } }];\n"
+          "jsCode": "// Site admin: delete | pause | resume | cadence (pages_per_week 0-3) | unpublish (keyword) | monitors (AI visibility / backlinks / monthly audit settings)\n// | prospect (prospect_domain + status contacted / replied / won / rejected / ignored / new, note, contact_email; replied: v4.13) | ai_prompts (add custom questions, switch some off) — by site_id or domain.\n// The table-ensure nodes before this one output table objects, so the request is read from the trigger (live finding 2026-10-02).\nlet t = {}; try { t = (($('Admin Run').first() || {}).json) || {}; } catch (e) { t = ($input.first() || {}).json || {}; }\nif (t.body && typeof t.body === 'object') t = { ...t, ...t.body };\nconst action = String(t.action || '').toLowerCase();\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst domain = normD(t.domain) || String(t.site_id || '').replace(/^site_/, '').replace(/-/g, '.');\nconst site_id = String(t.site_id || '').trim() || (normD(t.domain) ? 'site_' + normD(t.domain).replace(/[^a-z0-9]+/g, '-') : '');\nif (!['delete', 'pause', 'resume', 'cadence', 'unpublish', 'monitors', 'prospect', 'ai_prompts', 'content_groups'].includes(action)) throw new Error('action must be delete, pause, resume, cadence, unpublish, monitors, prospect, ai_prompts or content_groups');\nif (!site_id) throw new Error('site_id or domain is required');\nconst pages = Math.min(3, Math.max(0, Number(t.pages_per_week == null ? t.blogs_per_week : t.pages_per_week) || 0));\nif (action === 'cadence' && t.pages_per_week == null && t.blogs_per_week == null) throw new Error('pages_per_week (0-3) is required for action cadence');\nconst keyword = String(t.keyword || '').trim().toLowerCase().replace(/\\s+/g, ' ');\nif (action === 'unpublish' && !keyword) throw new Error('keyword is required for action unpublish');\nconst prospect_domain = normD(t.prospect_domain);\nconst pstatus = String(t.status || '').toLowerCase();\nif (action === 'prospect' && !prospect_domain) throw new Error('prospect_domain is required for action prospect');\nif (action === 'prospect' && pstatus && !['new', 'contacted', 'replied', 'won', 'rejected', 'ignored'].includes(pstatus)) throw new Error('status must be new, contacted, replied, won, rejected or ignored');\nconst add_prompts = (Array.isArray(t.add) ? t.add : (Array.isArray(t.prompts) ? t.prompts : [])).map(x => String(typeof x === 'object' ? x.prompt : x).trim()).filter(x => x.length >= 10).slice(0, 15);\nconst off_prompts = (Array.isArray(t.remove) ? t.remove : []).map(x => String(x).trim()).filter(Boolean);\nif (action === 'ai_prompts' && !add_prompts.length && !off_prompts.length) throw new Error('add (questions to track) or remove (prompt ids or texts) is required for action ai_prompts');\n// B7-5 (W3-D): content_groups = [{ name, pattern }] -- a regular expression per group over the page path (case-insensitive); [] clears them\nconst rawGroups = Array.isArray(t.content_groups) ? t.content_groups : (Array.isArray(t.groups) ? t.groups : null);\nif (action === 'content_groups' && !rawGroups) throw new Error('content_groups (a list of { name, pattern }; an empty list clears the groups) is required for action content_groups');\nconst content_groups = (rawGroups || []).map(g => ({ name: String(g && g.name || '').trim().slice(0, 60), pattern: String(g && g.pattern || '').trim().slice(0, 200) })).filter(g => g.name && g.pattern).slice(0, 12);\nif (action === 'content_groups') for (const g of content_groups) { if (/(\\+|\\*|\\})\\)?[+*{]/.test(g.pattern)) throw new Error('content group \"' + g.name + '\": nested repetition in the pattern is refused'); try { new RegExp(g.pattern, 'i'); } catch (e) { throw new Error('content group \"' + g.name + '\": not a valid regular expression'); } }\nconst content_groups_json = JSON.stringify(content_groups);\nconst monitors = (t.monitors && typeof t.monitors === 'object') ? t.monitors : (action === 'monitors' ? t : {});\nreturn [{ json: { action, site_id, domain: normD(t.domain) || '', status: action === 'pause' ? 'paused' : 'active', pages_per_week: pages, cadence_status: pages > 0 ? 'active' : 'off', keyword, prospect_domain, prospect_type: String(t.type || '').toLowerCase(), prospect_status: pstatus, contact_email: /^[^@\\s]+@[^@\\s]+\\.[a-z]{2,}$/i.test(String(t.contact_email || '').trim()) ? String(t.contact_email).trim().toLowerCase() : '', note: t.note == null ? null : String(t.note).slice(0, 500), add_prompts, off_prompts, monitors, content_groups_json, updated_at: new Date().toISOString(), request_id: String(t.request_id || '') } }];\n"
         },
         "id": "eb47ded5-1710-5c9d-ab25-141518fc1e1d",
         "name": "Admin Action",
@@ -1650,6 +1654,31 @@
                 },
                 "renameOutput": true,
                 "outputKey": "ai_prompts"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "loose",
+                    "version": 3
+                  },
+                  "conditions": [
+                    {
+                      "id": "b5861106-451d-53b8-baba-b7214e88aa4f",
+                      "leftValue": "={{ $json.action === 'content_groups' }}",
+                      "rightValue": "",
+                      "operator": {
+                        "type": "boolean",
+                        "operation": "true",
+                        "singleValue": true
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "content_groups"
               }
             ]
           },
@@ -1996,6 +2025,16 @@
               {
                 "id": "model_updated_at",
                 "displayName": "model_updated_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "content_groups_json",
+                "displayName": "content_groups_json",
                 "required": false,
                 "defaultMatch": false,
                 "display": true,
@@ -2595,6 +2634,339 @@
       },
       {
         "parameters": {
+          "resource": "row",
+          "operation": "update",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_sites"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "site_id",
+                "condition": "eq",
+                "keyValue": "={{ $json.site_id }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "content_groups_json": "={{ $json.content_groups_json }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "site_id",
+                "displayName": "site_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "domain",
+                "displayName": "domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "gsc_property",
+                "displayName": "gsc_property",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "ga4_property_id",
+                "displayName": "ga4_property_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "country",
+                "displayName": "country",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "location_code",
+                "displayName": "location_code",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "language_code",
+                "displayName": "language_code",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "email",
+                "displayName": "email",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "callback_url",
+                "displayName": "callback_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "keywords",
+                "displayName": "keywords",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "status",
+                "displayName": "status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "source",
+                "displayName": "source",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "created_at",
+                "displayName": "created_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "last_run_at",
+                "displayName": "last_run_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "last_status",
+                "displayName": "last_status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "request_id",
+                "displayName": "request_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "canonical_host",
+                "displayName": "canonical_host",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "business_name",
+                "displayName": "business_name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "logo_url",
+                "displayName": "logo_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "nap_json",
+                "displayName": "nap_json",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "services_json",
+                "displayName": "services_json",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "nav_pages_json",
+                "displayName": "nav_pages_json",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "business_facts",
+                "displayName": "business_facts",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "cta",
+                "displayName": "cta",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "brand_names",
+                "displayName": "brand_names",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "competitors",
+                "displayName": "competitors",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "accreditation",
+                "displayName": "accreditation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "model_updated_at",
+                "displayName": "model_updated_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "content_groups_json",
+                "displayName": "content_groups_json",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "beb0b25a-1122-51c1-9f23-33679331c57b",
+        "name": "Set Content Groups",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          760,
+          880
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
           "jsCode": "// Rows affected by the admin action (0 = no site / row with that id or keyword).\nconst a = $('Admin Action').first().json; const rows = $input.all().map(i => i.json).filter(r => r && typeof r === 'object');\nconst err = rows.find(r => r.error);\nreturn [{ json: { ...a, affected: rows.filter(r => r.site_id || r.ladder_id).length, error: err ? String((err.error.message || err.error.description || err.error)).slice(0, 200) : null } }];\n"
         },
         "id": "4659a5df-3888-5085-91e0-507bbe38ec11",
@@ -2825,6 +3197,24 @@
           [
             {
               "node": "Load AI Prompts (Admin)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Set Content Groups",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Set Content Groups": {
+        "main": [
+          [
+            {
+              "node": "Admin Result",
               "type": "main",
               "index": 0
             }

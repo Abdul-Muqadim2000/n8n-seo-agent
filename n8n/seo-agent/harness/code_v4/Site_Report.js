@@ -133,6 +133,7 @@ const AN = (() => {
     google_update: { label: 'Google update', tone: 'warning' },
     data_break: { label: 'Data break', tone: 'warning' },
     link: { label: 'Link won', tone: 'good' },
+    note: { label: 'Your note', tone: 'neutral' },
   };
   const S = (v) => String(v == null ? '' : v);
   const day = (v) => S(v).slice(0, 10);
@@ -190,6 +191,12 @@ const AN = (() => {
       out.push(mark('fix', d, fixed != null && fixed > 0 ? 'Audit fixes: ' + fixed + ' finding' + (fixed === 1 ? '' : 's') + ' gone' + (kind === 'site_audit' ? '' : ' (' + lower + ')') : name,
         { detail, source: 'seo_audits', report_type: kind }));
     }
+    // B7-7 (W3-D): the owner's own dated notes (monthly check-in notes) are marks too; the text is theirs, shown as written
+    for (const nt of (x.notes || [])) {
+      const d = day(nt.date);
+      if (!d || !inRange(from, to, d, d) || !S(nt.text).trim()) continue;
+      out.push(mark('note', d, 'Your note', { detail: S(nt.text).trim().slice(0, 300), source: S(nt.source) || 'seo_console_checkins' }));
+    }
     for (const l of (x.links || [])) {
       const d = day(l.t0 || l.first_seen || l.date);
       if (!d || !inRange(from, to, d, d)) continue;
@@ -218,7 +225,9 @@ const AN = (() => {
       + rows.map(m => '<tr><td ' + td + '>' + esc1(m.date + (m.date_end && m.date_end !== m.date ? ' to ' + m.date_end : '')) + '</td><td ' + td + '>'
         + esc1(m.label) + '</td><td ' + td + '>' + esc1(m.detail || m.kind_label) + '</td></tr>').join('') + '</table>';
   };
-  return { marks, html, inRange, breakBetween, EVENTS, KINDS, UPDATES: EVENTS.google_updates || [], BREAKS: EVENTS.data_breaks || [] };
+  // B7-7: said once in the report. Search Console's own annotations live only in Search Console (the API has no annotations resource).
+  const OWN_NOTES_LINE = "Search Console's own chart annotations stay in Search Console: Google offers no API that returns them. The marks above are your published pages, your audits, your dated notes and the Google updates we track.";
+  return { OWN_NOTES_LINE, marks, html, inRange, breakBetween, EVENTS, KINDS, UPDATES: EVENTS.google_updates || [], BREAKS: EVENTS.data_breaks || [] };
 })();
 const metrics = $('Site Metrics').all().map(i => i.json);
 let briefs = []; try { briefs = $('Site Brief').all().map(i => (i.json && i.json.output && typeof i.json.output === 'object') ? i.json.output : null); } catch (e) { briefs = []; }
@@ -233,8 +242,9 @@ const td = 'style="padding:4px 8px;border:1px solid #cbd5e1;font-size:13px;verti
 const table = (headers, rows, empty) => rows.length ? '<table style="border-collapse:collapse;margin:6px 0;max-width:100%">' + '<tr>' + headers.map(h => '<th ' + th + '>' + esc(h) + '</th>').join('') + '</tr>' + rows.map(r => '<tr>' + r.map(c => '<td ' + td + '>' + c + '</td>').join('') + '</tr>').join('') + '</table>' : '<p style="color:#64748b;font-size:13px">' + esc(empty || 'nothing to show') + '</p>';
 const tile = (label, value, delta, color) => '<td style="padding:8px 12px;border:1px solid #e2e8f0;min-width:110px;vertical-align:top"><div style="font-size:11px;color:#64748b;text-transform:uppercase">' + esc(label) + '</div><div style="font-size:20px;font-weight:700">' + value + '</div><div style="font-size:12px;color:' + (color || '#475569') + '">' + delta + '</div></td>';
 const h3 = (t) => '<h3 style="margin:18px 0 4px;font-size:15px;color:#0f172a">' + esc(t) + '</h3>';
-const path = (u) => { const p = String(u || '').replace(/^https?:\/\/[^\/]+/i, ''); return p || '/'; };
-const link = (u) => u ? '<a href="' + esc(u) + '" style="color:#1d4ed8">' + esc(path(u)) + '</a>' : '—';
+// R92 part 2 (W3-D): a page row whose host is not the canonical one (`other_host` / `hosts`) prints its FULL URL, so a reader can see the host differs
+const path = (u, row) => { if (row && (row.other_host || (row.hosts && row.hosts.length > 1))) return String(u || ''); const p = String(u || '').replace(/^https?:\/\/[^\/]+/i, ''); return p || '/'; };
+const link = (u, row) => u ? '<a href="' + esc(u) + '" style="color:#1d4ed8">' + esc(path(u, row)) + '</a>' : '—';
 const deltaS = (cur, prev) => { const d = cur - prev; return (d > 0 ? '<span style="color:#15803d">+' + n(d) + '</span>' : d < 0 ? '<span style="color:#b91c1c">' + n(d) + '</span>' : '0'); };
 return metrics.map((m, i) => {
   const b = briefs[i] || null; const G = m.gsc, A = m.ga4;
@@ -263,6 +273,7 @@ return metrics.map((m, i) => {
   if (BRK.length) html += '<div style="background:#fffbeb;border-left:4px solid #d97706;padding:8px 12px;margin:8px 0;font-size:13px"><b>These two periods are not directly comparable</b><ul style="margin:4px 0 0;padding-left:18px">'
     + BRK.map(b => '<li>' + esc(b.name) + ' (' + esc(b.start) + ' to ' + esc(b.end) + '): ' + esc(b.detail) + '</li>').join('') + '</ul></div>';
   if (MK.length) html += h3('What happened in this period') + AN.html(MK, { empty: false })
+    + '<p style="font-size:12px;color:#64748b">' + esc(m.annotation_note || AN.OWN_NOTES_LINE) + '</p>'
     + '<p style="font-size:12px;color:#64748b">Every chart in your dashboard is marked with these dates. A Google update inside the period may be part of the cause of a move, which cannot be proven from these numbers.</p>';
   // B7-1 (2026-10-15, benchmark area 7): did the change work, or did the whole site move? Every dated change, read over its OWN
   // 28 days after against the 28 before, against the control group of the site's other pages over exactly the same days. A change
@@ -358,6 +369,28 @@ return metrics.map((m, i) => {
       (AN ? 'Queries Google does not name (rare searches, withheld for privacy): ' + n(AN.clicks) + ' clicks and ' + n(AN.impressions) + ' impressions, ' + AN.impressions_pct + '% of all impressions.' : '') +
       (G.scraper_queries && G.scraper_queries.count ? '<br>' + n(G.scraper_queries.count) + ' queries came from SEO tools or scrapers (search operators) and are left out of every list above: ' + esc((G.scraper_queries.sample || []).join(', ')) + '.' : '') +
       ((G.truncated || []).length ? '<br><span style="color:#b45309">Search Console returned more rows than this run read (' + esc(G.truncated.join(', ')) + '): the figures below cover the ' + n(G.rows_read) + ' rows read.</span>' : '') + '</p>';
+    // B7-6 (W3-D): brand in one place, three sources side by side
+    const BSR = m.brand_series || null;
+    if (BSR) html += h3('Brand demand: three measurements side by side') + table(['Line', 'Source', 'Before → now', 'Basis'],
+        BSR.lines.map(l => l.read ? [esc(l.label), esc(l.source), n(l.prev) + ' → ' + n(l.cur) + ' (' + esc(l.change.text) + ')', esc(l.basis)] : [esc(l.label), esc(l.source), '—', 'Not read: ' + esc(l.reason)]))
+      + '<p style="font-size:12px;color:#64748b">' + esc(BSR.note) + '</p>';
+    // B7-4 (W3-D): Discover and Google News, only where the property has them; otherwise ONE line that says so
+    const STY = G.search_types || null;
+    if (STY) for (const [k, lab] of [['discover', 'Discover'], ['google_news', 'Google News']]) { const b = STY[k]; if (!b) continue;
+      html += b.has_data ? h3(lab + ' (Google, separate from web search)') + '<p style="font-size:13px"><b>' + n(b.cur.clicks) + '</b> clicks and ' + n(b.cur.impressions) + ' impressions, ' + esc(b.change.text) + '. <span style="color:#64748b">' + esc(b.basis) + '</span></p>'
+        : '<p style="font-size:12px;color:#64748b">' + esc(b.reason) + '.</p>'; }
+    // B7-5 (W3-D): content groups, each on the same statistical bar as the site-wide alerts
+    const CG = G.content_groups || null;
+    if (CG && CG.configured) html += h3('How each part of the site is doing') + table(['Group', 'Pages', 'Clicks before → now', 'Verdict'],
+        CG.groups.map(g => g.valid ? [esc(g.name), n(g.pages), n(g.prev_clicks) + ' → ' + n(g.clicks), g.change.real ? esc(g.change.direction === 'down' ? 'Fell: ' : 'Grew: ') + esc(g.change.text) : g.change.watch ? 'Watch: ' + esc(g.change.text) + ' (inside normal variation)' : g.change.measurable ? 'No real change' : 'Too few clicks to judge'] : [esc(g.name), '—', '—', 'Not used: ' + esc(g.reason)])
+          .concat(CG.ungrouped ? [['All other pages', n(CG.ungrouped.pages), n(CG.ungrouped.prev_clicks) + ' → ' + n(CG.ungrouped.clicks), CG.ungrouped.change.real ? esc(CG.ungrouped.change.text) : 'No real change']] : []))
+      + '<p style="font-size:12px;color:#64748b">' + esc(CG.note) + '</p>';
+    // B7-8 (W3-D): the latest days, preliminary, apart from every tested figure
+    const RC = G.recent || null;
+    if (RC && RC.read) html += '<p style="font-size:13px;border-left:4px solid #94a3b8;padding:4px 10px;margin:8px 0"><b>Since the report window</b> (' + esc(RC.start) + ' to ' + esc(RC.end) + ', ' + n(RC.days) + ' day' + (RC.days === 1 ? '' : 's') + '): ' + n(RC.clicks) + ' clicks, ' + n(RC.impressions) + ' impressions'
+      + (RC.window_daily_clicks != null ? ' (the report window averaged ' + RC.window_daily_clicks + ' clicks a day)' : '') + '. <span style="color:#64748b">' + esc(RC.label) + '</span></p>';
+    // B3-12 (W3-D): Google's Search Console report on generative-AI performance has no API
+    html += '<p style="font-size:12px;color:#64748b">Search Console\'s own generative-AI performance report is only in Search Console\'s interface: the Search Analytics API offers no search type or dimension that returns it, so none of its numbers are in this report.</p>';
     // B7-2 (2026-10-15, benchmark area 7): the device and the country, free and first-party. A split Google did not answer prints
     // its reason — an empty table would read as "no phone traffic" (INVARIANTS rule 1).
     const DV = G.devices || null, CO = G.countries || null;
@@ -380,11 +413,11 @@ return metrics.map((m, i) => {
     if (G.ctr_gaps.length) html += h3('Low click-through for the position (rewrite titles)') + table(['Query', 'Position', 'Impressions', 'CTR', 'Expected', 'Page'], G.ctr_gaps.slice(0, 6).map(q => [esc(q.query), posS(q.position), n(q.impressions), (q.ctr * 100).toFixed(1) + '%', Math.round(q.expected_ctr * 100) + '%', link(q.page)]));
     html += h3('Query movers') + '<table style="border-collapse:collapse;width:100%"><tr><td style="vertical-align:top;padding-right:8px;width:50%"><b style="font-size:13px;color:#15803d">Winners</b>' + table(['Query', 'Clicks', 'Position'], G.winners.slice(0, 6).map(q => [esc(q.query), n(q.clicks) + ' (' + deltaS(q.clicks, q.prev_clicks) + ')', posS(q.position) + (q.prev_position ? ' <span style="color:#94a3b8">was ' + posS(q.prev_position) + '</span>' : '')]), 'no clear winners') + '</td><td style="vertical-align:top;width:50%"><b style="font-size:13px;color:#b91c1c">Losers</b>' + table(['Query', 'Clicks', 'Position'], G.losers.slice(0, 6).map(q => [esc(q.query), n(q.clicks) + ' (' + deltaS(q.clicks, q.prev_clicks) + ')', posS(q.position) + (q.prev_position ? ' <span style="color:#94a3b8">was ' + posS(q.prev_position) + '</span>' : '')]), 'no clear losers') + '</td></tr></table>';
     if (G.new_queries.length || G.lost_queries.length) html += '<p style="font-size:13px"><b>New queries:</b> ' + (G.new_queries.slice(0, 8).map(q => esc(q.query) + ' (' + n(q.impressions) + ' impr.)').join(', ') || 'none') + '<br><b>Lost queries:</b> ' + (G.lost_queries.slice(0, 8).map(q => esc(q.query) + ' (' + n(q.prev_clicks) + ' clicks before)').join(', ') || 'none') + '</p>';
-    html += h3('Pages') + table(['Page', 'Clicks', 'Change', 'Impressions', 'Position'], G.top_pages.slice(0, 8).map(p => [link(p.page), n(p.clicks), deltaS(p.clicks, p.prev_clicks), n(p.impressions), posS(p.position)]));
+    html += h3('Pages') + table(['Page', 'Clicks', 'Change', 'Impressions', 'Position'], G.top_pages.slice(0, 8).map(p => [link(p.page, p), n(p.clicks), deltaS(p.clicks, p.prev_clicks), n(p.impressions), posS(p.position)]));
     // B4-1 (2026-10-15, benchmark area 4): every page with clicks is tested against the 28 days before AND the same 28 days a
     // year earlier, so this list is what really decayed — and the line underneath names what was checked and refused, because a
     // report that only prints its hits cannot be told apart from one that found nothing.
-    if (G.decaying_pages.length) html += '<p style="font-size:13px"><b style="color:#b91c1c">Pages losing traffic:</b> ' + G.decaying_pages.slice(0, 5).map(p => esc(path(p.page)) + ' (' + n(p.prev_clicks) + ' → ' + n(p.clicks) + ' clicks, −' + n(p.lost) + (p.kind === 'clickthrough' ? ', still shown as often: title and description first' : '') + ')').join('; ') + '</p>';
+    if (G.decaying_pages.length) html += '<p style="font-size:13px"><b style="color:#b91c1c">Pages losing traffic:</b> ' + G.decaying_pages.slice(0, 5).map(p => esc(path(p.page, p)) + ' (' + n(p.prev_clicks) + ' → ' + n(p.clicks) + ' clicks, −' + n(p.lost) + (p.kind === 'clickthrough' ? ', still shown as often: title and description first' : '') + ')').join('; ') + '</p>';
     if (G.decay_summary && G.decay_summary.tested) { const ds = G.decay_summary;
       html += '<p style="font-size:12px;color:#64748b">Decay check: ' + n(ds.tested) + ' pages tested, <b>' + n(ds.decaying) + '</b> really losing traffic'
         + (ds.seasonal ? ', ' + n(ds.seasonal) + ' down only against the weeks before and not against a year ago (seasonal)' : '')

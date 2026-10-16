@@ -32,6 +32,13 @@ sites.forEach((s, idx) => {
   req('device_prev', { startDate: R.previous.start, endDate: R.previous.end, dimensions: ['device'], rowLimit: 10 });
   req('country_cur', { startDate: R.current.start, endDate: R.current.end, dimensions: ['country'], rowLimit: 50 });
   req('country_prev', { startDate: R.previous.start, endDate: R.previous.end, dimensions: ['country'], rowLimit: 50 });
+  // B7-4 (W3-D, 2026-10-17): Discover and Google News are separate search types in the API (type: discover / googleNews); `web` never
+  // contains them. One daily series each over both periods. A property with no Discover data answers with NO rows, which Parse GSC
+  // reports as "this property has no Discover data" -- never an empty section.
+  req('discover_daily', { startDate: R.previous.start, endDate: R.current.end, dimensions: ['date'], rowLimit: 100, type: 'discover' });
+  req('news_daily', { startDate: R.previous.start, endDate: R.current.end, dimensions: ['date'], rowLimit: 100, type: 'googleNews' });
+  // B7-8 (W3-D): the days after the final-data window, as PRELIMINARY data (dataState: all). Shown apart, never mixed into the tests.
+  if (R.recent && R.recent.start <= R.recent.end) req('recent', { startDate: R.recent.start, endDate: R.recent.end, dimensions: ['date'], rowLimit: 10, dataState: 'all' });
   // B7-1 (2026-10-15, benchmark area 7): each dated change gets ITS OWN two windows — the 28 complete days after it and the 28
   // before it — because the report's own 28-v-28 both sit after a change made three months ago and would measure nothing. The whole
   // site's pages come back in each window, so the same two requests carry the page under test AND the control group of every other

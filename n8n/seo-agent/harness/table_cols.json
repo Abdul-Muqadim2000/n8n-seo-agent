@@ -305,7 +305,8 @@
   "brand_names",
   "competitors",
   "accreditation",
-  "model_updated_at"
+  "model_updated_at",
+  "content_groups_json"
  ],
  "PAGES": [
   "site_id",

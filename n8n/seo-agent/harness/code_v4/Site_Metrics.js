@@ -808,6 +808,7 @@ const AN = (() => {
     google_update: { label: 'Google update', tone: 'warning' },
     data_break: { label: 'Data break', tone: 'warning' },
     link: { label: 'Link won', tone: 'good' },
+    note: { label: 'Your note', tone: 'neutral' },
   };
   const S = (v) => String(v == null ? '' : v);
   const day = (v) => S(v).slice(0, 10);
@@ -865,6 +866,12 @@ const AN = (() => {
       out.push(mark('fix', d, fixed != null && fixed > 0 ? 'Audit fixes: ' + fixed + ' finding' + (fixed === 1 ? '' : 's') + ' gone' + (kind === 'site_audit' ? '' : ' (' + lower + ')') : name,
         { detail, source: 'seo_audits', report_type: kind }));
     }
+    // B7-7 (W3-D): the owner's own dated notes (monthly check-in notes) are marks too; the text is theirs, shown as written
+    for (const nt of (x.notes || [])) {
+      const d = day(nt.date);
+      if (!d || !inRange(from, to, d, d) || !S(nt.text).trim()) continue;
+      out.push(mark('note', d, 'Your note', { detail: S(nt.text).trim().slice(0, 300), source: S(nt.source) || 'seo_console_checkins' }));
+    }
     for (const l of (x.links || [])) {
       const d = day(l.t0 || l.first_seen || l.date);
       if (!d || !inRange(from, to, d, d)) continue;
@@ -893,7 +900,9 @@ const AN = (() => {
       + rows.map(m => '<tr><td ' + td + '>' + esc1(m.date + (m.date_end && m.date_end !== m.date ? ' to ' + m.date_end : '')) + '</td><td ' + td + '>'
         + esc1(m.label) + '</td><td ' + td + '>' + esc1(m.detail || m.kind_label) + '</td></tr>').join('') + '</table>';
   };
-  return { marks, html, inRange, breakBetween, EVENTS, KINDS, UPDATES: EVENTS.google_updates || [], BREAKS: EVENTS.data_breaks || [] };
+  // B7-7: said once in the report. Search Console's own annotations live only in Search Console (the API has no annotations resource).
+  const OWN_NOTES_LINE = "Search Console's own chart annotations stay in Search Console: Google offers no API that returns them. The marks above are your published pages, your audits, your dated notes and the Google updates we track.";
+  return { OWN_NOTES_LINE, marks, html, inRange, breakBetween, EVENTS, KINDS, UPDATES: EVENTS.google_updates || [], BREAKS: EVENTS.data_breaks || [] };
 })();
 // ---- lineage (G29, 2026-10-13, system review FIX_PLAN.md; CRITERIA_technical_tracking_reporting_ai_links.md 3.11) ----
 // Every number a customer reads has to say where it came from, over what period, and how big the sample was. Before this, the AI
@@ -1287,11 +1296,29 @@ return sites.map((s, idx) => {
   const annotations = AN.marks({ from: R.previous.start, to: R.current.end,
     published: [...publishedLogs.map(r => ({ published_at: r.published_at, keyword: r.keyword, published_url: r.published_url, source: r.source })),
       ...found.filter(f => !loggedKw.has(kwKey(f.keyword))).map(f => ({ published_at: (det && det.checked_at) || now, keyword: f.keyword, published_url: f.url, source: f.ladder_id ? 'ladder' : 'detected' }))],
+    notes: s.owner_notes || [],   // B7-7: the owner's dated notes
     // R20 (2026-10-14): the report type travels with every audit row, so a full SEO report between two technical audits is marked as a
     // report of another kind instead of chaining its health score to theirs (three invented moves in one day, live on 2026-10-11)
     audits: auditRowsAll.filter(r => r.site_id === s.site_id || normD(r.domain) === s.domain)
       .map(r => ({ audited_at: r.audited_at, report_type: r.report_type || 'site_audit', health_score: r.health_score, findings: r.findings })) });
   const data_breaks = AN.breakBetween(R.previous.start, R.current.end);
+  // ---- B7-6 (W3-D, 2026-10-17): BRAND IN ONE PLACE. Branded Search Console clicks, GA4 direct sessions and AI-assistant referral sessions as
+  // one series set, each line with its own source and basis (SEOTesting's Brand Signals draws the same three on one chart). The lines
+  // are NOT added together: they count different things (searches for the name, visits typed or untracked, visits from AI answers).
+  const brand_series = (() => {
+    const opts = { min_events: Number(cfg.alert_min_click_events) || 40, min_pct: Number(cfg.alert_min_pct) || 10 };
+    const line = (key, label, source, cur, prev, basis, unit) => ({ key, label, source, unit, read: true, cur, prev, change: ST.change(cur, prev, opts), basis });
+    const miss = (key, label, source, reason) => ({ key, label, source, read: false, reason });
+    const L = [];
+    const bs = gsc && gsc.brand_split;
+    L.push(bs && bs.names && bs.names.length ? line('gsc_brand', 'Branded Search Console clicks', 'Search Console', bs.brand.clicks, bs.previous.brand.clicks, 'clicks on searches containing ' + bs.names.slice(0, 4).join(' / ') + '; searches Google withholds are not counted', 'clicks')
+      : miss('gsc_brand', 'Branded Search Console clicks', 'Search Console', gsc ? 'no brand name is known for this site, so branded searches cannot be told apart' : 'Search Console is not connected'));
+    L.push(ga4 && ga4.direct ? line('ga4_direct', 'GA4 direct sessions', 'Google Analytics 4', ga4.direct.cur.sessions, ga4.direct.prev.sessions, "sessions in GA4's Direct channel: people who typed the address or came from a source GA4 could not name, so it is an upper bound on brand demand", 'sessions')
+      : miss('ga4_direct', 'GA4 direct sessions', 'Google Analytics 4', 'Google Analytics is not connected'));
+    L.push(ga4 && ga4.ai_referrals ? line('ga4_ai', 'AI-assistant referral sessions', 'Google Analytics 4', ga4.ai_referrals.cur.sessions, ga4.ai_referrals.prev.sessions, 'sessions whose source is an AI assistant (ChatGPT, Perplexity, Gemini, Copilot, Claude and others) or GA4 medium ai-assistant', 'sessions')
+      : miss('ga4_ai', 'AI-assistant referral sessions', 'Google Analytics 4', ga4 ? 'Google Analytics did not answer the AI-referral request' : 'Google Analytics is not connected'));
+    return { period: 'the last 28 days against the 28 days before', lines: L, note: 'Three measurements of how much people look for the brand, each from its own source. They are shown side by side and never added together.' };
+  })();
   // ---- B7-1 (2026-10-15, benchmark area 7 — docs/system-review-2026-10-14/BENCH_AREA7_site_tracking.md): DID THE CHANGE WORK? ----
   // Since G12 this node has inlined the change-test kit (CT) and shipped its METHOD SENTENCE in every weekly callback
   // (`change_method`) while running no test at all: CT.compare was called by the Link Builder and by nobody else. A published
@@ -1359,7 +1386,14 @@ return sites.map((s, idx) => {
     if ((gsc.cannibal || []).length) lineage.push(LN.of('Searches two of your pages compete for', 'gsc', { period: curRange, basis: 'measured',
       sample: LN.sample((gsc.cannibal_summary || {}).queries_checked || 0, 'non-brand searches checked'),
       note: 'both pages really were shown for that search; brand searches are left out' }));
+    // B7-4 / B7-5 / B7-8 (W3-D)
+    const stp = gsc.search_types || {};
+    for (const [k, lab] of [['discover', 'Discover clicks'], ['google_news', 'Google News clicks']]) if (stp[k] && stp[k].has_data) lineage.push(LN.of(lab, 'gsc', { period: curRange, basis: 'measured', sample: LN.sample(stp[k].cur.clicks, 'clicks'), note: 'search type ' + (k === 'discover' ? 'discover' : 'googleNews') + ', separate from web search' }));
+    const cgp = gsc.content_groups || {};
+    if (cgp.configured) lineage.push(LN.of('Clicks by content group', 'gsc', { period: curRange, basis: 'measured', sample: LN.sample((cgp.groups || []).filter(g => g.valid).length, 'content groups'), note: 'a regular expression over page paths; a page can sit in more than one group' }));
+    if (gsc.recent && gsc.recent.read) lineage.push(LN.of('Search clicks since the report window', 'gsc', { period: LN.asOf(now), basis: 'reported', sample: LN.sample(gsc.recent.days, 'days'), note: 'preliminary data (dataState all): still being collected and might change; not part of any tested figure' }));
   } else lineage.push(LN.unknown('Search clicks, impressions and positions', 'Search Console is not connected for this site, so this report carries no measured search data'));
+  lineage.push(LN.of('Brand series (branded clicks, direct sessions, AI referral sessions)', 'ga4', { period: curRange, basis: 'measured', sample: LN.sample(brand_series.lines.filter(l => l.read).length, 'of 3 lines read'), note: 'three sources side by side, never added together' }));
   if (ga4) lineage.push(LN.of('Organic sessions, engaged sessions and key events', 'ga4', { period: curRange, basis: 'measured',
     sample: LN.sample(ga4.organic.cur.sessions, 'organic sessions of ' + (ga4.total && ga4.total.cur ? ga4.total.cur.sessions : 0) + ' from all channels'), note: 'property ' + ga4.ga4_property_id }));
   else lineage.push(LN.unknown('Visits, engagement and key events', 'Google Analytics is not connected for this site'));
@@ -1387,7 +1421,7 @@ return sites.map((s, idx) => {
   const trackedSet = new Set(tracked.map(t => t.keyword));
   const query_rows = [...tracked.map(t => qrow({ query: t.keyword, clicks: t.clicks, impressions: t.impressions, ctr: t.impressions ? t.clicks / t.impressions : 0, position: t.gsc_position || 0, prev_clicks: t.prev_clicks, prev_position: t.gsc_prev_position || 0, page: t.page }, true, t.serp_position)),
     ...((gsc && gsc.queries) || []).filter(q => !trackedSet.has(q.query)).slice(0, 100).map(q => qrow(q, false, null))];
-  const site_row = { ...SM.toRow(model), site_id: s.site_id, domain: s.domain, gsc_property: s.gsc_property || s.gsc_property_hint || '', ga4_property_id: ga4 ? String(ga4.ga4_property_id) : (s.ga4_property_id || ''), country: s.country || '', location_code: Number(s.location_code) || 0, language_code: s.language_code || 'en', email: s.email || '', callback_url: s.callback_url || '',
+  const site_row = { ...SM.toRow(model), content_groups_json: s.content_groups_json || '', site_id: s.site_id, domain: s.domain, gsc_property: s.gsc_property || s.gsc_property_hint || '', ga4_property_id: ga4 ? String(ga4.ga4_property_id) : (s.ga4_property_id || ''), country: s.country || '', location_code: Number(s.location_code) || 0, language_code: s.language_code || 'en', email: s.email || '', callback_url: s.callback_url || '',
     keywords: (s.keywords || []).join(', '), status: s.status || 'active', source: s.source || 'form', created_at: s.created_at || now, last_run_at: now, last_status: (gsc ? 'gsc:ok' : 'gsc:off') + ' ' + (ga4 ? 'ga4:ok' : 'ga4:off') + (alerts.some(a => a.level === 'high') ? ' alerts' : ''), request_id: s.request_id || '' };
   // ---- G25: what Google thinks of the key pages, with what was not checked said out loud ----
   const mine = insp.filter(x => x.site_id === s.site_id || x.site_idx === idx);
@@ -1415,13 +1449,13 @@ return sites.map((s, idx) => {
   return { json: { site_id: s.site_id, domain: s.domain, email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', period: R, checked_at: now, first_run: !!s.first_run, on_demand: !!s.on_demand, source: s.source, country: s.country || '',
     site: { canonical_host: model.canonical_host, home_url: SM.siteUrl(model, '/'), business_name: SM.name(model), name_source: model.name_source || '', services: SM.services(model).slice(0, 12), nav_pages: (model.nav_pages || []).slice(0, 8), nap: SM.nap(model), pages_known: SM.pages(model).length, model_updated_at: model.model_updated_at || '' },
     page_inventory: inv ? { pages: inv.total, with_queries: inv.with_queries, changed: inv.changed, by_source: inv.by_source, sitemap_read: inv.sitemap_read } : null,
-    gsc: { connected: !!gsc, property: s.gsc_property || '', permission: s.gsc_permission || '', error: s.gsc_error || null, ...(gsc ? { totals: gsc.totals, deltas: gsc.deltas, daily: gsc.daily, query_count: gsc.query_count, page_count: gsc.page_count ?? null, anonymised: gsc.anonymised || null, brand_split: gsc.brand_split || null, scraper_queries: gsc.scraper_queries || null, rows_read: gsc.rows_read ?? null, paging: gsc.paging || [], truncated: gsc.truncated || [], winners: gsc.winners, losers: gsc.losers, new_queries: gsc.new_queries, lost_queries: gsc.lost_queries, striking: gsc.striking, ctr_gaps: gsc.ctr_gaps, top_pages: gsc.pages.slice(0, 10), decaying_pages: gsc.decaying_pages, not_decay: gsc.not_decay || [], decay_summary: gsc.decay_summary || null, rising_pages: gsc.rising_pages, errors: gsc.errors, cannibal: gsc.cannibal || [], cannibal_summary: gsc.cannibal_summary || null, devices: gsc.devices || null, countries: gsc.countries || null } : {}) },
+    gsc: { connected: !!gsc, property: s.gsc_property || '', permission: s.gsc_permission || '', error: s.gsc_error || null, ...(gsc ? { totals: gsc.totals, deltas: gsc.deltas, daily: gsc.daily, query_count: gsc.query_count, page_count: gsc.page_count ?? null, anonymised: gsc.anonymised || null, brand_split: gsc.brand_split || null, scraper_queries: gsc.scraper_queries || null, rows_read: gsc.rows_read ?? null, paging: gsc.paging || [], truncated: gsc.truncated || [], winners: gsc.winners, losers: gsc.losers, new_queries: gsc.new_queries, lost_queries: gsc.lost_queries, striking: gsc.striking, ctr_gaps: gsc.ctr_gaps, top_pages: gsc.pages.slice(0, 10), decaying_pages: gsc.decaying_pages, not_decay: gsc.not_decay || [], decay_summary: gsc.decay_summary || null, rising_pages: gsc.rising_pages, errors: gsc.errors, cannibal: gsc.cannibal || [], cannibal_summary: gsc.cannibal_summary || null, devices: gsc.devices || null, countries: gsc.countries || null, search_types: gsc.search_types || null, recent: gsc.recent || null, content_groups: gsc.content_groups || null } : {}) },
     ga4: ga4 ? { connected: true, property_id: ga4.ga4_property_id, detected: ga4.ga4_detected, property_name: ga4.ga4_property_name, organic: ga4.organic, total: ga4.total, organic_share: ga4.organic_share, channels: ga4.channels, landing: ga4.landing, daily: ga4.daily, errors: ga4.errors } : { connected: false, error: acctErr || ga4Reason || 'no property id given or detected' },
     console: { notices, last_checkin: ck, checkin_due: !!s.checkin_due },
     significance: stat,   // G28: the Poisson z-test behind every traffic alert (clicks / impressions / sessions)
     index_coverage,       // G25: Google's own view of every key page (URL Inspection within the 2,000-a-day quota, oldest first)
     page_watch: watch,    // G11: the daily key-page watch — what it checks, what changed this week, what it could not read
-    annotations, data_breaks, lineage,   // G12 / G29: the events of the period for every chart, and where each figure came from
+    annotations, annotation_note: AN.OWN_NOTES_LINE, brand_series, data_breaks, lineage,   // G12 / G29: the events of the period for every chart, and where each figure came from
     // B7-1 (2026-10-15, benchmark area 7): the method sentence used to travel alone — the Site Tracker shipped it and ran no test.
     change_method: change_tests.method, change_tests,
     cannibal: (gsc && gsc.cannibal) || [], cannibal_summary: (gsc && gsc.cannibal_summary) || null,   // B7-3

@@ -7108,6 +7108,10 @@
               {
                 "name": "model_updated_at",
                 "type": "string"
+              },
+              {
+                "name": "content_groups_json",
+                "type": "string"
               }
             ]
           },
@@ -7435,6 +7439,16 @@
               {
                 "id": "model_updated_at",
                 "displayName": "model_updated_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "content_groups_json",
+                "displayName": "content_groups_json",
                 "required": false,
                 "defaultMatch": false,
                 "display": true,
@@ -16260,6 +16274,10 @@
               },
               {
                 "name": "model_updated_at",
+                "type": "string"
+              },
+              {
+                "name": "content_groups_json",
                 "type": "string"
               }
             ]
