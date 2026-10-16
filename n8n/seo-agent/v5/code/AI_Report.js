@@ -25,6 +25,8 @@ return metrics.map((m, i) => {
   // R85: a lookup that failed is said where the volumes are read, never left as "—" with no reason
   if (M.volume_lookup && M.volume_lookup.note) html += p_(esc(M.volume_lookup.note), true);
   html += briefBox(b) + alertBox(m.alerts);
+  // B8-9: the alerts that rest on a test were judged together - say across how many, and at what threshold
+  if (M.multiple_tests && M.multiple_tests.tests) html += p_(esc(M.multiple_tests.note), true);
   const sig = d.significant === true ? ' <b>real change</b>' : d.significant === false ? ' (within noise)' : '';
   // B8-1 (2026-10-15, benchmark area 8, INVARIANTS rule 1): three of the four headline tiles printed a bare arrow beside a tested
   // one, in the same type and the same row. Every arrow now carries the verdict of its own test, and every rate its own 95% range.
@@ -46,7 +48,8 @@ return metrics.map((m, i) => {
     (T && T.connected ? tile('AI visits (28 days)', n(T.sessions), (T.change_pct != null ? (T.change_pct >= 0 ? '▲ ' : '▼ ') + Math.abs(T.change_pct) + '% · ' : '') + n(T.key_events) + ' key events' + (T.revenue ? ' · ' + money(T.revenue) + ' revenue' : '')) : '') +
     (M.sentiment_score != null ? tile('Sentiment', (M.sentiment_score > 0 ? '+' : '') + M.sentiment_score, P.positive + ' positive · ' + P.negative + ' negative', M.sentiment_score < 0 ? '#b91c1c' : '#15803d') : '') + '</tr><tr>' +
     tile('Avg. position', M.avg_rank ? '#' + M.avg_rank : '—', 'when named') + tile('AI Overview', M.aio_presence + '%', 'of searches show one' + (M.aio_basis ? ' (' + M.aio_basis.shown + ' of the ' + M.aio_basis.read + ' read' + (M.aio_basis.failed ? '; ' + M.aio_basis.failed + ' failed, left out' : '') + ')' : '') + '; you cited in ' + M.aio_citation_rate + '%') +
-    (M.brand && M.brand.answered ? tile('Brand recognised', M.brand.known + ' of ' + M.brand.answered, M.brand.carried ? 'checked ' + String(M.brand.checked_at).slice(0, 10) + ' (monthly)' : 'assistants know who you are', M.brand_known === false ? '#b91c1c' : '#15803d') : '') +
+    // B8-10: a count with its denominator and its 95% range, in the neutral colour - no green / red verdict from one answer per assistant
+    (M.brand && M.brand.answered ? tile('Brand recognised', M.brand.known + ' of ' + M.brand.answered, 'assistants asked directly named you' + (M.brand.ci ? '<br>95% range ' + M.brand.ci[0] + '–' + M.brand.ci[1] + '%' : '') + (M.brand.carried ? '<br>checked ' + String(M.brand.checked_at).slice(0, 10) + ' (monthly)' : '')) : '') +
     (X && X.sov != null ? tile('Market-wide share', X.sov + '%', n(X.answers_citing_you) + ' AI answers cite you' + (X.carried ? ' (monthly)' : '')) : '') +
     (A ? tile('AI crawlers', A.answer_bots_ok + ' of ' + A.answer_bots, A.ok ? 'answer bots can read the site' : 'blocked: see below', A.ok ? '#15803d' : '#b91c1c') : '') + '</tr></table>';
   // B8-1 / B8-3 / B8-5: what the figures above were measured on, in the place they are read. A sample too small for a rate, the
@@ -93,6 +96,9 @@ return metrics.map((m, i) => {
   if ((m.undecided || []).length) html += '<p style="margin:6px 0 2px;font-size:13px"><b>Not enough answers to tell yet</b> (left out of the gaps and the actions)</p>'
     + table(['Question', 'Answers so far', 'AI searches / month', 'Named instead'], m.undecided.map(u => [esc(u.prompt), n(u.samples) + muted(esc(u.why)), u.volume ? n(u.volume) : '—', esc((u.competitors || []).slice(0, 3).join(', ') || '—')]));
   html += h3('By engine') + table(['Engine', 'Answers', 'Named you', '95% range', 'Cited your pages', 'Failed'], engs.map(e => { const x = m.engines[e]; const outH = M.headline && (M.headline.monthly_left_out || []).some(o => o.engine === x.name); return [esc(x.name) + (x.carried ? muted('monthly · last asked ' + esc(String(x.checked_at || '').slice(0, 10))) : x.pulse_samples ? muted(x.pulse_samples + ' from the daily pulse') : '') + (outH ? muted('asked monthly: not in the headline') : ''), n(x.samples != null ? x.samples : x.answered), x.mentioned + ' (' + x.mention_rate + '%)', x.ci ? x.ci[0] + '–' + x.ci[1] + '%' : '—', x.cited + ' (' + x.citation_rate + '%)', n(x.errors)]; }));
+  // B8-8: an engine that cites the site less than last time is judged on its own answers - or says it has too few to tell
+  const ecFell = Object.values(M.engine_changes || {}).filter(c => c && c.fell);
+  if (ecFell.length) html += p_('<b>Citations by engine against the last check:</b> ' + ecFell.map(c => esc(c.name) + ' cited your pages in ' + c.k + ' of ' + c.samples + ' answers, ' + c.k_before + ' of ' + c.samples_before + ' last time — ' + esc(c.why)).join('; ') + '.', true);
   html += h3('Who AI recommends instead') + table(['Business', 'Answers naming it', 'Share of voice', ''], [['<b>' + esc(m.domain) + ' (you)</b>', n(M.mentioned), M.share_of_voice + '%', ''], ...m.competitors.map(c => [esc(c.domain), n(c.mentions), c.share + '%', c.auto ? (c.named_only ? 'named (no website shown)' : 'detected') : 'your competitor'])], 'no other businesses named');
   // B-G1 (2026-10-15, INVARIANTS rule 1 + 2): a stored keyword the read-path fit gate set aside was NOT asked of any engine and is in no
   // rate above — so the panel says why it is shorter, instead of a number nobody can account for.

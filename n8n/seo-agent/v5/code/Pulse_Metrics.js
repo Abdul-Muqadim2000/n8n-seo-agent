@@ -52,15 +52,25 @@ return plans.map(p => {
   const baseline_note = !judged.length ? 'There is no earlier pulse day to compare today with.'
     : !B.length ? 'Today is not compared with any earlier day: ' + baseline_set_aside.slice(0, 3).map(x => x.date + ' — ' + x.why).join('; ') + '.'
     : baseline_set_aside.length ? new Set(B.map(x => x.date)).size + ' of the past ' + new Set(judged.map(x => x.d.date)).size + ' days are comparable (readings: ' + B.length + ' of ' + judged.length + '); ' + baseline_set_aside.length + ' left out (' + baseline_set_aside.slice(0, 3).map(x => x.date + ' — ' + x.why).join('; ') + ').' : '';
-  const alerts = [];
+  // ---- B8-9 (2026-10-17, wave 3, benchmark area 8): today's drop and "a business suddenly named" are tested on the same morning's
+  // answers, so they are one family, corrected together by Holm at 1% family-wise (the pulse's own 99% bar, which it used per test).
+  // A test joins the family when its alert could fire on it; each alert that fires states the adjusted threshold it cleared.
+  const pfam = [];
   // a drop is only called one from a day we could read, on a baseline measured the same way
-  if (!readable.unavailable && todayRate.enough && n >= 20 && bn >= 40 && Math.abs(zTest(m, n, bm, bn)) >= 2.58 && pct(m, n) < pct(bm, bn) - 10) alerts.push({ level: 'high', text: 'Named in ' + pct(m, n) + '% of today\'s AI answers vs ' + pct(bm, bn) + '% over ' + B.length + ' comparable day(s) (' + n + ' answers today; a real drop, not sampling noise).' });
+  const dropZ = (!readable.unavailable && todayRate.enough && n >= 20 && bn >= 40) ? zTest(m, n, bm, bn) : null;
+  if (dropZ != null && pct(m, n) < pct(bm, bn) - 10) pfam.push({ id: 'drop', label: 'today\'s mentions', z: dropZ });
+  const seen = new Set(B.flatMap(d => Object.keys(d.competitors || {})));
+  const newComp = Object.entries(competitors).filter(([d0, k0]) => B.length >= 3 && !seen.has(d0) && n >= 20 && k0 >= Math.max(3, n * 0.3)).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  for (const [d, k] of newComp) pfam.push({ id: 'comp:' + d, label: d, z: zTest(k, n, 0, bn) });   // not named on any comparable earlier day: 0 of bn
+  const multiple_tests = holm(pfam, 0.01);
+  const passes = (id) => !!(multiple_tests.by[id] && multiple_tests.by[id].reject);
+  const alerts = [];
+  if (passes('drop')) alerts.push({ level: 'high', text: 'Named in ' + pct(m, n) + '% of today\'s AI answers vs ' + pct(bm, bn) + '% over ' + B.length + ' comparable day(s) (' + n + ' answers today; a real drop, not sampling noise: ' + holmWords(multiple_tests, 'drop') + ').' });
   // B8-3 (INVARIANTS rule 3): a morning that could not be read used to send nothing at all — a quiet day and a broken one looked
   // identical from the outside. A failure that reaches no human is not handled, so it is the one thing that always goes out.
   if (readable.unavailable) alerts.push({ level: 'high', text: readable.note + ' ' + (error_list.length ? error_list.map(e => e.engine + ' — ' + e.message).slice(0, 3).join('; ') : 'No engine answered.') });
   else if (dead.length) alerts.push({ level: 'medium', text: readable.note });
-  const seen = new Set(B.flatMap(d => Object.keys(d.competitors || {})));
-  for (const [d, k] of Object.entries(competitors).filter(([d0, k0]) => B.length >= 3 && !seen.has(d0) && n >= 20 && k0 >= Math.max(3, n * 0.3)).sort((a, b) => b[1] - a[1]).slice(0, 3)) alerts.push({ level: 'medium', text: d + ' appears in ' + k + ' of today\'s ' + n + ' AI answers and was not named in the past ' + B.length + ' days.' });
+  for (const [d, k] of newComp) if (passes('comp:' + d)) alerts.push({ level: 'medium', text: d + ' appears in ' + k + ' of today\'s ' + n + ' AI answers and was not named in the past ' + B.length + ' days (' + holmWords(multiple_tests, 'comp:' + d) + ').' });
   for (const q of p.prompts) for (const e of p.pulse_engines) { const now = (prompts[q.prompt_id] || {})[e]; if (!now || now === 'n' || now === 'e') continue;
     const last3 = B.slice(0, 3).map(d => ((d.prompts || {})[q.prompt_id] || {})[e]); if (last3.length === 3 && last3.every(v => v === 'M' || v === 'C') && now === 'a') alerts.push({ level: 'medium', text: ENG[e] + ' no longer names you for "' + q.prompt + '" (named first on each of the past 3 days).' }); }
   const daily_row = { site_id: p.site_id, domain: p.domain, date: p.date, checked_at: p.checked_at, run_id: p.run_id, samples: n, mentioned: m, cited: c, mention_rate: pct(m, n), citation_rate: pct(c, n),
@@ -78,11 +88,14 @@ return plans.map(p => {
       + p.set_aside.filter(x => x.dropped).map(x => esc(x.note || (x.keyword + ' — ' + x.detail))).join(' | ') + '</p>' : '') +
     // B8-2 / B8-3: what today was measured on, and which earlier days it could honestly be compared with
     ((readable.note || baseline_note) ? '<p style="font-size:12px;color:#b45309;margin:6px 0">' + (readable.note ? '<b>' + esc(readable.note) + '</b>' : '') + (readable.note && baseline_note ? ' ' : '') + esc(baseline_note) + '</p>' : '') +
+    // B8-9: how many tests today's alerts were judged across, and at what threshold
+    (multiple_tests.tests ? '<p style="font-size:12px;color:#475569;margin:6px 0">' + esc(multiple_tests.note.replace('of this run', 'of today\'s run')) + '</p>' : '') +
     '<p style="font-size:12px;color:#64748b">The weekly AI visibility report (Monday) adds these daily answers to its figures. Answers vary from one ask to the next; an alert is sent only when a change is beyond that noise, measured against earlier days that asked the same questions of the same engines.</p></div>';
   return { json: { site_id: p.site_id, domain: p.domain, date: p.date, email: p.email, callback_url: p.callback_url, request_id: p.request_id, on_demand: p.on_demand, alerts, daily_row, answer_rows, subject, html,
     set_aside: p.set_aside || [], set_aside_note: p.set_aside_note || '',   // B-G2 / B-G1: the refusals travel to the app and the callback too
     samples: n, mention_rate: pct(m, n), mention_ci: [lo, hi], citation_rate: pct(c, n), visibility_score: visibility, engines, errors, error_rate, errors_list: error_list, retried: retry.asked, retry_answered: retry.answered,
     // B8-2 / B8-3: what today could be read, and which earlier days it is honestly comparable with — both travel to the app and the callback
     readable, today_rate: todayRate, baseline_days: B.length, baseline_of: judged.length, baseline_set_aside, baseline_note,
+    multiple_tests: { method: multiple_tests.method, alpha: multiple_tests.alpha, tests: multiple_tests.tests, threshold_p: multiple_tests.threshold_p, threshold_z: multiple_tests.threshold_z, rejected: multiple_tests.rejected, results: multiple_tests.results, note: multiple_tests.note },   // B8-9
     status: 'progress', stage: 'ai_pulse', checked_at: p.checked_at } };
 });

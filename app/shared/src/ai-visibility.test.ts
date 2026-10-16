@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { AI_ENGINE_VALUES, AI_PAGES_DEFAULT, AI_PROMPTS_DEFAULT, AUTOMATIONS, aiPulseQuestions, estimateAiGrowthCost, estimateAiVisibilityCost, estimateMonitoringCost, MONITOR_COSTS, nextScheduledRun } from './constants';
 import { buildN8nPayload, monitorsBody } from './payload';
 import { monitorSettingsSchema } from './schemas';
+import { AI_MIN_QUESTION_SAMPLES, aiPrecisionTable, aiSampleRate, halfWidth95, questionWin, wilsonRange } from './ai-visibility';
 
 // AI visibility v4.9 (n8n/seo-agent/AI_VISIBILITY_SPEC.md): bigger question panel, the daily AI Pulse, their cost and schedule.
 
@@ -93,5 +94,74 @@ describe('AI growth (v4.12)', () => {
       { callbackUrl: 'https://app.example.com/api/hooks/n8n/x', email: '' },
     ) as Record<string, unknown>;
     expect(body.ai_target).toEqual({ question: 'Which companies help UAE businesses with e-invoicing?', kind: 'refresh', target_id: 'ait_x_1', fanout: ['a', 'b'], sources: [{ u: 'https://gulfnews.com/x', t: 'X' }], competitors: ['zoho.com'] });
+  });
+});
+
+// B8-6 / B8-7 (2026-10-17, benchmark area 8): the per-question range and what each panel size and cadence buys.
+describe('wilsonRange / halfWidth95 (the engine\'s _ai_stats.js formulas)', () => {
+  it('matches the engine on known samples', () => {
+    expect(wilsonRange(1, 4)).toEqual([4.6, 69.9]);   // harness S165's 1-of-4 brand check, as the engine printed it
+    expect(wilsonRange(0, 0)).toBeNull();
+    expect(wilsonRange(10, 10)![1]).toBe(100);
+  });
+  it('reproduces the published half-widths: about ±10 at 100 answers and ±1 at 10,000', () => {
+    expect(halfWidth95(100)).toBeCloseTo(9.6, 0);
+    expect(halfWidth95(10000)).toBeCloseTo(1, 0);
+    expect(halfWidth95(0)).toBeNull();
+    expect(halfWidth95(40, 0.1)!).toBeLessThan(halfWidth95(40)!);   // narrower away from 50%
+  });
+});
+
+describe('questionWin (B8-6)', () => {
+  it('uses the range and the floor the engine sent', () => {
+    const w = questionWin({ winRate: 25, samples: 8, win: { ci: [7.1, 59.1], enough: true, why: '' } });
+    expect(w).toMatchObject({ rate: 25, samples: 8, ci: [7.1, 59.1], enough: true });
+  });
+  it('rebuilds the same range from rate x samples when the server passed only the bare rate', () => {
+    expect(questionWin({ winRate: 25, samples: 8 }).ci).toEqual(wilsonRange(2, 8));
+  });
+  it('says "too few" under the floor instead of a 0% result', () => {
+    const w = questionWin({ winRate: 0, samples: 1 });
+    expect(w.enough).toBe(false);
+    expect(w.why).toMatch(new RegExp(`needs ${AI_MIN_QUESTION_SAMPLES}`));
+    expect(questionWin({ winRate: 0, samples: AI_MIN_QUESTION_SAMPLES }).enough).toBe(true);
+  });
+});
+
+describe('aiSampleRate / aiPrecisionTable (B8-7)', () => {
+  it('models one answer per weekly engine and six pulse mornings per fast engine when nothing was measured', () => {
+    const r = aiSampleRate();   // the six default engines: Claude is monthly, three of them are pulse engines
+    expect(r).toMatchObject({ weeklyPerQuestion: 5, pulsePerQuestion: 18, basis: 'modelled' });
+    expect(r.why).toMatch(/modelled/);
+    expect(aiSampleRate({ pulse: false }).pulsePerQuestion).toBe(0);
+  });
+  it('uses the engine\'s own measured sample, and projects the pulse at the measured answer rate when it was off', () => {
+    const m = aiSampleRate({ measured: { samples: 140, pulseSamples: 112, questions: 7, checkedAt: '2026-10-13T07:00:00Z' } });
+    expect(m).toMatchObject({ weeklyPerQuestion: 4, pulsePerQuestion: 16, basis: 'measured', pulseBasis: 'measured' });
+    expect(m.why).toMatch(/140 answers over 7 days to 7 buyer questions/);
+    const off = aiSampleRate({ measured: { samples: 28, pulseSamples: 0, questions: 7 } });
+    expect(off.pulseBasis).toBe('modelled');
+    expect(off.pulsePerQuestion).toBeCloseTo(18 * 0.8, 1);   // 4 of 5 weekly answers came back
+  });
+  it('prints a half-width for every panel size and cadence, narrower with more questions and with the pulse', () => {
+    const t = aiPrecisionTable({ panel: 8, pulse: true, measured: { samples: 140, pulseSamples: 112, questions: 7 } });
+    expect(t.basis).toBe('measured');
+    const row = (panel: number, cadence: string) => t.rows.find((x) => x.panel === panel && x.cadence === cadence)!;
+    expect(row(8, 'weekly').answers).toBe(28);
+    expect(row(8, 'weekly_pulse').answers).toBe(140);
+    expect(row(8, 'weekly_pulse').current).toBe(true);
+    expect(row(8, 'weekly').current).toBe(false);
+    expect(row(8, 'weekly').headline).toBe(halfWidth95(28));
+    expect(row(50, 'weekly_pulse').headline!).toBeLessThan(row(20, 'weekly_pulse').headline!);
+    expect(row(20, 'weekly_pulse').headline!).toBeLessThan(row(20, 'weekly').headline!);
+    expect(row(8, 'weekly').perQuestionEnough).toBe(true);   // 4 a question: just at the floor
+    expect(t.rows.map((x) => x.panel)).toEqual([8, 8, 20, 20, 50, 50]);
+  });
+  it('a site with no pulse engine gets weekly rows only, and a panel off the list is added', () => {
+    const t = aiPrecisionTable({ panel: 12, engines: ['perplexity', 'claude'], pulse: true });
+    expect(t.pulseAvailable).toBe(false);
+    expect(t.rows.every((x) => x.cadence === 'weekly')).toBe(true);
+    expect(t.rows.find((x) => x.panel === 12)!.current).toBe(true);
+    expect(t.rows.find((x) => x.panel === 12)!.perQuestionEnough).toBe(false);   // one answer a question a week
   });
 });

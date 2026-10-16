@@ -24,5 +24,6 @@ export * from './share';
 export * from './brand';
 export * from './queue';
 export * from './report-delivery';
+export * from './ai-visibility';
 // The setup guides are imported from '@seo/shared/guides', not from here: the catalogue is a sizeable chunk of text and only
 // the help panel (and the recommendation → guide map) needs it, so it stays out of every bundle that imports this barrel.

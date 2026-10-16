@@ -18,6 +18,7 @@ import {
   type MonitorSettings,
 } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
+import { AiPrecisionTable, type AiMeasuredSample } from '@/components/site/AiPrecision';
 import { Checkbox, Field, Select } from '@/components/ui/field';
 import { Segmented, SwitchRow } from '@/components/ui/tabs';
 import { TagInput } from '@/components/ui/tag-input';
@@ -57,12 +58,15 @@ export function MonitorSettingsFields({
   disabled,
   showBrandNames = true,
   enginesError,
+  aiMeasured,
 }: {
   value: MonitorSettings;
   onChange: (v: MonitorSettings) => void;
   disabled?: boolean;
   showBrandNames?: boolean;
   enginesError?: string;
+  /** B8-7: the latest AI visibility run's own sample, so the precision table is measured rather than modelled */
+  aiMeasured?: AiMeasuredSample | null;
 }) {
   useEngineCal();   // R99 / R100: re-render with the engine's own prices once they arrive
   const set = (patch: Partial<MonitorSettings>) => onChange({ ...value, ...patch });
@@ -125,6 +129,7 @@ export function MonitorSettingsFields({
                 disabled={disabled || !AI_PULSE_ENGINES.some((e) => value.aiEngines.includes(e))}
                 onChange={(e) => set({ aiPulse: e.target.checked })}
               />
+              <AiPrecisionTable panel={value.aiPromptsMax} engines={value.aiEngines} pulse={value.aiPulse} measured={aiMeasured} />
               <div className="space-y-3 rounded-lg border border-line p-3">
                 <Checkbox
                   label="AI growth (weekly)"
