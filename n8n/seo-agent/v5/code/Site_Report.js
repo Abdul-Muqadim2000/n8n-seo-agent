@@ -70,14 +70,38 @@ return metrics.map((m, i) => {
   html += h3('Do this week') + (acts.length ? '<ol style="margin:4px 0;padding-left:20px;font-size:14px">' + acts.map(a => '<li style="margin:4px 0"><b>' + esc(a.action) + '</b>' + (a.why ? '<br><span style="color:#475569;font-size:13px">' + esc(a.why) + '</span>' : '') + '</li>').join('') + '</ol>' : '<p style="font-size:13px;color:#64748b">Nothing urgent this week.</p>');
   if (withBody.length) html += '<p style="font-size:13px">Start the work with one click: open the <a href="' + esc(m.form_url) + '">SEO Assistant form</a> ("I know my keyword") or send one of these to the API (' + esc(m.api_url) + '):</p>' + withBody.slice(0, 3).map(a => '<pre style="background:#f1f5f9;padding:8px;font-size:11px;white-space:pre-wrap">' + esc(JSON.stringify(a.api_body)) + '</pre>').join('');
   // v4.5: the growth monitors' latest results (AI Visibility Tracker Mon 07:00, Backlink Monitor Mon 07:30, Audit Scheduler monthly)
-  const latest2 = (name) => { try { return $(name).all().map(x => x.json).filter(r => r && r.site_id === m.site_id && !r.error).sort((x, y) => String(y.checked_at || y.audited_at).localeCompare(String(x.checked_at || x.audited_at))).slice(0, 2); } catch (e) { return []; } };
-  const [av, av0] = latest2('Load AI Visibility (Site)'), [bl, bl0] = latest2('Load Backlink Snapshots (Site)'), [au, au0] = latest2('Load Audits (Site)');
-  if (av || bl || au) {
+  // R78 (2026-10-16): the block compared the two newest rows of each table whatever their TYPE — a full SEO report against the
+  // technical audit before it ("health 70 ▼13"), a full backlink snapshot against a free_only one that never reads DataForSEO
+  // ("18 referring domains ▲18"). Each row is now compared only with the previous row of the SAME kind, filtered BEFORE the two
+  // newest are taken: an audit with the previous audit of its report_type (the engine's own diff rule, Audit_Diff.js), a backlink
+  // snapshot with the previous one that read the same sources (free_only vs DataForSEO), an AI run with the previous one over the
+  // same engines and the same panel (AI_Metrics.js B-L4). No like-for-like baseline = no arrow.
+  const rowsOf = (name) => { try { return $(name).all().map(x => x.json).filter(r => r && r.site_id === m.site_id && !r.error).sort((x, y) => String(y.checked_at || y.audited_at).localeCompare(String(x.checked_at || x.audited_at))); } catch (e) { return []; } };
+  const AVR = rowsOf('Load AI Visibility (Site)'), BLR = rowsOf('Load Backlink Snapshots (Site)'), AUR = rowsOf('Load Audits (Site)');
+  const av = AVR[0] || null, bl = BLR[0] || null;
+  const engSet = (r) => { let e = {}; try { e = JSON.parse(r.engines_json || '{}') || {}; } catch (x) {} return Object.keys(e).filter(k => k !== 'claude' && !(e[k] || {}).carried).sort().join('+'); };
+  const av0 = av ? (AVR.slice(1).find(r => engSet(r) === engSet(av)) || null) : null;
+  const avPanelOk = av && av0 && (() => { const a = Number(av.prompts) || 0, b = Number(av0.prompts) || 0; return a > 0 && b > 0 && Math.abs(a - b) / Math.max(a, b) <= 0.2; })();
+  const avWhy = av && !(av0 && avPanelOk) && AVR.length > 1 ? (!av0 ? 'not compared: the earlier runs asked a different set of AI engines' : 'not compared: the earlier run asked ' + n(av0.prompts) + ' questions, this one ' + n(av.prompts)) : '';
+  const blKind = (r) => String(r.mode || '') === 'free' ? 'free' : 'index';
+  const bl0 = bl ? (BLR.slice(1).find(r => blKind(r) === blKind(bl)) || null) : null;
+  const AUDIT_LABEL = { site_audit: 'Technical audit', full: 'Full SEO report' };
+  const auAll = []; for (const r of AUR) { const t = String(r.report_type || ''); if (!auAll.includes(t)) auAll.push(t); }
+  const auTypes = auAll.some(Boolean) ? auAll.filter(Boolean) : auAll;   // rows without a type (before v4.5) only when nothing newer has one
+  const auPairs = auTypes.slice(0, 2).map(t => { const list = AUR.filter(r => String(r.report_type || '') === t); return { t, cur: list[0], prev: t ? (list[1] || null) : null }; });
+  if (av || bl || auPairs.length) {
     const dp = (cur, prev) => prev == null ? '' : (cur - prev > 0 ? ' <span style="color:#15803d">▲' + r1(cur - prev) + '</span>' : cur - prev < 0 ? ' <span style="color:#b91c1c">▼' + r1(prev - cur) + '</span>' : '');
     const rows = [];
-    if (av) { let comp = []; try { comp = JSON.parse(av.competitors_json || '[]'); } catch (e) {} rows.push(['<b>AI answers</b> (' + esc(String(av.checked_at).slice(0, 10)) + ')', 'named in ' + r1(av.mention_rate) + '%' + dp(Number(av.mention_rate), av0 ? Number(av0.mention_rate) : null) + ' · pages cited in ' + r1(av.citation_rate) + '% · share of voice ' + r1(av.share_of_voice) + '%' + (comp[0] ? ' (leader: ' + esc(comp[0].domain) + ' ' + comp[0].share + '%)' : '') + (av.alerts ? '<br><span style="color:#b91c1c">' + esc(av.alerts) + '</span>' : '')]); }
-    if (bl) rows.push(['<b>Backlinks</b> (' + esc(String(bl.checked_at).slice(0, 10)) + ', ' + esc(bl.mode) + ')', n(bl.referring_domains) + ' referring domains' + dp(Number(bl.referring_domains), bl0 ? Number(bl0.referring_domains) : null) + ' · ' + n(bl.new_links) + ' new / ' + n(bl.lost_links) + ' lost' + (Number(bl.important_lost) ? ' · <b style="color:#b91c1c">' + bl.important_lost + ' important lost</b>' : '') + (Number(bl.spammy_new) ? ' · ' + bl.spammy_new + ' spammy' : '') + ' · spam score ' + n(bl.spam_score)]);
-    if (au) rows.push(['<b>Technical audit</b> (' + esc(String(au.audited_at).slice(0, 10)) + ')', 'health ' + n(au.health_score) + '/100' + dp(Number(au.health_score), au0 ? Number(au0.health_score) : null) + ' (' + esc(au.grade) + ') · ' + n(au.critical) + ' critical, ' + n(au.high) + ' high, ' + n(au.medium) + ' medium · ' + n(au.pages_crawled) + ' pages crawled']);
+    if (av) { let comp = []; try { comp = JSON.parse(av.competitors_json || '[]'); } catch (e) {} const pv = av0 && avPanelOk ? av0 : null; rows.push(['<b>AI answers</b> (' + esc(String(av.checked_at).slice(0, 10)) + ')', 'named in ' + r1(av.mention_rate) + '%' + dp(Number(av.mention_rate), pv ? Number(pv.mention_rate) : null) + ' · pages cited in ' + r1(av.citation_rate) + '% · share of voice ' + r1(av.share_of_voice) + '%' + (comp[0] ? ' (leader: ' + esc(comp[0].domain) + ' ' + comp[0].share + '%)' : '') + (avWhy ? ' <span style="color:#64748b">(' + esc(avWhy) + ')</span>' : '') + (av.alerts ? '<br><span style="color:#b91c1c">' + esc(av.alerts) + '</span>' : '')]); }
+    if (bl) {
+      // R112: the merged count (every source, each link checked on its page) is THE count, as in the backlinks report itself;
+      // DataForSEO's own figure is the index's, and a free_only check has no index figures at all
+      const free = blKind(bl) === 'free'; const hasU = bl.union_domains !== '' && bl.union_domains != null;
+      const count = hasU ? n(bl.union_domains) + ' linking sites (all sources)' + dp(Number(bl.union_domains), bl0 && bl0.union_domains !== '' && bl0.union_domains != null ? Number(bl0.union_domains) : null)
+        : n(bl.referring_domains) + ' referring domains (DataForSEO)' + dp(Number(bl.referring_domains), bl0 ? Number(bl0.referring_domains) : null);
+      rows.push(['<b>Backlinks</b> (' + esc(String(bl.checked_at).slice(0, 10)) + ', ' + esc(bl.mode) + ')', count + (hasU && !free ? " · DataForSEO's index: " + n(bl.referring_domains) : '') + ' · ' + n(bl.new_links) + ' new / ' + n(bl.lost_links) + ' lost' + (Number(bl.important_lost) ? ' · <b style="color:#b91c1c">' + bl.important_lost + ' important lost</b>' : '') + (Number(bl.spammy_new) ? ' · ' + bl.spammy_new + ' spammy' : '') + (free ? ' · free sources only' : " · spam score " + n(bl.spam_score) + " (the index's)")]);
+    }
+    for (const pr of auPairs) { const au = pr.cur; rows.push(['<b>' + esc(AUDIT_LABEL[pr.t] || 'Audit') + '</b> (' + esc(String(au.audited_at).slice(0, 10)) + ')', 'health ' + n(au.health_score) + '/100' + dp(Number(au.health_score), pr.prev ? Number(pr.prev.health_score) : null) + ' (' + esc(au.grade) + ') · ' + n(au.critical) + ' critical, ' + n(au.high) + ' high, ' + n(au.medium) + ' medium · ' + n(au.pages_crawled) + ' pages crawled']); }
     html += h3('AI search, backlinks and technical health') + table(['Monitor', 'Latest'], rows) + '<p style="font-size:12px;color:#64748b">Details in the AI-visibility, backlink and audit reports (separate e-mails).</p>';
   }
   if (m.tracked.length) html += h3('Tracked keywords') + table(['Keyword', 'Source', 'Search Console avg', 'Before', 'Live Google check', 'Clicks', 'Impr.', 'Ranking page'], m.tracked.map(t => [esc(t.keyword), esc(t.source === 'ladder' ? (t.rung === 4 ? 'ladder top' : 'ladder rung ' + t.rung) : t.source === 'blog' ? 'blog page' : 'your list'),
@@ -150,7 +174,15 @@ return metrics.map((m, i) => {
   if (b && (b.watch || []).length) html += h3('Watch') + '<ul style="font-size:13px;margin:4px 0;padding-left:18px">' + b.watch.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>';
   html += '<p style="color:#64748b;font-size:12px;margin-top:16px">' + (G.connected ? 'A fall in clicks, impressions or sessions is only called a fall when it is beyond normal week-to-week variation (two-sample Poisson test, 95%); a larger move at low volume is shown as "Watch". ' : '') + 'Search Console figures are final up to 3 days ago and are averages across devices and locations; the live Google check is one SERP sample from DataForSEO. Trends are a relative index (100 = peak of the year). Reports run every Monday' + (m.tracked.some(t => t.source === 'ladder') ? '; the keyword ladder gets its own progress e-mail' : '') + '. Reply to this e-mail to pause tracking.</p></div>';
   const hi = m.alerts.filter(a => a.level === 'high').length; const parts = [];
-  if (G.connected) parts.push(n(G.totals.cur.clicks) + ' clicks ' + pctS(G.deltas.clicks_pct)); if (hi) parts.push(hi + ' alert' + (hi > 1 ? 's' : '')); if (found.length) parts.push(found.length + ' page' + (found.length > 1 ? 's' : '') + ' found live'); if (G.connected && G.striking.length) parts.push(G.striking.length + ' quick win' + (G.striking.length > 1 ? 's' : ''));
+  // R113 (2026-10-16): the subject follows the report's own significance test (G28). Clicks 21 -> 32 is "up 52%" in arithmetic and
+  // "not a real change" in the test printed under it, so the subject no longer says "32 clicks ▲ 52%": it leads with a change the test
+  // calls real and says the clicks are within normal variation. Without a significance block (older runs) the subject is unchanged.
+  const SG = m.significance || null, SC = SG && SG.clicks;
+  if (G.connected && SC && SC.real === false) {
+    const realOne = ['impressions', 'sessions'].find(k => SG[k] && SG[k].real === true && SG[k].pct != null);
+    if (realOne) parts.push(realOne + ' ' + pctS(SG[realOne].pct));
+    parts.push(n(G.totals.cur.clicks) + ' clicks (within normal variation)');
+  } else if (G.connected) parts.push(n(G.totals.cur.clicks) + ' clicks ' + pctS(G.deltas.clicks_pct)); if (hi) parts.push(hi + ' alert' + (hi > 1 ? 's' : '')); if (found.length) parts.push(found.length + ' page' + (found.length > 1 ? 's' : '') + ' found live'); if (G.connected && G.striking.length) parts.push(G.striking.length + ' quick win' + (G.striking.length > 1 ? 's' : ''));
   const subject = (G.connected ? '[SEO weekly] ' : '[SEO tracking] ') + m.domain + ' — ' + (parts.length ? parts.join(' · ') : 'connect Google Search Console to see real data');
   const file_name = 'seo-performance-' + m.domain.replace(/[^a-z0-9.]+/g, '-') + '-' + m.period.current.end + '.html';
   const doc = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + esc(subject) + '</title></head><body style="margin:24px">' + html + '</body></html>';

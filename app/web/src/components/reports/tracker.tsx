@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { Activity, BarChart3, ClipboardCheck, Eye, Flame, LineChart, MousePointerClick, Rocket, ScanSearch, Search, Target, TrendingUp, Users } from 'lucide-react';
-import { formatPosition, pctChange, type ReportDetail } from '@seo/shared';
+import { clicksHeadline, formatPosition, pctChange, type ReportDetail } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { fmtDate } from '@/lib/utils';
@@ -17,15 +17,8 @@ import { ActionList, ActionRunButton, BriefCard, sortActions } from './actions';
 import { AlertList, Block, Empty, has, n, num, obj, objs, pct, pctRatio, SectionTitle, shortUrl, str, strs, type P } from './kit';
 import { ChartTitle, PositionPill, ReportHero } from './visuals';
 
-/** The hero's headline: how clicks from Google moved against the 28 days before. */
-function clicksHeadline(clicks: number | null, pctCh: number | null): string {
-  if (clicks == null) return 'Weekly site report';
-  const c = n(clicks);
-  if (pctCh == null) return `${c} ${clicks === 1 ? 'click' : 'clicks'} from Google in the last 28 days`;
-  if (pctCh >= 0.5) return `Clicks from Google are up ${Math.round(pctCh)}% to ${c}`;
-  if (pctCh <= -0.5) return `Clicks from Google are down ${Math.abs(Math.round(pctCh))}% to ${c}`;
-  return `Clicks from Google are steady at ${c}`;
-}
+// The hero's headline (R113): `clicksHeadline` in @seo/shared follows the report's own significance test — a clicks change the test
+// calls not real reads "within normal variation", and a change that is real leads.
 
 type Metric = 'clicks' | 'impressions' | 'position';
 
@@ -60,7 +53,7 @@ export function SiteTrackerReport({ report }: { report: ReportDetail }) {
       <ReportHero
         report={report}
         eyebrow={str(period.start) ? `${fmtDate(str(period.start))} – ${fmtDate(str(period.end))}` : undefined}
-        title={gsc.connected === false ? 'Search Console is not connected' : clicksHeadline(num(cur.clicks), num(deltas.clicks_pct))}
+        title={gsc.connected === false ? 'Search Console is not connected' : clicksHeadline(num(cur.clicks), num(deltas.clicks_pct), p.significance)}
         description={[
           actions.length ? `${actions.length} recommended ${actions.length === 1 ? 'action' : 'actions'}` : 'No new actions this week',
           found ? `${found} written ${found === 1 ? 'page' : 'pages'} found live` : '',
@@ -175,23 +168,33 @@ export function SiteTrackerReport({ report }: { report: ReportDetail }) {
       {pending.length > 0 && (
         <Block title="Written, waiting to be published" description="Nothing can rank before it is published" icon={<Rocket />} iconTone="warning" flush>
           <ul className="divide-y divide-line">
-            {pending.map((x, i) => (
-              <InsightItem
-                key={i}
-                tone="warning"
-                icon={<Rocket />}
-                title={str(x.keyword)}
-                description={`written ${num(x.days) ?? 0} days ago`}
-                action={
-                  can('member') && (
-                    <ButtonLink to={paths.tool(org.id, 'published', { siteId: report.siteId, prefill: { keyword: str(x.keyword) } })} size="sm" variant="secondary">
-                      I published it
-                    </ButtonLink>
-                  )
-                }
-                actionPosition="side"
-              />
-            ))}
+            {pending.map((x, i) => {
+              // R111: a draft whose last quality round failed is never offered for publishing, even if an engine lists it here
+              const fix = str(x.status) === 'not_ready' || x.needs_fix === true;
+              const why = str(x.qa_reasons);
+              return (
+                <InsightItem
+                  key={i}
+                  tone="warning"
+                  icon={<Rocket />}
+                  title={str(x.keyword)}
+                  description={fix ? `did not pass the quality check${why ? `: ${why}` : ''} — fix it and run it again` : `written ${num(x.days) ?? 0} days ago`}
+                  action={
+                    can('member') &&
+                    (fix ? (
+                      <ButtonLink to={paths.tool(org.id, 'keyword', { siteId: report.siteId, prefill: { keyword: str(x.keyword) } })} size="sm" variant="secondary">
+                        Run it again
+                      </ButtonLink>
+                    ) : (
+                      <ButtonLink to={paths.tool(org.id, 'published', { siteId: report.siteId, prefill: { keyword: str(x.keyword) } })} size="sm" variant="secondary">
+                        I published it
+                      </ButtonLink>
+                    ))
+                  }
+                  actionPosition="side"
+                />
+              );
+            })}
           </ul>
         </Block>
       )}

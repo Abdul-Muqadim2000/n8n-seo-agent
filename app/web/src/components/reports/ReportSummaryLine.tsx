@@ -72,7 +72,8 @@ export function ReportSummaryLine({ report, className }: { report: Report; class
       break;
     case 'site_tracker':
       parts.push(
-        nm(s, 'clicks') != null && `${compactNumber(nm(s, 'clicks'))} clicks${nm(s, 'clicksPct') != null ? ` (${signed(nm(s, 'clicksPct')!)}%)` : ''}`,
+        // R113: the list line follows the significance test too — a change the test calls not real is "within normal variation"
+        nm(s, 'clicks') != null && `${compactNumber(nm(s, 'clicks'))} clicks${nm(s, 'clicksPct') != null ? ` (${signed(nm(s, 'clicksPct')!)}%)` : tx(s, 'clicksChange') ? ` (${tx(s, 'clicksChange')})` : ''}`,
         nm(s, 'impressions') != null && `${compactNumber(nm(s, 'impressions'))} impressions`,
         nm(s, 'sessions') != null && `${compactNumber(nm(s, 'sessions'))} organic sessions`,
         nm(s, 'actions') ? `${nm(s, 'actions')} actions` : null,

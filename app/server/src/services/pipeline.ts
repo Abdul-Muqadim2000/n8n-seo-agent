@@ -43,9 +43,10 @@ import {
 import { config } from '../config';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { notFound } from '../lib/errors';
-import { executions, siteRows } from '../n8n/client';
+import { executions, siteRows, type ExecutionSummary } from '../n8n/client';
+import { scheduleState } from './delivery';
 import { CADENCE, simulateCadence, type CadenceWeek } from './cadence';
-import { buildLadders, ladderAppSources, ladderNeedsYou, ladderReports, sortNeedsYou, type LadderBuild, type LadderSchedule, type SiteRun } from './ladders';
+import { buildLadders, draftQa, ladderAppSources, ladderNeedsYou, ladderReports, sortNeedsYou, type LadderBuild, type LadderSchedule, type SiteRun, type WaitingPage } from './ladders';
 import { loadBundle, recommend, type SiteBundle } from './recommendations';
 import { latestReport, monthSpend, reportsList } from './runs';
 
@@ -57,12 +58,53 @@ import { latestReport, monthSpend, reportsList } from './runs';
 
 const norm = normKeyword;
 
-/** Pages written and not published (the content log; every age), oldest first. */
-export function waitingPages(logs: ContentLogRow[], now = Date.now()): PipelineData['queue']['waiting'] {
+/** A waiting page as the Pipeline returns it; R111 adds whether its draft failed the quality check (and why). */
+export type WaitingEntry = PipelineData['queue']['waiting'][number] & { needsFix?: boolean; reasons?: string[] };
+
+/**
+ * Pages written and not published (the content log; every age), oldest first.
+ * R111 (2026-10-16): a row the engine marked `not_ready` (its last quality round failed) still waits — the pile-up guard counts
+ * it — but carries `needsFix` and the QA reasons, so nothing downstream offers to publish it.
+ */
+export function waitingPages(logs: ContentLogRow[], now = Date.now()): WaitingEntry[] {
   return logs
     .filter((l) => l.status !== 'published' && !l.published_url) // D5: 'started' (the run was spawned) and 'written' (the page exists) both wait
-    .map((l) => ({ keyword: l.keyword, startedAt: l.started_at, days: Math.max(0, Math.round((now - Date.parse(l.started_at || new Date(now).toISOString())) / 864e5)) }))
+    .map((l) => {
+      const qa = draftQa([l]);
+      return {
+        keyword: l.keyword,
+        startedAt: l.started_at,
+        days: Math.max(0, Math.round((now - Date.parse(l.started_at || new Date(now).toISOString())) / 864e5)),
+        ...(qa.needsFix ? { needsFix: true, reasons: qa.reasons } : {}),
+      };
+    })
     .sort((a, b) => b.days - a.days);
+}
+
+/** R111: the Publish step of the growth loop — drafts that failed their quality check are "needs a fix", never "to publish". */
+export function publishStage(waiting: WaitingEntry[], publishedCount: number): PipelineStage {
+  const ready = waiting.filter((w) => !w.needsFix);
+  const fix = waiting.filter((w) => w.needsFix);
+  const headline = [ready.length ? `${ready.length} page(s) to publish` : '', fix.length ? `${fix.length} need${fix.length === 1 ? 's' : ''} a fix` : ''].filter(Boolean).join(' · ');
+  return {
+    id: 'publish',
+    title: 'Publish',
+    state: fix.length || ready.some((w) => w.days >= 7) ? 'attention' : ready.length ? 'active' : publishedCount ? 'done' : 'waiting',
+    headline: headline || `${publishedCount} published`,
+    detail: !waiting.length
+      ? 'Every written page is live'
+      : [
+          ready.length ? 'Publish them on your site, then report each URL so tracking starts' : '',
+          fix.length ? `${fix.map((w) => `“${w.keyword}”`).slice(0, 3).join(', ')} did not pass the quality check: fix ${fix.length === 1 ? 'it' : 'them'} and run ${fix.length === 1 ? 'it' : 'them'} again` : '',
+        ]
+          .filter(Boolean)
+          .join('. '),
+    action: ready.length
+      ? { label: 'Report a published URL', mode: 'published' }
+      : fix.length
+        ? { label: 'Run it again', mode: 'keyword' }
+        : { label: 'Content', page: 'content' },
+  };
 }
 
 /** The ladders' schedule from the cadence mirror: the pages its coming runs write and what the first run decides. */
@@ -96,6 +138,51 @@ async function scheduledRunning(): Promise<PipelineData['running']> {
 }
 
 const ACTIVE_RUN = ['submitting', 'accepted', 'running'];
+
+// R104: each schedule's own recent executions (n8n mode "trigger" only is used, in scheduleState), for "last run" and "missed on".
+// One scheduled execution covers every website. Cached 5 minutes; a workflow n8n does not answer for is left out (nothing is claimed).
+let historyCache: { at: number; value: Record<string, ExecutionSummary[]> } | null = null;
+
+async function scheduledHistory(): Promise<Record<string, ExecutionSummary[]>> {
+  if (historyCache && Date.now() - historyCache.at < 5 * 60_000) return historyCache.value;
+  const out: Record<string, ExecutionSummary[]> = {};
+  await Promise.all(
+    [...new Set(AUTOMATIONS.map((a) => a.workflow))].map(async (wf) => {
+      try {
+        const [ok, bad] = await Promise.all([executions(wf, 'success', 40), executions(wf, 'error', 20)]);
+        out[wf] = [...ok, ...bad];
+      } catch {
+        /* not known: the automation keeps what the app's own rows say */
+      }
+    }),
+  );
+  historyCache = { at: Date.now(), value: out };
+  return out;
+}
+
+/**
+ * R104: the Pipeline's "last run" is the schedule's own last fire, with its real time; a result that came from an on-demand or test run
+ * is named as one, and a due time with no fire is "missed on <date>" — instead of the newest row of any origin under a "next run
+ * Monday" as if the schedule worked. Without the engine's history the automation is left as the app's own rows describe it.
+ */
+export function withScheduleTruth(list: AutomationStatus[], history: Record<string, ExecutionSummary[]>, tz: string, now = new Date()): AutomationStatus[] {
+  return list.map((a) => {
+    const info = AUTOMATIONS.find((x) => x.id === a.id);
+    if (!info) return a;
+    const st = scheduleState(info, history[info.workflow], tz, now, a.lastRunAt);
+    if (!st.known) return a;
+    const on = a.state === 'on';
+    const note = on ? st.note : st.onDemandAt ? `last run on demand ${st.onDemandAt.slice(0, 16).replace('T', ' ')} UTC` : '';
+    return { ...a, lastRunAt: on ? st.lastScheduledAt : st.onDemandAt ? null : a.lastRunAt, lastResult: [note, a.lastResult].filter(Boolean).join(' · ') || null };
+  });
+}
+
+/** R104: the pulse's last run is its row's own `checked_at`, never a time made up from the date (it read 06:30 for an 11:11 fire). */
+export function pulseLastRun(daily: { date: string; checkedAt?: string }[]): string | null {
+  const d = daily[daily.length - 1];
+  if (!d) return null;
+  return d.checkedAt && !Number.isNaN(Date.parse(d.checkedAt)) ? d.checkedAt : d.date || null;
+}
 
 /** This website's runs started in the app and not finished (the last 12 hours; older ones expire). */
 export function activeRuns(runs: SiteRun[], now = Date.now()): PipelineData['activeRuns'] {
@@ -244,14 +331,19 @@ function thisWeekItems(
 }
 
 /** What the coming Content Cadence run does: its posts, or why it writes nothing (as n8n decides it, cadence.ts). */
-export function cadenceDetail(next: QueueItem[], plan: CadenceWeek, build: Pick<LadderBuild, 'cards'>): string {
+export function cadenceDetail(next: QueueItem[], plan: CadenceWeek, build: Pick<LadderBuild, 'cards'> & { waiting?: WaitingPage[] }): string {
   const headOf = (id: string) => build.cards.find((c) => c.id === id)?.head ?? '';
-  if (plan.pausedReason === 'pileup')
+  if (plan.pausedReason === 'pileup') {
+    // R111: a draft that failed its quality check is counted (it waits) but labelled, and it is never told to be published
+    const fix = new Set((build.waiting ?? []).filter((w) => w.needsFix).map((w) => normKeyword(w.keyword)));
+    const label = (k: string) => (fix.has(normKeyword(k)) ? `“${k}” (needs a fix)` : `“${k}”`);
+    const anyFix = plan.waitingKeywords.some((k) => fix.has(normKeyword(k)));
     return (
       `Writes nothing: ${plural(plan.waitingPublish, 'written page')} waiting for publication (pile-up guard, limit ${plan.config.maxWaiting})` +
-      (plan.waitingKeywords.length ? `: ${plan.waitingKeywords.slice(0, 4).map((k) => `“${k}”`).join(', ')}${plan.waitingKeywords.length > 4 ? ' …' : ''}` : '') +
-      '. Publish them to continue'
+      (plan.waitingKeywords.length ? `: ${plan.waitingKeywords.slice(0, 4).map(label).join(', ')}${plan.waitingKeywords.length > 4 ? ' …' : ''}` : '') +
+      (anyFix ? '. Publish the ready ones and fix the others, then run them again, to continue' : '. Publish them to continue')
     );
+  }
   if (next.length) return next.map((q) => (q.ladder ? `“${q.keyword}” for ladder “${q.ladder.head}”` : `“${q.keyword}” (${q.source === 'striking' ? 'close to page one' : 'rising search'})`)).join(' · ');
   const why: string[] = [];
   if (plan.awaitingApproval.length)
@@ -350,7 +442,8 @@ export async function ladderDetailData(org: OrgRow, site: SiteRow, ladderId: str
     from,
     to,
     published,
-    audits: rows.audits.map((a) => ({ auditedAt: a.auditedAt, healthScore: a.healthScore, findings: a.findings })),
+    // R66: the marks compare each audit with the one before it, so one report type only (a full report scores on other weights)
+    audits: rows.audits.filter((a) => a.reportType !== 'full').map((a) => ({ auditedAt: a.auditedAt, healthScore: a.healthScore, findings: a.findings })),
   });
   const points: PagePeriodPoint[] = rows.queries
     .filter((q) => String(q.page ?? '') && Number(q.position) > 0)
@@ -445,7 +538,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
   const rtReport = reportOf(['rank_tracker']);
   const stReport = reportOf(['site_tracker']);
   const auReport = reportOf(['site_audit', 'full_report']);
-  const automations: AutomationStatus[] = [
+  const automationsRaw: AutomationStatus[] = [
     base('ai_visibility', m?.aiVisibility ?? true, 'Switched off in the monitor settings', {
       lastRunAt: lastIso(lastAi?.checkedAt, aiReport?.receivedAt),
       lastResult: lastAi ? `Named in ${formatPercent(lastAi.mentionRate, 0)} of ${lastAi.answers} answers · share of voice ${formatPercent(lastAi.shareOfVoice, 0)}` : null,
@@ -454,7 +547,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       detail: m ? `${m.aiPromptsMax} questions · ${m.aiEngines.length} engines` : `${AI_PROMPTS_DEFAULT} questions · 6 engines (defaults)`,
     }),
     base('ai_pulse', (m?.aiVisibility ?? true) && (m?.aiPulse ?? true), m?.aiVisibility === false ? 'AI visibility is switched off' : 'The daily pulse is switched off in the monitor settings', {
-      lastRunAt: x.ai.daily.length ? `${x.ai.daily[x.ai.daily.length - 1].date}T06:30:00.000Z` : null,
+      lastRunAt: pulseLastRun(x.ai.daily as { date: string; checkedAt?: string }[]),
       lastResult: x.ai.daily.length ? (() => { const dd = x.ai.daily[x.ai.daily.length - 1]; return `Named in ${formatPercent(dd.mentionRate, 0)} of ${dd.samples} answers${dd.alerts.length ? ` · ${dd.alerts.length} alert(s)` : ''}`; })() : null,
       lastReportId: reportOf(['ai_pulse'])?.id ?? null,
       monthlyCostUsd: m?.aiVisibility === false || m?.aiPulse === false ? 0 : estimateAiVisibilityCost({ prompts: m?.aiPromptsMax, engines: m?.aiEngines, pulse: true }).pulse,
@@ -476,7 +569,8 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     }),
     base('backlinks', m?.backlinks ?? true, 'Switched off in the monitor settings', {
       lastRunAt: lastIso(lastBl?.checkedAt, blReport?.receivedAt),
-      lastResult: lastBl ? `${lastBl.referringDomains} referring domains · ${lastBl.lostLinks} lost · ${lastBl.newLinks} new` : null,
+      // R112: the merged count (every source) where the snapshot has one, never DataForSEO's index count shown as "the" count
+      lastResult: lastBl ? `${lastBl.unionDomains ?? lastBl.referringDomains} ${lastBl.unionDomains != null ? 'linking sites (all sources)' : 'referring domains (DataForSEO)'} · ${lastBl.lostLinks} lost · ${lastBl.newLinks} new` : null,
       lastReportId: blReport?.id ?? null,
       monthlyCostUsd: m?.backlinks === false ? 0 : MONITOR_COSTS.backlinksMonthly,
       detail: x.backlinks.prospects.length ? `${x.backlinks.prospects.filter((p) => p.status === 'new').length} new link prospects` : null,
@@ -512,6 +606,8 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       detail: m ? `up to ${m.auditPages} pages${m.auditJs ? ' · JavaScript' : ''}` : 'up to 200 pages',
     }),
   ];
+  // R104: "last run" is the schedule's own last fire; on-demand results and missed due times are named as such
+  const automations = withScheduleTruth(automationsRaw, await scheduledHistory().catch(() => ({}) as Record<string, ExecutionSummary[]>), tz, new Date(now));
 
   // ---------- calendar: the next 4 weeks ----------
   const calendar: PipelineData['calendar'] = [];
@@ -579,14 +675,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       detail: queue.next.length ? `Next: ${queue.next.map((q) => q.keyword).join(', ')}` : queue.later.length ? `${queue.later.length} topics ready` : 'No topics yet — plan a ladder or wait for Search Console data',
       action: { label: 'Posts per week', page: 'settings/tracking' },
     },
-    {
-      id: 'publish',
-      title: 'Publish',
-      state: queue.waiting.some((w) => w.days >= 7) ? 'attention' : queue.waiting.length ? 'active' : x.content.items.some((c) => c.status === 'published') ? 'done' : 'waiting',
-      headline: queue.waiting.length ? `${queue.waiting.length} page(s) to publish` : `${x.content.items.filter((c) => c.status === 'published').length} published`,
-      detail: queue.waiting.length ? 'Publish them on your site, then report each URL so tracking starts' : 'Every written page is live',
-      action: queue.waiting.length ? { label: 'Report a published URL', mode: 'published' } : { label: 'Content', page: 'content' },
-    },
+    publishStage(queue.waiting, x.content.items.filter((c) => c.status === 'published').length),
     {
       id: 'track',
       title: 'Track',
@@ -600,7 +689,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       title: 'Monitor',
       state: active ? 'active' : 'waiting',
       headline: lastAudit ? `Health ${lastAudit.healthScore}/100` : 'No audit yet',
-      detail: [lastAi ? `AI named ${formatPercent(lastAi.mentionRate, 0)}` : null, lastBl ? `${lastBl.referringDomains} ref. domains` : null].filter(Boolean).join(' · ') || 'AI answers, backlinks and technical health',
+      detail: [lastAi ? `AI named ${formatPercent(lastAi.mentionRate, 0)}` : null, lastBl ? `${lastBl.unionDomains ?? lastBl.referringDomains} linking sites` : null].filter(Boolean).join(' · ') || 'AI answers, backlinks and technical health',
       action: { label: 'Technical health', page: 'technical' },
     },
     {

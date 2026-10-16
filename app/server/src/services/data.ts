@@ -9,6 +9,7 @@ import {
   type AiAccess,
   type AiData,
   type AiDailyRow,
+  type AiDay,
   type AiGrowth,
   type AiGrowthRow,
   type AiPageRow,
@@ -215,15 +216,21 @@ const toChange = (q: P): QueryChange => ({
   positionDelta: nn(q.position_delta),
 });
 
+/** R111: the QA reasons of a `fix_draft` action, as the engine sends them (a list, or one '; '-joined string). */
+const reasonList = (v: unknown): string[] => (Array.isArray(v) ? v.map(s) : s(v).split(';')).map((x) => x.trim()).filter(Boolean);
+
 export function engineActions(list: unknown, source: EngineAction['source'], receivedAt: string): EngineAction[] {
   return arr(list)
-    .filter((a) => a && typeof a === 'object' && (a.action || a.text))
+    // R111: a `fix_draft` action is kept even when the engine sent no sentence for it — the app words it from the keyword and reasons
+    .filter((a) => a && typeof a === 'object' && (a.action || a.text || (s(a.type) === 'fix_draft' && a.keyword)))
     .map((a) => ({
       source,
-      priority: n(a.priority) || 2,
+      priority: n(a.priority) || (s(a.type) === 'fix_draft' ? 1 : 2),
       type: s(a.type) || 'action',
-      action: s(a.action || a.text),
-      why: s(a.why),
+      action:
+        s(a.action || a.text) ||
+        `Fix the draft for "${s(a.keyword)}" and run it again: it did not pass the quality check, so it is not ready to publish`,
+      why: s(a.why) || (s(a.type) === 'fix_draft' && reasonList(a.reasons).length ? `The quality check found: ${reasonList(a.reasons).slice(0, 3).join('; ')}.` : ''),
       keyword: s(a.keyword) || null,
       url: s(a.url) || null,
       receivedAt,
@@ -302,7 +309,9 @@ export function chartAnnotations(input: { from?: string | null; to?: string | nu
     published: (input.log ?? [])
       .filter((r) => s(r.published_at))
       .map((r) => ({ publishedAt: s(r.published_at), keyword: s(r.keyword), url: s(r.published_url), source: s(r.source) })),
-    audits: (input.audits ?? []).map((a) => ({ auditedAt: s(a.audited_at), healthScore: nn(a.health_score), findings: nn(a.findings) })),
+    // R66: the marks compare each audit with the one before it, so they are fed one report type only — the technical audits. A full
+    // report scores other findings on other weights; between two technical audits it would print "health 83 → 70" that never happened.
+    audits: (input.audits ?? []).filter((a) => s(a.report_type) !== 'full').map((a) => ({ auditedAt: s(a.audited_at), healthScore: nn(a.health_score), findings: nn(a.findings) })),
   });
 }
 
@@ -674,6 +683,8 @@ export async function contentData(org: OrgRow, site: SiteRow): Promise<ContentDa
       publishedAt: s(r.published_at),
       week: s(r.week),
       existingPageUrl: s(r.existing_page_url),
+      // R111: why a `not_ready` draft failed its last quality round ('; '-joined by the engine); empty on every other row
+      qaReasons: s((r as ContentLogRow & { qa_reasons?: unknown }).qa_reasons),
     })),
     cadence: cadence[0] ? { pagesPerWeek: n(cadence[0].pages_per_week), status: s(cadence[0].status) } : null,
     caseStudies: cases.map((c) => ({
@@ -712,6 +723,19 @@ const toAudit = (r: AuditRow): AuditPoint => ({
   scheduled: b(r.scheduled),
 });
 
+/**
+ * R66 (2026-10-16): the audit an audit is compared with — the one before it **of the same report type**, the engine's own rule
+ * (v5/code/Audit_Diff.js, D2). A full report scores Authority / Schema / AI / content findings a technical audit never looks at, on
+ * other weights, so its neighbour of the other type gave "25 new issues" and "health down 83 → 70" that never happened. Rows with no
+ * report type (written before v4.5) are compared with nothing, as the engine does. Relative to the SELECTED audit, not the latest.
+ */
+export function previousOfType<T extends { reportType: string }>(points: T[], idx: number): T | null {
+  const sel = points[idx];
+  if (!sel || !sel.reportType) return null;
+  for (let i = idx - 1; i >= 0; i--) if (points[i].reportType === sel.reportType) return points[i];
+  return null;
+}
+
 /** G26: the impact weight of a stored finding — null for the audits written before the column existed (they keep the severity order). */
 const impactOf = (f: AuditFindingRow): number | null => {
   const v: unknown = f.impact;
@@ -730,7 +754,7 @@ export async function technicalData(org: OrgRow, site: SiteRow, auditId?: string
   const points = audits.map(toAudit);
   const idx = auditId ? points.findIndex((a) => a.auditId === auditId) : points.length - 1;
   const selected = idx >= 0 ? points[idx] : null;
-  const previous = idx > 0 ? points[idx - 1] : null;
+  const previous = idx > 0 ? previousOfType(points, idx) : null;   // R66: never the neighbour of another report type
   const [cur, prev] = await Promise.all([
     selected ? siteRows<AuditFindingRow>('auditFindings', d, { extra: [{ columnName: 'audit_id', condition: 'eq', value: selected.auditId }], max: 1000 }) : Promise.resolve([]),
     previous ? siteRows<AuditFindingRow>('auditFindings', d, { extra: [{ columnName: 'audit_id', condition: 'eq', value: previous.auditId }], max: 1000 }) : Promise.resolve([]),
@@ -783,6 +807,41 @@ export async function technicalData(org: OrgRow, site: SiteRow, auditId?: string
 }
 
 // ---------------- AI visibility ----------------
+
+/**
+ * The AI Pulse days, one point per date. Since R95 (A5, 2026-10-16) `seo_ai_daily` can hold TWO rows for one date — the scheduled
+ * reading and an on-demand one (keyed site_id + date + run_id) — so the rows of a date are pooled: samples, mentioned and cited are
+ * summed and the rates recomputed from the sums (the engine's own `pct`, a percentage to one decimal); share of voice and the
+ * visibility score are sample-weighted. `checkedAt` (R104) is the newest reading of the day — when the pulse really ran.
+ */
+export function aiDailySeries(days: AiDailyRow[]): (AiDay & { checkedAt: string })[] {
+  const pct = (a: number, b: number) => (b ? Math.round((1000 * a) / b) / 10 : 0);
+  const byDate = new Map<string, AiDailyRow[]>();
+  for (const x of days) {
+    if (!(n(x.samples) > 0) || !s(x.date)) continue;
+    byDate.set(s(x.date), [...(byDate.get(s(x.date)) ?? []), x]);
+  }
+  return [...byDate.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([date, rows]) => {
+      const samples = rows.reduce((t, r) => t + n(r.samples), 0);
+      // rows written before `mentioned` / `cited` existed carry only the rate: rebuild the count from it
+      const count = (r: AiDailyRow, k: 'mentioned' | 'cited', rate: number) => (r[k] != null && (r[k] as unknown) !== '' ? n(r[k]) : (rate / 100) * n(r.samples));
+      const mentioned = rows.reduce((t, r) => t + count(r, 'mentioned', n(r.mention_rate)), 0);
+      const cited = rows.reduce((t, r) => t + count(r, 'cited', n(r.citation_rate)), 0);
+      const weighted = (k: 'share_of_voice' | 'visibility_score') => (samples ? Math.round((rows.reduce((t, r) => t + n(r[k]) * n(r.samples), 0) / samples) * 10) / 10 : 0);
+      return {
+        date,
+        checkedAt: rows.map((r) => s(r.checked_at)).filter(Boolean).sort().pop() ?? '',
+        samples,
+        mentionRate: rows.length === 1 ? n(rows[0].mention_rate) : pct(mentioned, samples),
+        citationRate: rows.length === 1 ? n(rows[0].citation_rate) : pct(cited, samples),
+        shareOfVoice: rows.length === 1 ? n(rows[0].share_of_voice) : weighted('share_of_voice'),
+        visibilityScore: rows.length === 1 ? n(rows[0].visibility_score) : weighted('visibility_score'),
+        alerts: [...new Set(rows.flatMap((r) => splitList(r.alerts)))],
+      };
+    });
+}
 
 const toAiRun = (r: AiVisibilityRow): AiRun => ({
   runId: s(r.run_id),
@@ -961,9 +1020,7 @@ export async function aiData(org: OrgRow, site: SiteRow): Promise<AiData> {
   return {
     runs: vis.map(toAiRun),
     latest,
-    daily: days
-      .filter((x) => n(x.samples) > 0)
-      .map((x) => ({ date: s(x.date), samples: n(x.samples), mentionRate: n(x.mention_rate), citationRate: n(x.citation_rate), shareOfVoice: n(x.share_of_voice), visibilityScore: n(x.visibility_score), alerts: splitList(x.alerts) })),
+    daily: aiDailySeries(days),
     prompts: prompts.map((p) => ({
       promptId: s(p.prompt_id),
       prompt: s(p.prompt),

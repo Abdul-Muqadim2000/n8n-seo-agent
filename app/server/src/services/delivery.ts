@@ -1,5 +1,5 @@
 import { gte } from 'drizzle-orm';
-import { AUTOMATIONS, nextScheduledRun, type AutomationInfo, type AlertDelivery, type DeliveryCount, type DeliveryReport, type DeliveryWeek, type MissedSchedule } from '@seo/shared';
+import { SCHEDULES, nextScheduledRun, type AutomationInfo, type ScheduleInfo, type AlertDelivery, type DeliveryCount, type DeliveryReport, type DeliveryWeek, type MissedSchedule } from '@seo/shared';
 import { config } from '../config';
 import { db, schema } from '../db';
 import { executions, rows, type ExecutionSummary } from '../n8n/client';
@@ -13,7 +13,7 @@ import { executions, rows, type ExecutionSummary } from '../n8n/client';
 //   * ON DEMAND — the runs the app started. `runs` rows: delivered means the run completed AND at least one report arrived, because a
 //     run that finishes with no report delivered nothing. A run still going is left OUT of the rate instead of counted against it; a
 //     run that never finished and is older than n8n's own execution timeout is `stuck` and does count against it.
-//   * SCHEDULED — the nine weekly / daily / monthly automations. A scheduled run has no `runs` row (its report arrives by callback),
+//   * SCHEDULED — the ten weekly / daily / monthly schedules (the nine automations and the daily Page Watch, R103). A scheduled run has no `runs` row (its report arrives by callback),
 //     so the measure is the schedule's own clock against n8n's execution history: every time it should have fired, whether an
 //     execution exists near that time, and whether that execution succeeded. The fires it left behind are the MISSED SCHEDULES.
 //   * ALERTS — `seo_ops_alerts`, now that R6 writes `delivered` and `channels` back on the row. Before that every row sat at
@@ -95,23 +95,39 @@ export function onDemandWeek(runs: RunFact[], from: Date, to: Date, now: Date): 
   return count({ started: mine.length, delivered, failed, noReport, stuck, inFlight });
 }
 
+/**
+ * R103: only the executions a SCHEDULE started. n8n marks them `mode: "trigger"`; a run started by the Test Runner, another workflow or
+ * the API is `integrated` / `webhook` / `manual` and must not hide a fire that never happened. Summaries without a mode (older n8n
+ * answers, the tests' own fixtures) are taken as they come.
+ */
+export const scheduledExecs = (list: ExecutionSummary[] | undefined): ExecutionSummary[] => (list ?? []).filter((e) => !e.mode || e.mode === 'trigger');
+
+/** R103: the moment from which a schedule is measured — its own `since`, or the workflow's `createdAt` the engine reported. */
+export const measuredFrom = (a: Pick<ScheduleInfo, 'since' | 'workflow'>, created?: Record<string, string>): number => {
+  const v = [created?.[a.workflow], a.since].map((x) => (x ? Date.parse(x) : NaN)).filter(Number.isFinite);
+  return v.length ? Math.max(...v) : -Infinity;
+};
+
 /** The scheduled side of one week: the schedules' own clock against n8n's execution history. */
 export function scheduledWeek(
-  automations: AutomationInfo[],
+  automations: (AutomationInfo | ScheduleInfo)[],
   execs: Record<string, ExecutionSummary[]>,
   tz: string,
   from: Date,
   to: Date,
   now: Date,
+  created?: Record<string, string>,
 ): { counts: DeliveryCount; missed: MissedSchedule[] } {
   const grace = SCHEDULE_GRACE_MINUTES * 60_000;
   const end = Math.min(to.getTime(), now.getTime() - grace); // a fire that is still inside its grace window is not late yet
   let delivered = 0, failed = 0, started = 0;
   const missed: MissedSchedule[] = [];
   for (const a of automations) {
-    const known = (execs[a.workflow] ?? []).map((e) => ({ at: Date.parse(e.startedAt), status: String(e.status) })).filter((e) => Number.isFinite(e.at));
+    const known = scheduledExecs(execs[a.workflow]).map((e) => ({ at: Date.parse(e.startedAt), status: String(e.status) })).filter((e) => Number.isFinite(e.at));
+    const existed = measuredFrom(a, created);
     for (const at of scheduledTimes(a.schedule, tz, from, to)) {
       if (at.getTime() > end) continue;
+      if (at.getTime() < existed) continue; // R103: the schedule did not exist yet — not a fire, and not a missed one
       started++;
       // the schedule's own fire, or the nearest execution of that workflow inside the grace window
       const hit = known.filter((e) => Math.abs(e.at - at.getTime()) <= grace).sort((x, y) => Math.abs(x.at - at.getTime()) - Math.abs(y.at - at.getTime()))[0];
@@ -126,6 +142,61 @@ export function scheduledWeek(
   // a schedule that never fired is not "in flight" and not a failure of the engine's logic — it is a missed run, and it counts
   // against the rate, which is the whole point of showing it (D25a).
   return { counts: count({ started, delivered, failed, noReport: 0, stuck: missed.length, inFlight: 0 }), missed };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// R104 (2026-10-16): what the Pipeline says about one schedule. It showed the newest report or data row of ANY origin as each
+// automation's "last run" — so five schedules that had never fired on their own showed a last run (the on-demand and Test Runner runs
+// of the evening) and a "next run Monday" as if the schedule worked. Only n8n's execution mode tells a scheduled fire from an on-demand
+// run (an on-demand pulse even replaces the day's seo_ai_daily row), so this reads the schedule's own `trigger` executions.
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+export interface ScheduleState {
+  /** whether the engine's execution history could be read at all; when it could not, nothing is claimed either way */
+  known: boolean;
+  /** the schedule's own last fire (its real start time), or null when it has not fired in the history read */
+  lastScheduledAt: string | null;
+  /** the most recent due time that nothing fired for (a late fire still counts as a fire) */
+  missedAt: string | null;
+  /** the newest result of this automation for the site came from a run the schedule did not start */
+  onDemandAt: string | null;
+  /** the words for the Pipeline, e.g. "scheduled run missed on 2026-10-12 · last run on demand 2026-10-12 19:48 UTC" */
+  note: string;
+}
+
+/** How long after a scheduled fire its own results may still arrive (n8n's execution timeout is 30 minutes; a slow day is slower). */
+const RESULT_WINDOW_MS = 3 * 3_600_000;
+const utc = (ms: number) => new Date(ms).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+
+export function scheduleState(
+  a: Pick<ScheduleInfo, 'schedule' | 'since' | 'workflow'>,
+  execs: ExecutionSummary[] | undefined,
+  tz: string,
+  now: Date,
+  /** the newest result the app holds for this automation and site (report or data row), whoever started it */
+  dataLastAt?: string | null,
+  created?: Record<string, string>,
+): ScheduleState {
+  if (!execs) return { known: false, lastScheduledAt: null, missedAt: null, onDemandAt: null, note: '' };
+  const grace = SCHEDULE_GRACE_MINUTES * 60_000;
+  const fires = scheduledExecs(execs).map((e) => Date.parse(e.startedAt)).filter(Number.isFinite).sort((x, y) => y - x);
+  const last = fires.length ? fires[0] : null;
+  const existed = measuredFrom(a, created);
+  const dues = scheduledTimes(a.schedule, tz, new Date(now.getTime() - 35 * DAY_MS), new Date(now.getTime() - grace)).filter((d) => d.getTime() >= existed);
+  const due = dues.length ? dues[dues.length - 1].getTime() : null;
+  const missed = due != null && !fires.some((t) => t >= due - grace) ? due : null;
+  const data = dataLastAt ? Date.parse(dataLastAt) : NaN;
+  const onDemand = Number.isFinite(data) && (last == null || data > last + RESULT_WINDOW_MS) ? data : null;
+  const note = [missed != null ? `scheduled run missed on ${new Date(missed).toISOString().slice(0, 10)}` : '', onDemand != null ? `last run on demand ${utc(onDemand)}` : '']
+    .filter(Boolean)
+    .join(' · ');
+  return {
+    known: true,
+    lastScheduledAt: last != null ? new Date(last).toISOString() : null,
+    missedAt: missed != null ? new Date(missed).toISOString() : null,
+    onDemandAt: onDemand != null ? new Date(onDemand).toISOString() : null,
+    note,
+  };
 }
 
 /** The ops-alert side: which channel carried each alert (R6). */
@@ -153,23 +224,29 @@ export interface DeliveryInput {
   execs: Record<string, ExecutionSummary[]>;
   alerts: AlertFact[];
   timezone: string;
-  automations?: AutomationInfo[];
+  automations?: (AutomationInfo | ScheduleInfo)[];
   notes?: string[];
+  /** R103: the workflows' own `createdAt`, when the engine answered (overrides the built-in `since` when it is later) */
+  created?: Record<string, string>;
 }
 
 /** The whole report, from facts only — no database, no n8n. */
 export function deliveryReport(input: DeliveryInput): DeliveryReport {
-  const automations = input.automations ?? AUTOMATIONS;
+  const automations = input.automations ?? SCHEDULES;
   const notes = [...(input.notes ?? [])];
   const weeks: DeliveryWeek[] = weeksBack(input.weeks, input.now).map((from) => {
     const to = new Date(from.getTime() + 7 * DAY_MS);
     const onDemand = onDemandWeek(input.runs, from, to, input.now);
-    const { counts: scheduled, missed } = scheduledWeek(automations, input.execs, input.timezone, from, to, input.now);
+    const { counts: scheduled, missed } = scheduledWeek(automations, input.execs, input.timezone, from, to, input.now, input.created);
     const settled = onDemand.settled + scheduled.settled;
     const overallPct = pct(onDemand.delivered + scheduled.delivered, settled);
     return { week: from.toISOString().slice(0, 10), onDemand, scheduled, overallPct, belowTarget: overallPct != null && overallPct < TARGET_PCT, missed };
   });
   if (!Object.keys(input.execs).length) notes.push('No execution history could be read from the engine, so the scheduled side of every week is unmeasured, not perfect.');
+  // R103: say where the measurement starts, so an empty early week reads as "not measured yet" rather than as perfect or as 0%
+  const firstFrom = Math.min(...automations.map((a) => measuredFrom(a, input.created)));
+  if (Number.isFinite(firstFrom) && weeksBack(input.weeks, input.now)[0].getTime() < firstFrom)
+    notes.push(`Each schedule is counted from the day it was created (the first on ${new Date(firstFrom).toISOString().slice(0, 10)}); a week before a schedule existed is unmeasured for it, not missed. Only runs the schedule itself started count as its fires — a test or on-demand run does not.`);
   if (!input.alerts.length) notes.push('No ops alert has been recorded yet, so there is no alert delivery rate to show.');
   return { generatedAt: input.now.toISOString(), timezone: input.timezone, targetPct: TARGET_PCT, weeks, alerts: alertDelivery(input.alerts), notes };
 }
@@ -184,7 +261,7 @@ export async function loadDeliveryReport(now = new Date()): Promise<DeliveryRepo
   const execs: Record<string, ExecutionSummary[]> = {};
   const notes: string[] = [];
   const failedWorkflows: string[] = [];
-  for (const wf of [...new Set(AUTOMATIONS.map((a) => a.workflow))]) {
+  for (const wf of [...new Set(SCHEDULES.map((a) => a.workflow))]) {
     try {
       const [ok, bad] = await Promise.all([executions(wf, 'success', 150), executions(wf, 'error', 50)]);
       execs[wf] = [...ok, ...bad];
@@ -192,7 +269,7 @@ export async function loadDeliveryReport(now = new Date()): Promise<DeliveryRepo
       failedWorkflows.push(wf);
     }
   }
-  if (failedWorkflows.length) notes.push(`The engine did not answer for ${failedWorkflows.length} of ${new Set(AUTOMATIONS.map((a) => a.workflow)).size} scheduled workflows, so their weeks are unmeasured rather than perfect.`);
+  if (failedWorkflows.length) notes.push(`The engine did not answer for ${failedWorkflows.length} of ${new Set(SCHEDULES.map((a) => a.workflow)).size} scheduled workflows, so their weeks are unmeasured rather than perfect.`);
   let alerts: AlertFact[] = [];
   try {
     alerts = await rows<AlertFact>('opsAlerts', { max: 500 });

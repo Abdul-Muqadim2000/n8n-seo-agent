@@ -422,6 +422,11 @@ export interface AutomationInfo {
   runNowMode?: ModeId;
   /** the website settings tab that controls it */
   settingsTab: string;
+  /**
+   * R103 (2026-10-16): when this schedule first existed (its n8n workflow's `createdAt`, UTC, read from the instance on 2026-10-15). A fire
+   * due before it is not a missed fire — the delivery rate counted 57 of its 72 "missed" fires before the workflow was even created.
+   */
+  since?: string;
 }
 
 export const AUTOMATIONS: AutomationInfo[] = [
@@ -432,6 +437,7 @@ export const AUTOMATIONS: AutomationInfo[] = [
     cadence: 'Every Monday · Claude, new questions and the market-wide index on the month’s first run',
     schedule: { kind: 'weekly', weekday: 1, hour: 7, minute: 0 },
     workflow: 'SEOagentAIVisib1',
+    since: '2026-10-02T12:32:00.000Z',
     stage: 'ai_visibility',
     runNowMode: 'ai_visibility',
     settingsTab: 'tracking',
@@ -443,6 +449,7 @@ export const AUTOMATIONS: AutomationInfo[] = [
     cadence: 'Every day except Monday · alerts only when something really changed',
     schedule: { kind: 'daily', weekdays: [0, 2, 3, 4, 5, 6], hour: 6, minute: 30 },
     workflow: 'SEOagentAIPulse1',
+    since: '2026-10-07T22:21:00.000Z',
     stage: 'ai_pulse',
     settingsTab: 'tracking',
   },
@@ -453,6 +460,7 @@ export const AUTOMATIONS: AutomationInfo[] = [
     cadence: 'Every Monday 09:30 · after the AI visibility check, before the content run',
     schedule: { kind: 'weekly', weekday: 1, hour: 9, minute: 30 },
     workflow: 'SEOagentAIGrow1',
+    since: '2026-10-10T15:14:00.000Z',
     stage: 'ai_growth',
     settingsTab: 'tracking',
   },
@@ -463,6 +471,7 @@ export const AUTOMATIONS: AutomationInfo[] = [
     cadence: 'Every Monday · full report on the month’s first run',
     schedule: { kind: 'weekly', weekday: 1, hour: 7, minute: 30 },
     workflow: 'SEOagentBacklnk1',
+    since: '2026-10-02T12:32:00.000Z',
     stage: 'backlinks',
     runNowMode: 'backlinks',
     settingsTab: 'tracking',
@@ -474,6 +483,7 @@ export const AUTOMATIONS: AutomationInfo[] = [
     cadence: 'Every Monday 11:00 · after the backlink monitor and the AI growth loop',
     schedule: { kind: 'weekly', weekday: 1, hour: 11, minute: 0 },
     workflow: 'SEOagentLinkBld1',
+    since: '2026-10-11T00:42:00.000Z',
     stage: 'link_builder',
     settingsTab: 'tracking',
   },
@@ -485,6 +495,7 @@ export const AUTOMATIONS: AutomationInfo[] = [
     cadence: 'Every Monday · main keywords also on a phone · unpublished pages outside the top 50 once a month',
     schedule: { kind: 'weekly', weekday: 1, hour: 8, minute: 0 },
     workflow: 'SEOagentTracker1',
+    since: '2026-10-01T12:06:00.000Z',
     stage: 'rank_tracker',
     settingsTab: 'tracking',
   },
@@ -495,6 +506,7 @@ export const AUTOMATIONS: AutomationInfo[] = [
     cadence: 'Every Monday · trends reused for 25 days',
     schedule: { kind: 'weekly', weekday: 1, hour: 9, minute: 0 },
     workflow: 'SEOagentSiteTrk1',
+    since: '2026-10-01T22:22:00.000Z',
     stage: 'site_tracker',
     runNowMode: 'track',
     settingsTab: 'tracking',
@@ -506,6 +518,7 @@ export const AUTOMATIONS: AutomationInfo[] = [
     cadence: 'Every Monday · as many posts as you set per week',
     schedule: { kind: 'weekly', weekday: 1, hour: 10, minute: 0 },
     workflow: 'SEOagentCadence1',
+    since: '2026-10-01T23:15:00.000Z',
     stage: 'content',
     settingsTab: 'tracking',
   },
@@ -516,11 +529,35 @@ export const AUTOMATIONS: AutomationInfo[] = [
     cadence: '1st of every month · skipped when nothing changed',
     schedule: { kind: 'monthly', day: 1, hour: 6, minute: 0 },
     workflow: 'SEOagentAuditSc1',
+    since: '2026-10-02T12:32:00.000Z',
     stage: 'site_audit',
     runNowMode: 'audit',
     settingsTab: 'tracking',
   },
 ];
+
+/**
+ * R103 (2026-10-16): every n8n schedule the delivery rate measures — the nine automations above plus the tenth, the daily key-page watch
+ * (`SEOagentPageWch1`, build_site_tracker.py: `days`, interval 1, 05:45 in n8n's timezone, every day). Page Watch is not an automation a
+ * website switches on (it has no report stage and no settings tab of its own), so it is not in `AUTOMATIONS`; it is a schedule all the
+ * same, and a schedule that does not fire is a missed fire.
+ */
+export type ScheduleId = AutomationId | 'page_watch';
+export type ScheduleInfo = Omit<AutomationInfo, 'id'> & { id: ScheduleId };
+
+export const PAGE_WATCH_SCHEDULE: ScheduleInfo = {
+  id: 'page_watch',
+  title: 'Key-page watch',
+  summary: 'Reads your key pages and robots.txt every morning and alerts the same day when one went noindex, started redirecting, lost its canonical or changed its title.',
+  cadence: 'Every day 05:45',
+  schedule: { kind: 'daily', weekdays: [0, 1, 2, 3, 4, 5, 6], hour: 5, minute: 45 },
+  workflow: 'SEOagentPageWch1',
+  stage: 'page_watch',
+  settingsTab: 'tracking',
+  since: '2026-10-13T06:16:00.000Z',
+};
+
+export const SCHEDULES: ScheduleInfo[] = [...AUTOMATIONS, PAGE_WATCH_SCHEDULE];
 
 /** The next time a schedule fires after `from`, in the n8n timezone `tz` (DST-safe, no libraries). */
 export function nextScheduledRun(s: AutomationInfo['schedule'], tz: string, from: Date = new Date()): Date {
