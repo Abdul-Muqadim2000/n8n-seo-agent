@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { AlertTriangle, BadgeCheck, BarChart3, Bot, CalendarClock, CheckCircle2, CircleMinus, Coins, Eye, FileText, Gauge, Globe, Link2, ListOrdered, MessageSquareQuote, MessagesSquare, PieChart, Search, ShieldCheck, Smile, Sparkles, Users, XCircle } from 'lucide-react';
-import { AI_ENGINES, type ReportDetail } from '@seo/shared';
+import { AI_ENGINES, questionWin, type ReportDetail } from '@seo/shared';
 import { fmtDateTime } from '@/lib/utils';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Callout } from '@/components/ui/feedback';
@@ -34,6 +34,25 @@ function AnswerCell({ value }: { value: string }) {
     <span className={`inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-md px-1.5 text-xs font-medium ${c.cls}`}>
       {c.icon}
       {c.label}
+    </span>
+  );
+}
+
+/** B8-6: a question's week, with the range and the "too few answers" state the engine sends (`win.ci`, `win.enough`). */
+function WeekWin({ q }: { q: P }) {
+  const w = questionWin({ winRate: num(q.win_rate), samples: num(q.samples) ?? 0, win: has(q.win) ? obj(q.win) : null });
+  if (!w.samples) return <span className="text-xs text-ink-3">–</span>;
+  if (!w.enough || w.rate == null)
+    return (
+      <span className="text-xs text-ink-3" title={w.why}>
+        too few
+        <span className="block">{w.samples} {w.samples === 1 ? 'answer' : 'answers'}</span>
+      </span>
+    );
+  return (
+    <span className="tabular text-[13px] text-ink">
+      {pct(w.rate, 0)}
+      {w.ci && <span className="block text-xs text-ink-3">{`${pct(w.ci[0], 0)}–${pct(w.ci[1], 0)} · ${w.samples} answers`}</span>}
     </span>
   );
 }
@@ -98,13 +117,16 @@ export function AiVisibilityReport({ report }: { report: ReportDetail }) {
             <HeroStat
               label="AI knows your brand"
               value={num(brand.answered) ? `${num(brand.known) ?? 0} / ${num(brand.answered)}` : m.brand_known === true ? 'Yes' : m.brand_known === false ? 'No' : '–'}
-              hint={num(brand.answered) ? 'assistants that describe you correctly' : undefined}
+              // B8-10: a count with its denominator and its range — no verdict from one answer per assistant
+              hint={num(brand.answered) ? `assistants asked directly named you${arr<number>(brand.ci).length === 2 ? ` · 95% range ${pct(arr<number>(brand.ci)[0], 0)}–${pct(arr<number>(brand.ci)[1], 0)}` : ''}` : undefined}
             />
           </>
         }
       />
       {has(p.brief) && <BriefCard brief={obj(p.brief)} />}
       <AlertList alerts={objs(p.alerts)} />
+      {/* B8-9: the alerts that rest on a test were judged together, at one stated threshold */}
+      {(num(obj(m.multiple_tests).tests) ?? 0) > 0 && <p className="text-xs text-ink-3">{str(obj(m.multiple_tests).note)}</p>}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <MetricCard icon={<Sparkles />} label="Google AI Overviews shown" value={pctCount(m.aio_presence)} meta={`on your buyer questions · cite you ${pct(m.aio_citation_rate)}`} />
@@ -121,6 +143,9 @@ export function AiVisibilityReport({ report }: { report: ReportDetail }) {
                 <tr>
                   <th scope="col" className="border-b border-line px-3 py-2 text-left text-xs font-medium text-ink-3">
                     Question
+                  </th>
+                  <th scope="col" className="whitespace-nowrap border-b border-line px-2 py-2 text-right text-xs font-medium text-ink-3" title="Share of the week's answers to the question that name you, with its 95% range">
+                    Week
                   </th>
                   {engineKeys.map((k) => (
                     <th key={k} scope="col" className="whitespace-nowrap border-b border-line px-2 py-2 text-left text-xs font-medium text-ink-3">
@@ -141,6 +166,9 @@ export function AiVisibilityReport({ report }: { report: ReportDetail }) {
                           {q.won === true && <span className="ml-1.5 font-medium text-good-text">· won</span>}
                         </p>
                         {strs(q.competitors).length > 0 && <p className="mt-1 text-xs text-ink-3">Named instead: {strs(q.competitors).slice(0, 4).join(', ')}</p>}
+                      </td>
+                      <td className="px-2 py-2.5 text-right">
+                        <WeekWin q={q} />
                       </td>
                       {engineKeys.map((k) => (
                         <td key={k} className="px-2 py-2.5">

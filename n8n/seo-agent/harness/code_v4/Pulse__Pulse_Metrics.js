@@ -151,6 +151,45 @@ const sameBasis = (day, now) => {
   if (drift > PANEL_DRIFT) return { ok: false, why: p + ' answers that day against ' + q + ' today — a different panel, not a different result' };
   return { ok: true, why: '' };
 };
+// ---- B8-8 / B8-9 / B8-10 (2026-10-17, wave 3, benchmark area 8 - docs/system-review-2026-10-14/BENCH_AREA8_ai_visibility.md) ----
+// B8-9: one run raises several alerts off the SAME sample, each judged at 95% on its own - so a quiet week raises a false one far more
+// often than 1 in 20. The tested alerts of one run are one family and are corrected together (Holm's step-down, which controls the
+// family-wise error at alpha whatever the dependence between the tests). A test enters the family when its alert could fire on it -
+// the change points the way the alert reads - and the threshold each one had to clear is kept and printed beside it.
+const normCdf = (x) => { const t = 1 / (1 + 0.2316419 * Math.abs(x)), d = 0.3989422804014327 * Math.exp(-x * x / 2);   // Abramowitz-Stegun 26.2.17, error < 1e-7
+  const q = d * t * (0.319381530 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429)))); return x >= 0 ? 1 - q : q; };
+/** two-sided p of a z score; null when there was no test */
+const pTwo = (z) => (z == null || !isFinite(Number(z))) ? null : Math.max(0, Math.min(1, 2 * (1 - normCdf(Math.abs(Number(z))))));
+/** the |z| a two-sided test needs to reach p (bisection on pTwo) */
+const zFor = (p) => { let lo = 0, hi = 12; for (let i = 0; i < 60; i++) { const mid = (lo + hi) / 2; if (pTwo(mid) > p) lo = mid; else hi = mid; } return Math.round(100 * hi) / 100; };
+const fmtP = (p) => p == null ? '-' : p >= 0.001 ? String(Math.round(p * 10000) / 10000) : p.toExponential(1);
+/** Holm's step-down over [{ id, z }]: sorted by p, the i-th (0-based) of m must clear alpha / (m - i), and the first that does not
+ *  stops every one after it. Returns each test's p, the threshold it had to clear, whether it cleared it, and the words for both. */
+const holm = (tests, alpha) => {
+  const a = alpha == null ? 0.05 : alpha;
+  const T = (tests || []).filter(t => t && t.z != null && isFinite(Number(t.z))).map(t => ({ id: t.id, label: t.label || t.id, z: Number(t.z), p: pTwo(t.z) }));
+  const m = T.length; const order = T.slice().sort((x, y) => x.p - y.p);
+  let open = true; const res = {};
+  order.forEach((t, i) => { const thr = a / (m - i); const ok = open && t.p <= thr; if (!ok) open = false;
+    res[t.id] = { id: t.id, label: t.label, z: t.z, p: Math.round(t.p * 1e6) / 1e6, rank: i + 1, threshold_p: Math.round(thr * 1e6) / 1e6, threshold_z: zFor(thr), reject: ok,
+      why: (ok ? 'cleared' : 'did not clear') + ' the Holm-adjusted threshold (p ' + fmtP(t.p) + (ok ? ' ≤ ' : ' > ') + fmtP(thr) + ', step ' + (i + 1) + ' of ' + m + ' tested alerts this run)' }; });
+  const strict = m ? a / m : null;
+  const rejected = Object.values(res).filter(r => r.reject).length;
+  return { method: 'holm', alpha: a, tests: m, threshold_p: strict == null ? null : Math.round(strict * 1e6) / 1e6, threshold_z: strict == null ? null : zFor(strict),
+    rejected, results: order.map(t => res[t.id]), by: res,
+    note: !m ? 'No alert this run rested on a statistical test, so no multiple-comparison correction was needed.'
+      : 'Alerts that rest on a test are judged together, Holm-adjusted across the ' + m + ' tested alert' + (m === 1 ? '' : 's') + ' of this run at ' + Math.round(a * 100) + '% family-wise: the strongest needed p ≤ ' + fmtP(strict) + ' (|z| ≥ ' + zFor(strict) + ')' + (m > 1 ? ', each next one a little less' : '') + '; ' + rejected + ' cleared it.' };
+};
+/** the words an alert carries for the threshold it cleared */
+const holmWords = (h, id) => { const r = h && h.by ? h.by[id] : null; return r ? 'p ' + fmtP(r.p) + ', under the Holm-adjusted threshold p ≤ ' + fmtP(r.threshold_p) + ' across the ' + h.tests + ' tested alert' + (h.tests === 1 ? '' : 's') + ' of this run' : ''; };
+// B8-8: a per-engine change is tested on that engine's own answers, and below this many on EITHER side it is not tested at all
+const MIN_ENGINE_SAMPLES = MIN_RATE_SAMPLES;
+const engineChange = (kNow, nNow, kBefore, nBefore, o) => {
+  const a = Math.max(0, Number(nNow) || 0), b = Math.max(0, Number(nBefore) || 0); const floor = (o && o.min) || MIN_ENGINE_SAMPLES;
+  if (a < floor || b < floor) return { tested: false, delta: null, z: null, samples: a, samples_before: b, k: kNow, k_before: kBefore, basis: a && b ? 'measured' : 'not_available',
+    why: 'too few answers from this engine to tell (' + a + ' now, ' + b + ' before; a change needs ' + floor + ' on each side)' };
+  const t = changeOf(kNow, a, kBefore, b, o); return { tested: true, ...t, k: kNow, k_before: kBefore };
+};
 
 const COLS = ['site_id', 'domain', 'run_id', 'checked_at', 'prompt_id', 'prompt', 'kind', 'topic', 'engine', 'answered', 'mentioned', 'cited', 'rank', 'our_urls', 'competitors', 'sources', 'excerpt', 'cost', 'error', 'run_kind', 'sentiment', 'brands', 'issues', 'fanout', 'cited_urls'];
 const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
@@ -201,15 +240,25 @@ return plans.map(p => {
   const baseline_note = !judged.length ? 'There is no earlier pulse day to compare today with.'
     : !B.length ? 'Today is not compared with any earlier day: ' + baseline_set_aside.slice(0, 3).map(x => x.date + ' — ' + x.why).join('; ') + '.'
     : baseline_set_aside.length ? new Set(B.map(x => x.date)).size + ' of the past ' + new Set(judged.map(x => x.d.date)).size + ' days are comparable (readings: ' + B.length + ' of ' + judged.length + '); ' + baseline_set_aside.length + ' left out (' + baseline_set_aside.slice(0, 3).map(x => x.date + ' — ' + x.why).join('; ') + ').' : '';
-  const alerts = [];
+  // ---- B8-9 (2026-10-17, wave 3, benchmark area 8): today's drop and "a business suddenly named" are tested on the same morning's
+  // answers, so they are one family, corrected together by Holm at 1% family-wise (the pulse's own 99% bar, which it used per test).
+  // A test joins the family when its alert could fire on it; each alert that fires states the adjusted threshold it cleared.
+  const pfam = [];
   // a drop is only called one from a day we could read, on a baseline measured the same way
-  if (!readable.unavailable && todayRate.enough && n >= 20 && bn >= 40 && Math.abs(zTest(m, n, bm, bn)) >= 2.58 && pct(m, n) < pct(bm, bn) - 10) alerts.push({ level: 'high', text: 'Named in ' + pct(m, n) + '% of today\'s AI answers vs ' + pct(bm, bn) + '% over ' + B.length + ' comparable day(s) (' + n + ' answers today; a real drop, not sampling noise).' });
+  const dropZ = (!readable.unavailable && todayRate.enough && n >= 20 && bn >= 40) ? zTest(m, n, bm, bn) : null;
+  if (dropZ != null && pct(m, n) < pct(bm, bn) - 10) pfam.push({ id: 'drop', label: 'today\'s mentions', z: dropZ });
+  const seen = new Set(B.flatMap(d => Object.keys(d.competitors || {})));
+  const newComp = Object.entries(competitors).filter(([d0, k0]) => B.length >= 3 && !seen.has(d0) && n >= 20 && k0 >= Math.max(3, n * 0.3)).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  for (const [d, k] of newComp) pfam.push({ id: 'comp:' + d, label: d, z: zTest(k, n, 0, bn) });   // not named on any comparable earlier day: 0 of bn
+  const multiple_tests = holm(pfam, 0.01);
+  const passes = (id) => !!(multiple_tests.by[id] && multiple_tests.by[id].reject);
+  const alerts = [];
+  if (passes('drop')) alerts.push({ level: 'high', text: 'Named in ' + pct(m, n) + '% of today\'s AI answers vs ' + pct(bm, bn) + '% over ' + B.length + ' comparable day(s) (' + n + ' answers today; a real drop, not sampling noise: ' + holmWords(multiple_tests, 'drop') + ').' });
   // B8-3 (INVARIANTS rule 3): a morning that could not be read used to send nothing at all — a quiet day and a broken one looked
   // identical from the outside. A failure that reaches no human is not handled, so it is the one thing that always goes out.
   if (readable.unavailable) alerts.push({ level: 'high', text: readable.note + ' ' + (error_list.length ? error_list.map(e => e.engine + ' — ' + e.message).slice(0, 3).join('; ') : 'No engine answered.') });
   else if (dead.length) alerts.push({ level: 'medium', text: readable.note });
-  const seen = new Set(B.flatMap(d => Object.keys(d.competitors || {})));
-  for (const [d, k] of Object.entries(competitors).filter(([d0, k0]) => B.length >= 3 && !seen.has(d0) && n >= 20 && k0 >= Math.max(3, n * 0.3)).sort((a, b) => b[1] - a[1]).slice(0, 3)) alerts.push({ level: 'medium', text: d + ' appears in ' + k + ' of today\'s ' + n + ' AI answers and was not named in the past ' + B.length + ' days.' });
+  for (const [d, k] of newComp) if (passes('comp:' + d)) alerts.push({ level: 'medium', text: d + ' appears in ' + k + ' of today\'s ' + n + ' AI answers and was not named in the past ' + B.length + ' days (' + holmWords(multiple_tests, 'comp:' + d) + ').' });
   for (const q of p.prompts) for (const e of p.pulse_engines) { const now = (prompts[q.prompt_id] || {})[e]; if (!now || now === 'n' || now === 'e') continue;
     const last3 = B.slice(0, 3).map(d => ((d.prompts || {})[q.prompt_id] || {})[e]); if (last3.length === 3 && last3.every(v => v === 'M' || v === 'C') && now === 'a') alerts.push({ level: 'medium', text: ENG[e] + ' no longer names you for "' + q.prompt + '" (named first on each of the past 3 days).' }); }
   const daily_row = { site_id: p.site_id, domain: p.domain, date: p.date, checked_at: p.checked_at, run_id: p.run_id, samples: n, mentioned: m, cited: c, mention_rate: pct(m, n), citation_rate: pct(c, n),
@@ -227,11 +276,14 @@ return plans.map(p => {
       + p.set_aside.filter(x => x.dropped).map(x => esc(x.note || (x.keyword + ' — ' + x.detail))).join(' | ') + '</p>' : '') +
     // B8-2 / B8-3: what today was measured on, and which earlier days it could honestly be compared with
     ((readable.note || baseline_note) ? '<p style="font-size:12px;color:#b45309;margin:6px 0">' + (readable.note ? '<b>' + esc(readable.note) + '</b>' : '') + (readable.note && baseline_note ? ' ' : '') + esc(baseline_note) + '</p>' : '') +
+    // B8-9: how many tests today's alerts were judged across, and at what threshold
+    (multiple_tests.tests ? '<p style="font-size:12px;color:#475569;margin:6px 0">' + esc(multiple_tests.note.replace('of this run', 'of today\'s run')) + '</p>' : '') +
     '<p style="font-size:12px;color:#64748b">The weekly AI visibility report (Monday) adds these daily answers to its figures. Answers vary from one ask to the next; an alert is sent only when a change is beyond that noise, measured against earlier days that asked the same questions of the same engines.</p></div>';
   return { json: { site_id: p.site_id, domain: p.domain, date: p.date, email: p.email, callback_url: p.callback_url, request_id: p.request_id, on_demand: p.on_demand, alerts, daily_row, answer_rows, subject, html,
     set_aside: p.set_aside || [], set_aside_note: p.set_aside_note || '',   // B-G2 / B-G1: the refusals travel to the app and the callback too
     samples: n, mention_rate: pct(m, n), mention_ci: [lo, hi], citation_rate: pct(c, n), visibility_score: visibility, engines, errors, error_rate, errors_list: error_list, retried: retry.asked, retry_answered: retry.answered,
     // B8-2 / B8-3: what today could be read, and which earlier days it is honestly comparable with — both travel to the app and the callback
     readable, today_rate: todayRate, baseline_days: B.length, baseline_of: judged.length, baseline_set_aside, baseline_note,
+    multiple_tests: { method: multiple_tests.method, alpha: multiple_tests.alpha, tests: multiple_tests.tests, threshold_p: multiple_tests.threshold_p, threshold_z: multiple_tests.threshold_z, rejected: multiple_tests.rejected, results: multiple_tests.results, note: multiple_tests.note },   // B8-9
     status: 'progress', stage: 'ai_pulse', checked_at: p.checked_at } };
 });

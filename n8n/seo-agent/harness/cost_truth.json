@@ -296,6 +296,36 @@
    ],
    "tag": "Tracker"
   },
+  "SEO Agent \u2014 Reply Reader": {
+   "ai_nodes": [
+    "Reply Reader"
+   ],
+   "balance": "DFS Balance (Reply)",
+   "dead_ends": [],
+   "est": {
+    "ai": 0.003,
+    "dfs": 0.0
+   },
+   "settle": "Settle Run Ledger (Reply)",
+   "settle_from": [
+    "Refuse Run Ledger (Reply)",
+    "Reply Result"
+   ],
+   "settle_writes": [
+    "ai_usd",
+    "cost_basis",
+    "cost_mode",
+    "dfs_balance_end",
+    "dfs_source",
+    "dfs_usd",
+    "estimated_usd",
+    "measured_usd",
+    "settled_at",
+    "settled_usd",
+    "status"
+   ],
+   "tag": "Reply"
+  },
   "SEO Agent \u2014 Site Tracker": {
    "ai_nodes": [
     "Site Brief"

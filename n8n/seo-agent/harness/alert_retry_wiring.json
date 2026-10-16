@@ -566,6 +566,62 @@
     "severity"
    ]
   },
+  "SEO Agent \u2014 Reply Reader": {
+   "guard": {
+    "gate": "After Run Ledger (Reply)",
+    "if": "Run Allowed? (Reply)",
+    "kit": "RG",
+    "load": "Load Open Runs (Reply)",
+    "notice": "Refusal Notice (Reply)",
+    "post": "Post Refusal (Reply)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Reply)",
+     "Refusal Notice (Reply)",
+     "Refuse Run Ledger (Reply)",
+     "Tell Caller (Reply)?"
+    ],
+    "refuse": "Refuse Run Ledger (Reply)",
+    "tell": "Tell Caller (Reply)?"
+   },
+   "if_outputs": [
+    [
+     "Reply Link Requests"
+    ],
+    [
+     "Refuse Run Ledger (Reply)"
+    ]
+   ],
+   "refuse_values": [
+    "cost_basis",
+    "dfs_usd",
+    "estimated_usd",
+    "measured_usd",
+    "settled_at",
+    "settled_usd",
+    "status"
+   ],
+   "retry": {
+    "from": "Settle Run Ledger (Reply)",
+    "gate": "Any Alert Retry (Reply)?",
+    "load": "Load Open Alerts (Reply)",
+    "plan": "Alert Retry Plan (Reply)",
+    "post": "Post Alert Retry (Reply)",
+    "result": "Alert Retry Result (Reply)",
+    "save": "Save Alert Retry (Reply)",
+    "table": "seo_ops_alerts"
+   },
+   "writes": [
+    "attempt_log",
+    "attempts",
+    "channels",
+    "delivered",
+    "last_attempt_at",
+    "next_attempt_at",
+    "notes",
+    "severity"
+   ]
+  },
   "SEO Agent \u2014 Site Tracker": {
    "guard": {
     "gate": "After Run Ledger (Site)",

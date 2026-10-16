@@ -38,6 +38,7 @@ def src(p):   # a Code node source with the shared snippets inlined
     s = s.replace('/*__MONITOR_SITES__*/', rd('code/_monitor_sites.js')).replace('/*__REPORT_KIT__*/', rd('code/_report_kit.js')).replace('/*__AI_STATS__*/', rd('code/_ai_stats.js'))
     s = s.replace('/*__SITE_MODEL__*/', rd('code/_site_model.js').rstrip('\n'))   # G19 (SITE_MODEL_SPEC.md): the one site model, one copy per node that asks for it
     s = s.replace('/*__FIT_GATE__*/', rd('code/_fit_gate.js').rstrip('\n'))   # B-G1 / B-G2 (2026-10-15): the fit gate, on the READ path too (FITR, INVARIANTS rule 2)
+    s = s.replace('/*__AI_ACCESS_KIT__*/', rd('code/_ai_access_kit.js').rstrip('\n'))   # B9-9: the one robots.txt matcher (AI Access + Growth Robots)
     s = s.replace('/*__DRAFTS__*/', rd('code/_drafts.js').rstrip('\n'))   # P34-1: which stored outreach draft may still be offered
     s = s.replace('/*__PODCAST__*/', rd('code/_podcast.js').rstrip('\n'))   # L5: podcast guest opportunities (free directory, the show's own feed and site)
     s = s.replace('/*__AB__*/', rd('code/_ab.js').rstrip('\n'))   # L7: two subjects a batch, and no verdict under 30 sends per variant
@@ -592,6 +593,8 @@ g_http('Fetch Robots (Growth)', at(16, -2), timeout=15000, text=True, headers={'
 G.code('Robots Verdicts (Growth)', 'Growth_Robots.js', at(16, -3))
 G.code('Page Requests (Growth)', 'Growth_Page_Requests.js', at(17, 0)); G.iff('Any Pages (Growth)?', '{{ !$json.skip }}', at(18, 0))
 g_http('Fetch Key Pages', at(19, -1), batch=4, interval=300, timeout=20000, text=True, headers={'User-Agent': BROWSER_UA, 'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8', 'Accept-Language': 'en-US,en;q=0.8'})
+G.code('Fetcher Requests (Growth)', 'Growth_Fetcher_Requests.js', at(19, 1)); G.iff('Any Fetchers (Growth)?', '{{ !$json.skip }}', at(19, 2))
+g_http('Fetch As AI Bots (Growth)', at(19, 3), batch=4, interval=300, timeout=20000, text=True, headers={'User-Agent': '={{ $json.ua }}', 'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8'})
 G.code('Earned Requests', 'Growth_Earned_Requests.js', at(20, 0)); G.iff('Any Earned?', '{{ !$json.skip }}', at(21, 0))
 g_http('Fetch Cited Pages', at(22, -1), batch=4, interval=300, timeout=20000, text=True, headers={'User-Agent': BROWSER_UA, 'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8', 'Accept-Language': 'en-US,en;q=0.8'})
 G.code('Bing Sites (Growth)', 'Growth_Bing_Sites.js', at(23, 0)); G.iff('Any Bing (Growth)?', '{{ !$json.skip }}', at(24, 0)); g_http('Fetch Bing Sites (Growth)', at(25, -1), cred=BING)
@@ -643,7 +646,9 @@ def gstep(code, iff, http, nxt): G.link(code, iff); G.link(iff, http, 0); G.link
 # B9-3: robots.txt is read and judged before any page is scored or submitted
 gstep('Robots Requests (Growth)', 'Any Robots (Growth)?', 'Fetch Robots (Growth)', 'Robots Verdicts (Growth)')
 G.link('Robots Verdicts (Growth)', 'Page Requests (Growth)')
-gstep('Page Requests (Growth)', 'Any Pages (Growth)?', 'Fetch Key Pages', 'Earned Requests')
+# B9-8: each key page a second time as the AI answer fetchers (a CDN rule can turn them away while robots.txt allows them)
+G.link('Page Requests (Growth)', 'Any Pages (Growth)?'); G.link('Any Pages (Growth)?', 'Fetch Key Pages', 0); G.link('Any Pages (Growth)?', 'Earned Requests', 1); G.link('Fetch Key Pages', 'Fetcher Requests (Growth)')
+gstep('Fetcher Requests (Growth)', 'Any Fetchers (Growth)?', 'Fetch As AI Bots (Growth)', 'Earned Requests')
 gstep('Earned Requests', 'Any Earned?', 'Fetch Cited Pages', 'Bing Sites (Growth)')
 gstep('Bing Sites (Growth)', 'Any Bing (Growth)?', 'Fetch Bing Sites (Growth)', 'Bing Growth Requests')
 gstep('Bing Growth Requests', 'Any Bing Requests (Growth)?', 'Fetch Bing Growth', 'Bing Submit Requests')
@@ -791,9 +796,15 @@ RR.agent('Reply Reader', 'reply_reader.txt', {'type': 'object', 'properties': {'
 RR.code('Reply Result', 'Reply_Result.js', at(8, 0))
 RR.node('Respond Reply', 'n8n-nodes-base.respondToWebhook', 1.1, {'respondWith': 'json', 'responseBody': '={{ JSON.stringify($json) }}', 'options': {'responseCode': 200}}, at(9, 0))
 RR.node('Respond Reply Bad Request', 'n8n-nodes-base.respondToWebhook', 1.1, {'respondWith': 'json', 'responseBody': '={{ JSON.stringify({ ok: false, error: $json.error }) }}', 'options': {'responseCode': 400}}, at(3, 2))
-RR.chain('Reply Webhook', 'Reply Input', 'Reply OK?'); RR.link('Reply OK?', 'Reply Link Requests', 0); RR.link('Reply OK?', 'Respond Reply Bad Request', 1)
+RR.code('Reply Plan', '// W3-F: the request that passed the check - the run ledger reserves its row here, before the first model call\nreturn $input.all();', at(2, 1))
+RR.chain('Reply Webhook', 'Reply Input', 'Reply OK?'); RR.link('Reply OK?', 'Reply Plan', 0); RR.link('Reply OK?', 'Respond Reply Bad Request', 1); RR.link('Reply Plan', 'Reply Link Requests')
 RR.link('Reply Link Requests', 'Any Reply Pages?'); RR.link('Any Reply Pages?', 'Fetch Reply Pages', 0); RR.link('Any Reply Pages?', 'Reply Classify Input', 1); RR.link('Fetch Reply Pages', 'Reply Classify Input')
 RR.chain('Reply Classify Input', 'Reply Reader', 'Reply Result', 'Respond Reply')
+# W3-F (2026-10-17): the Reply Reader's Haiku call was recorded nowhere - no seo_run_ledger row at all. The reservation sits on the main path behind the
+# request check (a bad request reserves nothing), before the first model call; the settle runs beside the answer. `no_gate`: the web app is waiting
+# for the answer, so what else is running never refuses a reply (the row is still kept, and counted, like any other).
+RR.run_ledger('reply_read', 'Reply', 'Reply Plan', ['Reply Result'], at(10, 4))
+LEDGER_WIRING[RR.name]['no_gate'] = True; LEDGER_WIRING[RR.name]['no_dfs'] = True   # no DataForSEO here: the two balance probes are no-ops
 RR.sticky("""## SEO Agent — Reply Reader (v4.13, LINK_BUILDER_SPEC.md §2)
 `POST /webhook/seo-reply-read` (header X-API-Key, credential **SEO API Key**), synchronous. Body: `{ domain, prospect_domain, page_url?, business, signer, facts?, our_subject, our_body, reply_from, reply_subject, reply_text }`. The web app calls it for every reply a person wrote (bounces and automatic replies are sorted by headers in the app). Pages on the prospect's site named in the reply (and the page we pitched) are fetched and checked for our link at once. **Claude Haiku 4.5** (≈ $0.001): class (says_linked / interested / question / wants_payment / link_swap / not_now / declined / unsubscribe / wrong_person / out_of_office / other), one-line summary, return date, referred contact, suggested answer. An opt-out is never missed (rule fallback).""", [-40, -360], 900, 220, 6)
 RR.write('SEO_Agent_Reply_Reader.json')
