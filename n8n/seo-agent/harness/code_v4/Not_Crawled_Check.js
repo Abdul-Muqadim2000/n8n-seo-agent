@@ -34,6 +34,7 @@ const findings = [];
 const works = [];
 const F = (severity, title, evidence, why, fix, urls, pct, scoring) => findings.push({ category: 'Crawlability & Indexing', severity, title, evidence, why, fix,
   sample_urls: (urls || []).slice(0, 5), affected_count: (urls || []).length || null, affected_pct: pct == null ? null : Math.max(1, Math.min(100, Math.round(pct))),
+  affected_of: pct == null ? null : checked.length, affected_unit: 'known URLs read outside the crawl',   // R72: the share is of the URLs read, not of the crawl
   scope: 'page', scoring: scoring !== false, source: 'not_crawled', figure: '' });
 
 // ---- read every answer (paired by position: the fetch node keeps one answer per request) ----

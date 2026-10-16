@@ -12,7 +12,8 @@ import { IconTile, Stagger } from '@/components/insight';
 import { ApiRequestError } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
-import { useCreateSite } from '@/lib/queries';
+import { useCreateSite, useProviders } from '@/lib/queries';
+import { verifyMethods, verifyMethodsShort } from '@/lib/verify-copy';
 import { cn } from '@/lib/utils';
 import { SettingsCard, StepDot } from './_components/SettingsCard';
 
@@ -21,6 +22,7 @@ export default function AddSitePage() {
   const navigate = useNavigate();
   const create = useCreateSite(org.id);
   const first = sites.length === 0;
+  const google = !!useProviders().data?.google;
 
   if (!can('admin'))
     return (
@@ -45,7 +47,7 @@ export default function AddSitePage() {
         description="Tell us about the website. Next you verify that it belongs to your company, connect Search Console and start weekly tracking."
       />
       <Stagger className="space-y-6">
-        <AddSiteStepper />
+        <AddSiteStepper google={google} />
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
           <SettingsCard icon={<Building2 />} title="About the website" description="Its address, market and what it sells.">
             <CardBody className="pt-5 pb-6">
@@ -80,9 +82,9 @@ export default function AddSitePage() {
           <aside className="lg:sticky lg:top-6 lg:self-start">
             <SettingsCard icon={<ListChecks />} title="What happens next">
               <ol className="px-5 pt-5 pb-5">
-                {NEXT_STEPS.map((step, i) => (
+                {nextSteps(google).map((step, i) => (
                   <li key={i} className="relative flex gap-3 pb-5 last:pb-0">
-                    {i < NEXT_STEPS.length - 1 && <span className="absolute top-11 bottom-1.5 left-[17px] w-px bg-line-strong" aria-hidden />}
+                    {i < nextSteps(google).length - 1 && <span className="absolute top-11 bottom-1.5 left-[17px] w-px bg-line-strong" aria-hidden />}
                     <IconTile size="md">{step.icon}</IconTile>
                     <p className="min-w-0 pt-1.5 text-sm leading-relaxed text-ink-2">
                       <span className="sr-only">Step {i + 2}: </span>
@@ -100,12 +102,12 @@ export default function AddSitePage() {
 }
 
 /** The steps after this form (the same text as before, now with an icon each). */
-const NEXT_STEPS: { icon: ReactNode; text: ReactNode }[] = [
+const nextSteps = (google: boolean): { icon: ReactNode; text: ReactNode }[] => [
   {
     icon: <ShieldCheck />,
     text: (
       <>
-        <strong className="font-medium text-ink">Verify ownership</strong> with Search Console, a DNS record or a meta tag.
+        <strong className="font-medium text-ink">Verify ownership</strong> with {verifyMethods(google)}.
       </>
     ),
   },
@@ -128,10 +130,10 @@ const NEXT_STEPS: { icon: ReactNode; text: ReactNode }[] = [
 ];
 
 /** Where this page sits in getting a website going: this form is step 1 of 4. */
-function AddSiteStepper() {
+function AddSiteStepper({ google }: { google: boolean }) {
   const steps = [
     { label: 'Add the website', hint: 'Address, market and business' },
-    { label: 'Verify ownership', hint: 'Search Console, DNS or meta tag' },
+    { label: 'Verify ownership', hint: verifyMethodsShort(google) },
     { label: 'Connect your data', hint: 'Search Console and GA4' },
     { label: 'Start tracking', hint: 'First report within minutes' },
   ];

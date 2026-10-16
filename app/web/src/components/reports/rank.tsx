@@ -10,7 +10,7 @@ import { Card } from '@/components/ui/card';
 import { Delta, ExternalLink, Meter } from '@/components/ui/misc';
 import { CountUp, HeroStat, IconTile, Stagger } from '@/components/insight';
 import { DataTable, type Column } from '@/components/ui/table';
-import { Block, Empty, arr, num, obj, objs, shortUrl, str, type P } from './kit';
+import { Block, Empty, LedgerCard, arr, num, obj, objs, shortUrl, str, type P } from './kit';
 import { modeTitle, prefillFromApiBody } from './meta';
 import { PositionPill, ReportHero, ScoreMark } from './visuals';
 
@@ -209,6 +209,7 @@ export function RankTrackerReport({ report }: { report: ReportDetail }) {
           <MoverList title="Drops" items={drops} icon={<TrendingDown />} tone="critical" />
         </div>
       )}
+      <LedgerCard ledger={p.run_ledger} extraCost={num(p.cost_usd)} />
     </Stagger>
   );
 }

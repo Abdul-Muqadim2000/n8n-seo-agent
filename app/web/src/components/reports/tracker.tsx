@@ -14,7 +14,7 @@ import { DataTable, type Column } from '@/components/ui/table';
 import { Segmented, Tab, TabList, TabPanel, Tabs } from '@/components/ui/tabs';
 import { ChartCard, ShareBars, Sparkline, TimeSeriesChart } from '@/components/charts';
 import { ActionList, ActionRunButton, BriefCard, sortActions } from './actions';
-import { AlertList, Block, Empty, has, n, num, obj, objs, pct, pctRatio, SectionTitle, shortUrl, str, strs, type P } from './kit';
+import { AlertList, Block, Empty, has, LedgerCard, n, num, obj, objs, pct, pctRatio, SectionTitle, shortUrl, str, strs, type P } from './kit';
 import { ChartTitle, PositionPill, ReportHero } from './visuals';
 
 // The hero's headline (R113): `clicksHeadline` in @seo/shared follows the report's own significance test — a clicks change the test
@@ -258,6 +258,7 @@ export function SiteTrackerReport({ report }: { report: ReportDetail }) {
           )}
         </Block>
       )}
+      <LedgerCard ledger={p.run_ledger} extraCost={num(p.cost_usd)} />
     </Stagger>
   );
 }

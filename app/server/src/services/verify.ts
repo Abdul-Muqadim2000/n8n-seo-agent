@@ -85,25 +85,39 @@ export async function verifyDns(domain: string, token: string): Promise<VerifyOu
   }
 }
 
-export async function verifyMeta(domain: string, token: string): Promise<VerifyOutcome> {
+export async function verifyMeta(domain: string, token: string, fetchPage: typeof fetchPublicText = fetchPublicText): Promise<VerifyOutcome> {
   const d = cleanDomain(domain);
   const re1 = new RegExp(`<meta[^>]+name=["']${VERIFICATION_META_NAME}["'][^>]*content=["']([^"']+)["']`, 'i');
   const re2 = new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]*name=["']${VERIFICATION_META_NAME}["']`, 'i');
+  // what happened on each URL tried: the message says which case it was (R108)
+  let opened = false; // a page on the domain itself answered, with no tag in it
+  let redirectedTo = '';
+  let failure = '';
   for (const url of [`https://${d}/`, `https://www.${d}/`]) {
     try {
-      const page = await fetchPublicText(url);
-      if (!page) continue;
+      const page = await fetchPage(url);
+      if (!page) {
+        failure ||= 'no public https page answered';
+        continue;
+      }
       // the tag counts only on the domain itself (a redirect to another site proves nothing)
       const finalHost = cleanDomain(page.finalUrl.match(/^https:\/\/([^/?#:]+)/i)?.[1] ?? '');
-      if (finalHost !== d) continue;
+      if (finalHost !== d) {
+        redirectedTo ||= finalHost;
+        continue;
+      }
       const m = page.text.match(re1) ?? page.text.match(re2);
       if (m && m[1].trim() === token) return { verified: true, message: `Meta tag found on ${page.finalUrl}` };
       if (m) return { verified: false, message: `A ${VERIFICATION_META_NAME} tag is on ${page.finalUrl}, but with a different code.` };
-    } catch {
-      /* try the next URL */
+      opened = true;
+    } catch (err) {
+      // the error code only (messages can carry addresses)
+      failure ||= (err as NodeJS.ErrnoException).code ?? 'the request failed';
     }
   }
-  return { verified: false, message: `The ${VERIFICATION_META_NAME} meta tag was not found on the homepage of ${d} (https). Publish it inside <head> and try again.` };
+  if (opened) return { verified: false, message: `The homepage of ${d} has no ${VERIFICATION_META_NAME} meta tag. Publish it inside <head> and try again.` };
+  if (redirectedTo) return { verified: false, message: `https://${d}/ redirects to ${redirectedTo}. The tag must be on ${d} itself, so make the homepage of ${d} answer with the tag, then try again.` };
+  return { verified: false, message: `We could not open https://${d}/ (${failure || 'no answer'}), so we could not look for the ${VERIFICATION_META_NAME} meta tag. Check that the address is right and the site is online, then try again.` };
 }
 
 export function verify(method: Exclude<VerificationMethod, 'search_console'>, domain: string, token: string): Promise<VerifyOutcome> {

@@ -642,15 +642,21 @@ function ContentCard({ d, className }: { d: OverviewData; className?: string }) 
   return (
     <Panel className={className} title="Content pipeline" icon={<PenSquare />} footer={<MoreLink to={page('content')}>Content</MoreLink>}>
       {c.started > 0 && <ProgressBar className="mb-4" label="Published" value={c.published} max={c.started} valueLabel={`${c.published} of ${plural(c.started, 'page')} started`} tone={c.published >= c.started ? 'good' : 'accent'} />}
-      <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 md:grid-cols-5">
         <ContentStat icon={<PenSquare />} tone="blue" label="Pages started" value={c.started} info="written by the engine" />
         <ContentStat icon={<CheckCircle2 />} tone={c.published > 0 ? 'good' : 'neutral'} label="Published" value={c.published} info="live and checked" />
         <ContentStat icon={<Clock />} tone={c.pendingPublish > 0 ? 'warning' : 'neutral'} label="Waiting to publish" value={c.pendingPublish} info={c.pendingPublish ? 'written, not live yet' : 'nothing waiting'} />
+        <ContentStat icon={<Clock />} tone={(c.needsFix ?? 0) > 0 ? 'warning' : 'neutral'} label="Needs a fix" value={c.needsFix ?? 0} info={(c.needsFix ?? 0) ? 'failed the quality check' : 'nothing to fix'} />
         <ContentStat icon={<CalendarDays />} tone="blue" label="Blog posts per week" value={c.pagesPerWeek || 'Off'} hint={`${plural(c.caseStudies, 'case study', 'case studies')} on file`} />
       </div>
       {c.pendingPublish > 0 && (
         <Callout tone="warning" className="mt-4">
           {plural(c.pendingPublish, 'page is', 'pages are')} written but not live. Nothing can rank before it is published — publish and report the URL.
+        </Callout>
+      )}
+      {(c.needsFix ?? 0) > 0 && (
+        <Callout tone="warning" className="mt-4">
+          {plural(c.needsFix ?? 0, 'written page needs', 'written pages need')} a fix: the draft did not pass the quality check, so it is not ready to publish. Fix it and run it again.
         </Callout>
       )}
     </Panel>

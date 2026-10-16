@@ -1,3 +1,4 @@
+import { PRICES } from '@/lib/prices';
 import type { ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { ArrowRight, CheckCircle2, Clock, Coins, Compass, Globe, History, Lock, PackageCheck, PenLine, Plus, Radar, Settings, Sparkles, Telescope, TriangleAlert, Wrench } from 'lucide-react';
@@ -14,13 +15,13 @@ import { PageHeader } from '@/components/ui/misc';
 import { CountUp, HeroLink, HeroNextStep, HeroStat, IconTile, Stagger, SummaryHero } from '@/components/insight';
 import { CATEGORY_ICON, ModeGlyph } from '@/components/reports/meta';
 
-/** Typical cost per mode as a range where the options change it (mirrors the server estimate). */
-const COST_TEXT: Partial<Record<ModeId, string>> = {
-  keyword: '$0.40 report · $1.20 with the page',
-  discover: 'from $0.40',
-  audit: '$0.10 · full report $0.90',
-  ladder: 'from $1.80 (plan + 1 page)',
-  track: '$0.10 setup, then weekly monitors',
+/** Typical cost per mode as a range where the options change it. Every figure comes from the shared cost table (R99). */
+const COST_TEXT: Partial<Record<ModeId, () => string>> = {
+  keyword: () => `${PRICES.report()} report · ${PRICES.page()} with the page`,
+  discover: () => `from ${PRICES.research()}`,
+  audit: () => `${PRICES.auditTechnical()} · full report ${PRICES.auditFull()}`,
+  ladder: () => `from ${PRICES.ladderStart()} (plan + 1 page)`,
+  track: () => 'setup is free; the weekly monitors are priced in your tracking settings',
 };
 const SETTINGS_TAB: Partial<Record<ModeId, string>> = { profile: 'settings/profile', track: 'settings/tracking' };
 /**
@@ -107,7 +108,7 @@ export default function ToolsPage() {
                   <p className="mt-0.5 text-[13px] leading-snug text-ink-3">{g.description}</p>
                 </div>
               </div>
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {list.map((m) => (
                   <ToolCard key={m.id} info={m} site={site} recommended={m.id === recommended} />
                 ))}
@@ -253,7 +254,7 @@ function ToolCard({ info, site, recommended }: { info: ModeInfo; site: Site | nu
   const { org, can } = useOrgCtx();
   const tab = SETTINGS_TAB[info.id];
   const verified = !!site?.verifiedAt;
-  const cost = COST_TEXT[info.id] ?? (info.costUsd > 0 ? `about ${formatUsd(info.costUsd)}` : 'Free');
+  const cost = COST_TEXT[info.id]?.() ?? (info.costUsd > 0 ? `about ${formatUsd(info.costUsd)}` : 'Free');
 
   let action;
   let opens = false; // the action is a link (styling only: hover lift, glyph highlight)
@@ -277,8 +278,8 @@ function ToolCard({ info, site, recommended }: { info: ModeInfo; site: Site | nu
   } else if (info.siteBound && !verified && site) {
     opens = can('admin');
     action = can('admin') ? (
-      <ButtonLink to={paths.site(org.id, site.id, 'settings/verification')} variant="secondary" size="sm" icon={<Lock className="size-3.5" />} className={STRETCH}>
-        Verify {site.domain} first
+      <ButtonLink to={paths.site(org.id, site.id, 'settings/verification')} variant="secondary" size="sm" icon={<Lock className="size-3.5" />} className={cn(STRETCH, 'h-auto min-h-8 max-w-full whitespace-normal py-1 text-left')}>
+        <span className="min-w-0 break-words">Verify {site.domain} first</span>
       </ButtonLink>
     ) : (
       <span className="text-[13px] text-ink-3">Needs a verified website</span>

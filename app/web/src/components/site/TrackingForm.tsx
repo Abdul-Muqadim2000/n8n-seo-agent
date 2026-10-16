@@ -130,7 +130,7 @@ export function TrackingForm({
                   max={20}
                   normalize={(s) => s.trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 100)}
                   validate={(s) => (s.length < 2 ? 'Keywords need at least 2 characters' : null)}
-                  placeholder="e invoicing software uae, then Enter"
+                  placeholder="accounting software dubai, then Enter"
                 />
               )}
             </Field>
@@ -145,7 +145,7 @@ export function TrackingForm({
           error={errors.ga4PropertyId?.message}
           className="max-w-sm"
         >
-          {(p) => <Input {...p} inputMode="numeric" placeholder="543096312" {...register('ga4PropertyId')} />}
+          {(p) => <Input {...p} inputMode="numeric" placeholder="123456789" {...register('ga4PropertyId')} />}
         </Field>
 
         <Controller

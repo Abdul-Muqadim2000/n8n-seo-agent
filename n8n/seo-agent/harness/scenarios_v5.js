@@ -7700,7 +7700,7 @@ await guard('stored rungs, statistical alerts, pre-release check', async () => {
     && PASS.out.counts.pages === 2 && PASS.out.counts.pages_read === 2 && PASS.out.counts.failed === 0 && PASS.out.counts.passed >= 14
     && eq(PASS.out.failures, []) && PASS.out.pages.every(p => p.checks.length >= 8), JSON.stringify(PASS.out.counts));
   check('G27: what a staging host cannot answer is returned as "not checked" WITH the reason, never as "fine"',
-    PASS.out.not_checked.some(n => n.check === 'index_coverage' && /Google has seen|never been crawled/.test(n.reason))
+    PASS.out.not_checked.some(n => n.check === 'index_coverage' && /asks Google nothing/.test(n.reason))   /* R75 2026-10-16: PASS is a production check (staging false), so the reason is about this check, not a staging host */
     && PASS.out.not_checked.some(n => n.check === 'real_user_speed' && /Chrome UX Report/.test(n.reason))
     && PASS.out.not_checked.some(n => n.check === 'positions'), JSON.stringify(PASS.out.not_checked.map(n => n.check)));
   const FAIL = await prerelease({ base_url: STG, paths: ['/', '/gone/', '/moved/'], live_host: 'www.' + D62, staging: false },
@@ -16180,6 +16180,7 @@ await guard('S142 R49 verdict path, ladder report band, byline entities', async 
 });
 
 // ===================================================================================
+
 // S134-S137 (2026-10-16, fixer A10 — family F7 "one competitor / brand / topic gate for every list" and F10 "AI visibility reporting",
 // plus R92 parts 1 / 2 / 5 / 6 and the AI Pulse's days; dossiers docs/system-review-2026-10-15/defects/A_keywords_content.md R39 R54
 // and C_monitors.md R83 R84 R85 R86 R89 R92). Fixtures cut from the re-rating's own executions: exec 610 (A1's r_a1_ladder610),
@@ -16463,6 +16464,258 @@ await guard('S137 R92 one anchor population, one page per path, no menu fragment
     AR.filter(r => /e-invoicing-uae/.test(r.url)).length === 1 && AR.every(r => !/^https:\/\/techand\.ai\//.test(r.url)) && AR.some(r => r.url === W + '/peppol-uae') && AR.some(r => r.url === 'https://other-site.com/x'), JSON.stringify(AR.map(r => r.url)));
   reset();
 });
+
+
+// S143-S146 (fixer A14, 2026-10-16): the leftover halves of the first wave. S143 R50 / R51 / R58 / R40 (Keyword Check names the ladder and
+// page, the relevance prompt, the idea response's notes), S144 R42 (a ladder run on a full pile says so), S145 R111 / R87 (the cadence mails
+// name drafts that need a fix and paused ladders), S146 R94 follow-up (a sleep-delayed timer after the catch-up refuses to run the week twice).
+// ===================================================================================
+const A14W = require('./a14_wiring.json');
+const a14Check = (SN) => (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+
+await guard('S143 R50 R51 R58 R40 the keyword check names the ladder and page, the relevance prompt, the idea response notes', async () => {
+  const SN = 'S143 R50 R51 R58 R40 - the Keyword Check loads the ladders and the content log and names them; an unlisted industry is adjacent, not core; the idea response carries trend / tier / grouping notes';
+  reset(); begin(SN); const check = a14Check(SN);
+  const K = A1FX.K598;
+  check('R50: the Keyword Check loads the domain\'s ladders and content log in front of Assess Requests',
+    JSON.stringify(A14W.assess_chain) === JSON.stringify(['Load Assess Cache', 'Load Ladders (Assess)', 'Load Content Log (Assess)', 'Assess Requests']), JSON.stringify(A14W.assess_chain));
+  mock('Assess Result', [{ json: K.assess_result }]);
+  mock('Load Ladders (Assess)', [{ json: { ladder_id: 'lad_erp1', domain: 'techand.ai', keyword: 'erp software uae', head_keyword: 'erp software uae', rung: 4, status: 'active', target_url: 'https://www.techand.ai/erp-software-uae/' } }]);
+  mock('Load Content Log (Assess)', [{ json: { domain: 'techand.ai', keyword: 'erp software uae', status: 'written', published_url: '', existing_page_url: 'https://www.techand.ai/erp-software-uae/' } }]);
+  const body = (await run('Assess Response', [{ json: { output: { fit: 2, navigational: false, alternatives: '' } } }]))[0].json.body;
+  const ex = body.existing || {};
+  check('R50: the answer names the ladder id, its status, the page and the page status (live exec 649 had all four null)',
+    ex.ladder_id === 'lad_erp1' && ex.ladder_status === 'active' && /erp-software-uae/.test(ex.page_url || '') && ex.page_status === 'written' && /lad_erp1/.test(ex.note || ''), JSON.stringify(ex));
+  // the relevance prompt (one file, two agents)
+  const P = A14W.relevance_prompt;
+  check('R51: the relevance prompt rates a keyword that names an industry the services do not list "1 at most, never 2"', /industry, sector or customer type the services above do not list/.test(P) && /1 at most, never 2/.test(P), P.slice(0, 200));
+  check('R51: the prompt\'s output schema is unchanged', /"items": \[\{"keyword": "\.\.\.", "relevance": 2, "intent": "commercial", "page_type": "Service Page", "topic": "erp implementation services"\}/.test(P), '');
+  // the idea response
+  const ks = { goal: 'leads', pool_size: 5, priority: [{ keyword: 'wms uae', trend_note: 'falling 40% in 12 months' }], clusters: [{ tier: 'Covered', topic: 'erp', primary_keyword: 'erp software uae', page_type: 'Service Page', keyword_count: 2, total_volume: 100, supporting: [],
+    tier_note: 'in your ladder "erp software uae" - let that ladder write it', grouped_by: 'shared results page' }] };
+  const ir = (await run('Build Ideas Response', [{ json: { keyword_strategy: ks, domain: 'techand.ai', country: 'United Arab Emirates', request_id: 'r1' } }]))[0].json;
+  check('R51: a priority keyword carries its trend_note', ir.priority[0].trend_note === 'falling 40% in 12 months', JSON.stringify(ir.priority[0]));
+  check('R58 / R40: a content-plan topic carries its tier_note and grouped_by', ir.content_plan[0].tier_note === 'in your ladder "erp software uae" - let that ladder write it' && ir.content_plan[0].grouped_by === 'shared results page', JSON.stringify(ir.content_plan[0]));
+  reset();
+});
+
+await guard('S144 R42 a ladder run that writes on top of a full pile says so', async () => {
+  const SN = 'S144 R42 - the ladder report says "you have N pages waiting to be published (limit L); this writes page N+1" when the site is at its pile-up limit';
+  reset(); begin(SN); const check = a14Check(SN);
+  const L = A1FX.L610;
+  check('R42: the ladder path loads the content log before Ladder Requests', JSON.stringify(A14W.ladder_chain) === JSON.stringify(['Load Domain Ladder Settings', 'Load Content Log (Ladder)', 'Ladder Requests']), JSON.stringify(A14W.ladder_chain));
+  const days = (n) => new Date(Date.now() - n * 864e5).toISOString();
+  const logRow = (k, o = {}) => ({ json: { site_id: A1SITE, domain: A1D, keyword: k, source: 'cadence', status: 'written', started_at: days(10), published_url: '', ...o } });
+  const planWith = async (logs, settings) => {
+    const model = JSON.parse(JSON.stringify(L.site_model));
+    mock('Parse Verdict', [{ json: L.parse_verdict }]); mock('Ladder Pool', [{ json: L.ladder_pool }]); mock('Ladder Clusters', [{ json: L.ladder_clusters }]);
+    mock('Ladder Relevance Chunks', L.chunks.map(c => ({ json: c }))); mock('Site Model', [{ json: { site_model: model } }]);
+    mock('Load Site Cache', L.site_cache.length ? L.site_cache.map(r => ({ json: r })) : [{ json: {} }]);
+    mock('Load Domain Ladders', L.domain_ladders.map(r => ({ json: r }))); mock('Load Domain Ladder Settings', [...L.ladder_settings.filter(r => !(settings.length && r.ladder_id === '_site')), ...settings].map(r => ({ json: r.json || r })));
+    mock('Load Content Log (Ladder)', logs.length ? logs : [{ json: {} }]);
+    const pl = await run('Ladder Plan', L.relevance.map(o => ({ json: o })));
+    return (await run('Build Ladder Report', pl))[0].json;
+  };
+  const three = [logRow('wms uae'), logRow('erp for retail uae', { status: 'not_ready' }), logRow('e invoicing guide', { started_at: days(40) })];
+  const full = await planWith(three, []);
+  const notes = (full.ladder.notes || []).join(' | ');
+  check('R42: with 3 written / not_ready pages and the default limit 3, the report says "3 pages waiting to be published (limit 3); this writes page 4"',
+    full.ladder.planned && (full.ladder.write_now || []).length > 0 && /You have 3 pages waiting to be published \(limit 3\); this writes page 4\./.test(notes), notes.slice(0, 500));
+  check('R42: it also says one of them did not pass the quality check', /1 of them did not pass the quality check/.test(notes), notes.slice(0, 500));
+  const under = await planWith([logRow('wms uae'), logRow('old page', { started_at: days(200) }), logRow('published page', { status: 'published', published_url: 'https://www.techand.ai/x/' })], []);
+  check('R42: a page older than 120 days or already published does not count - 1 waiting is below the limit, no note', !/waiting to be published/.test((under.ladder.notes || []).join(' ')), (under.ladder.notes || []).join(' | ').slice(0, 300));
+  const site5 = await planWith(three, [{ ladder_id: '_site', site_id: A1SITE, domain: A1D, max_waiting: 5 }]);
+  check('R42: the limit is the `_site` row\'s max_waiting (5): 3 waiting is no pile-up', !/waiting to be published/.test((site5.ladder.notes || []).join(' ')), (site5.ladder.notes || []).join(' | ').slice(0, 300));
+  const site2 = await planWith(three, [{ ladder_id: '_site', site_id: A1SITE, domain: A1D, max_waiting: 2 }]);
+  check('R42: with limit 2 the sentence names limit 2', /You have 3 pages waiting to be published \(limit 2\); this writes page 4\./.test((site2.ladder.notes || []).join(' ')), (site2.ladder.notes || []).join(' | ').slice(0, 300));
+  reset();
+});
+
+await guard('S145 R111 R87 the cadence mails name the drafts that need a fix and the paused ladders', async () => {
+  const SN = 'S145 R111 R87 - Cadence Status / Cadence Note render needs_fix and paused_ladders when the pile-up is not the reason';
+  reset(); begin(SN); const check = a14Check(SN);
+  const base = { report_only: true, site_id: 'site_techand-ai', domain: 'techand.ai', request_id: 'cad_1', week: '2026-10-19', upcoming: [], pending_publish: [], awaiting_approval: [], suggestions: [], waiting_for_support: [],
+    needs_fix: [{ keyword: 'erp for retail uae', written_at: '2026-10-05', reasons: ['3 placeholders left'] }], paused_ladders: [{ ladder_id: 'lad_x', head: 'ai consulting dubai', reason: 'the live page already covers it' }] };
+  const st = (await run('Cadence Status', [{ json: { ...base, paused_reason: '' } }]))[0].json;
+  check('R111: the status mail names the draft that needs a fix, with its reason, and says it is not a publish', /Needs a fix, not a publish/.test(st.html) && /erp for retail uae/.test(st.html) && /3 placeholders left/.test(st.html), st.html.slice(0, 400));
+  check('R87: the status mail names the paused ladder with its reason', /Paused ladders/.test(st.html) && /ai consulting dubai/.test(st.html) && /already covers it/.test(st.html), st.html.slice(0, 400));
+  check('R111: the subject says a page needs a fix (it said "publish the supporting pages" before)', /need a fix/.test(st.subject) && !/supporting pages/.test(st.subject), st.subject);
+  check('R111 / R87: the callback carries needs_fix and paused_ladders', st.needs_fix.length === 1 && st.paused_ladders.length === 1, JSON.stringify([st.needs_fix, st.paused_ladders]));
+  const pu = (await run('Cadence Status', [{ json: { ...base, paused_reason: 'pileup', waiting_publish: 3, max_waiting: 3, waiting_keywords: ['a', 'b', 'c'] } }]))[0].json;
+  check('R111: when the pile-up is the reason the needs-a-fix paragraph is not repeated (the pile-up line already marks them)', !/Needs a fix, not a publish/.test(pu.html) && /Paused ladders/.test(pu.html), pu.html.slice(0, 300));
+  const onlyPaused = (await run('Cadence Status', [{ json: { ...base, needs_fix: [], paused_reason: '' } }]))[0].json;
+  check('R87: only a paused ladder - the subject says so', /ladder paused/.test(onlyPaused.subject), onlyPaused.subject);
+  mock('Cadence Plan', [{ json: { site_id: 'site_techand-ai', domain: 'techand.ai', email: '', callback_url: '', request_id: 'cad_1', week: '2026-10-19', keyword: 'wms uae', page_type: 'Guide', why: 'rising', source: 'trend', existing_page_url: '', pages_per_week: 1, upcoming: [], pending_publish: [],
+    needs_fix: base.needs_fix, paused_ladders: base.paused_ladders, paused_reason: '', candidates: 1 } }]);
+  const cn = (await run('Cadence Note', [{ json: {} }]))[0].json;
+  check('R111 / R87: the weekly note carries both too', /Needs a fix, not a publish/.test(cn.html) && /Paused ladders/.test(cn.html) && cn.needs_fix.length === 1 && cn.paused_ladders.length === 1, cn.html.slice(0, 400));
+  reset();
+});
+
+await guard('S146 R94 a sleep-delayed timer must not run the week twice', async () => {
+  const SN = 'S146 R94 - a run started by its own Schedule Trigger refuses (caught_up) when the catch-up already started that slot; nothing else is refused by it';
+  reset(); begin(SN); const check = a14Check(SN);
+  const DUE = '2026-10-19T11:30:00.000Z';   // Monday 07:30 America/New_York (EDT)
+  const KEY = 'catchup:SEOagentBacklnk1:' + DUE;
+  const rec = (key, v) => ({ json: { key, kind: 'catchup', site_id: '', value: JSON.stringify(v), updated_at: '2026-10-19T17:40:00.000Z' } });
+  const go = async (o) => {
+    reset();
+    mock('BL Plan', [{ json: { site_id: 'site_techand-ai', domain: 'techand.ai', mode: 'full' } }]);
+    mock('Load Open Runs (BL)', [{ json: {} }]);
+    mock('Load Catch-up Records (BL)', o.records || [{ json: {} }]);
+    mock('Reserve Run Ledger (BL)', [{ json: { id: 92, run_id: 'test-exec', mode: 'backlinks', status: 'reserved', key: 'schedule:backlinks' } }]);
+    mock('Run Ledger Row (BL)', [{ json: { run_id: 'test-exec', mode: 'backlinks', key: 'schedule:backlinks' } }]);
+    if (o.fire) mock('Weekly Schedule', [{ json: { timestamp: o.fire } }]);
+    return (await run('After Run Ledger (BL)', [{ json: {} }], { code: 'After_Run_Ledger_BL_' }))[0].json;
+  };
+  const late = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec(KEY, { status: 'started', started_at: '2026-10-19T17:40:00.000Z', entry: 'sweep' })] });
+  check('R94: the delayed timer (fires 7 h late) of a slot the catch-up started is refused `caught_up`, nothing started',
+    late.run_refused === true && late.reason === 'caught_up' && /already ran this scheduled slot/.test(late.refusal) && /2026-10-19T11:30:00.000Z/.test(late.refusal), JSON.stringify(late).slice(0, 400));
+  const dur = await go({ fire: '2026-10-19T11:30:02.000Z', records: [{ json: {} }] });
+  check('R94: an on-time scheduled run with no catch-up record runs', !dur.run_refused && dur.domain === 'techand.ai', JSON.stringify(dur).slice(0, 300));
+  const starting = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec(KEY, { status: 'starting', started_at: '2026-10-19T17:40:00.000Z' })] });
+  check('R94: a record still `starting` counts (the planner calls it caught up too)', starting.run_refused === true && starting.reason === 'caught_up', JSON.stringify(starting).slice(0, 300));
+  const failed = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec(KEY, { status: 'start_failed', error: 'boom' })] });
+  check('R94: a catch-up start that FAILED does not refuse the schedule\'s own fire', !failed.run_refused, JSON.stringify(failed).slice(0, 300));
+  const lastWeek = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec('catchup:SEOagentBacklnk1:2026-10-12T11:30:00.000Z', { status: 'started', started_at: '2026-10-12T17:00:00.000Z' })] });
+  check('R94: last week\'s record does not refuse this week', !lastWeek.run_refused, JSON.stringify(lastWeek).slice(0, 300));
+  const other = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec('catchup:SEOagentAIVisib1:' + DUE, { status: 'started', started_at: '2026-10-19T17:40:00.000Z' })] });
+  check('R94: another workflow\'s record does not refuse this one', !other.run_refused, JSON.stringify(other).slice(0, 300));
+  const viaCatchup = await go({ records: [rec(KEY, { status: 'started', started_at: '2026-10-19T17:40:00.000Z' })] });
+  check('R94: the catch-up\'s OWN start (no Schedule Trigger data) is never refused by its own record', !viaCatchup.run_refused, JSON.stringify(viaCatchup).slice(0, 300));
+  const dry = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec('catchup_dry:SEOagentBacklnk1:' + DUE, { status: 'started' })] });
+  check('R94: a dry-run record (`catchup_dry:`) is never read by production', !dry.run_refused, JSON.stringify(dry).slice(0, 300));
+  reset();
+});
+
+// ===================================================================================
+// S138-S141 (2026-10-16, re-rating 2026-10-15 family F9, fixer A11): technical audit accuracy.
+//   S138 R63 R71 R118  the crawl's items: a redirect is not a page, a deprecated tag must be one, duplicate content names its pages
+//   S139 R64 R62 R72   the extra crawl reports carry the crawl's id; hex entities decode on both sides; a share names its denominator
+//   S140 R67 R76       the audit row counts what it stores; the content review sees image alt text and decoded text
+//   S141 R75 R119      the pre-release reasons follow `staging`; the raw fetch no longer wears Google's bot page
+// Fixtures: harness/fixtures_live/r_a11.json.gz = the crawl of exec 648 (2026-10-16, deployed 668-node build) and exec 595.
+// ===================================================================================
+const A11 = (() => { try { return JSON.parse(require('zlib').gunzipSync(require('fs').readFileSync(require('path').join(__dirname, 'fixtures_live', 'r_a11.json.gz'))).toString()); } catch (e) { return null; } })();
+const a11check = (SN) => (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 500))); };
+const a11code = (n) => require('fs').readFileSync(require('path').join(process.env.CODE_DIR || (__dirname + '/code_v4'), n), 'utf8');
+const a11bsi = async (tag, mutate, inputMutate) => {
+  const t = JSON.parse(JSON.stringify(A11[tag])); if (mutate) mutate(t);
+  const bi = { ...t.bsi_input }; if (inputMutate) inputMutate(bi);
+  mock('Check Crawl', [{ json: t.check_crawl }]); mock('Get Crawled Pages Answers', [{ json: { tasks: [{ result: [{ items: t.pages }] }] } }]); mock('Collect Crawl Extras', [{ json: { crawl_extras: t.extras || {} } }]);
+  const out = await run('Build Site Issues', [{ json: bi }]); return { a: out[0].json.site_audit, out, t };
+};
+await guard('S138 R63 R71 R118 redirects are not pages, deprecated tags are named, duplicate content names its pages', async () => {
+  reset(); const SN = 'S138 R63 R71 R118 — the crawl\'s items'; begin(SN); const check = a11check(SN);
+  check('the fixture of the 2026-10-16 crawl is present', !!A11 && A11.e648.pages.length === 47 && A11.e595.pages.length === 47, 'fixture missing');
+  const REDIR = A11.e648.pages.filter(p => p.resource_type === 'redirect').map(p => p.url);
+  check('the crawl has 45 HTML pages and 2 redirect items (308)', REDIR.length === 2 && A11.e648.pages.filter(p => p.resource_type === 'html').length === 45, JSON.stringify(REDIR));
+  for (const tag of ['e648', 'e595']) {
+    const { a } = await a11bsi(tag);
+    const named = a.findings.filter(f => (f.sample_urls || []).some(u => REDIR.some(r => String(u).startsWith(r))));
+    const allowed = /^(Internal URLs that redirect|Links pointing to redirects)$/;
+    console.log('   ' + tag + ' -> health ' + a.health_score + ' (recorded ' + A11[tag].site_audit.health_score + '), pages ' + a.pages_crawled + ', findings naming a redirect: ' + named.map(f => f.title).join(' | '));
+    check(tag + ' R63: the audit counts 45 pages, not 47', a.pages_crawled === 45, a.pages_crawled);
+    check(tag + ' R63: only the two redirect findings name a redirect URL (no compression / canonical / Open Graph / Twitter / sources / URL shape do not)', named.every(f => allowed.test(f.title)) && named.some(f => f.title === 'Internal URLs that redirect'), JSON.stringify(named.map(f => f.title)));
+    check(tag + ' R63: "Internal URLs that redirect" still lists both redirecting URLs', (a.findings.find(f => f.title === 'Internal URLs that redirect') || { sample_urls: [] }).sample_urls.length === 2, '');
+    const pageShare = a.findings.filter(f => /of \d+ crawled pages/.test(f.evidence || '')).map(f => Number((f.evidence.match(/of (\d+) crawled pages/) || [])[1]));
+    check(tag + ' R63: every page share is taken of 45 crawled pages', pageShare.length > 3 && pageShare.every(n => n === 45), JSON.stringify(pageShare));
+    check(tag + ' R63: the health score does not fall because redirects stopped counting (was ' + A11[tag].site_audit.health_score + ', now ' + a.health_score + ')', a.health_score >= A11[tag].site_audit.health_score, a.health_score);
+    check(tag + ' R71: no "Deprecated HTML tags" finding for a page whose only deprecated tag is <u>', !a.findings.some(f => /Deprecated HTML tags/.test(f.title)), JSON.stringify(a.findings.filter(f => /Deprecated/.test(f.title)).map(f => f.sample_urls)));
+  }
+  const dup = (await a11bsi('e648')).a.findings.find(f => f.title === 'Pages with duplicate content');
+  check('R118: "Pages with duplicate content" names the 7 pages and is a page finding, not a whole-site one', dup && dup.scope === 'page' && dup.affected_count === 7 && (dup.sample_urls || []).length === 7 && dup.sample_urls.every(u => /\/whatwedo/.test(u)), JSON.stringify(dup && [dup.scope, dup.affected_count, dup.sample_urls]));
+  check('R118: its impact is priced on those pages, not "the whole website"', dup && !/whole website/.test(dup.impact_basis || ''), dup && dup.impact_basis);
+  const unnamed = (await a11bsi('e648', (t) => { t.pages.forEach(p => { if (p.duplicate_content) p.duplicate_content = false; }); })).a.findings.find(f => f.title === 'Pages with duplicate content');
+  check('R118: when the crawler counts duplicates but names no page, the finding says so and is Low (it cannot outrank findings that name pages)', unnamed && unnamed.severity === 'Low' && /did not name|not name/.test(unnamed.evidence), JSON.stringify(unnamed && [unnamed.severity, unnamed.evidence]));
+  const dep = (await a11bsi('e595', (t) => { const p = t.pages.find(x => x.resource_type === 'html'); p.checks.deprecated_html_tags = true; p.meta.deprecated_tags = ['center', 'u']; })).a.findings.find(f => /Deprecated HTML tags/.test(f.title));
+  check('R71: a page with a really obsolete tag (<center>) is still flagged, naming the tag and not <u>', dep && dep.sample_urls.length === 1 && /<center>/.test(dep.sample_urls[0]) && !/<u>/.test(dep.sample_urls[0]), JSON.stringify(dep && dep.sample_urls));
+});
+await guard('S139 R64 R62 R72 extra crawl reports, hex entities, a share names its denominator', async () => {
+  reset(); const SN = 'S139 R64 R62 R72 — extras, entities, denominators'; begin(SN); const check = a11check(SN);
+  // ---- R64 ----
+  const TID = A11.e648.check_crawl.crawl_task_id;
+  mock('Check Crawl', [{ json: A11.e648.check_crawl }]); mock('Save Task ID', [{ json: A11.e648.check_crawl }]);
+  const ex = await run('Crawl Extra Requests', [{ json: { version: '0.1', status_code: 20000, tasks: [{ id: 'other-task', result: [{ items: [] }] }] } }]);
+  check('R64: the crawl\'s task id is a real id', /^\d{8}-\d{4}-\d{4}-\d{4}-[0-9a-f]{12}$/.test(TID || ''), TID);
+  check('R64: all four extra reports carry the CRAWL\'s id (from Check Crawl), not the id of the pages answer', ex.length === 4 && ex.every(x => x.json.body[0].id === TID), JSON.stringify(ex.map(x => x.json.body[0])));
+  check('R64: the four requests are the duplicate titles, duplicate descriptions, non-indexable pages and redirect chains', ex.map(x => x.json.extra).join() === 'duplicate_title,duplicate_description,non_indexable,redirect_chains', ex.map(x => x.json.extra).join());
+  // ---- R62 ----
+  const D = 'northwind-erp.com'; const U = 'https://' + D + '/insights/saudi-datacenter';
+  const html = (title, h1, can) => '<!DOCTYPE html><html><head><title>' + title + '</title><link rel="canonical" href="' + can + '"></head><body><h1>' + h1 + '</h1><p>' + F.words(200) + '</p><a href="/a">a</a></body></html>';
+  const ok = (h) => ({ statusCode: 200, headers: { 'content-type': 'text/html' }, data: h });
+  const rdFor = async (rawHtml, renHtml) => {
+    mock('Analyze CrUX', [{ json: { domain: D, probe: { findings: [], what_works: [], measurements: {} }, extra_findings: [], crux: null, crawl_extras: {} } }]);
+    mock('Check Crawl', [{ json: { domain: D, crawl_js: false, render_diff_pages: 5, audit_level: 'site_audit', crawl_summary: { domain_info: { checks: {} }, page_metrics: {} } } }]);
+    mock('Get Crawled Pages', [{ json: { tasks: [{ result: [{ items: [] }] }] } }]); mock('Collect Crawl Extras', [{ json: { crawl_extras: {} } }]);
+    const plan = { pages: 1, cap: 5, crawl_js: false, figures: [] };
+    mock('Render Diff Targets', [{ json: { url: U, render_plan: plan } }]); mock('Render Key Pages', [ok(renHtml)]); mock('Fetch Raw Pages', [ok(rawHtml)]);
+    return (await run('Render Diff', store['Fetch Raw Pages']))[0].json;
+  };
+  const r1 = await rdFor(html('Microsoft&#x27;s Saudi Arabia East &#x2013; what it means', 'Microsoft&#x27;s Saudi Arabia East Datacenter goes live', U), html('Microsoft\'s Saudi Arabia East – what it means', 'Microsoft\'s Saudi Arabia East Datacenter goes live', U));
+  const pg = r1.render_diff.pages[0] || {};
+  console.log('   hex entities -> differs', JSON.stringify(pg.differs), '| h1', JSON.stringify((pg.figures || []).find(f => f.key === 'h1')));
+  check('R62: &#x27; and &#x2013; in the first response read the same as the rendered apostrophe and dash (title and H1: nothing differs)', pg.checked && (pg.differs || []).length === 0 && !(r1.extra_findings || []).some(f => /different version/.test(f.title)), JSON.stringify([pg.differs, (r1.extra_findings || []).map(f => f.title)]));
+  check('R62: the raw H1 is stored decoded', ((pg.figures || []).find(f => f.key === 'h1') || {}).raw === 'Microsoft\'s Saudi Arabia East Datacenter goes live', JSON.stringify((pg.figures || []).find(f => f.key === 'h1')));
+  const r2 = await rdFor(html('Alpha &amp;amp; Beta', 'Heading', U), html('Alpha &amp; Beta', 'Heading', U));
+  check('R62: &amp; is decoded once — "&amp;amp;" is the text "&amp;", which differs from "&" (no double decode)', (r2.render_diff.pages[0].differs || []).includes('title'), JSON.stringify(r2.render_diff.pages[0].differs));
+  // ---- R72 ----
+  const r3 = await rdFor(html('Old title', 'Same heading', U), html('A different title written by a script', 'Same heading', U));
+  const f3 = (r3.extra_findings || []).find(f => /different version/.test(f.title)) || {};
+  console.log('   render finding ->', JSON.stringify({ n: f3.affected_count, pct: f3.affected_pct, of: f3.affected_of, unit: f3.affected_unit }));
+  check('R72: the AI-crawler finding carries the denominator its percentage was taken on (1 of 1 key page read twice), with its unit', f3.affected_count === 1 && f3.affected_of === 1 && /key page/.test(f3.affected_unit || ''), JSON.stringify(f3));
+  const injected = { ...f3, affected_of: 5, affected_pct: 20, affected_unit: 'key pages read twice' };
+  const { out } = await a11bsi('e648', null, (bi) => { bi.extra_findings = [...(bi.extra_findings || []).filter(f => f.source !== 'render_diff' && f.source !== 'not_crawled'), injected]; /* the fixture's own findings of these two sources predate the fix (no denominator) */ });
+  const doc = decode(await run('Build Audit Report', out));
+  console.log('   report line ->', (doc.match(/1 of [^<]{0,40}\(20%\)/g) || []).join(' | '));
+  check('R72: the technical report prints "1 of 5 key pages read twice (20%)" and never "1 of 45 pages (20%)"', /1 of 5 key pages read twice \(20%\)/.test(doc) && !/(^|[^\d])1 of 45 pages \(20%\)/.test(doc), (doc.match(/(^|[^\d])1 of [^<]{0,40}\(20%\)/g) || []).join(' | '));
+  check('R72: the full report prints the same denominator (its template reads affected_of and affected_unit)', /affected_of/.test(a11code('Build_Full_Report.js')) && /affected_unit/.test(a11code('Build_Full_Report.js')), '');
+  check('R72: the not-crawled findings carry their denominator too', /affected_of/.test(a11code('Not_Crawled_Check.js')), '');
+});
+await guard('S140 R67 R76 the audit row counts what it stores; the content review sees alt text and decoded text', async () => {
+  reset(); const SN = 'S140 R67 R76 — audit row and content prompt'; begin(SN); const check = a11check(SN);
+  const fnd = (severity, scoring, i) => ({ category: 'On-Page', severity, title: 'Finding number ' + i, scoring, affected_count: 1 });
+  const fs140 = [fnd('High', true, 1), fnd('High', true, 2), fnd('Medium', true, 3), fnd('Low', true, 4), fnd('Info', true, 5), fnd('High', false, 6), fnd('High', false, 7), fnd('High', false, 8), fnd('Medium', false, 9), fnd('Low', false, 10)];
+  const counts = { Critical: 0, High: 0, Medium: 0, Low: 0, Info: 0 }; fs140.forEach(f => counts[f.severity]++);
+  mock('Audit Diff', [{ json: { site_id: 's1', domain: 'northwind-erp.com', audit_id: 'aud_x', audited_at: '2026-10-16T00:00:00Z', site_audit: { domain: 'northwind-erp.com', audit_level: 'full', health_score: 80, grade: 'Good', pages_crawled: 45, findings: fs140, issue_counts: counts } } }]);
+  const row = (await run('Audit Row', store['Audit Diff']))[0].json; const rows = (await run('Finding Rows', store['Audit Diff'])).map(x => x.json).filter(r => !r.skip);
+  console.log('   row ->', JSON.stringify([row.findings, row.critical, row.high, row.medium, row.low]), '| rows', rows.length);
+  check('R67: critical + high + medium + low = findings = the stored finding rows', row.critical + row.high + row.medium + row.low === row.findings && row.findings === rows.length, JSON.stringify([row, rows.length]));
+  check('R67: the review findings (not scored) are in neither side — High 2, Medium 1, Low 1', row.high === 2 && row.medium === 1 && row.low === 1 && row.critical === 0, JSON.stringify(row));
+  // ---- R76 ----
+  const hp = '<html><head><title>Home</title></head><body><nav><a href="/">Business Central Partner</a><a href="/f">Finance &amp; Operations Partner</a></nav><header><img src="/microsoft-partner.svg" alt="Microsoft Partner"></header><main>' + F.words(400) + '</main><footer><img alt="Microsoft Partner" src="/microsoft-partner.svg"><img alt="" src="/x.png"></footer></body></html>';
+  const cp = '<html><body><h2>Contact</h2><p>Let&#x27;s discuss how we can help your business &#x2013; today. ' + F.words(100) + '</p></body></html>';
+  mock('Analyze PageSpeed', [{ json: { domain: 'northwind-erp.com' } }]);
+  mock('Pick Key Pages', [{ json: { url: 'https://northwind-erp.com/', kind: 'home' } }, { json: { url: 'https://northwind-erp.com/contact-us', kind: 'contact' } }]);
+  mock('Fetch Page HTML', [{ json: { data: hp } }, { json: { data: cp } }]);
+  mock('Competitor Homes', [{ json: { domain: 'rival.example' } }]);
+  const cpOut = (await run('Build Content Prompt', [{ json: { page_text: '![Microsoft Gold Partner](https://rival.example/g.png) ' + F.words(120) + ' [Services](https://rival.example/s)' } }]))[0].json;
+  console.log('   prompt ->', cpOut.content_prompt_our.length, 'chars');
+  check('R76: the reviewer reads the homepage badge ("Microsoft Partner" image alt text) and it is labelled as an image', /\[image: Microsoft Partner\]/.test(cpOut.content_prompt_our), cpOut.content_prompt_our.slice(0, 400));
+  check('R76: the repeated badge is listed once, and an empty alt adds nothing', (cpOut.content_prompt_our.match(/Microsoft Partner/g) || []).length === 1 && !/\[image: \]/.test(cpOut.content_prompt_our), (cpOut.content_prompt_our.match(/Microsoft Partner/g) || []).length);
+  check('R62: the contact page reads "Let\'s discuss" and the dash, not &#x27; / &#x2013;', /Let's discuss how we can help your business – today/.test(cpOut.content_prompt_our) && !/&#x/.test(cpOut.content_prompt_our), cpOut.content_prompt_our.slice(-300));
+  check('R76: the competitor page keeps its image alt text too', /\[image: Microsoft Gold Partner\]/.test(cpOut.content_prompt_comp), cpOut.content_prompt_comp.slice(0, 200));
+  check('R62: Analyze HTML decodes hex entities too (it read only nbsp, amp and &#x27;)', /parseInt\(h, ?16\)/.test(a11code('Analyze_HTML.js')), '');
+});
+await guard('S141 R75 R119 the pre-release reasons follow `staging`; the raw fetch tells the truth about who it is', async () => {
+  reset(); const SN = 'S141 R75 R119 — pre-release wording and the raw-fetch identity'; begin(SN); const check = a11check(SN);
+  const run141 = async (staging) => { reset();
+    const items = (await run('Prerelease Validate', [{ json: { body: { base_url: 'https://staging.techand.ai', paths: ['/'], live_host: 'techand.ai', staging }, headers: {} } }])).map(x => x.json);
+    mock('Fetch Release Pages', items.map(it => it.kind === 'robots' ? { statusCode: 200, headers: {}, data: 'User-agent: *\nAllow: /\n' } : { statusCode: 200, headers: { 'content-type': 'text/html' }, data: '<html><head><title>T</title><link rel="canonical" href="https://techand.ai/"><meta name="description" content="d"></head><body><h1>H</h1></body></html>' }));
+    return (await run('Prerelease Verdict', store['Fetch Release Pages']))[0].json.body; };
+  const prod = await run141(false), stg = await run141(true);
+  const reasons = (b) => b.not_checked.filter(x => x.check && /index_coverage|real_user_speed|positions/.test(x.check)).map(x => x.reason);
+  console.log('   production reasons ->', JSON.stringify(reasons(prod)));
+  check('R75: on a production check (staging false) no not_checked reason mentions a staging host', reasons(prod).length === 3 && !reasons(prod).some(r => /staging/i.test(r)), JSON.stringify(reasons(prod)));
+  check('R75: each production reason says why this check does not ask (it reads only the pages)', reasons(prod).every(r => /this check reads only|by design/i.test(r)), JSON.stringify(reasons(prod)));
+  check('R75: on a staging run the staging wording stays', reasons(stg).some(r => /staging/i.test(r)) && reasons(stg).length === 3, JSON.stringify(reasons(stg)));
+  const W = (() => { try { return require('./a11_wiring.json'); } catch (e) { return null; } })();
+  check('R119: the build wrote the fetch wiring', !!W && !!W.user_agents, 'a11_wiring.json missing');
+  check('R119: no audit fetch presents itself with Google\'s bot page (the address the real Googlebot user agent carries); each names itself', W && Object.values(W.user_agents).length >= 2 && Object.values(W.user_agents).every(ua => !/google\.com\/bot\.html|googlebot/i.test(ua) && /SEOAgentAudit/.test(ua)), JSON.stringify(W && W.user_agents));
+  const rdSrc = a11code('Render_Diff.js');
+  check('R119: the render diff says what the first response is — a plain request under our own audit user agent; a site that treats named AI bots differently is the crawler-access check\'s job', /our own audit user agent/.test(rdSrc) && /crawler access/i.test(rdSrc), '');
+});
+
 
 H.report();
 })();

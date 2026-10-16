@@ -424,6 +424,7 @@ const STATUS_META: Record<FindingStatus, { label: string; node: ReactNode }> = {
   new: { label: 'New', node: <Badge tone="accent" icon={<Sparkles className="size-3" aria-hidden />}>New</Badge> },
   open: { label: 'Open', node: <Badge icon={<Circle className="size-3" aria-hidden />}>Open</Badge> },
   fixed: { label: 'Fixed', node: <Badge tone="good" icon={<CheckCircle2 className="size-3" aria-hidden />}>Fixed</Badge> },
+  no_longer_seen: { label: 'No longer seen', node: <Badge icon={<Circle className="size-3" aria-hidden />}>No longer seen</Badge> },
 };
 
 type SevFilter = Sev | 'all';

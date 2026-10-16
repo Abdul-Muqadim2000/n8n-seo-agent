@@ -273,6 +273,8 @@ export interface ContentItem {
   publishedAt: string;
   week: string;
   existingPageUrl: string;
+  /** R111: why a `not_ready` draft failed its last quality round ('; '-joined by the engine); empty on every other row */
+  qaReasons?: string;
 }
 
 export interface CaseStudy {
@@ -318,7 +320,8 @@ export interface AuditPoint {
   scheduled: boolean;
 }
 
-export type FindingStatus = 'new' | 'open' | 'fixed';
+/** `no_longer_seen`: a finding that rested on one outside reading and is not seen now - never counted as fixed (R74). */
+export type FindingStatus = 'new' | 'open' | 'fixed' | 'no_longer_seen';
 export interface Finding {
   key: string;
   category: string;
@@ -472,6 +475,8 @@ export interface AiDay {
   shareOfVoice: number;
   visibilityScore: number;
   alerts: string[];
+  /** R104: the newest reading of the day - when the pulse really ran */
+  checkedAt?: string;
 }
 
 export interface AiTraffic {
@@ -938,7 +943,7 @@ export interface OverviewData {
   ai: { latest: AiRun | null; series: { checkedAt: string; mentionRate: number; citationRate: number; shareOfVoice: number }[] };
   backlinks: { latest: BacklinkSnapshot | null; series: { month: string; referringDomains: number; backlinks: number }[] };
   rankings: { ladders: number; keywords: number; top3: number; top10: number; top50: number; movers: { keyword: string; from: number | null; to: number | null }[] };
-  content: { started: number; published: number; pendingPublish: number; pagesPerWeek: number; caseStudies: number };
+  content: { started: number; published: number; pendingPublish: number; /** R111: written drafts that failed the quality check (not counted in pendingPublish) */ needsFix?: number; pagesPerWeek: number; caseStudies: number };
   alerts: { open: number; checkinDue: boolean };
   recommendations: Recommendation[];
   reports: Report[];
@@ -1003,7 +1008,8 @@ export interface PipelineData {
     /** then these, week after week */
     later: QueueItem[];
     /** written, not published yet */
-    waiting: { keyword: string; startedAt: string; days: number }[];
+    /** `needsFix` (R111): the draft did not pass its quality check - fix it and run it again, do not publish it; `reasons` say why */
+    waiting: { keyword: string; startedAt: string; days: number; needsFix?: boolean; reasons?: string[] }[];
     /** opportunity posts while they are set to Manual: what Auto would write, nothing is written on its own (v4.8) */
     suggestions?: QueueItem[];
     /** the coming Monday run writes nothing because too many pages wait to be published (the pile-up guard, v4.8) */

@@ -34,10 +34,16 @@ import { assertGa4ForDomain } from './google';
 import { extractFiles } from './files';
 import { applyLadderPrefs, markLadderWon } from './ladderSettings';
 import { deliverReport } from './reportDelivery';
+import { engineCostTable } from './engineCost';
 import { assertBudget, lockCompany } from './spend';
 import { engineCostEstimate, ledgerCost, stageOf, summarize, titleFor } from './summaries';
 
-export const estimateCost = (input: RunInput): number => estimateRunCost(input.mode, input as unknown as Record<string, unknown>);
+/**
+ * R100: what the engine will reserve for this request — its own rolling figures (`engineCostTable`), the shipped table only when
+ * n8n cannot be read. The budget check holds this number, so it must be the engine's, not a mirror of its defaults.
+ */
+export const estimateCost = async (input: RunInput): Promise<number> =>
+  estimateRunCost(input.mode, input as unknown as Record<string, unknown>, (await engineCostTable()).calibration);
 export const etaFor = (input: RunInput): number => estimateRunMinutes(input.mode, input as unknown as Record<string, unknown>);
 
 export function runTitle(input: RunInput, site: SiteRow | null): string {
@@ -130,7 +136,7 @@ export async function createRun(a: OrgAccess, input: RunInput, opts: CreateRunOp
     if (page) input = { ...input, keyword: page.keyword, ladder: page.ladder };
   }
 
-  const estimated = estimateCost(input);
+  const estimated = await estimateCost(input);
   const body = compactBody(
     // ENGINE_EMAILS off: n8n gets no address at all, so it e-mails nothing; every result arrives here through the callback
     buildN8nPayload(input, site ? siteContext(site) : null, { callbackUrl: callbackUrl(org), email: config.engineEmails && input.emailCopy ? user.email : '' }),
@@ -460,6 +466,7 @@ export async function ingestCallback(
       if (cost != null) {
         patch.actualCostUsd = sql`coalesce(${schema.runs.actualCostUsd}, 0) + ${cost.usd}`;
         if (cost.estimated) patch.actualCostEstimated = true;
+        if (cost.partial) patch.actualCostPartial = true;
       }
       const engineEstimate = engineCostEstimate(body);
       if (engineEstimate != null) {
@@ -511,6 +518,7 @@ export function toRun(r: RunRow, extra: { siteDomain?: string | null; userName?:
     engineCostEstimateUsd: r.engineCostEstimateUsd,
     engineCostBasis: r.engineCostBasis,
     actualCostEstimated: r.actualCostEstimated,
+    actualCostPartial: r.actualCostPartial,
     etaMinutes: r.etaMinutes,
     input: r.input as unknown as RunInput,
     createdAt: r.createdAt.toISOString(),
