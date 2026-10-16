@@ -88,6 +88,19 @@ describe('ladder pages: states', () => {
   // R16 (2026-10-13, FIX_PLAN §3.11): a rung the keyword rule refused (a competitor's brand, a government portal, an off-topic search).
   // n8n writes `set_aside` on the row and names the reason in its weekly note; the app must show it as set aside, never promise it and
   // never offer "Write now" for it.
+  it('R34: a rung the engine marked `live (existing page)` is a published page at its covered_by URL, not a plan', () => {
+    const liveSrc = src({
+      ladders: [
+        lad({ keyword: 'ai consulting dubai', rung: 4, page_no: 1, status: 'live (existing page)', covered_by: 'https://www.techand.ai/ai-copilot-advisory-uae' }),
+        lad({ keyword: 'ai readiness uae', rung: 1, page_no: 2 }),
+      ],
+    });
+    const lb = buildLadders(liveSrc, sched(), { now: NOW });
+    const lp = lb.details.get('l1')!.pages.find((p) => p.keyword === 'ai consulting dubai')!;
+    expect(lp.state).toBe('published');
+    expect(lp.publishedUrl).toBe('https://www.techand.ai/ai-copilot-advisory-uae');
+  });
+
   it('a rung n8n set aside is shown as set_aside: not planned, not counted as coming, not written', () => {
     const asideSrc = src({
       ladders: [

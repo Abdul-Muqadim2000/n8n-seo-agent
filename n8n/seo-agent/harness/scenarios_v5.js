@@ -16179,5 +16179,128 @@ await guard('S142 R49 verdict path, ladder report band, byline entities', async 
   check('byline: entities are decoded before the author is stored', /author = textOfHtml\(author\)/.test(cc));
 });
 
+// ===================================================================================
+// S143-S146 (fixer A14, 2026-10-16): the leftover halves of the first wave. S143 R50 / R51 / R58 / R40 (Keyword Check names the ladder and
+// page, the relevance prompt, the idea response's notes), S144 R42 (a ladder run on a full pile says so), S145 R111 / R87 (the cadence mails
+// name drafts that need a fix and paused ladders), S146 R94 follow-up (a sleep-delayed timer after the catch-up refuses to run the week twice).
+// ===================================================================================
+const A14W = require('./a14_wiring.json');
+const a14Check = (SN) => (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+
+await guard('S143 R50 R51 R58 R40 the keyword check names the ladder and page, the relevance prompt, the idea response notes', async () => {
+  const SN = 'S143 R50 R51 R58 R40 - the Keyword Check loads the ladders and the content log and names them; an unlisted industry is adjacent, not core; the idea response carries trend / tier / grouping notes';
+  reset(); begin(SN); const check = a14Check(SN);
+  const K = A1FX.K598;
+  check('R50: the Keyword Check loads the domain\'s ladders and content log in front of Assess Requests',
+    JSON.stringify(A14W.assess_chain) === JSON.stringify(['Load Assess Cache', 'Load Ladders (Assess)', 'Load Content Log (Assess)', 'Assess Requests']), JSON.stringify(A14W.assess_chain));
+  mock('Assess Result', [{ json: K.assess_result }]);
+  mock('Load Ladders (Assess)', [{ json: { ladder_id: 'lad_erp1', domain: 'techand.ai', keyword: 'erp software uae', head_keyword: 'erp software uae', rung: 4, status: 'active', target_url: 'https://www.techand.ai/erp-software-uae/' } }]);
+  mock('Load Content Log (Assess)', [{ json: { domain: 'techand.ai', keyword: 'erp software uae', status: 'written', published_url: '', existing_page_url: 'https://www.techand.ai/erp-software-uae/' } }]);
+  const body = (await run('Assess Response', [{ json: { output: { fit: 2, navigational: false, alternatives: '' } } }]))[0].json.body;
+  const ex = body.existing || {};
+  check('R50: the answer names the ladder id, its status, the page and the page status (live exec 649 had all four null)',
+    ex.ladder_id === 'lad_erp1' && ex.ladder_status === 'active' && /erp-software-uae/.test(ex.page_url || '') && ex.page_status === 'written' && /lad_erp1/.test(ex.note || ''), JSON.stringify(ex));
+  // the relevance prompt (one file, two agents)
+  const P = A14W.relevance_prompt;
+  check('R51: the relevance prompt rates a keyword that names an industry the services do not list "1 at most, never 2"', /industry, sector or customer type the services above do not list/.test(P) && /1 at most, never 2/.test(P), P.slice(0, 200));
+  check('R51: the prompt\'s output schema is unchanged', /"items": \[\{"keyword": "\.\.\.", "relevance": 2, "intent": "commercial", "page_type": "Service Page", "topic": "erp implementation services"\}/.test(P), '');
+  // the idea response
+  const ks = { goal: 'leads', pool_size: 5, priority: [{ keyword: 'wms uae', trend_note: 'falling 40% in 12 months' }], clusters: [{ tier: 'Covered', topic: 'erp', primary_keyword: 'erp software uae', page_type: 'Service Page', keyword_count: 2, total_volume: 100, supporting: [],
+    tier_note: 'in your ladder "erp software uae" - let that ladder write it', grouped_by: 'shared results page' }] };
+  const ir = (await run('Build Ideas Response', [{ json: { keyword_strategy: ks, domain: 'techand.ai', country: 'United Arab Emirates', request_id: 'r1' } }]))[0].json;
+  check('R51: a priority keyword carries its trend_note', ir.priority[0].trend_note === 'falling 40% in 12 months', JSON.stringify(ir.priority[0]));
+  check('R58 / R40: a content-plan topic carries its tier_note and grouped_by', ir.content_plan[0].tier_note === 'in your ladder "erp software uae" - let that ladder write it' && ir.content_plan[0].grouped_by === 'shared results page', JSON.stringify(ir.content_plan[0]));
+  reset();
+});
+
+await guard('S144 R42 a ladder run that writes on top of a full pile says so', async () => {
+  const SN = 'S144 R42 - the ladder report says "you have N pages waiting to be published (limit L); this writes page N+1" when the site is at its pile-up limit';
+  reset(); begin(SN); const check = a14Check(SN);
+  const L = A1FX.L610;
+  check('R42: the ladder path loads the content log before Ladder Requests', JSON.stringify(A14W.ladder_chain) === JSON.stringify(['Load Domain Ladder Settings', 'Load Content Log (Ladder)', 'Ladder Requests']), JSON.stringify(A14W.ladder_chain));
+  const days = (n) => new Date(Date.now() - n * 864e5).toISOString();
+  const logRow = (k, o = {}) => ({ json: { site_id: A1SITE, domain: A1D, keyword: k, source: 'cadence', status: 'written', started_at: days(10), published_url: '', ...o } });
+  const planWith = async (logs, settings) => {
+    const model = JSON.parse(JSON.stringify(L.site_model));
+    mock('Parse Verdict', [{ json: L.parse_verdict }]); mock('Ladder Pool', [{ json: L.ladder_pool }]); mock('Ladder Clusters', [{ json: L.ladder_clusters }]);
+    mock('Ladder Relevance Chunks', L.chunks.map(c => ({ json: c }))); mock('Site Model', [{ json: { site_model: model } }]);
+    mock('Load Site Cache', L.site_cache.length ? L.site_cache.map(r => ({ json: r })) : [{ json: {} }]);
+    mock('Load Domain Ladders', L.domain_ladders.map(r => ({ json: r }))); mock('Load Domain Ladder Settings', [...L.ladder_settings.filter(r => !(settings.length && r.ladder_id === '_site')), ...settings].map(r => ({ json: r.json || r })));
+    mock('Load Content Log (Ladder)', logs.length ? logs : [{ json: {} }]);
+    const pl = await run('Ladder Plan', L.relevance.map(o => ({ json: o })));
+    return (await run('Build Ladder Report', pl))[0].json;
+  };
+  const three = [logRow('wms uae'), logRow('erp for retail uae', { status: 'not_ready' }), logRow('e invoicing guide', { started_at: days(40) })];
+  const full = await planWith(three, []);
+  const notes = (full.ladder.notes || []).join(' | ');
+  check('R42: with 3 written / not_ready pages and the default limit 3, the report says "3 pages waiting to be published (limit 3); this writes page 4"',
+    full.ladder.planned && (full.ladder.write_now || []).length > 0 && /You have 3 pages waiting to be published \(limit 3\); this writes page 4\./.test(notes), notes.slice(0, 500));
+  check('R42: it also says one of them did not pass the quality check', /1 of them did not pass the quality check/.test(notes), notes.slice(0, 500));
+  const under = await planWith([logRow('wms uae'), logRow('old page', { started_at: days(200) }), logRow('published page', { status: 'published', published_url: 'https://www.techand.ai/x/' })], []);
+  check('R42: a page older than 120 days or already published does not count - 1 waiting is below the limit, no note', !/waiting to be published/.test((under.ladder.notes || []).join(' ')), (under.ladder.notes || []).join(' | ').slice(0, 300));
+  const site5 = await planWith(three, [{ ladder_id: '_site', site_id: A1SITE, domain: A1D, max_waiting: 5 }]);
+  check('R42: the limit is the `_site` row\'s max_waiting (5): 3 waiting is no pile-up', !/waiting to be published/.test((site5.ladder.notes || []).join(' ')), (site5.ladder.notes || []).join(' | ').slice(0, 300));
+  const site2 = await planWith(three, [{ ladder_id: '_site', site_id: A1SITE, domain: A1D, max_waiting: 2 }]);
+  check('R42: with limit 2 the sentence names limit 2', /You have 3 pages waiting to be published \(limit 2\); this writes page 4\./.test((site2.ladder.notes || []).join(' ')), (site2.ladder.notes || []).join(' | ').slice(0, 300));
+  reset();
+});
+
+await guard('S145 R111 R87 the cadence mails name the drafts that need a fix and the paused ladders', async () => {
+  const SN = 'S145 R111 R87 - Cadence Status / Cadence Note render needs_fix and paused_ladders when the pile-up is not the reason';
+  reset(); begin(SN); const check = a14Check(SN);
+  const base = { report_only: true, site_id: 'site_techand-ai', domain: 'techand.ai', request_id: 'cad_1', week: '2026-10-19', upcoming: [], pending_publish: [], awaiting_approval: [], suggestions: [], waiting_for_support: [],
+    needs_fix: [{ keyword: 'erp for retail uae', written_at: '2026-10-05', reasons: ['3 placeholders left'] }], paused_ladders: [{ ladder_id: 'lad_x', head: 'ai consulting dubai', reason: 'the live page already covers it' }] };
+  const st = (await run('Cadence Status', [{ json: { ...base, paused_reason: '' } }]))[0].json;
+  check('R111: the status mail names the draft that needs a fix, with its reason, and says it is not a publish', /Needs a fix, not a publish/.test(st.html) && /erp for retail uae/.test(st.html) && /3 placeholders left/.test(st.html), st.html.slice(0, 400));
+  check('R87: the status mail names the paused ladder with its reason', /Paused ladders/.test(st.html) && /ai consulting dubai/.test(st.html) && /already covers it/.test(st.html), st.html.slice(0, 400));
+  check('R111: the subject says a page needs a fix (it said "publish the supporting pages" before)', /need a fix/.test(st.subject) && !/supporting pages/.test(st.subject), st.subject);
+  check('R111 / R87: the callback carries needs_fix and paused_ladders', st.needs_fix.length === 1 && st.paused_ladders.length === 1, JSON.stringify([st.needs_fix, st.paused_ladders]));
+  const pu = (await run('Cadence Status', [{ json: { ...base, paused_reason: 'pileup', waiting_publish: 3, max_waiting: 3, waiting_keywords: ['a', 'b', 'c'] } }]))[0].json;
+  check('R111: when the pile-up is the reason the needs-a-fix paragraph is not repeated (the pile-up line already marks them)', !/Needs a fix, not a publish/.test(pu.html) && /Paused ladders/.test(pu.html), pu.html.slice(0, 300));
+  const onlyPaused = (await run('Cadence Status', [{ json: { ...base, needs_fix: [], paused_reason: '' } }]))[0].json;
+  check('R87: only a paused ladder - the subject says so', /ladder paused/.test(onlyPaused.subject), onlyPaused.subject);
+  mock('Cadence Plan', [{ json: { site_id: 'site_techand-ai', domain: 'techand.ai', email: '', callback_url: '', request_id: 'cad_1', week: '2026-10-19', keyword: 'wms uae', page_type: 'Guide', why: 'rising', source: 'trend', existing_page_url: '', pages_per_week: 1, upcoming: [], pending_publish: [],
+    needs_fix: base.needs_fix, paused_ladders: base.paused_ladders, paused_reason: '', candidates: 1 } }]);
+  const cn = (await run('Cadence Note', [{ json: {} }]))[0].json;
+  check('R111 / R87: the weekly note carries both too', /Needs a fix, not a publish/.test(cn.html) && /Paused ladders/.test(cn.html) && cn.needs_fix.length === 1 && cn.paused_ladders.length === 1, cn.html.slice(0, 400));
+  reset();
+});
+
+await guard('S146 R94 a sleep-delayed timer must not run the week twice', async () => {
+  const SN = 'S146 R94 - a run started by its own Schedule Trigger refuses (caught_up) when the catch-up already started that slot; nothing else is refused by it';
+  reset(); begin(SN); const check = a14Check(SN);
+  const DUE = '2026-10-19T11:30:00.000Z';   // Monday 07:30 America/New_York (EDT)
+  const KEY = 'catchup:SEOagentBacklnk1:' + DUE;
+  const rec = (key, v) => ({ json: { key, kind: 'catchup', site_id: '', value: JSON.stringify(v), updated_at: '2026-10-19T17:40:00.000Z' } });
+  const go = async (o) => {
+    reset();
+    mock('BL Plan', [{ json: { site_id: 'site_techand-ai', domain: 'techand.ai', mode: 'full' } }]);
+    mock('Load Open Runs (BL)', [{ json: {} }]);
+    mock('Load Catch-up Records (BL)', o.records || [{ json: {} }]);
+    mock('Reserve Run Ledger (BL)', [{ json: { id: 92, run_id: 'test-exec', mode: 'backlinks', status: 'reserved', key: 'schedule:backlinks' } }]);
+    mock('Run Ledger Row (BL)', [{ json: { run_id: 'test-exec', mode: 'backlinks', key: 'schedule:backlinks' } }]);
+    if (o.fire) mock('Weekly Schedule', [{ json: { timestamp: o.fire } }]);
+    return (await run('After Run Ledger (BL)', [{ json: {} }], { code: 'After_Run_Ledger_BL_' }))[0].json;
+  };
+  const late = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec(KEY, { status: 'started', started_at: '2026-10-19T17:40:00.000Z', entry: 'sweep' })] });
+  check('R94: the delayed timer (fires 7 h late) of a slot the catch-up started is refused `caught_up`, nothing started',
+    late.run_refused === true && late.reason === 'caught_up' && /already ran this scheduled slot/.test(late.refusal) && /2026-10-19T11:30:00.000Z/.test(late.refusal), JSON.stringify(late).slice(0, 400));
+  const dur = await go({ fire: '2026-10-19T11:30:02.000Z', records: [{ json: {} }] });
+  check('R94: an on-time scheduled run with no catch-up record runs', !dur.run_refused && dur.domain === 'techand.ai', JSON.stringify(dur).slice(0, 300));
+  const starting = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec(KEY, { status: 'starting', started_at: '2026-10-19T17:40:00.000Z' })] });
+  check('R94: a record still `starting` counts (the planner calls it caught up too)', starting.run_refused === true && starting.reason === 'caught_up', JSON.stringify(starting).slice(0, 300));
+  const failed = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec(KEY, { status: 'start_failed', error: 'boom' })] });
+  check('R94: a catch-up start that FAILED does not refuse the schedule\'s own fire', !failed.run_refused, JSON.stringify(failed).slice(0, 300));
+  const lastWeek = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec('catchup:SEOagentBacklnk1:2026-10-12T11:30:00.000Z', { status: 'started', started_at: '2026-10-12T17:00:00.000Z' })] });
+  check('R94: last week\'s record does not refuse this week', !lastWeek.run_refused, JSON.stringify(lastWeek).slice(0, 300));
+  const other = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec('catchup:SEOagentAIVisib1:' + DUE, { status: 'started', started_at: '2026-10-19T17:40:00.000Z' })] });
+  check('R94: another workflow\'s record does not refuse this one', !other.run_refused, JSON.stringify(other).slice(0, 300));
+  const viaCatchup = await go({ records: [rec(KEY, { status: 'started', started_at: '2026-10-19T17:40:00.000Z' })] });
+  check('R94: the catch-up\'s OWN start (no Schedule Trigger data) is never refused by its own record', !viaCatchup.run_refused, JSON.stringify(viaCatchup).slice(0, 300));
+  const dry = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec('catchup_dry:SEOagentBacklnk1:' + DUE, { status: 'started' })] });
+  check('R94: a dry-run record (`catchup_dry:`) is never read by production', !dry.run_refused, JSON.stringify(dry).slice(0, 300));
+  reset();
+});
+
 H.report();
 })();

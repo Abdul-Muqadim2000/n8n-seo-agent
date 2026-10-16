@@ -347,9 +347,12 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
       let writtenAt: string | null = null;
       let publishedAt: string | null = null;
       let publishedUrl = '';
-      if (status === 'published' || pub) {
+      // R34 (A14): the engine marks a rung whose page the site already has `live (existing page)` with that page in `covered_by`:
+      // it is a live page, not a plan, so it shows as published with that URL
+      const coveredLive = /^live \(existing page\)/i.test(status) ? s(r.covered_by) : '';
+      if (status === 'published' || pub || coveredLive) {
         state = 'published';
-        publishedUrl = s(pub?.published_url) || (status === 'published' ? s(r.target_url) : '');
+        publishedUrl = s(pub?.published_url) || (status === 'published' ? s(r.target_url) : coveredLive);
         const at = pub?.published_at;
         publishedAt = isoOk(at) ? at : null;
         const started = logs.map((l) => s(l.started_at)).filter(isoOk).sort()[0];

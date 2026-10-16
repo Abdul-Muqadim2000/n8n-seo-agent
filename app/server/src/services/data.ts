@@ -684,7 +684,7 @@ export async function contentData(org: OrgRow, site: SiteRow): Promise<ContentDa
       week: s(r.week),
       existingPageUrl: s(r.existing_page_url),
       // R111: why a `not_ready` draft failed its last quality round ('; '-joined by the engine); empty on every other row
-      qaReasons: s((r as ContentLogRow & { qa_reasons?: unknown }).qa_reasons),
+      qaReasons: s(r.qa_reasons),
     })),
     cadence: cadence[0] ? { pagesPerWeek: n(cadence[0].pages_per_week), status: s(cadence[0].status) } : null,
     caseStudies: cases.map((c) => ({
@@ -828,7 +828,7 @@ export async function technicalData(org: OrgRow, site: SiteRow, auditId?: string
  * summed and the rates recomputed from the sums (the engine's own `pct`, a percentage to one decimal); share of voice and the
  * visibility score are sample-weighted. `checkedAt` (R104) is the newest reading of the day — when the pulse really ran.
  */
-export function aiDailySeries(days: AiDailyRow[]): (AiDay & { checkedAt: string })[] {
+export function aiDailySeries(days: AiDailyRow[]): AiDay[] {
   const pct = (a: number, b: number) => (b ? Math.round((1000 * a) / b) / 10 : 0);
   const byDate = new Map<string, AiDailyRow[]>();
   for (const x of days) {

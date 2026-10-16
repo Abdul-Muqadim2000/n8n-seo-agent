@@ -1,4 +1,5 @@
 /*__REACH__*/
+/*__FIT_GATE__*/
 // Keyword Check: the answer. Difficulty for this site and plan from the shared reach rules; topic fit, navigational / other brand and the
 // alternatives from the small Claude call (if it failed: fit null, navigational from DataForSEO's intent unless the keyword names the site itself).
 // Alternatives only when the keyword is not realistic or off-topic, never the keyword itself or one the site already targets.
@@ -50,7 +51,8 @@ const existing = (() => {
   const kw = String(a.keyword || '').toLowerCase().trim();
   const same = (x) => { const k = String(x || '').toLowerCase().trim(); return !!k && (k === kw || keywordsOverlap(k, kw)); };
   const dom = reachDomain(a.domain);
-  const lad = rowsOf('Load Ladders (Assess)').filter(r => !dom || reachDomain(r.domain) === dom).find(r => same(r.keyword) || (Number(r.rung) === 4 && same(r.head_keyword)));
+  // a stored rung the fit gate refuses (a competitor's brand, a government portal) is not "one of your keywords" - same gate as every read path
+  const lad = rowsOf('Load Ladders (Assess)').filter(r => fitStored(r, { own_domain: a.domain, protect: [a.keyword] }).ok).filter(r => !dom || reachDomain(r.domain) === dom).find(r => same(r.keyword) || (Number(r.rung) === 4 && same(r.head_keyword)));
   const log = rowsOf('Load Content Log (Assess)').filter(r => !dom || reachDomain(r.domain) === dom).find(r => same(r.keyword));
   const hit = (a.existing_keywords || []).find(same) || (lad && lad.keyword) || (log && log.keyword) || '';
   if (!hit && !lad && !log) return null;

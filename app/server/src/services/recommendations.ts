@@ -448,6 +448,7 @@ export async function overviewData(org: OrgRow, site: SiteRow): Promise<Overview
       published: x.content.items.filter((c) => c.status === 'published').length,
       // R111: a draft that failed its quality check is not "waiting to publish" (the overview tells the reader to publish these)
       pendingPublish: x.content.items.filter((c) => c.status !== 'published' && c.status !== 'not_ready').length,
+      needsFix: x.content.items.filter((c) => c.status === 'not_ready').length,
       pagesPerWeek: x.content.cadence?.pagesPerWeek ?? 0,
       caseStudies: x.content.caseStudies.length,
     },

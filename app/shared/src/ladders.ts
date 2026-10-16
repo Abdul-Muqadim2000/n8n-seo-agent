@@ -96,6 +96,8 @@ export interface StatusPage {
   writtenAt: string | null;
   publishedAt: string | null;
   history: RankPoint[];
+  /** R111: the written draft did not pass the quality check */
+  needsFix?: boolean;
 }
 
 /** Stuck: pages are live, the first went live 8+ weeks ago, and none of them moved up over the last 8 weeks. */
@@ -144,6 +146,15 @@ export function ladderStatus(i: LadderStatusInput): { status: LadderStatus; stat
   if (st === 'queued' || i.queued) return { status: 'queued', statusText: 'Queued: it starts when a ladder ahead of it is won, fully written or paused.' };
 
   const oldest = Math.max(0, ...waiting.map((p) => daysSince(p.writtenAt, now)));
+  // R111: a written page whose draft did not pass the quality check is not "waiting to be published" - it needs a fix and a new run
+  const fixing = waiting.filter((p) => p.needsFix);
+  if (waiting.length && oldest >= 7 && fixing.length)
+    return {
+      status: 'needs_you',
+      statusText: fixing.length === waiting.length
+        ? `${plural(fixing.length, 'page')} written ${fixing.length === 1 ? 'needs' : 'need'} a fix before ${fixing.length === 1 ? 'it' : 'they'} can be published: the draft did not pass the quality check, so fix it and run it again.`
+        : `${plural(fixing.length, 'page')} written ${fixing.length === 1 ? 'needs' : 'need'} a fix (the draft did not pass the quality check) and ${waiting.length - fixing.length} ${waiting.length - fixing.length === 1 ? 'is' : 'are'} waiting to be published.`,
+    };
   if (waiting.length && oldest >= 7)
     return {
       status: 'needs_you',

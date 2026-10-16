@@ -2020,8 +2020,10 @@ add_node('Ensure Ladder Table (Plan)', DT_TYPE, DT_VERSION, dt_create_params(LAD
 add_node('Load Domain Ladders', DT_TYPE, DT_VERSION, dt_get_any_params(LADDER_TABLE, [('domain', DOMAIN_PV), ('domain', "={{ 'www.' + String($('Parse Verdict').first().json.domain || '').toLowerCase() }}")]), [LX22 + 220, LY22], LOAD18)
 add_node('Ensure Ladder Settings Table (Ladder)', DT_TYPE, DT_VERSION, dt_create_params(LADDER_SETTINGS_TABLE, LADDER_SETTINGS_COLS), [LX22 + 440, LY22], {'onError': 'continueRegularOutput', 'executeOnce': True})
 add_node('Load Domain Ladder Settings', DT_TYPE, DT_VERSION, dt_get_any_params(LADDER_SETTINGS_TABLE, [('domain', DOMAIN_PV), ('site_id', "={{ 'site_' + String($('Parse Verdict').first().json.domain || '').toLowerCase().replace(/^www\\./, '').replace(/[^a-z0-9]+/g, '-') }}")]), [LX22 + 660, LY22], LOAD18)
+# R42 (A14): the site's content log, so the ladder report can say the pile-up limit is reached (Ladder_Plan.js `pile_up`)
+add_node('Load Content Log (Ladder)', DT_TYPE, DT_VERSION, dt_get_any_params(LOG_TABLE, [('domain', DOMAIN_PV), ('domain', "={{ 'www.' + String($('Parse Verdict').first().json.domain || '').toLowerCase() }}")]), [LX22 + 880, LY22], LOAD18)
 connect('Ladder Mode?', 'Ensure Ladder Table (Plan)', 0)
-for a, b in [('Ensure Ladder Table (Plan)', 'Load Domain Ladders'), ('Load Domain Ladders', 'Ensure Ladder Settings Table (Ladder)'), ('Ensure Ladder Settings Table (Ladder)', 'Load Domain Ladder Settings'), ('Load Domain Ladder Settings', 'Ladder Requests')]:
+for a, b in [('Ensure Ladder Table (Plan)', 'Load Domain Ladders'), ('Load Domain Ladders', 'Ensure Ladder Settings Table (Ladder)'), ('Ensure Ladder Settings Table (Ladder)', 'Load Domain Ladder Settings'), ('Load Domain Ladder Settings', 'Load Content Log (Ladder)'), ('Load Content Log (Ladder)', 'Ladder Requests')]:
     connect(a, b)
 # ---------- C. ladder: a newly measured reach is stored for discovery and the keyword check ----------
 _lp = pos('Ladder Plan')
@@ -5647,7 +5649,9 @@ def _r31_checks():
         # B-A9 (2026-10-15, build section 64): the concurrency gate's read of the open runs sits between the balance and the row, for the
         # same reason *Rate Limit* reads the ledger before it inserts — the row this run is about to write must not be in its own count.
         open59 = wiring59.get('open_runs') or ''
-        assert outs59('Ensure Run Ledger (' + tag59 + ')') == [bal59] and outs59(bal59) == [open59] and outs59(open59) == [wiring59['reserve']], \
+        cr59 = wiring59.get('catchup_records') or ''   # R94 follow-up (A14): a scheduled workflow reads the catch-up's records between the open-run read and the row
+        assert outs59('Ensure Run Ledger (' + tag59 + ')') == [bal59] and outs59(bal59) == [open59] and outs59(open59) == ([cr59] if cr59 else [wiring59['reserve']]) \
+            and (not cr59 or outs59(cr59) == [wiring59['reserve']]), \
             'R32 / B-A9: ' + wname59 + "'s balance reading and open-run read are not between the ensure and the row"
         assert "$('" + bal59 + "')" in by59[wiring59['reserve']]['parameters']['jsCode'], 'R32: ' + wname59 + ' does not store the reading on its row'
         # Every end of the run reaches the settle, so the only way to leave a row `reserved` is a run that crashed (which is what
@@ -9954,6 +9958,48 @@ def _b98_catchup():
 
 
 log('A schedule that never fired, and a restart that threw its fire away (2026-10-16, re-rating 2026-10-15 R94, High). In the 21 days to 2026-10-15 the Rank Tracker, the Site Tracker, AI Growth, the Content Cadence and the Link Builder had 8 due fires and none fired; the cause, read in n8n\'s own code, is that a cron fire lives only in memory and every restart, deploy or re-publish re-arms the schedule for its next future time, so the 2026-10-12 16:38 deploy restart threw away the five Monday runs the Mac\'s sleep had pushed past it. New workflow SEO Agent - Schedule Catch-up (build_catchup.py, SEOagentCatchUp1; kit v5/code/_catchup.js): n8n\'s Instance Started event plus an hourly sweep read each of the ten schedules\' latest due time in GENERIC_TIMEZONE, the workflow\'s executions with mode trigger through n8n\'s public API (an on-demand run does not count - an owner decision) and the catch-up\'s own seo_cache records, and start a missed fire ONCE through the workflow\'s own manual entry with no site, recording catchup:<workflow>:<due ISO> before the start; only fires due in the last 36 h (weekly / monthly) or 20 h (daily), never before the catch-up first ran, at most three a sweep 60 s apart and never more than the run guard has room for; a fire the schedule still holds is left to it until 6 h late so a week never runs twice. apply_env.py refuses a deploy on Monday 07:00-12:00 in the schedules\' time zone (--force-monday overrides), n8n/compose.yml sets GENERIC_TIMEZONE explicitly (America/New_York, what it was while unset), sync_credentials.py writes the n8n API credential from N8N_API_KEY, and AI Growth gained dry_run: true, which sends nothing to Bing or IndexNow and says so in the report (section 99)')
+
+
+# 110. THE LEFTOVER HALVES OF THE FIRST WAVE (2026-10-16, agent A14: R50 / R51 / R42 / R111 / R87 / R58 / R40 — the parts the first wave's
+#      agents reported as "needs elsewhere").
+#      * R50 the Keyword Check loads the domain's ladders and content log (build_api.py: Load Ladders (Assess) / Load Content Log (Assess),
+#        before Assess Requests) — Assess_Response.js had read both by name since the first wave and found nothing.
+#      * R51 the relevance prompt (shared by Keyword Relevance and Ladder Keyword Relevance) rates a keyword naming an industry the site does
+#        not list as adjacent (1), never core (2); its output schema is unchanged.
+#      * R42 a ladder run that writes a page while the site already holds its limit of written-but-unpublished pages says so: Ladder Plan
+#        reads the content log (Load Content Log (Ladder), in the ladder path before Ladder Requests) and Build Ladder Report words it.
+#      * R111 / R87 the cadence's status mail and note render `needs_fix` and `paused_ladders`; R58 / R40 the idea response carries
+#        `trend_note`, `tier_note` and `grouped_by`.
+for _f110, _tok110 in (('code/Assess_Response.js', "rowsOf('Load Ladders (Assess)')"), ('code/Assess_Response.js', "rowsOf('Load Content Log (Assess)')"),
+                       ('code/Ladder_Plan.js', "rowsOf('Load Content Log (Ladder)')"), ('code/Ladder_Plan.js', 'const pile_up = '),
+                       ('code/Build_Ladder_Report.js', 'L.pile_up.at_limit'), ('code/Cadence_Status.js', 'paused_ladders'), ('code/Cadence_Note.js', 'paused_ladders'),
+                       ('code/Build_Ideas_Response.js', 'trend_note'), ('code/Build_Ideas_Response.js', 'tier_note')):
+    assert _tok110 in _rd0(_f110), 'A14 / ' + _f110 + ' does not carry ' + _tok110
+_api110 = open(os.path.join(HERE0, 'build_api.py'), encoding='utf-8').read()
+for _n110 in ('Load Ladders (Assess)', 'Load Content Log (Assess)'):
+    assert "_an('" + _n110 + "'" in _api110 and "('" + _n110 + "', " in _api110 or "'" + _n110 + "')" in _api110, 'R50: the Keyword Check does not load ' + _n110
+assert "('Load Content Log (Assess)', 'Assess Requests')" in _api110, 'R50: the loads are not in front of Assess Requests'
+assert 'Load Content Log (Ladder)' in open(os.path.join(HERE0, 'build_v4.py'), encoding='utf-8').read(), 'R42: the ladder path does not load the content log'
+assert 'never 2' in _rd0('prompts/keyword_relevance.txt') and 'Return ONLY valid JSON: {"items"' in _rd0('prompts/keyword_relevance.txt'), 'R51: the relevance prompt'
+json.dump({'relevance_prompt': _rd0('prompts/keyword_relevance.txt'),
+           'assess_chain': [n for n in ('Load Assess Cache', 'Load Ladders (Assess)', 'Load Content Log (Assess)', 'Assess Requests') if "'" + n + "'" in _api110],
+           'ladder_chain': [n for n in ('Load Domain Ladder Settings', 'Load Content Log (Ladder)', 'Ladder Requests') if "'" + n + "'" in open(os.path.join(HERE0, 'build_v4.py'), encoding='utf-8').read()]},
+          open(os.path.join(HERE0, 'harness', 'a14_wiring.json'), 'w'), indent=1, sort_keys=True)   # harness S143 / S144 read it
+log('The leftover halves of the first wave (2026-10-16, agent A14): the Keyword Check loads the ladders and the content log, so its answer names the ladder and the page that already hold the search (R50); a keyword that names an industry the site does not list is adjacent, never core (R51); a ladder run that writes a page on top of a full pile says "you have N pages waiting (limit L); this writes page N+1" (R42); the cadence mails name the drafts that need a fix and the paused ladders (R111 / R87); the idea response carries the trend, tier and grouping notes (R51 / R58 / R40).')
+
+
+# 111. A SLEEP-DELAYED TIMER MUST NOT RUN THE WEEK TWICE (2026-10-16, agent A14, the R94 follow-up the first wave left open).
+#      The catch-up starts a fire the schedule still holds only after 6 h (late_hours); the delayed timer then fires anyway. The resume
+#      node of every scheduled workflow (ladder_common.LEDGER_RESUME_JS) now computes the due slot of a run started by its OWN Schedule
+#      Trigger (CU.lastDue on the trigger's timestamp) and refuses it, reason `caught_up`, when seo_cache holds `catchup:<workflow>:<due ISO>`
+#      (the key build_catchup.py writes) whose start did not fail. A catch-up start enters through the Execute Workflow Trigger, so the
+#      Schedule Trigger node has no data in it and nothing is checked; a lookup that fails refuses nothing.
+from ladder_common import LEDGER_RESUME_JS as _LR111, RUN_GUARD_SRC as _RG111
+for _t111 in ('__SCHED_JSON__', '__CATCHREC__', 'RG.caughtUp(', 'CU.lastDue(', '/*__CATCHUP__*/', 'caught_up: __caught'):
+    assert _t111 in _LR111, 'R94: the resume node does not carry ' + _t111
+assert "'catchup:' + wf + ':' + due" in _RG111 and "S(v.status) === 'start_failed'" in _RG111 and "refuse('caught_up'" in _RG111, 'R94: the run guard does not read the catch-up record the way the planner writes it'
+assert "prefix = dry ? 'catchup_dry:' : 'catchup:'" in _rd0('code/_catchup.js') and 'iso(due)' in _rd0('code/_catchup.js'), 'R94: the catch-up key format moved - RG.caughtUp must follow it'
+log('A sleep-delayed timer no longer runs the week twice (2026-10-16, agent A14, R94 follow-up): a scheduled run started by its own Schedule Trigger works out its due slot and refuses (reason "caught up", nothing charged) when the catch-up already started that slot; a catch-up start, a manual run and a failed lookup are never refused by it.')
 
 
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
