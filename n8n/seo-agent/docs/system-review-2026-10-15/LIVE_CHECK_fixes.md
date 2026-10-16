@@ -49,3 +49,25 @@ Spend: DataForSEO $1.24 for the day after all checks (balance $11.26 → $10.02)
 Also seen: execution 659 is discovery's own follow-up verdict on its pick ("erp system dubai", request 655) — by design.
 
 Spend notes: the backlinks check was meant to be free but was sent with `free` instead of `free_only`, so it ran the paid path ($0.37).
+
+
+## Second wave (deployed 2026-10-16 18:30 UTC from `52b9044`; repair `fix_ai_pages_hosts.py --apply`: 12 duplicate bare-host rows deleted, 6 moved)
+
+| Defect | Live check | Execution(s) | Result |
+|---|---|---|---|
+| R50 (rest) | Keyword Check "erp software uae" names the ladder and its page | assess (after deploy) | **pass** — `existing: {ladder_id: "lad_mv40b6s9h5a8", ladder_status: "writing", rung: 4, page_url: "https://www.techand.ai/erp-software-uae/", page_status: "written"}`; chance still `unmeasured` |
+| R100 | the app's pre-run price is the engine's own reservation | app `engineCostTable` | **pass** — `source: engine`, page (keyword) $1.403, technical audit $0.1125 (the shipped table said $0.84 for a page) |
+| R102 | legacy runs are "search data only" | app DB | **pass** — the 10 runs with an actual from before the cost kit carry `actual_cost_partial` |
+| R115 (backlinks) | the callback waits for the settle and carries run_ledger | 685 → 686 → 687 (free_only) | **pass** — Ledger Settle → Ledger Join → Callback Ledger → POST BL Report in that order; `run_ledger {dataforseo_usd 0, ai_usd 0, settled}` — a free run settles $0 |
+| R115 (AI visibility) + R47 / R80 | the callback carries DataForSEO + Claude; structured answers are counted | 683 → 684 → 688 | **pass** — `run_ledger {dataforseo_usd 0.7569, ai_usd 0.0967 (measured 0.0844, thinking modelled 0.0123)}`; Answer Analyst answers counted 1,797 / 983 tokens and AI Brief 1,171 (were 4–6, "[object Object]") |
+| R83 | AI visibility never tells the customer to pitch a rival | 688 | **pass** — wafeq, aiverix, pagero, edicomgroup, comarch, avalara, cleartax, zoho, tallysolutions… in `rival_sources`; PR actions: mabbaz.com, e-invoicingsoftware.ae, saifaudit.com, einvoicingsoftware.ae (A10 flagged the e-invoicing directories as possible rivals the rule cannot see — watch) |
+| R84 | AI visibility says what its denominators count | 688 | **pass** — `headline {buyer_questions 7, engines 5, run_answers 28, pulse_answers 34, samples 62, monthly_left_out…}`; `aio_basis {requests 7, read 7, shown 7, failed 0}` |
+| R85 | a failed AI search-volume lookup is reported | 688 | **not exercised** — the lookup succeeded (`volume_lookup.read: true`) |
+| R63 | the audit counts pages, not redirect responses | 681 → 682 | **pass** — `pages_crawled 45` (was 47), health 85 (was 83) |
+| R118 | duplicate content names its pages | 682 | **pass** — `scope: page`, 7 pages named, ranked 10th (was 3rd, whole site) |
+| R71 / R62 | no false "Deprecated HTML tags" / "AI crawlers see a different version" | 682 | **pass** — neither finding |
+| R64 | the extra crawl reports are read | 682 | **pass** — Collect Crawl Extras `errors: []` (was "Task Not Found" ×4) |
+| R67 | the stored audit row agrees with its finding rows | 682 | **pass** — findings 21 = high 4 + medium 6 + low 11 |
+| R68 | the first GBP lookup is in the run cost; a definitive empty answer is not retried | 682 | **pass** — `by_node` lists *Fetch GBP*, no *Fetch GBP (Retry)* |
+| R119 | the raw fetch does not claim Google's bot URL | workflow 682 | **pass** — only *Content Probes* (the AI-crawler access check, which impersonates each named bot on purpose) carries it |
+| R72 | sample shares said as samples | 682 | **not exercised** — no render-diff / not-crawled finding this run |

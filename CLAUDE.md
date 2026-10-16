@@ -58,7 +58,21 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-10-16 night, the R34–R119 fix wave — latest)
+## Status (2026-10-16 evening, second wave — every R34–R119 defect fixed in code — latest)
+**Second wave merged, deployed 18:30 UTC (`52b9044`), live-checked** (`docs/system-review-2026-10-15/LIVE_CHECK_fixes.md` §Second wave;
+FIX_PLAN §3.17: **no defect row left open**). Six agents (A9 engine cost, A10 one gate + AI reporting, A11 audit accuracy, A12 app copy,
+A13 app cost, A14 leftover halves) + orchestrator fixes (Rank Tracker callback behind its settle, engine prices in every app screen via
+`app/web/src/lib/engine-cal.ts`, last customer placeholders). Harness **6139 passed, 0 failed**; app typecheck clean, 301 shared / 305 server.
+Verified live in wave 2: R47/R69/R80 (answers counted ~1,000–1,800 tokens, not "[object Object]"), R50, R62, R63 (45 pages), R64, R67, R68,
+R71, R83, R84, R100, R102, R115 (backlinks + AI visibility callbacks carry the settled ledger: $0.7569 DataForSEO + $0.0967 Claude),
+R118, R119. Not yet live: R37/R43 (a page run, ≈ $1.40), R94 (a real missed Monday fire), R72/R74/R85 (their failure paths did not occur),
+R107 (no browser pass). Repairs run: `fix_not_ready_drafts.py`, `fix_ai_pages_hosts.py` (12 deleted, 6 moved). DataForSEO **$9.13** left
+($2.13 spent 2026-10-16). Docker Desktop stopped by itself at ~18:20 UTC and was restarted (`n8n/` and `app/compose.dev.yml` `up -d`).
+**Still open: the benchmark rows, not defects** — FIX_PLAN §3.16 has 45 open rows (B3-*, B4-*, B5-*, B6-*, B7-*, B8-*, B9-*) and 9 owner
+rows; plus the owner items (D25a always-on host, DataForSEO top-up, business profile + mailbox, key rotation, duplicate ladder
+`lad_mv9wshpdy2jf`, `count_on_demand`). Next: a fresh re-rating (separate run) or a third wave on the 45 benchmark rows.
+
+## Status (2026-10-16 night, the R34–R119 fix wave — previous)
 **Fixed, deployed, live-checked** (`n8n/seo-agent/docs/system-review-2026-10-15/LIVE_CHECK_fixes.md`; FIX_PLAN §3.17 statuses). Seven fixer
 agents in worktrees (A1 site picture, A2 audit picture, A3 app delivery, A4 engine state, A5 run identity + alerts, A6 schedule catch-up,
 A7 content QA, A8 verdict reading), merged one by one, rebuilt in the main worktree, harness **5387 → 5910 passed** (the one failure, S51
