@@ -638,7 +638,7 @@ const RS = (() => {
   const landscape = (a, ourDomain, competitorList, ourPosition) => {
     const our = bare(ourDomain);
     const comps = listOf(competitorList).filter(d => d && !isOurs(d, our));
-    if (!a || !a.ok) return { unavailable: true, top: [], above: [], competitors: comps.map(domain => ({ domain, position: null, tracked: true })), tracked: comps };
+    if (!a || !a.ok) return { unavailable: true, top: [], above: [], own: [], competitors: comps.map(domain => ({ domain, position: null, tracked: true })), tracked: comps };
     const organic = a.items.filter(x => x && x.type === 'organic').map((o, i) => ({
       position: Number(o.rank_group) || i + 1, domain: bare(o.domain) || hostOf(o.url), url: S(o.url), title: S(o.title).slice(0, 110) }))
       .filter(o => o.domain);
@@ -652,7 +652,12 @@ const RS = (() => {
       return { domain, position: hit ? hit.position : null, url: hit ? hit.url : '', tracked: true }; });
     // domains on page 1 that nobody named as a competitor but outrank us every week are worth naming too
     for (const t of top) if (!t.ours && !comps.includes(t.domain) && competitors.length < 20) competitors.push({ domain: t.domain, position: t.position, url: t.url, tracked: false });
-    return { unavailable: false, top, above, competitors, tracked: comps };
+    // B6-6 (2026-10-16, benchmark area 6): EVERY result of ours over the whole depth bought, not only the best one. `top` keeps one row
+    // per domain (the best position it holds), so a second page of the site on the same results page was thrown away before it was
+    // stored, and cannibalisation (two of our own URLs answering one search) could never be seen in the snapshot we keep.
+    const own = organic.filter(o => isOurs(o.domain, our)).sort((x, y) => x.position - y.position).map(o => ({ position: o.position, url: o.url }))
+      .filter((o, i, arr) => arr.findIndex(x => urlKey(x.url) === urlKey(o.url)) === i);
+    return { unavailable: false, top, above, own, competitors, tracked: comps };
   };
 
   // CTR- and feature-weighted share of voice over page 1 (a model: see METHOD)
@@ -686,7 +691,11 @@ const RS = (() => {
   const snapshot = (a, land, feats, device) => ({ at: (a && a.seen_at) || null, device: device || 'desktop',
     results: (a && a.results_count) || null, unavailable: !a || !a.ok, error: a && a.ok ? '' : ((a && a.error) || 'no answer'),
     features: feats && !feats.unavailable ? (feats.types || []).filter(t => t !== 'organic').slice(0, 12) : [],
-    top: ((land && land.top) || []).map(t => ({ p: t.position, u: S(t.url).slice(0, 180), t: S(t.title).slice(0, 80) })) });
+    top: ((land && land.top) || []).map(t => ({ p: t.position, u: S(t.url).slice(0, 180), t: S(t.title).slice(0, 80) })),
+    // B6-6: how many of OUR pages the answer held (any depth), and, only when there are two or more, which ones. `own_n` missing = a
+    // reading stored before this was kept, which can say nothing about a second page either way.
+    ...(land && !land.unavailable && Array.isArray(land.own) ? { own_n: land.own.length } : {}),
+    ...(land && !land.unavailable && Array.isArray(land.own) && land.own.length >= 2 ? { own: land.own.slice(0, 3).map(o => ({ p: o.position, u: S(o.url).slice(0, 140) })) } : {}) });
 
   // a JSON string that stays small: titles go first, then the tail of the list (a snapshot is proof, not an archive)
   const pack = (obj, max) => {
@@ -696,6 +705,7 @@ const RS = (() => {
     const o = JSON.parse(s);
     if (Array.isArray(o.top)) { o.top = o.top.map(t => ({ p: t.p, u: t.u })); o.trimmed = 'titles'; }
     s = JSON.stringify(o);
+    if (s.length > limit && Array.isArray(o.own) && o.own.length > 2) { o.own = o.own.slice(0, 2); o.trimmed = (o.trimmed ? o.trimmed + '+' : '') + 'own'; s = JSON.stringify(o); }   // B6-6: two pages are enough to show cannibalisation
     while (s.length > limit && Array.isArray(o.top) && o.top.length > 1) { o.top.pop(); o.trimmed = 'titles+tail'; s = JSON.stringify(o); }
     // B6-7 (2026-10-15, benchmark area 6): found while giving the customer's own keywords the same depth a rung gets. A column with
     // no `top` to trim was cut mid-string — `competitors_json` on any results page with a full top ten and a long method sentence —
@@ -760,7 +770,7 @@ const RS = (() => {
   const CHURN = { still_pct: 20, high_pct: 50, min_depth: 5, stale_days: 10,
     labels_basis: 'the still / some / high labels are a stated rule, not a measurement: no tool publishes a per-keyword threshold' };
   const churnNone = (reason) => ({ available: false, reason: S(reason) || 'not available', basis: 'not available', measured: false,
-    depth: 0, changed: null, changed_pct: null, entered: null, gone: null, moved: null, mean_move: null, band: null,
+    depth: 0, changed: null, changed_pct: null, entered: null, gone: null, moved: null, mean_move: null, mean_move_others: null, depth_others: 0, changed_others: null, changed_others_pct: null, band_others: null, band: null,
     from: null, to: null, device: '', labels_basis: CHURN.labels_basis });
   const snapOf = (v) => { const x = (v && typeof v === 'object' && !Array.isArray(v)) ? v : unpack(v, null);
     if (!x || x.unavailable) return null;
@@ -783,10 +793,24 @@ const RS = (() => {
     const gone = a.filter(e => !b.some(x => x.k === e.k)).length;
     const entered = b.filter(e => !aPos.has(e.k)).length;
     const moves = b.filter(e => aPos.has(e.k)).map(e => Math.abs(e.p - aPos.get(e.k)));
+    // B6-8: the page WITHOUT us. Our own fall of five places inside the top ten shifts five other results by one place each, so `changed`
+    // above counts our move as the page's churn (six of ten places, "high", every time). With `o.own` the other results are re-ranked
+    // among themselves in both readings and compared: how many of their places changed, and how far they moved relative to each other.
+    const ownD = bare(c.own || '');
+    const notOurs = (e) => !(ownD && isOurs(bare(e.k.split('/')[0]), ownD));
+    const aO = a.filter(notOurs).map((e, i) => ({ k: e.k, p: i + 1 })), bO = b.filter(notOurs).map((e, i) => ({ k: e.k, p: i + 1 }));
+    const depthO = Math.min(aO.length, bO.length);
+    const aOPos = new Map(aO.map(e => [e.k, e.p]));
+    let changedO = 0; for (let p = 1; p <= depthO; p++) if (aO[p - 1].k !== bO[p - 1].k) changedO++;
+    const movesO = bO.filter(e => aOPos.has(e.k)).map(e => Math.abs(e.p - aOPos.get(e.k)));
+    const changedOPct = depthO ? Math.round(changedO / depthO * 100) : null;
     const changed_pct = Math.round(changed / depth * 100);
     return { available: true, reason: '', basis: 'measured', measured: true, depth,
       changed, changed_pct, entered, gone, moved: moves.filter(m => m > 0).length,
       mean_move: moves.length ? r1(moves.reduce((s, x) => s + x, 0) / moves.length) : 0,
+      mean_move_others: movesO.length ? r1(movesO.reduce((s, x) => s + x, 0) / movesO.length) : 0,
+      depth_others: depthO, changed_others: changedO, changed_others_pct: changedOPct,
+      band_others: changedOPct == null ? null : changedOPct >= c.high_pct ? 'high' : changedOPct >= c.still_pct ? 'some' : 'still',
       band: changed_pct >= c.high_pct ? 'high' : changed_pct >= c.still_pct ? 'some' : 'still',
       from: A.at, to: B.at, device: B.device, trimmed: !!(A.trimmed || B.trimmed), labels_basis: c.labels_basis };
   };
@@ -863,7 +887,117 @@ const RS = (() => {
     if (ch.changed <= nz.changed) { out.band = 'noise'; out.within_noise = true; }
     return out;
   };
-  return { CTR, SUM_CTR, METHOD, AIO_KEEP, AIO_SOURCE, keepAt, CHURN, read, features, typeList, ourRank, landscape, voice, snapshot, pack, unpack,
+  // ---- B6-8 (2026-10-16, benchmark area 6): A MOVE IS THE SITE'S OWN ONLY WHEN IT BEATS THE PAGE'S OWN CHURN ----
+  // Since v4.2 a move of five places was "a drop" whatever the results page around it did; B6-2 put the measurement beside it, and the
+  // label stayed the same. Now the label follows the measurement: the page's own move when the page around it held (fewer than half of
+  // the top places changed occupant) AND the move is more than twice what the other pages present in both readings moved on average
+  // (and more than two places); "the results page moving" when it did not; "one reading against one reading" when the page's change is
+  // no larger than two readings of one moment show (R88); and "not compared", no verdict at all, when the earlier reading cannot be
+  // compared. The size of a listed move stays five places. These are stated rules: no tool publishes a per-keyword threshold.
+  const MOVE = { min_places: 5, others_factor: 2, others_floor: 2,
+    rule: 'a move is called your page\'s own only when the other results on the page held (fewer than half of them changed place among themselves) and the move is more than twice the average move of the other pages present in both readings, and more than 2 places; a stated rule, not a measurement' };
+  const moveKind = (delta, ch) => {
+    if (delta == null || !Number(delta)) return null;
+    const size = Math.abs(Number(delta)) >= 100 ? null : Math.abs(Number(delta));   // +-100 = came into / fell out of the depth checked
+    const sizeText = size == null ? (Number(delta) > 0 ? 'came into the top 50' : 'fell out of the top 50') : 'moved ' + size + ' place' + (size === 1 ? '' : 's');
+    if (!ch || !ch.available) return { kind: 'not_compared', own: false, text: 'not compared: ' + ((ch && ch.reason) || 'no earlier reading of the results page is stored') + ', so whether this is your page or the page around it is not said' };
+    if (ch.band === 'noise') return { kind: 'within_noise', own: false, text: 'the results page changed no more than two readings of the same moment do (' + ch.changed + ' of the top ' + ch.depth + ' places), so this is one reading against one reading, not a move' };
+    // the page without us decides (band_others, from churn's `own` option); a reading compared without it falls back to the whole page
+    const band = ch.band_others || ch.band;
+    const chg = ch.band_others ? ch.changed_others + ' of the other ' + ch.depth_others + ' results changed place' : ch.changed + ' of the top ' + ch.depth + ' places changed occupant';
+    if (band === 'high') return { kind: 'with_page', own: false, text: 'the results page moving: ' + chg + ', so this is not necessarily about your page' };
+    const others = ch.mean_move_others != null ? Number(ch.mean_move_others) : (Number(ch.mean_move) || 0);
+    const ref = Math.max(MOVE.others_floor, MOVE.others_factor * others);
+    if (size != null && size <= ref) return { kind: 'with_page', own: false, ref, text: 'the results page moving: your page ' + sizeText + ' and the other pages present in both readings moved ' + others + ' on average, so this move is no larger than the page\'s own churn' };
+    return { kind: 'own', own: true, ref, text: 'your page\'s own move: it ' + sizeText + ' while ' + chg + ' and the other pages moved ' + others + ' place' + (others === 1 ? '' : 's') + ' on average' };
+  };
+
+  // ---- B6-6 (2026-10-16, benchmark area 6, criterion 2.10): TWO OF THE SITE'S OWN PAGES ON ONE RESULTS PAGE ----
+  // Semrush has a cannibalisation tab. We had nothing, and the stored snapshot could not have shown it: it kept one URL per site. The
+  // snapshot now keeps how many of our pages the answer held and which. Silent when there is one; "not checked" (never "none") for a
+  // reading stored before the count was kept. "Preferred" = the page Google placed higher in THIS reading; if the previous reading ranked
+  // a different page of ours, that is said too.
+  const cannibal = (cur, o) => {
+    const q = o || {}; const x = unpack(cur, null);
+    if (!x || x.unavailable) return { checked: false, found: false, count: null, pages: [], reason: 'this check could not read the results page' };
+    if (x.own_n == null) return { checked: false, found: false, count: null, pages: [], reason: 'this reading was stored before a second page of the site was kept' };
+    const n = Number(x.own_n) || 0;
+    const pages = (Array.isArray(x.own) ? x.own : []).map(e => ({ position: Number(e && e.p) || 0, url: S(e && e.u) })).filter(e => e.position > 0 && e.url).sort((a, b) => a.position - b.position);
+    if (n < 2 || pages.length < 2) return { checked: true, found: false, count: n, pages: [] };
+    const preferred = pages[0];
+    const prevUrl = S(q.previous_url);
+    const switched = !!prevUrl && urlKey(prevUrl) !== urlKey(preferred.url);
+    const kw = S(q.keyword);
+    const text = (n === 2 ? 'Two' : String(n)) + ' of your pages appear on the results page' + (kw ? ' for "' + kw + '"' : '') + ' (top ' + (Number(q.depth) || 50) + ' of this check): '
+      + pages.map(p => p.url + ' at #' + p.position).join(' and ') + (n > pages.length ? ' (and ' + (n - pages.length) + ' more)' : '')
+      + '. Google prefers ' + preferred.url + ' today: it is the higher of them in this reading.'
+      + (switched ? ' In the previous reading' + (q.previous_at ? ' (' + S(q.previous_at).slice(0, 10) + ')' : '') + ' it ranked ' + prevUrl + ' instead, so Google is changing which of your pages it shows.' : '')
+      + ' Pages that compete for one search split its signals: choose one page for it and make the other point to it (merge it, redirect it, or link to it with this search\'s words).';
+    return { checked: true, found: true, count: n, pages, preferred, previous_url: prevUrl || null, switched, text, basis: 'observed: the URLs of this site in the stored reading of this check' };
+  };
+
+  // ---- B6-10 (2026-10-16, benchmark area 6, Ahrefs parity): WHO TOOK THE PLACE ----
+  // Ahrefs warns when a target URL is outranked. Our report said the number fell; the two stored snapshots name everybody above us in both
+  // readings, so the domains above the target now that were not above it then are named, with where they were. Refuses (with the
+  // reason) when either reading cannot be read, when we were not ranking before, or when we were below the depth the previous reading kept.
+  const outranked = (prev, cur, o) => {
+    const q = o || {}; const our = bare(q.domain);
+    const none = (reason) => ({ available: false, reason, domains: [], text: '' });
+    const P = unpack(prev, null), C = unpack(cur, null);
+    if (!C || C.unavailable || !Array.isArray(C.top) || !C.top.length) return none('this check could not read the results page');
+    if (!P || P.unavailable || !Array.isArray(P.top) || !P.top.length) return none('no earlier stored reading of this results page to compare with');
+    if (S(P.device || 'desktop') !== S(C.device || 'desktop')) return none('the two readings are of different devices');
+    const pp = Number(q.previous_position), cp = Number(q.position);
+    if (!(pp > 0)) return none(pp === 0 ? 'your page was not in the top 50 in the previous reading, so nobody moved above it' : 'the previous position could not be read');
+    if (!Number.isFinite(cp) || cp < 0) return none('this check could not read your position');
+    const rows = (s) => s.top.map(e => ({ p: Number(e && e.p) || 0, h: hostOf(S(e && e.u)) })).filter(e => e.p > 0 && e.h);
+    const pDepth = Math.max(0, ...P.top.map(e => Number(e && e.p) || 0));
+    if (pp > pDepth) return none('your page was at #' + pp + ' in the previous reading and that reading kept the top ' + pDepth + ' only, so who was above it then is not fully known');
+    const bestP = new Map(); for (const e of rows(P)) if (!isOurs(e.h, our) && (!bestP.has(e.h) || e.p < bestP.get(e.h))) bestP.set(e.h, e.p);
+    const domains = [];
+    for (const e of rows(C).sort((a, b) => a.p - b.p)) {
+      if (isOurs(e.h, our) || (cp > 0 && e.p >= cp) || domains.some(d => d.domain === e.h)) continue;
+      const b = bestP.has(e.h) ? bestP.get(e.h) : null;
+      if (b != null && b < pp) continue;   // it was above us then too
+      domains.push({ domain: e.h, position: e.p, previous: b });
+    }
+    const target = S(q.target_url) || 'your page';
+    const text = domains.length ? 'Outranked since the reading of ' + (S(q.previous_at).slice(0, 10) || 'the previous check') + ': '
+      + domains.slice(0, 4).map(d => d.domain + ' (now #' + d.position + ', ' + (d.previous == null ? 'not in the top ' + pDepth + ' then' : 'was #' + d.previous + ', below your page then') + ')').join(', ')
+      + (domains.length > 4 ? ' and ' + (domains.length - 4) + ' more' : '') + ' moved above ' + target + ' (#' + pp + ' then, ' + (cp > 0 ? '#' + cp : 'not in the top 50') + ' now).' : '';
+    return { available: true, reason: '', domains, text, previous_position: pp, position: cp, target_url: S(q.target_url) || null, basis: 'measured: the two stored top-ten readings' };
+  };
+
+  // ---- B6-14 (2026-10-16, benchmark area 6, gap G6-6): ONE SHARE OF VOICE OVER MANY KEYWORDS, WEIGHTED BY WHAT THEY ARE WORTH TO THE SITE ----
+  // The summary averaged the per-keyword shares unweighted, so 40% of a search nobody makes counted as much as 4% of the head term (Ahrefs
+  // and AccuRanker weight by volume). The weight here is the site's OWN Search Console impressions per query (seo_query_history, the
+  // newest stored 28-day period only: the table only grows), first-party and free. Impressions count only searches in which Google showed
+  // the site, so a keyword it does not appear for yet weighs nothing; fewer than two keywords with impressions is not a weighting, and the
+  // figure falls back to the unweighted mean, labelled so.
+  const WEIGHT = { min_keywords: 2,
+    basis: 'weighted by your own Search Console impressions for each keyword (the newest stored 28-day period); impressions count only searches in which Google showed your site, so a keyword you do not appear for yet weighs nothing' };
+  const weightedVoice = (items, rows, o) => {
+    const q = o || {}; const dom = bare(q.domain);
+    const its = (items || []).filter(x => x && x.share_of_voice != null && Number.isFinite(Number(x.share_of_voice)));
+    const unweighted = its.length ? r1(its.reduce((s, x) => s + Number(x.share_of_voice), 0) / its.length) : null;
+    if (!its.length) return { value: null, unweighted: null, weight: 'none', keywords: 0, weighted_keywords: 0, period_end: null, note: 'no results page was read, so no share of voice can be modelled' };
+    const mine = (rows || []).filter(r => r && !r.error && S(r.query) && (!dom || bare(r.domain) === dom));
+    const period = mine.reduce((m, r) => S(r.period_end) > m ? S(r.period_end) : m, '');
+    const imp = new Map();
+    for (const r of mine.filter(r => S(r.period_end) === period).sort((a, b) => S(a.checked_at).localeCompare(S(b.checked_at)))) imp.set(kwKey(r.query), Math.max(0, Number(r.impressions) || 0));
+    const w = its.map(x => ({ keyword: S(x.keyword), share_of_voice: Number(x.share_of_voice), impressions: imp.has(kwKey(x.keyword)) ? imp.get(kwKey(x.keyword)) : null }));
+    const withW = w.filter(x => x.impressions > 0);
+    const total = withW.reduce((s, x) => s + x.impressions, 0);
+    const base = { unweighted, keywords: its.length, weighted_keywords: withW.length, period_end: period || null, per_keyword: w.slice(0, 30) };
+    if (!mine.length) return { ...base, value: unweighted, weight: 'none', note: 'unweighted: no Search Console data is stored for this site, so every keyword counts the same' };
+    if (withW.length < WEIGHT.min_keywords) return { ...base, value: unweighted, weight: 'none', note: 'unweighted: ' + (withW.length ? 'only one' : 'none') + ' of these ' + its.length + ' keywords had Search Console impressions in the 28 days to ' + period + ', too few to weight by, so every keyword counts the same' };
+    const value = r1(withW.reduce((s, x) => s + x.share_of_voice * x.impressions, 0) / total);
+    const left = its.length - withW.length;
+    return { ...base, value, weight: 'impressions', impressions: total,
+      note: 'weighted by your Search Console impressions: ' + total + ' impressions over ' + withW.length + ' of the ' + its.length + ' keywords, 28 days to ' + period
+        + (left ? '; ' + left + (left === 1 ? ' keyword with no impressions weighs nothing' : ' keywords with no impressions weigh nothing') : '') + '; the unweighted average is ' + unweighted + '%' };
+  };
+  return { MOVE, moveKind, cannibal, outranked, WEIGHT, weightedVoice, CTR, SUM_CTR, METHOD, AIO_KEEP, AIO_SOURCE, keepAt, CHURN, read, features, typeList, ourRank, landscape, voice, snapshot, pack, unpack,
     featureLine, featureChips, churn, churnNone, churnText, moveNote, bare, hostOf, isOurs, listOf, weight, urlKey, serpHosts, prevReading, noise, withNoise };
 })();
 const CONFIG = { default_pages_per_week: 1, max_pages_per_week: 3, skip_recent_days: 90, striking_min_impressions: 30, striking_min_position: 4, striking_max_position: 20, publish_reminder_days: 7, upcoming: 4,
