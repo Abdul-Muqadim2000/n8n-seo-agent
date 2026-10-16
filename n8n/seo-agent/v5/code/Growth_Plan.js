@@ -197,6 +197,33 @@ for (const s of sites) {
     .sort((a, b) => b.citations * (1 + b.engines.length) - a.citations * (1 + a.engines.length))
     .filter((e, i, all) => !e.title || all.findIndex(x => x.host === e.host && x.title === e.title) === i)   // the same article under two addresses (tracking parameters) once
     .filter(e => { const k = perHost.get(e.host) || 0; perHost.set(e.host, k + 1); return k < 2; }).slice(0, 30);
+  // ---- B9-7 (2026-10-17, benchmark area 9): a wrong claim AI makes about the business is a correction target ----
+  // The Answer Analyst (AI Metrics) stores each wrong claim as "claim → what the facts on file say" in the answer rows' `issues`, and the
+  // list of them in the visibility row's perception_json. A correction needs three things: the claim, the TRUE fact (which must be on file
+  // — the analyst's "correct" half is only used when the profile, the services or the accreditation carry it; otherwise the target says
+  // "needs your fact" and nothing is drafted), and the pages that carry the claim (the third-party pages cited in the answers that made it).
+  // Nothing here is sent; the Earned Media step drafts through the one outreach writer, or hands the page to the Link Builder.
+  const perc = v ? parse(v.perception_json, null) : null;
+  const factsText = [...Object.values(s.profile || {}), ...(SM.services(site_model) || []), String(SM.facts(site_model).accreditation || ''), JSON.stringify(SM.facts(site_model) || {})].map(x => String(x == null ? '' : x)).join(' ').toLowerCase();
+  const wordsOf = (t) => [...new Set((String(t || '').toLowerCase().match(/[a-z0-9]{3,}/g) || []).filter(w => !['the', 'and', 'for', 'with', 'are', 'was', 'not', 'has', 'its', 'that', 'this', 'from', 'than'].includes(w)))];
+  const factOnFile = (fact) => { const ws = wordsOf(fact); if (!ws.length) return false; const hit = ws.filter(w => factsText.includes(w)); const digits = ws.filter(w => /\d/.test(w));
+    return digits.every(w => factsText.includes(w)) && hit.length / ws.length >= 0.6; };
+  const rivalDomains = (() => { const r = v ? parse(v.rival_sources_json, []) : []; return (Array.isArray(r) ? r : []).map(x => String((x && x.domain) || x || '').toLowerCase().replace(/^www\./, '')).filter(d => /\./.test(d)); })();   // R83 leftover: the businesses AI names instead of you, as the AI visibility run stored them
+  const corrections = [];
+  if (perc && perc.fact_check === 'checked') for (const it of (perc.issues || []).slice(0, 6)) {
+    const text = String(it.text || ''); const cut = text.indexOf(' → '); const claim = (cut >= 0 ? text.slice(0, cut) : text).trim(); const trueFact = cut >= 0 ? text.slice(cut + 3).trim() : '';
+    if (!claim) continue;
+    const key = claim.toLowerCase().slice(0, 40);
+    const pagesMap = new Map();
+    for (const a of answers.filter(a => a.site_id === s.site_id && String(a.issues || '').toLowerCase().includes(key)))
+      for (const c of parse(a.cited_urls, [])) { if (!c || !c.u || ours(c.u)) continue; const h = hostOf(c.u); if (GOV.test(h) || rivalDomains.some(d => h === d || h.endsWith('.' + d)) || comps.some(d => h === d || h.endsWith('.' + d))) continue;
+        const x = pagesMap.get(c.u) || { url: c.u, host: h, title: String(c.t || '').slice(0, 140), citations: 0 }; x.citations++; pagesMap.set(c.u, x); }
+    const onFile = !!trueFact && factOnFile(trueFact);
+    corrections.push({ claim: claim.slice(0, 200), true_fact: onFile ? trueFact.slice(0, 200) : '', fact_on_file: onFile, engines: it.engines || [], questions: it.questions || [], is_new: !!it.new,
+      pages: [...pagesMap.values()].sort((a, b) => b.citations - a.citations).slice(0, 3),
+      status: onFile ? 'ready' : 'needs_fact', note: onFile ? '' : 'needs your fact: the profile does not carry the correct answer to this claim' + (trueFact ? ' (the analyst suggested "' + trueFact.slice(0, 80) + '", which nothing on file confirms)' : '') + ' - add it to the business profile; nothing is drafted until then' });
+  }
+  const correction_fetch = [...new Set(corrections.filter(c => c.fact_on_file).flatMap(c => c.pages.map(pg => pg.url)))].slice(0, 4);
   // ---- IndexNow key (stored once per site; the owner hosts https://<domain>/<key>.txt) and the monthly entity check ----
   const kRow = cache.find(c => c.key === 'indexnow:' + s.site_id); const kv = kRow ? parse(kRow.value, {}) : {};
   const indexnow_key = (kv && /^[a-f0-9]{32}$/.test(kv.key || '')) ? kv.key : hex(32);
@@ -216,7 +243,7 @@ for (const s of sites) {
     set_aside, set_aside_note: FITR.line(set_aside, 'turned into a question to win or a page to write'),
     brand_names, competitors: comps.slice(0, 12), ai_pages_month: s.settings.ai_pages_month, run_id: 'grow_' + iso.slice(0, 10).replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, ''), checked_at: iso,
     vis_checked_at: v ? v.checked_at : '', win_min_answers: CONFIG.win_min_answers, won_lost, won_now, stalled_targets, follow_up, follow_up_days: CONFIG.follow_up_days,
-    key_pages: keyPages, audit, submit: [...submit.entries()].slice(0, CONFIG.submit_max).map(([url, why]) => ({ url, why })), targets, earned, earned_fetch: earned.filter(e => e.kind !== 'competitor').slice(0, CONFIG.earned_fetch).map(e => e.url),
+    key_pages: keyPages, audit, submit: [...submit.entries()].slice(0, CONFIG.submit_max).map(([url, why]) => ({ url, why })), targets, earned, earned_fetch: [...new Set([...earned.filter(e => e.kind !== 'competitor').slice(0, CONFIG.earned_fetch).map(e => e.url), ...correction_fetch])], corrections, rival_sources: rivalDomains,
     indexnow_key, indexnow_new: !kRow, indexnow_verified_at: kv.verified_at || '', entity_due, previous_entity: prevEntity, previous: prevG ? { checked_at: prevG.checked_at, avg_score: Number(prevG.avg_score) || null, earned: parse(prevG.earned_json, []) } : null,
     stored_pages: [...stored.values()].map(p => ({ url: normU(p.url), key: keyOf(p.url), score: Number(p.score) || 0, checked_at: p.checked_at, updated_on: p.updated_on, submitted_at: p.submitted_at, submitted_via: p.submitted_via, bing_crawled_at: p.bing_crawled_at, bing_status: Number(p.bing_status) || 0, kind: p.kind })) } });
 }

@@ -35,7 +35,7 @@ const out = [];
 for (const p of plans) {
   const business = p.business_name || p.domain;
   const ownReg = LK.regDomain(p.domain) || p.domain;
-  const rivals = new Set([...(p.competitors || []), ...aliasDomains(p.site_id)].map(d => LK.regDomain(String(d || '').toLowerCase().replace(/^www\./, '')) || '').filter(d => d && /\./.test(d) && d !== ownReg && !OK.isGov(d)));
+  const rivals = new Set([...(p.competitors || []), ...(p.rival_sources || []), ...aliasDomains(p.site_id)].map(d => LK.regDomain(String(d || '').toLowerCase().replace(/^www\./, '')) || '').filter(d => d && /\./.test(d) && d !== ownReg && !OK.isGov(d)));
   const rivalOf = (h) => rivals.has(LK.regDomain(String(h || '').toLowerCase().replace(/^www\./, '')) || '');   // D12: never the domain label ("techand" for Tech&) — the site model's name, else the domain
   const ourRes = p.brand_names.map(wordRe);
   const sellTerms = ((p.services || []).length ? p.services : [p.profile && p.profile.business_type]).filter(Boolean);
@@ -89,6 +89,44 @@ for (const p of plans) {
       jobs.push({ n: jobs.length + 1, prospect_domain: e.host, kind: e.kind, action_type: e.action_type, url: e.url, title: e.title, question: e.questions[0] || '', competitors_named: e.competitors_named, engines: e.engines });
     if (blocked) e.no_draft = String(blocked).slice(0, 160);
   }
-  out.push({ json: { site_id: p.site_id, domain: p.domain, business, earned: items, prospect_rows: rows, outreach_jobs: jobs } });
+  // ---- B9-7: one correction target per wrong claim: the claim, the true fact from the profile, the cited pages that carry it ----
+  // The Growth Plan decided which claims have a fact on file (`fact_on_file`); a claim without one stays "needs your fact" and is never
+  // drafted. A page is drafted for only when its own text carries the claim (we fetched it); a page we could not read, or that does not
+  // say it, is listed as "not confirmed" - the answer cited it, which is not the same as the page saying it. Drafting goes through the
+  // one outreach writer (the jobs below join the AI Outreach Writer's list), or - with the Link Builder on - the page is handed over as
+  // a prospect row. Nothing is sent from here.
+  const wordsIn = (t) => [...new Set((String(t || '').toLowerCase().match(/[a-z0-9]{4,}|\d{2,}/g) || []))];
+  const corrections = [];
+  for (const c of (p.corrections || [])) {
+    const cw = wordsIn(c.claim);
+    const pages = (c.pages || []).map(pg => {
+      const r = fetched.get(pg.url); const st = r ? Number(r.statusCode) || 0 : 0; const html = r ? String(r.body ?? r.data ?? '') : '';
+      const ok = st >= 200 && st < 300 && html.length > 120; const text = ok ? strip(html).toLowerCase() : '';
+      const confirmed = !ok ? null : (cw.length >= 2 && cw.filter(w => text.includes(w)).length / cw.length >= 0.6);
+      const contact_email = ok ? ((html.match(/mailto:([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})/i) || [])[1] || '').toLowerCase() : '';
+      return { ...pg, fetched: ok, carries_claim: confirmed, contact_email };
+    });
+    const target = c.fact_on_file ? pages.find(pg => pg.carries_claim === true && !OK.badHost(pg.host) && !OK.isGov(pg.host) && !rivalOf(pg.host)) : null;
+    let status = c.status, note = c.note, draft_job = null;
+    if (c.fact_on_file) {
+      if (!pages.length) { status = 'no_page'; note = 'AI made this claim but no third-party page was cited in those answers: nothing to correct at a publisher. Make sure your own pages state the fact plainly.'; }
+      else if (!target) { status = 'page_not_confirmed'; note = 'None of the cited pages could be read saying this (' + pages.map(pg => pg.host + (pg.fetched ? ': does not say it' : ': not readable')).join('; ') + '): no correction is drafted for a claim we cannot show on the page.'; }
+      else if (p.link_builder) { status = 'handed_over'; note = 'Handed to the Link Builder (one writer): ' + target.host + ' carries the claim. Approve the pitch on the Link building page.';
+        const hit = rows.find(r => r.prospect_domain === target.host);
+        const line = 'Correction needed: "' + c.claim + '" - the fact on file: ' + c.true_fact;
+        if (hit) { hit.detail = (hit.detail + '. ' + line).slice(0, 500); hit.note = (String(hit.note || '') + ' ' + line).trim().slice(0, 300); }
+        else { const old = prospects.find(x => x.site_id === p.site_id && x.prospect_domain === target.host && x.type === 'ai_source') || {};
+          rows.push({ site_id: p.site_id, domain: p.domain, prospect_domain: target.host, type: 'ai_source', rank: Number(old.rank) || 0, spam_score: Number(old.spam_score) || 0, detail: line.slice(0, 500), source_url: target.url, target_url: old.target_url || '',
+            status: old.status || 'new', first_seen: old.first_seen || p.checked_at, last_seen: p.checked_at, won_at: old.won_at || '', outreach_subject: old.outreach_subject || '', outreach_body: old.outreach_body || '', drafted_at: old.drafted_at || '',
+            note: line.slice(0, 300), score: 40, origin: 'ai_growth', contact_email: old.contact_email || target.contact_email || '', contact_url: old.contact_url || '', contacted_at: old.contacted_at || '',
+            followup_step: Number(old.followup_step) || 0, followup_subject: old.followup_subject || '', followup_body: old.followup_body || '', verified_at: old.verified_at || '' }); } }
+      else if (jobs.length < 5) { status = 'draft_requested'; note = 'Drafted for you to review (never sent): ' + target.url;
+        draft_job = { n: jobs.length + 1, prospect_domain: target.host, kind: 'correction', action_type: 'correction', url: target.url, title: target.title, question: '', claim: c.claim, true_fact: c.true_fact, competitors_named: [], engines: c.engines || [] };
+        jobs.push(draft_job); }
+      else { status = 'queued'; note = 'More corrections than drafts this week: it comes up again next run.'; }
+    }
+    corrections.push({ claim: c.claim, true_fact: c.true_fact, fact_on_file: c.fact_on_file, status, note, engines: c.engines, is_new: c.is_new, pages, job_n: draft_job ? draft_job.n : null });
+  }
+  out.push({ json: { site_id: p.site_id, domain: p.domain, business, earned: items, prospect_rows: rows, outreach_jobs: jobs, corrections } });
 }
 return out.length ? out : [{ json: { skip: true } }];

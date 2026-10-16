@@ -375,6 +375,8 @@ LEDGER_EST = {
     # R32's companion (2026-10-14, FIX_PLAN §3.13): the daily key-page watch spends nothing (25 plain GETs, no DataForSEO, no Claude) but
     # kept no row at all, so it was invisible to the guard and to the day's reconciliation. It reserves nothing and settles nothing.
     'page_watch':      {'ai': 0.0,  'dfs': 0.0},
+    # W3-F (2026-10-17): the Reply Reader classifies ONE reply with Haiku (about 1k tokens in, 300 out); the web app calls it per reply and waits
+    'reply_read':      {'ai': 0.003, 'dfs': 0.0},
 }
 
 
@@ -454,7 +456,7 @@ if (__SCHED.trigger && __SCHED.cron) {
   }
 }
 const g = RG.gate({ rows, mine, mode: '__MODE__', where: '__WHERE__', run_id: String($execution.id), caught_up: __caught, parent_run_id });
-if (g.allowed) return plan;
+if (g.allowed || __NO_GATE__) return plan;   // W3-F: a synchronous caller is waiting (the Reply Reader): it keeps its row but is never refused by what else is running
 let __dom = __S(__trig.domain);
 if (!__dom) { try { __dom = __S((plan[0] && plan[0].json || {}).domain); } catch (e) { __dom = ''; } }
 return [{ json: { run_refused: true, run_id: String($execution.id), refused_at: new Date().toISOString(),
@@ -549,6 +551,16 @@ def _ai_nodes_of(wfobj):
     return sorted(out)
 
 
+def _no_dfs_probe(spec):
+    """W3-F: a workflow that never calls DataForSEO (the Reply Reader) has nothing to read the account balance for. Its two probe nodes keep their
+    names and place on the chain (the reserve and the settle read them by name, and read nothing when they answer empty) but are a no-op Code
+    node, so the workflow holds no DataForSEO call and the in-200 ratchet (harness/in200_baseline.json) does not grow."""
+    for k in ('credentials', 'retryOnFail', 'maxTries', 'waitBetweenTries'): spec.pop(k, None)
+    spec['type'], spec['typeVersion'] = 'n8n-nodes-base.code', 2
+    spec['parameters'] = {'jsCode': 'return [{ json: {} }];   // no DataForSEO in this workflow: no account balance to read'}
+    return spec
+
+
 def ledger_mainline(wfobj, wiring):
     """R17: move everything the plan node used to feed to the far side of the reserve chain, so no paid node of the workflow can run
     before the ledger row exists. Called at WRITE time, when every connection of the workflow is already made, and it is the one place
@@ -583,6 +595,7 @@ def ledger_mainline(wfobj, wiring):
                                'credentials': {'httpBasicAuth': {'id': 'SEOcredDataForSE', 'name': 'DataForSEO'}},
                                'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True,
                                'retryOnFail': True, 'maxTries': 3, 'waitBetweenTries': 5000})
+        if wiring.get('no_dfs'): _no_dfs_probe(wfobj['nodes'][-1])
         eo = conns.setdefault(ensure, {}).setdefault('main', [])
         while not eo: eo.append([])
         assert any(t['node'] == wiring['reserve'] for t in eo[0]), 'R32: ' + ensure + ' does not feed ' + wiring['reserve']
@@ -631,7 +644,8 @@ def ledger_mainline(wfobj, wiring):
                                           .replace('__PLAN__', plan).replace('__LEDGER__', openrun).replace('__RESERVE__', reserve)
                                           .replace('__ROW__', str(wiring['reserve']))
                                           .replace('__SCHED_JSON__', _json.dumps(sched)).replace('__CATCHREC__', catchrec)
-                                          .replace('__MODE__', str(wiring['mode'])).replace('__WHERE__', str(wfobj.get('name') or tag))},
+                                          .replace('__MODE__', str(wiring['mode'])).replace('__WHERE__', str(wfobj.get('name') or tag))
+                                          .replace('__NO_GATE__', 'true' if wiring.get('no_gate') else 'false')},
                            'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + resume)), 'name': resume,
                            'type': 'n8n-nodes-base.code', 'typeVersion': 2, 'position': [x + 220, y]})
     nodes[resume] = wfobj['nodes'][-1]
@@ -809,6 +823,7 @@ def _ledger_settle_chain(wfobj, wiring, tag, settle_code, conns, nodes):
                            'credentials': {'httpBasicAuth': {'id': 'SEOcredDataForSE', 'name': 'DataForSEO'}},
                            'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True,
                            'retryOnFail': True, 'maxTries': 3, 'waitBetweenTries': 5000})
+    if wiring.get('no_dfs'): _no_dfs_probe(wfobj['nodes'][-1])
     wfobj['nodes'].append({'parameters': dt_get_all_where_params(RUN_LEDGER_TABLE, [
                                ('created_at', 'gte', '={{ new Date(Date.now() - ' + str(LEDGER_WINDOW_MS) + ').toISOString() }}')]),
                            'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + load)), 'name': load,
