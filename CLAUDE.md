@@ -58,7 +58,26 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-10-16, third whole-system re-rating: **5.5 / 10** measured — latest)
+## Status (2026-10-16 night, the R34–R119 fix wave — latest)
+**Fixed, deployed, live-checked** (`n8n/seo-agent/docs/system-review-2026-10-15/LIVE_CHECK_fixes.md`; FIX_PLAN §3.17 statuses). Seven fixer
+agents in worktrees (A1 site picture, A2 audit picture, A3 app delivery, A4 engine state, A5 run identity + alerts, A6 schedule catch-up,
+A7 content QA, A8 verdict reading), merged one by one, rebuilt in the main worktree, harness **5387 → 5910 passed** (the one failure, S51
+P34-5, is time-of-day: it fails identically on the pre-merge code between 00:00 and ~03:00 UTC), app typecheck clean + 280 shared / 291
+server tests. Deployed twice with `apply_env.py` (22 workflows incl. new **`SEOagentCatchUp1`** schedule catch-up — n8n "Instance
+Started" + hourly sweep, record-then-start in `seo_cache` `catchup:*`, armed 2026-10-16 so it replays nothing older; `GENERIC_TIMEZONE`
+now explicit America/New_York in compose; `apply_env.py` refuses Monday 07:00–12:00 New York unless `--force-monday`; AI Growth takes
+`dry_run: true`). `seo_content_log.qa_reasons` added; `fix_not_ready_drafts.py --apply` marked the two QA-failed drafts `not_ready`.
+**All 15 High are fixed; 13 verified live** (R34 R35 R36 R38 R59 R60 R61 R66 R77 R78 R110 R111 + the R49 keyword-check path), R37 / R43
+(content QA) and R94 (catch-up) fixed in harness and deployed but **not yet run live** (a page run ≈ $1.4; the catch-up's first real test
+is the next missed Monday fire). 42 fixed, 6 partly (R42 R49-verdict now fixed, R50 R51 R81 R92), 27 verified live, $1.24 DataForSEO.
+**Not launched (owner: usage limit)** — briefs ready in the session scratchpad, groups: A9 engine cost (R47=R69=R80, R82, R68, R70, R57,
+R81 parts 2–3, R101, R115), A10 one gate + AI reporting (R39 R54 R83 R84 R85 R86 R89, R92 parts 1/2/5/6), A11 audit accuracy (R62 R63 R64
+R67 R71 R72 R75 R76 R118 R119), A12 app copy (R97 R98 R99 R106 R107 R108 R109), A13 app cost (R100 R102 R114 R115). Plus the agents'
+NEEDS-ELSEWHERE items (FIX_PLAN rows and `LIVE_CHECK_fixes.md`): R50's Keyword Check needs Load Ladders / Content Log (build_api.py),
+R51's relevance prompt, R42's engine ladder-report note, `_cost_cal.js` dfsRun must skip `parent:` / `handoff` rows, A6's "slot already
+caught up" refusal in `_run_guard.js`, `Parse_GSC.js` host stripping, app types / overview "needs a fix" tile.
+
+## Status (2026-10-16, third whole-system re-rating: **5.5 / 10** measured — previous)
 **The re-rating is done and committed** (`n8n/seo-agent/docs/system-review-2026-10-15/`): `RESULTS.md` (master record) + `parts/1`-`4`
 (per-run evidence from four executor agents) + `SCORECARD.md` (scored by a **clean Claude CLI session outside the repo** — no CLAUDE.md,
 no memory, only the rubric, the scorer rules, prior evidence, this run's evidence and a code copy). Executions **594-643** on the deployed
