@@ -394,9 +394,13 @@ return plans.map(p => {
   const fullSet = pulseSets.reduce((best, d) => d.engines.length > best.length ? d.engines : best, []);
   const partialDays = pulseSets.filter(d => d.engines.join('+') !== fullSet.join('+'));
   const partialAnswers = partialDays.reduce((s, d) => s + d.samples, 0);
-  const pulse_basis = PR.length ? { days: PR.length, answers: pulseN, engines: fullSet.map(e => ENG[e] || e), basis: 'measured',
+  // A5 / R95 (2026-10-16): `seo_ai_daily` holds a scheduled AND an on-demand reading for one date, so PR counts READINGS. The days
+  // are the distinct dates; the note says both when they differ.
+  const pulseDates = [...new Set(PR.map(d => String(d.date || '').slice(0, 10)).filter(Boolean))];
+  const pulseDays = pulseDates.length || PR.length;
+  const pulse_basis = PR.length ? { days: pulseDays, readings: PR.length, answers: pulseN, engines: fullSet.map(e => ENG[e] || e), basis: 'measured',
     partial_days: partialDays.map(d => ({ date: d.date, answers: d.samples, engines: d.engines.map(e => ENG[e] || e), missing: d.missing })), partial_answers: partialAnswers,
-    note: PR.length + ' daily pulse day(s) are counted in the figures below (' + pulseN + ' of the ' + (ans.length + pulseN) + ' answers)'
+    note: (PR.length === pulseDays ? pulseDays + ' daily pulse day(s) are' : PR.length + ' daily pulse readings on ' + pulseDays + ' day(s) are') + ' counted in the figures below (' + pulseN + ' of the ' + (ans.length + pulseN) + ' answers)'
       + (partialDays.length ? ', and ' + partialDays.length + ' of them did not reach every engine (' + partialAnswers + ' answer(s) from '
         + partialDays.map(d => d.date + (d.missing.length ? ': no answer from ' + d.missing.join(', ') : ': ' + (d.engines.length || 'no') + ' engine(s) only')).join('; ') + ')' : '') + '.' } : null;
   // B8-5: *AI Requests* stops adding requests at 900 / $15 ($4 on the pulse) and records what it dropped in `skipped_by_cap` — which
@@ -418,6 +422,23 @@ return plans.map(p => {
   { const merged = mergeBrands([...counts.entries()], p.aliases); counts.clear(); for (const [k, v] of merged) counts.set(k, v.reduce((x, y) => x + y, 0)); }   // "ClearTax" and cleartax.com are one business
   const comp = [...new Set([...p.configured_competitors, ...[...counts.entries()].filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).map(([d]) => d)])].slice(0, 8)
     .map(d => ({ domain: d, mentions: counts.get(d) || 0, auto: !p.configured_competitors.includes(d), named_only: !/\./.test(d) }));
+  // ---- R83 (2026-10-16, re-rating defect C-7): the businesses AI recommends INSTEAD of you are never a place to "get featured".
+  // `comp` above is the 8-row display table ("Who AI recommends instead"); exec 623 kept cleartax … sap there, and wafeq.com — named
+  // as an alternative in 10 answers, outside the cut — came out as "Get featured on wafeq.com" and as an `ai_source` link prospect,
+  // with edicomgroup.com, aiverix.ae, comarch.com, pagero.com, flick.network and velmontcrest.ae. The EXCLUSION set is not the display
+  // set: every configured competitor, every business named in two or more answers (this run and the pulse), and every business the
+  // Answer Analyst has learned a website for (the `ai_brands:` aliases, this run's included) — compared by registrable domain, so
+  // europe.thomsonreuters.com is Thomson Reuters. Only a plain business site can be a rival: an official body, a platform, a news
+  // site, a directory or a research firm keeps its own kind (mof.gov.ae stays "official").
+  const regD = (h) => { const x = normD(h); const parts = x.split('.').filter(Boolean); if (parts.length <= 2) return x;
+    const sl = parts.slice(-2).join('.'); return /^(co|com|org|net|gov|ac|edu|ltd|plc|sch|nic|mil)\.[a-z]{2}$/.test(sl) ? parts.slice(-3).join('.') : sl; };
+  const learned = {}; ajobs.forEach((j, i) => { if (j.site_id !== p.site_id) return; const o = aouts[i] && !aouts[i].error ? parseJ(aouts[i].output) : null; for (const a of ((o && o.answers) || [])) for (const b of ((a && a.brands) || [])) { const nm = String((b && b.name) || '').trim(), d = normD(b && b.domain); if (nm.length >= 3 && nm.length <= 60 && brandish(nm) && /\./.test(d) && d !== p.domain && !d.endsWith('.' + p.domain) && !p.brand_names.some(x => String(x).toLowerCase() === nm.toLowerCase())) learned[nm] = d; } });   // D19: only a name that reads like a business name is learned
+  const ownReg = regD(p.domain); const rivalSet = new Set();
+  const addRival = (d) => { const x = regD(d); if (x && /\./.test(x) && x !== ownReg && kindOf(x) === 'site') rivalSet.add(x); };
+  for (const d of (p.configured_competitors || [])) addRival(d);
+  for (const [d, n] of counts.entries()) if (n >= 2) addRival(d);
+  for (const d of [...Object.values(p.aliases || {}), ...Object.values(learned)]) addRival(d);
+  const isRival = (h) => rivalSet.has(regD(h));
   const compTotal = comp.reduce((s, c) => s + c.mentions, 0);
   const share_of_voice = pct(mentioned, mentioned + compTotal);
   comp.forEach(c => { c.share = pct(c.mentions, mentioned + compTotal); });
@@ -431,14 +452,20 @@ return plans.map(p => {
     engines[e] = { name: ENG[e] || e, asked: er.length, answered: ea.length, samples: n, mentioned: m, cited: c, mention_rate: pct(m, n), citation_rate: pct(c, n), ci: wilson(m, n), errors: Rall.filter(r => r.engine === e && r.error).length,
       knows_brand: eb.length ? eb.some(r => r.mentioned) : null, pulse_samples: pe.n, sentiment: (() => { const s = ea.filter(r => r.sentiment); return s.length ? Math.round(100 * (s.filter(r => r.sentiment === 'positive').length - s.filter(r => r.sentiment === 'negative').length) / s.length) : null; })() }; }
   const aio = R.filter(r => r.engine === 'ai_overview');
-  const aio_presence = pct(aio.filter(r => r.answered).length, aio.length), aio_citation_rate = pct(aio.filter(r => r.cited).length, aio.filter(r => r.answered).length);
+  // R84 (2026-10-16): a request that FAILED did not show whether Google shows an AI Overview, so it is not in the presence denominator
+  // (exec 623: 5 shown, 1 with none, 1 failed = 5 of 6, 83.3%, not 5 of 7). The failure is still named in the failure line.
+  const aioRead = aio.filter(r => !r.error);
+  const aio_basis = { requests: aio.length, read: aioRead.length, shown: aio.filter(r => r.answered).length, failed: aio.length - aioRead.length };
+  const aio_presence = pct(aio_basis.shown, aioRead.length), aio_citation_rate = pct(aio.filter(r => r.cited).length, aio.filter(r => r.answered).length);
   // sources AI cites (not you, not a competitor): where to get listed / featured
   const src = new Map();
   const citedOf = (r) => { try { const v = JSON.parse(r.cited_urls || '[]'); return Array.isArray(v) ? v.filter(x => x && x.u) : []; } catch (e) { return []; } };   // v4.12: the exact pages cited
   const hostOfU = (u) => { const m = String(u || '').match(/^https?:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i); return m ? m[1].toLowerCase().replace(/^www\./, '') : ''; };
-  for (const r of ansAll) for (const h of list(r.sources)) { if (h === p.domain || h.endsWith('.' + p.domain) || comp.some(c => c.domain === h)) continue; const s = src.get(h) || { domain: h, citations: 0, engines: new Set(), topics: new Set(), urls: new Map() }; s.citations++; s.engines.add(ENG[r.engine] || r.engine); if (r.topic) s.topics.add(r.topic);
+  const rivalSrc = new Map(); const asRival = (h, n) => { const k = regD(h); rivalSrc.set(k, (rivalSrc.get(k) || 0) + n); };   // R83: cited, but a business AI names instead of you
+  for (const r of ansAll) for (const h of list(r.sources)) { if (h === p.domain || h.endsWith('.' + p.domain)) continue; if (comp.some(c => c.domain === h) || isRival(h)) { asRival(h, 1); continue; } const s = src.get(h) || { domain: h, citations: 0, engines: new Set(), topics: new Set(), urls: new Map() }; s.citations++; s.engines.add(ENG[r.engine] || r.engine); if (r.topic) s.topics.add(r.topic);
     for (const c of citedOf(r)) if (hostOfU(c.u) === h) { const x = s.urls.get(c.u) || { u: c.u, t: c.t || '', n: 0 }; x.n++; if (!x.t && c.t) x.t = c.t; s.urls.set(c.u, x); } src.set(h, s); }
-  for (const d of PR) for (const [h, n] of Object.entries(d.sources || {})) { if (h === p.domain || h.endsWith('.' + p.domain) || comp.some(c => c.domain === h)) continue; const s = src.get(h) || { domain: h, citations: 0, engines: new Set(), topics: new Set(), urls: new Map() }; s.citations += Number(n) || 0; s.engines.add('daily'); src.set(h, s); }
+  for (const d of PR) for (const [h, n] of Object.entries(d.sources || {})) { if (h === p.domain || h.endsWith('.' + p.domain)) continue; if (comp.some(c => c.domain === h) || isRival(h)) { asRival(h, Number(n) || 0); continue; } const s = src.get(h) || { domain: h, citations: 0, engines: new Set(), topics: new Set(), urls: new Map() }; s.citations += Number(n) || 0; s.engines.add('daily'); src.set(h, s); }
+  const rival_sources = [...rivalSrc.entries()].filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([domain, citations]) => ({ domain, citations, kind: 'rival' }));
   const sources = [...src.values()].sort((a, b) => b.citations - a.citations).slice(0, 15).map(s => ({ domain: s.domain, citations: s.citations, engines: [...s.engines].filter(x => x !== 'daily'), topics: [...s.topics].slice(0, 3), kind: kindOf(s.domain), urls: [...s.urls.values()].sort((a, b) => b.n - a.n).slice(0, 3) }));
   const pages = new Map(); for (const r of ansAll) for (const u of String(r.our_urls || '').split(/\s+/).filter(Boolean)) { const x = pages.get(u) || { url: u, citations: 0, engines: new Set() }; x.citations++; x.engines.add(r.engine); pages.set(u, x); }
   const our_pages = [...pages.values()].sort((a, b) => b.citations - a.citations).slice(0, 10).map(x => ({ url: x.url, citations: x.citations, engines: [...x.engines] }));
@@ -600,13 +627,42 @@ return plans.map(p => {
     visibility_score: prev.visibility_score == null ? null : +(visibility_score - prev.visibility_score).toFixed(1),
     // kept as the headline verdict the alerts and the subject read; `tests` holds the same answer for every other figure
     significant: prev.samples ? significant(mentioned, samples, prev.mentioned_k, prev.samples) : null, tests } : null;
+  // ---- R84 (2026-10-16, re-rating defect C-8): say exactly what the headline counts. Exec 623 printed "8 buyer questions × 6 AI
+  // engines · 74 answers" while the 74 were 7 buyer questions on the 5 weekly engines (33 this run + 41 from the pulse) — the 8th
+  // question is the brand question (recognition only) and Claude, asked monthly, is shown per engine and kept out of the headline on
+  // purpose (the week-on-week comparison depends on the weekly engine set). The words change, not the denominator.
+  const buyerQ = new Set(R.map(r => r.prompt_id)).size, brandQ = new Set(RB.map(r => r.prompt_id)).size;
+  const headEng = [...new Set([...RC.map(r => r.engine), ...PR.flatMap(d => Object.entries(d.engines || {}).filter(([, v]) => (Number((v || {}).answered) || 0) > 0).map(([e]) => e))])];
+  const monthlyOut = MONTHLY.filter(e => R.some(r => r.engine === e)).map(e => ({ engine: ENG[e] || e, answers: R.filter(r => r.engine === e && r.answered).length }));
+  const came_back = Rall.filter(r => !r.error).length;
+  const headline = { buyer_questions: buyerQ, brand_questions: brandQ, engines: headEng.map(e => ENG[e] || e), engine_count: headEng.length, run_answers: ans.length, pulse_answers: pulseN, samples,
+    monthly_left_out: monthlyOut, brand_answers: RB.filter(r => r.answered).length, requests: Rall.length, came_back,
+    text: samples + ' answers to the ' + buyerQ + ' buyer question' + (buyerQ === 1 ? '' : 's') + ' on the ' + headEng.length + ' weekly engine' + (headEng.length === 1 ? '' : 's')
+      + (pulseN ? ' (' + ans.length + ' this run + ' + pulseN + ' from the daily pulse)' : '')
+      + (monthlyOut.some(x => x.answers) ? '; ' + monthlyOut.filter(x => x.answers).map(x => x.engine + '\'s ' + x.answers + ' answer' + (x.answers === 1 ? '' : 's')).join(' and ') + ' (asked monthly) are shown per engine and not in the headline' : '')
+      + (brandQ ? '; the brand question measures recognition only' : '') };
+  // ---- R85 (2026-10-16, re-rating defect C-9): the AI search-volume lookup failed twice in exec 623 (HTTP 500 around task 50000
+  // "Internal Error.", 50 s each) and the report said "0 questions with a volume" as if it had been read. A lookup that failed is
+  // "not read", and the stored volumes (0 here, read on an earlier run) are named as stored, not as this month's.
+  const innerMsg = (r) => { const t = task0(r); if (t.status_message && t.status_code !== 20000) return String(t.status_message); const er = (r || {}).error; const e = er ? String(typeof er === 'string' ? er : (er.message || JSON.stringify(er))) : (gErr(r) || '');
+    const msgs = [...String(e).matchAll(/status_message[\\"]*:\s*[\\"]*([^\\"]+)/g)].map(m => m[1]).filter(x => !/^ok\.?$/i.test(x)); return msgs.length ? msgs[msgs.length - 1] : (e ? e.slice(0, 120) : 'no answer'); };
+  const volQ = dreq.map((q, i) => ({ q, r: dres[i] })).filter(x => x.q.site_id === p.site_id && x.q.kind === 'volume');
+  const volBad = volQ.filter(x => task0(x.r).status_code !== 20000);
+  const volRetried = volBad.some(x => Number(((x.r || {}).__dfs || {}).retried) > 0);
+  const volStored = [...meta.values()].filter(q => q.kind !== 'brand');
+  const volume_lookup = { asked: volQ.length > 0, read: volQ.length ? !volBad.length : null, keywords: volQ.reduce((n, x) => n + (((x.q.body || [])[0] || {}).keywords || []).length, 0),
+    error: volBad.length ? innerMsg(volBad[0].r) : '', retried: volRetried, stored_measured: volStored.filter(q => q.volume != null && q.volume !== '').length,
+    stored_positive: volStored.filter(q => Number(q.volume) > 0).length, questions: volStored.length,
+    note: volBad.length ? 'AI search volume could not be read this run (DataForSEO failed' + (volRetried ? ' twice' : '') + ': ' + innerMsg(volBad[0].r) + ')'
+      + ', so the volumes shown are the ones stored from an earlier run, not this month\'s.' : '' };
   const alerts = [];
   if (delta && (delta.significant === true ? delta.mention_rate < 0 : (delta.significant === null && delta.mention_rate <= -15))) alerts.push({ level: 'high', text: 'AI mentions dropped ' + Math.abs(delta.mention_rate) + ' points to ' + mention_rate + '% of answers' + (delta.significant ? ' (a real change, not sampling noise: ' + samples + ' answers this week vs ' + prev.samples + ')' : '') + '.' });
   if (prev && prev.engines) for (const [e, v] of Object.entries(prev.engines)) if ((v.cited || 0) > 0 && engines[e] && engines[e].answered && !engines[e].cited) alerts.push({ level: 'medium', text: (ENG[e] || e) + ' no longer cites any of your pages (cited ' + v.cited + ' times last time).' });
   if (brand_known === false && !brand.carried) alerts.push({ level: 'medium', text: 'Only ' + brand.known + ' of ' + brand.answered + ' AI assistants recognise ' + (p.business_name || p.domain) + ' when asked about it directly.' });
   // D19: the failures are reported with their reason, and above 10% they are an alert of their own (every rate counts answered requests only)
   if (errors) alerts.push({ level: error_rate > 50 ? 'high' : error_rate >= 10 ? 'medium' : 'low',
-    text: errors + ' of ' + Rall.length + ' AI requests failed' + (retry.asked ? ' (' + retry.answered + ' of ' + retry.asked + ' answered on the retry)' : '') + ': ' + error_list.map(e => e.engine + ' — ' + e.message).slice(0, 3).join('; ') + '. The rates below count the ' + ans.length + ' answers that came back.' });
+    text: errors + ' of ' + Rall.length + ' AI requests failed' + (retry.asked ? ' (' + retry.answered + ' of ' + retry.asked + ' answered on the retry)' : '') + ': ' + error_list.map(e => e.engine + ' — ' + e.message).slice(0, 3).join('; ') + '. ' + came_back + ' of ' + Rall.length + ' came back; the rates below count ' + headline.text + '.' });
+  if (volume_lookup.note) alerts.push({ level: 'low', text: volume_lookup.note });
   const prevComp = new Map((((prev && like.comparable) ? prev.competitors : null) || []).map(c => [c.domain, c]));   // B-L4: a competitor's share moves with the panel too
   // B8-1: "gained 10+ points" was a fixed rule over two noisy samples, raised beside a mention-rate change that had been z-tested.
   // The same test, on the same denominator as the share it is about.
@@ -652,10 +708,10 @@ return plans.map(p => {
       score: old.score === '' || old.score == null ? null : Number(old.score), origin: old.origin || 'ai_visibility', contact_email: old.contact_email || '', contact_url: old.contact_url || '', contacted_at: old.contacted_at || '',
       followup_step: Number(old.followup_step) || 0, followup_subject: old.followup_subject || '', followup_body: old.followup_body || '', verified_at: old.verified_at || '' }; });
   // brand names AI uses for businesses, with their website (Answer Analyst): the parser finds them next time even without a link
-  const aliases = { ...(p.aliases || {}) }; ajobs.forEach((j, i) => { if (j.site_id !== p.site_id) return; const o = aouts[i] && !aouts[i].error ? parseJ(aouts[i].output) : null; for (const a of ((o && o.answers) || [])) for (const b of ((a && a.brands) || [])) { const nm = String((b && b.name) || '').trim(), d = normD(b && b.domain); if (nm.length >= 3 && nm.length <= 60 && brandish(nm) && /\./.test(d) && d !== p.domain && !d.endsWith('.' + p.domain) && !p.brand_names.some(x => String(x).toLowerCase() === nm.toLowerCase())) aliases[nm] = d; } });   // D19: only a name that reads like a business name is learned
+  const aliases = { ...(p.aliases || {}), ...learned };   // R83: the same names the rival set above was built from (D19: only a name that reads like a business name is learned)
   const aliasKeys = Object.keys(aliases).slice(-200); const aliasesTrim = Object.fromEntries(aliasKeys.map(k => [k, aliases[k]]));
   const cache_rows = Object.keys(aliasesTrim).length !== Object.keys(p.aliases || {}).length || JSON.stringify(aliasesTrim) !== JSON.stringify(p.aliases || {}) ? [{ key: 'ai_brands:' + p.site_id, kind: 'ai', site_id: p.site_id, value: J(aliasesTrim), updated_at: now }] : [];
-  return { json: { ...p, metrics: { asked: RC.length, asked_all: R.length, requests: Rall.length, answered: ans.length, samples, pulse_samples: pulseN, pulse_days: PR.length, errors, error_rate, errors_list: error_list, retried: retry.asked, retry_answered: retry.answered, mentioned, cited, mention_rate, mention_ci: [mention_lo, mention_hi], citation_rate, share_of_voice, visibility_score, avg_rank: vis_row.avg_rank, aio_presence, aio_citation_rate, brand_known, brand, delta,
+  return { json: { ...p, metrics: { asked: RC.length, asked_all: R.length, requests: Rall.length, answered: ans.length, samples, pulse_samples: pulseN, pulse_days: pulseDays, pulse_readings: PR.length, came_back, headline, aio_basis, volume_lookup, errors, error_rate, errors_list: error_list, retried: retry.asked, retry_answered: retry.answered, mentioned, cited, mention_rate, mention_ci: [mention_lo, mention_hi], citation_rate, share_of_voice, visibility_score, avg_rank: vis_row.avg_rank, aio_presence, aio_citation_rate, brand_known, brand, delta,
     // B-L4: when the two runs are not like for like the customer is TOLD, in the place the change would have been
     delta_not_compared, panel, panel_before, delta_basis: prev ? (like.comparable ? 'compared with ' + String(prev.checked_at || '').slice(0, 10) + ' (' + panel_before + ' questions on ' + engText(engBefore) + ')' : like.why) : 'first run (baseline)',
     // B8-1: the other three headline tiles now carry what "Named in" always had — their own 95% range and their own verdict on the
@@ -664,5 +720,5 @@ return plans.map(p => {
     score_band, tests: delta ? delta.tests : null, enough_samples: samples >= MIN_RATE_SAMPLES, min_samples: MIN_RATE_SAMPLES,
     sample_note: samples >= MIN_RATE_SAMPLES ? '' : rateOf(mentioned, samples).why, pulse_basis, capped, undecided_questions: undecided.length,
       sentiment_score, accuracy_issues: fact_check === 'checked' ? issues.length : null, fact_check, index_sov: vis_row.index_sov, ai_impressions, demand_total, lost_demand },
-    engines, competitors: comp, sources, our_pages, questions, gaps, undecided, clusters, fanout, perception, traffic, access: acc, index, suggestions: sugg, market, alerts, actions: actions.slice(0, 10), vis_row, prospect_rows, cache_rows, cost_usd: vis_row.cost_usd, form_url: FORM_URL, api_url: API_URL } };
+    engines, competitors: comp, sources, rival_sources, our_pages, questions, gaps, undecided, clusters, fanout, perception, traffic, access: acc, index, suggestions: sugg, market, alerts, actions: actions.slice(0, 10), vis_row, prospect_rows, cache_rows, cost_usd: vis_row.cost_usd, form_url: FORM_URL, api_url: API_URL } };
 });

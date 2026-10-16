@@ -206,8 +206,22 @@ const RAD = (() => {
   const STOP = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'for', 'to', 'in', 'on', 'with', 'by', 'at', 'from', 'near', 'me', 'vs', 'is', 'are', 'what', 'how', 'best', 'top', 'your', 'my', 'our', 'service', 'services', 'company', 'companies', 'solution', 'solutions', 'provider', 'providers', 'software', 'system', 'systems']);
   const S = (v) => String(v == null ? '' : v);
   const num = (v) => (v === '' || v == null || typeof v === 'boolean' || !Number.isFinite(Number(v))) ? null : Number(v);
-  const tokens = (s) => { const out = []; for (const t of S(s).toLowerCase().split(/[^a-z0-9]+/)) { if (t.length <= 2 || STOP.has(t)) continue;
-    const w = t.replace(/ies$/, 'y').replace(/(ing|ed|es|s)$/, ''); if (w && !out.includes(w)) out.push(w); } return out; };
+  // R39 (2026-10-16, re-rating defect A-6): every token of two characters or fewer was dropped, so "ai" was not one of the words that
+  // matter in "ai consulting dubai" — the head had two of them ("consult", "dubai"), one shared word was enough, and "supply chain
+  // optimization consulting" became rung 2 of an AI-consulting ladder on "consult" alone (exec 610). A two-letter word that names a
+  // field ("ai", "bi", "hr", "it", "ui", "ux" ...) is now a word that matters; one that names a place ("uk", "eu") counts the way
+  // "dubai" always did. Pronouns and particles ("us", "me", "of", "to") stay out. `_site_model.js` termsOf already kept them.
+  const CORE2 = new Set(['ai', 'bi', 'hr', 'it', 'ui', 'ux', 'ml', 'ar', 'vr', 'xr', 'qa', 'pr', 'crm', 'erp', 'iot', 'uk', 'eu', '3d', '5g']);
+  const tokens = (s) => { const out = []; for (const t of S(s).toLowerCase().split(/[^a-z0-9]+/)) { if (!t || STOP.has(t) || (t.length <= 2 && !CORE2.has(t))) continue;
+    const w = t.length <= 3 ? t : t.replace(/ies$/, 'y').replace(/(ing|ed|es|s)$/, ''); if (w && !out.includes(w)) out.push(w); } return out; };
+  // R39, the second half: a rung has to share the head's SUBJECT, not only the kind of service or the place. "supply chain consulting
+  // dubai" shares "consult" and "dubai" with "ai consulting dubai" — two of its three words, and still another topic. Service-type
+  // words and places are context; when the head has a subject word at all, at least one shared word must be one.
+  const GENERIC = new Set(['consult', 'consultant', 'consultancy', 'consultancie', 'advisory', 'advisor', 'agency', 'firm', 'partner', 'expert', 'specialist', 'implementation', 'implement', 'integration', 'integrator',
+    'development', 'develop', 'developer', 'support', 'training', 'outsourc', 'cost', 'price', 'pric', 'quote', 'online', 'free', 'guide', 'review', 'list', 'example', 'meaning', 'definition', 'near', 'local', 'hire', 'job']);
+  const PLACE = new Set(['uae', 'dubai', 'abu', 'dhabi', 'sharjah', 'ajman', 'emirat', 'ksa', 'saudi', 'riyadh', 'jeddah', 'qatar', 'doha', 'kuwait', 'bahrain', 'oman', 'muscat', 'egypt', 'cairo', 'gcc', 'mena',
+    'middle', 'east', 'uk', 'london', 'usa', 'eu', 'europe', 'india', 'pakistan', 'singapore', 'australia', 'canada', 'germany', 'america']);
+  const subjectOf = (toks) => toks.filter(t => !GENERIC.has(t) && !PLACE.has(t));
   const shared = (a, b) => { const sb = new Set(b); return a.filter(t => sb.has(t)); };
   // what the site sells / already writes about, as one token set per source, so the evidence can name the matching one
   const anchors = (o) => {
@@ -292,13 +306,17 @@ const RAD = (() => {
     const common = shared(h, k);
     const need = Math.max(1, Math.ceil(h.length / 2));
     const q = (list) => list.map(t => '"' + t + '"').join(', ');
-    if (common.length >= need) return { ok: true, shared: common, need, head_words: h, reason: '' };
-    return { ok: false, shared: common, need, head_words: h,
+    const subject = subjectOf(h);
+    const onSubject = !subject.length || common.some(t => subject.includes(t));
+    if (common.length >= need && onSubject) return { ok: true, shared: common, need, head_words: h, subject, reason: '' };
+    if (common.length >= need) return { ok: false, shared: common, need, head_words: h, subject,
+      reason: 'it is not on this ladder\'s topic: it shares only ' + q(common) + ' with "' + S(headKw) + '" — the kind of service or the place, not the subject (' + q(subject) + ')' };
+    return { ok: false, shared: common, need, head_words: h, subject,
       reason: common.length
-        ? 'it is not on this ladder\'s topic: it shares only ' + q(common) + ' with "' + S(headKw) + '" (' + common.length + ' of the ' + h.length + ' words that matter, ' + need + ' needed)'
+        ? 'it is not on this ladder\'s topic: it shares only ' + q(common) + ' with "' + S(headKw) + '" (' + common.length + ' of the ' + h.length + ' words that matter, ' + need + ' needed: ' + q(h) + ')'
         : 'it is not on this ladder\'s topic: it shares none of the words that matter in "' + S(headKw) + '" (' + q(h) + ')' };
   };
-  return { of, pick, rows, line, headFit, LABEL, CFG, tokens };
+  return { of, pick, rows, line, headFit, LABEL, CFG, tokens, subjectOf, CORE2 };
 })();
 return $input.all().map(i => { const j = i.json || {}; const rad = RAD.of(j);
   return { json: { ...rad, rows: RAD.rows(rad), labels: RAD.LABEL, picked: j.pick === undefined ? null : RAD.pick(rad, j.pick),

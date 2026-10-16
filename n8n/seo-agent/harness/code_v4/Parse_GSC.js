@@ -8,7 +8,8 @@
 // ---- shared Search Console query rules (2026-10-12, FIX_PLAN G9 + D24 / P1-3): inlined by the build (the GSC_QUERIES placeholder) into
 // Parse GSC (the Site Tracker) and GSC Audit Findings (the audit), so the weekly report and the audit judge a query the same way.
 //   * GQ.isScraper(q)  — a query typed by an SEO tool or a scraper, not by a customer (search operators, capital booleans, quoted groups).
-//   * GQ.brandTest(..) — brand vs non-brand, from seo_monitors.brand_names / the site model's names, with the domain label as the fallback.
+//   * GQ.brandTest(..) — brand vs non-brand, from seo_monitors.brand_names / the site model's names, with the domain label as the fallback;
+//                        whole tokens only, never a substring (R89, below).
 //   * GQ.anonymised(..)— what Search Console withholds: the totals minus the sum of the query rows ("anonymised for privacy").
 // D24 (2026-10-11) found scraper queries among techand.ai's top queries; P1-3 (2026-10-12) added the leading minus ("-site:csc.gov.ae") and
 // the lower-case booleans Search Console reports. Prose alone never counts: "erp software and accounting for distributors" has no quotes,
@@ -28,8 +29,44 @@ const GQ = (() => {
     for (const n of (names || [])) { const s = String(n || '').trim(); if (!s) continue; push(/\./.test(s) ? s.split('.')[0] : s); }
     return keys;
   };
-  // a query is a brand query when a brand key appears in it as one run of letters/digits
-  const brandTest = (domain, names) => { const keys = brandKeys(domain, names); const is = (q) => { const s = squash(q); return keys.some(k => s.includes(k)); }; return { keys, is: keys.length ? is : () => false }; };
+  // ---- R89 (2026-10-16, re-rating defect C-13): the brand test squashed the query ("technology and analytics" -> "technologyandanalytics")
+  // and looked for a key INSIDE it, and "Tech&" squashed to the key "tech" — so "technology & data", "tech and software" and
+  // "techandkey com" were all counted as searches for the business (exec 634: "brand = techand, tech"). The outreach kit solved the same
+  // problem for "Tech&" on 2026-10-12 (MIN_NAME_RUN); this is that rule for search queries:
+  //   * a key is matched as WHOLE tokens of the query: one token equal to it ("techand"), or consecutive tokens that join to it with no
+  //     filler word between them ("northwind erp" -> "northwinderp") — never a substring, so "techandkey" is another word; a join
+  //     ACROSS a filler word ("tech and" -> "techand") is the name spoken, and counts only as the whole query ("tech and ai" yes,
+  //     "tech and software" no);
+  //   * a name whose letters are shorter than MIN_NAME_RUN once its punctuation is gone ("Tech&") is never a key on its own: it counts
+  //     only written or spoken as itself ("tech&", "tech and"), and only as the whole query (with the site's own domain ending at most),
+  //     because "tech and software" is a description, not a search for the business.
+  const MIN_NAME_RUN = 5;
+  const FILLER = new Set(['and', 'the', 'of', 'for', 'to', 'in', 'on', 'at', 'a', 'an', 'or', 'by', 'with', 'vs', 'near', 'me', 'from']);
+  const qTokens = (q) => String(q || '').toLowerCase().replace(/&/g, ' and ').split(/[^a-z0-9]+/).filter(Boolean);
+  const brandTest = (domain, names) => {
+    const keys = brandKeys(domain, names);
+    const tld = String(domain || '').toLowerCase().split('.').slice(1).filter(Boolean);
+    const long = keys.filter(k => k.length >= MIN_NAME_RUN || !/[^a-z0-9\s.]/i.test(String((names || []).find(n => squash(n) === k) || '')));
+    // the short punctuated names ("Tech&"): their own written / spoken forms, matched as the whole query
+    const spoken = [];
+    for (const n of (names || [])) { const s = String(n || '').trim(); if (!s || /\./.test(s)) continue; const k = squash(s);
+      if (k.length >= MIN_NAME_RUN || !/[^a-z0-9\s]/i.test(s)) continue; const toks = qTokens(s); if (toks.length && !spoken.some(x => x.join(' ') === toks.join(' '))) spoken.push(toks); }
+    const longKeys = long;
+    const is = (q) => {
+      const t = qTokens(q); if (!t.length) return false;
+      const onlyDomain = (rest) => rest.every(x => tld.includes(x) || x === 'com' || x === 'www');
+      for (const k of longKeys) {
+        if (k.length < 4) continue;
+        for (let i = 0; i < t.length; i++) { let j = i, acc = '', filler = false;
+          while (j < t.length && acc.length < k.length) { if (j > i && FILLER.has(t[j])) filler = true; acc += t[j]; j++;
+            // a join across a filler word ("tech and" -> "techand") is the name SPOKEN, so it counts only as the whole query
+            if (acc === k && (!filler || (i === 0 && onlyDomain(t.slice(j))))) return true; } } }
+      for (const sp of spoken) { const rest = t.slice(0, sp.length).join(' ') === sp.join(' ') ? t.slice(sp.length) : null;
+        if (rest && rest.every(x => tld.includes(x) || x === 'com' || x === 'www')) return true; }
+      return false; };
+    const shown = [...longKeys, ...spoken.map(t => t.join(' '))];
+    return { keys: shown, is: shown.length ? is : () => false };
+  };
   // Search Console never names the queries of rare searches: the dimensionless/date totals hold them, the query rows do not
   const anonymised = (totals, rows) => {
     const t = totals || {}; const sum = (rows || []).reduce((a, r) => ({ clicks: a.clicks + (Number(r.clicks) || 0), impressions: a.impressions + (Number(r.impressions) || 0) }), { clicks: 0, impressions: 0 });
@@ -267,13 +304,33 @@ for (const a of acc.values()) {
   const newQ = queries.filter(q => !prevQ.has(q.query) && q.impressions >= 20 && !isBrand(q.query)).slice(0, 10);
   const striking = queries.filter(q => q.position >= 4 && q.position <= 20 && q.impressions >= (cfg.striking_min_impressions || 30) && !isBrand(q.query)).slice(0, 15);
   const ctrGaps = queries.filter(q => q.position > 0 && q.position <= 10 && q.impressions >= (cfg.ctr_gap_min_impressions || 100) && !isBrand(q.query)).map(q => ({ ...q, expected_ctr: EXPECTED_CTR[Math.max(0, Math.min(9, Math.round(q.position) - 1))] })).filter(q => q.ctr < q.expected_ctr * 0.5).sort((x, y) => (y.impressions * (y.expected_ctr - y.ctr)) - (x.impressions * (x.expected_ctr - x.ctr))).slice(0, 10);
-  const prevP = new Map(a.pages_prev.map(r => [r.keys[0], r]));
+  // ---- R92 part 2 (2026-10-16, re-rating defect C-16): an `sc-domain:` property reports https://techand.ai/ AND https://www.techand.ai/
+  // as two pages, and the report printed two "/" rows (14 clicks and 3). One page is one row: the host variants of a path are merged
+  // onto the site model's canonical host (clicks and impressions summed, the position weighted by impressions). The row keeps the URL on
+  // the canonical host when Google reported one there; when Google only reported the other host, the row keeps THAT full URL, so a
+  // reader printing paths can still show the host differs (A2's rule in the audit), and `hosts` lists every variant with its numbers.
+  const canonHost = String((model && model.canonical_host) || '').toLowerCase().replace(/\.$/, '');
+  const hostOfU = (u) => { const m0 = String(u || '').match(/^https?:\/\/([^\/?#]+)/i); return m0 ? m0[1].toLowerCase() : ''; };
+  const pathKeyU = (u) => String(u || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/#.*$/, '').replace(/\/+$/, '');
+  const mergeHosts = (rowsIn) => { const g = new Map();
+    for (const r of (rowsIn || [])) { const u = String((r.keys || [])[0] || ''); const k = pathKeyU(u); const e = g.get(k) || { variants: [] }; e.variants.push(r); g.set(k, e); }
+    return [...g.values()].map(({ variants }) => { if (variants.length === 1 && (!canonHost || hostOfU(variants[0].keys[0]) === canonHost)) return variants[0];
+      const clicks = variants.reduce((n, r) => n + (Number(r.clicks) || 0), 0), impressions = variants.reduce((n, r) => n + (Number(r.impressions) || 0), 0);
+      const pw = variants.reduce((n, r) => n + (Number(r.position) || 0) * (Number(r.impressions) || 0), 0);
+      const onCanon = variants.find(r => hostOfU(r.keys[0]) === canonHost);
+      const lead = onCanon || [...variants].sort((x, y) => (Number(y.impressions) || 0) - (Number(x.impressions) || 0))[0];
+      return { ...lead, keys: [lead.keys[0], ...(lead.keys || []).slice(1)], clicks, impressions, ctr: impressions ? clicks / impressions : 0,
+        position: impressions ? pw / impressions : (Number(lead.position) || 0),
+        hosts: variants.length > 1 ? variants.map(r => ({ host: hostOfU(r.keys[0]), url: r.keys[0], clicks: Number(r.clicks) || 0, impressions: Number(r.impressions) || 0 })) : undefined,
+        other_host: !onCanon && !!canonHost }; }); };
+  a.pages_cur = mergeHosts(a.pages_cur); a.pages_prev = mergeHosts(a.pages_prev); a.pages_yoy = mergeHosts(a.pages_yoy);
+  const prevP = new Map(a.pages_prev.map(r => [pathKeyU(r.keys[0]), r]));
   // B4-1: the same 28 days a year earlier, per page. `yoy_read` says whether Google answered at all, so a page missing from the
   // year-ago rows is "0 clicks a year ago" when the request worked and "not read" when it did not — the two mean opposite things.
-  const yoyP = new Map(a.pages_yoy.map(r => [r.keys[0], r]));
+  const yoyP = new Map(a.pages_yoy.map(r => [pathKeyU(r.keys[0]), r]));
   const yoy_read = !a.errors.some(e => /^pages_yoy/.test(String(e))) && reqs.concat(moreReqs).some(q => q.site_idx === a.site_idx && q.kind === 'pages_yoy');
-  const pages = a.pages_cur.map(r => { const p = prevP.get(r.keys[0]), y = yoyP.get(r.keys[0]);
-    return { page: r.keys[0], clicks: r.clicks, impressions: r.impressions, ctr: r.ctr, position: +r.position.toFixed(1), prev_clicks: p ? p.clicks : 0, prev_impressions: p ? p.impressions : 0, clicks_delta: r.clicks - (p ? p.clicks : 0),
+  const pages = a.pages_cur.map(r => { const p = prevP.get(pathKeyU(r.keys[0])), y = yoyP.get(pathKeyU(r.keys[0]));
+    return { page: r.keys[0], ...(r.hosts ? { hosts: r.hosts } : {}), ...(r.other_host ? { other_host: true } : {}), clicks: r.clicks, impressions: r.impressions, ctr: r.ctr, position: +r.position.toFixed(1), prev_clicks: p ? p.clicks : 0, prev_impressions: p ? p.impressions : 0, clicks_delta: r.clicks - (p ? p.clicks : 0),
       prev_position: p && p.impressions ? +p.position.toFixed(1) : 0,   // B7-1: the control group's own position move needs both readings; 0 = the page had no impressions then, not position zero
       yoy_clicks: yoy_read ? (y ? y.clicks : 0) : null, yoy_impressions: yoy_read ? (y ? y.impressions : 0) : null }; }).sort((x, y) => y.clicks - x.clicks);
   // B4-1: a page is "decaying" only when the fall survives the two-sample Poisson test AND is not the dip the same weeks had a
@@ -365,7 +422,8 @@ for (const a of acc.values()) {
   const change_tests = testReqs.map(q => {
     const base = { key: q.test_key, url: q.test_url, date: q.change_date, what: q.change_what, keyword: q.change_keyword,
       joint: !!q.change_joint, window_before: q.window_before, window_after: q.window_after };
-    const bRows = a.tests['test_before|' + q.test_key], aRows = a.tests['test_after|' + q.test_key];
+    const bRaw = a.tests['test_before|' + q.test_key], aRaw = a.tests['test_after|' + q.test_key];
+    const bRows = bRaw ? mergeHosts(bRaw) : bRaw, aRows = aRaw ? mergeHosts(aRaw) : aRaw;   // R92 part 2: one page, one row, in both windows
     const bErr = a.test_err['test_before|' + q.test_key], aErr = a.test_err['test_after|' + q.test_key];
     if (!bRows || !aRows) return { ...base, read: false, page: null, control: null,
       reason: 'Search Console did not answer the ' + (!aRows ? 'window after' : 'window before') + ' this change ('

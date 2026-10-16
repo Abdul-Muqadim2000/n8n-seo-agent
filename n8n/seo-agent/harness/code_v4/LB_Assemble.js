@@ -390,11 +390,42 @@ const OK = (() => {
   // own front page is not: "add us to your list" has somewhere to go, "link to our guide" has not.
   const ROUNDUP_RE = /\b(best|top\s*\d+|top ten|alternatives?|round-?up|shortlist|directory|listing|list of|compar(?:e|ed|ison)|vs)\b/i;
   const isRoundup = (o) => ROUNDUP_RE.test(String(o.title || '')) || ROUNDUP_RE.test(String(o.url || o.page_url || '').replace(/[\/_?.&=-]+/g, ' '));
+  // ---- R86 (2026-10-16, re-rating defect C-10): the competitor test judged only the prospect PAGE. daxin-global.ae (whose own pages
+  // sell Odoo, Dynamics 365, Business Central and e-invoicing in Dubai) and qzinfomatics.com ("Microsoft Dynamics 365 Partner in Dubai")
+  // reached `ready` because their blog article named too few of the customer's 30 services to reach the 45% bar — a bar over a
+  // 30-service list is the problem, not its value. The SITE is now judged too, on the pages the run already fetched for contacts
+  // (about / contact / home): a business whose own pages offer at least SITE_MIN_SERVICES of our services — each service matched by
+  // all of its words, single-word services left out because one word ("builder", "finance") proves nothing — with the signals of a
+  // vendor selling them, in our market (the country named, or its domain ending), is a competing provider whatever its article is.
+  const SITE_MIN_SERVICES = 2, SITE_MIN_SIGNALS = 2;
+  const SITE_EXEMPT = new Set(['lost', 'reclaim', 'digest', 'podcast']);   // a lost link, a journalist request, a show: the ask is not "link to our page"
+  const MARKET = { AE: ['uae', 'u\\.a\\.e', 'dubai', 'abu dhabi', 'sharjah', 'ajman', 'united arab emirates', 'emirates'], SA: ['ksa', 'saudi', 'riyadh', 'jeddah', 'dammam'], QA: ['qatar', 'doha'],
+    KW: ['kuwait'], BH: ['bahrain', 'manama'], OM: ['oman', 'muscat'], EG: ['egypt', 'cairo'], GB: ['uk', 'united kingdom', 'london', 'england'], US: ['usa', 'united states'], IN: ['india'], PK: ['pakistan'],
+    SG: ['singapore'], AU: ['australia'], CA: ['canada'], DE: ['germany', 'deutschland'] };
+  const TLD_OF = Object.fromEntries(Object.entries(CC).map(([k, v]) => [v, k]));
+  const marketRe = (o) => { const iso = String(o.country_iso || '').toUpperCase(); const words = [...(MARKET[iso] || []), ...(o.country ? [String(o.country).toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')] : [])];
+    return words.length ? new RegExp('(^|[^a-z])(' + words.join('|') + ')($|[^a-z])', 'i') : null; };
+  function siteOffer(o) {
+    const text = String(o.site_text || '').slice(0, 60000); if (text.length < 200) return null;
+    const T = new Set(words(text).map(stem));
+    const offered = []; const seen = new Set();
+    for (const sv of (o.terms || [])) { const st = [...new Set(words(sv).map(stem))]; const key = st.slice().sort().join(' ');
+      if (st.length < 2 || seen.has(key)) continue; seen.add(key); if (st.every(w => T.has(w))) offered.push(String(sv)); }
+    const signals = [...new Set((text.match(VENDOR_RE) || []).map(x => x.toLowerCase().replace(/\s+/g, ' ').trim()))];
+    const re = marketRe(o); const iso = String(o.country_iso || '').toUpperCase(); const d = String(o.domain || '').toLowerCase();
+    const local = !re ? true : re.test(text) || (TLD_OF[iso] ? d.endsWith('.' + TLD_OF[iso]) : false);
+    return { offered, signals, local, pages: (o.site_pages || []).slice(0, 3) };
+  }
   function sellsSame(o) {
     const type = String(o.type || '');
     const rival = rivalOf(o);
     if (rival && LIST_TYPES.has(type) && isRoundup(o)) return '';   // asking a rival's "best X" list to add you is fair game
     if (rival) return 'a competing site of yours (' + rival.domain + '): ' + rival.why + ', and a competitor does not link to your page';
+    const site = (SITE_EXEMPT.has(type) || (LIST_TYPES.has(type) && isRoundup(o))) ? null : siteOffer(o);
+    if (site && site.offered.length >= SITE_MIN_SERVICES && site.signals.length >= SITE_MIN_SIGNALS && site.local)
+      return 'a competing provider: their own site' + (site.pages.length ? ' (' + site.pages.join(', ') + ')' : '') + ' offers ' + site.offered.length + ' of your services ("'
+        + site.offered.slice(0, 3).join('", "') + '"' + (site.offered.length > 3 ? ' …' : '') + ') with the signals of a vendor selling them ("' + site.signals.slice(0, 2).join('", "') + '")'
+        + (o.country ? ' in ' + o.country : '');
     const terms = [...new Set((o.terms || []).flatMap(t => words(t).map(stem)))];
     if (terms.length < 2) return '';
     const title = String(o.title || ''); const text = String(o.text || '').slice(0, 30000);
@@ -465,7 +496,7 @@ const OK = (() => {
     return { ok: false, why: 'off topic for you: neither its name, its page nor its country ties it to ' + (String(x.topic_label || '') || 'your topics') };
   }
   return { OFF_TOPIC, isGov, words, stem, fit, contactsIn, rankContacts, authorUrl, contactForm, sellSignals, countryOf, pickTarget, kindOf,
-    badHost, isHomeUrl, homepageOnly, accreditedList, accredited, sellsSame, rivalOf, isRoundup, LIST_TYPES, namesUs, nameRe, MIN_NAME_RUN, noPitch, gapTopic, SELLWORD };
+    badHost, isHomeUrl, homepageOnly, accreditedList, accredited, sellsSame, siteOffer, rivalOf, isRoundup, LIST_TYPES, namesUs, nameRe, MIN_NAME_RUN, noPitch, gapTopic, SELLWORD };
 })();
 
 // ---- the "links you can add yourself" checklist (v4.13, LINK_BUILDER_SPEC.md §4; inlined by the build) ----
@@ -785,12 +816,17 @@ for (const p of plans) {
   }
   // ---- 2. every prospect page read: qualify, evidence, contacts, our page ----
   const contactsBy = new Map(); const formBy = new Map(); const deadBy = new Map();
+  // R86: the prospect's own SITE, from the about / contact / home pages this run already fetched for contacts — read by the competitor
+  // test next to the prospect page, so a provider selling our services in our market is refused whatever its article is about
+  const siteBy = new Map();
   for (const { r, x } of second.filter(o => o.r.site_id === sid)) {
     const html = htmlOf(x); const st = statusOf(x);
-    if (r.kind === 'contact' && html && st < 400 && !LK.challenge(st, html)) { const l = contactsBy.get(r.prospect_domain) || []; l.push(...OK.contactsIn(html, r.prospect_domain, r.url)); contactsBy.set(r.prospect_domain, l); const f = OK.contactForm(html, r.url); if (f && !formBy.has(r.prospect_domain)) formBy.set(r.prospect_domain, f); }
+    if (r.kind === 'contact' && html && st < 400 && !LK.challenge(st, html)) { const sb = siteBy.get(r.prospect_domain) || { text: '', pages: [] }; if (sb.text.length < 60000) { sb.text += ' ' + LK.text(html).slice(0, 30000); sb.pages.push(String(r.url || '').replace(/^https?:\/\/(www\.)?/i, '')); } siteBy.set(r.prospect_domain, sb);
+      const l = contactsBy.get(r.prospect_domain) || []; l.push(...OK.contactsIn(html, r.prospect_domain, r.url)); contactsBy.set(r.prospect_domain, l); const f = OK.contactForm(html, r.url); if (f && !formBy.has(r.prospect_domain)) formBy.set(r.prospect_domain, f); }
     if (r.kind === 'outbound') { const e = errOf(x); const dead = st === 404 || st === 410 || /ENOTFOUND|NXDOMAIN|EAI_AGAIN.*ENOTFOUND|certificate has expired/i.test(e);
       if (dead) { const l = deadBy.get(r.prospect_domain) || []; l.push({ url: r.url, anchor: r.anchor, status: st || 'no DNS', on_page: r.on_page }); deadBy.set(r.prospect_domain, l); } }
   }
+  const siteOf = (dom) => { const sb = siteBy.get(dom); return sb ? { site_text: sb.text, site_pages: sb.pages, country: p.country || '', country_iso: p.country_iso || '' } : { country: p.country || '', country_iso: p.country_iso || '' }; };
   for (const { r, x } of pagesRead.filter(o => o.r.site_id === sid && o.r.kind === 'prospect')) {
     const stored = myProspects.find(y => y.prospect_domain === r.prospect_domain && y.type === r.type) || {};
     const html = htmlOf(x); const st = statusOf(x); const e = errOf(x);
@@ -825,7 +861,7 @@ for (const p of plans) {
     // ---- D13: who is never pitched (live 2026-10-11: competitors, bare homepages, mailbox providers and contact databases were) ----
     const bad = OK.badHost(r.prospect_domain); if (bad) reasons.push(bad);
     const onlyHome = OK.homepageOnly(r.type, r.url); if (onlyHome) reasons.push(onlyHome);
-    const competing = OK.sellsSame({ type: r.type, domain: r.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals, title: o.page_title, text: t, terms: sellTerms, url: r.url, fit: o.fit });   // R4: a SERP rival counts as a competitor; R21: the page's URL and the topic match it just measured
+    const competing = OK.sellsSame({ type: r.type, domain: r.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals, title: o.page_title, text: t, terms: sellTerms, url: r.url, fit: o.fit, ...siteOf(r.prospect_domain) });   // R4: a SERP rival counts as a competitor; R21: the page's URL and the topic match it just measured
     if (competing) reasons.push(competing);
     if (!weAreAccredited && OK.accreditedList(o.page_title + ' ' + r.url))   // the page IS such a list (its title / address says so); a page that merely names accredited providers is fine
       reasons.push('a list of accredited / approved providers: you get on it by applying with the accreditation, and the facts on file do not say you hold one (asking to be added claims it)');
@@ -853,7 +889,7 @@ for (const p of plans) {
       && !myOutreach.some(o => o.prospect_domain === x.prospect_domain && o.type === x.type && o.status === 'drafted'))) {
     const why = OK.badHost(x.prospect_domain)
       || (OK.isGov(x.prospect_domain) ? 'government site: you get on its lists by applying or being accredited, not by a pitch (see the listings checklist)' : '')
-      || OK.sellsSame({ type: x.type, domain: x.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals, title: x.detail || '', url: x.page_url || '' });   // R4 / R21
+      || OK.sellsSame({ type: x.type, domain: x.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals, title: x.detail || '', url: x.page_url || '', terms: sellTerms, ...siteOf(x.prospect_domain) });   // R4 / R21; R86: their own site, when this run read it
     if (!why) continue;
     outreach_rows.push(base({ prospect_domain: x.prospect_domain, type: x.type, status: 'not_fit', score: Number(x.score) || 0, fit: 0, fit_reason: why,
       page_url: x.source_url || '', page_title: String(x.detail || '').slice(0, 140), evidence: String(x.detail || ''), country: OK.countryOf(x.prospect_domain), checks: { reasons: [why], read: false } }));
@@ -1065,6 +1101,15 @@ for (const p of plans) {
       joint: won.filter(w => pathKey(w.to_url) === pathKey(c.url) && Math.abs(new Date(w.first_seen).getTime() - new Date(c.t0).getTime()) <= 28 * 864e5).length }));
   }
   // ---- 6. this week's writer jobs: the best ready prospects (new rows of this run + stored ready rows), not in free-only checks ----
+  // R86: a `ready` row stored by an earlier run is put through the same site test when this run read that site, so a competing
+  // provider qualified before the rule existed is refused now instead of being drafted
+  const storedRivals = p.serp_rivals;
+  for (const o of myOutreach.filter(o => o.status === 'ready' && !o.sequence_json && siteBy.has(o.prospect_domain) && !outreach_rows.some(n => n.prospect_domain === o.prospect_domain && n.type === o.type))) {
+    const why = OK.sellsSame({ type: o.type, domain: o.prospect_domain, competitors: p.competitors, serp_rivals: storedRivals, title: o.page_title || '', url: o.page_url || '', terms: sellTerms, ...siteOf(o.prospect_domain) });   // R21's SERP rivals too (build section 58 counts the four first-pass calls)
+    if (!why) continue;
+    let ck = {}; try { ck = JSON.parse(o.checks_json || '{}') || {}; } catch (e) { ck = {}; }
+    outreach_rows.push(base({ ...o, status: 'not_fit', fit_reason: why, contacts: (() => { try { return JSON.parse(o.contacts_json || '[]'); } catch (e) { return []; } })(), checks: { ...ck, reasons: [why] } }));
+  }
   const ready = [...outreach_rows.filter(o => o.status === 'ready'), ...myOutreach.filter(o => o.status === 'ready' && !o.sequence_json && !outreach_rows.some(n => n.prospect_domain === o.prospect_domain && n.type === o.type))]
     .map(o => ({ ...o, rankv: (Number(o.score) || 0) * (0.5 + Number(o.fit || 0)) })).sort((a, b) => b.rankv - a.rankv);
   const jobs = p.free_only ? [] : ready.slice(0, p.budget).map(({ rankv, ...o }) => o);

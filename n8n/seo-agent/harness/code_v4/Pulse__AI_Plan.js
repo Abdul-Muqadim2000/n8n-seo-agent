@@ -359,7 +359,11 @@ for (const s of sites.slice(0, CONFIG.max_sites_per_run)) {
   const prev = visRows.filter(v => v.site_id === s.site_id).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)))[0] || null;
   const autoRivals = prev ? (parse(prev.competitors_json, []) || []).filter(c => c && c.domain && c.auto && (c.mentions || 0) >= 2 && /\./.test(c.domain)).map(c => c.domain) : [];
   const aliasRow = cache.find(c => c.key === 'ai_brands:' + s.site_id);
-  const baseline = daily.filter(d => d.site_id === s.site_id && String(d.date) < today).sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, CONFIG.baseline_days)
+  // A5 / R95 (2026-10-16): `seo_ai_daily` now keeps a scheduled AND an on-demand reading for one date, so the baseline is the last
+  // `baseline_days` DAYS (every reading of them), not the last 7 rows — two readings of one morning would have pushed a day out.
+  const before = daily.filter(d => d.site_id === s.site_id && String(d.date) < today).sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.checked_at || '').localeCompare(String(a.checked_at || '')));
+  const baseDates = new Set([...new Set(before.map(d => String(d.date)))].slice(0, CONFIG.baseline_days));
+  const baseline = before.filter(d => baseDates.has(String(d.date)))
     .map(d => { const eng = parse(d.engines_json, {}), pr = parse(d.prompts_json, {});
       return { date: d.date, samples: Number(d.samples) || 0, mentioned: Number(d.mentioned) || 0, mention_rate: Number(d.mention_rate) || 0, prompts: pr, competitors: parse(d.competitors_json, {}),
         // B8-2 (2026-10-15, benchmark area 8, INVARIANTS rule 1): what that morning was actually measured on. Without it the

@@ -381,11 +381,42 @@ const OK = (() => {
   // own front page is not: "add us to your list" has somewhere to go, "link to our guide" has not.
   const ROUNDUP_RE = /\b(best|top\s*\d+|top ten|alternatives?|round-?up|shortlist|directory|listing|list of|compar(?:e|ed|ison)|vs)\b/i;
   const isRoundup = (o) => ROUNDUP_RE.test(String(o.title || '')) || ROUNDUP_RE.test(String(o.url || o.page_url || '').replace(/[\/_?.&=-]+/g, ' '));
+  // ---- R86 (2026-10-16, re-rating defect C-10): the competitor test judged only the prospect PAGE. daxin-global.ae (whose own pages
+  // sell Odoo, Dynamics 365, Business Central and e-invoicing in Dubai) and qzinfomatics.com ("Microsoft Dynamics 365 Partner in Dubai")
+  // reached `ready` because their blog article named too few of the customer's 30 services to reach the 45% bar — a bar over a
+  // 30-service list is the problem, not its value. The SITE is now judged too, on the pages the run already fetched for contacts
+  // (about / contact / home): a business whose own pages offer at least SITE_MIN_SERVICES of our services — each service matched by
+  // all of its words, single-word services left out because one word ("builder", "finance") proves nothing — with the signals of a
+  // vendor selling them, in our market (the country named, or its domain ending), is a competing provider whatever its article is.
+  const SITE_MIN_SERVICES = 2, SITE_MIN_SIGNALS = 2;
+  const SITE_EXEMPT = new Set(['lost', 'reclaim', 'digest', 'podcast']);   // a lost link, a journalist request, a show: the ask is not "link to our page"
+  const MARKET = { AE: ['uae', 'u\\.a\\.e', 'dubai', 'abu dhabi', 'sharjah', 'ajman', 'united arab emirates', 'emirates'], SA: ['ksa', 'saudi', 'riyadh', 'jeddah', 'dammam'], QA: ['qatar', 'doha'],
+    KW: ['kuwait'], BH: ['bahrain', 'manama'], OM: ['oman', 'muscat'], EG: ['egypt', 'cairo'], GB: ['uk', 'united kingdom', 'london', 'england'], US: ['usa', 'united states'], IN: ['india'], PK: ['pakistan'],
+    SG: ['singapore'], AU: ['australia'], CA: ['canada'], DE: ['germany', 'deutschland'] };
+  const TLD_OF = Object.fromEntries(Object.entries(CC).map(([k, v]) => [v, k]));
+  const marketRe = (o) => { const iso = String(o.country_iso || '').toUpperCase(); const words = [...(MARKET[iso] || []), ...(o.country ? [String(o.country).toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')] : [])];
+    return words.length ? new RegExp('(^|[^a-z])(' + words.join('|') + ')($|[^a-z])', 'i') : null; };
+  function siteOffer(o) {
+    const text = String(o.site_text || '').slice(0, 60000); if (text.length < 200) return null;
+    const T = new Set(words(text).map(stem));
+    const offered = []; const seen = new Set();
+    for (const sv of (o.terms || [])) { const st = [...new Set(words(sv).map(stem))]; const key = st.slice().sort().join(' ');
+      if (st.length < 2 || seen.has(key)) continue; seen.add(key); if (st.every(w => T.has(w))) offered.push(String(sv)); }
+    const signals = [...new Set((text.match(VENDOR_RE) || []).map(x => x.toLowerCase().replace(/\s+/g, ' ').trim()))];
+    const re = marketRe(o); const iso = String(o.country_iso || '').toUpperCase(); const d = String(o.domain || '').toLowerCase();
+    const local = !re ? true : re.test(text) || (TLD_OF[iso] ? d.endsWith('.' + TLD_OF[iso]) : false);
+    return { offered, signals, local, pages: (o.site_pages || []).slice(0, 3) };
+  }
   function sellsSame(o) {
     const type = String(o.type || '');
     const rival = rivalOf(o);
     if (rival && LIST_TYPES.has(type) && isRoundup(o)) return '';   // asking a rival's "best X" list to add you is fair game
     if (rival) return 'a competing site of yours (' + rival.domain + '): ' + rival.why + ', and a competitor does not link to your page';
+    const site = (SITE_EXEMPT.has(type) || (LIST_TYPES.has(type) && isRoundup(o))) ? null : siteOffer(o);
+    if (site && site.offered.length >= SITE_MIN_SERVICES && site.signals.length >= SITE_MIN_SIGNALS && site.local)
+      return 'a competing provider: their own site' + (site.pages.length ? ' (' + site.pages.join(', ') + ')' : '') + ' offers ' + site.offered.length + ' of your services ("'
+        + site.offered.slice(0, 3).join('", "') + '"' + (site.offered.length > 3 ? ' …' : '') + ') with the signals of a vendor selling them ("' + site.signals.slice(0, 2).join('", "') + '")'
+        + (o.country ? ' in ' + o.country : '');
     const terms = [...new Set((o.terms || []).flatMap(t => words(t).map(stem)))];
     if (terms.length < 2) return '';
     const title = String(o.title || ''); const text = String(o.text || '').slice(0, 30000);
@@ -456,7 +487,7 @@ const OK = (() => {
     return { ok: false, why: 'off topic for you: neither its name, its page nor its country ties it to ' + (String(x.topic_label || '') || 'your topics') };
   }
   return { OFF_TOPIC, isGov, words, stem, fit, contactsIn, rankContacts, authorUrl, contactForm, sellSignals, countryOf, pickTarget, kindOf,
-    badHost, isHomeUrl, homepageOnly, accreditedList, accredited, sellsSame, rivalOf, isRoundup, LIST_TYPES, namesUs, nameRe, MIN_NAME_RUN, noPitch, gapTopic, SELLWORD };
+    badHost, isHomeUrl, homepageOnly, accreditedList, accredited, sellsSame, siteOffer, rivalOf, isRoundup, LIST_TYPES, namesUs, nameRe, MIN_NAME_RUN, noPitch, gapTopic, SELLWORD };
 })();
 
 // ---- which stored outreach draft may still be offered (P34-1, live 2026-10-12; inlined by build_monitors.py) ----
@@ -503,9 +534,17 @@ const ACTION = {
   encyclopedia: (b, h) => ['coverage', 'Earn independent press coverage first; ' + h + ' only describes businesses that independent sources cover (never write about yourself there)'],
   competitor: (b, h) => ['content', 'A competitor\'s own page is cited here: answer the same question better on your site'],
 };
+// R83 (2026-10-16, re-rating defect C-7): the businesses AI recommends instead of you are never earned media to pitch. The Growth
+// Plan's competitors are the AI visibility table's 8 rows plus the declared ones; the exclusion set also takes every business the
+// Answer Analyst learned a website for (the `ai_brands:` cache the AI Visibility Tracker writes), by registrable domain.
+const cacheRowsG = (() => { try { return $('Load Cache (Growth)').all().map(i => i.json).filter(r => r && r.key); } catch (e) { return []; } })();
+const aliasDomains = (sid) => { const row = cacheRowsG.find(r => r.key === 'ai_brands:' + sid); if (!row) return []; try { return Object.values(JSON.parse(row.value || '{}') || {}).map(String); } catch (e) { return []; } };
 const out = [];
 for (const p of plans) {
-  const business = p.business_name || p.domain;   // D12: never the domain label ("techand" for Tech&) — the site model's name, else the domain
+  const business = p.business_name || p.domain;
+  const ownReg = LK.regDomain(p.domain) || p.domain;
+  const rivals = new Set([...(p.competitors || []), ...aliasDomains(p.site_id)].map(d => LK.regDomain(String(d || '').toLowerCase().replace(/^www\./, '')) || '').filter(d => d && /\./.test(d) && d !== ownReg && !OK.isGov(d)));
+  const rivalOf = (h) => rivals.has(LK.regDomain(String(h || '').toLowerCase().replace(/^www\./, '')) || '');   // D12: never the domain label ("techand" for Tech&) — the site model's name, else the domain
   const ourRes = p.brand_names.map(wordRe);
   const sellTerms = ((p.services || []).length ? p.services : [p.profile && p.profile.business_type]).filter(Boolean);
   const pageText = new Map();   // their page, for the competitor gate (never stored: the earned rows stay small)
@@ -520,6 +559,10 @@ for (const p of plans) {
         if (cu) contact_url = /^https?:/i.test(cu[1]) ? cu[1] : (cu[1].startsWith('/') ? 'https://' + e.host + cu[1] : ''); } }
     const [type, action] = (ACTION[e.kind] || ACTION.article)(business, e.host);
     const value = Math.round(10 * e.citations * (1 + e.engines.length / 2) * ({ list: 1.4, article: 1.1, news: 1.2, review: 1.2, forum: 1, official: 1.3, video: 0.9, social: 0.8, encyclopedia: 0.6, competitor: 0.3 }[e.kind] || 1)) / 10;
+    // R83: a page on the site of a business AI names instead of you is a competitor's page — answer the question better on your own
+    // site; only its "best X" list stays a list (the Link Builder's rule: asking a rival's roundup to add you is fair game)
+    const rival = rivalOf(e.host) && !(e.kind === 'list' && OK.isRoundup({ title, url: e.url }));
+    if (rival) { const [t2, a2] = ACTION.competitor(business, e.host); return { ...e, kind: 'competitor', rival: true, title, mentions_us, competitors_named: named, contact_email, contact_url, fetch_status, action: a2, action_type: t2, value: Math.round(10 * e.citations * (1 + e.engines.length / 2) * 0.3) / 10 }; }
     return { ...e, title, mentions_us, competitors_named: named, contact_email, contact_url, fetch_status, action, action_type: type, value };
   }).sort((a, b) => b.value - a.value);
   // prospects (type ai_source, one row per site + domain): the exact page, what it names, the action; drafts for the 3 most valuable new ones

@@ -657,7 +657,10 @@ list.forEach((s, site_idx) => {
   }
   const seen = new Set(); const pages = [];
   for (const c of cand.sort((a, b) => b.weight - a.weight || S(b.lastmod).localeCompare(S(a.lastmod)))) {
-    const u = S(c.url); if (!/^https?:\/\//i.test(u)) continue;
+    // R92 part 5 (2026-10-16, re-rating defect C-16): menu links point at sections ("/industries#bfsi", "/capabilities#ai"); a fragment is
+    // never sent to a server, so it is no page of its own — those two took 2 of the 25 slots and were inspected as "URL is unknown to
+    // Google". The fragment is dropped and the page counted once with the page it belongs to.
+    const u = S(c.url).replace(/#.*$/, ''); if (!/^https?:\/\//i.test(u)) continue;
     if (SM.helpers.bare(PW.helpers.hostOf(u)) !== SM.helpers.bare(s.domain)) continue;   // only the site's own pages are watched
     const k = ukey(u); if (seen.has(k)) continue; seen.add(k);
     pages.push({ url: u, kind: c.kind, weight: c.weight });
