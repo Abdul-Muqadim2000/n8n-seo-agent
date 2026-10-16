@@ -26,9 +26,17 @@ const ACTION = {
   encyclopedia: (b, h) => ['coverage', 'Earn independent press coverage first; ' + h + ' only describes businesses that independent sources cover (never write about yourself there)'],
   competitor: (b, h) => ['content', 'A competitor\'s own page is cited here: answer the same question better on your site'],
 };
+// R83 (2026-10-16, re-rating defect C-7): the businesses AI recommends instead of you are never earned media to pitch. The Growth
+// Plan's competitors are the AI visibility table's 8 rows plus the declared ones; the exclusion set also takes every business the
+// Answer Analyst learned a website for (the `ai_brands:` cache the AI Visibility Tracker writes), by registrable domain.
+const cacheRowsG = (() => { try { return $('Load Cache (Growth)').all().map(i => i.json).filter(r => r && r.key); } catch (e) { return []; } })();
+const aliasDomains = (sid) => { const row = cacheRowsG.find(r => r.key === 'ai_brands:' + sid); if (!row) return []; try { return Object.values(JSON.parse(row.value || '{}') || {}).map(String); } catch (e) { return []; } };
 const out = [];
 for (const p of plans) {
-  const business = p.business_name || p.domain;   // D12: never the domain label ("techand" for Tech&) — the site model's name, else the domain
+  const business = p.business_name || p.domain;
+  const ownReg = LK.regDomain(p.domain) || p.domain;
+  const rivals = new Set([...(p.competitors || []), ...aliasDomains(p.site_id)].map(d => LK.regDomain(String(d || '').toLowerCase().replace(/^www\./, '')) || '').filter(d => d && /\./.test(d) && d !== ownReg && !OK.isGov(d)));
+  const rivalOf = (h) => rivals.has(LK.regDomain(String(h || '').toLowerCase().replace(/^www\./, '')) || '');   // D12: never the domain label ("techand" for Tech&) — the site model's name, else the domain
   const ourRes = p.brand_names.map(wordRe);
   const sellTerms = ((p.services || []).length ? p.services : [p.profile && p.profile.business_type]).filter(Boolean);
   const pageText = new Map();   // their page, for the competitor gate (never stored: the earned rows stay small)
@@ -43,6 +51,10 @@ for (const p of plans) {
         if (cu) contact_url = /^https?:/i.test(cu[1]) ? cu[1] : (cu[1].startsWith('/') ? 'https://' + e.host + cu[1] : ''); } }
     const [type, action] = (ACTION[e.kind] || ACTION.article)(business, e.host);
     const value = Math.round(10 * e.citations * (1 + e.engines.length / 2) * ({ list: 1.4, article: 1.1, news: 1.2, review: 1.2, forum: 1, official: 1.3, video: 0.9, social: 0.8, encyclopedia: 0.6, competitor: 0.3 }[e.kind] || 1)) / 10;
+    // R83: a page on the site of a business AI names instead of you is a competitor's page — answer the question better on your own
+    // site; only its "best X" list stays a list (the Link Builder's rule: asking a rival's roundup to add you is fair game)
+    const rival = rivalOf(e.host) && !(e.kind === 'list' && OK.isRoundup({ title, url: e.url }));
+    if (rival) { const [t2, a2] = ACTION.competitor(business, e.host); return { ...e, kind: 'competitor', rival: true, title, mentions_us, competitors_named: named, contact_email, contact_url, fetch_status, action: a2, action_type: t2, value: Math.round(10 * e.citations * (1 + e.engines.length / 2) * 0.3) / 10 }; }
     return { ...e, title, mentions_us, competitors_named: named, contact_email, contact_url, fetch_status, action, action_type: type, value };
   }).sort((a, b) => b.value - a.value);
   // prospects (type ai_source, one row per site + domain): the exact page, what it names, the action; drafts for the 3 most valuable new ones

@@ -600,7 +600,22 @@ G.code('Growth Metrics', 'Growth_Metrics.js', at(46, 0))
 def exact_rows(name, comment, key, cols, pos, single=False):
     pick = "i.json." + key + " ? [i.json." + key + "] : []" if single else "i.json." + key + " || []"
     G.code(name, '// ' + comment + ' (exact columns)\nconst COLS = ' + json.dumps([c for c, _ in cols]) + ';\nconst rows = $(\'Growth Metrics\').all().flatMap(i => ' + pick + ').map(r => Object.fromEntries(COLS.map(c => [c, r[c] === undefined ? null : r[c]])));\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];', pos)
-exact_rows('AI Page Rows', 'Key pages checked this week (seo_ai_pages, upsert by site + url)', 'page_rows', AI_PAGES_COLS, at(47, 0)); G.iff('Any AI Page Rows?', '{{ !$json.skip }}', at(48, 0))
+# R92 part 6 (2026-10-16, re-rating defect C-16): the upsert key is (site_id, url), so a page written under the bare host and the same
+# page under www are two rows — the 17 bare-host rows of 2026-10-10/11 stayed beside their www twins. The key is normalised here: a URL on
+# the site's own domain is put on the site model's canonical host (Growth Plan `site_host`) before the upsert, and two variants of one
+# page in one run are one row. The stale rows already stored are repaired by fix_ai_pages_hosts.py (dry run by default).
+G.code('AI Page Rows', '// Key pages checked this week (seo_ai_pages, upsert by site + url) (exact columns)\n'
+       '// R92 part 6: the URL in the upsert key is on the canonical host, whatever host the page was read under\n'
+       'const COLS = ' + json.dumps([c for c, _ in AI_PAGES_COLS]) + ';\n'
+       "const plans = (() => { try { return $('Growth Plan').all().map(i => i.json).filter(p => p && p.site_id); } catch (e) { return []; } })();\n"
+       "const hostFor = new Map(plans.map(p => [p.site_id, String(p.site_host || '').toLowerCase().replace(/\\.$/, '')]));\n"
+       "const bare = (h) => String(h || '').toLowerCase().replace(/^www\\./, '');\n"
+       "const canon = (r) => { const h = hostFor.get(r.site_id) || ''; const m = String(r.url || '').match(/^https?:\\/\\/([^\\/?#]+)(.*)$/i);\n"
+       "  if (!h || !m || bare(m[1]) !== bare(h)) return r.url; return 'https://' + h + (m[2] || '/'); };\n"
+       "const rows = $('Growth Metrics').all().flatMap(i => i.json.page_rows || []).map(r => ({ ...r, url: canon(r) })).map(r => Object.fromEntries(COLS.map(c => [c, r[c] === undefined ? null : r[c]])));\n"
+       "const one = new Map(); for (const r of rows) one.set(r.site_id + '|' + r.url, r);   // two variants of one page in one run: one row, the last read wins (as the upsert would)\n"
+       "const out = [...one.values()];\n"
+       "return out.length ? out.map(r => ({ json: r })) : [{ json: { skip: true } }];", at(47, 0)); G.iff('Any AI Page Rows?', '{{ !$json.skip }}', at(48, 0))
 G.node('Save AI Pages', DT_TYPE, DT_VERSION, dt_upsert_params_keys(AI_PAGES_TABLE, AI_PAGES_COLS, ['site_id', 'url']), at(49, -1), onError='continueRegularOutput')
 exact_rows('AI Target Rows', 'The questions to win (seo_ai_targets, upsert by target_id; the Content Cadence writes the queued ones)', 'target_rows', AI_TARGETS_COLS, at(50, 0)); G.iff('Any AI Target Rows?', '{{ !$json.skip }}', at(51, 0))
 G.node('Save AI Targets', DT_TYPE, DT_VERSION, dt_upsert_params_keys(AI_TARGETS_TABLE, AI_TARGETS_COLS, ['target_id']), at(52, -1), onError='continueRegularOutput')
