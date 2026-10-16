@@ -1370,22 +1370,22 @@
           ]
         ]
       },
-      "Format Alert": {
+      "Alert Channels Done": {
         "main": [
           [
             {
-              "node": "Ensure Ops Alerts Table",
+              "node": "Alert Delivery",
               "type": "main",
               "index": 0
             }
           ]
         ]
       },
-      "Alert Channels Done": {
+      "Format Alert": {
         "main": [
           [
             {
-              "node": "Alert Delivery",
+              "node": "Ensure Ops Alerts Table",
               "type": "main",
               "index": 0
             }

@@ -152,25 +152,67 @@ const SM = (() => {
   // a page of the inventory answers a keyword when it already gets impressions for it, or when at least 75% of the keyword's
   // meaningful words are in its slug or title (D11; keep it even while the inventory is empty).
   const MATCH_MIN = 0.75;
-  const matchPage = (model, keyword) => {
-    const want = termsOf(keyword); if (!want.length) return null;
+  // R35 (2026-10-16, re-rating 2026-10-15): the words were compared literally, so "d365 finance dubai" did not match a page titled
+  // "Dynamics 365 Finance & Operations UAE" and the report told the owner that page "does not target" the search. Three rules, applied
+  // to BOTH sides before anything is compared: the product's own short names are written out (d365 = dynamics 365, f&o = finance and
+  // operations), a word is compared on a light stem (invoice / invoices / invoicing), and an emirate in the SEARCH is covered by a page
+  // about the UAE ("emirate ⊂ uae" — never the other way round: a Dubai page does not answer every UAE search).
+  const SYN = [[/\bd\s?365\b/g, 'dynamics 365'], [/\bdynamics365\b/g, 'dynamics 365'], [/\bf\s?&\s?o\b|\bfno\b/g, 'finance operations'], [/\bunited arab emirates\b/g, 'uae'],
+    [/\babu dhabi\b/g, 'abudhabi'], [/\bras al khaimah\b/g, 'rasalkhaimah'], [/\bumm al quwain\b/g, 'ummalquwain'], [/\bal ain\b/g, 'alain']];
+  const EMIRATES = new Set(['dubai', 'abudhabi', 'sharjah', 'ajman', 'fujairah', 'rasalkhaimah', 'rak', 'ummalquwain', 'alain']);
+  const norm = (s) => { let t = S(s).toLowerCase().replace(/&amp;/g, '&'); for (const [re, to] of SYN) t = t.replace(re, to); return t; };
+  const stem = (t) => t.length >= 5 ? t.replace(/(ings?|ed|es|(?<!s)s)$/, '').replace(/e$/, '') : t;   // business = businesses, invoice = invoicing
+  const matchTerms = (s) => uniq(termsOf(norm(s)).map(stem));
+  // a keyword term is covered by a page's terms: the same stem, or an emirate in the search against a page about the UAE
+  const covers = (set, t) => set.includes(t) || (EMIRATES.has(t) && (set.includes('uae') || set.includes('emirat')));
+  const shareIn = (want, set) => want.length ? want.filter(t => covers(set, t)).length / want.length : 0;
+  // R56: a listing page (the blog / insights index, a category, a tag) gets impressions for every article it lists; when a dedicated
+  // page matches the same search by its own slug or title, the dedicated page is the one that answers it
+  const LISTING = /^\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?(?:insights|blog|blogs|news|articles|resources|posts|updates|knowledge|learn|library|stories|press|media|case-studies)\/?$|\/(?:category|categories|tag|tags|page|author|topics?)\/[^/]+\/?$/i;
+  const isListing = (u) => { const p = pathOf(u).replace(/[?#].*$/, ''); return LISTING.test(p); };
+  const untitled = (model) => pages(model).filter(p => !S(p.title) && !S(p.h1));
+  const matchPage = (model, keyword, prefer) => {   // `prefer`: a URL that wins a tie (the page Search Console itself credits for the search)
+    const prefKey = prefer ? bare(hostOf(prefer)) + pathOf(prefer).replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase() : "";
+    const isPref = (u) => !!prefKey && (bare(hostOf(u)) + pathOf(u).replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase()) === prefKey;
+    const want = matchTerms(keyword); if (!want.length) return null;
     const key = tokensOf(keyword).join(' ');
     const inv = pages(model);
+    const byQuery = [];
     for (const p of inv) {
       const q = (p.queries || []).find(x => tokensOf(x.query || x.keyword || x).join(' ') === key && (Number((x || {}).impressions) || 0) > 0);
-      if (q) return { url: p.url, title: p.title, source: p.source, matched_by: 'query', score: 1, impressions: Number(q.impressions) || 0 };
+      if (q) byQuery.push({ url: p.url, title: p.title, source: p.source, matched_by: 'query', score: 1, impressions: Number(q.impressions) || 0 });
     }
+    byQuery.sort((a, b) => Number(isListing(a.url)) - Number(isListing(b.url)) || b.impressions - a.impressions);
+    const qHit = byQuery[0] || null;
+    const listingOf = (lst, best) => ({ url: lst.url, impressions: lst.impressions,
+      note: 'Google currently shows ' + pathOf(lst.url) + ' (a listing page) for this search; the page that is about it is ' + pathOf(best.url) });
+    if (qHit && !isListing(qHit.url)) { const lst = byQuery.find(x => isListing(x.url)); return lst ? { ...qHit, listing: listingOf(lst, qHit) } : qHit; }
     let best = null;
     for (const p of inv) {
-      const slug = termsOf(pathOf(p.url).replace(/\.[a-z]{2,5}$/i, ''));
-      const title = termsOf(S(p.title) + ' ' + S(p.h1));
-      const inSlug = want.filter(t => slug.includes(t)).length / want.length;
-      const inTitle = want.filter(t => title.includes(t)).length / want.length;
+      if (qHit && isListing(p.url)) continue;   // R56: looking for the dedicated page behind a listing's impressions
+      const slug = matchTerms(pathOf(p.url).replace(/\.[a-z]{2,5}$/i, ''));
+      const title = matchTerms(S(p.title) + ' ' + S(p.h1));
+      const inSlug = shareIn(want, slug);
+      const inTitle = shareIn(want, title);
       const score = Math.max(inSlug, inTitle);
-      if (score + 1e-9 >= MATCH_MIN && (!best || score > best.score)) best = { url: p.url, title: p.title, source: p.source, matched_by: inSlug >= inTitle ? 'slug' : 'title', score: Math.round(score * 100) / 100, impressions: 0 };
+      if (score + 1e-9 >= MATCH_MIN && (!best || score > best.score + 1e-9 || (Math.abs(score - best.score) < 1e-9 && isPref(p.url) && !isPref(best.url)))) best = { url: p.url, title: p.title, source: p.source, matched_by: inSlug >= inTitle ? 'slug' : 'title', score: Math.round(score * 100) / 100, impressions: 0 };
     }
-    return best;
+    if (qHit && best) return { ...best, listing: listingOf(qHit, best) };
+    return qHit || best;
   };
+  // R35: how much of a search a page's OWN title / H1 holds (null when the page's title was never read) - the only evidence that may call
+  // a page "about something else"
+  // the words of a spoken / long-tail search that say nothing about the subject ("which ... can help ... in the uae")
+  const FILLER = new Set(['which', 'what', 'how', 'why', 'when', 'where', 'who', 'can', 'could', 'help', 'helps', 'best', 'top', 'near', 'me', 'is', 'are', 'do', 'does', 'should', 'will', 'would', 'get', 'need', 'i', 'we', 'you']);
+  const titleShare = (page, keyword) => { const p = page || {}; if (!S(p.title) && !S(p.h1)) return null;
+    const want = uniq(termsOf(norm(keyword)).filter(t => !FILLER.has(t)).map(stem)); if (!want.length) return null; const set = matchTerms(S(p.title) + ' ' + S(p.h1));
+    return { share: Math.round(shareIn(want, set) * 100) / 100, have: want.filter(t => covers(set, t)).length, of: want.length, missing: want.filter(t => !covers(set, t)) }; };
+  // R34: the pages whose title was never read, so a caller can say what it judged on the address alone instead of reading nothing silently
+  const titleGap = (model) => { const all = pages(model); const u = untitled(model);
+    return { pages: all.length, untitled: u.length, urls: u.slice(0, 12).map(p => p.url),
+      note: u.length ? u.length + ' of the ' + all.length + ' pages of the site have no title on file yet (the weekly site check reads them a batch at a time), so they were judged by their address only' : '' }; };
+  // R55: a URL of the site as the site serves it (canonical host); another site's URL is returned as it is
+  const canonUrl = (model, u) => { const h = hostOf(u); if (!h || bare(h) !== bare((model || {}).domain || (model || {}).canonical_host || '')) return S(u); return siteUrl(model, pathOf(u)); };
   // D11: a stored seo_pages row carries its queries as the JSON string `queries_json`, so both shapes are accepted here
   const queriesOf = (p) => Array.isArray(p.queries) ? p.queries : (jparse(p.queries_json, []) || []);
   const withPages = (model, more) => ({ ...model, pages: (() => { const seen = new Set(); const out = [];
@@ -202,7 +244,8 @@ const SM = (() => {
     decay_state: S(p.decay_state), decay_pct: num0(p.decay_pct), decay_lost: num0(p.decay_lost), decay_kind: S(p.decay_kind),
     decay_basis: S(p.decay_basis).slice(0, 900), measured_at: S(p.measured_at) }));
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
-    helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml } };
+    titleShare, titleGap, canonUrl, isListing,
+    helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms } };
 })();
 const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 const out = [];

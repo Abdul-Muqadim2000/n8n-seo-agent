@@ -21,11 +21,25 @@ const REACH_BASE_RATE = { year: 2025, source: 'Ahrefs', top10_within_year_pct: 1
 const REACH_CHANCE = { direct: { band: 'good', range: [50, 70] }, short: { band: 'fair', range: [30, 50] }, full: { band: 'low', range: [15, 30] }, stretch: { band: 'slim', range: [5, 15] }, none: { band: 'none', range: [0, 0] } };
 const REACH_CHANCE_NOTE = 'an uncalibrated estimate until this system has measured its own ladders';
 // { band, range, label }: "estimated chance good (50-70%, uncalibrated)"; '' label for no plan
-const reachChance = (plan_type, stretch) => { const c = REACH_CHANCE[plan_type === 'none' ? 'none' : (stretch ? 'stretch' : plan_type)] || REACH_CHANCE.full;
+// R49 (2026-10-16, re-rating 2026-10-15): the band was read off the plan type alone, so a site whose reach is only the size tier for
+// "0 keywords in Google's top 10" (method size, sample 0) was told "estimated chance good (50-70%)" for a KD-3 keyword — the highest
+// band, on a reach nothing was measured on. The table stays (a judgement call until G17); it is now applied only when the reach rests on
+// a measured ranking: the site's top-10 keywords (percentile, or any top-10 keyword at all), a reach measured on the topic, or the site
+// already ranking 1-20 for the keyword. Otherwise there is no band — the plan and the months stay, with the base rate as the only figure.
+// The same words live in app/shared/src/keywords.ts (UNMEASURED_LABEL).
+const REACH_UNMEASURED_LABEL = 'no estimated chance (no measured ranking to judge it by)';
+const reachMeasured = (info, position) => { const i = info || {}; const p = reachNum(position);
+  if (p != null && p >= 1 && p <= REACH_CFG.easy_position) return true;
+  if (i.used === true || String(i.method || '') === 'percentile') return true;
+  return (Number(i.top10) || 0) > 0 || (Number(i.sample) || 0) > 0; };
+const reachChance = (plan_type, stretch, measured) => { const c = REACH_CHANCE[plan_type === 'none' ? 'none' : (stretch ? 'stretch' : plan_type)] || REACH_CHANCE.full;
+  if (c.band !== 'none' && measured === false) return { band: 'unmeasured', range: [0, 0], label: REACH_UNMEASURED_LABEL, basis: 'base rate' };
   return { band: c.band, range: c.range.slice(), label: c.band === 'none' ? '' : 'estimated chance ' + c.band + ' (' + c.range[0] + '-' + c.range[1] + '%, uncalibrated)' }; };
 const reachBaseRateText = () => 'Base rate (' + REACH_BASE_RATE.source + ', ' + REACH_BASE_RATE.year + '): only ' + REACH_BASE_RATE.top10_within_year_pct + '% of new pages reach Google\'s top 10 within a year, and ' + REACH_BASE_RATE.of_those_within_month_pct + '% of those do so within a month — the rest take months.';
 // the sentence under a plan's month range: the chance band, that it is uncalibrated, and the 2025 base rate it is judged against
-const reachChanceText = (plan) => (plan && plan.chance && plan.chance.label) ? 'Estimated chance of reaching the top 10 within ' + plan.months + ' months: ' + plan.chance.band + ' (' + plan.chance.range[0] + '-' + plan.chance.range[1] + '%) — ' + REACH_CHANCE_NOTE + '. ' + reachBaseRateText() : '';
+const reachChanceText = (plan) => !(plan && plan.chance && plan.chance.label) ? '' : plan.chance.band === 'unmeasured'
+  ? 'No estimated chance: the reach this plan is judged against rests on no measured ranking (the search data shows none of your keywords in Google\'s top 10), so a band would only restate the plan. The only measured figure is the base rate. ' + reachBaseRateText()
+  : (plan && plan.chance && plan.chance.label) ? 'Estimated chance of reaching the top 10 within ' + plan.months + ' months: ' + plan.chance.band + ' (' + plan.chance.range[0] + '-' + plan.chance.range[1] + '%) — ' + REACH_CHANCE_NOTE + '. ' + reachBaseRateText() : '';
 const reachDomain = (d) => String(d || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '').replace(/:\d+$/, '');
 const reachSiteId = (d) => 'site_' + reachDomain(d).replace(/[^a-z0-9]+/g, '-');
 const reachKey = (d) => 'reach:' + reachSiteId(d);
@@ -134,10 +148,11 @@ function reachTopic(ranked, head, domainReach, o) {
     best: best ? { keyword: String(best.keyword), position: pos(best) } : null, examples, other_topics, reason, note, head: String(head || '') };
 }
 const reachStrong = (authority, position) => { const p = reachNum(position); return !!(authority && ((Number(authority.top10) || 0) >= 100 || (Number(authority.organic_keywords) || 0) >= 1000)) || (p != null && p >= 1 && p <= REACH_CFG.easy_position); };
-function reachPlan(difficulty, strong) {
+// `measured` (R49): reachMeasured(reach info, position); false = no chance band. Left out, the band stays (a caller with no reach info).
+function reachPlan(difficulty, strong, measured) {
   const plan_type = { easy: 'direct', reachable: 'short', hard: 'full', very_hard: 'full', not_realistic: 'none' }[difficulty] || 'full';
   const m = plan_type === 'none' ? null : (strong ? REACH_MONTHS_STRONG : REACH_MONTHS)[plan_type];
-  return { plan_type, months: m ? m[0] + '-' + m[1] : '', months_range: m ? m.slice() : null, stretch: difficulty === 'very_hard', chance: reachChance(plan_type, difficulty === 'very_hard') };
+  return { plan_type, months: m ? m[0] + '-' + m[1] : '', months_range: m ? m.slice() : null, stretch: difficulty === 'very_hard', chance: reachChance(plan_type, difficulty === 'very_hard', measured) };
 }
 const reachLabel = (difficulty, plan) => [REACH_DIFF_LABEL[difficulty] || '', plan ? REACH_PLAN_LABEL[plan.plan_type] + (plan.stretch ? ' (stretch)' : '') : '', plan && plan.months ? plan.months + ' months' : ''].filter(Boolean).join(' · ');
 // DataForSEO Labs calls that measure reach on a cache miss (~$0.03): the site's top-10 keywords with their difficulty, and its size
@@ -209,7 +224,29 @@ const topic = reachTopic(a.reach_info.ranked === undefined ? null : a.reach_info
   { domain: a.domain, reason_missing: a.reach_info.cached ? 'the reach stored on ' + String(a.reach_info.cached_at || '').slice(0, 10) + ' was kept without the keywords behind it, so this check has no topic evidence to read' : '' });
 const reach = topic.reach;
 const difficulty_for_you = difficultyForYou(a.kd, reach, { navigational, position: a.position });
-const plan = reachPlan(difficulty_for_you, reachStrong(a.reach_info, a.position));
+// R49 (2026-10-16): a chance band only on a reach that rests on a measured ranking (exec 598: method size, 0 top-10 keywords -> "good 50-70%")
+const plan = reachPlan(difficulty_for_you, reachStrong(a.reach_info, a.position), reachMeasured(topic.used ? { used: true } : a.reach_info, a.position));
+// ---- R50 (2026-10-16): the check's own answer names the ladder / page that already holds this search ----
+// The app sends the website's ladder keywords (`existing_keywords`) and used them only to filter the alternatives, so a check on
+// "erp software uae" — the head of an active ladder with a written page — answered "Easy · Direct plan" with no word about it. The same
+// search (one search, one page: equal words or 75%+ in common) is named; when the Keyword Check also loaded the domain's seo_ladders /
+// seo_content_log rows (optional nodes), the ladder id, its status and the page are given too.
+const rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error && Object.keys(r).length); } catch (e) { return []; } };
+const existing = (() => {
+  const kw = String(a.keyword || '').toLowerCase().trim();
+  const same = (x) => { const k = String(x || '').toLowerCase().trim(); return !!k && (k === kw || keywordsOverlap(k, kw)); };
+  const dom = reachDomain(a.domain);
+  const lad = rowsOf('Load Ladders (Assess)').filter(r => !dom || reachDomain(r.domain) === dom).find(r => same(r.keyword) || (Number(r.rung) === 4 && same(r.head_keyword)));
+  const log = rowsOf('Load Content Log (Assess)').filter(r => !dom || reachDomain(r.domain) === dom).find(r => same(r.keyword));
+  const hit = (a.existing_keywords || []).find(same) || (lad && lad.keyword) || (log && log.keyword) || '';
+  if (!hit && !lad && !log) return null;
+  const page_url = String((log && (log.published_url || log.existing_page_url)) || (lad && lad.target_url) || '').trim();
+  return { keyword: String(hit || (lad && lad.keyword) || ''), how: String(hit).toLowerCase().trim() === kw ? 'the same keyword' : 'the same search',
+    ladder_id: lad ? String(lad.ladder_id || '') : null, ladder_status: lad ? String(lad.status || '') : null, rung: lad ? Number(lad.rung) || null : null,
+    page_url: page_url || null, page_status: log ? String(log.status || '') : null,
+    note: 'already one of your keywords' + (lad ? ' (ladder ' + lad.ladder_id + (lad.status ? ', ' + lad.status : '') + ')' : ' (one of your keyword ladders)')
+      + (page_url ? ' - its page: ' + page_url : '') + ': continue that ladder / improve that page rather than starting a second one for the same search' };
+})();
 const listOf = (v) => (Array.isArray(v) ? v : (typeof v === 'string' ? v.split(/[\n,;]+/) : [])).map(x => String(x == null ? '' : x).toLowerCase().replace(/["“”]/g, '').replace(/\s+/g, ' ').trim()).filter(x => x.length >= 2 && x.length <= 100);
 const need = difficulty_for_you === 'not_realistic' || fit === 0;
 const alternatives = need && aiOk ? [...new Set(listOf(o.alternatives))].filter(x => !keywordsOverlap(x, a.keyword) && !(a.existing_keywords || []).some(e => keywordsOverlap(e, x))).slice(0, 3) : [];
@@ -236,7 +273,9 @@ const body = { ok: true, keyword: a.keyword, country: a.country, volume: a.volum
   reach_basis: topic.used ? 'topic' : 'site', topic_reach: topic.topic_reach, reach_used: reach,
   topic_evidence: { on_topic: topic.on_topic, top10: topic.top10, sample: topic.sample, best: topic.best, examples: topic.examples, other_topics: topic.other_topics, reason: topic.reason },
   reach_note: topic.note,
+  existing,   // R50
   business_source: a.business_source, warnings };
+if (existing) body.label = body.label + ' · already one of your keywords';
 // ---- R26 (2026-10-14, FIX_PLAN.md §3.12): an answer with no search data may not sound sure ----
 // Live on 2026-10-14 "business central partner uae" and "dynamics 365 partner uae" came back with volume, difficulty, intent and CPC
 // all null — DataForSEO has nothing for them in the UAE — and the answer still read "Reachable for your site · Short ladder ·

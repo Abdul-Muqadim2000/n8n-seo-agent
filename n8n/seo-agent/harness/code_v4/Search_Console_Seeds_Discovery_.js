@@ -142,25 +142,67 @@ const SM = (() => {
   // a page of the inventory answers a keyword when it already gets impressions for it, or when at least 75% of the keyword's
   // meaningful words are in its slug or title (D11; keep it even while the inventory is empty).
   const MATCH_MIN = 0.75;
-  const matchPage = (model, keyword) => {
-    const want = termsOf(keyword); if (!want.length) return null;
+  // R35 (2026-10-16, re-rating 2026-10-15): the words were compared literally, so "d365 finance dubai" did not match a page titled
+  // "Dynamics 365 Finance & Operations UAE" and the report told the owner that page "does not target" the search. Three rules, applied
+  // to BOTH sides before anything is compared: the product's own short names are written out (d365 = dynamics 365, f&o = finance and
+  // operations), a word is compared on a light stem (invoice / invoices / invoicing), and an emirate in the SEARCH is covered by a page
+  // about the UAE ("emirate ⊂ uae" — never the other way round: a Dubai page does not answer every UAE search).
+  const SYN = [[/\bd\s?365\b/g, 'dynamics 365'], [/\bdynamics365\b/g, 'dynamics 365'], [/\bf\s?&\s?o\b|\bfno\b/g, 'finance operations'], [/\bunited arab emirates\b/g, 'uae'],
+    [/\babu dhabi\b/g, 'abudhabi'], [/\bras al khaimah\b/g, 'rasalkhaimah'], [/\bumm al quwain\b/g, 'ummalquwain'], [/\bal ain\b/g, 'alain']];
+  const EMIRATES = new Set(['dubai', 'abudhabi', 'sharjah', 'ajman', 'fujairah', 'rasalkhaimah', 'rak', 'ummalquwain', 'alain']);
+  const norm = (s) => { let t = S(s).toLowerCase().replace(/&amp;/g, '&'); for (const [re, to] of SYN) t = t.replace(re, to); return t; };
+  const stem = (t) => t.length >= 5 ? t.replace(/(ings?|ed|es|(?<!s)s)$/, '').replace(/e$/, '') : t;   // business = businesses, invoice = invoicing
+  const matchTerms = (s) => uniq(termsOf(norm(s)).map(stem));
+  // a keyword term is covered by a page's terms: the same stem, or an emirate in the search against a page about the UAE
+  const covers = (set, t) => set.includes(t) || (EMIRATES.has(t) && (set.includes('uae') || set.includes('emirat')));
+  const shareIn = (want, set) => want.length ? want.filter(t => covers(set, t)).length / want.length : 0;
+  // R56: a listing page (the blog / insights index, a category, a tag) gets impressions for every article it lists; when a dedicated
+  // page matches the same search by its own slug or title, the dedicated page is the one that answers it
+  const LISTING = /^\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?(?:insights|blog|blogs|news|articles|resources|posts|updates|knowledge|learn|library|stories|press|media|case-studies)\/?$|\/(?:category|categories|tag|tags|page|author|topics?)\/[^/]+\/?$/i;
+  const isListing = (u) => { const p = pathOf(u).replace(/[?#].*$/, ''); return LISTING.test(p); };
+  const untitled = (model) => pages(model).filter(p => !S(p.title) && !S(p.h1));
+  const matchPage = (model, keyword, prefer) => {   // `prefer`: a URL that wins a tie (the page Search Console itself credits for the search)
+    const prefKey = prefer ? bare(hostOf(prefer)) + pathOf(prefer).replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase() : "";
+    const isPref = (u) => !!prefKey && (bare(hostOf(u)) + pathOf(u).replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase()) === prefKey;
+    const want = matchTerms(keyword); if (!want.length) return null;
     const key = tokensOf(keyword).join(' ');
     const inv = pages(model);
+    const byQuery = [];
     for (const p of inv) {
       const q = (p.queries || []).find(x => tokensOf(x.query || x.keyword || x).join(' ') === key && (Number((x || {}).impressions) || 0) > 0);
-      if (q) return { url: p.url, title: p.title, source: p.source, matched_by: 'query', score: 1, impressions: Number(q.impressions) || 0 };
+      if (q) byQuery.push({ url: p.url, title: p.title, source: p.source, matched_by: 'query', score: 1, impressions: Number(q.impressions) || 0 });
     }
+    byQuery.sort((a, b) => Number(isListing(a.url)) - Number(isListing(b.url)) || b.impressions - a.impressions);
+    const qHit = byQuery[0] || null;
+    const listingOf = (lst, best) => ({ url: lst.url, impressions: lst.impressions,
+      note: 'Google currently shows ' + pathOf(lst.url) + ' (a listing page) for this search; the page that is about it is ' + pathOf(best.url) });
+    if (qHit && !isListing(qHit.url)) { const lst = byQuery.find(x => isListing(x.url)); return lst ? { ...qHit, listing: listingOf(lst, qHit) } : qHit; }
     let best = null;
     for (const p of inv) {
-      const slug = termsOf(pathOf(p.url).replace(/\.[a-z]{2,5}$/i, ''));
-      const title = termsOf(S(p.title) + ' ' + S(p.h1));
-      const inSlug = want.filter(t => slug.includes(t)).length / want.length;
-      const inTitle = want.filter(t => title.includes(t)).length / want.length;
+      if (qHit && isListing(p.url)) continue;   // R56: looking for the dedicated page behind a listing's impressions
+      const slug = matchTerms(pathOf(p.url).replace(/\.[a-z]{2,5}$/i, ''));
+      const title = matchTerms(S(p.title) + ' ' + S(p.h1));
+      const inSlug = shareIn(want, slug);
+      const inTitle = shareIn(want, title);
       const score = Math.max(inSlug, inTitle);
-      if (score + 1e-9 >= MATCH_MIN && (!best || score > best.score)) best = { url: p.url, title: p.title, source: p.source, matched_by: inSlug >= inTitle ? 'slug' : 'title', score: Math.round(score * 100) / 100, impressions: 0 };
+      if (score + 1e-9 >= MATCH_MIN && (!best || score > best.score + 1e-9 || (Math.abs(score - best.score) < 1e-9 && isPref(p.url) && !isPref(best.url)))) best = { url: p.url, title: p.title, source: p.source, matched_by: inSlug >= inTitle ? 'slug' : 'title', score: Math.round(score * 100) / 100, impressions: 0 };
     }
-    return best;
+    if (qHit && best) return { ...best, listing: listingOf(qHit, best) };
+    return qHit || best;
   };
+  // R35: how much of a search a page's OWN title / H1 holds (null when the page's title was never read) - the only evidence that may call
+  // a page "about something else"
+  // the words of a spoken / long-tail search that say nothing about the subject ("which ... can help ... in the uae")
+  const FILLER = new Set(['which', 'what', 'how', 'why', 'when', 'where', 'who', 'can', 'could', 'help', 'helps', 'best', 'top', 'near', 'me', 'is', 'are', 'do', 'does', 'should', 'will', 'would', 'get', 'need', 'i', 'we', 'you']);
+  const titleShare = (page, keyword) => { const p = page || {}; if (!S(p.title) && !S(p.h1)) return null;
+    const want = uniq(termsOf(norm(keyword)).filter(t => !FILLER.has(t)).map(stem)); if (!want.length) return null; const set = matchTerms(S(p.title) + ' ' + S(p.h1));
+    return { share: Math.round(shareIn(want, set) * 100) / 100, have: want.filter(t => covers(set, t)).length, of: want.length, missing: want.filter(t => !covers(set, t)) }; };
+  // R34: the pages whose title was never read, so a caller can say what it judged on the address alone instead of reading nothing silently
+  const titleGap = (model) => { const all = pages(model); const u = untitled(model);
+    return { pages: all.length, untitled: u.length, urls: u.slice(0, 12).map(p => p.url),
+      note: u.length ? u.length + ' of the ' + all.length + ' pages of the site have no title on file yet (the weekly site check reads them a batch at a time), so they were judged by their address only' : '' }; };
+  // R55: a URL of the site as the site serves it (canonical host); another site's URL is returned as it is
+  const canonUrl = (model, u) => { const h = hostOf(u); if (!h || bare(h) !== bare((model || {}).domain || (model || {}).canonical_host || '')) return S(u); return siteUrl(model, pathOf(u)); };
   // D11: a stored seo_pages row carries its queries as the JSON string `queries_json`, so both shapes are accepted here
   const queriesOf = (p) => Array.isArray(p.queries) ? p.queries : (jparse(p.queries_json, []) || []);
   const withPages = (model, more) => ({ ...model, pages: (() => { const seen = new Set(); const out = [];
@@ -192,7 +234,8 @@ const SM = (() => {
     decay_state: S(p.decay_state), decay_pct: num0(p.decay_pct), decay_lost: num0(p.decay_lost), decay_kind: S(p.decay_kind),
     decay_basis: S(p.decay_basis).slice(0, 900), measured_at: S(p.measured_at) }));
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
-    helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml } };
+    titleShare, titleGap, canonUrl, isListing,
+    helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms } };
 })();
 // ---- shared Search Console query rules (2026-10-12, FIX_PLAN G9 + D24 / P1-3): inlined by the build (the GSC_QUERIES placeholder) into
 // Parse GSC (the Site Tracker) and GSC Audit Findings (the audit), so the weekly report and the audit judge a query the same way.
@@ -252,6 +295,7 @@ const KWI = (() => {
     min_impressions: 10,        // a query needs this many impressions in the Search Console period before it seeds anything
     striking_min: 8,            // "striking distance": bottom of page 1 to the end of page 2, where one strong page moves the needle
     striking_max: 20,
+    off_topic_share: 0.5,       // R35: a ranking page is "about something else" only when its own title / H1 hold less than half of the search's words
     max_seeds: 10,              // how many Search Console queries may be handed to the research as seeds
     period_days: 28,            // the Search Console window the Site Tracker stores (Site_Plan.js ranges.current)
     month_days: 30,
@@ -309,30 +353,48 @@ const KWI = (() => {
       if (impressions < c.min_impressions) { dropped.low_impressions++; continue; }
       // which page, if any, already answers this search: the page inventory first (D11), the page Search Console reports only when
       // the inventory is empty (then it is the best evidence we have, and it is labelled as such)
-      const inv = matchPage(q);
+      const inv = matchPage(q, S(r.page));   // R35: the page Search Console credits wins a tie
       // R12 (2026-10-13, re-rating §3.11): 11 of 25 rows read "no page of yours answers this search" while the same row named a live
       // 200-OK page of the site — one of them ranking #6.2 — because only the slug / title match counted and the URL Search Console
       // itself reports was ignored whenever the inventory was non-empty. A URL on this site is evidence: it is the answering page, with
       // its own label ("the page that gets the impressions does not target this search"), so the report never asks the owner for a second
       // page for a search they already rank for (D11's cannibalisation rule, in the discovery path).
+      // R55 (2026-10-16): Search Console reports the bare host for an sc-domain property while the inventory holds the canonical one,
+      // so one table linked both. Every site URL printed goes through the site's canonical host (`c.canon`, SM.canonUrl); Google's own
+      // URL stays as `gsc_page`.
+      const canon = typeof c.canon === 'function' ? c.canon : (u) => u;
       const rowUrl = S(r.page);
       const rowBare = bare(rowUrl);
       const rowOnSite = !!rowUrl && !!rowBare && (!dom || rowBare === dom || rowBare.endsWith('.' + dom));
+      const pageUrl = rowOnSite ? S(canon(rowUrl)) : rowUrl;
+      // R35 (2026-10-16, re-rating 2026-10-15): a row whose page is on the site is a page that RANKS for the query. It used to be labelled
+      // "the page that gets the impressions does not target this search" whenever the literal word matcher failed — 20 rows, 18 of them
+      // the D365 F&O page for D365 F&O searches. A page is now called off-target only on evidence about the page itself: its own title /
+      // H1 (`c.pageTitleShare`, SM.titleShare) holding less than half of the search's words, and the sentence says what was compared.
+      const evidence = rowOnSite && typeof c.pageTitleShare === 'function' ? c.pageTitleShare(rowUrl, q) : null;
       const row_page = (rowUrl && (c.use_row_page || rowOnSite))
-        ? { url: rowUrl, title: '', matched_by: c.use_row_page ? 'search console page' : 'impressions' } : null;
-      const answered_by = inv ? { url: S(inv.url), title: S(inv.title), matched_by: S(inv.matched_by) || 'inventory' } : row_page;
+        ? { url: pageUrl, title: S(evidence && evidence.title), matched_by: c.use_row_page ? 'search console page' : 'search console' } : null;
+      const answered_by = inv ? { url: S(canon(S(inv.url))), title: S(inv.title), matched_by: S(inv.matched_by) || 'inventory', ...(inv.listing ? { listing: inv.listing } : {}) } : row_page;
       const kinds = [];
-      if (!answered_by) kinds.push('no_page');
-      else if (!inv && answered_by.matched_by === 'impressions') kinds.push('page_mismatch');
+      const offTopic = !inv && !!evidence && evidence.share != null && evidence.share < c.off_topic_share;
       const striking = position >= c.striking_min && position <= c.striking_max;
+      const lowPos = position > c.striking_max;
+      if (!answered_by) kinds.push('no_page');
+      else if (offTopic) kinds.push('page_mismatch');
+      else if (!inv && lowPos) kinds.push('low_position');
       if (striking) kinds.push('striking');
       const posTxt = position > 0 ? '#' + (Math.round(position * 10) / 10) : 'unreported';
+      const pathTxt = answered_by ? (S(answered_by.url).replace(/^https?:\/\/[^/]+/i, '') || '/') : '';
       const why = kinds.indexOf('no_page') >= 0 ? 'no page of yours answers this search'
-        : kinds.indexOf('page_mismatch') >= 0 ? 'the page that gets the impressions does not target this search'
-          + (striking ? ' (you rank ' + posTxt + ' with it — striking distance)' : ' (you rank ' + posTxt + ' with it)')
-          : striking ? 'you rank ' + posTxt + ' — striking distance' : 'a page of yours already answers this search';
+        : kinds.indexOf('page_mismatch') >= 0 ? 'the page that gets the impressions is about something else: ' + (evidence.h1 ? 'its title and H1 share' : 'its title shares') + ' only '
+          + evidence.have + ' of the ' + evidence.of + ' words of this search (missing: ' + evidence.missing.join(', ') + ') — you rank ' + posTxt + ' with ' + pathTxt
+          + (striking ? ' (striking distance)' : '') + '; aim that page at it or give the search its own'
+        : striking ? 'you rank ' + posTxt + ' with ' + pathTxt + ' — striking distance: improve that page'
+        : lowPos ? 'low position on ' + pathTxt + ' (you rank ' + posTxt + ' with it) — improve that page'
+        : 'a page of yours already answers this search (' + pathTxt + (position > 0 ? ', you rank ' + posTxt : '') + ')'
+          + (answered_by && answered_by.listing ? ' — Google currently shows ' + (S(answered_by.listing.url).replace(/^https?:\/\/[^/]+/i, '') || '/') + ' for it' : '');
       considered.push({ keyword: q, impressions, clicks, position: position > 0 ? Math.round(position * 10) / 10 : null,
-        ctr: impressions ? Math.round(clicks / impressions * 1000) / 10 : 0, page: rowUrl, answered_by, kinds, why,
+        ctr: impressions ? Math.round(clicks / impressions * 1000) / 10 : 0, page: rowOnSite ? pageUrl : rowUrl, gsc_page: rowUrl, on_site: rowOnSite, answered_by, kinds, why,
         period_end: period, period_days: c.period_days, tracked: yes(r.tracked) });
     }
     const wanted = considered.filter(q => q.kinds.length);
@@ -343,7 +405,12 @@ const KWI = (() => {
       pages_known: num(c.pages_known) || 0,
       queries: wanted, no_page: wanted.filter(q => q.kinds.indexOf('no_page') >= 0), striking: wanted.filter(q => q.kinds.indexOf('striking') >= 0),
       mismatch: wanted.filter(q => q.kinds.indexOf('page_mismatch') >= 0),
-      answered: considered.filter(q => !q.kinds.length && q.answered_by).slice(0, 20),
+      low_position: wanted.filter(q => q.kinds.indexOf('low_position') >= 0),
+      // R36 (2026-10-16): EVERY measured search with its page (not only the seeds), so discovery can say "you already rank for this with
+      // <page>" for a keyword the providers also returned, instead of recommending a second page for it
+      measured: considered.filter(q => q.on_site).slice(0, 500).map(q => ({ keyword: q.keyword, impressions: q.impressions, clicks: q.clicks, position: q.position,
+        page: q.page, gsc_page: q.gsc_page, answered_url: q.answered_by ? q.answered_by.url : '' })),
+      answered: considered.filter(q => !q.kinds.length && q.answered_by).slice(0, 60),
       seeds: order.slice(0, c.max_seeds).map(q => q.keyword), dropped,
       min_impressions: c.min_impressions, striking_min: c.striking_min, striking_max: c.striking_max };
   };
@@ -503,10 +570,21 @@ const KWI = (() => {
         keywords: [{ keyword: head.keyword, volume: head.volume, shared_urls: head.urls.length, shared: [] }, ...members].slice(0, c.max_cluster_keywords) });
     }
     clusters.sort((a, b) => b.keyword_count - a.keyword_count || b.total_volume - a.total_volume);
-    return { clusters, keywords_compared: ranked.length, min_shared_urls: need, min_urls: c.min_urls, top_n: depth,
+    return { clusters, keywords_compared: ranked.length, compared_keywords: ranked.map(e => e.keyword), min_shared_urls: need, min_urls: c.min_urls, top_n: depth,
       min_overlap_pct: depth && (num(c.min_overlap) || 0) > 0 ? Math.round(c.min_overlap * 100) : null,
       clustered: clusters.reduce((n, x) => n + x.keyword_count, 0) };
   };
+  // R40 (2026-10-16, re-rating 2026-10-15): ONE rule for which keywords may share a page, used by the ladder (Ladder Plan) and by
+  // discovery's content plan (Rank Keywords). Exec 610 compared the results pages of all 10 rung keywords, found no two sharing even 2 of
+  // their top 7, and still merged "openai consulting" into "ai consulting firm" because the AI's topic label said so. Now:
+  //   * Google answers it with the same pages as other keywords (a SERP cluster)  -> one page for the cluster ('shared results page');
+  //   * its results page was read and compared and shares with no one             -> its own page ('own results page');
+  //   * its results page could not be read or compared                           -> the AI's topic label + page type ('topic label').
+  // -> { key, by } ; `o` = { keyword, topic, page_type, serp_head (the cluster head, '' when it is not in a cluster), compared }
+  const pageGroup = (o) => { const x = o || {}; const kw = low(x.keyword);
+    if (S(x.serp_head)) return { key: 'serp|' + low(x.serp_head), by: 'shared results page' };
+    if (x.compared) return { key: 'kw|' + kw, by: 'own results page' };
+    return { key: 'topic|' + (low(x.topic) || kw) + '|' + S(x.page_type), by: 'topic label' }; };
   // "one page can serve all three: 'erp software uae' also covers 'erp system uae' (4 of the same top-10 pages), ..."
   const clusterText = (cl) => {
     const c = cl || {}; const others = (c.keywords || []).slice(1);
@@ -516,7 +594,7 @@ const KWI = (() => {
       + others.map(k => k.shared_urls + ' of its ' + depthTxt + ' pages with "' + k.keyword + '"').join(', ')
       + ' - Google answers these searches with the same pages, so a second page would only split the signals.';
   };
-  return { CFG, CLICK_LOSS, gscSeeds, calibrate, serpClusters, clusterText, featureLoss, lossApplied, lossText, serpPageTypes, shapeOf, liveChecks, ladderChecks, checkCost, urlKey, BASIS_TEXT, helpers: { bare, low, num } };
+  return { CFG, CLICK_LOSS, gscSeeds, calibrate, serpClusters, pageGroup, clusterText, featureLoss, lossApplied, lossText, serpPageTypes, shapeOf, liveChecks, ladderChecks, checkCost, urlKey, BASIS_TEXT, helpers: { bare, low, num } };
 })();
 // 2026-10-13 (FIX_PLAN G8, criterion K6): the site's own Search Console queries seed the keyword research.
 // Until now Search Console was read only by the weekly tracker and the content cadence, while discovery started from what an AI model
@@ -538,8 +616,14 @@ const pages_known = SM.pages(model).length;
 // a brand query is the site's own name, not an SEO win: the site model's names, the business name and the domain label (GQ.brandTest)
 const brandNames = [...((siteModel || {}).brand_names || []), (siteModel || {}).business_name || '', String(base.business_name || '')].filter(Boolean);
 const BR = GQ.brandTest(base.domain || '', brandNames);
+// R35 / R55 (2026-10-16): the evidence about a ranking page is its own title / H1 (SM.titleShare, null when never read), and every
+// site URL is printed on the canonical host (SM.canonUrl)
+const pageKey = (u) => String(u || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/$/, '');
+const pageBy = new Map(SM.pages(model).map(p => [pageKey(p.url), p]));
+const pageTitleShare = (url, q) => { const p = pageBy.get(pageKey(url)); const t = p ? SM.titleShare(p, q) : null; return t ? { ...t, title: p.title || '', h1: p.h1 || '' } : null; };
 const gsc = KWI.gscSeeds(rows, { domain: base.domain || '', isScraper: GQ.isScraper, isBrand: BR.is, pages_known,
-  matchPage: pages_known ? ((kw) => SM.matchPage(model, kw)) : null, use_row_page: !pages_known });
+  matchPage: pages_known ? ((kw, rowPage) => SM.matchPage(model, kw, rowPage)) : null, use_row_page: !pages_known,
+  canon: (u) => SM.canonUrl(model, u), pageTitleShare });
 const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
 const seeds0 = (base.seeds || []).map(norm).filter(Boolean);
 const extra = gsc.seeds.filter(k => !seeds0.includes(k));
@@ -551,5 +635,7 @@ return [{ json: { ...base, seeds, gsc_seeds: extra, search_console: {
   page_check: gsc.page_check, pages_known, brand_names: BR.keys, dropped: gsc.dropped,
   min_impressions: gsc.min_impressions, striking_min: gsc.striking_min, striking_max: gsc.striking_max,
   seeded: extra, queries: gsc.queries.slice(0, 60), no_page: gsc.no_page.slice(0, 30), striking: gsc.striking.slice(0, 30), answered: gsc.answered,
-  mismatch: gsc.mismatch.slice(0, 30)   // R12 (2026-10-13): a search a live page of ours already ranks for while targeting something else — improve that page, never a second one
+  mismatch: gsc.mismatch.slice(0, 30),   // R12 (2026-10-13): a search a live page of ours already ranks for while targeting something else — improve that page, never a second one
+  low_position: gsc.low_position.slice(0, 30), measured: gsc.measured,   // R35 / R36 (2026-10-16): a page that ranks low for the search, and every measured search with its page
+  title_gap: SM.titleGap(model)   // R34: the pages whose title is not on file, judged by their address only
 } } }];
