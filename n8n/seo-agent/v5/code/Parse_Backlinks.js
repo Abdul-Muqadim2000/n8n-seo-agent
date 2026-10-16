@@ -291,8 +291,15 @@ return plans.map(p => {
   const cleanAnchors = liveRows.filter(r => !spamSet.has(r.ref_domain));
   const farmAnchors = new Set(ledger.filter(r => spamSet.has(r.ref_domain)).map(r => normA(r.anchor)).filter(Boolean));
   const kinds = {}; for (const r of cleanAnchors) kinds[r.anchor_kind] = (kinds[r.anchor_kind] || 0) + 1;
-  const anchors = { kinds, set_aside: liveRows.length - cleanAnchors.length, base: ANCHOR_BASE,
-    top: ((one('anchors').res || {}).items || []).slice(0, 15).map(a => ({ anchor: String(a.anchor || '').slice(0, 80), referring_domains: Number(a.referring_domains) || 0, backlinks: Number(a.backlinks) || 0, kind: LK.anchorKind(a.anchor, p.domain, brands), farm: farmAnchors.has(normA(a.anchor)) })) };
+  // R92 part 1 (2026-10-16, re-rating defect C-16): the table listed the farm anchors ("High Quality Dofollow Backlinks DA 50 PA 40
+  // Premium PBN Network Service techand." 17 referring domains, exec 626) under a sentence saying the farms were "left out of both the
+  // percentages and the table below". Two populations, one sentence: the percentages are our own check's live referring sites, the
+  // table is the link index's anchor list. The table keeps the farm anchors MARKED (B10-3: shown for what they are), and what it marks
+  // is counted in the table's own unit — anchors and the referring domains the index gives them — so the sentence can say so.
+  const idxAnchors = ((one('anchors').res || {}).items || []).map(a => ({ anchor: String(a.anchor || '').slice(0, 80), referring_domains: Number(a.referring_domains) || 0, backlinks: Number(a.backlinks) || 0, kind: LK.anchorKind(a.anchor, p.domain, brands), farm: farmAnchors.has(normA(a.anchor)) }));
+  const anchors = { kinds, set_aside: liveRows.length - cleanAnchors.length, checked_sites: cleanAnchors.length, base: ANCHOR_BASE,
+    top: idxAnchors.slice(0, 15),
+    top_farm: { anchors: idxAnchors.slice(0, 10).filter(a => a.farm).length, referring_domains: idxAnchors.slice(0, 10).filter(a => a.farm).reduce((n, a) => n + a.referring_domains, 0) } };   // over the 10 rows the report prints
   const pages = ((one('pages').res || {}).items || []).slice(0, 15).map(x => ({ url: x.page, referring_domains: Number((x.page_summary || {}).referring_domains) || 0, backlinks: Number((x.page_summary || {}).backlinks) || 0, status: (vTarget.find(t => t.url === x.page) || {}).status || Number(x.status_code) || null }));
   // G18-1: a link a cap has written off (link farm, search-results page) is never one of the site's "best links" for SEO, whatever is left
   // of its score — a capped 5 above nothing is still nothing. Referral keeps every row: the visits it sends are measured, not judged.

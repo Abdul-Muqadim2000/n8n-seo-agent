@@ -86,7 +86,9 @@ return sites.filter(s => s.deliver).map(s => {
     // both, counted beside them - and the rule of thumb under it carries the measured distribution it is judged against.
     const AB = (s.anchors || {}).base || {}; const moneyPct = kt ? Math.round(100 * (K.money || 0) / kt) : null;
     if (kt) html += h3('Anchor texts') + p_(['brand', 'url', 'generic', 'money', 'image_or_empty'].filter(k => K[k]).map(k => esc({ brand: 'your name', url: 'web address', generic: 'generic ("here", "website")', money: 'keyword', image_or_empty: 'image / empty' }[k]) + ' ' + Math.round(100 * K[k] / kt) + '%').join(' · ')
-      + ' — over ' + n(kt) + ' referring site(s)' + ((s.anchors || {}).set_aside ? ', with ' + n(s.anchors.set_aside) + ' link-farm site(s) left out of both the percentages and the table below' : '')
+      + ' — over the ' + n(kt) + ' referring site(s) our own check found linking' + ((s.anchors || {}).set_aside ? ', with ' + n(s.anchors.set_aside) + ' link-farm site(s) left out of these percentages' : '')
+      // R92 part 1: the table below is the link index's anchor list — a different population, so the sentence says what it holds and what it marks
+      + '. The table below is the link index\'s own anchor list' + (((s.anchors || {}).top_farm || {}).anchors ? '; the ' + n(s.anchors.top_farm.anchors) + ' anchor(s) in it that link farms use (' + n(s.anchors.top_farm.referring_domains) + ' referring domain(s) in the index) are marked, not counted above' : '')
       + (AB.url ? '. For comparison, ' + esc(AB.source) + ': keyword ' + AB.money + '%, your name ' + AB.brand + '%, web address ' + AB.url + '%, image or empty ' + AB.image_or_empty + '%, generic ' + AB.generic + '%' : '') + '.'
       + (moneyPct != null && moneyPct > (AB.money || 30) && kt >= 10 ? ' <b>Keyword anchors are above that population (' + moneyPct + '%)</b>: ask new links to use your name or the page title.' : ''), true)
       + table(['Anchor', 'Referring domains', 'Kind'], ((s.anchors || {}).top || []).slice(0, 10).map(a => [esc(a.anchor), n(a.referring_domains), esc(a.kind) + (a.farm ? ' <span style="color:#b91c1c">· link farm, set aside</span>' : '')]));

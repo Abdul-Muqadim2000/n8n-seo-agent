@@ -4888,7 +4888,7 @@ await guard('retries, AI data, sister domains and the fact base', async () => {
   check('every rate counts answered requests only, and the one request that failed twice is listed with its engine, its message and the retry outcome', XM.samples === XM.answered && XM.errors === 1 && XM.error_rate === Math.round(1000 / XM.requests) / 10 && XM.retried === 2 && XM.retry_answered === 1 && XM.errors_list.length === 1 && XM.errors_list[0].engine === 'ChatGPT' && /no response/.test(XM.errors_list[0].message), JSON.stringify(XM).slice(0, 400));
   check('the failures are an alert of their own, which says how many answers the rates are based on', X.alerts.some(a => /1 of \d+ AI requests failed/.test(a.text) && /1 of 2 answered on the retry/.test(a.text) && /rates below count/.test(a.text)), JSON.stringify(X.alerts.map(a => a.text)));
   const rp = await run('AI Report', mt); const html = rp[0].json.html;
-  check('the report names the failures above the figures instead of hiding them', /requests failed this run/.test(html) && /answered when they were sent again/.test(html) && /answers that came back/.test(html), html.slice(0, 200));
+  check('the report names the failures above the figures instead of hiding them', /requests failed this run/.test(html) && /answered when they were sent again/.test(html) && /came back; the rates below count/.test(html), html.slice(0, 200));   // R84 (2026-10-16): "N of M came back; the rates below count …" — the counted answers were never "the answers that came back"
 
   // ---------- D. D19 / G22: a heading is not a brand, two URL variants are one page, a title is never cut ----------
   const PAGE = 'https://gulfnews.com/business/best-e-invoicing-providers-uae-2026-1.501';
@@ -13103,7 +13103,7 @@ await guard('b10-backlink-freshness-and-measured-liveness', async () => {
     && /link farm, set aside/.test(html89), JSON.stringify(A89.top));
   check('B10-3: the ">30% keyword anchors" rule of thumb was an unsourced constant — the block now prints the measured distribution it is judged against, and names it',
     /Linkody, 865,000 monitored backlinks, June 2026/.test(html89) && /keyword 56%, your name 18%, web address 15%, image or empty 10%, generic 1%/.test(html89)
-    && /with 3 link-farm site\(s\) left out of both the percentages and the table below/.test(html89),
+    && /with 3 link-farm site\(s\) left out of these percentages/.test(html89) && /link index's own anchor list/.test(html89),   // R92 part 1 (2026-10-16): the farms were never out of the table — it marks them
     (html89.match(/Anchor texts[\s\S]{0,520}/) || [''])[0]);
   check('B10-1 / B10-2: both new figures carry their own lineage — the index\'s age is "reported", our rate is "measured", and the sample is the pages we read',
     (rep89.lineage || []).some(l => /How old the link index/.test(l.figure) && l.basis === 'reported')
@@ -16453,6 +16453,292 @@ await guard('S133 R115 a monitor callback carries the settled run_ledger, posted
 });
 
 // ===================================================================================
+
+// S134-S137 (2026-10-16, fixer A10 — family F7 "one competitor / brand / topic gate for every list" and F10 "AI visibility reporting",
+// plus R92 parts 1 / 2 / 5 / 6 and the AI Pulse's days; dossiers docs/system-review-2026-10-15/defects/A_keywords_content.md R39 R54
+// and C_monitors.md R83 R84 R85 R86 R89 R92). Fixtures cut from the re-rating's own executions: exec 610 (A1's r_a1_ladder610),
+// exec 623 (fixtures_live/r_a10_aivis623: the AI Plan, the parsed answers, the database views, the discovery answers incl. the
+// volume lookup that failed twice), exec 628 (fixtures_live/r_a10_lb628: the Link Builder's prospect pages and the about / contact
+// pages it fetched, reduced to the sentences the checks read; e-mail addresses, phone numbers and people's names removed).
+// ===================================================================================
+const A10FX = (() => { const zlib = require('zlib'), fs = require('fs'), path = require('path');
+  const rd = (n) => { try { return JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(__dirname, 'fixtures_live', n))).toString('utf8')); } catch (e) { return null; } };
+  return { AI: rd('r_a10_aivis623.json.gz'), LB: rd('r_a10_lb628.json.gz') }; })();
+const a10Check = (SN) => (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+const A10J = (rows) => (rows || []).map(j => ({ json: JSON.parse(JSON.stringify(j)) }));
+
+await guard('S134 R39 R54 a ladder for "ai consulting" sees "ai", and buys no results page for a keyword it would throw away', async () => {
+  const SN = 'S134 R39 R54 — "ai" is a word that matters, a rung shares the head\'s subject and not only "consulting", and no results page is bought for a keyword the plan refuses (exec 610)';
+  reset(); begin(SN); const check = a10Check(SN);
+  const L = A1FX.L610; const HEAD = 'ai consulting dubai';
+  const pool = { ...JSON.parse(JSON.stringify(L.ladder_pool)), keyword: HEAD, location_code: 2784, language_code: 'en', ladder_serp_checks: 24, free_only: false };
+  const cr = (await run('Ladder Cluster Requests', [{ json: pool }])).map(x => x.json);
+  const asked = cr.filter(x => x.cluster_check).map(x => x.keyword);
+  console.log('   cluster requests ->', JSON.stringify(asked), cr[0] && cr[0].skip_reason);
+  const BOUGHT_610 = ['transfer pricing consulting', 'supply chain consulting uk', 'supply chain consulting meaning'];
+  check('R54 (dossier test a): the three keywords exec 610 bought a results page for and the relevance screen then rated 0 are not requested',
+    !BOUGHT_610.some(k => asked.includes(k)), JSON.stringify(asked));
+  check('R39 / R54: no results page is bought for a supply-chain keyword on an AI-consulting ladder, and none for "supply chain optimization consulting" (rung 2 of exec 610)',
+    !asked.some(k => /supply chain/.test(k)), JSON.stringify(asked));
+  check('R39: a keyword sharing the head\'s subject AND its service word is still compared ("ai consulting firm" — "ai" is a word that matters now)',
+    asked.includes('ai consulting firm') || (cr[0] && /only 1 rung candidate/.test(cr[0].skip_reason || '') && L.ladder_pool.research.candidates.some(k => k.keyword === 'ai consulting firm')), JSON.stringify(cr.map(x => x.keyword || x.skip_reason)));
+  // the relevance screen's own verdicts for what WAS asked (R54's residue: the AI screen still runs after the calls)
+  const rel = new Map(((L.relevance[0] || {}).output || {}).items.map(x => [x.keyword, x.relevance]));
+  const askedRel0 = asked.filter(k => rel.get(k) === 0);
+  console.log('   asked and rated 0 by the relevance screen ->', JSON.stringify(askedRel0));
+  check('R54: every keyword still asked is one the AI screen kept (relevance > 0) — nothing bought here is thrown away a step later', !askedRel0.length, JSON.stringify(askedRel0));
+  // the plan itself, replayed on exec 610's inputs (A1's replay): no rung keyword lacks "ai"
+  const lad = await a1Ladder(true);
+  const rungKws = (lad.rungs || []).flatMap(r => (r.pages || []).flatMap(p => [p.keyword, ...(p.supporting || [])]));
+  console.log('   rung keywords ->', JSON.stringify(rungKws), '| off topic ->', JSON.stringify((lad.off_topic_keywords || []).slice(0, 6).map(x => x.keyword)));
+  check('R39 (dossier test a, replay): no rung or supporting keyword of the "ai consulting dubai" ladder lacks "ai" — supply chain and transfer pricing are not rungs',
+    rungKws.every(k => /(^|\s)ai(\s|$)/.test(String(k))) && !rungKws.some(k => /supply chain|transfer pricing/.test(String(k))), JSON.stringify(rungKws));
+  const off = (lad.off_topic_keywords || []).find(x => x.keyword === 'supply chain optimization consulting');
+  check('R39: the plan says why "supply chain optimization consulting" was left out, naming the words that matter in the head ("ai" among them)',
+    !!off && /"ai"/.test(off.reason) && /not on this ladder/.test(off.reason), JSON.stringify(off || (lad.off_topic_keywords || []).slice(0, 4)));
+  const scd = (lad.off_topic_keywords || []).find(x => /consult/.test(x.keyword) && /dubai|uk/.test(x.keyword));
+  check('R39 (subject word): a keyword sharing only the service word and the place is told so — "the kind of service or the place, not the subject"',
+    !scd || /not the subject/.test(scd.reason) || /shares none|shares only/.test(scd.reason), JSON.stringify(scd || null));
+  reset();
+});
+
+await guard('S135 R83 R84 R85 AI visibility: no pitch to a rival, denominators that say what they count, a failed lookup that says so', async () => {
+  const SN = 'S135 R83 R84 R85 — the businesses AI names instead of you are never "Get featured on …" or link prospects, the headline says what its 74 answers are, AI Overview presence leaves the failed request out, and the failed volume lookup is reported (exec 623); the pulse counts days, not readings';
+  reset(); begin(SN); const check = a10Check(SN);
+  const F = A10FX.AI; if (!F) { check('the exec 623 fixture is readable', false, 'missing'); return; }
+  const metricsOf = async (plan) => { reset();
+    mock('AI Plan', [{ json: plan }]); mock('Apply Analysis', A10J(F.rows)); mock('AI Requests', A10J(F.reqs)); mock('Run AI Requests', A10J(F.resps)); mock('Merge AI Answers', A10J(F.resps));
+    mock('Load Link Prospects', A10J(F.prospects)); mock('Discovery Requests', A10J(F.dreq)); mock('Run Discovery', A10J(F.dres)); mock('Run Discovery Answers', A10J(F.dres));
+    mock('Analyst Jobs', A10J(F.ajobs)); mock('Answer Analyst', A10J(F.aouts)); mock('Prompt Rows', [{ json: { skip: true } }]);
+    return (await run('AI Metrics', store['Apply Analysis']))[0].json; };
+  const X = await metricsOf(JSON.parse(JSON.stringify(F.plan))); const XM = X.metrics;
+  const RIVALS = ['wafeq.com', 'edicomgroup.com', 'aiverix.ae', 'comarch.com', 'pagero.com', 'flick.network', 'velmontcrest.ae'];
+  console.log('   actions ->', JSON.stringify(X.actions.map(a => a.type + ': ' + a.action)));
+  console.log('   prospects ->', JSON.stringify(X.prospect_rows.map(r => r.prospect_domain)), '| rivals cited ->', JSON.stringify(X.rival_sources));
+  check('R83 (dossier test a): no "Get featured on …" action names a business AI recommends instead of you — wafeq.com, edicomgroup.com, aiverix.ae, comarch.com were four of the PR actions of exec 623',
+    !X.actions.some(a => RIVALS.some(d => String(a.action + ' ' + a.why).includes(d)) && /featured|pitch|guest/i.test(a.action + ' ' + a.why)), JSON.stringify(X.actions.map(a => a.action)));
+  check('R83: none of them, nor Thomson Reuters on its europe. subdomain, is an `ai_source` link prospect', !X.prospect_rows.some(r => [...RIVALS, 'europe.thomsonreuters.com'].includes(r.prospect_domain)),
+    JSON.stringify(X.prospect_rows.map(r => r.prospect_domain)));
+  const kindOfSrc = (d) => ((X.sources || []).find(s => s.domain === d) || {}).kind;
+  check('R83: the official sources stay official (mof.gov.ae, tax.gov.ae) — an official body is never a rival', kindOfSrc('mof.gov.ae') === 'official' && kindOfSrc('tax.gov.ae') === 'official',
+    JSON.stringify((X.sources || []).map(s => s.domain + ':' + s.kind)));
+  check('R83: the exclusion set is not the display set — "Who AI recommends instead" still shows 8 rows, and the rivals cited are named apart (wafeq.com among them)',
+    X.competitors.length === 8 && (X.rival_sources || []).some(r => r.domain === 'wafeq.com') && !(X.sources || []).some(s => RIVALS.includes(s.domain)), JSON.stringify({ comp: X.competitors.length, rivals: X.rival_sources }));
+  // ---- R84 ----
+  console.log('   headline ->', JSON.stringify(XM.headline), '| aio ->', XM.aio_presence, JSON.stringify(XM.aio_basis));
+  check('R84 (dossier test a): the headline counts 74 answers to 7 buyer questions on 5 weekly engines (33 this run + 41 from the pulse) — the 8th question is the brand question, and Claude is out of the headline on purpose',
+    XM.samples === 74 && XM.headline && XM.headline.buyer_questions === 7 && XM.headline.engine_count === 5 && XM.headline.run_answers === 33 && XM.headline.pulse_answers === 41
+    && /74 answers to the 7 buyer questions on the 5 weekly engines \(33 this run \+ 41 from the daily pulse\)/.test(XM.headline.text) && /Claude's 7 answers/.test(XM.headline.text), JSON.stringify(XM.headline));
+  check('R84: 46 of the 47 requests came back — the alert no longer calls the 33 counted answers "the answers that came back"',
+    XM.headline && XM.headline.came_back === 46 && XM.headline.requests === 47 && X.alerts.some(a => /1 of 47 AI requests failed/.test(a.text) && /46 of 47 came back/.test(a.text)) && !X.alerts.some(a => /33 answers that came back/.test(a.text)),
+    JSON.stringify(X.alerts.map(a => a.text)));
+  check('R84: AI Overview presence = shown / the requests that answered (5 of 6 = 83.3%), not 5 of 7 — the failed request is not in the denominator (exec 623 printed 71.4%)',
+    XM.aio_presence === 83.3 && F.expect.aio_presence === 71.4 && XM.aio_basis.failed === 1 && XM.aio_basis.read === 6, JSON.stringify({ now: XM.aio_presence, was: F.expect.aio_presence, basis: XM.aio_basis }));
+  // ---- R85 ----
+  console.log('   volume lookup ->', JSON.stringify(XM.volume_lookup));
+  check('R85: the failed AI search-volume lookup is "not read", with the provider\'s reason (task 50000 "Internal Error." inside an HTTP 500) — not "0 questions with a volume"',
+    XM.volume_lookup && XM.volume_lookup.read === false && /could not be read this run/.test(XM.volume_lookup.note) && /Internal Error/.test(XM.volume_lookup.note) && /twice/.test(XM.volume_lookup.note),
+    JSON.stringify(XM.volume_lookup));
+  check('R85: "0 stored" and "not read" stay apart — the 7 stored figures (all 0, read on an earlier run) are counted as stored, none of them above 0',
+    XM.volume_lookup.stored_measured === 7 && XM.volume_lookup.stored_positive === 0 && XM.volume_lookup.questions === 7, JSON.stringify(XM.volume_lookup));
+  // ---- the report ----
+  mock('AI Metrics', [{ json: X }]);
+  mock('AI Brief', [{ json: { output: { headline: 'h', summary: 's', watch: [], actions: [
+    { action: 'Pitch a guest article or comparison mention to wafeq.com, edicomgroup.com and aiverix.ae.', why: 'They are cited 15, 12 and 9 times on your topics.' },
+    { action: 'Be listed on mof.gov.ae', why: 'The official list AI cites.' }] } } }]);
+  const R = (await run('AI Report', store['AI Brief']))[0].json; const html = R.html;
+  check('R84: the report header and the failure line say what the figures count ("74 answers to the 7 buyer questions on the 5 weekly engines", "46 of 47 came back")',
+    /74 answers to the 7 buyer questions on the 5 weekly engines/.test(html) && /46 of 47 came back; the rates below count/.test(html) && !/8 buyer questions × 6 AI engines/.test(html), (html.match(/AI search visibility[\s\S]{0,700}/) || [''])[0]);
+  const lnAns = (R.lineage || []).find(l => /Named in/.test(l.figure)) || {};
+  check('R84: the lineage sample names the same population — 7 buyer questions on 5 weekly engines, 33 this run + 41 from the pulse (it read "8 questions × 6 engines")',
+    /7 buyer questions on 5 weekly engines: 33 this run \+ 41 from the daily pulse/.test(lnAns.sample || ''), JSON.stringify(lnAns));
+  check('R84: the AI Overview tile says what its rate is over (5 of the 6 read; 1 failed, left out)', /5 of the 6 read; 1 failed, left out/.test(html) && /83\.3%/.test(html),
+    (html.match(/AI Overview[\s\S]{0,200}/) || [''])[0]);
+  const lnVol = (R.lineage || []).find(l => /AI searches per month/.test(l.figure)) || {};
+  check('R85 (dossier test a): the report carries the failure sentence, and the lineage row says "not read this run" instead of "0 questions with a volume"',
+    /AI search volume could not be read this run/.test(html) && lnVol.basis === 'unknown' && /not read this run/.test(lnVol.note || '') && !/0 questions with a volume/.test(JSON.stringify(R.lineage)), JSON.stringify(lnVol));
+  check('R83: "Do this next" drops the brief\'s pitch to rivals (exec 623: "Pitch a guest article … to wafeq.com, edicomgroup.com and aiverix.ae") and keeps the rest; the rivals are named apart, not as PR targets',
+    !/Pitch a guest article or comparison mention to wafeq\.com/.test(html) && /Be listed on mof\.gov\.ae/.test(html) && /businesses AI recommends instead of you, so they are not places to get featured/.test(html),
+    (html.match(/Do this next[\s\S]{0,600}/) || [''])[0]);
+  // ---- the pulse counts days, not readings (A5 / R95 left two readings for one date) ----
+  const P2 = JSON.parse(JSON.stringify(F.plan)); const extra = { ...P2.pulse_rows[P2.pulse_rows.length - 1], checked_at: P2.pulse_rows[P2.pulse_rows.length - 1].date + 'T19:42:55.988Z' };
+  P2.pulse_rows = [...P2.pulse_rows, extra];
+  const Y = await metricsOf(P2);
+  console.log('   pulse basis ->', JSON.stringify(Y.metrics.pulse_basis && { days: Y.metrics.pulse_basis.days, readings: Y.metrics.pulse_basis.readings, note: Y.metrics.pulse_basis.note }));
+  check('A5 / R95: two readings on one date are two readings on ONE day — `days` counts distinct dates, the note says both (it said "3 daily pulse day(s)")',
+    Y.metrics.pulse_basis.days === 2 && Y.metrics.pulse_basis.readings === 3 && Y.metrics.pulse_days === 2 && /3 daily pulse readings on 2 day\(s\)/.test(Y.metrics.pulse_basis.note), JSON.stringify(Y.metrics.pulse_basis));
+  // the Pulse's baseline: seven DAYS, every reading of them
+  reset();
+  const M = require('./fixtures_monitors'); const A9 = require('./fixtures_ai49');
+  const dayK = (k) => new Date(Date.now() - k * 864e5).toISOString().slice(0, 10);
+  const daily = [8, 7, 6, 5, 4, 3, 2, 1].map(k => A9.dailyRow(dayK(k), { samples: 21, mentioned: 10 }));
+  const od = A9.dailyRow(dayK(1), { samples: 21, mentioned: 12 }); od.json.checked_at = dayK(1) + 'T19:42:00.000Z'; od.json.run_id = od.json.run_id + '_od';
+  mock('Load Sites', M.sites()); mock('Load Ladders', M.ladders()); mock('Load Monitors', M.monitors()); mock('Load Profiles', M.profiles());
+  mock('Load AI Prompts', [{ json: { prompt_id: 'p_1', site_id: M.SITE, domain: M.DOMAIN, prompt: 'Which companies help UAE businesses with e-invoicing before 2027?', kind: 'recommend', topic: 'e invoicing in uae', keyword: 'e invoicing uae', source: 'auto', status: 'active', created_at: '2026-10-01' } }]);
+  mock('Load AI Visibility', [{ json: {} }]); mock('Load AI Daily', [...daily, od]); mock('Load Cache (AI)', [{ json: {} }]);
+  const PP = (await run('AI Plan', store['Load Cache (AI)'], { code: 'Pulse__AI_Plan' }))[0].json;
+  const bDates = [...new Set((PP.baseline || []).map(b => b.date))];
+  console.log('   pulse baseline ->', JSON.stringify((PP.baseline || []).map(b => b.date)));
+  check('A5 / R95: the pulse baseline is the last 7 DAYS (8 readings: the on-demand one beside the scheduled one), not the last 7 rows (which were 6 days)',
+    (PP.baseline || []).length === 8 && bDates.length === 7 && !bDates.includes(dayK(8)), JSON.stringify({ n: (PP.baseline || []).length, dates: bDates }));
+  reset();
+});
+
+await guard('S136 R86 R89 R83 a competing provider judged by its own site, a list that says it is one, a brand that is a whole word', async () => {
+  const SN = 'S136 R86 R89 R83 — the Link Builder refuses a provider whose own site sells our services in our market (daxin-global.ae, qzinfomatics.com, exec 628), a vendor\'s own SEO title is not a "best of" list (exec 626), "tech" is not the brand (exec 634), and AI Growth pitches no business AI names instead of you';
+  reset(); begin(SN); const check = a10Check(SN);
+  const F = A10FX.LB; if (!F) { check('the exec 628 fixture is readable', false, 'missing'); return; }
+  // ---- R86 part 1: the Link Builder ----
+  mock('LB Plan', [{ json: JSON.parse(JSON.stringify(F.plan)) }]);
+  mock('LB Page Requests', F.pages.map(p => ({ json: p.r }))); mock('Fetch LB Pages', F.pages.map(p => ({ json: p.x })));
+  mock('LB Second Requests', F.second.map(p => ({ json: p.r }))); mock('Fetch LB Second', F.second.map(p => ({ json: p.x })));
+  const AS = (await run('LB Assemble', [{ json: {} }]))[0].json;
+  const O = (d) => AS.outreach_rows.find(o => o.prospect_domain === d) || {};
+  console.log('   outreach ->', JSON.stringify(AS.outreach_rows.map(o => [o.prospect_domain, o.type, o.status, String(o.fit_reason).slice(0, 90)])));
+  check('R86 (dossier test a): daxin-global.ae — whose own pages sell ERP, Dynamics 365 and Business Central in Dubai — is `not_fit` as a competing provider, whatever its blog article is (it was `ready` at fit 0.84)',
+    O('daxin-global.ae').status === 'not_fit' && /competing provider/.test(O('daxin-global.ae').fit_reason) && /their own site/.test(O('daxin-global.ae').fit_reason), JSON.stringify(O('daxin-global.ae')));
+  check('R86 (dossier test a): qzinfomatics.com ("Microsoft Dynamics 365 Partner in Dubai") is `not_fit` as a competing provider (it was `ready` at fit 0.87)',
+    O('qzinfomatics.com').status === 'not_fit' && /competing provider/.test(O('qzinfomatics.com').fit_reason), JSON.stringify(O('qzinfomatics.com')));
+  check('R86: the refusal names what their site offers ("Dynamics 365 …") and the market — evidence the owner can check, not a score',
+    /Dynamics 365/.test(O('qzinfomatics.com').fit_reason) && /United Arab Emirates/.test(O('qzinfomatics.com').fit_reason), O('qzinfomatics.com').fit_reason);
+  const notRival = ['nrdoshi.ae', 'sharedserviceslink.com', 'lumeafinance.com'];
+  check('R86: an audit firm, a publisher and an accounting firm that write about our topic are NOT refused as competing providers — the site test needs our services on their pages and the signals of a vendor selling them',
+    notRival.every(d => !/competing provider/.test(O(d).fit_reason || '')), JSON.stringify(notRival.map(d => [d, O(d).status, O(d).fit_reason])));
+  // ---- R86 part 2: the Backlink Monitor's "best of" lists (exec 626's 17 web-search results for the two topics) ----
+  reset();
+  const LISTS_626 = [
+    ['https://tmrconsult.com/best-dynamics-365-business-central-partner-uae/', 'Best Dynamics 365 Business Central Partner in UAE - TMR Consulting'],
+    ['https://www.lits.services/uae/', 'Microsoft Dynamics 365 Partner in UAE, ERP & CRM Solutions'],
+    ['https://www.startbiz.ae/blog/top-10-microsoft-dynamics-partners-in-uae', 'Top 10 Microsoft Dynamics Partners in UAE - StartBiz'],
+    ['https://sqitconsulting.com/contact-us/', 'Contact Best Microsoft Dynamics 365 Partner in the UAE | SQIT'],
+    ['https://topdynamicspartners.com/listings/9d7802ae-9237-42fb-b6f3-aff479c0d587', 'Trust IT Consultancy LLC - Microsoft Dynamics 365 Partner'],
+    ['https://qzinfomatics.com/solutions/microsoft-dynamics/', 'Microsoft Dynamics 365 Partner in Dubai, UAE - QZ Infomatics'],
+    ['https://www.iaxdynamics.com/', 'Microsoft Dynamics 365 Solutions & Implementations Partner'],
+    ['https://www.azdan.com/blog/top-20-uae-einvoicing-service-providers', 'Top 20 UAE E-Invoicing ASP - Azdan'],
+    ['https://www.softwaresuggest.com/einvoicing-software/uae', '20 Best e-Invoicing Software in UAE (Oct 2026)'],
+    ['https://www.penieltech.com/blog/best-invoicing-tools-uae-small-business/', '5 Best E-Invoicing Tools in UAE: Complete Business Guide'],
+    ['https://quicktax.ac/ae/en/blog/best-accounting-software-uae', 'Best Accounting Software for the UAE (2026 Comparison) - QuickTax']];
+  mock('BL Plan', [{ json: { site_id: 'site_techand-ai', domain: 'techand.ai', mode: 'full', competitors: ['cleartax.com', 'azentio.com'], checked_at: '2026-10-15T19:30:00.000Z' } }]);
+  mock('Source Requests', [{ json: { site_id: 'site_techand-ai', kind: 'searx_list', topic: 'dynamics 365 partner uae' } }]);
+  mock('Fetch Sources', [{ json: { results: LISTS_626.map(([url, title]) => ({ url, title })) } }]);
+  const LM = (await run('Link Merge', store['Fetch Sources']))[0].json;
+  const listed = (LM.list_pages || []).map(l => l.domain);
+  console.log('   list pages ->', JSON.stringify(listed));
+  check('R86 (dossier test a): the TMR, LITS, SQIT, QZ and iaxdynamics pages — vendors describing themselves — are not "best of" lists, nor is a directory profile on topdynamicspartners.com',
+    !['tmrconsult.com', 'lits.services', 'sqitconsulting.com', 'qzinfomatics.com', 'iaxdynamics.com', 'topdynamicspartners.com'].some(d => listed.includes(d)), JSON.stringify(listed));
+  check('R86: StartBiz "Top 10 Microsoft Dynamics Partners in UAE" and Azdan "Top 20 UAE E-Invoicing ASP" stay lists, with the other real roundups ("20 Best …", "5 Best … Tools", "… (2026 Comparison)")',
+    ['startbiz.ae', 'azdan.com', 'softwaresuggest.com', 'penieltech.com', 'quicktax.ac'].every(d => listed.includes(d)), JSON.stringify(listed));
+  // ---- R89: the brand / non-brand split (exec 634's own rows for the brand forms, and the queries the old test took for the brand) ----
+  reset();
+  const SITE = 'site_techand-ai', W = 'https://www.techand.ai', B0 = 'https://techand.ai';
+  const RNG = { current: { start: '2026-09-15', end: '2026-10-12' }, previous: { start: '2026-08-18', end: '2026-09-14' } };
+  const qr = (q, c, i, p, page) => ({ keys: [q, page || B0 + '/'], clicks: c, impressions: i, ctr: i ? c / i : 0, position: p });
+  const QUERIES = [qr('techand', 2, 60, 4.3), qr('techand', 1, 13, 5.2, W + '/'), qr('tech and ai', 1, 7, 2), qr('tech & ai', 0, 4, 15.3), qr('tech and', 0, 48, 3.7), qr('techand ai', 0, 3, 3),
+    qr('techandkey com', 0, 308, 7.9), qr('technology and analytics', 0, 30, 77.6), qr('technology & data', 0, 12, 60), qr('tech and software', 0, 9, 55), qr('tech and tech', 0, 83, 43.5),
+    qr('dynamics 365 finance in uae', 0, 64, 26.8, B0 + '/dynamics-365-finance-and-operations-uae')];
+  const reqG = (kind, dims) => ({ json: { site_idx: 0, site_id: SITE, kind, url: 'https://gsc/q', body: { dimensions: dims, rowLimit: 25000, startRow: 0 }, paged: false, page: 1 } });
+  mock('GSC Requests', [reqG('queries_cur', ['query', 'page']), reqG('queries_prev', ['query']), reqG('pages_cur', ['page']), reqG('pages_prev', ['page'])]);
+  mock('GSC Query', [{ json: { rows: QUERIES } }, { json: { rows: [] } },
+    { json: { rows: [{ keys: [B0 + '/'], clicks: 14, impressions: 410, ctr: 0.034, position: 14.2 }, { keys: [W + '/'], clicks: 3, impressions: 153, ctr: 0.02, position: 9.2 }, { keys: [B0 + '/dynamics-365-project-operations-uae'], clicks: 4, impressions: 165, ctr: 0.024, position: 12 }] } },
+    { json: { rows: [{ keys: [B0 + '/'], clicks: 9, impressions: 585, ctr: 0.015, position: 15.3 }] } }]);
+  mock('Resolve Properties', [{ json: { site_id: SITE, domain: 'techand.ai', ranges: RNG, config: {} } }]);
+  mock('Site Model (Site)', [{ json: { site_id: SITE, model: { site_id: SITE, domain: 'techand.ai', canonical_host: 'www.techand.ai', brand_names: ['Techand', 'Tech&'], business_name: 'Tech&' } } }]);
+  const PG = (await run('Parse GSC', store['GSC Query']))[0].json; const BS = PG.brand_split;
+  const isB = (q) => (BS.brand.top || []).some(t => t.query === q);
+  console.log('   brand split ->', JSON.stringify({ names: BS.names, brand: BS.brand.queries, top: (BS.brand.top || []).map(t => t.query), non: BS.non_brand.queries }));
+  check('R89 (dossier test a): "techandkey com", "technology and analytics", "technology & data", "tech and software" are non-brand — "tech" is never the brand on its own',
+    !isB('techandkey com') && !isB('technology and analytics') && !isB('technology & data') && !isB('tech and software') && !BS.names.includes('tech'), JSON.stringify({ names: BS.names, top: BS.brand.top }));
+  check('R89: "techand", "tech and" (the name spoken), "tech and ai", "tech & ai" and "techand ai" stay brand — exactly those 5 queries and their 4 clicks',
+    BS.brand.queries === 5 && BS.brand.clicks === 4 && BS.names.includes('techand') && BS.names.includes('tech and'), JSON.stringify(BS));
+  // ---- R83 on the AI Growth path: earned media from a business AI names instead of you is not pitched ----
+  reset();
+  const GP = { site_id: SITE, domain: 'techand.ai', business_name: 'Tech&', brand_names: ['Tech&', 'techand.ai'], competitors: ['cleartax.com', 'azentio.com'], services: ['Dynamics 365 Finance', 'Azure OpenAI Service'],
+    profile: {}, accreditation: '', link_builder: false, checked_at: '2026-10-15T09:30:00.000Z',
+    earned: [{ url: 'https://wafeq.com/en-ae/blog/e-invoicing-uae', title: 'E-invoicing in the UAE: a guide', host: 'wafeq.com', citations: 9, engines: ['ChatGPT'], questions: ['Which e-invoicing providers work in the UAE?'], kind: 'article' },
+      { url: 'https://europe.thomsonreuters.com/uae-einvoicing', title: 'UAE e-invoicing mandate', host: 'europe.thomsonreuters.com', citations: 5, engines: ['Gemini'], questions: ['What is the UAE e-invoicing deadline?'], kind: 'article' },
+      { url: 'https://gulfnews.com/business/uae-e-invoicing-explained', title: 'UAE e-invoicing explained', host: 'gulfnews.com', citations: 4, engines: ['ChatGPT'], questions: ['What is the UAE e-invoicing deadline?'], kind: 'news' }] };
+  mock('Growth Plan', [{ json: GP }]);
+  mock('Earned Requests', GP.earned.map(e => ({ json: { site_id: SITE, url: e.url } })));
+  const page = (t) => '<html><head><title>' + t + '</title></head><body><p>' + 'UAE e-invoicing starts in 2026 and the deadline is near. '.repeat(8) + '</p></body></html>';
+  mock('Fetch Cited Pages', GP.earned.map(e => ({ json: { statusCode: 200, headers: {}, data: page(e.title) } })));
+  mock('Load Cache (Growth)', [{ json: { key: 'ai_brands:' + SITE, kind: 'ai', site_id: SITE, value: JSON.stringify({ Wafeq: 'wafeq.com', 'Thomson Reuters': 'thomsonreuters.com' }) } }]);
+  mock('Load Link Prospects (Growth)', [{ json: {} }]);
+  const EM = (await run('Earned Media', store['Fetch Cited Pages']))[0].json;
+  console.log('   earned ->', JSON.stringify(EM.earned.map(e => [e.host, e.kind, e.action_type])), '| prospects ->', JSON.stringify(EM.prospect_rows.map(r => r.prospect_domain)), '| drafts ->', JSON.stringify(EM.outreach_jobs.map(j => j.prospect_domain)));
+  check('R83 (AI Growth path): a page on wafeq.com or on Thomson Reuters\' europe. subdomain — businesses AI names instead of you, outside the 8-row table — is a competitor\'s page: no prospect row, no draft',
+    !EM.prospect_rows.some(r => ['wafeq.com', 'europe.thomsonreuters.com'].includes(r.prospect_domain)) && !EM.outreach_jobs.some(j => ['wafeq.com', 'europe.thomsonreuters.com'].includes(j.prospect_domain))
+    && EM.earned.filter(e => ['wafeq.com', 'europe.thomsonreuters.com'].includes(e.host)).every(e => e.kind === 'competitor'), JSON.stringify(EM.earned.map(e => [e.host, e.kind])));
+  check('R83: a news site AI cites stays earned media to pitch', EM.prospect_rows.some(r => r.prospect_domain === 'gulfnews.com'), JSON.stringify(EM.prospect_rows.map(r => r.prospect_domain)));
+  reset();
+});
+
+await guard('S137 R92 one anchor population, one page per path, no menu fragments, one AI page row per page', async () => {
+  const SN = 'S137 R92 parts 1 2 5 6 — the anchor sentence says what the table holds, Search Console\'s two "/" rows are one page on the canonical host, Page Watch watches no "#fragment", and seo_ai_pages is keyed on the canonical host';
+  reset(); begin(SN); const check = a10Check(SN);
+  // ---- part 1: the backlink anchor block (exec 626: 2 referring sites in the percentages, 1 farm site set aside, a 17-domain farm anchor in the table) ----
+  const SITE = 'site_techand-ai', DOM = 'techand.ai';
+  const FARM = 'High Quality Dofollow Backlinks DA 50 PA 40 Premium PBN Network Service techand.';
+  const bplan = { site_id: SITE, domain: DOM, canonical_host: 'www.' + DOM, country: 'United Arab Emirates', location_code: 2784, language_code: 'en', email: '', callback_url: '', request_id: '', business_name: 'Tech&', brand_names: ['Tech&'],
+    on_demand: false, adhoc: false, free_only: false, mode: 'full', since: '2026-09-15', since_full: '2026-09-15', stored_timeseries: [], gap_due: false, stored_gap: [], competitors: [], accreditation: null, need_competitors: false,
+    assets: [], site_model: {}, profile: {}, target: DOM, targets: [DOM], key_paths: [], checked_at: '2026-10-15T19:30:00.000Z', run_id: 'bl_x', settings: {}, link_builder: false, previous: null };
+  const entry = (d, o = {}) => ({ ref_domain: d, kind: 'web', sources: ['dfs'], from_url: 'https://' + d + '/post', to_url: 'https://' + DOM + '/', anchor: 'techand.ai', first_seen: '2026-06-01', last_seen: '2026-10-14', dfs_last_seen: '2026-10-10',
+    authority: 50, visits: 0, visits_28d: 0, key_events: 0, pages: [{ url: 'https://' + d + '/post' }], prev: { status: 'live', miss_count: 0, verify: 'found', sources: 'dfs', last_seen: '2026-10-14', verified_at: '2026-10-08', seo_value: 30, rel: 'follow', anchor: o.anchor || 'techand.ai', from_url: '' }, ai_cited: false, ...o });
+  mock('BL Plan', [{ json: bplan }]);
+  const farmE = (d) => entry(d, { from_url: 'https://' + d + '/all/2835/13.html', anchor: FARM, pages: [{ url: 'https://' + d + '/all/2835/13.html' }] });
+  mock('Link Merge', [{ json: { site_id: SITE, domain: DOM, mode: 'full', entries: [entry('peppol.org', { anchor: 'https://techand.ai/' }), entry('example-dir.ae', { anchor: '' }),
+    farmE('pbn-farm1.example'), farmE('pbn-farm2.example'), farmE('pbn-farm3.example')], mention_pages: [], list_pages: [], cc_gap: [], sources: {} } }]);
+  const vl = (d, a) => ({ site_id: SITE, purpose: 'link', ref_domain: d, url: 'https://' + d + '/post', verify: 'found', rel: 'follow', placement: 'content', to_url: 'https://' + DOM + '/', anchor: a, title: 'A post', context: 'Tech&', outbound_domains: 5 });
+  mock('Verify Links', [vl('peppol.org', 'https://techand.ai/'), vl('example-dir.ae', '')]);
+  mock('BL Requests', [{ json: { site_id: SITE, kind: 'summary' } }, { json: { site_id: SITE, kind: 'anchors' } }]);
+  mock('Run BL Requests', [{ json: { tasks: [{ status_code: 20000, result: [{ rank: 40, backlinks: 30, referring_domains: 20, referring_domains_nofollow: 1, backlinks_spam_score: 30, broken_backlinks: 0, broken_pages: 0 }] }] } },
+    { json: { tasks: [{ status_code: 20000, result: [{ items: [{ anchor: FARM, referring_domains: 17, backlinks: 17 }, { anchor: 'techand.ai', referring_domains: 1, backlinks: 2 }] }] }] } }]);
+  const PB = (await run('Parse Backlinks', store['Verify Links']))[0].json;
+  const BR = (await run('BL Report', [{ json: PB }]))[0].json; const anc = (BR.html.match(/Anchor texts[\s\S]{0,2500}/) || [''])[0];
+  console.log('   anchors ->', JSON.stringify({ kinds: PB.anchors.kinds, set_aside: PB.anchors.set_aside, top_farm: PB.anchors.top_farm }));
+  check('R92 part 1 (dossier test a): the sentence no longer says the farms are "left out of both the percentages and the table below" while the table lists them',
+    !/left out of both the percentages and the table below/.test(anc) && /left out of these percentages/.test(anc), anc.slice(0, 500));
+  check('R92 part 1: it says what the table is (the link index\'s own anchor list) and counts what it marks in the table\'s own unit — the farm anchor\'s 17 referring domains',
+    /link index's own anchor list/.test(anc) && /anchor\(s\) in it that link farms use \(17 referring domain\(s\) in the index\) are marked/.test(anc) && /link farm, set aside/.test(anc), anc.slice(0, 700));
+  // ---- part 2: one page per path (exec 634: https://techand.ai/ 14 clicks and https://www.techand.ai/ 3 clicks) ----
+  reset();
+  const W = 'https://www.techand.ai', B0 = 'https://techand.ai', RNG = { current: { start: '2026-09-15', end: '2026-10-12' }, previous: { start: '2026-08-18', end: '2026-09-14' } };
+  const reqG = (kind, dims) => ({ json: { site_idx: 0, site_id: SITE, kind, url: 'https://gsc/q', body: { dimensions: dims, rowLimit: 25000, startRow: 0 }, paged: false, page: 1 } });
+  mock('GSC Requests', [reqG('pages_cur', ['page']), reqG('pages_prev', ['page'])]);
+  mock('GSC Query', [{ json: { rows: [{ keys: [B0 + '/'], clicks: 14, impressions: 410, ctr: 0.034, position: 14.2 }, { keys: [W + '/'], clicks: 3, impressions: 153, ctr: 0.02, position: 9.2 }, { keys: [B0 + '/dynamics-365-project-operations-uae'], clicks: 4, impressions: 165, ctr: 0.024, position: 12 }] } },
+    { json: { rows: [{ keys: [B0 + '/'], clicks: 9, impressions: 585, ctr: 0.015, position: 15.3 }] } }]);
+  mock('Resolve Properties', [{ json: { site_id: SITE, domain: DOM, ranges: RNG, config: {} } }]);
+  mock('Site Model (Site)', [{ json: { site_id: SITE, model: { site_id: SITE, domain: DOM, canonical_host: 'www.techand.ai', brand_names: ['Tech&'], business_name: 'Tech&' } } }]);
+  const PG = (await run('Parse GSC', store['GSC Query']))[0].json;
+  const homes = PG.pages.filter(p => /^https?:\/\/(www\.)?techand\.ai\/?$/.test(p.page));
+  console.log('   pages ->', JSON.stringify(PG.pages.map(p => [p.page, p.clicks, p.impressions, p.prev_clicks, p.hosts ? p.hosts.length : 0])));
+  check('R92 part 2 (dossier test a): the home page is ONE row on the canonical host — 17 clicks and 563 impressions, last period\'s 9 clicks beside it — not "/" twice (14 and 3)',
+    homes.length === 1 && homes[0].page === W + '/' && homes[0].clicks === 17 && homes[0].impressions === 563 && homes[0].prev_clicks === 9 && (homes[0].hosts || []).length === 2, JSON.stringify(homes));
+  const other = PG.pages.find(p => /project-operations/.test(p.page)) || {};
+  check('R92 part 2: a page Google reports only under the other host keeps that full URL and says so (`other_host`), so a reader printing paths can print the host (A2\'s rule)',
+    other.page === B0 + '/dynamics-365-project-operations-uae' && other.other_host === true, JSON.stringify(other));
+  // ---- part 5: Page Watch watches no menu fragment (exec 636: /industries#bfsi and /capabilities#ai took 2 of the 25 slots) ----
+  reset();
+  const navs = [{ url: W + '/insights', title: 'Insights' }, { url: W + '/industries#bfsi', title: 'BFSI' }, { url: W + '/capabilities#ai', title: 'AI' }, { url: W + '/capabilities', title: 'Capabilities' }, { url: W + '/capabilities/data', title: 'Data' }];
+  mock('Load Sites (Watch)', [{ json: { site_id: SITE, domain: DOM, canonical_host: 'www.' + DOM, model_updated_at: new Date().toISOString(), nav_pages_json: JSON.stringify(navs), status: 'active', email: '', callback_url: '' } }]);
+  for (const n of ['Load Ladders (Watch)', 'Load Pages (Watch)', 'Load Page Watch', 'Load Watch Cache', 'Load Recheck Requests', 'Load Ops Alerts (Watch)']) mock(n, [{ json: {} }]);
+  const WP = (await run('Watch Plan', store['Load Ops Alerts (Watch)'])).map(x => x.json).filter(x => x.url);
+  const urls = WP.map(x => x.url);
+  console.log('   watch ->', JSON.stringify(urls));
+  check('R92 part 5 (dossier test a): no watched URL carries a "#fragment", and a menu section is the page it belongs to — /industries once, /capabilities once',
+    !urls.some(u => /#/.test(u)) && urls.filter(u => u === W + '/industries').length === 1 && urls.filter(u => u === W + '/capabilities').length === 1, JSON.stringify(urls));
+  // ---- part 6: the seo_ai_pages upsert key is on the canonical host ----
+  reset();
+  mock('Growth Plan', [{ json: { site_id: SITE, domain: DOM, site_host: 'www.techand.ai' } }]);
+  const pr = (url) => ({ site_id: SITE, domain: DOM, url, kind: 'page', checked_at: '2026-10-15', status: 200, score: 70 });
+  mock('Growth Metrics', [{ json: { page_rows: [pr(B0 + '/e-invoicing-uae'), pr(W + '/e-invoicing-uae'), pr(W + '/peppol-uae'), pr('https://other-site.com/x')] } }]);
+  const AR = (await run('AI Page Rows', store['Growth Metrics'])).map(x => x.json);
+  console.log('   ai page rows ->', JSON.stringify(AR.map(r => r.url)));
+  check('R92 part 6: a page read under the bare host is upserted on the canonical host, and its two variants in one run are ONE row (the key no longer splits a page in two)',
+    AR.filter(r => /e-invoicing-uae/.test(r.url)).length === 1 && AR.every(r => !/^https:\/\/techand\.ai\//.test(r.url)) && AR.some(r => r.url === W + '/peppol-uae') && AR.some(r => r.url === 'https://other-site.com/x'), JSON.stringify(AR.map(r => r.url)));
+  reset();
+});
+
+
 // S143-S146 (fixer A14, 2026-10-16): the leftover halves of the first wave. S143 R50 / R51 / R58 / R40 (Keyword Check names the ladder and
 // page, the relevance prompt, the idea response's notes), S144 R42 (a ladder run on a full pile says so), S145 R111 / R87 (the cadence mails
 // name drafts that need a fix and paused ladders), S146 R94 follow-up (a sleep-delayed timer after the catch-up refuses to run the week twice).
@@ -16702,6 +16988,7 @@ await guard('S141 R75 R119 the pre-release reasons follow `staging`; the raw fet
   const rdSrc = a11code('Render_Diff.js');
   check('R119: the render diff says what the first response is — a plain request under our own audit user agent; a site that treats named AI bots differently is the crawler-access check\'s job', /our own audit user agent/.test(rdSrc) && /crawler access/i.test(rdSrc), '');
 });
+
 
 H.report();
 })();

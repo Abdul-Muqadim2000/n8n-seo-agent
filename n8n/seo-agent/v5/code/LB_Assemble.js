@@ -102,12 +102,17 @@ for (const p of plans) {
   }
   // ---- 2. every prospect page read: qualify, evidence, contacts, our page ----
   const contactsBy = new Map(); const formBy = new Map(); const deadBy = new Map();
+  // R86: the prospect's own SITE, from the about / contact / home pages this run already fetched for contacts — read by the competitor
+  // test next to the prospect page, so a provider selling our services in our market is refused whatever its article is about
+  const siteBy = new Map();
   for (const { r, x } of second.filter(o => o.r.site_id === sid)) {
     const html = htmlOf(x); const st = statusOf(x);
-    if (r.kind === 'contact' && html && st < 400 && !LK.challenge(st, html)) { const l = contactsBy.get(r.prospect_domain) || []; l.push(...OK.contactsIn(html, r.prospect_domain, r.url)); contactsBy.set(r.prospect_domain, l); const f = OK.contactForm(html, r.url); if (f && !formBy.has(r.prospect_domain)) formBy.set(r.prospect_domain, f); }
+    if (r.kind === 'contact' && html && st < 400 && !LK.challenge(st, html)) { const sb = siteBy.get(r.prospect_domain) || { text: '', pages: [] }; if (sb.text.length < 60000) { sb.text += ' ' + LK.text(html).slice(0, 30000); sb.pages.push(String(r.url || '').replace(/^https?:\/\/(www\.)?/i, '')); } siteBy.set(r.prospect_domain, sb);
+      const l = contactsBy.get(r.prospect_domain) || []; l.push(...OK.contactsIn(html, r.prospect_domain, r.url)); contactsBy.set(r.prospect_domain, l); const f = OK.contactForm(html, r.url); if (f && !formBy.has(r.prospect_domain)) formBy.set(r.prospect_domain, f); }
     if (r.kind === 'outbound') { const e = errOf(x); const dead = st === 404 || st === 410 || /ENOTFOUND|NXDOMAIN|EAI_AGAIN.*ENOTFOUND|certificate has expired/i.test(e);
       if (dead) { const l = deadBy.get(r.prospect_domain) || []; l.push({ url: r.url, anchor: r.anchor, status: st || 'no DNS', on_page: r.on_page }); deadBy.set(r.prospect_domain, l); } }
   }
+  const siteOf = (dom) => { const sb = siteBy.get(dom); return sb ? { site_text: sb.text, site_pages: sb.pages, country: p.country || '', country_iso: p.country_iso || '' } : { country: p.country || '', country_iso: p.country_iso || '' }; };
   for (const { r, x } of pagesRead.filter(o => o.r.site_id === sid && o.r.kind === 'prospect')) {
     const stored = myProspects.find(y => y.prospect_domain === r.prospect_domain && y.type === r.type) || {};
     const html = htmlOf(x); const st = statusOf(x); const e = errOf(x);
@@ -142,7 +147,7 @@ for (const p of plans) {
     // ---- D13: who is never pitched (live 2026-10-11: competitors, bare homepages, mailbox providers and contact databases were) ----
     const bad = OK.badHost(r.prospect_domain); if (bad) reasons.push(bad);
     const onlyHome = OK.homepageOnly(r.type, r.url); if (onlyHome) reasons.push(onlyHome);
-    const competing = OK.sellsSame({ type: r.type, domain: r.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals, title: o.page_title, text: t, terms: sellTerms, url: r.url, fit: o.fit });   // R4: a SERP rival counts as a competitor; R21: the page's URL and the topic match it just measured
+    const competing = OK.sellsSame({ type: r.type, domain: r.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals, title: o.page_title, text: t, terms: sellTerms, url: r.url, fit: o.fit, ...siteOf(r.prospect_domain) });   // R4: a SERP rival counts as a competitor; R21: the page's URL and the topic match it just measured
     if (competing) reasons.push(competing);
     if (!weAreAccredited && OK.accreditedList(o.page_title + ' ' + r.url))   // the page IS such a list (its title / address says so); a page that merely names accredited providers is fine
       reasons.push('a list of accredited / approved providers: you get on it by applying with the accreditation, and the facts on file do not say you hold one (asking to be added claims it)');
@@ -170,7 +175,7 @@ for (const p of plans) {
       && !myOutreach.some(o => o.prospect_domain === x.prospect_domain && o.type === x.type && o.status === 'drafted'))) {
     const why = OK.badHost(x.prospect_domain)
       || (OK.isGov(x.prospect_domain) ? 'government site: you get on its lists by applying or being accredited, not by a pitch (see the listings checklist)' : '')
-      || OK.sellsSame({ type: x.type, domain: x.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals, title: x.detail || '', url: x.page_url || '' });   // R4 / R21
+      || OK.sellsSame({ type: x.type, domain: x.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals, title: x.detail || '', url: x.page_url || '', terms: sellTerms, ...siteOf(x.prospect_domain) });   // R4 / R21; R86: their own site, when this run read it
     if (!why) continue;
     outreach_rows.push(base({ prospect_domain: x.prospect_domain, type: x.type, status: 'not_fit', score: Number(x.score) || 0, fit: 0, fit_reason: why,
       page_url: x.source_url || '', page_title: String(x.detail || '').slice(0, 140), evidence: String(x.detail || ''), country: OK.countryOf(x.prospect_domain), checks: { reasons: [why], read: false } }));
@@ -382,6 +387,15 @@ for (const p of plans) {
       joint: won.filter(w => pathKey(w.to_url) === pathKey(c.url) && Math.abs(new Date(w.first_seen).getTime() - new Date(c.t0).getTime()) <= 28 * 864e5).length }));
   }
   // ---- 6. this week's writer jobs: the best ready prospects (new rows of this run + stored ready rows), not in free-only checks ----
+  // R86: a `ready` row stored by an earlier run is put through the same site test when this run read that site, so a competing
+  // provider qualified before the rule existed is refused now instead of being drafted
+  const storedRivals = p.serp_rivals;
+  for (const o of myOutreach.filter(o => o.status === 'ready' && !o.sequence_json && siteBy.has(o.prospect_domain) && !outreach_rows.some(n => n.prospect_domain === o.prospect_domain && n.type === o.type))) {
+    const why = OK.sellsSame({ type: o.type, domain: o.prospect_domain, competitors: p.competitors, serp_rivals: storedRivals, title: o.page_title || '', url: o.page_url || '', terms: sellTerms, ...siteOf(o.prospect_domain) });   // R21's SERP rivals too (build section 58 counts the four first-pass calls)
+    if (!why) continue;
+    let ck = {}; try { ck = JSON.parse(o.checks_json || '{}') || {}; } catch (e) { ck = {}; }
+    outreach_rows.push(base({ ...o, status: 'not_fit', fit_reason: why, contacts: (() => { try { return JSON.parse(o.contacts_json || '[]'); } catch (e) { return []; } })(), checks: { ...ck, reasons: [why] } }));
+  }
   const ready = [...outreach_rows.filter(o => o.status === 'ready'), ...myOutreach.filter(o => o.status === 'ready' && !o.sequence_json && !outreach_rows.some(n => n.prospect_domain === o.prospect_domain && n.type === o.type))]
     .map(o => ({ ...o, rankv: (Number(o.score) || 0) * (0.5 + Number(o.fit || 0)) })).sort((a, b) => b.rankv - a.rankv);
   const jobs = p.free_only ? [] : ready.slice(0, p.budget).map(({ rankv, ...o }) => o);

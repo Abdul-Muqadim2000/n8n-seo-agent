@@ -10,7 +10,10 @@
 // keywords, so KWI.CFG.ladder_serp_checks (24) covers more than twice the pages a plan can hold, at 24 x $0.002 = $0.048 a ladder.
 // Everything below the cap is the pool's own opportunity order, after the same two filters the rungs are chosen by (the fit gate, which
 // `Ladder Pool` already applied, and RAD.headFit, which `Ladder Plan` applies) - so no call is ever bought for a keyword the plan would
-// have thrown away. A `free_only` run, an explicit `ladder_serp_checks: 0` and a pool with fewer than two comparable keywords make no
+// have thrown away. R54 (2026-10-16): exec 610 still bought "transfer pricing consulting", "supply chain consulting uk" and "supply
+// chain consulting meaning" for the "ai consulting dubai" ladder, because RAD.headFit could not see "ai" (R39) and passed them on
+// "consult" alone; the relevance screen rated all three 0 a step later. RAD.tokens now counts "ai" and RAD.headFit asks for the
+// head's subject word, so the same test refuses them HERE, before the call. A `free_only` run, an explicit `ladder_serp_checks: 0` and a pool with fewer than two comparable keywords make no
 // call at all, and the plan says which of those it was.
 const d = $input.first().json;
 const head = String(d.keyword || '').toLowerCase().trim();

@@ -10250,6 +10250,111 @@ def _b104_checks():
           % (sum(len(v) for v in _answers.values()), len(_answers), sum(len(v) for v in _cbs.values()), ', '.join(sorted(_cbs)), len(_gap)))
 
 
+
+# =============================================================================
+# 106. ONE COMPETITOR / BRAND / TOPIC GATE FOR EVERY LIST (2026-10-16, re-rating 2026-10-15 family F7 — R39, R54, R83, R86, R89;
+#      dossiers docs/system-review-2026-10-15/defects/A_keywords_content.md and C_monitors.md; harness S134 / S135 / S136).
+#
+#     * R39 / R54: `_radius.js` RAD.tokens dropped every token of two characters, so "ai" was not a word that matters in "ai consulting
+#       dubai" and "supply chain optimization consulting" became a rung on "consult" alone; the cluster step bought a results page for
+#       three keywords the relevance screen then rated 0. Two-letter field words ("ai", "bi", "hr", "it", "ui", "ux" …) count now, places
+#       ("uk", "eu") count as "dubai" always did, and RAD.headFit asks for the head's SUBJECT word, not only its service word or place.
+#       The kit is inlined into Ladder Cluster Requests, Ladder Plan and Rank Keywords — proved below on each generated node.
+#     * R83: the businesses AI names instead of you (every configured competitor, every business named in two or more answers, every
+#       business the Answer Analyst learned a website for — by registrable domain) are never a source to "get featured on" or an
+#       `ai_source` prospect, whatever the 8-row display cut; AI Growth's earned media applies the same set; the report drops a brief's
+#       pitch to one.
+#     * R86: the Link Builder judges the prospect's SITE (the about / contact pages it fetched) as well as its page; the Backlink Monitor's
+#       "best of" list test has closing word boundaries and no bare-number branch.
+#     * R89: the brand / non-brand split matches brand forms as whole tokens ("tech" is never the brand on its own; "tech and" counts only
+#       as the whole query) — in the Site Tracker, the audit's Search Console block and discovery, which inline the same kit.
+# =============================================================================
+for _n106 in ('Ladder Cluster Requests', 'Ladder Plan', 'Rank Keywords'):
+    _c106 = code(_n106)
+    assert "const CORE2 = new Set(['ai'" in _c106 and 'const subjectOf = ' in _c106 and 'onSubject' in _c106, \
+        'R39: %s does not carry the corrected topic radius (two-letter words, subject word)' % _n106
+assert 'RAD.headFit(head, k.keyword).ok' in code('Ladder Cluster Requests'), 'R54: the cluster step no longer filters with the head fit before buying'
+for _n106 in [n for n in nodes if 'const GQ = (() => {' in (nodes[n]['parameters'].get('jsCode') or '')]:
+    assert 'MIN_NAME_RUN = 5' in code(_n106) and 'onlyDomain' in code(_n106), 'R89: %s still matches a brand key as a substring' % _n106
+
+
+def _b106_checks():
+    """R83 / R86 / R89 on the GENERATED monitor workflows (written by the sub-builds after this section is read)."""
+    import json as _j106
+    def _codes106(f):
+        w = _j106.load(open(os.path.join(HERE0, 'workflows', f), encoding='utf-8'))[0]
+        return {n['name']: n['parameters'].get('jsCode', '') for n in w['nodes'] if n['type'] == 'n8n-nodes-base.code'}
+    _ai = _codes106('SEO_Agent_AI_Visibility.json')
+    assert 'const rivalSet = new Set()' in _ai['AI Metrics'] and "isRival(h)) { asRival(h, 1); continue; }" in _ai['AI Metrics'], \
+        'R83: AI Metrics still excludes only the 8 displayed rivals from the sources it pitches'
+    assert 'rival_sources' in _ai['AI Metrics'] and 'pitchesRival' in _ai['AI Report'], 'R83: the rivals are not named apart, or the brief can still pitch one'
+    _gr = _codes106('SEO_Agent_AI_Growth.json')
+    assert "$('Load Cache (Growth)')" in _gr['Earned Media'] and 'rivalOf(e.host)' in _gr['Earned Media'], 'R83: AI Growth\'s earned media still pitches a business AI names instead of you'
+    _lb = _codes106('SEO_Agent_Link_Builder.json')
+    assert 'const siteBy = new Map();' in _lb['LB Assemble'] and '...siteOf(r.prospect_domain)' in _lb['LB Assemble'] and 'function siteOffer(o)' in _lb['LB Assemble'], \
+        'R86: the Link Builder\'s competitor test still reads only the prospect page'
+    _bl = _codes106('SEO_Agent_Backlink_Monitor.json')
+    assert 'const LISTY_RES = [' in _bl['Link Merge'] and 'listy(x.title, x.url)' in _bl['Link Merge'] and 'const LISTY = /' not in _bl['Link Merge'], \
+        'R86: the Backlink Monitor still reads one word in a title as a "best of" list'
+    _st = _codes106('SEO_Agent_Site_Tracker.json')
+    assert 'MIN_NAME_RUN = 5' in _st['Parse GSC'] and 'onlyDomain' in _st['Parse GSC'], 'R89: the Site Tracker still counts "tech" as the brand'
+    print('R39 / R54 / R83 / R86 / R89: one topic radius that sees "ai", no rival pitched from the AI answers or from earned media, a '
+          'competing provider judged by its own site, a list that says it is one, and a brand that is a whole word')
+    return _st
+
+
+log('One competitor / brand / topic gate for every list (2026-10-16, re-rating 2026-10-15 family F7: R39, R54, R83, R86, R89). The topic radius saw no two-letter word, so "ai" did not count in "ai consulting dubai" and a supply-chain rung was planned and its results page bought on "consult" alone; it now counts the field words and asks for the head\'s subject. The businesses AI recommends instead of the customer were pitched as "Get featured on …" and saved as link prospects whenever they fell outside the 8-row display table; the exclusion set is now every rival the run knows, by registrable domain, on the AI visibility and AI Growth paths. The Link Builder judged only the prospect\'s article, so two Dynamics 365 partners in Dubai were ready pitches; it now reads their own site. The Backlink Monitor\'s "best of" test matched "top" inside a domain and "Dynamics 365 … Solutions" as a top-N list. The brand split counted "tech" as the brand.')
+
+
+# =============================================================================
+# 107. AI VISIBILITY SAYS WHAT ITS NUMBERS COUNT, AND ONE PAGE IS ONE ROW (2026-10-16, re-rating 2026-10-15 family F10 — R84, R85 — and
+#      R92 parts 1 / 2 / 5 / 6, plus the AI Pulse's days after A5's two readings a date; harness S135 / S137).
+#
+#     * R84: the header said "8 buyer questions × 6 AI engines · 74 answers" over 7 buyer questions on 5 weekly engines; the alert called
+#       the 33 counted answers "the answers that came back" (46 of 47 did); AI Overview presence put a failed request in its denominator.
+#     * R85: the AI search-volume lookup failed twice and the lineage said "0 questions with a volume"; it is "not read" now, with the reason.
+#     * R92: the anchor sentence and the anchor table are two populations and the sentence says so; Search Console's host variants of one
+#       path are one row on the canonical host; Page Watch drops "#fragments"; the seo_ai_pages upsert key is on the canonical host (and
+#       fix_ai_pages_hosts.py, a dry run by default, repairs the stale bare-host rows).
+#     * The pulse: `pulse_basis.days` counted readings, and the Pulse's baseline was the last 7 rows, not the last 7 days.
+# =============================================================================
+def _b107_checks(_st):
+    import json as _j107
+    def _codes107(f):
+        w = _j107.load(open(os.path.join(HERE0, 'workflows', f), encoding='utf-8'))[0]
+        return {n['name']: n['parameters'].get('jsCode', '') for n in w['nodes'] if n['type'] == 'n8n-nodes-base.code'}
+    _ai = _codes107('SEO_Agent_AI_Visibility.json')
+    for _t107, _m107 in (('const aioRead = aio.filter(r => !r.error);', 'R84: a failed AI Overview request is back in the presence denominator'),
+                         ('const headline = { buyer_questions: buyerQ', 'R84: the headline does not say what its answers count'),
+                         ('const volume_lookup = {', 'R85: a failed volume lookup is not reported'),
+                         ("$('Run Discovery Answers')", 'R85: AI Metrics reads the first discovery attempt, not the merged answers'),
+                         ('const pulseDays = pulseDates.length', 'A5: pulse_basis.days counts readings')):
+        assert _t107 in _ai['AI Metrics'], _m107
+    for _t107 in ('M.headline.text', 'M.volume_lookup.note', 'M.aio_basis'):
+        assert _t107 in _ai['AI Report'], 'R84 / R85: the AI report does not print ' + _t107
+    _pu = _codes107('SEO_Agent_AI_Pulse.json')
+    assert 'const baseDates = new Set(' in _pu['AI Plan'], 'A5: the pulse baseline is still the last 7 rows'
+    _bl = _codes107('SEO_Agent_Backlink_Monitor.json')
+    assert 'top_farm:' in _bl['Parse Backlinks'] and 'left out of both the percentages and the table below' not in _bl['BL Report'], 'R92 part 1: the anchor sentence still contradicts its table'
+    assert 'a.pages_cur = mergeHosts(a.pages_cur)' in _st['Parse GSC'] and 'bRaw ? mergeHosts(bRaw)' in _st['Parse GSC'], 'R92 part 2: Search Console pages are keyed by full URL again'
+    _pw = None
+    for _f107 in os.listdir(os.path.join(HERE0, 'workflows')):
+        if not _f107.endswith('.json'):
+            continue
+        for _w107 in _j107.load(open(os.path.join(HERE0, 'workflows', _f107), encoding='utf-8')):
+            for _n107 in _w107['nodes']:
+                if _n107['name'] == 'Watch Plan':
+                    _pw = _n107['parameters'].get('jsCode', '')
+    assert _pw and ".replace(/#.*$/, '')" in _pw, 'R92 part 5: Page Watch watches menu fragments again'
+    _gr = _codes107('SEO_Agent_AI_Growth.json')
+    assert "const canon = (r) =>" in _gr['AI Page Rows'] and "hostFor.get(r.site_id)" in _gr['AI Page Rows'], 'R92 part 6: the seo_ai_pages upsert key is not on the canonical host'
+    assert os.path.exists(os.path.join(HERE0, 'fix_ai_pages_hosts.py')), 'R92 part 6: the repair script for the stale bare-host rows is missing'
+    print('R84 / R85 / R92 / A5: the AI headline says what it counts, a failed lookup says so, one anchor sentence per population, one '
+          'Search Console row per page, no menu fragments watched, one AI page row per page, and the pulse counts days')
+
+
+log('AI visibility says what its numbers count, and one page is one row (2026-10-16, re-rating 2026-10-15: R84, R85, R92 parts 1/2/5/6, and the AI Pulse\'s days after A5). The AI report\'s header, alert and lineage now name the population the rates are counted over (buyer questions on the weekly engines, this run plus the pulse; Claude and the brand question reported apart); AI Overview presence leaves a failed request out of its denominator; a failed AI search-volume lookup is "not read" with the provider\'s reason. The backlink anchor sentence says the table is the index\'s list and counts the farm anchors it marks; Search Console\'s bare-host and www rows of one path are one row on the canonical host; Page Watch drops "#fragments"; seo_ai_pages is upserted on the canonical host (fix_ai_pages_hosts.py repairs the old rows, dry run by default); the pulse counts days, not readings, and its baseline is the last seven days.')
+
 # 110. THE LEFTOVER HALVES OF THE FIRST WAVE (2026-10-16, agent A14: R50 / R51 / R42 / R111 / R87 / R58 / R40 — the parts the first wave's
 #      agents reported as "needs elsewhere").
 #      * R50 the Keyword Check loads the domain's ladders and content log (build_api.py: Load Ladders (Assess) / Load Content Log (Assess),
@@ -10392,6 +10497,7 @@ assert "$('Check Crawl')" in code('Crawl Extra Requests') and 'isRedirectItem' i
 json.dump({'user_agents': _ua_out109, 'crawl_extra_requests_reads': ['Check Crawl', 'Save Task ID'], 'redirect_items_excluded_from_pages': True},
           open(os.path.join(HERE0, 'harness', 'a11_wiring.json'), 'w'), indent=1, sort_keys=True)
 log('The audit\'s raw fetches (Fetch Raw Pages, Fetch Not Crawled) name themselves "SEOAgentAudit/1.0" and no longer carry the info address of Google\'s crawler (R119, investigated 2026-10-16: techand.ai answers the same 219,172 bytes to Google-style, GPTBot and bare agents, so no printed figure was wrong; the identity was false and a WAF may challenge it); the render diff\'s method states that a site answering named AI bots differently is the AI crawler access check\'s finding')
+
 
 
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
@@ -10568,5 +10674,7 @@ _b86_checks()
 _b95_checks()
 # sections 104-105 (A9, F6): the answer the counter counts, the callbacks that wait for the settle, the Keyword Check's stamp
 _b104_checks()
+# sections 106-107 (F7 / F10 / R92): the gates and the counts, on the generated monitor workflows
+_b107_checks(_b106_checks())
 _b69_checks()
 
