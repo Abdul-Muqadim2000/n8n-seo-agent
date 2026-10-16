@@ -153,6 +153,8 @@ const FIT_PORTAL = /\b(log ?in|logins|sign ?in|sign ?up|password|passwords|porta
 // plain category nouns (software, system, services …) do not — "erp software login" is still a login
 const FIT_CONTENT = /\b(best|top|vs|versus|compar(e|ison)|review|reviews|alternatives?|how to|guide|guides|checklist|requirements?|pricing|price|prices|cost|costs|quote|quotes|hire|consultan(t|ts|cy|cies)|consulting|partner|partners|provider|providers|vendor|vendors|agency|agencies|accredited|approved|certified|compliant|compliance|implementation|integration|integrations|training|course|courses|template|templates|examples?|explained|meaning|benefits|registration|register|filing|return|returns|refund|refunds|deadline|deadlines|penalt(y|ies)|rules?|regulations?|free trial|demo|tutorial|steps|process|procedure)\b/;
 const FIT_PARTNER = /\b(partner|partners|partnership|reseller|resellers|implementation|implement|implementer|implementers|consultan(t|ts|cy|cies)|consulting|integration|integrations|integrate|migration|migrate|support|training|developer|developers|development|customi[sz]ation|customi[sz]e|add-?ons?|plugins?|specialist|specialists|expert|experts|agency|agencies|services?)\b/;
+// R60: the words of a public body's own service to a person (with FIT_GOV_NAMES only): nothing a business sells is left once they are taken out
+const FIT_GOV_SERVICE = /^(attestation|attestations|attest|attested|legali[sz]ation|legali[sz]e|apostille|notari[sz]ation|passport|passports|visa|visas|residency|iqama|renewal|renew|renewing|fines?|penalty|appointment|appointments|booking|stamp|stamping|medical|fitness|typing|cancellation|cancel|replacement|lost|reprint|fees?|charges?|timings?|working|hours|office|offices|centre|center|centres|centers|near|location|locations|track|tracking|apply|application|form|forms|download|print|copy|expiry|expired|validity|valid|enquiry|inquiry)$/;
 const FIT_COMPARE = /\b(vs|versus|compare|comparison|alternatives?|instead of|better than|difference between|against)\b/;
 const fitTokens = (s) => String(s || '').toLowerCase().replace(/[’']/g, '').split(/[^a-z0-9.]+/).map(t => t.replace(/^\.+|\.+$/g, '')).filter(t => t.length > 1 && !FIT_STOP.has(t));
 const fitHost = (d) => String(d || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/[\/?#].*$/, '').replace(/:\d+$/, '').replace(/^(www|m|app|en|ar)\./, '');
@@ -225,6 +227,12 @@ function fitGate(keyword, ctx) {
     const body = String(govName[1] || govName[0]).trim();
     const rest = toks.filter(t => !fitTokens(body).includes(t) && !FIT_GEO.has(t) && !/^(check|checking|card|number|no|online|status)$/.test(t));
     if (!rest.length || (portalWord && !contentWord)) return { ok: false, reason: 'government', detail: 'a public body or an identity document, not a topic (' + body + ')' };
+    // R60 (2026-10-16, re-rating 2026-10-15): "mofa attestation dubai" and "how to check emirates id status with passport number" walked
+    // through because one more word ("attestation", "passport") or a content word ("how to") made them look like a topic. A word that only
+    // names what the public body does FOR A PERSON (attest a document, issue a passport or visa, renew a card, collect a fine, book an
+    // appointment) adds no topic: the searcher still wants the body's own service, whatever "how to" is in front of it. "fta vat registration"
+    // and "zatca e invoicing" keep a business topic word of their own, so they stay.
+    if (rest.every(t => FIT_GOV_SERVICE.test(t))) return { ok: false, reason: 'government', detail: 'a service a public body provides to a person, not a topic for this website (' + body + ': ' + rest.join(' ') + ')' };
   }
   const serp = (ctx.serp || []).map(fitHost).filter(Boolean).slice(0, FIT_CFG.serp_top);
   if (serp.length >= FIT_CFG.serp_hold && serp.filter(fitGovHost).length >= FIT_CFG.serp_hold) return { ok: false, reason: 'government', detail: 'the results page belongs to government sites (' + [...new Set(serp.filter(fitGovHost))].slice(0, 3).join(', ') + ')' };
@@ -345,11 +353,20 @@ const FITR = {
   }
 };
 let cacheRowsAK = []; try { cacheRowsAK = $('Load Site Cache').all().map(i => i.json); } catch (e) { cacheRowsAK = []; }
-const fitCtxAK = { own_domain: base.domain || '', competitors: (base.competitors || []).map(String), serp_domains: comps.map(c => c.domain).filter(d => !(base.competitors || []).includes(d)), brands: fitLearnedBrands(cacheRowsAK), protect: [...seeds, ...(base.services || []), String(base.business || '').slice(0, 400)],
+// R60 (2026-10-16): the topics came from $('Competitor Analysis'), whose item carries no services, no business and no description on the
+// full-report path — so the topic bar saw the three seed headings (~5 words), judged nothing under its 12-word floor and let "ai mode",
+// "character ai" and "mofa attestation dubai" through. The site's own record is read here: the services of its site model, the keywords
+// the owner configured and the business facts — only this site's (another site's row never widens the topics).
+const __topics91 = (() => { const out = []; const bare = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
+  const listOf = (v) => { if (Array.isArray(v)) return v; const s = String(v == null ? '' : v).trim(); if (!s) return []; if (/^\[/.test(s)) { try { const x = JSON.parse(s); return Array.isArray(x) ? x : []; } catch (e) { return []; } } return s.split(/[,;\n]+/); };
+  try { const m = $('Restore Site Model').first().json.site_model || null; if (m && (!m.domain || bare(m.domain) === bare(base.domain))) out.push(...listOf(m.services), String(m.business_facts || '').slice(0, 600)); } catch (e) {}
+  try { const r = $('Load Site Row (Model)').first().json || {}; if (r.domain && bare(r.domain) === bare(base.domain)) out.push(...listOf(r.keywords), ...listOf(r.services_json), String(r.business_facts || '').slice(0, 600)); } catch (e) {}
+  return [...new Set(out.map(x => String(x || '').trim()).filter(Boolean))]; })();
+const fitCtxAK = { own_domain: base.domain || '', competitors: (base.competitors || []).map(String), serp_domains: comps.map(c => c.domain).filter(d => !(base.competitors || []).includes(d)), brands: fitLearnedBrands(cacheRowsAK), protect: [...seeds, ...(base.services || []), String(base.business || '').slice(0, 400), ...__topics91],
   // R13 (2026-10-13, re-rating §3.11): topic distance on the same 25% bar the outreach gate uses — §4a offered "ai" (165,000/mo),
   // "character ai", "google ai", "meta ai", "mh enterprises uae" and the gap kept "mofa attestation dubai" because the gate only
   // refused classes somebody had listed. The topics are the site's own: its services, its description and this run's seeds.
-  topics: [...(base.services || []), String(base.business || '').slice(0, 600), ...seeds, ...(((base.site_description || {}).products_or_services) || []).map(String)],
+  topics: [...(base.services || []), String(base.business || '').slice(0, 600), ...seeds, ...(((base.site_description || {}).products_or_services) || []).map(String), ...__topics91],
   topic_label: 'what this website sells' };
 const refused = [];
 const fitsAK = (k) => { const g = fitGate(k.keyword, { ...fitCtxAK, intent: k.intent }); if (!g.ok) refused.push({ keyword: k.keyword, volume: k.volume, intent: k.intent || '', reason: g.reason, detail: g.detail }); return g.ok; };
@@ -436,7 +453,7 @@ return [{
       easy_wins,
       keyword_gap,
       striking_distance,
-      refused: refused.filter((r, i, a) => a.findIndex(x => x.keyword === r.keyword) === i).slice(0, 40),
+      refused: refused.filter((r, i, a) => a.findIndex(x => x.keyword === r.keyword) === i).sort((x, y) => (y.volume || 0) - (x.volume || 0)).slice(0, 100),
       evidence: keywords_evidence
     },
     extra_findings: [...(base.extra_findings || []), ...findings],

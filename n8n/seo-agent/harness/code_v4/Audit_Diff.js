@@ -413,8 +413,21 @@ const cur = (a.findings || []).filter(f => f.scoring !== false && f.severity !==
 const not_compared = [...new Set((a.findings || []).filter(f => f.scoring !== false && f.severity !== 'Info' && !inScope(f)).map(f => String(f.category || '')))].filter(Boolean);
 const curKeys = new Map(cur.map(f => [keyOf(f), f])); const prevKeys = new Map(prevF.map(f => [f.finding_key, f]));
 const SEV = { Critical: 0, High: 1, Medium: 2, Low: 3, Info: 4 };
-const fixed = [...prevKeys.entries()].filter(([k]) => !curKeys.has(k)).map(([, f]) => ({ title: f.title, category: f.category, severity: f.severity })).sort((x, y) => SEV[x.severity] - SEV[y.severity]);
-const added = [...curKeys.entries()].filter(([k]) => prev && !prevKeys.has(k)).map(([, f]) => ({ title: f.title, category: f.category, severity: f.severity })).sort((x, y) => SEV[x.severity] - SEV[y.severity]);
+// R74 (2026-10-16, re-rating of 2026-10-15): a finding that rests on ONE outside reading — one results page ("does not rank at the top
+// for its own brand name"), one AI answer, one AI Overview, one content review written by a model — can disappear because that reading
+// changed, not because anything was fixed: exec 614 called the brand finding "fixed" one day after exec 566 on two single results-page
+// reads (not in the top 20, then #1). Such a finding is "no longer seen", never "fixed"; a new one is marked as resting on one reading.
+// The stored rows carry no source, so the class is read from the title (and, for the content review, from the category of a full report
+// whose review ran: its titles are written fresh by a model every run, so they never match by key).
+const ONE_READING = /own brand name|recommends other providers|AI Overviews?|ChatGPT|Perplexity|Gemini|\bClaude\b|Copilot answers|AI Mode|AI answers?|named in AI|cited by AI/i;
+const MEASURED_CONTENT = /duplicate content|text-to-html|hard-to-read|readab|light content|thin content|lorem|placeholder|named human author|freshness|phone number|word count|outbound links|images?\b|headings?\b|H1\b/i;
+const reviewRan = (a.findings || []).some(f => f && f.source === 'ai_review');
+const oneReading = (f) => !!f && (f.source === 'ai_review' || ONE_READING.test(String(f.title || ''))
+  || (reviewRan && String(f.category || '') === 'Content' && !MEASURED_CONTENT.test(String(f.title || ''))));
+const gone = [...prevKeys.entries()].filter(([k]) => !curKeys.has(k)).map(([, f]) => ({ title: f.title, category: f.category, severity: f.severity, one_reading: oneReading(f) })).sort((x, y) => SEV[x.severity] - SEV[y.severity]);
+const fixed = gone.filter(f => !f.one_reading).map(({ one_reading, ...f }) => f);
+const no_longer_seen = gone.filter(f => f.one_reading).map(({ one_reading, ...f }) => ({ ...f, why: 'it rested on a single outside reading (a results page, an AI answer or a content review) that did not repeat this time; nothing on the site has to have changed' }));
+const added = [...curKeys.entries()].filter(([k]) => prev && !prevKeys.has(k)).map(([, f]) => ({ title: f.title, category: f.category, severity: f.severity, ...(oneReading(f) ? { one_reading: true } : {}) })).sort((x, y) => SEV[x.severity] - SEV[y.severity]);
 // R19 (2026-10-14, FIX_PLAN §3.12): two counts measured on samples of different sizes are not a change. The technical audit of
 // execution 550 reported "15 → 4 affected" as an improvement because 31 of 45 URL inspections had failed and the sample had
 // shrunk from 25 pages to 14 — nobody said so. Where the samples differ by more than RT.MAX_SAMPLE_DRIFT (20%), or where the
@@ -435,8 +448,11 @@ const audited_at = new Date().toISOString();
 const days = prev ? Math.round((Date.now() - new Date(prev.audited_at).getTime()) / 864e5) : null;
 const audit_diff = prev ? { baseline: false, report_type: curType, previous: { audit_id: prev.audit_id, audited_at: prev.audited_at, report_type: prev.report_type, health_score: Number(prev.health_score), grade: prev.grade, findings: Number(prev.findings) || prevF.length }, days_since: days,
   score_delta: (Number(a.health_score) || 0) - (Number(prev.health_score) || 0), fixed, new: added, open, not_compared, sample_moved,
-  summary: fixed.length + ' fixed · ' + added.length + ' new · ' + open.length + ' still open (compared with the ' + labelOf(curType) + ' of ' + String(prev.audited_at).slice(0, 10) + ')'
-    + (sample_moved ? '. ' + sample_moved + ' finding(s) are not compared as numbers: they were measured on a different number of pages this time (how many is shown with each).' : '')
+  no_longer_seen,
+  summary: fixed.length + ' fixed · ' + added.length + ' new · ' + open.length + ' still open' + (no_longer_seen.length ? ' · ' + no_longer_seen.length + ' no longer seen' : '') + ' (compared with the ' + labelOf(curType) + ' of ' + String(prev.audited_at).slice(0, 10) + ')'
+    + (no_longer_seen.length ? '. ' + no_longer_seen.length + ' finding(s) rested on a single outside reading (a results page, an AI answer or a content review) that did not repeat, so they are not counted as fixed' : '')
+    + (sample_moved ? '. ' + sample_moved + ' finding(s) are not compared as numbers: ' + [open.filter(f => f.sample_changed && f.checked_before).length ? open.filter(f => f.sample_changed && f.checked_before).length + ' were measured on a different number of pages this time' : '',
+        open.filter(f => f.sample_changed && !f.checked_before).length ? open.filter(f => f.sample_changed && !f.checked_before).length + ' were stored last time without the number of pages they were measured on' : ''].filter(Boolean).join(', and ') + ' (shown with each).' : '')
     + (not_compared.length ? '. ' + not_compared.join(', ') + ' ' + (not_compared.length === 1 ? 'is' : 'are') + ' not assessed by a ' + labelOf(curType) + ', so those findings are shown but not compared.' : '') }
   : { baseline: true, report_type: curType, not_compared, summary: 'First ' + labelOf(curType) + ' stored: the next one shows what was fixed, what is new and what is still open.' + (otherType ? ' The ' + labelOf(otherType.report_type) + ' of ' + String(otherType.audited_at).slice(0, 10) + ' is a different report type and is not compared.' : '') };
 // ---- internal links: targets that need links, sources on the same topic that already carry authority ----
