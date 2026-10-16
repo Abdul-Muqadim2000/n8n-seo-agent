@@ -21,6 +21,7 @@ const KWI = (() => {
     min_impressions: 10,        // a query needs this many impressions in the Search Console period before it seeds anything
     striking_min: 8,            // "striking distance": bottom of page 1 to the end of page 2, where one strong page moves the needle
     striking_max: 20,
+    off_topic_share: 0.5,       // R35: a ranking page is "about something else" only when its own title / H1 hold less than half of the search's words
     max_seeds: 10,              // how many Search Console queries may be handed to the research as seeds
     period_days: 28,            // the Search Console window the Site Tracker stores (Site_Plan.js ranges.current)
     month_days: 30,
@@ -78,30 +79,48 @@ const KWI = (() => {
       if (impressions < c.min_impressions) { dropped.low_impressions++; continue; }
       // which page, if any, already answers this search: the page inventory first (D11), the page Search Console reports only when
       // the inventory is empty (then it is the best evidence we have, and it is labelled as such)
-      const inv = matchPage(q);
+      const inv = matchPage(q, S(r.page));   // R35: the page Search Console credits wins a tie
       // R12 (2026-10-13, re-rating §3.11): 11 of 25 rows read "no page of yours answers this search" while the same row named a live
       // 200-OK page of the site — one of them ranking #6.2 — because only the slug / title match counted and the URL Search Console
       // itself reports was ignored whenever the inventory was non-empty. A URL on this site is evidence: it is the answering page, with
       // its own label ("the page that gets the impressions does not target this search"), so the report never asks the owner for a second
       // page for a search they already rank for (D11's cannibalisation rule, in the discovery path).
+      // R55 (2026-10-16): Search Console reports the bare host for an sc-domain property while the inventory holds the canonical one,
+      // so one table linked both. Every site URL printed goes through the site's canonical host (`c.canon`, SM.canonUrl); Google's own
+      // URL stays as `gsc_page`.
+      const canon = typeof c.canon === 'function' ? c.canon : (u) => u;
       const rowUrl = S(r.page);
       const rowBare = bare(rowUrl);
       const rowOnSite = !!rowUrl && !!rowBare && (!dom || rowBare === dom || rowBare.endsWith('.' + dom));
+      const pageUrl = rowOnSite ? S(canon(rowUrl)) : rowUrl;
+      // R35 (2026-10-16, re-rating 2026-10-15): a row whose page is on the site is a page that RANKS for the query. It used to be labelled
+      // "the page that gets the impressions does not target this search" whenever the literal word matcher failed — 20 rows, 18 of them
+      // the D365 F&O page for D365 F&O searches. A page is now called off-target only on evidence about the page itself: its own title /
+      // H1 (`c.pageTitleShare`, SM.titleShare) holding less than half of the search's words, and the sentence says what was compared.
+      const evidence = rowOnSite && typeof c.pageTitleShare === 'function' ? c.pageTitleShare(rowUrl, q) : null;
       const row_page = (rowUrl && (c.use_row_page || rowOnSite))
-        ? { url: rowUrl, title: '', matched_by: c.use_row_page ? 'search console page' : 'impressions' } : null;
-      const answered_by = inv ? { url: S(inv.url), title: S(inv.title), matched_by: S(inv.matched_by) || 'inventory' } : row_page;
+        ? { url: pageUrl, title: S(evidence && evidence.title), matched_by: c.use_row_page ? 'search console page' : 'search console' } : null;
+      const answered_by = inv ? { url: S(canon(S(inv.url))), title: S(inv.title), matched_by: S(inv.matched_by) || 'inventory', ...(inv.listing ? { listing: inv.listing } : {}) } : row_page;
       const kinds = [];
-      if (!answered_by) kinds.push('no_page');
-      else if (!inv && answered_by.matched_by === 'impressions') kinds.push('page_mismatch');
+      const offTopic = !inv && !!evidence && evidence.share != null && evidence.share < c.off_topic_share;
       const striking = position >= c.striking_min && position <= c.striking_max;
+      const lowPos = position > c.striking_max;
+      if (!answered_by) kinds.push('no_page');
+      else if (offTopic) kinds.push('page_mismatch');
+      else if (!inv && lowPos) kinds.push('low_position');
       if (striking) kinds.push('striking');
       const posTxt = position > 0 ? '#' + (Math.round(position * 10) / 10) : 'unreported';
+      const pathTxt = answered_by ? (S(answered_by.url).replace(/^https?:\/\/[^/]+/i, '') || '/') : '';
       const why = kinds.indexOf('no_page') >= 0 ? 'no page of yours answers this search'
-        : kinds.indexOf('page_mismatch') >= 0 ? 'the page that gets the impressions does not target this search'
-          + (striking ? ' (you rank ' + posTxt + ' with it — striking distance)' : ' (you rank ' + posTxt + ' with it)')
-          : striking ? 'you rank ' + posTxt + ' — striking distance' : 'a page of yours already answers this search';
+        : kinds.indexOf('page_mismatch') >= 0 ? 'the page that gets the impressions is about something else: ' + (evidence.h1 ? 'its title and H1 share' : 'its title shares') + ' only '
+          + evidence.have + ' of the ' + evidence.of + ' words of this search (missing: ' + evidence.missing.join(', ') + ') — you rank ' + posTxt + ' with ' + pathTxt
+          + (striking ? ' (striking distance)' : '') + '; aim that page at it or give the search its own'
+        : striking ? 'you rank ' + posTxt + ' with ' + pathTxt + ' — striking distance: improve that page'
+        : lowPos ? 'low position on ' + pathTxt + ' (you rank ' + posTxt + ' with it) — improve that page'
+        : 'a page of yours already answers this search (' + pathTxt + (position > 0 ? ', you rank ' + posTxt : '') + ')'
+          + (answered_by && answered_by.listing ? ' — Google currently shows ' + (S(answered_by.listing.url).replace(/^https?:\/\/[^/]+/i, '') || '/') + ' for it' : '');
       considered.push({ keyword: q, impressions, clicks, position: position > 0 ? Math.round(position * 10) / 10 : null,
-        ctr: impressions ? Math.round(clicks / impressions * 1000) / 10 : 0, page: rowUrl, answered_by, kinds, why,
+        ctr: impressions ? Math.round(clicks / impressions * 1000) / 10 : 0, page: rowOnSite ? pageUrl : rowUrl, gsc_page: rowUrl, on_site: rowOnSite, answered_by, kinds, why,
         period_end: period, period_days: c.period_days, tracked: yes(r.tracked) });
     }
     const wanted = considered.filter(q => q.kinds.length);
@@ -112,7 +131,12 @@ const KWI = (() => {
       pages_known: num(c.pages_known) || 0,
       queries: wanted, no_page: wanted.filter(q => q.kinds.indexOf('no_page') >= 0), striking: wanted.filter(q => q.kinds.indexOf('striking') >= 0),
       mismatch: wanted.filter(q => q.kinds.indexOf('page_mismatch') >= 0),
-      answered: considered.filter(q => !q.kinds.length && q.answered_by).slice(0, 20),
+      low_position: wanted.filter(q => q.kinds.indexOf('low_position') >= 0),
+      // R36 (2026-10-16): EVERY measured search with its page (not only the seeds), so discovery can say "you already rank for this with
+      // <page>" for a keyword the providers also returned, instead of recommending a second page for it
+      measured: considered.filter(q => q.on_site).slice(0, 500).map(q => ({ keyword: q.keyword, impressions: q.impressions, clicks: q.clicks, position: q.position,
+        page: q.page, gsc_page: q.gsc_page, answered_url: q.answered_by ? q.answered_by.url : '' })),
+      answered: considered.filter(q => !q.kinds.length && q.answered_by).slice(0, 60),
       seeds: order.slice(0, c.max_seeds).map(q => q.keyword), dropped,
       min_impressions: c.min_impressions, striking_min: c.striking_min, striking_max: c.striking_max };
   };
@@ -272,10 +296,21 @@ const KWI = (() => {
         keywords: [{ keyword: head.keyword, volume: head.volume, shared_urls: head.urls.length, shared: [] }, ...members].slice(0, c.max_cluster_keywords) });
     }
     clusters.sort((a, b) => b.keyword_count - a.keyword_count || b.total_volume - a.total_volume);
-    return { clusters, keywords_compared: ranked.length, min_shared_urls: need, min_urls: c.min_urls, top_n: depth,
+    return { clusters, keywords_compared: ranked.length, compared_keywords: ranked.map(e => e.keyword), min_shared_urls: need, min_urls: c.min_urls, top_n: depth,
       min_overlap_pct: depth && (num(c.min_overlap) || 0) > 0 ? Math.round(c.min_overlap * 100) : null,
       clustered: clusters.reduce((n, x) => n + x.keyword_count, 0) };
   };
+  // R40 (2026-10-16, re-rating 2026-10-15): ONE rule for which keywords may share a page, used by the ladder (Ladder Plan) and by
+  // discovery's content plan (Rank Keywords). Exec 610 compared the results pages of all 10 rung keywords, found no two sharing even 2 of
+  // their top 7, and still merged "openai consulting" into "ai consulting firm" because the AI's topic label said so. Now:
+  //   * Google answers it with the same pages as other keywords (a SERP cluster)  -> one page for the cluster ('shared results page');
+  //   * its results page was read and compared and shares with no one             -> its own page ('own results page');
+  //   * its results page could not be read or compared                           -> the AI's topic label + page type ('topic label').
+  // -> { key, by } ; `o` = { keyword, topic, page_type, serp_head (the cluster head, '' when it is not in a cluster), compared }
+  const pageGroup = (o) => { const x = o || {}; const kw = low(x.keyword);
+    if (S(x.serp_head)) return { key: 'serp|' + low(x.serp_head), by: 'shared results page' };
+    if (x.compared) return { key: 'kw|' + kw, by: 'own results page' };
+    return { key: 'topic|' + (low(x.topic) || kw) + '|' + S(x.page_type), by: 'topic label' }; };
   // "one page can serve all three: 'erp software uae' also covers 'erp system uae' (4 of the same top-10 pages), ..."
   const clusterText = (cl) => {
     const c = cl || {}; const others = (c.keywords || []).slice(1);
@@ -285,7 +320,7 @@ const KWI = (() => {
       + others.map(k => k.shared_urls + ' of its ' + depthTxt + ' pages with "' + k.keyword + '"').join(', ')
       + ' - Google answers these searches with the same pages, so a second page would only split the signals.';
   };
-  return { CFG, CLICK_LOSS, gscSeeds, calibrate, serpClusters, clusterText, featureLoss, lossApplied, lossText, serpPageTypes, shapeOf, liveChecks, ladderChecks, checkCost, urlKey, BASIS_TEXT, helpers: { bare, low, num } };
+  return { CFG, CLICK_LOSS, gscSeeds, calibrate, serpClusters, pageGroup, clusterText, featureLoss, lossApplied, lossText, serpPageTypes, shapeOf, liveChecks, ladderChecks, checkCost, urlKey, BASIS_TEXT, helpers: { bare, low, num } };
 })();
 // ---- the in-200 retry gate, for every provider that answers "failed" with HTTP 200 (R18 / R19, 2026-10-14, FIX_PLAN §3.12) ----
 // n8n's `retryOnFail` only fires when a node FAILS. DataForSEO answers a dead task with HTTP 200 and `status_code` 40101

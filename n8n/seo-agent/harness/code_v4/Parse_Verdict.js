@@ -31,11 +31,25 @@ const REACH_BASE_RATE = { year: 2025, source: 'Ahrefs', top10_within_year_pct: 1
 const REACH_CHANCE = { direct: { band: 'good', range: [50, 70] }, short: { band: 'fair', range: [30, 50] }, full: { band: 'low', range: [15, 30] }, stretch: { band: 'slim', range: [5, 15] }, none: { band: 'none', range: [0, 0] } };
 const REACH_CHANCE_NOTE = 'an uncalibrated estimate until this system has measured its own ladders';
 // { band, range, label }: "estimated chance good (50-70%, uncalibrated)"; '' label for no plan
-const reachChance = (plan_type, stretch) => { const c = REACH_CHANCE[plan_type === 'none' ? 'none' : (stretch ? 'stretch' : plan_type)] || REACH_CHANCE.full;
+// R49 (2026-10-16, re-rating 2026-10-15): the band was read off the plan type alone, so a site whose reach is only the size tier for
+// "0 keywords in Google's top 10" (method size, sample 0) was told "estimated chance good (50-70%)" for a KD-3 keyword — the highest
+// band, on a reach nothing was measured on. The table stays (a judgement call until G17); it is now applied only when the reach rests on
+// a measured ranking: the site's top-10 keywords (percentile, or any top-10 keyword at all), a reach measured on the topic, or the site
+// already ranking 1-20 for the keyword. Otherwise there is no band — the plan and the months stay, with the base rate as the only figure.
+// The same words live in app/shared/src/keywords.ts (UNMEASURED_LABEL).
+const REACH_UNMEASURED_LABEL = 'no estimated chance (no measured ranking to judge it by)';
+const reachMeasured = (info, position) => { const i = info || {}; const p = reachNum(position);
+  if (p != null && p >= 1 && p <= REACH_CFG.easy_position) return true;
+  if (i.used === true || String(i.method || '') === 'percentile') return true;
+  return (Number(i.top10) || 0) > 0 || (Number(i.sample) || 0) > 0; };
+const reachChance = (plan_type, stretch, measured) => { const c = REACH_CHANCE[plan_type === 'none' ? 'none' : (stretch ? 'stretch' : plan_type)] || REACH_CHANCE.full;
+  if (c.band !== 'none' && measured === false) return { band: 'unmeasured', range: [0, 0], label: REACH_UNMEASURED_LABEL, basis: 'base rate' };
   return { band: c.band, range: c.range.slice(), label: c.band === 'none' ? '' : 'estimated chance ' + c.band + ' (' + c.range[0] + '-' + c.range[1] + '%, uncalibrated)' }; };
 const reachBaseRateText = () => 'Base rate (' + REACH_BASE_RATE.source + ', ' + REACH_BASE_RATE.year + '): only ' + REACH_BASE_RATE.top10_within_year_pct + '% of new pages reach Google\'s top 10 within a year, and ' + REACH_BASE_RATE.of_those_within_month_pct + '% of those do so within a month — the rest take months.';
 // the sentence under a plan's month range: the chance band, that it is uncalibrated, and the 2025 base rate it is judged against
-const reachChanceText = (plan) => (plan && plan.chance && plan.chance.label) ? 'Estimated chance of reaching the top 10 within ' + plan.months + ' months: ' + plan.chance.band + ' (' + plan.chance.range[0] + '-' + plan.chance.range[1] + '%) — ' + REACH_CHANCE_NOTE + '. ' + reachBaseRateText() : '';
+const reachChanceText = (plan) => !(plan && plan.chance && plan.chance.label) ? '' : plan.chance.band === 'unmeasured'
+  ? 'No estimated chance: the reach this plan is judged against rests on no measured ranking (the search data shows none of your keywords in Google\'s top 10), so a band would only restate the plan. The only measured figure is the base rate. ' + reachBaseRateText()
+  : (plan && plan.chance && plan.chance.label) ? 'Estimated chance of reaching the top 10 within ' + plan.months + ' months: ' + plan.chance.band + ' (' + plan.chance.range[0] + '-' + plan.chance.range[1] + '%) — ' + REACH_CHANCE_NOTE + '. ' + reachBaseRateText() : '';
 const reachDomain = (d) => String(d || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '').replace(/:\d+$/, '');
 const reachSiteId = (d) => 'site_' + reachDomain(d).replace(/[^a-z0-9]+/g, '-');
 const reachKey = (d) => 'reach:' + reachSiteId(d);
@@ -144,10 +158,11 @@ function reachTopic(ranked, head, domainReach, o) {
     best: best ? { keyword: String(best.keyword), position: pos(best) } : null, examples, other_topics, reason, note, head: String(head || '') };
 }
 const reachStrong = (authority, position) => { const p = reachNum(position); return !!(authority && ((Number(authority.top10) || 0) >= 100 || (Number(authority.organic_keywords) || 0) >= 1000)) || (p != null && p >= 1 && p <= REACH_CFG.easy_position); };
-function reachPlan(difficulty, strong) {
+// `measured` (R49): reachMeasured(reach info, position); false = no chance band. Left out, the band stays (a caller with no reach info).
+function reachPlan(difficulty, strong, measured) {
   const plan_type = { easy: 'direct', reachable: 'short', hard: 'full', very_hard: 'full', not_realistic: 'none' }[difficulty] || 'full';
   const m = plan_type === 'none' ? null : (strong ? REACH_MONTHS_STRONG : REACH_MONTHS)[plan_type];
-  return { plan_type, months: m ? m[0] + '-' + m[1] : '', months_range: m ? m.slice() : null, stretch: difficulty === 'very_hard', chance: reachChance(plan_type, difficulty === 'very_hard') };
+  return { plan_type, months: m ? m[0] + '-' + m[1] : '', months_range: m ? m.slice() : null, stretch: difficulty === 'very_hard', chance: reachChance(plan_type, difficulty === 'very_hard', measured) };
 }
 const reachLabel = (difficulty, plan) => [REACH_DIFF_LABEL[difficulty] || '', plan ? REACH_PLAN_LABEL[plan.plan_type] + (plan.stretch ? ' (stretch)' : '') : '', plan && plan.months ? plan.months + ' months' : ''].filter(Boolean).join(' · ');
 // DataForSEO Labs calls that measure reach on a cache miss (~$0.03): the site's top-10 keywords with their difficulty, and its size
@@ -203,6 +218,7 @@ const KWI = (() => {
     min_impressions: 10,        // a query needs this many impressions in the Search Console period before it seeds anything
     striking_min: 8,            // "striking distance": bottom of page 1 to the end of page 2, where one strong page moves the needle
     striking_max: 20,
+    off_topic_share: 0.5,       // R35: a ranking page is "about something else" only when its own title / H1 hold less than half of the search's words
     max_seeds: 10,              // how many Search Console queries may be handed to the research as seeds
     period_days: 28,            // the Search Console window the Site Tracker stores (Site_Plan.js ranges.current)
     month_days: 30,
@@ -260,30 +276,48 @@ const KWI = (() => {
       if (impressions < c.min_impressions) { dropped.low_impressions++; continue; }
       // which page, if any, already answers this search: the page inventory first (D11), the page Search Console reports only when
       // the inventory is empty (then it is the best evidence we have, and it is labelled as such)
-      const inv = matchPage(q);
+      const inv = matchPage(q, S(r.page));   // R35: the page Search Console credits wins a tie
       // R12 (2026-10-13, re-rating §3.11): 11 of 25 rows read "no page of yours answers this search" while the same row named a live
       // 200-OK page of the site — one of them ranking #6.2 — because only the slug / title match counted and the URL Search Console
       // itself reports was ignored whenever the inventory was non-empty. A URL on this site is evidence: it is the answering page, with
       // its own label ("the page that gets the impressions does not target this search"), so the report never asks the owner for a second
       // page for a search they already rank for (D11's cannibalisation rule, in the discovery path).
+      // R55 (2026-10-16): Search Console reports the bare host for an sc-domain property while the inventory holds the canonical one,
+      // so one table linked both. Every site URL printed goes through the site's canonical host (`c.canon`, SM.canonUrl); Google's own
+      // URL stays as `gsc_page`.
+      const canon = typeof c.canon === 'function' ? c.canon : (u) => u;
       const rowUrl = S(r.page);
       const rowBare = bare(rowUrl);
       const rowOnSite = !!rowUrl && !!rowBare && (!dom || rowBare === dom || rowBare.endsWith('.' + dom));
+      const pageUrl = rowOnSite ? S(canon(rowUrl)) : rowUrl;
+      // R35 (2026-10-16, re-rating 2026-10-15): a row whose page is on the site is a page that RANKS for the query. It used to be labelled
+      // "the page that gets the impressions does not target this search" whenever the literal word matcher failed — 20 rows, 18 of them
+      // the D365 F&O page for D365 F&O searches. A page is now called off-target only on evidence about the page itself: its own title /
+      // H1 (`c.pageTitleShare`, SM.titleShare) holding less than half of the search's words, and the sentence says what was compared.
+      const evidence = rowOnSite && typeof c.pageTitleShare === 'function' ? c.pageTitleShare(rowUrl, q) : null;
       const row_page = (rowUrl && (c.use_row_page || rowOnSite))
-        ? { url: rowUrl, title: '', matched_by: c.use_row_page ? 'search console page' : 'impressions' } : null;
-      const answered_by = inv ? { url: S(inv.url), title: S(inv.title), matched_by: S(inv.matched_by) || 'inventory' } : row_page;
+        ? { url: pageUrl, title: S(evidence && evidence.title), matched_by: c.use_row_page ? 'search console page' : 'search console' } : null;
+      const answered_by = inv ? { url: S(canon(S(inv.url))), title: S(inv.title), matched_by: S(inv.matched_by) || 'inventory', ...(inv.listing ? { listing: inv.listing } : {}) } : row_page;
       const kinds = [];
-      if (!answered_by) kinds.push('no_page');
-      else if (!inv && answered_by.matched_by === 'impressions') kinds.push('page_mismatch');
+      const offTopic = !inv && !!evidence && evidence.share != null && evidence.share < c.off_topic_share;
       const striking = position >= c.striking_min && position <= c.striking_max;
+      const lowPos = position > c.striking_max;
+      if (!answered_by) kinds.push('no_page');
+      else if (offTopic) kinds.push('page_mismatch');
+      else if (!inv && lowPos) kinds.push('low_position');
       if (striking) kinds.push('striking');
       const posTxt = position > 0 ? '#' + (Math.round(position * 10) / 10) : 'unreported';
+      const pathTxt = answered_by ? (S(answered_by.url).replace(/^https?:\/\/[^/]+/i, '') || '/') : '';
       const why = kinds.indexOf('no_page') >= 0 ? 'no page of yours answers this search'
-        : kinds.indexOf('page_mismatch') >= 0 ? 'the page that gets the impressions does not target this search'
-          + (striking ? ' (you rank ' + posTxt + ' with it — striking distance)' : ' (you rank ' + posTxt + ' with it)')
-          : striking ? 'you rank ' + posTxt + ' — striking distance' : 'a page of yours already answers this search';
+        : kinds.indexOf('page_mismatch') >= 0 ? 'the page that gets the impressions is about something else: ' + (evidence.h1 ? 'its title and H1 share' : 'its title shares') + ' only '
+          + evidence.have + ' of the ' + evidence.of + ' words of this search (missing: ' + evidence.missing.join(', ') + ') — you rank ' + posTxt + ' with ' + pathTxt
+          + (striking ? ' (striking distance)' : '') + '; aim that page at it or give the search its own'
+        : striking ? 'you rank ' + posTxt + ' with ' + pathTxt + ' — striking distance: improve that page'
+        : lowPos ? 'low position on ' + pathTxt + ' (you rank ' + posTxt + ' with it) — improve that page'
+        : 'a page of yours already answers this search (' + pathTxt + (position > 0 ? ', you rank ' + posTxt : '') + ')'
+          + (answered_by && answered_by.listing ? ' — Google currently shows ' + (S(answered_by.listing.url).replace(/^https?:\/\/[^/]+/i, '') || '/') + ' for it' : '');
       considered.push({ keyword: q, impressions, clicks, position: position > 0 ? Math.round(position * 10) / 10 : null,
-        ctr: impressions ? Math.round(clicks / impressions * 1000) / 10 : 0, page: rowUrl, answered_by, kinds, why,
+        ctr: impressions ? Math.round(clicks / impressions * 1000) / 10 : 0, page: rowOnSite ? pageUrl : rowUrl, gsc_page: rowUrl, on_site: rowOnSite, answered_by, kinds, why,
         period_end: period, period_days: c.period_days, tracked: yes(r.tracked) });
     }
     const wanted = considered.filter(q => q.kinds.length);
@@ -294,7 +328,12 @@ const KWI = (() => {
       pages_known: num(c.pages_known) || 0,
       queries: wanted, no_page: wanted.filter(q => q.kinds.indexOf('no_page') >= 0), striking: wanted.filter(q => q.kinds.indexOf('striking') >= 0),
       mismatch: wanted.filter(q => q.kinds.indexOf('page_mismatch') >= 0),
-      answered: considered.filter(q => !q.kinds.length && q.answered_by).slice(0, 20),
+      low_position: wanted.filter(q => q.kinds.indexOf('low_position') >= 0),
+      // R36 (2026-10-16): EVERY measured search with its page (not only the seeds), so discovery can say "you already rank for this with
+      // <page>" for a keyword the providers also returned, instead of recommending a second page for it
+      measured: considered.filter(q => q.on_site).slice(0, 500).map(q => ({ keyword: q.keyword, impressions: q.impressions, clicks: q.clicks, position: q.position,
+        page: q.page, gsc_page: q.gsc_page, answered_url: q.answered_by ? q.answered_by.url : '' })),
+      answered: considered.filter(q => !q.kinds.length && q.answered_by).slice(0, 60),
       seeds: order.slice(0, c.max_seeds).map(q => q.keyword), dropped,
       min_impressions: c.min_impressions, striking_min: c.striking_min, striking_max: c.striking_max };
   };
@@ -454,10 +493,21 @@ const KWI = (() => {
         keywords: [{ keyword: head.keyword, volume: head.volume, shared_urls: head.urls.length, shared: [] }, ...members].slice(0, c.max_cluster_keywords) });
     }
     clusters.sort((a, b) => b.keyword_count - a.keyword_count || b.total_volume - a.total_volume);
-    return { clusters, keywords_compared: ranked.length, min_shared_urls: need, min_urls: c.min_urls, top_n: depth,
+    return { clusters, keywords_compared: ranked.length, compared_keywords: ranked.map(e => e.keyword), min_shared_urls: need, min_urls: c.min_urls, top_n: depth,
       min_overlap_pct: depth && (num(c.min_overlap) || 0) > 0 ? Math.round(c.min_overlap * 100) : null,
       clustered: clusters.reduce((n, x) => n + x.keyword_count, 0) };
   };
+  // R40 (2026-10-16, re-rating 2026-10-15): ONE rule for which keywords may share a page, used by the ladder (Ladder Plan) and by
+  // discovery's content plan (Rank Keywords). Exec 610 compared the results pages of all 10 rung keywords, found no two sharing even 2 of
+  // their top 7, and still merged "openai consulting" into "ai consulting firm" because the AI's topic label said so. Now:
+  //   * Google answers it with the same pages as other keywords (a SERP cluster)  -> one page for the cluster ('shared results page');
+  //   * its results page was read and compared and shares with no one             -> its own page ('own results page');
+  //   * its results page could not be read or compared                           -> the AI's topic label + page type ('topic label').
+  // -> { key, by } ; `o` = { keyword, topic, page_type, serp_head (the cluster head, '' when it is not in a cluster), compared }
+  const pageGroup = (o) => { const x = o || {}; const kw = low(x.keyword);
+    if (S(x.serp_head)) return { key: 'serp|' + low(x.serp_head), by: 'shared results page' };
+    if (x.compared) return { key: 'kw|' + kw, by: 'own results page' };
+    return { key: 'topic|' + (low(x.topic) || kw) + '|' + S(x.page_type), by: 'topic label' }; };
   // "one page can serve all three: 'erp software uae' also covers 'erp system uae' (4 of the same top-10 pages), ..."
   const clusterText = (cl) => {
     const c = cl || {}; const others = (c.keywords || []).slice(1);
@@ -467,7 +517,7 @@ const KWI = (() => {
       + others.map(k => k.shared_urls + ' of its ' + depthTxt + ' pages with "' + k.keyword + '"').join(', ')
       + ' - Google answers these searches with the same pages, so a second page would only split the signals.';
   };
-  return { CFG, CLICK_LOSS, gscSeeds, calibrate, serpClusters, clusterText, featureLoss, lossApplied, lossText, serpPageTypes, shapeOf, liveChecks, ladderChecks, checkCost, urlKey, BASIS_TEXT, helpers: { bare, low, num } };
+  return { CFG, CLICK_LOSS, gscSeeds, calibrate, serpClusters, pageGroup, clusterText, featureLoss, lossApplied, lossText, serpPageTypes, shapeOf, liveChecks, ladderChecks, checkCost, urlKey, BASIS_TEXT, helpers: { bare, low, num } };
 })();
 const prev = $('Merge Keyword Data').first().json;
 const verdict = parseAgentJson($input.first().json.output);

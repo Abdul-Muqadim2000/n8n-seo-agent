@@ -770,12 +770,15 @@ const scSection = (a, num) => {
   const sc = a.search_console || {}, st = a.site_structure || {};
   const e2 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const n2 = (v) => (Number(v) || 0).toLocaleString('en-GB');
-  const p2 = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/, '') || '/';
+  // R59 (2026-10-16): a path alone only where the host is the site's own canonical one. Any other host is printed in full: stripping it
+  // listed "/" twice in the top-page table (14 clicks on https://techand.ai/, 3 on https://www.techand.ai/) and hid the split.
+  const h2 = String(((sc.host_split || {}).canonical_host) || a.canonical_host || '').toLowerCase();
+  const p2 = (u) => { const m = String(u || '').match(/^https?:\/\/([^\/?#]+)(.*)$/i); if (!m) return String(u || '') || '/'; return (!h2 || m[1].toLowerCase() === h2) ? (m[2] || '/') : String(u); };
   let h = `<h2 class="pb">${num}. Search Console &amp; Site Structure</h2>`;
   if (st.crawled_pages != null) {
     const db = st.depth_buckets || {}; const sm = st.sitemap || {};
     h += `<h3>Site structure (from the crawl)</h3><p>${n2(st.crawled_pages)} pages crawled, ${n2(st.indexable_pages)} indexable${st.within_3_clicks_pct != null ? '; ' + st.within_3_clicks_pct + '% of pages are within 3 clicks of the homepage' : ''}.</p>` + (st.crawl_coverage && st.crawl_coverage.text ? `<p>${e2(st.crawl_coverage.text)}.${st.crawl_coverage.coverage_pct != null && st.crawl_coverage.coverage_pct < 90 ? ' Every share below is a share of the pages that were crawled, not of the whole site.' : ''}</p>` : '') +
-      `<table class="ct"><tr><th>Clicks from home</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4+</th></tr><tr><td>Pages</td><td>${n2(db[0])}</td><td>${n2(db[1])}</td><td>${n2(db[2])}</td><td>${n2(db[3])}</td><td>${n2(db['4+'])}</td></tr></table>` +
+      `<table class="ct"><tr><th>Clicks from home</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4+</th>${db.unlinked ? '<th>No link reaches it</th>' : ''}</tr><tr><td>Pages</td><td>${n2(db[0])}</td><td>${n2(db[1])}</td><td>${n2(db[2])}</td><td>${n2(db[3])}</td><td>${n2(db['4+'])}</td>${db.unlinked ? '<td>' + n2(db.unlinked) + '</td>' : ''}</tr></table>` +
       ((st.sections || []).length ? `<table class="ct"><tr><th>Section</th><th>Pages crawled</th></tr>` + st.sections.map(s => `<tr><td>${e2(s.section)}</td><td>${n2(s.pages)}</td></tr>`).join('') + `</table>` : '') +
       `<p>XML sitemap: ${sm.status === 200 ? n2(sm.urls) + ' URLs' + (sm.is_index ? ' (index of ' + n2(sm.children) + ' sitemaps)' : '') : 'not readable at ' + e2(sm.url)}${st.indexable_not_in_sitemap ? '; ' + n2(st.indexable_not_in_sitemap) + ' indexable pages missing from it' : ''}${st.sitemap_only ? '; ' + n2(st.sitemap_only) + ' sitemap URLs that no internal link reaches' : ''}${st.sitemap_broken ? '; ' + n2(st.sitemap_broken) + ' sitemap URLs not returning 200' : ''}.</p>`;
   }
@@ -785,11 +788,13 @@ const scSection = (a, num) => {
     const t = sc.totals;
     h += `<p>Property <b>${e2(sc.property)}</b> (${e2(sc.permission)}).</p>`;
     if (t) h += `<p>Last 28 days (${e2(t.period.start)} to ${e2(t.period.end)}): <b>${n2(t.clicks)}</b> clicks, <b>${n2(t.impressions)}</b> impressions, CTR ${(t.ctr * 100).toFixed(2)}%, average position ${t.position}; ${n2(sc.pages_with_impressions)} pages and ${n2(sc.queries_with_impressions)} queries with impressions.</p>`;
+    const hs2 = sc.host_split || null;   // R59: the two addresses Google shows, side by side
+    if (hs2 && hs2.found) h += `<p><b>Google shows this site under two addresses.</b> ` + (hs2.hosts || []).map(o => `https://${e2(o.host)}: ${n2(o.pages)} pages, ${n2(o.clicks)} clicks, ${n2(o.impressions)} impressions (${n2(o.impressions_pct)}%)`).join('; ') + `. The site itself names https://${e2(hs2.canonical_host)} as its address (see the www and non-www finding).</p>`;
     h += `<table class="ct"><tr><th>Submitted sitemap</th><th>URLs</th><th>Last read</th><th>Errors</th><th>Warnings</th></tr>` + ((sc.sitemaps || []).length ? sc.sitemaps.map(s => `<tr><td>${e2(s.path)}</td><td>${n2(s.urls)}</td><td>${e2(String(s.downloaded || '').slice(0, 10) || (s.pending ? 'pending' : '—'))}</td><td>${n2(s.errors)}</td><td>${n2(s.warnings)}</td></tr>`).join('') : `<tr><td colspan="5">none submitted${sc.sitemaps_error ? ' (' + e2(sc.sitemaps_error) + ')' : ''}</td></tr>`) + `</table>`;
     const covRows = Object.entries(sc.coverage || {});
     if (covRows.length) h += `<p>Index coverage of ${n2((sc.inspections || []).length)} inspected pages: ` + covRows.map(([k, v]) => `${n2(v)} × ${e2(k)}`).join(', ') + ((sc.rich_results || []).length ? `. Rich results detected: ${e2(sc.rich_results.join(', '))}` : '') + `.</p>`;
     h += indexSection(sc);   // G25: page by page — in Google's index, the canonical it chose, its last crawl, mobile usability, rich results
-    if ((sc.not_indexed || []).length) h += `<table class="ct"><tr><th>Not indexed</th><th>Reason</th></tr>` + sc.not_indexed.slice(0, 10).map(x => `<tr><td>${e2(p2(x.url))}</td><td>${e2(x.reason)}</td></tr>`).join('') + `</table>`;
+    if ((sc.not_indexed || []).length) h += `<table class="ct"><tr><th>Not indexed</th><th>Reason</th></tr>` + sc.not_indexed.slice(0, 10).map(x => `<tr><td>${e2(p2(x.url))}</td><td>${e2(x.reason)}${x.shown_as ? ' — shown by Google as ' + e2(x.shown_as) + ' (' + n2(x.shown_impressions) + ' impressions)' : ''}</td></tr>`).join('') + `</table>`;
     if ((sc.top_queries || []).length) h += `<table class="ct"><tr><th>Top query</th><th>Clicks</th><th>Impressions</th><th>Position</th></tr>` + sc.top_queries.slice(0, 10).map(q => `<tr><td>${e2(q.query)}</td><td>${n2(q.clicks)}</td><td>${n2(q.impressions)}</td><td>${q.position}</td></tr>`).join('') + `</table>`;
     if ((sc.scraper_queries || {}).count) h += `<p class="small">${n2(sc.scraper_queries.count)} scraper ${sc.scraper_queries.count === 1 ? 'query' : 'queries'} (search operators such as site: or inurl:, ${n2(sc.scraper_queries.impressions)} impressions) left out of the top queries: they come from SEO tools and scrapers, not from customers.</p>`;
     if ((sc.top_pages || []).length) h += `<table class="ct"><tr><th>Top page</th><th>Clicks</th><th>Impressions</th><th>Position</th></tr>` + sc.top_pages.slice(0, 10).map(q => `<tr><td>${e2(p2(q.page))}</td><td>${n2(q.clicks)}</td><td>${n2(q.impressions)}</td><td>${q.position}</td></tr>`).join('') + `</table>`;
@@ -867,13 +872,17 @@ const minorBlock = (list, where) => {
 const indexSection = (sc) => {
   const e3 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const p3 = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/, '') || '/';
+  // R59 (2026-10-16): Google's canonical is printed with its host whenever the host differs from the page's — as a bare path it read
+  // "/d365-…-rollout-uae" for the page /d365-…-rollout-uae, a canonical identical to the page, while Google had chosen https://techand.ai
+  const h3 = (u) => (String(u || '').match(/^https?:\/\/([^\/?#]+)/i) || [])[1] || '';
+  const p3c = (g, u) => (h3(g) && h3(u) && h3(g).toLowerCase() !== h3(u).toLowerCase()) ? String(g) : p3(g);
   const ic = sc.index_coverage || null;
   if (!ic) return '';
   let h = `<h3>Google's index view of the key pages (URL Inspection)</h3><p>${e3(ic.text)}.</p>`;
   if ((ic.pages || []).length) {
     h += `<table class="ct"><tr><th>Page</th><th>In Google</th><th>State</th><th>Google's canonical</th><th>Last crawl</th><th>Mobile</th><th>Rich results</th></tr>`
       + ic.pages.slice(0, 25).map(p => `<tr><td>${e3(p3(p.url))}</td><td>${p.indexed === true ? '<span class="ok">yes</span>' : p.indexed === false ? '<span class="bad">no</span>' : '—'}</td><td>${e3(p.coverage || p.verdict || '—')}</td>`
-        + `<td>${p.canonical_ok === false ? '<span class="bad">' + e3(p3(p.google_canonical)) + '</span>' : p.canonical_ok === true ? 'same as ours' : '—'}</td>`
+        + `<td>${p.canonical_ok === false ? '<span class="bad">' + e3(p3c(p.google_canonical, p.url)) + '</span>' : p.canonical_ok === true ? 'same as ours' : '—'}</td>`
         + `<td>${e3(String(p.last_crawl || '').slice(0, 10) || '—')}</td><td>${p.mobile_usable === true ? 'ok' : p.mobile_usable === false ? '<span class="bad">issues</span>' : '—'}</td>`
         + `<td>${e3((p.rich_results || []).join(', ') || '—')}</td></tr>`).join('') + `</table>`;
     if (ic.pages.length > 25) h += `<p class="small">${ic.pages.length - 25} more inspected pages are in the data behind this report.</p>`;
@@ -1000,9 +1009,9 @@ ${cr && cr.business_context ? '<p><b>About the site:</b> ' + esc(cr.business_con
 ${a.score_cap_reason ? `<div class="note"><b>Score limit applied:</b> ${esc(a.score_cap_reason)}. Calculated score before the limit: ${esc(a.raw_score)}/100.</div>` : ''}
 <h3>Key Numbers: You vs Competitors</h3>
 <table class="ct"><tr><th>Metric</th><th>You</th><th>Competitor median</th></tr>
-<tr><td>Keywords ranking (top 30)</td><td>${num(you.keywords)}</td><td>${num(cb.medians && cb.medians.organic_keywords)}</td></tr>
-<tr><td>Keywords in top 10</td><td>${num(you.top10)}</td><td>${num(cb.medians && cb.medians.top10)}</td></tr>
-<tr><td>Estimated monthly organic visits</td><td>${num(you.traffic)}</td><td>${num(cb.medians && cb.medians.est_monthly_traffic)}</td></tr>
+<tr><td>Keywords ranking (top 30) — DataForSEO&#39;s database</td><td>${num(you.keywords)}</td><td>${num(cb.medians && cb.medians.organic_keywords)}</td></tr>
+<tr><td>Keywords in top 10 — DataForSEO&#39;s database</td><td>${num(you.top10)}</td><td>${num(cb.medians && cb.medians.top10)}</td></tr>${((a.search_console || d.search_console || {}).rankings) ? '<tr><td>Queries in Google&#39;s top 10 — Search Console, measured (' + num(((a.search_console || d.search_console).rankings.top10_brand)) + ' for your own name)</td><td>' + num((a.search_console || d.search_console).rankings.top10) + '</td><td>not measured for competitors</td></tr>' : ''}
+<tr><td>Estimated monthly organic visits — DataForSEO&#39;s estimate</td><td>${num(you.traffic)}</td><td>${num(cb.medians && cb.medians.est_monthly_traffic)}</td></tr>
 <tr><td>Referring domains</td><td>${num(you.rd)}</td><td>${num(au && au.medians && au.medians.referring_domains)}</td></tr>
 <tr><td>Mobile PageSpeed</td><td>${num(you.speed)}</td><td>${num(ps && ps.medians && ps.medians.score)}</td></tr>
 <tr><td>Domain age (years)</td><td>${num(you.age)}</td><td>${num(cb.medians && cb.medians.domain_age_years)}</td></tr></table>
@@ -1045,7 +1054,10 @@ if (sk) {
         list.map(k => `<tr><td>${esc(k.keyword)}</td><td>#${num(k.position)}</td><td>${num(k.volume)}</td><td>${diffLabel(k.difficulty)}</td></tr>`).join('') + `</table>`;
     });
   } else {
-    html += `<div class="note">Your site does not rank in the top 30 for any keyword in ${esc(d.country || 'this market')} yet. The opportunities below show which searches to target, grouped by search intent.</div>`;
+    const rk90 = (a.search_console || d.search_console || {}).rankings || null;   // R61 (2026-10-16): the database is not the site's reality
+    html += (rk90 && rk90.top30)
+      ? `<div class="note">DataForSEO's ranking database holds no top-30 ranking for your site in ${esc(d.country || 'this market')}, but Google's own data (Search Console) shows ${num(rk90.top30)} queries at an average position in the top 30 over the last 28 days, ${num(rk90.top10)} of them in the top 10${rk90.top10_brand ? ' (' + num(rk90.top10_brand) + ' for your own name)' : ''} — see section 12b. The opportunities below show which searches to target, grouped by search intent.</div>`
+      : `<div class="note">DataForSEO's ranking database holds no top-30 ranking for your site in ${esc(d.country || 'this market')}${rk90 ? ', and Search Console shows none either' : ''}. The opportunities below show which searches to target, grouped by search intent.</div>`;
   }
 
   // R13 (2026-10-13): a bucket the gate emptied says so with the reasons, instead of reading like a market with no demand
@@ -1174,20 +1186,39 @@ html += `<h2>15. Leading Indicators to Track</h2><ul>` + li.map(x => '<li>' + es
 
 // G29 (2026-10-13): every figure group of this report with its source, period and sample (LN, v5/code/_lineage.js)
 const _sc47 = a.search_console || {};
+// R73 (2026-10-16, re-rating 2026-10-15): each row reads the field the report actually printed. The keyword row read a.keyword_ideas
+// (the keywords are in d.site_keywords: "sample 0 keywords" beside ~60 printed), the backlink row a.backlinks (they are in d.authority:
+// "sample not recorded"), the CrUX row was hard-coded "measured" when the Chrome UX Report had answered "no field data", and the domain
+// age was dated today although every age came from the cache. A row appears only when its figure is in the report.
+const _kwN47 = (() => { const s = new Set(); const k47 = d.site_keywords || {}; const add = (k) => { if (k && k.keyword) s.add(String(k.keyword).toLowerCase()); };
+  for (const l of Object.values(k47.opportunities_by_intent || {})) (l || []).forEach(add);
+  for (const l of Object.values(k47.your_top_by_intent || {})) (l || []).forEach(add);
+  (k47.easy_wins || []).forEach(add); (k47.keyword_gap || []).forEach(add); (k47.striking_distance || []).forEach(add); return s.size; })();
+const _you47 = (((d.authority || {}).rows) || []).find(r => r && r.is_you && r.available !== false) || null;
+const _crux47 = a.crux || d.crux || null;
+const _ps47 = (((d.pagespeed || {}).rows) || []).filter(r => r && r.available !== false && r.score != null);
+let _ages47 = null; try { _ages47 = ($('Domain Ages').first().json || {}).ages || null; } catch (e) { _ages47 = null; }
+const _ageRows47 = (((a.competitor_benchmark || d.competitor_benchmark || {}).rows) || []).filter(r => r && r.domain_age_years != null);
+const _ageStored47 = [...new Set(Object.values(_ages47 || {}).map(x => (String((x || {}).source || '').match(/stored (\d{4}-\d{2}-\d{2})/) || [])[1]).filter(Boolean))].sort();
 const lineage = [
   LN.of('Health score and the findings', 'crawl', { basis: 'modelled', period: LN.asOf(a.audited_at || today), sample: LN.sample(a.pages_crawled, 'pages crawled'),
     note: 'our own 0-100 score: points off per finding by severity (the table below), not a Google figure' }),
   _sc47.connected
     ? LN.of('Clicks, impressions and index coverage', 'gsc', { basis: 'measured', period: 'the last 28 days', sample: LN.sample((_sc47.totals || {}).impressions, 'impressions'), note: 'property ' + String(_sc47.property || '') })
     : LN.unknown('Clicks, impressions and index coverage', String(_sc47.error || 'Search Console is not connected for this site')),
-  LN.of('Searches per month, difficulty, cost per click and traffic estimates', 'kwdata', { basis: 'estimated', period: 'the provider\'s latest 12-month average',
-    sample: LN.sample((a.keyword_ideas || a.keywords || []).length, 'keywords'), note: 'provider estimates for ' + String(d.country || '') + ', not measurements of your site' }),
-  LN.of('Backlinks and referring domains', 'backlink_index', { basis: 'reported', period: LN.asOf(today), sample: LN.sample((a.backlinks || {}).referring_domains, 'referring domains'),
-    note: 'one crawler\'s index of the web: it finds much of the web, never all of it' }),
-  LN.of('Core Web Vitals (real users)', 'crux', { basis: 'measured', period: 'the last 28 days of Chrome visits', sample: 'all Chrome visitors Google could aggregate',
-    note: 'where a page or template has too few visits the report says so instead of showing a figure' }),
-  LN.of('Lighthouse scores and speed savings', 'pagespeed', { basis: 'one_sample', period: LN.asOf(today), sample: 'one simulated mobile load per page tested' }),
-  LN.of('Domain age', 'rdap', { basis: 'reported', period: LN.asOf(today), sample: LN.sample(((a.domain_ages || {}).rows || []).length || undefined, 'domains looked up'), note: 'the registry record, cached for a year' }),
+  ...(_kwN47 ? [LN.of('Searches per month, difficulty, cost per click and traffic estimates', 'kwdata', { basis: 'estimated', period: 'the provider\'s latest 12-month average',
+    sample: LN.sample(_kwN47, 'keywords in section 4'), note: 'provider estimates for ' + String(d.country || '') + ', not measurements of your site' })] : []),
+  ...(_you47 ? [LN.of('Backlinks and referring domains', 'backlink_index', { basis: 'reported', period: LN.asOf(today), sample: LN.sample(_you47.referring_domains, 'referring domains to your site'),
+    note: 'one crawler\'s index of the web: it finds much of the web, never all of it' })] : []),
+  (_crux47 && _crux47.available !== false)
+    ? LN.of('Core Web Vitals (real users)', 'crux', { basis: 'measured', period: 'the last 28 days of Chrome visits', sample: 'all Chrome visitors Google could aggregate',
+      note: 'where a page or template has too few visits the report says so instead of showing a figure' })
+    : _crux47 ? LN.of('Core Web Vitals (real users)', 'crux', { basis: 'reported', period: 'the last 28 days of Chrome visits', sample: 'no field data',
+      note: 'the Chrome UX Report answered: ' + String(_crux47.not_available || _crux47.note || 'too few real-user visits for field data') })
+    : LN.unknown('Core Web Vitals (real users)', 'the Chrome UX Report was not asked in this run'),
+  ...(_ps47.length ? [LN.of('Lighthouse scores and speed savings', 'pagespeed', { basis: 'one_sample', period: LN.asOf(today), sample: LN.sample(_ps47.length, 'site(s), one simulated mobile load each') })] : []),
+  ...(_ageRows47.length ? [LN.of('Domain age', 'rdap', { basis: 'reported', period: _ageStored47.length ? 'looked up ' + _ageStored47[0] + ' and cached (a registration date does not change)' : LN.asOf(today),
+    sample: LN.sample(_ageRows47.length, 'domains looked up'), note: 'the registry record, cached for a year' })] : []),
 ];
 html += '<h2 class="pb">' + '16a. Where these numbers come from</h2>'
   + '<table class="ct"><tr><th>Figure</th><th>Source</th><th>Period</th><th>Sample</th><th>How it was arrived at</th></tr>'
@@ -1267,7 +1298,7 @@ return [{
     via_webhook: !!d.via_webhook,
     health_score: a.health_score,
     lineage,
-    search_console: a.search_console || null,
+    search_console: a.search_console ? (({ page_traffic, page_traffic_complete, ...rest }) => rest)(a.search_console) : null,
     crux: a.crux || null,
     render_diff: a.render_diff || null,
     priority_method: a.priority_method || '',

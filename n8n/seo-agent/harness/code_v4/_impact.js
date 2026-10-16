@@ -28,12 +28,28 @@ const IMP = (() => {
   const MINOR_RULE_MAX = 3;     // a rule on the list above stays in the main list where it sits on pages that earn real traffic
   const S = (v) => String(v == null ? '' : v);
   const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
-  const pathOf = (u) => S(u).replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '') || '/';
+  // host-agnostic by path, trailing slash ignored ("/whatwedo" and "/whatwedo/" are one page)
+  const pathOf = (u) => S(u).replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '').replace(/(.)\/$/, '$1') || '/';
   const fmt = (v) => n0(v).toLocaleString('en-GB');
 
   // clicks + impressions per page from the audit's own Search Console block (28 days)
+  // R65 (2026-10-16, re-rating 2026-10-15): the index held only `top_pages` — the report's top 10 — so a finding on pages Search Console
+  // measured in the same run was priced at the site average ("an estimated 4 clicks and 637 impressions" for six orphan pages that had
+  // 0 clicks and 16 impressions). `page_traffic` is every page row the audit read ([path, clicks, impressions], summed over the hosts);
+  // `top_pages` stays the report's table. With `page_traffic_complete` (fewer rows than the request's limit) a page that is not in the
+  // list had no impressions at all: that is a measurement of zero, not an unknown.
   const trafficIndex = (sc) => {
     const by = new Map();
+    const pt = (sc || {}).page_traffic;
+    if (Array.isArray(pt) && pt.length) {
+      for (const r of pt) {
+        if (!Array.isArray(r)) continue;
+        const p = pathOf(r[0]); if (!p) continue;
+        const cur = by.get(p) || { clicks: 0, impressions: 0 };
+        by.set(p, { clicks: cur.clicks + n0(r[1]), impressions: cur.impressions + n0(r[2]) });
+      }
+      return by;
+    }
     for (const r of ((sc || {}).top_pages || [])) {
       const p = pathOf(r.page || r.url);
       if (!p) continue;
@@ -66,6 +82,7 @@ const IMP = (() => {
     const sc = (ctx && ctx.search_console && ctx.search_console.connected) ? ctx.search_console : null;
     const totals = sc && sc.totals ? sc.totals : null;
     const by = trafficIndex(sc);
+    const complete = !!(sc && sc.page_traffic_complete === true && Array.isArray(sc.page_traffic) && sc.page_traffic.length);
     const knownPages = Math.max(1, n0(sc && sc.pages_with_impressions) || by.size || total);
     const avgClicks = totals ? n0(totals.clicks) / knownPages : 0;
     const avgImpr = totals ? n0(totals.impressions) / knownPages : 0;
@@ -81,9 +98,13 @@ const IMP = (() => {
       if (sc) {
         if (siteWide && totals) { clicks = n0(totals.clicks); impressions = n0(totals.impressions); measured = knownPages; }
         else {
-          for (const u of (f.sample_urls || [])) {
-            const hit = by.get(pathOf(S(u).split(' — ')[0]));
+          // R65: every affected URL the finding names (affected_urls), not only its 5-10 samples
+          const urls = (Array.isArray(f.affected_urls) && f.affected_urls.length) ? f.affected_urls : (f.sample_urls || []);
+          for (const u of urls) {
+            const raw = S(u).split(' — ')[0].trim();
+            const hit = by.get(pathOf(raw));
             if (hit) { clicks += hit.clicks; impressions += hit.impressions; measured++; }
+            else if (complete && /^https?:\/\/[^\s]+$/i.test(raw)) measured++;   // Search Console listed every page it showed: this one earned nothing
           }
           if (measured && affected > measured) { const k = affected / measured; clicks = Math.round(clicks * k); impressions = Math.round(impressions * k); }
           if (!measured) { clicks = Math.round(avgClicks * affected); impressions = Math.round(avgImpr * affected); }

@@ -760,12 +760,15 @@ const scSection = (a, num) => {
   const sc = a.search_console || {}, st = a.site_structure || {};
   const e2 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const n2 = (v) => (Number(v) || 0).toLocaleString('en-GB');
-  const p2 = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/, '') || '/';
+  // R59 (2026-10-16): a path alone only where the host is the site's own canonical one. Any other host is printed in full: stripping it
+  // listed "/" twice in the top-page table (14 clicks on https://techand.ai/, 3 on https://www.techand.ai/) and hid the split.
+  const h2 = String(((sc.host_split || {}).canonical_host) || a.canonical_host || '').toLowerCase();
+  const p2 = (u) => { const m = String(u || '').match(/^https?:\/\/([^\/?#]+)(.*)$/i); if (!m) return String(u || '') || '/'; return (!h2 || m[1].toLowerCase() === h2) ? (m[2] || '/') : String(u); };
   let h = `<h2 class="pb">${num}. Search Console &amp; Site Structure</h2>`;
   if (st.crawled_pages != null) {
     const db = st.depth_buckets || {}; const sm = st.sitemap || {};
     h += `<h3>Site structure (from the crawl)</h3><p>${n2(st.crawled_pages)} pages crawled, ${n2(st.indexable_pages)} indexable${st.within_3_clicks_pct != null ? '; ' + st.within_3_clicks_pct + '% of pages are within 3 clicks of the homepage' : ''}.</p>` + (st.crawl_coverage && st.crawl_coverage.text ? `<p>${e2(st.crawl_coverage.text)}.${st.crawl_coverage.coverage_pct != null && st.crawl_coverage.coverage_pct < 90 ? ' Every share below is a share of the pages that were crawled, not of the whole site.' : ''}</p>` : '') +
-      `<table class="ct"><tr><th>Clicks from home</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4+</th></tr><tr><td>Pages</td><td>${n2(db[0])}</td><td>${n2(db[1])}</td><td>${n2(db[2])}</td><td>${n2(db[3])}</td><td>${n2(db['4+'])}</td></tr></table>` +
+      `<table class="ct"><tr><th>Clicks from home</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4+</th>${db.unlinked ? '<th>No link reaches it</th>' : ''}</tr><tr><td>Pages</td><td>${n2(db[0])}</td><td>${n2(db[1])}</td><td>${n2(db[2])}</td><td>${n2(db[3])}</td><td>${n2(db['4+'])}</td>${db.unlinked ? '<td>' + n2(db.unlinked) + '</td>' : ''}</tr></table>` +
       ((st.sections || []).length ? `<table class="ct"><tr><th>Section</th><th>Pages crawled</th></tr>` + st.sections.map(s => `<tr><td>${e2(s.section)}</td><td>${n2(s.pages)}</td></tr>`).join('') + `</table>` : '') +
       `<p>XML sitemap: ${sm.status === 200 ? n2(sm.urls) + ' URLs' + (sm.is_index ? ' (index of ' + n2(sm.children) + ' sitemaps)' : '') : 'not readable at ' + e2(sm.url)}${st.indexable_not_in_sitemap ? '; ' + n2(st.indexable_not_in_sitemap) + ' indexable pages missing from it' : ''}${st.sitemap_only ? '; ' + n2(st.sitemap_only) + ' sitemap URLs that no internal link reaches' : ''}${st.sitemap_broken ? '; ' + n2(st.sitemap_broken) + ' sitemap URLs not returning 200' : ''}.</p>`;
   }
@@ -775,11 +778,13 @@ const scSection = (a, num) => {
     const t = sc.totals;
     h += `<p>Property <b>${e2(sc.property)}</b> (${e2(sc.permission)}).</p>`;
     if (t) h += `<p>Last 28 days (${e2(t.period.start)} to ${e2(t.period.end)}): <b>${n2(t.clicks)}</b> clicks, <b>${n2(t.impressions)}</b> impressions, CTR ${(t.ctr * 100).toFixed(2)}%, average position ${t.position}; ${n2(sc.pages_with_impressions)} pages and ${n2(sc.queries_with_impressions)} queries with impressions.</p>`;
+    const hs2 = sc.host_split || null;   // R59: the two addresses Google shows, side by side
+    if (hs2 && hs2.found) h += `<p><b>Google shows this site under two addresses.</b> ` + (hs2.hosts || []).map(o => `https://${e2(o.host)}: ${n2(o.pages)} pages, ${n2(o.clicks)} clicks, ${n2(o.impressions)} impressions (${n2(o.impressions_pct)}%)`).join('; ') + `. The site itself names https://${e2(hs2.canonical_host)} as its address (see the www and non-www finding).</p>`;
     h += `<table class="ct"><tr><th>Submitted sitemap</th><th>URLs</th><th>Last read</th><th>Errors</th><th>Warnings</th></tr>` + ((sc.sitemaps || []).length ? sc.sitemaps.map(s => `<tr><td>${e2(s.path)}</td><td>${n2(s.urls)}</td><td>${e2(String(s.downloaded || '').slice(0, 10) || (s.pending ? 'pending' : '—'))}</td><td>${n2(s.errors)}</td><td>${n2(s.warnings)}</td></tr>`).join('') : `<tr><td colspan="5">none submitted${sc.sitemaps_error ? ' (' + e2(sc.sitemaps_error) + ')' : ''}</td></tr>`) + `</table>`;
     const covRows = Object.entries(sc.coverage || {});
     if (covRows.length) h += `<p>Index coverage of ${n2((sc.inspections || []).length)} inspected pages: ` + covRows.map(([k, v]) => `${n2(v)} × ${e2(k)}`).join(', ') + ((sc.rich_results || []).length ? `. Rich results detected: ${e2(sc.rich_results.join(', '))}` : '') + `.</p>`;
     h += indexSection(sc);   // G25: page by page — in Google's index, the canonical it chose, its last crawl, mobile usability, rich results
-    if ((sc.not_indexed || []).length) h += `<table class="ct"><tr><th>Not indexed</th><th>Reason</th></tr>` + sc.not_indexed.slice(0, 10).map(x => `<tr><td>${e2(p2(x.url))}</td><td>${e2(x.reason)}</td></tr>`).join('') + `</table>`;
+    if ((sc.not_indexed || []).length) h += `<table class="ct"><tr><th>Not indexed</th><th>Reason</th></tr>` + sc.not_indexed.slice(0, 10).map(x => `<tr><td>${e2(p2(x.url))}</td><td>${e2(x.reason)}${x.shown_as ? ' — shown by Google as ' + e2(x.shown_as) + ' (' + n2(x.shown_impressions) + ' impressions)' : ''}</td></tr>`).join('') + `</table>`;
     if ((sc.top_queries || []).length) h += `<table class="ct"><tr><th>Top query</th><th>Clicks</th><th>Impressions</th><th>Position</th></tr>` + sc.top_queries.slice(0, 10).map(q => `<tr><td>${e2(q.query)}</td><td>${n2(q.clicks)}</td><td>${n2(q.impressions)}</td><td>${q.position}</td></tr>`).join('') + `</table>`;
     if ((sc.scraper_queries || {}).count) h += `<p class="small">${n2(sc.scraper_queries.count)} scraper ${sc.scraper_queries.count === 1 ? 'query' : 'queries'} (search operators such as site: or inurl:, ${n2(sc.scraper_queries.impressions)} impressions) left out of the top queries: they come from SEO tools and scrapers, not from customers.</p>`;
     if ((sc.top_pages || []).length) h += `<table class="ct"><tr><th>Top page</th><th>Clicks</th><th>Impressions</th><th>Position</th></tr>` + sc.top_pages.slice(0, 10).map(q => `<tr><td>${e2(p2(q.page))}</td><td>${n2(q.clicks)}</td><td>${n2(q.impressions)}</td><td>${q.position}</td></tr>`).join('') + `</table>`;
@@ -857,13 +862,17 @@ const minorBlock = (list, where) => {
 const indexSection = (sc) => {
   const e3 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const p3 = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/, '') || '/';
+  // R59 (2026-10-16): Google's canonical is printed with its host whenever the host differs from the page's — as a bare path it read
+  // "/d365-…-rollout-uae" for the page /d365-…-rollout-uae, a canonical identical to the page, while Google had chosen https://techand.ai
+  const h3 = (u) => (String(u || '').match(/^https?:\/\/([^\/?#]+)/i) || [])[1] || '';
+  const p3c = (g, u) => (h3(g) && h3(u) && h3(g).toLowerCase() !== h3(u).toLowerCase()) ? String(g) : p3(g);
   const ic = sc.index_coverage || null;
   if (!ic) return '';
   let h = `<h3>Google's index view of the key pages (URL Inspection)</h3><p>${e3(ic.text)}.</p>`;
   if ((ic.pages || []).length) {
     h += `<table class="ct"><tr><th>Page</th><th>In Google</th><th>State</th><th>Google's canonical</th><th>Last crawl</th><th>Mobile</th><th>Rich results</th></tr>`
       + ic.pages.slice(0, 25).map(p => `<tr><td>${e3(p3(p.url))}</td><td>${p.indexed === true ? '<span class="ok">yes</span>' : p.indexed === false ? '<span class="bad">no</span>' : '—'}</td><td>${e3(p.coverage || p.verdict || '—')}</td>`
-        + `<td>${p.canonical_ok === false ? '<span class="bad">' + e3(p3(p.google_canonical)) + '</span>' : p.canonical_ok === true ? 'same as ours' : '—'}</td>`
+        + `<td>${p.canonical_ok === false ? '<span class="bad">' + e3(p3c(p.google_canonical, p.url)) + '</span>' : p.canonical_ok === true ? 'same as ours' : '—'}</td>`
         + `<td>${e3(String(p.last_crawl || '').slice(0, 10) || '—')}</td><td>${p.mobile_usable === true ? 'ok' : p.mobile_usable === false ? '<span class="bad">issues</span>' : '—'}</td>`
         + `<td>${e3((p.rich_results || []).join(', ') || '—')}</td></tr>`).join('') + `</table>`;
     if (ic.pages.length > 25) h += `<p class="small">${ic.pages.length - 25} more inspected pages are in the data behind this report.</p>`;
@@ -1042,10 +1051,14 @@ const lineage = [
   _ins72.asked
     ? LN.of('What Google says about each key page', 'inspection', { basis: 'measured', period: LN.asOf(today), sample: LN.sample(_ins72.checked, 'of ' + _ins72.asked + ' pages Google answered for'), note: String(_ins72.note || '') })
     : LN.unknown('What Google says about each key page', 'no URL inspection ran for this audit'),
+  // R73 (2026-10-16): the Chrome UX Report is a known source that ANSWERED ("no field data"), not "source not recorded"; and a
+  // technical audit runs no PageSpeed test, so it prints no Lighthouse row (it printed one unconditionally)
   (a.crux && a.crux.available !== false)
     ? LN.of('Core Web Vitals (real users)', 'crux', { basis: 'measured', period: 'the last 28 days of Chrome visits', sample: 'all Chrome visitors Google could aggregate' })
-    : LN.unknown('Core Web Vitals (real users)', String(((a.crux || {}).note) || 'too few Chrome visits for Google to report field data')),
-  LN.of('Lighthouse scores and speed savings', 'pagespeed', { basis: 'one_sample', period: LN.asOf(today), sample: 'one simulated mobile load per page tested' }),
+    : a.crux ? LN.of('Core Web Vitals (real users)', 'crux', { basis: 'reported', period: 'the last 28 days of Chrome visits', sample: 'no field data',
+        note: 'the Chrome UX Report answered: ' + String(a.crux.not_available || a.crux.note || 'too few real-user visits for field data') })
+    : LN.unknown('Core Web Vitals (real users)', 'the Chrome UX Report was not asked in this audit'),
+  ...((((d.pagespeed || {}).rows) || []).some(r => r && r.score != null) ? [LN.of('Lighthouse scores and speed savings', 'pagespeed', { basis: 'one_sample', period: LN.asOf(today), sample: 'one simulated mobile load per page tested' })] : []),
   LN.of('Crawler access for search and AI bots', 'own_check', { basis: 'measured', period: LN.asOf(today), sample: '11 user agents requested', note: 'what the live robots.txt and the server answered us' }),
 ];
 html += `<h2>6a. Where these numbers come from</h2>` + LN.block(lineage, { title: '' });
@@ -1116,7 +1129,7 @@ return [{
     via_webhook: !!d.via_webhook,
     health_score: a.health_score,
     lineage,
-    search_console: a.search_console || null,
+    search_console: a.search_console ? (({ page_traffic, page_traffic_complete, ...rest }) => rest)(a.search_console) : null,
     crux: a.crux || null,
     render_diff: a.render_diff || null,
     priority_method: a.priority_method || '',

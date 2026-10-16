@@ -290,25 +290,67 @@ const SM = (() => {
   // a page of the inventory answers a keyword when it already gets impressions for it, or when at least 75% of the keyword's
   // meaningful words are in its slug or title (D11; keep it even while the inventory is empty).
   const MATCH_MIN = 0.75;
-  const matchPage = (model, keyword) => {
-    const want = termsOf(keyword); if (!want.length) return null;
+  // R35 (2026-10-16, re-rating 2026-10-15): the words were compared literally, so "d365 finance dubai" did not match a page titled
+  // "Dynamics 365 Finance & Operations UAE" and the report told the owner that page "does not target" the search. Three rules, applied
+  // to BOTH sides before anything is compared: the product's own short names are written out (d365 = dynamics 365, f&o = finance and
+  // operations), a word is compared on a light stem (invoice / invoices / invoicing), and an emirate in the SEARCH is covered by a page
+  // about the UAE ("emirate ⊂ uae" — never the other way round: a Dubai page does not answer every UAE search).
+  const SYN = [[/\bd\s?365\b/g, 'dynamics 365'], [/\bdynamics365\b/g, 'dynamics 365'], [/\bf\s?&\s?o\b|\bfno\b/g, 'finance operations'], [/\bunited arab emirates\b/g, 'uae'],
+    [/\babu dhabi\b/g, 'abudhabi'], [/\bras al khaimah\b/g, 'rasalkhaimah'], [/\bumm al quwain\b/g, 'ummalquwain'], [/\bal ain\b/g, 'alain']];
+  const EMIRATES = new Set(['dubai', 'abudhabi', 'sharjah', 'ajman', 'fujairah', 'rasalkhaimah', 'rak', 'ummalquwain', 'alain']);
+  const norm = (s) => { let t = S(s).toLowerCase().replace(/&amp;/g, '&'); for (const [re, to] of SYN) t = t.replace(re, to); return t; };
+  const stem = (t) => t.length >= 5 ? t.replace(/(ings?|ed|es|(?<!s)s)$/, '').replace(/e$/, '') : t;   // business = businesses, invoice = invoicing
+  const matchTerms = (s) => uniq(termsOf(norm(s)).map(stem));
+  // a keyword term is covered by a page's terms: the same stem, or an emirate in the search against a page about the UAE
+  const covers = (set, t) => set.includes(t) || (EMIRATES.has(t) && (set.includes('uae') || set.includes('emirat')));
+  const shareIn = (want, set) => want.length ? want.filter(t => covers(set, t)).length / want.length : 0;
+  // R56: a listing page (the blog / insights index, a category, a tag) gets impressions for every article it lists; when a dedicated
+  // page matches the same search by its own slug or title, the dedicated page is the one that answers it
+  const LISTING = /^\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?(?:insights|blog|blogs|news|articles|resources|posts|updates|knowledge|learn|library|stories|press|media|case-studies)\/?$|\/(?:category|categories|tag|tags|page|author|topics?)\/[^/]+\/?$/i;
+  const isListing = (u) => { const p = pathOf(u).replace(/[?#].*$/, ''); return LISTING.test(p); };
+  const untitled = (model) => pages(model).filter(p => !S(p.title) && !S(p.h1));
+  const matchPage = (model, keyword, prefer) => {   // `prefer`: a URL that wins a tie (the page Search Console itself credits for the search)
+    const prefKey = prefer ? bare(hostOf(prefer)) + pathOf(prefer).replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase() : "";
+    const isPref = (u) => !!prefKey && (bare(hostOf(u)) + pathOf(u).replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase()) === prefKey;
+    const want = matchTerms(keyword); if (!want.length) return null;
     const key = tokensOf(keyword).join(' ');
     const inv = pages(model);
+    const byQuery = [];
     for (const p of inv) {
       const q = (p.queries || []).find(x => tokensOf(x.query || x.keyword || x).join(' ') === key && (Number((x || {}).impressions) || 0) > 0);
-      if (q) return { url: p.url, title: p.title, source: p.source, matched_by: 'query', score: 1, impressions: Number(q.impressions) || 0 };
+      if (q) byQuery.push({ url: p.url, title: p.title, source: p.source, matched_by: 'query', score: 1, impressions: Number(q.impressions) || 0 });
     }
+    byQuery.sort((a, b) => Number(isListing(a.url)) - Number(isListing(b.url)) || b.impressions - a.impressions);
+    const qHit = byQuery[0] || null;
+    const listingOf = (lst, best) => ({ url: lst.url, impressions: lst.impressions,
+      note: 'Google currently shows ' + pathOf(lst.url) + ' (a listing page) for this search; the page that is about it is ' + pathOf(best.url) });
+    if (qHit && !isListing(qHit.url)) { const lst = byQuery.find(x => isListing(x.url)); return lst ? { ...qHit, listing: listingOf(lst, qHit) } : qHit; }
     let best = null;
     for (const p of inv) {
-      const slug = termsOf(pathOf(p.url).replace(/\.[a-z]{2,5}$/i, ''));
-      const title = termsOf(S(p.title) + ' ' + S(p.h1));
-      const inSlug = want.filter(t => slug.includes(t)).length / want.length;
-      const inTitle = want.filter(t => title.includes(t)).length / want.length;
+      if (qHit && isListing(p.url)) continue;   // R56: looking for the dedicated page behind a listing's impressions
+      const slug = matchTerms(pathOf(p.url).replace(/\.[a-z]{2,5}$/i, ''));
+      const title = matchTerms(S(p.title) + ' ' + S(p.h1));
+      const inSlug = shareIn(want, slug);
+      const inTitle = shareIn(want, title);
       const score = Math.max(inSlug, inTitle);
-      if (score + 1e-9 >= MATCH_MIN && (!best || score > best.score)) best = { url: p.url, title: p.title, source: p.source, matched_by: inSlug >= inTitle ? 'slug' : 'title', score: Math.round(score * 100) / 100, impressions: 0 };
+      if (score + 1e-9 >= MATCH_MIN && (!best || score > best.score + 1e-9 || (Math.abs(score - best.score) < 1e-9 && isPref(p.url) && !isPref(best.url)))) best = { url: p.url, title: p.title, source: p.source, matched_by: inSlug >= inTitle ? 'slug' : 'title', score: Math.round(score * 100) / 100, impressions: 0 };
     }
-    return best;
+    if (qHit && best) return { ...best, listing: listingOf(qHit, best) };
+    return qHit || best;
   };
+  // R35: how much of a search a page's OWN title / H1 holds (null when the page's title was never read) - the only evidence that may call
+  // a page "about something else"
+  // the words of a spoken / long-tail search that say nothing about the subject ("which ... can help ... in the uae")
+  const FILLER = new Set(['which', 'what', 'how', 'why', 'when', 'where', 'who', 'can', 'could', 'help', 'helps', 'best', 'top', 'near', 'me', 'is', 'are', 'do', 'does', 'should', 'will', 'would', 'get', 'need', 'i', 'we', 'you']);
+  const titleShare = (page, keyword) => { const p = page || {}; if (!S(p.title) && !S(p.h1)) return null;
+    const want = uniq(termsOf(norm(keyword)).filter(t => !FILLER.has(t)).map(stem)); if (!want.length) return null; const set = matchTerms(S(p.title) + ' ' + S(p.h1));
+    return { share: Math.round(shareIn(want, set) * 100) / 100, have: want.filter(t => covers(set, t)).length, of: want.length, missing: want.filter(t => !covers(set, t)) }; };
+  // R34: the pages whose title was never read, so a caller can say what it judged on the address alone instead of reading nothing silently
+  const titleGap = (model) => { const all = pages(model); const u = untitled(model);
+    return { pages: all.length, untitled: u.length, urls: u.slice(0, 12).map(p => p.url),
+      note: u.length ? u.length + ' of the ' + all.length + ' pages of the site have no title on file yet (the weekly site check reads them a batch at a time), so they were judged by their address only' : '' }; };
+  // R55: a URL of the site as the site serves it (canonical host); another site's URL is returned as it is
+  const canonUrl = (model, u) => { const h = hostOf(u); if (!h || bare(h) !== bare((model || {}).domain || (model || {}).canonical_host || '')) return S(u); return siteUrl(model, pathOf(u)); };
   // D11: a stored seo_pages row carries its queries as the JSON string `queries_json`, so both shapes are accepted here
   const queriesOf = (p) => Array.isArray(p.queries) ? p.queries : (jparse(p.queries_json, []) || []);
   const withPages = (model, more) => ({ ...model, pages: (() => { const seen = new Set(); const out = [];
@@ -340,7 +382,8 @@ const SM = (() => {
     decay_state: S(p.decay_state), decay_pct: num0(p.decay_pct), decay_lost: num0(p.decay_lost), decay_kind: S(p.decay_kind),
     decay_basis: S(p.decay_basis).slice(0, 900), measured_at: S(p.measured_at) }));
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
-    helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml } };
+    titleShare, titleGap, canonUrl, isListing,
+    helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms } };
 })();
 const d = __scored.json; const a = d.site_audit || {};
 const base = $('Check Crawl').first().json; const domain = base.domain; const site_id = 'site_' + String(domain).toLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -370,8 +413,21 @@ const cur = (a.findings || []).filter(f => f.scoring !== false && f.severity !==
 const not_compared = [...new Set((a.findings || []).filter(f => f.scoring !== false && f.severity !== 'Info' && !inScope(f)).map(f => String(f.category || '')))].filter(Boolean);
 const curKeys = new Map(cur.map(f => [keyOf(f), f])); const prevKeys = new Map(prevF.map(f => [f.finding_key, f]));
 const SEV = { Critical: 0, High: 1, Medium: 2, Low: 3, Info: 4 };
-const fixed = [...prevKeys.entries()].filter(([k]) => !curKeys.has(k)).map(([, f]) => ({ title: f.title, category: f.category, severity: f.severity })).sort((x, y) => SEV[x.severity] - SEV[y.severity]);
-const added = [...curKeys.entries()].filter(([k]) => prev && !prevKeys.has(k)).map(([, f]) => ({ title: f.title, category: f.category, severity: f.severity })).sort((x, y) => SEV[x.severity] - SEV[y.severity]);
+// R74 (2026-10-16, re-rating of 2026-10-15): a finding that rests on ONE outside reading — one results page ("does not rank at the top
+// for its own brand name"), one AI answer, one AI Overview, one content review written by a model — can disappear because that reading
+// changed, not because anything was fixed: exec 614 called the brand finding "fixed" one day after exec 566 on two single results-page
+// reads (not in the top 20, then #1). Such a finding is "no longer seen", never "fixed"; a new one is marked as resting on one reading.
+// The stored rows carry no source, so the class is read from the title (and, for the content review, from the category of a full report
+// whose review ran: its titles are written fresh by a model every run, so they never match by key).
+const ONE_READING = /own brand name|recommends other providers|AI Overviews?|ChatGPT|Perplexity|Gemini|\bClaude\b|Copilot answers|AI Mode|AI answers?|named in AI|cited by AI/i;
+const MEASURED_CONTENT = /duplicate content|text-to-html|hard-to-read|readab|light content|thin content|lorem|placeholder|named human author|freshness|phone number|word count|outbound links|images?\b|headings?\b|H1\b/i;
+const reviewRan = (a.findings || []).some(f => f && f.source === 'ai_review');
+const oneReading = (f) => !!f && (f.source === 'ai_review' || ONE_READING.test(String(f.title || ''))
+  || (reviewRan && String(f.category || '') === 'Content' && !MEASURED_CONTENT.test(String(f.title || ''))));
+const gone = [...prevKeys.entries()].filter(([k]) => !curKeys.has(k)).map(([, f]) => ({ title: f.title, category: f.category, severity: f.severity, one_reading: oneReading(f) })).sort((x, y) => SEV[x.severity] - SEV[y.severity]);
+const fixed = gone.filter(f => !f.one_reading).map(({ one_reading, ...f }) => f);
+const no_longer_seen = gone.filter(f => f.one_reading).map(({ one_reading, ...f }) => ({ ...f, why: 'it rested on a single outside reading (a results page, an AI answer or a content review) that did not repeat this time; nothing on the site has to have changed' }));
+const added = [...curKeys.entries()].filter(([k]) => prev && !prevKeys.has(k)).map(([, f]) => ({ title: f.title, category: f.category, severity: f.severity, ...(oneReading(f) ? { one_reading: true } : {}) })).sort((x, y) => SEV[x.severity] - SEV[y.severity]);
 // R19 (2026-10-14, FIX_PLAN §3.12): two counts measured on samples of different sizes are not a change. The technical audit of
 // execution 550 reported "15 → 4 affected" as an improvement because 31 of 45 URL inspections had failed and the sample had
 // shrunk from 25 pages to 14 — nobody said so. Where the samples differ by more than RT.MAX_SAMPLE_DRIFT (20%), or where the
@@ -392,8 +448,11 @@ const audited_at = new Date().toISOString();
 const days = prev ? Math.round((Date.now() - new Date(prev.audited_at).getTime()) / 864e5) : null;
 const audit_diff = prev ? { baseline: false, report_type: curType, previous: { audit_id: prev.audit_id, audited_at: prev.audited_at, report_type: prev.report_type, health_score: Number(prev.health_score), grade: prev.grade, findings: Number(prev.findings) || prevF.length }, days_since: days,
   score_delta: (Number(a.health_score) || 0) - (Number(prev.health_score) || 0), fixed, new: added, open, not_compared, sample_moved,
-  summary: fixed.length + ' fixed · ' + added.length + ' new · ' + open.length + ' still open (compared with the ' + labelOf(curType) + ' of ' + String(prev.audited_at).slice(0, 10) + ')'
-    + (sample_moved ? '. ' + sample_moved + ' finding(s) are not compared as numbers: they were measured on a different number of pages this time (how many is shown with each).' : '')
+  no_longer_seen,
+  summary: fixed.length + ' fixed · ' + added.length + ' new · ' + open.length + ' still open' + (no_longer_seen.length ? ' · ' + no_longer_seen.length + ' no longer seen' : '') + ' (compared with the ' + labelOf(curType) + ' of ' + String(prev.audited_at).slice(0, 10) + ')'
+    + (no_longer_seen.length ? '. ' + no_longer_seen.length + ' finding(s) rested on a single outside reading (a results page, an AI answer or a content review) that did not repeat, so they are not counted as fixed' : '')
+    + (sample_moved ? '. ' + sample_moved + ' finding(s) are not compared as numbers: ' + [open.filter(f => f.sample_changed && f.checked_before).length ? open.filter(f => f.sample_changed && f.checked_before).length + ' were measured on a different number of pages this time' : '',
+        open.filter(f => f.sample_changed && !f.checked_before).length ? open.filter(f => f.sample_changed && !f.checked_before).length + ' were stored last time without the number of pages they were measured on' : ''].filter(Boolean).join(', and ') + ' (shown with each).' : '')
     + (not_compared.length ? '. ' + not_compared.join(', ') + ' ' + (not_compared.length === 1 ? 'is' : 'are') + ' not assessed by a ' + labelOf(curType) + ', so those findings are shown but not compared.' : '') }
   : { baseline: true, report_type: curType, not_compared, summary: 'First ' + labelOf(curType) + ' stored: the next one shows what was fixed, what is new and what is still open.' + (otherType ? ' The ' + labelOf(otherType.report_type) + ' of ' + String(otherType.audited_at).slice(0, 10) + ' is a different report type and is not compared.' : '') };
 // ---- internal links: targets that need links, sources on the same topic that already carry authority ----

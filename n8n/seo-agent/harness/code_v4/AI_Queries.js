@@ -14,10 +14,18 @@ const pool = [
 // Category query: what a buyer types to find this type of business in the target country
 let category = '';
 const seeds = (sk.seeds || []).filter(Boolean);
-if (pool[0]) category = pool[0].keyword;
+// R60 (2026-10-16): the category question came from the highest-volume commercial keyword of the research pool ("ai in cloud", seeded
+// from orphan headings), so ChatGPT and Perplexity were asked about "the best ai in cloud company" and the report raised three findings
+// on the answer. The site's own words come first: the keywords the owner configured, then the research pool, then the seeds.
+let own91 = [];
+try { const r = $('Load Site Row (Model)').first().json || {}; const bare = (x) => String(x || '').toLowerCase().replace(/^www\./, '');
+  if (r.domain && bare(r.domain) === bare(base.domain)) own91 = String(r.keywords || '').split(/[,;\n]+/).map(s => s.trim().toLowerCase()).filter(s => s && !s.includes(String(base.domain).split('.')[0].toLowerCase())); } catch (e) {}
+if (own91[0]) category = own91[0];
+else if (pool[0]) category = pool[0].keyword;
 else if (seeds[0]) category = seeds[0];
-if (category && !/\b(company|companies|agency|agencies|services?|providers?|firms?|best|top)\b/i.test(category)) category = 'best ' + category + ' company';
-if (category && base.country && !category.toLowerCase().includes(String(base.country).toLowerCase())) category = category + ' ' + base.country;
+const place91 = /\b(uae|u\.a\.e|dubai|abu dhabi|sharjah|ajman|ksa|saudi|riyadh|jeddah|qatar|doha|oman|muscat|bahrain|kuwait|gcc|egypt|india|pakistan|uk|usa)\b/i;
+if (category && !/\b(company|companies|agency|agencies|services?|providers?|firms?|partners?|best|top)\b/i.test(category)) category = /\b(software|platforms?|tools?|apps?|systems?|solutions?)\b/i.test(category) ? 'best ' + category : 'best ' + category + ' company';
+if (category && base.country && !category.toLowerCase().includes(String(base.country).toLowerCase()) && !place91.test(category)) category = category + ' ' + base.country;
 
 const queries = [
   { query: brandName.toLowerCase(), type: 'brand' },
