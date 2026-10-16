@@ -742,6 +742,16 @@ const impactOf = (f: AuditFindingRow): number | null => {
   return v == null || v === '' ? null : n(v);
 };
 
+/** R74: the engine's ONE_READING / MEASURED_CONTENT rule (v5/code/Audit_Diff.js), read from the stored row's title and category. */
+const ONE_READING = /own brand name|recommends other providers|AI Overviews?|ChatGPT|Perplexity|Gemini|\bClaude\b|Copilot answers|AI Mode|AI answers?|named in AI|cited by AI/i;
+const MEASURED_CONTENT = /duplicate content|text-to-html|hard-to-read|readab|light content|thin content|lorem|placeholder|named human author|freshness|phone number|word count|outbound links|images?\b|headings?\b|H1\b/i;
+export function oneReadingFinding(f: { title?: unknown; category?: unknown; source?: unknown }, reportType: string): boolean {
+  const title = s(f.title);
+  if (s(f.source) === 'ai_review' || ONE_READING.test(title)) return true;
+  // a full report's content review is written fresh by a model every run: its titles never match by key
+  return reportType === 'full' && s(f.category) === 'Content' && !MEASURED_CONTENT.test(title);
+}
+
 export async function technicalData(org: OrgRow, site: SiteRow, auditId?: string): Promise<TechnicalData> {
   const d = site.domain;
   // G11 + G25 (2026-10-13, FIX_PLAN): the daily key-page watch and what Search Console says about those pages live in seo_page_watch,
@@ -776,6 +786,10 @@ export async function technicalData(org: OrgRow, site: SiteRow, auditId?: string
     })),
     ...prev
       .filter((f) => !curKeys.has(f.finding_key))
+      // R74 (A2, 2026-10-16): a finding that rested on ONE outside reading (a results page, an AI answer, a model-written content
+      // review) and is not seen now is "no longer seen", never "fixed" — the engine's own diff (Audit_Diff.js) keeps it out of
+      // `fixed`; the app derives "fixed" itself, so it applies the same rule and does not list it as fixed
+      .filter((f) => !oneReadingFinding(f, selected?.reportType ?? ''))
       .map((f) => ({ key: s(f.finding_key), category: s(f.category), severity: s(f.severity), title: s(f.title), affectedCount: 0, previousCount: n(f.affected_count), status: 'fixed' as const, impact: impactOf(f), impactBasis: s(f.impact_basis), recheck: recheckOf(f) })),
   ];
   const sevRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };

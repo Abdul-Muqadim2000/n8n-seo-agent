@@ -14633,6 +14633,13 @@ await guard('S109 R113 site report subject follows the significance test', async
   const noSig = RA3.siteMetrics(); delete noSig.significance;
   const repN = await a3Report({ m: noSig });
   check('R113: without a significance block (older runs) the subject keeps today\'s form', /32 clicks ▲ 52%/.test(repN.subject), repN.subject);
+  // R111 / R59 engine actions (A4, A2): a `fix_draft` or `host_split` action that arrives without a sentence is worded, never an empty bullet
+  const actM = RA3.siteMetrics({ actions: [{ priority: 1, type: 'fix_draft', keyword: 'ai consulting', url: 'https://www.techand.ai/ai-consulting/', reasons: ['covers 60% of the subtopics against 90%'] }, { priority: 2, type: 'host_split' }] });
+  const repA = await a3Report({ m: actM });
+  const doThis = (repA.html.match(/Do this week[\s\S]*?<\/ol>/) || [''])[0];
+  check('R111: a fix_draft action reads "Fix the draft … and run it again" with the QA reasons — never "publish"',
+    /Fix the draft for ("|&quot;)ai consulting("|&quot;) and run it again/.test(doThis) && /covers 60% of the subtopics against 90%/.test(doThis) && !/[Pp]ublish the/.test(doThis), doThis.replace(/<[^>]+>/g, ' ').slice(0, 400));
+  check('R59: a host_split action is worded too (one host Google serves)', /Make one host the only one Google serves/.test(doThis), doThis.replace(/<[^>]+>/g, ' ').slice(0, 400));
   reset();
 });
 

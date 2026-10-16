@@ -11,6 +11,8 @@ export interface LadderRow extends DtRow {
   ladder_id: string; domain: string; head_keyword: string; rung: number; page_no: number; keyword: string; supporting: string;
   page_type: string; target_url: string; page_exists: boolean; status: string; months: string; start_date: string; country: string;
   location_code: number; language_code: string; email: string; callback_url: string; request_id: string;
+  /** R34 (A4, 2026-10-16): why a row is `live (existing page)` and the page that covers it; the planned address it would have had */
+  status_note?: string; covered_by?: string; planned_url?: string;
   /** the word count the ladder's verdict set for this page (0 = unknown); passed to a page run as `ladder_words` (P2-7) */
   target_words?: number;
 }
@@ -50,6 +52,8 @@ export interface QueryRow extends DtRow {
 export interface ContentLogRow extends DtRow {
   site_id: string; domain: string; keyword: string; source: string; page_type: string; existing_page_url: string; rung: number;
   ladder_id: string; request_id: string; started_at: string; status: string; published_url: string; published_at: string; week: string;
+  /** R111 (2026-10-16): for status `not_ready` (the last quality round failed), the QA reasons, '; '-joined */
+  qa_reasons?: string;
 }
 export interface TrendRow extends DtRow {
   site_id: string; domain: string; keyword: string; checked_at: string; period_end: string; direction: string; change_pct: number;
