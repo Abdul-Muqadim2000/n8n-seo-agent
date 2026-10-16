@@ -417,6 +417,7 @@ LEDGER_RESUME_JS = """// R17 (2026-10-14, system review FIX_PLAN 3.12): the run 
 // passes (*Rate Limit*) had no counterpart here. The rules are shared with it (v5/code/_run_guard.js): a run of the same monitor still in
 // flight, a heavy crawl of the same site, too many analyses at once, or an account that cannot pay for this run. A refusal costs nothing -
 // it happens after the row exists and before the first paid node, and the row is marked `refused` so it never holds a cent of the day.
+/*__CATCHUP__*/
 /*__RUN_GUARD__*/
 const plan = $('__PLAN__').all();
 let rows = []; try { rows = $('__LEDGER__').all().map(i => i.json).filter(r => r && r.run_id && !r.error); } catch (e) { rows = []; }
@@ -432,7 +433,24 @@ if (__trig.body && typeof __trig.body === 'object') __trig = { ...__trig, ...__t
 let __row = {}; try { __row = $('__ROW__').first().json || {}; } catch (e) { __row = {}; }
 const __S = (v) => String(v == null ? '' : v).trim();
 const parent_run_id = RG.parentOf(mine) || RG.parentOf(__row) || __S(__trig.parent_run_id);
-const g = RG.gate({ rows, mine, mode: '__MODE__', where: '__WHERE__', run_id: String($execution.id), parent_run_id });
+// R94 follow-up (2026-10-16, A14): a run started by its OWN Schedule Trigger whose latest due slot the catch-up already ran (seo_cache
+// `catchup:<workflow id>:<due ISO>`, written before it starts) is the delayed timer of a week that is done - a sleeping Mac delivers a
+// fire hours late, and the catch-up starts it after 6 h, so without this the week ran twice. A catch-up start enters through the Execute
+// Workflow Trigger, so the Schedule Trigger node has no data in it and nothing is checked.
+const __SCHED = __SCHED_JSON__;
+let __caught = null;
+if (__SCHED.trigger && __SCHED.cron) {
+  let __fire = null; try { const __t = $(__SCHED.trigger).first(); __fire = __t && __t.json ? __t.json : null; } catch (e) { __fire = null; }
+  if (__fire) {
+    try {
+      const __ft = Date.parse(String(__fire.timestamp || '')) || Date.now();
+      const __due = CU.lastDue(__SCHED.cron, __SCHED.tz, __ft);
+      let __recs = []; try { __recs = $('__CATCHREC__').all().map(i => i.json).filter(r => r && r.key && !r.error); } catch (e) { __recs = []; }
+      __caught = RG.caughtUp({ records: __recs, workflow_id: __SCHED.wf, due: __due ? new Date(__due).toISOString() : '' });
+    } catch (e) { __caught = null; }   // fail OPEN: a scheduled run is never refused for a lookup that did not work
+  }
+}
+const g = RG.gate({ rows, mine, mode: '__MODE__', where: '__WHERE__', run_id: String($execution.id), caught_up: __caught, parent_run_id });
 if (g.allowed) return plan;
 let __dom = __S(__trig.domain);
 if (!__dom) { try { __dom = __S((plan[0] && plan[0].json || {}).domain); } catch (e) { __dom = ''; } }
@@ -449,13 +467,36 @@ return [{ json: { run_refused: true, run_id: String($execution.id), refused_at: 
 OPS_ALERT_SRC = read_v5('code/_ops_alert.js').rstrip('\n')
 ALERT_RETRY_SRC = read_v5('code/_alert_retry.js').rstrip('\n')
 RUN_GUARD_SRC = read_v5('code/_run_guard.js').rstrip('\n')
+CATCHUP_SRC = read_v5('code/_catchup.js').rstrip('\n')   # R94 follow-up: CU.lastDue, so a scheduled run can name its own due slot
+
+
+def _schedule_of(wfobj):
+    """R94 follow-up: the Schedule Trigger of a workflow as {trigger, cron, tz, wf} (the same five-field cron build_catchup.py plans with), or {}."""
+    trig = [n for n in wfobj['nodes'] if n.get('type') == 'n8n-nodes-base.scheduleTrigger']
+    if not trig:
+        return {}
+    assert len(trig) == 1, 'R94: more than one Schedule Trigger in ' + str(wfobj.get('name'))
+    ivs = trig[0]['parameters']['rule']['interval']; assert len(ivs) == 1, 'R94: a Schedule Trigger with several rules in ' + str(wfobj.get('name'))
+    iv = ivs[0]; f = iv.get('field')
+    if f == 'cronExpression':
+        cron = ' '.join(str(iv['expression']).split()[-5:])
+    elif f == 'weeks':
+        cron = '%d %d * * %s' % (int(iv['triggerAtMinute']), int(iv['triggerAtHour']), ','.join(str(d) for d in (iv.get('triggerAtDay') or [])) or '*')
+    elif f == 'days':
+        cron = '%d %d * * *' % (int(iv['triggerAtMinute']), int(iv['triggerAtHour']))
+    else:
+        raise AssertionError('R94: schedule field "' + str(f) + '" in ' + str(wfobj.get('name')) + ' is not taught to the run guard')
+    from env_settings import ENV
+    tz = (wfobj.get('settings') or {}).get('timezone') or (ENV.get('GENERIC_TIMEZONE') or '').strip() or 'America/New_York'
+    return {'trigger': trig[0]['name'], 'cron': cron, 'tz': tz, 'wf': str(wfobj.get('id'))}
 
 
 def inline_kits(src):
     """Replace the kit markers with the one copy of each kit (the same markers every builder uses)."""
     return (src.replace('/*__OPS_ALERT__*/', OPS_ALERT_SRC)
                .replace('/*__ALERT_RETRY__*/', ALERT_RETRY_SRC)
-               .replace('/*__RUN_GUARD__*/', RUN_GUARD_SRC))
+               .replace('/*__RUN_GUARD__*/', RUN_GUARD_SRC)
+               .replace('/*__CATCHUP__*/', CATCHUP_SRC))
 
 
 def _if_params(nid, expr):
@@ -561,6 +602,20 @@ def ledger_mainline(wfobj, wiring):
         conns.setdefault(openrun, {})['main'] = [[{'node': wiring['reserve'], 'type': 'main', 'index': 0}]]
         nodes[openrun] = wfobj['nodes'][-1]
     wiring['open_runs'] = openrun
+    # ---- R94 follow-up: the catch-up's own records (kind `catchup` in seo_cache), read before the reservation, only for a workflow that has a
+    # Schedule Trigger. The code keeps this workflow's `catchup:<id>:` keys.
+    sched = _schedule_of(wfobj)
+    catchrec = 'Load Catch-up Records (' + tag + ')'
+    if sched and catchrec not in nodes:
+        cx, cy = nodes[openrun]['position']
+        wfobj['nodes'].append({'parameters': dt_get_all_where_params(CACHE_TABLE, [('kind', 'eq', 'catchup')]),
+                               'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + catchrec)), 'name': catchrec,
+                               'type': DT_TYPE, 'typeVersion': DT_VERSION, 'position': [cx + 110, cy + 150],
+                               'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True})
+        nodes[catchrec] = wfobj['nodes'][-1]
+        conns.setdefault(openrun, {})['main'] = [[{'node': catchrec, 'type': 'main', 'index': 0}]]
+        conns.setdefault(catchrec, {})['main'] = [[{'node': wiring['reserve'], 'type': 'main', 'index': 0}]]
+    wiring['catchup_records'] = catchrec if sched else ''
     assert resume not in nodes, 'R17: ' + resume + ' already exists (ledger_mainline ran twice)'
     outs = conns.setdefault(plan, {}).setdefault('main', [])
     while not outs: outs.append([])
@@ -572,6 +627,7 @@ def ledger_mainline(wfobj, wiring):
     wfobj['nodes'].append({'parameters': {'jsCode': inline_kits(LEDGER_RESUME_JS)
                                           .replace('__PLAN__', plan).replace('__LEDGER__', openrun).replace('__RESERVE__', reserve)
                                           .replace('__ROW__', str(wiring['reserve']))
+                                          .replace('__SCHED_JSON__', _json.dumps(sched)).replace('__CATCHREC__', catchrec)
                                           .replace('__MODE__', str(wiring['mode'])).replace('__WHERE__', str(wfobj.get('name') or tag))},
                            'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + resume)), 'name': resume,
                            'type': 'n8n-nodes-base.code', 'typeVersion': 2, 'position': [x + 220, y]})

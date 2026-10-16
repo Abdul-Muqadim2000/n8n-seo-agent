@@ -9,6 +9,14 @@ const SHORT = { easy: 'easy for you', reachable: 'reachable', hard: 'hard', very
 const kdLabel = (v) => v == null ? 'N/A' : v + (L.reach != null ? ' · ' + SHORT[difficultyForYou(v, L.reach, {})] : (v < 30 ? ' · easy' : v < 50 ? ' · medium' : v < 70 ? ' · hard' : ' · very hard'));
 const posText = (p) => p ? '#' + p : 'not in top 60';
 const months = (m) => Array.isArray(m) ? (m[0] === m[1] ? 'month ' + m[0] : 'months ' + m[0] + '-' + m[1]) : '—';
+// R42 (2026-10-16): a ladder run that writes a page while the site already has its limit of written-but-unpublished pages says so, in the
+// owner's words, where the notes are read (the Content Cadence stops at that limit; a ladder run does not, so the pile grows by one).
+if (L.planned && (L.write_now || []).length && L.pile_up && L.pile_up.at_limit) {
+  const pu = L.pile_up;
+  L.notes = [...(L.notes || []), 'You have ' + pu.waiting + ' page' + (pu.waiting === 1 ? '' : 's') + ' waiting to be published (limit ' + pu.limit + '); this writes page ' + (pu.waiting + 1) + '.'
+    + (pu.needs_fix ? ' ' + pu.needs_fix + ' of them did not pass the quality check and need a fix first.' : '')
+    + ' Publish or discard the waiting pages before the next one is written: a pile of unpublished pages ranks nothing.'];
+}
 let secNo = 0;
 const h2 = (title, pageBreak) => '<h2' + (pageBreak ? ' class="pb"' : '') + '>' + (++secNo) + '. ' + esc(title) + '</h2>';
 const kv = (rows) => '<table class="kv">' + rows.map(r => '<tr><td class="k">' + esc(r[0]) + '</td><td>' + r[1] + '</td></tr>').join('') + '</table>';

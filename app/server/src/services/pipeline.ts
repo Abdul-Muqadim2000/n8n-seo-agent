@@ -59,7 +59,7 @@ import { latestReport, monthSpend, reportsList } from './runs';
 const norm = normKeyword;
 
 /** A waiting page as the Pipeline returns it; R111 adds whether its draft failed the quality check (and why). */
-export type WaitingEntry = PipelineData['queue']['waiting'][number] & { needsFix?: boolean; reasons?: string[] };
+export type WaitingEntry = PipelineData['queue']['waiting'][number];
 
 /**
  * Pages written and not published (the content log; every age), oldest first.
