@@ -222,6 +222,10 @@ export interface AuditFindingRow extends DtRow {
    * clicks and impressions of those pages x their place in the site) and the one line that explains it. Rows written before this
    * change have neither, so every reader falls back to the severity order. */
   impact?: number; impact_basis?: string;
+  /** R19: the pages the count was measured on (0 / missing on rows before it was stored) */
+  checked?: number;
+  /** B5-11 (v4.18): the engine's evidence line and up to 5 example addresses (a JSON array as text); rows written before have neither */
+  evidence?: string; sample_urls?: string;
 }
 
 /** v4.8 (PIPELINE_FEATURE_SPEC.md §9.1): one row per keyword ladder; the row with ladder_id '_site' holds the website's defaults

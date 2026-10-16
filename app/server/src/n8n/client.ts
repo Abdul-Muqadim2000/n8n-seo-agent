@@ -85,6 +85,25 @@ export async function assessCall(body: Record<string, unknown>, orgId: string, t
   return { kind: 'answered', status: res.status, json: json && typeof json === 'object' && !Array.isArray(json) ? json : {}, error: null };
 }
 
+/** B3-7: the Publish Check (SEOagentPubCheck) — a supplied page through the content gate's deterministic half; free, writes nothing. */
+export async function publishCheckCall(body: Record<string, unknown>, orgId: string, timeoutMs = 30000): Promise<AssessCallResult> {
+  if (!config.n8n.webhookKey) return { kind: 'unreachable', status: 0, json: {}, error: 'The SEO engine is not configured (SEO_API_KEY missing)' };
+  let res: Response;
+  try {
+    res = await fetch(config.n8n.baseUrl + config.n8n.publishCheckPath, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': config.n8n.webhookKey, 'x-forwarded-for': `app:${orgId}` },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (err) {
+    const e = err as Error;
+    return { kind: e?.name === 'TimeoutError' || e?.name === 'AbortError' ? 'timeout' : 'unreachable', status: 0, json: {}, error: String(e?.message || err) };
+  }
+  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  return { kind: 'answered', status: res.status, json: json && typeof json === 'object' && !Array.isArray(json) ? json : {}, error: null };
+}
+
 export interface AdminCallResult {
   ok: boolean;
   action: string;

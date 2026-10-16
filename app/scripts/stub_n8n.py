@@ -37,6 +37,7 @@ BY_ID = {v: k for k, v in IDS.items()}
 DOMAIN = os.environ.get('PROFILE_DOMAIN', '')
 ROWS = {name: [] for name in TABLES}
 LOCK = threading.Lock()
+PUBLISH_CHECKS = []
 SEQ = [1]
 
 if DOMAIN:
@@ -109,14 +110,30 @@ class H(BaseHTTPRequestHandler):
             with LOCK:
                 data = [r for r in ROWS.get(t, []) if matches(r, filters_of(q))]
             return self._send({'data': data, 'nextCursor': None})
+        if parts == ['__publish_checks']:
+            with LOCK:
+                return self._send({'data': PUBLISH_CHECKS[-20:]})
         if parts[:3] == ['api', 'v1', 'executions']:
             return self._send({'data': [], 'nextCursor': None})
         return self._send({'data': [], 'nextCursor': None})
 
     def do_POST(self):
         parts, _ = self._parts()
-        t = self._table(parts)
         body = self._body()
+        # B3-7: a stand-in for the Publish Check webhook (the real one is n8n's SEOagentPubCheck): it keeps the body it was sent, so a
+        # test can see what the app forwarded, and answers in the contract's shape — a short page is "not publishable", like the gate
+        if parts == ['webhook', 'seo-publish-check']:
+            with LOCK:
+                PUBLISH_CHECKS.append(body)
+            if not str(body.get('markdown') or '').strip():
+                return self._send({'ok': False, 'verdict': 'error', 'exit_code': 2, 'error': 'markdown is required', 'errors': ['markdown is required'], 'writes': 'none'}, 400)
+            words = len(str(body.get('markdown')).split())
+            ok = words >= 300
+            return self._send({'ok': True, 'publishable': ok, 'verdict': 'publishable' if ok else 'not_publishable', 'exit_code': 0 if ok else 1,
+                               'label': 'stub', 'summary': 'stub verdict', 'reasons': [] if ok else ['The page has %d words; the target is 300' % words],
+                               'content_score': 84 if ok else 51, 'score_bar': 80, 'warnings': [], 'advice': [], 'checks': {},
+                               'not_checked': [{'check': 'editor_review', 'reason': 'a model call'}], 'basis': 'stub', 'writes': 'none', 'cost_usd': 0})
+        t = self._table(parts)
         if not t:
             return self._send({'message': 'no such table'}, 404)
         rows = body.get('data') or []

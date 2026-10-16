@@ -10737,6 +10737,18 @@ assert "mark('note'" in _an119 and 'OWN_NOTES_LINE' in _an119, 'B7-7: the owner 
 assert 'other_host' in _sr118 and 'path = (u, row)' in _sr118, 'R92 part 2: Site Report path() lost the host rule'
 log('Brand series, notes and hosts (2026-10-17, B7-6 / B7-7 / R92): branded Search Console clicks, GA4 direct sessions and AI-assistant referral sessions are one series set in the weekly report, each with its own source and basis and never added together; the owner\'s dated check-in notes are chart marks and the report says once that Search Console\'s own annotations stay in Search Console; a page row on a non-canonical host prints its full URL.')
 
+# 124. A FINDING KEEPS ITS EVIDENCE (2026-10-17, agent W3-G, benchmark area 5 row B5-11 / area 12 G-5). The read API
+#      (`GET /api/v1/websites/:id/audits/:auditId`, app/API.md "Read API v1") answers "why is this finding here?" — but the stored
+#      seo_audit_findings row kept only the title and the count: the evidence line every finding carries (the kit refuses one with
+#      none, B-L lineage) and its example addresses lived only in the PDF. Two columns, written on every audit from now on; older
+#      rows answer `evidence: null` in the API, never "".
+assert ('evidence', 'string') in AUDIT_FINDINGS_COLS and ('sample_urls', 'string') in AUDIT_FINDINGS_COLS, 'B5-11: seo_audit_findings needs evidence + sample_urls (ladder_common.py) — run sync_tables.py after deploying'
+_fr124 = code('Finding Rows')
+assert _fr124.count("recheck_note: '' }));") == 1, 'B5-11: Finding Rows row shape moved'
+setcode('Finding Rows', _fr124.replace("recheck_note: '' }));",
+        "recheck_note: '',\n  evidence: String(f.evidence || '').slice(0, 500), sample_urls: JSON.stringify((Array.isArray(f.sample_urls) ? f.sample_urls : []).filter(u => typeof u === 'string' && /^https?:\\/\\//i.test(u)).slice(0, 5).map(u => u.slice(0, 300))) }));   // B5-11: the read API's evidence"))
+log('Findings keep their evidence (2026-10-17, B5-11): every stored audit finding row carries its evidence line and up to five example addresses, so the read API can show why a finding is there.')
+
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:
 #     "two fixes have never come back and both are enforced by the build".

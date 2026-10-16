@@ -483,6 +483,33 @@ export const reportDeliveries = pgTable(
   ],
 );
 
+/**
+ * B5-11 / area 12 G-5 (v4.18): a company API key for the read API (`/api/v1`, design note in app/API.md "Read API v1").
+ * The key itself is shown once and never stored: only its SHA-256 (`tokenHash`) and a display prefix (`asc_` + 8 characters).
+ * A key belongs to exactly one company and reads only that company's data; it can never start a run or change anything.
+ */
+export const apiKeys = pgTable(
+  'api_keys',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    prefix: text('prefix').notNull(),
+    tokenHash: text('token_hash').notNull(),
+    /** read | publish_check */
+    scopes: jsonb('scopes').$type<string[]>().notNull().default(['read']),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: created(),
+    expiresAt: ts('expires_at'),
+    lastUsedAt: ts('last_used_at'),
+    revokedAt: ts('revoked_at'),
+  },
+  (t) => [uniqueIndex('api_keys_hash_idx').on(t.tokenHash), index('api_keys_org_idx').on(t.orgId)],
+);
+
+export type ApiKeyRow = typeof apiKeys.$inferSelect;
 export type MailboxRow = typeof mailboxes.$inferSelect;
 export type OutreachSequenceRow = typeof outreachSequences.$inferSelect;
 export type OutreachMessageRow = typeof outreachMessages.$inferSelect;

@@ -33,6 +33,8 @@ const Env = z.object({
   /** v4.13 Link Builder: start a run on demand, and read one reply (synchronous) */
   N8N_LINK_BUILDER_PATH: str('/webhook/seo-link-builder'),
   N8N_REPLY_PATH: str('/webhook/seo-reply-read'),
+  /** B3-7: the Publish Check (SEOagentPubCheck): the deterministic half of the content gate over a supplied page, synchronous, free */
+  N8N_PUBLISH_CHECK_PATH: str('/webhook/seo-publish-check'),
   /** v4.13: 32 bytes (64 hex or base64) that encrypt mailbox passwords; without it no mailbox can be connected */
   MAILBOX_KEY: str(''),
   /** v4.13: the sender and inbox jobs (off in tests or on a second server) */
@@ -114,6 +116,7 @@ export const config = {
     assessPath: e.N8N_ASSESS_PATH,
     linkBuilderPath: e.N8N_LINK_BUILDER_PATH,
     replyPath: e.N8N_REPLY_PATH,
+    publishCheckPath: e.N8N_PUBLISH_CHECK_PATH,
     projectId: e.N8N_PROJECT_ID,
   },
   callbackBaseUrl: e.CALLBACK_BASE_URL,

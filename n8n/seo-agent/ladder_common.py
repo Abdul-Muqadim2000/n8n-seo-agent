@@ -260,7 +260,10 @@ AUDIT_FINDINGS_COLS = [('site_id', 'string'), ('domain', 'string'), ('audit_id',
                        # G11 (2026-10-13, FIX_PLAN): "I fixed this" in the app sets recheck_state to `requested` (with recheck_requested_at);
                        # the next daily Page Watch answers it on the site's key pages and writes back `fixed` / `still_open` / `not_checked`
                        # with the rule it used and one sentence of evidence - days instead of waiting for the next monthly audit (1.10).
-                       ('recheck_state', 'string'), ('recheck_requested_at', 'string'), ('recheck_at', 'string'), ('recheck_rule', 'string'), ('recheck_note', 'string')]
+                       ('recheck_state', 'string'), ('recheck_requested_at', 'string'), ('recheck_at', 'string'), ('recheck_rule', 'string'), ('recheck_note', 'string'),
+                       # B5-11 (W3-G, 2026-10-17): the finding's evidence line and up to 5 example addresses (JSON text), so the read API
+                       # (`GET /api/v1/websites/:id/audits/:auditId`) can say WHY a finding is there; rows before this answer null (run sync_tables.py)
+                       ('evidence', 'string'), ('sample_urls', 'string')]
 
 # ---- the daily key-page watch and Google's view of those pages (G11 + G25, 2026-10-13, FIX_PLAN) ----
 # One row per site and key page: today's raw reading (status, a redirect that appeared, noindex, canonical, title, description, H1s, whether
