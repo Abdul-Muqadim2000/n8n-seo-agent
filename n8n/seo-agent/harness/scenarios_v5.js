@@ -17169,6 +17169,168 @@ await guard('S150 B5-12 R67 GA4 key events join the impact weight and the basis 
   check('R67: the full report carries the same note (same template)', /unscoredNote\(a\)/.test(a11code('Build_Full_Report.js')) && /counted here and \$\{n === 1/.test(a11code('Build_Full_Report.js')), '');
 });
 
+// S155-S158 (2026-10-16, agent W3-C, benchmark area 6 rows B6-6 / B6-8 / B6-10 / B6-14 —
+// docs/system-review-2026-10-14/BENCH_AREA6_rank_tracking.md): cannibalisation seen in the stored reading, a move that is the page's
+// own only when it beats the results page's churn, who took the place, and one share of voice weighted by the site's own impressions.
+// ===================================================================================
+const W3C = (() => {
+  const D = 'techand.ai', SITE = 'site_techand-ai', HEAD = 'peppol uae';
+  const EMPTY = [{ json: {} }];
+  const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString();
+  const TEN = ['cleartax.com', 'tax.gov.ae', 'zoho.com', 'complyance.io', 'finline.ae', 'grantthornton.ae', 'hawksford.com', 'pwc.com', 'kpmg.com', 'deloitte.com'];
+  const mkCheck = (SN) => (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const slug = (k) => String(k).replace(/\s+/g, '-');
+  // a stored snapshot in the shape RS.snapshot writes (o.own_n / o.own = the B6-6 fields)
+  const snapOf = (doms, o = {}) => JSON.stringify({ at: o.at || daysAgo(7), device: o.device || 'desktop', results: 1420000, unavailable: false, error: '',
+    features: [], top: doms.map((d, i) => ({ p: i + 1, u: 'https://' + d + '/' + slug(o.keyword || HEAD) + '/', t: 'Page about peppol (' + d + ')' })),
+    ...(o.own_n != null ? { own_n: o.own_n } : {}), ...(o.own ? { own: o.own } : {}) });
+  const lrow = (rung, page_no, keyword, status) => ({ json: { id: rung * 10 + page_no, createdAt: 'x', updatedAt: 'x', ladder_id: 'lad_W3C', domain: D, head_keyword: HEAD, rung, page_no, keyword, supporting: '',
+    page_type: rung === 4 ? 'Pillar Page' : 'Guide', target_url: 'https://' + D + '/' + slug(keyword) + '/', page_exists: true, status, months: '', start_date: daysAgo(120),
+    country: 'United Arab Emirates', location_code: 2784, language_code: 'en', email: 'owner@techand.ai', callback_url: 'https://hooks.example.com/x', request_id: 'r-W3C' } });
+  const ROWS = [lrow(4, 1, HEAD, 'published'), lrow(1, 2, 'peppol access point uae', 'published'), lrow(2, 3, 'peppol invoice format', 'published')];
+  const hrow = (keyword, position, at, snapshot, url) => ({ json: { ladder_id: 'lad_W3C', keyword, checked_at: at, position, url: url == null ? 'https://' + D + '/' + slug(keyword) + '/' : url, serp_features: '', domain: D, rung: 0,
+    device: 'desktop', features_json: JSON.stringify({ unavailable: false, types: [], ai_overview: { shown: false, cites_us: false, content_loaded: true, cited_domains: [], seen_at: at }, featured_snippet: { shown: false, ours: false, domain: '' }, people_also_ask: { shown: false, count: 0, questions: [] }, local_pack: { shown: false, ours: null }, video: { shown: false }, shopping: { shown: false }, checked_at: at }),
+    competitors_json: '', snapshot_json: snapshot, share_of_voice: 10 } });
+  // one Rank Tracker run end to end: plan -> SERP answers -> Parse Positions -> Tracker Report. opts.extra[keyword] = more organic items of ours
+  const report = async (history, opts = {}) => {
+    reset();
+    mock('Load Ladders', ROWS); mock('Load Content Log (Tracker)', EMPTY); mock('Load Pages (Tracker)', EMPTY);
+    mock('Load Sites (Tracker)', [{ json: { id: 1, site_id: SITE, domain: D, country: 'United Arab Emirates', location_code: 2784, language_code: 'en', status: 'active', competitors: 'cleartax.com' } }]);
+    mock('Load Monitors (Tracker)', EMPTY);
+    mock('Load Query History (Tracker)', opts.queries ? opts.queries.map(j => ({ json: j })) : EMPTY);
+    mock('Load History', history.length ? history : EMPTY);
+    const pl = await run('Tracker Plan', store['Load History']);
+    mock('SERP Check', pl.map(c => { const kw = c.json.keyword;
+      const ans = V.serpRich({ keyword: kw, domain: D, device: c.json.device, position: (opts.positions || {})[kw] == null ? 20 : opts.positions[kw], top: ((opts.top || {})[kw]) || TEN });
+      for (const e of (((opts.extra || {})[kw]) || [])) ans.tasks[0].result[0].items.push({ type: 'organic', rank_group: e.p, rank_absolute: e.p + 3, page: Math.ceil(e.p / 10), domain: D, title: 'Another page of ours', url: e.u });
+      return ans; }));
+    mock('SERP Check Answers', [{ json: { __dfs: { asked: pl.length, checked: pl.length, failed: 0, retried: 0, retry_answered: 0, unavailable: 0, note: '', cost_usd: 0.045, cost_basis: 'measured: the provider\'s own cost for these calls' } } }]);
+    const pp = await run('Parse Positions', store['SERP Check']); mock('Save History', pp);
+    return { R: (await run('Tracker Report', pp))[0].json, pp };
+  };
+  const posOf = (R, kw) => (R.positions || []).find(p => p.keyword === kw) || {};
+  return { D, SITE, HEAD, TEN, daysAgo, mkCheck, snapOf, hrow, report, posOf, slug };
+})();
+
+await guard('S155 B6-6 cannibalisation from the stored reading', async () => {
+  const SN = 'S155 B6-6: two of the site\'s own URLs in one stored reading are named, with the one Google prefers today; silent when only one is on the page';
+  reset(); begin(SN); const check = W3C.mkCheck(SN);
+  const { D, HEAD, hrow, snapOf, daysAgo, report, posOf } = W3C;
+  const second = 'https://' + D + '/blog/what-is-peppol/';
+  const { R, pp } = await report([hrow(HEAD, 6, daysAgo(7), snapOf(W3C.TEN), second)], { positions: { [HEAD]: 4 }, extra: { [HEAD]: [{ p: 17, u: second }] } });
+  const stored = (pp.find(x => x.json.keyword === HEAD && x.json.device !== 'mobile') || { json: {} }).json;
+  const snap = (() => { try { return JSON.parse(stored.snapshot_json || 'null') || {}; } catch (e) { return {}; } })();
+  console.log('   snapshot own ->', JSON.stringify({ own_n: snap.own_n, own: snap.own }));
+  check('B6-6: the stored reading keeps how many of our pages the answer held and which (the snapshot used to keep one URL per site, so a second page was thrown away before it was stored)',
+    snap.own_n === 2 && Array.isArray(snap.own) && snap.own.length === 2 && snap.own[0].p === 4 && snap.own[1].p === 17 && snap.own[1].u === second, JSON.stringify(snap));
+  const c = posOf(R, HEAD).cannibal || {};
+  console.log('   cannibal ->', JSON.stringify(c));
+  check('B6-6: the keyword\'s row names both URLs with their positions and the one Google prefers today (the higher one)',
+    c.found === true && c.count === 2 && (c.pages || []).length === 2 && c.preferred && c.preferred.position === 4 && /peppol-uae/.test(c.preferred.url)
+    && c.pages[1].url === second && /Google prefers .*peppol-uae\/ today/.test(c.text || ''), JSON.stringify(c));
+  check('B6-6: the previous reading ranked the OTHER page, and the sentence says Google is changing which page it shows',
+    c.switched === true && c.previous_url === second && /changing which of your pages it shows/.test(c.text || ''), JSON.stringify(c));
+  check('B6-6: the mail carries the line and the summary counts it',
+    /of your pages appear on the results page for &quot;peppol uae&quot;|of your pages appear on the results page for "peppol uae"/.test(R.html) && R.html.indexOf(second) > 0
+    && R.serp_summary && R.serp_summary.cannibalisation && R.serp_summary.cannibalisation.found === 1, JSON.stringify(R.serp_summary && R.serp_summary.cannibalisation));
+  const one = await report([hrow(HEAD, 6, daysAgo(7), snapOf(W3C.TEN))], { positions: { [HEAD]: 4 } });
+  const c1 = posOf(one.R, HEAD).cannibal || {};
+  check('B6-6: silent when only one of the site\'s pages is on the results page: checked, nothing found, no line in the mail',
+    c1.checked === true && c1.found === false && c1.count === 1 && !/of your pages appear on the results page/.test(one.R.html), JSON.stringify(c1));
+  const old = ((await run('_rank_serp', [{ json: { serp: V.serpRich({ keyword: HEAD, domain: D, position: 4 }), domain: D, cur_snapshot: snapOf(W3C.TEN) } }], { code: '_rank_serp' }))[0].json.cannibal) || {};
+  check('B6-6: a reading stored before the count was kept is "not checked" with its reason, never "no cannibalisation"',
+    old.checked === false && old.found === false && /stored before a second page of the site was kept/.test(old.reason || ''), JSON.stringify(old));
+});
+
+await guard('S156 B6-8 a move is the site\'s own only when it beats the page\'s churn', async () => {
+  const SN = 'S156 B6-8: a move of five places is the page\'s own only when it beats the results page\'s churn; otherwise the page moving; not compared when the earlier reading cannot be compared';
+  reset(); begin(SN); const check = W3C.mkCheck(SN);
+  const { HEAD, hrow, snapOf, daysAgo, report, posOf, TEN } = W3C;
+  const kind = (R, kw) => ((R.moves || []).find(m => m.keyword === kw) || {}).kind;
+  const steady = await report([hrow(HEAD, 4, daysAgo(7), snapOf(TEN))], { positions: { [HEAD]: 20 } });
+  console.log('   steady moves ->', JSON.stringify(steady.R.moves), ' html drops ->', (steady.R.html.match(/Drops to look at:<\/b>[^<]*/) || [''])[0].slice(0, 200));
+  check('B6-8: a fall of sixteen places on a results page that held is the page\'s OWN move, and it is the drop the mail asks the owner to look at',
+    kind(steady.R, HEAD) === 'own' && /Drops to look at:<\/b> peppol uae/.test(steady.R.html) && steady.R.move_summary && steady.R.move_summary.own === 1, JSON.stringify(steady.R.moves));
+  const rew = await report([hrow(HEAD, 4, daysAgo(7), snapOf(['a.com', 'b.com', 'c.com', 'd.com', 'e.com', 'f.com', 'g.com', 'h.com', 'i.com', 'j.com']))], { positions: { [HEAD]: 20 } });
+  check('B6-8: the SAME fall on a results page rewritten under it is "the results page moving": it is not in "Drops to look at" and is listed as moving with the page',
+    kind(rew.R, HEAD) === 'with_page' && !/Drops to look at/.test(rew.R.html) && /Moved with the results page/.test(rew.R.html) && rew.R.move_summary.with_page === 1, JSON.stringify(rew.R.moves));
+  const none = await report([hrow(HEAD, 4, daysAgo(7), '')], { positions: { [HEAD]: 20 } });
+  check('B6-8: with no comparable earlier reading the move is "not compared" (no verdict) and is not reported as a drop',
+    kind(none.R, HEAD) === 'not_compared' && !/Drops to look at/.test(none.R.html) && /could not be compared with the results page around them/.test(none.R.html)
+    && none.R.move_summary.not_compared === 1, JSON.stringify(none.R.moves));
+  check('B6-8: the rule travels with the moves and says it is a stated rule, not a measurement',
+    /stated rule, not a measurement/.test(steady.R.move_summary.rule || '') && /twice the average move of the other pages/.test(steady.R.move_summary.rule || ''), JSON.stringify(steady.R.move_summary));
+  // our page 3 -> 8 inside the top ten: five other results shift up one place each, which the whole-page count reads as six of ten
+  // places changed ("high"). Among themselves the other results did not move at all, so this is the page's own fall.
+  const prevTop = ['cleartax.com', 'tax.gov.ae', 'techand.ai', 'zoho.com', 'complyance.io', 'finline.ae', 'grantthornton.ae', 'hawksford.com', 'pwc.com', 'kpmg.com'];
+  const held = await report([hrow(HEAD, 3, daysAgo(7), snapOf(prevTop))], { positions: { [HEAD]: 8 },
+    top: { [HEAD]: ['cleartax.com', 'tax.gov.ae', 'zoho.com', 'complyance.io', 'finline.ae', 'grantthornton.ae', 'hawksford.com', 'x', 'pwc.com', 'kpmg.com'] } });
+  const chH = posOf(held.R, HEAD).serp_change || {};
+  console.log('   held ->', JSON.stringify({ kind: kind(held.R, HEAD), band: chH.band, band_others: chH.band_others, changed: chH.changed, changed_others: chH.changed_others }));
+  check('B6-8: our own fall inside the top ten is not mistaken for the page moving: the whole-page count says "high" only because of our move, the others held, and it is the site\'s own drop',
+    chH.band === 'high' && chH.band_others === 'still' && chH.changed_others === 0 && kind(held.R, HEAD) === 'own', JSON.stringify(chH));
+  // the same fall where the other results also swapped places by six (four of nine changed, 2.7 places on average): no larger than the churn
+  const slid = await report([hrow(HEAD, 3, daysAgo(7), snapOf(prevTop))], { positions: { [HEAD]: 8 },
+    top: { [HEAD]: ['hawksford.com', 'pwc.com', 'zoho.com', 'complyance.io', 'finline.ae', 'grantthornton.ae', 'cleartax.com', 'x', 'tax.gov.ae', 'kpmg.com'] } });
+  const ch = posOf(slid.R, HEAD).serp_change || {};
+  console.log('   slid ->', JSON.stringify({ kind: kind(slid.R, HEAD), band_others: ch.band_others, others: ch.mean_move_others, mean: ch.mean_move }));
+  check('B6-8: the yardstick is the OTHER pages\' movement among themselves, our own URL left out of it',
+    ch.available === true && ch.band_others === 'some' && ch.changed_others === 4 && ch.mean_move_others === 2.7, JSON.stringify(ch));
+  check('B6-8: five places on a page whose other results moved 2.7 places on average is the page moving, not the site\'s own drop',
+    kind(slid.R, HEAD) === 'with_page', JSON.stringify(slid.R.moves));
+  check('B6-8: the callback\'s drops still list every five-place move with its clause (the app reads it), beside the classified moves',
+    (rew.R.drops || []).length === 1 && /not necessarily about your page/.test(rew.R.drops[0]) && Array.isArray(rew.R.own_drops) && rew.R.own_drops.length === 0, JSON.stringify({ d: rew.R.drops, o: rew.R.own_drops }));
+});
+
+await guard('S157 B6-10 who took the place', async () => {
+  const SN = 'S157 B6-10: the domains that moved above the target URL since the previous reading are named, from the two stored readings';
+  reset(); begin(SN); const check = W3C.mkCheck(SN);
+  const { D, HEAD, hrow, snapOf, daysAgo, report, posOf, TEN } = W3C;
+  const prevTop = ['cleartax.com', 'tax.gov.ae', 'zoho.com', D, 'complyance.io', 'finline.ae', 'grantthornton.ae', 'hawksford.com', 'pwc.com', 'kpmg.com'];
+  const curTop = ['cleartax.com', 'newcomer.ae', 'tax.gov.ae', 'zoho.com', 'complyance.io', 'x', 'finline.ae', 'grantthornton.ae', 'hawksford.com', 'pwc.com'];
+  const { R } = await report([hrow(HEAD, 4, daysAgo(7), snapOf(prevTop))], { positions: { [HEAD]: 6 }, top: { [HEAD]: curTop } });
+  const o = posOf(R, HEAD).outranked || {};
+  console.log('   outranked ->', JSON.stringify(o));
+  check('B6-10: newcomer.ae (new on page 1) and complyance.io (below us last time) are named as having moved above the target, nobody who was already above',
+    o.available === true && (o.domains || []).map(d => d.domain).join(',') === 'newcomer.ae,complyance.io'
+    && o.domains[0].previous === null && o.domains[1].previous === 5 && o.domains[1].position === 5, JSON.stringify(o));
+  check('B6-10: the line names the target URL and the two positions, and reaches the mail',
+    /Outranked since the reading of \d{4}-\d\d-\d\d: newcomer\.ae \(now #2, not in the top 10 then\), complyance\.io \(now #5, was #5, below your page then\) moved above https:\/\/techand\.ai\/peppol-uae\/ \(#4 then, #6 now\)\./.test(o.text || '')
+    && R.html.indexOf('Outranked since the reading of') > 0, o.text);
+  const st = await report([hrow(HEAD, 4, daysAgo(7), snapOf(prevTop))], { positions: { [HEAD]: 4 }, top: { [HEAD]: prevTop } });
+  const o2 = posOf(st.R, HEAD).outranked || {};
+  check('B6-10: silent when nobody moved above the page', o2.available === true && (o2.domains || []).length === 0 && !/Outranked since/.test(st.R.html), JSON.stringify(o2));
+  const nr = await report([hrow(HEAD, 0, daysAgo(7), snapOf(TEN))], { positions: { [HEAD]: 6 } });
+  const o3 = posOf(nr.R, HEAD).outranked || {};
+  check('B6-10: refuses with the reason when the page was not ranking in the previous reading (nobody can have moved above it)',
+    o3.available === false && /not in the top 50 in the previous reading/.test(o3.reason || ''), JSON.stringify(o3));
+});
+
+await guard('S158 B6-14 share of voice weighted by the site\'s own impressions', async () => {
+  const SN = 'S158 B6-14: one share of voice over the ladder\'s keywords, weighted by the site\'s Search Console impressions per query, saying which weight was used, and unweighted (labelled) when there is none';
+  reset(); begin(SN); const check = W3C.mkCheck(SN);
+  const { D, HEAD, report, posOf } = W3C;
+  const q = (query, impressions, period_end, checked_at) => ({ site_id: W3C.SITE, domain: D, period_end, checked_at: checked_at || period_end + 'T09:00:00.000Z', query, clicks: 1, impressions, ctr: 0, position: 9 });
+  const queries = [q(HEAD, 900, '2026-10-12'), q('peppol access point uae', 100, '2026-10-12'), q('peppol invoice format', 0, '2026-10-12'), q('peppol invoice format', 50000, '2026-09-14')];
+  const { R } = await report([], { positions: { [HEAD]: 2 }, queries });
+  const s = R.serp_summary || {};
+  const sHead = posOf(R, HEAD).share_of_voice;
+  const others = ['peppol access point uae', 'peppol invoice format'].map(k => posOf(R, k).share_of_voice);
+  const want = Math.round((sHead * 900 + others[0] * 100) / 1000 * 10) / 10;
+  console.log('   sov ->', JSON.stringify({ head: sHead, others, value: s.share_of_voice, unweighted: s.share_of_voice_unweighted, weight: s.share_of_voice_weight, note: s.share_of_voice_note }));
+  check('B6-14: the ladder\'s share of voice is weighted by the newest period\'s impressions (900 / 100 / 0); the older period\'s 50,000 is ignored',
+    s.share_of_voice_weight === 'impressions' && Math.abs(s.share_of_voice - want) < 0.11 && s.share_of_voice !== s.share_of_voice_unweighted, JSON.stringify(s));
+  check('B6-14: it says which weight was used, over how many keywords, and keeps the unweighted figure beside it',
+    /weighted by your Search Console impressions: 1000 impressions over 2 of the 3 keywords, 28 days to 2026-10-12/.test(s.share_of_voice_note || '') && /1 keyword with no impressions weigh/.test(s.share_of_voice_note || '')
+    && s.share_of_voice_unweighted != null && R.html.indexOf('weighted by your Search Console impressions') > 0, s.share_of_voice_note);
+  const { R: R0 } = await report([], { positions: { [HEAD]: 2 } });
+  const s0 = R0.serp_summary || {};
+  check('B6-14: with no Search Console data stored the figure is the unweighted mean and says so',
+    s0.share_of_voice_weight === 'none' && s0.share_of_voice === s0.share_of_voice_unweighted && /unweighted: no Search Console data is stored/.test(s0.share_of_voice_note || ''), JSON.stringify(s0));
+  check('B6-14: the share of voice lineage row names the weight',
+    (R.lineage || []).some(l => /Share of voice/.test(l.figure) && /impressions/.test(l.note || '')) && (R0.lineage || []).some(l => /Share of voice/.test(l.figure) && /unweighted/.test(l.note || '')),
+    JSON.stringify((R.lineage || []).filter(l => /Share of voice/.test(l.figure))));
+});
 
 H.report();
 })();

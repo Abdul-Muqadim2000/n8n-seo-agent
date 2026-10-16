@@ -10576,6 +10576,88 @@ _pv113 = rd('code/Prerelease_Validate.js'); _pd113 = rd('code/Prerelease_Verdict
 assert 'fail_on' in _pv113 and 'expected' in _pv113 and 'fail_on' in _pd113 and 'expected_unused' in _pd113 and 'below_threshold' in _pd113, 'B5-7: the pre-release check lost fail_on / expected'
 assert os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'docs', 'PRERELEASE_CI.md')), 'B5-7: docs/PRERELEASE_CI.md (the CI recipe) is missing'
 log('A pre-release check a build can use (2026-10-16, benchmark area 5, B5-7): POST /webhook/seo-prerelease takes fail_on (any | low | medium | high | critical: only failures of that severity or above fail, the rest come back as below_threshold) and expected (the changes the release makes on purpose, "/path" or "/path:check" or {path, check, reason}, returned as expected_changes; an entry that matched nothing as expected_unused), nothing accepted is hidden, and docs/PRERELEASE_CI.md holds a GitHub Actions job and a one-line shell recipe')
+# 116. TWO OF YOUR PAGES ON ONE RESULTS PAGE, AND WHO TOOK THE PLACE (2026-10-16, agent W3-C, benchmark area 6 —
+#      docs/system-review-2026-10-14/BENCH_AREA6_rank_tracking.md; register rows B6-6 and B6-10)
+#
+#      * B6-6 — **the stored reading could not have shown cannibalisation.** The row says "two of the site's own URLs in one stored
+#        snapshot is cannibalisation, observed, and we already store the snapshot". The snapshot was built from `RS.landscape().top`,
+#        which keeps ONE row per domain (the best position it holds), so a second page of the site was thrown away before it was
+#        stored (exec 632: one of its stored readings has nine of ten positions — a domain holding two places lost one). The landscape
+#        now lists every result of ours over the whole depth bought, the snapshot keeps the count (`own_n`) and, when there are two or
+#        more, the URLs (`own`, at most three, trimmed to two before the top ten loses its tail). `RS.cannibal` names both pages with
+#        their positions and the one Google prefers today (the higher in this reading), says when the previous reading ranked the other
+#        page, and is silent when only one page of the site is on the results page. A reading stored before the count existed is
+#        "not checked", never "no cannibalisation".
+#      * B6-10 — **the report said the number fell and not who took the place**, although both stored snapshots name everybody above
+#        us. `RS.outranked` names the domains above the target URL now that were not above it in the previous reading (new on page 1,
+#        or below us then), with both positions; it refuses with the reason when either reading cannot be read, when the page was not
+#        ranking before, or when the page was below the depth the previous reading kept.
+#
+# 117. A MOVE IS THE SITE'S OWN ONLY WHEN IT BEATS THE PAGE'S CHURN, AND ONE SHARE OF VOICE WEIGHTED BY WHAT THE SITE IS SHOWN FOR
+#      (2026-10-16, agent W3-C; rows B6-8 and B6-14)
+#
+#      * B6-8 — **a move of five places was "a drop" whatever the results page did** (the v4.2 rule; B6-2 put the measurement beside it
+#        and left the label). And the B6-2 measurement itself counted OUR move as the page's churn: a fall from #3 to #8 inside the top
+#        ten shifts five other results one place each, so "6 of the top 10 places changed" ("high") came out for every such fall — the
+#        page's own fall could never be called its own. `RS.churn(..., { own })` now also re-ranks the other results among themselves in
+#        both readings (`changed_others`, `band_others`, `mean_move_others`), and `RS.moveKind` calls a move the page's own only when the
+#        others held (fewer than half changed place) and the move is more than twice their average move and more than two places;
+#        "moved with the results page" when it is not; "within what two readings of one moment differ by" (R88's noise); and "not
+#        compared", with no verdict, when the earlier reading cannot be compared. The mail's "Drops to look at" and the subject's count
+#        hold the page's own falls only; the callback's `drops` / `gains` keep every five-place move with its clause (the app reads them),
+#        and the classified `moves` / `move_summary` travel beside them. A stated rule, and it says so.
+#      * B6-14 — **share of voice across keywords was an unweighted mean**, so 40% of a search nobody makes counted as much as 4% of the
+#        head term. *Load Query History (Tracker)* reads `seo_query_history` (newest 5,000 rows by period) and `RS.weightedVoice` weights
+#        each keyword's share by the site's own Search Console impressions in the newest stored 28-day period — first-party and free,
+#        the owner's default weight. It says which weight was used, over how many keywords and impressions, keeps the unweighted figure
+#        beside it, and falls back to the unweighted mean, labelled, when no Search Console data is stored or fewer than two keywords had
+#        impressions. Impressions count only searches where Google showed the site; the note says that a keyword it does not appear for
+#        yet weighs nothing.
+# =============================================================================
+def _b116_checks():
+    """Benchmark area 6, rows B6-6 / B6-8 / B6-10 / B6-14, on the generated Rank Tracker."""
+    import json as _j
+    _wf = _j.load(open(os.path.join(HERE0, 'workflows', 'SEO_Agent_Rank_Tracker.json')))[0]
+    _nodes = {n['name']: n for n in _wf['nodes']}
+    _code = {k: n['parameters'].get('jsCode', '') for k, n in _nodes.items() if n['type'] == 'n8n-nodes-base.code'}
+    for _n in ('Parse Positions', 'Tracker Report'):
+        for _a, _m in (('const own = organic.filter(o => isOurs(o.domain, our))', 'B6-6: the landscape keeps one URL per site, so a second page of ours is never stored'),
+                       ('own_n: land.own.length', 'B6-6: the stored reading does not say how many of our pages it held'),
+                       ('const cannibal = (cur, o) =>', 'B6-6: the cannibalisation reading is missing'),
+                       ('const outranked = (prev, cur, o) =>', 'B6-10: the "who took the place" reading is missing'),
+                       ('band_others:', 'B6-8: the page\'s churn still counts our own move'),
+                       ('const moveKind = (delta, ch) =>', 'B6-8: a move is still called a drop whatever the page did'),
+                       ('const weightedVoice = (items, rows, o) =>', 'B6-14: the share of voice across keywords is still unweighted')):
+            assert _a in _code[_n], _n + ': ' + _m
+    _r = _code['Tracker Report']
+    for _a, _m in (("RS.churn(r.prev_row ? r.prev_row.snapshot_json : null, r.result.snapshot_json, { own: ladDomain })", 'B6-8: the ladder report measures the page with our own move in it'),
+                   ("RS.churn(prev ? prev.snapshot_json : null, sd.row.snapshot_json, { own: dom })", 'B6-8: the tracked-keyword report measures the page with our own move in it'),
+                   ("const ownDrops = movesOf('own', 'drop')", 'B6-8: the mail\'s drops are not the page\'s own'),
+                   ("(ownDrops.length ? ' · ' + ownDrops.length + ' drop(s)' : '')", 'B6-8: the subject still counts every five-place move as a drop'),
+                   ("could not be compared with the results page around them", 'B6-8: a move with no comparable reading is not listed with no verdict'),
+                   ("RS.cannibal(r.result.snapshot_json", 'B6-6: the ladder report does not read cannibalisation'),
+                   ("RS.outranked(r.prev_row ? r.prev_row.snapshot_json : null, r.result.snapshot_json", 'B6-10: the ladder report does not name who took the place'),
+                   ("$('Load Query History (Tracker)')", 'B6-14: the report never reads the Search Console impressions'),
+                   ("share_of_voice: voiceW.value", 'B6-14: the ladder summary share of voice is not the weighted figure'),
+                   ("share_of_voice: voiceWW.value", 'B6-14: the tracked-keyword share of voice is not the weighted figure'),
+                   ("share_of_voice_weight: voiceW.weight", 'B6-14: the summary does not say which weight was used')):
+        assert _a in _r, _m
+    _ld = _nodes.get('Load Query History (Tracker)')
+    assert _ld and _ld['parameters'].get('dataTableId', {}).get('value') == QUERY_TABLE and _ld['parameters'].get('limit') == 5000 \
+        and _ld['parameters'].get('orderByColumn') == 'period_end', 'B6-14: the Rank Tracker does not load seo_query_history, newest first and bounded'
+    _down = {}
+    for _s, _o in (_wf.get('connections') or {}).items():
+        for _l in (_o.get('main') or []):
+            for _t in (_l or []):
+                _down.setdefault(_s, []).append(_t['node'])
+    for _a, _b in (('Load Sites (Tracker)', 'Ensure Query Table (Tracker)'), ('Ensure Query Table (Tracker)', 'Load Query History (Tracker)'),
+                   ('Load Query History (Tracker)', 'Ensure Monitors Table (Tracker)')):
+        assert _b in (_down.get(_a) or []), 'B6-14: %s does not feed %s in the Rank Tracker' % (_a, _b)
+    assert _nodes['Ensure Monitors Table (Tracker)'].get('executeOnce') is True, 'B6-14: the node after 5,000 query rows would run once per row'
+    _post = _nodes['POST Progress']['parameters']['jsonBody']
+    for _f in ('moves: $json.moves', 'move_summary: $json.move_summary', 'own_drops: $json.own_drops'):
+        assert _f in _post, 'B6-8: the callback does not carry ' + _f
+    log('Rank Tracker (B6-6 / B6-8 / B6-10 / B6-14): two of the site\'s own pages on one results page are named with the one Google prefers today, a move is the page\'s own only when it beats the other results\' churn (our own move left out of the yardstick), the domains that moved above the target URL are named, and the share of voice across keywords is weighted by the site\'s Search Console impressions or labelled unweighted')
 
 
 
@@ -10755,5 +10837,7 @@ _b95_checks()
 _b104_checks()
 # sections 106-107 (F7 / F10 / R92): the gates and the counts, on the generated monitor workflows
 _b107_checks(_b106_checks())
+# sections 116-117 (B6-6 / B6-8 / B6-10 / B6-14): benchmark area 6, on the generated Rank Tracker
+_b116_checks()
 _b69_checks()
 
