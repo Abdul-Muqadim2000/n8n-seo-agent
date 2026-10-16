@@ -10,7 +10,7 @@ import { ButtonLink } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
 import { ExternalLink } from '@/components/ui/misc';
 import { CountUp, HeroStat, Stagger } from '@/components/insight';
-import { Block, Empty, num, obj, objs, shortUrl, str } from './kit';
+import { Block, Empty, LedgerCard, num, obj, objs, shortUrl, str } from './kit';
 import { ReportHero } from './visuals';
 
 const LISTING: Record<string, { label: string; tone: Tone }> = {
@@ -190,6 +190,7 @@ export function LinkBuilderReport({ report }: { report: ReportDetail }) {
           </ul>
         </Block>
       )}
+      <LedgerCard ledger={p.run_ledger} extraCost={num(p.cost_usd)} />
     </Stagger>
   );
 }
