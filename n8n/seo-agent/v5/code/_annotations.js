@@ -14,6 +14,7 @@ const AN = (() => {
     google_update: { label: 'Google update', tone: 'warning' },
     data_break: { label: 'Data break', tone: 'warning' },
     link: { label: 'Link won', tone: 'good' },
+    note: { label: 'Your note', tone: 'neutral' },
   };
   const S = (v) => String(v == null ? '' : v);
   const day = (v) => S(v).slice(0, 10);
@@ -71,6 +72,12 @@ const AN = (() => {
       out.push(mark('fix', d, fixed != null && fixed > 0 ? 'Audit fixes: ' + fixed + ' finding' + (fixed === 1 ? '' : 's') + ' gone' + (kind === 'site_audit' ? '' : ' (' + lower + ')') : name,
         { detail, source: 'seo_audits', report_type: kind }));
     }
+    // B7-7 (W3-D): the owner's own dated notes (monthly check-in notes) are marks too; the text is theirs, shown as written
+    for (const nt of (x.notes || [])) {
+      const d = day(nt.date);
+      if (!d || !inRange(from, to, d, d) || !S(nt.text).trim()) continue;
+      out.push(mark('note', d, 'Your note', { detail: S(nt.text).trim().slice(0, 300), source: S(nt.source) || 'seo_console_checkins' }));
+    }
     for (const l of (x.links || [])) {
       const d = day(l.t0 || l.first_seen || l.date);
       if (!d || !inRange(from, to, d, d)) continue;
@@ -99,5 +106,7 @@ const AN = (() => {
       + rows.map(m => '<tr><td ' + td + '>' + esc1(m.date + (m.date_end && m.date_end !== m.date ? ' to ' + m.date_end : '')) + '</td><td ' + td + '>'
         + esc1(m.label) + '</td><td ' + td + '>' + esc1(m.detail || m.kind_label) + '</td></tr>').join('') + '</table>';
   };
-  return { marks, html, inRange, breakBetween, EVENTS, KINDS, UPDATES: EVENTS.google_updates || [], BREAKS: EVENTS.data_breaks || [] };
+  // B7-7: said once in the report. Search Console's own annotations live only in Search Console (the API has no annotations resource).
+  const OWN_NOTES_LINE = "Search Console's own chart annotations stay in Search Console: Google offers no API that returns them. The marks above are your published pages, your audits, your dated notes and the Google updates we track.";
+  return { OWN_NOTES_LINE, marks, html, inRange, breakBetween, EVENTS, KINDS, UPDATES: EVENTS.google_updates || [], BREAKS: EVENTS.data_breaks || [] };
 })();

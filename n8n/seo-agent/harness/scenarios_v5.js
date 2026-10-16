@@ -17505,5 +17505,111 @@ await guard('S154 B3-8 a refresh re-reads the live page\'s sources and re-checks
 });
 
 
+
+// ===================================================================================
+// S159-S162 (2026-10-17, W3-D, benchmark area 7): B7-4 Discover / Google News, B7-5 content groups, B7-6 brand series, B7-7 notes as marks,
+// B7-8 the latest days from preliminary data, B3-12 the generative-AI report (no API), R92 part 2 (a page on the wrong host prints its URL).
+// ===================================================================================
+const W3D = { D: 'northwind-erp.com', W: 'https://www.northwind-erp.com' };
+W3D.SITE = 'site_northwind-erp-com'; W3D.EMPTY = [{ json: {} }];
+W3D.row = (keys, c, im, p) => ({ keys, clicks: c, impressions: im, ctr: im ? +(c / im).toFixed(4) : 0, position: p });
+W3D.ago = (d) => new Date(Date.now() - d * 864e5).toISOString();
+W3D.plan = async (extra) => {
+  const site = { json: { id: 1, site_id: W3D.SITE, domain: W3D.D, gsc_property: 'sc-domain:' + W3D.D, ga4_property_id: '123', country: 'United Arab Emirates', location_code: 2784, language_code: 'en',
+    email: '', callback_url: '', keywords: 'erp software uae', status: 'active', created_at: W3D.ago(400), last_run_at: W3D.ago(7), ...(extra.site || {}) } };
+  mock('Load Sites', [site]); mock('Load Ladders', W3D.EMPTY); mock('Load Rank History', W3D.EMPTY); mock('Load Site Metrics', W3D.EMPTY);
+  mock('Load Query History', W3D.EMPTY); mock('Load Content Log', W3D.EMPTY); mock('Load Console Alerts', W3D.EMPTY);
+  mock('Load Check-ins', extra.checkins || W3D.EMPTY); mock('Load Profiles (Site)', W3D.EMPTY); mock('Load Monitors (Site)', W3D.EMPTY);
+  return (await run('Site Plan', W3D.EMPTY)).map(x => x.json).find(x => x.site_id === W3D.SITE);
+};
+W3D.answer = (o) => (q) => {
+  const k = q.kind, R = o.R;
+  if (k === 'by_date') { const out = []; for (let i = 0; i < 56; i++) { const d = new Date(Date.parse(q.body.startDate + 'T00:00:00Z') + i * 864e5).toISOString().slice(0, 10); out.push(W3D.row([d], 5, 90, 7.5)); } return { rows: out }; }
+  if (k === 'pages_cur') return { rows: [W3D.row([W3D.W + '/blog/a/'], 100, 900, 8), W3D.row([W3D.W + '/blog/b/'], 80, 700, 9), W3D.row([W3D.W + '/services/erp/'], 60, 600, 5), W3D.row(['https://northwind-erp.com/pricing/'], 20, 200, 6)] };
+  if (k === 'pages_prev') return { rows: [W3D.row([W3D.W + '/blog/a/'], 200, 900, 8), W3D.row([W3D.W + '/blog/b/'], 160, 700, 9), W3D.row([W3D.W + '/services/erp/'], 60, 600, 5), W3D.row(['https://northwind-erp.com/pricing/'], 20, 200, 6)] };
+  if (k === 'discover_daily') { if (o.discoverErr) return { error: { message: 'boom' } }; if (!o.discover) return {}; const out = []; for (let i = 0; i < 56; i++) { const d = new Date(Date.parse(q.body.startDate + 'T00:00:00Z') + i * 864e5).toISOString().slice(0, 10); out.push(W3D.row([d], i < 28 ? 4 : 9, 300, 1)); } return { rows: out }; }
+  if (k === 'news_daily') return {};
+  if (k === 'recent') return { rows: [W3D.row([new Date(Date.parse(R.current.end + 'T00:00:00Z') + 864e5).toISOString().slice(0, 10)], 7, 100, 8), W3D.row([new Date(Date.parse(R.current.end + 'T00:00:00Z') + 2 * 864e5).toISOString().slice(0, 10)], 3, 40, 8)] };
+  return { rows: [] };
+};
+W3D.parse = async (plan, o) => {
+  const RP = { ...plan, gsc_property: 'sc-domain:' + W3D.D, gsc_connected: true, gsc_permission: 'siteFullUser', gsc_error: null };
+  mock('Resolve Properties', [{ json: RP }]);
+  const REQ = (await run('GSC Requests', [{ json: RP }])).map(x => x.json);
+  mock('GSC Requests', REQ.map(q => ({ json: q }))); mock('GSC Query', REQ.map(q => ({ json: W3D.answer({ ...o, R: RP.ranges })(q) })));
+  mock('GSC More Requests', []); mock('GSC Query (More)', []); mock('Site Model (Site)', W3D.EMPTY);
+  return { RP, REQ, pg: (await run('Parse GSC', store['GSC Query']))[0].json };
+};
+W3D.metrics = async (RP, pg, ga4) => { reset(); mock('Resolve Properties', [{ json: RP }]); mock('Parse GSC', [{ json: pg }]); if (ga4) mock('Parse GA4', [{ json: ga4 }]);
+  return (await run('Site Metrics', store['Resolve Properties']))[0].json; };
+W3D.report = async (M) => (await run('Site Report', await run('Brief Input', [{ json: M }])))[0].json;
+W3D.GA4 = { site_idx: 0, site_id: W3D.SITE, ga4_property_id: '123', ga4_detected: false, ga4_property_name: '', errors: [], organic: { cur: { sessions: 500, engaged: 300, key_events: 5, users: 400 }, prev: { sessions: 480, engaged: 290, key_events: 5, users: 390 } },
+  total: { cur: { sessions: 1500, engaged: 800, key_events: 9, users: 1000 }, prev: { sessions: 1400, engaged: 780, key_events: 8, users: 950 } }, direct: { cur: { sessions: 300, engaged: 0, key_events: 0, users: 0 }, prev: { sessions: 200, engaged: 0, key_events: 0, users: 0 } },
+  ai_referrals: { cur: { sessions: 40, engaged: 0, key_events: 0, users: 0 }, prev: { sessions: 10, engaged: 0, key_events: 0, users: 0 } }, organic_share: 33, channels: [], landing: [], daily: [] };
+
+await guard('S159 B7-4 B7-8 B3-12 Discover, News, the latest days and the generative-AI report', async () => {
+  reset(); const SN = 'S159 B7-4 B7-8 B3-12'; begin(SN); const check = a11check(SN);
+  const plan = await W3D.plan({});
+  const { RP, REQ, pg } = await W3D.parse(plan, { discover: true });
+  const kinds = REQ.map(q => q.kind);
+  check('B7-4: Discover and Google News are asked for as their own search types', (REQ.find(q => q.kind === 'discover_daily') || { body: {} }).body.type === 'discover' && (REQ.find(q => q.kind === 'news_daily') || { body: {} }).body.type === 'googleNews', JSON.stringify(kinds));
+  check('B7-8: the latest days are asked for as preliminary data, starting the day after the final window', (REQ.find(q => q.kind === 'recent') || { body: {} }).body.dataState === 'all' && REQ.find(q => q.kind === 'recent').body.startDate > RP.ranges.current.end, JSON.stringify((REQ.find(q => q.kind === 'recent') || {}).body));
+  check('B7-4: a property with Discover rows gets measured Discover numbers, tested on the usual bar', pg.search_types.discover.has_data === true && pg.search_types.discover.cur.clicks === 252 && pg.search_types.discover.prev.clicks === 112, JSON.stringify(pg.search_types.discover));
+  check('B7-4: a property with no Google News rows is told "no Google News data" (read, not an empty table)', pg.search_types.google_news.read === true && pg.search_types.google_news.has_data === false && /no Google News data/.test(pg.search_types.google_news.reason), JSON.stringify(pg.search_types.google_news));
+  check('B7-8: the preliminary days are summed apart and labelled in Google\'s words, and the tested totals did not move', pg.recent.read && pg.recent.clicks === 10 && pg.recent.days === 2 && /still being collected and might change/.test(pg.recent.label) && pg.totals.cur.clicks === 28 * 5, JSON.stringify({ r: pg.recent, t: pg.totals.cur }));
+  const e = await W3D.parse(plan, { discoverErr: true });
+  check('B7-4: a request Google did not answer is "not read" with the reason, never "no Discover data"', e.pg.search_types.discover.read === false && /did not answer/.test(e.pg.search_types.discover.reason), JSON.stringify(e.pg.search_types.discover));
+  const M = await W3D.metrics(RP, pg, W3D.GA4); const REP = await W3D.report(M);
+  check('B7-4: the report prints the Discover numbers and one sentence for Google News', /Discover \(Google, separate from web search\)/.test(REP.html) && /This property has no Google News data/.test(REP.html), (REP.html.match(/Discover[\s\S]{0,200}/) || [''])[0]);
+  check('B7-8: the report has a "Since the report window" line, labelled preliminary', /Since the report window/.test(REP.html) && /still being collected and might change/.test(REP.html));
+  check('B3-12: the report says once that the generative-AI performance report has no API', (REP.html.match(/generative-AI performance report/g) || []).length === 1 && /offers no search type or dimension/.test(REP.html));
+});
+
+await guard('S160 B7-5 content groups', async () => {
+  reset(); const SN = 'S160 B7-5'; begin(SN); const check = a11check(SN);
+  const none = await W3D.plan({}); const nopg = (await W3D.parse(none, {})).pg;
+  check('B7-5: with no groups set it says so and groups nothing', nopg.content_groups.configured === false && /No content groups are set/.test(nopg.content_groups.note), JSON.stringify(nopg.content_groups));
+  const groups = [{ name: 'Blog', pattern: '^/blog/' }, { name: 'Services', pattern: '/services/' }, { name: 'Bad', pattern: '([a-z' }, { name: 'Nasty', pattern: '(a+)+$' }];
+  const plan = await W3D.plan({ site: { content_groups_json: JSON.stringify(groups) } });
+  check('B7-5: Site Plan carries the parsed groups and the stored JSON (so the site row keeps it)', plan.content_groups.length === 4 && plan.content_groups_json.indexOf('Blog') > 0, JSON.stringify(plan.content_groups));
+  const { RP, pg } = await W3D.parse(plan, {});
+  const g = Object.fromEntries(pg.content_groups.groups.map(x => [x.name, x]));
+  check('B7-5: the blog group sums its pages over both periods and is judged "real" on the usual bar (360 → 180 clicks)', g.Blog.valid && g.Blog.pages === 2 && g.Blog.clicks === 180 && g.Blog.prev_clicks === 360 && g.Blog.change.real === true && g.Blog.change.direction === 'down', JSON.stringify(g.Blog));
+  check('B7-5: a steady group (60 → 60) is not a finding', g.Services.change.real === false, JSON.stringify(g.Services.change));
+  check('B7-5: an invalid or catastrophic pattern is refused with its reason, not run', g.Bad.valid === false && /not a valid/.test(g.Bad.reason) && g.Nasty.valid === false && /nested repetition/.test(g.Nasty.reason), JSON.stringify([g.Bad, g.Nasty]));
+  check('B7-5: the pages in no group are one line beside them (host-variant pricing page)', pg.content_groups.ungrouped.pages === 1 && pg.content_groups.ungrouped.clicks === 20, JSON.stringify(pg.content_groups.ungrouped));
+  const REP = await W3D.report(await W3D.metrics(RP, pg, W3D.GA4));
+  check('B7-5: the report has the group table with the verdict and the overlap note', /How each part of the site is doing/.test(REP.html) && /Fell: /.test(REP.html) && /counts in each of them/.test(REP.html) && /Not used: /.test(REP.html));
+  mock('Admin Run', [{ json: { action: 'content_groups', domain: W3D.D, content_groups: [{ name: 'Blog', pattern: '^/blog/' }] } }]);
+  const ok = (await run('Admin Action', store['Admin Run']))[0].json;
+  check('B7-5: Site Admin stores the groups as JSON for the site', ok.action === 'content_groups' && JSON.parse(ok.content_groups_json)[0].name === 'Blog', JSON.stringify(ok).slice(0, 300));
+});
+
+await guard('S161 B7-6 B7-7 brand series and notes as marks', async () => {
+  reset(); const SN = 'S161 B7-6 B7-7'; begin(SN); const check = a11check(SN);
+  const day = W3D.ago(10).slice(0, 10);
+  const plan = await W3D.plan({ checkins: [{ json: { site_id: W3D.SITE, month: day.slice(0, 7), notes: 'Moved the pricing page to /plans', submitted_at: day + 'T09:00:00Z' } }, { json: { site_id: W3D.SITE, month: '2020-01', notes: 'ancient', submitted_at: '2020-01-05T00:00:00Z' } }] });
+  check('B7-7: Site Plan turns check-in notes into dated notes', plan.owner_notes.some(n => n.date === day && /pricing page/.test(n.text)), JSON.stringify(plan.owner_notes));
+  const { RP, pg } = await W3D.parse(plan, {});
+  const M = await W3D.metrics(RP, pg, W3D.GA4);
+  check('B7-7: the note inside the window is a mark; the 2020 note is not', M.annotations.some(a => a.kind === 'note' && a.date === day && /pricing page/.test(a.detail)) && !M.annotations.some(a => /ancient/.test(a.detail)), JSON.stringify(M.annotations.filter(a => a.kind === 'note')));
+  const L = Object.fromEntries(M.brand_series.lines.map(l => [l.key, l]));
+  check('B7-6: GA4 direct and AI referral lines carry their own source and basis', L.ga4_direct.read && L.ga4_direct.cur === 300 && L.ga4_direct.prev === 200 && /Direct channel/.test(L.ga4_direct.basis) && L.ga4_ai.cur === 40 && L.ga4_ai.source === 'Google Analytics 4', JSON.stringify([L.ga4_direct, L.ga4_ai]));
+  check('B7-6: with a brand name known the Search Console line is read, else it says why not', L.gsc_brand.read === true || /brand name/.test(L.gsc_brand.reason), JSON.stringify(L.gsc_brand));
+  const M2 = await W3D.metrics(RP, pg, null); const L2 = Object.fromEntries(M2.brand_series.lines.map(l => [l.key, l]));
+  check('B7-6: without GA4 the two GA4 lines are "not read" with the reason', !L2.ga4_direct.read && !L2.ga4_ai.read && /not connected/.test(L2.ga4_direct.reason));
+  const REP = await W3D.report(M);
+  check('B7-6: the report prints the three lines side by side and says they are never added', /Brand demand: three measurements side by side/.test(REP.html) && /never added together/.test(REP.html) && /AI-assistant referral sessions/.test(REP.html));
+  check('B7-7: the report says once that Search Console\'s own annotations stay in Search Console', (REP.html.match(/own chart annotations stay in Search Console/g) || []).length === 1);
+});
+
+await guard('S162 R92 a page on a non-canonical host prints its URL', async () => {
+  reset(); const SN = 'S162 R92'; begin(SN); const check = a11check(SN);
+  const plan = await W3D.plan({}); const { RP, pg } = await W3D.parse(plan, {});
+  const M = await W3D.metrics(RP, { ...pg, pages: pg.pages.map(p => /pricing/.test(p.page) ? { ...p, other_host: true } : p) }, W3D.GA4);
+  const REP = await W3D.report(M);
+  check('R92: a row flagged other_host prints https://… in full, an ordinary row only its path', REP.html.indexOf('>https://northwind-erp.com/pricing/<') > 0 && REP.html.indexOf('>/blog/a/<') > 0, (REP.html.match(/<a href=[^>]*>[^<]*<\/a>/g) || []).join(' '));
+});
+
 H.report();
 })();
