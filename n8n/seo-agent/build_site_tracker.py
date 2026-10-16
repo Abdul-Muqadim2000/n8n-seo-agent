@@ -343,6 +343,11 @@ for n in N:
     if n['type'] == '@n8n/n8n-nodes-langchain.lmChatAnthropic': assert n.get('credentials'), 'model without credential: ' + n['name']
 _code = {n['name']: n['parameters'].get('jsCode', '') for n in N if n['type'] == 'n8n-nodes-base.code'}
 for _n in ('Match Slugs (Detect)', 'Detect Published'): assert 'const overlapTokens' in _code[_n], _n + ': word rules not inlined'
+# R34 (2026-10-16, build_v4.py section 88): the same plain GET of the site's own pages reads the titles the inventory lacks (bounded, free),
+# and the inventory names the pages still judged by their address only. *Fetch Pages (Detect)* is the one HTTP node for both reads.
+assert "grab('Load Pages (Site)')" in _code['Match Slugs (Detect)'] and 'title_fill_per_site' in _code['Match Slugs (Detect)'] and 'title_fill' in _code['Match Slugs (Detect)'], 'R34: Match Slugs (Detect) does not read the missing titles'
+assert 'SM.titleGap(merged)' in _code['Page Inventory (Site)'] and 'title_unknown' in _code['Page Inventory (Site)'], 'R34: the page inventory does not name the pages without a title'
+assert any(n['name'] == 'Fetch Pages (Detect)' and n.get('retryOnFail') for n in N), 'R34: the title read must keep the retry rule (retry_lint)'
 assert 'function publishedRows(' in _code['Detect Published'], 'Detect Published: published-page rows not inlined'
 assert not any(('/*__OVERLAP__*/' in c_) or ('/*__PUBLISH_ROWS__*/' in c_) for c_ in _code.values()), 'placeholder left in the Site Tracker'
 # FIX_PLAN 2026-10-12: G9 (every Search Console row, the anonymised share, brand vs non-brand, the audit's scraper rule), G28 (a traffic alert

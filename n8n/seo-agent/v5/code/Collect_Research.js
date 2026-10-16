@@ -29,9 +29,11 @@ const classify = (kw, intent) => {
 };
 // G8: what Search Console measured for this site in the newest 28-day period, by exact query
 const SC = (base.search_console && typeof base.search_console === 'object') ? base.search_console : {};
-const gscBy = new Map(((SC.queries || [])).map(q => [String(q.keyword || '').toLowerCase(), q]));
+// R36 (2026-10-16): the seeds are only the searches worth seeding; `measured` is every search Search Console measured with a page of
+// the site, so a keyword the providers also returned still carries the page it already ranks with (and is never offered a second one)
+const gscBy = new Map([...(SC.measured || []).map(q => ({ ...q, kinds: [], answered_by: q.answered_url ? { url: q.answered_url } : null })), ...(SC.queries || [])].map(q => [String(q.keyword || '').toLowerCase(), q]));
 const gscFacts = (kw) => { const q = gscBy.get(kw); return q ? { impressions: q.impressions, clicks: q.clicks, position: q.position, ctr: q.ctr,
-  page: q.page || '', answered_by: q.answered_by || null, kinds: q.kinds || [], period_end: q.period_end || SC.period_end || '', period_days: q.period_days || SC.period_days || 28 } : null; };
+  page: q.page || '', gsc_page: q.gsc_page || q.page || '', answered_by: q.answered_by || null, kinds: q.kinds || [], period_end: q.period_end || SC.period_end || '', period_days: q.period_days || SC.period_days || 28 } : null; };
 const pool = new Map();
 const addItem = (raw, source, extra = {}) => {
   const kd = raw.keyword_data || raw;
@@ -90,7 +92,9 @@ const score = (e) => {
   if (e.avg_rd != null && e.avg_rd > 300) win *= 0.5; else if (e.avg_rd != null && e.avg_rd > 100) win *= 0.7;
   const value = 1 + Math.log10(1 + (e.cpc || 0));
   const iw = W[e.intent] ?? 1;
-  const tr = 1 + Math.min(0.3, Math.max(-0.3, (e.trend_yearly || 0) / 100));
+  // R51 (2026-10-16): a keyword losing 73% of its searches a year lost only 30% of its score (the floor was -0.3), and a CPC outweighed
+  // it into "where to start". A decline now counts as far as -70%; a rise is still capped at +30% (one good year is not a trend).
+  const tr = 1 + Math.min(0.3, Math.max(-0.7, (e.trend_yearly || 0) / 100));
   return { traffic_potential, traffic_basis: cal.traffic_basis, traffic_note: cal.traffic_note, modelled_traffic_potential: cal.modelled_traffic_potential,
     winnability: +win.toFixed(2), value_factor: +value.toFixed(2), pre_score: +(traffic_potential * win * value * iw * tr).toFixed(1) };
 };

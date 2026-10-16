@@ -13,7 +13,9 @@ const siteUrlOf = (dom, path) => SM.siteUrl(SITE_MODEL && SITE_MODEL.domain && S
 // second one. A page named by the request, or already found, still wins.
 const matched = (() => { if (d.existing_page && d.existing_page.url) return null;
   const m = SITE_MODEL ? SM.matchPage(SITE_MODEL, d.keyword) : null;
-  return m ? { url: m.url, title: m.title || '', match: m.score == null ? 1 : m.score, matched_by: m.matched_by, source: m.matched_by === 'query' ? 'search console' : 'page inventory' } : null; })();
+  // R56 (2026-10-16): a listing page's impressions name the dedicated page behind it; the listing travels as context
+  return m ? { url: SM.canonUrl(SITE_MODEL, m.url), title: m.title || '', match: m.score == null ? 1 : m.score, matched_by: m.matched_by, source: m.matched_by === 'query' ? 'search console' : 'page inventory',
+    ...(m.listing ? { listing: m.listing } : {}) } : null; })();
 const urls = []; const seen = new Set();
 const add = (u, kind) => { u = String(u || '').trim(); if (!u || seen.has(u.replace(/\/$/, ''))) return; seen.add(u.replace(/\/$/, '')); urls.push({ url: u, kind }); };
 if (d.existing_page && d.existing_page.url) add(d.existing_page.url, 'existing');

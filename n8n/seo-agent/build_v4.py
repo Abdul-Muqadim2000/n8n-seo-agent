@@ -6732,9 +6732,9 @@ for _a70 in ('out.not_compared.push(', 'retried: retryItems.some(', "out.availab
     assert _a70 in code('Ladder Clusters'), 'B2-4 / rule 1: Ladder Clusters is missing ' + _a70
 assert 'serp_not_compared' in code('Ladder Plan') and 'notCompared' in code('Ladder Plan'), 'B2-4 / rule 1: the plan does not carry what could not be compared'
 # the grouping itself, and the rung it decides
-for _a70 in ("k.serp_group ? 'serp|' + k.serp_group", 'const rungMap = new Map(', 'clusterRungs.push({'):
+for _a70 in ("serp_head: k.serp_group && (k.serp_cluster_size || 0) > 1 ? k.serp_group : ''", 'const rungMap = new Map(', 'clusterRungs.push({'):
     assert _a70 in code('Ladder Plan'), 'B2-4: Ladder Plan is missing ' + _a70
-assert "if (String(key).indexOf('serp|') === 0) { groups.push(sorted); continue; }" in code('Ladder Plan'), \
+assert "if (byOf.get(key) !== 'topic label') { groups.push(sorted); continue; }" in code('Ladder Plan'), \
     'B2-4: a group built on shared results pages must not be split into two pages by the topic-label cap'
 # B2-5 in the plan: measured count, stated adjustment, both printed
 for _a70 in ('const serp_diversity = {', 'DIVERSITY_PENALTY', 'score_before: scoreBefore', 'score: dataRefused ? null : scoreAfter'):
@@ -9147,6 +9147,49 @@ sticky("""### One AI Overview figure in one place, and a state that advances onl
 **And the class:** `state_lint.py`'s "a work-in-progress state needs a way back" was asked only of the tables someone had listed — which is how `seo_ai_targets` sat outside it for three releases. The list is now **derived from the generated workflows**, and a table whose `writing` state is read back and acted on fails the build until its way back is declared *and* built. It found a third table on its first run, `seo_case_studies`, and records the honest answer: nothing tests that row's state, so it is not this defect.""",
        -2600, -3800, 1180, 420, 3)
 log('One AI Overview figure in one place, and a state that advances only on evidence (2026-10-15, FIX_PLAN §3.16 rows B6-9 and B9-6). B6-9: v5/code/Ladder_Pool.js still multiplied the click-through rate by 0.65 when a results page carried an AI Overview - Ahrefs\' APRIL 2025 figure - after B1-3 had replaced it in _kw_inputs.js with the December 2025 per-position study (300,000 keywords, published 2026-02-04: -58.0% at position 1, -50.8% at 2, -46.4% at 3) and B6-1 in _rank_serp.js. Which kit belongs where is B6-1\'s own reasoning: a flat factor all but cancels out of a SHARE, so the share of voice needed the per-position table, while the ladder\'s traffic_potential is an ABSOLUTE top-three estimate and only the keywords whose results page has an AI Overview carried the factor - so the stale number inflated those estimates by 1.35x and moved them up the pre_score order that decides which rungs are planned. Ladder Pool now makes the same KWI.calibrate call the discovery twin Collect_Research.js makes, and the estimate carries traffic_basis / traffic_note / click_loss instead of arriving bare. The class is closed by a build-time scan that refuses the literal 0.65 within 200 characters of an AI Overview in every v5/code kit and every generated Code node, with comments stripped first so the two comments that record WHY the figure was retired survive. B9-6: the write half of "writing was a promise nobody kept" - the Content Cadence marked an AI target writing and stamped written_at when a page run STARTED, whatever the spawn did, and nothing in the system ever set written, so Growth Metrics counted written: 0 every week of its life and a refused or failed run left the question claiming work in progress for ever (R1\'s class in the one table R1 did not cover). AI Target Marks now writes the row back to queued with the error when the content run could not be started and says in the row\'s own reason that nothing exists yet; the new AI Target Settle is the only exit from writing and advances a row only against the seo_content_log row for that same run, which is R1\'s rule exactly (a page counts as written only on a written content-log row); it deliberately does not time a row out, because the 14-day requeue and its alert belong to the read half in AI Growth. The class is closed by deriving state_lint.py\'s work-in-progress registry from the generated workflows instead of hand-writing it from R1\'s one instance: every table a run moves to writing whose state is read back and acted on must declare its way back, and check B then has to find the node that writes it. On its first run the derived registry found a third table, seo_case_studies, and the honest answer is recorded rather than assumed - nothing tests that row\'s state (Brief Context hands a later page url: \'\' unless the status is published, and the Link Builder takes a case study only when it has a page_url), so it is not this defect')
+
+
+# 88. KNOW THE CUSTOMER'S OWN SITE BEFORE ADVISING (2026-10-16, the third re-rating's family F1 — docs/system-review-2026-10-15/
+#     defects/A_keywords_content.md R34 R35 R36 R40 R41 R49 R50 R51 R55 R56 R58). The code lives in v5/code; this section only proves
+#     that every path the dossiers name runs it, because three fixes of 2026-10-15 failed live by reaching one path of several.
+#     R34: SM.titleGap / the coverage count over the whole inventory (Ladder Plan); the Site Tracker's title read is asserted in
+#          build_site_tracker.py. R35/R55/R56: SM.matchPage (synonyms, stems, emirates, listing pages, a preferred page) and
+#          SM.canonUrl in every caller. R36: Search Console's own page in Rank Keywords. R40: KWI.pageGroup in the ladder AND discovery.
+#     R41: the head term's traffic through the click-loss model. R49: reachPlan(…, reachMeasured(…)) in every caller of v5/code.
+#     R50: the Keyword Check names the ladder. R51: the falling pick. R58: no covered topic in "Now".
+_F1 = {
+    'Ladder Plan': ('const KWI = (() =>', 'KWI.pageGroup({', 'reachMeasured(', 'folded.push({', 'const headTraffic', 'SM.titleGap(pageModel)', 'not_planned: notPlanned[r]'),
+    'Rank Keywords': ('KWI.pageGroup({', "c.tier = 'Covered'", 'FALLING_PCT', 'coveredBy(k.keyword, k.gsc)', 'reachMeasured('),
+    'Search Console Seeds (Discovery)': ('SM.canonUrl(model, u)', 'pageTitleShare', 'SM.matchPage(model, kw, rowPage)'),
+    'Client Page Requests': ('SM.matchPage(SITE_MODEL, d.keyword)', 'SM.canonUrl(SITE_MODEL, m.url)'),
+    'Collect Research': ('SC.measured', 'Math.max(-0.7,'),
+    'Ladder Pool': ('Math.max(-0.7,',),
+    'Build Keyword Strategy': ('reachMeasured(RR, p)', 'pipeline.trend_note', 'c.tier_note'),
+}
+for _n88, _need88 in _F1.items():
+    for _s88 in _need88:
+        assert _s88 in code(_n88), 'F1 (R34-R58): %s is missing %s' % (_n88, _s88)
+for _n88 in ('Ladder Plan', 'Rank Keywords', 'Search Console Seeds (Discovery)', 'Client Page Requests', 'Collect Research'):
+    for _s88 in ('const titleShare = ', 'const canonUrl = ', 'const isListing = '):
+        assert _s88 not in code(_n88) or 'const SM = (() => {' in code(_n88), _n88 + ': the site-model kit is half inlined'
+_ASSESS88 = _rd0('code/Assess_Response.js')
+assert 'reachMeasured(topic.used' in _ASSESS88 and 'existing,   // R50' in _ASSESS88, 'R49 / R50: the Keyword Check (build_api.py) lost its fix'
+# R49, every caller in v5/code: a reachPlan(...) call with two arguments would show a chance band on an unmeasured reach again
+import glob as _glob88
+_two88 = []
+for _f88 in sorted(_glob88.glob(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'v5', 'code', '*.js'))):
+    if os.path.basename(_f88) == '_reach.js':
+        continue
+    for _m88 in re.finditer(r'reachPlan\(([^()]*(?:\([^()]*\)[^()]*)*)\)', open(_f88, encoding='utf-8').read()):
+        if re.sub(r'\([^()]*\)', '', _m88.group(1)).count(',') < 2:   # top-level arguments only
+            _two88.append(os.path.basename(_f88))
+assert not _two88, 'R49: reachPlan without the measured flag in ' + ', '.join(sorted(set(_two88)))
+log('Know the customer\'s own site before advising (2026-10-16, family F1: R34 R35 R36 R40 R41 R49 R50 R51 R55 R56 R58): the Site Tracker reads the '
+    'titles its inventory lacks (40 a site a week, free) and names the rest "title unknown"; SM.matchPage reads d365 = dynamics 365, emirate within '
+    'the UAE and light stems, prefers the page Search Console credits and the dedicated page over a listing; discovery calls a ranking page '
+    'off-target only on its own title and prints one host; a search the site ranks for with a page is covered by it; one grouping rule '
+    '(KWI.pageGroup) for ladder and discovery; the head term\'s traffic after the click loss; no chance band on an unmeasured reach; the Keyword '
+    'Check names the ladder; no falling "where to start" without a label; nothing a ladder or a page covers is "Now"')
 
 
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
