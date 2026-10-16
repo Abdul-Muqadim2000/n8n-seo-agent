@@ -35,6 +35,9 @@ let aiBrandRowsT = []; try { aiBrandRowsT = $('Load AI Brands (Tracker)').all().
 // R91 (2026-10-16): the depth every check really asked for (Tracker Plan's request body), never a number written into a sentence
 const depthAsked = Number((((plan.find(p => p && Array.isArray(p.body)) || {}).body || [])[0] || {}).depth) || 50;
 let ladderRows = []; try { ladderRows = $('Load Ladders').all().map(i => i.json).filter(r => r && r.ladder_id && r.keyword); } catch (e) {}
+// B6-14 (2026-10-16, benchmark area 6): the site's own Search Console impressions per query (seo_query_history, written weekly by the
+// Site Tracker) weigh the share of voice across a ladder's keywords; RS.weightedVoice keeps the newest stored period only
+let queryRows = []; try { queryRows = $('Load Query History (Tracker)').all().map(i => i.json).filter(r => r && r.query && !r.error); } catch (e) {}
 // 2026-10-12 (FIX_PLAN D11): the site's page inventory (seo_pages, filled weekly by the Site Tracker). A ladder keyword that a live page
 // already answers is never "write it" or "publish it": the next step names that page and asks for a refresh, because a second page for the
 // same search splits the signals. With no inventory stored nothing changes.
@@ -107,7 +110,7 @@ for (const [id, items] of byLadder) {
   // page that slipped and a page that was simply pushed down by a rewritten results page read identically. The proof was already
   // stored (criterion 2.2): `snapshot_json` keeps the top 10 with their URLs for every check. Nothing extra is bought.
   const changes = new Map(rowsK.map(r => [r.keyword, r.deferred ? RS.churnNone('no check was bought for this keyword this week — it is checked monthly until its page is live')
-    : RS.withNoise(RS.churn(r.prev_row ? r.prev_row.snapshot_json : null, r.result.snapshot_json, {}), RS.noise(deskHist, { keyword: r.keyword, domain: ladDomain }))]));   // R88: judged against what two readings of one moment show
+    : RS.withNoise(RS.churn(r.prev_row ? r.prev_row.snapshot_json : null, r.result.snapshot_json, { own: ladDomain }), RS.noise(deskHist, { keyword: r.keyword, domain: ladDomain }))]));   // R88: judged against what two readings of one moment show; B6-8: `own` also measures the page without us
   const moveNoteOf = (r) => RS.moveNote(r.delta, changes.get(r.keyword));
   const withMove = (r) => { const n = moveNoteOf(r); return r.keyword + ' (' + posText(r.previous) + ' \u2192 ' + posText(r.current) + (n ? '; ' + n : '') + ')'; };
   // how old the oldest reading this report compares against is, and what Google did in between (criterion 2.12)
@@ -313,11 +316,44 @@ for (const [id, items] of byLadder) {
   const ladder_marks = aside.filter(x => x && x.dropped && !x.written && x.keyword).map(x => ({ ladder_id: id, keyword: x.keyword, status: 'set_aside',
     status_note: String((x.note || x.detail || x.reason || 'set aside by the keyword rule') + (Number(x.rung) === 4 ? ' — the ladder is paused until it is re-planned' : '')).slice(0, 300) }))
     .filter((m, i, a) => a.findIndex(o => o.keyword === m.keyword) === i);
-  const subject = '[Keyword ladder] ' + head.head_keyword + ' — ' + head.domain + ': ' + (head.current > 0 ? 'top page at #' + head.current : 'top page not yet in the top ' + depthAsked) + (drops.length ? ' · ' + drops.length + ' drop(s)' : '');
+  // ---- B6-8 (2026-10-16, benchmark area 6): a move of five places is the page's OWN only when it beats the results page's churn ----
+  // `gains` / `drops` above stay what they were (every five-place move with its clause; the app reads them). What a move is CALLED now
+  // follows the measurement: the mail's "Drops to look at" holds the page's own falls only, a move no larger than the page around it is
+  // "moved with the results page", and a move with no comparable earlier reading is listed with no verdict at all.
+  const moves = rowsK.filter(r => !r.deferred && r.delta != null && Math.abs(r.delta) >= RS.MOVE.min_places).map(r => {
+    const k = RS.moveKind(r.delta, changes.get(r.keyword)) || { kind: 'not_compared', own: false, text: '' };
+    return { keyword: r.keyword, rung: r.rung, previous: r.previous, current: r.current, delta: r.delta, direction: r.delta > 0 ? 'gain' : 'drop',
+      kind: k.kind, own: !!k.own, note: k.text, line: r.keyword + ' (' + posText(r.previous) + ' → ' + posText(r.current) + (k.text ? '; ' + k.text : '') + ')' }; });
+  const movesOf = (kind, dir) => moves.filter(m => m.kind === kind && (!dir || m.direction === dir)).map(m => m.line);
+  const ownDrops = movesOf('own', 'drop'), ownGains = movesOf('own', 'gain');
+  const movedWithPage = movesOf('with_page'), withinNoise = movesOf('within_noise'), notCompared = movesOf('not_compared');
+  const move_summary = { own: moves.filter(m => m.kind === 'own').length, with_page: movedWithPage.length, within_noise: withinNoise.length,
+    not_compared: notCompared.length, min_places: RS.MOVE.min_places, rule: RS.MOVE.rule };
+  // ---- B6-6 / B6-10 (2026-10-16): two of the site's own pages on one results page, and who moved above the target URL ----
+  const cannibals = new Map(rowsK.map(r => [r.keyword, r.deferred ? null : RS.cannibal(r.result.snapshot_json, { keyword: r.keyword, depth: depthAsked,
+    previous_url: r.prev_row ? r.prev_row.url : '', previous_at: r.prev_at })]));
+  const outrankedOf = new Map(rowsK.map(r => [r.keyword, r.deferred ? null : RS.outranked(r.prev_row ? r.prev_row.snapshot_json : null, r.result.snapshot_json,
+    { domain: ladDomain, previous_position: r.previous, position: r.current, target_url: rowOf(r.keyword).target_url || r.url, previous_at: r.prev_at })]));
+  const cannibalFound = [...cannibals.values()].filter(c => c && c.found);
+  const outrankedFound = rowsK.map(r => outrankedOf.get(r.keyword)).filter(o => o && o.available && o.domains.length);
+  // ---- B6-14 (2026-10-16): one share of voice over the ladder's keywords, weighted by the site's own Search Console impressions ----
+  const voiceW = RS.weightedVoice(rowsK.map(r => ({ keyword: r.keyword, share_of_voice: (serps.get(r.keyword) || {}).share_of_voice })), queryRows, { domain: ladDomain });
+  const movesHtml = (ownGains.length ? '<p style="color:#15803d"><b>Gains:</b> ' + esc(ownGains.join('; ')) + '</p>' : '')
+    + (ownDrops.length ? '<p style="color:#b91c1c"><b>Drops to look at:</b> ' + esc(ownDrops.join('; ')) + '</p>' : '')
+    + (movedWithPage.length ? '<p style="color:#334155"><b>Moved with the results page</b> (not necessarily about your page): ' + esc(movedWithPage.join('; ')) + '</p>' : '')
+    + (withinNoise.length ? '<p style="color:#64748b"><b>Within what two readings of the same moment differ by</b> (not a move): ' + esc(withinNoise.join('; ')) + '</p>' : '')
+    + (notCompared.length ? '<p style="color:#64748b"><b>Position changes that could not be compared with the results page around them</b> (no verdict): ' + esc(notCompared.join('; ')) + '</p>' : '')
+    + (moves.length ? '<p style="color:#64748b;font-size:12px">How a move of ' + RS.MOVE.min_places + ' places or more is read: ' + esc(RS.MOVE.rule) + '.</p>' : '')
+    + (outrankedFound.length ? '<p style="color:#b45309"><b>Who took the place:</b> ' + esc(outrankedFound.map(o => o.text).join(' ')) + '</p>' : '')
+    + (cannibalFound.length ? '<p style="color:#b45309"><b>Two of your pages compete for one search:</b> ' + esc(cannibalFound.map(c => c.text).join(' ')) + '</p>' : '');
+  const sovHtml = voiceW.value != null ? '<p style="font-size:12px;color:#334155">Your share of voice across the ' + voiceW.keywords + ' keyword' + (voiceW.keywords === 1 ? '' : 's') + ' read: '
+    + voiceW.value + '% (' + esc(voiceW.note) + ').</p>' : '';
+  for (const l of lineage) if (l && /^Share of voice$/.test(String(l.figure || '')) && l.basis !== 'unknown') l.note = String(l.note || '') + ' Across the keywords: ' + voiceW.note + '.';
+  const subject = '[Keyword ladder] ' + head.head_keyword + ' — ' + head.domain + ': ' + (head.current > 0 ? 'top page at #' + head.current : 'top page not yet in the top ' + depthAsked) + (ownDrops.length ? ' · ' + ownDrops.length + ' drop(s)' : '');
   const html = '<p>Hi,</p><p>Position check for your keyword ladder towards <b>' + esc(head.head_keyword) + '</b> on <b>' + esc(head.domain) + '</b> (' + rowsK.length + ' keywords, Google top ' + depthAsked + ').</p>' + table +
     '<p><b>Rungs:</b> ' + (rungs.map(r => 'Rung ' + r.rung + ': ' + r.top10 + '/' + r.pages + ' in top 10, ' + r.top3 + ' in top 3' + (r.reached ? ' ✓ reached' : '')).join(' · ') || 'no rung pages tracked') + '</p>' +
-    (gains.length ? '<p style="color:#15803d"><b>Gains:</b> ' + esc(gains.join('; ')) + '</p>' : '') + (drops.length ? '<p style="color:#b91c1c"><b>Drops to look at:</b> ' + esc(drops.join('; ')) + '</p>' : '') +
-    serpHtml + remindHtml + RP.block(replan) + asideHtml + '<p><b>Next step:</b> ' + esc(next.text) + '</p>' + (next.publish_url ? '<p>Page to publish: <a href="' + esc(next.publish_url) + '">' + esc(next.publish_url) + '</a></p>' : '') +
+    movesHtml +
+    serpHtml + sovHtml + remindHtml + RP.block(replan) + asideHtml + '<p><b>Next step:</b> ' + esc(next.text) + '</p>' + (next.publish_url ? '<p>Page to publish: <a href="' + esc(next.publish_url) + '">' + esc(next.publish_url) + '</a></p>' : '') +
     (apiBody ? '<p>Start the next page: open the <a href="' + formLink + '">SEO Assistant form</a> ("I know my keyword", keyword <b>' + esc(apiBody.keyword) + '</b>, domain ' + esc(head.domain) + '), or send this to the API (' + esc(API_URL) + '):</p><pre style="background:#f1f5f9;padding:8px;font-size:12px">' + esc(JSON.stringify(apiBody, null, 2)) + '</pre>' : '') +
     '<p style="color:#64748b;font-size:12px">Checks run weekly; once the top page holds the top 3 for four checks, the main keyword and the published pages are checked monthly. Positions come from DataForSEO live SERPs.</p>'
     // G12 / G29 (2026-10-13): the events of the tracked window, and where each figure came from
@@ -330,7 +366,11 @@ for (const [id, items] of byLadder) {
   const aboveCount = new Map();
   for (const r of rowsK) for (const a of ((serps.get(r.keyword) || {}).above || [])) { const e = aboveCount.get(a.domain) || { domain: a.domain, keywords: 0, best_position: a.position, tracked: a.tracked };
     e.keywords++; e.best_position = Math.min(e.best_position, a.position); e.tracked = e.tracked || a.tracked; aboveCount.set(a.domain, e); }
-  const serp_summary = { checked: sovs.length, share_of_voice: sovs.length ? Math.round(sovs.reduce((s, x) => s + x, 0) / sovs.length * 10) / 10 : null,
+  const serp_summary = { checked: sovs.length, share_of_voice: voiceW.value,   // B6-14: weighted by impressions when there are any, else the unweighted mean, labelled
+    share_of_voice_unweighted: voiceW.unweighted, share_of_voice_weight: voiceW.weight, share_of_voice_note: voiceW.note,
+    share_of_voice_weighting: { weight: voiceW.weight, keywords: voiceW.keywords, weighted_keywords: voiceW.weighted_keywords, impressions: voiceW.impressions || null, period_end: voiceW.period_end, basis: RS.WEIGHT.basis },
+    cannibalisation: { found: cannibalFound.length, checked: [...cannibals.values()].filter(c => c && c.checked).length, not_checked: [...cannibals.values()].filter(c => c && !c.checked).length },
+    outranked: { keywords: outrankedFound.length, compared: rowsK.filter(r => (outrankedOf.get(r.keyword) || {}).available).length },
     head_share_of_voice: headSerp ? headSerp.share_of_voice : null, method: RS.METHOD,
     competitors_above: [...aboveCount.values()].sort((a, b) => b.keywords - a.keywords || a.best_position - b.best_position).slice(0, 10),
     tracked_competitors: (headSerp && headSerp.competitors.filter(c => c.tracked)) || [],
@@ -357,8 +397,9 @@ for (const [id, items] of byLadder) {
         features: s ? s.features : null, feature_labels: s ? s.chips : [], results_page: s ? s.line : '',
         share_of_voice: s ? s.share_of_voice : null, above: s ? s.above : [], competitors: s ? s.competitors : [], snapshot_at: s ? s.snapshot_at : null,
         previous_checked_at: r.prev_at || null, previous_is_stale: staleRead(r),
-        serp_change: changes.get(r.keyword) || null, move_note: moveNoteOf(r) }; }),
-    rungs, gains, drops, serp_summary, annotations: marks, lineage, next_step: next, links_to_add, set_aside: aside, ladder_marks, paused, api_body: apiBody, done, won, stuck,
+        serp_change: changes.get(r.keyword) || null, move_note: moveNoteOf(r),
+        move_kind: ((moves.find(m => m.keyword === r.keyword) || {}).kind) || null, cannibal: cannibals.get(r.keyword) || null, outranked: outrankedOf.get(r.keyword) || null }; }),
+    rungs, gains, drops, own_gains: ownGains, own_drops: ownDrops, moved_with_page: movedWithPage, not_compared_moves: notCompared, moves, move_summary, serp_summary, annotations: marks, lineage, next_step: next, links_to_add, set_aside: aside, ladder_marks, paused, api_body: apiBody, done, won, stuck,
     stuck_weeks: stuckWeeks, replan } });   // G32: the proposal, never applied here
 }
 // ====================================================================================================================
@@ -402,7 +443,11 @@ if (watchMeta && (watchMeta.sites || []).length) {
       const previous = prev ? Number(prev.position) : null;
       const delta = (current > 0 && previous > 0) ? previous - current : (current > 0 && previous === 0) ? 100 : (current === 0 && previous > 0) ? -100 : null;
       const change = !read ? RS.churnNone('no live reading of this results page is stored for this keyword yet')
-        : RS.withNoise(RS.churn(prev ? prev.snapshot_json : null, sd.row.snapshot_json, {}), RS.noise(deskHist, { keyword: kw, domain: dom }));
+        : RS.withNoise(RS.churn(prev ? prev.snapshot_json : null, sd.row.snapshot_json, { own: dom }), RS.noise(deskHist, { keyword: kw, domain: dom }));
+      // B6-6 / B6-8 / B6-10 (2026-10-16): the same three readings the ladder report makes, from the same stored rows
+      const kind = RS.moveKind(delta, change);
+      const cannibal = read ? RS.cannibal(sd.row.snapshot_json, { keyword: sd.keyword, depth: depthAsked, previous_url: prev ? prev.url : '', previous_at: prev ? prev.checked_at : '' }) : null;
+      const outr = read ? RS.outranked(prev ? prev.snapshot_json : null, sd.row.snapshot_json, { domain: dom, previous_position: prev ? Number(prev.position) : null, position: current, target_url: sd.row.url || '', previous_at: prev ? prev.checked_at : '' }) : null;
       const f = read ? RS.unpack(sd.row.features_json, null) : null;
       const c = read ? RS.unpack(sd.row.competitors_json, null) : null;
       const sov = (read && sd.row.share_of_voice != null && Number(sd.row.share_of_voice) >= 0) ? Number(sd.row.share_of_voice) : null;
@@ -410,12 +455,30 @@ if (watchMeta && (watchMeta.sites || []).length) {
         at: sd.at || '', url: read ? (sd.row.url || '') : '', features: f, chips: f ? RS.featureChips(f) : [],
         share_of_voice: sov, above: ((c || {}).above || []).map(x => ({ domain: x.d, position: x.p, tracked: !!x.t })),
         competitors: ((c || {}).competitors || []).map(x => ({ domain: x.d, position: x.p, tracked: !!x.t })),
-        previous_checked_at: prev ? String(prev.checked_at) : null, move_note: RS.moveNote(delta, change) };
+        previous_checked_at: prev ? String(prev.checked_at) : null, move_note: RS.moveNote(delta, change),
+        move_kind: kind ? kind.kind : null, move_kind_note: kind ? kind.text : '', cannibal, outranked: outr };
     }).sort((a, b) => (a.current == null ? 1 : 0) - (b.current == null ? 1 : 0) || (a.current === 0 ? 1 : 0) - (b.current === 0 ? 1 : 0) || (a.current || 0) - (b.current || 0) || a.keyword.localeCompare(b.keyword));
     if (!rowsW.length && !heldW.length && !asideW.length) continue;
     const moveOf = (r) => r.keyword + ' (' + posText(r.previous) + ' → ' + posText(r.current) + (r.move_note ? '; ' + r.move_note : '') + ')';
     const gainsW = rowsW.filter(r => r.delta != null && r.delta >= 5).map(moveOf);
     const dropsW = rowsW.filter(r => r.delta != null && r.delta <= -5).map(moveOf);
+    // B6-8: what each five-place move is called; the mail's gains and drops are the page's own moves only
+    const bigW = rowsW.filter(r => r.delta != null && Math.abs(r.delta) >= RS.MOVE.min_places && r.move_kind);
+    const kindLine = (r) => r.keyword + ' (' + posText(r.previous) + ' → ' + posText(r.current) + (r.move_kind_note ? '; ' + r.move_kind_note : '') + ')';
+    const ofKindW = (k, dir) => bigW.filter(r => r.move_kind === k && (!dir || (dir === 'gain' ? r.delta > 0 : r.delta < 0))).map(kindLine);
+    const ownGainsW = ofKindW('own', 'gain'), ownDropsW = ofKindW('own', 'drop'), withPageW = ofKindW('with_page'), noiseW = ofKindW('within_noise'), notComparedW = ofKindW('not_compared');
+    const movesW = bigW.map(r => ({ keyword: r.keyword, previous: r.previous, current: r.current, delta: r.delta, direction: r.delta > 0 ? 'gain' : 'drop', kind: r.move_kind, own: r.move_kind === 'own', note: r.move_kind_note, line: kindLine(r) }));
+    const cannibalW = rowsW.filter(r => r.cannibal && r.cannibal.found), outrankedW = rowsW.filter(r => r.outranked && r.outranked.available && r.outranked.domains.length);
+    const voiceWW = RS.weightedVoice(rowsW.filter(r => r.read).map(r => ({ keyword: r.keyword, share_of_voice: r.share_of_voice })), queryRows, { domain: dom });
+    const movesHtmlW = (ownGainsW.length ? '<p style="color:#15803d"><b>Gains:</b> ' + esc(ownGainsW.join('; ')) + '</p>' : '')
+      + (ownDropsW.length ? '<p style="color:#b91c1c"><b>Drops to look at:</b> ' + esc(ownDropsW.join('; ')) + '</p>' : '')
+      + (withPageW.length ? '<p style="color:#334155"><b>Moved with the results page</b> (not necessarily about your page): ' + esc(withPageW.join('; ')) + '</p>' : '')
+      + (noiseW.length ? '<p style="color:#64748b"><b>Within what two readings of the same moment differ by</b> (not a move): ' + esc(noiseW.join('; ')) + '</p>' : '')
+      + (notComparedW.length ? '<p style="color:#64748b"><b>Position changes that could not be compared with the results page around them</b> (no verdict): ' + esc(notComparedW.join('; ')) + '</p>' : '')
+      + (bigW.length ? '<p style="color:#64748b;font-size:12px">How a move of ' + RS.MOVE.min_places + ' places or more is read: ' + esc(RS.MOVE.rule) + '.</p>' : '')
+      + (outrankedW.length ? '<p style="color:#b45309"><b>Who took the place:</b> ' + esc(outrankedW.map(r => '"' + r.keyword + '": ' + r.outranked.text).join(' ')) + '</p>' : '')
+      + (cannibalW.length ? '<p style="color:#b45309"><b>Two of your pages compete for one search:</b> ' + esc(cannibalW.map(r => r.cannibal.text).join(' ')) + '</p>' : '')
+      + (voiceWW.value != null ? '<p style="font-size:12px;color:#334155">Your share of voice across the ' + voiceWW.keywords + ' keyword' + (voiceWW.keywords === 1 ? '' : 's') + ' read: ' + voiceWW.value + '% (' + esc(voiceWW.note) + ').</p>' : '');
     const readRows = rowsW.filter(r => r.read);
     const top10 = readRows.filter(r => r.current > 0 && r.current <= 10).length;
     const top3 = readRows.filter(r => r.current > 0 && r.current <= 3).length;
@@ -447,7 +510,7 @@ if (watchMeta && (watchMeta.sites || []).length) {
         (perCheck * (365 / 7 / 12)).toFixed(3) + ' a month to watch weekly. ' + (carriedW.length ? carriedW.length + ' of your keywords cost nothing this week because a reading already existed. ' : '') + 'The tracker buys at most ' + watchMeta.limits.per_site + ' of them a week, oldest reading first.</p>';
     })();
     // the next step says something only when the readings say it (rule 1): a fall the page around it did not share, then the nearest win
-    const ownDrop = rowsW.filter(r => r.delta != null && r.delta <= -5 && r.change && r.change.available && r.change.band === 'still').sort((a, b) => a.delta - b.delta)[0] || null;
+    const ownDrop = rowsW.filter(r => r.delta != null && r.delta <= -RS.MOVE.min_places && r.move_kind === 'own').sort((a, b) => a.delta - b.delta)[0] || null;   // B6-8: the page's own fall, by the one rule
     const nearest = striking.sort((a, b) => a.current - b.current)[0] || null;
     const nextW = ownDrop ? { action: 'look_at_drop', keyword: ownDrop.keyword, text: '"' + ownDrop.keyword + '" fell from ' + posText(ownDrop.previous) + ' to ' + posText(ownDrop.current) + ' and the rest of that results page barely moved, so this one is about your page: look at the page that ranks for it first.' }
       : nearest ? { action: 'nearest_win', keyword: nearest.keyword, text: '"' + nearest.keyword + '" is at ' + posText(nearest.current) + ' — the nearest win on your list. Strengthening the page that already ranks for it is cheaper than writing a new one.' }
@@ -455,7 +518,9 @@ if (watchMeta && (watchMeta.sites || []).length) {
       : { action: 'nothing_read', keyword: '', text: 'No results page could be read for your keyword list this week, so there is nothing to act on: the checks are sent again next week.' };
     const summaryW = { keywords: site.total, read: readRows.length, checked: rowsW.filter(r => r.how === 'bought').length,
       carried: carriedW.length, held: heldW.length, set_aside: asideW.length, could_not_be_read: unreadable,
-      top10, top3, striking: striking.length, share_of_voice: sovRows.length ? Math.round(sovRows.reduce((a, r) => a + r.share_of_voice, 0) / sovRows.length * 10) / 10 : null,
+      top10, top3, striking: striking.length, share_of_voice: voiceWW.value,   // B6-14: weighted by impressions when there are any, else unweighted, labelled
+      share_of_voice_unweighted: voiceWW.unweighted, share_of_voice_weight: voiceWW.weight, share_of_voice_note: voiceWW.note,
+      cannibalisation: { found: cannibalW.length }, outranked: { keywords: outrankedW.length },
       method: RS.METHOD, page_movement: { compared: comparedW, not_available: rowsW.length - comparedW, labels_basis: RS.CHURN.labels_basis },
       week_checks: runChecks, limits: watchMeta.limits };
     const lineageW = [
@@ -463,7 +528,7 @@ if (watchMeta && (watchMeta.sites || []).length) {
         sample: LN.sample(readRows.length, 'of the ' + site.total + ' keywords on your list had a results page read (top 50, desktop)'),
         note: 'one country and one device at one moment; ' + rowsW.filter(r => r.how !== 'bought' && r.read).length + ' of them were read from a results page already bought this week, with the date shown beside each' })
         : LN.unknown('Position per keyword', 'no results page could be read for any keyword on your list this week'),
-      sovRows.length ? LN.of('Share of voice', 'model', { basis: 'modelled', period: LN.asOf(nowCheck), sample: LN.sample(sovRows.length, 'results pages read'), note: RS.METHOD })
+      sovRows.length ? LN.of('Share of voice', 'model', { basis: 'modelled', period: LN.asOf(nowCheck), sample: LN.sample(sovRows.length, 'results pages read'), note: RS.METHOD + ' Across the keywords: ' + voiceWW.note + '.' })
         : LN.unknown('Share of voice', 'no results page was read, so no share can be modelled'),
       comparedW ? LN.of('How much the results page itself moved', 'serp', { basis: 'measured', period: LN.asOf(nowCheck),
         sample: LN.sample(comparedW, 'results pages with a stored earlier reading to compare against'), note: 'counted from the two stored top-ten readings; ' + RS.CHURN.labels_basis })
@@ -473,14 +538,13 @@ if (watchMeta && (watchMeta.sites || []).length) {
         : LN.unknown('What the checks cost', 'the provider reported no cost for this run’s calls'),
     ];
     const subjectW = '[Tracked keywords] ' + site.domain + ' — ' + readRows.length + ' of ' + site.total + ' read'
-      + (top10 ? ' · ' + top10 + ' in the top 10' : '') + (dropsW.length ? ' · ' + dropsW.length + ' drop(s)' : '');
+      + (top10 ? ' · ' + top10 + ' in the top 10' : '') + (ownDropsW.length ? ' · ' + ownDropsW.length + ' drop(s)' : '');
     const htmlW = '<p>Hi,</p><p>This week’s positions for the <b>' + site.total + ' keyword' + (site.total === 1 ? '' : 's') + ' you asked us to watch</b> on <b>' + esc(site.domain) + '</b> (Google top 50, desktop). ' +
       'Your keyword ladders are reported separately — a keyword that is both is checked once, with the ladder.</p>' +
       (tableW || '<p>No keyword on your list could be read this week.</p>') +
       '<p><b>Where they stand:</b> ' + top3 + ' in the top 3, ' + top10 + ' in the top 10, ' + striking.length + ' within reach (positions 4-20)' +
       (unreadable ? ', ' + unreadable + ' could not be read this week (they are checked again next week — that is "check again", not "not ranking")' : '') + '.</p>' +
-      (gainsW.length ? '<p style="color:#15803d"><b>Gains:</b> ' + esc(gainsW.join('; ')) + '</p>' : '') +
-      (dropsW.length ? '<p style="color:#b91c1c"><b>Drops to look at:</b> ' + esc(dropsW.join('; ')) + '</p>' : '') +
+      movesHtmlW +
       heldHtml + asideHtmlW +
       '<p><b>Next step:</b> ' + esc(nextW.text) + '</p>' +
       '<p style="color:#64748b;font-size:12px">Share of voice is an estimate of the clicks page 1 offers, not measured clicks: ' + esc(RS.METHOD) +
@@ -492,8 +556,11 @@ if (watchMeta && (watchMeta.sites || []).length) {
       positions: rowsW.map(r => ({ rung: 0, keyword: r.keyword, position: r.read ? r.current : null, previous: r.previous, delta: r.delta,
         url: r.url, device: 'desktop', source: r.how, source_note: howText(r), read: r.read, reason: r.reason,
         features: r.features, feature_labels: r.chips, share_of_voice: r.share_of_voice, above: r.above, competitors: r.competitors,
-        previous_checked_at: r.previous_checked_at, checked_at: r.at || null, serp_change: r.change, move_note: r.move_note })),
-      rungs: [], gains: gainsW, drops: dropsW, serp_summary: summaryW, watch_summary: summaryW,
+        previous_checked_at: r.previous_checked_at, checked_at: r.at || null, serp_change: r.change, move_note: r.move_note,
+        move_kind: r.move_kind, cannibal: r.cannibal, outranked: r.outranked })),
+      rungs: [], gains: gainsW, drops: dropsW, own_gains: ownGainsW, own_drops: ownDropsW, moved_with_page: withPageW, not_compared_moves: notComparedW,
+      moves: movesW, move_summary: { own: bigW.filter(r => r.move_kind === 'own').length, with_page: withPageW.length, within_noise: noiseW.length, not_compared: notComparedW.length, min_places: RS.MOVE.min_places, rule: RS.MOVE.rule },
+      serp_summary: summaryW, watch_summary: summaryW,
       not_checked: heldW, set_aside: asideW, annotations: [], lineage: lineageW, next_step: nextW, links_to_add: [],
       api_body: null, done: false, won: false, stuck: false } });
   }
