@@ -3058,7 +3058,7 @@ await guard('audit correctness (FIX_PLAN D2 D6 D18 D17 D24)', async () => {
   // ---- D6: www / non-www only from the host probes ----
   const w = await techAudit('www', htmlFor('www.northwind-erp.com'));
   const wwwF = (a) => a.findings.filter(f => /www and non-www|duplicate host/i.test(f.title));
-  check('D6: apex 308 → www with a www canonical: no host finding, "One canonical host" in what works, hosts.consolidated true', wwwF(w.a).length === 0 && w.a.what_works.some(x => /One canonical host.*\(308\).*canonical tags agree/.test(x)) && w.ap.probe.measurements.hosts.consolidated === true && w.ap.probe.measurements.hosts.canonical_tag_host === 'www.northwind-erp.com', JSON.stringify({ f: wwwF(w.a).map(f => f.title), works: w.a.what_works.filter(x => /canonical host/.test(x)), hosts: w.ap.probe.measurements.hosts }));
+  check('D6: apex 308 → www with a www canonical: no host finding, "One canonical host" in what works, hosts.consolidated true', wwwF(w.a).length === 0 && w.a.what_works.some(x => /One canonical host.*\(308\).*(canonical tags agree|homepage canonical tag names it)/.test(x)) && w.ap.probe.measurements.hosts.consolidated === true && w.ap.probe.measurements.hosts.canonical_tag_host === 'www.northwind-erp.com', JSON.stringify({ f: wwwF(w.a).map(f => f.title), works: w.a.what_works.filter(x => /canonical host/.test(x)), hosts: w.ap.probe.measurements.hosts }));
   check('D6: never from test_canonicalization alone (the crawl summary says false, no finding quotes the crawler test)', F.summaryDone.tasks[0].result[0].domain_info.checks.test_canonicalization === false && !w.a.findings.some(f => /canonicalization test/i.test(f.evidence)), JSON.stringify(w.a.findings.map(f => f.title)));
   const b = await techAudit('both', htmlFor('northwind-erp.com')); const hf = wwwF(b.a);
   check('D6: both hosts 200 with no redirect: one High "not consolidated" finding, fix worded after the canonical host (bare domain)', hf.length === 1 && hf[0].severity === 'High' && /not consolidated/.test(hf[0].title) && /both return 200 with no redirect/.test(hf[0].evidence) && /301-redirect https:\/\/www\.northwind-erp\.com\/ to https:\/\/northwind-erp\.com\//.test(hf[0].fix) && b.ap.probe.measurements.hosts.consolidated === false, JSON.stringify(hf));
@@ -3067,7 +3067,10 @@ await guard('audit correctness (FIX_PLAN D2 D6 D18 D17 D24)', async () => {
   const dis = await techAudit('www', htmlFor('northwind-erp.com')); const hf3 = wwwF(dis.a);
   check('D6: apex redirects to www but the canonical tag names the bare domain: finding (redirect and canonical disagree), fix keeps the bare domain', hf3.length === 1 && /redirects \(308\) to https:\/\/www\.northwind-erp\.com\/, but the homepage canonical tag points to https:\/\/northwind-erp\.com\//.test(hf3[0].evidence) && /301-redirect https:\/\/www\.northwind-erp\.com\/ to https:\/\/northwind-erp\.com\//.test(hf3[0].fix), JSON.stringify(hf3));
   const apx = await techAudit('apex', htmlFor('northwind-erp.com'));
-  check('D6: www 301 → apex with a bare-domain canonical: no finding, works says the canonical tags agree', wwwF(apx.a).length === 0 && apx.a.what_works.some(x => /www redirects to the main domain \(301\), and the canonical tags agree/.test(x)), JSON.stringify(apx.a.what_works.filter(x => /www/.test(x))));
+  // R59 (2026-10-16): this fixture's Search Console rows are all on https://www.northwind-erp.com while the server sends www to the bare domain —
+  // Google shows the host the site redirects away from. The probe still raises nothing (the server is consolidated), but the split Google
+  // shows is now a finding, and "the canonical tags agree" is no longer what works. The probe half of the old check is unchanged.
+  check('D6: www 301 → apex with a bare-domain canonical: no probe finding; the Search Console rows on www are the only host finding, and what works no longer says the hosts agree', wwwF(apx.a).filter(f => /not consolidated|Redirect chain/i.test(f.title)).length === 0 && apx.a.findings.some(f => /are split in Google/.test(f.title)) && !apx.a.what_works.some(x => /www redirects to the main domain/.test(x)), JSON.stringify({ f: wwwF(apx.a).map(f => f.title), works: apx.a.what_works.filter(x => /www/.test(x)) }));
   // ---- D18: duplicate meta tags verified on the homepage HTML (DataForSEO flags 12 of 14 pages, the homepage among them) ----
   const d18a = await techAudit('apex', htmlFor('northwind-erp.com'), { dupMeta: true });
   check('D18: three theme-color tags with different media (+ og:image twice) are not duplicates: finding dropped, a what-works line, no homepage duplicates measured', !d18a.a.findings.some(f => /Duplicate meta tags/.test(f.title)) && d18a.a.what_works.some(x => /No duplicate meta tags on the homepage/.test(x)) && d18a.ap.probe.measurements.homepage_meta.checked === true && d18a.ap.probe.measurements.homepage_meta.duplicates.length === 0, JSON.stringify({ meta: d18a.ap.probe.measurements.homepage_meta, f: d18a.a.findings.filter(f => /meta/i.test(f.title)).map(f => f.title) }));
@@ -8573,10 +8576,11 @@ await guard('r10-r15-rerating-completion-defects', async () => {
   const refusals = {}; for (const k of ['ai', 'character ai', 'google ai', 'humanize ai', 'meta ai', 'blackbox ai', 'microsoft ai', 'mh enterprises uae', 'mofa attestation dubai', 'ai image generator']) refusals[k] = await fitRun(k, fitCtx59);
   const keeps = {}; for (const k of ['erp software uae', 'best erp software dubai', 'microsoft dynamics 365 partner uae', 'ai automation uae', 'business central implementation dubai']) keeps[k] = await fitRun(k, fitCtx59);
   console.log('   topic gate ->', JSON.stringify(Object.entries(refusals).map(([k, v]) => [k, v.reason])), '| keeps', JSON.stringify(Object.keys(keeps).filter(k => keeps[k].ok)));
+  // R60 (2026-10-16): "mofa attestation dubai" is now refused as a public body's service to a person (government) before the topic bar is asked
   check('R13: every §4a keyword of the live report is refused with a reason — "ai" and "google ai" as too broad, the other companies\' names and the off-topic searches as off topic',
-    Object.values(refusals).every(v => v.ok === false && ['too broad', 'off topic'].includes(v.reason) && String(v.detail || '').length > 20)
+    Object.values(refusals).every(v => v.ok === false && ['too broad', 'off topic', 'government'].includes(v.reason) && String(v.detail || '').length > 20)
     && refusals['ai'].reason === 'too broad' && refusals['google ai'].reason === 'too broad' && refusals['character ai'].reason === 'off topic'
-    && refusals['mofa attestation dubai'].reason === 'off topic', JSON.stringify(Object.entries(refusals).map(([k, v]) => [k, v.reason, v.detail])).slice(0, 600));
+    && refusals['mofa attestation dubai'].reason === 'government', JSON.stringify(Object.entries(refusals).map(([k, v]) => [k, v.reason, v.detail])).slice(0, 600));
   check('R13: the keywords the site should target are untouched — its categories in its market, its product names and the service it sells',
     Object.values(keeps).every(v => v.ok === true), JSON.stringify(Object.entries(keeps).map(([k, v]) => [k, v.ok, v.reason])));
   check('R13: with too little on file the measure judges nothing (it never refuses a keyword because a site has no description)',
@@ -15284,6 +15288,239 @@ await guard('S101 R49 R50 the keyword check: a chance band only on a measured re
     !Lx.chance || Lx.chance.band === 'unmeasured' || Lx.chance.band === 'none', JSON.stringify(Lx.chance));
   reset();
 });
+
+// ===================================================================================
+// S102-S105 (fixer A2, 2026-10-16): family F1 for the technical audit and the full report — know the customer's own site before advising —
+// plus R65 / R73 / R74 / R117 in the same nodes (docs/system-review-2026-10-15/defects/B_technical.md). Fixtures cut from the saved
+// executions 595 (technical audit) and 614 (full report) of the 2026-10-15 re-rating: harness/fixtures_ra2.js.
+const A2check = (SN) => (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+const A2clone = (o) => JSON.parse(JSON.stringify(o));
+// the Search Console part of the audit as exec 595 ran it: plan, sitemap, the 48 requests and answers, the submitted sitemaps
+const A2gsc = async (o = {}) => {
+  const G = require('./fixtures_ra2').gsc595;
+  reset();
+  mock('GSC Audit Plan', [{ json: o.plan || A2clone(G.plan) }]); mock('Fetch Sitemap (Audit)', [{ json: G.sitemap }]);
+  mock('GSC Audit Requests', G.requests.map(j => ({ json: j }))); mock('GSC Audit Query', (o.answers || G.answers).map(j => ({ json: j })));
+  mock('GSC Sitemaps (Audit)', [{ json: o.sitemaps || G.sitemaps }]);
+  return (await run('GSC Audit Findings', store['GSC Sitemaps (Audit)']))[0].json;
+};
+const A2scored = async (gf) => {
+  mock('Check Crawl', [{ json: { domain: 'techand.ai', audit_level: 'site_audit', pages_crawled: 45, crawl_js: false, crawl_summary: { domain_info: { checks: {} }, page_metrics: {} } } }]);
+  mock('Get Crawled Pages', { tasks: [{ result: [{ items: [] }] }] }); mock('Collect Crawl Extras', [{ json: { crawl_extras: {} } }]);
+  return (await run('Build Site Issues', [{ json: gf }]))[0].json;
+};
+
+await guard('S102 R59 R65 R117 the host Google shows, every measured page, the pages a link reaches', async () => {
+  const SN = 'S102 R59 / R65 / R117 — Google shows the bare host: one host-split finding instead of "not indexed", one canonical count, the host in the tables; every measured page weighs the impact; a page no link reaches is not "within 3 clicks"';
+  reset(); begin(SN); const check = A2check(SN);
+  const X = require('./fixtures_ra2'); const G = X.gsc595;
+  const gf = await A2gsc();
+  const sc = gf.search_console; const fx = gf.extra_findings;
+  console.log('   findings ->', fx.map(f => '[' + f.severity + '] ' + f.title).join(' | '));
+  // ---- R59: the finding that says what Google shows ----
+  const split = fx.find(f => /www and non-www are split in Google/.test(f.title));
+  check('R59: one High host-split finding names what Google shows — the page rows per host (37 pages / 28 clicks / 5,193 impressions on https://techand.ai, 13 / 4 / 522 on www), the 3 pages whose canonical Google moved to the bare host, the bare-host sitemap that was submitted — and the fix is the sitemap and the links, not "request indexing"',
+    !!split && split.severity === 'High' && /https:\/\/techand\.ai 37 page\(s\), 28 clicks, 5,193 impressions/.test(split.evidence) && /https:\/\/www\.techand\.ai 13 page\(s\), 4 clicks, 522 impressions/.test(split.evidence)
+    && /Google chose https:\/\/techand\.ai as the canonical of 3 inspected page/.test(split.evidence) && /submitted to Search Console is https:\/\/techand\.ai\/sitemap\.xml/.test(split.evidence)
+    && /submit https:\/\/www\.techand\.ai\/sitemap\.xml/.test(split.fix) && !/request indexing\.?$/i.test(split.fix),
+    JSON.stringify(split || fx.map(f => f.title)));
+  const impr = new Map(); for (const r of G.answers[1].rows) { const p = r.keys[0].replace(/^https?:\/\/[^\/]+/, '').replace(/(.)\/$/, '$1') || '/'; impr.set(p, (impr.get(p) || 0) + r.impressions); }
+  const pOf = (u) => String(u).replace(/^https?:\/\/[^\/]+/, '').replace(/(.)\/$/, '$1') || '/';
+  const cannot = fx.filter(f => /cannot rank at all/.test(f.why || ''));
+  check('R59: no finding tells the owner a page "cannot rank at all" while Google shows that page under either host (all 16 had impressions on https://techand.ai)',
+    cannot.every(f => (f.sample_urls || []).every(u => !impr.get(pOf(u)))), JSON.stringify(cannot.map(f => [f.title, f.sample_urls])));
+  check('R59: the two canonical counts of one object agree (index_coverage said 3, search_console said 0 for the same pages) and the host-only difference is named',
+    sc.index_coverage && sc.index_coverage.canonical_mismatch === (sc.canonical_mismatch || []).length && sc.canonical_mismatch.length === 3 && sc.canonical_mismatch.every(c => c.host_only === true),
+    JSON.stringify({ ic: sc.index_coverage && sc.index_coverage.canonical_mismatch, sc: sc.canonical_mismatch }));
+  check('R59: the 16 www pages stay in the not-indexed list — they really are out of the index — each with the bare-host page Google shows instead (1,374 impressions in all)',
+    sc.not_indexed.length === 16 && sc.not_indexed.every(x => /^https:\/\/techand\.ai\//.test(x.shown_as || '')) && sc.not_indexed.reduce((n, x) => n + (x.shown_impressions || 0), 0) === 1374,
+    JSON.stringify(sc.not_indexed.slice(0, 3)));
+  const works = [...((gf.probe || {}).what_works || []), ...gf.extra_works];
+  check('R59: what works no longer says "One canonical host … the canonical tags agree" (nor "all sampled pages are indexed") while Google shows the other host',
+    !works.some(w => /^One canonical host/.test(w)) && !works.some(w => /sampled pages are indexed by Google/.test(w)) && ((gf.probe || {}).measurements || {}).hosts && gf.probe.measurements.hosts.google_split === true,
+    JSON.stringify(works));
+  const dup = G.answers.find(a => a.inspectionResult && /Duplicate/.test(a.inspectionResult.indexStatusResult.coverageState || ''));
+  const pw = (await run('_page_watch', [{ json: { inspection: dup } }]))[0].json.inspection;
+  check('R59 (same cause, the page-watch kit): Google choosing the same page on the other host is not "same as ours" for the daily watch and the weekly tracker',
+    pw.canonical_ok === false && pw.canonical_host_only === true, JSON.stringify({ ok: pw.canonical_ok, host_only: pw.canonical_host_only, g: pw.google_canonical, u: pw.user_canonical }));
+  // ---- R59 in the report, R65 on the scored audit ----
+  const full = await A2scored(A2clone(gf));
+  const top = full.site_audit.findings.filter(f => f.severity !== 'Info');
+  check('R59: the host-split finding is first or second in the fix list (the live acceptance: "first or second")',
+    top.slice(0, 2).some(f => /are split in Google/.test(f.title)), JSON.stringify(top.slice(0, 3).map(f => [f.title, f.impact])));
+  const hs = full.site_audit.findings.find(f => /are split in Google/.test(f.title)) || {};
+  check('R65: the host-split finding is weighed on every page it names — 1 click and 1,374 impressions, measured (the site average had said "an estimated 10 clicks and 1,699 impressions")',
+    !!hs.impact_traffic && hs.impact_traffic.clicks === 1 && hs.impact_traffic.impressions === 1374 && hs.impact_traffic.estimated === false && /about 1 clicks and 1,374 impressions/.test(hs.impact_basis || ''),
+    JSON.stringify(hs.impact_traffic || null) + ' ' + (hs.impact_basis || ''));
+  const rep = await run('Build Audit Report', [{ json: full }]); const doc = decode(rep);
+  const at = doc.indexOf('index view of the key pages'); const idx = at >= 0 ? doc.slice(at, at + 30000) : '';
+  check('R59: the index table prints Google\'s canonical WITH its host when Google chose the other host (it printed the page\'s own path, a canonical identical to the page)',
+    /https:\/\/techand\.ai\/d365-finance-operations-implementation-rollout-uae/.test(idx), idx.slice(0, 400));
+  const tpAt = doc.indexOf('<th>Top page</th>'); const tp = tpAt >= 0 ? doc.slice(tpAt, tpAt + 4000) : '';
+  check('R59: the top-page table no longer lists "/" twice — the bare host is printed in full',
+    /<td>https:\/\/techand\.ai\/<\/td>/.test(tp) && (tp.slice(0, tp.indexOf('</table>')).match(/<td>\/<\/td>/g) || []).length === 1, tp.slice(0, 500));
+  check('R65: the report keeps its ten top pages and the full page index stays out of the payload the app receives',
+    sc.top_pages.length === 10 && Array.isArray(sc.page_traffic) && sc.page_traffic.length >= 40 && !!rep[0].json.search_console && !('page_traffic' in rep[0].json.search_console),
+    JSON.stringify({ top: sc.top_pages.length, index: (sc.page_traffic || []).length, payload: Object.keys(rep[0].json.search_console || {}).slice(0, 30) }));
+  const ORPH = G.plan.pages.filter(p => p.orphan).map(p => p.url);
+  const imp = (await run('_impact', [{ json: { total_pages: 45, search_console: sc, findings: [{ category: 'Crawlability & Indexing', severity: 'High', title: 'Orphan pages (no crawlable internal links)', affected_count: ORPH.length, affected_pct: 13, sample_urls: ORPH, scope: 'pages' }] } }]))[0].json.findings[0];
+  check('R65: six orphan pages are weighed on what Search Console measured for them — 0 clicks, 16 impressions, not estimated — instead of the site average ("an estimated 4 clicks and 637 impressions")',
+    ORPH.length === 6 && imp.impact_traffic.clicks === 0 && imp.impact_traffic.impressions === 16 && imp.impact_traffic.estimated === false, JSON.stringify(imp.impact_traffic));
+  // ---- R117 ----
+  const st = gf.site_structure;
+  check('R117: the six orphan pages (click depth 0, reached only through the sitemap) are their own bucket, and the audit no longer calls the structure "shallow: 100% within 3 clicks"',
+    st.depth_buckets.unlinked === 6 && st.depth_buckets[0] === 1 && st.within_3_clicks_pct < 90 && !gf.extra_works.some(w => /Shallow site structure/.test(w)),
+    JSON.stringify(st.depth_buckets) + ' ' + st.within_3_clicks_pct);
+  check('R117: the structure table of the report shows the pages no link reaches', /No link reaches it<\/th>/.test(doc), '');
+  // ---- R59, the control: every row and every canonical on www ----
+  const wwwAns = A2clone(G.answers).map(a => { if (a.rows) a.rows = a.rows.map(r => r.keys ? ({ ...r, keys: r.keys.map(k => String(k).replace(/^https:\/\/techand\.ai/, 'https://www.techand.ai')) }) : r);
+    if (a.inspectionResult) { const i = a.inspectionResult.indexStatusResult; if (i.googleCanonical) i.googleCanonical = i.googleCanonical.replace(/^https:\/\/techand\.ai/, 'https://www.techand.ai'); } return a; });
+  const gfW = await A2gsc({ answers: wwwAns, sitemaps: { sitemap: G.sitemaps.sitemap.map(s => ({ ...s, path: 'https://www.techand.ai/sitemap.xml' })) } });
+  check('R59 (control): with every page row and every canonical on www there is no host-split finding, and "One canonical host" stays in what works',
+    !gfW.extra_findings.some(f => /split in Google/.test(f.title)) && !!gfW.search_console.host_split && gfW.search_console.host_split.found === false && ((gfW.probe || {}).what_works || []).some(w => /^One canonical host/.test(w)),
+    JSON.stringify({ split: gfW.search_console.host_split, titles: gfW.extra_findings.map(f => f.title) }));
+  reset();
+});
+
+await guard('S103 R60 seeds and topics from what the business sells', async () => {
+  const SN = 'S103 R60 — the full report seeds its keyword research from what the business sells, the topic gate gets the site\'s own topics, a public body\'s service to a person is refused, and the AI question is about the site\'s own market';
+  reset(); begin(SN); const check = A2check(SN);
+  const K = require('./fixtures_ra2').kw614;
+  const ORPHANS = ['ai & automation', 'assess & envision', 'build & implement'];
+  const fq = async (withSite) => { reset(); mock('Schema Findings', [{ json: { domain: 'techand.ai' } }]); mock('Get Crawled Pages', { tasks: [{ result: [{ items: K.pages }] }] });
+    if (withSite) { mock('Load Site Row (Model)', [{ json: K.site_row }]); mock('Restore Site Model', [{ json: { site_model: K.site_model } }]); }
+    return (await run('Fallback Queries', [{ json: {} }])).map(i => i.json); };
+  check('R60 (the run as it happened): exec 614 seeded the research with the three orphan card headings', JSON.stringify(K.fallback_before.map(q => q.query)) === JSON.stringify(ORPHANS), JSON.stringify(K.fallback_before));
+  const q1 = await fq(true);
+  console.log('   seeds ->', JSON.stringify(q1));
+  check('R60: the seeds are the keywords the owner configured for this site, each saying where it came from — not three orphan card headings',
+    JSON.stringify(q1.map(q => q.query)) === JSON.stringify(['e invoicing software uae', 'erp implementation dubai', 'peppol uae']) && q1.every(q => q.source === 'your keywords'), JSON.stringify(q1));
+  const q0 = await fq(false);
+  console.log('   seeds without a site record ->', JSON.stringify(q0));
+  check('R60 / R117: with no site record on file a page no link reaches is still not a seed (it sorted first on its crawler depth 0)',
+    q0.length > 0 && q0.every(q => !ORPHANS.includes(q.query)), JSON.stringify(q0));
+  const ak = async (seeds, withSite) => { reset();
+    mock('Competitor Analysis', [{ json: A2clone(K.base) }]); mock('KW Targets', K.targets.map(j => ({ json: j }))); mock('Ranked Keywords Answers', K.ranked.map(j => ({ json: j })));
+    mock('Fallback Queries', seeds.map(j => ({ json: j })));
+    if (withSite) { mock('Load Site Row (Model)', [{ json: K.site_row }]); mock('Restore Site Model', [{ json: { site_model: K.site_model } }]); }
+    // one search of what the site sells, added to the ideas: exec 614's ideas were bought for the orphan headings, so they hold none
+    const ideas = A2clone(K.ideas); ideas.tasks[0].result[0].items.push({ keyword: 'business central implementation uae', keyword_info: { search_volume: 90, cpc: 5 }, keyword_properties: { keyword_difficulty: 10 }, search_intent_info: { main_intent: 'commercial' } });
+    return (await run('Analyze Keywords', [{ json: ideas }]))[0].json; };
+  const A1 = await ak(q1, true); const sk = A1.site_keywords;
+  const shown = [...Object.values(sk.opportunities_by_intent).flat(), ...sk.easy_wins, ...sk.keyword_gap, ...sk.striking_distance].map(k => k.keyword);
+  const all = new Set([...K.ideas.tasks[0].result[0].items.map(i => i.keyword), ...K.ranked.flatMap(r => r.tasks[0].result[0].items.map(i => i.keyword_data.keyword))]);
+  const BAD = ['ai mode', 'blackbox ai', 'character ai', 'google ai', 'meta ai', 'face swap ai', 'mofa attestation dubai', 'how to check emirates id status with passport number'].filter(k => all.has(k));
+  console.log('   shown ->', JSON.stringify(shown.slice(0, 40)));
+  check('R60: the searches the dossier names are in the research data the test feeds (so the next check is about them)', BAD.length >= 6, JSON.stringify(BAD));
+  check('R60: with the site\'s own services and keywords the topic gate engages — every one of them is refused with a reason and none is an easy win, an opportunity or a gap keyword',
+    BAD.every(k => sk.refused.some(r => r.keyword === k && r.reason)) && BAD.every(k => !shown.includes(k)),
+    JSON.stringify({ missing: BAD.filter(k => !sk.refused.some(r => r.keyword === k)), shown: shown.filter(k => BAD.includes(k)), refused: sk.refused.slice(0, 12).map(r => r.keyword + ':' + r.reason) }));
+  console.log('   refused ->', sk.refused.length, JSON.stringify(sk.refused.map(r => r.keyword + ':' + r.volume + ':' + r.reason)));
+  check('R60: what the site sells survives the gate ("business central implementation uae" is still an opportunity)',
+    shown.includes('business central implementation uae'), JSON.stringify(shown.slice(0, 30)));
+  reset(); mock('Load Site Row (Model)', [{ json: K.site_row }]);
+  const aq = (await run('AI Queries', [{ json: A1 }])).map(i => i.json);
+  console.log('   AI questions ->', JSON.stringify(aq.map(q => q.query)));
+  check('R60: the question asked of ChatGPT and Perplexity is about what the site sells ("best e invoicing software uae"), not "the best ai in cloud company"',
+    aq[0].category_query === 'best e invoicing software uae' && !aq.some(q => /ai in cloud/.test(q.query)), JSON.stringify(aq));
+  const gate = async (keyword) => (await run('_fit_gate', [{ json: { keyword, ctx: {} } }]))[0].json;
+  const refusedGov = []; for (const k of ['mofa attestation dubai', 'how to check emirates id status with passport number', 'emirates id renewal fees']) { const g = await gate(k); if (!g.ok && g.reason === 'government') refusedGov.push(k); }
+  check('R60: the gate itself refuses a public body\'s service to a person, even with "how to" in front and no topics on file',
+    refusedGov.length === 3, JSON.stringify(refusedGov));
+  const kept = []; for (const k of ['fta vat registration', 'zatca e invoicing', 'emaratax registration guide', 'mohre wps']) { const g = await gate(k); if (g.ok) kept.push(k); }
+  check('R60: a public body with a business topic of its own is still a topic ("fta vat registration", "zatca e invoicing", "emaratax registration guide", "mohre wps")',
+    kept.length === 4, JSON.stringify(kept));
+  reset();
+});
+
+await guard('S104 R61 rankings the site has, from Google\'s own data', async () => {
+  const SN = 'S104 R61 — no "does not rank in Google\'s top 10 for any keyword" beside Search Console\'s own top-10 queries: the statements name DataForSEO and carry Google\'s count, Key Numbers label their source';
+  reset(); begin(SN); const check = A2check(SN);
+  const X = require('./fixtures_ra2'); const K = X.kw614;
+  const plan = A2clone(X.gsc595.plan); plan.base = { ...plan.base, audit_level: 'full', extra_findings: A2clone(K.authority_findings), extra_works: ['Ranks #1 for its brand name'] };
+  check('R61 (the run as it happened): exec 614 raised "does not rank in Google\'s top 10 for any keyword" and "No rankings for informational searches" from DataForSEO alone',
+    K.authority_findings.some(f => /does not rank in Google.s top 10 for any keyword/.test(f.title)) && K.authority_findings.some(f => f.title === 'No rankings for informational searches'), JSON.stringify(K.authority_findings.map(f => f.title)));
+  const gf = await A2gsc({ plan });
+  const rk = gf.search_console.rankings; const fx = gf.extra_findings;
+  console.log('   rankings ->', JSON.stringify(rk && { top10: rk.top10, brand: rk.top10_brand, top30: rk.top30, by_intent: rk.by_intent_top30, ex: rk.examples }));
+  check('R61: Search Console\'s own count is read in the same run — queries at an average position in the top 10, several of them for the brand', !!rk && rk.top10 >= 10 && rk.top10_brand >= 2, JSON.stringify(rk || null));
+  const ten = fx.find(f => f.title === 'Far fewer top-10 rankings than competitors');
+  check('R61: no finding says the site "does not rank in Google\'s top 10 for any keyword"; the comparison stays DataForSEO against DataForSEO and carries Google\'s measured count beside it',
+    !fx.some(f => /does not rank in Google.s top 10 for any keyword/.test(f.title)) && !!ten && /DataForSEO.s ranking database, top-10 rankings in United Arab Emirates: techand\.ai 0 vs competitor median/.test(ten.evidence)
+    && /Search Console \(measured/.test(ten.evidence) && new RegExp('\\b' + (rk || {}).top10 + ' queries at an average position in Google.s top 10').test(ten.evidence),
+    JSON.stringify(ten || fx.map(f => f.title)));
+  const inf = fx.find(f => /rankings for informational searches/.test(f.title));
+  check('R61: the intent finding counts Search Console\'s queries too — "No rankings for informational searches" becomes a Low "Few rankings …" naming both sources',
+    !!inf && inf.title === 'Few rankings for informational searches' && inf.severity === 'Low' && /DataForSEO.s database holds 0 informational keywords/.test(inf.evidence) && /Search Console shows \d+ informational quer/.test(inf.evidence),
+    JSON.stringify(inf || null));
+  const trf = fx.find(f => f.title === 'Organic traffic is under 10% of competitors');
+  check('R61: the traffic comparison says the 0 is the provider\'s estimate and adds what Search Console measured (32 clicks)',
+    !!trf && /DataForSEO.s estimate/.test(trf.evidence) && /Search Console measured 32 clicks and 5,308 impressions/.test(trf.evidence), JSON.stringify(trf || null));
+  check('R61: "Ranks #1 for its brand name" never stands beside a "does not rank" finding', !(gf.extra_works.some(w => /Ranks #1 for its brand name/.test(w)) && fx.some(f => /does not rank/i.test(f.title))), JSON.stringify(fx.map(f => f.title)));
+  mock('Normalize Input', [{ json: { domain: 'techand.ai', country: 'United Arab Emirates', started_at: new Date().toISOString() } }]);
+  const SK0 = { seeds: [], domains: [], your_top_by_intent: { informational: [], navigational: [], commercial: [], transactional: [] }, opportunities_by_intent: { informational: [], navigational: [], commercial: [], transactional: [] }, easy_wins: [], keyword_gap: [], striking_distance: [], refused: [] };
+  const docF = decode(await run('Build Full Report', [{ json: { ...gf, domain: 'techand.ai', country: 'United Arab Emirates', site_keywords: SK0, competitor_benchmark: K.base.competitor_benchmark,
+    site_audit: { health_score: 69, raw_score: 69, grade: 'C', findings: [], what_works: [], issue_counts: {}, category_scores: {}, not_assessed: [], notes: [], search_console: gf.search_console, competitor_benchmark: K.base.competitor_benchmark } } }]));
+  const kn = docF.slice(docF.indexOf('Key Numbers'), docF.indexOf('Key Numbers') + 2500);
+  check('R61: Key Numbers label DataForSEO\'s figures as DataForSEO\'s and add Google\'s own measured count of top-10 queries',
+    /Keywords in top 10 — DataForSEO&#39;s database/.test(kn) && /Queries in Google&#39;s top 10 — Search Console, measured/.test(kn) && /Estimated monthly organic visits — DataForSEO&#39;s estimate/.test(kn), kn.slice(0, 900));
+  check('R61: §4 no longer says "does not rank in the top 30 for any keyword"; it names the database and what Google measured',
+    !/does not rank in the top 30 for any keyword/.test(docF) && /shows \d+ queries at an average position in the top 30/.test(docF), (docF.match(/<div class="note">[^<]*top-30[^<]*<\/div>/) || [''])[0]);
+  reset();
+});
+
+await guard('S105 R73 R74 lineage that matches the page, and a single reading is not a fix', async () => {
+  const SN = 'S105 R73 / R74 — every lineage row reads the figure the report printed; a finding that rested on one outside reading is "no longer seen", not "fixed", and the sample sentence says when the earlier report stored no sample';
+  reset(); begin(SN); const check = A2check(SN);
+  const X = require('./fixtures_ra2'); const K = X.kw614;
+  // ---- R73: the technical audit ----
+  const gf = await A2gsc(); gf.crux = A2clone(X.report.crux_595);
+  const full = await A2scored(gf);
+  const rep = await run('Build Audit Report', [{ json: full }]); const lin = rep[0].json.lineage || [];
+  const cwv = lin.find(l => l.figure === 'Core Web Vitals (real users)') || {};
+  check('R73: the technical audit\'s CrUX row names the Chrome UX Report and its answer ("no field data"), not "source not recorded"',
+    cwv.source === 'crux' && cwv.basis !== 'unknown' && cwv.sample === 'no field data' && /too few real-user visits/.test(cwv.note || ''), JSON.stringify(cwv));
+  check('R73: a technical audit runs no PageSpeed test, so it prints no Lighthouse row', !lin.some(l => /Lighthouse/.test(l.figure)), JSON.stringify(lin.map(l => l.figure)));
+  // ---- R73: the full report ----
+  reset();
+  mock('Normalize Input', [{ json: { domain: 'techand.ai', country: 'United Arab Emirates', started_at: new Date().toISOString() } }]);
+  mock('Domain Ages', [{ json: X.report.domain_ages_614 }]);
+  const kw = (k, v) => ({ keyword: k, volume: v, difficulty: 20, cpc: 1, intent: 'commercial', competitors: [] });
+  const SK = { seeds: ['e invoicing software uae'], domains: [], your_top_by_intent: { informational: [], navigational: [], commercial: [], transactional: [] },
+    opportunities_by_intent: { informational: [], navigational: [], commercial: [kw('dynamics 365 partner uae', 90), kw('business central uae', 70)], transactional: [] },
+    easy_wins: [kw('business central uae', 70), kw('peppol uae', 40)], keyword_gap: [kw('erp software uae', 300), kw('e invoicing uae', 200)], striking_distance: [], refused: [] };
+  const docF = await run('Build Full Report', [{ json: { domain: 'techand.ai', country: 'United Arab Emirates', site_keywords: SK, authority: X.report.authority_614, competitor_benchmark: K.base.competitor_benchmark,
+    site_audit: { health_score: 69, raw_score: 69, grade: 'C', findings: [], what_works: [], issue_counts: {}, category_scores: {}, not_assessed: [], notes: [], crux: A2clone(X.report.crux_595), competitor_benchmark: K.base.competitor_benchmark } } }]);
+  const linF = docF[0].json.lineage || [];
+  const row = (re) => linF.find(l => re.test(l.figure)) || {};
+  console.log('   full-report lineage ->', JSON.stringify(linF.map(l => [l.figure, l.basis, l.period, l.sample])));
+  check('R73: the keyword row counts the keywords section 4 prints (5 here), not "sample 0 keywords"', row(/^Searches per month/).sample === '5 keywords in section 4', JSON.stringify(row(/^Searches per month/)));
+  check('R73: the backlink row reads the referring domains the authority block printed (18), not "sample not recorded"', row(/^Backlinks/).sample === '18 referring domains to your site', JSON.stringify(row(/^Backlinks/)));
+  check('R73: the CrUX row is not "measured" when the Chrome UX Report had no field data', row(/^Core Web Vitals/).basis !== 'measured' && row(/^Core Web Vitals/).sample === 'no field data', JSON.stringify(row(/^Core Web Vitals/)));
+  check('R73: the domain age is dated by its cache (looked up 2026-10-11), not "as of today", with the domains it covers', /looked up 2026-10-11 and cached/.test(row(/^Domain age/).period || '') && row(/^Domain age/).sample === '3 domains looked up', JSON.stringify(row(/^Domain age/)));
+  check('R73: no PageSpeed test in the data, no Lighthouse row', !linF.some(l => /Lighthouse/.test(l.figure)), JSON.stringify(linF.map(l => l.figure)));
+  // ---- R74 ----
+  reset();
+  const keyOf = (f) => String(f.category || '') + '|' + String(f.title || '').toLowerCase().replace(/\d[\d,.%]*/g, '#').replace(/["'“”‘’]/g, '').replace(/\s+/g, ' ').trim();
+  const PREV = [{ category: 'AI Search Readiness', severity: 'High', title: 'Site does not rank at the top for its own brand name', affected_count: 0, checked: 0 },
+    { category: 'Crawlability & Indexing', severity: 'High', title: 'A large share of important pages is not indexed by Google', affected_count: 18, checked: 0 },
+    { category: 'Crawlability & Indexing', severity: 'Medium', title: 'Missing canonical tag', affected_count: 2, checked: 0 }];
+  mock('Check Crawl', [{ json: { domain: 'techand.ai' } }]);
+  mock('Load Audit History', [{ json: { site_id: 'site_techand-ai', audit_id: 'aud_prev566', audited_at: '2026-10-14T16:30:00.853Z', report_type: 'full', health_score: 69, grade: 'C', findings: 3 } }]);
+  mock('Load Audit Findings', PREV.map(f => ({ json: { site_id: 'site_techand-ai', audit_id: 'aud_prev566', finding_key: keyOf(f), ...f } })));
+  mock('Get Crawled Pages', { tasks: [{ result: [{ items: [] }] }] });
+  mock('Build Site Issues', [{ json: { domain: 'techand.ai', site_audit: { domain: 'techand.ai', audit_level: 'full', health_score: 70, weights: { 'Crawlability & Indexing': 20, 'AI Search Readiness': 10 },
+    findings: [{ category: 'Crawlability & Indexing', severity: 'High', title: 'A large share of important pages is not indexed by Google', affected_count: 16, checked: 45 }] } } }]);
+  const D = (await run('Audit Diff', store['Load Audit Findings']))[0].json.site_audit.audit_diff;
+  console.log('   diff ->', D.summary);
+  check('R74: the brand finding, which rested on one results-page read each time, is "no longer seen" — not "fixed"',
+    !D.fixed.some(f => /own brand name/.test(f.title)) && (D.no_longer_seen || []).some(f => /own brand name/.test(f.title)), JSON.stringify({ fixed: D.fixed, gone: D.no_longer_seen }));
+  check('R74: a measured finding that is gone is still "fixed"', D.fixed.some(f => f.title === 'Missing canonical tag'), JSON.stringify(D.fixed));
+  check('R74: the summary does not claim a different number of pages when the earlier report recorded none, and it counts what is no longer seen',
+    !/measured on a different number of pages this time/.test(D.summary) && /stored last time without the number of pages/.test(D.summary) && /1 no longer seen/.test(D.summary), D.summary);
+  reset();
+});
+
 
 H.report();
 })();

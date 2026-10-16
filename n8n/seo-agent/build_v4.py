@@ -646,7 +646,12 @@ patch('Competitor Analysis', "  const rdap = (ages[i]?.events || []).find(e => /
 log('Domain age: free RDAP lookup added as a fallback to DataForSEO WHOIS (covers .ae, .pk, .de and other ccTLDs)')
 
 # ---- smarter competitor-discovery queries (H1s of shallow service pages instead of raw titles) ----
-setcode('Fallback Queries', r"""// Queries used to discover competitors on Google: what this site's key pages are about, taken from H1s/titles of shallow pages.
+setcode('Fallback Queries', r"""// Queries used to discover competitors on Google and to seed the full report's keyword research: what this business sells.
+// R60 (2026-10-16, re-rating of 2026-10-15): the seeds were the H1s of the crawled pages sorted by click depth, and a page no link reaches
+// gets click_depth 0 from a crawler that also starts from the sitemap — so three orphan cards ("ai & automation", "assess & envision",
+// "build & implement") sorted ahead of every real service page and became "Keyword research based on your services". The site's own words
+// come first now: the keywords the owner configured for this site, then the services its site model holds (the ones the linked pages talk
+// about most first), and only then page headings, with pages no link reaches last. Each query says where it came from (`source`).
 const base = $('Schema Findings').first().json;
 const pages = $('Get Crawled Pages').first().json.tasks?.[0]?.result?.[0]?.items || [];
 const brand = String(base.domain || '').split('.')[0].toLowerCase();
@@ -655,22 +660,40 @@ const skip = (u) => /privacy|cookie|terms|security|legal|contact|about|insights|
 const clean = (t) => String(t || '').split(/\s[|\-–—:]\s/)[0].replace(/[^\w\s&\-]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
 const generic = /^(page|home|homepage|welcome|untitled|services?|products?|solutions?|our (services|work|products)|index|overview)\b/;
 const ok = (q) => { const w = q ? q.split(' ').length : 0; return w >= 2 && w <= 7 && !generic.test(q) && !(brand.length > 3 && q.includes(brand)); };
+const bareOf = (d) => String(d || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
+const listOf = (v) => { if (Array.isArray(v)) return v; const s = String(v == null ? '' : v).trim(); if (!s) return [];
+  if (/^\[/.test(s)) { try { const a = JSON.parse(s); return Array.isArray(a) ? a : []; } catch (e) { return []; } } return s.split(/[,;\n]+/); };
+// the stored site row and the site model of THIS site (another site's row never seeds this one)
+let siteRow = {}; try { const r = $('Load Site Row (Model)').first().json || {}; if (r.domain && bareOf(r.domain) === bareOf(base.domain)) siteRow = r; } catch (e) {}
+let model = null; try { const m = $('Restore Site Model').first().json.site_model || null; if (m && (!m.domain || bareOf(m.domain) === bareOf(base.domain))) model = m; } catch (e) {}
+// a page with click depth 0 that is not the homepage was reached only through the sitemap (R117): no link leads a visitor to it
+const unlinked = (p) => !!((p.checks || {}).is_orphan_page) || (p.click_depth === 0 && !isHome(p.url));
+const live = pages.filter(p => p.url && !isHome(p.url) && !skip(p.url) && (p.status_code == null || p.status_code === 200));
+const headOf = (p) => { const m = p.meta || {}; return [clean(((m.htags || {}).h1 || [])[0]), clean(m.title)].join(' '); };
+const linkedText = live.filter(p => !unlinked(p)).map(headOf);
+const toks = (s) => String(s || '').toLowerCase().split(/[^a-z0-9]+/).filter(t => t.length > 2 && !['and', 'for', 'the', 'with', 'microsoft'].includes(t));
+const out = []; const add = (q, source) => { if (q && ok(q) && !out.some(o => o.query === q) && out.length < 3) out.push({ query: q, source }); };
+// 1. the keywords the owner configured for this site
+for (const k of listOf(siteRow.keywords)) add(clean(k), 'your keywords');
+// 2. the services the site model holds, the ones the linked pages talk about most first
+const services = [...new Set([...listOf(model && model.services), ...listOf(siteRow.services_json)].map(clean).filter(Boolean))];
+const svcScore = (s) => { const t = toks(s); if (!t.length) return 0; return linkedText.filter(h => t.every(w => h.includes(w))).length; };
+services.map((s, i) => ({ s, i, n: svcScore(s) })).filter(x => x.n > 0).sort((a, b) => b.n - a.n || a.i - b.i).forEach(x => add(x.s, 'your services'));
+// 3. page headings: linked pages first (shallow, then well linked), a page no link reaches last
 const scored = [];
-pages.filter(p => p.url && !isHome(p.url) && !skip(p.url) && (p.status_code == null || p.status_code === 200)).forEach(p => {
+live.forEach(p => {
   const m = p.meta || {};
   const cands = [clean(((m.htags || {}).h1 || [])[0]), clean(m.title)].filter(ok);
-  if (cands.length) scored.push({ q: cands[0], depth: p.click_depth ?? 9, links: m.inbound_links_count || 0 });
+  if (cands.length) scored.push({ q: cands[0], depth: unlinked(p) ? 99 : (p.click_depth ?? 9), links: m.inbound_links_count || 0 });
 });
 scored.sort((a, b) => a.depth - b.depth || b.links - a.links);
-const queries = [];
-for (const s of scored) { if (!queries.includes(s.q)) queries.push(s.q); if (queries.length >= 3) break; }
-if (!queries.length) {
+for (const s of scored) add(s.q, s.depth >= 99 ? 'a page no link reaches' : 'page heading');
+if (!out.length) {
   const home = pages.find(p => isHome(p.url));
-  const q = clean(home && home.meta && ((((home.meta.htags || {}).h1 || [])[0]) || home.meta.title));
-  if (ok(q)) queries.push(q);
+  add(clean(home && home.meta && ((((home.meta.htags || {}).h1 || [])[0]) || home.meta.title)), 'homepage heading');
 }
-if (!queries.length) return [{ json: { query: brand + ' services' } }];
-return queries.map(q => ({ json: { query: q } }));""")
+if (!out.length) return [{ json: { query: brand + ' services', source: 'the domain name' } }];
+return out.map(q => ({ json: q }));""")
 log('Competitor discovery: queries come from H1s/titles of shallow service pages, skipping generic or brand-only strings')
 
 # ---- topic clusters: same intent, bounded size ----
@@ -1398,12 +1421,15 @@ const scSection = (a, num) => {
   const sc = a.search_console || {}, st = a.site_structure || {};
   const e2 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const n2 = (v) => (Number(v) || 0).toLocaleString('en-GB');
-  const p2 = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/, '') || '/';
+  // R59 (2026-10-16): a path alone only where the host is the site's own canonical one. Any other host is printed in full: stripping it
+  // listed "/" twice in the top-page table (14 clicks on https://techand.ai/, 3 on https://www.techand.ai/) and hid the split.
+  const h2 = String(((sc.host_split || {}).canonical_host) || a.canonical_host || '').toLowerCase();
+  const p2 = (u) => { const m = String(u || '').match(/^https?:\/\/([^\/?#]+)(.*)$/i); if (!m) return String(u || '') || '/'; return (!h2 || m[1].toLowerCase() === h2) ? (m[2] || '/') : String(u); };
   let h = `<h2 class="pb">${num}. Search Console &amp; Site Structure</h2>`;
   if (st.crawled_pages != null) {
     const db = st.depth_buckets || {}; const sm = st.sitemap || {};
     h += `<h3>Site structure (from the crawl)</h3><p>${n2(st.crawled_pages)} pages crawled, ${n2(st.indexable_pages)} indexable${st.within_3_clicks_pct != null ? '; ' + st.within_3_clicks_pct + '% of pages are within 3 clicks of the homepage' : ''}.</p>` +
-      `<table class="ct"><tr><th>Clicks from home</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4+</th></tr><tr><td>Pages</td><td>${n2(db[0])}</td><td>${n2(db[1])}</td><td>${n2(db[2])}</td><td>${n2(db[3])}</td><td>${n2(db['4+'])}</td></tr></table>` +
+      `<table class="ct"><tr><th>Clicks from home</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4+</th>${db.unlinked ? '<th>No link reaches it</th>' : ''}</tr><tr><td>Pages</td><td>${n2(db[0])}</td><td>${n2(db[1])}</td><td>${n2(db[2])}</td><td>${n2(db[3])}</td><td>${n2(db['4+'])}</td>${db.unlinked ? '<td>' + n2(db.unlinked) + '</td>' : ''}</tr></table>` +
       ((st.sections || []).length ? `<table class="ct"><tr><th>Section</th><th>Pages crawled</th></tr>` + st.sections.map(s => `<tr><td>${e2(s.section)}</td><td>${n2(s.pages)}</td></tr>`).join('') + `</table>` : '') +
       `<p>XML sitemap: ${sm.status === 200 ? n2(sm.urls) + ' URLs' + (sm.is_index ? ' (index of ' + n2(sm.children) + ' sitemaps)' : '') : 'not readable at ' + e2(sm.url)}${st.indexable_not_in_sitemap ? '; ' + n2(st.indexable_not_in_sitemap) + ' indexable pages missing from it' : ''}${st.sitemap_only ? '; ' + n2(st.sitemap_only) + ' sitemap URLs that no internal link reaches' : ''}${st.sitemap_broken ? '; ' + n2(st.sitemap_broken) + ' sitemap URLs not returning 200' : ''}.</p>`;
   }
@@ -1413,10 +1439,12 @@ const scSection = (a, num) => {
     const t = sc.totals;
     h += `<p>Property <b>${e2(sc.property)}</b> (${e2(sc.permission)}).</p>`;
     if (t) h += `<p>Last 28 days (${e2(t.period.start)} to ${e2(t.period.end)}): <b>${n2(t.clicks)}</b> clicks, <b>${n2(t.impressions)}</b> impressions, CTR ${(t.ctr * 100).toFixed(2)}%, average position ${t.position}; ${n2(sc.pages_with_impressions)} pages and ${n2(sc.queries_with_impressions)} queries with impressions.</p>`;
+    const hs2 = sc.host_split || null;   // R59: the two addresses Google shows, side by side
+    if (hs2 && hs2.found) h += `<p><b>Google shows this site under two addresses.</b> ` + (hs2.hosts || []).map(o => `https://${e2(o.host)}: ${n2(o.pages)} pages, ${n2(o.clicks)} clicks, ${n2(o.impressions)} impressions (${n2(o.impressions_pct)}%)`).join('; ') + `. The site itself names https://${e2(hs2.canonical_host)} as its address (see the www and non-www finding).</p>`;
     h += `<table class="ct"><tr><th>Submitted sitemap</th><th>URLs</th><th>Last read</th><th>Errors</th><th>Warnings</th></tr>` + ((sc.sitemaps || []).length ? sc.sitemaps.map(s => `<tr><td>${e2(s.path)}</td><td>${n2(s.urls)}</td><td>${e2(String(s.downloaded || '').slice(0, 10) || (s.pending ? 'pending' : '—'))}</td><td>${n2(s.errors)}</td><td>${n2(s.warnings)}</td></tr>`).join('') : `<tr><td colspan="5">none submitted${sc.sitemaps_error ? ' (' + e2(sc.sitemaps_error) + ')' : ''}</td></tr>`) + `</table>`;
     const covRows = Object.entries(sc.coverage || {});
     if (covRows.length) h += `<p>Index coverage of ${n2((sc.inspections || []).length)} sampled pages: ` + covRows.map(([k, v]) => `${n2(v)} × ${e2(k)}`).join(', ') + ((sc.rich_results || []).length ? `. Rich results detected: ${e2(sc.rich_results.join(', '))}` : '') + `.</p>`;
-    if ((sc.not_indexed || []).length) h += `<table class="ct"><tr><th>Not indexed</th><th>Reason</th></tr>` + sc.not_indexed.slice(0, 10).map(x => `<tr><td>${e2(p2(x.url))}</td><td>${e2(x.reason)}</td></tr>`).join('') + `</table>`;
+    if ((sc.not_indexed || []).length) h += `<table class="ct"><tr><th>Not indexed</th><th>Reason</th></tr>` + sc.not_indexed.slice(0, 10).map(x => `<tr><td>${e2(p2(x.url))}</td><td>${e2(x.reason)}${x.shown_as ? ' — shown by Google as ' + e2(x.shown_as) + ' (' + n2(x.shown_impressions) + ' impressions)' : ''}</td></tr>`).join('') + `</table>`;
     if ((sc.top_queries || []).length) h += `<table class="ct"><tr><th>Top query</th><th>Clicks</th><th>Impressions</th><th>Position</th></tr>` + sc.top_queries.slice(0, 10).map(q => `<tr><td>${e2(q.query)}</td><td>${n2(q.clicks)}</td><td>${n2(q.impressions)}</td><td>${q.position}</td></tr>`).join('') + `</table>`;
     if ((sc.top_pages || []).length) h += `<table class="ct"><tr><th>Top page</th><th>Clicks</th><th>Impressions</th><th>Position</th></tr>` + sc.top_pages.slice(0, 10).map(q => `<tr><td>${e2(p2(q.page))}</td><td>${n2(q.clicks)}</td><td>${n2(q.impressions)}</td><td>${q.position}</td></tr>`).join('') + `</table>`;
   }
@@ -3644,13 +3672,17 @@ IDX_SECTION_JS = r"""// ---- what Google says about each key page (G25, 2026-10-
 const indexSection = (sc) => {
   const e3 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const p3 = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/, '') || '/';
+  // R59 (2026-10-16): Google's canonical is printed with its host whenever the host differs from the page's — as a bare path it read
+  // "/d365-…-rollout-uae" for the page /d365-…-rollout-uae, a canonical identical to the page, while Google had chosen https://techand.ai
+  const h3 = (u) => (String(u || '').match(/^https?:\/\/([^\/?#]+)/i) || [])[1] || '';
+  const p3c = (g, u) => (h3(g) && h3(u) && h3(g).toLowerCase() !== h3(u).toLowerCase()) ? String(g) : p3(g);
   const ic = sc.index_coverage || null;
   if (!ic) return '';
   let h = `<h3>Google's index view of the key pages (URL Inspection)</h3><p>${e3(ic.text)}.</p>`;
   if ((ic.pages || []).length) {
     h += `<table class="ct"><tr><th>Page</th><th>In Google</th><th>State</th><th>Google's canonical</th><th>Last crawl</th><th>Mobile</th><th>Rich results</th></tr>`
       + ic.pages.slice(0, 25).map(p => `<tr><td>${e3(p3(p.url))}</td><td>${p.indexed === true ? '<span class="ok">yes</span>' : p.indexed === false ? '<span class="bad">no</span>' : '—'}</td><td>${e3(p.coverage || p.verdict || '—')}</td>`
-        + `<td>${p.canonical_ok === false ? '<span class="bad">' + e3(p3(p.google_canonical)) + '</span>' : p.canonical_ok === true ? 'same as ours' : '—'}</td>`
+        + `<td>${p.canonical_ok === false ? '<span class="bad">' + e3(p3c(p.google_canonical, p.url)) + '</span>' : p.canonical_ok === true ? 'same as ours' : '—'}</td>`
         + `<td>${e3(String(p.last_crawl || '').slice(0, 10) || '—')}</td><td>${p.mobile_usable === true ? 'ok' : p.mobile_usable === false ? '<span class="bad">issues</span>' : '—'}</td>`
         + `<td>${e3((p.rich_results || []).join(', ') || '—')}</td></tr>`).join('') + `</table>`;
     if (ic.pages.length > 25) h += `<p class="small">${ic.pages.length - 25} more inspected pages are in the data behind this report.</p>`;
@@ -3743,20 +3775,39 @@ LINEAGE_SRC47 = seo_events.LINEAGE_SRC
 setcode('Build Full Report', LINEAGE_SRC47 + '\n' + code('Build Full Report'))
 _LIN47 = """// G29 (2026-10-13): every figure group of this report with its source, period and sample (LN, v5/code/_lineage.js)
 const _sc47 = a.search_console || {};
+// R73 (2026-10-16, re-rating 2026-10-15): each row reads the field the report actually printed. The keyword row read a.keyword_ideas
+// (the keywords are in d.site_keywords: "sample 0 keywords" beside ~60 printed), the backlink row a.backlinks (they are in d.authority:
+// "sample not recorded"), the CrUX row was hard-coded "measured" when the Chrome UX Report had answered "no field data", and the domain
+// age was dated today although every age came from the cache. A row appears only when its figure is in the report.
+const _kwN47 = (() => { const s = new Set(); const k47 = d.site_keywords || {}; const add = (k) => { if (k && k.keyword) s.add(String(k.keyword).toLowerCase()); };
+  for (const l of Object.values(k47.opportunities_by_intent || {})) (l || []).forEach(add);
+  for (const l of Object.values(k47.your_top_by_intent || {})) (l || []).forEach(add);
+  (k47.easy_wins || []).forEach(add); (k47.keyword_gap || []).forEach(add); (k47.striking_distance || []).forEach(add); return s.size; })();
+const _you47 = (((d.authority || {}).rows) || []).find(r => r && r.is_you && r.available !== false) || null;
+const _crux47 = a.crux || d.crux || null;
+const _ps47 = (((d.pagespeed || {}).rows) || []).filter(r => r && r.available !== false && r.score != null);
+let _ages47 = null; try { _ages47 = ($('Domain Ages').first().json || {}).ages || null; } catch (e) { _ages47 = null; }
+const _ageRows47 = (((a.competitor_benchmark || d.competitor_benchmark || {}).rows) || []).filter(r => r && r.domain_age_years != null);
+const _ageStored47 = [...new Set(Object.values(_ages47 || {}).map(x => (String((x || {}).source || '').match(/stored (\\d{4}-\\d{2}-\\d{2})/) || [])[1]).filter(Boolean))].sort();
 const lineage = [
   LN.of('Health score and the findings', 'crawl', { basis: 'modelled', period: LN.asOf(a.audited_at || today), sample: LN.sample(a.pages_crawled, 'pages crawled'),
     note: 'our own 0-100 score: points off per finding by severity (the table below), not a Google figure' }),
   _sc47.connected
     ? LN.of('Clicks, impressions and index coverage', 'gsc', { basis: 'measured', period: 'the last 28 days', sample: LN.sample((_sc47.totals || {}).impressions, 'impressions'), note: 'property ' + String(_sc47.property || '') })
     : LN.unknown('Clicks, impressions and index coverage', String(_sc47.error || 'Search Console is not connected for this site')),
-  LN.of('Searches per month, difficulty, cost per click and traffic estimates', 'kwdata', { basis: 'estimated', period: 'the provider\\'s latest 12-month average',
-    sample: LN.sample((a.keyword_ideas || a.keywords || []).length, 'keywords'), note: 'provider estimates for ' + String(d.country || '') + ', not measurements of your site' }),
-  LN.of('Backlinks and referring domains', 'backlink_index', { basis: 'reported', period: LN.asOf(today), sample: LN.sample((a.backlinks || {}).referring_domains, 'referring domains'),
-    note: 'one crawler\\'s index of the web: it finds much of the web, never all of it' }),
-  LN.of('Core Web Vitals (real users)', 'crux', { basis: 'measured', period: 'the last 28 days of Chrome visits', sample: 'all Chrome visitors Google could aggregate',
-    note: 'where a page or template has too few visits the report says so instead of showing a figure' }),
-  LN.of('Lighthouse scores and speed savings', 'pagespeed', { basis: 'one_sample', period: LN.asOf(today), sample: 'one simulated mobile load per page tested' }),
-  LN.of('Domain age', 'rdap', { basis: 'reported', period: LN.asOf(today), sample: LN.sample(((a.domain_ages || {}).rows || []).length || undefined, 'domains looked up'), note: 'the registry record, cached for a year' }),
+  ...(_kwN47 ? [LN.of('Searches per month, difficulty, cost per click and traffic estimates', 'kwdata', { basis: 'estimated', period: 'the provider\\'s latest 12-month average',
+    sample: LN.sample(_kwN47, 'keywords in section 4'), note: 'provider estimates for ' + String(d.country || '') + ', not measurements of your site' })] : []),
+  ...(_you47 ? [LN.of('Backlinks and referring domains', 'backlink_index', { basis: 'reported', period: LN.asOf(today), sample: LN.sample(_you47.referring_domains, 'referring domains to your site'),
+    note: 'one crawler\\'s index of the web: it finds much of the web, never all of it' })] : []),
+  (_crux47 && _crux47.available !== false)
+    ? LN.of('Core Web Vitals (real users)', 'crux', { basis: 'measured', period: 'the last 28 days of Chrome visits', sample: 'all Chrome visitors Google could aggregate',
+      note: 'where a page or template has too few visits the report says so instead of showing a figure' })
+    : _crux47 ? LN.of('Core Web Vitals (real users)', 'crux', { basis: 'reported', period: 'the last 28 days of Chrome visits', sample: 'no field data',
+      note: 'the Chrome UX Report answered: ' + String(_crux47.not_available || _crux47.note || 'too few real-user visits for field data') })
+    : LN.unknown('Core Web Vitals (real users)', 'the Chrome UX Report was not asked in this run'),
+  ...(_ps47.length ? [LN.of('Lighthouse scores and speed savings', 'pagespeed', { basis: 'one_sample', period: LN.asOf(today), sample: LN.sample(_ps47.length, 'site(s), one simulated mobile load each') })] : []),
+  ...(_ageRows47.length ? [LN.of('Domain age', 'rdap', { basis: 'reported', period: _ageStored47.length ? 'looked up ' + _ageStored47[0] + ' and cached (a registration date does not change)' : LN.asOf(today),
+    sample: LN.sample(_ageRows47.length, 'domains looked up'), note: 'the registry record, cached for a year' })] : []),
 ];
 html += '<h2 class="pb">' + '16a. Where these numbers come from</h2>'
   + '<table class="ct"><tr><th>Figure</th><th>Source</th><th>Period</th><th>Sample</th><th>How it was arrived at</th></tr>'
@@ -6963,10 +7014,14 @@ const lineage = [
   _ins72.asked
     ? LN.of('What Google says about each key page', 'inspection', { basis: 'measured', period: LN.asOf(today), sample: LN.sample(_ins72.checked, 'of ' + _ins72.asked + ' pages Google answered for'), note: String(_ins72.note || '') })
     : LN.unknown('What Google says about each key page', 'no URL inspection ran for this audit'),
+  // R73 (2026-10-16): the Chrome UX Report is a known source that ANSWERED ("no field data"), not "source not recorded"; and a
+  // technical audit runs no PageSpeed test, so it prints no Lighthouse row (it printed one unconditionally)
   (a.crux && a.crux.available !== false)
     ? LN.of('Core Web Vitals (real users)', 'crux', { basis: 'measured', period: 'the last 28 days of Chrome visits', sample: 'all Chrome visitors Google could aggregate' })
-    : LN.unknown('Core Web Vitals (real users)', String(((a.crux || {}).note) || 'too few Chrome visits for Google to report field data')),
-  LN.of('Lighthouse scores and speed savings', 'pagespeed', { basis: 'one_sample', period: LN.asOf(today), sample: 'one simulated mobile load per page tested' }),
+    : a.crux ? LN.of('Core Web Vitals (real users)', 'crux', { basis: 'reported', period: 'the last 28 days of Chrome visits', sample: 'no field data',
+        note: 'the Chrome UX Report answered: ' + String(a.crux.not_available || a.crux.note || 'too few real-user visits for field data') })
+    : LN.unknown('Core Web Vitals (real users)', 'the Chrome UX Report was not asked in this audit'),
+  ...((((d.pagespeed || {}).rows) || []).some(r => r && r.score != null) ? [LN.of('Lighthouse scores and speed savings', 'pagespeed', { basis: 'one_sample', period: LN.asOf(today), sample: 'one simulated mobile load per page tested' })] : []),
   LN.of('Crawler access for search and AI bots', 'own_check', { basis: 'measured', period: LN.asOf(today), sample: '11 user agents requested', note: 'what the live robots.txt and the server answered us' }),
 ];
 html += `<h2>6a. Where these numbers come from</h2>` + LN.block(lineage, { title: '' });
@@ -9407,6 +9462,269 @@ log('Know the customer\'s own site before advising (2026-10-16, family F1: R34 R
     'off-target only on its own title and prints one host; a search the site ranks for with a page is covered by it; one grouping rule '
     '(KWI.pageGroup) for ladder and discovery; the head term\'s traffic after the click loss; no chance band on an unmeasured reach; the Keyword '
     'Check names the ladder; no falling "where to start" without a label; nothing a ladder or a page covers is "Now"')
+
+
+# =============================================================================
+# 90. KNOW THE CUSTOMER'S OWN SITE BEFORE ADVISING: THE HOST GOOGLE SHOWS, THE RANKINGS GOOGLE MEASURED, THE PAGES A LINK REACHES
+#     (2026-10-16, re-rating of 2026-10-15, docs/system-review-2026-10-15/defects/B_technical.md R59 / R61 / R65 / R117)
+#
+#     * R59 (High) — the first-ranked finding of the technical audit AND the full report read "Google serves the bare host" as
+#       "a large share of important pages is not indexed … request indexing": all 16 "not indexed" www pages had impressions on
+#       https://techand.ai in the same Search Console answer (1,374 in 28 days), Google had chosen the bare host as canonical for 3,
+#       and the only sitemap submitted to the property was https://techand.ai/sitemap.xml. *GSC Audit Findings* never looked at the
+#       other host, counted a canonical mismatch twice two different ways (3 and 0), and the report tables stripped the host so "/"
+#       appeared twice and Google's canonical printed as the page itself. Now: one host-split finding with the per-host counts, the
+#       pages Google chose on the other host and the sitemap that was submitted; a page shown under the other host leaves the
+#       not-indexed finding (it stays in the list, with what Google shows instead); "One canonical host" leaves what-works when Google
+#       disagrees; one definition of a canonical mismatch for both counts; the page-watch kit compares the host too.
+#     * R61 (High) — "the site does not rank in Google's top 10 for any keyword" (DataForSEO's database) beside Search Console's 15
+#       queries in the top 10: the finding, the per-intent finding, the traffic estimate and *Key Numbers* now name their source and
+#       carry Google's own count; the competitor comparison stays provider against provider.
+#     * R65 — impact weights read every page row Search Console measured (`page_traffic`), not the top 10; a complete list makes a
+#       missing page a measured zero; every affected URL counts, not only the samples.
+#     * R117 — a page no link reaches got click depth 0 (the crawler starts from the sitemap) and counted as "within 3 clicks".
+# =============================================================================
+_GAF90 = 'GSC Audit Findings'
+patch(_GAF90, "const findings = [], works = []; const CAT = 'Crawlability & Indexing';", r"""// ---- R59 / R61 / R65 / R117 (2026-10-16, build section 90): the host Google shows, the rankings it measured, the pages a link reaches ----
+const __hostOf90 = (u) => (String(u || '').trim().toLowerCase().match(/^https?:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/) || [])[1] || '';
+// the site's own address: the host its homepage canonical tag names, else the stored canonical host, else where the redirect leads, else the crawl's first page
+const __canonHost90 = (() => {
+  const b = (base && typeof base === 'object') ? base : {}; const hp = (((b.probe || {}).measurements || {}).hosts) || {};
+  for (const c of [hp.canonical_tag_host, b.canonical_host, hp.consolidated ? __hostOf90(hp.apex_location) : '', __hostOf90(((plan.pages || [])[0] || {}).url)]) {
+    const h = String(c || '').toLowerCase().replace(/^https?:\/\//, '').replace(/[\/?#].*$/, ''); if (h) return h; }
+  return String(plan.domain || '').toLowerCase(); })();
+// ONE definition of "Google chose another canonical", used by both counts: Google's choice against the page's own canonical (else the URL),
+// host-sensitively — and a difference of host alone is named, because that is the www / non-www split and not a duplicate page
+const canonOk90 = (i) => (!i || !i.google_canonical) ? null : same(i.google_canonical, i.user_canonical || i.url);
+const hostOnly90 = (i) => !!i && !!i.google_canonical && key(i.google_canonical) === key(i.user_canonical || i.url) && __hostOf90(i.google_canonical) !== __hostOf90(i.user_canonical || i.url);
+let host_split90 = null, servedAlt90 = [], canonAll90 = [], rowsByKey90 = new Map();
+const elsewhere90 = (i) => (rowsByKey90.get(key(i.url)) || []).filter(r => __hostOf90(r.page) !== __hostOf90(i.url) && r.impressions > 0);
+const findings = [], works = []; const CAT = 'Crawlability & Indexing';""")
+# R117: a page no link reaches is not "within 3 clicks of the homepage"
+patch(_GAF90, "const depthBuckets = { 0: 0, 1: 0, 2: 0, 3: 0, '4+': 0 }; for (const p of pages) { if (p.depth == null) continue; depthBuckets[p.depth >= 4 ? '4+' : p.depth] += 1; }",
+      r"""// R117 (2026-10-16): the crawler starts from the sitemap as well as the homepage, so a page no link reaches gets click depth 0 — exec 595
+// counted six orphan pages as "within 3 clicks" and printed "Shallow site structure: 100%" beside a High "Orphan pages" finding
+const __home90 = (u) => /^https?:\/\/[^\/]+\/?$/.test(String(u || '').trim());
+const unlinked90 = (p) => p.depth != null && (p.orphan === true || (Number(p.depth) === 0 && !__home90(p.url)));
+const depthBuckets = { 0: 0, 1: 0, 2: 0, 3: 0, '4+': 0, unlinked: 0 }; for (const p of pages) { if (p.depth == null) continue; if (unlinked90(p)) { depthBuckets.unlinked += 1; continue; } depthBuckets[p.depth >= 4 ? '4+' : p.depth] += 1; }""")
+patch(_GAF90, "const within3 = pages.filter(p => p.depth != null && p.depth <= 3).length;",
+      "const within3 = pages.filter(p => p.depth != null && !unlinked90(p) && p.depth <= 3).length;")
+# R65 + R61: every page row for the impact index, and Google's own count of the queries the site ranks for
+patch(_GAF90, "search_console.top_pages = pagesRows.slice(0, 10);", r"""search_console.top_pages = pagesRows.slice(0, 10);
+  // R65 (2026-10-16): the impact of a finding is weighed on EVERY page Search Console measured ([path, clicks, impressions], the hosts
+  // summed); top_pages stays the report's table of ten. Complete = fewer rows than the request asked for, so a page not listed had none.
+  { const m90 = new Map(); for (const r of pagesRows) { const p = String(r.page || '').replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '').replace(/(.)\/$/, '$1') || '/'; const o = m90.get(p) || [p, 0, 0]; o[1] += r.clicks; o[2] += r.impressions; m90.set(p, o); }
+    const lim90 = Number(((((byKind.pages || [])[0] || {}).q || {}).body || {}).rowLimit) || 0;
+    search_console.page_traffic = [...m90.values()].slice(0, 1000); search_console.page_traffic_complete = lim90 > 0 && pagesRows.length < lim90; }
+  // R61 (2026-10-16): what Google's own data says about rankings, so no line of the report says "ranks for no keyword" beside it
+  { const qlim90 = Number(((((byKind.queries || [])[0] || {}).q || {}).body || {}).rowLimit) || 0;
+    const bt90 = GQ.brandTest(plan.domain || base.domain, []);
+    const t10 = queryRows.filter(q => q.position > 0 && q.position <= 10), t30 = queryRows.filter(q => q.position > 0 && q.position <= 30);
+    const INF90 = /^(how|what|why|when|where|who|which|is|are|can|does|do|should)\b|\b(how to|guide|tips|meaning|definition|examples?|explained|checklist|benefits|is changing|what is|vs)\b|\?/;
+    const COM90 = /\b(best|top|services?|company|companies|partners?|consultants?|consulting|agency|agencies|providers?|vendors?|firms?|implementation|upgrade|migration|support|reviews?|compare|comparison|alternatives?)\b/;
+    const TRX90 = /\b(price|prices|pricing|cost|costs|buy|hire|quote|demo|trial|book|contact|near me)\b/;
+    const intentOf90 = (q) => INF90.test(q) ? 'informational' : TRX90.test(q) ? 'transactional' : COM90.test(q) ? 'commercial' : '';
+    const byI = { informational: 0, commercial: 0, transactional: 0 }, exI = { informational: [], commercial: [], transactional: [] };
+    for (const q of t30) { const it = bt90.is(q.query) ? '' : intentOf90(String(q.query || '').toLowerCase()); if (it) { byI[it] += 1; if (exI[it].length < 3) exI[it].push(q.query + ' #' + q.position); } }
+    const sum = (l, f) => l.reduce((n, q) => n + (Number(q[f]) || 0), 0);
+    search_console.rankings = { source: 'Search Console', period: plan.range || null, queries_read: queryRows.length, capped: qlim90 > 0 && allQueryRows.length >= qlim90,
+      top10: t10.length, top10_brand: t10.filter(q => bt90.is(q.query)).length, top10_impressions: sum(t10, 'impressions'), top10_clicks: sum(t10, 'clicks'), top30: t30.length,
+      by_intent_top30: byI, intent_examples: exI,
+      examples: t10.slice().sort((x, y) => y.impressions - x.impressions).slice(0, 5).map(q => ({ query: q.query, position: q.position, impressions: q.impressions, clicks: q.clicks })),
+      note: 'average position per query over the period; Search Console withholds the queries of rare searches, so this is a floor' }; }""")
+# R59: a page Google shows under the other host is not "not indexed"
+patch(_GAF90, "  const notIdx = ok.filter(i => i.indexed === false); search_console.not_indexed = notIdx.map(i => ({ url: i.url, reason: i.coverage }));",
+      r"""  // R59 (2026-10-16): a page Google does not index under this host but SHOWS under the other one (www / bare) is not "not indexed":
+  // Google chose its twin. Exec 595: all 16 "not indexed" www pages had impressions on https://techand.ai (1,374 in 28 days) and the
+  // High "cannot rank at all ... request indexing" was ranked first. They are reported by the host-split finding, with their
+  // impressions; only a page with no impressions under any host stays in the not-indexed finding. The list keeps every page.
+  rowsByKey90 = new Map(); for (const r of pagesRows) { const k = key(r.page); if (!k) continue; const l = rowsByKey90.get(k) || []; l.push(r); rowsByKey90.set(k, l); }
+  const notIdxAll90 = ok.filter(i => i.indexed === false);
+  servedAlt90 = notIdxAll90.filter(i => elsewhere90(i).length);
+  const notIdx = notIdxAll90.filter(i => !elsewhere90(i).length);
+  search_console.not_indexed = notIdxAll90.map(i => { const o = elsewhere90(i); return o.length ? { url: i.url, reason: i.coverage, shown_as: o[0].page, shown_impressions: o.reduce((n, r) => n + r.impressions, 0), shown_clicks: o.reduce((n, r) => n + r.clicks, 0) } : { url: i.url, reason: i.coverage }; });
+  const notIdxCov90 = {}; for (const i of notIdx) { const k = i.coverage || i.verdict || 'unknown'; notIdxCov90[k] = (notIdxCov90[k] || 0) + 1; }""")
+patch(_GAF90, "Object.entries(coverage).filter(([k]) => !/indexed/i.test(k) || /not indexed/i.test(k)).map(([k, v]) => v + ' × ' + k).join(', '), notIdx.map(i => i.url), notIdx.length, share);",
+      "Object.entries(notIdxCov90).filter(([k]) => !/indexed/i.test(k) || /not indexed/i.test(k)).map(([k, v]) => v + ' × ' + k).join(', ') + ', with no impressions under any host' + (servedAlt90.length ? '; ' + servedAlt90.length + ' more are not indexed under this address but shown by Google under the other one (see the www and non-www finding)' : ''), notIdx.map(i => i.url), notIdx.length, share);")
+patch(_GAF90, "    else works.push('All ' + ok.length + ' sampled pages are indexed by Google');",
+      "    else if (!servedAlt90.length) works.push('All ' + ok.length + ' sampled pages are indexed by Google');")
+patch(_GAF90, "    const canon = ok.filter(i => i.indexed && i.google_canonical && !same(i.google_canonical, i.url)); search_console.canonical_mismatch = canon.map(i => ({ url: i.url, google_canonical: i.google_canonical }));",
+      r"""    // R59: index_coverage.canonical_mismatch read 3 and search_console.canonical_mismatch 0 for the same pages (one counted every page
+    // host-sensitively, the other indexed pages only). One definition now; a different HOST of the same page goes to the host-split finding.
+    canonAll90 = ok.filter(i => canonOk90(i) === false);
+    search_console.canonical_mismatch = canonAll90.map(i => ({ url: i.url, google_canonical: i.google_canonical, user_canonical: i.user_canonical || '', indexed: i.indexed, host_only: hostOnly90(i) }));
+    const canon = canonAll90.filter(i => !hostOnly90(i));""")
+patch(_GAF90, "google_canonical: i.google_canonical, canonical_ok: (!i.google_canonical || !i.user_canonical) ? null : same(i.google_canonical, i.user_canonical), mobile_usable: i.mobile_usable, rich_results: i.rich })),",
+      "google_canonical: i.google_canonical, canonical_ok: canonOk90(i), canonical_host_only: hostOnly90(i), mobile_usable: i.mobile_usable, rich_results: i.rich })),")
+patch(_GAF90, "canonical_ok: (!i.google_canonical || !i.user_canonical) ? null : same(i.google_canonical, i.user_canonical), mobile_usable: i.mobile_usable, rich_results: i.rich, not_checked: i.not_checked || '' })),",
+      "canonical_ok: canonOk90(i), mobile_usable: i.mobile_usable, rich_results: i.rich, not_checked: i.not_checked || '' })),")
+# the host-split finding itself: after the inspection findings, inside the measured-on range of R19 (so it carries checked / checked_of)
+patch(_GAF90, "  // ---- R19: how many pages each of those numbers was measured on, said out loud and carried into the stored row and the diff ----",
+      r"""  // ---- R59 (2026-10-16): www and non-www as GOOGLE shows them — the redirect and the homepage tag are what the site says, not what Google does ----
+  {
+    const ch = __canonHost90; const alt = !ch ? '' : (/^www\./.test(ch) ? ch.slice(4) : 'www.' + ch); const bareH = /^www\./.test(ch) ? alt : ch;
+    const fmt90 = (v) => (Number(v) || 0).toLocaleString('en-GB');
+    const hostRows = {}; for (const r of pagesRows) { const h = __hostOf90(r.page); if (!h) continue; const o = hostRows[h] || (hostRows[h] = { host: h, pages: 0, clicks: 0, impressions: 0 }); o.pages += 1; o.clicks += r.clicks; o.impressions += r.impressions; }
+    const C = hostRows[ch] || { host: ch, pages: 0, clicks: 0, impressions: 0 }; const A = hostRows[alt] || { host: alt, pages: 0, clicks: 0, impressions: 0 };
+    const allImpr = Object.values(hostRows).reduce((n, o) => n + o.impressions, 0); const altShare = allImpr ? A.impressions / allImpr : 0;
+    const googleAlt = canonAll90.filter(i => hostOnly90(i) && __hostOf90(i.google_canonical) === alt);
+    const altMaps = (sitemaps || []).filter(s => __hostOf90(s.path) === alt);
+    const split = !!alt && ((A.pages >= 2 && altShare >= 0.2) || googleAlt.length > 0);
+    const shownImpr = servedAlt90.reduce((n, i) => n + elsewhere90(i).reduce((m, r) => m + r.impressions, 0), 0);
+    const shownClicks = servedAlt90.reduce((n, i) => n + elsewhere90(i).reduce((m, r) => m + r.clicks, 0), 0);
+    host_split90 = { found: split, canonical_host: ch, other_host: alt, hosts: [C, A].map(o => ({ ...o, impressions_pct: allImpr ? Math.round(o.impressions / allImpr * 100) : 0 })),
+      google_chose_other: googleAlt.map(i => ({ url: i.url, google_canonical: i.google_canonical })), submitted_sitemaps_other_host: altMaps.map(s => s.path),
+      not_indexed_shown_elsewhere: servedAlt90.length, shown_elsewhere_impressions: shownImpr, shown_elsewhere_clicks: shownClicks };
+    search_console.host_split = host_split90;
+    if (split) {
+      const hp = (((base.probe || {}).measurements || {}).hosts) || {};
+      const server = (Number(hp.apex_status) >= 300 && Number(hp.apex_status) < 400 && __hostOf90(hp.apex_location) === ch && ch !== bareH)
+        ? 'your server redirects (' + hp.apex_status + ') https://' + bareH + ' to https://' + ch + (String(hp.canonical_tag_host || '').toLowerCase() === ch ? ' and the homepage canonical tag names https://' + ch : '')
+        : (Number(hp.www_status) >= 300 && Number(hp.www_status) < 400 && __hostOf90(hp.www_location) === ch && ch === bareH) ? 'your server redirects (' + hp.www_status + ') https://' + alt + ' to https://' + ch : '';
+      const ev = ['Search Console page rows (28 days): https://' + A.host + ' ' + A.pages + ' page(s), ' + fmt90(A.clicks) + ' clicks, ' + fmt90(A.impressions) + ' impressions (' + Math.round(altShare * 100) + '% of page impressions); https://' + C.host + ' ' + C.pages + ' page(s), ' + fmt90(C.clicks) + ' clicks, ' + fmt90(C.impressions) + ' impressions',
+        googleAlt.length ? 'Google chose https://' + alt + ' as the canonical of ' + googleAlt.length + ' inspected page(s) whose own canonical names https://' + ch + ' (' + googleAlt.slice(0, 3).map(i => path(i.url)).join(', ') + ')' : '',
+        altMaps.length ? 'the sitemap submitted to Search Console is ' + altMaps.map(s => s.path).join(', ') : '',
+        servedAlt90.length ? servedAlt90.length + ' key page(s) not indexed under https://' + ch + ' are shown under https://' + alt + ' (' + fmt90(shownImpr) + ' impressions, ' + fmt90(shownClicks) + ' clicks)' : '',
+        server].filter(Boolean).join('; ');
+      const urls90 = [...new Set([...servedAlt90.map(i => i.url), ...googleAlt.map(i => i.url)])];
+      host_split90.evidence = ev;
+      // the redirect probe already reported the two hosts as not consolidated: Google's view is the same problem, so no second finding is
+      // raised — its numbers travel in search_console.host_split and the report's Search Console section prints them beside that finding
+      const probeFlag90 = (((base.probe || {}).findings) || []).some(f => /www and non-www versions are not consolidated|redirect chain or loop between apex and www/i.test(String((f || {}).title || '')));
+      if (probeFlag90) host_split90.folded_into_probe = true;
+      else F('High', 'www and non-www are split in Google: ' + (altShare >= 0.5 ? 'most pages are' : 'part of the site is') + ' shown under https://' + alt + ', not https://' + ch,
+        'Your site names https://' + ch + ' as its address, but Google shows and ranks pages under https://' + alt + '. The pages under https://' + ch + ' then read as "not indexed" while their twins collect the impressions, and links and ranking signals are split between two addresses until one of them wins.',
+        'Make every signal name https://' + ch + ': submit https://' + ch + '/sitemap.xml in Search Console' + (altMaps.length ? ' and remove ' + altMaps.map(s => s.path).join(', ') : '') + ', list only https://' + ch + ' URLs in it, change internal links that still point at https://' + alt + ', keep the redirects, then watch the page rows move to https://' + ch + ' in Search Console over the next weeks. Requesting indexing page by page does not help: Google already knows these pages under the other address. If https://' + alt + ' is the address you want, change the redirect and the canonical tags instead.',
+        ev, urls90, urls90.length || A.pages, (ok.length && urls90.length) ? Math.round(urls90.length / ok.length * 100) : Math.round(altShare * 100));
+      const f90 = findings[findings.length - 1]; if (f90 && /are split in Google/.test(String(f90.title || ''))) { f90.affected_urls = urls90.slice(0, 200); f90.host_split = true; }
+      const nc90 = findings.find(f => f && f.title === 'Pages shown in Google but never clicked');
+      if (nc90) { const n = pagesRows.filter(p => p.impressions >= 50 && p.clicks === 0 && __hostOf90(p.page) === alt).length; if (n) nc90.evidence = String(nc90.evidence || '') + '; ' + n + ' of them are listed under https://' + alt + ', the other address (see the www and non-www finding)'; }
+    }
+  }
+  // ---- R19: how many pages each of those numbers was measured on, said out loud and carried into the stored row and the diff ----""")
+# R61 + R59 at the hand-over: the ranking statements made from DataForSEO's database alone, and the what-works line Google contradicts
+patch(_GAF90, "return [{ json: { ...base, extra_findings: [...(base.extra_findings || []), ...findings], extra_works: [...(base.extra_works || []), ...works], search_console, site_structure } }];",
+      r"""// ---- R61 (2026-10-16): the ranking statements built before Search Console was read (Competitor Analysis, Analyze Keywords) said
+// "does not rank in Google's top 10 for any keyword" from DataForSEO's database alone while Google's own data, read here, showed 15
+// queries in the top 10. They now name both sources; the competitor comparison stays provider against provider.
+const __rk90 = search_console.rankings || null;
+const __n90 = (v) => (Number(v) || 0).toLocaleString('en-GB');
+const __per90 = (__rk90 && __rk90.period && __rk90.period.start) ? __rk90.period.start + ' to ' + __rk90.period.end : 'the last 28 days';
+const __gsc90 = __rk90 ? 'Search Console (measured, ' + __per90 + '): ' + __rk90.top10 + ' quer' + (__rk90.top10 === 1 ? 'y' : 'ies') + ' at an average position in Google\'s top 10 (' + __n90(__rk90.top10_impressions) + ' impressions, ' + __n90(__rk90.top10_clicks) + ' clicks'
+  + (__rk90.top10_brand ? '; ' + __rk90.top10_brand + ' of them for your own name' : '') + ')' + ((__rk90.examples || []).length ? ', e.g. ' + __rk90.examples.slice(0, 3).map(q => '"' + q.query + '" #' + q.position).join(', ') : '') : '';
+const __ex90 = (base.extra_findings || []).map(f => {
+  if (!__rk90 || !f || f.category !== 'Authority') return f;
+  const t = String(f.title || '');
+  if (/does not rank in Google.s top 10 for any keyword/i.test(t) && __rk90.top10 > 0) return { ...f, title: 'Far fewer top-10 rankings than competitors',
+    evidence: String(f.evidence || '').replace(/^Top-10 rankings in /, 'DataForSEO\'s ranking database, top-10 rankings in ') + '; ' + __gsc90,
+    why: 'Google shows the site in its top 10 for very few searches' + (__rk90.top10_brand * 2 >= __rk90.top10 ? ', most of them for its own name,' : '') + ' while the competitors hold hundreds in the same database: a buyer who searches for what you sell finds them first.',
+    reconciled: 'search_console' };
+  const mi = t.match(/^No rankings for (informational|commercial|transactional) searches$/);
+  if (mi && ((__rk90.by_intent_top30 || {})[mi[1]] || 0) > 0) { const n = __rk90.by_intent_top30[mi[1]];
+    return { ...f, severity: 'Low', title: 'Few rankings for ' + mi[1] + ' searches',
+      evidence: String(f.evidence || '').replace(/^You rank for 0 /, 'DataForSEO\'s database holds 0 ') + '; Search Console shows ' + n + ' ' + mi[1] + ' quer' + (n === 1 ? 'y' : 'ies') + ' in the top 30 (' + __per90 + ', e.g. ' + ((__rk90.intent_examples || {})[mi[1]] || []).map(q => '"' + q + '"').join(', ') + ')',
+      why: 'Competitors are found for many more of these searches than you are; the provider\'s database does not see the few you already rank for.', reconciled: 'search_console' }; }
+  if (/^Organic traffic is under 10% of competitors$/.test(t) && search_console.totals) return { ...f,
+    evidence: String(f.evidence || '').replace(/^Estimated monthly organic visits:/, 'Estimated monthly organic visits (DataForSEO\'s estimate, the same for every site compared):') + '; Search Console measured ' + __n90(search_console.totals.clicks) + ' clicks and ' + __n90(search_console.totals.impressions) + ' impressions for your site in ' + __per90,
+    reconciled: 'search_console' };
+  return f;
+});
+const __works90 = (__rk90 && __rk90.top10) ? ['Google\'s own data (Search Console, ' + __per90 + '): ' + __rk90.top10 + ' quer' + (__rk90.top10 === 1 ? 'y' : 'ies') + ' in the top 10' + (__rk90.top10_brand ? ' (' + __rk90.top10_brand + ' for your own name)' : '')] : [];
+// R59: "One canonical host … the canonical tags agree" is what the server says; with Google showing the other host it is not what works
+const __probe90 = (base.probe && host_split90 && host_split90.found) ? { ...base.probe, what_works: (base.probe.what_works || []).filter(w => !/^One canonical host|^www redirects to the main domain/.test(String(w))),
+  measurements: { ...(base.probe.measurements || {}), hosts: { ...(((base.probe.measurements || {}).hosts) || {}), google_split: true, google_other_host: host_split90.other_host } } } : base.probe;
+return [{ json: { ...base, ...(base.probe ? { probe: __probe90 } : {}), extra_findings: [...__ex90, ...findings], extra_works: [...(base.extra_works || []), ...works, ...__works90], search_console, site_structure } }];""")
+# the redirect probe says what it checked: the server and the homepage tag, not Google
+patch('Analyze Probes', "works.push('One canonical host: https://' + domain + ' redirects (' + home.status + ') to https://' + WWW + (canonical_tag_host === WWW ? ', and the canonical tags agree' : ''));",
+      "works.push('One canonical host on the server: https://' + domain + ' redirects (' + home.status + ') to https://' + WWW + (canonical_tag_host === WWW ? ', and the homepage canonical tag names it' : ''));")   # R59: what Google shows is checked against Search Console in GSC Audit Findings (no inline JS comment: the line goes on)
+# R65: the page index is for the impact weights; the report payload the app receives keeps its size
+for _n90 in ('Build Full Report', 'Build Audit Report'):
+    patch(_n90, "    search_console: a.search_console || null,", "    search_console: a.search_console ? (({ page_traffic, page_traffic_complete, ...rest }) => rest)(a.search_console) : null,")
+# R61 in the full report: Key Numbers name their source, and the "does not rank in the top 30" note says what Google measured
+patch('Build Full Report', "<tr><td>Keywords ranking (top 30)</td><td>${num(you.keywords)}</td>", "<tr><td>Keywords ranking (top 30) — DataForSEO&#39;s database</td><td>${num(you.keywords)}</td>")
+patch('Build Full Report', "<tr><td>Keywords in top 10</td><td>${num(you.top10)}</td><td>${num(cb.medians && cb.medians.top10)}</td></tr>",
+      "<tr><td>Keywords in top 10 — DataForSEO&#39;s database</td><td>${num(you.top10)}</td><td>${num(cb.medians && cb.medians.top10)}</td></tr>"
+      "${((a.search_console || d.search_console || {}).rankings) ? '<tr><td>Queries in Google&#39;s top 10 — Search Console, measured (' + num(((a.search_console || d.search_console).rankings.top10_brand)) + ' for your own name)</td><td>' + num((a.search_console || d.search_console).rankings.top10) + '</td><td>not measured for competitors</td></tr>' : ''}")
+patch('Build Full Report', "<tr><td>Estimated monthly organic visits</td><td>${num(you.traffic)}</td>", "<tr><td>Estimated monthly organic visits — DataForSEO&#39;s estimate</td><td>${num(you.traffic)}</td>")
+patch('Build Full Report', "    html += `<div class=\"note\">Your site does not rank in the top 30 for any keyword in ${esc(d.country || 'this market')} yet. The opportunities below show which searches to target, grouped by search intent.</div>`;",
+      r"""    const rk90 = (a.search_console || d.search_console || {}).rankings || null;   // R61 (2026-10-16): the database is not the site's reality
+    html += (rk90 && rk90.top30)
+      ? `<div class="note">DataForSEO's ranking database holds no top-30 ranking for your site in ${esc(d.country || 'this market')}, but Google's own data (Search Console) shows ${num(rk90.top30)} queries at an average position in the top 30 over the last 28 days, ${num(rk90.top10)} of them in the top 10${rk90.top10_brand ? ' (' + num(rk90.top10_brand) + ' for your own name)' : ''} — see section 12b. The opportunities below show which searches to target, grouped by search intent.</div>`
+      : `<div class="note">DataForSEO's ranking database holds no top-30 ranking for your site in ${esc(d.country || 'this market')}${rk90 ? ', and Search Console shows none either' : ''}. The opportunities below show which searches to target, grouped by search intent.</div>`;""")
+_gaf90 = code(_GAF90)
+assert 'host_split90' in _gaf90 and 'search_console.page_traffic' in _gaf90 and 'search_console.rankings' in _gaf90 and 'unlinked90' in _gaf90, \
+    'R59 / R61 / R65 / R117: GSC Audit Findings lost its host split, its page index, its rankings or its unlinked bucket'
+assert 'trafficIndex' in _rd0('code/_impact.js') and 'page_traffic' in _rd0('code/_impact.js') and 'affected_urls' in _rd0('code/_impact.js'), \
+    'R65: _impact.js does not read the full page index or the affected URLs'
+assert 'canonical_host_only' in _rd0('code/_page_watch.js'), 'R59: the page-watch kit no longer names a host-only canonical difference'
+log('Know the customer\'s own site before advising (2026-10-16, re-rating of 2026-10-15, R59 / R61 / R65 / R117 — build section 90). '
+    'R59: GSC Audit Findings reads the www / non-www split from Google\'s own data (page rows per host, the canonical Google chose, the sitemap submitted) and raises one High finding with the per-host counts and the fix (submit the canonical host\'s sitemap, keep the redirects, change internal links) instead of "a large share of important pages is not indexed … request indexing"; a page Google shows under the other host leaves the not-indexed finding and stays in the list with what Google shows instead; "One canonical host" leaves what works when Google disagrees; one definition of a canonical mismatch for index_coverage and search_console; the page-watch kit compares the host; the report tables print a host that differs. '
+    'R61: the "does not rank in Google\'s top 10 for any keyword", "No rankings for <intent> searches" and "Organic traffic under 10%" statements name DataForSEO and carry Search Console\'s measured count; Key Numbers label the provider\'s figures and add Google\'s. '
+    'R65: impact weights use every page row Search Console measured (page_traffic, stripped from the report payload) and every affected URL. '
+    'R117: a page no link reaches is its own depth bucket, never "within 3 clicks"')
+
+# =============================================================================
+# 91. SEEDS AND TOPICS FROM WHAT THE BUSINESS SELLS, LINEAGE THAT MATCHES THE PAGE, A ONE-READING FINDING IS NOT "FIXED"
+#     (2026-10-16, re-rating of 2026-10-15, defects/B_technical.md R60 / R73 / R74)
+#
+#     * R60 (High) — the full report's keyword research was seeded from three orphan card headings and the topic gate judged nothing
+#       (fewer than 12 topic words on file), so "ai mode", "blackbox ai", "character ai", "face swap ai", "mofa attestation dubai" and
+#       "how to check emirates id status with passport number" became easy wins and gap keywords, and ChatGPT was asked about "the best
+#       ai in cloud company". *Fallback Queries* (section 4, rewritten) now seeds from the configured keywords, then the site model's
+#       services; *Analyze Keywords* feeds the gate the site model's services, the configured keywords and the business facts; the
+#       gate refuses a public body's service to a person (`_fit_gate.js` FIT_GOV_SERVICE); *AI Queries* asks about the site's own keyword.
+#     * R73 — the lineage rows read the fields the report printed (section 47 / 72 edited in place).
+#     * R74 — a finding resting on one outside reading is "no longer seen", not "fixed" (v5/code/Audit_Diff.js), and the sample sentence
+#       says when the earlier report did not record its sample.
+# =============================================================================
+patch('Analyze Keywords', "let cacheRowsAK = []; try { cacheRowsAK = $('Load Site Cache').all().map(i => i.json); } catch (e) { cacheRowsAK = []; }",
+      r"""let cacheRowsAK = []; try { cacheRowsAK = $('Load Site Cache').all().map(i => i.json); } catch (e) { cacheRowsAK = []; }
+// R60 (2026-10-16): the topics came from $('Competitor Analysis'), whose item carries no services, no business and no description on the
+// full-report path — so the topic bar saw the three seed headings (~5 words), judged nothing under its 12-word floor and let "ai mode",
+// "character ai" and "mofa attestation dubai" through. The site's own record is read here: the services of its site model, the keywords
+// the owner configured and the business facts — only this site's (another site's row never widens the topics).
+const __topics91 = (() => { const out = []; const bare = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
+  const listOf = (v) => { if (Array.isArray(v)) return v; const s = String(v == null ? '' : v).trim(); if (!s) return []; if (/^\[/.test(s)) { try { const x = JSON.parse(s); return Array.isArray(x) ? x : []; } catch (e) { return []; } } return s.split(/[,;\n]+/); };
+  try { const m = $('Restore Site Model').first().json.site_model || null; if (m && (!m.domain || bare(m.domain) === bare(base.domain))) out.push(...listOf(m.services), String(m.business_facts || '').slice(0, 600)); } catch (e) {}
+  try { const r = $('Load Site Row (Model)').first().json || {}; if (r.domain && bare(r.domain) === bare(base.domain)) out.push(...listOf(r.keywords), ...listOf(r.services_json), String(r.business_facts || '').slice(0, 600)); } catch (e) {}
+  return [...new Set(out.map(x => String(x || '').trim()).filter(Boolean))]; })();""")
+patch('Analyze Keywords', "  topics: [...(base.services || []), String(base.business || '').slice(0, 600), ...seeds, ...(((base.site_description || {}).products_or_services) || []).map(String)],",
+      "  topics: [...(base.services || []), String(base.business || '').slice(0, 600), ...seeds, ...(((base.site_description || {}).products_or_services) || []).map(String), ...__topics91],")
+patch('Analyze Keywords', "protect: [...seeds, ...(base.services || []), String(base.business || '').slice(0, 400)],",
+      "protect: [...seeds, ...(base.services || []), String(base.business || '').slice(0, 400), ...__topics91],")
+# the refusals the report prints: the biggest searches first and up to 100 (with real topics the gate refuses ~60 searches of exec 614's research above 2,900/mo alone), so a refused "ai mode" (49,500/mo) is never cut off by 40 navigational names
+patch('Analyze Keywords', "      refused: refused.filter((r, i, a) => a.findIndex(x => x.keyword === r.keyword) === i).slice(0, 40),",
+      "      refused: refused.filter((r, i, a) => a.findIndex(x => x.keyword === r.keyword) === i).sort((x, y) => (y.volume || 0) - (x.volume || 0)).slice(0, 100),")
+patch('AI Queries', "if (pool[0]) category = pool[0].keyword;\nelse if (seeds[0]) category = seeds[0];\nif (category && !/\\b(company|companies|agency|agencies|services?|providers?|firms?|best|top)\\b/i.test(category)) category = 'best ' + category + ' company';\nif (category && base.country && !category.toLowerCase().includes(String(base.country).toLowerCase())) category = category + ' ' + base.country;",
+      r"""// R60 (2026-10-16): the category question came from the highest-volume commercial keyword of the research pool ("ai in cloud", seeded
+// from orphan headings), so ChatGPT and Perplexity were asked about "the best ai in cloud company" and the report raised three findings
+// on the answer. The site's own words come first: the keywords the owner configured, then the research pool, then the seeds.
+let own91 = [];
+try { const r = $('Load Site Row (Model)').first().json || {}; const bare = (x) => String(x || '').toLowerCase().replace(/^www\./, '');
+  if (r.domain && bare(r.domain) === bare(base.domain)) own91 = String(r.keywords || '').split(/[,;\n]+/).map(s => s.trim().toLowerCase()).filter(s => s && !s.includes(String(base.domain).split('.')[0].toLowerCase())); } catch (e) {}
+if (own91[0]) category = own91[0];
+else if (pool[0]) category = pool[0].keyword;
+else if (seeds[0]) category = seeds[0];
+const place91 = /\b(uae|u\.a\.e|dubai|abu dhabi|sharjah|ajman|ksa|saudi|riyadh|jeddah|qatar|doha|oman|muscat|bahrain|kuwait|gcc|egypt|india|pakistan|uk|usa)\b/i;
+if (category && !/\b(company|companies|agency|agencies|services?|providers?|firms?|partners?|best|top)\b/i.test(category)) category = /\b(software|platforms?|tools?|apps?|systems?|solutions?)\b/i.test(category) ? 'best ' + category : 'best ' + category + ' company';
+if (category && base.country && !category.toLowerCase().includes(String(base.country).toLowerCase()) && !place91.test(category)) category = category + ' ' + base.country;""")
+# R74: the summary says why a finding left the list, and why a number was not compared
+patch('Audit Diff', """  summary: fixed.length + ' fixed · ' + added.length + ' new · ' + open.length + ' still open (compared with the ' + labelOf(curType) + ' of ' + String(prev.audited_at).slice(0, 10) + ')'
+    + (sample_moved ? '. ' + sample_moved + ' finding(s) are not compared as numbers: they were measured on a different number of pages this time (how many is shown with each).' : '')""",
+      r"""  no_longer_seen,
+  summary: fixed.length + ' fixed · ' + added.length + ' new · ' + open.length + ' still open' + (no_longer_seen.length ? ' · ' + no_longer_seen.length + ' no longer seen' : '') + ' (compared with the ' + labelOf(curType) + ' of ' + String(prev.audited_at).slice(0, 10) + ')'
+    + (no_longer_seen.length ? '. ' + no_longer_seen.length + ' finding(s) rested on a single outside reading (a results page, an AI answer or a content review) that did not repeat, so they are not counted as fixed' : '')
+    + (sample_moved ? '. ' + sample_moved + ' finding(s) are not compared as numbers: ' + [open.filter(f => f.sample_changed && f.checked_before).length ? open.filter(f => f.sample_changed && f.checked_before).length + ' were measured on a different number of pages this time' : '',
+        open.filter(f => f.sample_changed && !f.checked_before).length ? open.filter(f => f.sample_changed && !f.checked_before).length + ' were stored last time without the number of pages they were measured on' : ''].filter(Boolean).join(', and ') + ' (shown with each).' : '')""")
+assert "for (const k of listOf(siteRow.keywords)) add(clean(k), 'your keywords');" in code('Fallback Queries'), 'R60: Fallback Queries does not seed from the configured keywords'
+assert '__topics91' in code('Analyze Keywords') and 'own91' in code('AI Queries'), 'R60: the topic gate or the AI category question does not read the site\'s own record'
+assert 'FIT_GOV_SERVICE' in FIT_GATE_SRC, 'R60: the fit gate does not refuse a public body\'s service to a person'
+assert 'no_longer_seen' in code('Audit Diff'), 'R74: the diff calls a single reading that changed "fixed"'
+assert "LN.sample(_kwN47, 'keywords in section 4')" in code('Build Full Report') and "sample: 'no field data'" in code('Build Audit Report'), 'R73: the lineage rows do not read what the report printed'
+log('Seeds and topics from what the business sells, lineage that matches the page, and a one-reading finding that is not "fixed" (2026-10-16, re-rating of 2026-10-15, R60 / R73 / R74 — build section 91). '
+    'R60: Fallback Queries seeds the full report from the configured keywords, then the site model\'s services, then headings of linked pages (a page no link reaches last), each with its source; Analyze Keywords gives the fit gate the site model\'s services, the configured keywords and the business facts, so the topic bar engages; the gate refuses a public body\'s service to a person ("mofa attestation dubai", "how to check emirates id status with passport number"); the refusal list keeps the biggest searches; AI Queries asks the AI engines about the site\'s own keyword. '
+    'R73: the full report\'s and the technical audit\'s lineage rows read the fields the report printed (keywords in section 4, referring domains from the authority block, CrUX "no field data" from the Chrome UX Report, no Lighthouse row without a PageSpeed test, the domain age dated by its cache). '
+    'R74: a finding that rested on one outside reading (a results page, an AI answer, a content review) is "no longer seen", never "fixed", and the diff\'s sample sentence says when the earlier report stored no sample size')
 
 
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
