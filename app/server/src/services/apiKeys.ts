@@ -2,6 +2,7 @@ import { and, desc, eq, isNull, or, gt, sql } from 'drizzle-orm';
 import { API_KEY, API_SCOPES, apiKeyState, isApiKeyToken, keyDisplayPrefix, keyExpiry, type ApiKeyView, type ApiScope } from '@seo/shared';
 import { db, schema } from '../db';
 import type { ApiKeyRow, OrgRow, UserRow } from '../db/schema';
+import type { Role } from '@seo/shared';
 import { randomToken, sha256 } from '../lib/crypto';
 import { HttpError, notFound } from '../lib/errors';
 
@@ -95,4 +96,16 @@ export async function authenticateKey(token: string, now = new Date()): Promise<
     await db.update(schema.apiKeys).set({ lastUsedAt: now }).where(eq(schema.apiKeys.id, r.k.id));
   }
   return { key: r.k, org: r.org };
+}
+
+/** G4: the key creator's CURRENT membership of the company (null when they left or never were): a key acts as its creator. */
+export async function creatorMembership(orgId: string, userId: string | null): Promise<{ user: UserRow; role: Role } | null> {
+  if (!userId) return null;
+  const rows = await db
+    .select({ user: schema.users, role: schema.memberships.role })
+    .from(schema.memberships)
+    .innerJoin(schema.users, eq(schema.memberships.userId, schema.users.id))
+    .where(and(eq(schema.memberships.orgId, orgId), eq(schema.memberships.userId, userId)))
+    .limit(1);
+  return rows[0] ? { user: rows[0].user, role: rows[0].role as Role } : null;
 }

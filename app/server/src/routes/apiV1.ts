@@ -1,10 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { API_KEY, API_SCOPES, apiKeyCreateSchema, bearerKey, roleAtLeast, triesBearer, type ApiScope } from '@seo/shared';
+import { API_KEY, API_SCOPES, apiKeyCreateSchema, bearerKey, IDEMPOTENCY, roleAtLeast, triesBearer, type ApiScope } from '@seo/shared';
 import { isUuid, orgAccess, requireVerified, siteAccess } from '../auth/access';
 import { config } from '../config';
 import { sha256 } from '../lib/crypto';
 import { badRequest, HttpError, notFound, parse } from '../lib/errors';
 import { authenticateKey, createKey, listKeys, revokeKey } from '../services/apiKeys';
+import { modesV1, startRunV1 } from '../services/apiRuns';
 import {
   fileOf,
   getAudit,
@@ -42,7 +43,9 @@ export async function v1Ctx(req: FastifyRequest): Promise<V1Ctx> {
   const orgId = req.headers['x-org-id'] ?? (req.query as { org?: string }).org;
   if (!orgId) throw badRequest('Name the company with the X-Org-Id header', undefined, 'org_missing');
   const a = await orgAccess(req, Array.isArray(orgId) ? orgId[0] : orgId);
-  return { org: a.org, auth: 'session', key: null, scopes: roleAtLeast(a.role, 'member') ? ['read', 'publish_check'] : ['read'] };
+  // a person's session may do through the API what their role lets them do in the app
+  const scopes: ApiScope[] = roleAtLeast(a.role, 'admin') ? ['read', 'publish_check', 'run', 'admin'] : roleAtLeast(a.role, 'member') ? ['read', 'publish_check', 'run'] : ['read'];
+  return { org: a.org, auth: 'session', key: null, scopes, actor: a };
 }
 
 /** rate-limit bucket: the key (hashed), else the session, else the address */
@@ -54,6 +57,8 @@ function bucket(req: FastifyRequest): string {
 }
 const perMinute = { rateLimit: { max: API_KEY.perMinute, timeWindow: '1 minute', keyGenerator: bucket } };
 const perCheck = { rateLimit: { max: API_KEY.publishChecksPer10Min, timeWindow: '10 minutes', keyGenerator: bucket } };
+/** G4: the same ceiling as the app's own "start a run" route (30 a minute), per key */
+const perRun = { rateLimit: { max: API_KEY.runsPerMinute, timeWindow: '1 minute', keyGenerator: bucket } };
 
 const readCtx = async (req: FastifyRequest) => {
   const ctx = await v1Ctx(req);
@@ -72,6 +77,8 @@ const ENDPOINTS = [
   'GET /api/v1/reports/:reportId',
   'GET /api/v1/files/:fileId',
   'POST /api/v1/publish-check',
+  'GET /api/v1/modes',
+  'POST /api/v1/runs',
   'POST /api/v1/mcp',
 ];
 
@@ -79,7 +86,19 @@ const ENDPOINTS = [
 
 type Args = Record<string, unknown>;
 const listArgs = { limit: { type: 'integer', minimum: 1, maximum: 100 }, cursor: { type: 'string', description: 'nextCursor of the previous page' } };
-const TOOLS: { name: string; description: string; inputSchema: Record<string, unknown>; run: (ctx: V1Ctx, a: Args) => Promise<unknown> }[] = [
+type Tool = { name: string; description: string; inputSchema: Record<string, unknown>; scope?: ApiScope; run: (ctx: V1Ctx, a: Args) => Promise<unknown> };
+const toolScope = (t: Tool): ApiScope => t.scope ?? (t.name === 'publish_check' ? 'publish_check' : 'read');
+const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
+const runArgs = {
+  input: {
+    type: 'object',
+    description:
+      'The analysis, exactly as the app form sends it: { mode, websiteId, ... }. Call list_modes for the fields of every mode. Example: { "mode": "audit", "websiteId": "<id>", "reportType": "site_audit" }.',
+    additionalProperties: true,
+  },
+  acknowledge: { type: 'array', items: { type: 'string' }, description: 'ids of the duplicate warnings you accept (from preview_run or a confirm_needed answer)' },
+};
+const TOOLS: Tool[] = [
   { name: 'list_websites', description: "The company's websites (id, domain, whether ownership is verified).", inputSchema: { type: 'object', properties: listArgs }, run: (c, a) => listWebsites(c, a) },
   {
     name: 'list_audits',
@@ -134,6 +153,24 @@ const TOOLS: { name: string; description: string; inputSchema: Record<string, un
     },
     run: async (c, a) => (await publishCheck(c, a)).body,
   },
+  // ---- G4: starting work (scope "run") ----
+  { name: 'list_modes', description: 'Every analysis that can be started, with what it delivers, its estimated cost and minutes, and the JSON Schema of its input.', inputSchema: { type: 'object', properties: {} }, run: async () => modesV1() },
+  {
+    name: 'preview_run',
+    scope: 'run',
+    description:
+      'Before starting an analysis: its estimated cost and time, the budget left this month, and any warning that it duplicates work already planned or running (each with an id). Starts nothing, costs nothing.',
+    inputSchema: { type: 'object', properties: runArgs, required: ['input'] },
+    run: async (c, a) => (await startRunV1(c, { ...obj(a.input), acknowledge: a.acknowledge, dryRun: true }, undefined)).body,
+  },
+  {
+    name: 'start_run',
+    scope: 'run',
+    description:
+      "Starts an analysis (it costs money, within the company's monthly budget; the same checks as the app's form). If it duplicates planned or running work it is refused with the warnings: read them, then pass their ids in acknowledge. Pass the same idempotencyKey when you retry, so a retry never starts a second run. Follow it with get_run.",
+    inputSchema: { type: 'object', properties: { ...runArgs, idempotencyKey: { type: 'string', description: 'any unique string, e.g. a UUID; reuse it to retry safely' } }, required: ['input'] },
+    run: async (c, a) => (await startRunV1(c, { ...obj(a.input), acknowledge: a.acknowledge }, a.idempotencyKey == null ? undefined : String(a.idempotencyKey))).body,
+  },
 ];
 
 const PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05'];
@@ -152,18 +189,20 @@ async function mcp(ctx: V1Ctx, msg: Rpc): Promise<unknown | null> {
         protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0],
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: 'ascentra', title: `${config.brand} — ${ctx.org.name}`, version: '1.0.0' },
-        instructions: `Read-only access to ${ctx.org.name}'s SEO data: websites, technical audits and their findings, analyses, reports, and a free publish check. Nothing here starts a run or changes a setting.`,
+        instructions: ctx.scopes.includes('run')
+          ? `Access to ${ctx.org.name}'s SEO data (websites, audits and findings, analyses, reports, a free publish check) and to starting analyses within the company's monthly budget. Before start_run, call preview_run: it shows the cost and any duplicate warning. Never acknowledge a warning the user has not seen.`
+          : `Read-only access to ${ctx.org.name}'s SEO data: websites, technical audits and their findings, analyses, reports, and a free publish check. This key cannot start a run or change a setting.`,
       });
     }
     case 'ping':
       return ok({});
     case 'tools/list':
-      return ok({ tools: TOOLS.filter((t) => (t.name === 'publish_check' ? ctx.scopes.includes('publish_check') : ctx.scopes.includes('read'))).map(({ name, description, inputSchema }) => ({ name, description, inputSchema })) });
+      return ok({ tools: TOOLS.filter((t) => ctx.scopes.includes(toolScope(t))).map(({ name, description, inputSchema }) => ({ name, description, inputSchema })) });
     case 'tools/call': {
       const tool = TOOLS.find((t) => t.name === msg.params?.name);
       if (!tool) return rpcError(msg.id, -32602, `Unknown tool: ${String(msg.params?.name ?? '')}`);
       try {
-        if (tool.name !== 'publish_check') requireScope(ctx, 'read');
+        requireScope(ctx, toolScope(tool));
         const args = msg.params?.arguments && typeof msg.params.arguments === 'object' ? (msg.params.arguments as Args) : {};
         const result = (await tool.run(ctx, args)) as Record<string, unknown>;
         return ok({ content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result, isError: false });
@@ -171,6 +210,8 @@ async function mcp(ctx: V1Ctx, msg: Rpc): Promise<unknown | null> {
         const he = e instanceof HttpError ? e : null;
         if (!he) throw e;
         const text = he.fields ? `${he.message} (${Object.entries(he.fields).map(([k, v]) => `${k}: ${v}`).join('; ')})` : he.message;
+        // a refusal that carries data (the duplicate warnings of confirm_needed) hands it to the assistant as well
+        if (he.extra) return ok({ content: [{ type: 'text', text: `${text}\n${JSON.stringify(he.extra)}` }], structuredContent: { error: he.message, code: he.code, ...he.extra }, isError: true });
         return ok({ content: [{ type: 'text', text }], isError: true });
       }
     }
@@ -189,7 +230,7 @@ export async function apiV1Routes(app: FastifyInstance) {
       auth: ctx.auth,
       key: ctx.key ? { id: ctx.key.id, name: ctx.key.name, prefix: ctx.key.prefix, scopes: scopesOf(ctx.key.scopes) } : null,
       scopes: ctx.scopes,
-      limits: { perMinute: API_KEY.perMinute, publishChecksPer10Minutes: API_KEY.publishChecksPer10Min, pageSizeMax: 100 },
+      limits: { perMinute: API_KEY.perMinute, publishChecksPer10Minutes: API_KEY.publishChecksPer10Min, runsPerMinute: API_KEY.runsPerMinute, pageSizeMax: 100 },
       endpoints: ENDPOINTS,
     };
   });
@@ -208,6 +249,19 @@ export async function apiV1Routes(app: FastifyInstance) {
   app.get('/api/v1/files/:fileId', { config: perMinute }, async (req, reply) => {
     const f = await fileOf(await readCtx(req), (req.params as Args).fileId);
     return sendFile(reply, f, (req.query as { download?: string }).download === '1');
+  });
+
+  // ---- G4: the write API (scope "run"): start any analysis a form can start ----
+  app.get('/api/v1/modes', { config: perMinute }, async (req) => {
+    await readCtx(req);
+    return modesV1();
+  });
+  app.post('/api/v1/runs', { config: perRun }, async (req, reply) => {
+    const ctx = await v1Ctx(req);
+    const h = req.headers[IDEMPOTENCY.header];
+    const r = await startRunV1(ctx, req.body, Array.isArray(h) ? h[0] : h);
+    if (r.replayed) reply.header(IDEMPOTENCY.replayHeader, 'true');
+    return reply.status(r.status).send(r.body);
   });
 
   app.post('/api/v1/publish-check', { config: perCheck, bodyLimit: 2 * 1024 * 1024 }, async (req, reply) => {

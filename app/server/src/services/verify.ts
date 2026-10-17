@@ -1,7 +1,7 @@
-import { promises as dns, type LookupAddress } from 'node:dns';
+import { promises as dns } from 'node:dns';
 import { request } from 'node:https';
-import { isIP } from 'node:net';
 import { cleanDomain, domainOk, VERIFICATION_META_NAME, VERIFICATION_TXT_PREFIX, type VerificationMethod } from '@seo/shared';
+import { publicLookup } from '../lib/netGuard';
 
 // Proof that a company owns a domain before it sees the domain's data: a DNS TXT record or a meta tag on the homepage (this
 // module), or "Verify with Google" — the person's own Google account owns the property in Search Console (services/google.ts
@@ -10,28 +10,6 @@ import { cleanDomain, domainOk, VERIFICATION_META_NAME, VERIFICATION_TXT_PREFIX,
 export interface VerifyOutcome {
   verified: boolean;
   message: string;
-}
-
-function isPrivateIp(ip: string): boolean {
-  if (isIP(ip) === 4) {
-    const [a, b] = ip.split('.').map(Number);
-    return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224;
-  }
-  const l = ip.toLowerCase();
-  return l === '::1' || l === '::' || l.startsWith('fc') || l.startsWith('fd') || l.startsWith('fe80') || l.startsWith('::ffff:') || l.startsWith('64:ff9b');
-}
-
-/** DNS lookup for the HTTPS connection itself: only public addresses (the address checked is the address connected to). */
-function publicLookup(hostname: string, options: object, cb: (err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => void) {
-  dns
-    .lookup(hostname, { all: true })
-    .then((addrs) => {
-      const ok = addrs.filter((a) => !isPrivateIp(a.address));
-      if (!ok.length || ok.length !== addrs.length) return cb(Object.assign(new Error(`${hostname} resolves to a private address`), { code: 'EPRIVATE' }), '', 4);
-      if ((options as { all?: boolean }).all) return cb(null, ok);
-      cb(null, ok[0].address, ok[0].family);
-    })
-    .catch((err) => cb(err, '', 4));
 }
 
 function getOnce(url: string, maxBytes: number): Promise<{ status: number; location: string | null; text: string }> {

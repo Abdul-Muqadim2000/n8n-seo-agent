@@ -129,6 +129,8 @@ export interface Run {
   siteDomain: string | null;
   userId: string | null;
   userName: string | null;
+  /** G4: the API key that started it (the run is still the key creator's); null for a run started in the app */
+  apiKeyName?: string | null;
   mode: ModeId;
   title: string;
   status: RunStatus;

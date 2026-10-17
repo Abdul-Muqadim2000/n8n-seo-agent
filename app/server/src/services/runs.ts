@@ -1,10 +1,11 @@
-import { and, asc, desc, eq, inArray, lt, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, lt, ne, sql } from 'drizzle-orm';
 import {
   buildN8nPayload,
   cleanDomain,
   compactBody,
   estimateRunCost,
   estimateRunMinutes,
+  IDEMPOTENCY,
   MODES,
   n8nSiteId,
   ladderPrefsSchema,
@@ -28,7 +29,7 @@ import { config } from '../config';
 import { db, schema } from '../db';
 import type { OrgRow, ReportRow, RunRow, SiteRow } from '../db/schema';
 import { safeEqual } from '../lib/crypto';
-import { badRequest, forbidden, notFound } from '../lib/errors';
+import { badRequest, forbidden, HttpError, notFound } from '../lib/errors';
 import { insertRows, invalidateSite, siteRows, startRun, updateRows } from '../n8n/client';
 import { assertGa4ForDomain } from './google';
 import { extractFiles } from './files';
@@ -103,9 +104,32 @@ export function inputForRole(input: RunInput, role: Role): RunInput {
 export interface CreateRunOptions {
   /** 'auto': started by "Choose keywords for me" on the owner's behalf (its title says so; its reports count as automatic) */
   startedBy?: 'person' | 'auto';
+  /** G4: the API key that asks (stored on the run; the run is still the key creator's, `a.user`) */
+  apiKeyId?: string | null;
+  /** G4: the caller's Idempotency-Key and the hash of its request — checked under the company lock, before the budget */
+  idempotency?: { key: string; hash: string } | null;
 }
 
+/** G4: the run an Idempotency-Key named in the last 24 hours, if any. */
+export async function findIdempotentRun(orgId: string, key: string): Promise<RunRow | null> {
+  return (
+    (await db.query.runs.findFirst({
+      where: and(eq(schema.runs.orgId, orgId), eq(schema.runs.idempotencyKey, key), gt(schema.runs.createdAt, new Date(Date.now() - IDEMPOTENCY.hours * 3_600_000))),
+      orderBy: desc(schema.runs.createdAt),
+    })) ?? null
+  );
+}
+
+/** G4: the same Idempotency-Key with a different request. 422, like Stripe: the key names one request, never two. */
+export const idempotencyMismatch = () =>
+  new HttpError(422, 'This Idempotency-Key was already used for a different request in the last 24 hours. Use a new key for a new run.', 'idempotency_mismatch');
+
 export async function createRun(a: OrgAccess, input: RunInput, opts: CreateRunOptions = {}): Promise<RunRow> {
+  return (await createRunWithMeta(a, input, opts)).run;
+}
+
+/** `createRun`, and whether the run is a replay of an earlier request with the same Idempotency-Key (nothing new was started). */
+export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: CreateRunOptions = {}): Promise<{ run: RunRow; replayed: boolean }> {
   const { org, user } = a;
   const auto = opts.startedBy === 'auto';
   if (org.disabled) throw forbidden('This company is disabled. Contact the platform administrator.');
@@ -150,8 +174,21 @@ export async function createRun(a: OrgAccess, input: RunInput, opts: CreateRunOp
   }
   // budget checks and the insert under one lock per company, so parallel requests (runs and keyword checks) cannot all pass the same
   // check; the month counts runs and keyword checks, the platform's daily ceiling every company (spend.ts)
-  const run = await db.transaction(async (tx) => {
+  const created = await db.transaction(async (tx) => {
     await lockCompany(tx, org.id);
+    // G4: a repeat of an earlier request (same Idempotency-Key within 24 hours) answers that run and starts nothing. Under the lock,
+    // so two repeats arriving together cannot both miss each other; before the budget, so a replay is answered even when the
+    // budget has since filled up.
+    if (opts.idempotency) {
+      const prior = await tx.query.runs.findFirst({
+        where: and(eq(schema.runs.orgId, org.id), eq(schema.runs.idempotencyKey, opts.idempotency.key), gt(schema.runs.createdAt, new Date(Date.now() - IDEMPOTENCY.hours * 3_600_000))),
+        orderBy: desc(schema.runs.createdAt),
+      });
+      if (prior) {
+        if (prior.idempotencyHash !== opts.idempotency.hash) throw idempotencyMismatch();
+        return { row: prior, replayed: true };
+      }
+    }
     await assertBudget(tx, org, estimated, 'This run');
     const [row] = await tx
       .insert(schema.runs)
@@ -165,10 +202,15 @@ export async function createRun(a: OrgAccess, input: RunInput, opts: CreateRunOp
         input: { ...input, emailCopy: config.engineEmails && input.emailCopy, ...(auto ? { autoStart: true } : {}) } as unknown as Record<string, unknown>,
         estimatedCostUsd: estimated,
         etaMinutes: etaFor(input),
+        apiKeyId: opts.apiKeyId ?? null,
+        idempotencyKey: opts.idempotency?.key ?? null,
+        idempotencyHash: opts.idempotency?.hash ?? null,
       })
       .returning();
-    return row;
+    return { row, replayed: false };
   });
+  if (created.replayed) return { run: created.row, replayed: true };
+  const run = created.row;
 
   const res = await startRun(body, org.id);
   if (!res.ok) {
@@ -177,7 +219,7 @@ export async function createRun(a: OrgAccess, input: RunInput, opts: CreateRunOp
       .set({ status: 'failed', error: res.error, requestId: res.requestId, completedAt: new Date() })
       .where(eq(schema.runs.id, run.id))
       .returning();
-    return failed;
+    return { run: failed, replayed: false };
   }
   // B-A6 (2026-10-15): the engine recognised a repeat of a request already running, did not start a second run and did not spend
   // again, and answered with the FIRST run's id. Two of our rows would then carry one request id, and a callback matches the newest
@@ -192,7 +234,7 @@ export async function createRun(a: OrgAccess, input: RunInput, opts: CreateRunOp
     });
     if (original) {
       await db.delete(schema.runs).where(eq(schema.runs.id, run.id));
-      return original;
+      return { run: original, replayed: true };
     }
     // the first run is not ours (started outside this app, or already cleaned up): keep this row, it is the only one that can
     // receive the callback — but never claim it started work the engine did not do.
@@ -225,7 +267,7 @@ export async function createRun(a: OrgAccess, input: RunInput, opts: CreateRunOp
       })
       .where(eq(schema.sites.id, site.id));
   }
-  return accepted;
+  return { run: accepted, replayed: false };
 }
 
 /** B-A6: should this start resolve to a run that is already going, instead of keeping a row of its own?
@@ -500,8 +542,9 @@ export async function ingestCallback(
 
 // ---------------- serializers ----------------
 
-export function toRun(r: RunRow, extra: { siteDomain?: string | null; userName?: string | null } = {}): Run {
+export function toRun(r: RunRow, extra: { siteDomain?: string | null; userName?: string | null; apiKeyName?: string | null } = {}): Run {
   return {
+    apiKeyName: r.apiKeyId ? (extra.apiKeyName ?? 'an API key') : null,
     id: r.id,
     orgId: r.orgId,
     siteId: r.siteId,

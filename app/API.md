@@ -265,8 +265,10 @@ Screaming Frog 24 and Sitebulb 10 (2026) let a customer ask their own crawl ques
 ships an API + MCP. This is the same for every part of the product at once, built once in the app server — never per feature.
 
 **Design rules.**
-1. **Read-only.** Every endpoint is a `GET`, except `POST /api/v1/publish-check` (it writes nothing anywhere and costs nothing) and
-   the MCP endpoint (whose tools are the same reads). A key can never start a run, spend money, change a setting or list members.
+1. **Read-only unless a write permission was chosen.** Every read endpoint is a `GET`; `POST /api/v1/publish-check` writes nothing and
+   costs nothing. Since G4 (2026-10-17) a key created with the **`run`** permission can start analyses (`POST /api/v1/runs`) and push
+   findings to the company's issue tracker, and one with **`admin`** can manage event webhooks and start exports — "Write API" below.
+   A key never changes a setting, lists members or reads another company.
 2. **One company per credential, never another.** A key belongs to exactly one company. Every query carries `org_id = <the key's
    company>`; a website, run, report, audit or file of another company answers **404 — the same answer as one that does not exist**.
    Audits and findings live in n8n's Data Tables keyed by *domain*, so they are read only for a website **this company verified**
@@ -283,7 +285,7 @@ ships an API + MCP. This is the same for every part of the product at once, buil
 
 **Authentication.** `Authorization: Bearer asc_<43 characters>` — a **company API key**, created and revoked by an owner or admin in
 Company settings → API access. The key is shown **once**; only its SHA-256 is stored (`api_keys.token_hash`), with a display prefix
-(`asc_` + 8 characters), its name, scopes (`read`, `publish_check`), creator, optional expiry (30 / 90 / 365 days or none), last use
+(`asc_` + 8 characters), its name, scopes (`read`, `publish_check`, `run`, `admin` — G4), creator, optional expiry (30 / 90 / 365 days or none), last use
 (written at most once a minute) and revocation. At most 10 live keys per company. An unknown, revoked or expired key answers 401
 `api_key_invalid` (one message for all three). A request with a Bearer key is never cookie-authenticated, so it needs no
 `X-Requested-With` (a cross-site form cannot set `Authorization`). A signed-in **session** works for the same routes, with
@@ -306,7 +308,9 @@ Company settings → API access. The key is shown **once**; only its SHA-256 is 
 | GET | /api/v1/reports/:reportId | `ReportV1 & { payload }` (the callback as stored — what the app's report page renders) |
 | GET | /api/v1/files/:fileId | the file, with the same headers and sandbox as the app's file route |
 | POST | /api/v1/publish-check | B3-7, below (scope `publish_check`) |
-| POST | /api/v1/mcp | MCP over Streamable HTTP (JSON answers, no streams; API key only): `initialize`, `tools/list`, `tools/call`, `ping` — tools `list_websites`, `list_audits`, `get_audit`, `list_runs`, `get_run`, `list_reports`, `get_report`, `publish_check`, each calling the handler of the REST route above |
+| GET | /api/v1/modes | G4: every mode with `{ mode, title, description, websiteRequired, delivers, estimate: { usd, minutes }, inputSchema }` (the form's schema as JSON Schema) |
+| POST | /api/v1/runs | G4: start an analysis (scope `run`) — "Write API" below |
+| POST | /api/v1/mcp | MCP over Streamable HTTP (JSON answers, no streams; API key only): `initialize`, `tools/list`, `tools/call`, `ping` — tools `list_websites`, `list_audits`, `get_audit`, `list_runs`, `get_run`, `list_reports`, `get_report`, `publish_check`, `list_modes`, and with scope `run` `preview_run` / `start_run` (G4), each calling the handler of the REST route above. `tools/list` shows only the tools the key may call |
 
 Key management (session only, Company settings → API access):
 
@@ -333,9 +337,72 @@ cost_usd: 0 }`. n8n's 400 is passed on as 400 `{ ok: false, verdict: 'error', ex
 workflow off is 502 `engine_unavailable` ("nothing was checked"). `exit_code` is meant for a CI step: 0 publish, 1 do not, 2 the
 request was wrong.
 
-**Not built (on purpose):** a ticket hand-off (Jira / Linear) and a BI connector (a Looker Studio community connector) — both sit on
-top of this API and need the owner's choice of tracker / tool; new findings already leave the product through report delivery
-(`site_audit` stage, signed webhook).
+### Write API — start any analysis a form can start (G4, `app/docs/INTEGRATIONS.md` §4)
+
+`POST /api/v1/runs` — a key with the **`run`** permission (or a member's session with `X-Org-Id`). The body is **the body the app's
+form posts** (`shared/src/schemas.ts` `RUN_SCHEMAS`, chosen by `mode`; `GET /api/v1/modes` lists every mode's fields as JSON Schema),
+with `websiteId` accepted for `siteId` and the website's country filled in when `country` is left out, plus two fields of its own:
+
+- `acknowledge: string[]` — ids of the duplicate warnings the caller accepts;
+- `dryRun: true` — answer the estimate, the warnings and the budget, start nothing.
+
+Every start runs the **app's own run path** (`createRunWithMeta`): the company's advisory lock, the monthly budget (402 `budget`), the
+platform's daily ceiling (429 `platform_capacity`), the engine's front door, the ladder-page and tracking bookkeeping. The forms'
+duplicate warnings (`pipelineNotices`: the same run already going, a page already written for the keyword, a ladder for the same
+search, the schedule doing it anyway…) are computed on the server from the same pipeline data; one the form asks a person to tick is
+**409 `confirm_needed`** until its id is in `acknowledge`. 30 starts a minute per key (the form route's limit), 120 requests a minute.
+
+A key acts as **the person who created it**: the run is theirs (with "via API key <name>" on the run page, `runs.api_key_id`), and it
+is refused with 403 `key_owner_gone` once that person is no longer a member (`run`) or an admin (`admin`).
+
+**`Idempotency-Key`** header (1-200 of `A-Za-z0-9_.:-`, e.g. a UUID): a repeat within 24 hours answers the **same run** (200,
+`idempotent-replayed: true`) and starts nothing; the same key with a different request is 422 `idempotency_mismatch`. Checked under
+the company lock, before the budget, so two concurrent repeats cannot both start.
+
+| Answer | When | Body |
+|---|---|---|
+| 201 | started | `{ run: RunV1 & { input }, notices }` |
+| 200 | `dryRun`, or a replay | `{ dryRun: true, mode, estimate: { usd, minutes }, notices, needsAcknowledge, budget: { spentUsd, budgetUsd, remainingUsd } }` / the run |
+| 400 | `validation` (with `fields`, the forms' messages) | |
+| 402 / 429 | `budget` / `platform_capacity` / `rate_limited` | |
+| 403 | `scope_missing`, `key_owner_gone`, `website_unverified` (`forbidden`) | |
+| 404 | the website is not this company's | |
+| 409 | `confirm_needed` | `{ notices: PipelineNotice[], needsAcknowledge: string[] }` |
+| 422 | `idempotency_mismatch` | |
+
+The run row exists even when the engine refuses at the door (status `failed` with the engine's sentence), exactly as in the app; poll
+`GET /api/v1/runs/:runId` or subscribe to `run.completed` / `run.failed` (event webhooks, below).
+
+```bash
+KEY=asc_...   # Company settings -> API access, with "Start analyses"
+# what would it cost, and does it duplicate anything?
+curl -s https://app.example.com/api/v1/runs -H "Authorization: Bearer $KEY" -H 'content-type: application/json' \
+  -d '{"mode":"audit","websiteId":"<website id>","reportType":"site_audit","dryRun":true}'
+# start it (safe to retry with the same key)
+curl -s https://app.example.com/api/v1/runs -H "Authorization: Bearer $KEY" -H 'content-type: application/json' \
+  -H "Idempotency-Key: $(uuidgen)" -d '{"mode":"audit","websiteId":"<website id>","reportType":"site_audit"}'
+# a page for one keyword, accepting the "a page for this keyword is already written" warning by its id
+curl -s https://app.example.com/api/v1/runs -H "Authorization: Bearer $KEY" -H 'content-type: application/json' \
+  -d '{"mode":"keyword","websiteId":"<id>","keyword":"e invoicing uae","receiveContent":true,"acknowledge":["written:e invoicing uae"]}'
+curl -s https://app.example.com/api/v1/runs/<run id> -H "Authorization: Bearer $KEY"
+```
+
+### Connecting an AI assistant (MCP)
+
+The endpoint is `POST <APP_URL>/api/v1/mcp` with `Authorization: Bearer asc_…`. A read-only key gives the read tools; a key with
+`run` adds `preview_run` and `start_run` (whose instructions tell the assistant to preview first and never to acknowledge a warning
+the user has not seen).
+
+- **Claude Code**: `claude mcp add --transport http ascentra https://app.example.com/api/v1/mcp --header "Authorization: Bearer asc_..."`
+- **Claude Desktop** (`claude_desktop_config.json`, through the `mcp-remote` bridge, which forwards the header):
+  ```json
+  { "mcpServers": { "ascentra": { "command": "npx",
+      "args": ["-y", "mcp-remote", "https://app.example.com/api/v1/mcp", "--header", "Authorization:${ASCENTRA_AUTH}"],
+      "env": { "ASCENTRA_AUTH": "Bearer asc_..." } } } }
+  ```
+- **OpenAI (Responses API / Agents SDK)**: `tools: [{ "type": "mcp", "server_label": "ascentra", "server_url": "https://app.example.com/api/v1/mcp",
+  "headers": { "Authorization": "Bearer asc_..." }, "require_approval": "always" }]`. ChatGPT's own in-app custom connectors accept
+  only OAuth or no authentication, so a company key cannot be pasted there today; use the API, or a read-only key behind your own proxy.
 
 ## n8n → app
 `POST /api/hooks/n8n/:hookToken` — every callback of every run and every scheduled report of the company (the token is the

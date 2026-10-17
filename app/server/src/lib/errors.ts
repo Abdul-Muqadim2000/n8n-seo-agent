@@ -7,6 +7,8 @@ export class HttpError extends Error {
     message: string,
     public code?: string,
     public fields?: Record<string, string>,
+    /** G4: more of the answer, beside error / code / fields (e.g. the notices a 409 `confirm_needed` refers to) */
+    public extra?: Record<string, unknown>,
   ) {
     super(message);
   }

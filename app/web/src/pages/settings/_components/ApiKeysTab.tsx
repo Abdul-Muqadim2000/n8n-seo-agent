@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { KeyRound, Plus, ShieldCheck, Trash2 } from 'lucide-react';
-import { API_KEY, API_SCOPE_LABELS, API_SCOPES, type ApiKeyView, type ApiScope } from '@seo/shared';
+import { API_KEY, API_SCOPE_LABELS, API_SCOPE_SHORT, API_SCOPES, API_WRITE_SCOPES, type ApiKeyView, type ApiScope } from '@seo/shared';
 import { StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CardBody, CardFooter } from '@/components/ui/card';
@@ -16,9 +16,10 @@ import { fmtAgo, fmtDate } from '@/lib/utils';
 import { SettingsCard } from './SettingsCard';
 
 /**
- * B5-11 (v4.18) — the company's API keys for the read API (app/API.md "Read API v1").
- * A key reads this company's websites, audits and findings, runs, reports and files, and can run the free publish check. It can never
- * start an analysis or change anything. The key is shown once, right after it is made; afterwards only its first characters are.
+ * B5-11 (v4.18) — the company's API keys (app/API.md "Read API v1"); G4 (2026-10-17) added the write permissions.
+ * A key reads this company's websites, audits and findings, runs, reports and files, and can run the free publish check. Only a key
+ * given "start runs" can start an analysis (inside the monthly budget), and only one given "admin" can manage webhooks and exports;
+ * either acts as the person who made it. The key is shown once, right after it is made; afterwards only its first characters are.
  */
 
 const STATE_TONE = { active: 'good', expired: 'warning', revoked: 'neutral' } as const;
@@ -68,7 +69,7 @@ export function ApiKeysTab() {
   const columns: Column<ApiKeyView>[] = [
     { key: 'name', header: 'Name', cell: (k) => <span className="font-medium">{k.name}</span> },
     { key: 'prefix', header: 'Key', cell: (k) => <code className="font-mono text-xs">{k.prefix}…</code> },
-    { key: 'scopes', header: 'Can', cell: (k) => <span className="text-sm text-ink-2">{k.scopes.map((s) => (s === 'read' ? 'read' : 'publish check')).join(' · ')}</span> },
+    { key: 'scopes', header: 'Can', cell: (k) => <span className="text-sm text-ink-2">{k.scopes.map((s) => API_SCOPE_SHORT[s]).join(' · ')}</span> },
     { key: 'state', header: 'Status', cell: (k) => <StatusBadge tone={STATE_TONE[k.state]}>{STATE_LABEL[k.state]}</StatusBadge> },
     { key: 'lastUsedAt', header: 'Last used', cell: (k) => (k.lastUsedAt ? fmtAgo(k.lastUsedAt) : 'Never'), sortValue: (k) => k.lastUsedAt ?? '' },
     { key: 'expiresAt', header: 'Expires', cell: (k) => (k.expiresAt ? fmtDate(k.expiresAt) : 'Never') },
@@ -112,6 +113,13 @@ export function ApiKeysTab() {
               />
             ))}
           </fieldset>
+          {scopes.some((s) => API_WRITE_SCOPES.includes(s)) && (
+            <Callout tone="warning" title="This key can change things">
+              {scopes.includes('run') && <p>It can start analyses that cost money, inside the company’s monthly budget, and create tickets in your issue tracker. Every run it starts shows the key’s name.</p>}
+              {scopes.includes('admin') && <p>It can add and remove event webhooks and start data exports.</p>}
+              <p>It acts as you: if you leave the company or lose the role, it stops working for these.</p>
+            </Callout>
+          )}
           <Field label="Expires">
             {(p) => (
               <Select {...p} value={String(days)} onChange={(e) => setDays(Number(e.target.value))}>
@@ -131,7 +139,7 @@ export function ApiKeysTab() {
         </CardFooter>
       </SettingsCard>
 
-      <SettingsCard icon={<ShieldCheck />} title="Your keys" description="A key reads only this company's data. It can never start an analysis, spend money or change a setting.">
+      <SettingsCard icon={<ShieldCheck />} title="Your keys" description="A key reads only this company's data. Only a key with “start runs” can spend money, and only within the monthly budget.">
         <CardBody>
           {data.items.length ? (
             <DataTable rows={data.items} columns={columns} rowKey={(k) => k.id} pageSize={20} />
@@ -142,7 +150,7 @@ export function ApiKeysTab() {
         <CardFooter>
           <p className="text-sm text-ink-2">
             Send it as <code className="font-mono">Authorization: Bearer asc_…</code> to <code className="font-mono">/api/v1</code>. Up to {API_KEY.perMinute} requests a minute per key.
-            AI assistants that speak MCP can connect to <code className="font-mono">/api/v1/mcp</code> with the same key.
+            AI assistants that speak MCP can connect to <code className="font-mono">/api/v1/mcp</code> with the same key — the setup for Claude and ChatGPT is under Integrations.
           </p>
         </CardFooter>
       </SettingsCard>

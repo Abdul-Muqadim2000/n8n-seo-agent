@@ -84,7 +84,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   app.setErrorHandler((err: FastifyError | HttpError, req, reply) => {
     if (err instanceof HttpError) {
-      return reply.status(err.statusCode).send({ error: err.message, code: err.code, fields: err.fields });
+      return reply.status(err.statusCode).send({ ...(err.extra ?? {}), error: err.message, code: err.code, fields: err.fields });
     }
     const status = (err as FastifyError).statusCode ?? 500;
     if (status === 429) return reply.status(429).send({ error: 'Too many attempts. Please wait a minute and try again.', code: 'rate_limited' });

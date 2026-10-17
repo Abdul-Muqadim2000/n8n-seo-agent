@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  API_SCOPE_ROLE,
+  API_WRITE_SCOPES,
   apiKeyCreateSchema,
+  idempotencyKeyOk,
   apiKeyState,
   bearerKey,
   costBasisV1,
@@ -49,6 +52,16 @@ describe('B5-11 API keys', () => {
     expect(apiKeyCreateSchema.safeParse({ name: 'x', scopes: ['write'] }).success).toBe(false);
     expect(apiKeyCreateSchema.safeParse({ name: 'x', expiresInDays: 7 }).success).toBe(false);
     expect(apiKeyCreateSchema.parse({ name: 'x', expiresInDays: 0 }).expiresInDays).toBe(0);
+  });
+  it('G4: the write permissions are chosen explicitly, never by default, and need a role to stay usable', () => {
+    expect(apiKeyCreateSchema.parse({ name: 'agent', scopes: ['read', 'run', 'admin'] }).scopes).toEqual(['read', 'run', 'admin']);
+    expect(apiKeyCreateSchema.parse({ name: 'x' }).scopes).not.toContain('run');
+    expect(API_WRITE_SCOPES).toEqual(['run', 'admin']);
+    expect([API_SCOPE_ROLE.read, API_SCOPE_ROLE.run, API_SCOPE_ROLE.admin]).toEqual(['viewer', 'member', 'admin']);
+  });
+  it('G4: an Idempotency-Key is a short opaque string', () => {
+    for (const ok of ['a', 'job-42', '0d133af2-f740-481a-9de0-013991e7dea1', 'ci:release.2026_10']) expect(idempotencyKeyOk(ok)).toBe(true);
+    for (const bad of ['', 'has space', 'x'.repeat(201), 'semi;colon', 42, null]) expect(idempotencyKeyOk(bad)).toBe(false);
   });
 });
 

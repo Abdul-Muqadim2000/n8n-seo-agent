@@ -33,14 +33,15 @@ export function sendFile(reply: FastifyReply, f: Pick<FileRow, 'kind' | 'fileNam
 
 async function runWithNames(runId: string): Promise<Run | null> {
   const rows = await db
-    .select({ r: schema.runs, domain: schema.sites.domain, userName: schema.users.name })
+    .select({ r: schema.runs, domain: schema.sites.domain, userName: schema.users.name, keyName: schema.apiKeys.name })
     .from(schema.runs)
     .leftJoin(schema.sites, eq(schema.runs.siteId, schema.sites.id))
     .leftJoin(schema.users, eq(schema.runs.userId, schema.users.id))
+    .leftJoin(schema.apiKeys, eq(schema.runs.apiKeyId, schema.apiKeys.id))
     .where(eq(schema.runs.id, runId))
     .limit(1);
   const x = rows[0];
-  return x ? toRun(x.r, { siteDomain: x.domain, userName: x.userName }) : null;
+  return x ? toRun(x.r, { siteDomain: x.domain, userName: x.userName, apiKeyName: x.keyName }) : null;
 }
 
 export async function runRoutes(app: FastifyInstance) {
@@ -63,14 +64,15 @@ export async function runRoutes(app: FastifyInstance) {
     else if (q.status && ['submitting', 'accepted', 'running', 'completed', 'failed'].includes(q.status)) conds.push(eq(schema.runs.status, q.status));
     if (q.cursor && !Number.isNaN(Date.parse(q.cursor))) conds.push(lt(schema.runs.createdAt, new Date(q.cursor)));
     const rows = await db
-      .select({ r: schema.runs, domain: schema.sites.domain, userName: schema.users.name })
+      .select({ r: schema.runs, domain: schema.sites.domain, userName: schema.users.name, keyName: schema.apiKeys.name })
       .from(schema.runs)
       .leftJoin(schema.sites, eq(schema.runs.siteId, schema.sites.id))
       .leftJoin(schema.users, eq(schema.runs.userId, schema.users.id))
+      .leftJoin(schema.apiKeys, eq(schema.runs.apiKeyId, schema.apiKeys.id))
       .where(and(...conds))
       .orderBy(desc(schema.runs.createdAt))
       .limit(limit + 1);
-    const items = rows.slice(0, limit).map((x) => toRun(x.r, { siteDomain: x.domain, userName: x.userName }));
+    const items = rows.slice(0, limit).map((x) => toRun(x.r, { siteDomain: x.domain, userName: x.userName, apiKeyName: x.keyName }));
     return { items, nextCursor: rows.length > limit ? rows[limit - 1].r.createdAt.toISOString() : null };
   });
 
