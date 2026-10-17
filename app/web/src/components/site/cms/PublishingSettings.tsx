@@ -116,7 +116,7 @@ function ConnectionCard({ c, admin }: { c: CmsConnectionView; admin: boolean }) 
   const facts = [
     c.baseUrl && { label: 'Address', value: <span className="break-all">{c.baseUrl}</span> },
     c.username && { label: 'User', value: c.username },
-    s.account && { label: c.kind === 'wordpress' ? 'Signed in as' : c.kind === 'webhook' ? 'Endpoint' : 'Connected to', value: s.account },
+    s.account && (c.kind === 'wordpress' || c.kind === 'webhook') && { label: c.kind === 'wordpress' ? 'Signed in as' : 'Endpoint', value: s.account },
     c.kind === 'wordpress' && { label: 'Creates', value: s.postType === 'pages' ? 'Pages' : `Posts${s.categories?.length ? ` in ${s.categories.join(', ')}` : ''}${s.tags?.length ? ` · tags ${s.tags.join(', ')}` : ''}` },
     c.kind === 'wordpress' && s.seoPlugin && { label: 'SEO fields', value: s.seoFields?.length ? `${s.seoPlugin === 'yoast' ? 'Yoast SEO' : 'Rank Math'} fields filled directly` : 'Meta description in the excerpt' },
     c.kind === 'webflow' && { label: 'Collection', value: s.collectionName || s.collectionId },

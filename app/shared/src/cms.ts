@@ -493,7 +493,12 @@ export function cmsReadiness(c: CmsCandidate, page: CmsPage = cmsPage(c.payload 
   if (isPage) {
     const author = obj(meta.author);
     // the HTML and the Markdown both: the delivery rule reads the Markdown, the CMS receives the HTML (or the Markdown)
-    const ph = findCmsPlaceholders([page.html, page.markdown, page.title, page.h1, page.metaDescription, s(author.name)]);
+    // (the two are the same article: a bracket in both counts as often as the version that has it more often, not twice)
+    const inHtml = findCmsPlaceholders([page.html, page.title, page.h1, page.metaDescription, s(author.name)]);
+    const inMd = findCmsPlaceholders([page.markdown]);
+    const merged = new Map(inHtml.map((b) => [b.token, b]));
+    for (const b of inMd) merged.set(b.token, { ...b, count: Math.max(b.count, merged.get(b.token)?.count ?? 0) });
+    const ph = [...merged.values()].sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'placeholder' ? -1 : 1) || b.count - a.count || a.token.localeCompare(b.token));
     if (ph.length) {
       const total = ph.reduce((t, x) => t + x.count, 0);
       blockers.push({

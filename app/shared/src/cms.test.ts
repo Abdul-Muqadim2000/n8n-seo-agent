@@ -111,6 +111,11 @@ describe('cmsReadiness: the rule, which has no override', () => {
     expect(r.blockers[0]!.items).toEqual([{ token: '[Price band: typical fee in AED]', count: 1, kind: 'placeholder' }]);
   });
 
+  it('a bracket in both the HTML and the Markdown of the same article is counted once per place, not twice', () => {
+    const r = cmsReadiness(cand(page({ html: html + '<p>From [Price].</p>', markdown: '# X\n\nFrom [Price].' })));
+    expect(r.blockers[0]!.items).toEqual([{ token: '[Price]', count: 1, kind: 'placeholder' }]);
+  });
+
   it('placeholders block both, with the list', () => {
     const r = cmsReadiness(cand(page({ html: html + '<p>We have [Confirm: 120 clients] in the UAE, from [Price].</p>' })));
     expect(r.draftAllowed).toBe(false);

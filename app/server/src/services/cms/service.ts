@@ -337,7 +337,8 @@ export async function reportState(a: OrgAccess, reportId: unknown): Promise<CmsR
     canLive: roleAtLeast(a.role, 'admin') && readiness.liveAllowed && conns.length > 0 && !!site?.verifiedAt,
     page: isPage ? { title: page.title, slug: page.slug, keyword: page.keyword, images: page.images.length } : null,
     connections: conns.map(connectionView),
-    items: items.map((i) => itemView(i, byId.get(i.connectionId))),
+    // an item row that never reached the CMS (a failed first send) is not "in the CMS"
+    items: items.filter((i) => i.remoteId).map((i) => itemView(i, byId.get(i.connectionId))),
     history,
     publicUrls: Object.fromEntries(conns.map((c) => [c.id, cmsPublicUrl((c.settings as CmsConnectionSettings).publicUrlTemplate, page, site?.domain ?? '')])),
   };

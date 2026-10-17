@@ -141,7 +141,7 @@ export function CmsPublishPanel({ report }: { report: ReportDetail }) {
               ) : (
                 <span>Not in {conn.label} yet.</span>
               )}
-              {conn.status !== 'ok' && <StatusBadge tone="warning">Connection not tested</StatusBadge>}
+              {conn.status !== 'ok' && <StatusBadge tone="warning">{conn.status === 'error' ? 'The connection’s last test failed' : 'Connection not tested yet'}</StatusBadge>}
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {s.canDraft && !live && (
