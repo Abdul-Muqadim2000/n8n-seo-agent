@@ -156,6 +156,27 @@ module.exports = async (ctx) => {
   });
 
   // ===================================================================================
+  // SA07 — the coverage target: whole terms, and never the regulator's page as the page to beat
+  // ===================================================================================
+  await guard('SA07 A-7 coverage target: no fragment terms, and a government page is never the page a vendor has to beat', async () => {
+    reset(); const SN = 'SA07 A-7 — the term model of "e invoicing software uae" holds whole phrases ("ministry of finance", not "ministry finance" / "businesses the uae" / "features like"), and the coverage target is a business\'s page, not mof.gov.ae';
+    begin(SN); const check = mkCheck(SN);
+    const A = FX.a7;
+    for (const n of ['Pick Top 6', 'SERP Top 10', 'Collect Site URLs', 'Collect Client Pages', 'Read Competitor Pages']) mock(n, items(A[n]));
+    const acp = (await run('Analyze Competitor Pages', [{ json: {} }]))[0].json;
+    const terms = (acp.term_model || []).map(t => t.term);
+    console.log('   terms ->', terms.slice(0, 26).join(' | '));
+    check('A-7: no phrase joins words a one- or two-letter word separated, and none ends on "like"',
+      !terms.some(t => /^(businesses the uae|ministry finance|features like)$/.test(t) || / like$/.test(t)) && terms.includes('ministry of finance'), JSON.stringify(terms));
+    mock('Collect Facts', [{ json: acp }]);
+    const pa = (await run('Parse Analysis', items(A['After Count (Competitor Analyzer)'])))[0].json;
+    const ct = pa.coverage_target || {};
+    console.log('   coverage target ->', JSON.stringify({ best: ct.best && ct.best.domain, basis: ct.basis }));
+    check('A-7: the page to beat is not the regulator (mof.gov.ae), and the basis says the government page was left out',
+      ct.best && !/gov\./.test(ct.best.domain) && /government \/ regulator page\(s\) left out/.test(ct.basis || ''), JSON.stringify(ct.best) + ' ' + ct.basis);
+  });
+
+  // ===================================================================================
   // SA25 — discovery's first picks carry the ladder that already holds them
   // ===================================================================================
   const discover764 = async () => {
