@@ -160,6 +160,12 @@ for (const [id, items] of byLadder) {
       reason: g.reason, detail: g.detail, note: g.note, written: !!g.live, dropped: !g.ok, seen: 'this check' });
     if (!g.ok) asideKw.add(r.keyword);
   }
+  // C-12 (re-rating 2026-10-17): a rung whose stored row is already `set_aside` (an earlier check wrote it back with its reason) stays set
+  // aside in this report too - "facts erp" (facts.ae's brand, #3 for the head) was listed as a rung "not published yet" while the Site
+  // Tracker of the same minutes showed it set aside: a monthly rung is not re-gated (no check was bought), so the stored verdict is read
+  for (const r of rowsK) { if (asideKw.has(r.keyword)) continue; const lr = rowOf(r.keyword); if (String(lr.status || r.status || '') !== 'set_aside') continue;
+    asideKw.add(r.keyword); fitAside.push({ ladder_id: id, keyword: r.keyword, rung: r.rung, page_no: r.page_no, status: 'set_aside', target_url: lr.target_url || '',
+      reason: String(lr.status_note || 'set aside by an earlier check').slice(0, 200), detail: '', note: String(lr.status_note || ''), written: false, dropped: true, seen: 'stored' }); }
   // R87: a ladder whose MAIN keyword is set aside — by this check, by the plan, or already on its row — is paused: nothing asks for its
   // rungs (they exist only to climb towards that keyword), the head's row is written back `set_aside` with the reason, and the next step
   // says so and offers a re-plan. Setting the head aside is not dropping the topic: nothing is deleted.
@@ -184,26 +190,31 @@ for (const [id, items] of byLadder) {
   const pending = rungs.find(r => !r.reached) || null;
   const pageOf = (t) => ({ keyword: t.keyword, page_type: t.page_type, target_url: t.target_url, status: t.status });
   let next;
-  const mainNotReady = !!topRow && !mainLive && !mainWritten && topRow.status === 'writing' && !!notReadyOf(topRow.keyword);   // R111
+  // C-7 (re-rating 2026-10-17): the content log decides, not the ladder row's word - a main page whose draft failed its quality check is
+  // "fix the draft" ("it consulting dubai" was told "write the main page" while the Site Tracker and the cadence said "fix it"), and it is
+  // asked before "write the main page", which used to match first and made this branch unreachable
+  const mainNotReady = !!topRow && !mainLive && !mainWritten && !!notReadyOf(topRow.keyword);   // R111
   if (paused) next = { action: 'paused', rung: 4, main_page: mainLive ? 'live' : 'planned', reason: paused.reason,
     text: 'This ladder is paused: its main keyword "' + paused.keyword + '" is not a search this website should target (' + (paused.detail || paused.reason) + ')'
       + (paused.seen === 'this check' ? ', as this week\'s check of its results page showed' : '') + '. None of its pages is written or asked for until you re-plan the ladder towards another main keyword, or tell us the keyword is deliberate; the pages that are already live keep being checked.', pages: [] };
   else if (done) next = { action: 'complete', rung: 4, text: 'The top rung "' + head.keyword + '" has held the top 3 for 4 checks. From now on it is checked once a month with the published pages, so a drop is noticed; keep the pages fresh and the links growing.', pages: [] };
-  else if (topRow && !mainWritten && (mainFirst || allIn)) next = { action: 'write_top', rung: 4, main_page: 'planned',
-    text: (mainFirst ? (rungs.length ? 'This plan writes the main page first: ' : 'The main page is the whole ladder for now: ') : 'Every rung is in the top 10: ') + 'write the main page "' + head.keyword + '"' + (rungs.length && mainFirst ? '; its supporting pages follow once it is live' : '') + '.', pages: [pageOf(topRow)] };
   else if (mainNotReady && (mainFirst || allIn)) next = { action: 'fix_top', rung: 4, main_page: 'not_ready',
     text: 'The main page "' + head.keyword + '" is ' + fixText(topRow.keyword) + '.', pages: [pageOf(topRow)] };
+  else if (topRow && !mainWritten && (mainFirst || allIn)) next = { action: 'write_top', rung: 4, main_page: 'planned',
+    text: (mainFirst ? (rungs.length ? 'This plan writes the main page first: ' : 'The main page is the whole ladder for now: ') : 'Every rung is in the top 10: ') + 'write the main page "' + head.keyword + '"' + (rungs.length && mainFirst ? '; its supporting pages follow once it is live' : '') + '.', pages: [pageOf(topRow)] };
   else if (topRow && mainWritten && !mainLive && (mainFirst || allIn)) next = { action: 'publish_top', rung: 4, main_page: 'written', publish_url: topRow.target_url || '',
     text: 'The main page "' + head.keyword + '" is written but not live yet: publish it' + (topRow.target_url ? ' at ' + topRow.target_url : '') + '. Nothing climbs until it is published' + (rungs.length && mainFirst ? ', and its supporting pages wait for it' : '') + '.', pages: [] };
   else if (pending) {
     const target = rowsK.filter(x => x.rung === pending.rung && !asideKw.has(x.keyword));   // R16: never ask for a page we should not write
     next = { action: 'write_rung_' + pending.rung, rung: pending.rung, main_page: mainLive ? 'live' : mainWritten ? 'written' : 'planned',
       text: 'Work on rung ' + pending.rung + ': ' + (pending.top10 ? pending.top10 + ' of ' + pending.pages + ' pages are in the top 10. ' : 'none of its pages is in the top 10 yet. ') + 'Write or improve: ' + target.map(t => { const c = coveredBy(t);
-        return '"' + t.keyword + '"' + (c ? ' (' + c.url + ' already answers this search — refresh that page, do not publish a second one)' : (t.status === 'writing' && writtenOf(t.keyword)) ? ' (already written — publish it)' : (t.status === 'writing' && notReadyOf(t.keyword)) ? ' (' + fixText(t.keyword) + ')' : t.status === 'writing' ? ' (a page run was started for it but no page was written — it is written again)' : ''); }).join(', ') + '.',
+        return '"' + t.keyword + '"' + (() => { const nr = notReadyOf(t.keyword); const st = SM.pageStep({ keyword: t.keyword, covered_url: c ? c.url : '', written: t.status === 'writing' && writtenOf(t.keyword), not_ready: !!nr, reasons: nr ? nr.qa_reasons : '', started: t.status === 'writing' });   // C-7: one page state, the Site Tracker's too
+          return st.text ? ' (' + st.text + ')' : ''; })(); }).join(', ') + '.',
       pages: target.map(t => { const c = coveredBy(t); return c ? { ...pageOf(t), status: 'improve', target_url: c.url, covered_by: c.url } : pageOf(t); }) };
   } else { const cTop = topRow ? coveredBy(topRow) : null;   // D11: the page that answers the main keyword may be one the site already had
     next = { action: 'improve_top', rung: 4, main_page: 'live',
-      text: (allIn ? 'Every rung is in the top 10 and the main page is live' : 'The main page is live') + ': improve the main page "' + head.keyword + '"' + (cTop ? ' — it is ' + cTop.url + ', the page the site already has for this search' : '') + ' (depth, internal links from the rung pages, links from other sites) and keep it fresh.',
+      text: (allIn ? 'Every rung is in the top 10 and the main page is live' : 'The main page is live') + ': improve the main page "' + head.keyword + '"' + (cTop ? ' — it is ' + cTop.url + ', the page the site already has for this search' : '') + (() => { const ru = String((topRow && topRow.url) || ''), rp = topRow ? Number(topRow.current) : 0;   // C-13: the page Google ranks, when it is another one
+        return ru && rp > 0 && ukeyT(ru) !== ukeyT(cTop ? cTop.url : (topRow.target_url || '')) ? '. Google ranks a different page of yours for this search: ' + ru + ' (#' + rp + '). Decide which of the two answers it, improve that one and link the other to it (one search, one page)' : ''; })() + ' (depth, internal links from the rung pages, links from other sites) and keep it fresh.',
       pages: topRow ? [cTop ? { ...pageOf(topRow), status: 'improve', target_url: cTop.url, covered_by: cTop.url } : pageOf(topRow)] : [] }; }
   // won: the main keyword in the top 3 in each of the last 4 checks, this one included (failed checks skipped)
   const histOf = (kw) => deskHist.filter(x => x.ladder_id === id && x.keyword === kw && String(x.checked_at) < nowCheck && validPos(x.position)).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)));

@@ -167,7 +167,8 @@ assert "RS.serpHosts(r.result, 10)" in _tracker_nodes['Tracker Report'] and '[..
 assert "action: 'paused'" in _tracker_nodes['Tracker Report'] and 'ladder_marks' in _tracker_nodes['Tracker Report'] and 'Set aside by this week' in _tracker_nodes['Tracker Report'], 'R87: a set-aside head does not pause its ladder, or the report does not tell a checked keyword from an unchecked one'
 assert "'top page not yet in the top ' + depthAsked" in _tracker_nodes['Tracker Report'] and 'not yet in the top 100' not in _tracker_nodes['Tracker Report'], 'R91: the subject names a depth nobody asked for'
 assert 'RS.stableReading(deskHist, { keyword: it.keyword, domain: ladDomain' in _tracker_nodes['Tracker Report'] and 'RS.stableReading(deskHist, { keyword: kw, domain: dom' in _tracker_nodes['Tracker Report'], 'R88 / C-4: the two reports compare one keyword against different baselines again (both use RS.stableReading)'
-assert "notReadyOf(t.keyword)) ? ' (' + fixText(t.keyword)" in _tracker_nodes['Tracker Report'], 'R111: a failed draft is told "publish it" again'
+assert "not_ready: !!nr, reasons: nr ? nr.qa_reasons : ''" in _tracker_nodes['Tracker Report'] and 'const pageStep = ' in _tracker_nodes['Tracker Report'], \
+    'R111 / C-7: a failed draft is told "publish it" again (the rung text reads the one page state, SM.pageStep)'
 assert 'const fitStored = ' in _tracker_nodes['Tracker Report'] and 'serp_domains: doms' in _tracker_nodes['Tracker Report'], 'R16: the Rank Tracker report does not judge the rungs against the results page it just read'
 assert 'set_aside_pages' in _tracker_nodes['Tracker Plan'] and 'set_aside_pages' in _tracker_nodes['Tracker Report'] and 'Set aside' in _tracker_nodes['Tracker Report'], 'R16: the set-aside rungs do not reach the report'
 for _c, _t in HISTORY_COLS:

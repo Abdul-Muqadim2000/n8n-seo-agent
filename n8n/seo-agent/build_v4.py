@@ -8875,7 +8875,8 @@ def _b80_checks():
         'B7-2: a split Google did not answer and a split it answered with nothing are the same thing again'
     assert "read: false, page: null, control: null" in _pg80, 'B7-1: an unanswered window no longer refuses with a reason'
     # B7-3: brand searches are out of the cannibalisation list, on the write path, not filtered later
-    assert 'filter(m => !isBrand(m.query))' in _pg80, 'B7-3: brand searches are being reported as cannibalisation'
+    assert 'filter(m => actionable(m.query))' in _pg80 and 'const actionable = (q) => !isBrand(q) && !otherOf(q);' in _pg80, \
+        'B7-3 / C-6: brand searches (or searches for another website) are being reported as cannibalisation'
     # B7-3: the action may never ask for another page (D11 by another name)
     assert 'Decide which one answers this search' in _sm80 and 'Two of your pages compete for' in _sm80, 'B7-3: the action is gone'
 

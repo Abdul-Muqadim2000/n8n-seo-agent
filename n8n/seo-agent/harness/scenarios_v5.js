@@ -15191,6 +15191,68 @@ await guard('SC5 C-4 one outlier reading', async () => {
     RS.BAND_TERMS);
   reset();
 });
+
+await guard('SC6 C-6 C-7 C-12 C-13 C-15 site and rank reports agree', async () => {
+  const SN = 'SC6 C-6 / C-7 / C-12 / C-13 / C-15 — the two weekly reports read one page state (a failed draft a live page makes unnecessary is retired in both; a failed main-page draft is "fix it", not "write it"), a stored set-aside rung stays set aside, the page Google ranks is named, one row per page with Google\'s own "indexed" believed, and a search for another website is never a quick win';
+  reset(); begin(SN);
+  const check = C1.check(SN);
+  const codeOf = (f) => require('fs').readFileSync(require('path').join(process.env.CODE_DIR || require('path').join(__dirname, 'code_v4'), f), 'utf8');
+  // ---- C-6: the real queries of exec 787 ----
+  const GQ = (() => { const s = codeOf('Parse_GSC.js'); const a = s.indexOf('const GQ = (() => {'), b = s.indexOf('\n})();', a) + 6; return new Function(s.slice(a, b) + '; return GQ;')(); })();
+  const keys = GQ.brandTest('techand.ai', ['Tech&', 'techand.ai']).keys;
+  const other = (q) => GQ.otherSite(q, 'techand.ai', keys);
+  check('C-6: "techandkey com" (411 impressions, techandkey.com is a tech-news site) is a search for another website; the site\'s own name and real topic searches are not',
+    other('techandkey com') === 'techandkey.com' && other('zoho.com') === 'zoho.com' && other('techand ai') === '' && other('techand.ai') === '' && other('tech and') === ''
+    && other('dynamics 365 finance in uae') === '' && other('erp software uae') === '' && other('uae federal tax authority') === '', JSON.stringify(['techandkey com', 'techand ai', 'tech and'].map(q => [q, other(q)])));
+  const pg = codeOf('Parse_GSC.js');
+  check('C-6: Parse GSC keeps it out of the quick wins, the title rewrites, the new queries and the competing-pages list, and names it apart (other_site_queries)',
+    (pg.match(/actionable\(q\.query\)/g) || []).length === 3 && /filter\(m => actionable\(m\.query\)\)/.test(pg) && /other_site_queries/.test(pg) && /searches were for another website, not yours/.test(codeOf('Site_Report.js')), 'wiring');
+  // ---- C-7: one page state (SM.pageStep), read by both reports ----
+  const SMk = (() => { const s = codeOf('Site_Metrics.js'); const a = s.indexOf('const SM = (() => {'), b = s.indexOf('\n})();', a) + 6; return new Function(s.slice(a, b) + '; return SM;')(); })();
+  const covered = SMk.pageStep({ keyword: 'ai consulting', covered_url: 'https://www.techand.ai/ai-copilot-advisory-uae', not_ready: true, reasons: ['11 bracketed field(s)'] });
+  const fix = SMk.pageStep({ keyword: 'it consulting dubai', not_ready: true, reasons: 'placeholders left; word count 3,100 for 2,100' });
+  check('C-7: "ai consulting" (a failed draft, and /ai-copilot-advisory-uae already answers it) - refresh the live page, the draft is not needed; "it consulting dubai" (a failed draft, no live page) - fix it and run it again',
+    covered.state === 'covered' && /ai-copilot-advisory-uae already answers this search — refresh that page, do not publish a second one; the draft written for "ai consulting" is not needed/.test(covered.text)
+    && fix.state === 'not_ready' && /did not pass the quality check \(placeholders left; word count 3,100 for 2,100\) — fix it and run it again/.test(fix.text), JSON.stringify([covered, fix]));
+  const tr = codeOf('Tracker_Report.js');
+  check('C-7: the Rank Tracker asks "fix the draft" for a failed main page BEFORE "write the main page" (the order that made it unreachable), and its rung list reads SM.pageStep',
+    tr.indexOf("action: 'fix_top'") > 0 && tr.indexOf("action: 'fix_top'") < tr.indexOf("action: 'write_top'") && /SM\.pageStep\(\{ keyword: t\.keyword, covered_url: c \? c\.url : ''/.test(tr)
+    && !/topRow\.status === 'writing' && !!notReadyOf\(topRow\.keyword\)/.test(tr), 'order');
+  // ---- C-7 / C-15: the Site Tracker's Site Metrics on the real shapes of exec 787 ----
+  const D = 'techand.ai', SITE = 'site_techand-ai';
+  const RANGES = { current: { start: '2026-09-17', end: '2026-10-14' }, previous: { start: '2026-08-20', end: '2026-09-16' }, yoy: { start: '2025-09-17', end: '2025-10-14' } };
+  const CFG = { max_gsc_keyword_requests: 30, max_gsc_pages: 3, striking_min_impressions: 30, ctr_gap_min_impressions: 100, decay_drop_pct: 25, alert_drop_pct: 30, alert_min_pct: 10, alert_min_click_events: 40, alert_min_impression_events: 400, alert_min_session_events: 40, service_account_email: 'svc@example.com' };
+  const ROLL = 'https://www.techand.ai/d365-finance-operations-implementation-rollout-uae', CRM = 'https://techand.ai/dynamics-365-crm-uae';
+  mock('Resolve Properties', [{ json: { site_id: SITE, domain: D, gsc_property: 'sc-domain:' + D, gsc_connected: true, gsc_permission: 'siteFullUser', gsc_error: null, country: 'United Arab Emirates', location_code: 2784, language_code: 'en',
+    email: '', callback_url: '', request_id: '', source: 'form', status: 'active', created_at: '2026-01-01T00:00:00.000Z', keywords: [], tracked: [], ladder_heads: [], serp_positions: {}, pending_publish: [], console_alerts: [], last_checkin: null, checkin_due: false,
+    ranges: RANGES, on_demand: false, checked_at: '2026-10-17T16:45:00.000Z', config: CFG,
+    ladder_pages: [{ keyword: 'd365 finance implementation uae', url: ROLL, status: 'published', page_exists: true, rung: 2, ladder_id: 'l1' }, { keyword: 'd365 rollout uae', url: ROLL.replace('www.', ''), status: 'published', page_exists: true, rung: 2, ladder_id: 'l2' },
+      { keyword: 'dynamics 365 crm uae', url: CRM, status: 'planned', rung: 4, ladder_id: 'l3' }],
+    needs_fix: [{ keyword: 'ai consulting', reasons: ['11 bracketed field(s)'], page_type: 'Service Page' }, { keyword: 'it consulting dubai', reasons: ['placeholders left'], page_type: 'Service Page' }] } }]);
+  mock('Site Model (Site)', [{ json: { site_id: SITE, domain: D, model: SMk.from({ site_id: SITE, domain: D, canonical_host: 'www.' + D, business_name: 'Tech&' }, {}) } }]);
+  mock('Page Inventory (Site)', [{ json: { site_id: SITE, pages: [{ url: 'https://www.techand.ai/ai-copilot-advisory-uae', title: 'AI Consulting in Dubai | AI Copilot Advisory UAE | Tech&', h1: 'AI consulting', status: 200 }] } }]);
+  mock('Parse Inspection', [{ json: { site_idx: 0, url: ROLL, indexed: false, verdict: 'NEUTRAL', coverage: 'Discovered - currently not indexed' } }, { json: { site_idx: 0, url: CRM, indexed: true, verdict: 'PASS', coverage: 'Submitted and indexed' } }]);
+  for (const n of ['Parse GSC', 'Parse GA4', 'Parse Trends', 'Parse Site SERP', 'Detect Published']) mock(n, [{ json: {} }]);
+  let SMo = {}; try { SMo = (await run('Site Metrics', store['Resolve Properties']))[0].json; } catch (e) { SMo = { error: String(e.message || e) }; }
+  const acts = SMo.actions || [], pagesOut = (SMo.ladder_pages || SMo.pages || []);
+  console.log('   site metrics ->', JSON.stringify({ err: SMo.error, actions: acts.map(a => [a.type, a.keyword]), alerts: (SMo.alerts || []).map(a => a.text).filter(t => /not indexed/.test(t)), pages: pagesOut.map(p => [p.url, p.status]) }).slice(0, 900));
+  check('C-7: the Site Tracker retires the "ai consulting" draft (refresh the live page) and asks to fix only "it consulting dubai" - the Rank Tracker\'s answer',
+    acts.some(a => a.type === 'refresh_existing' && a.keyword === 'ai consulting' && /ai-copilot-advisory-uae already answers this search/.test(a.action)) && !acts.some(a => a.type === 'fix_draft' && a.keyword === 'ai consulting')
+    && acts.some(a => a.type === 'fix_draft' && a.keyword === 'it consulting dubai') && (SMo.drafts_retired || []).some(d => d.keyword === 'ai consulting') && !(SMo.needs_fix || []).some(d => d.keyword === 'ai consulting'),
+    JSON.stringify(acts.map(a => [a.type, a.keyword])));
+  const notIdx = (SMo.alerts || []).filter(a => /Page not indexed: .*d365-finance-operations-implementation-rollout-uae/.test(a.text));
+  check('C-15: one row per page - the rollout page held by two ladder rows (www and the bare host) is one row and raises "Page not indexed" once, not twice',
+    notIdx.length === 1 && pagesOut.filter(p => /d365-finance-operations-implementation-rollout-uae/.test(p.url)).length === 1, JSON.stringify({ alerts: notIdx.map(a => a.text), rows: pagesOut.filter(p => /rollout/.test(p.url)).map(p => p.url) }));
+  const crm = pagesOut.find(p => /dynamics-365-crm-uae/.test(p.url)) || {};
+  check('C-15: /dynamics-365-crm-uae, "Submitted and indexed" by Google, is shown live - not "planned"', crm.status === 'live (indexed by Google)' && crm.page_exists === true, JSON.stringify(crm));
+  // ---- C-12: a stored set-aside rung stays set aside in the Rank Tracker (generated code) ----
+  check('C-12: the Rank Tracker reads a rung\'s stored `set_aside` (facts erp, set aside by an earlier check) and never lists it as a rung to write',
+    /String\(lr\.status \|\| r\.status \|\| ''\) !== 'set_aside'/.test(tr) && /seen: 'stored'/.test(tr), 'wiring');
+  // ---- C-13: the page Google ranks, when it is not the page the plan calls the main page ----
+  check('C-13: when Google ranks a different page of the site (peppol uae: the PINT-AE guide at #46), the next step names it and asks which page answers the search',
+    /Google ranks a different page of yours for this search: ' \+ ru \+ ' \(#' \+ rp \+ '\)/.test(tr), 'wiring');
+  reset();
+});
 // ===================================================================================
 // S106-S109 (agent A3, 2026-10-16): the weekly site report's monitor block compares like with like (R78), shows one backlink count
 // (R112), and its subject line follows its own significance test (R113). Fixtures: harness/fixtures_ra3.js (exec 634's rows).
