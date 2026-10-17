@@ -51,10 +51,14 @@ export function summarize(stage: string, p: P): Summary {
     case 'full_report': {
       put('healthScore', num(p.health_score));
       put('grade', str(p.grade));
-      const ic = obj(p.issue_counts);
+      // B-17 (F-B, 2026-10-17): count what the stored list holds (the scored findings); issue_counts also counts the unscored
+      // content-review findings, so the summary said High 17 / Medium 18 beside a list of 15 / 15. Older payloads keep issue_counts.
+      const stored = obj(p.issue_counts_stored);
+      const ic = Object.keys(stored).length ? stored : obj(p.issue_counts);
       put('critical', num(ic.Critical));
       put('high', num(ic.High));
       put('medium', num(ic.Medium));
+      if (Object.keys(stored).length) put('unscored', num(stored.unscored));
       put('scoreDelta', num(obj(p.audit_diff).score_delta));
       break;
     }
