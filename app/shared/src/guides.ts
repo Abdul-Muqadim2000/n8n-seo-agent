@@ -1034,6 +1034,128 @@ export const GUIDES = [
     related: ['budget'],
     keywords: ['team', 'invite', 'roles', 'permissions', 'colleague'],
   },
+  // ---------------------------------------------------------------- Server logs (gap #6, app/docs/LOG_ANALYTICS.md)
+  {
+    id: 'crawler-logs-upload',
+    area: 'website',
+    title: 'Upload your server’s access log',
+    why: 'Your access log is the only record of what Googlebot and the AI crawlers really fetched on {{domain}} — which pages, how often, and what your server answered. One file is enough to start.',
+    where: 'Your web server or hosting panel',
+    who: 'Whoever can download files from the server or the hosting panel',
+    minutes: 10,
+    vars: [V.domain],
+    steps: [
+      {
+        title: 'Find the log',
+        body: 'Pick the access log, not the error log. Older days are usually kept next to it as `.1`, `.2.gz` and so on.',
+        choices: [
+          { label: 'Nginx', body: 'On the server: `/var/log/nginx/access.log` and the rotated `access.log.*.gz` beside it.' },
+          { label: 'Apache', body: '`/var/log/apache2/access.log` (Debian, Ubuntu) or `/var/log/httpd/access_log` (Red Hat, CentOS), plus the rotated files.' },
+          { label: 'IIS (Windows)', body: '`C:\\inetpub\\logs\\LogFiles\\W3SVC1\\` — one `u_ex*.log` file per day. The W3C format is read as it is.' },
+          { label: 'cPanel', body: 'Open **Metrics → Raw Access**, then download the archive for {{domain}}. It is already gzip.' },
+          { label: 'Plesk', body: 'Open **Websites & Domains → Logs**, filter on access logs and download them.' },
+          { label: 'Managed WordPress hosts', body: 'Kinsta, WP Engine and similar hosts keep access logs but show only the last lines in their panel. Ask their support for the raw access logs of the last 30 days.' },
+          { label: 'Amazon CloudFront', body: 'Standard logs land in the S3 bucket you chose. Download the `.gz` files of the days you want and upload them as they are.' },
+        ],
+      },
+      {
+        title: 'Keep the visitor address in the log',
+        body: 'Crawlers are proved by their address, so the log must hold the visitor’s address, not your CDN’s or load balancer’s.',
+        warn: 'Behind Cloudflare or a load balancer the default log shows the proxy. Log `CF-Connecting-IP` or `X-Forwarded-For` (Nginx: the `realip` module; Apache: `mod_remoteip`), or send Cloudflare’s own logs with Logpush instead.',
+      },
+      {
+        title: 'Upload it on the Crawlers page',
+        body: 'Press **Upload a log** and choose the file. Plain text or gzip, up to 1 GB a file. Several days in one file is fine: zip the rotated files together first, for example `zcat access.log.*.gz | gzip > last-month.log.gz`.',
+        note: 'The same file uploaded twice is read once, and lines two files share are counted once.',
+      },
+      { title: 'Wait for it to be read', body: 'A million lines take well under a minute. The page shows the file as read with how many lines were crawler requests, people, and unreadable.' },
+    ],
+    done: 'The Crawlers page shows requests per crawler, with how many were proved to be the real crawler.',
+    trouble: [
+      { q: 'Every Googlebot request shows as “unchecked”', a: 'The log holds your proxy’s address. See step 2, or use Cloudflare Logpush.' },
+      { q: 'Lines were counted as unreadable', a: 'We read Apache and Nginx combined or common logs, IIS / W3C extended logs and JSON lines. A custom format with the date first or no quotes around the request is not read; switch the log back to combined for the days you upload.' },
+      { q: 'What happens to the addresses of people', a: 'Requests from people are counted and dropped. The file itself is deleted as soon as it has been read.' },
+    ],
+    related: ['crawler-logs-cloudflare', 'crawler-logs-drain', 'ai-crawler-access'],
+    keywords: ['server log', 'access log', 'log file', 'googlebot', 'gptbot', 'crawl budget', 'bots', 'nginx', 'apache', 'iis'],
+  },
+  {
+    id: 'crawler-logs-cloudflare',
+    area: 'website',
+    title: 'Send Cloudflare’s logs automatically (Logpush)',
+    why: 'With Logpush Cloudflare sends every request for {{domain}} to Ascentra within minutes, with the visitor’s real address, so the Crawlers page stays current without anyone uploading files.',
+    where: 'Cloudflare dashboard',
+    who: 'A Cloudflare account member who may edit Logpush jobs (Logs Write)',
+    minutes: 10,
+    vars: [V.domain, { key: 'logEndpoint', label: 'Where the logs go', example: 'https://app.ascentra.example/api/ingest/logs/your-website-id' }, { key: 'logHeader', label: 'The header that carries the key', example: 'X-Ascentra-Log-Key' }],
+    steps: [
+      {
+        title: 'Create a push key here',
+        body: 'On the Crawlers page press **Create push key** and copy it. It is shown once; a new key replaces the old one at once.',
+        warn: 'Logpush of HTTP requests is a Cloudflare Enterprise feature. On other plans, upload your server’s access log instead.',
+      },
+      {
+        title: 'Start a Logpush job in Cloudflare',
+        body: 'Open your domain in Cloudflare, then **Analytics & Logs → Logpush → Create a Logpush job**. Choose the **HTTP destination**.',
+        link: { label: 'Cloudflare: HTTP destination', href: 'https://developers.cloudflare.com/logs/logpush/logpush-job/enable-destinations/http/' },
+      },
+      {
+        title: 'Paste the destination with the key in it',
+        body: 'Cloudflare turns every `header_` part of the address into a request header. Put your key after the equals sign.',
+        copy: [{ label: 'HTTP endpoint', value: '{{logEndpoint}}?header_{{logHeader}}=PASTE-YOUR-KEY-HERE', hint: 'Replace PASTE-YOUR-KEY-HERE with the key you copied' }],
+      },
+      {
+        title: 'Choose the dataset and the fields',
+        body: 'Dataset **HTTP requests**. Fields: `ClientIP`, `ClientRequestHost`, `ClientRequestMethod`, `ClientRequestURI`, `ClientRequestUserAgent`, `EdgeStartTimestamp`, `EdgeResponseStatus`, `EdgeResponseBytes`, `OriginResponseDurationMs`, `RayID`. Timestamp format **RFC3339**.',
+        note: 'Set the maximum upload size to 100 MB or less. Requests from people are counted and dropped on arrival.',
+      },
+      { title: 'Save', body: 'Cloudflare sends a small test file first; Ascentra accepts it, and the job turns on. The Crawlers page shows the time of the last push.' },
+    ],
+    done: 'The Crawlers page shows “Last push” a few minutes old and the request counts start to grow.',
+    trouble: [
+      { q: 'Cloudflare says “error validating destination”', a: 'The key in the address is wrong or was replaced. Create a new key here and paste it again.' },
+      { q: 'Requests stopped arriving', a: 'Check the job is enabled in Cloudflare and that nobody created a new key here since.' },
+    ],
+    related: ['crawler-logs-upload', 'crawler-logs-drain'],
+    keywords: ['cloudflare', 'logpush', 'cdn logs', 'http requests', 'server log', 'bots'],
+  },
+  {
+    id: 'crawler-logs-drain',
+    area: 'website',
+    title: 'Send logs from Vercel, Fastly or Akamai',
+    why: 'A log drain sends every request for {{domain}} to Ascentra as it happens, so the Crawlers page stays current without uploads.',
+    where: 'Your CDN or hosting dashboard',
+    who: 'Whoever manages the CDN or hosting account',
+    minutes: 15,
+    vars: [V.domain, { key: 'logEndpoint', label: 'Where the logs go', example: 'https://app.ascentra.example/api/ingest/logs/your-website-id' }, { key: 'logHeader', label: 'The header that carries the key', example: 'X-Ascentra-Log-Key' }],
+    steps: [
+      { title: 'Create a push key here', body: 'On the Crawlers page press **Create push key** and copy it. It is shown once.' },
+      {
+        title: 'Add the drain',
+        body: 'Every drain needs the same three things: the address, a custom header with the key, and JSON (one request per line, or a JSON array).',
+        copy: [
+          { label: 'Endpoint', value: '{{logEndpoint}}' },
+          { label: 'Header name', value: '{{logHeader}}' },
+        ],
+        choices: [
+          { label: 'Vercel', body: '**Team Settings → Drains → Add Drain**, data type **Logs**, sources static, lambda and edge, destination **Custom endpoint**. Format NDJSON or JSON, and under **Custom headers** add `{{logHeader}}: your key`.', link: { label: 'Vercel: drains', href: 'https://vercel.com/docs/drains/using-drains' } },
+          { label: 'Fastly', body: 'Add an **HTTPS** logging endpoint with the URL above, a custom header named `{{logHeader}}` with your key, JSON log line format and content type `application/x-ndjson`. Use the log format below.', link: { label: 'Fastly: HTTPS logging', href: 'https://www.fastly.com/documentation/guides/integrations/logging-endpoints/log-streaming-https/' } },
+          { label: 'Akamai DataStream 2', body: 'Create a stream with a **Custom HTTPS** destination, JSON format, and a custom header `{{logHeader}}` with your key. Include client IP, request time, host, method, path, query string, status code, total bytes, user agent and turnaround time.', link: { label: 'Akamai: custom HTTPS endpoint', href: 'https://techdocs.akamai.com/datastream2/docs/stream-custom-https' } },
+          { label: 'Anything else', body: 'Any service that can POST JSON lines with a custom header works. Each line needs a time, the client address, the path, the status and the user agent; we recognise the usual names (`timestamp`, `client_ip`, `path`, `status`, `user_agent` and many others).' },
+        ],
+      },
+      {
+        title: 'Fastly only: the log format',
+        body: 'Paste this as the log format so every line carries what we read.',
+        copy: [{ label: 'Fastly log format', value: '{"timestamp":"%{strftime(\\{"%Y-%m-%dT%H:%M:%SZ"\\}, time.start)}V","client_ip":"%{req.http.Fastly-Client-IP}V","host":"%{json.escape(req.http.Host)}V","method":"%{json.escape(req.method)}V","url":"%{json.escape(req.url)}V","status":%{resp.status}V,"response_body_size":%{resp.body_bytes_written}V,"user_agent":"%{json.escape(req.http.User-Agent)}V","time_elapsed":%{time.elapsed.usec}V}' }],
+      },
+      { title: 'Save and test', body: 'Most services send a test request when you save. The Crawlers page shows the time of the last push.' },
+    ],
+    done: 'The Crawlers page shows “Last push” a few minutes old.',
+    trouble: [{ q: 'The test fails with 401', a: 'The header name or the key is wrong. The header must be exactly `{{logHeader}}`, the value the key and nothing else.' }],
+    related: ['crawler-logs-upload', 'crawler-logs-cloudflare'],
+    keywords: ['vercel', 'fastly', 'akamai', 'log drain', 'datastream', 'server log', 'bots'],
+  },
 ] as const satisfies readonly Guide[];
 
 export type GuideId = (typeof GUIDES)[number]['id'];
