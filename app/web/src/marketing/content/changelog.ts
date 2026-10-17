@@ -14,6 +14,20 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2026-10-18',
+    title: 'Written pages: every link opened, every gap named, nothing said about you that you have not said',
+    summary:
+      'Before a written page is offered to you, every link to another site is now opened: a link to a missing page stops the page and names the link, with a replacement when one is at hand. Anything left in brackets for you to fill in is counted and named, whatever the writer called it, and a page that still holds one waits in the app instead of being sent out as finished.',
+    highlights: [
+      'Every outbound link is opened before delivery; a missing page is named by its address, a site that blocks checks is listed as “could not be checked”',
+      'Every bracket left for you is counted and named, and the article preview highlights the same ones',
+      'What a page says about your own prices, terms and services must match what your site and business details say; anything else is marked for you to confirm',
+      'Topics the keyword verdict says to leave out are kept out of the brief and checked in the page; a competitor’s own name is never a section you are asked to add',
+      'The short answer at the top of a page survives every editing round, and figures your own site states no longer need an outside source',
+    ],
+    features: ['content'],
+  },
+  {
     date: '2026-10-17',
     title: 'Your data through an API, a quality check for any page, and sharper alerts everywhere',
     summary:

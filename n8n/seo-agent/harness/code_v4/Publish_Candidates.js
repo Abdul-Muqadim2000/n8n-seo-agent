@@ -194,6 +194,10 @@ const SM = (() => {
     if (qHit && best) return { ...best, listing: listingOf(qHit, best) };
     return qHit || best;
   };
+  // A-22 (2026-10-17): how well ONE page of the inventory targets a search by its own words (slug or title / H1, the matchPage rule), so a
+  // caller that already knows the page Google ranks can ask whether another page targets the search more closely - never to replace it
+  const pageScore = (page, keyword) => { const p = page || {}; const want = matchTerms(keyword); if (!want.length || !S(p.url)) return null;
+    return Math.round(Math.max(shareIn(want, matchTerms(pathOf(p.url).replace(/\.[a-z]{2,5}$/i, ''))), shareIn(want, matchTerms(S(p.title) + ' ' + S(p.h1)))) * 100) / 100; };
   // R35: how much of a search a page's OWN title / H1 holds (null when the page's title was never read) - the only evidence that may call
   // a page "about something else"
   // the words of a spoken / long-tail search that say nothing about the subject ("which ... can help ... in the uae")
@@ -238,7 +242,7 @@ const SM = (() => {
     decay_state: S(p.decay_state), decay_pct: num0(p.decay_pct), decay_lost: num0(p.decay_lost), decay_kind: S(p.decay_kind),
     decay_basis: S(p.decay_basis).slice(0, 900), measured_at: S(p.measured_at) }));
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
-    titleShare, titleGap, canonUrl, isListing,
+    titleShare, titleGap, canonUrl, isListing, pageScore,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms } };
 })();
 // 2026-10-12 (FIX_PLAN D11): the sitemap is now read for EVERY tracked site, not only for the ones with a page waiting — the same one plain GET
@@ -271,7 +275,7 @@ plan.forEach((s, idx) => {
     cands.set(kw, { key: kw, keyword: r.keyword, source: 'content_log', log: r, ladder, written_at: String(r.started_at || '') });
   }
   for (const l of LD) {
-    if (l.status !== 'writing') continue;
+    if (!['writing', 'written', 'not_ready'].includes(l.status)) continue;   // A-20: a ladder row follows its content log (written / not_ready) once the page run ends
     const kw = norm(l.keyword); if (!kw || cands.has(kw) || published.has(kw)) continue;
     const log = L.filter(r => norm(r.keyword) === kw).sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0] || null;   // an older log row of the same page (kept in the rows)
     cands.set(kw, { key: kw, keyword: l.keyword, source: 'ladder', log, ladder: l, written_at: String((log && log.started_at) || l.start_date || '') });

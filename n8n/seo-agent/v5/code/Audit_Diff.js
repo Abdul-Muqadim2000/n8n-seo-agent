@@ -64,11 +64,14 @@ const titleOf = (p) => String(((p.meta || {}).htags || {}).h1?.[0] || (p.meta ||
 const topicOf = (p) => new Set([...toks(titleOf(p)), ...toks(String(p.url).replace(/^https?:\/\/[^\/]+/, ''))].filter(t => !brandToks.has(t)));
 const inl = (p) => Number((p.meta || {}).inbound_links_count) || 0;
 const sc = a.search_console || {}; const shown = new Map((sc.top_pages || []).map(x => [norm(x.page), Number(x.impressions) || 0]));
-const targets = pages.filter(p => norm(p.url) !== norm(siteUrlOf(domain, '/')) && (inl(p) <= 2 || (p.checks || {}).is_orphan_page || (shown.get(norm(p.url)) || 0) >= 50 && inl(p) <= 5) && !/privacy|terms|cookie|legal|login|cart|checkout/i.test(p.url))
+// B-15 (F-B, 2026-10-17, exec 739; also: an anchor is cut at a whole word, never mid-word): the fix pack linked the six near-identical /whatwedo/* pages the duplicate-content finding says to
+// consolidate; a page that finding names gets no new links until it is made different (or redirected)
+const dupUrls = new Set((a.findings || []).filter(f => /duplicate content|near-identical/i.test(String(f.title || ''))).flatMap(f => [...(f.sample_urls || []), ...(f.affected_urls || [])]).map(u => norm(String(u).split(' ')[0])));
+const targets = pages.filter(p => !dupUrls.has(norm(p.url)) && norm(p.url) !== norm(siteUrlOf(domain, '/')) && (inl(p) <= 2 || (p.checks || {}).is_orphan_page || (shown.get(norm(p.url)) || 0) >= 50 && inl(p) <= 5) && !/privacy|terms|cookie|legal|login|cart|checkout/i.test(p.url))
   .sort((x, y) => (shown.get(norm(y.url)) || 0) - (shown.get(norm(x.url)) || 0) || inl(x) - inl(y)).slice(0, 25);
 const sources = pages.filter(p => inl(p) >= 3 || (Number(p.click_depth) || 9) <= 1);
 const internal_links = [];
 for (const t of targets) { const tt = topicOf(t); if (!tt.size) continue;
   const best = sources.filter(s => norm(s.url) !== norm(t.url)).map(s => ({ s, score: [...topicOf(s)].filter(x => tt.has(x)).length * 10 + Math.min(9, Math.floor(inl(s) / 5)) })).filter(x => x.score >= 10).sort((x, y) => y.score - x.score).slice(0, 2);
-  for (const b of best) internal_links.push({ from_url: b.s.url, to_url: t.url, anchor: titleOf(t).slice(0, 70) || [...tt].slice(0, 4).join(' '), reason: ((t.checks || {}).is_orphan_page || inl(t) === 0 ? 'orphan page (no links in)' : inl(t) + ' internal link(s) in') + ((shown.get(norm(t.url)) || 0) ? '; ' + shown.get(norm(t.url)) + ' impressions in 28 days' : '') }); }
+  for (const b of best) internal_links.push({ from_url: b.s.url, to_url: t.url, anchor: ((s) => s.length <= 70 ? s : s.slice(0, 70).replace(/\s+\S*$/, '').replace(/[\s:,;–—-]+$/, ''))(titleOf(t)) || [...tt].slice(0, 4).join(' '), reason: ((t.checks || {}).is_orphan_page || inl(t) === 0 ? 'orphan page (no links in)' : inl(t) + ' internal link(s) in') + ((shown.get(norm(t.url)) || 0) ? '; ' + shown.get(norm(t.url)) + ' impressions in 28 days' : '') }); }
 return [{ json: { ...d, audit_id, audited_at, site_id, site_audit: { ...a, audit_id, audited_at, audit_diff, internal_links: internal_links.slice(0, 20) } } }];

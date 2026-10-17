@@ -403,7 +403,8 @@
   "recheck_rule",
   "recheck_note",
   "evidence",
-  "sample_urls"
+  "sample_urls",
+  "check_version"
  ],
  "CHECKIN": [
   "site_id",

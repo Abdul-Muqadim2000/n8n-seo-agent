@@ -365,7 +365,7 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
       } else {
         const fromLog = logState(logs, reports, runs, now);
         if (fromLog) ({ state, writtenAt } = fromLog);
-        else if (status === 'writing') {
+        else if (status === 'writing' || status === 'written' || status === 'not_ready') {   // A-20 (F-A1): the engine moves the row on when the page run ends
           // marked by the ladder run's own first pages (no content-log row): written with the plan
           const start = s(r.start_date);
           if (isoOk(start) && now - Date.parse(start) < WRITING_WINDOW_MS && !report) state = 'writing';
