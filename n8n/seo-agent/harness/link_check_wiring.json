@@ -1,0 +1,122 @@
+{
+ "connections": {
+  "Content QA": {
+   "main": [
+    [
+     {
+      "node": "Outbound Link Requests",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Outbound Link Requests": {
+   "main": [
+    [
+     {
+      "node": "Any Outbound Links?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Any Outbound Links?": {
+   "main": [
+    [
+     {
+      "node": "Fetch Outbound Links",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Outbound Link Check",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Fetch Outbound Links": {
+   "main": [
+    [
+     {
+      "node": "Outbound Link Check",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Outbound Link Check": {
+   "main": [
+    [
+     {
+      "node": "Originality Check",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "nodes": [
+  {
+   "parameters": {
+    "method": "GET",
+    "url": "={{ $json.url }}",
+    "sendHeaders": true,
+    "headerParameters": {
+     "parameters": [
+      {
+       "name": "User-Agent",
+       "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 SEO-Agent-LinkCheck/1.0"
+      },
+      {
+       "name": "Accept",
+       "value": "text/html,application/xhtml+xml,application/pdf,*/*;q=0.8"
+      }
+     ]
+    },
+    "options": {
+     "batching": {
+      "batch": {
+       "batchSize": 1,
+       "batchInterval": 300
+      }
+     },
+     "timeout": 20000,
+     "redirect": {
+      "redirect": {
+       "followRedirects": true,
+       "maxRedirects": 6
+      }
+     },
+     "response": {
+      "response": {
+       "fullResponse": true,
+       "neverError": true,
+       "responseFormat": "text"
+      }
+     }
+    }
+   },
+   "id": "ba11788c-2617-5c00-97e3-7e7162b96ca2",
+   "name": "Fetch Outbound Links",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.5,
+   "position": [
+    6240,
+    1628
+   ],
+   "onError": "continueRegularOutput",
+   "retryOnFail": true,
+   "maxTries": 3,
+   "waitBetweenTries": 5000
+  }
+ ],
+ "placeholders_kit": "// ---- placeholder kit (A-13, 2026-10-17; inlined through the PLACEHOLDERS marker) ----\n// ONE answer to \"what in this page is still a bracket somebody has to fill in or confirm?\", shared by Content QA (the count, the gate,\n// the reasons), the app's article view and its delivery rule (app/shared/src/placeholders.ts carries the same two patterns, and the\n// build asserts they are byte-identical). Live (exec 771) the delivered body said \"a fixed [Price band: typical Assess & Envision fee in\n// AED]\" while QA reported `placeholder_count 0`, `open_brackets []`: the pattern counted a bracket only when it held no colon, and the\n// colon form was assumed to be one of OUR review notes \u2014 but a writer invents its own labels. Now:\n//   * a bracket that is a Markdown link or image (`[text](url)`, `![alt](src)`), a checkbox (`[ ]`, `[x]`), a footnote (`[^1]`) or a\n//     number (`[1]`) is not a gap;\n//   * a review note is one of the CLOSED list of labels the prompts and QA themselves emit \u2014 `[Confirm: \u2026]`, `[Owner: \u2026]`,\n//     `[Author insight: \u2026]`, `[Image: \u2026]` \u2014 and is reported as a note;\n//   * every other bracket that starts with a letter is a placeholder, whatever its case or punctuation: `[Price]`, `[name, role]`,\n//     `[date]`, `[Price band: typical \u2026 fee in AED]`, `[Insert client logo]`.\n// Regex only (the n8n Code sandbox has no URL constructor).\nconst PH = (() => {\n  const BRACKET_SRC = \"(?<![!\\\\\\\\])\\\\[([A-Za-z][^\\\\[\\\\]\\\\n]{0,399})\\\\](?![(:])\";\n  const NOTE_SRC = \"^(?:confirm|owner|author insight|image)\\\\s*:\";\n  const bracketRe = () => new RegExp(BRACKET_SRC, 'g');\n  const NOTE_RE = new RegExp(NOTE_SRC, 'i');\n  // one pass over the text: { placeholders: [{token, count}], notes: [{token, count}], placeholder_count, note_count, items: [...] }\n  const scan = (text) => {\n    const t = String(text == null ? '' : text);\n    const ph = new Map(), nt = new Map();\n    for (const m of t.matchAll(bracketRe())) {\n      const inner = m[1].trim(); if (!inner) continue;\n      if (/^x$/i.test(inner)) continue;   // a ticked checkbox\n      const tok = '[' + m[1] + ']';\n      const into = NOTE_RE.test(inner) ? nt : ph;\n      into.set(tok, (into.get(tok) || 0) + 1);\n    }\n    const list = (mp) => [...mp.entries()].map(x => ({ token: x[0], count: x[1] })).sort((a, b) => b.count - a.count);\n    const placeholders = list(ph), notes = list(nt);\n    return { placeholders, notes, placeholder_count: placeholders.reduce((s, x) => s + x.count, 0), note_count: notes.reduce((s, x) => s + x.count, 0),\n      items: placeholders.map(p => ({ ...p, kind: 'placeholder' })).concat(notes.map(n => ({ ...n, kind: 'review_note' }))) };\n  };\n  return { BRACKET_SRC, NOTE_SRC, bracketRe, NOTE_RE, scan };\n})();"
+}

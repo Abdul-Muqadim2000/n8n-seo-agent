@@ -43,6 +43,14 @@ const GQ = (() => {
   const MIN_NAME_RUN = 5;
   const FILLER = new Set(['and', 'the', 'of', 'for', 'to', 'in', 'on', 'at', 'a', 'an', 'or', 'by', 'with', 'vs', 'near', 'me', 'from']);
   const qTokens = (q) => String(q || '').toLowerCase().replace(/&/g, ' and ').split(/[^a-z0-9]+/).filter(Boolean);
+  // A-26: optimal string alignment distance (a swap of two neighbouring letters is one edit: "techadn" = "techand" misspelt once)
+  const FUZZY_MIN = 6;
+  const editDistance = (a, b) => { const m = a.length, n = b.length; const d = Array.from({ length: m + 1 }, (_, i) => [i, ...new Array(n).fill(0)]);
+    for (let j = 0; j <= n; j++) d[0][j] = j;
+    for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) { const c = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + c);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1); }
+    return d[m][n]; };
   const brandTest = (domain, names) => {
     const keys = brandKeys(domain, names);
     const tld = String(domain || '').toLowerCase().split('.').slice(1).filter(Boolean);
@@ -63,6 +71,17 @@ const GQ = (() => {
             if (acc === k && (!filler || (i === 0 && onlyDomain(t.slice(j))))) return true; } } }
       for (const sp of spoken) { const rest = t.slice(0, sp.length).join(' ') === sp.join(' ') ? t.slice(sp.length) : null;
         if (rest && rest.every(x => tld.includes(x) || x === 'com' || x === 'www')) return true; }
+      // A-26 (2026-10-17, exec 764): "techandf cc" — the brand typed with one slip — was taken as a customer search, used as a discovery
+      // seed and reported as a page mismatch ("aim that page at it"). A token (or two adjacent tokens with no filler word between them)
+      // within one edit of a brand key of 6+ letters (two edits from 10 letters), starting with the same two letters, is the brand misspelt.
+      for (const k of longKeys) {
+        if (k.length < FUZZY_MIN) continue;
+        const lim = k.length >= 10 ? 2 : 1;
+        for (let i = 0; i < t.length; i++) {
+          const cands = [t[i]]; if (i + 1 < t.length && !FILLER.has(t[i + 1]) && !FILLER.has(t[i])) cands.push(t[i] + t[i + 1]);
+          for (const w of cands) if (w.length >= 5 && w !== k && w.slice(0, 2) === k.slice(0, 2) && Math.abs(w.length - k.length) <= lim && editDistance(w, k) <= lim) return true;
+        }
+      }
       return false; };
     const shown = [...longKeys, ...spoken.map(t => t.join(' '))];
     return { keys: shown, is: shown.length ? is : () => false };
@@ -75,7 +94,7 @@ const GQ = (() => {
     return { clicks: cl, impressions: im, clicks_pct: tc ? Math.round(cl / tc * 1000) / 10 : 0, impressions_pct: ti ? Math.round(im / ti * 1000) / 10 : 0,
       named_clicks: sum.clicks, named_impressions: sum.impressions, note: 'Search Console withholds the queries of rare searches; these clicks and impressions are real but belong to queries it does not name.' };
   };
-  return { isScraper, brandKeys, brandTest, anonymised };
+  return { isScraper, brandKeys, brandTest, anonymised, editDistance };
 })();
 // ---- site-tracking statistics (2026-10-12, FIX_PLAN G28): an alert must mean "this really changed", not "a number moved by 30%".
 // Clicks, impressions and sessions are counts over two periods of the same length, so the honest test is the two-sample Poisson test

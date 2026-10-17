@@ -49,6 +49,14 @@ import type {
   DeliveryRecord,
   DeliverySettings,
   DeliverySettingsInput,
+  CmsConnectionCreate,
+  CmsConnectionUpdate,
+  CmsConnectionView,
+  CmsPublishInput,
+  CmsPublishResult,
+  CmsReportState,
+  CmsSiteState,
+  CmsTestResultView,
 } from '@seo/shared';
 import { api, ApiRequestError } from './api';
 
@@ -256,8 +264,9 @@ export function useTeamMutation<TBody>(orgId: string, method: 'POST' | 'PATCH' |
   });
 }
 
-export const useInvitation = (token: string) =>
-  useQuery({ queryKey: ['invitation', token], queryFn: () => api<InvitationPreview>(`/api/invitations/${token}`), retry: noRetryOn4xx });
+/** `viewer` (the signed-in user's id, or null) is in the key: the answer depends on who asks (D-11, joined from it already) */
+export const useInvitation = (token: string, viewer: string | null = null) =>
+  useQuery({ queryKey: ['invitation', token, viewer], queryFn: () => api<InvitationPreview>(`/api/invitations/${token}`), retry: noRetryOn4xx, staleTime: 0 });
 
 // ---------- sites ----------
 export const useSites = (orgId: string | undefined) =>
@@ -702,5 +711,82 @@ export function useAdminUpdateOrg() {
   return useMutation({
     mutationFn: ({ orgId, ...body }: { orgId: string; monthlyBudgetUsd: number; disabled?: boolean }) => api<AdminOrg>(`/api/admin/orgs/${orgId}`, { method: 'PATCH', body }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'orgs'] }),
+  });
+}
+
+// ---------- G2: CMS publishing (app/docs/CMS_PUBLISHING.md) ----------
+const cmsKey = (siteId: string) => ['site', siteId, 'cms'] as const;
+
+export const useCmsConnections = (orgId: string, siteId: string) =>
+  useQuery({ queryKey: [...cmsKey(siteId), 'connections'], queryFn: () => api<{ items: CmsConnectionView[] }>(`/api/orgs/${orgId}/sites/${siteId}/cms/connections`), retry: noRetryOn4xx });
+
+/** The website's CMS items and recent attempts (Content page); off when the site is not verified. */
+export const useCmsSiteState = (orgId: string, siteId: string, enabled = true) =>
+  useQuery({ queryKey: [...cmsKey(siteId), 'state'], queryFn: () => api<CmsSiteState>(`/api/orgs/${orgId}/sites/${siteId}/cms/state`), enabled, retry: noRetryOn4xx, staleTime: 30_000 });
+
+export const useCmsReportState = (orgId: string, reportId: string) =>
+  useQuery({ queryKey: [...qk.report(orgId, reportId), 'cms'], queryFn: () => api<CmsReportState>(`/api/orgs/${orgId}/reports/${reportId}/cms`), retry: noRetryOn4xx });
+
+function useCmsInvalidate(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return () => {
+    qc.invalidateQueries({ queryKey: cmsKey(siteId) });
+    qc.invalidateQueries({ queryKey: ['org', orgId, 'report'] });
+  };
+}
+
+export function useCreateCmsConnection(orgId: string, siteId: string) {
+  const done = useCmsInvalidate(orgId, siteId);
+  return useMutation({
+    mutationFn: (body: CmsConnectionCreate) => api<{ connection: CmsConnectionView; signingSecret?: string }>(`/api/orgs/${orgId}/sites/${siteId}/cms/connections`, { method: 'POST', body }),
+    onSuccess: done,
+  });
+}
+
+export function useUpdateCmsConnection(orgId: string, siteId: string) {
+  const done = useCmsInvalidate(orgId, siteId);
+  return useMutation({
+    mutationFn: ({ id, ...body }: CmsConnectionUpdate & { id: string }) => api<CmsConnectionView>(`/api/orgs/${orgId}/sites/${siteId}/cms/connections/${id}`, { method: 'PATCH', body }),
+    onSuccess: done,
+  });
+}
+
+export function useDeleteCmsConnection(orgId: string, siteId: string) {
+  const done = useCmsInvalidate(orgId, siteId);
+  return useMutation({
+    mutationFn: (id: string) => api<{ ok: true }>(`/api/orgs/${orgId}/sites/${siteId}/cms/connections/${id}`, { method: 'DELETE' }),
+    onSuccess: done,
+  });
+}
+
+export function useTestCmsConnection(orgId: string, siteId: string) {
+  const done = useCmsInvalidate(orgId, siteId);
+  return useMutation({
+    mutationFn: (id: string) => api<CmsTestResultView>(`/api/orgs/${orgId}/sites/${siteId}/cms/connections/${id}/test`, { method: 'POST' }),
+    onSuccess: done,
+  });
+}
+
+export function useCmsPublish(orgId: string, reportId: string, siteId: string) {
+  const done = useCmsInvalidate(orgId, siteId);
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CmsPublishInput) => api<CmsPublishResult>(`/api/orgs/${orgId}/reports/${reportId}/cms/publish`, { method: 'POST', body }),
+    onSuccess: (r) => {
+      done();
+      // a live page started the engine's publish check: the website's pipeline and runs change
+      if (r.engine.runId) {
+        qc.invalidateQueries({ queryKey: ['org', orgId, 'runs'] });
+        qc.invalidateQueries({ queryKey: ['site', siteId, 'data'] });
+      }
+    },
+  });
+}
+
+export function useCmsRefresh(orgId: string, reportId: string, siteId: string) {
+  const done = useCmsInvalidate(orgId, siteId);
+  return useMutation({
+    mutationFn: (connectionId: string) => api<CmsPublishResult>(`/api/orgs/${orgId}/reports/${reportId}/cms/refresh`, { method: 'POST', body: { connectionId } }),
+    onSuccess: done,
   });
 }

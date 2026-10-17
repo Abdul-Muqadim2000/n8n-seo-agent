@@ -4,6 +4,7 @@ PAGE
 Target Keyword: {{ $json.keyword }} · Country: {{ $json.country }} · Page Type: {{ $json.page_type }} · Goal: {{ $json.goal || 'leads' }}
 {{ $json.existing_page ? 'This content replaces the existing page at ' + $json.existing_page.url + '. Keep every true fact from it; improve everything else.' : '' }}
 {{ $json.ai_target ? 'AI ANSWER TARGET: this page must be the one AI assistants cite for "' + $json.ai_target.question + '". Answer that question in the first 40-60 words after the H1 (the Quick answer), give each search the assistants run (' + (($json.ai_target.fanout || []).map(f => '"' + f + '"').join(', ') || 'see the brief') + ') its own question-style H2 answered in its first sentence, keep any comparison neutral (never put this business first), and use only the verified figures with their linked sources.' : '' }}
+{{ ($json.verdict_exclusions || []).length ? 'LEAVE OUT (the verdict on this keyword: these do not match what its buyers want; no section, heading or question about them): ' + $json.verdict_exclusions.map(e => e.topic).join('; ') + '.' : '' }}
 
 WHO YOU ARE WRITING FOR
 {{ $json.content_brief.target_audience || $json.audience || 'Not provided' }}

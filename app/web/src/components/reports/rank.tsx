@@ -245,7 +245,11 @@ export function RankTrackerReport({ report }: { report: ReportDetail }) {
           </div>
         )
       )}
-      <LedgerCard ledger={p.run_ledger} extraCost={num(p.cost_usd)} />
+      <LedgerCard
+        ledger={p.run_ledger}
+        extraCost={num(p.cost_usd)}
+        shared="What the whole weekly rank check used: every ladder and the watch list are checked in one run, and each ladder's report shows that same figure. It is not this ladder's own cost, and it is counted once."
+      />
     </Stagger>
   );
 }

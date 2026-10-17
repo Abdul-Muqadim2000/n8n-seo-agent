@@ -81,7 +81,10 @@ Full guide: `brand/BRAND.md`; the app's tokens are in `src/index.css` (light + d
 - Name: **Ascentra** in all UI copy ("SEO Agent" is only the internal engine name). The logo is always one of the supplied SVGs in
   `public/brand/` (`components/layout/Brand.tsx` in the app, `marketing/components/Logo.tsx` on the business site): never live text,
   never redrawn, recoloured, rotated, stretched, outlined or shadowed; never animate single rays (fading / moving / scaling the whole
-  logo is fine).
+  logo is fine). **One exception, approved by the owner on 2026-10-18:** the "wing wave" of `components/brand/AscentraMark.tsx` —
+  the supplied path split into its 33 rays unchanged, one colour, a band of *opacity* running from the sun to the wing tip and back to
+  the exact mark (static under reduced motion). Only for the loader (`PageLoader`) and large faint decorative marks (home hero,
+  `CtaBand`); never on the logo lockups (header, footer, app shell, documents), never a per-ray colour, position, scale or rotation.
 - Colour: tokens only (no hex, no Tailwind palette colours like `blue-500`). Ascentra Blue (`accent`) is the only accent — no second
   accent and **no gradients** (`linear-gradient`, `bg-gradient-*`, `from-*` / `to-*`); the neutral `--shimmer` skeleton token and CSS
   masks are the only exceptions. About 70% white / paper, 20% ink, 10% blue. Inside ink bands use the `on-ink` tokens

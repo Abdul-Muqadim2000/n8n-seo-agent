@@ -11,7 +11,8 @@ const posText = (p) => p ? '#' + p : 'not in top 60';
 const months = (m) => Array.isArray(m) ? (m[0] === m[1] ? 'month ' + m[0] : 'months ' + m[0] + '-' + m[1]) : '—';
 // R42 (2026-10-16): a ladder run that writes a page while the site already has its limit of written-but-unpublished pages says so, in the
 // owner's words, where the notes are read (the Content Cadence stops at that limit; a ladder run does not, so the pile grows by one).
-if (L.planned && (L.write_now || []).length && L.pile_up && L.pile_up.at_limit) {
+// F-A1 / A-12: a plan built with the website's limits (`L.limits`) states them itself, held pages included; this note is for older plans
+if (L.planned && !L.limits && (L.write_now || []).length && L.pile_up && L.pile_up.at_limit) {
   const pu = L.pile_up;
   L.notes = [...(L.notes || []), 'You have ' + pu.waiting + ' page' + (pu.waiting === 1 ? '' : 's') + ' waiting to be published (limit ' + pu.limit + '); this writes page ' + (pu.waiting + 1) + '.'
     + (pu.needs_fix ? ' ' + pu.needs_fix + ' of them did not pass the quality check and need a fix first.' : '')
@@ -87,7 +88,8 @@ parts.push(h2('The plan in one page') + kv([
   ['Traffic potential', planned ? '~' + num(st.traffic_potential_total) + ' visits/month across the ladder once the pages rank in the top 3' : '—'],
   // R1 (2026-10-13): the plan used to call these pages written and promise them as page content before the page run had even started — and a
   // run the day's AI budget refused then left nothing behind but a ladder row saying "writing" (live: execution 500).
-  ['Started now', (L.write_now || []).length ? (L.write_now || []).map(w => '"' + esc(w.keyword) + '" (rung ' + w.rung + ')').join(', ') + ' — started as its own page run; each arrives as its own report. A run the day\'s AI budget refuses writes nothing and puts the page back to "planned" for the next weekly run.' : 'none'],
+  ['Started now', L.held && (L.held.pages || []).length ? 'none — held by the website\'s limits: ' + esc((L.held.why || []).map(w => w.text).join('; and ')) + '. The Content Cadence writes '
+    + (L.held.pages.length === 1 ? 'it' : 'them') + ' when the limit clears.' : (L.write_now || []).length ? (L.write_now || []).map(w => '"' + esc(w.keyword) + '" (rung ' + w.rung + ')').join(', ') + ' — started as its own page run; each arrives as its own report. A run the day\'s AI budget refuses writes nothing and puts the page back to "planned" for the next weekly run.' : 'none'],
   ['Tracking', planned ? 'Positions checked ' + esc((L.tracker || {}).cadence || 'weekly') + '; progress e-mail with the next rung; once the top page holds the top 3 for 4 checks it is checked monthly' : 'nothing to track']
 ]) + ((L.notes || []).filter(n => !(L.refusal && n === L.refusal.message)).length ? '<div class="note">' + L.notes.filter(n => !(L.refusal && n === L.refusal.message)).map(esc).join('<br>') + '</div>' : ''));
 
@@ -149,7 +151,7 @@ for (const r of rungs) {
 }
 ladderHtml += '<h3>Top — ' + esc(top.keyword) + ' — ' + months(top.months) + '</h3>' + kv([
   ['Page', (top.exists ? '<span class="ok">improve</span> ' : 'new ') + esc(top.target_url)],
-  ['Page type', esc(top.page_type)], ['Supporting keywords', esc((top.supporting || []).join(', ') || '—')],
+  ['Page type', esc(top.page_type)], ['Supporting keywords', esc((top.supporting || []).join(', ') || '—') + (top.grouped_by ? '<br><span class="small">Grouped by ' + esc(top.grouped_by) + '</span>' : '')],   // A-10
   ['Searches/mo · difficulty', num(top.volume) + ' · ' + kdLabel(top.kd)], ['You today', esc(posText(top.your_position))], ['When', L.plan_type === 'direct' || mainOnly ? 'written first — ' + months(top.months) : months(top.months)],
   ...(top.why ? [['Why here', esc(top.why)]] : [])   // B2-3
 ]);
@@ -172,7 +174,7 @@ parts.push(h2('Internal link map') + '<p class="small">Every rung page links up 
 // 6. Write now
 parts.push(h2('Pages written now') + ((L.write_now || []).length ? '<table class="ct"><tr><th>#</th><th>Keyword</th><th>Page type</th><th>URL</th><th>Links to</th></tr>' +
   L.write_now.map(w => '<tr><td>' + w.page_no + '</td><td><b>' + esc(w.keyword) + '</b></td><td>' + esc(w.page_type) + '</td><td>' + esc(w.target_url) + (w.exists ? ' (improve)' : ' (new)') + '</td><td>' + esc((w.links_to || []).map(x => x.keyword).join(', ')) + '</td></tr>').join('') + '</table>' +
-  '<p>Each page runs through the full content pipeline (competitor analysis, verified facts, brief, copywriter, critic, QA, editor) and arrives as its own PDF and Word file' + (d.email ? ' at ' + esc(d.email) : '') + '. Publish it at the URL above, then the weekly tracker measures the climb.</p>' : '<p>No pages requested now.</p>'));
+  '<p>Each page runs through the full content pipeline (competitor analysis, verified facts, brief, copywriter, critic, QA, editor) and arrives as its own PDF and Word file' + (d.email ? ' at ' + esc(d.email) : '') + '. Publish it at the URL above, then the weekly tracker measures the climb.</p>' : (L.held && (L.held.pages || []).length ? '<p><b>Held, not written:</b> ' + L.held.pages.map(w => '"' + esc(w.keyword) + '"').join(', ') + ' — ' + esc((L.held.why || []).map(w => w.text).join('; and ')) + '.</p><p class="small">' + esc((L.limits || {}).text || '') + '</p>' : '<p>No pages requested now.</p>')));
 
 // 7. Requirements
 parts.push(h2('What else is needed') + '<table class="ct"><tr><th>Item</th><th>Detail</th></tr>' + (L.requirements || []).map(r => '<tr><td><b>' + esc(r.item) + '</b></td><td>' + esc(r.detail) + '</td></tr>').join('') + '</table>');

@@ -8,14 +8,14 @@ const AUTO: Row[] = [
   { label: 'No stop', note: 'Runs on schedule', kind: 'skip' },
   { label: 'Written', note: 'Draft, critique and edit' },
   { label: 'Checked', note: 'SEO QA on every page' },
-  { label: 'Ready to publish', note: 'Package or WordPress draft' },
+  { label: 'Ready to publish', note: 'Package or a draft in your CMS' },
 ];
 const MANUAL: Row[] = [
   { label: 'Planned', note: 'Picked by the Monday cadence' },
   { label: 'Needs you', note: 'Waits until someone approves', kind: 'wait' },
   { label: 'Written', note: 'Draft, critique and edit' },
   { label: 'Checked', note: 'SEO QA on every page' },
-  { label: 'Ready to publish', note: 'Package or WordPress draft' },
+  { label: 'Ready to publish', note: 'Package or a draft in your CMS' },
 ];
 
 function Lane({ title, body, icon: Icon, rows, mode }: { title: string; body: string; icon: LucideIcon; rows: Row[]; mode: 'auto' | 'manual' }) {

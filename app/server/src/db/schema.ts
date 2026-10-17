@@ -519,6 +519,105 @@ export const apiKeys = pgTable(
   (t) => [uniqueIndex('api_keys_hash_idx').on(t.tokenHash), index('api_keys_org_idx').on(t.orgId)],
 );
 
+// ---- G2 (2026-10-17): publishing written pages to the customer's CMS (app/docs/CMS_PUBLISHING.md) ----
+/** One CMS a website publishes to (WordPress, Webflow, Contentful or a signed webhook). The secret is sealed (lib/secretBox.ts). */
+export const cmsConnections = pgTable(
+  'cms_connections',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    siteId: uuid('site_id')
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    /** wordpress | webflow | contentful | webhook */
+    kind: text('kind').notNull(),
+    label: text('label').notNull().default(''),
+    baseUrl: text('base_url').notNull().default(''),
+    username: text('username').notNull().default(''),
+    /** AES-256-GCM under MAILBOX_KEY; never sent to the browser, never logged */
+    secret: text('secret').notNull().default(''),
+    /** non-secret settings (shared/src/cms.ts CmsConnectionSettings) */
+    settings: jsonb('settings').$type<Record<string, unknown>>().notNull().default({}),
+    /** untested | ok | error */
+    status: text('status').notNull().default('untested'),
+    statusReason: text('status_reason').notNull().default(''),
+    lastTestedAt: ts('last_tested_at'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: created(),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+  },
+  (t) => [index('cms_connections_site_idx').on(t.siteId), index('cms_connections_org_idx').on(t.orgId)],
+);
+
+/** One page in one CMS: re-publishing the same slug through the same connection updates this item, never a second one. */
+export const cmsItems = pgTable(
+  'cms_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    siteId: uuid('site_id')
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    connectionId: uuid('connection_id')
+      .notNull()
+      .references(() => cmsConnections.id, { onDelete: 'cascade' }),
+    slug: text('slug').notNull(),
+    keyword: text('keyword').notNull().default(''),
+    remoteId: text('remote_id').notNull().default(''),
+    remoteUrl: text('remote_url').notNull().default(''),
+    /** draft | published | unknown */
+    remoteStatus: text('remote_status').notNull().default('unknown'),
+    lastReportId: uuid('last_report_id').references(() => reports.id, { onDelete: 'set null' }),
+    /** images already uploaded for this item (file name -> remote media id / url), so a re-publish does not upload them twice */
+    media: jsonb('media').$type<Record<string, { id: string; url: string }>>().notNull().default({}),
+    /** a publish in progress holds the item until then (a second click meanwhile is refused) */
+    lockUntil: ts('lock_until'),
+    /** when the engine was told the page is live (the "I published a page" run) */
+    engineToldAt: ts('engine_told_at'),
+    createdAt: created(),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex('cms_items_connection_slug_idx').on(t.connectionId, t.slug), index('cms_items_site_idx').on(t.siteId)],
+);
+
+/** Every attempt to send a page to a CMS, and every refusal with its reasons: who, when, where, draft or live, what came back. */
+export const cmsPublishes = pgTable(
+  'cms_publishes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    siteId: uuid('site_id').references(() => sites.id, { onDelete: 'set null' }),
+    connectionId: uuid('connection_id').references(() => cmsConnections.id, { onDelete: 'set null' }),
+    itemId: uuid('item_id').references(() => cmsItems.id, { onDelete: 'set null' }),
+    reportId: uuid('report_id').references(() => reports.id, { onDelete: 'set null' }),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+    /** the connection's kind and label at the time (kept when the connection is removed) */
+    kind: text('kind').notNull().default(''),
+    connectionLabel: text('connection_label').notNull().default(''),
+    keyword: text('keyword').notNull().default(''),
+    /** draft | live | refresh */
+    mode: text('mode').notNull(),
+    /** sent | failed | blocked */
+    status: text('status').notNull(),
+    remoteId: text('remote_id').notNull().default(''),
+    remoteUrl: text('remote_url').notNull().default(''),
+    /** the CMS host or kind, never a secret */
+    target: text('target').notNull().default(''),
+    error: text('error').notNull().default(''),
+    notes: jsonb('notes').$type<string[]>().notNull().default([]),
+    blockers: jsonb('blockers').$type<Record<string, unknown>[]>().notNull().default([]),
+    engineRunId: uuid('engine_run_id').references(() => runs.id, { onDelete: 'set null' }),
+    createdAt: created(),
+  },
+  (t) => [index('cms_publishes_org_created_idx').on(t.orgId, t.createdAt), index('cms_publishes_report_idx').on(t.reportId), index('cms_publishes_site_idx').on(t.siteId, t.createdAt)],
+);
+
 // ---------------------------------------------------------------------------------------------------------------------------
 // G4 (2026-10-17): integrations — app/docs/INTEGRATIONS.md. Every secret column holds a value sealed with MAILBOX_KEY (secretBox).
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -672,6 +771,9 @@ export type IssueLinkRow = typeof issueLinks.$inferSelect;
 export type WebhookEndpointRow = typeof webhookEndpoints.$inferSelect;
 export type WebhookDeliveryRow = typeof webhookDeliveries.$inferSelect;
 export type ExportRunRow = typeof exportRuns.$inferSelect;
+export type CmsConnectionRow = typeof cmsConnections.$inferSelect;
+export type CmsItemRow = typeof cmsItems.$inferSelect;
+export type CmsPublishRow = typeof cmsPublishes.$inferSelect;
 export type ApiKeyRow = typeof apiKeys.$inferSelect;
 export type MailboxRow = typeof mailboxes.$inferSelect;
 export type OutreachSequenceRow = typeof outreachSequences.$inferSelect;

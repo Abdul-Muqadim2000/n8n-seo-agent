@@ -51,10 +51,14 @@ export function summarize(stage: string, p: P): Summary {
     case 'full_report': {
       put('healthScore', num(p.health_score));
       put('grade', str(p.grade));
-      const ic = obj(p.issue_counts);
+      // B-17 (F-B, 2026-10-17): count what the stored list holds (the scored findings); issue_counts also counts the unscored
+      // content-review findings, so the summary said High 17 / Medium 18 beside a list of 15 / 15. Older payloads keep issue_counts.
+      const stored = obj(p.issue_counts_stored);
+      const ic = Object.keys(stored).length ? stored : obj(p.issue_counts);
       put('critical', num(ic.Critical));
       put('high', num(ic.High));
       put('medium', num(ic.Medium));
+      if (Object.keys(stored).length) put('unscored', num(stored.unscored));
       put('scoreDelta', num(obj(p.audit_diff).score_delta));
       break;
     }
@@ -129,6 +133,7 @@ export function summarize(stage: string, p: P): Summary {
     }
     case 'ai_growth': {
       // v4.12: the weekly AI growth loop
+      if (p.dry_run === true) put('dryRun', true);   // D-4: a test run submitted nothing
       const sub = obj(p.submitted);
       put('submitted', (num(obj(sub.bing).submitted) ?? 0) + (num(obj(sub.indexnow).submitted) ?? 0));
       put('pagesChecked', Array.isArray(p.pages) ? p.pages.length : null);
@@ -200,6 +205,10 @@ export function titleFor(stage: string, p: P): string {
   if (stage === 'content' && kw) return `${p.html ? 'Page' : 'Keyword report'}: ${kw}`;
   if ((stage === 'ladder_plan' || stage === 'rank_tracker') && kw) return `${base}: ${kw}`;
   if (stage === 'published' && kw) return `Publish check: ${kw}`;
+  // D-13: a pulse day with no real change is not an "alert" (report 12 of 2026-10-17: "AI pulse alert" over 0 alerts)
+  if (stage === 'ai_pulse') return `${len(p.alerts) ? 'AI pulse alert' : base}${dom ? ` · ${dom}` : ''}`;
+  // D-4: an AI Growth dry run (`dry_run: true`) submitted nothing; its title must not read as the week's work
+  if (stage === 'ai_growth' && p.dry_run === true) return `${base} · dry run, nothing submitted${dom ? ` · ${dom}` : ''}`;
   return dom ? `${base} · ${dom}` : base;
 }
 

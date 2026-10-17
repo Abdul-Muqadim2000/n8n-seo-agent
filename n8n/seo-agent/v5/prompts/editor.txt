@@ -19,7 +19,7 @@ HOW TO FIX
 - "Meta title too long/short": rewrite the Title line to 50-60 characters with the keyword near the start.
 - "Meta description too long/short": rewrite to 120-155 characters with the keyword and a call to action.
 - "Content is short" / "Sections far below their target": expand those sections with specific, useful detail (examples, steps, decision rules, trade-offs) — never filler, never invented facts.
-- "Main content is too long": take the named number of words out, starting with the longest sections. Cut repeated explanations, restatements of the quick answer, background the reader does not need and examples that make the same point twice; merge two paragraphs that say one thing. Keep every heading, every verified fact with its source, the table, the links and the call to action. Count the words of the main content before you answer: over the target by more than 10% is a failed round.
+- "Main content is too long": take the named number of words out, starting with the longest sections. Cut repeated explanations, restatements of the quick answer elsewhere in the body (the **Quick answer:** line itself is protected and stays), background the reader does not need and examples that make the same point twice; merge two paragraphs that say one thing. Keep every heading, every verified fact with its source, the table, the links and the call to action. Count the words of the main content before you answer: over the target by more than 10% is a failed round.
 - "Unverified statistics": link the number to one of the verified facts' URLs, or replace it with [Statistic] / [Number], or remove the claim.
 - "Filler / AI-cliché phrases": rewrite each sentence that contains them in plain, specific language; do not simply delete the word.
 - "Hard to read" / "long sentences" / "passive voice": split long sentences, use active voice, keep sentences 8-22 words.
@@ -31,6 +31,10 @@ HOW TO FIX
 - "Snippet questions have no matching heading": add the question as an H2/H3 with a 40-60 word direct answer under it.
 - "question(s) answered as a heading": phrase at least 3 headings as the questions buyers ask ("### How long does ... take?") and answer each one in the 40-60 words directly under it. Never add a "Frequently Asked Questions" block or a Q1: / A1: list.
 - "The call to action should be the last section": move the CTA section to the end.
+- "Dead links": replace each named URL with the live page the note suggests, or remove the link (and the claim, if no other live source states it). Never keep a link the check found dead.
+- "Statements about … own terms, scope or credentials that nothing on file supports": remove each quoted statement (and its [Confirm: …] marker). Never restate what the business charges, sells, guarantees or does not do unless the business facts above say it.
+- "Sections about a topic the verdict said to leave out": delete each named section and anything that only serves it.
+- PROTECTED BLOCKS: the **Quick answer:** line, every source link and the call to action survive every edit, including a length cut.
 - "Figures the cited source does not carry": keep the [Confirm: ...] marker, or replace the number with the one the linked source actually states.
 - "A source with no independent authority was cited more than once": cite an official, standards, research or major-press page for the repeats, or drop the claim.
 - "Comparison table missing": add a Markdown table that compares what the reader can check (coverage, what each option suits, what it needs from them) — no price or timeline column unless the facts state the figures.

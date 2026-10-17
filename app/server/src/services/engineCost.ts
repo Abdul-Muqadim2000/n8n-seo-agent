@@ -65,6 +65,12 @@ export async function engineCostTable(opts: { fresh?: boolean } = {}): Promise<C
   return inflight;
 }
 
+/**
+ * D-2: the last reading's calibration, without any I/O, for the synchronous sentences that name a run's price (the Pipeline's
+ * "write it now (about $x)"), so they say what the form and the budget check say. null before the first reading.
+ */
+export const cachedCalibration = (): EngineCalibration | null => last?.info.calibration ?? null;
+
 /** Test hook: forget the cached reading. */
 export function resetEngineCostTable(): void {
   last = null;

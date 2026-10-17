@@ -15,16 +15,21 @@ else if (!pc.competitors_given) nc.push({ check: 'coverage_target', reason: 'no 
 if (!pc.competitors_given) nc.push({ check: 'originality', reason: 'no competitor page was sent, so the draft could not be compared word for word with anyone' });
 if (!pc.target_words_given) nc.push({ check: 'length', reason: 'no target_words was sent, so the page is measured against its own length (the length check cannot fail)' });
 if (pc.domain_given && !pc.internal_links_given) nc.push({ check: 'internal_links_exist', reason: 'no internal_links list was sent, so the links to the site\'s own pages were trusted, not verified to exist' });
+// A-14 (2026-10-17): a content run fetches every outbound link (Outbound Link Check) and fails on a dead one; this check fetches nothing
+if ((v.outbound_links || []).length) nc.push({ check: 'outbound_links_live', reason: 'this check fetches nothing, so whether the page\'s ' + v.outbound_links.length + ' outbound link(s) answer was not checked (a content run fetches each one and refuses a dead link)' });
 nc.push({ check: 'author_box', reason: 'the byline, author box and Person schema are added by the blog package from the business profile; they are not part of the Markdown sent' });
 const R = v.readability || {};
 const advice = [R.note, ...(Array.isArray(v.style_notes) ? v.style_notes : []), ...(Array.isArray(v.eeat_notes) ? v.eeat_notes : [])].filter(Boolean).slice(0, 12);
+// B-12 (F-B, 2026-10-17, exec 745): with no terms sent the coverage points are granted, not measured, and the score says so wherever it is printed
+const granted = (!pc.terms_given && v.score_breakdown && Number(v.score_breakdown.coverage) > 0) ? Number(v.score_breakdown.coverage) : 0;
+const scoreNote = granted ? granted + ' of the ' + (v.content_score ?? '?') + ' points (topic coverage) were granted because no terms were sent, not measured' : '';
 const reasons = Array.isArray(v.not_ready_reasons) && v.not_ready_reasons.length ? v.not_ready_reasons : (publishable ? [] : (v.warnings || []).slice(0, 6));
 const body = {
   ok: true, publishable, verdict: publishable ? 'publishable' : 'not_publishable', exit_code: publishable ? 0 : 1,
   label: S(v.quality_label || (publishable ? 'passed the quality check' : 'did not pass the quality check — not ready to publish')),
   summary: publishable ? 'Publishable: the page passes every deterministic check of the content gate (score ' + v.content_score + ' of 100).'
-    : 'Not publishable: ' + (reasons.length || 1) + ' reason(s) — ' + S(reasons[0] || 'the gate failed').slice(0, 220),
-  reasons, content_score: v.content_score ?? null, score_bar: 80, score_breakdown: v.score_breakdown || null,
+    : 'Not publishable: ' + (reasons.length || 1) + ' reason(s) — ' + S(reasons[0] || 'the gate failed').slice(0, 220) + (granted && /content score/.test(S(reasons[0])) ? ' (' + scoreNote + ')' : ''),
+  reasons, content_score: v.content_score ?? null, score_bar: 80, score_breakdown: v.score_breakdown || null, score_granted_points: granted, score_note: scoreNote,
   warnings: v.warnings || [], advice,
   checks: {
     placeholders: { count: v.placeholder_count ?? 0, max: v.placeholder_max ?? null, open_brackets: v.open_brackets || [], note: S(v.placeholder_note) },

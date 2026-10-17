@@ -186,6 +186,8 @@ function useNeedsYouHref() {
   return (a: NonNullable<NeedsYouItem['action']>): string | null => {
     if (a.ladderId) return paths.ladder(org.id, site.id, a.ladderId);
     if (a.runId) return paths.run(org.id, a.runId);
+    // G2: the page's report, where it is sent to the CMS
+    if (a.reportId) return paths.report(org.id, a.reportId);
     if (a.mode) return can('member') ? paths.tool(org.id, a.mode, { siteId: site.id, prefill: a.prefill }) : null;
     if (a.page) return paths.site(org.id, site.id, a.page);
     return null;

@@ -460,6 +460,33 @@ given up at once and switches the endpoint off ("the address was removed on thei
 reason. The log (`webhook_deliveries`, also the queue) keeps 30 days. **Channel routing** for Slack / Teams = one endpoint per
 channel, each with its own events and websites (e.g. `#seo-alerts` ← `alert.raised` + `run.failed`, `#seo-wins` ← `rank.changed`).
 
+## Publishing to the customer's CMS (G2, `app/docs/CMS_PUBLISHING.md`, `shared/src/cms.ts`)
+Connections belong to one verified website; secrets are sealed under `MAILBOX_KEY` and never returned (`hasSecret` only).
+- `GET /api/orgs/:orgId/sites/:siteId/cms/connections` (viewer) → `{ items: CmsConnectionView[] }`.
+- `POST …/cms/connections` (admin, 10/min) — `{ kind: 'wordpress', baseUrl, username, secret, postType?, categories?, tags?, publicUrlTemplate?, label? }`
+  | `{ kind: 'webflow', secret, collectionId, fieldMap?, … }` | `{ kind: 'contentful', secret, spaceId, environment?, contentTypeId, fieldMap?, … }`
+  | `{ kind: 'webhook', baseUrl, … }` → `{ connection, signingSecret? }` (the webhook's secret, **once**). `baseUrl` must be `https://` on a
+  public host (`cmsUrlOk`); every request is pinned to public IPs, redirects are not followed. 400 `secrets_unavailable` without `MAILBOX_KEY`.
+  At most 5 per website.
+- `PATCH …/cms/connections/:id` (admin) — any field of its own kind; `secret` left out keeps it; `fieldMap` is checked against the fields the
+  last test read (`fieldMapProblems`, 400 with `fields.fieldMap`). Changing an address, id or secret sets `status: 'untested'`.
+- `DELETE …/cms/connections/:id` (admin) — the items go, the publishing history stays.
+- `POST …/cms/connections/:id/test` (admin, 10/min) → `{ ok, message, connection }`; stores the status and what the CMS offers (WordPress user,
+  capabilities, Yoast / Rank Math fields; Webflow collection fields; Contentful content type fields and default locale).
+- `GET /api/orgs/:orgId/sites/:siteId/cms/state` (viewer) → `{ connections, items, recent }` (Content page).
+- `GET /api/orgs/:orgId/reports/:reportId/cms` (viewer) → `CmsReportState`: `readiness` (`draftAllowed`, `liveAllowed`, `blockers[]` with codes
+  `not_a_page | not_ready | not_publishable | placeholders | no_title | no_slug | other_domain | no_website`, `warnings`, `liveRefusal`),
+  `canDraft` / `canLive` for this person, the connections, this page's items, its history, `publicUrls` per connection.
+- `POST /api/orgs/:orgId/reports/:reportId/cms/publish` (member for `mode: 'draft'`; **admin and `confirmLive: true`** for `mode: 'live'` —
+  403 / 400 `confirm_live` otherwise; 10/min) `{ connectionId, mode, confirmLive }` → `CmsPublishResult { ok, record, item, engine }`. A blocked page
+  answers `ok: false` with `record.status: 'blocked'` and the blockers (nothing reaches the CMS; there is no override). An item already **live**
+  in the CMS is refused as a draft (it would change the live page). Re-sending updates the same CMS item (stored per connection × slug; an item
+  the CMS already has under the slug is adopted). 409 `cms_busy` while another send of the same item runs. When the page is live the app starts
+  the engine's `published` run with the live address (on the website's domain) — `engine.runId`.
+- `POST /api/orgs/:orgId/reports/:reportId/cms/refresh` (member) `{ connectionId }` — asks the CMS whether the item is live now; the first time it is,
+  the engine's `published` run starts.
+- Pipeline: a `publish` Needs-you item says when a draft is already in the CMS and, with a connection, its action is `{ label, reportId }`.
+
 ## n8n → app
 `POST /api/hooks/n8n/:hookToken` — every callback of every run and every scheduled report of the company (the token is the
 company's `hook_token`; it is sent to n8n as `callback_url`). Body: the n8n callback (`stage`, `request_id`, …); embedded files are

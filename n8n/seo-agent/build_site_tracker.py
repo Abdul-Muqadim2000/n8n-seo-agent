@@ -65,10 +65,11 @@ GSC_QUERIES_SRC = _rdt('code/_gsc_queries.js').rstrip('\n')   # G9 / D24: scrape
 SERP_OBS_SRC = _rdt('code/_serp_obs.js').rstrip('\n')        # D26: a results-page feature is one observation at one moment, never a fact about the query
 RANK_SERP_SRC = _rdt('code/_rank_serp.js').rstrip('\n')      # G6 (FIX_PLAN 2026-10-12): the whole results page of one rank check (features, page 1, share of voice, snapshot)
 PAGE_WATCH_SRC = _rdt('code/_page_watch.js').rstrip('\n')    # G11 + G25 (FIX_PLAN 2026-10-13): the daily key-page watch and URL Inspection within Google's quota
+WAITING_SRC = _rdt('code/_waiting.js').rstrip('\n')          # F-A1 / A-12 (2026-10-17): the pile-up count and the ladders being written, one rule shared with the ladder mode
 FIT_GATE_SRC = _rdt('code/_fit_gate.js').rstrip('\n')        # R16 (build_v4.py section 53): the fit gate, also over the rungs stored before it existed (fitStored)
 rd = lambda p: (seo_events.inline(_rdt(p)).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SITE_STATS__*/', SITE_STATS_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC)
                 .replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__RANK_SERP__*/', RANK_SERP_SRC).replace('/*__PAGE_WATCH__*/', PAGE_WATCH_SRC)
-                .replace('/*__FIT_GATE__*/', FIT_GATE_SRC))
+                .replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__WAITING__*/', WAITING_SRC))
 NS = uuid.UUID('5e0a9e1e-2a1f-4c0b-9d8e-0000a9e0c0de')
 nid = lambda name: str(uuid.uuid5(NS, 'sitetracker:' + name))
 MAIN_WF = json.load(open(os.path.join(OUT, 'SEO_Agent_v4.json')))[0]

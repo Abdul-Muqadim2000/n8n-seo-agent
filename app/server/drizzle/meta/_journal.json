@@ -68,8 +68,15 @@
     {
       "idx": 9,
       "version": "7",
-      "when": 1792254797892,
-      "tag": "0009_g4_integrations",
+      "when": 1792255013466,
+      "tag": "0009_cms_publishing",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792273579849,
+      "tag": "0010_g4_integrations",
       "breakpoints": true
     }
   ]

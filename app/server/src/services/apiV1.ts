@@ -7,6 +7,7 @@ import {
   filterFindings,
   findingsV1,
   MODE_IDS,
+  notFixedKeys,
   pageLimit,
   pageOf,
   publishCheckSchema,
@@ -129,10 +130,15 @@ const toAuditV1 = (r: AuditRow): AuditV1 => ({
 });
 
 /** the site's audits, oldest first (the order `previousOfType` works on), one per audit id */
-async function auditsOf(site: SiteRow): Promise<AuditV1[]> {
+async function auditRowsOf(site: SiteRow): Promise<{ audit: AuditV1; row: AuditRow }[]> {
   const rows = await siteRows<AuditRow>('audits', site.domain, { sortBy: 'audited_at:asc', max: 500 });
   const seen = new Set<string>();
-  return rows.map(toAuditV1).filter((a) => a.id && !seen.has(a.id) && seen.add(a.id));
+  const out: { audit: AuditV1; row: AuditRow }[] = [];
+  for (const row of rows) { const audit = toAuditV1(row); if (audit.id && !seen.has(audit.id)) { seen.add(audit.id); out.push({ audit, row }); } }
+  return out;
+}
+async function auditsOf(site: SiteRow): Promise<AuditV1[]> {
+  return (await auditRowsOf(site)).map((x) => x.audit);
 }
 
 export async function listAudits(ctx: V1Ctx, websiteId: unknown, q: Q = {}): Promise<PageV1<AuditV1>> {
@@ -147,15 +153,18 @@ export async function getAudit(ctx: V1Ctx, websiteId: unknown, auditId: unknown,
   requireVerifiedSite(site);
   const id = str(auditId);
   if (!id || id.length > 80) throw notFound('Audit not found');
-  const audits = await auditsOf(site);
+  const withRows = await auditRowsOf(site);
+  const audits = withRows.map((x) => x.audit);
   const idx = audits.findIndex((a) => a.id === id);
   if (idx < 0) throw notFound('Audit not found');
   const audit = audits[idx];
+  // B-5 (F-B, 2026-10-17): the previous findings the engine did not count as fixed (a changed check, a JavaScript / plain crawl)
+  const notFixed = notFixedKeys(withRows[idx].row);
   // R66: the comparison is the previous audit of the SAME report type, never its neighbour of another type
   const prevPoint = previousOfType(audits, idx);
   const rowsOf = (aid: string) => siteRows<AuditFindingRow>('auditFindings', site.domain, { extra: [{ columnName: 'audit_id', condition: 'eq', value: aid }], max: 1000 });
   const [cur, prev] = await Promise.all([rowsOf(audit.id), prevPoint ? rowsOf(prevPoint.id) : Promise.resolve(null)]);
-  const findings = findingsV1(cur, prev, (f) => oneReadingFinding(f, audit.reportType));
+  const findings = findingsV1(cur, prev, (f) => oneReadingFinding(f, audit.reportType) || notFixed.has(String(f.finding_key ?? '')));
   return { audit, comparedWith: prevPoint?.id ?? null, findings: filterFindings(findings, { severity: q.severity, status: q.status }) };
 }
 

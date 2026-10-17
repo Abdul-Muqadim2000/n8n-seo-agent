@@ -246,3 +246,17 @@ function bundleWith(o: { snapshotActions?: ReturnType<typeof engineActions>; ite
     reportsElsewhere: false,
   } as unknown as SiteBundle;
 }
+
+// B-17 (F-B, 2026-10-17, re-rating 2026-10-17 exec 767): the summary said High 17 / Medium 18 beside a stored list of High 15 / Medium 15,
+// because issue_counts also counts the unscored content-review findings. The callback now carries the stored counts.
+describe('full report summary counts what the list holds (B-17)', () => {
+  it('uses issue_counts_stored when the engine sends it, and names the unscored', () => {
+    const s = summarize('full_report', { health_score: 70, grade: 'Needs Improvement', issue_counts: { Critical: 0, High: 17, Medium: 18, Low: 18, Info: 2 },
+      issue_counts_stored: { Critical: 0, High: 15, Medium: 15, Low: 17, unscored: 7 } });
+    expect([s.high, s.medium, s.unscored]).toEqual([15, 15, 7]);
+  });
+  it('an older payload keeps issue_counts', () => {
+    const s = summarize('site_audit', { health_score: 85, grade: 'Good', issue_counts: { Critical: 0, High: 4, Medium: 7 } });
+    expect([s.high, s.medium, s.unscored]).toEqual([4, 7, undefined]);
+  });
+});

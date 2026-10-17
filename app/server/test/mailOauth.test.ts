@@ -84,9 +84,11 @@ describe('what this installation offers (L4)', () => {
     const m = await import('../src/services/mailOauth');
     const ms = m.mailProviderInfo().find((p) => p.id === 'ms_graph')!;
     expect(ms.enabled).toBe(false);
-    expect(ms.disabledWhy).toMatch(/MS_OAUTH_CLIENT_ID/);
+    // D-12 (re-rating 2026-10-17): customer text names no setting or file ("MS_OAUTH_CLIENT_ID … in app/.env" was shown on the tab)
+    expect(ms.disabledWhy).toMatch(/Microsoft 365 sign-in is not set up on this installation/);
+    expect(ms.disabledWhy).not.toMatch(/MS_OAUTH|CLIENT_ID|SECRET|\.env/);
     expect(ms.disabledWhy).toMatch(/app password/);
-    expect(() => m.mailAuthUrl('ms_graph')).toThrow(/MS_OAUTH_CLIENT_ID/);
+    expect(() => m.mailAuthUrl('ms_graph')).toThrow(/not set up/);
     process.env.MS_OAUTH_CLIENT_ID = 'ms-client'; process.env.MS_OAUTH_CLIENT_SECRET = 'ms-secret';
     vi.resetModules();
   });

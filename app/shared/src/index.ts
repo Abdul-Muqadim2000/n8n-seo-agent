@@ -16,6 +16,7 @@ export * from './keywords';
 export * from './link-import';
 export * from './outreach';
 export * from './draft-qa';
+export * from './placeholders';
 export * from './findings';
 export * from './lineage';
 export * from './annotations';
@@ -29,3 +30,4 @@ export * from './ai-visibility';
 // the help panel (and the recommendation → guide map) needs it, so it stays out of every bundle that imports this barrel.
 export * from './api-v1';
 export * from './integrations';
+export * from './cms';

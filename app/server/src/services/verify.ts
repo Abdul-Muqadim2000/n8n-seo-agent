@@ -12,6 +12,9 @@ export interface VerifyOutcome {
   message: string;
 }
 
+// the SSRF guard's two halves live in lib/netGuard.ts (G4); re-exported here for the callers that import them from verify (cms/http.ts)
+export { isPrivateIp, publicLookup } from '../lib/netGuard';
+
 function getOnce(url: string, maxBytes: number): Promise<{ status: number; location: string | null; text: string }> {
   return new Promise((resolve, reject) => {
     const req = request(url, { method: 'GET', lookup: publicLookup as never, headers: { 'user-agent': 'SEO-Agent-Verifier/1.0', accept: 'text/html' }, timeout: 10000 }, (res) => {

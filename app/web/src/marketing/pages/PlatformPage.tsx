@@ -48,7 +48,9 @@ const SOURCE_GROUPS: { title: string; items: { name: string; use: string }[] }[]
   {
     title: 'Publishing',
     items: [
-      { name: 'WordPress', use: 'drafts for your team to review' },
+      { name: 'WordPress', use: 'drafts or live posts, with Yoast SEO or Rank Math fields' },
+      { name: 'Webflow and Contentful', use: 'an item or entry, your fields mapped once' },
+      { name: 'Signed webhook', use: 'any other stack, or a bot that opens a pull request' },
       { name: 'HTML, Markdown and meta.json', use: 'a package for any other CMS' },
     ],
   },

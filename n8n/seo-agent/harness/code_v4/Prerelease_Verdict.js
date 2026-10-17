@@ -459,7 +459,8 @@ plan.forEach((p, i) => {
     if (!S(sig.h1)) add('h1', 'fail', 'no H1');
     else if (sig.h1s > 1) add('h1', 'warn', sig.h1s + ' H1s');
     else add('h1', 'pass', '"' + S(sig.h1).slice(0, 80) + '"');
-    add('description', S(sig.description) ? 'pass' : 'warn', S(sig.description) ? S(sig.description).slice(0, 80) : 'no meta description', 'low');
+    // B-13 (F-B, 2026-10-17): a caller who asks to fail on low (`fail_on: "low"`) gets a missing description as a failure; otherwise it stays a warning
+    add('description', S(sig.description) ? 'pass' : (S(first.fail_on) === 'low' ? 'fail' : 'warn'), S(sig.description) ? S(sig.description).slice(0, 80) : 'no meta description', 'low');
   }
   pages.push({ url, status: st, checked: true, error: '', noindex: !!sig.noindex, canonical: S(sig.canonical), title: S(sig.title), h1: S(sig.h1), bytes: Number(sig.bytes) || 0, checks });
 });

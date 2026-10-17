@@ -30,5 +30,69 @@ const CL = (() => {
       if (out.includes(s)) out = out.replace(s, '[Owner: confirm — ' + s + ']'); }
     return { text: out, flags };
   }
-  return { CLAIM_RE, keyOf, check };
+  // ---- A-15 (2026-10-17, re-rating 2026-10-17): what a written PAGE says about the business's own terms and scope ----
+  // Live (exec 771, business facts and profile empty) the page told buyers "We charge for advice and delivery. Licences sit on a separate
+  // line of the quote, you can buy them through any channel …", "Some can, but Tech& does not [manage a complete office IT setup]" and
+  // "Tech& does not handle company formation" — none of it on any of the site's 33 pages, and the quality check listed none of it.
+  // CL.business(text, corpus, opts) reads every sentence that speaks about the business (we / our / us, or one of its names in
+  // opts.names) and holds three kinds of statement against `corpus` (the business facts, the profile, the site model and the site's own
+  // pages this run read):
+  //   * its commercial terms — what it charges, quotes, bills, licenses, guarantees, refunds, discounts, how it contracts or resells;
+  //   * its scope — what it does NOT do, NEVER or ONLY does ("Tech& does not handle company formation");
+  //   * its credentials — accreditation, certification, partnership, awards, founding year, a count of years / clients / staff.
+  // A statement is supported when ONE sentence of the corpus carries its trigger (the same number, the trigger's stem; for a scope
+  // statement, a negation) and at least half of its own content words. Anything else is returned as unsupported, with the sentence; the
+  // caller marks it [Confirm: …] for the owner. Sentences already holding a bracket are left alone (a note is never nested).
+  // The subject must be the business: "we …", "<name> …", "our <team / prices / quotes …>" — "configuration does not meet your needs" and
+  // "you can act on it with another partner" say nothing about it. Questions (a buyer's checklist) are never claims.
+  const BIZ_TERMS = /\b(?:charg(?:e|es|ed|ing)|quot(?:e|es|ed|ing)|bill(?:s|ed|ing)?|invoice (?:you|clients|customers)|pricing|priced|fixed[- ]price|flat[- ](?:fee|rate)|fees?|retainers?|contracts?|lock[- ]?in|refund\w*|money[- ]back|guarantee[sd]?|warrant(?:y|ies)|discount\w*|commissions?|mark-?ups?|resell(?:er|ers|s|ing)?|sells?|payment terms|free of charge|at no (?:extra )?cost|no (?:hidden )?(?:fees|charges|costs))\b/i;
+  const BIZ_CRED = /\b(?:accredit\w*|certified|certifications?|iso[ -]?\d{4,5}|(?:gold|silver|solutions|certified|official|premier|authori[sz]ed|preferred|cloud solution) partner(?:s|ship)?|partner of the year|award\w*|member(?:s|ship)? of|founded|since (?:19|20)\d\d|headquarter\w*|offices? in|\d[\d,.]*\+? ?(?:years?|yrs|clients?|customers?|projects?|employees|staff|consultants|engineers|implementations?))\b/i;
+  const BIZ_ADVICE = /\b(?:do|does|did|will|would|can|could)(?:\s+not|n['’]t)\s+(?:need|have to|recommend|suggest|advise|expect|know|mean|matter|depend|apply|require you|replace|guarantee you)\b/i;   // advice to the reader, not a statement of our scope
+  const OURS_PAGE = /\b(?:[Ww]e|[Ww]e['’](?:re|ve|ll|d)|[Oo]ur|[Oo]urs|us)\b/;
+  const escR = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const STOPW = new Set('the a an and or of for to in on with by at from as is are was were be been it its this that these those you your they them their there here can could will would should may might must do does did not no never only also just than then so such some any all each other more most very into over under about through which who whom what when where why how our we us ours has have had'.split(' '));
+  const stem = (w) => { let x = String(w).toLowerCase().replace(/licens/g, 'licenc'); if (x.length > 5) x = x.replace(/(?:ations?|ings?|ies|ed|es|s)$/, ''); else if (x.length > 3) x = x.replace(/s$/, ''); return x; };
+  const words = (s, drop) => norm(s).split(' ').filter(w => w.length > 2 && !STOPW.has(w) && !(drop || []).includes(w)).map(stem);
+  function business(text, corpus, opts = {}) {
+    const t = String(text || ''); const out = { flags: [], checked: 0 };
+    if (!t.trim()) return out;
+    const names = (opts.names || []).map(n => String(n || '').trim()).filter(n => n.length >= 3);
+    const nameWords = [...new Set(names.flatMap(n => norm(n).split(' ')).filter(Boolean))];
+    const SUBJ = '(?:\\b[Ww]e|\\b[Oo]ur (?:team|consultants|engineers|people|firm|company|prices|fees|quotes|contracts|recommendations)' + names.map(n => '|' + (/^\w/.test(n) ? '\\b' : '') + escR(n)).join('') + ')';
+    const SCOPE = new RegExp(SUBJ + '\\s+(?:(?:do|does|did|will|would|can|could)(?:\\s+not|n[\'’]t)\\b|(?:never|only)\\b)|(?:\\b[Ww]e[\'’]re|\\b[Ww]e are' + names.map(n => '|' + escR(n) + ' is').join('') + ')\\s+not\\s+an?\\b');
+    const SUBJ_RE = new RegExp(SUBJ);
+    const NEG_ANY = /\b(?:do|does|did|will|would|can|could)(?:\s+not|n['’]t)\b|\b(?:never|only)\b|\bnot an?\b/i;
+    const cs = String(corpus || '').split(/(?<=[.!?])\s+|\n+/).map(s => ({ n: norm(s), w: new Set(words(s, nameWords)), neg: NEG_ANY.test(s) })).filter(x => x.n.length > 3);
+    const lines = t.split('\n'); let prevLine = '';
+    for (const line of lines) {
+      const L = line.trim();
+      if (!L || /^#{1,6}\s/.test(L) || /^\|/.test(L) || /^(?:Title|Meta Description|Slug|Primary Keyword|Secondary Keywords):/i.test(L)) { if (L) prevLine = L.replace(/^#+\s*/, ''); continue; }
+      const sents = L.replace(/\*\*/g, '').split(/(?<=[.!?])\s+(?=[A-Z"“(])/);
+      for (let i = 0; i < sents.length; i++) {
+        const s = sents[i].trim().replace(/^[-*]\s+/, '');
+        if (s.length < 6 || /\?\s*$/.test(s) || /[\[\]]/.test(s.replace(/\[[^\[\]]*\]\([^)]*\)/g, ''))) continue;
+        const plain = s.replace(/\[([^\[\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`]+/g, '');
+        if (!(OURS_PAGE.test(plain) || SUBJ_RE.test(plain))) continue;
+        let kind = null, trig = null, m;
+        if ((m = plain.match(SCOPE)) && !BIZ_ADVICE.test(plain) && !/\b(?:what|whether|if)\s+$/i.test(plain.slice(0, m.index))) { kind = 'scope'; trig = m[0]; }
+        else if (SUBJ_RE.test(plain) && (m = plain.match(BIZ_TERMS))) { kind = 'terms'; trig = m[0]; }
+        else if (SUBJ_RE.test(plain) && (m = plain.match(BIZ_CRED))) { kind = 'credential'; trig = m[0]; }
+        if (!kind) continue;
+        out.checked++;
+        // an elliptical sentence ("Some can, but Tech& does not.") is read with the sentence or heading before it
+        let W = words(plain, nameWords);
+        if (W.length < 2) W = [...new Set(W.concat(words(i > 0 ? sents[i - 1] : prevLine, nameWords)))];
+        const key = kind === 'credential' ? keyOf(trig) : stem((norm(trig).split(' ').filter(w => !STOPW.has(w) && !nameWords.includes(w))[0]) || norm(trig));
+        const supported = cs.some(c => {
+          if (kind === 'scope' ? !c.neg : !(key && c.n.includes(key))) return false;
+          if (kind === 'credential' && /\d/.test(key)) return true;   // the same number on the site's own pages: "20+ Years"
+          const hit = W.filter(w => c.w.has(w)).length; return W.length ? hit / W.length >= 0.5 : false;
+        });
+        if (!supported) out.flags.push({ kind, trigger: trig, sentence: s.slice(0, 300) });
+      }
+      prevLine = L;
+    }
+    return out;
+  }
+  return { CLAIM_RE, keyOf, check, business };
 })();

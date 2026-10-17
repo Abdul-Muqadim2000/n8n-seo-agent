@@ -1181,7 +1181,7 @@ export interface NeedsYouItem {
   title: string;
   detail: string;
   /** one button: a page of the website, a tool (with prefill), a run, or a ladder */
-  action: { label: string; page?: string; mode?: import('./constants').ModeId; prefill?: Record<string, unknown>; runId?: string; ladderId?: string } | null;
+  action: { label: string; page?: string; mode?: import('./constants').ModeId; prefill?: Record<string, unknown>; runId?: string; ladderId?: string; /** G2: the page's report (to send it to the CMS) */ reportId?: string } | null;
   ladderId?: string;
   /** approve items: the page the "Write it" dialog starts (with its ladder fields) */
   writeNow?: QueueItem;

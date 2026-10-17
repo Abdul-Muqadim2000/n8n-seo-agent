@@ -76,6 +76,8 @@ export const integrations: string[] = [
   'Claude',
   'Google AI Mode',
   'WordPress',
+  'Webflow',
+  'Contentful',
   'Common Crawl',
 ];
 

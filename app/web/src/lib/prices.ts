@@ -1,9 +1,17 @@
-import { estimateRunCost as est, formatUsd, keyCost as kc, MONITOR_COSTS, type CostKey, type ModeId } from '@seo/shared';
+import { estimateRunCost as est, estimateRunMinutes, formatUsd, keyCost as kc, MONITOR_COSTS, type CostKey, type ModeId } from '@seo/shared';
 import { engineCal } from './engine-cal';
 
 // R100: every figure follows the engine's own calibration when the app could read it (lib/engine-cal.ts), the shipped table otherwise
 const keyCost = (k: CostKey) => kc(k, engineCal());
 const estimateRunCost = (m: ModeId, v: Record<string, unknown> = {}) => est(m, v, engineCal());
+
+/**
+ * D-2 (re-rating 2026-10-17): the price and the time of one run, for every screen that names a mode — the tools cards, the
+ * onboarding launch step, the queue — computed exactly as the tool form and the budget check compute them. `MODES[].costUsd` is the
+ * shipped table and `MODES[].etaMinutes` the bare base time; neither may be shown as a run's price or duration.
+ */
+export const runCost = (mode: ModeId, values: Record<string, unknown> = {}): number => estimateRunCost(mode, values);
+export const runMinutes = (mode: ModeId, values: Record<string, unknown> = {}): number => estimateRunMinutes(mode, values);
 
 /**
  * Prices shown inside sentences, all read from the shared cost table (`@seo/shared` cost.ts, which follows the engine's own
