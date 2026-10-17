@@ -2,6 +2,10 @@
 /*__ANCHOR__*/
 /*__SITE_MODEL__*/
 /*__COVERAGE__*/
+/*__PLACEHOLDERS__*/
+/*__CLAIMS__*/
+/*__EXCLUSIONS__*/
+/*__FIT_GATE__*/
 // Deterministic quality gate for the generated page. v5 adds: banned-phrase (AI cliché) detection, readability (Flesch),
 // term coverage against the competitor term model / brief, specificity, section-length checks, the editor's critique,
 // and a 0-100 CONTENT SCORE. Schema is generated here (page-type aware), never by the model.
@@ -43,6 +47,20 @@ if (md !== before1) fixes.push('Removed the word "placeholder" from text');
 //     checks now read the same map. It is built here because the mask runs first and rewrites `md` irreversibly.
 const srcText = new Map();
 const ownFacts = String(prev.business || '') + ' ' + String(prev.business_facts || '') + ' ' + String(prev.case_facts_text || '');   // the client's own numbers vouch for themselves
+// A-19 / A-15 (2026-10-17, re-rating 2026-10-17): what the business says about itself, from every place this run read it — the facts
+// and description it gave, the business profile (author, reviewer, NAP), the site model (business facts, accreditation, services) and
+// the text of its own pages this run fetched (homepage, the page on this topic, a related page). Live (exec 771) round 1 flagged "20+
+// years" as an unverified statistic although the homepage says "20+ Years" and `client_pages` carried it: the check read only
+// `business_facts` + `case_facts_text`, both empty. The same corpus decides whether a statement about the business's own terms is
+// on file (§9d) and which figures need no external source (§9, §9b).
+const OWN_TEXT = (() => {
+  const SMx = SITE_MODEL || (prev.site_model && typeof prev.site_model === 'object' ? prev.site_model : null) || {};
+  const vals = (o) => (o && typeof o === 'object') ? Object.values(o).map(v => (v && typeof v === 'object') ? vals(v) : String(v == null ? '' : v)).join(' ') : String(o || '');
+  return [prev.business, prev.business_facts, prev.case_facts_text, SMx.business_facts, SMx.accreditation, vals(SMx.services), vals(SMx.nap),
+    vals(prev.site_profile), vals(prev.author), vals(prev.reviewer), ...(prev.client_pages || []).map(p => p && p.text), prev.existing_page_text,
+    prev.existing_page_facts_text, vals(prev.client_signals)].filter(Boolean).map(String).join('\n');
+})();
+const ownLower = OWN_TEXT.toLowerCase().replace(/\s+/g, ' ');
 const addSrc = (u, t) => { const k = SRC.key(u); if (!k || !String(t || '').trim()) return; srcText.set(k, ((srcText.get(k) || '') + ' ' + String(t)).slice(0, 12000)); };
 (prev.facts || []).forEach(f => addSrc(f && f.url, [f && f.text, f && f.claim, f && f.title].filter(Boolean).join(' ')));
 (brief.evidence_plan || []).forEach(e => addSrc(e && e.source_url, e && e.fact));
@@ -154,6 +172,55 @@ if (ladderSlug && slugWritten && slugWritten.replace(/^\/|\/$/g, '') !== ladderS
   }
 }
 
+// 4b. A-17 (2026-10-17, re-rating 2026-10-17): the blocks an editing round may never take out. Live (exec 771) round 1 had a 63-word
+//     Quick answer right under the introduction; the single editor call — told to CUT 946 words and to cut "restatements of the quick
+//     answer" — removed the block itself, and round 2 refused the page for "Quick answer block missing". Every round after the first is
+//     compared with the draft the editor was given (*Needs Revision?* holds it): a Quick answer that was there and is gone is put back
+//     where it stood (after the introduction), and a source link whose anchor words the editor kept word for word but unlinked is linked
+//     again (only a source of the evidence plan or the run's facts, or an official host, and never one the link check found dead). The
+//     author box is not in the draft at all (the blog package adds it after this gate), so no edit can remove it.
+const protected_restored = [];
+if (round > 1) {
+  let PRV = null; try { PRV = $('Needs Revision?').first().json || null; } catch (e) { PRV = null; }
+  const prevMd = PRV && typeof PRV.output === 'string' ? PRV.output : '';
+  const QA_LINE = /^\**\s*Quick answer:?\**\s*(.+)$/im;
+  const prevQA = prevMd ? prevMd.match(QA_LINE) : null;
+  if (prevQA && !QA_LINE.test(md)) {
+    const lines = md.split('\n'); const h1i = lines.findIndex(l => /^# /.test(l));
+    if (h1i >= 0) {
+      let i = h1i + 1; while (i < lines.length && (!lines[i].trim() || /^!\[/.test(lines[i].trim()))) i++;   // blank lines and the hero image
+      let j = i; while (j < lines.length && lines[j].trim() && !/^#/.test(lines[j])) j++;   // the introduction paragraph
+      const at = (i < lines.length && !/^#/.test(lines[i])) ? j : h1i + 1;
+      lines.splice(at, 0, '', prevQA[0].trim(), '');
+      md = lines.join('\n').replace(/\n{3,}/g, '\n\n');
+      const qw = countWords(plain(prevQA[1]));
+      protected_restored.push({ block: 'quick_answer', words: qw });
+      fixes.push('Restored the Quick answer block (' + qw + ' words) the editor removed: it is a protected block, and no editing round may take it out');
+    }
+  }
+  if (prevMd) {
+    const evid = new Set(((brief.evidence_plan || []).map(e => SRC.key(e && e.source_url))).concat((prev.facts || []).map(f => SRC.key(f && f.url))).filter(Boolean));
+    const deadPrev = new Set((((PRV.content_qa || {}).link_check || {}).dead || []).map(x => SRC.key(x && x.url)).filter(Boolean));
+    const OFFICIAL = /(^|\.)(gov|edu|int|mil)(\.|$)|\.gov\.[a-z]{2}$|(^|\.)(u\.ae|europa\.eu|who\.int|oecd\.org|worldbank\.org|imf\.org)$/i;
+    const relinked = [];
+    for (const m of prevMd.matchAll(/\[([^\[\]]{3,120})\]\((https?:\/\/[^)\s]+)\)/g)) {
+      const anchor = m[1], url = m[2]; const k = SRC.key(url); const host = SRC.host(url);
+      if (!k || deadPrev.has(k) || (domain && (host === domain || host.endsWith('.' + domain)))) continue;
+      if (!(evid.has(k) || OFFICIAL.test(host))) continue;
+      if (md.includes('](' + url + ')')) continue;
+      // the first place the anchor words stand in the body, outside a heading and outside any other link
+      const re = new RegExp('(^|[^\\[\\w])(' + escRe(anchor) + ')(?![\\w\\]])', 'g'); let hit = null, mm;
+      while ((mm = re.exec(md))) { const at = mm.index + mm[1].length; const lineStart = md.lastIndexOf('\n', at) + 1;
+        if (/^(#|Title:|Meta Description:|Slug:)/.test(md.slice(lineStart, lineStart + 18))) continue;
+        const before = md.slice(Math.max(0, at - 200), at); if (/\[[^\]]*$/.test(before)) continue; hit = at; break; }
+      if (hit == null) continue;
+      md = md.slice(0, hit) + '[' + anchor + '](' + url + ')' + md.slice(hit + anchor.length); relinked.push(url);
+    }
+    if (relinked.length) { protected_restored.push({ block: 'source_links', urls: relinked });
+      fixes.push('Re-linked ' + relinked.length + ' source citation(s) the editor unlinked while keeping their words: ' + relinked.slice(0, 4).join(', ')); }
+  }
+}
+
 // 5. Internal links: only real pages on the user's site; external links kept (they are citations)
 // 2026-10-11 (FIX_PLAN D9): a page the ladder has only planned is not a link target — the live hub linked twice each to three pages that
 // did not exist (exec 365). (FIX_PLAN G4): every link loses its tracking parameters (utm_*, srsltid, gclid, fbclid), and a weak source
@@ -188,7 +255,10 @@ if (weakRepeats.length) fixes.push(`Unlinked ${weakRepeats.length} repeat citati
 const allowedSources = new Set(((brief.evidence_plan || []).map(e => String(e.source_url || '').toLowerCase())).concat((prev.facts || []).map(f => String(f.url || '').toLowerCase())));
 const TRUSTED = /(^|\.)(gov|edu|int|mil)(\.|$)|\.gov\.[a-z]{2}$|(^|\.)(microsoft|odoo|sap|oracle|netsuite|google|zoho|sage|xero|quickbooks|intuit|salesforce|hubspot|shopify|stripe|who|oecd|worldbank|imf|un|europa)\.(com|org|eu|int)$/i;
 const unknownSources = externalUrls.filter(e => !TRUSTED.test(e.host) && allowedSources.size && ![...allowedSources].some(s => s && (e.url.toLowerCase().startsWith(s) || s.startsWith(e.url.toLowerCase()))));
-if (unknownSources.length > 2) warnings.push('External links to sources not in the evidence plan: ' + unknownSources.slice(0, 3).map(e => e.host).join(', ') + ' — verify each one');
+// A-14 (2026-10-17): named by URL, not by host, and said for what it is — whether each one ANSWERS is measured by *Outbound Link Check*
+// right after this node (in a content run), which names every dead one; this warning is about what the run never read
+if (unknownSources.length > 2) warnings.push('External links to sources not in the evidence plan: ' + unknownSources.slice(0, 3).map(e => e.url).join(', ') + (unknownSources.length > 3 ? ' and ' + (unknownSources.length - 3) + ' more' : '')
+  + ' — this run never read those pages, so what each sentence cites them for is unchecked: cite the evidence plan\'s source instead, or keep only a page that states the claim');
 const trusted_sources = externalUrls.filter(e => TRUSTED.test(e.host)).map(e => e.host);
 
 // 6. FAQs
@@ -247,7 +317,13 @@ for (const s of noBrackets.split(/(?<=[.!?])\s+/)) {
   for (const m of s.matchAll(/\b\d[\d,.]*\+\s+(years?|clients?|customers?|projects?|users?|students?|universities|schools|companies|installations?|reviews?|countries|awards?)\b/gi)) statHits.add(m[0].trim());
 }
 const clientNums = (String(prev.business_facts || '') + ' ' + String(prev.case_facts_text || '')).toLowerCase();   // numbers the client gave (facts, case studies) need no external source
-const stats = [...statHits].filter(s => !/^(19|20)\d\d/.test(s)).filter(s => !clientNums.includes(s.toLowerCase().replace(/^(over|more than|up to|nearly|around|approximately|about)\s+/, ''))).slice(0, 8);
+// A-19: a figure the business itself states — on its own pages, in its profile or its facts (OWN_TEXT, §2b) — needs no external source
+const ownStat = (s) => { const x = s.toLowerCase().replace(/^(over|more than|up to|nearly|around|approximately|about)\s+/, '').replace(/\s+/g, ' ').trim();
+  if (clientNums.includes(x)) return true;
+  const re = new RegExp('(^|[^0-9.,])' + escRe(x).replace(/\\\+\s*/, '\\+\\s*').replace(/ /g, '\\s*') + '(?![0-9])', 'i');   // "20+ Years" = "20+ years" = "20 + years"; "5 years" is not in "25 years"
+  return re.test(ownLower); };
+const stats_own = [...statHits].filter(s => !/^(19|20)\d\d/.test(s) && ownStat(s));
+const stats = [...statHits].filter(s => !/^(19|20)\d\d/.test(s)).filter(s => !ownStat(s)).slice(0, 8);
 
 // 9b. Claim check (FIX_PLAN G4, 2026-10-11): a figure in a sentence that cites a source must be IN that source. The only source text we have
 //     is the text the writer was shown — the fact snippets from the live search, the brief's evidence plan and the competitor pages we read —
@@ -276,7 +352,7 @@ const citedFigureCheck = (text, limit) => {
     for (const f of SRC.figures(body)) {
       checked++;
       if (texts.some(t => SRC.hasFigure(f, t))) continue;
-      if (SRC.hasFigure(f, ownFacts) || clientNums.includes(String(f.raw).toLowerCase())) continue;
+      if (SRC.hasFigure(f, ownFacts) || clientNums.includes(String(f.raw).toLowerCase()) || SRC.hasFigure(f, OWN_TEXT)) continue;   // A-19: the business's own pages vouch for its own figures
       found.push({ figure: f.raw, sources: [...new Set(urls.map(u => SRC.host(u)))], reason: texts.some(t => SRC.cutShort(t)) ? 'not_in_excerpt' : 'absent',
         start: a + f.index, end: a + f.index + f.length, raw: f.raw, context: plain(sent).slice(0, 160),
         refreshed: urls.some(u => freshRead.has(SRC.key(u))) });
@@ -315,6 +391,23 @@ if (RS && RS.refresh) {
       : !srcs.length ? 'the live page cites no external source next to a figure, so there was nothing to re-check'
         : 'the live page\'s ' + srcs.length + ' cited source(s) next to a figure were re-read today (' + okS.length + ' read' + (failS.length ? ', ' + failS.length + ' could not be read and were not checked' : '') + '); every figure of a sentence citing one was looked up in that source\'s text as it reads now, by the same rule as the draft'
   };
+}
+// 9d. A-15 (2026-10-17, re-rating 2026-10-17): what the page says about the business's OWN terms, scope and credentials must be on file.
+//     Live (exec 771, no business facts, no profile) the page promised "We charge for advice and delivery. Licences sit on a separate line
+//     of the quote …", "Some can, but Tech& does not" and "Tech& does not handle company formation" — on none of the site's pages — and
+//     the quality check named none of them. CL.business holds every such sentence against OWN_TEXT (§2b); one nothing on file supports is
+//     marked [Confirm: …] in the copy and listed, and the editor must take it out or the owner must confirm it.
+const bizNames = [...new Set([(prev.site_profile || {}).business_name, SITE_MODEL ? SM.name(SITE_MODEL) : '', ...((SITE_MODEL && Array.isArray(SITE_MODEL.brand_names)) ? SITE_MODEL.brand_names : []),
+  (prev.site_description || {}).business_name, domain ? String(domain).split('.')[0] : ''].map(x => String(x || '').trim()).filter(x => x.length >= 3))];
+const business_claims = [];
+{
+  const BC = CL.business(md, OWN_TEXT, { names: bizNames });
+  for (const f of BC.flags.slice(0, 8)) {
+    const at = md.indexOf(f.sentence); const marked = at >= 0 && business_claims.filter(x => x.marked).length < 6;
+    if (marked) md = md.slice(0, at) + '[Confirm: ' + f.sentence + ']' + md.slice(at + f.sentence.length);
+    business_claims.push({ kind: f.kind, trigger: f.trigger, sentence: f.sentence, marked });
+  }
+  if (business_claims.some(x => x.marked)) fixes.push('Marked ' + business_claims.filter(x => x.marked).length + ' statement(s) about the business that nothing on file supports as [Confirm: …] for the owner');
 }
 
 // 10. Banned phrases (AI clichés and filler)
@@ -390,8 +483,17 @@ const bestPct = benchCov && benchCov.pct != null ? benchCov.pct : (covPlan && co
 const coverage_target_pct = CVG.target(bestPct);
 const coverage_pct = Math.round(coverage * 100);
 const coverage_ratio = coverage_target_pct ? Math.min(1, coverage / (coverage_target_pct / 100)) : coverage;
-const missingSubtopics = covPlan && Array.isArray(covPlan.subtopics) && covPlan.subtopics.length
-  ? CVG.subtopicGap(covPlan.subtopics, { headings: h2s.concat(md.match(/^###\s+.+$/gm) || []), text: bodyPlain }).filter(x => x.state === 'missing').map(x => x.subtopic)
+// A-16 (2026-10-17): a subtopic that names a company — the page to beat's own brand, another result's, a legal-entity name, a "why X
+// is the best" line — is that company talking about itself and is never required of our draft. Parse Analysis already leaves them out
+// (CVG.subtopics with the fit gate's labels); a plan stored before that, or built by another caller, is filtered here by the same rule.
+let subPool = []; try { subPool = ($('Analyze Competitor Pages').first().json || {}).competitors || []; } catch (e) { subPool = []; }
+if (!subPool.length) subPool = prev.competitors || [];
+const subBest = covPlan && covPlan.best ? (subPool.find(c => c && (c.url === covPlan.best.url || (covPlan.best.domain && c.domain === covPlan.best.domain))) || { domain: covPlan.best.domain, url: covPlan.best.url }) : null;
+const subOpts = { labels: fitLabels, brands: subPool.map(c => c && (c.domain || c.url)).filter(Boolean).concat((SITE_MODEL && Array.isArray(SITE_MODEL.competitors)) ? SITE_MODEL.competitors : []) };
+const subtopics_dropped = [];
+const subtopicsKept = (covPlan && Array.isArray(covPlan.subtopics) ? covPlan.subtopics : []).filter(s => { const why = CVG.namesBrand(s, subBest, subOpts); if (why) subtopics_dropped.push({ subtopic: s, reason: why }); return !why; });
+const missingSubtopics = subtopicsKept.length
+  ? CVG.subtopicGap(subtopicsKept, { headings: h2s.concat(md.match(/^###\s+.+$/gm) || []), text: bodyPlain }).filter(x => x.state === 'missing').map(x => x.subtopic)
   : [];
 const termsFound = termCoverage.filter(t => t.present).length;
 const benchUsed = benchCov ? benchCov.found : (covPlan && covPlan.best && covPlan.best.terms_used != null ? covPlan.best.terms_used : null);
@@ -403,7 +505,7 @@ const coverage_report = {
   best_competitor: covPlan && covPlan.best ? { domain: covPlan.best.domain || '', url: covPlan.best.url || '', rank: covPlan.best.rank ?? null, word_count: covPlan.best.word_count ?? null, sections: covPlan.best.sections ?? null } : null,
   average_competitor_pct: covPlan ? (covPlan.average_pct ?? null) : null,
   measured_on: benchCov ? 'this page\'s own term list, on both the draft and that competitor page' : (covPlan ? 'the draft on its term list; the competitor figure comes from the brief\'s shared-term list' : 'the draft only'),
-  missing_terms: missingTerms, subtopics_total: covPlan && covPlan.subtopics ? covPlan.subtopics.length : 0,
+  missing_terms: missingTerms, subtopics_total: subtopicsKept.length, subtopics_dropped,   // A-16: the headings left out because they name a company
   subtopics_missing: missingSubtopics, pages_compared: covPlan ? (covPlan.pages_compared ?? null) : null,
   basis: coverage_target_pct
     ? 'uses ' + termsFound + ' of the ' + termCoverage.length + ' terms the top pages share (' + coverage_pct + '%; a term counts once it appears), against a target of ' + coverage_target_pct + '% taken from '
@@ -479,7 +581,15 @@ if (AT) {
 // B-11 (F-B, 2026-10-17, exec 745): "should not be treated as an automatic guarantee" and "does not by itself guarantee compliance" DENY a
 // guarantee; only a sentence that makes one is a claim to verify
 const __guar = String(md || '').split(/(?<=[.!?])\s+|\n+/).filter(x => /guarantee/i.test(x) && !/\b(no|not|never|nor|neither|without|cannot|can't|won't|isn't|doesn't|don't)\b[^.!?]{0,60}guarantee/i.test(x));
-if (__guar.length && !prev.business) warnings.push('Contains a guarantee claim — please verify: "' + __guar[0].trim().slice(0, 120) + '"');
+if (__guar.length && !prev.business) warnings.push('Contains a guarantee claim — please verify: "' + __guar[0].trim().replace(/^\[Confirm:\s*/, '').replace(/\]$/, '').slice(0, 120) + '"');   // A-15: quoted without the [Confirm: …] §9d may have put round it
+if (business_claims.length) warnings.push('Statements about ' + (bizNames[0] || 'the business') + '\'s own terms, scope or credentials that nothing on file supports (business facts, profile, its own pages; now marked [Confirm: …]): '
+  + business_claims.slice(0, 4).map(b => '"' + b.sentence.slice(0, 160) + '"').join('; ') + ' — remove each one, or the owner confirms it in the business facts');
+// A-18 (2026-10-17): a section about a topic the verdict said to leave out. Live (exec 771) the verdict said "Skip the consultancy-licence
+// and start-an-IT-company questions, which don't match buyer intent" and the page carried "How Much Is a Consultancy Licence in Dubai?".
+const verdict_exclusions = Array.isArray(prev.verdict_exclusions) ? prev.verdict_exclusions : EXC.fromVerdict(prev.verdict_changes, []);
+const excluded_sections = EXC.check(md.match(/^#{2,3} .+$/gm) || [], verdict_exclusions, prev.keyword || '');
+if (excluded_sections.length) warnings.push('Sections about a topic the verdict said to leave out: ' + excluded_sections.slice(0, 4).map(x => '"' + x.heading + '" (the verdict: skip ' + x.topic + ')').join('; ')
+  + ' — remove each section; the page stays on what its buyers search for');
 if (stats.length) warnings.push('Unverified statistics that need a linked source or a [Statistic] marker: ' + stats.join('; '));
 const figAbsent = unverified_figures.filter(f => f.reason !== 'not_in_excerpt'), figExcerpt = unverified_figures.filter(f => f.reason === 'not_in_excerpt');
 if (figAbsent.length) warnings.push('Figures the cited source does not carry (now marked [Confirm: …]): ' + figAbsent.slice(0, 5).map(f => '"' + f.figure + '" (' + f.sources.join(', ') + ')').join('; ') + ' — quote the source\'s own number or cite the page that states it');
@@ -508,19 +618,21 @@ if (critique && Array.isArray(critique.problems)) critique.problems.filter(p => 
 //      bracket that starts with an UPPER-case letter, and the writer's own [Confirm: …] notes were counted (on the copy before §9b) but never
 //      named to anyone. Every bracket a person has to fill is counted now, whatever its case; the writer's review notes are listed by name;
 //      QA's own [Confirm: <figure>] marks are named once, by the figure warning, and never again here.
+// A-13 (2026-10-17, re-rating 2026-10-17): live (exec 771) the delivered body said "a fixed [Price band: typical Assess & Envision fee in
+//      AED]" while this node reported `placeholder_count 0`, `placeholders_in_body []`, `open_brackets []`: the pattern refused a colon,
+//      on the assumption that a colon bracket is one of our own review notes — but the writer invents its own labels. One detector now
+//      (v5/code/_placeholders.js, PH.scan; the app's article view and its delivery rule read the same two patterns from
+//      app/shared/src/placeholders.ts, asserted identical by the build): a review note is one of the closed list Confirm / Owner /
+//      Author insight / Image, and every other bracket that starts with a letter is a placeholder, whatever it holds.
 const PH_MAX = 5;
-const PH_RE = /\[[A-Za-z][A-Za-z0-9 &/'’.,()-]{1,48}\]/g;
-const phText = withoutMeta.replace(/\[([^\[\]]+)\]\([^)\s]*\)/g, '$1');   // [anchor](url) and the table of contents are links, not placeholders
-const phCounts = new Map();
-for (const t of (phText.match(PH_RE) || [])) phCounts.set(t, (phCounts.get(t) || 0) + 1);
-const placeholders = [...phCounts.entries()].map(x => ({ token: x[0], count: x[1] })).sort((a, b) => b.count - a.count);
-const placeholder_count = placeholders.reduce((s, x) => s + x.count, 0);
-const finalBody = md.replace(/^(Title|Meta Description|Slug|Primary Keyword|Secondary Keywords):.*$/gm, '');   // the copy AFTER §9b's marks
-const review_notes = (finalBody.match(/\[(?:Confirm|Owner|Author insight|Statistic)\b[^\]]*\]/gi) || []).length;
-const qaOwnMarks = new Set(unverified_figures.map(f => '[Confirm: ' + f.figure + ']').concat(flagged_amounts.map(a => '[Confirm: ' + a.amount + ']')));
-const wnCounts = new Map();
-for (const t of (finalBody.match(/\[(?:Confirm|Owner)\b[^\]]*\]/gi) || [])) if (!qaOwnMarks.has(t)) wnCounts.set(t, (wnCounts.get(t) || 0) + 1);
-const writer_notes = [...wnCounts.entries()].map(x => ({ token: x[0], count: x[1] }));
+const finalBody = md.replace(/^(Title|Meta Description|Slug|Primary Keyword|Secondary Keywords):.*$/gm, '');   // the copy AFTER §9b's and §9d's marks
+const phScan = PH.scan(finalBody);
+const placeholders = phScan.placeholders;
+const placeholder_count = phScan.placeholder_count;
+const review_notes = phScan.notes.filter(n => !/^\[Image\b/i.test(n.token)).reduce((k, n) => k + n.count, 0) + (finalBody.match(/\[Statistic\b[^\]]*\]/gi) || []).length;   // as before: Confirm / Owner / Author insight notes and [Statistic] (a placeholder too); the image plan is not a note
+const qaOwnMarks = new Set(unverified_figures.map(f => '[Confirm: ' + f.figure + ']').concat(flagged_amounts.map(a => '[Confirm: ' + a.amount + ']'))
+  .concat(business_claims.filter(b => b.marked).map(b => '[Confirm: ' + b.sentence + ']')));
+const writer_notes = phScan.notes.filter(n => /^\[(?:Confirm|Owner)\b/i.test(n.token) && !qaOwnMarks.has(n.token));
 const open_brackets = placeholders.map(p => ({ ...p, kind: 'placeholder' })).concat(writer_notes.map(n => ({ ...n, kind: 'review_note' })));
 if (placeholder_count > PH_MAX) warnings.push(`Too many placeholders to publish (${placeholder_count}, at most ${PH_MAX} allowed): ` + placeholders.slice(0, 6).map(p => p.token + (p.count > 1 ? ' x' + p.count : '')).join(', ')
   + ' — rewrite those passages so they do not need the missing figure (what drives the cost, what the stages are, what to ask the vendor), and keep a placeholder only where the owner must fill one value in');
@@ -673,6 +785,8 @@ const length_instruction = (target && mainWords > target * 1.1)
   ? 'CUT ' + over_words + ' words: the main content is ' + mainWords + ' words against a target of ' + target + ' (+' + over_pct + '%). '
     + (fat_sections.length ? 'The longest sections are ' + fat_sections.map(x => '"' + x.h2 + '" (' + x.words + ' words' + (x.target ? ' against ' + x.target : '') + ')').join(', ') + '. ' : '')
     + 'Cut repetition, restatements and secondary detail; keep every section, every verified fact, every source and every link. Do not add a single word, and do not stop above ' + Math.round(target * 1.1) + ' words.'
+    // A-17: the cut once took the Quick answer itself (exec 771) — the protected blocks are named in the instruction, not left to inference
+    + ' PROTECTED, never cut: the **Quick answer:** line right after the introduction (' + (answerWords || '40-70') + ' words), every source link and the call to action.'
     // R43: a correct cut must not fail the coverage check by taking a term off the page — the ones used only once or twice are named
     + (atRiskTerms.length ? ' Keep at least one use of each of these terms (each appears only once or twice, and the topic coverage counts them): ' + atRiskTerms.join(', ') + '.' : '')
   : '';
@@ -744,6 +858,9 @@ return [{ json: { ...prev, output: md, qa_round: round, editor_rounds, meta: { t
     total_words: totalWords, main_content_words: mainWords, faq_words: faqWords, target_word_count: target, sections, placeholders, placeholder_count, placeholder_max: PH_MAX, review_notes, writer_notes, open_brackets, business_name: bizName, nap_source,
     placeholder_note, length_instruction, over_words, over_pct, longest_sections: fat_sections,   // R25 / R22: the masked figures by name, and the cut the editor is asked to make
     masked_amounts, flagged_amounts, sourced_amounts,   // B3-1 / B3-2: what the money mask removed, what it left for review, and what a cited source vouched for
+    outbound_links: externalUrls.map(e => ({ url: e.url, anchor: e.anchor, host: e.host, tier: e.tier })),   // A-14: every outbound link, for Outbound Link Check
+    business_claims, business_names: bizNames, unverified_statistics_own: stats_own,   // A-15 / A-19
+    verdict_exclusions, excluded_sections, protected_restored,   // A-18 / A-17
     passed_copy, profile_placeholders, profile_placeholder_fields: PROFILE_PH, placeholders_total: placeholder_count + profile_placeholders,
     keyword_mentions: kwCount, keyword_density_pct: density, h2_count: h2s.length, faq_count: validFaqs.length, question_headings: questionHeadings, answered_questions: answeredQuestions, internal_links: internalLinks, external_links: externalLinks, sources_cited: externalUrls.slice(0, 15),
     source_quality: externalUrls.reduce((m, e) => ({ ...m, [e.tier]: (m[e.tier] || 0) + 1 }), {}), weak_sources_unlinked: [...new Set(weakRepeats)], links_to_add_when_published: plannedLinksQA.map(p => ({ keyword: p.keyword || '', url: p.url, role: p.role, anchor: anchorText(p) })),

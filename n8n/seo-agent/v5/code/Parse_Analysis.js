@@ -1,5 +1,6 @@
 /*__PAGE_TYPE__*/
 /*__COVERAGE__*/
+/*__FIT_GATE__*/
 // Accepts an object (from the Structured Output Parser) or a string with/without code fences or surrounding text
 const parseAgentJson = (raw) => {
   if (raw && typeof raw === 'object') return raw;
@@ -45,7 +46,8 @@ const coverage_target = bestCov && bestCov.coverage_pct != null ? {
   average_pct: bestCov.average_pct,
   pages_compared: bestCov.pages_compared,
   target_pct: CVG.target(bestCov.coverage_pct),
-  subtopics: CVG.subtopics((prev.competitors || []).find(c => c && c.url === bestCov.url) || null, 12),
+  // A-16: the page's own brand and every other result's brand are left out of its subtopics (the fit gate's labels, CVG.namesBrand)
+  subtopics: CVG.subtopics((prev.competitors || []).find(c => c && c.url === bestCov.url) || null, 12, { labels: fitLabels, brands: (prev.competitors || []).map(c => c && (c.domain || c.url)).filter(Boolean) }),
   basis: 'the ' + bestCov.pages_compared + ' competitor page(s) read for this keyword: ' + (bestCov.domain || 'the best page')
     + (bestCov.rank ? ' (position ' + bestCov.rank + ')' : '') + ' uses ' + bestCov.terms_used + ' of the ' + bestCov.terms_total
     + ' terms they share (' + bestCov.coverage_pct + '%), against an average of ' + bestCov.average_pct + '% (a term counts once it appears)'

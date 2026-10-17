@@ -102,16 +102,58 @@ const CVG = (() => {
     }
     return null;
   };
-  const subtopics = (page, limit) => {
+  // A-16 (2026-10-17, re-rating 2026-10-17): a heading that NAMES A COMPANY is that company talking about itself, never a subtopic. Live
+  // (exec 771) the page to beat was agncompu.com and its own headings "IT Consultancy Company in Dubai - AGN IT Services LLC" and "Why AGN
+  // IT Services LLC Is Best IT Consultancy Company in Dubai" were required of our draft and became a refusal reason. A heading is the
+  // page's brand talking when it carries: the page's own domain label, or an acronym that label starts with ("AGN" of agncompu.com) —
+  // labels by the fit gate's own rule (fitLabels, passed in as opts.labels where the fit gate is inlined; the same rule otherwise); the
+  // brand segment of the page's own title ("… - AGN IT Services LLC"); any name in opts.brands (the other results' domains, the declared
+  // competitors); a legal-entity suffix (LLC, FZE, DMCC, Ltd …); or a "why X is the best" line.
+  const LEGAL = /\b(?:llc|l\.l\.c\.?|fze|fzco|fz-?llc|dmcc|ltd\.?|limited|inc\.?|gmbh|plc|pvt\.?|wll|w\.l\.l\.?|s\.a\.r\.l\.?|pte)(?=$|[^a-z])/i;
+  const SELF_PROMO = /\bwhy\b.{0,60}?\b(?:is|are)\s+(?:the\s+)?(?:best|leading|top|no\.?\s?1|number one|#1)\b|\bwhy (?:choose|hire|work with|pick)\b/i;
+  const GENERIC_BRAND = new Set('it ai erp crm the and for of in services service solutions solution systems system software consulting consultancy consultants company companies group technologies technology tech digital global international llc ltd inc fze dmcc limited uae dubai abu dhabi sharjah gcc middle east best top cloud data partner partners agency'.split(' '));
+  const hostLabel = (u) => { const h = S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/[\/?#].*$/, '').replace(/:\d+$/, '').replace(/^(?:www|m|app|en|ar)\./, ''); const first = h.split('.')[0] || ''; return first.replace(/[^a-z0-9]/g, ''); };
+  const labelsDefault = (dom) => { const l = hostLabel(dom); return l.length >= 4 && !GENERIC_BRAND.has(l) ? [l] : []; };
+  const brandMarks = (page, opts) => {
+    const o = opts || {}; const labelsOf = typeof o.labels === 'function' ? o.labels : labelsDefault;
+    const labels = new Set(); const words = new Set();
+    const addDom = (d) => { try { (labelsOf(d) || []).forEach(l => l && labels.add(String(l).toLowerCase())); } catch (e) { labelsDefault(d).forEach(l => labels.add(l)); } };
+    if (page && (page.domain || page.url)) addDom(page.domain || S(page.url));
+    for (const b of (Array.isArray(o.brands) ? o.brands : [])) { const x = S(b).trim(); if (!x) continue;
+      if (/\.[a-z]{2,}(?:$|\/)/i.test(x) && !/\s/.test(x)) addDom(x);
+      else x.toLowerCase().split(/[^a-z0-9&]+/).filter(w => w.length >= 3 && !GENERIC_BRAND.has(w)).forEach(w => words.add(w)); }
+    // the brand segment of the page's own title: the last part after a separator, when it is short and is not the topic itself
+    const segs = S(page && page.title).split(/\s+[|–—-]\s+/).map(x => x.trim()).filter(Boolean);
+    if (segs.length >= 2) { const last = segs[segs.length - 1]; if (last.split(/\s+/).length <= 5)
+      last.toLowerCase().split(/[^a-z0-9&]+/).filter(w => w.length >= 3 && !GENERIC_BRAND.has(w)).forEach(w => words.add(w)); }
+    return { labels: [...labels], words: [...words] };
+  };
+  const namesBrand = (heading, page, opts, marks) => {
+    const h = clean(heading); if (!h) return null;
+    if (LEGAL.test(h)) return 'names a company (legal-entity suffix)';
+    if (SELF_PROMO.test(h)) return 'a company promoting itself';
+    const M = marks || brandMarks(page, opts);
+    const raw = h.split(/[^A-Za-z0-9&]+/).filter(Boolean); const low = raw.map(w => w.toLowerCase());
+    for (const l of M.labels) {
+      if (low.includes(l)) return 'names ' + l;
+      const acr = raw.find(w => w.length >= 3 && w === w.toUpperCase() && /[A-Z]/.test(w) && !GENERIC_BRAND.has(w.toLowerCase()) && l.startsWith(w.toLowerCase()));
+      if (acr) return 'names ' + acr + ' (' + l + ')';
+    }
+    const w = low.find(x => M.words.includes(x)); if (w) return 'names ' + w;
+    return null;
+  };
+  const subtopics = (page, limit, opts) => {
     const out = []; const seen = new Set();
     const hs = (page && page.headings) || []; const list = page ? kindOf(page) === 'list' : false;
     const content = S(page && (page.content_full || page.content || page.text));
+    const marks = brandMarks(page, opts);
     for (let i = 0; i < hs.length; i++) {
       const h = hs[i];
       const text = clean(h); const key = text.toLowerCase();
       if (!text || text.length < 8 || text.length > 90 || JUNK.test(text) || seen.has(key)) continue;
       if (toks(text).length < 2) continue;
       if (PROMO.test(text)) continue;
+      if (namesBrand(text, page, opts, marks)) continue;   // A-16: the competitor's own name is never our subtopic
       if (list && (/^\d+[.)]\s/.test(text) || ENTRY_DETAIL.test(text))) continue;
       const parent = i + 1 < hs.length && levelOf(hs[i + 1]) > levelOf(h);
       const words = parent ? null : bodyUnder(content, text);
@@ -176,6 +218,6 @@ const CVG = (() => {
     return { ok: true, median, low, high, p25: quant(fl, 0.25), p75: quant(fl, 0.75), clamped: low !== Math.round(median - BAND_HARDER),
       pages_read: all.length, pages_measured: measured.length, pages: measured.sort((a, b) => (a.rank || 99) - (b.rank || 99)).slice(0, 10) };
   };
-  return { termRe, coverageOf, best, target, subtopics, subtopicGap, pct, toks, clean, kindOf, kindFor, MIN_TARGET, MAX_TARGET,
+  return { termRe, coverageOf, best, target, subtopics, subtopicGap, namesBrand, brandMarks, pct, toks, clean, kindOf, kindFor, MIN_TARGET, MAX_TARGET,
     plainOf, readability, readBand, READ_MIN_WORDS, READ_MIN_PAGES, BAND_HARDER, BAND_EASIER, BAND_FLOOR, BAND_CEIL };
 })();

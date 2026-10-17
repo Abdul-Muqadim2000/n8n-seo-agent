@@ -550,9 +550,9 @@ print('Pre-release Check workflow written:', len(_PN), 'nodes')
 _PCW = json.load(open(os.path.join(os.path.dirname(_out), 'SEO_Agent_v4.json'), encoding='utf-8'))[0]
 _PC_MAIN = {n['name']: n['parameters'].get('jsCode', '') for n in _PCW['nodes'] if n['type'] == 'n8n-nodes-base.code'}
 assert _PC_MAIN.get('Content QA') and _PC_MAIN.get('Originality Check'), 'B3-7: the main workflow has no Content QA / Originality Check to reuse'
-_pc_kit = lambda f: _rd5('code/' + f).replace('/*__COVERAGE__*/', _rd5('code/_coverage.js').rstrip('\n')).replace('/*__SITE_MODEL__*/', _rd5('code/_site_model.js').rstrip('\n'))
+_pc_kit = lambda f: _rd5('code/' + f).replace('/*__COVERAGE__*/', _rd5('code/_coverage.js').rstrip('\n')).replace('/*__SITE_MODEL__*/', _rd5('code/_site_model.js').rstrip('\n')).replace('/*__FIT_GATE__*/', _rd5('code/_fit_gate.js').rstrip('\n'))   # A-16: the fit gate's brand labels for the subtopics
 _PC_BRIEF = _pc_kit('PubCheck_Parse_Brief.js')
-assert not _PC_BRIEF.startswith('/*__') and _PC_BRIEF.count('const CVG = (() => {') == 1 and _PC_BRIEF.count('const SM = (() =>') == 1 and 'const CVG = (() => {' in _PC_BRIEF and 'const SM = (() =>' in _PC_BRIEF, 'B3-7: a kit placeholder is left in the publish check'
+assert '/*__FIT_GATE__*/' not in _PC_BRIEF and 'const fitLabels' in _PC_BRIEF and not _PC_BRIEF.startswith('/*__') and _PC_BRIEF.count('const CVG = (() => {') == 1 and _PC_BRIEF.count('const SM = (() =>') == 1 and 'const CVG = (() => {' in _PC_BRIEF and 'const SM = (() =>' in _PC_BRIEF, 'B3-7: a kit placeholder is left in the publish check'
 def _pcn(name, ntype, ver, params, pos_, **extra):
     n = {'parameters': params, 'id': str(uuid.uuid5(_NID_NS, 'pubcheck:' + name)), 'name': name, 'type': ntype, 'typeVersion': ver, 'position': pos_}; n.update(extra); return n
 _pc_hook = {"httpMethod": "POST", "path": "seo-publish-check", "authentication": "headerAuth", "responseMode": "responseNode", "options": {}}
