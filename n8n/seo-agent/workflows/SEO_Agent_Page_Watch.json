@@ -624,6 +624,14 @@
               {
                 "name": "recheck_note",
                 "type": "string"
+              },
+              {
+                "name": "evidence",
+                "type": "string"
+              },
+              {
+                "name": "sample_urls",
+                "type": "string"
               }
             ]
           },
@@ -1853,6 +1861,26 @@
               {
                 "id": "recheck_note",
                 "displayName": "recheck_note",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "evidence",
+                "displayName": "evidence",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "sample_urls",
+                "displayName": "sample_urls",
                 "required": false,
                 "defaultMatch": false,
                 "display": true,

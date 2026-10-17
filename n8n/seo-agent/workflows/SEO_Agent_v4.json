@@ -12963,6 +12963,14 @@
               {
                 "name": "recheck_note",
                 "type": "string"
+              },
+              {
+                "name": "evidence",
+                "type": "string"
+              },
+              {
+                "name": "sample_urls",
+                "type": "string"
               }
             ]
           },
@@ -13257,7 +13265,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// One seo_audit_findings row per scored finding (exact columns); the key ignores numbers so \"7 pages ...\" and \"5 pages ...\" are the same issue.\nconst d = $('Audit Diff').first().json; const a = d.site_audit || {};\nconst keyOf = (f) => String(f.category || '') + '|' + String(f.title || '').toLowerCase().replace(/\\d[\\d,.%]*/g, '#').replace(/[\"'“”‘’]/g, '').replace(/\\s+/g, ' ').trim();\nconst rows = (a.findings || []).filter(f => f.scoring !== false && f.severity !== 'Info').map(f => ({ site_id: d.site_id, domain: a.domain || d.domain, audit_id: d.audit_id, audited_at: d.audited_at, finding_key: keyOf(f), category: f.category || '', severity: f.severity || '', title: String(f.title || '').slice(0, 200), affected_count: Number(f.affected_count) || 0, checked: Number(f.checked) || 0, impact: Number(f.impact) || 0, impact_basis: String(f.impact_basis || '').slice(0, 400),\n  recheck_state: '', recheck_requested_at: '', recheck_at: '', recheck_rule: '', recheck_note: '' }));   // G11: filled when the owner marks it fixed and the daily watch answers\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];\n"
+          "jsCode": "// One seo_audit_findings row per scored finding (exact columns); the key ignores numbers so \"7 pages ...\" and \"5 pages ...\" are the same issue.\nconst d = $('Audit Diff').first().json; const a = d.site_audit || {};\nconst keyOf = (f) => String(f.category || '') + '|' + String(f.title || '').toLowerCase().replace(/\\d[\\d,.%]*/g, '#').replace(/[\"'“”‘’]/g, '').replace(/\\s+/g, ' ').trim();\nconst rows = (a.findings || []).filter(f => f.scoring !== false && f.severity !== 'Info').map(f => ({ site_id: d.site_id, domain: a.domain || d.domain, audit_id: d.audit_id, audited_at: d.audited_at, finding_key: keyOf(f), category: f.category || '', severity: f.severity || '', title: String(f.title || '').slice(0, 200), affected_count: Number(f.affected_count) || 0, checked: Number(f.checked) || 0, impact: Number(f.impact) || 0, impact_basis: String(f.impact_basis || '').slice(0, 400),\n  recheck_state: '', recheck_requested_at: '', recheck_at: '', recheck_rule: '', recheck_note: '',\n  evidence: String(f.evidence || '').slice(0, 500), sample_urls: JSON.stringify((Array.isArray(f.sample_urls) ? f.sample_urls : []).filter(u => typeof u === 'string' && /^https?:\\/\\//i.test(u)).slice(0, 5).map(u => u.slice(0, 300))) }));   // B5-11: the read API's evidence   // G11: filled when the owner marks it fixed and the daily watch answers\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];\n"
         },
         "id": "7041252d-340d-561d-81af-91524096cc10",
         "name": "Finding Rows",
@@ -13480,6 +13488,26 @@
               {
                 "id": "recheck_note",
                 "displayName": "recheck_note",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "evidence",
+                "displayName": "evidence",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "sample_urls",
+                "displayName": "sample_urls",
                 "required": false,
                 "defaultMatch": false,
                 "display": true,

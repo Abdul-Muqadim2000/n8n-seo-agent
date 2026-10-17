@@ -401,7 +401,9 @@
   "recheck_requested_at",
   "recheck_at",
   "recheck_rule",
-  "recheck_note"
+  "recheck_note",
+  "evidence",
+  "sample_urls"
  ],
  "CHECKIN": [
   "site_id",
