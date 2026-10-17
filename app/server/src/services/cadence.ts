@@ -224,7 +224,10 @@ export function planCadence(input: CadenceInput, now: number): CadencePlan {
   const publishedKw = new Set(logs.filter((l) => l.published_url).map((l) => norm(l.keyword)));
   const lrows = input.ladders.filter((l) => l && l.ladder_id && l.keyword).sort(byRung);
   const ladderKw = new Set(lrows.map((l) => norm(l.keyword)));
-  for (const l of lrows) if (l.status === 'writing' || l.status === 'published') recent.add(norm(l.keyword));
+  // A-20 (2026-10-17, F-A1; n8n v5/code/_waiting.js LADDER_WRITTEN): the engine moves a ladder row from `writing` to `written` / `not_ready`
+  // when the page run saves its content-log row, so all three mean "its page run has started or finished"
+  const ladderWritten = (st: unknown) => st === 'writing' || st === 'written' || st === 'not_ready';
+  for (const l of lrows) if (ladderWritten(l.status) || l.status === 'published') recent.add(norm(l.keyword));
   // R16 (2026-10-13, FIX_PLAN §3.11): only a row that still says `planned` is open. n8n now also writes `set_aside` on a stored rung the
   // keyword rule refuses (a competitor's brand, a government portal, an off-topic search) and names the reason in its weekly note, so
   // such a row drops out of this mirror as well — the app never promises a page the Monday run will not write (Cadence_Plan.js).
@@ -411,7 +414,7 @@ export function planCadence(input: CadenceInput, now: number): CadencePlan {
     waitingMap.set(k, { keyword: l.keyword, writtenAt: String(l.started_at || ''), needsFix: l.status === 'not_ready' });
   }
   for (const l of lrows) {
-    if (l.status !== 'writing') continue;
+    if (!ladderWritten(l.status)) continue;   // A-20
     const k = norm(l.keyword);
     if (!k || waitingMap.has(k) || publishedKw.has(k)) continue;
     // R1: no `written` log row = the page was never written (the engine's refusal path resets such a row to `planned`)

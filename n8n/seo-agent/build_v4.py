@@ -765,7 +765,7 @@ GSC_QUERIES_SRC = _rd0('code/_gsc_queries.js').rstrip('\n')   # 2026-10-12 (G9 /
 KW_INPUTS_SRC = _rd0('code/_kw_inputs.js').rstrip('\n')   # 2026-10-13 (G8): the discovery inputs -- Search Console seeds, calibrated traffic potential, SERP-overlap clusters, the live-check cap
 RADIUS_SRC = _rd0('code/_radius.js').rstrip('\n')   # 2026-10-13 (G32): the topic radius -- which topics are within reach, which are a stretch, on what evidence (needs the reach kit in the same node)
 import seo_events   # 2026-10-13 (G12 / G29): the dated event registry and the lineage / annotation / change-test kits, one copy each
-rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC).replace('/*__RADIUS__*/', RADIUS_SRC)   # shared kits (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
+rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC).replace('/*__RADIUS__*/', RADIUS_SRC).replace('/*__WAITING__*/', _rd0('code/_waiting.js').rstrip('\n'))   # shared kits (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
 def set_prompt(name, file): nodes[name]['parameters']['text'] = '=' + rd('prompts/' + file)
 def set_schema(parser_name, schema): nodes[parser_name]['parameters']['inputSchema'] = json.dumps(schema, ensure_ascii=False)
 def get_schema(parser_name): return json.loads(nodes[parser_name]['parameters']['inputSchema'])
@@ -1123,7 +1123,7 @@ add_node('Run Ladder Research', 'n8n-nodes-base.httpRequest', 4.5, DFS_HTTP(), [
 add_node('Ladder Pool', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Ladder_Pool.js')}, [X, LY]); X += 220
 add_node('Ladder Relevance Chunks', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Relevance_Chunks.js')}, [X, LY]); X += 220
 agent_bundle('Ladder Keyword Relevance', 'keyword_relevance.txt', 'Claude — Ladder Relevance', 'claude-sonnet-5-5', 'Claude Sonnet 5.5', 16384, 'low', 'Parser — Ladder Relevance',
-  {'type': 'object', 'properties': {'items': {'type': 'array', 'items': {'type': 'object', 'properties': {'keyword': {'type': 'string'}, 'relevance': {'type': 'number'}, 'intent': {'type': 'string'}, 'page_type': {'type': 'string'}, 'topic': {'type': 'string'}}, 'required': ['keyword', 'relevance']}}}, 'required': ['items']}, [X, LY]); X += 260
+  {'type': 'object', 'properties': {'items': {'type': 'array', 'items': {'type': 'object', 'properties': {'keyword': {'type': 'string'}, 'relevance': {'type': 'number'}, 'intent': {'type': 'string'}, 'page_type': {'type': 'string'}, 'topic': {'type': 'string'}, 'fit_reason': {'type': 'string'}}, 'required': ['keyword', 'relevance']}}}, 'required': ['items']}, [X, LY]); X += 260   # F-A1 / A-11: fit_reason when the pages Google ranks sell what the business does not
 add_node('Ladder Plan', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Ladder_Plan.js')}, [X, LY]); X += 220
 add_node('Build Ladder Report', 'n8n-nodes-base.code', 2, {'jsCode': LEDGER_L + rd('code/Build_Ladder_Report.js')}, [X, LY]); X += 220
 for a, b in [('Ladder Requests', 'Run Ladder Research'), ('Run Ladder Research', 'Ladder Pool'), ('Ladder Pool', 'Ladder Relevance Chunks'), ('Ladder Relevance Chunks', 'Ladder Keyword Relevance'), ('Ladder Keyword Relevance', 'Ladder Plan'), ('Ladder Plan', 'Build Ladder Report')]:
@@ -3988,7 +3988,9 @@ assert 'noFaqSchema' in code('Parse Verdict'), 'R7: Parse Verdict does not strip
 assert 'const rungWords = ' in code('Ladder Plan') and 'pg.target_words = rungWords.words' in code('Ladder Plan') \
     and 'RUNG_WORDS.fallback' in code('Ladder Plan'), 'R8 / R22: a rung page gets a word target, and never 0'
 # R1's consumers: a page counts as written only when the content log says so
-assert "l.status !== 'written'" in rd('code/Cadence_Plan.js') and 'writtenOf' in rd('code/Cadence_Plan.js'), 'R1: the cadence still counts unwritten pages'
+# F-A1 / A-12 (2026-10-17): the pile-up count moved into the shared kit v5/code/_waiting.js (Cadence Plan and Ladder Plan both call it)
+assert 'WAITING.waiting({ log: slog, ladders: lrows' in _rd0('code/Cadence_Plan.js') and 'if (!lg) continue;   // R1' in _rd0('code/_waiting.js') \
+    and "if (!WAITS.has(l.status) || !fresh(l.started_at)) continue;" in _rd0('code/_waiting.js'), 'R1: the cadence still counts unwritten pages'
 assert 'writtenLog' in rd('code/Tracker_Report.js') and 'writtenKw' in rd('code/Site_Plan.js') and 'p.written' in rd('code/Site_Metrics.js'), 'R1: a tracker still reports an unwritten page'
 _rr48 = pos('Release Ladder Row')
 sticky("""### What the re-rating run found (R1 … R9, 2026-10-13)
@@ -11177,6 +11179,55 @@ setcode('Parse Verdict', SITE_MODEL_SRC + '\n' + OWN_COVER_SRC + '\n' + _pv130)
 assert 'let verdict_changes' in code('Parse Verdict') and 'OWNV.secondary' in code('Parse Verdict'), 'A-5: Parse Verdict did not take the own-coverage check'
 log('What the site already holds, read before any keyword advice (2026-10-17, F-A3): v5/code/_own_cover.js (OWN) answers whether a page, a keyword ladder or an unpublished draft already holds a search - A-25: discovery marks "erp system dubai" / "erp systems in uae" as the ladder "erp software uae"\'s searches in other words (Covered) and keeps a close variant or the same topic for another place in the plan with the ladder named in "Where to start", "Build first" and the tier table; the ladder rows are read back through the fit gate. A-5 / A-6 / A-23: the keyword path loads the ladders, their settings and the content log right after Prepare Keyword Run (Load Ladders / Load Ladder Settings / Load Drafts (Run) -> Own Coverage (Run), gated), the Verdict Agent reads what the site already has on the topic, and Parse Verdict (v5/code/_verdict_own.js) says first when the search itself is a ladder\'s or a draft\'s, names the live pages on the topic before any "build a page", takes the secondary keywords another page / ladder / draft holds off the page and names them, answers a section a rung covers with that rung and its page, and moves an amount the page already states out of the request')
 # <<< 130 (F-A3)
+
+# 131. KEYWORD LADDER PLANNING (2026-10-17, defect-fix agent F-A1; re-rating 2026-10-17 part 1, execs 750 / 751 / 770 / 771: A-2, A-8, A-9,
+#      A-10, A-11, A-12, A-20, A-21). The plan is built by v5/code/Ladder_Plan.js and its inputs; what this section adds is the wiring and the
+#      assertions that the fixes are in the generated code:
+#      * A-9: KWI.serpClusters (v5/code/_kw_inputs.js) compares a keyword left alone with every MEMBER of a group, not only its head, so
+#        "own results page" is only printed when it is true by the pair rule; A-10: the main page's supporting keywords get their results
+#        page read within the same cap (Ladder Cluster Requests `supporting_check`) and are kept only when Google answers them with the main
+#        keyword's pages, else labelled "not compared"; A-8: one keyword, one page across rungs, the main page, the other ladders and the
+#        live pages; A-11: the rung keyword's results-page titles reach the relevance screen (fit_reason) and the kind of page Google ranks
+#        is printed beside a page type it contradicts; A-12: the website's own limits (v5/code/_waiting.js, shared with the Content Cadence)
+#        hold the pages a ladder run was asked to write now; A-21: the main page's run says it re-measured (v5/code/_remeasure.js).
+patch('Normalize Input', "   // R15: the URL the ladder planned for this page\n",
+      "   // R15: the URL the ladder planned for this page\n"
+      "    ladder_measure: (p2.ladder_measure && typeof p2.ladder_measure === 'object' && !Array.isArray(p2.ladder_measure)) ? { keyword: String(p2.ladder_measure.keyword || '').toLowerCase().trim().slice(0, 200),\n"
+      "      score: (p2.ladder_measure.score === null || p2.ladder_measure.score === '' || !Number.isFinite(Number(p2.ladder_measure.score))) ? null : Number(p2.ladder_measure.score),\n"
+      "      checked_at: String(p2.ladder_measure.checked_at || '').slice(0, 40), ai_overview: p2.ladder_measure.ai_overview === true,\n"
+      "      features: Array.isArray(p2.ladder_measure.features) ? p2.ladder_measure.features.slice(0, 12).map(x => String(x).slice(0, 40)) : [] } : null,   // A-21: what the ladder run measured for this keyword\n")
+_pv131 = code('Parse Verdict')
+_ret131 = "\nreturn [{\n  json: {\n    ...prev,\n    verdict: EV56.withheld"
+assert _pv131.count(_ret131) == 1, 'A-21: the Parse Verdict return moved'
+assert _pv131.count("    verdict_evidence: EV56.evidence,\n") == 1, 'A-21: verdict_evidence line moved'
+setcode('Parse Verdict', _pv131.replace(_ret131, "\n" + rd('code/_remeasure.js').rstrip('\n') + "\n" + _ret131)
+        .replace("    verdict_evidence: EV56.evidence,\n", "    verdict_evidence: EV56.evidence,\n    ladder_remeasure,   // A-21\n"))
+assert 'ladder_measure: measureOf(p)' in code('Spawn Page Runs') and 'ladder_remeasure' in code('Parse Verdict') and 'ladder_measure:' in code('Normalize Input'), 'A-21: the re-measure note is not wired'
+# A-9 / A-10 / A-11 / A-8 / A-12 in the generated nodes
+assert 'via: best.via' in code('Ladder Plan') or 'c.attach !== false' in code('Ladder Plan'), 'A-9: the ladder clusters compare only with the head'
+assert 'supporting_check: true' in code('Ladder Cluster Requests') and 'supportingEntries' in code('Ladder Clusters') and 'types_of' in code('Ladder Clusters'), 'A-10 / A-11: the supporting keywords or the page kinds are not read'
+assert 'const one_page = ' in code('Ladder Plan') and 'OWN.claim(kw, ownCtx(' in code('Ladder Plan') and 'const OWN = (() => {' in code('Ladder Plan'), 'A-8: one keyword, one page is not enforced (or not through the one own-coverage rule, OWN)'
+assert 'WAITING.waiting(' in code('Ladder Plan') and 'WAITING.focus(' in code('Ladder Plan') and 'const held = ' in code('Ladder Plan'), 'A-12: the ladder run does not apply the website limits'
+assert 'Google ranks: ' in code('Ladder Relevance Chunks') and 'fit_reason' in nodes['Ladder Keyword Relevance']['parameters']['text'], 'A-11: the relevance screen does not see what Google ranks'
+assert not any('/*__WAITING__*/' in n['parameters'].get('jsCode', '') for n in nodes.values()), 'waiting kit placeholder left'
+# A-20: the ladder row follows the content log the page run has just saved (written / not_ready), only from `writing`
+_sc131 = pos('Save Content Log (Run)')
+add_node('Ladder Row Written', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Ladder_Row_Written.js')}, [_sc131[0] + 220, _sc131[1]])
+if_node('Ladder Row To Follow?', "{{ !$json.skip }}", [_sc131[0] + 440, _sc131[1]])
+add_node('Mark Ladder Row Written', DT_TYPE, DT_VERSION, dt_update_params(LADDER_TABLE, LADDER_COLS,
+    [('ladder_id', '={{ $json.ladder_id }}'), ('keyword', '={{ $json.keyword }}'), ('status', '={{ $json.from_status }}')], {'status': '={{ $json.status }}', 'status_note': '={{ $json.status_note }}'}),
+    [_sc131[0] + 660, _sc131[1]], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+connect('Save Content Log (Run)', 'Ladder Row Written'); connect('Ladder Row Written', 'Ladder Row To Follow?'); connect('Ladder Row To Follow?', 'Mark Ladder Row Written', 0)
+_mlr131 = nodes['Mark Ladder Row Written']['parameters']
+assert [c['keyName'] for c in _mlr131['filters']['conditions']] == ['ladder_id', 'keyword', 'status'], 'A-20: the ladder row update must match ladder_id + keyword + status writing'
+_lw131p = os.path.join(HERE0, 'harness', 'ledger_wiring.json')
+_lw131 = json.load(open(_lw131p)) if os.path.exists(_lw131p) else {}
+_lw131['ladder_written'] = {'from': 'Save Content Log (Run)', 'code': 'Ladder Row Written', 'gate': 'Ladder Row To Follow?', 'update': 'Mark Ladder Row Written', 'table': LADDER_TABLE,
+                            'conditions': [c['keyName'] for c in _mlr131['filters']['conditions']], 'values': sorted(_mlr131['columns']['value'].keys())}
+json.dump(_lw131, open(_lw131p, 'w'), indent=1, sort_keys=True)
+log('Keyword ladder planning (2026-10-17, F-A1: A-2 A-8 A-9 A-10 A-11 A-12 A-20 A-21): one keyword one page across the plan, the other ladders and the live pages; '
+    'clusters compared pair by pair; the main page\'s supporting keywords read and kept only on a shared results page; the kind of page Google ranks and what it sells reach the plan; '
+    'the website\'s ladder and pile-up limits hold a ladder run\'s pages; ladder rows follow the content log; a re-measured keyword says so.')
 
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:

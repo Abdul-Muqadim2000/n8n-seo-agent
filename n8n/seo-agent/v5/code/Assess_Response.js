@@ -64,16 +64,21 @@ const existing = (() => {
   const model = pages.length ? SM.withPages(SM.from({ domain: a.domain || '' }, {}), pages) : null;
   const pm = model ? SM.matchPage(model, kw) : null;
   const pg = pm && !SM.isListing(pm.url) ? { url: String(pm.url), title: String(pm.title || ''), matched_by: pm.matched_by } : null;
-  // A-2: the ladder's own status (seo_ladder_settings: active / paused) beside the row's (planned / writing)
-  const lst = lad ? (rowsOf('Load Ladder Settings (Assess)').find(r => String(r.ladder_id || '') === String(lad.ladder_id || '')) || null) : null;
-  const ladStatus = lst && String(lst.status || '').trim() ? String(lst.status).trim().toLowerCase() : (lad ? String(lad.status || '') : null);
+  // A-2 (exec 751): the ladder's OWN status is its seo_ladder_settings row's (active / paused / ...), never the rung row's (planned /
+  // writing, which is `row_status`). A ladder with no settings row is active (the Content Cadence's own default) - but only when the settings
+  // could be read at all; with nothing readable its status is unknown (null), never the rung row's word.
+  const sets = rowsOf('Load Ladder Settings (Assess)');
+  const lst = lad ? (sets.find(r => String(r.ladder_id || '') === String(lad.ladder_id || '')) || null) : null;
+  const LSTAT = ['active', 'queued', 'paused', 'won', 'stuck', 'archived'];
+  const ladStatus = !lad ? null : lst && LSTAT.includes(String(lst.status || '').trim().toLowerCase()) ? String(lst.status).trim().toLowerCase()
+    : (lst || sets.length) ? 'active' : null;
   if (!hit && !lad && !log && !pg) return null;
   if (!hit && !lad && !log) return { keyword: kw, how: 'a page of yours', ladder_id: null, ladder_status: null, rung: null, page_url: pg.url, page_title: pg.title || null, page_status: 'live',
     matched_by: pg.matched_by, pages_checked: pages.length,
     note: 'you already have a page for this search: ' + pg.url + (pg.title ? ' ("' + pg.title + '")' : '') + ' - improve that page rather than starting a ladder for a second one' };
   const page_url = String((log && (log.published_url || log.existing_page_url)) || (lad && lad.target_url) || (pg && pg.url) || '').trim();
   return { keyword: String(hit || (lad && lad.keyword) || ''), how: String(hit).toLowerCase().trim() === kw ? 'the same keyword' : 'the same search',
-    ladder_id: lad ? String(lad.ladder_id || '') : null, ladder_status: lad ? ladStatus : null, row_status: lad ? String(lad.status || '') : null, rung: lad ? Number(lad.rung) || null : null,
+    ladder_id: lad ? String(lad.ladder_id || '') : null, ladder_status: ladStatus, row_status: lad ? String(lad.status || '') : null, rung: lad ? Number(lad.rung) || null : null,
     page_url: page_url || null, page_status: log ? String(log.status || '') : null, live_page: pg ? pg.url : null, pages_checked: pages.length,
     note: 'already one of your keywords' + (lad ? ' (ladder ' + lad.ladder_id + (ladStatus ? ', ' + ladStatus : '') + ')' : ' (one of your keyword ladders)')
       + (page_url ? ' - its page: ' + page_url : '') + ': continue that ladder / improve that page rather than starting a second one for the same search' };

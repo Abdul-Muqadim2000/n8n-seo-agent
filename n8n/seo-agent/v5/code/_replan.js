@@ -71,7 +71,7 @@ const RP = (() => {
     const rungLive = rungPages.filter(p => p.live);
     if (mainLive && rungPages.length && rungLive.length < rungPages.length) options.push({ action: 'reorder', title: 'Change the order: finish the supporting pages first',
       detail: 'The main page is live but only ' + rungLive.length + ' of ' + rungPages.length + ' supporting pages are. Publish the rest before working on the main page again — the main page is held up by the pages that should be pointing at it, not by its own text.',
-      evidence: rungPages.filter(p => !p.live).slice(0, 4).map(p => '"' + p.keyword + '" (rung ' + (Number(p.rung) || 1) + ') is ' + (p.status === 'writing' ? 'written but not published' : 'not written yet')) });
+      evidence: rungPages.filter(p => !p.live).slice(0, 4).map(p => '"' + p.keyword + '" (rung ' + (Number(p.rung) || 1) + ') is ' + (p.status === 'not_ready' ? 'written but did not pass the quality check' : ['writing', 'written', 'not_ready'].includes(p.status) ? 'written but not published' : 'not written yet')) });
     else if (!mainLive && rungLive.length) options.push({ action: 'reorder', title: 'Change the order: the main page is the missing piece',
       detail: rungLive.length + ' supporting page(s) are live and nothing is pointing at a main page, because there is none yet. Write and publish the main page for "' + S(x.head_keyword || head.keyword) + '" and link every supporting page up to it.',
       evidence: ['the main page for "' + S(x.head_keyword || head.keyword) + '" is not live', rungLive.length + ' supporting page(s) are live'] });

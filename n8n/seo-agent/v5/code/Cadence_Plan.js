@@ -22,6 +22,7 @@
 // Sites without a pick but with something to say (paused, awaiting approval, suggestions, a main page waiting for support) get one report_only item (nothing_to_do: true) for the
 // Cadence Status note; dry_run only plans.
 /*__SITE_MODEL__*/
+/*__WAITING__*/
 // R16 (2026-10-13, FIX_PLAN §3.11): the fit gate also reads the rows that were STORED before it existed, so a competitor's brand or a
 // government portal planned as a rung is set aside here instead of being written (`set_aside`, with the reason; the Ladder Marks node
 // writes `status: set_aside` back on the row, so the app and the next run see the same thing).
@@ -82,7 +83,7 @@ for (const s of list) {
   const publishedKw = new Set(slog.filter(l => l.published_url).map(l => norm(l.keyword)));
   const lrows = ladders.filter(l => normD(l.domain) === s.domain).sort(byRung);
   const ladderKw = new Set(lrows.map(l => norm(l.keyword)));
-  for (const l of lrows) if (l.status === 'writing' || l.status === 'published') recent.add(norm(l.keyword));
+  for (const l of lrows) if (WAITING.LADDER_WRITTEN.has(l.status) || l.status === 'published') recent.add(norm(l.keyword));   // A-20: writing, written, not_ready
   // R16: every stored rung goes through the fit gate before it can be written. Context: the website's own domain, the competitors it
   // declared (seo_monitors / the site model) and, PROTECTED so that the ladder's own topic can never look like a brand, the ladder head
   // terms and the site's services. A rung whose page is already written or published is kept (fitStored) and only flagged.
@@ -213,24 +214,11 @@ for (const s of list) {
     return true; });
   // pile-up guard (v4.14, FIX_PLAN D5): every page written and not published counts, each keyword once — the content log rows that say
   // `written` (in the last 120 days) AND the ladder rows still 'writing' whose keyword has such a row and no published page.
-  const freshW = (t) => { const x = Date.parse(String(t || '')); return Number.isFinite(x) && (now - x) < CONFIG.waiting_days * 864e5; };
-  const waitingMap = new Map();   // keyword key -> { keyword, written_at, source }
-  // R1 (2026-10-13, re-rating): `written` in the content log is the only proof that a page exists. A `started` row is a run that opened the
-  // row and never finished, and a ladder row saying `writing` is a promise, not a page: live, a page run the budget guard refused left row 19
-  // "writing" with a `started` log row, and this guard counted it as one of 6 pages waiting and paused the site's writing for a week.
-  // R111 (2026-10-16): a draft whose LAST quality round failed (`not_ready`) still counts — it is written and not live — but it is
-  // labelled "needs a fix": it can only leave the queue by being fixed and run again, never by being published as it is.
-  const WAITS = new Set(['written', 'not_ready']);
-  const writtenOf = (k) => slog.filter(r => norm(r.keyword) === k && (WAITS.has(r.status) || r.status === 'published' || String(r.published_url || '').trim()))
-    .sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0] || null;
-  const fixOf = (l) => l && l.status === 'not_ready' ? { needs_fix: true, reasons: String(l.qa_reasons || '').split(/;\s+/).filter(Boolean).slice(0, 3) } : {};
-  for (const l of slog) { if ((l.status !== 'written' && l.status !== 'not_ready') || !freshW(l.started_at)) continue; const k = norm(l.keyword); if (!k || waitingMap.has(k)) continue; waitingMap.set(k, { keyword: l.keyword, written_at: String(l.started_at || ''), source: String(l.source || ''), ...fixOf(l) }); }
-  for (const l of lrows) { if (l.status !== 'writing') continue; const k = norm(l.keyword); if (!k || waitingMap.has(k) || publishedKw.has(k)) continue;
-    const lg = writtenOf(k); if (!lg) continue;   // R1: no `written` log row = the page was never written (the refusal path resets such a row to `planned`)
-    const at = String(lg.started_at || l.start_date || ''); if (!freshW(at)) continue;
-    waitingMap.set(k, { keyword: l.keyword, written_at: at, source: 'ladder', ...fixOf(lg) }); }
-  const waiting = [...waitingMap.values()].sort((a, b) => String(a.written_at).localeCompare(String(b.written_at)));
-  const waitingKw = new Set(waitingMap.keys());
+  // R1 / R111 / A-20: the rule itself lives in v5/code/_waiting.js (WAITING.waiting), so the ladder mode counts the same pages
+  const WAITS = WAITING.WAITS;   // R111: const WAITS = new Set(['written', 'not_ready']); - a failed draft still waits, labelled "needs a fix"
+  const W = WAITING.waiting({ log: slog, ladders: lrows, now: Number(now), days: CONFIG.waiting_days });
+  const waiting = W.list;
+  const waitingKw = W.keys;
   const pileup = waitingKw.size >= cfg.max_waiting;
   const paused_reason = pileup && !force ? 'pileup' : '';
   const picks = paused_reason ? [] : uniq.slice(0, pages);

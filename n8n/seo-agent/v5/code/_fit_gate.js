@@ -217,7 +217,7 @@ const fitBrandList = (ctx, protect) => { const out = []; const seen = new Set();
 // Returns { ok, live, flagged, reason, detail, note }: ok false = leave it out of what is written and reported; `note` is the sentence
 // a report or the repair script prints, so the reason always travels with the decision.
 const fitStoredLive = (row) => { const r = row || {}; const st = String(r.status || '').toLowerCase();
-  return st === 'writing' || st === 'published' || r.page_exists === true || r.page_exists === 'true' || !!String(r.published_url || '').trim(); };
+  return st === 'writing' || st === 'written' || st === 'not_ready' || st === 'published' || r.page_exists === true || r.page_exists === 'true' || !!String(r.published_url || '').trim(); };
 const fitStored = (row, ctx) => {
   const r = row || {}; const kw = String(r.keyword || '').trim();
   const live = fitStoredLive(r) || (ctx || {}).written === true;
