@@ -342,10 +342,14 @@ export async function siteRoutes(app: FastifyInstance) {
       case 'ai_prompts':
         body = { ...base, action: 'ai_prompts', add: a.add, remove: a.remove };
         break;
+      case 'content_groups':
+        body = { ...base, action: 'content_groups', content_groups: a.contentGroups };
+        break;
     }
     const r = await siteAdmin(body);
     if (!r.ok) throw new HttpError(502, r.error || 'The SEO engine could not apply the change.', 'admin_failed');
     if (r.affected === 0 && (a.action === 'pause' || a.action === 'resume')) throw new HttpError(409, 'The SEO engine does not track this website yet: start weekly tracking first.', 'not_tracked');
+    if (r.affected === 0 && a.action === 'content_groups') throw new HttpError(409, 'The SEO engine does not track this website yet: start weekly tracking first, then set its content groups.', 'not_tracked');
     if (r.affected === 0 && a.action === 'unpublish') throw notFound(`No page for "${a.keyword}" is recorded for ${site.domain}.`);
     if (r.affected === 0 && a.action === 'prospect') throw notFound(`${a.prospectDomain} is not in the link-prospect list.`);
     // mirror what the app shows about the site

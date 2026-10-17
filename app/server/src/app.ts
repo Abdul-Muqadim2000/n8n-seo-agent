@@ -9,6 +9,8 @@ import { readSession } from './auth/session';
 import { config } from './config';
 import { HttpError } from './lib/errors';
 import { linkBuilderRoutes } from './routes/linkBuilder';
+import { apiV1Routes } from './routes/apiV1';
+import { triesBearer } from '@seo/shared';
 import { adminRoutes } from './routes/admin';
 import { authRoutes } from './routes/auth';
 import { dataRoutes } from './routes/data';
@@ -63,6 +65,13 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   app.addHook('onRequest', async (req, reply) => {
     if (!req.url.startsWith('/api/')) return;
+    // B5-11: a request to the read API that presents a company API key is authenticated by that key alone - never by the cookie - so
+    // it needs no CSRF header (a cross-site form cannot set Authorization) and its session is not read at all
+    if (req.url.startsWith('/api/v1') && triesBearer(req.headers.authorization)) {
+      req.user = null;
+      req.sessionId = null;
+      return;
+    }
     // CSRF: state-changing requests must carry a header a cross-site form cannot set (n8n callbacks authenticate by URL token instead)
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !req.url.startsWith('/api/hooks/') && req.headers['x-requested-with'] !== 'fetch') {
       throw new HttpError(403, 'Missing X-Requested-With header', 'csrf');
@@ -110,6 +119,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(hookRoutes);
   await app.register(adminRoutes);
   await app.register(linkBuilderRoutes);
+  await app.register(apiV1Routes);
 
   // the built React app (production image): static files, and index.html for every client-side route
   const dist = config.webDist ? resolve(config.webDist) : '';

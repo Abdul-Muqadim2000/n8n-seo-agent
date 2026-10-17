@@ -258,6 +258,85 @@ A `keyword` run with a website and `receiveContent` is logged in n8n's `seo_cont
 90 days); when the keyword is a planned page of one of the website's ladders and no `ladder` is given, the server attaches that
 ladder page (`ladder` fields, ladder links, row marked `writing`), as "Write now" on the Pipeline page does.
 
+## Read API v1 — the customer's own data, for scripts, BI tools and agents (B5-11 / area 12 G-5, B3-7)
+
+**Why.** Until v4.18 a company's data could leave the product only as a dashboard, a PDF / Word / Markdown file or a delivered report.
+Screaming Frog 24 and Sitebulb 10 (2026) let a customer ask their own crawl questions and push issues into their tracker; SE Ranking
+ships an API + MCP. This is the same for every part of the product at once, built once in the app server — never per feature.
+
+**Design rules.**
+1. **Read-only.** Every endpoint is a `GET`, except `POST /api/v1/publish-check` (it writes nothing anywhere and costs nothing) and
+   the MCP endpoint (whose tools are the same reads). A key can never start a run, spend money, change a setting or list members.
+2. **One company per credential, never another.** A key belongs to exactly one company. Every query carries `org_id = <the key's
+   company>`; a website, run, report, audit or file of another company answers **404 — the same answer as one that does not exist**.
+   Audits and findings live in n8n's Data Tables keyed by *domain*, so they are read only for a website **this company verified**
+   (a verified domain belongs to one company, `sites_verified_domain_idx`); an unverified website answers 403 `website_unverified`.
+3. **Same data the app shows.** The handlers read where the dashboards read (the app's Postgres for websites / runs / reports /
+   files, n8n's `seo_audits` / `seo_audit_findings` filtered by the verified domain), with the dashboards' own rules: the comparison
+   audit is the previous one **of the same report type** (R66), a count measured on a sample that moved by more than 20% is "not
+   compared" (R19), and a finding that rested on one outside reading is "no longer seen", never "fixed" (R74).
+4. **Honest gaps.** A field the engine did not store for that row is `null`, never `0` or `""`: `checked` (stored since R19),
+   `evidence` / `sampleUrls` (stored since v4.18 — older audits answer `null`). Every report carries `ready` — the same
+   `deliveryDecision` the delivery and the share links use — so a script can tell a QA-failed draft or an unread verdict from
+   finished work. Costs carry their basis (`measured` / `engine_estimate` / `app_estimate`) and `partial` (search data only).
+5. **Versioned.** Everything is under `/api/v1`; a breaking change gets `/api/v2`, never an edit in place. New fields may appear.
+
+**Authentication.** `Authorization: Bearer asc_<43 characters>` — a **company API key**, created and revoked by an owner or admin in
+Company settings → API access. The key is shown **once**; only its SHA-256 is stored (`api_keys.token_hash`), with a display prefix
+(`asc_` + 8 characters), its name, scopes (`read`, `publish_check`), creator, optional expiry (30 / 90 / 365 days or none), last use
+(written at most once a minute) and revocation. At most 10 live keys per company. An unknown, revoked or expired key answers 401
+`api_key_invalid` (one message for all three). A request with a Bearer key is never cookie-authenticated, so it needs no
+`X-Requested-With` (a cross-site form cannot set `Authorization`). A signed-in **session** works for the same routes, with
+`X-Org-Id: <company id>` (membership checked; any role reads, `publish-check` needs member).
+
+**Limits.** 120 requests a minute per key (or per session), `POST /api/v1/publish-check` 30 per 10 minutes; over it: 429
+`rate_limited` with `retry-after`. Lists take `?limit=` (1–100, default 25) and `?cursor=`; they answer `{ items, nextCursor }`, with
+`nextCursor: null` on the last page. Cursors are opaque.
+
+| Method | Path | Returns |
+|---|---|---|
+| GET | /api/v1 | `{ company: { id, name }, auth: 'api_key' \| 'session', key: { id, name, prefix, scopes } \| null, limits, endpoints }` |
+| GET | /api/v1/websites | `Page<WebsiteV1>` — `{ id, domain, country, verified, verifiedAt, trackingStatus, createdAt }` |
+| GET | /api/v1/websites/:websiteId | `WebsiteV1` |
+| GET | /api/v1/websites/:websiteId/audits | `Page<AuditV1>` newest first — `{ id, auditedAt, reportType, healthScore, grade, pagesCrawled, findings, bySeverity, scheduled }` (verified websites) |
+| GET | /api/v1/websites/:websiteId/audits/:auditId?severity=high,critical&status=new | `{ audit, comparedWith, findings: FindingV1[] }` — `FindingV1`: `{ key, category, severity, title, affected, checked, evidence, sampleUrls, impact, impactBasis, status: new \| open \| fixed \| no_longer_seen, previousAffected, notCompared, recheck }`, in the audit's own fix-list order |
+| GET | /api/v1/runs?websiteId=&status=&mode= | `Page<RunV1>` — `{ id, websiteId, mode, title, status, error, createdAt, completedAt, reportCount, cost: { usd, basis, partial, estimated } }` |
+| GET | /api/v1/runs/:runId | `{ run: RunV1 & { input }, reports: ReportV1[] }` |
+| GET | /api/v1/reports?websiteId=&stage= | `Page<ReportV1>` — `{ id, runId, websiteId, stage, status, title, summary, receivedAt, scheduled, ready: { ok, code, reason }, files }` |
+| GET | /api/v1/reports/:reportId | `ReportV1 & { payload }` (the callback as stored — what the app's report page renders) |
+| GET | /api/v1/files/:fileId | the file, with the same headers and sandbox as the app's file route |
+| POST | /api/v1/publish-check | B3-7, below (scope `publish_check`) |
+| POST | /api/v1/mcp | MCP over Streamable HTTP (JSON answers, no streams; API key only): `initialize`, `tools/list`, `tools/call`, `ping` — tools `list_websites`, `list_audits`, `get_audit`, `list_runs`, `get_run`, `list_reports`, `get_report`, `publish_check`, each calling the handler of the REST route above |
+
+Key management (session only, Company settings → API access):
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | /api/orgs/:orgId/api-keys | (admin) | `{ items: ApiKeyView[], max }` — never a token or its hash |
+| POST | /api/orgs/:orgId/api-keys | `apiKeyCreateSchema` `{ name, scopes?, expiresInDays? }` (admin; 20 an hour) | `ApiKeyView` **plus `token`** — the only time it is returned |
+| DELETE | /api/orgs/:orgId/api-keys/:keyId | (admin) | `ApiKeyView` with `revokedAt` set (refused from the next request) |
+
+### "Is this page publishable?" (B3-7)
+`POST /api/v1/publish-check` (key with scope `publish_check`, or the session) and, for the app's own form (Content → "Check a page
+before you publish"), `POST /api/orgs/:orgId/sites/:siteId/publish-check` (member, verified site; the website's domain, country and
+business facts are filled in when the body leaves them out). The body (`publishCheckSchema`, `shared/src/api-v1.ts`) is n8n's
+Publish Check contract: `markdown` (required, ≥ 50 words, ≤ 200,000 characters; optional `Title:` / `Meta Description:` / `Slug:`
+lines above the H1), `keyword` (required, ≤ 120), and optional `domain`, `page_type`, `target_words` (200–10,000), `terms[]` (≤ 60,
+a string or `{ term, min_count }`), `competitors[]` (≤ 10 `{ url, content ≤ 30,000, rank?, title? }`), `sources[]` (≤ 20
+`{ url, text }`), `internal_links[]`, `business_facts`, `currency`, `country`, `ai_question`, `ai_fanout[]`. `domain` must be one of
+the **company's own verified websites** or left out — a check is never run in another company's name.
+The app forwards it to `POST {N8N_BASE_URL}/webhook/seo-publish-check` (`X-API-Key`, synchronous, 30 s) — the deterministic half of
+the content run's own gate (*Content QA* + *Originality Check*: no model call, no fetch, **no row written, $0**) — and answers n8n's
+200 unchanged: `{ ok, publishable, verdict, exit_code 0|1, label, summary, reasons[], content_score, score_bar, score_breakdown,
+warnings[], advice[], checks, fixed_markdown, auto_fixes[], schema_types[], not_checked[{ check, reason }], basis, writes: 'none',
+cost_usd: 0 }`. n8n's 400 is passed on as 400 `{ ok: false, verdict: 'error', exit_code: 2, error, errors[] }`; n8n down or the
+workflow off is 502 `engine_unavailable` ("nothing was checked"). `exit_code` is meant for a CI step: 0 publish, 1 do not, 2 the
+request was wrong.
+
+**Not built (on purpose):** a ticket hand-off (Jira / Linear) and a BI connector (a Looker Studio community connector) — both sit on
+top of this API and need the owner's choice of tracker / tool; new findings already leave the product through report delivery
+(`site_audit` stage, signed webhook).
+
 ## n8n → app
 `POST /api/hooks/n8n/:hookToken` — every callback of every run and every scheduled report of the company (the token is the
 company's `hook_token`; it is sent to n8n as `callback_url`). Body: the n8n callback (`stage`, `request_id`, …); embedded files are

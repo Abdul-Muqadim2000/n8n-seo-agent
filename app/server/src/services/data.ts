@@ -1398,5 +1398,16 @@ export async function settingsData(org: OrgRow, site: SiteRow): Promise<SiteSett
     cadence: cadence[0] ? { pagesPerWeek: n(cadence[0].pages_per_week), status: s(cadence[0].status) } : null,
     profile,
     readiness: readiness(profile),
+    contentGroups: contentGroupsOf(siteRow?.content_groups_json),
   };
+}
+
+/** B7-5: seo_sites.content_groups_json → the groups (anything unreadable is "none set", never an error on the settings page) */
+export function contentGroupsOf(raw: unknown): { name: string; pattern: string }[] {
+  try {
+    const v = typeof raw === 'string' && raw ? JSON.parse(raw) : [];
+    return Array.isArray(v) ? v.filter((g) => g && typeof g.name === 'string' && typeof g.pattern === 'string').map((g) => ({ name: g.name, pattern: g.pattern })).slice(0, 12) : [];
+  } catch {
+    return [];
+  }
 }

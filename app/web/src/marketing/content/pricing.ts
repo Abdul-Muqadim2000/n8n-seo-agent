@@ -221,6 +221,7 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Your house style, applied and checked', hint: 'How your name is written, British or American spelling, words to avoid and the tone', values: [true, true, true] },
       { label: 'Refreshes instead of duplicates', hint: 'A search one of your live pages already answers is queued as a refresh of that page', values: [true, true, true] },
       { label: 'Live publish check', hint: 'Verifies the page once it is live', values: [true, true, true] },
+      { label: 'Check any page before you publish', hint: 'Paste a page or send it from your build: the same quality verdict, every reason named, free', values: [true, true, true] },
     ],
   },
   {
@@ -275,6 +276,7 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Step-by-step guides for every setup task', hint: 'Your own values, instructions for the provider you use, and a copy you can e-mail to a colleague', values: [true, true, true] },
       { label: 'Cost estimate before every run', hint: 'The analysis engine’s own figure, corrected against what runs really cost, and replaced with the actual cost when the work finishes', values: [true, true, true] },
       { label: 'Spend caps per company', values: [true, true, true] },
+      { label: 'Read-only API and MCP access', hint: 'Websites, audits and findings, runs and reports, with revocable keys per company', values: [true, true, true] }, // PLACEHOLDER — confirm the plans
       { label: 'Multi-company workspaces', values: [false, false, true] }, // PLACEHOLDER — confirm
       { label: 'Onboarding with your team', values: [false, false, true] }, // PLACEHOLDER — confirm
     ],

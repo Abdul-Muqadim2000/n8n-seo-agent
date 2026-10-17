@@ -414,6 +414,27 @@ export function parseRunInput(body: unknown): { success: true; data: RunInput } 
 }
 
 // ---------- site admin (Site Admin workflow) ----------
+/** B7-5: the engine refuses nested repetition (it can hang a run) and an invalid expression (v5/code/Admin_Action.js) — so does the form */
+export const CONTENT_GROUPS_MAX = 12;
+export const contentGroupSchema = z.object({
+  name: z.string().trim().min(1, 'Name the group').max(60),
+  pattern: z
+    .string()
+    .trim()
+    .min(1, 'Enter a pattern, e.g. ^/blog/')
+    .max(200)
+    .refine((v) => !/(\+|\*|\})\)?[+*{]/.test(v), 'Nested repetition (like (a+)+) is refused: it can hang the weekly run')
+    .refine((v) => {
+      try {
+        new RegExp(v, 'i');
+        return true;
+      } catch {
+        return false;
+      }
+    }, 'Not a valid pattern'),
+});
+export type ContentGroup = z.output<typeof contentGroupSchema>;
+
 export const adminActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('pause') }),
   z.object({ action: z.literal('resume') }),
@@ -432,6 +453,11 @@ export const adminActionSchema = z.discriminatedUnion('action', [
     note: z.string().trim().max(500).optional(),
     /** v4.10: who to write to (found by the engine on the prospect's site, or typed by the person) */
     contactEmail: z.string().trim().toLowerCase().email('Enter an e-mail address').max(200).optional().or(z.literal('')),
+  }),
+  z.object({
+    action: z.literal('content_groups'),
+    /** B7-5: the website's page groups (blog, services, product), each a regular expression over the page path; [] clears them */
+    contentGroups: z.array(contentGroupSchema).max(CONTENT_GROUPS_MAX, `At most ${CONTENT_GROUPS_MAX} groups`),
   }),
   z.object({
     action: z.literal('ai_prompts'),

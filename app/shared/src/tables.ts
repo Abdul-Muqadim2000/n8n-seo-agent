@@ -36,6 +36,8 @@ export interface SiteRow extends DtRow {
   site_id: string; domain: string; gsc_property: string; ga4_property_id: string; country: string; location_code: number;
   language_code: string; email: string; callback_url: string; keywords: string; status: string; source: string; created_at: string;
   last_run_at: string; last_status: string; request_id: string;
+  /** B7-5 (W3-D): [{ name, pattern }] as JSON text, set through Site Admin `content_groups` */
+  content_groups_json?: string;
 }
 export interface SiteMetricsRow extends DtRow {
   site_id: string; domain: string; period_start: string; period_end: string; checked_at: string; gsc_connected: boolean;
@@ -222,6 +224,10 @@ export interface AuditFindingRow extends DtRow {
    * clicks and impressions of those pages x their place in the site) and the one line that explains it. Rows written before this
    * change have neither, so every reader falls back to the severity order. */
   impact?: number; impact_basis?: string;
+  /** R19: the pages the count was measured on (0 / missing on rows before it was stored) */
+  checked?: number;
+  /** B5-11 (v4.18): the engine's evidence line and up to 5 example addresses (a JSON array as text); rows written before have neither */
+  evidence?: string; sample_urls?: string;
 }
 
 /** v4.8 (PIPELINE_FEATURE_SPEC.md §9.1): one row per keyword ladder; the row with ladder_id '_site' holds the website's defaults

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ArrowRight, Footprints, GitFork, Layers, ListOrdered, TrendingDown, TrendingUp } from 'lucide-react';
+import { ArrowRight, CircleHelp, Footprints, GitFork, Layers, ListOrdered, Shuffle, TrendingDown, TrendingUp } from 'lucide-react';
 import { formatPosition, type ReportDetail } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
@@ -40,6 +40,14 @@ export function RankTrackerReport({ report }: { report: ReportDetail }) {
   const rungs = objs(p.rungs);
   const gains = objs(p.gains);
   const drops = objs(p.drops);
+  // B6-8 (W3-C): a five-place move is the page's OWN only when it beats the results page's churn; the engine lists those apart from the
+  // moves that went with the page around them and the ones it could not compare. Older reports have only gains / drops.
+  const split = p.move_summary != null && typeof p.move_summary === 'object';
+  const lines = (v: unknown) => arr(v).map((x) => str(x)).filter(Boolean);
+  const ownGains = lines(p.own_gains);
+  const ownDrops = lines(p.own_drops);
+  const withPage = lines(p.moved_with_page);
+  const notCompared = lines(p.not_compared_moves);
   const next = obj(p.next_step);
   const apiBody = obj(p.api_body);
   const run = Object.keys(apiBody).length ? prefillFromApiBody(apiBody) : null;
@@ -65,6 +73,17 @@ export function RankTrackerReport({ report }: { report: ReportDetail }) {
     { key: 'sov', header: 'Share of voice', align: 'right', sortValue: (r) => num(r.share_of_voice), cell: (r) => (r.share_of_voice == null ? <span className="text-xs text-ink-3">–</span> : <span className="tabular text-[13px] text-ink-2">{num(r.share_of_voice)}%</span>) },
     { key: 'features', header: 'The results page', cell: (r) => (labels(r).length ? <span className="text-[13px] text-ink-2">{labels(r).join(' · ')}</span> : <span className="text-xs text-ink-3">plain results</span>), hideOnMobile: true },
     { key: 'above', header: 'Above you', cell: (r) => { const a = objs(r.above); return a.length ? <span className="text-[13px] text-ink-2">{a.slice(0, 2).map((x) => `${str(x.domain)} (#${num(x.position)})`).join(', ')}{a.length > 2 ? ` +${a.length - 2}` : ''}</span> : <span className="text-xs text-ink-3">–</span>; }, hideOnMobile: true },
+    {
+      key: 'notes',
+      header: 'Notes',
+      cell: (r) => {
+        const c = obj(r.cannibal);
+        const o = obj(r.outranked);
+        const t = [c.found === true ? str(c.text) : '', o.available === true && arr(o.domains).length ? str(o.text) : ''].filter(Boolean);
+        return t.length ? <span className="block max-w-[28rem] text-[13px] leading-snug text-ink-2">{t.join(' ')}</span> : <span className="text-xs text-ink-3">–</span>;
+      },
+      hideOnMobile: true,
+    },
     { key: 'url', header: 'Ranking URL', cell: (r) => (str(r.url) ? <ExternalLink href={str(r.url)} className="text-[13px]">{shortUrl(str(r.url))}</ExternalLink> : <span className="text-xs text-ink-3">–</span>), hideOnMobile: true },
   ];
 
@@ -84,8 +103,8 @@ export function RankTrackerReport({ report }: { report: ReportDetail }) {
           <>
             <HeroStat label="Pages checked" value={<CountUp value={positions.length} />} />
             <HeroStat label="In the top 10" value={<CountUp value={top10} />} />
-            <HeroStat label="Gains" value={<CountUp value={gains.length} />} hint="moved up since last week" />
-            <HeroStat label="Drops" value={<CountUp value={drops.length} />} hint="moved down since last week" />
+            <HeroStat label="Gains" value={<CountUp value={split ? ownGains.length : gains.length} />} hint={split ? 'your pages’ own rises, beyond the page’s churn' : 'moved up since last week'} />
+            <HeroStat label="Drops" value={<CountUp value={split ? ownDrops.length : drops.length} />} hint={split ? 'your pages’ own falls, beyond the page’s churn' : 'moved down since last week'} />
           </>
         }
       />
@@ -180,7 +199,7 @@ export function RankTrackerReport({ report }: { report: ReportDetail }) {
             <SerpStat label="AI Overview shown" value={num(sf.ai_overview) ?? 0} of={num(serp.checked)} hint={num(sf.ai_overview_cites_us) ? `cites you for ${num(sf.ai_overview_cites_us)}` : num(sf.ai_overview_sources_unknown) ? 'whether it cites you was not loaded' : 'it did not cite you in these checks'} />
             <SerpStat label="Featured snippet" value={num(sf.featured_snippet) ?? 0} of={num(serp.checked)} hint={num(sf.snippet_ours) ? `${num(sf.snippet_ours)} held by you` : 'held by other sites'} />
             <SerpStat label="People Also Ask" value={num(sf.people_also_ask) ?? 0} of={num(serp.checked)} hint="questions worth answering on the page" />
-            <SerpStat label="Your share of voice" value={null} display={serp.share_of_voice == null ? '–' : `${num(serp.share_of_voice)}%`} hint="estimated from the clicks page 1 offers" />
+            <SerpStat label="Your share of voice" value={null} display={serp.share_of_voice == null ? '–' : `${num(serp.share_of_voice)}%`} hint={str(serp.share_of_voice_note) || 'estimated from the clicks page 1 offers'} />
           </div>
           {objs(serp.competitors_above).length > 0 && (
             <div className="mt-4">
@@ -203,11 +222,28 @@ export function RankTrackerReport({ report }: { report: ReportDetail }) {
         </Block>
       )}
 
-      {(gains.length > 0 || drops.length > 0) && (
-        <div className="grid gap-5 lg:grid-cols-2">
-          <MoverList title="Gains" items={gains} icon={<TrendingUp />} tone="good" />
-          <MoverList title="Drops" items={drops} icon={<TrendingDown />} tone="critical" />
-        </div>
+      {split ? (
+        (ownGains.length > 0 || ownDrops.length > 0 || withPage.length > 0 || notCompared.length > 0) && (
+          <>
+            <div className="grid gap-5 lg:grid-cols-2">
+              <LineList title="Your own gains" items={ownGains} icon={<TrendingUp />} tone="good" />
+              <LineList title="Drops to look at" items={ownDrops} icon={<TrendingDown />} tone="critical" />
+            </div>
+            {(withPage.length > 0 || notCompared.length > 0) && (
+              <div className="grid gap-5 lg:grid-cols-2">
+                {withPage.length > 0 && <LineList title="Moved with the results page" note="Not necessarily about your page: the pages around it moved as much." items={withPage} icon={<Shuffle />} tone="neutral" />}
+                {notCompared.length > 0 && <LineList title="Not compared" note="No earlier reading of the results page to compare with, so no verdict." items={notCompared} icon={<CircleHelp />} tone="neutral" />}
+              </div>
+            )}
+          </>
+        )
+      ) : (
+        (gains.length > 0 || drops.length > 0) && (
+          <div className="grid gap-5 lg:grid-cols-2">
+            <MoverList title="Gains" items={gains} icon={<TrendingUp />} tone="good" />
+            <MoverList title="Drops" items={drops} icon={<TrendingDown />} tone="critical" />
+          </div>
+        )
       )}
       <LedgerCard ledger={p.run_ledger} extraCost={num(p.cost_usd)} />
     </Stagger>
@@ -225,6 +261,25 @@ function SerpStat({ label, value, of, hint, display }: { label: string; value: n
       </p>
       {hint && <p className="mt-1 text-xs text-ink-3">{hint}</p>}
     </div>
+  );
+}
+
+/** B6-8: the engine's own lines ("keyword (12 → 18; your page's own move: …)"), each already saying what the move is */
+function LineList({ title, items, icon, tone, note }: { title: string; items: string[]; icon: ReactNode; tone: 'good' | 'critical' | 'neutral'; note?: string }) {
+  return (
+    <Block title={title} icon={icon} iconTone={tone} description={note}>
+      {items.length ? (
+        <ul className="divide-y divide-line">
+          {items.map((t, i) => (
+            <li key={i} className="py-2 text-sm leading-snug text-ink">
+              {t}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <Empty>None this week.</Empty>
+      )}
+    </Block>
   );
 }
 

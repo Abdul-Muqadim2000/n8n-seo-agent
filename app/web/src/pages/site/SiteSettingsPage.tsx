@@ -2,11 +2,12 @@ import { useState, type ReactNode } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Building2, CalendarClock, KeyRound, PauseCircle, PenSquare, PlayCircle, Radar, Settings, ShieldAlert, Trash2 } from 'lucide-react';
-import { cleanDomain, formatUsd, type AdminResult, type MonitorSettings, type SiteSettingsData } from '@seo/shared';
+import { Building2, CalendarClock, FolderTree, KeyRound, PauseCircle, PenSquare, PlayCircle, Radar, Settings, ShieldAlert, Plus, Trash2 } from 'lucide-react';
+import { cleanDomain, CONTENT_GROUPS_MAX, contentGroupSchema, formatUsd, type AdminResult, type ContentGroup, type MonitorSettings, type SiteSettingsData } from '@seo/shared';
 import { EmailVerifyNotice } from '@/components/site/EmailVerifyNotice';
 import { competitorValidator } from '@/components/site/helpers';
 import { completeMonitors, MonitoringCost, MonitorSettingsFields } from '@/components/site/MonitorSettingsFields';
+import { aiMeasuredFrom } from '@/components/site/AiPrecision';
 import { ProfileForm, profileSavedToast, useSaveProfile } from '@/components/site/ProfileForm';
 import { businessOnly, SiteBusinessForm } from '@/components/site/SiteBusinessFields';
 import { BLOG_OPTIONS, blogMonthlyCost, trackDefaults, TrackingForm, type TrackFormOutput } from '@/components/site/TrackingForm';
@@ -269,6 +270,8 @@ function TrackingSettings({ data, admin }: { data: SiteSettingsData; admin: bool
         admin={admin}
       />
 
+      <ContentGroupsCard initial={data.contentGroups ?? []} admin={admin} />
+
       <Card>
         <CardHeader
           icon={<HeaderTile icon={<KeyRound />} />}
@@ -421,6 +424,7 @@ function MonitorsCard({
   const [monitors, setMonitors] = useState(initial);
   const [competitors, setCompetitors] = useState(initialCompetitors);
   const [enginesError, setEnginesError] = useState<string | undefined>();
+  const ai = useSiteData(org.id, site.id, 'ai');   // B8-7: the precision table reads the latest run's measured sample
   const dirty = JSON.stringify(monitors) !== JSON.stringify(initial) || JSON.stringify(competitors) !== JSON.stringify(initialCompetitors);
 
   const save = () => {
@@ -448,7 +452,7 @@ function MonitorsCard({
       <CardBody>
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="min-w-0 space-y-5">
-            <MonitorSettingsFields value={monitors} onChange={setMonitors} disabled={!admin} enginesError={enginesError} />
+            <MonitorSettingsFields value={monitors} onChange={setMonitors} disabled={!admin} enginesError={enginesError} aiMeasured={aiMeasuredFrom(ai.data)} />
             <Field
               label="Competitors"
               optional
@@ -491,6 +495,76 @@ function MonitorsCard({
           )}
           <Button size="sm" onClick={save} loading={action.isPending} disabled={!dirty}>
             Save monitors
+          </Button>
+        </CardFooter>
+      )}
+    </Card>
+  );
+}
+
+/**
+ * B7-5 (W3-D's engine half): the website's page groups — blog, services, product — each a pattern over the page address. The weekly
+ * site report then shows each group's clicks against the 28 days before, judged on the same bar as every alert, with the pages in no
+ * group on a line of their own. Stored in the engine (Site Admin `content_groups`); an empty list clears them.
+ */
+function ContentGroupsCard({ initial, admin }: { initial: ContentGroup[]; admin: boolean }) {
+  const { org } = useOrgCtx();
+  const { site } = useSiteCtx();
+  const action = useSiteAdmin(org.id, site.id);
+  const [rows, setRows] = useState<ContentGroup[]>(initial.length ? initial : []);
+  const [errs, setErrs] = useState<Record<number, string>>({});
+  const dirty = JSON.stringify(rows) !== JSON.stringify(initial);
+  const set = (i: number, patch: Partial<ContentGroup>) => setRows(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const save = () => {
+    const kept = rows.filter((r) => r.name.trim() || r.pattern.trim());
+    const bad: Record<number, string> = {};
+    kept.forEach((r, i) => {
+      const p = contentGroupSchema.safeParse(r);
+      if (!p.success) bad[i] = p.error.issues[0]?.message ?? 'Check this group';
+    });
+    setRows(kept);
+    setErrs(bad);
+    if (Object.keys(bad).length) return;
+    action.mutate(
+      { action: 'content_groups', contentGroups: kept.map((r) => ({ name: r.name.trim(), pattern: r.pattern.trim() })) },
+      {
+        onSuccess: (r: AdminResult) => (r.ok ? toast.success(kept.length ? 'Content groups saved: the next weekly report shows them' : 'Content groups cleared') : toast.error(r.error ?? 'The change was not applied')),
+        onError: (e) => toast.error(errorMessage(e)),
+      },
+    );
+  };
+  return (
+    <Card>
+      <CardHeader
+        icon={<HeaderTile icon={<FolderTree />} />}
+        title="Content groups"
+        description="Group your pages — blog, services, product — and the weekly report shows how each group does in Google search, judged on the same bar as every alert. A page can sit in more than one group."
+      />
+      <CardBody className="space-y-3">
+        {rows.length === 0 && <p className="text-sm text-ink-2">No groups yet. The weekly report shows the site as a whole.</p>}
+        {rows.map((r, i) => (
+          <div key={i} className="grid gap-2 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)_auto] sm:items-start">
+            <Input aria-label={`Group ${i + 1} name`} value={r.name} maxLength={60} placeholder="Blog" disabled={!admin} onChange={(e) => set(i, { name: e.target.value })} />
+            <div className="min-w-0">
+              <Input aria-label={`Group ${i + 1} pattern`} className="font-mono" value={r.pattern} maxLength={200} placeholder="^/blog/" disabled={!admin} onChange={(e) => set(i, { pattern: e.target.value })} />
+              {errs[i] && <p className="mt-1 text-xs text-critical-text">{errs[i]}</p>}
+            </div>
+            {admin && (
+              <Button variant="ghost" size="sm" aria-label={`Remove group ${i + 1}`} onClick={() => setRows(rows.filter((_, j) => j !== i))}>
+                <Trash2 />
+              </Button>
+            )}
+          </div>
+        ))}
+        <p className="text-xs text-ink-3">The pattern is a regular expression over the page path, case-insensitive: <code className="font-mono">^/blog/</code> matches every page under /blog/, <code className="font-mono">^/(services|solutions)/</code> two sections at once.</p>
+      </CardBody>
+      {admin && (
+        <CardFooter>
+          <Button variant="secondary" size="sm" disabled={rows.length >= CONTENT_GROUPS_MAX} onClick={() => setRows([...rows, { name: '', pattern: '' }])}>
+            <Plus /> Add a group
+          </Button>
+          <Button size="sm" onClick={save} loading={action.isPending} disabled={!dirty}>
+            Save groups
           </Button>
         </CardFooter>
       )}

@@ -17610,6 +17610,22 @@ await guard('S162 R92 a page on a non-canonical host prints its URL', async () =
   check('R92: a row flagged other_host prints https://… in full, an ordinary row only its path', REP.html.indexOf('>https://northwind-erp.com/pricing/<') > 0 && REP.html.indexOf('>/blog/a/<') > 0, (REP.html.match(/<a href=[^>]*>[^<]*<\/a>/g) || []).join(' '));
 });
 
+await guard('S171 B5-11 a stored finding keeps its evidence for the read API', async () => {
+  reset(); const SN = 'S171 B5-11'; begin(SN); const check = a11check(SN);
+  const FCOLS = require('./table_cols.json').AUDIT_FINDINGS;
+  const f171 = [
+    { category: 'Speed', severity: 'High', title: 'Three top pages render in over 4 seconds', evidence: 'Largest Contentful Paint 4.2s, 4.8s, 5.1s (PageSpeed, mobile)', affected_count: 3, sample_urls: ['https://northwind-erp.com/a/', 'https://northwind-erp.com/b/', 'javascript:alert(1)', 42], scoring: true },
+    { category: 'On-Page', severity: 'Medium', title: 'Two pages carry no meta description', affected_count: 2, scoring: true },
+  ];
+  mock('Audit Diff', [{ json: { site_id: 's1', domain: 'northwind-erp.com', audit_id: 'aud_171', audited_at: '2026-10-17T00:00:00Z', site_audit: { domain: 'northwind-erp.com', findings: f171 } } }]);
+  const rows = (await run('Finding Rows', store['Audit Diff'])).map(x => x.json).filter(r => !r.skip);
+  check('B5-11: the table defines evidence and sample_urls', FCOLS.includes('evidence') && FCOLS.includes('sample_urls'), JSON.stringify(FCOLS));
+  check('B5-11: every row carries exactly the table columns (an insert auto-maps every field)', rows.length === 2 && rows.every(r => same(Object.keys(r), FCOLS)), JSON.stringify(rows.map(r => Object.keys(r))));
+  check('B5-11: the evidence line is stored as the engine wrote it', rows[0].evidence === 'Largest Contentful Paint 4.2s, 4.8s, 5.1s (PageSpeed, mobile)', rows[0].evidence);
+  check('B5-11: example addresses are JSON text, http(s) only', JSON.stringify(JSON.parse(rows[0].sample_urls)) === JSON.stringify(['https://northwind-erp.com/a/', 'https://northwind-erp.com/b/']), rows[0].sample_urls);
+  check('B5-11: a finding without evidence stores "" (the API answers null), not invented text', rows[1].evidence === '' && rows[1].sample_urls === '[]', JSON.stringify(rows[1]));
+});
+
 // ===================================================================================
 // W3-F (2026-10-17): AI growth's third wave (area 9: B9-7 / B9-8 / B9-9 / B9-10), the page-watch decoder and the Reply Reader's ledger row.
 // S167 B9-7 plan  S168 B9-7 earned media + writer + report  S169 B9-8 fetchers  S170 B9-9 one matcher  S175 B9-10 Bing's report

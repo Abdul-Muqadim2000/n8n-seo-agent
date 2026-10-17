@@ -17,7 +17,7 @@ type P = { orgId: string; runId: string; reportId: string; fileId: string; share
  * downloads; the content type follows the stored kind (never n8n's MIME, which could say text/html for a .txt). The same handling is
  * used for a company's own files and for the files of a shared report (G15) — one implementation, one set of headers.
  */
-function sendFile(reply: FastifyReply, f: Pick<FileRow, 'kind' | 'fileName' | 'data'>, download: boolean) {
+export function sendFile(reply: FastifyReply, f: Pick<FileRow, 'kind' | 'fileName' | 'data'>, download: boolean) {
   const inline = !download && (f.kind === 'pdf' || f.kind === 'txt' || f.kind === 'md' || f.kind === 'json' || f.kind === 'csv');
   const type = f.kind === 'pdf' ? 'application/pdf' : inline ? 'text/plain; charset=utf-8' : 'application/octet-stream';
   const safeName = f.fileName.replace(/[^\w.\- ]+/g, '_');

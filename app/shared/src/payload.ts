@@ -112,6 +112,8 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
         crawl_pages: input.crawlPages,
         crawl_js: input.crawlJs,
         competitors: input.competitors.length ? input.competitors : (s?.competitors ?? []),
+        // B5-12 (W3-A): the fix list can weigh problems by GA4 key events when the website's property is known
+        ga4_property_id: s?.ga4PropertyId || '',
       };
 
     case 'ladder':

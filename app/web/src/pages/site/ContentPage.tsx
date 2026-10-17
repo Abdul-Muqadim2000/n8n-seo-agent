@@ -23,6 +23,7 @@ import { DataGate, FilterChips, SrOnly, Kind, Panel, RunAnalysisMenu, SectionHea
 import { HeroMeter } from './_components/pipeline/home';
 import { countBy, daysSince, plural, urlPath } from './_components/format';
 import { FileLinks } from './_components/reports';
+import { PublishCheckPanel } from './_components/publish-check';
 import { verdictLabel } from '@/components/reports/kit';
 
 export default function ContentPage() {
@@ -268,6 +269,12 @@ function Content({ d }: { d: ContentData }) {
       </div>
 
       <CaseStudies items={d.caseStudies} />
+
+      {can('member') && (
+        <section>
+          <PublishCheckPanel orgId={org.id} siteId={site.id} />
+        </section>
+      )}
 
       <section>
         <Panel icon={<FileText />} title="Generated pages" description="Keyword reports and finished pages with their downloads (Word, PDF, HTML, Markdown and meta.json)">
