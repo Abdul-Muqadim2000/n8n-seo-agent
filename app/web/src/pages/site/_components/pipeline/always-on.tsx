@@ -1,7 +1,8 @@
 // Pipeline home: the always-on part (opportunity posts and monitoring) and the weekly capacity the ladders share.
 import type { ReactNode } from 'react';
 import { AlertTriangle, Bot, CalendarClock, ChevronRight, Circle, FileText, Flame, History, Lightbulb, PenSquare, Play, RefreshCw, Settings, Target, TrendingDown, TrendingUp } from 'lucide-react';
-import { AUTOMATIONS, formatUsd, MODES, type AutomationStatus, type LadderCard, type PipelineData, type QueueItem } from '@seo/shared';
+import { AUTOMATIONS, formatUsd, type AutomationStatus, type LadderCard, type PipelineData, type QueueItem } from '@seo/shared';
+import { PRICES } from '@/lib/prices';
 import { Badge, StatusBadge, type Tone } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
@@ -181,7 +182,7 @@ function OpportunityPosts({ data, onWrite }: { data: PipelineData; onWrite: (i: 
           <>
             {!perWeek && !manual && (
               <Callout tone="info" title="Weekly posts are off">
-                These would be written next. Turn weekly posts on, or write one now (about {formatUsd(MODES.keyword.costUsd)} each).
+                These would be written next. Turn weekly posts on, or write one now (about {PRICES.page()} each).
               </Callout>
             )}
             {next.length > 0 && (

@@ -92,7 +92,7 @@ export const solutions: Solution[] = [
     ],
     faqs: [
       { q: 'Do we need SEO expertise to use Ascentra?', a: 'No. Every verdict and recommendation explains itself in plain language, and the pipeline tells you what to do next.' },
-      { q: 'Can our writers edit the pages?', a: 'Yes. Pages arrive as HTML, Markdown or a WordPress draft, so your team edits them before publishing.' },
+      { q: 'Can our writers edit the pages?', a: 'Yes. Pages arrive as HTML and Markdown, or as drafts in your WordPress, Webflow or Contentful, so your team edits them before anything goes live.' },
       { q: 'Who on the team can start paid runs?', a: 'Members and above can start runs; viewers can only read. Owners set the budget.' },
     ],
     showcase: {

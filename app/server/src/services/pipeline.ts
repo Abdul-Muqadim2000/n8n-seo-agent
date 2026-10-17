@@ -45,6 +45,7 @@ import type { OrgRow, SiteRow } from '../db/schema';
 import { notFound } from '../lib/errors';
 import { executions, siteRows, type ExecutionSummary } from '../n8n/client';
 import { scheduleState } from './delivery';
+import { annotatePublishNeeds } from './cms/service';
 import { CADENCE, simulateCadence, type CadenceWeek } from './cadence';
 import { buildLadders, draftQa, ladderAppSources, ladderNeedsYou, ladderReports, sortNeedsYou, type LadderBuild, type LadderSchedule, type SiteRun, type WaitingPage } from './ladders';
 import { loadBundle, recommend, type SiteBundle } from './recommendations';
@@ -417,7 +418,10 @@ export function detectedFeed(detected: DetectedPage[], cards: Pick<LadderCard, '
 }
 
 export async function pipelineData(org: OrgRow, site: SiteRow): Promise<PipelineData> {
-  return (await pipelineState(org, site)).data;
+  const data = (await pipelineState(org, site)).data;
+  // G2: a page waiting to be published says what the CMS already holds, and offers to send it from its report
+  await annotatePublishNeeds(org.id, site.id, data.needsYou).catch(() => undefined);
+  return data;
 }
 
 /** The website's keyword-ladder cards, in priority order (after a change from the ladder controls). */

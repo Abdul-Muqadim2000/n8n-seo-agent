@@ -69,11 +69,26 @@ export interface Guide {
   related?: readonly string[];
   /** extra words that should find this guide in the search box */
   keywords?: readonly string[];
+  /** D-9: a guide for something only some installations offer (Google sign-in); not offered where it is off */
+  requires?: 'google_signin';
 }
+
+/** What this installation offers, for the guides that depend on it (`/api/auth/providers`). */
+export interface GuideAvailability {
+  googleSignIn: boolean;
+}
+
+/**
+ * D-9 (re-rating 2026-10-17): the DNS guide's "Next, or instead" offered "Prove the website is yours with your Google account" on an
+ * installation with no Google sign-in (the verify step there shows DNS and the meta tag only). A guide is offered only when what it
+ * walks through exists here.
+ */
+export const guideAvailable = (g: Pick<Guide, 'requires'> | undefined, a: GuideAvailability): boolean =>
+  !!g && (g.requires !== 'google_signin' || a.googleSignIn);
 
 export const GUIDE_AREAS: { id: GuideArea; label: string; description: string }[] = [
   { id: 'google', label: 'Google data', description: 'Search Console and Analytics: the data behind every report' },
-  { id: 'ownership', label: 'Proving the website is yours', description: 'One of three ways, before any data is shown' },
+  { id: 'ownership', label: 'Proving the website is yours', description: 'One of the ways this app offers, before any data is shown' },
   { id: 'website', label: 'Changes on your website', description: 'Files, pages and tools that live on your side' },
   { id: 'mailbox', label: 'Your mailbox', description: 'Link-building pitches go out from your own address' },
   { id: 'business', label: 'About your business', description: 'What every page is written from and checked against' },
@@ -173,6 +188,7 @@ export const GUIDES = [
   {
     id: 'search-console-owner',
     area: 'ownership',
+    requires: 'google_signin',
     title: 'Prove the website is yours with your Google account',
     why: 'The fastest of the three ways to prove ownership: if your own Google account is already a verified owner in Search Console, there is nothing to add anywhere.',
     where: 'Ascentra, then Google’s sign-in screen',
@@ -539,8 +555,182 @@ export const GUIDES = [
       { q: 'My editor strips the HTML', a: 'Paste into a code / raw block rather than the visual editor. Visual editors routinely drop headings, link attributes and structured data.' },
       { q: 'The check says images are missing', a: 'The names in the package are a plan, not uploaded files. Add your own images, keep the alt text, and run the check again.' },
     ],
-    related: ['indexnow-key-file', 'business-facts'],
+    related: ['wordpress-application-password', 'webflow-api-token', 'contentful-cma-token', 'cms-webhook', 'indexnow-key-file', 'business-facts'],
     keywords: ['publish', 'cms', 'wordpress', 'article', 'slug'],
+  },
+  // ---------------------------------------------------------------- G2: publishing to your CMS from Ascentra
+  {
+    id: 'wordpress-application-password',
+    area: 'website',
+    title: 'Connect WordPress with an application password',
+    why: 'With it Ascentra puts a written page into WordPress for you — as a draft by default — with its slug, excerpt, featured image and SEO fields, and updates the same post when you send it again.',
+    where: 'Your WordPress admin',
+    who: 'A WordPress user with the Editor or Administrator role (Administrator if the pages should keep their structured data)',
+    minutes: 5,
+    vars: [V.domain],
+    steps: [
+      {
+        title: 'Sign in as the user Ascentra should post as',
+        body: 'Open your WordPress admin and sign in as an **Editor** or **Administrator**. Posts are created under this user. A dedicated user such as `ascentra` keeps the history clear.',
+        note: 'Only Administrators may save structured data (JSON-LD) inside a post on a normal WordPress site. With an Editor, Ascentra leaves it out and tells you to add it through your SEO plugin.',
+      },
+      {
+        title: 'Create an application password',
+        body: 'Go to **Users → Profile** (or **Users → All users → the user → Edit**), scroll to **Application Passwords**, type `Ascentra` as the name and click **Add New Application Password**.',
+        link: { label: 'How application passwords work (WordPress.org)', href: 'https://make.wordpress.org/core/2020/11/05/application-passwords-integration-guide/' },
+        warn: 'WordPress shows the password once. Copy it now — if you lose it, revoke it and create another.',
+      },
+      {
+        title: 'Fill in the connection in Ascentra',
+        body: 'In **Website settings → Publishing → Connect a CMS → WordPress**, enter the site address (for example `https://{{domain}}`, not the /wp-admin address), the **user name** (not the e-mail) and the application password. Choose posts or pages, and the categories and tags new posts should get.',
+      },
+      {
+        title: 'Test the connection',
+        body: 'Click **Test connection**. Ascentra signs in, checks the user may create and publish posts, and looks for Yoast SEO or Rank Math fields it can fill.',
+        choices: [
+          { label: 'Yoast SEO', body: 'The SEO title and meta description go straight into Yoast when the site exposes its fields to the REST API. If it does not, the description goes into the excerpt and Ascentra tells you to paste the title into Yoast.' },
+          { label: 'Rank Math', body: 'The same: Rank Math’s fields are filled when they are open to the REST API (Rank Math → General Settings → Others → Headless CMS Support), otherwise the excerpt carries the description.' },
+          { label: 'No SEO plugin', body: 'The meta description goes into the excerpt, which most themes print as the description.' },
+        ],
+      },
+    ],
+    done: 'The connection shows **Connected** with the user’s name. On a written page, **Send to CMS as draft** creates a draft you can open in WordPress.',
+    trouble: [
+      { q: 'The test says no WordPress REST API answered', a: 'Use the site’s own address. A security plugin (Wordfence, iThemes) or the host can block `/wp-json`: allow it for signed-in requests.' },
+      { q: 'The test says the password was refused', a: 'Application passwords need HTTPS and WordPress 5.6 or newer. Some hosts strip the Authorization header — ask them to pass it through, or add the rule they give you to .htaccess.' },
+      { q: 'Publishing live fails but drafts work', a: 'The user may create but not publish. Make it an Editor or Administrator.' },
+    ],
+    related: ['publish-page', 'cms-webhook'],
+    keywords: ['wordpress', 'application password', 'rest api', 'yoast', 'rank math', 'publish', 'cms'],
+  },
+  {
+    id: 'webflow-api-token',
+    area: 'website',
+    title: 'Connect Webflow: an API token and the collection id',
+    why: 'With them Ascentra creates the page as an item of your blog collection — a draft by default — and publishes it only when an owner or admin chooses to.',
+    where: 'Webflow site settings and the Designer',
+    who: 'A Webflow workspace member who can manage the site’s integrations',
+    minutes: 5,
+    vars: [V.domain],
+    steps: [
+      {
+        title: 'Create a site API token',
+        body: 'Open the site’s **Site settings → Apps & integrations → API access → Generate API token**. Name it `Ascentra` and give it **CMS: read and write**. Copy the token.',
+        link: { label: 'Webflow: site tokens', href: 'https://developers.webflow.com/data/reference/authentication/site-token' },
+        warn: 'Webflow shows the token once. Anyone with it can change your CMS, so paste it only into Ascentra.',
+      },
+      {
+        title: 'Find the collection id',
+        body: 'In the Designer open **CMS**, choose the collection your articles live in (for example **Blog Posts**) and open its **settings**: the **Collection ID** is a 24-character code.',
+      },
+      {
+        title: 'Connect and test',
+        body: 'In **Website settings → Publishing → Connect a CMS → Webflow**, paste the token and the collection id, then **Test connection**. Ascentra reads the collection’s fields.',
+      },
+      {
+        title: 'Map the fields once',
+        body: 'Choose the **rich-text** field that holds the article, and the plain-text fields for the meta description, the SEO title, the excerpt and the author if your collection has them. The name and the slug are filled for you.',
+        note: 'Images are not uploaded to Webflow: add the featured image in the item. The file and its alt text are in the page’s downloads.',
+      },
+      {
+        title: 'Tell Ascentra the address pattern',
+        body: 'Pages of a collection live under its own path, for example `https://{{domain}}/blog/{slug}`. Enter that pattern so Ascentra can check the live page and track it.',
+      },
+    ],
+    done: 'The connection shows **Connected** with the collection name, and a page sent as a draft appears in the collection as a draft item.',
+    trouble: [
+      { q: 'The test says no collection with this id', a: 'The token belongs to another site, or the id was copied from another collection. Copy both from the same site.' },
+      { q: 'Publishing fails with a domain error', a: 'Webflow publishes items only on a site that has been published at least once. Publish the site in the Designer first.' },
+    ],
+    related: ['publish-page', 'cms-webhook'],
+    keywords: ['webflow', 'api token', 'collection', 'cms', 'publish'],
+  },
+  {
+    id: 'contentful-cma-token',
+    area: 'website',
+    title: 'Connect Contentful: a content management token',
+    why: 'With it Ascentra creates the page as an entry of your article content type — a draft by default — and publishes the entry only when an owner or admin chooses to.',
+    where: 'Contentful web app',
+    who: 'A Contentful user with access to the space and its environment',
+    minutes: 8,
+    vars: [V.domain],
+    steps: [
+      {
+        title: 'Create a content management token',
+        body: 'In Contentful open **Settings → CMA tokens → Create personal access token**, name it `Ascentra` and copy it. It must be a management token, not a Content Delivery API key.',
+        link: { label: 'Contentful: authentication', href: 'https://www.contentful.com/developers/docs/references/authentication/' },
+        warn: 'Contentful shows the token once, and it acts with your own permissions. A dedicated user with access to one space only is safer.',
+      },
+      {
+        title: 'Note the three ids',
+        body: 'The **space id** is in **Settings → General settings**. The **environment** is usually `master`. The **content type id** is shown in **Content model → your article type** (for example `blogPost`).',
+      },
+      {
+        title: 'Connect and test',
+        body: 'In **Website settings → Publishing → Connect a CMS → Contentful**, paste the token and the ids, then **Test connection**. Ascentra reads the content type’s fields and your default locale.',
+      },
+      {
+        title: 'Map the fields once',
+        body: 'Choose the fields for the **title**, the **slug** and the **article**. The article goes into a **Long text** field as Markdown; the meta description, SEO title and the date into fields of their own if you have them.',
+        note: 'A Rich Text field is refused on purpose: it is a document model, not HTML, and converting into it would quietly drop tables and links. Add a Long text field for the article.',
+      },
+      {
+        title: 'Tell Ascentra the address pattern',
+        body: 'Your front end builds the address of an entry, for example `https://{{domain}}/insights/{slug}`. Enter that pattern so Ascentra can check the live page and track it.',
+      },
+    ],
+    done: 'The connection shows **Connected** with the content type, and a page sent as a draft appears in Contentful as a draft entry.',
+    trouble: [
+      { q: 'The test says no such space, environment or content type', a: 'One of the three ids is wrong, or the token’s user has no access to that space or environment.' },
+      { q: 'Publishing fails with a validation error', a: 'A required field of the content type is not mapped. Map a field to it, or make it optional in the content model.' },
+    ],
+    related: ['publish-page', 'cms-webhook'],
+    keywords: ['contentful', 'cma', 'management token', 'headless', 'cms', 'publish'],
+  },
+  {
+    id: 'cms-webhook',
+    area: 'website',
+    title: 'Receive pages through a signed webhook',
+    why: 'For any stack Ascentra does not connect to directly — another headless CMS, a static site, a bot that opens a pull request — the whole page arrives as signed JSON at an address of yours.',
+    where: 'Your own endpoint',
+    who: 'A developer who can deploy a small endpoint',
+    minutes: 30,
+    vars: [V.domain],
+    steps: [
+      {
+        title: 'Deploy an https endpoint',
+        body: 'It receives a `POST` with a JSON body: the title, the slug, the meta description, the article as HTML and Markdown, the structured data, the images (as base64 when small enough) and whether to keep it a draft or publish it (`mode`).',
+      },
+      {
+        title: 'Connect it in Ascentra and copy the secret',
+        body: 'In **Website settings → Publishing → Connect a CMS → Webhook**, enter the address. Ascentra shows a signing secret starting `whsec_` **once** — store it with your endpoint.',
+      },
+      {
+        title: 'Check the signature on every request',
+        body: 'Compute HMAC-SHA256 with the secret over the timestamp header, a dot and the raw body, and compare it with the signature header in constant time. Refuse anything older than five minutes.',
+        copy: [
+          { label: 'Signature header', value: 'X-Ascentra-Signature: sha256=<hex>' },
+          { label: 'Timestamp header', value: 'X-Ascentra-Timestamp: <milliseconds>' },
+          { label: 'Signed text', value: '<timestamp>.<raw body>' },
+        ],
+      },
+      {
+        title: 'Use the idempotency key',
+        body: 'The `Idempotency-Key` header is the same for every send of the same page. Update the item you made the first time instead of creating a second one.',
+      },
+      {
+        title: 'Answer with what you did',
+        body: 'Answer `2xx`, ideally with JSON `{"id": "…", "url": "…", "status": "draft"}` (or `"published"`). Ascentra keeps the id and the address and shows them on the page.',
+        note: 'Pages on {{domain}} that you publish are checked live and tracked once you, or this answer, say they are live.',
+      },
+    ],
+    done: 'Test connection sends a signed `cms.test` event and your endpoint answers 2xx.',
+    trouble: [
+      { q: 'The signature never matches', a: 'Sign the raw body exactly as received, before any JSON parsing or re-serialisation, and use the timestamp header’s value as it is.' },
+      { q: 'The secret is lost', a: 'Remove the connection and add it again: a new secret is made and shown once.' },
+    ],
+    related: ['publish-page'],
+    keywords: ['webhook', 'hmac', 'signature', 'headless', 'pull request', 'git', 'api', 'cms'],
   },
   {
     id: 'bing-webmaster',

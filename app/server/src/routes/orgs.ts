@@ -310,6 +310,8 @@ export async function orgRoutes(app: FastifyInstance) {
       .returning();
     const inviteUrl = `${config.appUrl}/invite/${token}`;
     await audit(req, a.org.id, { action: 'team.invited', target: { type: 'invitation', id: inv.id, label: body.email }, details: { role: body.role } });
+    // D-10: the dialog said "We sent an invitation" on a server with no mail account; say what really happens
+    const emailed = config.accountEmails;
     void sendMail(
       {
         to: body.email,
@@ -320,7 +322,7 @@ export async function orgRoutes(app: FastifyInstance) {
       },
       req.log,
     );
-    return { id: inv.id, email: inv.email, role: inv.role as Role, invitedBy: a.user.name, createdAt: inv.createdAt.toISOString(), expiresAt: inv.expiresAt.toISOString(), inviteUrl };
+    return { id: inv.id, email: inv.email, role: inv.role as Role, invitedBy: a.user.name, createdAt: inv.createdAt.toISOString(), expiresAt: inv.expiresAt.toISOString(), inviteUrl, emailed };
   });
 
   app.delete('/api/orgs/:orgId/invitations/:id', async (req) => {
@@ -377,8 +379,22 @@ export async function orgRoutes(app: FastifyInstance) {
       db.query.organizations.findFirst({ where: eq(schema.organizations.id, inv.orgId) }),
       inv.invitedBy ? db.query.users.findFirst({ where: eq(schema.users.id, inv.invitedBy) }) : Promise.resolve(undefined),
     ]);
-    const reason = inv.acceptedAt ? 'This invitation was already accepted.' : inv.revokedAt ? 'This invitation was withdrawn.' : inv.expiresAt < new Date() ? 'This invitation has expired. Ask for a new one.' : null;
-    return { orgName: org?.name ?? 'Unknown company', email: inv.email, role: inv.role as Role, inviterName: inviter?.name ?? null, valid: !reason, reason };
+    // D-11: signing up from an invitation joins the company at once, after which this page only said "already accepted" with no way
+    // on. When the signed-in person is a member of the invitation's company, the answer says so and carries the company id.
+    const member =
+      req.user && inv.acceptedAt
+        ? await db.query.memberships.findFirst({ where: and(eq(schema.memberships.orgId, inv.orgId), eq(schema.memberships.userId, req.user.id)) })
+        : undefined;
+    const reason = member
+      ? `You are a member of ${org?.name ?? 'this company'}.`
+      : inv.acceptedAt
+        ? 'This invitation was already accepted.'
+        : inv.revokedAt
+          ? 'This invitation was withdrawn.'
+          : inv.expiresAt < new Date()
+            ? 'This invitation has expired. Ask for a new one.'
+            : null;
+    return { orgName: org?.name ?? 'Unknown company', email: inv.email, role: inv.role as Role, inviterName: inviter?.name ?? null, valid: !reason, reason, ...(member ? { joinedOrgId: inv.orgId } : {}) };
   });
 
   app.post('/api/invitations/:token/accept', async (req) => {

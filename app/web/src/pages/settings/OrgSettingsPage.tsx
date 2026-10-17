@@ -38,7 +38,7 @@ import { GuideButton } from '@/components/guide';
 import { ApiRequestError, errorMessage } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
-import { qk, useDeleteOrg, useMembers, useSetBudget, useTeamMutation, useUpdateOrg, useUsage } from '@/lib/queries';
+import { qk, useDeleteOrg, useMembers, useProviders, useSetBudget, useTeamMutation, useUpdateOrg, useUsage } from '@/lib/queries';
 import { fmtAgo, fmtDate, fmtDay } from '@/lib/utils';
 import { RoleChip, ROLE_ICON, SettingsCard } from './_components/SettingsCard';
 import { DeliveryTab } from './_components/DeliveryTab';
@@ -552,11 +552,27 @@ function TeamTab() {
   );
 }
 
+/** D-10: "We sent an invitation" was said on a server that sends no e-mail; this says what really happened. */
+export function InvitationSentNote({ email, role, emailed }: { email: string; role: Role; emailed: boolean }) {
+  return emailed ? (
+    <p>
+      We e-mailed an invitation to <strong className="font-medium text-ink">{email}</strong> as {ROLE_LABELS[role].toLowerCase()}. If it does not arrive, send them this link
+      yourself:
+    </p>
+  ) : (
+    <p>
+      The invitation for <strong className="font-medium text-ink">{email}</strong> as {ROLE_LABELS[role].toLowerCase()} is ready. This app sends no e-mail, so nothing has been
+      sent: send them this link yourself.
+    </p>
+  );
+}
+
 type InviteValues = z.input<typeof inviteSchema>;
 type InviteOutput = z.output<typeof inviteSchema>;
 
 function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const { org } = useOrgCtx();
+  const mailOn = useProviders().data?.email === true;   // D-10: account e-mails (invitations) are sent by this server
   const invite = useTeamMutation<InviteOutput>(org.id, 'POST', () => `/api/orgs/${org.id}/invitations`, (b) => b);
   const [created, setCreated] = useState<Invitation | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -588,7 +604,7 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o:
       open={open}
       onOpenChange={close}
       title={created ? 'Invitation ready' : `Invite someone to ${org.name}`}
-      description={created ? undefined : 'They get an e-mail with a link to join. The link works for 7 days.'}
+      description={created ? undefined : mailOn ? 'They get an e-mail with a link to join. The link works for 7 days.' : 'You get a link to send them yourself (this app sends no e-mail). The link works for 7 days.'}
       footer={
         created ? (
           <>
@@ -617,10 +633,7 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o:
     >
       {created ? (
         <div className="space-y-4 text-sm text-ink-2">
-          <p>
-            We sent an invitation to <strong className="font-medium text-ink">{created.email}</strong> as {ROLE_LABELS[created.role].toLowerCase()}. If e-mail is not set up on
-            this server, or it does not arrive, send them this link yourself:
-          </p>
+          <InvitationSentNote email={created.email} role={created.role} emailed={created.emailed ?? mailOn} />
           {created.inviteUrl ? (
             <div className="flex flex-wrap items-center gap-2 rounded-lg border border-line-strong bg-surface-2 px-3 py-2">
               <code className="min-w-0 flex-1 break-all font-mono text-[13px] text-ink">{created.inviteUrl}</code>

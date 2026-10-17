@@ -13,7 +13,7 @@
     "dev:web": "npm run dev -w @seo/web",
     "build": "npm run build -w @seo/web && npm run build -w @seo/server",
     "typecheck": "npm run typecheck -w @seo/shared && npm run typecheck -w @seo/server && npm run typecheck -w @seo/web",
-    "test": "npm run test -w @seo/shared && npm run test -w @seo/server",
+    "test": "npm run test -w @seo/shared && npm run test -w @seo/server && npm run test -w @seo/web",
     "db:generate": "npm run db:generate -w @seo/server",
     "export:payloads": "npm run export:payloads -w @seo/shared"
   },

@@ -104,6 +104,18 @@ decision; there is no override. Rules and their 41 unit tests: `shared/src/repor
 E-mail delivery needs SMTP configured (`SEO_SMTP_*`); it is **not** gated on `ACCOUNT_EMAILS`, which is about verification and reset
 links. Without a mail account the page says so and the webhook still works.
 
+## Publishing to the customer's CMS (G2)
+
+Website settings → **Publishing** connects WordPress (REST API + application password), Webflow (Data API v2, one collection, fields
+mapped once), Contentful (Content Management API, one content type) or a **signed webhook** for any other stack. A written page's report
+then carries **Publish to your CMS**: members send it as a **draft**, owners and admins **publish live** after ticking a confirmation. A page
+the run marked not ready, or one with a bracket still left for a person (the shared `findOpenBrackets` detector), is refused with the list —
+there is no override. Sending again updates the same CMS item; when a page is live the app starts the engine's *I published a page* run,
+so the content log, the ladder row and the pile-up guard follow. Credentials are sealed with `MAILBOX_KEY`; CMS addresses must be public
+https hosts (DNS pinned). Every attempt is in `cms_publishes`; the Content page and the Pipeline's *Needs you* show drafts and live pages.
+Design, threat model, vendor request shapes with their doc links and what is deliberately not built: **`docs/CMS_PUBLISHING.md`**. It
+supersedes the inactive n8n WordPress sub-workflow (`SEOagentWordPres`), which stays untouched.
+
 ## Shared reports, under the customer's own name (B-R2)
 
 A report handed to somebody with no account (`/share/:token`, G15) opens under **their** supplier's mark: the business name and logo

@@ -10,6 +10,7 @@ import { config } from './config';
 import { HttpError } from './lib/errors';
 import { linkBuilderRoutes } from './routes/linkBuilder';
 import { apiV1Routes } from './routes/apiV1';
+import { cmsRoutes } from './routes/cms';
 import { triesBearer } from '@seo/shared';
 import { adminRoutes } from './routes/admin';
 import { authRoutes } from './routes/auth';
@@ -132,6 +133,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(adminRoutes);
   await app.register(linkBuilderRoutes);
   await app.register(apiV1Routes);
+  await app.register(cmsRoutes);
 
   // the built React app (production image): static files, and index.html for every client-side route
   const dist = config.webDist ? resolve(config.webDist) : '';

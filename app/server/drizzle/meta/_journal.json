@@ -68,29 +68,15 @@
     {
       "idx": 9,
       "version": "7",
-      "when": 1792255165575,
-      "tag": "0009_g1_mfa",
+      "when": 1792255013466,
+      "tag": "0009_cms_publishing",
       "breakpoints": true
     },
     {
       "idx": 10,
       "version": "7",
-      "when": 1792272083405,
-      "tag": "0010_g1_audit",
-      "breakpoints": true
-    },
-    {
-      "idx": 11,
-      "version": "7",
-      "when": 1792272500613,
-      "tag": "0011_g1_sessions",
-      "breakpoints": true
-    },
-    {
-      "idx": 12,
-      "version": "7",
-      "when": 1792273452214,
-      "tag": "0012_g1_sso",
+      "when": 1792274220074,
+      "tag": "0010_g1_identity",
       "breakpoints": true
     }
   ]
