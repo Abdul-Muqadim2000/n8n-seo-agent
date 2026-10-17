@@ -1,3 +1,4 @@
+/*__OWN_COVER__*/
 /*__REACH__*/
 /*__RADIUS__*/
 /*__FIT_GATE__*/
@@ -80,8 +81,10 @@ const coveredBy = (kw, gsc) => {
 // recommended as a new page: the live run offered "e invoicing" as the top pick while the ladder head "e invoicing in uae" was already running.
 // The test is the ladder's own one-search-one-page rule in both directions: the same search (Jaccard >= 0.75, keywordsOverlap) or the keyword's
 // every meaningful word inside the ladder keyword ("e invoicing" in "e invoicing in uae").
-const ladderRowsD = (() => { try { return $('Load Domain Ladders (Discovery)').all().map(i => i.json).filter(r => r && r.ladder_id && r.keyword); } catch (e) { return []; } })();
+const ladderRowsD = (() => { try { return $('Load Domain Ladders (Discovery)').all().map(i => i.json).filter(r => r && r.ladder_id && r.keyword); } catch (e) { return []; } })()
+  .filter(r => fitStored(r, { ...fitCtx, protect: [...fitCtx.protect, String(r.head_keyword || '')] }).ok);   // A-25 / INVARIANTS rule 2: a stored rung is read back through the gate it was written through
 const ladderArchivedD = (() => { try { return new Set($('Load Ladder Settings (Discovery)').all().map(i => i.json).filter(r => r && r.ladder_id && String(r.status || '').toLowerCase() === 'archived').map(r => String(r.ladder_id))); } catch (e) { return new Set(); } })();
+const ownLadD = OWN.ladders(ladderRowsD, (() => { try { return $('Load Ladder Settings (Discovery)').all().map(i => i.json); } catch (e) { return []; } })(), { domain: base.domain || '' });
 const ladderKwsD = (() => { const out = []; const seen = new Set(); const ourD = reachDomain(base.domain || '');
   for (const r of ladderRowsD) { if (!ourD || reachDomain(r.domain) !== ourD || ladderArchivedD.has(String(r.ladder_id))) continue;
     for (const [kw, part] of [[r.keyword, Number(r.rung) === 4 ? 'head' : 'rung'], [r.head_keyword, 'head']]) { const k = String(kw || '').toLowerCase().trim(); const sig = r.ladder_id + '|' + k + '|' + part;
@@ -92,13 +95,20 @@ const ladderCovers = (kw) => { if (!ladderKwsD.length) return null; const t = ov
   for (const x of ladderKwsD) { if (!x.tokens.length) continue;
     const same = overlapScore(t, x.tokens) >= 0.75; const inside = t.every(w => x.tokens.includes(w));
     if (same || inside) return { ladder_id: x.ladder_id, head_keyword: x.head_keyword || x.keyword, ladder_keyword: x.keyword, part: x.part, rung: x.rung, status: x.status, target_url: x.target_url, how: same ? 'the same search' : 'part of a broader page' }; }
-  return null; };
+  // A-25 (2026-10-17, exec 764): "erp system dubai" (Where to start) and "erp systems in uae" (priority #5) carried no ladder note while the
+  // ladder "erp software uae" holds "erp software dubai" and its own head: the same searches in other words (system = software, OWN.relate).
+  const o = OWN.ladderOf(ownLadD, kw, { min: 'other words' });
+  return o ? { ladder_id: o.ladder_id, head_keyword: o.head_keyword, ladder_keyword: o.keyword, part: o.part, rung: o.rung, status: o.status, ladder_status: o.ladder_status, target_url: o.target_url, how: o.how } : null; };
+// A-25: a close variant or the same topic for another place is not the same search, so it stays in the plan - with the ladder named beside it
+const ladderNear = (kw) => { const o = OWN.ladderOf(ownLadD, kw, { min: 'other place' }); return o && (o.relation === 'variant' || o.relation === 'other place')
+  ? { ladder_id: o.ladder_id, head_keyword: o.head_keyword, ladder_keyword: o.keyword, part: o.part, rung: o.rung, status: o.status, ladder_status: o.ladder_status, how: o.how } : null; };
+const nearNote = (n) => n ? 'close to your ladder "' + n.head_keyword + '" (' + (n.part === 'head' ? 'its main page' : 'its rung ' + n.rung + ' page') + ' "' + n.ladder_keyword + '", ' + n.status + (n.ladder_status === 'paused' ? ', ladder paused' : '') + ': ' + n.how + ') - check that page does not already cover it before writing a new one' : '';
 const refused = [];
 const kws = (base.research.candidates || []).map(k => {
   const r = rel.get(k.keyword) || { relevance: 1, intent: k.intent, page_type: '', topic: '' };
   const intent = INTENTS.includes(r.intent) ? r.intent : k.intent;
   const page_type = PAGES.includes(r.page_type) ? r.page_type : defaultPage(intent);
-  return { ...k, intent, relevance: r.relevance, page_type, topic: r.topic || k.keyword.split(' ').slice(0, 3).join(' '), opportunity: +(k.pre_score * (RELF[r.relevance] ?? 0.45)).toFixed(1), competitors_in_top20: k.competitors.length, covered_by: coveredBy(k.keyword, k.gsc), ladder_covered: ladderCovers(k.keyword), ...forYou(k.kd, topicReachOf(r.topic, k.keyword)) };
+  return { ...k, intent, relevance: r.relevance, page_type, topic: r.topic || k.keyword.split(' ').slice(0, 3).join(' '), opportunity: +(k.pre_score * (RELF[r.relevance] ?? 0.45)).toFixed(1), competitors_in_top20: k.competitors.length, covered_by: coveredBy(k.keyword, k.gsc), ladder_covered: ladderCovers(k.keyword), ladder_near: ladderNear(k.keyword), ...forYou(k.kd, topicReachOf(r.topic, k.keyword)) };
 }).filter(k => k.relevance > 0 && k.intent !== 'navigational').filter(k => {
   const g = fitGate(k.keyword, { ...fitCtx, intent: k.intent });
   if (!g.ok) refused.push({ keyword: k.keyword, volume: k.volume, reason: g.reason, detail: g.detail });
@@ -135,7 +145,7 @@ const clusters = [...cl.values()].map(c => { const p = c.keywords[0]; const taC 
   topic: c.topic, grouped_by: c.grouped_by, primary_keyword: p.keyword, page_type: mode(c.page_types), intent: mode(c.intents), keyword_count: c.keywords.length,
   total_volume: c.total_volume, total_opportunity: +c.total_opportunity.toFixed(1), primary_kd: p.kd, primary_volume: p.volume, primary_cpc: p.cpc,
   supporting: c.keywords.slice(1, 9).map(k => k.keyword), keywords: c.keywords.slice(0, 12).map(k => ({ keyword: k.keyword, volume: k.volume, kd: k.kd, intent: k.intent, opportunity: k.opportunity })),
-  suggested_title: p.keyword.replace(/\b\w/g, m => m.toUpperCase()), covered_by: p.covered_by || null, ladder_covered: p.ladder_covered || null,
+  suggested_title: p.keyword.replace(/\b\w/g, m => m.toUpperCase()), covered_by: p.covered_by || null, ladder_covered: p.ladder_covered || null, ladder_near: p.ladder_covered ? null : (p.ladder_near || null),
   ...forYou(p.kd, taC), ...(taC && taC.note ? { topic_reach_note: taC.note } : {})
 }; }).sort((a, b) => b.total_opportunity - a.total_opportunity);
 // Tiers follow the goal: for leads/sales the first "Now" slots go to commercial/transactional topics; research topics support them
@@ -149,6 +159,7 @@ ordered.forEach(c => {
   if (c.ladder_covered || c.covered_by) { c.tier = 'Covered';
     c.tier_note = c.ladder_covered ? 'in your ladder "' + c.ladder_covered.head_keyword + '" (' + c.ladder_covered.how + ') - let that ladder write it'
       : 'improve the page you have: ' + c.covered_by.url + (c.covered_by.position ? ' (you rank #' + c.covered_by.position + ')' : ''); return; }
+  if (c.ladder_near) c.tier_note = nearNote(c.ladder_near);   // A-25: kept in the plan, the ladder named beside it
   const winnable = winnableFor(c.difficulty_for_you, c.primary_kd);   // v4.8: easy or reachable for this site (fixed 55 without a website)
   if (now < 5 && winnable && (goalNow === 'traffic' || buyerIntent(c) || now >= 4)) { c.tier = 'Now'; now++; }
   else if (nxt < 8) { c.tier = 'Next'; nxt++; }
@@ -190,9 +201,10 @@ const free = (k) => !k.covered_by && !k.ladder_covered;   // D11: a live page al
 const FALLING_PCT = -50;
 const falling = (k) => Number(k.trend_yearly) <= FALLING_PCT;
 const steady = (k) => !falling(k);
-const pick0 = kws.find(k => fits(k) && free(k) && steady(k)) || kws.find(k => fits(k) && free(k)) || kws.find(k => fits(k) && !k.covered_by && steady(k)) || kws.find(k => fits(k) && !k.covered_by)
+const pick0 = kws.find(k => fits(k) && free(k) && !k.ladder_near && steady(k)) || kws.find(k => fits(k) && free(k) && !k.ladder_near) || kws.find(k => fits(k) && free(k)) || kws.find(k => fits(k) && !k.covered_by && steady(k)) || kws.find(k => fits(k) && !k.covered_by)
   || kws.find(k => fits(k) && steady(k)) || kws.find(fits) || priority.find(k => free(k) && steady(k)) || priority.find(free) || priority.find(k => !k.covered_by) || priority[0] || kws[0] || null;
-const pipeline = pick0 && falling(pick0) ? { ...pick0, trend_note: 'falling ' + pick0.trend_yearly + '% a year - picked only because no steadier keyword qualified' } : pick0;
+const pipeline0 = pick0 && falling(pick0) ? { ...pick0, trend_note: 'falling ' + pick0.trend_yearly + '% a year - picked only because no steadier keyword qualified' } : pick0;
+const pipeline = pipeline0 && (pipeline0.ladder_near || pipeline0.ladder_covered) ? { ...pipeline0, ladder_note: pipeline0.ladder_covered ? 'already in your ladder "' + pipeline0.ladder_covered.head_keyword + '" (' + pipeline0.ladder_covered.how + ') - picked only because no free keyword qualified' : nearNote(pipeline0.ladder_near) } : pipeline0;
 
 return [{ json: { ...base, keyword_strategy: {
   goal, pool_size: base.research.pool_size, ai_reviewed, total_relevant: kws.length, keywords: kws.slice(0, 200),

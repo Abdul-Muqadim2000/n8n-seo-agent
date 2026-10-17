@@ -71,4 +71,41 @@ module.exports = async (ctx) => {
     check('A-24: with nothing declared, the three are the first three businesses of the page (hlbhamt.com, sscoglobal.com, fit.ae) — the old pick was hlbhamt / naukrigulf / sscoglobal',
       reqs2.map(r => r.domain).join(',') === 'hlbhamt.com,sscoglobal.com,fit.ae', JSON.stringify(reqs2.map(r => r.domain)));
   });
+
+  // ===================================================================================
+  // SA25 — discovery's first picks carry the ladder that already holds them
+  // ===================================================================================
+  const discover764 = async () => {
+    mock('Collect Research', [{ json: FX.cr764 }]);
+    mock('Relevance Chunks', [{ json: { keywords_chunk: FX.rel764.map((r, i) => ({ n: i + 1, keyword: r.keyword })) } }]);
+    mock('Site Model', [{ json: { site_model: { ...FX.site_model764, pages: FX.pages764 } } }]);
+    mock('Load Domain Ladders (Discovery)', items(FX.ladders764)); mock('Load Ladder Settings (Discovery)', items(FX.settings764));
+    mock('Reach (Discovery)', items(FX.reach764)); mock('Load Site Cache', [{ json: {} }]);
+    return (await run('Rank Keywords', [{ json: { output: { items: FX.rel764 } } }]))[0].json.keyword_strategy;
+  };
+  await guard('SA25 A-25 discover: "Where to start", "Build first" and "Now" never lead with a search a ladder already holds', async () => {
+    reset(); const SN = 'SA25 A-25 — "erp system dubai" / "erp systems in uae" are the ladder "erp software uae"\'s searches in other words: Covered, never "Where to start"; a near topic keeps its tier with the ladder named';
+    begin(SN); const check = mkCheck(SN);
+    const ks = await discover764();
+    const kw = (k) => ks.keywords.find(x => x.keyword === k) || {};
+    console.log('   where to start ->', ks.pipeline_keyword && ks.pipeline_keyword.keyword, '| Now ->', ks.clusters.filter(c => c.tier === 'Now').map(c => c.primary_keyword).join(', '));
+    check('A-25: "erp system dubai" (the live run\'s "Where to start") is covered by the ladder "erp software uae" — the same search in other words',
+      (kw('erp system dubai').ladder_covered || {}).head_keyword === 'erp software uae' && /other words/.test(kw('erp system dubai').ladder_covered.how), JSON.stringify(kw('erp system dubai').ladder_covered));
+    check('A-25: "erp systems in uae" (priority #5, no ladder note live) carries one now',
+      !!kw('erp systems in uae').ladder_covered, JSON.stringify(kw('erp systems in uae').ladder_covered));
+    const p = ks.pipeline_keyword || {};
+    check('A-25: "Where to start" is a search no ladder holds, or it says which ladder it is close to',
+      p.keyword && !p.ladder_covered && (!p.ladder_near || /close to your ladder/.test(p.ladder_note || '')), JSON.stringify({ k: p.keyword, c: p.ladder_covered, n: p.ladder_near, note: p.ladder_note }));
+    const lead = ks.clusters.filter(c => c.tier === 'Now');
+    check('A-25: no "Now" topic is a search a ladder holds; a Now topic near a ladder names it',
+      lead.every(c => !c.ladder_covered && (!c.ladder_near || /close to your ladder/.test(c.tier_note || ''))) && ks.clusters.some(c => c.primary_keyword === 'erp system dubai' && c.tier === 'Covered'),
+      JSON.stringify(ks.clusters.slice(0, 14).map(c => [c.tier, c.primary_keyword, c.tier_note])));
+    // the relation itself, one search one page in other words / other places
+    const OWNsrc = fs.readFileSync(path.join(process.env.CODE_DIR || path.join(__dirname, 'code_v4'), 'Rank_Keywords.js'), 'utf8');
+    const at = OWNsrc.indexOf('const OWN = (() => {'); const OWN = at < 0 ? null : new Function(OWNsrc.slice(at, OWNsrc.indexOf('\n})();', at) + 6) + '\nreturn OWN;')();
+    check('A-25: OWN.relate — system = software, another emirate is another place, one extra word is a variant, unrelated stays unrelated',
+      OWN && OWN.relate('erp systems in uae', 'erp software uae') === 'other words' && OWN.relate('erp implementation uae', 'erp implementation dubai') === 'other place'
+      && OWN.relate('erp implementation partner uae', 'erp implementation dubai') === 'variant' && OWN.relate('cloud solutions', 'erp software uae') === null
+      && OWN.relate('uae e-invoicing deadline', 'uae e-invoicing deadline 2027') === 'same', OWN ? 'relations differ' : 'OWN kit not inlined in Rank Keywords');
+  });
 };

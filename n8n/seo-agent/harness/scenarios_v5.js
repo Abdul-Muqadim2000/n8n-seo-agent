@@ -11772,12 +11772,14 @@ await guard('read-path fit gate over stored rungs', async () => {
   const GP81 = require('./gate_pairs.json'), GB81 = require('./gate_pairs_baseline.json');
   const readers81 = GP81.pairs['keyword fit | seo_ladders'].readers;
   check('the lint reads the node\'s OWN code: a node that only inlines the fit gate is NOT gated by it',
-    readers81['SEO Agent v4 — Audit, Keywords, Verdict & Content / Ladder Plan'] === false
-    && readers81['SEO Agent v4 — Audit, Keywords, Verdict & Content / Rank Keywords'] === false,
+    readers81['SEO Agent v4 — Audit, Keywords, Verdict & Content / Ladder Plan'] === false,
     JSON.stringify(readers81));
+  // A-25 (2026-10-17): *Rank Keywords* earned its gate — it now calls fitStored( on the ladder rows in its own code, so it is gated and
+  // left the baseline; Ladder Plan is still the example of a node that merely inlines the kit
+  check('A-25: Rank Keywords reads the stored rungs through fitStored in its own code, so the lint counts it gated',
+    readers81['SEO Agent v4 — Audit, Keywords, Verdict & Content / Rank Keywords'] === true, JSON.stringify(readers81));
   check('and both are still named on the ratchet, where this fix found them — nothing left the baseline that did not earn it',
-    (GB81['keyword fit | seo_ladders'].ungated || []).includes('SEO Agent v4 — Audit, Keywords, Verdict & Content / Ladder Plan')
-    && (GB81['keyword fit | seo_ladders'].ungated || []).includes('SEO Agent v4 — Audit, Keywords, Verdict & Content / Rank Keywords'),
+    (GB81['keyword fit | seo_ladders'].ungated || []).includes('SEO Agent v4 — Audit, Keywords, Verdict & Content / Ladder Plan'),
     JSON.stringify(GB81['keyword fit | seo_ladders'].ungated));
   check('the shared loop counts as the gate, so the four fixed read paths are gated and off the baseline for good',
     GP81.pairs['keyword fit | seo_ladders'].read.includes('FITR.rungs(')

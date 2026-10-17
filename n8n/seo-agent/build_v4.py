@@ -10869,6 +10869,28 @@ setcode('Finding Rows', _fr124.replace("recheck_note: '' }));",
         "recheck_note: '',\n  evidence: String(f.evidence || '').slice(0, 500), sample_urls: JSON.stringify((Array.isArray(f.sample_urls) ? f.sample_urls : []).filter(u => typeof u === 'string' && /^https?:\\/\\//i.test(u)).slice(0, 5).map(u => u.slice(0, 300))) }));   // B5-11: the read API's evidence"))
 log('Findings keep their evidence (2026-10-17, B5-11): every stored audit finding row carries its evidence line and up to five example addresses, so the read API can show why a finding is there.')
 
+# >>> 130 (F-A3)
+# =============================================================================
+# 130. WHAT THE SITE ALREADY HOLDS, READ BEFORE ANY KEYWORD ADVICE (2026-10-17, re-rating 2026-10-17, fix agent F-A3: A-1 / A-5 / A-6 /
+#      A-23 / A-25; docs/system-review-2026-10-17/parts/1_keywords_content.md). One kit, `v5/code/_own_cover.js` (OWN), answers "does a
+#      page, a keyword ladder or an unpublished draft of this site already hold this search?" for every keyword path:
+#        * discovery (*Rank Keywords*): "erp system dubai" / "erp systems in uae" are the ladder "erp software uae"'s searches in other
+#          words (Covered), and a close variant or the same topic for another place keeps its tier with the ladder named (A-25);
+# =============================================================================
+OWN_COVER_SRC = _rd0('code/_own_cover.js').rstrip('\n')
+assert 'const OWN = (() => {' in OWN_COVER_SRC
+for _n130 in list(nodes):
+    _c130 = nodes[_n130]['parameters'].get('jsCode', '')
+    if '/*__OWN_COVER__*/' in _c130:
+        setcode(_n130, _c130.replace('/*__OWN_COVER__*/', OWN_COVER_SRC))
+assert not any('/*__OWN_COVER__*/' in n['parameters'].get('jsCode', '') for n in nodes.values()), 'own-cover kit placeholder left'
+# A-25: discovery reads its ladders through the fit gate and knows the same search in other words
+assert 'const OWN = (() => {' in code('Rank Keywords') and 'OWN.ladderOf(ownLadD, kw' in code('Rank Keywords') and 'ladder_near: ladderNear(k.keyword)' in code('Rank Keywords'), 'A-25: Rank Keywords lost the ladder note'
+assert ".filter(r => fitStored(r, { ...fitCtx" in code('Rank Keywords'), 'A-25: Rank Keywords reads stored rungs without the fit gate'
+assert 'pipeline.ladder_note' in code('Build Keyword Strategy'), 'A-25: "Where to start" does not print the ladder note'
+log('What the site already holds, read before any keyword advice (2026-10-17, F-A3): v5/code/_own_cover.js (OWN) answers whether a page, a keyword ladder or an unpublished draft already holds a search - A-25: discovery marks "erp system dubai" / "erp systems in uae" as the ladder "erp software uae"\'s searches in other words (Covered) and keeps a close variant or the same topic for another place in the plan with the ladder named in "Where to start", "Build first" and the tier table; the ladder rows are read back through the fit gate')
+# <<< 130 (F-A3)
+
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:
 #     "two fixes have never come back and both are enforced by the build".
