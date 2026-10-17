@@ -466,16 +466,28 @@ export function AiGrowthReport({ report }: { report: ReportDetail }) {
   const pages = objs(p.pages), earned = objs(p.earned).filter((e) => str(e.kind) !== 'competitor'), targets = objs(p.targets).filter((t) => ['queued', 'writing', 'won'].includes(str(t.status)));
   const alerts = objs(p.alerts).filter((a) => str(a.level) !== 'good'), wins = objs(p.alerts).filter((a) => str(a.level) === 'good');
   const actions = objs(p.actions);
+  // D-4 (re-rating 2026-10-17): a dry run (`dry_run: true`, exec 783) submitted nothing; it must not read as the week's work done
+  const dry = p.dry_run === true;
+  const high = actions.filter((a) => num(a.priority) === 1).length;
   return (
     <Stagger className="space-y-5">
+      {dry && (
+        <Callout tone="warning" title="Dry run: nothing was submitted">
+          {str(p.dry_run_note) || 'A test run: no page was sent to Bing or IndexNow. The weekly run submits.'}
+        </Callout>
+      )}
       <ReportHero
         report={report}
-        title={actions.filter((a) => num(a.priority) === 1).length ? `${actions.filter((a) => num(a.priority) === 1).length} high-value step(s) to get named in AI answers` : 'AI growth: done for you this week'}
-        description="Pages sent to Bing and IndexNow, key pages checked for AI readiness, the pages AI cites without naming you, and the questions queued for an AI answer page."
+        title={dry ? 'AI growth dry run: what this week would do' : high ? `${high} high-value step(s) to get named in AI answers` : 'AI growth: done for you this week'}
+        description={
+          dry
+            ? 'What the weekly run would send to Bing and IndexNow (nothing was sent), key pages checked for AI readiness, the pages AI cites without naming you, and the questions queued for an AI answer page.'
+            : 'Pages sent to Bing and IndexNow, key pages checked for AI readiness, the pages AI cites without naming you, and the questions queued for an AI answer page.'
+        }
         aside={num(p.avg_score) != null ? <ScoreMark score={Math.round(num(p.avg_score)!)} label="Key pages AI-ready" /> : undefined}
         stats={
           <>
-            <HeroStat label="Sent to Bing / IndexNow" value={sent} hint={str(inx.verified) === 'true' || inx.verified === true ? 'IndexNow ready' : 'IndexNow waits for its key file'} />
+            <HeroStat label={dry ? 'Sent to Bing / IndexNow (dry run)' : 'Sent to Bing / IndexNow'} value={sent} hint={str(inx.verified) === 'true' || inx.verified === true ? 'IndexNow ready' : 'IndexNow waits for its key file'} />
             <HeroStat label="Key pages checked" value={pages.length} hint={num(p.avg_score) != null ? `average ${Math.round(num(p.avg_score)!)}/100` : undefined} />
             <HeroStat label="Pages citing others" value={earned.filter((e) => e.mentions_us !== true).length} hint={`${earned.filter((e) => e.draft).length} draft(s)`} />
             <HeroStat label="Questions queued" value={targets.filter((t) => str(t.status) === 'queued').length} />

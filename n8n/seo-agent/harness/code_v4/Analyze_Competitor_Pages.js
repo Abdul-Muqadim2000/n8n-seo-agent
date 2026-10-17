@@ -237,11 +237,18 @@ const avg = competitors.length ? Math.round(competitors.reduce((s, c) => s + c.w
 const STOP = new Set('a an the and or but if then else when while of for to in on at by with from as is are was were be been being it its this that these those they them their there here you your we our us i me my he she his her which who whom whose what where why how all any each few more most other some such no nor not only own same so than too very can will just do does did done have has had having would could should may might must shall into over under again further about above below between through during before after out off up down also because until while both per via etc'.split(' '));
 // generic business words are useless as single terms (they still count inside multi-word phrases)
 const GENERIC = new Set('business businesses company companies help helps helping solution solutions need needs needed project projects team teams time times way ways work works working use used using make makes making get gets getting provide provides providing ensure ensures right best better good great new different important service services year years day days people thing things lot part parts number including based also well like one two three first second many much more most every able high low large small long key main specific several various within across throughout during ahead forward often always free full end top type types level levels example examples case cases result results option options area areas point points plan plans today experience experienced expert experts professional professionals partner partners client clients customer customers organization organizations organisation organisations industry industries process processes system systems software contact learn read'.split(' '));
-const tokens = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9\s'-]/g, ' ').split(/\s+/).filter(w => w && w.length > 2 && !/^\d+$/.test(w)).slice(0, 3500);
+// A-7 (2026-10-17, re-rating exec 760): the coverage target carried "businesses the uae", "ministry finance" and "features like" - the
+// words of one or two letters (in, of) were DROPPED before the phrases were cut, so the words on either side were joined into a phrase no
+// page contains. They stay in place now: a stop word may sit inside a three-word phrase ("ministry of finance") but never starts or ends
+// one, a number is a break (BRK) no phrase spans, and "like" / "including" never end a phrase. Single words still need three letters.
+const BRK = '\u0000';
+const tokens = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9\s'-]/g, ' ').split(/\s+/).filter(Boolean).map(w => /^\d+$/.test(w) ? BRK : w).slice(0, 3500);
+const FRAG = new Set(['like', 'including', 'includes', 'etc', 'such']);
 const grams = (toks) => { const g = new Map(); const add = (s) => g.set(s, (g.get(s) || 0) + 1);
-  for (let i = 0; i < toks.length; i++) { const a = toks[i]; if (!STOP.has(a)) add(a);
-    if (i + 1 < toks.length) { const b = toks[i + 1]; if (!STOP.has(a) && !STOP.has(b)) add(a + ' ' + b);
-      if (i + 2 < toks.length) { const c = toks[i + 2]; if (!STOP.has(a) && !STOP.has(c)) add(a + ' ' + b + ' ' + c); } } }
+  const edge = (w) => w !== BRK && !STOP.has(w) && !FRAG.has(w) && w.length > 1;
+  for (let i = 0; i < toks.length; i++) { const a = toks[i]; if (!edge(a)) continue; if (a.length > 2) add(a);
+    if (i + 1 < toks.length) { const b = toks[i + 1]; if (b === BRK) continue; if (edge(b)) add(a + ' ' + b);
+      if (i + 2 < toks.length) { const c = toks[i + 2]; if (edge(c) && !FRAG.has(b)) add(a + ' ' + b + ' ' + c); } } }
   return g; };
 const docs = competitors.map(c => grams(tokens(c.content_full)));
 const df = new Map(), tf = new Map();

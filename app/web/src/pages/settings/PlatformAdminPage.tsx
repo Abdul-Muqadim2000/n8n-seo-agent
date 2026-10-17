@@ -55,7 +55,7 @@ export default function PlatformAdminPage() {
           <EmptyState
             icon={<Lock className="size-5" />}
             title="You do not have access to this page"
-            description="Platform administration is limited to the operators the server names in PLATFORM_ADMIN_EMAILS."
+            description="Platform administration is limited to the people who run this installation."
             action={<ButtonLink to="/">Go to the dashboard</ButtonLink>}
           />
         </Card>

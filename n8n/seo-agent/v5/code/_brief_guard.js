@@ -1,3 +1,4 @@
+/*__EXCLUSIONS__*/
 // ---- the brief is held to what the data supports (D10, 2026-10-12; inlined into the v3 node *Parse Brief* by build_v4.py section 35) ----
 // Execution 365 asked for 3,100 words although the competitor analysis had recommended (and clamped) far fewer and the verdict had asked
 // for "a service page of about 2,100 words", and it built the page on cost and timeline although the business had given neither — so the
@@ -53,6 +54,21 @@ if (prev.pricing_facts !== undefined || prev.timeline_facts !== undefined) {
       const cols = (CT.columns || []).filter(c => !offends(c));
       if (cols.length !== (CT.columns || []).length) { adjustments.push('Removed ' + ((CT.columns || []).length - cols.length) + ' comparison-table column(s) that only a ' + missing.replace(' facts', '') + ' could fill'); CT.columns = cols; }
       if (offends(CT.rows_hint)) { CT.rows_hint = 'criteria the reader can check for themselves (what each option covers, who it suits, what it needs from them) — no price or timeline figures'; adjustments.push('Comparison-table rows no longer ask for figures the business has not given'); }
+    }
+  }
+}
+// 3. A-18 (2026-10-17, re-rating 2026-10-17): a section about a topic the verdict said to leave out is taken out of the outline, so the
+//    writer is never asked for it. Live (exec 771) the verdict said "Skip the consultancy-licence and start-an-IT-company questions" and
+//    the page carried "How Much Is a Consultancy Licence in Dubai?" (the brief never saw the instruction). EXC is the verdict-exclusions
+//    kit; Content QA checks the finished draft by the same rule.
+{
+  const EXL = Array.isArray(prev.verdict_exclusions) ? prev.verdict_exclusions : EXC.fromVerdict(prev.verdict_changes, []);
+  if (EXL.length) {
+    const pr = EXC.prune(brief.outline, EXL, prev.keyword || '');
+    if (pr.dropped.length) { brief.outline = pr.kept; adjustments.push('Outline section(s) the verdict said to leave out were removed: ' + pr.dropped.map(d => '"' + d.h2 + '" (skip ' + d.topic + ')').join('; ')); }
+    if (Array.isArray(brief.snippet_targets)) {
+      const SNIP = brief.snippet_targets.filter(t => !EXL.some(e => EXC.match(String((t && t.question) || ''), e, prev.keyword || '')));
+      if (SNIP.length !== brief.snippet_targets.length) { adjustments.push('Removed ' + (brief.snippet_targets.length - SNIP.length) + ' snippet question(s) about a topic the verdict said to leave out'); brief.snippet_targets = SNIP; }
     }
   }
 }

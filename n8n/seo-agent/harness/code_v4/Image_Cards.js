@@ -190,6 +190,10 @@ const SM = (() => {
     if (qHit && best) return { ...best, listing: listingOf(qHit, best) };
     return qHit || best;
   };
+  // A-22 (2026-10-17): how well ONE page of the inventory targets a search by its own words (slug or title / H1, the matchPage rule), so a
+  // caller that already knows the page Google ranks can ask whether another page targets the search more closely - never to replace it
+  const pageScore = (page, keyword) => { const p = page || {}; const want = matchTerms(keyword); if (!want.length || !S(p.url)) return null;
+    return Math.round(Math.max(shareIn(want, matchTerms(pathOf(p.url).replace(/\.[a-z]{2,5}$/i, ''))), shareIn(want, matchTerms(S(p.title) + ' ' + S(p.h1)))) * 100) / 100; };
   // R35: how much of a search a page's OWN title / H1 holds (null when the page's title was never read) - the only evidence that may call
   // a page "about something else"
   // the words of a spoken / long-tail search that say nothing about the subject ("which ... can help ... in the uae")
@@ -234,7 +238,7 @@ const SM = (() => {
     decay_state: S(p.decay_state), decay_pct: num0(p.decay_pct), decay_lost: num0(p.decay_lost), decay_kind: S(p.decay_kind),
     decay_basis: S(p.decay_basis).slice(0, 900), measured_at: S(p.measured_at) }));
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
-    titleShare, titleGap, canonUrl, isListing,
+    titleShare, titleGap, canonUrl, isListing, pageScore,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms } };
 })();
 // Image cards (FIX_PLAN G30, 2026-10-13): one HTML card per planned image, for the local renderer to turn into a WebP file.

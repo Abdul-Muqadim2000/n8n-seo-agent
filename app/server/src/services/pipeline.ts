@@ -370,8 +370,9 @@ export function writtenPages(logs: ContentLogRow[], ladders: LadderRow[], now = 
         source: String(l.request_id || '').startsWith('cad_') ? 'cadence' : l.source || 'app',
       })),
     ...ladders
-      .filter((l) => l.keyword && (l.status === 'writing' || l.status === 'published'))
-      .map((l) => ({ keyword: l.keyword, status: l.status as 'writing' | 'published', startedAt: '', publishedUrl: l.status === 'published' ? l.target_url || '' : '', source: 'ladder' })),
+      // A-20 (F-A1): `written` / `not_ready` are a ladder row whose page run finished; here they are a page that exists and is not live
+      .filter((l) => l.keyword && (l.status === 'writing' || l.status === 'written' || l.status === 'not_ready' || l.status === 'published'))
+      .map((l) => ({ keyword: l.keyword, status: (l.status === 'published' ? 'published' : 'writing') as 'writing' | 'published', startedAt: '', publishedUrl: l.status === 'published' ? l.target_url || '' : '', source: 'ladder' })),
   ];
   // one entry per keyword: a published page (with its address) wins, then the newest; the content log knows dates the ladder lacks
   const rank = (w: PipelineData['written'][number]) => (w.status === 'published' ? (w.publishedUrl ? 2 : 1) : 0);

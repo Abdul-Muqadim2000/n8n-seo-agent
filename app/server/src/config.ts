@@ -134,7 +134,10 @@ export const config = {
     enabled: !!(e.GOOGLE_OAUTH_CLIENT_ID && e.GOOGLE_OAUTH_CLIENT_SECRET),
     redirectUri: `${e.APP_URL}/api/auth/google/callback`,
   },
-  brand: e.SEO_BRAND,
+  // D-12 (re-rating 2026-10-17): the app's own name in what it says to customers (MCP server title, account e-mails). It was
+  // SEO_BRAND — the engine's report brand, read from n8n/.env and "Dev SEO" by default — so every MCP client of this install was told
+  // it was talking to "Dev SEO". The product is Ascentra (web/src/components/layout/Brand.tsx BRAND_NAME).
+  brand: 'Ascentra',
   mail: {
     from: e.SEO_MAIL_FROM || (e.SEO_SMTP_USER ? `${e.SEO_BRAND} <${e.SEO_SMTP_USER}>` : ''),
     host: e.SEO_SMTP_HOST,

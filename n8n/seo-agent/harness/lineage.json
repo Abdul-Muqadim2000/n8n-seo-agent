@@ -133,7 +133,7 @@
     "kit": true,
     "travels": true
    },
-   "markup": 480,
+   "markup": 481,
    "node": "Build Full Report",
    "subject": [
     "lineage",
@@ -165,7 +165,7 @@
     "kit": true,
     "travels": true
    },
-   "markup": 94,
+   "markup": 95,
    "node": "Build Ladder Report",
    "subject": [
     "lineage"

@@ -362,7 +362,8 @@ const fromCrawl = (url) => {
   const meta = hit.meta || {};
   const nonIdx = (((prev.crawl_extras || {}).non_indexable) || []).find(x => sameUrl(x.url, url));
   const robots = [nonIdx && /noindex/i.test(S(nonIdx.reason)) ? 'noindex' : '', meta.follow === false ? 'nofollow' : ''].filter(Boolean).join(', ');
-  return { ok: true, title: S(meta.title), h1: S((meta.htags || {}).h1 && (meta.htags || {}).h1[0]), h1_count: (((meta.htags || {}).h1) || []).length,
+  // B-1: the crawl's title and heading are decoded once, as readHtml decodes the first response's
+  return { ok: true, title: LK.text(S(meta.title)), h1: LK.text(S((meta.htags || {}).h1 && (meta.htags || {}).h1[0])), h1_count: (((meta.htags || {}).h1) || []).length,
     canonical: S(meta.canonical), robots, links: (num(meta.internal_links_count) || 0) + (num(meta.external_links_count) || 0),
     internal_links: num(meta.internal_links_count) || 0, words: num((meta.content || {}).plain_text_word_count) || 0, js_shell: false };
 };
@@ -399,13 +400,35 @@ const FIGURES = [
 ];
 const SOURCE_RAW = 'the first response (raw HTML)';
 const SOURCE_REN = 'after JavaScript (rendered page)';
+// B-1 (2026-10-17): text is compared as the decoded text both readers hold (readHtml decodes once; the crawl's figures are decoded once
+// in fromCrawl), never decoded a second time here ("&amp;amp;" is the text "&amp;", R62)
+const normText = (v) => S(v).toLowerCase().replace(/\s+/g, ' ').trim();
 const same = (f, a, b) => f.kind === 'url' ? (sameUrl(a, b) || (!S(a) && !S(b)))
   : f.kind === 'count' ? (Number(a) === Number(b) || (Math.max(Number(a) || 0, Number(b) || 0) > 0 && Math.min(Number(a) || 0, Number(b) || 0) / Math.max(Number(a) || 0, Number(b) || 0) >= 0.8))
-    : S(a).toLowerCase().replace(/\s+/g, ' ') === S(b).toLowerCase().replace(/\s+/g, ' ');
+    : normText(a) === normText(b);
 const grew = (f, rawV, renV) => {   // a count that is materially bigger after JavaScript
   if (f.kind !== 'count') return false;
   const a = Number(rawV) || 0, b = Number(renV) || 0;
   return b >= (f.key === 'links' ? 10 : 150) && (a === 0 || a / b < 0.4);
+};
+// B-1 (2026-10-17, re-rating 2026-10-17, exec 739, High): the 20 pages paired with the JavaScript crawl compared OUR parser's count of every
+// <a> and every word of the first response with DataForSEO's OWN counts after rendering (`internal_links_count + external_links_count` —
+// unique links — and `plain_text_word_count`, the main text without the navigation). Two different rulers: /security read "52 links, 694
+// words" against "29, 439", every one of the 20 pages came out SMALLER after JavaScript — the opposite of what script-written content does —
+// and the audit raised "AI crawlers see a different version of 20 key page(s)" on a server-rendered site whose first response GPTBot and a
+// browser receive byte for byte. Two rules now:
+//   * a count only ever matters in ONE direction: the rendered page having MORE than the first response (that is content a non-rendering
+//     crawler misses). A first response that carries more than the rendered reading hides nothing from any crawler: it is `raw_more`, never
+//     a finding, on every path;
+//   * on a crawl-paired page the two counts come from two different counting methods, so only a gap no counting difference can explain is
+//     read as script-written content: the crawl (which counts unique links and the main text only, i.e. LESS than our parser) must see at
+//     least CRAWL_GAP times what our parser found in the first response. Anything closer is `not_compared`, with the reason, and scores
+//     nothing. Title, main heading and canonical link mean the same thing in both readings and are compared (entities decoded).
+const CRAWL_GAP = 2.5;
+const pairedCount = (f, rawV, renV) => {
+  const a = Number(rawV) || 0, b = Number(renV) || 0;
+  if (b >= (f.key === 'links' ? 10 : 150) && (a === 0 || b >= CRAWL_GAP * a)) return { state: 'js_only', from: SOURCE_REN + ' — the JavaScript crawl counted ' + b + ', at least ' + CRAWL_GAP + ' times the ' + a + ' in the first response, more than its own way of counting can explain' };
+  return { state: 'not_compared', from: 'not compared: the JavaScript crawl counts ' + (f.key === 'links' ? 'unique links' : 'the main text only') + ' and our parser counts ' + (f.key === 'links' ? 'every link' : 'every word') + ' of the first response, so ' + a + ' against ' + b + ' is a difference of method, not of content' };
 };
 
 const pages = [];
@@ -438,10 +461,13 @@ for (const job of jobs) {
     const hasB = f.kind === 'count' ? (Number(b) || 0) > 0 : !!S(b);
     let state = 'same', from = SOURCE_RAW;
     // B5-6: the crawl keeps the indexing rule it derived, not the meta tag, so the two robots readings are not comparable for a crawl-paired page
-    if (job.extra && f.key === 'robots') return { figure: f.label, key: f.key, raw: a, rendered: b, state: 'same', from: 'not compared (the crawl keeps its own indexing rule)' };
+    if (job.extra && f.key === 'robots') return { figure: f.label, key: f.key, raw: a, rendered: b, state: 'not_compared', from: 'not compared (the crawl keeps its own indexing rule)' };
+    // B-1: a crawl-paired count is read only in the one direction its method can support (see pairedCount)
+    if (job.extra && f.kind === 'count') { const pc = (Number(a) || 0) === (Number(b) || 0) ? { state: 'same', from: SOURCE_RAW } : pairedCount(f, a, b); return { figure: f.label, key: f.key, raw: a, rendered: b, state: pc.state, from: pc.from }; }
     if (!hasA && !hasB) { state = 'absent'; from = 'neither reading has it'; }
     else if (!hasA && hasB) { state = 'js_only'; from = SOURCE_REN; }
-    else if (hasA && !hasB) { state = 'raw_only'; from = SOURCE_RAW; }
+    else if (hasA && !hasB) { state = job.extra ? 'not_compared' : 'raw_only'; from = job.extra ? 'not compared: the JavaScript crawl kept no ' + f.label.toLowerCase() + ' for this page' : SOURCE_RAW; }
+    else if (f.kind === 'count' && (Number(a) || 0) > (Number(b) || 0)) { state = same(f, a, b) ? 'same' : 'raw_more'; from = state === 'same' ? SOURCE_RAW : 'the first response has more than the rendered page — nothing is hidden from a crawler that does not run JavaScript'; }
     else if (!same(f, a, b)) { state = grew(f, a, b) ? 'js_only' : 'differs'; from = state === 'js_only' ? SOURCE_REN : 'the two readings differ'; }
     return { figure: f.label, key: f.key, raw: a, rendered: b, state, from };
   });
@@ -452,7 +478,7 @@ for (const job of jobs) {
   const unc = uncRen || uncRaw || { count: 0, kinds: [], samples: [] };
   pages.push({ url: t.url, path: pathOf(t.url), kind: t.kind || 'page', checked: true, not_checked: '', rendered_source, paired_with_crawl: job.extra,
     figures, js_only: figures.filter(f => f.state === 'js_only').map(f => f.key),
-    differs: figures.filter(f => f.state === 'differs').map(f => f.key), js_shell: !!raw.js_shell,
+    differs: figures.filter(f => f.state === 'differs').map(f => f.key), not_compared: figures.filter(f => f.state === 'not_compared').map(f => f.key), js_shell: !!raw.js_shell,
     uncrawlable: unc.count, uncrawlable_kinds: unc.kinds, uncrawlable_samples: unc.samples,
     uncrawlable_read_from: unc.count ? (uncRen ? 'the rendered page' : 'the first response') : '' });
 }
@@ -502,7 +528,12 @@ const render_diff = {
   paired_with_crawl: checked.filter(p => p.paired_with_crawl).length, paired_note: plan.raw_pairs_note || '',
   hreflang,
   cap: plan.cap || 0, rendered_source: checked.length ? checked[0].rendered_source : '',
-  method: (extras.length ? 'Up to ' + (plan.cap || 5) + ' key pages are rendered by the render service; with this JavaScript crawl up to ' + extras.length + ' more are paired with the crawl itself (it is already the rendered reading), which costs one free plain request each. ' : '') + 'Each page was read twice: a plain GET of the page under our own audit user agent (the first response, what a crawler that does not run JavaScript receives from a plain request; a site that answers named AI bots differently is read by the AI crawler access check, not here) and the same page after its scripts ran. Title, main heading, canonical link, robots meta, links and text length are read from both with the same parser, and URLs are compared without the www. prefix.',
+  // B-1: the method says exactly what was compared, and how, for each of the two kinds of page
+  method: 'Each page was read twice: a plain GET of the page under our own audit user agent (the first response, what a crawler that does not run JavaScript receives from a plain request; a site that answers named AI bots differently is read by the AI crawler access check, not here) and the same page after its scripts ran. '
+    + 'For the ' + (plan.cap || 5) + ' key pages rendered by the render service both readings are HTML and title, main heading, canonical link, robots meta, links and text length are read from both with the same parser. '
+    + (extras.length ? 'With this JavaScript crawl ' + extras.length + ' more pages are paired with the crawl itself (it is already the rendered reading, one free plain request each). The crawl keeps its own figures, not the HTML: title, main heading and canonical link are compared as text (entities decoded); the robots rule is not compared (the crawl keeps the rule it derived); links and words are counted differently (the crawl counts unique links and the main text, our parser every link and every word), so a count is read as script-written content only when the crawl saw at least ' + CRAWL_GAP + ' times what the first response carries, and is otherwise not compared. ' : '')
+    + 'A count only matters when the page after JavaScript has more than the first response: a first response that carries more hides nothing from a crawler. URLs are compared without the www. prefix.',
+  pages_counts_not_compared: checked.filter(p => (p.not_compared || []).some(k => k === 'links' || k === 'words')).length,
   figures: FIGURES.map(f => f.label),
   checked_at: new Date().toISOString()
 };
@@ -607,7 +638,9 @@ if (notChecked.length) F('Technical', 'Info', 'The response-versus-render check 
   notChecked.map(p => p.url), false, '');
 
 if (checked.length && !withJs.length && !checked.some(p => (p.differs || []).length)) {
-  works.push('Every key page checked (' + checked.length + ') serves its title, heading, canonical, robots rule, links and text in the first response, so crawlers that do not run JavaScript see the same page as Google does');
+  const ncP = checked.filter(p => (p.not_compared || []).length).length;   // B-1: say which figures were not compared on the crawl-paired pages
+  works.push('Every ' + (extras.length ? '' : 'key ') + 'page checked (' + checked.length + ') serves its title, heading, canonical, robots rule, links and text in the first response, so crawlers that do not run JavaScript see the same page as Google does'
+    + (ncP ? ' (on ' + ncP + ' page(s) paired with the JavaScript crawl the robots rule and the link and word counts were compared only as far as the crawl\'s own way of counting allows: see the method)' : ''));
 }
 
 return [{ json: { ...prev, skip: undefined, render_diff,

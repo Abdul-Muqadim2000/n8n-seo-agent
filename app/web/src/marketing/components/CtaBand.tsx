@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { ArrowRight, Check } from 'lucide-react';
+import { AscentraMark } from '@/components/brand/AscentraMark';
 import { ButtonLink } from '@/components/ui/button';
 import { useMe } from '@/lib/queries';
 import { cn } from '@/lib/utils';
@@ -15,7 +16,7 @@ const CTA_FACTS = ['Free to set up', 'First site check on day one', 'Cost shown 
 
 /**
  * Closing ink band, the bookend of the home hero: hairline grid, centred headline, primary + secondary CTA, the promises that remove
- * the risk, the entry price, and the brand mark rising from the bottom edge as a faint watermark.
+ * the risk, the entry price, and the brand mark rising from the bottom edge as a faint, slowly waving watermark.
  */
 export function CtaBand({
   title = 'Your product is ready. Let’s get it found.',
@@ -45,10 +46,10 @@ export function CtaBand({
       <Container size="lg">
         <Reveal className="relative isolate overflow-hidden rounded-3xl bg-ink-surface px-6 pb-32 pt-16 text-center text-on-ink sm:px-12 sm:pb-40 sm:pt-24 lg:pb-44">
           <div aria-hidden className="mk-grid-ink pointer-events-none absolute inset-0 -z-10" />
-          {/* the supplied white mark, its hub on the bottom edge so the rays rise behind the text (a mask, faded to 6%) */}
-          <span
-            aria-hidden
-            className="mk-watermark pointer-events-none absolute bottom-0 left-1/2 -z-10 aspect-[911/797] w-[460px] -translate-x-[68.4%] translate-y-[24.3%] bg-on-ink/[0.06] sm:w-[640px] lg:w-[760px]"
+          {/* the mark, its hub on the bottom edge so the rays rise behind the text; a slow wave runs from the sun to the wing tip */}
+          <AscentraMark
+            wave="ambient"
+            className="pointer-events-none absolute bottom-0 left-1/2 -z-10 w-[460px] -translate-x-[68.4%] translate-y-[24.3%] text-white opacity-[0.18] sm:w-[640px] lg:w-[760px]"
           />
           <div className="relative mx-auto max-w-4xl">
             <h2 className="mx-auto max-w-3xl font-display text-[2.25rem] font-semibold leading-[1.06] tracking-[-0.025em] text-balance text-on-ink sm:text-5xl lg:text-[3.5rem]">{title}</h2>

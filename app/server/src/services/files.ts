@@ -21,8 +21,14 @@ export function fileKind(fileName: string, mimeType: string): ReportFile['kind']
   if (ext === 'zip' || mimeType.includes('zip')) return 'zip';
   if (ext === 'csv' || mimeType === 'text/csv') return 'csv';
   if (ext === 'txt' || mimeType.startsWith('text/')) return 'txt';
+  // D-13: raster images only (an SVG can carry script, so it stays a plain download under "other")
+  if (/^(png|jpe?g|webp|gif|avif)$/.test(ext) || /^image\/(png|jpeg|webp|gif|avif)$/.test(mimeType)) return 'image';
   return 'other';
 }
+
+/** The kind to show for a stored file: rows stored before `image` existed say `other` for a .webp (D-13). */
+export const shownFileKind = (f: { kind: string; fileName: string; mimeType: string }): ReportFile['kind'] =>
+  f.kind === 'other' ? fileKind(f.fileName, f.mimeType) : (f.kind as ReportFile['kind']);
 
 const MIME_BY_EXT: Record<string, string> = {
   txt: 'text/plain; charset=utf-8',

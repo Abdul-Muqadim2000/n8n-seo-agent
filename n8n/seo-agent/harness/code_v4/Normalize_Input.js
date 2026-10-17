@@ -412,6 +412,10 @@ return [{
     ladder_links,
     ladder_words: Math.max(0, Math.round(Number(p2.ladder_words) || 0)),   // P2-7: the word count the ladder verdict set for this page
     ladder_target_url: /^https?:\/\/\S+$/i.test(String(p2.ladder_target_url || '').trim()) ? String(p2.ladder_target_url).trim().slice(0, 300) : '',   // R15: the URL the ladder planned for this page
+    ladder_measure: (p2.ladder_measure && typeof p2.ladder_measure === 'object' && !Array.isArray(p2.ladder_measure)) ? { keyword: String(p2.ladder_measure.keyword || '').toLowerCase().trim().slice(0, 200),
+      score: (p2.ladder_measure.score === null || p2.ladder_measure.score === '' || !Number.isFinite(Number(p2.ladder_measure.score))) ? null : Number(p2.ladder_measure.score),
+      checked_at: String(p2.ladder_measure.checked_at || '').slice(0, 40), ai_overview: p2.ladder_measure.ai_overview === true,
+      features: Array.isArray(p2.ladder_measure.features) ? p2.ladder_measure.features.slice(0, 12).map(x => String(x).slice(0, 40)) : [] } : null,   // A-21: what the ladder run measured for this keyword
     ai_target,
     force_content: !!p2.force_content,
     publish_wordpress: !!CONFIG.wordpress_publish && !!wordpress_url,
