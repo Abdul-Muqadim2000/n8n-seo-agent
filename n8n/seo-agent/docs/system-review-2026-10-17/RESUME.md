@@ -85,10 +85,13 @@ Before each phase, read §3 / §8 to see what is already done.
 - **Phase B — the open Lows and found bugs** (one or two small agents, `FIX_COMMON.md`): `pipeline.ts` `seo_pages` by `domain` (G3's find),
   C-9, B-8, B-9, B-10, B-16, B-18, the Tracker Report scenario for C-12 / C-13, "ran late" on the Audit Scheduler and Page Watch, the
   prospects nothing names (halsimplify / tradeshift). Merge, rebuild, harness ≥ 6861 / 0 failed, push.
-- **Phase C — deploy** (the step the permission system refused on 2026-10-17; the owner asked for it to be done): once A and B are merged
-  and green, run `cd n8n && python3 seo-agent/apply_env.py` **once** (not Monday 07:00–12:00 New York). If it is refused again, do not work
-  around it: record it here and continue with what does not need the deploy.
-- **Phase D — test everything live** (only after a successful deploy): the §5 live checks on techand.ai (DataForSEO ≈ $0.8; stop if the
+- **Phase C — deploy: NOT unattended.** The permission system refuses a production deploy without the owner present (refused twice:
+  2026-10-17 21:31 UTC, and as a scheduled job 2026-10-18 03:20 PKT). Do **not** run `apply_env.py`, and do not schedule or script it. Prepare
+  it instead: everything merged and green, and a short "deploy checklist" at the end of this file (what the deploy changes, `sync_tables.py`
+  columns, migrations, what to live-check). The owner runs it on return.
+- **Phase D — test everything that can be tested without the deploy**: offline (harness, app tests, web build) after every merge, and a
+  browser pass on the dev stack (it serves the main checkout's app code; it does not need the n8n deploy). The §5 **live engine checks wait for
+  the owner's deploy**. When run: the §5 live checks on techand.ai (DataForSEO ≈ $0.8; stop if the
   balance would fall under $3.00), plus a browser pass on the dev stack (Playwright image, 1440 / 390, light / dark) of onboarding step 6,
   the Publishing tab, the Crawlers page, the identity screens (two-step, sessions, audit log, SSO tab), the Integrations tab. Write
   `LIVE_CHECK_fixes_2026-10-18.md` in this folder (per check: execution id, node, quoted value, pass / fail). A fix that fails live gets
