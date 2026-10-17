@@ -160,6 +160,7 @@ export const deliveryOn = (s: DeliverySettings): boolean => s.frequency !== 'off
 
 export type HoldCode =
   | 'not_ready'
+  | 'test_run'
   | 'refused'
   | 'rejected'
   | 'unavailable'
@@ -232,6 +233,7 @@ export interface DeliveryCandidate {
  *    `serp_features.unavailable`, a homepage it could not read). The report exists so the customer can see *why*; pushing it
  *    would present "we could not look" as a finding.
  *  - **interim** — a "started" callback is an acknowledgement, not a result.
+ *  - **test run** — C-11: a dry run (`dry_run: true`) changed nothing; it is a test, not a report.
  */
 export function deliveryDecision(c: DeliveryCandidate): DeliveryDecision {
   const p = c.payload ?? {};
@@ -245,6 +247,10 @@ export function deliveryDecision(c: DeliveryCandidate): DeliveryDecision {
   if (INTERIM_STAGES.has(stage)) return hold('interim', 'This is a note that the work started, not the report itself.');
   if (!finishedStatus(stage, status)) return hold('rejected', `This run finished as "${status}", not as a completed report.`);
   if (text(p.validation_error)) return hold('refused', `The engine refused this run: ${text(p.validation_error).slice(0, 200)}`);
+  // C-11 (re-rating 2026-10-17): a dry run is a test the owner started - AI Growth's `dry_run: true` submitted nothing, so a report titled
+  // "done for you this week" must never be pushed to anyone. It stays in the app, marked as a test.
+  if (p.dry_run === true || p.dry_run === 'true')
+    return hold('test_run', 'This was a test run (dry run): nothing was submitted or changed, so it stays in the app and is not sent.');
 
   // R11 — the quality gate. A page that did not pass is a draft, whatever else the report contains.
   if (p.qa_not_ready === true || p.qa_publishable === false) {

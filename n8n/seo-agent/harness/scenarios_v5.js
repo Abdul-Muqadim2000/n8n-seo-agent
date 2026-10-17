@@ -2258,6 +2258,10 @@ await guard('ai pulse', async () => {
   console.log('   quiet day ->', JSON.stringify({ samples: pmQ[0].json.samples, mention: pmQ[0].json.mention_rate, alerts: pmQ[0].json.alerts.map(a => a.text.slice(0, 60)) }));
   await run('Pulse Answer Rows', pmQ, { code: 'Pulse__Pulse_Answer_Rows' }); await run('AI Daily Rows', pmQ, { code: 'Pulse__AI_Daily_Rows' }); const alQ = await run('Pulse Alerts', pmQ, { code: 'Pulse__Pulse_Alerts' });
   check('quiet day: no alert, nothing delivered, the daily row is still stored', pmQ[0].json.alerts.length === 0 && alQ[0].json.skip === true && store['AI Daily Rows'][0].json.samples === 21, JSON.stringify(pmQ[0].json.alerts));
+  // C-14 (re-rating 2026-10-17): the on-demand pulse of 2026-10-17 with 0 alerts read "0 change(s)" under a red alert box
+  check('C-14: a pulse with no alert says "no change in today\'s AI answers" and draws no alert box; a pulse with alerts still counts them',
+    /— no change in today's AI answers$/.test(pmQ[0].json.subject) && !/#fef2f2/.test(pmQ[0].json.html) && /No change worth an alert today/.test(pmQ[0].json.html) && /— \d+ change\(s\) in today's AI answers$/.test(X.subject) && /#fef2f2/.test(X.html),
+    JSON.stringify([pmQ[0].json.subject, X.subject]));
   // too few samples: no statistical alert from a handful of answers
   mock('Load AI Prompts', prompts.slice(0, 2)); const planS = await run('AI Plan', store['Load Cache (AI)'], PN); const rqS = await run('AI Requests', planS, PR); mock('Run AI Requests', rqS.map((q, i) => A9.answerFor(q.json, i, {})));
   const pmS = await run('Pulse Metrics', await run('Parse AI Answers', store['Run AI Requests'], PP), PM);
@@ -2742,7 +2746,10 @@ await guard('ai growth', async () => {
   const OFF = await growthPass();
   check('D12: with the Link Builder off AI Growth still drafts, but never to a competitor selling what we sell (orksync.com) and never to a government page',
     OFF.em.outreach_jobs.length >= 1 && !OFF.em.outreach_jobs.some(j => j.prospect_domain === 'orksync.com') && !OFF.em.outreach_jobs.some(j => /\.gov(\.|$)/.test(j.prospect_domain))
-    && /competing provider/.test(OFF.row('orksync.com').note), JSON.stringify({ jobs: OFF.em.outreach_jobs.map(j => j.prospect_domain), orksync: OFF.row('orksync.com').note }));
+    // C-2 (2026-10-17): a site whose own title sells our category ("ERP Implementation Services in Dubai") is a competitor in AI Growth too
+    // (RV.providerOf, the rule the Link Builder uses) - not a prospect at all, with the reason, rather than a prospect with a refusal note
+    && (/competing provider/.test(OFF.row('orksync.com').note) || ((OFF.em.earned.find(e => e.host === 'orksync.com') || {}).kind === 'competitor' && /sells what you sell/.test((OFF.em.earned.find(e => e.host === 'orksync.com') || {}).rival_why || '') && !OFF.row('orksync.com').prospect_domain)),
+    JSON.stringify({ jobs: OFF.em.outreach_jobs.map(j => j.prospect_domain), orksync: OFF.row('orksync.com').note, earned: (OFF.em.earned.find(e => e.host === 'orksync.com') || {}).rival_why }));
   check('D12: the name comes from the site model, never the domain label — with no profile the drafts are for "Tech&", and the facts tell the writer nothing is accredited',
     (await growthPass({ site: { business_name: 'Tech&' }, profiles: [] })).em.business === 'Tech&'
     && /Business: Tech&/.test((await growthPass({ site: { business_name: 'Tech&' }, profiles: [] })).oi.facts) && !/Accreditation/.test(OFF.oi.facts), JSON.stringify(OFF.oi.facts).slice(0, 200));
@@ -15029,6 +15036,129 @@ await guard('SC3 C-16 the mail watcher watchdog', async () => {
   const T = await planWith(WF(), [ROW4], null, { plan_only: true });
   const TR = await CU_RUN('Watchdog Result', [{ json: {} }]);
   check('C-16: a test run of the catch-up (plan only) neither re-activates nor writes the watchdog record', T.skip === true && T.test === true && TR.length === 0, JSON.stringify([T, TR]));
+  reset();
+});
+
+await guard('SC4 C-2 C-8 C-10 one rival set', async () => {
+  const SN = 'SC4 C-2 / C-8 / C-10 / C-3 — one rival set for AI visibility, AI Growth, the Backlink Monitor and the Link Builder (the real 2026-10-17 titles): a business AI recommends instead of you is never a pitch, not even its "best of" page; a site whose own title or address sells your category is a competing provider; the link gap knows a UAE paper; a prospect is pointed at our page on its topic; earned-media counts say what they count';
+  reset(); begin(SN);
+  const check = C1.check(SN);
+  const KIT = (() => { const src = require('fs').readFileSync(require('path').join(process.env.CODE_DIR || require('path').join(__dirname, 'code_v4'), 'LB_Assemble.js'), 'utf8');
+    const cut = src.indexOf('const CT = (() => {'); return new Function(src.slice(0, cut) + '; return { LK, RV, OK };')(); })();
+  const { RV, OK } = KIT;
+  // the real site: topics (the eight ladder heads) and services (the site model) of techand.ai, exec 776 / 781
+  const TOPICS = ['e invoicing in uae', 'erp software uae', 'ai consulting dubai', 'it consulting dubai', 'dynamics 365 partner uae', 'erp implementation dubai', 'azure cloud migration dubai', 'peppol uae'];
+  const SERVICES = ['Microsoft Azure Infrastructure', 'Azure Integration Services', 'Cloud Migration & Modernization', 'Azure AI Services', 'Intelligent Document Processing', 'Predictive Models', 'Dynamics 365 Finance', 'Dynamics 365 Sales'];
+  const prov = (domain, title, url) => RV.providerOf({ domain, title, url, topics: TOPICS, services: SERVICES });
+  // ---- (1) the category-provider rule on the titles and addresses the 2026-10-17 run saw ----
+  const YES = [['erp-dubai.ae', 'ERPNext Implementation Partner in UAE & Dubai 2026', 'https://erp-dubai.ae/erpnext-dubai'], ['erp-dubai.ae', 'Elate ERP | ERP Software in Dubai & UAE', 'https://erp-dubai.ae/'],
+    ['penieltech.com', '', 'https://penieltech.com/blog/odoo-implementation-umm-al-quwain/'], ['penieltech.com', 'Odoo Implementation in Umm Al Quwain | 4.9 Rated | Penieltech', 'https://penieltech.com/blog/odoo-implementation-umm-al-quwain/'],
+    ['penieltech.com', 'No.1 IT Company in Dubai', 'https://penieltech.com/'], ['halsimplify.com', 'HAL ERP - Top ERP System in Saudi', 'https://halsimplify.com/']];
+  const NO = [['mof.gov.ae', 'eInvoicing Accredited Service Providers (ASPs) | Ministry of Finance', ''], ['uaeasp.ae', 'E-Invoicing Service Providers in the UAE', ''], ['consultsynergy.ae', 'UAE Pre-Approved eInvoicing Service Providers List 2026', ''],
+    ['alaan.com', 'Implementation Pathways for UAE E-Invoicing: Practical Guidance for SMEs and Enterprises', ''], ['halsimplify.com', 'UAE e-Invoicing: Requirements, Deadlines & 2026–2027 Timeline', 'https://halsimplify.com/knowledge-center/e-invoicing-uae-requirements-timeline'],
+    ['youngandright.ae', 'Best E-Invoicing Tools for UAE Businesses', ''], ['www.reddit.com', 'Which e-invoicing provider are you using?', 'https://www.reddit.com/r/dubai/comments/abc/einvoicing_provider/'],
+    ['mazeed.com', 'Get Ready for E-Invoicing in UAE | Free E-Invoicing-Checker', 'https://mazeed.com/e-invoicing-in-uae'], ['infinite-it.com', 'Peppol E-Invoicing in the UAE: The Complete 2026–2027 Compliance Guide for Businesses', ''],
+    ['tradeshift.com', 'UAE E-Invoicing: Choosing an ASP Before the 30 October Deadline', ''], ['gulfnews.com', 'Best e-invoicing providers in the UAE for 2026', ''], ['hawksford.com', 'UAE e-invoicing: timeline, business actions and penalties', '']];
+  const yes = YES.map(([d, t, u]) => [d, prov(d, t, u)]), no = NO.map(([d, t, u]) => [d, prov(d, t, u)]);
+  check('C-8: a site whose own title or address sells your category is a competing provider - erp-dubai.ae ("ERPNext Implementation Partner", "ERP Software"), penieltech.com (/odoo-implementation-…, "IT Company"), "HAL ERP - Top ERP System"',
+    yes.every(([, w]) => !!w), JSON.stringify(yes));
+  check('C-8: and a guide, a list of providers, a ministry, a forum question, a newspaper and a checker tool are not - the rule reads the claim, not the topic',
+    no.every(([, w]) => !w), JSON.stringify(no.filter(([, w]) => w)));
+  // ---- (2) the Link Builder's gate with the AI-named rivals (the stored AI-visibility row and the Answer Analyst's names of 2026-10-17) ----
+  const VIS = [{ site_id: 'site_techand-ai', checked_at: '2026-10-17T16:32:00.000Z', rival_sources_json: JSON.stringify([{ domain: 'tallysolutions.com', citations: 25, kind: 'rival' }, { domain: 'flick.network', citations: 9, kind: 'rival' }, { domain: 'erp-dubai.ae', citations: 2, kind: 'vendor', why: 'its page title says it sells ERP' }]),
+    competitors_json: JSON.stringify([{ domain: 'cleartax.com', mentions: 15 }, { domain: 'zoho.com', mentions: 28, auto: true }]) },
+    { site_id: 'site_techand-ai', checked_at: '2026-10-16T20:16:00.000Z', rival_sources_json: '[]', competitors_json: '[]' }];
+  const CACHE = [{ key: 'ai_brands:site_techand-ai', value: JSON.stringify({ 'PACT REVENU': 'pactsoft.ae', 'Flick Network': 'flick.network', Deloitte: 'deloitte.com', 'Azdan': 'azdan.com', 'Federal Tax Authority': 'tax.gov.ae' }) }];
+  const ai_rivals = RV.aiRivals({ site_id: 'site_techand-ai', own: 'techand.ai', vis_rows: VIS, cache_rows: CACHE });
+  check('C-2: the AI-named rivals the Backlink Monitor and the Link Builder now read: the stored rivals and vendors, the share-of-voice rows and the learned names (pactsoft.ae = "PACT REVENU") - never a ministry or a consultancy',
+    ['flick.network', 'tallysolutions.com', 'erp-dubai.ae', 'cleartax.com', 'zoho.com', 'pactsoft.ae', 'azdan.com'].every(d => ai_rivals.some(r => r.domain === d)) && !ai_rivals.some(r => /gov\.ae|deloitte/.test(r.domain)),
+    JSON.stringify(ai_rivals.map(r => r.domain)));
+  const P = { competitors: ['cleartax.com', 'azentio.com'], serp_rivals: [{ domain: 'flick.network', host: 'flick.network', position: 1, keyword: 'e invoicing in uae' }, { domain: 'youngandright.ae', host: 'youngandright.ae', position: 1, keyword: 'e invoicing software uae' }], ai_rivals, topics: TOPICS, terms: SERVICES, country: 'United Arab Emirates', country_iso: 'AE' };
+  const gate = (o) => OK.sellsSame({ ...P, ...o });
+  const LB = {
+    erp: gate({ type: 'ai_source', domain: 'erp-dubai.ae', title: 'ERPNext Implementation Partner in UAE & Dubai 2026', url: 'https://erp-dubai.ae/erpnext-dubai' }),
+    peniel: gate({ type: 'ai_source', domain: 'penieltech.com', title: 'Odoo Implementation in Umm Al Quwain | 4.9 Rated | Penieltech', url: 'https://penieltech.com/blog/odoo-implementation-umm-al-quwain/' }),
+    pact: gate({ type: 'list', domain: 'pactsoft.ae', title: 'Top E-Invoicing Software in UAE for VAT Compliance', url: 'https://pactsoft.ae/top-e-invoicing-software-uae' }),
+    flick: gate({ type: 'ai_source', domain: 'flick.network', title: 'Best e-Invoicing Software in UAE | FTA Compliant Solution', url: 'https://flick.network/en-ae/products/e-invoicing-software' }),
+    young: gate({ type: 'list', domain: 'youngandright.ae', title: 'Best E-Invoicing Tools for UAE Businesses', url: 'https://youngandright.ae/best-e-invoicing-tools' }),
+    infinite: gate({ type: 'ai_source', domain: 'infinite-it.com', title: 'Peppol E-Invoicing in the UAE: The Complete 2026–2027 Compliance Guide for Businesses', url: 'https://infinite-it.com/en/blog/peppol-e-invoicing-uae-guide' }),
+    mazeed: gate({ type: 'ai_source', domain: 'mazeed.com', title: 'Get Ready for E-Invoicing in UAE | Free E-Invoicing-Checker', url: 'https://mazeed.com/e-invoicing-in-uae' }) };
+  check('C-8: the Link Builder refuses erp-dubai.ae and penieltech.com (qualified needs_contact on 2026-10-17) as competing providers, with the evidence',
+    /(erp-dubai\.ae\): sells what you sell: its page title says it sells ERP|competing provider: its page title says it sells ERP \("ERPNext Implementation Partner)/.test(LB.erp) && /competing provider: its page (title|address) says it sells ERP/.test(LB.peniel), JSON.stringify([LB.erp, LB.peniel]));
+  check('C-2: a business AI recommends instead of you is refused even for its "best of" page - pactsoft.ae\'s list ("PACT REVENU") and flick.network - while a SERP-only rival\'s roundup (youngandright.ae) stays pitchable',
+    /pactsoft\.ae\): a business AI recommends instead of you \(named "PACT REVENU"\)/.test(LB.pact) && /flick\.network\): a competitor of yours|flick\.network\): a business AI recommends instead of you/.test(LB.flick) && LB.young === '',
+    JSON.stringify([LB.pact, LB.flick, LB.young]));
+  check('C-8: and the pipeline is not emptied - a guide (infinite-it.com) and a checker page (mazeed.com) are still qualified', LB.infinite === '' && LB.mazeed === '', JSON.stringify([LB.infinite, LB.mazeed]));
+  // ---- (3) AI Growth's earned media, the node itself, with the real earned rows of exec 783 ----
+  const E = (url, title, host, kind, citations, q) => ({ url, title, host, kind, citations, engines: ['ai_mode', 'gemini'], questions: [q] });
+  mock('Growth Plan', [{ json: { site_id: 'site_techand-ai', domain: 'techand.ai', business_name: 'Tech&', brand_names: ['Tech&'], competitors: ['cleartax.com', 'azentio.com', 'zoho.com', 'tallysolutions.com'],
+    rival_sources: ['tallysolutions.com', 'cleartax.com', 'wafeq.com', 'zoho.com', 'flick.network'], link_builder: true, services: SERVICES, topics: TOPICS, profile: {}, accreditation: '', checked_at: '2026-10-17T16:42:00.000Z', corrections: [],
+    earned: [E('https://flick.network/en-ae/products/e-invoicing-software', 'Best e-Invoicing Software in UAE | FTA Compliant Solution', 'flick.network', 'list', 13, 'What are the best e-invoicing software options in the UAE?'),
+      E('https://erp-dubai.ae/erpnext-dubai', 'ERPNext Implementation Partner in UAE & Dubai 2026', 'erp-dubai.ae', 'article', 4, 'How do I choose an ERP implementation partner in Dubai?'),
+      E('https://finline.ae/en/articles/uae-e-invoicing-asp-list', 'UAE E-Invoicing ASP List 2026: Accredited & Pre-Approved - Finline', 'finline.ae', 'article', 37, 'Which companies are accredited service providers?'),
+      E('https://hawksford.com/insights-and-guides/uae-e-invoicing', 'UAE e-invoicing: timeline, business actions and penalties', 'hawksford.com', 'article', 23, 'What are the UAE e-invoicing requirements?')] } }]);
+  mock('Earned Requests', [{ json: { skip: true } }]); mock('Fetch Cited Pages', [{ json: {} }]); mock('Load Link Prospects (Growth)', [{ json: {} }]); mock('Load Cache (Growth)', CACHE.map(r => ({ json: { ...r, kind: 'ai', site_id: 'site_techand-ai' } })));
+  const EM = (await run('Earned Media', [{ json: {} }]))[0].json;
+  const kindOf = (h) => (EM.earned.find(e => e.host === h) || {}).kind;
+  check('C-2: AI Growth no longer tells the customer to "ask the editor of flick.network to add Tech& to this list" - flick.network is a competitor\'s page ("answer the same question better on your site"), not a prospect',
+    kindOf('flick.network') === 'competitor' && !/Ask the editor of flick\.network/.test(JSON.stringify(EM.earned)) && !EM.prospect_rows.some(r => r.prospect_domain === 'flick.network'),
+    JSON.stringify(EM.earned.map(e => [e.host, e.kind, e.action])));
+  check('C-2: erp-dubai.ae (its title sells ERP) is a competitor there too, with the reason, while finline.ae and hawksford.com stay earned-media prospects handed to the Link Builder',
+    kindOf('erp-dubai.ae') === 'competitor' && /sells what you sell/.test((EM.earned.find(e => e.host === 'erp-dubai.ae') || {}).rival_why || '') && ['finline.ae', 'hawksford.com'].every(h => EM.prospect_rows.some(r => r.prospect_domain === h)),
+    JSON.stringify({ rows: EM.prospect_rows.map(r => r.prospect_domain), erp: EM.earned.find(e => e.host === 'erp-dubai.ae') }));
+  // ---- (4) the Backlink Monitor: the real comp_new / gap cases, run through Parse Backlinks on the S20 fixture site ----
+  const M = require('./fixtures_monitors');
+  mock('Load Sites', M.sites()); mock('Load Ladders', M.ladders()); mock('Load Monitors', M.monitors()); mock('Load Profiles', M.profiles()); mock('Load Backlink Snapshots', [{ json: {} }]); mock('Load Link Prospects', [{ json: {} }]);
+  mock('Load Content Log', [{ json: { site_id: M.SITE, domain: M.DOMAIN, keyword: 'erp for distributors', published_url: 'https://northwind-erp.com/erp-for-distributors/', status: 'published' } }]);
+  mock('Load Case Studies', [{ json: { case_id: 'cs_1', site_id: M.SITE, title: 'Gulf Fresh Foods: Odoo', page_url: 'https://northwind-erp.com/case-studies/gulf-fresh/' } }]);
+  mock('Load AI Visibility (BL)', [{ json: { site_id: M.SITE, checked_at: '2026-10-17T16:32:00.000Z', rival_sources_json: JSON.stringify([{ domain: 'pactsoft.ae', citations: 3, kind: 'named' }]), competitors_json: '[]' } }]);
+  mock('Load Cache (BL Rivals)', [{ json: {} }]);
+  const plan = await run('BL Plan', store['Load Case Studies']); const PL = plan[0].json;
+  check('C-2: the Backlink Monitor\'s plan carries the AI-named rivals', (PL.ai_rivals || []).some(r => r.domain === 'pactsoft.ae'), JSON.stringify(PL.ai_rivals));
+  const rq = await run('BL Requests', plan);
+  const resp = rq.map(r => M.blFor(r.json));
+  const ci = rq.findIndex(r => r.json.kind === 'comp_new');
+  const cn = (domain, title, url) => ({ domain_from: domain, url_from: url, page_from_title: title, first_seen: '2026-10-16 10:00:00 +00:00', domain_from_rank: 300, backlink_spam_score: 0, anchor: 'guide', dofollow: true });
+  const extra = [cn('marketguest.com', 'Questions Before Buying Property in Malaysia: A Buyer\'s Guide', 'https://marketguest.com/property-malaysia'), cn('pactsoft.ae', 'E-Invoicing in the UAE: what changes in 2026', 'https://pactsoft.ae/blog/e-invoicing-uae'),
+    cn('erpnext-gulf.ae', 'ERPNext Implementation Partner in Dubai', 'https://erpnext-gulf.ae/'), cn('erpinsider.ae', 'ERP software for distributors in the UAE: what to ask', 'https://erpinsider.ae/erp-distributors-uae')];
+  if (ci >= 0) resp[ci] = { tasks: [{ status_code: 20000, status_message: 'Ok.', cost: 0.02, result: [{ total_count: extra.length, items_count: extra.length, items: extra }] }] };
+  mock('Run BL Requests', resp);
+  await run('Gap Requests', store['Run BL Requests']); mock('Run Gap Requests', [M.gap()]);
+  const B = (await run('Parse Backlinks', store['Run Gap Requests']))[0].json;
+  const cand = (d) => B.candidates.find(c => c.prospect_domain === d);
+  const cnew = (d) => (B.comp_new || []).find(c => c.domain === d) || {};
+  console.log('   comp_new ->', JSON.stringify((B.comp_new || []).map(c => [c.domain, c.off_topic, c.topic_reason])), '| refused', JSON.stringify(B.rival_refused), '| targets', JSON.stringify(B.candidates.filter(c => ['list', 'comp_new', 'gap'].includes(c.type)).map(c => [c.prospect_domain, c.target_url])));
+  check('C-10: a site that just linked to a competitor is stored as a prospect only when it is on your topic - marketguest.com (property in Malaysia) is listed with its reason and not stored',
+    ci >= 0 && cnew('marketguest.com').off_topic === true && /off topic/.test(cnew('marketguest.com').topic_reason || '') && !cand('marketguest.com'), JSON.stringify(cnew('marketguest.com')));
+  check('C-2: a business AI named (pactsoft.ae) and a site whose title sells your category (erpnext-gulf.ae) are not prospects - each named in the report with the reason',
+    !cand('pactsoft.ae') && !cand('erpnext-gulf.ae') && (B.rival_refused || []).some(r => r.domain === 'pactsoft.ae' && /AI recommends/.test(r.why)) && (B.rival_refused || []).some(r => r.domain === 'erpnext-gulf.ae' && /sells what you sell/.test(r.why)),
+    JSON.stringify(B.rival_refused));
+  const tg = B.candidates.filter(c => ['list', 'comp_new', 'gap'].includes(c.type));
+  const home = 'https://northwind-erp.com/';
+  check('C-10: each prospect is pointed at our page on its topic or at the homepage - an ERP-for-distributors article at /erp-for-distributors/, the rest not all at one unrelated page',
+    (cand('erpinsider.ae') || {}).target_url === 'https://northwind-erp.com/erp-for-distributors/' && tg.every(c => c.target_url === home || PL.assets.some(a => a.url === c.target_url)),
+    JSON.stringify(tg.map(c => [c.prospect_domain, c.target_url])));
+  const pbSrc = require('fs').readFileSync(require('path').join(process.env.CODE_DIR || require('path').join(__dirname, 'code_v4'), 'Parse_Backlinks.js'), 'utf8');
+  check('C-10: the link gap\'s topic gate knows a newspaper of your market (gulfnews.com is a UAE paper) - RV.marketMedia', RV.marketMedia('gulfnews.com', 'AE') && RV.marketMedia('www.khaleejtimes.com', 'AE') && !RV.marketMedia('marketguest.com', 'AE') && /RV\.marketMedia\(d, p\.country_iso\)/.test(pbSrc), 'gulfnews');
+  // ---- (5) C-3: what the earned-media counts are counted over ----
+  mock('Manual Run', [{ json: { domain: 'techand.ai' } }]);
+  mock('Growth Metrics', [{ json: { site_id: 's1', domain: 'techand.ai', checked_at: '2026-10-17T16:42:00.000Z', submitted: { bing: { enabled: true, in_account: true, submitted: 0, urls: [], error: '' }, indexnow: { verified: false, submitted: 0, key: 'k', key_url: '' } },
+    outcome: { basis: 'none', reason: '' }, pages: [], targets: [], alerts: [], actions: [], ai_pages_month: 2, robots: null, set_aside: [], refused_submissions: [], corrections: [],
+    earned: [{ url: 'https://mof.gov.ae/en/about-us/initiatives/einvoicing/', title: 'UAE Ministry of Finance – e-Invoicing', host: 'mof.gov.ae', kind: 'official', citations: 93, engines: ['chatgpt'], questions: ['q'], competitors_named: [], action: 'apply' }],
+    earned_basis: { answers: 670, from: '2026-10-10', to: '2026-10-17', days: 8, runs: 9, pulse: 588 } } }]);
+  mock('Bing Submit Requests', [{ json: { skip: true } }]); mock('IndexNow Requests', [{ json: { skip: true } }]);
+  const GR = (await run('Growth Report', [{ json: {} }]))[0].json;
+  delete store['Manual Run'];
+  const lin = (GR.lineage || []).find(l => /Pages AI cites without naming you/.test(JSON.stringify(l))) || {};
+  check('C-3: the earned-media counts say what they count - "Answers citing it" over the 670 answers of 2026-10-10 to 2026-10-17 (weekly runs and the daily pulse), not "the answers of the last weekly AI-visibility run"',
+    /Counted over 670 AI answers that did not name you, 2026-10-10 to 2026-10-17/.test(GR.html) && /Answers citing it/.test(GR.html) && !/the answers of the last weekly AI-visibility run/.test(JSON.stringify(GR.lineage || [])) && /2026-10-10 to 2026-10-17/.test(JSON.stringify(lin)),
+    JSON.stringify(lin).slice(0, 300));
+  // ---- C-11: a dry run is a test, and says so where the customer looks first ----
+  mock('Manual Run', [{ json: { domain: 'techand.ai', request_id: 'rr1017-growth-dry', dry_run: true } }]);
+  const GD = (await run('Growth Report', [{ json: {} }]))[0].json;
+  delete store['Manual Run'];
+  check('C-11: the AI Growth dry run of 2026-10-17 is titled a TEST RUN ("[AI growth · TEST RUN] techand.ai — dry run, nothing was submitted"), never "done for you this week", and carries dry_run for the app\'s delivery hold',
+    GD.dry_run === true && /^\[AI growth · TEST RUN\] techand\.ai — dry run, nothing was submitted$/.test(GD.subject) && !/done for you this week/.test(GD.subject) && GR.subject && !/TEST RUN/.test(GR.subject), JSON.stringify([GD.subject, GR.subject]));
   reset();
 });
 // ===================================================================================

@@ -318,7 +318,7 @@ export const STAGE_LABELS: Record<string, string> = {
   case_study_started: 'Case study started',
   ai_visibility_started: 'AI visibility started',
   ai_visibility: 'AI visibility report',
-  ai_pulse: 'AI pulse alert',
+  ai_pulse: 'AI pulse',   // C-14: "alert" only when the pulse raised one (titleFor)
   ai_growth: 'AI growth',
   backlinks_started: 'Backlink check started',
   backlinks: 'Backlink report',
