@@ -18,6 +18,8 @@ import { hookRoutes } from './routes/hooks';
 import { keywordRoutes } from './routes/keywords';
 import { ladderRoutes } from './routes/ladders';
 import { meRoutes } from './routes/me';
+import { mfaRoutes } from './routes/mfa';
+import { securityRoutes } from './routes/security';
 import { orgRoutes } from './routes/orgs';
 import { runRoutes } from './routes/runs';
 import { siteRoutes } from './routes/sites';
@@ -29,7 +31,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   const redact = (url: string) => url.replace(/(\/api\/hooks\/n8n\/)[^/?#]+/, '$1***');
   const serializers = { req: (r: { method: string; url: string; ip?: string }) => ({ method: r.method, url: redact(r.url), ip: r.ip }) };
   const app = Fastify({
-    logger: config.isProd ? { level: 'info', serializers } : { level: 'info', serializers, transport: { target: 'pino-pretty', options: { translateTime: 'HH:MM:ss', ignore: 'pid,hostname' } } },
+    logger: config.isProd || config.logLevel === 'silent' ? { level: config.logLevel, serializers } : { level: config.logLevel, serializers, transport: { target: 'pino-pretty', options: { translateTime: 'HH:MM:ss', ignore: 'pid,hostname' } } },
     // behind a reverse proxy: trust exactly that many hops of X-Forwarded-For (never every hop: the client controls the leftmost)
     trustProxy: config.trustProxy > 0 ? (_addr: string, hop: number) => hop < config.trustProxy : false,
     // 1 MB for people; the n8n callback route allows 40 MB (PDFs and Word files as base64)
@@ -62,6 +64,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   app.decorateRequest('user', null);
   app.decorateRequest('sessionId', null);
+  app.decorateRequest('session', null);
 
   app.addHook('onRequest', async (req, reply) => {
     if (!req.url.startsWith('/api/')) return;
@@ -80,11 +83,12 @@ export async function buildApp(): Promise<FastifyInstance> {
     const s = await readSession(req, reply);
     req.user = s?.user ?? null;
     req.sessionId = s?.sessionId ?? null;
+    req.session = s?.session ?? null;
   });
 
   app.setErrorHandler((err: FastifyError | HttpError, req, reply) => {
     if (err instanceof HttpError) {
-      return reply.status(err.statusCode).send({ error: err.message, code: err.code, fields: err.fields });
+      return reply.status(err.statusCode).send({ ...err.extra, error: err.message, code: err.code, fields: err.fields });
     }
     const status = (err as FastifyError).statusCode ?? 500;
     if (status === 429) return reply.status(429).send({ error: 'Too many attempts. Please wait a minute and try again.', code: 'rate_limited' });
@@ -110,6 +114,8 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(authRoutes);
   await app.register(meRoutes);
+  await app.register(mfaRoutes);
+  await app.register(securityRoutes);
   await app.register(orgRoutes);
   await app.register(siteRoutes);
   await app.register(dataRoutes);

@@ -1,14 +1,17 @@
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Link, useNavigate, useSearchParams } from 'react-router';
-import { loginSchema } from '@seo/shared';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { loginSchema, type Me, type MfaChallenge } from '@seo/shared';
 import type { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
 import { Field, Input } from '@/components/ui/field';
-import { ApiRequestError, errorMessage } from '@/lib/api';
-import { useAuthMutation } from '@/lib/queries';
+import { api, ApiRequestError, errorMessage } from '@/lib/api';
+import { qk } from '@/lib/queries';
 import { AuthCard, GOOGLE_ERRORS, GoogleButton, safeNext } from './shared';
+import { SecondStep } from './SecondStep';
 
 type Values = z.input<typeof loginSchema>;
 
@@ -16,18 +19,39 @@ export default function LoginPage() {
   const [params] = useSearchParams();
   const next = safeNext(params.get('next'));
   const navigate = useNavigate();
-  const login = useAuthMutation<Values>('/api/auth/login');
+  const qc = useQueryClient();
+  // G1: with two-step verification on, the password answers with a challenge instead of a session
+  const [challenge, setChallenge] = useState<MfaChallenge | null>(null);
+  const login = useMutation({ mutationFn: (v: Values) => api<Me | MfaChallenge>('/api/auth/login', { method: 'POST', body: v }) });
   const form = useForm<Values>({ resolver: zodResolver(loginSchema), defaultValues: { email: '', password: '' } });
   const googleError = params.get('error');
 
   const onSubmit = form.handleSubmit((v) =>
     login.mutate(v, {
-      onSuccess: () => navigate(next ?? '/', { replace: true }),
+      onSuccess: (r) => {
+        if ('mfaRequired' in r) return setChallenge(r);
+        qc.setQueryData(qk.me, r);
+        navigate(next ?? '/', { replace: true });
+      },
       onError: (e) => {
         if (e instanceof ApiRequestError) for (const [k, m] of Object.entries(e.fields)) form.setError(k as keyof Values, { message: m });
       },
     }),
   );
+
+  if (challenge)
+    return (
+      <SecondStep
+        methods={challenge.methods}
+        emailHint={challenge.emailHint}
+        next={next}
+        onCancel={() => {
+          void api('/api/auth/mfa/cancel', { method: 'POST' }).catch(() => undefined);
+          setChallenge(null);
+          form.setValue('password', '');
+        }}
+      />
+    );
 
   return (
     <AuthCard

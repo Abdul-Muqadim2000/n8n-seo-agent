@@ -1,4 +1,4 @@
-import type { ApiError } from '@seo/shared';
+import type { ApiError, StepUpMethod } from '@seo/shared';
 
 export class ApiRequestError extends Error {
   constructor(
@@ -6,6 +6,8 @@ export class ApiRequestError extends Error {
     message: string,
     public fields: Record<string, string> = {},
     public code?: string,
+    /** the whole JSON answer (G1: the step-up methods, the SSO address) */
+    public data: Record<string, unknown> = {},
   ) {
     super(message);
   }
@@ -13,8 +15,18 @@ export class ApiRequestError extends Error {
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
+/**
+ * G1 step-up: a security-relevant change answered `403 reauth_required` opens one dialog (StepUpProvider); when the person confirms
+ * it is them, the request is sent once more. Without a handler (or when they cancel) the error reaches the caller as usual.
+ */
+type StepUpHandler = (methods: StepUpMethod[]) => Promise<boolean>;
+let stepUpHandler: StepUpHandler | null = null;
+export function setStepUpHandler(h: StepUpHandler | null) {
+  stepUpHandler = h;
+}
+
 /** JSON fetch against the app server. Mutations carry X-Requested-With (the server's CSRF guard). */
-export async function api<T>(path: string, opts: { method?: Method; body?: unknown; signal?: AbortSignal } = {}): Promise<T> {
+export async function api<T>(path: string, opts: { method?: Method; body?: unknown; signal?: AbortSignal; noStepUp?: boolean } = {}): Promise<T> {
   const method = opts.method ?? 'GET';
   const headers: Record<string, string> = { accept: 'application/json' };
   if (method !== 'GET') headers['x-requested-with'] = 'fetch';
@@ -35,8 +47,12 @@ export async function api<T>(path: string, opts: { method?: Method; body?: unkno
   const text = await res.text();
   const data = text ? safeParse(text) : null;
   if (!res.ok) {
-    const e = (data ?? {}) as Partial<ApiError>;
-    throw new ApiRequestError(res.status, e.error || `Request failed (${res.status})`, e.fields ?? {}, e.code);
+    const e = (data ?? {}) as Partial<ApiError> & Record<string, unknown>;
+    if (res.status === 403 && e.code === 'reauth_required' && stepUpHandler && !opts.noStepUp) {
+      const confirmed = await stepUpHandler(Array.isArray(e.methods) ? (e.methods as StepUpMethod[]) : ['password']);
+      if (confirmed) return api<T>(path, { ...opts, noStepUp: true });
+    }
+    throw new ApiRequestError(res.status, e.error || `Request failed (${res.status})`, e.fields ?? {}, e.code, e);
   }
   return data as T;
 }

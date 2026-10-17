@@ -30,8 +30,71 @@ export const users = pgTable(
     avatarUrl: text('avatar_url'),
     createdAt: created(),
     lastLoginAt: ts('last_login_at'),
+    /** G1: the authenticator-app secret, sealed (lib/secretBox `sealIdentity`); `mfaTotpPending` holds a secret during enrolment */
+    mfaTotpSecret: text('mfa_totp_secret'),
+    mfaTotpPending: text('mfa_totp_pending'),
+    mfaTotpEnabledAt: ts('mfa_totp_enabled_at'),
+    /** the last accepted RFC 6238 time step: a code is accepted once, never again (replay) */
+    mfaTotpLastStep: integer('mfa_totp_last_step'),
   },
   (t) => [uniqueIndex('users_email_idx').on(t.email), uniqueIndex('users_google_sub_idx').on(t.googleSub)],
+);
+
+/** G1: one-time recovery codes (SHA-256 of 80-bit codes; each usable once). */
+export const mfaRecoveryCodes = pgTable(
+  'mfa_recovery_codes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    codeHash: text('code_hash').notNull(),
+    usedAt: ts('used_at'),
+    createdAt: created(),
+  },
+  (t) => [index('mfa_recovery_user_idx').on(t.userId), uniqueIndex('mfa_recovery_hash_idx').on(t.userId, t.codeHash)],
+);
+
+/** G1: passkeys / security keys as a second factor (WebAuthn). */
+export const webauthnCredentials = pgTable(
+  'webauthn_credentials',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** base64url credential id from the authenticator */
+    credentialId: text('credential_id').notNull(),
+    publicKey: bytea('public_key').notNull(),
+    counter: integer('counter').notNull().default(0),
+    transports: jsonb('transports').$type<string[]>().notNull().default([]),
+    deviceType: text('device_type').notNull().default('singleDevice'),
+    backedUp: boolean('backed_up').notNull().default(false),
+    name: text('name').notNull(),
+    createdAt: created(),
+    lastUsedAt: ts('last_used_at'),
+  },
+  (t) => [uniqueIndex('webauthn_credential_idx').on(t.credentialId), index('webauthn_user_idx').on(t.userId)],
+);
+
+/**
+ * G1: short-lived server-side state of a multi-step sign-in — the password-checked sign-in still waiting for its second factor, a
+ * passkey challenge, an OIDC state / nonce / PKCE verifier, a SAML request id, a consumed SAML assertion id. `id` is the SHA-256 of
+ * a random token the browser holds (cookie or RelayState), or of a protocol id; rows expire within minutes.
+ */
+export const authFlows = pgTable(
+  'auth_flows',
+  {
+    id: text('id').primaryKey(),
+    kind: text('kind').notNull(),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    orgId: uuid('org_id'),
+    data: jsonb('data').$type<Record<string, unknown>>().notNull().default({}),
+    attempts: integer('attempts').notNull().default(0),
+    expiresAt: ts('expires_at').notNull(),
+    createdAt: created(),
+  },
+  (t) => [index('auth_flows_expires_idx').on(t.expiresAt)],
 );
 
 /** Login sessions: `id` is the SHA-256 of the cookie token, so a database leak does not leak sessions. */
@@ -47,6 +110,13 @@ export const sessions = pgTable(
     lastSeenAt: ts('last_seen_at').defaultNow().notNull(),
     userAgent: text('user_agent'),
     ip: text('ip'),
+    /** G1: how this session was signed in (password / google / sso) and, for SSO, through which company's identity provider */
+    authMethod: text('auth_method').notNull().default('password'),
+    ssoOrgId: uuid('sso_org_id'),
+    /** G1: when a second factor was verified in this session (null = none) */
+    mfaAt: ts('mfa_at'),
+    /** G1: the last proof of presence (sign-in or step-up); security changes need one within MFA.stepUpMinutes */
+    reauthAt: ts('reauth_at'),
   },
   (t) => [index('sessions_user_idx').on(t.userId)],
 );
@@ -87,6 +157,8 @@ export const organizations = pgTable(
     /** when the last scheduled summary went out, so a restart cannot send the same week twice */
     deliveryLastRunAt: ts('delivery_last_run_at'),
     disabled: boolean('disabled').notNull().default(false),
+    /** G1: two-step requirement, idle timeout, audit retention (shared/src/identity.ts `SecurityPolicy`, read with `policyOf`) */
+    securityPolicy: jsonb('security_policy').$type<Record<string, unknown>>().notNull().default({}),
     onboardingStep: text('onboarding_step').notNull().default('company'),
     onboardedAt: ts('onboarded_at'),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
@@ -514,6 +586,9 @@ export type MailboxRow = typeof mailboxes.$inferSelect;
 export type OutreachSequenceRow = typeof outreachSequences.$inferSelect;
 export type OutreachMessageRow = typeof outreachMessages.$inferSelect;
 export type UserRow = typeof users.$inferSelect;
+export type SessionRow = typeof sessions.$inferSelect;
+export type WebauthnCredentialRow = typeof webauthnCredentials.$inferSelect;
+export type AuthFlowRow = typeof authFlows.$inferSelect;
 export type OrgRow = typeof organizations.$inferSelect;
 export type SiteRow = typeof sites.$inferSelect;
 export type RunRow = typeof runs.$inferSelect;

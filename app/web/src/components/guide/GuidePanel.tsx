@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import * as D from '@radix-ui/react-dialog';
 import { toast } from 'sonner';
-import { ArrowLeft, ArrowRight, Building2, Check, ChevronRight, Clock, Copy, ExternalLink as ExternalIcon, Globe, LifeBuoy, Mail, MapPin, Search, Send, ShieldCheck, Sparkles, UserRound, X, type LucideIcon } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Building2, Check, ChevronRight, Clock, Copy, ExternalLink as ExternalIcon, Globe, LifeBuoy, Lock, Mail, MapPin, Search, Send, ShieldCheck, Sparkles, UserRound, X, type LucideIcon } from 'lucide-react';
 import { fillGuide, GUIDE_AREAS, guideById, guideText, GUIDES, searchGuides, type FilledCopy, type FilledStep, type Guide, type GuideArea, type GuideVars } from '@seo/shared/guides';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -25,7 +25,7 @@ export interface GuideFinish {
 }
 export type GuideState = { mode: 'index'; query?: string } | { mode: 'guide'; id: string; vars?: GuideVars; finish?: GuideFinish; fromIndex?: boolean } | null;
 
-const AREA_ICON: Record<GuideArea, LucideIcon> = { google: Search, ownership: ShieldCheck, website: Globe, mailbox: Mail, business: Building2, company: UserRound };
+const AREA_ICON: Record<GuideArea, LucideIcon> = { google: Search, ownership: ShieldCheck, website: Globe, mailbox: Mail, business: Building2, company: UserRound, security: Lock };
 const areaLabel = (a: GuideArea) => GUIDE_AREAS.find((x) => x.id === a)?.label ?? 'Guide';
 
 export function GuidePanel({ state, setState, close }: { state: GuideState; setState: (s: GuideState) => void; close: () => void }) {

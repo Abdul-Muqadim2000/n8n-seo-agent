@@ -5,6 +5,7 @@ import { RouterProvider } from 'react-router';
 import { Toaster } from 'sonner';
 import { TooltipProvider } from '@/components/ui/overlay';
 import { GuideProvider } from '@/components/guide';
+import { StepUpProvider } from '@/components/identity/StepUpProvider';
 import { ThemeProvider } from '@/lib/theme';
 import { router } from './router';
 // brand fonts, self-hosted (the CSP blocks Google Fonts); unicode-range means browsers fetch only the latin files
@@ -25,7 +26,9 @@ createRoot(document.getElementById('root')!).render(
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <GuideProvider>
-            <RouterProvider router={router} />
+            <StepUpProvider>
+              <RouterProvider router={router} />
+            </StepUpProvider>
           </GuideProvider>
           <Toaster position="bottom-right" toastOptions={{ className: '!bg-surface !text-ink !border-line' }} />
         </TooltipProvider>

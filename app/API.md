@@ -12,16 +12,48 @@ Roles: `viewer` (read) < `member` (start runs) < `admin` (sites, team, site sett
 |---|---|---|---|
 | GET | /api/auth/providers | | `AuthProviders` |
 | POST | /api/auth/signup | `signupSchema` | `Me` (signed in) |
-| POST | /api/auth/login | `loginSchema` | `Me` |
+| POST | /api/auth/login | `loginSchema` | `Me`, or `MfaChallenge` (`{ mfaRequired: true, methods, emailHint }`, no session yet) when two-step verification is on |
 | POST | /api/auth/logout | | `{ ok }` |
 | POST | /api/auth/forgot | `forgotSchema` | `{ ok }` (always, no account enumeration) |
 | POST | /api/auth/reset | `resetSchema` | `{ ok }` (signs out every session) |
 | POST | /api/auth/verify-email | `{ token }` | `{ ok }` |
 | POST | /api/auth/resend-verification | | `{ ok, sent }` |
-| GET | /api/auth/google?next=/path | | 302 to Google, back to `/api/auth/google/callback`, then to `next` (or `/login?error=`) |
+| GET | /api/auth/google?next=/path | | 302 to Google, back to `/api/auth/google/callback`, then to `next` (or `/login?error=`; `/login/mfa?next=` when a second step is due) |
 | GET | /api/me | | `Me`, or `null` when signed out |
 | PATCH | /api/me | `updateMeSchema` | `Me` |
 | POST | /api/me/password | `changePasswordSchema` | `{ ok }` |
+
+### Two-step verification and step-up (G1, `app/docs/IDENTITY.md`, `shared/src/identity.ts`)
+A sign-in with a second factor is two requests: the password (or Google) answers `MfaChallenge` and sets the http-only cookie
+`mfa_flow` (path `/api/auth`, 5 minutes); `POST /api/auth/mfa/verify` completes it. 5 wrong codes void the challenge
+(`mfa_flow_locked`). A TOTP code is accepted once. Security-relevant changes answer **`403 reauth_required`** with
+`methods: StepUpMethod[]` when the session has no proof of presence in the last 10 minutes; `POST /api/auth/step-up` gives one
+(5 failures in 15 minutes sign the session out, `stepup_locked`). A company that requires two-step verification answers every
+company route with **`403 mfa_enrolment_required`** (no factor yet) or **`403 mfa_verification_required`** (has one, this session
+has not used it — `POST /api/auth/step-up` with a factor clears it).
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | /api/auth/mfa | (cookie `mfa_flow`) | `{ methods, emailHint, next }`; 404 `mfa_flow_missing` |
+| POST | /api/auth/mfa/webauthn/options | (cookie) | WebAuthn request options for the person's passkeys |
+| POST | /api/auth/mfa/verify | `mfaVerifySchema` (`{ method: 'totp' \| 'recovery', code }` or `{ method: 'webauthn', response }`) | `Me & { next, recoveryCodesLeft }` (session created); 401 `mfa_invalid` / `mfa_flow_locked` |
+| POST | /api/auth/mfa/cancel | | `{ ok }` |
+| GET | /api/auth/step-up | | `{ methods, validUntil }` |
+| POST | /api/auth/step-up/webauthn/options | | WebAuthn request options |
+| POST | /api/auth/step-up | `stepUpSchema` (a factor, or `{ method: 'password', password }` for people without one) | `{ ok, validUntil }`; 401 `stepup_invalid` / `stepup_locked` |
+| GET | /api/me/mfa | | `MfaStatus` |
+| POST | /api/me/mfa/totp/start | (step-up) | `TotpEnrolment` (`secret`, `uri`, `qrSvg`) — the secret is kept sealed as pending |
+| POST | /api/me/mfa/totp/confirm | `{ code }` | `MfaStatus & { newRecoveryCodes }` (codes only with the first factor; shown once) |
+| DELETE | /api/me/mfa/totp | (step-up) | `MfaStatus`; 400 when it is the last factor and a company requires one |
+| POST | /api/me/mfa/recovery-codes | (step-up) | `{ newRecoveryCodes }` (the old ones stop working) |
+| POST | /api/me/mfa/passkeys/options | (step-up) | WebAuthn creation options |
+| POST | /api/me/mfa/passkeys | `{ name, response }` | `MfaStatus & { newRecoveryCodes }` |
+| PATCH | /api/me/mfa/passkeys/:id | `{ name }` | `PasskeyView` |
+| DELETE | /api/me/mfa/passkeys/:id | (step-up) | `MfaStatus` |
+| GET | /api/orgs/:orgId/security | | `SecurityPolicy` |
+| PUT | /api/orgs/:orgId/security | `securityPolicySchema` (admin, step-up; switching `requireMfa` on needs your own factor) | `SecurityPolicy` |
+
+`GET /api/orgs/:orgId/members` adds `mfaEnabled` to each member for owners and admins.
 
 ## Companies and team
 | Method | Path | Body | Returns |

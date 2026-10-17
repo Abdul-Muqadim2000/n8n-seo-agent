@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, gte, isNull, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, isNull, ne } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
@@ -19,6 +19,7 @@ import {
   type Org,
   type Role,
   type Usage,
+  roleAtLeast,
 } from '@seo/shared';
 import { isPlatformAdmin, isUuid, orgAccess, requireUser } from '../auth/access';
 import { config } from '../config';
@@ -254,8 +255,21 @@ export async function orgRoutes(app: FastifyInstance) {
             .leftJoin(schema.users, eq(schema.invitations.invitedBy, schema.users.id))
             .where(and(eq(schema.invitations.orgId, a.org.id), isNull(schema.invitations.acceptedAt), isNull(schema.invitations.revokedAt), gt(schema.invitations.expiresAt, new Date())))
             .orderBy(desc(schema.invitations.createdAt));
+    // G1: who has two-step verification — owners and admins see it (the company's security posture is theirs to manage)
+    const admin = roleAtLeast(a.role, 'admin');
+    const keyed = admin
+      ? new Set((await db.selectDistinct({ id: schema.webauthnCredentials.userId }).from(schema.webauthnCredentials).where(inArray(schema.webauthnCredentials.userId, members.map((r) => r.u.id)))).map((r) => r.id))
+      : new Set<string>();
     return {
-      members: members.map(({ m, u }) => ({ userId: u.id, name: u.name, email: u.email, avatarUrl: u.avatarUrl, role: m.role as Role, joinedAt: m.createdAt.toISOString() })),
+      members: members.map(({ m, u }) => ({
+        userId: u.id,
+        name: u.name,
+        email: u.email,
+        avatarUrl: u.avatarUrl,
+        role: m.role as Role,
+        joinedAt: m.createdAt.toISOString(),
+        ...(admin ? { mfaEnabled: !!u.mfaTotpEnabledAt || keyed.has(u.id) } : {}),
+      })),
       invitations: invites.map(({ i, by }) => ({ id: i.id, email: i.email, role: i.role as Role, invitedBy: by, createdAt: i.createdAt.toISOString(), expiresAt: i.expiresAt.toISOString() })),
     };
   });

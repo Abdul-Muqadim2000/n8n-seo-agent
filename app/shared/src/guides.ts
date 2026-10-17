@@ -7,7 +7,7 @@
 // [label](https://url) for links — and {{placeholders}} for the real values of the site (its domain, the record to add, the key
 // file). Rendering is in web/src/components/guide/rich.tsx; the plain-text form is `guideText` below.
 
-export type GuideArea = 'google' | 'ownership' | 'website' | 'mailbox' | 'business' | 'company';
+export type GuideArea = 'google' | 'ownership' | 'website' | 'mailbox' | 'business' | 'company' | 'security';
 
 export interface GuideVar {
   key: string;
@@ -78,6 +78,7 @@ export const GUIDE_AREAS: { id: GuideArea; label: string; description: string }[
   { id: 'mailbox', label: 'Your mailbox', description: 'Link-building pitches go out from your own address' },
   { id: 'business', label: 'About your business', description: 'What every page is written from and checked against' },
   { id: 'company', label: 'Your company in Ascentra', description: 'Budget, team and who may do what' },
+  { id: 'security', label: 'Sign-in and security', description: 'Two-step verification, single sign-on and provisioning' },
 ];
 
 const V = {
@@ -1017,6 +1018,67 @@ export const GUIDES = [
     done: 'The team list shows them as a member, and work that needed them stops waiting.',
     related: ['budget'],
     keywords: ['team', 'invite', 'roles', 'permissions', 'colleague'],
+  },
+  // ---------------------------------------------------------------- sign-in and security (G1)
+  {
+    id: 'two-step-verification',
+    area: 'security',
+    title: 'Turn on two-step verification',
+    why: 'A password alone is one leak away from someone else reading your company’s reports and starting paid runs. With a second step, a stolen password is not enough.',
+    where: 'Your account → Two-step verification',
+    who: 'Everyone, for their own account',
+    minutes: 4,
+    steps: [
+      {
+        title: 'Choose how you will confirm it is you',
+        body: 'An **authenticator app** on your phone shows a new 6-digit code every 30 seconds. A **passkey** uses your laptop’s fingerprint or face unlock, your phone, or a security key. You can set up both; either works at sign-in.',
+        choices: [
+          { label: 'Authenticator app', body: 'Install one if you have none: **Google Authenticator**, **Microsoft Authenticator**, **1Password** or **Authy** all work. Company phones often have one already.' },
+          { label: 'Passkey', body: 'Nothing to install on a recent Mac, Windows PC, iPhone or Android phone. A hardware key (YubiKey or similar) works too.' },
+        ],
+      },
+      {
+        title: 'Set it up',
+        body: 'Open **Your account**, find **Two-step verification** and press **Set up an authenticator app** (scan the QR code, then type the code the app shows) or **Add a passkey** (follow your browser’s prompt).',
+        note: 'If you cannot scan the code, type the key shown under it into the app as a "time-based" account.',
+      },
+      {
+        title: 'Save your recovery codes',
+        body: 'You get ten one-time codes. **Download** them or put them in your password manager. Each works once, in place of a code, if you lose your phone.',
+        warn: 'Without the codes and without your phone, only a company owner (by removing and re-inviting you) can get you back in.',
+      },
+    ],
+    done: 'Your account shows **Two-step verification: On**, and the next sign-in asks for a code after your password.',
+    trouble: [
+      { q: 'The code is always rejected', a: 'The phone’s clock is off. Set date and time to **automatic** on the phone, then use the newest code. A code works once and only for about a minute.' },
+      { q: 'I lost my phone', a: 'Sign in with a recovery code, then remove the old app and set up the new phone. Out of codes: ask your company owner.' },
+    ],
+    related: ['require-two-step'],
+    keywords: ['2fa', 'mfa', 'totp', 'authenticator', 'passkey', 'security key', 'two factor', 'recovery codes'],
+  },
+  {
+    id: 'require-two-step',
+    area: 'security',
+    title: 'Require two-step verification for your whole company',
+    why: 'One member with a reused password is enough for someone to read every report. Requiring a second step closes that for everyone at once.',
+    where: 'Company settings → Security',
+    who: 'An owner or admin (who already uses two-step verification)',
+    minutes: 5,
+    steps: [
+      { title: 'Turn it on for yourself first', body: 'The switch stays locked until your own account has two-step verification — otherwise it would lock you out on the next click.' },
+      {
+        title: 'Tell the team before you switch it on',
+        body: 'Members without a second step see a page asking them to set one up the next time they open the company. Nothing is lost; they just cannot see anything until they do. **Send to a colleague** sends them the setup guide.',
+      },
+      {
+        title: 'Decide what counts',
+        body: '**Sign-ins through your own identity provider** (single sign-on) count by default, because your IdP enforces its own MFA. **Google sign-ins** do not count by default: we cannot see whether a Google account has 2-Step Verification on. Turn that on only if your Google Workspace admin enforces it.',
+      },
+      { title: 'Switch on "Require two-step verification"', body: 'The members list then shows who has it. Follow up with anyone marked **Off**.' },
+    ],
+    done: 'Every member in the list shows two-step verification **On**.',
+    related: ['two-step-verification'],
+    keywords: ['enforce mfa', 'require 2fa', 'policy', 'security policy'],
   },
 ] as const satisfies readonly Guide[];
 

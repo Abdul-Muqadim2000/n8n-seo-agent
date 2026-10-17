@@ -49,6 +49,9 @@ import type {
   DeliveryRecord,
   DeliverySettings,
   DeliverySettingsInput,
+  MfaStatus,
+  SecurityPolicy,
+  TotpEnrolment,
 } from '@seo/shared';
 import { api, ApiRequestError } from './api';
 
@@ -702,5 +705,37 @@ export function useAdminUpdateOrg() {
   return useMutation({
     mutationFn: ({ orgId, ...body }: { orgId: string; monthlyBudgetUsd: number; disabled?: boolean }) => api<AdminOrg>(`/api/admin/orgs/${orgId}`, { method: 'PATCH', body }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'orgs'] }),
+  });
+}
+
+// ---------- G1 identity: two-step verification, security policy ----------
+type NewCodes = { newRecoveryCodes: string[] | null };
+
+export const useMfaStatus = () => useQuery({ queryKey: ['me', 'mfa'], queryFn: () => api<MfaStatus>('/api/me/mfa') });
+
+/** every identity change refreshes the person's status and their /api/me (mfaEnabled) */
+function useIdentityMutation<TBody, TRes>(fn: (b: TBody) => Promise<TRes>) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: fn, onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }) });
+}
+
+export const useTotpStart = () => useMutation({ mutationFn: () => api<TotpEnrolment>('/api/me/mfa/totp/start', { method: 'POST' }) });
+export const useTotpConfirm = () => useIdentityMutation((code: string) => api<MfaStatus & NewCodes>('/api/me/mfa/totp/confirm', { method: 'POST', body: { code } }));
+export const useTotpDisable = () => useIdentityMutation((_: void) => api<MfaStatus>('/api/me/mfa/totp', { method: 'DELETE' }));
+export const useRegenerateRecoveryCodes = () => useIdentityMutation((_: void) => api<NewCodes>('/api/me/mfa/recovery-codes', { method: 'POST' }));
+export const usePasskeyOptions = () => useMutation({ mutationFn: () => api<Record<string, unknown>>('/api/me/mfa/passkeys/options', { method: 'POST' }) });
+export const usePasskeyRegister = () =>
+  useIdentityMutation((b: { name: string; response: Record<string, unknown> }) => api<MfaStatus & NewCodes>('/api/me/mfa/passkeys', { method: 'POST', body: b }));
+export const usePasskeyRemove = () => useIdentityMutation((id: string) => api<MfaStatus>(`/api/me/mfa/passkeys/${id}`, { method: 'DELETE' }));
+
+export const useSecurityPolicy = (orgId: string) => useQuery({ queryKey: [...qk.org(orgId), 'security'], queryFn: () => api<SecurityPolicy>(`/api/orgs/${orgId}/security`) });
+export function useSaveSecurityPolicy(orgId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (p: SecurityPolicy) => api<SecurityPolicy>(`/api/orgs/${orgId}/security`, { method: 'PUT', body: p }),
+    onSuccess: (p) => {
+      qc.setQueryData([...qk.org(orgId), 'security'], p);
+      qc.invalidateQueries({ queryKey: qk.me });
+    },
   });
 }

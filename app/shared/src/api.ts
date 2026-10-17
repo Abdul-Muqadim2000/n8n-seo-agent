@@ -18,6 +18,8 @@ export interface User {
   hasPassword: boolean;
   googleLinked: boolean;
   createdAt: string;
+  /** G1: at least one second factor (authenticator app or passkey) is set up */
+  mfaEnabled: boolean;
 }
 
 export interface OrgSummary {
@@ -27,6 +29,8 @@ export interface OrgSummary {
   role: Role;
   onboardingStep: string;
   onboardedAt: string | null;
+  /** G1: the company requires two-step verification */
+  requiresMfa?: boolean;
 }
 
 export interface Me {
@@ -196,6 +200,8 @@ export interface Member {
   avatarUrl: string | null;
   role: Role;
   joinedAt: string;
+  /** G1: the member has two-step verification (owners and admins see it; false for viewers' view) */
+  mfaEnabled?: boolean;
 }
 
 export interface Invitation {

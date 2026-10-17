@@ -44,6 +44,7 @@ import { RoleChip, ROLE_ICON, SettingsCard } from './_components/SettingsCard';
 import { DeliveryTab } from './_components/DeliveryTab';
 import { MailboxesTab } from './_components/MailboxesTab';
 import { ApiKeysTab } from './_components/ApiKeysTab';
+import { SecurityTab } from './_components/SecurityTab';
 
 const TABS = [
   { id: 'company', label: 'Company', description: 'Your company’s details, websites and setup.' },
@@ -52,6 +53,7 @@ const TABS = [
   { id: 'delivery', label: 'Report delivery', description: 'Where your finished reports are sent, and on what schedule.' },
   { id: 'mailboxes', label: 'Mailboxes', description: 'The mailboxes link-building pitches go out from, and your opt-out list.' },
   { id: 'api', label: 'API access', description: 'Keys that let a script, a BI tool or an AI assistant read your own data.' },
+  { id: 'security', label: 'Security', description: 'Two-step verification for everyone, and who has it.' },
 ] as const;
 
 const ROLE_DESCRIPTIONS: Record<Role, string> = {
@@ -78,6 +80,7 @@ export default function OrgSettingsPage() {
       {current.id === 'delivery' && <DeliveryTab />}
       {current.id === 'mailboxes' && <MailboxesTab />}
       {current.id === 'api' && <ApiKeysTab />}
+      {current.id === 'security' && <SecurityTab />}
     </div>
   );
 }

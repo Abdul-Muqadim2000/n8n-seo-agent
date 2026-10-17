@@ -30,6 +30,8 @@ import {
 } from 'lucide-react';
 import { MODES, ROLE_LABELS, type Org, type Site } from '@seo/shared';
 import { GuideIndexButton } from '@/components/guide';
+import { CompanyMfaGate, COMPANY_MFA_CODES } from '@/components/identity/CompanyMfaGate';
+import { ApiRequestError } from '@/lib/api';
 import { lastSite, makeCan, OrgContext, rememberSite, useOrgCtx, type OrgContextValue } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { useLogout, useMe, useOrg, useSites } from '@/lib/queries';
@@ -138,6 +140,8 @@ export function OrgLayout() {
 
   useDocumentTitle(ctx ? shellTitle(loc.pathname, ctx.org, ctx.sites) : null);
 
+  // G1: the company requires two-step verification and this session has not passed it
+  if (org.isError && org.error instanceof ApiRequestError && COMPANY_MFA_CODES.includes(org.error.code ?? '')) return <CompanyMfaGate error={org.error} />;
   if (org.isError) return <ErrorState error={org.error} title="Company not available" />;
   if (!ctx) return <PageLoader fullPage />;
 

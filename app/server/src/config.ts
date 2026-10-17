@@ -11,6 +11,8 @@ const str = (def = '') => z.string().optional().transform((v) => (v == null ? de
 
 const Env = z.object({
   NODE_ENV: str('development'),
+  /** pino level (tests: silent) */
+  LOG_LEVEL: str('info'),
   PORT: str('4000').transform(Number),
   HOST: str('0.0.0.0'),
   /** where people open the app (used for links in e-mails and the Google redirect) */
@@ -37,6 +39,12 @@ const Env = z.object({
   N8N_PUBLISH_CHECK_PATH: str('/webhook/seo-publish-check'),
   /** v4.13: 32 bytes (64 hex or base64) that encrypt mailbox passwords; without it no mailbox can be connected */
   MAILBOX_KEY: str(''),
+  /** G1: 32 bytes (64 hex or base64) that seal authenticator-app secrets and OIDC client secrets; empty = MAILBOX_KEY is used */
+  IDENTITY_KEY: str(''),
+  /** G1: the name authenticator apps show beside the account (default: SEO_BRAND) */
+  MFA_ISSUER: str(''),
+  /** G1: let an OIDC issuer resolve to a private address (a test IdP in the same Docker network); never in production */
+  SSO_ALLOW_PRIVATE_HOSTS: bool(false),
   /** v4.13: the sender and inbox jobs (off in tests or on a second server) */
   LINK_BUILDER_JOBS: bool(true),
   /** L1: check the recipient's domain for a mail server before the first e-mail; false only for a local mail test with made-up domains */
@@ -100,6 +108,7 @@ const e = parsed.data;
 export const config = {
   env: e.NODE_ENV,
   isProd: e.NODE_ENV === 'production',
+  logLevel: e.LOG_LEVEL || 'info',
   port: e.PORT,
   host: e.HOST,
   appUrl: e.APP_URL,
@@ -156,6 +165,9 @@ export const config = {
   defaultBudgetUsd: e.DEFAULT_MONTHLY_BUDGET_USD,
   allowSignup: e.ALLOW_SIGNUP,
   mailboxKey: e.MAILBOX_KEY,
+  identityKey: e.IDENTITY_KEY || e.MAILBOX_KEY,
+  mfaIssuer: e.MFA_ISSUER || e.SEO_BRAND,
+  ssoAllowPrivateHosts: e.SSO_ALLOW_PRIVATE_HOSTS,
   // L4: OAuth mailboxes. The redirect URI must be registered in the owner's Google / Azure app exactly as it is built here.
   mailOauth: {
     gmail: { clientId: e.GMAIL_OAUTH_CLIENT_ID, clientSecret: e.GMAIL_OAUTH_CLIENT_SECRET, enabled: !!(e.GMAIL_OAUTH_CLIENT_ID && e.GMAIL_OAUTH_CLIENT_SECRET) },

@@ -5,6 +5,7 @@ import { requireUser } from '../auth/access';
 import { exchangeGoogleCode, G_COOKIE, googleAuthUrl } from '../auth/google';
 import { burnPasswordCheck, hashPassword, verifyPassword } from '../auth/password';
 import { clearSessionCookie, createSession, deleteSession, deleteUserSessions } from '../auth/session';
+import { startMfaChallenge } from '../auth/signin';
 import { consumeToken, issueToken } from '../auth/tokens';
 import { config } from '../config';
 import { db, schema } from '../db';
@@ -98,7 +99,10 @@ export async function authRoutes(app: FastifyInstance) {
       throw new HttpError(401, user ? 'This account signs in with Google. Use "Continue with Google", or set a password with "Forgot password".' : 'Wrong e-mail or password.', 'bad_credentials');
     }
     if (!(await verifyPassword(user.passwordHash, body.password))) throw new HttpError(401, 'Wrong e-mail or password.', 'bad_credentials');
-    await createSession(reply, req, user.id);
+    // G1: with two-step verification on, the password only opens the second step
+    const challenge = await startMfaChallenge(reply, user, { method: 'password' });
+    if (challenge) return challenge;
+    await createSession(reply, req, user.id, { method: 'password' });
     return buildMe(user);
   });
 
@@ -227,7 +231,9 @@ export async function authRoutes(app: FastifyInstance) {
           .returning();
       }
     }
-    await createSession(reply, req, user.id);
+    // G1: with two-step verification on, Google only opens the second step (/login/mfa asks for the code)
+    if (await startMfaChallenge(reply, user, { method: 'google', next })) return reply.redirect(`/login/mfa${next !== '/' ? `?next=${encodeURIComponent(next)}` : ''}`);
+    await createSession(reply, req, user.id, { method: 'google' });
     return reply.redirect(next);
   });
 }

@@ -7,6 +7,8 @@ export class HttpError extends Error {
     message: string,
     public code?: string,
     public fields?: Record<string, string>,
+    /** extra fields of the JSON answer (G1: the step-up methods, the SSO address) */
+    public extra?: Record<string, unknown>,
   ) {
     super(message);
   }
