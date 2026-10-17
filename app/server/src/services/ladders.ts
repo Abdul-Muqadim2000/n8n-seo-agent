@@ -1,5 +1,7 @@
 import {
   daysSince,
+  estimateRunCost,
+  formatUsd,
   isWon,
   keywordTokens,
   LADDER_SITE_ROW,
@@ -33,6 +35,7 @@ import { and, desc, eq, gte, inArray, or, sql } from 'drizzle-orm';
 import { db, schema } from '../db';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { rankSeries } from './data';
+import { cachedCalibration } from './engineCost';
 import { actionFromApiBody } from './recommendations';
 import { filesFor, toReport } from './runs';
 
@@ -813,7 +816,7 @@ export function ladderNeedsYou(b: LadderBuild): NeedsYouItem[] {
       kind: 'approve',
       severity: 'info',
       title: `Next page ready: ${q(a.keyword)}`,
-      detail: `Page ${pageNo} of your ladder ${q(c.head)}${rung === 4 ? ' (the main page)' : `, rung ${rung}`}. The ladder is Manual: write it now (about $${MONITOR_COSTS.blogPostEach.toFixed(2)}) or leave it for later.`,
+      detail: `Page ${pageNo} of your ladder ${q(c.head)}${rung === 4 ? ' (the main page)' : `, rung ${rung}`}. The ladder is Manual: write it now (about ${formatUsd(estimateRunCost('keyword', {}, cachedCalibration()))}) or leave it for later.`,   // D-2: the Write now form's own figure
       action:
         actionFromApiBody(
           {

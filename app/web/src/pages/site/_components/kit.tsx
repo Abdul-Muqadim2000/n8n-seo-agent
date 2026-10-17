@@ -3,7 +3,8 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { ArrowRight, Bot, ChevronDown, CircleCheck, CircleMinus, CircleX, FileSearch, Gauge, Link2, ListChecks, PenSquare, Search, TrendingUp, Wrench } from 'lucide-react';
-import { MODES, type ModeId, type Priority } from '@seo/shared';
+import { formatUsd, MODES, type ModeId, type Priority } from '@seo/shared';
+import { runCost } from '@/lib/prices';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { cn } from '@/lib/utils';
@@ -337,7 +338,7 @@ export function RunAnalysisMenu({ label = 'Run an analysis', variant = 'primary'
         <MenuItem key={it.mode} icon={it.icon} onSelect={() => navigate(tool(it.mode))}>
           <span className="flex min-w-0 flex-1 items-center justify-between gap-3">
             <span className="truncate">{MODES[it.mode].title}</span>
-            <span className="shrink-0 text-xs tabular text-ink-3">{MODES[it.mode].costUsd ? `~$${MODES[it.mode].costUsd.toFixed(2)}` : 'free'}</span>
+            <span className="shrink-0 text-xs tabular text-ink-3">{runCost(it.mode) ? `~${formatUsd(runCost(it.mode))}` : 'free'}</span>
           </span>
         </MenuItem>
       ))}
