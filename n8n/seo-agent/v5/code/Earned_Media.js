@@ -52,9 +52,14 @@ for (const p of plans) {
     const [type, action] = (ACTION[e.kind] || ACTION.article)(business, e.host);
     const value = Math.round(10 * e.citations * (1 + e.engines.length / 2) * ({ list: 1.4, article: 1.1, news: 1.2, review: 1.2, forum: 1, official: 1.3, video: 0.9, social: 0.8, encyclopedia: 0.6, competitor: 0.3 }[e.kind] || 1)) / 10;
     // R83: a page on the site of a business AI names instead of you is a competitor's page — answer the question better on your own
-    // site; only its "best X" list stays a list (the Link Builder's rule: asking a rival's roundup to add you is fair game)
-    const rival = rivalOf(e.host) && !(e.kind === 'list' && OK.isRoundup({ title, url: e.url }));
-    if (rival) { const [t2, a2] = ACTION.competitor(business, e.host); return { ...e, kind: 'competitor', rival: true, title, mentions_us, competitors_named: named, contact_email, contact_url, fetch_status, action: a2, action_type: t2, value: Math.round(10 * e.citations * (1 + e.engines.length / 2) * 0.3) / 10 }; }
+    // site. C-2 (re-rating 2026-10-17): its "best X" list too - every site in this set is a BUSINESS rival (declared, or named by AI),
+    // and a competitor's own list ranks itself, not you (flick.network: "Ask the editor of flick.network to add Tech& to this list" while
+    // the AI visibility run named it among the businesses AI recommends instead, and the Link Builder refused it). The Link Builder's
+    // exemption is for a SERP-only rival (a publisher that outranks you), which this set does not hold. A site that sells your category
+    // by its own title or address (RV.providerOf: "ERPNext Implementation Partner", "Odoo Implementation") is a competitor here too.
+    const sells = rivalOf(e.host) ? '' : (OK.isGov(e.host) ? '' : RV.providerOf({ domain: e.host, title, url: e.url, topics: p.topics || [], services: p.services || [] }));
+    const rival = rivalOf(e.host) || !!sells;
+    if (rival) { const [t2, a2] = ACTION.competitor(business, e.host); return { ...e, kind: 'competitor', rival: true, rival_why: sells ? 'it sells what you sell: ' + sells : 'a business AI recommends instead of you', title, mentions_us, competitors_named: named, contact_email, contact_url, fetch_status, action: a2, action_type: t2, value: Math.round(10 * e.citations * (1 + e.engines.length / 2) * 0.3) / 10 }; }
     return { ...e, title, mentions_us, competitors_named: named, contact_email, contact_url, fetch_status, action, action_type: type, value };
   }).sort((a, b) => b.value - a.value);
   // prospects (type ai_source, one row per site + domain): the exact page, what it names, the action; drafts for the 3 most valuable new ones
@@ -81,7 +86,7 @@ for (const p of plans) {
       : (OK.badHost(e.host)
         || (OK.isGov(e.host) ? 'government site: you get on its lists by applying or being accredited, not by a pitch' : '')
         || OK.homepageOnly(kindType, e.url)
-        || OK.sellsSame({ type: kindType, domain: e.host, competitors: p.competitors, title: e.title, text: pageText.get(e.url) || '', terms: sellTerms })
+        || OK.sellsSame({ type: kindType, domain: e.host, competitors: p.competitors, ai_rivals: [...(p.rival_sources || []), ...aliasDomains(p.site_id)], topics: p.topics || [], title: e.title, url: e.url, text: pageText.get(e.url) || '', terms: sellTerms })
         || (!OK.accredited(p.accreditation) && OK.accreditedList(e.title + ' ' + e.url) ? 'a list of accredited / approved providers: you get on it by applying with the accreditation, and the facts on file do not say you hold one' : ''));
     if (blocked) row.note = String(blocked).slice(0, 300);
     if (kept.superseded && !blocked) row.note = (DRAFTS.reason + '; ' + row.note).slice(0, 300);   // P34-1: the owner is told the old pitch was withdrawn, not shown it again

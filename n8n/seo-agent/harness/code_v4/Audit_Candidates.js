@@ -294,8 +294,24 @@ const SM = (() => {
     clicks: num0(p.clicks), impressions: num0(p.impressions), position: num0(p.position), prev_clicks: num0(p.prev_clicks), yoy_clicks: num0(p.yoy_clicks),
     decay_state: S(p.decay_state), decay_pct: num0(p.decay_pct), decay_lost: num0(p.decay_lost), decay_kind: S(p.decay_kind),
     decay_basis: S(p.decay_basis).slice(0, 900), measured_at: S(p.measured_at) }));
+  // ---- C-7 (re-rating 2026-10-17): ONE page state per keyword, read by the Rank Tracker AND the Site Tracker (and so by the cadence) ----
+  // In one morning the Rank Tracker said of "ai consulting" "…/ai-copilot-advisory-uae already answers this search - refresh that page"
+  // while the Site Tracker said "fix the four drafts that failed the quality check and run them again", and of "it consulting dubai"
+  // "write the main page" while the Site Tracker and the cadence said "written today, failed QA, fix it". The order of evidence is one:
+  // a LIVE page of the site that answers the search wins (refresh it; a draft written for the search is retired, never a second page);
+  // then a written draft (publish it); then a draft that failed its quality check (fix it and run it again); then a run that wrote nothing.
+  // in: { keyword, covered_url, written, not_ready, reasons (array or '; ' text), started } -> { state, text } (text: the parenthesis a list uses)
+  const pageStep = (o) => {
+    const c = o || {}, kw = S(c.keyword), why = (Array.isArray(c.reasons) ? c.reasons : S(c.reasons).split(/;\s+/)).map(S).filter(Boolean).slice(0, 2).join('; ').slice(0, 220);
+    if (S(c.covered_url)) return { state: 'covered', text: S(c.covered_url) + ' already answers this search — refresh that page, do not publish a second one'
+      + (c.not_ready || c.written ? '; the draft written for "' + kw + '" is not needed (use its text to refresh that page)' : '') };
+    if (c.written) return { state: 'written', text: 'already written — publish it' };
+    if (c.not_ready) return { state: 'not_ready', text: 'written, but the draft did not pass the quality check' + (why ? ' (' + why + ')' : '') + ' — fix it and run it again; do not publish it as it is' };
+    if (c.started) return { state: 'started', text: 'a page run was started for it but no page was written — it is written again' };
+    return { state: 'planned', text: '' };
+  };
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
-    titleShare, titleGap, canonUrl, isListing, pageScore,
+    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms } };
 })();
 const { list, on_demand, want, total } = monitorSites('audit');

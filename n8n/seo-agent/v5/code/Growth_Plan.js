@@ -187,11 +187,21 @@ for (const s of sites) {
   for (const p of keyPages) if (!stored.has(keyOf(p.url))) addSub(p.url, 'key page, first submission');
   // ---- the earned-media list: exact pages AI cited in answers that did not name the business (last 8 days, weekly + daily) ----
   const em = new Map();
-  for (const a of answers.filter(a => a.site_id === s.site_id && (a.answered === true || a.answered === 'true') && !(a.mentioned === true || a.mentioned === 'true') && a.kind !== 'brand'))
+  // C-3 (re-rating 2026-10-17): the count is "answers that cited this page" over the answers stored in the last 8 days - weekly runs AND
+  // the daily pulse (670 rows on 2026-10-17) - and the report now says exactly that (earned_basis). It used to say "the answers of the last
+  // weekly AI-visibility run", against which mof.gov.ae's 93 next to that run's 18 looked like a per-site total; and a page cited twice
+  // in one answer counts once.
+  const earnAns = answers.filter(a => a.site_id === s.site_id && (a.answered === true || a.answered === 'true') && !(a.mentioned === true || a.mentioned === 'true') && a.kind !== 'brand');
+  const atsE = earnAns.map(a => String(a.checked_at || '')).filter(Boolean).sort();
+  const earned_basis = { answers: earnAns.length, from: (atsE[0] || '').slice(0, 10), to: (atsE[atsE.length - 1] || '').slice(0, 10), days: 8,
+    runs: new Set(earnAns.map(a => String(a.run_id || ''))).size, pulse: earnAns.filter(a => /pulse/i.test(String(a.run_kind || a.run_id || ''))).length };
+  for (const a of earnAns) {
+    const seenU = new Set();
     // G22 (2026-10-11 system review): a source chip sometimes carries only a fragment of the title ("E", "Best e" live). A title that
     // short is treated as missing, so Earned Media reads the page's own <title> from the copy it fetches anyway; a real title is kept whole.
-    for (const c of parse(a.cited_urls, [])) { if (!c || !c.u || ours(c.u)) continue; const h = hostOf(c.u); const t0 = String(c.t || '').replace(/\s+/g, ' ').trim(); const t = t0.length >= 8 ? t0 : '';
+    for (const c of parse(a.cited_urls, [])) { if (!c || !c.u || ours(c.u) || seenU.has(c.u)) continue; seenU.add(c.u); const h = hostOf(c.u); const t0 = String(c.t || '').replace(/\s+/g, ' ').trim(); const t = t0.length >= 8 ? t0 : '';
       const x = em.get(c.u) || { url: c.u, title: t, host: h, n: 0, engines: new Set(), questions: new Set() }; x.n++; x.engines.add(a.engine); x.questions.add(a.prompt); if (!x.title && t) x.title = t; em.set(c.u, x); }
+  }
   const perHost = new Map();
   const earned = [...em.values()].map(x => ({ url: x.url, title: x.title, host: x.host, citations: x.n, engines: [...x.engines], questions: [...x.questions].slice(0, 3), kind: kindOf(x.host, x.title, x.url, comps) }))
     .sort((a, b) => b.citations * (1 + b.engines.length) - a.citations * (1 + a.engines.length))
@@ -243,7 +253,8 @@ for (const s of sites) {
     set_aside, set_aside_note: FITR.line(set_aside, 'turned into a question to win or a page to write'),
     brand_names, competitors: comps.slice(0, 12), ai_pages_month: s.settings.ai_pages_month, run_id: 'grow_' + iso.slice(0, 10).replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, ''), checked_at: iso,
     vis_checked_at: v ? v.checked_at : '', win_min_answers: CONFIG.win_min_answers, won_lost, won_now, stalled_targets, follow_up, follow_up_days: CONFIG.follow_up_days,
-    key_pages: keyPages, audit, submit: [...submit.entries()].slice(0, CONFIG.submit_max).map(([url, why]) => ({ url, why })), targets, earned, earned_fetch: [...new Set([...earned.filter(e => e.kind !== 'competitor').slice(0, CONFIG.earned_fetch).map(e => e.url), ...correction_fetch])], corrections, rival_sources: rivalDomains,
+    topics: [...new Set(lrowsAll.map(l => String(l.head_keyword || '')).filter(Boolean))].slice(0, 20),   // C-2: the categories RV.providerOf judges a cited site against
+    key_pages: keyPages, audit, submit: [...submit.entries()].slice(0, CONFIG.submit_max).map(([url, why]) => ({ url, why })), targets, earned, earned_basis, earned_fetch: [...new Set([...earned.filter(e => e.kind !== 'competitor').slice(0, CONFIG.earned_fetch).map(e => e.url), ...correction_fetch])], corrections, rival_sources: rivalDomains,
     indexnow_key, indexnow_new: !kRow, indexnow_verified_at: kv.verified_at || '', entity_due, previous_entity: prevEntity, previous: prevG ? { checked_at: prevG.checked_at, avg_score: Number(prevG.avg_score) || null, earned: parse(prevG.earned_json, []) } : null,
     stored_pages: [...stored.values()].map(p => ({ url: normU(p.url), key: keyOf(p.url), score: Number(p.score) || 0, checked_at: p.checked_at, updated_on: p.updated_on, submitted_at: p.submitted_at, submitted_via: p.submitted_via, bing_crawled_at: p.bing_crawled_at, bing_status: Number(p.bing_status) || 0, kind: p.kind })) } });
 }

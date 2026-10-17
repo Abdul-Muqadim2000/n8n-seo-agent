@@ -8,6 +8,7 @@
 /*__COUNTRIES__*/
 /*__LINK_KIT__*/
 /*__SITE_MODEL__*/
+/*__RIVALS__*/
 const CONFIG = { max_sites_per_run: 15, sequences_per_week: 10, monthly_days: 25, qualify_per_week: 25 };
 const { list, on_demand, want, total } = monitorSites('links');   // `trigger` comes from the shared snippet
 if (!list.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'no site matches "' + want + '"' : (total ? 'the Link Builder is switched off for every site' : 'no sites yet') } }];
@@ -56,6 +57,11 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
     }
     return [...byDom.values()].sort((a, b) => (a.position || 99) - (b.position || 99)).slice(0, 40);
   })();
+  // C-2 / C-8 (re-rating 2026-10-17): the businesses AI recommends instead of the site (the AI Visibility Tracker's stored rivals and the
+  // Answer Analyst's learned names) are rivals here too - pactsoft.ae ("PACT REVENU") and the vendors AI cited were qualified as prospects
+  const ai_rivals = (() => { let vis = [], cacheAi = []; try { vis = $('Load AI Visibility (LB)').all().map(i => i.json).filter(r => r && r.site_id); } catch (e) {}
+    try { cacheAi = $('Load Cache (LB Rivals)').all().map(i => i.json).filter(r => r && r.key); } catch (e) {}
+    return RV.aiRivals({ site_id: s.site_id, own: s.domain, vis_rows: vis, cache_rows: cacheAi }); })();
   const pr = profiles.find(x => x.site_id === s.site_id) || {};
   const lad = ladders.filter(l => normD(l.domain) === s.domain);
   const topics = [...new Set([...lad.map(l => l.head_keyword || l.keyword), ...(s.keywords || []), pr.business_type].map(x => String(x || '').trim().toLowerCase()).filter(x => x && x.split(/\s+/).some(w => !STOP.test(w))))].slice(0, 4);
@@ -109,7 +115,7 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const mineP = prospects.filter(p => p.site_id === s.site_id);
   const mineO = outreach.filter(o => o.site_id === s.site_id);
   return { json: { site_id: s.site_id, domain: s.domain, country: s.country || c.name || '', country_iso: c.iso, location_code: Number(s.location_code) || 2840, language_code: s.language_code || 'en',
-    email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', on_demand, free_only, competitors, serp_rivals, topics, brand, brand_known, services, accreditation,
+    email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', on_demand, free_only, competitors, serp_rivals, ai_rivals, topics, brand, brand_known, services, accreditation,
     brand_names: [...new Set([brand, named, ...s.settings.brand_names, s.domain.split('.')[0].length >= 5 ? s.domain.split('.')[0] : ''].filter(Boolean))],
     profile: { business_name: bn, business_type: pr.business_type || '', author_name: pr.author_name || '', author_job_title: pr.author_job_title || '', street_address: pr.street_address || '', city: pr.city || '', region: pr.region || '',
       postal_code: pr.postal_code || '', country_code: pr.country_code || c.iso || '', phone: pr.phone || '', public_email: pr.public_email || '', logo_url: pr.logo_url || '' },

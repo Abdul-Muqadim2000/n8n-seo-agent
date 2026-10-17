@@ -1933,6 +1933,27 @@
     "name": "Read Executions (Catch-up)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Read Mailbox Workflow (Watchdog)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Deactivate Mailbox",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Activate Mailbox",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 Site Admin": [],

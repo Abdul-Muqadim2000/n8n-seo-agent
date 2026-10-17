@@ -87,5 +87,21 @@ const GQ = (() => {
     return { clicks: cl, impressions: im, clicks_pct: tc ? Math.round(cl / tc * 1000) / 10 : 0, impressions_pct: ti ? Math.round(im / ti * 1000) / 10 : 0,
       named_clicks: sum.clicks, named_impressions: sum.impressions, note: 'Search Console withholds the queries of rare searches; these clicks and impressions are real but belong to queries it does not name.' };
   };
-  return { isScraper, brandKeys, brandTest, anonymised, editDistance };
+  // ---- C-6 (re-rating 2026-10-17): a search for ANOTHER website is not a quick win ----
+  // "techandkey com" (411 impressions; techandkey.com is "TechAndKey - Latest Tech News") was correctly not a brand search (R89) and was then
+  // recommended as a striking-distance quick win, a low-CTR "rewrite titles" item and a cannibalisation pair. A navigational search for a
+  // site that is not this one - one name followed by a domain ending ("techandkey com"), or a written domain ("techandkey.com") - is set
+  // aside like a scraper query: counted in the totals, never in a list of things to do. Returns that site, or ''.
+  const NAV_TLD = new Set(['com', 'net', 'org', 'io', 'co', 'ae', 'ai', 'app', 'info', 'biz', 'me', 'dev', 'tech', 'online', 'store', 'site', 'xyz', 'us', 'uk', 'sa', 'in']);
+  const otherSite = (q, domain, keys) => {
+    const s = String(q || '').toLowerCase().trim(); let name = '', tld = '';
+    const m = s.match(/(?:^|\s|www\.)([a-z0-9-]{3,})\.(com|net|org|io|co|ae|ai|app|info|biz|me|dev|tech|online|store|site|xyz)(?:\.[a-z]{2})?(?:\/\S*)?(?:\s|$)/);
+    if (m) { name = m[1].replace(/-/g, ''); tld = m[2]; }
+    else { const t = qTokens(s).filter(x => x !== 'www'); if (t.length !== 2 || !NAV_TLD.has(t[1])) return ''; name = t[0]; tld = t[1]; }
+    if (name.length < 3) return '';
+    const own = String(domain || '').toLowerCase().split('.')[0].replace(/[^a-z0-9]/g, '');
+    if (name === own || (keys || []).some(k => squash(k) === name)) return '';
+    return name + '.' + tld;
+  };
+  return { isScraper, brandKeys, brandTest, anonymised, editDistance, otherSite };
 })();
