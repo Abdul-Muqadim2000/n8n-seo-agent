@@ -18,6 +18,7 @@ import {
 import { sqlClient } from '../../db';
 import { detectFormat, lineParser, parseJsonObject, type LineResult, type LogRecord } from './parse';
 import { loadRanges, networkOf } from './ranges';
+import { pgDate } from './pgTime';
 import { Verifier, type Dns } from './verify';
 
 /**
@@ -129,23 +130,29 @@ export async function processIngestFile(input: IngestInput): Promise<{ stats: In
     await take(parse!(line), line);
   };
 
-  for await (const line of rl) {
-    if (!parse) {
-      head.push(line);
-      if (head.length < 20) continue;
-      format = detectFormat(head);
-      parse = lineParser(format === 'unknown' ? 'combined' : format);
-      for (const h of head.splice(0)) await handle(h);
-      continue;
+  try {
+    for await (const line of rl) {
+      if (!parse) {
+        head.push(line);
+        if (head.length < 20) continue;
+        format = detectFormat(head);
+        parse = lineParser(format === 'unknown' ? 'combined' : format);
+        for (const h of head.splice(0)) await handle(h);
+        continue;
+      }
+      if (stats.lines >= CRAWLER_LIMITS.maxLines) {
+        truncated = true;
+        rl.close();
+        stream.destroy();
+        break;
+      }
+      await handle(line);
+      if (stats.lines % 50_000 === 0 && input.onProgress) await input.onProgress(stats);
     }
-    if (stats.lines >= CRAWLER_LIMITS.maxLines) {
-      truncated = true;
-      rl.close();
-      stream.destroy();
-      break;
-    }
-    await handle(line);
-    if (stats.lines % 50_000 === 0 && input.onProgress) await input.onProgress(stats);
+  } catch (e) {
+    // a broken gzip surfaces here (zlib's Z_* codes); anything else (the database) is not a file problem
+    if (!streamError && !String((e as { code?: string }).code ?? '').startsWith('Z_')) throw e;
+    streamError = streamError ?? (e as Error);
   }
   if (streamError) {
     const msg = String((streamError as Error).message || streamError);
@@ -174,7 +181,7 @@ async function writeBatch(input: IngestInput, batch: Pending[], verifier: Verifi
     return {
       site_id: input.siteId,
       ingest_id: input.ingestId,
-      at: b.rec.at,
+      at: b.rec.at.toISOString(),
       bot: b.bot.key,
       verification: v,
       method: b.rec.method,
@@ -189,7 +196,7 @@ async function writeBatch(input: IngestInput, batch: Pending[], verifier: Verifi
       line_hash: sha16(b.hashOf),
     };
   });
-  type Ins = { at: Date; bot: string; verification: string; path: string; query_keys: string; kind: string; status: number; bytes: number | null; ms: number | null };
+  type Ins = { at: Date | string; bot: string; verification: string; path: string; query_keys: string; kind: string; status: number; bytes: number | null; ms: number | null };
   const inserted = (await sqlClient`insert into crawler_hits ${sqlClient(rows as unknown as Record<string, unknown>[], 'site_id', 'ingest_id', 'at', 'bot', 'verification', 'method', 'path', 'query_keys', 'kind', 'status', 'bytes', 'ms', 'net', 'line_hash')}
     on conflict (site_id, line_hash) do nothing
     returning at, bot, verification, path, query_keys, kind, status, bytes, ms`) as unknown as Ins[];
@@ -201,7 +208,8 @@ async function writeBatch(input: IngestInput, batch: Pending[], verifier: Verifi
   const daily = new Map<string, D>();
   const pages = new Map<string, P>();
   for (const r of inserted) {
-    const d = day(r.at);
+    const at = pgDate(r.at)!;
+    const d = day(at);
     const dk = `${d}|${r.bot}|${r.verification}`;
     let a = daily.get(dk);
     if (!a) daily.set(dk, (a = { site_id: input.siteId, day: d, bot: r.bot, verification: r.verification, hits: 0, s2xx: 0, s3xx: 0, s4xx: 0, s5xx: 0, refused: 0, param_hits: 0, asset_hits: 0, bytes: 0, ms_sum: 0, ms_n: 0 }));
@@ -229,7 +237,7 @@ async function writeBatch(input: IngestInput, batch: Pending[], verifier: Verifi
     else if (cls === 4) p.s4xx++;
     else if (cls === 5) p.s5xx++;
     if (r.query_keys) p.param_hits++;
-    const t = r.at.getTime();
+    const t = at.getTime();
     if (t >= p._at) {
       p._at = t;
       p.last_status = r.status;

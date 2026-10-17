@@ -8,6 +8,7 @@ import { randomToken, safeEqual, sha256 } from '../lib/crypto';
 import { badRequest, HttpError, parse } from '../lib/errors';
 import { crawlerCsv, crawlerData, ingestsOf, toIngestView } from '../services/crawlers/analytics';
 import { queueIngest, spool } from '../services/crawlers/jobs';
+import { pgIso } from '../services/crawlers/pgTime';
 
 /**
  * Gap #6 (app/docs/LOG_ANALYTICS.md): the Crawlers page's routes. Two plugins:
@@ -69,14 +70,14 @@ export async function crawlerRoutes(app: FastifyInstance) {
     requireVerified(a.site);
     const token = LOG_PUSH_KEY.prefix + randomToken(32);
     const prefix = token.slice(0, LOG_PUSH_KEY.displayLength);
-    const [row] = await sqlClient<{ push_key_created_at: Date }[]>`
+    const [row] = await sqlClient<{ push_key_created_at: Date | string }[]>`
       insert into log_sources (site_id, org_id, push_key_hash, push_key_prefix, push_key_created_at, push_key_created_by, updated_at)
       values (${a.site.id}, ${a.org.id}, ${sha256(token)}, ${prefix}, now(), ${a.user.id}, now())
       on conflict (site_id) do update set push_key_hash = excluded.push_key_hash, push_key_prefix = excluded.push_key_prefix,
         push_key_created_at = excluded.push_key_created_at, push_key_created_by = excluded.push_key_created_by, updated_at = now()
       returning push_key_created_at`;
     req.log.info({ site: a.site.id, by: a.user.id }, 'crawler log push key created');
-    return { token, prefix, endpoint: `${config.appUrl}/api/ingest/logs/${a.site.id}`, header: LOG_PUSH_KEY.header, createdAt: row.push_key_created_at.toISOString() };
+    return { token, prefix, endpoint: `${config.appUrl}/api/ingest/logs/${a.site.id}`, header: LOG_PUSH_KEY.header, createdAt: pgIso(row.push_key_created_at) ?? new Date().toISOString() };
   });
 
   app.delete(`${base}/push-key`, async (req) => {

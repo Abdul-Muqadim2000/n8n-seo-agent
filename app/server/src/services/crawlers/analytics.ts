@@ -25,6 +25,7 @@ import { config } from '../../config';
 import { sqlClient } from '../../db';
 import type { SiteRow } from '../../db/schema';
 import { rows as n8nRows } from '../../n8n/client';
+import { pgIso } from './pgTime';
 import { rangeStatus } from './ranges';
 
 /**
@@ -56,10 +57,10 @@ export const toIngestView = (r: {
   bytes: number | string;
   stats: unknown;
   error: string;
-  created_at?: Date;
-  createdAt?: Date;
-  finished_at?: Date | null;
-  finishedAt?: Date | null;
+  created_at?: Date | string;
+  createdAt?: Date | string;
+  finished_at?: Date | string | null;
+  finishedAt?: Date | string | null;
 }): LogIngestView => ({
   id: r.id,
   source: r.source as LogIngestView['source'],
@@ -67,10 +68,10 @@ export const toIngestView = (r: {
   status: r.status as LogIngestView['status'],
   format: (r.format || 'unknown') as LogIngestView['format'],
   bytes: Number(r.bytes) || 0,
-  stats: (r.stats as IngestStats | null) ?? null,
+  stats: (typeof r.stats === "string" ? (JSON.parse(r.stats) as IngestStats) : (r.stats as IngestStats | null)) ?? null,
   error: r.error,
-  createdAt: (r.created_at ?? r.createdAt ?? new Date()).toISOString(),
-  finishedAt: (r.finished_at ?? r.finishedAt)?.toISOString() ?? null,
+  createdAt: pgIso(r.created_at ?? r.createdAt) ?? new Date().toISOString(),
+  finishedAt: pgIso(r.finished_at ?? r.finishedAt),
 });
 
 export async function ingestsOf(siteId: string, limit = 20): Promise<LogIngestView[]> {
@@ -90,8 +91,8 @@ export async function setupOf(site: SiteRow): Promise<CrawlerSetup> {
     push: {
       enabled: !!src?.push_key_prefix,
       prefix: src?.push_key_prefix ?? null,
-      createdAt: src?.push_key_created_at?.toISOString() ?? null,
-      lastPushAt: src?.last_push_at?.toISOString() ?? null,
+      createdAt: pgIso(src?.push_key_created_at),
+      lastPushAt: pgIso(src?.last_push_at),
       pushes24h: num(p?.n),
     },
     endpoint: `${config.appUrl}/api/ingest/logs/${site.id}`,
@@ -193,8 +194,8 @@ export async function crawlerData(site: SiteRow, daysIn: unknown, opts: { withSe
     select path,
       max(day) filter (where bot = ${GOOGLEBOT}) as last_google,
       min(day) filter (where bot = ${GOOGLEBOT}) as first_google,
-      max(day) filter (where bot = any(${AI_BOTS}::text[])) as last_ai,
-      min(day) filter (where bot = any(${AI_BOTS}::text[])) as first_ai,
+      max(day) filter (where bot = any(string_to_array(${AI_BOTS.join(",")}, ','))) as last_ai,
+      min(day) filter (where bot = any(string_to_array(${AI_BOTS.join(",")}, ','))) as first_ai,
       coalesce(sum(hits) filter (where bot = ${GOOGLEBOT} and day >= ${from}), 0) as g_hits,
       max(last_status) filter (where bot = ${GOOGLEBOT} and day >= ${from}) as g_status
     from crawler_page_daily where site_id = ${sid} group by path
@@ -265,7 +266,7 @@ export async function crawlerData(site: SiteRow, daysIn: unknown, opts: { withSe
   top.sort((a, b) => b.hits - a.hits);
   const paramPatterns = await sqlClient<{ path: string; keys: string; hits: string }[]>`
     select path, query_keys as keys, count(*) as hits from crawler_hits
-    where site_id = ${sid} and bot = ${GOOGLEBOT} and verification <> 'spoofed' and query_keys <> '' and at >= ${fromD}
+    where site_id = ${sid} and bot = ${GOOGLEBOT} and verification <> 'spoofed' and query_keys <> '' and at >= ${fromD.toISOString()}
     group by path, query_keys order by count(*) desc limit 15`;
 
   // ---- new pages: first fetched by Googlebot inside the window, and only once the data is old enough to say "first"
@@ -284,12 +285,12 @@ export async function crawlerData(site: SiteRow, daysIn: unknown, opts: { withSe
   // ---- AI fetches made because a person asked
   const demand = await sqlClient<{ path: string; hits: string; bots: string[]; last: Date | string }[]>`
     select path, sum(hits) as hits, array_agg(distinct bot) as bots, max(day) as last from crawler_page_daily
-    where site_id = ${sid} and day >= ${from} and bot = any(${AI_USER_BOTS}::text[]) group by path order by sum(hits) desc limit 20`;
+    where site_id = ${sid} and day >= ${from} and bot = any(string_to_array(${AI_USER_BOTS.join(",")}, ',')) group by path order by sum(hits) desc limit 20`;
 
   // ---- spoofers and refusals
   const spoofNets = await sqlClient<{ bot: string; networks: string; top: string[] }[]>`
     select bot, count(distinct net) as networks, (array_agg(net order by n desc))[1:3] as top from (
-      select bot, net, count(*) as n from crawler_hits where site_id = ${sid} and verification = 'spoofed' and at >= ${fromD} and net is not null group by bot, net
+      select bot, net, count(*) as n from crawler_hits where site_id = ${sid} and verification = 'spoofed' and at >= ${fromD.toISOString()} and net is not null group by bot, net
     ) x group by bot`;
   const netsOf = new Map(spoofNets.map((r) => [r.bot, { networks: num(r.networks), top: r.top ?? [] }]));
   const refusedBy = new Map<string, number>();
@@ -438,8 +439,8 @@ export async function crawlerCsv(site: SiteRow, kind: string, daysIn: unknown): 
   if (kind === 'hits') {
     const rows = await sqlClient<{ at: Date; bot: string; verification: string; method: string; path: string; query_keys: string; status: number; bytes: string | null; ms: number | null; net: string | null }[]>`
       select at, bot, verification, method, path, query_keys, status, bytes, ms, net from crawler_hits
-      where site_id = ${site.id} and at >= ${fromD} order by at desc limit 200000`;
-    return { name: base, body: toCsv(['time_utc', 'crawler', 'verification', 'method', 'path', 'parameter_names', 'status', 'bytes', 'response_ms', 'network_if_not_verified'], rows.map((r) => [r.at.toISOString(), botLabel(r.bot), r.verification, r.method, r.path, r.query_keys, r.status, r.bytes, r.ms, r.net])) };
+      where site_id = ${site.id} and at >= ${fromD.toISOString()} order by at desc limit 200000`;
+    return { name: base, body: toCsv(['time_utc', 'crawler', 'verification', 'method', 'path', 'parameter_names', 'status', 'bytes', 'response_ms', 'network_if_not_verified'], rows.map((r) => [pgIso(r.at), botLabel(r.bot), r.verification, r.method, r.path, r.query_keys, r.status, r.bytes, r.ms, r.net])) };
   }
   const rows = await sqlClient<{ day: Date; bot: string; verification: string; hits: number; s2xx: number; s3xx: number; s4xx: number; s5xx: number; param_hits: number; asset_hits: number; bytes: string; ms_sum: string; ms_n: number }[]>`
     select day, bot, verification, hits, s2xx, s3xx, s4xx, s5xx, param_hits, asset_hits, bytes, ms_sum, ms_n from crawler_daily

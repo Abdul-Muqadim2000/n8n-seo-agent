@@ -2,6 +2,7 @@ import { isIP } from 'node:net';
 import { RANGE_SOURCES, type RangeSourceId } from '@seo/shared';
 import { sqlClient } from '../../db';
 import snapshotFile from './ranges.snapshot.json';
+import { pgIso } from './pgTime';
 
 /**
  * The vendors' published crawler IP lists (app/docs/LOG_ANALYTICS.md §3): a dated copy ships with the code
@@ -172,7 +173,7 @@ export async function loadRanges(force = false): Promise<void> {
   if (!active.size) fromSnapshot();
   if (!force && Date.now() - loadedAt < 60_000) return;
   loadedAt = Date.now();
-  let rows: { source_id: string; url: string; creation_time: string | null; prefixes: string[]; fetched_at: Date | null; error: string }[] = [];
+  let rows: { source_id: string; url: string; creation_time: string | null; prefixes: string[]; fetched_at: Date | string | null; error: string }[] = [];
   try {
     rows = await sqlClient`select source_id, url, creation_time, prefixes, fetched_at, error from bot_ip_ranges`;
   } catch {
@@ -181,7 +182,7 @@ export async function loadRanges(force = false): Promise<void> {
   for (const r of rows) {
     const cur = active.get(r.source_id);
     if (Array.isArray(r.prefixes) && r.prefixes.length && r.fetched_at) {
-      active.set(r.source_id, { ...compile(r.prefixes), creationTime: r.creation_time, fetchedAt: r.fetched_at.toISOString(), count: r.prefixes.length, error: r.error, url: r.url });
+      active.set(r.source_id, { ...compile(r.prefixes), creationTime: r.creation_time, fetchedAt: pgIso(r.fetched_at), count: r.prefixes.length, error: r.error, url: r.url });
     } else if (cur) {
       cur.error = r.error;
     }
@@ -251,7 +252,7 @@ export async function refreshRanges(fetcher: Fetcher = (u) => fetch(u, { headers
       if (before && parsed.prefixes.length < Math.ceil(before / 10)) throw new Error(`list shrank from ${before} to ${parsed.prefixes.length} ranges: kept the previous one`);
       await sqlClient`
         insert into bot_ip_ranges (source_id, url, creation_time, prefixes, fetched_at, checked_at, error)
-        values (${s.id}, ${s.url}, ${parsed.creationTime}, ${sqlClient.json(parsed.prefixes)}, now(), now(), '')
+        values (${s.id}, ${s.url}, ${parsed.creationTime}, ${JSON.stringify(parsed.prefixes)}::jsonb, now(), now(), '')
         on conflict (source_id) do update set url = excluded.url, creation_time = excluded.creation_time, prefixes = excluded.prefixes,
           fetched_at = excluded.fetched_at, checked_at = excluded.checked_at, error = ''`;
       updated++;

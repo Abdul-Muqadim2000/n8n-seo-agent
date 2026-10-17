@@ -155,11 +155,11 @@ async function runJob(job: { id: string; siteId: string; spoolPath: string }): P
       path: job.spoolPath,
       dns: dnsForJobs,
       onProgress: async (s: IngestStats) => {
-        await sqlClient`update log_ingests set stats = ${sqlClient.json(s as never)} where id = ${job.id}`;
+        await sqlClient`update log_ingests set stats = ${JSON.stringify(s)}::jsonb where id = ${job.id}`;
       },
     });
     const error = r.truncated ? `Only the first ${CRAWLER_LIMITS.maxLines.toLocaleString('en-US')} lines were read. Split the file to load the rest.` : '';
-    await sqlClient`update log_ingests set status = 'done', format = ${r.format}, stats = ${sqlClient.json(r.stats as never)}, error = ${error}, finished_at = now(), spool_path = '' where id = ${job.id}`;
+    await sqlClient`update log_ingests set status = 'done', format = ${r.format}, stats = ${JSON.stringify(r.stats)}::jsonb, error = ${error}, finished_at = now(), spool_path = '' where id = ${job.id}`;
     log?.info({ ingest: job.id, lines: r.stats.lines, bots: r.stats.bots, ms: Date.now() - t0 }, 'crawler log ingested');
   } catch (e) {
     const msg = String((e as Error).message || e).slice(0, 500);

@@ -75,13 +75,13 @@ describe.skipIf(!DB)('crawler logs against Postgres', () => {
     ids.viewer = await user('viewer@a.example');
     ids.member = await user('member@a.example');
     ids.other = await user('owner@b.example');
-    const org = async (name: string) => (await sql<{ id: string }[]>`insert into organizations (name, slug, hook_token) values (${name}, ${name.toLowerCase()}, ${sha256(name)}) returning id`)[0].id;
+    const org = async (name: string) => (await sql<{ id: string }[]>`insert into organizations (name, slug, hook_token, monthly_budget_usd) values (${name}, ${name.toLowerCase()}, ${sha256(name)}, 25) returning id`)[0].id;
     ids.orgA = await org('A');
     ids.orgB = await org('B');
     for (const [u, o, r] of [[ids.owner, ids.orgA, 'owner'], [ids.viewer, ids.orgA, 'viewer'], [ids.member, ids.orgA, 'member'], [ids.other, ids.orgB, 'owner']] as const)
       await sql`insert into memberships (org_id, user_id, role) values (${o}, ${u}, ${r})`;
     const site = async (o: string, domain: string, verified: boolean) =>
-      (await sql<{ id: string }[]>`insert into sites (org_id, domain, country, verification_token, verified_at) values (${o}, ${domain}, 'United Arab Emirates', ${'t' + domain}, ${verified ? new Date() : null}) returning id`)[0].id;
+      (await sql<{ id: string }[]>`insert into sites (org_id, domain, country, verification_token, verified_at) values (${o}, ${domain}, 'United Arab Emirates', ${'t' + domain}, ${verified ? new Date().toISOString() : null}) returning id`)[0].id;
     ids.siteA = await site(ids.orgA, 'techand.example', true);
     ids.siteU = await site(ids.orgA, 'unverified.example', false);
     ids.siteB = await site(ids.orgB, 'other.example', true);
@@ -91,7 +91,7 @@ describe.skipIf(!DB)('crawler logs against Postgres', () => {
       await sql`insert into sessions (id, user_id, expires_at) values (${sha256(token)}, ${uid}, now() + interval '1 day')`;
     }
     apiKey = 'asc_' + 'A'.repeat(43);
-    await sql`insert into api_keys (org_id, name, prefix, token_hash, scopes) values (${ids.orgA}, 'test', ${apiKey.slice(0, 12)}, ${sha256(apiKey)}, ${sql.json(['read'])})`;
+    await sql`insert into api_keys (org_id, name, prefix, token_hash, scopes) values (${ids.orgA}, 'test', ${apiKey.slice(0, 12)}, ${sha256(apiKey)}, ${JSON.stringify(['read'])}::jsonb)`;
     inventory.length = 0;
     inventory.push(
       { site_id: 'site_techand-example', url: 'https://www.techand.example/services/ai-consulting/', title: 'AI consulting', h1: '', source: 'sitemap', lastmod: '', queries_json: '[]', updated_at: '', clicks: 50, impressions: 900 } as SitePageRow,
@@ -161,8 +161,8 @@ describe.skipIf(!DB)('crawler logs against Postgres', () => {
     expect(bot('bingbot').verified).toBe(2);
     expect(d.totals.spoofed).toBe(3);
     expect(d.spoofed.find((s) => s.bot === 'gptbot')).toMatchObject({ hits: 1, networks: 1, topNetworks: ['45.133.1.0/24'] });
-    expect(d.waste).toMatchObject({ redirects: 1, clientErrors: 0, serverErrors: 1 });
-    expect(d.waste.top.map((t) => t.reason).sort()).toEqual(['3xx', '5xx', 'param'].sort().concat().filter(Boolean).length ? expect.arrayContaining(['3xx', '5xx', 'param']) : []);
+    expect(d.waste).toMatchObject({ redirects: 1, clientErrors: 1, serverErrors: 1, paramHits: 1 });
+    expect(d.waste.top.map((t) => t.reason)).toEqual(expect.arrayContaining(['3xx', '5xx', 'param']));
     expect(d.waste.paramPatterns).toEqual([{ path: '/blog/e-invoicing-uae', keys: 'page,utm_source', hits: 1 }]);
     expect(d.coverage).toMatchObject({ source: 'inventory', inventory: 3, inSitemap: 2, fetchedByGoogle: 1, fetchedByAi: 2 });
     expect(d.coverage.neverGoogle.map((p) => p.path)).toEqual(['/pricing', '/never-fetched']);
@@ -280,9 +280,9 @@ describe.skipIf(!DB)('crawler logs against Postgres', () => {
       const bot = i % 10 === 0 ? (i % 20 === 0 ? 1 : 2) : 0;
       const ip = bot === 1 ? `66.249.64.${i % 30}` : bot === 2 ? `132.196.86.${i % 200}` : `198.51.${(i >> 8) & 255}.${i & 255}`;
       const t = `${String(Math.floor(i / 3600) % 24).padStart(2, '0')}:${String(Math.floor(i / 60) % 60).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}`;
-      if (!w.write(`${ip} - - [${day}:${t} +0000] "GET /p/${i % 5000}?i=${i} HTTP/1.1" 200 ${1000 + (i % 900)} "-" "${uas[bot]}" 0.0${i % 90}\n`)) await new Promise((r) => w.once('drain', r));
+      if (!w.write(`${ip} - - [${day}:${t} +0000] "GET /p/${i % 5000}?i=${i} HTTP/1.1" 200 ${1000 + (i % 900)} "-" "${uas[bot]}" 0.0${i % 90}\n`)) await new Promise<void>((r) => w.once('drain', () => r()));
     }
-    await new Promise((r) => w.end(r));
+    await new Promise<void>((r) => w.end(() => r()));
     const spooled = await jobs.spool(createReadStream(file), 2 ** 31);
     await jobs.queueIngest({ orgId: ids.orgA, siteId: ids.siteA, source: 'upload', fileName: 'big.log', createdBy: ids.owner, spooled });
     let maxLag = 0;
