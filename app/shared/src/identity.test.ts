@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AUDIT_ACTIONS,
+  AUDIT_CATEGORIES,
+  actionsIn,
+  auditCsvRow,
+  auditLabel,
+  csvCell,
+  safeAuditDetails,
   cleanTotpCode,
   DEFAULT_SECURITY_POLICY,
   formatRecoveryCode,
@@ -87,5 +94,42 @@ describe('the company security policy', () => {
     expect(retentionLabel(365)).toBe('1 year');
     expect(retentionLabel(730)).toBe('2 years');
     expect(retentionLabel(2555)).toBe('7 years');
+  });
+});
+
+describe('the audit log', () => {
+  it('files every action under a known category with words for it', () => {
+    for (const [a, v] of Object.entries(AUDIT_ACTIONS)) {
+      expect(Object.keys(AUDIT_CATEGORIES), a).toContain(v.category);
+      expect(v.label.length, a).toBeGreaterThan(3);
+    }
+    for (const c of Object.keys(AUDIT_CATEGORIES)) expect(actionsIn(c as never).length, c).toBeGreaterThan(0);
+    expect(auditLabel('team.invited')).toBe('Invited someone');
+    expect(auditLabel('unknown.thing')).toBe('unknown.thing');
+  });
+  it('drops anything that looks like a secret from the details, at any level', () => {
+    const d = safeAuditDetails({
+      role: 'admin',
+      password: 'hunter2',
+      webhook: { url: 'https://x.test', secret: 's3cret', signingSecret: 'x' },
+      apiKey: 'asc_123',
+      token: 't',
+      code: '123456',
+      clientSecret: 'cs',
+      privateKey: 'pk',
+      list: [{ token: 'a', name: 'n' }],
+      long: 'x'.repeat(1000),
+    });
+    expect(d).toEqual({ role: 'admin', webhook: { url: 'https://x.test' }, list: [{ name: 'n' }], long: 'x'.repeat(300) });
+    expect(safeAuditDetails('not an object')).toEqual({});
+  });
+  it('writes CSV cells that a spreadsheet will not execute', () => {
+    expect(csvCell('plain')).toBe('"plain"');
+    expect(csvCell('say "hi"')).toBe('"say ""hi"""');
+    for (const v of ['=1+1', '+1', '-1', '@SUM(A1)', '\tx', '\rx']) expect(csvCell(v).startsWith(`"'`), v).toBe(true);
+    expect(csvCell(null)).toBe('""');
+    expect(csvCell({ a: 1 })).toBe('"{""a"":1}"');
+    const row = auditCsvRow({ id: '1', at: '2026-10-17T10:00:00.000Z', action: 'team.invited', label: 'Invited someone', category: 'team', outcome: 'success', actorType: 'user', actorId: null, actorLabel: 'a@b.test', targetType: 'invitation', targetId: 'i1', targetLabel: '=evil()', ip: '1.2.3.4', userAgent: 'UA', details: { role: 'member' } });
+    expect(row).toBe('"2026-10-17T10:00:00.000Z","team.invited","Invited someone","success","user","a@b.test","invitation","\'=evil()","1.2.3.4","UA","{""role"":""member""}"');
   });
 });

@@ -1,4 +1,5 @@
 import { and, asc, eq, isNotNull, ne } from 'drizzle-orm';
+import { audit } from '../services/audit';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import {
   adminActionSchema,
@@ -93,6 +94,7 @@ export async function verifyWithGoogle(req: FastifyRequest, orgId: string, siteI
   const r = await gscOwnerCheck(userAccessToken, a.site.domain);
   if (!r.owner) return 'not_owner';
   await markVerified(a.site, 'search_console', r.property);
+  await audit(req, a.org.id, { action: 'site.verified', target: { type: 'site', id: a.site.id, label: a.site.domain }, details: { method: 'search_console' } });
   return 'verified';
 }
 
@@ -146,6 +148,7 @@ export async function siteRoutes(app: FastifyInstance) {
         verificationToken: randomToken(18),
       })
       .returning();
+    await audit(req, a.org.id, { action: 'site.added', target: { type: 'site', id: site.id, label: site.domain } });
     return toSite(site);
   });
 
@@ -179,6 +182,7 @@ export async function siteRoutes(app: FastifyInstance) {
     if (site.verifiedAt) await stopInEngine(site, req.log);
     await db.delete(schema.sites).where(eq(schema.sites.id, site.id));
     invalidateSite(site.domain);
+    await audit(req, site.orgId, { action: 'site.deleted', target: { type: 'site', id: site.id, label: site.domain }, details: { wasVerified: !!site.verifiedAt } });
     return { ok: true };
   });
 
@@ -208,6 +212,7 @@ export async function siteRoutes(app: FastifyInstance) {
     if (await verifiedElsewhere(site.domain, site.orgId)) throw conflict(`${site.domain} is already verified by another company on this platform.`, 'domain_claimed');
     const r = await verify(method, site.domain, site.verificationToken);
     if (r.verified) await markVerified(site, method);
+    await audit(req, site.orgId, { action: r.verified ? 'site.verified' : 'site.verify_failed', outcome: r.verified ? 'success' : 'failure', target: { type: 'site', id: site.id, label: site.domain }, details: { method } });
     return { verified: r.verified, method, message: r.message };
   });
 

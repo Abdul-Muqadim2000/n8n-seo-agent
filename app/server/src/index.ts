@@ -1,5 +1,7 @@
 import { buildApp } from './app';
+import { purgeExpiredFlows } from './auth/flows';
 import { purgeExpiredSessions } from './auth/session';
+import { purgeAudit } from './services/audit';
 import { config } from './config';
 import { runMigrations, sqlClient } from './db';
 import { AUTO_START, runAutoStart } from './services/autoStart';
@@ -17,6 +19,14 @@ async function main() {
     'SEO platform server ready',
   );
   const timer = setInterval(() => purgeExpiredSessions().catch((err) => app.log.warn({ err }, 'session purge failed')), 6 * 60 * 60 * 1000);
+  // G1: expired sign-in challenges every 10 minutes; audit events past each company's retention once a day (and once at start)
+  const flowTimer = setInterval(() => void purgeExpiredFlows().catch((err) => app.log.warn({ err: String(err) }, 'auth flow purge failed')), 10 * 60 * 1000);
+  const auditPurge = () =>
+    purgeAudit()
+      .then((n) => n && app.log.info({ events: n }, 'audit events past their retention removed'))
+      .catch((err) => app.log.warn({ err: String(err) }, 'audit retention purge failed'));
+  const auditFirst = setTimeout(() => void auditPurge(), 60 * 1000);
+  const auditTimer = setInterval(() => void auditPurge(), 24 * 60 * 60 * 1000);
   const staleTimer = setInterval(
     () =>
       expireStaleRuns()
@@ -60,6 +70,9 @@ async function main() {
     clearInterval(deliveryTimer);
     clearInterval(failureTimer);
     clearInterval(timer);
+    clearInterval(flowTimer);
+    clearInterval(auditTimer);
+    clearTimeout(auditFirst);
     clearInterval(staleTimer);
     await app.close();
     await sqlClient.end({ timeout: 5 });

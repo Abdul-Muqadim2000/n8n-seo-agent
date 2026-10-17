@@ -55,6 +55,17 @@ has not used it — `POST /api/auth/step-up` with a factor clears it).
 
 `GET /api/orgs/:orgId/members` adds `mfaEnabled` to each member for owners and admins.
 
+### Audit log (G1, `server/src/services/audit.ts`, catalogue `AUDIT_ACTIONS` in `shared/src/identity.ts`)
+Append-only per company (a database trigger refuses UPDATE / TRUNCATE and any DELETE but the daily retention purge and the
+company's own deletion). Owners and admins only; another company's log is a 404. Each event: `id, at, action, label, category,
+outcome, actorType (user / scim / system / platform_admin), actorId, actorLabel, targetType, targetId, targetLabel, ip, userAgent,
+details` — details never carry a password, code, token, secret or key (`safeAuditDetails`).
+
+| Method | Path | Query | Returns |
+|---|---|---|---|
+| GET | /api/orgs/:orgId/audit | `category`, `action`, `actor` (user id), `outcome`, `from` / `to` (YYYY-MM-DD, UTC), `before` (cursor), `limit` ≤ 200 | `{ items: AuditEventView[], nextCursor, actors (first page), retentionDays }` |
+| GET | /api/orgs/:orgId/audit.csv | the same filters | CSV (UTF-8 with BOM, ≤ 50,000 rows, formula-safe cells); the export is itself an event (`audit.exported`); 10 an hour |
+
 ## Companies and team
 | Method | Path | Body | Returns |
 |---|---|---|---|

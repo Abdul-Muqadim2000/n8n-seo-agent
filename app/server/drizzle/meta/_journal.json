@@ -71,6 +71,13 @@
       "when": 1792255165575,
       "tag": "0009_g1_mfa",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792272083405,
+      "tag": "0010_g1_audit",
+      "breakpoints": true
     }
   ]
 }

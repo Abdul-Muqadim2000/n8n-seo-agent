@@ -5,6 +5,7 @@ import { requireUser } from '../auth/access';
 import { hashPassword, verifyPassword } from '../auth/password';
 import { db, schema } from '../db';
 import { badRequest, parse } from '../lib/errors';
+import { auditUser } from '../services/audit';
 import { buildMe } from '../services/me';
 
 export async function meRoutes(app: FastifyInstance) {
@@ -26,6 +27,7 @@ export async function meRoutes(app: FastifyInstance) {
     await db.update(schema.users).set({ passwordHash: await hashPassword(body.newPassword) }).where(eq(schema.users.id, user.id));
     // every other device is signed out (the current session stays)
     await db.delete(schema.sessions).where(and(eq(schema.sessions.userId, user.id), ne(schema.sessions.id, req.sessionId ?? '')));
+    await auditUser(req, user, { action: 'account.password_changed', details: { otherDevicesSignedOut: true, firstPassword: !user.passwordHash } });
     return { ok: true };
   });
 }

@@ -13,6 +13,7 @@ import type { UserRow } from '../db/schema';
 import { sha256 } from '../lib/crypto';
 import { badRequest, conflict, forbidden, HttpError, parse } from '../lib/errors';
 import { sendMail } from '../lib/mailer';
+import { audit, auditUser } from '../services/audit';
 import { acceptInvitation } from '../services/invitations';
 import { buildMe } from '../services/me';
 import { verifyWithGoogle } from './sites';
@@ -85,7 +86,10 @@ export async function authRoutes(app: FastifyInstance) {
         emailVerifiedAt: invitedHere ? new Date() : null,
       })
       .returning();
-    if (invitedHere && invitation) await acceptInvitation(invitation, user);
+    if (invitedHere && invitation) {
+      await acceptInvitation(invitation, user);
+      await audit(req, invitation.orgId, { action: 'team.joined', actor: { type: 'user', userId: user.id, label: user.email }, target: { type: 'user', id: user.id, label: user.email }, details: { role: invitation.role } });
+    }
     else void sendVerification(user, req.log).catch((err) => req.log.error({ err }, 'verification e-mail failed')); // do not make the visitor wait for SMTP
     await createSession(reply, req, user.id);
     return buildMe(user);
@@ -98,16 +102,21 @@ export async function authRoutes(app: FastifyInstance) {
       await burnPasswordCheck(body.password);
       throw new HttpError(401, user ? 'This account signs in with Google. Use "Continue with Google", or set a password with "Forgot password".' : 'Wrong e-mail or password.', 'bad_credentials');
     }
-    if (!(await verifyPassword(user.passwordHash, body.password))) throw new HttpError(401, 'Wrong e-mail or password.', 'bad_credentials');
+    if (!(await verifyPassword(user.passwordHash, body.password))) {
+      await auditUser(req, user, { action: 'auth.login.failed', outcome: 'failure', details: { method: 'password', reason: 'wrong password' } });
+      throw new HttpError(401, 'Wrong e-mail or password.', 'bad_credentials');
+    }
     // G1: with two-step verification on, the password only opens the second step
     const challenge = await startMfaChallenge(reply, user, { method: 'password' });
     if (challenge) return challenge;
     await createSession(reply, req, user.id, { method: 'password' });
+    await auditUser(req, user, { action: 'auth.login.succeeded', details: { method: 'password', mfa: false } });
     return buildMe(user);
   });
 
   app.post('/api/auth/logout', async (req, reply) => {
     if (req.sessionId) await deleteSession(req.sessionId);
+    if (req.user) await auditUser(req, req.user, { action: 'auth.logout' });
     clearSessionCookie(reply);
     return { ok: true };
   });
@@ -138,6 +147,8 @@ export async function authRoutes(app: FastifyInstance) {
     // the reset link reached the mailbox, which also confirms the address
     await db.update(schema.users).set({ passwordHash: await hashPassword(body.password), emailVerifiedAt: sql`coalesce(${schema.users.emailVerifiedAt}, now())` }).where(eq(schema.users.id, userId));
     await deleteUserSessions(userId);
+    const who = await db.query.users.findFirst({ where: eq(schema.users.id, userId) });
+    if (who) await auditUser(req, who, { action: 'account.password_reset', details: { signedOutEverywhere: true } });
     return { ok: true };
   });
 
@@ -234,6 +245,7 @@ export async function authRoutes(app: FastifyInstance) {
     // G1: with two-step verification on, Google only opens the second step (/login/mfa asks for the code)
     if (await startMfaChallenge(reply, user, { method: 'google', next })) return reply.redirect(`/login/mfa${next !== '/' ? `?next=${encodeURIComponent(next)}` : ''}`);
     await createSession(reply, req, user.id, { method: 'google' });
+    await auditUser(req, user, { action: 'auth.login.succeeded', details: { method: 'google', mfa: false } });
     return reply.redirect(next);
   });
 }

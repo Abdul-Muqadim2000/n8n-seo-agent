@@ -1,4 +1,4 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
 import type {
   ApiKeyCreate,
   ApiKeyView,
@@ -49,6 +49,7 @@ import type {
   DeliveryRecord,
   DeliverySettings,
   DeliverySettingsInput,
+  AuditEventView,
   MfaStatus,
   SecurityPolicy,
   TotpEnrolment,
@@ -727,6 +728,22 @@ export const usePasskeyOptions = () => useMutation({ mutationFn: () => api<Recor
 export const usePasskeyRegister = () =>
   useIdentityMutation((b: { name: string; response: Record<string, unknown> }) => api<MfaStatus & NewCodes>('/api/me/mfa/passkeys', { method: 'POST', body: b }));
 export const usePasskeyRemove = () => useIdentityMutation((id: string) => api<MfaStatus>(`/api/me/mfa/passkeys/${id}`, { method: 'DELETE' }));
+
+export type AuditFilters = { category?: string; actor?: string; outcome?: string; from?: string; to?: string };
+export type AuditPage = { items: AuditEventView[]; nextCursor: string | null; actors?: { id: string; label: string }[]; retentionDays: number };
+export const auditQs = (f: AuditFilters) => new URLSearchParams(Object.entries(f).filter(([, v]) => v)).toString();
+export function useAuditLog(orgId: string, filters: AuditFilters, enabled = true) {
+  return useInfiniteQuery({
+    queryKey: [...qk.org(orgId), 'audit', filters],
+    queryFn: ({ pageParam }) => {
+      const qs = auditQs({ ...filters, ...(pageParam ? { before: pageParam } : {}) } as AuditFilters);
+      return api<AuditPage>(`/api/orgs/${orgId}/audit${qs ? `?${qs}` : ''}`);
+    },
+    initialPageParam: '',
+    getNextPageParam: (p) => p.nextCursor ?? undefined,
+    enabled,
+  });
+}
 
 export const useSecurityPolicy = (orgId: string) => useQuery({ queryKey: [...qk.org(orgId), 'security'], queryFn: () => api<SecurityPolicy>(`/api/orgs/${orgId}/security`) });
 export function useSaveSecurityPolicy(orgId: string) {

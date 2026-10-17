@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
   boolean,
   customType,
   doublePrecision,
@@ -95,6 +96,36 @@ export const authFlows = pgTable(
     createdAt: created(),
   },
   (t) => [index('auth_flows_expires_idx').on(t.expiresAt)],
+);
+
+/**
+ * G1: the customer-visible audit log. Append-only in the database itself: a trigger (migration g1_audit) refuses UPDATE, TRUNCATE
+ * and any DELETE except the retention purge (`ascentra.audit_purge`) and the company's own deletion. Written only through
+ * services/audit.ts. `actor_user_id` has no foreign key on purpose: removing a person must not rewrite the history of what they did.
+ */
+export const auditEvents = pgTable(
+  'audit_events',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    at: ts('at').defaultNow().notNull(),
+    action: text('action').notNull(),
+    outcome: text('outcome').notNull().default('success'),
+    /** user / scim / system / platform_admin */
+    actorType: text('actor_type').notNull(),
+    actorUserId: uuid('actor_user_id'),
+    /** the actor as they were at the time (e-mail, token name) */
+    actorLabel: text('actor_label').notNull(),
+    targetType: text('target_type'),
+    targetId: text('target_id'),
+    targetLabel: text('target_label'),
+    ip: text('ip'),
+    userAgent: text('user_agent'),
+    details: jsonb('details').$type<Record<string, unknown>>().notNull().default({}),
+  },
+  (t) => [index('audit_events_org_idx').on(t.orgId, t.id), index('audit_events_org_at_idx').on(t.orgId, t.at), index('audit_events_org_action_idx').on(t.orgId, t.action)],
 );
 
 /** Login sessions: `id` is the SHA-256 of the cookie token, so a database leak does not leak sessions. */
@@ -589,6 +620,7 @@ export type UserRow = typeof users.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
 export type WebauthnCredentialRow = typeof webauthnCredentials.$inferSelect;
 export type AuthFlowRow = typeof authFlows.$inferSelect;
+export type AuditEventRow = typeof auditEvents.$inferSelect;
 export type OrgRow = typeof organizations.$inferSelect;
 export type SiteRow = typeof sites.$inferSelect;
 export type RunRow = typeof runs.$inferSelect;

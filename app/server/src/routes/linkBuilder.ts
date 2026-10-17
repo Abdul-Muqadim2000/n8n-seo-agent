@@ -1,4 +1,5 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
+import { audit } from '../services/audit';
 import type { FastifyInstance } from 'fastify';
 import {
   approveSchema,
@@ -59,6 +60,7 @@ export async function linkBuilderRoutes(app: FastifyInstance) {
     const [row] = await db.insert(schema.mailboxes).values({ ...rest, orgId: org.id, secret: seal(password), sentFolder: t.imap.sentFolder, lastUid: Math.max(0, t.imap.uidNext - 1), uidValidity: t.imap.uidValidity, dns: t.dns as unknown as Record<string, unknown>, createdBy: user.id })
       .onConflictDoNothing().returning();
     if (!row) throw new HttpError(409, `${m.fromEmail} is already connected.`);
+    await audit(req, org.id, { action: 'mailbox.connected', target: { type: 'mailbox', id: row.id, label: m.fromEmail }, details: { method: 'app password', smtpHost: m.smtpHost } });
     return mailboxView(row);
   });
 
@@ -118,6 +120,7 @@ export async function linkBuilderRoutes(app: FastifyInstance) {
       try { revoked = await revokeMailTokens(p4, unseal(mb.oauthRefresh)); } catch (e) { revoked = { ok: false, note: MAIL_PROVIDERS[p4].withdraw }; req.log.warn({ err: String(e) }, 'mailbox token not revoked'); }
     }
     await db.delete(schema.mailboxes).where(eq(schema.mailboxes.id, mb.id));
+    await audit(req, org.id, { action: 'mailbox.removed', target: { type: 'mailbox', id: mb.id, label: mb.fromEmail }, details: { accessWithdrawn: revoked.ok } });
     return { ok: true, revoked: revoked.ok, note: revoked.note };
   });
 
@@ -169,6 +172,7 @@ export async function linkBuilderRoutes(app: FastifyInstance) {
         await db.update(schema.mailboxes).set(common).where(eq(schema.mailboxes.id, existing.id));
       } else {
         await db.insert(schema.mailboxes).values({ ...common, orgId: org.id, fromName: t.email.split('@')[0] ?? t.email, createdBy: req.user.id, startedAt: now });
+        await audit(req, org.id, { action: 'mailbox.connected', target: { type: 'mailbox', label: t.email }, details: { method: provider } });
       }
       req.log.info({ org: org.id, provider }, 'mailbox connected with OAuth');
       return back(`mailbox=connected&address=${encodeURIComponent(t.email)}${reads ? '' : '&reads=0'}`);

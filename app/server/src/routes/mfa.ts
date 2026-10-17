@@ -9,6 +9,7 @@ import { MFA_COOKIE, MFA_COOKIE_OPTS } from '../auth/signin';
 import { db, schema } from '../db';
 import type { UserRow } from '../db/schema';
 import { badRequest, HttpError, notFound, parse } from '../lib/errors';
+import { auditUser } from '../services/audit';
 import { buildMe } from '../services/me';
 import {
   companiesRequiringMfa,
@@ -80,6 +81,7 @@ export async function mfaRoutes(app: FastifyInstance) {
     const ok = await checkFactor(user, body as never, typeof flow.data.challenge === 'string' ? flow.data.challenge : null);
     if (!ok) {
       const n = await failFlowAttempt(flow.id);
+      await auditUser(req, user, { action: 'auth.mfa.failed', outcome: 'failure', details: { method: body.method, attempt: n } });
       if (n >= MFA.flowAttempts) {
         await deleteFlow(flow.id);
         reply.clearCookie(MFA_COOKIE, { path: MFA_COOKIE_OPTS.path });
@@ -95,6 +97,8 @@ export async function mfaRoutes(app: FastifyInstance) {
     reply.clearCookie(MFA_COOKIE, { path: MFA_COOKIE_OPTS.path });
     const method = (done.data.method as 'password' | 'google' | 'sso') ?? 'password';
     await createSession(reply, req, user.id, { method, mfa: true, ssoOrgId: (done.data.ssoOrgId as string | null) ?? null });
+    await auditUser(req, user, { action: method === 'sso' ? 'auth.sso.succeeded' : 'auth.login.succeeded', details: { method, mfa: body.method } });
+    if (body.method === 'recovery') await auditUser(req, user, { action: 'mfa.recovery.used' });
     const recoveryLeft = body.method === 'recovery' ? await remainingRecoveryCodes(user.id) : null;
     return { ...(await buildMe(user)), next: String(done.data.next ?? '/'), recoveryCodesLeft: recoveryLeft };
   });
@@ -131,6 +135,7 @@ export async function mfaRoutes(app: FastifyInstance) {
     }
     if (!ok) {
       const n = await bumpCounter(`stepfail:${req.sessionId}`, 'stepup_fail', STEP_UP_FAIL_WINDOW_MIN);
+      await auditUser(req, user, { action: 'auth.stepup.failed', outcome: 'failure', details: { method: body.method, attempt: n, signedOut: n >= STEP_UP_FAILS } });
       if (n >= STEP_UP_FAILS && req.sessionId) {
         // too many wrong proofs from one session: it may not be its owner using it
         await deleteSession(req.sessionId);
@@ -162,6 +167,7 @@ export async function mfaRoutes(app: FastifyInstance) {
     const firstFactor = (await factorCount(user)) === 0;
     const r = await confirmTotp(user, code.replace(/[\s-]/g, ''));
     await markSessionMfa(req.sessionId);
+    await auditUser(req, user, { action: 'mfa.totp.enabled', details: { firstFactor } });
     return { ...(await mfaStatus(await reloadUser(user.id), { ...req.session!, mfaAt: new Date() })), newRecoveryCodes: r.recoveryCodes };
   });
 
@@ -171,6 +177,7 @@ export async function mfaRoutes(app: FastifyInstance) {
     if (!user.mfaTotpEnabledAt) throw notFound('No authenticator app is set up');
     await guardLastFactor(user);
     await disableTotp(user);
+    await auditUser(req, user, { action: 'mfa.totp.disabled' });
     return mfaStatus(await reloadUser(user.id), req.session);
   });
 
@@ -179,6 +186,7 @@ export async function mfaRoutes(app: FastifyInstance) {
     await requireRecentAuth(req);
     if ((await factorCount(user)) === 0) throw badRequest('Set up an authenticator app or a passkey first; recovery codes come with it.');
     const codes = await regenerateRecoveryCodes(user.id);
+    await auditUser(req, user, { action: 'mfa.recovery.regenerated' });
     return { newRecoveryCodes: codes };
   });
 
@@ -198,6 +206,7 @@ export async function mfaRoutes(app: FastifyInstance) {
     const firstFactor = (await factorCount(user)) === 0;
     const r = await registerPasskey(user, flow.data.challenge, body.response, body.name);
     await markSessionMfa(req.sessionId);
+    await auditUser(req, user, { action: 'mfa.passkey.added', target: { type: 'passkey', id: r.passkey.id, label: body.name }, details: { firstFactor } });
     return { ...(await mfaStatus(await reloadUser(user.id), { ...req.session!, mfaAt: new Date() })), newRecoveryCodes: r.recoveryCodes };
   });
 
@@ -218,6 +227,7 @@ export async function mfaRoutes(app: FastifyInstance) {
     if (!owned || owned.userId !== user.id) throw notFound('Passkey not found');
     await guardLastFactor(user);
     const removed = await removePasskey(user.id, id);
+    await auditUser(req, user, { action: 'mfa.passkey.removed', target: { type: 'passkey', id, label: removed.name } });
     return mfaStatus(await reloadUser(user.id), req.session);
   });
 }

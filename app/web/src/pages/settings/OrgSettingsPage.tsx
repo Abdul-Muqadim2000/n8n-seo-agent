@@ -45,6 +45,7 @@ import { DeliveryTab } from './_components/DeliveryTab';
 import { MailboxesTab } from './_components/MailboxesTab';
 import { ApiKeysTab } from './_components/ApiKeysTab';
 import { SecurityTab } from './_components/SecurityTab';
+import { AuditTab } from './_components/AuditTab';
 
 const TABS = [
   { id: 'company', label: 'Company', description: 'Your company’s details, websites and setup.' },
@@ -53,7 +54,8 @@ const TABS = [
   { id: 'delivery', label: 'Report delivery', description: 'Where your finished reports are sent, and on what schedule.' },
   { id: 'mailboxes', label: 'Mailboxes', description: 'The mailboxes link-building pitches go out from, and your opt-out list.' },
   { id: 'api', label: 'API access', description: 'Keys that let a script, a BI tool or an AI assistant read your own data.' },
-  { id: 'security', label: 'Security', description: 'Two-step verification for everyone, and who has it.' },
+  { id: 'security', label: 'Security', description: 'Two-step verification for everyone, who has it, and how long records are kept.' },
+  { id: 'audit', label: 'Audit log', description: 'Who did what, when and from where: sign-ins, team, settings, keys and sharing.' },
 ] as const;
 
 const ROLE_DESCRIPTIONS: Record<Role, string> = {
@@ -81,6 +83,7 @@ export default function OrgSettingsPage() {
       {current.id === 'mailboxes' && <MailboxesTab />}
       {current.id === 'api' && <ApiKeysTab />}
       {current.id === 'security' && <SecurityTab />}
+      {current.id === 'audit' && <AuditTab />}
     </div>
   );
 }

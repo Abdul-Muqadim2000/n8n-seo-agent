@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { ShieldCheck, Users } from 'lucide-react';
-import { DEFAULT_SECURITY_POLICY, type Member, type SecurityPolicy } from '@seo/shared';
+import { ScrollText, ShieldCheck, Users } from 'lucide-react';
+import { AUDIT_RETENTION_CHOICES, DEFAULT_SECURITY_POLICY, retentionLabel, type Member, type SecurityPolicy } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CardBody, CardFooter } from '@/components/ui/card';
 import { Callout, ErrorState, Skeleton } from '@/components/ui/feedback';
+import { Field, Select } from '@/components/ui/field';
 import { Avatar } from '@/components/ui/misc';
 import { SwitchRow } from '@/components/ui/tabs';
 import { DataTable, type Column } from '@/components/ui/table';
@@ -81,6 +82,28 @@ export function SecurityTab() {
             <Button variant="ghost" disabled={!dirty} onClick={() => setDraft(policy.data!)}>
               Discard
             </Button>
+            <Button onClick={submit} disabled={!dirty} loading={save.isPending}>
+              Save
+            </Button>
+          </CardFooter>
+        )}
+      </SettingsCard>
+      <SettingsCard icon={<ScrollText />} title="Records" description="How long the audit log keeps what happened in this company.">
+        <CardBody>
+          <Field label="Keep audit events for" hint="Older events are removed once a day. Many security reviews ask for at least a year." className="max-w-xs">
+            {(p) => (
+              <Select {...p} value={String(draft.auditRetentionDays)} disabled={!admin} onChange={(e) => set({ auditRetentionDays: Number(e.target.value) })}>
+                {AUDIT_RETENTION_CHOICES.map((d) => (
+                  <option key={d} value={d}>
+                    {retentionLabel(d)}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        </CardBody>
+        {admin && (
+          <CardFooter className="justify-end gap-2">
             <Button onClick={submit} disabled={!dirty} loading={save.isPending}>
               Save
             </Button>

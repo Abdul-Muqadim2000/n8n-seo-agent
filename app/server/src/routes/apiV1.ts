@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { audit } from '../services/audit';
 import { API_KEY, API_SCOPES, apiKeyCreateSchema, bearerKey, roleAtLeast, triesBearer, type ApiScope } from '@seo/shared';
 import { isUuid, orgAccess, requireVerified, siteAccess } from '../auth/access';
 import { config } from '../config';
@@ -237,13 +238,16 @@ export async function apiV1Routes(app: FastifyInstance) {
     const a = await orgAccess(req, (req.params as Args).orgId, 'admin');
     const b = parse(apiKeyCreateSchema, req.body ?? {});
     const { key, token } = await createKey({ org: a.org, user: a.user, name: b.name, scopes: b.scopes, expiresInDays: b.expiresInDays });
+    await audit(req, a.org.id, { action: 'apikey.created', target: { type: 'api_key', id: key.id, label: `${key.name} (${key.prefix}…)` }, details: { scopes: key.scopes, expiresAt: key.expiresAt } });
     return { ...key, token };
   });
   app.delete('/api/orgs/:orgId/api-keys/:keyId', async (req) => {
     const p = req.params as Args;
     const a = await orgAccess(req, p.orgId, 'admin');
     if (!isUuid(p.keyId)) throw notFound('API key not found');
-    return revokeKey(a.org.id, p.keyId);
+    const k = await revokeKey(a.org.id, p.keyId);
+    await audit(req, a.org.id, { action: 'apikey.revoked', target: { type: 'api_key', id: k.id, label: `${k.name} (${k.prefix}…)` } });
+    return k;
   });
 
   // ---- B3-7 in the app: Content → "Check a page before you publish" (member, verified website) ----

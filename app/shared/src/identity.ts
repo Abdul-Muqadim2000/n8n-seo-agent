@@ -209,3 +209,146 @@ export interface MemberSecurity {
   mfaEnabled: boolean;
 }
 
+// ---------------------------------------------------------------------------------------------------------------------------
+// 3. The audit log
+// ---------------------------------------------------------------------------------------------------------------------------
+
+export const AUDIT_CATEGORIES = {
+  signin: 'Sign-in',
+  account: 'Accounts and two-step verification',
+  team: 'Team and roles',
+  websites: 'Websites',
+  settings: 'Company settings',
+  data: 'Sharing and exports',
+  api: 'API keys',
+  sso: 'Single sign-on and provisioning',
+} as const;
+export type AuditCategory = keyof typeof AUDIT_CATEGORIES;
+
+/** every action the log can hold, with its words and category (the server's tests check every action it writes is listed) */
+export const AUDIT_ACTIONS = {
+  'auth.login.succeeded': { label: 'Signed in', category: 'signin' },
+  'auth.login.failed': { label: 'Sign-in failed', category: 'signin' },
+  'auth.mfa.failed': { label: 'Wrong second-step code', category: 'signin' },
+  'auth.sso.succeeded': { label: 'Signed in with single sign-on', category: 'signin' },
+  'auth.sso.failed': { label: 'Single sign-on failed', category: 'signin' },
+  'auth.logout': { label: 'Signed out', category: 'signin' },
+  'auth.session_revoked': { label: 'Signed a device out', category: 'signin' },
+  'auth.sessions_revoked': { label: 'Signed out every other device', category: 'signin' },
+  'auth.session_idle': { label: 'Signed out after inactivity', category: 'signin' },
+  'auth.stepup.failed': { label: 'Failed to confirm identity', category: 'signin' },
+  'account.password_changed': { label: 'Changed password', category: 'account' },
+  'account.password_reset': { label: 'Reset password by e-mail', category: 'account' },
+  'mfa.totp.enabled': { label: 'Turned on the authenticator app', category: 'account' },
+  'mfa.totp.disabled': { label: 'Removed the authenticator app', category: 'account' },
+  'mfa.passkey.added': { label: 'Added a passkey', category: 'account' },
+  'mfa.passkey.removed': { label: 'Removed a passkey', category: 'account' },
+  'mfa.recovery.regenerated': { label: 'Made new recovery codes', category: 'account' },
+  'mfa.recovery.used': { label: 'Signed in with a recovery code', category: 'account' },
+  'team.invited': { label: 'Invited someone', category: 'team' },
+  'team.invitation_revoked': { label: 'Withdrew an invitation', category: 'team' },
+  'team.joined': { label: 'Joined the company', category: 'team' },
+  'team.role_changed': { label: 'Changed a role', category: 'team' },
+  'team.removed': { label: 'Removed a member', category: 'team' },
+  'team.left': { label: 'Left the company', category: 'team' },
+  'site.added': { label: 'Added a website', category: 'websites' },
+  'site.verified': { label: 'Proved ownership of a website', category: 'websites' },
+  'site.verify_failed': { label: 'Website ownership check failed', category: 'websites' },
+  'site.deleted': { label: 'Deleted a website', category: 'websites' },
+  'company.created': { label: 'Created the company', category: 'settings' },
+  'company.updated': { label: 'Changed company details', category: 'settings' },
+  'company.budget_changed': { label: 'Changed the monthly budget', category: 'settings' },
+  'company.delivery_changed': { label: 'Changed report delivery', category: 'settings' },
+  'company.security_changed': { label: 'Changed security settings', category: 'settings' },
+  'company.admin_changed': { label: 'Platform administrator changed the company', category: 'settings' },
+  'mailbox.connected': { label: 'Connected a mailbox', category: 'settings' },
+  'mailbox.removed': { label: 'Removed a mailbox', category: 'settings' },
+  'share.created': { label: 'Shared a report by link', category: 'data' },
+  'share.revoked': { label: 'Revoked a share link', category: 'data' },
+  'audit.exported': { label: 'Exported the audit log', category: 'data' },
+  'apikey.created': { label: 'Created an API key', category: 'api' },
+  'apikey.revoked': { label: 'Revoked an API key', category: 'api' },
+  'sso.domain_added': { label: 'Claimed an e-mail domain', category: 'sso' },
+  'sso.domain_verified': { label: 'Verified an e-mail domain', category: 'sso' },
+  'sso.domain_removed': { label: 'Removed an e-mail domain', category: 'sso' },
+  'sso.connection_saved': { label: 'Changed the single sign-on connection', category: 'sso' },
+  'sso.connection_tested': { label: 'Tested single sign-on', category: 'sso' },
+  'sso.connection_deleted': { label: 'Deleted the single sign-on connection', category: 'sso' },
+  'sso.enforced': { label: 'Made single sign-on required', category: 'sso' },
+  'sso.unenforced': { label: 'Stopped requiring single sign-on', category: 'sso' },
+  'sso.user_provisioned': { label: 'Created an account at first sign-on', category: 'sso' },
+  'scim.token_created': { label: 'Created a provisioning token', category: 'sso' },
+  'scim.token_revoked': { label: 'Revoked a provisioning token', category: 'sso' },
+  'scim.user_created': { label: 'Provisioned a person', category: 'sso' },
+  'scim.user_updated': { label: 'Updated a provisioned person', category: 'sso' },
+  'scim.user_deactivated': { label: 'Deactivated a person', category: 'sso' },
+  'scim.user_reactivated': { label: 'Reactivated a person', category: 'sso' },
+  'scim.user_deleted': { label: 'Deprovisioned a person', category: 'sso' },
+  'scim.group_changed': { label: 'Changed a provisioned group', category: 'sso' },
+  'scim.group_mapping_changed': { label: 'Mapped a group to a role', category: 'sso' },
+} as const satisfies Record<string, { label: string; category: AuditCategory }>;
+export type AuditAction = keyof typeof AUDIT_ACTIONS;
+export const auditLabel = (a: string): string => (AUDIT_ACTIONS as Record<string, { label: string }>)[a]?.label ?? a;
+export const auditCategoryOf = (a: string): AuditCategory | null => (AUDIT_ACTIONS as Record<string, { category: AuditCategory }>)[a]?.category ?? null;
+export const actionsIn = (c: AuditCategory): AuditAction[] => (Object.keys(AUDIT_ACTIONS) as AuditAction[]).filter((a) => AUDIT_ACTIONS[a].category === c);
+
+export type AuditActorType = 'user' | 'scim' | 'system' | 'platform_admin';
+
+export interface AuditEventView {
+  id: string;
+  at: string;
+  action: string;
+  label: string;
+  category: AuditCategory | null;
+  outcome: 'success' | 'failure';
+  actorType: AuditActorType;
+  actorId: string | null;
+  actorLabel: string;
+  targetType: string | null;
+  targetId: string | null;
+  targetLabel: string | null;
+  ip: string | null;
+  userAgent: string | null;
+  details: Record<string, unknown>;
+}
+
+export const auditQuerySchema = z.object({
+  category: z.enum(Object.keys(AUDIT_CATEGORIES) as [AuditCategory, ...AuditCategory[]]).optional(),
+  action: z.string().max(60).optional(),
+  actor: z.string().uuid().optional(),
+  outcome: z.enum(['success', 'failure']).optional(),
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  before: z.string().regex(/^\d{1,18}$/).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+});
+export type AuditQuery = z.infer<typeof auditQuerySchema>;
+
+/** keys whose values never go into an audit event, whatever a route passes */
+const SECRET_KEY = /(secret|password|passwd|token|api.?key|private|credential|recovery.?code|^code$|cookie|assertion|response)/i;
+/** the details a route passes, without secrets or huge values, at most two levels deep */
+export function safeAuditDetails(d: unknown, depth = 0): Record<string, unknown> {
+  if (!d || typeof d !== 'object' || Array.isArray(d)) return {};
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(d as Record<string, unknown>).slice(0, 40)) {
+    if (SECRET_KEY.test(k)) continue;
+    if (v == null || typeof v === 'boolean' || typeof v === 'number') out[k] = v;
+    else if (typeof v === 'string') out[k] = v.slice(0, 300);
+    else if (Array.isArray(v)) out[k] = v.slice(0, 20).map((x) => (x && typeof x === 'object' ? (depth < 1 ? safeAuditDetails(x, depth + 1) : null) : typeof x === 'string' ? x.slice(0, 120) : x));
+    else if (typeof v === 'object' && depth < 1) out[k] = safeAuditDetails(v, depth + 1);
+  }
+  return out;
+}
+
+/** one CSV cell: quoted, and a leading = + - @ tab or CR neutralised (spreadsheet formula injection, OWASP) */
+export function csvCell(v: unknown): string {
+  let s = v == null ? '' : typeof v === 'string' ? v : typeof v === 'object' ? JSON.stringify(v) : String(v);
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  return `"${s.replace(/"/g, '""')}"`;
+}
+
+export const AUDIT_CSV_COLUMNS = ['time', 'action', 'description', 'outcome', 'actor_type', 'actor', 'target_type', 'target', 'ip', 'user_agent', 'details'] as const;
+export function auditCsvRow(e: AuditEventView): string {
+  return [e.at, e.action, e.label, e.outcome, e.actorType, e.actorLabel, e.targetType, e.targetLabel ?? e.targetId, e.ip, e.userAgent, e.details].map(csvCell).join(',');
+}
+
