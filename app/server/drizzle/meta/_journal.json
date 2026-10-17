@@ -78,6 +78,13 @@
       "when": 1792272083405,
       "tag": "0010_g1_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792272500613,
+      "tag": "0011_g1_sessions",
+      "breakpoints": true
     }
   ]
 }

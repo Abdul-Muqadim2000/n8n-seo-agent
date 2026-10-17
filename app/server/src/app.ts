@@ -20,6 +20,7 @@ import { ladderRoutes } from './routes/ladders';
 import { meRoutes } from './routes/me';
 import { mfaRoutes } from './routes/mfa';
 import { securityRoutes } from './routes/security';
+import { sessionRoutes } from './routes/sessions';
 import { orgRoutes } from './routes/orgs';
 import { runRoutes } from './routes/runs';
 import { siteRoutes } from './routes/sites';
@@ -116,6 +117,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(meRoutes);
   await app.register(mfaRoutes);
   await app.register(securityRoutes);
+  await app.register(sessionRoutes);
   await app.register(orgRoutes);
   await app.register(siteRoutes);
   await app.register(dataRoutes);

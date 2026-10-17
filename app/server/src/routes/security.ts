@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm';
+import { refreshSessionPolicy } from '../auth/session';
 import type { FastifyInstance } from 'fastify';
 import { AUDIT_CSV_COLUMNS, auditCsvRow, auditQuerySchema, policyOf, securityPolicySchema, type SecurityPolicy } from '@seo/shared';
 import { orgAccess, requireRecentAuth, userHasMfa } from '../auth/access';
@@ -23,6 +24,11 @@ export async function securityRoutes(app: FastifyInstance) {
       throw badRequest('Set up two-step verification on your own account first (Your account → Two-step verification).', { requireMfa: 'You have no second factor yet' });
     await db.update(schema.organizations).set({ securityPolicy: { ...next } }).where(eq(schema.organizations.id, a.org.id));
     const changed = (Object.keys(next) as (keyof SecurityPolicy)[]).filter((k) => next[k] !== before[k]);
+    // every member's open sessions take the new strictest idle timeout at once
+    if (next.idleTimeoutMinutes !== before.idleTimeoutMinutes) {
+      const members = await db.select({ id: schema.memberships.userId }).from(schema.memberships).where(eq(schema.memberships.orgId, a.org.id));
+      await refreshSessionPolicy(members.map((m) => m.id));
+    }
     if (changed.length)
       await audit(req, a.org.id, {
         action: 'company.security_changed',

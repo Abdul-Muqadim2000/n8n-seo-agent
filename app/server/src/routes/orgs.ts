@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, gt, gte, inArray, isNull, ne } from 'drizzle-orm';
+import { refreshSessionPolicy } from '../auth/session';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
@@ -361,6 +362,7 @@ export async function orgRoutes(app: FastifyInstance) {
     if (!target) throw notFound('Member not found');
     if (target.role === 'owner') throw forbidden(self ? 'The owner cannot leave the company.' : 'The owner cannot be removed.');
     await db.delete(schema.memberships).where(and(eq(schema.memberships.orgId, a.org.id), eq(schema.memberships.userId, p.userId)));
+    await refreshSessionPolicy([p.userId]);
     const who = await db.query.users.findFirst({ where: eq(schema.users.id, p.userId) });
     await audit(req, a.org.id, { action: self ? 'team.left' : 'team.removed', target: { type: 'user', id: p.userId, label: who?.email ?? null }, details: { role: target.role } });
     return { ok: true };

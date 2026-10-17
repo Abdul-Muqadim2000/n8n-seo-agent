@@ -12,6 +12,8 @@ declare module 'fastify' {
     sessionId: string | null;
     /** G1: the session row behind the cookie (how it signed in, second factor, last step-up) */
     session: SessionRow | null;
+    /** G1: set when this request's session was ended (idle timeout) */
+    sessionEnded?: 'idle';
   }
 }
 
@@ -19,6 +21,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const isUuid = (v: unknown): v is string => typeof v === 'string' && UUID.test(v);
 
 export function requireUser(req: FastifyRequest): UserRow {
+  if (!req.user && req.sessionEnded === 'idle') throw new HttpError(401, 'You were signed out after a period of inactivity. Sign in again.', IDENTITY_ERRORS.sessionIdle);
   if (!req.user) throw unauthorized();
   return req.user;
 }

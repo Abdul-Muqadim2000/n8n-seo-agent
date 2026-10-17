@@ -55,6 +55,19 @@ has not used it — `POST /api/auth/step-up` with a factor clears it).
 
 `GET /api/orgs/:orgId/members` adds `mfaEnabled` to each member for owners and admins.
 
+### Sessions (G1)
+A session records how it signed in (`password` / `google` / `sso`), whether a second factor was used, its device and IP, and the
+strictest idle timeout of the person's companies (`SecurityPolicy.idleTimeoutMinutes`, refreshed whenever a policy or a membership
+changes). A session idle past it is deleted on its next request (`401 session_idle`, plus a short-lived `signed_out=idle` cookie
+for the sign-in page). Activity is written once a minute; requests with `X-Ascentra-Passive: 1` (the web app's polls from a hidden
+tab) do not count.
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | /api/me/sessions | | `{ items: SessionView[] }` (this device first; `id` is a public id, never the session key) |
+| DELETE | /api/me/sessions/:id | | `{ ok, signedOutHere }`; another person's session is a 404 |
+| POST | /api/me/sessions/revoke-others | | `{ ok, revoked }` |
+
 ### Audit log (G1, `server/src/services/audit.ts`, catalogue `AUDIT_ACTIONS` in `shared/src/identity.ts`)
 Append-only per company (a database trigger refuses UPDATE / TRUNCATE and any DELETE but the daily retention purge and the
 company's own deletion). Owners and admins only; another company's log is a 404. Each event: `id, at, action, label, category,

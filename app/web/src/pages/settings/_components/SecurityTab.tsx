@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { ScrollText, ShieldCheck, Users } from 'lucide-react';
-import { AUDIT_RETENTION_CHOICES, DEFAULT_SECURITY_POLICY, retentionLabel, type Member, type SecurityPolicy } from '@seo/shared';
+import { AUDIT_RETENTION_CHOICES, DEFAULT_SECURITY_POLICY, IDLE_TIMEOUT_CHOICES, idleLabel, retentionLabel, type Member, type SecurityPolicy } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -88,8 +88,20 @@ export function SecurityTab() {
           </CardFooter>
         )}
       </SettingsCard>
-      <SettingsCard icon={<ScrollText />} title="Records" description="How long the audit log keeps what happened in this company.">
-        <CardBody>
+      <SettingsCard icon={<ScrollText />} title="Sessions and records" description="When idle sessions end, and how long the audit log keeps what happened.">
+        <CardBody className="grid gap-4 sm:grid-cols-2">
+          <Field label="Sign members out after" hint="Of no activity in the app. A member in several companies gets the strictest one." className="max-w-xs">
+            {(p) => (
+              <Select {...p} value={String(draft.idleTimeoutMinutes ?? '')} disabled={!admin} onChange={(e) => set({ idleTimeoutMinutes: e.target.value ? Number(e.target.value) : null })}>
+                <option value="">Never (sessions last 30 days)</option>
+                {IDLE_TIMEOUT_CHOICES.map((m) => (
+                  <option key={m} value={m}>
+                    {idleLabel(m)}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
           <Field label="Keep audit events for" hint="Older events are removed once a day. Many security reviews ask for at least a year." className="max-w-xs">
             {(p) => (
               <Select {...p} value={String(draft.auditRetentionDays)} disabled={!admin} onChange={(e) => set({ auditRetentionDays: Number(e.target.value) })}>

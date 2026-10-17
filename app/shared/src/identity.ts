@@ -204,6 +204,53 @@ export function strictestIdle(policies: SecurityPolicy[]): number | null {
 export const idleLabel = (m: number | null): string => (m == null ? 'Never' : m < 60 ? `${m} minutes` : m < 1440 ? `${m / 60} hour${m === 60 ? '' : 's'}` : '24 hours');
 export const retentionLabel = (d: number): string => (d < 365 ? `${d} days` : d === 2555 ? '7 years' : `${d / 365} year${d === 365 ? '' : 's'}`);
 
+/** one signed-in device in "Where you're signed in" */
+export interface SessionView {
+  /** the session's public id (never its key) */
+  id: string;
+  current: boolean;
+  device: string;
+  ip: string | null;
+  createdAt: string;
+  lastSeenAt: string;
+  expiresAt: string;
+  authMethod: AuthMethod;
+  mfa: boolean;
+}
+
+/** "Chrome on macOS" from a user agent, for people (no fingerprinting, no library: the big families only) */
+export function deviceLabel(ua: string | null | undefined): string {
+  const u = ua ?? '';
+  if (!u) return 'Unknown device';
+  const browser = /Edg\//.test(u)
+    ? 'Edge'
+    : /OPR\/|Opera/.test(u)
+      ? 'Opera'
+      : /Firefox\//.test(u)
+        ? 'Firefox'
+        : /Chrome\/|CriOS\//.test(u)
+          ? 'Chrome'
+          : /Safari\//.test(u)
+            ? 'Safari'
+            : /curl|python|node|axios|Go-http/i.test(u)
+              ? 'A script'
+              : 'A browser';
+  const os = /iPhone|iPad|iPod/.test(u)
+    ? 'iOS'
+    : /Android/.test(u)
+      ? 'Android'
+      : /Mac OS X|Macintosh/.test(u)
+        ? 'macOS'
+        : /Windows/.test(u)
+          ? 'Windows'
+          : /CrOS/.test(u)
+            ? 'ChromeOS'
+            : /Linux/.test(u)
+              ? 'Linux'
+              : '';
+  return os ? `${browser} on ${os}` : browser;
+}
+
 export interface MemberSecurity {
   userId: string;
   mfaEnabled: boolean;

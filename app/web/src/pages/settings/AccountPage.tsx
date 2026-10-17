@@ -20,6 +20,7 @@ import { fmtDate } from '@/lib/utils';
 import { StandaloneShell } from './_components/StandaloneShell';
 import { RoleChip, SettingsCard } from './_components/SettingsCard';
 import { TwoStepSection } from './_components/TwoStepSection';
+import { SessionsSection } from './_components/SessionsSection';
 
 export default function AccountPage() {
   const me = useMe();
@@ -32,6 +33,7 @@ export default function AccountPage() {
         <SignInSection me={me.data} />
         <TwoStepSection />
         <PasswordSection me={me.data} />
+        <SessionsSection />
         <CompaniesSection me={me.data} />
         <SignOutSection />
       </Stagger>

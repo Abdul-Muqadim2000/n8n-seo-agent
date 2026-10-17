@@ -25,6 +25,12 @@ export default function LoginPage() {
   const login = useMutation({ mutationFn: (v: Values) => api<Me | MfaChallenge>('/api/auth/login', { method: 'POST', body: v }) });
   const form = useForm<Values>({ resolver: zodResolver(loginSchema), defaultValues: { email: '', password: '' } });
   const googleError = params.get('error');
+  // G1: the server leaves a short-lived hint when it ended a session for inactivity
+  const [idle] = useState(() => {
+    const was = typeof document !== 'undefined' && /(?:^|;\s*)signed_out=idle/.test(document.cookie);
+    if (was) document.cookie = 'signed_out=; Max-Age=0; path=/';
+    return was;
+  });
 
   const onSubmit = form.handleSubmit((v) =>
     login.mutate(v, {
@@ -66,6 +72,11 @@ export default function LoginPage() {
         </>
       }
     >
+      {idle && (
+        <Callout tone="info" className="mb-5">
+          You were signed out after a period of inactivity, as your company asks. Sign in again to continue.
+        </Callout>
+      )}
       {googleError && (
         <Callout tone="critical" className="mb-5">
           {GOOGLE_ERRORS[googleError] ?? googleError}

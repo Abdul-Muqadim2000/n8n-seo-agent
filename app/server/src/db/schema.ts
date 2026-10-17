@@ -148,8 +148,12 @@ export const sessions = pgTable(
     mfaAt: ts('mfa_at'),
     /** G1: the last proof of presence (sign-in or step-up); security changes need one within MFA.stepUpMinutes */
     reauthAt: ts('reauth_at'),
+    /** G1: what the device list shows and revokes by — never the session key itself */
+    publicId: uuid('public_id').defaultRandom().notNull(),
+    /** G1: the strictest idle timeout of the person's companies, refreshed when a policy or a membership changes (null = none) */
+    idleTimeoutMinutes: integer('idle_timeout_minutes'),
   },
-  (t) => [index('sessions_user_idx').on(t.userId)],
+  (t) => [index('sessions_user_idx').on(t.userId), uniqueIndex('sessions_public_idx').on(t.publicId)],
 );
 
 /** One-time tokens for e-mail verification and password reset (hashed). */

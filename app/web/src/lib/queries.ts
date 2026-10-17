@@ -50,6 +50,7 @@ import type {
   DeliverySettings,
   DeliverySettingsInput,
   AuditEventView,
+  SessionView,
   MfaStatus,
   SecurityPolicy,
   TotpEnrolment,
@@ -728,6 +729,10 @@ export const usePasskeyOptions = () => useMutation({ mutationFn: () => api<Recor
 export const usePasskeyRegister = () =>
   useIdentityMutation((b: { name: string; response: Record<string, unknown> }) => api<MfaStatus & NewCodes>('/api/me/mfa/passkeys', { method: 'POST', body: b }));
 export const usePasskeyRemove = () => useIdentityMutation((id: string) => api<MfaStatus>(`/api/me/mfa/passkeys/${id}`, { method: 'DELETE' }));
+
+export const useSessions = () => useQuery({ queryKey: ['me', 'sessions'], queryFn: () => api<{ items: SessionView[] }>('/api/me/sessions') });
+export const useRevokeSession = () => useIdentityMutation((id: string) => api<{ ok: boolean; signedOutHere: boolean }>(`/api/me/sessions/${id}`, { method: 'DELETE' }));
+export const useRevokeOtherSessions = () => useIdentityMutation((_: void) => api<{ ok: boolean; revoked: number }>('/api/me/sessions/revoke-others', { method: 'POST' }));
 
 export type AuditFilters = { category?: string; actor?: string; outcome?: string; from?: string; to?: string };
 export type AuditPage = { items: AuditEventView[]; nextCursor: string | null; actors?: { id: string; label: string }[]; retentionDays: number };

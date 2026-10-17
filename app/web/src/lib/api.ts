@@ -30,6 +30,8 @@ export async function api<T>(path: string, opts: { method?: Method; body?: unkno
   const method = opts.method ?? 'GET';
   const headers: Record<string, string> = { accept: 'application/json' };
   if (method !== 'GET') headers['x-requested-with'] = 'fetch';
+  // G1 idle timeout: what a hidden tab fetches by itself (polling) is not the person being active
+  if (method === 'GET' && typeof document !== 'undefined' && document.visibilityState === 'hidden') headers['x-ascentra-passive'] = '1';
   if (opts.body !== undefined) headers['content-type'] = 'application/json';
   let res: Response;
   try {
@@ -48,6 +50,9 @@ export async function api<T>(path: string, opts: { method?: Method; body?: unkno
   const data = text ? safeParse(text) : null;
   if (!res.ok) {
     const e = (data ?? {}) as Partial<ApiError> & Record<string, unknown>;
+    // G1: the company's idle timeout ended the session — back to sign-in (which explains why), then back here
+    if (res.status === 401 && e.code === 'session_idle' && typeof window !== 'undefined' && !window.location.pathname.startsWith('/login'))
+      window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
     if (res.status === 403 && e.code === 'reauth_required' && stepUpHandler && !opts.noStepUp) {
       const confirmed = await stepUpHandler(Array.isArray(e.methods) ? (e.methods as StepUpMethod[]) : ['password']);
       if (confirmed) return api<T>(path, { ...opts, noStepUp: true });
