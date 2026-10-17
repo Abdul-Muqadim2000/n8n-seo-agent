@@ -251,8 +251,13 @@ const KWI = (() => {
   // `serpPageTypes` reads the URL and the title of each organic result, with the title first where it is decisive ("best ... ",
   // "how to ...") and the path after it. Nothing is inferred from a domain we have not read, and a result it cannot place is
   // `Other`, counted and never guessed at.
+  // F-A1 / A-11 (2026-10-17, re-rating): a title that says it IS a list ("Top 10 ...", "List of ...", "Top IT Consulting Companies in
+  // Dubai") is a list wherever it is published - the LinkedIn Pulse listicle of exec 770 was counted as a forum post, so the results page
+  // of "dubai it consulting companies" (4 lists of 7) settled nothing and the rung was planned as a service page with no word about it.
+  const LIST_TITLE = /\b(?:top\s*\d+\+?|list of)\b|\btop\s+(?:[\w&.-]+\s+){0,4}(?:companies|firms|agencies|providers|consultants|consultancies|vendors|partners|tools|platforms)\b/i;
   const SHAPES = [
     { type: 'Government or official', test: (u, t, d) => /(^|\.)(gov|gov\.[a-z]{2}|gob|govt)(\.|$)/.test(d) || /\.gov($|\.)/.test(d) },
+    { type: 'Comparison or list', test: (u, t) => LIST_TITLE.test(t) },
     { type: 'Forum or community', test: (u, t, d) => /(^|\.)(reddit|quora|stackexchange|stackoverflow|linkedin|facebook|x|twitter|medium)\./.test(d) || /\/(forum|community|questions|discussion)\//.test(u) },
     { type: 'Directory or marketplace', test: (u, t, d) => /(^|\.)(g2|capterra|getapp|softwareadvice|trustradius|saashub|clutch|crunchbase|yelp|yellowpages|indiamart)\./.test(d) },
     { type: 'Comparison or list', test: (u, t) => /\b(best|top\s*\d+|vs\.?|versus|alternatives?|comparison|compared)\b/i.test(t) || /\/(best|top|vs|alternatives|compare)[-\/]/.test(u) },
@@ -337,16 +342,42 @@ const KWI = (() => {
     const byKw = new Map(); for (const e of list) if (!byKw.has(e.keyword)) byKw.set(e.keyword, e);
     const ranked = [...byKw.values()].sort((a, b) => b.weight - a.weight || (b.volume || 0) - (a.volume || 0) || a.keyword.localeCompare(b.keyword));
     const used = new Set(); const clusters = [];
+    const built = [];
     for (const head of ranked) {
       if (used.has(head.keyword)) continue;
       const hs = new Set(head.urls); const members = [];
       for (const other of ranked) {
         if (other.keyword === head.keyword || used.has(other.keyword)) continue;
         const shared = other.urls.filter(u => hs.has(u));
-        if (shared.length >= need) members.push({ keyword: other.keyword, volume: other.volume, shared_urls: shared.length, shared: shared.slice(0, 3) });
+        if (shared.length >= need) members.push({ keyword: other.keyword, volume: other.volume, shared_urls: shared.length, shared: shared.slice(0, 3), shared_with_head: shared.length });
       }
       if (!members.length) continue;
       used.add(head.keyword); members.forEach(m => used.add(m.keyword));
+      built.push({ head, members });
+    }
+    // F-A1 / A-9 (2026-10-17, re-rating exec 770): a keyword that meets the rule with a MEMBER of a group but not with its head was left
+    // alone and labelled "own results page (no other search Google answers with the same pages)" - "it consulting company dubai" shares
+    // 3 of its top 7 with "it consulting company in dubai" (the plan's own threshold) and only 2 with the group's head. The rule is a
+    // pair rule, so the label could only be true if every pair was compared. A keyword still alone after the heads have taken their
+    // members joins the group of the member it shares the most with (one hop: a keyword that joined this way is never a bridge for the
+    // next one), and says through whom it joined and how much it shares with the head.
+    if (c.attach !== false) {
+      for (const k of ranked) {
+        if (used.has(k.keyword)) continue;
+        const ks = new Set(k.urls); let best = null;
+        for (const g of built) for (const m of [{ keyword: g.head.keyword, urls: g.head.urls }, ...g.members.filter(x => !x.via).map(x => byKw.get(x.keyword))]) {
+          if (!m || !Array.isArray(m.urls)) continue;
+          const shared = m.urls.filter(u => ks.has(u));
+          if (shared.length >= need && (!best || shared.length > best.shared.length)) best = { g, via: m.keyword, shared };
+        }
+        if (!best) continue;
+        const hs = new Set(best.g.head.urls);
+        best.g.members.push({ keyword: k.keyword, volume: k.volume, shared_urls: best.shared.length, shared: best.shared.slice(0, 3),
+          via: best.via === best.g.head.keyword ? '' : best.via, shared_with_head: k.urls.filter(u => hs.has(u)).length });
+        used.add(k.keyword);
+      }
+    }
+    for (const { head, members } of built) {
       members.sort((a, b) => b.shared_urls - a.shared_urls || (b.volume || 0) - (a.volume || 0));
       clusters.push({ head_keyword: head.keyword, keyword_count: members.length + 1, urls_compared: head.urls.length,
         min_shared_urls: need, top_n: depth, min_overlap_pct: depth && (num(c.min_overlap) || 0) > 0 ? Math.round(c.min_overlap * 100) : null,
@@ -354,7 +385,9 @@ const KWI = (() => {
         keywords: [{ keyword: head.keyword, volume: head.volume, shared_urls: head.urls.length, shared: [] }, ...members].slice(0, c.max_cluster_keywords) });
     }
     clusters.sort((a, b) => b.keyword_count - a.keyword_count || b.total_volume - a.total_volume);
-    return { clusters, keywords_compared: ranked.length, compared_keywords: ranked.map(e => e.keyword), min_shared_urls: need, min_urls: c.min_urls, top_n: depth,
+    // every compared keyword's own list, at the depth it was compared at, so a later step can test any pair by the same rule (A-10)
+    const urls_of = {}; for (const e of ranked) urls_of[e.keyword] = e.urls.slice();
+    return { clusters, urls_of, keywords_compared: ranked.length, compared_keywords: ranked.map(e => e.keyword), min_shared_urls: need, min_urls: c.min_urls, top_n: depth,
       min_overlap_pct: depth && (num(c.min_overlap) || 0) > 0 ? Math.round(c.min_overlap * 100) : null,
       clustered: clusters.reduce((n, x) => n + x.keyword_count, 0) };
   };
@@ -375,10 +408,12 @@ const KWI = (() => {
     if (!others.length) return '';
     const depthTxt = c.top_n ? 'top ' + c.top_n : 'top-10';
     return 'One page can target all ' + c.keyword_count + ': "' + c.head_keyword + '" shares '
-      + others.map(k => k.shared_urls + ' of its ' + depthTxt + ' pages with "' + k.keyword + '"').join(', ')
+      + others.map(k => k.via ? k.shared_urls + ' of the ' + depthTxt + ' pages of "' + k.via + '" with "' + k.keyword + '" (' + (k.shared_with_head ?? 0) + ' with "' + c.head_keyword + '" itself)'
+        : k.shared_urls + ' of its ' + depthTxt + ' pages with "' + k.keyword + '"').join(', ')
       + ' - Google answers these searches with the same pages, so a second page would only split the signals.';
   };
-  return { CFG, CLICK_LOSS, gscSeeds, calibrate, serpClusters, pageGroup, clusterText, featureLoss, lossApplied, lossText, serpPageTypes, shapeOf, competitorClass, liveChecks, ladderChecks, checkCost, urlKey, BASIS_TEXT, helpers: { bare, low, num } };
+  const pageKindOf = (page_type) => OURS[S(page_type)] || '';   // F-A1 / A-11: the kind of page a plan's page type is, in serpPageTypes' words
+  return { CFG, CLICK_LOSS, gscSeeds, calibrate, serpClusters, pageGroup, pageKindOf, clusterText, featureLoss, lossApplied, lossText, serpPageTypes, shapeOf, competitorClass, liveChecks, ladderChecks, checkCost, urlKey, BASIS_TEXT, helpers: { bare, low, num } };
 })();
 // ---- topic radius (G32, 2026-10-13, system review FIX_PLAN.md G32; criterion K12 in CRITERIA_keywords_content.md) ----
 // "Which topics is this website close enough to win, and which are a stretch?" — until now the system answered that per keyword
@@ -535,14 +570,27 @@ const freeOnly = d.free_only === true;
 // the head term keeps the results page the run already bought (competitors_summary), so it is never re-bought here
 const onTopic = cands.filter(k => String(k.keyword).toLowerCase() !== head).filter(k => { try { return RAD.headFit(head, k.keyword).ok; } catch (e) { return true; } });
 const wanted = onTopic.slice(0, cap);
+// F-A1 / A-10 (2026-10-17, re-rating exec 770): the main page's supporting keywords came from the verdict's list and were grouped with the
+// main keyword on its word alone - of the six on row 33 only one had its results page read, and it shares 0 of the main keyword's top 7.
+// Within the same cap, the supporting keywords the plan would put on the main page are read too, so the plan can keep only those Google
+// answers with the main keyword's own pages and say how it knows (Ladder Plan compares them with the head's results page this run read).
+const lowK = (x) => String(x || '').toLowerCase().trim();
+const seenK = new Set([head, ...wanted.map(k => lowK(k.keyword))]);
+const supporting = [];
+for (const kw of (Array.isArray(d.secondary_keywords) ? d.secondary_keywords : []).slice(0, 10).map(lowK)) {
+  if (!kw || seenK.has(kw) || supporting.length >= 6 || wanted.length + supporting.length >= cap) continue;
+  seenK.add(kw); supporting.push({ keyword: kw, supporting_check: true });
+}
 const plan = { asked: wanted.length, candidates: cands.length, on_topic: onTopic.length, cap, cap_basis: KWI.CFG.ladder_serp_checks === cap
     ? 'the standing cap of ' + KWI.CFG.ladder_serp_checks + ' keywords a ladder may buy a results page for' : 'the cap set for this run (' + cap + ')',
-  cost_usd: KWI.checkCost(wanted.length), price_usd: KWI.CFG.serp_check_usd, top_n: 7, min_overlap: 0.4,
-  left_uncompared: Math.max(0, onTopic.length - wanted.length) };
+  cost_usd: KWI.checkCost(wanted.length + supporting.length), price_usd: KWI.CFG.serp_check_usd, top_n: 7, min_overlap: 0.4,
+  left_uncompared: Math.max(0, onTopic.length - wanted.length), supporting_asked: supporting.length };
 const skip = freeOnly ? 'this run was asked for free sources only, so no results page was bought and the rungs are grouped by topic instead'
   : cap <= 0 ? 'results-page comparison is switched off for this run (ladder_serp_checks 0), so the rungs are grouped by topic instead'
     : wanted.length < 2 ? 'only ' + wanted.length + ' rung candidate(s) are on this ladder\'s topic, and a comparison needs at least two, so nothing was bought'
       : '';
-if (skip) return [{ json: { cluster_check: false, skip_reason: skip, ...plan, asked: 0, cost_usd: 0 } }];
-return wanted.map((k, i) => ({ json: { cluster_check: true, keyword: k.keyword, location_code: d.location_code, language_code: d.language_code || 'en',
-  n: i + 1, of: wanted.length, weight: k.pre_score ?? k.opportunity ?? 0, volume: k.volume ?? null, ...plan } }));
+if (skip) return [{ json: { cluster_check: false, skip_reason: skip, ...plan, asked: 0, supporting_asked: 0, cost_usd: 0 } }];
+return [...wanted.map((k, i) => ({ json: { cluster_check: true, keyword: k.keyword, location_code: d.location_code, language_code: d.language_code || 'en',
+  n: i + 1, of: wanted.length, weight: k.pre_score ?? k.opportunity ?? 0, volume: k.volume ?? null, ...plan } })),
+  ...supporting.map((k, i) => ({ json: { cluster_check: true, supporting_check: true, keyword: k.keyword, location_code: d.location_code, language_code: d.language_code || 'en',
+    n: wanted.length + i + 1, of: wanted.length + supporting.length, weight: 0, volume: null, ...plan } }))];

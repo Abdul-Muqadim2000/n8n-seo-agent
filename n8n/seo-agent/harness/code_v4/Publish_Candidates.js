@@ -275,7 +275,7 @@ plan.forEach((s, idx) => {
     cands.set(kw, { key: kw, keyword: r.keyword, source: 'content_log', log: r, ladder, written_at: String(r.started_at || '') });
   }
   for (const l of LD) {
-    if (l.status !== 'writing') continue;
+    if (!['writing', 'written', 'not_ready'].includes(l.status)) continue;   // A-20: a ladder row follows its content log (written / not_ready) once the page run ends
     const kw = norm(l.keyword); if (!kw || cands.has(kw) || published.has(kw)) continue;
     const log = L.filter(r => norm(r.keyword) === kw).sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0] || null;   // an older log row of the same page (kept in the rows)
     cands.set(kw, { key: kw, keyword: l.keyword, source: 'ladder', log, ladder: l, written_at: String((log && log.started_at) || l.start_date || '') });

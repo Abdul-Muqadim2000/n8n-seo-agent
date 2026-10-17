@@ -83,6 +83,22 @@
    "status_note"
   ]
  },
+ "ladder_written": {
+  "code": "Ladder Row Written",
+  "conditions": [
+   "ladder_id",
+   "keyword",
+   "status"
+  ],
+  "from": "Save Content Log (Run)",
+  "gate": "Ladder Row To Follow?",
+  "table": "seo_ladders",
+  "update": "Mark Ladder Row Written",
+  "values": [
+   "status",
+   "status_note"
+  ]
+ },
  "modes": {
   "ai_visibility": [
    "Monitor Started"
