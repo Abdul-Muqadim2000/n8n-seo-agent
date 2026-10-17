@@ -11112,6 +11112,22 @@ patch('Build Audit Response', "return { audit_id: r.audit_id, audit_diff: a.audi
       "return { audit_id: r.audit_id, issue_counts_stored: ((l) => ({ Critical: l.filter(f => f.severity === 'Critical').length, High: l.filter(f => f.severity === 'High').length, Medium: l.filter(f => f.severity === 'Medium').length, Low: l.filter(f => f.severity === 'Low').length, unscored: (a.findings || []).filter(f => f && f.scoring === false).length }))((a.findings || []).filter(f => f && f.scoring !== false && f.severity !== 'Info')), audit_diff: a.audit_diff || null,")
 log('A diff that knows what changed: the engine or the site (2026-10-17, F-B, re-rating 2026-10-17 B-5 + INVARIANTS rule 1): every audit stores its checks_version and whether its crawl ran JavaScript, every finding row the version of its check; a finding that left the list because our check changed since the previous audit is "no longer reported (our check changed)" and one that appeared through a changed check is "found by a changed check", never fixed / new; findings that depend on JavaScript rendering are not compared across a JavaScript and a plain crawl (or a crawl that did not record it); seo_audits.not_fixed_json carries the keys the engine did not count as fixed so the app\'s lists follow; and the callback carries the stored counts so the app\'s summary matches the list')
 
+# ---- B-14 (Low): "URLs are not SEO-friendly" lists only URLs with a reason we can name, and names it per URL (/cookies had none) ----
+patch('Build Site Issues', "for (const c of CATALOG) {\n",
+      "// B-14 (F-B, 2026-10-17, exec 739): the crawler's flag gave no reason and listed /cookies; a URL is listed only with a reason we can name\n"
+      "const urlWhy14 = (u) => { const m = String(u || '').match(/^https?:\\/\\/[^\\/]+([^#]*)$/); const pth = m ? m[1] : String(u || ''); const why = [];\n"
+      "  if (/\\?/.test(pth)) why.push('carries parameters'); if (/[A-Z]/.test(pth.replace(/\\?.*$/, ''))) why.push('has capital letters'); if (/_/.test(pth)) why.push('uses underscores');\n"
+      "  const joined = pth.replace(/\\?.*$/, '').split(/[\\/-]/).filter(sg => sg && sg.length >= 7 && (sg.match(/what|why|how|who|with|and|our|your|the|for|we|do/g) || []).length >= 2);\n"
+      "  if (joined.length) why.push('joins words without hyphens (\"' + joined[0] + '\")'); return why.join(', '); };\n"
+      "for (const c of CATALOG) {\n")
+patch('Build Site Issues', "    if (c.key === 'deprecated_html_tags' && v === true) { const t = obsoleteTags(p); if (t && !t.length) return false; }   // R71",
+      "    if (c.key === 'deprecated_html_tags' && v === true) { const t = obsoleteTags(p); if (t && !t.length) return false; }   // R71\n"
+      "    if (c.key === 'seo_friendly_url' && v === false && !urlWhy14(p.url)) return false;   // B-14")
+patch('Build Site Issues', "return ot && ot.length ? p.url + ' — <' + ot.join('>, <') + '>' : p.url; }),",
+      "return ot && ot.length ? p.url + ' — <' + ot.join('>, <') + '>' : (c.key === 'seo_friendly_url' ? p.url + ' — ' + urlWhy14(p.url) : p.url); }),")
+assert 'urlWhy14' in code('Build Site Issues'), 'B-14: the URL reasons are missing'
+log('Lows of the 2026-10-17 re-rating (F-B): the pre-release check fails a missing description when the caller asks fail_on low (B-13), a sentence that denies a guarantee is not a guarantee claim (B-11), the publish check says how many of its points it granted unmeasured (B-12), "URLs are not SEO-friendly" names its reason per URL and drops a URL it has none for (B-14), and the fix pack links no page the duplicate-content finding names and never cuts an anchor mid-word (B-15)')
+
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:
 #     "two fixes have never come back and both are enforced by the build".

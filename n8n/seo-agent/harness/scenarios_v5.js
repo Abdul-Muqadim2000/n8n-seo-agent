@@ -18130,5 +18130,51 @@ await guard('S183 B-5 B-6 crawl_js a changed check is not "fixed", a JavaScript 
 });
 
 
+await guard('S184 B-11 B-12 B-13 B-14 B-15 the lows of executor B (execs 739 / 743 / 745)', async () => {
+  reset(); const SN = 'S184 B-11 / B-12 / B-13 / B-14 / B-15 — a denied guarantee, granted points, fail_on low, a URL with no reason, the fix pack and the duplicates'; begin(SN); const check = A2check(SN);
+  // B-13: fail_on "low" turns a missing description into a failure
+  reset();
+  const v = (await run('Prerelease Validate', [{ json: { body: { base_url: 'https://www.techand.ai', paths: ['/power-platform-analytics-uae'], live_host: 'www.techand.ai', staging: false, fail_on: 'low' }, headers: {} } }])).map(x => x.json);
+  mock('Fetch Release Pages', v.map(it => it.kind === 'robots' ? { statusCode: 200, headers: {}, data: 'User-agent: *\nAllow: /\n' }
+    : { statusCode: 200, headers: { 'content-type': 'text/html' }, data: '<html><head><title>Power Platform &amp; Analytics Services in UAE | Tech&amp;</title><link rel="canonical" href="https://www.techand.ai/power-platform-analytics-uae"></head><body><h1>Power Platform</h1></body></html>' }));
+  const vb = (await run('Prerelease Verdict', store['Fetch Release Pages']))[0].json.body;
+  check('B-13: with fail_on "low" a page with no meta description fails the release (exec 743 kept it a warning whatever the setting)', vb.exit_code === 1 && (vb.failures || []).some(f => f.check === 'description'), JSON.stringify({ exit: vb.exit_code, f: vb.failures, w: vb.warnings }));
+  // B-11 + B-12: the publish check
+  const pc = async (body) => { reset();
+    const pb = (await run('Parse Brief', [{ json: { body, headers: {} } }], { code: 'PubCheck__Parse_Brief' }))[0].json;
+    const qa = await run('Content QA', [{ json: pb }]); const oc = await run('Originality Check', qa); return (await run('Publish Check Verdict', oc))[0].json.body; };
+  const md0 = W3B_RA7.r616.draft_round2.replace(/guarantee[sd]?/gi, 'promise');
+  const denial = md0 + '\n\nNone of these features should be treated as an automatic guarantee of regulatory compliance, and the software does not by itself guarantee compliance.\n';
+  const claim = md0 + '\n\nWe guarantee full compliance within 30 days.\n';
+  const d1 = await pc({ markdown: denial, keyword: 'ai consulting', domain: 'techand.ai' });
+  const d2 = await pc({ markdown: claim, keyword: 'ai consulting', domain: 'techand.ai' });
+  check('B-11: a sentence that denies a guarantee is no "guarantee claim"', !(d1.warnings || []).some(w => /guarantee claim/.test(w)), JSON.stringify((d1.warnings || []).filter(w => /guarantee/.test(w))));
+  check('B-11: a sentence that makes one still is, and is quoted', (d2.warnings || []).some(w => /guarantee claim — please verify: "We guarantee full compliance/.test(w)), JSON.stringify((d2.warnings || []).filter(w => /guarantee/.test(w))));
+  check('B-12: with no terms sent the score says how many of its points were granted, not measured', d1.score_granted_points === ((d1.score_breakdown || {}).coverage || 0) && d1.score_granted_points > 0 && /granted because no terms were sent/.test(d1.score_note), JSON.stringify({ g: d1.score_granted_points, n: d1.score_note, sb: d1.score_breakdown }));
+  // B-14: the crawl's "not SEO-friendly" flag on four of exec 739's URLs
+  const okPage = (url, friendly) => ({ url, status_code: 200, resource_type: 'html', checks: { seo_friendly_url: friendly }, meta: { title: 'T', internal_links_count: 10, external_links_count: 1, htags: { h1: ['H'] }, content: { plain_text_word_count: 500 } } });
+  const urls = ['https://www.techand.ai/cookies', 'https://www.techand.ai/whatwedo', 'https://www.techand.ai/whywith-techand', 'https://www.techand.ai/Ai_Tools?ref=1'];
+  const src = a11code('Build_Site_Issues.js');
+  const why = new Function(src.slice(src.indexOf('const urlWhy14 = '), src.indexOf('for (const c of CATALOG) {')) + '\nreturn urlWhy14;')();
+  console.log('   url reasons ->', JSON.stringify(urls.map(u => [u, why(u)])));
+  check('B-14: /cookies has no reason and is not listed; /whatwedo and /whywith-techand join words; a parameter, capitals and an underscore are named', !why(urls[0]) && /joins words/.test(why(urls[1])) && /joins words/.test(why(urls[2])) && /parameters/.test(why(urls[3])) && /capital/.test(why(urls[3])) && /underscore/.test(why(urls[3])), JSON.stringify(urls.map(why)));
+  check('B-14: the finding drops a URL with no reason and prints the reason beside each one', /seo_friendly_url' && v === false && !urlWhy14\(p\.url\)/.test(src) && /p\.url \+ ' — ' \+ urlWhy14\(p\.url\)/.test(src), '');
+  // B-15: the internal-link suggestions skip the pages the duplicate-content finding names, and never cut an anchor mid-word
+  reset();
+  const dup = ['https://www.techand.ai/whatwedo/run-optimize', 'https://www.techand.ai/whatwedo/ai-automation'];
+  const long = 'https://www.techand.ai/insights/upgrading-your-erp-for-uae-peppol-pint-ae-compliance';
+  const pg = (url, inl, title) => ({ url, status_code: 200, resource_type: 'html', checks: { is_orphan_page: inl === 0 }, click_depth: 2, meta: { title, inbound_links_count: inl, htags: { h1: [title] } } });
+  const items = [pg('https://www.techand.ai/', 30, 'Tech& Home'), pg('https://www.techand.ai/whatwedo', 20, 'What We Do Run Optimize Automation Upgrading ERP Peppol Compliance'),
+    ...dup.map(u => pg(u, 0, 'Run Optimize Automation')), pg(long, 0, 'Upgrading Your ERP for UAE Peppol PINT-AE Compliance: A Technical Integration Guide for Finance Teams')];
+  mock('Check Crawl', [{ json: { domain: 'techand.ai', crawl_js: false } }]); mock('Load Audit History', []); mock('Load Audit Findings', []);
+  mock('Get Crawled Pages Answers', [{ json: { tasks: [{ result: [{ items }] }] } }]); mock('Get Crawled Pages', [{ json: { tasks: [{ result: [{ items }] }] } }]);
+  mock('Build Site Issues', [{ json: { domain: 'techand.ai', site_audit: { domain: 'techand.ai', audit_level: 'site_audit', health_score: 85, weights: {}, findings: [{ category: 'Content', severity: 'Medium', title: 'Duplicate content on 7 pages', sample_urls: dup, affected_count: 7 }] } } }]);
+  const il = (await run('Audit Diff', [{ json: {} }]))[0].json.site_audit.internal_links || [];
+  console.log('   internal links ->', JSON.stringify(il.map(x => [x.to_url, x.anchor])));
+  check('B-15: no link is suggested to a page the duplicate-content finding names', !il.some(x => dup.includes(x.to_url)), JSON.stringify(il.map(x => x.to_url)));
+  check('B-15: an anchor longer than 70 characters ends on a whole word', il.filter(x => x.to_url === long).every(x => x.anchor.length <= 70 && !/Inte$/.test(x.anchor) && /\w$/.test(x.anchor)) && il.some(x => x.to_url === long), JSON.stringify(il.filter(x => x.to_url === long)));
+});
+
+
 H.report();
 })();
