@@ -197,7 +197,7 @@ const pipeline = pick0 && falling(pick0) ? { ...pick0, trend_note: 'falling ' + 
 return [{ json: { ...base, keyword_strategy: {
   goal, pool_size: base.research.pool_size, ai_reviewed, total_relevant: kws.length, keywords: kws.slice(0, 200),
   clusters, quick_wins, questions, long_tail, competitor_gaps, by_intent, priority, pipeline_keyword: pipeline, topic_radius,
-  competitor_domains: base.research.competitor_domains, by_source: base.research.by_source, research_failures: base.research.failures, refused: refused.slice(0, 60),
+  competitor_domains: base.research.competitor_domains, competitor_basis: base.research.competitor_basis || null, by_source: base.research.by_source, research_failures: base.research.failures, refused: refused.slice(0, 60),
   covered: kws.filter(k => k.covered_by).slice(0, 20).map(k => ({ keyword: k.keyword, volume: k.volume, url: k.covered_by.url, matched_by: k.covered_by.matched_by, position: k.covered_by.position ?? null })), pages_known: SM.pages(pageModelD).length,
   title_gap: SM.titleGap(pageModelD),   // R34: the pages whose title is not on file (judged by their address only)
   ladder_covered: kws.filter(k => k.ladder_covered).slice(0, 20).map(k => ({ keyword: k.keyword, volume: k.volume, ladder_id: k.ladder_covered.ladder_id, head_keyword: k.ladder_covered.head_keyword, ladder_keyword: k.ladder_covered.ladder_keyword, part: k.ladder_covered.part, rung: k.ladder_covered.rung, status: k.ladder_covered.status, target_url: k.ladder_covered.target_url, how: k.ladder_covered.how })), ladders_known: [...new Set(ladderKwsD.map(x => x.ladder_id))].length,

@@ -109,6 +109,7 @@ const failures = pairs.filter(([r, res]) => !res || res.error || Number(res.stat
 return [{ json: { ...base, research: {
   pool_size: all.length, candidates, long_tail_pool: all.filter(e => e.words >= 4 && e.intent !== 'navigational').slice(0, 300),
   competitor_domains: [...new Set(reqB.filter(r => r.kind === 'competitor').map(r => r.domain))], by_source: bySource, failures, requests: pairs.length,
+  competitor_basis: (reqB[0] || {}).competitor_basis || null,   // A-24: how each competitor was chosen and which results were passed over
   // G8: how much of the pool came from the site's own Search Console, and how many estimates its data could check
   search_console: { available: !!SC.available, seeded: (base.gsc_seeds || []).length, measured: all.filter(e => e.gsc).length, only_source: gsc_only,
     calibrated: all.filter(e => e.traffic_basis === 'calibrated').length, modelled: all.filter(e => e.traffic_basis === 'modelled').length, period_end: SC.period_end || '' }
