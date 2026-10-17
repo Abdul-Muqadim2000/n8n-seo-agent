@@ -73,6 +73,31 @@ module.exports = async (ctx) => {
   });
 
   // ===================================================================================
+  // SA01 — the Keyword Check sees the live page, and a paused ladder is "paused"
+  // ===================================================================================
+  await guard('SA01 A-1 / A-2 Keyword Check: the live Business Central page answers "business central partner uae"; a paused ladder says paused', async () => {
+    reset(); const SN = 'SA01 A-1 A-2 — the Keyword Check reads the page inventory: "business central partner uae" names /dynamics-365-business-central-uae (exec 750 said existing: null), and the paused ladder of "dynamics 365 partner uae" is "paused", not "planned"';
+    begin(SN); const check = mkCheck(SN);
+    const ask = async (ex) => { const A = FX['as' + ex];
+      for (const n of ['Assess Result', 'Load Ladders (Assess)', 'Load Content Log (Assess)']) mock(n, items(A[n]));
+      mock('Load Pages (Assess)', items(FX.pages764)); mock('Load Ladder Settings (Assess)', items(FX.settings764));
+      return (await run('Assess Response', items(A['Fit Parsed?'])))[0].json.body; };
+    const b750 = await ask('750');
+    console.log('   750 existing ->', JSON.stringify(b750.existing), '| label ->', b750.label);
+    check('A-1: "business central partner uae" names the live Business Central page and tells the owner to improve it',
+      b750.existing && /dynamics-365-business-central-uae/.test(b750.existing.page_url) && b750.existing.how === 'a page of yours' && /improve that page/.test(b750.existing.note)
+      && /you already have a page for it/.test(b750.label), JSON.stringify(b750.existing));
+    const b751 = await ask('751');
+    console.log('   751 existing ->', JSON.stringify(b751.existing));
+    check('A-2: the ladder lad_mv4vxu3bq0kl is paused in seo_ladder_settings and the answer says paused (the row\'s own status is kept beside it)',
+      b751.existing && b751.existing.ladder_id === 'lad_mv4vxu3bq0kl' && b751.existing.ladder_status === 'paused' && b751.existing.row_status === 'planned' && /paused/.test(b751.existing.note), JSON.stringify(b751.existing));
+    mock('Load Pages (Assess)', [{ json: {} }]); mock('Load Ladder Settings (Assess)', [{ json: {} }]);
+    const A = FX.as750; for (const n of ['Assess Result', 'Load Ladders (Assess)', 'Load Content Log (Assess)']) mock(n, items(A[n]));
+    const bNone = (await run('Assess Response', items(A['Fit Parsed?'])))[0].json.body;
+    check('A-1: with no page inventory on file the answer is what it was (no page invented)', bNone.existing === null, JSON.stringify(bNone.existing));
+  });
+
+  // ===================================================================================
   // SA05 / SA23 — the verdict and the keyword report read what the site already holds before they advise
   // ===================================================================================
   const verdictRun = async (ex) => {

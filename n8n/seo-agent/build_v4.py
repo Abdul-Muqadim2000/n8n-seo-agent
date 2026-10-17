@@ -10373,7 +10373,7 @@ for _f110, _tok110 in (('code/Assess_Response.js', "rowsOf('Load Ladders (Assess
 _api110 = open(os.path.join(HERE0, 'build_api.py'), encoding='utf-8').read()
 for _n110 in ('Load Ladders (Assess)', 'Load Content Log (Assess)'):
     assert "_an('" + _n110 + "'" in _api110 and "('" + _n110 + "', " in _api110 or "'" + _n110 + "')" in _api110, 'R50: the Keyword Check does not load ' + _n110
-assert "('Load Content Log (Assess)', 'Assess Requests')" in _api110, 'R50: the loads are not in front of Assess Requests'
+assert "('Load Content Log (Assess)', 'Assess Requests')" in _api110 or "('Load Ladder Settings (Assess)', 'Assess Requests')" in _api110, 'R50: the loads are not in front of Assess Requests'   # A-1 (2026-10-17): the page inventory and the ladder settings load after the content log
 assert 'Load Content Log (Ladder)' in open(os.path.join(HERE0, 'build_v4.py'), encoding='utf-8').read(), 'R42: the ladder path does not load the content log'
 assert 'never 2' in _rd0('prompts/keyword_relevance.txt') and 'Return ONLY valid JSON: {"items"' in _rd0('prompts/keyword_relevance.txt'), 'R51: the relevance prompt'
 json.dump({'relevance_prompt': _rd0('prompts/keyword_relevance.txt'),
