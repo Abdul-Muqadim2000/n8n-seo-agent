@@ -11,6 +11,7 @@ _env.require_settings('build_api.py')
 from ladder_common import (CACHE_TABLE, CACHE_COLS, DT_TYPE, DT_VERSION,
                            dt_create_params, dt_insert_params, dt_get_all_where_params, dt_delete_where_params)
 from ladder_common import LADDER_TABLE as _LADDER_TABLE, LOG_TABLE as _LOG_TABLE   # R50 (A14): the Keyword Check names the ladder / page that already holds the search
+from ladder_common import PAGES_TABLE as _PAGES_TABLE, LADDER_SETTINGS_TABLE as _LSET_TABLE   # A-1 / A-2 (2026-10-17): the page inventory and the ladder's own status
 # B-F5 (2026-10-15): these ids are placeholders — freeze_ids() re-keys every one of them on (workflow, node) before the dump.
 # They are generated in build order rather than at random all the same, so that even a half-built workflow dumped for debugging
 # is the same twice, and so that the build-time lint for a random id (build_v4.py section 69) has nothing to find.
@@ -319,6 +320,7 @@ assert _m_c and _m_d and _m_o, 'Normalize Input: COUNTRIES / cleanDomain / domai
 def _assess_code(f):
     s = _rd5('code/' + f).replace('/*__REACH__*/', _rd5('code/_reach.js').rstrip('\n'))
     s = s.replace('/*__FIT_GATE__*/', _rd5('code/_fit_gate.js').rstrip('\n'))   # R50 (A14): the stored ladder rows it names pass the same gate every other read path uses
+    s = s.replace('/*__SITE_MODEL__*/', _rd5('code/_site_model.js').rstrip('\n')).replace('/*__OWN_COVER__*/', _rd5('code/_own_cover.js').rstrip('\n'))   # A-1 (2026-10-17): the page inventory match, the same as the main workflow's
     s = s.replace('/*__COUNTRIES__*/', '// ---- countries: copied from the main workflow\'s Normalize Input by build_api.py (DataForSEO location code = 2000 + ISO numeric) ----' + _m_c.group(0))
     s = s.replace('/*__DOMAIN_RULES__*/', '// ---- domain rules: copied from Normalize Input (public hostnames only) ----' + _m_d.group(0) + _m_o.group(0))
     assert '/*__' not in s, f + ': placeholder left'
@@ -374,6 +376,10 @@ _AN = [
   # R50 (2026-10-16, A14): the answer names the ladder / page that already holds the search. Assess_Response.js reads these two nodes by name.
   _an('Load Ladders (Assess)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_LADDER_TABLE, [('domain', 'eq', "={{ $('Assess Validate').first().json.domain }}")]), [990, -100], **_LOAD),
   _an('Load Content Log (Assess)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_LOG_TABLE, [('domain', 'eq', "={{ $('Assess Validate').first().json.domain }}")]), [1045, -100], **_LOAD),
+  # A-1 / A-2 (2026-10-17, re-rating exec 750): "business central partner uae" came back `existing: null` beside the live Business Central page
+  # (the check read the ladder table only), and a paused ladder was shown "planned". Assess_Response.js reads these two nodes by name.
+  _an('Load Pages (Assess)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_PAGES_TABLE, [('site_id', 'eq', "={{ $('Assess Validate').first().json.site_id }}")]), [1045, 60], **_LOAD),
+  _an('Load Ladder Settings (Assess)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_LSET_TABLE, [('domain', 'eq', "={{ $('Assess Validate').first().json.domain }}")]), [1045, 220], **_LOAD),
   _acode('Assess Requests', 'Assess_Requests.js', [1100, -100]),
   _an('Run Assess Requests', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.endpoint }}', 'authentication': 'genericCredentialType', 'genericAuthType': 'httpBasicAuth', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.body) }}', 'options': {'timeout': 15000}}, [1320, -100], credentials=_DFS_CRED, onError='continueRegularOutput', **retry_lint.RETRY),
   _acode('Assess Result', 'Assess_Result.js', [1540, -100]),
@@ -396,7 +402,7 @@ def _alink(a, b, out=0):
     outs = _AC.setdefault(a, {}).setdefault('main', [])
     while len(outs) <= out: outs.append([])
     outs[out].append({'node': b, 'type': 'main', 'index': 0})
-for _a, _b in [('Assess Webhook', 'Assess Validate'), ('Assess Validate', 'Assess Valid?'), ('Ensure Cache Table (Assess)', 'Load Assess Cache'), ('Load Assess Cache', 'Load Ladders (Assess)'), ('Load Ladders (Assess)', 'Load Content Log (Assess)'), ('Load Content Log (Assess)', 'Assess Requests'), ('Assess Requests', 'Run Assess Requests'),
+for _a, _b in [('Assess Webhook', 'Assess Validate'), ('Assess Validate', 'Assess Valid?'), ('Ensure Cache Table (Assess)', 'Load Assess Cache'), ('Load Assess Cache', 'Load Ladders (Assess)'), ('Load Ladders (Assess)', 'Load Content Log (Assess)'), ('Load Content Log (Assess)', 'Load Pages (Assess)'), ('Load Pages (Assess)', 'Load Ladder Settings (Assess)'), ('Load Ladder Settings (Assess)', 'Assess Requests'), ('Assess Requests', 'Run Assess Requests'),
                ('Run Assess Requests', 'Assess Result'), ('Assess Result', 'DataForSEO OK?'), ('Keyword Fit', 'Fit Parsed?'), ('Keyword Fit (Text)', 'Assess Response'), ('Assess Response', 'Respond Assess'), ('Respond Assess', 'Reach Row (Assess)'), ('Reach Row (Assess)', 'New Reach (Assess)?'),
                ('Ensure Run Ledger (Assess)', 'Run Ledger Row (Assess)'), ('Run Ledger Row (Assess)', 'Reserve Run Ledger (Assess)'), ('Reserve Run Ledger (Assess)', 'Load Run Ledger (Assess)'), ('Load Run Ledger (Assess)', 'Assess Limit'),
                ('Assess Limit', 'Assess Limited?'), ('Respond Assess Limited', 'Mark Run Refused (Assess)'),

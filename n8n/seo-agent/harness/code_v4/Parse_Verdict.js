@@ -1,3 +1,386 @@
+// ---- the one site model (G19, 2026-10-12; see SITE_MODEL_SPEC.md; the builders inline this file where a node asks for the SITE_MODEL kit) ----
+// Every workflow reads the same facts about a site through SM: the canonical host, the business name / logo / NAP (seo_profiles ->
+// the homepage Organization / LocalBusiness schema -> Google Business Profile -> the fields the web app sent), the services and nav
+// pages, the page inventory (seo_pages), the business facts, the call to action, the brand names, the competitors and the
+// accreditation status. SM.from() builds the model, SM.toRow() writes it back to the seo_sites columns.
+const SM = (() => {
+  const S = (v) => String(v == null ? '' : v).trim();
+  const normHost = (v) => S(v).toLowerCase().replace(/^https?:\/\//, '').replace(/[\/?#].*$/, '').replace(/:\d+$/, '');
+  const bare = (v) => normHost(v).replace(/^www\./, '');
+  const hostOf = (u) => normHost((S(u).match(/^https?:\/\/([^\/?#]+)/i) || [])[1] || '');   // the n8n Code sandbox has no URL constructor
+  const siteIdFor = (d) => 'site_' + bare(d).replace(/[^a-z0-9]+/g, '-');
+  const listOf = (v) => (Array.isArray(v) ? v : S(v).split(/[\n,;|]+/)).map(x => S(x)).filter(Boolean);
+  const uniq = (a) => [...new Set(a)];
+  const jparse = (v, dflt) => { if (v && typeof v === 'object') return v; try { const o = JSON.parse(S(v) || 'null'); return o == null ? dflt : o; } catch (e) { return dflt; } };
+  const STOP = new Set(['a', 'an', 'and', 'at', 'by', 'for', 'from', 'in', 'into', 'of', 'on', 'or', 'the', 'to', 'vs', 'with', 'your', 'our', 'my']);
+  const tokensOf = (s) => S(s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+  // one-letter parts ("e" of "e invoicing") and stop words never decide a page match: with them "e invoicing uae penalties" would
+  // score 3 of 4 against /uae-e-invoicing-fta-rules/ and claim the FTA page (the S26 false-match pair).
+  const termsOf = (s) => uniq(tokensOf(s).filter(t => t.length > 1 && !STOP.has(t)));
+  const pathOf = (u) => { const p = S(u).replace(/^https?:\/\/[^\/]*/i, ''); return p || '/'; };
+  const strip = (s) => S(s).replace(/<[^>]*>/g, ' ').replace(/&[a-z]+;|&#\d+;/gi, ' ').replace(/\s+/g, ' ').trim();
+
+  // ---- the homepage HTML: canonical host, Organization / LocalBusiness schema, nav pages ----
+  const ldNodes = (html) => {
+    const out = []; const re = /<script\b[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi; let m;
+    const push = (o) => { if (!o || typeof o !== 'object') return; if (Array.isArray(o)) { o.forEach(push); return; } out.push(o); if (Array.isArray(o['@graph'])) o['@graph'].forEach(push); };
+    while ((m = re.exec(S(html)))) push(jparse(m[1], null));
+    return out;
+  };
+  const ORG_TYPE = /(organization|corporation|localbusiness|professionalservice|store|ngo|educationalorganization|governmentorganization|onlinebusiness|softwarecompany|company|consultant|accountingservice)/i;
+  const typesOf = (o) => [].concat((o && o['@type']) || []).map(t => S(t).toLowerCase());
+  const orgFromHtml = (html) => {
+    const nodes = ldNodes(html).filter(o => typesOf(o).some(t => ORG_TYPE.test(t)));
+    const node = nodes.find(o => typesOf(o).some(t => /localbusiness|professionalservice|store/.test(t))) || nodes[0];
+    if (!node) return null;
+    const logo = typeof node.logo === 'string' ? node.logo : ((node.logo || {}).url || '');
+    return { name: S(node.name), type: typesOf(node).join('/'), telephone: S(node.telephone), email: S(node.email), logo: S(logo),
+      sameAs: listOf(node.sameAs), address: (node.address && typeof node.address === 'object') ? node.address : null };
+  };
+  const navFromHtml = (html, host) => {
+    const h = S(html); const zones = [];
+    for (const re of [/<nav\b[\s\S]*?<\/nav>/gi, /<header\b[\s\S]*?<\/header>/gi]) { const f = h.match(re); if (f) zones.push(...f); }
+    const out = []; const seen = new Set();
+    for (const zone of zones) {
+      for (const a of (zone.match(/<a\b[^>]*>[\s\S]*?<\/a>/gi) || [])) {
+        const href = S((a.match(/\bhref\s*=\s*["']([^"']+)["']/i) || [])[1]);
+        if (!href || /^(#|javascript:|mailto:|tel:)/i.test(href)) continue;
+        const abs = /^https?:\/\//i.test(href) ? href : (href.charAt(0) === '/' ? 'https://' + host + href : '');
+        if (!abs || bare(hostOf(abs)) !== bare(host)) continue;
+        const p = pathOf(abs); if (p === '/' || seen.has(p)) continue;
+        seen.add(p); out.push({ url: abs, title: strip(a).slice(0, 80), path: p });
+        if (out.length >= 12) return out;
+      }
+    }
+    return out;
+  };
+
+  // ---- precedence: seo_profiles -> homepage schema -> Google Business Profile -> what the app sent ----
+  const pick = (sources, read) => { for (const s of sources) { const v = S(read(s.value) || ''); if (v) return { value: v, source: s.name }; } return { value: '', source: '' }; };
+
+  const from = (siteRow, extras) => {
+    const row = (siteRow && typeof siteRow === 'object') ? siteRow : {};
+    const x = (extras && typeof extras === 'object') ? extras : {};
+    const req = x.request || {};
+    const prof = x.profile || {};
+    const gbp = x.gbp || {};
+    const html = S(x.html || (x.home || {}).html);
+    const domain = bare(row.domain || x.domain || req.domain || (x.home || {}).url || '');
+    const site_id = S(row.site_id) || S(x.site_id) || (domain ? siteIdFor(domain) : '');
+    const org = x.homepage_org || (html ? orgFromHtml(html) : null) || null;
+
+    // canonical host: this run's probe, else the homepage's own canonical tag, else where the homepage request landed, else the stored
+    // value, else the bare domain. A canonical tag on another domain is ignored.
+    const canonTag = (S(html).match(/<link\b[^>]*>/gi) || []).find(t => /\brel\s*=\s*["']?canonical\b/i.test(t)) || '';
+    const canonHost = hostOf((canonTag.match(/\bhref\s*=\s*["']([^"']+)["']/i) || [])[1] || '');
+    const landed = hostOf(x.final_url || (x.home || {}).url || '');
+    const fromProbe = normHost(x.canonical_host || (x.probe || {}).canonical_host || '');
+    // the site's own live URLs (ladder pages, published pages, sitemap) are evidence too: the host most of them use
+    const voted = (() => { const c = {}; for (const u of (x.seen_hosts || [])) { const h = normHost(u.indexOf('/') >= 0 ? hostOf(u) || u : u); if (h && bare(h) === domain) c[h] = (c[h] || 0) + 1; }
+      return Object.keys(c).sort((a, b) => c[b] - c[a] || a.length - b.length)[0] || ''; })();
+    const candidates = [[fromProbe, 'probe'], [bare(canonHost) === domain ? canonHost : '', 'canonical tag'], [bare(landed) === domain ? landed : '', 'redirect'], [voted, 'live urls'], [normHost(row.canonical_host), 'stored'], [domain, 'domain']];
+    const hit = candidates.find(c => c[0]) || [domain, 'domain'];
+    const canonical_host = hit[0], host_source = hit[1];
+
+    const SRC = [{ name: 'profile', value: prof }, { name: 'homepage_schema', value: org || {} }, { name: 'gbp', value: gbp }, { name: 'app', value: req }, { name: 'stored', value: { business_name: row.business_name, logo_url: row.logo_url } }];
+    const nameHit = pick(SRC, (s) => s.business_name || s.name || s.title);
+    const logoHit = pick(SRC, (s) => s.logo_url || s.logo || s.photo_url);
+    const addr = (org && org.address && typeof org.address === 'object') ? org.address : {};
+    const NAP_SRC = [{ name: 'profile', value: prof }, { name: 'homepage_schema', value: { street_address: addr.streetAddress, city: addr.addressLocality, region: addr.addressRegion, postal_code: addr.postalCode, country_code: addr.addressCountry, phone: (org || {}).telephone, public_email: (org || {}).email } },
+      { name: 'gbp', value: { street_address: gbp.address, city: gbp.city, phone: gbp.phone } }, { name: 'app', value: req }];
+    const street = pick(NAP_SRC, (s) => s.street_address), phone = pick(NAP_SRC, (s) => s.phone);
+    const nap = { business_name: nameHit.value, street_address: street.value, city: pick(NAP_SRC, (s) => s.city).value, region: pick(NAP_SRC, (s) => s.region).value,
+      postal_code: pick(NAP_SRC, (s) => s.postal_code).value, country_code: pick(NAP_SRC, (s) => s.country_code || s.country).value,
+      phone: phone.value, public_email: pick(NAP_SRC, (s) => s.public_email || s.email).value, price_range: S(prof.price_range), source: street.source || phone.source || '' };
+    const stored = jparse(row.nap_json, null);
+    if (stored && !nap.street_address && !nap.phone) { Object.assign(nap, stored); nap.source = S(stored.source) || 'stored'; }
+
+    // P2-2 (2026-10-12): the Site Describer answers with `products_or_services` — reading only `services` left services_json empty on every
+    // site, so the brief's facts said `services: []` although the describer had found nine.
+    const desc0 = x.description || {};
+    const services = uniq([...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
+    const navStored = jparse(row.nav_pages_json, []) || [];
+    const navFresh = x.nav_pages || (html && canonical_host ? navFromHtml(html, canonical_host) : []);
+    const nav_pages = (navFresh.length ? navFresh : navStored).map(p => ({ url: S(p.url), title: S(p.title), path: S(p.path) || pathOf(p.url) })).filter(p => p.url).slice(0, 12);
+
+    const pages = (Array.isArray(x.pages) ? x.pages : []).map(p => ({ url: S(p.url), title: S(p.title), h1: S(p.h1), source: S(p.source) || 'sitemap', lastmod: S(p.lastmod),
+      queries: Array.isArray(p.queries) ? p.queries : (jparse(p.queries_json, []) || []) })).filter(p => p.url);
+
+    const business_facts = S(req.business_facts || x.business_facts || row.business_facts).slice(0, 2000);
+    const cta = S(req.cta || x.cta || row.cta).slice(0, 200);
+    const mon = x.monitors || {};
+    const brand_names = uniq([...listOf(mon.brand_names), ...listOf(x.brand_names), ...listOf(row.brand_names), nameHit.value].filter(Boolean));
+    const competitors = uniq([...listOf(mon.competitors), ...listOf(x.competitors), ...listOf(row.competitors)].map(bare).filter(d => d && d !== domain)).slice(0, 8);
+    const accreditation = S(x.accreditation || row.accreditation);
+    const updated_at = S(x.updated_at) || S(row.model_updated_at) || new Date().toISOString();
+
+    return { site_id, domain, canonical_host, host_source, home_url: 'https://' + canonical_host + '/',
+      business_name: nameHit.value, name_source: nameHit.source, logo_url: logoHit.value, logo_source: logoHit.source,
+      nap, services, nav_pages, pages, business_facts, cta, brand_names, competitors, accreditation,
+      model_updated_at: updated_at, sources: { profile: !!prof.site_id || !!prof.business_name, homepage_schema: !!org, gbp: !!(gbp.name || gbp.phone), app: !!(req.business_facts || req.cta || req.business_name), html: !!html } };
+  };
+
+  // every URL the agent emits for a site goes through here: https, the canonical host, no double slash
+  const siteUrl = (model, path) => {
+    const p = S(path);
+    if (/^https?:\/\//i.test(p)) return p;
+    const host = normHost((model || {}).canonical_host || (model || {}).domain || '');
+    const tail = p ? ('/' + p).replace(/\/{2,}/g, '/') : '/';
+    return 'https://' + host + tail;
+  };
+  const apiTarget = (model) => bare((model || {}).domain || (model || {}).canonical_host || '');   // DataForSEO and the other APIs keep the bare domain
+  const name = (model) => S((model || {}).business_name) || bare((model || {}).domain || '');
+  const nap = (model) => ((model || {}).nap && typeof model.nap === 'object') ? model.nap : { business_name: '', street_address: '', city: '', region: '', postal_code: '', country_code: '', phone: '', public_email: '', price_range: '', source: '' };
+  const services = (model) => Array.isArray((model || {}).services) ? model.services : [];
+  const pages = (model) => Array.isArray((model || {}).pages) ? model.pages : [];
+  const facts = (model) => {
+    const t = S((model || {}).business_facts) + ' ' + S(((model || {}).nap || {}).price_range);
+    return { business_facts: S((model || {}).business_facts), cta: S((model || {}).cta), accreditation: S((model || {}).accreditation),
+      pricing: /(aed|usd|\$|€|£|price|pricing|cost|fee|per month|per user|from \d)/i.test(t),
+      timeline: /(\d+\s*(day|week|month|year)|timeline|go.?live|turnaround|within \d)/i.test(t) };
+  };
+  // a page of the inventory answers a keyword when it already gets impressions for it, or when at least 75% of the keyword's
+  // meaningful words are in its slug or title (D11; keep it even while the inventory is empty).
+  const MATCH_MIN = 0.75;
+  // R35 (2026-10-16, re-rating 2026-10-15): the words were compared literally, so "d365 finance dubai" did not match a page titled
+  // "Dynamics 365 Finance & Operations UAE" and the report told the owner that page "does not target" the search. Three rules, applied
+  // to BOTH sides before anything is compared: the product's own short names are written out (d365 = dynamics 365, f&o = finance and
+  // operations), a word is compared on a light stem (invoice / invoices / invoicing), and an emirate in the SEARCH is covered by a page
+  // about the UAE ("emirate ⊂ uae" — never the other way round: a Dubai page does not answer every UAE search).
+  const SYN = [[/\bd\s?365\b/g, 'dynamics 365'], [/\bdynamics365\b/g, 'dynamics 365'], [/\bf\s?&\s?o\b|\bfno\b/g, 'finance operations'], [/\bunited arab emirates\b/g, 'uae'],
+    [/\babu dhabi\b/g, 'abudhabi'], [/\bras al khaimah\b/g, 'rasalkhaimah'], [/\bumm al quwain\b/g, 'ummalquwain'], [/\bal ain\b/g, 'alain']];
+  const EMIRATES = new Set(['dubai', 'abudhabi', 'sharjah', 'ajman', 'fujairah', 'rasalkhaimah', 'rak', 'ummalquwain', 'alain']);
+  const norm = (s) => { let t = S(s).toLowerCase().replace(/&amp;/g, '&'); for (const [re, to] of SYN) t = t.replace(re, to); return t; };
+  const stem = (t) => t.length >= 5 ? t.replace(/(ings?|ed|es|(?<!s)s)$/, '').replace(/e$/, '') : t;   // business = businesses, invoice = invoicing
+  const matchTerms = (s) => uniq(termsOf(norm(s)).map(stem));
+  // a keyword term is covered by a page's terms: the same stem, or an emirate in the search against a page about the UAE
+  const covers = (set, t) => set.includes(t) || (EMIRATES.has(t) && (set.includes('uae') || set.includes('emirat')));
+  const shareIn = (want, set) => want.length ? want.filter(t => covers(set, t)).length / want.length : 0;
+  // R56: a listing page (the blog / insights index, a category, a tag) gets impressions for every article it lists; when a dedicated
+  // page matches the same search by its own slug or title, the dedicated page is the one that answers it
+  const LISTING = /^\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?(?:insights|blog|blogs|news|articles|resources|posts|updates|knowledge|learn|library|stories|press|media|case-studies)\/?$|\/(?:category|categories|tag|tags|page|author|topics?)\/[^/]+\/?$/i;
+  const isListing = (u) => { const p = pathOf(u).replace(/[?#].*$/, ''); return LISTING.test(p); };
+  const untitled = (model) => pages(model).filter(p => !S(p.title) && !S(p.h1));
+  const matchPage = (model, keyword, prefer) => {   // `prefer`: a URL that wins a tie (the page Search Console itself credits for the search)
+    const prefKey = prefer ? bare(hostOf(prefer)) + pathOf(prefer).replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase() : "";
+    const isPref = (u) => !!prefKey && (bare(hostOf(u)) + pathOf(u).replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase()) === prefKey;
+    const want = matchTerms(keyword); if (!want.length) return null;
+    const key = tokensOf(keyword).join(' ');
+    const inv = pages(model);
+    const byQuery = [];
+    for (const p of inv) {
+      const q = (p.queries || []).find(x => tokensOf(x.query || x.keyword || x).join(' ') === key && (Number((x || {}).impressions) || 0) > 0);
+      if (q) byQuery.push({ url: p.url, title: p.title, source: p.source, matched_by: 'query', score: 1, impressions: Number(q.impressions) || 0 });
+    }
+    byQuery.sort((a, b) => Number(isListing(a.url)) - Number(isListing(b.url)) || b.impressions - a.impressions);
+    const qHit = byQuery[0] || null;
+    const listingOf = (lst, best) => ({ url: lst.url, impressions: lst.impressions,
+      note: 'Google currently shows ' + pathOf(lst.url) + ' (a listing page) for this search; the page that is about it is ' + pathOf(best.url) });
+    if (qHit && !isListing(qHit.url)) { const lst = byQuery.find(x => isListing(x.url)); return lst ? { ...qHit, listing: listingOf(lst, qHit) } : qHit; }
+    let best = null;
+    for (const p of inv) {
+      if (qHit && isListing(p.url)) continue;   // R56: looking for the dedicated page behind a listing's impressions
+      const slug = matchTerms(pathOf(p.url).replace(/\.[a-z]{2,5}$/i, ''));
+      const title = matchTerms(S(p.title) + ' ' + S(p.h1));
+      const inSlug = shareIn(want, slug);
+      const inTitle = shareIn(want, title);
+      const score = Math.max(inSlug, inTitle);
+      if (score + 1e-9 >= MATCH_MIN && (!best || score > best.score + 1e-9 || (Math.abs(score - best.score) < 1e-9 && isPref(p.url) && !isPref(best.url)))) best = { url: p.url, title: p.title, source: p.source, matched_by: inSlug >= inTitle ? 'slug' : 'title', score: Math.round(score * 100) / 100, impressions: 0 };
+    }
+    if (qHit && best) return { ...best, listing: listingOf(qHit, best) };
+    return qHit || best;
+  };
+  // A-22 (2026-10-17): how well ONE page of the inventory targets a search by its own words (slug or title / H1, the matchPage rule), so a
+  // caller that already knows the page Google ranks can ask whether another page targets the search more closely - never to replace it
+  const pageScore = (page, keyword) => { const p = page || {}; const want = matchTerms(keyword); if (!want.length || !S(p.url)) return null;
+    return Math.round(Math.max(shareIn(want, matchTerms(pathOf(p.url).replace(/\.[a-z]{2,5}$/i, ''))), shareIn(want, matchTerms(S(p.title) + ' ' + S(p.h1)))) * 100) / 100; };
+  // R35: how much of a search a page's OWN title / H1 holds (null when the page's title was never read) - the only evidence that may call
+  // a page "about something else"
+  // the words of a spoken / long-tail search that say nothing about the subject ("which ... can help ... in the uae")
+  const FILLER = new Set(['which', 'what', 'how', 'why', 'when', 'where', 'who', 'can', 'could', 'help', 'helps', 'best', 'top', 'near', 'me', 'is', 'are', 'do', 'does', 'should', 'will', 'would', 'get', 'need', 'i', 'we', 'you']);
+  const titleShare = (page, keyword) => { const p = page || {}; if (!S(p.title) && !S(p.h1)) return null;
+    const want = uniq(termsOf(norm(keyword)).filter(t => !FILLER.has(t)).map(stem)); if (!want.length) return null; const set = matchTerms(S(p.title) + ' ' + S(p.h1));
+    return { share: Math.round(shareIn(want, set) * 100) / 100, have: want.filter(t => covers(set, t)).length, of: want.length, missing: want.filter(t => !covers(set, t)) }; };
+  // R34: the pages whose title was never read, so a caller can say what it judged on the address alone instead of reading nothing silently
+  const titleGap = (model) => { const all = pages(model); const u = untitled(model);
+    return { pages: all.length, untitled: u.length, urls: u.slice(0, 12).map(p => p.url),
+      note: u.length ? u.length + ' of the ' + all.length + ' pages of the site have no title on file yet (the weekly site check reads them a batch at a time), so they were judged by their address only' : '' }; };
+  // R55: a URL of the site as the site serves it (canonical host); another site's URL is returned as it is
+  const canonUrl = (model, u) => { const h = hostOf(u); if (!h || bare(h) !== bare((model || {}).domain || (model || {}).canonical_host || '')) return S(u); return siteUrl(model, pathOf(u)); };
+  // D11: a stored seo_pages row carries its queries as the JSON string `queries_json`, so both shapes are accepted here
+  const queriesOf = (p) => Array.isArray(p.queries) ? p.queries : (jparse(p.queries_json, []) || []);
+  const withPages = (model, more) => ({ ...model, pages: (() => { const seen = new Set(); const out = [];
+    for (const p of [...pages(model), ...(Array.isArray(more) ? more : [])]) { const u = S(p.url); if (!u) continue; const k = pathOf(u).replace(/\/$/, '').toLowerCase();
+      if (seen.has(k)) { const old = out.find(o => pathOf(o.url).replace(/\/$/, '').toLowerCase() === k); if (old) { old.title = old.title || S(p.title); old.h1 = old.h1 || S(p.h1); old.lastmod = old.lastmod || S(p.lastmod); const q = queriesOf(p); if (q.length) old.queries = q; } continue; }
+      seen.add(k); out.push({ url: u, title: S(p.title), h1: S(p.h1), source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries: queriesOf(p) }); }
+    return out; })() });
+  // the model exactly as it was stored (seo_sites row or a seo_cache value), with its own timestamp -- never "now", so isFresh() is honest
+  const stored = (row) => { const r = (row && typeof row === 'object') ? row : {}; return (S(r.canonical_host) || S(r.model_updated_at)) ? from(r, {}) : null; };
+  const FRESH_DAYS = 7;
+  const ageDays = (model) => { const t = Date.parse(S((model || {}).model_updated_at)); return Number.isFinite(t) ? (Date.now() - t) / 864e5 : Infinity; };
+  const isFresh = (model, days) => !!(model && S(model.canonical_host) && ageDays(model) < (Number(days) > 0 ? Number(days) : FRESH_DAYS));
+  // exactly the seo_sites columns the model owns (plus the two keys), ready to merge into a site row or a cache value
+  const COLUMNS = ['site_id', 'domain', 'canonical_host', 'business_name', 'logo_url', 'nap_json', 'services_json', 'nav_pages_json', 'business_facts', 'cta', 'brand_names', 'competitors', 'accreditation', 'model_updated_at'];
+  const toRow = (model) => { const m = model || {};
+    return { site_id: S(m.site_id), domain: S(m.domain), canonical_host: S(m.canonical_host), business_name: S(m.business_name), logo_url: S(m.logo_url),
+      nap_json: JSON.stringify(nap(m)), services_json: JSON.stringify(services(m)), nav_pages_json: JSON.stringify((m.nav_pages || []).map(p => ({ url: p.url, title: p.title }))),
+      business_facts: S(m.business_facts).slice(0, 2000), cta: S(m.cta).slice(0, 200), brand_names: (m.brand_names || []).join(', ').slice(0, 500),
+      competitors: (m.competitors || []).join(', ').slice(0, 500), accreditation: S(m.accreditation).slice(0, 200), model_updated_at: S(m.model_updated_at) };
+  };
+  // B4-1 / B4-2 (2026-10-15, benchmark area 4): the measurement columns belong to the row, so the kit emits them — a Data Table
+  // node auto-maps every field it is given, and a row that is short of a column is as wrong as one that carries a stray field.
+  // The model itself measures nothing: these are the defaults the Site Tracker's own judgement is written over
+  // (v5/code/Page_Inventory_Site.js), and `''` for decay_state means "never measured", never "steady".
+  const num0 = (v) => (Number(v) || 0);
+  const pageRows = (model) => pages(model).map(p => ({ site_id: S((model || {}).site_id), url: S(p.url), title: S(p.title).slice(0, 300), h1: S(p.h1).slice(0, 300),
+    source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries_json: JSON.stringify(p.queries || []), updated_at: S((model || {}).model_updated_at) || new Date().toISOString(),
+    clicks: num0(p.clicks), impressions: num0(p.impressions), position: num0(p.position), prev_clicks: num0(p.prev_clicks), yoy_clicks: num0(p.yoy_clicks),
+    decay_state: S(p.decay_state), decay_pct: num0(p.decay_pct), decay_lost: num0(p.decay_lost), decay_kind: S(p.decay_kind),
+    decay_basis: S(p.decay_basis).slice(0, 900), measured_at: S(p.measured_at) }));
+  return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
+    titleShare, titleGap, canonUrl, isListing, pageScore,
+    helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms } };
+})();
+// ---- what the site already holds for a search: its pages, its keyword ladders and its unpublished drafts (2026-10-17, re-rating A-1 /
+// A-5 / A-23 / A-25; inlined by build_v4.py section 130 and build_api.py where a node asks for the OWN_COVER placeholder) ----
+// The re-rating of 2026-10-17 found four paths that recommended work the site had already done or planned:
+//   * the keyword report "erp system dubai" (exec 765) said "Build a Dynamics 365 Business Central / Finance & Operations ERP service
+//     page" while /dynamics-365-business-central-uae and /dynamics-365-finance-and-operations-uae are live, and gave as secondary keywords
+//     the slug of the first, a planned rung of the ladder "erp software uae" and a variant of the ladder "erp implementation dubai";
+//   * the verdict "e invoicing software uae" (exec 760) folded five planned pages of the active ladder "e invoicing in uae" and a written
+//     draft into the page it said to improve, and asked for "a penalties section" while the site has the penalties article and the rung;
+//   * discovery (exec 764) led "Where to start" / "Build first" / "Now" with "erp system dubai" and "erp systems in uae", the searches the
+//     ladder "erp software uae" already holds in other words;
+//   * the Keyword Check (exec 750) answered "business central partner uae" with `existing: null` beside the live Business Central page.
+// One question underneath all four: does something the site owns already answer this search? This kit answers it from three sources -
+// the page inventory (through the caller's `matchPage`, SM.matchPage), the keyword ladders (seo_ladders + seo_ladder_settings, the rows
+// the CALLER has already passed through the fit gate) and the content log's unpublished drafts - and says HOW it matched, so a report
+// can name the page, the ladder or the draft instead of recommending a second one. Pure functions; the harness drives them directly.
+const OWN = (() => {
+  const S = (v) => String(v == null ? '' : v).trim();
+  const STOP = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'for', 'to', 'in', 'on', 'with', 'by', 'at', 'from', 'near', 'me', 'vs', 'is', 'are', 'what', 'how', 'best', 'top', 'your', 'my']);
+  // the same words as _reach.js `overlapTokens` (one search, one page), so "the same search" means the same thing in every path
+  const tokens = (s) => { const out = []; for (const t of S(s).toLowerCase().split(/[^a-z0-9]+/)) { if (t.length <= 1 || STOP.has(t)) continue;
+    const w = t.replace(/ies$/, 'y').replace(/(ing|ed|es|s)$/, '').replace(/[^a-z0-9]/g, ''); if (w && !out.includes(w)) out.push(w); } return out; };
+  // two words people use for the same product search ("erp system dubai" = "erp software dubai"): applied to both sides, never to one
+  const SYN = { system: 'software' };
+  const syn = (ts) => [...new Set(ts.map(t => SYN[t] || t))];
+  // places: a search for the same thing in another emirate / the country is the same TOPIC, not the same search
+  const PLACES = new Set(['uae', 'dubai', 'abu', 'dhabi', 'abudhabi', 'sharjah', 'ajman', 'fujairah', 'rak', 'ra', 'khaimah', 'emirate', 'emirat', 'gcc', 'ksa', 'saudi', 'riyadh', 'jeddah', 'qatar', 'doha', 'bahrain', 'oman', 'muscat', 'kuwait', 'mena', 'middle', 'east', 'arab', 'united']);
+  const noPlace = (ts) => ts.filter(t => !PLACES.has(t));
+  const jacc = (a, b) => { if (!a.length || !b.length) return 0; const sb = new Set(b); const c = a.filter(t => sb.has(t)).length; return c / (a.length + b.length - c); };
+  const inside = (a, b) => a.length > 0 && a.every(t => b.includes(t));
+  const RANK = { same: 4, 'other words': 3, variant: 2, 'other place': 1 };
+  /** how two searches relate: 'same' (75%+ the same words), 'other words' (the same once system = software), 'variant' (one is the
+   *  other plus ONE word, places aside: "erp implementation partner uae" of "erp implementation dubai"), 'other place' (the same words for
+   *  another place), or null */
+  const relate = (a, b) => {
+    const A = tokens(a), B = tokens(b); if (!A.length || !B.length) return null;
+    if (jacc(A, B) >= 0.75) return 'same';
+    const As = syn(A), Bs = syn(B);
+    if (jacc(As, Bs) >= 0.75) return 'other words';
+    const Ap = noPlace(As), Bp = noPlace(Bs);
+    if (Ap.length >= 2 && Bp.length >= 2) {
+      if (jacc(Ap, Bp) >= 0.75) return (As.length === Ap.length && Bs.length === Bp.length) ? 'other words' : 'other place';
+      if ((inside(Bp, Ap) && Ap.length - Bp.length === 1) || (inside(Ap, Bp) && Bp.length - Ap.length === 1)) return 'variant';
+    }
+    return null;
+  };
+  const HOW = { same: 'the same search', 'other words': 'the same search in other words', variant: 'a close variant of it', 'other place': 'the same topic for another place' };
+  const listOf = (v) => (Array.isArray(v) ? v : S(v).split(/[,;\n]+/)).map(x => S(x).toLowerCase()).filter(Boolean);
+  const bare = (d) => S(d).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#:].*$/, '');
+  /** the site's keyword ladders as one list of searches (each rung keyword, its supporting keywords and the head), archived ladders and
+   *  set-aside rungs left out, each with the LADDER's status from seo_ladder_settings (paused / active) beside the row's own status.
+   *  `keep(row)` is the caller's fit gate (fitStored) - a stored rung is read back through the gate it was written through. */
+  const ladders = (rows, settings, o) => {
+    const c = o || {}; const dom = bare(c.domain); const keep = typeof c.keep === 'function' ? c.keep : () => true;
+    const st = new Map((Array.isArray(settings) ? settings : []).filter(r => r && r.ladder_id).map(r => [S(r.ladder_id), S(r.status).toLowerCase()]));
+    const out = [];
+    for (const r of (Array.isArray(rows) ? rows : [])) {
+      if (!r || !S(r.ladder_id) || !S(r.keyword)) continue;
+      if (dom && bare(r.domain) && bare(r.domain) !== dom) continue;
+      const lst = st.get(S(r.ladder_id)) || '';
+      if (lst === 'archived' || /^(set_aside|refused|deleted)$/i.test(S(r.status))) continue;
+      if (!keep(r)) continue;
+      const rung = Number(r.rung) || 0;
+      out.push({ ladder_id: S(r.ladder_id), head_keyword: S(r.head_keyword).toLowerCase(), keyword: S(r.keyword).toLowerCase(), rung, part: rung === 4 ? 'head' : 'rung',
+        status: S(r.status) || 'planned', ladder_status: lst || null, target_url: S(r.target_url), supporting: listOf(r.supporting).slice(0, 12) });
+    }
+    return out;
+  };
+  /** the content log's pages that exist as text but not on the site (written, not ready, started) */
+  const drafts = (rows, o) => {
+    const dom = bare((o || {}).domain);
+    return (Array.isArray(rows) ? rows : []).filter(r => r && S(r.keyword) && (!dom || !bare(r.domain) || bare(r.domain) === dom))
+      .filter(r => !/^(published|discarded|deleted|failed)$/i.test(S(r.status)))
+      .map(r => ({ keyword: S(r.keyword).toLowerCase(), status: S(r.status) || 'written', ladder_id: S(r.ladder_id), url: S(r.published_url || r.existing_page_url || r.suggested_url) }));
+  };
+  const best = (cands) => cands.filter(x => x.rel).sort((a, b) => RANK[b.rel] - RANK[a.rel])[0] || null;
+  /** the ladder entry that holds a search, with how. `o.self` = { ladder_id, keyword } of the run's own row (never a conflict with itself);
+   *  `o.min` = the weakest relation that counts ('variant' by default; 'other place' to also catch the same topic elsewhere). */
+  const ladderOf = (index, kw, o) => {
+    const c = o || {}; const min = RANK[c.min || 'variant'];
+    const self = c.self || {}; const selfKw = S(self.keyword).toLowerCase();
+    const cands = [];
+    for (const e of (index || [])) {
+      if (self.ladder_id && e.ladder_id === S(self.ladder_id) && (e.keyword === selfKw || (e.part === 'head' && e.head_keyword === selfKw))) continue;
+      for (const [k, via] of [[e.keyword, 'keyword'], ...e.supporting.map(s => [s, 'supporting'])]) {
+        const rel = relate(kw, k); if (rel && RANK[rel] >= min) cands.push({ ...e, matched: k, via, rel });
+      }
+    }
+    const b = best(cands); if (!b) return null;
+    return { kind: 'ladder', ladder_id: b.ladder_id, head_keyword: b.head_keyword, keyword: b.keyword, rung: b.rung, part: b.part, status: b.status,
+      ladder_status: b.ladder_status, target_url: b.target_url, matched: b.matched, via: b.via, how: HOW[b.rel], relation: b.rel };
+  };
+  const draftOf = (list, kw, o) => {
+    const c = o || {}; const min = RANK[c.min || 'other words']; const selfKw = S(c.self_keyword).toLowerCase();
+    const b = best((list || []).filter(d => d.keyword !== selfKw).map(d => ({ ...d, rel: relate(kw, d.keyword) })).filter(d => d.rel && RANK[d.rel] >= min));
+    return b ? { kind: 'draft', keyword: b.keyword, status: b.status, url: b.url, ladder_id: b.ladder_id, how: HOW[b.rel], relation: b.rel } : null;
+  };
+  const ukey = (u) => bare(u) + S(u).toLowerCase().replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  /** what the site already holds for `kw`: a page (ctx.matchPage), then a ladder, then a draft - the first that answers, or null.
+   *  ctx = { matchPage(kw) -> { url, title, matched_by, score } | null, ladders, drafts, exclude_urls: [the page this run improves], self,
+ *          page_min: the share of the search's words a page must carry by slug / title (default: whatever matchPage accepted) } */
+  const claim = (kw, ctx) => {
+    const c = ctx || {};
+    const skip = new Set((c.exclude_urls || []).filter(Boolean).map(ukey));
+    const p = typeof c.matchPage === 'function' ? c.matchPage(kw) : null;
+    const strong = p && (S(p.matched_by) === 'query' || (Number(p.score) || 0) + 1e-9 >= (Number(c.page_min) || 0));   // a caller may ask for every word (secondary keywords)
+    if (p && strong && S(p.url) && !skip.has(ukey(p.url))) return { kind: 'page', url: S(p.url), title: S(p.title), matched_by: S(p.matched_by) || 'inventory', how: 'a page of yours targets it' };
+    const l = ladderOf(c.ladders, kw, { self: c.self, min: c.min_ladder });
+    if (l) return l;
+    return draftOf(c.drafts, kw, { self_keyword: (c.self || {}).keyword });
+  };
+  /** one line a customer reads: "your page /x", "your ladder "y" (rung page "z", planned)", "your draft "z" (not ready)" */
+  const sayOf = (x) => {
+    if (!x) return '';
+    const path = (u) => S(u).replace(/^https?:\/\/[^/]+/i, '') || '/';
+    if (x.kind === 'page') return 'your page ' + path(x.url) + (x.title ? ' ("' + x.title + '")' : '');
+    if (x.kind === 'ladder') return 'your keyword ladder "' + x.head_keyword + '"' + (x.ladder_status === 'paused' ? ' (paused)' : '') + ' — ' + (x.part === 'head' ? 'its main page' : 'its rung ' + x.rung + ' page') + ' "' + x.keyword + '" (' + x.status + ')' + (x.via === 'supporting' ? ', which also targets "' + x.matched + '"' : '');
+    return 'your draft "' + x.keyword + '" (' + x.status + ', not published yet)';
+  };
+  /** the site's own words that set a page / rung apart from `kw`: its tokens minus the search's, places and generic words left out */
+  const GENERIC = new Set(['page', 'service', 'solution', 'software', 'company', 'compan', 'partner', 'guide', 'complete', 'tech', 'uae', 'best', 'top', 'list', 'new', 'cost', 'price']);
+  const distinct = (text, kw) => { const k = new Set(syn(tokens(kw))); return syn(tokens(text)).filter(t => !k.has(t) && !PLACES.has(t) && !GENERIC.has(t) && !/^\d+$/.test(t)); };
+  /** the prompt block: what the site already has on this topic, so the model never proposes it as new */
+  const text = (ctx, kw, o) => {
+    const c = ctx || {}; const lim = (o && o.max) || 8;
+    const want = noPlace(syn(tokens(kw)));
+    const near = (k) => { const t = syn(tokens(k)); return want.some(w => t.includes(w)); };
+    const lines = [];
+    const pages = (c.pages || []).slice(0, lim);
+    if (pages.length) lines.push('Pages of the site on this topic: ' + pages.map(p => (S(p.url).replace(/^https?:\/\/[^/]+/i, '') || '/') + (p.title ? ' ("' + S(p.title).slice(0, 80) + '")' : '')).join('; '));
+    const lads = new Map();
+    for (const e of (c.ladders || [])) { if (!(near(e.keyword) || near(e.head_keyword) || e.supporting.some(near))) continue;
+      const k = e.ladder_id; if (!lads.has(k)) lads.set(k, { head: e.head_keyword, status: e.ladder_status, rungs: [] });
+      lads.get(k).rungs.push(e.keyword + ' (' + e.status + ')'); }
+    for (const [, l] of [...lads.entries()].slice(0, 6)) lines.push('Keyword ladder "' + l.head + '"' + (l.status ? ' (' + l.status + ')' : '') + ' - its pages: ' + l.rungs.slice(0, 8).join(', '));
+    const dr = (c.drafts || []).filter(d => near(d.keyword)).slice(0, 6);
+    if (dr.length) lines.push('Pages written but not published yet: ' + dr.map(d => d.keyword + ' (' + d.status + ')').join(', '));
+    return lines.join('\n');
+  };
+  return { tokens, relate, ladders, drafts, ladderOf, draftOf, claim, sayOf, distinct, text, HOW, PLACES, ukey };
+})();
 // Accepts an object (from the Structured Output Parser) or a string with/without code fences or surrounding text
 const parseAgentJson = (raw) => {
   if (raw && typeof raw === 'object') return raw;
@@ -218,6 +601,7 @@ const KWI = (() => {
     min_impressions: 10,        // a query needs this many impressions in the Search Console period before it seeds anything
     striking_min: 8,            // "striking distance": bottom of page 1 to the end of page 2, where one strong page moves the needle
     striking_max: 20,
+    target_share: 0.75,         // A-22: a page's own slug / title targets a search at this share of its words (SM.MATCH_MIN)
     off_topic_share: 0.5,       // R35: a ranking page is "about something else" only when its own title / H1 hold less than half of the search's words
     max_seeds: 10,              // how many Search Console queries may be handed to the research as seeds
     period_days: 28,            // the Search Console window the Site Tracker stores (Site_Plan.js ranges.current)
@@ -297,9 +681,36 @@ const KWI = (() => {
       const evidence = rowOnSite && typeof c.pageTitleShare === 'function' ? c.pageTitleShare(rowUrl, q) : null;
       const row_page = (rowUrl && (c.use_row_page || rowOnSite))
         ? { url: pageUrl, title: S(evidence && evidence.title), matched_by: c.use_row_page ? 'search console page' : 'search console' } : null;
-      const answered_by = inv ? { url: S(canon(S(inv.url))), title: S(inv.title), matched_by: S(inv.matched_by) || 'inventory', ...(inv.listing ? { listing: inv.listing } : {}) } : row_page;
+      // A-22 (2026-10-17, re-rating 2026-10-17, exec 764): 17 of 79 rows named a different page than the one Search Console reports for the
+      // query — "dynamics 365 finance and operations pricing dubai" ranks #9.6 with /dynamics-365-finance-and-operations-uae and the owner was
+      // told to improve the VAT article, because the inventory's word match decided first and Google's own page only broke a tie. The page
+      // Google ranks for a search (Search Console's query x page row) IS the answer. The word match is the fallback for a row with no page
+      // of ours, and is labelled as such; where another page targets the search more closely by its words, both are named (`also`), never
+      // swapped. The one exception stays R56: a listing page (the blog index) gets impressions for every article it lists, so the dedicated
+      // page behind it answers, and the listing is named beside it.
+      const listingOf = typeof c.isListing === 'function' ? c.isListing : () => false;
+      const pageScore = typeof c.pageScore === 'function' ? c.pageScore : () => null;
+      const ukey = (u) => bare(u) + S(u).toLowerCase().replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+      const invUrl = inv ? S(canon(S(inv.url))) : '';
+      const invIsRow = !!inv && !!rowUrl && ukey(invUrl) === ukey(pageUrl);
+      const listingRow = rowOnSite && listingOf(rowUrl) && !!inv && !invIsRow && !listingOf(inv.url);
+      let answered_by = null;
+      if (rowOnSite && !listingRow) {
+        answered_by = { ...row_page, basis: 'the page Search Console reports for this search' };
+        if (inv && !invIsRow && S(inv.matched_by) !== 'query') {
+          const own = pageScore(rowUrl, q);
+          if (own == null || (Number(inv.score) || 0) > own + 1e-9) answered_by.also = { url: invUrl, title: S(inv.title), matched_by: S(inv.matched_by), score: inv.score ?? null };
+        }
+      } else if (inv) {
+        answered_by = { url: invUrl, title: S(inv.title), matched_by: S(inv.matched_by) || 'inventory',
+          basis: listingRow ? 'the page about this search behind the listing page Google shows for it' : 'matched by its words: Search Console names no page of yours for this search',
+          ...(inv.listing ? { listing: inv.listing } : listingRow ? { listing: { url: pageUrl, impressions: impressions,
+            note: 'Google currently shows ' + (pageUrl.replace(/^https?:\/\/[^/]+/i, '') || '/') + ' (a listing page) for this search; the page that is about it is ' + (invUrl.replace(/^https?:\/\/[^/]+/i, '') || '/') } } : {}) };
+      } else answered_by = row_page;
       const kinds = [];
-      const offTopic = !inv && !!evidence && evidence.share != null && evidence.share < c.off_topic_share;
+      const ownScore = rowOnSite ? pageScore(rowUrl, q) : null;   // the ranking page's own words (slug or title / H1): a slug that targets the search is not "about something else"
+      const offTopic = !!answered_by && answered_by.matched_by === 'search console' && !invIsRow && !!evidence && evidence.share != null && evidence.share < c.off_topic_share
+        && !(ownScore != null && ownScore + 1e-9 >= c.target_share);
       const striking = position >= c.striking_min && position <= c.striking_max;
       const lowPos = position > c.striking_max;
       if (!answered_by) kinds.push('no_page');
@@ -308,14 +719,21 @@ const KWI = (() => {
       if (striking) kinds.push('striking');
       const posTxt = position > 0 ? '#' + (Math.round(position * 10) / 10) : 'unreported';
       const pathTxt = answered_by ? (S(answered_by.url).replace(/^https?:\/\/[^/]+/i, '') || '/') : '';
+      // A-22: the second page is named beside Google's own, never instead of it; a page matched by words alone says so
+      const alsoTxt = answered_by && answered_by.also ? ' — ' + (S(answered_by.also.url).replace(/^https?:\/\/[^/]+/i, '') || '/') + ' matches the words of this search more closely: keep one page for it and link the other to it' : '';
+      // a listing page (the blog index) is what Google shows; the position is ITS position, and the page about the search is named beside it
+      const listPath = answered_by && answered_by.listing ? (S(answered_by.listing.url).replace(/^https?:\/\/[^/]+/i, '') || '/') : '';
+      const rankTxt = listPath ? 'Google shows ' + listPath + ' (a listing page) at ' + posTxt + ' for it; the page about it is ' + pathTxt + ' (link it from ' + listPath + ')'
+        : 'you rank ' + posTxt + ' with ' + pathTxt;
+      const basisTxt = answered_by && answered_by.matched_by !== 'search console' && answered_by.matched_by !== 'search console page' && !answered_by.listing ? ' (matched by its words: Search Console names no page of yours for this search)' : '';
       const why = kinds.indexOf('no_page') >= 0 ? 'no page of yours answers this search'
         : kinds.indexOf('page_mismatch') >= 0 ? 'the page that gets the impressions is about something else: ' + (evidence.h1 ? 'its title and H1 share' : 'its title shares') + ' only '
           + evidence.have + ' of the ' + evidence.of + ' words of this search (missing: ' + evidence.missing.join(', ') + ') — you rank ' + posTxt + ' with ' + pathTxt
-          + (striking ? ' (striking distance)' : '') + '; aim that page at it or give the search its own'
-        : striking ? 'you rank ' + posTxt + ' with ' + pathTxt + ' — striking distance: improve that page'
-        : lowPos ? 'low position on ' + pathTxt + ' (you rank ' + posTxt + ' with it) — improve that page'
+          + (striking ? ' (striking distance)' : '') + (answered_by.also ? '; ' + (S(answered_by.also.url).replace(/^https?:\/\/[^/]+/i, '') || '/') + ' is the page about it by its words — make that page the clear answer and link it from ' + pathTxt : '; aim that page at it or give the search its own')
+        : striking ? rankTxt + ' — striking distance: improve that page' + alsoTxt + basisTxt
+        : lowPos ? (listPath ? 'low position: ' + rankTxt : 'low position on ' + pathTxt + ' (you rank ' + posTxt + ' with it)') + ' — improve that page' + alsoTxt + basisTxt
         : 'a page of yours already answers this search (' + pathTxt + (position > 0 ? ', you rank ' + posTxt : '') + ')'
-          + (answered_by && answered_by.listing ? ' — Google currently shows ' + (S(answered_by.listing.url).replace(/^https?:\/\/[^/]+/i, '') || '/') + ' for it' : '');
+          + (answered_by && answered_by.listing ? ' — Google currently shows ' + (S(answered_by.listing.url).replace(/^https?:\/\/[^/]+/i, '') || '/') + ' for it' : '') + alsoTxt + basisTxt;
       considered.push({ keyword: q, impressions, clicks, position: position > 0 ? Math.round(position * 10) / 10 : null,
         ctr: impressions ? Math.round(clicks / impressions * 1000) / 10 : 0, page: rowOnSite ? pageUrl : rowUrl, gsc_page: rowUrl, on_site: rowOnSite, answered_by, kinds, why,
         period_end: period, period_days: c.period_days, tracked: yes(r.tracked) });
@@ -457,6 +875,29 @@ const KWI = (() => {
   };
   const BASIS_TEXT = { calibrated: 'calibrated with your Search Console data', modelled: 'modelled from provider volume', unknown: 'no estimate' };
 
+  // ---- A-24 (2026-10-17, re-rating exec 764): who may stand as a COMPETITOR whose rankings feed keyword discovery ----
+  // Discovery took the top three domains of one results page ("erp consultants dubai"), and #2 was naukrigulf.com "ERP Consultant Jobs
+  // in UAE - 67 Vacancies": its 300 ranked keywords ("flydubai careers", "dubai iranian hospital", "jobs abu dhabi") were 545 of the
+  // 1,168 researched and 224 of the 240 reviewed were rated off-topic. A competitor is a business that sells what the site sells; a job
+  // board, a directory / review marketplace, a list of companies, a government portal, a news site or a forum ranks for the search but
+  // competes for nothing. Each class is read from the result itself (host, title, URL shape — KWI.shapeOf's rules), never guessed.
+  const JOB_HOSTS = /(^|\.)(naukrigulf|naukri|indeed|glassdoor|bayt|monster|monstergulf|foundit|gulftalent|ziprecruiter|jooble|careerjet|simplyhired|wellfound|dubizzle|laimoon|drjobpro|jobsdb|jobstreet|seek|reed|totaljobs|careerbuilder)\./;
+  const NEWS_HOSTS = /(^|\.)(khaleejtimes|gulfnews|thenationalnews|thenational|arabianbusiness|zawya|gulfbusiness|emirates247|wam|bloomberg|reuters|forbes|forbesmiddleeast|cnbc|bbc|cnn|nytimes|theguardian|businessinsider|techcrunch|wired|zdnet|computerweekly|itp|economymiddleeast|wamda)\./;
+  const DIRECTORY_HOSTS = /(^|\.)(clutch|themanifest|goodfirms|sortlist|designrush|techbehemoths|2gis|yellowpages|yelp|g2|capterra|getapp|softwareadvice|trustradius|saashub|crunchbase|trustpilot|upwork|fiverr|softwaresuggest|gartner|peerspot|serchen|dnb|zoominfo|kompass|hidubai|uaeyp)\./;
+  const JOB_TEXT = /\b(jobs?|vacanc(?:y|ies)|careers?|hiring|recruit\w*|salar(?:y|ies))\b/i;
+  /** -> '' (a business: may be a competitor) or the class that rules it out */
+  const competitorClass = (domain, url, title) => {
+    const d = bare(domain || url); if (!d) return 'unknown';
+    if (JOB_HOSTS.test(d) || JOB_TEXT.test(S(title)) || /\/(jobs?|careers?|vacanc\w*)(\/|$|-)/i.test(urlKey(url))) return 'job board';
+    if (NEWS_HOSTS.test(d)) return 'news or media';
+    const shape = shapeOf(S(url) || d, title);
+    if (shape === 'Government or official') return 'government';
+    if (shape === 'Forum or community') return 'forum or social';
+    if (DIRECTORY_HOSTS.test(d) || shape === 'Directory or marketplace') return 'directory or marketplace';
+    if (shape === 'Comparison or list') return 'list of companies';
+    return '';
+  };
+
   // ---- K7: clusters by shared results pages ----
   // entries: [{ keyword, urls: [top-10 urls], weight, volume }]. A head keyword takes every keyword that shares at least
   // min_shared_urls of its own top-10 URLs; the head is the strongest keyword not already in a cluster, so the cluster can be named
@@ -517,7 +958,7 @@ const KWI = (() => {
       + others.map(k => k.shared_urls + ' of its ' + depthTxt + ' pages with "' + k.keyword + '"').join(', ')
       + ' - Google answers these searches with the same pages, so a second page would only split the signals.';
   };
-  return { CFG, CLICK_LOSS, gscSeeds, calibrate, serpClusters, pageGroup, clusterText, featureLoss, lossApplied, lossText, serpPageTypes, shapeOf, liveChecks, ladderChecks, checkCost, urlKey, BASIS_TEXT, helpers: { bare, low, num } };
+  return { CFG, CLICK_LOSS, gscSeeds, calibrate, serpClusters, pageGroup, clusterText, featureLoss, lossApplied, lossText, serpPageTypes, shapeOf, competitorClass, liveChecks, ladderChecks, checkCost, urlKey, BASIS_TEXT, helpers: { bare, low, num } };
 })();
 const prev = $('Merge Keyword Data').first().json;
 const verdict = parseAgentJson($input.first().json.output);
@@ -746,6 +1187,100 @@ if (EXP) {
   verdict_changes.unshift('Improve the page the site already has for this search (' + EXP.url + '): update and expand it, keep its URL, and do not publish a second page for this keyword.');
 }
 
+// ---- A-5 / A-6 / A-23 (2026-10-17, re-rating execs 760 / 765): the verdict's advice checked against what the site already holds ----
+// (inlined into *Parse Verdict* by build_v4.py section 130, after the existing-page rules; reads `prev.own_coverage` from *Own Coverage
+// (Run)*, the site model's pages and the existing page's whole text.) Four deterministic checks, each reported, nothing silently dropped:
+//   1. a secondary keyword another page, a ladder or a written draft of the site already holds is taken off this page and named (A-5:
+//      five planned pages of the ladder "e invoicing in uae" and the draft "uae e-invoicing deadline 2027"; A-23: the slug of the live
+//      Business Central page, a rung of "erp software uae", a variant of "erp implementation dubai");
+//   2. with no page of its own for the search, a change that says "build a ... page" is preceded by the pages the site already has on
+//      that topic, read from their titles (A-23: /dynamics-365-business-central-uae and /dynamics-365-finance-and-operations-uae);
+//   3. a change that asks for a section on a topic a rung or a draft of the site covers names it ("a penalties section" beside the
+//      penalties rung and article, A-5);
+//   4. an amount the change asks to "add" that the page already states is moved out of the request (A-6: "the AED 50 million threshold").
+const OWNV = (() => {
+  const cov = prev.own_coverage && typeof prev.own_coverage === 'object' ? prev.own_coverage : null;
+  const model = prev.site_model && typeof prev.site_model === 'object' ? prev.site_model : null;
+  const res = { secondary: (Array.isArray(verdict.secondary_keywords) ? verdict.secondary_keywords : []).map(s => String(s || '').trim()).filter(Boolean),
+    covered: [], related: [], sections: [], already_on_page: [], keyword_covered: null, checked: !!cov };
+  const pathOf = (u) => String(u || '').replace(/^https?:\/\/[^/]+/i, '') || '/';
+  // 4 (first). an amount the change asks to add that the page already states (A-6)
+  const pageText = String(prev.existing_page_text || '').toLowerCase().replace(/\s+/g, ' ');
+  if (EXP && pageText) {
+    const AMT = /\b(?:aed|usd|eur|gbp|sar|dhs?)\s?\d[\d,.]*\s*(?:million|billion|thousand|bn|m|k)?\b|\$\s?\d[\d,.]*\s*(?:million|billion|thousand|bn|m|k)?\b|\b\d[\d,.]*\s*(?:million|billion)\b/gi;
+    const forms = (m) => { const t = m.toLowerCase().replace(/\s+/g, ' ').trim(); const out = [t];
+      const n = t.match(/(\d[\d,.]*)\s*(million|billion|m|bn)?/); if (n) { const u = n[2] === 'm' ? 'million' : n[2] === 'bn' ? 'billion' : n[2] || ''; out.push(t.replace(/\s*(million|billion|m|bn)\b/, u ? ' ' + u : ''), n[1] + (u ? ' ' + u : '')); }
+      return [...new Set(out)].filter(f => f.length >= 3); };
+    verdict_changes = verdict_changes.map(line => {
+      if (!/\b(?:add|include|state|mention|cover|explain)\b/i.test(line)) return line;
+      const items = line.split(/,\s*(?:and\s+)?|;\s*|:\s+/);
+      let out = line; const kept = [];
+      for (const it of items) { const ms = it.match(AMT) || []; if (!ms.length) continue;
+        if (!ms.every(m => forms(m).some(f => pageText.includes(f)))) continue;
+        const item = it.trim().replace(/[.\s]+$/, ''); if (!item || item.length > 120) continue;
+        const re = new RegExp('(,\\s*(?:and\\s+)?|\\s+and\\s+)?' + item.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+        const next = out.replace(re, ''); if (next === out) continue;
+        out = next; kept.push(item); }
+      if (!kept.length) return line;
+      kept.forEach(k => res.already_on_page.push(k));
+      return out.replace(/\s+([,.;])/g, '$1').replace(/,\s*\./g, '.').replace(/\s*$/, '') + ' Already on the page, keep as it is: ' + kept.join('; ') + '.';
+    });
+  }
+  if (cov) {
+    const expUrl = EXP ? EXP.url : '';
+    const self = cov.self || { ladder_id: prev.ladder_id || '', keyword: prev.keyword };
+    const ctx = { matchPage: model ? (k) => SM.matchPage(model, k) : null, ladders: cov.ladders || [], drafts: cov.drafts || [],
+      exclude_urls: [expUrl, self.target_url || prev.ladder_target_url || ''], self, page_min: 1 };
+    // 0. the search itself: a ladder or a draft of the site may already hold it (A-23: "erp system dubai" is the rung "erp software dubai"
+    //    of the ladder "erp software uae" in other words) - said first, so nobody writes a second page for it
+    const selfClaim = EXP ? null : (OWN.ladderOf(ctx.ladders, prev.keyword, { self, min: 'other words' }) || OWN.draftOf(ctx.drafts, prev.keyword, { self_keyword: self.keyword }));
+    if (selfClaim) { res.keyword_covered = { by: selfClaim.kind, ladder_id: selfClaim.ladder_id || null, head_keyword: selfClaim.head_keyword || null, keyword: selfClaim.keyword, status: selfClaim.status, how: selfClaim.how, note: OWN.sayOf(selfClaim) };
+      verdict_changes.unshift('This search is already planned on the site: ' + OWN.sayOf(selfClaim) + ' is ' + selfClaim.how + '. Write or improve that page rather than a second one for it.'); }
+    // 1. secondary keywords
+    const keep = [];
+    for (const s of res.secondary) {
+      if (OWN.relate(s, prev.keyword)) { keep.push(s); continue; }   // the page's own search in other words stays on it
+      const c = OWN.claim(s, ctx);
+      if (c && c.relation !== 'other place') res.covered.push({ keyword: s, by: c.kind, url: c.url || c.target_url || '', ladder_id: c.ladder_id || null,
+        head_keyword: c.head_keyword || null, status: c.status || null, how: c.how, note: OWN.sayOf(c) });
+      else keep.push(s);
+    }
+    res.secondary = keep;
+    // 2. "build a page" beside the pages the site already has on that topic (only when the search has no page of its own)
+    const BUILD_RE = /\b(?:build|create|write|publish|launch|develop|make|set up)\b[^.;]{0,120}?\b(?:page|landing page|hub|guide|article|post)\b/i;
+    const titleTerms = (p) => OWN.distinct(String(p.title || '').replace(/\s*[|–—]\s*[^|–—]{1,30}$/, ''), '');
+    if (!EXP && model) {
+      const ask = verdict_changes.find(l => BUILD_RE.test(l) && !/^This search is already planned on the site/.test(l));   // the model's own request, not our note
+      if (ask) {
+        const lt = new Set(OWN.tokens(ask).map(t => t === 'system' ? 'software' : t));
+        res.related = SM.pages(model).filter(p => !SM.isListing(p.url)).map(p => { const tt = titleTerms(p); const hit = tt.filter(t => lt.has(t)).length;
+          return { url: SM.canonUrl(model, p.url), title: String(p.title || '').replace(/\s*[|–—]\s*[^|–—]{1,30}$/, ''), hit, of: tt.length }; })
+          .filter(p => p.of >= 2 && p.hit >= 2 && p.hit / p.of >= 0.75).sort((a, b) => b.hit / b.of - a.hit / a.of || b.hit - a.hit).slice(0, 4);
+        const at = /^This search is already planned on the site/.test(verdict_changes[0] || '') ? 1 : 0;
+        if (res.related.length) verdict_changes.splice(at, 0, 'Before building anything new: the site already has ' + res.related.map(p => pathOf(p.url) + (p.title ? ' ("' + p.title + '")' : '')).join(' and ')
+          + ' on this topic. Improve and link those first; a new page is worth it only for a search none of them targets, and it must link to them.');
+      }
+    }
+    // 3. a section on a topic a rung or a draft of the site covers
+    const holders = [...(cov.ladders || []).filter(e => !(self.ladder_id && e.ladder_id === self.ladder_id && e.keyword === String(self.keyword || '').toLowerCase()))
+      .map(e => ({ text: e.keyword, say: OWN.sayOf({ kind: 'ladder', ...e }), url: model ? ((SM.matchPage(model, e.keyword) || {}).url || '') : '' })),
+      ...(cov.drafts || []).filter(d => d.keyword !== String(prev.keyword || '').toLowerCase()).map(d => ({ text: d.keyword, say: OWN.sayOf({ kind: 'draft', ...d }), url: '' }))];
+    const kwCore = OWN.distinct(prev.keyword, '');
+    const onTopic = (t) => { const tt = OWN.tokens(t); return kwCore.some(w => tt.includes(w)); };
+    verdict_changes = verdict_changes.map(line => {
+      const lt = new Set(OWN.tokens(line)); const notes = [];
+      for (const h of holders) { const d = OWN.distinct(h.text, prev.keyword).filter(t => t.length >= 5); if (!d.length || d.length > 2 || !d.every(t => lt.has(t))) continue;
+        if (!onTopic(h.text) || notes.some(n => n.topic === h.text)) continue;   // a rung of another topic is not this page's business
+        notes.push({ topic: h.text, say: h.say + (h.url && (!EXP || OWN.ukey(h.url) !== OWN.ukey(EXP.url)) ? ', page ' + pathOf(h.url) : '') }); if (notes.length >= 2) break; }
+      if (!notes.length) return line;
+      notes.forEach(n => res.sections.push({ line: line.slice(0, 120), topic: n.topic, by: n.say }));
+      return line.replace(/\s*$/, '') + ' (The site already covers ' + notes.map(n => '"' + n.topic + '": ' + n.say).join('; ') + ' — keep it to a short summary here that links there, not a full section.)';
+    });
+  }
+  if (res.covered.length) verdict_changes.push('Kept off this page because the site already holds ' + (res.covered.length === 1 ? 'it' : 'them') + ': '
+    + res.covered.slice(0, 8).map(c => '"' + c.keyword + '" (' + c.note + ')').join('; ') + '. Two pages for one search split the signals — link to those pages instead.');
+  return res;
+})();
 return [{
   json: {
     ...prev,
@@ -758,7 +1293,9 @@ return [{
     verdict_risks: verdict.risks || [],
     recommended_page: PT.of(verdict.recommended_page || prev.page_type, prev.page_type),
     page_notes: PT.notes(verdict.recommended_page, PT.of(verdict.recommended_page || prev.page_type, prev.page_type)),
-    secondary_keywords: verdict.secondary_keywords || [],
+    secondary_keywords: OWNV.secondary,
+    secondary_covered: OWNV.covered,   // A-5: the searches the site already holds elsewhere, kept off this page and named
+    existing_related: OWNV.related, sections_covered: OWNV.sections, already_on_page: OWNV.already_on_page, keyword_covered: OWNV.keyword_covered, own_coverage_checked: OWNV.checked,
     verdict_changes,
     page_claims_dropped,
     existing_page_action,

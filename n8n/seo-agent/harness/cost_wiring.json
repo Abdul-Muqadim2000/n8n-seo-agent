@@ -379,6 +379,7 @@
     "keyword",
     "keyword_data",
     "language_name",
+    "own_coverage_text",
     "page_type",
     "serp_digest",
     "site_authority"
@@ -390,7 +391,7 @@
    "model": "claude-sonnet-5-5",
    "node": "Verdict Agent",
    "streaming": false,
-   "template_chars": 5394
+   "template_chars": 5923
   }
  ],
  "calibrate": {

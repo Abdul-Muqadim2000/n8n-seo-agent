@@ -1928,7 +1928,7 @@ await guard('pipeline phase 3', async () => {
   console.log('   tiers with reach 10 ->', JSON.stringify(Wl.rk.clusters.slice(0, 8).map(c => c.tier + ':' + c.primary_kd + ':' + c.difficulty_for_you)));
   check('discovery for a small site (reach 10): Now only up to difficulty 30 — topics v4.7 put in Now move to Next', nowL.every(c => c.primary_kd == null || c.primary_kd <= 30) && legacyNow.some(t => !nowL.some(c => c.topic === t)), JSON.stringify({ now: nowL.map(c => c.primary_kd), legacyNow }));
   const N0 = await discover(false, null, { base: { live_serp_checks: 8 } });
-  const strip = (o) => JSON.parse(JSON.stringify(o, (k, v) => ['difficulty_for_you', 'plan_type', 'months', 'for_you_label', 'reach', 'chance', 'refused', 'why', 'live', 'covered_by', 'covered', 'pages_known', 'ladder_covered', 'ladders_known', 'traffic_basis', 'traffic_note', 'modelled_traffic_potential', 'gsc', 'serp_cluster', 'serp_clusters', 'serp_overlap', 'search_console', 'live_checks', 'topic_radius', 'radius', 'radius_reason', 'grouped_by', 'title_gap', 'tier_note', 'trend_note'].includes(k) ? undefined : v));   // 2026-10-16 (R40 / R34 / R58 / R51): grouped_by / title_gap / tier_note / trend_note are new labels; 2026-10-13: topic_radius / radius / radius_reason are G32's block (drawn from the reach, so empty verdicts without a website); 2026-10-11: chance / refused (G3, D4) are new fields; why / live changed on purpose (D26: the AI Overview as a timed observation, D20: deduplicated domains); 2026-10-12: covered_by / covered / pages_known are D11's labels (null / empty without a page inventory) and ladder_covered / ladders_known are D20's (null / 0 without a ladder); 2026-10-13: traffic_basis / traffic_note / modelled_traffic_potential / gsc / serp_cluster / serp_clusters / serp_overlap / search_console / live_checks are G8's new fields (the traffic number itself is unchanged without Search Console data, which is what this check proves)
+  const strip = (o) => JSON.parse(JSON.stringify(o, (k, v) => ['difficulty_for_you', 'plan_type', 'months', 'for_you_label', 'reach', 'chance', 'refused', 'why', 'live', 'covered_by', 'covered', 'pages_known', 'ladder_covered', 'ladders_known', 'traffic_basis', 'traffic_note', 'modelled_traffic_potential', 'gsc', 'serp_cluster', 'serp_clusters', 'serp_overlap', 'search_console', 'live_checks', 'topic_radius', 'radius', 'radius_reason', 'grouped_by', 'title_gap', 'tier_note', 'trend_note', 'competitor_basis', 'ladder_near'].includes(k) ? undefined : v));   // 2026-10-16 (R40 / R34 / R58 / R51): grouped_by / title_gap / tier_note / trend_note are new labels; 2026-10-13: topic_radius / radius / radius_reason are G32's block (drawn from the reach, so empty verdicts without a website); 2026-10-11: chance / refused (G3, D4) are new fields; why / live changed on purpose (D26: the AI Overview as a timed observation, D20: deduplicated domains); 2026-10-12: covered_by / covered / pages_known are D11's labels (null / empty without a page inventory) and ladder_covered / ladders_known are D20's (null / 0 without a ladder); 2026-10-13: traffic_basis / traffic_note / modelled_traffic_potential / gsc / serp_cluster / serp_clusters / serp_overlap / search_console / live_checks are G8's new fields (the traffic number itself is unchanged without Search Console data, which is what this check proves)
   check('discovery without a website: no reach call, no labels', N0.rq[0].json.skip && N0.rd.reach === null && N0.rk.reach === null && N0.rk.keywords.every(k => k.difficulty_for_you === undefined), JSON.stringify(N0.rd));
   check('discovery without a website = v4.7 (tiers with difficulty <= 55, priority, pipeline keyword)', eq(strip(N0.rk), strip(N0.legacy)) && eq(N0.ks.choice_options, N0.legacyKs.choice_options) && eq(strip(N0.ks.keyword_strategy), strip(N0.legacyKs.keyword_strategy)), 'differs from the frozen v4.7 Rank Keywords / Build Keyword Strategy');
   check('callback without a website: the new fields are null', N0.ir.reach === null && N0.ir.priority.every(k => k.difficulty_for_you === null && k.label === null && k.plan_type === null) && !/For your site/.test(N0.ks.result_html), JSON.stringify(N0.ir.priority[0]).slice(0, 200));
@@ -6243,7 +6243,9 @@ await guard('g8-discovery-inputs', async () => {
     && S.search_console.no_page[0].period_days === 28, JSON.stringify(S.search_console.no_page));
   check('K6: a striking-distance search (position 8-20) becomes a seed even though a page already covers it',
     eq(S.search_console.striking.map(q => q.keyword), ['inventory software for distributors'])
-    && S.search_console.striking[0].position === 12.6 && (S.search_console.striking[0].answered_by || {}).matched_by === 'slug', JSON.stringify(S.search_console.striking));
+    // A-22 (2026-10-17): the page Search Console reports for the search is the answer (it is also the page the slug matches here)
+    && S.search_console.striking[0].position === 12.6 && (S.search_console.striking[0].answered_by || {}).matched_by === 'search console'
+    && S.search_console.striking[0].answered_by.url === S.search_console.striking[0].page, JSON.stringify(S.search_console.striking));
   check('K6: a search a live page already answers at #3 is NOT seeded — it is named as answered, with that page',
     !S.gsc_seeds.includes('erp implementation dubai') && S.search_console.answered.length === 1
     && S.search_console.answered[0].keyword === 'erp implementation dubai' && S.search_console.answered[0].answered_by.url === W + '/erp-implementation-dubai/', JSON.stringify(S.search_console.answered));
@@ -11770,12 +11772,14 @@ await guard('read-path fit gate over stored rungs', async () => {
   const GP81 = require('./gate_pairs.json'), GB81 = require('./gate_pairs_baseline.json');
   const readers81 = GP81.pairs['keyword fit | seo_ladders'].readers;
   check('the lint reads the node\'s OWN code: a node that only inlines the fit gate is NOT gated by it',
-    readers81['SEO Agent v4 — Audit, Keywords, Verdict & Content / Ladder Plan'] === false
-    && readers81['SEO Agent v4 — Audit, Keywords, Verdict & Content / Rank Keywords'] === false,
+    readers81['SEO Agent v4 — Audit, Keywords, Verdict & Content / Ladder Plan'] === false,
     JSON.stringify(readers81));
+  // A-25 (2026-10-17): *Rank Keywords* earned its gate — it now calls fitStored( on the ladder rows in its own code, so it is gated and
+  // left the baseline; Ladder Plan is still the example of a node that merely inlines the kit
+  check('A-25: Rank Keywords reads the stored rungs through fitStored in its own code, so the lint counts it gated',
+    readers81['SEO Agent v4 — Audit, Keywords, Verdict & Content / Rank Keywords'] === true, JSON.stringify(readers81));
   check('and both are still named on the ratchet, where this fix found them — nothing left the baseline that did not earn it',
-    (GB81['keyword fit | seo_ladders'].ungated || []).includes('SEO Agent v4 — Audit, Keywords, Verdict & Content / Ladder Plan')
-    && (GB81['keyword fit | seo_ladders'].ungated || []).includes('SEO Agent v4 — Audit, Keywords, Verdict & Content / Rank Keywords'),
+    (GB81['keyword fit | seo_ladders'].ungated || []).includes('SEO Agent v4 — Audit, Keywords, Verdict & Content / Ladder Plan'),
     JSON.stringify(GB81['keyword fit | seo_ladders'].ungated));
   check('the shared loop counts as the gate, so the four fixed read paths are gated and off the baseline for good',
     GP81.pairs['keyword fit | seo_ladders'].read.includes('FITR.rungs(')
@@ -17941,6 +17945,8 @@ await guard('S166 B8-8 B8-9 B8-10 the build carries the three engine fixes in bo
   check('B8-10: the majority rule brand.known * 2 >= brand.answered is gone', AM && !/brand\.known \* 2 >= brand\.answered/.test(AM), '');
 });
 
+// F-A3 (re-rating 2026-10-17): keyword research — discover, keyword report, verdict, Keyword Check (harness/scenarios_fa3.js)
+await require('./scenarios_fa3')({ H, run, mock, store, guard, reset, begin });
 
 // ===================================================================================
 // S180-S183 (2026-10-17, defect-fix agent F-B — re-rating 2026-10-17 part 2, executor B: execs 739 / 767, docs/system-review-2026-10-17/
