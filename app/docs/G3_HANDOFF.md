@@ -24,9 +24,12 @@ DB tests: `docker run --network gap-g3-net … -e TEST_DATABASE_URL=postgres://s
   `VisualKey`), `CapabilityMap` GROUPS, `CapabilityScreen` APP_PATH, `changelog.ts` line dated 2026-10-17, pricing / solutions rows.
 - Browser pass at 390 / 1440, light / dark (render tests only so far).
 
+## Merged
+`8b2704e` merged `feature/seo-agent-v4.5` @ 2aa912a; the migration is now `0010_crawler_logs` (after upstream `0009_cms_publishing`,
+regenerated, only the six crawler tables). After the merge: tsc clean in shared / server / web; shared 406 passed / 1 skipped, server
+354 passed / 29 skipped, web 21 passed, crawler DB suite 12 / 12 on a fresh throwaway Postgres (removed afterwards).
+
 ## Merge notes
-- Upstream has `0009_cms_publishing`: mine must become `0010_crawler_logs` (delete mine + its snapshot, take upstream journal /
-  snapshot, `npx drizzle-kit generate --name crawler_logs` in `server/`).
 - Shared files touched: `db/schema.ts` (new tables at the end + `bigint, bigserial, date` imports), `app.ts` (`/api/ingest/` skips CSRF
   and session like `/api/hooks/`; two plugins registered), `index.ts` (startCrawlerJobs), `config.ts` (`crawlers`), `routes/apiV1.ts`,
   `services/apiV1.ts`, `shared/src/index.ts`, `shared/src/guides.ts`, `web/src/lib/queries.ts`, `router.tsx`, `OrgLayout.tsx` (nav).
