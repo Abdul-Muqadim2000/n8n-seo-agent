@@ -3,6 +3,7 @@ import {
   AI_PAGES_DEFAULT,
   AI_PAGES_MAX,
   COUNTRIES,
+  notFixedKeys,
   profileReadiness,
   safeJson,
   splitList,
@@ -771,6 +772,8 @@ export async function technicalData(org: OrgRow, site: SiteRow, auditId?: string
   ]);
   const prevBy = new Map(prev.map((f) => [f.finding_key, f]));
   const curKeys = new Set(cur.map((f) => f.finding_key));
+  // B-5 (F-B, 2026-10-17): the engine's own decision about what is NOT fixed (a check that changed, a JavaScript / plain crawl)
+  const notFixed = notFixedKeys(idx >= 0 ? audits[idx] : null);
   const findings: Finding[] = [
     ...cur.map((f) => ({
       key: s(f.finding_key),
@@ -789,7 +792,7 @@ export async function technicalData(org: OrgRow, site: SiteRow, auditId?: string
       // R74 (A2, 2026-10-16): a finding that rested on ONE outside reading (a results page, an AI answer, a model-written content
       // review) and is not seen now is "no longer seen", never "fixed" — the engine's own diff (Audit_Diff.js) keeps it out of
       // `fixed`; the app derives "fixed" itself, so it applies the same rule and does not list it as fixed
-      .filter((f) => !oneReadingFinding(f, selected?.reportType ?? ''))
+      .filter((f) => !oneReadingFinding(f, selected?.reportType ?? '') && !notFixed.has(f.finding_key))
       .map((f) => ({ key: s(f.finding_key), category: s(f.category), severity: s(f.severity), title: s(f.title), affectedCount: 0, previousCount: n(f.affected_count), status: 'fixed' as const, impact: impactOf(f), impactBasis: s(f.impact_basis), recheck: recheckOf(f) })),
   ];
   const sevRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
