@@ -41,6 +41,7 @@ Return ONLY valid JSON (no markdown, no backticks, no extra text) in this exact 
   "risks": ["0-3 risks or watch-outs; empty array if none"],
   "recommended_page": "best-fit page type, e.g. Service Page / Blog Post / Comparison Page / Landing Page / Guide",
   "what_must_change": ["for GO_WITH_CHANGES: the concrete changes (page type, angle, targeting, supporting content); else empty"],
+  "topics_to_skip": ["2-5 word noun phrases for subtopics or questions this page must NOT cover because they do not match the buyer's intent (e.g. \"consultancy licence\", \"starting an IT company\"); empty when there are none. Every topic you tell the writer to skip in what_must_change goes here too."],
   "expected_monthly_visits_top3": 0,
   "time_to_rank_months": 0,
   "secondary_keywords": ["6-10 related keywords worth targeting on the same page"]

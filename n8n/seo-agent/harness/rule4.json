@@ -25,8 +25,8 @@
    "subject": 2
   },
   "verdict": {
-   "pass": 2,
-   "subject": 2
+   "pass": 3,
+   "subject": 3
   }
  },
  "rows": {
@@ -497,6 +497,24 @@
     "how": "set every one of those fields when the gate refuses (v5/code/Originality_Check.js does it), never only the flag",
     "missing": [],
     "node": "Originality Check",
+    "ok": true,
+    "touched": [
+     "publishable",
+     "not_ready",
+     "quality_label",
+     "not_ready_reasons",
+     "quality",
+     "passed"
+    ],
+    "why": "B3-3: the originality gate ran AFTER *Content QA* had finalised the delivery gate and set only `qa.passed`, so a draft 100% identical to a competitor page came out `publishable: true`, `not_ready: false`, \"passed the quality check\" -- which is what the -DRAFT file name, the package banner, meta.json, the callback and the app all read. A gate that fails is a refusal, not a label.",
+    "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+   },
+   {
+    "fail": "",
+    "gate": "content quality",
+    "how": "set every one of those fields when the gate refuses (v5/code/Originality_Check.js does it), never only the flag",
+    "missing": [],
+    "node": "Outbound Link Check",
     "ok": true,
     "touched": [
      "publishable",

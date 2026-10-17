@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { deliveryDecision } from './report-delivery';
 import { findOpenBrackets, isReviewNote, PLACEHOLDER_BRACKET_SRC, PLACEHOLDER_NOTE_SRC } from './placeholders';
@@ -21,8 +21,11 @@ describe('A-13 — one detector for every bracket left for a person', () => {
     expect(isReviewNote('[Price band: fee]')).toBe(false);
   });
 
-  it('is the engine’s own pattern, character for character (build_v4.py section 130 asserts the same)', () => {
-    const kit = readFileSync(join(__dirname, '../../../n8n/seo-agent/v5/code/_placeholders.js'), 'utf8');
+  // the engine's kit lives outside app/: present in a repo checkout, absent in the app-only test container and the production image
+  // (build_v4.py section 130 asserts the same equality from the engine side, so the check is never lost)
+  const KIT = join(__dirname, '../../../n8n/seo-agent/v5/code/_placeholders.js');
+  it.skipIf(!existsSync(KIT))('is the engine’s own pattern, character for character (build_v4.py section 130 asserts the same)', () => {
+    const kit = readFileSync(KIT, 'utf8');
     expect(kit).toContain(`const BRACKET_SRC = ${JSON.stringify(PLACEHOLDER_BRACKET_SRC)};`);
     expect(kit).toContain(`const NOTE_SRC = ${JSON.stringify(PLACEHOLDER_NOTE_SRC)};`);
   });
