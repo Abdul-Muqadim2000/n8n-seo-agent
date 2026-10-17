@@ -40,6 +40,21 @@ describe('D-4: an AI Growth dry run reads as a dry run', () => {
   });
 });
 
+describe('D-6: the ladder hero gives one duration', () => {
+  // report 5 (00a0da6c…, exec 770 "it consulting dubai"): badge "Direct plan · 2–4 months", tile "Time to rank ~5 months"
+  const plan = { keyword: 'it consulting dubai', planned: true, plan_type: 'direct', months: '2-4', stretch: false, difficulty_for_you: 'easy', head: { keyword: 'it consulting dubai', volume: 90, kd: 12 }, feasibility: { time_to_rank_months: 5, expected_visits_top3: 27, verdict: 'GO_WITH_CHANGES', score: 52 }, rungs: [], stats: {} };
+  it("the time-to-rank tile shows the plan's range; the model's ~5 is only a note", () => {
+    const t = text(renderReport(report('ladder_plan', plan)));
+    expect(t).toMatch(/Time to rank\s*2–4 months/);
+    expect(t).not.toMatch(/Time to rank\s*~\s*5 months/);
+    expect(t).toContain("the writing model's own guess, not measured: ~5 months");
+  });
+  it('without a plan range the model estimate is shown, labelled', () => {
+    const t = text(renderReport(report('ladder_plan', { ...plan, months: '' })));
+    expect(t).toMatch(/Time to rank\s*~\s*5 months/);
+  });
+});
+
 describe('D-13: what a started note and a page draft say in the app', () => {
   it('a started note says the report arrives here, not "at your callback" (reports 8 and 9)', () => {
     const summary =
