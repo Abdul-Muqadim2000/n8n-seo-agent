@@ -13,7 +13,6 @@ import {
   FeatureCard,
   GrowthLoopDiagram,
   IconTile,
-  IntegrationMarquee,
   LadderMockup,
   LinkSourcesDiagram,
   LOOP_STEPS,
@@ -24,6 +23,7 @@ import {
 } from '../components';
 import { CapabilityCount, featureBySlug, features, type FaqItem, type Fact } from '../content/features';
 import { pricingTiers } from '../content/pricing';
+import { integrations } from '../content/site';
 import { solutions } from '../content/solutions';
 import { useSeo } from '../useSeo';
 
@@ -119,16 +119,22 @@ function CheckList({ items, onInk }: { items: string[]; onInk?: boolean }) {
   );
 }
 
+/** A small product card floating over the hero's dashboard edge (wide screens only; sample data, decorative). */
+function FloatCard({ className, delay, children }: { className?: string; delay: number; children: React.ReactNode }) {
+  return (
+    <div aria-hidden className={cn('absolute z-10 hidden w-64 rounded-xl border border-line bg-surface p-4 shadow-overlay animate-fade-up xl:block', className)} style={{ animationDelay: `${delay}ms` }}>
+      {children}
+    </div>
+  );
+}
+
 function Hero() {
   return (
     <section className="relative isolate overflow-hidden bg-page">
-      {/* the brand mark as a faint watermark: the supplied mark, faded (ink on light, white on dark) */}
-      <span
-        aria-hidden
-        className="mk-watermark pointer-events-none absolute -right-56 top-[24rem] -z-10 aspect-[911/797] w-[440px] bg-ink/[0.045] sm:-right-24 sm:-top-10 sm:w-[560px] lg:-right-16 lg:top-0 lg:w-[760px]"
-      />
-      <Container className="pb-20 pt-12 sm:pb-28 sm:pt-16 lg:pt-20">
-        <div className="max-w-4xl">
+      {/* hairline grid behind the headline, fading out from the top centre (a mask, not a colour gradient) */}
+      <div aria-hidden className="mk-grid pointer-events-none absolute inset-x-0 top-0 -z-10 h-[760px]" />
+      <Container className="pt-12 sm:pt-16 lg:pt-20">
+        <div className="mx-auto max-w-5xl text-center">
           <div className="animate-fade-up" style={{ animationDelay: '0ms' }}>
             <Link
               to="/platform/ai-visibility"
@@ -140,26 +146,26 @@ function Hero() {
             </Link>
           </div>
           <div className="animate-fade-up" style={{ animationDelay: '70ms' }}>
-            <h1 className="mt-7 font-display text-[2.6rem] font-semibold leading-[1.04] tracking-[-0.02em] text-balance text-ink sm:text-6xl lg:text-[4.5rem]">
-              Compounding growth in search and AI answers, on autopilot.
+            <h1 className="mx-auto mt-8 max-w-5xl font-display text-[2.5rem] font-semibold leading-[1.05] tracking-[-0.03em] text-balance text-ink sm:text-[3.25rem] lg:text-[3.75rem]">
+              Compounding growth in search and AI answers, <span className="text-accent-text">on autopilot.</span>
             </h1>
           </div>
           <div className="animate-fade-up" style={{ animationDelay: '140ms' }}>
-            <p className="mt-6 max-w-2xl text-pretty text-lg leading-relaxed text-ink-2 sm:text-xl">
+            <p className="mx-auto mt-6 max-w-2xl text-pretty text-lg leading-relaxed text-ink-2 sm:text-xl">
               Ascentra researches your keywords, writes the pages, audits the site and tracks rankings, AI answers and backlinks — every week, with your team approving what matters.
             </p>
           </div>
-          <div className="mt-9 flex flex-wrap gap-3 animate-fade-up" style={{ animationDelay: '210ms' }}>
+          <div className="mt-9 flex flex-wrap justify-center gap-3 animate-fade-up" style={{ animationDelay: '210ms' }}>
             <ButtonLink to="/signup" size="lg" className="group">
               Start free
               <ArrowRight className="size-4 transition-transform duration-200 ease-brand group-hover:translate-x-0.5" aria-hidden />
             </ButtonLink>
-            <ButtonLink to="/how-it-works" size="lg" variant="secondary">
-              See how it works
+            <ButtonLink to="/contact?topic=sales" size="lg" variant="secondary">
+              Book a demo
             </ButtonLink>
           </div>
           <div className="animate-fade-up" style={{ animationDelay: '280ms' }}>
-            <ul className="mt-8 flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-ink-3">
+            <ul className="mx-auto mt-8 flex max-w-4xl flex-wrap justify-center gap-x-6 gap-y-2 text-[13px] text-ink-3">
               {HERO_FACTS.map((t) => (
                 <li key={t} className="flex items-center gap-2">
                   <Check className="size-3.5 text-accent-text" strokeWidth={2.5} aria-hidden />
@@ -169,13 +175,80 @@ function Hero() {
             </ul>
           </div>
         </div>
-        <div className="mt-14 animate-fade-up sm:mt-16" style={{ animationDelay: '420ms' }}>
-          <BrowserFrame url="app.ascentra.com/overview" caption="Sample data" label="Product preview">
-            <DashboardMockup />
-          </BrowserFrame>
+      </Container>
+
+      {/* the product on stage: its lower half rests on an ink floor that carries on into the trust strip */}
+      <div className="relative z-10 mt-14 sm:mt-16">
+        <div aria-hidden className="absolute inset-x-0 bottom-0 top-[55%] -z-10 bg-ink-surface" />
+        <Container>
+          <div className="relative mx-auto max-w-6xl animate-fade-up" style={{ animationDelay: '420ms' }}>
+            <FloatCard className="-bottom-12 -left-4 min-[1400px]:-left-14" delay={900}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-ink">
+                  <span className="mk-pulse size-1.5 rounded-full bg-accent" />
+                  AI Pulse · today
+                </span>
+                <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3">ChatGPT</span>
+              </div>
+              <p className="mt-3 font-display text-[22px] font-semibold tracking-[-0.02em] text-ink">
+                7 <span className="text-[14px] font-medium text-ink-3">of 20 answers</span>
+              </p>
+              <p className="mt-0.5 text-[12px] text-ink-2">name you, up 2 since last week</p>
+              <div className="mt-3 flex gap-1">
+                {Array.from({ length: 20 }, (_, i) => (
+                  <span key={i} className={cn('h-1.5 flex-1 rounded-full', i < 7 ? 'bg-accent' : 'bg-surface-3')} />
+                ))}
+              </div>
+            </FloatCard>
+            <FloatCard className="-bottom-20 -right-4 min-[1400px]:-right-14" delay={1050}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[12px] font-semibold text-ink">Ladder rung</span>
+                <span className="inline-flex h-5 items-center gap-1 rounded-full bg-good-soft px-2 text-[10.5px] font-medium text-good-text">
+                  <Check className="size-3" strokeWidth={2.5} />
+                  Page one
+                </span>
+              </div>
+              <p className="mt-2 truncate text-[13px] text-ink-2">invoice approval workflow</p>
+              <p className="mt-2 flex items-baseline gap-2 font-mono tabular">
+                <span className="text-[13px] text-ink-3 line-through decoration-ink-3/50">#14</span>
+                <ArrowRight className="size-3.5 self-center text-ink-3" />
+                <span className="text-[22px] font-medium tracking-[-0.02em] text-ink">#6</span>
+              </p>
+            </FloatCard>
+            <div className="rounded-[20px] border border-line bg-surface p-1.5 shadow-overlay sm:p-2">
+              <BrowserFrame url="app.ascentra.com/overview" label="Product preview" className="[&>div]:shadow-none">
+                <DashboardMockup />
+              </BrowserFrame>
+            </div>
+            <p className="mt-5 text-center font-mono text-[11px] uppercase tracking-[0.12em] text-on-ink-2">Product preview · sample data</p>
+          </div>
+        </Container>
+      </div>
+
+      <TrustStrip />
+    </section>
+  );
+}
+
+/** Under the hero, on ink: the engines and tools Ascentra works with, typeset as a quiet wordmark row (names only, no third-party logos). */
+function TrustStrip() {
+  return (
+    <div className="relative overflow-hidden bg-ink-surface pb-16 pt-12 sm:pb-20 sm:pt-14 xl:pt-24">
+      {/* the supplied white mark, faint, as the strip's signature */}
+      <span aria-hidden className="mk-watermark pointer-events-none absolute -bottom-24 -right-24 aspect-[911/797] w-[360px] bg-on-ink/[0.05] sm:w-[460px]" />
+      <Container className="relative">
+        <div className="border-t border-line-on-ink pt-10 sm:pt-12">
+          <p className="text-center font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-on-ink-2">Built on the data and AI engines your team already relies on</p>
+          <ul className="mx-auto mt-8 flex max-w-5xl flex-wrap items-center justify-center gap-x-10 gap-y-5 sm:gap-x-12">
+            {integrations.map((name) => (
+              <li key={name} className="font-display text-[15px] font-semibold tracking-[-0.01em] text-on-ink/60 transition-colors duration-200 ease-brand hover:text-on-ink sm:text-[17px]">
+                {name}
+              </li>
+            ))}
+          </ul>
         </div>
       </Container>
-    </section>
+    </div>
   );
 }
 
@@ -529,12 +602,6 @@ export default function HomePage() {
   return (
     <>
       <Hero />
-      <div className="border-y border-line bg-page py-10">
-        <Container>
-          <p className="mb-6 text-center font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3">Works with the engines and tools you already rely on</p>
-        </Container>
-        <IntegrationMarquee />
-      </div>
       <ProblemOutcome />
       <CapabilityGrid />
       <LoopBand />

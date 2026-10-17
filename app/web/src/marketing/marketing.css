@@ -35,6 +35,17 @@
   mask: url('/brand/ascentra-mark-white.svg') center / contain no-repeat;
 }
 
+/* ---------- hero grid: hairlines in the line token, faded out by a mask (no colour gradient) ---------- */
+.mk-grid {
+  background-image:
+    linear-gradient(to right, var(--line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--line) 1px, transparent 1px);
+  background-size: 56px 56px;
+  background-position: center -1px;
+  -webkit-mask-image: radial-gradient(ellipse 62% 70% at 50% 0%, #000 25%, transparent 100%);
+  mask-image: radial-gradient(ellipse 62% 70% at 50% 0%, #000 25%, transparent 100%);
+}
+
 /* ---------- FAQ (details) ---------- */
 .mk-faq[open] .mk-faq-body {
   animation: asc-fade-up 320ms var(--brand-ease) both;
