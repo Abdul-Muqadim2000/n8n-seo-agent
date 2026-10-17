@@ -9890,7 +9890,11 @@ def _b98_catchup():
             'R94: %s - its manual entry "%s" does not feed the schedule\'s own first node, so a catch-up would not run the scheduled path' % (_id98, _e98)
     # ---------- B. the three doors, and RECORD-then-start by graph walk ----------
     assert _by98['Instance Started']['type'] == 'n8n-nodes-base.n8nTrigger' and _by98['Instance Started']['parameters']['events'] == ['init'], 'R94: no Instance Started door'
-    assert _by98['Hourly Sweep']['type'] == 'n8n-nodes-base.scheduleTrigger', 'R94: no hourly sweep'
+    _sw98 = [n for n in _cu98['nodes'] if n['type'] == 'n8n-nodes-base.scheduleTrigger']
+    assert len(_sw98) == 1, 'R94: no sweep schedule'
+    _swn98 = _sw98[0]['name']
+    # C-1 (re-rating 2026-10-17): no wall-clock execution time-out on the sweep (exec 728 was cancelled after the Mac slept 44 min in one node)
+    assert _cu98['settings'].get('executionTimeout') == -1, 'C-1: the catch-up has an execution time-out again - n8n counts it in wall-clock time'
     _st98 = _by98['Start Missed Run']['parameters']
     assert _st98['options'].get('waitForSubWorkflow') is False and _st98['workflowId']['value'] == '={{ $json.workflow_id }}', 'R94: the start waits, or starts a fixed workflow'
     _cc98 = _cu98['connections']
@@ -9903,11 +9907,12 @@ def _b98_catchup():
                 continue
             seen.add(nd); todo.extend(_out98(_cc98, nd))
         return seen
-    for _door98 in ('Instance Started', 'Hourly Sweep', 'Catch-up Run'):
+    for _door98 in ('Instance Started', _swn98, 'Catch-up Run'):
         assert 'Start Missed Run' in _reach98(_door98, None), 'R94: ' + _door98 + ' never reaches the start'
         assert 'Start Missed Run' not in _reach98(_door98, 'Save Catch-up Record'), \
             'R94: ' + _door98 + ' can reach Start Missed Run without passing Save Catch-up Record - the start must come after its record'
-    assert 'Catch-up Payload' in _out98(_cc98, 'Save Catch-up Record'), 'R94: the payload is not built from the saved record'
+    assert _out98(_cc98, 'Save Catch-up Record') == ['Confirm Claim'] and _out98(_cc98, 'Confirm Claim') == ['Catch-up Payload'], \
+        'R94 / C-1: the payload is not built from the saved record read back (Confirm Claim)'
     # ---------- C. deployment: imported, published, credential, time zone ----------
     _ae98 = open(os.path.join(HERE0, 'apply_env.py'), encoding='utf-8').read()
     _tree98 = _ast98.parse(_ae98)
