@@ -57,10 +57,18 @@ const existing = (() => {
   const hit = (a.existing_keywords || []).find(same) || (lad && lad.keyword) || (log && log.keyword) || '';
   if (!hit && !lad && !log) return null;
   const page_url = String((log && (log.published_url || log.existing_page_url)) || (lad && lad.target_url) || '').trim();
+  // F-A1 / A-2 (2026-10-17, re-rating exec 751): `ladder_status` was the RUNG row's status ("planned") while the ladder itself was paused
+  // in seo_ladder_settings. The ladder's status is its settings row's (no row = active, the Content Cadence's own default); the rung row's
+  // own state is `rung_status`. When no settings row could be read at all the ladder's status is unknown (null), never guessed.
+  const sets = rowsOf('Load Ladder Settings (Assess)');
+  const setRow = lad ? sets.find(r => String(r.ladder_id) === String(lad.ladder_id)) : null;
+  const LSTAT = ['active', 'queued', 'paused', 'won', 'stuck', 'archived'];
+  const ladStatus = !lad ? null : setRow && LSTAT.includes(String(setRow.status || '').toLowerCase()) ? String(setRow.status).toLowerCase()
+    : (setRow || sets.length) ? 'active' : null;
   return { keyword: String(hit || (lad && lad.keyword) || ''), how: String(hit).toLowerCase().trim() === kw ? 'the same keyword' : 'the same search',
-    ladder_id: lad ? String(lad.ladder_id || '') : null, ladder_status: lad ? String(lad.status || '') : null, rung: lad ? Number(lad.rung) || null : null,
+    ladder_id: lad ? String(lad.ladder_id || '') : null, ladder_status: ladStatus, rung_status: lad ? String(lad.status || '') : null, rung: lad ? Number(lad.rung) || null : null,
     page_url: page_url || null, page_status: log ? String(log.status || '') : null,
-    note: 'already one of your keywords' + (lad ? ' (ladder ' + lad.ladder_id + (lad.status ? ', ' + lad.status : '') + ')' : ' (one of your keyword ladders)')
+    note: 'already one of your keywords' + (lad ? ' (ladder ' + lad.ladder_id + (ladStatus ? ', ' + ladStatus : '') + ')' : ' (one of your keyword ladders)')
       + (page_url ? ' - its page: ' + page_url : '') + ': continue that ladder / improve that page rather than starting a second one for the same search' };
 })();
 const listOf = (v) => (Array.isArray(v) ? v : (typeof v === 'string' ? v.split(/[\n,;]+/) : [])).map(x => String(x == null ? '' : x).toLowerCase().replace(/["“”]/g, '').replace(/\s+/g, ' ').trim()).filter(x => x.length >= 2 && x.length <= 100);

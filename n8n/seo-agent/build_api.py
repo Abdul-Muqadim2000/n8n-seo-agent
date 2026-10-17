@@ -10,7 +10,7 @@ import env_settings as _env   # B-F5: a build with no n8n/.env must refuse, not 
 _env.require_settings('build_api.py')
 from ladder_common import (CACHE_TABLE, CACHE_COLS, DT_TYPE, DT_VERSION,
                            dt_create_params, dt_insert_params, dt_get_all_where_params, dt_delete_where_params)
-from ladder_common import LADDER_TABLE as _LADDER_TABLE, LOG_TABLE as _LOG_TABLE   # R50 (A14): the Keyword Check names the ladder / page that already holds the search
+from ladder_common import LADDER_TABLE as _LADDER_TABLE, LOG_TABLE as _LOG_TABLE, LADDER_SETTINGS_TABLE as _LADDER_SETTINGS_TABLE   # R50 (A14): the Keyword Check names the ladder / page that already holds the search
 # B-F5 (2026-10-15): these ids are placeholders — freeze_ids() re-keys every one of them on (workflow, node) before the dump.
 # They are generated in build order rather than at random all the same, so that even a half-built workflow dumped for debugging
 # is the same twice, and so that the build-time lint for a random id (build_v4.py section 69) has nothing to find.
@@ -374,6 +374,8 @@ _AN = [
   # R50 (2026-10-16, A14): the answer names the ladder / page that already holds the search. Assess_Response.js reads these two nodes by name.
   _an('Load Ladders (Assess)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_LADDER_TABLE, [('domain', 'eq', "={{ $('Assess Validate').first().json.domain }}")]), [990, -100], **_LOAD),
   _an('Load Content Log (Assess)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_LOG_TABLE, [('domain', 'eq', "={{ $('Assess Validate').first().json.domain }}")]), [1045, -100], **_LOAD),
+  # F-A1 / A-2 (2026-10-17): the ladder's OWN status (active / paused / ...) lives in seo_ladder_settings, not on the rung row
+  _an('Load Ladder Settings (Assess)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_LADDER_SETTINGS_TABLE, [('domain', 'eq', "={{ $('Assess Validate').first().json.domain }}")]), [1070, -40], **_LOAD),
   _acode('Assess Requests', 'Assess_Requests.js', [1100, -100]),
   _an('Run Assess Requests', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.endpoint }}', 'authentication': 'genericCredentialType', 'genericAuthType': 'httpBasicAuth', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.body) }}', 'options': {'timeout': 15000}}, [1320, -100], credentials=_DFS_CRED, onError='continueRegularOutput', **retry_lint.RETRY),
   _acode('Assess Result', 'Assess_Result.js', [1540, -100]),
@@ -396,7 +398,7 @@ def _alink(a, b, out=0):
     outs = _AC.setdefault(a, {}).setdefault('main', [])
     while len(outs) <= out: outs.append([])
     outs[out].append({'node': b, 'type': 'main', 'index': 0})
-for _a, _b in [('Assess Webhook', 'Assess Validate'), ('Assess Validate', 'Assess Valid?'), ('Ensure Cache Table (Assess)', 'Load Assess Cache'), ('Load Assess Cache', 'Load Ladders (Assess)'), ('Load Ladders (Assess)', 'Load Content Log (Assess)'), ('Load Content Log (Assess)', 'Assess Requests'), ('Assess Requests', 'Run Assess Requests'),
+for _a, _b in [('Assess Webhook', 'Assess Validate'), ('Assess Validate', 'Assess Valid?'), ('Ensure Cache Table (Assess)', 'Load Assess Cache'), ('Load Assess Cache', 'Load Ladders (Assess)'), ('Load Ladders (Assess)', 'Load Content Log (Assess)'), ('Load Content Log (Assess)', 'Load Ladder Settings (Assess)'), ('Load Ladder Settings (Assess)', 'Assess Requests'), ('Assess Requests', 'Run Assess Requests'),
                ('Run Assess Requests', 'Assess Result'), ('Assess Result', 'DataForSEO OK?'), ('Keyword Fit', 'Fit Parsed?'), ('Keyword Fit (Text)', 'Assess Response'), ('Assess Response', 'Respond Assess'), ('Respond Assess', 'Reach Row (Assess)'), ('Reach Row (Assess)', 'New Reach (Assess)?'),
                ('Ensure Run Ledger (Assess)', 'Run Ledger Row (Assess)'), ('Run Ledger Row (Assess)', 'Reserve Run Ledger (Assess)'), ('Reserve Run Ledger (Assess)', 'Load Run Ledger (Assess)'), ('Load Run Ledger (Assess)', 'Assess Limit'),
                ('Assess Limit', 'Assess Limited?'), ('Respond Assess Limited', 'Mark Run Refused (Assess)'),
