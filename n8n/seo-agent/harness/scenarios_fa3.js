@@ -177,6 +177,29 @@ module.exports = async (ctx) => {
   });
 
   // ===================================================================================
+  // SA04 — describe: the pages' own titles on the canonical host, and facts that are facts
+  // ===================================================================================
+  await guard('SA04 A-4 describe: pages read carry their own titles on the canonical host; site_facts holds no section label, call to action or article title', async () => {
+    reset(); const SN = 'SA04 A-4 — describe names /industries "Industries We Serve" (not the menu text "Banking Financial Services"), the homepage on www, no "Read more" link as a menu page, and site_facts without "What We Do" / "Insights" / the site\'s own article titles';
+    begin(SN); const check = mkCheck(SN);
+    const A = FX.a4;
+    for (const n of ['Clean Site Text', 'Nav Pages Plan', 'Read Nav Pages']) mock(n, items(A[n]));
+    mock('Site Model', [{ json: { site_model: { ...FX.site_model764, pages: FX.pages764 } } }]);
+    const sp = (await run('Site Pages', [{ json: {} }]))[0].json;
+    console.log('   pages read ->', sp.site_pages.map(p => p.url.replace(/^https:\/\//, '') + ' "' + p.title + '"').join(' | '));
+    const t = (path) => (sp.site_pages.find(p => p.url.endsWith(path)) || {}).title;
+    check('A-4: /industries and /capabilities/data are named by their own page titles, not the menu link text',
+      t('/industries') === 'Industries We Serve' && t('/capabilities/data') === 'Data & Analytics', JSON.stringify(sp.site_pages));
+    check('A-4: every page read is on the canonical host (www.techand.ai), the homepage included',
+      sp.site_pages.every(p => /^https:\/\/www\.techand\.ai\//.test(p.url)), JSON.stringify(sp.site_pages.map(p => p.url)));
+    check('A-4: a "Read more about ..." article link is not kept as a menu page', !(sp.nav_pages || []).some(n => /^read more/i.test(n.text)), JSON.stringify(sp.nav_pages));
+    const bad = ['Industries We Serve', 'What We Do', 'Insights', 'Proven Track Record', 'Global Partner', 'Ready to Transform Your Business?', 'Top Peppol E-Invoicing Software Features Every UAE CFO Must Look For', 'The Financial Reporting Trap: Why D365 F&O Users Still Reach for Excel'];
+    check('A-4: site_facts keeps the claims ("20+ Years", "24/7 Support") and drops section labels, calls to action and the site\'s own article titles, and counts them',
+      sp.site_facts.includes('20+ Years') && sp.site_facts.includes('24/7 Support') && !bad.some(b => sp.site_facts.includes(b)) && sp.site_facts_dropped >= bad.length,
+      JSON.stringify({ kept: sp.site_facts.slice(0, 12), dropped: sp.site_facts_dropped }));
+  });
+
+  // ===================================================================================
   // SA25 — discovery's first picks carry the ladder that already holds them
   // ===================================================================================
   const discover764 = async () => {
