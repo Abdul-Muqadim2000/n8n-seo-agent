@@ -343,6 +343,16 @@ describe('cadence mirror: a failed draft and a set-aside main keyword (R111, R87
     expect([p.waitingPublish, p.needsFix]).toEqual([1, ['peppol uae cost']]);
   });
 
+  // A-20 (2026-10-17, F-A1): the engine now moves the ladder row itself to `written` / `not_ready` when the page run saves its content-log
+  // row (Ladder_Row_Written.js). The mirror reads those exactly like `writing`: the page waits once, and it is never written again.
+  it('A-20: a ladder row that says not_ready / written waits once and is not picked again', () => {
+    for (const st of ['not_ready', 'written'] as const) {
+      const p = planCadence(input({ ladders: A({ a: st }), logs: [logRow('peppol uae cost', { status: st, ladder_id: 'lad_A' })], settings: noGuard }), NOW);
+      expect(p.waitingPublish).toBe(1);
+      expect(p.picks.some((x) => x.keyword === 'peppol uae cost')).toBe(false);
+    }
+  });
+
   // R87: n8n writes `set_aside` back on the main keyword's row when it is not a search the site should target (Tracker Ladder Marks /
   // Ladder Marks). The ladder's rungs exist only to climb towards it, so the Monday run writes none of them and the app shows it paused.
   it('R87: a ladder whose main keyword row says set_aside is paused: no rung written or queued, the reason kept', () => {
