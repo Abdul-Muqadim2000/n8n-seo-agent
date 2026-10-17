@@ -59,7 +59,20 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-10-16 evening, second wave — every R34–R119 defect fixed in code — latest)
+## Status (2026-10-17, third wave — the 28 benchmark rows in reach built — latest)
+**Seven agents (W3-A audit, W3-B content, W3-C rank, W3-D site tracking, W3-E AI stats, W3-F AI growth + leftovers, W3-G app layer +
+marketing), 3 at a time; every merge rebuilt in the main worktree with the exact harness count. Harness 6139 -> 6486 passed, 0 failed;
+app typecheck clean, 326 shared / 305 server. Deployed twice 2026-10-16/17 (23 published, new `SEOagentPubCheck`
+`POST /webhook/seo-publish-check`; columns `seo_sites.content_groups_json`, `seo_ai_visibility.rival_sources_json`,
+`seo_audit_findings.evidence` / `sample_urls`; app migration 0008 `api_keys`).** FIX_PLAN §3.16: 21 of 28 rows verified live (several
+only on their honest "nothing to act on" path), 7 fixed in harness (B5-4 B6-6 B6-8 B6-10 B8-6 B8-7 B5-11 — they need a second rank
+reading, a multi-language site, a browser pass or an owner-created API key). New: read API `/api/v1` + MCP `POST /api/v1/mcp` with
+per-company keys, a publish check usable outside a content run, Holm-corrected AI alerts, per-engine tests, content groups, Discover /
+News, own-move vs SERP churn, cannibalisation, corrections for wrong AI claims, readiness as the AI fetchers. DataForSEO **$8.09**.
+Console Alerts' IMAP trigger dropped while the Mac slept and n8n deactivated it (re-activated 2026-10-17). Not in reach / owner: see
+`docs/system-review-2026-10-15/NEXT_WAVE_BENCHMARK_ROWS.md` §1 and §6.
+
+## Status (2026-10-16 evening, second wave — every R34–R119 defect fixed in code — previous)
 **Second wave merged, deployed 18:30 UTC (`52b9044`), live-checked** (`docs/system-review-2026-10-15/LIVE_CHECK_fixes.md` §Second wave;
 FIX_PLAN §3.17: **no defect row left open**). Six agents (A9 engine cost, A10 one gate + AI reporting, A11 audit accuracy, A12 app copy,
 A13 app cost, A14 leftover halves) + orchestrator fixes (Rank Tracker callback behind its settle, engine prices in every app screen via
