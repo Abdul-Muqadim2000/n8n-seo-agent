@@ -12964,7 +12964,7 @@ await guard('S88 B6 rank tracking', async () => {
   check('B6-5: a week in which a results page could not be read says how many failed and how many were sent again, so a smaller week is not read as a fall',
     /4 results pages asked for, 3 read, 1 could not be read and 1 of them sent again/.test(Rfailed.html), (Rfailed.html.match(/This week’s checks:[^<]+/) || [''])[0]);
   check('B6-2: the movement is explained once under the table, with what it was measured on, beside the share of voice that is still labelled a model',
-    /Page movement is measured: the top ten stored for this reading against the top ten stored for the previous one\./.test(Rsteady.html)
+    /Page movement is measured: the top ten stored for this reading against the top ten stored for the previous one( \(or, when that one was a one-off[^)]*\))?\./.test(Rsteady.html)   // C-4: the one-off rule is said where the method is
     && /stated rule, not a measurement/.test(Rsteady.html) && /Not measured clicks/.test(Rsteady.html)
     && /<th[^>]*>Page movement<\/th>/.test(Rsteady.html), (Rsteady.html.match(/Page movement is measured[^<]*/) || [''])[0]);
   save('rank-tracker-b6.html', Rchurn.html); scanHtml('rank tracker report with the page movement (B6)', Rchurn.html);
@@ -15159,6 +15159,36 @@ await guard('SC4 C-2 C-8 C-10 one rival set', async () => {
   delete store['Manual Run'];
   check('C-11: the AI Growth dry run of 2026-10-17 is titled a TEST RUN ("[AI growth · TEST RUN] techand.ai — dry run, nothing was submitted"), never "done for you this week", and carries dry_run for the app\'s delivery hold',
     GD.dry_run === true && /^\[AI growth · TEST RUN\] techand\.ai — dry run, nothing was submitted$/.test(GD.subject) && !/done for you this week/.test(GD.subject) && GR.subject && !/TEST RUN/.test(GR.subject), JSON.stringify([GD.subject, GR.subject]));
+  reset();
+});
+
+await guard('SC5 C-4 one outlier reading', async () => {
+  const SN = 'SC5 C-4 — page movement is not measured against one outlier reading: on the real readings of "e invoicing in uae" the 2026-10-16 19:58 page (exec 715) is named a one-off and the 2026-10-17 page is compared with the reading it matches; every movement label is defined';
+  reset(); begin(SN);
+  const check = C1.check(SN);
+  const RS = (() => { const src = require('fs').readFileSync(require('path').join(process.env.CODE_DIR || require('path').join(__dirname, 'code_v4'), 'Tracker_Report.js'), 'utf8');
+    const a = src.indexOf('const RS = (() => {'), b = src.indexOf('\n})();', a) + 6; return new Function(src.slice(a, b) + '; return RS;')(); })();
+  const H4 = require('./fixtures_c4');
+  const desk = H4.filter(r => r.device === 'desktop');
+  const today = desk.find(r => r.checked_at.startsWith('2026-10-17'));
+  const naive = RS.churn(RS.prevReading(desk, { keyword: 'e invoicing in uae', domain: 'techand.ai', before: today.checked_at }).snapshot_json, today.snapshot_json, { own: 'techand.ai' });
+  const st = RS.stableReading(desk, { keyword: 'e invoicing in uae', domain: 'techand.ai', before: today.checked_at, cur: today.snapshot_json });
+  const fixed = { ...RS.churn(st.row.snapshot_json, today.snapshot_json, { own: 'techand.ai' }), ...(st.outlier ? { outlier: st.outlier } : {}) };
+  console.log('   naive ->', naive.changed, 'of', naive.depth, naive.band, '| stable baseline', st.row.checked_at, '->', fixed.changed, 'of', fixed.depth, fixed.band, '|', st.outlier && st.outlier.text);
+  check('C-4: the reading compared against before (2026-10-16 19:58) shows "the whole results page moved" - the defect, reproduced from the stored readings',
+    naive.available && naive.band === 'high' && naive.changed >= 8, JSON.stringify({ changed: naive.changed, depth: naive.depth, band: naive.band }));
+  check('C-4: with the one-off set aside the 2026-10-17 page is compared with the 2026-10-16 00:33 reading it matches - it barely moved - and the one-off is named with its figures',
+    st.row.checked_at === '2026-10-16T00:33:54.182Z' && fixed.band === 'still' && fixed.changed <= 1 && st.outlier && st.outlier.at === '2026-10-16T19:58:13.658Z'
+    && /2026-10-16 19:58 UTC was a one-off: it differed from this reading in \d+ of the top \d+ places/.test(st.outlier.text) && /one-off/.test(RS.churnText(fixed)),
+    JSON.stringify({ base: st.row.checked_at, changed: fixed.changed, band: fixed.band, outlier: st.outlier }));
+  // a real move is still a move: the 2026-10-16 19:58 page as "today" against the readings before it has no agreeing older reading
+  const odd = desk.find(r => r.checked_at.startsWith('2026-10-16T19:58'));
+  const st2 = RS.stableReading(desk, { keyword: 'e invoicing in uae', domain: 'techand.ai', before: odd.checked_at, cur: odd.snapshot_json });
+  check('C-4: and a page that really changed (2026-10-16 19:58 against the readings before it) keeps the newest baseline - no reading is set aside without a reading that contradicts it',
+    st2.row.checked_at === '2026-10-16T00:33:54.182Z' && !st2.outlier, JSON.stringify({ base: st2.row && st2.row.checked_at, outlier: st2.outlier }));
+  check('C-4: every label is defined - "within noise" (two readings minutes apart differed as much) is said in words, never the bare word "(noise)"',
+    RS.bandWord('noise') === 'within noise' && RS.bandWord('high') === 'most of the page moved' && /"within noise" = no more places changed than in two readings of the same page taken minutes apart/.test(RS.BAND_TERMS),
+    RS.BAND_TERMS);
   reset();
 });
 // ===================================================================================
