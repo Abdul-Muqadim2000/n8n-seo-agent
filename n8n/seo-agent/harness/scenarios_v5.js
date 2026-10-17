@@ -11545,9 +11545,13 @@ await guard('b2-serp-clusters-and-domain-diversity', async () => {
   // the control: the same pool with no results pages read is the behaviour before this pass
   const label = await ladder80({ serp: false });
   const abLabel = label.pages.filter(p => p.keyword === A || p.keyword === B);
-  check('B2-4 (control): with no results page read, the same two searches become TWO pages grouped by the AI\'s topic label — which is what shipped until today',
-    abLabel.length === 2 && abLabel.every(p => /topic label/.test(p.grouped_by || '')) && label.clusters === null,
-    JSON.stringify(abLabel.map(p => [p.rung, p.keyword, p.grouped_by])));
+  // F-A1 / A-8 (2026-10-17): with no results page read the two searches used to become TWO pages on the AI's topic label (what shipped
+  // until B2-4); they are the same words, so the one-keyword-one-page rule now folds them into one page even without a results page, and
+  // the plan says so - the grouping is still labelled a topic label, never a measured one
+  check('B2-4 (control) + A-8: with no results page read, the same two searches (the same words) are ONE page, folded by the one-keyword-one-page rule and still labelled a topic label',
+    abLabel.length === 1 && abLabel.every(p => /topic label/.test(p.grouped_by || '')) && label.clusters === null
+    && ((label.L.one_page || {}).moved || []).some(m => (m.keyword === A || m.keyword === B) && /the same search/.test(m.why)),
+    JSON.stringify({ pages: abLabel.map(p => [p.rung, p.keyword, p.grouped_by]), moved: (label.L.one_page || {}).moved }));
 
   // ---------- 2. INVARIANTS rule 1: a keyword whose results page failed is named, not clustered, not dropped ----------
   const nc = (cl.not_compared || []).find(x => x.keyword === FAILED) || {};
@@ -11572,8 +11576,8 @@ await guard('b2-serp-clusters-and-domain-diversity', async () => {
     askedBig.length === 24 && big.reqs[0].cap === 24 && big.reqs[0].cost_usd === 0.048 && big.reqs[0].price_usd === 0.002
     && big.reqs[0].on_topic > 24 && big.reqs[0].left_uncompared === big.reqs[0].on_topic - 24, JSON.stringify(big.reqs[0]));
   check('B2-4: what was really spent is read back from the tasks that ran, counted once by task id, and never from the reservation',
-    cl.cost_usd === +(cl.asked * 0.002 - 0.002).toFixed(4) && /measured:/.test(cl.cost_basis) && /counted once by task id/.test(cl.cost_basis),
-    JSON.stringify({ cost: cl.cost_usd, asked: cl.asked, basis: cl.cost_basis }));
+    cl.cost_usd === +((cl.asked + (cl.supporting_asked || 0)) * 0.002 - 0.002).toFixed(4) && /measured:/.test(cl.cost_basis) && /counted once by task id/.test(cl.cost_basis),   // F-A1 / A-10: the main page's supporting keywords are read in the same cap
+    JSON.stringify({ cost: cl.cost_usd, asked: cl.asked, supporting_asked: cl.supporting_asked, basis: cl.cost_basis }));
 
   // ---------- 4. a free run buys nothing ----------
   const free = await ladder80({ pv: { free_only: true } });
@@ -16754,6 +16758,7 @@ await guard('S143 R50 R51 R58 R40 the keyword check names the ladder and page, t
   mock('Assess Result', [{ json: K.assess_result }]);
   mock('Load Ladders (Assess)', [{ json: { ladder_id: 'lad_erp1', domain: 'techand.ai', keyword: 'erp software uae', head_keyword: 'erp software uae', rung: 4, status: 'active', target_url: 'https://www.techand.ai/erp-software-uae/' } }]);
   mock('Load Content Log (Assess)', [{ json: { domain: 'techand.ai', keyword: 'erp software uae', status: 'written', published_url: '', existing_page_url: 'https://www.techand.ai/erp-software-uae/' } }]);
+  mock('Load Ladder Settings (Assess)', [{ json: { ladder_id: 'lad_erp1', domain: 'techand.ai', status: 'active' } }]);   // F-A1 / A-2: the ladder's own status
   const body = (await run('Assess Response', [{ json: { output: { fit: 2, navigational: false, alternatives: '' } } }]))[0].json.body;
   const ex = body.existing || {};
   check('R50: the answer names the ladder id, its status, the page and the page status (live exec 649 had all four null)',
@@ -16791,15 +16796,17 @@ await guard('S144 R42 a ladder run that writes on top of a full pile says so', a
   const three = [logRow('wms uae'), logRow('erp for retail uae', { status: 'not_ready' }), logRow('e invoicing guide', { started_at: days(40) })];
   const full = await planWith(three, []);
   const notes = (full.ladder.notes || []).join(' | ');
-  check('R42: with 3 written / not_ready pages and the default limit 3, the report says "3 pages waiting to be published (limit 3); this writes page 4"',
-    full.ladder.planned && (full.ladder.write_now || []).length > 0 && /You have 3 pages waiting to be published \(limit 3\); this writes page 4\./.test(notes), notes.slice(0, 500));
+  // F-A1 / A-12 (2026-10-17): the ladder run no longer writes on top of a full pile - it states the limit with the count and HOLDS the page
+  check('R42 + A-12: with 3 written / not_ready pages and the default limit 3, the plan states "at most 3 written pages waiting to be published (3 now)" and the page is held, not written',
+    full.ladder.planned && (full.ladder.write_now || []).length === 0 && /at most 3 written pages waiting to be published \(3 now, 1 needing a fix\)/.test(notes)
+    && (full.ladder.held.why || []).some(w => w.limit === 'pileup' && /3 page\(s\) are written and waiting/.test(w.text)), notes.slice(0, 500));
   check('R42: it also says one of them did not pass the quality check', /1 of them did not pass the quality check/.test(notes), notes.slice(0, 500));
   const under = await planWith([logRow('wms uae'), logRow('old page', { started_at: days(200) }), logRow('published page', { status: 'published', published_url: 'https://www.techand.ai/x/' })], []);
-  check('R42: a page older than 120 days or already published does not count - 1 waiting is below the limit, no note', !/waiting to be published/.test((under.ladder.notes || []).join(' ')), (under.ladder.notes || []).join(' | ').slice(0, 300));
+  check('R42: a page older than 120 days or already published does not count - 1 waiting is below the limit (no pile-up reason)', /waiting to be published \(1 now\)/.test((under.ladder.notes || []).join(' ')) && !((under.ladder.held || {}).why || []).some(w => w.limit === 'pileup'), (under.ladder.notes || []).join(' | ').slice(0, 300));
   const site5 = await planWith(three, [{ ladder_id: '_site', site_id: A1SITE, domain: A1D, max_waiting: 5 }]);
-  check('R42: the limit is the `_site` row\'s max_waiting (5): 3 waiting is no pile-up', !/waiting to be published/.test((site5.ladder.notes || []).join(' ')), (site5.ladder.notes || []).join(' | ').slice(0, 300));
+  check('R42: the limit is the `_site` row\'s max_waiting (5): 3 waiting is no pile-up', /at most 5 written pages waiting to be published \(3 now/.test((site5.ladder.notes || []).join(' ')) && !((site5.ladder.held || {}).why || []).some(w => w.limit === 'pileup'), (site5.ladder.notes || []).join(' | ').slice(0, 300));
   const site2 = await planWith(three, [{ ladder_id: '_site', site_id: A1SITE, domain: A1D, max_waiting: 2 }]);
-  check('R42: with limit 2 the sentence names limit 2', /You have 3 pages waiting to be published \(limit 2\); this writes page 4\./.test((site2.ladder.notes || []).join(' ')), (site2.ladder.notes || []).join(' | ').slice(0, 300));
+  check('R42: with limit 2 the sentence names limit 2', /at most 2 written pages waiting to be published \(3 now/.test((site2.ladder.notes || []).join(' ')), (site2.ladder.notes || []).join(' | ').slice(0, 300));
   reset();
 });
 
@@ -17935,6 +17942,245 @@ await guard('S166 B8-8 B8-9 B8-10 the build carries the three engine fixes in bo
   check('B8-9: the Holm kit (holm, pTwo, zFor) is inlined into AI Metrics and Pulse Metrics', [AM, PM].every(s => /const holm = \(/.test(s) && /const pTwo = \(/.test(s) && /const zFor = \(/.test(s)), [AM.length, PM.length].join(','));
   check('B8-8: the old cited > 0 then cited === 0 rule is gone from AI Metrics', AM && !/\(v\.cited \|\| 0\) > 0 && engines\[e\] && engines\[e\]\.answered && !engines\[e\]\.cited/.test(AM), '');
   check('B8-10: the majority rule brand.known * 2 >= brand.answered is gone', AM && !/brand\.known \* 2 >= brand\.answered/.test(AM), '');
+});
+
+
+// ===================================================================================
+// SFA1-1 … SFA1-8 (2026-10-17, defect-fix agent F-A1 — keyword ladder planning; re-rating 2026-10-17 part 1,
+// docs/system-review-2026-10-17/parts/1_keywords_content.md §7 / §8, findings A-2 A-8 A-9 A-10 A-11 A-12 A-20 A-21)
+// The fixture is cut from the re-rating's own executions (harness/fixtures_live/r_fa1_ladder770.json.gz: exec 770 the ladder
+// "it consulting dubai" — its Parse Verdict, Ladder Pool, the 20 cluster results pages it bought (organic results only), the relevance
+// answers, the site model, the domain's ladders / settings / content log; exec 771 its page run's Merge Keyword Data, verdict answer,
+// Normalize Input and Content Log Row), e-mail addresses / phones / hook URLs removed.
+// ===================================================================================
+const FA1 = (() => { const zlib = require('zlib'), fs = require('fs'), path = require('path');
+  return JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(__dirname, 'fixtures_live', 'r_fa1_ladder770.json.gz'))).toString('utf8')); })();
+const fa1Check = (SN) => (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+const FA1L = (x) => String(x || '').toLowerCase().trim();
+// exec 770's Ladder Clusters and Ladder Plan, replayed; `o` swaps one input (relevance answers, settings, content log, extra SERPs, the request)
+const fa1Ladder = async (o) => {
+  const X = o || {};
+  const pv = { ...FA1.parse_verdict, ...(X.base || {}) };
+  mock('Parse Verdict', [{ json: pv }]);
+  mock('Ladder Pool', [{ json: { ...FA1.ladder_pool, ...(X.base || {}) } }]);
+  const reqs = X.requests || FA1.cluster_requests;
+  mock('Ladder Cluster Requests', reqs.map(j => ({ json: j })));
+  mock('Run Ladder Cluster SERP', (X.serps || FA1.cluster_serp).map(j => ({ json: j })));
+  mock('Ladder Cluster Retry', FA1.cluster_retry.map(j => ({ json: j }))); mock('Run Ladder Cluster SERP (Retry)', []);
+  const cl = (await run('Ladder Clusters', [{ json: FA1.ladder_pool }]))[0].json;
+  mock('Ladder Relevance Chunks', FA1.chunks.map(j => ({ json: j })));
+  mock('Site Model', [{ json: { site_model: FA1.site_model } }]);
+  mock('Load Site Cache', FA1.site_cache.length ? FA1.site_cache.map(j => ({ json: j })) : [{ json: {} }]);
+  mock('Load Domain Ladders', (X.ladders || FA1.domain_ladders).map(j => ({ json: j })));
+  mock('Load Domain Ladder Settings', (X.settings || FA1.ladder_settings).map(j => ({ json: j })));
+  mock('Load Content Log (Ladder)', (X.log || FA1.content_log).length ? (X.log || FA1.content_log).map(j => ({ json: j })) : [{ json: {} }]);
+  const item = (await run('Ladder Plan', (X.relevance || FA1.relevance).map(j => ({ json: j }))))[0].json;
+  return { L: item.ladder, item, clusters: cl.serp_clusters };
+};
+// every keyword of a plan and the pages that carry it (own keyword or supporting)
+const fa1Owners = (L) => { const m = new Map(); const add = (kw, pg) => { const k = FA1L(kw); if (!k) return; if (!m.has(k)) m.set(k, []); m.get(k).push(pg); };
+  for (const r of (L.rungs || [])) for (const p of (r.pages || [])) { add(p.keyword, p.keyword); for (const s of (p.supporting || [])) add(s, p.keyword); }
+  add(L.top.keyword, L.top.keyword); for (const s of (L.top.supporting || [])) add(s, L.top.keyword);
+  return m; };
+const FA1_RULE = (cl) => (a, b) => { const ua = cl.urls_of[FA1L(a)], ub = cl.urls_of[FA1L(b)]; if (!ua || !ub) return null; const sb = new Set(ub); return ua.filter(u => sb.has(u)).length; };
+
+await guard('SFA1-1 A-9 a keyword that meets the rule with a member of a group joins it, and "own results page" is only said when true', async () => {
+  const SN = 'SFA1-1 A-9 — "it consulting company dubai" shares 3 of its top 7 with "it consulting company in dubai" (a member, 2 with the head): it joins that group and no page claims a results page of its own while it meets the rule with another keyword';
+  reset(); begin(SN); const check = fa1Check(SN);
+  const { L, clusters } = await fa1Ladder();
+  const share = FA1_RULE(clusters);
+  check('A-9: the pair the executor recomputed really shares 3 of 7 (the fixture is exec 770\'s own results pages)', share('it consulting company dubai', 'it consulting company in dubai') === 3 && share('it consulting company dubai', 'dubai it consulting companies') === 2,
+    JSON.stringify([share('it consulting company dubai', 'it consulting company in dubai'), share('it consulting company dubai', 'dubai it consulting companies')]));
+  const ofK = clusters.of_keyword['it consulting company dubai'] || null;
+  check('A-9: it is a member of the "dubai it consulting companies" group, joined through "it consulting company in dubai" (3 shared), 2 with the head',
+    ofK && ofK.head_keyword === 'dubai it consulting companies' && ofK.via === 'it consulting company in dubai' && ofK.shared_urls === 3 && ofK.shared_with_head === 2, JSON.stringify(ofK));
+  const pages = L.rungs.flatMap(r => r.pages);
+  check('A-9: no rung page "it consulting company dubai" any more (exec 770 row 32)', !pages.some(p => p.keyword === 'it consulting company dubai'), JSON.stringify(pages.map(p => p.keyword)));
+  const own = pages.filter(p => /^own results page/.test(p.grouped_by || ''));
+  const compared = Object.keys(clusters.urls_of);
+  const bad = own.filter(p => compared.some(k => k !== FA1L(p.keyword) && (share(p.keyword, k) || 0) >= clusters.min_shared_urls));
+  check('A-9: every page labelled "own results page" shares fewer than 3 of its top 7 with EVERY other keyword compared — the rule and the label agree',
+    own.length >= 1 && !bad.length && own.every(p => !/no other search Google answers/.test(p.grouped_by)), JSON.stringify({ own: own.map(p => [p.keyword, p.grouped_by]), bad: bad.map(p => p.keyword) }));
+  const g = pages.find(p => p.keyword === 'dubai it consulting companies') || {};
+  check('A-9: the group page says who joined through whom', /through "it consulting company in dubai"/.test(g.grouped_by || '') && (g.supporting || []).includes('it consulting company dubai'), JSON.stringify({ by: g.grouped_by, sup: g.supporting }));
+});
+await guard('SFA1-2 A-8 one keyword, one page across the rungs, the main page, the other ladders and the live pages', async () => {
+  const SN = 'SFA1-2 A-8 — exec 770 planned "it consulting company dubai" as the rung page of row 32 AND as a supporting keyword of the main page (row 33); every keyword now has exactly one page';
+  reset(); begin(SN); const check = fa1Check(SN);
+  const { L } = await fa1Ladder();
+  const owners = fa1Owners(L);
+  const twice = [...owners.entries()].filter(([, ps]) => ps.length > 1);
+  check('A-8: no keyword is on two pages of the plan', !twice.length, JSON.stringify(twice));
+  check('A-8: "it consulting company dubai" is on exactly one page — the rung page Google groups it with, not the main page', (owners.get('it consulting company dubai') || []).length === 1 && !L.top.supporting.includes('it consulting company dubai'), JSON.stringify({ owners: owners.get('it consulting company dubai'), top: L.top.supporting }));
+  const lo = (L.one_page || {}).left_out || [];
+  check('A-8: the plan says why it left the main page ("the rung page … targets it")', lo.some(x => x.keyword === 'it consulting company dubai' && /rung page "dubai it consulting companies" targets it/.test(x.why)), JSON.stringify(lo));
+  check('A-8: and prints it among its notes', L.notes.some(n => /^One keyword, one page: /.test(n) && /it consulting company dubai/.test(n)), JSON.stringify(L.notes.filter(n => /One keyword/.test(n))));
+  // a supporting keyword another ladder of the site already plans is never put on this main page
+  const other = FA1.domain_ladders.find(r => Number(r.rung) !== 4 && r.ladder_id !== 'lad_mvcldcnv9q1q') || {};
+  const { L: L2 } = await fa1Ladder({ base: { secondary_keywords: [other.keyword, ...FA1.parse_verdict.secondary_keywords] } });
+  check('A-8: a keyword of another ladder of the site ("' + other.keyword + '") is left off the main page, with that ladder named', !L2.top.supporting.includes(FA1L(other.keyword))
+    && ((L2.one_page || {}).left_out || []).some(x => x.keyword === FA1L(other.keyword) && /belongs to your ladder/.test(x.why)), JSON.stringify(((L2.one_page || {}).left_out || []).slice(0, 4)));
+  // a live page that carries every word of the search answers it; a 3-of-4 title match on another subject ("AI Consulting … Services in UAE") does not
+  const { L: L3 } = await fa1Ladder({ base: { secondary_keywords: ['dynamics 365 business central uae', 'it consulting services dubai', ...FA1.parse_verdict.secondary_keywords] } });
+  const lo3 = (L3.one_page || {}).left_out || [];
+  check('A-8: "dynamics 365 business central uae" — the site\'s live page /dynamics-365-business-central-uae answers it — is not given to the new main page',
+    !L3.top.supporting.includes('dynamics 365 business central uae') && lo3.some(x => x.keyword === 'dynamics 365 business central uae' && /dynamics-365-business-central-uae already answers it|not on this ladder/.test(x.why)), JSON.stringify(lo3.slice(0, 5)));
+  check('A-8: "it consulting services dubai" is NOT said to be answered by the AI consulting page (IT is not AI: a 3-of-4 match is not "already answers it")',
+    !lo3.some(x => x.keyword === 'it consulting services dubai' && /ai-copilot-advisory-uae/.test(x.why)), JSON.stringify(lo3.filter(x => x.keyword === 'it consulting services dubai')));
+});
+
+await guard('SFA1-3 A-10 the main page keeps a supporting keyword only on a shared results page, and says when it could not compare', async () => {
+  const SN = 'SFA1-3 A-10 — the verdict\'s supporting keywords get their results page read inside the cap; one sharing the main keyword\'s pages is kept as measured, one Google answers with other pages is left out with the count, one that could not be read is labelled "not compared"';
+  reset(); begin(SN); const check = fa1Check(SN);
+  const pool = { ...FA1.ladder_pool };
+  const reqs = (await run('Ladder Cluster Requests', [{ json: pool }])).map(i => i.json);
+  const sup = reqs.filter(r => r.supporting_check).map(r => r.keyword);
+  check('A-10: Ladder Cluster Requests asks for the verdict\'s supporting keywords that are not rung candidates already, inside the cap of 24', sup.length >= 3 && reqs.length <= 24
+    && sup.includes('it consultancy dubai') && sup.includes('it consultants in dubai') && reqs.filter(r => !r.supporting_check).length === 20 && reqs.every(r => r.cost_usd === +(reqs.length * 0.002).toFixed(4)),
+    JSON.stringify({ sup, n: reqs.length, cost: reqs[0] && reqs[0].cost_usd }));
+  // their answers: one with the main keyword's own top results, one with other pages, the rest failing (task error inside a 200)
+  const headTop = FA1.parse_verdict.competitors_summary.slice().sort((a, b) => a.rank - b.rank).map(c => c.url);
+  const env = (urls) => ({ status_code: 20000, tasks: [{ id: 'fa1-' + Math.random(), status_code: 20000, cost: 0.002, result: [{ items: urls.map((u, i) => ({ type: 'organic', rank_group: i + 1, url: u, title: 'Result ' + (i + 1) })) }] }] });
+  const other7 = ['https://a.example.ae/x', 'https://b.example.ae/y', 'https://c.example.ae/z', 'https://d.example.ae/w', 'https://e.example.ae/v', 'https://f.example.ae/u', 'https://g.example.ae/t'];
+  const serps = reqs.map((r, i) => i < FA1.cluster_serp.length && !r.supporting_check ? FA1.cluster_serp[i]
+    : r.keyword === 'it consultants in dubai' ? env([headTop[0], headTop[1], headTop[2], headTop[3], ...other7.slice(0, 3)])
+      : r.keyword === 'it consultancy dubai' ? env(other7) : { status_code: 20000, tasks: [{ id: 'fa1-err-' + i, status_code: 40501, status_message: 'Invalid Field', cost: 0, result: null }] });
+  const { L, clusters } = await fa1Ladder({ requests: reqs, serps });
+  const basis = L.top.supporting_basis || [];
+  console.log('   main page supporting ->', JSON.stringify({ basis, by: L.top.grouped_by }));
+  check('A-10: the supporting keywords were read and kept apart from the rung clusters', clusters.supporting_compared >= 2 && clusters.compared === 20 && clusters.asked === 20, JSON.stringify({ sc: clusters.supporting_compared, c: clusters.compared, a: clusters.asked }));
+  const kept = basis.find(k => k.keyword === 'it consultants in dubai') || {};
+  check('A-10: "it consultants in dubai" shares 4 of the main keyword\'s top results — kept, labelled "shared results page" with the count', kept.by === 'shared results page' && kept.shared_urls >= 3, JSON.stringify({ kept, left_out: (L.one_page || {}).left_out }));
+  const out = ((L.one_page || {}).left_out || []).find(x => x.keyword === 'it consultancy dubai') || {};
+  check('A-10: "it consultancy dubai" shares 0 — left off the main page with "Google answers it with other pages: 0 of …"', !L.top.supporting.includes('it consultancy dubai') && /Google answers it with other pages: 0 of/.test(out.why || ''), JSON.stringify(out));
+  check('A-10: a supporting keyword whose results page could not be read is kept only as "topic label (results page not compared)" — never presented as measured',
+    basis.filter(k => k.shared_urls == null && k.by !== 'shared results page').every(k => /not compared|same live page|main keyword/.test(k.by)) && basis.some(k => /not compared/.test(k.by)) && /shared results page for \d+ of \d+; the rest grouped by topic/.test(L.top.grouped_by),
+    JSON.stringify({ basis, by: L.top.grouped_by }));
+  check('A-10: "it consulting services dubai" (read as a rung candidate, 0 of the main keyword\'s top results) is no longer a supporting keyword of the main page', !L.top.supporting.includes('it consulting services dubai'), JSON.stringify(L.top.supporting));
+  // the exec-770 inputs (no supporting keyword read): nothing is called measured
+  const { L: L0 } = await fa1Ladder();
+  check('A-10: with no supporting keyword read (exec 770 as it ran), the main page says its supporting keywords are grouped by topic, not compared', /topic label \(results pages not compared\)/.test(L0.top.grouped_by) && L0.notes.some(n => /main page's supporting keywords are grouped by topic label/.test(n)), L0.top.grouped_by);
+});
+
+await guard('SFA1-4 A-11 what Google ranks for a rung reaches the plan: the kind of page, and what it sells', async () => {
+  const SN = 'SFA1-4 A-11 — "dubai it consulting companies" (4 lists of 7) is no longer a silent Service Page; "it services dubai" (local IT support, CCTV, cabling) reaches the relevance screen with those titles, and a refusal for "not what you sell" is named in the plan';
+  reset(); begin(SN); const check = fa1Check(SN);
+  const { L, item, clusters } = await fa1Ladder();
+  const lst = L.rungs.flatMap(r => r.pages).find(p => p.keyword === 'dubai it consulting companies') || {};
+  check('A-11: the kind of page Google ranks for it is read from the titles the run bought: lists, 4 of 7', clusters.types_of['dubai it consulting companies'].dominant === 'Comparison or list' && clusters.types_of['dubai it consulting companies'].dominant_count === 4, JSON.stringify(clusters.types_of['dubai it consulting companies']));
+  check('A-11: the Service Page planned for a list results page carries the note (exec 770: page_type_note null)', lst.serp_kind && lst.serp_kind.mismatch === true && /lists are what Google ranks for "dubai it consulting companies": 4 of the 7/i.test(lst.page_type_note || '') && L.notes.some(n => n === lst.page_type_note + '.'), JSON.stringify({ k: lst.serp_kind, n: lst.page_type_note }));
+  mock('Ladder Clusters', [{ json: { ...FA1.ladder_pool, serp_clusters: clusters } }]);
+  const ch = (await run('Ladder Relevance Chunks', store['Ladder Clusters']))[0].json;
+  const line = ch.keywords_text.split('\n').find(x => /\bit services dubai \(/.test(x)) || '';
+  check('A-11: the relevance screen is shown what Google ranks for "it services dubai" (local IT support)', /Google ranks: .*Local IT Support in Dubai/.test(line), line);
+  const PROMPT = (() => { try { return require('fs').readFileSync(require('path').join(__dirname, '..', 'v5', 'prompts', 'keyword_relevance.txt'), 'utf8'); } catch (e) { return ''; } })();
+  check('A-11: the prompt tells it to judge by what those pages offer and to give fit_reason', !PROMPT || (/Google ranks: …/.test(PROMPT) && /fit_reason/.test(PROMPT) && /local IT support/.test(PROMPT)), PROMPT.slice(0, 120));
+  // the screen's answer: relevance 0 for "it services dubai" with its reason -> not planned, and named
+  const rel = JSON.parse(JSON.stringify(FA1.relevance));
+  for (const o of rel) { const its = (o.output && o.output.items) || []; for (const it of its) if (it.keyword === 'it services dubai') { it.relevance = 0; it.fit_reason = 'Google ranks local IT support and managed-IT firms; Tech& does not sell office IT support.'; } }
+  const { L: L2 } = await fa1Ladder({ relevance: rel });
+  check('A-11: refused for what it sells, "it services dubai" is not a page of the plan and the notes say why', !L2.rungs.flatMap(r => r.pages).some(p => p.keyword === 'it services dubai')
+    && (L2.not_sold_keywords || []).some(x => x.keyword === 'it services dubai') && L2.notes.some(n => /offer something this business does not: "it services dubai" \(Google ranks local IT support/.test(n)), JSON.stringify(L2.not_sold_keywords));
+  check('A-11: exec 770 as it ran (no fit_reason in the answers) names no keyword falsely', !(L.not_sold_keywords || []).length, JSON.stringify(L.not_sold_keywords));
+});
+
+await guard('SFA1-5 A-12 a ladder run obeys the website\'s limits: pile-up and ladders written at once', async () => {
+  const SN = 'SFA1-5 A-12 — exec 770: 5 pages waiting (limit 3) and 5 Auto ladders with pages ahead (max 2); the main page is held with both reasons, the rows stay planned, nothing is spawned; force overrides and says so; a site under its limits writes as before';
+  reset(); begin(SN); const check = fa1Check(SN);
+  const { L, item } = await fa1Ladder();
+  console.log('   limits ->', JSON.stringify({ limits: L.limits && { ...L.limits, text: undefined, basis: undefined }, held: L.held && L.held.why.map(w => w.limit) }));
+  check('A-12: the pile-up count is the Content Cadence\'s: 5 waiting, 3 needing a fix, limit 3 (the executor\'s count)', L.pile_up.waiting === 5 && L.pile_up.needs_fix === 3 && L.pile_up.limit === 3 && L.pile_up.at_limit, JSON.stringify(L.pile_up));
+  check('A-12: the ladders ahead are counted by the cadence\'s rule (max 2 Auto ladders at a time; this one is behind 2 or more)', L.limits.max_active === 2 && L.limits.active_ahead >= 2 && L.limits.queued === true, JSON.stringify(L.limits));
+  check('A-12: nothing is written now — the page asked for is HELD, with both limits as the reason', L.write_now.length === 0 && L.held && L.held.pages.length === 1 && L.held.pages[0].keyword === 'it consulting dubai'
+    && L.held.why.map(w => w.limit).join(',') === 'pileup,max_active', JSON.stringify(L.held && L.held.why));
+  check('A-12: the plan says it in the owner\'s words (both limits, with the numbers, and who writes the page later)', L.notes.some(n => /^Limits of this website: at most 2 Auto ladder/.test(n) && /at most 3 written pages waiting/.test(n) && /was NOT written/.test(n) && /Content Cadence writes it/.test(n)), JSON.stringify(L.notes.filter(n => /Limits/.test(n))));
+  mock('Attach PDF Ladder', [{ json: { ...item, ladder: L } }]);
+  const rows = (await run('Ladder Rows', [{ json: {} }])).map(i => i.json);
+  check('A-12: every stored row stays planned (no row says writing for a page nobody started)', rows.length >= 3 && rows.every(r => r.status === 'planned'), JSON.stringify(rows.map(r => [r.keyword, r.status])));
+  mock('Ladder Plan', [{ json: item }]);
+  const spawned = await run('Spawn Page Runs', [{ json: { ...item, ladder: L } }]);
+  check('A-12: no page run is started', spawned.length === 0, JSON.stringify(spawned.map(s => s.json && s.json.body && s.json.body.keyword)));
+  // the request said "write anyway"
+  const { L: Lf } = await fa1Ladder({ base: { force_content: true } });
+  check('A-12: force_content overrides both limits and the plan says that it did', Lf.write_now.length === 1 && !Lf.held && Lf.limits.forced === true && Lf.notes.some(n => /overridden for this run/.test(n)), JSON.stringify({ w: Lf.write_now.length, held: !!Lf.held, f: Lf.limits.forced }));
+  // a site under its limits: nothing waiting, 10 ladders allowed
+  const settings = FA1.ladder_settings.map(r => r.ladder_id === '_site' ? { ...r, max_active: 10, max_waiting: 10 } : r);
+  const { L: Lok } = await fa1Ladder({ settings });
+  check('A-12: under both limits the page is written as before, and the limits are still stated', Lok.write_now.length === 1 && !Lok.held && Lok.notes.some(n => /^Limits of this website: at most 10 Auto ladder/.test(n) && /so it is written now/.test(n)), JSON.stringify({ w: Lok.write_now.length, n: Lok.notes.filter(n => /Limits/.test(n)) }));
+});
+
+await guard('SFA1-6 A-2 the Keyword Check gives the ladder\'s own status, not the rung row\'s', async () => {
+  const SN = 'SFA1-6 A-2 — "dynamics 365 partner uae": its ladder lad_mv4vxu3bq0kl is paused in seo_ladder_settings; the answer said ladder_status "planned" (the rung row)';
+  reset(); begin(SN); const check = fa1Check(SN);
+  const K = (() => { const zlib = require('zlib'), fs = require('fs'), path = require('path'); return JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(__dirname, 'fixtures_live', 'r_a1_assess598.json.gz'))).toString('utf8')); })();
+  const lad = FA1.domain_ladders.filter(r => r.ladder_id === 'lad_mv4vxu3bq0kl');
+  const set = FA1.ladder_settings.find(r => r.ladder_id === 'lad_mv4vxu3bq0kl') || {};
+  check('A-2: the fixture is the live state: the ladder is paused, its main row planned', set.status === 'paused' && lad.some(r => Number(r.rung) === 4 && r.status === 'planned'), JSON.stringify({ set: set.status, rows: lad.map(r => [r.rung, r.status]) }));
+  mock('Assess Result', [{ json: { ...K.assess_result, keyword: 'dynamics 365 partner uae', existing_keywords: [] } }]);
+  mock('Load Ladders (Assess)', FA1.domain_ladders.map(j => ({ json: j })));
+  mock('Load Content Log (Assess)', FA1.content_log.map(j => ({ json: j })));
+  mock('Load Ladder Settings (Assess)', FA1.ladder_settings.map(j => ({ json: j })));
+  const body = (await run('Assess Response', [{ json: { output: { fit: 2, navigational: false, alternatives: '' } } }]))[0].json.body;
+  const ex = body.existing || {};
+  check('A-2: ladder_status is "paused" (the ladder\'s settings row), the rung row\'s own "planned" is rung_status', ex.ladder_id === 'lad_mv4vxu3bq0kl' && ex.ladder_status === 'paused' && ex.rung_status === 'planned' && /lad_mv4vxu3bq0kl, paused/.test(ex.note || ''), JSON.stringify(ex));
+  mock('Load Ladder Settings (Assess)', [{ json: {} }]);
+  const unk = ((await run('Assess Response', [{ json: { output: { fit: 2, navigational: false, alternatives: '' } } }]))[0].json.body.existing) || {};
+  check('A-2: with no settings row readable the ladder\'s status is unknown (null), never the rung row\'s', unk.ladder_status === null && unk.rung_status === 'planned', JSON.stringify(unk));
+});
+
+await guard('SFA1-7 A-20 the ladder row follows the content log: written / not_ready, only from writing, on the saved row', async () => {
+  const SN = 'SFA1-7 A-20 — after page run 771 the content log said not_ready while ladder row 33 still said writing; the run now moves the row to not_ready with the reasons, from writing only, and every reader treats it as a written page';
+  reset(); begin(SN); const check = fa1Check(SN);
+  const NI = FA1.p771_normalize, CR = FA1.p771_content_log_row;
+  check('A-20: the fixture is exec 771: a ladder page run whose content-log row is not_ready', NI.ladder_id === 'lad_mvcldcnv9q1q' && CR.status === 'not_ready', JSON.stringify({ l: NI.ladder_id, s: CR.status }));
+  mock('Normalize Input', [{ json: NI }]); mock('Content Log Row', [{ json: CR }]); mock('Save Content Log (Run)', [{ json: { ...CR, id: 8 } }]);
+  const out = (await run('Ladder Row Written', [{ json: { ...CR, id: 8 } }]))[0].json;
+  check('A-20: the ladder row is set to not_ready, matched from writing, with the QA reasons as its note', out.ladder_id === 'lad_mvcldcnv9q1q' && out.keyword === 'it consulting dubai' && out.from_status === 'writing' && out.status === 'not_ready' && /did not pass the quality check: /.test(out.status_note), JSON.stringify(out));
+  mock('Content Log Row', [{ json: { ...CR, status: 'written', qa_reasons: '' } }]);
+  const okW = (await run('Ladder Row Written', [{ json: {} }]))[0].json;
+  check('A-20: a page that passed sets the row to written, no note', okW.status === 'written' && okW.status_note === '', JSON.stringify(okW));
+  mock('Save Content Log (Run)', [{ json: { error: 'Data Table unavailable' } }]);
+  const noEv = (await run('Ladder Row Written', [{ json: {} }]))[0].json;
+  check('A-20: with no saved content-log row there is no evidence, so the row is not moved', noEv.skip === true && /nothing proves/.test(noEv.reason), JSON.stringify(noEv));
+  mock('Normalize Input', [{ json: { ...NI, ladder_id: '', client_ip: 'app:x' } }]); mock('Save Content Log (Run)', [{ json: { ...CR, id: 8 } }]);
+  const notL = (await run('Ladder Row Written', [{ json: {} }]))[0].json;
+  check('A-20: a page that is not a ladder page touches no ladder row', notL.skip === true, JSON.stringify(notL));
+  const W = (() => { try { return require('./ledger_wiring.json').ladder_written; } catch (e) { return null; } })();
+  check('A-20: the update is wired after the saved content-log row and matches ladder_id + keyword + status (writing)', W && W.from === 'Save Content Log (Run)' && W.table === 'seo_ladders' && W.conditions.join(',') === 'ladder_id,keyword,status' && W.values.includes('status_note'), JSON.stringify(W));
+  // the readers: a not_ready ladder row is a written page that waits (pile-up, once) and is still watched for publication
+  const ladders = FA1.domain_ladders.map(r => r.ladder_id === 'lad_mvcldcnv9q1q' && r.keyword === 'it consulting dubai' ? { ...r, status: 'not_ready' } : r);
+  const log = [...FA1.content_log, { ...CR, started_at: new Date().toISOString() }];
+  const { L } = await fa1Ladder({ ladders, log });
+  check('A-20: the pile-up counts the not_ready page once (6 = 5 + this one), labelled as needing a fix', L.pile_up.waiting === 6 && L.pile_up.needs_fix === 4, JSON.stringify(L.pile_up));
+  const pc = require('fs').readFileSync(require('path').join(process.env.CODE_DIR || require('path').join(__dirname, 'code_v4'), 'Publish_Candidates.js'), 'utf8');
+  check('A-20: publish detection still watches a ladder row that says written / not_ready', /\['writing', 'written', 'not_ready'\]\.includes\(l\.status\)/.test(pc), 'Publish_Candidates.js');
+});
+
+await guard('SFA1-8 A-21 the main page run says it re-measured, and why its number moved', async () => {
+  const SN = 'SFA1-8 A-21 — ladder 770 scored "it consulting dubai" 52 at 16:09 (no AI Overview); page run 771 scored it 48 at 16:12 with an AI Overview — the second report now names the first reading and what changed';
+  reset(); begin(SN); const check = fa1Check(SN);
+  const { L, item } = await fa1Ladder({ base: { force_content: true } });
+  mock('Ladder Plan', [{ json: item }]);
+  const bodies = (await run('Spawn Page Runs', [{ json: { ...item, ladder: L } }])).map(i => i.json.body);
+  const lm = (bodies[0] || {}).ladder_measure || null;
+  check('A-21: the main page\'s run is handed what the ladder measured (score 52, 16:09, no AI Overview)', lm && lm.keyword === 'it consulting dubai' && lm.score === 52 && /T16:09/.test(lm.checked_at) && lm.ai_overview === false, JSON.stringify(lm));
+  const niRun = async (body) => (await run('Normalize Input', [{ json: { headers: { 'content-type': 'application/json' }, params: {}, query: {}, body } }]))[0].json;
+  const ni = await niRun({ ...bodies[0], callback_url: 'https://hooks.example.com/x', client_ip: 'ladder:lad_mvcldcnv9q1q' });
+  check('A-21: Normalize Input carries it through', ni.ladder_measure && ni.ladder_measure.score === 52 && ni.ladder_measure.ai_overview === false && !ni.validation_error, JSON.stringify({ lm: ni.ladder_measure, e: ni.validation_error }));
+  const mk = FA1.p771_merge_keyword_data;
+  check('A-21: the fixture is page run 771: an AI Overview was seen at 16:12', ((mk.serp_features || {}).ai_overview || {}).present === true && /T16:12/.test((mk.serp_features || {}).checked_at || ''), JSON.stringify((mk.serp_features || {}).ai_overview));
+  mock('Merge Keyword Data', [{ json: { ...mk, ladder_measure: ni.ladder_measure } }]);
+  mock('Load Site Cache', FA1.p771_site_cache.length ? FA1.p771_site_cache.map(j => ({ json: j })) : [{ json: {} }]);
+  const pv = (await run('Parse Verdict', JSON.parse(JSON.stringify(FA1.p771_verdict_agent)).map(j => ({ json: j }))))[0].json;
+  const note = (pv.verdict_reasons || []).find(r => /^Re-measured:/.test(r)) || '';
+  check('A-21: the page run\'s reasons say it re-measured: both readings, both scores, and that the AI Overview appeared',
+    pv.verdict_score === FA1.p771_parse_verdict_score && /16:09 UTC and scored this keyword 52/.test(note) && /16:12 UTC and scores it 48/.test(note) && /an AI Overview was seen this time/.test(note) && pv.ladder_remeasure && pv.ladder_remeasure.score_moved === true, note || JSON.stringify(pv.verdict_reasons));
+  // a run that is not the ladder's main page, or has nothing handed over, says nothing of the kind
+  mock('Merge Keyword Data', [{ json: { ...mk } }]);
+  const pv0 = (await run('Parse Verdict', JSON.parse(JSON.stringify(FA1.p771_verdict_agent)).map(j => ({ json: j }))))[0].json;
+  check('A-21: with no ladder measurement handed over there is no re-measure note', !(pv0.verdict_reasons || []).some(r => /^Re-measured:/.test(r)) && pv0.ladder_remeasure === null, JSON.stringify(pv0.ladder_remeasure));
+  const rung = bodies.find(b => b.keyword !== 'it consulting dubai');
+  check('A-21: a rung page\'s run is handed no measurement (it is another keyword)', !rung || rung.ladder_measure === null, JSON.stringify(rung && rung.ladder_measure));
 });
 
 
