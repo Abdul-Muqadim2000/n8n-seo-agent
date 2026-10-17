@@ -393,6 +393,21 @@ const deliveryLog = {
   error: (o: object, msg: string) => console.error(JSON.stringify({ level: 'error', msg, ...o })),
 };
 
+/** Stages only a schedule produces. Their callbacks reuse the request id of the run that set the work up (the ladder plan, the
+ *  tracking setup), so a run row is found for them although that run did none of the work. */
+export const SCHEDULED_STAGES: readonly string[] = ['rank_tracker', 'content_cadence', 'console_alert'];
+
+/** A report a schedule produced (a weekly or daily run), as opposed to one the matched app run produced. */
+export const isScheduledCallback = (stage: string, body: Record<string, unknown>): boolean => body.on_demand === false || SCHEDULED_STAGES.includes(stage);
+
+/**
+ * D-3 (re-rating 2026-10-17): whether a callback's spend belongs to the run row it matched. A scheduled report never does: the Rank
+ * Tracker's weekly run (exec 785, $0.116) posted one report per ladder with the request id of the run that planned each ladder, and
+ * every one of them was added to that old run — the 2026-10-08 "Ladder: peppol uae" run went 0.1185 → 0.1905 → 0.3065. A run's
+ * cost counts once, on the run that spent it.
+ */
+export const callbackCostCountsForRun = (stage: string, body: Record<string, unknown>): boolean => !isScheduledCallback(stage, body);
+
 /**
  * How one callback moves its run (pure, so it is tested without a database). A `rejected` callback closes the run as failed with the
  * engine's own sentence — R116: an on-demand monitor the run guard refused after its "started" note now posts exactly that
@@ -446,7 +461,7 @@ export async function ingestCallback(
         requestId,
         // weekly reports reuse the request id of the run that set tracking up: they are scheduled all the same; a ladder started by
         // "Choose keywords for me" is automatic too (it shows among the Pipeline's automatic runs)
-        scheduled: !run || body.on_demand === false || ['rank_tracker', 'content_cadence', 'console_alert'].includes(stage) || run.input?.autoStart === true,
+        scheduled: !run || isScheduledCallback(stage, body) || run.input?.autoStart === true,
         summary: summarize(stage, body),
         payload,
       })
@@ -462,13 +477,15 @@ export async function ingestCallback(
       const patch: Record<string, unknown> = { reportCount: sql`${schema.runs.reportCount} + 1`, lastStage: stage };
       // B-R3: whatever the engine says about money replaces what the app guessed. `ledgerCost` is what the run reported spending
       // (search data + the model calls it priced), `engineCostEstimate` its own calibrated reservation with the sentence behind it.
-      const cost = ledgerCost(body);
+      // D-3: a schedule's spend (and its reservation) is not this run's
+      const ownSpend = callbackCostCountsForRun(stage, body);
+      const cost = ownSpend ? ledgerCost(body) : null;
       if (cost != null) {
         patch.actualCostUsd = sql`coalesce(${schema.runs.actualCostUsd}, 0) + ${cost.usd}`;
         if (cost.estimated) patch.actualCostEstimated = true;
         if (cost.partial) patch.actualCostPartial = true;
       }
-      const engineEstimate = engineCostEstimate(body);
+      const engineEstimate = ownSpend ? engineCostEstimate(body) : null;
       if (engineEstimate != null) {
         patch.engineCostEstimateUsd = engineEstimate.usd;
         if (engineEstimate.basis) patch.engineCostBasis = engineEstimate.basis.slice(0, 500);

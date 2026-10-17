@@ -276,7 +276,16 @@ export function JsonViewer({ value, title = 'Raw data', defaultOpen }: { value: 
 }
 
 /** The run ledger every completed callback carries: DataForSEO spend, AI calls, duration (the breakdown behind "Details"). */
-export function LedgerCard({ ledger, extraCost }: { ledger: unknown; extraCost?: number | null }) {
+export function LedgerCard({
+  ledger,
+  extraCost,
+  shared,
+}: {
+  ledger: unknown;
+  extraCost?: number | null;
+  /** D-3: the figure is a whole run's that posted several reports (the weekly rank check posts one per ladder): say so, once */
+  shared?: string;
+}) {
   const l = obj(ledger);
   if (!has(l) && extraCost == null) return null;
   const byNode = Object.entries(obj(l.by_node))
@@ -286,10 +295,10 @@ export function LedgerCard({ ledger, extraCost }: { ledger: unknown; extraCost?:
   const cost = ledgerBreakdown(l, extraCost);
   return (
     <Block
-      title="Run ledger"
+      title={shared ? 'Run ledger: the whole run' : 'Run ledger'}
       icon={<Receipt />}
       iconTone="neutral"
-      description="What this run used."
+      description={shared ?? 'What this run used.'}
       info="Search data is what the data provider charged; model calls are priced from the usage the run reported. Each line says whether its figure is measured or estimated, and a run that did not report its model calls shows search data only."
     >
       <Facts
