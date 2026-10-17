@@ -66,17 +66,17 @@ describe('findCmsPlaceholders', () => {
   it('counts Content QA’s brackets and the labelled ones it leaves for the owner', () => {
     const found = findCmsPlaceholders(['<p>From [Price] a month. [Confirm: AED 50m] threshold. [Owner: confirm — 3 offices]. [Author Name]. [Price]</p>']);
     expect(found).toEqual([
-      { token: '[Price]', count: 2 },
-      { token: '[Author Name]', count: 1 },
-      { token: '[Confirm: AED 50m]', count: 1 },
-      { token: '[Owner: confirm — 3 offices]', count: 1 },
+      { token: '[Price]', count: 2, kind: 'placeholder' },
+      { token: '[Author Name]', count: 1, kind: 'placeholder' },
+      { token: '[Confirm: AED 50m]', count: 1, kind: 'review_note' },
+      { token: '[Owner: confirm — 3 offices]', count: 1, kind: 'review_note' },
     ]);
   });
   it('ignores Markdown links, numbered citations, scripts and styles', () => {
     expect(findCmsPlaceholders(['See [the FTA guide](https://tax.gov.ae/x) [1] [23]', '<script type="application/ld+json">{"a":"[Price]"}</script><style>a[href]{}</style>'])).toEqual([]);
   });
   it('finds placeholders in attributes (an alt text) too', () => {
-    expect(findCmsPlaceholders(['<img alt="[Image: the team at work]">'])).toEqual([{ token: '[Image: the team at work]', count: 1 }]);
+    expect(findCmsPlaceholders(['<img alt="[Image: the team at work]">'])).toEqual([{ token: '[Image: the team at work]', count: 1, kind: 'review_note' }]);
   });
 });
 
@@ -105,13 +105,19 @@ describe('cmsReadiness: the rule, which has no override', () => {
     expect(r.blockers.map((b) => b.code)).toEqual(['not_publishable']);
   });
 
+  it('a bracket left in the Markdown (the delivery rule’s A-13 hold) is one placeholder blocker with the list, not two blockers', () => {
+    const r = cmsReadiness(cand(page({ markdown: '# E-Invoicing\n\nFees start at [Price band: typical fee in AED].' })));
+    expect(r.blockers.map((b) => b.code)).toEqual(['placeholders']);
+    expect(r.blockers[0]!.items).toEqual([{ token: '[Price band: typical fee in AED]', count: 1, kind: 'placeholder' }]);
+  });
+
   it('placeholders block both, with the list', () => {
     const r = cmsReadiness(cand(page({ html: html + '<p>We have [Confirm: 120 clients] in the UAE, from [Price].</p>' })));
     expect(r.draftAllowed).toBe(false);
     const b = r.blockers.find((x) => x.code === 'placeholders')!;
     expect(b.items).toEqual([
-      { token: '[Confirm: 120 clients]', count: 1 },
-      { token: '[Price]', count: 1 },
+      { token: '[Price]', count: 1, kind: 'placeholder' },
+      { token: '[Confirm: 120 clients]', count: 1, kind: 'review_note' },
     ]);
     expect(b.message).toMatch(/^2 placeholders are still in the page/);
   });

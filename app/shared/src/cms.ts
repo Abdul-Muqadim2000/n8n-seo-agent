@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { cleanDomain, domainOk, urlOnDomain } from './domain';
+import { findOpenBrackets, type OpenBracket } from './placeholders';
 import { deliveryDecision } from './report-delivery';
 
 /**
@@ -420,31 +421,22 @@ export function cmsPage(payload: P): CmsPage {
 // 5. Placeholders
 // ---------------------------------------------------------------------------------------------------------------------------
 
-/** Content QA's own count (n8n `Content_QA.js` PH_RE): `[Price]`, `[Author Name]`, `[name, role]`. */
-const PH_RE = /\[[A-Za-z][A-Za-z0-9 &/'’.,()-]{1,48}\]/g;
-/** The labelled forms QA writes for the owner and PH_RE does not count: `[Confirm: AED 50m]`, `[Owner: confirm — …]`, `[Image: …]`. */
-const LABELLED_RE = /\[[A-Z][A-Za-z]{1,24}(?: [A-Za-z]{1,24}){0,3}:[^[\]\n]{0,300}\]/g;
+/** Text of a page a reader sees as text: scripts and styles out (JSON-LD and CSS selectors are not gaps for a person). */
+const visibleText = (t: string): string => t.replace(/<script\b[\s\S]*?<\/script>/gi, ' ').replace(/<style\b[\s\S]*?<\/style>/gi, ' ');
 
-/** Text of a page with the parts a reader never sees as text removed: scripts and styles, Markdown link targets. */
-const visibleText = (t: string): string =>
-  t
-    .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
-    .replace(/!?\[([^\]\n]*)\]\([^)\n]*\)/g, ' $1 ');
-
-/** Every bracket left for the owner, once each with its count (most frequent first). */
-export function findCmsPlaceholders(texts: readonly string[]): { token: string; count: number }[] {
-  const m = new Map<string, number>();
-  for (const raw of texts) {
-    const t = visibleText(raw || '');
-    // the two patterns never match the same place: PH_RE has no colon, every LABELLED_RE match has one
-    for (const re of [LABELLED_RE, PH_RE])
-      for (const x of t.match(re) ?? []) {
-        const key = x.length > 120 ? `${x.slice(0, 117)}…]` : x;
-        m.set(key, (m.get(key) ?? 0) + 1);
-      }
-  }
-  return [...m.entries()].map(([token, count]) => ({ token, count })).sort((a, b) => b.count - a.count || a.token.localeCompare(b.token));
+/**
+ * Every bracket left for a person (a gap to fill or a review note to confirm), once each with its count — through the ONE detector
+ * the engine's Content QA and the delivery rule use (`findOpenBrackets`, placeholders.ts), so the CMS gate cannot disagree with them.
+ */
+export function findCmsPlaceholders(texts: readonly string[]): OpenBracket[] {
+  const m = new Map<string, OpenBracket>();
+  for (const raw of texts)
+    for (const b of findOpenBrackets(visibleText(raw || ''))) {
+      const token = b.token.length > 120 ? `${b.token.slice(0, 117)}…]` : b.token;
+      const had = m.get(token);
+      m.set(token, { token, kind: b.kind, count: (had?.count ?? 0) + b.count });
+    }
+  return [...m.values()].sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'placeholder' ? -1 : 1) || b.count - a.count || a.token.localeCompare(b.token));
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -456,8 +448,8 @@ export type CmsBlockCode = 'not_a_page' | 'not_ready' | 'not_publishable' | 'pla
 export interface CmsBlocker {
   code: CmsBlockCode;
   message: string;
-  /** the placeholders, for `placeholders` */
-  items?: { token: string; count: number }[];
+  /** the open brackets, for `placeholders` (gaps to fill first, then review notes to confirm) */
+  items?: { token: string; count: number; kind?: 'placeholder' | 'review_note' }[];
 }
 
 export interface CmsReadiness {
@@ -489,16 +481,19 @@ export function cmsReadiness(c: CmsCandidate, page: CmsPage = cmsPage(c.payload 
   if (!isPage) blockers.push({ code: 'not_a_page', message: 'This report has no written page to publish.' });
   if (!c.siteDomain) blockers.push({ code: 'no_website', message: 'This page was written without one of your websites, so there is no CMS connection to send it to.' });
 
-  // B-R1's rule, unchanged: rejected, not ready (QA failed), refused, could not be checked, interim
+  // B-R1's rule, unchanged: rejected, not ready (QA failed, or A-13: brackets still open), refused, could not be checked, interim.
+  // When the only reason is the open brackets, the placeholder blocker below says it with the full list, so it is not said twice.
   const d = deliveryDecision({ stage: c.stage, status: c.status, payload: p });
-  if (!d.deliver) blockers.push({ code: 'not_ready', message: d.reason });
+  const bracketsOnly = !d.deliver && deliveryDecision({ stage: c.stage, status: c.status, payload: { ...p, markdown: '', page_markdown: '' } }).deliver;
+  if (!d.deliver && !bracketsOnly) blockers.push({ code: 'not_ready', message: d.reason });
   const quality = obj(p.qa_quality ?? meta.quality);
-  if (d.deliver && (meta.publishable === false || quality.publishable === false || quality.not_ready === true))
+  if ((d.deliver || bracketsOnly) && (meta.publishable === false || quality.publishable === false || quality.not_ready === true))
     blockers.push({ code: 'not_publishable', message: 'The page package says this page may not be published as it is (a draft to finish by hand).' });
 
   if (isPage) {
     const author = obj(meta.author);
-    const ph = findCmsPlaceholders([page.html || page.markdown, page.title, page.h1, page.metaDescription, s(author.name)]);
+    // the HTML and the Markdown both: the delivery rule reads the Markdown, the CMS receives the HTML (or the Markdown)
+    const ph = findCmsPlaceholders([page.html, page.markdown, page.title, page.h1, page.metaDescription, s(author.name)]);
     if (ph.length) {
       const total = ph.reduce((t, x) => t + x.count, 0);
       blockers.push({

@@ -185,7 +185,7 @@ describe.skipIf(!DB)('CMS publishing routes (real database)', () => {
   it('placeholders are refused with the list', async () => {
     const res = await req('admin', 'POST', `/api/orgs/${ids.org1}/reports/${ids.holes}/cms/publish`, { connectionId: ids.wp, mode: 'live', confirmLive: true });
     expect(res.json().ok).toBe(false);
-    expect(res.json().record.blockers[0]).toMatchObject({ code: 'placeholders', items: [{ token: '[Confirm: AED 50m]', count: 1 }, { token: '[Price]', count: 1 }] });
+    expect(res.json().record.blockers[0]).toMatchObject({ code: 'placeholders', items: [{ token: '[Price]', count: 1, kind: 'placeholder' }, { token: '[Confirm: AED 50m]', count: 1, kind: 'review_note' }] });
   });
 
   it('the report state says who may do what', async () => {
