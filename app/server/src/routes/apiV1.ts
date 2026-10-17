@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { API_KEY, API_SCOPES, apiKeyCreateSchema, bearerKey, IDEMPOTENCY, roleAtLeast, triesBearer, type ApiScope } from '@seo/shared';
+import { API_KEY, API_SCOPES, apiKeyCreateSchema, bearerKey, EXPORT_TABLES, exportColumns, IDEMPOTENCY, roleAtLeast, triesBearer, type ApiScope } from '@seo/shared';
 import { isUuid, orgAccess, requireVerified, siteAccess } from '../auth/access';
 import { config } from '../config';
 import { sha256 } from '../lib/crypto';
@@ -7,6 +7,8 @@ import { badRequest, HttpError, notFound, parse } from '../lib/errors';
 import { authenticateKey, createKey, listKeys, revokeKey } from '../services/apiKeys';
 import { actorOf, modesV1, startRunV1 } from '../services/apiRuns';
 import { createEndpoint, deleteEndpoint, listEndpoints, listWebhookDeliveries, testEndpoint } from '../services/webhooks';
+import { connectedTrackers, createIssue, listIssues } from '../services/issueTrackers';
+import { runExport, tableRowsV1 } from '../services/exports';
 import {
   fileOf,
   getAudit,
@@ -19,6 +21,7 @@ import {
   listWebsites,
   publishCheck,
   requireScope,
+  siteOf,
   type V1Ctx,
 } from '../services/apiV1';
 import { sendFile } from './runs';
@@ -80,6 +83,11 @@ const ENDPOINTS = [
   'POST /api/v1/publish-check',
   'GET /api/v1/modes',
   'POST /api/v1/runs',
+  'GET /api/v1/tables',
+  'GET /api/v1/websites/:websiteId/tables/:table',
+  'POST /api/v1/exports/:id/run',
+  'GET /api/v1/issues',
+  'POST /api/v1/issues',
   'GET /api/v1/webhooks',
   'POST /api/v1/webhooks',
   'DELETE /api/v1/webhooks/:id',
@@ -157,6 +165,17 @@ const TOOLS: Tool[] = [
       required: ['markdown', 'keyword'],
     },
     run: async (c, a) => (await publishCheck(c, a)).body,
+  },
+  {
+    name: 'get_table',
+    description:
+      'Rows of one export table for one verified website, oldest first: rank_history (keyword positions), site_metrics (weekly Search Console / GA4), audit_findings, ai_visibility, backlinks, runs (analyses and their cost). Filter by date with since / until (ISO).',
+    inputSchema: {
+      type: 'object',
+      properties: { websiteId: { type: 'string' }, table: { type: 'string', enum: ['rank_history', 'site_metrics', 'audit_findings', 'ai_visibility', 'backlinks', 'runs'] }, since: { type: 'string' }, until: { type: 'string' }, ...listArgs },
+      required: ['websiteId', 'table'],
+    },
+    run: async (c, a) => tableRowsV1(c.org, await siteOf(c, a.websiteId), a.table, a),
   },
   // ---- G4: starting work (scope "run") ----
   { name: 'list_modes', description: 'Every analysis that can be started, with what it delivers, its estimated cost and minutes, and the JSON Schema of its input.', inputSchema: { type: 'object', properties: {} }, run: async () => modesV1() },
@@ -267,6 +286,34 @@ export async function apiV1Routes(app: FastifyInstance) {
     const r = await startRunV1(ctx, req.body, Array.isArray(h) ? h[0] : h);
     if (r.replayed) reply.header(IDEMPOTENCY.replayHeader, 'true');
     return reply.status(r.status).send(r.body);
+  });
+
+  // ---- G4: the export tables, readable per website (what the Looker Studio connector calls) ----
+  app.get('/api/v1/tables', { config: perMinute }, async (req) => {
+    await readCtx(req);
+    return { items: EXPORT_TABLES.map((t) => ({ id: t.id, label: t.label, grain: t.grain, dateColumn: t.dateColumn, columns: exportColumns(t) })) };
+  });
+  app.get('/api/v1/websites/:websiteId/tables/:table', { config: perMinute }, async (req) => {
+    const ctx = await readCtx(req);
+    const p = req.params as Args;
+    return tableRowsV1(ctx.org, await siteOf(ctx, p.websiteId), p.table, req.query as Args);
+  });
+  app.post('/api/v1/exports/:id/run', { config: perRun }, async (req) => {
+    const a = await actorOf(await v1Ctx(req), 'admin');
+    return runExport(a.org.id, (req.params as Args).id, 'manual');
+  });
+
+  // ---- G4: tickets in the company's tracker (create: scope "run"; read: "read") ----
+  app.get('/api/v1/issues', { config: perMinute }, async (req) => {
+    const ctx = await readCtx(req);
+    const w = (req.query as Args).websiteId;
+    const site = w ? await siteOf(ctx, w) : null;
+    return { items: await listIssues(ctx.org.id, site?.id ?? null), trackers: await connectedTrackers(ctx.org.id) };
+  });
+  app.post('/api/v1/issues', { config: perRun }, async (req, reply) => {
+    const a = await actorOf(await v1Ctx(req), 'run');
+    const r = await createIssue(a, req.body);
+    return reply.status(r.existing ? 200 : 201).send(r);
   });
 
   // ---- G4: event webhooks (scope "admin"; the key acts as its creator, who must still be an admin) ----

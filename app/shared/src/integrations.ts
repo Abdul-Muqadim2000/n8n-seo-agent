@@ -791,6 +791,15 @@ export const bigQueryDestinationSchema = z.object({
     }),
 });
 export const exportDestinationSchema = z.discriminatedUnion('kind', [s3DestinationSchema, bigQueryDestinationSchema]);
+/** What can change on a connected destination without connecting it again (the credentials and the target cannot). */
+export const exportDestinationPatchSchema = z.object({
+  name: z.string().trim().min(1).max(60).optional(),
+  tables: z.array(z.enum(EXPORT_TABLE_IDS as [string, ...string[]])).min(1, 'Choose at least one table').optional(),
+  schedule: z.enum(EXPORT_SCHEDULES).optional(),
+  hour: z.number().int().min(0).max(23).optional(),
+  weekday: z.number().int().min(0).max(6).optional(),
+  format: z.enum(EXPORT_FORMATS).optional(),
+});
 export type ExportDestinationInput = z.input<typeof exportDestinationSchema>;
 
 /** The next scheduled export after `from` (UTC), or null when the schedule is off. */

@@ -487,6 +487,54 @@ Connections belong to one verified website; secrets are sealed under `MAILBOX_KE
   the engine's `published` run starts.
 - Pipeline: a `publish` Needs-you item says when a draft is already in the CMS and, with a connection, its action is `{ label, reportId }`.
 
+### Issue trackers — Jira Cloud, Linear, Asana
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| POST | /api/orgs/:orgId/integrations/trackers | `trackerConnectSchema`: `{ kind: 'jira', siteUrl: https://<name>.atlassian.net, email, apiToken, projectKey, issueType? }` · `{ kind: 'linear', apiKey: lin_api_…, teamKey }` · `{ kind: 'asana', token, projectGid }` (20 an hour) | `IntegrationView` — connects (or replaces) the company's tracker of that kind **after the vendor confirmed** the token and the project / team / issue type; 400 names what is wrong (e.g. the issue types the project has) |
+| POST | /api/orgs/:orgId/integrations/:id/test | | `{ ok, error }` (status kept on the connection) |
+| DELETE | /api/orgs/:orgId/integrations/:id | | `{ deleted: true }` (tickets keep their link, the connection goes) |
+| GET | /api/orgs/:orgId/issues?siteId= | any role | `{ items: IssueLinkView[], trackers: [{ kind, name, target, status }] }` |
+| POST | /api/orgs/:orgId/issues | **member**; `issueCreateSchema` `{ websiteId, kind?, source: { type: 'finding', auditId, findingKey } \| { type: 'recommendation', id } }` (30 a minute per company) | `{ existing, issue: IssueLinkView }` |
+| POST | /api/orgs/:orgId/issues/refresh?siteId= | member | `{ refreshed, failed, items }` — reads each ticket's state (at most once per 5 minutes per ticket) |
+| GET / POST | /api/v1/issues | key: `read` / **`run`** | the same list / push (201 new, 200 existing) |
+
+The ticket: title `[SEO] <finding>`; the audit and its date, severity and category, pages affected of pages checked, why it matters,
+the evidence line, up to 10 example pages, **the fix** (from the audit's own report), the "I fixed this" hint and a link back to the
+finding; a recommendation carries its detail, evidence and action. Jira gets it as ADF with labels `ascentra`, `seo`; Linear as
+Markdown; Asana as plain notes. **One finding = one ticket**: `issue_links` is unique per (company, `finding:<website>:<finding key>`
+or `rec:<website>:<id>`), inserted as `creating` before the vendor call, so two simultaneous pushes reach the vendor once; a failed
+vendor call removes the placeholder. States map to `todo` / `in_progress` / `done` (Jira status category, Linear state type, Asana
+`completed`). Vendor errors: 502 `tracker_refused` (token; the connection is marked `error`), `tracker_not_found`, `tracker_error`,
+`tracker_unreachable`.
+
+### Warehouse / BI export — S3-compatible storage and BigQuery
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| POST | /api/orgs/:orgId/integrations/exports | `exportDestinationSchema`: `{ kind: 's3', name, provider: aws \| gcs \| r2 \| other, region, accountId (R2), endpoint (other), bucket, prefix, format: ndjson \| csv, tables[], schedule: daily \| weekly \| off, hour (UTC), weekday, accessKeyId, secretAccessKey }` · `{ kind: 'bigquery', name, projectId, datasetId, location, tablePrefix, tables[], schedule, hour, weekday, serviceAccountJson }` | `IntegrationView` — saved only after a test: S3 writes `<prefix>/_ascentra/dt=…/_ascentra-connection-test.txt`; BigQuery reads the dataset. At most 3 destinations |
+| PATCH | /api/orgs/:orgId/integrations/:id | `{ name?, tables?, schedule?, hour?, weekday?, format? }` | `IntegrationView` (the credentials and the target need a new connection) |
+| POST | /api/orgs/:orgId/integrations/:id/run | (6 a minute; once per 10 minutes per destination) | `ExportRunView` `{ status: ok \| partial \| failed, tables: [{ table, rows, bytes, object, truncated, error }] }` |
+| GET | /api/orgs/:orgId/integrations/:id/runs | | `{ items: ExportRunView[] }` (30) |
+| POST | /api/v1/exports/:id/run | key with **`admin`** | the same |
+| GET | /api/v1/tables | key `read` | the six tables with their columns (name, type, description) |
+| GET | /api/v1/websites/:websiteId/tables/:table?since=&until=&limit=&cursor= | key `read`, verified website | `{ table, columns, items, nextCursor }`, oldest first, `limit` up to 100 (default 100) |
+
+Tables (`EXPORT_TABLES`, `shared/src/integrations.ts` — the one schema; every row adds `company_id`, `website_id`, `website_domain`,
+`exported_at`): `rank_history` (n8n `seo_rank_history`), `site_metrics` (`seo_site_metrics`), `audit_findings` (`seo_audit_findings`),
+`ai_visibility` (`seo_ai_visibility`), `backlinks` (`seo_backlinks`), `runs` (the app's runs with their cost). Values are typed
+(`STRING`, `INTEGER`, `FLOAT`, `BOOLEAN`, `TIMESTAMP`, `DATE`); a value the engine did not store is `null`, never 0. Objects:
+`<prefix>/<table>/dt=YYYY-MM-DD/<table>-<export run id>.<ndjson|csv>` — a full snapshot per run, read the newest `dt`. CSV is RFC 4180
+with a header row; a text cell starting with `= + - @` gets a leading `'` (CSV injection). BigQuery: table `<tablePrefix><table>`,
+created with the documented schema, `WRITE_TRUNCATE` each run (a resumable-upload load job of NDJSON, polled until DONE). Requests to
+storage are signed with AWS SigV4 (`lib/sigv4.ts`); AWS uses `<bucket>.s3.<region>.amazonaws.com`, the others path-style
+(`storage.googleapis.com/<bucket>` with HMAC keys, `<account>.r2.cloudflarestorage.com/<bucket>`, or any public https endpoint).
+Limits: 200,000 rows per table per run (`truncated: true` beyond), 100 MB per object. Scheduled exports run from a five-minute
+timer (`exportTick`); a failed scheduled export waits for its next time.
+
+**Looker Studio**: the community connector in `integrations/looker-studio/` (Apps Script) reads `GET /api/v1/tables` and the table
+route above with a read-only key — deployment steps in its README.
+
 ## n8n → app
 `POST /api/hooks/n8n/:hookToken` — every callback of every run and every scheduled report of the company (the token is the
 company's `hook_token`; it is sent to n8n as `callback_url`). Body: the n8n callback (`stage`, `request_id`, …); embedded files are
