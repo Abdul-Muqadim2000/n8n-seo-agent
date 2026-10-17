@@ -1,7 +1,10 @@
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
+  bigserial,
   boolean,
   customType,
+  date,
   doublePrecision,
   index,
   integer,
@@ -509,6 +512,156 @@ export const apiKeys = pgTable(
   (t) => [uniqueIndex('api_keys_hash_idx').on(t.tokenHash), index('api_keys_org_idx').on(t.orgId)],
 );
 
+/**
+ * Gap #6 (2026-10-17, app/docs/LOG_ANALYTICS.md): server-log and AI-crawler analytics. One settings row per website: how long raw
+ * crawler lines are kept, and the push key Cloudflare Logpush / a log drain sends (only its SHA-256 is stored; shown once).
+ */
+export const logSources = pgTable('log_sources', {
+  siteId: uuid('site_id')
+    .primaryKey()
+    .references(() => sites.id, { onDelete: 'cascade' }),
+  orgId: uuid('org_id')
+    .notNull()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
+  retentionDays: integer('retention_days').notNull().default(30),
+  pushKeyHash: text('push_key_hash'),
+  pushKeyPrefix: text('push_key_prefix'),
+  pushKeyCreatedAt: ts('push_key_created_at'),
+  pushKeyCreatedBy: uuid('push_key_created_by').references(() => users.id, { onDelete: 'set null' }),
+  lastPushAt: ts('last_push_at'),
+  updatedAt: ts('updated_at').defaultNow().notNull(),
+});
+
+/**
+ * One row per uploaded file or pushed batch: the job the background worker runs (queued → processing → done | failed). The bytes
+ * wait in a spool file on the server that received them (`host`, `spool_path`) and are deleted as soon as the job ends.
+ */
+export const logIngests = pgTable(
+  'log_ingests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    siteId: uuid('site_id')
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    /** upload | push */
+    source: text('source').notNull(),
+    fileName: text('file_name').notNull().default(''),
+    /** queued | processing | done | failed */
+    status: text('status').notNull().default('queued'),
+    host: text('host').notNull().default(''),
+    spoolPath: text('spool_path').notNull().default(''),
+    bytes: bigint('bytes', { mode: 'number' }).notNull().default(0),
+    sha256: text('sha256').notNull(),
+    /** combined | w3c | json | unknown */
+    format: text('format').notNull().default('unknown'),
+    stats: jsonb('stats').$type<Record<string, unknown>>(),
+    error: text('error').notNull().default(''),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: created(),
+    startedAt: ts('started_at'),
+    finishedAt: ts('finished_at'),
+  },
+  (t) => [
+    index('log_ingests_site_created_idx').on(t.siteId, t.createdAt),
+    index('log_ingests_status_idx').on(t.status, t.createdAt),
+    // the same file twice is refused (a retried push answers "already have it"); a failed one may be sent again
+    uniqueIndex('log_ingests_site_sha_idx').on(t.siteId, t.sha256).where(sql`${t.status} <> 'failed'`),
+  ],
+);
+
+/**
+ * One row per crawler request (never a person's): kept `log_sources.retention_days`. No client address is stored — only, for a
+ * request that was not proved, its network (/24 for IPv4, /48 for IPv6), so a spoofer can be blocked. `line_hash` makes the same
+ * line sent twice (an overlapping upload, a retried push) count once.
+ */
+export const crawlerHits = pgTable(
+  'crawler_hits',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    siteId: uuid('site_id')
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    ingestId: uuid('ingest_id').references(() => logIngests.id, { onDelete: 'set null' }),
+    at: ts('at').notNull(),
+    bot: text('bot').notNull(),
+    /** verified | spoofed | claimed | unchecked */
+    verification: text('verification').notNull(),
+    method: text('method').notNull().default('GET'),
+    path: text('path').notNull(),
+    queryKeys: text('query_keys').notNull().default(''),
+    /** page | asset | robots | sitemap */
+    kind: text('kind').notNull().default('page'),
+    status: integer('status').notNull(),
+    bytes: bigint('bytes', { mode: 'number' }),
+    ms: integer('ms'),
+    net: text('net'),
+    lineHash: bytea('line_hash').notNull(),
+  },
+  (t) => [index('crawler_hits_site_at_idx').on(t.siteId, t.at), uniqueIndex('crawler_hits_site_line_idx').on(t.siteId, t.lineHash)],
+);
+
+/** Daily totals per crawler and verification (kept 400 days; additive, so every ingest adds to them). */
+export const crawlerDaily = pgTable(
+  'crawler_daily',
+  {
+    siteId: uuid('site_id')
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    day: date('day', { mode: 'string' }).notNull(),
+    bot: text('bot').notNull(),
+    verification: text('verification').notNull(),
+    hits: integer('hits').notNull().default(0),
+    s2xx: integer('s2xx').notNull().default(0),
+    s3xx: integer('s3xx').notNull().default(0),
+    s4xx: integer('s4xx').notNull().default(0),
+    s5xx: integer('s5xx').notNull().default(0),
+    refused: integer('refused').notNull().default(0),
+    paramHits: integer('param_hits').notNull().default(0),
+    assetHits: integer('asset_hits').notNull().default(0),
+    bytes: bigint('bytes', { mode: 'number' }).notNull().default(0),
+    msSum: bigint('ms_sum', { mode: 'number' }).notNull().default(0),
+    msN: integer('ms_n').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.siteId, t.day, t.bot, t.verification] })],
+);
+
+/** Daily requests per crawler and path, spoofed requests left out (kept 400 days): coverage, first seen, waste by URL. */
+export const crawlerPageDaily = pgTable(
+  'crawler_page_daily',
+  {
+    siteId: uuid('site_id')
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    day: date('day', { mode: 'string' }).notNull(),
+    bot: text('bot').notNull(),
+    path: text('path').notNull(),
+    hits: integer('hits').notNull().default(0),
+    verifiedHits: integer('verified_hits').notNull().default(0),
+    s3xx: integer('s3xx').notNull().default(0),
+    s4xx: integer('s4xx').notNull().default(0),
+    s5xx: integer('s5xx').notNull().default(0),
+    paramHits: integer('param_hits').notNull().default(0),
+    lastStatus: integer('last_status'),
+  },
+  (t) => [primaryKey({ columns: [t.siteId, t.day, t.bot, t.path] }), index('crawler_page_daily_site_bot_path_idx').on(t.siteId, t.bot, t.path)],
+);
+
+/** The vendors' published crawler IP lists as last fetched (one row per list); the server falls back to its dated copy. */
+export const botIpRanges = pgTable('bot_ip_ranges', {
+  sourceId: text('source_id').primaryKey(),
+  url: text('url').notNull(),
+  creationTime: text('creation_time'),
+  prefixes: jsonb('prefixes').$type<string[]>().notNull().default([]),
+  fetchedAt: ts('fetched_at'),
+  checkedAt: ts('checked_at').defaultNow().notNull(),
+  error: text('error').notNull().default(''),
+});
+
+export type LogSourceRow = typeof logSources.$inferSelect;
+export type LogIngestRow = typeof logIngests.$inferSelect;
 export type ApiKeyRow = typeof apiKeys.$inferSelect;
 export type MailboxRow = typeof mailboxes.$inferSelect;
 export type OutreachSequenceRow = typeof outreachSequences.$inferSelect;

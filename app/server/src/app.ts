@@ -9,6 +9,7 @@ import { readSession } from './auth/session';
 import { config } from './config';
 import { HttpError } from './lib/errors';
 import { linkBuilderRoutes } from './routes/linkBuilder';
+import { crawlerRoutes, crawlerStreamRoutes } from './routes/crawlers';
 import { apiV1Routes } from './routes/apiV1';
 import { triesBearer } from '@seo/shared';
 import { adminRoutes } from './routes/admin';
@@ -73,10 +74,12 @@ export async function buildApp(): Promise<FastifyInstance> {
       return;
     }
     // CSRF: state-changing requests must carry a header a cross-site form cannot set (n8n callbacks authenticate by URL token instead)
-    if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !req.url.startsWith('/api/hooks/') && req.headers['x-requested-with'] !== 'fetch') {
+    // log pushes (Cloudflare Logpush, log drains) authenticate by the site's push key in a header, like n8n callbacks by URL token
+    const machine = req.url.startsWith('/api/hooks/') || req.url.startsWith('/api/ingest/');
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !machine && req.headers['x-requested-with'] !== 'fetch') {
       throw new HttpError(403, 'Missing X-Requested-With header', 'csrf');
     }
-    if (req.url.startsWith('/api/hooks/') || req.url === '/api/health') return;
+    if (machine || req.url === '/api/health') return;
     const s = await readSession(req, reply);
     req.user = s?.user ?? null;
     req.sessionId = s?.sessionId ?? null;
@@ -119,6 +122,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(hookRoutes);
   await app.register(adminRoutes);
   await app.register(linkBuilderRoutes);
+  await app.register(crawlerRoutes);
+  await app.register(crawlerStreamRoutes);
   await app.register(apiV1Routes);
 
   // the built React app (production image): static files, and index.html for every client-side route
