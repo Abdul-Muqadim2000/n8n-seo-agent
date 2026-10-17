@@ -9,7 +9,7 @@ import { buttonClass } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
 import { ExternalLink, KeyValue } from '@/components/ui/misc';
 import { CountUp, HeroStat, InsightItem, ProgressBar, ScoreRing, Stagger } from '@/components/insight';
-import { Block, Bullets, CheckRow, Chips, CodeBlock, Disclosure, Empty, Facts, has, JsonViewer, LedgerCard, n, num, obj, objs, shortUrl, str, strs, type P } from './kit';
+import { Block, Bullets, CheckRow, Chips, CodeBlock, Disclosure, Empty, Facts, has, inAppWording, JsonViewer, LedgerCard, n, num, obj, objs, shortUrl, str, strs, type P } from './kit';
 import { keywordPrefill, stageLabel } from './meta';
 import { ReportHero, ScoreMark, StatusMark, WordValue } from './visuals';
 
@@ -421,7 +421,7 @@ export function StartedReport({ report }: { report: ReportDetail }) {
       <ReportHero
         report={report}
         title={str(p.title) || stageLabel(report.stage)}
-        description={str(p.summary) || undefined}
+        description={inAppWording(str(p.summary)) || undefined}
         aside={
           ok ? (
             <StatusMark tone="accent" icon={<Hourglass />} title={num(p.estimated_minutes) != null ? `About ${num(p.estimated_minutes)} min` : 'Started'} caption="The full report appears here as soon as it is ready." />

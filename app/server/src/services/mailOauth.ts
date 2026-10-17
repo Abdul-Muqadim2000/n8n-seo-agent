@@ -81,7 +81,8 @@ export const mailProviderInfo = (): MailProviderInfo[] =>
         : 'Sends pitches with no password stored. Replies are not read automatically: Google classes inbox access as a restricted scope, which needs its security review and app verification first — read them in Gmail, or connect this mailbox with an app password instead.',
       disabledWhy: mailOauthEnabled(p)
         ? ''
-        : `This installation has no ${d.label} OAuth app configured (${p === 'ms_graph' ? 'MS_OAUTH_CLIENT_ID / MS_OAUTH_CLIENT_SECRET' : 'GMAIL_OAUTH_CLIENT_ID / GMAIL_OAUTH_CLIENT_SECRET'} in app/.env). Connect this mailbox with an app password, or ask your administrator to add the app.`,
+        : // D-12: customer text, so no setting names or file paths (the operator's README says which settings turn it on)
+          `${d.label} sign-in is not set up on this installation. Connect this mailbox with an app password, or ask your administrator to set up ${d.label} sign-in.`,
       withdraw: d.withdraw,
     };
   });

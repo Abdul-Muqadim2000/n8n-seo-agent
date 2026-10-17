@@ -264,8 +264,9 @@ export function useTeamMutation<TBody>(orgId: string, method: 'POST' | 'PATCH' |
   });
 }
 
-export const useInvitation = (token: string) =>
-  useQuery({ queryKey: ['invitation', token], queryFn: () => api<InvitationPreview>(`/api/invitations/${token}`), retry: noRetryOn4xx });
+/** `viewer` (the signed-in user's id, or null) is in the key: the answer depends on who asks (D-11, joined from it already) */
+export const useInvitation = (token: string, viewer: string | null = null) =>
+  useQuery({ queryKey: ['invitation', token, viewer], queryFn: () => api<InvitationPreview>(`/api/invitations/${token}`), retry: noRetryOn4xx, staleTime: 0 });
 
 // ---------- sites ----------
 export const useSites = (orgId: string | undefined) =>

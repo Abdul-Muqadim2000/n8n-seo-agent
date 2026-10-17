@@ -1,7 +1,8 @@
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { PenSquare } from 'lucide-react';
-import { formatUsd, MODES, urlOnHost, type QueueItem } from '@seo/shared';
+import { urlOnHost, type QueueItem } from '@seo/shared';
+import { PRICES } from '@/lib/prices';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/overlay';
 import { errorMessage } from '@/lib/api';
@@ -70,7 +71,7 @@ export function WriteNowDialog({ item, onClose, note }: { item: WriteNowItem; on
             Cancel
           </Button>
           <Button loading={start.isPending} icon={<PenSquare className="size-4" />} onClick={write}>
-            Write it (about {formatUsd(MODES.keyword.costUsd)})
+            Write it (about {PRICES.page()})
           </Button>
         </>
       }
