@@ -69,11 +69,26 @@ export interface Guide {
   related?: readonly string[];
   /** extra words that should find this guide in the search box */
   keywords?: readonly string[];
+  /** D-9: a guide for something only some installations offer (Google sign-in); not offered where it is off */
+  requires?: 'google_signin';
 }
+
+/** What this installation offers, for the guides that depend on it (`/api/auth/providers`). */
+export interface GuideAvailability {
+  googleSignIn: boolean;
+}
+
+/**
+ * D-9 (re-rating 2026-10-17): the DNS guide's "Next, or instead" offered "Prove the website is yours with your Google account" on an
+ * installation with no Google sign-in (the verify step there shows DNS and the meta tag only). A guide is offered only when what it
+ * walks through exists here.
+ */
+export const guideAvailable = (g: Pick<Guide, 'requires'> | undefined, a: GuideAvailability): boolean =>
+  !!g && (g.requires !== 'google_signin' || a.googleSignIn);
 
 export const GUIDE_AREAS: { id: GuideArea; label: string; description: string }[] = [
   { id: 'google', label: 'Google data', description: 'Search Console and Analytics: the data behind every report' },
-  { id: 'ownership', label: 'Proving the website is yours', description: 'One of three ways, before any data is shown' },
+  { id: 'ownership', label: 'Proving the website is yours', description: 'One of the ways this app offers, before any data is shown' },
   { id: 'website', label: 'Changes on your website', description: 'Files, pages and tools that live on your side' },
   { id: 'mailbox', label: 'Your mailbox', description: 'Link-building pitches go out from your own address' },
   { id: 'business', label: 'About your business', description: 'What every page is written from and checked against' },
@@ -172,6 +187,7 @@ export const GUIDES = [
   {
     id: 'search-console-owner',
     area: 'ownership',
+    requires: 'google_signin',
     title: 'Prove the website is yours with your Google account',
     why: 'The fastest of the three ways to prove ownership: if your own Google account is already a verified owner in Search Console, there is nothing to add anywhere.',
     where: 'Ascentra, then Google’s sign-in screen',

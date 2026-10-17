@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fillGuide, fillText, GUIDE_AREAS, GUIDE_FOR_RECOMMENDATION, GUIDES, guideById, guideText, guidesByArea, plainText, searchGuides, type Guide } from './guides';
+import { fillGuide, fillText, GUIDE_AREAS, GUIDE_FOR_RECOMMENDATION, GUIDES, guideAvailable, guideById, guideText, guidesByArea, plainText, searchGuides, type Guide } from './guides';
 
 const all = GUIDES as unknown as Guide[];
 const texts = (g: Guide): string[] => [
@@ -151,5 +151,20 @@ describe('searchGuides', () => {
     expect(ids).not.toContain('indexnow-key-file');
     expect(searchGuides('dns record').map((g) => g.id)).toContain('dns-txt-record');
     expect(searchGuides('search console links').map((g) => g.id)).toEqual(['search-console-links-export']);
+  });
+});
+
+describe('D-9: only the ways this installation offers', () => {
+  it('the Google sign-in guide is not offered without Google sign-in; DNS and the meta tag always are', () => {
+    const off = { googleSignIn: false };
+    expect(guideAvailable(guideById('search-console-owner'), off)).toBe(false);
+    expect(guideAvailable(guideById('search-console-owner'), { googleSignIn: true })).toBe(true);
+    // the DNS guide's "Next, or instead" on an installation with google: false (2026-10-17) offers the meta tag only
+    expect((guideById('dns-txt-record')?.related ?? []).filter((id) => guideAvailable(guideById(id), off))).toEqual(['meta-tag']);
+    expect((guideById('meta-tag')?.related ?? []).filter((id) => guideAvailable(guideById(id), off))).toEqual(['dns-txt-record']);
+  });
+
+  it('every guide that walks through "Verify with Google" says it needs Google sign-in', () => {
+    for (const g of all) if (texts(g).some((t) => /Verify with Google/.test(t))) expect(g.requires, g.id).toBe('google_signin');
   });
 });

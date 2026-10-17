@@ -156,7 +156,8 @@ export interface Run {
 
 export interface ReportFile {
   id: string;
-  kind: 'pdf' | 'docx' | 'doc' | 'html' | 'md' | 'json' | 'zip' | 'csv' | 'txt' | 'other';
+  /** `image` since 2026-10-18 (D-13): a page's hero and in-body images (.webp / .png / .jpg) were listed as a generic "File" */
+  kind: 'pdf' | 'docx' | 'doc' | 'html' | 'md' | 'json' | 'zip' | 'csv' | 'txt' | 'image' | 'other';
   fileName: string;
   mimeType: string;
   size: number;
@@ -207,6 +208,8 @@ export interface Invitation {
   expiresAt: string;
   /** only returned right after creation, so the inviter can copy it */
   inviteUrl?: string;
+  /** D-10: right after creation — whether this server e-mails invitations at all (no mail account = the link is the only way) */
+  emailed?: boolean;
 }
 
 export interface InvitationPreview {
@@ -216,6 +219,8 @@ export interface InvitationPreview {
   inviterName: string | null;
   valid: boolean;
   reason: string | null;
+  /** D-11: the signed-in person already belongs to the invitation's company (they joined from it): where to go */
+  joinedOrgId?: string;
 }
 
 export interface Usage {

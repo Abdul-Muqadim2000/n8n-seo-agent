@@ -1,5 +1,5 @@
 import { useEngineCal } from '@/lib/engine-cal';
-import { PRICES } from '@/lib/prices';
+import { PRICES, runCost, runMinutes } from '@/lib/prices';
 import type { ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { ArrowRight, CheckCircle2, Clock, Coins, Compass, Globe, History, Lock, PackageCheck, PenLine, Plus, Radar, Settings, Sparkles, Telescope, TriangleAlert, Wrench } from 'lucide-react';
@@ -256,7 +256,8 @@ function ToolCard({ info, site, recommended }: { info: ModeInfo; site: Site | nu
   const { org, can } = useOrgCtx();
   const tab = SETTINGS_TAB[info.id];
   const verified = !!site?.verifiedAt;
-  const cost = COST_TEXT[info.id]?.() ?? (info.costUsd > 0 ? `about ${formatUsd(info.costUsd)}` : 'Free');
+  const usd = runCost(info.id);   // D-2: the form's own figure, not the shipped MODES[].costUsd
+  const cost = COST_TEXT[info.id]?.() ?? (usd > 0 ? `about ${formatUsd(usd)}` : 'Free');
 
   let action;
   let opens = false; // the action is a link (styling only: hover lift, glyph highlight)
@@ -343,7 +344,7 @@ function ToolCard({ info, site, recommended }: { info: ModeInfo; site: Site | nu
               {cost}
             </span>
             <span className="inline-flex h-6 items-center gap-1 rounded-md bg-surface-2 px-2 font-medium text-ink-2">
-              <Clock className="size-3.5 shrink-0 text-ink-3" aria-hidden />~{info.etaMinutes} min
+              <Clock className="size-3.5 shrink-0 text-ink-3" aria-hidden />~{runMinutes(info.id)} min
             </span>
           </span>
           <span className="ml-auto">{action}</span>

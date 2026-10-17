@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Download, ExternalLink, File, FileArchive, FileCode, FileJson, FileSpreadsheet, FileText, FileType } from 'lucide-react';
+import { Download, ExternalLink, File, FileArchive, FileCode, FileImage, FileJson, FileSpreadsheet, FileText, FileType } from 'lucide-react';
 import type { ReportFile } from '@seo/shared';
 import { fileUrl } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
@@ -15,6 +15,7 @@ const KIND_ICON: Record<ReportFile['kind'], (c: string) => ReactNode> = {
   zip: (c) => <FileArchive className={c} aria-hidden />,
   csv: (c) => <FileSpreadsheet className={c} aria-hidden />,
   txt: (c) => <FileText className={c} aria-hidden />,
+  image: (c) => <FileImage className={c} aria-hidden />,
   other: (c) => <File className={c} aria-hidden />,
 };
 
@@ -28,13 +29,14 @@ const KIND_LABEL: Record<ReportFile['kind'], string> = {
   zip: 'ZIP',
   csv: 'CSV',
   txt: 'Text',
+  image: 'Image',
   other: 'File',
 };
 
 export const fileKindLabel = (k: ReportFile['kind']) => KIND_LABEL[k] ?? 'File';
 
 /** The order files are offered in: the documents people read first. */
-const ORDER: ReportFile['kind'][] = ['pdf', 'docx', 'doc', 'html', 'md', 'json', 'csv', 'zip', 'txt', 'other'];
+const ORDER: ReportFile['kind'][] = ['pdf', 'docx', 'doc', 'html', 'md', 'json', 'csv', 'zip', 'txt', 'image', 'other'];
 export const sortFiles = (files: ReportFile[]) => [...files].sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind) || a.fileName.localeCompare(b.fileName));
 
 /** The same document is sometimes attached twice (backlinks: `pdf` and `files.pdf`): keep the first of each name + size. */

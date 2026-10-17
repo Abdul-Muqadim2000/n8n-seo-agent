@@ -18,6 +18,15 @@ export const objs = (v: unknown): P[] => arr(v).filter((x): x is P => !!x && typ
 export const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 export const str = (v: unknown): string => (typeof v === 'string' ? v : v == null ? '' : typeof v === 'number' || typeof v === 'boolean' ? String(v) : '');
 export const strs = (v: unknown): string[] => arr(v).map(str).filter(Boolean);
+
+/**
+ * D-13: the engine's "started" notes say where the report goes in API terms ("arrives at your callback", "will be sent to … and
+ * your callback"). In the app the callback IS this page, so the customer reads "arrives here".
+ */
+export const inAppWording = (s: string): string =>
+  s
+    .replace(/\barrives at (?:(\S+@\S+?) and )?your callback\b/g, (_m, email?: string) => (email ? `arrives here and at ${email}` : 'arrives here'))
+    .replace(/\bwill be sent to (?:(\S+@\S+?) and )?your callback\b/g, (_m, email?: string) => (email ? `will appear here and be sent to ${email}` : 'will appear here'));
 export const has = (v: unknown): boolean => (Array.isArray(v) ? v.length > 0 : v != null && v !== '' && !(typeof v === 'object' && !Object.keys(v as object).length));
 
 /** "1,600" / "12K" for counts; "–" when missing. */
@@ -276,7 +285,16 @@ export function JsonViewer({ value, title = 'Raw data', defaultOpen }: { value: 
 }
 
 /** The run ledger every completed callback carries: DataForSEO spend, AI calls, duration (the breakdown behind "Details"). */
-export function LedgerCard({ ledger, extraCost }: { ledger: unknown; extraCost?: number | null }) {
+export function LedgerCard({
+  ledger,
+  extraCost,
+  shared,
+}: {
+  ledger: unknown;
+  extraCost?: number | null;
+  /** D-3: the figure is a whole run's that posted several reports (the weekly rank check posts one per ladder): say so, once */
+  shared?: string;
+}) {
   const l = obj(ledger);
   if (!has(l) && extraCost == null) return null;
   const byNode = Object.entries(obj(l.by_node))
@@ -286,10 +304,10 @@ export function LedgerCard({ ledger, extraCost }: { ledger: unknown; extraCost?:
   const cost = ledgerBreakdown(l, extraCost);
   return (
     <Block
-      title="Run ledger"
+      title={shared ? 'Run ledger: the whole run' : 'Run ledger'}
       icon={<Receipt />}
       iconTone="neutral"
-      description="What this run used."
+      description={shared ?? 'What this run used.'}
       info="Search data is what the data provider charged; model calls are priced from the usage the run reported. Each line says whether its figure is measured or estimated, and a run that did not report its model calls shows search data only."
     >
       <Facts
