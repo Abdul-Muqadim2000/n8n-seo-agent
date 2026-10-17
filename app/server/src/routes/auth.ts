@@ -1,4 +1,5 @@
 import { and, eq, gt, isNull, sql } from 'drizzle-orm';
+import { ssoRequiredError, ssoRequiredFor } from '../services/sso';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { forgotSchema, loginSchema, resetSchema, signupSchema, type AuthProviders } from '@seo/shared';
 import { requireUser } from '../auth/access';
@@ -73,6 +74,9 @@ export async function authRoutes(app: FastifyInstance) {
         })
       : null;
     const invitedHere = !!invitation && invitation.email === body.email;
+    // G1: an address on a domain whose company requires single sign-on gets its account from the identity provider
+    const sso = await ssoRequiredFor(body.email, null);
+    if (sso) throw ssoRequiredError(sso);
     if (!config.allowSignup && !invitedHere) throw forbidden('Sign-up is by invitation only. Open the invitation link you received to create your account.');
     const exists = await db.query.users.findFirst({ where: eq(schema.users.email, body.email) });
     if (exists) throw conflict('An account with this e-mail already exists. Sign in instead.', 'email_taken');
@@ -98,6 +102,13 @@ export async function authRoutes(app: FastifyInstance) {
   app.post('/api/auth/login', LIMIT, async (req, reply) => {
     const body = parse(loginSchema, req.body);
     const user = await db.query.users.findFirst({ where: eq(schema.users.email, body.email) });
+    // G1: checked before any password: a domain that requires single sign-on refuses passwords (owners keep theirs: break-glass)
+    const sso = await ssoRequiredFor(body.email, user?.id ?? null);
+    if (sso) {
+      await burnPasswordCheck(body.password);
+      if (user) await auditUser(req, user, { action: 'auth.login.failed', outcome: 'failure', details: { method: 'password', reason: 'single sign-on required' } });
+      throw ssoRequiredError(sso);
+    }
     if (!user || !user.passwordHash) {
       await burnPasswordCheck(body.password);
       throw new HttpError(401, user ? 'This account signs in with Google. Use "Continue with Google", or set a password with "Forgot password".' : 'Wrong e-mail or password.', 'bad_credentials');
@@ -209,6 +220,11 @@ export async function authRoutes(app: FastifyInstance) {
       return fail('google_failed');
     }
     if (!profile.emailVerified) return fail('google_unverified');
+    // G1: Google sign-in is refused like a password where the company requires its own identity provider
+    if (!req.user) {
+      const existing = (await db.query.users.findFirst({ where: eq(schema.users.googleSub, profile.sub) })) ?? (await db.query.users.findFirst({ where: eq(schema.users.email, profile.email) }));
+      if (await ssoRequiredFor(profile.email, existing?.id ?? null)) return fail('sso_required');
+    }
 
     // already signed in ("Link Google account" on the account page): attach this Google login to the current user
     if (req.user) {

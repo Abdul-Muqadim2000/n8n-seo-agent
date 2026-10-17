@@ -51,6 +51,7 @@ import type {
   DeliverySettingsInput,
   AuditEventView,
   SessionView,
+  SsoOverview,
   MfaStatus,
   SecurityPolicy,
   TotpEnrolment,
@@ -733,6 +734,13 @@ export const usePasskeyRemove = () => useIdentityMutation((id: string) => api<Mf
 export const useSessions = () => useQuery({ queryKey: ['me', 'sessions'], queryFn: () => api<{ items: SessionView[] }>('/api/me/sessions') });
 export const useRevokeSession = () => useIdentityMutation((id: string) => api<{ ok: boolean; signedOutHere: boolean }>(`/api/me/sessions/${id}`, { method: 'DELETE' }));
 export const useRevokeOtherSessions = () => useIdentityMutation((_: void) => api<{ ok: boolean; revoked: number }>('/api/me/sessions/revoke-others', { method: 'POST' }));
+
+export const useSso = (orgId: string, enabled = true) => useQuery({ queryKey: [...qk.org(orgId), 'sso'], queryFn: () => api<SsoOverview>(`/api/orgs/${orgId}/sso`), enabled });
+/** every SSO change answers with fresh state or nothing: refetch the overview */
+export function useSsoMutation<TBody, TRes = unknown>(orgId: string, fn: (b: TBody) => Promise<TRes>) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: fn, onSuccess: () => qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'sso'] }) });
+}
 
 export type AuditFilters = { category?: string; actor?: string; outcome?: string; from?: string; to?: string };
 export type AuditPage = { items: AuditEventView[]; nextCursor: string | null; actors?: { id: string; label: string }[]; retentionDays: number };

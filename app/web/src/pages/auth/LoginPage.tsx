@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Link, useNavigate, useSearchParams } from 'react-router';
+import { KeyRound } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { loginSchema, type Me, type MfaChallenge } from '@seo/shared';
 import type { z } from 'zod';
@@ -40,6 +41,11 @@ export default function LoginPage() {
         navigate(next ?? '/', { replace: true });
       },
       onError: (e) => {
+        // G1: this address signs in through its company's identity provider: go there
+        if (e instanceof ApiRequestError && e.code === 'sso_required' && typeof e.data.ssoUrl === 'string') {
+          window.location.assign(`${e.data.ssoUrl}${next ? `&next=${encodeURIComponent(next)}` : ''}`);
+          return;
+        }
         if (e instanceof ApiRequestError) for (const [k, m] of Object.entries(e.fields)) form.setError(k as keyof Values, { message: m });
       },
     }),
@@ -103,6 +109,12 @@ export default function LoginPage() {
           Sign in
         </Button>
       </form>
+      <Link
+        to={`/login/sso${next ? `?next=${encodeURIComponent(next)}` : ''}`}
+        className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-line text-sm font-medium text-ink-2 transition-colors duration-150 ease-brand hover:bg-surface-2 hover:text-ink"
+      >
+        <KeyRound className="size-4" aria-hidden /> Sign in with SSO
+      </Link>
     </AuthCard>
   );
 }

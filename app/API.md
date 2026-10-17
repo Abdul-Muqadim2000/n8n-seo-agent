@@ -68,6 +68,36 @@ tab) do not count.
 | DELETE | /api/me/sessions/:id | | `{ ok, signedOutHere }`; another person's session is a 404 |
 | POST | /api/me/sessions/revoke-others | | `{ ok, revoked }` |
 
+### Single sign-on (G1, `server/src/services/sso.ts`, `app/docs/IDENTITY.md` §4)
+One connection per company, OIDC (`openid-client`: discovery, code + PKCE + nonce) or SAML 2.0 (`@node-saml/node-saml`: signed
+assertions, audience, `InResponseTo` from requests we issued, 2 minutes of clock skew; plus our own issuer, recipient and one-use
+assertion checks; IdP-initiated answers are refused). It serves addresses on the company's **DNS-verified** domains only. Owners and
+admins configure it; changes need a step-up; making it required is the owner's, needs their own two-step verification, and signs out
+every non-owner session on those domains opened without it. Changing the identity provider switches the connection off until a
+test passes again.
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | /api/orgs/:orgId/sso | (admin) | `SsoOverview` (`domains`, `connection` — never the client secret, `sp` — the values to give the IdP, `secretsReady`) |
+| POST | /api/orgs/:orgId/sso/domains | `{ domain }` (admin, step-up; no public mail providers) | `SsoDomainView` with the TXT value; 409 when another company verified it |
+| POST | /api/orgs/:orgId/sso/domains/:id/verify | (admin) | `{ domain, verified, message }` (looks for `TXT ascentra-sso=<token>` at the domain) |
+| DELETE | /api/orgs/:orgId/sso/domains/:id | (admin, step-up) | `{ ok }` |
+| PUT | /api/orgs/:orgId/sso/connection | `ssoConnectionSchema` (admin, step-up; client secret / certificates omitted = keep) | `SsoConnectionView` |
+| PATCH | /api/orgs/:orgId/sso/connection | `{ enabled?, enforced? }` (admin, step-up; `enforced` owner only) | `SsoConnectionView`; 400 until a test passed / a domain is verified |
+| DELETE | /api/orgs/:orgId/sso/connection | (admin, step-up; owner when enforced) | `{ ok }` |
+| POST | /api/orgs/:orgId/sso/connection/test | (admin) | `{ url }` — open it: a real sign-in in test mode, back to `/o/:orgId/settings/sso?test=ok\|failed` |
+| POST | /api/sso/discover | `{ email }` | `{ sso, orgName?, url? }` |
+| GET | /api/sso/start?email=&next= | | 302 to the identity provider (cookie `sso_flow`, 10 minutes) |
+| GET | /api/sso/oidc/callback | (from the IdP) | 302 to `next`, `/login/mfa` or `/login?error=sso_*` |
+| POST | /api/sso/saml/:connId/acs | form `SAMLResponse`, `RelayState` (no CSRF header: the IdP posts it) | the same redirects |
+| GET | /api/sso/saml/:connId/metadata | | SP metadata XML |
+
+When a company **requires** SSO, `POST /api/auth/login` and `/api/auth/signup` for an address on its domains answer
+`403 { code: 'sso_required', ssoUrl }` before any password is checked (owners excepted), and Google sign-in returns
+`/login?error=sso_required`. First sign-ins create the account and membership with the default role when JIT is on; the IdP's
+`sub` / NameID is remembered so a renamed address finds the same person. If the company does not count its IdP as a second step
+(`mfaTrustSso: false`), people with their own factor get the second step (`/login/mfa`).
+
 ### Audit log (G1, `server/src/services/audit.ts`, catalogue `AUDIT_ACTIONS` in `shared/src/identity.ts`)
 Append-only per company (a database trigger refuses UPDATE / TRUNCATE and any DELETE but the daily retention purge and the
 company's own deletion). Owners and admins only; another company's log is a 404. Each event: `id, at, action, label, category,

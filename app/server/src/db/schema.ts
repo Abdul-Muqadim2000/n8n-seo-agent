@@ -98,6 +98,71 @@ export const authFlows = pgTable(
   (t) => [index('auth_flows_expires_idx').on(t.expiresAt)],
 );
 
+/** G1: e-mail domains a company claims for single sign-on, proven by a DNS TXT record; one company per verified domain. */
+export const ssoDomains = pgTable(
+  'sso_domains',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    domain: text('domain').notNull(),
+    verificationToken: text('verification_token').notNull(),
+    verifiedAt: ts('verified_at'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: created(),
+  },
+  (t) => [uniqueIndex('sso_domains_org_domain_idx').on(t.orgId, t.domain), uniqueIndex('sso_domains_verified_idx').on(t.domain).where(sql`${t.verifiedAt} is not null`)],
+);
+
+/** G1: a company's identity provider (one per company): OIDC or SAML 2.0. */
+export const ssoConnections = pgTable(
+  'sso_connections',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    protocol: text('protocol').notNull(),
+    enabled: boolean('enabled').notNull().default(false),
+    enforced: boolean('enforced').notNull().default(false),
+    jitEnabled: boolean('jit_enabled').notNull().default(true),
+    defaultRole: text('default_role').notNull().default('member'),
+    oidcIssuer: text('oidc_issuer'),
+    oidcClientId: text('oidc_client_id'),
+    /** sealed (lib/secretBox `sealIdentity`) */
+    oidcClientSecret: text('oidc_client_secret'),
+    samlEntityId: text('saml_entity_id'),
+    samlSsoUrl: text('saml_sso_url'),
+    /** the IdP's signing certificates, PEM (public) */
+    samlCerts: jsonb('saml_certs').$type<string[]>().notNull().default([]),
+    lastTestAt: ts('last_test_at'),
+    lastTestOk: boolean('last_test_ok'),
+    lastTestMessage: text('last_test_message'),
+    lastLoginAt: ts('last_login_at'),
+    createdAt: created(),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex('sso_connections_org_idx').on(t.orgId)],
+);
+
+/** G1: the IdP's stable subject for a person, so a renamed address still finds them. */
+export const ssoIdentities = pgTable(
+  'sso_identities',
+  {
+    connectionId: uuid('connection_id')
+      .notNull()
+      .references(() => ssoConnections.id, { onDelete: 'cascade' }),
+    subject: text('subject').notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: created(),
+    lastLoginAt: ts('last_login_at'),
+  },
+  (t) => [primaryKey({ columns: [t.connectionId, t.subject] }), index('sso_identities_user_idx').on(t.userId)],
+);
+
 /**
  * G1: the customer-visible audit log. Append-only in the database itself: a trigger (migration g1_audit) refuses UPDATE, TRUNCATE
  * and any DELETE except the retention purge (`ascentra.audit_purge`) and the company's own deletion. Written only through
@@ -625,6 +690,8 @@ export type SessionRow = typeof sessions.$inferSelect;
 export type WebauthnCredentialRow = typeof webauthnCredentials.$inferSelect;
 export type AuthFlowRow = typeof authFlows.$inferSelect;
 export type AuditEventRow = typeof auditEvents.$inferSelect;
+export type SsoConnectionRow = typeof ssoConnections.$inferSelect;
+export type SsoDomainRow = typeof ssoDomains.$inferSelect;
 export type OrgRow = typeof organizations.$inferSelect;
 export type SiteRow = typeof sites.$inferSelect;
 export type RunRow = typeof runs.$inferSelect;

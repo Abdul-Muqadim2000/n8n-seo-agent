@@ -251,6 +251,134 @@ export function deviceLabel(ua: string | null | undefined): string {
   return os ? `${browser} on ${os}` : browser;
 }
 
+// ---------------------------------------------------------------------------------------------------------------------------
+// 4. Single sign-on
+// ---------------------------------------------------------------------------------------------------------------------------
+
+export const SSO = {
+  /** the DNS TXT record that proves a company controls an e-mail domain: `ascentra-sso=<token>` at the domain itself */
+  txtPrefix: 'ascentra-sso=',
+  maxDomains: 20,
+  /** an SSO round trip must come back within this */
+  flowMinutes: 10,
+  /** SAML NotBefore / NotOnOrAfter tolerance */
+  clockSkewSeconds: 120,
+  maxCerts: 3,
+} as const;
+
+/** consumer mail providers: nobody may claim them for single sign-on (they are not one company's domain) */
+export const FREE_MAIL_DOMAINS = [
+  'gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com', 'live.com', 'msn.com', 'yahoo.com', 'ymail.com', 'icloud.com', 'me.com', 'mac.com',
+  'aol.com', 'proton.me', 'protonmail.com', 'pm.me', 'gmx.com', 'gmx.net', 'gmx.de', 'web.de', 'mail.com', 'yandex.com', 'yandex.ru', 'zoho.com',
+  'fastmail.com', 'hey.com', 'tutanota.com', 'qq.com', '163.com', '126.com', 'naver.com', 'mail.ru',
+] as const;
+
+const DOMAIN_RE = /^(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+/** "Example.COM." / "@example.com" / "https://example.com/" → "example.com", or '' when it is not a domain */
+export function cleanEmailDomain(v: unknown): string {
+  if (typeof v !== 'string') return '';
+  const d = v.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^@/, '').replace(/[/?#].*$/, '').replace(/\.$/, '');
+  return DOMAIN_RE.test(d) ? d : '';
+}
+/** the domain of an e-mail address (lower case), or '' */
+export const ssoEmailDomain = (email: string): string => cleanEmailDomain(email.split('@')[1] ?? '');
+
+export const ssoDomainSchema = z.object({
+  domain: z
+    .string()
+    .trim()
+    .max(253)
+    .transform((v) => cleanEmailDomain(v))
+    .refine((v) => !!v, 'Enter a domain like example.com')
+    .refine((v) => !(FREE_MAIL_DOMAINS as readonly string[]).includes(v), 'A public mail provider cannot be claimed for single sign-on'),
+});
+
+export type SsoProtocol = 'oidc' | 'saml';
+
+const httpsUrl = z
+  .string()
+  .trim()
+  .max(500)
+  .refine((v) => /^https:\/\/[^\s/]+/i.test(v), 'Must start with https://');
+
+/** what an admin saves: the identity provider's side of the connection (the secret only when it is being set or changed) */
+export const ssoConnectionSchema = z
+  .object({
+    protocol: z.enum(['oidc', 'saml']),
+    oidc: z
+      .object({
+        issuer: httpsUrl,
+        clientId: z.string().trim().min(1, 'Enter the client ID').max(300),
+        /** omitted or '' = keep the stored one */
+        clientSecret: z.string().max(500).optional(),
+      })
+      .optional(),
+    saml: z
+      .object({
+        entityId: z.string().trim().min(1, 'Enter the identity provider’s entity ID (issuer)').max(500),
+        ssoUrl: httpsUrl,
+        /** empty = keep the stored certificates */
+        certificates: z.array(z.string().trim().min(40, 'Paste the whole certificate').max(20_000)).max(SSO.maxCerts).default([]),
+      })
+      .optional(),
+    jitEnabled: z.boolean().default(true),
+    defaultRole: z.enum(['admin', 'member', 'viewer']).default('member'),
+  })
+  .superRefine((v, ctx) => {
+    if (v.protocol === 'oidc' && !v.oidc) ctx.addIssue({ code: 'custom', path: ['oidc'], message: 'Fill in the OIDC settings' });
+    if (v.protocol === 'saml' && !v.saml) ctx.addIssue({ code: 'custom', path: ['saml'], message: 'Fill in the SAML settings' });
+  });
+export type SsoConnectionInput = z.input<typeof ssoConnectionSchema>;
+
+export const ssoSwitchSchema = z.object({ enabled: z.boolean().optional(), enforced: z.boolean().optional() });
+
+export interface SsoDomainView {
+  id: string;
+  domain: string;
+  verified: boolean;
+  verifiedAt: string | null;
+  /** the TXT record to publish at `domain` */
+  txtValue: string;
+}
+
+export interface SsoCertInfo {
+  subject: string;
+  notAfter: string;
+  expired: boolean;
+  fingerprint: string;
+}
+
+export interface SsoConnectionView {
+  id: string;
+  protocol: SsoProtocol;
+  enabled: boolean;
+  enforced: boolean;
+  jitEnabled: boolean;
+  defaultRole: 'admin' | 'member' | 'viewer';
+  oidc: { issuer: string; clientId: string; hasClientSecret: boolean } | null;
+  saml: { entityId: string; ssoUrl: string; certificates: SsoCertInfo[] } | null;
+  lastTest: { at: string; ok: boolean; message: string } | null;
+  lastLoginAt: string | null;
+  updatedAt: string;
+}
+
+/** what the company's IT admin types into their identity provider */
+export interface SsoServiceProvider {
+  oidcRedirectUri: string;
+  samlEntityId: string | null;
+  samlAcsUrl: string | null;
+  samlMetadataUrl: string | null;
+  loginUrl: string;
+}
+
+export interface SsoOverview {
+  domains: SsoDomainView[];
+  connection: SsoConnectionView | null;
+  sp: SsoServiceProvider;
+  /** secrets can be stored (IDENTITY_KEY / MAILBOX_KEY) */
+  secretsReady: boolean;
+}
+
 export interface MemberSecurity {
   userId: string;
   mfaEnabled: boolean;

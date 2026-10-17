@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  cleanEmailDomain,
+  ssoConnectionSchema,
+  ssoDomainSchema,
+  ssoEmailDomain,
   deviceLabel,
   AUDIT_ACTIONS,
   AUDIT_CATEGORIES,
@@ -145,5 +149,27 @@ describe('device labels', () => {
     expect(deviceLabel('curl/8.7.1')).toBe('A script');
     expect(deviceLabel('')).toBe('Unknown device');
     expect(deviceLabel(null)).toBe('Unknown device');
+  });
+});
+
+describe('single sign-on inputs', () => {
+  it('reads a domain however it is typed, and refuses non-domains and public mail providers', () => {
+    expect(cleanEmailDomain('Example.COM.')).toBe('example.com');
+    expect(cleanEmailDomain('@acme.co.uk')).toBe('acme.co.uk');
+    expect(cleanEmailDomain('https://acme.io/path?x')).toBe('acme.io');
+    for (const v of ['', 'localhost', 'a b.com', '-x.com', 'x', null]) expect(cleanEmailDomain(v)).toBe('');
+    expect(ssoEmailDomain('Dana@Acme.IO')).toBe('acme.io');
+    expect(ssoDomainSchema.safeParse({ domain: 'acme.io' }).success).toBe(true);
+    for (const d of ['gmail.com', 'outlook.com', 'not a domain']) expect(ssoDomainSchema.safeParse({ domain: d }).success, d).toBe(false);
+  });
+  it('validates the connection for its protocol, https only', () => {
+    expect(ssoConnectionSchema.safeParse({ protocol: 'oidc', oidc: { issuer: 'https://acme.okta.com', clientId: 'c' } }).success).toBe(true);
+    expect(ssoConnectionSchema.safeParse({ protocol: 'oidc', oidc: { issuer: 'http://acme.okta.com', clientId: 'c' } }).success).toBe(false);
+    expect(ssoConnectionSchema.safeParse({ protocol: 'oidc' }).success).toBe(false);
+    expect(ssoConnectionSchema.safeParse({ protocol: 'saml', saml: { entityId: 'x', ssoUrl: 'https://idp/sso' } }).success).toBe(true);
+    expect(ssoConnectionSchema.safeParse({ protocol: 'saml', saml: { entityId: 'x', ssoUrl: 'https://idp/sso', certificates: ['short'] } }).success).toBe(false);
+    expect(ssoConnectionSchema.safeParse({ protocol: 'saml', oidc: { issuer: 'https://a', clientId: 'c' } }).success).toBe(false);
+    expect(ssoConnectionSchema.parse({ protocol: 'oidc', oidc: { issuer: 'https://a.test', clientId: 'c' } })).toMatchObject({ jitEnabled: true, defaultRole: 'member' });
+    expect(ssoConnectionSchema.safeParse({ protocol: 'oidc', oidc: { issuer: 'https://a.test', clientId: 'c' }, defaultRole: 'owner' }).success).toBe(false);
   });
 });

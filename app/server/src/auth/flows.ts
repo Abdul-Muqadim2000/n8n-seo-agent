@@ -8,10 +8,10 @@ import { randomToken, sha256 } from '../lib/crypto';
  * or SAML `RelayState`); the table keeps only its SHA-256, so a database copy cannot complete anyone's sign-in.
  *
  * Kinds: `mfa_login` (password / Google / SSO checked, second factor pending), `webauthn_reg` (passkey being added),
- * `webauthn_auth` (a step-up passkey challenge), `stepup_fail` (failed step-ups of a session), `oidc`
- * (state, nonce, PKCE verifier), `saml_req` (an AuthnRequest id we issued), `saml_seen` (an assertion id already accepted).
+ * `webauthn_auth` (a step-up passkey challenge), `stepup_fail` (failed step-ups of a session), `sso`
+ * (an SSO round trip: OIDC state, nonce and PKCE verifier, or the SAML RelayState), `saml_req` (an AuthnRequest id we issued), `saml_seen` (an assertion id already accepted).
  */
-export type FlowKind = 'mfa_login' | 'webauthn_reg' | 'webauthn_auth' | 'stepup_fail' | 'oidc' | 'saml_req' | 'saml_seen';
+export type FlowKind = 'mfa_login' | 'webauthn_reg' | 'webauthn_auth' | 'stepup_fail' | 'sso' | 'saml_req' | 'saml_seen';
 
 export async function createFlow(kind: FlowKind, o: { userId?: string | null; orgId?: string | null; data?: Record<string, unknown>; ttlMinutes: number; token?: string }): Promise<string> {
   const token = o.token ?? randomToken(32);

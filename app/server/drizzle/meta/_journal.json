@@ -85,6 +85,13 @@
       "when": 1792272500613,
       "tag": "0011_g1_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792273452214,
+      "tag": "0012_g1_sso",
+      "breakpoints": true
     }
   ]
 }

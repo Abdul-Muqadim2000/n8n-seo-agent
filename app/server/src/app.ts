@@ -21,6 +21,7 @@ import { meRoutes } from './routes/me';
 import { mfaRoutes } from './routes/mfa';
 import { securityRoutes } from './routes/security';
 import { sessionRoutes } from './routes/sessions';
+import { ssoRoutes } from './routes/sso';
 import { orgRoutes } from './routes/orgs';
 import { runRoutes } from './routes/runs';
 import { siteRoutes } from './routes/sites';
@@ -77,7 +78,9 @@ export async function buildApp(): Promise<FastifyInstance> {
       return;
     }
     // CSRF: state-changing requests must carry a header a cross-site form cannot set (n8n callbacks authenticate by URL token instead)
-    if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !req.url.startsWith('/api/hooks/') && req.headers['x-requested-with'] !== 'fetch') {
+    // G1: the SAML answer is a cross-site form POST from the identity provider, authenticated by its signature and our request id
+    const samlAcs = req.method === 'POST' && /^\/api\/sso\/saml\/[^/]+\/acs(\?|$)/.test(req.url);
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !req.url.startsWith('/api/hooks/') && !samlAcs && req.headers['x-requested-with'] !== 'fetch') {
       throw new HttpError(403, 'Missing X-Requested-With header', 'csrf');
     }
     if (req.url.startsWith('/api/hooks/') || req.url === '/api/health') return;
@@ -118,6 +121,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(mfaRoutes);
   await app.register(securityRoutes);
   await app.register(sessionRoutes);
+  await app.register(ssoRoutes);
   await app.register(orgRoutes);
   await app.register(siteRoutes);
   await app.register(dataRoutes);

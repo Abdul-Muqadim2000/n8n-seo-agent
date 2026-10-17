@@ -12,7 +12,7 @@ export interface VerifyOutcome {
   message: string;
 }
 
-function isPrivateIp(ip: string): boolean {
+export function isPrivateIp(ip: string): boolean {
   if (isIP(ip) === 4) {
     const [a, b] = ip.split('.').map(Number);
     return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224;
@@ -22,7 +22,7 @@ function isPrivateIp(ip: string): boolean {
 }
 
 /** DNS lookup for the HTTPS connection itself: only public addresses (the address checked is the address connected to). */
-function publicLookup(hostname: string, options: object, cb: (err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => void) {
+export function publicLookup(hostname: string, options: object, cb: (err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => void) {
   dns
     .lookup(hostname, { all: true })
     .then((addrs) => {

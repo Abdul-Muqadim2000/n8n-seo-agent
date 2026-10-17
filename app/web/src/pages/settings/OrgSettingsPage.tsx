@@ -46,6 +46,7 @@ import { MailboxesTab } from './_components/MailboxesTab';
 import { ApiKeysTab } from './_components/ApiKeysTab';
 import { SecurityTab } from './_components/SecurityTab';
 import { AuditTab } from './_components/AuditTab';
+import { SsoTab } from './_components/SsoTab';
 
 const TABS = [
   { id: 'company', label: 'Company', description: 'Your company’s details, websites and setup.' },
@@ -55,6 +56,7 @@ const TABS = [
   { id: 'mailboxes', label: 'Mailboxes', description: 'The mailboxes link-building pitches go out from, and your opt-out list.' },
   { id: 'api', label: 'API access', description: 'Keys that let a script, a BI tool or an AI assistant read your own data.' },
   { id: 'security', label: 'Security', description: 'Two-step verification for everyone, who has it, and how long records are kept.' },
+  { id: 'sso', label: 'Single sign-on', description: 'Sign in through your identity provider (Okta, Entra ID, Google Workspace), on your own e-mail domains.' },
   { id: 'audit', label: 'Audit log', description: 'Who did what, when and from where: sign-ins, team, settings, keys and sharing.' },
 ] as const;
 
@@ -83,6 +85,7 @@ export default function OrgSettingsPage() {
       {current.id === 'mailboxes' && <MailboxesTab />}
       {current.id === 'api' && <ApiKeysTab />}
       {current.id === 'security' && <SecurityTab />}
+      {current.id === 'sso' && <SsoTab />}
       {current.id === 'audit' && <AuditTab />}
     </div>
   );
