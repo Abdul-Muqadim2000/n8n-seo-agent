@@ -350,7 +350,8 @@
       "crawl_js": true,
       "competitors": [
         "rival.ae"
-      ]
+      ],
+      "ga4_property_id": "543096312"
     },
     "expect": {
       "mode": "audit",
@@ -383,7 +384,8 @@
       "competitors": [
         "azentio.com",
         "cleartax.com"
-      ]
+      ],
+      "ga4_property_id": "543096312"
     },
     "expect": {
       "include_full_report": false,
