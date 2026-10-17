@@ -11,8 +11,8 @@ import { AuthCard } from './shared';
 
 export default function AcceptInvitePage() {
   const { token = '' } = useParams();
-  const inv = useInvitation(token);
   const me = useMe();
+  const inv = useInvitation(token, me.data?.user.id ?? null);
   const accept = usePost<Record<string, never>, { orgId: string }>(`/api/invitations/${token}/accept`);
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -44,7 +44,17 @@ export default function AcceptInvitePage() {
           <div className="text-ink-3">Role: {ROLE_LABELS[i.role]}</div>
         </div>
       </div>
-      {!i.valid ? (
+      {i.joinedOrgId ? (
+        // D-11: they joined from this invitation (signing up from it joins at once): the way in, not a dead end
+        <div className="space-y-3">
+          <Callout tone="good" title={`You joined ${i.orgName}`}>
+            You are a member as {ROLE_LABELS[i.role].toLowerCase()}.
+          </Callout>
+          <ButtonLink to={paths.org(i.joinedOrgId)} size="lg" className="w-full">
+            Open {i.orgName}
+          </ButtonLink>
+        </div>
+      ) : !i.valid ? (
         <Callout tone="warning">{i.reason ?? 'This invitation is no longer valid.'}</Callout>
       ) : !me.data ? (
         <div className="space-y-3">
