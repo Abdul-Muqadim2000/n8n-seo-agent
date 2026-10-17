@@ -1,4 +1,5 @@
 /*__COVERAGE__*/
+/*__FIT_GATE__*/
 /*__SITE_MODEL__*/
 // B3-7 (2026-10-16, benchmark area 3): "is this page publishable?" without a $0.80 content run.
 // `POST /webhook/seo-publish-check` runs the DETERMINISTIC half of the content gate over Markdown the caller supplies: the very same
@@ -63,7 +64,7 @@ if (terms.length && competitors.length) {
   if (bc && bc.coverage_pct != null) coverage_target = { terms_total: bc.terms_total, terms: terms.map(t => t.term),
     best: { domain: bc.domain, url: bc.url, rank: bc.rank, coverage_pct: bc.coverage_pct, terms_used: bc.terms_used, word_count: bc.word_count, sections: bc.sections, kind: bc.kind },
     page_kind: kind, type_match: bc.type_match, measure: 'presence', average_pct: bc.average_pct, pages_compared: bc.pages_compared, target_pct: CVG.target(bc.coverage_pct),
-    subtopics: CVG.subtopics(competitors.find(c => c.url === bc.url) || null, 12) };
+    subtopics: CVG.subtopics(competitors.find(c => c.url === bc.url) || null, 12, { labels: fitLabels, brands: competitors.map(c => c.domain || c.url).filter(Boolean) }) };   // A-16
 }
 // links to the site's own pages: only what the caller listed is a real page; with no list, the links the page itself makes are trusted
 // (and the verdict says they were not verified), so the check never strips a link it cannot judge
