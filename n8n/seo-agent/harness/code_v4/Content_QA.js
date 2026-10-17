@@ -492,6 +492,10 @@ const SM = (() => {
     if (qHit && best) return { ...best, listing: listingOf(qHit, best) };
     return qHit || best;
   };
+  // A-22 (2026-10-17): how well ONE page of the inventory targets a search by its own words (slug or title / H1, the matchPage rule), so a
+  // caller that already knows the page Google ranks can ask whether another page targets the search more closely - never to replace it
+  const pageScore = (page, keyword) => { const p = page || {}; const want = matchTerms(keyword); if (!want.length || !S(p.url)) return null;
+    return Math.round(Math.max(shareIn(want, matchTerms(pathOf(p.url).replace(/\.[a-z]{2,5}$/i, ''))), shareIn(want, matchTerms(S(p.title) + ' ' + S(p.h1)))) * 100) / 100; };
   // R35: how much of a search a page's OWN title / H1 holds (null when the page's title was never read) - the only evidence that may call
   // a page "about something else"
   // the words of a spoken / long-tail search that say nothing about the subject ("which ... can help ... in the uae")
@@ -536,7 +540,7 @@ const SM = (() => {
     decay_state: S(p.decay_state), decay_pct: num0(p.decay_pct), decay_lost: num0(p.decay_lost), decay_kind: S(p.decay_kind),
     decay_basis: S(p.decay_basis).slice(0, 900), measured_at: S(p.measured_at) }));
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
-    titleShare, titleGap, canonUrl, isListing,
+    titleShare, titleGap, canonUrl, isListing, pageScore,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms } };
 })();
 // Coverage kit (FIX_PLAN G33, 2026-10-13; inlined through the marker /*__COVERAGE__*/).
@@ -595,6 +599,7 @@ const CVG = (() => {
   const kindFor = (pageType) => (/blog|guide|article|pillar|hub|case stud|post/i.test(S(pageType)) ? 'guide' : 'service');
   // a list is a fair benchmark only for a guide whose search itself asks for a list ("best erp companies in dubai")
   const LIST_SEARCH = /\b(?:best|top|companies|firms|agencies|providers|vendors|tools|alternatives|list)\b/i;
+  const OFFICIAL = /(^|\.)(gov|govt|gob|gouv|mil)(\.[a-z]{2,3})?$|(^|\.)(gov|govt|gob|gouv)\.[a-z]{2,3}(\.[a-z]{2})?$/;   // a government / official host
   const best = (pages, terms, want) => {
     const scored = (Array.isArray(pages) ? pages : []).filter(p => p && S(p.content_full || p.content || p.text))
       .map(p => ({ page: p, kind: kindOf(p), cov: coverageOf(p.content_full || p.content || p.text, terms) }));
@@ -604,13 +609,19 @@ const CVG = (() => {
     // never the bar for a service page), and only then any page — and the answer says which of the three it was.
     const k = want && want.kind ? want.kind : null;
     const lists = !!(k === 'guide' && want && LIST_SEARCH.test(S(want.keyword)));
-    const same = k ? scored.filter(x => x.kind === k || (lists && x.kind === 'list')) : scored;
-    const notList = scored.filter(x => x.kind !== 'list');
-    const pool = same.length ? same : (notList.length ? notList : scored);
+    // A-7 (2026-10-17, re-rating exec 760): a vendor's page was measured against mof.gov.ae, "the best service page" because it was the only
+    // result read as a service page. A government / regulator page is a source to cite, never the page a business has to beat: it is
+    // left out of the choice whenever any other page was read (and the answer counts it), and stands in only when nothing else did.
+    const isOfficial = (x) => OFFICIAL.test(S(x.page.domain || x.page.url).toLowerCase().replace(/^https?:\/\//, '').replace(/[\/?#].*$/, ''));
+    const official = scored.filter(isOfficial);
+    const cands = official.length < scored.length ? scored.filter(x => !isOfficial(x)) : scored;
+    const same = k ? cands.filter(x => x.kind === k || (lists && x.kind === 'list')) : cands;
+    const notList = cands.filter(x => x.kind !== 'list');
+    const pool = same.length ? same : (notList.length ? notList : cands);
     const w = pool.slice().sort(order)[0];
     return { domain: S(w.page.domain), url: S(w.page.url), rank: Number(w.page.rank) || null, coverage_pct: w.cov.pct, terms_used: w.cov.found,
       terms_total: w.cov.total, word_count: Number(w.page.word_count) || null, sections: (w.page.headings || []).length, kind: w.kind,
-      type_match: k ? same.length > 0 : null, same_kind_pages: k ? same.length : null,
+      type_match: k ? same.length > 0 : null, same_kind_pages: k ? same.length : null, official_skipped: cands === scored ? 0 : official.length,
       average_pct: Math.round(scored.reduce((s, x) => s + (x.cov.pct || 0), 0) / scored.length), pages_compared: scored.length };
   };
   const MIN_TARGET = 60, MAX_TARGET = 90;
@@ -1187,7 +1198,10 @@ if (AT) {
   if (fan.length && covered.length < Math.ceil(fan.length / 2)) warnings.push('AI target: give these searches the assistants run their own question-style H2: ' + ai_ready.missing.slice(0, 4).map(f => '"' + f + '"').join(', '));
   if (qHeads < 2) warnings.push('AI target: phrase at least 2 H2s as the questions buyers ask');
 }
-if (/guarantee/i.test(md) && !prev.business) warnings.push('Contains a guarantee claim — please verify');
+// B-11 (F-B, 2026-10-17, exec 745): "should not be treated as an automatic guarantee" and "does not by itself guarantee compliance" DENY a
+// guarantee; only a sentence that makes one is a claim to verify
+const __guar = String(md || '').split(/(?<=[.!?])\s+|\n+/).filter(x => /guarantee/i.test(x) && !/\b(no|not|never|nor|neither|without|cannot|can't|won't|isn't|doesn't|don't)\b[^.!?]{0,60}guarantee/i.test(x));
+if (__guar.length && !prev.business) warnings.push('Contains a guarantee claim — please verify: "' + __guar[0].trim().slice(0, 120) + '"');
 if (stats.length) warnings.push('Unverified statistics that need a linked source or a [Statistic] marker: ' + stats.join('; '));
 const figAbsent = unverified_figures.filter(f => f.reason !== 'not_in_excerpt'), figExcerpt = unverified_figures.filter(f => f.reason === 'not_in_excerpt');
 if (figAbsent.length) warnings.push('Figures the cited source does not carry (now marked [Confirm: …]): ' + figAbsent.slice(0, 5).map(f => '"' + f.figure + '" (' + f.sources.join(', ') + ')').join('; ') + ' — quote the source\'s own number or cite the page that states it');

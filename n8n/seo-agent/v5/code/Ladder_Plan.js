@@ -5,6 +5,7 @@
 /*__SITE_MODEL__*/
 /*__KW_INPUTS__*/
 /*__WAITING__*/
+/*__OWN_COVER__*/
 // Ladder mode: applies the AI relevance screen, assigns keywords to rungs by difficulty, builds one page per topic
 // cluster, maps internal links, matches existing pages, estimates the timeline and picks the pages to write now.
 // v4.8 (PIPELINE_FEATURE_SPEC §5.3-5.5): everything is measured against the site's REACH (stored 30 days in seo_cache, else measured from this
@@ -370,11 +371,15 @@ const one_page = { moved: [], left_out: [], kept: [] };
     const ua = a === head ? (headRead ? headUrls : null) : urlsOfK(a), ub = b === head ? (headRead ? headUrls : null) : urlsOfK(b);
     if (ua && ub) return sharedN(ua, ub) >= needK;
     const wa = wordsKey(a); return !!wa && wa === wordsKey(b); };
-  // a live page "already answers" a keyword only on Search Console's own word (impressions for that exact search) or when its slug or
-  // title carries EVERY meaningful word: SM.matchPage's 75% lets "it consulting services dubai" match the page titled "AI Consulting
-  // Copilot Advisory Services in UAE" (3 of 4 - the missing word is the subject, IT against AI), which would move a keyword off a page
-  // onto a page about something else
-  const answeredBy = (kw) => { const m = SM.matchPage(pageModel, kw); return m && m.url && (m.matched_by === 'query' || Number(m.score) >= 1) ? m : null; };
+  // "does the site already hold this search" is ONE rule, the one the page run's verdict applies to its secondary keywords (F-A3,
+  // v5/code/_own_cover.js OWN.claim): a live page (Search Console's own word, or EVERY meaningful word in its slug / title - page_min 1:
+  // SM.matchPage's 75% lets "it consulting services dubai" match "AI Consulting Copilot Advisory Services in UAE", 3 of 4 with the subject
+  // missing), then another keyword ladder of the site (read back through the fit gate), then an unpublished draft. This ladder's own rows
+  // are not stored yet, so they never claim themselves.
+  const ownLadders = OWN.ladders(others.filter(r => { try { return fitStored(r, { own_domain: domain, protect: [String(r.head_keyword || '')] }).ok; } catch (e) { return true; } }), settingsRows, { domain });
+  const ownDrafts = OWN.drafts(rowsOf('Load Content Log (Ladder)').filter(r => reachDomain(r.domain) === reachDomain(domain)), { domain });
+  const ownCtx = (exclude) => ({ matchPage: (k) => SM.matchPage(pageModel, k), ladders: ownLadders, drafts: ownDrafts, exclude_urls: exclude, self: { ladder_id: ladderId, keyword: head }, page_min: 1 });
+  const pageOnly = (exclude) => ({ ...ownCtx(exclude), ladders: [], drafts: [] });
   const claimsOf = (pg) => [pg.keyword, ...(pg.supporting || []), ...((pg.keywords || []).map(k => k.keyword))].map(lowK).filter(Boolean);
   // 2. rung pages, in plan order: a page whose keyword another page already owns is folded into that page (or into the main page)
   const owners = [];
@@ -387,9 +392,9 @@ const one_page = { moved: [], left_out: [], kept: [] };
       one_page.moved.push({ keyword: pg.keyword, from: 'rung ' + r.rung + ' page', to: '"' + owner.keyword + '"', why: 'the same search as a keyword that page already targets' }); return false; }
     owners.push(pg); return true; });
   // a rung page's supporting keyword that a live page of the site already answers belongs to that page, not to a new one
-  for (const pg of owners) pg.supporting = (pg.supporting || []).filter(kw => { const ex = answeredBy(kw);
-    if (!ex || !ex.url || KWI.urlKey(ex.url) === KWI.urlKey(pg.target_url)) return true;
-    one_page.left_out.push({ keyword: kw, page: pg.keyword, why: ex.url + ' already answers it' }); return false; });
+  for (const pg of owners) pg.supporting = (pg.supporting || []).filter(kw => { const c = OWN.claim(kw, pageOnly(pg.exists ? [pg.target_url] : []));
+    if (!c) return true;
+    one_page.left_out.push({ keyword: kw, page: pg.keyword, why: OWN.sayOf(c) + ' already answers it' }); return false; });
   // 3. the main page's supporting keywords
   const cand = [...new Set([...(top.supporting || []), ...(base.secondary_keywords || [])].map(lowK).filter(Boolean))].slice(0, 12);
   const keep = [];
@@ -401,11 +406,11 @@ const one_page = { moved: [], left_out: [], kept: [] };
     if (fold) { keep.push({ keyword: kw, by: fold.why || 'the same live page answers it', shared_urls: null, of: null }); continue; }
     const owner = owners.find(o => claimsOf(o).some(k => sameKw(k, kw)));
     if (owner) { out('the rung page "' + owner.keyword + '" targets it'); continue; }
-    const tk = takenBy(kw); if (tk) { out('it belongs to your ladder "' + tk.head + '"'); continue; }
+    const tk = takenBy(kw); if (tk) { out('it belongs to your ladder "' + tk.head + '"'); continue; }   // R1, the cross-ladder rule the rungs use
+    const oc = OWN.claim(kw, ownCtx(top.exists ? [top.target_url] : []));
+    if (oc) { out(OWN.sayOf(oc) + (oc.kind === 'page' ? ' already answers it' : ' holds it (' + oc.how + ')'), { claim: oc.kind }); continue; }
     const g = fitGate(kw, { ...fitCtxP, intent: '' }); if (!g.ok) { out('refused by the fit gate (' + g.reason + ')'); continue; }
     const hf = RAD.headFit(head, kw); if (!hf.ok) { out('not on this ladder\'s topic'); continue; }
-    const ex = answeredBy(kw);
-    if (ex && ex.url && !(top.exists && KWI.urlKey(ex.url) === KWI.urlKey(top.target_url))) { out(ex.url + ' already answers it'); continue; }
     const u = urlsOfK(kw);
     if (u && headRead) {
       const n = sharedN(u, headUrls);

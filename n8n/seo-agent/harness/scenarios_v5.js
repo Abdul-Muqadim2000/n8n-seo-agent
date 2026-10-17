@@ -1928,7 +1928,7 @@ await guard('pipeline phase 3', async () => {
   console.log('   tiers with reach 10 ->', JSON.stringify(Wl.rk.clusters.slice(0, 8).map(c => c.tier + ':' + c.primary_kd + ':' + c.difficulty_for_you)));
   check('discovery for a small site (reach 10): Now only up to difficulty 30 — topics v4.7 put in Now move to Next', nowL.every(c => c.primary_kd == null || c.primary_kd <= 30) && legacyNow.some(t => !nowL.some(c => c.topic === t)), JSON.stringify({ now: nowL.map(c => c.primary_kd), legacyNow }));
   const N0 = await discover(false, null, { base: { live_serp_checks: 8 } });
-  const strip = (o) => JSON.parse(JSON.stringify(o, (k, v) => ['difficulty_for_you', 'plan_type', 'months', 'for_you_label', 'reach', 'chance', 'refused', 'why', 'live', 'covered_by', 'covered', 'pages_known', 'ladder_covered', 'ladders_known', 'traffic_basis', 'traffic_note', 'modelled_traffic_potential', 'gsc', 'serp_cluster', 'serp_clusters', 'serp_overlap', 'search_console', 'live_checks', 'topic_radius', 'radius', 'radius_reason', 'grouped_by', 'title_gap', 'tier_note', 'trend_note'].includes(k) ? undefined : v));   // 2026-10-16 (R40 / R34 / R58 / R51): grouped_by / title_gap / tier_note / trend_note are new labels; 2026-10-13: topic_radius / radius / radius_reason are G32's block (drawn from the reach, so empty verdicts without a website); 2026-10-11: chance / refused (G3, D4) are new fields; why / live changed on purpose (D26: the AI Overview as a timed observation, D20: deduplicated domains); 2026-10-12: covered_by / covered / pages_known are D11's labels (null / empty without a page inventory) and ladder_covered / ladders_known are D20's (null / 0 without a ladder); 2026-10-13: traffic_basis / traffic_note / modelled_traffic_potential / gsc / serp_cluster / serp_clusters / serp_overlap / search_console / live_checks are G8's new fields (the traffic number itself is unchanged without Search Console data, which is what this check proves)
+  const strip = (o) => JSON.parse(JSON.stringify(o, (k, v) => ['difficulty_for_you', 'plan_type', 'months', 'for_you_label', 'reach', 'chance', 'refused', 'why', 'live', 'covered_by', 'covered', 'pages_known', 'ladder_covered', 'ladders_known', 'traffic_basis', 'traffic_note', 'modelled_traffic_potential', 'gsc', 'serp_cluster', 'serp_clusters', 'serp_overlap', 'search_console', 'live_checks', 'topic_radius', 'radius', 'radius_reason', 'grouped_by', 'title_gap', 'tier_note', 'trend_note', 'competitor_basis', 'ladder_near'].includes(k) ? undefined : v));   // 2026-10-16 (R40 / R34 / R58 / R51): grouped_by / title_gap / tier_note / trend_note are new labels; 2026-10-13: topic_radius / radius / radius_reason are G32's block (drawn from the reach, so empty verdicts without a website); 2026-10-11: chance / refused (G3, D4) are new fields; why / live changed on purpose (D26: the AI Overview as a timed observation, D20: deduplicated domains); 2026-10-12: covered_by / covered / pages_known are D11's labels (null / empty without a page inventory) and ladder_covered / ladders_known are D20's (null / 0 without a ladder); 2026-10-13: traffic_basis / traffic_note / modelled_traffic_potential / gsc / serp_cluster / serp_clusters / serp_overlap / search_console / live_checks are G8's new fields (the traffic number itself is unchanged without Search Console data, which is what this check proves)
   check('discovery without a website: no reach call, no labels', N0.rq[0].json.skip && N0.rd.reach === null && N0.rk.reach === null && N0.rk.keywords.every(k => k.difficulty_for_you === undefined), JSON.stringify(N0.rd));
   check('discovery without a website = v4.7 (tiers with difficulty <= 55, priority, pipeline keyword)', eq(strip(N0.rk), strip(N0.legacy)) && eq(N0.ks.choice_options, N0.legacyKs.choice_options) && eq(strip(N0.ks.keyword_strategy), strip(N0.legacyKs.keyword_strategy)), 'differs from the frozen v4.7 Rank Keywords / Build Keyword Strategy');
   check('callback without a website: the new fields are null', N0.ir.reach === null && N0.ir.priority.every(k => k.difficulty_for_you === null && k.label === null && k.plan_type === null) && !/For your site/.test(N0.ks.result_html), JSON.stringify(N0.ir.priority[0]).slice(0, 200));
@@ -6243,7 +6243,9 @@ await guard('g8-discovery-inputs', async () => {
     && S.search_console.no_page[0].period_days === 28, JSON.stringify(S.search_console.no_page));
   check('K6: a striking-distance search (position 8-20) becomes a seed even though a page already covers it',
     eq(S.search_console.striking.map(q => q.keyword), ['inventory software for distributors'])
-    && S.search_console.striking[0].position === 12.6 && (S.search_console.striking[0].answered_by || {}).matched_by === 'slug', JSON.stringify(S.search_console.striking));
+    // A-22 (2026-10-17): the page Search Console reports for the search is the answer (it is also the page the slug matches here)
+    && S.search_console.striking[0].position === 12.6 && (S.search_console.striking[0].answered_by || {}).matched_by === 'search console'
+    && S.search_console.striking[0].answered_by.url === S.search_console.striking[0].page, JSON.stringify(S.search_console.striking));
   check('K6: a search a live page already answers at #3 is NOT seeded — it is named as answered, with that page',
     !S.gsc_seeds.includes('erp implementation dubai') && S.search_console.answered.length === 1
     && S.search_console.answered[0].keyword === 'erp implementation dubai' && S.search_console.answered[0].answered_by.url === W + '/erp-implementation-dubai/', JSON.stringify(S.search_console.answered));
@@ -11773,13 +11775,19 @@ await guard('read-path fit gate over stored rungs', async () => {
   // them for ever. gate_lint now cuts the kit out before it asks, on the write side too, and counts `FITR.rungs(` as the gate.
   const GP81 = require('./gate_pairs.json'), GB81 = require('./gate_pairs_baseline.json');
   const readers81 = GP81.pairs['keyword fit | seo_ladders'].readers;
-  check('the lint reads the node\'s OWN code: a node that only inlines the fit gate is NOT gated by it',
-    readers81['SEO Agent v4 — Audit, Keywords, Verdict & Content / Ladder Plan'] === false
-    && readers81['SEO Agent v4 — Audit, Keywords, Verdict & Content / Rank Keywords'] === false,
+  // F-A1 (2026-10-17): *Ladder Plan* earned its gate the same way - it now reads the site's other ladders through fitStored( in its own
+  // code before the own-coverage rule (OWN) may name one of them - so it is gated and left the baseline. The kit-only case is still
+  // judged: *Ladder Pool* and *Brief Context* inline the whole fit-gate kit and are no reader of seo_ladders at all.
+  check('the lint reads the node\'s OWN code: Ladder Plan is gated now because its own code calls fitStored( on the stored rows (F-A1), and no node is counted for the kit alone',
+    readers81['SEO Agent v4 — Audit, Keywords, Verdict & Content / Ladder Plan'] === true && !Object.keys(readers81).some(k => /\/ (Ladder Pool|Brief Context)$/.test(k)),
     JSON.stringify(readers81));
-  check('and both are still named on the ratchet, where this fix found them — nothing left the baseline that did not earn it',
-    (GB81['keyword fit | seo_ladders'].ungated || []).includes('SEO Agent v4 — Audit, Keywords, Verdict & Content / Ladder Plan')
-    && (GB81['keyword fit | seo_ladders'].ungated || []).includes('SEO Agent v4 — Audit, Keywords, Verdict & Content / Rank Keywords'),
+  // A-25 (2026-10-17): *Rank Keywords* earned its gate — it now calls fitStored( on the ladder rows in its own code, so it is gated and
+  // left the baseline; Ladder Plan is still the example of a node that merely inlines the kit
+  check('A-25: Rank Keywords reads the stored rungs through fitStored in its own code, so the lint counts it gated',
+    readers81['SEO Agent v4 — Audit, Keywords, Verdict & Content / Rank Keywords'] === true, JSON.stringify(readers81));
+  check('and the ratchet lets go only of what earned it: Ladder Plan and Rank Keywords left it, the ungated readers are still on it',
+    !(GB81['keyword fit | seo_ladders'].ungated || []).includes('SEO Agent v4 — Audit, Keywords, Verdict & Content / Ladder Plan')
+    && ['SEO Agent v4 — Audit, Keywords, Verdict & Content / Publish Check', 'SEO Agent — Link Builder / LB Plan'].every(k => (GB81['keyword fit | seo_ladders'].ungated || []).includes(k)),
     JSON.stringify(GB81['keyword fit | seo_ladders'].ungated));
   check('the shared loop counts as the gate, so the four fixed read paths are gated and off the baseline for good',
     GP81.pairs['keyword fit | seo_ladders'].read.includes('FITR.rungs(')
@@ -15918,7 +15926,8 @@ await guard('S105 R73 R74 lineage that matches the page, and a single reading is
   const keyOf = (f) => String(f.category || '') + '|' + String(f.title || '').toLowerCase().replace(/\d[\d,.%]*/g, '#').replace(/["'“”‘’]/g, '').replace(/\s+/g, ' ').trim();
   const PREV = [{ category: 'AI Search Readiness', severity: 'High', title: 'Site does not rank at the top for its own brand name', affected_count: 0, checked: 0 },
     { category: 'Crawlability & Indexing', severity: 'High', title: 'A large share of important pages is not indexed by Google', affected_count: 18, checked: 0 },
-    { category: 'Crawlability & Indexing', severity: 'Medium', title: 'Missing canonical tag', affected_count: 2, checked: 0 }];
+    { category: 'Crawlability & Indexing', severity: 'Medium', title: 'Missing canonical tag', affected_count: 2, checked: 0 },
+    { category: 'Crawlability & Indexing', severity: 'Medium', title: 'Missing meta description', affected_count: 3, checked: 0 }];
   mock('Check Crawl', [{ json: { domain: 'techand.ai' } }]);
   mock('Load Audit History', [{ json: { site_id: 'site_techand-ai', audit_id: 'aud_prev566', audited_at: '2026-10-14T16:30:00.853Z', report_type: 'full', health_score: 69, grade: 'C', findings: 3 } }]);
   mock('Load Audit Findings', PREV.map(f => ({ json: { site_id: 'site_techand-ai', audit_id: 'aud_prev566', finding_key: keyOf(f), ...f } })));
@@ -15929,7 +15938,10 @@ await guard('S105 R73 R74 lineage that matches the page, and a single reading is
   console.log('   diff ->', D.summary);
   check('R74: the brand finding, which rested on one results-page read each time, is "no longer seen" — not "fixed"',
     !D.fixed.some(f => /own brand name/.test(f.title)) && (D.no_longer_seen || []).some(f => /own brand name/.test(f.title)), JSON.stringify({ fixed: D.fixed, gone: D.no_longer_seen }));
-  check('R74: a measured finding that is gone is still "fixed"', D.fixed.some(f => f.title === 'Missing canonical tag'), JSON.stringify(D.fixed));
+  check('R74: a measured finding that is gone is still "fixed"', D.fixed.some(f => f.title === 'Missing meta description'), JSON.stringify(D.fixed));
+  // B-5 (2026-10-17): "Missing canonical tag" was raised on the redirect responses until R63 (2026-10-16 18:30 UTC); this earlier audit is
+  // from 2026-10-14, so its disappearance is our check changing, not the site
+  check('B-5: a finding whose check changed after the earlier audit is "no longer reported (our check changed)", not fixed', !D.fixed.some(f => f.title === 'Missing canonical tag') && (D.no_longer_reported || []).some(f => f.title === 'Missing canonical tag' && /R63/.test(f.why)), JSON.stringify({ fixed: D.fixed, nlr: D.no_longer_reported }));
   check('R74: the summary does not claim a different number of pages when the earlier report recorded none, and it counts what is no longer seen',
     !/measured on a different number of pages this time/.test(D.summary) && /stored last time without the number of pages/.test(D.summary) && /1 no longer seen/.test(D.summary), D.summary);
   reset();
@@ -17167,12 +17179,12 @@ await guard('S150 B5-12 R67 GA4 key events join the impact weight and the basis 
     { category: 'Content', severity: 'Medium', title: 'Review: thin author box', evidence: 'p2', why: 'w', fix: 'f', sample_urls: [], affected_count: null, affected_pct: 100, scope: 'site', scoring: false, source: 'ai_review' }]; }));
   console.log('   R67 fixture ->', JSON.stringify(rev.a.findings.filter(f => f.scoring === false).map(f => [f.title, f.severity])), JSON.stringify(rev.a.issue_counts));
   const docR = decode(await run('Build Audit Report', rev.out));
-  const noteR = (docR.match(/[^>]{0,40}AI-review findings? (?:is|are) counted here[^<]*/g) || []).join(' | ');
+  const noteR = (docR.match(/[^>]{0,40}counted in this table[^<]*/g) || []).join(' | ');
   console.log('   R67 note ->', noteR);
-  check('R67: the technical report says "3 unscored findings (2 from the AI review) are counted here and are not part of the score" under the severity table', /3 unscored findings are \(2 from the AI review\) counted here and are not part of the score/.test(docR), noteR);
+  check('R67 / B-17: the technical report says "3 unscored findings counted in this table are not part of the score (2 of them from the AI review)" under the severity table, as one sentence', /3 unscored findings counted in this table are not part of the score \(2 of them from the AI review\)\./.test(docR), noteR);
   const docP = decode(await run('Build Audit Report', plain.out));
-  check('R67: the audit\'s own Info note (unscored) is named too, in the singular', /1 unscored finding is counted here and is not part of the score/.test(docP), '');
-  check('R67: the full report carries the same note (same template)', /unscoredNote\(a\)/.test(a11code('Build_Full_Report.js')) && /counted here and \$\{n === 1/.test(a11code('Build_Full_Report.js')), '');
+  check('R67: the audit\'s own Info note (unscored) is named too, in the singular', /1 unscored finding counted in this table is not part of the score\./.test(docP), '');
+  check('R67: the full report carries the same note (same template)', /unscoredNote\(a\)/.test(a11code('Build_Full_Report.js')) && /counted in this table \$\{n === 1/.test(a11code('Build_Full_Report.js')), '');
 });
 
 // S155-S158 (2026-10-16, agent W3-C, benchmark area 6 rows B6-6 / B6-8 / B6-10 / B6-14 —
@@ -17944,6 +17956,242 @@ await guard('S166 B8-8 B8-9 B8-10 the build carries the three engine fixes in bo
   check('B8-10: the majority rule brand.known * 2 >= brand.answered is gone', AM && !/brand\.known \* 2 >= brand\.answered/.test(AM), '');
 });
 
+// F-A3 (re-rating 2026-10-17): keyword research — discover, keyword report, verdict, Keyword Check (harness/scenarios_fa3.js)
+await require('./scenarios_fa3')({ H, run, mock, store, guard, reset, begin });
+
+// ===================================================================================
+// S180-S183 (2026-10-17, defect-fix agent F-B — re-rating 2026-10-17 part 2, executor B: execs 739 / 767, docs/system-review-2026-10-17/
+// parts/2_technical.md). Fixtures cut from the saved executions: harness/fixtures_live/b1_render_pairs_739.json (three crawl-paired pages
+// of the JavaScript audit, raw HTML with scripts / styles stripped) and fixtures_live/fb_full_767.json (the full report's keyword and AI
+// inputs, cut to the keywords it showed or refused).
+//   S180 B-1        response vs render compares like with like: no "AI crawlers see a different version" from two counting methods
+//   S181 B-2 B-4 B-7 B-17  the brand from every form and Search Console, the site: estimate beside URL Inspection, directories that are
+//                   directories, one source per competitor figure
+//   S182 B-3        the fit gate on the real exec-767 keyword set: attestation, jobs, other industries and another company's name refused
+//   S183 B-5 B-6 crawl_js  a changed check is not "fixed", a JavaScript crawl is not compared with a plain one, the blocker's reason fits
+// ===================================================================================
+await guard('S180 B-1 response vs render: two counting methods are not a difference (exec 739)', async () => {
+  reset(); const SN = 'S180 B-1 — the 20 crawl-paired pages of exec 739 compared our parser with DataForSEO\'s own counts; now only a gap no counting difference explains is read'; begin(SN); const check = A2check(SN);
+  const FX = require('./fixtures_live/b1_render_pairs_739.json');
+  const D = 'techand.ai', home = 'https://www.techand.ai/';
+  const homeHtml = (links) => '<!DOCTYPE html><html><head><title>Tech&amp; | Home</title><link rel="canonical" href="https://www.techand.ai"></head><body><h1>Value Driven Innovation</h1><p>' + F.words(300) + '</p>' + Array.from({ length: links }, (_, i) => '<a href="/p' + i + '">p' + i + '</a>').join('') + '</body></html>';
+  const prevAudit = { domain: D, audit_level: 'site_audit', probe: { findings: [], what_works: [], measurements: {} }, extra_findings: [], crux: null, crawl_extras: {} };
+  const homeCrawl = { url: home, status_code: 200, resource_type: 'html', checks: {}, meta: { title: 'Tech& | Home', canonical: 'https://www.techand.ai', internal_links_count: 20, external_links_count: 0, htags: { h1: ['Value Driven Innovation'] }, content: { plain_text_word_count: 300 } } };
+  const rd = async (o = {}) => {
+    reset();
+    const plan = { pages: 1, cap: 5, crawl_js: true, figures: [], raw_extra: FX.pages.map(p => ({ url: p.url, kind: 'page', title: '' })), raw_pairs: FX.pages.length, raw_cap: 25,
+      raw_pairs_note: FX.pages.length + ' more page(s) are paired with the JavaScript crawl: a plain request for the first response against what the crawl saw after its scripts ran' };
+    mock('Analyze CrUX', [{ json: prevAudit }]);
+    mock('Render Diff Targets', [{ json: { url: home, kind: 'home', title: '', index: 0, render_plan: plan } }]);
+    mock('Render Key Pages', [{ statusCode: 200, headers: { 'content-type': 'text/html' }, data: homeHtml(o.renderedLinks == null ? 20 : o.renderedLinks) }]);
+    mock('Fetch Raw Pages', [{ statusCode: 200, headers: { 'content-type': 'text/html' }, data: homeHtml(20) }, ...FX.pages.map(p => p.raw)]);
+    const crawl = FX.pages.map(p => o.mutate ? o.mutate(JSON.parse(JSON.stringify(p.crawl))) : p.crawl);
+    mock('Get Crawled Pages', [{ json: { tasks: [{ result: [{ items: [homeCrawl, ...crawl] }] }] } }]);
+    return (await run('Render Diff', store['Fetch Raw Pages']))[0].json;
+  };
+  const out = await rd(); const rdf = out.render_diff;
+  const paired = rdf.pages.filter(p => p.paired_with_crawl);
+  console.log('   paired ->', paired.map(p => p.path + ' ' + p.figures.map(f => f.key + ':' + f.raw + '/' + f.rendered + ':' + f.state).join(' ')).join(' | '));
+  const fig = (p, k) => (p.figures.find(f => f.key === k) || {});
+  check('B-1 (the run as it happened): the three pages read the same figures as exec 739 printed — our parser on the first response (e.g. /security 52 links, 694 words), DataForSEO\'s counts after rendering (29, 439)',
+    paired.length === 3 && paired.every(p => { const x = FX.pages.find(q => q.url === p.url).exec_739; return fig(p, 'links').raw === x.links[0] && fig(p, 'words').raw === x.words[0] && fig(p, 'links').rendered === x.links[1] && fig(p, 'words').rendered === x.words[1]; }),
+    JSON.stringify(paired.map(p => [p.path, fig(p, 'links'), fig(p, 'words')])));
+  check('B-1: on a crawl-paired page the link and word counts are "not compared" with the reason (two counting methods), never "differs"',
+    paired.every(p => fig(p, 'links').state === 'not_compared' && fig(p, 'words').state === 'not_compared' && /counts unique links/.test(fig(p, 'links').from) && !(p.differs || []).length && !p.js_only.length), JSON.stringify(paired.map(p => p.figures.map(f => f.state))));
+  check('B-1: title, main heading and canonical link still are compared on those pages, and agree', paired.every(p => ['title', 'h1', 'canonical'].every(k => fig(p, k).state === 'same')), JSON.stringify(paired.map(p => ['title', 'h1', 'canonical'].map(k => fig(p, k).state))));
+  check('B-1: no "AI crawlers see a different version" and no link / text finding is raised on a server-rendered site',
+    !(out.extra_findings || []).some(f => f.source === 'render_diff' && f.severity !== 'Info'), JSON.stringify((out.extra_findings || []).map(f => f.title)));
+  check('B-1: the method says what was compared, and how, for the crawl-paired pages', /counted differently/.test(rdf.method) && /2\.5 times/.test(rdf.method) && /robots rule is not compared/.test(rdf.method) && !/read from both with the same parser, and URLs/.test(rdf.method), rdf.method);
+  check('B-1: "what works" says the counts on the paired pages were compared only as far as the crawl\'s counting allows', (out.extra_works || []).some(w => /serves its title/.test(w) && /paired with the JavaScript crawl/.test(w)), JSON.stringify(out.extra_works));
+  // a real JavaScript gap on a paired page is still found: the crawl sees five times the words of the first response
+  const js = await rd({ mutate: (c) => { if (/\/security$/.test(c.url)) c.meta.content.plain_text_word_count = 3500; return c; } });
+  const sec = js.render_diff.pages.find(p => /\/security$/.test(p.path)) || { js_only: [] };
+  check('B-1: a crawl count no counting difference explains (3,500 words against 694 in the first response) is still text that only appears after JavaScript',
+    sec.js_only.includes('words') && (js.extra_findings || []).some(f => f.figure === 'words' && /only appears after JavaScript/.test(f.title)), JSON.stringify(sec.js_only));
+  // the render-service path: a first response that carries MORE links than the rendered page hides nothing
+  const rm = await rd({ renderedLinks: 4 });
+  const hp = rm.render_diff.pages.find(p => p.path === '/');
+  check('B-1: on a rendered key page a first response with more links than after JavaScript is "raw_more", not a difference', fig(hp, 'links').state === 'raw_more' && !(hp.differs || []).length && !(rm.extra_findings || []).some(f => /AI crawlers see a different version/.test(f.title)), JSON.stringify(hp.figures));
+  check('B-1: both reports list only the real differences and sum the rest up in one line', ['Build_Audit_Report.js', 'Build_Full_Report.js'].every(fn => /notCmp128/.test(a11code(fn)) && /were not compared: the crawl counts links and words its own way/.test(a11code(fn))), '');
+});
+
+await guard('S181 B-2 B-4 B-7 B-17 the brand from every form and Search Console, the index from URL Inspection, directories that are directories (exec 767)', async () => {
+  reset(); const SN = 'S181 B-2 / B-4 / B-7 / B-17 — exec 767 judged the brand on one read of "tech&", put a High on a site: estimate beside its own URL Inspection, told the owner to get listed on vendors\' homepages, and printed two sources for one competitor figure'; begin(SN); const check = A2check(SN);
+  const FX = require('./fixtures_live/fb_full_767.json');
+  const base = { domain: 'techand.ai', country: 'United Arab Emirates', pages_crawled: 47, content_review: { business_context: FX.business_context },
+    competitor_benchmark: FX.competitor_analysis.competitor_benchmark, site_keywords: { seeds: [], keyword_gap: [], opportunities_by_intent: {}, your_top_by_intent: {} }, extra_findings: [], extra_works: [] };
+  mock('Load Site Row (Model)', [{ json: FX.site_row }]); mock('Restore Site Model', [{ json: { site_model: FX.site_model } }]);
+  const aq = (await run('AI Queries', [{ json: base }])).map(i => i.json);
+  const forms = aq[0].brand_forms || [];
+  console.log('   brand forms ->', JSON.stringify(forms), '| queries', JSON.stringify(aq.map(q => q.type + ':' + q.query)));
+  check('B-2 (the run as it happened): exec 767 searched the brand as "tech&" only', FX.ai_queries_before.filter(q => q.type === 'brand').map(q => q.query).join() === 'tech&', JSON.stringify(FX.ai_queries_before));
+  check('B-2: the brand is searched as "techand" (the domain name, also a configured brand name); "tech&" is listed and not searched, with the reason', aq.filter(q => q.type === 'brand').map(q => q.query).join() === 'techand'
+    && forms.some(b => b.form === 'tech&' && b.searched === false && /reads it as "tech"/.test(b.why)), JSON.stringify(forms));
+  // the AI Visibility node with the run's own answers: the SERP of "tech&" stands in for the brand read (techand.ai is in neither top 20)
+  const byType = {}; FX.ai_queries_before.forEach((q, i) => { byType[q.type] = FX.ai_serp_answers[i]; });
+  mock('Parse Content Review', [{ json: base }]); mock('AI Queries', aq.map(j => ({ json: j })));
+  mock('AI SERP Answers', aq.map(q => ({ json: byType[q.type] || byType.brand }))); mock('LLM Prompts', FX.llm_prompts.map(j => ({ json: j })));
+  const av = (await run('AI Visibility', FX.ask_llms.map(j => ({ json: j }))))[0].json;
+  const fx = av.extra_findings;
+  const brand = fx.find(f => /own brand name/.test(f.title)) || {};
+  console.log('   brand finding ->', brand.severity, brand.evidence);
+  check('B-2: a results page alone raises a Medium, marked one reading, and names every search asked and every form not asked', brand.severity === 'Medium' && brand.one_reading === true && /"techand" not in the top 20/.test(brand.evidence) && /"tech&" not searched/.test(brand.evidence), JSON.stringify(brand));
+  const gpt = fx.find(f => f.title === 'ChatGPT recommends other providers, not you') || {}; const ppx = fx.find(f => f.title === 'Perplexity recommends other providers, not you') || {};
+  console.log('   fixes ->', gpt.fix, '||', ppx.fix);
+  check('B-7: ChatGPT cited only the vendors\' own homepages, and the fix says so instead of calling them directories', /cited only the vendors' own sites/.test(gpt.fix || '') && !/directories and review sites cited \(e-numerak/.test(gpt.fix || ''), gpt.fix);
+  check('B-7: Perplexity\'s fix names the cited lists that are not vendors (mof.gov.ae, azdan.com …) and never a vendor it recommended', /mof\.gov\.ae/.test(ppx.fix || '') && /azdan\.com/.test(ppx.fix || '') && !/wafeq\.com/.test(ppx.fix || ''), ppx.fix);
+  const idx = fx.find(f => f.title === 'Far fewer pages indexed than crawled') || {};
+  check('B-4: the site: estimate alone is a Medium estimate, not a High', idx.severity === 'Medium' && idx.estimate_only === true && /rough estimate/.test(idx.evidence), JSON.stringify(idx));
+  // Search Console decides: the 2026-10-15 run's own Search Console answers (the same property; "techand" #4.46 with 72 impressions)
+  const X = require('./fixtures_ra2');
+  const plan = A2clone(X.gsc595.plan); plan.base = { ...plan.base, audit_level: 'full', extra_findings: fx, extra_works: [], ai_visibility: av.ai_visibility };
+  const gf = await A2gsc({ plan });
+  const bq = ((gf.search_console.rankings || {}).brand_queries) || [];
+  const b2 = gf.extra_findings.find(f => /own brand name/.test(f.title)) || null;
+  console.log('   brand queries ->', JSON.stringify(bq.slice(0, 4)), '| finding ->', b2 && b2.severity, b2 && b2.evidence.slice(0, 240));
+  check('B-2: Search Console\'s brand queries are read with every brand form ("techand" first by impressions)', bq.length >= 2 && bq[0].query === 'techand', JSON.stringify(bq));
+  check('B-2: the brand finding is judged from Search Console (measured): "techand" averages #4.5, so it stays a Medium with Google\'s figures first, no longer one reading',
+    !!b2 && b2.severity === 'Medium' && b2.reconciled === 'search_console' && b2.one_reading === false && /^Search Console \(measured/.test(b2.evidence) && /"techand" #4\.5 \(72 impressions/.test(b2.evidence), JSON.stringify(b2));
+  check('B-4: with the URL Inspection of the key pages in the same run, the site: estimate is no finding, and the AI section says why',
+    !gf.extra_findings.some(f => f.title === 'Far fewer pages indexed than crawled') && /URL Inspection read \d+ key pages/.test((gf.ai_visibility || {}).index_estimate_note || ''), JSON.stringify((gf.ai_visibility || {}).index_estimate_note || null));
+  // a brand the searches find at the top is a works line, not a finding
+  const top = A2clone(X.gsc595.answers);
+  const gfTop = await A2gsc({ plan, answers: JSON.parse(JSON.stringify(top).replace(/"position":4\.4583333333[0-9]*/g, '"position":1.2')) });
+  check('B-2: when the brand query people use most is at the top (#1.2), there is no brand finding and "what works" says so with the measured figures',
+    !gfTop.extra_findings.some(f => /own brand name/.test(f.title)) && gfTop.extra_works.some(w => /searches for your own name find you at the top/.test(w)), JSON.stringify(gfTop.extra_works.slice(-3)));
+  // B-17: the benchmark table reads DataForSEO's domain totals, the figures the medians use
+  mock('Normalize Input', [{ json: { domain: 'techand.ai', country: 'United Arab Emirates', started_at: new Date().toISOString() } }]);
+  const SK = { seeds: [], domains: [{ domain: 'techand.ai', is_you: true, total: 0, top3: 0, top10: 0, by_intent: {} }, { domain: 'cleartax.com', is_you: false, total: 300, top3: 35, top10: 196, by_intent: {} }, { domain: 'azentio.com', is_you: false, total: 8, top3: 0, top10: 7, by_intent: {} }],
+    your_top_by_intent: { informational: [], navigational: [], commercial: [], transactional: [] }, opportunities_by_intent: { informational: [], navigational: [], commercial: [], transactional: [] }, easy_wins: [], keyword_gap: [], striking_distance: [], refused: [] };
+  const cb = FX.competitor_analysis.competitor_benchmark;
+  const docF = decode(await run('Build Full Report', [{ json: { ...gf, domain: 'techand.ai', country: 'United Arab Emirates', site_keywords: SK, competitor_benchmark: cb,
+    site_audit: { health_score: 70, raw_score: 70, grade: 'Needs Improvement', findings: [], what_works: [], issue_counts: {}, category_scores: {}, not_assessed: [], notes: [], search_console: gf.search_console, competitor_benchmark: cb } } }]));
+  const bench = docF.slice(docF.indexOf('3. Competitor Benchmark'), docF.indexOf('3. Competitor Benchmark') + 2500);
+  check('B-17: the benchmark table shows cleartax.com 886 keywords / 511 top 10 (the medians\' source), not the 300 / 196 of the ranked-keyword sample', /cleartax\.com[\s\S]{0,120}886[\s\S]{0,40}511/.test(bench) && !/cleartax\.com[\s\S]{0,60}>300</.test(bench), bench.slice(0, 900));
+  check('B-17: the intent table says it counts the first rankings read per domain', /up to 300 per domain/.test(docF), '');
+  check('B-4: the AI section prints the URL Inspection beside the site: estimate', /URL Inspection read \d+ key pages in this run/.test(docF), (docF.match(/Google index[^<]{0,300}/) || [''])[0]);
+});
+
+await guard('S182 B-3 the fit gate on the real keyword set of exec 767', async () => {
+  reset(); const SN = 'S182 B-3 — attestation, job searches, other industries, another company\'s name and wide words were keyword targets in exec 767; the one gate now refuses them with a reason on every list, and so the AI question'; begin(SN); const check = A2check(SN);
+  const FX = require('./fixtures_live/fb_full_767.json');
+  mock('Competitor Analysis', [{ json: FX.competitor_analysis }]); mock('KW Targets', FX.kw_targets.map(j => ({ json: j })));
+  mock('Ranked Keywords Answers', FX.ranked.map(j => ({ json: j }))); mock('Fallback Queries', FX.fallback.map(j => ({ json: j })));
+  mock('Load Site Cache', []); mock('Load Site Row (Model)', [{ json: FX.site_row }]); mock('Restore Site Model', [{ json: { site_model: FX.site_model } }]);
+  const ak = (await run('Analyze Keywords', [{ json: FX.ideas }]))[0].json; const sk = ak.site_keywords;
+  const shown = [...Object.values(sk.opportunities_by_intent).flat(), ...sk.easy_wins, ...sk.keyword_gap, ...sk.striking_distance].map(k => k.keyword);
+  console.log('   shown ->', JSON.stringify([...new Set(shown)]));
+  const BAD = ['intelligent software solutions', 'uae document attestation', 'mofa document attestation', 'how to attest documents from mofa', 'finance jobs in uae', 'finance manager jobs in uae',
+    'top facilities management companies uae', 'facility management companies in uae', 'dubai business tax', 'uae businesses', 'uae business news', 'commercial companies law uae'];
+  check('B-3 (the run as it happened): exec 767 offered these as easy wins and keyword-gap targets', BAD.filter(k => [...FX.shown_before.easy_wins, ...FX.shown_before.keyword_gap].includes(k)).length >= 8, JSON.stringify(FX.shown_before));
+  check('B-3: none of them is an easy win, a gap keyword or an opportunity now, and each is refused with its reason', BAD.every(k => !shown.includes(k) && sk.refused.some(r => r.keyword === k && r.reason && r.detail)),
+    JSON.stringify({ shown: BAD.filter(k => shown.includes(k)), missing: BAD.filter(k => !sk.refused.some(r => r.keyword === k)) }));
+  const why = (k) => (sk.refused.find(r => r.keyword === k) || {}).reason;
+  check('B-3: the reasons name the class: a public body\'s document service, a job search, too broad, off topic', why('uae document attestation') === 'government' && why('mofa document attestation') === 'government' && why('finance jobs in uae') === 'job search'
+    && why('dubai business tax') === 'too broad' && why('intelligent software solutions') === 'off topic', JSON.stringify(BAD.map(k => k + ':' + why(k))));
+  check('B-3: what Tech& sells survives ("erp software in uae", "erp systems in uae", "what is e invoicing in uae")', ['erp software in uae', 'erp systems in uae', 'what is e invoicing in uae'].every(k => shown.includes(k)), JSON.stringify(shown));
+  check('B-3: nothing refused before is let through now except "software companies in dubai" (software in the market, like "software company in abu dhabi")',
+    FX.refused_before.map(r => r[0]).filter(k => shown.includes(k)).every(k => k === 'software companies in dubai'), JSON.stringify(FX.refused_before.map(r => r[0]).filter(k => shown.includes(k))));
+  // the AI questions are built from these lists: "intelligent software solutions" (another company's name) is no longer asked
+  const aq = (await run('AI Queries', [{ json: { ...ak, content_review: { business_context: FX.business_context } } }])).map(i => i.json);
+  console.log('   AI questions ->', JSON.stringify(aq.map(q => q.type + ':' + q.query)));
+  check('B-3: exec 767 asked "intelligent software solutions" as its top AI search; it is not asked now', FX.ai_queries_before.some(q => q.query === 'intelligent software solutions') && !aq.some(q => /intelligent software solutions/.test(q.query)), JSON.stringify(aq.map(q => q.query)));
+  // the gate itself, on the site's own services: product names keep their keywords
+  const ctx = { own_domain: 'techand.ai', topics: [...FX.site_model.services, ...String(FX.site_row.keywords).split(/,\s*/)] };
+  const gate = async (keyword) => (await run('_fit_gate', [{ json: { keyword, ctx } }]))[0].json;
+  const keep = []; for (const k of ['business central partner uae', 'dynamics 365 finance', 'intelligent document processing uae', 'azure kubernetes consulting dubai', 'supply chain management software uae', 'peppol e invoicing uae', 'attestation software']) { const g = await gate(k); if (g.ok || k === 'attestation software') keep.push(k + ':' + (g.ok ? 'ok' : g.reason)); }
+  check('B-3: a common word counts through the service name it belongs to ("business central partner uae", "intelligent document processing uae", "supply chain management software uae" stay)',
+    keep.filter(x => /:ok$/.test(x)).length === 6, JSON.stringify(keep));
+  const att = await gate('attestation software');
+  check('B-3: a product word keeps an attestation keyword out of the public-service rule (it is judged on topic instead)', att.reason !== 'government', JSON.stringify(att));
+});
+
+await guard('S183 B-5 B-6 crawl_js a changed check is not "fixed", a JavaScript crawl is not compared with a plain one, the blocker says what it blocks', async () => {
+  reset(); const SN = 'S183 B-5 / B-6 / rule 1 — exec 767 called five findings "fixed" when only the engine had changed; seo_audits did not record crawl_js; the host split was "first because Google cannot index or follow these pages"'; begin(SN); const check = A2check(SN);
+  const keyOf = (f) => String(f.category || '') + '|' + String(f.title || '').toLowerCase().replace(/\d[\d,.%]*/g, '#').replace(/["'“”‘’]/g, '').replace(/\s+/g, ' ').trim();
+  // the previous full report of exec 767's diff (2026-10-16 00:45, before the R62 / R63 / R71 deploy at 18:30 UTC), as stored then (no crawl_js, no checks_version)
+  const GONE = [{ title: 'AI crawlers see a different version of 1 key page(s)', category: 'AI Search Readiness', severity: 'Medium' }, { title: 'No compression (gzip/brotli)', category: 'Performance', severity: 'Medium' },
+    { title: 'Missing canonical tag', category: 'Crawlability & Indexing', severity: 'Medium' }, { title: 'Missing Open Graph tags', category: 'On-Page', severity: 'Low' }, { title: 'Deprecated HTML tags', category: 'Technical', severity: 'Low' }];
+  const OPEN = [{ title: 'HTML cannot be cached by the CDN (no-store / private)', category: 'Performance', severity: 'High', affected_count: 45, checked: 45 }];
+  const W = { 'Crawlability & Indexing': 20, 'AI Search Readiness': 10, Performance: 10, 'On-Page': 10, Technical: 10, Authority: 10 };
+  const diff = async (prevRow, prevF, curFindings, curJs) => {
+    reset();
+    mock('Check Crawl', [{ json: { domain: 'techand.ai', crawl_js: curJs } }]);
+    mock('Load Audit History', [{ json: { site_id: 'site_techand-ai', report_type: 'full', health_score: 70, grade: 'C', findings: prevF.length, ...prevRow } }]);
+    mock('Load Audit Findings', prevF.map(f => ({ json: { site_id: 'site_techand-ai', audit_id: prevRow.audit_id, finding_key: keyOf(f), affected_count: 1, checked: 0, ...f } })));
+    mock('Get Crawled Pages', { tasks: [{ result: [{ items: [] }] }] });
+    mock('Build Site Issues', [{ json: { domain: 'techand.ai', site_audit: { domain: 'techand.ai', audit_level: 'full', health_score: 70, weights: W, findings: curFindings } } }]);
+    const out = (await run('Audit Diff', store['Load Audit Findings']))[0].json;
+    const row = (await run('Audit Row', [{ json: {} }]))[0].json;
+    const fr = (await run('Finding Rows', [{ json: {} }])).map(i => i.json);
+    return { D: out.site_audit.audit_diff, row, fr };
+  };
+  const brandNew = { title: 'Site does not rank at the top for its own brand name', category: 'AI Search Readiness', severity: 'Medium' };
+  const A = await diff({ audit_id: 'aud_mva8x2exzvm', audited_at: '2026-10-16T00:45:03.993Z' }, [...GONE, ...OPEN], [...OPEN, brandNew], false);
+  console.log('   diff ->', A.D.summary);
+  check('B-5: none of the five is "fixed": four are "no longer reported (our check changed)" with the change that did it', A.D.fixed.length === 0 && (A.D.no_longer_reported || []).length === 4
+    && A.D.no_longer_reported.every(f => /our check changed \(2026-10-16: /.test(f.why)), JSON.stringify({ fixed: A.D.fixed, nlr: A.D.no_longer_reported }));
+  check('rule 1: the render finding is not compared at all — the previous audit did not record whether its crawl ran JavaScript', (A.D.js_not_compared || []).some(t => /AI crawlers see a different version/.test(t)) && /did not record whether its crawl ran JavaScript/.test(A.D.summary), A.D.summary);
+  check('B-5: the brand finding that appeared through a changed check is "found by a changed check", not new', !A.D.new.some(f => /own brand name/.test(f.title)) && (A.D.newly_checked || []).some(f => /own brand name/.test(f.title)), JSON.stringify({ n: A.D.new, nc: A.D.newly_checked }));
+  check('B-5: the audit row stores crawl_js, the checks version and the keys not counted as fixed; every finding row its check version',
+    A.row.crawl_js === false && A.row.checks_version === '2026-10-17.1' && JSON.parse(A.row.not_fixed_json).length === 5 && A.fr.every(r => typeof r.check_version === 'string') && A.fr.some(r => r.check_version === '2026-10-17.1'), JSON.stringify({ row: A.row, fr: A.fr.map(r => r.title + ':' + r.check_version) }));
+  // the next audit, both crawls JavaScript, checks version unchanged: a finding that is gone IS fixed
+  const B = await diff({ audit_id: 'aud_next', audited_at: '2026-10-20T00:00:00Z', crawl_js: true, checks_version: '2026-10-17.1' }, [...OPEN, { title: 'Missing canonical tag', category: 'Crawlability & Indexing', severity: 'Medium' }, { title: 'AI crawlers see a different version of 2 key page(s)', category: 'AI Search Readiness', severity: 'Medium' }], OPEN, true);
+  check('B-5 / rule 1: with the same checks and two JavaScript crawls, what is gone is fixed (both the canonical and the render finding)', B.D.fixed.length === 2 && !(B.D.no_longer_reported || []).length && !(B.D.js_not_compared || []).length, B.D.summary);
+  // B-6: the host split, scored with the 2026-10-15 run's Search Console answers
+  const gf = await A2gsc(); const sc = await A2scored(gf);
+  const hs = sc.site_audit.findings.find(f => /split in Google/.test(f.title)) || {};
+  check('B-6: the host split is ranked as a blocker and its reason says what it does — no "Google cannot index or follow these pages"', /^Google splits these pages between two addresses/.test(hs.impact_basis || '') && !/cannot index or follow/.test(String(sc.site_audit.priority_first || '')), JSON.stringify({ basis: hs.impact_basis, first: sc.site_audit.priority_first }));
+  // B-17: the callback carries the counts of what the stored list holds
+  check('B-17: the audit callback carries issue_counts_stored for the app\'s summary', /issue_counts_stored/.test(a11code('Build_Audit_Response.js')), '');
+});
+
+
+await guard('S184 B-11 B-12 B-13 B-14 B-15 the lows of executor B (execs 739 / 743 / 745)', async () => {
+  reset(); const SN = 'S184 B-11 / B-12 / B-13 / B-14 / B-15 — a denied guarantee, granted points, fail_on low, a URL with no reason, the fix pack and the duplicates'; begin(SN); const check = A2check(SN);
+  // B-13: fail_on "low" turns a missing description into a failure
+  reset();
+  const v = (await run('Prerelease Validate', [{ json: { body: { base_url: 'https://www.techand.ai', paths: ['/power-platform-analytics-uae'], live_host: 'www.techand.ai', staging: false, fail_on: 'low' }, headers: {} } }])).map(x => x.json);
+  mock('Fetch Release Pages', v.map(it => it.kind === 'robots' ? { statusCode: 200, headers: {}, data: 'User-agent: *\nAllow: /\n' }
+    : { statusCode: 200, headers: { 'content-type': 'text/html' }, data: '<html><head><title>Power Platform &amp; Analytics Services in UAE | Tech&amp;</title><link rel="canonical" href="https://www.techand.ai/power-platform-analytics-uae"></head><body><h1>Power Platform</h1></body></html>' }));
+  const vb = (await run('Prerelease Verdict', store['Fetch Release Pages']))[0].json.body;
+  check('B-13: with fail_on "low" a page with no meta description fails the release (exec 743 kept it a warning whatever the setting)', vb.exit_code === 1 && (vb.failures || []).some(f => f.check === 'description'), JSON.stringify({ exit: vb.exit_code, f: vb.failures, w: vb.warnings }));
+  // B-11 + B-12: the publish check
+  const pc = async (body) => { reset();
+    const pb = (await run('Parse Brief', [{ json: { body, headers: {} } }], { code: 'PubCheck__Parse_Brief' }))[0].json;
+    const qa = await run('Content QA', [{ json: pb }]); const oc = await run('Originality Check', qa); return (await run('Publish Check Verdict', oc))[0].json.body; };
+  const md0 = W3B_RA7.r616.draft_round2.replace(/guarantee[sd]?/gi, 'promise');
+  const denial = md0 + '\n\nNone of these features should be treated as an automatic guarantee of regulatory compliance, and the software does not by itself guarantee compliance.\n';
+  const claim = md0 + '\n\nWe guarantee full compliance within 30 days.\n';
+  const d1 = await pc({ markdown: denial, keyword: 'ai consulting', domain: 'techand.ai' });
+  const d2 = await pc({ markdown: claim, keyword: 'ai consulting', domain: 'techand.ai' });
+  check('B-11: a sentence that denies a guarantee is no "guarantee claim"', !(d1.warnings || []).some(w => /guarantee claim/.test(w)), JSON.stringify((d1.warnings || []).filter(w => /guarantee/.test(w))));
+  check('B-11: a sentence that makes one still is, and is quoted', (d2.warnings || []).some(w => /guarantee claim — please verify: "We guarantee full compliance/.test(w)), JSON.stringify((d2.warnings || []).filter(w => /guarantee/.test(w))));
+  check('B-12: with no terms sent the score says how many of its points were granted, not measured', d1.score_granted_points === ((d1.score_breakdown || {}).coverage || 0) && d1.score_granted_points > 0 && /granted because no terms were sent/.test(d1.score_note), JSON.stringify({ g: d1.score_granted_points, n: d1.score_note, sb: d1.score_breakdown }));
+  // B-14: the crawl's "not SEO-friendly" flag on four of exec 739's URLs
+  const okPage = (url, friendly) => ({ url, status_code: 200, resource_type: 'html', checks: { seo_friendly_url: friendly }, meta: { title: 'T', internal_links_count: 10, external_links_count: 1, htags: { h1: ['H'] }, content: { plain_text_word_count: 500 } } });
+  const urls = ['https://www.techand.ai/cookies', 'https://www.techand.ai/whatwedo', 'https://www.techand.ai/whywith-techand', 'https://www.techand.ai/Ai_Tools?ref=1'];
+  const src = a11code('Build_Site_Issues.js');
+  const why = new Function(src.slice(src.indexOf('const urlWhy14 = '), src.indexOf('for (const c of CATALOG) {')) + '\nreturn urlWhy14;')();
+  console.log('   url reasons ->', JSON.stringify(urls.map(u => [u, why(u)])));
+  check('B-14: /cookies has no reason and is not listed; /whatwedo and /whywith-techand join words; a parameter, capitals and an underscore are named', !why(urls[0]) && /joins words/.test(why(urls[1])) && /joins words/.test(why(urls[2])) && /parameters/.test(why(urls[3])) && /capital/.test(why(urls[3])) && /underscore/.test(why(urls[3])), JSON.stringify(urls.map(why)));
+  check('B-14: the finding drops a URL with no reason and prints the reason beside each one', /seo_friendly_url' && v === false && !urlWhy14\(p\.url\)/.test(src) && /p\.url \+ ' — ' \+ urlWhy14\(p\.url\)/.test(src), '');
+  // B-15: the internal-link suggestions skip the pages the duplicate-content finding names, and never cut an anchor mid-word
+  reset();
+  const dup = ['https://www.techand.ai/whatwedo/run-optimize', 'https://www.techand.ai/whatwedo/ai-automation'];
+  const long = 'https://www.techand.ai/insights/upgrading-your-erp-for-uae-peppol-pint-ae-compliance';
+  const pg = (url, inl, title) => ({ url, status_code: 200, resource_type: 'html', checks: { is_orphan_page: inl === 0 }, click_depth: 2, meta: { title, inbound_links_count: inl, htags: { h1: [title] } } });
+  const items = [pg('https://www.techand.ai/', 30, 'Tech& Home'), pg('https://www.techand.ai/whatwedo', 20, 'What We Do Run Optimize Automation Upgrading ERP Peppol Compliance'),
+    ...dup.map(u => pg(u, 0, 'Run Optimize Automation')), pg(long, 0, 'Upgrading Your ERP for UAE Peppol PINT-AE Compliance: A Technical Integration Guide for Finance Teams')];
+  mock('Check Crawl', [{ json: { domain: 'techand.ai', crawl_js: false } }]); mock('Load Audit History', []); mock('Load Audit Findings', []);
+  mock('Get Crawled Pages Answers', [{ json: { tasks: [{ result: [{ items }] }] } }]); mock('Get Crawled Pages', [{ json: { tasks: [{ result: [{ items }] }] } }]);
+  mock('Build Site Issues', [{ json: { domain: 'techand.ai', site_audit: { domain: 'techand.ai', audit_level: 'site_audit', health_score: 85, weights: {}, findings: [{ category: 'Content', severity: 'Medium', title: 'Duplicate content on 7 pages', sample_urls: dup, affected_count: 7 }] } } }]);
+  const il = (await run('Audit Diff', [{ json: {} }]))[0].json.site_audit.internal_links || [];
+  console.log('   internal links ->', JSON.stringify(il.map(x => [x.to_url, x.anchor])));
+  check('B-15: no link is suggested to a page the duplicate-content finding names', !il.some(x => dup.includes(x.to_url)), JSON.stringify(il.map(x => x.to_url)));
+  check('B-15: an anchor longer than 70 characters ends on a whole word', il.filter(x => x.to_url === long).every(x => x.anchor.length <= 70 && !/Inte$/.test(x.anchor) && /\w$/.test(x.anchor)) && il.some(x => x.to_url === long), JSON.stringify(il.filter(x => x.to_url === long)));
+});
+
 
 // ===================================================================================
 // SFA1-1 … SFA1-8 (2026-10-17, defect-fix agent F-A1 — keyword ladder planning; re-rating 2026-10-17 part 1,
@@ -18024,7 +18272,7 @@ await guard('SFA1-2 A-8 one keyword, one page across the rungs, the main page, t
   const { L: L3 } = await fa1Ladder({ base: { secondary_keywords: ['dynamics 365 business central uae', 'it consulting services dubai', ...FA1.parse_verdict.secondary_keywords] } });
   const lo3 = (L3.one_page || {}).left_out || [];
   check('A-8: "dynamics 365 business central uae" — the site\'s live page /dynamics-365-business-central-uae answers it — is not given to the new main page',
-    !L3.top.supporting.includes('dynamics 365 business central uae') && lo3.some(x => x.keyword === 'dynamics 365 business central uae' && /dynamics-365-business-central-uae already answers it|not on this ladder/.test(x.why)), JSON.stringify(lo3.slice(0, 5)));
+    !L3.top.supporting.includes('dynamics 365 business central uae') && lo3.some(x => x.keyword === 'dynamics 365 business central uae' && /your page \/dynamics-365-business-central-uae .*already answers it|not on this ladder/.test(x.why)), JSON.stringify(lo3.slice(0, 5)));
   check('A-8: "it consulting services dubai" is NOT said to be answered by the AI consulting page (IT is not AI: a 3-of-4 match is not "already answers it")',
     !lo3.some(x => x.keyword === 'it consulting services dubai' && /ai-copilot-advisory-uae/.test(x.why)), JSON.stringify(lo3.filter(x => x.keyword === 'it consulting services dubai')));
 });
@@ -18122,10 +18370,10 @@ await guard('SFA1-6 A-2 the Keyword Check gives the ladder\'s own status, not th
   mock('Load Ladder Settings (Assess)', FA1.ladder_settings.map(j => ({ json: j })));
   const body = (await run('Assess Response', [{ json: { output: { fit: 2, navigational: false, alternatives: '' } } }]))[0].json.body;
   const ex = body.existing || {};
-  check('A-2: ladder_status is "paused" (the ladder\'s settings row), the rung row\'s own "planned" is rung_status', ex.ladder_id === 'lad_mv4vxu3bq0kl' && ex.ladder_status === 'paused' && ex.rung_status === 'planned' && /lad_mv4vxu3bq0kl, paused/.test(ex.note || ''), JSON.stringify(ex));
+  check('A-2: ladder_status is "paused" (the ladder\'s settings row), the rung row\'s own "planned" is row_status', ex.ladder_id === 'lad_mv4vxu3bq0kl' && ex.ladder_status === 'paused' && ex.row_status === 'planned' && /lad_mv4vxu3bq0kl, paused/.test(ex.note || ''), JSON.stringify(ex));
   mock('Load Ladder Settings (Assess)', [{ json: {} }]);
   const unk = ((await run('Assess Response', [{ json: { output: { fit: 2, navigational: false, alternatives: '' } } }]))[0].json.body.existing) || {};
-  check('A-2: with no settings row readable the ladder\'s status is unknown (null), never the rung row\'s', unk.ladder_status === null && unk.rung_status === 'planned', JSON.stringify(unk));
+  check('A-2: with no settings row readable the ladder\'s status is unknown (null), never the rung row\'s', unk.ladder_status === null && unk.row_status === 'planned', JSON.stringify(unk));
 });
 
 await guard('SFA1-7 A-20 the ladder row follows the content log: written / not_ready, only from writing, on the saved row', async () => {

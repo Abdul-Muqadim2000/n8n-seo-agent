@@ -182,6 +182,11 @@ function Hero() {
     <section className="relative isolate overflow-hidden bg-page">
       {/* hairline grid behind the headline, fading out from the top centre (a mask, not a colour gradient) */}
       <div aria-hidden className="mk-grid pointer-events-none absolute inset-x-0 top-0 -z-10 h-[760px]" />
+      {/* the brand mark, large and faint behind the headline (the supplied mark as a mask: ink on light, light on dark) */}
+      <span
+        aria-hidden
+        className="mk-watermark pointer-events-none absolute -right-40 top-64 -z-10 aspect-[911/797] w-[420px] bg-ink/[0.05] sm:-right-24 sm:top-10 sm:w-[560px] lg:-right-10 lg:top-6 lg:w-[720px]"
+      />
       <Container className="pt-12 sm:pt-16 lg:pt-20">
         <div className="mx-auto max-w-5xl text-center">
           <div className="animate-fade-up" style={{ animationDelay: '0ms' }}>

@@ -89,6 +89,7 @@ const CVG = (() => {
   const kindFor = (pageType) => (/blog|guide|article|pillar|hub|case stud|post/i.test(S(pageType)) ? 'guide' : 'service');
   // a list is a fair benchmark only for a guide whose search itself asks for a list ("best erp companies in dubai")
   const LIST_SEARCH = /\b(?:best|top|companies|firms|agencies|providers|vendors|tools|alternatives|list)\b/i;
+  const OFFICIAL = /(^|\.)(gov|govt|gob|gouv|mil)(\.[a-z]{2,3})?$|(^|\.)(gov|govt|gob|gouv)\.[a-z]{2,3}(\.[a-z]{2})?$/;   // a government / official host
   const best = (pages, terms, want) => {
     const scored = (Array.isArray(pages) ? pages : []).filter(p => p && S(p.content_full || p.content || p.text))
       .map(p => ({ page: p, kind: kindOf(p), cov: coverageOf(p.content_full || p.content || p.text, terms) }));
@@ -98,13 +99,19 @@ const CVG = (() => {
     // never the bar for a service page), and only then any page — and the answer says which of the three it was.
     const k = want && want.kind ? want.kind : null;
     const lists = !!(k === 'guide' && want && LIST_SEARCH.test(S(want.keyword)));
-    const same = k ? scored.filter(x => x.kind === k || (lists && x.kind === 'list')) : scored;
-    const notList = scored.filter(x => x.kind !== 'list');
-    const pool = same.length ? same : (notList.length ? notList : scored);
+    // A-7 (2026-10-17, re-rating exec 760): a vendor's page was measured against mof.gov.ae, "the best service page" because it was the only
+    // result read as a service page. A government / regulator page is a source to cite, never the page a business has to beat: it is
+    // left out of the choice whenever any other page was read (and the answer counts it), and stands in only when nothing else did.
+    const isOfficial = (x) => OFFICIAL.test(S(x.page.domain || x.page.url).toLowerCase().replace(/^https?:\/\//, '').replace(/[\/?#].*$/, ''));
+    const official = scored.filter(isOfficial);
+    const cands = official.length < scored.length ? scored.filter(x => !isOfficial(x)) : scored;
+    const same = k ? cands.filter(x => x.kind === k || (lists && x.kind === 'list')) : cands;
+    const notList = cands.filter(x => x.kind !== 'list');
+    const pool = same.length ? same : (notList.length ? notList : cands);
     const w = pool.slice().sort(order)[0];
     return { domain: S(w.page.domain), url: S(w.page.url), rank: Number(w.page.rank) || null, coverage_pct: w.cov.pct, terms_used: w.cov.found,
       terms_total: w.cov.total, word_count: Number(w.page.word_count) || null, sections: (w.page.headings || []).length, kind: w.kind,
-      type_match: k ? same.length > 0 : null, same_kind_pages: k ? same.length : null,
+      type_match: k ? same.length > 0 : null, same_kind_pages: k ? same.length : null, official_skipped: cands === scored ? 0 : official.length,
       average_pct: Math.round(scored.reduce((s, x) => s + (x.cov.pct || 0), 0) / scored.length), pages_compared: scored.length };
   };
   const MIN_TARGET = 60, MAX_TARGET = 90;
@@ -258,6 +265,7 @@ const coverage_target = bestCov && bestCov.coverage_pct != null ? {
     + ' terms they share (' + bestCov.coverage_pct + '%), against an average of ' + bestCov.average_pct + '% (a term counts once it appears)'
     + (bestCov.type_match ? '; it is the best ' + KIND_NAME[pageKind] + ' among them, the kind of page being written (' + bestCov.same_kind_pages + ' of that kind read)'
       : '; no ' + KIND_NAME[pageKind] + ' was among the pages read, so the best ' + (bestCov.kind === 'list' ? 'page' : 'page that is not a list of companies') + ' stands in')
+    + (bestCov.official_skipped ? '; ' + bestCov.official_skipped + ' government / regulator page(s) left out of the choice (a source to cite, not a page to beat)' : '')
 } : null;
 const coverage_digest = coverage_target ? 'TARGET: use at least ' + coverage_target.target_pct + '% of the shared terms above, each at least once (the best ' + (coverage_target.type_match ? KIND_NAME[pageKind] : 'page') + ' in the results, '
   + (coverage_target.best.domain || 'the leader') + (coverage_target.best.rank ? ' at position ' + coverage_target.best.rank : '') + ', uses '

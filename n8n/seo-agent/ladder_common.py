@@ -249,7 +249,11 @@ LINK_IMPORTS_TABLE = 'seo_link_imports'
 LINK_IMPORTS_COLS = [('site_id', 'string'), ('domain', 'string'), ('import_id', 'string'), ('source', 'string'), ('ref_domain', 'string'), ('from_url', 'string'), ('to_url', 'string'),
                      ('anchor', 'string'), ('links', 'number'), ('last_crawled', 'string'), ('imported_at', 'string')]
 AUDITS_COLS = [('site_id', 'string'), ('domain', 'string'), ('audit_id', 'string'), ('audited_at', 'string'), ('report_type', 'string'), ('health_score', 'number'), ('grade', 'string'), ('pages_crawled', 'number'),
-               ('findings', 'number'), ('critical', 'number'), ('high', 'number'), ('medium', 'number'), ('low', 'number'), ('scheduled', 'boolean'), ('request_id', 'string')]
+               ('findings', 'number'), ('critical', 'number'), ('high', 'number'), ('medium', 'number'), ('low', 'number'), ('scheduled', 'boolean'), ('request_id', 'string'),
+               # B-5 + INVARIANTS rule 1 (F-B, 2026-10-17): whether the crawl ran JavaScript (a JavaScript crawl is never compared like for like
+               # with a plain one), the version of the engine's checks the audit ran (a finding that left the list because a check changed is
+               # not "fixed"), and the keys the engine did not count as fixed, as JSON text, so the app's lists follow (run sync_tables.py)
+               ('crawl_js', 'boolean'), ('checks_version', 'string'), ('not_fixed_json', 'string')]
 AUDIT_FINDINGS_COLS = [('site_id', 'string'), ('domain', 'string'), ('audit_id', 'string'), ('audited_at', 'string'), ('finding_key', 'string'), ('category', 'string'), ('severity', 'string'), ('title', 'string'), ('affected_count', 'number'),
                        # R19 (2026-10-14, FIX_PLAN §3.12): how many pages the count above was measured on. 31 of 45 URL inspections failed in
                        # execution 550, so a finding measured on 14 pages was compared with one measured on 25 and called an improvement.
@@ -264,7 +268,9 @@ AUDIT_FINDINGS_COLS = [('site_id', 'string'), ('domain', 'string'), ('audit_id',
                        ('recheck_state', 'string'), ('recheck_requested_at', 'string'), ('recheck_at', 'string'), ('recheck_rule', 'string'), ('recheck_note', 'string'),
                        # B5-11 (W3-G, 2026-10-17): the finding's evidence line and up to 5 example addresses (JSON text), so the read API
                        # (`GET /api/v1/websites/:id/audits/:auditId`) can say WHY a finding is there; rows before this answer null (run sync_tables.py)
-                       ('evidence', 'string'), ('sample_urls', 'string')]
+                       ('evidence', 'string'), ('sample_urls', 'string'),
+                       # B-5 (F-B, 2026-10-17): the version of the check that raised the finding (Audit_Diff CHECK_CHANGES); '' on older rows
+                       ('check_version', 'string')]
 
 # ---- the daily key-page watch and Google's view of those pages (G11 + G25, 2026-10-13, FIX_PLAN) ----
 # One row per site and key page: today's raw reading (status, a redirect that appeared, noindex, canonical, title, description, H1s, whether

@@ -27,8 +27,31 @@ const place91 = /\b(uae|u\.a\.e|dubai|abu dhabi|sharjah|ajman|ksa|saudi|riyadh|j
 if (category && !/\b(company|companies|agency|agencies|services?|providers?|firms?|partners?|best|top)\b/i.test(category)) category = /\b(software|platforms?|tools?|apps?|systems?|solutions?)\b/i.test(category) ? 'best ' + category : 'best ' + category + ' company';
 if (category && base.country && !category.toLowerCase().includes(String(base.country).toLowerCase()) && !place91.test(category)) category = category + ' ' + base.country;
 
+// ---- B-2 (2026-10-17, re-rating 2026-10-17, exec 767, High): the brand was judged from ONE results page for "tech&" — a form a search
+// engine reads as "tech" — while Search Console in the same run had "techand" #4.5 and "tech & ai" #2.7. Every brand form is listed (the
+// domain's label, the configured brand names, the business name); a form that a search engine reads as another search is not searched and
+// says why; at most two are searched. GSC Audit Findings then judges the brand from Search Console's own brand queries.
+const __sq128 = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const __bare128 = (x) => String(x || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
+const __names128 = [];
+try { const r = $('Load Site Row (Model)').first().json || {}; if (r.domain && __bare128(r.domain) === __bare128(base.domain)) __names128.push(...String(r.brand_names || '').split(/[,;\n]+/), r.business_name); } catch (e) {}
+try { const m = $('Restore Site Model').first().json.site_model || {}; if (!m.domain || __bare128(m.domain) === __bare128(base.domain)) __names128.push(...(Array.isArray(m.brand_names) ? m.brand_names : String(m.brand_names || '').split(/[,;\n]+/)), m.business_name); } catch (e) {}
+__names128.push(brandName);
+const brand_forms = [];
+const __addForm128 = (form, source) => {
+  const f = String(form || '').trim(); if (!f) return; const low = f.toLowerCase(); if (brand_forms.some(b => b.form === low)) return;
+  const letters = __sq128(f); let searched = true, why = '';
+  if (!/^[a-z0-9 .-]+$/i.test(f)) { searched = false; why = 'a search engine drops its symbols and reads it as "' + low.replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim() + '", another search'; }
+  else if (letters.length < 4) { searched = false; why = 'too short to name only this business'; }
+  else { const twin = brand_forms.find(b => b.searched && __sq128(b.form) === letters); if (twin) { searched = false; why = 'the same search as "' + twin.form + '"'; } }
+  brand_forms.push({ form: low, source, searched, why });
+};
+__addForm128(String(base.domain || '').split('.')[0], 'the domain name');
+for (const n of __names128) __addForm128(n, 'the business name');
+const __brandQs128 = brand_forms.filter(b => b.searched).slice(0, 2);
+for (const b of brand_forms.filter(b => b.searched).slice(2)) { b.searched = false; b.why = 'two brand searches are read per report'; }
 const queries = [
-  { query: brandName.toLowerCase(), type: 'brand' },
+  ...__brandQs128.map(b => ({ query: b.form, type: 'brand' })),
   { query: 'site:' + base.domain, type: 'index' }
 ];
 if (category) queries.push({ query: category.toLowerCase(), type: 'category' });
@@ -36,4 +59,4 @@ if (pool[0] && pool[0].keyword !== category) queries.push({ query: pool[0].keywo
 
 const seen = new Set();
 return queries.filter(q => q.query && !seen.has(q.query) && seen.add(q.query))
-  .map(q => ({ json: { ...q, brand_name: brandName, category_query: category } }));
+  .map(q => ({ json: { ...q, brand_name: brandName, category_query: category, brand_forms } }));

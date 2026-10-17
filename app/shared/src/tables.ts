@@ -213,6 +213,21 @@ export interface AuditRow extends DtRow {
   site_id: string; domain: string; audit_id: string; audited_at: string; report_type: string; health_score: number; grade: string;
   pages_crawled: number; findings: number; critical: number; high: number; medium: number; low: number; scheduled: boolean;
   request_id: string;
+  /** B-5 + INVARIANTS rule 1 (F-B, 2026-10-17): whether the crawl ran JavaScript, the version of the engine's checks, and the keys of the
+   * previous audit's findings the engine did NOT count as fixed (a check changed, one outside reading, a JavaScript / plain crawl), as JSON
+   * text `[{ key, why }]`. Rows written before have none. */
+  crawl_js?: boolean | null; checks_version?: string | null; not_fixed_json?: string | null;
+}
+/** B-5: the previous audit's finding keys the engine did not count as fixed, with the reason (empty for rows that carry none) */
+export function notFixedKeys(row: { not_fixed_json?: unknown } | null | undefined): Map<string, string> {
+  const out = new Map<string, string>();
+  const raw = row?.not_fixed_json;
+  if (typeof raw !== 'string' || !raw.trim()) return out;
+  try {
+    const list: unknown = JSON.parse(raw);
+    if (Array.isArray(list)) for (const x of list) if (x && typeof x === 'object' && typeof (x as { key?: unknown }).key === 'string') out.set((x as { key: string }).key, String((x as { why?: unknown }).why ?? ''));
+  } catch { /* a malformed value is no decision */ }
+  return out;
 }
 export interface AuditFindingRow extends DtRow {
   site_id: string; domain: string; audit_id: string; audited_at: string; finding_key: string; category: string; severity: string;

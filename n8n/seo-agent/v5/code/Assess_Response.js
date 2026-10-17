@@ -1,5 +1,7 @@
 /*__REACH__*/
 /*__FIT_GATE__*/
+/*__SITE_MODEL__*/
+
 // Keyword Check: the answer. Difficulty for this site and plan from the shared reach rules; topic fit, navigational / other brand and the
 // alternatives from the small Claude call (if it failed: fit null, navigational from DataForSEO's intent unless the keyword names the site itself).
 // Alternatives only when the keyword is not realistic or off-topic, never the keyword itself or one the site already targets.
@@ -55,19 +57,29 @@ const existing = (() => {
   const lad = rowsOf('Load Ladders (Assess)').filter(r => fitStored(r, { own_domain: a.domain, protect: [a.keyword] }).ok).filter(r => !dom || reachDomain(r.domain) === dom).find(r => same(r.keyword) || (Number(r.rung) === 4 && same(r.head_keyword)));
   const log = rowsOf('Load Content Log (Assess)').filter(r => !dom || reachDomain(r.domain) === dom).find(r => same(r.keyword));
   const hit = (a.existing_keywords || []).find(same) || (lad && lad.keyword) || (log && log.keyword) || '';
-  if (!hit && !lad && !log) return null;
-  const page_url = String((log && (log.published_url || log.existing_page_url)) || (lad && lad.target_url) || '').trim();
-  // F-A1 / A-2 (2026-10-17, re-rating exec 751): `ladder_status` was the RUNG row's status ("planned") while the ladder itself was paused
-  // in seo_ladder_settings. The ladder's status is its settings row's (no row = active, the Content Cadence's own default); the rung row's
-  // own state is `rung_status`. When no settings row could be read at all the ladder's status is unknown (null), never guessed.
+  // A-1 (2026-10-17, exec 750): a live page of the site that already targets the search (the page inventory seo_pages, SM.matchPage: the
+  // page that gets impressions for it, or 75% of its words in the slug / title) - "business central partner uae" was answered `existing:
+  // null` beside /dynamics-365-business-central-uae ("Certified Microsoft Dynamics 365 Business Central Partner in UAE")
+  const pages = rowsOf('Load Pages (Assess)');
+  const model = pages.length ? SM.withPages(SM.from({ domain: a.domain || '' }, {}), pages) : null;
+  const pm = model ? SM.matchPage(model, kw) : null;
+  const pg = pm && !SM.isListing(pm.url) ? { url: String(pm.url), title: String(pm.title || ''), matched_by: pm.matched_by } : null;
+  // A-2 (exec 751): the ladder's OWN status is its seo_ladder_settings row's (active / paused / ...), never the rung row's (planned /
+  // writing, which is `row_status`). A ladder with no settings row is active (the Content Cadence's own default) - but only when the settings
+  // could be read at all; with nothing readable its status is unknown (null), never the rung row's word.
   const sets = rowsOf('Load Ladder Settings (Assess)');
-  const setRow = lad ? sets.find(r => String(r.ladder_id) === String(lad.ladder_id)) : null;
+  const lst = lad ? (sets.find(r => String(r.ladder_id || '') === String(lad.ladder_id || '')) || null) : null;
   const LSTAT = ['active', 'queued', 'paused', 'won', 'stuck', 'archived'];
-  const ladStatus = !lad ? null : setRow && LSTAT.includes(String(setRow.status || '').toLowerCase()) ? String(setRow.status).toLowerCase()
-    : (setRow || sets.length) ? 'active' : null;
+  const ladStatus = !lad ? null : lst && LSTAT.includes(String(lst.status || '').trim().toLowerCase()) ? String(lst.status).trim().toLowerCase()
+    : (lst || sets.length) ? 'active' : null;
+  if (!hit && !lad && !log && !pg) return null;
+  if (!hit && !lad && !log) return { keyword: kw, how: 'a page of yours', ladder_id: null, ladder_status: null, rung: null, page_url: pg.url, page_title: pg.title || null, page_status: 'live',
+    matched_by: pg.matched_by, pages_checked: pages.length,
+    note: 'you already have a page for this search: ' + pg.url + (pg.title ? ' ("' + pg.title + '")' : '') + ' - improve that page rather than starting a ladder for a second one' };
+  const page_url = String((log && (log.published_url || log.existing_page_url)) || (lad && lad.target_url) || (pg && pg.url) || '').trim();
   return { keyword: String(hit || (lad && lad.keyword) || ''), how: String(hit).toLowerCase().trim() === kw ? 'the same keyword' : 'the same search',
-    ladder_id: lad ? String(lad.ladder_id || '') : null, ladder_status: ladStatus, rung_status: lad ? String(lad.status || '') : null, rung: lad ? Number(lad.rung) || null : null,
-    page_url: page_url || null, page_status: log ? String(log.status || '') : null,
+    ladder_id: lad ? String(lad.ladder_id || '') : null, ladder_status: ladStatus, row_status: lad ? String(lad.status || '') : null, rung: lad ? Number(lad.rung) || null : null,
+    page_url: page_url || null, page_status: log ? String(log.status || '') : null, live_page: pg ? pg.url : null, pages_checked: pages.length,
     note: 'already one of your keywords' + (lad ? ' (ladder ' + lad.ladder_id + (ladStatus ? ', ' + ladStatus : '') + ')' : ' (one of your keyword ladders)')
       + (page_url ? ' - its page: ' + page_url : '') + ': continue that ladder / improve that page rather than starting a second one for the same search' };
 })();
@@ -99,7 +111,7 @@ const body = { ok: true, keyword: a.keyword, country: a.country, volume: a.volum
   reach_note: topic.note,
   existing,   // R50
   business_source: a.business_source, warnings };
-if (existing) body.label = body.label + ' · already one of your keywords';
+if (existing) body.label = body.label + (existing.how === 'a page of yours' ? ' · you already have a page for it' : ' · already one of your keywords');
 // ---- R26 (2026-10-14, FIX_PLAN.md §3.12): an answer with no search data may not sound sure ----
 // Live on 2026-10-14 "business central partner uae" and "dynamics 365 partner uae" came back with volume, difficulty, intent and CPC
 // all null — DataForSEO has nothing for them in the UAE — and the answer still read "Reachable for your site · Short ladder ·
