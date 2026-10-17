@@ -1,6 +1,6 @@
 # Resume here — re-rating 2026-10-17, its fix wave and the enterprise gap builds
 
-Written 2026-10-17 ≈ 21:55 UTC by the orchestrator, because the usage limit was close. Branch `feature/seo-agent-v4.5` (tip `2aa912a` or
+Written 2026-10-17 ≈ 21:55 UTC by the orchestrator, because the usage limit was close. Branch `feature/seo-agent-v4.5` (tip `47ce789` or
 later), pushed. Read this, then the newest `*_HANDOFF.md` in each open worktree below.
 
 ## 1. Done and on the branch
@@ -25,18 +25,27 @@ later), pushed. Read this, then the newest `*_HANDOFF.md` in each open worktree 
 `cd /Users/abdul.muqadim/n8n_devaicon/n8n && python3 seo-agent/apply_env.py` (not Monday 07:00–12:00 New York). It also runs
 `sync_tables.py` (F-B's four new columns). The app's migration 0009 runs at the dev server's next start.
 
-## 3. Open agents (worktrees under `.claude/worktrees/`; resume each with SendMessage to its id, or start a fresh agent on its branch + handoff note)
+## 3. Open agents — all checkpointed, parked on their branches (worktrees under `.claude/worktrees/agent-<id>/`)
 
-| Agent | Branch / worktree | State at checkpoint | Handoff note |
+State at 2026-10-17 ≈ 22:40 UTC. **Every defect fixer is merged** (F-C last, `47ce789`: all 8 High fixed in code, harness 6861 / 0,
+app 377 shared / 334 server / 17 web). The gap builders are parked, each with a handoff note on its branch:
+
+| Agent | Branch | Built and tested | Left (see its handoff note) |
 |---|---|---|---|
-| F-C monitors + schedule catch-up (C-1 High, C-2..C-16) | `worktree-agent-a9759c9fce4dc97fb` | 5 commits, finishing | `n8n/seo-agent/docs/system-review-2026-10-17/F-C_HANDOFF.md` |
-| G1 identity (MFA, audit log, sessions, SSO OIDC+SAML; SCIM last) | `worktree-agent-acb3f285de8c3a4bc` | 5 commits (4 of 5 items), finishing | `app/docs/G1_HANDOFF.md` |
-| G3 server-log + AI-crawler analytics | `worktree-agent-aaf7d59acd32d0ae8` | 4 commits (Crawlers page built), finishing | `app/docs/G3_HANDOFF.md` |
-| G4 integrations + write API (runs API/MCP, webhooks, Jira/Linear/Asana, BigQuery/S3 + Looker Studio, Slack/Teams) | `worktree-agent-a05552be562d6b396` | 3 commits, **paused** at checkpoint | `app/docs/G4_HANDOFF.md` |
+| G1 identity | `worktree-agent-acb3f285de8c3a4bc` (merged 2aa912a in) | two-step (TOTP, passkeys, recovery codes, step-up, company policy), audit log (DB refuses edits, retention, CSV), sessions + idle timeout, SSO (OIDC + SAML 2.0 on DNS-proven domains, enforce, break-glass); 53 server + 15 shared tests on PGlite | **SCIM 2.0** (started: types, token, filter parser), marketing (`/security`, features, changelog, pricing), browser pass; owner: `IDENTITY_KEY`, a real IdP, which plans include SSO/SCIM/audit log. Note: `app/docs/G1_HANDOFF.md`, design `app/docs/IDENTITY.md` |
+| G3 crawler logs | `worktree-agent-aaf7d59acd32d0ae8` (merged 2aa912a in) | upload + push ingest (Logpush / drains), parsers, IP-range + rDNS verification, rollups, Crawlers page, `/api/v1` + MCP tool, 12 DB tests, 1M lines in 16 s | marketing entry, browser pass. Note: `app/docs/G3_HANDOFF.md`, design `app/docs/LOG_ANALYTICS.md` |
+| G4 integrations | `worktree-agent-a05552be562d6b396` (merged 2aa912a in) | server side of all 5: runs API + MCP run tools, signed webhooks + Slack/Teams, Jira/Linear/Asana, S3/BigQuery export + table read API; 61 + 15 tests; shared SSRF guard moved to `server/src/lib/netGuard.ts` | Integrations settings UI + "Create ticket" buttons, guides, Looker Studio connector, marketing, non-WIP commits. Note: `app/docs/G4_HANDOFF.md`. Its throwaway `gap-g4-pg` container + `gap-g4-net` may still exist |
 
-Common briefs the agents follow (copies in this folder: `FIX_COMMON.md`, `GAP_COMMON.md`, `SCORER_RULES.md`): `FIX_COMMON.md` (defect fixers),
-`GAP_COMMON.md` (gap builders). Key rules in them: work only in the worktree, never touch the running stacks / dev DB / main checkout,
-`build_v4.py --no-env` + harness in a throwaway container, commit per functionality, do not commit `--no-env` generated files.
+**Migration clash to resolve when merging:** G1 `0010_g1_identity.sql` (hand-appended audit-log trigger at the end — keep it), G3
+`0010_crawler_logs.sql`, G4 `0010_g4_integrations.sql` — merge one at a time and renumber the next (0011, 0012), regenerating the drizzle
+snapshot/journal. Root `package.json` / lock: G1 adds deps + an `overrides` pin of xml-crypto 6.3.2.
+
+**Found by G3, not fixed:** `app/server/src/services/pipeline.ts` reads `seo_pages` filtered by `domain`, but that table is keyed by
+`site_id` — the read likely always falls into its `.catch(() => [])`, so the pipeline never sees the page inventory.
+
+**Left open by fixers (Low):** C-9 (`AI_Metrics.js` ~287–296 count only engines that answered on both sides; `AI_Report.js:124` hard-codes
+"the 7 days to …"); B-8 B-9 B-10 B-16 B-18; a Tracker Report node-level scenario for C-12/C-13; Audit Scheduler and Page Watch do not carry
+the "ran late" notice; halsimplify.com / tradeshift.com still qualify as prospects when nothing names their category.
 
 ## 4. How to merge each one (what worked today)
 
