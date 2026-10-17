@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import * as D from '@radix-ui/react-dialog';
 import { toast } from 'sonner';
 import { ArrowLeft, ArrowRight, Building2, Check, ChevronRight, Clock, Copy, ExternalLink as ExternalIcon, Globe, LifeBuoy, Mail, MapPin, Search, Send, ShieldCheck, Sparkles, UserRound, X, type LucideIcon } from 'lucide-react';
-import { fillGuide, GUIDE_AREAS, guideById, guideText, GUIDES, searchGuides, type FilledCopy, type FilledStep, type Guide, type GuideArea, type GuideVars } from '@seo/shared/guides';
+import { fillGuide, GUIDE_AREAS, guideAvailable, guideById, guideText, GUIDES, searchGuides, type FilledCopy, type FilledStep, type Guide, type GuideArea, type GuideVars } from '@seo/shared/guides';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
@@ -11,6 +11,7 @@ import { IconTile } from '@/components/ui/icon-tile';
 import { CopyButton, Meter } from '@/components/ui/misc';
 import { CollapsePanel, Collapsible } from '@/components/insight/disclosure';
 import { Segmented } from '@/components/ui/tabs';
+import { useProviders } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 import { RichText } from './rich';
 import { firstOpenStep, readDone, writeDone } from './progress';
@@ -27,6 +28,12 @@ export type GuideState = { mode: 'index'; query?: string } | { mode: 'guide'; id
 
 const AREA_ICON: Record<GuideArea, LucideIcon> = { google: Search, ownership: ShieldCheck, website: Globe, mailbox: Mail, business: Building2, company: UserRound };
 const areaLabel = (a: GuideArea) => GUIDE_AREAS.find((x) => x.id === a)?.label ?? 'Guide';
+
+/** D-9: what this installation offers (Google sign-in may be off); until the server says, a Google-only guide is not offered */
+function useGuideAvailability() {
+  const google = useProviders().data?.google === true;
+  return useMemo(() => ({ googleSignIn: google }), [google]);
+}
 
 export function GuidePanel({ state, setState, close }: { state: GuideState; setState: (s: GuideState) => void; close: () => void }) {
   const guide = state?.mode === 'guide' ? guideById(state.id) : undefined;
@@ -71,6 +78,8 @@ function PanelHead({ children, back }: { children: React.ReactNode; back?: () =>
 // ---------------------------------------------------------------- one guide
 function GuideView({ guide, vars, finish, onBack, onOpen }: { guide: Guide; vars?: GuideVars; finish?: GuideFinish; onBack?: () => void; onOpen: (id: string) => void }) {
   const filled = useMemo(() => fillGuide(guide, vars ?? {}), [guide, vars]);
+  const available = useGuideAvailability();
+  const related = (filled.related ?? []).filter((id) => guideAvailable(guideById(id), available));   // D-9: only what this app offers
   const total = filled.steps.length;
   const [done, setDone] = useState<number[]>(() => readDone(guide.id));
   const [current, setCurrent] = useState<number>(() => firstOpenStep(readDone(guide.id), total));
@@ -193,11 +202,11 @@ function GuideView({ guide, vars, finish, onBack, onOpen }: { guide: Guide; vars
           </div>
         )}
 
-        {!!filled.related?.length && (
+        {related.length > 0 && (
           <div className="mt-5">
             <h3 className="text-[13px] font-medium text-ink-3">Next, or instead</h3>
             <div className="mt-2 flex flex-wrap gap-2">
-              {filled.related.map((id) => {
+              {related.map((id) => {
                 const r = guideById(id);
                 if (!r) return null;
                 const RIcon = AREA_ICON[r.area];
@@ -387,7 +396,8 @@ function CopyRow({ copy }: { copy: FilledCopy }) {
 // ---------------------------------------------------------------- all guides
 function GuideIndex({ onOpen }: { onOpen: (id: string) => void }) {
   const [q, setQ] = useState('');
-  const found = useMemo(() => searchGuides(q), [q]);
+  const available = useGuideAvailability();
+  const found = useMemo(() => searchGuides(q).filter((g) => guideAvailable(g, available)), [q, available]);
   const groups = GUIDE_AREAS.map((a) => ({ ...a, items: found.filter((g) => g.area === a.id) })).filter((g) => g.items.length);
   return (
     <>
