@@ -29,7 +29,7 @@ calls it, and new work goes here because the app holds the per-company credentia
 | Risk | What stops it |
 |---|---|
 | A page the run did not stand behind reaches a live site (QA failed, DRAFT, refused, could not be checked) | `cmsReadiness()` (shared) calls the delivery rule `deliveryDecision()` of `report-delivery.ts` unchanged, adds `meta.publishable === false`; **no override exists**, for drafts or live, for any role |
-| Unfinished text reaches a live site (`[Confirm: …]`, `[Owner: …]`, `[Price]`, `[Author Name]`, `[Image: …]`) | every bracket the engine's Content QA counts (`PH_RE`) **plus** the labelled forms with a colon, in the HTML, title, H1, meta description and author; each one listed with its count; blocks draft and live |
+| Unfinished text reaches a live site (`[Confirm: …]`, `[Owner: …]`, `[Price]`, `[Author Name]`, `[Image: …]`) | the ONE bracket detector the engine's Content QA and the delivery rule use (`findOpenBrackets`, `shared/src/placeholders.ts`), run over the HTML, the Markdown, title, H1, meta description and author; each bracket listed with its count and kind (gap / review note); blocks draft and live |
 | A quality check that never ran | draft allowed with a warning; **live refused** |
 | Someone without the right publishes live | draft: member+; live: admin/owner **and** `confirmLive: true` in the body; the server checks both, the UI only mirrors them |
 | SSRF through a typed CMS address (`https://169.254.169.254/…`, `https://10.0.0.5`, DNS rebinding) | `https://` only, host refused by name (`cmsUrlOk`), and the connection's DNS lookup is pinned to public addresses (`publicLookup` of `services/verify.ts` — the address checked is the address connected to); redirects are not followed |
@@ -48,7 +48,8 @@ calls it, and new work goes here because the app holds the per-company credentia
 - not a written page (`stage !== 'content'` or no HTML / Markdown);
 - **the delivery rule refuses it** (`deliveryDecision`: rejected, not ready / QA failed, refused, could not be checked, interim);
 - the package says `publishable: false` (the `-DRAFT` file the engine names that way carries the same flag);
-- **placeholders left** — listed with counts;
+- **brackets left for a person** (`findOpenBrackets`) — listed with counts. When the delivery rule's only reason to hold the page is the same
+  brackets (A-13), that hold is reported once, as this blocker with the list;
 - no title or no slug; the page was written for another domain than the website.
 
 Live only: the quality check did not run (`qa_publishable == null` and no "passed" summary).

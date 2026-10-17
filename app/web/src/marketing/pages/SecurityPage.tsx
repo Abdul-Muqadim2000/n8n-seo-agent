@@ -94,7 +94,7 @@ const GOOGLE_STEPS = [
 const FAQS: FaqItem[] = [
   {
     q: 'Does Ascentra change anything on our website?',
-    a: 'No. Ascentra reads your website and your Google data. The pages it writes arrive as a package or a WordPress draft, and your team decides what to publish.',
+    a: 'Only what you ask it to. Ascentra reads your website and your Google data. Written pages arrive as a package, or as drafts in the CMS you connected; only an owner or admin can publish one live. CMS credentials are encrypted at rest, never shown again, and the address you connect must be a public https host.',
   },
   {
     q: 'What access does Ascentra need to Google?',

@@ -10,6 +10,7 @@ import { Delta, ExternalLink, KeyValue } from '@/components/ui/misc';
 import { ChartCard, TimeSeriesChart } from '@/components/charts';
 import { CountUp, HeroStat, Stagger } from '@/components/insight';
 import { absolutePageUrl, ArticleViewer, findPlaceholders } from './article';
+import { CmsPublishPanel } from './CmsPublish';
 import { Block, Bullets, Chips, Facts, has, LedgerCard, n, num, obj, objs, str, strs, usd, verdictLabel, type P } from './kit';
 import { keywordPrefill } from './meta';
 import { ChartTitle, ReportHero, ScoreMark, TickGrid, WordValue } from './visuals';
@@ -244,6 +245,9 @@ export function ContentReport({ report }: { report: ReportDetail }) {
       )}
 
       {html && <PageChecks html={html} meta={meta} qa={qa} qaOk={qaOk} notReady={notReady} qaLabel={qaLabel} ledger={obj(p.run_ledger)} />}
+
+      {/* G2: send the page to the website's CMS — drafts by default, live only for owners and admins, never a page the checks refuse */}
+      {html && report.siteId && <CmsPublishPanel report={report} />}
 
       {html ? (
         <Block
