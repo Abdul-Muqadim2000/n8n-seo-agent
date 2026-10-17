@@ -41,6 +41,8 @@ const Env = z.object({
   LINK_BUILDER_JOBS: bool(true),
   /** L1: check the recipient's domain for a mail server before the first e-mail; false only for a local mail test with made-up domains */
   OUTREACH_MX_CHECK: bool(true),
+  /** G2: a CMS on localhost / a private address (a local WordPress in development). Ignored in production. */
+  CMS_ALLOW_PRIVATE_HOSTS: bool(false),
   /** the n8n project of the SEO Agent's Data Tables (the app creates seo_ladder_settings there when it is missing) */
   N8N_PROJECT_ID: str('wo1WpMiHjdduGvfl'),
   /** this server as seen from n8n (callbacks), e.g. http://host.docker.internal:4000; https in production */
@@ -167,5 +169,7 @@ export const config = {
   },
   linkBuilderJobs: e.LINK_BUILDER_JOBS,
   outreachMxCheck: e.OUTREACH_MX_CHECK,
+  // G2: never in production, whatever the variable says
+  cmsAllowPrivateHosts: e.CMS_ALLOW_PRIVATE_HOSTS && e.NODE_ENV !== 'production',
 };
 export type Config = typeof config;

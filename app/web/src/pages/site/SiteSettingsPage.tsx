@@ -12,6 +12,7 @@ import { ProfileForm, profileSavedToast, useSaveProfile } from '@/components/sit
 import { businessOnly, SiteBusinessForm } from '@/components/site/SiteBusinessFields';
 import { BLOG_OPTIONS, blogMonthlyCost, trackDefaults, TrackingForm, type TrackFormOutput } from '@/components/site/TrackingForm';
 import { VerificationPanel } from '@/components/site/VerificationPanel';
+import { PublishingSettings } from '@/components/site/cms/PublishingSettings';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { Card, CardBody, CardFooter, CardHeader } from '@/components/ui/card';
@@ -34,6 +35,7 @@ const TABS = [
   { id: 'verification', label: 'Verification & Google', description: 'Ownership of the website and the Search Console and GA4 connection.' },
   { id: 'tracking', label: 'Tracking & monitors', description: 'Weekly tracking, blog posts per week and the growth monitors, with their cost.' },
   { id: 'profile', label: 'Author & profile', description: 'The author, reviewer and business details behind every byline, author box and schema.' },
+  { id: 'publishing', label: 'Publishing', description: 'Your CMS: written pages go to it as drafts from their report, and live only when an owner or admin chooses.' },
   { id: 'danger', label: 'Delete', description: 'Remove this website from your company.' },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
@@ -74,6 +76,8 @@ function TabContent({ tab, admin }: { tab: TabId; admin: boolean }) {
       return site.verifiedAt ? <TrackingTab admin={admin} /> : <VerifyFirst what="Tracking and the growth monitors" />;
     case 'profile':
       return site.verifiedAt ? <ProfileTab admin={admin} /> : <VerifyFirst what="The author and business profile" />;
+    case 'publishing':
+      return site.verifiedAt ? <PublishingSettings admin={admin} /> : <VerifyFirst what="Publishing to your CMS" />;
     case 'danger':
       return <DangerTab />;
   }

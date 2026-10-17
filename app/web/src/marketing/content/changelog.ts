@@ -15,6 +15,20 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-18',
+    title: 'Send written pages to your CMS',
+    summary:
+      'A written page now goes from its report to WordPress, Webflow or Contentful — or to any other stack through a signed webhook — as a draft by default. Only an owner or admin can publish one live, after confirming it, and Ascentra then checks the live page and starts tracking it.',
+    highlights: [
+      'WordPress with an application password: posts or pages, categories and tags, the featured image, and Yoast SEO or Rank Math fields when your site exposes them',
+      'Webflow and Contentful: your collection or content type, its fields mapped once',
+      'A signed webhook for anything else — a headless CMS, a static site or a bot that opens a pull request',
+      'A page that failed its quality check, or still holds a bracket left for you, is refused with the list; sending again updates the same post, never a second one',
+      'Every send is recorded — who, when, draft or live, where — and the Content and Pipeline pages show which pages are drafts and which are live',
+    ],
+    features: ['content'],
+  },
+  {
+    date: '2026-10-18',
     title: 'Written pages: every link opened, every gap named, nothing said about you that you have not said',
     summary:
       'Before a written page is offered to you, every link to another site is now opened: a link to a missing page stops the page and names the link, with a replacement when one is at hand. Anything left in brackets for you to fill in is counted and named, whatever the writer called it, and a page that still holds one waits in the app instead of being sent out as finished.',

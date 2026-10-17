@@ -6,7 +6,7 @@ export const LOOP_STEPS: { label: string; icon: LucideIcon; body: string }[] = [
   { label: 'Research', icon: Search, body: 'Keywords, competitors, trends and the questions buyers ask AI assistants.' },
   { label: 'Plan', icon: ListChecks, body: 'Ladders and weekly posts in priority order, with a verdict for every keyword.' },
   { label: 'Write', icon: PenLine, body: 'Pages written, critiqued and edited, with SEO QA and expertise built in.' },
-  { label: 'Publish', icon: Send, body: 'A ready package or a WordPress draft; Ascentra checks the live page.' },
+  { label: 'Publish', icon: Send, body: 'A ready package or a draft in your CMS; Ascentra checks the live page.' },
   { label: 'Track', icon: ChartLine, body: 'Rankings, traffic, AI answers and links, every week.' },
   { label: 'Learn', icon: Lightbulb, body: 'What worked feeds the next plan, and what needs you lands in one queue.' },
 ];
