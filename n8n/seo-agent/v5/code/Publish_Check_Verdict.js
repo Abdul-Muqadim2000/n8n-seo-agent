@@ -15,6 +15,8 @@ else if (!pc.competitors_given) nc.push({ check: 'coverage_target', reason: 'no 
 if (!pc.competitors_given) nc.push({ check: 'originality', reason: 'no competitor page was sent, so the draft could not be compared word for word with anyone' });
 if (!pc.target_words_given) nc.push({ check: 'length', reason: 'no target_words was sent, so the page is measured against its own length (the length check cannot fail)' });
 if (pc.domain_given && !pc.internal_links_given) nc.push({ check: 'internal_links_exist', reason: 'no internal_links list was sent, so the links to the site\'s own pages were trusted, not verified to exist' });
+// A-14 (2026-10-17): a content run fetches every outbound link (Outbound Link Check) and fails on a dead one; this check fetches nothing
+if ((v.outbound_links || []).length) nc.push({ check: 'outbound_links_live', reason: 'this check fetches nothing, so whether the page\'s ' + v.outbound_links.length + ' outbound link(s) answer was not checked (a content run fetches each one and refuses a dead link)' });
 nc.push({ check: 'author_box', reason: 'the byline, author box and Person schema are added by the blog package from the business profile; they are not part of the Markdown sent' });
 const R = v.readability || {};
 const advice = [R.note, ...(Array.isArray(v.style_notes) ? v.style_notes : []), ...(Array.isArray(v.eeat_notes) ? v.eeat_notes : [])].filter(Boolean).slice(0, 12);
