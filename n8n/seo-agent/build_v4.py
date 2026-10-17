@@ -10869,6 +10869,249 @@ setcode('Finding Rows', _fr124.replace("recheck_note: '' }));",
         "recheck_note: '',\n  evidence: String(f.evidence || '').slice(0, 500), sample_urls: JSON.stringify((Array.isArray(f.sample_urls) ? f.sample_urls : []).filter(u => typeof u === 'string' && /^https?:\\/\\//i.test(u)).slice(0, 5).map(u => u.slice(0, 300))) }));   // B5-11: the read API's evidence"))
 log('Findings keep their evidence (2026-10-17, B5-11): every stored audit finding row carries its evidence line and up to five example addresses, so the read API can show why a finding is there.')
 
+# 128. THE TECHNICAL AUDIT AND THE FULL REPORT TELL THE CUSTOMER WHAT WAS MEASURED (2026-10-17, defect-fix agent F-B, re-rating 2026-10-17
+#      part 2 — executor B, execs 739 / 767, docs/system-review-2026-10-17/parts/2_technical.md). Each change names its finding:
+#      * B-1 (High)  — Render Diff compares like with like (v5/code/Render_Diff.js): a crawl-paired page's counts come from DataForSEO's own
+#        counting and are read only where no counting difference can explain the gap; a first response that carries MORE never scores. Both
+#        reports list only the real differences and say in one line how many figures were not compared, and why.
+#      * B-2 (High)  — the brand: every brand form is listed, a form a search engine reads as another search ("tech&" reads "tech") is not
+#        searched and says why, and GSC Audit Findings judges the brand from Search Console's own brand queries. A results page alone never
+#        raises a High.
+#      * B-3 (High)  — the fit gate (v5/code/_fit_gate.js): a document service a public body provides to a person, a job search, a word too
+#        wide to be a category, and a common word lifted out of a longer service name are refused with their reason on every path that uses
+#        the gate (the full report's gap, easy wins, opportunities — and so the AI questions built from them).
+#      * B-4 (Medium) — a `site:` estimate is never a finding beside the URL Inspection of the same run; the report prints both.
+#      * B-6 (Medium) — the reason a blocker is ranked first names what that class of blocker does (v5/code/_impact.js).
+#      * B-7 (Medium) — "get listed on the directories ChatGPT cited" only names cited pages that are NOT the vendors it recommended.
+#      * B-17 (Medium) — one source per competitor figure: the benchmark table and the medians both use DataForSEO's domain totals; the intent
+#        table says it counts the first rankings read; the unscored-findings line reads as a sentence; the app's summary counts what the list holds.
+_aq128 = code('AI Queries')
+patch('AI Queries', """const queries = [
+  { query: brandName.toLowerCase(), type: 'brand' },
+  { query: 'site:' + base.domain, type: 'index' }
+];""", r"""// ---- B-2 (2026-10-17, re-rating 2026-10-17, exec 767, High): the brand was judged from ONE results page for "tech&" — a form a search
+// engine reads as "tech" — while Search Console in the same run had "techand" #4.5 and "tech & ai" #2.7. Every brand form is listed (the
+// domain's label, the configured brand names, the business name); a form that a search engine reads as another search is not searched and
+// says why; at most two are searched. GSC Audit Findings then judges the brand from Search Console's own brand queries.
+const __sq128 = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const __bare128 = (x) => String(x || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
+const __names128 = [];
+try { const r = $('Load Site Row (Model)').first().json || {}; if (r.domain && __bare128(r.domain) === __bare128(base.domain)) __names128.push(...String(r.brand_names || '').split(/[,;\n]+/), r.business_name); } catch (e) {}
+try { const m = $('Restore Site Model').first().json.site_model || {}; if (!m.domain || __bare128(m.domain) === __bare128(base.domain)) __names128.push(...(Array.isArray(m.brand_names) ? m.brand_names : String(m.brand_names || '').split(/[,;\n]+/)), m.business_name); } catch (e) {}
+__names128.push(brandName);
+const brand_forms = [];
+const __addForm128 = (form, source) => {
+  const f = String(form || '').trim(); if (!f) return; const low = f.toLowerCase(); if (brand_forms.some(b => b.form === low)) return;
+  const letters = __sq128(f); let searched = true, why = '';
+  if (!/^[a-z0-9 .-]+$/i.test(f)) { searched = false; why = 'a search engine drops its symbols and reads it as "' + low.replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim() + '", another search'; }
+  else if (letters.length < 4) { searched = false; why = 'too short to name only this business'; }
+  else { const twin = brand_forms.find(b => b.searched && __sq128(b.form) === letters); if (twin) { searched = false; why = 'the same search as "' + twin.form + '"'; } }
+  brand_forms.push({ form: low, source, searched, why });
+};
+__addForm128(String(base.domain || '').split('.')[0], 'the domain name');
+for (const n of __names128) __addForm128(n, 'the business name');
+const __brandQs128 = brand_forms.filter(b => b.searched).slice(0, 2);
+for (const b of brand_forms.filter(b => b.searched).slice(2)) { b.searched = false; b.why = 'two brand searches are read per report'; }
+const queries = [
+  ...__brandQs128.map(b => ({ query: b.form, type: 'brand' })),
+  { query: 'site:' + base.domain, type: 'index' }
+];""")
+patch('AI Queries', "  .map(q => ({ json: { ...q, brand_name: brandName, category_query: category } }));",
+      "  .map(q => ({ json: { ...q, brand_name: brandName, category_query: category, brand_forms } }));")
+
+# ---- AI Visibility: the brand from every form asked (B-2), the site: estimate as an estimate (B-4), directories that are directories (B-7) ----
+patch('AI Visibility', """      'Get listed where AI answers draw their sources: the directories and review sites cited (' + (r.cited_sources.slice(0, 4).join(', ') || 'see report') + '), plus comparison and "best X" pages that name you.');""",
+      r"""      (() => {   // B-7 (2026-10-17): a cited page that belongs to a vendor the answer recommended is that vendor's own site, not a directory
+        const vend = new Set((r.domains_named || r.domains_mentioned).map(norm)); const lists = r.cited_sources.filter(s => !vend.has(norm(s)) && ![...vend].some(v => matches(s, v)) && !matches(s, ours));
+        return lists.length
+          ? 'Get listed where ' + platform + ' draws its sources: the lists and directories it cited that are not vendors themselves (' + lists.slice(0, 4).join(', ') + '), plus comparison and "best X" pages that name you.'
+          : platform + ' cited only the vendors\' own sites (' + (r.cited_sources.slice(0, 4).join(', ') || 'none named') + '), so there is no list to get onto from this answer: publish a page of your own that answers this question directly (what to look for, how providers compare, where you fit) so the next answer can cite it, and get named on the lists other AI answers cite.';
+      })());""")
+patch('AI Visibility', """const brandRow = rows.find(r => r.type === 'brand');
+if (brandRow) {
+  if (brandRow.your_position == null || brandRow.your_position > 3) {
+    F('High', 'Site does not rank at the top for its own brand name',
+      'Search "' + brandRow.query + '": your position ' + (brandRow.your_position || 'not in top 20'),
+      'If people cannot find you by name, every other channel (ads, referrals, AI) leaks visitors.',
+      'Use one consistent brand name everywhere, add Organization schema with alternateName, and build branded mentions.');
+  } else works.push('Ranks #' + brandRow.your_position + ' for its brand name');
+}""", r"""// B-2 (2026-10-17): every brand search asked, and every form not asked with its reason. A results page read once is one reading: the
+// finding is Medium and says so; GSC Audit Findings replaces it with Search Console's own brand queries where the run has them.
+const brandRows = rows.filter(r => r.type === 'brand');
+const brandForms = (qs[0] || {}).brand_forms || [];
+if (brandRows.length) {
+  const best = brandRows.map(r => r.your_position).filter(p => p != null).sort((x, y) => x - y)[0];
+  const asked = brandRows.map(r => '"' + r.query + '" ' + (r.your_position != null ? '#' + r.your_position : 'not in the top 20')).join('; ');
+  const notAsked = brandForms.filter(b => !b.searched).map(b => '"' + b.form + '" not searched (' + b.why + ')').join('; ');
+  if (best == null || best > 3) {
+    findings.push({ category: 'AI Search Readiness', severity: 'Medium', title: 'Site does not rank at the top for its own brand name',
+      evidence: 'Results pages read once in this run: ' + asked + (notAsked ? '; ' + notAsked : '') + '. One read of a results page is one reading; Search Console\'s own brand queries decide where the run has them.',
+      why: 'If people cannot find you by name, every other channel (ads, referrals, AI) leaks visitors.',
+      fix: 'Use one consistent brand name everywhere, add Organization schema with alternateName, and build branded mentions.',
+      sample_urls: [], affected_count: null, affected_pct: 100, scope: 'site', one_reading: true,
+      brand_check: { asked: brandRows.map(r => ({ query: r.query, position: r.your_position })), not_asked: brandForms.filter(b => !b.searched) } });
+  } else works.push('Ranks #' + best + ' for its own name (' + asked + ')');
+}""")
+patch('AI Visibility', """    findings.push({ category: 'Crawlability & Indexing', severity: 'High', title: 'Far fewer pages indexed than crawled', evidence: 'Google site: estimate ' + indexEstimate + ' vs ' + crawled + ' crawlable pages', why: 'Pages that are not indexed cannot rank. This is an estimate; confirm in Search Console.',""",
+      """    findings.push({ category: 'Crawlability & Indexing', severity: 'Medium', title: 'Far fewer pages indexed than crawled', evidence: 'Google site: estimate ' + indexEstimate + ' vs ' + crawled + ' URLs the crawl reached (a site: count is a rough estimate Google does not stand behind; URL Inspection, where this run has it, replaces it)', why: 'Pages that are not indexed cannot rank. This is an estimate; confirm in Search Console.', estimate_only: true,""")   # B-4: a site: count alone is never High
+patch('AI Visibility', "      index_estimate: indexEstimate,", "      index_estimate: indexEstimate,\n      brand_forms: brandForms,")
+# B-7: the vendors are the domains the answer NAMES in its text; its cited pages (annotations) are a separate list
+patch('AI Visibility', "    domains_mentioned: domainsInText.slice(0, 12),",
+      "    domains_mentioned: domainsInText.slice(0, 12),\n    domains_named: [...new Set((text.match(/\\b([a-z0-9-]+\\.)+[a-z]{2,}\\b/gi) || []).map(norm))].slice(0, 30),")
+# B-3: every refusal is kept with its reason (the stored list was cut at 100, so most of exec 767's refusals had no reason anywhere)
+patch('Analyze Keywords', "sort((x, y) => (y.volume || 0) - (x.volume || 0)).slice(0, 100),", "sort((x, y) => (y.volume || 0) - (x.volume || 0)).slice(0, 250),")
+
+# ---- GSC Audit Findings: the brand and the index from Google's own data (B-2 / B-4) ----
+patch('GSC Audit Findings', "    const bt90 = GQ.brandTest(plan.domain || base.domain, []);",
+      r"""    // B-2 (2026-10-17): the brand test knows every brand form on file (the configured brand names, the business name), not the domain label only
+    const __bn128 = (() => { const out = []; const bare = (x) => String(x || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, ''); const dom = bare(plan.domain || base.domain);
+      try { const r = $('Load Site Row (Model)').first().json || {}; if (r.domain && bare(r.domain) === dom) out.push(...String(r.brand_names || '').split(/[,;\n]+/), r.business_name); } catch (e) {}
+      try { const m = $('Restore Site Model').first().json.site_model || {}; if (!m.domain || bare(m.domain) === dom) out.push(...(Array.isArray(m.brand_names) ? m.brand_names : String(m.brand_names || '').split(/[,;\n]+/)), m.business_name); } catch (e) {}
+      for (const b of (((base.ai_visibility || {}).brand_forms) || [])) out.push(b.form);
+      return [...new Set(out.map(x => String(x || '').trim()).filter(Boolean))]; })();
+    const bt90 = GQ.brandTest(plan.domain || base.domain, __bn128);""")
+patch('GSC Audit Findings', "      by_intent_top30: byI, intent_examples: exI,",
+      "      by_intent_top30: byI, intent_examples: exI,\n"
+      "      brand_keys: bt90.keys, brand_queries: queryRows.filter(q => q.position > 0 && bt90.is(q.query)).sort((x, y) => (y.impressions - x.impressions) || (x.position - y.position)).slice(0, 10).map(q => ({ query: q.query, position: q.position, impressions: q.impressions, clicks: q.clicks })),")
+patch('GSC Audit Findings', "return [{ json: { ...base, ...(base.probe ? { probe: __probe90 } : {}), extra_findings: [...__ex90, ...findings], extra_works: [...(base.extra_works || []), ...works, ...__works90], search_console, site_structure } }];",
+      r"""// ---- B-2 / B-4 (2026-10-17, re-rating 2026-10-17, exec 767): the brand and the index, judged from Google's own data where this run has it ----
+// The brand finding came from one results page ("tech&") beside Search Console's "techand" #4.5 and "tech & ai" #2.7 in the same report, and
+// flipped between "fixed" and "new" from report to report; the index finding put a High on a site: estimate (8) while the URL Inspection of
+// all 45 key pages, in the same run, said 30 are indexed and explained the other 15. Measured data decides; a results page stays a reading.
+const __bq128 = (__rk90 && Array.isArray(__rk90.brand_queries)) ? __rk90.brand_queries.filter(q => (Number(q.impressions) || 0) > 0) : [];
+const __ic128 = search_console.index_coverage || null;
+const __works128 = []; let __avNote128 = null;
+const __ex128 = __ex90.map(f => {
+  if (!f) return f;
+  const t = String(f.title || '');
+  if (t === 'Site does not rank at the top for its own brand name' && __bq128.length) {
+    const main = __bq128[0]; const pos = Number(main.position) || 0;
+    const list = __bq128.slice(0, 4).map(q => '"' + q.query + '" #' + q.position + ' (' + __n90(q.impressions) + ' impressions, ' + __n90(q.clicks) + ' clicks)').join(', ');
+    if (pos > 0 && pos <= 3) { __works128.push('Google\'s own data (Search Console, ' + __per90 + '): the searches for your own name find you at the top — ' + list); return null; }
+    return { ...f, severity: pos > 10 ? 'High' : 'Medium', one_reading: false, reconciled: 'search_console',
+      evidence: 'Search Console (measured, ' + __per90 + '), the searches for your own name: ' + list + '. The results pages read in this run: ' + String(f.evidence || '').replace(/^Results pages read once in this run: /, '').replace(/ One read of a results page is one reading;.*$/, ''),
+      why: 'The search people use most for your name finds you at #' + main.position + ' on average' + (pos > 10 ? ', below the first page' : '') + ': people who already know you have to scroll past other results to reach you.' };
+  }
+  if (/^Far fewer pages indexed than crawled$|^Many more URLs indexed than the crawl found/.test(t) && __ic128 && Number(__ic128.checked) >= 10) {
+    __avNote128 = 'The site: estimate is not used: URL Inspection read ' + __ic128.checked + ' key pages in this run (' + __ic128.indexed + ' indexed, ' + __ic128.not_indexed + ' not, explained in Crawlability & Indexing).';
+    return null;
+  }
+  return f;
+}).filter(Boolean);
+const __av128 = base.ai_visibility ? { ai_visibility: { ...base.ai_visibility, brand_search_console: __bq128.slice(0, 5), ...(__avNote128 ? { index_estimate_note: __avNote128, index_inspection: { checked: __ic128.checked, indexed: __ic128.indexed, not_indexed: __ic128.not_indexed } } : {}) } } : {};
+return [{ json: { ...base, ...__av128, ...(base.probe ? { probe: __probe90 } : {}), extra_findings: [...__ex128, ...findings], extra_works: [...(base.extra_works || []), ...works, ...__works90, ...__works128], search_console, site_structure } }];""")
+
+# ---- Build Full Report: the AI section prints the inspection beside the estimate (B-4); one source per competitor figure (B-17) ----
+patch('Build Full Report', "  if (av.index_estimate != null) html += `<p><b>Google index estimate (site: search):</b> ${num(av.index_estimate)} URLs vs ${num(a.pages_crawled)} pages crawled. Confirm the exact figure in Search Console.</p>`;",
+      "  if (av.index_estimate != null) html += av.index_inspection   // B-4: the measured inspection, not the rough site: count, where the run has it\n"
+      "    ? `<p><b>Google index:</b> URL Inspection read ${num(av.index_inspection.checked)} key pages in this run: ${num(av.index_inspection.indexed)} indexed, ${num(av.index_inspection.not_indexed)} not (see Crawlability &amp; Indexing). The site: search estimate (${num(av.index_estimate)}) is a rough count and is not used.</p>`\n"
+      "    : `<p><b>Google index estimate (site: search):</b> ${num(av.index_estimate)} URLs vs ${num(a.pages_crawled)} pages analysed. A site: count is a rough estimate; confirm the exact figure in Search Console.</p>`;")
+patch('Build Full Report', "  return { domain: dom, is_you: c.is_you, keywords: k.total ?? c.organic_keywords, top10: k.top10 ?? c.top10,",
+      "  return { domain: dom, is_you: c.is_you, keywords: c.organic_keywords ?? k.total, top10: c.top10 ?? k.top10,   // B-17: DataForSEO's domain totals, the figures the medians use\n   ")
+patch('Build Full Report', """<p class="small">Competitors: ${esc(cb.source || '')}. Country: ${esc(d.country || '')}.</p>""",
+      """<p class="small">Competitors: ${esc(cb.source || '')}. Country: ${esc(d.country || '')}. Keywords and Top 10 are DataForSEO's totals for each domain (the same figures the Key Numbers' medians use).</p>""")
+patch('Build Full Report', "  html += `<h3>Current Rankings per Intent (top 30): You vs Competitors</h3><table class=\"ct\"><tr><th>Intent</th>` +",
+      "  html += `<h3>Current Rankings per Intent (top 30): You vs Competitors</h3><p class=\"small\">Counted on the rankings DataForSEO returned for each domain, highest search volume first (${esc(sk.domains.map(x => x.domain + ' ' + num(x.total)).join(', '))} read; up to 300 per domain), so a domain's row can add up to less than its total in section 3.</p><table class=\"ct\"><tr><th>Intent</th>` +")
+for _rn128 in ('Build Audit Report', 'Build Full Report'):
+    patch(_rn128, "  return `<p class=\"small\">${n} ${label}${n === 1 ? ' is' : 's are'}${k && k < n ? ' (' + k + ' from the AI review)' : ''} counted here and ${n === 1 ? 'is' : 'are'} not part of the score.</p>`;",
+          "  return `<p class=\"small\">${n} ${label}${n === 1 ? '' : 's'} counted in this table ${n === 1 ? 'is' : 'are'} not part of the score${k && k < n ? ' (' + k + ' of them from the AI review)' : ''}.</p>`;   // B-17: a sentence")
+    # B-1: the table lists the differences a crawler sees; the figures not compared (two counting methods) and the counts the first response
+    # holds MORE of are summed up in one line instead of 60 rows that read like problems
+    patch(_rn128, "      if (f.state === 'same' || f.state === 'absent') continue;",
+          "      if (f.state === 'same' || f.state === 'absent') continue;\n"
+          "      if (f.state === 'not_compared' || f.state === 'raw_more') { (f.state === 'raw_more' ? rawMore128 : notCmp128).push(p.path + ' ' + f.key); continue; }")
+    patch(_rn128, "  const rows = [];\n  for (const p of (rdf.pages || [])) {", "  const rows = []; const notCmp128 = [], rawMore128 = [];\n  for (const p of (rdf.pages || [])) {")
+    patch(_rn128, "  h += `<p class=\"small\">${e3(rdf.method)} ${rdf.pages_checked} page(s) read twice",
+          "  if (notCmp128.length || rawMore128.length) h += `<p class=\"small\">${notCmp128.length ? notCmp128.length + ' figure(s) on ' + new Set(notCmp128.map(x => x.split(' ')[0])).size + ' page(s) paired with the JavaScript crawl were not compared: the crawl counts links and words its own way and keeps its own robots rule, so those differences are of method, not of content. ' : ''}${rawMore128.length ? rawMore128.length + ' count(s) are higher in the first response than after JavaScript: nothing is hidden from a crawler there. ' : ''}</p>`;\n"
+          "  h += `<p class=\"small\">${e3(rdf.method)} ${rdf.pages_checked} page(s) read twice")
+
+# ---- the audit's measurements: the URLs the crawl reached are not "pages" (B-4, "Pages found by crawling 47" under "45 pages crawled") ----
+patch('Build Audit Report', "  ['Pages found by crawling', ms.crawled_urls != null ? ms.crawled_urls : a.pages_crawled],",
+      "  ['URLs the crawl reached', ms.crawled_urls != null ? (ms.crawled_urls + (Number(ms.crawled_urls) !== Number(a.pages_crawled) ? ' (' + a.pages_crawled + ' pages analysed; the others are redirects or not HTML)' : '')) : a.pages_crawled],")
+
+assert 'brand_forms' in code('AI Queries') and "type: 'brand'" in code('AI Queries'), 'B-2: AI Queries does not list the brand forms'
+assert 'brandRows' in code('AI Visibility') and "severity: 'Medium', title: 'Site does not rank at the top for its own brand name'" in code('AI Visibility'), 'B-2: the brand finding still rests on one High read'
+assert 'brand_queries' in code('GSC Audit Findings') and '__ex128' in code('GSC Audit Findings'), 'B-2 / B-4: Search Console does not judge the brand and the index'
+assert 'const vend = new Set' in code('AI Visibility'), 'B-7: the directory advice still names the vendors'
+assert 'keywords: c.organic_keywords ?? k.total' in code('Build Full Report'), 'B-17: the benchmark table and the medians read different sources'
+assert 'CRAWL_GAP' in code('Render Diff') and "'raw_more'" in code('Render Diff') and "'not_compared'" in code('Render Diff'), 'B-1: Render Diff still compares two rulers'
+assert 'blockerWhy' in code('Build Site Issues'), 'B-6: the blocker reason is still one sentence for every class'
+assert 'FIT_DOC_SERVICE' in FIT_GATE_SRC and 'FIT_JOBS' in FIT_GATE_SRC and 'FIT_COMMON' in FIT_GATE_SRC and 'FIT_WIDE' in FIT_GATE_SRC, 'B-3: the fit gate lacks the document-service / job / common-word / wide-word rules'
+log('The technical audit and the full report say what was measured (2026-10-17, defect-fix agent F-B, re-rating 2026-10-17 B-1 / B-2 / B-3 / B-4 / B-6 / B-7 / B-17): Render Diff compares like with like (a crawl-paired page\'s link and word counts are DataForSEO\'s own and are read only where no counting difference explains the gap; a first response that holds MORE never scores), the brand is judged from every brand form and Search Console\'s own brand queries (a results page alone is never High), the fit gate refuses document services a public body gives a person, job searches, words too wide to be a category and common words lifted out of a longer service name, a site: estimate is never a finding beside the URL Inspection of the same run, the first item\'s reason names what its class of blocker does, the directory advice names only cited pages that are not the recommended vendors, and the benchmark table and the medians read one source')
+# ---- B-5 + INVARIANTS rule 1 (like for like): a finding that left the list because OUR CHECK changed is not "fixed", and a JavaScript crawl
+#      is never compared with a crawl that did not run JavaScript. Exec 767 told the customer "5 fixed" (no compression, missing canonical,
+#      missing Open Graph, deprecated tags, a render difference) when only the engine had changed (R62 / R63 / R71 of 2026-10-16); seo_audits
+#      did not record whether a crawl ran JavaScript at all. Now: CHECK_CHANGES says when each check last changed what it reports, every
+#      audit stores its checks_version and crawl_js, every finding row its check_version, and the diff puts a finding whose check changed
+#      since the previous audit in `no_longer_reported` (gone) or `newly_checked` (appeared), never in fixed / new. The keys the engine did
+#      not count as fixed travel in seo_audits.not_fixed_json, so the app's own lists follow the same decision.
+patch('Audit Diff', "const gone = [...prevKeys.entries()].filter(([k]) => !curKeys.has(k)).map(([, f]) => ({ title: f.title, category: f.category, severity: f.severity, one_reading: oneReading(f) })).sort((x, y) => SEV[x.severity] - SEV[y.severity]);",
+      r"""// ---- B-5 (2026-10-17, re-rating 2026-10-17, exec 767): when each check last changed WHAT it reports. `since` is this build's checks
+// version (sortable); `at` is when that change reached the instance where it is known (rows written before checks_version existed are
+// judged by their audited_at: a change with no known time is taken as newer than every such row). Newest entries last.
+const CHECK_CHANGES = [
+  { re: /AI crawlers see a different version|only appears after JavaScript|written by JavaScript|changes after JavaScript|not in the first response|appear only after JavaScript/i, since: '2026-10-16.2', at: '2026-10-16T18:30:00Z', what: 'the response-versus-render check decodes HTML entities on both sides (R62)' },
+  { re: /no compression|missing canonical|open graph|twitter card/i, since: '2026-10-16.2', at: '2026-10-16T18:30:00Z', what: 'a redirect response is no longer read as a page (R63)' },
+  { re: /deprecated html/i, since: '2026-10-16.2', at: '2026-10-16T18:30:00Z', what: 'only tags browsers dropped count as deprecated (R71)' },
+  { re: /large share of important pages is not indexed|not indexed by google/i, since: '2026-10-16.1', at: '', what: 'a page Google shows under the other www / non-www address is no longer "not indexed" (R59)' },
+  { re: /AI crawlers see a different version|only appears after JavaScript|written by JavaScript|changes after JavaScript|not in the first response|appear only after JavaScript/i, since: '2026-10-17.1', at: '', what: 'the response-versus-render check no longer compares two counting methods (B-1)' },
+  { re: /own brand name/i, since: '2026-10-17.1', at: '', what: 'the brand is judged from every brand form and Search Console\'s own brand queries (B-2)' },
+  { re: /pages indexed than crawled|more urls indexed than the crawl found/i, since: '2026-10-17.1', at: '', what: 'a site: estimate is not a finding beside the URL Inspection of the same run (B-4)' },
+  { re: /keyword gap|low-difficulty keywords|close to page 1|AI Overviews/i, since: '2026-10-17.1', at: '', what: 'the keyword fit gate refuses document services, job searches and words lifted out of longer service names (B-3)' },
+  { re: /recommends other providers/i, since: '2026-10-17.1', at: '', what: 'the directory advice names only cited pages that are not the vendors themselves (B-7)' }
+];
+const CHECKS_VERSION = CHECK_CHANGES.map(e => e.since).sort().pop();
+const prevChecks128 = prev ? String(prev.checks_version || '') : '';
+const changedSince128 = (e) => prevChecks128 ? e.since > prevChecks128 : !(e.at && String(prev.audited_at || '') >= e.at);
+const checkChange = (f) => { if (!prev) return null; const hits = CHECK_CHANGES.filter(e => e.re.test(String(f.title || '')) && changedSince128(e)); return hits.length ? hits[hits.length - 1] : null; };
+const checkVersionOf = (f) => CHECK_CHANGES.filter(e => e.re.test(String(f.title || ''))).map(e => e.since).sort().pop() || '';
+// ---- rule 1, like for like: a crawl that ran JavaScript is not compared with one that did not (or with one that did not record it) ----
+const JS_DEP = /AI crawlers see a different version|after JavaScript|written by JavaScript|not in the first response|built without a real <a href>/i;
+const curJs = !!base.crawl_js;
+const prevJs = prev ? (prev.crawl_js === true || prev.crawl_js === 'true' ? true : (prev.crawl_js === false || prev.crawl_js === 'false') ? false : null) : null;
+const jsMismatch = !!prev && prevJs !== curJs;
+const jsDep = (f) => jsMismatch && (JS_DEP.test(String((f || {}).title || '')) || (f || {}).source === 'render_diff');
+const js_not_compared = jsMismatch ? [...new Set([...[...prevKeys.values()].filter(jsDep), ...cur.filter(jsDep)].map(f => String(f.title || '')))] : [];
+const gone = [...prevKeys.entries()].filter(([k]) => !curKeys.has(k)).filter(([, f]) => !jsDep(f)).map(([k, f]) => { const cc = checkChange(f); return { key: k, title: f.title, category: f.category, severity: f.severity, one_reading: oneReading(f), check_changed: cc ? cc.since.slice(0, 10) + ': ' + cc.what : '' }; }).sort((x, y) => SEV[x.severity] - SEV[y.severity]);""")
+patch('Audit Diff', "const fixed = gone.filter(f => !f.one_reading).map(({ one_reading, ...f }) => f);",
+      "const fixed = gone.filter(f => !f.one_reading && !f.check_changed).map(({ one_reading, check_changed, key, ...f }) => f);\n"
+      "const no_longer_reported = gone.filter(f => !f.one_reading && f.check_changed).map(({ one_reading, check_changed, key, ...f }) => ({ ...f, why: 'our check changed (' + check_changed + '), so this is not counted as fixed: nothing on the site has to have changed' }));   // B-5")
+patch('Audit Diff', "const no_longer_seen = gone.filter(f => f.one_reading).map(({ one_reading, ...f }) => ({ ...f, why:",
+      "const no_longer_seen = gone.filter(f => f.one_reading).map(({ one_reading, check_changed, key, ...f }) => ({ ...f, why:")
+patch('Audit Diff', "const added = [...curKeys.entries()].filter(([k]) => prev && !prevKeys.has(k)).map(([, f]) => ({ title: f.title, category: f.category, severity: f.severity, ...(oneReading(f) ? { one_reading: true } : {}) })).sort((x, y) => SEV[x.severity] - SEV[y.severity]);",
+      "const added0 = [...curKeys.entries()].filter(([k]) => prev && !prevKeys.has(k)).filter(([, f]) => !jsDep(f)).map(([, f]) => { const cc = checkChange(f); return { title: f.title, category: f.category, severity: f.severity, ...(oneReading(f) ? { one_reading: true } : {}), ...(cc ? { check_changed: cc.since.slice(0, 10) + ': ' + cc.what } : {}) }; }).sort((x, y) => SEV[x.severity] - SEV[y.severity]);\n"
+      "const added = added0.filter(f => !f.check_changed);\n"
+      "const newly_checked = added0.filter(f => f.check_changed).map(f => ({ ...f, why: 'found by a check that changed since the previous audit (' + f.check_changed + '): it may have been there before' }));   // B-5\n"
+      "// the keys the engine does NOT count as fixed, for the app's own lists (seo_audits.not_fixed_json)\n"
+      "const not_fixed = gone.filter(f => f.one_reading || f.check_changed).map(f => ({ key: f.key, why: f.check_changed ? 'check changed ' + f.check_changed : 'one outside reading' }))\n"
+      "  .concat(jsMismatch ? [...prevKeys.entries()].filter(([k, f]) => !curKeys.has(k) && jsDep(f)).map(([k]) => ({ key: k, why: 'not compared: the crawl ' + (prevJs == null ? 'of the previous audit did not record whether it ran JavaScript' : (curJs ? 'ran JavaScript this time and not before' : 'did not run JavaScript this time')) })) : []);")
+patch('Audit Diff', "const open = [...curKeys.entries()].filter(([k]) => prevKeys.has(k)).map(([k, f]) => {",
+      "const open = [...curKeys.entries()].filter(([k]) => prevKeys.has(k)).filter(([, f]) => !jsDep(f)).map(([k, f]) => {")
+patch('Audit Diff', "  no_longer_seen,\n  summary: fixed.length + ' fixed · ' + added.length + ' new · ' + open.length + ' still open' + (no_longer_seen.length ? ' · ' + no_longer_seen.length + ' no longer seen' : '')",
+      "  no_longer_seen, no_longer_reported, newly_checked, js_not_compared, checks_version: CHECKS_VERSION, previous_checks_version: prevChecks128 || null, crawl_js: curJs, previous_crawl_js: prevJs,\n"
+      "  summary: fixed.length + ' fixed · ' + added.length + ' new · ' + open.length + ' still open' + (no_longer_seen.length ? ' · ' + no_longer_seen.length + ' no longer seen' : '')\n"
+      "    + (no_longer_reported.length ? ' · ' + no_longer_reported.length + ' no longer reported (our check changed)' : '') + (newly_checked.length ? ' · ' + newly_checked.length + ' found by a changed check' : '')")
+patch('Audit Diff', "    + (no_longer_seen.length ? '. ' + no_longer_seen.length + ' finding(s) rested on a single outside reading (a results page, an AI answer or a content review) that did not repeat, so they are not counted as fixed' : '')",
+      "    + (no_longer_seen.length ? '. ' + no_longer_seen.length + ' finding(s) rested on a single outside reading (a results page, an AI answer or a content review) that did not repeat, so they are not counted as fixed' : '')\n"
+      "    + (no_longer_reported.length ? '. ' + no_longer_reported.length + ' finding(s) are no longer reported because our check changed since the previous audit, not because the site did: they are not counted as fixed' : '')\n"
+      "    + (js_not_compared.length ? '. ' + js_not_compared.length + ' finding(s) that depend on JavaScript rendering are not compared: ' + (prevJs == null ? 'the previous audit did not record whether its crawl ran JavaScript' : 'this crawl ' + (curJs ? 'ran' : 'did not run') + ' JavaScript and the previous one ' + (prevJs ? 'did' : 'did not')) : '')")
+patch('Audit Diff', "return [{ json: { ...d, audit_id, audited_at, site_id, site_audit: { ...a, audit_id, audited_at, audit_diff, internal_links: internal_links.slice(0, 20) } } }];",
+      "return [{ json: { ...d, audit_id, audited_at, site_id, site_audit: { ...a, audit_id, audited_at, audit_diff, internal_links: internal_links.slice(0, 20),\n"
+      "  // B-5 + rule 1: what the stored rows need to be compared like for like next time\n"
+      "  findings: (a.findings || []).map(f => ({ ...f, check_version: checkVersionOf(f) })), checks_version: CHECKS_VERSION, crawl_js: curJs, not_fixed: prev ? not_fixed : [] } } }];")
+patch('Audit Row', "scheduled: !!d.scheduled, request_id: d.request_id || '' } }];",
+      "scheduled: !!d.scheduled, request_id: d.request_id || '',\n"
+      "  crawl_js: !!a.crawl_js, checks_version: String(a.checks_version || ''), not_fixed_json: JSON.stringify((a.not_fixed || []).slice(0, 60)).slice(0, 4000) } }];   // B-5 + rule 1")
+patch('Finding Rows', ".map(u => u.slice(0, 300))) }));", ".map(u => u.slice(0, 300))), check_version: String(f.check_version || '') }));")   # B-5: the column order of ladder_common.py
+assert ('crawl_js', 'boolean') in AUDITS_COLS and ('checks_version', 'string') in AUDITS_COLS and ('not_fixed_json', 'string') in AUDITS_COLS and ('check_version', 'string') in AUDIT_FINDINGS_COLS, \
+    'B-5: seo_audits needs crawl_js / checks_version / not_fixed_json and seo_audit_findings check_version (ladder_common.py) — run sync_tables.py after deploying'
+assert 'no_longer_reported' in code('Audit Diff') and 'jsMismatch' in code('Audit Diff') and 'not_fixed_json' in code('Audit Row'), 'B-5: the diff still calls a changed check "fixed"'
+
+# ---- the app's summary counts what the stored list holds (B-17) ----
+patch('Build Audit Response', "return { audit_id: r.audit_id, audit_diff: a.audit_diff || null,",
+      "return { audit_id: r.audit_id, issue_counts_stored: ((l) => ({ Critical: l.filter(f => f.severity === 'Critical').length, High: l.filter(f => f.severity === 'High').length, Medium: l.filter(f => f.severity === 'Medium').length, Low: l.filter(f => f.severity === 'Low').length, unscored: (a.findings || []).filter(f => f && f.scoring === false).length }))((a.findings || []).filter(f => f && f.scoring !== false && f.severity !== 'Info')), audit_diff: a.audit_diff || null,")
+log('A diff that knows what changed: the engine or the site (2026-10-17, F-B, re-rating 2026-10-17 B-5 + INVARIANTS rule 1): every audit stores its checks_version and whether its crawl ran JavaScript, every finding row the version of its check; a finding that left the list because our check changed since the previous audit is "no longer reported (our check changed)" and one that appeared through a changed check is "found by a changed check", never fixed / new; findings that depend on JavaScript rendering are not compared across a JavaScript and a plain crawl (or a crawl that did not record it); seo_audits.not_fixed_json carries the keys the engine did not count as fixed so the app\'s lists follow; and the callback carries the stored counts so the app\'s summary matches the list')
+
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:
 #     "two fixes have never come back and both are enforced by the build".
