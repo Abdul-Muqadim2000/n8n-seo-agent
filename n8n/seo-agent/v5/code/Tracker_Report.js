@@ -177,13 +177,13 @@ for (const [id, items] of byLadder) {
   const notReadyOf = (kw) => (writtenOf(kw) ? null : notReadyLog.filter(l => normK(l.keyword) === normK(kw) && (!l.domain || normD(l.domain) === normD(head.domain))).sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0]) || null;   // R111
   const fixText = (kw) => { const l = notReadyOf(kw); const why = String((l && l.qa_reasons) || '').split(/;\s+/).filter(Boolean).slice(0, 2).join('; ');
     return 'written, but the draft did not pass the quality check' + (why ? ' (' + why.slice(0, 220) + ')' : '') + ' — fix it and run it again; do not publish it as it is'; };
-  const mainLive = !!topRow && liveOf(topRow), mainWritten = !!topRow && (mainLive || (topRow.status === 'writing' && writtenOf(topRow.keyword)));
+  const mainLive = !!topRow && liveOf(topRow), mainWritten = !!topRow && (mainLive || (['writing', 'written', 'not_ready'].includes(topRow.status) && writtenOf(topRow.keyword)));
   const mainFirst = !!topRow && (Number(topRow.page_no) === 1 || !rungs.length);
   const allIn = rungs.length > 0 && rungs.every(r => r.reached);
   const pending = rungs.find(r => !r.reached) || null;
   const pageOf = (t) => ({ keyword: t.keyword, page_type: t.page_type, target_url: t.target_url, status: t.status });
   let next;
-  const mainNotReady = !!topRow && !mainLive && !mainWritten && topRow.status === 'writing' && !!notReadyOf(topRow.keyword);   // R111
+  const mainNotReady = !!topRow && !mainLive && !mainWritten && ['writing', 'written', 'not_ready'].includes(topRow.status) && !!notReadyOf(topRow.keyword);   // R111
   if (paused) next = { action: 'paused', rung: 4, main_page: mainLive ? 'live' : 'planned', reason: paused.reason,
     text: 'This ladder is paused: its main keyword "' + paused.keyword + '" is not a search this website should target (' + (paused.detail || paused.reason) + ')'
       + (paused.seen === 'this check' ? ', as this week\'s check of its results page showed' : '') + '. None of its pages is written or asked for until you re-plan the ladder towards another main keyword, or tell us the keyword is deliberate; the pages that are already live keep being checked.', pages: [] };
@@ -198,7 +198,7 @@ for (const [id, items] of byLadder) {
     const target = rowsK.filter(x => x.rung === pending.rung && !asideKw.has(x.keyword));   // R16: never ask for a page we should not write
     next = { action: 'write_rung_' + pending.rung, rung: pending.rung, main_page: mainLive ? 'live' : mainWritten ? 'written' : 'planned',
       text: 'Work on rung ' + pending.rung + ': ' + (pending.top10 ? pending.top10 + ' of ' + pending.pages + ' pages are in the top 10. ' : 'none of its pages is in the top 10 yet. ') + 'Write or improve: ' + target.map(t => { const c = coveredBy(t);
-        return '"' + t.keyword + '"' + (c ? ' (' + c.url + ' already answers this search — refresh that page, do not publish a second one)' : (t.status === 'writing' && writtenOf(t.keyword)) ? ' (already written — publish it)' : (t.status === 'writing' && notReadyOf(t.keyword)) ? ' (' + fixText(t.keyword) + ')' : t.status === 'writing' ? ' (a page run was started for it but no page was written — it is written again)' : ''); }).join(', ') + '.',
+        return '"' + t.keyword + '"' + (c ? ' (' + c.url + ' already answers this search — refresh that page, do not publish a second one)' : (['writing', 'written', 'not_ready'].includes(t.status) && writtenOf(t.keyword)) ? ' (already written — publish it)' : (t.status === 'writing' && notReadyOf(t.keyword)) ? ' (' + fixText(t.keyword) + ')' : t.status === 'writing' ? ' (a page run was started for it but no page was written — it is written again)' : ''); }).join(', ') + '.',
       pages: target.map(t => { const c = coveredBy(t); return c ? { ...pageOf(t), status: 'improve', target_url: c.url, covered_by: c.url } : pageOf(t); }) };
   } else { const cTop = topRow ? coveredBy(topRow) : null;   // D11: the page that answers the main keyword may be one the site already had
     next = { action: 'improve_top', rung: 4, main_page: 'live',
@@ -235,7 +235,7 @@ for (const [id, items] of byLadder) {
   const links_to_add = lastCheck ? rowsK.map(r => { const l = logOf(r.keyword); const at = l ? String(l.published_at || l.started_at || '') : ''; return (at && at > lastCheck && l.published_url) ? { keyword: r.keyword, url: l.published_url, anchor: anchorText({ title: l.title, keyword: r.keyword, url: l.published_url }), rung: r.rung } : null; }).filter(Boolean) : [];
   const remindHtml = links_to_add.length ? '<p><b>Now live — add the links:</b> ' + links_to_add.map(x => '"' + esc(x.anchor) + '" (' + esc(x.url) + ')').join(', ') + '. ' +
     'Each of these pages was published since the last check, so the other ladder pages do not link to it yet: add one link from ' + (links_to_add.some(x => x.rung !== 4) ? 'the main page "' + esc(head.head_keyword) + '"' : 'the pages that cover the same topic') + ' using the anchor shown.</p>' : '';
-  const firstPending = (next.pages || []).find(p => !(p.status === 'writing' && writtenOf(p.keyword))) || (next.pages || [])[0];   // R1: a `writing` row with no written page is still to be written
+  const firstPending = (next.pages || []).find(p => !(['writing', 'written', 'not_ready'].includes(p.status) && writtenOf(p.keyword))) || (next.pages || [])[0];   // R1: a `writing` row with no written page is still to be written
   const apiBody = (firstPending && next.action !== 'paused') ? { mode: 'keyword', keyword: firstPending.keyword, page_type: firstPending.page_type || 'Service Page', country: head.country || '', domain: head.domain, existing_page_url: (next.action === 'improve_top' || firstPending.covered_by) ? (firstPending.target_url || '') : '', email: head.email, ladder_id: id, ladder_rung: next.rung, ladder_head: head.head_keyword, force_content: true } : null;   // D11: a covered keyword is written as a refresh of the page that exists
   const formLink = FORM_URL + '?' + encodeURIComponent('What do you want?') + '=' + encodeURIComponent('I know my keyword');
   // B6-2: a reading from a month ago is not "before" in the sense a weekly table implies — a won ladder and an unpublished rung are

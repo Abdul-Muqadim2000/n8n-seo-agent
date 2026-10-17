@@ -568,6 +568,14 @@ const GQ = (() => {
   const MIN_NAME_RUN = 5;
   const FILLER = new Set(['and', 'the', 'of', 'for', 'to', 'in', 'on', 'at', 'a', 'an', 'or', 'by', 'with', 'vs', 'near', 'me', 'from']);
   const qTokens = (q) => String(q || '').toLowerCase().replace(/&/g, ' and ').split(/[^a-z0-9]+/).filter(Boolean);
+  // A-26: optimal string alignment distance (a swap of two neighbouring letters is one edit: "techadn" = "techand" misspelt once)
+  const FUZZY_MIN = 6;
+  const editDistance = (a, b) => { const m = a.length, n = b.length; const d = Array.from({ length: m + 1 }, (_, i) => [i, ...new Array(n).fill(0)]);
+    for (let j = 0; j <= n; j++) d[0][j] = j;
+    for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) { const c = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + c);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1); }
+    return d[m][n]; };
   const brandTest = (domain, names) => {
     const keys = brandKeys(domain, names);
     const tld = String(domain || '').toLowerCase().split('.').slice(1).filter(Boolean);
@@ -588,6 +596,17 @@ const GQ = (() => {
             if (acc === k && (!filler || (i === 0 && onlyDomain(t.slice(j))))) return true; } } }
       for (const sp of spoken) { const rest = t.slice(0, sp.length).join(' ') === sp.join(' ') ? t.slice(sp.length) : null;
         if (rest && rest.every(x => tld.includes(x) || x === 'com' || x === 'www')) return true; }
+      // A-26 (2026-10-17, exec 764): "techandf cc" — the brand typed with one slip — was taken as a customer search, used as a discovery
+      // seed and reported as a page mismatch ("aim that page at it"). A token (or two adjacent tokens with no filler word between them)
+      // within one edit of a brand key of 6+ letters (two edits from 10 letters), starting with the same two letters, is the brand misspelt.
+      for (const k of longKeys) {
+        if (k.length < FUZZY_MIN) continue;
+        const lim = k.length >= 10 ? 2 : 1;
+        for (let i = 0; i < t.length; i++) {
+          const cands = [t[i]]; if (i + 1 < t.length && !FILLER.has(t[i + 1]) && !FILLER.has(t[i])) cands.push(t[i] + t[i + 1]);
+          for (const w of cands) if (w.length >= 5 && w !== k && w.slice(0, 2) === k.slice(0, 2) && Math.abs(w.length - k.length) <= lim && editDistance(w, k) <= lim) return true;
+        }
+      }
       return false; };
     const shown = [...longKeys, ...spoken.map(t => t.join(' '))];
     return { keys: shown, is: shown.length ? is : () => false };
@@ -600,7 +619,7 @@ const GQ = (() => {
     return { clicks: cl, impressions: im, clicks_pct: tc ? Math.round(cl / tc * 1000) / 10 : 0, impressions_pct: ti ? Math.round(im / ti * 1000) / 10 : 0,
       named_clicks: sum.clicks, named_impressions: sum.impressions, note: 'Search Console withholds the queries of rare searches; these clicks and impressions are real but belong to queries it does not name.' };
   };
-  return { isScraper, brandKeys, brandTest, anonymised };
+  return { isScraper, brandKeys, brandTest, anonymised, editDistance };
 })();
 // Turns the Search Console answers (sitemaps, search performance, URL inspections) and the sitemap-vs-crawl comparison into audit findings,
 // a "search_console" block and a "site_structure" block for the report; then hands the audit item on to Build Site Issues.
@@ -716,7 +735,13 @@ if (!connected) {
     search_console.page_traffic = [...m90.values()].slice(0, 1000); search_console.page_traffic_complete = lim90 > 0 && pagesRows.length < lim90; }
   // R61 (2026-10-16): what Google's own data says about rankings, so no line of the report says "ranks for no keyword" beside it
   { const qlim90 = Number(((((byKind.queries || [])[0] || {}).q || {}).body || {}).rowLimit) || 0;
-    const bt90 = GQ.brandTest(plan.domain || base.domain, []);
+    // B-2 (2026-10-17): the brand test knows every brand form on file (the configured brand names, the business name), not the domain label only
+    const __bn128 = (() => { const out = []; const bare = (x) => String(x || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, ''); const dom = bare(plan.domain || base.domain);
+      try { const r = $('Load Site Row (Model)').first().json || {}; if (r.domain && bare(r.domain) === dom) out.push(...String(r.brand_names || '').split(/[,;\n]+/), r.business_name); } catch (e) {}
+      try { const m = $('Restore Site Model').first().json.site_model || {}; if (!m.domain || bare(m.domain) === dom) out.push(...(Array.isArray(m.brand_names) ? m.brand_names : String(m.brand_names || '').split(/[,;\n]+/)), m.business_name); } catch (e) {}
+      for (const b of (((base.ai_visibility || {}).brand_forms) || [])) out.push(b.form);
+      return [...new Set(out.map(x => String(x || '').trim()).filter(Boolean))]; })();
+    const bt90 = GQ.brandTest(plan.domain || base.domain, __bn128);
     const t10 = queryRows.filter(q => q.position > 0 && q.position <= 10), t30 = queryRows.filter(q => q.position > 0 && q.position <= 30);
     const INF90 = /^(how|what|why|when|where|who|which|is|are|can|does|do|should)\b|\b(how to|guide|tips|meaning|definition|examples?|explained|checklist|benefits|is changing|what is|vs)\b|\?/;
     const COM90 = /\b(best|top|services?|company|companies|partners?|consultants?|consulting|agency|agencies|providers?|vendors?|firms?|implementation|upgrade|migration|support|reviews?|compare|comparison|alternatives?)\b/;
@@ -728,6 +753,7 @@ if (!connected) {
     search_console.rankings = { source: 'Search Console', period: plan.range || null, queries_read: queryRows.length, capped: qlim90 > 0 && allQueryRows.length >= qlim90,
       top10: t10.length, top10_brand: t10.filter(q => bt90.is(q.query)).length, top10_impressions: sum(t10, 'impressions'), top10_clicks: sum(t10, 'clicks'), top30: t30.length,
       by_intent_top30: byI, intent_examples: exI,
+      brand_keys: bt90.keys, brand_queries: queryRows.filter(q => q.position > 0 && bt90.is(q.query)).sort((x, y) => (y.impressions - x.impressions) || (x.position - y.position)).slice(0, 10).map(q => ({ query: q.query, position: q.position, impressions: q.impressions, clicks: q.clicks })),
       examples: t10.slice().sort((x, y) => y.impressions - x.impressions).slice(0, 5).map(q => ({ query: q.query, position: q.position, impressions: q.impressions, clicks: q.clicks })),
       note: 'average position per query over the period; Search Console withholds the queries of rare searches, so this is a floor' }; } search_console.top_queries = queryRows.slice(0, 10); search_console.pages_with_impressions = pagesRows.length; search_console.queries_with_impressions = queryRows.length;
   gscPageKeys = [...new Set(pagesRows.map(p => key(p.page)).filter(Boolean))];
@@ -908,4 +934,29 @@ const __works90 = (__rk90 && __rk90.top10) ? ['Google\'s own data (Search Consol
 // R59: "One canonical host … the canonical tags agree" is what the server says; with Google showing the other host it is not what works
 const __probe90 = (base.probe && host_split90 && host_split90.found) ? { ...base.probe, what_works: (base.probe.what_works || []).filter(w => !/^One canonical host|^www redirects to the main domain/.test(String(w))),
   measurements: { ...(base.probe.measurements || {}), hosts: { ...(((base.probe.measurements || {}).hosts) || {}), google_split: true, google_other_host: host_split90.other_host } } } : base.probe;
-return [{ json: { ...base, ...(base.probe ? { probe: __probe90 } : {}), extra_findings: [...__ex90, ...findings], extra_works: [...(base.extra_works || []), ...works, ...__works90], search_console, site_structure } }];
+// ---- B-2 / B-4 (2026-10-17, re-rating 2026-10-17, exec 767): the brand and the index, judged from Google's own data where this run has it ----
+// The brand finding came from one results page ("tech&") beside Search Console's "techand" #4.5 and "tech & ai" #2.7 in the same report, and
+// flipped between "fixed" and "new" from report to report; the index finding put a High on a site: estimate (8) while the URL Inspection of
+// all 45 key pages, in the same run, said 30 are indexed and explained the other 15. Measured data decides; a results page stays a reading.
+const __bq128 = (__rk90 && Array.isArray(__rk90.brand_queries)) ? __rk90.brand_queries.filter(q => (Number(q.impressions) || 0) > 0) : [];
+const __ic128 = search_console.index_coverage || null;
+const __works128 = []; let __avNote128 = null;
+const __ex128 = __ex90.map(f => {
+  if (!f) return f;
+  const t = String(f.title || '');
+  if (t === 'Site does not rank at the top for its own brand name' && __bq128.length) {
+    const main = __bq128[0]; const pos = Number(main.position) || 0;
+    const list = __bq128.slice(0, 4).map(q => '"' + q.query + '" #' + q.position + ' (' + __n90(q.impressions) + ' impressions, ' + __n90(q.clicks) + ' clicks)').join(', ');
+    if (pos > 0 && pos <= 3) { __works128.push('Google\'s own data (Search Console, ' + __per90 + '): the searches for your own name find you at the top — ' + list); return null; }
+    return { ...f, severity: pos > 10 ? 'High' : 'Medium', one_reading: false, reconciled: 'search_console',
+      evidence: 'Search Console (measured, ' + __per90 + '), the searches for your own name: ' + list + '. The results pages read in this run: ' + String(f.evidence || '').replace(/^Results pages read once in this run: /, '').replace(/ One read of a results page is one reading;.*$/, ''),
+      why: 'The search people use most for your name finds you at #' + main.position + ' on average' + (pos > 10 ? ', below the first page' : '') + ': people who already know you have to scroll past other results to reach you.' };
+  }
+  if (/^Far fewer pages indexed than crawled$|^Many more URLs indexed than the crawl found/.test(t) && __ic128 && Number(__ic128.checked) >= 10) {
+    __avNote128 = 'The site: estimate is not used: URL Inspection read ' + __ic128.checked + ' key pages in this run (' + __ic128.indexed + ' indexed, ' + __ic128.not_indexed + ' not, explained in Crawlability & Indexing).';
+    return null;
+  }
+  return f;
+}).filter(Boolean);
+const __av128 = base.ai_visibility ? { ai_visibility: { ...base.ai_visibility, brand_search_console: __bq128.slice(0, 5), ...(__avNote128 ? { index_estimate_note: __avNote128, index_inspection: { checked: __ic128.checked, indexed: __ic128.indexed, not_indexed: __ic128.not_indexed } } : {}) } } : {};
+return [{ json: { ...base, ...__av128, ...(base.probe ? { probe: __probe90 } : {}), extra_findings: [...__ex128, ...findings], extra_works: [...(base.extra_works || []), ...works, ...__works90, ...__works128], search_console, site_structure } }];

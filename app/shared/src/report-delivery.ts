@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { AUTOMATIONS, MODES, SCHEDULED_STAGES, STAGE_LABELS } from './constants';
+import { findOpenBrackets } from './placeholders';
 
 /**
  * B-R1 — getting the report out of the app (benchmark programme 2026-10-15, area 12 §4 G-1 and §7).
@@ -250,6 +251,16 @@ export function deliveryDecision(c: DeliveryCandidate): DeliveryDecision {
   if (p.qa_not_ready === true || p.qa_publishable === false) {
     const why = (Array.isArray(p.qa_reasons) ? p.qa_reasons.map(text).filter(Boolean) : []).slice(0, 2).join('; ');
     return hold('not_ready', `The page did not pass the quality check${why ? ` (${why})` : ''}, so it is waiting in the app rather than going out as finished work.`);
+  }
+  // A-13 (2026-10-17) — a written page that still holds a bracket for a person to fill in or confirm is a draft too, whatever the
+  // gate said: the same detector the engine counts with (placeholders.ts) reads the page that would be sent.
+  const body = text(p.markdown) || text(p.page_markdown);
+  if (body) {
+    const open = findOpenBrackets(body);
+    if (open.length) {
+      const n = open.reduce((s, b) => s + b.count, 0);
+      return hold('not_ready', `The page still has ${n} bracket${n === 1 ? '' : 's'} to fill in or confirm (${open.slice(0, 3).map((b) => b.token.slice(0, 80)).join(', ')}), so it is waiting in the app rather than going out as finished work.`);
+    }
   }
   // R22 / R23 — a ladder the engine would not plan
   if (p.planned === false) return hold('refused', `No plan was made: ${text(isObj(p.refusal).reason) || 'the engine refused this keyword'}.`);

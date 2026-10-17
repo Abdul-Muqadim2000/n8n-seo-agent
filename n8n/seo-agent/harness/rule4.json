@@ -25,8 +25,8 @@
    "subject": 2
   },
   "verdict": {
-   "pass": 2,
-   "subject": 2
+   "pass": 3,
+   "subject": 3
   }
  },
  "rows": {
@@ -61,7 +61,6 @@
     "readers": [
      "SEO Agent \u2014 AI Growth / Growth Plan",
      "SEO Agent \u2014 Content Cadence / AI Target Settle",
-     "SEO Agent \u2014 Content Cadence / Cadence Plan",
      "SEO Agent \u2014 Link Builder / LB Plan"
     ],
     "table": "seo_ai_targets",
@@ -89,11 +88,10 @@
     "forward": "writing",
     "how": "add the table to state_lint.REVERSALS with the state it comes back to and the field that carries the reason, then build the node that writes it back -- the declaration alone does not pass, check B still has to find the writer",
     "is_declared": true,
-    "node": "SEO Agent \u2014 Content Cadence / Ladder Marks",
+    "node": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Ladder Row Written",
     "ok": true,
     "readers": [
      "SEO Agent \u2014 AI Growth / Growth Plan",
-     "SEO Agent \u2014 Content Cadence / Cadence Plan",
      "SEO Agent \u2014 Link Builder / LB Plan",
      "SEO Agent \u2014 Rank Tracker / Tracker Report",
      "SEO Agent \u2014 Site Tracker / Publish Candidates"
@@ -101,6 +99,7 @@
     "table": "seo_ladders",
     "why": "a state that means \"being done\" with no declared way back is how R1 and B9-6 both happened: the row outlives the run that made the promise, and a reader that tests for the state believes it",
     "writers": [
+     "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Ladder Row Written",
      "SEO Agent \u2014 Content Cadence / Ladder Marks",
      "SEO Agent \u2014 Site Admin / Unpublish Ladder"
     ]
@@ -498,6 +497,24 @@
     "how": "set every one of those fields when the gate refuses (v5/code/Originality_Check.js does it), never only the flag",
     "missing": [],
     "node": "Originality Check",
+    "ok": true,
+    "touched": [
+     "publishable",
+     "not_ready",
+     "quality_label",
+     "not_ready_reasons",
+     "quality",
+     "passed"
+    ],
+    "why": "B3-3: the originality gate ran AFTER *Content QA* had finalised the delivery gate and set only `qa.passed`, so a draft 100% identical to a competitor page came out `publishable: true`, `not_ready: false`, \"passed the quality check\" -- which is what the -DRAFT file name, the package banner, meta.json, the callback and the app all read. A gate that fails is a refusal, not a label.",
+    "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+   },
+   {
+    "fail": "",
+    "gate": "content quality",
+    "how": "set every one of those fields when the gate refuses (v5/code/Originality_Check.js does it), never only the flag",
+    "missing": [],
+    "node": "Outbound Link Check",
     "ok": true,
     "touched": [
      "publishable",

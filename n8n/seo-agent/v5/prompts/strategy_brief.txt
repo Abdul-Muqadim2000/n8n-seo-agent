@@ -4,6 +4,7 @@ PAGE DETAILS
 Target Keyword: {{ $json.keyword }} · Country: {{ $json.country }} · Language: {{ $json.language_name || 'English' }} ({{ $json.spelling }} spelling) · Currency: {{ $json.currency }}
 Page Type: {{ $json.page_type }}{{ $json.page_notes ? ' (what the verdict asked for: ' + $json.page_notes + ')' : '' }} · Business goal: {{ $json.goal || 'leads' }} · Tone requested: {{ $json.tone || 'professional and direct' }}
 Verdict on this keyword: {{ $json.verdict }} ({{ $json.verdict_score }}/100). {{ ($json.verdict_reasons || []).join(' ') }} {{ $json.recommended_page && $json.recommended_page !== $json.page_type ? 'Recommended page type instead: ' + $json.recommended_page + '.' : '' }}
+{{ ($json.verdict_exclusions || []).length ? 'LEAVE OUT (the verdict on this keyword: these do not match what its buyers want; no section, heading or question about them): ' + $json.verdict_exclusions.map(e => e.topic).join('; ') + '.' : '' }}
 Business: {{ $json.business || 'Not provided — write for a generic business of this type and use placeholders like [Your Business Name] and [Your City]' }}
 Customers: {{ $json.audience || 'Not provided' }}
 Website: {{ $json.domain || 'Not provided' }}

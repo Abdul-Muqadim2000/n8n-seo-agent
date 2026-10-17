@@ -28,7 +28,9 @@ const pageBy = new Map(SM.pages(model).map(p => [pageKey(p.url), p]));
 const pageTitleShare = (url, q) => { const p = pageBy.get(pageKey(url)); const t = p ? SM.titleShare(p, q) : null; return t ? { ...t, title: p.title || '', h1: p.h1 || '' } : null; };
 const gsc = KWI.gscSeeds(rows, { domain: base.domain || '', isScraper: GQ.isScraper, isBrand: BR.is, pages_known,
   matchPage: pages_known ? ((kw, rowPage) => SM.matchPage(model, kw, rowPage)) : null, use_row_page: !pages_known,
-  canon: (u) => SM.canonUrl(model, u), pageTitleShare });
+  canon: (u) => SM.canonUrl(model, u), pageTitleShare,
+  // A-22 (2026-10-17): Search Console's own page answers the search; these say whether it is a listing page and how well a page's own words target it
+  isListing: SM.isListing, pageScore: (url, q) => { const p = pageBy.get(pageKey(url)); return p ? SM.pageScore(p, q) : null; } });
 const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
 const seeds0 = (base.seeds || []).map(norm).filter(Boolean);
 const extra = gsc.seeds.filter(k => !seeds0.includes(k));
