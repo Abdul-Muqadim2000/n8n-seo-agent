@@ -179,8 +179,8 @@ function Plans({ billing, setBilling }: { billing: Billing; setBilling: (b: Bill
       <PageHero
         align="center"
         eyebrow="Pricing"
-        title="Plans that grow with your portfolio."
-        lead="Start free. Every plan writes the pages as well as finding the keywords — and every run shows its cost before it starts."
+        title="Start small. Grow when it works."
+        lead="Setting up is free. Every plan writes the pages, not just a list of keywords — and every run shows its cost before it starts."
         containerClassName="pb-12 sm:pb-14"
       >
         <div className="mt-9 flex justify-center">

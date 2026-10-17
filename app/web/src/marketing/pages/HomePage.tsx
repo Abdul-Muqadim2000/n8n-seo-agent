@@ -1,5 +1,5 @@
 import { Link } from 'react-router';
-import { ArrowRight, BadgeCheck, Check, Lock, MoveRight, ShieldCheck, Users, Wallet } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Bot, Check, Globe, Link2, Lock, MessageSquare, Minus, Search, ShieldCheck, Sparkles, Users, Wallet, type LucideIcon } from 'lucide-react';
 import { ButtonLink } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
@@ -27,22 +27,46 @@ import { integrations } from '../content/site';
 import { solutions } from '../content/solutions';
 import { useSeo } from '../useSeo';
 
-// next to the main CTA: what removes the risk of trying it (facts from pricing.ts and the product), then the reach
-const HERO_FACTS = ['Free to set up', 'Cost shown before every run', 'Nothing published without your team', 'Search Console, GA4 and 6 AI engines'];
+// next to the main CTA: what removes the risk of trying it (facts from pricing.ts and the product)
+const HERO_FACTS = ['Free to set up', 'First site check on day one', 'Cost shown before every run', 'Nothing goes live without your OK'];
 
-const PROBLEMS: { today: string; outcome: string }[] = [
+// "Why Ascentra": the same SEO jobs done by hand and with Ascentra, in plain words (real capabilities only)
+const COMPARE: { job: string; byHand: string; withUs: string }[] = [
   {
-    today: 'Keyword lists pile up with no clear call on which ones are worth the effort.',
-    outcome: 'Research starts from the searches you already appear for, and every keyword gets a verdict, its reach for your site and the plan it takes to rank.',
+    job: 'Knowing what to write',
+    byHand: 'Guessing which words people type into Google.',
+    withUs: 'The searches your buyers really make, and a clear yes or no on which ones you can win.',
   },
   {
-    today: 'Posts are written one at a time and rarely build towards the terms that matter.',
-    outcome: 'Keyword ladders climb to your head terms, and a weekly cadence keeps the right pages coming.',
+    job: 'Writing the pages',
+    byHand: 'A blog post now and then, when someone finds the time.',
+    withUs: 'Pages written every week, checked for facts and quality, ready for you to publish.',
   },
   {
-    today: 'Lost links, indexing problems and AI answers change without anyone noticing.',
-    outcome: 'Monitors check links, audits and AI answers on a schedule and alert only on real changes.',
+    job: 'Keeping the site healthy',
+    byHand: 'Problems stay hidden until the traffic drops.',
+    withUs: 'The whole site checked every month, with the fixes spelled out and ready to hand over.',
   },
+  {
+    job: 'Showing up in AI answers',
+    byHand: 'No idea whether ChatGPT recommends you or a competitor.',
+    withUs: 'The questions your buyers ask AI, checked every day — and pages written to win them.',
+  },
+  {
+    job: 'Knowing it works',
+    byHand: 'Reports nobody reads, numbers nobody trusts.',
+    withUs: 'One Monday report: what moved, why, and what to do next.',
+  },
+];
+
+// "Every place people look for you": what Ascentra does on each surface (AI engines and links are on the Growth plan)
+const SURFACES: { icon: LucideIcon; name: string; what: string }[] = [
+  { icon: Search, name: 'Google search', what: 'Pages written for what your buyers search, with positions checked every week' },
+  { icon: Sparkles, name: 'Google AI Overviews and AI Mode', what: 'Checked for your name and your links' },
+  { icon: MessageSquare, name: 'ChatGPT', what: 'Asked your buyers’ questions every day' },
+  { icon: Bot, name: 'Gemini, Perplexity and Claude', what: 'Asked the same questions, next to your competitors' },
+  { icon: Globe, name: 'Bing', what: 'New pages sent to Bing the moment they go live' },
+  { icon: Link2, name: 'Other websites', what: 'Every link to you checked, and the sites that should link to you found' },
 ];
 
 const PLATFORM_FACTS: Fact[] = [
@@ -52,11 +76,28 @@ const PLATFORM_FACTS: Fact[] = [
   { value: 1000, label: 'pages per crawl, JavaScript included' },
 ];
 
-const START_STEPS = [
-  { title: 'Connect your website', body: 'Add the site, prove you own it and connect Search Console and GA4.' },
-  { title: 'Describe the business', body: 'Market, competitors, authors and proof, so every page sounds like you.' },
-  { title: 'Choose the plan', body: 'Pick keywords or let Ascentra recommend them, then set Auto or Manual and the weekly pace.' },
-  { title: 'Review and approve', body: 'Ascentra runs the loop. You approve what needs a person and read the Monday report.' },
+// what happens when, from sign-up on — work Ascentra does, never a promised Google position
+const TIMELINE = [
+  {
+    when: 'Day 1',
+    title: 'Set up and first check',
+    body: 'Connect your website in minutes. Get a full check of the site, the searches worth winning and your first page written.',
+  },
+  {
+    when: 'Week 1',
+    title: 'SEO on a schedule',
+    body: 'New pages every week, your Google positions checked and your AI answers watched — all without anyone chasing it.',
+  },
+  {
+    when: 'Month 1',
+    title: 'Proof it is working',
+    body: 'Every Monday a report shows what moved, what got clicks and what to do next, in plain words.',
+  },
+  {
+    when: 'Month 3 and on',
+    title: 'Growth that builds on itself',
+    body: 'Each page supports the next, so you climb from easier searches to the big ones your competitors own today.',
+  },
 ];
 
 const ENTERPRISE = [
@@ -67,6 +108,14 @@ const ENTERPRISE = [
 ];
 
 const FAQS: FaqItem[] = [
+  {
+    q: 'What does SEO actually do for my business?',
+    a: 'SEO gets your website shown when people search Google — or ask ChatGPT — for what you sell. Those visitors are already looking for something like yours, and you do not pay for every click the way you do with ads. Ascentra does the work that gets you there: finding the right searches, writing the pages, fixing the site and tracking the results.',
+  },
+  {
+    q: 'How fast will I see results?',
+    a: 'You can connect a website, check it and have your first page written on day one, and the weekly schedule starts that same week. Moving up on Google takes longer — usually weeks to a few months, depending on how hard the search is. Nobody can honestly promise a position on Google, and we don’t. What we do promise is that the work starts on day one and every Monday you see what moved.',
+  },
   {
     q: 'Do we need an SEO specialist to use Ascentra?',
     a: 'No. Every verdict, audit finding and recommendation explains itself in plain language, and the pipeline tells you what to do next. Specialists get the detail they need to go further.',
@@ -147,12 +196,12 @@ function Hero() {
           </div>
           <div className="animate-fade-up" style={{ animationDelay: '70ms' }}>
             <h1 className="mx-auto mt-8 max-w-5xl font-display text-[2.5rem] font-semibold leading-[1.05] tracking-[-0.03em] text-balance text-ink sm:text-[3.25rem] lg:text-[3.75rem]">
-              Compounding growth in search and AI answers, <span className="text-accent-text">on autopilot.</span>
+              You built the product. <span className="text-accent-text sm:block">Now get the traffic.</span>
             </h1>
           </div>
           <div className="animate-fade-up" style={{ animationDelay: '140ms' }}>
             <p className="mx-auto mt-6 max-w-2xl text-pretty text-lg leading-relaxed text-ink-2 sm:text-xl">
-              Ascentra researches your keywords, writes the pages, audits the site and tracks rankings, AI answers and backlinks — every week, with your team approving what matters.
+              Ascentra is SEO that runs itself. It finds what your buyers search on Google and ask ChatGPT, writes the pages that answer them, fixes what holds your site back — and shows you every week that more people are finding you.
             </p>
           </div>
           <div className="mt-9 flex flex-wrap justify-center gap-3 animate-fade-up" style={{ animationDelay: '210ms' }}>
@@ -252,30 +301,80 @@ function TrustStrip() {
   );
 }
 
-function ProblemOutcome() {
+function WhyAscentra() {
   return (
-    <Section tone="surface" bordered>
-      <SectionHeading
-        eyebrow="Why Ascentra"
-        title="SEO is a weekly loop. Most teams still run it by hand."
-        lead="Research in one tool, writing in another, rankings in a spreadsheet and AI answers nowhere at all. Ascentra runs the whole loop in one place."
-      />
-      <div className="mt-14 grid gap-4 lg:grid-cols-3">
-        {PROBLEMS.map((p, i) => (
-          <Reveal key={p.outcome} index={i} className="flex flex-col rounded-xl border border-line bg-page">
-            <div className="p-6 sm:p-7">
-              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3">Today</p>
-              <p className="mt-3 text-[15px] leading-relaxed text-ink-2">{p.today}</p>
-            </div>
-            <div className="relative border-t border-line">
-              <span className="absolute left-6 top-0 inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-surface text-accent-text sm:left-7" aria-hidden>
-                <MoveRight className="size-3.5" />
+    <Section tone="surface">
+      <div className="grid grid-cols-1 items-start gap-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-20">
+        <div className="lg:sticky lg:top-28">
+          <SectionHeading
+            eyebrow="Why Ascentra"
+            title="A great product is half the job. People have to find it."
+            lead="Most buyers start with a Google search or a question to ChatGPT. If you are not in those answers, you do not exist for them. Ascentra puts your business there — and keeps it there, week after week."
+          >
+            <ButtonLink to="/signup" size="lg" className="group">
+              Get found — start free
+              <ArrowRight className="size-4 transition-transform duration-200 ease-brand group-hover:translate-x-0.5" aria-hidden />
+            </ButtonLink>
+          </SectionHeading>
+        </div>
+        <Reveal index={1} className="overflow-hidden rounded-2xl border border-line bg-page shadow-raised">
+          <div className="flex items-center justify-between gap-3 border-b border-line bg-surface px-5 py-4 sm:px-6">
+            <p className="font-display text-[15px] font-semibold text-ink">Every place people look for you</p>
+            <span className="rounded-full bg-accent-soft px-2.5 py-0.5 font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-accent-text">Covered</span>
+          </div>
+          <ul className="divide-y divide-line">
+            {SURFACES.map(({ icon: Icon, name, what }, i) => (
+              <Reveal as="li" key={name} index={i} className="flex items-center gap-4 px-5 py-4 sm:px-6">
+                <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-line bg-surface text-accent-text">
+                  <Icon className="size-4" aria-hidden />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-medium text-ink">{name}</span>
+                  <span className="mt-0.5 block text-[13px] leading-snug text-ink-2">{what}</span>
+                </span>
+                <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink" aria-hidden>
+                  <Check className="size-3.5" strokeWidth={2.75} />
+                </span>
+              </Reveal>
+            ))}
+          </ul>
+        </Reveal>
+      </div>
+
+      {/* the same five jobs, by hand and with Ascentra */}
+      <Reveal className="mt-20 sm:mt-24">
+        <h3 className="max-w-2xl font-display text-2xl font-semibold tracking-[-0.01em] text-balance text-ink sm:text-[1.75rem]">SEO is five jobs, every week. Here is who does them.</h3>
+      </Reveal>
+      <div className="mt-8 overflow-hidden rounded-2xl border border-line" role="table" aria-label="SEO by hand compared with Ascentra">
+        <div role="row" className="hidden grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)_minmax(0,1.15fr)] border-b border-line bg-page md:grid">
+          <span role="columnheader" className="px-6 py-4 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3">The job</span>
+          <span role="columnheader" className="px-6 py-4 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3">Doing it by hand</span>
+          <span role="columnheader" className="bg-accent-soft px-6 py-4 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-accent-text">With Ascentra</span>
+        </div>
+        {COMPARE.map((c, i) => (
+          <Reveal
+            key={c.job}
+            index={i}
+            role="row"
+            className="grid grid-cols-1 border-b border-line last:border-b-0 md:grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)_minmax(0,1.15fr)]"
+          >
+            <span role="rowheader" className="px-5 pb-1 pt-5 font-display text-[15px] font-semibold text-ink sm:px-6 md:py-5">
+              {c.job}
+            </span>
+            <span role="cell" className="flex gap-3 px-5 py-2 text-[14px] leading-relaxed text-ink-3 sm:px-6 md:py-5">
+              <Minus className="mt-1 size-3.5 shrink-0" aria-hidden />
+              <span>
+                <span className="sr-only">By hand: </span>
+                {c.byHand}
               </span>
-            </div>
-            <div className="flex-1 rounded-b-xl bg-surface p-6 pt-8 sm:p-7 sm:pt-9">
-              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-accent-text">With Ascentra</p>
-              <p className="mt-3 text-[15px] font-medium leading-relaxed text-ink">{p.outcome}</p>
-            </div>
+            </span>
+            <span role="cell" className="flex gap-3 bg-accent-soft/60 px-5 pb-5 pt-2 text-[14px] font-medium leading-relaxed text-ink sm:px-6 md:py-5">
+              <Check className="mt-1 size-3.5 shrink-0 text-accent-text" strokeWidth={2.75} aria-hidden />
+              <span>
+                <span className="sr-only">With Ascentra: </span>
+                {c.withUs}
+              </span>
+            </span>
           </Reveal>
         ))}
       </div>
@@ -284,13 +383,54 @@ function ProblemOutcome() {
   );
 }
 
+function Timeline() {
+  return (
+    <Section tone="page">
+      <div className="flex flex-wrap items-end justify-between gap-6">
+        <SectionHeading
+          eyebrow="From sign-up to found"
+          title="Started on day one. Better every week."
+          lead="No months of onboarding and no agency kick-off calls. Here is what happens after you sign up."
+        />
+        <Reveal>
+          <ArrowLink to="/how-it-works">See how it works in detail</ArrowLink>
+        </Reveal>
+      </div>
+      <ol className="relative mt-14 grid gap-10 sm:grid-cols-2 lg:grid-cols-4 lg:gap-6">
+        {/* the line the four milestones sit on (wide screens) */}
+        <span aria-hidden className="absolute inset-x-0 top-[7px] hidden h-px bg-line lg:block" />
+        {TIMELINE.map((t, i) => (
+          <Reveal as="li" key={t.when} index={i} className="relative">
+            <span aria-hidden className={cn('relative block size-[15px] rounded-full border-[3px] border-page', i === 0 ? 'mk-pulse bg-accent' : 'bg-accent/70')} />
+            <p className="mt-5 font-mono text-[12px] font-medium uppercase tracking-[0.14em] text-accent-text">{t.when}</p>
+            <h3 className="mt-2 font-display text-lg font-semibold tracking-[-0.01em] text-ink">{t.title}</h3>
+            <p className="mt-2 text-[14px] leading-relaxed text-ink-2">{t.body}</p>
+          </Reveal>
+        ))}
+      </ol>
+      <Reveal className="mt-14 flex flex-col items-start gap-5 rounded-2xl border border-line bg-surface p-6 shadow-card sm:flex-row sm:items-center sm:justify-between sm:p-8">
+        <div className="max-w-2xl">
+          <p className="font-display text-lg font-semibold tracking-[-0.01em] text-ink">The sooner you start, the sooner it compounds.</p>
+          <p className="mt-1.5 text-[14px] leading-relaxed text-ink-2">
+            Setting up is free and takes minutes. Google decides when a page moves up — usually weeks to a few months — so every week you wait is a week your competitors keep.
+          </p>
+        </div>
+        <ButtonLink to="/signup" size="lg" className="group w-full shrink-0 sm:w-auto">
+          Start free
+          <ArrowRight className="size-4 transition-transform duration-200 ease-brand group-hover:translate-x-0.5" aria-hidden />
+        </ButtonLink>
+      </Reveal>
+    </Section>
+  );
+}
+
 function CapabilityGrid() {
   // bento: the first card and the seventh span two columns on wide screens (3 + 3 + 3 + 3 cells)
   const wide = new Set([0, 6]);
   return (
-    <Section tone="page" id="platform">
+    <Section tone="page" id="platform" bordered>
       <div className="flex flex-wrap items-end justify-between gap-6">
-        <SectionHeading eyebrow="Platform" title={`${CapabilityCount} capabilities. One system.`} lead="Each one stands on its own. Together they run your SEO as one weekly loop, from the first keyword to the Monday report." />
+        <SectionHeading eyebrow={`Platform · ${CapabilityCount} capabilities`} title="Everything SEO takes. One place." lead="Each part works on its own. Together they run your SEO every week — from finding what people search for to the Monday report." />
         <Reveal>
           <ArrowLink to="/platform">Explore the platform</ArrowLink>
         </Reveal>
@@ -340,8 +480,8 @@ function AiSpotlight() {
         <div>
           <SectionHeading
             eyebrow="AI search visibility"
-            title="Know what ChatGPT, Gemini and Google’s AI say about you."
-            lead="Buyers ask AI assistants for a shortlist before they ever search. Ascentra asks the same questions, every day, and shows where you are named, cited or missing."
+            title="Find out if ChatGPT recommends you — and fix it when it doesn’t."
+            lead="More and more buyers ask an AI assistant for a shortlist before they ever search. Ascentra asks the same questions every day and shows where you are named, linked or missing."
           />
           <div className="mt-9">
             <CheckList onInk items={[f.benefits[1], f.benefits[2], f.benefits[3], f.benefits[4]]} />
@@ -371,8 +511,8 @@ function LadderSpotlight() {
         <div>
           <SectionHeading
             eyebrow="Keyword ladders"
-            title="Climb to the keywords that matter, one rung at a time."
-            lead="Hard keywords rarely fall to a single new page. Ascentra plans easier supporting pages that earn relevance first, writes them in order and links each one up to your head term."
+            title="Win the big searches by starting with the easier ones."
+            lead="A brand-new page rarely beats the leaders for a big search on its own. Ascentra plans smaller pages you can win first, writes them in order and links each one up to the big one."
           />
           <div className="mt-9">
             <CheckList
@@ -399,8 +539,8 @@ function BacklinksSpotlight() {
       <SectionHeading
         align="center"
         eyebrow="Backlinks from every source"
-        title="Nine sources. One ledger. Every link checked."
-        lead="Link indexes miss links and report live ones as lost. Ascentra merges nine sources and visits each linking page itself — a link counts as lost only after two misses, with the reason."
+        title="See every site that links to you — and the ones that should."
+        lead="Links from other websites are one of the strongest signals Google uses. Ascentra gathers them from nine sources, visits each linking page itself and finds the sites that should link to you next."
       />
       <Reveal className="mt-14 sm:mt-16">
         <LinkSourcesDiagram />
@@ -419,45 +559,6 @@ function BacklinksSpotlight() {
       </div>
       <Reveal className="mt-10 text-center">
         <ArrowLink to="/platform/backlinks">Explore backlinks</ArrowLink>
-      </Reveal>
-    </Section>
-  );
-}
-
-function HowItWorks() {
-  return (
-    <Section tone="page">
-      <div className="flex flex-wrap items-end justify-between gap-6">
-        <SectionHeading eyebrow="How it works" title="From sign-up to a weekly loop in four steps." />
-        <Reveal>
-          <ArrowLink to="/how-it-works">See how it works in detail</ArrowLink>
-        </Reveal>
-      </div>
-      <ol className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {START_STEPS.map((s, i) => (
-          <Reveal
-            as="li"
-            key={s.title}
-            index={i}
-            className="group relative rounded-xl border border-line bg-surface p-6 transition-[border-color,box-shadow] duration-200 ease-brand hover:border-line-strong hover:shadow-raised"
-          >
-            <span className="absolute inset-x-6 top-0 h-0.5 origin-left scale-x-0 rounded-full bg-accent transition-transform duration-300 ease-brand group-hover:scale-x-100" aria-hidden />
-            <span className="font-mono text-sm font-medium text-accent-text tabular">{String(i + 1).padStart(2, '0')}</span>
-            <h3 className="mt-6 font-display text-lg font-semibold tracking-[-0.01em] text-ink">{s.title}</h3>
-            <p className="mt-2 text-[14px] leading-relaxed text-ink-2">{s.body}</p>
-          </Reveal>
-        ))}
-      </ol>
-      {/* the long home page gets a second "Start free" where the visitor has just seen how little it takes */}
-      <Reveal className="mt-10 flex flex-col items-start gap-4 rounded-xl border border-line bg-surface p-6 shadow-card sm:flex-row sm:items-center sm:justify-between sm:p-7">
-        <div>
-          <p className="font-display text-lg font-semibold tracking-[-0.01em] text-ink">Step one takes a few minutes.</p>
-          <p className="mt-1 text-[14px] leading-relaxed text-ink-2">Setting up the company and verifying websites is free; every run shows its cost before it starts.</p>
-        </div>
-        <ButtonLink to="/signup" size="lg" className="group w-full shrink-0 sm:w-auto">
-          Start free
-          <ArrowRight className="size-4 transition-transform duration-200 ease-brand group-hover:translate-x-0.5" aria-hidden />
-        </ButtonLink>
       </Reveal>
     </Section>
   );
@@ -535,7 +636,12 @@ function WhoItsFor() {
 function PricingTeaser() {
   return (
     <Section tone="surface" bordered>
-      <SectionHeading align="center" eyebrow="Pricing" title="Plans that grow with your portfolio." lead="Start free. Every run shows its cost before it starts, and budgets keep spend where you set it." />
+      <SectionHeading
+        align="center"
+        eyebrow="Pricing"
+        title="Start small. Grow when it works."
+        lead={`Free to set up, with plans from ${pricingTiers[0].price} a month. Every run shows its cost before it starts, and budgets keep spend where you set it.`}
+      />
       <div className="mx-auto mt-14 grid max-w-5xl gap-4 lg:grid-cols-3">
         {pricingTiers.map((t, i) => (
           <Reveal
@@ -595,20 +701,20 @@ function FaqSection() {
 
 export default function HomePage() {
   useSeo({
-    title: 'Enterprise-grade autonomous SEO',
-    description: 'Ascentra researches keywords, writes pages, audits your site and tracks rankings, AI answers and backlinks every week, with your team approving what matters.',
+    title: 'Get found on Google and ChatGPT — SEO that runs itself',
+    description: 'You built the product; Ascentra brings the traffic. It finds what your buyers search for, writes the pages, fixes your site and tracks Google and AI answers every week.',
     path: '/',
   });
   return (
     <>
       <Hero />
-      <ProblemOutcome />
+      <WhyAscentra />
+      <Timeline />
       <CapabilityGrid />
       <LoopBand />
       <AiSpotlight />
       <LadderSpotlight />
       <BacklinksSpotlight />
-      <HowItWorks />
       <EnterpriseBand />
       <WhoItsFor />
       <PricingTeaser />

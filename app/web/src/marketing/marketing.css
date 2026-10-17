@@ -15,18 +15,11 @@
   transform: translateY(-50%);
 }
 
-/* ---------- reveal on scroll ---------- */
-.mk-reveal {
-  opacity: 0;
-  transform: translateY(18px);
-  transition:
-    opacity 640ms var(--brand-ease),
-    transform 640ms var(--brand-ease);
-  transition-delay: calc(var(--mk-i, 0) * 70ms);
-}
-.mk-reveal.is-visible {
-  opacity: 1;
-  transform: none;
+/* ---------- no entrance motion ----------
+   Content is on the page when it loads: no fade-and-lift on scroll, no staggered page entrances, no charts drawing themselves.
+   Motion is kept for feedback only (hover, menus opening) and for the few things that are live (a pulsing dot, flowing diagram lines). */
+.mk-site .animate-fade-up {
+  animation: none;
 }
 
 /* ---------- brand mark watermark: the supplied SVG as a mask over a faded on-ink fill ---------- */
@@ -44,6 +37,17 @@
   background-position: center -1px;
   -webkit-mask-image: radial-gradient(ellipse 62% 70% at 50% 0%, #000 25%, transparent 100%);
   mask-image: radial-gradient(ellipse 62% 70% at 50% 0%, #000 25%, transparent 100%);
+}
+
+/* the same grid on ink (closing band), fading out towards the edges */
+.mk-grid-ink {
+  background-image:
+    linear-gradient(to right, var(--line-on-ink) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--line-on-ink) 1px, transparent 1px);
+  background-size: 56px 56px;
+  background-position: center center;
+  -webkit-mask-image: radial-gradient(ellipse 65% 75% at 50% 45%, #000 15%, transparent 100%);
+  mask-image: radial-gradient(ellipse 65% 75% at 50% 45%, #000 15%, transparent 100%);
 }
 
 /* ---------- FAQ (details) ---------- */
@@ -78,64 +82,6 @@
   to {
     transform: translateX(-50%);
   }
-}
-
-/* ---------- line chart draw-in (DashboardMockup) ---------- */
-.mk-draw {
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
-  transition: stroke-dashoffset 1600ms var(--brand-ease) 200ms;
-}
-.is-drawn .mk-draw {
-  stroke-dashoffset: 0;
-}
-.mk-fill {
-  opacity: 0;
-  transition: opacity 900ms var(--brand-ease) 900ms;
-}
-.is-drawn .mk-fill {
-  opacity: 1;
-}
-
-/* staggered pop-in for mockup parts (dots, rungs, rows): set --mk-i on the element */
-.mk-pop {
-  opacity: 0;
-  transform: translateY(6px) scale(0.98);
-  transition:
-    opacity 420ms var(--brand-ease),
-    transform 420ms var(--brand-ease);
-  transition-delay: calc(120ms + var(--mk-i, 0) * 45ms);
-}
-.is-drawn .mk-pop {
-  opacity: 1;
-  transform: none;
-}
-.mk-pop-dot {
-  transform: scale(0);
-  transform-box: fill-box;
-  transform-origin: center;
-  transition: transform 360ms var(--brand-ease);
-  transition-delay: calc(150ms + var(--mk-i, 0) * 28ms);
-}
-.is-drawn .mk-pop-dot {
-  transform: none;
-}
-/* bars growing from zero width/height */
-.mk-grow-x {
-  transform: scaleX(0);
-  transform-origin: left center;
-  transition: transform 900ms var(--brand-ease);
-  transition-delay: calc(200ms + var(--mk-i, 0) * 80ms);
-}
-.mk-grow-y {
-  transform: scaleY(0);
-  transform-origin: center bottom;
-  transition: transform 900ms var(--brand-ease);
-  transition-delay: calc(200ms + var(--mk-i, 0) * 80ms);
-}
-.is-drawn .mk-grow-x,
-.is-drawn .mk-grow-y {
-  transform: none;
 }
 
 /* ---------- diagrams ---------- */
@@ -229,29 +175,9 @@
 
 /* ---------- reduced motion: everything static and visible ---------- */
 @media (prefers-reduced-motion: reduce) {
-  .mk-reveal,
-  .mk-pop {
-    opacity: 1;
-    transform: none;
-    transition: none;
-  }
   .mk-menu-panel,
   .mk-sheet {
     animation: none;
-  }
-  .mk-draw {
-    stroke-dashoffset: 0;
-    transition: none;
-  }
-  .mk-fill {
-    opacity: 1;
-    transition: none;
-  }
-  .mk-pop-dot,
-  .mk-grow-x,
-  .mk-grow-y {
-    transform: none;
-    transition: none;
   }
   .mk-marquee {
     -webkit-mask-image: none;
