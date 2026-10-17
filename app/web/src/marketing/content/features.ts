@@ -126,7 +126,7 @@ export const features: Feature[] = [
       { q: 'What happens on Manual?', a: 'The step waits in “Needs you” until someone on your team approves it. Nothing is written before that.' },
       {
         q: 'Does Ascentra publish to my site by itself?',
-        a: 'No. It prepares a publish-ready package — HTML, Markdown and meta data — and can create WordPress drafts. Your team publishes; Ascentra then checks the live page. If you would rather not, publishing is one of the done-for-you services on the pricing page.',
+        a: 'Not by itself. It sends written pages to your WordPress, Webflow or Contentful (or any other stack through a signed webhook) as drafts, and an owner or admin chooses when one goes live. A page that failed its quality check, or still has text left for you to fill in, is never sent. Ascentra then checks the live page and tracks it. If you would rather not, publishing is one of the done-for-you services on the pricing page.',
       },
       { q: 'Can I change the pace later?', a: 'Yes. Posts per week, the default mode and the ladder limits are website settings you can change at any time.' },
     ],
@@ -291,7 +291,9 @@ export const features: Feature[] = [
       'Three images produced with every page — a title card and two section cards made from the page itself, with the alt text, file names and the social image',
       'An originality check against every competitor page the research read and against your own pages: more than 15% of a page matching one of them comes back for a rewrite, with the passage shown',
       'A coverage target taken from the best page in the results, not an average, with the subtopics it covers and yours still missing',
-      'A blog package as HTML, Markdown and meta.json, or a WordPress draft',
+      'A blog package as HTML, Markdown and meta.json — or sent straight to your CMS: WordPress, Webflow, Contentful, or any other stack through a signed webhook',
+      'Drafts by default: only an owner or admin publishes a page live, after confirming it; sending again updates the same post, never a second one',
+      'A page that did not pass its quality check, or still holds a bracket left for you, cannot be sent to your CMS — the gaps are listed instead',
       'Links only to pages that are already live, with link text that reads like a title; pages still to come are listed as links to add later',
       'Every figure looked up in the source the page cites, and a source without independent authority cited at most once',
       'A live check of the published page: schema, images, links and metadata',
@@ -304,7 +306,7 @@ export const features: Feature[] = [
       { title: 'Brief', body: 'Keyword, intent and outline, with facts from your business profile, your case studies and your style guide.' },
       { title: 'Write and critique', body: 'A draft, a critic’s review and an editor’s pass that acts on it.' },
       { title: 'Check', body: 'SEO checks on every page, against a coverage target read off the best page in the results. Every figure is looked up in the source it cites, and anything that is not there is marked for you to confirm. A page that repeats a competitor or one of your own pages goes back for a rewrite.' },
-      { title: 'Publish and verify', body: 'Take the package or a WordPress draft; Ascentra checks the page once it is live.' },
+      { title: 'Publish and verify', body: 'Send the page to your CMS as a draft — or publish it live if you are an owner or admin — or take the package. Ascentra checks the page once it is live and starts tracking it.' },
     ],
     facts: [
       { value: 3, label: 'passes: writer, critic and editor' },
@@ -325,7 +327,10 @@ export const features: Feature[] = [
         q: 'Which spelling do the pages use?',
         a: 'The spelling of the country each page targets, unless your style guide names one — then that wins everywhere. The report says which rule was used.',
       },
-      { q: 'Can Ascentra publish to WordPress?', a: 'It creates WordPress drafts for your team to review. Publishing stays with you.' },
+      {
+        q: 'Can Ascentra publish to our CMS?',
+        a: 'Yes — to WordPress (with Yoast SEO or Rank Math fields when your site exposes them), Webflow and Contentful, and to anything else through a signed webhook. Pages go as drafts by default; only an owner or admin can publish one live, and only after ticking a confirmation. Pages that did not pass the quality check, or still have text to fill in, are refused with the reasons.',
+      },
       { q: 'What is the blog package?', a: 'The article as HTML and Markdown, the three images as WebP files, plus a meta.json file with the title, description, slug, schema and the image list — ready for any CMS.' },
       {
         q: 'How do you know the page is not copied?',

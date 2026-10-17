@@ -217,7 +217,7 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Originality check on every page', hint: 'Against the competitor pages researched and your own pages', values: [true, true, true] },
       { label: 'Coverage target from the best competitor', hint: 'With the subtopics that page covers', values: [true, true, true] },
       { label: 'Three images made with every page', hint: 'WebP, with the alt text and file names', values: [true, true, true] },
-      { label: 'Blog package and WordPress drafts', hint: 'HTML, Markdown, meta.json and the images', values: [true, true, true] },
+      { label: 'Blog package and CMS publishing', hint: 'HTML, Markdown, meta.json and the images — or sent to WordPress, Webflow, Contentful or a signed webhook, as drafts by default', values: [true, true, true] },
       { label: 'Your house style, applied and checked', hint: 'How your name is written, British or American spelling, words to avoid and the tone', values: [true, true, true] },
       { label: 'Refreshes instead of duplicates', hint: 'A search one of your live pages already answers is queued as a refresh of that page', values: [true, true, true] },
       { label: 'Live publish check', hint: 'Verifies the page once it is live', values: [true, true, true] },
@@ -331,7 +331,7 @@ export const pricingFaqs: FaqItem[] = [
   },
   {
     q: 'Do you publish the pages to our site?',
-    a: 'The software does not: it prepares the page as HTML, Markdown and meta data for your team. Our publishing service does, as a paid add-on — WordPress, Shopify, Webflow, Squarespace, Ghost or a headless CMS, and for a React or Next.js codebase the page arrives as a pull request your developers merge. Nothing goes live without your approval.', // PLACEHOLDER — confirm the service
+    a: 'The software sends pages to WordPress, Webflow, Contentful or your own endpoint as drafts, and an owner or admin publishes them live with one click — a page that failed its checks is never sent. For any other setup our publishing service does it, as a paid add-on — WordPress, Shopify, Webflow, Squarespace, Ghost or a headless CMS, and for a React or Next.js codebase the page arrives as a pull request your developers merge. Nothing goes live without your approval.', // PLACEHOLDER — confirm the service
   },
   {
     q: 'Can you fix what the audit finds?',
