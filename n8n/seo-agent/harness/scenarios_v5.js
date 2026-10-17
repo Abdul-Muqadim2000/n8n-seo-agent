@@ -18175,6 +18175,139 @@ await guard('S184 B-11 B-12 B-13 B-14 B-15 the lows of executor B (execs 739 / 7
   check('B-15: an anchor longer than 70 characters ends on a whole word', il.filter(x => x.to_url === long).every(x => x.anchor.length <= 70 && !/Inte$/.test(x.anchor) && /\w$/.test(x.anchor)) && il.some(x => x.to_url === long), JSON.stringify(il.filter(x => x.to_url === long)));
 });
 
+// ===================================================================================
+// S191-S194 (2026-10-17, re-rating 2026-10-17, agent F-A2 — docs/system-review-2026-10-17/parts/1_keywords_content.md §8, A-13 ... A-19).
+// Replays exec 771 (the ladder top page "it consulting dubai" on techand.ai): its own Parse Brief, competitor pages, site model, the
+// copywriter's draft (QA round 1), the item the editor was given (Needs Revision? round 1) and the editor's draft (QA round 2), cut into
+// harness/fixtures_live/r_fa2_page771.json.gz. The outbound links are answered as the executor's curl found them at 16:2x UTC (two 404s,
+// a Vercel checkpoint 429, a 403). Every check below fails on the build of 2026-10-17.
+// ===================================================================================
+const FA2 = JSON.parse(require('zlib').gunzipSync(require('fs').readFileSync(require('path').join(__dirname, 'fixtures_live', 'r_fa2_page771.json.gz'))).toString());
+const fa2Check = (SN) => (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+const fa2QA = async (round, over) => {
+  reset();
+  mock('Parse Brief', [{ json: { ...FA2.parse_brief, ...(over || {}) } }]);
+  mock('Analyze Competitor Pages', [{ json: { competitors: FA2.competitors } }]);
+  mock('Site Model', [{ json: { site_model: FA2.site_model } }]);
+  if (round === 1) return (await run('Content QA', [{ json: { output: FA2.draft_round1, critique: FA2.critique_round1 } }], { runIndex: 0 }))[0].json;
+  mock('Parse Critique', [{ json: { critique: FA2.critique_round1 } }]);
+  mock('Needs Revision?', [{ json: FA2.needs_revision_round1 }]);
+  return (await run('Content QA', [{ json: { output: FA2.draft_round2 } }], { runIndex: 1 }))[0].json;
+};
+
+await guard('S191 A-13 A-17 the editor\'s draft: every bracket counted, the Quick answer kept', async () => {
+  const SN = 'S191 A-13 A-17 — exec 771 round 2: "[Price band: …]" is a placeholder, and the Quick answer the editor cut is put back'; begin(SN); const check = fa2Check(SN);
+  const out = await fa2QA(2); const Q = out.content_qa;
+  console.log('   placeholders ->', JSON.stringify(Q.placeholders), '| restored ->', JSON.stringify(Q.protected_restored));
+  check('A-13: the bracket exec 771 delivered uncounted is a placeholder, named in the note the owner reads (was placeholder_count 0)',
+    Q.placeholder_count >= 1 && (Q.placeholders || []).some(p => p.token === '[Price band: typical Assess & Envision fee in AED]')
+    && /\[Price band: typical Assess & Envision fee in AED\]/.test(Q.placeholder_note) && (Q.quality.placeholders_in_body || []).includes('[Price band: typical Assess & Envision fee in AED]'),
+    JSON.stringify({ n: Q.placeholder_count, ph: Q.placeholders, note: Q.placeholder_note }));
+  check('A-13: and it is among the not-ready reasons of the last round', (Q.not_ready_reasons || []).some(r => r.includes('[Price band: typical Assess & Envision fee in AED]')), JSON.stringify(Q.not_ready_reasons));
+  check('A-17: the 63-word Quick answer round 1 had is back in the page, after the introduction (exec 771: 0 words, a refusal reason)',
+    /^\**\s*Quick answer:?\**/im.test(out.output) && Q.answer_block_words >= 40 && (Q.protected_restored || []).some(x => x.block === 'quick_answer')
+    && !(Q.warnings || []).some(w => /^Quick answer block missing/.test(w)) && !(Q.not_ready_reasons || []).some(r => /Quick answer block missing/.test(r)),
+    JSON.stringify({ words: Q.answer_block_words, restored: Q.protected_restored }));
+  const qaAt = out.output.search(/^\**\s*Quick answer/im), h1At = out.output.search(/^# /m), h2At = out.output.search(/^## /m);
+  check('A-17: it stands between the H1 and the first H2', h1At >= 0 && qaAt > h1At && (h2At < 0 || qaAt < h2At), JSON.stringify({ h1At, qaAt, h2At }));
+  const r1 = await fa2QA(1);
+  check('A-17: round 1 (2,546 words against 1,600) asks for the cut and names the protected blocks in it', /PROTECTED, never cut: the \*\*Quick answer:\*\* line/.test(r1.content_qa.length_instruction || ''), r1.content_qa.length_instruction);
+  // the same restore when nothing told the run which draft the editor had: no Needs Revision? data, nothing invented
+  reset(); mock('Parse Brief', [{ json: FA2.parse_brief }]); mock('Analyze Competitor Pages', [{ json: { competitors: FA2.competitors } }]); mock('Site Model', [{ json: { site_model: FA2.site_model } }]);
+  const bare = (await run('Content QA', [{ json: { output: FA2.draft_round2 } }], { runIndex: 1 }))[0].json.content_qa;
+  check('A-17: with no earlier draft in hand nothing is restored and the missing block is still reported', !(bare.protected_restored || []).length && (bare.warnings || []).some(w => /^Quick answer block missing/.test(w)), JSON.stringify(bare.protected_restored));
+  reset();
+});
+
+await guard('S192 A-15 A-16 A-18 A-19 what the page says about the business, whose headings, which topics', async () => {
+  const SN = 'S192 A-15 A-16 A-18 A-19 — exec 771: unsourced terms of the business held, a competitor\'s brand headings dropped, the verdict\'s "skip" checked, the site\'s own "20+ years" kept';
+  begin(SN); const check = fa2Check(SN);
+  const r1 = await fa2QA(1); const Q1 = r1.content_qa;
+  const r2 = await fa2QA(2); const Q2 = r2.content_qa;
+  console.log('   claims r1 ->', JSON.stringify((Q1.business_claims || []).map(b => b.sentence)), '\n   claims r2 ->', JSON.stringify((Q2.business_claims || []).map(b => b.sentence)));
+  const s2 = (Q2.business_claims || []).map(b => b.sentence).join(' | ');
+  check('A-15: round 2 holds the three statements about Tech&\'s own terms and scope no page of the site states',
+    /We charge for advice and delivery/.test(s2) && /Licences sit on a separate line of the quote/.test(s2) && /Tech& does not handle company formation/.test(s2) && /Some can, but Tech& does not/.test(s2), s2);
+  check('A-15: each is marked [Confirm: …] in the copy and named in a warning; QA\'s own marks are not counted again as notes the writer left',
+    /\[Confirm: Tech& does not handle company formation\.\]/.test(r2.output) && /\[Confirm: We charge for advice and delivery\.\]/.test(r2.output)
+    && (Q2.warnings || []).some(w => /^Statements about Tech&'s own terms, scope or credentials/.test(w) && /company formation/.test(w))
+    && !(Q2.writer_notes || []).some(n => /company formation/.test(n.token)), JSON.stringify({ wn: Q2.writer_notes }));
+  check('A-15: the statements its own pages DO support are not held (Microsoft partner, 20+ years)', !(Q1.business_claims || []).concat(Q2.business_claims || []).some(b => /20\+ years|Microsoft partner/i.test(b.sentence)), JSON.stringify(Q1.business_claims));
+  check('A-19: "20+ years" — on the homepage this run read — is no longer an unverified statistic (round 1 flagged it)',
+    !(Q1.unverified_statistics || []).includes('20+ years') && (Q1.unverified_statistics_own || []).some(s => /20\+ years/i.test(s)) && !(Q1.warnings || []).some(w => /Unverified statistics.*20\+ years/.test(w)),
+    JSON.stringify({ st: Q1.unverified_statistics, own: Q1.unverified_statistics_own }));
+  check('A-16: neither round requires agncompu.com\'s own headings "… AGN IT Services LLC" as subtopics; both are reported as dropped with a reason',
+    ![...(Q1.missing_subtopics || []), ...(Q2.missing_subtopics || [])].some(s => /AGN/.test(s)) && !(Q2.warnings || []).concat(Q2.not_ready_reasons || []).some(w => /AGN IT Services/.test(w))
+    && ((Q2.coverage || {}).subtopics_dropped || []).filter(x => /AGN/.test(x.subtopic)).length === 2,
+    JSON.stringify({ m1: Q1.missing_subtopics, m2: Q2.missing_subtopics, dropped: (Q2.coverage || {}).subtopics_dropped }));
+  check('A-16: the topical headings of that page are still subtopics (Strategic IT Development, Cloud Transformation Consultancy)',
+    (Q2.missing_subtopics || []).includes('Strategic IT Development') && (Q2.missing_subtopics || []).includes('Cloud Transformation Consultancy'), JSON.stringify(Q2.missing_subtopics));
+  check('A-18: the verdict\'s "Skip the consultancy-licence and start-an-IT-company questions" is read out of its changes',
+    (Q2.verdict_exclusions || []).map(e => e.topic).join('|') === 'consultancy licence|start an IT company', JSON.stringify(Q2.verdict_exclusions));
+  check('A-18: round 2\'s "How Much Is a Consultancy Licence in Dubai?" and round 1\'s licence / start-a-company sections are named against it in a warning',
+    (Q2.excluded_sections || []).some(x => x.heading === 'How Much Is a Consultancy Licence in Dubai?') && (Q1.excluded_sections || []).length >= 2 && (Q1.excluded_sections || []).some(x => /consultancy licence/i.test(x.heading))
+    && (Q2.warnings || []).some(w => /^Sections about a topic the verdict said to leave out: "How Much Is a Consultancy Licence in Dubai\?"/.test(w)),
+    JSON.stringify({ e1: Q1.excluded_sections, e2: Q2.excluded_sections }));
+  const PB = require('fs').readFileSync(require('path').join(process.env.CODE_DIR || require('path').join(__dirname, 'code'), 'Parse_Brief.js'), 'utf8');
+  const PV = require('fs').readFileSync(require('path').join(process.env.CODE_DIR || require('path').join(__dirname, 'code'), 'Parse_Verdict.js'), 'utf8');
+  const PA = require('fs').readFileSync(require('path').join(process.env.CODE_DIR || require('path').join(__dirname, 'code'), 'Parse_Analysis.js'), 'utf8');
+  check('A-18 / A-16 wiring: Parse Verdict carries verdict_exclusions (topics_to_skip + the "skip" phrases), Parse Brief prunes the outline, Parse Analysis gives the subtopics the fit gate\'s labels',
+    /verdict_exclusions: EXC\.fromVerdict\(verdict_changes, verdict\.topics_to_skip\)/.test(PV) && /EXC\.prune\(brief\.outline/.test(PB) && /labels: fitLabels/.test(PA), '');
+  reset();
+});
+
+await guard('S193 A-14 every outbound link fetched; a dead one refuses by URL', async () => {
+  const SN = 'S193 A-14 — exec 771 round 2\'s seven outbound links: two 404s fail the gate by URL with a replacement or "remove it"; a bot wall and a 403 are "could not be checked"';
+  begin(SN); const check = fa2Check(SN);
+  const out = await fa2QA(2);
+  const reqs = await run('Outbound Link Requests', [{ json: out }]);
+  console.log('   requests ->', JSON.stringify(reqs.map(i => i.json.url)));
+  check('A-14: one request per distinct outbound link of this round (7), carrying the round', reqs.length === 7 && reqs.every(i => i.json.round === 2 && /^https:/.test(i.json.url)), JSON.stringify(reqs.map(i => i.json)));
+  const ANS = { 'business-licensing': { statusCode: 404, data: '<html><title>Page not found</title></html>' }, 'office-of-data-protection': { statusCode: 404, data: '<html><title>404</title></html>' },
+    'difc.com': { statusCode: 429, data: '<html><title>Vercel Security Checkpoint</title></html>' }, 'centralbank.ae': { statusCode: 403, data: '<html>Access Denied</html>' } };
+  const answer = (u) => { const k = Object.keys(ANS).find(x => u.includes(x)); return k ? ANS[k] : { statusCode: 200, data: '<html><head><title>Data protection laws</title></head><body><h1>Data protection</h1>' + 'text '.repeat(2000) + '</body></html>' }; };
+  mock('Fetch Outbound Links', reqs.map(i => ({ json: answer(i.json.url) })));
+  const C = (await run('Outbound Link Check', [{ json: {} }]))[0].json.content_qa;
+  const L = C.link_check || {};
+  console.log('   link check ->', JSON.stringify({ dead: (L.dead || []).map(x => [x.url, x.reason, x.suggestion]), unknown: (L.unknown || []).map(x => [x.url, x.reason]) }));
+  check('A-14: the two 404s of exec 771 are dead, by URL', (L.dead || []).length === 2 && L.dead.some(x => /business-licensing/.test(x.url)) && L.dead.some(x => /office-of-data-protection/.test(x.url)), JSON.stringify(L.dead));
+  check('A-14: the Vercel checkpoint (429) and the 403 are "could not be checked", never dead', (L.unknown || []).length === 2 && L.unknown.some(x => /difc/.test(x.url)) && L.unknown.some(x => /centralbank/.test(x.url)), JSON.stringify(L.unknown));
+  check('A-14: on the last round the page is refused for them — publishable false, not ready, the URLs in the reasons and the label',
+    C.publishable === false && C.not_ready === true && C.quality.publishable === false && /not ready to publish/.test(C.quality_label)
+    && (C.not_ready_reasons || []).some(r => /business-licensing/.test(r) && /office-of-data-protection/.test(r)), JSON.stringify({ p: C.publishable, nr: C.not_ready, r: C.not_ready_reasons }));
+  check('A-14: each dead link carries a replacement from this run\'s sources or "remove it"', (L.dead || []).every(x => x.suggestion || true) && (C.warnings || []).some(w => /^Dead links \(fetched in this run\)/.test(w) && /(use https?:\/\/|remove the link)/.test(w)), JSON.stringify(C.warnings.filter(w => /Dead links/.test(w))));
+  check('A-14: the warning no longer asks the owner to "verify" hosts — any source outside the plan is named by URL', !(out.content_qa.warnings || []).some(w => /verify each one/.test(w)), JSON.stringify((out.content_qa.warnings || []).filter(w => /evidence plan/.test(w))));
+  // all answer: nothing changes; a round-1 fetch never stands in for round 2; a domain that does not resolve is dead, a timeout is not
+  mock('Fetch Outbound Links', reqs.map(() => ({ json: { statusCode: 200, data: '<html><title>ok</title><h1>ok</h1>' + 'x '.repeat(4000) + '</html>' } })));
+  const C2 = (await run('Outbound Link Check', [{ json: {} }]))[0].json.content_qa;
+  check('A-14: when every link answers, the gate is what Content QA decided', (C2.link_check.dead || []).length === 0 && C2.publishable === out.content_qa.publishable && C2.not_ready === out.content_qa.not_ready, JSON.stringify(C2.link_check));
+  mock('Fetch Outbound Links', reqs.map((_, i) => ({ json: i === 0 ? { error: { message: 'getaddrinfo ENOTFOUND u.ae' } } : i === 1 ? { error: { message: 'timeout of 20000ms exceeded' } } : { statusCode: 200, data: '<title>ok</title>' + 'x '.repeat(4000) } })));
+  const C3 = (await run('Outbound Link Check', [{ json: {} }]))[0].json.content_qa.link_check;
+  check('A-14: a domain that does not resolve is dead; a timeout is "could not be checked"', C3.dead.length === 1 && C3.dead[0].reason === 'the domain does not resolve' && C3.unknown.length === 1 && /could not be fetched/.test(C3.unknown[0].reason), JSON.stringify(C3));
+  mock('Outbound Link Requests', [{ json: { url: 'https://u.ae/x', round: 1 } }]);
+  const C4 = (await run('Outbound Link Check', [{ json: {} }]))[0].json.content_qa.link_check;
+  check('A-14: a fetch from an earlier QA round is never read as this round\'s', C4.checked === 0, JSON.stringify(C4));
+  reset();
+});
+
+await guard('S194 A-14 A-13 wiring: the link check sits between Content QA and Originality Check, the app reads the same patterns', async () => {
+  const SN = 'S194 A-14 A-13 — generated main workflow: Content QA -> Outbound Link Requests -> Any Outbound Links? -> Fetch Outbound Links -> Outbound Link Check -> Originality Check; one placeholder pattern';
+  begin(SN); const check = fa2Check(SN);
+  const fs = require('fs'), path = require('path');
+  const W = JSON.parse(fs.readFileSync(path.join(__dirname, 'link_check_wiring.json'), 'utf8'));   // written by build_v4.py section 130 from the generated workflow
+  const to = (n, o = 0) => (((W.connections[n] || {}).main || [])[o] || []).map(t => t.node);
+  check('A-14: Content QA -> Outbound Link Requests -> Any Outbound Links? (true: Fetch -> Check, false: Check) -> Originality Check',
+    to('Content QA').join() === 'Outbound Link Requests' && to('Outbound Link Requests').join() === 'Any Outbound Links?' && to('Any Outbound Links?', 0).join() === 'Fetch Outbound Links'
+    && to('Any Outbound Links?', 1).join() === 'Outbound Link Check' && to('Fetch Outbound Links').join() === 'Outbound Link Check' && to('Outbound Link Check').join() === 'Originality Check', JSON.stringify(W.connections['Content QA']));
+  const FE = (W.nodes || []).find(n => n.name === 'Fetch Outbound Links') || {};
+  const opt = (FE.parameters || {}).options || {};
+  check('A-14: the fetch follows redirects, never throws on a status, returns the full answer and retries 3x / 5 s', FE.retryOnFail === true && FE.maxTries === 3 && FE.onError === 'continueRegularOutput'
+    && opt.response.response.fullResponse === true && opt.response.response.neverError === true && opt.redirect.redirect.followRedirects === true, JSON.stringify({ FE: { r: FE.retryOnFail, t: FE.maxTries }, opt }));
+  const kit = W.placeholders_kit;
+  const cq = fs.readFileSync(path.join(process.env.CODE_DIR || path.join(__dirname, 'code'), 'Content_QA.js'), 'utf8');
+  check('A-13: Content QA counts with the kit (PH.scan) and no pattern of its own', /const PH = \(\(\) =>/.test(cq) && /PH\.scan\(finalBody\)/.test(cq) && !/const PH_RE =/.test(cq) && cq.includes(kit.match(/const BRACKET_SRC = [^\n]+/)[0]), '');
+});
+
 
 H.report();
 })();
