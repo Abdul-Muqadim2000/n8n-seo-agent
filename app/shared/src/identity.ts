@@ -379,6 +379,80 @@ export interface SsoOverview {
   secretsReady: boolean;
 }
 
+// ---------------------------------------------------------------------------------------------------------------------------
+// 5. SCIM 2.0 provisioning
+// ---------------------------------------------------------------------------------------------------------------------------
+
+export const SCIM = {
+  /** `scim_` + 256 random bits: recognisable in a log or a scanner */
+  prefix: 'scim_',
+  maxLive: 2,
+  perMinute: 600,
+  maxPage: 200,
+  schemas: {
+    user: 'urn:ietf:params:scim:schemas:core:2.0:User',
+    group: 'urn:ietf:params:scim:schemas:core:2.0:Group',
+    list: 'urn:ietf:params:scim:api:messages:2.0:ListResponse',
+    patch: 'urn:ietf:params:scim:api:messages:2.0:PatchOp',
+    error: 'urn:ietf:params:scim:api:messages:2.0:Error',
+  },
+} as const;
+
+const SCIM_TOKEN_RE = /^scim_[A-Za-z0-9_-]{43}$/;
+export const isScimToken = (v: unknown): v is string => typeof v === 'string' && SCIM_TOKEN_RE.test(v);
+export function scimBearer(header: unknown): string | null {
+  if (typeof header !== 'string') return null;
+  const m = /^Bearer\s+(\S+)\s*$/i.exec(header);
+  return m && isScimToken(m[1]) ? m[1] : null;
+}
+
+/**
+ * The SCIM filters identity providers send (RFC 7644 §3.4.2.2), `attr eq "value"` only — Okta sends `userName eq "a@b.c"`, Entra ID
+ * `userName eq "a@b.c"` / `externalId eq "…"`, groups by `displayName eq "…"`. Anything else is refused (`invalidFilter`) rather than
+ * answered wrongly.
+ */
+export function parseScimFilter(filter: unknown): { attr: string; value: string } | null | 'invalid' {
+  if (filter == null || filter === '') return null;
+  if (typeof filter !== 'string' || filter.length > 500) return 'invalid';
+  const m = /^\s*([A-Za-z][\w.]*(?:\[[^\]]*\])?(?:\.\w+)?)\s+eq\s+"((?:[^"\\]|\\.)*)"\s*$/i.exec(filter);
+  if (!m) return 'invalid';
+  const attr = m[1].toLowerCase().replace(/\[type eq "work"\]/, '');
+  const known: Record<string, string> = { username: 'userName', externalid: 'externalId', 'emails.value': 'email', 'emails[primary eq true].value': 'email', displayname: 'displayName', id: 'id' };
+  const a = known[attr];
+  return a ? { attr: a, value: m[2].replace(/\\(.)/g, '$1') } : 'invalid';
+}
+
+/** "False" / "false" / false → false (Entra ID sends booleans as strings in PATCH) */
+export const scimBool = (v: unknown): boolean | undefined => (typeof v === 'boolean' ? v : typeof v === 'string' && /^(true|false)$/i.test(v) ? v.toLowerCase() === 'true' : undefined);
+
+export interface ScimTokenView {
+  id: string;
+  name: string;
+  prefix: string;
+  createdAt: string;
+  createdByName: string | null;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+}
+
+export interface ScimGroupView {
+  id: string;
+  displayName: string;
+  members: number;
+  role: 'admin' | 'member' | 'viewer' | null;
+}
+
+export interface ScimOverview {
+  baseUrl: string;
+  tokens: ScimTokenView[];
+  groups: ScimGroupView[];
+  /** provisioning acts only on addresses at these domains */
+  verifiedDomains: string[];
+}
+
+export const scimTokenCreateSchema = z.object({ name: z.string().trim().min(1, 'Name the token, e.g. "Okta"').max(60) });
+export const scimGroupRoleSchema = z.object({ role: z.enum(['admin', 'member', 'viewer']).nullable() });
+
 export interface MemberSecurity {
   userId: string;
   mfaEnabled: boolean;
