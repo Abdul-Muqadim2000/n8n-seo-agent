@@ -404,6 +404,62 @@ the user has not seen).
   "headers": { "Authorization": "Bearer asc_..." }, "require_approval": "always" }]`. ChatGPT's own in-app custom connectors accept
   only OAuth or no authentication, so a company key cannot be pasted there today; use the API, or a read-only key behind your own proxy.
 
+## Integrations (G4, `app/docs/INTEGRATIONS.md`) — Company settings → Integrations
+
+Every route below is **admin** (session, `X-Requested-With: fetch`) unless marked. Secrets (webhook URLs, signing secrets, tracker
+tokens, storage keys, service-account JSON) are sealed with AES-256-GCM under `MAILBOX_KEY`; without it every connect answers 400
+`secrets_unavailable`. No answer ever carries a secret: `urlHost` + `urlHint` (last 4), `secretHint` ("token …a1b2"), `hasSecret`.
+Every outbound request goes through the connect-time SSRF guard (`lib/netGuard.ts`).
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | /api/orgs/:orgId/integrations | | `IntegrationsOverview` `{ secretsReady, appUrl, endpoints, deliveries, integrations, exportRuns, issues }` |
+
+### Event webhooks (signed JSON, Slack, Microsoft Teams)
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | /api/orgs/:orgId/webhooks | | `{ items: WebhookEndpointView[], deliveries: WebhookDeliveryView[] }` (the last 50) |
+| POST | /api/orgs/:orgId/webhooks | `webhookEndpointSchema` `{ name, format: json \| slack \| teams, url, events[], websiteIds?, enabled? }` (20 an hour) | `{ endpoint, secret }` — `secret` (`whsec_…`, json only) is returned **once** |
+| PATCH | /api/orgs/:orgId/webhooks/:id | `{ name?, events?, websiteIds?, enabled? }` | `WebhookEndpointView` (re-enabling clears `disabledReason` and the failure count) |
+| DELETE | /api/orgs/:orgId/webhooks/:id | | `{ deleted: true }` (its log goes with it) |
+| POST | /api/orgs/:orgId/webhooks/:id/test | | `{ ok, status, error }` — a test event, sent now, not queued |
+| POST | /api/orgs/:orgId/webhooks/:id/rotate-secret | | `{ endpoint, secret }` (json only) |
+| POST | /api/orgs/:orgId/webhook-deliveries/:id/redeliver | | the delivery after one more attempt (same delivery id) |
+| GET / POST | /api/v1/webhooks | key with **`admin`** | the same list / create |
+| DELETE | /api/v1/webhooks/:id · POST /api/v1/webhooks/:id/test | key with `admin` | |
+
+Address rules: https on a public host (`webhookUrlOk`); `slack` must be `https://hooks.slack.com/services|workflows|triggers/…`;
+`teams` a Workflows address (`*.logic.azure.com`, `*.powerplatform.com`) or an older connector (`*.webhook.office.com`). At most 10
+endpoints a company; `websiteIds` must be the company's own (empty = every website).
+
+**Events** (`WEBHOOK_EVENTS`): `run.completed`, `run.failed`, `report.ready`, `report.held`, `alert.raised`, `audit.finding.new`,
+`rank.changed` — derived in the app from the callback it just stored (`eventsFor`, `shared/src/integrations.ts`), plus `run.failed`
+when the engine refuses at the door, its execution fails, or the run expires. Signed-JSON body (Slack and Teams get their own format,
+`slackMessage` / `teamsMessage`):
+
+```json
+{ "id": "6c0e…", "type": "rank.changed", "createdAt": "2026-10-17T08:00:00.000Z",
+  "company": { "id": "…", "name": "Northwind" }, "website": { "id": "…", "domain": "northwind.example" },
+  "data": { "ladder": { "id": "lad_…", "head": "e invoicing uae" },
+            "gains": [{ "keyword": "peppol uae", "position": 4, "previous": 12, "delta": 8, "url": null }], "drops": [],
+            "report": { "id": "…", "title": "…", "stage": "rank_tracker", "url": "https://app…/o/…/reports/…" } } }
+```
+
+Headers: `X-Ascentra-Event`, `X-Ascentra-Delivery` (stable across retries — de-duplicate on it), `X-Ascentra-Timestamp` (ms) and, for
+signed JSON, `X-Ascentra-Signature: sha256=<hex HMAC-SHA256 of "<timestamp>.<raw body>" with the endpoint's secret>` — the scheme
+report delivery uses. Verify it, and refuse a timestamp older than 5 minutes:
+
+```js
+const ok = 'sha256=' + crypto.createHmac('sha256', secret).update(`${req.headers['x-ascentra-timestamp']}.${rawBody}`).digest('hex');
+if (!crypto.timingSafeEqual(Buffer.from(ok), Buffer.from(req.headers['x-ascentra-signature'] || ''))) return res.status(401).end();
+```
+
+**Delivery.** 10-second timeout; a 2xx is delivered. Otherwise retried after 1, 5, 30, 120 and 720 minutes, then `gave_up`; a 410 is
+given up at once and switches the endpoint off ("the address was removed on their side"); 25 failures in a row switch it off with the
+reason. The log (`webhook_deliveries`, also the queue) keeps 30 days. **Channel routing** for Slack / Teams = one endpoint per
+channel, each with its own events and websites (e.g. `#seo-alerts` ← `alert.raised` + `run.failed`, `#seo-wins` ← `rank.changed`).
+
 ## n8n → app
 `POST /api/hooks/n8n/:hookToken` — every callback of every run and every scheduled report of the company (the token is the
 company's `hook_token`; it is sent to n8n as `callback_url`). Body: the n8n callback (`stage`, `request_id`, …); embedded files are

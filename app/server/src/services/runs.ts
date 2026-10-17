@@ -35,6 +35,7 @@ import { assertGa4ForDomain } from './google';
 import { extractFiles } from './files';
 import { applyLadderPrefs, markLadderWon } from './ladderSettings';
 import { deliverReport } from './reportDelivery';
+import { emitForCallback, emitRunsFailed } from './webhooks';
 import { engineCostTable } from './engineCost';
 import { assertBudget, lockCompany } from './spend';
 import { engineCostEstimate, ledgerCost, stageOf, summarize, titleFor } from './summaries';
@@ -219,6 +220,7 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
       .set({ status: 'failed', error: res.error, requestId: res.requestId, completedAt: new Date() })
       .where(eq(schema.runs.id, run.id))
       .returning();
+    void emitRunsFailed([failed.id]).catch(() => undefined);
     return { run: failed, replayed: false };
   }
   // B-A6 (2026-10-15): the engine recognised a repeat of a request already running, did not start a second run and did not spend
@@ -333,6 +335,7 @@ export async function expireStaleRuns(): Promise<number> {
       ),
     )
     .returning({ id: schema.runs.id });
+  void emitRunsFailed(rows.map((r) => r.id)).catch(() => undefined);
   return rows.length;
 }
 
@@ -475,7 +478,7 @@ export async function ingestCallback(
     : null;
 
   const status = String(body.status ?? (stage === 'rejected' ? 'rejected' : 'completed'));
-  const reportId = await db.transaction(async (tx) => {
+  const stored = await db.transaction(async (tx) => {
     const [rep] = await tx
       .insert(schema.reports)
       .values({
@@ -492,7 +495,7 @@ export async function ingestCallback(
         summary: summarize(stage, body),
         payload,
       })
-      .returning({ id: schema.reports.id });
+      .returning({ id: schema.reports.id, title: schema.reports.title, receivedAt: schema.reports.receivedAt, scheduled: schema.reports.scheduled });
     if (files.length)
       await tx.insert(schema.files).values(
         files.map((f) => ({ id: f.id, orgId: org.id, reportId: rep.id, field: f.field, kind: f.kind, fileName: f.fileName, mimeType: f.mimeType, size: f.size, data: f.data })),
@@ -520,13 +523,17 @@ export async function ingestCallback(
     }
     if (site && (stage === 'site_tracker_setup' || stage === 'site_tracker') && site.trackingStatus === 'not_started')
       await tx.update(schema.sites).set({ trackingStatus: 'active', trackingStartedAt: new Date() }).where(eq(schema.sites.id, site.id));
-    return rep.id;
+    return rep;
   });
+  const reportId = stored.id;
   if (domain) invalidateSite(domain);
   // B-R1: push it. `deliverReport` decides for itself whether this report may leave the app (a page that failed its quality gate,
   // a refused plan or evidence the engine could not read is held with its reason), and a delivery that goes wrong is logged, never
   // allowed to lose the callback we have just stored.
   void deliverReport(org.id, reportId, deliveryLog).catch(() => undefined);
+  // G4: the company's event webhooks (run.completed / report.ready / alert.raised / audit.finding.new / rank.changed …), derived from
+  // this callback after it is stored — like delivery, an event that goes wrong never loses the callback
+  void emitForCallback(org, site, { id: reportId, title: stored.title, stage, status, receivedAt: stored.receivedAt, scheduled: stored.scheduled, runId: run?.id ?? null }, payload, run).catch(() => undefined);
   // the rank tracker says a ladder is won (main keyword top 3 in 4 checks): its settings row says so, so the cadence stops writing it
   // and the app keeps showing Won once the tracker stops checking it (not for a ladder the person paused)
   let ladderWon: boolean | undefined;

@@ -5,7 +5,8 @@ import { config } from '../config';
 import { sha256 } from '../lib/crypto';
 import { badRequest, HttpError, notFound, parse } from '../lib/errors';
 import { authenticateKey, createKey, listKeys, revokeKey } from '../services/apiKeys';
-import { modesV1, startRunV1 } from '../services/apiRuns';
+import { actorOf, modesV1, startRunV1 } from '../services/apiRuns';
+import { createEndpoint, deleteEndpoint, listEndpoints, listWebhookDeliveries, testEndpoint } from '../services/webhooks';
 import {
   fileOf,
   getAudit,
@@ -79,6 +80,10 @@ const ENDPOINTS = [
   'POST /api/v1/publish-check',
   'GET /api/v1/modes',
   'POST /api/v1/runs',
+  'GET /api/v1/webhooks',
+  'POST /api/v1/webhooks',
+  'DELETE /api/v1/webhooks/:id',
+  'POST /api/v1/webhooks/:id/test',
   'POST /api/v1/mcp',
 ];
 
@@ -262,6 +267,24 @@ export async function apiV1Routes(app: FastifyInstance) {
     const r = await startRunV1(ctx, req.body, Array.isArray(h) ? h[0] : h);
     if (r.replayed) reply.header(IDEMPOTENCY.replayHeader, 'true');
     return reply.status(r.status).send(r.body);
+  });
+
+  // ---- G4: event webhooks (scope "admin"; the key acts as its creator, who must still be an admin) ----
+  app.get('/api/v1/webhooks', { config: perMinute }, async (req) => {
+    const a = await actorOf(await v1Ctx(req), 'admin');
+    return { items: await listEndpoints(a.org.id), deliveries: await listWebhookDeliveries(a.org.id, 50) };
+  });
+  app.post('/api/v1/webhooks', { config: perRun }, async (req, reply) => {
+    const a = await actorOf(await v1Ctx(req), 'admin');
+    return reply.status(201).send(await createEndpoint(a.org, a.user, req.body));
+  });
+  app.delete('/api/v1/webhooks/:id', { config: perMinute }, async (req) => {
+    const a = await actorOf(await v1Ctx(req), 'admin');
+    return deleteEndpoint(a.org.id, (req.params as Args).id);
+  });
+  app.post('/api/v1/webhooks/:id/test', { config: perRun }, async (req) => {
+    const a = await actorOf(await v1Ctx(req), 'admin');
+    return testEndpoint(a.org, (req.params as Args).id);
   });
 
   app.post('/api/v1/publish-check', { config: perCheck, bodyLimit: 2 * 1024 * 1024 }, async (req, reply) => {
