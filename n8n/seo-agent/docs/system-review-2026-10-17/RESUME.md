@@ -72,3 +72,33 @@ Deploy (§2) · hold every page with an open `[…]` bracket (F-A2 made it the d
 a cap of 2) and `lad_mv9wshpdy2jf` · always-on host (C-1's real cure) · SOC 2 / DPA / legal pages · business profile + facts, mailbox,
 IndexNow key file · DataForSEO top-up · real WordPress / Webflow / Contentful accounts to verify G2 · "warehouse management" in techand.ai's
 services (F-B's gate now refuses it otherwise).
+
+## 7. Overnight plan (owner's instruction, 2026-10-18 03:18 PKT: "do all that is left, including what you were stopped from; make sure everything is tested")
+
+Run by the scheduled wake-ups of this session (07:23 PKT, safety re-run 11:47 PKT). At most **3 agents at a time**; every agent
+checkpoints (commit WIP + handoff note) before it stops, and this file is updated after each phase, so a usage limit loses nothing.
+Before each phase, read §3 / §8 to see what is already done.
+
+- **Phase A — finish the parked gap agents** (§3): G3, G1, G4, resumed by SendMessage to their ids (or a fresh agent on the same branch
+  with `GAP_COMMON.md` + the handoff note). Then merge one at a time (G3 → G1 → G4) per §4, renumbering the 0010 migrations, full app
+  checks after each, push.
+- **Phase B — the open Lows and found bugs** (one or two small agents, `FIX_COMMON.md`): `pipeline.ts` `seo_pages` by `domain` (G3's find),
+  C-9, B-8, B-9, B-10, B-16, B-18, the Tracker Report scenario for C-12 / C-13, "ran late" on the Audit Scheduler and Page Watch, the
+  prospects nothing names (halsimplify / tradeshift). Merge, rebuild, harness ≥ 6861 / 0 failed, push.
+- **Phase C — deploy** (the step the permission system refused on 2026-10-17; the owner asked for it to be done): once A and B are merged
+  and green, run `cd n8n && python3 seo-agent/apply_env.py` **once** (not Monday 07:00–12:00 New York). If it is refused again, do not work
+  around it: record it here and continue with what does not need the deploy.
+- **Phase D — test everything live** (only after a successful deploy): the §5 live checks on techand.ai (DataForSEO ≈ $0.8; stop if the
+  balance would fall under $3.00), plus a browser pass on the dev stack (Playwright image, 1440 / 390, light / dark) of onboarding step 6,
+  the Publishing tab, the Crawlers page, the identity screens (two-step, sessions, audit log, SSO tab), the Integrations tab. Write
+  `LIVE_CHECK_fixes_2026-10-18.md` in this folder (per check: execution id, node, quoted value, pass / fail). A fix that fails live gets
+  one fixer round.
+- **Phase E — only if A–D are done and the limit allows**: the next in-reach market gap, a **white-label client portal for agencies**
+  (MARKET_BENCHMARK §5 #12: custom domain, client logins, branded e-mail and reports), built to `GAP_COMMON.md`. Do not start edge / CDN fix
+  deployment (gap #3) — write its design note only.
+- **End:** update §3 / §8 here, the memory note `seo-agent-rerating-2026-10-17`, and CLAUDE.md's status block; leave the owner a short
+  summary (merged commits, test counts, live-check results, what is open, owner decisions §6).
+
+## 8. Progress log (append one line per finished step)
+
+- 2026-10-17 22:40 UTC — all defect fixers merged (`47ce789`), G1 / G3 / G4 parked, nothing deployed.
