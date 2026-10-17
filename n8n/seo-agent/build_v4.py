@@ -9913,6 +9913,13 @@ def _b98_catchup():
             'R94: ' + _door98 + ' can reach Start Missed Run without passing Save Catch-up Record - the start must come after its record'
     assert _out98(_cc98, 'Save Catch-up Record') == ['Confirm Claim'] and _out98(_cc98, 'Confirm Claim') == ['Catch-up Payload'], \
         'R94 / C-1: the payload is not built from the saved record read back (Confirm Claim)'
+    # ---------- C-16: the mail watcher's watchdog re-activates only behind its decision, never on a test, and alarms through the Error Handler ----------
+    _wdg98 = _wire98.get('watchdog') or {}
+    assert _wdg98.get('id') == 'SEOagentConsole1', 'C-16: the watchdog does not watch the Search Console mail watcher: ' + str(_wdg98)
+    for _p98 in ('Deactivate Mailbox', 'Activate Mailbox'):
+        assert _p98 in _reach98('Save Catch-up Report', None) and _p98 not in _reach98('Save Catch-up Report', 'Mailbox Down?'), \
+            'C-16: ' + _p98 + ' can run without the watchdog deciding the watcher is down'
+    assert _out98(_cc98, 'Save Watchdog State') == ['Watchdog Alarm'], 'C-16: the alarm does not follow the saved watchdog record'
     # ---------- C. deployment: imported, published, credential, time zone ----------
     _ae98 = open(os.path.join(HERE0, 'apply_env.py'), encoding='utf-8').read()
     _tree98 = _ast98.parse(_ae98)

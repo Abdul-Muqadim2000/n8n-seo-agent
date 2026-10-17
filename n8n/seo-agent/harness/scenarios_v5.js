@@ -14972,6 +14972,65 @@ await guard('SC2 C-1 a late run says so', async () => {
     !C.ran_late && C.subject === CB.subject && C.html === CB.html && !D.ran_late && D.subject === CB.subject, JSON.stringify([C.ran_late, D.ran_late, C.subject]));
   reset();
 });
+
+await guard('SC3 C-16 the mail watcher watchdog', async () => {
+  const SN = 'SC3 C-16 — the Search Console mail watcher is judged by the Error Handler\'s record of its drops, not by the API\'s "active" flag: a drop after its last (re)arming is re-activated through the public API, a failed re-activation is retried and after three in a row the run fails so the ops alert goes out; the owner\'s switch-off is never touched';
+  reset(); begin(SN);
+  const check = C1.check(SN), CU_RUN = R94.CU_RUN;
+  const CUK = (() => { const src = require('fs').readFileSync(require('path').join(process.env.CODE_DIR || require('path').join(__dirname, 'code_v4'), 'Catchup__Watchdog_Result.js'), 'utf8'); const m = src.match(/const CU = \(\(\) => \{[\s\S]*?\n\}\)\(\);/); return m ? new Function(m[0] + '; return CU;')() : null; })();
+  const CU_WD = (st, code) => CUK.watchdogResult({ state: st, decision: {}, deactivate: { statusCode: 200, body: { active: false } }, activate: { statusCode: code, body: { message: 'getaddrinfo ENOTFOUND imap.gmail.com' } } });
+  // the real alert row 4 (seo_ops_alerts after the 2026-10-17 wave) and the real workflow state: published at the 15:07 deploy, API "active: true"
+  const ROW4 = { id: 4, workflow: 'SEO Agent — Console Alerts', node: 'Mailbox Trigger', mode: 'trigger', severity: 'critical', count: 5,
+    message: 'The trigger node "Mailbox Trigger" failed at runtime and was deactivated — The IMAP server closed the connection without reporting an error, usually because the server (or a proxy/firewall) periodically closes long-lived connections, or was temporarily unavailable. n8n will automatically retry reactivating the workflow. — IMAP connection closed unexpectedly',
+    first_seen_at: '2026-10-13T17:52:35.392Z', last_seen_at: '2026-10-17T18:31:28.219Z' };
+  const ROW3 = { id: 3, workflow: 'SEO Agent — Console Alerts', node: 'unknown node', message: 'no message', last_seen_at: '2026-10-13T03:07:39.348Z' };
+  const WF = (o) => ({ json: { statusCode: 200, headers: {}, body: { id: 'SEOagentConsole1', name: 'SEO Agent — Console Alerts', active: true, updatedAt: '2026-10-17T15:07:40.000Z', ...(o || {}) } } });
+  const stateRec = (v) => ({ json: { key: 'catchup:watchdog:SEOagentConsole1', kind: 'catchup', value: JSON.stringify(v) } });
+  const planWith = async (wf, alerts, state, entry) => {
+    mock('Catch-up Entry', [{ json: { entry: 'sweep', now: new Date().toISOString(), ...(entry || {}) } }]);
+    mock('Read Mailbox Workflow (Watchdog)', [wf]);
+    mock('Load Mailbox Alerts (Watchdog)', alerts.length ? alerts.map(a => ({ json: a })) : [{ json: {} }]);
+    mock('Load Catch-up Records', state ? [stateRec(state)] : [{ json: {} }]);
+    return (await CU_RUN('Watchdog Plan', [{ json: {} }]))[0].json;
+  };
+  const A = await planWith(WF(), [ROW3, ROW4]);
+  check('C-16: the 18:31 drop (row 4) is newer than the 15:07 publish, so the API\'s "active: true" is not believed - the watchdog decides to re-activate (deactivate, then activate), with the reason',
+    A.action === 'reactivate' && A.skip === false && A.last_drop === '2026-10-17T18:31:28.219Z' && /does not say it is listening/.test(A.reason)
+    && /\/workflows\/SEOagentConsole1\/deactivate$/.test(A.deactivate_url) && /\/workflows\/SEOagentConsole1\/activate$/.test(A.activate_url), JSON.stringify(A));
+  mock('Deactivate Mailbox', [{ json: { statusCode: 200, body: { id: 'SEOagentConsole1', active: false } } }]);
+  mock('Activate Mailbox', [{ json: { statusCode: 200, body: { id: 'SEOagentConsole1', active: true } } }]);
+  const OK = JSON.parse((await CU_RUN('Watchdog Result', [{ json: {} }]))[0].json.value);
+  check('C-16: a re-activation n8n accepted (HTTP 200, active) is recorded "listening again" with its time, and resets the failure count',
+    /listening again/.test(OK.last_result) && OK.failures === 0 && OK.reactivated_at && OK.left_inactive === false && OK.alarm === false, JSON.stringify(OK));
+  const B = await planWith(WF(), [ROW4], OK);
+  check('C-16: the next sweep sees the drop older than the watchdog\'s own re-activation - "listening", nothing done',
+    B.action === 'none' && B.verdict === 'listening', JSON.stringify(B));
+  // ---- the Mac woke without DNS: n8n answers 400 to the activation (ENOTFOUND imap.gmail.com) ----
+  delete store['Deactivate Mailbox'];
+  mock('Deactivate Mailbox', [{ json: { statusCode: 200, body: { id: 'SEOagentConsole1', active: false } } }]);
+  mock('Activate Mailbox', [{ json: { statusCode: 400, body: { message: 'getaddrinfo ENOTFOUND imap.gmail.com' } } }]);
+  await planWith(WF(), [ROW4]);
+  const F1 = JSON.parse((await CU_RUN('Watchdog Result', [{ json: {} }]))[0].json.value);
+  check('C-16: a re-activation n8n refused is "not listening" with n8n\'s own reason (never "re-activated"), and the watchdog knows it left the workflow switched off',
+    /not listening/.test(F1.last_result) && /activate: getaddrinfo ENOTFOUND imap\.gmail\.com/.test(F1.last_error) && F1.failures === 1 && F1.left_inactive === true && F1.alarm === false, JSON.stringify(F1));
+  const C = await planWith(WF({ active: false }), [ROW4], { ...F1, last_try_at: new Date(Date.now() - 40 * 60000).toISOString() });
+  check('C-16: 40 minutes later it switches back on the workflow IT left off (activate only), while a workflow the owner switched off is never touched',
+    C.action === 'activate' && (await planWith(WF({ active: false }), [ROW4], {})).verdict === 'off', JSON.stringify(C));
+  const W = await planWith(WF({ active: false }), [ROW4], { ...F1, last_try_at: new Date(Date.now() - 5 * 60000).toISOString() });
+  check('C-16: and it waits 30 minutes between tries, so a sleeping network is not hammered every sweep', W.action === 'none' && W.verdict === 'waiting', JSON.stringify(W));
+  const st2 = CU_WD(F1, 400), st3 = CU_WD(st2, 400);
+  mock('Watchdog Result', [{ json: { key: 'catchup:watchdog:SEOagentConsole1', value: JSON.stringify(st3) } }]);
+  let threw = ''; try { await run('Watchdog Alarm', [{ json: {} }], { code: 'Catchup__Watchdog_Alarm' }); } catch (e) { threw = String(e.message || e); }
+  H.results[H.results.length - 1].ok = !!threw; if (threw) H.results[H.results.length - 1].error = 'threw as expected';
+  mock('Watchdog Result', [{ json: { key: 'catchup:watchdog:SEOagentConsole1', value: JSON.stringify(st2) } }]);
+  const quiet = (await run('Watchdog Alarm', [{ json: {} }], { code: 'Catchup__Watchdog_Alarm' }))[0].json;
+  check('C-16: after the third failed re-activation in a row the sweep fails with the reason, so the Error Handler raises the ops alert; after the second it does not',
+    st3.failures === 3 && st3.alarm === true && /mail watcher .* is not listening: 3 re-activation\(s\) in a row failed/.test(threw) && quiet.failures === 2, JSON.stringify({ threw, st3 }));
+  const T = await planWith(WF(), [ROW4], null, { plan_only: true });
+  const TR = await CU_RUN('Watchdog Result', [{ json: {} }]);
+  check('C-16: a test run of the catch-up (plan only) neither re-activates nor writes the watchdog record', T.skip === true && T.test === true && TR.length === 0, JSON.stringify([T, TR]));
+  reset();
+});
 // ===================================================================================
 // S106-S109 (agent A3, 2026-10-16): the weekly site report's monitor block compares like with like (R78), shows one backlink count
 // (R112), and its subject line follows its own significance test (R113). Fixtures: harness/fixtures_ra3.js (exec 634's rows).

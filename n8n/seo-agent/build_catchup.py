@@ -120,6 +120,24 @@ def schedules():
 
 
 SCHED = schedules()
+
+
+def watched():
+    """C-16: the workflow whose trigger is a long-lived mail connection (the Search Console mail watcher). Its IMAP trigger drops when the
+    Mac wakes without DNS and n8n's own re-activation is tried once and fails, while the API keeps saying `active: true`."""
+    found = []
+    for fn in sorted(os.listdir(OUT)):
+        if not fn.endswith('.json') or fn in NOT_GENERATED or fn == FILE:
+            continue
+        for wf in json.load(open(os.path.join(OUT, fn), encoding='utf-8')):
+            for n in wf['nodes']:
+                if n['type'] == 'n8n-nodes-base.emailReadImap':
+                    found.append({'id': wf['id'], 'name': wf['name'], 'trigger_node': n['name'], 'file': fn})
+    assert len(found) == 1, 'C-16: expected one workflow with an IMAP trigger (the Search Console mail watcher), found ' + str(found)
+    return found[0]
+
+
+WATCH = watched()
 try:   # the time zone must be one the platform knows, or every due time is wrong
     from zoneinfo import ZoneInfo
     ZoneInfo(TZ)
@@ -133,7 +151,8 @@ def src(file):
     slim = [{k: v for k, v in x.items() if k not in ('name', 'trigger_node')} for x in SCHED]
     s = s.replace('__SCHEDULES__', json.dumps(slim, ensure_ascii=False)).replace('__CONFIG__', json.dumps(CONFIG))
     s = s.replace('__TZ__', TZ).replace('__N8N_API__', N8N_API).replace('__EXEC_LIMIT__', str(EXEC_LIMIT))
-    left = re.findall(r'/\*__[A-Z_]+__\*/|__(?:SCHEDULES|CONFIG|TZ|N8N_API|EXEC_LIMIT)__', s)
+    s = s.replace('__WATCH__', json.dumps({k: WATCH[k] for k in ('id', 'name', 'trigger_node')}, ensure_ascii=False))
+    left = re.findall(r'/\*__[A-Z_]+__\*/|__(?:SCHEDULES|CONFIG|TZ|N8N_API|EXEC_LIMIT|WATCH)__', s)
     assert not left, file + ': placeholder left ' + str(left)
     return s
 
@@ -206,6 +225,27 @@ node('Save Start Result', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CAC
 node('Space Starts', 'n8n-nodes-base.wait', 1.1, {'amount': 30, 'unit': 'seconds'}, at(24, 1), webhookId=node_id(NAME, 'Space Starts:hook'))
 code('Catch-up Report', 'Catchup_Report.js', at(17, 0))
 node('Save Catch-up Report', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), at(18, 0), **SAVE)
+# ---- C-16 (re-rating 2026-10-17): the mail watcher's watchdog, last in the sweep (every catch-up start has happened by then) ----
+from ladder_common import OPS_ALERTS_TABLE
+api_get('Read Mailbox Workflow (Watchdog)', '=' + N8N_API + '/workflows/' + WATCH['id'] + '?excludePinnedData=true', at(19, -1))
+node('Load Mailbox Alerts (Watchdog)', DT_TYPE, DT_VERSION, dt_get_where_params(OPS_ALERTS_TABLE, 'workflow', 'eq', WATCH['name']), at(20, -1), **LOAD)
+code('Watchdog Plan', 'Watchdog_Plan.js', at(21, -1)); iff('Mailbox Down?', '{{ !$json.skip }}', at(22, -1)); iff('Deactivate First?', "{{ $json.action === 'reactivate' }}", at(23, -2))
+
+
+def api_post(name, url_expr, pos):
+    """deactivate / activate through n8n's public API. Both are idempotent (a second activate of an active workflow changes nothing), so the
+    one retry rule applies; neverError + fullResponse so the result node reads the status code and n8n's own reason (a 400 when the IMAP
+    server cannot be reached is "not listening", never "re-activated")."""
+    return node(name, 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': url_expr, 'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+        'options': {'timeout': 30000, 'response': {'response': {'fullResponse': True, 'neverError': True}}}},
+        pos, credentials=CRED, onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True, **retry_lint.RETRY)
+
+
+api_post('Deactivate Mailbox', "={{ $('Watchdog Plan').first().json.deactivate_url }}", at(24, -2))
+api_post('Activate Mailbox', "={{ $('Watchdog Plan').first().json.activate_url }}", at(25, -1))
+code('Watchdog Result', 'Watchdog_Result.js', at(26, -1))
+node('Save Watchdog State', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), at(27, -1), **SAVE)
+code('Watchdog Alarm', 'Watchdog_Alarm.js', at(28, -1))
 
 link('Instance Started', 'Let n8n Start'); link('Let n8n Start', 'Catch-up Entry'); link(SWEEP, 'Catch-up Entry'); link('Catch-up Run', 'Catch-up Entry')
 for a, b in [('Catch-up Entry', 'Ensure Cache Table (Catch-up)'), ('Ensure Cache Table (Catch-up)', 'Load Catch-up Records'), ('Load Catch-up Records', 'Load Run Ledger (Catch-up)'),
@@ -220,6 +260,12 @@ link('Any State?', 'Save Catch-up State', 0); link('Any State?', 'Catch-up Start
 link('Any Starts?', 'Loop Catch-ups', 0); link('Any Starts?', 'Catch-up Report', 1)
 link('Loop Catch-ups', 'Catch-up Report', 0); link('Loop Catch-ups', 'Catch-up Record Row', 1)   # splitInBatches v3: 0 = done, 1 = loop
 link('Recorded?', 'Start Missed Run', 0); link('Recorded?', 'Loop Catch-ups', 1)
+for a, b in [('Save Catch-up Report', 'Read Mailbox Workflow (Watchdog)'), ('Read Mailbox Workflow (Watchdog)', 'Load Mailbox Alerts (Watchdog)'),
+             ('Load Mailbox Alerts (Watchdog)', 'Watchdog Plan'), ('Watchdog Plan', 'Mailbox Down?'), ('Deactivate Mailbox', 'Activate Mailbox'),
+             ('Activate Mailbox', 'Watchdog Result'), ('Watchdog Result', 'Save Watchdog State'), ('Save Watchdog State', 'Watchdog Alarm')]:
+    link(a, b)
+link('Mailbox Down?', 'Deactivate First?', 0); link('Mailbox Down?', 'Watchdog Result', 1)
+link('Deactivate First?', 'Deactivate Mailbox', 0); link('Deactivate First?', 'Activate Mailbox', 1)
 
 table = '\n'.join('| %s | `%s` | %s | %s |' % (s['label'], s['cron'], s['kind'], s['entry_node']) for s in SCHED)
 node('Note', 'n8n-nodes-base.stickyNote', 1, {'width': 1500, 'height': 520, 'color': 6, 'content': """## SEO Agent — Schedule Catch-up (R94, 2026-10-16)
@@ -254,6 +300,6 @@ for n in N:
         open(os.path.join(CODE, CODE_PREFIX + re.sub(r'[^A-Za-z0-9_.-]+', '_', n['name']) + '.js'), 'w').write(n['parameters']['jsCode'])
 # what the harness reads (S126-S129) and build section 98 extends: the schedule table as baked, and the settings it was baked with
 json.dump({'workflow': {'id': WID, 'name': NAME, 'file': FILE}, 'tz': TZ, 'default_tz': DEFAULT_TZ, 'n8n_api': N8N_API, 'credential': CRED['httpHeaderAuth']['id'],
-           'config': CONFIG, 'exec_limit': EXEC_LIMIT, 'schedules': SCHED},
+           'config': CONFIG, 'exec_limit': EXEC_LIMIT, 'schedules': SCHED, 'watchdog': WATCH},
           open(os.path.join(HERE, 'harness', 'catchup_wiring.json'), 'w'), indent=1, sort_keys=True)
 print('wrote', FILE + ':', len(N), 'nodes;', len(SCHED), 'schedules caught up (' + TZ + ')')
