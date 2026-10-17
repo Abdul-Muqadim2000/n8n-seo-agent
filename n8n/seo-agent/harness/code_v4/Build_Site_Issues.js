@@ -124,6 +124,21 @@ const IMP = (() => {
   const SEV_ORD = { Critical: 0, High: 1, Medium: 2, Low: 3, Info: 4 };
   // what stops Google indexing a page or sends it somewhere else: these come first whatever else is in the list
   const BLOCKER = /noindex|not indexable|non-indexable|blocked by robots|robots\.txt (blocks|disallow)|disallowed|broken pages|returning 4xx|server errors|canonical (points|to broken|to a redirect|chain)|recursive canonical|soft 404|redirect (loop|chain)|not indexed|index coverage|crawler access|meta refresh|www and non-www|duplicate host|HTTP does not redirect|sitemap is (missing|not)|no sitemap/i;
+  // B-6 (2026-10-17, re-rating 2026-10-17, execs 739 / 767): the reason a blocker is first was one sentence for every class — "Google cannot
+  // index or follow these pages" — printed under the www / non-www split finding whose own text says Google shows and ranks those pages under
+  // the other address and that requesting indexing does not help. The reason now names what THIS class of blocker does.
+  const blockerWhy = (f) => {
+    const t = S((f || {}).title);
+    if (/www and non-www|duplicate host|split in Google/i.test(t)) return 'Google splits these pages between two addresses of the site, so their links and ranking signals are divided';
+    if (/HTTP does not redirect/i.test(t)) return 'the insecure address of these pages is served as a separate page';
+    if (/redirect (loop|chain)/i.test(t)) return 'crawlers are sent through redirects before they reach these pages';
+    if (/canonical/i.test(t)) return 'these pages send Google to another address as the one to index';
+    if (/sitemap/i.test(t)) return 'Google is not given a working list of the pages to crawl';
+    if (/crawler access|blocked by robots|robots\.txt|disallow/i.test(t)) return 'crawlers are told not to read these pages';
+    if (/broken pages|returning 4xx|server errors|soft 404/i.test(t)) return 'these addresses do not answer with a page';
+    if (/not indexed|index coverage/i.test(t)) return 'Google has not indexed these pages';
+    return 'Google cannot index or follow these pages';
+  };
   // items that change nothing a visitor or a crawler acts on: they are worth fixing, never first
   const COSMETIC = /favicon|doctype|charset|deprecated html|readab|text-to-html|alt text|open graph|social (image|card)/i;
   // ---- G18-2 (2026-10-12, measured by the accuracy set): the minor band, folded into one line ----
@@ -292,7 +307,7 @@ const IMP = (() => {
       f.impact_source = ga ? (sc ? 'search_console_and_ga4_key_events' : 'ga4_key_events') : (sc ? 'search_console' : 'none');   // B5-12: which weight this finding used
       f.minor = isMinor(f);   // G18-2: folded in the reports and in the app, never removed
       f.impact_basis = [
-        blocker ? 'Google cannot index or follow these pages' : '',
+        blocker ? blockerWhy(f) : '',
         siteWide ? 'the whole website' : affected + ' of ' + total + ' crawled pages',
         sc ? (measured || siteWide ? 'about ' : 'an estimated ') + fmt(clicks) + ' clicks and ' + fmt(impressions) + ' impressions in the last 28 days'
           + (capped ? ' (capped at everything the whole website measured in that period: the pages affected cannot put more at risk)' : '') : 'no Search Console data, so the pages affected and their place in the site decide the order',
@@ -388,12 +403,18 @@ const findings = [];
 const whatWorks = [];
 let schema_flag = null;   // R24: the crawl's structured-data flag, reported in `not_assessed` by a technical audit
 
+// B-14 (F-B, 2026-10-17, exec 739): the crawler's flag gave no reason and listed /cookies; a URL is listed only with a reason we can name
+const urlWhy14 = (u) => { const m = String(u || '').match(/^https?:\/\/[^\/]+([^#]*)$/); const pth = m ? m[1] : String(u || ''); const why = [];
+  if (/\?/.test(pth)) why.push('carries parameters'); if (/[A-Z]/.test(pth.replace(/\?.*$/, ''))) why.push('has capital letters'); if (/_/.test(pth)) why.push('uses underscores');
+  const joined = pth.replace(/\?.*$/, '').split(/[\/-]/).filter(sg => sg && sg.length >= 7 && (sg.match(/what|why|how|who|with|and|our|your|the|for|we|do/g) || []).length >= 2);
+  if (joined.length) why.push('joins words without hyphens ("' + joined[0] + '")'); return why.join(', '); };
 for (const c of CATALOG) {
   const pool = (c.key === 'is_redirect' || c.key === 'has_links_to_redirects') ? redirectItems.concat(pages) : pages;   // R63: only the two redirect checks look at redirect items
   const affected = pool.filter(p => {
     const v = p.checks ? p.checks[c.key] : undefined;
     if (v === undefined || v === null) return false;
     if (c.key === 'deprecated_html_tags' && v === true) { const t = obsoleteTags(p); if (t && !t.length) return false; }   // R71
+    if (c.key === 'seo_friendly_url' && v === false && !urlWhy14(p.url)) return false;   // B-14
     return c.invert ? v === false : v === true;
   });
   const redirOnly = (c.key === 'is_redirect' || c.key === 'has_links_to_redirects') && affected.length > 0 && affected.every(isRedirectItem);
@@ -410,7 +431,7 @@ for (const c of CATALOG) {
         : redirOnly ? affected.length + ' of ' + (total + redirectItems.length) + ' crawled URLs redirect' : affected.length + ' of ' + total + ' crawled pages',
       affected_count: affected.length,
       affected_pct: Math.round(affected.length / total * 100),
-      sample_urls: affected.slice(0, 10).map(p => { const ot = c.key === 'deprecated_html_tags' ? obsoleteTags(p) : null; return ot && ot.length ? p.url + ' — <' + ot.join('>, <') + '>' : p.url; }),
+      sample_urls: affected.slice(0, 10).map(p => { const ot = c.key === 'deprecated_html_tags' ? obsoleteTags(p) : null; return ot && ot.length ? p.url + ' — <' + ot.join('>, <') + '>' : (c.key === 'seo_friendly_url' ? p.url + ' — ' + urlWhy14(p.url) : p.url); }),
       scope: 'page'
     });
   }

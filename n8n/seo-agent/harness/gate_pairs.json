@@ -49,8 +49,9 @@
    "readers": {
     "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Ladder Plan": false,
     "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Ladder Settings Rows": false,
+    "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Own Coverage (Run)": true,
     "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Publish Check": false,
-    "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Rank Keywords": false,
+    "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Rank Keywords": true,
     "SEO Agent \u2014 AI Growth / Growth Plan": true,
     "SEO Agent \u2014 AI Pulse / AI Plan": true,
     "SEO Agent \u2014 AI Visibility Tracker / AI Plan": true,
@@ -153,7 +154,6 @@
    "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Ladder Plan",
    "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Ladder Settings Rows",
    "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Publish Check",
-   "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Rank Keywords",
    "SEO Agent \u2014 Audit Scheduler / Audit Candidates",
    "SEO Agent \u2014 Backlink Monitor / BL Plan",
    "SEO Agent \u2014 Console Alerts / Alert Target",
