@@ -1,5 +1,6 @@
 import { Link } from 'react-router';
 import { ArrowRight, BadgeCheck, Bot, Check, Globe, Link2, Lock, MessageSquare, Minus, Search, ShieldCheck, Sparkles, Users, Wallet, type LucideIcon } from 'lucide-react';
+import { AscentraMark } from '@/components/brand/AscentraMark';
 import { ButtonLink } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
@@ -182,10 +183,10 @@ function Hero() {
     <section className="relative isolate overflow-hidden bg-page">
       {/* hairline grid behind the headline, fading out from the top centre (a mask, not a colour gradient) */}
       <div aria-hidden className="mk-grid pointer-events-none absolute inset-x-0 top-0 -z-10 h-[760px]" />
-      {/* the brand mark, large and faint behind the headline (the supplied mark as a mask: ink on light, light on dark) */}
-      <span
-        aria-hidden
-        className="mk-watermark pointer-events-none absolute -right-40 top-64 -z-10 aspect-[911/797] w-[420px] bg-ink/[0.05] sm:-right-24 sm:top-10 sm:w-[560px] lg:-right-10 lg:top-6 lg:w-[720px]"
+      {/* the brand mark, large and faint behind the headline (ink on light, light on dark), a slow wave running from its sun to its wing tip */}
+      <AscentraMark
+        wave="ambient"
+        className="pointer-events-none absolute -right-40 top-64 -z-10 w-[420px] text-ink opacity-[0.15] sm:-right-24 sm:top-10 sm:w-[560px] lg:-right-10 lg:top-6 lg:w-[720px]"
       />
       <Container className="pt-12 sm:pt-16 lg:pt-20">
         <div className="mx-auto max-w-5xl text-center">
