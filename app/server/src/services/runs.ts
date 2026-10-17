@@ -31,7 +31,7 @@ import { safeEqual } from '../lib/crypto';
 import { badRequest, forbidden, notFound } from '../lib/errors';
 import { insertRows, invalidateSite, siteRows, startRun, updateRows } from '../n8n/client';
 import { assertGa4ForDomain } from './google';
-import { extractFiles } from './files';
+import { extractFiles, shownFileKind } from './files';
 import { applyLadderPrefs, markLadderWon } from './ladderSettings';
 import { deliverReport } from './reportDelivery';
 import { engineCostTable } from './engineCost';
@@ -554,7 +554,8 @@ export function toReport(r: Pick<ReportRow, 'id' | 'runId' | 'siteId' | 'stage' 
     siteDomain,
     stage: r.stage,
     status: r.status,
-    title: r.title,
+    // D-13: pulse reports stored before 2026-10-18 are titled "AI pulse alert" even on a day with no alert
+    title: r.stage === 'ai_pulse' && r.summary?.alerts === 0 ? r.title.replace(/^AI pulse alert\b/, 'AI pulse') : r.title,
     summary: r.summary,
     receivedAt: r.receivedAt.toISOString(),
     scheduled: r.scheduled,
@@ -571,7 +572,7 @@ export async function filesFor(reportIds: string[]): Promise<Map<string, ReportF
     .where(inArray(schema.files.reportId, reportIds));
   for (const f of rows) {
     const list = m.get(f.reportId) ?? [];
-    list.push({ id: f.id, kind: f.kind as ReportFile['kind'], fileName: f.fileName, mimeType: f.mimeType, size: f.size, field: f.field });
+    list.push({ id: f.id, kind: shownFileKind(f), fileName: f.fileName, mimeType: f.mimeType, size: f.size, field: f.field });
     m.set(f.reportId, list);
   }
   return m;

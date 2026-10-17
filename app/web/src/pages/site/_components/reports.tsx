@@ -40,7 +40,7 @@ export function isFixPackFile(f: ReportFile): boolean {
   return /fix/i.test(f.field) || (f.kind === 'zip' && /fix/i.test(f.fileName)) || FIX_NAMES.test(f.fileName);
 }
 
-const FILE_ORDER: ReportFile['kind'][] = ['pdf', 'docx', 'doc', 'html', 'md', 'zip', 'json', 'csv', 'txt', 'other'];
+const FILE_ORDER: ReportFile['kind'][] = ['pdf', 'docx', 'doc', 'html', 'md', 'zip', 'json', 'csv', 'txt', 'image', 'other'];
 const isInline = (f: ReportFile) => f.kind === 'pdf' || f.kind === 'html';
 
 export function FileChip({ orgId, f, size = 'sm' }: { orgId: string; f: ReportFile; size?: 'sm' | 'md' }) {

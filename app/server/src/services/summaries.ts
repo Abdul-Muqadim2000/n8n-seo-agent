@@ -129,6 +129,7 @@ export function summarize(stage: string, p: P): Summary {
     }
     case 'ai_growth': {
       // v4.12: the weekly AI growth loop
+      if (p.dry_run === true) put('dryRun', true);   // D-4: a test run submitted nothing
       const sub = obj(p.submitted);
       put('submitted', (num(obj(sub.bing).submitted) ?? 0) + (num(obj(sub.indexnow).submitted) ?? 0));
       put('pagesChecked', Array.isArray(p.pages) ? p.pages.length : null);
@@ -200,6 +201,10 @@ export function titleFor(stage: string, p: P): string {
   if (stage === 'content' && kw) return `${p.html ? 'Page' : 'Keyword report'}: ${kw}`;
   if ((stage === 'ladder_plan' || stage === 'rank_tracker') && kw) return `${base}: ${kw}`;
   if (stage === 'published' && kw) return `Publish check: ${kw}`;
+  // D-13: a pulse day with no real change is not an "alert" (report 12 of 2026-10-17: "AI pulse alert" over 0 alerts)
+  if (stage === 'ai_pulse') return `${len(p.alerts) ? 'AI pulse alert' : base}${dom ? ` · ${dom}` : ''}`;
+  // D-4: an AI Growth dry run (`dry_run: true`) submitted nothing; its title must not read as the week's work
+  if (stage === 'ai_growth' && p.dry_run === true) return `${base} · dry run, nothing submitted${dom ? ` · ${dom}` : ''}`;
   return dom ? `${base} · ${dom}` : base;
 }
 

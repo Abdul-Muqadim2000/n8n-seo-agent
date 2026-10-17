@@ -18,6 +18,15 @@ export const objs = (v: unknown): P[] => arr(v).filter((x): x is P => !!x && typ
 export const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 export const str = (v: unknown): string => (typeof v === 'string' ? v : v == null ? '' : typeof v === 'number' || typeof v === 'boolean' ? String(v) : '');
 export const strs = (v: unknown): string[] => arr(v).map(str).filter(Boolean);
+
+/**
+ * D-13: the engine's "started" notes say where the report goes in API terms ("arrives at your callback", "will be sent to … and
+ * your callback"). In the app the callback IS this page, so the customer reads "arrives here".
+ */
+export const inAppWording = (s: string): string =>
+  s
+    .replace(/\barrives at (?:(\S+@\S+?) and )?your callback\b/g, (_m, email?: string) => (email ? `arrives here and at ${email}` : 'arrives here'))
+    .replace(/\bwill be sent to (?:(\S+@\S+?) and )?your callback\b/g, (_m, email?: string) => (email ? `will appear here and be sent to ${email}` : 'will appear here'));
 export const has = (v: unknown): boolean => (Array.isArray(v) ? v.length > 0 : v != null && v !== '' && !(typeof v === 'object' && !Object.keys(v as object).length));
 
 /** "1,600" / "12K" for counts; "–" when missing. */

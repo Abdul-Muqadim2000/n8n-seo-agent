@@ -156,7 +156,8 @@ export interface Run {
 
 export interface ReportFile {
   id: string;
-  kind: 'pdf' | 'docx' | 'doc' | 'html' | 'md' | 'json' | 'zip' | 'csv' | 'txt' | 'other';
+  /** `image` since 2026-10-18 (D-13): a page's hero and in-body images (.webp / .png / .jpg) were listed as a generic "File" */
+  kind: 'pdf' | 'docx' | 'doc' | 'html' | 'md' | 'json' | 'zip' | 'csv' | 'txt' | 'image' | 'other';
   fileName: string;
   mimeType: string;
   size: number;

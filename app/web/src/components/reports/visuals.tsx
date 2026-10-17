@@ -2,7 +2,7 @@
 // score mark for the hero's aside, download cards, and small in-cell measures for keyword tables (volume bar, difficulty meter,
 // position pill). Colours: blue for categories and intensity, status tokens only where the colour means good / bad (always with a word).
 import { createContext, useContext, type ReactNode } from 'react';
-import { AlertOctagon, AlertTriangle, CheckCircle2, Download, ExternalLink as ExternalIcon, File, FileArchive, FileCode, FileJson, FileSpreadsheet, FileText, FileType, Files, Info } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, CheckCircle2, Download, ExternalLink as ExternalIcon, File, FileArchive, FileCode, FileImage, FileJson, FileSpreadsheet, FileText, FileType, Files, Info } from 'lucide-react';
 import type { ReportDetail, ReportFile } from '@seo/shared';
 import { fileUrl } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
@@ -187,6 +187,7 @@ const KIND_ICON: Record<ReportFile['kind'], ReactNode> = {
   zip: <FileArchive />,
   csv: <FileSpreadsheet />,
   txt: <FileText />,
+  image: <FileImage />,
   other: <File />,
 };
 
@@ -200,6 +201,7 @@ const KIND_TITLE: Record<ReportFile['kind'], string> = {
   zip: 'ZIP',
   csv: 'CSV',
   txt: 'Text',
+  image: 'Image',
   other: 'File',
 };
 
