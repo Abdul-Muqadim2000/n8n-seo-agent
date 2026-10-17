@@ -231,7 +231,7 @@ export function CostLine({ run }: { run: Run }) {
     <span className="inline-flex flex-col items-end gap-1 tabular">
       <span className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-xs font-medium text-ink-2" title={cost.basis}>
         <Coins className="size-3 text-ink-3" aria-hidden />
-        {formatUsd(cost.usd, cost.source === 'measured' ? 3 : 2)}
+        {formatUsd(cost.usd, cost.source === 'measured' || cost.source === 'partial' ? 3 : 2)}
       </span>
       <span className="block text-xs text-ink-3">{COST_SOURCE_LABEL[cost.source]}</span>
     </span>

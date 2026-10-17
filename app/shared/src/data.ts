@@ -897,6 +897,8 @@ export interface SiteSettingsData {
   cadence: { pagesPerWeek: number; status: string } | null;
   profile: ProfileFields | null;
   readiness: ProfileReadiness;
+  /** B7-5: the website's content groups as the engine stores them (seo_sites.content_groups_json); [] when none are set */
+  contentGroups?: { name: string; pattern: string }[];
 }
 
 export type RecommendationCategory = 'search' | 'technical' | 'ai' | 'backlinks' | 'content' | 'rankings' | 'setup';

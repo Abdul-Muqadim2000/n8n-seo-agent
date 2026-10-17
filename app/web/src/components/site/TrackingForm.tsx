@@ -11,6 +11,8 @@ import { GuideButton } from '@/components/guide';
 import { errorMessage } from '@/lib/api';
 import { applyServerErrors, asCountry, competitorValidator, errorText } from './helpers';
 import { completeMonitors, DEFAULT_MONITORS, MonitoringCost, MonitorSettingsFields } from './MonitorSettingsFields';
+import { aiMeasuredFrom } from './AiPrecision';
+import { useSiteData } from '@/lib/queries';
 
 // "Track my site" (mode `track`): keywords, GA4 property, blog posts per week, competitors and the growth monitors.
 
@@ -69,6 +71,8 @@ export function TrackingForm({
     defaultValues: defaults ?? trackDefaults(site),
   });
   const { register, control, formState, setError, setValue, watch } = form;
+  // B8-7: the precision table reads what the latest AI run measured (a verified website only; none yet = modelled)
+  const ai = useSiteData(site.orgId, site.id, 'ai', undefined, { enabled: !!site.verifiedAt && sections === 'full' });
   const errors = formState.errors;
   const [error, setErr] = useState<unknown>(null);
   const blogsLabel = useId();
@@ -209,6 +213,7 @@ export function TrackingForm({
                 onChange={(m) => setValue('monitors', m, { shouldDirty: true, shouldValidate: formState.isSubmitted })}
                 disabled={readOnly}
                 enginesError={errors.monitors?.aiEngines?.message}
+                aiMeasured={aiMeasuredFrom(ai.data)}
               />
             </div>
 

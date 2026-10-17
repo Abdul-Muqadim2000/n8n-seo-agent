@@ -56,6 +56,8 @@ state that asks for something, add or reuse a guide in the same change.
 the engine's calibrated figures); `MODES[mode].costUsd`, `estimateRunCost()` and `MONITOR_COSTS` all read it. To show what a run
 costs, call `runCostEstimate(run)` and render `COST_SOURCE_LABEL[cost.source]` beside the number with `cost.basis` behind an
 `InfoTip` — a figure shown without saying whether it is actual, the engine's estimate or ours is a bug.
+The `partial` source (R102 / R115) is a settled figure with **no model-call part** — label it "search data only", never "actual",
+show it to 3 decimals like a measured figure, and never add it to a measured total (the usage page keeps `actualPartialUsd` apart).
 
 ## Pages a client sees (the shared report)
 

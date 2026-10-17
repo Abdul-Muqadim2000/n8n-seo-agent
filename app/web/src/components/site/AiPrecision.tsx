@@ -1,8 +1,21 @@
 // B8-7 (benchmark area 8): what a question panel and a cadence can measure, before the owner pays for it. The figures are the 95%
 // half-widths of the engine's own Wilson range at each panel size, with and without the daily pulse, from the latest run's measured
 // sample when there is one (app/shared/src/ai-visibility.ts aiPrecisionTable).
-import { aiPrecisionTable, type AiEngine } from '@seo/shared';
+import { aiPrecisionTable, type AiData, type AiEngine } from '@seo/shared';
 import { cn } from '@/lib/utils';
+
+/**
+ * What the latest AI visibility run measured, for the precision table beside the settings: its answers counted over the week, the
+ * pulse's share of them, and the panel's questions — the brand question is asked only on the monthly full run and on-demand runs
+ * (AI_Plan.js), so it is taken off there. No run yet → null, and the table stays "Modelled".
+ */
+export function aiMeasuredFrom(d: Pick<AiData, 'runs' | 'latest'> | null | undefined): AiMeasuredSample | null {
+  const run = d?.runs?.length ? d.runs[d.runs.length - 1] : null;
+  if (!run || !(run.samples > 0)) return null;
+  const withBrand = run.runKind === 'full' || run.runKind === 'on_demand';
+  const pulseSamples = (d?.latest?.engines ?? []).reduce((t, e) => t + (Number(e.pulseSamples) || 0), 0);
+  return { samples: run.samples, pulseSamples, questions: Math.max(1, run.prompts - (withBrand ? 1 : 0)), checkedAt: run.checkedAt };
+}
 
 export interface AiMeasuredSample {
   samples: number;

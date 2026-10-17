@@ -59,9 +59,10 @@ const num = (v: unknown): number | null => (v == null || v === '' || !Number.isF
 // ---------------- keyset pages over the app's own tables ----------------
 
 /** created_at to the millisecond (what a JS Date carries), then id: the order and the cursor agree exactly */
+/** (postgres-js takes no JS Date inside a raw sql template: the cursor's time goes in as ISO text) */
 function keyset(col: SQL | ReturnType<typeof sql>, idCol: unknown, cursor: ReturnType<typeof decodeCursor>): SQL | null {
   if (!cursor || !('t' in cursor)) return null;
-  return sql`(date_trunc('milliseconds', ${col}), ${idCol}) < (${new Date(cursor.t)}::timestamptz, ${cursor.id}::uuid)`;
+  return sql`(date_trunc('milliseconds', ${col}), ${idCol}) < (${new Date(cursor.t).toISOString()}::timestamptz, ${cursor.id}::uuid)`;
 }
 const ms = (col: unknown) => sql`date_trunc('milliseconds', ${col})`;
 

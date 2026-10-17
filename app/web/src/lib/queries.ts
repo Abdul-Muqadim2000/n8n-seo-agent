@@ -1,5 +1,9 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
 import type {
+  ApiKeyCreate,
+  ApiKeyView,
+  PublishCheckInput,
+  PublishCheckResult,
   AdminOrg,
   DeliveryReport,
   AdminResult,
@@ -200,6 +204,33 @@ export function useTestDelivery(orgId: string) {
   return useMutation({
     mutationFn: () => api<{ delivered: boolean; outcomes: { channel: string; ok: boolean; target: string; error: string }[] }>(`/api/orgs/${orgId}/delivery/test`, { method: 'POST' }),
     onSuccess: () => qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'delivery'] }),
+  });
+}
+
+// ---- B5-11: company API keys (Company settings → API access) ----
+export const useApiKeys = (orgId: string, enabled = true) =>
+  useQuery({ queryKey: [...qk.org(orgId), 'api-keys'], queryFn: () => api<{ items: ApiKeyView[]; max: number }>(`/api/orgs/${orgId}/api-keys`), enabled });
+
+export function useCreateApiKey(orgId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ApiKeyCreate) => api<ApiKeyView & { token: string }>(`/api/orgs/${orgId}/api-keys`, { method: 'POST', body }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'api-keys'] }),
+  });
+}
+
+export function useRevokeApiKey(orgId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (keyId: string) => api<ApiKeyView>(`/api/orgs/${orgId}/api-keys/${keyId}`, { method: 'DELETE' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'api-keys'] }),
+  });
+}
+
+/** B3-7: "Check a page before you publish" — free, synchronous, writes nothing. */
+export function usePublishCheck(orgId: string, siteId: string) {
+  return useMutation({
+    mutationFn: (body: PublishCheckInput) => api<PublishCheckResult>(`/api/orgs/${orgId}/sites/${siteId}/publish-check`, { method: 'POST', body }),
   });
 }
 

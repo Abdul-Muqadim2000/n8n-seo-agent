@@ -43,6 +43,7 @@ import { fmtAgo, fmtDate, fmtDay } from '@/lib/utils';
 import { RoleChip, ROLE_ICON, SettingsCard } from './_components/SettingsCard';
 import { DeliveryTab } from './_components/DeliveryTab';
 import { MailboxesTab } from './_components/MailboxesTab';
+import { ApiKeysTab } from './_components/ApiKeysTab';
 
 const TABS = [
   { id: 'company', label: 'Company', description: 'Your company’s details, websites and setup.' },
@@ -50,6 +51,7 @@ const TABS = [
   { id: 'usage', label: 'Usage & budget', description: 'What this month’s analyses cost, and the monthly budget that caps them.' },
   { id: 'delivery', label: 'Report delivery', description: 'Where your finished reports are sent, and on what schedule.' },
   { id: 'mailboxes', label: 'Mailboxes', description: 'The mailboxes link-building pitches go out from, and your opt-out list.' },
+  { id: 'api', label: 'API access', description: 'Keys that let a script, a BI tool or an AI assistant read your own data.' },
 ] as const;
 
 const ROLE_DESCRIPTIONS: Record<Role, string> = {
@@ -75,6 +77,7 @@ export default function OrgSettingsPage() {
       {current.id === 'usage' && <UsageTab />}
       {current.id === 'delivery' && <DeliveryTab />}
       {current.id === 'mailboxes' && <MailboxesTab />}
+      {current.id === 'api' && <ApiKeysTab />}
     </div>
   );
 }
@@ -727,6 +730,12 @@ function UsageTab() {
           meta={
             <>
               {pct}% of the {formatUsd(u.budgetUsd)} budget · measured so far {formatUsd(u.actualUsd)}
+              {u.actualPartialRuns > 0 && (
+                <span title="These runs reported their search-data costs only, not their model calls, so their whole cost is counted at the engine's estimate.">
+                  {' '}
+                  · search data only {formatUsd(u.actualPartialUsd, 3)} ({u.actualPartialRuns} {u.actualPartialRuns === 1 ? 'run' : 'runs'})
+                </span>
+              )}
             </>
           }
         />

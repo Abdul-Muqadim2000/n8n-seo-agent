@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { Activity, BarChart3, ClipboardCheck, Eye, Flame, LineChart, MousePointerClick, Rocket, ScanSearch, Search, Target, TrendingUp, Users } from 'lucide-react';
+import { Activity, BarChart3, ClipboardCheck, Eye, Flame, Layers, LineChart, MousePointerClick, Rocket, ScanSearch, Search, Target, TrendingUp, Users } from 'lucide-react';
 import { clicksHeadline, formatPosition, pctChange, type ReportDetail } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
@@ -161,6 +161,8 @@ export function SiteTrackerReport({ report }: { report: ReportDetail }) {
 
       {gsc.connected !== false && <QueryTabs gsc={gsc} />}
 
+      {obj(gsc.content_groups).configured === true && <ContentGroups cg={obj(gsc.content_groups)} />}
+
       <ActionList actions={objs(p.actions)} siteId={report.siteId} />
 
       {objs(p.detected_published).length > 0 && <FoundLive rows={objs(p.detected_published)} siteId={report.siteId} />}
@@ -301,6 +303,47 @@ function FoundLive({ rows, siteId }: { rows: P[]; siteId: string | null }) {
           </li>
         ))}
       </ul>
+    </Block>
+  );
+}
+
+/**
+ * B7-5: the website's own page groups, each judged on the same bar as the site-wide alerts (the engine's ST.change: enough clicks across
+ * both periods and a move that survives the significance test), with the pages in no group on a line of their own. A group whose
+ * pattern the engine refused is shown with the reason, never silently dropped.
+ */
+function ContentGroups({ cg }: { cg: P }) {
+  const verdict = (c: P) => {
+    if (!Object.keys(c).length) return <span className="text-xs text-ink-3">–</span>;
+    if (c.measurable === false) return <span className="text-xs text-ink-3">too few clicks to judge</span>;
+    if (c.real === true) return <StatusBadge tone={c.direction === 'down' ? 'critical' : 'good'}>{str(c.text)}</StatusBadge>;
+    return <span className="text-[13px] text-ink-2">{str(c.text)}{c.watch === true ? ' · within normal variation' : ''}</span>;
+  };
+  const groups = objs(cg.groups);
+  const rest = obj(cg.ungrouped);
+  return (
+    <Block title="Content groups" description="Your page groups in Google search, the last 28 days against the 28 before" icon={<Layers />}>
+      <ul className="divide-y divide-line">
+        {groups.map((g, i) => (
+          <li key={i} className="flex flex-col gap-1 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <span className="min-w-0">
+              <span className="font-medium text-ink">{str(g.name)}</span> <code className="font-mono text-xs text-ink-3">/{str(g.pattern)}/</code>
+              {g.valid === false ? <span className="block text-xs text-critical-text">{str(g.reason)}</span> : <span className="block text-xs text-ink-3">{num(g.pages) ?? 0} pages · {num(g.clicks) ?? 0} clicks</span>}
+            </span>
+            {g.valid !== false && verdict(obj(g.change))}
+          </li>
+        ))}
+        {Object.keys(rest).length > 0 && (
+          <li className="flex flex-col gap-1 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <span className="min-w-0">
+              <span className="font-medium text-ink">Pages in no group</span>
+              <span className="block text-xs text-ink-3">{num(rest.pages) ?? 0} pages · {num(rest.clicks) ?? 0} clicks</span>
+            </span>
+            {verdict(obj(rest.change))}
+          </li>
+        )}
+      </ul>
+      {str(cg.note) && <p className="mt-3 text-xs text-ink-3">{str(cg.note)}</p>}
     </Block>
   );
 }

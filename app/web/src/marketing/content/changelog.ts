@@ -14,6 +14,24 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2026-10-17',
+    title: 'Your data through an API, a quality check for any page, and sharper alerts everywhere',
+    summary:
+      'Your own websites, audits and findings, runs and reports can now be read from a script, a BI tool or an AI assistant, with read-only keys you create and revoke. Any page — written here or anywhere else — can be checked before you publish it. And across audits, rankings, site tracking and AI visibility, more of what changes is tested before it is called a change.',
+    highlights: [
+      'A read-only API over your own data: websites, audits and every finding with its evidence, runs and reports — and an MCP endpoint, so an AI assistant can answer questions about it',
+      'API keys per company, shown once, with an expiry and revocable at any time; a key never reads another company’s data',
+      'Check a page before you publish: the same verdict our own pages must pass, every reason named and what could not be checked — in the app, or from your build',
+      'Content: refreshed pages re-check their facts against their sources, readability is measured against the pages that rank, and every page is checked for a direct answer first',
+      'Audit: hreflang checks, the before-and-after-JavaScript comparison across the crawl, GA4 key events in the fix-list order, and an honest count of the findings that are not scored. Release check: a fail threshold, a list of intended changes and a ready CI recipe',
+      'Rank tracking now flags pages competing for one search, names who outranked you, separates your own moves from page-wide reshuffles, and weights share of voice by your real impressions',
+      'Site tracking: Discover and Google News, content groups, brand demand in one place, a line for the latest days, and your notes as chart marks',
+      'AI visibility: per-assistant change tests, one multiple-comparison correction per report, per-question ranges in the app, and a precision table in the monitor settings',
+      'AI growth now turns wrong AI claims about your business into correction drafts, checks key pages as the AI fetchers see them, and names Bing’s AI Performance report',
+    ],
+    features: ['reports', 'content', 'technical-audits', 'keyword-ladders', 'site-tracking', 'ai-visibility', 'enterprise'],
+  },
+  {
     date: '2026-10-15',
     title: 'Rank tracking now follows the keywords you named, not only the ones in a ladder',
     summary:
