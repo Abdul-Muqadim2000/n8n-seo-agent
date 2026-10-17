@@ -73,6 +73,64 @@ module.exports = async (ctx) => {
   });
 
   // ===================================================================================
+  // SA05 / SA23 — the verdict and the keyword report read what the site already holds before they advise
+  // ===================================================================================
+  const verdictRun = async (ex) => {
+    mock('Prepare Keyword Run', [{ json: FX['pkr' + ex] }]);
+    mock('Load Ladders (Run)', items(FX.ladders764)); mock('Load Ladder Settings (Run)', items(FX.settings764)); mock('Load Drafts (Run)', items(FX.log_before));
+    const oc = (await run('Own Coverage (Run)', store['Load Drafts (Run)']))[0].json;
+    mock('Merge Keyword Data', [{ json: { ...FX['mkd' + ex], own_coverage: oc.own_coverage, own_coverage_text: oc.own_coverage_text } }]);
+    mock('Load Site Cache', items(FX['cache' + ex]));
+    const pv = (await run('Parse Verdict', items(FX['va' + ex])))[0].json;
+    return { oc, pv };
+  };
+  await guard('SA05 A-5 / A-6 verdict "e invoicing software uae": the ladder\'s pages stay off the page, the penalties rung is named, the threshold on the page is not asked for', async () => {
+    reset(); const SN = 'SA05 A-5 A-6 — the verdict keeps the planned pages of the ladder "e invoicing in uae" and the written draft off the page it improves, names them, says the penalties topic is covered, and never asks to add the AED 50 million threshold the page states';
+    begin(SN); const check = mkCheck(SN);
+    const { oc, pv } = await verdictRun('760');
+    console.log('   own coverage ->', oc.own_coverage_text.split('\n').map(l => l.slice(0, 140)).join(' || '));
+    console.log('   secondary ->', JSON.stringify(pv.secondary_keywords), '| covered ->', JSON.stringify(pv.secondary_covered.map(c => [c.keyword, c.by, c.head_keyword || c.url])));
+    console.log('   changes ->\n      ' + pv.verdict_changes.join('\n      '));
+    check('A-5: the verdict prompt is told what the site already has on the topic (the ladder "e invoicing in uae" with its pages, the drafts)',
+      /Keyword ladder "e invoicing in uae"/.test(oc.own_coverage_text) && /uae e invoicing penalties/.test(oc.own_coverage_text) && /uae e-invoicing deadline 2027/.test(oc.own_coverage_text), oc.own_coverage_text);
+    const off = ['uae e-invoicing requirements', 'list of asp for e-invoicing in uae', 'is e-invoicing mandatory in uae', 'uae e-invoicing accredited service provider', 'uae e-invoicing deadline'];
+    check('A-5: the five searches the ladder (rows 3, 4, 6, 7) and the draft 7 hold are taken off this page',
+      off.every(k => !pv.secondary_keywords.some(s => s.toLowerCase() === k)) && off.every(k => pv.secondary_covered.some(c => c.keyword.toLowerCase() === k)),
+      JSON.stringify({ kept: pv.secondary_keywords, covered: pv.secondary_covered.map(c => c.keyword) }));
+    check('A-5: the customer reads which ladder / draft holds them (no "ladder" word anywhere live)',
+      pv.verdict_changes.some(l => /^Kept off this page because the site already holds them/.test(l) && /keyword ladder "e invoicing in uae"/.test(l) && /"UAE e-invoicing deadline" \(your (keyword ladder|draft)/.test(l)), JSON.stringify(pv.verdict_changes.slice(-1)));
+    check('A-5: "a penalties section" is answered with the penalties rung and its page',
+      pv.verdict_changes.some(l => /penalties section/.test(l) && /The site already covers "uae e invoicing penalties"/.test(l) && /penalties-mitigation-costs/.test(l)), JSON.stringify(pv.verdict_changes.filter(l => /penalt/.test(l))));
+    check('A-6: "add ... the AED 50 million threshold" no longer asks for what the page states; the line says it is already there',
+      pv.verdict_changes.some(l => /PINT-AE/.test(l) && !/, and the AED 50 million threshold/.test(l) && /Already on the page, keep as it is: the AED 50 million threshold/.test(l))
+      && pv.already_on_page.some(x => /AED 50 million/.test(x)), JSON.stringify(pv.verdict_changes.filter(l => /PINT/.test(l))));
+    check('A-5: every secondary keyword taken off says what holds it, and the page is still the one to improve', pv.secondary_covered.every(c => c.note && c.how) && pv.existing_page_action === 'improve'
+      && /^Improve the page the site already has for this search/.test(pv.verdict_changes[0] || ''), JSON.stringify({ cov: pv.secondary_covered.map(c => [c.keyword, c.note]), c0: pv.verdict_changes[0] }));
+  });
+  await guard('SA23 A-23 keyword report "erp system dubai": the Business Central / F&O pages and the two ERP ladders are named before "build a page"', async () => {
+    reset(); const SN = 'SA23 A-23 — the keyword report names /dynamics-365-business-central-uae and /dynamics-365-finance-and-operations-uae before it says "build a ... page", and keeps the BC page\'s slug and the ERP ladders\' searches off its secondary keywords';
+    begin(SN); const check = mkCheck(SN);
+    const { oc, pv } = await verdictRun('765');
+    console.log('   changes[0] ->', (pv.verdict_changes[0] || '').slice(0, 260));
+    console.log('   secondary ->', JSON.stringify(pv.secondary_keywords), '| covered ->', JSON.stringify(pv.secondary_covered.map(c => [c.keyword, c.by, c.head_keyword || c.url])));
+    const before = pv.verdict_changes.find(l => /^Before building anything new: the site already has/.test(l)) || '';
+    check('A-23: before "build a ... page", the report names the live Business Central and F&O pages',
+      /dynamics-365-business-central-uae/.test(before) && /dynamics-365-finance-and-operations-uae/.test(before) && pv.existing_related.length >= 2
+      && pv.verdict_changes.indexOf(before) < pv.verdict_changes.findIndex(l => /\bBuild a\b/i.test(l)), JSON.stringify({ changes: pv.verdict_changes.map(l => l.slice(0, 90)), rel: pv.existing_related }));
+    check('A-23: the search itself is the ladder "erp software uae"\'s rung "erp software dubai" in other words, and the report says so first',
+      pv.keyword_covered && pv.keyword_covered.head_keyword === 'erp software uae' && /^This search is already planned on the site: your keyword ladder "erp software uae"/.test(pv.verdict_changes[0] || ''),
+      JSON.stringify({ kc: pv.keyword_covered, c0: pv.verdict_changes[0] }));
+    const cov = (k) => pv.secondary_covered.find(c => c.keyword.toLowerCase() === k);
+    check('A-23: "dynamics 365 business central uae" (the live page\'s slug) is covered by that page',
+      cov('dynamics 365 business central uae') && /business-central-uae/.test(cov('dynamics 365 business central uae').url), JSON.stringify(pv.secondary_covered));
+    check('A-23: "erp software dubai" (rung of "erp software uae") and "erp implementation partner uae" (ladder "erp implementation dubai") are named, not folded in',
+      (cov('erp software dubai') ? cov('erp software dubai').head_keyword === 'erp software uae' : (pv.keyword_covered || {}).head_keyword === 'erp software uae')
+      && cov('erp implementation partner uae') && cov('erp implementation partner uae').head_keyword === 'erp implementation dubai',
+      JSON.stringify(pv.secondary_covered.map(c => [c.keyword, c.head_keyword, c.url])));
+    check('A-23: the prompt the verdict read carries the BC page among the pages on the topic', oc.own_coverage.pages.some(p => /business-central-uae/.test(p.url)), JSON.stringify(oc.own_coverage.pages));
+  });
+
+  // ===================================================================================
   // SA25 — discovery's first picks carry the ladder that already holds them
   // ===================================================================================
   const discover764 = async () => {

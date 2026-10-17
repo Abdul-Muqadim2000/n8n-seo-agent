@@ -10876,6 +10876,9 @@ log('Findings keep their evidence (2026-10-17, B5-11): every stored audit findin
 #      page, a keyword ladder or an unpublished draft of this site already hold this search?" for every keyword path:
 #        * discovery (*Rank Keywords*): "erp system dubai" / "erp systems in uae" are the ladder "erp software uae"'s searches in other
 #          words (Covered), and a close variant or the same topic for another place keeps its tier with the ladder named (A-25);
+#        * the verdict / keyword report (*Own Coverage (Run)* after *Prepare Keyword Run*, *Parse Verdict*): the search itself, the
+#          secondary keywords, a "build a page" request, a section request and an amount already on the page (A-5 / A-6 / A-23);
+#        * the Keyword Check (build_api.py): the page inventory and the ladder's own status (A-1 / A-2).
 # =============================================================================
 OWN_COVER_SRC = _rd0('code/_own_cover.js').rstrip('\n')
 assert 'const OWN = (() => {' in OWN_COVER_SRC
@@ -10888,7 +10891,33 @@ assert not any('/*__OWN_COVER__*/' in n['parameters'].get('jsCode', '') for n in
 assert 'const OWN = (() => {' in code('Rank Keywords') and 'OWN.ladderOf(ownLadD, kw' in code('Rank Keywords') and 'ladder_near: ladderNear(k.keyword)' in code('Rank Keywords'), 'A-25: Rank Keywords lost the ladder note'
 assert ".filter(r => fitStored(r, { ...fitCtx" in code('Rank Keywords'), 'A-25: Rank Keywords reads stored rungs without the fit gate'
 assert 'pipeline.ladder_note' in code('Build Keyword Strategy'), 'A-25: "Where to start" does not print the ladder note'
-log('What the site already holds, read before any keyword advice (2026-10-17, F-A3): v5/code/_own_cover.js (OWN) answers whether a page, a keyword ladder or an unpublished draft already holds a search - A-25: discovery marks "erp system dubai" / "erp systems in uae" as the ladder "erp software uae"\'s searches in other words (Covered) and keeps a close variant or the same topic for another place in the plan with the ladder named in "Where to start", "Build first" and the tier table; the ladder rows are read back through the fit gate')
+# A-5 / A-23: the keyword path (verdict, keyword report, ladder feasibility, page runs) loads the site's ladders, their settings and the
+# content log's drafts right after *Prepare Keyword Run*, and *Own Coverage (Run)* hands them on (gated) with the pages on the topic.
+from ladder_common import LADDER_SETTINGS_TABLE as _LST130, LOG_TABLE as _LOG130, LADDER_TABLE as _LT130, dt_get_where_params as _dgw130, dt_get_any_params as _dga130
+_DOM130 = "={{ String($('Prepare Keyword Run').first().json.domain || '').toLowerCase().replace(/^www\\./, '') }}"
+_SID130 = "={{ 'site_' + String($('Prepare Keyword Run').first().json.domain || '').toLowerCase().replace(/^www\\./, '').replace(/[^a-z0-9]+/g, '-') }}"
+_pk130 = pos('Prepare Keyword Run')
+assert [t['node'] for lst in conns['Prepare Keyword Run']['main'] for t in lst] == ['Has Domain?'], 'A-5: Prepare Keyword Run no longer feeds Has Domain? alone'
+add_node('Load Ladders (Run)', DT_TYPE, DT_VERSION, _dgw130(_LT130, 'domain', 'eq', _DOM130), [_pk130[0] + 60, _pk130[1] + 260], LOAD18)
+add_node('Load Ladder Settings (Run)', DT_TYPE, DT_VERSION, _dga130(_LST130, [('domain', _DOM130), ('site_id', _SID130)]), [_pk130[0] + 260, _pk130[1] + 260], LOAD18)
+add_node('Load Drafts (Run)', DT_TYPE, DT_VERSION, _dgw130(_LOG130, 'domain', 'eq', _DOM130), [_pk130[0] + 460, _pk130[1] + 260], LOAD18)
+add_node('Own Coverage (Run)', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Own_Coverage_Run.js').replace('/*__OWN_COVER__*/', OWN_COVER_SRC)}, [_pk130[0] + 660, _pk130[1] + 260])
+disconnect('Prepare Keyword Run', 'Has Domain?')
+for _a130, _b130 in [('Prepare Keyword Run', 'Load Ladders (Run)'), ('Load Ladders (Run)', 'Load Ladder Settings (Run)'), ('Load Ladder Settings (Run)', 'Load Drafts (Run)'),
+                     ('Load Drafts (Run)', 'Own Coverage (Run)'), ('Own Coverage (Run)', 'Has Domain?')]:
+    connect(_a130, _b130)
+assert 'const OWN = (() => {' in code('Own Coverage (Run)') and 'const SM = (() => {' in code('Own Coverage (Run)') and 'fitStored(r,' in code('Own Coverage (Run)'), 'A-5: Own Coverage (Run) is missing a kit or the gate'
+assert 'own_coverage_text' in nodes['Verdict Agent']['parameters']['text'], 'A-5: the verdict prompt does not read what the site already holds'
+# A-5 / A-6 / A-23: Parse Verdict checks the advice against it (secondary keywords, "build a page", sections, amounts already on the page)
+_pv130 = code('Parse Verdict')
+assert _pv130.count("    secondary_keywords: verdict.secondary_keywords || [],") == 1 and _pv130.count("\nreturn [{\n  json: {\n    ...prev,") == 1, 'A-5: Parse Verdict return moved'
+_pv130 = _pv130.replace("\nreturn [{\n  json: {\n    ...prev,", "\n" + _rd0('code/_verdict_own.js').rstrip('\n') + "\nreturn [{\n  json: {\n    ...prev,")
+_pv130 = _pv130.replace("    secondary_keywords: verdict.secondary_keywords || [],",
+    "    secondary_keywords: OWNV.secondary,\n    secondary_covered: OWNV.covered,   // A-5: the searches the site already holds elsewhere, kept off this page and named\n"
+    "    existing_related: OWNV.related, sections_covered: OWNV.sections, already_on_page: OWNV.already_on_page, keyword_covered: OWNV.keyword_covered, own_coverage_checked: OWNV.checked,")
+setcode('Parse Verdict', SITE_MODEL_SRC + '\n' + OWN_COVER_SRC + '\n' + _pv130)
+assert 'let verdict_changes' in code('Parse Verdict') and 'OWNV.secondary' in code('Parse Verdict'), 'A-5: Parse Verdict did not take the own-coverage check'
+log('What the site already holds, read before any keyword advice (2026-10-17, F-A3): v5/code/_own_cover.js (OWN) answers whether a page, a keyword ladder or an unpublished draft already holds a search - A-25: discovery marks "erp system dubai" / "erp systems in uae" as the ladder "erp software uae"\'s searches in other words (Covered) and keeps a close variant or the same topic for another place in the plan with the ladder named in "Where to start", "Build first" and the tier table; the ladder rows are read back through the fit gate. A-5 / A-6 / A-23: the keyword path loads the ladders, their settings and the content log right after Prepare Keyword Run (Load Ladders / Load Ladder Settings / Load Drafts (Run) -> Own Coverage (Run), gated), the Verdict Agent reads what the site already has on the topic, and Parse Verdict (v5/code/_verdict_own.js) says first when the search itself is a ladder\'s or a draft\'s, names the live pages on the topic before any "build a page", takes the secondary keywords another page / ladder / draft holds off the page and names them, answers a section a rung covers with that rung and its page, and moves an amount the page already states out of the request')
 # <<< 130 (F-A3)
 
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and

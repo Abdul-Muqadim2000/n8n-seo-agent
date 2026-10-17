@@ -96,12 +96,14 @@ const OWN = (() => {
   };
   const ukey = (u) => bare(u) + S(u).toLowerCase().replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
   /** what the site already holds for `kw`: a page (ctx.matchPage), then a ladder, then a draft - the first that answers, or null.
-   *  ctx = { matchPage(kw) -> { url, title, matched_by } | null, ladders, drafts, exclude_urls: [the page this run improves], self } */
+   *  ctx = { matchPage(kw) -> { url, title, matched_by, score } | null, ladders, drafts, exclude_urls: [the page this run improves], self,
+ *          page_min: the share of the search's words a page must carry by slug / title (default: whatever matchPage accepted) } */
   const claim = (kw, ctx) => {
     const c = ctx || {};
     const skip = new Set((c.exclude_urls || []).filter(Boolean).map(ukey));
     const p = typeof c.matchPage === 'function' ? c.matchPage(kw) : null;
-    if (p && S(p.url) && !skip.has(ukey(p.url))) return { kind: 'page', url: S(p.url), title: S(p.title), matched_by: S(p.matched_by) || 'inventory', how: 'a page of yours targets it' };
+    const strong = p && (S(p.matched_by) === 'query' || (Number(p.score) || 0) + 1e-9 >= (Number(c.page_min) || 0));   // a caller may ask for every word (secondary keywords)
+    if (p && strong && S(p.url) && !skip.has(ukey(p.url))) return { kind: 'page', url: S(p.url), title: S(p.title), matched_by: S(p.matched_by) || 'inventory', how: 'a page of yours targets it' };
     const l = ladderOf(c.ladders, kw, { self: c.self, min: c.min_ladder });
     if (l) return l;
     return draftOf(c.drafts, kw, { self_keyword: (c.self || {}).keyword });
