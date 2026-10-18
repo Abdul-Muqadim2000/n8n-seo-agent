@@ -33,6 +33,67 @@ def answer_expr(src):
     return "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))(" + src + ") }}"
 
 
+# A-28 / B-8 (re-rating 2026-10-17): the counter was sent the user prompt alone, but an n8n Tools Agent (v3.1) with an output parser
+# sends more: a system message holding these formatting instructions and ONE tool, `format_final_json_response`, whose input schema is
+# the parser's schema (wrapped in `output`) — and Anthropic adds its tool-use system prompt whenever a tool is offered. That is the
+# 834-955 tokens a call the count missed against n8n's own `tokenUsage` (Reply Reader 1,025 counted vs 1,859; describe 3,876 vs 4,831;
+# Content Reviewer 10,392 vs 11,276). Text copied from the n8n 2.41.4 image (@n8n/n8n-nodes-langchain dist, ToolsAgent/V3/helpers/
+# runAgent.js `formatting_instructions`, ToolsAgent/common.js `getTools`); an agent with no parser and no system message sends neither.
+AGENT_FORMAT_INSTRUCTIONS = ('IMPORTANT: For your response to user, you MUST use the `format_final_json_response` tool with your complete '
+                             'answer formatted according to the required schema. Do not attempt to format the JSON manually - always use '
+                             'this tool. Your response will be rejected if it is not properly formatted through this tool. Only use this '
+                             'tool once you are ready to provide your final answer.')
+AGENT_PARSER_TOOL_DESC = ('Use this tool to format your final response to the user in a structured JSON format. This tool validates your '
+                          'output against a schema to ensure it meets the required format. ONLY use this tool when you have completed all '
+                          'necessary reasoning and are ready to provide your final answer. Do not use this tool for intermediate steps or '
+                          'for asking questions. The output from this tool will be directly returned to the user.')
+
+
+def _no_double_braces(s):
+    """An n8n expression ends at the first `}}`: a JSON literal spliced into one must never contain two braces in a row."""
+    while '}}' in s or '{{' in s:
+        s = s.replace('}}', '} }').replace('{{', '{ {')
+    return s
+
+
+def count_frame(nodes, conns, agent):
+    """The `system` and `tools` the agent really sends, as a JS fragment (`, system: "...", tools: [...]`) to splice into the two
+    count_tokens bodies of its chain, so the counted prompt is the prompt that was billed. '' for an agent without an output parser."""
+    parsers = sorted({s for s, outs in conns.items() for l in (outs.get('ai_outputParser') or []) for t in (l or []) if t['node'] == agent})
+    if not parsers:
+        return ''
+    assert len(parsers) == 1, 'A-28: ' + agent + ' has ' + str(len(parsers)) + ' output parsers'
+    p = nodes[parsers[0]]['parameters']
+    assert p.get('schemaType') == 'manual', 'A-28: ' + parsers[0] + ' is not a manual JSON schema (' + str(p.get('schemaType')) + ')'
+    sys_msg = ((nodes[agent]['parameters'].get('options') or {}).get('systemMessage'))
+    system = (str(sys_msg) + '\n\n' if sys_msg else '') + AGENT_FORMAT_INSTRUCTIONS
+    tool = {'name': 'format_final_json_response', 'description': AGENT_PARSER_TOOL_DESC,
+            'input_schema': {'type': 'object', 'properties': {'output': json.loads(p['inputSchema'])}, 'required': ['output']}}
+    return _no_double_braces(', system: ' + json.dumps(system) + ', tools: ' + json.dumps([tool]))
+
+
+COUNT_FRAME_MARK = '/*__A28_FRAME__*/'
+
+
+def fill_count_frames(nodes, conns):
+    """Replace the placeholder a builder left in its *Count Prompt / Count Answer (Agent)* bodies with the agent's frame. Returns how
+    many bodies it filled (the main workflow's builder places the mark early and fills it at WRITE, after its parser edits)."""
+    done = 0
+    for name, n in nodes.items():
+        m = re.match(r'^Count (?:Prompt|Answer) \((.+)\)$', name)
+        body = str((n.get('parameters') or {}).get('jsonBody') or '')
+        if not m or COUNT_FRAME_MARK not in body:
+            continue
+        n['parameters']['jsonBody'] = body.replace(COUNT_FRAME_MARK, count_frame(nodes, conns, m.group(1)))
+        done += 1
+    return done
+
+
+def count_frame_ok(body, frame):
+    """True when a count body carries the agent's frame (the build check for every count node)."""
+    return not frame or frame in str(body or '')
+
+
 def answer_expr_ok(value):
     """True when a `__answer` expression serialises an object instead of stringifying it (the build check for every workflow)."""
     v = str(value or '')
@@ -88,7 +149,7 @@ def count_chain(wfobj, agents=None):
             ca, af = 'Count Answer (' + ag + ')', 'After Count (' + ag + ')'
             assert not any(x in nodes for x in (set_n, cp, ca, af)), 'R82: ' + ag + ' is already counted'
             px, py = nodes[ag]['position']
-            own, mdl = "$('" + set_n + "').item.json", json.dumps(model)
+            own, mdl = "$('" + set_n + "').item.json", json.dumps(model) + count_frame(nodes, conns, ag)   # A-28: the system + tool it sends
             http = lambda name, body, at: _node(name, 'n8n-nodes-base.httpRequest', 4.5, {
                 'method': 'POST', 'url': ANTHROPIC_COUNT_URL,
                 'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'anthropicApi',

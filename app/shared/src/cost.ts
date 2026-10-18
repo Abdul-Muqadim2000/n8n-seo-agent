@@ -198,14 +198,37 @@ export function costKeys(mode: ModeId, v: Values = {}): CostKey[] {
  * it is what the engine will reserve; without it, the shipped defaults — the fallback, and what `MODES[].costUsd` shows.
  */
 export function estimateRunCost(mode: ModeId, v: Values = {}, cal?: EngineCalibration | null): number {
-  return round(costKeys(mode, v).reduce((total, key) => total + keyCost(key, cal), 0));
+  const keys = costKeys(mode, v);
+  return round(keys.reduce((total, key) => total + keyCost(key, cal), 0) + crawlExtra(mode, v, keys, cal));
+}
+
+/**
+ * B-9 (re-rating 2026-10-17): the crawl row is ONE 200-page crawl without JavaScript, whatever the audit asked for. Exec 739 asked for a
+ * JavaScript crawl ($0.36 quoted for 200 pages, 4x a plain one) and was shown $0.11. DataForSEO charges per crawled page, so an audit's
+ * crawl scales with the pages it may crawl and x4 with JavaScript — the engine's `CC.crawlFactor` (`_cost_cal.js`), constant for constant.
+ */
+export const CRAWL_BASE_PAGES = 200;
+export const CRAWL_JS_MULT = 4;
+export function crawlFactor(pages?: unknown, js?: unknown): number {
+  const n = typeof pages === 'number' && Number.isFinite(pages) && pages > 0 ? pages : CRAWL_BASE_PAGES;
+  return Math.round((n / CRAWL_BASE_PAGES) * (js === true ? CRAWL_JS_MULT : 1) * 10000) / 10000;
+}
+/** What scaling the crawl adds to an audit's search-data figure (0 for every other mode, and for a 200-page plain crawl). */
+function crawlExtra(mode: ModeId, v: Values, keys: CostKey[], cal?: EngineCalibration | null): number {
+  if (mode !== 'audit') return 0;
+  const f = crawlFactor(v.crawlPages, v.crawlJs);
+  if (f === 1) return 0;
+  let extra = 0;
+  if (keys.includes('crawl')) extra += estOf('dfs', 'crawl', cal).usd * (f - 1);
+  if (keys.includes('full')) extra += COST_TABLE.crawl.dfs * (f - 1);
+  return extra;
 }
 
 /** The same request priced the way the engine splits it, for a breakdown the customer can read. */
 export function estimateRunCostParts(mode: ModeId, v: Values = {}, cal?: EngineCalibration | null): { ai: number; dfs: number; usd: number; keys: CostKey[] } {
   const keys = costKeys(mode, v);
   const ai = round(keys.reduce((t, k) => t + estOf('ai', k, cal).usd, 0));
-  const dfs = round(keys.reduce((t, k) => t + estOf('dfs', k, cal).usd, 0));
+  const dfs = round(keys.reduce((t, k) => t + estOf('dfs', k, cal).usd, 0) + crawlExtra(mode, v, keys, cal));
   return { ai, dfs, usd: round(ai + dfs), keys };
 }
 

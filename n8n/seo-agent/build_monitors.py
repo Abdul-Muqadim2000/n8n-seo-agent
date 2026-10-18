@@ -152,7 +152,7 @@ class WF:
                     {'id': str(uuid.uuid5(NS, 'bc2:' + self.prefix + ':' + ag + ':answer')), 'name': '__answer',
                      'value': monitor_cost.answer_expr('$json.output'), 'type': 'string'}]}},   # R47 / R80 (2026-10-16): an object as its JSON
                     [px, py + 320], onError='continueRegularOutput', alwaysOutputData=True)
-                mdl, own = json.dumps(model), "$('" + set_n + "').item.json"
+                mdl, own = json.dumps(model) + monitor_cost.count_frame(nodes, self.C, ag), "$('" + set_n + "').item.json"   # A-28: the system + tool it sends
                 self.count_node(cp, '={{ JSON.stringify({ model: ' + mdl + ', messages: [{ role: "user", content: String($json.__prompt || "") }] }) }}',
                                 [px + 200, py + 320])
                 self.count_node(ca, '={{ JSON.stringify({ model: ' + mdl + ', messages: ['

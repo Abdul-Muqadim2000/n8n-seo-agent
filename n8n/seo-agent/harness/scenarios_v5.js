@@ -1976,7 +1976,7 @@ await guard('pipeline phase 3', async () => {
   // answer used to read as a measurement of THIS topic; it now names what it really rests on, the way MarketMuse states the same case
   // ("If you have no Topic Authority, then your Personalized Difficulty = Keyword Difficulty"). The warning is the only change here.
   check('B1-1: an encouraging answer measured against a reach that came from OTHER topics names them and calls itself the optimistic case', B.reach_basis === 'site' && B.topic_reach === null && B.reach_used === 30 && /measured against your site-wide reach \(30\), which comes from other topics/.test(B.warnings.join(' ')) && /optimistic case/.test(B.warnings.join(' ')) && /is on this topic/.test(B.reach_note), JSON.stringify([B.warnings, B.reach_note]));
-  check('assess: cost = the DataForSEO task costs (4 x $0.01) + Claude ($0.002)', B.cost_usd === 0.042, B.cost_usd);
+  check('assess: cost = the DataForSEO task costs (4 x $0.01) + Claude ($0.0033, A-28: as n8n measured one Haiku call)', B.cost_usd === 0.0433, B.cost_usd);
   const rra = await run('Reach Row (Assess)', resp1);
   check('assess: the measured reach is stored after the answer (exact cache columns)', keysOf(rra[0].json) === CACHE_COLS && rra[0].json.key === 'reach:' + SITE && JSON.parse(rra[0].json.value).reach === 30, JSON.stringify(rra[0].json));
   mock('Load Assess Cache', [reachRow(30), { json: { key: 'desc:' + D, kind: 'desc', site_id: SITE, value: JSON.stringify({ description: { business_description: 'Stored: ERP partner in Dubai', products_or_services: ['ERP', 'E-invoicing'] }, page_title: '' }), updated_at: daysAgo(5) } }]);
@@ -1987,7 +1987,7 @@ await guard('pipeline phase 3', async () => {
   ar = await run('Assess Result', store['Run Assess Requests']);
   check('assess: the stored reach is reused, business from the stored description, position #14 read', ar[0].json.reach_info.cached && ar[0].json.reach_info.reach === 30 && !ar[0].json.cache_row && ar[0].json.business === 'Stored: ERP partner in Dubai' && eq(ar[0].json.services, ['ERP', 'E-invoicing']) && ar[0].json.business_source === 'stored description' && ar[0].json.position === 14 && /e-invoicing-software/.test(ar[0].json.position_url), JSON.stringify(ar[0].json).slice(0, 300));
   resp1 = await run('Assess Response', FIT({ fit: 2 })); B = resp1[0].json.body;
-  check('assess: already #14 -> easy, direct 2-3 months (top 20 shortens); cost $0.022', B.difficulty_for_you === 'easy' && B.plan_type === 'direct' && B.months === '2-3' && B.position === 14 && B.cost_usd === 0.022, JSON.stringify(B));
+  check('assess: already #14 -> easy, direct 2-3 months (top 20 shortens); cost $0.0233 (A-28: the Haiku call at $0.0033)', B.difficulty_for_you === 'easy' && B.plan_type === 'direct' && B.months === '2-3' && B.position === 14 && B.cost_usd === 0.0233, JSON.stringify(B));
   const rra2 = await run('Reach Row (Assess)', resp1);
   check('assess: a stored reach is not saved again', rra2[0].json.skip === true, JSON.stringify(rra2[0].json));
   b = await answer(AR({ keyword: 'cleartax e invoicing', existing_keywords: ['e invoicing in uae', 'peppol uae'] }), FIT({ fit: 1, navigational: true, alternatives: ['e invoicing software uae', 'Peppol UAE', 'cleartax e invoicing', 'e invoicing in the UAE', '"FTA e invoicing requirements"', 'einvoicing for sme uae'] }));
@@ -2001,7 +2001,7 @@ await guard('pipeline phase 3', async () => {
   b = await answer(AR({ intent: 'navigational', keyword: 'xero login' }), [{ json: { error: { message: 'Overloaded' } } }]);
   // R3 (2026-10-13): the fit that cannot be read is in the LABEL, not only in `warnings`, and the Claude call is charged even when its
   // answer could not be parsed (live: exec 488 shipped fit null and reported the AI part of the cost as nothing).
-  check('assess: Claude failed -> fit null in the label as well, navigational from the keyword data, a warning, and the model still charged', b.fit === null && b.fit_known === false && /topic check unavailable/.test(b.label) && b.navigational === true && b.difficulty_for_you === 'not_realistic' && b.warnings.some(w => /topic check unavailable: Overloaded/.test(w)) && b.cost_usd === 0.0222, JSON.stringify(b));
+  check('assess: Claude failed -> fit null in the label as well, navigational from the keyword data, a warning, and the model still charged', b.fit === null && b.fit_known === false && /topic check unavailable/.test(b.label) && b.navigational === true && b.difficulty_for_you === 'not_realistic' && b.warnings.some(w => /topic check unavailable: Overloaded/.test(w)) && b.cost_usd === 0.0235, JSON.stringify(b));
   b = await answer(AR({ intent: 'navigational', keyword: 'northwind erp' }), [{ json: { error: { message: 'Overloaded' } } }]);
   check('assess: the site\'s own brand is never "another company"', b.navigational === false && b.difficulty_for_you !== 'not_realistic', JSON.stringify(b));
   mock('Assess Validate', [{ json: v }]); mock('Load Assess Cache', EMPTY);
@@ -8171,10 +8171,10 @@ await guard('the re-rating defects R1..R9', async () => {
   check('R3: the fit that could not be read is in the LABEL, not only in `warnings` (live: exec 488 shipped fit null on D22\'s own acceptance keyword)',
     bNull.fit === null && bNull.fit_known === false && /topic check unavailable$/.test(bNull.label) && bNull.warnings.some(w => /topic check unavailable: The AI model returned an empty response/.test(w)), JSON.stringify(bNull));
   check('R3: and the Claude call is charged even when its answer could not be parsed, so the cost the customer sees is the money that went out',
-    bNull.cost_usd === 0.0242, JSON.stringify({ cost: bNull.cost_usd, dataforseo: 0.0222 }));
+    bNull.cost_usd === 0.0255, JSON.stringify({ cost: bNull.cost_usd, dataforseo: 0.0222 }));
   const bPlain = await assess([{ json: { output: 'fit=2; navigational=no; alternatives=none' } }], 'fit=2; navigational=no; alternatives=none');
   check('R3: the plain one-line answer the retry gives is read — fit 2, not navigational, no invented alternatives — and both calls are charged',
-    bPlain.fit === 2 && bPlain.fit_known === true && bPlain.navigational === false && eq(bPlain.alternatives, []) && !/topic check unavailable/.test(bPlain.label) && bPlain.cost_usd === 0.0262, JSON.stringify(bPlain));
+    bPlain.fit === 2 && bPlain.fit_known === true && bPlain.navigational === false && eq(bPlain.alternatives, []) && !/topic check unavailable/.test(bPlain.label) && bPlain.cost_usd === 0.0288, JSON.stringify(bPlain));
   const bProse = await assess([{ json: { output: 'Here is my answer:\n{"fit": 1, "navigational": false, "alternatives": "erp implementation dubai, erp consultant uae"}' } }]);
   check('R3: a JSON object inside free text is read too, and the comma-separated alternatives of the simpler schema are split',
     bProse.fit === 1 && bProse.fit_known === true && bProse.navigational === false, JSON.stringify({ fit: bProse.fit, alts: bProse.alternatives }));
@@ -9981,7 +9981,7 @@ await guard('R31 R32 R33 the money a run reports is the money that happened', as
     paid69.ai_source === 'priced' && paid69.ai_usd !== 0.05 && paid69.ai_calls === 1
     && paid69.ai_measured === false && paid69.ai_measured_usd === 0 && eq(paid69.ai_counted_nodes, [])
     && eq(paid69.ai_nodes_ran, ['Link Analyst']) && /^estimated: prompt and answer characters/.test(paid69.ai_basis)
-    && /Claude \$0\.0053 ESTIMATED/.test(paid69.cost_basis), JSON.stringify(paid69));
+    && /Claude \$0\.0018 ESTIMATED/.test(paid69.cost_basis), JSON.stringify(paid69));   // B-8 / A-27: $0.0053 with the budget-share thinking
 
   // the other half: a free_only site reserves nothing in the first place
   reset();
@@ -12383,13 +12383,13 @@ await guard('B-F1 the Sonnet half, and B-A11 three nodes that advised from what 
     && /^estimated: prompt and answer characters/.test(before86.basis), JSON.stringify(before86));
   check('B-F1: counted, the same call is priced from the 12,905 prompt and 3,303 answer tokens Anthropic counted, and the characters are ignored',
     after86.counted === true && after86.in_tokens === 12905
-    && after86.out_tokens === 3303 + Math.round(16384 * T86.THINK_SHARE.medium)
+    && after86.out_tokens === 3303 + T86.THINK_SEEN   // B-8 / A-27 (2026-10-18): non-streaming, so the thinking seen, not the budget
     && after86.measured_usd > 0 && after86.measured_usd > after86.estimated_usd
     && /^measured: Anthropic \/v1\/messages\/count_tokens counted 12905 prompt and 3303 answer token\(s\)/.test(after86.basis),
     JSON.stringify(after86));
   check('B-F1: only the thinking no counter can see is still modelled, and the basis says so and says what it costs',
     after86.estimated_usd > 0 && after86.measured === false
-    && /thinking token\(s\) it cannot see are modelled from the medium effort budget/.test(after86.basis)
+    && /thinking token\(s\) it cannot see are modelled at the 64 a call n8n's reported output was seen to exceed the counted answer by/.test(after86.basis)
     && /is modelled\)/.test(after86.basis), after86.basis);
   const describer86 = await kit86({ call: 'callCost', call_spec: { node: 'Site Describer', model: 'claude-haiku-4-5-20251001',
     max_tokens: 4096, effort: '', streaming: false, prompt_chars: 22000, output_chars: 3000, calls: 1,
@@ -12405,7 +12405,7 @@ await guard('B-F1 the Sonnet half, and B-A11 three nodes that advised from what 
   console.log('   3 chunks ->', JSON.stringify({ usd: perItem86.usd, m: perItem86.measured_usd, rounds: perItem86.counted_rounds, basis: perItem86.basis }));
   check('B-F1: the keyword screen runs once per chunk of 80, so its three counts are SUMMED — 7,800 prompt and 3,600 answer tokens across three calls, all three measured',
     perItem86.counted === true && perItem86.counted_rounds === 3 && perItem86.in_tokens === 7800
-    && perItem86.out_tokens === 3600 + Math.round(16384 * T86.THINK_SHARE.low) * 3
+    && perItem86.out_tokens === 3600 + T86.THINK_SEEN * 3
     && / across 3 call\(s\)/.test(perItem86.basis) && !/repeated for the/.test(perItem86.basis), JSON.stringify(perItem86));
   const oneOfThree = await kit86({ call: 'callCost', call_spec: { ...CHUNKS, counted: { prompt_tokens: 2600, total_tokens: 3800, rounds: 1 } } });
   check('B-F1: and a count that covers ONE of three calls measures one and repeats the other two as a model — the Editor\'s rule, unchanged by any of this',
@@ -13893,7 +13893,7 @@ await guard('B-C2 a monitor settles what it measured, not what it reserved', asy
   const la = bl.ai_by_node['Link Analyst'], laT = TOK94['Link Analyst'];
   // 8,000 prompt tokens over two calls, 1,700 answer tokens over two calls, plus 2 x round(8192 x 0.05) of modelled thinking
   check('B-C2: a monitor agent answers once per SITE and does not loop, so every one of its calls is on the main path — the two counts are SUMMED and all of them are measured',
-    la.in_tokens === laT.in[0] + laT.in[1] && la.out_tokens === laT.out[0] + laT.out[1] + 2 * Math.round(8192 * 0.05)
+    la.in_tokens === laT.in[0] + laT.in[1] && la.out_tokens === laT.out[0] + laT.out[1] + 2 * 64   /* B-8 / A-27: a non-streaming call models the 64 thinking tokens a call it was seen to do, not the budget */
     && la.counted === true && / across 2 call\(s\)/.test(la.basis) && !/repeated for the/.test(la.basis), JSON.stringify(la));
   for (const [why, bad] of [['the answer count came back no larger than the prompt', laT.in.map(v => ({ json: { input_tokens: v } }))],
                             ['the prompt count did not answer at all', laT.in.map(() => ({ json: { error: 'overloaded_error' } }))],
@@ -19009,6 +19009,49 @@ await guard('SFL1 C-9 the AI visibility comparison counts only engines that answ
   check('C-9: the report\'s lineage prints that period', /1 daily pulse day since 2026-10-06/.test(JSON.stringify(ln)) && !/the 7 days to/.test(JSON.stringify(R.lineage || [])), JSON.stringify(ln).slice(0, 300));
   const Z = await W3E.drive({ rows: W3E.answers(0), pulse_rows: [], previous: W3E.previous({ mk: 0, engines: { chatgpt: W3E.eng(20, 0), gemini: W3E.eng(10, 0), perplexity: W3E.eng(10, 0), ai_mode: W3E.eng(20, 0) } }) });
   check('C-9: with no pulse reading the period says so', /^this run on .* \(no daily pulse reading since 2026-10-06\)$/.test(Z.metrics.rate_period), Z.metrics.rate_period);
+});
+
+await guard('SFL2 B-8 A-27 A-28 B-9 a Claude call is priced at what n8n saw, a short call counts its whole prompt, and an audit estimate follows its crawl', async () => {
+  const SN = 'SFL2 B-8 / A-27 / A-28 / B-9 — exec 767\'s Content Reviewer was booked 31% above n8n\'s own tokenUsage (modelled thinking on top of a counted answer), the Reply Reader 54% below (the agent\'s tool and instructions never counted), and exec 739\'s JavaScript crawl was estimated as a plain one';
+  begin(SN); const check = W3E.mkCheck(SN);
+  const kit = async (j) => (await run('Cost Kit', [{ json: j }], { code: '_cost_cal' }))[0].json;
+  // B-8: exec 767, Content Reviewer (Sonnet 5.5, effort medium, not streaming): n8n tokenUsage 11,276 in / 2,258 out = $0.0451; the
+  // count, with the agent's system message and parser tool now in it, sees the prompt n8n billed and the 2,208-token answer
+  const cr = await kit({ call: 'callCost', call_spec: { node: 'Content Reviewer', model: 'claude-sonnet-5-5', max_tokens: 16384, effort: 'medium', streaming: false,
+    prompt_chars: 40000, output_chars: 8000, calls: 1, counted: { prompt_tokens: 11276, total_tokens: 11276 + 2208, rounds: 1 } } });
+  const n8n767 = +((11276 * 2 + 2258 * 10) / 1e6).toFixed(4);
+  check('B-8: the Content Reviewer is priced within 2% of n8n\'s own $0.0451 (it was $0.0592, +31%: 1,638 modelled thinking tokens on a call that thought ~50)',
+    n8n767 === 0.0451 && Math.abs(cr.usd - n8n767) / n8n767 < 0.02 && cr.think_tokens === 64, JSON.stringify({ usd: cr.usd, think: cr.think_tokens, n8n: n8n767 }));
+  const old = +((10392 * 2 + (2208 + Math.round(16384 * 0.1)) * 10) / 1e6).toFixed(4);
+  check('B-8: (the old arithmetic on the same call reproduces the $0.0592 the run booked)', old === 0.0592, String(old));
+  // A-27: the streaming Opus nodes report no usage at all, so nothing checks them — they keep the effort-budget model and say so
+  const op = await kit({ call: 'callCost', call_spec: { node: 'Copywriter', model: 'claude-opus-5-5', max_tokens: 32768, effort: 'high', streaming: true,
+    prompt_chars: 40000, output_chars: 19000, calls: 1, counted: { prompt_tokens: 9000, total_tokens: 14000, rounds: 1 } } });
+  check('A-27: a streaming call keeps the effort-budget thinking (no figure exists to check it against) and its basis says so',
+    op.think_tokens === Math.round(32768 * 0.2) && /modelled from the high effort budget/.test(op.basis), JSON.stringify({ t: op.think_tokens, b: op.basis }));
+  // A-28: every counted agent's two count bodies carry the agent's system message and its parser tool (build check, recorded here)
+  const A9W = require('./a9_cost_wiring.json');
+  const fr = A9W.count_frames || {};
+  check('A-28: the Reply Reader, the Verdict Agent and the Site Describer are counted with their parser tool; the two plain-text Opus agents with none',
+    (fr['SEO_Agent_Reply_Reader.json'] || {})['Reply Reader'] === 'tool' && (fr['SEO_Agent_v4.json'] || {})['Verdict Agent'] === 'tool'
+    && (fr['SEO_Agent_v4.json'] || {})['Site Describer'] === 'tool' && (fr['SEO_Agent_v4.json'] || {})['Copywriter'] === 'none', JSON.stringify(fr));
+  // exec 753: n8n counted 1,859 prompt tokens, the bare-prompt count 1,025 — the 834 missing are the instructions + tool + Anthropic's tool prompt
+  const rr = await kit({ call: 'callCost', call_spec: { node: 'Reply Reader', model: 'claude-haiku-4-5-20251001', max_tokens: 2000, effort: '', streaming: false,
+    prompt_chars: 4000, output_chars: 900, calls: 1, counted: { prompt_tokens: 1859, total_tokens: 1859 + 190, rounds: 1 } } });
+  check('A-28: with the whole prompt counted, the Reply Reader\'s call is $0.0028 (it booked $0.0020 for the $0.0044 n8n saw; the rest is the tool call\'s own framing, which no count sees)',
+    rr.usd === 0.0028 && rr.measured === true, JSON.stringify(rr));
+  // B-9: exec 739 asked for a JavaScript crawl of up to 200 pages (quoted $0.36) and was told $0.11
+  const pk = async (req) => kit({ call: 'pick', kind: 'dfs', request: req });
+  const js200 = await pk({ mode: 'audit', crawl_max_pages: 200, crawl_js: true });
+  const plain200 = await pk({ mode: 'audit', crawl_max_pages: 200, crawl_js: false });
+  const plain1000 = await pk({ mode: 'audit', crawl_max_pages: 1000, crawl_js: false });
+  const full400js = await pk({ mode: 'audit', include_full_report: true, crawl_max_pages: 400, crawl_js: true });
+  check('B-9: a JavaScript crawl of 200 pages is estimated at $0.36, a plain one at $0.09, 1,000 plain pages at $0.45',
+    js200.usd === 0.36 && plain200.usd === 0.09 && plain1000.usd === 0.45 && /rendered with JavaScript at 4x a page/.test(js200.basis) && !/scaled/.test(plain200.basis),
+    JSON.stringify({ js200, plain200: plain200.usd, plain1000: plain1000.usd }));
+  check('B-9: a full report scales only its crawl part ($0.55 + $0.09 x 7 for 400 JavaScript pages)', full400js.usd === +(0.55 + 0.09 * 7).toFixed(4), JSON.stringify(full400js));
+  const kw = await pk({ mode: 'keyword', crawl_max_pages: 1000, crawl_js: true });
+  check('B-9: no other mode moves', kw.crawl_factor === 1 && kw.usd === 0.04, JSON.stringify(kw));
 });
 
 

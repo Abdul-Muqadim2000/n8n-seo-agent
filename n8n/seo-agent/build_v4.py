@@ -4402,7 +4402,7 @@ return $input.all().map(i => { const j = i.json || {}; const fn = String(j.call 
   if (fn === 'dfsLedger') { const L = CC.dfsLedger(); const added = (j.answers || []).map(a => L.add(a)); return { json: { added, ...L.state } }; }
   if (fn === 'dfsDay') return { json: CC.dfsDay(j.rows || [], j.mine || {}) };
   if (fn === 'tables') return { json: { EST: CC.EST, DFS_EST: CC.DFS_EST, PRICES: CC.PRICES, UNKNOWN: CC.UNKNOWN, CHARS_PER_TOKEN: CC.CHARS_PER_TOKEN,
-    THINK_SHARE: CC.THINK_SHARE, ALPHA: CC.ALPHA, HEADROOM: CC.HEADROOM, KEEP: CC.KEEP, CAP: CC.CAP, FACTOR_KEY: CC.FACTOR_KEY,
+    THINK_SHARE: CC.THINK_SHARE, THINK_SEEN: CC.THINK_SEEN, ALPHA: CC.ALPHA, HEADROOM: CC.HEADROOM, KEEP: CC.KEEP, CAP: CC.CAP, FACTOR_KEY: CC.FACTOR_KEY,
     RECONCILE_TOLERANCE: CC.RECONCILE_TOLERANCE, RECONCILE_FLOOR: CC.RECONCILE_FLOOR } };
   return { json: { error: 'unknown call ' + fn } }; });
 """)
@@ -5871,7 +5871,7 @@ log('The spend guard covers both currencies and the account is a hard floor (202
 # =============================================================================
 
 from ladder_common import LEDGER_WINDOW_MS as LEDGER_WINDOW_MS62
-from monitor_cost import answer_expr as _answer_expr104   # R47 / R69 / R80 (section 104): one answer expression for every builder
+from monitor_cost import answer_expr as _answer_expr104, fill_count_frames as _fill_frames104   # R47 / R69 / R80 (section 104): one answer expression for every builder
 
 # ---------- A. B-A8: the free token counter, on the main path, behind the three streaming agents ----------
 COUNT_URL62 = 'https://api.anthropic.com/v1/messages/count_tokens'
@@ -5909,7 +5909,7 @@ for _c62 in _STREAM62:
          # R47 / R69 / R80 (2026-10-16): the answer as the model returned it — a parsed object as its JSON, never "[object Object]"
          'value': _answer_expr104("$('" + _ag62 + "').first().json.output"), 'type': 'string'}]}},
         [_px62, _py62 + 260])
-    _mdl62 = json.dumps(_c62['model'])
+    _mdl62 = json.dumps(_c62['model']) + '/*__A28_FRAME__*/'   # A-28 (2026-10-18): the system + tool the agent sends, filled in at WRITE (a later section may change the parser)
     _count_node62(_cp62, '={{ JSON.stringify({ model: ' + _mdl62 + ', messages: [{ role: "user", content: String($json.__prompt || "") }] }) }}',
                   [_px62 + 200, _py62 + 260])
     _count_node62(_ca62, '={{ JSON.stringify({ model: ' + _mdl62 + ', messages: ['
@@ -7568,7 +7568,7 @@ for _c76 in _NS76:
         {'id': str(uuid.uuid5(uuid.NAMESPACE_URL, 'bf1:' + _ag76 + ':answer')), 'name': '__answer',
          'value': _answer_expr104('$json.output'), 'type': 'string'}]}},   # R47 / R69 / R80: an object as its JSON
         [_px76, _py76 + 300], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
-    _mdl76 = json.dumps(_c76['model'])
+    _mdl76 = json.dumps(_c76['model']) + '/*__A28_FRAME__*/'   # A-28 (2026-10-18): the system + tool the agent sends, filled in at WRITE (a later section may change the parser)
     _own76 = "$('" + _set76 + "')." + ('item' if _multi76 else 'first()') + ".json"
     _count_node62(_cp76, '={{ JSON.stringify({ model: ' + _mdl76 + ', messages: [{ role: "user", content: String($json.__prompt || "") }] }) }}',
                   [_px76 + 200, _py76 + 300])
@@ -10193,6 +10193,18 @@ def _b104_checks():
                 _v = next(a['value'] for a in _n['parameters']['assignments']['assignments'] if a['name'] == '__answer')
                 assert _mc104.answer_expr_ok(_v), 'R47: ' + _f + ' / ' + _n['name'] + ' still sends String(output) to the counter'
                 _answers.setdefault(_f, {})[_n['name'][len('Prompt For Count ('):-1]] = _v
+    # A-28 / B-8 (2026-10-18): every count body carries what its agent really sends besides the prompt (the formatting instructions as the
+    # system message and the parser's format_final_json_response tool), so the counted prompt is the prompt n8n's tokenUsage billed
+    _frames = {}
+    for _f, _w in _wfs.items():
+        _nb = {n['name']: n for n in _w['nodes']}
+        for _ag in sorted(_answers.get(_f, {})):
+            _fr = _mc104.count_frame(_nb, _w['connections'], _ag)
+            for _cn in ('Count Prompt (' + _ag + ')', 'Count Answer (' + _ag + ')'):
+                assert _cn in _nb, 'A-28: ' + _f + ' has no ' + _cn
+                assert _mc104.count_frame_ok(_nb[_cn]['parameters'].get('jsonBody'), _fr), 'A-28: ' + _f + ' / ' + _cn + ' counts the prompt without the system message and tool its agent sends'
+                assert '}}' not in str(_nb[_cn]['parameters'].get('jsonBody'))[3:-2], 'A-28: ' + _f + ' / ' + _cn + ' has a }} inside its expression'
+            _frames.setdefault(_f, {})[_ag] = 'tool' if _fr else 'none'
     # the 16 structured agents of R80's list, Site Brief (R82) and the two text agents — each counted, each through the one expression
     _want = {'SEO_Agent_v4.json': ['Site Describer', 'Competitor Analyzer', 'Strategy Brief', 'Content Reviewer', 'Keyword Seeds',
                                    'Verdict Agent', 'Keyword Relevance', 'Critic', 'Ladder Keyword Relevance', 'Copywriter', 'Editor'],
@@ -10257,7 +10269,7 @@ def _b104_checks():
     _kc = _wfs['SEO_Agent_Keyword_Check.json']
     _sv = next(n for n in _kc['nodes'] if n['name'] == 'Settle Run Ledger (Assess)')['parameters']['columns']['value']
     assert '$json.settled_at' in str(_sv.get('settled_at')) and '$json.dfs_source' in str(_sv.get('dfs_source')), 'R81: Settle Run Ledger (Assess) drops settled_at / dfs_source'
-    _out = {'answers': _answers, 'call_tables': _tables, 'callbacks': _cbs, 'callback_gap': _gap,
+    _out = {'answers': _answers, 'count_frames': _frames, 'call_tables': _tables, 'callbacks': _cbs, 'callback_gap': _gap,
             'assess_settle_columns': sorted(_sv), 'main': _A9_MAIN105,
             'measured': {w: _lw['monitors'][w].get('measured') or '' for w in sorted(_lw.get('monitors') or {})}}
     json.dump(_out, open(os.path.join(HERE0, 'harness', 'a9_cost_wiring.json'), 'w'), indent=1, sort_keys=True)
@@ -11407,6 +11419,10 @@ log('A build that invents what it was not told, and a gate that only works one w
 # =============================================================================
 # 9. WRITE
 # =============================================================================
+# A-28 / B-8 (2026-10-18): the count bodies of sections 62 / 76 carry a placeholder where the agent's system message and parser tool go;
+# filled here, after every section that edits a parser schema, so the counted prompt is the one the agent sends today
+_n_frames = _fill_frames104(nodes, conns)
+assert _n_frames == 2 * len(_AI_CALLS51), ('A-28: %d count bodies framed, expected two for each of the %d counted agents' % (_n_frames, len(_AI_CALLS51)))
 w['nodes'] = list(nodes.values())
 w['name'] = 'SEO Agent v4 — Audit, Keywords, Verdict & Content'
 w['active'] = False

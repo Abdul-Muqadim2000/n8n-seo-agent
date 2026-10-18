@@ -5,7 +5,10 @@
 // Keyword Check: the answer. Difficulty for this site and plan from the shared reach rules; topic fit, navigational / other brand and the
 // alternatives from the small Claude call (if it failed: fit null, navigational from DataForSEO's intent unless the keyword names the site itself).
 // Alternatives only when the keyword is not realistic or off-topic, never the keyword itself or one the site already targets.
-const CONFIG = { ai_cost_usd: 0.002 };   // Claude Haiku 4.5, ~900 input + ~80 output tokens ($1 / $5 per million)
+// A-28 (re-rating 2026-10-17): $0.002 was a guess (~900 in + ~80 out); n8n's own token usage of execs 749-751 / 761-762 put one Haiku
+// call at $0.0029-0.0033 (the prompt plus the agent's tool and formatting instructions, ~2,000 tokens). Not counted per call: two
+// count_tokens round-trips would land on the caller's clock (section 108), so the figure is the measured upper end, labelled ESTIMATED.
+const CONFIG = { ai_cost_usd: 0.0033 };
 const FIT_UNKNOWN = 'topic check unavailable';   // R3: the same words in the label, the warning and the app (shared/src/keywords.ts)
 const a = $('Assess Result').first().json;
 const out = $input.first().json || {};
