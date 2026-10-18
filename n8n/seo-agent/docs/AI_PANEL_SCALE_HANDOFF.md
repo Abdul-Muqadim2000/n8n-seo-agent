@@ -71,8 +71,8 @@ See `AI_VISIBILITY_SPEC.md` §10 for the full spec. Short form:
 |---|---|---|
 | 0 baseline + probe | done | — |
 | 1 scale (500, chunking, resume, rotation, ledger) | done — harness 7058 passed, 0 failed (S200–S205 new) | see git log "G6 part 1" |
-| 2 personas / segments / sources / fit gate / owner edits | todo | |
-| 3 engines (ChatGPT API, Gemini API opt-in) | todo | |
+| 2 personas / segments / sources / fit gate / owner edits | done — S206–S208 | git log "G6 part 2" |
+| 3 engines (ChatGPT API, Gemini API opt-in) | done — S209; harness 7102 passed, 0 failed | git log "G6 part 3" |
 | 4 statistics at scale | todo | |
 | 5 cost (engine + app, shared cases) | todo | |
 | 6 app (panel manager, settings, charts, guides, API/MCP) | todo | |
@@ -98,4 +98,15 @@ See `AI_VISIBILITY_SPEC.md` §10 for the full spec. Short form:
   and the plan says so (`sample.capped`, `sample.why`).
 
 ## 7. Fields that need one live call
-(filled in as parts land)
+The sandbox answers with dummy data and validates only some fields (it refused `max_output_tokens` on o4-mini, it accepted
+`web_search_country_iso_code` for Claude in 2026-10 which the live API refuses). One cheap live call each before switching the engine on:
+1. `ai_optimization/chat_gpt/llm_responses/live` with `{ user_prompt, model_name: "gpt-5.4-mini", web_search: true, max_output_tokens: 1200,
+   web_search_country_iso_code: "AE" }` — all four fields on this model (the sandbox echoed `web_search: false` and a different model).
+   Acceptance: task 20000, `result[0].web_search === true`, `items[0].sections[0].annotations` non-empty; note `task.cost` (the price
+   estimate is $0.012 — `AIP.PRICE.chatgpt_api` in `v5/code/_ai_panel.js` and `AI_ENGINE_COST` in the app; correct both if it differs).
+2. `ai_optimization/gemini/llm_responses/live` with `{ user_prompt, model_name: "gemini-3.5-flash", web_search: true, max_output_tokens: 1200 }`.
+   Same acceptance; price estimate $0.02.
+3. `serp/google/organic/live/advanced` for People-also-ask needs no new field (depth 10, the rank tracker's own request); the sandbox
+   returned a `people_also_ask` item.
+4. The model lists themselves are free: `GET ai_optimization/{chat_gpt,gemini}/llm_responses/models` on the LIVE API confirms
+   gpt-5.4-mini / gemini-3.5-flash exist with `web_search_supported: true` (the sandbox listed both).
