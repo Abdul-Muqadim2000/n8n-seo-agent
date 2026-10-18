@@ -10,7 +10,8 @@ OUT=$DATA/backups
 cd "$(dirname "$0")"
 BUCKET=$(grep -E '^BACKUP_BUCKET=' "$SECRETS/prod.env" | cut -d= -f2- || true)
 STAMP=$(date -u +%Y-%m-%dT%H%M%SZ)
-COMPOSE=(docker compose -p alaventra --env-file "$SECRETS/prod.env" -f compose.prod.yml)
+# ALAVENTRA_COMPOSE: another compose command line (the local rehearsal of RUNBOOK §5 points it at a scratch project)
+read -r -a COMPOSE <<< "${ALAVENTRA_COMPOSE:-docker compose -p alaventra --env-file $SECRETS/prod.env -f compose.prod.yml}"
 mkdir -p "$OUT"
 for db in n8n app; do
   f="$OUT/$db-$STAMP.dump"
