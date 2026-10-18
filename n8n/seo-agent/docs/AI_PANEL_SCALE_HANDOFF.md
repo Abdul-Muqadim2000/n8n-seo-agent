@@ -73,7 +73,7 @@ See `AI_VISIBILITY_SPEC.md` §10 for the full spec. Short form:
 | 1 scale (500, chunking, resume, rotation, ledger) | done — harness 7058 passed, 0 failed (S200–S205 new) | see git log "G6 part 1" |
 | 2 personas / segments / sources / fit gate / owner edits | done — S206–S208 | git log "G6 part 2" |
 | 3 engines (ChatGPT API, Gemini API opt-in) | done — S209; harness 7102 passed, 0 failed | git log "G6 part 3" |
-| 4 statistics at scale | todo | |
+| 4 statistics at scale | done — S210; harness 7118 passed, 0 failed | git log "G6 part 4" |
 | 5 cost (engine + app, shared cases) | todo | |
 | 6 app (panel manager, settings, charts, guides, API/MCP) | todo | |
 | 7 marketing | todo | |

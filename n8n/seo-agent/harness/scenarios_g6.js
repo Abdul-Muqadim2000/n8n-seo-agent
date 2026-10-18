@@ -361,4 +361,57 @@ module.exports = async (ctx) => {
     const c = AIP.cost({ panel: 50, engines: ['chatgpt', 'chatgpt_api', 'gemini_api'] });
     check('the price of each engine is stated, the two API ones marked as estimates until their first live call', c.prices.find(x => x.engine === 'chatgpt_api').usd === 0.012 && /estimate/.test(c.prices.find(x => x.engine === 'gemini_api').basis) && /measured/.test(c.prices.find(x => x.engine === 'chatgpt').basis), JSON.stringify(c.prices));
   });
+
+  // ===================================================================================================================================
+  await guard('S210 G6 — statistics at scale: segments with ranges, Benjamini-Hochberg over the segment family, no delta across a changed panel', async () => {
+    reset(); const SN = 'S210 G6 — the last part of a 500-question run: rates per engine / cluster / buyer role / market / stage with 95% ranges, "too few answers", share of voice per cluster, segment changes corrected by Benjamini-Hochberg, the achievable half-width printed, and no delta when the panel changed';
+    begin(SN); const check = mkCheck(SN);
+    const panel = synthPanel(498);
+    // a tiny third market with two questions, so one segment is under the floor (500 questions in all: the most a panel holds)
+    panel.push({ ...panel[1], prompt_id: 'g6_qa_1', prompt: 'Which e-invoicing providers serve Qatar? (a)', market: 'QA-en', keyword: 'e-invoicing qatar a' }, { ...panel[1], prompt_id: 'g6_qa_2', prompt: 'Which ERP partners serve Qatar? (b)', market: 'QA-en', keyword: 'erp qatar b' });
+    const ids = panel.filter(q => q.kind !== 'brand').map(q => q.prompt_id).sort();
+    // last week: the same 501 buyer questions on the same 5 engines; e-invoicing was named in 60% of its answers, everything else as now
+    const ENGS = { chatgpt: 1, gemini: 1, perplexity: 1, ai_overview: 1, ai_mode: 1 };
+    const prevRow = (o) => ({ site_id: 'site_techand-ai', domain: 'techand.ai', run_id: 'ai_prev', checked_at: day(7), run_kind: 'full', prompts: 499, answers: 2495, samples: 2495, mention_rate: 14.3, citation_rate: 4.8,
+      engines_json: JSON.stringify(Object.fromEntries(Object.keys(ENGS).map(e => [e, { name: e, asked: 501, answered: 501, samples: 501, mentioned: 70, cited: 20 }]))), competitors_json: '[]',
+      panel_json: JSON.stringify({ ids: (o && o.ids) || ids }), segments_json: JSON.stringify({ v: 1, rows: [['cluster', 'e-invoicing', 42, 210, 126], ['cluster', 'vat compliance', 42, 210, 30], ['persona', 'cfo', 126, 630, 90]] }) });
+    const all = []; for (const q of panel) { if (q.kind === 'brand') continue; for (const e of Object.keys(ENGS)) all.push({ ...q, engine: e }); }
+    const rows = answerRows(all.map(q => ({ ...q, site_id: 'site_techand-ai', domain: 'techand.ai' })), 'ai_g6stats');
+    rows.forEach((r, i) => { const q = panel.find(x => x.prompt_id === r.prompt_id); if (q && q.cluster === 'e-invoicing') r.mentioned = i % 7 === 0; });
+    const runIt = async (o) => {
+      loadWeekly({ monitors: { ai_prompts_max: 500, ai_markets: 'SA-en, QA-en' }, prompts: panel, runAnswers: rows.slice(0, rows.length - 100), cache: [{ key: 'ai_run:site_techand-ai', kind: 'ai', site_id: 'site_techand-ai', updated_at: day(0.01),
+        value: JSON.stringify({ run_id: 'ai_g6stats', run_kind: 'weekly', site_id: 'site_techand-ai', domain: 'techand.ai', started_at: day(0.05), updated_at: day(0.01), chunk: 4, status: 'running', asked: 2395, total: 2495, spent_dfs_usd: 9.58, executions: ['e1', 'e2', 'e3', 'e4'] }) }],
+        trigger: { domain: 'techand.ai', site_id: 'site_techand-ai', continue_run: 'ai_g6stats' } });
+      mock('Load AI Visibility', items([prevRow(o)]));
+      const plan = (await run('AI Plan', [{ json: {} }]))[0].json;
+      // every answer of the run: the earlier parts stored all but this part's; this part answers the last 100
+      mock('Apply Analysis', items(rows.slice(rows.length - 100)));
+      return { plan, am: (await run('AI Metrics', [{ json: {} }]))[0].json };
+    };
+    const { plan, am } = await runIt();
+    check('the plan continues the run and is its last part', plan.chunk.going && plan.chunk.final_expected && plan.run_id === 'ai_g6stats', JSON.stringify(plan.chunk));
+    const S = am.segments, R = S.rows;
+    const dimCount = (d) => R.filter(s => s.dim === d).length;
+    check('segments per engine (5), cluster (12), buyer role (4), market (3), stage (3) and the three cross tables', dimCount('engine') === 5 && dimCount('cluster') === 12 && dimCount('persona') === 4 && dimCount('market') === 3 && dimCount('stage') === 3 && dimCount('cluster x persona') === 48 && dimCount('engine x cluster') === 60 && dimCount('market x cluster') >= 24,
+      JSON.stringify(['engine', 'cluster', 'persona', 'market', 'stage', 'cluster x persona', 'engine x cluster', 'market x cluster'].map(dimCount)));
+    const qa = R.find(s => s.dim === 'market' && s.key === 'QA-en'), ei = R.find(s => s.dim === 'cluster' && s.key === 'e-invoicing');
+    check('each segment carries its 95% Wilson range; a market with 10 answers says too few, never a rate', ei.enough && ei.ci.length === 2 && ei.ci[0] <= ei.rate && ei.rate <= ei.ci[1] && qa && !qa.enough && qa.n === 10 && /12 before it says anything/.test(qa.why), JSON.stringify([ei, qa]));
+    check('share of voice per cluster: yours out of yours plus the businesses named instead in those answers, with the leader', ei.sov > 0 && ei.sov < 100 && ei.leader === 'cleartax.com', JSON.stringify(ei));
+    const F = S.family;
+    check('the segment changes are one family corrected by Benjamini-Hochberg at q = 0.10, and the note says why not Holm', F.method === 'benjamini-hochberg' && F.q === 0.1 && F.tests >= 2 && /false discovery rate/.test(F.note) && /Holm-adjusted, because each one interrupts you/.test(F.note), JSON.stringify(F));
+    check('e-invoicing fell from 60% to ~14% on 210 answers a side: a real move; VAT compliance (same as before) is not', ei.change && ei.change.significant === true && ei.change.delta < -40 && R.find(s => s.dim === 'cluster' && s.key === 'vat compliance').change.significant === false, JSON.stringify([ei.change, R.find(s => s.dim === 'cluster' && s.key === 'vat compliance').change]));
+    check('the moves list names it', S.moves.some(x => x.dim === 'cluster' && x.key === 'e-invoicing'), JSON.stringify(S.moves));
+    // the same family under Holm, for the record: BH never calls fewer
+    const AS = kitOf('AI_Metrics.js', 'AIP');
+    check('the panel record: the ids asked, the composition, measured and achievable half-widths', am.panel && am.panel.size === 499 && am.panel.composition.market['QA-en'] === 2 && am.panel.half_width.measured.headline > 0 && am.panel.half_width.achievable.headline > 0 && AS.LIMITS.max === 500, JSON.stringify(am.panel && am.panel.half_width));
+    const vr = am.vis_row; const segStore = JSON.parse(vr.segments_json); const panStore = JSON.parse(vr.panel_json);
+    check('the stored row keeps the segments compact (named columns once) and the panel\'s ids for next week', segStore.v === 1 && segStore.cols[0] === 'dim' && Array.isArray(segStore.rows[0]) && panStore.ids.length === 499 && vr.segments_json.length < 60000, vr.segments_json.length);
+    // the report
+    const rep0 = (await run('AI Report', store['AI Metrics']))[0].json;
+    check('the report prints the topic, buyer and market tables with ranges, what moved, how precise it is, and caps the answer grid at 60 of 501', /By topic cluster/.test(rep0.html) && /By buyer role/.test(rep0.html) && /By market/.test(rep0.html) && /What moved, by segment/.test(rep0.html) && /Benjamini-Hochberg/.test(rep0.html) && /How precise this is/.test(rep0.html) && /The 60 questions that matter most of the 499 asked/.test(rep0.html) && /too few answers/.test(rep0.html) && /asked over 5 executions/.test(rep0.html),
+      ['By topic cluster', 'By buyer role', 'What moved', 'How precise', 'matter most', 'too few answers', 'asked over 5'].map(t => t + ':' + rep0.html.includes(t)).join(' '));
+    // a changed panel: only 60% of last week's ids — no delta at all, and no segment change
+    const { am: am2 } = await runIt({ ids: ids.slice(0, Math.round(ids.length * 0.6)).concat(Array.from({ length: 200 }, (_, i) => 'gone_' + i)) });
+    check('under 80% of the questions in common: no delta, the reason printed, no segment tested', /different panel, not a different result/.test(am2.metrics.delta_not_compared) && am2.segments.family.tests === 0 && !am2.metrics.tests, am2.metrics.delta_not_compared);
+  });
 };

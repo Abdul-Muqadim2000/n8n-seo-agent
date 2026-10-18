@@ -190,6 +190,31 @@ return plans.map(p => {
   const group = (key) => { const g = new Map(); for (const q of questions.filter(x => x.kind !== 'brand')) { const k = String(q[key] || 'other').toLowerCase(); const x = g.get(k) || { key: k, questions: 0, volume: 0, n: 0, m: 0, rivals: new Map() }; x.questions++; x.volume += Number(q.volume) || 0; x.n += q.samples; x.m += Math.round(q.win_rate * q.samples / 100); q.competitors.forEach(c => x.rivals.set(c, (x.rivals.get(c) || 0) + 1)); g.set(k, x); }
     return [...g.values()].map(x => ({ key: x.key, questions: x.questions, volume: x.volume, samples: x.n, mention_rate: pct(x.m, x.n), leader: [...x.rivals.entries()].sort((a, b) => b[1] - a[1]).map(([d]) => d)[0] || '' })).sort((a, b) => b.volume - a.volume || b.questions - a.questions); };
   const clusters = { stages: group('stage'), clusters: group('cluster').slice(0, 12) };
+  // ---- G6 (2026-10-18, AI_VISIBILITY_SPEC.md §10): rates per engine x topic cluster x buyer role x market x funnel stage ------------
+  // Every segment counts this run's answers on the weekly engines (the headline's base: no brand question, no monthly engine) plus the
+  // daily pulse's answers of its questions, with its 95% Wilson range, and says "too few answers" under MIN_RATE_SAMPLES. Share of voice
+  // per segment is yours out of yours plus the businesses AI named instead, in the same answers (the weekly answers: the pulse stores
+  // site-level competitor counts only). A segment's change is tested only against a comparable earlier panel, and the whole family of
+  // segment tests is corrected together with Benjamini-Hochberg (_ai_stats.js bh: why not Holm is written there).
+  const SEG_DIMS = { engine: (q, e) => e, cluster: (q) => String(q.cluster || q.topic || 'other').toLowerCase(), persona: (q) => String(q.persona || '').trim() || 'any buyer',
+    market: (q) => q.market || p.own_market || '', stage: (q) => q.stage || 'other' };
+  const SEG_CROSS = [['cluster', 'persona'], ['engine', 'cluster'], ['market', 'cluster']];
+  const segAcc = new Map();
+  const segBump = (dim, key, pid, e, x) => { const id = dim + '|' + key; const s = segAcc.get(id) || { dim, key, n: 0, k: 0, c: 0, pulse_n: 0, comp: new Map(), q: new Set() };
+    s.n += x.n; s.k += x.k; s.c += x.c; s.pulse_n += x.pn || 0; s.q.add(pid); for (const d of (x.comp || [])) s.comp.set(d, (s.comp.get(d) || 0) + 1); segAcc.set(id, s); };
+  const segKeys = (q, e) => { const v = {}; for (const [d, f] of Object.entries(SEG_DIMS)) v[d] = f(q, e);
+    return [...Object.keys(SEG_DIMS).map(d => [d, v[d]]), ...SEG_CROSS.map(([a, b]) => [a + ' x ' + b, v[a] + ' · ' + v[b]])]; };
+  for (const r of ans) { if (r.kind === 'brand') continue; const q = { ...(meta.get(r.prompt_id) || {}), topic: r.topic };
+    const x = { n: 1, k: r.mentioned ? 1 : 0, c: r.cited ? 1 : 0, comp: list(r.competitors) };
+    for (const [d, key] of segKeys(q, r.engine)) segBump(d, key, r.prompt_id, r.engine, x); }
+  for (const d0 of PR) for (const [pid, st] of Object.entries(d0.prompts || {})) { const q = meta.get(pid); if (!q || q.kind === 'brand') continue;
+    for (const [e, v] of Object.entries(st || {})) { if (v === 'n' || v === 'e') continue;
+      const x = { n: 1, k: /^[mcMC]$/.test(v) ? 1 : 0, c: /^[cC]$/.test(v) ? 1 : 0, pn: 1 };
+      for (const [d, key] of segKeys(q, e)) segBump(d, key, pid, e, x); } }
+  const segRows = [...segAcc.values()].map(s => { const r0 = rateOf(s.k, s.n); const compN = [...s.comp.values()].reduce((a, b) => a + b, 0);
+    const leader = [...s.comp.entries()].sort((a, b) => b[1] - a[1])[0];
+    return { dim: s.dim, key: s.key, questions: s.q.size, n: s.n, k: s.k, cited: s.c, pulse_n: s.pulse_n, rate: r0.rate, ci: r0.ci, enough: r0.enough, why: r0.why,
+      sov: (s.n - s.pulse_n) > 0 && (s.k + compN) > 0 ? Math.round(1000 * (s.k - 0) / (s.k + compN)) / 10 : null, sov_basis: 'your mentions out of yours plus the businesses named instead, in this run\'s answers', leader: leader ? leader[0] : '' }; });
   // demand: AI searches a month behind the panel, and the estimated share of them that name the business (volume x win rate; an estimate)
   const demand = questions.filter(q => q.kind !== 'brand' && q.volume != null);
   const demand_total = demand.reduce((s, q) => s + (Number(q.volume) || 0), 0), ai_impressions = Math.round(demand.reduce((s, q) => s + (Number(q.volume) || 0) * q.win_rate / 100, 0));
@@ -323,9 +348,43 @@ return plans.map(p => {
   const same_kind = prev ? RT.likeForLike(engNow.join('+'), engBefore.join('+'),
     { labels: { [engNow.join('+')]: engText(engNow), [engBefore.join('+')]: engText(engBefore) }, what: 'this week\'s figures and the stored ones' }) : null;
   const same_panel = prev ? RT.comparable(panel, panel_before, { unit: 'questions' }) : null;
-  const like = prev ? (same_kind.comparable ? same_panel : same_kind) : null;
+  // G6 (2026-10-18): the same NUMBER of questions is not the same panel. With 500 questions the owner imports, edits and re-words them, and
+  // the writer tops the panel up: a week whose questions are mostly new is a different measurement, whatever its size. The stored row now
+  // keeps the ids it asked (panel_json); under 80% of them in common there is no delta at all, and the report says why.
+  const nowIds = AIP.panelIds([...byQ.entries()].filter(([, q]) => q.kind !== 'brand').map(([id]) => id));
+  const prevIds = prev && prev.panel && Array.isArray(prev.panel.ids) ? prev.panel.ids : null;
+  const same_ids = prevIds ? AIP.overlap(nowIds, prevIds) : null;
+  const like = prev ? (!same_kind.comparable ? same_kind
+    : (same_ids && same_ids.same === false) ? { comparable: false, why: 'only ' + Math.round(100 * same_ids.share) + '% of the questions asked now were asked then (' + same_ids.common + ' in common): a different panel, not a different result' }
+    : same_panel) : null;
   const delta_not_compared = prev && !like.comparable
     ? 'Not compared with ' + String(prev.checked_at || '').slice(0, 10) + ': ' + like.why + '.' : '';
+  // G6: the segment changes and the panel record need `like` (same engines, same questions) — they are computed here, after it
+  // changes, per segment: only against a comparable panel (same engines, same questions), only with enough answers on both sides
+  const prevSeg = new Map(((prev && prev.segments && prev.segments.rows) || []).map(s => [s.dim + '|' + s.key, s]));
+  const segTests = []; const segChange = {};
+  if (prev && like.comparable) for (const s of segRows) { const b = prevSeg.get(s.dim + '|' + s.key); if (!b || !(Number(b.n) > 0)) continue;
+    const qb = Number(b.questions) || 0; if (qb && Math.abs(s.questions - qb) / Math.max(s.questions, qb) > 0.2) { segChange[s.dim + '|' + s.key] = { tested: false, why: 'its questions changed (' + qb + ' then, ' + s.questions + ' now)' }; continue; }
+    if (s.n < MIN_RATE_SAMPLES || Number(b.n) < MIN_RATE_SAMPLES) { segChange[s.dim + '|' + s.key] = { tested: false, why: 'too few answers to test a change (' + s.n + ' now, ' + b.n + ' before; ' + MIN_RATE_SAMPLES + ' needed on each side)' }; continue; }
+    const t = changeOf(s.k, s.n, Number(b.k) || 0, Number(b.n)); segChange[s.dim + '|' + s.key] = { tested: true, delta: t.delta, z: t.z, n_before: Number(b.n), k_before: Number(b.k) || 0 };
+    segTests.push({ id: s.dim + '|' + s.key, label: s.dim + ' ' + s.key, z: t.z }); }
+  const seg_family = bh(segTests, 0.1);
+  for (const s of segRows) { const c = segChange[s.dim + '|' + s.key]; if (!c) continue; const f = seg_family.by[s.dim + '|' + s.key];
+    s.change = c.tested ? { delta: c.delta, z: c.z, n_before: c.n_before, p: f ? f.p : null, significant: !!(f && f.discovery), why: f ? f.why : '' } : { delta: null, significant: null, why: c.why }; }
+  const segOrder = ['engine', 'cluster', 'persona', 'market', 'stage', 'cluster x persona', 'engine x cluster', 'market x cluster'];
+  const segments = { rows: segOrder.flatMap(d => segRows.filter(s => s.dim === d).sort((a, b) => b.n - a.n).slice(0, d.indexOf(' x ') > 0 ? 60 : 40)),
+    family: { method: seg_family.method, q: seg_family.q, tests: seg_family.tests, rejected: seg_family.rejected, note: seg_family.note },
+    moves: segRows.filter(s => s.change && s.change.significant).sort((a, b) => Math.abs(b.change.delta) - Math.abs(a.change.delta)).slice(0, 12).map(s => ({ dim: s.dim, key: s.key, rate: s.rate, delta: s.change.delta, n: s.n, why: s.change.why })),
+    too_few: segRows.filter(s => !s.enough && segOrder.slice(0, 5).includes(s.dim)).length,
+    min_answers: MIN_RATE_SAMPLES, basis: 'measured', counted: 'this run\'s answers on the weekly engines + the daily pulse answers to the same questions (no brand question, no monthly engine)' };
+  // the precision this panel buys, measured on this run and modelled for the panel as it is set
+  const medCl = (() => { const xs = segRows.filter(s => s.dim === 'cluster').map(s => s.n).sort((a, b) => a - b); return xs.length ? xs[Math.floor(xs.length / 2)] : 0; })();
+  const panel_cost = AIP.cost({ panel: Number(p.prompts_max) || nowIds.length + 1, engines: p.engines, pulse: p.pulse !== false, pulse_mode: p.pulse_mode, pulse_per_week: p.pulse_per_week });
+  const panel_info = { ids: nowIds, size: nowIds.length, setting: Number(p.prompts_max) || null, engines: [...new Set(Rall.map(r => r.engine))].sort(), hash: AIP.panelHash(nowIds, [...new Set(Rall.map(r => r.engine))]),
+    composition: Object.fromEntries(['cluster', 'persona', 'market', 'stage'].map(d => [d, Object.fromEntries(segRows.filter(s => s.dim === d).map(s => [s.key, s.questions]))])),
+    overlap_with_previous: same_ids, half_width: { measured: { headline: samples ? Math.round(10 * (wilson(mentioned, samples)[1] - wilson(mentioned, samples)[0]) / 2) / 10 : null, headline_answers: samples, median_cluster: medCl ? AIP.halfWidth(medCl) : null, median_cluster_answers: medCl },
+      achievable: { headline: panel_cost.half_width.headline, cluster: panel_cost.half_width.cluster, per_week: panel_cost.per_week, note: 'at the widest (a rate near 50%), with the panel and the daily pulse as they are set' } },
+    pulse_per_week: panel_cost.per_week, executions: panel_cost.executions };
   // ---- B8-1 (2026-10-15, benchmark area 8, INVARIANTS rule 1): FOUR headline tiles printed an arrow and only ONE of them had been
   // tested. "Named in" carried its 95% range and a two-proportion z-test from v4.9; "Your pages cited", "Share of voice" and the
   // visibility score were subtractions printed in the same type, in the same row, from the same 33-54 answers — and the subject line
@@ -448,7 +507,10 @@ return plans.map(p => {
     index_json: index ? J({ ...index, suggestions: sugg, fanout, demand: { total: demand_total, named: ai_impressions, lost: lost_demand } }) : J({ suggestions: sugg, fanout, demand: { total: demand_total, named: ai_impressions, lost: lost_demand } }), clusters_json: J(clusters),
     rival_sources_json: J(rival_store),   // wave 3 (W3-F): AI Growth reads the rival businesses AI cites from the latest row
     // G6: the segments and the panel (filled in below) and how many executions the run took
-    segments_json: '', panel_json: '', chunks: run_split ? run_split.executions : 1 };   // wave 3 (W3-F): AI Growth reads the rival businesses AI cites from the latest row
+    // compact, so a year of weekly rows stays small: one array per segment (the columns are named once); the report and the callback carry the full rows
+    segments_json: J({ v: 1, cols: ['dim', 'key', 'questions', 'n', 'k', 'cited', 'sov', 'leader', 'pulse_n', 'delta', 'significant'], rows: segments.rows.map(s => [s.dim, s.key, s.questions, s.n, s.k, s.cited, s.sov, s.leader, s.pulse_n, s.change ? s.change.delta : null, s.change ? s.change.significant : null]),
+      family: segments.family, moves: segments.moves, min_answers: segments.min_answers }),
+    panel_json: J(panel_info), chunks: run_split ? run_split.executions : 1 };   // wave 3 (W3-F): AI Growth reads the rival businesses AI cites from the latest row
   const now = p.checked_at;
   const prospect_rows = sources.filter(s => !['platform', 'authority'].includes(s.kind) && s.citations >= 1).slice(0, 10).map(s => { const old = prospects.find(x => x.site_id === p.site_id && x.prospect_domain === s.domain && x.type === 'ai_source') || {};
     const top = (s.urls || [])[0] || null;   // v4.12: the exact page AI cites on that site (the one to be named on)
@@ -482,5 +544,5 @@ return plans.map(p => {
     // B8-8 / B8-9: each engine's own change test (or why it was not tested), and the one correction the tested alerts were judged by
     engine_changes, min_engine_samples: MIN_ENGINE_SAMPLES, multiple_tests: { method: multiple_tests.method, alpha: multiple_tests.alpha, tests: multiple_tests.tests, threshold_p: multiple_tests.threshold_p, threshold_z: multiple_tests.threshold_z, rejected: multiple_tests.rejected, results: multiple_tests.results, note: multiple_tests.note },
       sentiment_score, accuracy_issues: fact_check === 'checked' ? issues.length : null, fact_check, index_sov: vis_row.index_sov, ai_impressions, demand_total, lost_demand },
-    engines, competitors: comp, sources, rival_sources, our_pages, questions, gaps, undecided, clusters, fanout, perception, traffic, access: acc, index, suggestions: sugg, market, alerts, actions: actions.slice(0, 10), vis_row, prospect_rows, cache_rows, cost_usd: exec_cost, run_cost_usd: vis_row.cost_usd, run_split, form_url: FORM_URL, api_url: API_URL } };
+    engines, competitors: comp, sources, rival_sources, our_pages, questions, gaps, undecided, clusters, fanout, perception, traffic, access: acc, index, suggestions: sugg, market, alerts, actions: actions.slice(0, 10), vis_row, prospect_rows, cache_rows, cost_usd: exec_cost, run_cost_usd: vis_row.cost_usd, run_split, segments, panel: { ...panel_info, ids: undefined }, form_url: FORM_URL, api_url: API_URL } };
 });

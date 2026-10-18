@@ -178,6 +178,29 @@ const holm = (tests, alpha) => {
 };
 /** the words an alert carries for the threshold it cleared */
 const holmWords = (h, id) => { const r = h && h.by ? h.by[id] : null; return r ? 'p ' + fmtP(r.p) + ', under the Holm-adjusted threshold p ≤ ' + fmtP(r.threshold_p) + ' across the ' + h.tests + ' tested alert' + (h.tests === 1 ? '' : 's') + ' of this run' : ''; };
+// ---- G6 (2026-10-18, AI_VISIBILITY_SPEC.md §10): the SEGMENT family — Benjamini-Hochberg, not Holm ----
+// A 500-question panel is read per engine x topic cluster x buyer role x market x funnel stage: dozens to hundreds of rate changes a
+// week. Holm controls the chance of even ONE false call across the family; over 200 tests its first step needs p <= 0.00025 (|z| >= 3.66),
+// so a segment moving 15 points on 150 answers would never be called — the correction would make every real move invisible. For the
+// segment table we control the FALSE DISCOVERY RATE instead (Benjamini-Hochberg, q = 0.10: of the segment moves called, about 1 in 10
+// at most is noise), which is the accepted rule for screening many comparisons. The headline ALERTS keep Holm: they are few (<= ~10)
+// and each one interrupts the owner, so for them even one false call is too many.
+/** Benjamini-Hochberg over [{ id, z }]: sorted by p, the largest rank i (1-based) with p_(i) <= q * i / m and every test up to it is a
+ *  discovery. Returns each test's p, its rank, the threshold of its rank, whether it is a discovery, and the words. */
+const bh = (tests, q) => {
+  const Q = q == null ? 0.1 : q;
+  const T = (tests || []).filter(t => t && t.z != null && isFinite(Number(t.z))).map(t => ({ id: t.id, label: t.label || t.id, z: Number(t.z), p: pTwo(t.z) }));
+  const m = T.length; const order = T.slice().sort((x, y) => x.p - y.p);
+  let cut = 0; order.forEach((t, i) => { if (t.p <= Q * (i + 1) / m) cut = i + 1; });
+  const by = {}; order.forEach((t, i) => { const thr = Q * (i + 1) / m; const ok = i < cut;
+    by[t.id] = { id: t.id, label: t.label, z: t.z, p: Math.round(t.p * 1e6) / 1e6, rank: i + 1, threshold_p: Math.round(thr * 1e6) / 1e6, discovery: ok,
+      why: (ok ? 'a real move' : 'within noise') + ' at a ' + Math.round(Q * 100) + '% false discovery rate (p ' + fmtP(t.p) + (ok ? ' within' : ', not within') + ' the Benjamini-Hochberg cut of ' + m + ' segment test' + (m === 1 ? '' : 's') + ')' }; });
+  const rejected = Object.values(by).filter(r => r.discovery).length;
+  return { method: 'benjamini-hochberg', q: Q, tests: m, rejected, by,
+    note: !m ? 'No segment had enough answers on both sides to test a change.'
+      : m + ' segment change' + (m === 1 ? ' was' : 's were') + ' tested together, at a ' + Math.round(Q * 100) + '% false discovery rate (Benjamini-Hochberg: of the moves called real, about 1 in ' + Math.round(1 / Q) + ' at most may be noise); '
+        + rejected + ' cleared it. The headline alerts are judged separately, Holm-adjusted, because each one interrupts you.' };
+};
 // B8-8: a per-engine change is tested on that engine's own answers, and below this many on EITHER side it is not tested at all
 const MIN_ENGINE_SAMPLES = MIN_RATE_SAMPLES;
 const engineChange = (kNow, nNow, kBefore, nBefore, o) => {
