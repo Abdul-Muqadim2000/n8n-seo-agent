@@ -41,6 +41,20 @@ describe('/api through the proxy', () => {
     expect(fwd(r, 'x-origin-secret')).toBeNull();
     expect(String(r.headers.get('x-middleware-override-headers') ?? '')).not.toContain('x-origin-secret');
   });
+  it("forwards only what the API reads: never Vercel's own x-vercel-* or hop-by-hop headers (2026-10-18: MIDDLEWARE_INVOCATION_FAILED)", () => {
+    vi.stubEnv('API_ORIGIN', 'https://api.alaventra.com');
+    vi.stubEnv('ORIGIN_SECRET', 's3cret');
+    const r = middleware(req('https://app.alaventra.com/api/me', {
+      cookie: 'sid=abc', 'x-requested-with': 'fetch', 'x-org-id': 'o1', 'x-real-ip': '203.0.113.7',
+      'x-vercel-id': 'bom1::x', 'x-vercel-oidc-token': 'jwt', connection: 'keep-alive', 'x-forwarded-for': '203.0.113.7, 10.0.0.1',
+    }));
+    const over = String(r.headers.get('x-middleware-override-headers') ?? '').split(',');
+    expect(fwd(r, 'cookie')).toBe('sid=abc');
+    expect(fwd(r, 'x-requested-with')).toBe('fetch');
+    expect(fwd(r, 'x-org-id')).toBe('o1');
+    expect(fwd(r, 'x-real-ip')).toBe('203.0.113.7');
+    for (const h of ['x-vercel-id', 'x-vercel-oidc-token', 'connection', 'host', 'x-forwarded-for']) expect(over, h).not.toContain(h);   // whole names
+  });
   it('answers 503 without an API origin', () => {
     vi.stubEnv('API_ORIGIN', '');
     expect(middleware(req('https://app.alaventra.com/api/me')).status).toBe(503);

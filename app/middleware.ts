@@ -54,11 +54,29 @@ export default function middleware(request: Request): Response {
       headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
     });
   }
-  const headers = new Headers(request.headers);
+  // Only the headers the API needs. Copying every incoming header into the request override also re-injected Vercel's own
+  // x-vercel-* / hop-by-hop headers and the invocation failed on every /api call (MIDDLEWARE_INVOCATION_FAILED, 2026-10-18).
+  const headers = new Headers();
+  for (const [k, v] of request.headers) if (FORWARD.has(k.toLowerCase())) headers.set(k, v);
+  const ip = request.headers.get('x-real-ip') ?? (request.headers.get('x-forwarded-for') ?? '').split(',')[0].trim();
+  if (ip) headers.set('x-real-ip', ip);
   headers.set('x-forwarded-host', host);
   headers.set('x-forwarded-proto', 'https');
   const secret = (process.env.ORIGIN_SECRET ?? '').trim();
-  if (secret) headers.set('x-origin-secret', secret);
-  else headers.delete('x-origin-secret');   // never forward a visitor's own attempt at it
-  return rewrite(new URL(url.pathname + url.search, origin), { request: { headers } });
+  if (secret) headers.set('x-origin-secret', secret);   // a visitor's own x-origin-secret is never in FORWARD
+  try {
+    return rewrite(new URL(url.pathname + url.search, origin), { request: { headers } });
+  } catch (e) {
+    const err = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+    return new Response(JSON.stringify({ error: 'The edge proxy could not forward this request.', code: 'proxy_failed', detail: err.slice(0, 300) }), {
+      status: 502,
+      headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
+    });
+  }
 }
+
+/** request headers the API reads; everything else (Vercel's own x-vercel-*, hop-by-hop, a visitor's x-origin-secret) stays behind */
+const FORWARD = new Set([
+  'accept', 'accept-language', 'authorization', 'cookie', 'content-length', 'content-type', 'idempotency-key', 'if-none-match', 'origin',
+  'referer', 'user-agent', 'x-api-key', 'x-org-id', 'x-requested-with', 'x-csrf-token',
+]);
