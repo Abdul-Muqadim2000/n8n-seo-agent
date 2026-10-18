@@ -111,6 +111,7 @@ Before each phase, read §3 / §8 to see what is already done.
 - 2026-10-18 07:50 PKT — Phase B started: agent F-L (pipeline.ts seo_pages bug, C-9, B-8/A-27/A-28 cost counting, B-9, B-10, B-16, B-18, Tracker Report scenario C-12/C-13, ran-late on Audit Scheduler + Page Watch, rival prospects), handoff `F-L_HANDOFF.md`. G1 told: migration 0011 after G3.
 - 2026-10-18 13:08 PKT — safety re-run: all three agents had stopped ≈ 08:00 (usage limit). G1 finished SCIM + marketing + browser pass (52 views clean) and stopped mid-merge (0011, 5 conflicts) — resumed to finish the merge; G4 committed its marketing — resumed to finish its list; F-L had item 1 (pipeline.ts by site_id) — resumed for items 2–6.
 - 2026-10-18 PKT afternoon — Phase A: **G1 merged** (identity: two-step + passkeys, audit log, sessions, SSO OIDC/SAML, SCIM 2.0; migration 0011; browser pass 52 views clean); app 425 / 414 / 21, typecheck + web build clean, secret scan clean. G4 finished on its branch, next to merge as 0012.
+- 2026-10-18 13:20 PKT — **Phase E started at the owner's request**: agent G5 white-label client portal (agency → client workspaces, branding, client logins, custom domain, branded e-mail, agency overview), handoff `app/docs/G5_HANDOFF.md`, migration after G4 (0013).
 
 ## 9. Deploy checklist for the owner (Phase C — prepared, not run)
 
