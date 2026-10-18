@@ -125,3 +125,4 @@ What it does with the merged code:
   G1 `IDENTITY_KEY` (falls back to `MAILBOX_KEY`), `MFA_ISSUER`, `SSO_ALLOW_PRIVATE_HOSTS`.
 
 Right after the deploy: the live checks of §5 (≈ $0.8 DataForSEO) — tell the orchestrator "run the live checks".
+- 2026-10-18 07:45 PKT — Phase A: **G3 merged** (crawler logs, migration 0010; the three .log fixtures were gitignored — committed with an exception); app 408 / 355 / 21, typecheck + web build clean.
