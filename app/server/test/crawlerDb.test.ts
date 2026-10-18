@@ -58,7 +58,11 @@ describe.skipIf(!DB)('crawler logs against Postgres', () => {
     const dbm = await import('../src/db');
     sql = dbm.sqlClient;
     await dbm.runMigrations();
-    await sql`truncate organizations, users, bot_ip_ranges cascade`;
+    // the audit log is append-only (migration 0011 refuses TRUNCATE): clear it through the retention purge's own switch, then delete
+    await sql.begin(async (tx) => { await tx`select set_config('ascentra.audit_purge', 'on', true)`; await tx`delete from audit_events`; });
+    await sql`delete from organizations`;
+    await sql`delete from users`;
+    await sql`delete from bot_ip_ranges`;
     jobs = await import('../src/services/crawlers/jobs');
     ranges = await import('../src/services/crawlers/ranges');
     const { sha256 } = await import('../src/lib/crypto');
