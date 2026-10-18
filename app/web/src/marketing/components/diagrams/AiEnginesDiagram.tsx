@@ -23,7 +23,7 @@ export function AiEnginesDiagram({ className }: { className?: string }) {
         <MessageSquareText className={cn('size-4', ink ? 'text-accent-on-ink' : 'text-accent-text')} aria-hidden />
         <span className={title}>Question panel</span>
       </div>
-      <p className={cn('mt-1 text-[13px]', sub)}>Up to 50 buyer questions</p>
+      <p className={cn('mt-1 text-[13px]', sub)}>Up to 500 buyer questions</p>
       <ul className="mt-4 space-y-2">
         {QUESTIONS.map((q) => (
           <li key={q} className={cn('rounded-md border px-3 py-2 text-[12.5px] leading-snug', ink ? 'border-line-on-ink text-on-ink' : 'border-line bg-surface-2 text-ink')}>

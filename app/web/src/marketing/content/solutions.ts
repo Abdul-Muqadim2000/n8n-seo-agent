@@ -121,7 +121,7 @@ export const solutions: Solution[] = [
       { title: 'Thin proof', body: 'Generic content does not show the expertise and experience buyers look for.' },
     ],
     helps: [
-      { feature: 'ai-visibility', title: 'Visibility in AI answers', body: 'Up to 50 buyer questions across six AI engines, with share of voice against named competitors and AI referral revenue from GA4.' },
+      { feature: 'ai-visibility', title: 'Visibility in AI answers', body: 'Up to 500 buyer questions by topic, buyer role and market across six AI engines (nine on request), with share of voice against named competitors and AI referral revenue from GA4.' },
       { feature: 'ai-growth', title: 'Onto the shortlist, week by week', body: 'The questions you lose become answer pages, new pages reach Bing the same week, and the review and list pages AI cites without you become pitches.' },
       { feature: 'keyword-ladders', title: 'A route to the head term', body: 'Supporting pages on easier, related keywords climb to the category term.' },
       { feature: 'content', title: 'Pages with real expertise', body: 'Author and reviewer, experience notes, case studies and schema on every page.' },
