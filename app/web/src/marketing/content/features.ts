@@ -2,6 +2,7 @@
 // /platform/<slug>, footer). Add every new product functionality here (CLAUDE.md). Copy rules: customer language, plain and
 // specific, capability facts only — no invented customers, ratings or results.
 import {
+  Briefcase,
   Building2,
   ChartLine,
   ChartNoAxesColumnIncreasing,
@@ -34,7 +35,8 @@ export type VisualKey =
   | 'growth-loop'
   | 'link-sources'
   | 'ai-engines'
-  | 'crawlers';
+  | 'crawlers'
+  | 'agency-portal';
 
 export interface Fact {
   /** a number counts up when it scrolls into view; a string is shown as is */
@@ -943,6 +945,61 @@ export const features: Feature[] = [
     story: {
       title: 'Control for every company and website you run.',
       body: 'Each company has its own websites, team, budget and data. Website data appears only after ownership is proven, and every run shows its cost before any paid work begins.',
+    },
+  },
+  {
+    slug: 'agency-portal',
+    name: 'Agency client portal',
+    shortName: 'Client portal',
+    tagline: 'A workspace per client, client logins and a portal under your own name and domain.',
+    summary:
+      'Agencies keep every client in a workspace of its own, see every client website in one table, and give each client a portal of their websites — dashboards, reports, recommendations and the pages waiting for their approval. With white-label on, the portal, the reports, the documents and the e-mails your clients get carry your name, your logo, your colour and your own address.',
+    icon: Briefcase,
+    benefits: [
+      'A workspace per client — its own websites, budget, reports and logins — and your team switching between them',
+      'One table of every client website: health, rankings movement, clicks, AI visibility, alerts, approvals waiting and spend against budget, with a CSV export',
+      'Client logins as viewer or approver: their websites, reports and recommendations, and nothing of your other clients, your costs or your settings',
+      'Client approval before a page goes live or an outreach e-mail is sent, when you want it',
+      'Your name, logo and colour in place of ours — with every text kept readable to WCAG AA in light and dark mode — and “Powered by” off unless you switch it on',
+      'The portal on your own address, such as seo.youragency.com, proven with a DNS record and checked again every few hours',
+      'Invitations and scheduled reports sent under your name, and from your own mailbox once its SPF and DKIM check out',
+    ],
+    steps: [
+      { title: 'Turn on agency mode', body: 'The owner switches the company to an agency. Owners and admins reach every client; members see the clients you assign.' },
+      { title: 'Create a workspace per client', body: 'Its own websites, budget and reports. Verify the client’s website and start tracking as usual.' },
+      { title: 'Brand it and give it your address', body: 'Your name, logo and colour, then two DNS records for your portal address and, if you like, your own sender.' },
+      { title: 'Invite the client', body: 'As a viewer, or as an approver who signs off pages and outreach before they go out.' },
+    ],
+    facts: [
+      { value: 2, label: 'client roles: viewer and approver' },
+      { value: 'AA', label: 'contrast kept for your colour, light and dark' },
+      { value: 1, label: 'table of every client website, with a CSV export' },
+    ],
+    faqs: [
+      {
+        q: 'Can one client see another client’s data?',
+        a: 'No. Each client is a separate workspace and a client login reaches only its own. Its people see their websites’ dashboards, reports, recommendations and approvals — not your other clients, not what the work costs you, not your settings.',
+      },
+      {
+        q: 'Will my clients see the Ascentra name?',
+        a: 'Not with white-label on: the portal, report pages, shared reports, the documents they download and the e-mails they get carry your name. A small “Powered by Ascentra” line appears only if you switch it on. PDFs the analyses produce are replaced by a printable page of the report under your brand.',
+      },
+      {
+        q: 'How does the portal get onto our own domain?',
+        a: 'You add the address, publish a TXT record that proves it is yours and a CNAME that points it at the portal, and press Check. The record is checked again every few hours, and an address whose proof disappears stops being served.',
+      },
+      {
+        q: 'Do clients sign in with their own company accounts?',
+        a: 'Yes. They can use a password with two-step verification, or Google or their company’s single sign-on, and any two-step requirement you set for their workspace applies.',
+      },
+    ],
+    related: ['enterprise', 'reports', 'report-delivery'],
+    image: 'loftTeam',
+    visual: 'agency-portal',
+    story: {
+      eyebrow: 'For agencies',
+      title: 'Your clients see your work, under your name.',
+      body: 'A logo on a shared page is not a portal. Clients get their own login, their own websites and a say before anything goes live — and everything they see, from the sign-in page to the Monday e-mail, is yours.',
     },
   },
 ];

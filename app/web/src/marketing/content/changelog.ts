@@ -15,6 +15,21 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-18',
+    title: 'A client portal for agencies, under your own name',
+    summary:
+      'Agencies get a workspace per client, one table of every client website, client logins with approvals, and a portal that carries your brand — on your own address, with e-mails from your own mailbox.',
+    highlights: [
+      'Agency mode: a workspace per client with its own websites, budget and reports; owners and admins reach every client, members the clients you assign',
+      'Clients: every client website in one table — health, rankings movement, clicks, AI visibility, alerts, approvals waiting, spend against budget — with a CSV export',
+      'Client logins as viewer or approver, who see their own websites, reports and recommendations and nothing else',
+      'Approvals: ask a client to sign off a page or an outreach e-mail, and optionally hold publishing and sending until they have',
+      'White-label: your name, logo and colour on the portal, report pages, shared reports, documents and e-mails, with contrast kept readable in light and dark',
+      'Your own portal address, proven with DNS and checked again every few hours, and client e-mails from your own verified mailbox',
+    ],
+    features: ['agency-portal'],
+  },
+  {
+    date: '2026-10-18',
     title: 'Single sign-on, SCIM, two-step verification and an audit log',
     summary:
       'Sign in through your company’s identity provider, let it create and switch off accounts, require a second step for everyone, and see who did what. Everything a security review asks about identity, in Company settings.',

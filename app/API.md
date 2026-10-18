@@ -489,6 +489,55 @@ Connections belong to one verified website; secrets are sealed under `MAILBOX_KE
   the engine's `published` run starts.
 - Pipeline: a `publish` Needs-you item says when a draft is already in the CMS and, with a connection, its action is `{ label, reportId }`.
 
+## Agencies and the client portal (G5, `app/docs/WHITE_LABEL.md`, `shared/src/agency.ts`)
+A **client workspace** is an ordinary company with `kind: 'client'` and its agency as parent; every route of a company works on it.
+Roles there come from the agency (owners / admins: every client; members / viewers: clients they were assigned to) and from the
+client's own people (`client_approver`, `client_viewer`, ranked **below** viewer, so every route that asks for viewer or more answers
+them 403). `GET /api/orgs/:orgId` answers `kind`, `agency` (`{ name }`, plus `id` for agency staff), `brand` (`PortalBrand` when
+white-label is on, else null), `clientApproval`; a client person gets `monthlyBudgetUsd: 0`. `GET /api/me` lists client workspaces
+only to their client people (staff reach them through the agency) and, on a portal host, only that agency and its clients.
+- `POST /api/orgs/:orgId/agency` (owner) → `Org` with `kind: 'agency'`. Audited `agency.enabled`.
+- `GET /api/orgs/:orgId/clients` (agency staff) → `{ clients: AgencyClient[] }` (assigned ones only for members / viewers).
+- `POST /api/orgs/:orgId/clients` (agency admin, 30/h) `{ name, monthlyBudgetUsd?, website? }` → the client workspace (`Org`); budget ≤
+  `OWNER_BUDGET_MAX_USD`. Deleting one is `DELETE /api/orgs/:clientId` by the **agency's owner**; an agency with clients answers 409
+  `agency_has_clients`.
+- `GET /api/orgs/:orgId/clients/:clientId/staff` (agency admin) → `{ staff: StaffAccess[] }`; `PUT …/staff/:userId` `{ role: 'admin' |
+  'member' | 'viewer' | null }` assigns / removes an agency member (owners and admins reach every client already: 400). Leaving the agency
+  removes the person's assignments; a SCIM-deactivated agency membership switches every client off (403 `membership_deactivated`).
+- `GET /api/orgs/:orgId/agency/overview` (agency staff) → `{ rows: AgencyOverviewRow[], generatedAt }`: per client website the latest
+  health score, rank gains / drops, clicks change, AI visibility, alerts of the last 14 days, approvals waiting, this month's spend and the
+  budget — from the app's own database (no engine call). `GET …/agency/overview.csv` (agency admin, 20/min): the same rows, formula-safe,
+  audited `agency.overview_exported`.
+- Invitations into a client workspace accept only `client_viewer` / `client_approver`; client roles anywhere else answer 400
+  (`inviteRoleProblem`). A white-label client's invitation link and e-mail use the agency's portal host and sender.
+- `GET /api/orgs/:orgId/branding` (admin of an agency or client workspace) → `BrandingResponse` (`branding`, the computed `contrast`
+  report, the agency's brand for a client). `PUT` — agency: `brandingSchema` (`whiteLabel`, `productName`, `logoUrl`, `logoDarkUrl` —
+  https on a public dotted host —, `accent` `#rrggbb`, `supportEmail`, `footerText`, `poweredBy`); client: `clientBrandingSchema`
+  (name, logos, accent overrides). Audited `branding.updated` in the agency.
+- `PUT /api/orgs/:orgId/client-settings` (admin of a client workspace) `{ clientApproval }`.
+- `GET /api/orgs/:orgId/portal/mail` (agency admin) → `PortalMailView`; `PUT` `{ senderName, replyTo, fromMailboxId, dkimSelector }` — a
+  `fromMailboxId` (one of the agency's own mailboxes) is accepted only when its domain's SPF passes and a DKIM key is found (400
+  `from_not_verified`); `POST …/portal/mail/check` re-runs the check.
+- `GET /api/orgs/:orgId/portal/domains` (agency admin) → `{ domains: PortalDomainView[], cnameTarget }`. `POST` `{ host }` (agency admin,
+  step-up, 10/h) claims a host with a **new** token (400 for the platform's own hosts and private names; 409 `host_in_use` when another
+  company holds it; at most 3). `POST …/:id/verify` checks `TXT _portal-verification.<host>` = `portal-verification=<token>` and the CNAME
+  to `PORTAL_CNAME_TARGET` → `{ domain, check }`. `DELETE …/:id` (agency owner, step-up) releases it.
+- Approvals (client workspace): `GET /api/orgs/:orgId/approvals` (client viewer and up) → `{ items: ApprovalView[], canDecide }`;
+  `GET …/approvals/candidates` (member) → written pages of the last 60 days and outreach drafts; `POST …/approvals` (agency staff, member)
+  `{ kind: 'page' | 'outreach', itemId, siteId?, title, note? }` (asking again replaces the open request); `POST …/approvals/:id/decide`
+  (**client approver** only) `{ decision: 'approved' | 'changes_requested', note }` (a note is required for changes; 409 once decided);
+  `POST …/approvals/:id/withdraw` (member). With `clientApproval` on, `POST …/reports/:id/cms/publish` with `mode: 'live'` and
+  `POST …/link-building/approve` answer **409 `client_approval_required`** until the item's latest request is approved.
+- Client people reach exactly: the company, its websites, `GET …/sites/:siteId/data/{overview,search,rankings,technical,ai,backlinks}`,
+  `GET …/recommendations`, reports and their files, and approvals. Payloads they get have every cost / ledger / budget key removed
+  (`clientSafePayload`); in a white-label workspace their files are rebranded (Word, zip, HTML, Markdown, text, CSV, JSON — the engine's
+  report brand and ours replaced by the agency's name) and the engine's PDF is not offered (404; the report page prints instead).
+- Portal host (no company in the URL): `GET /api/portal/context` → `PortalContext | null`; `GET /api/portal/tls-allow?domain=` → 200 for the
+  app's own hosts and verified portal hosts, else 404 (the reverse proxy's on-demand TLS "ask"); `POST /api/portal/handoff` `{ host }` (on the
+  app host, signed in, belonging to that agency) → `{ url, expiresInSeconds: 60 }`; `GET /api/portal/handoff/:token` on that host opens the
+  session (same method, two-step and SSO company) and redirects to `/`; once only. With `PORTAL_STRICT_HOSTS`, any other host answers 421
+  with a plain text body; a lapsed portal host always does.
+
 ## n8n → app
 `POST /api/hooks/n8n/:hookToken` — every callback of every run and every scheduled report of the company (the token is the
 company's `hook_token`; it is sent to n8n as `callback_url`). Body: the n8n callback (`stage`, `request_id`, …); embedded files are

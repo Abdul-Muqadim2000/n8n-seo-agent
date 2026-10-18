@@ -6,7 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { z } from 'zod';
 import { toast } from 'sonner';
 import { eachDayOfInterval, endOfMonth, format, isValid, min as minDate, parseISO } from 'date-fns';
-import { Activity, Building2, CalendarDays, ChartNoAxesColumn, Clock, Globe, Mail, PiggyBank, Play, Plus, Search, Settings, Trash2, UserPlus, Users, Wallet } from 'lucide-react';
+import { Activity, Briefcase, Building2, CalendarDays, ChartNoAxesColumn, Clock, Globe, Mail, PiggyBank, Play, Plus, Search, Settings, Trash2, UserPlus, Users, Wallet } from 'lucide-react';
 import {
   COMPANY_SIZES,
   compactNumber,
@@ -232,6 +232,24 @@ function CompanyTab() {
           )}
         </CardBody>
       </SettingsCard>
+
+      {/* G5: an agency runs client workspaces under its own brand */}
+      {org.kind !== 'client' && (
+        <SettingsCard
+          icon={<Briefcase />}
+          title={org.kind === 'agency' ? 'Agency' : 'Agency mode'}
+          description={
+            org.kind === 'agency'
+              ? 'This company is an agency: it holds a workspace per client, with client logins and your brand.'
+              : 'For agencies: a workspace per client, client logins, one table of every client website, your brand and your own portal address.'
+          }
+          actions={
+            <ButtonLink to={paths.clients(org.id)} size="sm" variant="secondary">
+              {org.kind === 'agency' ? 'Open clients' : 'Learn more'}
+            </ButtonLink>
+          }
+        />
+      )}
 
       {can('owner') && <DeleteCompanyCard />}
     </Stagger>

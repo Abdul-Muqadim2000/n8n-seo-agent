@@ -40,6 +40,7 @@ export const solutions: Solution[] = [
       { title: 'Questions about AI search', body: 'Clients ask whether ChatGPT recommends them, and there is no clear way to answer.' },
     ],
     helps: [
+      { feature: 'agency-portal', title: 'A portal for every client, under your name', body: 'A workspace per client, one table of every client website, client logins with approvals, and your brand on your own address.' },
       { feature: 'enterprise', title: 'One workspace per client', body: 'Each client company has its own websites, team, budget and data, with roles for your staff and theirs.' },
       { feature: 'reports', title: 'Reports ready to send', body: 'Full SEO reports as PDF or Word, and a Monday report for every website.' },
       { feature: 'ai-visibility', title: 'AI visibility per client', body: 'Mention rate and share of voice against each client’s own competitors, with ranges.' },
@@ -52,14 +53,15 @@ export const solutions: Solution[] = [
       'Client access through roles, down to read-only viewers',
     ],
     faqs: [
-      { q: 'Can clients see their own data?', a: 'Yes. Invite them to their company with the viewer role; they see their websites and reports, and nothing from other clients.' },
+      { q: 'Can clients see their own data?', a: 'Yes. Invite them to their client workspace as a viewer or an approver; they see their websites, reports and recommendations in a portal under your name, and nothing from other clients or from what the work costs you.' },
+      { q: 'Can the portal carry our brand and domain?', a: 'Yes. Switch on white-label for your name, logo and colour, add your own address such as seo.youragency.com with two DNS records, and send client e-mails from your own mailbox once its SPF and DKIM check out.' },
       { q: 'How do I keep costs per client in check?', a: 'Every run shows its estimated cost first, and each company has its own budget and spend cap.' },
       { q: 'Do I need access to each client’s Search Console?', a: 'The client adds Ascentra’s service account as a user, and the website owner proves ownership once.' },
     ],
     showcase: {
-      feature: 'enterprise',
-      title: 'Every client in a workspace of its own.',
-      body: 'Switch between client companies from one login. Each has its own verified websites, team, budget and reports, and clients can join as viewers to follow the work.',
+      feature: 'agency-portal',
+      title: 'Every client in a workspace of its own, under your name.',
+      body: 'Switch between clients from one login and see every client website in one table. Clients sign in to a portal with your brand on your own address, follow their websites and approve what goes out.',
     },
   },
   {
