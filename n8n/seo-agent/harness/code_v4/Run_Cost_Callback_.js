@@ -23,5 +23,16 @@ if (Number.isFinite(usd) && usd >= 0) {
   out.run_cost_estimate_basis = 'not available: this run was never priced by the spend guard'
     + (rl ? ' (it reached the guard but carried no estimate)' : ' (the guard did not run for it)');
 }
+// F-L (2026-10-18, re-rating 2026-10-17 C-1 follow-up): a scheduled audit the Audit Scheduler started late carries `ran_late` (CU.lateRun,
+// computed in the scheduler; Normalize Input keeps it for a scheduled request only), and its report says so the way every monitor's
+// Callback Ledger does: `ran_late` on the callback (the app titles it "ran late"), the box first in the HTML, the tag on the subject.
+let __late = null; try { __late = ($('Normalize Input').first().json || {}).ran_late || null; } catch (e) { __late = null; }
+if (__late && __late.late === true) {
+  out.ran_late = __late;
+  const __esc = (x) => String(x == null ? '' : x).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  const __box = '<div class="ran-late" style="border:1px solid #b45309;background:#fffbeb;color:#78350f;padding:10px 14px;margin:0 0 14px;font:14px/1.5 sans-serif"><strong>Ran late.</strong> ' + __esc(__late.text) + '</div>';
+  for (const k of ['html', 'report_html']) if (typeof out[k] === 'string' && out[k]) out[k] = /<body[^>]*>/i.test(out[k]) ? out[k].replace(/<body[^>]*>/i, (b) => b + __box) : __box + out[k];
+  if (typeof out.subject === 'string' && out.subject && !/\(ran late/.test(out.subject)) out.subject = out.subject + ' (ran late — due ' + String(__late.due || '').slice(0, 10) + ')';
+}
 // files ride on the binary, not the json (the PDF and the Word document of a report): a Code node drops them unless they are returned.
 return [{ json: out, binary: item.binary }];

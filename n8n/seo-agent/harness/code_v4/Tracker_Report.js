@@ -1557,7 +1557,8 @@ for (const [id, items] of byLadder) {
   const updateLine = sinceMarks.length ? 'Google changed its ranking systems inside the window these positions are compared over ('
     + windowStart + ' to ' + String(nowCheck).slice(0, 10) + '): ' + sinceMarks.map(m => String(m.label).replace(/^Google: /, '') + ' (' + m.date + (m.date_end && m.date_end !== m.date ? ' to ' + m.date_end : '') + ')').join(' and ')
     + '. A move in this window may be part of the cause, which cannot be proven from these positions.' : '';
-  const rungs = [1, 2, 3].map(r => { const ps = rowsK.filter(x => x.rung === r); return { rung: r, pages: ps.length, top10: ps.filter(x => x.current > 0 && x.current <= 10).length, top3: ps.filter(x => x.current > 0 && x.current <= 3).length, reached: ps.length > 0 && ps.every(x => x.current > 0 && x.current <= 10) }; }).filter(r => r.pages);
+  // C-12 (F-L, 2026-10-18): the rung counts leave out a rung the fit gate set aside (computed below), so a set-aside page never holds a rung open
+  const rungStats = (skip) => [1, 2, 3].map(r => { const ps = rowsK.filter(x => x.rung === r && !skip.has(x.keyword)); return { rung: r, pages: ps.length, top10: ps.filter(x => x.current > 0 && x.current <= 10).length, top3: ps.filter(x => x.current > 0 && x.current <= 3).length, reached: ps.length > 0 && ps.every(x => x.current > 0 && x.current <= 10) }; }).filter(r => r.pages);
   const drops = rowsK.filter(r => r.delta != null && r.delta <= -5).map(withMove);
   const gains = rowsK.filter(r => r.delta != null && r.delta >= 5).map(withMove);
   const topTop3Before = deskHist.filter(x => x.ladder_id === id && x.keyword === head.keyword && String(x.checked_at) < nowCheck && Number(x.position) > 0 && Number(x.position) <= 3).length;
@@ -1602,6 +1603,7 @@ for (const [id, items] of byLadder) {
   for (const r of rowsK) { if (asideKw.has(r.keyword)) continue; const lr = rowOf(r.keyword); if (String(lr.status || r.status || '') !== 'set_aside') continue;
     asideKw.add(r.keyword); fitAside.push({ ladder_id: id, keyword: r.keyword, rung: r.rung, page_no: r.page_no, status: 'set_aside', target_url: lr.target_url || '',
       reason: String(lr.status_note || 'set aside by an earlier check').slice(0, 200), detail: '', note: String(lr.status_note || ''), written: false, dropped: true, seen: 'stored' }); }
+  const rungs = rungStats(asideKw);   // C-12: set-aside rungs neither count as pages of their rung nor keep it from being reached
   // R87: a ladder whose MAIN keyword is set aside — by this check, by the plan, or already on its row — is paused: nothing asks for its
   // rungs (they exist only to climb towards that keyword), the head's row is written back `set_aside` with the reason, and the next step
   // says so and offers a re-plan. Setting the head aside is not dropping the topic: nothing is deleted.
@@ -1690,7 +1692,7 @@ for (const [id, items] of byLadder) {
   // both checked monthly, and the column said nothing about it.
   const staleRead = (r) => !!r.prev_at && (new Date(nowCheck).getTime() - new Date(r.prev_at).getTime()) / 864e5 > RS.CHURN.stale_days;
   const table = '<table style="border-collapse:collapse;font-size:13px"><tr><th align="left" ' + td + '>Rung</th><th align="left" ' + td + '>Keyword</th><th ' + td + '>Now</th><th ' + td + '>Before</th><th align="left" ' + td + '>Ranking URL</th></tr>' +
-    rowsK.map(r => '<tr><td ' + td + '>' + (r.rung === 4 ? 'Top' : r.rung) + '</td><td ' + td + '>' + esc(r.keyword) + (r.deferred ? ' <span style="color:#64748b;font-size:11px">(not published yet: checked monthly, last ' + esc(String(r.last_checked || '').slice(0, 10)) + ')</span>' : '') + '</td><td align="center" ' + td + '>' + esc(posText(r.current)) + '</td><td align="center" ' + td + '>' + (r.previous == null ? 'first check' : esc(posText(r.previous)) + (staleRead(r) ? ' <span style="color:#64748b;font-size:11px">(' + esc(r.prev_at.slice(0, 10)) + ')</span>' : '')) + '</td><td ' + td + '>' + esc(r.url || '—') + '</td></tr>').join('') + '</table>';
+    rowsK.map(r => '<tr><td ' + td + '>' + (r.rung === 4 ? 'Top' : r.rung) + '</td><td ' + td + '>' + esc(r.keyword) + (asideKw.has(r.keyword) ? ' <span style="color:#b45309;font-size:11px">(set aside: not a search this website should target — see below; no page is written for it)</span>' : r.deferred ? ' <span style="color:#64748b;font-size:11px">(not published yet: checked monthly, last ' + esc(String(r.last_checked || '').slice(0, 10)) + ')</span>' : '')   /* C-12 (F-L): a set-aside rung is not "not published yet" */ + '</td><td align="center" ' + td + '>' + esc(posText(r.current)) + '</td><td align="center" ' + td + '>' + (r.previous == null ? 'first check' : esc(posText(r.previous)) + (staleRead(r) ? ' <span style="color:#64748b;font-size:11px">(' + esc(r.prev_at.slice(0, 10)) + ')</span>' : '')) + '</td><td ' + td + '>' + esc(r.url || '—') + '</td></tr>').join('') + '</table>';
   // ---- G6: what the results pages looked like, who is above us and the share of voice ----
   const mobText = (m) => !m ? '—' : posText(m.position) + (m.fresh ? '' : ' <span style="color:#64748b;font-size:11px">(' + esc(String(m.checked_at || '').slice(0, 10)) + ')</span>');
   const serpRows = rowsK.filter(r => serps.get(r.keyword) || mobiles.get(r.keyword));
@@ -1843,7 +1845,7 @@ for (const [id, items] of byLadder) {
   out.push({ json: { ladder_id: id, domain: head.domain, head_keyword: head.head_keyword, email: head.email || '', callback_url: head.callback_url || '', request_id: head.request_id || '',
     subject, html, status: 'progress', stage: 'rank_tracker', checked_at: nowCheck,
     positions: rowsK.map(r => { const s = serps.get(r.keyword), m = mobiles.get(r.keyword);
-      return { rung: r.rung, keyword: r.keyword, position: r.current, previous: r.previous, delta: r.delta, url: r.url, device: 'desktop',
+      return { rung: r.rung, keyword: r.keyword, position: r.current, previous: r.previous, delta: r.delta, url: r.url, device: 'desktop', set_aside: asideKw.has(r.keyword),
         mobile_position: m ? m.position : null, mobile_checked_at: m ? m.checked_at : null,
         features: s ? s.features : null, feature_labels: s ? s.chips : [], results_page: s ? s.line : '',
         share_of_voice: s ? s.share_of_voice : null, above: s ? s.above : [], competitors: s ? s.competitors : [], snapshot_at: s ? s.snapshot_at : null,
