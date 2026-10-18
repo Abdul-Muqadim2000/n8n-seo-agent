@@ -11417,6 +11417,148 @@ log('A build that invents what it was not told, and a gate that only works one w
 
 
 # =============================================================================
+# F-L (2026-10-18, re-rating 2026-10-17 part 2: B-10 / B-16 / B-18) — the full report's content review, the homepage redirect chain and
+# the article bylines, each judged on what the run actually read.
+# =============================================================================
+# ---- B-18: "Articles have no named human author" was measured on the 2 articles Pick Key Pages sampled (exec 767: "1 of 2"), while 11
+# of techand.ai's 12 /insights/ articles credit "Tech& Team" / "Tech& Technology Team". The sample now takes up to 8 articles (free
+# fetches), and the finding says WHICH kind of byline it saw: a team is a team, not "no author". The page cap rises from 10 to 16 so the
+# home / contact / about / service picks are never pushed out; Build Content Prompt still puts only the first two articles' text in the
+# reviewer's prompt. Also: "about" no longer matches an article whose slug happens to contain "why" (exec 767 read
+# /insights/the-financial-reporting-trap-why-… as the About page).
+patch('Pick Key Pages', "add(pages.find(p => isAbout(p.url) && !isContact(p.url)), 'about');",
+      "add(pages.find(p => isAbout(p.url) && !isContact(p.url) && !isArticle(p.url)), 'about');   // B-18: an article whose slug says \"why\" is not the About page")
+patch('Pick Key Pages', "pages.filter(p => isArticle(p.url)).sort(byImportance).slice(0, 2).forEach(p => add(p, 'article'));",
+      "pages.filter(p => isArticle(p.url)).sort(byImportance).slice(0, 8).forEach(p => add(p, 'article'));   // B-18: 8 articles, not 2 (free fetches)")
+patch('Pick Key Pages', "return pick.slice(0, 10).map(p => ({ json: p }));", "return pick.slice(0, 16).map(p => ({ json: p }));")
+patch('Build Content Prompt', "picked.forEach((p, i) => {\n  if (!p || !p.url) return;",
+      "let __articlesInPrompt = 0;   // B-18: up to 8 articles are fetched for the byline check; only the first two go into the reviewer's prompt\n"
+      "picked.forEach((p, i) => {\n  if (!p || !p.url) return;\n  if (p.kind === 'article' && ++__articlesInPrompt > 2) return;")
+patch('Analyze HTML', """const noAuthor = artNodes.filter(({ n }) => {
+  const a = n && asArr(n.author)[0];
+  const name = a && (typeof a === 'string' ? a : a.name);
+  const isOrg = a && typesOf(a).some(t => /Organization/.test(t));
+  return !name || isOrg || /team|staff|admin|editor/i.test(name);
+});
+if (arts.length && noAuthor.length) F('Content', 'High', 'Articles have no named human author', noAuthor.length + ' of ' + arts.length + ' sampled articles', """,
+      """// B-18 (re-rating 2026-10-17): a byline is a named person, a TEAM (an Organization author, or "Tech& Team" / staff / editorial desk), or
+// nothing at all — and the finding says which it saw, on how many of the site's articles.
+const bylineOf = (n) => { const a = n && asArr(n.author)[0]; const name = String((a && (typeof a === 'string' ? a : a.name)) || '').trim();
+  const isOrg = !!a && typeof a === 'object' && typesOf(a).some(t => /Organization/.test(t));
+  return { name, team: !!name && (isOrg || /\\b(team|staff|admin|editors?|editorial|desk)\\b/i.test(name)) }; };
+const bylines = artNodes.map(x => ({ ...x, by: bylineOf(x.n) }));
+const teamBy = bylines.filter(x => x.by.team), noneBy = bylines.filter(x => !x.by.name);
+const noAuthor = [...teamBy, ...noneBy];
+// the crawl's own article count; when the in-200 gate marked the crawl `unavailable` (__dfs) the count could not be read and is not claimed
+const crawlAns18 = (() => { try { return $('Get Crawled Pages Answers').first().json || {}; } catch (e) { return {}; } })();
+const siteArticles = (crawlAns18.__dfs && crawlAns18.__dfs.unavailable) ? null
+  : (crawlAns18.tasks?.[0]?.result?.[0]?.items || []).filter(p => p && p.url && Number(p.status_code) === 200 && /\\/(insights|blog|news|articles?|guides?)\\/./i.test(p.url)).length;
+const teamNames = [...new Set(teamBy.map(x => x.by.name))].slice(0, 3);
+const authorTitle = !noneBy.length ? 'Articles have no named human author: they are credited to a team, not a person' : 'Articles have no named human author';
+const authorEvidence = [teamBy.length ? teamBy.length + ' of ' + arts.length + ' sampled articles credit a team (' + teamNames.map(t => '"' + t + '"').join(', ') + '), not a named person' : '',
+  noneBy.length ? noneBy.length + ' of ' + arts.length + ' sampled articles name no author at all' : ''].filter(Boolean).join('; ')
+  + (siteArticles == null ? ' (the crawl could not be read, so how many articles the site has is not known)' : siteArticles > arts.length ? ' (' + arts.length + ' of the ' + siteArticles + ' articles the crawl found were read)' : '');
+if (arts.length && noAuthor.length) F('Content', 'High', authorTitle, authorEvidence, """)
+log('B-18 (F-L, 2026-10-18): the byline check reads up to 8 articles, says "a team, not a named person" when that is what it saw, and counts against the articles the crawl found; "about" no longer matches an article slug')
+
+# ---- B-10: the content review said "No pricing, engagement models or timelines" (exec 767, Medium) while six service pages carry
+# "Pricing in UAE" / "Cost Factors" / "What Drives the Cost?" sections. The reviewer read 8 pages, each cut at 2,500 characters, and none of
+# them was a page with such a section (22,000 characters, no "pric" or "cost" anywhere). Two changes: the prompt carries (a) the price /
+# cost / timeline sections further down the pages it read and (b) the site's other pages that have such sections, from the crawl's own
+# headings (free, already in the run), with a rule never to call them missing; and Parse Content Review checks the answer — a "no pricing"
+# finding over a site whose crawl shows pricing sections is rewritten to what the run can stand behind, at Low.
+patch('Build Content Prompt', "const ours = parts.join('\\n\\n').slice(0, 22000);", r"""// B-10 (re-rating 2026-10-17): the sections a reader looks for when judging pricing / timelines, from deeper in the pages read and from
+// the crawl's headings of the pages not read
+const SECT_RE = /\b(pric(?:e|es|ing)|costs?|fees?|budget|quote|timelines?|duration|how long|engagement models?)\b/i;
+const sectText = (html) => { const out = []; const h = String(html || ''); const re = /<h([23])\b[^>]*>([\s\S]*?)<\/h\1>/gi; let m; const marks = [];
+  while ((m = re.exec(h))) marks.push({ at: m.index, end: re.lastIndex, title: strip(m[2]) });
+  marks.forEach((k, j) => { if (!SECT_RE.test(k.title) || out.length >= 4) return; const body = strip(h.slice(k.end, j + 1 < marks.length ? marks[j + 1].at : k.end + 6000)).slice(0, 450);
+    out.push({ heading: k.title.slice(0, 120), text: body }); });
+  return out; };
+const readSections = [];
+picked.forEach((p, i) => { if (!p || !p.url) return; const f = fetched[i] || {}; const ss = sectText(f.html || f.body || f.data || ''); if (ss.length) readSections.push({ url: p.url, sections: ss }); });
+const readUrls = new Set(picked.map(p => p && p.url).filter(Boolean));
+const crawlAns10 = (() => { try { return $('Get Crawled Pages Answers').first().json || {}; } catch (e) { return {}; } })();
+const crawlUnread10 = !!(crawlAns10.__dfs && crawlAns10.__dfs.unavailable);   // the in-200 gate said the crawl could not be read: no outline, and the prompt says so
+const crawlItems10 = crawlUnread10 ? [] : (crawlAns10.tasks?.[0]?.result?.[0]?.items || []);
+const outline = crawlItems10.filter(p => p && p.url && !readUrls.has(p.url) && Number(p.status_code) === 200 && !/\/(insights|blog|news|articles?|guides?)\//i.test(p.url))
+  .map(p => { const ht = (p.meta || {}).htags || {}; return { url: p.url, headings: [...(ht.h2 || []), ...(ht.h3 || [])].map(x => String(x).trim()).filter(x => SECT_RE.test(x)).slice(0, 4) }; })
+  .filter(x => x.headings.length).slice(0, 12);
+const extra10 = (readSections.length ? '\n\n=== SECTIONS FURTHER DOWN THE PAGES ABOVE (price, cost, timeline; each page above is cut at 2,500 characters) ===\n'
+    + readSections.map(r => r.url + '\n' + r.sections.map(s => '## ' + s.heading + ': ' + s.text).join('\n')).join('\n\n') : '')
+  + (outline.length ? '\n\n=== OTHER PAGES OF THIS SITE WITH SUCH SECTIONS (their headings, from the crawl; not read above) ===\n'
+    + outline.map(o => o.url + ': ' + o.headings.map(x => '"' + x + '"').join(', ')).join('\n') : '')
+  + (crawlUnread10 ? '\n\n=== OTHER PAGES OF THIS SITE: the crawl could not be read, so whether other pages carry price or timeline sections is not known ===' : '');
+const room10 = Math.min(extra10.length, 4500);
+const ours = parts.join('\n\n').slice(0, 22000 - room10) + extra10.slice(0, room10);
+const content_sections = { read: readSections.map(r => ({ url: r.url, headings: r.sections.map(s => s.heading), figures: r.sections.some(s => /(?:AED|USD|EUR|GBP|SAR|\$|€|£)\s?\d|\d[\d,.]*\s?(?:AED|USD|dirhams?)/i.test(s.text)) })), outline, outline_unavailable: crawlUnread10 };""")
+patch('Build Content Prompt', "    content_pages_read: parts.length,", "    content_pages_read: parts.length,\n    content_sections,   // B-10: what the run knows about price / timeline sections, for Parse Content Review's check")
+for _nm_fl in ('Content Reviewer', 'Prompt For Count (Content Reviewer)'):
+    _p_fl = nodes[_nm_fl]['parameters']
+    _old_fl = "- Look for: contradicting claims (years of experience vs dates), unproven claims (partner, certified, client base), missing proof (case studies, reviews, named experts), vague service pages, missing pricing or timelines, only high-commitment calls to action, placeholder text, formatting artifacts."
+    _new_fl = (_old_fl + "\n- Pricing, timelines and engagement models: the SECTIONS blocks list such sections further down the pages you read and on other pages "
+               "of the site. Never report one of them as missing when a SECTIONS block lists it; if the sections explain what drives the cost but "
+               "give no figures, say exactly that (for example \"pricing sections list cost factors but no price ranges\"), naming the pages.")
+    if _nm_fl == 'Content Reviewer':
+        assert str(_p_fl['text']).count(_old_fl) == 1, 'B-10: the reviewer prompt rule moved'
+        _p_fl['text'] = _p_fl['text'].replace(_old_fl, _new_fl)
+    else:
+        _as_fl = next(a for a in _p_fl['assignments']['assignments'] if a['name'] == '__prompt')
+        assert str(_as_fl['value']).count(_old_fl) == 1, 'B-10: the counted prompt of the Content Reviewer no longer carries the rule'
+        _as_fl['value'] = _as_fl['value'].replace(_old_fl, _new_fl)
+patch('Parse Content Review', """  for (const f of (cr.findings || [])) {
+    let sev = ['Critical', 'High', 'Medium', 'Low'].includes(f.severity) ? f.severity : 'Medium';""", r"""  // B-10 (re-rating 2026-10-17): a "no pricing" finding over a site whose own pages carry pricing / cost sections is not what the run saw
+  const CS = base.content_sections || { read: [], outline: [] };
+  const PRICE_H = /\b(pric(?:e|es|ing)|costs?|fees?|budget|quote)\b/i, TIME_H = /\b(timelines?|duration|how long)\b/i;
+  const pricePages = [...(CS.read || []), ...(CS.outline || [])].filter(x => (x.headings || []).some(h => PRICE_H.test(h)));
+  const timePages = [...(CS.read || []), ...(CS.outline || [])].filter(x => (x.headings || []).some(h => TIME_H.test(h)));
+  const figuresSeen = (CS.read || []).some(x => x.figures);
+  const claimsNoPrice = (f) => /\b(no|missing|without|lacks?|lacking|absent|not (?:shown|listed|stated|given))\b[^.;]{0,80}\b(pric(?:e|es|ing)|costs?|fees?)\b|\b(pric(?:e|es|ing)|costs?)\b[^.;]{0,40}\b(missing|absent|not (?:shown|listed|stated|given))\b/i.test(String(f.title || '') + ' ' + String(f.evidence || ''));
+  const pathOf10 = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/i, '') || '/';
+  const pricedFinding = (f) => {
+    const list = pricePages.slice(0, 4).map(x => pathOf10(x.url) + ' ("' + (x.headings || []).filter(h => PRICE_H.test(h))[0] + '")').join(', ');
+    const asksTime = /\b(timelines?|durations?|how long)\b/i.test(String(f.title || '') + ' ' + String(f.evidence || ''));
+    return { ...f, severity: 'Low', title: 'Pricing sections explain what drives the cost' + (figuresSeen ? '' : ' but give no price ranges'),
+      evidence: pricePages.length + ' page(s) carry pricing / cost sections: ' + list + (pricePages.length > 4 ? ' and ' + (pricePages.length - 4) + ' more' : '')
+        + (asksTime ? (timePages.length ? '; ' + timePages.length + ' page(s) have a timeline section' : '; no timeline section was seen on the pages read or in the crawl\'s headings') : '')
+        + '. The review read ' + (base.content_pages_read || 0) + ' page(s); the original finding said: ' + String(f.title || '').slice(0, 120),
+      fix: 'Add indicative ranges or worked sizing examples to those pricing sections' + (asksTime && !timePages.length ? ', and typical timelines per engagement' : '') + '.',
+      url: pricePages[0].url, b10_rewritten: true }; };
+  for (const f0 of (cr.findings || [])) {
+    const f = (pricePages.length && claimsNoPrice(f0)) ? pricedFinding(f0) : f0;
+    let sev = ['Critical', 'High', 'Medium', 'Low'].includes(f.severity) ? f.severity : 'Medium';""")
+patch('Parse Content Review', "  (cr.strengths || []).forEach(s => works.push(s));",
+      "  (cr.strengths || []).forEach(s => works.push(s));\n"
+      "  if (pricePages.length && cr.eeat_signals && cr.eeat_signals.pricing_transparency === 'no') cr.eeat_signals.pricing_transparency = 'partial';   // B-10")
+log('B-10 (F-L, 2026-10-18): the content review is shown the price / cost / timeline sections further down the pages it read and the crawl headings of the pages it did not, and a "no pricing" answer over pages that carry pricing sections is rewritten to what the run saw, at Low')
+
+# ---- B-16: http://techand.ai/ -> 308 https://techand.ai/ -> 308 https://www.techand.ai/ is two hops; DataForSEO's redirect-chain report
+# starts on https and answered 0 items, and "What works" said "HTTP correctly redirects to HTTPS". The host probes (no redirects
+# followed) already hold every hop: each address variant is followed through them and two hops or more is a finding.
+patch('Analyze Probes', "else if (R.apex_http && R.apex_http.status >= 300 && R.apex_http.status < 400 && /^https:/i.test(apexHttpLoc)) works.push('HTTP redirects to HTTPS');",
+      r"""// B-16 (re-rating 2026-10-17): follow every homepage address variant through the probes (none of them follows a redirect itself)
+const normU16 = (u) => { const m = String(u || '').trim().match(/^(https?):\/\/([^\/?#]+)(\/[^?#]*)?/i); return m ? m[1].toLowerCase() + '://' + m[2].toLowerCase() + (m[3] || '/') : ''; };
+const byUrl16 = {}; for (const id of ['home', 'www_https', 'www_http', 'apex_http']) if (R[id] && R[id].url) byUrl16[normU16(R[id].url)] = id;
+const chainOf16 = (start) => { const hops = []; const seen = new Set(); let id = start;
+  while (id && R[id] && !seen.has(id)) { seen.add(id); const r = R[id]; if (!(r.status >= 300 && r.status < 400)) break;
+    let loc = h(id, 'location'); if (/^\//.test(loc)) loc = (String(r.url).match(/^https?:\/\/[^\/]+/i) || [''])[0] + loc;
+    if (!loc) break; hops.push({ from: r.url, status: r.status, to: loc }); id = byUrl16[normU16(loc)]; }
+  return hops; };
+const redirect_chains = ['apex_http', 'www_http', 'home', 'www_https'].map(id => ({ start: (R[id] || {}).url || '', hops: chainOf16(id) })).filter(c => c.start && c.hops.length >= 2);
+if (redirect_chains.length) add('Crawlability & Indexing', 'Low', 'Redirect chain on the homepage address',
+  redirect_chains.map(c => c.start + ' ' + c.hops.map(x => '→ ' + x.status + ' ' + x.to).join(' ') + ' (' + c.hops.length + ' hops)').join('; '),
+  'Every extra hop delays the first visit and is one more request for crawlers; links, ads and typed addresses that use these variants take more than one hop to arrive.',
+  'Redirect each variant straight to https://' + canonical_host + '/ in one hop (one 301 per variant, no hop through the other host or scheme).');
+if (R.apex_http && R.apex_http.status >= 300 && R.apex_http.status < 400 && /^https:/i.test(apexHttpLoc)) {
+  const n16 = (redirect_chains.find(c => c.start === R.apex_http.url) || { hops: [] }).hops.length;
+  works.push(n16 >= 2 ? 'HTTP redirects to HTTPS (in ' + n16 + ' hops: see the redirect chain finding)' : 'HTTP redirects to HTTPS');
+}""")
+patch('Analyze Probes', "        homepage_meta,\n", "        homepage_meta,\n        redirect_chains,   // B-16\n")
+patch('Build Site Issues', "ok(dc.test_https_redirect === true, 'HTTP correctly redirects to HTTPS');",
+      "ok(dc.test_https_redirect === true && !((probe.measurements || {}).redirect_chains || []).length, 'HTTP correctly redirects to HTTPS');   // B-16: not \"correctly\" over a chain the probes measured")
+log('B-16 (F-L, 2026-10-18): the homepage address variants are followed through the host probes and a chain of two hops or more is a Low finding; "HTTP correctly redirects to HTTPS" is not said over one')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 # A-28 / B-8 (2026-10-18): the count bodies of sections 62 / 76 carry a placeholder where the agent's system message and parser tool go;

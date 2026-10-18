@@ -19054,6 +19054,73 @@ await guard('SFL2 B-8 A-27 A-28 B-9 a Claude call is priced at what n8n saw, a s
   check('B-9: no other mode moves', kw.crawl_factor === 1 && kw.usd === 0.04, JSON.stringify(kw));
 });
 
+await guard('SFL3 B-16 B-18 B-10 the full report on what it read: the redirect chain, the bylines, the pricing sections', async () => {
+  const SN = 'SFL3 B-16 / B-18 / B-10 — exec 767 (techand.ai): the two-hop http://techand.ai/ redirect unreported, "no named author" from 2 of 12 articles, and "No pricing" while six service pages carry pricing sections';
+  reset(); begin(SN); const check = W3E.mkCheck(SN);
+  const FL = require('./fixtures_fl.js');
+  const J = (x) => JSON.parse(JSON.stringify(x));
+  const D = FL.domain;
+  // ---------- B-16: the real host probes of exec 767 ----------
+  const probeRun = async (run0) => { mock('Check Crawl', [{ json: { domain: D } }]); mock('Get Crawled Pages Answers', [{ json: J(FL.crawl) }]);
+    mock('Build Probes', FL.probes.build.map(j => ({ json: j }))); mock('Content Probes', FL.probes.content.map(j => ({ json: j })));
+    mock('Run Probes', run0.map(j => ({ json: j }))); mock('Run Content Probes', FL.probes.run_content.map(j => ({ json: j })));
+    return (await run('Analyze Probes', [{ json: {} }]))[0].json; };
+  const ap = await probeRun(J(FL.probes.run));
+  const chain = ap.probe.findings.find(f => f.title === 'Redirect chain on the homepage address');
+  check('B-16: http://techand.ai/ -> 308 https://techand.ai/ -> 308 https://www.techand.ai/ is reported as a two-hop chain (Low)',
+    chain && chain.severity === 'Low' && /http:\/\/techand\.ai\/ → 308 https:\/\/techand\.ai\/ → 308 https:\/\/www\.techand\.ai\/ \(2 hops\)/.test(chain.evidence)
+    && /https:\/\/www\.techand\.ai\//.test(chain.fix) && (ap.probe.measurements.redirect_chains || []).length === 1, JSON.stringify(chain || ap.probe.findings.map(f => f.title)));
+  check('B-16: "What works" no longer calls it a plain HTTP-to-HTTPS redirect', ap.probe.what_works.some(w => /HTTP redirects to HTTPS \(in 2 hops/.test(w)) && !ap.probe.what_works.includes('HTTP redirects to HTTPS'), JSON.stringify(ap.probe.what_works));
+  const one = J(FL.probes.run); const ah0 = one.find(r => r.headers && /^https:\/\/techand\.ai\/?$/.test(String(r.headers.location || '')));
+  if (ah0) ah0.headers.location = 'https://www.techand.ai/';
+  const ap1 = await probeRun(one);
+  check('B-16: a one-hop http -> https://www redirect is not a chain', !ap1.probe.findings.some(f => /Redirect chain on the homepage/.test(f.title)) && ap1.probe.what_works.includes('HTTP redirects to HTTPS'), JSON.stringify(ap1.probe.what_works));
+  // ---------- B-18: the key pages from the real crawl, the bylines of the site's articles ----------
+  const pk = (await run('Pick Key Pages', [{ json: {} }])).map(i => i.json);
+  const arts = pk.filter(p => p.kind === 'article'), about = pk.find(p => p.kind === 'about');
+  check('B-18: up to 8 articles are sampled (exec 767: 2), and "about" is no longer an /insights/ article whose slug says "why"',
+    arts.length === 8 && (!about || !/\/insights\//.test(about.url)) && pk.filter(p => p.kind === 'service').length === 5, JSON.stringify(pk.map(p => p.kind + ' ' + p.url)));
+  const real = Object.fromEntries(FL.articles.map(a => [a.url, a.ld.join('\n')]));
+  const team = ['Tech& Team', 'Tech& Technology Team'];
+  const html = (p, i) => p.kind !== 'article' ? '<html><head><title>' + p.kind + '</title></head><body><h1>' + p.kind + '</h1><p>' + 'Text about the services we run for clients in the UAE. '.repeat(30) + '</p></body></html>'
+    : '<html><head>' + (real[p.url] || '<script type="application/ld+json">' + JSON.stringify({ '@context': 'https://schema.org', '@type': 'BlogPosting', headline: 'Article ' + i, datePublished: '2026-09-01', dateModified: '2026-09-10',
+      author: { '@type': 'Person', name: team[i % 2] } }) + '</script>') + '</head><body><h1>Article</h1><p>' + 'An article body with facts and a source link. '.repeat(40) + '</p></body></html>';
+  const fetched = pk.map((p, i) => ({ json: { data: html(p, i), statusCode: 200 } }));
+  mock('Analyze Probes', [{ json: ap }]); mock('Fetch Page HTML', fetched);
+  const ahtml = (await run('Analyze HTML', fetched))[0].json.html_analysis;
+  const auth = ahtml.findings.find(f => /named human author/.test(f.title));
+  const realPerson = FL.articles.some(a => pk.some(p => p.url === a.url) && /"name":"Muhammad Aarish"/.test(a.ld.join('')));
+  check('B-18: the byline finding says the articles credit a TEAM, names the team bylines, and counts against the 12 articles the crawl found',
+    auth && /credited to a team, not a person/.test(auth.title) && /of 8 sampled articles credit a team \("Tech& Team"/.test(auth.evidence) && /8 of the 12 articles the crawl found were read/.test(auth.evidence)
+    && !/name no author at all/.test(auth.evidence), JSON.stringify(auth));
+  check('B-18: the one named person (Muhammad Aarish, a real exec-767 article) is not counted as a team byline', !realPerson || /^7 of 8/.test(auth.evidence), auth && auth.evidence);
+  // ---------- B-10: the content review against the pages the crawl knows ----------
+  const svc = pk.find(p => p.kind === 'service');
+  const deep = '<html><body><h1>Service</h1><p>' + 'We implement and support Dynamics 365 for UAE firms. '.repeat(80) + '</p><h2>Pricing in UAE</h2><p>What drives the cost: the number of users, the modules, the data to migrate and the integrations.</p><h2>FAQ</h2><p>Questions.</p></body></html>';
+  const fetched10 = pk.map((p, i) => ({ json: { data: p.url === svc.url ? deep : html(p, i), statusCode: 200 } }));
+  mock('Analyze PageSpeed', [{ json: { domain: D } }]); mock('Fetch Page HTML', fetched10); mock('Competitor Homes', []);
+  const bcp = (await run('Build Content Prompt', [{ json: {} }]))[0].json;
+  const out10 = bcp.content_sections || {};
+  check('B-10: the reviewer is shown the pricing section further down a page it read (the page is cut at 2,500 characters)',
+    /SECTIONS FURTHER DOWN THE PAGES ABOVE/.test(bcp.content_prompt_our) && /## Pricing in UAE: What drives the cost/.test(bcp.content_prompt_our) && (out10.read || []).some(r => r.url === svc.url), (bcp.content_prompt_our || '').slice(-1500));
+  check('B-10: and the site\'s other pages with pricing sections, from the crawl\'s own headings (exec 767 read none of them)',
+    /OTHER PAGES OF THIS SITE WITH SUCH SECTIONS/.test(bcp.content_prompt_our) && /dynamics-365-cloud-migration-uae: .*"Migration Cost Factors"/.test(bcp.content_prompt_our)
+    && (out10.outline || []).filter(o => o.headings.some(h => /pric|cost/i.test(h))).length >= 6 && bcp.content_prompt_our.length <= 22000 && out10.outline_unavailable === false, JSON.stringify(out10.outline));
+  // the real answer of exec 767's Content Reviewer, read against what the run knew
+  const parse = async (sections) => { mock('Build Content Prompt', [{ json: { ...bcp, content_sections: sections, content_pages_read: FL.content_pages_read } }]);
+    return (await run('Parse Content Review', [{ json: { output: J(FL.reviewer_output) } }]))[0].json; };
+  const orig = (FL.reviewer_output.findings || []).find(f => /pricing/i.test(f.title));
+  const pr = await parse({ read: [], outline: out10.outline, outline_unavailable: false });
+  const nf = pr.extra_findings.filter(f => f.source === 'ai_review');
+  const priced = nf.find(f => /^Pricing sections explain what drives the cost/.test(f.title));
+  check('B-10: the fixture is exec 767\'s answer: "No pricing, engagement models or timelines" (Medium)', orig && /No pricing/.test(orig.title) && orig.severity === 'Medium', JSON.stringify(orig));
+  check('B-10: over pages that carry pricing sections it becomes "Pricing sections explain what drives the cost but give no price ranges", Low, naming the pages',
+    priced && priced.severity === 'Low' && /but give no price ranges/.test(priced.title) && /dynamics-365-cloud-migration-uae \("D365 Cloud Migration Services Pricing in UAE"\)/.test(priced.evidence)
+    && !nf.some(f => /^No pricing/i.test(f.title)) && pr.content_review.eeat_signals.pricing_transparency !== 'no', JSON.stringify(priced));
+  const pr0 = await parse({ read: [], outline: [], outline_unavailable: false });
+  check('B-10: a site with no pricing section anywhere keeps the reviewer\'s finding as it was', pr0.extra_findings.some(f => f.source === 'ai_review' && /^No pricing/.test(f.title) && f.severity === 'Medium'), JSON.stringify(pr0.extra_findings.map(f => f.title)));
+});
+
 
 H.report();
 })();

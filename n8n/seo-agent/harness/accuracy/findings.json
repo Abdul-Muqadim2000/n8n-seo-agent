@@ -443,6 +443,14 @@
    "label": "false_positive",
    "reason": "All 11 crawler user-agents get HTTP 200 and exactly the browser's 117,798 characters.",
    "source": "fixture probes bot:* (statuses and lengths)"
+  },
+  {
+   "id": "AF-54",
+   "site": "techand.ai",
+   "finding": "Crawlability & Indexing|Redirect chain on the homepage address",
+   "label": "true_positive",
+   "reason": "http://techand.ai/ answers 308 to https://techand.ai/, which answers 308 to https://www.techand.ai/: two hops before the page (B-16, re-rating 2026-10-17). The fixture holds both hops in probes.apex_http and probes.home.",
+   "source": "fixture probes apex_http / home Location headers; checked live by the 2026-10-17 re-rating (docs/system-review-2026-10-17/parts/2_technical.md B-16)"
   }
  ]
 }
