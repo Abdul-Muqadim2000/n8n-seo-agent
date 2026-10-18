@@ -107,6 +107,9 @@ Before each phase, read §3 / §8 to see what is already done.
 - 2026-10-17 22:40 UTC — all defect fixers merged (`47ce789`), G1 / G3 / G4 parked, nothing deployed.
 - 2026-10-18 07:24 PKT — overnight run started: G3, G1, G4 resumed (Phase A); merge order G3 → G1 (0011) → G4 (0012).
 - 2026-10-18 07:30 PKT — **Docker Desktop had stopped overnight** (no n8n execution after 2026-10-17 20:34 UTC; n8n, the app dev stack and its DB were all down). Restarted Docker and both stacks (`n8n/` `docker compose up -d`, `app/compose.dev.yml up -d`), nothing else changed; n8n healthz 200. The catch-up workflow replays any fire missed meanwhile at its next sweep.
+- 2026-10-18 07:45 PKT — Phase A: **G3 merged** (crawler logs, migration 0010; the three .log fixtures were gitignored — committed with an exception); app 408 / 355 / 21, typecheck + web build clean.
+- 2026-10-18 07:50 PKT — Phase B started: agent F-L (pipeline.ts seo_pages bug, C-9, B-8/A-27/A-28 cost counting, B-9, B-10, B-16, B-18, Tracker Report scenario C-12/C-13, ran-late on Audit Scheduler + Page Watch, rival prospects), handoff `F-L_HANDOFF.md`. G1 told: migration 0011 after G3.
+- 2026-10-18 13:08 PKT — safety re-run: all three agents had stopped ≈ 08:00 (usage limit). G1 finished SCIM + marketing + browser pass (52 views clean) and stopped mid-merge (0011, 5 conflicts) — resumed to finish the merge; G4 committed its marketing — resumed to finish its list; F-L had item 1 (pipeline.ts by site_id) — resumed for items 2–6.
 
 ## 9. Deploy checklist for the owner (Phase C — prepared, not run)
 
@@ -125,5 +128,3 @@ What it does with the merged code:
   G1 `IDENTITY_KEY` (falls back to `MAILBOX_KEY`), `MFA_ISSUER`, `SSO_ALLOW_PRIVATE_HOSTS`.
 
 Right after the deploy: the live checks of §5 (≈ $0.8 DataForSEO) — tell the orchestrator "run the live checks".
-- 2026-10-18 07:45 PKT — Phase A: **G3 merged** (crawler logs, migration 0010; the three .log fixtures were gitignored — committed with an exception); app 408 / 355 / 21, typecheck + web build clean.
-- 2026-10-18 07:50 PKT — Phase B started: agent F-L (pipeline.ts seo_pages bug, C-9, B-8/A-27/A-28 cost counting, B-9, B-10, B-16, B-18, Tracker Report scenario C-12/C-13, ran-late on Audit Scheduler + Page Watch, rival prospects), handoff `F-L_HANDOFF.md`. G1 told: migration 0011 after G3.
