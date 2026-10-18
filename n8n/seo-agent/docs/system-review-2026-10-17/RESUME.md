@@ -141,8 +141,8 @@ grace, stateful data disk `alaventra-data` 20 GB pd-balanced + boot disk, static
 `-app-env`; n8n encryption key carried over from the laptop), uptime checks + e-mail alert, budget $25. Cost ≈ **$21/month**.
 Everything is in `deploy/gcp/` (`RUNBOOK.md` first); gcloud runs in Docker via `deploy/gcp/gcloud-docker.sh` (image
 `alaventra-gcloud:1` = official image + ssh).
-- Live: `https://api.34-18-208-219.sslip.io/api/health` → `{"ok":true,"db":true,"n8n":{"api":true,"webhook":true}}`;
-  `https://hooks.34-18-208-219.sslip.io/webhook/*` (n8n editor, /rest, /api/v1 are 404 from the internet; editor via
+- Live: `https://api.alaventra.com/api/health` → `{"ok":true,"db":true,"n8n":{"api":true,"webhook":true}}`;
+  `https://hooks.alaventra.com/webhook/*` (n8n editor, /rest, /api/v1 are 404 from the internet; editor via
   `deploy/gcp/tunnel.sh` → http://localhost:15678).
 - Migrated from the laptop, counts identical: app DB 44 tables / 1,326 rows; n8n 36 Data Tables / 5,375 rows (16,654 entities).
 - Engine deployed (`deploy_engine.py`): main workflow 699 nodes, 26 workflows, 24 active, new columns synced.
@@ -156,3 +156,9 @@ Everything is in `deploy/gcp/` (`RUNBOOK.md` first); gcloud runs in Docker via `
   (`API_ORIGIN`, `VITE_API_ORIGIN`, `ORIGIN_SECRET`, `PRIMARY_HOSTS`; Pro for commercial use), Google OAuth / mailbox redirect URIs
   for the production host, app e-mail (SMTP), **rotating every key pasted in chat** (they are now in Secret Manager — rotate there with
   `load_secrets.sh` after changing `.env`), DataForSEO top-up ($5.43).
+
+**2026-10-18 16:45 UTC — domain switched to alaventra.com.** DNS is hosted at Vercel (ns1/ns2.vercel-dns.com, a wildcard sends other
+names to Vercel); A records `api` and `hooks` → 34.18.208.219 (TTL 60). `DOMAIN=alaventra.com` in `alaventra-prod-env`, stack restarted
+on the VM at `cb7edc7`, Let's Encrypt certificates issued (to 2027-01-16), uptime checks replaced (api./hooks.alaventra.com), the
+sslip.io names retired. End-to-end pre-release check via `https://hooks.alaventra.com` passed. The Vercel `ORIGIN_SECRET` value was
+written to `~/seo-agent-secrets/vercel-ORIGIN_SECRET.txt` (600) for the owner — never into chat or the repo.

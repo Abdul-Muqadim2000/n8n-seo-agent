@@ -72,8 +72,8 @@ n8n at seo-n8n-workflow-64e834115c48.herokuapp.com shows its unclaimed `/setup`)
 
 ## Status (2026-10-18 evening — PRODUCTION LIVE ON GCP — latest)
 Backend + n8n now run on **GCP `alaventra-prod`** (Doha, spot e2-medium 4 GB, ~$21/month; `deploy/gcp/`, `RUNBOOK.md`; details
-`n8n/seo-agent/docs/system-review-2026-10-17/RESUME.md` §10). Live: `https://api.34-18-208-219.sslip.io` and
-`https://hooks.34-18-208-219.sslip.io` (temporary names until a domain). Data migrated with identical counts; engine deployed
+`n8n/seo-agent/docs/system-review-2026-10-17/RESUME.md` §10). Live: `https://api.alaventra.com` and `https://hooks.alaventra.com`
+(DNS at Vercel: A records → 34.18.208.219; Let's Encrypt via Caddy). Data migrated with identical counts; engine deployed
 (699-node main, 24 active); **the laptop's n8n is stopped** — deploy the engine with `deploy/gcp/deploy_engine.py` over
 `deploy/gcp/tunnel.sh`, not `apply_env.py`. Product name is **Alaventra**. Frontend → Vercel (not yet set up).
 
