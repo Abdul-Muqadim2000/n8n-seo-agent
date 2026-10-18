@@ -162,3 +162,14 @@ names to Vercel); A records `api` and `hooks` → 34.18.208.219 (TTL 60). `DOMAI
 on the VM at `cb7edc7`, Let's Encrypt certificates issued (to 2027-01-16), uptime checks replaced (api./hooks.alaventra.com), the
 sslip.io names retired. End-to-end pre-release check via `https://hooks.alaventra.com` passed. The Vercel `ORIGIN_SECRET` value was
 written to `~/seo-agent-secrets/vercel-ORIGIN_SECRET.txt` (600) for the owner — never into chat or the repo.
+
+**2026-10-18 ~18:45 UTC — frontend live on Vercel, whole chain verified.** Vercel project (Root `app`, production branch `main`,
+auto-deploy on push restored by removing `git.deploymentEnabled:false` from `app/vercel.json`), domains alaventra.com / www / app;
+env `API_ORIGIN`, `VITE_API_ORIGIN`, `PRIMARY_HOSTS`, `ORIGIN_SECRET` (value from `~/seo-agent-secrets/vercel-production.env`). Server
+switched to `APP_FRONTEND=vercel`. Two middleware fixes: forward only the headers the API reads; skip a non-header-safe secret
+(the first value pasted was the masked `••••` line → every /api call threw in `Headers.set`). Proven: `/api/health` through Vercel ok;
+the server logs the visitor's real IP for proxied requests (secret matches); a Playwright run on the live site — sign-up → session via
+Vercel (200) → the same session **directly** on `api.alaventra.com` (cookie `sid` on `.alaventra.com`, Secure, HttpOnly, Lax; CORS
+from app. only) → sign-out → sign-in → onboarding renders; no console errors, no failed requests. A test account
+`rr-prod-check-…@example.org` ("Prod Check", no company) is left in production — delete it from the platform admin.
+**Note:** pushing to `main` now deploys the frontend; the VM follows `feature/seo-agent-v4.5` (keep the two in step).
