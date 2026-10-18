@@ -125,6 +125,14 @@ const Env = z.object({
   /** deploy/gcp: browser origins allowed to call this API across origins WITH cookies (the front end on another host, for direct
    *  uploads), comma-separated full origins, e.g. https://app.alaventra.com; empty = no cross-origin access at all */
   CORS_ORIGINS: str(''),
+  /** admin panel: an Anthropic Admin API key (sk-ant-admin…) to read what Claude really billed (cost report); empty = not shown */
+  ANTHROPIC_ADMIN_API_KEY: str(''),
+  /** admin panel: the DataForSEO API login / password (the engine's own, in n8n/.env) to read the account balance; empty = the
+   *  balance movement recorded in the engine's run ledger is used instead */
+  SEO_DATAFORSEO_LOGIN: str(''),
+  SEO_DATAFORSEO_PASSWORD: str(''),
+  /** admin panel: the engine-ledger cost sync (every 10 minutes; off on a second server or in tests) */
+  ADMIN_COST_SYNC: bool(true),
 });
 
 const parsed = Env.safeParse(process.env);
@@ -223,6 +231,11 @@ export const config = {
   cmsAllowPrivateHosts: e.CMS_ALLOW_PRIVATE_HOSTS && e.NODE_ENV !== 'production',
   /** the engine's report brand (SEO_BRAND): printed into the documents it produces, replaced in what a white-label client gets */
   engineBrand: e.SEO_BRAND,
+  admin: {
+    anthropicAdminKey: e.ANTHROPIC_ADMIN_API_KEY,
+    dataforseo: { login: e.SEO_DATAFORSEO_LOGIN, password: e.SEO_DATAFORSEO_PASSWORD, enabled: !!(e.SEO_DATAFORSEO_LOGIN && e.SEO_DATAFORSEO_PASSWORD) },
+    costSync: e.ADMIN_COST_SYNC,
+  },
   portal: {
     cnameTarget: e.PORTAL_CNAME_TARGET.toLowerCase().replace(/\.$/, ''),
     extraHosts: e.APP_EXTRA_HOSTS.split(/[\s,]+/).map((x) => x.trim().toLowerCase()).filter(Boolean),

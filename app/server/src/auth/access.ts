@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import type { FastifyRequest } from 'fastify';
-import { clientWorkspaceRole, IDENTITY_ERRORS, isClientRole, MFA, policyOf, roleAtLeast, sessionMeetsMfa, type Role, type StepUpMethod } from '@seo/shared';
+import { ACCOUNT_SUSPENDED, clientWorkspaceRole, IDENTITY_ERRORS, isClientRole, MFA, policyOf, roleAtLeast, sessionMeetsMfa, type Role, type StepUpMethod } from '@seo/shared';
 import { config } from '../config';
 import { db, schema } from '../db';
 import type { OrgRow, SessionRow, SiteRow, UserRow } from '../db/schema';
@@ -13,7 +13,7 @@ declare module 'fastify' {
     /** G1: the session row behind the cookie (how it signed in, second factor, last step-up) */
     session: SessionRow | null;
     /** G1: set when this request's session was ended (idle timeout) */
-    sessionEnded?: 'idle';
+    sessionEnded?: 'idle' | 'suspended';
   }
 }
 
@@ -22,6 +22,7 @@ export const isUuid = (v: unknown): v is string => typeof v === 'string' && UUID
 
 export function requireUser(req: FastifyRequest): UserRow {
   if (!req.user && req.sessionEnded === 'idle') throw new HttpError(401, 'You were signed out after a period of inactivity. Sign in again.', IDENTITY_ERRORS.sessionIdle);
+  if (!req.user && req.sessionEnded === 'suspended') throw new HttpError(401, ACCOUNT_SUSPENDED.message, ACCOUNT_SUSPENDED.code);
   if (!req.user) throw unauthorized();
   return req.user;
 }

@@ -52,6 +52,7 @@ vi.mock('../src/services/apiV1', async (orig) => {
 });
 vi.mock('../src/services/pipeline', () => ({ pipelineData: vi.fn(async () => ({ activeRuns: st.activeRuns, automations: [], running: [], pages: [], ladderCards: [], queue: { next: [], later: [], waiting: [] } })) }));
 vi.mock('../src/services/spend', () => ({ monthSpend: vi.fn(async () => 5) }));
+vi.mock('../src/services/admin/credits', () => ({ creditCheck: vi.fn(async () => ({ enforced: true, needed: 3.6, available: 1, held: 0, enough: false })) }));
 vi.mock('../src/services/runs', () => ({
   estimateCost: vi.fn(async () => 0.12),
   findIdempotentRun: vi.fn(async () => (st.priorIdem ? { id: 'run-prior' } : null)),
@@ -153,6 +154,8 @@ describe('POST /api/v1/runs', () => {
     const r = await post(RUN_KEY, { ...audit, dryRun: true });
     expect(r.statusCode).toBe(200);
     expect(r.json()).toMatchObject({ dryRun: true, mode: 'audit', estimate: { usd: 0.12 }, needsAcknowledge: ['active:run-going'], budget: { spentUsd: 5, budgetUsd: 25, remainingUsd: 20 } });
+    // admin panel: the dry run says whether the company's credits would let it start
+    expect(r.json().credits).toEqual({ enforced: true, needed: 3.6, available: 1, held: 0, enough: false });
     expect(st.created).toEqual([]);
   });
 

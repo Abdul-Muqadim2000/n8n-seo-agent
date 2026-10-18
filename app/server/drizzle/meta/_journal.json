@@ -99,6 +99,13 @@
       "when": 1792316010596,
       "tag": "0013_g5_white_label",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792352142916,
+      "tag": "0014_admin_panel",
+      "breakpoints": true
     }
   ]
 }

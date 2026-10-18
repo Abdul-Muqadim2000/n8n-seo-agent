@@ -168,6 +168,19 @@ describe('OIDC', () => {
     expect(failures.some((e: { action: string }) => e.action === 'auth.sso.failed')).toBe(true);
   });
 
+  it('a suspended account is refused before JIT gives it a membership (admin panel)', async () => {
+    const co = await oidcCompany('owner@sus-oidc.test', 'Sus OIDC', 'sus-oidc.test');
+    await signUp(app, 'held@sus-oidc.test');
+    await db.update(schema.users).set({ suspendedAt: new Date() }).where(eq(schema.users.email, 'held@sus-oidc.test'));
+    const c = new Client(app);
+    const r = await oidcRound(c, { email: 'held@sus-oidc.test' }, { sub: 'held-1', email: 'held@sus-oidc.test' });
+    expect(r.headers.location).toBe('/login?error=account_suspended');
+    expect(c.jar.has('sid')).toBe(false);
+    const u = await db.query.users.findFirst({ where: eq(schema.users.email, 'held@sus-oidc.test') });
+    expect(await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, u!.id) })).toBeUndefined();
+    expect(co.org.id).toBeTruthy();
+  });
+
   it('without JIT, only existing members get in', async () => {
     const co = await oidcCompany('owner@nojit.test', 'No JIT', 'nojit.test');
     await co.owner.put(`/api/orgs/${co.org.id}/sso/connection`, { ...oidcSettings(), oidc: { issuer: idp.issuer, clientId: idp.clientId }, jitEnabled: false });

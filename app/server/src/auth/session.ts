@@ -1,10 +1,11 @@
 import { and, eq, isNull, lt } from 'drizzle-orm';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { policyOf, strictestIdle, type AuthMethod, type User } from '@seo/shared';
+import { ACCOUNT_SUSPENDED, policyOf, strictestIdle, type AuthMethod, type User } from '@seo/shared';
 import { config } from '../config';
 import { db, schema } from '../db';
 import type { SessionRow, UserRow } from '../db/schema';
 import { cookieDomainFor } from '../lib/crossOrigin';
+import { HttpError } from '../lib/errors';
 import { randomToken, sha256 } from '../lib/crypto';
 import { auditUser } from '../services/audit';
 
@@ -22,7 +23,13 @@ export interface SessionOptions {
   ssoOrgId?: string | null;
 }
 
+/** admin panel: the one refusal of a suspended account (every sign-in path ends in createSession or startMfaChallenge) */
+export const suspendedError = () => new HttpError(403, ACCOUNT_SUSPENDED.message, ACCOUNT_SUSPENDED.code);
+
 export async function createSession(reply: FastifyReply, req: FastifyRequest, userId: string, opts: SessionOptions = {}): Promise<void> {
+  // a suspended account never gets a session, whichever way it proved who it is (password, Google, SSO, passkey / code, portal hand-off)
+  const who = await db.query.users.findFirst({ where: eq(schema.users.id, userId), columns: { suspendedAt: true } });
+  if (who?.suspendedAt) throw suspendedError();
   const token = randomToken(32);
   const now = new Date();
   const expiresAt = new Date(now.getTime() + SESSION_DAYS * DAY);
@@ -100,6 +107,13 @@ export async function readSession(req: FastifyRequest, reply: FastifyReply): Pro
     .limit(1);
   const row = rows[0];
   if (!row) return null;
+  // admin panel: a suspended account's sessions stop working at once (suspending also deletes them; this covers a race)
+  if (row.user.suspendedAt) {
+    await db.delete(schema.sessions).where(eq(schema.sessions.id, id));
+    clearSessionCookie(reply);
+    req.sessionEnded = 'suspended';
+    return null;
+  }
   if (row.session.expiresAt.getTime() < Date.now()) {
     await db.delete(schema.sessions).where(eq(schema.sessions.id, id));
     clearSessionCookie(reply);

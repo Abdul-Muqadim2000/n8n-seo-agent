@@ -105,7 +105,8 @@ export async function creatorMembership(orgId: string, userId: string | null): P
     .select({ user: schema.users, role: schema.memberships.role })
     .from(schema.memberships)
     .innerJoin(schema.users, eq(schema.memberships.userId, schema.users.id))
-    .where(and(eq(schema.memberships.orgId, orgId), eq(schema.memberships.userId, userId)))
+    // admin panel: a suspended creator's keys act for nobody
+    .where(and(eq(schema.memberships.orgId, orgId), eq(schema.memberships.userId, userId), isNull(schema.users.suspendedAt)))
     .limit(1);
   return rows[0] ? { user: rows[0].user, role: rows[0].role as Role } : null;
 }
