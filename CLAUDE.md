@@ -3,7 +3,8 @@
 Enterprise SEO automation built as n8n workflows: keyword research, keyword verdicts, long-form content with QA, technical site audits, full SEO reports, AI-visibility checks. Everything lives in `n8n/seo-agent/`; the stack runs locally with Docker Compose from `n8n/`.
 
 ## Read first
-- **`n8n/seo-agent/docs/system-review-2026-10-15/NEXT_WAVE_BENCHMARK_ROWS.md` — START HERE for the next session: the 28 open benchmark rows of FIX_PLAN §3.16 that are in reach, grouped into 8 parallel agents (model per agent), the leftovers, the orchestration rules, numbers, deploy and live-check rules. Every R34–R119 defect is already fixed.**
+- **`n8n/seo-agent/docs/system-review-2026-10-17/RESUME.md` — START HERE (2026-10-18): the fourth re-rating (6/10, market 4.2, enterprise 1.5), every fix and the five enterprise capabilities merged but NOT deployed, the deploy checklist (§9), the live checks (§5), owner decisions (§6) and launch blockers.**
+- `n8n/seo-agent/docs/system-review-2026-10-15/NEXT_WAVE_BENCHMARK_ROWS.md` — (previous) the 28 open benchmark rows of FIX_PLAN §3.16 that are in reach, grouped into 8 parallel agents (model per agent), the leftovers, the orchestration rules, numbers, deploy and live-check rules. Every R34–R119 defect is already fixed.**
 - `n8n/seo-agent/docs/system-review-2026-10-15/DEFECTS.md` — (done 2026-10-16) to fix the defects: every defect of the third re-rating (5.5/10, 2026-10-16) re-verified with its root cause at file:line, the fix order by family, and an offline + live acceptance test per defect (dossiers in `defects/`). 15 High, 39 Medium, 28 Low, R53 withdrawn, R117–R119 added.** The run itself: `RESULTS.md`, `parts/`, `SCORECARD.md`; register FIX_PLAN §3.17.
 - **`n8n/seo-agent/docs/system-review-2026-10-11/` — the fix plan and its live-check notes (Phases 1-4 done 2026-10-13; see the latest status). `FIX_PLAN.md` is still the register: §3.7-§3.10 hold the defects the live checks found, §5.2 the re-rating protocol.** Whole-system review of 2026-10-11: live run of every feature on techand.ai (`RESULTS.md`, 26 defects with evidence, ≈ $4.3), benchmarks of the best tools with proven data (`CRITERIA_*.md`), the scorecard (`SCORECARD.md`: **5/10 overall**, 13 areas), and **`FIX_PLAN.md`** — 80 items (D defects, G criteria gaps, L Link Builder items, O owner decisions) with evidence, where to fix, the fix, an acceptance test, phases sized into sessions, the re-rating protocol and a scores history. Read its `README.md` first.
 - `app/README.md` — **the web app (v4.7, 2026-10-03)**: multi-company React + TypeScript front end with sign-up / Google login, onboarding, dashboards, every analysis as a form, runs and reports; Fastify + Postgres server in front of n8n. `app/API.md` (every endpoint), `app/web/CONVENTIONS.md` (UI rules). Product name **Ascentra** (brand kit in `app/web/brand/`, public marketing site in `app/web/src/marketing/`, 2026-10-08).
@@ -59,7 +60,23 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-10-17, third wave — the 28 benchmark rows in reach built — latest)
+## Status (2026-10-18, fourth re-rating + its fix wave + five enterprise capabilities — latest)
+**Re-rated 2026-10-17 on the deployed build: 6 / 10** (area mean 5.88; was 5.54), plus **market position 4.2** and **enterprise readiness
+1.5** against the October 2026 leaders (`n8n/seo-agent/docs/system-review-2026-10-17/`: `RESULTS.md`, `parts/1-4`, `SCORECARD.md` by a
+clean CLI session, `MARKET_BENCHMARK.md` — Search Atlas, Ahrefs, Semrush/Adobe, seoClarity, Conductor, BrightEdge, Botify, Profound…).
+**Then, on `feature/seo-agent-v4.5` (merged, pushed, NOT deployed):** every defect of that run fixed (8 High, ~70 Medium/Low; fixers
+F-B F-A1 F-A2 F-A3 F-C F-D F-L) and five enterprise gaps built: **CMS publishing** (WordPress / Webflow / Contentful / signed webhook,
+migration 0009), **crawler-log + AI-crawler analytics** (0010), **identity** — two-step / passkeys / sessions / audit log / SSO OIDC+SAML /
+SCIM (0011), **integrations + write API** — runs API + MCP run tools, signed webhooks, Slack/Teams, Jira/Linear/Asana, S3/BigQuery,
+Looker Studio (0012), **white-label agency portal** (0013). Engine harness **6939 passed, 0 failed**; app **486 shared / 494 server /
+42 web**; real-DB suites crawlers 12 / CMS 18 / integrations 16; combined browser pass (447 visits) `BROWSER_PASS_2026-10-18.md`.
+**Start here: `n8n/seo-agent/docs/system-review-2026-10-17/RESUME.md`** (§9 deploy checklist, §6 owner decisions, §5 live checks).
+**The deploy is the owner's**: `apply_env.py` is refused by the permission classifier as a production deploy (twice, incl. as a scheduled
+job). After it: `MAILBOX_KEY` in `app/.env`, restart the dev server for 0013, the live checks (≈ $0.8), then a fresh re-rating.
+**Not launch-ready yet:** no billing (no Stripe), Privacy/Terms are drafts, no always-on host (Docker on the Mac stopped overnight
+2026-10-18 and was restarted), app SMTP off, keys pasted in chat to rotate, pricing placeholders, DataForSEO $5.43.
+
+## Status (2026-10-17, third wave — the 28 benchmark rows in reach built — previous)
 **Seven agents (W3-A audit, W3-B content, W3-C rank, W3-D site tracking, W3-E AI stats, W3-F AI growth + leftovers, W3-G app layer +
 marketing), 3 at a time; every merge rebuilt in the main worktree with the exact harness count. Harness 6139 -> 6486 passed, 0 failed;
 app typecheck clean, 326 shared / 305 server. Deployed twice 2026-10-16/17 (23 published, new `SEOagentPubCheck`

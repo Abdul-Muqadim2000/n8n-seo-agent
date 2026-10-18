@@ -25,27 +25,11 @@ later), pushed. Read this, then the newest `*_HANDOFF.md` in each open worktree 
 `cd /Users/abdul.muqadim/n8n_devaicon/n8n && python3 seo-agent/apply_env.py` (not Monday 07:00–12:00 New York). It also runs
 `sync_tables.py` (F-B's four new columns). The app's migration 0009 runs at the dev server's next start.
 
-## 3. Open agents — all checkpointed, parked on their branches (worktrees under `.claude/worktrees/agent-<id>/`)
+## 3. Open agents — none
 
-State at 2026-10-17 ≈ 22:40 UTC. **Every defect fixer is merged** (F-C last, `47ce789`: all 8 High fixed in code, harness 6861 / 0,
-app 377 shared / 334 server / 17 web). The gap builders are parked, each with a handoff note on its branch:
-
-| Agent | Branch | Built and tested | Left (see its handoff note) |
-|---|---|---|---|
-| G1 identity | `worktree-agent-acb3f285de8c3a4bc` (merged 2aa912a in) | two-step (TOTP, passkeys, recovery codes, step-up, company policy), audit log (DB refuses edits, retention, CSV), sessions + idle timeout, SSO (OIDC + SAML 2.0 on DNS-proven domains, enforce, break-glass); 53 server + 15 shared tests on PGlite | **SCIM 2.0** (started: types, token, filter parser), marketing (`/security`, features, changelog, pricing), browser pass; owner: `IDENTITY_KEY`, a real IdP, which plans include SSO/SCIM/audit log. Note: `app/docs/G1_HANDOFF.md`, design `app/docs/IDENTITY.md` |
-| G3 crawler logs | `worktree-agent-aaf7d59acd32d0ae8` (merged 2aa912a in) | upload + push ingest (Logpush / drains), parsers, IP-range + rDNS verification, rollups, Crawlers page, `/api/v1` + MCP tool, 12 DB tests, 1M lines in 16 s | marketing entry, browser pass. Note: `app/docs/G3_HANDOFF.md`, design `app/docs/LOG_ANALYTICS.md` |
-| G4 integrations | `worktree-agent-a05552be562d6b396` (merged 2aa912a in) | server side of all 5: runs API + MCP run tools, signed webhooks + Slack/Teams, Jira/Linear/Asana, S3/BigQuery export + table read API; 61 + 15 tests; shared SSRF guard moved to `server/src/lib/netGuard.ts` | Integrations settings UI + "Create ticket" buttons, guides, Looker Studio connector, marketing, non-WIP commits. Note: `app/docs/G4_HANDOFF.md`. Its throwaway `gap-g4-pg` container + `gap-g4-net` may still exist |
-
-**Migration clash to resolve when merging:** G1 `0010_g1_identity.sql` (hand-appended audit-log trigger at the end — keep it), G3
-`0010_crawler_logs.sql`, G4 `0010_g4_integrations.sql` — merge one at a time and renumber the next (0011, 0012), regenerating the drizzle
-snapshot/journal. Root `package.json` / lock: G1 adds deps + an `overrides` pin of xml-crypto 6.3.2.
-
-**Found by G3, not fixed:** `app/server/src/services/pipeline.ts` reads `seo_pages` filtered by `domain`, but that table is keyed by
-`site_id` — the read likely always falls into its `.catch(() => [])`, so the pipeline never sees the page inventory.
-
-**Left open by fixers (Low):** C-9 (`AI_Metrics.js` ~287–296 count only engines that answered on both sides; `AI_Report.js:124` hard-codes
-"the 7 days to …"); B-8 B-9 B-10 B-16 B-18; a Tracker Report node-level scenario for C-12/C-13; Audit Scheduler and Page Watch do not carry
-the "ran late" notice; halsimplify.com / tradeshift.com still qualify as prospects when nothing names their category.
+Every agent of the 2026-10-17/18 work is merged into `feature/seo-agent-v4.5`: defect fixers F-B F-A1 F-A2 F-A3 F-C F-D F-L and the
+Phase D fixer; gap builders G1 identity (0011), G2 CMS publishing (0009), G3 crawler logs (0010), G4 integrations (0012), G5 white-label
+portal (0013). Engine harness 6939 / 0; app 486 shared / 494 server / 42 web; browser pass `BROWSER_PASS_2026-10-18.md`.
 
 ## 4. How to merge each one (what worked today)
 
@@ -116,6 +100,7 @@ Before each phase, read §3 / §8 to see what is already done.
 - 2026-10-18 PKT — **Phase D browser pass** on the dev stack: 447 visits, all key flows pass (`BROWSER_PASS_2026-10-18.md`); 1 Medium (CMS / crawler-key / log-upload actions write no audit event) + 6 Low.
 - 2026-10-18 PKT — **Phase B done: F-L merged** (all six items); harness 6939 / 0, app 454 / 457 / 30.
 - 2026-10-18 14:30 PKT — **Phase D findings fixed and merged** (audit events for CMS / crawler admin writes, step-6 overflow, Crawlers hero copy, Publishing spacing, aiSampleRate period; the /pricing contrast flag was a scanner false positive, ~17:1); crawler DB suite 12/12 with `CRAWLER_JOBS=false`.
+- 2026-10-18 15:00 PKT — **Phase E done: G5 merged** (white-label client portal: agency → client workspaces, client roles below viewer, branding with AA tokens, custom portal domains with TXT + CNAME proof and takeover guard, branded e-mail, client approvals, agency overview; migration 0013; 69 browser visits, no "Ascentra" on client surfaces). App 486 / 494 / 42; real-DB suites crawlers 12, CMS 18, integrations 16 on migrations 0000–0013. **Overnight plan complete; only the deploy (§9) and the live checks remain — the owner's.**
 
 ## 9. Deploy checklist for the owner (Phase C — prepared, not run)
 
@@ -128,9 +113,11 @@ What it does with the merged code:
   the Backlink Monitor / Link Builder rival loaders.
 - `sync_tables.py` (run by apply_env) adds: `seo_audits.crawl_js` (boolean), `seo_audits.checks_version`, `seo_audits.not_fixed_json`,
   `seo_audit_findings.check_version`.
-- The app (dev stack serves the main checkout) applies its migrations at the server's next start: `0009_cms_publishing` is already in;
-  G3 / G1 / G4 add 0010 / 0011 / 0012 when merged (§8 says which landed). Production image: rebuild `app/compose.yml`.
+- The app's migrations 0009–0012 were applied on the dev stack during the Phase D browser pass; **0013 (white label) applies at the dev
+  server's next start** (`docker restart seo-platform-dev-server-1`). Production image: rebuild `app/compose.yml`.
 - New app settings (all optional, `app/.env`): `CMS_ALLOW_PRIVATE_HOSTS`, `CRAWLER_JOBS`, `LOG_SPOOL_DIR`, `BOT_RANGES_REFRESH`, and with
-  G1 `IDENTITY_KEY` (falls back to `MAILBOX_KEY`), `MFA_ISSUER`, `SSO_ALLOW_PRIVATE_HOSTS`.
+  G1 `IDENTITY_KEY` (falls back to `MAILBOX_KEY`), `MFA_ISSUER`, `SSO_ALLOW_PRIVATE_HOSTS`; G5 `PORTAL_CNAME_TARGET`, `APP_EXTRA_HOSTS`,
+  `PORTAL_STRICT_HOSTS`, `PORTAL_DOMAIN_CHECK_HOURS`, `PORTAL_JOBS`. **`MAILBOX_KEY` must be set** or CMS / integrations / two-step
+  secrets cannot be stored.
 
 Right after the deploy: the live checks of §5 (≈ $0.8 DataForSEO) — tell the orchestrator "run the live checks".
