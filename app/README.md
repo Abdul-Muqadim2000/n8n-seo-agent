@@ -187,6 +187,16 @@ The Backlinks page (`pages/site/BacklinksPage.tsx`) shows every referring site f
 
 "Check my backlinks" has a Depth choice: the full check (~$0.50) or free sources only ($0). Engine side: `n8n/seo-agent/BACKLINKS_SPEC.md`.
 
+## Crawlers from server logs (gap #6, 2026-10-17)
+
+The Crawlers page (`pages/site/CrawlersPage.tsx`) shows what Googlebot, Bingbot, Applebot and the AI crawlers (GPTBot, OAI-SearchBot,
+ChatGPT-User, ClaudeBot, Claude-SearchBot, Claude-User, PerplexityBot, Perplexity-User, Google-Agent, Amazonbot, CCBot, Bytespider,
+Meta) actually requested, from the website's own access logs — uploaded (Apache / Nginx, IIS / W3C, CloudFront, JSON lines; gzip; up
+to 1 GB) or pushed by Cloudflare Logpush / a Vercel, Fastly or Akamai log drain to `POST /api/ingest/logs/:siteId` with the site's push
+key. Every crawler is checked against its vendor's published IP list or by forward-confirmed DNS; impostors are counted apart. Only
+crawler requests are stored, never an address. Design, privacy and limits: `docs/LOG_ANALYTICS.md`; routes: `API.md` → "Crawlers";
+code: `server/src/services/crawlers/`, `routes/crawlers.ts`, `shared/src/crawlers.ts`.
+
 ## Pipeline (automation)
 
 Each website has a Pipeline page: this week's runs, Needs you, one card per keyword ladder (in priority order), the always-on part

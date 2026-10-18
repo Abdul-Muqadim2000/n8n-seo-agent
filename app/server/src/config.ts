@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { z } from 'zod';
 
 // Settings come from the environment. In Docker Compose the app reads ../n8n/.env (the SEO_* secrets the n8n stack already uses:
@@ -90,6 +92,12 @@ const Env = z.object({
   /** "Choose keywords for me": the server starts the next recommended ladder for websites that switched it on (every 6 hours);
    * off = the setting is stored but nothing starts on its own */
   AUTO_START_LADDERS: bool(false),
+  /** gap #6 (app/docs/LOG_ANALYTICS.md): the crawler-log worker, retention and IP-list refresh (off on a second server or in tests) */
+  CRAWLER_JOBS: bool(true),
+  /** where uploaded / pushed logs wait until the worker has read them (deleted right after); local disk of this server */
+  LOG_SPOOL_DIR: str(''),
+  /** fetch the vendors' crawler IP lists once a day (off: the dated copy shipped with the code is used) */
+  BOT_RANGES_REFRESH: bool(true),
 });
 
 const parsed = Env.safeParse(process.env);
@@ -168,6 +176,11 @@ export const config = {
     redirectUri: `${e.APP_URL}/api/mailbox-oauth/callback`,
   },
   linkBuilderJobs: e.LINK_BUILDER_JOBS,
+  crawlers: {
+    jobs: e.CRAWLER_JOBS,
+    spoolDir: e.LOG_SPOOL_DIR || join(tmpdir(), 'ascentra-logs'),
+    refreshRanges: e.BOT_RANGES_REFRESH,
+  },
   outreachMxCheck: e.OUTREACH_MX_CHECK,
   // G2: never in production, whatever the variable says
   cmsAllowPrivateHosts: e.CMS_ALLOW_PRIVATE_HOSTS && e.NODE_ENV !== 'production',

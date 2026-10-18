@@ -57,6 +57,10 @@ import type {
   CmsReportState,
   CmsSiteState,
   CmsTestResultView,
+  CrawlerData,
+  CrawlerSettingsInput,
+  LogPushKeyCreated,
+  LogUploadAccepted,
 } from '@seo/shared';
 import { api, ApiRequestError } from './api';
 
@@ -790,3 +794,89 @@ export function useCmsRefresh(orgId: string, reportId: string, siteId: string) {
     onSuccess: done,
   });
 }
+
+// ---------- gap #6: crawlers from the site's own logs (app/docs/LOG_ANALYTICS.md) ----------
+const crawlersKey = (siteId: string) => [...qk.site(siteId), 'crawlers'] as const;
+
+/** The Crawlers page; polls every 5 s while a log file is waiting or being read. */
+export function useCrawlers(orgId: string, siteId: string, days: number) {
+  return useQuery({
+    queryKey: [...crawlersKey(siteId), days],
+    queryFn: () => api<CrawlerData>(`/api/orgs/${orgId}/sites/${siteId}/crawlers?days=${days}`),
+    placeholderData: keepPreviousData,
+    retry: noRetryOn4xx,
+    staleTime: 60_000,
+    refetchInterval: (q) => (q.state.data?.ingests.some((i) => i.status === 'queued' || i.status === 'processing') ? 5000 : false),
+  });
+}
+
+/**
+ * Uploads one log file as a raw stream (never read into memory here or on the server). XMLHttpRequest, not fetch: it reports upload
+ * progress. Same CSRF header as every other change.
+ */
+export function uploadLog(orgId: string, siteId: string, file: File, onProgress: (sent: number, total: number) => void): Promise<LogUploadAccepted> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `/api/orgs/${orgId}/sites/${siteId}/crawlers/upload?name=${encodeURIComponent(file.name)}`);
+    xhr.setRequestHeader('x-requested-with', 'fetch');
+    xhr.setRequestHeader('content-type', 'application/octet-stream');
+    xhr.setRequestHeader('accept', 'application/json');
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(e.loaded, e.total);
+    };
+    xhr.onerror = () => reject(new ApiRequestError(0, 'The upload was interrupted. Check your connection and try again.'));
+    xhr.onload = () => {
+      let data: { error?: string; code?: string; fields?: Record<string, string> } & Partial<LogUploadAccepted> = {};
+      try {
+        data = JSON.parse(xhr.responseText || '{}');
+      } catch {
+        /* keep {} */
+      }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(data as LogUploadAccepted);
+      else reject(new ApiRequestError(xhr.status, data.error || `Upload failed (${xhr.status})`, data.fields ?? {}, data.code));
+    };
+    xhr.send(file);
+  });
+}
+
+export function useUploadLog(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (a: { file: File; onProgress: (sent: number, total: number) => void }) => uploadLog(orgId, siteId, a.file, a.onProgress),
+    onSuccess: () => qc.invalidateQueries({ queryKey: crawlersKey(siteId) }),
+  });
+}
+
+export function useCreatePushKey(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<LogPushKeyCreated>(`/api/orgs/${orgId}/sites/${siteId}/crawlers/push-key`, { method: 'POST' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: crawlersKey(siteId) }),
+  });
+}
+
+export function useRevokePushKey(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<{ ok: boolean }>(`/api/orgs/${orgId}/sites/${siteId}/crawlers/push-key`, { method: 'DELETE' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: crawlersKey(siteId) }),
+  });
+}
+
+export function useCrawlerSettings(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CrawlerSettingsInput) => api<CrawlerSettingsInput>(`/api/orgs/${orgId}/sites/${siteId}/crawlers/settings`, { method: 'PUT', body }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: crawlersKey(siteId) }),
+  });
+}
+
+export function useDeleteCrawlerData(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (confirm: string) => api<{ ok: boolean }>(`/api/orgs/${orgId}/sites/${siteId}/crawlers/data`, { method: 'DELETE', body: { confirm } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: crawlersKey(siteId) }),
+  });
+}
+
+export const crawlerExportUrl = (orgId: string, siteId: string, kind: 'daily' | 'pages' | 'hits', days: number) => `/api/orgs/${orgId}/sites/${siteId}/crawlers/export?kind=${kind}&days=${days}`;

@@ -71,6 +71,13 @@
       "when": 1792255013466,
       "tag": "0009_cms_publishing",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792274155524,
+      "tag": "0010_crawler_logs",
+      "breakpoints": true
     }
   ]
 }

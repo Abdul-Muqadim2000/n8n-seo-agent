@@ -30,3 +30,4 @@ export * from './ai-visibility';
 // the help panel (and the recommendation → guide map) needs it, so it stays out of every bundle that imports this barrel.
 export * from './api-v1';
 export * from './cms';
+export * from './crawlers';

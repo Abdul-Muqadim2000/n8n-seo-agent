@@ -81,6 +81,7 @@ export const solutions: Solution[] = [
       { feature: 'keyword-ladders', title: 'Content with a destination', body: 'Keyword ladders climb to the head terms your business needs, one supporting page at a time.' },
       { feature: 'technical-audits', title: 'Audits with a fix pack', body: 'Monthly audits show what changed, and the fix pack goes straight to your developers.' },
       { feature: 'site-tracking', title: 'One weekly view', body: 'Search Console, GA4 and Trends together, with striking-distance keywords called out.' },
+      { feature: 'crawler-analytics', title: 'What the crawlers really did', body: 'Your server logs show which pages Google and the AI crawlers fetched, which they skipped and which “crawlers” were impostors.' },
       { feature: 'guided-setup', title: 'Nothing waits on a ticket', body: 'Every connection we ask for comes with its steps and your own values — and goes to IT or the agency as an e-mail when the job is theirs.' },
       { feature: 'report-delivery', title: 'The report reaches the people who decide', body: 'Each week’s report goes to the list you choose and into the channel your team already watches, with an expiring link for anyone outside it.' },
     ],

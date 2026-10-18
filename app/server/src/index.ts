@@ -5,6 +5,7 @@ import { runMigrations, sqlClient } from './db';
 import { AUTO_START, runAutoStart } from './services/autoStart';
 import { checkEngineFailures } from './services/engineFailures';
 import { autoApproveTick, pollTick, senderTick } from './services/outreachJobs';
+import { startCrawlerJobs } from './services/crawlers/jobs';
 import { deliveryTick, retryTick } from './services/reportDelivery';
 import { expireStaleRuns } from './services/runs';
 
@@ -53,7 +54,10 @@ async function main() {
     ? [setInterval(() => void senderTick(app.log), 60 * 1000), setInterval(() => void pollTick(app.log), 3 * 60 * 1000), setInterval(() => void autoApproveTick(app.log), 10 * 60 * 1000)]
     : [];
   app.log.info({ linkBuilderJobs: config.linkBuilderJobs }, config.linkBuilderJobs ? 'link-building sender and inbox jobs on' : 'link-building jobs off (LINK_BUILDER_JOBS)');
+  // gap #6: the crawler-log worker, retention and the daily IP-list refresh; CRAWLER_JOBS=false stops them
+  const crawlerTimers = startCrawlerJobs(app.log);
   const stop = async () => {
+    for (const t of crawlerTimers) clearInterval(t);
     for (const t of lbTimers) clearInterval(t);
     if (autoStartFirst) clearTimeout(autoStartFirst);
     if (autoStartTimer) clearInterval(autoStartTimer);

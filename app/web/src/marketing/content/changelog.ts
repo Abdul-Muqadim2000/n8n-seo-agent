@@ -15,6 +15,20 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-18',
+    title: 'See which crawlers really read your site',
+    summary:
+      'Upload a server log, or let Cloudflare, Vercel, Fastly or Akamai send yours, and the new Crawlers page shows what Googlebot and the AI crawlers actually requested — every one checked against the addresses its company publishes, with impostors counted apart.',
+    highlights: [
+      'Googlebot, Bingbot, Applebot, GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot, Claude-User, PerplexityBot, Perplexity-User, Google-Agent and more, each proved by its company’s address list or by DNS',
+      'Pages Google or the AI crawlers did not fetch, and the requests spent on redirects, errors and parameter URLs',
+      'The pages AI assistants fetched because a person asked them something',
+      'Visits by people are dropped as the file is read and no address is kept; you choose how long the rest stays',
+      'Every figure as CSV and in the read API',
+    ],
+    features: ['crawler-analytics'],
+  },
+  {
+    date: '2026-10-18',
     title: 'Send written pages to your CMS',
     summary:
       'A written page now goes from its report to WordPress, Webflow or Contentful — or to any other stack through a signed webhook — as a draft by default. Only an owner or admin can publish one live, after confirming it, and Ascentra then checks the live page and starts tracking it.',
