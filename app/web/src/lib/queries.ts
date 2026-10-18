@@ -67,6 +67,17 @@ import type {
   CrawlerSettingsInput,
   LogPushKeyCreated,
   LogUploadAccepted,
+  AgencyClient,
+  AgencyOverviewRow,
+  ApprovalCandidate,
+  ApprovalView,
+  Branding,
+  BrandingResponse,
+  ClientBranding,
+  PortalDomainCheck,
+  PortalDomainView,
+  PortalMailView,
+  StaffAccess,
 } from '@seo/shared';
 import { api, ApiRequestError } from './api';
 
@@ -944,3 +955,143 @@ export function useDeleteCrawlerData(orgId: string, siteId: string) {
 }
 
 export const crawlerExportUrl = (orgId: string, siteId: string, kind: 'daily' | 'pages' | 'hits', days: number) => `/api/orgs/${orgId}/sites/${siteId}/crawlers/export?kind=${kind}&days=${days}`;
+
+// ---------- G5: agencies, client workspaces and the client portal (app/docs/WHITE_LABEL.md) ----------
+const agencyKey = (orgId: string) => [...qk.org(orgId), 'agency'] as const;
+
+export function useEnableAgency(orgId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<Org>(`/api/orgs/${orgId}/agency`, { method: 'POST' }),
+    onSuccess: (org) => {
+      qc.setQueryData(qk.org(orgId), org);
+      qc.invalidateQueries({ queryKey: qk.me });
+    },
+  });
+}
+
+export const useClients = (orgId: string, enabled = true) =>
+  useQuery({ queryKey: [...agencyKey(orgId), 'clients'], queryFn: () => api<{ clients: AgencyClient[] }>(`/api/orgs/${orgId}/clients`), enabled, retry: noRetryOn4xx });
+
+export function useCreateClient(orgId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { name: string; monthlyBudgetUsd?: number; website?: string }) => api<Org>(`/api/orgs/${orgId}/clients`, { method: 'POST', body }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: agencyKey(orgId) }),
+  });
+}
+
+export const useClientStaff = (orgId: string, clientId: string | null) =>
+  useQuery({
+    queryKey: [...agencyKey(orgId), 'staff', clientId],
+    queryFn: () => api<{ staff: StaffAccess[] }>(`/api/orgs/${orgId}/clients/${clientId}/staff`),
+    enabled: !!clientId,
+  });
+
+export function useAssignStaff(orgId: string, clientId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (b: { userId: string; role: 'admin' | 'member' | 'viewer' | null }) =>
+      api<{ staff: StaffAccess[] }>(`/api/orgs/${orgId}/clients/${clientId}/staff/${b.userId}`, { method: 'PUT', body: { role: b.role } }),
+    onSuccess: (r) => {
+      qc.setQueryData([...agencyKey(orgId), 'staff', clientId], r);
+      qc.invalidateQueries({ queryKey: [...agencyKey(orgId), 'clients'] });
+    },
+  });
+}
+
+export const useAgencyOverview = (orgId: string, enabled = true) =>
+  useQuery({
+    queryKey: [...agencyKey(orgId), 'overview'],
+    queryFn: () => api<{ rows: AgencyOverviewRow[]; generatedAt: string }>(`/api/orgs/${orgId}/agency/overview`),
+    enabled,
+    placeholderData: keepPreviousData,
+  });
+export const agencyOverviewCsvUrl = (orgId: string) => `/api/orgs/${orgId}/agency/overview.csv`;
+
+export const useBranding = (orgId: string) => useQuery({ queryKey: [...qk.org(orgId), 'branding'], queryFn: () => api<BrandingResponse>(`/api/orgs/${orgId}/branding`) });
+
+export function useSaveBranding(orgId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Partial<Branding> | Partial<ClientBranding>) => api<BrandingResponse>(`/api/orgs/${orgId}/branding`, { method: 'PUT', body }),
+    onSuccess: (r) => {
+      qc.setQueryData([...qk.org(orgId), 'branding'], r);
+      qc.invalidateQueries({ queryKey: qk.org(orgId), exact: true });
+    },
+  });
+}
+
+export function useClientSettings(orgId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { clientApproval: boolean }) => api<Org>(`/api/orgs/${orgId}/client-settings`, { method: 'PUT', body }),
+    onSuccess: (org) => {
+      qc.setQueryData(qk.org(orgId), org);
+      qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'branding'] });
+    },
+  });
+}
+
+export const usePortalMail = (orgId: string) => useQuery({ queryKey: [...qk.org(orgId), 'portal-mail'], queryFn: () => api<PortalMailView>(`/api/orgs/${orgId}/portal/mail`) });
+
+export function useSavePortalMail(orgId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { senderName: string; replyTo: string; fromMailboxId: string | null; dkimSelector: string }) =>
+      api<PortalMailView>(`/api/orgs/${orgId}/portal/mail`, { method: 'PUT', body }),
+    onSuccess: (r) => qc.setQueryData([...qk.org(orgId), 'portal-mail'], r),
+  });
+}
+
+export function useCheckPortalMail(orgId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<PortalMailView>(`/api/orgs/${orgId}/portal/mail/check`, { method: 'POST' }),
+    onSuccess: (r) => qc.setQueryData([...qk.org(orgId), 'portal-mail'], r),
+  });
+}
+
+export const usePortalDomains = (orgId: string) =>
+  useQuery({ queryKey: [...qk.org(orgId), 'portal-domains'], queryFn: () => api<{ domains: PortalDomainView[]; cnameTarget: string | null }>(`/api/orgs/${orgId}/portal/domains`) });
+
+export function usePortalDomainMutations(orgId: string) {
+  const qc = useQueryClient();
+  const refresh = () => qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'portal-domains'] });
+  return {
+    claim: useMutation({ mutationFn: (host: string) => api<PortalDomainView>(`/api/orgs/${orgId}/portal/domains`, { method: 'POST', body: { host } }), onSuccess: refresh }),
+    verify: useMutation({
+      mutationFn: (id: string) => api<{ domain: PortalDomainView; check: PortalDomainCheck }>(`/api/orgs/${orgId}/portal/domains/${id}/verify`, { method: 'POST' }),
+      onSuccess: refresh,
+    }),
+    release: useMutation({ mutationFn: (id: string) => api<{ ok: boolean }>(`/api/orgs/${orgId}/portal/domains/${id}`, { method: 'DELETE' }), onSuccess: refresh }),
+  };
+}
+
+const approvalsKey = (orgId: string) => [...qk.org(orgId), 'approvals'] as const;
+export const useApprovals = (orgId: string) =>
+  useQuery({ queryKey: approvalsKey(orgId), queryFn: () => api<{ items: ApprovalView[]; canDecide: boolean }>(`/api/orgs/${orgId}/approvals`), refetchInterval: 60_000 });
+export const useApprovalCandidates = (orgId: string, enabled: boolean) =>
+  useQuery({ queryKey: [...approvalsKey(orgId), 'candidates'], queryFn: () => api<{ items: ApprovalCandidate[] }>(`/api/orgs/${orgId}/approvals/candidates`), enabled });
+
+export function useApprovalMutations(orgId: string) {
+  const qc = useQueryClient();
+  const refresh = () => qc.invalidateQueries({ queryKey: approvalsKey(orgId) });
+  return {
+    request: useMutation({
+      mutationFn: (b: { kind: 'page' | 'outreach'; itemId: string; siteId: string | null; title: string; note: string }) =>
+        api<ApprovalView>(`/api/orgs/${orgId}/approvals`, { method: 'POST', body: b }),
+      onSuccess: refresh,
+    }),
+    decide: useMutation({
+      mutationFn: (b: { id: string; decision: 'approved' | 'changes_requested'; note: string }) =>
+        api<ApprovalView>(`/api/orgs/${orgId}/approvals/${b.id}/decide`, { method: 'POST', body: { decision: b.decision, note: b.note } }),
+      onSuccess: refresh,
+    }),
+    withdraw: useMutation({ mutationFn: (id: string) => api<{ ok: boolean }>(`/api/orgs/${orgId}/approvals/${id}/withdraw`, { method: 'POST' }), onSuccess: refresh }),
+  };
+}
+
+export const usePortalHandoff = () =>
+  useMutation({ mutationFn: (host: string) => api<{ url: string; expiresInSeconds: number }>('/api/portal/handoff', { method: 'POST', body: { host } }) });
+

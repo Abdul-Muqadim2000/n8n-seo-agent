@@ -15,6 +15,8 @@ import { db, schema } from '../db';
 import type { OrgRow, ReportShareRow, UserRow } from '../db/schema';
 import { siteRows } from '../n8n/client';
 import { summarize } from './summaries';
+import { brandForOrg } from './brandOf';
+import { rewritableKind } from './portalDocs';
 import { randomToken, sha256 } from '../lib/crypto';
 import { HttpError, notFound } from '../lib/errors';
 
@@ -176,7 +178,7 @@ function orderedSummary(stage: string, payload: unknown, stored: Record<string, 
 /** The one report a live link may show, with its files and the company's name — and nothing else from that company. */
 export async function sharedReport(share: ReportShareRow): Promise<SharedReport | null> {
   const rows = await db
-    .select({ r: schema.reports, domain: schema.sites.domain, orgName: schema.organizations.name })
+    .select({ r: schema.reports, domain: schema.sites.domain, orgName: schema.organizations.name, org: schema.organizations })
     .from(schema.reports)
     .leftJoin(schema.sites, eq(schema.reports.siteId, schema.sites.id))
     .leftJoin(schema.organizations, eq(schema.reports.orgId, schema.organizations.id))
@@ -184,6 +186,8 @@ export async function sharedReport(share: ReportShareRow): Promise<SharedReport 
     .limit(1);
   const row = rows[0];
   if (!row) return null;
+  // G5: a white-label client workspace's link shows the agency's name and only the files that can carry it
+  const agencyBrand = await brandForOrg(row.org ?? null);
   const [files, brand] = await Promise.all([
     db
       .select({ id: schema.files.id, kind: schema.files.kind, fileName: schema.files.fileName, mimeType: schema.files.mimeType, size: schema.files.size })
@@ -202,9 +206,10 @@ export async function sharedReport(share: ReportShareRow): Promise<SharedReport 
     receivedAt: row.r.receivedAt.toISOString(),
     scheduled: row.r.scheduled,
     summary: orderedSummary(row.r.stage, row.r.payload, row.r.summary),
-    files,
+    files: agencyBrand ? files.filter((f) => rewritableKind(f.kind)) : files,
     orgName: row.orgName ?? '',
     brand,
+    agencyBrand,
     // B-R2: the same readiness rule the delivery applies, said to the reader instead of used to refuse. The payload itself never leaves.
     caveat: shareCaveat(deliveryDecision({ stage: row.r.stage, status: row.r.status, payload: (row.r.payload ?? {}) as Record<string, unknown> })),
     expiresAt: share.expiresAt.toISOString(),

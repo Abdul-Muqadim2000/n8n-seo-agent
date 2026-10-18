@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  type AnyPgColumn,
   bigint,
   bigserial,
   boolean,
@@ -314,8 +315,74 @@ export const organizations = pgTable(
     onboardedAt: ts('onboarded_at'),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: created(),
+    /** G5 (app/docs/WHITE_LABEL.md): standard | agency | client — a client workspace is an ordinary company with its agency as parent */
+    kind: text('kind').notNull().default('standard'),
+    /** a client workspace's agency; an agency with client workspaces cannot be deleted (restrict) */
+    parentOrgId: uuid('parent_org_id').references((): AnyPgColumn => organizations.id, { onDelete: 'restrict' }),
+    /** agency: the whole brand (shared/src/agency.ts `Branding`); client workspace: its override (`ClientBranding`) */
+    branding: jsonb('branding').$type<Record<string, unknown>>().notNull().default({}),
+    /** agency: sender name, reply-to, custom From mailbox and its last SPF / DKIM check (`PortalMailSettings`) */
+    portalMail: jsonb('portal_mail').$type<Record<string, unknown>>().notNull().default({}),
+    /** client workspace: a live publish / an outreach send waits for the client's approval */
+    clientApproval: boolean('client_approval').notNull().default(false),
   },
-  (t) => [uniqueIndex('organizations_slug_idx').on(t.slug), uniqueIndex('organizations_hook_idx').on(t.hookToken)],
+  (t) => [uniqueIndex('organizations_slug_idx').on(t.slug), uniqueIndex('organizations_hook_idx').on(t.hookToken), index('organizations_parent_idx').on(t.parentOrgId)],
+);
+
+/**
+ * G5: a host an agency serves its client portal on (`seo.agency.com`). Proven by a TXT record carrying `token` (a new random token
+ * per claim, bound to this company — WHITE_LABEL.md §2 takeover) plus a CNAME to the app; re-checked, lapsed after repeated failures,
+ * deleted on release. One verified (or lapsed) owner per host.
+ */
+export const portalDomains = pgTable(
+  'portal_domains',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    host: text('host').notNull(),
+    token: text('token').notNull(),
+    /** pending | verified | lapsed */
+    status: text('status').notNull().default('pending'),
+    verifiedAt: ts('verified_at'),
+    lastCheckAt: ts('last_check_at'),
+    lastCheckOk: boolean('last_check_ok'),
+    lastCheckDetail: text('last_check_detail'),
+    failures: integer('failures').notNull().default(0),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: created(),
+  },
+  (t) => [
+    uniqueIndex('portal_domains_org_host_idx').on(t.orgId, t.host),
+    uniqueIndex('portal_domains_live_host_idx').on(t.host).where(sql`${t.status} in ('verified', 'lapsed')`),
+  ],
+);
+
+/** G5: an item the agency asked a client to approve (a written page, an outreach draft) and the client's decision. */
+export const portalApprovals = pgTable(
+  'portal_approvals',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    siteId: uuid('site_id').references(() => sites.id, { onDelete: 'set null' }),
+    /** page | outreach */
+    kind: text('kind').notNull(),
+    /** a report id (page) or `prospect-domain|type` (outreach) */
+    itemId: text('item_id').notNull(),
+    title: text('title').notNull(),
+    /** pending | approved | changes_requested | withdrawn */
+    status: text('status').notNull().default('pending'),
+    note: text('note').notNull().default(''),
+    requestedBy: uuid('requested_by').references(() => users.id, { onDelete: 'set null' }),
+    requestedAt: ts('requested_at').defaultNow().notNull(),
+    decisionNote: text('decision_note'),
+    decidedBy: uuid('decided_by').references(() => users.id, { onDelete: 'set null' }),
+    decidedAt: ts('decided_at'),
+  },
+  (t) => [index('portal_approvals_org_idx').on(t.orgId, t.requestedAt), index('portal_approvals_item_idx').on(t.orgId, t.kind, t.itemId)],
 );
 
 export const memberships = pgTable(
@@ -1165,6 +1232,8 @@ export type SsoConnectionRow = typeof ssoConnections.$inferSelect;
 export type SsoDomainRow = typeof ssoDomains.$inferSelect;
 export type ScimGroupRow = typeof scimGroups.$inferSelect;
 export type MembershipRow = typeof memberships.$inferSelect;
+export type PortalDomainRow = typeof portalDomains.$inferSelect;
+export type PortalApprovalRow = typeof portalApprovals.$inferSelect;
 export type OrgRow = typeof organizations.$inferSelect;
 export type SiteRow = typeof sites.$inferSelect;
 export type RunRow = typeof runs.$inferSelect;

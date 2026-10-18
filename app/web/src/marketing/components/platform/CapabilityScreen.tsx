@@ -19,6 +19,7 @@ const APP_PATH: Record<string, string> = {
   integrations: 'settings/integrations',
   'guided-setup': 'settings/verification',
   enterprise: 'settings/company',
+  'agency-portal': 'clients',
 };
 
 /** a full product page (the dashboard) needs the full content width: pages stack text above it instead of beside it */

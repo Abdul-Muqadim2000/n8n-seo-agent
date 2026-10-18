@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Check, Crown, Eye, ShieldCheck, UserRound } from 'lucide-react';
+import { BadgeCheck, Check, Crown, Eye, ShieldCheck, UserRound } from 'lucide-react';
 import { ROLE_LABELS, type Role } from '@seo/shared';
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
@@ -57,6 +57,8 @@ export const ROLE_ICON: Record<Role, ReactNode> = {
   admin: <ShieldCheck />,
   member: <UserRound />,
   viewer: <Eye />,
+  client_approver: <BadgeCheck />,
+  client_viewer: <Eye />,
 };
 
 /** A role as a chip with its icon (the owner in brand blue). */

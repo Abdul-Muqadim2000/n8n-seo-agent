@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import type { FastifyRequest } from 'fastify';
-import { IDENTITY_ERRORS, MFA, policyOf, roleAtLeast, sessionMeetsMfa, type Role, type StepUpMethod } from '@seo/shared';
+import { clientWorkspaceRole, IDENTITY_ERRORS, isClientRole, MFA, policyOf, roleAtLeast, sessionMeetsMfa, type Role, type StepUpMethod } from '@seo/shared';
 import { config } from '../config';
 import { db, schema } from '../db';
 import type { OrgRow, SessionRow, SiteRow, UserRow } from '../db/schema';
@@ -36,24 +36,49 @@ export interface OrgAccess {
   role: Role;
 }
 
-/** The signed-in user's membership in the company, at least `min`; 404 for companies they do not belong to. */
+/**
+ * The signed-in user's role in the company, at least `min`; 404 for companies they do not belong to.
+ *
+ * G5 (app/docs/WHITE_LABEL.md §4): in an agency's client workspace the role comes from what the person holds there AND in its agency
+ * (`clientWorkspaceRole`): agency owners / admins reach every client, members / viewers only clients they were assigned to, client
+ * people their client role — never anything from an agency membership that is gone or switched off. Client roles rank below viewer,
+ * so a route that asks for viewer or more refuses them; the portal's routes pass `min: 'client_viewer'` explicitly. On a portal host,
+ * every company outside that agency is a 404.
+ */
 export async function orgAccess(req: FastifyRequest, orgId: unknown, min: Role = 'viewer'): Promise<OrgAccess> {
   const user = requireUser(req);
   if (!isUuid(orgId)) throw notFound('Company not found');
-  const rows = await db
-    .select({ org: schema.organizations, role: schema.memberships.role, deactivatedAt: schema.memberships.deactivatedAt })
-    .from(schema.memberships)
-    .innerJoin(schema.organizations, eq(schema.memberships.orgId, schema.organizations.id))
-    .where(and(eq(schema.memberships.orgId, orgId), eq(schema.memberships.userId, user.id)))
-    .limit(1);
-  const row = rows[0];
-  if (!row) throw notFound('Company not found');
-  // G1: switched off by the company's identity provider (SCIM)
-  if (row.deactivatedAt) throw new HttpError(403, `Your access to ${row.org.name} has been switched off by your organisation.`, 'membership_deactivated');
-  await requireCompanyMfa(req, row.org, user);
-  const role = row.role as Role;
-  if (!roleAtLeast(role, min)) throw forbidden(`This needs the ${min} role or higher`);
-  return { user, org: row.org, role };
+  const org = await db.query.organizations.findFirst({ where: eq(schema.organizations.id, orgId) });
+  if (!org) throw notFound('Company not found');
+  const portal = req.portal;
+  if (portal && org.id !== portal.orgId && org.parentOrgId !== portal.orgId) throw notFound('Company not found');
+  const direct = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.orgId, org.id), eq(schema.memberships.userId, user.id)) });
+  let role: Role | null;
+  let agency: OrgRow | null = null;
+  if (org.kind === 'client' && org.parentOrgId) {
+    const am = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.orgId, org.parentOrgId), eq(schema.memberships.userId, user.id)) });
+    role = clientWorkspaceRole({
+      direct: direct ? { role: direct.role, deactivated: !!direct.deactivatedAt } : null,
+      agency: am ? { role: am.role, deactivated: !!am.deactivatedAt } : null,
+    });
+    if (!role) {
+      if (direct?.deactivatedAt || am?.deactivatedAt) throw new HttpError(403, `Your access to ${org.name} has been switched off by your organisation.`, 'membership_deactivated');
+      throw notFound('Company not found');
+    }
+    // agency staff also answer to the agency's own two-step policy
+    if (!isClientRole(role)) agency = (await db.query.organizations.findFirst({ where: eq(schema.organizations.id, org.parentOrgId) })) ?? null;
+  } else {
+    if (!direct) throw notFound('Company not found');
+    // G1: switched off by the company's identity provider (SCIM)
+    if (direct.deactivatedAt) throw new HttpError(403, `Your access to ${org.name} has been switched off by your organisation.`, 'membership_deactivated');
+    // a client role outside a client workspace means nothing (never written; refused anyway)
+    if (isClientRole(direct.role)) throw notFound('Company not found');
+    role = direct.role as Role;
+  }
+  if (agency) await requireCompanyMfa(req, agency, user);
+  await requireCompanyMfa(req, org, user);
+  if (!roleAtLeast(role, min)) throw forbidden(isClientRole(role) ? 'This is not part of your client portal.' : `This needs the ${min} role or higher`);
+  return { user, org, role };
 }
 
 /** has the person set up at least one second factor? */

@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { AlertOctagon, AlertTriangle, CheckCircle2, Info, Loader2, RefreshCw } from 'lucide-react';
 import { AscentraMark } from '@/components/brand/AscentraMark';
+import { onPortalHost, usePortalBrand } from '@/lib/portal';
 import { errorMessage } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { Button } from './button';
@@ -24,6 +25,7 @@ const LOADER_DELAY = 150;
  * `fullPage` centres it in the whole window (app start, sign-in check, the company shell) instead of the content area.
  */
 export function PageLoader({ label = 'Loading…', fullPage }: { label?: string; fullPage?: boolean }) {
+  const portalLoader = !!usePortalBrand() || onPortalHost();
   const [elapsed] = useState(() => {
     const now = performance.now();
     if (now - loaderChain.goneAt > 400) loaderChain.start = now;
@@ -41,7 +43,12 @@ export function PageLoader({ label = 'Loading…', fullPage }: { label?: string;
       style={{ animationDelay: `${LOADER_DELAY - elapsed}ms` }}
       role="status"
     >
-      <AscentraMark wave="loader" className="w-12 text-accent dark:text-white" style={{ ['--asc-ray-offset' as string]: `${elapsed}ms` }} />
+      {/* G5: an agency's portal never shows our mark — a plain spinner in its colour */}
+      {portalLoader ? (
+        <Spinner className="size-8 text-accent-text" />
+      ) : (
+        <AscentraMark wave="loader" className="w-12 text-accent dark:text-white" style={{ ['--asc-ray-offset' as string]: `${elapsed}ms` }} />
+      )}
       <span className="text-sm text-ink-3">{label}</span>
     </div>
   );

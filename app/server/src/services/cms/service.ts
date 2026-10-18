@@ -34,6 +34,7 @@ import type { CmsConnectionRow, CmsItemRow, CmsPublishRow, ReportRow, SiteRow } 
 import { randomToken } from '../../lib/crypto';
 import { badRequest, conflict, forbidden, HttpError, notFound, validationError } from '../../lib/errors';
 import { seal, secretsReady, unseal } from '../../lib/secretBox';
+import { requireClientApproval } from '../approvals';
 import { createRun } from '../runs';
 import { connectorFor, CmsError, type ConnCtx, type ImageWithBytes, type RemoteItem } from './connectors';
 import { CmsHttpError } from './http';
@@ -406,6 +407,8 @@ export async function publishReport(a: OrgAccess, reportId: unknown, body: unkno
   const { report, site } = await reportOf(a.org.id, reportId);
   if (!site) throw badRequest('This page was written without one of your websites, so it has no CMS connection.');
   requireVerified(site);
+  // G5: a client workspace that approves pages first: no live publish without the client's approval of this page
+  if (mode === 'live') await requireClientApproval(a.org, 'page', report.id);
   const conn = await connectionOf(a.org.id, site.id, connectionId);
   const connector = connectorFor(conn.kind);
   if (!connector) throw badRequest('Unknown CMS');

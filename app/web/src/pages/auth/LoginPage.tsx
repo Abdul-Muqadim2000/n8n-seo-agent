@@ -11,6 +11,7 @@ import { Callout } from '@/components/ui/feedback';
 import { Field, Input } from '@/components/ui/field';
 import { api, ApiRequestError, errorMessage } from '@/lib/api';
 import { qk } from '@/lib/queries';
+import { usePortalContext } from '@/lib/portal';
 import { AuthCard, GOOGLE_ERRORS, GoogleButton, safeNext } from './shared';
 import { SecondStep } from './SecondStep';
 
@@ -26,6 +27,9 @@ export default function LoginPage() {
   const login = useMutation({ mutationFn: (v: Values) => api<Me | MfaChallenge>('/api/auth/login', { method: 'POST', body: v }) });
   const form = useForm<Values>({ resolver: zodResolver(loginSchema), defaultValues: { email: '', password: '' } });
   const googleError = params.get('error');
+  // G5: on an agency's portal host Google and single sign-on run on the app's own address and hand the session back here
+  const portal = usePortalContext().data ?? null;
+  const viaApp = portal ? `${portal.appUrl}/login?next=${encodeURIComponent(`/portal-handoff?host=${portal.host}`)}` : null;
   // G1: the server leaves a short-lived hint when it ended a session for inactivity
   const [idle] = useState(() => {
     const was = typeof document !== 'undefined' && /(?:^|;\s*)signed_out=idle/.test(document.cookie);
@@ -43,6 +47,7 @@ export default function LoginPage() {
       onError: (e) => {
         // G1: this address signs in through its company's identity provider: go there
         if (e instanceof ApiRequestError && e.code === 'sso_required' && typeof e.data.ssoUrl === 'string') {
+          if (viaApp) return window.location.assign(viaApp);
           window.location.assign(`${e.data.ssoUrl}${next ? `&next=${encodeURIComponent(next)}` : ''}`);
           return;
         }
@@ -68,14 +73,18 @@ export default function LoginPage() {
   return (
     <AuthCard
       title="Sign in"
-      subtitle="Welcome back. Sign in to your company's SEO workspace."
+      subtitle={portal ? 'Sign in to your SEO portal.' : "Welcome back. Sign in to your company's SEO workspace."}
       footer={
-        <>
-          New here?{' '}
-          <Link to={next ? `/signup?next=${encodeURIComponent(next)}` : '/signup'} className="font-medium text-accent-text hover:underline">
-            Create an account
-          </Link>
-        </>
+        portal ? (
+          <>Access to this portal is by invitation.</>
+        ) : (
+          <>
+            New here?{' '}
+            <Link to={next ? `/signup?next=${encodeURIComponent(next)}` : '/signup'} className="font-medium text-accent-text hover:underline">
+              Create an account
+            </Link>
+          </>
+        )
       }
     >
       {idle && (
@@ -88,7 +97,7 @@ export default function LoginPage() {
           {GOOGLE_ERRORS[googleError] ?? googleError}
         </Callout>
       )}
-      <GoogleButton next={next} />
+      {!portal && <GoogleButton next={next} />}
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
         <Field label="Work e-mail" error={form.formState.errors.email?.message}>
           {(p) => <Input {...p} type="email" autoComplete="email" placeholder="you@company.com" {...form.register('email')} />}
@@ -109,12 +118,21 @@ export default function LoginPage() {
           Sign in
         </Button>
       </form>
-      <Link
-        to={`/login/sso${next ? `?next=${encodeURIComponent(next)}` : ''}`}
-        className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-line text-sm font-medium text-ink-2 transition-colors duration-150 ease-brand hover:bg-surface-2 hover:text-ink"
-      >
-        <KeyRound className="size-4" aria-hidden /> Sign in with SSO
-      </Link>
+      {viaApp ? (
+        <a
+          href={viaApp}
+          className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-line text-sm font-medium text-ink-2 transition-colors duration-150 ease-brand hover:bg-surface-2 hover:text-ink"
+        >
+          <KeyRound className="size-4" aria-hidden /> Sign in with Google or your company account
+        </a>
+      ) : (
+        <Link
+          to={`/login/sso${next ? `?next=${encodeURIComponent(next)}` : ''}`}
+          className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-line text-sm font-medium text-ink-2 transition-colors duration-150 ease-brand hover:bg-surface-2 hover:text-ink"
+        >
+          <KeyRound className="size-4" aria-hidden /> Sign in with SSO
+        </Link>
+      )}
     </AuthCard>
   );
 }

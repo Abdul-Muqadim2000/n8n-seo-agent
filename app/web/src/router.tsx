@@ -105,6 +105,8 @@ export const router = createBrowserRouter([
           { path: '/onboarding/:orgId/:step?', lazy: page(() => import('@/pages/onboarding/OnboardingPage')) },
           { path: '/account', lazy: page(() => import('@/pages/settings/AccountPage')) },
           { path: '/admin', lazy: page(() => import('@/pages/settings/PlatformAdminPage')) },
+          // G5: after Google / single sign-on on the app's own address, back to an agency's portal address
+          { path: '/portal-handoff', lazy: page(() => import('@/pages/auth/PortalHandoffPage')) },
           {
             path: '/o/:orgId',
             element: <OrgLayout />,
@@ -118,6 +120,8 @@ export const router = createBrowserRouter([
               { path: 'runs/:runId', lazy: page(() => import('@/pages/runs/RunDetailPage')) },
               { path: 'reports', lazy: page(() => import('@/pages/runs/ReportsPage')) },
               { path: 'reports/:reportId', lazy: page(() => import('@/pages/runs/ReportPage')) },
+              { path: 'clients', lazy: page(() => import('@/pages/agency/ClientsPage')) },
+              { path: 'approvals', lazy: page(() => import('@/pages/portal/ApprovalsPage')) },
               { path: 'settings', element: <Navigate to="company" replace /> },
               { path: 'settings/:tab', lazy: page(() => import('@/pages/settings/OrgSettingsPage')) },
             ],

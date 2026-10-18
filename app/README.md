@@ -144,6 +144,19 @@ engine refused, a verdict it could not check — from the same `deliveryDecision
 
 A browser pass over the whole app, including this page, is in **`BROWSER_PASS.md`** with its screenshots.
 
+## Agencies and the white-label client portal (G5)
+
+An owner turns a company into an **agency** (Company settings → Agency mode). The agency creates a **client workspace** per client — an ordinary
+company with the agency as parent: its own websites, budget, reports, delivery settings and audit log. Agency owners and admins reach
+every client, members and viewers the clients an admin gave them; the sidebar switches between them and **Clients** shows every client's
+websites in one table (health, rankings movement, clicks, AI visibility, alerts, approvals waiting, spend vs budget) with a CSV export.
+The client's own people are invited as **client viewer** or **client approver** and see a portal of their websites — dashboards,
+reports, recommendations and **Approvals** — and nothing of the agency, of other clients, of costs or settings. With **white-label** on
+(Company settings → Branding) they see the agency's name, logo and colour (adjusted to WCAG AA in light and dark) on every page, shared
+report, rebranded document and e-mail; the portal can live on the agency's own host (**Portal address**: TXT + CNAME, re-checked,
+on-demand TLS through the operator's proxy) and e-mails can come from the agency's own verified mailbox (**Client e-mail**). Design,
+threat model (tenant isolation, domain takeover), operator setup and what is deliberately not built: **`docs/WHITE_LABEL.md`**.
+
 ## Cost figures: one table (B-R3)
 
 `shared/src/cost.ts` is the only place a per-mode price is written down, and it mirrors the engine's own calibrated defaults

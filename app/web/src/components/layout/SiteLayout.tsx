@@ -10,11 +10,12 @@ import { PageHeader } from '../ui/misc';
 import { SITE_NAV } from './OrgLayout';
 import { useProviders } from '@/lib/queries';
 import { verifyLockedDescription } from '@/lib/verify-copy';
+import { isClientRole } from '@seo/shared';
 
 /** /o/:orgId/sites/:siteId/* — the site header; data pages wait for domain verification (their API answers 403 before). */
 export function SiteLayout() {
   const { siteId = '' } = useParams();
-  const { org, sites, can } = useOrgCtx();
+  const { org, sites, can, role } = useOrgCtx();
   const loc = useLocation();
   const site = sites.find((s) => s.id === siteId);
   const google = !!useProviders().data?.google;
@@ -78,7 +79,7 @@ export function SiteLayout() {
               icon={<ShieldAlert className="size-5" />}
               title={`Verify that you own ${site.domain}`}
               description={verifyLockedDescription(google)}
-              action={can('admin') ? <ButtonLink to={paths.site(org.id, site.id, 'settings/verification')}>Verify ownership</ButtonLink> : <span className="text-sm text-ink-3">Ask an admin of your company to verify it.</span>}
+              action={can('admin') ? <ButtonLink to={paths.site(org.id, site.id, 'settings/verification')}>Verify ownership</ButtonLink> : <span className="text-sm text-ink-3">{isClientRole(role) ? 'Your agency is setting this website up; its dashboards appear here once that is done.' : 'Ask an admin of your company to verify it.'}</span>}
             />
           </div>
         </>

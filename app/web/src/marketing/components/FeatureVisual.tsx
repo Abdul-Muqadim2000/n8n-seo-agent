@@ -15,6 +15,7 @@ import { IntegrationsMockup } from './mockups/IntegrationsMockup';
 import { KeywordVerdictMockup } from './mockups/KeywordVerdictMockup';
 import { LadderMockup } from './mockups/LadderMockup';
 import { WorkspaceMockup } from './mockups/WorkspaceMockup';
+import { AgencyPortalMockup } from './mockups/AgencyPortalMockup';
 
 /** Renders the mockup or diagram a feature names in the registry (`feature.visual` / `feature.diagram`). */
 export function FeatureVisual({ kind, className }: { kind: VisualKey; className?: string }) {
@@ -39,6 +40,8 @@ export function FeatureVisual({ kind, className }: { kind: VisualKey; className?
       return <AuditMockup className={className} />;
     case 'workspace':
       return <WorkspaceMockup className={className} />;
+    case 'agency-portal':
+      return <AgencyPortalMockup className={className} />;
     case 'report-delivery':
       return <DeliveryMockup className={className} />;
     case 'guided-setup':

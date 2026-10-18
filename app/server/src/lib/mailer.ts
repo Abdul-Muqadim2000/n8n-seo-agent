@@ -24,16 +24,42 @@ export interface Mail {
   lines: string[];
   action?: { label: string; url: string };
   footer?: string;
+  /** G5: an agency's sender (name, From, reply-to, its own mailbox) for e-mails to its clients; default = the app's own */
+  sender?: MailSender;
+}
+
+/** G5: one message as handed to a transport */
+export interface MailPayload {
+  from: string;
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+  replyTo?: string;
+  attachments?: { filename: string; content: Buffer }[];
+}
+
+/** G5 (services/portalMail.ts `senderFor`): who a message comes from and under which name */
+export interface MailSender {
+  brandName: string;
+  /** the button colour (passes AA with white text) or null for the default */
+  buttonColor: string | null;
+  from: string;
+  replyTo?: string;
+  /** the agency's own mailbox sends (custom From) */
+  via?: (m: MailPayload) => Promise<void>;
 }
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
 export function renderMail(m: Mail): { html: string; text: string } {
+  const brandName = m.sender?.brandName ?? config.brand;
+  const color = m.sender?.buttonColor && /^#[0-9a-f]{6}$/i.test(m.sender.buttonColor) ? m.sender.buttonColor : '#2a78d6';
   const button = m.action
-    ? `<p style="margin:28px 0"><a href="${esc(m.action.url)}" style="background:#2a78d6;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600;display:inline-block">${esc(m.action.label)}</a></p><p style="color:#52514e;font-size:13px">Or open this link: <br><a href="${esc(m.action.url)}" style="color:#2a78d6;word-break:break-all">${esc(m.action.url)}</a></p>`
+    ? `<p style="margin:28px 0"><a href="${esc(m.action.url)}" style="background:${color};color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600;display:inline-block">${esc(m.action.label)}</a></p><p style="color:#52514e;font-size:13px">Or open this link: <br><a href="${esc(m.action.url)}" style="color:#2a78d6;word-break:break-all">${esc(m.action.url)}</a></p>`
     : '';
   const html = `<!doctype html><html><body style="margin:0;background:#f6f6f3;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:#0b0b0b">
-<div style="max-width:520px;margin:0 auto;padding:32px 20px"><div style="font-weight:700;font-size:16px;margin-bottom:24px">${esc(config.brand)}</div>
+<div style="max-width:520px;margin:0 auto;padding:32px 20px"><div style="font-weight:700;font-size:16px;margin-bottom:24px">${esc(brandName)}</div>
 <div style="background:#ffffff;border:1px solid #e1e0d9;border-radius:12px;padding:28px">
 ${m.lines.map((l) => `<p style="margin:0 0 14px;line-height:1.55;font-size:15px">${esc(l)}</p>`).join('\n')}${button}</div>
 <p style="color:#898781;font-size:12px;margin-top:20px">${esc(m.footer ?? 'You received this e-mail because of an action on your account. If it was not you, you can ignore it.')}</p></div></body></html>`;
@@ -50,7 +76,9 @@ export async function sendMail(m: Mail, log: { info: (o: object, msg: string) =>
     return false;
   }
   try {
-    await t.sendMail({ from: config.mail.from, to: m.to, subject: m.subject, html, text });
+    const msg: MailPayload = { from: m.sender?.from || config.mail.from, to: m.to, subject: m.subject, html, text, ...(m.sender?.replyTo ? { replyTo: m.sender.replyTo } : {}) };
+    if (m.sender?.via) await m.sender.via(msg);
+    else await t.sendMail(msg);
     return true;
   } catch (err) {
     log.error({ err: String(err), to: m.to, subject: m.subject }, 'e-mail failed');
@@ -78,7 +106,7 @@ export interface ReportMail extends Mail {
 }
 
 /** One report card: what it is, the figures it carried, and the links that open it. */
-function reportCard(r: DeliveryItem): string {
+function reportCard(r: DeliveryItem, brandName: string = config.brand): string {
   const rows = figureLines(r)
     .map(
       (f) =>
@@ -86,7 +114,7 @@ function reportCard(r: DeliveryItem): string {
     )
     .join('');
   const links = [
-    `<a href="${esc(r.url)}" style="color:#2a78d6;text-decoration:none;font-weight:600">Open in ${esc(config.brand)}</a>`,
+    `<a href="${esc(r.url)}" style="color:#2a78d6;text-decoration:none;font-weight:600">Open in ${esc(brandName)}</a>`,
     r.shareUrl ? `<a href="${esc(r.shareUrl)}" style="color:#2a78d6;text-decoration:none">Share this report</a>` : '',
     r.files.length ? `<span style="color:#898781">${r.files.length} file${r.files.length === 1 ? '' : 's'}</span>` : '',
   ]
@@ -106,26 +134,30 @@ export async function sendReportMail(
 ): Promise<boolean> {
   const text = [...m.lines, m.footer ?? ''].filter(Boolean).join('\n\n');
   const t = reportTransport();
-  if (!t) {
+  const brandName = m.sender?.brandName ?? config.brand;
+  if (!t && !m.sender?.via) {
     log.info({ to: m.to, subject: m.subject, reports: m.reports.length }, 'report not e-mailed (no SMTP configured)');
     return false;
   }
   const held = m.lines.filter((l) => l.startsWith('Not sent — '));
   const html = `<!doctype html><html><body style="margin:0;background:#f6f6f3;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:#0b0b0b">
-<div style="max-width:620px;margin:0 auto;padding:32px 20px"><div style="font-weight:700;font-size:16px;margin-bottom:20px">${esc(config.brand)}</div>
+<div style="max-width:620px;margin:0 auto;padding:32px 20px"><div style="font-weight:700;font-size:16px;margin-bottom:20px">${esc(brandName)}</div>
 <p style="margin:0 0 18px;line-height:1.55;font-size:15px">${esc(m.lines[0] ?? '')}</p>
-${m.reports.map(reportCard).join('\n')}
+${m.reports.map((r) => reportCard(r, brandName)).join('\n')}
 ${held.length ? `<div style="border:1px solid #e1e0d9;border-radius:10px;padding:14px 18px;margin:0 0 14px;background:#ffffff"><div style="font-size:13px;color:#52514e">${held.map((l) => esc(l)).join('<br>')}</div></div>` : ''}
 <p style="color:#898781;font-size:12px;margin-top:20px">${esc(m.footer ?? '')}</p></div></body></html>`;
   try {
-    await t.sendMail({
-      from: config.mail.from,
+    const msg: MailPayload = {
+      from: m.sender?.from || config.mail.from,
       to: m.to,
       subject: m.subject,
       html,
       text,
+      ...(m.sender?.replyTo ? { replyTo: m.sender.replyTo } : {}),
       ...(m.attachments?.length ? { attachments: m.attachments } : {}),
-    });
+    };
+    if (m.sender?.via) await m.sender.via(msg);
+    else await t!.sendMail(msg);
     return true;
   } catch (err) {
     log.error({ err: String(err), to: m.to, subject: m.subject }, 'report delivery e-mail failed');

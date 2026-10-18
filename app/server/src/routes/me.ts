@@ -10,13 +10,13 @@ import { buildMe } from '../services/me';
 
 export async function meRoutes(app: FastifyInstance) {
   // signed out is a normal state for this call (the app asks on every load): null instead of a 401
-  app.get('/api/me', async (req) => (req.user ? buildMe(req.user) : null));
+  app.get('/api/me', async (req) => (req.user ? buildMe(req.user, req.portal?.orgId ?? null) : null));
 
   app.patch('/api/me', async (req) => {
     const user = requireUser(req);
     const body = parse(updateMeSchema, req.body);
     const [u] = await db.update(schema.users).set({ name: body.name }).where(eq(schema.users.id, user.id)).returning();
-    return buildMe(u);
+    return buildMe(u, req.portal?.orgId ?? null);
   });
 
   app.post('/api/me/password', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req) => {

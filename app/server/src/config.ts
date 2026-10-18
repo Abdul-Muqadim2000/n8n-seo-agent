@@ -106,6 +106,16 @@ const Env = z.object({
   LOG_SPOOL_DIR: str(''),
   /** fetch the vendors' crawler IP lists once a day (off: the dated copy shipped with the code is used) */
   BOT_RANGES_REFRESH: bool(true),
+  /** G5 (app/docs/WHITE_LABEL.md §5): the host agencies point their portal host's CNAME at; empty = the CNAME is not checked */
+  PORTAL_CNAME_TARGET: str(''),
+  /** G5: more hosts this app answers on besides APP_URL's (comma-separated), e.g. the callback host */
+  APP_EXTRA_HOSTS: str(''),
+  /** G5: refuse requests for any other host (421); default on when APP_URL is https */
+  PORTAL_STRICT_HOSTS: z.string().optional(),
+  /** G5: how often verified portal hosts are re-checked (hours) */
+  PORTAL_DOMAIN_CHECK_HOURS: str('6').transform(Number),
+  /** G5: the portal-host re-check timer (off on a second server or in tests) */
+  PORTAL_JOBS: bool(true),
 });
 
 const parsed = Env.safeParse(process.env);
@@ -196,5 +206,15 @@ export const config = {
   outreachMxCheck: e.OUTREACH_MX_CHECK,
   // G2: never in production, whatever the variable says
   cmsAllowPrivateHosts: e.CMS_ALLOW_PRIVATE_HOSTS && e.NODE_ENV !== 'production',
+  /** the engine's report brand (SEO_BRAND): printed into the documents it produces, replaced in what a white-label client gets */
+  engineBrand: e.SEO_BRAND,
+  portal: {
+    cnameTarget: e.PORTAL_CNAME_TARGET.toLowerCase().replace(/\.$/, ''),
+    extraHosts: e.APP_EXTRA_HOSTS.split(/[\s,]+/).map((x) => x.trim().toLowerCase()).filter(Boolean),
+    strictHosts:
+      e.PORTAL_STRICT_HOSTS != null && e.PORTAL_STRICT_HOSTS !== '' ? /^(1|true|yes|on)$/i.test(e.PORTAL_STRICT_HOSTS) : e.APP_URL.startsWith('https://'),
+    checkHours: Math.max(1, e.PORTAL_DOMAIN_CHECK_HOURS || 6),
+    jobs: e.PORTAL_JOBS,
+  },
 };
 export type Config = typeof config;

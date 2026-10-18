@@ -100,7 +100,7 @@ export async function mfaRoutes(app: FastifyInstance) {
     await auditUser(req, user, { action: method === 'sso' ? 'auth.sso.succeeded' : 'auth.login.succeeded', details: { method, mfa: body.method } });
     if (body.method === 'recovery') await auditUser(req, user, { action: 'mfa.recovery.used' });
     const recoveryLeft = body.method === 'recovery' ? await remainingRecoveryCodes(user.id) : null;
-    return { ...(await buildMe(user)), next: String(done.data.next ?? '/'), recoveryCodesLeft: recoveryLeft };
+    return { ...(await buildMe(user, req.portal?.orgId ?? null)), next: String(done.data.next ?? '/'), recoveryCodesLeft: recoveryLeft };
   });
 
   app.post('/api/auth/mfa/cancel', async (req, reply) => {

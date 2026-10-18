@@ -10,6 +10,9 @@ import { HttpError, notFound, validationError } from '../lib/errors';
 import { deliverReport } from '../services/reportDelivery';
 import { createRun, filesFor, getRunOrThrow, reportsList, toReport, toRun } from '../services/runs';
 import { createShare, listShares, markOpened, revokeShare, sharedFile, sharedReport, shareByToken } from '../services/shareLinks';
+import { payloadFor } from '../services/brandOf';
+import { portalFile, portalFiles, shareFile } from '../services/portalDocs';
+import { baseUrlFor } from '../services/portalMail';
 
 type P = { orgId: string; runId: string; reportId: string; fileId: string; shareId: string; token: string };
 
@@ -86,8 +89,9 @@ export async function runRoutes(app: FastifyInstance) {
     return { run: run!, reports: reports.reverse() };
   });
 
+  // G5: reports are part of the client portal (client viewers and approvers read them; files are rebranded below)
   app.get('/api/orgs/:orgId/reports', async (req) => {
-    const a = await orgAccess(req, (req.params as P).orgId);
+    const a = await orgAccess(req, (req.params as P).orgId, 'client_viewer');
     const q = req.query as { siteId?: string; stage?: string; limit?: string; before?: string };
     return reportsList(a.org.id, {
       siteId: q.siteId && isUuid(q.siteId) ? q.siteId : undefined,
@@ -99,21 +103,26 @@ export async function runRoutes(app: FastifyInstance) {
 
   app.get('/api/orgs/:orgId/reports/:reportId', async (req): Promise<ReportDetail> => {
     const p = req.params as P;
-    const a = await orgAccess(req, p.orgId);
+    const a = await orgAccess(req, p.orgId, 'client_viewer');
     if (!isUuid(p.reportId)) throw notFound('Report not found');
     const row = await db.query.reports.findFirst({ where: and(eq(schema.reports.orgId, a.org.id), eq(schema.reports.id, p.reportId)) });
     if (!row) throw notFound('Report not found');
     const [files, site] = await Promise.all([filesFor([row.id]), row.siteId ? db.query.sites.findFirst({ where: eq(schema.sites.id, row.siteId) }) : Promise.resolve(undefined)]);
-    return { ...toReport(row, files.get(row.id) ?? [], site?.domain ?? null), payload: row.payload };
+    // G5: a client person gets no cost figures, and in a white-label workspace no file we cannot rebrand (the engine's PDF: the
+    // portal offers the branded print view instead)
+    const shown = await portalFiles(a, files.get(row.id) ?? []);
+    return { ...toReport(row, shown, site?.domain ?? null), payload: payloadFor(a.role, row.payload) };
   });
 
   app.get('/api/orgs/:orgId/files/:fileId', async (req, reply) => {
     const p = req.params as P;
-    const a = await orgAccess(req, p.orgId);
+    const a = await orgAccess(req, p.orgId, 'client_viewer');
     if (!isUuid(p.fileId)) throw notFound('File not found');
     const f = await db.query.files.findFirst({ where: and(eq(schema.files.orgId, a.org.id), eq(schema.files.id, p.fileId)) });
     if (!f) throw notFound('File not found');
-    return sendFile(reply, f, (req.query as { download?: string }).download === '1');
+    const branded = await portalFile(a, f);
+    if (!branded) throw notFound('This file is offered as a printable page in your portal.');
+    return sendFile(reply, branded, (req.query as { download?: string }).download === '1');
   });
 
   /**
@@ -144,7 +153,7 @@ export async function runRoutes(app: FastifyInstance) {
     const { link, token } = await createShare({ org: a.org, user: a.user, reportId: p.reportId, days: body.days == null || body.days === '' ? SHARE.defaultDays : body.days });
     await audit(req, a.org.id, { action: 'share.created', target: { type: 'report', id: p.reportId, label: null }, details: { shareId: link.id, expiresAt: link.expiresAt } });
     // the token is returned exactly once: it is stored only as a hash
-    return { ...link, url: shareUrl(config.appUrl, token), days: shareDays(body.days == null || body.days === '' ? SHARE.defaultDays : body.days) };
+    return { ...link, url: shareUrl(await baseUrlFor(a.org), token), days: shareDays(body.days == null || body.days === '' ? SHARE.defaultDays : body.days) };
   });
 
   app.get('/api/orgs/:orgId/reports/:reportId/shares', async (req) => {
@@ -184,7 +193,9 @@ export async function runRoutes(app: FastifyInstance) {
     if (!isShareToken(p.token) || !isUuid(p.fileId)) throw gone();
     const share = await shareByToken(p.token);
     if (shareState(share) !== 'live') throw gone();
-    const f = await sharedFile(share!, p.fileId);
+    const raw = await sharedFile(share!, p.fileId);
+    // G5: a white-label client workspace's shared files carry the agency's name, never ours
+    const f = raw ? await shareFile(share!.orgId, raw) : null;
     if (!f) throw gone();
     await markOpened(share!.id);
     return sendFile(reply, f, (req.query as { download?: string }).download === '1');

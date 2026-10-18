@@ -7,6 +7,7 @@ import { fmtBytes, fmtDate, fmtDateTime } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Callout, PageLoader } from '@/components/ui/feedback';
 import { BRAND_NAME, BrandMark } from '@/components/layout/Brand';
+import { onPortalHost, useApplyBrand } from '@/lib/portal';
 import { ShareBrand } from '@/components/share/ShareBrand';
 import { useDocumentTitle } from '@/components/layout/useDocumentTitle';
 import { StageIcon, stageLabel } from '@/components/reports/meta';
@@ -41,6 +42,9 @@ export default function SharedReportPage() {
     retry: false,
   });
   const report = q.data?.report;
+  // G5: a white-label client workspace's link: the agency's colour, and its name where ours would be
+  const agency = report?.agencyBrand ?? null;
+  useApplyBrand(agency);
   const brandName = report?.brand?.name || report?.orgName || '';
   useDocumentTitle(report ? [report.title || 'Report', brandName].filter(Boolean).join(' · ') : 'Shared report');
 
@@ -156,14 +160,33 @@ export default function SharedReportPage() {
         )}
       </main>
 
-      {/* B-R2: our own mark, one line, under the customer's report — never above it */}
+      {/* B-R2: our own mark, one line, under the customer's report — never above it. G5: under a white-label agency, theirs (and
+          ours only when they chose "Powered by") */}
       <footer className="mt-auto border-t border-line">
-        <p className="mx-auto flex max-w-3xl items-center gap-1.5 px-4 py-5 text-[12px] text-ink-3">
-          <BrandMark className="size-4" /> Report prepared with{' '}
-          <a href="/" className="rounded-sm font-medium text-ink-2 underline-offset-2 hover:underline">
-            {BRAND_NAME}
-          </a>
-        </p>
+        {agency ? (
+          <div className="mx-auto max-w-3xl space-y-0.5 px-4 py-5 text-[12px] text-ink-3">
+            <p>
+              Report prepared by <span className="font-medium text-ink-2">{agency.name}</span>
+              {agency.supportEmail && (
+                <>
+                  {' · '}
+                  <a href={`mailto:${agency.supportEmail}`} className="rounded-sm underline-offset-2 hover:underline">
+                    {agency.supportEmail}
+                  </a>
+                </>
+              )}
+            </p>
+            {agency.footerText && <p>{agency.footerText}</p>}
+            {agency.poweredBy && <p>Powered by {BRAND_NAME}</p>}
+          </div>
+        ) : onPortalHost() || q.isPending ? null : (
+          <p className="mx-auto flex max-w-3xl items-center gap-1.5 px-4 py-5 text-[12px] text-ink-3">
+            <BrandMark className="size-4" /> Report prepared with{' '}
+            <a href="/" className="rounded-sm font-medium text-ink-2 underline-offset-2 hover:underline">
+              {BRAND_NAME}
+            </a>
+          </p>
+        )}
       </footer>
     </div>
   );

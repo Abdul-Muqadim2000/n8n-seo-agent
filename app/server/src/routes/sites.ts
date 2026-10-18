@@ -118,8 +118,9 @@ async function stopInEngine(site: SiteRow, log: FastifyRequest['log']) {
 export { stopInEngine };
 
 export async function siteRoutes(app: FastifyInstance) {
+  // G5: the client portal lists the workspace's websites
   app.get('/api/orgs/:orgId/sites', async (req) => {
-    const a = await orgAccess(req, (req.params as P).orgId);
+    const a = await orgAccess(req, (req.params as P).orgId, 'client_viewer');
     const rows = await db.query.sites.findMany({ where: eq(schema.sites.orgId, a.org.id), orderBy: asc(schema.sites.createdAt) });
     return rows.map(toSite);
   });
@@ -154,7 +155,7 @@ export async function siteRoutes(app: FastifyInstance) {
 
   app.get('/api/orgs/:orgId/sites/:siteId', async (req) => {
     const p = req.params as P;
-    const { site } = await siteAccess(req, p.orgId, p.siteId);
+    const { site } = await siteAccess(req, p.orgId, p.siteId, 'client_viewer');
     return toSite(site);
   });
 

@@ -79,14 +79,18 @@ export type ProspectStatus = (typeof PROSPECT_STATUSES)[number];
 
 export const CRAWL_PAGE_OPTIONS = [200, 500, 1000] as const;
 
-export const ROLES = ['owner', 'admin', 'member', 'viewer'] as const;
+// G5 (app/docs/WHITE_LABEL.md): the two client roles of an agency's client workspace rank BELOW viewer, so every route that asks for
+// viewer or more refuses them; the client portal opens its few routes to them explicitly (deny by default).
+export const ROLES = ['owner', 'admin', 'member', 'viewer', 'client_approver', 'client_viewer'] as const;
 export type Role = (typeof ROLES)[number];
-export const ROLE_RANK: Record<Role, number> = { viewer: 0, member: 1, admin: 2, owner: 3 };
+export const ROLE_RANK: Record<Role, number> = { client_viewer: -2, client_approver: -1, viewer: 0, member: 1, admin: 2, owner: 3 };
 export const ROLE_LABELS: Record<Role, string> = {
   owner: 'Owner',
   admin: 'Admin',
   member: 'Member',
   viewer: 'Viewer',
+  client_approver: 'Client approver',
+  client_viewer: 'Client viewer',
 };
 export function roleAtLeast(role: Role | null | undefined, min: Role): boolean {
   return !!role && ROLE_RANK[role] >= ROLE_RANK[min];

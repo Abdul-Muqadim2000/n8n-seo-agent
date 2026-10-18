@@ -2,6 +2,7 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 import { audit } from '../services/audit';
 import type { FastifyInstance } from 'fastify';
 import {
+  outreachItemId,
   approveSchema,
   draftDismissSchema,
   linkBuilderRunSchema,
@@ -32,6 +33,7 @@ import { approve, linkBuildingData, linkSettingsOf, mailboxView, sequenceFor, se
 import { testMailbox } from '../services/mail';
 import { exchangeMailCode, isOauthMailbox, MAIL_PROVIDERS, mailAuthUrl, mailProviderInfo, oauthProviderOf, revokeMailTokens, testOauthMailbox } from '../services/mailOauth';
 import { sendManual } from '../services/outreachJobs';
+import { requireClientApproval } from '../services/approvals';
 
 // v4.13 Link Builder (n8n/seo-agent/LINK_BUILDER_SPEC.md): the company's mailboxes, a website's link-building board, approving / editing /
 // pausing sequences, answering replies in the thread, opt-outs, the listings checklist and "find opportunities now".
@@ -221,7 +223,10 @@ export async function linkBuilderRoutes(app: FastifyInstance) {
   app.post('/api/orgs/:orgId/sites/:siteId/link-building/approve', { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } }, async (req) => {
     const p = req.params as P; const { org, site, user } = await siteAccess(req, p.orgId, p.siteId, 'member');
     requireVerified(site);
-    const q = await approve(org, site, user.id, parse(approveSchema, req.body));
+    const body = parse(approveSchema, req.body);
+    // G5: a client workspace that approves outreach first: this draft needs the client's approval
+    await requireClientApproval(org, 'outreach', outreachItemId(body.prospectDomain, body.type));
+    const q = await approve(org, site, user.id, body);
     return { ok: true, id: q.id };
   });
 

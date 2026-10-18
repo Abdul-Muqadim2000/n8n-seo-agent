@@ -4,6 +4,8 @@ import {
   isScimToken,
   parseScimFilter,
   ROLE_RANK,
+  isClientRole,
+  provisionedRole,
   SCIM,
   scimBool,
   ssoEmailDomain,
@@ -221,6 +223,9 @@ async function domainCheck(orgId: string, email: string): Promise<void> {
 }
 
 async function defaultRole(orgId: string): Promise<Role> {
+  // G5: a client workspace provisions client people only, whatever the connection's default says
+  const org = await db.query.organizations.findFirst({ where: eq(schema.organizations.id, orgId), columns: { kind: true } });
+  if (org?.kind === 'client') return 'client_viewer';
   const c = await db.query.ssoConnections.findFirst({ where: eq(schema.ssoConnections.orgId, orgId) });
   return (c?.defaultRole as Role) ?? 'member';
 }
@@ -510,10 +515,14 @@ export async function recomputeRoles(req: FastifyRequest, orgId: string, userIds
     .innerJoin(schema.scimGroups, eq(schema.scimGroupMembers.groupId, schema.scimGroups.id))
     .where(and(eq(schema.scimGroups.orgId, orgId), inArray(schema.scimGroupMembers.userId, ids)));
   const fallback = await defaultRole(orgId);
+  // G5: in a client workspace a group never makes anyone staff, and the agency's own assignments are not the IdP's to change
+  const client = (await db.query.organizations.findFirst({ where: eq(schema.organizations.id, orgId), columns: { kind: true } }))?.kind === 'client';
   for (const m of mships) {
     if (m.role === 'owner') continue;
+    if (client && !isClientRole(m.role)) continue;
     const roles = mapped.filter((r) => r.userId === m.userId && r.role).map((r) => r.role as Role);
-    const next: Role | null = roles.length ? roles.reduce((a, b) => (ROLE_RANK[b] > ROLE_RANK[a] ? b : a)) : m.provisionedBy === 'scim' ? fallback : null;
+    const mappedRole: Role | null = roles.length ? roles.reduce((a, b) => (ROLE_RANK[b] > ROLE_RANK[a] ? b : a)) : m.provisionedBy === 'scim' ? fallback : null;
+    const next: Role | null = mappedRole && client ? provisionedRole('client', mappedRole) : mappedRole;
     if (!next || next === m.role) continue;
     await db.update(schema.memberships).set({ role: next }).where(and(eq(schema.memberships.orgId, orgId), eq(schema.memberships.userId, m.userId)));
     const u = await db.query.users.findFirst({ where: eq(schema.users.id, m.userId) });

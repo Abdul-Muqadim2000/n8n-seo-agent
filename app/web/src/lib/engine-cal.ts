@@ -1,7 +1,7 @@
 import { useContext, useEffect, useSyncExternalStore } from 'react';
 import { useParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import type { EngineCalibration } from '@seo/shared';
+import { isClientRole, type EngineCalibration } from '@seo/shared';
 import { api } from './api';
 import { OrgContext } from './context';
 
@@ -40,7 +40,8 @@ export function useEngineCal(orgId?: string | null): EngineCalibration | null {
   const q = useQuery({
     queryKey: ['engine-costs', id],
     queryFn: () => api<{ calibration?: EngineCalibration | null }>(`/api/orgs/${id}/costs`),
-    enabled: !!id,
+    // G5: a client person never reads what runs cost (the route refuses them): the shipped table stays in use
+    enabled: !!id && !(ctx && isClientRole(ctx.role)),
     staleTime: 5 * 60_000,
     retry: false,
   });

@@ -10,6 +10,7 @@ import { autoApproveTick, pollTick, senderTick } from './services/outreachJobs';
 import { startCrawlerJobs } from './services/crawlers/jobs';
 import { deliveryTick, retryTick } from './services/reportDelivery';
 import { expireStaleRuns } from './services/runs';
+import { startPortalJobs } from './services/portalHosts';
 import { webhookTick } from './services/webhooks';
 import { exportTick } from './services/exports';
 
@@ -72,8 +73,11 @@ async function main() {
   app.log.info({ linkBuilderJobs: config.linkBuilderJobs }, config.linkBuilderJobs ? 'link-building sender and inbox jobs on' : 'link-building jobs off (LINK_BUILDER_JOBS)');
   // gap #6: the crawler-log worker, retention and the daily IP-list refresh; CRAWLER_JOBS=false stops them
   const crawlerTimers = startCrawlerJobs(app.log);
+  // G5: verified portal hosts re-checked (lapse after repeated failures); PORTAL_JOBS=false stops it
+  const stopPortalJobs = startPortalJobs(app.log);
   const stop = async () => {
     for (const t of crawlerTimers) clearInterval(t);
+    stopPortalJobs();
     for (const t of lbTimers) clearInterval(t);
     if (autoStartFirst) clearTimeout(autoStartFirst);
     if (autoStartTimer) clearInterval(autoStartTimer);

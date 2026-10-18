@@ -153,7 +153,7 @@ export default function ReportsPage() {
 }
 
 function ReportRow({ report }: { report: Report }) {
-  const { org } = useOrgCtx();
+  const { org, can } = useOrgCtx();
   const to = paths.report(org.id, report.id);
   return (
     // the title link covers the row; the run link and the file links sit above it
@@ -176,7 +176,7 @@ function ReportRow({ report }: { report: Report }) {
             {stageLabel(report.stage, report)}
             {report.siteDomain && ` · ${report.siteDomain}`}
             <span title={fmtDateTime(report.receivedAt)}> · {fmtAgo(report.receivedAt)}</span>
-            {report.runId && (
+            {report.runId && can('viewer') && (
               <>
                 {' · '}
                 <Link to={paths.run(org.id, report.runId)} className="relative z-[1] text-accent-text hover:underline transition-colors duration-150 ease-brand">

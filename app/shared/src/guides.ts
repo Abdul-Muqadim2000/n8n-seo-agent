@@ -7,7 +7,7 @@
 // [label](https://url) for links — and {{placeholders}} for the real values of the site (its domain, the record to add, the key
 // file). Rendering is in web/src/components/guide/rich.tsx; the plain-text form is `guideText` below.
 
-export type GuideArea = 'google' | 'ownership' | 'website' | 'mailbox' | 'business' | 'company' | 'security' | 'integrations';
+export type GuideArea = 'google' | 'ownership' | 'website' | 'mailbox' | 'business' | 'company' | 'security' | 'integrations' | 'agency';
 
 export interface GuideVar {
   key: string;
@@ -95,6 +95,7 @@ export const GUIDE_AREAS: { id: GuideArea; label: string; description: string }[
   { id: 'company', label: 'Your company in Ascentra', description: 'Budget, team and who may do what' },
   { id: 'security', label: 'Sign-in and security', description: 'Two-step verification, single sign-on and provisioning' },
   { id: 'integrations', label: 'Connecting your tools', description: 'Slack and Teams, Jira / Linear / Asana, your warehouse, Looker Studio and AI assistants' },
+  { id: 'agency', label: 'Your agency portal', description: 'Your brand, your domain and your clients’ access' },
 ];
 
 const V = {
@@ -1840,6 +1841,124 @@ export const GUIDES = [
     trouble: [{ q: 'The test fails with 401', a: 'The header name or the key is wrong. The header must be exactly `{{logHeader}}`, the value the key and nothing else.' }],
     related: ['crawler-logs-upload', 'crawler-logs-cloudflare'],
     keywords: ['vercel', 'fastly', 'akamai', 'log drain', 'datastream', 'server log', 'bots'],
+  },
+  // ---------------------------------------------------------------- G5: the agency's client portal
+  {
+    id: 'portal-domain',
+    area: 'agency',
+    title: 'Put your client portal on your own domain',
+    why: 'Your clients sign in at an address with your name in it, such as seo.youragency.com, and never see ours.',
+    where: 'Your DNS provider, then Company settings → Portal address',
+    who: 'Whoever manages DNS for your agency’s domain',
+    minutes: 15,
+    vars: [
+      { key: 'host', label: 'Your portal address', example: 'seo.youragency.com' },
+      { key: 'txtName', label: 'Name of the TXT record', example: '_portal-verification.seo.youragency.com' },
+      { key: 'txtValue', label: 'Value of the TXT record', example: 'portal-verification=a1b2c3d4e5f6' },
+      { key: 'cnameTarget', label: 'Where the CNAME points', example: 'portals.example-platform.com' },
+    ],
+    steps: [
+      { title: 'Choose the address', body: 'Pick a sub-domain of your own website, for example `{{host}}`, and add it under **Portal address**. Each claim gets its own record value: an old value proves nothing.' },
+      {
+        title: 'Prove it is yours with a TXT record',
+        body: 'At your DNS provider create a record of type **TXT** with this name and value. It proves your agency controls the address.',
+        copy: [
+          { label: 'Name / host', value: '{{txtName}}', hint: 'Some providers want only the part before your domain' },
+          { label: 'Value', value: '{{txtValue}}', hint: 'Value / Content / Text' },
+        ],
+        choices: [
+          { label: 'Cloudflare', body: '**DNS → Records → Add record**, type TXT, paste the name and the value, **Save**.' },
+          { label: 'GoDaddy', body: '**My Products → DNS → Add New Record**, type TXT, name = the part before your domain, paste the value, **Save**.' },
+          { label: 'Namecheap', body: '**Domain List → Manage → Advanced DNS → Add New Record**, TXT Record, host = the part before your domain, paste the value, tick to save.' },
+          { label: 'Route 53', body: '**Hosted zones → your domain → Create record**, type TXT, record name = the part before your domain, the value in quotes, **Create records**.' },
+        ],
+      },
+      {
+        title: 'Point the address at the portal with a CNAME',
+        body: 'Create a record of type **CNAME** for the address itself, pointing at the platform. With Cloudflare, leave the proxy **off** (grey cloud) so the certificate can be issued for your address.',
+        copy: [
+          { label: 'CNAME name', value: '{{host}}' },
+          { label: 'Points to', value: '{{cnameTarget}}' },
+        ],
+        warn: 'Do not delete the TXT record later: the address is checked again every few hours and stops being served when the proof is gone.',
+      },
+      { title: 'Check it', body: 'Back in Ascentra press **Check now**. When both records are found the address shows **Verified** and your clients can open it; the certificate is issued on the first visit.' },
+    ],
+    done: 'The address shows **Verified**, and opening it shows your sign-in page with your logo.',
+    trouble: [
+      { q: 'It says the TXT value is different', a: 'You claimed the address again and got a new value. Replace the old TXT record with the value shown now.' },
+      { q: 'It says the address points somewhere else', a: 'Another CNAME or A record exists for that name. Remove it and keep only the CNAME above.' },
+      { q: 'The browser warns about the certificate', a: 'Wait a minute and reload: the certificate is requested on the first visit after verification. With Cloudflare, switch the proxy off.' },
+      { q: 'It says the address is in use', a: 'Another company on this platform verified it. If it is yours, they must release it first; contact us if they cannot be reached.' },
+    ],
+    related: ['portal-email-auth', 'dns-txt-record'],
+    keywords: ['white label', 'custom domain', 'portal', 'cname', 'agency', 'client portal'],
+  },
+  {
+    id: 'portal-email-auth',
+    area: 'agency',
+    title: 'Send client e-mails from your own address',
+    why: 'Report e-mails and invitations to your clients come from your agency’s address — and only once your domain tells mail servers it allows it, so they land in the inbox and not in spam.',
+    where: 'Your mail provider and DNS, then Company settings → Client e-mail',
+    who: 'Whoever manages your mail domain’s DNS',
+    minutes: 20,
+    vars: [{ key: 'domain', label: 'Your mail domain', example: 'youragency.com' }],
+    steps: [
+      { title: 'Connect the mailbox', body: 'Company settings → **Mailboxes**: connect the address you want clients to see, for example `reports@{{domain}}`.' },
+      {
+        title: 'Publish SPF',
+        body: 'Your domain needs one TXT record starting with `v=spf1` that names your mail provider and ends in `~all` or `-all` (never `+all`).',
+        choices: [
+          { label: 'Google Workspace', body: 'TXT at `@`: `v=spf1 include:_spf.google.com ~all`', link: { label: 'Google’s SPF help', href: 'https://support.google.com/a/answer/33786' } },
+          { label: 'Microsoft 365', body: 'TXT at `@`: `v=spf1 include:spf.protection.outlook.com -all`', link: { label: 'Microsoft’s SPF help', href: 'https://learn.microsoft.com/en-us/defender-office-365/email-authentication-spf-configure' } },
+        ],
+      },
+      {
+        title: 'Turn on DKIM signing',
+        body: 'Your mail provider gives you a DKIM record (a TXT or CNAME under `<selector>._domainkey.{{domain}}`). Add it, then switch signing on in the provider.',
+        note: 'If your provider uses a selector that is not one of the common ones, type it in **DKIM selector** so we look in the right place.',
+      },
+      { title: 'Choose it as the sender', body: 'Company settings → **Client e-mail**: pick the mailbox and **Save**. We check SPF and DKIM; until both pass, e-mails go out from our address under your agency’s name.' },
+    ],
+    done: 'Client e-mail shows **Verified** beside the mailbox, and the next invitation comes from your address.',
+    trouble: [
+      { q: 'SPF says “weak”', a: 'Your record ends in `+all` or `?all`, which lets anyone send as you. Change it to `~all` or `-all`.' },
+      { q: 'DKIM is not found', a: 'Signing may still be off in your provider, or it uses another selector: enter the selector shown in its DKIM settings.' },
+    ],
+    related: ['email-authentication', 'mailbox-connect'],
+    keywords: ['spf', 'dkim', 'custom from', 'sender', 'white label email', 'agency'],
+  },
+  {
+    id: 'portal-branding',
+    area: 'agency',
+    title: 'Brand the portal as your own',
+    why: 'Your clients see your name, your logo and your colour on every page, report and e-mail — the work is presented as yours.',
+    where: 'Company settings → Branding',
+    minutes: 5,
+    steps: [
+      { title: 'Host your logo', body: 'Put an SVG or PNG of your logo on your own website or CDN at an **https** address. A transparent background works best; add a second one drawn for dark backgrounds if you have it.' },
+      { title: 'Fill in the brand', body: 'Product name (what clients call the portal), logo address(es), one colour, a support address and a footer line. The colour is adjusted where needed so every text on it stays readable in light and dark mode.' },
+      { title: 'Switch white-label on', body: 'Turn on **White-label** and **Save**. The portal, report pages, shared reports, documents and e-mails your clients get carry your brand from then on.' },
+    ],
+    done: 'A client logging in sees your name and colour, and no mention of ours.',
+    related: ['portal-domain', 'invite-clients'],
+    keywords: ['white label', 'logo', 'colour', 'color', 'brand', 'agency'],
+  },
+  {
+    id: 'invite-clients',
+    area: 'agency',
+    title: 'Give a client access to their portal',
+    why: 'Your client follows their own websites — dashboards, reports, recommendations — and approves pages and outreach before they go out, without seeing your other clients or your costs.',
+    where: 'The client’s workspace → Company settings → Team',
+    minutes: 3,
+    steps: [
+      { title: 'Open the client’s workspace', body: 'From **Clients**, open the client and go to **Company settings → Team → Invite people**.' },
+      { title: 'Pick the role', body: '**Client viewer** reads everything in the portal. **Client approver** also approves pages and outreach. Your own team is added from the agency’s Clients page, not here.' },
+      { title: 'Send the link', body: 'They get an e-mail from your agency (or you copy the link). It opens on your portal address when you have one.' },
+    ],
+    done: 'They appear in the Team list with their client role.',
+    related: ['portal-branding', 'portal-domain'],
+    keywords: ['client login', 'client access', 'approver', 'viewer', 'agency'],
   },
 ] as const satisfies readonly Guide[];
 

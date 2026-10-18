@@ -1,4 +1,5 @@
 // Response shapes of the app's REST API (server/src/routes/*), shared with the React client.
+import type { OrgAgencyInfo, OrgKind, PortalBrand } from './agency';
 import type { ModeId, Role } from './constants';
 import type { MonitorSettings, ProfileFields, RunInput } from './schemas';
 
@@ -31,6 +32,9 @@ export interface OrgSummary {
   onboardedAt: string | null;
   /** G1: the company requires two-step verification */
   requiresMfa?: boolean;
+  /** G5: standard / agency / client workspace, and the agency a client workspace belongs to */
+  kind?: OrgKind;
+  agencyName?: string | null;
 }
 
 export interface Me {
@@ -63,6 +67,14 @@ export interface Org {
   onboardedAt: string | null;
   createdAt: string;
   role: Role;
+  /** G5 (app/docs/WHITE_LABEL.md): standard company, agency, or an agency's client workspace */
+  kind: OrgKind;
+  /** a client workspace: its agency (the id only for the agency's own staff) */
+  agency: OrgAgencyInfo | null;
+  /** the brand client-facing surfaces of this company use (white-label on), else null (the app's own) */
+  brand: PortalBrand | null;
+  /** a client workspace: a live publish / an outreach send waits for the client's approval */
+  clientApproval: boolean;
 }
 
 export type TrackingStatus = 'not_started' | 'active' | 'paused';

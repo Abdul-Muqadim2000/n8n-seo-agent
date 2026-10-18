@@ -15,6 +15,8 @@ import {
   type SsoDomainView,
   type SsoOverview,
   type SsoServiceProvider,
+  orgKindOf,
+  provisionedRole,
 } from '@seo/shared';
 import { z } from 'zod';
 import { refreshSessionPolicy, createSession } from '../auth/session';
@@ -552,7 +554,7 @@ export async function finishSso(req: FastifyRequest, reply: FastifyReply, conn: 
   const membership = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.orgId, org.id), eq(schema.memberships.userId, user.id)) });
   if (!membership) {
     if (!conn.jitEnabled) throw new SsoFailure('sso_not_provisioned', `${id.email} is not a member of ${org.name}. Ask an admin to invite you.`, flow, conn);
-    await db.insert(schema.memberships).values({ orgId: org.id, userId: user.id, role: conn.defaultRole, provisionedBy: 'jit' });
+    await db.insert(schema.memberships).values({ orgId: org.id, userId: user.id, role: provisionedRole(orgKindOf(org.kind), conn.defaultRole), provisionedBy: 'jit' });
     await refreshSessionPolicy([user.id]);
     provisioned = true;
   } else if (membership.deactivatedAt) {

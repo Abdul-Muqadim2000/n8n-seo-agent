@@ -75,6 +75,7 @@ export const pricingTiers: PricingTier[] = [
     features: [
       'Websites and companies to fit your portfolio', // PLACEHOLDER — confirm
       'Multi-company workspaces with roles and invitations',
+      'Agency client portal: client workspaces, client logins and approvals, white-label on your own domain', // PLACEHOLDER — confirm the plan and any per-client price
       'Single sign-on (SAML 2.0 / OIDC) and SCIM provisioning',
       'Spend caps and budgets per company',
       'Search Console alert watcher and monthly check-ins',
@@ -291,6 +292,8 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'API and MCP access', hint: 'Read websites, audits, runs, reports and the export tables; start analyses with a key you allow to, within your budget', values: [true, true, true] }, // PLACEHOLDER — confirm the plans
       { label: 'Warehouse export and Looker Studio', hint: 'Six tables to BigQuery, Amazon S3, Google Cloud Storage or Cloudflare R2, daily or weekly; a Looker Studio connector', values: [false, true, true] }, // PLACEHOLDER — confirm the plans
       { label: 'Multi-company workspaces', values: [false, false, true] }, // PLACEHOLDER — confirm
+      { label: 'Agency client workspaces and client logins', hint: 'A workspace per client, viewer and approver logins, approvals, one table of every client website', values: [false, false, true] }, // PLACEHOLDER — confirm the plans and any per-client price
+      { label: 'White-label portal on your own domain', hint: 'Your name, logo and colour on the portal, reports, documents and e-mails; your own address and sender', values: [false, false, true] }, // PLACEHOLDER — confirm the plans
       { label: 'Onboarding with your team', values: [false, false, true] }, // PLACEHOLDER — confirm
     ],
   },
