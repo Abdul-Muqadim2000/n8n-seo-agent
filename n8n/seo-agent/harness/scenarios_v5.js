@@ -18980,6 +18980,37 @@ await guard('SFA1-8 A-21 the main page run says it re-measured, and why its numb
   check('A-21: a rung page\'s run is handed no measurement (it is another keyword)', !rung || rung.ladder_measure === null, JSON.stringify(rung && rung.ladder_measure));
 });
 
+// ===================================================================================
+// SFL1-SFL… (2026-10-18, defect-fix agent F-L: the open Lows of the 2026-10-17 re-rating, docs/system-review-2026-10-17/parts/*.md).
+await guard('SFL1 C-9 the AI visibility comparison counts only engines that answered on both sides, and prints the period it counted', async () => {
+  const SN = 'SFL1 C-9 — exec 776 printed "compared with 2026-10-16 (… Gemini …)" while run 722\'s Gemini had answered 0 of 7 (8 errors), and "the 7 days to …" over ONE pulse day';
+  begin(SN); const check = W3E.mkCheck(SN);
+  // the shape of run 722's stored engines: Gemini asked 7, answered 0, errors 8
+  const gem0 = { ...W3E.eng(0, 0), asked: 7, answered: 0, samples: 0, errors: 8 };
+  const X = await W3E.drive({ rows: W3E.answers(0), pulse_rows: [W3E.pulseDay({ mentioned: 0 })],
+    previous: W3E.previous({ mk: 0, engines: { chatgpt: W3E.eng(20, 0), gemini: gem0, perplexity: W3E.eng(10, 0), ai_mode: W3E.eng(20, 0) } }) });
+  const M = X.metrics;
+  check('C-9: an engine that answered nothing last time is not in the stored set, so the delta is refused with the reason',
+    M.delta_not_compared && /Gemini/.test(M.delta_not_compared) && !/^compared with/.test(M.delta_basis) && M.tests == null, JSON.stringify({ n: M.delta_not_compared, b: M.delta_basis }));
+  const Y = await W3E.drive({ rows: W3E.answers(0), pulse_rows: [W3E.pulseDay({ mentioned: 0 })],
+    previous: W3E.previous({ mk: 0, engines: { chatgpt: W3E.eng(20, 0), gemini: W3E.eng(10, 0), perplexity: W3E.eng(10, 0), ai_mode: W3E.eng(20, 0) } }) });
+  check('C-9: when every engine answered on both sides the comparison stands and names the engines', /^compared with 2026-10-06 \(11 questions on .*Gemini/.test(Y.metrics.delta_basis) && !Y.metrics.delta_not_compared, Y.metrics.delta_basis);
+  const old = await W3E.drive({ rows: W3E.answers(0), pulse_rows: [W3E.pulseDay({ mentioned: 0 })],
+    previous: W3E.previous({ mk: 0, engines: { chatgpt: { name: 'ChatGPT' }, gemini: { name: 'Gemini' }, perplexity: { name: 'Perplexity' }, ai_mode: { name: 'Google AI Mode' } } }) });
+  check('C-9: a stored row of an older shape (no answered / samples field) keeps its engines (unknown is not none)', /^compared with/.test(old.metrics.delta_basis), old.metrics.delta_basis);
+  // an engine READ without an answer (the AI Overview of a week in which Google showed none: asked, no error) is a reading, not a failure
+  const read0 = await W3E.drive({ rows: W3E.answers(0), pulse_rows: [W3E.pulseDay({ mentioned: 0 })],
+    previous: W3E.previous({ mk: 0, engines: { chatgpt: W3E.eng(20, 0), gemini: { ...W3E.eng(0, 0), asked: 7, errors: 0 }, perplexity: W3E.eng(10, 0), ai_mode: W3E.eng(20, 0) } }) });
+  check('C-9: an engine asked and read without an error (no answer shown) stays in the set', /^compared with .*Gemini/.test(read0.metrics.delta_basis), read0.metrics.delta_basis);
+  check('C-9: the period counted is this run + the ONE pulse day since the stored run, not "7 days"',
+    M.rate_period === 'this run on ' + W3E.NOW.slice(0, 10) + ' + 1 daily pulse day since 2026-10-06', M.rate_period);
+  const R = await W3E.rep(X);
+  const ln = (R.lineage || []).find(l => /Named in/.test(JSON.stringify(l))) || {};
+  check('C-9: the report\'s lineage prints that period', /1 daily pulse day since 2026-10-06/.test(JSON.stringify(ln)) && !/the 7 days to/.test(JSON.stringify(R.lineage || [])), JSON.stringify(ln).slice(0, 300));
+  const Z = await W3E.drive({ rows: W3E.answers(0), pulse_rows: [], previous: W3E.previous({ mk: 0, engines: { chatgpt: W3E.eng(20, 0), gemini: W3E.eng(10, 0), perplexity: W3E.eng(10, 0), ai_mode: W3E.eng(20, 0) } }) });
+  check('C-9: with no pulse reading the period says so', /^this run on .* \(no daily pulse reading since 2026-10-06\)$/.test(Z.metrics.rate_period), Z.metrics.rate_period);
+});
+
 
 H.report();
 })();
