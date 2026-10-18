@@ -35,7 +35,8 @@ export function TicketChip({ issue }: { issue: IssueLinkView }) {
 
 export function TicketButton({ siteId, source, label = 'Create ticket' }: { siteId: string; source: TicketSource; label?: string }) {
   const { org, can } = useOrgCtx();
-  const q = useIssues(org.id, siteId);
+  // G5: tickets are the agency's own work: a client person neither sees nor reads them (the route refuses client roles)
+  const q = useIssues(org.id, siteId, can('viewer'));
   const create = useCreateIssue(org.id, siteId);
   const trackers = q.data?.trackers ?? [];
   if (!trackers.length) return null;
@@ -71,7 +72,8 @@ export function TicketButton({ siteId, source, label = 'Create ticket' }: { site
 /** Reads the state of this website's tickets back from the tracker once when the page opens (at most every 5 minutes server-side). */
 export function useTicketStates(siteId: string): boolean {
   const { org, can } = useOrgCtx();
-  const q = useIssues(org.id, siteId);
+  // G5: tickets are the agency's own work: a client person neither sees nor reads them (the route refuses client roles)
+  const q = useIssues(org.id, siteId, can('viewer'));
   const refresh = useRefreshIssues(org.id, siteId);
   const done = useRef(false);
   const has = can('member') && !!q.data?.items.some((i) => i.status === 'created');
