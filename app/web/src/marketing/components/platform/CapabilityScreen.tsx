@@ -15,6 +15,7 @@ const APP_PATH: Record<string, string> = {
   backlinks: 'backlinks',
   reports: 'reports',
   'report-delivery': 'settings/delivery',
+  integrations: 'settings/integrations',
   'guided-setup': 'settings/verification',
   enterprise: 'settings/company',
 };

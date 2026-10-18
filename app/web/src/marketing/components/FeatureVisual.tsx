@@ -10,6 +10,7 @@ import { ContentMockup } from './mockups/ContentMockup';
 import { DashboardMockup } from './mockups/DashboardMockup';
 import { DeliveryMockup } from './mockups/DeliveryMockup';
 import { GuideMockup } from './mockups/GuideMockup';
+import { IntegrationsMockup } from './mockups/IntegrationsMockup';
 import { KeywordVerdictMockup } from './mockups/KeywordVerdictMockup';
 import { LadderMockup } from './mockups/LadderMockup';
 import { WorkspaceMockup } from './mockups/WorkspaceMockup';
@@ -41,6 +42,8 @@ export function FeatureVisual({ kind, className }: { kind: VisualKey; className?
       return <DeliveryMockup className={className} />;
     case 'guided-setup':
       return <GuideMockup className={className} />;
+    case 'integrations':
+      return <IntegrationsMockup className={className} />;
     case 'growth-loop':
       return <GrowthLoopDiagram className={className} />;
     case 'link-sources':

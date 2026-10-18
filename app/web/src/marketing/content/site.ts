@@ -79,6 +79,14 @@ export const integrations: string[] = [
   'Webflow',
   'Contentful',
   'Common Crawl',
+  'Slack',
+  'Microsoft Teams',
+  'Jira',
+  'Linear',
+  'Asana',
+  'BigQuery',
+  'Amazon S3',
+  'Looker Studio',
 ];
 
 /** the six AI engines and answer surfaces Ascentra asks */

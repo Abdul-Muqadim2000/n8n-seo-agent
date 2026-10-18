@@ -37,6 +37,7 @@ export const pricingTiers: PricingTier[] = [
       'Search Console, GA4 and Trends tracking, with weekly rank checks',
       'Monday report, alerts and share links',
       'Reports delivered by e-mail or webhook, on your schedule',
+      'Alerts in Slack or Teams, and findings as Jira, Linear or Asana tickets',
       'A step-by-step guide for every setup task',
     ],
   },
@@ -59,6 +60,7 @@ export const pricingTiers: PricingTier[] = [
       'Full SEO reports as PDF or Word',
       'Daily key-page check and the pre-release check for your build',
       'Signed webhook deliveries into your own systems',
+      'Daily or weekly export to BigQuery or your storage, and a Looker Studio connector', // PLACEHOLDER — confirm the plan
     ],
   },
   {
@@ -264,6 +266,8 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Reports delivered to you', hint: 'As each one arrives, or a daily, weekly or monthly summary — by e-mail with the figures and files, and to a webhook', values: [true, true, true] },
       { label: 'Reports that are not ready are held back', hint: 'A page that failed its quality check or a verdict the analysis could not make is never sent, and the reason is stated', values: [true, true, true] },
       { label: 'Signed webhook deliveries', hint: 'Every body signed with your own secret, so your systems can tell the message is ours', values: [false, true, true] },
+      { label: 'Alerts and events in Slack or Microsoft Teams', hint: 'Alerts, finished and failed runs, new audit findings and ranking moves, routed per channel', values: [true, true, true] }, // PLACEHOLDER — confirm the plans
+      { label: 'Findings as Jira, Linear or Asana tickets', hint: 'One ticket per finding, with the evidence and the fix; its state shown back', values: [true, true, true] }, // PLACEHOLDER — confirm the plans
       { label: 'Search Console alert watcher and monthly check-ins', values: [false, false, true] }, // PLACEHOLDER — confirm
     ],
   },
@@ -276,7 +280,8 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Step-by-step guides for every setup task', hint: 'Your own values, instructions for the provider you use, and a copy you can e-mail to a colleague', values: [true, true, true] },
       { label: 'Cost estimate before every run', hint: 'The analysis engine’s own figure, corrected against what runs really cost, and replaced with the actual cost when the work finishes', values: [true, true, true] },
       { label: 'Spend caps per company', values: [true, true, true] },
-      { label: 'Read-only API and MCP access', hint: 'Websites, audits and findings, runs and reports, with revocable keys per company', values: [true, true, true] }, // PLACEHOLDER — confirm the plans
+      { label: 'API and MCP access', hint: 'Read websites, audits, runs, reports and the export tables; start analyses with a key you allow to, within your budget', values: [true, true, true] }, // PLACEHOLDER — confirm the plans
+      { label: 'Warehouse export and Looker Studio', hint: 'Six tables to BigQuery, Amazon S3, Google Cloud Storage or Cloudflare R2, daily or weekly; a Looker Studio connector', values: [false, true, true] }, // PLACEHOLDER — confirm the plans
       { label: 'Multi-company workspaces', values: [false, false, true] }, // PLACEHOLDER — confirm
       { label: 'Onboarding with your team', values: [false, false, true] }, // PLACEHOLDER — confirm
     ],

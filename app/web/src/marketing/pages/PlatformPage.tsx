@@ -54,6 +54,16 @@ const SOURCE_GROUPS: { title: string; items: { name: string; use: string }[] }[]
       { name: 'HTML, Markdown and meta.json', use: 'a package for any other CMS' },
     ],
   },
+  {
+    title: 'Your team’s tools',
+    items: [
+      { name: 'Slack and Microsoft Teams', use: 'alerts, finished work and ranking moves, routed per channel' },
+      { name: 'Jira, Linear and Asana', use: 'one ticket per audit finding or recommendation, its state read back' },
+      { name: 'BigQuery, Amazon S3, Google Cloud Storage and Cloudflare R2', use: 'six tables exported daily or weekly' },
+      { name: 'Looker Studio', use: 'the same tables in your reports' },
+      { name: 'Claude and ChatGPT (MCP)', use: 'ask about your data and start analyses within your budget' },
+    ],
+  },
 ];
 
 function Hero() {

@@ -116,6 +116,18 @@ https hosts (DNS pinned). Every attempt is in `cms_publishes`; the Content page 
 Design, threat model, vendor request shapes with their doc links and what is deliberately not built: **`docs/CMS_PUBLISHING.md`**. It
 supersedes the inactive n8n WordPress sub-workflow (`SEOagentWordPres`), which stays untouched.
 
+## Integrations and the write API (G4)
+
+Company settings → **Integrations** (admins): **event endpoints** — Slack, Microsoft Teams or signed JSON, each with its own event types
+(`run.completed`, `run.failed`, `report.ready`, `report.held`, `alert.raised`, `audit.finding.new`, `rank.changed`) and websites, retried
+1/5/30/120/720 minutes, logged in `webhook_deliveries`; **Jira Cloud / Linear / Asana** — connected after the vendor confirmed the token,
+then **Create ticket** beside every audit finding (Technical page) and recommendation, one ticket per finding (`issue_links`), its state
+read back; **data export** — six tables (`EXPORT_TABLES`) daily / weekly to S3-compatible storage (AWS, GCS HMAC, R2; SigV4) or BigQuery
+(load jobs), logged in `export_runs`; the **Looker Studio connector** (`../integrations/looker-studio/`) and MCP client snippets. API keys
+gain the `run` (start analyses: `POST /api/v1/runs`, MCP `start_run`, through the app's own run path with `Idempotency-Key`) and `admin`
+permissions. Every secret is sealed with `MAILBOX_KEY`; every outbound call goes through `server/src/lib/netGuard.ts` (connect-time DNS
+pinning). Design and threat model: **`docs/INTEGRATIONS.md`**; endpoints: `API.md` → "Write API" and "Integrations (G4)".
+
 ## Shared reports, under the customer's own name (B-R2)
 
 A report handed to somebody with no account (`/share/:token`, G15) opens under **their** supplier's mark: the business name and logo

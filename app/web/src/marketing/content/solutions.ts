@@ -42,6 +42,7 @@ export const solutions: Solution[] = [
     helps: [
       { feature: 'enterprise', title: 'One workspace per client', body: 'Each client company has its own websites, team, budget and data, with roles for your staff and theirs.' },
       { feature: 'reports', title: 'Reports ready to send', body: 'Full SEO reports as PDF or Word, and a Monday report for every website.' },
+      { feature: 'integrations', title: 'Client data in your own BI', body: 'Every client’s rankings, traffic, audits and AI visibility exported to BigQuery or your storage, or charted in Looker Studio.' },
       { feature: 'ai-visibility', title: 'AI visibility per client', body: 'Mention rate and share of voice against each client’s own competitors, with ranges.' },
       { feature: 'autopilot', title: 'The same loop for every website', body: 'Weekly cadence per website, Auto where you trust it and Manual where the client signs off.' },
     ],
@@ -83,6 +84,7 @@ export const solutions: Solution[] = [
       { feature: 'site-tracking', title: 'One weekly view', body: 'Search Console, GA4 and Trends together, with striking-distance keywords called out.' },
       { feature: 'guided-setup', title: 'Nothing waits on a ticket', body: 'Every connection we ask for comes with its steps and your own values — and goes to IT or the agency as an e-mail when the job is theirs.' },
       { feature: 'report-delivery', title: 'The report reaches the people who decide', body: 'Each week’s report goes to the list you choose and into the channel your team already watches, with an expiring link for anyone outside it.' },
+      { feature: 'integrations', title: 'Findings in your backlog', body: 'An audit finding becomes one Jira, Linear or Asana ticket with the evidence and the fix, and alerts land in your Slack or Teams channel.' },
     ],
     outcomes: [
       'A planned, steady publishing rhythm',
