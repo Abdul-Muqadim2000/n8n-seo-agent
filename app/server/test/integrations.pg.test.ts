@@ -298,6 +298,22 @@ describe.skipIf(!DB)('G4 integrations (real database)', () => {
     });
   });
 
+  // ------------------------------------------------------------------ G1's audit log
+  describe('audit log', () => {
+    it('every G4 write is recorded with who did it — an API run names the key — and only with known actions', async () => {
+      const { AUDIT_ACTIONS } = await import('@seo/shared');
+      const rows = await db.query.auditEvents.findMany({ where: (t, o) => o.eq(t.orgId, ids.org1!) });
+      const by = (a: string) => rows.filter((r) => r.action === a);
+      expect(by('run.started_via_api').length).toBeGreaterThan(0);
+      expect(by('run.started_via_api')[0]!.actorLabel).toContain('via API key runner');
+      expect(by('integration.webhook_added').length).toBeGreaterThan(0);
+      expect(by('integration.connected').length).toBeGreaterThan(0);
+      expect(by('issue.created')).toHaveLength(1);
+      for (const r of rows) expect(Object.keys(AUDIT_ACTIONS), r.action).toContain(r.action);
+      expect(JSON.stringify(rows.map((r) => r.details))).not.toMatch(/ATATT|whsec_|secret123/);
+    });
+  });
+
   // ------------------------------------------------------------------ export
   describe('warehouse export', () => {
     it('S3-compatible: connect (a test object), run now: one signed object per table, the run logged; again at once is 429', async () => {

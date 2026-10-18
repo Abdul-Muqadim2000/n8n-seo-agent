@@ -21,9 +21,10 @@ mockup, changelog 2026-10-18, tools list, plan lists, pricing matrix rows marked
 
 ## Checks (2026-10-18)
 
-- Typecheck shared / server / web clean. Shared 399 passed (1 skipped), server 374 passed (32 skipped = the two real-DB suites when
-  their flag is off), web 26 passed, Looker connector 15 checks, guides 23.
-- Real database (`G4_DB_TEST=1`, own Postgres `gap-g4-pg`): `test/integrations.pg.test.ts` 15 / 15.
+- After merging G3 + G1 (f40dc22): typecheck shared / server / web clean; shared 448 passed (1 skipped), server 455 passed (44 skipped =
+  the real-DB suites with their flags off), web 30 passed, web build OK, Looker connector 15 checks.
+- Real database (`G4_DB_TEST=1`, own Postgres, migrations 0000-0012 incl. G1's audit trigger): `test/integrations.pg.test.ts` 16 / 16
+  (the 16th checks every G4 write lands in G1's audit log with known actions, the API run naming its key, no secret in the details).
 - Browser pass on an own stack (`gap-g4-pg` + `gap-g4-stub` n8n stand-in + `gap-g4-server` + `gap-g4-web`, Playwright 1.55): the
   Integrations tab (as it opens, and with every form open), the Technical page with the Ticket column, Recommendations and
   `/platform/integrations`, each at 1440 and 390 px in light and dark, plus the Slack guide opening and a Create-ticket click —
