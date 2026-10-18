@@ -9941,10 +9941,17 @@ def _b98_catchup():
             'C-16: ' + _p98 + ' can run without the watchdog deciding the watcher is down'
     assert _out98(_cc98, 'Save Watchdog State') == ['Watchdog Alarm'], 'C-16: the alarm does not follow the saved watchdog record'
     # ---------- C. deployment: imported, published, credential, time zone ----------
+    # the lists live in deploy_manifest.json since 2026-10-18, read by both deploy paths: apply_env.py (local) and the engine image's
+    # release step (n8n/deploy/release.mjs) - so the check reads the manifest and proves both still read it
     _ae98 = open(os.path.join(HERE0, 'apply_env.py'), encoding='utf-8').read()
-    _tree98 = _ast98.parse(_ae98)
-    _lists98 = {t.id: [e.value for e in n.value.elts] for n in _tree98.body if isinstance(n, _ast98.Assign) and isinstance(n.value, _ast98.List)
-                for t in n.targets if isinstance(t, _ast98.Name)}
+    _tree98 = _ast98.parse(_ae98)   # still read below: deploy_window's Monday rule
+    _rel98 = open(os.path.join(HERE0, '..', 'deploy', 'release.mjs'), encoding='utf-8').read()
+    assert "json.load(open(os.path.join(HERE, 'deploy_manifest.json')" in _ae98 and "MANIFEST['workflows'], MANIFEST['publish']" in _ae98, \
+        'R94: apply_env.py no longer takes its import / publish lists from deploy_manifest.json'
+    assert "'deploy_manifest.json'" in _rel98 and 'manifest.workflows' in _rel98 and 'manifest.publish' in _rel98, \
+        'R94: n8n/deploy/release.mjs no longer takes its import / publish lists from deploy_manifest.json'
+    _man98 = json.load(open(os.path.join(HERE0, 'deploy_manifest.json'), encoding='utf-8'))
+    _lists98 = {'WORKFLOWS': _man98['workflows'], 'PUBLISH': _man98['publish']}
     assert _wire98['workflow']['file'] in _lists98['WORKFLOWS'] and _wire98['workflow']['id'] in _lists98['PUBLISH'], 'R94: apply_env.py does not import / publish the catch-up'
     _unpub98 = [i for i in _baked98 if i not in _lists98['PUBLISH']]
     assert not _unpub98, 'R94: the catch-up would start %s, which apply_env.py does not publish ("Workflow is not active")' % _unpub98
