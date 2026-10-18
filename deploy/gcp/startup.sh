@@ -21,6 +21,13 @@ REF=$(md instance/attributes/alaventra-ref); REF=${REF:-main}
 DATA=/mnt/data
 SECRETS=$DATA/secrets
 
+# Containers reach the internet only through IP forwarding. Google's Debian image turns it off
+# (/etc/sysctl.d/60-gce-network-security.conf: net.ipv4.ip_forward=0), which left every container — the app build's npm ci,
+# n8n's calls to DataForSEO / Claude — with no outbound network (first boot 2026-10-18: npm hung, EAI_AGAIN). A later file wins
+# at boot; write it now too (procps / sysctl is not installed on this image).
+echo 'net.ipv4.ip_forward=1' > /etc/sysctl.d/99-alaventra-docker.conf
+echo 1 > /proc/sys/net/ipv4/ip_forward
+
 # ---- 1. data disk --------------------------------------------------------------------------------------------------------
 DEV=/dev/disk/by-id/google-data
 for _ in $(seq 1 30); do [ -e "$DEV" ] && break; sleep 2; done

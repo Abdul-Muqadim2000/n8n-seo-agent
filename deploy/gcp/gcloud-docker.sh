@@ -9,8 +9,10 @@ set -eu
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 T=${TMPDIR:-/tmp}; T=${T%/}
 mkdir -p "$HOME/.config/alaventra-ssh"
-if [ -n "${DOCKER_PUBLISH:-}" ]; then set -- -p "$DOCKER_PUBLISH" gcr.io/google.com/cloudsdktool/google-cloud-cli:stable "$@"
-else set -- gcr.io/google.com/cloudsdktool/google-cloud-cli:stable "$@"; fi
+IMG=alaventra-gcloud:1   # the official image + openssh-client (gcloud.Dockerfile)
+docker image inspect "$IMG" >/dev/null 2>&1 || docker build -q -t "$IMG" -f "$(dirname "$0")/gcloud.Dockerfile" "$(dirname "$0")" >/dev/null
+if [ -n "${DOCKER_PUBLISH:-}" ]; then set -- -p "$DOCKER_PUBLISH" "$IMG" "$@"
+else set -- "$IMG" "$@"; fi
 exec docker run --rm -i \
   -v "$HOME/.config/gcloud:/root/.config/gcloud" \
   -v "$HOME/.config/alaventra-ssh:/root/.ssh" \
