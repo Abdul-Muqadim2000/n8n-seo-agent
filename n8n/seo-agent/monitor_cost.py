@@ -294,6 +294,33 @@ def callback_after_settle(wfobj, wiring, has_cb, post, v5_dir, declared_ends):
     return wiring['callbacks'][-1]
 
 
+RAN_LATE_MARK = '/*__RAN_LATE__*/'
+
+
+def schedule_with_kind(wfobj):
+    """The workflow's schedule ({trigger, cron, tz, wf}) plus `kind` (daily / weekly / monthly), as Callback Ledger and RL read it."""
+    from ladder_common import _schedule_of
+    sched = dict(_schedule_of(wfobj) or {})
+    if sched.get('cron'):
+        _mn, _hr, _dom, _mon, _dow = sched['cron'].split()
+        sched['kind'] = 'monthly' if _dom != '*' else ('weekly' if _dow != '*' else 'daily')
+    return sched
+
+
+def bake_ran_late(wfobj, v5_dir):
+    """F-L (2026-10-18, C-1 follow-up): fill RAN_LATE_MARK in every Code node of `wfobj` with the catch-up kit, the workflow's own SCHED
+    and the RL kit (v5/code/_ran_late.js). Returns the names of the nodes it baked (asserted by the caller)."""
+    sched = schedule_with_kind(wfobj)
+    assert sched.get('cron'), 'F-L: ' + str(wfobj.get('name')) + ' carries the ran-late mark but has no schedule to be late against'
+    src = _read(v5_dir, '_catchup.js').rstrip('\n') + '\nconst SCHED = ' + json.dumps(sched) + ';\n' + _read(v5_dir, '_ran_late.js').rstrip('\n')
+    baked = []
+    for n in wfobj['nodes']:
+        if n.get('type') == 'n8n-nodes-base.code' and RAN_LATE_MARK in str(n['parameters'].get('jsCode') or ''):
+            n['parameters']['jsCode'] = n['parameters']['jsCode'].replace(RAN_LATE_MARK, src)
+            baked.append(n['name'])
+    return baked
+
+
 def triggers_of(wfobj):
     return [n['name'] for n in wfobj['nodes'] if str(n.get('type') or '').lower().endswith(('trigger', 'webhook'))
             or n['type'] in ('n8n-nodes-base.scheduleTrigger', 'n8n-nodes-base.executeWorkflowTrigger', 'n8n-nodes-base.manualTrigger')]

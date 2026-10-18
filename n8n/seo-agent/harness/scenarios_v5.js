@@ -19151,6 +19151,57 @@ await guard('SFL4 C-12 C-13 Tracker Report on exec 785: a stored set-aside rung 
     pep.next_step && pep.next_step.text.includes('Google ranks a different page of yours for this search: ' + ru + ' (#46)') && /one search, one page/.test(pep.next_step.text), (pep.next_step || {}).text);
 });
 
+await guard('SFL5 C-1 follow-up the Audit Scheduler and the Page Watch say when they ran late', async () => {
+  const SN = 'SFL5 C-1 follow-up — F-C put the "ran late" notice on every Callback Ledger; the Audit Scheduler (its audits report through the main workflow) and the Page Watch (its callback is the alert digest) had none';
+  reset(); begin(SN); const check = W3E.mkCheck(SN);
+  // the 1st-of-the-month audit (06:00 New York = 10:00 UTC) started by the catch-up six hours later
+  const catchup = { trigger: 'catchup', scheduled_for: '2026-10-01T10:00:00.000Z', why: 'the computer running the engine was asleep at 06:00', started_at: '2026-10-01T16:05:00.000Z' };
+  const body0 = { mode: 'audit', domain: 'northwind-erp.com', country: 'United Arab Emirates', report_type: 'Site Audit (technical issues only)', scheduled: true, request_id: 'aud_202610_northwind-erp-com', callback_url: 'https://app.example.com/api/hooks/n8n/x' };
+  mock('Audit Schedule Plan', [{ json: { site_id: 'site_northwind-erp-com', domain: 'northwind-erp.com', run: true, why: '60 days since the last audit (safety net)', body: body0 } }]);
+  mock('Manual Run', [{ json: catchup }]);
+  const late = (await run('Audits To Start', [{ json: {} }]))[0].json;
+  check('Audit Scheduler: a run the catch-up started 6 h after its slot hands `ran_late` to the audit it starts (the slot, the delay, why)',
+    late.body.ran_late && late.body.ran_late.late === true && late.body.ran_late.due === '2026-10-01T10:00:00.000Z' && late.body.ran_late.late_min === 365
+    && /monthly run that was due Thu 1 Oct 2026, 06:00 \(America\/New_York\)/.test(late.body.ran_late.text) && /schedule catch-up started it/.test(late.body.ran_late.text), JSON.stringify(late.body.ran_late));
+  reset();
+  mock('Audit Schedule Plan', [{ json: { site_id: 'site_northwind-erp-com', domain: 'northwind-erp.com', run: true, why: 'x', body: body0 } }]);
+  mock('Monthly Schedule', [{ json: { timestamp: '2026-10-01T10:00:20.000Z' } }]);
+  const onTime = (await run('Audits To Start', [{ json: {} }]))[0].json;
+  check('Audit Scheduler: the schedule firing on time adds nothing to the audit\'s body', !onTime.body.ran_late && onTime.ran_late.late === false, JSON.stringify(onTime.ran_late));
+  // Normalize Input keeps it for a scheduled request only
+  const niRun = async (b) => (await run('Normalize Input', [{ json: { headers: { 'content-type': 'application/json' }, params: {}, query: {}, body: b } }]))[0].json;
+  const ni = await niRun({ ...late.body, client_ip: 'audit:site_northwind-erp-com' });
+  check('Normalize Input: the scheduled audit keeps `ran_late`', ni.ran_late && ni.ran_late.late === true && ni.ran_late.late_min === 365 && !ni.validation_error, JSON.stringify(ni.ran_late || ni.validation_error));
+  const niApp = await niRun({ ...late.body, scheduled: false, client_ip: 'app:x' });
+  check('Normalize Input: a caller\'s own request cannot label itself late', niApp.ran_late === null, JSON.stringify(niApp.ran_late));
+  // the audit's callback, through the one node every callback of the main workflow passes
+  mock('Normalize Input', [{ json: ni }]); mock('Rate Limit', [{ json: { run_cost_estimate_usd: 0.09, run_cost_estimate_basis: 'x' } }]);
+  const cb = (await run('Run Cost (Callback)', [{ json: { stage: 'site_audit', subject: 'Technical SEO audit — northwind-erp.com', html: '<html><body><h1>Audit</h1></body></html>' } }]))[0].json;
+  check('main workflow: the audit report carries `ran_late` (the app titles it "ran late"), the box first in its HTML, the tag on its subject',
+    cb.ran_late && cb.ran_late.late === true && /<body><div class="ran-late"[^>]*><strong>Ran late\.<\/strong> This is the monthly run that was due/.test(cb.html)
+    && /\(ran late — due 2026-10-01\)$/.test(cb.subject), JSON.stringify({ s: cb.subject, h: cb.html.slice(0, 220) }));
+  mock('Normalize Input', [{ json: { ...ni, ran_late: null } }]);
+  const cb0 = (await run('Run Cost (Callback)', [{ json: { stage: 'site_audit', subject: 'Technical SEO audit — northwind-erp.com', html: '<html><body><h1>Audit</h1></body></html>' } }]))[0].json;
+  check('main workflow: a run that was not late is untouched', !('ran_late' in cb0) && !/ran-late/.test(cb0.html) && !/ran late/.test(cb0.subject), JSON.stringify(cb0.subject));
+  // the Page Watch: the daily watch (05:45 New York) the catch-up started at 11:30 New York
+  reset();
+  const watchCatchup = { trigger: 'catchup', scheduled_for: '2026-10-17T09:45:00.000Z', why: 'the computer running the engine was asleep at 05:45', started_at: '2026-10-17T15:30:00.000Z' };
+  const pending = [{ alert_key: 'k1', node: 'northwind-erp.com · northwind-erp.com/pricing', message: 'Page gone: answers 404', severity: 'critical', delivered: 'pending', count: 1, last_seen_at: '2026-10-17T15:31:00.000Z' }];
+  mock('Watch Ops Alert', pending.map(j => ({ json: j }))); mock('Save Watch Ops Alert', pending.map(j => ({ json: j })));
+  mock('Watch Compare', [{ json: { site_id: 'site_northwind-erp-com', domain: 'northwind-erp.com', checked_at: '2026-10-17T15:31:00.000Z', changes: [{ url: 'https://northwind-erp.com/pricing', code: 'page_gone', severity: 'critical', label: 'page gone', text: 'The page answers 404.' }] } }]);
+  mock('Watch Run', [{ json: watchCatchup }]);
+  const ch = (await run('Watch Ops Channels', store['Save Watch Ops Alert']))[0].json;
+  check('Page Watch: the digest (its callback) says it ran late — the subject tag, the first line, `ran_late` on the webhook body',
+    ch.ran_late && ch.ran_late.late === true && /\(ran late — due 2026-10-17\)$/.test(ch.subject) && /^SEO Agent key-page watch: 1 change .*\nRan late: This is the daily run that was due Sat 17 Oct 2026, 05:45 \(America\/New_York\)/.test(ch.plain)
+    && ch.webhook_body.ran_late && ch.webhook_body.summary === ch.subject, JSON.stringify({ s: ch.subject, p: ch.plain.slice(0, 260) }));
+  const al = (await run('Watch Alerts', store['Watch Compare'])).map(x => x.json);
+  check('Page Watch: the alert the app shows says it too', al.length === 1 && /Ran late: This is the daily run that was due/.test(al[0].summary), JSON.stringify(al.map(a => a.summary)));
+  mock('Watch Run', [{ json: {} }]); mock('Daily Schedule', [{ json: { timestamp: '2026-10-17T09:45:03.000Z' } }]);
+  const chOk = (await run('Watch Ops Channels', store['Save Watch Ops Alert']))[0].json;
+  check('Page Watch: on time, nothing is added', chOk.ran_late.late === false && !/ran late/i.test(chOk.subject + chOk.plain) && !chOk.webhook_body.ran_late, JSON.stringify({ s: chOk.subject }));
+  reset();
+});
+
 
 H.report();
 })();
