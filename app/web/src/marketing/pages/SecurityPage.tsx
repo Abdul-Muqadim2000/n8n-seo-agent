@@ -1,4 +1,4 @@
-import { BadgeCheck, Bug, Building2, Check, KeyRound, Minus, ShieldCheck, Users, Wallet, type LucideIcon } from 'lucide-react';
+import { BadgeCheck, Bug, Building2, Check, Fingerprint, KeyRound, Minus, ScrollText, ShieldCheck, Users, Wallet, type LucideIcon } from 'lucide-react';
 import { ButtonLink } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { CtaBand, Faq, IconTile, Reveal, Section, SectionHeading } from '../components';
@@ -18,6 +18,10 @@ const GROUPS: { icon: LucideIcon; title: string; items: string[] }[] = [
     items: [
       'Passwords hashed with argon2id',
       'Google sign-in with PKCE',
+      'Two-step verification: authenticator app, passkeys or a security key, and single-use recovery codes',
+      'A second-step code is accepted once; five wrong codes end the attempt',
+      'Security changes ask you to confirm it is you again',
+      'Your signed-in devices listed, signed out one by one or all at once',
       'E-mail verification and password reset by one-time links',
       'One-time links stored only as hashes, and they expire',
       'Sessions in HttpOnly cookies; only a hash of each session is stored',
@@ -32,6 +36,28 @@ const GROUPS: { icon: LucideIcon; title: string; items: string[] }[] = [
       'Invitations by link, which admins can revoke',
       'Every request checked against your role on the server, not only in the browser',
       'Signing in with Google to an unconfirmed account removes its old password and sessions',
+    ],
+  },
+  {
+    icon: Fingerprint,
+    title: 'Single sign-on and provisioning',
+    items: [
+      'SAML 2.0 and OIDC: Okta, Microsoft Entra ID, Google Workspace or any standard provider',
+      'Only on e-mail domains your company proves with a DNS record, one company per domain',
+      'Signed assertions only; the audience, recipient, request and expiry checked, and each answer accepted once',
+      'Single sign-on can be required: passwords stop for your domain, owners keep a protected way in',
+      'SCIM 2.0: your provider creates, updates and switches off people, and its groups set roles',
+    ],
+  },
+  {
+    icon: ScrollText,
+    title: 'Audit and company policy',
+    items: [
+      'An audit log of sign-ins, team, settings, keys and sharing, with who, when and from where',
+      'Append-only in the database itself: entries cannot be edited or deleted through the app',
+      'CSV export and a retention period you choose, from 30 days to 7 years',
+      'Require two-step verification for every member',
+      'Sign people out after the idle time you set',
     ],
   },
   {
@@ -82,6 +108,8 @@ const ROLE_ROWS: { action: string; allowed: [boolean, boolean, boolean, boolean]
   { action: 'Start runs, keyword checks and link imports', allowed: [true, true, true, false] },
   { action: 'Add and verify websites, change their settings', allowed: [true, true, false, false] },
   { action: 'Invite people and change their roles', allowed: [true, true, false, false] },
+  { action: 'Set up single sign-on, provisioning and two-step rules; read the audit log', allowed: [true, true, false, false] },
+  { action: 'Require single sign-on', allowed: [true, false, false, false] },
   { action: 'Set the budget and delete the company', allowed: [true, false, false, false] },
 ];
 
@@ -107,6 +135,14 @@ const FAQS: FaqItem[] = [
   {
     q: 'How do we remove a person or a website?',
     a: 'Admins remove people and revoke open invitations from the team settings, and remove websites from the website settings. Deleting a website also removes its plans from the automation engine.',
+  },
+  {
+    q: 'Do you support single sign-on and SCIM?',
+    a: 'Yes. Any SAML 2.0 or OIDC provider — Okta, Microsoft Entra ID, Google Workspace and others — on e-mail domains you prove with a DNS record, and SCIM 2.0 so your provider creates and switches off accounts. An owner can make single sign-on required for your domain.',
+  },
+  {
+    q: 'Is there an audit log?',
+    a: 'Yes. Owners and admins see sign-ins and failed sign-ins, two-step changes, team and role changes, websites, settings, API keys and sharing, with who, when and from which address, and can export it as CSV. Entries cannot be edited or deleted; you choose how long they are kept.',
   },
   {
     q: 'Can you go through our security questionnaire?',
