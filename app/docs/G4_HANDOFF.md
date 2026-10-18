@@ -1,69 +1,50 @@
-# G4 handoff — integrations + write API (paused 2026-10-18)
+# G4 handoff — integrations + write API (finished 2026-10-18)
 
 Branch `worktree-agent-a05552be562d6b396` (worktree `.claude/worktrees/agent-a05552be562d6b396`). Design: `app/docs/INTEGRATIONS.md`.
-API reference: `app/API.md` → "Write API", "Connecting an AI assistant (MCP)", "Integrations (G4)". `feature/seo-agent-v4.5` @ 2aa912a
-is already merged in (commit 0553c35); G4's migration is **`0010_g4_integrations`** (after G2's `0009_cms_publishing`).
+API reference: `app/API.md` → "Write API", "Connecting an AI assistant (MCP)", "Integrations (G4)". README section "Integrations and the
+write API (G4)". `feature/seo-agent-v4.5` @ 2aa912a is merged in (0553c35); **not** merged again on purpose (the orchestrator merges after
+G3 and G1 land) — G4's migration is `0010_g4_integrations` today and becomes **0012** then (`npm run db:generate` after deleting ours,
+or rename the file + journal entry + snapshot).
 
-## State of the 5 items
+## All five items are done
 
-| # | Item | State | Files |
-|---|---|---|---|
-| 1 | Write API + MCP run tools | **Server done + tested** | `server/src/services/apiRuns.ts`, `routes/apiV1.ts`, `services/runs.ts` (`createRunWithMeta`, idempotency under the company lock, `findIdempotentRun`), `services/apiKeys.ts` (`creatorMembership`), `shared/src/api-v1.ts` (scopes `run` / `admin`, `IDEMPOTENCY`), `web/.../ApiKeysTab.tsx` (write-scope warning), `web/.../RunDetailPage.tsx` ("via API key") |
-| 2 | Outbound webhooks | **Server done + tested** | `services/webhooks.ts` (queue = log, claim, backoff 1/5/30/120/720 min, 410 / 25 failures disable), events derived in `shared/src/integrations.ts` `eventsFor`, hooked in `services/runs.ts` `ingestCallback`, `expireStaleRuns`, `services/engineFailures.ts`; timer in `server/src/index.ts`; routes `routes/integrations.ts` + `/api/v1/webhooks` |
-| 3 | Issue trackers | **Server done + tested** | `services/issueTrackers.ts` (Jira REST v3 / Linear GraphQL / Asana; dedupe via `issue_links` placeholder), routes in `routes/integrations.ts` + `/api/v1/issues` |
-| 4 | Warehouse / BI export | **Server done + tested; Looker connector NOT started** | `services/exports.ts`, `lib/sigv4.ts`, `lib/googleSa.ts`, `shared/src/integrations.ts` (`EXPORT_TABLES`…), table read API `/api/v1/tables`, `/api/v1/websites/:id/tables/:table`, MCP `get_table`, timer in `index.ts` |
-| 5 | Slack / Teams alerts | **Server done** (formats `json` / `slack` / `teams` of item 2, routing = one endpoint per channel) | same as 2 |
-| — | Settings page "Integrations" (UI) | **Not started** | — |
-| — | Guides for every token | **Not started** | — |
-| — | Marketing (features / changelog / pages) | **Not started** | — |
-| — | `app/docs/INTEGRATIONS.md` | Done (design); keep in sync | |
+| # | Item | Server | UI | Tests |
+|---|---|---|---|---|
+| 1 | Write API + MCP run tools (scopes `run` / `admin`, Idempotency-Key, the forms' checks) | `services/apiRuns.ts`, `routes/apiV1.ts`, `services/runs.ts` `createRunWithMeta` | API access tab (write-scope warning), run page "via API key" | `server/test/apiRuns.test.ts` (15), real-DB suite |
+| 2 | Outbound webhooks (events, HMAC, retries, delivery log, SSRF guard) | `services/webhooks.ts`, `lib/netGuard.ts`, events from `shared/src/integrations.ts` `eventsFor` | Integrations → Alerts and events | `shared/src/integrations.test.ts`, `server/test/webhooks.test.ts`, real-DB suite |
+| 3 | Jira / Linear / Asana tickets, dedupe, state read back | `services/issueTrackers.ts` | Integrations → Issue trackers; **Create ticket** on Technical findings + Recommendations (`components/site/TicketButton.tsx`) | `server/test/vendors.test.ts`, real-DB suite, `web/test/integrations.test.tsx` |
+| 4 | Warehouse export (S3 / GCS / R2, BigQuery) + Looker Studio connector | `services/exports.ts`, `lib/sigv4.ts`, `lib/googleSa.ts`, table read API | Integrations → Data export, Looker Studio, MCP snippets | `vendors.test.ts` (AWS SigV4 vector, BigQuery job flow), `integrations-data.test.ts`, `integrations/looker-studio/test/connector.test.mjs` |
+| 5 | Slack / Teams alerts with routing | formats of item 2 | same | same |
 
-SSRF guard: `server/src/lib/netGuard.ts` (`outbound` + `transport` for tests; webhookUrlOk + connect-time `publicLookup` + IP-literal
-check). `services/verify.ts` re-exports `isPrivateIp` / `publicLookup` from it, so G2's `services/cms/http.ts` uses the same code.
-Secrets sealed with `MAILBOX_KEY` (no new env setting so far).
+Also: 10 setup guides (area `integrations` in `shared/src/guides.ts`), marketing (capability `/platform/integrations` with its own
+mockup, changelog 2026-10-18, tools list, plan lists, pricing matrix rows marked PLACEHOLDER, two solutions).
 
-## Exact next steps
+## Checks (2026-10-18)
 
-1. **UI** — add tab `integrations` to `web/src/pages/settings/OrgSettingsPage.tsx` `TABS` and a new
-   `web/src/pages/settings/_components/IntegrationsTab.tsx` reading `GET /api/orgs/:orgId/integrations` (`IntegrationsOverview`):
-   cards (a) Event webhooks: list + add form (name, format json/slack/teams, URL, event checkboxes from `WEBHOOK_EVENT_LABELS`,
-   websites), test / enable-disable / rotate secret / delete, show the `whsec_` secret once, delivery log with "Send again"
-   (`/webhook-deliveries/:id/redeliver`); (b) Issue trackers: Jira / Linear / Asana connect forms (`trackerConnectSchema`), test,
-   disconnect; (c) Data export: S3 (provider select, `STORAGE_PROVIDER_LABELS`) and BigQuery (paste key JSON) forms, tables
-   (`EXPORT_TABLES`), schedule, Run now, last runs; (d) Looker Studio + AI assistants: MCP snippets (copy from API.md) and the connector
-   link. Hooks in `web/src/lib/queries.ts`. Then a **"Create ticket"** button: `TechnicalPage.tsx` `FindingsTable` (POST
-   `/api/orgs/:orgId/issues` with `{ websiteId, source: { type: 'finding', auditId, findingKey: f.key } }`, show `remoteKey` link from
-   `GET /issues?siteId=` + refresh) and `_components/recommendations.tsx` (`type: 'recommendation', id`). Shown only when
-   `trackers.length`. Brand tokens only; check 390 / 1440, light / dark.
-2. **Guides** (`shared/src/guides.ts`, add area `integrations` to `GuideArea` + `GUIDE_AREAS`): `slack-webhook`, `teams-workflow-webhook`,
-   `webhook-signature`, `jira-api-token`, `linear-api-key`, `asana-pat`, `s3-access-keys` (choices AWS IAM / GCS HMAC / R2 token),
-   `bigquery-service-account`, `looker-studio-connector`, `mcp-assistant`. Wire with `GuideButton` in the tab. Run `guides.test.ts`.
-3. **Looker Studio connector** — `integrations/looker-studio/` at the repo root: `appsscript.json`, `Code.gs` (getAuthType KEY,
-   setCredentials / isAuthValid via `GET /api/v1`, getConfig: app URL + website + table, getSchema from `GET /api/v1/tables`,
-   getData from `/api/v1/websites/:id/tables/:table?since=&until=` paging `nextCursor`), `README.md` with deployment steps.
-4. **Marketing** — `web/src/marketing/content/features.ts` (new capability or extend the API entry: "Integrations: Slack / Teams,
-   Jira / Linear / Asana, BigQuery / S3, Looker Studio, API + MCP that can start work"), `content/changelog.ts` line dated
-   2026-10-17/18, and every page that lists capabilities (pricing matrix, platform, home).
-5. Update `app/.env.example` only if a new setting is added (none yet); add a line to `app/README.md` pointing at INTEGRATIONS.md.
-6. Final: `npm run typecheck`, `npm test` (shared + server), `cd web && npx vitest run`, the real-DB suite (below), then a
-   non-WIP commit per functionality and the reply per the common brief.
+- Typecheck shared / server / web clean. Shared 399 passed (1 skipped), server 374 passed (32 skipped = the two real-DB suites when
+  their flag is off), web 26 passed, Looker connector 15 checks, guides 23.
+- Real database (`G4_DB_TEST=1`, own Postgres `gap-g4-pg`): `test/integrations.pg.test.ts` 15 / 15.
+- Browser pass on an own stack (`gap-g4-pg` + `gap-g4-stub` n8n stand-in + `gap-g4-server` + `gap-g4-web`, Playwright 1.55): the
+  Integrations tab (as it opens, and with every form open), the Technical page with the Ticket column, Recommendations and
+  `/platform/integrations`, each at 1440 and 390 px in light and dark, plus the Slack guide opening and a Create-ticket click —
+  **22 visits: no horizontal overflow, an h1 on every page, no WCAG AA contrast failure, no failed request, no console error** except
+  the one deliberate 409 of the Create-ticket click (the seeded tracker token was a dummy, so the app said "the stored token cannot be
+  read any more — connect the tracker again", the intended failure path). Screenshots stayed in the session scratchpad. The stack was
+  removed afterwards.
+- Secret scan: only AWS's public documentation example key `AKIAIOSFODNN7EXAMPLE` (SigV4 test vector) appears.
 
-## Checks (last run, after the merge)
+## For the owner
 
-- Typecheck shared / server / web: clean before the WIP commit's last edits; re-run (only API.md and test files changed after).
-- Shared 328+12+10 tests, server 354 + `apiRuns` 15 + `webhooks` 6 + `vendors` 20 — all passing.
-- Real database: `docker network create gap-g4-net; docker run -d --name gap-g4-pg --network gap-g4-net -e POSTGRES_USER=seo
-  -e POSTGRES_PASSWORD=seo -e POSTGRES_DB=g4 postgres:17-alpine`, then `docker run --rm --network gap-g4-net -e G4_DB_TEST=1
-  -e DATABASE_URL=postgres://seo:seo@gap-g4-pg:5432/g4 -v <worktree>/app:/app -w /app/server node:22-bookworm-slim npx vitest run
-  test/integrations.pg.test.ts` → **15 / 15 passed**. The containers `gap-g4-pg` and network `gap-g4-net` are still up: remove them
-  at the end (`docker rm -f gap-g4-pg; docker network rm gap-g4-net`).
-- Known failing: none. Note for secret scanners: `server/test/vendors.test.ts` contains AWS's **public documentation example**
-  credentials (`AKIAIOSFODNN7EXAMPLE`) for the SigV4 test vector — not a real key.
+- `MAILBOX_KEY` must be set on the server (already required for mailboxes): without it nothing can be connected and the page says so.
+- Prices / plans in `content/pricing.ts` for the new rows are PLACEHOLDER.
+- Looker connector: deploy it once per installation (`integrations/looker-studio/README.md`) and serve a PNG of the app icon for its manifest.
+- Not built (see INTEGRATIONS.md §8): OAuth 3LO for Jira / Asana, a native Slack app, Snowflake / Redshift loaders, two-way ticket sync.
 
-## Merge notes (hotspots)
+## Merge hotspots
 
-`server/src/db/schema.ts` (runs columns + the G4 block before `CmsConnectionRow`), migration numbering (`0010`), `server/src/app.ts`
-(`integrationRoutes`), `server/src/index.ts` (webhook + export timers), `server/src/lib/errors.ts` (`HttpError.extra`, spread in the
-error handler), `shared/src/index.ts` (`./integrations`), `shared/src/api.ts` (`Run.apiKeyName`), `services/runs.ts`
-(`createRunWithMeta`, events), `services/verify.ts` (re-export). Still to come: `OrgSettingsPage.tsx`, `queries.ts`, `guides.ts`,
-`features.ts`, `changelog.ts`.
+`server/src/db/schema.ts` (runs columns + the G4 block before `CmsConnectionRow`), migration numbering, `server/src/app.ts`,
+`server/src/index.ts` (webhook + export timers), `lib/errors.ts` (`HttpError.extra`), `services/verify.ts` (re-exports netGuard),
+`services/runs.ts`, `shared/src/index.ts`, `shared/src/api.ts` (`Run.apiKeyName`), `shared/src/guides.ts` (new area + 10 guides),
+`web/src/components/guide/GuidePanel.tsx` (area icon), `OrgSettingsPage.tsx` (tab), `TechnicalPage.tsx`, `RecommendationsPage.tsx`,
+`recommendations.tsx`, marketing `features.ts` / `changelog.ts` / `pricing.ts` / `site.ts` / `solutions.ts` / `PlatformPage.tsx` /
+`CapabilityMap.tsx` / `CapabilityScreen.tsx` / `FeatureVisual.tsx`.
