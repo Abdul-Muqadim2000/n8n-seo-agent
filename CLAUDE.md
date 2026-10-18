@@ -68,8 +68,9 @@ clean CLI session, `MARKET_BENCHMARK.md` — Search Atlas, Ahrefs, Semrush/Adobe
 F-B F-A1 F-A2 F-A3 F-C F-D F-L) and five enterprise gaps built: **CMS publishing** (WordPress / Webflow / Contentful / signed webhook,
 migration 0009), **crawler-log + AI-crawler analytics** (0010), **identity** — two-step / passkeys / sessions / audit log / SSO OIDC+SAML /
 SCIM (0011), **integrations + write API** — runs API + MCP run tools, signed webhooks, Slack/Teams, Jira/Linear/Asana, S3/BigQuery,
-Looker Studio (0012), **white-label agency portal** (0013). Engine harness **6939 passed, 0 failed**; app **486 shared / 494 server /
-42 web**; real-DB suites crawlers 12 / CMS 18 / integrations 16; combined browser pass (447 visits) `BROWSER_PASS_2026-10-18.md`.
+Looker Studio (0012), **white-label agency portal** (0013), and the **AI question panel at scale** (3–500 questions, personas / topics /
+markets, split weekly runs, rotating pulse, per-segment stats; `n8n/seo-agent/docs/AI_PANEL_SCALE_HANDOFF.md`). Engine harness **7125 passed,
+0 failed**; app **518 shared / 500 server / 42 web**; real-DB suites crawlers 12 / CMS 18 / integrations 16; combined browser pass (447 visits) `BROWSER_PASS_2026-10-18.md`.
 **Start here: `n8n/seo-agent/docs/system-review-2026-10-17/RESUME.md`** (§9 deploy checklist, §6 owner decisions, §5 live checks).
 **The deploy is the owner's**: `apply_env.py` is refused by the permission classifier as a production deploy (twice, incl. as a scheduled
 job). After it: `MAILBOX_KEY` in `app/.env`, restart the dev server for 0013, the live checks (≈ $0.8), then a fresh re-rating.
