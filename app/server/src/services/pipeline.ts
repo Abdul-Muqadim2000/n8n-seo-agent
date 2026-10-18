@@ -16,6 +16,7 @@ import {
   lineagePeriod,
   lineageSample,
   lineageUnknown,
+  n8nSiteId,
   type AuditPoint,
   type Lineage,
   type PagePeriodPoint,
@@ -43,7 +44,7 @@ import {
 import { config } from '../config';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { notFound } from '../lib/errors';
-import { executions, siteRows, type ExecutionSummary } from '../n8n/client';
+import { executions, rows as n8nRows, siteRows, type ExecutionSummary } from '../n8n/client';
 import { scheduleState } from './delivery';
 import { annotatePublishNeeds } from './cms/service';
 import { CADENCE, simulateCadence, type CadenceWeek } from './cadence';
@@ -472,6 +473,24 @@ export async function ladderDetailData(org: OrgRow, site: SiteRow, ladderId: str
   return { ...d, reports: await ladderReports(org, site, ladderId, pageReports), annotations, changeTests, lineage: lineageList };
 }
 
+/**
+ * The website's page inventory (n8n Data Table `seo_pages`, written by the Site Tracker). That table is keyed by `site_id` (the engine's
+ * `site_` + domain id, `n8nSiteId`) and has NO `domain` column. The 2026-10-17 re-rating found this read filtered by `domain` (through
+ * `siteRows`), which n8n refuses, and a silent `.catch(() => [])` turned the refusal into "no pages", so the pipeline's cadence mirror never
+ * saw a live page. Read by `site_id`; an unreadable inventory still degrades to [] (the cadence runs with the defaults) but is logged.
+ */
+export async function sitePageInventory(
+  domain: string,
+  warn: (o: object, msg: string) => void = (o, msg) => console.warn(JSON.stringify({ level: 'warn', msg, ...o })),
+): Promise<SitePageRow[]> {
+  try {
+    return await n8nRows<SitePageRow>('pages', { filters: [{ columnName: 'site_id', condition: 'eq', value: n8nSiteId(domain) }], max: 3000 });
+  } catch (e) {
+    warn({ site: domain, table: 'seo_pages', err: String((e as Error)?.message ?? e).slice(0, 200) }, 'page inventory not read: the pipeline runs without it');
+    return [];
+  }
+}
+
 async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: PipelineData; ladders: LadderBuild; rows: { logs: ContentLogRow[]; queries: QueryRow[]; audits: AuditPoint[] } }> {
   const d = site.domain;
   const [x, ladders, queries, trends, logs, history, settingsRows, app, spent, cadenceReport, recentReports, running, aiTargets, sitePages] = await Promise.all([
@@ -491,7 +510,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     scheduledRunning(),
     // v4.12: the AI growth loop's questions to win (the queued ones are the cadence's AI page of the week)
     siteRows<AiTargetRow>('aiTargets', d, { max: 100 }).catch(() => [] as AiTargetRow[]),
-    siteRows<SitePageRow>('pages', d, { max: 3000 }).catch(() => [] as SitePageRow[]),   // D11: the website's page inventory (the cadence never writes a second page for a search a live page answers)
+    sitePageInventory(d),   // D11: the website's page inventory (the cadence never writes a second page for a search a live page answers)
   ]);
   const ownRuns = activeRuns(app.runs);
   const verified = !!site.verifiedAt;

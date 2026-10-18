@@ -361,6 +361,42 @@
    }
   ]
  },
+ "count_frames": {
+  "SEO_Agent_AI_Growth.json": {
+   "AI Outreach Writer": "tool"
+  },
+  "SEO_Agent_AI_Visibility.json": {
+   "AI Brief": "tool",
+   "Answer Analyst": "tool",
+   "Prompt Writer": "tool"
+  },
+  "SEO_Agent_Backlink_Monitor.json": {
+   "Link Analyst": "tool",
+   "Outreach Writer": "tool"
+  },
+  "SEO_Agent_Link_Builder.json": {
+   "Outreach Sequence Writer": "tool"
+  },
+  "SEO_Agent_Reply_Reader.json": {
+   "Reply Reader": "tool"
+  },
+  "SEO_Agent_Site_Tracker.json": {
+   "Site Brief": "tool"
+  },
+  "SEO_Agent_v4.json": {
+   "Competitor Analyzer": "tool",
+   "Content Reviewer": "tool",
+   "Copywriter": "none",
+   "Critic": "tool",
+   "Editor": "none",
+   "Keyword Relevance": "tool",
+   "Keyword Seeds": "tool",
+   "Ladder Keyword Relevance": "tool",
+   "Site Describer": "tool",
+   "Strategy Brief": "tool",
+   "Verdict Agent": "tool"
+  }
+ },
  "main": {
   "competitors": {
    "expr": "{{ (Array.isArray($('Schema Findings').first().json.competitors) ? $('Schema Findings').first().json.competitors : []).map(d => String(d || '').toLowerCase().replace(/^www\\./, '')).filter(d => d && d !== String($('Schema Findings').first().json.domain || '').toLowerCase() && !d.endsWith('.' + String($('Schema Findings').first().json.domain || '').toLowerCase())).length > 0 }}",

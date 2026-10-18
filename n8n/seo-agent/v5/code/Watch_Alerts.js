@@ -3,6 +3,8 @@
 // `source: page_watch`). The message id holds the site, the page, the kind of change and the day, so one change is recorded once however
 // often the watch runs. Good news (the page answers again, the noindex is gone) is recorded as `info`: it is how a fix shows up.
 /*__PAGE_WATCH__*/
+/*__RAN_LATE__*/
+const ran_late = RL.of(SCHED, ['Watch Run']);   // F-L: a late watch says so on the alerts it records
 const sites = $('Watch Compare').all().map(i => i.json).filter(s => s && !s.skip);
 const S = (v) => String(v == null ? '' : v).trim();
 const rows = [];
@@ -13,7 +15,7 @@ for (const s of sites) {
     const id = 'watch:' + s.site_id + ':' + S(c.code) + ':' + PW.hash(PW.helpers.ukey(page)) + ':' + day;
     rows.push({ site_id: s.site_id, domain: s.domain, kind: 'page_watch', severity: S(c.severity),
       subject: (S(c.label).charAt(0).toUpperCase() + S(c.label).slice(1) + ': ' + (page.replace(/^https?:\/\//, '') || s.domain)).slice(0, 200),
-      summary: (S(c.text) + (c.code === 'robots_changed' ? '' : ' Checked ' + S(s.checked_at).slice(0, 16).replace('T', ' ') + ' UTC by the daily key-page watch.')).slice(0, 1000),
+      summary: (S(c.text) + (c.code === 'robots_changed' ? '' : ' Checked ' + S(s.checked_at).slice(0, 16).replace('T', ' ') + ' UTC by the daily key-page watch.') + (ran_late.late ? ' Ran late: ' + ran_late.text : '')).slice(0, 1000),
       received_at: s.checked_at, message_id: id.slice(0, 200), status: 'new', source: 'page_watch' });
   }
   // a re-check that answers "fixed" closes the loop for the person who pressed "I fixed this" (G11 / criterion 1.10)

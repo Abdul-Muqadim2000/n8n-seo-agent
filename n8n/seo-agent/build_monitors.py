@@ -152,7 +152,7 @@ class WF:
                     {'id': str(uuid.uuid5(NS, 'bc2:' + self.prefix + ':' + ag + ':answer')), 'name': '__answer',
                      'value': monitor_cost.answer_expr('$json.output'), 'type': 'string'}]}},   # R47 / R80 (2026-10-16): an object as its JSON
                     [px, py + 320], onError='continueRegularOutput', alwaysOutputData=True)
-                mdl, own = json.dumps(model), "$('" + set_n + "').item.json"
+                mdl, own = json.dumps(model) + monitor_cost.count_frame(nodes, self.C, ag), "$('" + set_n + "').item.json"   # A-28: the system + tool it sends
                 self.count_node(cp, '={{ JSON.stringify({ model: ' + mdl + ', messages: [{ role: "user", content: String($json.__prompt || "") }] }) }}',
                                 [px + 200, py + 320])
                 self.count_node(ca, '={{ JSON.stringify({ model: ' + mdl + ', messages: ['
@@ -290,6 +290,10 @@ class WF:
             for _tag in getattr(self, 'deliveries', []):
                 monitor_cost.callback_after_settle({'id': self.wid, 'name': self.name, 'nodes': self.N, 'connections': self.C},
                                                    LEDGER_WIRING[self.name], 'Has Callback (' + _tag + ')?', 'POST ' + _tag + ' Report', V5, _declared)
+        # F-L (2026-10-18): the "ran late" notice where a workflow has no Callback Ledger (the Audit Scheduler hands it to its audits)
+        _rl = monitor_cost.bake_ran_late({'id': self.wid, 'name': self.name, 'nodes': self.N, 'connections': self.C}, V5) \
+            if any(monitor_cost.RAN_LATE_MARK in str((n.get('parameters') or {}).get('jsCode') or '') for n in self.N) else []
+        assert sorted(_rl) == sorted({'SEO Agent — Audit Scheduler': ['Audits To Start']}.get(self.name, [])), 'F-L: ' + self.name + ' baked the ran-late notice into ' + str(_rl)
         names = {n['name'] for n in self.N}; assert len(names) == len(self.N), 'duplicate node names in ' + fname
         for s, outs in self.C.items():
             assert s in names, s
@@ -550,7 +554,12 @@ S.code('Audit Schedule Plan', 'Audit_Sched_Plan.js', at(10, 1))
 S.code('Fingerprint Rows', "// The sitemap fingerprints to store (seo_cache, upsert by key; exact columns), for started and skipped sites alike.\nconst rows = $('Audit Schedule Plan').all().map(i => i.json.cache_row).filter(Boolean);\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];", at(11, 1))
 S.iff('Any Fingerprints?', '{{ !$json.skip }}', at(12, 1))
 S.node('Save Fingerprints', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), at(13, 0), onError='continueRegularOutput', alwaysOutputData=True)
-S.code('Audits To Start', "// Only the audits that are due; the others are listed with the reason they were skipped.\nconst plan = $('Audit Schedule Plan').all().map(i => i.json); const due = plan.filter(p => p.run && p.body);\nreturn due.length ? due.map(p => ({ json: { body: p.body, domain: p.domain, why: p.why } })) : [{ json: { nothing_to_do: true, skipped: plan.map(p => p.domain + ': ' + p.why) } }];", at(14, 1))
+S.code('Audits To Start', "// Only the audits that are due; the others are listed with the reason they were skipped.\n"
+       "// F-L (2026-10-18, re-rating 2026-10-17 C-1 follow-up): the audits report through the main workflow, so a scheduler run that ran late (the\n"
+       "// catch-up started it for a missed 1st of the month, or the schedule fired hours late) hands `ran_late` to each audit it starts; Normalize\n"
+       "// Input keeps it for a scheduled request only and Run Cost (Callback) marks the report: `ran_late`, the box, the subject.\n"
+       "/*__RAN_LATE__*/\nconst ran_late = RL.of(SCHED, ['Manual Run']);\n"
+       "const plan = $('Audit Schedule Plan').all().map(i => i.json); const due = plan.filter(p => p.run && p.body);\nreturn due.length ? due.map(p => ({ json: { body: ran_late.late ? { ...p.body, ran_late } : p.body, domain: p.domain, why: p.why, ran_late } })) : [{ json: { nothing_to_do: true, skipped: plan.map(p => p.domain + ': ' + p.why), ran_late } }];", at(14, 1))
 S.iff('Any Audits Due?', '{{ !$json.nothing_to_do }}', at(15, 1))
 S.node('Start Scheduled Audits', 'n8n-nodes-base.executeWorkflow', 1.2, {'source': 'database', 'workflowId': {'__rl': True, 'mode': 'id', 'value': 'SEOagentV4Full01'}, 'mode': 'each', 'options': {'waitForSubWorkflow': False}}, at(16, 0), onError='continueRegularOutput')
 S.code('Audits Started', "// What was started (each audit delivers its own report, diff and fix pack) and what was skipped, with the reason.\nconst plan = $('Audit Schedule Plan').all().map(i => i.json);\nreturn [{ json: { started: plan.filter(p => p.run).map(p => p.domain + ': ' + p.why), skipped: plan.filter(p => !p.run).map(p => p.domain + ': ' + p.why), at: new Date().toISOString() } }];", at(17, 0))
