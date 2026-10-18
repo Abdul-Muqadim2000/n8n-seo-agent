@@ -72,7 +72,7 @@ export async function api<T>(path: string, opts: { method?: Method; body?: unkno
       const confirmed = await stepUpHandler(Array.isArray(e.methods) ? (e.methods as StepUpMethod[]) : ['password']);
       if (confirmed) return api<T>(path, { ...opts, noStepUp: true });
     }
-    throw new ApiRequestError(res.status, e.error || `Request failed (${res.status})`, e.fields ?? {}, e.code, e);
+    throw new ApiRequestError(res.status, errorText(e.error, res.status), e.fields ?? {}, e.code, e);
   }
   return data as T;
 }
@@ -83,6 +83,15 @@ function safeParse(t: string): unknown {
   } catch {
     return { error: t.slice(0, 200) };
   }
+}
+
+/** The message of an error answer. Ours carry `error` as text; Vercel's platform errors (e.g. MIDDLEWARE_INVOCATION_FAILED)
+ *  answer `{"error":{"code","message"}}` — printing that object showed "[object Object]" on the sign-in page (2026-10-18). */
+export function errorText(error: unknown, status: number): string {
+  if (typeof error === 'string' && error.trim()) return error;
+  const m = error && typeof error === 'object' ? (error as { message?: unknown }).message : undefined;
+  if (typeof m === 'string' && m.trim()) return status >= 500 ? `${m} (${status}). Please try again in a moment.` : m;
+  return status >= 500 ? `The server could not answer (${status}). Please try again in a moment.` : `Request failed (${status})`;
 }
 
 export function errorMessage(e: unknown): string {
