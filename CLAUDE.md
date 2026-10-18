@@ -70,6 +70,13 @@ prefix / `AlaventraMark`, every string in `app/` + `integrations/` (webhook head
 Actions CI / Security / Images (GHCR) / Deploy web, Dependabot. API and engine hosts **not chosen yet** (owner researching; a Heroku
 n8n at seo-n8n-workflow-64e834115c48.herokuapp.com shows its unclaimed `/setup`). Harness now exits 1 on any failure.
 
+## Status (2026-10-18 evening — PRODUCTION LIVE ON GCP — latest)
+Backend + n8n now run on **GCP `alaventra-prod`** (Doha, spot e2-medium 4 GB, ~$21/month; `deploy/gcp/`, `RUNBOOK.md`; details
+`n8n/seo-agent/docs/system-review-2026-10-17/RESUME.md` §10). Live: `https://api.34-18-208-219.sslip.io` and
+`https://hooks.34-18-208-219.sslip.io` (temporary names until a domain). Data migrated with identical counts; engine deployed
+(699-node main, 24 active); **the laptop's n8n is stopped** — deploy the engine with `deploy/gcp/deploy_engine.py` over
+`deploy/gcp/tunnel.sh`, not `apply_env.py`. Product name is **Alaventra**. Frontend → Vercel (not yet set up).
+
 ## Status (2026-10-18, fourth re-rating + its fix wave + five enterprise capabilities — previous)
 **Re-rated 2026-10-17 on the deployed build: 6 / 10** (area mean 5.88; was 5.54), plus **market position 4.2** and **enterprise readiness
 1.5** against the October 2026 leaders (`n8n/seo-agent/docs/system-review-2026-10-17/`: `RESULTS.md`, `parts/1-4`, `SCORECARD.md` by a
