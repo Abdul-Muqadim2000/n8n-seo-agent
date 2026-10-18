@@ -1,5 +1,5 @@
 import { Link } from 'react-router';
-import { ArrowRight, BadgeCheck, Bot, Check, Globe, Link2, Lock, MessageSquare, Minus, Search, ShieldCheck, Sparkles, Users, Wallet, type LucideIcon } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Bot, Check, Fingerprint, Globe, Link2, Lock, MessageSquare, Minus, ScrollText, Search, ShieldCheck, Sparkles, Users, Wallet, type LucideIcon } from 'lucide-react';
 import { AscentraMark } from '@/components/brand/AscentraMark';
 import { ButtonLink } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -66,7 +66,7 @@ const SURFACES: { icon: LucideIcon; name: string; what: string }[] = [
   { icon: Sparkles, name: 'Google AI Overviews and AI Mode', what: 'Checked for your name and your links' },
   { icon: MessageSquare, name: 'ChatGPT', what: 'Asked your buyers’ questions every day' },
   { icon: Bot, name: 'Gemini, Perplexity and Claude', what: 'Asked the same questions, next to your competitors' },
-  { icon: Globe, name: 'Bing', what: 'New pages sent to Bing the moment they go live' },
+  { icon: Globe, name: 'Bing and Copilot', what: 'New and updated pages sent to Bing every week, and through IndexNow once your key file is up' },
   { icon: Link2, name: 'Other websites', what: 'Every link to you checked, and the sites that should link to you found' },
 ];
 
@@ -106,6 +106,8 @@ const ENTERPRISE = [
   { icon: BadgeCheck, title: 'Verified ownership', body: 'Data appears only after you prove a website is yours: Search Console, a DNS TXT record or a meta tag.' },
   { icon: Wallet, title: 'Budget caps', body: 'Every run shows its cost before it starts; budgets are checked first and owners set spend caps.' },
   { icon: Lock, title: 'Data isolation', body: 'Each company’s websites, runs and reports are kept apart, and access follows your role.' },
+  { icon: Fingerprint, title: 'Single sign-on and SCIM', body: 'Okta, Microsoft Entra ID, Google Workspace or any SAML 2.0 / OIDC provider — required if you like — and accounts provisioned from it.' },
+  { icon: ScrollText, title: 'Two-step and an audit log', body: 'Authenticator apps, passkeys or security keys, required company-wide if you choose, and a log of who did what that nobody can edit.' },
 ];
 
 const FAQS: FaqItem[] = [
@@ -430,9 +432,30 @@ function Timeline() {
   );
 }
 
+/** indices of the cards that span two of three columns so that every row is full: each starts a row, the first is card 0 */
+function bentoWide(n: number): Set<number> {
+  const wide = new Set<number>();
+  let left = (3 - (n % 3)) % 3 || 3;
+  const gap = Math.floor(n / left);
+  let col = 0;
+  let last = -n;
+  for (let i = 0; i < n; i++) {
+    let w = 1;
+    if (left > 0 && col === 0 && (i - last >= gap || n - i <= 3 * left)) {
+      w = 2;
+      left--;
+      last = i;
+      wide.add(i);
+    }
+    col = (col + w) % 3;
+  }
+  return wide;
+}
+
 function CapabilityGrid() {
-  // bento: the first card and the seventh span two columns on wide screens (3 + 3 + 3 + 3 cells)
-  const wide = new Set([0, 6]);
+  // bento: some cards span two columns on wide screens — as many as it takes (one to three) for every row of three to be full,
+  // each starting a row and spread out, so the grid stays even whatever the number of capabilities
+  const wide = bentoWide(features.length);
   return (
     <Section tone="page" id="platform" bordered>
       <div className="flex flex-wrap items-end justify-between gap-6">
@@ -555,7 +578,7 @@ function BacklinksSpotlight() {
         {[
           { t: 'Checked, not assumed', b: 'Rel, placement, noindex and canonical read from the live page.' },
           { t: 'Valued three ways', b: 'SEO, referral and brand value for every referring site.' },
-          { t: 'Prospects that convert', b: 'Scored prospects, contacts, outreach drafts and follow-ups after 7 and 14 days — sent from your own mailbox, with no password to store.' },
+          { t: 'Pitches you approve', b: 'Scored prospects with a contact on their own site and a checked pitch with two follow-ups — sent from your own mailbox once you approve it.' },
         ].map((x, i) => (
           <Reveal key={x.t} index={i}>
             <p className="font-display text-[15px] font-semibold text-ink">{x.t}</p>
@@ -578,7 +601,7 @@ function EnterpriseBand() {
           <SectionHeading
             eyebrow="Enterprise-ready"
             title="Built for companies with more than one website."
-            lead="Workspaces per company, roles for every person, verified ownership before any data is shown and a budget check before any paid work."
+            lead="Workspaces per company, roles for every person, single sign-on, verified ownership before any data is shown and a budget check before any paid work."
           >
             <ButtonLink to="/security" variant="secondary" icon={<ShieldCheck className="size-4" aria-hidden />} className="max-sm:h-10">
               Security at Ascentra
@@ -607,7 +630,7 @@ function WhoItsFor() {
     <Section tone="page" spacing="lg">
       <div className="grid grid-cols-1 items-center gap-14 lg:grid-cols-2 lg:gap-16">
         <div>
-          <SectionHeading eyebrow="Who it’s for" title="For the teams that own organic growth." lead="Agencies running many clients, marketing teams without a full SEO function, B2B companies and businesses with many locations." />
+          <SectionHeading eyebrow="Who it’s for" title="For the teams that own organic growth." lead="Agencies running many clients, marketing teams without a full SEO function, B2B companies, businesses with many locations and enterprise teams with their own sign-in and data stack." />
           <ul className="mt-10 divide-y divide-line border-y border-line">
             {solutions.map((s, i) => (
               <Reveal as="li" key={s.slug} index={i}>
