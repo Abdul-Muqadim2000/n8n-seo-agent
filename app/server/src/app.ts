@@ -170,7 +170,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       wildcard: false,
       cacheControl: false,
       // hashed bundles never change; everything else (index.html, favicon, theme-init.js) is revalidated
-      setHeaders: (res, path) => res.setHeader('cache-control', path.includes('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache'),
+      setHeaders: (reply, path) => void reply.header('cache-control', path.includes('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache'),
     });
     app.setNotFoundHandler(async (req, reply) => {
       if (req.url.startsWith('/api/') || req.method !== 'GET') return reply.status(404).send({ error: 'Not found', code: 'not_found' });
