@@ -15,7 +15,7 @@ log() { echo "[alaventra-startup] $*"; }
 MD=http://metadata.google.internal/computeMetadata/v1
 md() { curl -fsS -H 'Metadata-Flavor: Google' "$MD/$1" 2>/dev/null || true; }
 PROJECT=$(md project/project-id)
-NAME=$(md instance/attributes/alaventra-name); NAME=${NAME:-ascentra}
+NAME=$(md instance/attributes/alaventra-name); NAME=${NAME:-alaventra}
 REPO=$(md instance/attributes/alaventra-repo); REPO=${REPO:-https://github.com/Abdul-Muqadim2000/n8n-seo-agent.git}
 REF=$(md instance/attributes/alaventra-ref); REF=${REF:-main}
 DATA=/mnt/data

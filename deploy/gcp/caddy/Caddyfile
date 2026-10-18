@@ -3,7 +3,7 @@
 #   hooks.<domain>  -> n8n, but ONLY /webhook/* and /healthz; the editor and n8n's REST / public API are never public
 #   app.<domain>    -> the app server too, while APP_FRONTEND=caddy (go-live before the Vercel front end exists)
 #   :8081 /healthz  -> the managed instance group's autohealing probe (Google's probers only, by firewall)
-# DOMAIN is the one variable to change (prod.env): 34-18-181-79.sslip.io works today with real certificates; a real domain later.
+# DOMAIN is the one variable to change (prod.env): 34-18-208-219.sslip.io works today with real certificates; a real domain later.
 {
 	{$CADDY_GLOBAL_OPTIONS}
 	email {$ACME_EMAIL}

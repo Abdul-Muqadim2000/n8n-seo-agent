@@ -42,7 +42,7 @@ services:
       # the autohealing health check of the managed instance group (Google's probers only; see bootstrap.sh firewall)
       - '${HEALTH_PORT:-8081}:8081'
     environment:
-      DOMAIN: ${DOMAIN:?set DOMAIN in prod.env (e.g. 34-18-181-79.sslip.io)}
+      DOMAIN: ${DOMAIN:?set DOMAIN in prod.env (e.g. 34-18-208-219.sslip.io)}
       APP_HOST: ${APP_HOST:-app.${DOMAIN}}
       # caddy = this server answers app.<domain> (go-live before Vercel); vercel = app.<domain> is Vercel's and Caddy leaves it alone
       APP_FRONTEND: ${APP_FRONTEND:-caddy}
@@ -130,7 +130,8 @@ services:
       DB_POSTGRESDB_USER: n8n
       DB_POSTGRESDB_PASSWORD: ${N8N_DB_PASSWORD:?}
       DB_POSTGRESDB_POOL_SIZE: '4'
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?the instance key: reuse the local one to keep credentials and API keys (migrate_data.md)}
+      # the instance key: reuse the local one so credentials and the n8n API key carry over (load_secrets.sh --reuse-local-n8n-key)
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?set N8N_ENCRYPTION_KEY in prod.env}
       # public URLs: webhooks (and the URLs n8n writes into forms / Wait resumes) use hooks.<domain>; the editor is only on the tunnel
       N8N_HOST: hooks.${DOMAIN}
       N8N_PROTOCOL: https

@@ -11,9 +11,9 @@
 # The VM starts only when the three settings secrets exist (load_secrets.sh) — its startup script needs them.
 #
 # Settings (environment variables; the defaults are the decisions of 2026-10-18):
-#   PROJECT ascentra-prod · BILLING 0122E1-574F3D-7CDF90 · REGION me-central1 · ZONE me-central1-a · NAME ascentra (resource prefix)
+#   PROJECT alaventra-prod · BILLING 0122E1-574F3D-7CDF90 · REGION me-central1 · ZONE me-central1-a · NAME alaventra (resource prefix)
 #   MACHINE e2-medium · BOOT_TYPE pd-balanced BOOT_SIZE 20 · DATA_TYPE pd-balanced DATA_SIZE 20 (RUNBOOK §2: why not pd-standard)
-#   DOMAIN 34-18-181-79.sslip.io (until a real one) · ALERT_EMAIL muqadim2000@gmail.com · REF feature/seo-agent-v4.5 (branch the VM runs)
+#   DOMAIN 34-18-208-219.sslip.io (until a real one) · ALERT_EMAIL muqadim2000@gmail.com · REF feature/seo-agent-v4.5 (branch the VM runs)
 #   GCLOUD gcloud (the command to run gcloud with; e.g. a Docker wrapper)
 set -euo pipefail
 
@@ -27,18 +27,18 @@ for a in "$@"; do
   esac
 done
 
-PROJECT=${PROJECT:-ascentra-prod}
+PROJECT=${PROJECT:-alaventra-prod}
 BILLING=${BILLING:-0122E1-574F3D-7CDF90}
 REGION=${REGION:-me-central1}
 ZONE=${ZONE:-me-central1-a}
-NAME=${NAME:-ascentra}
+NAME=${NAME:-alaventra}
 MACHINE=${MACHINE:-e2-medium}
 BOOT_TYPE=${BOOT_TYPE:-pd-balanced}
 BOOT_SIZE=${BOOT_SIZE:-20}
 DATA_TYPE=${DATA_TYPE:-pd-balanced}
 DATA_SIZE=${DATA_SIZE:-20}
 IP_NAME=${IP_NAME:-$NAME-ip}
-DOMAIN=${DOMAIN:-34-18-181-79.sslip.io}
+DOMAIN=${DOMAIN:-34-18-208-219.sslip.io}
 ALERT_EMAIL=${ALERT_EMAIL:-muqadim2000@gmail.com}
 REPO=${REPO:-https://github.com/Abdul-Muqadim2000/n8n-seo-agent.git}
 REF=${REF:-feature/seo-agent-v4.5}
@@ -81,8 +81,9 @@ say "domain: $DOMAIN  ->  api.$DOMAIN · hooks.$DOMAIN · app.$DOMAIN"
 
 # ---- 1. project, billing, APIs --------------------------------------------------------------------------------------------
 head_ "project and billing"
+# The project is never created here: the billing account is at its linked-project limit (2026-10-18), and a project id is permanent.
 if "${G[@]}" projects describe "$PROJECT" --format='value(lifecycleState)' 2>/dev/null | grep -q ACTIVE; then keep "project $PROJECT"
-else run projects create "$PROJECT" --name="Alaventra production"; fi
+else say "  ! project $PROJECT not found (or no access). Create it and link billing by hand, then run this again."; exit 1; fi
 if [ "$("${G[@]}" billing projects describe "$PROJECT" --format='value(billingEnabled)' 2>/dev/null || true)" = "True" ]; then keep "billing link"
 else run billing projects link "$PROJECT" --billing-account="$BILLING"; fi
 

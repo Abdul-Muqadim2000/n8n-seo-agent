@@ -6,7 +6,7 @@
 #
 #   deploy/gcp/load_secrets.sh                         dry run: shows which KEYS would be stored / generated / changed (never a value)
 #   deploy/gcp/load_secrets.sh --apply                 stores them (a new version only for a file that changed; older versions destroyed)
-#   options: --domain example.com   switch the domain (default: keep the stored one, else 34-18-181-79.sslip.io)
+#   options: --domain example.com   switch the domain (default: keep the stored one, else 34-18-208-219.sslip.io)
 #            --reuse-local-n8n-key  take N8N_ENCRYPTION_KEY from the local n8n container (n8n-n8n-1), so the migrated credentials
 #                                   and the n8n API key keep working (migrate_data.md); only when the stored prod-env has none yet
 #            --app-frontend caddy|vercel   who answers app.<domain> (default: keep, else caddy)
@@ -22,9 +22,9 @@ export ROOT
 MAIN=$(dirname "$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || echo "$ROOT/.git")")
 export N8N_ENV_FILE=${N8N_ENV_FILE:-$MAIN/n8n/.env}
 export APP_ENV_FILE=${APP_ENV_FILE:-$MAIN/app/.env}
-export PROJECT=${PROJECT:-ascentra-prod}
+export PROJECT=${PROJECT:-alaventra-prod}
 export REGION=${REGION:-me-central1}
-export NAME=${NAME:-ascentra}
+export NAME=${NAME:-alaventra}
 export GCLOUD=${GCLOUD:-gcloud}
 export N8N_CONTAINER=${N8N_CONTAINER:-n8n-n8n-1}
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/alaventra-secrets.XXXXXX")
@@ -86,7 +86,7 @@ if not prod.get('N8N_ENCRYPTION_KEY'):
         gen('N8N_ENCRYPTION_KEY'); notes[-1] += ' (NEW instance key: migrated credentials and the n8n API key will not decrypt - see migrate_data.md)'
 dom = opt('--domain')
 if dom: prod['DOMAIN'] = dom.strip().lower().rstrip('.')
-prod.setdefault('DOMAIN', '34-18-181-79.sslip.io')
+prod.setdefault('DOMAIN', '34-18-208-219.sslip.io')
 fe = opt('--app-frontend')
 if fe:
     if fe not in ('caddy', 'vercel'): sys.exit('--app-frontend must be caddy or vercel')
