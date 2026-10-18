@@ -19202,6 +19202,45 @@ await guard('SFL5 C-1 follow-up the Audit Scheduler and the Page Watch say when 
   reset();
 });
 
+await guard('SFL6 C-8 leftover a vendor\'s own storefront is a competing provider, a guide / list / ministry / publisher is not', async () => {
+  const SN = 'SFL6 C-8 leftover — exec 781 qualified halsimplify.com (HAL ERP: an article on its knowledge centre) and tradeshift.com (an e-invoicing network: a buyer\'s guide) because neither title nor address claims the category; their own page menus sell it and ask for a demo';
+  reset(); begin(SN); const check = W3E.mkCheck(SN);
+  const zlib = require('zlib'), fs = require('fs'), path = require('path');
+  const KIT = (() => { const src = fs.readFileSync(path.join(process.env.CODE_DIR || path.join(__dirname, 'code_v4'), 'LB_Assemble.js'), 'utf8');
+    const cut = src.indexOf('const CT = (() => {'); return new Function(src.slice(0, cut) + '; return { LK, RV, OK };')(); })();
+  const { RV, OK } = KIT;
+  const TOPICS = ['e invoicing in uae', 'erp software uae', 'ai consulting dubai', 'it consulting dubai', 'dynamics 365 partner uae', 'erp implementation dubai', 'azure cloud migration dubai', 'peppol uae'];
+  const SERVICES = ['Microsoft Azure Infrastructure', 'Azure Integration Services', 'Cloud Migration & Modernization', 'Azure AI Services', 'Intelligent Document Processing', 'Predictive Models', 'Dynamics 365 Finance', 'Dynamics 365 Sales'];
+  // exec 781's prospect pages, reduced to their <title>, their own <nav> / <header> and the call-to-action phrases (contact data scrubbed)
+  const FX = JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(__dirname, 'fixtures_fl_781.json.gz'))).toString());
+  const pageOf = (d) => FX.pages.find(p => p.domain === d) || {};
+  const htmlOf = (p) => '<html><head><title>' + p.title + '</title></head><body>' + (p.zones || []).join('\n') + '<main><p>' + (p.ctas || []).join(' · ') + '</p></main></body></html>';
+  const prov = (p, extra) => RV.providerOf({ domain: p.domain, title: p.page_title_781 || p.title, url: p.url, page_html: htmlOf(p), topics: TOPICS, services: SERVICES, ...(extra || {}) });
+  const hal = pageOf('halsimplify.com'), ts = pageOf('tradeshift.com');
+  check('C-8: the fixture is exec 781: both were qualified needs_contact with no reason', hal.status_781 === 'needs_contact' && ts.status_781 === 'needs_contact' && !(hal.reasons_781 || []).length && !(ts.reasons_781 || []).length, JSON.stringify([hal.status_781, ts.status_781]));
+  const wh = prov(hal), wt = prov(ts);
+  check('C-8: halsimplify.com — its menu sells ERP / e-invoicing (Conversational ERP, "HAL vs Odoo / SAP B1 / Microsoft Dynamics", E-invoicing) and the page asks for a demo',
+    /its own site menu sells ERP/.test(wh) && /"Request a demo"/i.test(wh), wh);
+  check('C-8: tradeshift.com — its menu sells "e-Invoicing Software" and the page asks for a demo', /its own site menu sells e-invoicing \("e-Invoicing Software"\)/.test(wt) && /demo/i.test(wt), wt);
+  check('C-8: without the page itself (a title alone, as AI visibility and earned media read it) the old rule stands: neither is called a provider from its title',
+    RV.providerOf({ domain: hal.domain, title: hal.page_title_781, url: hal.url, topics: TOPICS, services: SERVICES }) === '' && RV.providerOf({ domain: ts.domain, title: ts.page_title_781, url: ts.url, topics: TOPICS, services: SERVICES }) === '', 'title-only');
+  // through the Link Builder's own qualification (OK.sellsSame), with the type each row had
+  const sells = (p, type) => OK.sellsSame({ type, domain: p.domain, competitors: [], serp_rivals: [], ai_rivals: [], topics: TOPICS, title: p.page_title_781 || p.title, text: '', terms: SERVICES, url: p.url, fit: 0.5, page_html: htmlOf(p) });
+  const sh = sells(hal, 'ai_source'), st = sells(ts, 'resource');
+  check('C-8: the Link Builder refuses both as competing providers (ai_source, resource)', /^a competing provider: its own site menu sells/.test(sh) && /^a competing provider: its own site menu sells/.test(st), JSON.stringify([sh, st]));
+  // ---- what it must NOT catch: exec 781's guide / consultancy / news pages, and the real ministry, publisher, member list and list pages ----
+  const keep = ['innovatetax.com', 'andersen.com', 'turbolens.io', 'marketguest.com'].map(d => [d, prov(pageOf(d))]);
+  check('C-8: exec 781\'s tax-consultancy guide, the consultancy, a tool site with no sales menu and a guest-post market are not called providers by their storefront',
+    keep.every(([, w]) => !/its own site menu/.test(w)), JSON.stringify(keep));
+  const L = (f) => zlib.gunzipSync(fs.readFileSync(path.join(__dirname, 'fixtures_live', f))).toString();
+  const real = [['mof.gov.ae', 'lb_page_mof_asp_list.html.gz', 'list'], ['thedocmag.com', 'page_thedocmag.html.gz', 'resource'], ['peppol.org', 'page_peppol_members.html.gz', 'list'],
+    ['azdan.com', 'lb_page_azdan_top20.html.gz', 'list']].map(([d, f, type]) => { const html = L(f); const title = ((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '').trim();
+      return [d, title, RV.providerOf({ domain: d, title, url: 'https://' + d + '/', page_html: html, topics: TOPICS, services: SERVICES }),
+        OK.sellsSame({ type, domain: d, competitors: [], serp_rivals: [], ai_rivals: [], topics: TOPICS, title, text: '', terms: SERVICES, url: 'https://' + d + '/', fit: 0.5, page_html: html })]; });
+  check('C-8: the Ministry of Finance ASP list, a publisher, the OpenPeppol member list and azdan.com\'s "Top 20" list stay pitchable (D13: a list that leaves you out is pitched, even from a vendor)',
+    real.every(([, , w, s]) => !/its own site menu/.test(w) && !/its own site menu/.test(s)), JSON.stringify(real.map(([d, t, w, s]) => [d, t.slice(0, 40), w, s])));
+});
+
 
 H.report();
 })();
