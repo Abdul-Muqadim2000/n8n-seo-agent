@@ -738,7 +738,7 @@ export const GUIDES = [
     id: 'bing-webmaster',
     area: 'website',
     title: 'Add your site to Bing Webmaster Tools',
-    why: 'Free, and it pays twice: Bing shares link data that costs money elsewhere, and Copilot and ChatGPT search read Bing’s index — so being in it is part of being in AI answers.',
+    why: 'Free, and it pays twice: Bing shares link data that costs money elsewhere, and Microsoft Copilot answers from Bing’s index — so being in it is part of being in AI answers.',
     where: 'Bing Webmaster Tools',
     minutes: 5,
     vars: [V.domain],
