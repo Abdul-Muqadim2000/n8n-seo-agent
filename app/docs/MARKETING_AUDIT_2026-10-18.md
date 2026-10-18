@@ -106,7 +106,7 @@ On `worktree-agent-ad53a4111ec7bf11b`:
 - `30c732b` Home: enterprise band, Bing line, outreach line, bento for any count
 - `6c8b573` Solutions: enterprise teams page, AI growth / link-building help lines, computed counts
 - `82f1fbc` Pricing and security
-- (next) mega-menu fit, two copy fixes found in the browser pass, this file's results
+- `97e922e` mega-menu fit, two copy fixes found in the browser pass, this file's results
 
 ## 5. For the owner to decide
 
