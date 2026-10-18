@@ -11,8 +11,7 @@ from env_settings import load_env
 BASE = os.environ.get('N8N_PUBLIC_URL', 'http://localhost:5678').rstrip('/') + '/api/v1'
 
 def api_key():
-    # deploy/gcp/deploy_engine.py runs this against the production n8n (N8N_PUBLIC_URL) and hands it the key in the environment
-    k = os.environ.get('N8N_API_KEY') or load_env().get('N8N_API_KEY')
+    k = os.environ.get('N8N_API_KEY') or load_env().get('N8N_API_KEY')   # environment first: CI against a remote instance (N8N_PUBLIC_URL)
     if k: return k
     p = os.path.join(HERE, '..', '..', 'app', '.env')
     if os.path.exists(p):

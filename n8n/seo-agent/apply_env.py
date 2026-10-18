@@ -13,8 +13,8 @@ import json, os, shutil, subprocess, sys, tempfile, time, urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__)); N8N_DIR = os.path.join(HERE, '..'); CONTAINER, PROJECT = 'n8n-n8n-1', 'wo1WpMiHjdduGvfl'
 sys.path.insert(0, HERE); from env_settings import load_env
 from ladder_common import ALERT_WEBHOOK_PLACEHOLDER
-WORKFLOWS = ['SEO_Agent_v4.json', 'SEO_Agent_API.json', 'SEO_Agent_Error_Handler.json', 'SEO_Agent_Rank_Tracker.json', 'SEO_Agent_Site_Tracker.json', 'SEO_Agent_Page_Watch.json', 'SEO_Agent_Site_Admin.json', 'SEO_Agent_Content_Cadence.json', 'SEO_Agent_Console_Alerts.json', 'SEO_Agent_Publish_WordPress.json', 'SEO_Agent_AI_Visibility.json', 'SEO_Agent_AI_Pulse.json', 'SEO_Agent_AI_Growth.json', 'SEO_Agent_Backlink_Monitor.json', 'SEO_Agent_Audit_Scheduler.json', 'SEO_Agent_Admin_API.json', 'SEO_Agent_Keyword_Check.json', 'SEO_Agent_Link_Builder.json', 'SEO_Agent_Link_Builder_API.json', 'SEO_Agent_Reply_Reader.json', 'SEO_Agent_Prerelease.json', 'SEO_Agent_Schedule_Catchup.json', 'SEO_Agent_Publish_Check.json']
-PUBLISH = ['SEOagentV4Full01', 'SEOagentAPIentry', 'SEOagentErrHandl', 'SEOagentTracker1', 'SEOagentSiteTrk1', 'SEOagentPageWch1', 'SEOagentSiteAdm1', 'SEOagentCadence1', 'SEOagentAIVisib1', 'SEOagentAIPulse1', 'SEOagentAIGrow1', 'SEOagentBacklnk1', 'SEOagentAuditSc1', 'SEOagentAdminAPI', 'SEOagentAssess', 'SEOagentLinkBld1', 'SEOagentLinkBAPI', 'SEOagentReplyRd1', 'SEOagentPreRel1', 'SEOagentCatchUp1', 'SEOagentPubCheck']
+MANIFEST = json.load(open(os.path.join(HERE, 'deploy_manifest.json'), encoding='utf-8'))   # shared with n8n/deploy/release.mjs
+WORKFLOWS, PUBLISH = MANIFEST['workflows'], MANIFEST['publish']
 def sh(cmd, **kw): return subprocess.run(cmd, check=True, text=True, capture_output=True, **kw)
 args = sys.argv[1:]
 # R94 (2026-10-16, defects/C_monitors.md): every n8n restart discards a due fire - the crons re-arm for their next future time, and the

@@ -78,6 +78,7 @@ function report() {
     if (!r.ok) fail++;
   }
   console.log(`\n${results.length - fail} passed, ${fail} failed`);
+  if (fail) process.exitCode = 1;   // CI (.github/workflows/ci.yml) fails on any failed check, not on the printed count alone
   save('_results.json', results.map(r => ({ ...r, items: undefined, count: r.items ? r.items.length : 0 })));
 }
 // Scan generated HTML for templating defects

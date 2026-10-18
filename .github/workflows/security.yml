@@ -1,0 +1,88 @@
+# Security checks. The repository is PUBLIC: a leaked key is published the moment it is pushed, so the secret scan runs on every
+# push and pull request, in addition to the build's own scanner (n8n/seo-agent: Slack / Discord / Teams / Zapier webhooks, xoxb-,
+# sk-ant-, AIza, private keys) and GitHub's secret scanning with push protection (turn it on: DEPLOY.md).
+name: Security
+
+on:
+  pull_request:
+  push:
+    branches: [main, 'feature/**', 'release/**']
+  schedule:
+    - cron: '17 4 * * 1' # Mondays 04:17 UTC: CodeQL and the audit see new advisories without a code change
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  secrets:
+    name: secret scan (TruffleHog)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: trufflesecurity/trufflehog@v3.88.0
+        with:
+          extra_args: --results=verified,unknown
+
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript, python, actions]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended
+          config: |
+            paths-ignore:
+              - n8n/seo-agent/workflows
+              - n8n/seo-agent/harness/code_v4
+              - n8n/seo-agent/harness/sample-output
+              - n8n/seo-agent/docs
+              - '**/node_modules'
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:${{ matrix.language }}
+
+  dependency-review:
+    name: dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure
+
+  npm-audit:
+    name: npm audit (production dependencies)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm audit --omit=dev --audit-level=high

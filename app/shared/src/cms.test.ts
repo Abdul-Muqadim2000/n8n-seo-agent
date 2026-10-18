@@ -162,7 +162,7 @@ describe('cmsUrlOk (SSRF: what a customer may type as a CMS address)', () => {
     'https://10.0.0.5',
     'https://[::1]/',
     'https://wp.internal',
-    'https://user:pass@blog.example.org',
+    'https://user:pass@blog.example.org', // trufflehog:ignore (a refused-URL fixture, not a credential)
     'ftp://blog.example.org',
     'javascript:alert(1)',
     '',
