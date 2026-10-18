@@ -1,0 +1,262 @@
+# Alaventra production stack for ONE e2-medium VM (2 shared vCPU, 4 GiB RAM) — deploy/gcp/RUNBOOK.md.
+#
+#   docker compose -p alaventra --env-file /mnt/data/secrets/prod.env -f deploy/gcp/compose.prod.yml up -d
+#
+# What runs here: Caddy (HTTPS), n8n (the SEO engine, Postgres-backed, one main process), its task runners, the app server
+# (Fastify; also serves the web build for portal hosts and as a fallback front end), ONE Postgres holding two databases (n8n, app),
+# Gotenberg (HTML -> PDF) and SearXNG (web search). Not here: Redis / workers (queue mode needs ~1 GB more), the linkgraph job
+# (SEO_LINKGRAPH=off: it streams ~11 GB a month), the n8n sandbox service (privileged Docker-in-Docker for n8n's own AI assistant,
+# which the SEO engine never uses).
+#
+# Memory budget (MiB). e2-medium = 4096 MiB; Debian + dockerd + containerd + the guest agent take ~350, so ~3700 are left.
+#   n8n 1200 · runners 512 · postgres 448 · app 384 · gotenberg 384 · searxng 192 · caddy 96   = 3216 limits
+#   headroom ~480 MiB for the kernel page cache (Postgres reads through it). The limits are ceilings, not reservations: idle the stack
+#   uses ~1.2 GiB (measured on the dev Mac 2026-10-18: n8n 532, runners ~200, searxng 135, app 259, postgres 52, gotenberg ~30).
+#   Only n8n and the runners may spill into the 4 GiB swap file (memswap_limit): a heavy run gets slower instead of being OOM-killed.
+#   Postgres, the app and the small services never swap (memswap_limit = mem_limit), so a heavy run cannot make sign-in slow.
+#
+# Everything persistent lives on the data disk (DATA_DIR, /mnt/data on the VM): postgres/, n8n/, caddy/, spool/. The boot disk holds
+# only images and the swap file, so a recreated VM finds its state where it left it.
+
+name: alaventra
+
+x-logging: &logging
+  # json-file with rotation: at most 3 x 10 MB per container (the boot disk is 20 GB; unbounded logs are the classic way to fill it)
+  driver: json-file
+  options: { max-size: '10m', max-file: '3' }
+
+x-common: &common
+  restart: always
+  logging: *logging
+
+services:
+  caddy:
+    <<: *common
+    image: caddy:2.11.4
+    # 96 MiB: Caddy idles at ~20-30 MiB; the margin is TLS handshakes and request buffering of uploads it streams through
+    mem_limit: 96m
+    memswap_limit: 96m
+    ports:
+      - '${HTTP_PORT:-80}:80'
+      - '${HTTPS_PORT:-443}:443'
+      # the autohealing health check of the managed instance group (Google's probers only; see bootstrap.sh firewall)
+      - '${HEALTH_PORT:-8081}:8081'
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in prod.env (e.g. 34-18-181-79.sslip.io)}
+      APP_HOST: ${APP_HOST:-app.${DOMAIN}}
+      # caddy = this server answers app.<domain> (go-live before Vercel); vercel = app.<domain> is Vercel's and Caddy leaves it alone
+      APP_FRONTEND: ${APP_FRONTEND:-caddy}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+      ORIGIN_SECRET: ${ORIGIN_SECRET:?set ORIGIN_SECRET in prod.env}
+      CADDY_GLOBAL_OPTIONS: ${CADDY_GLOBAL_OPTIONS:-}
+    volumes:
+      - ./caddy:/etc/caddy:ro
+      - ${DATA_DIR:-/mnt/data}/caddy/data:/data
+      - ${DATA_DIR:-/mnt/data}/caddy/config:/config
+    depends_on: [app, n8n]
+
+  postgres:
+    <<: *common
+    image: postgres:17-alpine
+    # 448 MiB: shared_buffers 96 MB + up to 40 connections x ~4-6 MB + autovacuum + maintenance_work_mem 48 MB. Tuned below for this
+    # size (the defaults assume nothing about memory and allow 100 connections). jit off: it costs memory and helps nothing here.
+    mem_limit: 448m
+    memswap_limit: 448m
+    shm_size: 128m
+    command:
+      - postgres
+      - -c
+      - shared_buffers=96MB
+      - -c
+      - effective_cache_size=320MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=48MB
+      - -c
+      - max_connections=40
+      - -c
+      - max_parallel_workers_per_gather=0
+      - -c
+      - jit=off
+      - -c
+      - wal_buffers=4MB
+      - -c
+      - min_wal_size=64MB
+      - -c
+      - max_wal_size=512MB
+      - -c
+      - checkpoint_completion_target=0.9
+      - -c
+      - random_page_cost=1.5
+      - -c
+      - effective_io_concurrency=64
+      - -c
+      - log_min_duration_statement=5000
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?}
+      N8N_DB_PASSWORD: ${N8N_DB_PASSWORD:?}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?}
+    volumes:
+      - ${DATA_DIR:-/mnt/data}/postgres:/var/lib/postgresql/data
+      - ./postgres/initdb.sh:/docker-entrypoint-initdb.d/10-databases.sh:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d n8n && pg_isready -U postgres -d app']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  n8n:
+    <<: *common
+    image: docker.io/n8nio/n8n:${N8N_VERSION:-2.41.4}
+    # 1200 MiB (+1200 swap): idle 532 MiB; a heavy run keeps its whole run data in memory and serialises 25-42 MB of JSON on every
+    # saved step, so peaks of 900+ MiB are normal. The V8 heap cap (1000 MB) sits under the cgroup limit so Node collects garbage
+    # before the kernel steps in.
+    mem_limit: 1200m
+    memswap_limit: 2400m
+    ports:
+      # the editor and the public API: loopback only, reached through an IAP SSH tunnel (RUNBOOK §4); never public
+      - '127.0.0.1:${N8N_LOCAL_PORT:-5678}:5678'
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      NODE_OPTIONS: --max-old-space-size=1000
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: '5432'
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_USER: n8n
+      DB_POSTGRESDB_PASSWORD: ${N8N_DB_PASSWORD:?}
+      DB_POSTGRESDB_POOL_SIZE: '4'
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?the instance key: reuse the local one to keep credentials and API keys (migrate_data.md)}
+      # public URLs: webhooks (and the URLs n8n writes into forms / Wait resumes) use hooks.<domain>; the editor is only on the tunnel
+      N8N_HOST: hooks.${DOMAIN}
+      N8N_PROTOCOL: https
+      N8N_PORT: '5678'
+      WEBHOOK_URL: https://hooks.${DOMAIN}/
+      N8N_EDITOR_BASE_URL: http://localhost:${N8N_LOCAL_PORT:-5678}/
+      N8N_PROXY_HOPS: '1'
+      # the editor is only ever opened as http://localhost through the tunnel; a Secure cookie would make sign-in fail on some browsers
+      N8N_SECURE_COOKIE: 'false'
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-America/New_York}
+      TZ: ${GENERIC_TIMEZONE:-America/New_York}
+      EXECUTIONS_MODE: regular
+      # Concurrency (RUNBOOK §8): at most 4 executions started by a trigger or a webhook run at once; more wait in n8n's own FIFO queue
+      # (they are not refused, and they survive a restart). 4 = the engine gate's ceiling (_run_guard.js: 3 other open runs + this one),
+      # so n8n never starts more than the engine would let run, and one slot is always left for the app's synchronous webhooks.
+      # Sub-workflow executions are NOT counted by n8n (docs.n8n.io/hosting/scaling/concurrency-control/) — the heavy analyses are
+      # sub-workflows, so their limit is the engine's own gate, not this number.
+      N8N_CONCURRENCY_PRODUCTION_LIMIT: ${N8N_CONCURRENCY_PRODUCTION_LIMIT:-4}
+      EXECUTIONS_TIMEOUT: '3600'
+      EXECUTIONS_TIMEOUT_MAX: '7200'
+      # 14 days of history (run_report.py, capture_runs.py and the re-ratings read executions back), at most 10k rows
+      EXECUTIONS_DATA_PRUNE: 'true'
+      EXECUTIONS_DATA_MAX_AGE: '336'
+      EXECUTIONS_DATA_PRUNE_MAX_COUNT: '10000'
+      # PDFs, zips and Word files stay on disk instead of in the heap
+      N8N_DEFAULT_BINARY_DATA_MODE: filesystem
+      N8N_RUNNERS_ENABLED: 'true'
+      N8N_RUNNERS_MODE: external
+      N8N_RUNNERS_BROKER_LISTEN_ADDRESS: 0.0.0.0
+      N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN:?}
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: 'true'
+      # G6 (AI panel at scale): n8n's 200 MB Data Table default is too small for a large question panel
+      N8N_DATA_TABLES_MAX_SIZE_BYTES: '1073741824'
+      N8N_DIAGNOSTICS_ENABLED: 'false'
+      N8N_PERSONALIZATION_ENABLED: 'false'
+      N8N_VERSION_NOTIFICATIONS_ENABLED: 'false'
+      N8N_TEMPLATES_ENABLED: 'false'
+      N8N_HIRING_BANNER_ENABLED: 'false'
+    volumes:
+      - ${DATA_DIR:-/mnt/data}/n8n:/home/node/.n8n
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:5678/healthz >/dev/null 2>&1 || exit 1']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+
+  runners:
+    <<: *common
+    image: ghcr.io/n8n-io/runners:${N8N_VERSION:-2.41.4}
+    # 512 MiB (+512 swap): the Code nodes run here. Idle ~35-200 MiB; the crawl / report Code nodes hold a run's page data while they
+    # work. P34-5 (two 200-page audits at once stalled the runner) is why it may swap rather than die.
+    mem_limit: 512m
+    memswap_limit: 1024m
+    depends_on: [n8n]
+    environment:
+      N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN:?}
+      N8N_RUNNERS_TASK_BROKER_URI: http://n8n:5679
+      N8N_RUNNERS_AUTO_SHUTDOWN_TIMEOUT: '15'
+
+  app:
+    <<: *common
+    build:
+      context: ../../app
+    image: alaventra-app:${APP_IMAGE_TAG:-local}
+    # 384 MiB: idle 259 MiB (dev, with tsx); the production build is lighter. Uploads stream to the spool dir, never into memory.
+    mem_limit: 384m
+    memswap_limit: 384m
+    depends_on:
+      postgres: { condition: service_healthy }
+    env_file:
+      # the owner's two settings files, as loaded into Secret Manager (load_secrets.sh) and written here by startup.sh
+      - path: ${SECRETS_DIR:-/mnt/data/secrets}/n8n.env
+        required: true
+      - path: ${SECRETS_DIR:-/mnt/data/secrets}/app.env
+        required: true
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=300
+      DATABASE_URL: postgres://app:${APP_DB_PASSWORD:?}@postgres:5432/app
+      # where people open the app: the Vercel front end once it exists (app.<domain>), until then this server through Caddy
+      APP_URL: https://${APP_HOST:-app.${DOMAIN}}
+      # where browsers and machines reach this server directly (uploads, log push, SCIM)
+      PUBLIC_API_URL: https://api.${DOMAIN}
+      APP_EXTRA_HOSTS: api.${DOMAIN}${APP_EXTRA_HOSTS_MORE:-}
+      # app.<domain> and api.<domain> share the session cookie (same site), so a direct upload to api.<domain> is signed in
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-${DOMAIN}}
+      CORS_ORIGINS: https://${APP_HOST:-app.${DOMAIN}}${CORS_ORIGINS_MORE:-}
+      # Caddy is the one proxy in front (it rewrites X-Forwarded-For to the visitor's address, also for Vercel's proxied requests)
+      TRUST_PROXY: '1'
+      N8N_BASE_URL: http://n8n:5678
+      # n8n posts results here. The service answers to "host.docker.internal" on this network on purpose: the engine accepts http
+      # callbacks only for localhost / host.docker.internal / n8n, and every callback URL already stored in the Data Tables (sites,
+      # ladders, monitors) says http://host.docker.internal:4000 — so migrated rows keep working and callbacks never leave the VM.
+      CALLBACK_BASE_URL: http://host.docker.internal:4000
+      LOG_SPOOL_DIR: /spool
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-America/New_York}
+    volumes:
+      - ${DATA_DIR:-/mnt/data}/spool:/spool
+    networks:
+      default:
+        aliases: [host.docker.internal]
+
+  gotenberg:
+    <<: *common
+    image: gotenberg/gotenberg:8
+    # 384 MiB: Chromium idles at ~30 MiB and peaks at ~250-350 MiB on a long report; restarting it every 20 conversions keeps it there.
+    # LibreOffice routes are off (the engine converts HTML only).
+    mem_limit: 384m
+    memswap_limit: 384m
+    command:
+      - gotenberg
+      - --api-timeout=120s
+      - --chromium-disable-javascript=true
+      - --chromium-restart-after=20
+      - --libreoffice-disable-routes=true
+      - --log-level=warn
+
+  searxng:
+    <<: *common
+    image: ghcr.io/searxng/searxng:${SEARXNG_VERSION:-2026.9.30-a9d990033}
+    # 192 MiB: idles at ~135 MiB with one worker
+    mem_limit: 192m
+    memswap_limit: 192m
+    environment:
+      SEARXNG_SECRET: ${SEARXNG_SECRET:?}
+      GRANIAN_WORKERS: '1'
+    volumes:
+      - ../../n8n/searxng-settings.yml:/etc/searxng/settings.yml:ro
