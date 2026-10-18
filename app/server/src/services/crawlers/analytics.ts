@@ -262,7 +262,7 @@ export async function crawlerData(site: SiteRow, daysIn: unknown, opts: { withSe
   const top: CrawlerData['waste']['top'] = [];
   for (const r of wasteRows)
     for (const [reason, n] of [['5xx', r.s5xx], ['4xx', r.s4xx], ['3xx', r.s3xx], ['param', r.param_hits]] as const)
-      if (num(n) > 0) top.push({ path: r.path, reason, hits: num(n), status: reason === 'param' ? null : r.last_status });
+      if (num(n) > 0) top.push({ path: r.path, reason, hits: num(n), status: reason !== 'param' && r.last_status != null && `${Math.floor(r.last_status / 100)}xx` === reason ? r.last_status : null });
   top.sort((a, b) => b.hits - a.hits);
   const paramPatterns = await sqlClient<{ path: string; keys: string; hits: string }[]>`
     select path, query_keys as keys, count(*) as hits from crawler_hits

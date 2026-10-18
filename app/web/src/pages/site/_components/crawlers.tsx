@@ -143,12 +143,12 @@ function Retention({ d, orgId, siteId, admin }: { d: CrawlerData; orgId: string;
   return (
     <Field label="Keep each crawler request for" hint={`Daily totals are kept ${CRAWLER_LIMITS.rollupDays} days. Requests from people are never stored.`}>
       {(p) => (
+        <div className="max-w-[12rem]">
         <Select
           {...p}
           value={String(d.setup.retentionDays)}
           disabled={!admin || save.isPending}
           onChange={(e) => save.mutate({ retentionDays: Number(e.target.value) }, { onSuccess: () => toast.success('Saved'), onError: (err) => toast.error(errorMessage(err)) })}
-          className="max-w-[12rem]"
         >
           {CRAWLER_LIMITS.retentionDays.map((v) => (
             <option key={v} value={v}>
@@ -156,6 +156,7 @@ function Retention({ d, orgId, siteId, admin }: { d: CrawlerData; orgId: string;
             </option>
           ))}
         </Select>
+        </div>
       )}
     </Field>
   );

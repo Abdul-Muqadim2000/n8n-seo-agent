@@ -89,7 +89,7 @@ describe('Crawlers page', () => {
   it('with data: headline, impostors apart, coverage gaps, budget, AI demand, recommendation links', () => {
     const html = wrap(<Crawlers d={full} {...props} admin member />);
     const t = text(html);
-    expect(t).toContain('Googlebot asked for 70 pages; AI crawlers for 40 in 30 days');
+    expect(t).toContain('Googlebot made 70 requests, AI crawlers 40, in the last 30 days');
     expect(t).toContain('92% of crawler requests were proved');
     expect(t).toContain('9 more only pretended to be a crawler');
     for (const s of ['Pages Googlebot did not fetch', '/pricing', 'Crawl budget Googlebot spent badly', '/api/broken', 'page,utm_source', 'ChatGPT-User, Claude-User', 'Impostors', '45.133.1.0/24', 'Claimed', 'Proved', '/old-landing', 'Key asl_AbCdEfGh… active', 'Replace the key', 'Delete all log data', 'Export CSV']) expect(t).toContain(s);

@@ -93,7 +93,7 @@ export function Crawlers({ d, orgId, siteId, domain, admin, member, loading, onU
   const top = d.recommendations.find((r) => r.tone !== 'good') ?? d.recommendations[0];
   const proved = t.verifiedShare != null ? ratioPct(t.verifiedShare, 0) : '–';
   const title = t.hits
-    ? `Googlebot asked for ${plural(t.googlebot, 'page')}; AI crawlers for ${n(t.ai)} in ${d.windowDays} days`
+    ? `Googlebot made ${plural(t.googlebot, 'request')}, AI crawlers ${n(t.ai)}, in the last ${d.windowDays} days`
     : `No crawler request in the last ${d.windowDays} days of your logs`;
   const cov = d.coverage;
   return (
