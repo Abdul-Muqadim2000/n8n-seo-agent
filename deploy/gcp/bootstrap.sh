@@ -194,7 +194,7 @@ if q compute instance-groups managed describe "$MIG" --zone="$ZONE"; then
 else
   # size 0 first: the one VM is added below with its own stateful disk and address
   run compute instance-groups managed create "$MIG" --zone="$ZONE" --template="$TPL_URL" --size=0 \
-      --health-check="$HC" --initial-delay=900 --default-action-on-vm-failure=repair \
+      --health-check="$HC" --initial-delay=1800 --default-action-on-vm-failure=repair \
       --stateful-disk=device-name=boot,auto-delete=on-permanent-instance-deletion --project="$PROJECT"
 fi
 
