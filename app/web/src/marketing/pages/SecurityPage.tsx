@@ -67,6 +67,7 @@ const GROUPS: { icon: LucideIcon; title: string; items: string[] }[] = [
       'Each company’s websites, runs, reports and files are kept apart',
       'Website data appears only after ownership is verified',
       'Deleting a website or company also removes its plans from the automation engine',
+      'Server logs you send keep crawler requests only: visits by people are dropped as the file is read, no address is stored, and the file is deleted once read',
     ],
   },
   {

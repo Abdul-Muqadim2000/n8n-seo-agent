@@ -10,6 +10,7 @@ import {
   Send,
   Link2,
   PenLine,
+  Radar,
   ScanSearch,
   Search,
   Sparkles,
@@ -32,7 +33,8 @@ export type VisualKey =
   | 'report-delivery'
   | 'growth-loop'
   | 'link-sources'
-  | 'ai-engines';
+  | 'ai-engines'
+  | 'crawlers';
 
 export interface Fact {
   /** a number counts up when it scrolls into view; a string is shown as is */
@@ -570,6 +572,60 @@ export const features: Feature[] = [
       eyebrow: 'One panel, six engines',
       title: 'The same questions, asked everywhere, on a schedule.',
       body: 'Every engine gets the same buyer questions. Answers are read for who is named, who is cited and what is said about you, and every rate carries a 95% range — so a real change stands out from day-to-day noise.',
+    },
+  },
+  {
+    slug: 'crawler-analytics',
+    name: 'Crawler analytics',
+    shortName: 'Crawlers',
+    tagline: 'What Googlebot and the AI crawlers really fetched on your site — and which of them were impostors.',
+    summary:
+      'Search Console tells you what Google decided. Your server logs tell you what its crawler, and every AI crawler, actually asked for. Upload a log or let Cloudflare or your log drain send it, and Ascentra shows every crawler’s requests, checks each one against the addresses its company publishes, and points at the pages nobody fetched and the requests wasted on redirects and errors.',
+    icon: Radar,
+    benefits: [
+      'Googlebot, Bingbot and Applebot, and the AI crawlers: GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot, Claude-SearchBot, Claude-User, PerplexityBot, Perplexity-User, Google-Agent, Amazonbot, Common Crawl, Bytespider and Meta',
+      'Every crawler checked against its company’s published address list or by DNS — a request that only borrows a crawler’s name is counted apart, never as the real thing',
+      'Pages Google or the AI crawlers did not fetch, most-visited first, and the requests spent on redirects, errors and parameter URLs',
+      'The pages ChatGPT, Claude and Perplexity fetched because someone asked them a question',
+      'Upload Apache, Nginx, IIS, CloudFront or JSON logs, or have Cloudflare Logpush, Vercel, Fastly or Akamai send them automatically',
+      'Only crawler requests are kept: visits by people are counted and dropped, and no address is stored',
+    ],
+    steps: [
+      { title: 'Send your logs', body: 'Upload a file from your server or hosting panel, or give your CDN the push key once and it sends every request within minutes.' },
+      { title: 'Every crawler is checked', body: 'Each request that calls itself a crawler is checked against the addresses its company publishes. Impostors go in their own column.' },
+      { title: 'Compared with your pages', body: 'The requests are matched with your site’s page list, so pages no crawler fetched stand out — most-visited first.' },
+      { title: 'Act on it', body: 'Each finding links to the audit or the AI visibility view that fixes it, and every figure exports to CSV or the API.' },
+    ],
+    facts: [
+      { value: 15, suffix: '+', label: 'search and AI crawlers recognised' },
+      { value: 'Four', label: 'log formats: Apache / Nginx, IIS, CloudFront and JSON' },
+      { value: 'Zero', label: 'visitor addresses stored' },
+    ],
+    faqs: [
+      {
+        q: 'Why not just trust the user agent?',
+        a: 'Because anyone can write “Googlebot” or “GPTBot” in a request. Ascentra checks the address each request came from against the list Google, Microsoft, Apple, OpenAI, Anthropic, Perplexity, Amazon and Common Crawl publish, or confirms it by DNS. A crawler whose company publishes no way to check it is shown as claimed, not verified.',
+      },
+      {
+        q: 'Which logs can we send?',
+        a: 'Apache and Nginx access logs, IIS and CloudFront logs, and JSON lines — plain or gzip, up to 1 GB a file. Or let Cloudflare Logpush (an Enterprise feature), Vercel, Fastly or Akamai send them automatically with a key you create in the app.',
+      },
+      {
+        q: 'What happens to our visitors’ data?',
+        a: 'Requests by people are counted and dropped as the file is read; the file itself is deleted as soon as it has been read. For crawlers we keep the time, the page, the status, the size and the answer time — never an address, and never the values in a URL’s parameters. You choose how long the details are kept, and can delete them all at once.',
+      },
+      {
+        q: 'Is Google-Extended in the report?',
+        a: 'No crawler is called Google-Extended: it is a robots.txt switch for AI use of your pages, while Google fetches them with its usual crawlers. The page says so instead of showing an empty row.',
+      },
+    ],
+    related: ['technical-audits', 'ai-visibility', 'site-tracking'],
+    image: 'serverRoom',
+    visual: 'crawlers',
+    story: {
+      eyebrow: 'Why it matters',
+      title: 'An AI assistant can only name a page its crawler has read.',
+      body: 'Rankings and AI answers both start with a fetch. Your logs are the only record of which fetches happened — and of how many requests that looked like Googlebot were someone else.',
     },
   },
   {

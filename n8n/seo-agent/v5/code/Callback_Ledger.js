@@ -20,8 +20,29 @@ let settled = (all.find((it) => isSettle((it && it.json) || null)) || {}).json |
 if (!settled) { try { settled = $(SETTLE).first().json || null; } catch (e) { settled = null; } }
 const run_ledger = settled ? LCB.fromSettle(settled)
   : { settled: false, cost_basis: 'this run could not be settled, so no cost figure is given (see the run ledger row)' };
+// C-1 (re-rating 2026-10-17): a run that ran late says so in its report - started by the schedule catch-up for a slot it missed (the
+// payload's `trigger: 'catchup'`, `scheduled_for`, `why`) or fired by its own schedule hours after the slot (the Mac asleep). The slot,
+// how late and why go on the callback as `ran_late`, first in the report's HTML and in its subject. An on-demand run is never "late".
+/*__CATCHUP__*/
+const SCHED = __SCHED_JSON__;
+let __trig = {}, __fired = '';
+for (const __n of ['Manual Run', 'Watch Run']) { try { const __t = $(__n).first(); if (__t && __t.json) { __trig = __t.json; break; } } catch (e) {} }
+if (__trig.body && typeof __trig.body === 'object') __trig = { ...__trig, ...__trig.body };
+if (SCHED.trigger) { try { const __t = $(SCHED.trigger).first(); if (__t && __t.json) __fired = String(__t.json.timestamp || ''); } catch (e) {} }
+let ran_late = { late: false };
+try { ran_late = CU.lateRun({ trigger: __trig.trigger, scheduled_for: __trig.scheduled_for, why: __trig.why, started_at: __trig.started_at, fired_at: __fired,
+  cron: SCHED.cron, tz: SCHED.tz, kind: SCHED.kind }); } catch (e) { ran_late = { late: false }; }
+const __esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+const lateMark = (j) => {
+  if (!ran_late.late) return j;
+  const box = '<div class="ran-late" style="border:1px solid #b45309;background:#fffbeb;color:#78350f;padding:10px 14px;margin:0 0 14px;font:14px/1.5 sans-serif"><strong>Ran late.</strong> ' + __esc(ran_late.text) + '</div>';
+  const o = { ...j, ran_late };
+  if (typeof o.html === 'string' && o.html) o.html = /<body[^>]*>/i.test(o.html) ? o.html.replace(/<body[^>]*>/i, (b) => b + box) : box + o.html;
+  if (typeof o.subject === 'string' && o.subject && !/\(ran late/.test(o.subject)) o.subject = o.subject + ' (ran late — due ' + ran_late.due.slice(0, 10) + ')';
+  return o;
+};
 return items.map((it) => {
-  const out = { json: { ...((it && it.json) || {}), run_ledger } };
+  const out = { json: lateMark({ ...((it && it.json) || {}), run_ledger }) };
   if (it && it.binary) out.binary = it.binary;
   return out;
 });

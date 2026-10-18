@@ -8,7 +8,7 @@ import { summarize, titleFor } from '../src/services/summaries';
 describe('D-4: an AI Growth dry run is titled as one', () => {
   const dry = { stage: 'ai_growth', domain: 'techand.ai', dry_run: true, dry_run_note: 'DRY RUN — nothing was submitted', submitted: { bing: { submitted: 0 }, indexnow: { submitted: 0 } } };
   it('title and summary say dry run', () => {
-    expect(titleFor('ai_growth', dry)).toBe('AI growth · dry run, nothing submitted · techand.ai');
+    expect(titleFor('ai_growth', dry)).toBe('AI growth · techand.ai (test run, nothing submitted)');
     expect(summarize('ai_growth', dry).dryRun).toBe(true);
   });
   it('the weekly run keeps its title', () => {

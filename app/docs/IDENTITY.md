@@ -29,7 +29,7 @@ are in `shared/src/guides.ts` (area `identity`).
 | An admin covering their tracks | The audit log is append-only in the database itself (a trigger refuses UPDATE, and DELETE outside the retention purge) |
 | Secrets in the audit log | Events carry ids, labels and before/after of plain settings only — never a password, code, token, secret or key |
 
-## 2. Data model (migration `0009_identity`)
+## 2. Data model (migration `0011_g1_identity`, with the audit-log trigger appended by hand at its end)
 
 - `users`: `mfa_totp_secret` (sealed), `mfa_totp_pending` (sealed, during enrolment), `mfa_totp_enabled_at`, `mfa_totp_last_step`.
 - `mfa_recovery_codes` (user, SHA-256 of the code, used at).

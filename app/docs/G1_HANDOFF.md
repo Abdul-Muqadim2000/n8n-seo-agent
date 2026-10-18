@@ -1,6 +1,6 @@
 # G1 enterprise identity — hand-off (2026-10-18)
 
-Branch `worktree-agent-acb3f285de8c3a4bc` (based on `feature/seo-agent-v4.5`, last merged at 2aa912a). Design and manual:
+Branch `worktree-agent-acb3f285de8c3a4bc` (based on `feature/seo-agent-v4.5`, last merged at 7fe504f+, after G3). Design and manual:
 `app/docs/IDENTITY.md`; endpoints: `app/API.md` (sections "Two-step verification and step-up", "Sessions", "Single sign-on",
 "Audit log").
 
@@ -23,6 +23,11 @@ Branch `worktree-agent-acb3f285de8c3a4bc` (based on `feature/seo-agent-v4.5`, la
   `test/helpers/client.ts` (cookie jar, CSRF header, a different IP per request), `webauthn.ts` (software authenticator, real
   ES256 signatures), `idp.ts` (mock OIDC issuer with RS256 JWKS / PKCE / client auth; SAML IdP with a generated key + self-signed
   cert signing assertions with xml-crypto).
+
+## Migration now
+After merging G3 (`0010_crawler_logs`), the whole G1 schema is **`server/drizzle/0011_g1_identity.sql`** (10 tables + columns on
+`users`, `sessions`, `organizations`, `memberships`), regenerated from the merged schema; the audit-log trigger is appended by
+hand at its end — keep that tail if it is ever regenerated or renumbered.
 
 ## Done after the first hand-off (2026-10-18 night)
 - **5c43c07 SCIM 2.0** — `services/scim.ts`, `routes/scim.ts` (`/api/scim/v2`, bearer `scim_…` hashed, 2 live, 600/min), Users

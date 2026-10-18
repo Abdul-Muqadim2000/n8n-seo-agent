@@ -314,7 +314,7 @@ const RS = (() => {
     return band + ': ' + ch.changed + ' of the top ' + ch.depth + ' places changed' + when
       + (ch.entered ? ', ' + ch.entered + ' new page' + (ch.entered === 1 ? '' : 's') + ' came in' : '')
       + (ch.mean_move ? ', and the pages present in both readings moved ' + ch.mean_move + ' place' + (ch.mean_move === 1 ? '' : 's') + ' on average' : '')
-      + ' (measured by comparing the two stored readings; ' + ch.labels_basis + (ch.noise ? '; ' + ch.noise.text : '') + ').';
+      + ' (measured by comparing the two stored readings; ' + ch.labels_basis + (ch.noise ? '; ' + ch.noise.text : '') + ')' + (ch.outlier ? '; ' + ch.outlier.text : '') + '.';   // C-4
   };
   // the clause that goes beside a gain or a drop, so a move is never reported without the context that decides what it means
   const moveNote = (delta, ch) => {
@@ -372,6 +372,40 @@ const RS = (() => {
     if (!best) return null;
     return { ...best, text: 'two readings of this results page taken ' + best.minutes + ' minutes apart (' + best.at.slice(0, 10) + ') already differed in ' + best.changed + ' of the top ' + best.depth + ' places' };
   };
+  // ---- C-4 (re-rating 2026-10-17): ONE OUTLIER READING IS NOT THE BASELINE ----
+  // "e invoicing in uae: the whole results page moved: 9 of the top 9 places changed since the reading of 2026-10-16, 9 new pages came in"
+  // - today's top ten was IDENTICAL to the readings of 2026-10-15 19:48 and 2026-10-16 00:33; the one compared against (2026-10-16 19:58,
+  // the same request) was a different page. The baseline is still the newest earlier reading, unless that reading is a one-off: it differs
+  // from this reading by half the page or more, while an older reading (up to 3 back, within 21 days) matches this one (under a fifth of
+  // the places changed) and differed from the newest by half or more. Then the older, agreeing reading is the baseline and the one-off is
+  // named with its figures. A change is never computed against a reading the readings around it contradict.
+  const stableReading = (rows, o) => {
+    const q = o || {}; const kw = kwKey(q.keyword), dom = bare(q.domain); const before = S(q.before || '9999');
+    const since = new Date(Date.parse(before.slice(0, 4) === '9999' ? new Date().toISOString() : before) - (Number(q.days) || 21) * 864e5).toISOString();
+    const fallback = prevReading(rows, q);
+    const cands = (rows || []).filter(h => h && isDesk(h) && kwKey(h.keyword) === kw && (!dom || bare(h.domain) === dom) && S(h.checked_at) && S(h.checked_at) < before
+      && S(h.checked_at) >= since && h.position !== '' && h.position != null && Number(h.position) >= 0 && snapOf(h.snapshot_json))
+      .sort((a, b) => S(b.checked_at).localeCompare(S(a.checked_at))).slice(0, Number(q.max) || 3);
+    const latest = fallback && cands.length && S(cands[0].checked_at) === S(fallback.checked_at) ? cands[0] : null;
+    if (!latest || cands.length < 2 || !snapOf(q.cur)) return { row: fallback, outlier: null };
+    const c0 = churn(latest.snapshot_json, q.cur, {});
+    if (!c0.available || c0.changed_pct < CHURN.high_pct) return { row: latest, outlier: null };
+    for (const older of cands.slice(1)) {
+      const co = churn(older.snapshot_json, q.cur, {}), cl = churn(older.snapshot_json, latest.snapshot_json, {});
+      if (co.available && cl.available && co.changed_pct < CHURN.still_pct && cl.changed_pct >= CHURN.high_pct) {
+        const at = (x) => S(x).slice(0, 16).replace('T', ' ');
+        return { row: older, outlier: { at: S(latest.checked_at), changed: c0.changed, depth: c0.depth, vs_older: cl.changed, older_at: S(older.checked_at), older_changed: co.changed,
+          text: 'the reading of ' + at(latest.checked_at) + ' UTC was a one-off: it differed from this reading in ' + c0.changed + ' of the top ' + c0.depth + ' places and from the reading before it in ' + cl.changed
+            + ', while this reading matches the reading of ' + at(older.checked_at) + ' UTC (' + co.changed + ' changed) - so movement is measured against that one' } };
+      }
+    }
+    return { row: latest, outlier: null };
+  };
+  // the label beside a "N of top M changed" figure, in words, each one defined in the report's footer (BAND_TERMS)
+  const BAND_WORD = { high: 'most of the page moved', some: 'part of the page moved', still: 'barely moved', noise: 'within noise' };
+  const BAND_TERMS = 'Labels: "most of the page moved" = half the places or more changed occupant; "part of the page moved" = a fifth or more; "barely moved" = less; '
+    + '"within noise" = no more places changed than in two readings of the same page taken minutes apart, so it is not called movement at all';
+  const bandWord = (b) => BAND_WORD[S(b)] || S(b);
   // a measured change, judged against that noise: no larger than it = 'noise', and every severity word is withheld
   const withNoise = (ch, nz) => {
     if (!ch || !ch.available || !nz) return ch;
@@ -490,7 +524,7 @@ const RS = (() => {
         + (left ? '; ' + left + (left === 1 ? ' keyword with no impressions weighs nothing' : ' keywords with no impressions weigh nothing') : '') + '; the unweighted average is ' + unweighted + '%' };
   };
   return { MOVE, moveKind, cannibal, outranked, WEIGHT, weightedVoice, CTR, SUM_CTR, METHOD, AIO_KEEP, AIO_SOURCE, keepAt, CHURN, read, features, typeList, ourRank, landscape, voice, snapshot, pack, unpack,
-    featureLine, featureChips, churn, churnNone, churnText, moveNote, bare, hostOf, isOurs, listOf, weight, urlKey, serpHosts, prevReading, noise, withNoise };
+    featureLine, featureChips, churn, churnNone, churnText, moveNote, bare, hostOf, isOurs, listOf, weight, urlKey, serpHosts, prevReading, stableReading, bandWord, BAND_TERMS, noise, withNoise };
 })();
 return $input.all().map(i => { const j = i.json || {}; const a = RS.read(j.serp); const mine = RS.ourRank(a, j.domain);
   const features = RS.features(a, j.domain); const landscape = RS.landscape(a, j.domain, j.competitors || [], mine.position);

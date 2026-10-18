@@ -9,6 +9,7 @@ import { authenticateKey, createKey, listKeys, revokeKey } from '../services/api
 import {
   fileOf,
   getAudit,
+  getCrawlers,
   getReport,
   getRun,
   getWebsite,
@@ -67,6 +68,7 @@ const ENDPOINTS = [
   'GET /api/v1/websites/:websiteId',
   'GET /api/v1/websites/:websiteId/audits',
   'GET /api/v1/websites/:websiteId/audits/:auditId',
+  'GET /api/v1/websites/:websiteId/crawlers',
   'GET /api/v1/runs',
   'GET /api/v1/runs/:runId',
   'GET /api/v1/reports',
@@ -94,6 +96,13 @@ const TOOLS: { name: string; description: string; inputSchema: Record<string, un
       "One audit's findings in its own fix-list order, with severity, pages affected, the pages checked, evidence, and whether each is new, open, fixed or no longer seen compared with the previous audit of the same type. Filter with severity (e.g. 'high,critical') and status (e.g. 'new').",
     inputSchema: { type: 'object', properties: { websiteId: { type: 'string' }, auditId: { type: 'string' }, severity: { type: 'string' }, status: { type: 'string' } }, required: ['websiteId', 'auditId'] },
     run: (c, a) => getAudit(c, a.websiteId, a.auditId, a),
+  },
+  {
+    name: 'get_crawler_activity',
+    description:
+      "What Googlebot, Bingbot and the AI crawlers (GPTBot, ClaudeBot, PerplexityBot, ChatGPT-User …) actually requested on one verified website, from its own access logs: requests per crawler and day with how many were proved by the vendor's IP list or DNS, spoofed crawlers counted apart, pages Google or AI did not fetch, crawl budget spent on redirects / errors / parameter URLs, pages AI assistants fetched because a person asked, response times. days: 7, 30 or 90.",
+    inputSchema: { type: 'object', properties: { websiteId: { type: 'string' }, days: { type: 'integer', enum: [7, 30, 90] } }, required: ['websiteId'] },
+    run: (c, a) => getCrawlers(c, a.websiteId, a),
   },
   {
     name: 'list_runs',
@@ -153,7 +162,7 @@ async function mcp(ctx: V1Ctx, msg: Rpc): Promise<unknown | null> {
         protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0],
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: 'ascentra', title: `${config.brand} — ${ctx.org.name}`, version: '1.0.0' },
-        instructions: `Read-only access to ${ctx.org.name}'s SEO data: websites, technical audits and their findings, analyses, reports, and a free publish check. Nothing here starts a run or changes a setting.`,
+        instructions: `Read-only access to ${ctx.org.name}'s SEO data: websites, technical audits and their findings, crawler activity from server logs, analyses, reports, and a free publish check. Nothing here starts a run or changes a setting.`,
       });
     }
     case 'ping':
@@ -202,6 +211,7 @@ export async function apiV1Routes(app: FastifyInstance) {
     const p = req.params as Args;
     return getAudit(await readCtx(req), p.websiteId, p.auditId, req.query as Args);
   });
+  app.get('/api/v1/websites/:websiteId/crawlers', { config: perMinute }, async (req) => getCrawlers(await readCtx(req), (req.params as Args).websiteId, req.query as Args));
   app.get('/api/v1/runs', { config: perMinute }, async (req) => listRuns(await readCtx(req), req.query as Args));
   app.get('/api/v1/runs/:runId', { config: perMinute }, async (req) => getRun(await readCtx(req), (req.params as Args).runId));
   app.get('/api/v1/reports', { config: perMinute }, async (req) => listReports(await readCtx(req), req.query as Args));

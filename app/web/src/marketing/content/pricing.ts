@@ -55,6 +55,7 @@ export const pricingTiers: PricingTier[] = [
       'Up to three pages a week, with the autopilot pipeline and several ladders', // PLACEHOLDER — confirm
       'AI search visibility: up to 50 questions and the daily AI Pulse',
       'Backlinks from every source, with Ascentra’s own link checks',
+      'Crawler analytics from your server logs: Google and the AI crawlers, each one checked',
       'Link building: prospects, contacts and pitches from your own mailbox',
       'Full SEO reports as PDF or Word',
       'Daily key-page check and the pre-release check for your build',
@@ -244,6 +245,7 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Daily AI Pulse', hint: 'Alerts only on statistically real changes', values: [false, true, true] },
       { label: 'AI growth, every week', hint: 'New pages sent to Bing and IndexNow, key pages scored for AI readiness, the questions to win queued', values: [false, true, true] },
       { label: 'Earned media', hint: 'The exact pages AI cites without naming you, with a draft for each', values: [false, true, true] },
+      { label: 'Crawler analytics from your server logs', hint: 'Googlebot and the AI crawlers, each checked against its company’s addresses; impostors apart', values: [false, true, true] }, // PLACEHOLDER — confirm
       { label: 'Backlinks from every source', hint: 'Nine sources, every link checked by Ascentra', values: [false, true, true] }, // PLACEHOLDER — confirm
       { label: 'Prospects, contacts and outreach drafts from your own mailbox', values: [false, true, true] },
       { label: 'Mailbox connected without a password', hint: 'Microsoft 365 or Gmail on their own sign-in screen; an app password works for any other host', values: [false, true, true] },

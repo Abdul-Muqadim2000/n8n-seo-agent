@@ -31,3 +31,4 @@ export * from './ai-visibility';
 export * from './api-v1';
 export * from './identity';
 export * from './cms';
+export * from './crawlers';

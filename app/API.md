@@ -170,6 +170,20 @@ details` — details never carry a password, code, token, secret or key (`safeAu
 | POST | /api/orgs/:orgId/sites/:siteId/ai/indexnow/check | (member, verified site; 20 / 10 min) | `IndexNowCheck` — fetches the site's IndexNow key file (from the latest AI growth run; own host, https) and says whether it is in place |
 | POST | /api/orgs/:orgId/sites/:siteId/backlinks/import | `linkImportSchema` `{ csv, fileName? }` (member, verified site; 16 MB, 20 an hour) — v4.10: a Search Console Links export (Latest links / More sample links / Top linking sites) or another tool's backlink CSV, parsed by `shared/src/link-import.ts` into `seo_link_imports` (the same kind replaces the previous upload); 400 with a plain message when the file holds no links to the site | `LinkImportSummary` |
 
+## Crawlers from server logs (gap #6, `docs/LOG_ANALYTICS.md`, `shared/src/crawlers.ts`)
+Verified sites only (403 `forbidden` otherwise); another company's website is a 404. Times are UTC days.
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | /api/orgs/:orgId/sites/:siteId/crawlers?days=7\|30\|90 | (viewer) | `CrawlerData` — totals, per-crawler rows (verified / claimed / unchecked / spoofed, statuses, paths, answer time, how it is proved), daily series by kind with impostors apart, coverage against `seo_pages`, crawl budget, new pages, AI fetches for a person, answer times, impostors with their networks, AI crawlers refused, recommendations (`link`: technical / ai / crawler-setup), `setup` (retention, push key prefix and last push, endpoint, header, limits, IP lists with dates and errors) and `ingests` |
+| GET | …/crawlers/ingests | (viewer) | `{ items: LogIngestView[] }` (last 50; pushes of the last day only) |
+| GET | …/crawlers/export?kind=daily\|pages\|hits&days= | (viewer; 30 / 10 min) | CSV attachment (cells starting with `= + - @` are prefixed with `'`) |
+| POST | …/crawlers/upload?name= | raw file body, `application/octet-stream`, plain or gzip (member; 1 GB; 20 an hour) | 202 `LogUploadAccepted` `{ ingest, duplicate: false }` (queued; the worker reads it), 200 with `duplicate: true` for a file already read, 413 too large |
+| PUT | …/crawlers/settings | `crawlerSettingsSchema` `{ retentionDays: 7 \| 30 \| 90 }` (admin) | `{ retentionDays }` |
+| POST | …/crawlers/push-key | (admin; 10 an hour) | `LogPushKeyCreated` `{ token, prefix, endpoint, header, createdAt }` — the key is returned **once**; a new key replaces the old one |
+| DELETE | …/crawlers/push-key | (admin) | `{ ok }` (pushes refused from the next one) |
+| DELETE | …/crawlers/data | `{ confirm: <domain> }` (admin) | `{ ok, deleted: { requests, dailyRows, files } }`; 409 while a file is being read |
+| POST | /api/ingest/logs/:siteId | header `X-Ascentra-Log-Key: asl_…` (or `Authorization: Bearer asl_…`); NDJSON / JSON array, plain or gzip; no session, no CSRF header; 100 MB; 120 a minute per site | 200 `{ ok, ingestId, duplicate }` (also for a batch already received), 200 `{ ok, empty }` for an empty body, 401 `push_key_invalid` for every refusal (unknown or unverified site, wrong or revoked key), 413 too large |
+
 ## Dashboards (verified sites only; 403 otherwise)
 | Method | Path | Returns |
 |---|---|---|
@@ -410,13 +424,14 @@ Company settings → API access. The key is shown **once**; only its SHA-256 is 
 | GET | /api/v1/websites/:websiteId | `WebsiteV1` |
 | GET | /api/v1/websites/:websiteId/audits | `Page<AuditV1>` newest first — `{ id, auditedAt, reportType, healthScore, grade, pagesCrawled, findings, bySeverity, scheduled }` (verified websites) |
 | GET | /api/v1/websites/:websiteId/audits/:auditId?severity=high,critical&status=new | `{ audit, comparedWith, findings: FindingV1[] }` — `FindingV1`: `{ key, category, severity, title, affected, checked, evidence, sampleUrls, impact, impactBasis, status: new \| open \| fixed \| no_longer_seen, previousAffected, notCompared, recheck }`, in the audit's own fix-list order |
+| GET | /api/v1/websites/:websiteId/crawlers?days=7\|30\|90 | `CrawlerData` — what search and AI crawlers requested, from the site's own logs (gap #6, `docs/LOG_ANALYTICS.md`): the same answer as the app's Crawlers page; verified websites only (403 `website_unverified`) |
 | GET | /api/v1/runs?websiteId=&status=&mode= | `Page<RunV1>` — `{ id, websiteId, mode, title, status, error, createdAt, completedAt, reportCount, cost: { usd, basis, partial, estimated } }` |
 | GET | /api/v1/runs/:runId | `{ run: RunV1 & { input }, reports: ReportV1[] }` |
 | GET | /api/v1/reports?websiteId=&stage= | `Page<ReportV1>` — `{ id, runId, websiteId, stage, status, title, summary, receivedAt, scheduled, ready: { ok, code, reason }, files }` |
 | GET | /api/v1/reports/:reportId | `ReportV1 & { payload }` (the callback as stored — what the app's report page renders) |
 | GET | /api/v1/files/:fileId | the file, with the same headers and sandbox as the app's file route |
 | POST | /api/v1/publish-check | B3-7, below (scope `publish_check`) |
-| POST | /api/v1/mcp | MCP over Streamable HTTP (JSON answers, no streams; API key only): `initialize`, `tools/list`, `tools/call`, `ping` — tools `list_websites`, `list_audits`, `get_audit`, `list_runs`, `get_run`, `list_reports`, `get_report`, `publish_check`, each calling the handler of the REST route above |
+| POST | /api/v1/mcp | MCP over Streamable HTTP (JSON answers, no streams; API key only): `initialize`, `tools/list`, `tools/call`, `ping` — tools `list_websites`, `list_audits`, `get_audit`, `get_crawler_activity`, `list_runs`, `get_run`, `list_reports`, `get_report`, `publish_check`, each calling the handler of the REST route above |
 
 Key management (session only, Company settings → API access):
 
