@@ -59,7 +59,7 @@ export const useConnectExport = (orgId: string) => useOrgMutation(orgId, (body: 
 export const useUpdateExport = (orgId: string) =>
   useOrgMutation(orgId, (v: { id: string; body: Record<string, unknown> }) => api<IntegrationView>(`/api/orgs/${orgId}/integrations/${v.id}`, { method: 'PATCH', body: v.body }));
 export const useTestIntegration = (orgId: string) => useOrgMutation(orgId, (id: string) => api<{ ok: boolean; error: string }>(`/api/orgs/${orgId}/integrations/${id}/test`, { method: 'POST' }));
-export const useRunExport = (orgId: string) => useOrgMutation(orgId, (id: string) => api<ExportRunView>(`/api/orgs/${orgId}/integrations/${id}/run`, { method: 'POST' }));
+export const useRunExport = (orgId: string) => useOrgMutation(orgId, (id: string) => api<ExportRunView>(`/api/orgs/${orgId}/integrations/${id}/run`, { method: 'POST', direct: true }));   // an export can take up to 2 minutes: past a proxy's time limit
 export const useDeleteIntegration = (orgId: string) =>
   useOrgMutation(orgId, (id: string) => api<{ deleted: true }>(`/api/orgs/${orgId}/integrations/${id}`, { method: 'DELETE' }), (o) => [[...qk.org(o), 'issues']]);
 
