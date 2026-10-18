@@ -19121,6 +19121,36 @@ await guard('SFL3 B-16 B-18 B-10 the full report on what it read: the redirect c
   check('B-10: a site with no pricing section anywhere keeps the reviewer\'s finding as it was', pr0.extra_findings.some(f => f.source === 'ai_review' && /^No pricing/.test(f.title) && f.severity === 'Medium'), JSON.stringify(pr0.extra_findings.map(f => f.title)));
 });
 
+await guard('SFL4 C-12 C-13 Tracker Report on exec 785: a stored set-aside rung stays set aside, the page Google ranks is named', async () => {
+  const SN = 'SFL4 C-12 / C-13 — the Rank Tracker of exec 785 (techand.ai) listed "facts erp" (set aside on its row) as a rung "not published yet", and told "peppol uae" to improve the insights page while Google ranks the PINT-AE guide at #46; F-C proved the fix only on generated code';
+  reset(); begin(SN); const check = W3E.mkCheck(SN);
+  const FX = JSON.parse(require('zlib').gunzipSync(require('fs').readFileSync(require('path').join(__dirname, 'fixtures_fl_785.json.gz'))).toString());
+  for (const n of ['Tracker Plan', 'Parse Positions', 'SERP Check Answers', 'Load Ladders', 'Load History', 'Load Content Log (Tracker)', 'Load Pages (Tracker)', 'Load Monitors (Tracker)', 'Load AI Brands (Tracker)', 'Load Query History (Tracker)'])
+    mock(n, (FX[n].length ? FX[n] : [{}]).map(j => ({ json: j })));
+  const out = (await run('Tracker Report', store['Parse Positions'])).map(i => i.json);
+  const erp = out.find(x => x.ladder_id === 'lad_mv40b6s9h5a8') || {}, pep = out.find(x => x.ladder_id === 'lad_muz4gf79ifhk') || {};
+  const oldErp = FX.expected.find(x => x.ladder_id === 'lad_mv40b6s9h5a8') || {}, oldPep = FX.expected.find(x => x.ladder_id === 'lad_muz4gf79ifhk') || {};
+  const factsRow = FX['Load Ladders'].find(r => r.keyword === 'facts erp') || {};
+  check('C-12: the fixture is exec 785: "facts erp" is stored set_aside (facts.ae\'s brand) and the old report still listed it', factsRow.status === 'set_aside' && /facts\.ae/.test(factsRow.status_note || ''), JSON.stringify(factsRow));
+  const rungKws = (erp.positions || erp.rungs || []).map(p => p.keyword).filter(Boolean);
+  console.log('   erp report ->', JSON.stringify({ positions: (erp.positions || []).map(p => p.keyword + ':' + (p.status || '')), facts_in_html: ((erp.html || '').match(/.{0,120}facts erp.{0,160}/g) || []).map(s => s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')) }).slice(0, 1500));
+  const aside = (erp.set_aside || []).find(x => x.keyword === 'facts erp');
+  check('C-12: the stored set-aside rung stays set aside — in the report\'s set-aside list with its reason, never in the rungs to write',
+    aside && aside.seen === 'stored' && aside.dropped === true && /facts\.ae/.test(aside.reason) && !/facts erp/.test(JSON.stringify(erp.next_step || {}))
+    && !/facts erp\s*<span[^>]*>\(not published yet/.test(erp.html || ''), JSON.stringify({ aside, rungs: rungKws, next: erp.next_step && erp.next_step.text }));
+  // F-L found the table still said "facts erp (not published yet: checked monthly …)" beside the set-aside note, and the rung counts
+  // still held it as a page of rung 2 ("Rung 2: 0/2"), so a page nobody will write kept the rung from ever being reached
+  const fr = (erp.positions || []).find(p => p.keyword === 'facts erp') || {};
+  check('C-12: its row in the position table says "set aside", not "not published yet", and it is not a page of rung 2',
+    fr.set_aside === true && /facts erp\s*<span[^>]*>\(set aside: not a search this website should target/.test(erp.html || '')
+    && (erp.rungs || []).some(r => r.rung === 2 && r.pages === 1) && /Rung 2: 0\/1 in top 10/.test(erp.html || ''), JSON.stringify({ fr, rungs: erp.rungs }));
+  const ru = 'https://www.techand.ai/insights/upgrading-your-erp-for-uae-peppol-pint-ae-compliance-a-technical-integration-guide';
+  check('C-13: exec 785 ranked the PINT-AE guide at #46 and told the owner to improve another page, without a word about the split',
+    /improve the main page "peppol uae"/.test((oldPep.next_step || {}).text || '') && !/Google ranks a different page/.test((oldPep.next_step || {}).text || ''), (oldPep.next_step || {}).text);
+  check('C-13: now the next step names the page Google ranks (#46) and asks which of the two answers the search',
+    pep.next_step && pep.next_step.text.includes('Google ranks a different page of yours for this search: ' + ru + ' (#46)') && /one search, one page/.test(pep.next_step.text), (pep.next_step || {}).text);
+});
+
 
 H.report();
 })();
