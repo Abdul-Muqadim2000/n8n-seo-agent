@@ -253,9 +253,9 @@ services:
   searxng:
     <<: *common
     image: ghcr.io/searxng/searxng:${SEARXNG_VERSION:-2026.9.30-a9d990033}
-    # 192 MiB: idles at ~135 MiB with one worker
-    mem_limit: 192m
-    memswap_limit: 192m
+    # 256 MiB: idles at ~125-135 MiB with one worker and reached 162 MiB while starting in the local test of 2026-10-18
+    mem_limit: 256m
+    memswap_limit: 256m
     environment:
       SEARXNG_SECRET: ${SEARXNG_SECRET:?}
       GRANIAN_WORKERS: '1'

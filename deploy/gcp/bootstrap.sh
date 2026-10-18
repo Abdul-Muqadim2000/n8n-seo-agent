@@ -43,7 +43,8 @@ ALERT_EMAIL=${ALERT_EMAIL:-muqadim2000@gmail.com}
 REPO=${REPO:-https://github.com/Abdul-Muqadim2000/n8n-seo-agent.git}
 REF=${REF:-feature/seo-agent-v4.5}
 BUDGET_USD=${BUDGET_USD:-25}
-GCLOUD=${GCLOUD:-gcloud}
+# default: gcloud in Docker with your login (gcloud-docker.sh); GCLOUD=gcloud to use a local Cloud SDK
+GCLOUD=${GCLOUD:-$(cd "$(dirname "$0")" && pwd)/gcloud-docker.sh gcloud}
 read -r -a G <<< "$GCLOUD"
 
 HERE=$(cd "$(dirname "$0")" && pwd)

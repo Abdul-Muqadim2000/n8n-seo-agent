@@ -25,7 +25,8 @@ export APP_ENV_FILE=${APP_ENV_FILE:-$MAIN/app/.env}
 export PROJECT=${PROJECT:-alaventra-prod}
 export REGION=${REGION:-me-central1}
 export NAME=${NAME:-alaventra}
-export GCLOUD=${GCLOUD:-gcloud}
+# default: gcloud in Docker with your login (gcloud-docker.sh); GCLOUD=gcloud to use a local Cloud SDK
+export GCLOUD=${GCLOUD:-$ROOT/deploy/gcp/gcloud-docker.sh gcloud}
 export N8N_CONTAINER=${N8N_CONTAINER:-n8n-n8n-1}
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/alaventra-secrets.XXXXXX")
 chmod 700 "$WORK"
