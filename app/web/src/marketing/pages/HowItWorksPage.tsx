@@ -82,17 +82,28 @@ const STAGES: Stage[] = [
     title: 'Publish and verify',
     short: 'Drafts in your CMS; you choose what goes live; Ascentra checks the live page',
     body: 'Send the page to WordPress, Webflow, Contentful or your own endpoint as a draft, or take the blog package — HTML, Markdown and meta.json. An owner or admin publishes it live. Ascentra notices the new page and checks it live: metadata, schema, images and links.',
-    points: ['Nothing goes live without an owner or admin choosing it', 'A page that failed its checks is never sent to your CMS', 'Planned pages are found in your sitemap by slug and title', 'The live check confirms what search engines will see'],
+    points: [
+      'Nothing goes live without an owner or admin choosing it',
+      'A page that failed its checks is never sent to your CMS',
+      'Planned pages are found in your sitemap by slug and title',
+      'The live check confirms what search engines will see',
+      'New and updated pages go to Bing and IndexNow that week',
+    ],
     visual: <PublishCheckMockup />,
     link: { to: '/platform/content', label: 'Explore the content engine' },
   },
   {
     id: 'track',
     icon: ChartLine,
-    title: 'Track and learn',
+    title: 'Track, grow and learn',
     short: 'Rankings, traffic, AI answers and links, every week',
-    body: 'Rankings, Search Console, GA4, AI answers and backlinks are checked on a fixed schedule. The Monday report shows what changed, and what worked shapes next week’s plan.',
-    points: ['Striking-distance keywords move up the queue', 'Alerts only on real changes: AI answers are tested, links checked twice', 'Prioritised recommendations, each ready to run'],
+    body: 'Rankings, Search Console, GA4, AI answers and backlinks are checked on a fixed schedule. The questions you lose in AI answers become pages to write, link openings become pitches you approve, the Monday report shows what changed, and what worked shapes next week’s plan.',
+    points: [
+      'Striking-distance keywords move up the queue',
+      'Alerts only on real changes: AI answers are tested, links checked twice',
+      'Link pitches drafted every Monday, sent from your own mailbox once you approve them',
+      'Prioritised recommendations, each ready to run',
+    ],
     visual: <ReportMockup />,
     link: { to: '/platform/site-tracking', label: 'Explore site tracking' },
   },
@@ -261,7 +272,7 @@ function Week() {
         <SectionHeading
           eyebrow="A week with Ascentra"
           title="The schedule that runs while you work."
-          lead="A daily pulse on AI answers, a Monday morning of checks and writing, and a monthly audit. Paid work that would only repeat an unchanged result is skipped."
+          lead="A daily check of your key pages and of AI answers, a Monday of checks, writing and outreach, and a monthly audit. Paid work that would only repeat an unchanged result is skipped, and a run that was missed still happens — marked as late."
         />
         <WeekSchedule className="mt-14 sm:mt-16" />
       </Section>

@@ -12,7 +12,7 @@
   display: none;
 }
 
-/* ---------- "A week with Ascentra": a time-of-day cursor sweeps 06:00 → 10:30, each run lights up as it passes ---------- */
+/* ---------- "A week with Ascentra": a time-of-day cursor sweeps 05:30 → 11:30, each run lights up as it passes ---------- */
 .pf-sweep {
   opacity: 0;
 }
