@@ -55,6 +55,7 @@ export const pricingTiers: PricingTier[] = [
       'Up to 3 websites', // PLACEHOLDER — confirm
       'Up to three pages a week, with the autopilot pipeline and several ladders', // PLACEHOLDER — confirm
       'AI search visibility: up to 50 questions and the daily AI Pulse',
+      'AI growth every week: new pages to Bing and IndexNow, AI-readiness checks, answer pages and earned media',
       'Backlinks from every source, with Ascentra’s own link checks',
       'Crawler analytics from your server logs: Google and the AI crawlers, each one checked',
       'Link building: prospects, contacts and pitches from your own mailbox',
@@ -250,7 +251,7 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Earned media', hint: 'The exact pages AI cites without naming you, with a draft for each', values: [false, true, true] },
       { label: 'Crawler analytics from your server logs', hint: 'Googlebot and the AI crawlers, each checked against its company’s addresses; impostors apart', values: [false, true, true] }, // PLACEHOLDER — confirm
       { label: 'Backlinks from every source', hint: 'Nine sources, every link checked by Ascentra', values: [false, true, true] }, // PLACEHOLDER — confirm
-      { label: 'Prospects, contacts and outreach drafts from your own mailbox', values: [false, true, true] },
+      { label: 'Prospects, contacts and outreach drafts from your own mailbox', hint: 'You approve each sequence; sent on weekdays, starting slowly, with your postal address and an opt-out in every e-mail and consent asked where the law expects it', values: [false, true, true] },
       { label: 'Mailbox connected without a password', hint: 'Microsoft 365 or Gmail on their own sign-in screen; an app password works for any other host', values: [false, true, true] },
       { label: 'Listings you can add yourself', hint: 'Directories and marketplaces worth being on, checked and kept up to date', values: [false, true, true] },
       { label: 'Journalist requests, podcasts and broken-link reclaim', hint: 'Free sources read every week, matched to your topics', values: [false, true, true] },
@@ -289,6 +290,7 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Step-by-step guides for every setup task', hint: 'Your own values, instructions for the provider you use, and a copy you can e-mail to a colleague', values: [true, true, true] },
       { label: 'Cost estimate before every run', hint: 'The analysis engine’s own figure, corrected against what runs really cost, and replaced with the actual cost when the work finishes', values: [true, true, true] },
       { label: 'Spend caps per company', values: [true, true, true] },
+      { label: 'Missed schedules caught up', hint: 'A scheduled run that did not fire starts once the system is back, and its report says it ran late', values: [true, true, true] },
       { label: 'API and MCP access', hint: 'Read websites, audits, runs, reports and the export tables; start analyses with a key you allow to, within your budget', values: [true, true, true] }, // PLACEHOLDER — confirm the plans
       { label: 'Warehouse export and Looker Studio', hint: 'Six tables to BigQuery, Amazon S3, Google Cloud Storage or Cloudflare R2, daily or weekly; a Looker Studio connector', values: [false, true, true] }, // PLACEHOLDER — confirm the plans
       { label: 'Multi-company workspaces', values: [false, false, true] }, // PLACEHOLDER — confirm
