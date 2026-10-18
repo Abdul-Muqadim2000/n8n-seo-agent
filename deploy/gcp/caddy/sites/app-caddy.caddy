@@ -1,0 +1,8 @@
+# APP_FRONTEND=caddy: this server answers app.<domain> itself (the app image carries the web build). Used to go live before the
+# Vercel front end exists; switch APP_FRONTEND=vercel once app.<domain> points at Vercel (RUNBOOK §6).
+{$APP_HOST} {
+	encode zstd gzip
+	@hooks path /api/hooks/*
+	respond @hooks 404
+	import app_upstream
+}

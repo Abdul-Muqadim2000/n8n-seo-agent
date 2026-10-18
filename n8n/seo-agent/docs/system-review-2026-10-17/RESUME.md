@@ -131,3 +131,34 @@ monitors → Questions tracked), "Check now" (≈ $5.6 + $0.15 to write ~92 ques
 One live call each must confirm the new ChatGPT API / Gemini API request fields (handoff §5).
 
 Right after the deploy: the live checks of §5 (≈ $0.8 DataForSEO) — tell the orchestrator "run the live checks".
+
+## 10. PRODUCTION IS LIVE ON GCP (2026-10-18, 15:31 UTC)
+
+Backend + n8n run on GCP project **`alaventra-prod`** (billing `0122E1-574F3D-7CDF90`, owner muqadim2000@gmail.com), region
+**me-central1 (Doha)**: one **spot e2-medium (4 GB)** `alaventra-vm-1` in managed instance group `alaventra-mig` (autohealing, 30-min
+grace, stateful data disk `alaventra-data` 20 GB pd-balanced + boot disk, static IP `alaventra-ip` **34.18.208.219**), daily snapshots
+(7 days), nightly `pg_dump` to `gs://alaventra-prod-backups` (14 days), settings in Secret Manager (`alaventra-prod-env`, `-n8n-env`,
+`-app-env`; n8n encryption key carried over from the laptop), uptime checks + e-mail alert, budget $25. Cost ≈ **$21/month**.
+Everything is in `deploy/gcp/` (`RUNBOOK.md` first); gcloud runs in Docker via `deploy/gcp/gcloud-docker.sh` (image
+`alaventra-gcloud:1` = official image + ssh).
+- Live: `https://api.alaventra.com/api/health` → `{"ok":true,"db":true,"n8n":{"api":true,"webhook":true}}`;
+  `https://hooks.alaventra.com/webhook/*` (n8n editor, /rest, /api/v1 are 404 from the internet; editor via
+  `deploy/gcp/tunnel.sh` → http://localhost:15678).
+- Migrated from the laptop, counts identical: app DB 44 tables / 1,326 rows; n8n 36 Data Tables / 5,375 rows (16,654 entities).
+- Engine deployed (`deploy_engine.py`): main workflow 699 nodes, 26 workflows, 24 active, new columns synced.
+- Proven end to end: a pre-release check over the public hooks URL → `pass`, 16/16 checks, 4.9 s, writes none.
+- **The laptop's n8n is STOPPED** (`n8n-n8n-1`) so schedules fire once; the local dev app has no engine any more.
+- Bugs found and fixed while deploying (all in the scripts now): global template path; `startup.sh` sourced os-release which
+  overwrote `NAME`; **Google's Debian sets `ip_forward=0`** so containers had no outbound network; gcloud image had no ssh;
+  autohealing grace too short for the first build. Open: `deploy_engine.py` PUTs the main workflow before publishing its WordPress
+  sub-workflow (first `--apply` fails on main; a second run succeeds) — fix the order.
+- **Still the owner's:** a domain (then `load_secrets.sh --domain …` + DNS A records to 34.18.208.219), the Vercel project + env
+  (`API_ORIGIN`, `VITE_API_ORIGIN`, `ORIGIN_SECRET`, `PRIMARY_HOSTS`; Pro for commercial use), Google OAuth / mailbox redirect URIs
+  for the production host, app e-mail (SMTP), **rotating every key pasted in chat** (they are now in Secret Manager — rotate there with
+  `load_secrets.sh` after changing `.env`), DataForSEO top-up ($5.43).
+
+**2026-10-18 16:45 UTC — domain switched to alaventra.com.** DNS is hosted at Vercel (ns1/ns2.vercel-dns.com, a wildcard sends other
+names to Vercel); A records `api` and `hooks` → 34.18.208.219 (TTL 60). `DOMAIN=alaventra.com` in `alaventra-prod-env`, stack restarted
+on the VM at `cb7edc7`, Let's Encrypt certificates issued (to 2027-01-16), uptime checks replaced (api./hooks.alaventra.com), the
+sslip.io names retired. End-to-end pre-release check via `https://hooks.alaventra.com` passed. The Vercel `ORIGIN_SECRET` value was
+written to `~/seo-agent-secrets/vercel-ORIGIN_SECRET.txt` (600) for the owner — never into chat or the repo.

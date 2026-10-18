@@ -25,8 +25,23 @@ export function setStepUpHandler(h: StepUpHandler | null) {
   stepUpHandler = h;
 }
 
-/** JSON fetch against the app server. Mutations carry X-Requested-With (the server's CSRF guard). */
-export async function api<T>(path: string, opts: { method?: Method; body?: unknown; signal?: AbortSignal; noStepUp?: boolean } = {}): Promise<T> {
+/**
+ * deploy/gcp: the API server's own origin when this front end is served from another host of the same site (Vercel), e.g.
+ * https://api.alaventra.com (build-time VITE_API_ORIGIN). Everything else goes through this host's /api proxy; requests that may be
+ * large or slow (log uploads, backlink CSVs, warehouse exports) go to the API directly, because a proxy in front has body-size and
+ * time limits. The session cookie is shared on the parent domain and the server answers CORS for this origin (lib/crossOrigin.ts).
+ * Empty (development, the single-server production image) = same origin for everything.
+ */
+export const API_ORIGIN = String(import.meta.env.VITE_API_ORIGIN ?? '')
+  .trim()
+  .replace(/\/+$/, '');
+/** the URL for a request that should bypass the front end's proxy */
+export const directUrl = (path: string) => (API_ORIGIN ? API_ORIGIN + path : path);
+/** fetch credentials for such a request: the cookie must travel cross-origin */
+export const directCredentials = (): RequestCredentials => (API_ORIGIN ? 'include' : 'same-origin');
+
+/** JSON fetch against the app server. Mutations carry X-Requested-With (the server's CSRF guard). `direct`: see API_ORIGIN. */
+export async function api<T>(path: string, opts: { method?: Method; body?: unknown; signal?: AbortSignal; noStepUp?: boolean; direct?: boolean } = {}): Promise<T> {
   const method = opts.method ?? 'GET';
   const headers: Record<string, string> = { accept: 'application/json' };
   if (method !== 'GET') headers['x-requested-with'] = 'fetch';
@@ -35,11 +50,11 @@ export async function api<T>(path: string, opts: { method?: Method; body?: unkno
   if (opts.body !== undefined) headers['content-type'] = 'application/json';
   let res: Response;
   try {
-    res = await fetch(path, {
+    res = await fetch(opts.direct ? directUrl(path) : path, {
       method,
       headers,
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-      credentials: 'same-origin',
+      credentials: opts.direct ? directCredentials() : 'same-origin',
       signal: opts.signal,
     });
   } catch {

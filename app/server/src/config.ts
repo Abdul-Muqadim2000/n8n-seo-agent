@@ -116,6 +116,15 @@ const Env = z.object({
   PORTAL_DOMAIN_CHECK_HOURS: str('6').transform(Number),
   /** G5: the portal-host re-check timer (off on a second server or in tests) */
   PORTAL_JOBS: bool(true),
+  /** deploy/gcp: where browsers and machines reach THIS server directly when the web front end runs elsewhere (Vercel), e.g.
+   *  https://api.alaventra.com — the addresses shown for machine endpoints (log push, SCIM) use it; empty = APP_URL */
+  PUBLIC_API_URL: str(''),
+  /** deploy/gcp: the parent domain the session cookie is shared on (app.<domain> and api.<domain>), e.g. alaventra.com; applied only
+   *  on hosts inside it (an agency portal host keeps host-only cookies); empty = host-only everywhere */
+  COOKIE_DOMAIN: str(''),
+  /** deploy/gcp: browser origins allowed to call this API across origins WITH cookies (the front end on another host, for direct
+   *  uploads), comma-separated full origins, e.g. https://app.alaventra.com; empty = no cross-origin access at all */
+  CORS_ORIGINS: str(''),
 });
 
 const parsed = Env.safeParse(process.env);
@@ -132,6 +141,12 @@ export const config = {
   port: e.PORT,
   host: e.HOST,
   appUrl: e.APP_URL,
+  /** this server's own public address (machine endpoints); APP_URL when the web and the API share a host */
+  publicApiUrl: (e.PUBLIC_API_URL || e.APP_URL).replace(/\/+$/, ''),
+  cookieDomain: e.COOKIE_DOMAIN.toLowerCase().replace(/^\.+|\.+$/g, ''),
+  corsOrigins: e.CORS_ORIGINS.split(/[\s,]+/)
+    .map((x) => x.trim().replace(/\/+$/, '').toLowerCase())
+    .filter((x) => /^https?:\/\/[^/]+$/.test(x)),
   databaseUrl: e.DATABASE_URL,
   webDist: e.WEB_DIST,
   cookieSecure: e.COOKIE_SECURE != null && e.COOKIE_SECURE !== '' ? /^(1|true|yes)$/i.test(e.COOKIE_SECURE) : e.APP_URL.startsWith('https://'),

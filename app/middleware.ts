@@ -12,9 +12,22 @@
 //   PRIMARY_HOSTS  comma-separated hosts that are ours (e.g. alaventra.com,www.alaventra.com,app.alaventra.com). A request to any
 //                  other host is treated as an agency portal and proxied whole. *.vercel.app is always ours. Unset: every host is
 //                  ours (no portal pass-through), the safe default until custom portal domains are added to the Vercel project.
-// On the API server: APP_URL = this site's public origin, and TRUST_PROXY = 2 (Vercel's edge + the API host's own router), so the
-// client address comes from X-Forwarded-For and the host from the X-Forwarded-Host set below.
+//   ORIGIN_SECRET  (deploy/gcp) the shared secret the API host's proxy (Caddy) checks before it believes X-Real-IP / X-Forwarded-Host
+//                  from us; sent as X-Origin-Secret on every proxied request. Same value as ORIGIN_SECRET in the VM's prod.env.
+//                  Unset: the API sees Vercel's address as the visitor's (shared rate limits) and our host as its own.
+// On the API server: APP_URL = this site's public origin. Behind deploy/gcp's Caddy TRUST_PROXY = 1 (Caddy rewrites X-Forwarded-For
+// from X-Real-IP for requests that carry the secret, and from the connecting address for everything else); behind a plain router 2.
+//
+// Content-Security-Policy is set here, not in vercel.json, because connect-src must name API_ORIGIN: large uploads go to the API
+// directly (web/src/lib/api.ts API_ORIGIN — a proxy in front has body-size and time limits). Two CSP headers would intersect, so
+// vercel.json carries none.
 import { next, rewrite } from '@vercel/functions/middleware';
+
+const CSP_BASE =
+  "default-src 'self'; base-uri 'self'; font-src 'self' https: data:; form-action 'self'; frame-ancestors 'self'; img-src 'self' data: https:; " +
+  "object-src 'none'; script-src 'self'; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; frame-src 'self' blob:; upgrade-insecure-requests";
+/** the page's CSP: the API's origin is the one other place scripts may talk to */
+export const csp = (apiOrigin: string) => `${CSP_BASE}; connect-src 'self'${/^https:\/\/[^/\s;]+$/.test(apiOrigin) ? ' ' + apiOrigin : ''}`;
 
 export const config = { matcher: '/:path*' };
 
@@ -32,9 +45,9 @@ export default function middleware(request: Request): Response {
   const isApi = url.pathname === '/api' || url.pathname.startsWith('/api/');
   const primary = hostsOf(process.env.PRIMARY_HOSTS);
   const ours = primary.size === 0 || primary.has(host) || host.endsWith('.vercel.app') || host === 'localhost';
-  if (!isApi && ours) return next();
-
   const origin = (process.env.API_ORIGIN ?? '').trim().replace(/\/+$/, '');
+  if (!isApi && ours) return next({ headers: { 'content-security-policy': csp(origin) } });
+
   if (!/^https?:\/\/[^/]+$/.test(origin)) {
     return new Response(JSON.stringify({ error: 'The API is not configured for this deployment.', code: 'api_unconfigured' }), {
       status: 503,
@@ -44,5 +57,8 @@ export default function middleware(request: Request): Response {
   const headers = new Headers(request.headers);
   headers.set('x-forwarded-host', host);
   headers.set('x-forwarded-proto', 'https');
+  const secret = (process.env.ORIGIN_SECRET ?? '').trim();
+  if (secret) headers.set('x-origin-secret', secret);
+  else headers.delete('x-origin-secret');   // never forward a visitor's own attempt at it
   return rewrite(new URL(url.pathname + url.search, origin), { request: { headers } });
 }
