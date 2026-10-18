@@ -41,13 +41,15 @@ export async function orgAccess(req: FastifyRequest, orgId: unknown, min: Role =
   const user = requireUser(req);
   if (!isUuid(orgId)) throw notFound('Company not found');
   const rows = await db
-    .select({ org: schema.organizations, role: schema.memberships.role })
+    .select({ org: schema.organizations, role: schema.memberships.role, deactivatedAt: schema.memberships.deactivatedAt })
     .from(schema.memberships)
     .innerJoin(schema.organizations, eq(schema.memberships.orgId, schema.organizations.id))
     .where(and(eq(schema.memberships.orgId, orgId), eq(schema.memberships.userId, user.id)))
     .limit(1);
   const row = rows[0];
   if (!row) throw notFound('Company not found');
+  // G1: switched off by the company's identity provider (SCIM)
+  if (row.deactivatedAt) throw new HttpError(403, `Your access to ${row.org.name} has been switched off by your organisation.`, 'membership_deactivated');
   await requireCompanyMfa(req, row.org, user);
   const role = row.role as Role;
   if (!roleAtLeast(role, min)) throw forbidden(`This needs the ${min} role or higher`);

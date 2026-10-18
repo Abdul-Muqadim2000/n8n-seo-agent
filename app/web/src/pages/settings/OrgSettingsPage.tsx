@@ -376,6 +376,8 @@ function TeamTab() {
             <span className="flex items-center gap-2 font-medium text-ink">
               <span className="truncate">{m.name}</span>
               {m.userId === me.user.id && <Badge tone="accent">You</Badge>}
+              {m.deactivated && <StatusBadge tone="warning">Deactivated</StatusBadge>}
+              {(m.provisionedBy === 'scim' || m.provisionedBy === 'jit') && <Badge>{m.provisionedBy === 'scim' ? 'SCIM' : 'SSO'}</Badge>}
             </span>
             <span className="block truncate text-xs text-ink-3">{m.email}</span>
             <span className="mt-1.5 block md:hidden">{roleCell(m)}</span>

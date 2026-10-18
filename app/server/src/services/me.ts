@@ -1,4 +1,4 @@
-import { asc, count, eq } from 'drizzle-orm';
+import { and, asc, count, eq, isNull } from 'drizzle-orm';
 import { policyOf, type Me, type OrgSummary, type Role } from '@seo/shared';
 import { isPlatformAdmin } from '../auth/access';
 import { toUser } from '../auth/session';
@@ -10,7 +10,7 @@ export async function buildMe(user: UserRow): Promise<Me> {
     .select({ org: schema.organizations, role: schema.memberships.role })
     .from(schema.memberships)
     .innerJoin(schema.organizations, eq(schema.memberships.orgId, schema.organizations.id))
-    .where(eq(schema.memberships.userId, user.id))
+    .where(and(eq(schema.memberships.userId, user.id), isNull(schema.memberships.deactivatedAt)))
     .orderBy(asc(schema.organizations.name));
   const orgs: OrgSummary[] = rows.map((r) => ({
     id: r.org.id,

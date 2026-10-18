@@ -34,6 +34,34 @@ CREATE TABLE "mfa_recovery_codes" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "scim_group_members" (
+	"group_id" uuid NOT NULL,
+	"user_id" uuid NOT NULL,
+	CONSTRAINT "scim_group_members_group_id_user_id_pk" PRIMARY KEY("group_id","user_id")
+);
+--> statement-breakpoint
+CREATE TABLE "scim_groups" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"org_id" uuid NOT NULL,
+	"display_name" text NOT NULL,
+	"external_id" text,
+	"role" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "scim_tokens" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"org_id" uuid NOT NULL,
+	"name" text NOT NULL,
+	"prefix" text NOT NULL,
+	"token_hash" text NOT NULL,
+	"created_by" uuid,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"last_used_at" timestamp with time zone,
+	"revoked_at" timestamp with time zone
+);
+--> statement-breakpoint
 CREATE TABLE "sso_connections" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"org_id" uuid NOT NULL,
@@ -89,6 +117,9 @@ CREATE TABLE "webauthn_credentials" (
 	"last_used_at" timestamp with time zone
 );
 --> statement-breakpoint
+ALTER TABLE "memberships" ADD COLUMN "deactivated_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "memberships" ADD COLUMN "provisioned_by" text DEFAULT 'invite' NOT NULL;--> statement-breakpoint
+ALTER TABLE "memberships" ADD COLUMN "scim_external_id" text;--> statement-breakpoint
 ALTER TABLE "organizations" ADD COLUMN "security_policy" jsonb DEFAULT '{}'::jsonb NOT NULL;--> statement-breakpoint
 ALTER TABLE "sessions" ADD COLUMN "auth_method" text DEFAULT 'password' NOT NULL;--> statement-breakpoint
 ALTER TABLE "sessions" ADD COLUMN "sso_org_id" uuid;--> statement-breakpoint
@@ -103,6 +134,11 @@ ALTER TABLE "users" ADD COLUMN "mfa_totp_last_step" integer;--> statement-breakp
 ALTER TABLE "audit_events" ADD CONSTRAINT "audit_events_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "auth_flows" ADD CONSTRAINT "auth_flows_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mfa_recovery_codes" ADD CONSTRAINT "mfa_recovery_codes_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "scim_group_members" ADD CONSTRAINT "scim_group_members_group_id_scim_groups_id_fk" FOREIGN KEY ("group_id") REFERENCES "public"."scim_groups"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "scim_group_members" ADD CONSTRAINT "scim_group_members_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "scim_groups" ADD CONSTRAINT "scim_groups_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "scim_tokens" ADD CONSTRAINT "scim_tokens_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "scim_tokens" ADD CONSTRAINT "scim_tokens_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sso_connections" ADD CONSTRAINT "sso_connections_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sso_domains" ADD CONSTRAINT "sso_domains_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sso_domains" ADD CONSTRAINT "sso_domains_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
@@ -115,6 +151,10 @@ CREATE INDEX "audit_events_org_action_idx" ON "audit_events" USING btree ("org_i
 CREATE INDEX "auth_flows_expires_idx" ON "auth_flows" USING btree ("expires_at");--> statement-breakpoint
 CREATE INDEX "mfa_recovery_user_idx" ON "mfa_recovery_codes" USING btree ("user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "mfa_recovery_hash_idx" ON "mfa_recovery_codes" USING btree ("user_id","code_hash");--> statement-breakpoint
+CREATE INDEX "scim_group_members_user_idx" ON "scim_group_members" USING btree ("user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "scim_groups_org_name_idx" ON "scim_groups" USING btree ("org_id","display_name");--> statement-breakpoint
+CREATE UNIQUE INDEX "scim_tokens_hash_idx" ON "scim_tokens" USING btree ("token_hash");--> statement-breakpoint
+CREATE INDEX "scim_tokens_org_idx" ON "scim_tokens" USING btree ("org_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "sso_connections_org_idx" ON "sso_connections" USING btree ("org_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "sso_domains_org_domain_idx" ON "sso_domains" USING btree ("org_id","domain");--> statement-breakpoint
 CREATE UNIQUE INDEX "sso_domains_verified_idx" ON "sso_domains" USING btree ("domain") WHERE "sso_domains"."verified_at" is not null;--> statement-breakpoint

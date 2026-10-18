@@ -203,6 +203,10 @@ export interface Member {
   joinedAt: string;
   /** G1: the member has two-step verification (owners and admins see it; false for viewers' view) */
   mfaEnabled?: boolean;
+  /** G1: how the person came in (owner / invite / jit = first SSO sign-in / scim) */
+  provisionedBy?: 'owner' | 'invite' | 'jit' | 'scim';
+  /** G1: switched off by the company's identity provider (SCIM); no access until reactivated */
+  deactivated?: boolean;
 }
 
 export interface Invitation {

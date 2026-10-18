@@ -163,6 +163,55 @@ export const ssoIdentities = pgTable(
   (t) => [primaryKey({ columns: [t.connectionId, t.subject] }), index('sso_identities_user_idx').on(t.userId)],
 );
 
+/** G1: SCIM bearer tokens (hashed; shown once), one company each. */
+export const scimTokens = pgTable(
+  'scim_tokens',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    prefix: text('prefix').notNull(),
+    tokenHash: text('token_hash').notNull(),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: created(),
+    lastUsedAt: ts('last_used_at'),
+    revokedAt: ts('revoked_at'),
+  },
+  (t) => [uniqueIndex('scim_tokens_hash_idx').on(t.tokenHash), index('scim_tokens_org_idx').on(t.orgId)],
+);
+
+/** G1: groups pushed by the identity provider; `role` maps a group to a role in the company (null = no effect on roles). */
+export const scimGroups = pgTable(
+  'scim_groups',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    displayName: text('display_name').notNull(),
+    externalId: text('external_id'),
+    role: text('role'),
+    createdAt: created(),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex('scim_groups_org_name_idx').on(t.orgId, t.displayName)],
+);
+
+export const scimGroupMembers = pgTable(
+  'scim_group_members',
+  {
+    groupId: uuid('group_id')
+      .notNull()
+      .references(() => scimGroups.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.groupId, t.userId] }), index('scim_group_members_user_idx').on(t.userId)],
+);
+
 /**
  * G1: the customer-visible audit log. Append-only in the database itself: a trigger (migration g1_audit) refuses UPDATE, TRUNCATE
  * and any DELETE except the retention purge (`ascentra.audit_purge`) and the company's own deletion. Written only through
@@ -278,6 +327,11 @@ export const memberships = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     role: text('role').notNull(),
     createdAt: created(),
+    /** G1: switched off by the company's identity provider (SCIM `active: false`): no access until reactivated */
+    deactivatedAt: ts('deactivated_at'),
+    /** G1: how the person came in — owner / invite / jit (first SSO sign-in) / scim */
+    provisionedBy: text('provisioned_by').notNull().default('invite'),
+    scimExternalId: text('scim_external_id'),
   },
   (t) => [primaryKey({ columns: [t.orgId, t.userId] }), index('memberships_user_idx').on(t.userId)],
 );
@@ -794,6 +848,8 @@ export type AuthFlowRow = typeof authFlows.$inferSelect;
 export type AuditEventRow = typeof auditEvents.$inferSelect;
 export type SsoConnectionRow = typeof ssoConnections.$inferSelect;
 export type SsoDomainRow = typeof ssoDomains.$inferSelect;
+export type ScimGroupRow = typeof scimGroups.$inferSelect;
+export type MembershipRow = typeof memberships.$inferSelect;
 export type OrgRow = typeof organizations.$inferSelect;
 export type SiteRow = typeof sites.$inferSelect;
 export type RunRow = typeof runs.$inferSelect;

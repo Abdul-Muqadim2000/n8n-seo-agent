@@ -23,6 +23,7 @@ import { mfaRoutes } from './routes/mfa';
 import { securityRoutes } from './routes/security';
 import { sessionRoutes } from './routes/sessions';
 import { ssoRoutes } from './routes/sso';
+import { scimRoutes } from './routes/scim';
 import { orgRoutes } from './routes/orgs';
 import { runRoutes } from './routes/runs';
 import { siteRoutes } from './routes/sites';
@@ -73,7 +74,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     if (!req.url.startsWith('/api/')) return;
     // B5-11: a request to the read API that presents a company API key is authenticated by that key alone - never by the cookie - so
     // it needs no CSRF header (a cross-site form cannot set Authorization) and its session is not read at all
-    if (req.url.startsWith('/api/v1') && triesBearer(req.headers.authorization)) {
+    // G1: SCIM is authenticated by its own bearer token only (routes/scim.ts), never by a cookie
+    if ((req.url.startsWith('/api/v1') && triesBearer(req.headers.authorization)) || req.url.startsWith('/api/scim/')) {
       req.user = null;
       req.sessionId = null;
       return;
@@ -123,6 +125,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(securityRoutes);
   await app.register(sessionRoutes);
   await app.register(ssoRoutes);
+  await app.register(scimRoutes);
   await app.register(orgRoutes);
   await app.register(siteRoutes);
   await app.register(dataRoutes);

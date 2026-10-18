@@ -104,7 +104,7 @@ export const toConnectionView = (c: SsoConnectionRow): SsoConnectionView => ({
 });
 
 const connectionOf = (orgId: string) => db.query.ssoConnections.findFirst({ where: eq(schema.ssoConnections.orgId, orgId) });
-const verifiedDomains = async (orgId: string) =>
+export const verifiedDomains = async (orgId: string) =>
   (await db.query.ssoDomains.findMany({ where: and(eq(schema.ssoDomains.orgId, orgId), isNotNull(schema.ssoDomains.verifiedAt)) })).map((d) => d.domain);
 
 export async function ssoOverview(org: OrgRow): Promise<SsoOverview> {
@@ -552,9 +552,11 @@ export async function finishSso(req: FastifyRequest, reply: FastifyReply, conn: 
   const membership = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.orgId, org.id), eq(schema.memberships.userId, user.id)) });
   if (!membership) {
     if (!conn.jitEnabled) throw new SsoFailure('sso_not_provisioned', `${id.email} is not a member of ${org.name}. Ask an admin to invite you.`, flow, conn);
-    await db.insert(schema.memberships).values({ orgId: org.id, userId: user.id, role: conn.defaultRole });
+    await db.insert(schema.memberships).values({ orgId: org.id, userId: user.id, role: conn.defaultRole, provisionedBy: 'jit' });
     await refreshSessionPolicy([user.id]);
     provisioned = true;
+  } else if (membership.deactivatedAt) {
+    throw new SsoFailure('sso_deactivated', `Your access to ${org.name} has been switched off by your organisation.`, flow, conn);
   }
   await db
     .insert(schema.ssoIdentities)

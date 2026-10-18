@@ -1300,6 +1300,37 @@ export const GUIDES = [
     keywords: ['sso', 'domain', 'verify domain', 'txt record'],
   },
   {
+    id: 'scim-provisioning',
+    area: 'security',
+    title: 'Provision people automatically (SCIM)',
+    why: 'Joiners get access without an invitation, and a leaver switched off in your identity provider loses access here at once — no one has to remember to remove them.',
+    where: 'Company settings → Single sign-on, then your identity provider',
+    who: 'An administrator of your identity provider, with an owner or admin of your company in Ascentra',
+    minutes: 15,
+    vars: [{ key: 'scimUrl', label: 'SCIM base URL', example: 'https://app.ascentra.example/api/scim/v2' }],
+    steps: [
+      { title: 'Verify your e-mail domain first', body: 'Provisioning only creates people whose addresses are on your verified domains (see **Prove your e-mail domain**).' },
+      { title: 'Create a provisioning token', body: 'Company settings → **Single sign-on** → Provisioning: name it after your provider and **Create token**. Copy it at once: it is shown only once.' },
+      {
+        title: 'Point your identity provider at Ascentra',
+        body: 'Give it the base URL and the token (as a Bearer / HTTP header token).',
+        copy: [{ label: 'SCIM base URL', value: '{{scimUrl}}' }],
+        choices: [
+          { label: 'Okta', body: 'In the Ascentra app: **General → App Settings → Provisioning: SCIM**, then **Provisioning → Integration**: SCIM connector base URL = the URL above, unique identifier `userName`, actions Push New Users / Push Profile Updates / Push Groups, authentication **HTTP Header** with the token. Then **To App**: enable Create, Update and Deactivate.' },
+          { label: 'Microsoft Entra ID', body: 'Enterprise application → **Provisioning → Get started → Automatic**: Tenant URL = the URL above, Secret token = the token, **Test Connection**, **Save**, then **Start provisioning**.' },
+        ],
+      },
+      { title: 'Map groups to roles', body: 'Push the groups you use (for example “Ascentra Admins”). They appear under **Groups and roles**: choose the role each gives. A person gets the highest role of their groups; owners are never changed.' },
+    ],
+    done: 'People you assign in your provider appear in the Team list marked **SCIM**, and switching one off shows them as **Deactivated**.',
+    trouble: [
+      { q: 'Users are refused with “not on one of this company’s verified domains”', a: 'Verify that domain first, or assign only people with addresses on your verified domains.' },
+      { q: 'Okta says the user already exists', a: 'They are already a member (invited earlier). Okta matches them by userName and updates them from then on.' },
+    ],
+    related: ['sso-identity-provider', 'sso-domain'],
+    keywords: ['scim', 'provisioning', 'deprovisioning', 'okta', 'entra', 'joiners leavers', 'groups'],
+  },
+  {
     id: 'sso-identity-provider',
     area: 'security',
     title: 'Connect your identity provider (single sign-on)',
@@ -1342,7 +1373,7 @@ export const GUIDES = [
       { q: '“audience mismatch” or “Recipient”', a: 'The entity ID or ACS URL in your provider differs from ours by a character. Copy them again from this page.' },
       { q: '“Invalid signature”', a: 'The certificate pasted here is not the one your provider signs with (often after a rotation). Paste the current one.' },
     ],
-    related: ['sso-domain'],
+    related: ['sso-domain', 'scim-provisioning'],
     keywords: ['sso', 'saml', 'oidc', 'okta', 'entra', 'azure ad', 'google workspace', 'identity provider', 'single sign-on'],
   },
 ] as const satisfies readonly Guide[];

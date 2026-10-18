@@ -98,6 +98,30 @@ When a company **requires** SSO, `POST /api/auth/login` and `/api/auth/signup` f
 `sub` / NameID is remembered so a renamed address finds the same person. If the company does not count its IdP as a second step
 (`mfaTrustSso: false`), people with their own factor get the second step (`/login/mfa`).
 
+### SCIM 2.0 provisioning (G1, `server/src/services/scim.ts`, `app/docs/IDENTITY.md` §5)
+Base URL `/api/scim/v2`, `Authorization: Bearer scim_…` (one company per token; hashed at rest; 600 requests a minute per token;
+never a cookie, no CSRF header). Answers are `application/scim+json`; errors are SCIM errors (`status`, `scimType`, `detail`).
+Only addresses on the company's verified SSO domains are provisioned; an existing account with that address is linked, not
+duplicated. `active: false` deactivates the membership (every company route answers `403 membership_deactivated`, the company
+disappears from `/api/me`, the sessions its IdP opened end); `DELETE` removes the membership (the account stays). The owner is never
+deactivated, removed or re-roled. A person's role is the highest role mapped from their groups; with no mapped group, people SCIM
+created take the SSO connection's default role and invited people keep theirs.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | /ServiceProviderConfig, /ResourceTypes, /Schemas | discovery |
+| GET | /Users?filter=&startIndex=&count= | `eq` on `userName`, `externalId`, `emails.value`, `id`; count ≤ 200 |
+| POST | /Users | 201; 409 `uniqueness` when already a member; 400 off-domain |
+| GET / PUT / PATCH / DELETE | /Users/:id | PATCH: Okta `{ op: replace, value: { active } }`, Entra paths (`active` as "False", `name.givenName`, `emails[type eq "work"].value`, `externalId`); unknown attributes ignored |
+| GET | /Groups?filter=&excludedAttributes=members | `eq` on `displayName`, `externalId`, `id` |
+| POST | /Groups | members must be members of the company |
+| GET / PUT / PATCH / DELETE | /Groups/:id | PATCH members add / remove (`members[value eq "…"]` or a value list) / replace, displayName |
+
+Admin side (session, owners and admins): `GET /api/orgs/:orgId/scim` → `ScimOverview` (base URL, tokens by prefix, groups with
+member counts and mapped role, verified domains); `POST …/scim/tokens { name }` (step-up, at most 2 live) → the token once;
+`DELETE …/scim/tokens/:id` (step-up); `PATCH …/scim/groups/:id { role: 'admin' | 'member' | 'viewer' | null }` (step-up) re-roles
+the group's members at once. `GET /api/orgs/:orgId/members` adds `provisionedBy` and `deactivated`.
+
 ### Audit log (G1, `server/src/services/audit.ts`, catalogue `AUDIT_ACTIONS` in `shared/src/identity.ts`)
 Append-only per company (a database trigger refuses UPDATE / TRUNCATE and any DELETE but the daily retention purge and the
 company's own deletion). Owners and admins only; another company's log is a 404. Each event: `id, at, action, label, category,

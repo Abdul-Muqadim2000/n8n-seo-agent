@@ -85,7 +85,7 @@ export async function orgRoutes(app: FastifyInstance) {
           createdBy: user.id,
         })
         .returning();
-      await tx.insert(schema.memberships).values({ orgId: o.id, userId: user.id, role: 'owner' });
+      await tx.insert(schema.memberships).values({ orgId: o.id, userId: user.id, role: 'owner', provisionedBy: 'owner' });
       return o;
     });
     await audit(req, org.id, { action: 'company.created', target: { type: 'company', id: org.id, label: org.name } });
@@ -283,6 +283,8 @@ export async function orgRoutes(app: FastifyInstance) {
         role: m.role as Role,
         joinedAt: m.createdAt.toISOString(),
         ...(admin ? { mfaEnabled: !!u.mfaTotpEnabledAt || keyed.has(u.id) } : {}),
+        provisionedBy: m.provisionedBy as Member['provisionedBy'],
+        deactivated: !!m.deactivatedAt,
       })),
       invitations: invites.map(({ i, by }) => ({ id: i.id, email: i.email, role: i.role as Role, invitedBy: by, createdAt: i.createdAt.toISOString(), expiresAt: i.expiresAt.toISOString() })),
     };

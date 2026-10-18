@@ -15,6 +15,7 @@ import { api, ApiRequestError, errorMessage } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { useSso, useSsoMutation } from '@/lib/queries';
 import { fmtDate, fmtDateTime } from '@/lib/utils';
+import { ScimCard } from './ScimCard';
 import { SettingsCard } from './SettingsCard';
 
 /**
@@ -47,6 +48,7 @@ export function SsoTab() {
       <DomainsCard data={sso.data} />
       <ConnectionCard data={sso.data} />
       {sso.data.connection && <SwitchesCard data={sso.data} />}
+      <ScimCard />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { eq, lt } from 'drizzle-orm';
+import { and, eq, isNull, lt } from 'drizzle-orm';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { policyOf, strictestIdle, type AuthMethod, type User } from '@seo/shared';
 import { config } from '../config';
@@ -62,7 +62,7 @@ export async function userIdleTimeout(userId: string): Promise<number | null> {
     .select({ policy: schema.organizations.securityPolicy })
     .from(schema.memberships)
     .innerJoin(schema.organizations, eq(schema.memberships.orgId, schema.organizations.id))
-    .where(eq(schema.memberships.userId, userId));
+    .where(and(eq(schema.memberships.userId, userId), isNull(schema.memberships.deactivatedAt)));
   return strictestIdle(rows.map((r) => policyOf(r.policy)));
 }
 

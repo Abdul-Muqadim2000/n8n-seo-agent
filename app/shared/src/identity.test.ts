@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isScimToken,
+  parseScimFilter,
+  scimBearer,
+  scimBool,
   cleanEmailDomain,
   ssoConnectionSchema,
   ssoDomainSchema,
@@ -171,5 +175,28 @@ describe('single sign-on inputs', () => {
     expect(ssoConnectionSchema.safeParse({ protocol: 'saml', oidc: { issuer: 'https://a', clientId: 'c' } }).success).toBe(false);
     expect(ssoConnectionSchema.parse({ protocol: 'oidc', oidc: { issuer: 'https://a.test', clientId: 'c' } })).toMatchObject({ jitEnabled: true, defaultRole: 'member' });
     expect(ssoConnectionSchema.safeParse({ protocol: 'oidc', oidc: { issuer: 'https://a.test', clientId: 'c' }, defaultRole: 'owner' }).success).toBe(false);
+  });
+});
+
+describe('SCIM inputs', () => {
+  it('reads the eq filters identity providers send, refuses the rest', () => {
+    expect(parseScimFilter(undefined)).toBeNull();
+    expect(parseScimFilter('userName eq "a@b.test"')).toEqual({ attr: 'userName', value: 'a@b.test' });
+    expect(parseScimFilter('USERNAME EQ "a@b.test"')).toEqual({ attr: 'userName', value: 'a@b.test' });
+    expect(parseScimFilter('externalId eq "00u1"')).toEqual({ attr: 'externalId', value: '00u1' });
+    expect(parseScimFilter('emails[type eq "work"].value eq "a@b.test"')).toEqual({ attr: 'email', value: 'a@b.test' });
+    expect(parseScimFilter('displayName eq "Team \\"A\\""')).toEqual({ attr: 'displayName', value: 'Team "A"' });
+    for (const f of ['userName sw "a"', 'userName eq "a" or userName eq "b"', 'title eq "x"', 'userName eq a']) expect(parseScimFilter(f), f).toBe('invalid');
+  });
+  it('reads Entra’s string booleans and only our token shape', () => {
+    expect(scimBool('False')).toBe(false);
+    expect(scimBool('true')).toBe(true);
+    expect(scimBool(false)).toBe(false);
+    expect(scimBool('no')).toBeUndefined();
+    const t = 'scim_' + 'a'.repeat(43);
+    expect(isScimToken(t)).toBe(true);
+    expect(isScimToken('asc_' + 'a'.repeat(43))).toBe(false);
+    expect(scimBearer(`Bearer ${t}`)).toBe(t);
+    expect(scimBearer(`Basic ${t}`)).toBeNull();
   });
 });

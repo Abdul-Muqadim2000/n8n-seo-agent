@@ -62,7 +62,7 @@ export async function companiesRequiringMfa(userId: string): Promise<string[]> {
     .select({ name: schema.organizations.name, policy: schema.organizations.securityPolicy })
     .from(schema.memberships)
     .innerJoin(schema.organizations, eq(schema.memberships.orgId, schema.organizations.id))
-    .where(eq(schema.memberships.userId, userId));
+    .where(and(eq(schema.memberships.userId, userId), isNull(schema.memberships.deactivatedAt)));
   return rows.filter((r) => policyOf(r.policy).requireMfa).map((r) => r.name);
 }
 
