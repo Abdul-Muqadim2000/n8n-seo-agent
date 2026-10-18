@@ -16,10 +16,10 @@ tunnel. It is apply_env.py for a remote instance: no `docker exec`, no restart.
 What it does, in order (each step says what it found):
  1. refuses inside the Monday 07:00-12:00 window of the schedules' time zone (an update re-arms schedules; R94), unless --force-monday
  2. builds with the owner's settings (build_v4.py, exit code checked) unless --no-build
- 3. for each workflow of apply_env.py's WORKFLOWS: substitutes the alert webhook (R29: the real URL only ever exists in memory and on
+ 3. for each workflow of deploy_manifest.json: substitutes the alert webhook (R29: the real URL only ever exists in memory and on
     the instance), then PUT /api/v1/workflows/<id> when the content differs. n8n 2.41.4 makes a PUT on a published workflow live at
     once (verified 2026-10-18 on a scratch instance: activeVersionId follows the new versionId)
- 4. POST /api/v1/workflows/<id>/activate for apply_env.py's PUBLISH set (+ Console Alerts when SEO_IMAP_PASSWORD is set) - idempotent
+ 4. POST /api/v1/workflows/<id>/activate for the manifest's publish set (+ publish_when_imap when SEO_IMAP_PASSWORD is set) - idempotent
  5. --credentials: PATCH /api/v1/credentials/<id> for every credential sync_credentials.py defines whose values are set
  6. sync_tables.py against the remote (new Data Table columns), with the same key
 The API key is N8N_API_KEY from n8n/.env (it stays valid on the server when the instance key was carried over by the migration), or
@@ -136,7 +136,9 @@ def main():
             print(r.stdout[-1500:], r.stderr[-1500:]); sys.exit('build failed (exit %d)' % r.returncode)
         say('built: ' + ([l for l in r.stdout.splitlines() if l.startswith('wrote')] or ['ok'])[-1])
 
-    consts = literal(os.path.join(ENGINE, 'apply_env.py'), 'WORKFLOWS', 'PUBLISH')
+    # the one deploy list (deploy_manifest.json, also read by apply_env.py and n8n/deploy/release.mjs)
+    manifest = json.load(open(os.path.join(ENGINE, 'deploy_manifest.json'), encoding='utf-8'))
+    consts = {'WORKFLOWS': manifest['workflows'], 'PUBLISH': manifest['publish']}
     placeholder = literal(os.path.join(ENGINE, 'ladder_common.py'), 'ALERT_WEBHOOK_PLACEHOLDER')['ALERT_WEBHOOK_PLACEHOLDER']
     hook = (ENV.get('SEO_ALERT_WEBHOOK_URL') or '').strip()
     updated, same, missing, failed = [], [], [], []
@@ -176,15 +178,32 @@ def main():
         say('  (missing workflows are created by the migration - migrate_data.md - or by --create-missing)')
 
     # 4. publish
-    publish = list(consts['PUBLISH']) + (['SEOagentConsole1'] if ENV.get('SEO_IMAP_PASSWORD') else [])
+    publish = list(consts['PUBLISH']) + (list(manifest.get('publish_when_imap') or []) if ENV.get('SEO_IMAP_PASSWORD') else [])
     hold = {x.split('=', 1)[1] for x in args if x.startswith('--except=')}
-    pub_ok, pub_fail = [], []
-    for wid in publish:
-        if wid in hold: continue
-        if not APPLY: pub_ok.append(wid); continue
-        st, r = api('POST', '/workflows/%s/activate' % wid)
-        (pub_ok.append(wid) if st == 200 else pub_fail.append('%s (%s: %s)' % (wid, st, str((r or {}).get('message'))[:120])))
-    say('published: %d%s%s' % (len(pub_ok), ' (would publish)' if not APPLY else '', ('; FAILED: ' + '; '.join(pub_fail)) if pub_fail else ''))
+    # The public API refuses to publish a workflow whose Execute Workflow nodes call an unpublished sub-workflow ("Please publish all
+    # referenced sub-workflows first"; the CLI's publish:workflow does not check). So: passes until nothing moves, and a referenced
+    # sub-workflow that is not in the list (the WordPress publisher, which only has an Execute Workflow Trigger) is published first.
+    import re
+    pub_ok, todo, extra, last_err = [], [w for w in publish if w not in hold], [], {}
+    if not APPLY:
+        pub_ok = todo
+    for _pass in range(6 if APPLY else 0):
+        progressed, nxt = False, []
+        for wid in todo:
+            st, r = api('POST', '/workflows/%s/activate' % wid)
+            if st == 200:
+                pub_ok.append(wid); progressed = True; continue
+            msg = str((r or {}).get('message'))
+            m = re.search(r'references workflow (\S+) .*not published', msg)
+            if m and m.group(1) not in todo and m.group(1) not in pub_ok and m.group(1) not in hold:
+                extra.append(m.group(1)); nxt.insert(0, m.group(1)); progressed = True
+            last_err[wid] = '%s (%s: %s)' % (wid, st, msg[:160])
+            nxt.append(wid)
+        todo = list(dict.fromkeys(nxt))
+        if not todo or not progressed: break
+    pub_fail = [last_err[w] for w in todo] if APPLY else []
+    say('published: %d%s%s%s' % (len(pub_ok), ' (would publish)' if not APPLY else '',
+        (' (incl. referenced sub-workflows: ' + ', '.join(extra) + ')') if extra else '', ('; FAILED: ' + '; '.join(pub_fail)) if pub_fail else ''))
     failed += pub_fail
 
     # 5. credentials
