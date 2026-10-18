@@ -19,17 +19,21 @@ import { useLogout, useMe, usePost, useProviders, useUpdateMe } from '@/lib/quer
 import { fmtDate } from '@/lib/utils';
 import { StandaloneShell } from './_components/StandaloneShell';
 import { RoleChip, SettingsCard } from './_components/SettingsCard';
+import { TwoStepSection } from './_components/TwoStepSection';
+import { SessionsSection } from './_components/SessionsSection';
 
 export default function AccountPage() {
   const me = useMe();
   if (!me.data) return <PageLoader fullPage />;
   return (
-    <StandaloneShell icon={<UserRound />} title="Your account" description="Your name, e-mail, sign-in methods and companies.">
+    <StandaloneShell icon={<UserRound />} title="Your account" description="Your name, e-mail, sign-in methods, two-step verification and companies.">
       <Stagger className="space-y-4">
         <ProfileSection me={me.data} />
         <EmailSection me={me.data} />
         <SignInSection me={me.data} />
+        <TwoStepSection />
         <PasswordSection me={me.data} />
+        <SessionsSection />
         <CompaniesSection me={me.data} />
         <SignOutSection />
       </Stagger>

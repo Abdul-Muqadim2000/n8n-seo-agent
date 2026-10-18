@@ -82,6 +82,8 @@ export const router = createBrowserRouter([
             element: <AuthLayout />,
             children: [
               { path: '/login', lazy: page(() => import('@/pages/auth/LoginPage')) },
+              { path: '/login/mfa', lazy: page(() => import('@/pages/auth/MfaPage')) },
+              { path: '/login/sso', lazy: page(() => import('@/pages/auth/SsoLoginPage')) },
               { path: '/signup', lazy: page(() => import('@/pages/auth/SignupPage')) },
               { path: '/forgot-password', lazy: page(() => import('@/pages/auth/ForgotPasswordPage')) },
             ],

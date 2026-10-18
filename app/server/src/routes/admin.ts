@@ -1,4 +1,5 @@
 import { eq, sql } from 'drizzle-orm';
+import { audit } from '../services/audit';
 import type { FastifyInstance } from 'fastify';
 import { orgBudgetSchema, type AdminOrg } from '@seo/shared';
 import { isPlatformAdmin, isUuid, requireUser } from '../auth/access';
@@ -70,6 +71,12 @@ export async function adminRoutes(app: FastifyInstance) {
       .where(eq(schema.organizations.id, orgId))
       .returning({ id: schema.organizations.id });
     if (!rows.length) throw notFound('Company not found');
+    await audit(req, orgId, {
+      action: 'company.admin_changed',
+      actor: { type: 'platform_admin', userId: req.user?.id ?? null, label: req.user?.email ?? 'platform administrator' },
+      target: { type: 'company', id: orgId },
+      details: { monthlyBudgetUsd: body.monthlyBudgetUsd, ...(body.disabled !== undefined ? { disabled: body.disabled } : {}) },
+    });
     return (await list(orgId))[0];
   });
 

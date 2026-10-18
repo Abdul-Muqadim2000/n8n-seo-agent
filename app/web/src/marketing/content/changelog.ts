@@ -15,6 +15,21 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-18',
+    title: 'Single sign-on, SCIM, two-step verification and an audit log',
+    summary:
+      'Sign in through your company’s identity provider, let it create and switch off accounts, require a second step for everyone, and see who did what. Everything a security review asks about identity, in Company settings.',
+    highlights: [
+      'Single sign-on with SAML 2.0 or OIDC — Okta, Microsoft Entra ID, Google Workspace — on e-mail domains you prove with a DNS record; test a sign-in first, then switch it on, then require it',
+      'SCIM 2.0: your identity provider creates, updates and switches off people, and its groups set their roles',
+      'Two-step verification with an authenticator app, passkeys or a security key, ten recovery codes, and a company setting that requires it for everyone',
+      'An audit log that nobody can edit: sign-ins, two-step changes, team and roles, websites, settings, API keys and sharing, with CSV export and the retention you choose',
+      'Your signed-in devices, signed out one by one or all at once, and idle sign-out after the time your company sets',
+      'Security changes ask you to confirm it is you, once, for ten minutes',
+    ],
+    features: ['enterprise'],
+  },
+  {
+    date: '2026-10-18',
     title: 'See which crawlers really read your site',
     summary:
       'Upload a server log, or let Cloudflare, Vercel, Fastly or Akamai send yours, and the new Crawlers page shows what Googlebot and the AI crawlers actually requested — every one checked against the addresses its company publishes, with impostors counted apart.',

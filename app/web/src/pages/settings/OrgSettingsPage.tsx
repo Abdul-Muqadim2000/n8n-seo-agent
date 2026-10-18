@@ -44,6 +44,9 @@ import { RoleChip, ROLE_ICON, SettingsCard } from './_components/SettingsCard';
 import { DeliveryTab } from './_components/DeliveryTab';
 import { MailboxesTab } from './_components/MailboxesTab';
 import { ApiKeysTab } from './_components/ApiKeysTab';
+import { SecurityTab } from './_components/SecurityTab';
+import { AuditTab } from './_components/AuditTab';
+import { SsoTab } from './_components/SsoTab';
 
 const TABS = [
   { id: 'company', label: 'Company', description: 'Your company’s details, websites and setup.' },
@@ -52,6 +55,9 @@ const TABS = [
   { id: 'delivery', label: 'Report delivery', description: 'Where your finished reports are sent, and on what schedule.' },
   { id: 'mailboxes', label: 'Mailboxes', description: 'The mailboxes link-building pitches go out from, and your opt-out list.' },
   { id: 'api', label: 'API access', description: 'Keys that let a script, a BI tool or an AI assistant read your own data.' },
+  { id: 'security', label: 'Security', description: 'Two-step verification for everyone, who has it, and how long records are kept.' },
+  { id: 'sso', label: 'Single sign-on', description: 'Sign in through your identity provider (Okta, Entra ID, Google Workspace), on your own e-mail domains.' },
+  { id: 'audit', label: 'Audit log', description: 'Who did what, when and from where: sign-ins, team, settings, keys and sharing.' },
 ] as const;
 
 const ROLE_DESCRIPTIONS: Record<Role, string> = {
@@ -78,6 +84,9 @@ export default function OrgSettingsPage() {
       {current.id === 'delivery' && <DeliveryTab />}
       {current.id === 'mailboxes' && <MailboxesTab />}
       {current.id === 'api' && <ApiKeysTab />}
+      {current.id === 'security' && <SecurityTab />}
+      {current.id === 'sso' && <SsoTab />}
+      {current.id === 'audit' && <AuditTab />}
     </div>
   );
 }
@@ -367,6 +376,8 @@ function TeamTab() {
             <span className="flex items-center gap-2 font-medium text-ink">
               <span className="truncate">{m.name}</span>
               {m.userId === me.user.id && <Badge tone="accent">You</Badge>}
+              {m.deactivated && <StatusBadge tone="warning">Deactivated</StatusBadge>}
+              {(m.provisionedBy === 'scim' || m.provisionedBy === 'jit') && <Badge>{m.provisionedBy === 'scim' ? 'SCIM' : 'SSO'}</Badge>}
             </span>
             <span className="block truncate text-xs text-ink-3">{m.email}</span>
             <span className="mt-1.5 block md:hidden">{roleCell(m)}</span>

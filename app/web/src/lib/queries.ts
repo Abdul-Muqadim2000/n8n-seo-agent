@@ -1,4 +1,4 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
 import type {
   ApiKeyCreate,
   ApiKeyView,
@@ -49,6 +49,12 @@ import type {
   DeliveryRecord,
   DeliverySettings,
   DeliverySettingsInput,
+  AuditEventView,
+  SessionView,
+  SsoOverview,
+  MfaStatus,
+  SecurityPolicy,
+  TotpEnrolment,
   CmsConnectionCreate,
   CmsConnectionUpdate,
   CmsConnectionView,
@@ -718,6 +724,64 @@ export function useAdminUpdateOrg() {
   });
 }
 
+// ---------- G1 identity: two-step verification, security policy ----------
+type NewCodes = { newRecoveryCodes: string[] | null };
+
+export const useMfaStatus = () => useQuery({ queryKey: ['me', 'mfa'], queryFn: () => api<MfaStatus>('/api/me/mfa') });
+
+/** every identity change refreshes the person's status and their /api/me (mfaEnabled) */
+function useIdentityMutation<TBody, TRes>(fn: (b: TBody) => Promise<TRes>) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: fn, onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }) });
+}
+
+export const useTotpStart = () => useMutation({ mutationFn: () => api<TotpEnrolment>('/api/me/mfa/totp/start', { method: 'POST' }) });
+export const useTotpConfirm = () => useIdentityMutation((code: string) => api<MfaStatus & NewCodes>('/api/me/mfa/totp/confirm', { method: 'POST', body: { code } }));
+export const useTotpDisable = () => useIdentityMutation((_: void) => api<MfaStatus>('/api/me/mfa/totp', { method: 'DELETE' }));
+export const useRegenerateRecoveryCodes = () => useIdentityMutation((_: void) => api<NewCodes>('/api/me/mfa/recovery-codes', { method: 'POST' }));
+export const usePasskeyOptions = () => useMutation({ mutationFn: () => api<Record<string, unknown>>('/api/me/mfa/passkeys/options', { method: 'POST' }) });
+export const usePasskeyRegister = () =>
+  useIdentityMutation((b: { name: string; response: Record<string, unknown> }) => api<MfaStatus & NewCodes>('/api/me/mfa/passkeys', { method: 'POST', body: b }));
+export const usePasskeyRemove = () => useIdentityMutation((id: string) => api<MfaStatus>(`/api/me/mfa/passkeys/${id}`, { method: 'DELETE' }));
+
+export const useSessions = () => useQuery({ queryKey: ['me', 'sessions'], queryFn: () => api<{ items: SessionView[] }>('/api/me/sessions') });
+export const useRevokeSession = () => useIdentityMutation((id: string) => api<{ ok: boolean; signedOutHere: boolean }>(`/api/me/sessions/${id}`, { method: 'DELETE' }));
+export const useRevokeOtherSessions = () => useIdentityMutation((_: void) => api<{ ok: boolean; revoked: number }>('/api/me/sessions/revoke-others', { method: 'POST' }));
+
+export const useSso = (orgId: string, enabled = true) => useQuery({ queryKey: [...qk.org(orgId), 'sso'], queryFn: () => api<SsoOverview>(`/api/orgs/${orgId}/sso`), enabled });
+/** every SSO change answers with fresh state or nothing: refetch the overview */
+export function useSsoMutation<TBody, TRes = unknown>(orgId: string, fn: (b: TBody) => Promise<TRes>) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: fn, onSuccess: () => qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'sso'] }) });
+}
+
+export type AuditFilters = { category?: string; actor?: string; outcome?: string; from?: string; to?: string };
+export type AuditPage = { items: AuditEventView[]; nextCursor: string | null; actors?: { id: string; label: string }[]; retentionDays: number };
+export const auditQs = (f: AuditFilters) => new URLSearchParams(Object.entries(f).filter(([, v]) => v)).toString();
+export function useAuditLog(orgId: string, filters: AuditFilters, enabled = true) {
+  return useInfiniteQuery({
+    queryKey: [...qk.org(orgId), 'audit', filters],
+    queryFn: ({ pageParam }) => {
+      const qs = auditQs({ ...filters, ...(pageParam ? { before: pageParam } : {}) } as AuditFilters);
+      return api<AuditPage>(`/api/orgs/${orgId}/audit${qs ? `?${qs}` : ''}`);
+    },
+    initialPageParam: '',
+    getNextPageParam: (p) => p.nextCursor ?? undefined,
+    enabled,
+  });
+}
+
+export const useSecurityPolicy = (orgId: string) => useQuery({ queryKey: [...qk.org(orgId), 'security'], queryFn: () => api<SecurityPolicy>(`/api/orgs/${orgId}/security`) });
+export function useSaveSecurityPolicy(orgId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (p: SecurityPolicy) => api<SecurityPolicy>(`/api/orgs/${orgId}/security`, { method: 'PUT', body: p }),
+    onSuccess: (p) => {
+      qc.setQueryData([...qk.org(orgId), 'security'], p);
+      qc.invalidateQueries({ queryKey: qk.me });
+    },
+  });
+}
 // ---------- G2: CMS publishing (app/docs/CMS_PUBLISHING.md) ----------
 const cmsKey = (siteId: string) => ['site', siteId, 'cms'] as const;
 

@@ -1,4 +1,5 @@
-import { and, asc, desc, eq, gt, gte, isNull, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, isNull, ne } from 'drizzle-orm';
+import { refreshSessionPolicy } from '../auth/session';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
@@ -19,6 +20,7 @@ import {
   type Org,
   type Role,
   type Usage,
+  roleAtLeast,
 } from '@seo/shared';
 import { isPlatformAdmin, isUuid, orgAccess, requireUser } from '../auth/access';
 import { config } from '../config';
@@ -31,6 +33,7 @@ import { stopInEngine } from './sites';
 import { monitorsFromRow } from '../services/data';
 import { engineCostTable } from '../services/engineCost';
 import { sendMail } from '../lib/mailer';
+import { audit } from '../services/audit';
 import { acceptInvitation } from '../services/invitations';
 import { deliveryOverview, listDeliveries, saveSettings, sendTest } from '../services/reportDelivery';
 import { monthStart } from '../services/runs';
@@ -82,9 +85,10 @@ export async function orgRoutes(app: FastifyInstance) {
           createdBy: user.id,
         })
         .returning();
-      await tx.insert(schema.memberships).values({ orgId: o.id, userId: user.id, role: 'owner' });
+      await tx.insert(schema.memberships).values({ orgId: o.id, userId: user.id, role: 'owner', provisionedBy: 'owner' });
       return o;
     });
+    await audit(req, org.id, { action: 'company.created', target: { type: 'company', id: org.id, label: org.name } });
     return toOrg(org, 'owner');
   });
 
@@ -101,6 +105,13 @@ export async function orgRoutes(app: FastifyInstance) {
       .set({ ...(body.name ? { name: body.name } : {}), ...(body.industry !== undefined ? { industry: body.industry } : {}), ...(body.size !== undefined ? { size: body.size } : {}), ...(body.website !== undefined ? { website: body.website } : {}) })
       .where(eq(schema.organizations.id, a.org.id))
       .returning();
+    const changed = (['name', 'industry', 'size', 'website'] as const).filter((k) => o[k] !== a.org[k]);
+    if (changed.length)
+      await audit(req, a.org.id, {
+        action: 'company.updated',
+        target: { type: 'company', id: a.org.id, label: o.name },
+        details: { before: Object.fromEntries(changed.map((k) => [k, a.org[k]])), after: Object.fromEntries(changed.map((k) => [k, o[k]])) },
+      });
     return toOrg(o, a.role);
   });
 
@@ -133,6 +144,8 @@ export async function orgRoutes(app: FastifyInstance) {
     if (body.monthlyBudgetUsd > config.ownerBudgetMaxUsd && !isPlatformAdmin(a.user))
       throw badRequest(`Owners can set up to $${config.ownerBudgetMaxUsd} a month; for more, ask the platform administrator.`, { monthlyBudgetUsd: `At most $${config.ownerBudgetMaxUsd}` });
     const [o] = await db.update(schema.organizations).set({ monthlyBudgetUsd: body.monthlyBudgetUsd }).where(eq(schema.organizations.id, a.org.id)).returning();
+    if (o.monthlyBudgetUsd !== a.org.monthlyBudgetUsd)
+      await audit(req, a.org.id, { action: 'company.budget_changed', target: { type: 'company', id: a.org.id, label: a.org.name }, details: { before: a.org.monthlyBudgetUsd, after: o.monthlyBudgetUsd } });
     return toOrg(o, a.role);
   });
 
@@ -221,6 +234,8 @@ export async function orgRoutes(app: FastifyInstance) {
   app.put('/api/orgs/:orgId/delivery', async (req) => {
     const a = await orgAccess(req, (req.params as { orgId: string }).orgId, 'owner');
     const settings = await saveSettings(a.org, req.body);
+    // where reports go, never the webhook's signing secret (safeAuditDetails drops it as well)
+    await audit(req, a.org.id, { action: 'company.delivery_changed', target: { type: 'company', id: a.org.id, label: a.org.name }, details: { settings: settings as unknown as Record<string, unknown> } });
     const fresh = await db.query.organizations.findFirst({ where: eq(schema.organizations.id, a.org.id) });
     return { ...(await deliveryOverview(fresh ?? a.org)), settings };
   });
@@ -254,8 +269,23 @@ export async function orgRoutes(app: FastifyInstance) {
             .leftJoin(schema.users, eq(schema.invitations.invitedBy, schema.users.id))
             .where(and(eq(schema.invitations.orgId, a.org.id), isNull(schema.invitations.acceptedAt), isNull(schema.invitations.revokedAt), gt(schema.invitations.expiresAt, new Date())))
             .orderBy(desc(schema.invitations.createdAt));
+    // G1: who has two-step verification — owners and admins see it (the company's security posture is theirs to manage)
+    const admin = roleAtLeast(a.role, 'admin');
+    const keyed = admin
+      ? new Set((await db.selectDistinct({ id: schema.webauthnCredentials.userId }).from(schema.webauthnCredentials).where(inArray(schema.webauthnCredentials.userId, members.map((r) => r.u.id)))).map((r) => r.id))
+      : new Set<string>();
     return {
-      members: members.map(({ m, u }) => ({ userId: u.id, name: u.name, email: u.email, avatarUrl: u.avatarUrl, role: m.role as Role, joinedAt: m.createdAt.toISOString() })),
+      members: members.map(({ m, u }) => ({
+        userId: u.id,
+        name: u.name,
+        email: u.email,
+        avatarUrl: u.avatarUrl,
+        role: m.role as Role,
+        joinedAt: m.createdAt.toISOString(),
+        ...(admin ? { mfaEnabled: !!u.mfaTotpEnabledAt || keyed.has(u.id) } : {}),
+        provisionedBy: m.provisionedBy as Member['provisionedBy'],
+        deactivated: !!m.deactivatedAt,
+      })),
       invitations: invites.map(({ i, by }) => ({ id: i.id, email: i.email, role: i.role as Role, invitedBy: by, createdAt: i.createdAt.toISOString(), expiresAt: i.expiresAt.toISOString() })),
     };
   });
@@ -281,6 +311,7 @@ export async function orgRoutes(app: FastifyInstance) {
       .values({ orgId: a.org.id, email: body.email, role: body.role, tokenHash: sha256(token), invitedBy: a.user.id, expiresAt: new Date(Date.now() + 7 * 864e5) })
       .returning();
     const inviteUrl = `${config.appUrl}/invite/${token}`;
+    await audit(req, a.org.id, { action: 'team.invited', target: { type: 'invitation', id: inv.id, label: body.email }, details: { role: body.role } });
     // D-10: the dialog said "We sent an invitation" on a server with no mail account; say what really happens
     const emailed = config.accountEmails;
     void sendMail(
@@ -300,7 +331,12 @@ export async function orgRoutes(app: FastifyInstance) {
     const p = req.params as { orgId: string; id: string };
     const a = await orgAccess(req, p.orgId, 'admin');
     if (!isUuid(p.id)) throw notFound('Invitation not found');
-    await db.update(schema.invitations).set({ revokedAt: new Date() }).where(and(eq(schema.invitations.id, p.id), eq(schema.invitations.orgId, a.org.id)));
+    const [gone] = await db
+      .update(schema.invitations)
+      .set({ revokedAt: new Date() })
+      .where(and(eq(schema.invitations.id, p.id), eq(schema.invitations.orgId, a.org.id), isNull(schema.invitations.revokedAt)))
+      .returning();
+    if (gone) await audit(req, a.org.id, { action: 'team.invitation_revoked', target: { type: 'invitation', id: gone.id, label: gone.email }, details: { role: gone.role } });
     return { ok: true };
   });
 
@@ -314,6 +350,10 @@ export async function orgRoutes(app: FastifyInstance) {
     if (target.role === 'owner') throw forbidden('The owner’s role cannot be changed.');
     if (target.userId === a.user.id) throw badRequest('You cannot change your own role.');
     await db.update(schema.memberships).set({ role: body.role }).where(and(eq(schema.memberships.orgId, a.org.id), eq(schema.memberships.userId, p.userId)));
+    if (target.role !== body.role) {
+      const who = await db.query.users.findFirst({ where: eq(schema.users.id, p.userId) });
+      await audit(req, a.org.id, { action: 'team.role_changed', target: { type: 'user', id: p.userId, label: who?.email ?? null }, details: { before: target.role, after: body.role } });
+    }
     return { ok: true };
   });
 
@@ -326,6 +366,9 @@ export async function orgRoutes(app: FastifyInstance) {
     if (!target) throw notFound('Member not found');
     if (target.role === 'owner') throw forbidden(self ? 'The owner cannot leave the company.' : 'The owner cannot be removed.');
     await db.delete(schema.memberships).where(and(eq(schema.memberships.orgId, a.org.id), eq(schema.memberships.userId, p.userId)));
+    await refreshSessionPolicy([p.userId]);
+    const who = await db.query.users.findFirst({ where: eq(schema.users.id, p.userId) });
+    await audit(req, a.org.id, { action: self ? 'team.left' : 'team.removed', target: { type: 'user', id: p.userId, label: who?.email ?? null }, details: { role: target.role } });
     return { ok: true };
   });
 
@@ -362,7 +405,9 @@ export async function orgRoutes(app: FastifyInstance) {
     const inv = token.length < 100 ? await db.query.invitations.findFirst({ where: eq(schema.invitations.tokenHash, sha256(token)) }) : undefined;
     if (!inv || inv.acceptedAt || inv.revokedAt || inv.expiresAt < new Date()) throw badRequest('This invitation is no longer valid.');
     if (inv.email !== user.email.toLowerCase()) throw forbidden(`This invitation is for ${inv.email}. Sign in with that address.`);
-    return { orgId: await acceptInvitation(inv, user) };
+    const orgId = await acceptInvitation(inv, user);
+    await audit(req, orgId, { action: 'team.joined', target: { type: 'user', id: user.id, label: user.email }, details: { role: inv.role } });
+    return { orgId };
   });
 
 }

@@ -12,16 +12,126 @@ Roles: `viewer` (read) < `member` (start runs) < `admin` (sites, team, site sett
 |---|---|---|---|
 | GET | /api/auth/providers | | `AuthProviders` |
 | POST | /api/auth/signup | `signupSchema` | `Me` (signed in) |
-| POST | /api/auth/login | `loginSchema` | `Me` |
+| POST | /api/auth/login | `loginSchema` | `Me`, or `MfaChallenge` (`{ mfaRequired: true, methods, emailHint }`, no session yet) when two-step verification is on |
 | POST | /api/auth/logout | | `{ ok }` |
 | POST | /api/auth/forgot | `forgotSchema` | `{ ok }` (always, no account enumeration) |
 | POST | /api/auth/reset | `resetSchema` | `{ ok }` (signs out every session) |
 | POST | /api/auth/verify-email | `{ token }` | `{ ok }` |
 | POST | /api/auth/resend-verification | | `{ ok, sent }` |
-| GET | /api/auth/google?next=/path | | 302 to Google, back to `/api/auth/google/callback`, then to `next` (or `/login?error=`) |
+| GET | /api/auth/google?next=/path | | 302 to Google, back to `/api/auth/google/callback`, then to `next` (or `/login?error=`; `/login/mfa?next=` when a second step is due) |
 | GET | /api/me | | `Me`, or `null` when signed out |
 | PATCH | /api/me | `updateMeSchema` | `Me` |
 | POST | /api/me/password | `changePasswordSchema` | `{ ok }` |
+
+### Two-step verification and step-up (G1, `app/docs/IDENTITY.md`, `shared/src/identity.ts`)
+A sign-in with a second factor is two requests: the password (or Google) answers `MfaChallenge` and sets the http-only cookie
+`mfa_flow` (path `/api/auth`, 5 minutes); `POST /api/auth/mfa/verify` completes it. 5 wrong codes void the challenge
+(`mfa_flow_locked`). A TOTP code is accepted once. Security-relevant changes answer **`403 reauth_required`** with
+`methods: StepUpMethod[]` when the session has no proof of presence in the last 10 minutes; `POST /api/auth/step-up` gives one
+(5 failures in 15 minutes sign the session out, `stepup_locked`). A company that requires two-step verification answers every
+company route with **`403 mfa_enrolment_required`** (no factor yet) or **`403 mfa_verification_required`** (has one, this session
+has not used it — `POST /api/auth/step-up` with a factor clears it).
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | /api/auth/mfa | (cookie `mfa_flow`) | `{ methods, emailHint, next }`; 404 `mfa_flow_missing` |
+| POST | /api/auth/mfa/webauthn/options | (cookie) | WebAuthn request options for the person's passkeys |
+| POST | /api/auth/mfa/verify | `mfaVerifySchema` (`{ method: 'totp' \| 'recovery', code }` or `{ method: 'webauthn', response }`) | `Me & { next, recoveryCodesLeft }` (session created); 401 `mfa_invalid` / `mfa_flow_locked` |
+| POST | /api/auth/mfa/cancel | | `{ ok }` |
+| GET | /api/auth/step-up | | `{ methods, validUntil }` |
+| POST | /api/auth/step-up/webauthn/options | | WebAuthn request options |
+| POST | /api/auth/step-up | `stepUpSchema` (a factor, or `{ method: 'password', password }` for people without one) | `{ ok, validUntil }`; 401 `stepup_invalid` / `stepup_locked` |
+| GET | /api/me/mfa | | `MfaStatus` |
+| POST | /api/me/mfa/totp/start | (step-up) | `TotpEnrolment` (`secret`, `uri`, `qrSvg`) — the secret is kept sealed as pending |
+| POST | /api/me/mfa/totp/confirm | `{ code }` | `MfaStatus & { newRecoveryCodes }` (codes only with the first factor; shown once) |
+| DELETE | /api/me/mfa/totp | (step-up) | `MfaStatus`; 400 when it is the last factor and a company requires one |
+| POST | /api/me/mfa/recovery-codes | (step-up) | `{ newRecoveryCodes }` (the old ones stop working) |
+| POST | /api/me/mfa/passkeys/options | (step-up) | WebAuthn creation options |
+| POST | /api/me/mfa/passkeys | `{ name, response }` | `MfaStatus & { newRecoveryCodes }` |
+| PATCH | /api/me/mfa/passkeys/:id | `{ name }` | `PasskeyView` |
+| DELETE | /api/me/mfa/passkeys/:id | (step-up) | `MfaStatus` |
+| GET | /api/orgs/:orgId/security | | `SecurityPolicy` |
+| PUT | /api/orgs/:orgId/security | `securityPolicySchema` (admin, step-up; switching `requireMfa` on needs your own factor) | `SecurityPolicy` |
+
+`GET /api/orgs/:orgId/members` adds `mfaEnabled` to each member for owners and admins.
+
+### Sessions (G1)
+A session records how it signed in (`password` / `google` / `sso`), whether a second factor was used, its device and IP, and the
+strictest idle timeout of the person's companies (`SecurityPolicy.idleTimeoutMinutes`, refreshed whenever a policy or a membership
+changes). A session idle past it is deleted on its next request (`401 session_idle`, plus a short-lived `signed_out=idle` cookie
+for the sign-in page). Activity is written once a minute; requests with `X-Ascentra-Passive: 1` (the web app's polls from a hidden
+tab) do not count.
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | /api/me/sessions | | `{ items: SessionView[] }` (this device first; `id` is a public id, never the session key) |
+| DELETE | /api/me/sessions/:id | | `{ ok, signedOutHere }`; another person's session is a 404 |
+| POST | /api/me/sessions/revoke-others | | `{ ok, revoked }` |
+
+### Single sign-on (G1, `server/src/services/sso.ts`, `app/docs/IDENTITY.md` §4)
+One connection per company, OIDC (`openid-client`: discovery, code + PKCE + nonce) or SAML 2.0 (`@node-saml/node-saml`: signed
+assertions, audience, `InResponseTo` from requests we issued, 2 minutes of clock skew; plus our own issuer, recipient and one-use
+assertion checks; IdP-initiated answers are refused). It serves addresses on the company's **DNS-verified** domains only. Owners and
+admins configure it; changes need a step-up; making it required is the owner's, needs their own two-step verification, and signs out
+every non-owner session on those domains opened without it. Changing the identity provider switches the connection off until a
+test passes again.
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | /api/orgs/:orgId/sso | (admin) | `SsoOverview` (`domains`, `connection` — never the client secret, `sp` — the values to give the IdP, `secretsReady`) |
+| POST | /api/orgs/:orgId/sso/domains | `{ domain }` (admin, step-up; no public mail providers) | `SsoDomainView` with the TXT value; 409 when another company verified it |
+| POST | /api/orgs/:orgId/sso/domains/:id/verify | (admin) | `{ domain, verified, message }` (looks for `TXT ascentra-sso=<token>` at the domain) |
+| DELETE | /api/orgs/:orgId/sso/domains/:id | (admin, step-up) | `{ ok }` |
+| PUT | /api/orgs/:orgId/sso/connection | `ssoConnectionSchema` (admin, step-up; client secret / certificates omitted = keep) | `SsoConnectionView` |
+| PATCH | /api/orgs/:orgId/sso/connection | `{ enabled?, enforced? }` (admin, step-up; `enforced` owner only) | `SsoConnectionView`; 400 until a test passed / a domain is verified |
+| DELETE | /api/orgs/:orgId/sso/connection | (admin, step-up; owner when enforced) | `{ ok }` |
+| POST | /api/orgs/:orgId/sso/connection/test | (admin) | `{ url }` — open it: a real sign-in in test mode, back to `/o/:orgId/settings/sso?test=ok\|failed` |
+| POST | /api/sso/discover | `{ email }` | `{ sso, orgName?, url? }` |
+| GET | /api/sso/start?email=&next= | | 302 to the identity provider (cookie `sso_flow`, 10 minutes) |
+| GET | /api/sso/oidc/callback | (from the IdP) | 302 to `next`, `/login/mfa` or `/login?error=sso_*` |
+| POST | /api/sso/saml/:connId/acs | form `SAMLResponse`, `RelayState` (no CSRF header: the IdP posts it) | the same redirects |
+| GET | /api/sso/saml/:connId/metadata | | SP metadata XML |
+
+When a company **requires** SSO, `POST /api/auth/login` and `/api/auth/signup` for an address on its domains answer
+`403 { code: 'sso_required', ssoUrl }` before any password is checked (owners excepted), and Google sign-in returns
+`/login?error=sso_required`. First sign-ins create the account and membership with the default role when JIT is on; the IdP's
+`sub` / NameID is remembered so a renamed address finds the same person. If the company does not count its IdP as a second step
+(`mfaTrustSso: false`), people with their own factor get the second step (`/login/mfa`).
+
+### SCIM 2.0 provisioning (G1, `server/src/services/scim.ts`, `app/docs/IDENTITY.md` §5)
+Base URL `/api/scim/v2`, `Authorization: Bearer scim_…` (one company per token; hashed at rest; 600 requests a minute per token;
+never a cookie, no CSRF header). Answers are `application/scim+json`; errors are SCIM errors (`status`, `scimType`, `detail`).
+Only addresses on the company's verified SSO domains are provisioned; an existing account with that address is linked, not
+duplicated. `active: false` deactivates the membership (every company route answers `403 membership_deactivated`, the company
+disappears from `/api/me`, the sessions its IdP opened end); `DELETE` removes the membership (the account stays). The owner is never
+deactivated, removed or re-roled. A person's role is the highest role mapped from their groups; with no mapped group, people SCIM
+created take the SSO connection's default role and invited people keep theirs.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | /ServiceProviderConfig, /ResourceTypes, /Schemas | discovery |
+| GET | /Users?filter=&startIndex=&count= | `eq` on `userName`, `externalId`, `emails.value`, `id`; count ≤ 200 |
+| POST | /Users | 201; 409 `uniqueness` when already a member; 400 off-domain |
+| GET / PUT / PATCH / DELETE | /Users/:id | PATCH: Okta `{ op: replace, value: { active } }`, Entra paths (`active` as "False", `name.givenName`, `emails[type eq "work"].value`, `externalId`); unknown attributes ignored |
+| GET | /Groups?filter=&excludedAttributes=members | `eq` on `displayName`, `externalId`, `id` |
+| POST | /Groups | members must be members of the company |
+| GET / PUT / PATCH / DELETE | /Groups/:id | PATCH members add / remove (`members[value eq "…"]` or a value list) / replace, displayName |
+
+Admin side (session, owners and admins): `GET /api/orgs/:orgId/scim` → `ScimOverview` (base URL, tokens by prefix, groups with
+member counts and mapped role, verified domains); `POST …/scim/tokens { name }` (step-up, at most 2 live) → the token once;
+`DELETE …/scim/tokens/:id` (step-up); `PATCH …/scim/groups/:id { role: 'admin' | 'member' | 'viewer' | null }` (step-up) re-roles
+the group's members at once. `GET /api/orgs/:orgId/members` adds `provisionedBy` and `deactivated`.
+
+### Audit log (G1, `server/src/services/audit.ts`, catalogue `AUDIT_ACTIONS` in `shared/src/identity.ts`)
+Append-only per company (a database trigger refuses UPDATE / TRUNCATE and any DELETE but the daily retention purge and the
+company's own deletion). Owners and admins only; another company's log is a 404. Each event: `id, at, action, label, category,
+outcome, actorType (user / scim / system / platform_admin), actorId, actorLabel, targetType, targetId, targetLabel, ip, userAgent,
+details` — details never carry a password, code, token, secret or key (`safeAuditDetails`).
+
+| Method | Path | Query | Returns |
+|---|---|---|---|
+| GET | /api/orgs/:orgId/audit | `category`, `action`, `actor` (user id), `outcome`, `from` / `to` (YYYY-MM-DD, UTC), `before` (cursor), `limit` ≤ 200 | `{ items: AuditEventView[], nextCursor, actors (first page), retentionDays }` |
+| GET | /api/orgs/:orgId/audit.csv | the same filters | CSV (UTF-8 with BOM, ≤ 50,000 rows, formula-safe cells); the export is itself an event (`audit.exported`); 10 an hour |
 
 ## Companies and team
 | Method | Path | Body | Returns |

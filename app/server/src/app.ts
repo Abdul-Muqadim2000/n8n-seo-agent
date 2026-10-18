@@ -20,6 +20,11 @@ import { hookRoutes } from './routes/hooks';
 import { keywordRoutes } from './routes/keywords';
 import { ladderRoutes } from './routes/ladders';
 import { meRoutes } from './routes/me';
+import { mfaRoutes } from './routes/mfa';
+import { securityRoutes } from './routes/security';
+import { sessionRoutes } from './routes/sessions';
+import { ssoRoutes } from './routes/sso';
+import { scimRoutes } from './routes/scim';
 import { orgRoutes } from './routes/orgs';
 import { runRoutes } from './routes/runs';
 import { siteRoutes } from './routes/sites';
@@ -31,7 +36,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   const redact = (url: string) => url.replace(/(\/api\/hooks\/n8n\/)[^/?#]+/, '$1***');
   const serializers = { req: (r: { method: string; url: string; ip?: string }) => ({ method: r.method, url: redact(r.url), ip: r.ip }) };
   const app = Fastify({
-    logger: config.isProd ? { level: 'info', serializers } : { level: 'info', serializers, transport: { target: 'pino-pretty', options: { translateTime: 'HH:MM:ss', ignore: 'pid,hostname' } } },
+    logger: config.isProd || config.logLevel === 'silent' ? { level: config.logLevel, serializers } : { level: config.logLevel, serializers, transport: { target: 'pino-pretty', options: { translateTime: 'HH:MM:ss', ignore: 'pid,hostname' } } },
     // behind a reverse proxy: trust exactly that many hops of X-Forwarded-For (never every hop: the client controls the leftmost)
     trustProxy: config.trustProxy > 0 ? (_addr: string, hop: number) => hop < config.trustProxy : false,
     // 1 MB for people; the n8n callback route allows 40 MB (PDFs and Word files as base64)
@@ -64,12 +69,14 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   app.decorateRequest('user', null);
   app.decorateRequest('sessionId', null);
+  app.decorateRequest('session', null);
 
   app.addHook('onRequest', async (req, reply) => {
     if (!req.url.startsWith('/api/')) return;
     // B5-11: a request to the read API that presents a company API key is authenticated by that key alone - never by the cookie - so
     // it needs no CSRF header (a cross-site form cannot set Authorization) and its session is not read at all
-    if (req.url.startsWith('/api/v1') && triesBearer(req.headers.authorization)) {
+    // G1: SCIM is authenticated by its own bearer token only (routes/scim.ts), never by a cookie
+    if ((req.url.startsWith('/api/v1') && triesBearer(req.headers.authorization)) || req.url.startsWith('/api/scim/')) {
       req.user = null;
       req.sessionId = null;
       return;
@@ -77,18 +84,21 @@ export async function buildApp(): Promise<FastifyInstance> {
     // CSRF: state-changing requests must carry a header a cross-site form cannot set (n8n callbacks authenticate by URL token instead)
     // log pushes (Cloudflare Logpush, log drains) authenticate by the site's push key in a header, like n8n callbacks by URL token
     const machine = req.url.startsWith('/api/hooks/') || req.url.startsWith('/api/ingest/');
-    if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !machine && req.headers['x-requested-with'] !== 'fetch') {
+    // G1: the SAML answer is a cross-site form POST from the identity provider, authenticated by its signature and our request id
+    const samlAcs = req.method === 'POST' && /^\/api\/sso\/saml\/[^/]+\/acs(\?|$)/.test(req.url);
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !machine && !samlAcs && req.headers['x-requested-with'] !== 'fetch') {
       throw new HttpError(403, 'Missing X-Requested-With header', 'csrf');
     }
     if (machine || req.url === '/api/health') return;
     const s = await readSession(req, reply);
     req.user = s?.user ?? null;
     req.sessionId = s?.sessionId ?? null;
+    req.session = s?.session ?? null;
   });
 
   app.setErrorHandler((err: FastifyError | HttpError, req, reply) => {
     if (err instanceof HttpError) {
-      return reply.status(err.statusCode).send({ error: err.message, code: err.code, fields: err.fields });
+      return reply.status(err.statusCode).send({ ...err.extra, error: err.message, code: err.code, fields: err.fields });
     }
     const status = (err as FastifyError).statusCode ?? 500;
     if (status === 429) return reply.status(429).send({ error: 'Too many attempts. Please wait a minute and try again.', code: 'rate_limited' });
@@ -114,6 +124,11 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(authRoutes);
   await app.register(meRoutes);
+  await app.register(mfaRoutes);
+  await app.register(securityRoutes);
+  await app.register(sessionRoutes);
+  await app.register(ssoRoutes);
+  await app.register(scimRoutes);
   await app.register(orgRoutes);
   await app.register(siteRoutes);
   await app.register(dataRoutes);
