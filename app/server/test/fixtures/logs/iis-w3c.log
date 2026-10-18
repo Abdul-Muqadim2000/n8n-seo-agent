@@ -1,0 +1,9 @@
+#Software: Microsoft Internet Information Services 10.0
+#Version: 1.0
+#Date: 2026-10-15 00:00:00
+#Fields: date time s-ip cs-method cs-uri-stem cs-uri-query s-port cs-username c-ip cs(User-Agent) cs(Referer) sc-status sc-substatus sc-win32-status time-taken
+2026-10-15 06:00:00 10.0.0.4 GET /default.aspx - 443 - 66.249.64.9 Mozilla/5.0+(compatible;+Googlebot/2.1;++http://www.google.com/bot.html) - 200 0 0 31
+2026-10-15 06:00:05 10.0.0.4 GET /products.aspx id=5&sort=asc 443 - 66.249.64.9 Mozilla/5.0+(compatible;+Googlebot/2.1;++http://www.google.com/bot.html) - 200 0 0 45
+2026-10-15 06:01:00 10.0.0.4 GET /default.aspx - 443 - 198.51.100.7 Mozilla/5.0+(Windows+NT+10.0;+Win64;+x64)+AppleWebKit/537.36+(KHTML,+like+Gecko)+Chrome/130.0.0.0+Safari/537.36 - 200 0 0 15
+2026-10-15 06:02:00 10.0.0.4 GET /about.aspx - 443 - 20.171.206.33 Mozilla/5.0+AppleWebKit/537.36+(KHTML,+like+Gecko);+compatible;+GPTBot/1.2;++https://openai.com/gptbot - 200 0 0 60
+2026-10-15 06:03:00 10.0.0.4 GET /about.aspx
