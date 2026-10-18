@@ -1,18 +1,20 @@
 {
  "compose_tz_default": "America/New_York",
  "config": {
+  "confirm_minutes": 10,
   "count_on_demand": false,
   "fired_slack_minutes": 5,
   "grace_minutes": 1,
-  "late_hours": 6,
-  "max_attempts": 2,
-  "max_starts": 3,
+  "late_minutes": 30,
+  "max_attempts": 3,
+  "max_starts": 2,
+  "next_gap_hours": {
+   "daily": 2,
+   "monthly": 48,
+   "weekly": 12
+  },
   "refusal_minutes": 20,
-  "window_hours": {
-   "daily": 20,
-   "monthly": 36,
-   "weekly": 36
-  }
+  "stale_plan_minutes": 10
  },
  "credential": "SEOcredN8nApiKey",
  "default_tz": "America/New_York",
@@ -194,6 +196,12 @@
   }
  ],
  "tz": "America/New_York",
+ "watchdog": {
+  "file": "SEO_Agent_Console_Alerts.json",
+  "id": "SEOagentConsole1",
+  "name": "SEO Agent \u2014 Console Alerts",
+  "trigger_node": "Mailbox Trigger"
+ },
  "workflow": {
   "file": "SEO_Agent_Schedule_Catchup.json",
   "id": "SEOagentCatchUp1",

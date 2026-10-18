@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { audit } from '../services/audit';
 import { API_KEY, API_SCOPES, apiKeyCreateSchema, bearerKey, EXPORT_TABLES, exportColumns, IDEMPOTENCY, roleAtLeast, triesBearer, type ApiScope } from '@seo/shared';
 import { isUuid, orgAccess, requireVerified, siteAccess } from '../auth/access';
 import { config } from '../config';
@@ -12,6 +13,7 @@ import { runExport, tableRowsV1 } from '../services/exports';
 import {
   fileOf,
   getAudit,
+  getCrawlers,
   getReport,
   getRun,
   getWebsite,
@@ -41,7 +43,7 @@ export async function v1Ctx(req: FastifyRequest): Promise<V1Ctx> {
     const token = bearerKey(h);
     const a = token ? await authenticateKey(token) : null;
     if (!a) throw new HttpError(401, 'This API key is not valid: it is unknown, revoked or expired', 'api_key_invalid');
-    return { org: a.org, auth: 'api_key', key: a.key, scopes: scopesOf(a.key.scopes) };
+    return { org: a.org, auth: 'api_key', key: a.key, scopes: scopesOf(a.key.scopes), req };
   }
   if (!req.user) throw new HttpError(401, 'Send a company API key (Authorization: Bearer asc_…) or sign in', 'unauthorized');
   const orgId = req.headers['x-org-id'] ?? (req.query as { org?: string }).org;
@@ -49,7 +51,7 @@ export async function v1Ctx(req: FastifyRequest): Promise<V1Ctx> {
   const a = await orgAccess(req, Array.isArray(orgId) ? orgId[0] : orgId);
   // a person's session may do through the API what their role lets them do in the app
   const scopes: ApiScope[] = roleAtLeast(a.role, 'admin') ? ['read', 'publish_check', 'run', 'admin'] : roleAtLeast(a.role, 'member') ? ['read', 'publish_check', 'run'] : ['read'];
-  return { org: a.org, auth: 'session', key: null, scopes, actor: a };
+  return { org: a.org, auth: 'session', key: null, scopes, actor: a, req };
 }
 
 /** rate-limit bucket: the key (hashed), else the session, else the address */
@@ -75,6 +77,7 @@ const ENDPOINTS = [
   'GET /api/v1/websites/:websiteId',
   'GET /api/v1/websites/:websiteId/audits',
   'GET /api/v1/websites/:websiteId/audits/:auditId',
+  'GET /api/v1/websites/:websiteId/crawlers',
   'GET /api/v1/runs',
   'GET /api/v1/runs/:runId',
   'GET /api/v1/reports',
@@ -94,6 +97,13 @@ const ENDPOINTS = [
   'POST /api/v1/webhooks/:id/test',
   'POST /api/v1/mcp',
 ];
+
+/** G4 + G1: who the audit log names for a write through the API — the key's creator "via API key <name>", or the signed-in person */
+const apiActor = (ctx: V1Ctx, a: { user: { id: string; email: string } }) => ({
+  type: 'user' as const,
+  userId: a.user.id,
+  label: ctx.key ? `${a.user.email} via API key ${ctx.key.name} (${ctx.key.prefix}…)` : a.user.email,
+});
 
 // ---------------- MCP (Streamable HTTP, JSON answers only) over the same handlers ----------------
 
@@ -125,6 +135,13 @@ const TOOLS: Tool[] = [
       "One audit's findings in its own fix-list order, with severity, pages affected, the pages checked, evidence, and whether each is new, open, fixed or no longer seen compared with the previous audit of the same type. Filter with severity (e.g. 'high,critical') and status (e.g. 'new').",
     inputSchema: { type: 'object', properties: { websiteId: { type: 'string' }, auditId: { type: 'string' }, severity: { type: 'string' }, status: { type: 'string' } }, required: ['websiteId', 'auditId'] },
     run: (c, a) => getAudit(c, a.websiteId, a.auditId, a),
+  },
+  {
+    name: 'get_crawler_activity',
+    description:
+      "What Googlebot, Bingbot and the AI crawlers (GPTBot, ClaudeBot, PerplexityBot, ChatGPT-User …) actually requested on one verified website, from its own access logs: requests per crawler and day with how many were proved by the vendor's IP list or DNS, spoofed crawlers counted apart, pages Google or AI did not fetch, crawl budget spent on redirects / errors / parameter URLs, pages AI assistants fetched because a person asked, response times. days: 7, 30 or 90.",
+    inputSchema: { type: 'object', properties: { websiteId: { type: 'string' }, days: { type: 'integer', enum: [7, 30, 90] } }, required: ['websiteId'] },
+    run: (c, a) => getCrawlers(c, a.websiteId, a),
   },
   {
     name: 'list_runs',
@@ -214,8 +231,8 @@ async function mcp(ctx: V1Ctx, msg: Rpc): Promise<unknown | null> {
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: 'ascentra', title: `${config.brand} — ${ctx.org.name}`, version: '1.0.0' },
         instructions: ctx.scopes.includes('run')
-          ? `Access to ${ctx.org.name}'s SEO data (websites, audits and findings, analyses, reports, a free publish check) and to starting analyses within the company's monthly budget. Before start_run, call preview_run: it shows the cost and any duplicate warning. Never acknowledge a warning the user has not seen.`
-          : `Read-only access to ${ctx.org.name}'s SEO data: websites, technical audits and their findings, analyses, reports, and a free publish check. This key cannot start a run or change a setting.`,
+          ? `Access to ${ctx.org.name}'s SEO data (websites, audits and findings, crawler activity from server logs, analyses, reports, a free publish check) and to starting analyses within the company's monthly budget. Before start_run, call preview_run: it shows the cost and any duplicate warning. Never acknowledge a warning the user has not seen.`
+          : `Read-only access to ${ctx.org.name}'s SEO data: websites, technical audits and their findings, crawler activity from server logs, analyses, reports, and a free publish check. This key cannot start a run or change a setting.`,
       });
     }
     case 'ping':
@@ -266,6 +283,7 @@ export async function apiV1Routes(app: FastifyInstance) {
     const p = req.params as Args;
     return getAudit(await readCtx(req), p.websiteId, p.auditId, req.query as Args);
   });
+  app.get('/api/v1/websites/:websiteId/crawlers', { config: perMinute }, async (req) => getCrawlers(await readCtx(req), (req.params as Args).websiteId, req.query as Args));
   app.get('/api/v1/runs', { config: perMinute }, async (req) => listRuns(await readCtx(req), req.query as Args));
   app.get('/api/v1/runs/:runId', { config: perMinute }, async (req) => getRun(await readCtx(req), (req.params as Args).runId));
   app.get('/api/v1/reports', { config: perMinute }, async (req) => listReports(await readCtx(req), req.query as Args));
@@ -299,8 +317,11 @@ export async function apiV1Routes(app: FastifyInstance) {
     return tableRowsV1(ctx.org, await siteOf(ctx, p.websiteId), p.table, req.query as Args);
   });
   app.post('/api/v1/exports/:id/run', { config: perRun }, async (req) => {
-    const a = await actorOf(await v1Ctx(req), 'admin');
-    return runExport(a.org.id, (req.params as Args).id, 'manual');
+    const ctx = await v1Ctx(req);
+    const a = await actorOf(ctx, 'admin');
+    const r = await runExport(a.org.id, (req.params as Args).id, 'manual');
+    await audit(req, a.org.id, { action: 'integration.export_started', actor: apiActor(ctx, a), target: { type: 'integration', id: r.integrationId }, outcome: r.status === 'failed' ? 'failure' : 'success', details: { status: r.status } });
+    return r;
   });
 
   // ---- G4: tickets in the company's tracker (create: scope "run"; read: "read") ----
@@ -311,8 +332,10 @@ export async function apiV1Routes(app: FastifyInstance) {
     return { items: await listIssues(ctx.org.id, site?.id ?? null), trackers: await connectedTrackers(ctx.org.id) };
   });
   app.post('/api/v1/issues', { config: perRun }, async (req, reply) => {
-    const a = await actorOf(await v1Ctx(req), 'run');
+    const ctx = await v1Ctx(req);
+    const a = await actorOf(ctx, 'run');
     const r = await createIssue(a, req.body);
+    if (!r.existing) await audit(req, a.org.id, { action: 'issue.created', actor: apiActor(ctx, a), target: { type: 'issue', id: r.issue.id, label: r.issue.remoteKey }, details: { kind: r.issue.kind, source: r.issue.sourceKey } });
     return reply.status(r.existing ? 200 : 201).send(r);
   });
 
@@ -322,12 +345,18 @@ export async function apiV1Routes(app: FastifyInstance) {
     return { items: await listEndpoints(a.org.id), deliveries: await listWebhookDeliveries(a.org.id, 50) };
   });
   app.post('/api/v1/webhooks', { config: perRun }, async (req, reply) => {
-    const a = await actorOf(await v1Ctx(req), 'admin');
-    return reply.status(201).send(await createEndpoint(a.org, a.user, req.body));
+    const ctx = await v1Ctx(req);
+    const a = await actorOf(ctx, 'admin');
+    const r = await createEndpoint(a.org, a.user, req.body);
+    await audit(req, a.org.id, { action: 'integration.webhook_added', actor: apiActor(ctx, a), target: { type: 'webhook', id: r.endpoint.id, label: r.endpoint.name }, details: { format: r.endpoint.format, host: r.endpoint.urlHost, events: r.endpoint.events } });
+    return reply.status(201).send(r);
   });
   app.delete('/api/v1/webhooks/:id', { config: perMinute }, async (req) => {
-    const a = await actorOf(await v1Ctx(req), 'admin');
-    return deleteEndpoint(a.org.id, (req.params as Args).id);
+    const ctx = await v1Ctx(req);
+    const a = await actorOf(ctx, 'admin');
+    const r = await deleteEndpoint(a.org.id, (req.params as Args).id);
+    await audit(req, a.org.id, { action: 'integration.webhook_removed', actor: apiActor(ctx, a), target: { type: 'webhook', id: String((req.params as Args).id) } });
+    return r;
   });
   app.post('/api/v1/webhooks/:id/test', { config: perRun }, async (req) => {
     const a = await actorOf(await v1Ctx(req), 'admin');
@@ -361,13 +390,16 @@ export async function apiV1Routes(app: FastifyInstance) {
     const a = await orgAccess(req, (req.params as Args).orgId, 'admin');
     const b = parse(apiKeyCreateSchema, req.body ?? {});
     const { key, token } = await createKey({ org: a.org, user: a.user, name: b.name, scopes: b.scopes, expiresInDays: b.expiresInDays });
+    await audit(req, a.org.id, { action: 'apikey.created', target: { type: 'api_key', id: key.id, label: `${key.name} (${key.prefix}…)` }, details: { scopes: key.scopes, expiresAt: key.expiresAt } });
     return { ...key, token };
   });
   app.delete('/api/orgs/:orgId/api-keys/:keyId', async (req) => {
     const p = req.params as Args;
     const a = await orgAccess(req, p.orgId, 'admin');
     if (!isUuid(p.keyId)) throw notFound('API key not found');
-    return revokeKey(a.org.id, p.keyId);
+    const k = await revokeKey(a.org.id, p.keyId);
+    await audit(req, a.org.id, { action: 'apikey.revoked', target: { type: 'api_key', id: k.id, label: `${k.name} (${k.prefix}…)` } });
+    return k;
   });
 
   // ---- B3-7 in the app: Content → "Check a page before you publish" (member, verified website) ----

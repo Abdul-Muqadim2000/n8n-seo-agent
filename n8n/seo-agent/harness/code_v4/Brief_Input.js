@@ -238,8 +238,24 @@ const SM = (() => {
     clicks: num0(p.clicks), impressions: num0(p.impressions), position: num0(p.position), prev_clicks: num0(p.prev_clicks), yoy_clicks: num0(p.yoy_clicks),
     decay_state: S(p.decay_state), decay_pct: num0(p.decay_pct), decay_lost: num0(p.decay_lost), decay_kind: S(p.decay_kind),
     decay_basis: S(p.decay_basis).slice(0, 900), measured_at: S(p.measured_at) }));
+  // ---- C-7 (re-rating 2026-10-17): ONE page state per keyword, read by the Rank Tracker AND the Site Tracker (and so by the cadence) ----
+  // In one morning the Rank Tracker said of "ai consulting" "…/ai-copilot-advisory-uae already answers this search - refresh that page"
+  // while the Site Tracker said "fix the four drafts that failed the quality check and run them again", and of "it consulting dubai"
+  // "write the main page" while the Site Tracker and the cadence said "written today, failed QA, fix it". The order of evidence is one:
+  // a LIVE page of the site that answers the search wins (refresh it; a draft written for the search is retired, never a second page);
+  // then a written draft (publish it); then a draft that failed its quality check (fix it and run it again); then a run that wrote nothing.
+  // in: { keyword, covered_url, written, not_ready, reasons (array or '; ' text), started } -> { state, text } (text: the parenthesis a list uses)
+  const pageStep = (o) => {
+    const c = o || {}, kw = S(c.keyword), why = (Array.isArray(c.reasons) ? c.reasons : S(c.reasons).split(/;\s+/)).map(S).filter(Boolean).slice(0, 2).join('; ').slice(0, 220);
+    if (S(c.covered_url)) return { state: 'covered', text: S(c.covered_url) + ' already answers this search — refresh that page, do not publish a second one'
+      + (c.not_ready || c.written ? '; the draft written for "' + kw + '" is not needed (use its text to refresh that page)' : '') };
+    if (c.written) return { state: 'written', text: 'already written — publish it' };
+    if (c.not_ready) return { state: 'not_ready', text: 'written, but the draft did not pass the quality check' + (why ? ' (' + why + ')' : '') + ' — fix it and run it again; do not publish it as it is' };
+    if (c.started) return { state: 'started', text: 'a page run was started for it but no page was written — it is written again' };
+    return { state: 'planned', text: '' };
+  };
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
-    titleShare, titleGap, canonUrl, isListing, pageScore,
+    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms } };
 })();
 // ---- site-tracking statistics (2026-10-12, FIX_PLAN G28): an alert must mean "this really changed", not "a number moved by 30%".
@@ -442,6 +458,9 @@ return $('Site Metrics').all().map(i => { const m = i.json; const G = m.gsc, A =
     // to "publish the three written pages", two of them refused by their own quality check). The reasons travel with them.
     ...((m.needs_fix || []).length ? { drafts_to_fix_not_publish: m.needs_fix.map(p => p.keyword + ' (did not pass the quality check: ' + ((p.reasons || []).slice(0, 2).join('; ') || 'see the page report').slice(0, 240) + ')'),
       drafts_note: 'These pages were written but did NOT pass the quality check. Never tell the owner to publish them: tell them to fix the listed points and run the page again.' } : {}),
+    // C-7 (re-rating 2026-10-17): drafts a live page of the site makes unnecessary - the Rank Tracker tells the owner to refresh that page
+    ...((m.drafts_retired || []).length ? { drafts_not_needed: m.drafts_retired.map(d => d.keyword + ' -> refresh ' + d.live_url + ' instead'),
+      drafts_not_needed_note: 'A live page of the site already answers each of these searches. Never tell the owner to fix or publish these drafts: tell them to refresh the live page named.' } : {}),
     ...((m.detected_published || []).length ? { pages_found_live_this_week: m.detected_published.map(f => f.keyword + ' -> ' + f.url + ' (tracking started)') } : {}),   // v4.8 publish detection
     search_console_notices: ((m.console || {}).notices || []).map(x => x.severity + ': ' + x.kind + ' — ' + x.subject + ' (' + String(x.received_at).slice(0, 10) + ')'),
     monthly_checkin: (m.console || {}).last_checkin ? { month: m.console.last_checkin.month, manual_action: m.console.last_checkin.manual_action, security_issue: m.console.last_checkin.security_issue, pages_not_indexed_sitewide: m.console.last_checkin.not_indexed_total >= 0 ? m.console.last_checkin.not_indexed_total : null, top_reasons: ((m.console.last_checkin.coverage || {}).reasons || []).slice(0, 3) } : (m.console && m.console.checkin_due ? 'due (not submitted this month)' : null),
@@ -450,5 +469,5 @@ return $('Site Metrics').all().map(i => { const m = i.json; const G = m.gsc, A =
     // G28: the significance of each traffic change — an alert worded "Watch:" is inside sampling noise and must never be called a fall
     traffic_significance: m.significance ? Object.entries(m.significance).filter(([, v]) => v).map(([k, v]) => ({ metric: k, current: v.cur, previous: v.prev, change_pct: v.pct, confidence_range_pct: v.ci, statistically_real: !!v.real, only_watch: !!v.watch })) : [],
     google_updates_in_period: ST.updatesIn(m.period.current).map(u => u.name + ' (' + u.start + ' to ' + u.end + ')'),
-    alerts: m.alerts.map(a => a.level + ': ' + a.text), computed_actions: m.actions.map(a => ({ priority: a.priority, action: a.action, why: a.why })) };
+    alerts: m.alerts.map(a => a.level + ': ' + a.text), computed_actions: m.actions.map(a => ({ priority: a.priority, type: a.type || "", action: a.action, why: a.why })) };
   return { json: { site_id: m.site_id, domain: m.domain, facts: JSON.stringify(facts) } }; });

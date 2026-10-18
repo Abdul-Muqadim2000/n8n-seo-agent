@@ -1093,7 +1093,7 @@
      "node": "Site Brief",
      "ref": "$('Brief Input').item.json",
      "streaming": false,
-     "template_chars": 3008
+     "template_chars": 3143
     }
    ],
    "ai_nodes": [

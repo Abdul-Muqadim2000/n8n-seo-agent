@@ -272,7 +272,7 @@ for (const s of list) {
   const dropped = set_aside.filter(x => x.dropped);   // R16: a rung nobody should write is a reason to report, not to go quiet
   if (!picks.length && (paused_reason || awaiting_approval.length || suggestions.length || facts.waiting_for_support.length || dropped.length || facts.paused_ladders.length)) {
     const fixK = new Set(needs_fix.map(w => norm(w.keyword)));
-    const reason = paused_reason ? waitingKw.size + ' written pages waiting for publication (pile-up guard, limit ' + cfg.max_waiting + '): ' + facts.waiting_keywords.slice(0, 6).map(k => '"' + k + '"' + (fixK.has(norm(k)) ? ' (needs a fix: it did not pass the quality check)' : '')).join(', ')
+    const reason = paused_reason ? waitingKw.size + ' written pages waiting for publication (pile-up guard, limit ' + cfg.max_waiting + '): ' + facts.waiting_keywords.slice(0, 6).map(k => '"' + k + '"' + (fixK.has(norm(k)) ? (() => { const cv = coverOf({ keyword: k }); return cv ? ' (not needed: ' + SM.pageStep({ keyword: k, covered_url: cv.url, not_ready: true }).text + ')' : ' (needs a fix: it did not pass the quality check)'; })() : '')).join(', ')
         + (needs_fix.length ? ' — publish the ones that passed, and fix the ' + needs_fix.length + ' that need a fix and run them again, to continue' : ' — publish them to continue')
       : dropped.length ? 'nothing to write automatically this week; ' + dropped.length + ' planned page(s) set aside: ' + dropped.slice(0, 3).map(x => x.note).join(' | ')
       : 'nothing to write automatically this week';

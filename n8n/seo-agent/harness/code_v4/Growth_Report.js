@@ -141,6 +141,7 @@ const DRY_OF = (sid) => { const pick = (nm) => { try { return $(nm).all().map(i 
 // reads Growth Metrics explicitly: the node before it saves a Data Table row and outputs that row, not the summary
 return $('Growth Metrics').all().map(i => i.json).filter(m => !m.skip).map(m => {
   const B = m.submitted.bing, X = m.submitted.indexnow;
+  const EB = m.earned_basis || {};   // C-3: what the earned-media counts are counted over
   // B9-1 (2026-10-15, benchmark area 9): what a submission actually reaches, said the way the sources say it. Bing's index is read
   // by Bing and Microsoft Copilot; OpenAI documents OAI-SearchBot, not Bing, as what surfaces pages in ChatGPT search; and
   // IndexNow's own FAQ states that submitting "does not guarantee immediate indexing". Sent is sent — never "indexed".
@@ -168,7 +169,7 @@ return $('Growth Metrics').all().map(i => i.json).filter(m => !m.skip).map(m => 
   // here with its reason, because "we are not writing a page about X because it is a competitor's brand" is the better answer.
   if ((m.set_aside || []).length) html += '<p style="margin:4px 0 8px;font-size:12px;color:#b45309"><b>Set aside</b> (planned before the keyword rule existed, no question and no page): '
     + m.set_aside.map(x => esc(x.note || (x.keyword + ' — ' + x.detail))).join(' | ') + '</p>';
-  html += h3('Pages AI cites without naming you (earned media)') + table(['Page', 'Kind', 'Cited', 'Names', 'Next step'], m.earned.slice(0, 12).map(e => [link(e.url, e.title || e.host), esc(KIND[e.kind] || e.kind), n(e.citations) + 'x · ' + esc(e.engines.join(', ')),
+  html += h3('Pages AI cites without naming you (earned media)') + (EB.answers ? p_('Counted over ' + n(EB.answers) + ' AI answers that did not name you, ' + esc(EB.from) + ' to ' + esc(EB.to) + ' (the weekly AI-visibility runs and the daily pulse): a page is counted once for each answer that linked it. The AI visibility report\'s "Sources AI relies on" counts websites over its own run, so the two numbers are not the same measure.', true) : '') + table(['Page', 'Kind', 'Answers citing it', 'Names', 'Next step'], m.earned.slice(0, 12).map(e => [link(e.url, e.title || e.host), esc(KIND[e.kind] || e.kind), n(e.citations) + ' · ' + esc(e.engines.join(', ')),
     e.mentions_us === true ? '<b style="color:#15803d">you</b>' : esc(e.competitors_named.join(', ') || (e.mentions_us === false ? 'not you' : '—')), esc(e.action)]), 'no third-party pages cited this week');
   // B9-3: a withheld score says why instead of printing a number nothing supports; the blocked pages sort to the top
   html += h3('Key pages: can AI read and quote them?') + table(['Page', 'Score', 'Updated', 'Bing', 'Fix first'], m.pages.slice().sort((a, b) => (a.score == null ? -1 : a.score) - (b.score == null ? -1 : b.score)).map(p => [link(p.url),
@@ -197,13 +198,16 @@ return $('Growth Metrics').all().map(i => i.json).filter(m => !m.skip).map(m => 
     // B9-3: what the AI fetchers may read is measured from the site's own robots.txt, or it is not checked
     (m.robots && !m.robots.unavailable) ? LN.of('What the AI search fetchers may read', 'own_check', { basis: 'measured', period: LN.asOf(m.checked_at), sample: LN.sample(Object.keys((m.robots && m.robots.verdicts) || {}).length, 'key pages evaluated against robots.txt'), note: (m.robots.note || 'the site\'s own robots.txt') + ', matched by Google\'s documented rules (most specific group, longest rule, Allow wins a tie)' })
       : LN.unknown('What the AI search fetchers may read', (m.robots && (m.robots.reason || m.robots.note)) || 'robots.txt was not read this run'),
-    LN.of('Pages AI cites without naming you', 'ai_engines', { basis: 'measured', period: 'the answers of the last weekly AI-visibility run', sample: LN.sample(m.earned.length, 'third-party pages cited'), note: 'the exact pages the assistants linked in their answers' }),
+    LN.of('Pages AI cites without naming you', 'ai_engines', { basis: 'measured', period: EB.answers ? EB.from + ' to ' + EB.to + ' (' + EB.days + ' days of stored answers: weekly AI-visibility runs and the daily pulse)' : 'the answers stored in the last 8 days', sample: LN.sample(m.earned.length, 'third-party pages cited') + (EB.answers ? ' in ' + EB.answers + ' answers that did not name you' : ''), note: 'the exact pages the assistants linked in their answers; each page counted once per answer that linked it' }),
     B.enabled && B.in_account ? LN.of('Bing crawl state and submissions', 'bing', { basis: 'reported', period: LN.asOf(m.checked_at), sample: LN.sample(B.submitted, 'pages submitted this run') })
       : LN.unknown('Bing crawl state', B.enabled ? 'this site is not in the Bing Webmaster account' : 'no Bing Webmaster key is configured'),
     LN.of('Questions queued for an AI answer page', 'ai_db', { basis: 'estimated', period: LN.asOf(m.checked_at), sample: LN.sample(m.targets.length, 'questions in the panel'), note: 'the value of each question uses DataForSEO\'s AI search volume estimate' }),
   ];
   html += LN.block(lineage) + '</div>';
-  const subject = '[AI growth] ' + m.domain + ' — ' + (m.actions.filter(a => a.priority === 1).length ? m.actions.filter(a => a.priority === 1).length + ' high-value action(s)' : 'done for you this week') + (m.alerts.some(a => a.level === 'good') ? ' · a win' : '');
+  // C-11 (re-rating 2026-10-17): a dry run is a test - nothing was done for anyone this week - so its subject says so, and the callback
+  // carries `dry_run: true`, which the app's delivery rule holds (app/shared/src/report-delivery.ts, hold code `test_run`)
+  const subject = DRY ? '[AI growth · TEST RUN] ' + m.domain + ' — dry run, nothing was submitted'
+    : '[AI growth] ' + m.domain + ' — ' + (m.actions.filter(a => a.priority === 1).length ? m.actions.filter(a => a.priority === 1).length + ' high-value action(s)' : 'done for you this week') + (m.alerts.some(a => a.level === 'good') ? ' · a win' : '');
   const file_name = 'ai-growth-' + m.domain.replace(/[^a-z0-9]+/gi, '-') + '-' + m.checked_at.slice(0, 10) + '.html';
   return { json: { ...m, lineage, subject, html, file_name, status: 'progress', stage: 'ai_growth', ...(DRY ? { dry_run: true, dry_run_note } : {}) }, binary: { data: { data: b64(wrapDoc(subject, html)), mimeType: 'text/html', fileName: file_name, fileExtension: 'html' } } };
 });

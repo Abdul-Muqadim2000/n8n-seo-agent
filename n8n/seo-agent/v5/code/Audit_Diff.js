@@ -24,9 +24,25 @@ const otherType = !prev ? (audits.find(r => r.report_type && r.report_type !== c
 //   observation and the diff leaves it out of fixed / new / still-open on BOTH sides.
 const assessed = new Set(Object.keys(a.weights || {}));   // the categories this audit type scores: a finding outside them is "not checked", never "fixed" or "new"
 const inScope = (f) => !assessed.size || assessed.has(f.category);
-const prevF = prev ? rowsOf('Load Audit Findings').filter(r => r.audit_id === prev.audit_id).filter(inScope) : [];
+// C-5 (re-rating 2026-10-17): two audits compare only on the checks BOTH ran. Audit 794 (crawl_js false) against 739 of 48 minutes earlier
+// (crawl_js true) reported "1 fixed: AI crawlers see a different version of 20 key page(s)" - a finding only a JavaScript crawl can make,
+// absent because the method changed, not because anything was fixed. The method is read from this run (Check Crawl / the audit) and from
+// the stored row's `crawl_js` (the column is the audit report's to write; an older row without it is UNKNOWN, never "same"). When the two
+// differ or one is unknown, the findings that depend on rendering are left out of fixed / new / still open on both sides and named.
+const jsOf = (v) => (v === true || v === 'true' || v === 1 || v === '1') ? true : (v === false || v === 'false' || v === 0 || v === '0') ? false : null;
+const curJs = jsOf(a.crawl_js != null ? a.crawl_js : base.crawl_js);
+const prevJs = prev ? jsOf(prev.crawl_js) : null;
+const methodSame = curJs !== null && prevJs !== null && curJs === prevJs;
+const JS_DEP = /after JavaScript|written by JavaScript|not in the first response|changes after|AI crawlers see a different version|response-versus-render|without a real <a href>/i;
+const jsDep = (f) => !!f && (f.source === 'render_diff' || JS_DEP.test(String(f.title || '')));
+const methodOk = (f) => methodSame || !jsDep(f);
+const jsWord = (v) => v === true ? 'with JavaScript rendering' : v === false ? 'without JavaScript rendering' : 'with a crawl method not recorded';
+const prevAll = prev ? rowsOf('Load Audit Findings').filter(r => r.audit_id === prev.audit_id).filter(inScope) : [];
+const prevF = prevAll.filter(methodOk);
 const keyOf = (f) => String(f.category || '') + '|' + String(f.title || '').toLowerCase().replace(/\d[\d,.%]*/g, '#').replace(/["'“”‘’]/g, '').replace(/\s+/g, ' ').trim();
-const cur = (a.findings || []).filter(f => f.scoring !== false && f.severity !== 'Info').filter(inScope);
+const curAll = (a.findings || []).filter(f => f.scoring !== false && f.severity !== 'Info').filter(inScope);
+const cur = curAll.filter(methodOk);
+const not_compared_method = prev && !methodSame ? [...new Set([...prevAll, ...curAll].filter(jsDep).map(f => String(f.title || '')))].slice(0, 12) : [];
 const not_compared = [...new Set((a.findings || []).filter(f => f.scoring !== false && f.severity !== 'Info' && !inScope(f)).map(f => String(f.category || '')))].filter(Boolean);
 const curKeys = new Map(cur.map(f => [keyOf(f), f])); const prevKeys = new Map(prevF.map(f => [f.finding_key, f]));
 const SEV = { Critical: 0, High: 1, Medium: 2, Low: 3, Info: 4 };
@@ -54,6 +70,11 @@ const audit_diff = prev ? { baseline: false, report_type: curType, previous: { a
   summary: fixed.length + ' fixed · ' + added.length + ' new · ' + open.length + ' still open (compared with the ' + labelOf(curType) + ' of ' + String(prev.audited_at).slice(0, 10) + ')'
     + (not_compared.length ? '. ' + not_compared.join(', ') + ' ' + (not_compared.length === 1 ? 'is' : 'are') + ' not assessed by a ' + labelOf(curType) + ', so those findings are shown but not compared.' : '') }
   : { baseline: true, report_type: curType, not_compared, summary: 'First ' + labelOf(curType) + ' stored: the next one shows what was fixed, what is new and what is still open.' + (otherType ? ' The ' + labelOf(otherType.report_type) + ' of ' + String(otherType.audited_at).slice(0, 10) + ' is a different report type and is not compared.' : '') };
+// C-5: the crawl method of both audits, on the diff, and the findings left out because it changed (added after the build's patches of the literal)
+audit_diff.crawl_js = curJs; audit_diff.basis = { ...(audit_diff.basis || {}), crawl_js: curJs, previous_crawl_js: prevJs, method_same: prev ? methodSame : null };
+if (!audit_diff.baseline) { audit_diff.not_compared_method = not_compared_method;
+  if (not_compared_method.length) audit_diff.summary += '. This audit ran ' + jsWord(curJs) + ' and the one before ' + jsWord(prevJs) + ', so the ' + not_compared_method.length
+    + ' finding(s) that depend on rendering are not compared (' + not_compared_method.slice(0, 3).map(t => '\u201c' + t + '\u201d').join(', ') + ')'; }
 // ---- internal links: targets that need links, sources on the same topic that already carry authority ----
 const pages = ($('Get Crawled Pages').first().json.tasks?.[0]?.result?.[0]?.items || []).filter(p => p && p.status_code === 200 && p.resource_type === 'html' && !(p.checks || {}).is_redirect && !/(\?|\/(tag|category|author|page)\/|\/feed\/?$)/i.test(p.url));
 const norm = (u) => String(u || '').toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');

@@ -4,3 +4,5 @@ dist/
 *.log
 .vite/
 coverage/
+# test fixtures in real log formats (synthetic: vendor bot ranges + documentation / private addresses) are code, not logs
+!server/test/fixtures/logs/*.log

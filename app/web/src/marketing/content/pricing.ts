@@ -56,6 +56,7 @@ export const pricingTiers: PricingTier[] = [
       'Up to three pages a week, with the autopilot pipeline and several ladders', // PLACEHOLDER — confirm
       'AI search visibility: up to 50 questions and the daily AI Pulse',
       'Backlinks from every source, with Ascentra’s own link checks',
+      'Crawler analytics from your server logs: Google and the AI crawlers, each one checked',
       'Link building: prospects, contacts and pitches from your own mailbox',
       'Full SEO reports as PDF or Word',
       'Daily key-page check and the pre-release check for your build',
@@ -74,6 +75,7 @@ export const pricingTiers: PricingTier[] = [
     features: [
       'Websites and companies to fit your portfolio', // PLACEHOLDER — confirm
       'Multi-company workspaces with roles and invitations',
+      'Single sign-on (SAML 2.0 / OIDC) and SCIM provisioning',
       'Spend caps and budgets per company',
       'Search Console alert watcher and monthly check-ins',
       'Onboarding with your team', // PLACEHOLDER — confirm
@@ -245,6 +247,7 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Daily AI Pulse', hint: 'Alerts only on statistically real changes', values: [false, true, true] },
       { label: 'AI growth, every week', hint: 'New pages sent to Bing and IndexNow, key pages scored for AI readiness, the questions to win queued', values: [false, true, true] },
       { label: 'Earned media', hint: 'The exact pages AI cites without naming you, with a draft for each', values: [false, true, true] },
+      { label: 'Crawler analytics from your server logs', hint: 'Googlebot and the AI crawlers, each checked against its company’s addresses; impostors apart', values: [false, true, true] }, // PLACEHOLDER — confirm
       { label: 'Backlinks from every source', hint: 'Nine sources, every link checked by Ascentra', values: [false, true, true] }, // PLACEHOLDER — confirm
       { label: 'Prospects, contacts and outreach drafts from your own mailbox', values: [false, true, true] },
       { label: 'Mailbox connected without a password', hint: 'Microsoft 365 or Gmail on their own sign-in screen; an app password works for any other host', values: [false, true, true] },
@@ -276,6 +279,11 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
     rows: [
       { label: 'Websites', values: ['1', 'Up to 3', 'Custom'] }, // PLACEHOLDER — confirm
       { label: 'Roles and invitations', hint: 'Owner, admin, member and viewer', values: [true, true, true] },
+      { label: 'Two-step verification', hint: 'Authenticator app, passkeys or a security key, and recovery codes; a company can require it for everyone', values: [true, true, true] },
+      { label: 'Signed-in devices and idle sign-out', hint: 'Sign a device out; end idle sessions after the time your company sets', values: [true, true, true] },
+      { label: 'Audit log', hint: 'Sign-ins, team, settings, keys and sharing — who, when and from where; CSV export', values: [true, true, true] }, // PLACEHOLDER — confirm the plans
+      { label: 'Single sign-on (SAML 2.0 and OIDC)', hint: 'Okta, Microsoft Entra ID, Google Workspace or any standard provider, on your verified e-mail domains; can be required', values: [false, false, true] }, // PLACEHOLDER — confirm the plans
+      { label: 'SCIM provisioning', hint: 'People created, updated and switched off from your identity provider; groups mapped to roles', values: [false, false, true] }, // PLACEHOLDER — confirm the plans
       { label: 'Verified website ownership', values: [true, true, true] },
       { label: 'Step-by-step guides for every setup task', hint: 'Your own values, instructions for the provider you use, and a copy you can e-mail to a colleague', values: [true, true, true] },
       { label: 'Cost estimate before every run', hint: 'The analysis engine’s own figure, corrected against what runs really cost, and replaced with the actual cost when the work finishes', values: [true, true, true] },

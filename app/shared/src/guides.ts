@@ -7,7 +7,7 @@
 // [label](https://url) for links — and {{placeholders}} for the real values of the site (its domain, the record to add, the key
 // file). Rendering is in web/src/components/guide/rich.tsx; the plain-text form is `guideText` below.
 
-export type GuideArea = 'google' | 'ownership' | 'website' | 'mailbox' | 'business' | 'company' | 'integrations';
+export type GuideArea = 'google' | 'ownership' | 'website' | 'mailbox' | 'business' | 'company' | 'security' | 'integrations';
 
 export interface GuideVar {
   key: string;
@@ -93,6 +93,7 @@ export const GUIDE_AREAS: { id: GuideArea; label: string; description: string }[
   { id: 'mailbox', label: 'Your mailbox', description: 'Link-building pitches go out from your own address' },
   { id: 'business', label: 'About your business', description: 'What every page is written from and checked against' },
   { id: 'company', label: 'Your company in Ascentra', description: 'Budget, team and who may do what' },
+  { id: 'security', label: 'Sign-in and security', description: 'Two-step verification, single sign-on and provisioning' },
   { id: 'integrations', label: 'Connecting your tools', description: 'Slack and Teams, Jira / Linear / Asana, your warehouse, Looker Studio and AI assistants' },
 ];
 
@@ -1550,6 +1551,295 @@ export const GUIDES = [
     done: 'The assistant lists your websites when asked.',
     related: ['webhook-signature', 'looker-studio-connector'],
     keywords: ['mcp', 'claude', 'chatgpt', 'openai', 'assistant', 'agent', 'api'],
+  },
+  // ---------------------------------------------------------------- sign-in and security (G1)
+  {
+    id: 'two-step-verification',
+    area: 'security',
+    title: 'Turn on two-step verification',
+    why: 'A password alone is one leak away from someone else reading your company’s reports and starting paid runs. With a second step, a stolen password is not enough.',
+    where: 'Your account → Two-step verification',
+    who: 'Everyone, for their own account',
+    minutes: 4,
+    steps: [
+      {
+        title: 'Choose how you will confirm it is you',
+        body: 'An **authenticator app** on your phone shows a new 6-digit code every 30 seconds. A **passkey** uses your laptop’s fingerprint or face unlock, your phone, or a security key. You can set up both; either works at sign-in.',
+        choices: [
+          { label: 'Authenticator app', body: 'Install one if you have none: **Google Authenticator**, **Microsoft Authenticator**, **1Password** or **Authy** all work. Company phones often have one already.' },
+          { label: 'Passkey', body: 'Nothing to install on a recent Mac, Windows PC, iPhone or Android phone. A hardware key (YubiKey or similar) works too.' },
+        ],
+      },
+      {
+        title: 'Set it up',
+        body: 'Open **Your account**, find **Two-step verification** and press **Set up an authenticator app** (scan the QR code, then type the code the app shows) or **Add a passkey** (follow your browser’s prompt).',
+        note: 'If you cannot scan the code, type the key shown under it into the app as a "time-based" account.',
+      },
+      {
+        title: 'Save your recovery codes',
+        body: 'You get ten one-time codes. **Download** them or put them in your password manager. Each works once, in place of a code, if you lose your phone.',
+        warn: 'Without the codes and without your phone, only a company owner (by removing and re-inviting you) can get you back in.',
+      },
+    ],
+    done: 'Your account shows **Two-step verification: On**, and the next sign-in asks for a code after your password.',
+    trouble: [
+      { q: 'The code is always rejected', a: 'The phone’s clock is off. Set date and time to **automatic** on the phone, then use the newest code. A code works once and only for about a minute.' },
+      { q: 'I lost my phone', a: 'Sign in with a recovery code, then remove the old app and set up the new phone. Out of codes: ask your company owner.' },
+    ],
+    related: ['require-two-step'],
+    keywords: ['2fa', 'mfa', 'totp', 'authenticator', 'passkey', 'security key', 'two factor', 'recovery codes'],
+  },
+  {
+    id: 'require-two-step',
+    area: 'security',
+    title: 'Require two-step verification for your whole company',
+    why: 'One member with a reused password is enough for someone to read every report. Requiring a second step closes that for everyone at once.',
+    where: 'Company settings → Security',
+    who: 'An owner or admin (who already uses two-step verification)',
+    minutes: 5,
+    steps: [
+      { title: 'Turn it on for yourself first', body: 'The switch stays locked until your own account has two-step verification — otherwise it would lock you out on the next click.' },
+      {
+        title: 'Tell the team before you switch it on',
+        body: 'Members without a second step see a page asking them to set one up the next time they open the company. Nothing is lost; they just cannot see anything until they do. **Send to a colleague** sends them the setup guide.',
+      },
+      {
+        title: 'Decide what counts',
+        body: '**Sign-ins through your own identity provider** (single sign-on) count by default, because your IdP enforces its own MFA. **Google sign-ins** do not count by default: we cannot see whether a Google account has 2-Step Verification on. Turn that on only if your Google Workspace admin enforces it.',
+      },
+      { title: 'Switch on "Require two-step verification"', body: 'The members list then shows who has it. Follow up with anyone marked **Off**.' },
+    ],
+    done: 'Every member in the list shows two-step verification **On**.',
+    related: ['two-step-verification'],
+    keywords: ['enforce mfa', 'require 2fa', 'policy', 'security policy'],
+  },
+  {
+    id: 'sso-domain',
+    area: 'security',
+    title: 'Prove your e-mail domain for single sign-on',
+    why: 'Single sign-on and provisioning only ever act on addresses at domains your company has proven it controls — so no other company can claim your colleagues.',
+    where: 'Your DNS provider',
+    who: 'Whoever manages DNS for your domain (often IT)',
+    minutes: 10,
+    vars: [V.domain, { key: 'dnsValue', label: 'Value of the record', example: 'ascentra-sso=abc123def456' }],
+    steps: [
+      { title: 'Add the domain in Ascentra', body: 'Company settings → **Single sign-on** → **Add a domain**: type `{{domain}}` (the part after @ in your colleagues’ addresses). Public mail providers such as gmail.com cannot be claimed.' },
+      {
+        title: 'Add a TXT record at your DNS provider',
+        body: 'Create a record of type **TXT** at the domain itself (host `@`, or `{{domain}}`), with this value. Leave any other TXT records (SPF, Google, Microsoft) as they are.',
+        copy: [{ label: 'TXT value', value: '{{dnsValue}}', hint: 'Value / Content / Text' }],
+        choices: [
+          { label: 'Cloudflare', body: '**DNS → Records → Add record**, type TXT, name `@`, paste the value, **Save**.' },
+          { label: 'GoDaddy', body: '**My Products → DNS → Add New Record**, type TXT, name `@`, paste the value, **Save**.' },
+          { label: 'Route 53', body: '**Hosted zones → {{domain}} → Create record**, type TXT, leave the name empty, paste the value in quotes, **Create records**.' },
+          { label: 'Azure DNS', body: '**DNS zones → {{domain}} → + Record set**, type TXT, name `@`, paste the value, **OK**.' },
+        ],
+      },
+      { title: 'Check it', body: 'Back in Ascentra press **Check now**. Records usually appear within minutes; some providers take up to an hour.' },
+    ],
+    done: 'The domain shows **Verified**.',
+    trouble: [{ q: 'Another company has verified it', a: 'One domain belongs to one company here. If it is really yours, contact us with proof and we will look into it.' }],
+    related: ['sso-identity-provider', 'dns-txt-record'],
+    keywords: ['sso', 'domain', 'verify domain', 'txt record'],
+  },
+  {
+    id: 'scim-provisioning',
+    area: 'security',
+    title: 'Provision people automatically (SCIM)',
+    why: 'Joiners get access without an invitation, and a leaver switched off in your identity provider loses access here at once — no one has to remember to remove them.',
+    where: 'Company settings → Single sign-on, then your identity provider',
+    who: 'An administrator of your identity provider, with an owner or admin of your company in Ascentra',
+    minutes: 15,
+    vars: [{ key: 'scimUrl', label: 'SCIM base URL', example: 'https://app.ascentra.example/api/scim/v2' }],
+    steps: [
+      { title: 'Verify your e-mail domain first', body: 'Provisioning only creates people whose addresses are on your verified domains (see **Prove your e-mail domain**).' },
+      { title: 'Create a provisioning token', body: 'Company settings → **Single sign-on** → Provisioning: name it after your provider and **Create token**. Copy it at once: it is shown only once.' },
+      {
+        title: 'Point your identity provider at Ascentra',
+        body: 'Give it the base URL and the token (as a Bearer / HTTP header token).',
+        copy: [{ label: 'SCIM base URL', value: '{{scimUrl}}' }],
+        choices: [
+          { label: 'Okta', body: 'In the Ascentra app: **General → App Settings → Provisioning: SCIM**, then **Provisioning → Integration**: SCIM connector base URL = the URL above, unique identifier `userName`, actions Push New Users / Push Profile Updates / Push Groups, authentication **HTTP Header** with the token. Then **To App**: enable Create, Update and Deactivate.' },
+          { label: 'Microsoft Entra ID', body: 'Enterprise application → **Provisioning → Get started → Automatic**: Tenant URL = the URL above, Secret token = the token, **Test Connection**, **Save**, then **Start provisioning**.' },
+        ],
+      },
+      { title: 'Map groups to roles', body: 'Push the groups you use (for example “Ascentra Admins”). They appear under **Groups and roles**: choose the role each gives. A person gets the highest role of their groups; owners are never changed.' },
+    ],
+    done: 'People you assign in your provider appear in the Team list marked **SCIM**, and switching one off shows them as **Deactivated**.',
+    trouble: [
+      { q: 'Users are refused with “not on one of this company’s verified domains”', a: 'Verify that domain first, or assign only people with addresses on your verified domains.' },
+      { q: 'Okta says the user already exists', a: 'They are already a member (invited earlier). Okta matches them by userName and updates them from then on.' },
+    ],
+    related: ['sso-identity-provider', 'sso-domain'],
+    keywords: ['scim', 'provisioning', 'deprovisioning', 'okta', 'entra', 'joiners leavers', 'groups'],
+  },
+  {
+    id: 'sso-identity-provider',
+    area: 'security',
+    title: 'Connect your identity provider (single sign-on)',
+    why: 'Your people sign in with the account your IT team already manages, with its MFA and its leaver process — nobody keeps a separate password for Ascentra.',
+    where: 'Your identity provider’s admin console, then Company settings → Single sign-on',
+    who: 'An administrator of your identity provider, with an owner or admin of your company in Ascentra',
+    minutes: 20,
+    vars: [
+      { key: 'redirectUri', label: 'Sign-in redirect URI (OIDC)', example: 'https://app.ascentra.example/api/sso/oidc/callback' },
+      { key: 'acsUrl', label: 'ACS URL (SAML)', example: 'https://app.ascentra.example/api/sso/saml/<id>/acs' },
+      { key: 'entityId', label: 'Entity ID / audience (SAML)', example: 'https://app.ascentra.example/api/sso/saml/<id>' },
+      { key: 'metadataUrl', label: 'SP metadata URL (SAML)', example: 'https://app.ascentra.example/api/sso/saml/<id>/metadata' },
+    ],
+    steps: [
+      { title: 'Choose OIDC or SAML', body: '**OpenID Connect** is quicker (a client ID and secret). Choose **SAML 2.0** if your IT standard asks for it. Both are equally secure here.' },
+      {
+        title: 'Create the app in your identity provider',
+        body: 'Create a web application for Ascentra and give it the values below. Assign the people or groups who should use Ascentra.',
+        copy: [
+          { label: 'OIDC sign-in redirect URI', value: '{{redirectUri}}' },
+          { label: 'SAML ACS URL', value: '{{acsUrl}}' },
+          { label: 'SAML entity ID / audience', value: '{{entityId}}' },
+        ],
+        choices: [
+          { label: 'Okta (OIDC)', body: '**Applications → Create App Integration → OIDC → Web Application**. Sign-in redirect URI: the value above. Grant type: Authorization Code. Copy the **Client ID**, **Client secret** and your Okta domain (issuer `https://<you>.okta.com`).' },
+          { label: 'Okta (SAML)', body: '**Applications → Create App Integration → SAML 2.0**. Single sign-on URL: the ACS URL; Audience URI: the entity ID; Name ID format **EmailAddress**; attribute `email` = user.email. Then **View SAML setup instructions**: copy the IdP SSO URL, the issuer and the certificate.' },
+          { label: 'Microsoft Entra ID (OIDC)', body: '**App registrations → New registration**, redirect URI (Web) = the value above. **Certificates & secrets → New client secret**. Issuer: `https://login.microsoftonline.com/<tenant id>/v2.0`. Under **Token configuration** add the optional claim **email**.' },
+          { label: 'Microsoft Entra ID (SAML)', body: '**Enterprise applications → New application → Create your own → non-gallery**, then **Single sign-on → SAML**: Identifier = the entity ID, Reply URL = the ACS URL. Download **Certificate (Base64)**; copy **Login URL** and **Microsoft Entra Identifier**.' },
+          { label: 'Google Workspace (SAML)', body: 'Admin console → **Apps → Web and mobile apps → Add custom SAML app**. Copy the **SSO URL**, **Entity ID** and **Certificate**; ACS URL and Entity ID = the values above; Name ID **Basic Information → Primary email**.' },
+        ],
+        note: 'For SAML you can also point your IdP at the metadata URL: {{metadataUrl}}',
+      },
+      { title: 'Enter the IdP’s values in Ascentra', body: 'Company settings → **Single sign-on** → Identity provider: paste the issuer, client ID and secret (OIDC) or the entity ID, SSO URL and certificate (SAML), choose whether first sign-ins create accounts and with which role, and **Save**.' },
+      { title: 'Run a test sign-in', body: 'Press **Test sign-in** and sign in at your provider with an account on your verified domain. Nothing is created; the result appears under **Last test**.' },
+      { title: 'Switch it on — and, when ready, require it', body: 'Turn on **Single sign-on is on**. Once everyone has tried it, an owner can turn on **Require single sign-on**: passwords then stop working on your domains (owners keep theirs as the way in if the provider is down).' },
+    ],
+    done: 'The last test is green, single sign-on is on, and colleagues reach Ascentra through **Sign in with SSO**.',
+    trouble: [
+      { q: 'The test says no e-mail address was sent', a: 'Add the **email** claim (OIDC) or an `email` attribute / EmailAddress Name ID (SAML) in your provider.' },
+      { q: '“audience mismatch” or “Recipient”', a: 'The entity ID or ACS URL in your provider differs from ours by a character. Copy them again from this page.' },
+      { q: '“Invalid signature”', a: 'The certificate pasted here is not the one your provider signs with (often after a rotation). Paste the current one.' },
+    ],
+    related: ['sso-domain', 'scim-provisioning'],
+    keywords: ['sso', 'saml', 'oidc', 'okta', 'entra', 'azure ad', 'google workspace', 'identity provider', 'single sign-on'],
+  },
+  // ---------------------------------------------------------------- Server logs (gap #6, app/docs/LOG_ANALYTICS.md)
+  {
+    id: 'crawler-logs-upload',
+    area: 'website',
+    title: 'Upload your server’s access log',
+    why: 'Your access log is the only record of what Googlebot and the AI crawlers really fetched on {{domain}} — which pages, how often, and what your server answered. One file is enough to start.',
+    where: 'Your web server or hosting panel',
+    who: 'Whoever can download files from the server or the hosting panel',
+    minutes: 10,
+    vars: [V.domain],
+    steps: [
+      {
+        title: 'Find the log',
+        body: 'Pick the access log, not the error log. Older days are usually kept next to it as `.1`, `.2.gz` and so on.',
+        choices: [
+          { label: 'Nginx', body: 'On the server: `/var/log/nginx/access.log` and the rotated `access.log.*.gz` beside it.' },
+          { label: 'Apache', body: '`/var/log/apache2/access.log` (Debian, Ubuntu) or `/var/log/httpd/access_log` (Red Hat, CentOS), plus the rotated files.' },
+          { label: 'IIS (Windows)', body: '`C:\\inetpub\\logs\\LogFiles\\W3SVC1\\` — one `u_ex*.log` file per day. The W3C format is read as it is.' },
+          { label: 'cPanel', body: 'Open **Metrics → Raw Access**, then download the archive for {{domain}}. It is already gzip.' },
+          { label: 'Plesk', body: 'Open **Websites & Domains → Logs**, filter on access logs and download them.' },
+          { label: 'Managed WordPress hosts', body: 'Kinsta, WP Engine and similar hosts keep access logs but show only the last lines in their panel. Ask their support for the raw access logs of the last 30 days.' },
+          { label: 'Amazon CloudFront', body: 'Standard logs land in the S3 bucket you chose. Download the `.gz` files of the days you want and upload them as they are.' },
+        ],
+      },
+      {
+        title: 'Keep the visitor address in the log',
+        body: 'Crawlers are proved by their address, so the log must hold the visitor’s address, not your CDN’s or load balancer’s.',
+        warn: 'Behind Cloudflare or a load balancer the default log shows the proxy. Log `CF-Connecting-IP` or `X-Forwarded-For` (Nginx: the `realip` module; Apache: `mod_remoteip`), or send Cloudflare’s own logs with Logpush instead.',
+      },
+      {
+        title: 'Upload it on the Crawlers page',
+        body: 'Press **Upload a log** and choose the file. Plain text or gzip, up to 1 GB a file. Several days in one file is fine: zip the rotated files together first, for example `zcat access.log.*.gz | gzip > last-month.log.gz`.',
+        note: 'The same file uploaded twice is read once, and lines two files share are counted once.',
+      },
+      { title: 'Wait for it to be read', body: 'A million lines take well under a minute. The page shows the file as read with how many lines were crawler requests, people, and unreadable.' },
+    ],
+    done: 'The Crawlers page shows requests per crawler, with how many were proved to be the real crawler.',
+    trouble: [
+      { q: 'Every Googlebot request shows as “unchecked”', a: 'The log holds your proxy’s address. See step 2, or use Cloudflare Logpush.' },
+      { q: 'Lines were counted as unreadable', a: 'We read Apache and Nginx combined or common logs, IIS / W3C extended logs and JSON lines. A custom format with the date first or no quotes around the request is not read; switch the log back to combined for the days you upload.' },
+      { q: 'What happens to the addresses of people', a: 'Requests from people are counted and dropped. The file itself is deleted as soon as it has been read.' },
+    ],
+    related: ['crawler-logs-cloudflare', 'crawler-logs-drain', 'ai-crawler-access'],
+    keywords: ['server log', 'access log', 'log file', 'googlebot', 'gptbot', 'crawl budget', 'bots', 'nginx', 'apache', 'iis'],
+  },
+  {
+    id: 'crawler-logs-cloudflare',
+    area: 'website',
+    title: 'Send Cloudflare’s logs automatically (Logpush)',
+    why: 'With Logpush Cloudflare sends every request for {{domain}} to Ascentra within minutes, with the visitor’s real address, so the Crawlers page stays current without anyone uploading files.',
+    where: 'Cloudflare dashboard',
+    who: 'A Cloudflare account member who may edit Logpush jobs (Logs Write)',
+    minutes: 10,
+    vars: [V.domain, { key: 'logEndpoint', label: 'Where the logs go', example: 'https://app.ascentra.example/api/ingest/logs/your-website-id' }, { key: 'logHeader', label: 'The header that carries the key', example: 'X-Ascentra-Log-Key' }],
+    steps: [
+      {
+        title: 'Create a push key here',
+        body: 'On the Crawlers page press **Create push key** and copy it. It is shown once; a new key replaces the old one at once.',
+        warn: 'Logpush of HTTP requests is a Cloudflare Enterprise feature. On other plans, upload your server’s access log instead.',
+      },
+      {
+        title: 'Start a Logpush job in Cloudflare',
+        body: 'Open your domain in Cloudflare, then **Analytics & Logs → Logpush → Create a Logpush job**. Choose the **HTTP destination**.',
+        link: { label: 'Cloudflare: HTTP destination', href: 'https://developers.cloudflare.com/logs/logpush/logpush-job/enable-destinations/http/' },
+      },
+      {
+        title: 'Paste the destination with the key in it',
+        body: 'Cloudflare turns every `header_` part of the address into a request header. Put your key after the equals sign.',
+        copy: [{ label: 'HTTP endpoint', value: '{{logEndpoint}}?header_{{logHeader}}=PASTE-YOUR-KEY-HERE', hint: 'Replace PASTE-YOUR-KEY-HERE with the key you copied' }],
+      },
+      {
+        title: 'Choose the dataset and the fields',
+        body: 'Dataset **HTTP requests**. Fields: `ClientIP`, `ClientRequestHost`, `ClientRequestMethod`, `ClientRequestURI`, `ClientRequestUserAgent`, `EdgeStartTimestamp`, `EdgeResponseStatus`, `EdgeResponseBytes`, `OriginResponseDurationMs`, `RayID`. Timestamp format **RFC3339**.',
+        note: 'Set the maximum upload size to 100 MB or less. Requests from people are counted and dropped on arrival.',
+      },
+      { title: 'Save', body: 'Cloudflare sends a small test file first; Ascentra accepts it, and the job turns on. The Crawlers page shows the time of the last push.' },
+    ],
+    done: 'The Crawlers page shows “Last push” a few minutes old and the request counts start to grow.',
+    trouble: [
+      { q: 'Cloudflare says “error validating destination”', a: 'The key in the address is wrong or was replaced. Create a new key here and paste it again.' },
+      { q: 'Requests stopped arriving', a: 'Check the job is enabled in Cloudflare and that nobody created a new key here since.' },
+    ],
+    related: ['crawler-logs-upload', 'crawler-logs-drain'],
+    keywords: ['cloudflare', 'logpush', 'cdn logs', 'http requests', 'server log', 'bots'],
+  },
+  {
+    id: 'crawler-logs-drain',
+    area: 'website',
+    title: 'Send logs from Vercel, Fastly or Akamai',
+    why: 'A log drain sends every request for {{domain}} to Ascentra as it happens, so the Crawlers page stays current without uploads.',
+    where: 'Your CDN or hosting dashboard',
+    who: 'Whoever manages the CDN or hosting account',
+    minutes: 15,
+    vars: [V.domain, { key: 'logEndpoint', label: 'Where the logs go', example: 'https://app.ascentra.example/api/ingest/logs/your-website-id' }, { key: 'logHeader', label: 'The header that carries the key', example: 'X-Ascentra-Log-Key' }],
+    steps: [
+      { title: 'Create a push key here', body: 'On the Crawlers page press **Create push key** and copy it. It is shown once.' },
+      {
+        title: 'Add the drain',
+        body: 'Every drain needs the same three things: the address, a custom header with the key, and JSON (one request per line, or a JSON array).',
+        copy: [
+          { label: 'Endpoint', value: '{{logEndpoint}}' },
+          { label: 'Header name', value: '{{logHeader}}' },
+        ],
+        choices: [
+          { label: 'Vercel', body: '**Team Settings → Drains → Add Drain**, data type **Logs**, sources static, lambda and edge, destination **Custom endpoint**. Format NDJSON or JSON, and under **Custom headers** add `{{logHeader}}: your key`.', link: { label: 'Vercel: drains', href: 'https://vercel.com/docs/drains/using-drains' } },
+          { label: 'Fastly', body: 'Add an **HTTPS** logging endpoint with the URL above, a custom header named `{{logHeader}}` with your key, JSON log line format and content type `application/x-ndjson`. Use the log format below.', link: { label: 'Fastly: HTTPS logging', href: 'https://www.fastly.com/documentation/guides/integrations/logging-endpoints/log-streaming-https/' } },
+          { label: 'Akamai DataStream 2', body: 'Create a stream with a **Custom HTTPS** destination, JSON format, and a custom header `{{logHeader}}` with your key. Include client IP, request time, host, method, path, query string, status code, total bytes, user agent and turnaround time.', link: { label: 'Akamai: custom HTTPS endpoint', href: 'https://techdocs.akamai.com/datastream2/docs/stream-custom-https' } },
+          { label: 'Anything else', body: 'Any service that can POST JSON lines with a custom header works. Each line needs a time, the client address, the path, the status and the user agent; we recognise the usual names (`timestamp`, `client_ip`, `path`, `status`, `user_agent` and many others).' },
+        ],
+      },
+      {
+        title: 'Fastly only: the log format',
+        body: 'Paste this as the log format so every line carries what we read.',
+        copy: [{ label: 'Fastly log format', value: '{"timestamp":"%{strftime(\\{"%Y-%m-%dT%H:%M:%SZ"\\}, time.start)}V","client_ip":"%{req.http.Fastly-Client-IP}V","host":"%{json.escape(req.http.Host)}V","method":"%{json.escape(req.method)}V","url":"%{json.escape(req.url)}V","status":%{resp.status}V,"response_body_size":%{resp.body_bytes_written}V,"user_agent":"%{json.escape(req.http.User-Agent)}V","time_elapsed":%{time.elapsed.usec}V}' }],
+      },
+      { title: 'Save and test', body: 'Most services send a test request when you save. The Crawlers page shows the time of the last push.' },
+    ],
+    done: 'The Crawlers page shows “Last push” a few minutes old.',
+    trouble: [{ q: 'The test fails with 401', a: 'The header name or the key is wrong. The header must be exactly `{{logHeader}}`, the value the key and nothing else.' }],
+    related: ['crawler-logs-upload', 'crawler-logs-cloudflare'],
+    keywords: ['vercel', 'fastly', 'akamai', 'log drain', 'datastream', 'server log', 'bots'],
   },
 ] as const satisfies readonly Guide[];
 

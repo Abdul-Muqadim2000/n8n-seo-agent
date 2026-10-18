@@ -216,6 +216,7 @@ return plans.map(p => {
     const t = titleOfD.get(LK.refKey(d));
     if (t) { const f = OK.fit(topicText, t); if (f >= OK.OFF_TOPIC) return { ok: true, why: 'its page matches your topics (' + Math.round(100 * f) + '%)' }; }
     if (ccTld.length === 2 && ccTld !== 'us' && String(d || '').toLowerCase().endsWith('.' + ccTld)) return { ok: true, why: 'a site in your market (.' + ccTld + ')' };
+    if (RV.marketMedia(d, p.country_iso)) return { ok: true, why: 'a news publisher in your market' };   // C-10: gulfnews.com is a UAE paper, whatever its domain ending
     return { ok: false, why: 'off topic for you: neither its name, its page nor its country ties it to ' + ((p.topics || [])[0] || 'your topics') };
   };
   const gi = greqs.findIndex(g => g.site_id === p.site_id && !g.skip); const G = gi >= 0 ? result(gresps, gi) : null; const competitors = gi >= 0 ? greqs[gi].competitors : p.competitors;
@@ -233,6 +234,19 @@ return plans.map(p => {
     // accredited, not by an e-mail (mof.gov.ae and uae-asp.ae came back as gap prospects carrying a drafted pitch).
     g.no_pitch = OK.noPitch(g.domain, { spam: g.spam, title: titleOfD.get(LK.refKey(g.domain)) || '', accredited: weAreAccredited }); }   // D23 / P34-4: shown in the gap table with the reason, never pitched
   const gap_off_topic = gap.filter(g => g.off_topic).length;
+  // C-10 (re-rating 2026-10-17): "sites that just linked to a competitor" pass the same topic gate before they are stored as prospects -
+  // marketguest.com ("Questions Before Buying Property in Malaysia") was saved with score 35 and refused by the Link Builder minutes later
+  for (const c of compNew) { const v = onTopic(c.domain); c.off_topic = !v.ok; c.topic_reason = v.why; }
+  // C-2 (re-rating 2026-10-17): the one rival set - a declared competitor, a business AI recommends instead of you, or a site whose own
+  // title or address says it sells your category - is never stored as a prospect to pitch (pactsoft.ae, complyance.io, penieltech.com and
+  // halsimplify.com lists and articles were); it is named in the report with the reason
+  const RVS = RV.set({ own: p.domain, declared: p.competitors || [], ai: p.ai_rivals || [] });
+  const rivalWhy = (d, title, url) => { const e = RVS.of(d); if (e && e.kind === 'business') return e.why || 'a competitor';
+    const sells = RV.providerOf({ domain: d, title, url, topics: p.topics || [], services: p.services || [] }); return sells ? 'it sells what you sell: ' + sells : ''; };
+  // C-10: each prospect is pointed at OUR page on its topic, or the homepage - never the one asset every prospect got (/dynamics-365-crm-uae for
+  // four e-invoicing lists)
+  const targetFor = (text) => { let best = null, bf = 0; for (const a of (p.assets || [])) { const f = OK.fit(String(text || ''), String((a && a.title) || '')); if (f > bf) { bf = f; best = a; } }
+    return best && bf >= OK.OFF_TOPIC ? best.url : home; };
   // ---------------- coverage: who sees what ----------------
   const srcNow = (r) => r._sources_now || [];
   const per = {}, only = {}; for (const r of liveRows) { const s = srcNow(r); for (const x of s) per[x] = (per[x] || 0) + 1; if (s.length === 1) only[s[0]] = (only[s[0]] || 0) + 1; }
@@ -354,20 +368,24 @@ return plans.map(p => {
   const disavow = [...new Set([...spammy.filter(x => x.spam >= 60 || SPAM_WORDS.test(x.anchor + ' ' + x.title)).map(x => LK.refKey(x.from_domain)), ...ledger.filter(r => r.link_type === 'spam').map(r => r.ref_domain)])];   // the whole cluster, live or gone (D3)
   const disavow_text = disavow.length ? '# Disavow candidates for ' + p.domain + ' (' + today + ')\n# Review before uploading at https://search.google.com/search-console/disavow-links — Google ignores most spam links on its own;\n# disavow only for a manual action or a clear paid-link pattern you did not create.\n' + disavow.map(d => 'domain:' + d).join('\n') + '\n' : '';
   // ---------------- prospects: value x likelihood ----------------
-  const target0 = (p.assets[0] || {}).url || home;
+  const target0 = home;   // C-10: no prospect is pointed at the first asset by default any more (targetFor, above)
   const candidates = [
     ...important_lost.map(l => ({ prospect_domain: l.from_domain, type: 'lost', origin: 'check', rank: l.domain_rank, spam_score: l.spam, score: scoreOf('lost', { authority: l.domain_rank, dr: l.dr }), detail: (REASON[l.reason] || 'lost') + ': linked to ' + pathOf(l.to_url) + ' from ' + l.from_url + (l.last_seen ? ' until ' + l.last_seen : ''), source_url: l.from_url, target_url: l.to_url })),
     ...reclaim.flatMap(r => r.domains.slice(0, 3).map(d => ({ prospect_domain: d, type: 'reclaim', origin: 'check', rank: 0, spam_score: 0, score: scoreOf('reclaim', ledger.find(x => x.ref_domain === d) || {}), detail: 'Links to ' + pathOf(r.broken_url) + ' (HTTP ' + (r.status || 'error') + '): 301-redirect it to ' + pathOf(r.redirect_to), source_url: '', target_url: r.redirect_to }))),
     ...mentions.slice(0, 12).map(x => ({ prospect_domain: x.domain, type: 'mention', origin: x.source, rank: x.domain_rank, spam_score: 0, score: scoreOf('mention', { authority: x.domain_rank, dr: x.dr }, x.verified ? 1 : 0.8), detail: 'Mentions you without a link' + (x.verified ? ' (checked on the page)' : '') + ': ' + x.title, source_url: x.url, target_url: home })),
-    ...lists.filter(l => !l.named && l.competitors.length).slice(0, 8).map(l => ({ prospect_domain: l.domain, type: 'list', origin: 'web', rank: l.domain_rank, spam_score: 0, score: scoreOf('list', { authority: l.domain_rank, dr: l.dr }, (1 + 0.15 * (l.competitors.length - 1)) * localOf(l.domain)), detail: '"' + String(l.title).slice(0, 90) + '" lists ' + l.competitors.join(', ') + ', not you', source_url: l.url, target_url: target0 })),
+    ...lists.filter(l => !l.named && l.competitors.length).slice(0, 8).map(l => ({ prospect_domain: l.domain, type: 'list', origin: 'web', rank: l.domain_rank, spam_score: 0, score: scoreOf('list', { authority: l.domain_rank, dr: l.dr }, (1 + 0.15 * (l.competitors.length - 1)) * localOf(l.domain)), detail: '"' + String(l.title).slice(0, 90) + '" lists ' + l.competitors.join(', ') + ', not you', source_url: l.url, target_url: targetFor([l.title, l.topic].filter(Boolean).join(' ')) })),
     ...lists.filter(l => l.named && !l.linked).slice(0, 4).map(l => ({ prospect_domain: l.domain, type: 'mention', origin: 'web', rank: l.domain_rank, spam_score: 0, score: scoreOf('mention', { authority: l.domain_rank, dr: l.dr }), detail: 'Lists you without a link: ' + String(l.title).slice(0, 100), source_url: l.url, target_url: home })),
-    ...compNew.slice(0, 10).map(c => ({ prospect_domain: c.domain, type: 'comp_new', origin: 'dfs', rank: c.domain_rank, spam_score: 0, score: scoreOf('comp_new', { authority: c.domain_rank, dr: c.dr }, localOf(c.domain)), detail: 'Linked to ' + c.competitor + ' on ' + c.first_seen + (c.title ? ': ' + c.title : ''), source_url: c.url, target_url: target0 })),
-    ...gap.filter(g => !g.off_topic && !g.no_pitch && (g.source !== 'cc' ? gi >= 0 : true)).slice(0, 25).map(g => ({ prospect_domain: g.domain, type: 'gap', origin: g.source, rank: g.rank, spam_score: g.spam, score: scoreOf('gap', { authority: g.rank, dr: drOf.get(g.domain) || 0, cc_rank: g.cc_rank }, (1 + 0.6 * (g.links_to.length - 1)) * localOf(g.domain)),   /* links to several competitors: the strongest intent signal; on the market's own domain ending: more relevant */ detail: 'Links to ' + g.links_to.join(', ') + (g.backlinks ? ' (' + g.backlinks + ' links)' : '') + ', not to you' + (g.source === 'cc' ? ' (Common Crawl)' : ''), source_url: '', target_url: target0 }))];
+    ...compNew.filter(c => !c.off_topic).slice(0, 10).map(c => ({ prospect_domain: c.domain, type: 'comp_new', origin: 'dfs', rank: c.domain_rank, spam_score: 0, score: scoreOf('comp_new', { authority: c.domain_rank, dr: c.dr }, localOf(c.domain)), detail: 'Linked to ' + c.competitor + ' on ' + c.first_seen + (c.title ? ': ' + c.title : ''), source_url: c.url, target_url: targetFor([c.title, c.anchor].filter(Boolean).join(' ')) })),
+    ...gap.filter(g => !g.off_topic && !g.no_pitch && (g.source !== 'cc' ? gi >= 0 : true)).slice(0, 25).map(g => ({ prospect_domain: g.domain, type: 'gap', origin: g.source, rank: g.rank, spam_score: g.spam, score: scoreOf('gap', { authority: g.rank, dr: drOf.get(g.domain) || 0, cc_rank: g.cc_rank }, (1 + 0.6 * (g.links_to.length - 1)) * localOf(g.domain)),   /* links to several competitors: the strongest intent signal; on the market's own domain ending: more relevant */ detail: 'Links to ' + g.links_to.join(', ') + (g.backlinks ? ' (' + g.backlinks + ' links)' : '') + ', not to you' + (g.source === 'cc' ? ' (Common Crawl)' : ''), source_url: '', target_url: targetFor(titleOfD.get(LK.refKey(g.domain)) || '') }))];
+  // C-2: the rival gate on everything we would pitch (a lost link and a reclaim are our own links: never refused here)
+  const rival_refused = [];
+  for (let i = candidates.length - 1; i >= 0; i--) { const c = candidates[i]; if (['lost', 'reclaim'].includes(c.type)) continue;
+    const why = rivalWhy(c.prospect_domain, String(c.detail || ''), c.source_url); if (why) { rival_refused.push({ domain: c.prospect_domain, type: c.type, why: why.slice(0, 200) }); candidates.splice(i, 1); } }
   const ledger_rows = ledger.map(({ visits_28d, _prev_status, _new, _dfs_new, _sources_now, _found_new, _url, ...r }) => r);
   const new_links = [...news.map(n => ({ ...n, verified: (vLink.get(LK.refKey(n.from_domain)) || {}).verify || '' })),
     ...ledger.filter(r => r._new && !r._dfs_new && r.kind === 'web' && r.status !== 'lost').map(r => ({ from_domain: r.ref_domain, from_url: r.from_url, to_url: r.to_url, anchor: r.anchor, dofollow: r.rel === 'follow', domain_rank: r.authority, dr: r.dr, page_rank: 0, spam: r.spam_score, first_seen: r.first_seen, last_seen: r.last_seen, title: r.page_title, spammy: r.link_type === 'spam', sources: r.sources, verified: r.verify }))]
     .filter((x, i, a) => a.findIndex(y => LK.refKey(y.from_domain) === LK.refKey(x.from_domain)) === i);
   return { json: { ...p, competitors, summary, lost, important_lost, new_links, spammy, reclaim, refdomains: [...linking].slice(0, 2000), timeseries: ts, mentions, gap, gap_off_topic, gap_stored: gi < 0 && gapBase.length > 0, gap_checked: gi < 0 ? ((p.stored_gap || [])[0] || {}).last_seen || '' : p.checked_at.slice(0, 10),
     lists, comp_new: compNew.slice(0, 20), coverage, anchors, pages, values, best_links, referral, dormant: dormant.slice(0, 25), wins: wins.filter(w => !spamSet.has(w.ref_domain)), at_risk: atRiskOut.map(({ e, v }) => ({ ref_domain: e.ref_domain, url: v.url, verify: v.verify })), rel_changed: relChanged.filter(r => !spamSet.has(r.ref_domain)), farms, dr_enabled: drOf.size > 0, dr_error,
-    ledger_rows, alerts, not_compared, deliver, disavow_text, candidates, gap_error: G && !G.ok ? G.error : null, cost_usd: +cost.toFixed(4) } };
+    ledger_rows, alerts, not_compared, deliver, disavow_text, candidates, rival_refused, gap_error: G && !G.ok ? G.error : null, cost_usd: +cost.toFixed(4) } };
 });

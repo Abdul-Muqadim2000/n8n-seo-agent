@@ -266,10 +266,11 @@ return plans.map(p => {
     competitors_json: JSON.stringify(topN(competitors, 25)), sources_json: JSON.stringify(topN(sources, 25)), alerts: alerts.map(a => a.level + ': ' + a.text).join(' | '), cost_usd: +R.reduce((s, r) => s + (Number(r.cost) || 0), 0).toFixed(4) };
   const answer_rows = R.map(r => { const o = {}; for (const k of COLS) o[k] = r[k] === undefined ? '' : r[k]; return o; });
   const [lo, hi] = wilson(m, n);
-  const subject = '[AI pulse] ' + p.domain + ' — ' + alerts.length + ' change(s) in today\'s AI answers';
+  // C-14 (re-rating 2026-10-17): a pulse with no alert said "0 change(s)" under a red alert box; it now says there was no change
+  const subject = '[AI pulse] ' + p.domain + ' — ' + (alerts.length ? alerts.length + ' change(s) in today\'s AI answers' : 'no change in today\'s AI answers');
   const html = '<div style="font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#0f172a;max-width:760px"><h2 style="margin:0 0 4px;font-size:18px">AI pulse: ' + esc(p.domain) + ' · ' + esc(p.date) + '</h2>' +
     '<p style="font-size:13px;color:#475569;margin:0 0 8px">' + n + ' answers from ' + p.pulse_engines.map(e => ENG[e]).join(', ') + ' to your ' + p.prompts.length + ' tracked questions. Named in ' + pct(m, n) + '% (95% range ' + lo + '-' + hi + '%), your pages cited in ' + pct(c, n) + '%.' + (errors ? ' ' + errors + ' of ' + R.length + ' requests failed (' + error_list.map(e => e.engine + ': ' + e.message).join('; ') + ')' + (retry.asked ? ', ' + retry.answered + ' of ' + retry.asked + ' answered when sent again' : '') + '; today\'s figures count the ' + n + ' answers that came back.' : '') + '</p>' +
-    '<div style="background:#fef2f2;border-left:4px solid #b91c1c;padding:8px 12px">' + alerts.map(a => '<div style="font-size:13px;margin:2px 0">⚠ ' + esc(a.text) + '</div>').join('') + '</div>' +
+    (alerts.length ? '<div style="background:#fef2f2;border-left:4px solid #b91c1c;padding:8px 12px">' + alerts.map(a => '<div style="font-size:13px;margin:2px 0">⚠ ' + esc(a.text) + '</div>').join('') + '</div>' : '<p style="font-size:13px;color:#15803d;margin:0">No change worth an alert today.</p>') +
     // B-G1 (2026-10-15, INVARIANTS rule 1 + 2): a panel question the read-path fit gate set aside was not asked today and is in none of
     // the figures above — the mail says so with the reason instead of leaving a smaller panel unexplained.
     ((p.set_aside || []).filter(x => x.dropped).length ? '<p style="font-size:12px;color:#b45309;margin:6px 0"><b>Not asked</b> (set aside by the keyword rule): '

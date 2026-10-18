@@ -2,9 +2,9 @@
 
 Branch `worktree-agent-a05552be562d6b396` (worktree `.claude/worktrees/agent-a05552be562d6b396`). Design: `app/docs/INTEGRATIONS.md`.
 API reference: `app/API.md` → "Write API", "Connecting an AI assistant (MCP)", "Integrations (G4)". README section "Integrations and the
-write API (G4)". `feature/seo-agent-v4.5` @ 2aa912a is merged in (0553c35); **not** merged again on purpose (the orchestrator merges after
-G3 and G1 land) — G4's migration is `0010_g4_integrations` today and becomes **0012** then (`npm run db:generate` after deleting ours,
-or rename the file + journal entry + snapshot).
+write API (G4)". `feature/seo-agent-v4.5` @ 0320acb (G3 crawler logs + G1 identity) is merged in; G4's migration is **`0012_g4_integrations`**,
+regenerated from the merged schema (journal 0009 → 0010 → 0011 → 0012; a second `drizzle-kit generate` finds nothing). Every admin
+action of G4 writes G1's audit log (category "Integrations and API work").
 
 ## All five items are done
 

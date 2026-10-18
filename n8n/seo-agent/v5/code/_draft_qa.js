@@ -61,7 +61,7 @@ const DQ = (() => {
     add(OK.badHost(d.prospect_domain));
     if (OK.isGov(d.prospect_domain)) add('a government site: it lists providers through accreditation or an application, never through a pitch');
     add(OK.homepageOnly(type, d.page_url));
-    add(OK.sellsSame({ type, domain: d.prospect_domain, competitors: c.competitors || [], serp_rivals: c.serp_rivals || [], title: d.page_title, url: d.page_url }));   // R21
+    add(OK.sellsSame({ type, domain: d.prospect_domain, competitors: c.competitors || [], serp_rivals: c.serp_rivals || [], ai_rivals: c.ai_rivals || [], topics: c.topics || [], title: d.page_title, url: d.page_url }));   // R21
     if (!(c.accredited === undefined ? OK.accredited(c.accreditation) : c.accredited) && OK.accreditedList(S(d.page_title) + ' ' + S(d.page_url)))
       add('a list of accredited / approved providers: the facts on file do not say you hold that accreditation');
     // 6. a real quote from their page (only when we have evidence to quote)

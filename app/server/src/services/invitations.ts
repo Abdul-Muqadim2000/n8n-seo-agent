@@ -1,4 +1,5 @@
 import { and, eq } from 'drizzle-orm';
+import { refreshSessionPolicy } from '../auth/session';
 import { db, schema } from '../db';
 import type { UserRow } from '../db/schema';
 
@@ -13,5 +14,6 @@ export async function acceptInvitation(inv: InvitationRow, user: UserRow): Promi
     // the invitation went to this address: it is confirmed
     if (!user.emailVerifiedAt) await tx.update(schema.users).set({ emailVerifiedAt: new Date() }).where(eq(schema.users.id, user.id));
   });
+  await refreshSessionPolicy([user.id]);
   return inv.orgId;
 }

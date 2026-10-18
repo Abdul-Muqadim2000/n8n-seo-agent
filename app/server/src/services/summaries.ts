@@ -205,11 +205,12 @@ export function titleFor(stage: string, p: P): string {
   if (stage === 'content' && kw) return `${p.html ? 'Page' : 'Keyword report'}: ${kw}`;
   if ((stage === 'ladder_plan' || stage === 'rank_tracker') && kw) return `${base}: ${kw}`;
   if (stage === 'published' && kw) return `Publish check: ${kw}`;
-  // D-13: a pulse day with no real change is not an "alert" (report 12 of 2026-10-17: "AI pulse alert" over 0 alerts)
-  if (stage === 'ai_pulse') return `${len(p.alerts) ? 'AI pulse alert' : base}${dom ? ` · ${dom}` : ''}`;
-  // D-4: an AI Growth dry run (`dry_run: true`) submitted nothing; its title must not read as the week's work
-  if (stage === 'ai_growth' && p.dry_run === true) return `${base} · dry run, nothing submitted${dom ? ` · ${dom}` : ''}`;
-  return dom ? `${base} · ${dom}` : base;
+  // D-13 / C-14 (re-rating 2026-10-17): a pulse with no alert is not titled "AI pulse alert"; the word follows the alerts it carries
+  const named = stage === 'ai_pulse' && len(p.alerts) ? 'AI pulse alert' : base;
+  // D-4 / C-11: a dry run submitted nothing and is a test; C-1: a scheduled run that ran late says so in its title too (the engine's `ran_late`)
+  const tags = [p.dry_run === true || p.dry_run === 'true' ? 'test run, nothing submitted' : '', obj(p.ran_late).late === true ? 'ran late' : ''].filter(Boolean);
+  const t = dom ? `${named} · ${dom}` : named;
+  return tags.length ? `${t} (${tags.join(', ')})` : t;
 }
 
 /**

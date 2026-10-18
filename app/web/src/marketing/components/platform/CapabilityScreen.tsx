@@ -13,6 +13,7 @@ const APP_PATH: Record<string, string> = {
   'site-tracking': 'overview',
   'ai-visibility': 'ai-visibility',
   backlinks: 'backlinks',
+  'crawler-analytics': 'crawlers',
   reports: 'reports',
   'report-delivery': 'settings/delivery',
   integrations: 'settings/integrations',

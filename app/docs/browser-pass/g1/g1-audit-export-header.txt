@@ -1,0 +1,3 @@
+northwind-trading-audit-2026-10-18.csv
+time,action,description,outcome,actor_type,actor,target_type,target,ip,user_agent,details
+rows: 23

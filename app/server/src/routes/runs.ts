@@ -1,4 +1,5 @@
 import { and, desc, eq, inArray, lt, type SQL } from 'drizzle-orm';
+import { audit } from '../services/audit';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { isShareToken, MODE_IDS, parseRunInput, SHARE, shareDays, shareRefusal, shareState, shareUrl, type Page, type ReportDetail, type Run } from '@seo/shared';
 import { isUuid, orgAccess } from '../auth/access';
@@ -141,6 +142,7 @@ export async function runRoutes(app: FastifyInstance) {
     if (body.days != null && body.days !== '' && !Number.isFinite(Number(body.days)))
       throw new HttpError(400, `Choose how many days the link should last (${SHARE.minDays}-${SHARE.maxDays}).`, 'validation', { days: 'Must be a number of days' });
     const { link, token } = await createShare({ org: a.org, user: a.user, reportId: p.reportId, days: body.days == null || body.days === '' ? SHARE.defaultDays : body.days });
+    await audit(req, a.org.id, { action: 'share.created', target: { type: 'report', id: p.reportId, label: null }, details: { shareId: link.id, expiresAt: link.expiresAt } });
     // the token is returned exactly once: it is stored only as a hash
     return { ...link, url: shareUrl(config.appUrl, token), days: shareDays(body.days == null || body.days === '' ? SHARE.defaultDays : body.days) };
   });
@@ -156,7 +158,9 @@ export async function runRoutes(app: FastifyInstance) {
     const p = req.params as P;
     const a = await orgAccess(req, p.orgId, 'admin');
     if (!isUuid(p.reportId) || !isUuid(p.shareId)) throw notFound('Share link not found');
-    return revokeShare(a.org.id, p.reportId, p.shareId);
+    const revoked = await revokeShare(a.org.id, p.reportId, p.shareId);
+    await audit(req, a.org.id, { action: 'share.revoked', target: { type: 'report', id: p.reportId, label: null }, details: { shareId: p.shareId } });
+    return revoked;
   });
 
   /** The one report behind a live link. No session, no company id in the URL: the token itself names the report. */

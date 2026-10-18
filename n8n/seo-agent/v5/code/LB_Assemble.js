@@ -88,7 +88,7 @@ for (const p of plans) {
     // own id: the checks that need a real domain are then skipped, never failed. The topic fit and the draft gate always apply.
     const named = /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i.test(String(x.prospect_domain || ''));
     const why = (named ? (OK.noPitch(x.prospect_domain, { title: noteOf, spam: Number(x.spam_score) || 0, accredited: weAreAccredited })
-      || OK.sellsSame({ type: 'digest', domain: x.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals })) : '')   // R21: a SERP rival counts here too
+      || OK.sellsSame({ type: 'digest', domain: x.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals, ai_rivals: p.ai_rivals || [], topics: p.topics || [] })) : '')   // R21: a SERP rival counts here too
       || (f < 0.3 ? 'off topic for you (' + Math.round(f * 100) + '% match with your pages)' : '');
     const em = String(x.contact_email || '').toLowerCase() || (text.match(/[a-z0-9._%+-]+@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}/i) || [])[0] || '';
     const dl = (noteOf.match(/\d{4}-\d{2}-\d{2}/) || [])[0] || '';
@@ -147,7 +147,7 @@ for (const p of plans) {
     // ---- D13: who is never pitched (live 2026-10-11: competitors, bare homepages, mailbox providers and contact databases were) ----
     const bad = OK.badHost(r.prospect_domain); if (bad) reasons.push(bad);
     const onlyHome = OK.homepageOnly(r.type, r.url); if (onlyHome) reasons.push(onlyHome);
-    const competing = OK.sellsSame({ type: r.type, domain: r.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals, title: o.page_title, text: t, terms: sellTerms, url: r.url, fit: o.fit, ...siteOf(r.prospect_domain) });   // R4: a SERP rival counts as a competitor; R21: the page's URL and the topic match it just measured
+    const competing = OK.sellsSame({ type: r.type, domain: r.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals, ai_rivals: p.ai_rivals || [], topics: p.topics || [], title: o.page_title, text: t, terms: sellTerms, url: r.url, fit: o.fit, ...siteOf(r.prospect_domain) });   // R4: a SERP rival counts as a competitor; R21: the page's URL and the topic match it just measured
     if (competing) reasons.push(competing);
     if (!weAreAccredited && OK.accreditedList(o.page_title + ' ' + r.url))   // the page IS such a list (its title / address says so); a page that merely names accredited providers is fine
       reasons.push('a list of accredited / approved providers: you get on it by applying with the accreditation, and the facts on file do not say you hold one (asking to be added claims it)');
@@ -175,7 +175,7 @@ for (const p of plans) {
       && !myOutreach.some(o => o.prospect_domain === x.prospect_domain && o.type === x.type && o.status === 'drafted'))) {
     const why = OK.badHost(x.prospect_domain)
       || (OK.isGov(x.prospect_domain) ? 'government site: you get on its lists by applying or being accredited, not by a pitch (see the listings checklist)' : '')
-      || OK.sellsSame({ type: x.type, domain: x.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals, title: x.detail || '', url: x.page_url || '', terms: sellTerms, ...siteOf(x.prospect_domain) });   // R4 / R21; R86: their own site, when this run read it
+      || OK.sellsSame({ type: x.type, domain: x.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals, ai_rivals: p.ai_rivals || [], topics: p.topics || [], title: x.detail || '', url: x.page_url || '', terms: sellTerms, ...siteOf(x.prospect_domain) });   // R4 / R21; R86: their own site, when this run read it
     if (!why) continue;
     outreach_rows.push(base({ prospect_domain: x.prospect_domain, type: x.type, status: 'not_fit', score: Number(x.score) || 0, fit: 0, fit_reason: why,
       page_url: x.source_url || '', page_title: String(x.detail || '').slice(0, 140), evidence: String(x.detail || ''), country: OK.countryOf(x.prospect_domain), checks: { reasons: [why], read: false } }));
@@ -196,7 +196,7 @@ for (const p of plans) {
     if ((!html && e) || st === 404 || st === 410) reasons.push(st ? "the show's site answers " + st : "the show's site does not answer");
     if (html && !blocked) reasons.push(...OK.sellSignals(html, facts));
     const bad = OK.noPitch(r.prospect_domain, { title: r.show_title, accredited: weAreAccredited }); if (bad) reasons.push(bad);
-    const competing = OK.sellsSame({ type: 'podcast', domain: r.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals }); if (competing) reasons.push(competing);
+    const competing = OK.sellsSame({ type: 'podcast', domain: r.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals, ai_rivals: p.ai_rivals || [], topics: p.topics || [] }); if (competing) reasons.push(competing);
     const fit = OK.fit([r.show_title, r.summary, t.slice(0, 3000)].join(' '), topicText, df, docs.length);
     // R27 (2026-10-14): "Alchemy Uncensored" was offered to the owner at a 29% match. A guest appearance is the owner's own hour, so the
     // show has to be on our topics by more than the 25% that qualifies a page for a link (PC.MIN_FIT).
@@ -391,7 +391,7 @@ for (const p of plans) {
   // provider qualified before the rule existed is refused now instead of being drafted
   const storedRivals = p.serp_rivals;
   for (const o of myOutreach.filter(o => o.status === 'ready' && !o.sequence_json && siteBy.has(o.prospect_domain) && !outreach_rows.some(n => n.prospect_domain === o.prospect_domain && n.type === o.type))) {
-    const why = OK.sellsSame({ type: o.type, domain: o.prospect_domain, competitors: p.competitors, serp_rivals: storedRivals, title: o.page_title || '', url: o.page_url || '', terms: sellTerms, ...siteOf(o.prospect_domain) });   // R21's SERP rivals too (build section 58 counts the four first-pass calls)
+    const why = OK.sellsSame({ type: o.type, domain: o.prospect_domain, competitors: p.competitors, serp_rivals: storedRivals, ai_rivals: p.ai_rivals || [], topics: p.topics || [], title: o.page_title || '', url: o.page_url || '', terms: sellTerms, ...siteOf(o.prospect_domain) });   // R21's SERP rivals too (build section 58 counts the four first-pass calls)
     if (!why) continue;
     let ck = {}; try { ck = JSON.parse(o.checks_json || '{}') || {}; } catch (e) { ck = {}; }
     outreach_rows.push(base({ ...o, status: 'not_fit', fit_reason: why, contacts: (() => { try { return JSON.parse(o.contacts_json || '[]'); } catch (e) { return []; } })(), checks: { ...ck, reasons: [why] } }));

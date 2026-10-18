@@ -211,9 +211,16 @@ def callback_after_settle(wfobj, wiring, has_cb, post, v5_dir, declared_ends):
             fed_direct.append(p)
     hx, hy = nodes[has_cb]['position']
     wfobj['nodes'].append(_node(join, 'n8n-nodes-base.merge', 3.2, {'mode': 'append'}, [hx - 440, hy + 120]))
+    # C-1 (re-rating 2026-10-17): the schedule of this workflow, so its callback can say the run was late (CU.lateRun)
+    from ladder_common import _schedule_of
+    sched = dict(_schedule_of(wfobj) or {})
+    if sched.get('cron'):
+        _mn, _hr, _dom, _mon, _dow = sched['cron'].split()
+        sched['kind'] = 'monthly' if _dom != '*' else ('weekly' if _dow != '*' else 'daily')
     code = (_read(v5_dir, 'Callback_Ledger.js').replace('/*__LEDGER_CB__*/', ledger_cb_src(v5_dir))
+            .replace('/*__CATCHUP__*/', _read(v5_dir, '_catchup.js').rstrip('\n')).replace('__SCHED_JSON__', json.dumps(sched))
             .replace('__SETTLE__', settle_code).replace('__HAS_CALLBACK__', has_cb).replace('__PREDS__', json.dumps(preds)))
-    for ph in ('/*__LEDGER_CB__*/', '__SETTLE__', '__HAS_CALLBACK__', '__PREDS__'):
+    for ph in ('/*__LEDGER_CB__*/', '/*__CATCHUP__*/', '__SCHED_JSON__', '__SETTLE__', '__HAS_CALLBACK__', '__PREDS__'):
         assert ph not in code, ph + ' left in ' + cbl
     wfobj['nodes'].append(_node(cbl, 'n8n-nodes-base.code', 2, {'jsCode': code}, [hx - 220, hy + 120]))
     for p, i in preds:

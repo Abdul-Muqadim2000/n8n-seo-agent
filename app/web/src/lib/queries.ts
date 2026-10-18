@@ -1,4 +1,4 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
 import type {
   ApiKeyCreate,
   ApiKeyView,
@@ -49,6 +49,12 @@ import type {
   DeliveryRecord,
   DeliverySettings,
   DeliverySettingsInput,
+  AuditEventView,
+  SessionView,
+  SsoOverview,
+  MfaStatus,
+  SecurityPolicy,
+  TotpEnrolment,
   CmsConnectionCreate,
   CmsConnectionUpdate,
   CmsConnectionView,
@@ -57,6 +63,10 @@ import type {
   CmsReportState,
   CmsSiteState,
   CmsTestResultView,
+  CrawlerData,
+  CrawlerSettingsInput,
+  LogPushKeyCreated,
+  LogUploadAccepted,
 } from '@seo/shared';
 import { api, ApiRequestError } from './api';
 
@@ -714,6 +724,64 @@ export function useAdminUpdateOrg() {
   });
 }
 
+// ---------- G1 identity: two-step verification, security policy ----------
+type NewCodes = { newRecoveryCodes: string[] | null };
+
+export const useMfaStatus = () => useQuery({ queryKey: ['me', 'mfa'], queryFn: () => api<MfaStatus>('/api/me/mfa') });
+
+/** every identity change refreshes the person's status and their /api/me (mfaEnabled) */
+function useIdentityMutation<TBody, TRes>(fn: (b: TBody) => Promise<TRes>) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: fn, onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }) });
+}
+
+export const useTotpStart = () => useMutation({ mutationFn: () => api<TotpEnrolment>('/api/me/mfa/totp/start', { method: 'POST' }) });
+export const useTotpConfirm = () => useIdentityMutation((code: string) => api<MfaStatus & NewCodes>('/api/me/mfa/totp/confirm', { method: 'POST', body: { code } }));
+export const useTotpDisable = () => useIdentityMutation((_: void) => api<MfaStatus>('/api/me/mfa/totp', { method: 'DELETE' }));
+export const useRegenerateRecoveryCodes = () => useIdentityMutation((_: void) => api<NewCodes>('/api/me/mfa/recovery-codes', { method: 'POST' }));
+export const usePasskeyOptions = () => useMutation({ mutationFn: () => api<Record<string, unknown>>('/api/me/mfa/passkeys/options', { method: 'POST' }) });
+export const usePasskeyRegister = () =>
+  useIdentityMutation((b: { name: string; response: Record<string, unknown> }) => api<MfaStatus & NewCodes>('/api/me/mfa/passkeys', { method: 'POST', body: b }));
+export const usePasskeyRemove = () => useIdentityMutation((id: string) => api<MfaStatus>(`/api/me/mfa/passkeys/${id}`, { method: 'DELETE' }));
+
+export const useSessions = () => useQuery({ queryKey: ['me', 'sessions'], queryFn: () => api<{ items: SessionView[] }>('/api/me/sessions') });
+export const useRevokeSession = () => useIdentityMutation((id: string) => api<{ ok: boolean; signedOutHere: boolean }>(`/api/me/sessions/${id}`, { method: 'DELETE' }));
+export const useRevokeOtherSessions = () => useIdentityMutation((_: void) => api<{ ok: boolean; revoked: number }>('/api/me/sessions/revoke-others', { method: 'POST' }));
+
+export const useSso = (orgId: string, enabled = true) => useQuery({ queryKey: [...qk.org(orgId), 'sso'], queryFn: () => api<SsoOverview>(`/api/orgs/${orgId}/sso`), enabled });
+/** every SSO change answers with fresh state or nothing: refetch the overview */
+export function useSsoMutation<TBody, TRes = unknown>(orgId: string, fn: (b: TBody) => Promise<TRes>) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: fn, onSuccess: () => qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'sso'] }) });
+}
+
+export type AuditFilters = { category?: string; actor?: string; outcome?: string; from?: string; to?: string };
+export type AuditPage = { items: AuditEventView[]; nextCursor: string | null; actors?: { id: string; label: string }[]; retentionDays: number };
+export const auditQs = (f: AuditFilters) => new URLSearchParams(Object.entries(f).filter(([, v]) => v)).toString();
+export function useAuditLog(orgId: string, filters: AuditFilters, enabled = true) {
+  return useInfiniteQuery({
+    queryKey: [...qk.org(orgId), 'audit', filters],
+    queryFn: ({ pageParam }) => {
+      const qs = auditQs({ ...filters, ...(pageParam ? { before: pageParam } : {}) } as AuditFilters);
+      return api<AuditPage>(`/api/orgs/${orgId}/audit${qs ? `?${qs}` : ''}`);
+    },
+    initialPageParam: '',
+    getNextPageParam: (p) => p.nextCursor ?? undefined,
+    enabled,
+  });
+}
+
+export const useSecurityPolicy = (orgId: string) => useQuery({ queryKey: [...qk.org(orgId), 'security'], queryFn: () => api<SecurityPolicy>(`/api/orgs/${orgId}/security`) });
+export function useSaveSecurityPolicy(orgId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (p: SecurityPolicy) => api<SecurityPolicy>(`/api/orgs/${orgId}/security`, { method: 'PUT', body: p }),
+    onSuccess: (p) => {
+      qc.setQueryData([...qk.org(orgId), 'security'], p);
+      qc.invalidateQueries({ queryKey: qk.me });
+    },
+  });
+}
 // ---------- G2: CMS publishing (app/docs/CMS_PUBLISHING.md) ----------
 const cmsKey = (siteId: string) => ['site', siteId, 'cms'] as const;
 
@@ -790,3 +858,89 @@ export function useCmsRefresh(orgId: string, reportId: string, siteId: string) {
     onSuccess: done,
   });
 }
+
+// ---------- gap #6: crawlers from the site's own logs (app/docs/LOG_ANALYTICS.md) ----------
+const crawlersKey = (siteId: string) => [...qk.site(siteId), 'crawlers'] as const;
+
+/** The Crawlers page; polls every 5 s while a log file is waiting or being read. */
+export function useCrawlers(orgId: string, siteId: string, days: number) {
+  return useQuery({
+    queryKey: [...crawlersKey(siteId), days],
+    queryFn: () => api<CrawlerData>(`/api/orgs/${orgId}/sites/${siteId}/crawlers?days=${days}`),
+    placeholderData: keepPreviousData,
+    retry: noRetryOn4xx,
+    staleTime: 60_000,
+    refetchInterval: (q) => (q.state.data?.ingests.some((i) => i.status === 'queued' || i.status === 'processing') ? 5000 : false),
+  });
+}
+
+/**
+ * Uploads one log file as a raw stream (never read into memory here or on the server). XMLHttpRequest, not fetch: it reports upload
+ * progress. Same CSRF header as every other change.
+ */
+export function uploadLog(orgId: string, siteId: string, file: File, onProgress: (sent: number, total: number) => void): Promise<LogUploadAccepted> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `/api/orgs/${orgId}/sites/${siteId}/crawlers/upload?name=${encodeURIComponent(file.name)}`);
+    xhr.setRequestHeader('x-requested-with', 'fetch');
+    xhr.setRequestHeader('content-type', 'application/octet-stream');
+    xhr.setRequestHeader('accept', 'application/json');
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(e.loaded, e.total);
+    };
+    xhr.onerror = () => reject(new ApiRequestError(0, 'The upload was interrupted. Check your connection and try again.'));
+    xhr.onload = () => {
+      let data: { error?: string; code?: string; fields?: Record<string, string> } & Partial<LogUploadAccepted> = {};
+      try {
+        data = JSON.parse(xhr.responseText || '{}');
+      } catch {
+        /* keep {} */
+      }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(data as LogUploadAccepted);
+      else reject(new ApiRequestError(xhr.status, data.error || `Upload failed (${xhr.status})`, data.fields ?? {}, data.code));
+    };
+    xhr.send(file);
+  });
+}
+
+export function useUploadLog(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (a: { file: File; onProgress: (sent: number, total: number) => void }) => uploadLog(orgId, siteId, a.file, a.onProgress),
+    onSuccess: () => qc.invalidateQueries({ queryKey: crawlersKey(siteId) }),
+  });
+}
+
+export function useCreatePushKey(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<LogPushKeyCreated>(`/api/orgs/${orgId}/sites/${siteId}/crawlers/push-key`, { method: 'POST' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: crawlersKey(siteId) }),
+  });
+}
+
+export function useRevokePushKey(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<{ ok: boolean }>(`/api/orgs/${orgId}/sites/${siteId}/crawlers/push-key`, { method: 'DELETE' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: crawlersKey(siteId) }),
+  });
+}
+
+export function useCrawlerSettings(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CrawlerSettingsInput) => api<CrawlerSettingsInput>(`/api/orgs/${orgId}/sites/${siteId}/crawlers/settings`, { method: 'PUT', body }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: crawlersKey(siteId) }),
+  });
+}
+
+export function useDeleteCrawlerData(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (confirm: string) => api<{ ok: boolean }>(`/api/orgs/${orgId}/sites/${siteId}/crawlers/data`, { method: 'DELETE', body: { confirm } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: crawlersKey(siteId) }),
+  });
+}
+
+export const crawlerExportUrl = (orgId: string, siteId: string, kind: 'daily' | 'pages' | 'hits', days: number) => `/api/orgs/${orgId}/sites/${siteId}/crawlers/export?kind=${kind}&days=${days}`;

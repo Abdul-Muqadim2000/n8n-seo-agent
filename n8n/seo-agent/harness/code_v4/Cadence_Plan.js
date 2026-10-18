@@ -260,8 +260,24 @@ const SM = (() => {
     clicks: num0(p.clicks), impressions: num0(p.impressions), position: num0(p.position), prev_clicks: num0(p.prev_clicks), yoy_clicks: num0(p.yoy_clicks),
     decay_state: S(p.decay_state), decay_pct: num0(p.decay_pct), decay_lost: num0(p.decay_lost), decay_kind: S(p.decay_kind),
     decay_basis: S(p.decay_basis).slice(0, 900), measured_at: S(p.measured_at) }));
+  // ---- C-7 (re-rating 2026-10-17): ONE page state per keyword, read by the Rank Tracker AND the Site Tracker (and so by the cadence) ----
+  // In one morning the Rank Tracker said of "ai consulting" "…/ai-copilot-advisory-uae already answers this search - refresh that page"
+  // while the Site Tracker said "fix the four drafts that failed the quality check and run them again", and of "it consulting dubai"
+  // "write the main page" while the Site Tracker and the cadence said "written today, failed QA, fix it". The order of evidence is one:
+  // a LIVE page of the site that answers the search wins (refresh it; a draft written for the search is retired, never a second page);
+  // then a written draft (publish it); then a draft that failed its quality check (fix it and run it again); then a run that wrote nothing.
+  // in: { keyword, covered_url, written, not_ready, reasons (array or '; ' text), started } -> { state, text } (text: the parenthesis a list uses)
+  const pageStep = (o) => {
+    const c = o || {}, kw = S(c.keyword), why = (Array.isArray(c.reasons) ? c.reasons : S(c.reasons).split(/;\s+/)).map(S).filter(Boolean).slice(0, 2).join('; ').slice(0, 220);
+    if (S(c.covered_url)) return { state: 'covered', text: S(c.covered_url) + ' already answers this search — refresh that page, do not publish a second one'
+      + (c.not_ready || c.written ? '; the draft written for "' + kw + '" is not needed (use its text to refresh that page)' : '') };
+    if (c.written) return { state: 'written', text: 'already written — publish it' };
+    if (c.not_ready) return { state: 'not_ready', text: 'written, but the draft did not pass the quality check' + (why ? ' (' + why + ')' : '') + ' — fix it and run it again; do not publish it as it is' };
+    if (c.started) return { state: 'started', text: 'a page run was started for it but no page was written — it is written again' };
+    return { state: 'planned', text: '' };
+  };
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
-    titleShare, titleGap, canonUrl, isListing, pageScore,
+    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms } };
 })();
 // ---- the pages written and not yet published, and the ladders being written: ONE rule for the Content Cadence and the ladder mode ----
@@ -946,7 +962,7 @@ const RS = (() => {
     return band + ': ' + ch.changed + ' of the top ' + ch.depth + ' places changed' + when
       + (ch.entered ? ', ' + ch.entered + ' new page' + (ch.entered === 1 ? '' : 's') + ' came in' : '')
       + (ch.mean_move ? ', and the pages present in both readings moved ' + ch.mean_move + ' place' + (ch.mean_move === 1 ? '' : 's') + ' on average' : '')
-      + ' (measured by comparing the two stored readings; ' + ch.labels_basis + (ch.noise ? '; ' + ch.noise.text : '') + ').';
+      + ' (measured by comparing the two stored readings; ' + ch.labels_basis + (ch.noise ? '; ' + ch.noise.text : '') + ')' + (ch.outlier ? '; ' + ch.outlier.text : '') + '.';   // C-4
   };
   // the clause that goes beside a gain or a drop, so a move is never reported without the context that decides what it means
   const moveNote = (delta, ch) => {
@@ -1004,6 +1020,40 @@ const RS = (() => {
     if (!best) return null;
     return { ...best, text: 'two readings of this results page taken ' + best.minutes + ' minutes apart (' + best.at.slice(0, 10) + ') already differed in ' + best.changed + ' of the top ' + best.depth + ' places' };
   };
+  // ---- C-4 (re-rating 2026-10-17): ONE OUTLIER READING IS NOT THE BASELINE ----
+  // "e invoicing in uae: the whole results page moved: 9 of the top 9 places changed since the reading of 2026-10-16, 9 new pages came in"
+  // - today's top ten was IDENTICAL to the readings of 2026-10-15 19:48 and 2026-10-16 00:33; the one compared against (2026-10-16 19:58,
+  // the same request) was a different page. The baseline is still the newest earlier reading, unless that reading is a one-off: it differs
+  // from this reading by half the page or more, while an older reading (up to 3 back, within 21 days) matches this one (under a fifth of
+  // the places changed) and differed from the newest by half or more. Then the older, agreeing reading is the baseline and the one-off is
+  // named with its figures. A change is never computed against a reading the readings around it contradict.
+  const stableReading = (rows, o) => {
+    const q = o || {}; const kw = kwKey(q.keyword), dom = bare(q.domain); const before = S(q.before || '9999');
+    const since = new Date(Date.parse(before.slice(0, 4) === '9999' ? new Date().toISOString() : before) - (Number(q.days) || 21) * 864e5).toISOString();
+    const fallback = prevReading(rows, q);
+    const cands = (rows || []).filter(h => h && isDesk(h) && kwKey(h.keyword) === kw && (!dom || bare(h.domain) === dom) && S(h.checked_at) && S(h.checked_at) < before
+      && S(h.checked_at) >= since && h.position !== '' && h.position != null && Number(h.position) >= 0 && snapOf(h.snapshot_json))
+      .sort((a, b) => S(b.checked_at).localeCompare(S(a.checked_at))).slice(0, Number(q.max) || 3);
+    const latest = fallback && cands.length && S(cands[0].checked_at) === S(fallback.checked_at) ? cands[0] : null;
+    if (!latest || cands.length < 2 || !snapOf(q.cur)) return { row: fallback, outlier: null };
+    const c0 = churn(latest.snapshot_json, q.cur, {});
+    if (!c0.available || c0.changed_pct < CHURN.high_pct) return { row: latest, outlier: null };
+    for (const older of cands.slice(1)) {
+      const co = churn(older.snapshot_json, q.cur, {}), cl = churn(older.snapshot_json, latest.snapshot_json, {});
+      if (co.available && cl.available && co.changed_pct < CHURN.still_pct && cl.changed_pct >= CHURN.high_pct) {
+        const at = (x) => S(x).slice(0, 16).replace('T', ' ');
+        return { row: older, outlier: { at: S(latest.checked_at), changed: c0.changed, depth: c0.depth, vs_older: cl.changed, older_at: S(older.checked_at), older_changed: co.changed,
+          text: 'the reading of ' + at(latest.checked_at) + ' UTC was a one-off: it differed from this reading in ' + c0.changed + ' of the top ' + c0.depth + ' places and from the reading before it in ' + cl.changed
+            + ', while this reading matches the reading of ' + at(older.checked_at) + ' UTC (' + co.changed + ' changed) - so movement is measured against that one' } };
+      }
+    }
+    return { row: latest, outlier: null };
+  };
+  // the label beside a "N of top M changed" figure, in words, each one defined in the report's footer (BAND_TERMS)
+  const BAND_WORD = { high: 'most of the page moved', some: 'part of the page moved', still: 'barely moved', noise: 'within noise' };
+  const BAND_TERMS = 'Labels: "most of the page moved" = half the places or more changed occupant; "part of the page moved" = a fifth or more; "barely moved" = less; '
+    + '"within noise" = no more places changed than in two readings of the same page taken minutes apart, so it is not called movement at all';
+  const bandWord = (b) => BAND_WORD[S(b)] || S(b);
   // a measured change, judged against that noise: no larger than it = 'noise', and every severity word is withheld
   const withNoise = (ch, nz) => {
     if (!ch || !ch.available || !nz) return ch;
@@ -1122,7 +1172,7 @@ const RS = (() => {
         + (left ? '; ' + left + (left === 1 ? ' keyword with no impressions weighs nothing' : ' keywords with no impressions weigh nothing') : '') + '; the unweighted average is ' + unweighted + '%' };
   };
   return { MOVE, moveKind, cannibal, outranked, WEIGHT, weightedVoice, CTR, SUM_CTR, METHOD, AIO_KEEP, AIO_SOURCE, keepAt, CHURN, read, features, typeList, ourRank, landscape, voice, snapshot, pack, unpack,
-    featureLine, featureChips, churn, churnNone, churnText, moveNote, bare, hostOf, isOurs, listOf, weight, urlKey, serpHosts, prevReading, noise, withNoise };
+    featureLine, featureChips, churn, churnNone, churnText, moveNote, bare, hostOf, isOurs, listOf, weight, urlKey, serpHosts, prevReading, stableReading, bandWord, BAND_TERMS, noise, withNoise };
 })();
 const CONFIG = { default_pages_per_week: 1, max_pages_per_week: 3, skip_recent_days: 90, striking_min_impressions: 30, striking_min_position: 4, striking_max_position: 20, publish_reminder_days: 7, upcoming: 4,
   max_active: 2, max_waiting: 3, waiting_days: 120, gate_head_position: 30, won_checks: 4, won_position: 3, suggestions: 5,
@@ -1367,7 +1417,7 @@ for (const s of list) {
   const dropped = set_aside.filter(x => x.dropped);   // R16: a rung nobody should write is a reason to report, not to go quiet
   if (!picks.length && (paused_reason || awaiting_approval.length || suggestions.length || facts.waiting_for_support.length || dropped.length || facts.paused_ladders.length)) {
     const fixK = new Set(needs_fix.map(w => norm(w.keyword)));
-    const reason = paused_reason ? waitingKw.size + ' written pages waiting for publication (pile-up guard, limit ' + cfg.max_waiting + '): ' + facts.waiting_keywords.slice(0, 6).map(k => '"' + k + '"' + (fixK.has(norm(k)) ? ' (needs a fix: it did not pass the quality check)' : '')).join(', ')
+    const reason = paused_reason ? waitingKw.size + ' written pages waiting for publication (pile-up guard, limit ' + cfg.max_waiting + '): ' + facts.waiting_keywords.slice(0, 6).map(k => '"' + k + '"' + (fixK.has(norm(k)) ? (() => { const cv = coverOf({ keyword: k }); return cv ? ' (not needed: ' + SM.pageStep({ keyword: k, covered_url: cv.url, not_ready: true }).text + ')' : ' (needs a fix: it did not pass the quality check)'; })() : '')).join(', ')
         + (needs_fix.length ? ' — publish the ones that passed, and fix the ' + needs_fix.length + ' that need a fix and run them again, to continue' : ' — publish them to continue')
       : dropped.length ? 'nothing to write automatically this week; ' + dropped.length + ' planned page(s) set aside: ' + dropped.slice(0, 3).map(x => x.note).join(' | ')
       : 'nothing to write automatically this week';

@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { z } from 'zod';
 
 // Settings come from the environment. In Docker Compose the app reads ../n8n/.env (the SEO_* secrets the n8n stack already uses:
@@ -11,6 +13,8 @@ const str = (def = '') => z.string().optional().transform((v) => (v == null ? de
 
 const Env = z.object({
   NODE_ENV: str('development'),
+  /** pino level (tests: silent) */
+  LOG_LEVEL: str('info'),
   PORT: str('4000').transform(Number),
   HOST: str('0.0.0.0'),
   /** where people open the app (used for links in e-mails and the Google redirect) */
@@ -37,6 +41,12 @@ const Env = z.object({
   N8N_PUBLISH_CHECK_PATH: str('/webhook/seo-publish-check'),
   /** v4.13: 32 bytes (64 hex or base64) that encrypt mailbox passwords; without it no mailbox can be connected */
   MAILBOX_KEY: str(''),
+  /** G1: 32 bytes (64 hex or base64) that seal authenticator-app secrets and OIDC client secrets; empty = MAILBOX_KEY is used */
+  IDENTITY_KEY: str(''),
+  /** G1: the name authenticator apps show beside the account (default: SEO_BRAND) */
+  MFA_ISSUER: str(''),
+  /** G1: let an OIDC issuer resolve to a private address (a test IdP in the same Docker network); never in production */
+  SSO_ALLOW_PRIVATE_HOSTS: bool(false),
   /** v4.13: the sender and inbox jobs (off in tests or on a second server) */
   LINK_BUILDER_JOBS: bool(true),
   /** L1: check the recipient's domain for a mail server before the first e-mail; false only for a local mail test with made-up domains */
@@ -90,6 +100,12 @@ const Env = z.object({
   /** "Choose keywords for me": the server starts the next recommended ladder for websites that switched it on (every 6 hours);
    * off = the setting is stored but nothing starts on its own */
   AUTO_START_LADDERS: bool(false),
+  /** gap #6 (app/docs/LOG_ANALYTICS.md): the crawler-log worker, retention and IP-list refresh (off on a second server or in tests) */
+  CRAWLER_JOBS: bool(true),
+  /** where uploaded / pushed logs wait until the worker has read them (deleted right after); local disk of this server */
+  LOG_SPOOL_DIR: str(''),
+  /** fetch the vendors' crawler IP lists once a day (off: the dated copy shipped with the code is used) */
+  BOT_RANGES_REFRESH: bool(true),
 });
 
 const parsed = Env.safeParse(process.env);
@@ -102,6 +118,7 @@ const e = parsed.data;
 export const config = {
   env: e.NODE_ENV,
   isProd: e.NODE_ENV === 'production',
+  logLevel: e.LOG_LEVEL || 'info',
   port: e.PORT,
   host: e.HOST,
   appUrl: e.APP_URL,
@@ -161,6 +178,9 @@ export const config = {
   defaultBudgetUsd: e.DEFAULT_MONTHLY_BUDGET_USD,
   allowSignup: e.ALLOW_SIGNUP,
   mailboxKey: e.MAILBOX_KEY,
+  identityKey: e.IDENTITY_KEY || e.MAILBOX_KEY,
+  mfaIssuer: e.MFA_ISSUER || e.SEO_BRAND,
+  ssoAllowPrivateHosts: e.SSO_ALLOW_PRIVATE_HOSTS,
   // L4: OAuth mailboxes. The redirect URI must be registered in the owner's Google / Azure app exactly as it is built here.
   mailOauth: {
     gmail: { clientId: e.GMAIL_OAUTH_CLIENT_ID, clientSecret: e.GMAIL_OAUTH_CLIENT_SECRET, enabled: !!(e.GMAIL_OAUTH_CLIENT_ID && e.GMAIL_OAUTH_CLIENT_SECRET) },
@@ -168,6 +188,11 @@ export const config = {
     redirectUri: `${e.APP_URL}/api/mailbox-oauth/callback`,
   },
   linkBuilderJobs: e.LINK_BUILDER_JOBS,
+  crawlers: {
+    jobs: e.CRAWLER_JOBS,
+    spoolDir: e.LOG_SPOOL_DIR || join(tmpdir(), 'ascentra-logs'),
+    refreshRanges: e.BOT_RANGES_REFRESH,
+  },
   outreachMxCheck: e.OUTREACH_MX_CHECK,
   // G2: never in production, whatever the variable says
   cmsAllowPrivateHosts: e.CMS_ALLOW_PRIVATE_HOSTS && e.NODE_ENV !== 'production',

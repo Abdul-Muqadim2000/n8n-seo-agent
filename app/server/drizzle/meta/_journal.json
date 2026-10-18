@@ -75,8 +75,22 @@
     {
       "idx": 10,
       "version": "7",
-      "when": 1792273579849,
-      "tag": "0010_g4_integrations",
+      "when": 1792274155524,
+      "tag": "0010_crawler_logs",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792291323513,
+      "tag": "0011_g1_identity",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792311299869,
+      "tag": "0012_g4_integrations",
       "breakpoints": true
     }
   ]

@@ -23,6 +23,7 @@ const siteDataPages: RouteObject[] = [
   { path: 'content', lazy: page(() => import('@/pages/site/ContentPage')) },
   { path: 'technical', lazy: page(() => import('@/pages/site/TechnicalPage')) },
   { path: 'ai', lazy: page(() => import('@/pages/site/AiVisibilityPage')) },
+  { path: 'crawlers', lazy: page(() => import('@/pages/site/CrawlersPage')) },
   { path: 'backlinks', lazy: page(() => import('@/pages/site/BacklinksPage')) },
   { path: 'links', lazy: page(() => import('@/pages/site/LinkBuildingPage')) },
   { path: 'alerts', lazy: page(() => import('@/pages/site/AlertsPage')) },
@@ -81,6 +82,8 @@ export const router = createBrowserRouter([
             element: <AuthLayout />,
             children: [
               { path: '/login', lazy: page(() => import('@/pages/auth/LoginPage')) },
+              { path: '/login/mfa', lazy: page(() => import('@/pages/auth/MfaPage')) },
+              { path: '/login/sso', lazy: page(() => import('@/pages/auth/SsoLoginPage')) },
               { path: '/signup', lazy: page(() => import('@/pages/auth/SignupPage')) },
               { path: '/forgot-password', lazy: page(() => import('@/pages/auth/ForgotPasswordPage')) },
             ],

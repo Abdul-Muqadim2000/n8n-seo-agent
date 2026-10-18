@@ -1,5 +1,5 @@
-import { asc, eq } from 'drizzle-orm';
-import type { Me, OrgSummary, Role } from '@seo/shared';
+import { and, asc, count, eq, isNull } from 'drizzle-orm';
+import { policyOf, type Me, type OrgSummary, type Role } from '@seo/shared';
 import { isPlatformAdmin } from '../auth/access';
 import { toUser } from '../auth/session';
 import { db, schema } from '../db';
@@ -10,7 +10,7 @@ export async function buildMe(user: UserRow): Promise<Me> {
     .select({ org: schema.organizations, role: schema.memberships.role })
     .from(schema.memberships)
     .innerJoin(schema.organizations, eq(schema.memberships.orgId, schema.organizations.id))
-    .where(eq(schema.memberships.userId, user.id))
+    .where(and(eq(schema.memberships.userId, user.id), isNull(schema.memberships.deactivatedAt)))
     .orderBy(asc(schema.organizations.name));
   const orgs: OrgSummary[] = rows.map((r) => ({
     id: r.org.id,
@@ -19,6 +19,8 @@ export async function buildMe(user: UserRow): Promise<Me> {
     role: r.role as Role,
     onboardingStep: r.org.onboardingStep,
     onboardedAt: r.org.onboardedAt?.toISOString() ?? null,
+    requiresMfa: policyOf(r.org.securityPolicy).requireMfa,
   }));
-  return { user: toUser(user), orgs, platformAdmin: isPlatformAdmin(user) };
+  const keys = await db.select({ n: count() }).from(schema.webauthnCredentials).where(eq(schema.webauthnCredentials.userId, user.id));
+  return { user: toUser(user, Number(keys[0]?.n ?? 0)), orgs, platformAdmin: isPlatformAdmin(user) };
 }

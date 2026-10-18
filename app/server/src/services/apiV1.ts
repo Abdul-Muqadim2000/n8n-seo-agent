@@ -26,11 +26,13 @@ import {
 } from '@seo/shared';
 import { db, schema } from '../db';
 import type { ApiKeyRow, OrgRow, RunRow, SiteRow } from '../db/schema';
+import type { FastifyRequest } from 'fastify';
 import { isUuid, type OrgAccess } from '../auth/access';
 import { HttpError, notFound, validationError } from '../lib/errors';
 import { publishCheckCall, siteRows } from '../n8n/client';
 import { oneReadingFinding, previousOfType } from './data';
 import { filesFor } from './runs';
+import { crawlerData } from './crawlers/analytics';
 
 /**
  * B5-11 / area 12 G-5 (v4.18): the handlers of the read API. Design note: app/API.md "Read API v1".
@@ -48,6 +50,8 @@ export interface V1Ctx {
   scopes: ApiScope[];
   /** G4: a session's own membership (a key's actor is its creator, resolved per write in services/apiRuns.ts `actorOf`) */
   actor?: OrgAccess | null;
+  /** G4 + G1: the request, so a write made through a tool (MCP) is audited with its address and user agent like a REST one */
+  req?: FastifyRequest | null;
 }
 
 export function requireScope(ctx: V1Ctx, scope: ApiScope) {
@@ -166,6 +170,15 @@ export async function getAudit(ctx: V1Ctx, websiteId: unknown, auditId: unknown,
   const [cur, prev] = await Promise.all([rowsOf(audit.id), prevPoint ? rowsOf(prevPoint.id) : Promise.resolve(null)]);
   const findings = findingsV1(cur, prev, (f) => oneReadingFinding(f, audit.reportType) || notFixed.has(String(f.finding_key ?? '')));
   return { audit, comparedWith: prevPoint?.id ?? null, findings: filterFindings(findings, { severity: q.severity, status: q.status }) };
+}
+
+// ---------------- crawler activity (gap #6, app/docs/LOG_ANALYTICS.md; the app's own Postgres, verified websites only) ----------------
+
+/** What search and AI crawlers requested on the website, from its own access logs: the same answer as the app's Crawlers page. */
+export async function getCrawlers(ctx: V1Ctx, websiteId: unknown, q: Q = {}) {
+  const site = await siteOf(ctx, websiteId);
+  requireVerifiedSite(site);
+  return crawlerData(site, q.days);
 }
 
 // ---------------- runs ----------------

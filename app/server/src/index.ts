@@ -1,10 +1,13 @@
 import { buildApp } from './app';
+import { purgeExpiredFlows } from './auth/flows';
 import { purgeExpiredSessions } from './auth/session';
+import { purgeAudit } from './services/audit';
 import { config } from './config';
 import { runMigrations, sqlClient } from './db';
 import { AUTO_START, runAutoStart } from './services/autoStart';
 import { checkEngineFailures } from './services/engineFailures';
 import { autoApproveTick, pollTick, senderTick } from './services/outreachJobs';
+import { startCrawlerJobs } from './services/crawlers/jobs';
 import { deliveryTick, retryTick } from './services/reportDelivery';
 import { expireStaleRuns } from './services/runs';
 import { webhookTick } from './services/webhooks';
@@ -19,6 +22,14 @@ async function main() {
     'SEO platform server ready',
   );
   const timer = setInterval(() => purgeExpiredSessions().catch((err) => app.log.warn({ err }, 'session purge failed')), 6 * 60 * 60 * 1000);
+  // G1: expired sign-in challenges every 10 minutes; audit events past each company's retention once a day (and once at start)
+  const flowTimer = setInterval(() => void purgeExpiredFlows().catch((err) => app.log.warn({ err: String(err) }, 'auth flow purge failed')), 10 * 60 * 1000);
+  const auditPurge = () =>
+    purgeAudit()
+      .then((n) => n && app.log.info({ events: n }, 'audit events past their retention removed'))
+      .catch((err) => app.log.warn({ err: String(err) }, 'audit retention purge failed'));
+  const auditFirst = setTimeout(() => void auditPurge(), 60 * 1000);
+  const auditTimer = setInterval(() => void auditPurge(), 24 * 60 * 60 * 1000);
   const staleTimer = setInterval(
     () =>
       expireStaleRuns()
@@ -59,7 +70,10 @@ async function main() {
     ? [setInterval(() => void senderTick(app.log), 60 * 1000), setInterval(() => void pollTick(app.log), 3 * 60 * 1000), setInterval(() => void autoApproveTick(app.log), 10 * 60 * 1000)]
     : [];
   app.log.info({ linkBuilderJobs: config.linkBuilderJobs }, config.linkBuilderJobs ? 'link-building sender and inbox jobs on' : 'link-building jobs off (LINK_BUILDER_JOBS)');
+  // gap #6: the crawler-log worker, retention and the daily IP-list refresh; CRAWLER_JOBS=false stops them
+  const crawlerTimers = startCrawlerJobs(app.log);
   const stop = async () => {
+    for (const t of crawlerTimers) clearInterval(t);
     for (const t of lbTimers) clearInterval(t);
     if (autoStartFirst) clearTimeout(autoStartFirst);
     if (autoStartTimer) clearInterval(autoStartTimer);
@@ -68,6 +82,9 @@ async function main() {
     clearInterval(exportTimer);
     clearInterval(failureTimer);
     clearInterval(timer);
+    clearInterval(flowTimer);
+    clearInterval(auditTimer);
+    clearTimeout(auditFirst);
     clearInterval(staleTimer);
     await app.close();
     await sqlClient.end({ timeout: 5 });

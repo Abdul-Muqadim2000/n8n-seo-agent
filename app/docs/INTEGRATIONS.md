@@ -41,7 +41,7 @@ every token the person must fetch (`shared/src/guides.ts`, area `integrations`).
 | A partial or wrong export | Every export writes one object per table per run (never appends to a half-written one) and records rows, bytes and the object name per table in `export_runs`; a table that failed is named with its error while the others still land. BigQuery tables are loaded with `WRITE_TRUNCATE` from a full snapshot, so a re-run replaces instead of duplicating. |
 | An export that grows without bound | 200,000 rows per table per run and 100 MB per object; beyond it the table is cut and the run says so (`truncated: true`). |
 
-## 3. Data model (migration `0010_g4_integrations`)
+## 3. Data model (migration `0012_g4_integrations`)
 
 - `runs` + `api_key_id` (which key started it, null for people), `idempotency_key`, `idempotency_hash`; index `(org_id, idempotency_key)`.
 - `integrations` — one connector per row: `kind` (`jira` | `linear` | `asana` | `s3` | `bigquery`), `name`, `config` (jsonb, non-secret:

@@ -393,8 +393,24 @@ const SM = (() => {
     clicks: num0(p.clicks), impressions: num0(p.impressions), position: num0(p.position), prev_clicks: num0(p.prev_clicks), yoy_clicks: num0(p.yoy_clicks),
     decay_state: S(p.decay_state), decay_pct: num0(p.decay_pct), decay_lost: num0(p.decay_lost), decay_kind: S(p.decay_kind),
     decay_basis: S(p.decay_basis).slice(0, 900), measured_at: S(p.measured_at) }));
+  // ---- C-7 (re-rating 2026-10-17): ONE page state per keyword, read by the Rank Tracker AND the Site Tracker (and so by the cadence) ----
+  // In one morning the Rank Tracker said of "ai consulting" "…/ai-copilot-advisory-uae already answers this search - refresh that page"
+  // while the Site Tracker said "fix the four drafts that failed the quality check and run them again", and of "it consulting dubai"
+  // "write the main page" while the Site Tracker and the cadence said "written today, failed QA, fix it". The order of evidence is one:
+  // a LIVE page of the site that answers the search wins (refresh it; a draft written for the search is retired, never a second page);
+  // then a written draft (publish it); then a draft that failed its quality check (fix it and run it again); then a run that wrote nothing.
+  // in: { keyword, covered_url, written, not_ready, reasons (array or '; ' text), started } -> { state, text } (text: the parenthesis a list uses)
+  const pageStep = (o) => {
+    const c = o || {}, kw = S(c.keyword), why = (Array.isArray(c.reasons) ? c.reasons : S(c.reasons).split(/;\s+/)).map(S).filter(Boolean).slice(0, 2).join('; ').slice(0, 220);
+    if (S(c.covered_url)) return { state: 'covered', text: S(c.covered_url) + ' already answers this search — refresh that page, do not publish a second one'
+      + (c.not_ready || c.written ? '; the draft written for "' + kw + '" is not needed (use its text to refresh that page)' : '') };
+    if (c.written) return { state: 'written', text: 'already written — publish it' };
+    if (c.not_ready) return { state: 'not_ready', text: 'written, but the draft did not pass the quality check' + (why ? ' (' + why + ')' : '') + ' — fix it and run it again; do not publish it as it is' };
+    if (c.started) return { state: 'started', text: 'a page run was started for it but no page was written — it is written again' };
+    return { state: 'planned', text: '' };
+  };
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
-    titleShare, titleGap, canonUrl, isListing, pageScore,
+    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms } };
 })();
 const d = __scored.json; const a = d.site_audit || {};
@@ -419,9 +435,25 @@ const otherType = !prev ? (audits.find(r => r.report_type && r.report_type !== c
 //   This filter stays for the rows older audits stored, so a finding outside the current weights is never called "fixed" or "new".
 const assessed = new Set(Object.keys(a.weights || {}));   // the categories this audit type scores: a finding outside them is "not checked", never "fixed" or "new"
 const inScope = (f) => !assessed.size || assessed.has(f.category);
-const prevF = prev ? rowsOf('Load Audit Findings').filter(r => r.audit_id === prev.audit_id).filter(inScope) : [];
+// C-5 (re-rating 2026-10-17): two audits compare only on the checks BOTH ran. Audit 794 (crawl_js false) against 739 of 48 minutes earlier
+// (crawl_js true) reported "1 fixed: AI crawlers see a different version of 20 key page(s)" - a finding only a JavaScript crawl can make,
+// absent because the method changed, not because anything was fixed. The method is read from this run (Check Crawl / the audit) and from
+// the stored row's `crawl_js` (the column is the audit report's to write; an older row without it is UNKNOWN, never "same"). When the two
+// differ or one is unknown, the findings that depend on rendering are left out of fixed / new / still open on both sides and named.
+const jsOf = (v) => (v === true || v === 'true' || v === 1 || v === '1') ? true : (v === false || v === 'false' || v === 0 || v === '0') ? false : null;
+const curJs = jsOf(a.crawl_js != null ? a.crawl_js : base.crawl_js);
+const prevJs = prev ? jsOf(prev.crawl_js) : null;
+const methodSame = curJs !== null && prevJs !== null && curJs === prevJs;
+const JS_DEP = /after JavaScript|written by JavaScript|not in the first response|changes after|AI crawlers see a different version|response-versus-render|without a real <a href>/i;
+const jsDep = (f) => !!f && (f.source === 'render_diff' || JS_DEP.test(String(f.title || '')));
+const methodOk = (f) => methodSame || !jsDep(f);
+const jsWord = (v) => v === true ? 'with JavaScript rendering' : v === false ? 'without JavaScript rendering' : 'with a crawl method not recorded';
+const prevAll = prev ? rowsOf('Load Audit Findings').filter(r => r.audit_id === prev.audit_id).filter(inScope) : [];
+const prevF = prevAll.filter(methodOk);
 const keyOf = (f) => String(f.category || '') + '|' + String(f.title || '').toLowerCase().replace(/\d[\d,.%]*/g, '#').replace(/["'“”‘’]/g, '').replace(/\s+/g, ' ').trim();
-const cur = (a.findings || []).filter(f => f.scoring !== false && f.severity !== 'Info').filter(inScope);
+const curAll = (a.findings || []).filter(f => f.scoring !== false && f.severity !== 'Info').filter(inScope);
+const cur = curAll.filter(methodOk);
+const not_compared_method = prev && !methodSame ? [...new Set([...prevAll, ...curAll].filter(jsDep).map(f => String(f.title || '')))].slice(0, 12) : [];
 const not_compared = [...new Set((a.findings || []).filter(f => f.scoring !== false && f.severity !== 'Info' && !inScope(f)).map(f => String(f.category || '')))].filter(Boolean);
 const curKeys = new Map(cur.map(f => [keyOf(f), f])); const prevKeys = new Map(prevF.map(f => [f.finding_key, f]));
 const SEV = { Critical: 0, High: 1, Medium: 2, Low: 3, Info: 4 };
@@ -456,27 +488,26 @@ const changedSince128 = (e) => prevChecks128 ? e.since > prevChecks128 : !(e.at 
 const checkChange = (f) => { if (!prev) return null; const hits = CHECK_CHANGES.filter(e => e.re.test(String(f.title || '')) && changedSince128(e)); return hits.length ? hits[hits.length - 1] : null; };
 const checkVersionOf = (f) => CHECK_CHANGES.filter(e => e.re.test(String(f.title || ''))).map(e => e.since).sort().pop() || '';
 // ---- rule 1, like for like: a crawl that ran JavaScript is not compared with one that did not (or with one that did not record it) ----
-const JS_DEP = /AI crawlers see a different version|after JavaScript|written by JavaScript|not in the first response|built without a real <a href>/i;
-const curJs = !!base.crawl_js;
-const prevJs = prev ? (prev.crawl_js === true || prev.crawl_js === 'true' ? true : (prev.crawl_js === false || prev.crawl_js === 'false') ? false : null) : null;
-const jsMismatch = !!prev && prevJs !== curJs;
-const jsDep = (f) => jsMismatch && (JS_DEP.test(String((f || {}).title || '')) || (f || {}).source === 'render_diff');
-const js_not_compared = jsMismatch ? [...new Set([...[...prevKeys.values()].filter(jsDep), ...cur.filter(jsDep)].map(f => String(f.title || '')))] : [];
-const gone = [...prevKeys.entries()].filter(([k]) => !curKeys.has(k)).filter(([, f]) => !jsDep(f)).map(([k, f]) => { const cc = checkChange(f); return { key: k, title: f.title, category: f.category, severity: f.severity, one_reading: oneReading(f), check_changed: cc ? cc.since.slice(0, 10) + ': ' + cc.what : '' }; }).sort((x, y) => SEV[x.severity] - SEV[y.severity]);
+// (C-5, F-C) Audit_Diff.js reads both audits' crawl method (curJs / prevJs / methodSame) and defines JS_DEP / jsDep; reused here:
+// a JavaScript-dependent finding is held out only when the two crawls differ or one is unknown
+const jsMismatch = !!prev && !methodSame;
+const jsDepB = (f) => jsMismatch && jsDep(f);
+const js_not_compared = not_compared_method;   // F-C's list: both sides' JavaScript-dependent findings, held out before the keys were built
+const gone = [...prevKeys.entries()].filter(([k]) => !curKeys.has(k)).filter(([, f]) => !jsDepB(f)).map(([k, f]) => { const cc = checkChange(f); return { key: k, title: f.title, category: f.category, severity: f.severity, one_reading: oneReading(f), check_changed: cc ? cc.since.slice(0, 10) + ': ' + cc.what : '' }; }).sort((x, y) => SEV[x.severity] - SEV[y.severity]);
 const fixed = gone.filter(f => !f.one_reading && !f.check_changed).map(({ one_reading, check_changed, key, ...f }) => f);
 const no_longer_reported = gone.filter(f => !f.one_reading && f.check_changed).map(({ one_reading, check_changed, key, ...f }) => ({ ...f, why: 'our check changed (' + check_changed + '), so this is not counted as fixed: nothing on the site has to have changed' }));   // B-5
 const no_longer_seen = gone.filter(f => f.one_reading).map(({ one_reading, check_changed, key, ...f }) => ({ ...f, why: 'it rested on a single outside reading (a results page, an AI answer or a content review) that did not repeat this time; nothing on the site has to have changed' }));
-const added0 = [...curKeys.entries()].filter(([k]) => prev && !prevKeys.has(k)).filter(([, f]) => !jsDep(f)).map(([, f]) => { const cc = checkChange(f); return { title: f.title, category: f.category, severity: f.severity, ...(oneReading(f) ? { one_reading: true } : {}), ...(cc ? { check_changed: cc.since.slice(0, 10) + ': ' + cc.what } : {}) }; }).sort((x, y) => SEV[x.severity] - SEV[y.severity]);
+const added0 = [...curKeys.entries()].filter(([k]) => prev && !prevKeys.has(k)).filter(([, f]) => !jsDepB(f)).map(([, f]) => { const cc = checkChange(f); return { title: f.title, category: f.category, severity: f.severity, ...(oneReading(f) ? { one_reading: true } : {}), ...(cc ? { check_changed: cc.since.slice(0, 10) + ': ' + cc.what } : {}) }; }).sort((x, y) => SEV[x.severity] - SEV[y.severity]);
 const added = added0.filter(f => !f.check_changed);
 const newly_checked = added0.filter(f => f.check_changed).map(f => ({ ...f, why: 'found by a check that changed since the previous audit (' + f.check_changed + '): it may have been there before' }));   // B-5
 // the keys the engine does NOT count as fixed, for the app's own lists (seo_audits.not_fixed_json)
 const not_fixed = gone.filter(f => f.one_reading || f.check_changed).map(f => ({ key: f.key, why: f.check_changed ? 'check changed ' + f.check_changed : 'one outside reading' }))
-  .concat(jsMismatch ? [...prevKeys.entries()].filter(([k, f]) => !curKeys.has(k) && jsDep(f)).map(([k]) => ({ key: k, why: 'not compared: the crawl ' + (prevJs == null ? 'of the previous audit did not record whether it ran JavaScript' : (curJs ? 'ran JavaScript this time and not before' : 'did not run JavaScript this time')) })) : []);
+  .concat(jsMismatch ? [...new Set(prevAll.filter(f => jsDepB(f)).map(f => f.finding_key).filter(Boolean))].map((k) => ({ key: k, why: 'not compared: the crawl ' + (prevJs == null ? 'of the previous audit did not record whether it ran JavaScript' : (curJs ? 'ran JavaScript this time and not before' : 'did not run JavaScript this time')) })) : []);
 // R19 (2026-10-14, FIX_PLAN §3.12): two counts measured on samples of different sizes are not a change. The technical audit of
 // execution 550 reported "15 → 4 affected" as an improvement because 31 of 45 URL inspections had failed and the sample had
 // shrunk from 25 pages to 14 — nobody said so. Where the samples differ by more than RT.MAX_SAMPLE_DRIFT (20%), or where the
 // earlier audit did not record its sample at all, the delta is not printed: the report says the sample moved.
-const open = [...curKeys.entries()].filter(([k]) => prevKeys.has(k)).filter(([, f]) => !jsDep(f)).map(([k, f]) => {
+const open = [...curKeys.entries()].filter(([k]) => prevKeys.has(k)).filter(([, f]) => !jsDepB(f)).map(([k, f]) => {
   const p = prevKeys.get(k);
   const now = f.affected_count ?? null; const before = Number(p.affected_count) || null;
   const checked = f.checked == null ? null : Number(f.checked); const checkedBefore = Number(p.checked) || null;
@@ -492,7 +523,7 @@ const audited_at = new Date().toISOString();
 const days = prev ? Math.round((Date.now() - new Date(prev.audited_at).getTime()) / 864e5) : null;
 const audit_diff = prev ? { baseline: false, report_type: curType, previous: { audit_id: prev.audit_id, audited_at: prev.audited_at, report_type: prev.report_type, health_score: Number(prev.health_score), grade: prev.grade, findings: Number(prev.findings) || prevF.length }, days_since: days,
   score_delta: (Number(a.health_score) || 0) - (Number(prev.health_score) || 0), fixed, new: added, open, not_compared, sample_moved,
-  no_longer_seen, no_longer_reported, newly_checked, js_not_compared, checks_version: CHECKS_VERSION, previous_checks_version: prevChecks128 || null, crawl_js: curJs, previous_crawl_js: prevJs,
+  no_longer_seen, no_longer_reported, newly_checked, js_not_compared, checks_version: CHECKS_VERSION, previous_checks_version: prevChecks128 || null, crawl_js: curJs === true, previous_crawl_js: prevJs,
   summary: fixed.length + ' fixed · ' + added.length + ' new · ' + open.length + ' still open' + (no_longer_seen.length ? ' · ' + no_longer_seen.length + ' no longer seen' : '')
     + (no_longer_reported.length ? ' · ' + no_longer_reported.length + ' no longer reported (our check changed)' : '') + (newly_checked.length ? ' · ' + newly_checked.length + ' found by a changed check' : '') + ' (compared with the ' + labelOf(curType) + ' of ' + String(prev.audited_at).slice(0, 10) + ')'
     + (no_longer_seen.length ? '. ' + no_longer_seen.length + ' finding(s) rested on a single outside reading (a results page, an AI answer or a content review) that did not repeat, so they are not counted as fixed' : '')
@@ -502,6 +533,11 @@ const audit_diff = prev ? { baseline: false, report_type: curType, previous: { a
         open.filter(f => f.sample_changed && !f.checked_before).length ? open.filter(f => f.sample_changed && !f.checked_before).length + ' were stored last time without the number of pages they were measured on' : ''].filter(Boolean).join(', and ') + ' (shown with each).' : '')
     + (not_compared.length ? '. ' + not_compared.join(', ') + ' ' + (not_compared.length === 1 ? 'is' : 'are') + ' not assessed by a ' + labelOf(curType) + ', so those findings are shown but not compared.' : '') }
   : { baseline: true, report_type: curType, not_compared, summary: 'First ' + labelOf(curType) + ' stored: the next one shows what was fixed, what is new and what is still open.' + (otherType ? ' The ' + labelOf(otherType.report_type) + ' of ' + String(otherType.audited_at).slice(0, 10) + ' is a different report type and is not compared.' : '') };
+// C-5: the crawl method of both audits, on the diff, and the findings left out because it changed (added after the build's patches of the literal)
+audit_diff.crawl_js = curJs; audit_diff.basis = { ...(audit_diff.basis || {}), crawl_js: curJs, previous_crawl_js: prevJs, method_same: prev ? methodSame : null };
+if (!audit_diff.baseline) { audit_diff.not_compared_method = not_compared_method;
+  if (not_compared_method.length) audit_diff.summary += '. This audit ran ' + jsWord(curJs) + ' and the one before ' + jsWord(prevJs) + ', so the ' + not_compared_method.length
+    + ' finding(s) that depend on rendering are not compared (' + not_compared_method.slice(0, 3).map(t => '\u201c' + t + '\u201d').join(', ') + ')'; }
 // ---- internal links: targets that need links, sources on the same topic that already carry authority ----
 const pages = ($('Get Crawled Pages Answers').first().json.tasks?.[0]?.result?.[0]?.items || []).filter(p => p && p.status_code === 200 && p.resource_type === 'html' && !(p.checks || {}).is_redirect && !/(\?|\/(tag|category|author|page)\/|\/feed\/?$)/i.test(p.url));
 const norm = (u) => String(u || '').toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
@@ -524,4 +560,4 @@ for (const t of targets) { const tt = topicOf(t); if (!tt.size) continue;
   for (const b of best) internal_links.push({ from_url: b.s.url, to_url: t.url, anchor: ((s) => s.length <= 70 ? s : s.slice(0, 70).replace(/\s+\S*$/, '').replace(/[\s:,;–—-]+$/, ''))(titleOf(t)) || [...tt].slice(0, 4).join(' '), reason: ((t.checks || {}).is_orphan_page || inl(t) === 0 ? 'orphan page (no links in)' : inl(t) + ' internal link(s) in') + ((shown.get(norm(t.url)) || 0) ? '; ' + shown.get(norm(t.url)) + ' impressions in 28 days' : '') }); }
 return [{ json: { ...d, audit_id, audited_at, site_id, site_audit: { ...a, audit_id, audited_at, audit_diff, internal_links: internal_links.slice(0, 20),
   // B-5 + rule 1: what the stored rows need to be compared like for like next time
-  findings: (a.findings || []).map(f => ({ ...f, check_version: checkVersionOf(f) })), checks_version: CHECKS_VERSION, crawl_js: curJs, not_fixed: prev ? not_fixed : [] } } }];
+  findings: (a.findings || []).map(f => ({ ...f, check_version: checkVersionOf(f) })), checks_version: CHECKS_VERSION, crawl_js: curJs === true, not_fixed: prev ? not_fixed : [] } } }];

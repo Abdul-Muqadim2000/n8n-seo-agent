@@ -26,6 +26,7 @@ import { getRun, requireScope, siteOf, toRunV1, type V1Ctx } from './apiV1';
 import { pipelineData } from './pipeline';
 import { createRunWithMeta, estimateCost, findIdempotentRun } from './runs';
 import { creatorMembership } from './apiKeys';
+import { audit } from './audit';
 import { monthSpend } from './spend';
 
 /**
@@ -156,6 +157,15 @@ export async function startRunV1(ctx: V1Ctx, rawBody: unknown, idempotencyKey: s
 
   const { run, replayed } = await createRunWithMeta(actor, input, { apiKeyId: ctx.key?.id ?? null, idempotency: idem });
   const full = await getRun(ctx, run.id);
+  // G1's audit log: an analysis started through the API (REST or MCP), named with the key that started it
+  if (!replayed)
+    await audit(ctx.req ?? null, ctx.org.id, {
+      action: 'run.started_via_api',
+      actor: { type: 'user', userId: actor.user.id, label: ctx.key ? `${actor.user.email} via API key ${ctx.key.name} (${ctx.key.prefix}…)` : actor.user.email },
+      target: { type: 'run', id: run.id, label: run.title },
+      outcome: run.status === 'failed' ? 'failure' : 'success',
+      details: { mode: input.mode, estimatedUsd: estimate, via: ctx.key ? 'api_key' : 'session', status: run.status },
+    });
   return { status: replayed ? 200 : 201, replayed, body: { run: full.run, notices } };
 }
 

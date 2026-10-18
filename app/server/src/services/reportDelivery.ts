@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { and, asc, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
 import {
   DEFAULT_DELIVERY_SETTINGS,
   DELIVERY,
@@ -164,7 +164,7 @@ async function recipients(org: OrgRow, s: DeliverySettings): Promise<string[]> {
     .select({ email: schema.users.email })
     .from(schema.memberships)
     .innerJoin(schema.users, eq(schema.memberships.userId, schema.users.id))
-    .where(eq(schema.memberships.orgId, org.id))
+    .where(and(eq(schema.memberships.orgId, org.id), isNull(schema.memberships.deactivatedAt)))
     .limit(DELIVERY.maxRecipients);
   return rows.map((r) => r.email).filter(Boolean);
 }
