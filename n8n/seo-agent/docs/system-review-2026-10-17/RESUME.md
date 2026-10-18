@@ -103,6 +103,7 @@ Before each phase, read §3 / §8 to see what is already done.
 - 2026-10-18 15:00 PKT — **Phase E done: G5 merged** (white-label client portal: agency → client workspaces, client roles below viewer, branding with AA tokens, custom portal domains with TXT + CNAME proof and takeover guard, branded e-mail, client approvals, agency overview; migration 0013; 69 browser visits, no "Ascentra" on client surfaces). App 486 / 494 / 42; real-DB suites crawlers 12, CMS 18, integrations 16 on migrations 0000–0013. **Overnight plan complete; only the deploy (§9) and the live checks remain — the owner's.**
 - 2026-10-18 PKT — **business site audited and completed** (`app/docs/MARKETING_AUDIT_2026-10-18.md`, 26 capabilities): new pages for AI growth and link building (both shipped, never advertised), enterprise solution page, catch-up, schedule, security groups, out-of-date claims fixed, counts from the registry (17 capabilities); 132 browser visits clean. Dev app server restarted: migrations 0000–0013 applied, all five new features available in the dev app.
 - 2026-10-18 PKT — owner asked to expand the AI question panel fully regardless of price: **agent G6 started** (panel up to 500, personas / clusters / markets, every DataForSEO AI engine that works, rotating pulse, per-cluster stats, cost in engine + app, panel manager UI, marketing), worktree branch, handoff `n8n/seo-agent/docs/AI_PANEL_SCALE_HANDOFF.md`. Hosting discussed: frontend on Vercel, backend + n8n on Railway (EU West) or a DO droplet; deployment-prep agent offered, not started.
+- 2026-10-18 PKT — **G6 merged** (AI question panel up to 500, personas / topics / markets, split weekly runs, rotating pulse, per-segment stats, panel manager; handoff `n8n/seo-agent/docs/AI_PANEL_SCALE_HANDOFF.md` §4 owner steps, §5 live checks); harness 7125 / 0, app 518 / 500 / 42.
 
 ## 9. Deploy checklist for the owner (Phase C — prepared, not run)
 
@@ -121,5 +122,12 @@ What it does with the merged code:
   G1 `IDENTITY_KEY` (falls back to `MAILBOX_KEY`), `MFA_ISSUER`, `SSO_ALLOW_PRIVATE_HOSTS`; G5 `PORTAL_CNAME_TARGET`, `APP_EXTRA_HOSTS`,
   `PORTAL_STRICT_HOSTS`, `PORTAL_DOMAIN_CHECK_HOURS`, `PORTAL_JOBS`. **`MAILBOX_KEY` must be set** or CMS / integrations / two-step
   secrets cannot be stored.
+
+**Added by G6 (AI panel at scale):** before the deploy put `N8N_DATA_TABLES_MAX_SIZE_BYTES=1073741824` in `n8n/.env` (n8n's 200 MB
+Data Table default is too small for a large panel). `sync_tables.py` then adds `seo_monitors.ai_personas` / `ai_markets` /
+`ai_pulse_mode` / `ai_pulse_per_week`, `seo_ai_prompts.persona` / `market` / `pinned` / `fit_note`, `seo_ai_visibility.segments_json` /
+`panel_json` / `chunks`, `seo_ai_daily.sample_json`. After the deploy: raise techand.ai's panel to 100 in the app (Settings → Tracking &
+monitors → Questions tracked), "Check now" (≈ $5.6 + $0.15 to write ~92 questions — top up DataForSEO first), then 200 a week later.
+One live call each must confirm the new ChatGPT API / Gemini API request fields (handoff §5).
 
 Right after the deploy: the live checks of §5 (≈ $0.8 DataForSEO) — tell the orchestrator "run the live checks".
