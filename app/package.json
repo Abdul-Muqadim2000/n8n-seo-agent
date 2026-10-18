@@ -22,5 +22,8 @@
   },
   "overrides": {
     "xml-crypto": "6.3.2"
+  },
+  "devDependencies": {
+    "@vercel/functions": "^3.10.1"
   }
 }

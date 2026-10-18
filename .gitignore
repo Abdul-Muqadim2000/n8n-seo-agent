@@ -10,3 +10,6 @@ __pycache__/
 
 # Brand kits (shipped as zips; the extracted assets live in app/web/brand and app/web/public)
 *-brand-kit.zip
+
+# Vercel CLI link (vercel link)
+.vercel/

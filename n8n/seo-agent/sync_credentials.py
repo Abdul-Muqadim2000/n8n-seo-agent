@@ -74,6 +74,11 @@ def main():
     if not out: print('nothing to import'); return
     print('credentials to import:', ', '.join(c['id'] + ':' + c.pop('_mode') for c in out))
     if dry: return
+    if '--out' in args:   # a remote instance (DEPLOY.md): the release step imports this file, base64 in SEO_CREDENTIALS_B64
+        dest = args[args.index('--out') + 1]
+        fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600); os.write(fd, json.dumps(out).encode('utf-8')); os.close(fd)
+        print('written to', dest, '(0600, plaintext secrets: put it in the host\'s secret store, then delete it)')
+        return
     fd, path = tempfile.mkstemp(suffix='.json'); os.write(fd, json.dumps(out).encode('utf-8')); os.close(fd); os.chmod(path, 0o644)   # the n8n CLI runs as user node inside the container
     try:
         subprocess.run(['docker', 'cp', path, CONTAINER + ':/tmp/seo_creds.json'], check=True)
