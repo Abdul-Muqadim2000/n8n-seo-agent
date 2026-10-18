@@ -115,6 +115,11 @@ export function useMe() {
     },
     staleTime: 60_000,
     retry: noRetryOn4xx,
+    // with the API down (a 503), the failed query must stay failed: by default every component that starts reading it retries it,
+    // which puts it back to pending — RootRoute then swaps the home page for its loader, the header unmounts, the retry fails and
+    // the header mounts again: an endless loop of /api/me behind "Loading…" (alaventra.com, 2026-10-18). A reload or an explicit
+    // refetch still tries again.
+    retryOnMount: false,
   });
 }
 
