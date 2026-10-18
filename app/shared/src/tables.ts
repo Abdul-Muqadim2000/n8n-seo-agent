@@ -108,12 +108,16 @@ export interface MonitorsRow extends DtRow {
   ai_growth: boolean | null; ai_pages_month: number | null;
   /** v4.13 (empty = on) */
   link_builder: boolean | null;
+  /** G6 (2026-10-18): buyer roles and extra markets (CC-lang) the panel covers; the pulse's sampling ('' auto | sample | full) and mornings a week (empty = auto) */
+  ai_personas?: string; ai_markets?: string; ai_pulse_mode?: string; ai_pulse_per_week?: number | null;
 }
 export interface AiPromptRow extends DtRow {
   prompt_id: string; site_id: string; domain: string; prompt: string; kind: string; topic: string; keyword: string;
   source: string; status: string; created_at: string;
   /** v4.9: buyer stage, topic cluster, monthly AI search volume (null = not looked up yet), where the question came from */
   stage: string; cluster: string; volume: number | null; origin: string; updated_at: string;
+  /** G6 (2026-10-18): buyer role, market (CC-lang), pinned by the owner, and the fit gate's sentence when status is 'refused' */
+  persona?: string; market?: string; pinned?: boolean | null; fit_note?: string;
 }
 export interface AiAnswerRow extends DtRow {
   site_id: string; domain: string; run_id: string; checked_at: string; prompt_id: string; prompt: string; kind: string;
@@ -133,6 +137,8 @@ export interface AiVisibilityRow extends DtRow {
   run_kind: string; samples: number; visibility_score: number; mention_lo: number; mention_hi: number; sentiment_score: number | null;
   accuracy_issues: number; ai_sessions: number | null; ai_conversions: number | null; ai_revenue: number | null; index_sov: number | null;
   ai_impressions: number | null; perception_json: string; traffic_json: string; access_json: string; index_json: string; clusters_json: string;
+  /** G6 (2026-10-18): rates per engine x cluster x buyer role x market x stage (compact: one array per segment), the panel asked, the executions it took */
+  segments_json?: string; panel_json?: string; chunks?: number | null;
 }
 /** v4.12 (n8n/seo-agent/AI_GROWTH_SPEC.md): the AI growth loop's key pages — can AI read and quote them, Bing's crawl, submission */
 export interface AiPageRow extends DtRow {
@@ -155,6 +161,8 @@ export interface AiDailyRow extends DtRow {
   site_id: string; domain: string; date: string; checked_at: string; run_id: string; samples: number; mentioned: number; cited: number;
   mention_rate: number; citation_rate: number; share_of_voice: number; visibility_score: number; engines_json: string; prompts_json: string;
   competitors_json: string; sources_json: string; alerts: string; cost_usd: number;
+  /** G6 (2026-10-18): the morning's rotating sample (mode, N a week, questions asked of the panel, strata covered) */
+  sample_json?: string;
 }
 export interface BacklinkSnapshotRow extends DtRow {
   site_id: string; domain: string; checked_at: string; mode: string; rank: number; backlinks: number; referring_domains: number;

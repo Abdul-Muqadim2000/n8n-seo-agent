@@ -82,6 +82,14 @@ export const monitorSettingsSchema = z.object({
   aiPromptsMax: z.number().int().min(3).max(AI_PROMPTS_MAX).default(AI_PROMPTS_DEFAULT),
   /** v4.9: the daily AI Pulse (ChatGPT, Gemini and Google AI Mode on the whole panel, Tuesday to Sunday) */
   aiPulse: z.boolean().default(true),
+  /** G6 (2026-10-18): the buyer roles the panel is written for (e.g. CFO, IT manager) — empty: the writer picks */
+  aiPersonas: stringList(6, 40),
+  /** G6: extra markets the panel is asked in, as country-language (e.g. SA-en, AE-ar); the website's own market is always included */
+  aiMarkets: z.array(z.string().trim().regex(/^[A-Za-z]{2}([-_ ][A-Za-z]{2,3})?$/, 'Use a country code and a language, e.g. SA-en')).max(5).default([]),
+  /** G6: how the daily pulse covers a big panel: auto (all of it up to 50 questions, a rotating sample above), sample, or every question */
+  aiPulseMode: z.enum(['auto', 'sample', 'full']).default('auto'),
+  /** G6: mornings a week each question is asked in a rotating sample (0 = chosen for the precision targets) */
+  aiPulsePerWeek: z.number().int().min(0).max(6).default(0),
   /** v4.12: the weekly AI growth loop (Bing / IndexNow submission, AI-readiness checks, earned-media list + drafts, questions to win) */
   aiGrowth: z.boolean().default(true),
   /** v4.12: AI answer / refresh pages a month written by the Monday content run (0 = none; the loop still plans them) */
@@ -436,6 +444,27 @@ export const contentGroupSchema = z.object({
 });
 export type ContentGroup = z.output<typeof contentGroupSchema>;
 
+// G6 (2026-10-18): one question of the AI panel as the owner types or imports it
+const aiQuestionText = z.string().trim().min(10, 'Questions need at least 10 characters').max(300);
+export const aiQuestionSchema = z.object({
+  prompt: aiQuestionText,
+  persona: z.string().trim().max(40).default(''),
+  cluster: z.string().trim().max(60).default(''),
+  stage: z.enum(['', 'awareness', 'consideration', 'decision']).default(''),
+  market: z.string().trim().regex(/^([A-Za-z]{2}([-_ ][A-Za-z]{2,3})?)?$/, 'Use a country code and a language, e.g. SA-en').default(''),
+  pinned: z.boolean().default(false),
+});
+export type AiQuestionInput = z.output<typeof aiQuestionSchema>;
+export const aiQuestionEditSchema = z.object({
+  promptId: z.string().trim().min(1).max(80),
+  prompt: aiQuestionText.optional(),
+  persona: z.string().trim().max(40).optional(),
+  cluster: z.string().trim().max(60).optional(),
+  stage: z.enum(['awareness', 'consideration', 'decision']).optional(),
+  market: z.string().trim().regex(/^[A-Za-z]{2}([-_ ][A-Za-z]{2,3})?$/, 'Use a country code and a language, e.g. SA-en').optional(),
+  pinned: z.boolean().optional(),
+});
+
 export const adminActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('pause') }),
   z.object({ action: z.literal('resume') }),
@@ -462,8 +491,14 @@ export const adminActionSchema = z.discriminatedUnion('action', [
   }),
   z.object({
     action: z.literal('ai_prompts'),
-    add: z.array(z.string().trim().min(10, 'Questions need at least 10 characters').max(300)).max(15).default([]),
-    remove: z.array(z.string().trim().min(1).max(300)).max(50).default([]),
+    // G6 (2026-10-18): the panel manager — add up to 500 (text, or a question with its buyer role / cluster / stage / market / pin: the CSV
+    // import), edit in place (new wording becomes a new question; the engine switches the old one off), off / on, pin / unpin
+    add: z.array(z.union([aiQuestionText, aiQuestionSchema])).max(AI_PROMPTS_MAX, `At most ${AI_PROMPTS_MAX} questions at once`).default([]),
+    remove: z.array(z.string().trim().min(1).max(300)).max(AI_PROMPTS_MAX).default([]),
+    enable: z.array(z.string().trim().min(1).max(300)).max(AI_PROMPTS_MAX).default([]),
+    pin: z.array(z.string().trim().min(1).max(300)).max(AI_PROMPTS_MAX).default([]),
+    unpin: z.array(z.string().trim().min(1).max(300)).max(AI_PROMPTS_MAX).default([]),
+    edit: z.array(aiQuestionEditSchema).max(AI_PROMPTS_MAX).default([]),
   }),
 ]);
 export type AdminAction = z.output<typeof adminActionSchema>;

@@ -15,6 +15,22 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-18',
+    title: 'AI visibility at enterprise scale: up to 500 questions, by buyer role and market',
+    summary:
+      'The AI question panel grows from 50 to 500 buyer questions, written for each buyer role and market you choose, and every figure is now shown per topic, buyer role, market and engine — each with its 95% range. Two more engines can be added, and the cost of any panel is shown before you save.',
+    highlights: [
+      'Up to 500 questions per website, asked in full every week on every engine you choose (a new website starts with 50)',
+      'Questions written for each buyer role (CFO, IT manager …) and market (country and language), from real AI questions, Google’s “People also ask”, your Search Console queries and your competitors’ topics; repeats in other words are dropped, and a question that names another company or a government service is refused with the reason',
+      'A question panel you manage: filter by topic, role, market or an engine’s result; import a CSV; pin, edit, re-word or switch off',
+      'Rates per topic, buyer role, market and engine with 95% ranges, “too few answers” where a group needs more, and changes called real only when they clear a false-discovery-rate screen across every group',
+      'Above 50 questions the daily AI Pulse asks a rotating sample that covers every topic and buyer role every morning; choose how many mornings each question gets, or ask every question every morning',
+      'Microsoft Copilot, the ChatGPT API and the Gemini API as optional engines',
+      'What a panel costs a week, a morning and a month — and how precise it will be — shown before you save; the same figures through the read API and to AI assistants',
+    ],
+    features: ['ai-visibility'],
+  },
+  {
+    date: '2026-10-18',
     title: 'A client portal for agencies, under your own name',
     summary:
       'Agencies get a workspace per client, one table of every client website, client logins with approvals, and a portal that carries your brand — on your own address, with e-mails from your own mailbox.',

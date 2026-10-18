@@ -44,6 +44,7 @@ def src(p):   # a Code node source with the shared snippets inlined
     s = s.replace('/*__AB__*/', rd('code/_ab.js').rstrip('\n'))   # L7: two subjects a batch, and no verdict under 30 sends per variant
     s = s.replace('/*__DFS_RETRY__*/', rd('code/_dfs_retry.js').rstrip('\n'))   # R18 / R19 / B-L4 / B-L5: the in-200 retry rule and the two like-for-like guards (RT.comparable, RT.likeForLike)
     s = s.replace('/*__LINK_KIT__*/', rd('code/_link_kit.js')).replace('/*__OUTREACH_KIT__*/', rd('code/_outreach_kit.js')).replace('/*__LISTINGS__*/', rd('code/_listings.js')).replace('/*__CLAIMS__*/', rd('code/_claims.js')).replace('/*__DRAFT_QA__*/', rd('code/_draft_qa.js')).replace('__BING_ENABLED__', 'true' if BING_ON else 'false').replace('__AHREFS_ENABLED__', 'true' if AHREFS_ON else 'false')
+    s = s.replace('/*__AI_PANEL__*/', rd('code/_ai_panel.js').rstrip('\n'))   # G6 (2026-10-18): the AI question panel at scale (limits, markets, strata, chunks, the one cost formula)
     s = s.replace('/*__RIVALS__*/', rd('code/_rivals.js').rstrip('\n'))   # C-2 / C-8 (2026-10-17): the one rival set and the category-provider rule (inside the outreach kit, and in AI Metrics)
     s = s.replace('/*__COUNTRIES__*/', "// ---- countries: copied from the main workflow's Normalize Input by build_monitors.py (DataForSEO location code = 2000 + ISO numeric) ----" + _COUNTRIES.group(0))
     assert '/*__' not in s and '_ENABLED__' not in s, p + ': placeholder left'
@@ -331,13 +332,16 @@ SINCE = lambda days: '={{ new Date(Date.now() - ' + str(days) + ' * 864e5).toISO
 A.node('Load AI Daily', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_DAILY_TABLE, [('checked_at', 'gte', SINCE(15))]), at(8, 1), **LOAD)
 A.node('Load Cache (AI)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'ai'), at(9, 1), **LOAD)
 A.node('Load Query History', DT_TYPE, DT_VERSION, dt_get_all_where_params(QUERY_TABLE, [('checked_at', 'gte', SINCE(35))]), at(10, 1), **LOAD)
-loads += [('Load AI Daily', None), ('Load Cache (AI)', None), ('Load Query History', None)]
+# G6 (2026-10-18): the answers earlier executions of an unfinished split run stored (a run is resumed for at most 6 days; the pulse's rows are
+# not this run's). AI Plan reads which questions x engines are answered, AI Metrics measures the whole run over them in its last execution.
+A.node('Load AI Run Answers', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_ANSWERS_TABLE, [('run_kind', 'neq', 'pulse'), ('checked_at', 'gte', SINCE(6.2))]), at(10, 2), **LOAD)
+loads += [('Load AI Daily', None), ('Load Cache (AI)', None), ('Load Query History', None), ('Load AI Run Answers', None)]
 A.code('AI Plan', 'AI_Plan.js', at(11, 1)); A.iff('Any Sites (AI)?', '{{ !$json.nothing_to_do }}', at(12, 1)); A.node('Nothing To Do (AI)', 'n8n-nodes-base.noOp', 1, {}, at(13, 2))
 A.code('Site Text Jobs', 'Site_Text_Jobs.js', at(13, -2)); A.iff('Need Site Text?', '{{ !$json.skip }}', at(14, -2))
 A.node('Read Site (AI)', 'n8n-nodes-base.httpRequest', 4.5, {'url': '=https://r.jina.ai/https://{{ $json.domain }}', 'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth', 'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'X-Retain-Images', 'value': 'none'}]}, 'options': {'response': {'response': {'responseFormat': 'text', 'outputPropertyName': 'site_text'}}, 'timeout': 30000}}, at(15, -3), credentials={'httpHeaderAuth': {'id': 'SEOcredJinaReade', 'name': 'Jina Reader'}}, onError='continueRegularOutput', **retry_lint.RETRY)
 A.code('Discovery Requests', 'Discovery_Requests.js', at(16, -2)); A.iff('Any Discovery?', '{{ !$json.skip }}', at(17, -2)); A.dfs_http('Run Discovery', at(18, -3), batch=4, interval=300, timeout=120000)
 A.code('Prompt Jobs', 'Prompt_Jobs.js', at(19, -2)); A.iff('Any Prompt Jobs?', '{{ !$json.skip }}', at(20, -2))
-A.agent('Prompt Writer', 'ai_prompts.txt', {'type': 'object', 'properties': {'prompts': {'type': 'array', 'items': {'type': 'object', 'properties': {'prompt': {'type': 'string'}, 'kind': {'type': 'string'}, 'stage': {'type': 'string'}, 'cluster': {'type': 'string'}, 'keyword': {'type': 'string'}, 'origin': {'type': 'string'}}, 'required': ['prompt']}}}, 'required': ['prompts']}, at(21, -3))
+A.agent('Prompt Writer', 'ai_prompts.txt', {'type': 'object', 'properties': {'prompts': {'type': 'array', 'items': {'type': 'object', 'properties': {'prompt': {'type': 'string'}, 'kind': {'type': 'string'}, 'stage': {'type': 'string'}, 'cluster': {'type': 'string'}, 'keyword': {'type': 'string'}, 'origin': {'type': 'string'}, 'persona': {'type': 'string'}}, 'required': ['prompt']}}}, 'required': ['prompts']}, at(21, -3))   # G6: + persona (one job per market x buyer role)
 A.code('Prompt Rows', 'Prompt_Rows.js', at(22, -2)); A.iff('Any Prompt Rows?', '{{ !$json.skip }}', at(23, -2))
 A.node('Save Prompts', DT_TYPE, DT_VERSION, dt_upsert_params(AI_PROMPTS_TABLE, AI_PROMPTS_COLS, 'prompt_id'), at(24, -3), onError='continueRegularOutput')
 A.code('Traffic Requests', 'Traffic_Requests.js', at(13, 0)); A.iff('Any GA4 (AI)?', '{{ !$json.skip }}', at(14, 0))
@@ -354,13 +358,24 @@ A.code('Analyst Jobs', 'Analyst_Jobs.js', at(24, 0)); A.iff('Any Analyst Jobs?',
 A.agent('Answer Analyst', 'answer_analyst.txt', {'type': 'object', 'properties': {'answers': {'type': 'array', 'items': {'type': 'object', 'properties': {'n': {'type': 'number'}, 'brands': {'type': 'array', 'items': {'type': 'object', 'properties': {'name': {'type': 'string'}, 'domain': {'type': 'string'}}, 'required': ['name']}}, 'sentiment': {'type': 'string'}, 'why': {'type': 'string'}, 'wrong': {'type': 'array', 'items': {'type': 'object', 'properties': {'claim': {'type': 'string'}, 'correct': {'type': 'string'}}, 'required': ['claim']}}}, 'required': ['n']}}, 'descriptors': ARR}, 'required': ['answers']}, at(26, -1))
 A.code('Apply Analysis', 'Apply_Analysis.js', at(27, 0)); A.iff('Any Answer Rows?', '{{ !$json.skip }}', at(28, 0))
 A.node('Save AI Answers', DT_TYPE, DT_VERSION, dt_insert_params(AI_ANSWERS_TABLE, AI_ANSWERS_COLS), at(29, -1), onError='continueRegularOutput')
-A.code('AI Metrics', 'AI_Metrics.js', at(10, 3)); A.code('AI Vis Rows', 'AI_Vis_Rows.js', at(11, 3))
+# G6 (2026-10-18): the hand-off between the executions of a split weekly run — the run's state row, and the start of the next execution
+A.code('AI Chunk Handoff', 'AI_Chunk_Handoff.js', at(30, 0))
+A.code('Run State Rows', "// G6: the split runs' state rows for seo_cache (upsert by key; exact columns).\nconst rows = $('AI Chunk Handoff').all().map(i => (i.json || {}).state_row).filter(Boolean);\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];", at(31, 0))
+A.iff('Any Run State?', '{{ !$json.skip }}', at(32, 0))
+A.node('Save Run State', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), at(33, -1), onError='continueRegularOutput')
+A.code('Next Chunk Starts', "// G6: one start item per site whose run continues (Manual Run reads domain / site_id + continue_run; parent_run_id keeps the run guard from\n// taking this execution's open ledger row for a twin). The state row is saved first, so the next execution finds what is answered.\nconst out = $('AI Chunk Handoff').all().map(i => (i.json || {}).next).filter(Boolean);\nreturn out.length ? out.map(j => ({ json: j })) : [{ json: { skip: true } }];", at(34, 0))
+A.iff('Any Next Chunk?', '{{ !$json.skip }}', at(35, 0))
+A.node('Start Next Chunk', 'n8n-nodes-base.executeWorkflow', 1.2, {'source': 'database', 'workflowId': {'__rl': True, 'mode': 'id', 'value': 'SEOagentAIVisib1'}, 'mode': 'each', 'options': {'waitForSubWorkflow': False}}, at(36, -1), onError='continueRegularOutput')
+A.code('AI Metrics', 'AI_Metrics.js', at(10, 3)); A.iff('Any Final Sites?', '{{ !$json.skip }}', at(10, 4)); A.code('AI Vis Rows', 'AI_Vis_Rows.js', at(11, 3))
+A.code('Chunk Part Done', "// G6: every site of this execution continues its split run in another execution — nothing to measure, report or deliver here.\nreturn [{ json: { done: true, part: true, note: ($('AI Metrics').first().json || {}).reason || '' } }];", at(11, 5))
 A.node('Save AI Visibility', DT_TYPE, DT_VERSION, dt_insert_params(AI_VIS_TABLE, AI_VIS_COLS), at(12, 3), onError='continueRegularOutput')
 A.code('AI Prospect Rows', 'AI_Prospect_Rows.js', at(13, 3)); A.iff('Any AI Prospects?', '{{ !$json.skip }}', at(14, 3))
 A.node('Save AI Prospects', DT_TYPE, DT_VERSION, dt_upsert_params_keys(PROSPECT_TABLE, PROSPECT_COLS, ['site_id', 'prospect_domain', 'type']), at(15, 2), onError='continueRegularOutput')
 A.code('AI Cache Rows', 'AI_Cache_Rows.js', at(16, 3)); A.iff('Any Cache Rows?', '{{ !$json.skip }}', at(17, 3))
 A.node('Save AI Cache', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), at(18, 2), onError='continueRegularOutput')
-A.node('Prune Old Answers', DT_TYPE, DT_VERSION, dt_delete_where_params(AI_ANSWERS_TABLE, [('checked_at', 'lt', SINCE(400))]), at(19, 3), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
+# G6 (2026-10-18): kept 120 days (was 400). A 500-question panel stores ~3,000 answer rows (~6.9 MB) a week and n8n holds ALL its Data Tables
+# in 200 MB by default (N8N_DATA_TABLES_MAX_SIZE_BYTES); the weekly figures, segments and panel of every run stay in seo_ai_visibility for good.
+A.node('Prune Old Answers', DT_TYPE, DT_VERSION, dt_delete_where_params(AI_ANSWERS_TABLE, [('checked_at', 'lt', SINCE(120))]), at(19, 3), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
 A.code('AI Brief Input', 'AI_Brief_Input.js', at(20, 3))
 A.agent('AI Brief', 'ai_brief.txt', {'type': 'object', 'properties': {'headline': {'type': 'string'}, 'summary': {'type': 'string'}, 'actions': {'type': 'array', 'items': {'type': 'object', 'properties': {'priority': {'type': 'number'}, 'action': {'type': 'string'}, 'why': {'type': 'string'}}, 'required': ['action']}}, 'watch': ARR}, 'required': ['headline', 'summary', 'actions']}, at(21, 3))
 A.code('AI Report', 'AI_Report.js', at(22, 3)); A.pdf_chain('AI', at(23, 3))
@@ -375,11 +390,14 @@ A.chain('Access Requests', 'Any Access?'); A.link('Any Access?', 'Fetch Access',
 A.chain('AI Access', 'AI Requests', 'Any AI Requests?'); A.link('Any AI Requests?', 'Run AI Requests', 0); A.link('Any AI Requests?', 'Parse AI Answers', 1)
 A.ai_retry_gate(at(22, 1), 'Parse AI Answers')   # D19: task errors inside an HTTP 200 are re-sent once, then merged back in order
 A.chain('Parse AI Answers', 'Analyst Jobs', 'Any Analyst Jobs?'); A.link('Any Analyst Jobs?', 'Answer Analyst', 0); A.link('Any Analyst Jobs?', 'Apply Analysis', 1); A.link('Answer Analyst', 'Apply Analysis')
-A.chain('Apply Analysis', 'Any Answer Rows?'); A.link('Any Answer Rows?', 'Save AI Answers', 0); A.link('Any Answer Rows?', 'AI Metrics', 1); A.link('Save AI Answers', 'AI Metrics')
-A.chain('AI Metrics', 'AI Vis Rows', 'Save AI Visibility', 'AI Prospect Rows', 'Any AI Prospects?'); A.link('Any AI Prospects?', 'Save AI Prospects', 0); A.link('Any AI Prospects?', 'AI Cache Rows', 1); A.link('Save AI Prospects', 'AI Cache Rows')
+A.chain('Apply Analysis', 'Any Answer Rows?'); A.link('Any Answer Rows?', 'Save AI Answers', 0); A.link('Any Answer Rows?', 'AI Chunk Handoff', 1); A.link('Save AI Answers', 'AI Chunk Handoff')
+A.chain('AI Chunk Handoff', 'Run State Rows', 'Any Run State?'); A.link('Any Run State?', 'Save Run State', 0); A.link('Any Run State?', 'Next Chunk Starts', 1); A.link('Save Run State', 'Next Chunk Starts')
+A.chain('Next Chunk Starts', 'Any Next Chunk?'); A.link('Any Next Chunk?', 'Start Next Chunk', 0); A.link('Any Next Chunk?', 'AI Metrics', 1); A.link('Start Next Chunk', 'AI Metrics')
+A.chain('AI Metrics', 'Any Final Sites?'); A.link('Any Final Sites?', 'AI Vis Rows', 0); A.link('Any Final Sites?', 'Chunk Part Done', 1)
+A.chain('AI Vis Rows', 'Save AI Visibility', 'AI Prospect Rows', 'Any AI Prospects?'); A.link('Any AI Prospects?', 'Save AI Prospects', 0); A.link('Any AI Prospects?', 'AI Cache Rows', 1); A.link('Save AI Prospects', 'AI Cache Rows')
 A.chain('AI Cache Rows', 'Any Cache Rows?'); A.link('Any Cache Rows?', 'Save AI Cache', 0); A.link('Any Cache Rows?', 'Prune Old Answers', 1); A.link('Save AI Cache', 'Prune Old Answers')
 A.chain('Prune Old Answers', 'AI Brief Input', 'AI Brief', 'AI Report', 'Prepare PDF AI', 'Render PDF AI', 'Attach PDF AI', 'Has Email (AI)?'); A.link('Attach PDF AI', 'Build AI Callback'); A.link('Build AI Callback', 'Has Callback (AI)?')
-A.run_ledger('ai_visibility', 'AI', 'AI Plan', ['AI Report'], at(12, 7), measured='AI Metrics')
+A.run_ledger('ai_visibility', 'AI', 'AI Plan', ['AI Report', 'Chunk Part Done'], at(12, 7), measured='AI Metrics|AI Chunk Handoff')   # G6: a part of a split run ends at Chunk Part Done and states its money in the hand-off
 # B-A10 (2026-10-15, INVARIANTS rule 3): the monthly question-discovery pull is the one paid call outside the AI gate D19 built.
 # Its failure is silent by construction — *Prompt Jobs* simply finds no new questions — so a 40101 inside a 200 shrinks next
 # month's panel with nobody told, and a smaller panel is exactly what B-L4 had to stop being read as a fall in visibility.
@@ -402,7 +420,11 @@ loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Mon
 for i, (nm, t) in enumerate(loads): Q.load(nm, t, at(1 + i, 1))
 Q.node('Load AI Daily', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_DAILY_TABLE, [('checked_at', 'gte', SINCE(15))]), at(7, 1), **LOAD)
 Q.node('Load Cache (AI)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'ai'), at(8, 1), **LOAD)
-Q.code('AI Plan', 'Pulse_Plan.js', at(9, 1)); Q.iff('Any Sites (Pulse)?', '{{ !$json.nothing_to_do }}', at(10, 1)); Q.node('Nothing To Do (Pulse)', 'n8n-nodes-base.noOp', 1, {}, at(11, 2))
+# G6 (2026-10-18): the daily safety net for a split weekly AI visibility run whose chain of executions broke — started again from where it stopped
+Q.code('AI Run Resume', 'AI_Run_Resume.js', at(9, 3)); Q.iff('Any Run To Resume?', '{{ !$json.skip }}', at(10, 3))
+Q.node('Resume AI Run', 'n8n-nodes-base.executeWorkflow', 1.2, {'source': 'database', 'workflowId': {'__rl': True, 'mode': 'id', 'value': 'SEOagentAIVisib1'}, 'mode': 'each', 'options': {'waitForSubWorkflow': False}}, at(11, 3), onError='continueRegularOutput')
+# (after the pulse's own ledger row: a start of another run is spending, and section 55 proves nothing spends before the reservation)
+Q.code('AI Plan', 'Pulse_Plan.js', at(9, 1)); Q.iff('Any Sites (Pulse)?', "{{ !$('AI Plan').first().json.nothing_to_do }}", at(10, 1)); Q.node('Nothing To Do (Pulse)', 'n8n-nodes-base.noOp', 1, {}, at(11, 2))
 Q.code('AI Requests', 'AI_Requests.js', at(11, 0)); Q.iff('Any AI Requests?', '{{ !$json.skip }}', at(12, 0))
 Q.dfs_http('Run AI Requests', at(13, -1), batch=10, interval=200, timeout=150000)
 Q.code('Parse AI Answers', 'Parse_AI_Answers.js', at(14, 0)); Q.code('Pulse Metrics', 'Pulse_Metrics.js', at(15, 0))
@@ -413,10 +435,12 @@ Q.code('AI Daily Rows', "// One seo_ai_daily row per site and reading (exact col
 Q.iff('Any Daily Rows?', '{{ !$json.skip }}', at(20, 0))
 AI_DAILY_KEYS = ['site_id', 'date', 'run_id']   # R95: one row per site, day AND reading (scheduled: pulse_<day>_<site>; on demand: + the execution)
 Q.node('Save AI Daily', DT_TYPE, DT_VERSION, dt_upsert_params_keys(AI_DAILY_TABLE, AI_DAILY_COLS, AI_DAILY_KEYS), at(21, -1), onError='continueRegularOutput')
-Q.node('Prune Pulse Answers', DT_TYPE, DT_VERSION, dt_delete_where_params(AI_ANSWERS_TABLE, [('run_kind', 'eq', 'pulse'), ('checked_at', 'lt', SINCE(35))]), at(22, 0), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
+# G6 (2026-10-18): kept 21 days (was 35) — a 500-question panel's daily sample stores up to ~900 rows a morning; the daily figures stay in seo_ai_daily
+Q.node('Prune Pulse Answers', DT_TYPE, DT_VERSION, dt_delete_where_params(AI_ANSWERS_TABLE, [('run_kind', 'eq', 'pulse'), ('checked_at', 'lt', SINCE(21))]), at(22, 0), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
 Q.code('Pulse Alerts', "// Sites with something to report (an alert, or an on-demand run): the e-mail and the callback (stage ai_pulse). Quiet days send nothing.\nconst out = $('Pulse Metrics').all().map(i => i.json).filter(m => (m.alerts || []).length || m.on_demand).map(m => { const { daily_row, answer_rows, ...rest } = m; return { json: rest }; });\nreturn out.length ? out : [{ json: { skip: true } }];", at(23, 0))
 Q.iff('Any Pulse Alerts?', '{{ !$json.skip }}', at(24, 0)); Q.deliver('Pulse', at(25, -1), None)
-Q.chain('Daily Schedule', *[e[0] for e in ens], *[l[0] for l in loads], 'Load AI Daily', 'Load Cache (AI)', 'AI Plan', 'Any Sites (Pulse)?'); Q.link('Manual Run', ens[0][0])
+Q.chain('Daily Schedule', *[e[0] for e in ens], *[l[0] for l in loads], 'Load AI Daily', 'Load Cache (AI)', 'AI Plan', 'AI Run Resume', 'Any Run To Resume?'); Q.link('Manual Run', ens[0][0])
+Q.link('Any Run To Resume?', 'Resume AI Run', 0); Q.link('Any Run To Resume?', 'Any Sites (Pulse)?', 1); Q.link('Resume AI Run', 'Any Sites (Pulse)?')
 Q.link('Any Sites (Pulse)?', 'AI Requests', 0); Q.link('Any Sites (Pulse)?', 'Nothing To Do (Pulse)', 1)
 Q.chain('AI Requests', 'Any AI Requests?'); Q.link('Any AI Requests?', 'Run AI Requests', 0); Q.link('Any AI Requests?', 'Parse AI Answers', 1)
 Q.ai_retry_gate(at(13, 1), 'Parse AI Answers')   # D19: the pulse re-sends a failed task once too (its figures are the week's samples)
@@ -836,3 +860,19 @@ from ladder_common import PROFILE_COLS   # G31 (2026-10-13): the business profil
 json.dump({'RUN_LEDGER': [c for c, _ in RUN_LEDGER_COLS], 'AI_PAGES': [c for c, _ in AI_PAGES_COLS], 'AI_TARGETS': [c for c, _ in AI_TARGETS_COLS], 'AI_GROWTH': [c for c, _ in AI_GROWTH_COLS], 'PROSPECT': [c for c, _ in PROSPECT_COLS],
            'CACHE': [c for c, _ in CACHE_COLS], 'AI_ANSWERS': [c for c, _ in AI_ANSWERS_COLS], 'MONITORS': [c for c, _ in MONITORS_COLS], 'LINK_OUTREACH': [c for c, _ in LINK_OUTREACH_COLS], 'LISTINGS': [c for c, _ in LISTINGS_COLS], 'LINK_IMPACT': [c for c, _ in LINK_IMPACT_COLS], 'LINKS': [c for c, _ in LINKS_COLS], 'SITES': [c for c, _ in SITES_COLS], 'PAGES': [c for c, _ in PAGES_COLS],
            'LOG': [c for c, _ in LOG_COLS], 'LADDER': [c for c, _ in LADDER_COLS], 'HISTORY': [c for c, _ in HISTORY_COLS], 'AUDIT_FINDINGS': [c for c, _ in AUDIT_FINDINGS_COLS], 'CHECKIN': [c for c, _ in CHECKIN_COLS], 'OPS_ALERTS': [c for c, _ in OPS_ALERTS_COLS], 'PAGE_WATCH': [c for c, _ in PAGE_WATCH_COLS], 'CONSOLE_ALERTS': [c for c, _ in ALERTS_COLS], 'PROFILE': [c for c, _ in PROFILE_COLS]}, open(os.path.join(HERE, 'harness', 'table_cols.json'), 'w'), indent=1)   # G19 site model + D5 content log: the rows these nodes write
+
+# ---- G6 (2026-10-18, AI_VISIBILITY_SPEC.md §10): ONE table of AI-panel cost cases, held by the engine and the app ----------------------
+# v5/data/ai_panel_cost_cases.json is written by harness/ai_panel_cases.js from AIP.cost (v5/code/_ai_panel.js). It is copied to the harness
+# (S211 runs every case through the generated AIP.cost) and to app/shared (cost.aipanel.test.ts runs every case through estimateAiPanelCost),
+# so a price or a formula changed on one side and not the other fails a test on the side that did not change.
+_g6 = json.load(open(os.path.join(V5, 'data', 'ai_panel_cost_cases.json'), encoding='utf-8'))
+json.dump(_g6, open(os.path.join(HERE, 'harness', 'ai_panel_cost_cases.json'), 'w'), indent=1)
+_g6_app = os.path.normpath(os.path.join(HERE, '..', '..', 'app', 'shared', 'src', 'ai-panel-cost-cases.generated.ts'))
+if os.path.isdir(os.path.dirname(_g6_app)):
+    open(_g6_app, 'w', encoding='utf-8').write('// GENERATED by n8n/seo-agent/build_monitors.py from n8n/seo-agent/v5/data/ai_panel_cost_cases.json - do not edit by hand.\n'
+        '// G6 (2026-10-18): the golden cases of the AI-panel cost formula. The engine (AIP.cost, harness S211) and the app (estimateAiPanelCost,\n'
+        '// cost.aipanel.test.ts) are both held to them; regenerate with `node harness/ai_panel_cases.js` after a price or formula change.\n'
+        'export const AI_PANEL_COST_CASES = ' + json.dumps(_g6, indent=1, ensure_ascii=False) + ' as const;\n')
+_g6_rt = re.search(r"const PRICE = (\{[^}]+\});", rd('code/_ai_panel.js'))
+assert _g6_rt and json.loads(re.sub(r'(\w+):', r'"\1":', _g6_rt.group(1))) == _g6['prices'], 'G6: v5/data/ai_panel_cost_cases.json is stale against AIP.PRICE - run node harness/ai_panel_cases.js'
+print('G6: the AI-panel cost table (' + str(len(_g6['cases'])) + ' cases) copied to the harness and the app')

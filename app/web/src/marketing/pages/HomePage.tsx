@@ -131,7 +131,7 @@ const FAQS: FaqItem[] = [
     q: 'Does Ascentra publish to our website?',
     a: 'Only when you say so. Written pages go to your WordPress, Webflow or Contentful as drafts; an owner or admin publishes one live with a confirmation. Ascentra then checks the live page and tracks it.',
   },
-  { q: 'Which AI engines do you check?', a: 'ChatGPT, Gemini, Perplexity, Claude, Google AI Mode and AI Overviews, with a panel of up to 50 buyer questions.' },
+  { q: 'Which AI engines do you check?', a: 'ChatGPT, Gemini, Perplexity, Claude, Google AI Mode and AI Overviews — plus Microsoft Copilot and the ChatGPT and Gemini APIs if you want them — with a panel of up to 500 buyer questions by topic, buyer role and market.' },
   {
     q: 'How do you keep costs under control?',
     a: 'Every run shows its estimated cost before it starts, budgets are checked before any work begins and owners set spend caps. Results that cannot have changed are reused instead of paid for again.',

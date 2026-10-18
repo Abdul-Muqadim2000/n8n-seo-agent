@@ -7,6 +7,7 @@ import type { ChartAnnotation } from './annotations';
 import type { PageChangeTest } from './change-test';
 import type { Lineage } from './lineage';
 import type { RecommendationScore } from './queue';
+import type { AiPanelInfo, AiSegments } from './ai-panel';
 
 export interface MetricsPoint {
   periodStart: string;
@@ -643,7 +644,11 @@ export interface AiData {
       you: { mentions: number; aiSearchVolume: number } | null;
     } | null;
   } | null;
-  prompts: { promptId: string; prompt: string; kind: string; topic: string; keyword: string; source: string; status: string; createdAt: string; stage: string; cluster: string; volume: number | null; origin: string }[];
+  /** G6: persona (buyer role), market (CC-lang), pinned, and the fit gate's sentence for a refused question */
+  prompts: { promptId: string; prompt: string; kind: string; topic: string; keyword: string; source: string; status: string; createdAt: string; stage: string; cluster: string; volume: number | null; origin: string; persona: string; market: string; pinned: boolean; fitNote: string }[];
+  /** G6 (2026-10-18): the latest run's rates per engine / cluster / buyer role / market / stage, and the panel it asked */
+  segments: AiSegments | null;
+  panel: AiPanelInfo | null;
   /** v4.9: the AI Pulse days (last 90) */
   daily: AiDay[];
   answers: {

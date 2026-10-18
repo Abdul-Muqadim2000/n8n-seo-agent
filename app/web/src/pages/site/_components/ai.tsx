@@ -16,7 +16,7 @@ import { urlPath } from './format';
 
 const ENGINE_LABEL: Record<string, string> = Object.fromEntries(AI_ENGINES.map((e) => [e.value, e.label]));
 /** Short engine names for narrow grid headers. */
-const ENGINE_SHORT: Record<string, string> = { ai_overview: 'AI Overview', ai_mode: 'AI Mode', copilot: 'Copilot' };
+const ENGINE_SHORT: Record<string, string> = { ai_overview: 'AI Overview', ai_mode: 'AI Mode', copilot: 'Copilot', chatgpt_api: 'GPT API', gemini_api: 'Gemini API' };
 export const engineLabel = (key: string, fallback?: string) => ENGINE_LABEL[key] ?? fallback ?? titleCase(key);
 const ENGINE_ORDER = AI_ENGINES.map((e) => e.value as string);
 export const sortEngines = (keys: Iterable<string>) => [...new Set(keys)].sort((a, b) => (ENGINE_ORDER.indexOf(a) + 1 || 99) - (ENGINE_ORDER.indexOf(b) + 1 || 99));
@@ -104,7 +104,10 @@ export function QuestionGrid({ questions, engineNames }: { questions: readonly Q
   const [filter, setFilter] = useState<'all' | 'lost' | 'won'>('all');
   const engines = useMemo(() => sortEngines(questions.flatMap((q) => Object.keys(q.engines))), [questions]);
   const won = questions.filter((q) => q.won).length;
-  const rows = questions.filter((q) => (filter === 'won' ? q.won : filter === 'lost' ? !q.won : true));
+  const all = questions.filter((q) => (filter === 'won' ? q.won : filter === 'lost' ? !q.won : true));
+  // G6: a 500-question panel is a 500-row grid; it opens on the first 50 and grows on request
+  const [shown, setShown] = useState(50);
+  const rows = all.slice(0, shown);
   return (
     <div className="space-y-3">
       <FilterChips
@@ -175,6 +178,15 @@ export function QuestionGrid({ questions, engineNames }: { questions: readonly Q
           </tbody>
         </table>
       </div>
+      {all.length > rows.length && (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink-3">
+          <span>Showing {rows.length} of {all.length} questions</span>
+          <span className="flex gap-1">
+            <Button size="sm" variant="secondary" onClick={() => setShown((n) => n + 100)}>Show 100 more</Button>
+            <Button size="sm" variant="ghost" onClick={() => setShown(all.length)}>Show all</Button>
+          </span>
+        </div>
+      )}
       <GridLegend />
     </div>
   );

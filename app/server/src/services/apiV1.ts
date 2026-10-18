@@ -30,7 +30,7 @@ import type { FastifyRequest } from 'fastify';
 import { isUuid, type OrgAccess } from '../auth/access';
 import { HttpError, notFound, validationError } from '../lib/errors';
 import { publishCheckCall, siteRows } from '../n8n/client';
-import { oneReadingFinding, previousOfType } from './data';
+import { aiData, oneReadingFinding, previousOfType } from './data';
 import { filesFor } from './runs';
 import { crawlerData } from './crawlers/analytics';
 
@@ -175,6 +175,34 @@ export async function getAudit(ctx: V1Ctx, websiteId: unknown, auditId: unknown,
 // ---------------- crawler activity (gap #6, app/docs/LOG_ANALYTICS.md; the app's own Postgres, verified websites only) ----------------
 
 /** What search and AI crawlers requested on the website, from its own access logs: the same answer as the app's Crawlers page. */
+/**
+ * G6 (2026-10-18): the AI question panel's latest weekly figures per segment — engine, topic cluster, buyer role, market and funnel
+ * stage (and the cross tables) — each with its answer count, its 95% range, "enough" (12 answers or more), share of voice and the
+ * change the Benjamini-Hochberg screen called real; plus the panel it was measured on (size, composition, how much of it was asked the
+ * week before, the precision it reaches). What the AI visibility page charts, for BI tools and agents.
+ */
+export async function getAiSegments(ctx: V1Ctx, websiteId: unknown, q: Q = {}) {
+  const site = await siteOf(ctx, websiteId);
+  requireVerifiedSite(site);
+
+  const d = await aiData(ctx.org, site);
+  const run = d.runs.length ? d.runs[d.runs.length - 1] : null;
+  const dim = typeof q.dimension === 'string' && q.dimension ? q.dimension : '';
+  const rows = (d.segments?.rows ?? []).filter((s) => !dim || s.dim === dim);
+  return {
+    websiteId: site.id,
+    domain: site.domain,
+    checkedAt: run?.checkedAt ?? null,
+    runKind: run?.runKind ?? null,
+    questions: { tracked: d.prompts.filter((p) => !['off', 'refused'].includes(p.status)).length, refused: d.prompts.filter((p) => p.status === 'refused').length, off: d.prompts.filter((p) => p.status === 'off').length },
+    panel: d.panel,
+    segments: rows,
+    family: d.segments?.family ?? null,
+    moves: d.segments?.moves ?? [],
+    minAnswers: d.segments?.minAnswers ?? 12,
+  };
+}
+
 export async function getCrawlers(ctx: V1Ctx, websiteId: unknown, q: Q = {}) {
   const site = await siteOf(ctx, websiteId);
   requireVerifiedSite(site);

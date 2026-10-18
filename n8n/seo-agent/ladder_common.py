@@ -160,9 +160,14 @@ MONITORS_COLS = [('site_id', 'string'), ('domain', 'string'), ('ai_visibility', 
                  ('ai_pulse', 'boolean'),   # v4.9: daily AI pulse (empty = on)
                  ('ai_growth', 'boolean'), ('ai_pages_month', 'number'),   # v4.12 (AI_GROWTH_SPEC.md): the weekly AI Growth loop (empty = on) and AI answer / refresh pages a month (empty = 2)
                  ('link_builder', 'boolean'),   # v4.13 (LINK_BUILDER_SPEC.md): the weekly Link Builder (empty = on); on, the Backlink Monitor no longer drafts e-mails
-                 ('stuck_weeks', 'number')]   # G32 (2026-10-13): weeks without a position gain before a ladder is called stuck and gets a re-plan proposal (empty = 8, kept 2-26); run sync_tables.py after deploying
+                 ('stuck_weeks', 'number'),   # G32 (2026-10-13): weeks without a position gain before a ladder is called stuck and gets a re-plan proposal (empty = 8, kept 2-26)
+                 # G6 (2026-10-18, AI_VISIBILITY_SPEC.md §10): buyer roles and extra markets the panel covers, and how the daily pulse samples it
+                 ('ai_personas', 'string'), ('ai_markets', 'string'), ('ai_pulse_mode', 'string'), ('ai_pulse_per_week', 'number')]
 AI_PROMPTS_COLS = [('prompt_id', 'string'), ('site_id', 'string'), ('domain', 'string'), ('prompt', 'string'), ('kind', 'string'), ('topic', 'string'), ('keyword', 'string'), ('source', 'string'), ('status', 'string'), ('created_at', 'string'),
-                   ('stage', 'string'), ('cluster', 'string'), ('volume', 'number'), ('origin', 'string'), ('updated_at', 'string')]   # v4.9: buyer stage, topic cluster, monthly search volume, where the question came from
+                   ('stage', 'string'), ('cluster', 'string'), ('volume', 'number'), ('origin', 'string'), ('updated_at', 'string'),
+                   # G6 (2026-10-18): who asks it (buyer role), in which market (CC-lang), pinned by the owner (never retired by the writer),
+                   # and the fit gate's sentence when status is 'refused' (stored, so the panel manager shows what was refused and why)
+                   ('persona', 'string'), ('market', 'string'), ('pinned', 'boolean'), ('fit_note', 'string')]   # v4.9 (the row above): buyer stage, topic cluster, monthly search volume, where the question came from
 AI_ANSWERS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string'), ('checked_at', 'string'), ('prompt_id', 'string'), ('prompt', 'string'), ('kind', 'string'), ('topic', 'string'), ('engine', 'string'),
                    ('answered', 'boolean'), ('mentioned', 'boolean'), ('cited', 'boolean'), ('rank', 'number'), ('our_urls', 'string'), ('competitors', 'string'), ('sources', 'string'), ('excerpt', 'string'), ('cost', 'number'), ('error', 'string'),
                    ('run_kind', 'string'), ('sentiment', 'string'), ('brands', 'string'), ('issues', 'string'), ('fanout', 'string'),
@@ -173,12 +178,17 @@ AI_VIS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string')
                ('run_kind', 'string'), ('samples', 'number'), ('visibility_score', 'number'), ('mention_lo', 'number'), ('mention_hi', 'number'), ('sentiment_score', 'number'), ('accuracy_issues', 'number'),
                ('ai_sessions', 'number'), ('ai_conversions', 'number'), ('ai_revenue', 'number'), ('index_sov', 'number'), ('ai_impressions', 'number'),
                ('perception_json', 'string'), ('traffic_json', 'string'), ('access_json', 'string'), ('index_json', 'string'), ('clusters_json', 'string'),   # v4.9 (AI_VISIBILITY_SPEC.md)
-               ('rival_sources_json', 'string')]   # wave 3 (W3-F via W3-E): the rival businesses' own pages AI cites, read by AI Growth's Growth_Plan.js
+               ('rival_sources_json', 'string'),   # wave 3 (W3-F via W3-E): the rival businesses' own pages AI cites, read by Growth_Plan.js
+               # G6 (2026-10-18): rates per engine x cluster x persona x market with ranges and BH-corrected changes; the panel this run asked
+               # (question ids, engines, composition, the pulse's sample, achievable half-widths) so the next delta can be refused when it changed;
+               # how many executions the run took
+               ('segments_json', 'string'), ('panel_json', 'string'), ('chunks', 'number')]
 # v4.9: one row per site per day from the AI Pulse (the panel on the fast engines; small aggregates, no answer text)
 AI_DAILY_TABLE = 'seo_ai_daily'
 AI_DAILY_COLS = [('site_id', 'string'), ('domain', 'string'), ('date', 'string'), ('checked_at', 'string'), ('run_id', 'string'), ('samples', 'number'), ('mentioned', 'number'), ('cited', 'number'),
                  ('mention_rate', 'number'), ('citation_rate', 'number'), ('share_of_voice', 'number'), ('visibility_score', 'number'), ('engines_json', 'string'), ('prompts_json', 'string'),
-                 ('competitors_json', 'string'), ('sources_json', 'string'), ('alerts', 'string'), ('cost_usd', 'number')]
+                 ('competitors_json', 'string'), ('sources_json', 'string'), ('alerts', 'string'), ('cost_usd', 'number'),
+                 ('sample_json', 'string')]   # G6 (2026-10-18): the morning's rotating sample — mode, N a week, questions asked of the panel, strata covered
 # v4.12 (AI_GROWTH_SPEC.md): the weekly AI Growth loop — what it does so the site gets named and cited, not only measured.
 # seo_ai_pages: one row per site and key page: can an AI assistant read and quote it (raw HTML without JavaScript, answer in the first 200
 # characters, a visible update date, question headings, sourced figures, size), and is it in Bing's index (Bing Webmaster GetUrlInfo) / submitted.

@@ -133,6 +133,12 @@ class H(BaseHTTPRequestHandler):
                                'label': 'stub', 'summary': 'stub verdict', 'reasons': [] if ok else ['The page has %d words; the target is 300' % words],
                                'content_score': 84 if ok else 51, 'score_bar': 80, 'warnings': [], 'advice': [], 'checks': {},
                                'not_checked': [{'check': 'editor_review', 'reason': 'a model call'}], 'basis': 'stub', 'writes': 'none', 'cost_usd': 0})
+        # G6 (2026-10-18): a stand-in for Site Admin (the real one is n8n's SEOagentAdminAPI): it keeps the body, so a browser pass can see
+        # what the panel manager sent, and answers in the contract's shape
+        if parts == ['webhook', 'seo-site-admin']:
+            with LOCK:
+                PUBLISH_CHECKS.append({'site_admin': body})
+            return self._send({'ok': True, 'action': body.get('action', ''), 'affected': 1, 'error': None})
         t = self._table(parts)
         if not t:
             return self._send({'message': 'no such table'}, 404)

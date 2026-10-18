@@ -13,7 +13,8 @@ import { Delta, Meter, PageHeader } from '@/components/ui/misc';
 import { CountUp, HeroNextStep, HeroStat, IconTile, MetricCard, ScoreRing, Stagger, SummaryHero } from '@/components/insight';
 import { DataTable, type Column } from '@/components/ui/table';
 import { EngineActionList, RUN_LABEL, runFromApiBody, typeLabel } from './_components/actions';
-import { AnswersExplorer, QuestionGrid, QuestionManager, engineLabel } from './_components/ai';
+import { AnswersExplorer, QuestionGrid, engineLabel } from './_components/ai';
+import { PanelManager, SegmentsSection } from './_components/ai-panel';
 import { AccessPanel, AiTrafficPanel, DiscoveryPanel, GroupsPanel, IndexPanel, PerceptionPanel } from './_components/ai-insights';
 import { AiGrowthSection } from './_components/ai-growth';
 import { Chips, DataGate, FillHeight, MetricSwitch, Kind, Panel, SectionHeading, ToolButton, YesNo, useSitePage } from './_components/kit';
@@ -222,7 +223,7 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
         </div>
       )}
 
-      {d.latest && <GroupsPanel stages={d.latest.stages} clusters={d.latest.clusters} />}
+      {d.segments && d.segments.rows.length > 0 ? <SegmentsSection segments={d.segments} panel={d.panel} /> : d.latest && <GroupsPanel stages={d.latest.stages} clusters={d.latest.clusters} />}
 
       {d.report && d.report.questions.length > 0 && (
         <section>
@@ -298,9 +299,9 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
       </section>
 
       <section>
-        <SectionHeading icon={<ListChecks />} title="Tracked buyer questions" description={can('admin') ? 'Add the questions your buyers ask, or switch off ones that do not fit' : 'The questions asked every week (admins can change them)'} />
+        <SectionHeading icon={<ListChecks />} title="Your question panel" description={can('admin') ? 'Up to 500 buyer questions by topic, buyer role and market: add, import, edit, pin or switch off' : 'The questions asked every week (admins can change them)'} />
         <Card className="p-4">
-          <QuestionManager prompts={d.prompts} />
+          <PanelManager prompts={d.prompts} answers={d.answers} suggestions={d.latest?.index?.suggestions?.map((s) => ({ question: s.question, volume: s.volume })) ?? []} setting={d.panel?.setting ?? null} />
         </Card>
       </section>
     </Stagger>

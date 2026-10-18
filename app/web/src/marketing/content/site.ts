@@ -95,8 +95,10 @@ export const integrations: string[] = [
   'Cloudflare',
 ];
 
-/** the six AI engines and answer surfaces Ascentra asks */
+/** the six AI engines and answer surfaces Ascentra asks by default */
 export const aiEngines: string[] = ['ChatGPT', 'Gemini', 'Perplexity', 'Claude', 'Google AI Mode', 'AI Overviews'];
+/** G6 (2026-10-18): the engines a website can add (each one priced in its settings) */
+export const aiEnginesOptIn: string[] = ['Microsoft Copilot', 'ChatGPT API', 'Gemini API'];
 
 /** the nine link sources merged into one ledger */
 export const linkSources: string[] = [

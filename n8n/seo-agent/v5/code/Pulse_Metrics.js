@@ -6,7 +6,7 @@
 const COLS = ['site_id', 'domain', 'run_id', 'checked_at', 'prompt_id', 'prompt', 'kind', 'topic', 'engine', 'answered', 'mentioned', 'cited', 'rank', 'our_urls', 'competitors', 'sources', 'excerpt', 'cost', 'error', 'run_kind', 'sentiment', 'brands', 'issues', 'fanout', 'cited_urls'];
 const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 let rows = []; try { rows = $('Parse AI Answers').all().map(i => i.json).filter(r => !r.skip && r.engine); } catch (e) {}
-const ENG = { chatgpt: 'ChatGPT', gemini: 'Gemini', ai_mode: 'Google AI Mode', perplexity: 'Perplexity', claude: 'Claude', ai_overview: 'Google AI Overview', copilot: 'Copilot' };
+const ENG = { chatgpt: 'ChatGPT', gemini: 'Gemini', ai_mode: 'Google AI Mode', perplexity: 'Perplexity', claude: 'Claude', ai_overview: 'Google AI Overview', copilot: 'Copilot', chatgpt_api: 'ChatGPT API', gemini_api: 'Gemini API' };   // G6: + the model APIs
 const pct = (a, b) => b ? Math.round(1000 * a / b) / 10 : 0;
 const list = (s) => String(s || '').split(/,\s*/).filter(Boolean);
 const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -75,13 +75,14 @@ return plans.map(p => {
     const last3 = B.slice(0, 3).map(d => ((d.prompts || {})[q.prompt_id] || {})[e]); if (last3.length === 3 && last3.every(v => v === 'M' || v === 'C') && now === 'a') alerts.push({ level: 'medium', text: ENG[e] + ' no longer names you for "' + q.prompt + '" (named first on each of the past 3 days).' }); }
   const daily_row = { site_id: p.site_id, domain: p.domain, date: p.date, checked_at: p.checked_at, run_id: p.run_id, samples: n, mentioned: m, cited: c, mention_rate: pct(m, n), citation_rate: pct(c, n),
     share_of_voice: (() => { const tot = Object.values(topN(competitors, 8)).reduce((s, x) => s + x, 0); return pct(m, m + tot); })(), visibility_score: visibility, engines_json: JSON.stringify(engines), prompts_json: JSON.stringify(prompts),
-    competitors_json: JSON.stringify(topN(competitors, 25)), sources_json: JSON.stringify(topN(sources, 25)), alerts: alerts.map(a => a.level + ': ' + a.text).join(' | '), cost_usd: +R.reduce((s, r) => s + (Number(r.cost) || 0), 0).toFixed(4) };
+    competitors_json: JSON.stringify(topN(competitors, 25)), sources_json: JSON.stringify(topN(sources, 25)), alerts: alerts.map(a => a.level + ': ' + a.text).join(' | '), cost_usd: +R.reduce((s, r) => s + (Number(r.cost) || 0), 0).toFixed(4),
+    sample_json: p.sample ? JSON.stringify(p.sample) : '' };   // G6: which part of the panel this morning asked (rotating sample or all of it)
   const answer_rows = R.map(r => { const o = {}; for (const k of COLS) o[k] = r[k] === undefined ? '' : r[k]; return o; });
   const [lo, hi] = wilson(m, n);
   // C-14 (re-rating 2026-10-17): a pulse with no alert said "0 change(s)" under a red alert box; it now says there was no change
   const subject = '[AI pulse] ' + p.domain + ' — ' + (alerts.length ? alerts.length + ' change(s) in today\'s AI answers' : 'no change in today\'s AI answers');
   const html = '<div style="font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#0f172a;max-width:760px"><h2 style="margin:0 0 4px;font-size:18px">AI pulse: ' + esc(p.domain) + ' · ' + esc(p.date) + '</h2>' +
-    '<p style="font-size:13px;color:#475569;margin:0 0 8px">' + n + ' answers from ' + p.pulse_engines.map(e => ENG[e]).join(', ') + ' to your ' + p.prompts.length + ' tracked questions. Named in ' + pct(m, n) + '% (95% range ' + lo + '-' + hi + '%), your pages cited in ' + pct(c, n) + '%.' + (errors ? ' ' + errors + ' of ' + R.length + ' requests failed (' + error_list.map(e => e.engine + ': ' + e.message).join('; ') + ')' + (retry.asked ? ', ' + retry.answered + ' of ' + retry.asked + ' answered when sent again' : '') + '; today\'s figures count the ' + n + ' answers that came back.' : '') + '</p>' +
+    '<p style="font-size:13px;color:#475569;margin:0 0 8px">' + n + ' answers from ' + p.pulse_engines.map(e => ENG[e]).join(', ') + (p.sample && p.sample.mode === 'sample' ? ' to ' + p.prompts.length + ' of your ' + p.panel_size + ' tracked questions (this morning\'s rotating sample: each question ' + p.sample.per_week + ' morning' + (p.sample.per_week === 1 ? '' : 's') + ' a week, every topic and buyer group every morning)' : ' to your ' + p.prompts.length + ' tracked questions') + '. Named in ' + pct(m, n) + '% (95% range ' + lo + '-' + hi + '%), your pages cited in ' + pct(c, n) + '%.' + (errors ? ' ' + errors + ' of ' + R.length + ' requests failed (' + error_list.map(e => e.engine + ': ' + e.message).join('; ') + ')' + (retry.asked ? ', ' + retry.answered + ' of ' + retry.asked + ' answered when sent again' : '') + '; today\'s figures count the ' + n + ' answers that came back.' : '') + '</p>' +
     (alerts.length ? '<div style="background:#fef2f2;border-left:4px solid #b91c1c;padding:8px 12px">' + alerts.map(a => '<div style="font-size:13px;margin:2px 0">⚠ ' + esc(a.text) + '</div>').join('') + '</div>' : '<p style="font-size:13px;color:#15803d;margin:0">No change worth an alert today.</p>') +
     // B-G1 (2026-10-15, INVARIANTS rule 1 + 2): a panel question the read-path fit gate set aside was not asked today and is in none of
     // the figures above — the mail says so with the reason instead of leaving a smaller panel unexplained.
@@ -98,5 +99,6 @@ return plans.map(p => {
     // B8-2 / B8-3: what today could be read, and which earlier days it is honestly comparable with — both travel to the app and the callback
     readable, today_rate: todayRate, baseline_days: B.length, baseline_of: judged.length, baseline_set_aside, baseline_note,
     multiple_tests: { method: multiple_tests.method, alpha: multiple_tests.alpha, tests: multiple_tests.tests, threshold_p: multiple_tests.threshold_p, threshold_z: multiple_tests.threshold_z, rejected: multiple_tests.rejected, results: multiple_tests.results, note: multiple_tests.note },   // B8-9
+    sample: p.sample || null, panel_size: p.panel_size || p.prompts.length,   // G6
     status: 'progress', stage: 'ai_pulse', checked_at: p.checked_at } };
 });

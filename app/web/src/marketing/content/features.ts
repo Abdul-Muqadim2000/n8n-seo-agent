@@ -537,11 +537,14 @@ export const features: Feature[] = [
     shortName: 'AI visibility',
     tagline: 'See how often ChatGPT, Gemini, Perplexity, Claude and Google’s AI name and cite you.',
     summary:
-      'Ascentra asks a panel of up to 50 real buyer questions to six AI engines and records who is named and cited. A daily AI Pulse watches for changes and alerts only when they are statistically real, and GA4 shows the visits and revenue AI answers send you.',
+      'Ascentra asks a panel of up to 500 real buyer questions — by topic, buyer role and market — to six AI engines (nine with Copilot and the ChatGPT and Gemini APIs) and records who is named and cited. A daily AI Pulse watches for changes and alerts only when they are statistically real, and GA4 shows the visits and revenue AI answers send you.',
     icon: Sparkles,
     benefits: [
-      'A panel of up to 50 buyer questions, built from real AI-answer data and your Search Console queries',
-      'ChatGPT, Gemini, Perplexity, Claude, Google AI Mode and AI Overviews',
+      'A panel of up to 500 buyer questions, written for each buyer role and market from real AI-answer data, Google’s “People also ask”, your Search Console queries and your competitors’ topics — every one checked so it never names another company or a government service',
+      'Rates per topic, buyer role, market and engine, each with its 95% range — and “too few answers” where a group has not been asked enough to say',
+      'Import your own question list as CSV, pin the questions that matter, edit, re-word or switch any question off',
+      'ChatGPT, Gemini, Perplexity, Claude, Google AI Mode and AI Overviews, with Microsoft Copilot and the ChatGPT and Gemini APIs on request',
+      'A big panel is asked in full every week and as a rotating sample every morning, so every topic and buyer role is in every daily reading — and the cost and the precision it buys are shown before you save',
       'Mention rate, citation rate and share of voice against competitors, with 95% ranges',
       'A daily AI Pulse that alerts only on statistically real changes',
       'Visits, key events and revenue from AI referrals in GA4',
@@ -556,14 +559,14 @@ export const features: Feature[] = [
       'For real Copilot citations we point you to Bing’s own AI Performance report — and say plainly that it has no API, so it is never blended into our numbers',
     ],
     steps: [
-      { title: 'Build the panel', body: 'Up to 50 questions your buyers ask, grouped by stage and topic.' },
-      { title: 'Ask every engine', body: 'ChatGPT, Gemini, Perplexity, Claude, Google AI Mode and AI Overviews, on a schedule.' },
+      { title: 'Build the panel', body: 'Up to 500 questions your buyers ask, by topic, buyer role, market and stage.' },
+      { title: 'Ask every engine', body: 'ChatGPT, Gemini, Perplexity, Claude, Google AI Mode and AI Overviews — plus Copilot and the ChatGPT and Gemini APIs if you want them — on a schedule.' },
       { title: 'Measure', body: 'Mentions, citations and share of voice, each with a 95% range so noise is not news.' },
       { title: 'Act', body: 'Value-ranked actions, the sources AI engines trust and the claims to correct.' },
     ],
     facts: [
-      { value: 50, label: 'buyer questions per panel' },
-      { value: 6, label: 'AI engines and answer surfaces' },
+      { value: 500, label: 'buyer questions per panel' },
+      { value: 9, label: 'AI engines and answer surfaces' },
       { value: 95, suffix: '%', label: 'ranges on every rate' },
     ],
     faqs: [
@@ -587,7 +590,7 @@ export const features: Feature[] = [
     visual: 'ai-visibility',
     diagram: 'ai-engines',
     story: {
-      eyebrow: 'One panel, six engines',
+      eyebrow: 'One panel, up to nine engines',
       title: 'The same questions, asked everywhere, on a schedule.',
       body: 'Every engine gets the same buyer questions. Answers are read for who is named, who is cited and what is said about you, and every rate carries a 95% range — so a real change stands out from day-to-day noise.',
     },

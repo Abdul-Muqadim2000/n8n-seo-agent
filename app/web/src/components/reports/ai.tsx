@@ -391,6 +391,7 @@ function AiV49Blocks({ p, domain }: { p: P; domain: string }) {
           <ShareBars items={objs(idx.brands).filter((b) => num(b.share) != null).map((b) => ({ label: str(b.domain), value: num(b.share) ?? 0, sub: `${n(b.mentions)}` }))} highlight={domain} />
         </Block>
       )}
+      {objs(obj(p.segments).rows).length > 0 && <AiSegmentBlocks p={p} />}
       {stages.length > 0 && (
         <Block title="By buyer stage" icon={<BadgeCheck />}>
           <p className="text-[13px] text-ink-2">{stages.map((g) => `${str(g.key)}: named ${pct(g.mention_rate, 0)}${str(g.leader) ? ` (leader ${str(g.leader)})` : ''}`).join(' · ')}</p>
@@ -402,6 +403,41 @@ function AiV49Blocks({ p, domain }: { p: P; domain: string }) {
         </Block>
       )}
     </div>
+  );
+}
+
+/** G6 (2026-10-18): the weekly report's segments — topic, buyer role and market, each rate with its 95% range or "too few answers",
+ *  the moves a Benjamini-Hochberg screen called real, and how precise the panel is. Absent on reports before G6. */
+function AiSegmentBlocks({ p }: { p: P }) {
+  const seg = obj(p.segments);
+  const rows = objs(seg.rows);
+  const fam = obj(seg.family);
+  const pan = obj(p.panel);
+  const hw = obj(obj(pan.half_width).measured), ac = obj(obj(pan.half_width).achievable);
+  const line = (dim: string, title: string) => {
+    const r = rows.filter((s) => str(s.dim) === dim).slice(0, 8);
+    if (!r.length) return null;
+    return (
+      <p className="text-[13px] text-ink-2">
+        <span className="font-medium text-ink">{title}: </span>
+        {r.map((s) => (s.enough ? `${str(s.key)} ${num(s.rate)}% (${(s.ci as number[] | undefined)?.join('–') ?? ''}%, ${n(s.n)} answers)` : `${str(s.key)} too few answers (${n(s.n)})`)).join(' · ')}
+      </p>
+    );
+  };
+  return (
+    <Block title="By topic, buyer role and market" description={str(fam.note)} icon={<BarChart3 />}>
+      <div className="space-y-1.5">
+        {line('cluster', 'Topics')}
+        {line('persona', 'Buyer roles')}
+        {line('market', 'Markets')}
+        {objs(seg.moves).length > 0 && (
+          <p className="text-[13px] text-ink-2"><span className="font-medium text-ink">Real moves: </span>{objs(seg.moves).map((x) => `${str(x.dim)} ${str(x.key)} ${num(x.delta)! > 0 ? '+' : ''}${num(x.delta)} pts`).join(' · ')}</p>
+        )}
+        {num(hw.headline) != null && (
+          <p className="text-xs text-ink-3">Measured to ±{num(hw.headline)} points on the headline; this panel can reach ±{num(ac.headline)} on the headline and ±{num(ac.cluster)} on a 12-question topic (95%).</p>
+        )}
+      </div>
+    </Block>
   );
 }
 

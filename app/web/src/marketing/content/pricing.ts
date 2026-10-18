@@ -54,7 +54,7 @@ export const pricingTiers: PricingTier[] = [
     features: [
       'Up to 3 websites', // PLACEHOLDER — confirm
       'Up to three pages a week, with the autopilot pipeline and several ladders', // PLACEHOLDER — confirm
-      'AI search visibility: up to 50 questions and the daily AI Pulse',
+      'AI search visibility: up to 500 questions by topic, buyer role and market, and the daily AI Pulse', // PLACEHOLDER — confirm the plan limit (the panel's usage is priced by its size, shown before saving)
       'AI growth every week: new pages to Bing and IndexNow, AI-readiness checks, answer pages and earned media',
       'Backlinks from every source, with Ascentra’s own link checks',
       'Crawler analytics from your server logs: Google and the AI crawlers, each one checked',
@@ -245,7 +245,8 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Daily key-page check and pre-release check', hint: 'Your build asks whether a release candidate is safe to publish', values: [true, true, true] },
       { label: 'What only appears after JavaScript', hint: 'Key pages read twice, so content a crawler cannot see is flagged', values: [true, true, true] },
       { label: 'Search Console, GA4 and Trends', values: [true, true, true] },
-      { label: 'AI search visibility', hint: 'ChatGPT, Gemini, Perplexity, Claude, AI Mode, AI Overviews', values: [false, 'Up to 50 questions', 'Up to 50 questions'] }, // PLACEHOLDER — confirm
+      { label: 'AI search visibility', hint: 'ChatGPT, Gemini, Perplexity, Claude, AI Mode, AI Overviews; Copilot and the ChatGPT and Gemini APIs on request', values: [false, 'Up to 500 questions', 'Up to 500 questions'] }, // PLACEHOLDER — confirm the plan limits
+      { label: 'Questions by buyer role and market', hint: 'Rates per topic, buyer role and market with 95% ranges; import your own list as CSV', values: [false, true, true] }, // PLACEHOLDER — confirm
       { label: 'Daily AI Pulse', hint: 'Alerts only on statistically real changes', values: [false, true, true] },
       { label: 'AI growth, every week', hint: 'New pages sent to Bing and IndexNow, key pages scored for AI readiness, the questions to win queued', values: [false, true, true] },
       { label: 'Earned media', hint: 'The exact pages AI cites without naming you, with a draft for each', values: [false, true, true] },
