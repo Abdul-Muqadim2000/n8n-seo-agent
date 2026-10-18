@@ -240,6 +240,19 @@ describe('branded e-mail', () => {
     expect(s.via).toBeUndefined();
     // a standard company keeps ours
     expect((await senderFor(null)).brandName).toBe('Ascentra');
+    // a client person's own account e-mails (verification, password) come from the agency and open its portal address; a person
+    // with any other company keeps ours
+    const { senderForUser } = await import('../src/services/portalMail');
+    const ceo = (await db.query.users.findFirst({ where: eq(schema.users.email, 'ceo@acme.example.com') }))!;
+    const own = await senderForUser(ceo.id);
+    expect(own.sender.brandName).toBe('Ascentra'); // the CEO also owns "Side Project"
+    const solo = (await db.query.users.findFirst({ where: eq(schema.users.email, 'owner@north-agency.com') }))!;
+    expect((await senderForUser(solo.id)).sender.brandName).toBe('Ascentra');
+    await db.delete(schema.memberships).where(eq(schema.memberships.userId, ceo.id));
+    await db.insert(schema.memberships).values({ orgId: client.id, userId: ceo.id, role: 'client_viewer' });
+    const branded = await senderForUser(ceo.id);
+    expect(branded.sender.brandName).toBe('North Insights');
+    expect(branded.baseUrl).toBe(`http://${HOST}`);
 
     // a mailbox of the agency whose domain has SPF but no DKIM cannot be the sender
     const [mb] = await db

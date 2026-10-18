@@ -14,6 +14,7 @@ import type { UserRow } from '../db/schema';
 import { sha256 } from '../lib/crypto';
 import { badRequest, conflict, forbidden, HttpError, parse } from '../lib/errors';
 import { sendMail } from '../lib/mailer';
+import { senderForUser } from '../services/portalMail';
 import { audit, auditUser } from '../services/audit';
 import { acceptInvitation } from '../services/invitations';
 import { buildMe } from '../services/me';
@@ -23,13 +24,16 @@ const LIMIT = { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } };
 
 export async function sendVerification(user: UserRow, log: FastifyInstance['log']): Promise<boolean> {
   const token = await issueToken(user.id, 'verify_email', 60 * 24 * 3);
+  // G5: a client person of a white-label agency hears from the agency, and the link opens its portal address
+  const { sender, baseUrl } = await senderForUser(user.id);
   return sendMail(
     {
       to: user.email,
-      subject: `Confirm your e-mail for ${config.brand}`,
+      subject: `Confirm your e-mail for ${sender.brandName}`,
       lines: [`Hi ${user.name},`, 'Please confirm your e-mail address. Analyses and reports start once it is confirmed.'],
-      action: { label: 'Confirm e-mail', url: `${config.appUrl}/verify-email?token=${token}` },
+      action: { label: 'Confirm e-mail', url: `${baseUrl}/verify-email?token=${token}` },
       footer: 'The link works for 3 days. If you did not create an account, ignore this e-mail.',
+      sender,
     },
     log,
   );
@@ -137,13 +141,15 @@ export async function authRoutes(app: FastifyInstance) {
     const user = await db.query.users.findFirst({ where: eq(schema.users.email, email) });
     if (user) {
       const token = await issueToken(user.id, 'reset_password', 60);
+      const { sender, baseUrl } = await senderForUser(user.id);
       void sendMail(
         {
           to: user.email,
-          subject: `Reset your ${config.brand} password`,
+          subject: `Reset your ${sender.brandName} password`,
           lines: [`Hi ${user.name},`, 'Someone asked to reset the password of your account. Choose a new one with the button below.'],
-          action: { label: 'Choose a new password', url: `${config.appUrl}/reset-password?token=${token}` },
+          action: { label: 'Choose a new password', url: `${baseUrl}/reset-password?token=${token}` },
           footer: 'The link works for one hour. If you did not ask for it, ignore this e-mail; your password stays the same.',
+          sender,
         },
         req.log,
       );
