@@ -74,16 +74,69 @@ See `AI_VISIBILITY_SPEC.md` §10 for the full spec. Short form:
 | 2 personas / segments / sources / fit gate / owner edits | done — S206–S208 | git log "G6 part 2" |
 | 3 engines (ChatGPT API, Gemini API opt-in) | done — S209; harness 7102 passed, 0 failed | git log "G6 part 3" |
 | 4 statistics at scale | done — S210; harness 7118 passed, 0 failed | git log "G6 part 4" |
-| 5 cost (engine + app, shared cases) | todo | |
+| 5 cost (engine + app, shared cases) | done — S211 (20 golden cases) + app `cost.aipanel.test.ts` (23); shared 507 tests | git log "G6 part 5" |
 | 6 app (panel manager, settings, charts, guides, API/MCP) | todo | |
 | 7 marketing | todo | |
 | 8 tests (harness + app + browser) | todo | |
 
-## 4. Owner steps after the deploy — raise techand.ai's panel
-(filled in when part 5 lands)
+## 4. Cost table and the owner steps to raise techand.ai's panel
 
-## 5. Live acceptance checks
-(filled in as parts land)
+**The cost model** (`AIP.cost`, `v5/code/_ai_panel.js`; the app's `estimateAiPanelCost`, `app/shared/src/ai-panel.ts`; DataForSEO + Claude, US$).
+Calibrated: 8 questions = **$4.32 / month** and one pulse morning **$0.084** — exactly what the live pulse measured on 2026-10-08 and
+2026-10-13; 20 questions = $9.40 (the v4.9 table). "Month" = 4.33 weekly runs + the month's full-run extra + 26 pulse mornings.
+
+| Panel · engines · pulse | Weekly requests | Weekly run | Month's full run | Pulse | Month | ± headline / ± 12-q cluster (95%) |
+|---|---|---|---|---|---|---|
+| 8 · default 6 · auto | 35 (1 exec) | $0.27 | $1.24 | 6×/wk, 7 q/day, $0.08/day | $4.32 | ±7.6 / ±7.6 |
+| 20 · default 6 · auto | 95 (1 exec) | $0.51 | $1.78 | 6×/wk, 19 q/day, $0.23/day | $9.40 | ±4.7 / ±5.9 |
+| 50 · default 6 · auto | 245 (1 exec) | $1.17 | $3.19 | 6×/wk, 49 q/day, $0.59/day | $22.37 | ±2.9 / ±5.9 |
+| **100** · default 6 · auto | 495 (1 exec) | **$2.31** | $5.58 | 3×/wk, 50 q/day, $0.60/day | **$28.86** | ±2.6 / ±7.5 |
+| **200** · default 6 · auto | 995 (2 exec) | **$4.61** | $10.38 | 3×/wk, 100 q/day, $1.20/day | **$56.91** | ±1.9 / ±7.5 |
+| 300 · default 6 · auto | 1495 (3 exec) | $6.73 | $15.00 | 3×/wk, 150 q/day, $1.80/day | $84.17 | ±1.5 / ±7.5 |
+| 500 · default 6 · auto | 2495 (5 exec) | $10.89 | $24.16 | 3×/wk, 250 q/day, $3.00/day | $138.36 | ±1.2 / ±7.5 |
+| 100 · default 6 · pulse off | 495 (1 exec) | $2.31 | $5.58 | off | $13.27 | ±4.4 / ±12.3 |
+| 200 · default 6 · pulse off | 995 (2 exec) | $4.61 | $10.38 | off | $25.73 | ±3.1 / ±12.3 |
+| 500 · default 6 · pulse off | 2495 (5 exec) | $10.89 | $24.16 | off | $60.42 | ±2 / ±12.3 |
+| 100 · all 9 engines · auto | 792 (2 exec) | $5.86 | $9.16 | 2×/wk, 33 q/day, $0.46/day | $40.66 | ±2.5 / ±7 |
+| 200 · all 9 engines · auto | 1592 (3 exec) | $11.42 | $17.22 | 2×/wk, 67 q/day, $0.94/day | $79.60 | ±1.7 / ±7 |
+| 500 · all 9 engines · auto | 3992 (7 exec) | $27.86 | $41.16 | 2×/wk, 167 q/day, $2.34/day | $194.66 | ±1.1 / ±7 |
+| 500 · default 6 · pulse full | 2495 (5 exec) | $10.89 | $24.16 | 3×/wk (capped by the 900-request morning) | $138.36 | ±1.2 / ±7.5 |
+
+"Default 6" = ChatGPT, Gemini, Perplexity, Google AI Overview, Google AI Mode weekly + Claude monthly (techand.ai's setting). "All 9" adds
+Copilot, the ChatGPT API and the Gemini API (the two API prices are estimates until their first live call). The ChatGPT database view
+(LLM Mentions) is US-English only, so techand.ai (UAE) reads Google's AI Overview data there.
+
+**Owner steps after the deploy** (techand.ai is at 8 questions today):
+1. In `n8n/.env` set `N8N_DATA_TABLES_MAX_SIZE_BYTES=1073741824` (1 GB; n8n's default is 200 MB for ALL Data Tables) and redeploy — at
+   200 questions the weekly answers add ~2.3 MB a week, kept 120 days.
+2. **100 questions.** App → the website → Settings → Tracking & monitors → AI visibility → *Questions tracked* = 100 (the form shows
+   $28.86 a month before you save). Optional: *Buyer roles* "CFO, Finance manager, IT manager, Founder" (the panel is then written per
+   role); *Markets* empty (UAE only). Save. Equivalent API: `POST /webhook/seo-site-admin` `{ "action": "monitors", "domain": "techand.ai",
+   "monitors": { "ai_prompts_max": 100, "ai_personas": "CFO, Finance manager, IT manager, Founder" } }`.
+3. Start one check now instead of waiting for Monday 07:00: App → AI visibility → *Check now* (or the form "Check my AI visibility").
+   Measured cost of that run ≈ $5.58 (it is the month's full run: Claude + the brand question + the database views) + ~92 new
+   questions written (≈ 3 Prompt Writer jobs, ~$0.15). Read the report and the panel manager (refused questions are listed with reasons).
+4. **200 questions** a week later, the same way ($56.91 a month; the weekly run is split over 2 executions, $4.61 a run).
+
+
+## 5. Live acceptance checks (after the deploy, on techand.ai)
+1. **Raise to 100, on-demand run** (step 3 above) — the AI Visibility Tracker execution:
+   - *AI Plan*: `prompts_needed` 92, `chunk.no` 1, `chunk.final_expected` true, `est_dfs_usd` ≈ 5.3, `personas` as set, `markets` ["AE-en"].
+   - *Prompt Jobs*: 3+ items, each `count` ≤ 40 and its `persona` / `market` / `language` set.
+   - *Prompt Rows*: ≥ 85 rows `status: active` with `persona` / `market`; any `status: refused` row has a `fit_note` sentence.
+   - *AI Requests*: ≈ 594 requests, first item `chunks[0].final: true`, `cost_cap_usd` ≥ 15.
+   - *AI Metrics*: `metrics.requests` ≈ 594; `segments.rows` has cluster / persona / market / engine / stage rows with `ci`; `panel.size` ≈ 99;
+     `vis_row.segments_json` and `vis_row.panel_json` non-empty; `run_split.executions` 1.
+   - *Run Ledger Row (AI)*: `dfs_est_usd` = the plan's `est_dfs_usd`, `cost_basis` says "priced from their own panel".
+   - seo_cache `ai_run:site_techand-ai`: `status: done`.
+2. **Raise to 200, the next weekly run** (Monday 07:00 or *Check now*): execution 1 *AI Plan* `chunk.final_expected` false; *Start Next
+   Chunk* ran; a SECOND execution started within seconds whose *AI Plan* has `chunk.no` 2, `chunk.going` true, `done_keys` ≈ 600 and the same
+   `run_id`; only that execution has *AI Metrics* with `run_split.executions` 2 and `vis_row.chunks` 2. The two ledger rows: the second
+   keyed `parent:<first execution id>`, each settling its own DataForSEO money; the report says "asked over 2 executions".
+3. **The next pulse morning at 200**: Pulse *AI Plan* `sample.mode` "sample", `sample.per_week` 3, ~100 prompts, `sample.covered` =
+   `sample.strata`; *AI Requests* ≈ 300; the `seo_ai_daily` row has `sample_json`.
+4. **Resume**: none expected; if a part ever dies, the pulse's *AI Run Resume* names it the next morning and *Resume AI Run* starts it.
+5. **Engines (optional, one live call each, §7)** before switching the ChatGPT API / Gemini API on.
 
 ## 6. Open / not built
 - **Found while building part 1 (fixed):** the weekly per-question win rate counted a pulse answer that named the business FIRST (codes

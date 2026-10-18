@@ -28,6 +28,10 @@ import type { ModeId } from './constants';
  * be kept honest by reading `_cost_cal.js`.
  */
 
+// G6 (2026-10-18): the AI question panel's own cost (per panel size x engines x pulse setting, per weekly run, pulse morning and month) is
+// one formula in ./ai-panel.ts (estimateAiPanelCost) — the mirror of the engine's AIP.cost, both held to the same golden cases
+// (./ai-panel-cost-cases.generated.ts; cost.aipanel.test.ts here, harness S211 there). It is not repeated in this table.
+
 /** The estimate keys the engine prices a request against (`_cost_cal.js` `EST` / `DFS_EST`). */
 export type CostKey =
   | 'content'

@@ -414,4 +414,18 @@ module.exports = async (ctx) => {
     const { am: am2 } = await runIt({ ids: ids.slice(0, Math.round(ids.length * 0.6)).concat(Array.from({ length: 200 }, (_, i) => 'gone_' + i)) });
     check('under 80% of the questions in common: no delta, the reason printed, no segment tested', /different panel, not a different result/.test(am2.metrics.delta_not_compared) && am2.segments.family.tests === 0 && !am2.metrics.tests, am2.metrics.delta_not_compared);
   });
+
+  // ===================================================================================================================================
+  await guard('S211 G6 — one cost table: the engine is held to the golden cases the app is held to', async () => {
+    reset(); const SN = 'S211 G6 — every golden case of v5/data/ai_panel_cost_cases.json (copied by the build to harness/ and app/shared) through the generated AIP.cost, field by field';
+    begin(SN); const check = mkCheck(SN);
+    const G = JSON.parse(fs.readFileSync(path.join(__dirname, 'ai_panel_cost_cases.json'), 'utf8'));
+    const pick = (c) => ({ panel: c.panel, asked: c.asked, per_week: c.per_week, pulse_questions_day: c.pulse_questions_day, executions: c.executions, analyst_jobs: c.analyst_jobs,
+      requests: c.requests, run: c.run, full_extra: c.full_extra, pulse_day: c.pulse_day, month: c.month, half_width: c.half_width });
+    const bad = G.cases.filter(cs => JSON.stringify(pick(AIP.cost(cs.input))) !== JSON.stringify(cs.expect));
+    check(G.cases.length + ' golden cases, every figure equal', G.cases.length >= 20 && !bad.length, JSON.stringify(bad.slice(0, 2).map(cs => [cs.input, pick(AIP.cost(cs.input)), cs.expect])));
+    check('the table\'s prices are the engine\'s prices', JSON.stringify(G.prices) === JSON.stringify(AIP.PRICE) && JSON.stringify(G.pulse_engines) === JSON.stringify(AIP.PULSE_ENGINES), JSON.stringify([G.prices, AIP.PRICE]));
+    const c8 = G.cases.find(cs => cs.input.panel === 8 && Object.keys(cs.input).length === 1);
+    check('8 questions: one pulse morning is $0.084 — what the live pulse measured on 2026-10-08 and 2026-10-13', c8 && c8.expect.pulse_day.usd === 0.084, JSON.stringify(c8 && c8.expect.pulse_day));
+  });
 };

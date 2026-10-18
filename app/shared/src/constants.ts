@@ -1,4 +1,5 @@
 import { modeCostUsd } from './cost';
+import { AI_PANEL_LIMITS, AI_PANEL_PRICE, AI_PANEL_PULSE_ENGINES, estimateAiPanelCost, type AiPulseMode } from './ai-panel';
 
 // Option lists mirror the n8n form pages and Normalize Input (n8n/seo-agent/v5 + build_v4.py), so every value the app sends
 // is one the workflow already understands. Change them together.
@@ -68,11 +69,14 @@ export const AI_ENGINES = [
   { value: 'ai_mode', label: 'Google AI Mode' },
   /** v4.12: Bing's Copilot Search summary (DataForSEO Bing results) — opt-in: Bing shows it for few searches */
   { value: 'copilot', label: 'Microsoft Copilot (Bing; few searches show it)' },
+  /** G6 (2026-10-18): what an app or agent built on the models answers (DataForSEO LLM Responses with web search) — opt-in */
+  { value: 'chatgpt_api', label: 'ChatGPT API (GPT with web search)' },
+  { value: 'gemini_api', label: 'Gemini API (with Google Search)' },
 ] as const;
 export type AiEngine = (typeof AI_ENGINES)[number]['value'];
 export const AI_ENGINE_VALUES = AI_ENGINES.map((e) => e.value) as unknown as [AiEngine, ...AiEngine[]];
-/** the engines a website starts with (Copilot is opt-in) */
-export const AI_DEFAULT_ENGINES: AiEngine[] = AI_ENGINE_VALUES.filter((e) => e !== 'copilot');
+/** the engines a website starts with (Copilot and the two model APIs are opt-in) */
+export const AI_DEFAULT_ENGINES: AiEngine[] = AI_ENGINE_VALUES.filter((e) => e !== 'copilot' && e !== 'chatgpt_api' && e !== 'gemini_api');
 
 export const PROSPECT_STATUSES = ['new', 'contacted', 'replied', 'won', 'rejected', 'ignored'] as const;   // replied: v4.13 (the app's inbox read a reply)
 export type ProspectStatus = (typeof PROSPECT_STATUSES)[number];
@@ -348,12 +352,14 @@ export const MONITOR_COSTS = {
   weeksPerMonth: 4.33,
 };
 
-/** DataForSEO price per question on each AI engine (n8n AI_Requests.js CONFIG.cost, measured 2026-10-02 / priced 2026-10-08). */
-export const AI_ENGINE_COST: Record<AiEngine, number> = { chatgpt: 0.004, gemini: 0.004, perplexity: 0.006, claude: 0.025, ai_overview: 0.002, ai_mode: 0.004, copilot: 0.002 };
+/** DataForSEO price per question on each AI engine — the one table, ./ai-panel.ts (mirrors the engine's AIP.PRICE, golden cases in both). */
+export const AI_ENGINE_COST: Record<AiEngine, number> = { ...AI_PANEL_PRICE };
 /** The engines the daily AI Pulse asks (n8n Pulse_Plan.js CONFIG.pulse_engines), Tuesday to Sunday. */
-export const AI_PULSE_ENGINES: readonly AiEngine[] = ['chatgpt', 'gemini', 'ai_mode', 'copilot'];
-export const AI_PROMPTS_DEFAULT = 20;
-export const AI_PROMPTS_MAX = 50;
+export const AI_PULSE_ENGINES: readonly AiEngine[] = AI_PANEL_PULSE_ENGINES;
+/** G6 (2026-10-18): a NEW website starts with 50 questions; a website whose stored setting is empty keeps 20; up to 500. */
+export const AI_PROMPTS_DEFAULT = AI_PANEL_LIMITS.default_new;
+export const AI_PROMPTS_STORED_DEFAULT = AI_PANEL_LIMITS.default_stored;
+export const AI_PROMPTS_MAX = AI_PANEL_LIMITS.max;
 
 /** Questions the weekly run and the daily pulse ask: the panel without its brand question ("What is <site>?", asked once a month). */
 export function aiPulseQuestions(panel: number): number {
@@ -364,18 +370,10 @@ export function aiPulseQuestions(panel: number): number {
  * Monthly cost of AI visibility for one site (v4.9, n8n/seo-agent/AI_VISIBILITY_SPEC.md §5): the weekly run (every engine but Claude, plus
  * the Answer Analyst and the brief), the month's full run (Claude, the AI-answer database index and question discovery) and the daily pulse.
  */
-export function estimateAiVisibilityCost(o: { prompts?: number; engines?: readonly AiEngine[]; pulse?: boolean } = {}): { weekly: number; fullRun: number; pulse: number; total: number } {
-  const weeks = MONITOR_COSTS.weeksPerMonth;
-  const q = Math.min(AI_PROMPTS_MAX, Math.max(3, o.prompts ?? AI_PROMPTS_DEFAULT));
-  const engines = o.engines && o.engines.length ? o.engines : AI_DEFAULT_ENGINES;
-  const sum = (list: readonly AiEngine[]) => list.reduce((t, e) => t + AI_ENGINE_COST[e], 0);
-  const asked = aiPulseQuestions(q);   // the brand question is asked on the month's full run only (n8n AI_Requests.js)
-  const nonClaude = sum(engines.filter((e) => e !== 'claude'));
-  const weekly = weeks * (asked * nonClaude + 0.13);
-  const fullRun = (engines.includes('claude') ? q * AI_ENGINE_COST.claude : 0) + nonClaude + 0.45 + 0.3;
-  const pulse = o.pulse === false ? 0 : weeks * 6 * asked * sum(AI_PULSE_ENGINES.filter((e) => engines.includes(e)));
-  const r = (x: number) => Math.round(x * 100) / 100;
-  return { weekly: r(weekly), fullRun: r(fullRun), pulse: r(pulse), total: r(weekly + fullRun + pulse) };
+export function estimateAiVisibilityCost(o: { prompts?: number; engines?: readonly AiEngine[]; pulse?: boolean; pulseMode?: AiPulseMode | string; pulsePerWeek?: number | null } = {}): { weekly: number; fullRun: number; pulse: number; total: number } {
+  // G6 (2026-10-18): one formula — ./ai-panel.ts estimateAiPanelCost, the mirror of the engine's AIP.cost (golden cases on both sides)
+  const c = estimateAiPanelCost({ panel: o.prompts ?? AI_PROMPTS_DEFAULT, engines: o.engines && o.engines.length ? o.engines : AI_DEFAULT_ENGINES, pulse: o.pulse, pulseMode: o.pulseMode, pulsePerWeek: o.pulsePerWeek });
+  return { weekly: c.month.weekly, fullRun: c.month.fullExtra, pulse: c.month.pulse, total: c.month.total };
 }
 MONITOR_COSTS.aiVisibilityMonthly = estimateAiVisibilityCost().total;
 

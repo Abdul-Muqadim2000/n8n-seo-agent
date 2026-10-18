@@ -7,12 +7,13 @@ import { AI_MIN_QUESTION_SAMPLES, aiPrecisionTable, aiSampleRate, halfWidth95, q
 // AI visibility v4.9 (n8n/seo-agent/AI_VISIBILITY_SPEC.md): bigger question panel, the daily AI Pulse, their cost and schedule.
 
 describe('AI visibility settings', () => {
-  it('default to 20 questions with the daily pulse on; at most 50 questions', () => {
+  it('default to 50 questions for a new website with the daily pulse on; at most 500 questions (G6)', () => {
     const d = monitorSettingsSchema.parse({});
     expect(d.aiPromptsMax).toBe(AI_PROMPTS_DEFAULT);
+    expect(AI_PROMPTS_DEFAULT).toBe(50);
     expect(d.aiPulse).toBe(true);
-    expect(monitorSettingsSchema.safeParse({ aiPromptsMax: 50 }).success).toBe(true);
-    expect(monitorSettingsSchema.safeParse({ aiPromptsMax: 51 }).success).toBe(false);
+    expect(monitorSettingsSchema.safeParse({ aiPromptsMax: 500 }).success).toBe(true);
+    expect(monitorSettingsSchema.safeParse({ aiPromptsMax: 501 }).success).toBe(false);
     expect(monitorSettingsSchema.safeParse({ aiPromptsMax: 2 }).success).toBe(false);
   });
   it('reach n8n as ai_prompts_max / ai_pulse (Site Admin monitors)', () => {
@@ -26,23 +27,26 @@ describe('estimateAiVisibilityCost', () => {
     const c = estimateAiVisibilityCost();
     expect(c.total).toBeCloseTo(c.weekly + c.fullRun + c.pulse, 1);
     expect(MONITOR_COSTS.aiVisibilityMonthly).toBe(c.total);
-    // 19 questions (the panel of 20 without its brand question, asked monthly) x (ChatGPT + Gemini + AI Mode at $0.004) x 6 days x 4.33 weeks; Copilot is opt-in
-    expect(c.pulse).toBeCloseTo(19 * 0.012 * 6 * 4.33, 1);
-    expect(estimateAiVisibilityCost({ engines: [...AI_ENGINE_VALUES] }).pulse).toBeCloseTo(19 * 0.014 * 6 * 4.33, 1);
+    // 49 questions (the panel of 50 without its brand question, asked monthly) x (ChatGPT + Gemini + AI Mode at $0.004) x 6 days x 4.33 weeks; Copilot is opt-in
+    expect(c.pulse).toBeCloseTo(49 * 0.012 * 6 * 4.33, 1);
+    expect(estimateAiVisibilityCost({ engines: [...AI_ENGINE_VALUES] }).pulse).toBeCloseTo(49 * 0.014 * 6 * 4.33, 1);
     expect(aiPulseQuestions(8)).toBe(7);
-    expect(aiPulseQuestions(500)).toBe(49);
+    expect(aiPulseQuestions(500)).toBe(499);
+    expect(aiPulseQuestions(900)).toBe(499);
   });
   it('drops the pulse when it is off or none of its engines is chosen, and grows with the panel', () => {
     expect(estimateAiVisibilityCost({ pulse: false }).pulse).toBe(0);
     expect(estimateAiVisibilityCost({ engines: ['perplexity', 'claude'] }).pulse).toBe(0);
     expect(estimateAiVisibilityCost({ prompts: 40 }).total).toBeGreaterThan(estimateAiVisibilityCost({ prompts: 20 }).total);
-    expect(estimateAiVisibilityCost({ prompts: 500 }).total).toBe(estimateAiVisibilityCost({ prompts: 50 }).total);
+    expect(estimateAiVisibilityCost({ prompts: 900 }).total).toBe(estimateAiVisibilityCost({ prompts: 500 }).total);
+    // G6: above 50 questions the pulse asks a rotating sample, so it grows slower than the panel
+    expect(estimateAiVisibilityCost({ prompts: 500 }).pulse).toBeLessThan(10 * estimateAiVisibilityCost({ prompts: 50 }).pulse);
   });
   it('Claude only on the monthly full run', () => {
     const withClaude = estimateAiVisibilityCost({ engines: ['chatgpt', 'claude'], pulse: false });
     const without = estimateAiVisibilityCost({ engines: ['chatgpt'], pulse: false });
     expect(withClaude.weekly).toBe(without.weekly);
-    expect(withClaude.fullRun - without.fullRun).toBeCloseTo(20 * 0.025, 2);
+    expect(withClaude.fullRun - without.fullRun).toBeCloseTo(AI_PROMPTS_DEFAULT * 0.025, 2);
   });
   it('feeds the monitoring total', () => {
     const off = estimateMonitoringCost({ aiVisibility: false, backlinks: false, auditMonthly: false, blogsPerWeek: 0 });
