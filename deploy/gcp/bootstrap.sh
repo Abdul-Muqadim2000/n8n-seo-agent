@@ -181,7 +181,7 @@ else
       --metadata-from-file="startup-script=$HERE/startup.sh" \
       --region="$REGION" --project="$PROJECT"
 fi
-TPL_URL="projects/$PROJECT/regions/$REGION/instanceTemplates/$TPL"
+TPL_URL="projects/$PROJECT/global/instanceTemplates/$TPL"   # gcloud creates a global template here (--region only places the subnet)
 
 if q compute instance-groups managed describe "$MIG" --zone="$ZONE"; then
   keep "group $MIG"
