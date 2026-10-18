@@ -160,6 +160,8 @@ export function OrgLayout() {
   // G5: a client person inside a white-label workspace sees the agency's brand (on the app host too)
   const portal = !!ctx && isClientRole(ctx.role);
   useApplyBrand(portal ? ctx?.org.brand : null);
+  // the title names the brand in force: re-render when it arrives
+  usePortalBrand();
   useDocumentTitle(ctx ? shellTitle(loc.pathname, ctx.org, ctx.sites) : null);
 
   // G1: the company requires two-step verification and this session has not passed it

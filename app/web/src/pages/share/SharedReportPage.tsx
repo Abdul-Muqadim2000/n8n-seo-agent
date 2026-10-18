@@ -7,7 +7,7 @@ import { fmtBytes, fmtDate, fmtDateTime } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Callout, PageLoader } from '@/components/ui/feedback';
 import { BRAND_NAME, BrandMark } from '@/components/layout/Brand';
-import { useApplyBrand } from '@/lib/portal';
+import { onPortalHost, useApplyBrand } from '@/lib/portal';
 import { ShareBrand } from '@/components/share/ShareBrand';
 import { useDocumentTitle } from '@/components/layout/useDocumentTitle';
 import { StageIcon, stageLabel } from '@/components/reports/meta';
@@ -179,7 +179,7 @@ export default function SharedReportPage() {
             {agency.footerText && <p>{agency.footerText}</p>}
             {agency.poweredBy && <p>Powered by {BRAND_NAME}</p>}
           </div>
-        ) : (
+        ) : onPortalHost() || q.isPending ? null : (
           <p className="mx-auto flex max-w-3xl items-center gap-1.5 px-4 py-5 text-[12px] text-ink-3">
             <BrandMark className="size-4" /> Report prepared with{' '}
             <a href="/" className="rounded-sm font-medium text-ink-2 underline-offset-2 hover:underline">
