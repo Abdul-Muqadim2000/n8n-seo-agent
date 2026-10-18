@@ -151,6 +151,8 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
     ga4_property_id: String(s.ga4_property_id || '').replace(/^properties\//, '').trim(), pulse_rows, key_paths,
     // B-G1: what the gate refused, with its reason, so the report names it instead of printing a shorter list (INVARIANTS rule 1)
     set_aside, set_aside_note: FITR.line(set_aside, 'asked of the AI engines or scored against'),
+    // G6: the gate's context, so the questions the Prompt Writer writes this run are judged by the same rule before they are stored
+    fit_input: { own_domain: s.domain, competitors, brands: aliases, heads: lrowsAll.map(l => l.head_keyword), services: SM.services(site_model), keywords: s.keywords || [] },
     previous: prev ? { checked_at: prev.checked_at, mention_rate: prevMention, samples: prevSamples, mentioned_k: Math.round(prevMention * prevSamples / 100),
       // B-L4 (2026-10-15, INVARIANTS rule 1): the panel is settable from 3 to 50 and a weekly check asks fewer engines than the
       // monthly full one, so the stored row's OWN panel size and run kind travel with its figures. Without them AI Metrics

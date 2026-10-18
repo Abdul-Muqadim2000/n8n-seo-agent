@@ -243,4 +243,122 @@ module.exports = async (ctx) => {
     const pf = (await run('AI Plan', [{ json: {} }], { code: 'Pulse__AI_Plan' }))[0].json;
     check('pulse = full panel on 500 questions: as much as one morning allows, and the note says why', pf.sample.capped && /one morning asks at most/.test(pf.sample.why) && pf.prompts.length * 3 <= 900, JSON.stringify(pf.sample));
   });
+
+  // ===================================================================================================================================
+  await guard('S206 G6 — growing techand.ai\'s 8-question panel to 500, by market x buyer role, from every source', async () => {
+    reset(); const SN = 'S206 G6 — techand.ai\'s real 8-question panel (exec 776) raised to 500 with two buyer roles and a second market: writer jobs per cell (<= 40 each), People-also-ask and competitors\' homepages read';
+    begin(SN); const check = mkCheck(SN);
+    loadWeekly({ monitors: { ai_prompts_max: 500, ai_personas: 'CFO, IT manager', ai_markets: 'SA-en' }, trigger: { ...W['Manual Run'][0] } });
+    const plan = (await run('AI Plan', [{ json: {} }]))[0].json;
+    check('the plan asks for 492 new questions (500 - the 8 stored), within what one run may write (14 jobs x 40)', plan.need_prompts && plan.prompts_needed === 492 && plan.personas.join('|') === 'CFO|IT manager' && plan.markets.join('|') === 'AE-en|SA-en', JSON.stringify([plan.prompts_needed, plan.personas, plan.markets]));
+    check('the fit gate\'s context travels with the plan (own domain, competitors, learned brand names, services)', plan.fit_input && plan.fit_input.own_domain === 'techand.ai' && plan.fit_input.competitors.includes('cleartax.com') && Object.keys(plan.fit_input.brands).length > 3, JSON.stringify(plan.fit_input).slice(0, 200));
+    const stj = (await run('Site Text Jobs', [{ json: {} }])).map(i => i.json);
+    check('the homepages of the declared competitors are read for topic ideas (cleartax.com, azentio.com)', stj.filter(j => j.kind === 'competitor').map(j => j.domain).join(',') === 'cleartax.com,azentio.com', JSON.stringify(stj));
+    mock('Read Site (AI)', stj.map(j => ({ json: { site_text: j.kind === 'competitor' ? '# ' + j.domain + '\nE-invoicing software\nVAT returns\nPayroll for SMEs\nContact us\nPrivacy policy\n' : '' } })));
+    const dr = (await run('Discovery Requests', [{ json: {} }])).map(i => i.json);
+    const paa = dr.filter(r => r.kind === 'paa');
+    check('People-also-ask is read per topic in each market (results page, depth 10), the database for up to 4 topics', paa.length >= 2 && new Set(paa.map(r => r.market)).size === 2 && paa.every(r => /serp\/google\/organic/.test(r.endpoint) && r.body[0].depth === 10) && dr.filter(r => r.kind === 'discover').length <= 4,
+      JSON.stringify(dr.map(r => r.kind + ':' + (r.market || r.platform || '') + ':' + (r.topic || '')).slice(0, 12)));
+    // the results-page answer in DataForSEO's shape (sandbox-probed 2026-10-18: item type people_also_ask with people_also_ask_element titles)
+    mock('Run Discovery', dr.map(r => ({ json: r.kind === 'paa' ? { tasks: [{ status_code: 20000, cost: 0.002, result: [{ items: [{ type: 'organic', title: 'x' }, { type: 'people_also_ask', items: [{ type: 'people_also_ask_element', title: 'Is e-invoicing mandatory in ' + (r.market === 'SA-en' ? 'Saudi Arabia' : 'the UAE') + '?' }, { type: 'people_also_ask_element', title: 'How much does an e-invoicing provider cost?' }] }] }] }] } : { tasks: [{ status_code: 20000, cost: 0.1, result: [{ items: [] }] }] } })));
+    const jobs = (await run('Prompt Jobs', [{ json: {} }])).map(i => i.json);
+    const cells = new Set(jobs.map(j => j.market + '|' + j.persona));
+    check('writer jobs: one or more per market x buyer role (4 cells), each at most 40 questions, at most 14 in all', cells.size === 4 && jobs.every(j => j.count >= 1 && j.count <= 40) && jobs.length <= 14 && jobs.reduce((s, j) => s + j.count, 0) <= 492, JSON.stringify(jobs.map(j => j.market + '|' + j.persona + ':' + j.count)));
+    check('each job names its buyer role, its market\'s country and language, the clusters in use', jobs.every(j => j.persona && j.language === 'English' && j.country && (j.clusters || []).length >= 1), JSON.stringify(jobs.map(j => [j.persona, j.country, j.language])));
+    check('the Saudi jobs get Saudi People-also-ask questions, the UAE jobs UAE ones', jobs.filter(j => j.market === 'SA-en').every(j => j.paa_questions.some(q => /Saudi/.test(q))) && jobs.filter(j => j.market === 'AE-en').every(j => j.paa_questions.some(q => /UAE/.test(q))), JSON.stringify(jobs.map(j => (j.paa_questions || [])[0])));
+    check('competitors\' homepages give topic lines, without their names or their menus\' boilerplate', jobs[0].competitor_offers.length === 2 && /E-invoicing software/.test(jobs[0].competitor_offers[0]) && !/Contact us|Privacy/.test(jobs[0].competitor_offers.join(' ')), JSON.stringify(jobs[0].competitor_offers));
+    check('only the first job may write the brand question', jobs.filter(j => !j.has_brand_prompt).length <= 1, '');
+    const prompt = fs.readFileSync(path.join(CD, 'Prompt_Writer.prompt.txt'), 'utf8');
+    check('the writer\'s prompt carries the buyer role, the language, the clusters, People-also-ask and what competitors sell', /\$json\.persona/.test(prompt) && /\$json\.language/.test(prompt) && /\$json\.clusters/.test(prompt) && /paa_questions/.test(prompt) && /competitor_offers/.test(prompt) && /"persona"/.test(prompt), '');
+  });
+
+  // ===================================================================================================================================
+  await guard('S207 G6 — every new question through the meaning dedupe and the fit gate; refusals stored with the reason', async () => {
+    reset(); const SN = 'S207 G6 — the Prompt Writer\'s questions for techand.ai: a repeat in other words is dropped, a competitor\'s brand / a government service / the site\'s own name are stored REFUSED with the gate\'s sentence, never asked';
+    begin(SN); const check = mkCheck(SN);
+    loadWeekly({ monitors: { ai_prompts_max: 30, ai_personas: 'CFO' }, trigger: { ...W['Manual Run'][0] } });
+    const plan = (await run('AI Plan', [{ json: {} }]))[0].json;
+    mock('Prompt Jobs', [{ json: { site_id: plan.site_id, persona: 'CFO', market: 'AE-en', count: 22 } }]);
+    const Q = (prompt, keyword, extra) => ({ prompt, keyword, kind: 'recommend', stage: 'decision', cluster: 'e-invoicing', origin: 'writer', ...(extra || {}) });
+    mock('Prompt Writer', [{ json: { output: { prompts: [
+      Q('Which accredited e-invoicing providers in the UAE should a CFO shortlist before the 2026 deadline?', 'e-invoicing providers uae'),
+      Q('As a CFO in the UAE, which accredited e-invoicing providers should I shortlist before the 2026 deadline?', 'accredited e-invoicing uae'),   // the same question, other words
+      Q('Is ClearTax the right e-invoicing partner for a mid-size UAE distributor?', 'cleartax e-invoicing uae'),   // a declared competitor's brand
+      Q('How do I renew my Emirates ID online through the ICP portal?', 'emirates id renewal online'),   // a government service
+      Q('Is Techand a reliable ERP partner for UAE manufacturers?', 'techand erp partner'),   // the site's own name outside the brand question
+      Q('What does an ERP implementation cost for a 200-person UAE manufacturer?', 'erp implementation cost uae', { kind: 'cost', stage: 'decision', cluster: 'erp implementation' }),
+      Q('Which ERP rollout risks should a CFO plan for in the first year?', 'erp rollout risks', { kind: 'problem', stage: 'awareness', cluster: 'erp implementation', origin: 'paa' }) ] } } }]);
+    const rows = (await run('Prompt Rows', [{ json: {} }])).map(i => i.json).filter(r => !r.skip);
+    const fresh = rows.filter(r => !plan.prompts.some(q => q.prompt_id === r.prompt_id));
+    const PRC = ['prompt_id', 'site_id', 'domain', 'prompt', 'kind', 'topic', 'keyword', 'source', 'status', 'created_at', 'stage', 'cluster', 'volume', 'origin', 'updated_at', 'persona', 'market', 'pinned', 'fit_note'];
+    check('every row has exactly the table\'s columns (the save node maps every field it is given)', rows.every(r => Object.keys(r).length === PRC.length && PRC.every(c => c in r)), JSON.stringify(rows.map(r => Object.keys(r).filter(k => !PRC.includes(k)))));
+    check('the repeat in other words is dropped (one of the two "shortlist" questions is stored)', fresh.filter(r => /shortlist/.test(r.prompt)).length === 1, JSON.stringify(fresh.map(r => r.prompt.slice(0, 40))));
+    const ref = fresh.filter(r => r.status === 'refused');
+    console.log('   refused ->', ref.map(r => r.fit_note).join(' || '));
+    check('ClearTax, the Emirates ID portal and "Techand" are stored REFUSED, each with the gate\'s sentence', ref.length === 3 && ref.some(r => /ClearTax/.test(r.prompt) && /other brand/.test(r.fit_note)) && ref.some(r => /Emirates ID/.test(r.prompt) && /government|portal/.test(r.fit_note)) && ref.some(r => /Techand/.test(r.prompt) && /own brand/.test(r.fit_note)), JSON.stringify(ref.map(r => r.fit_note)));
+    const ok = fresh.filter(r => r.status === 'active');
+    check('the three good questions are stored active with their buyer role, market and origin', ok.length === 3 && ok.every(r => r.persona === 'CFO' && r.market === 'AE-en') && ok.some(r => r.origin === 'paa'), JSON.stringify(ok.map(r => [r.persona, r.market, r.origin])));
+    // and a refused question is never asked
+    const req = (await run('AI Requests', [{ json: {} }])).map(i => i.json);
+    check('no request is made for a refused question', !req.some(r => ref.some(x => x.prompt_id === r.prompt_id)) && req.some(r => ok.some(x => x.prompt_id === r.prompt_id)), '');
+    // the read path: a stored refused question is not in next week's panel
+    loadWeekly({ monitors: { ai_prompts_max: 30 }, prompts: [...W['Load AI Prompts'], ...fresh] });
+    const p2 = (await run('AI Plan', [{ json: {} }]))[0].json;
+    check('next week\'s panel leaves the refused questions out and keeps the good ones', !p2.prompts.some(q => ref.some(x => x.prompt_id === q.prompt_id)) && ok.every(x => p2.prompts.some(q => q.prompt_id === x.prompt_id)), JSON.stringify(p2.prompts.map(q => q.prompt_id)));
+    // the kit's own meaning rule
+    check('meaning dedupe: the same question for another buyer role or market is NOT a repeat', !AIP.sameAsk({ prompt: 'Which e-invoicing providers are best in the UAE?', persona: 'CFO' }, { prompt: 'Which e-invoicing providers are best in the UAE?', persona: 'IT manager' })
+      && AIP.sameAsk({ prompt: 'Which e-invoicing providers are best in the UAE?', persona: 'CFO', market: 'AE-en' }, { prompt: 'Best e-invoicing providers in the UAE — which ones?', persona: 'CFO', market: 'AE-en' }), '');
+  });
+
+  // ===================================================================================================================================
+  await guard('S208 G6 — the owner manages the panel: import, edit, re-word, switch off / on, pin', async () => {
+    reset(); const SN = 'S208 G6 — Site Admin ai_prompts: a CSV import of questions with buyer role / cluster / market, an edit in place, new wording as a new question, off / on (a refused one becomes the owner\'s), pin / unpin';
+    begin(SN); const check = mkCheck(SN);
+    await run('Admin Action', { body: { action: 'ai_prompts', domain: 'techand.ai', add: [
+      { prompt: 'Which payroll software works best for a 50-person Dubai company?', persona: 'Finance manager', cluster: 'Payroll Software', stage: 'decision', market: 'ae-en', pinned: true },
+      { prompt: 'What should a CFO in Riyadh ask before choosing an ERP partner?', persona: 'CFO', cluster: 'erp implementation', stage: 'consideration', market: 'SA' },
+      'How long does an e-invoicing rollout take for a UAE retailer?' ],
+      edit: [{ prompt_id: 'p_keep', persona: 'IT manager', cluster: 'erp implementation' }, { prompt_id: 'p_reword', prompt: 'Which accredited e-invoicing providers serve UAE logistics companies?' }],
+      remove: ['p_off'], enable: ['p_refused'], pin: ['p_keep'], unpin: ['p_pinned'] } });
+    const base = { site_id: 'site_techand-ai', domain: 'techand.ai', kind: 'recommend', topic: 't', keyword: 'k', source: 'auto', status: 'active', created_at: '2026-10-01T00:00:00.000Z', stage: 'decision', cluster: 'e-invoicing', volume: 10, origin: 'writer', updated_at: '', persona: '', market: 'AE-en', pinned: false, fit_note: '' };
+    mock('Load AI Prompts (Admin)', items([{ ...base, prompt_id: 'p_keep', prompt: 'Keep this one as it is?' }, { ...base, prompt_id: 'p_reword', prompt: 'Which e-invoicing providers are accredited?' }, { ...base, prompt_id: 'p_off', prompt: 'Switch me off?' },
+      { ...base, prompt_id: 'p_refused', prompt: 'Is ClearTax good?', status: 'refused', fit_note: '"Is ClearTax good?" was not added: names a competitor (other brand)' }, { ...base, prompt_id: 'p_pinned', prompt: 'Pinned one?', pinned: true }]));
+    const rows = (await run('AI Prompt Rows (Admin)', [{ json: {} }])).map(i => i.json);
+    const by = (id) => rows.find(r => r.prompt_id === id) || {};
+    const added = rows.filter(r => r.origin === 'custom' && r.source === 'custom' && !['p_keep', 'p_reword', 'p_off', 'p_refused', 'p_pinned'].includes(r.prompt_id));
+    check('three imported questions, the owner\'s own, with role / cluster (lower case) / stage / market (normalised) / pin', added.length === 4 && added.some(r => r.persona === 'Finance manager' && r.cluster === 'payroll software' && r.market === 'AE-en' && r.pinned === true && r.stage === 'decision') && added.some(r => r.market === 'SA-en' && r.persona === 'CFO'), JSON.stringify(added.map(r => [r.prompt.slice(0, 20), r.persona, r.cluster, r.market, r.pinned])));
+    check('an edit changes role and cluster in place, keeps the wording and the id (and the pin applies)', by('p_keep').persona === 'IT manager' && by('p_keep').cluster === 'erp implementation' && by('p_keep').prompt === 'Keep this one as it is?' && by('p_keep').pinned === true, JSON.stringify(by('p_keep')));
+    const reworded = rows.find(r => /logistics/.test(r.prompt));
+    check('new wording is a NEW question (new id, active) and the old one is switched off — no trend compares two questions', by('p_reword').status === 'off' && reworded && reworded.prompt_id !== 'p_reword' && reworded.status === 'active' && reworded.cluster === 'e-invoicing', JSON.stringify([by('p_reword').status, reworded && reworded.prompt_id]));
+    check('switch off; switch on a refused question — it becomes the owner\'s own and says so', by('p_off').status === 'off' && by('p_refused').status === 'active' && by('p_refused').source === 'custom' && /switched on by the owner/.test(by('p_refused').fit_note), JSON.stringify([by('p_off').status, by('p_refused')]));
+    check('unpin', by('p_pinned').pinned === false, JSON.stringify(by('p_pinned')));
+    check('every row: exact seo_ai_prompts columns', rows.every(r => Object.keys(r).length === 19), JSON.stringify(Object.keys(rows[0])));
+    // the weekly plan puts a pinned question first
+    loadWeekly({ monitors: { ai_prompts_max: 5 }, prompts: [...W['Load AI Prompts'].slice(0, 6), { ...W['Load AI Prompts'][6], pinned: true }] });
+    const p = (await run('AI Plan', [{ json: {} }]))[0].json;
+    check('a pinned question is asked first and survives a smaller panel', p.prompts[0].prompt_id === W['Load AI Prompts'][6].prompt_id && p.prompts.length === 5, JSON.stringify(p.prompts.map(q => q.prompt_id)));
+  });
+
+  // ===================================================================================================================================
+  await guard('S209 G6 — the engines DataForSEO offers now: ChatGPT API and Gemini API wired opt-in', async () => {
+    reset(); const SN = 'S209 G6 — sandbox probe of 2026-10-18: ChatGPT and Gemini LLM Responses (web search) asked as two more opt-in engines, parsed like Perplexity / Claude; Grok / DeepSeek / Meta / Copilot have no endpoint and are refused';
+    begin(SN); const check = mkCheck(SN);
+    loadWeekly({ monitors: { ai_engines: 'chatgpt, chatgpt_api, gemini_api, grok, deepseek' }, trigger: { ...W['Manual Run'][0] } });
+    const plan = (await run('AI Plan', [{ json: {} }]))[0].json;
+    check('a site may choose the two API engines; engines DataForSEO has no endpoint for are dropped', plan.engines.join(',') === 'chatgpt,chatgpt_api,gemini_api', plan.engines.join(','));
+    const req = (await run('AI Requests', [{ json: {} }])).map(i => i.json).filter(r => r.engine);
+    const ca = req.find(r => r.engine === 'chatgpt_api'), ga = req.find(r => r.engine === 'gemini_api');
+    check('the ChatGPT API: chat_gpt/llm_responses with a web-search model, the market\'s country, its price', ca && /chat_gpt\/llm_responses\/live$/.test(ca.endpoint) && ca.body[0].model_name === 'gpt-5.4-mini' && ca.body[0].web_search === true && ca.body[0].web_search_country_iso_code === 'AE' && ca.est_cost === AIP.PRICE.chatgpt_api, JSON.stringify(ca && ca.body));
+    check('the Gemini API: gemini/llm_responses with web search and its price', ga && /gemini\/llm_responses\/live$/.test(ga.endpoint) && ga.body[0].model_name === 'gemini-3.5-flash' && ga.body[0].web_search === true && ga.est_cost === AIP.PRICE.gemini_api, JSON.stringify(ga && ga.body));
+    // the answer shape the sandbox returned for both (items -> sections -> text + annotations)
+    const ans = (text, cites) => ({ tasks: [{ status_code: 20000, cost: 0.011, result: [{ model_name: 'm', web_search: true, money_spent: 0.0106, items: [{ type: 'message', sections: [{ type: 'text', text, annotations: cites.map(u => ({ title: 'src', url: u })) }] }], fan_out_queries: ['uae e-invoicing providers'] }] }] });
+    mock('Run AI Requests', req.map(r => ({ json: r.engine === 'chatgpt_api' ? ans('Top picks: Techand (techand.ai) leads, then ClearTax.', ['https://techand.ai/e-invoicing', 'https://www.cleartax.com/ae']) : r.engine === 'gemini_api' ? ans('ClearTax and Zoho are common choices.', ['https://zoho.com/ae']) : { tasks: [{ status_code: 20000, cost: 0.004, result: [{ markdown: 'x', items: [] }] }] } })));
+    delete store['Merge AI Answers'];
+    const parsed = (await run('Parse AI Answers', store['Run AI Requests'])).map(i => i.json).filter(r => r.engine);
+    const pc = parsed.find(r => r.engine === 'chatgpt_api'), pg = parsed.find(r => r.engine === 'gemini_api');
+    check('a ChatGPT API answer that names and cites the site: answered, mentioned, cited, rank 1, its cost', pc && pc.answered && pc.mentioned && pc.cited && pc.rank === 1 && pc.cost === 0.011, JSON.stringify(pc).slice(0, 300));
+    check('a Gemini API answer that does not: answered, not mentioned, its rivals read', pg && pg.answered && !pg.mentioned && /zoho/.test(pg.competitors), JSON.stringify(pg).slice(0, 300));
+    const c = AIP.cost({ panel: 50, engines: ['chatgpt', 'chatgpt_api', 'gemini_api'] });
+    check('the price of each engine is stated, the two API ones marked as estimates until their first live call', c.prices.find(x => x.engine === 'chatgpt_api').usd === 0.012 && /estimate/.test(c.prices.find(x => x.engine === 'gemini_api').basis) && /measured/.test(c.prices.find(x => x.engine === 'chatgpt').basis), JSON.stringify(c.prices));
+  });
 };

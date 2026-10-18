@@ -271,7 +271,8 @@ if (action === 'cadence' && b.pages_per_week == null && b.blogs_per_week == null
 if (action === 'unpublish' && !b.keyword) errors.push('keyword is required for action unpublish');
 if (action === 'prospect' && !b.prospect_domain) errors.push('prospect_domain is required for action prospect');
 if (action === 'prospect' && b.status && !['new', 'contacted', 'replied', 'won', 'rejected', 'ignored'].includes(String(b.status).toLowerCase())) errors.push('status must be new, contacted, replied, won, rejected or ignored');
-if (action === 'ai_prompts' && !(Array.isArray(b.add) && b.add.length) && !(Array.isArray(b.remove) && b.remove.length)) errors.push('add (questions to track) or remove (prompt ids or texts) is required for action ai_prompts');
+if (action === 'ai_prompts' && !['add', 'remove', 'enable', 'pin', 'unpin', 'edit'].some(k => Array.isArray(b[k]) && b[k].length)) errors.push('add (questions to track), edit, remove, enable, pin or unpin (prompt ids or texts) is required for action ai_prompts');   // G6 (2026-10-18): the panel manager
+if (action === 'ai_prompts' && ['add', 'remove', 'enable', 'pin', 'unpin', 'edit'].some(k => Array.isArray(b[k]) && b[k].length > 500)) errors.push('at most 500 questions per change');
 return [{ json: { ok: errors.length === 0, error: errors.join('; '), action, forward: { ...b, action, request_id: String(b.request_id || ('admin-' + $execution.id)) } } }];"""
 admin_hook = {"httpMethod": "POST", "path": "seo-site-admin", "authentication": "headerAuth", "responseMode": "responseNode", "options": {}}
 awf = {"id": "SEOagentAdminAPI", "name": "SEO Agent — Admin API", "active": False, "settings": {"executionOrder": "v1", "errorWorkflow": "SEOagentErrHandl"}, "tags": [],
