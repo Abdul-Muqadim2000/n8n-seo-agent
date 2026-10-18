@@ -15,7 +15,10 @@ import {
   inviteSchema,
   MODES,
   ROLE_LABELS,
+  CLIENT_ROLES,
+  isClientRole,
   type Invitation,
+  type OrgKind,
   type ModeId,
   type Member,
   type Role,
@@ -47,6 +50,7 @@ import { ApiKeysTab } from './_components/ApiKeysTab';
 import { SecurityTab } from './_components/SecurityTab';
 import { AuditTab } from './_components/AuditTab';
 import { SsoTab } from './_components/SsoTab';
+import { BrandingTab, ClientMailTab, PortalDomainTab } from './_components/AgencyTabs';
 
 const TABS = [
   { id: 'company', label: 'Company', description: 'Your company’s details, websites and setup.' },
@@ -58,13 +62,20 @@ const TABS = [
   { id: 'security', label: 'Security', description: 'Two-step verification for everyone, who has it, and how long records are kept.' },
   { id: 'sso', label: 'Single sign-on', description: 'Sign in through your identity provider (Okta, Entra ID, Google Workspace), on your own e-mail domains.' },
   { id: 'audit', label: 'Audit log', description: 'Who did what, when and from where: sign-ins, team, settings, keys and sharing.' },
-] as const;
+  // G5: an agency's portal for its clients, and a client workspace's own branding and approval rule
+  { id: 'branding', label: 'Branding', description: 'The name, logo and colour your clients see instead of ours.', kinds: ['agency', 'client'] },
+  { id: 'portal', label: 'Portal address', description: 'Your clients’ portal on your own domain, such as seo.youragency.com.', kinds: ['agency'] },
+  { id: 'client-mail', label: 'Client e-mail', description: 'Who e-mails to your clients come from, and where their replies go.', kinds: ['agency'] },
+] as const satisfies readonly { id: string; label: string; description: string; kinds?: readonly OrgKind[] }[];
+const tabShown = (t: (typeof TABS)[number], kind: OrgKind) => !('kinds' in t) || (t.kinds as readonly OrgKind[]).includes(kind);
 
 const ROLE_DESCRIPTIONS: Record<Role, string> = {
   owner: 'Everything, including the budget and deleting the company.',
   admin: 'Websites, website settings and the team. Starts analyses.',
   member: 'Starts analyses and sees every dashboard and report.',
   viewer: 'Sees dashboards and reports. Cannot start analyses.',
+  client_approver: 'The client’s portal: dashboards, reports and recommendations, and approves pages and outreach.',
+  client_viewer: 'The client’s portal: dashboards, reports and recommendations. Read only.',
 };
 
 const sizeLabel = (s: string) => (s === 'Just me' ? s : `${s.replace('-', '–')} people`);
@@ -72,12 +83,12 @@ const sizeLabel = (s: string) => (s === 'Just me' ? s : `${s.replace('-', '–')
 export default function OrgSettingsPage() {
   const { tab } = useParams();
   const { org } = useOrgCtx();
-  const current = TABS.find((t) => t.id === tab);
+  const current = TABS.find((t) => t.id === tab && tabShown(t, org.kind));
   if (!current) return <Navigate to={paths.settings(org.id, 'company')} replace />;
   return (
     <div>
       <PageHeader icon={<Building2 />} title="Company settings" description={current.description} eyebrow={org.name} />
-      <LinkTabs className="mb-6" items={TABS.map((t) => ({ to: paths.settings(org.id, t.id), label: t.label }))} />
+      <LinkTabs className="mb-6" items={TABS.filter((t) => tabShown(t, org.kind)).map((t) => ({ to: paths.settings(org.id, t.id), label: t.label }))} />
       {current.id === 'company' && <CompanyTab />}
       {current.id === 'team' && <TeamTab />}
       {current.id === 'usage' && <UsageTab />}
@@ -87,6 +98,9 @@ export default function OrgSettingsPage() {
       {current.id === 'security' && <SecurityTab />}
       {current.id === 'sso' && <SsoTab />}
       {current.id === 'audit' && <AuditTab />}
+      {current.id === 'branding' && <BrandingTab />}
+      {current.id === 'portal' && <PortalDomainTab />}
+      {current.id === 'client-mail' && <ClientMailTab />}
     </div>
   );
 }
@@ -343,8 +357,10 @@ function TeamTab() {
   };
 
   // the role control (a select for admins, a badge otherwise); its own column from md up, under the e-mail on phones
+  // G5: in a client workspace a client person is one of the client roles; an agency member's access is set from the agency
+  const roleChoices = (m: Member): readonly Role[] => (isClientRole(m.role) ? CLIENT_ROLES : org.kind === 'client' ? [] : (['admin', 'member', 'viewer'] as const));
   const roleCell = (m: Member) =>
-    admin && m.role !== 'owner' && m.userId !== me.user.id ? (
+    admin && m.role !== 'owner' && m.userId !== me.user.id && roleChoices(m).length ? (
       <div className="w-32">
         <Select
           aria-label={`Role of ${m.name}`}
@@ -353,7 +369,7 @@ function TeamTab() {
           onChange={(e) => changeRole(m, e.target.value as Role)}
           className="h-8 text-[13px]"
         >
-          {(['admin', 'member', 'viewer'] as const).map((r) => (
+          {roleChoices(m).map((r) => (
             <option key={r} value={r}>
               {ROLE_LABELS[r]}
             </option>
@@ -389,7 +405,7 @@ function TeamTab() {
       key: 'role',
       header: 'Role',
       hideOnMobile: true,
-      sortValue: (m) => ['owner', 'admin', 'member', 'viewer'].indexOf(m.role),
+      sortValue: (m) => ['owner', 'admin', 'member', 'viewer', 'client_approver', 'client_viewer'].indexOf(m.role),
       cell: roleCell,
     },
     {
@@ -441,7 +457,11 @@ function TeamTab() {
       <SettingsCard
         icon={<Users />}
         title={`Members (${list.length})`}
-        description="Everyone here sees all websites of the company. What they can change depends on their role."
+        description={
+          org.kind === 'client'
+            ? 'The client’s own people see this workspace as their portal. Your agency’s owners and admins reach it already; give other agency members access from the agency’s Clients page.'
+            : 'Everyone here sees all websites of the company. What they can change depends on their role.'
+        }
         actions={
           admin ? (
             <Button size="sm" icon={<UserPlus className="size-4" />} onClick={() => setInviteOpen(true)}>
@@ -454,7 +474,7 @@ function TeamTab() {
           <DataTable rows={list} columns={columns} rowKey={(m) => m.userId} initialSort={{ key: 'role', dir: 'asc' }} searchable={list.length > 8} searchPlaceholder="Search members…" />
           <h3 className="mt-6 mb-2.5 text-xs font-medium text-ink-3">What each role can do</h3>
           <dl className="grid gap-2.5 sm:grid-cols-2">
-            {(['owner', 'admin', 'member', 'viewer'] as const).map((r) => (
+            {(org.kind === 'client' ? CLIENT_ROLES : (['owner', 'admin', 'member', 'viewer'] as const)).map((r) => (
               <div key={r} className="flex items-start gap-3 rounded-lg border border-line p-3 transition-colors duration-150 ease-brand hover:border-line-strong">
                 <IconTile size="sm" tone={r === 'owner' ? 'blue' : 'neutral'}>
                   {ROLE_ICON[r]}
@@ -578,15 +598,18 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o:
   const invite = useTeamMutation<InviteOutput>(org.id, 'POST', () => `/api/orgs/${org.id}/invitations`, (b) => b);
   const [created, setCreated] = useState<Invitation | null>(null);
   const [error, setError] = useState<unknown>(null);
-  const form = useForm<InviteValues, unknown, InviteOutput>({ resolver: zodResolver(inviteSchema), defaultValues: { email: '', role: 'member' } });
-  const role = form.watch('role') ?? 'member';
+  // G5: a client workspace invites the client's own people (client roles); a company invites staff
+  const choices: readonly Role[] = org.kind === 'client' ? CLIENT_ROLES : (['admin', 'member', 'viewer'] as const);
+  const first = org.kind === 'client' ? 'client_viewer' : 'member';
+  const form = useForm<InviteValues, unknown, InviteOutput>({ resolver: zodResolver(inviteSchema), defaultValues: { email: '', role: first } });
+  const role = form.watch('role') ?? first;
 
   const close = (o: boolean) => {
     onOpenChange(o);
     if (!o) {
       setCreated(null);
       setError(null);
-      form.reset({ email: '', role: 'member' });
+      form.reset({ email: '', role: first });
     }
   };
 
@@ -660,8 +683,8 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o:
               Role
             </p>
             <div role="radiogroup" aria-labelledby="invite-role-label" className="space-y-2">
-              {(['admin', 'member', 'viewer'] as const).map((r) => (
-                <ChoiceCard key={r} selected={role === r} onSelect={() => form.setValue('role', r)} title={ROLE_LABELS[r]} description={ROLE_DESCRIPTIONS[r]} icon={<span className="[&_svg]:size-4">{ROLE_ICON[r]}</span>} />
+              {choices.map((r) => (
+                <ChoiceCard key={r} selected={role === r} onSelect={() => form.setValue('role', r as InviteValues['role'])} title={ROLE_LABELS[r]} description={ROLE_DESCRIPTIONS[r]} icon={<span className="[&_svg]:size-4">{ROLE_ICON[r]}</span>} />
               ))}
             </div>
           </div>

@@ -3,6 +3,8 @@
 import { useId, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { ArrowRight, CheckCircle2, Info, OctagonAlert, TriangleAlert } from 'lucide-react';
+import { brandTokens } from '@seo/shared';
+import { onPortalHost, usePortalBrand } from '@/lib/portal';
 import { cn } from '@/lib/utils';
 import { IconTile, type IconTileTone } from '@/components/ui/icon-tile';
 import { CollapsePanel, DisclosureButton, InfoTip } from './disclosure';
@@ -138,11 +140,18 @@ export function SummaryHero({
   actions?: ReactNode;
   className?: string;
 }) {
+  // G5: in an agency's portal there is no Ascentra watermark, and a brand colour light enough to need dark text cannot carry the
+  // hero's white text: the hero falls back to ink
+  const brand = usePortalBrand();
+  const light = !!brand?.accent && brandTokens(brand.accent)?.light['accent-ink'] !== '#ffffff';
+  if (tone === 'blue' && light) tone = 'ink';
   return (
     <SurfaceContext.Provider value={tone}>
       <section className={cn('relative isolate overflow-hidden rounded-xl p-5 shadow-raised sm:p-6', tone === 'ink' ? 'bg-ink-surface text-on-ink ring-1 ring-line-on-ink' : 'bg-accent text-on-ink dark:bg-accent-soft dark:ring-1 dark:ring-line-on-ink', className)}>
         {/* the whole mark as a quiet watermark (brand: hero graphics / watermarks; never single rays) */}
-        <img src="/brand/ascentra-mark-white.svg" alt="" aria-hidden className={cn('pointer-events-none absolute -top-24 -right-20 -z-10 w-[26rem] select-none', tone === 'ink' ? 'opacity-[0.045]' : 'opacity-[0.08]')} />
+        {!brand && !onPortalHost() && (
+          <img src="/brand/ascentra-mark-white.svg" alt="" aria-hidden className={cn('pointer-events-none absolute -top-24 -right-20 -z-10 w-[26rem] select-none', tone === 'ink' ? 'opacity-[0.045]' : 'opacity-[0.08]')} />
+        )}
         <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div className="min-w-0 max-w-3xl">
             {eyebrow && <div className={cn('mb-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium', tone === 'ink' ? 'text-on-ink-2' : 'text-on-ink/90')}>{eyebrow}</div>}

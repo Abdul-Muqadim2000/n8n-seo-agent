@@ -36,5 +36,10 @@ export const paths = {
   report: (orgId: string, reportId: string) => `/o/${orgId}/reports/${reportId}`,
   reports: (orgId: string) => `/o/${orgId}/reports`,
   settings: (orgId: string, tab = 'company') => `/o/${orgId}/settings/${tab}`,
+  /** G5: an agency's clients and their websites in one table */
+  clients: (orgId: string) => `/o/${orgId}/clients`,
+  /** G5: a client workspace's approvals (asked by the agency, decided by the client) */
+  approvals: (orgId: string) => `/o/${orgId}/approvals`,
+  portalHandoff: (host: string) => `/portal-handoff?host=${encodeURIComponent(host)}`,
   admin: '/admin',
 };

@@ -453,3 +453,26 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* G5: "Save as PDF" on a report prints the report alone: no navigation, no buttons, light page, cards unbroken where possible */
+@media print {
+  #app-sidebar,
+  [data-print-hide],
+  .lg\:hidden.sticky {
+    display: none !important;
+  }
+  :root {
+    color-scheme: light;
+  }
+  body {
+    background: #fff;
+  }
+  main {
+    max-width: none !important;
+  }
+  section,
+  .shadow-card {
+    break-inside: avoid;
+    box-shadow: none !important;
+  }
+}

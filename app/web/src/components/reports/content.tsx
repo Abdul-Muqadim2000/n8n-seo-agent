@@ -247,7 +247,8 @@ export function ContentReport({ report }: { report: ReportDetail }) {
       {html && <PageChecks html={html} meta={meta} qa={qa} qaOk={qaOk} notReady={notReady} qaLabel={qaLabel} ledger={obj(p.run_ledger)} />}
 
       {/* G2: send the page to the website's CMS — drafts by default, live only for owners and admins, never a page the checks refuse */}
-      {html && report.siteId && <CmsPublishPanel report={report} />}
+      {/* G5: publishing is the agency's act, never a client person's (their portal has Approvals) */}
+      {html && report.siteId && can('viewer') && <CmsPublishPanel report={report} />}
 
       {html ? (
         <Block

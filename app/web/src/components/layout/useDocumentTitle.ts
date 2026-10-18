@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BRAND_NAME } from './Brand';
+import { productName } from '@/lib/portal';
 
 /** Sets `document.title` while the calling component is mounted (back to the brand name when it unmounts). */
 export function useDocumentTitle(title: string | null | undefined) {
@@ -7,7 +7,7 @@ export function useDocumentTitle(title: string | null | undefined) {
     if (!title) return;
     document.title = title;
     return () => {
-      document.title = BRAND_NAME;
+      document.title = productName();
     };
   }, [title]);
 }
