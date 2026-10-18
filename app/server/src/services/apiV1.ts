@@ -26,7 +26,8 @@ import {
 } from '@seo/shared';
 import { db, schema } from '../db';
 import type { ApiKeyRow, OrgRow, RunRow, SiteRow } from '../db/schema';
-import { isUuid } from '../auth/access';
+import type { FastifyRequest } from 'fastify';
+import { isUuid, type OrgAccess } from '../auth/access';
 import { HttpError, notFound, validationError } from '../lib/errors';
 import { publishCheckCall, siteRows } from '../n8n/client';
 import { oneReadingFinding, previousOfType } from './data';
@@ -47,6 +48,10 @@ export interface V1Ctx {
   auth: 'api_key' | 'session';
   key: ApiKeyRow | null;
   scopes: ApiScope[];
+  /** G4: a session's own membership (a key's actor is its creator, resolved per write in services/apiRuns.ts `actorOf`) */
+  actor?: OrgAccess | null;
+  /** G4 + G1: the request, so a write made through a tool (MCP) is audited with its address and user agent like a REST one */
+  req?: FastifyRequest | null;
 }
 
 export function requireScope(ctx: V1Ctx, scope: ApiScope) {

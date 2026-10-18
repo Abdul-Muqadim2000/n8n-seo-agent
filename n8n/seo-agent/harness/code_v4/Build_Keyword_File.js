@@ -47,6 +47,14 @@ const CC = (() => {
   // against maxTokensToSample). Share of the budget by effort, from the three Opus nodes of exec 521 (27,365 in / 16,426 out reported as
   // `tokenUsageEstimate` against ~11k tokens of real answer).
   const THINK_SHARE = { low: 0.05, medium: 0.1, high: 0.2 };
+  // B-8 / A-27 (re-rating 2026-10-17): that budget share is right for nothing we can check. On the NON-streaming adaptive-thinking
+  // nodes n8n records the real `tokenUsage`, whose output count INCLUDES the thinking (Anthropic bills thinking as output), and on
+  // execs 760 / 764 / 765 / 767 / 770 it exceeded the counted answer by about 50 tokens a call (Content Reviewer 2,258 vs 2,208;
+  // 3,959 vs 3,909; 1,535 vs 1,484) — while the budget share added 1,638-3,277 per node and put the ledger 19-31% above n8n. Adaptive
+  // thinking at low / medium effort mostly does not think on these tasks. So a non-streaming call is modelled at the thinking it was
+  // SEEN to do, a little above the measured gap; only a streaming call (where n8n reports no usage, so nothing can check it) keeps the
+  // budget share, and its basis says so.
+  const THINK_SEEN = 64;
   const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
   const r4 = (v) => +n0(v).toFixed(4);
   const family = (model) => {
@@ -125,7 +133,8 @@ const CC = (() => {
     const covers = cnt ? Math.max(1, Math.round(n0((c.counted || {}).rounds) || 1)) : 0;
     const rounds = cnt ? Math.min(calls, covers) : 0;
     const perIn = cnt ? cnt.in_tokens / covers : 0, perOut = cnt ? cnt.out_tokens / covers : 0;
-    const budget = c.effort ? Math.round(n0(c.max_tokens) * (THINK_SHARE[String(c.effort)] || 0)) * calls : 0;
+    const seenThink = !!c.effort && !c.streaming;   // B-8 / A-27: a non-streaming call is modelled at the thinking it was seen to do
+    const budget = !c.effort ? 0 : seenThink ? THINK_SEEN * calls : Math.round(n0(c.max_tokens) * (THINK_SHARE[String(c.effort)] || 0)) * calls;
     const think = u ? 0 : budget;
     const inTok = u ? n0(u.promptTokens) : cnt ? Math.round(perIn * calls) : tokensOf(c.prompt_chars) * calls;
     const outTok = u ? n0(u.completionTokens) : (cnt ? Math.round(perOut * calls) : tokensOf(c.output_chars) * calls) + think;
@@ -143,8 +152,9 @@ const CC = (() => {
         : cnt ? 'measured: ' + cnt.source + ' counted ' + cnt.in_tokens + ' prompt and ' + cnt.out_tokens + ' answer token(s)'
             + (covers > 1 ? ' across ' + covers + ' call(s)' : '')
             + (calls > rounds ? ', repeated for the ' + (calls - rounds) + ' round(s) the counter did not see' : '')
-            + (think > 0 ? '; the ' + think + ' thinking token(s) it cannot see are modelled from the '
-              + String(c.effort) + ' effort budget' : '')
+            + (think > 0 ? '; the ' + think + ' thinking token(s) it cannot see are modelled ' + (seenThink
+              ? 'at the ' + THINK_SEEN + ' a call n8n\'s reported output was seen to exceed the counted answer by (2026-10-17)'
+              : 'from the ' + String(c.effort) + ' effort budget') : '')
             + retried
             + (estimated_usd > 0 ? ' ($' + estimated_usd.toFixed(4) + ' of $' + usd.toFixed(4) + ' is modelled)' : '')
         : 'estimated: prompt and answer characters at ' + CHARS_PER_TOKEN + ' characters a token'
@@ -292,17 +302,33 @@ const CC = (() => {
     return { usd: r4(Math.max(capped, recentMax)), source: 'calibrated', floor: r4(recentMax), def, n: st.n };
   };
 
+  // B-9: how many 200-page plain crawls an audit's crawl is. DataForSEO on-page charges per crawled page, and a page rendered with
+  // JavaScript costs 4x (exec 739: $0.36 quoted for 200 pages against $0.09). Pages default to 200, as Normalize Input does.
+  const CRAWL_BASE_PAGES = 200, CRAWL_JS_MULT = 4;
+  const crawlFactor = (d) => { const r = d || {}; const pages = n0(r.crawl_max_pages) > 0 ? n0(r.crawl_max_pages) : CRAWL_BASE_PAGES;
+    const js = r.crawl_js === true || /^(true|yes|1)$/i.test(String(r.crawl_js || ''));
+    return +((pages / CRAWL_BASE_PAGES) * (js ? CRAWL_JS_MULT : 1)).toFixed(4); };
+
   // one request -> what it reserves. `room` is the extra the case-study intake holds back for the page run it spawns.
   const pick = (kind, d, cal) => {
     const keys = keysFor(kind, d);
     let usd = 0, source = 'default', floor = 0;
-    for (const k of keys) { const e = estOf(kind, k, cal); usd += e.usd; floor += e.floor; if (e.source === 'calibrated') source = 'calibrated'; }
+    // B-9 (re-rating 2026-10-17): the crawl figure is one 200-page plain crawl, whatever the request asked for. Exec 739 asked for a
+    // JavaScript crawl ($0.36 quoted for 200 pages, 4x the plain one) and was told $0.11. An audit's crawl is now scaled by the pages it
+    // may crawl and by JavaScript (CC.crawlFactor) — the same formula as the app's app/shared/src/cost.ts `crawlFactor`.
+    const cf = (kind === 'dfs' && String((d || {}).mode) === 'audit') ? crawlFactor(d) : 1;
+    for (const k of keys) { const e = estOf(kind, k, cal); usd += e.usd; floor += e.floor; if (e.source === 'calibrated') source = 'calibrated';
+      if (cf !== 1 && k === 'crawl') usd += e.usd * (cf - 1);
+      if (cf !== 1 && k === 'full') usd += n0(DFS_EST.crawl) * (cf - 1); }
     const room = (kind === 'ai' && String((d || {}).mode) === 'case_study') ? estOf('ai', 'content', cal).usd : 0;
     // `key` is the PRIMARY estimate key and the one the rolling figure is stored under, so what a settle teaches is read back by the next
     // run of the same shape; `label` names every key the request used (a run that also needs a site description adds `describe`, which
     // only makes that mode's figure a shade conservative — the safe direction).
     return { usd: r4(usd), keys, key: keys[0] || '', label: keys.join('+'), source, floor: r4(floor), room: r4(room),
-      basis: keys.length ? (source === 'calibrated' ? 'calibrated from this mode\'s last settled runs (never below $' + r4(floor).toFixed(4) + ', what it recently cost)' : 'the shipped estimate for ' + keys.join(' + ') + ' (no settled run of this mode yet)') : 'this mode spends nothing here' };
+      crawl_factor: cf,
+      basis: (keys.length ? (source === 'calibrated' ? 'calibrated from this mode\'s last settled runs (never below $' + r4(floor).toFixed(4) + ', what it recently cost)' : 'the shipped estimate for ' + keys.join(' + ') + ' (no settled run of this mode yet)') : 'this mode spends nothing here')
+        + (cf !== 1 ? '; the crawl scaled x' + cf + ' (up to ' + (n0((d || {}).crawl_max_pages) || CRAWL_BASE_PAGES) + ' pages'
+          + (crawlFactor({ crawl_max_pages: CRAWL_BASE_PAGES, crawl_js: (d || {}).crawl_js }) > 1 ? ', rendered with JavaScript at 4x a page' : '') + ')' : '') };
   };
 
   // what a settle writes back: the rolling figure moves toward this run's amount, the recent window keeps the floor honest.
@@ -562,7 +588,7 @@ const CC = (() => {
     return out;
   };
 
-  return { PRICES, UNKNOWN, CHARS_PER_TOKEN, THINK_SHARE, EST, DFS_EST, ALPHA, HEADROOM, KEEP, CAP, FACTOR_KEY, MODEL_PREFIX,
+  return { PRICES, UNKNOWN, CHARS_PER_TOKEN, THINK_SHARE, THINK_SEEN, crawlFactor, CRAWL_BASE_PAGES, CRAWL_JS_MULT, EST, DFS_EST, ALPHA, HEADROOM, KEEP, CAP, FACTOR_KEY, MODEL_PREFIX,
     RECONCILE_TOLERANCE, RECONCILE_FLOOR, RUN_OVERSPEND, COUNTER, countUsage, dfsLedger, dfsDay, dfsRun, crawlCost, aiRun,
     family, priceOf, tokensOf, callCost, runCost, keysFor, readCal, estOf, pick, calKey, calStat, calRow, monthRow, part, costBasis, split };
 })();

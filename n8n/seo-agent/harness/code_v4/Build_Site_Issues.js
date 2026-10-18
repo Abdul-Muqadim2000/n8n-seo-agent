@@ -698,7 +698,7 @@ const render_merge = renderMerges.length ? { merged: renderMerges.length, items:
 // ===== 5. What works =====
 const ok = (cond, text) => { if (cond) whatWorks.push(text); };
 ok(dc.ssl === true, 'Valid SSL certificate on the main domain' + (exp ? ' (expires ' + exp.slice(0, 10) + ')' : ''));
-ok(dc.test_https_redirect === true, 'HTTP correctly redirects to HTTPS');
+ok(dc.test_https_redirect === true && !((probe.measurements || {}).redirect_chains || []).length, 'HTTP correctly redirects to HTTPS');   // B-16: not "correctly" over a chain the probes measured
 ok(dc.robots_txt === true, 'robots.txt is present');
 ok(dc.http2 === true, 'HTTP/2 is enabled');
 ok(dc.test_page_not_found === true, 'Missing pages return a proper 404');

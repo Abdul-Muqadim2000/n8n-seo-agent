@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { orgAccess, siteAccess } from '../auth/access';
+import { audit } from '../services/audit';
 import {
   createConnection,
   deleteConnection,
@@ -32,19 +33,25 @@ export async function cmsRoutes(app: FastifyInstance) {
   app.post('/api/orgs/:orgId/sites/:siteId/cms/connections', { config: perUser(10) }, async (req) => {
     const p = req.params as P;
     const a = await siteAccess(req, p.orgId, p.siteId, 'admin');
-    return createConnection(a, req.body, req.log);
+    const r = await createConnection(a, req.body, req.log);
+    await audit(req, a.org.id, { action: 'cms.connected', target: { type: 'cms_connection', id: r.connection.id, label: r.connection.label }, details: { siteId: a.site.id, kind: r.connection.kind } });
+    return r;
   });
 
   app.patch('/api/orgs/:orgId/sites/:siteId/cms/connections/:connectionId', { config: perUser(30) }, async (req) => {
     const p = req.params as P;
     const a = await siteAccess(req, p.orgId, p.siteId, 'admin');
-    return updateConnection(a, p.connectionId, req.body, req.log);
+    const r = await updateConnection(a, p.connectionId, req.body, req.log);
+    await audit(req, a.org.id, { action: 'cms.changed', target: { type: 'cms_connection', id: r.id, label: r.label }, details: { siteId: a.site.id, fields: Object.keys((req.body ?? {}) as object).filter((k) => k !== 'secret') } });
+    return r;
   });
 
   app.delete('/api/orgs/:orgId/sites/:siteId/cms/connections/:connectionId', async (req) => {
     const p = req.params as P;
     const a = await siteAccess(req, p.orgId, p.siteId, 'admin');
-    return deleteConnection(a, p.connectionId, req.log);
+    const r = await deleteConnection(a, p.connectionId, req.log);
+    await audit(req, a.org.id, { action: 'cms.removed', target: { type: 'cms_connection', id: p.connectionId }, details: { siteId: a.site.id } });
+    return r;
   });
 
   app.post('/api/orgs/:orgId/sites/:siteId/cms/connections/:connectionId/test', { config: perUser(10) }, async (req) => {

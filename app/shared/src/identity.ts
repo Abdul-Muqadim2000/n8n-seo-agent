@@ -472,6 +472,8 @@ export const AUDIT_CATEGORIES = {
   api: 'API keys',
   sso: 'Single sign-on and provisioning',
   agency: 'Agency and client portal',
+  /** G4 (app/docs/INTEGRATIONS.md): webhooks, trackers, exports, and work started through the API */
+  integrations: 'Integrations and API work',
 } as const;
 export type AuditCategory = keyof typeof AUDIT_CATEGORIES;
 
@@ -556,6 +558,24 @@ export const AUDIT_ACTIONS = {
   'approval.withdrawn': { label: 'Withdrew an approval request', category: 'agency' },
   'approval.approved': { label: 'Client approved', category: 'agency' },
   'approval.changes_requested': { label: 'Client asked for changes', category: 'agency' },
+  'integration.webhook_added': { label: 'Added an event endpoint', category: 'integrations' },
+  'integration.webhook_changed': { label: 'Changed an event endpoint', category: 'integrations' },
+  'integration.webhook_removed': { label: 'Removed an event endpoint', category: 'integrations' },
+  'integration.webhook_secret_rotated': { label: 'Made a new webhook signing secret', category: 'integrations' },
+  'integration.connected': { label: 'Connected an integration', category: 'integrations' },
+  'integration.changed': { label: 'Changed an integration', category: 'integrations' },
+  'integration.disconnected': { label: 'Disconnected an integration', category: 'integrations' },
+  'integration.export_started': { label: 'Started a data export', category: 'integrations' },
+  'issue.created': { label: 'Created a ticket in the issue tracker', category: 'integrations' },
+  'cms.connected': { label: 'Connected a CMS', category: 'integrations' },
+  'cms.changed': { label: 'Changed a CMS connection', category: 'integrations' },
+  'cms.removed': { label: 'Removed a CMS connection', category: 'integrations' },
+  'crawler.push_key_created': { label: 'Made a crawler log push key', category: 'integrations' },
+  'crawler.push_key_revoked': { label: 'Switched crawler log pushes off', category: 'integrations' },
+  'crawler.log_uploaded': { label: 'Uploaded a server log', category: 'integrations' },
+  'crawler.retention_changed': { label: 'Changed how long crawler logs are kept', category: 'integrations' },
+  'crawler.data_deleted': { label: 'Deleted a website\'s crawler log data', category: 'integrations' },
+  'run.started_via_api': { label: 'Started an analysis through the API', category: 'integrations' },
 } as const satisfies Record<string, { label: string; category: AuditCategory }>;
 export type AuditAction = keyof typeof AUDIT_ACTIONS;
 export const auditLabel = (a: string): string => (AUDIT_ACTIONS as Record<string, { label: string }>)[a]?.label ?? a;

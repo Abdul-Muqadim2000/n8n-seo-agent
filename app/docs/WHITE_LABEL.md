@@ -48,7 +48,7 @@ with the client's logo at most (B-R2). This file is the design and the operating
 | A client approves something the agency then changes | An approval names the item (a page report, or one outreach draft by prospect and type); with "client approval required" on, a live CMS publish and an outreach approval of that item are refused until an *approved* decision exists; asking again withdraws the old request. |
 | Admin actions without trace | Every agency action is audited (G1 `audit()`): agency mode, client created / deleted, staff assigned, branding, portal domain claimed / verified / lapsed / released, e-mail settings, approvals requested / decided. |
 
-## 3. Data model (migration `0012_g5_white_label`; renumbered after G4 if it lands first)
+## 3. Data model (migration `0013_g5_white_label`, after G4's `0012_g4_integrations`)
 
 - `organizations.kind` — `standard` (default) | `agency` | `client`; `organizations.parent_org_id` (the agency of a client; restrict
   on delete: an agency with clients cannot be deleted); `organizations.branding` jsonb (`Branding`, shared/src/agency.ts — agency:

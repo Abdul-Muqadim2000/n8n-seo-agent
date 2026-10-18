@@ -69,7 +69,23 @@ if (apexToWww) {
 }
 const apexHttpLoc = h('apex_http', 'location');
 if (R.apex_http && R.apex_http.status === 200) add('Security', 'High', 'HTTP version of the homepage does not redirect to HTTPS', 'http://' + domain + '/ returns 200', 'Browsers mark the page as not secure and two versions of the site can be indexed.', 'Add a sitewide 301 redirect from http:// to https://.');
-else if (R.apex_http && R.apex_http.status >= 300 && R.apex_http.status < 400 && /^https:/i.test(apexHttpLoc)) works.push('HTTP redirects to HTTPS');
+// B-16 (re-rating 2026-10-17): follow every homepage address variant through the probes (none of them follows a redirect itself)
+const normU16 = (u) => { const m = String(u || '').trim().match(/^(https?):\/\/([^\/?#]+)(\/[^?#]*)?/i); return m ? m[1].toLowerCase() + '://' + m[2].toLowerCase() + (m[3] || '/') : ''; };
+const byUrl16 = {}; for (const id of ['home', 'www_https', 'www_http', 'apex_http']) if (R[id] && R[id].url) byUrl16[normU16(R[id].url)] = id;
+const chainOf16 = (start) => { const hops = []; const seen = new Set(); let id = start;
+  while (id && R[id] && !seen.has(id)) { seen.add(id); const r = R[id]; if (!(r.status >= 300 && r.status < 400)) break;
+    let loc = h(id, 'location'); if (/^\//.test(loc)) loc = (String(r.url).match(/^https?:\/\/[^\/]+/i) || [''])[0] + loc;
+    if (!loc) break; hops.push({ from: r.url, status: r.status, to: loc }); id = byUrl16[normU16(loc)]; }
+  return hops; };
+const redirect_chains = ['apex_http', 'www_http', 'home', 'www_https'].map(id => ({ start: (R[id] || {}).url || '', hops: chainOf16(id) })).filter(c => c.start && c.hops.length >= 2);
+if (redirect_chains.length) add('Crawlability & Indexing', 'Low', 'Redirect chain on the homepage address',
+  redirect_chains.map(c => c.start + ' ' + c.hops.map(x => '→ ' + x.status + ' ' + x.to).join(' ') + ' (' + c.hops.length + ' hops)').join('; '),
+  'Every extra hop delays the first visit and is one more request for crawlers; links, ads and typed addresses that use these variants take more than one hop to arrive.',
+  'Redirect each variant straight to https://' + canonical_host + '/ in one hop (one 301 per variant, no hop through the other host or scheme).');
+if (R.apex_http && R.apex_http.status >= 300 && R.apex_http.status < 400 && /^https:/i.test(apexHttpLoc)) {
+  const n16 = (redirect_chains.find(c => c.start === R.apex_http.url) || { hops: [] }).hops.length;
+  works.push(n16 >= 2 ? 'HTTP redirects to HTTPS (in ' + n16 + ' hops: see the redirect chain finding)' : 'HTTP redirects to HTTPS');
+}
 
 // 2. Caching & server response (measured on the page browsers actually receive)
 const cc = h(MAIN, 'cache-control');
@@ -184,6 +200,7 @@ return [{
         canonical_host,
         hosts: { apex_status: home.status || 0, apex_location: homeLoc || '', www_status: www.status || 0, www_location: h('www_https', 'location') || '', canonical_tag_host, consolidated: hosts_consolidated },
         homepage_meta,
+        redirect_chains,   // B-16
         cache_control: cc || null,
         cache_status: [cacheHdr, cacheHdr2].filter(Boolean),
         homepage_ttfb_ms: ttfb,

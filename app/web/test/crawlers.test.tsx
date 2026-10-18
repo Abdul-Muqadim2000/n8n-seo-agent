@@ -97,6 +97,13 @@ describe('Crawlers page', () => {
     expect(t).not.toContain('NaN');
     expect(t).not.toContain('undefined');
   });
+  it('when no request could be proved the hero says so instead of printing a dash for a number', () => {
+    const none: CrawlerData = { ...full, totals: { ...full.totals, hits: 5, verifiedShare: null, spoofed: 5 } };
+    const t = text(wrap(<Crawlers d={none} {...props} admin member />));
+    expect(t).toContain('No crawler request could be checked against the vendors’ address lists yet.');
+    expect(t).not.toMatch(/– of crawler requests/);
+    expect(t).toContain('5 more only pretended to be a crawler');
+  });
   it('a viewer sees everything but cannot upload, create a key or delete', () => {
     const t = text(wrap(<Crawlers d={full} {...props} admin={false} member={false} />));
     expect(t).toContain('Members and admins upload logs.');

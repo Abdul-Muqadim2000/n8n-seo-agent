@@ -427,6 +427,8 @@ return [{
     crawl_max_pages: crawl_pages,
     crawl_js: crawl_js_req || CONFIG.crawl_js,
     scheduled: !!p2.scheduled,
+    // F-L (2026-10-18): the Audit Scheduler's ran-late notice, kept for a scheduled request only (a caller cannot label its own run late)
+    ran_late: (!!p2.scheduled && p2.ran_late && typeof p2.ran_late === 'object' && p2.ran_late.late === true) ? { late: true, via: String(p2.ran_late.via || ''), due: String(p2.ran_late.due || ''), started_at: String(p2.ran_late.started_at || ''), late_min: Number(p2.ran_late.late_min) || 0, kind: String(p2.ran_late.kind || ''), why: String(p2.ran_late.why || '').slice(0, 300), text: String(p2.ran_late.text || '').slice(0, 600) } : null,
     monitor_input,
     topics,
     free_only: mode === 'backlinks' && /^(true|1|yes|on)$/i.test(String(p2.free_only ?? '')),

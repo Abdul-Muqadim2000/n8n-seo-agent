@@ -30,6 +30,20 @@ export const changelog: ChangelogEntry[] = [
   },
   {
     date: '2026-10-18',
+    title: 'Integrations: Slack and Teams alerts, Jira / Linear / Asana tickets, warehouse export, and an API that can start work',
+    summary:
+      'Ascentra now works inside your team’s own tools. Alerts and finished work go to the Slack or Teams channels you pick, an audit finding becomes one ticket in your tracker with its state shown back, your data is exported to BigQuery or your storage every day or week, and assistants like Claude and ChatGPT can start analyses — within your budget and with the same checks as the app.',
+    highlights: [
+      'Alerts, finished and failed runs, held-back reports, new audit findings and ranking moves — to Slack, Microsoft Teams or your own systems as signed JSON, routed per channel, retried and logged',
+      'Create ticket beside every audit finding and recommendation: one ticket per finding in Jira, Linear or Asana, with the evidence, example pages and the fix',
+      'Six tables exported daily or weekly to BigQuery, Amazon S3, Google Cloud Storage or Cloudflare R2, in one documented schema — and a Looker Studio connector for the same tables',
+      'API keys can now be allowed to start analyses: the same validation, budget, duplicate warnings and limits as the app, and a retry never starts a second run',
+      'Assistants connect over MCP: they read your data, preview a run’s cost and start it only after showing you any duplicate warning',
+    ],
+    features: ['integrations', 'enterprise', 'technical-audits'],
+  },
+  {
+    date: '2026-10-18',
     title: 'Single sign-on, SCIM, two-step verification and an audit log',
     summary:
       'Sign in through your company’s identity provider, let it create and switch off accounts, require a second step for everyone, and see who did what. Everything a security review asks about identity, in Company settings.',

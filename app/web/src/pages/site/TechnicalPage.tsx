@@ -17,6 +17,7 @@ import { Select } from '@/components/ui/field';
 import { Delta, PageHeader, scoreTone } from '@/components/ui/misc';
 import { CountUp, DisclosureButton, DistributionBar, HeroStat, IconTile, InfoTip, InsightItem, MetricCard, ScoreRing, Stagger, SummaryHero, type IconTileTone } from '@/components/insight';
 import { DataTable, type Column } from '@/components/ui/table';
+import { TicketButton, useTicketStates } from '@/components/site/TicketButton';
 import { DataGate, FillHeight, FilterChips, Panel, SectionHeading, ToolButton, useSitePage } from './_components/kit';
 import { countBy, dateLabelFormat, diff, plural, sortByDate, timeAxisFormat } from './_components/format';
 import { FileChip, ReportList, isFixPackFile } from './_components/reports';
@@ -431,6 +432,9 @@ type SevFilter = Sev | 'all';
 type StatusFilter = FindingStatus | 'all';
 
 function FindingsTable({ findings: all, hasPrevious, auditId }: { findings: Finding[]; hasPrevious: boolean; auditId: string }) {
+  const { site } = useSitePage();
+  // G4: with Jira / Linear / Asana connected, every open finding can become one ticket, and its state shows here
+  const ticketing = useTicketStates(site.id);
   const [sev, setSev] = useState<SevFilter>('all');
   const [status, setStatus] = useState<StatusFilter>('all');
   const [cat, setCat] = useState('all');
@@ -478,6 +482,9 @@ function FindingsTable({ findings: all, hasPrevious, auditId }: { findings: Find
     ...(hasPrevious ? [{ key: 'status', header: 'Status', sortValue: (f: Finding) => ['new', 'open', 'fixed'].indexOf(f.status), cell: (f: Finding) => STATUS_META[f.status]?.node ?? f.status }] : []),
     // G11 (2026-10-13): mark it fixed and the daily key-page watch judges that one finding again the next morning
     { key: 'recheck', header: 'Fix check', sortValue: (f: Finding) => f.recheck?.state ?? '', cell: (f: Finding) => <RecheckCell finding={f} auditId={auditId} /> },
+    ...(ticketing
+      ? [{ key: 'ticket', header: 'Ticket', cell: (f: Finding) => (f.status === 'fixed' || !f.key ? <span className="text-ink-3">—</span> : <TicketButton siteId={site.id} source={{ type: 'finding', auditId, findingKey: f.key }} />) }]
+      : []),
   ];
 
   if (!all.length) return <EmptyState className="py-8" title="No findings stored for this audit" description="Audits before v4.5 stored only their score; run a new audit for the full list." />;

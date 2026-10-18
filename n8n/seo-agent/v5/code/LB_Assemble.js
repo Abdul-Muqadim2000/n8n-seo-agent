@@ -147,7 +147,7 @@ for (const p of plans) {
     // ---- D13: who is never pitched (live 2026-10-11: competitors, bare homepages, mailbox providers and contact databases were) ----
     const bad = OK.badHost(r.prospect_domain); if (bad) reasons.push(bad);
     const onlyHome = OK.homepageOnly(r.type, r.url); if (onlyHome) reasons.push(onlyHome);
-    const competing = OK.sellsSame({ type: r.type, domain: r.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals, ai_rivals: p.ai_rivals || [], topics: p.topics || [], title: o.page_title, text: t, terms: sellTerms, url: r.url, fit: o.fit, ...siteOf(r.prospect_domain) });   // R4: a SERP rival counts as a competitor; R21: the page's URL and the topic match it just measured
+    const competing = OK.sellsSame({ type: r.type, domain: r.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals, ai_rivals: p.ai_rivals || [], topics: p.topics || [], title: o.page_title, text: t, terms: sellTerms, url: r.url, fit: o.fit, page_html: html && !blocked ? html : '', ...siteOf(r.prospect_domain) });   /* C-8 leftover (F-L): the page itself, for its own menu and sales buttons */   // R4: a SERP rival counts as a competitor; R21: the page's URL and the topic match it just measured
     if (competing) reasons.push(competing);
     if (!weAreAccredited && OK.accreditedList(o.page_title + ' ' + r.url))   // the page IS such a list (its title / address says so); a page that merely names accredited providers is fine
       reasons.push('a list of accredited / approved providers: you get on it by applying with the accreditation, and the facts on file do not say you hold one (asking to be added claims it)');

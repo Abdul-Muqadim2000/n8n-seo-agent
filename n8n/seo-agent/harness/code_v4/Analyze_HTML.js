@@ -411,13 +411,24 @@ else if (inner.length) works.push('BreadcrumbList schema present');
 // ---------- Articles ----------
 const arts = P.filter(p => p.kind === 'article');
 const artNodes = arts.map(p => ({ p, n: p.nodes.find(n => typesOf(n).some(t => /Article|BlogPosting|NewsArticle/.test(t))) }));
-const noAuthor = artNodes.filter(({ n }) => {
-  const a = n && asArr(n.author)[0];
-  const name = a && (typeof a === 'string' ? a : a.name);
-  const isOrg = a && typesOf(a).some(t => /Organization/.test(t));
-  return !name || isOrg || /team|staff|admin|editor/i.test(name);
-});
-if (arts.length && noAuthor.length) F('Content', 'High', 'Articles have no named human author', noAuthor.length + ' of ' + arts.length + ' sampled articles', 'Expertise signals (E-E-A-T) depend on a real, credentialed author, especially on advice or compliance topics.', 'Credit a named expert with an author page, job title and LinkedIn (author @type Person with url and sameAs).', noAuthor.map(x => x.p.url), noAuthor.length, arts.length);
+// B-18 (re-rating 2026-10-17): a byline is a named person, a TEAM (an Organization author, or "Tech& Team" / staff / editorial desk), or
+// nothing at all — and the finding says which it saw, on how many of the site's articles.
+const bylineOf = (n) => { const a = n && asArr(n.author)[0]; const name = String((a && (typeof a === 'string' ? a : a.name)) || '').trim();
+  const isOrg = !!a && typeof a === 'object' && typesOf(a).some(t => /Organization/.test(t));
+  return { name, team: !!name && (isOrg || /\b(team|staff|admin|editors?|editorial|desk)\b/i.test(name)) }; };
+const bylines = artNodes.map(x => ({ ...x, by: bylineOf(x.n) }));
+const teamBy = bylines.filter(x => x.by.team), noneBy = bylines.filter(x => !x.by.name);
+const noAuthor = [...teamBy, ...noneBy];
+// the crawl's own article count; when the in-200 gate marked the crawl `unavailable` (__dfs) the count could not be read and is not claimed
+const crawlAns18 = (() => { try { return $('Get Crawled Pages Answers').first().json || {}; } catch (e) { return {}; } })();
+const siteArticles = (crawlAns18.__dfs && crawlAns18.__dfs.unavailable) ? null
+  : (crawlAns18.tasks?.[0]?.result?.[0]?.items || []).filter(p => p && p.url && Number(p.status_code) === 200 && /\/(insights|blog|news|articles?|guides?)\/./i.test(p.url)).length;
+const teamNames = [...new Set(teamBy.map(x => x.by.name))].slice(0, 3);
+const authorTitle = !noneBy.length ? 'Articles have no named human author: they are credited to a team, not a person' : 'Articles have no named human author';
+const authorEvidence = [teamBy.length ? teamBy.length + ' of ' + arts.length + ' sampled articles credit a team (' + teamNames.map(t => '"' + t + '"').join(', ') + '), not a named person' : '',
+  noneBy.length ? noneBy.length + ' of ' + arts.length + ' sampled articles name no author at all' : ''].filter(Boolean).join('; ')
+  + (siteArticles == null ? ' (the crawl could not be read, so how many articles the site has is not known)' : siteArticles > arts.length ? ' (' + arts.length + ' of the ' + siteArticles + ' articles the crawl found were read)' : '');
+if (arts.length && noAuthor.length) F('Content', 'High', authorTitle, authorEvidence, 'Expertise signals (E-E-A-T) depend on a real, credentialed author, especially on advice or compliance topics.', 'Credit a named expert with an author page, job title and LinkedIn (author @type Person with url and sameAs).', noAuthor.map(x => x.p.url), noAuthor.length, arts.length);
 const frozen = artNodes.filter(({ n }) => n && n.datePublished && n.dateModified && n.datePublished === n.dateModified);
 if (frozen.length) F('Content', 'Medium', 'No freshness signal on articles', frozen.length + ' of ' + arts.length + ' sampled articles have dateModified equal to datePublished', 'Time-sensitive content looks unmaintained without a genuine update date.', 'Show a visible "Last reviewed" date and update dateModified only after real edits.', frozen.map(x => x.p.url), frozen.length, arts.length);
 artNodes.forEach(({ n }) => { const pl = n && n.publisher && urlOf(n.publisher.logo); if (pl) urlsToCheck.push({ url: pl, purpose: 'Article publisher logo' }); });

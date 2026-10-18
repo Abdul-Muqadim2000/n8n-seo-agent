@@ -26,14 +26,33 @@ export const API_KEY = {
   perMinute: 120,
   /** publish checks per 10 minutes per key */
   publishChecksPer10Min: 30,
+  /** G4: run starts a minute per key — the same ceiling as the app's own "start a run" route */
+  runsPerMinute: 30,
 } as const;
 
-export const API_SCOPES = ['read', 'publish_check'] as const;
+/**
+ * G4 (2026-10-17, app/docs/INTEGRATIONS.md): `run` and `admin` are WRITE permissions, chosen at creation and never implied by the
+ * others. `run` starts analyses (they cost money, inside the company's budget) and pushes findings to the company's issue tracker;
+ * `admin` manages the event webhooks and starts exports. A key acts as the person who made it, re-checked on every request.
+ */
+export const API_SCOPES = ['read', 'publish_check', 'run', 'admin'] as const;
 export type ApiScope = (typeof API_SCOPES)[number];
 export const API_SCOPE_LABELS: Record<ApiScope, string> = {
-  read: 'Read websites, audits and findings, runs, reports and files',
+  read: 'Read websites, audits and findings, runs, reports, files and the export tables',
   publish_check: 'Check a page before it is published (free, writes nothing)',
+  run: 'Start analyses within the monthly budget, and create tickets in your issue tracker',
+  admin: 'Manage event webhooks and start data exports',
 };
+/** the short words the key list shows */
+export const API_SCOPE_SHORT: Record<ApiScope, string> = { read: 'read', publish_check: 'publish check', run: 'start runs', admin: 'admin' };
+/** the role the key's creator must still hold for a key to use the scope (re-checked on every request) */
+export const API_SCOPE_ROLE: Record<ApiScope, 'viewer' | 'member' | 'admin'> = { read: 'viewer', publish_check: 'member', run: 'member', admin: 'admin' };
+/** scopes that change something or spend money: shown with a warning when a key is created */
+export const API_WRITE_SCOPES: readonly ApiScope[] = ['run', 'admin'];
+
+/** `Idempotency-Key`: what a caller may send (Stripe's shape: an opaque string the caller generates, e.g. a UUID) */
+export const IDEMPOTENCY = { header: 'idempotency-key', replayHeader: 'idempotent-replayed', hours: 24, re: /^[A-Za-z0-9_.:-]{1,200}$/ } as const;
+export const idempotencyKeyOk = (v: unknown): v is string => typeof v === 'string' && IDEMPOTENCY.re.test(v);
 
 const KEY_RE = /^asc_[A-Za-z0-9_-]{43}$/;
 /** true for something shaped like one of our keys — checked before any lookup, so junk never reaches the database */

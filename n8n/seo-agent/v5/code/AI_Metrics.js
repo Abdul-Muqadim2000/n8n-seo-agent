@@ -296,7 +296,16 @@ return plans.map(p => {
   // more engines than a weekly one, but `RC` above already leaves the monthly engines out of every rate for exactly that reason,
   // so weekly and full ARE comparable. What is not comparable is a changed engine list — switch Perplexity off and the rates move
   // on their own. A stored row says which engines it asked: the ones it did not are marked `carried`.
-  const engSet = (obj) => Object.keys(obj || {}).filter(e => !MONTHLY.includes(e) && !(obj[e] || {}).carried).sort();
+  // C-9 (re-rating 2026-10-17, exec 776): an engine that was ASKED but answered nothing counted in the set all the same — run 722's
+  // Gemini had answered 0 of 7 (8 errors), so "compared with 2026-10-16 (… Gemini …)" set 54 answers on five engines against 28 on
+  // four. An engine is in the set only when it was READ: it answered (samples, else answered, > 0), or some of its requests came back
+  // without an error — the Google AI Overview "answers" only when Google shows one, and a week with none shown is a reading, not a
+  // failure. An engine whose every request failed is out. A stored row of an older shape that records none of these fields keeps the
+  // engine (unknown is not "none").
+  const answeredOn = (v) => { const x = v || {}; if (x.samples == null && x.answered == null) return true;
+    if ((Number(x.samples != null ? x.samples : x.answered) || 0) > 0) return true;
+    const asked = Number(x.asked) || 0; return asked > 0 && (Number(x.errors) || 0) < asked; };
+  const engSet = (obj) => Object.keys(obj || {}).filter(e => !MONTHLY.includes(e) && !(obj[e] || {}).carried && answeredOn(obj[e])).sort();
   const engNow = engSet(engines), engBefore = engSet(prev && prev.engines);
   const engText = (l) => l.map(e => ENG[e] || e).join(', ') || 'no engine';
   const panel = byQ.size, panel_before = prev ? Number(prev.prompts) || 0 : 0;
@@ -433,6 +442,11 @@ return plans.map(p => {
       score: old.score === '' || old.score == null ? null : Number(old.score), origin: old.origin || 'ai_visibility', contact_email: old.contact_email || '', contact_url: old.contact_url || '', contacted_at: old.contacted_at || '',
       followup_step: Number(old.followup_step) || 0, followup_subject: old.followup_subject || '', followup_body: old.followup_body || '', verified_at: old.verified_at || '' }; });
   // brand names AI uses for businesses, with their website (Answer Analyst): the parser finds them next time even without a link
+  // C-9: the period the headline rates were counted over, as counted — this run plus the pulse readings *AI Plan* took since the last
+  // stored run (`since = previous.checked_at`), not a fixed "7 days" (exec 776 counted ONE pulse day and printed "the 7 days to …").
+  const rate_period = (() => { const to = String(p.checked_at || '').slice(0, 10); const from = prev && prev.checked_at ? String(prev.checked_at).slice(0, 10) : ([...pulseDates].sort()[0] || '');
+    if (!PR.length) return 'this run on ' + to + ' (no daily pulse reading' + (from ? ' since ' + from : '') + ')';
+    return 'this run on ' + to + ' + ' + pulseDays + ' daily pulse day' + (pulseDays === 1 ? '' : 's') + (from ? ' since ' + from : ''); })();
   const aliases = { ...(p.aliases || {}), ...learned };   // R83: the same names the rival set above was built from (D19: only a name that reads like a business name is learned)
   const aliasKeys = Object.keys(aliases).slice(-200); const aliasesTrim = Object.fromEntries(aliasKeys.map(k => [k, aliases[k]]));
   const cache_rows = Object.keys(aliasesTrim).length !== Object.keys(p.aliases || {}).length || JSON.stringify(aliasesTrim) !== JSON.stringify(p.aliases || {}) ? [{ key: 'ai_brands:' + p.site_id, kind: 'ai', site_id: p.site_id, value: J(aliasesTrim), updated_at: now }] : [];
@@ -443,7 +457,7 @@ return plans.map(p => {
     // change. B8-3 / B8-5: what the week's sample is actually made of, and what was never asked.
     citation_ci: wilson(cited, samples), sov_ci: wilson(mentioned, mentioned + compTotal), sov_denominator: mentioned + compTotal,
     score_band, tests: delta ? delta.tests : null, enough_samples: samples >= MIN_RATE_SAMPLES, min_samples: MIN_RATE_SAMPLES,
-    sample_note: samples >= MIN_RATE_SAMPLES ? '' : rateOf(mentioned, samples).why, pulse_basis, capped, undecided_questions: undecided.length,
+    sample_note: samples >= MIN_RATE_SAMPLES ? '' : rateOf(mentioned, samples).why, pulse_basis, rate_period, capped, undecided_questions: undecided.length,
     // B8-8 / B8-9: each engine's own change test (or why it was not tested), and the one correction the tested alerts were judged by
     engine_changes, min_engine_samples: MIN_ENGINE_SAMPLES, multiple_tests: { method: multiple_tests.method, alpha: multiple_tests.alpha, tests: multiple_tests.tests, threshold_p: multiple_tests.threshold_p, threshold_z: multiple_tests.threshold_z, rejected: multiple_tests.rejected, results: multiple_tests.results, note: multiple_tests.note },
       sentiment_score, accuracy_issues: fact_check === 'checked' ? issues.length : null, fact_check, index_sov: vis_row.index_sov, ai_impressions, demand_total, lost_demand },

@@ -16,6 +16,7 @@ const APP_PATH: Record<string, string> = {
   'crawler-analytics': 'crawlers',
   reports: 'reports',
   'report-delivery': 'settings/delivery',
+  integrations: 'settings/integrations',
   'guided-setup': 'settings/verification',
   enterprise: 'settings/company',
   'agency-portal': 'clients',

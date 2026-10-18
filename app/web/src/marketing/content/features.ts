@@ -8,6 +8,7 @@ import {
   ChartNoAxesColumnIncreasing,
   FileText,
   LifeBuoy,
+  Plug,
   Send,
   Link2,
   PenLine,
@@ -32,6 +33,7 @@ export type VisualKey =
   | 'workspace'
   | 'guided-setup'
   | 'report-delivery'
+  | 'integrations'
   | 'growth-loop'
   | 'link-sources'
   | 'ai-engines'
@@ -893,6 +895,60 @@ export const features: Feature[] = [
     },
   },
   {
+    slug: 'integrations',
+    name: 'Integrations and API',
+    shortName: 'Integrations',
+    tagline: 'Alerts in Slack or Teams, findings as tickets, your data in your warehouse — and an API your assistant can work with.',
+    summary:
+      'Ascentra fits into the tools your team already runs on. Alerts and finished work go to the Slack or Teams channel you choose, an audit finding becomes one ticket in Jira, Linear or Asana, and your rankings, traffic, audits, AI visibility and backlinks land in BigQuery, S3 or Looker Studio. Scripts and AI assistants can read everything and, with your permission, start analyses within your budget.',
+    icon: Plug,
+    benefits: [
+      'Alerts, failed runs, finished reports, new audit findings and ranking moves sent to Slack or Microsoft Teams — each channel gets only the events you pick',
+      'Every event also as signed JSON for your own systems, Zapier, Make or n8n, retried when your side is down, with a delivery log',
+      'Any audit finding or recommendation sent to Jira, Linear or Asana as one ticket with the evidence, the example pages and the fix — and its state shown back next to the finding',
+      'Rankings, weekly Search Console and GA4 figures, audit findings, AI visibility, backlinks and analyses exported every day or week to BigQuery, Amazon S3, Google Cloud Storage or Cloudflare R2',
+      'A Looker Studio connector for the same tables, read with a read-only key',
+      'An API and an MCP server: assistants like Claude and ChatGPT read your data and, with a key you allow to, start analyses — with the same budget, duplicate and cost checks as the app',
+    ],
+    steps: [
+      { title: 'Connect a channel or a tracker', body: 'Paste a Slack or Teams address, or a Jira, Linear or Asana token. Ascentra checks it with the tool before anything is saved.' },
+      { title: 'Pick what goes where', body: 'Alerts to one channel, wins to another; tickets on the findings you choose; the tables you want, daily or weekly.' },
+      { title: 'Work happens in your tools', body: 'Your team reads the alert where it already works, fixes the ticket in its own tracker and charts the data in its own BI.' },
+      { title: 'Every send is logged', body: 'Delivered, retried or held back — each event, ticket and export has a record you can read.' },
+    ],
+    facts: [
+      { value: 7, label: 'event types to route to Slack, Teams or your systems' },
+      { value: 3, label: 'issue trackers: Jira, Linear and Asana' },
+      { value: 6, label: 'tables, one documented schema, for your warehouse' },
+    ],
+    faqs: [
+      {
+        q: 'Can an AI assistant spend our money?',
+        a: 'Only with a key you created for that, and only inside your monthly budget. A key can read by default; starting analyses is a separate permission. Every start goes through the same checks as the app: the cost estimate, the budget, and the warning when the work duplicates something already planned or running — which the assistant must show you rather than accept on its own.',
+      },
+      {
+        q: 'Will the same finding be ticketed twice?',
+        a: 'No. One finding is one ticket: pushing it again, by anyone, opens the ticket already made. Its state — to do, in progress, done — is read back from your tracker and shown beside the finding.',
+      },
+      {
+        q: 'Where are our tokens kept?',
+        a: 'Encrypted, and never shown again after you paste them — not even to an owner. Ascentra only ever connects to the tool’s own public address, and every message it sends is logged without the secret.',
+      },
+      {
+        q: 'What does the export contain?',
+        a: 'Six tables with a documented schema: rank history, weekly Search Console and GA4 figures, audit findings, AI visibility, backlinks, and analyses with their cost. Each export is a full copy, so a re-run replaces instead of duplicating.',
+      },
+    ],
+    related: ['report-delivery', 'enterprise', 'technical-audits'],
+    image: 'serverRoom',
+    visual: 'integrations',
+    story: {
+      eyebrow: 'Why it matters',
+      title: 'SEO work that lives where the rest of the work lives.',
+      body: 'Findings only get fixed when they reach the backlog, and numbers only get trusted when they sit next to the rest of the business’s numbers. Ascentra sends both there, and lets your assistant ask and act without a login.',
+    },
+  },
+  {
     slug: 'enterprise',
     name: 'Enterprise platform',
     shortName: 'Enterprise',
@@ -911,7 +967,7 @@ export const features: Feature[] = [
       'Website ownership verified through Search Console, a DNS TXT record or a meta tag',
       'A cost estimate before every run, budget guards and spend caps',
       'Data isolation per company',
-      'API keys per company: read-only, shown once, with an expiry, revocable at any time, and never able to read another company’s data',
+      'API keys per company: shown once, with an expiry, revocable at any time, read-only unless you allow a key to start analyses, and never able to reach another company’s data',
       'No repeated paid work: results are reused where nothing changed',
     ],
     steps: [

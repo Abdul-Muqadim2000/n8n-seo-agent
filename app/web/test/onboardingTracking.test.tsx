@@ -97,6 +97,14 @@ describe('onboarding outside the company layout (D-1)', () => {
     expect(html).not.toContain('Something went wrong');
   });
 
+  it('the tracking fieldset can shrink below its content, so the keyword chips cannot widen the page at 390 px', () => {
+    const { html } = renderOnboarding('tracking');
+    const tags = html.match(/<fieldset[^>]*>/g) ?? [];
+    expect(tags.length).toBeGreaterThan(0);
+    // a fieldset's default min-width is min-content: without min-w-0 a long chip row pushes the whole step 3 px past the viewport
+    expect(tags.find((t) => /class="[^"]*space-y-5/.test(t))).toMatch(/class="[^"]*\bmin-w-0\b/);
+  });
+
   it("reads the engine's prices for the company in the onboarding address", () => {
     const { qc } = renderOnboarding('tracking');
     expect(qc.getQueryCache().find({ queryKey: ['engine-costs', ORG] })).toBeTruthy();

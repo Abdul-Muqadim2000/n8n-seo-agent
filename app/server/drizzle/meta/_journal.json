@@ -89,8 +89,15 @@
     {
       "idx": 12,
       "version": "7",
-      "when": 1792312246268,
-      "tag": "0012_g5_white_label",
+      "when": 1792311299869,
+      "tag": "0012_g4_integrations",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792316010596,
+      "tag": "0013_g5_white_label",
       "breakpoints": true
     }
   ]

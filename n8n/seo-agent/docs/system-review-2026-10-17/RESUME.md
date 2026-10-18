@@ -112,6 +112,10 @@ Before each phase, read §3 / §8 to see what is already done.
 - 2026-10-18 13:08 PKT — safety re-run: all three agents had stopped ≈ 08:00 (usage limit). G1 finished SCIM + marketing + browser pass (52 views clean) and stopped mid-merge (0011, 5 conflicts) — resumed to finish the merge; G4 committed its marketing — resumed to finish its list; F-L had item 1 (pipeline.ts by site_id) — resumed for items 2–6.
 - 2026-10-18 PKT afternoon — Phase A: **G1 merged** (identity: two-step + passkeys, audit log, sessions, SSO OIDC/SAML, SCIM 2.0; migration 0011; browser pass 52 views clean); app 425 / 414 / 21, typecheck + web build clean, secret scan clean. G4 finished on its branch, next to merge as 0012.
 - 2026-10-18 13:20 PKT — **Phase E started at the owner's request**: agent G5 white-label client portal (agency → client workspaces, branding, client logins, custom domain, branded e-mail, agency overview), handoff `app/docs/G5_HANDOFF.md`, migration after G4 (0013).
+- 2026-10-18 13:45 PKT — Phase A done: **G4 merged** (integrations + write API: runs API / MCP run tools with scopes, signed webhooks + Slack / Teams, Jira / Linear / Asana tickets, S3 / BigQuery export, Looker Studio connector, Integrations UI; migration 0012; every write audited); G3's DB test fixed for G1's append-only audit trigger (12/12 on fresh Postgres). App 449 / 455 / 30, typecheck + web build clean. Migrations now 0009 CMS → 0010 crawler logs → 0011 identity → 0012 integrations.
+- 2026-10-18 PKT — **Phase D browser pass** on the dev stack: 447 visits, all key flows pass (`BROWSER_PASS_2026-10-18.md`); 1 Medium (CMS / crawler-key / log-upload actions write no audit event) + 6 Low.
+- 2026-10-18 PKT — **Phase B done: F-L merged** (all six items); harness 6939 / 0, app 454 / 457 / 30.
+- 2026-10-18 14:30 PKT — **Phase D findings fixed and merged** (audit events for CMS / crawler admin writes, step-6 overflow, Crawlers hero copy, Publishing spacing, aiSampleRate period; the /pricing contrast flag was a scanner false positive, ~17:1); crawler DB suite 12/12 with `CRAWLER_JOBS=false`.
 
 ## 9. Deploy checklist for the owner (Phase C — prepared, not run)
 

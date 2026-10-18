@@ -13,8 +13,8 @@
    "subject": 16
   },
   "refusal": {
-   "pass": 16,
-   "subject": 33
+   "pass": 18,
+   "subject": 35
   },
   "withheld": {
    "pass": 4,
@@ -38,6 +38,16 @@
    "fails": [],
    "markup": 0,
    "node": "Analyze Backlinks",
+   "refusal": true,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Analyze HTML": {
+   "fails": [],
+   "markup": 4,
+   "node": "Analyze HTML",
    "refusal": true,
    "subject": [
     "refusal"
@@ -124,6 +134,16 @@
     "withheld"
    ],
    "withheld": true,
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Build Content Prompt": {
+   "fails": [],
+   "markup": 0,
+   "node": "Build Content Prompt",
+   "refusal": true,
+   "subject": [
+    "refusal"
+   ],
    "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
   },
   "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Build Full Report": {

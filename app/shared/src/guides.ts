@@ -7,7 +7,7 @@
 // [label](https://url) for links — and {{placeholders}} for the real values of the site (its domain, the record to add, the key
 // file). Rendering is in web/src/components/guide/rich.tsx; the plain-text form is `guideText` below.
 
-export type GuideArea = 'google' | 'ownership' | 'website' | 'mailbox' | 'business' | 'company' | 'security' | 'agency';
+export type GuideArea = 'google' | 'ownership' | 'website' | 'mailbox' | 'business' | 'company' | 'security' | 'integrations' | 'agency';
 
 export interface GuideVar {
   key: string;
@@ -94,6 +94,7 @@ export const GUIDE_AREAS: { id: GuideArea; label: string; description: string }[
   { id: 'business', label: 'About your business', description: 'What every page is written from and checked against' },
   { id: 'company', label: 'Your company in Ascentra', description: 'Budget, team and who may do what' },
   { id: 'security', label: 'Sign-in and security', description: 'Two-step verification, single sign-on and provisioning' },
+  { id: 'integrations', label: 'Connecting your tools', description: 'Slack and Teams, Jira / Linear / Asana, your warehouse, Looker Studio and AI assistants' },
   { id: 'agency', label: 'Your agency portal', description: 'Your brand, your domain and your clients’ access' },
 ];
 
@@ -1209,6 +1210,348 @@ export const GUIDES = [
     done: 'The team list shows them as a member, and work that needed them stops waiting.',
     related: ['budget'],
     keywords: ['team', 'invite', 'roles', 'permissions', 'colleague'],
+  },
+  // ---------------------------------------------------------------- Integrations (G4, app/docs/INTEGRATIONS.md)
+  {
+    id: 'slack-webhook',
+    area: 'integrations',
+    title: 'Send alerts to a Slack channel',
+    why: 'Alerts, failed analyses and finished reports land in the channel your team already reads, instead of waiting for someone to open Ascentra. One address per channel, so alerts and wins can go to different places.',
+    where: 'Slack (api.slack.com) and Company settings → Integrations',
+    who: 'Someone allowed to add apps to your Slack workspace',
+    minutes: 5,
+    steps: [
+      {
+        title: 'Create a small Slack app',
+        body: 'Open **Your Apps**, press **Create New App** → **From scratch**, name it `Ascentra` and pick your workspace. It needs no other setting.',
+        link: { label: 'Open Slack apps', href: 'https://api.slack.com/apps' },
+      },
+      {
+        title: 'Switch on incoming webhooks',
+        body: 'In the app, open **Incoming Webhooks**, turn **Activate Incoming Webhooks** on, then press **Add New Webhook to Workspace** and choose the channel, e.g. `#seo-alerts`.',
+        note: 'Repeat this step for a second channel (e.g. `#seo-wins`): each channel gets its own address.',
+      },
+      {
+        title: 'Copy the address',
+        body: 'Slack shows an address starting with `https://hooks.slack.com/services/`. Copy it. Treat it like a password: anyone with it can post in that channel.',
+      },
+      {
+        title: 'Add it in Ascentra',
+        body: 'In **Company settings → Integrations → Alerts and events**, press **Add an endpoint**, choose **Slack channel**, paste the address, pick the events, and press **Test**.',
+      },
+    ],
+    done: 'The test message appears in the channel within a few seconds.',
+    trouble: [
+      { q: 'The test says 404 no_service or 410', a: 'The webhook was removed or the app uninstalled. Add a new webhook to the channel and paste the new address.' },
+      { q: 'Nothing arrives, no error', a: 'Check the channel the webhook was created for: Slack posts only there, whatever the message says.' },
+    ],
+    related: ['teams-workflow-webhook', 'webhook-signature'],
+    keywords: ['slack', 'alerts', 'channel', 'notifications', 'incoming webhook'],
+  },
+  {
+    id: 'teams-workflow-webhook',
+    area: 'integrations',
+    title: 'Send alerts to a Microsoft Teams channel',
+    why: 'Alerts, failed analyses and finished reports appear as cards in a Teams channel. Microsoft retired the old Office 365 connectors in favour of Workflows; this sets up the Workflows way.',
+    where: 'Microsoft Teams (Workflows) and Company settings → Integrations',
+    who: 'A member of the Teams channel who may create workflows',
+    minutes: 6,
+    steps: [
+      {
+        title: 'Open Workflows on the channel',
+        body: 'In Teams, open the channel, press the **…** next to its name and choose **Workflows**.',
+      },
+      {
+        title: 'Use the webhook template',
+        body: 'Pick **Post to a channel when a webhook request is received**, give it a name such as `Ascentra`, confirm the team and channel, and press **Add workflow**.',
+        link: { label: 'Microsoft’s instructions', href: 'https://support.microsoft.com/en-us/office/create-incoming-webhooks-with-workflows-for-microsoft-teams-8ae491c7-0394-4861-ba59-055e33f75498' },
+      },
+      {
+        title: 'Copy the address',
+        body: 'Teams shows an address ending in `logic.azure.com` or `powerplatform.com`. Copy it and keep it private: it lets anyone post in the channel.',
+      },
+      {
+        title: 'Add it in Ascentra',
+        body: 'In **Company settings → Integrations → Alerts and events**, press **Add an endpoint**, choose **Microsoft Teams channel**, paste the address, pick the events, and press **Test**.',
+      },
+    ],
+    done: 'A card titled “Test event” appears in the channel.',
+    trouble: [{ q: 'The test is refused as not a Teams address', a: 'Older connector addresses (webhook.office.com) still work; anything else must be the Workflows address Teams showed you.' }],
+    related: ['slack-webhook'],
+    keywords: ['teams', 'microsoft', 'workflows', 'power automate', 'alerts'],
+  },
+  {
+    id: 'webhook-signature',
+    area: 'integrations',
+    title: 'Receive events in your own system',
+    why: 'A signed JSON message for every event — finished runs, alerts, new audit findings, ranking moves — so your own tools, Zapier, Make or n8n can act on it. The signature proves the message came from Ascentra.',
+    where: 'Your own system, then Company settings → Integrations',
+    who: 'A developer, or whoever runs your automation tool',
+    minutes: 15,
+    steps: [
+      {
+        title: 'Get an https address that accepts a POST',
+        body: 'Your own endpoint, or a catch hook in Zapier, Make or n8n. It must be https and reachable from the internet.',
+      },
+      {
+        title: 'Add it as Signed JSON',
+        body: 'In **Company settings → Integrations → Alerts and events**, add an endpoint with **Signed JSON**. Copy the `whsec_` secret it shows: it is shown once.',
+      },
+      {
+        title: 'Check the signature',
+        body: 'Compute HMAC-SHA256 with the secret over the timestamp header, a dot, and the raw body, and compare it with the signature header. Refuse anything older than five minutes.',
+        copy: [
+          { label: 'Headers to read', value: 'X-Ascentra-Signature, X-Ascentra-Timestamp, X-Ascentra-Event, X-Ascentra-Delivery' },
+          { label: 'What is signed', value: '<X-Ascentra-Timestamp>.<raw body>', hint: 'sha256=<hex> in X-Ascentra-Signature' },
+        ],
+      },
+      {
+        title: 'Answer quickly, de-duplicate on the delivery id',
+        body: 'Answer with any 2xx within 10 seconds and do the work afterwards. A retried event keeps its `X-Ascentra-Delivery` id, so you can ignore one you have already handled.',
+      },
+    ],
+    done: '**Test** shows “delivered” and your system logged one message with a valid signature.',
+    related: ['slack-webhook', 'mcp-assistant'],
+    keywords: ['webhook', 'hmac', 'signature', 'zapier', 'make', 'n8n', 'json', 'events'],
+  },
+  {
+    id: 'jira-api-token',
+    area: 'integrations',
+    title: 'Connect Jira Cloud',
+    why: 'Each audit finding or recommendation can become one Jira ticket, with the evidence, the example pages and the fix written in — and its state shows back beside the finding.',
+    where: 'Atlassian account settings and Company settings → Integrations',
+    who: 'A Jira user who can create issues in the project',
+    minutes: 5,
+    steps: [
+      {
+        title: 'Create an API token',
+        body: 'Signed in as the person tickets should be created by, open **API tokens**, press **Create API token**, name it `Ascentra` and copy it.',
+        link: { label: 'Open Atlassian API tokens', href: 'https://id.atlassian.com/manage-profile/security/api-tokens' },
+        warn: 'The token acts as that person. Use an account that should be the reporter of SEO tickets, not a personal admin account.',
+      },
+      {
+        title: 'Find the project key and issue type',
+        body: 'The project key is the letters before every ticket number (e.g. `SEO` in SEO-12). The issue type is how the project names its work items: `Task`, `Bug` or `Story`.',
+      },
+      {
+        title: 'Connect it in Ascentra',
+        body: 'In **Company settings → Integrations → Issue trackers**, press **Connect** beside Jira Cloud and fill in your Jira address (like `https://your-company.atlassian.net`), the account e-mail, the token, the key and the type.',
+      },
+      {
+        title: 'Create a first ticket',
+        body: 'Open the **Technical** page of a website and press **Create ticket** beside a finding. The ticket key appears there with its status.',
+      },
+    ],
+    done: 'Jira Cloud shows “Connected”, and the first ticket opens in Jira with the evidence and the fix.',
+    trouble: [
+      { q: 'It says the project has no such issue type', a: 'The message lists the types the project has. Type one of them exactly.' },
+      { q: 'It says the token was refused', a: 'Tokens can expire or be revoked. Create a new one and use **Replace**.' },
+    ],
+    related: ['linear-api-key', 'asana-pat'],
+    keywords: ['jira', 'atlassian', 'ticket', 'issue', 'api token'],
+  },
+  {
+    id: 'linear-api-key',
+    area: 'integrations',
+    title: 'Connect Linear',
+    why: 'Each audit finding or recommendation can become one Linear issue in your team, written in Markdown with the evidence and the fix, and its state shows back in Ascentra.',
+    where: 'Linear settings and Company settings → Integrations',
+    who: 'A member of the Linear team',
+    minutes: 3,
+    steps: [
+      {
+        title: 'Create a personal API key',
+        body: 'In Linear open **Settings → Account → Security & access**, then **Personal API keys** → **New API key**, name it `Ascentra` and copy it. It starts with `lin_api_`.',
+        link: { label: 'Open Linear settings', href: 'https://linear.app/settings/account/security' },
+      },
+      {
+        title: 'Note the team key',
+        body: 'The letters before every issue number in the team, e.g. `WEB` in WEB-7.',
+      },
+      {
+        title: 'Connect it in Ascentra',
+        body: 'In **Company settings → Integrations → Issue trackers**, press **Connect** beside Linear, paste the key and the team key.',
+      },
+    ],
+    done: 'Linear shows “Connected” with the team’s name.',
+    related: ['jira-api-token', 'asana-pat'],
+    keywords: ['linear', 'issue', 'ticket', 'api key'],
+  },
+  {
+    id: 'asana-pat',
+    area: 'integrations',
+    title: 'Connect Asana',
+    why: 'Each audit finding or recommendation can become one Asana task in a project, with the evidence and the fix in its description, and its completion shows back in Ascentra.',
+    where: 'Asana developer console and Company settings → Integrations',
+    who: 'A member of the Asana project',
+    minutes: 4,
+    steps: [
+      {
+        title: 'Create a personal access token',
+        body: 'Open the **Developer console**, press **Create new token**, name it `Ascentra`, accept the terms and copy the token.',
+        link: { label: 'Open the Asana developer console', href: 'https://app.asana.com/0/my-apps' },
+      },
+      {
+        title: 'Find the project id',
+        body: 'Open the project in Asana: its address looks like `app.asana.com/0/1201234567890123/list`. The long number is the project id.',
+      },
+      {
+        title: 'Connect it in Ascentra',
+        body: 'In **Company settings → Integrations → Issue trackers**, press **Connect** beside Asana and paste the token and the project id.',
+      },
+    ],
+    done: 'Asana shows “Connected” with the project’s name.',
+    related: ['jira-api-token', 'linear-api-key'],
+    keywords: ['asana', 'task', 'pat', 'personal access token'],
+  },
+  {
+    id: 's3-access-keys',
+    area: 'integrations',
+    title: 'Export to S3, Google Cloud Storage or Cloudflare R2',
+    why: 'Your rankings, Search Console and GA4 figures, audit findings, AI visibility, backlinks and analyses land as files in your own bucket every day or week — ready for Snowflake, Redshift, Databricks or any BI tool.',
+    where: 'Your cloud console and Company settings → Integrations',
+    who: 'Someone who manages your cloud storage',
+    minutes: 15,
+    steps: [
+      {
+        title: 'Create a bucket (or pick one)',
+        body: 'A private bucket used only for these exports is simplest. Ascentra writes under one folder and never reads or deletes anything.',
+      },
+      {
+        title: 'Create keys that can only write there',
+        body: 'Ascentra needs permission to put objects in that bucket and nothing else.',
+        choices: [
+          {
+            label: 'Amazon S3',
+            body: 'In IAM create a user with an access key and a policy allowing `s3:PutObject` on `arn:aws:s3:::<bucket>/*` only. Copy the access key id and the secret access key.',
+            link: { label: 'AWS: create an access key', href: 'https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html' },
+          },
+          {
+            label: 'Google Cloud Storage',
+            body: 'Give a service account **Storage Object Creator** on the bucket, then under **Cloud Storage → Settings → Interoperability** create an **HMAC key** for it. Copy the access key and the secret.',
+            link: { label: 'Google: HMAC keys', href: 'https://cloud.google.com/storage/docs/authentication/managing-hmackeys' },
+          },
+          {
+            label: 'Cloudflare R2',
+            body: 'In **R2 → Manage API tokens** create a token with **Object Read & Write** limited to the bucket. Copy the access key id, the secret access key and your account id.',
+            link: { label: 'Cloudflare: R2 API tokens', href: 'https://developers.cloudflare.com/r2/api/tokens/' },
+          },
+        ],
+      },
+      {
+        title: 'Add the destination in Ascentra',
+        body: 'In **Company settings → Integrations → Data export**, press **Add a destination**, choose the storage, the bucket, a folder, NDJSON or CSV, the tables and the schedule, and paste the keys. Ascentra writes one small test file before saving.',
+      },
+      {
+        title: 'Read the newest folder',
+        body: 'Files arrive as `<folder>/<table>/dt=<date>/<table>-<run>.ndjson`. Each run is a full copy, so your queries read the newest `dt` folder.',
+      },
+    ],
+    done: '**Run now** shows “Done” with the rows of each table, and the files are in the bucket.',
+    trouble: [{ q: 'It says AccessDenied', a: 'The key may not write to that bucket or folder. Check the policy names the bucket and allows putting objects.' }],
+    related: ['bigquery-service-account', 'looker-studio-connector'],
+    keywords: ['s3', 'aws', 'gcs', 'google cloud storage', 'r2', 'cloudflare', 'export', 'warehouse', 'snowflake', 'redshift'],
+  },
+  {
+    id: 'bigquery-service-account',
+    area: 'integrations',
+    title: 'Export to BigQuery',
+    why: 'Six tables — rankings, weekly Search Console and GA4 figures, audit findings, AI visibility, backlinks and analyses with their cost — are loaded into your own BigQuery dataset on a schedule, with a documented schema.',
+    where: 'Google Cloud console and Company settings → Integrations',
+    who: 'Someone with IAM rights in your Google Cloud project',
+    minutes: 15,
+    steps: [
+      {
+        title: 'Create a dataset',
+        body: 'In BigQuery, create a dataset such as `seo` in the location you want (US or EU). Ascentra creates its tables inside it.',
+        link: { label: 'Open BigQuery', href: 'https://console.cloud.google.com/bigquery' },
+      },
+      {
+        title: 'Create a service account for Ascentra',
+        body: 'In **IAM & Admin → Service accounts**, create one named `ascentra-export`. Give it **BigQuery Job User** on the project and **BigQuery Data Editor** on the dataset only.',
+        link: { label: 'Open service accounts', href: 'https://console.cloud.google.com/iam-admin/serviceaccounts' },
+      },
+      {
+        title: 'Download its JSON key',
+        body: 'Open the service account → **Keys → Add key → Create new key → JSON**. A file downloads. Keep it private; you will paste it once.',
+        warn: 'If your organisation blocks key creation, ask an administrator for an exception for this one account, or use the S3-compatible export to Google Cloud Storage instead.',
+      },
+      {
+        title: 'Add the destination in Ascentra',
+        body: 'In **Company settings → Integrations → Data export**, press **Add a destination**, choose **BigQuery**, fill in the project id and dataset, paste the whole JSON key and choose the tables and schedule. Ascentra checks it can see the dataset before saving.',
+      },
+    ],
+    done: '**Run now** shows “Done”, and tables named like `ascentra_rank_history` appear in the dataset.',
+    trouble: [{ q: 'It says the dataset does not exist', a: 'Check the project id and dataset id, and that the service account was given access to that dataset.' }],
+    related: ['s3-access-keys', 'looker-studio-connector'],
+    keywords: ['bigquery', 'google cloud', 'service account', 'warehouse', 'export', 'json key'],
+  },
+  {
+    id: 'looker-studio-connector',
+    area: 'integrations',
+    title: 'Add Ascentra to Looker Studio',
+    why: 'Chart your rankings, Search Console and GA4 figures, audit findings, AI visibility and backlinks in Looker Studio, beside the rest of your company’s reporting, refreshed from Ascentra.',
+    where: 'Ascentra, Google Apps Script and Looker Studio',
+    who: 'Whoever builds your Looker Studio reports (the first step needs an Ascentra owner or admin)',
+    minutes: 15,
+    vars: [{ key: 'appUrl', label: 'Your Ascentra address', example: 'https://app.ascentra.example' }],
+    steps: [
+      {
+        title: 'Create a read-only API key',
+        body: 'In **Company settings → API access**, create a key named `Looker Studio` with only **Read** ticked. Copy it.',
+      },
+      {
+        title: 'Install the connector',
+        body: 'Ascentra’s connector is a small Google Apps Script. Create a new project at script.google.com, paste the files from Ascentra’s `integrations/looker-studio` folder, then **Deploy → New deployment → Add-on / Looker Studio connector**, as its README describes.',
+        link: { label: 'Open Apps Script', href: 'https://script.google.com/home' },
+      },
+      {
+        title: 'Add it as a data source',
+        body: 'In Looker Studio, **Create → Data source**, search for your deployed connector, paste the API key when asked, and fill in your Ascentra address, the website and the table.',
+        copy: [{ label: 'Ascentra address', value: '{{appUrl}}' }],
+      },
+      {
+        title: 'Build the report',
+        body: 'Each table becomes one data source with typed fields, e.g. `rank_history` with keyword, position and checked_at. Add one data source per table you want to chart.',
+      },
+    ],
+    done: 'The data source shows its fields and a table of your rows.',
+    related: ['bigquery-service-account', 'mcp-assistant'],
+    keywords: ['looker', 'data studio', 'dashboard', 'bi', 'connector'],
+  },
+  {
+    id: 'mcp-assistant',
+    area: 'integrations',
+    title: 'Connect Claude or ChatGPT to your SEO data',
+    why: 'Ask an AI assistant about your websites, audits, rankings and reports — and, if you allow it, let it start analyses for you, inside your monthly budget and with the same checks as the app.',
+    where: 'Company settings → API access, and your assistant’s settings',
+    who: 'An owner or admin (for the key); anyone for the assistant',
+    minutes: 5,
+    vars: [{ key: 'appUrl', label: 'Your Ascentra address', example: 'https://app.ascentra.example' }],
+    steps: [
+      {
+        title: 'Create a key for the assistant',
+        body: 'In **Company settings → API access**, create a key. Tick only **Read** for questions; tick **Start analyses** as well if the assistant may start runs.',
+        warn: 'A key with **Start analyses** spends from your monthly budget. The assistant is told to preview the cost first and never to accept a duplicate warning you have not seen.',
+      },
+      {
+        title: 'Add Ascentra to the assistant',
+        body: 'The address is your Ascentra address followed by `/api/v1/mcp`, with the key sent as a Bearer token.',
+        copy: [{ label: 'MCP address', value: '{{appUrl}}/api/v1/mcp' }],
+        choices: [
+          { label: 'Claude Code', body: 'Run `claude mcp add --transport http ascentra <the MCP address> --header "Authorization: Bearer <your key>"`.' },
+          { label: 'Claude Desktop', body: 'Add a server to **claude_desktop_config.json** that runs `npx -y mcp-remote <the MCP address> --header Authorization:<Bearer your key>`; the snippet on the Integrations page is ready to copy.' },
+          { label: 'OpenAI API', body: 'Add a tool of type `mcp` with the address and an `Authorization` header to your Responses API call. ChatGPT’s own app connectors accept only OAuth, so a key cannot be pasted there yet.' },
+        ],
+      },
+      {
+        title: 'Ask something',
+        body: 'Try “Which high-severity findings are new on my site since the last audit?” or, with a run key, “Preview a technical audit of my site”.',
+      },
+    ],
+    done: 'The assistant lists your websites when asked.',
+    related: ['webhook-signature', 'looker-studio-connector'],
+    keywords: ['mcp', 'claude', 'chatgpt', 'openai', 'assistant', 'agent', 'api'],
   },
   // ---------------------------------------------------------------- sign-in and security (G1)
   {

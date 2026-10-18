@@ -97,7 +97,7 @@ export function TrackingForm({
 
   return (
     <form id={formId} onSubmit={submit} noValidate className="space-y-6">
-      <fieldset disabled={readOnly} className="space-y-5">
+      <fieldset disabled={readOnly} className="min-w-0 space-y-5">
         {showCountry && (
           <Field label="Country" hint="Rankings and trends are checked for this country." error={errors.country?.message}>
             {(p) => (

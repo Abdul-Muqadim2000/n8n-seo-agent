@@ -1976,7 +1976,7 @@ await guard('pipeline phase 3', async () => {
   // answer used to read as a measurement of THIS topic; it now names what it really rests on, the way MarketMuse states the same case
   // ("If you have no Topic Authority, then your Personalized Difficulty = Keyword Difficulty"). The warning is the only change here.
   check('B1-1: an encouraging answer measured against a reach that came from OTHER topics names them and calls itself the optimistic case', B.reach_basis === 'site' && B.topic_reach === null && B.reach_used === 30 && /measured against your site-wide reach \(30\), which comes from other topics/.test(B.warnings.join(' ')) && /optimistic case/.test(B.warnings.join(' ')) && /is on this topic/.test(B.reach_note), JSON.stringify([B.warnings, B.reach_note]));
-  check('assess: cost = the DataForSEO task costs (4 x $0.01) + Claude ($0.002)', B.cost_usd === 0.042, B.cost_usd);
+  check('assess: cost = the DataForSEO task costs (4 x $0.01) + Claude ($0.0033, A-28: as n8n measured one Haiku call)', B.cost_usd === 0.0433, B.cost_usd);
   const rra = await run('Reach Row (Assess)', resp1);
   check('assess: the measured reach is stored after the answer (exact cache columns)', keysOf(rra[0].json) === CACHE_COLS && rra[0].json.key === 'reach:' + SITE && JSON.parse(rra[0].json.value).reach === 30, JSON.stringify(rra[0].json));
   mock('Load Assess Cache', [reachRow(30), { json: { key: 'desc:' + D, kind: 'desc', site_id: SITE, value: JSON.stringify({ description: { business_description: 'Stored: ERP partner in Dubai', products_or_services: ['ERP', 'E-invoicing'] }, page_title: '' }), updated_at: daysAgo(5) } }]);
@@ -1987,7 +1987,7 @@ await guard('pipeline phase 3', async () => {
   ar = await run('Assess Result', store['Run Assess Requests']);
   check('assess: the stored reach is reused, business from the stored description, position #14 read', ar[0].json.reach_info.cached && ar[0].json.reach_info.reach === 30 && !ar[0].json.cache_row && ar[0].json.business === 'Stored: ERP partner in Dubai' && eq(ar[0].json.services, ['ERP', 'E-invoicing']) && ar[0].json.business_source === 'stored description' && ar[0].json.position === 14 && /e-invoicing-software/.test(ar[0].json.position_url), JSON.stringify(ar[0].json).slice(0, 300));
   resp1 = await run('Assess Response', FIT({ fit: 2 })); B = resp1[0].json.body;
-  check('assess: already #14 -> easy, direct 2-3 months (top 20 shortens); cost $0.022', B.difficulty_for_you === 'easy' && B.plan_type === 'direct' && B.months === '2-3' && B.position === 14 && B.cost_usd === 0.022, JSON.stringify(B));
+  check('assess: already #14 -> easy, direct 2-3 months (top 20 shortens); cost $0.0233 (A-28: the Haiku call at $0.0033)', B.difficulty_for_you === 'easy' && B.plan_type === 'direct' && B.months === '2-3' && B.position === 14 && B.cost_usd === 0.0233, JSON.stringify(B));
   const rra2 = await run('Reach Row (Assess)', resp1);
   check('assess: a stored reach is not saved again', rra2[0].json.skip === true, JSON.stringify(rra2[0].json));
   b = await answer(AR({ keyword: 'cleartax e invoicing', existing_keywords: ['e invoicing in uae', 'peppol uae'] }), FIT({ fit: 1, navigational: true, alternatives: ['e invoicing software uae', 'Peppol UAE', 'cleartax e invoicing', 'e invoicing in the UAE', '"FTA e invoicing requirements"', 'einvoicing for sme uae'] }));
@@ -2001,7 +2001,7 @@ await guard('pipeline phase 3', async () => {
   b = await answer(AR({ intent: 'navigational', keyword: 'xero login' }), [{ json: { error: { message: 'Overloaded' } } }]);
   // R3 (2026-10-13): the fit that cannot be read is in the LABEL, not only in `warnings`, and the Claude call is charged even when its
   // answer could not be parsed (live: exec 488 shipped fit null and reported the AI part of the cost as nothing).
-  check('assess: Claude failed -> fit null in the label as well, navigational from the keyword data, a warning, and the model still charged', b.fit === null && b.fit_known === false && /topic check unavailable/.test(b.label) && b.navigational === true && b.difficulty_for_you === 'not_realistic' && b.warnings.some(w => /topic check unavailable: Overloaded/.test(w)) && b.cost_usd === 0.0222, JSON.stringify(b));
+  check('assess: Claude failed -> fit null in the label as well, navigational from the keyword data, a warning, and the model still charged', b.fit === null && b.fit_known === false && /topic check unavailable/.test(b.label) && b.navigational === true && b.difficulty_for_you === 'not_realistic' && b.warnings.some(w => /topic check unavailable: Overloaded/.test(w)) && b.cost_usd === 0.0235, JSON.stringify(b));
   b = await answer(AR({ intent: 'navigational', keyword: 'northwind erp' }), [{ json: { error: { message: 'Overloaded' } } }]);
   check('assess: the site\'s own brand is never "another company"', b.navigational === false && b.difficulty_for_you !== 'not_realistic', JSON.stringify(b));
   mock('Assess Validate', [{ json: v }]); mock('Load Assess Cache', EMPTY);
@@ -8171,10 +8171,10 @@ await guard('the re-rating defects R1..R9', async () => {
   check('R3: the fit that could not be read is in the LABEL, not only in `warnings` (live: exec 488 shipped fit null on D22\'s own acceptance keyword)',
     bNull.fit === null && bNull.fit_known === false && /topic check unavailable$/.test(bNull.label) && bNull.warnings.some(w => /topic check unavailable: The AI model returned an empty response/.test(w)), JSON.stringify(bNull));
   check('R3: and the Claude call is charged even when its answer could not be parsed, so the cost the customer sees is the money that went out',
-    bNull.cost_usd === 0.0242, JSON.stringify({ cost: bNull.cost_usd, dataforseo: 0.0222 }));
+    bNull.cost_usd === 0.0255, JSON.stringify({ cost: bNull.cost_usd, dataforseo: 0.0222 }));
   const bPlain = await assess([{ json: { output: 'fit=2; navigational=no; alternatives=none' } }], 'fit=2; navigational=no; alternatives=none');
   check('R3: the plain one-line answer the retry gives is read — fit 2, not navigational, no invented alternatives — and both calls are charged',
-    bPlain.fit === 2 && bPlain.fit_known === true && bPlain.navigational === false && eq(bPlain.alternatives, []) && !/topic check unavailable/.test(bPlain.label) && bPlain.cost_usd === 0.0262, JSON.stringify(bPlain));
+    bPlain.fit === 2 && bPlain.fit_known === true && bPlain.navigational === false && eq(bPlain.alternatives, []) && !/topic check unavailable/.test(bPlain.label) && bPlain.cost_usd === 0.0288, JSON.stringify(bPlain));
   const bProse = await assess([{ json: { output: 'Here is my answer:\n{"fit": 1, "navigational": false, "alternatives": "erp implementation dubai, erp consultant uae"}' } }]);
   check('R3: a JSON object inside free text is read too, and the comma-separated alternatives of the simpler schema are split',
     bProse.fit === 1 && bProse.fit_known === true && bProse.navigational === false, JSON.stringify({ fit: bProse.fit, alts: bProse.alternatives }));
@@ -9981,7 +9981,7 @@ await guard('R31 R32 R33 the money a run reports is the money that happened', as
     paid69.ai_source === 'priced' && paid69.ai_usd !== 0.05 && paid69.ai_calls === 1
     && paid69.ai_measured === false && paid69.ai_measured_usd === 0 && eq(paid69.ai_counted_nodes, [])
     && eq(paid69.ai_nodes_ran, ['Link Analyst']) && /^estimated: prompt and answer characters/.test(paid69.ai_basis)
-    && /Claude \$0\.0053 ESTIMATED/.test(paid69.cost_basis), JSON.stringify(paid69));
+    && /Claude \$0\.0018 ESTIMATED/.test(paid69.cost_basis), JSON.stringify(paid69));   // B-8 / A-27: $0.0053 with the budget-share thinking
 
   // the other half: a free_only site reserves nothing in the first place
   reset();
@@ -12383,13 +12383,13 @@ await guard('B-F1 the Sonnet half, and B-A11 three nodes that advised from what 
     && /^estimated: prompt and answer characters/.test(before86.basis), JSON.stringify(before86));
   check('B-F1: counted, the same call is priced from the 12,905 prompt and 3,303 answer tokens Anthropic counted, and the characters are ignored',
     after86.counted === true && after86.in_tokens === 12905
-    && after86.out_tokens === 3303 + Math.round(16384 * T86.THINK_SHARE.medium)
+    && after86.out_tokens === 3303 + T86.THINK_SEEN   // B-8 / A-27 (2026-10-18): non-streaming, so the thinking seen, not the budget
     && after86.measured_usd > 0 && after86.measured_usd > after86.estimated_usd
     && /^measured: Anthropic \/v1\/messages\/count_tokens counted 12905 prompt and 3303 answer token\(s\)/.test(after86.basis),
     JSON.stringify(after86));
   check('B-F1: only the thinking no counter can see is still modelled, and the basis says so and says what it costs',
     after86.estimated_usd > 0 && after86.measured === false
-    && /thinking token\(s\) it cannot see are modelled from the medium effort budget/.test(after86.basis)
+    && /thinking token\(s\) it cannot see are modelled at the 64 a call n8n's reported output was seen to exceed the counted answer by/.test(after86.basis)
     && /is modelled\)/.test(after86.basis), after86.basis);
   const describer86 = await kit86({ call: 'callCost', call_spec: { node: 'Site Describer', model: 'claude-haiku-4-5-20251001',
     max_tokens: 4096, effort: '', streaming: false, prompt_chars: 22000, output_chars: 3000, calls: 1,
@@ -12405,7 +12405,7 @@ await guard('B-F1 the Sonnet half, and B-A11 three nodes that advised from what 
   console.log('   3 chunks ->', JSON.stringify({ usd: perItem86.usd, m: perItem86.measured_usd, rounds: perItem86.counted_rounds, basis: perItem86.basis }));
   check('B-F1: the keyword screen runs once per chunk of 80, so its three counts are SUMMED — 7,800 prompt and 3,600 answer tokens across three calls, all three measured',
     perItem86.counted === true && perItem86.counted_rounds === 3 && perItem86.in_tokens === 7800
-    && perItem86.out_tokens === 3600 + Math.round(16384 * T86.THINK_SHARE.low) * 3
+    && perItem86.out_tokens === 3600 + T86.THINK_SEEN * 3
     && / across 3 call\(s\)/.test(perItem86.basis) && !/repeated for the/.test(perItem86.basis), JSON.stringify(perItem86));
   const oneOfThree = await kit86({ call: 'callCost', call_spec: { ...CHUNKS, counted: { prompt_tokens: 2600, total_tokens: 3800, rounds: 1 } } });
   check('B-F1: and a count that covers ONE of three calls measures one and repeats the other two as a model — the Editor\'s rule, unchanged by any of this',
@@ -13893,7 +13893,7 @@ await guard('B-C2 a monitor settles what it measured, not what it reserved', asy
   const la = bl.ai_by_node['Link Analyst'], laT = TOK94['Link Analyst'];
   // 8,000 prompt tokens over two calls, 1,700 answer tokens over two calls, plus 2 x round(8192 x 0.05) of modelled thinking
   check('B-C2: a monitor agent answers once per SITE and does not loop, so every one of its calls is on the main path — the two counts are SUMMED and all of them are measured',
-    la.in_tokens === laT.in[0] + laT.in[1] && la.out_tokens === laT.out[0] + laT.out[1] + 2 * Math.round(8192 * 0.05)
+    la.in_tokens === laT.in[0] + laT.in[1] && la.out_tokens === laT.out[0] + laT.out[1] + 2 * 64   /* B-8 / A-27: a non-streaming call models the 64 thinking tokens a call it was seen to do, not the budget */
     && la.counted === true && / across 2 call\(s\)/.test(la.basis) && !/repeated for the/.test(la.basis), JSON.stringify(la));
   for (const [why, bad] of [['the answer count came back no larger than the prompt', laT.in.map(v => ({ json: { input_tokens: v } }))],
                             ['the prompt count did not answer at all', laT.in.map(() => ({ json: { error: 'overloaded_error' } }))],
@@ -18978,6 +18978,267 @@ await guard('SFA1-8 A-21 the main page run says it re-measured, and why its numb
   check('A-21: with no ladder measurement handed over there is no re-measure note', !(pv0.verdict_reasons || []).some(r => /^Re-measured:/.test(r)) && pv0.ladder_remeasure === null, JSON.stringify(pv0.ladder_remeasure));
   const rung = bodies.find(b => b.keyword !== 'it consulting dubai');
   check('A-21: a rung page\'s run is handed no measurement (it is another keyword)', !rung || rung.ladder_measure === null, JSON.stringify(rung && rung.ladder_measure));
+});
+
+// ===================================================================================
+// SFL1-SFL… (2026-10-18, defect-fix agent F-L: the open Lows of the 2026-10-17 re-rating, docs/system-review-2026-10-17/parts/*.md).
+await guard('SFL1 C-9 the AI visibility comparison counts only engines that answered on both sides, and prints the period it counted', async () => {
+  const SN = 'SFL1 C-9 — exec 776 printed "compared with 2026-10-16 (… Gemini …)" while run 722\'s Gemini had answered 0 of 7 (8 errors), and "the 7 days to …" over ONE pulse day';
+  begin(SN); const check = W3E.mkCheck(SN);
+  // the shape of run 722's stored engines: Gemini asked 7, answered 0, errors 8
+  const gem0 = { ...W3E.eng(0, 0), asked: 7, answered: 0, samples: 0, errors: 8 };
+  const X = await W3E.drive({ rows: W3E.answers(0), pulse_rows: [W3E.pulseDay({ mentioned: 0 })],
+    previous: W3E.previous({ mk: 0, engines: { chatgpt: W3E.eng(20, 0), gemini: gem0, perplexity: W3E.eng(10, 0), ai_mode: W3E.eng(20, 0) } }) });
+  const M = X.metrics;
+  check('C-9: an engine that answered nothing last time is not in the stored set, so the delta is refused with the reason',
+    M.delta_not_compared && /Gemini/.test(M.delta_not_compared) && !/^compared with/.test(M.delta_basis) && M.tests == null, JSON.stringify({ n: M.delta_not_compared, b: M.delta_basis }));
+  const Y = await W3E.drive({ rows: W3E.answers(0), pulse_rows: [W3E.pulseDay({ mentioned: 0 })],
+    previous: W3E.previous({ mk: 0, engines: { chatgpt: W3E.eng(20, 0), gemini: W3E.eng(10, 0), perplexity: W3E.eng(10, 0), ai_mode: W3E.eng(20, 0) } }) });
+  check('C-9: when every engine answered on both sides the comparison stands and names the engines', /^compared with 2026-10-06 \(11 questions on .*Gemini/.test(Y.metrics.delta_basis) && !Y.metrics.delta_not_compared, Y.metrics.delta_basis);
+  const old = await W3E.drive({ rows: W3E.answers(0), pulse_rows: [W3E.pulseDay({ mentioned: 0 })],
+    previous: W3E.previous({ mk: 0, engines: { chatgpt: { name: 'ChatGPT' }, gemini: { name: 'Gemini' }, perplexity: { name: 'Perplexity' }, ai_mode: { name: 'Google AI Mode' } } }) });
+  check('C-9: a stored row of an older shape (no answered / samples field) keeps its engines (unknown is not none)', /^compared with/.test(old.metrics.delta_basis), old.metrics.delta_basis);
+  // an engine READ without an answer (the AI Overview of a week in which Google showed none: asked, no error) is a reading, not a failure
+  const read0 = await W3E.drive({ rows: W3E.answers(0), pulse_rows: [W3E.pulseDay({ mentioned: 0 })],
+    previous: W3E.previous({ mk: 0, engines: { chatgpt: W3E.eng(20, 0), gemini: { ...W3E.eng(0, 0), asked: 7, errors: 0 }, perplexity: W3E.eng(10, 0), ai_mode: W3E.eng(20, 0) } }) });
+  check('C-9: an engine asked and read without an error (no answer shown) stays in the set', /^compared with .*Gemini/.test(read0.metrics.delta_basis), read0.metrics.delta_basis);
+  check('C-9: the period counted is this run + the ONE pulse day since the stored run, not "7 days"',
+    M.rate_period === 'this run on ' + W3E.NOW.slice(0, 10) + ' + 1 daily pulse day since 2026-10-06', M.rate_period);
+  const R = await W3E.rep(X);
+  const ln = (R.lineage || []).find(l => /Named in/.test(JSON.stringify(l))) || {};
+  check('C-9: the report\'s lineage prints that period', /1 daily pulse day since 2026-10-06/.test(JSON.stringify(ln)) && !/the 7 days to/.test(JSON.stringify(R.lineage || [])), JSON.stringify(ln).slice(0, 300));
+  const Z = await W3E.drive({ rows: W3E.answers(0), pulse_rows: [], previous: W3E.previous({ mk: 0, engines: { chatgpt: W3E.eng(20, 0), gemini: W3E.eng(10, 0), perplexity: W3E.eng(10, 0), ai_mode: W3E.eng(20, 0) } }) });
+  check('C-9: with no pulse reading the period says so', /^this run on .* \(no daily pulse reading since 2026-10-06\)$/.test(Z.metrics.rate_period), Z.metrics.rate_period);
+});
+
+await guard('SFL2 B-8 A-27 A-28 B-9 a Claude call is priced at what n8n saw, a short call counts its whole prompt, and an audit estimate follows its crawl', async () => {
+  const SN = 'SFL2 B-8 / A-27 / A-28 / B-9 — exec 767\'s Content Reviewer was booked 31% above n8n\'s own tokenUsage (modelled thinking on top of a counted answer), the Reply Reader 54% below (the agent\'s tool and instructions never counted), and exec 739\'s JavaScript crawl was estimated as a plain one';
+  begin(SN); const check = W3E.mkCheck(SN);
+  const kit = async (j) => (await run('Cost Kit', [{ json: j }], { code: '_cost_cal' }))[0].json;
+  // B-8: exec 767, Content Reviewer (Sonnet 5.5, effort medium, not streaming): n8n tokenUsage 11,276 in / 2,258 out = $0.0451; the
+  // count, with the agent's system message and parser tool now in it, sees the prompt n8n billed and the 2,208-token answer
+  const cr = await kit({ call: 'callCost', call_spec: { node: 'Content Reviewer', model: 'claude-sonnet-5-5', max_tokens: 16384, effort: 'medium', streaming: false,
+    prompt_chars: 40000, output_chars: 8000, calls: 1, counted: { prompt_tokens: 11276, total_tokens: 11276 + 2208, rounds: 1 } } });
+  const n8n767 = +((11276 * 2 + 2258 * 10) / 1e6).toFixed(4);
+  check('B-8: the Content Reviewer is priced within 2% of n8n\'s own $0.0451 (it was $0.0592, +31%: 1,638 modelled thinking tokens on a call that thought ~50)',
+    n8n767 === 0.0451 && Math.abs(cr.usd - n8n767) / n8n767 < 0.02 && cr.think_tokens === 64, JSON.stringify({ usd: cr.usd, think: cr.think_tokens, n8n: n8n767 }));
+  const old = +((10392 * 2 + (2208 + Math.round(16384 * 0.1)) * 10) / 1e6).toFixed(4);
+  check('B-8: (the old arithmetic on the same call reproduces the $0.0592 the run booked)', old === 0.0592, String(old));
+  // A-27: the streaming Opus nodes report no usage at all, so nothing checks them — they keep the effort-budget model and say so
+  const op = await kit({ call: 'callCost', call_spec: { node: 'Copywriter', model: 'claude-opus-5-5', max_tokens: 32768, effort: 'high', streaming: true,
+    prompt_chars: 40000, output_chars: 19000, calls: 1, counted: { prompt_tokens: 9000, total_tokens: 14000, rounds: 1 } } });
+  check('A-27: a streaming call keeps the effort-budget thinking (no figure exists to check it against) and its basis says so',
+    op.think_tokens === Math.round(32768 * 0.2) && /modelled from the high effort budget/.test(op.basis), JSON.stringify({ t: op.think_tokens, b: op.basis }));
+  // A-28: every counted agent's two count bodies carry the agent's system message and its parser tool (build check, recorded here)
+  const A9W = require('./a9_cost_wiring.json');
+  const fr = A9W.count_frames || {};
+  check('A-28: the Reply Reader, the Verdict Agent and the Site Describer are counted with their parser tool; the two plain-text Opus agents with none',
+    (fr['SEO_Agent_Reply_Reader.json'] || {})['Reply Reader'] === 'tool' && (fr['SEO_Agent_v4.json'] || {})['Verdict Agent'] === 'tool'
+    && (fr['SEO_Agent_v4.json'] || {})['Site Describer'] === 'tool' && (fr['SEO_Agent_v4.json'] || {})['Copywriter'] === 'none', JSON.stringify(fr));
+  // exec 753: n8n counted 1,859 prompt tokens, the bare-prompt count 1,025 — the 834 missing are the instructions + tool + Anthropic's tool prompt
+  const rr = await kit({ call: 'callCost', call_spec: { node: 'Reply Reader', model: 'claude-haiku-4-5-20251001', max_tokens: 2000, effort: '', streaming: false,
+    prompt_chars: 4000, output_chars: 900, calls: 1, counted: { prompt_tokens: 1859, total_tokens: 1859 + 190, rounds: 1 } } });
+  check('A-28: with the whole prompt counted, the Reply Reader\'s call is $0.0028 (it booked $0.0020 for the $0.0044 n8n saw; the rest is the tool call\'s own framing, which no count sees)',
+    rr.usd === 0.0028 && rr.measured === true, JSON.stringify(rr));
+  // B-9: exec 739 asked for a JavaScript crawl of up to 200 pages (quoted $0.36) and was told $0.11
+  const pk = async (req) => kit({ call: 'pick', kind: 'dfs', request: req });
+  const js200 = await pk({ mode: 'audit', crawl_max_pages: 200, crawl_js: true });
+  const plain200 = await pk({ mode: 'audit', crawl_max_pages: 200, crawl_js: false });
+  const plain1000 = await pk({ mode: 'audit', crawl_max_pages: 1000, crawl_js: false });
+  const full400js = await pk({ mode: 'audit', include_full_report: true, crawl_max_pages: 400, crawl_js: true });
+  check('B-9: a JavaScript crawl of 200 pages is estimated at $0.36, a plain one at $0.09, 1,000 plain pages at $0.45',
+    js200.usd === 0.36 && plain200.usd === 0.09 && plain1000.usd === 0.45 && /rendered with JavaScript at 4x a page/.test(js200.basis) && !/scaled/.test(plain200.basis),
+    JSON.stringify({ js200, plain200: plain200.usd, plain1000: plain1000.usd }));
+  check('B-9: a full report scales only its crawl part ($0.55 + $0.09 x 7 for 400 JavaScript pages)', full400js.usd === +(0.55 + 0.09 * 7).toFixed(4), JSON.stringify(full400js));
+  const kw = await pk({ mode: 'keyword', crawl_max_pages: 1000, crawl_js: true });
+  check('B-9: no other mode moves', kw.crawl_factor === 1 && kw.usd === 0.04, JSON.stringify(kw));
+});
+
+await guard('SFL3 B-16 B-18 B-10 the full report on what it read: the redirect chain, the bylines, the pricing sections', async () => {
+  const SN = 'SFL3 B-16 / B-18 / B-10 — exec 767 (techand.ai): the two-hop http://techand.ai/ redirect unreported, "no named author" from 2 of 12 articles, and "No pricing" while six service pages carry pricing sections';
+  reset(); begin(SN); const check = W3E.mkCheck(SN);
+  const FL = require('./fixtures_fl.js');
+  const J = (x) => JSON.parse(JSON.stringify(x));
+  const D = FL.domain;
+  // ---------- B-16: the real host probes of exec 767 ----------
+  const probeRun = async (run0) => { mock('Check Crawl', [{ json: { domain: D } }]); mock('Get Crawled Pages Answers', [{ json: J(FL.crawl) }]);
+    mock('Build Probes', FL.probes.build.map(j => ({ json: j }))); mock('Content Probes', FL.probes.content.map(j => ({ json: j })));
+    mock('Run Probes', run0.map(j => ({ json: j }))); mock('Run Content Probes', FL.probes.run_content.map(j => ({ json: j })));
+    return (await run('Analyze Probes', [{ json: {} }]))[0].json; };
+  const ap = await probeRun(J(FL.probes.run));
+  const chain = ap.probe.findings.find(f => f.title === 'Redirect chain on the homepage address');
+  check('B-16: http://techand.ai/ -> 308 https://techand.ai/ -> 308 https://www.techand.ai/ is reported as a two-hop chain (Low)',
+    chain && chain.severity === 'Low' && /http:\/\/techand\.ai\/ → 308 https:\/\/techand\.ai\/ → 308 https:\/\/www\.techand\.ai\/ \(2 hops\)/.test(chain.evidence)
+    && /https:\/\/www\.techand\.ai\//.test(chain.fix) && (ap.probe.measurements.redirect_chains || []).length === 1, JSON.stringify(chain || ap.probe.findings.map(f => f.title)));
+  check('B-16: "What works" no longer calls it a plain HTTP-to-HTTPS redirect', ap.probe.what_works.some(w => /HTTP redirects to HTTPS \(in 2 hops/.test(w)) && !ap.probe.what_works.includes('HTTP redirects to HTTPS'), JSON.stringify(ap.probe.what_works));
+  const one = J(FL.probes.run); const ah0 = one.find(r => r.headers && /^https:\/\/techand\.ai\/?$/.test(String(r.headers.location || '')));
+  if (ah0) ah0.headers.location = 'https://www.techand.ai/';
+  const ap1 = await probeRun(one);
+  check('B-16: a one-hop http -> https://www redirect is not a chain', !ap1.probe.findings.some(f => /Redirect chain on the homepage/.test(f.title)) && ap1.probe.what_works.includes('HTTP redirects to HTTPS'), JSON.stringify(ap1.probe.what_works));
+  // ---------- B-18: the key pages from the real crawl, the bylines of the site's articles ----------
+  const pk = (await run('Pick Key Pages', [{ json: {} }])).map(i => i.json);
+  const arts = pk.filter(p => p.kind === 'article'), about = pk.find(p => p.kind === 'about');
+  check('B-18: up to 8 articles are sampled (exec 767: 2), and "about" is no longer an /insights/ article whose slug says "why"',
+    arts.length === 8 && (!about || !/\/insights\//.test(about.url)) && pk.filter(p => p.kind === 'service').length === 5, JSON.stringify(pk.map(p => p.kind + ' ' + p.url)));
+  const real = Object.fromEntries(FL.articles.map(a => [a.url, a.ld.join('\n')]));
+  const team = ['Tech& Team', 'Tech& Technology Team'];
+  const html = (p, i) => p.kind !== 'article' ? '<html><head><title>' + p.kind + '</title></head><body><h1>' + p.kind + '</h1><p>' + 'Text about the services we run for clients in the UAE. '.repeat(30) + '</p></body></html>'
+    : '<html><head>' + (real[p.url] || '<script type="application/ld+json">' + JSON.stringify({ '@context': 'https://schema.org', '@type': 'BlogPosting', headline: 'Article ' + i, datePublished: '2026-09-01', dateModified: '2026-09-10',
+      author: { '@type': 'Person', name: team[i % 2] } }) + '</script>') + '</head><body><h1>Article</h1><p>' + 'An article body with facts and a source link. '.repeat(40) + '</p></body></html>';
+  const fetched = pk.map((p, i) => ({ json: { data: html(p, i), statusCode: 200 } }));
+  mock('Analyze Probes', [{ json: ap }]); mock('Fetch Page HTML', fetched);
+  const ahtml = (await run('Analyze HTML', fetched))[0].json.html_analysis;
+  const auth = ahtml.findings.find(f => /named human author/.test(f.title));
+  const realPerson = FL.articles.some(a => pk.some(p => p.url === a.url) && /"name":"Muhammad Aarish"/.test(a.ld.join('')));
+  check('B-18: the byline finding says the articles credit a TEAM, names the team bylines, and counts against the 12 articles the crawl found',
+    auth && /credited to a team, not a person/.test(auth.title) && /of 8 sampled articles credit a team \("Tech& Team"/.test(auth.evidence) && /8 of the 12 articles the crawl found were read/.test(auth.evidence)
+    && !/name no author at all/.test(auth.evidence), JSON.stringify(auth));
+  check('B-18: the one named person (Muhammad Aarish, a real exec-767 article) is not counted as a team byline', !realPerson || /^7 of 8/.test(auth.evidence), auth && auth.evidence);
+  // ---------- B-10: the content review against the pages the crawl knows ----------
+  const svc = pk.find(p => p.kind === 'service');
+  const deep = '<html><body><h1>Service</h1><p>' + 'We implement and support Dynamics 365 for UAE firms. '.repeat(80) + '</p><h2>Pricing in UAE</h2><p>What drives the cost: the number of users, the modules, the data to migrate and the integrations.</p><h2>FAQ</h2><p>Questions.</p></body></html>';
+  const fetched10 = pk.map((p, i) => ({ json: { data: p.url === svc.url ? deep : html(p, i), statusCode: 200 } }));
+  mock('Analyze PageSpeed', [{ json: { domain: D } }]); mock('Fetch Page HTML', fetched10); mock('Competitor Homes', []);
+  const bcp = (await run('Build Content Prompt', [{ json: {} }]))[0].json;
+  const out10 = bcp.content_sections || {};
+  check('B-10: the reviewer is shown the pricing section further down a page it read (the page is cut at 2,500 characters)',
+    /SECTIONS FURTHER DOWN THE PAGES ABOVE/.test(bcp.content_prompt_our) && /## Pricing in UAE: What drives the cost/.test(bcp.content_prompt_our) && (out10.read || []).some(r => r.url === svc.url), (bcp.content_prompt_our || '').slice(-1500));
+  check('B-10: and the site\'s other pages with pricing sections, from the crawl\'s own headings (exec 767 read none of them)',
+    /OTHER PAGES OF THIS SITE WITH SUCH SECTIONS/.test(bcp.content_prompt_our) && /dynamics-365-cloud-migration-uae: .*"Migration Cost Factors"/.test(bcp.content_prompt_our)
+    && (out10.outline || []).filter(o => o.headings.some(h => /pric|cost/i.test(h))).length >= 6 && bcp.content_prompt_our.length <= 22000 && out10.outline_unavailable === false, JSON.stringify(out10.outline));
+  // the real answer of exec 767's Content Reviewer, read against what the run knew
+  const parse = async (sections) => { mock('Build Content Prompt', [{ json: { ...bcp, content_sections: sections, content_pages_read: FL.content_pages_read } }]);
+    return (await run('Parse Content Review', [{ json: { output: J(FL.reviewer_output) } }]))[0].json; };
+  const orig = (FL.reviewer_output.findings || []).find(f => /pricing/i.test(f.title));
+  const pr = await parse({ read: [], outline: out10.outline, outline_unavailable: false });
+  const nf = pr.extra_findings.filter(f => f.source === 'ai_review');
+  const priced = nf.find(f => /^Pricing sections explain what drives the cost/.test(f.title));
+  check('B-10: the fixture is exec 767\'s answer: "No pricing, engagement models or timelines" (Medium)', orig && /No pricing/.test(orig.title) && orig.severity === 'Medium', JSON.stringify(orig));
+  check('B-10: over pages that carry pricing sections it becomes "Pricing sections explain what drives the cost but give no price ranges", Low, naming the pages',
+    priced && priced.severity === 'Low' && /but give no price ranges/.test(priced.title) && /dynamics-365-cloud-migration-uae \("D365 Cloud Migration Services Pricing in UAE"\)/.test(priced.evidence)
+    && !nf.some(f => /^No pricing/i.test(f.title)) && pr.content_review.eeat_signals.pricing_transparency !== 'no', JSON.stringify(priced));
+  const pr0 = await parse({ read: [], outline: [], outline_unavailable: false });
+  check('B-10: a site with no pricing section anywhere keeps the reviewer\'s finding as it was', pr0.extra_findings.some(f => f.source === 'ai_review' && /^No pricing/.test(f.title) && f.severity === 'Medium'), JSON.stringify(pr0.extra_findings.map(f => f.title)));
+});
+
+await guard('SFL4 C-12 C-13 Tracker Report on exec 785: a stored set-aside rung stays set aside, the page Google ranks is named', async () => {
+  const SN = 'SFL4 C-12 / C-13 — the Rank Tracker of exec 785 (techand.ai) listed "facts erp" (set aside on its row) as a rung "not published yet", and told "peppol uae" to improve the insights page while Google ranks the PINT-AE guide at #46; F-C proved the fix only on generated code';
+  reset(); begin(SN); const check = W3E.mkCheck(SN);
+  const FX = JSON.parse(require('zlib').gunzipSync(require('fs').readFileSync(require('path').join(__dirname, 'fixtures_fl_785.json.gz'))).toString());
+  for (const n of ['Tracker Plan', 'Parse Positions', 'SERP Check Answers', 'Load Ladders', 'Load History', 'Load Content Log (Tracker)', 'Load Pages (Tracker)', 'Load Monitors (Tracker)', 'Load AI Brands (Tracker)', 'Load Query History (Tracker)'])
+    mock(n, (FX[n].length ? FX[n] : [{}]).map(j => ({ json: j })));
+  const out = (await run('Tracker Report', store['Parse Positions'])).map(i => i.json);
+  const erp = out.find(x => x.ladder_id === 'lad_mv40b6s9h5a8') || {}, pep = out.find(x => x.ladder_id === 'lad_muz4gf79ifhk') || {};
+  const oldErp = FX.expected.find(x => x.ladder_id === 'lad_mv40b6s9h5a8') || {}, oldPep = FX.expected.find(x => x.ladder_id === 'lad_muz4gf79ifhk') || {};
+  const factsRow = FX['Load Ladders'].find(r => r.keyword === 'facts erp') || {};
+  check('C-12: the fixture is exec 785: "facts erp" is stored set_aside (facts.ae\'s brand) and the old report still listed it', factsRow.status === 'set_aside' && /facts\.ae/.test(factsRow.status_note || ''), JSON.stringify(factsRow));
+  const rungKws = (erp.positions || erp.rungs || []).map(p => p.keyword).filter(Boolean);
+  console.log('   erp report ->', JSON.stringify({ positions: (erp.positions || []).map(p => p.keyword + ':' + (p.status || '')), facts_in_html: ((erp.html || '').match(/.{0,120}facts erp.{0,160}/g) || []).map(s => s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')) }).slice(0, 1500));
+  const aside = (erp.set_aside || []).find(x => x.keyword === 'facts erp');
+  check('C-12: the stored set-aside rung stays set aside — in the report\'s set-aside list with its reason, never in the rungs to write',
+    aside && aside.seen === 'stored' && aside.dropped === true && /facts\.ae/.test(aside.reason) && !/facts erp/.test(JSON.stringify(erp.next_step || {}))
+    && !/facts erp\s*<span[^>]*>\(not published yet/.test(erp.html || ''), JSON.stringify({ aside, rungs: rungKws, next: erp.next_step && erp.next_step.text }));
+  // F-L found the table still said "facts erp (not published yet: checked monthly …)" beside the set-aside note, and the rung counts
+  // still held it as a page of rung 2 ("Rung 2: 0/2"), so a page nobody will write kept the rung from ever being reached
+  const fr = (erp.positions || []).find(p => p.keyword === 'facts erp') || {};
+  check('C-12: its row in the position table says "set aside", not "not published yet", and it is not a page of rung 2',
+    fr.set_aside === true && /facts erp\s*<span[^>]*>\(set aside: not a search this website should target/.test(erp.html || '')
+    && (erp.rungs || []).some(r => r.rung === 2 && r.pages === 1) && /Rung 2: 0\/1 in top 10/.test(erp.html || ''), JSON.stringify({ fr, rungs: erp.rungs }));
+  const ru = 'https://www.techand.ai/insights/upgrading-your-erp-for-uae-peppol-pint-ae-compliance-a-technical-integration-guide';
+  check('C-13: exec 785 ranked the PINT-AE guide at #46 and told the owner to improve another page, without a word about the split',
+    /improve the main page "peppol uae"/.test((oldPep.next_step || {}).text || '') && !/Google ranks a different page/.test((oldPep.next_step || {}).text || ''), (oldPep.next_step || {}).text);
+  check('C-13: now the next step names the page Google ranks (#46) and asks which of the two answers the search',
+    pep.next_step && pep.next_step.text.includes('Google ranks a different page of yours for this search: ' + ru + ' (#46)') && /one search, one page/.test(pep.next_step.text), (pep.next_step || {}).text);
+});
+
+await guard('SFL5 C-1 follow-up the Audit Scheduler and the Page Watch say when they ran late', async () => {
+  const SN = 'SFL5 C-1 follow-up — F-C put the "ran late" notice on every Callback Ledger; the Audit Scheduler (its audits report through the main workflow) and the Page Watch (its callback is the alert digest) had none';
+  reset(); begin(SN); const check = W3E.mkCheck(SN);
+  // the 1st-of-the-month audit (06:00 New York = 10:00 UTC) started by the catch-up six hours later
+  const catchup = { trigger: 'catchup', scheduled_for: '2026-10-01T10:00:00.000Z', why: 'the computer running the engine was asleep at 06:00', started_at: '2026-10-01T16:05:00.000Z' };
+  const body0 = { mode: 'audit', domain: 'northwind-erp.com', country: 'United Arab Emirates', report_type: 'Site Audit (technical issues only)', scheduled: true, request_id: 'aud_202610_northwind-erp-com', callback_url: 'https://app.example.com/api/hooks/n8n/x' };
+  mock('Audit Schedule Plan', [{ json: { site_id: 'site_northwind-erp-com', domain: 'northwind-erp.com', run: true, why: '60 days since the last audit (safety net)', body: body0 } }]);
+  mock('Manual Run', [{ json: catchup }]);
+  const late = (await run('Audits To Start', [{ json: {} }]))[0].json;
+  check('Audit Scheduler: a run the catch-up started 6 h after its slot hands `ran_late` to the audit it starts (the slot, the delay, why)',
+    late.body.ran_late && late.body.ran_late.late === true && late.body.ran_late.due === '2026-10-01T10:00:00.000Z' && late.body.ran_late.late_min === 365
+    && /monthly run that was due Thu 1 Oct 2026, 06:00 \(America\/New_York\)/.test(late.body.ran_late.text) && /schedule catch-up started it/.test(late.body.ran_late.text), JSON.stringify(late.body.ran_late));
+  reset();
+  mock('Audit Schedule Plan', [{ json: { site_id: 'site_northwind-erp-com', domain: 'northwind-erp.com', run: true, why: 'x', body: body0 } }]);
+  mock('Monthly Schedule', [{ json: { timestamp: '2026-10-01T10:00:20.000Z' } }]);
+  const onTime = (await run('Audits To Start', [{ json: {} }]))[0].json;
+  check('Audit Scheduler: the schedule firing on time adds nothing to the audit\'s body', !onTime.body.ran_late && onTime.ran_late.late === false, JSON.stringify(onTime.ran_late));
+  // Normalize Input keeps it for a scheduled request only
+  const niRun = async (b) => (await run('Normalize Input', [{ json: { headers: { 'content-type': 'application/json' }, params: {}, query: {}, body: b } }]))[0].json;
+  const ni = await niRun({ ...late.body, client_ip: 'audit:site_northwind-erp-com' });
+  check('Normalize Input: the scheduled audit keeps `ran_late`', ni.ran_late && ni.ran_late.late === true && ni.ran_late.late_min === 365 && !ni.validation_error, JSON.stringify(ni.ran_late || ni.validation_error));
+  const niApp = await niRun({ ...late.body, scheduled: false, client_ip: 'app:x' });
+  check('Normalize Input: a caller\'s own request cannot label itself late', niApp.ran_late === null, JSON.stringify(niApp.ran_late));
+  // the audit's callback, through the one node every callback of the main workflow passes
+  mock('Normalize Input', [{ json: ni }]); mock('Rate Limit', [{ json: { run_cost_estimate_usd: 0.09, run_cost_estimate_basis: 'x' } }]);
+  const cb = (await run('Run Cost (Callback)', [{ json: { stage: 'site_audit', subject: 'Technical SEO audit — northwind-erp.com', html: '<html><body><h1>Audit</h1></body></html>' } }]))[0].json;
+  check('main workflow: the audit report carries `ran_late` (the app titles it "ran late"), the box first in its HTML, the tag on its subject',
+    cb.ran_late && cb.ran_late.late === true && /<body><div class="ran-late"[^>]*><strong>Ran late\.<\/strong> This is the monthly run that was due/.test(cb.html)
+    && /\(ran late — due 2026-10-01\)$/.test(cb.subject), JSON.stringify({ s: cb.subject, h: cb.html.slice(0, 220) }));
+  mock('Normalize Input', [{ json: { ...ni, ran_late: null } }]);
+  const cb0 = (await run('Run Cost (Callback)', [{ json: { stage: 'site_audit', subject: 'Technical SEO audit — northwind-erp.com', html: '<html><body><h1>Audit</h1></body></html>' } }]))[0].json;
+  check('main workflow: a run that was not late is untouched', !('ran_late' in cb0) && !/ran-late/.test(cb0.html) && !/ran late/.test(cb0.subject), JSON.stringify(cb0.subject));
+  // the Page Watch: the daily watch (05:45 New York) the catch-up started at 11:30 New York
+  reset();
+  const watchCatchup = { trigger: 'catchup', scheduled_for: '2026-10-17T09:45:00.000Z', why: 'the computer running the engine was asleep at 05:45', started_at: '2026-10-17T15:30:00.000Z' };
+  const pending = [{ alert_key: 'k1', node: 'northwind-erp.com · northwind-erp.com/pricing', message: 'Page gone: answers 404', severity: 'critical', delivered: 'pending', count: 1, last_seen_at: '2026-10-17T15:31:00.000Z' }];
+  mock('Watch Ops Alert', pending.map(j => ({ json: j }))); mock('Save Watch Ops Alert', pending.map(j => ({ json: j })));
+  mock('Watch Compare', [{ json: { site_id: 'site_northwind-erp-com', domain: 'northwind-erp.com', checked_at: '2026-10-17T15:31:00.000Z', changes: [{ url: 'https://northwind-erp.com/pricing', code: 'page_gone', severity: 'critical', label: 'page gone', text: 'The page answers 404.' }] } }]);
+  mock('Watch Run', [{ json: watchCatchup }]);
+  const ch = (await run('Watch Ops Channels', store['Save Watch Ops Alert']))[0].json;
+  check('Page Watch: the digest (its callback) says it ran late — the subject tag, the first line, `ran_late` on the webhook body',
+    ch.ran_late && ch.ran_late.late === true && /\(ran late — due 2026-10-17\)$/.test(ch.subject) && /^SEO Agent key-page watch: 1 change .*\nRan late: This is the daily run that was due Sat 17 Oct 2026, 05:45 \(America\/New_York\)/.test(ch.plain)
+    && ch.webhook_body.ran_late && ch.webhook_body.summary === ch.subject, JSON.stringify({ s: ch.subject, p: ch.plain.slice(0, 260) }));
+  const al = (await run('Watch Alerts', store['Watch Compare'])).map(x => x.json);
+  check('Page Watch: the alert the app shows says it too', al.length === 1 && /Ran late: This is the daily run that was due/.test(al[0].summary), JSON.stringify(al.map(a => a.summary)));
+  mock('Watch Run', [{ json: {} }]); mock('Daily Schedule', [{ json: { timestamp: '2026-10-17T09:45:03.000Z' } }]);
+  const chOk = (await run('Watch Ops Channels', store['Save Watch Ops Alert']))[0].json;
+  check('Page Watch: on time, nothing is added', chOk.ran_late.late === false && !/ran late/i.test(chOk.subject + chOk.plain) && !chOk.webhook_body.ran_late, JSON.stringify({ s: chOk.subject }));
+  reset();
+});
+
+await guard('SFL6 C-8 leftover a vendor\'s own storefront is a competing provider, a guide / list / ministry / publisher is not', async () => {
+  const SN = 'SFL6 C-8 leftover — exec 781 qualified halsimplify.com (HAL ERP: an article on its knowledge centre) and tradeshift.com (an e-invoicing network: a buyer\'s guide) because neither title nor address claims the category; their own page menus sell it and ask for a demo';
+  reset(); begin(SN); const check = W3E.mkCheck(SN);
+  const zlib = require('zlib'), fs = require('fs'), path = require('path');
+  const KIT = (() => { const src = fs.readFileSync(path.join(process.env.CODE_DIR || path.join(__dirname, 'code_v4'), 'LB_Assemble.js'), 'utf8');
+    const cut = src.indexOf('const CT = (() => {'); return new Function(src.slice(0, cut) + '; return { LK, RV, OK };')(); })();
+  const { RV, OK } = KIT;
+  const TOPICS = ['e invoicing in uae', 'erp software uae', 'ai consulting dubai', 'it consulting dubai', 'dynamics 365 partner uae', 'erp implementation dubai', 'azure cloud migration dubai', 'peppol uae'];
+  const SERVICES = ['Microsoft Azure Infrastructure', 'Azure Integration Services', 'Cloud Migration & Modernization', 'Azure AI Services', 'Intelligent Document Processing', 'Predictive Models', 'Dynamics 365 Finance', 'Dynamics 365 Sales'];
+  // exec 781's prospect pages, reduced to their <title>, their own <nav> / <header> and the call-to-action phrases (contact data scrubbed)
+  const FX = JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(__dirname, 'fixtures_fl_781.json.gz'))).toString());
+  const pageOf = (d) => FX.pages.find(p => p.domain === d) || {};
+  const htmlOf = (p) => '<html><head><title>' + p.title + '</title></head><body>' + (p.zones || []).join('\n') + '<main><p>' + (p.ctas || []).join(' · ') + '</p></main></body></html>';
+  const prov = (p, extra) => RV.providerOf({ domain: p.domain, title: p.page_title_781 || p.title, url: p.url, page_html: htmlOf(p), topics: TOPICS, services: SERVICES, ...(extra || {}) });
+  const hal = pageOf('halsimplify.com'), ts = pageOf('tradeshift.com');
+  check('C-8: the fixture is exec 781: both were qualified needs_contact with no reason', hal.status_781 === 'needs_contact' && ts.status_781 === 'needs_contact' && !(hal.reasons_781 || []).length && !(ts.reasons_781 || []).length, JSON.stringify([hal.status_781, ts.status_781]));
+  const wh = prov(hal), wt = prov(ts);
+  check('C-8: halsimplify.com — its menu sells ERP / e-invoicing (Conversational ERP, "HAL vs Odoo / SAP B1 / Microsoft Dynamics", E-invoicing) and the page asks for a demo',
+    /its own site menu sells ERP/.test(wh) && /"Request a demo"/i.test(wh), wh);
+  check('C-8: tradeshift.com — its menu sells "e-Invoicing Software" and the page asks for a demo', /its own site menu sells e-invoicing \("e-Invoicing Software"\)/.test(wt) && /demo/i.test(wt), wt);
+  check('C-8: without the page itself (a title alone, as AI visibility and earned media read it) the old rule stands: neither is called a provider from its title',
+    RV.providerOf({ domain: hal.domain, title: hal.page_title_781, url: hal.url, topics: TOPICS, services: SERVICES }) === '' && RV.providerOf({ domain: ts.domain, title: ts.page_title_781, url: ts.url, topics: TOPICS, services: SERVICES }) === '', 'title-only');
+  // through the Link Builder's own qualification (OK.sellsSame), with the type each row had
+  const sells = (p, type) => OK.sellsSame({ type, domain: p.domain, competitors: [], serp_rivals: [], ai_rivals: [], topics: TOPICS, title: p.page_title_781 || p.title, text: '', terms: SERVICES, url: p.url, fit: 0.5, page_html: htmlOf(p) });
+  const sh = sells(hal, 'ai_source'), st = sells(ts, 'resource');
+  check('C-8: the Link Builder refuses both as competing providers (ai_source, resource)', /^a competing provider: its own site menu sells/.test(sh) && /^a competing provider: its own site menu sells/.test(st), JSON.stringify([sh, st]));
+  // ---- what it must NOT catch: exec 781's guide / consultancy / news pages, and the real ministry, publisher, member list and list pages ----
+  const keep = ['innovatetax.com', 'andersen.com', 'turbolens.io', 'marketguest.com'].map(d => [d, prov(pageOf(d))]);
+  check('C-8: exec 781\'s tax-consultancy guide, the consultancy, a tool site with no sales menu and a guest-post market are not called providers by their storefront',
+    keep.every(([, w]) => !/its own site menu/.test(w)), JSON.stringify(keep));
+  const L = (f) => zlib.gunzipSync(fs.readFileSync(path.join(__dirname, 'fixtures_live', f))).toString();
+  const real = [['mof.gov.ae', 'lb_page_mof_asp_list.html.gz', 'list'], ['thedocmag.com', 'page_thedocmag.html.gz', 'resource'], ['peppol.org', 'page_peppol_members.html.gz', 'list'],
+    ['azdan.com', 'lb_page_azdan_top20.html.gz', 'list']].map(([d, f, type]) => { const html = L(f); const title = ((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '').trim();
+      return [d, title, RV.providerOf({ domain: d, title, url: 'https://' + d + '/', page_html: html, topics: TOPICS, services: SERVICES }),
+        OK.sellsSame({ type, domain: d, competitors: [], serp_rivals: [], ai_rivals: [], topics: TOPICS, title, text: '', terms: SERVICES, url: 'https://' + d + '/', fit: 0.5, page_html: html })]; });
+  check('C-8: the Ministry of Finance ASP list, a publisher, the OpenPeppol member list and azdan.com\'s "Top 20" list stay pitchable (D13: a list that leaves you out is pitched, even from a vendor)',
+    real.every(([, , w, s]) => !/its own site menu/.test(w) && !/its own site menu/.test(s)), JSON.stringify(real.map(([d, t, w, s]) => [d, t.slice(0, 40), w, s])));
 });
 
 

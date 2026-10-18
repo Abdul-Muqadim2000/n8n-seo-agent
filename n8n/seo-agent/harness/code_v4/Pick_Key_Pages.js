@@ -278,13 +278,13 @@ const add = (p, kind) => { if (p && p.url && !pick.some(x => x.url === p.url)) p
 
 add(pages.find(p => isHome(p.url)), 'home');
 add(pages.find(p => isContact(p.url)), 'contact');
-add(pages.find(p => isAbout(p.url) && !isContact(p.url)), 'about');
+add(pages.find(p => isAbout(p.url) && !isContact(p.url) && !isArticle(p.url)), 'about');   // B-18: an article whose slug says "why" is not the About page
 const isHub = (u) => /\/(insights|blog|news|articles?|guides?|tag|category|author)\/?$/i.test(u);
 pages.filter(p => !isHome(p.url) && !isLegal(p.url) && !isArticle(p.url) && !isHub(p.url) && !isContact(p.url) && !isAbout(p.url))
   .sort(byImportance).slice(0, 5).forEach(p => add(p, 'service'));
-pages.filter(p => isArticle(p.url)).sort(byImportance).slice(0, 2).forEach(p => add(p, 'article'));
+pages.filter(p => isArticle(p.url)).sort(byImportance).slice(0, 8).forEach(p => add(p, 'article'));   // B-18: 8 articles, not 2 (free fetches)
 
 // Kuch na mile to kam az kam homepage
 if (!pick.some(p => p.kind === 'home')) pick.unshift({ url: siteUrlOf(domain, '/'), kind: 'home' });
 
-return pick.slice(0, 10).map(p => ({ json: p }));
+return pick.slice(0, 16).map(p => ({ json: p }));

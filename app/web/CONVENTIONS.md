@@ -134,3 +134,7 @@ Full guide: `brand/BRAND.md`; the app's tokens are in `src/index.css` (light + d
   5. If it matters to a team or a plan: link it from the relevant `solutions.ts` entries (`helps`) and add rows to the comparison
      table / plan lists in `pricing.ts`.
   6. Check `/`, `/platform`, `/platform/<slug>` at 375 and 1440 in light and dark, with reduced motion on and off.
+
+## Audit log
+
+Every new admin write (a connection, a key, a setting, an upload or deletion that changes what the company has) calls `audit()` from `server/src/services/audit.ts` with an action listed in `AUDIT_ACTIONS` (`shared/src/identity.ts`), no secret in its details, and the route test asserts the event.

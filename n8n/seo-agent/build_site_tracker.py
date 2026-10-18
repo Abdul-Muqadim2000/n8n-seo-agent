@@ -95,7 +95,10 @@ def link(conns, a, b, out=0):
     outs = conns.setdefault(a, {}).setdefault('main', [])
     while len(outs) <= out: outs.append([])
     outs[out].append({'node': b, 'type': 'main', 'index': 0})
+RAN_LATE_WANT = {'SEO Agent — Page Watch': ['Watch Alerts', 'Watch Ops Channels']}   # F-L (2026-10-18): the nodes that say a late run was late
 def write(wfobj, fname):
+    _rl = monitor_cost.bake_ran_late(wfobj, V5) if any(monitor_cost.RAN_LATE_MARK in str((n.get('parameters') or {}).get('jsCode') or '') for n in wfobj['nodes']) else []
+    assert sorted(_rl) == sorted(RAN_LATE_WANT.get(wfobj.get('name'), [])), 'F-L: ' + str(wfobj.get('name')) + ' baked the ran-late notice into ' + str(_rl)
     # R17 (2026-10-14, FIX_PLAN §3.12): the reserve chain goes on the MAIN path, now that every connection of this workflow is made
     if wfobj.get('name') in LEDGER_WIRING:
         _w = LEDGER_WIRING[wfobj['name']]

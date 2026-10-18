@@ -421,7 +421,7 @@ const OK = (() => {
     // C-8 (after the service-overlap evidence above, which names what their site offers): a site that sells your CATEGORY (ERP, e-invoicing, IT, AI, cloud) by its title, its address or its own about / contact text,
     // whatever product names it uses - erp-dubai.ae "ERPNext Implementation Partner", penieltech.com "Odoo Implementation"
     if (!SITE_EXEMPT.has(type) && typeof RV !== 'undefined') {
-      const cat = RV.providerOf({ domain: o.domain, title: o.title, url: o.url || o.page_url, site_text: o.site_text, topics: o.topics, services: o.terms });
+      const cat = RV.providerOf({ domain: o.domain, title: o.title, url: o.url || o.page_url, site_text: o.site_text, page_html: o.page_html, topics: o.topics, services: o.terms });   // C-8 leftover (F-L): page_html = the prospect page itself (its menu + sales buttons)
       if (cat) return 'a competing provider: ' + cat;
     }
     const terms = [...new Set((o.terms || []).flatMap(t => words(t).map(stem)))];
