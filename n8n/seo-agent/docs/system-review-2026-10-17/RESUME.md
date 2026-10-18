@@ -105,3 +105,23 @@ Before each phase, read §3 / §8 to see what is already done.
 ## 8. Progress log (append one line per finished step)
 
 - 2026-10-17 22:40 UTC — all defect fixers merged (`47ce789`), G1 / G3 / G4 parked, nothing deployed.
+- 2026-10-18 07:24 PKT — overnight run started: G3, G1, G4 resumed (Phase A); merge order G3 → G1 (0011) → G4 (0012).
+- 2026-10-18 07:30 PKT — **Docker Desktop had stopped overnight** (no n8n execution after 2026-10-17 20:34 UTC; n8n, the app dev stack and its DB were all down). Restarted Docker and both stacks (`n8n/` `docker compose up -d`, `app/compose.dev.yml up -d`), nothing else changed; n8n healthz 200. The catch-up workflow replays any fire missed meanwhile at its next sweep.
+
+## 9. Deploy checklist for the owner (Phase C — prepared, not run)
+
+Run on return (not Monday 07:00–12:00 New York): `cd /Users/abdul.muqadim/n8n_devaicon/n8n && python3 seo-agent/apply_env.py`.
+
+What it does with the merged code:
+- Rebuilds the 24 workflows with `n8n/.env` (16 workflow files changed since the deployed 932de87, ≈ +1,800 lines) and imports + publishes them,
+  restarts n8n. New nodes include: Outbound Link Requests / Fetch / Check (Content QA), Own Coverage (Run), Load Pages / Load Ladder Settings
+  (Keyword Check), Save Content Log (Run) → Ladder Row Written → Mark Ladder Row Written, the catch-up's Confirm Claim + Watchdog nodes,
+  the Backlink Monitor / Link Builder rival loaders.
+- `sync_tables.py` (run by apply_env) adds: `seo_audits.crawl_js` (boolean), `seo_audits.checks_version`, `seo_audits.not_fixed_json`,
+  `seo_audit_findings.check_version`.
+- The app (dev stack serves the main checkout) applies its migrations at the server's next start: `0009_cms_publishing` is already in;
+  G3 / G1 / G4 add 0010 / 0011 / 0012 when merged (§8 says which landed). Production image: rebuild `app/compose.yml`.
+- New app settings (all optional, `app/.env`): `CMS_ALLOW_PRIVATE_HOSTS`, `CRAWLER_JOBS`, `LOG_SPOOL_DIR`, `BOT_RANGES_REFRESH`, and with
+  G1 `IDENTITY_KEY` (falls back to `MAILBOX_KEY`), `MFA_ISSUER`, `SSO_ALLOW_PRIVATE_HOSTS`.
+
+Right after the deploy: the live checks of §5 (≈ $0.8 DataForSEO) — tell the orchestrator "run the live checks".
