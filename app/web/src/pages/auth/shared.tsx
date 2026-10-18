@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { ACCOUNT_SUSPENDED } from '@seo/shared';
 import { pageTitle } from '@/components/layout/Brand';
 import { useDocumentTitle } from '@/components/layout/useDocumentTitle';
 import { Card } from '@/components/ui/card';
@@ -51,6 +52,8 @@ export function GoogleButton({ next, label = 'Continue with Google' }: { next?: 
 }
 
 export const GOOGLE_ERRORS: Record<string, string> = {
+  // a suspended account signing in with Google (the password sign-in answers the same text as an error)
+  [ACCOUNT_SUSPENDED.code]: ACCOUNT_SUSPENDED.message,
   google_state: 'The Google sign-in expired. Please try again.',
   google_failed: 'Google sign-in did not complete. Please try again.',
   google_unverified: 'Your Google account e-mail is not verified.',

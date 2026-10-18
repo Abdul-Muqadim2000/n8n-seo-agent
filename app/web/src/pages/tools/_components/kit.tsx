@@ -144,7 +144,14 @@ export function SubmitError({ error, siteId }: { error: unknown; siteId?: string
   if (!error) return null;
   let body: ReactNode = <Callout tone="critical" title="The run did not start">{errorMessage(error)}</Callout>;
   if (error instanceof ApiRequestError) {
-    if (error.status === 402)
+    // 2026-10-18: a company with credit enforcement on and too few credits (the server's text says how many it needs and has)
+    if (error.status === 402 && error.code === 'credits')
+      body = (
+        <Callout tone="critical" title="Not enough credits for this run">
+          {error.message}
+        </Callout>
+      );
+    else if (error.status === 402)
       body = (
         <Callout
           tone="critical"
