@@ -82,7 +82,7 @@ const r1 = (x: number) => Math.round(x * 10) / 10;
 export function aiSampleRate(o: {
   engines?: readonly AiEngine[];
   pulse?: boolean;
-  measured?: { samples: number; pulseSamples: number; questions: number; checkedAt?: string } | null;
+  measured?: { samples: number; pulseSamples: number; questions: number; checkedAt?: string; /** the engine's `metrics.rate_period` */ ratePeriod?: string | null } | null;
 } = {}): AiSampleRate {
   const engines = o.engines && o.engines.length ? o.engines : AI_DEFAULT_ENGINES;
   const wE = weeklyEngines(engines).length, pE = pulseEngines(engines).length;
@@ -98,7 +98,7 @@ export function aiSampleRate(o: {
     const pulseBasis: AiSampleRate['pulseBasis'] = !pulseOn ? 'off' : measuredPulse > 0 ? 'measured' : 'modelled';
     return {
       weeklyPerQuestion: r1(weekly), pulsePerQuestion: r1(pulse), answerRate: Math.round(answerRate * 100) / 100, basis: 'measured', pulseBasis,
-      why: `measured on the run of ${m.checkedAt ? m.checkedAt.slice(0, 10) : 'the latest check'}: ${m.samples} answers over 7 days to ${m.questions} buyer question${m.questions === 1 ? '' : 's'}`
+      why: `measured on the run of ${m.checkedAt ? m.checkedAt.slice(0, 10) : 'the latest check'}: ${m.samples} answers ${m.ratePeriod?.trim() ? `from ${m.ratePeriod.trim()}` : 'over 7 days'} to ${m.questions} buyer question${m.questions === 1 ? '' : 's'}`
         + ` (${r1(weekly)} a question from the weekly run${measuredPulse > 0 ? `, ${r1(measuredPulse)} from the daily pulse` : ''})`
         + (pulseBasis === 'modelled' ? `; the daily pulse is projected at the same answer rate (${Math.round(answerRate * 100)}%)` : ''),
     };
