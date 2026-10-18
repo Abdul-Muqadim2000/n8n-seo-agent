@@ -115,6 +115,7 @@ Before each phase, read §3 / §8 to see what is already done.
 - 2026-10-18 13:45 PKT — Phase A done: **G4 merged** (integrations + write API: runs API / MCP run tools with scopes, signed webhooks + Slack / Teams, Jira / Linear / Asana tickets, S3 / BigQuery export, Looker Studio connector, Integrations UI; migration 0012; every write audited); G3's DB test fixed for G1's append-only audit trigger (12/12 on fresh Postgres). App 449 / 455 / 30, typecheck + web build clean. Migrations now 0009 CMS → 0010 crawler logs → 0011 identity → 0012 integrations.
 - 2026-10-18 PKT — **Phase D browser pass** on the dev stack: 447 visits, all key flows pass (`BROWSER_PASS_2026-10-18.md`); 1 Medium (CMS / crawler-key / log-upload actions write no audit event) + 6 Low.
 - 2026-10-18 PKT — **Phase B done: F-L merged** (all six items); harness 6939 / 0, app 454 / 457 / 30.
+- 2026-10-18 14:30 PKT — **Phase D findings fixed and merged** (audit events for CMS / crawler admin writes, step-6 overflow, Crawlers hero copy, Publishing spacing, aiSampleRate period; the /pricing contrast flag was a scanner false positive, ~17:1); crawler DB suite 12/12 with `CRAWLER_JOBS=false`.
 
 ## 9. Deploy checklist for the owner (Phase C — prepared, not run)
 
