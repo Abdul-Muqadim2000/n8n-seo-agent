@@ -173,3 +173,10 @@ Vercel (200) → the same session **directly** on `api.alaventra.com` (cookie `s
 from app. only) → sign-out → sign-in → onboarding renders; no console errors, no failed requests. A test account
 `rr-prod-check-…@example.org` ("Prod Check", no company) is left in production — delete it from the platform admin.
 **Note:** pushing to `main` now deploys the frontend; the VM follows `feature/seo-agent-v4.5` (keep the two in step).
+
+**2026-10-19 — e-mail through Brevo, live in production.** `n8n/.env`: `SEO_SMTP_HOST=smtp-relay.brevo.com`, port 587 (STARTTLS),
+user `bebfe4001@smtp-brevo.com`, SMTP key (owner placed it), `SEO_MAIL_FROM=Alaventra <noreply@alaventra.com>`; `app/.env`
+`ACCOUNT_EMAILS=true` (backups in `~/seo-agent-secrets/*.bak-20261019-*`). Brevo domain auth in Vercel DNS: `brevo-code` TXT, DKIM CNAMEs
+`brevo1/brevo2._domainkey`, DMARC `p=none`. Loaded with `load_secrets.sh --apply`, stack restarted; test from the production app container:
+SMTP login OK, `250 2.0.0 OK: queued` to the owner's Gmail. Engine credentials (incl. SMTP) rewritten on production n8n with
+`deploy_engine.py --credentials`. Vercel env needs no mail keys (the frontend sends nothing).
