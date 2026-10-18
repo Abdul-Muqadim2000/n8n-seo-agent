@@ -1,0 +1,1 @@
+# APP_FRONTEND=vercel: app.<domain> is served by Vercel, which proxies /api/* to api.<domain> (deploy/vercel). Nothing to serve here.

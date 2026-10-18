@@ -1,0 +1,85 @@
+# Alaventra edge (deploy/gcp/compose.prod.yml). Caddy gets and renews the certificates itself (Let's Encrypt / ZeroSSL).
+#   api.<domain>    -> the app server (browsers through Vercel's /api rewrite, direct uploads, log push, SCIM, API keys)
+#   hooks.<domain>  -> n8n, but ONLY /webhook/* and /healthz; the editor and n8n's REST / public API are never public
+#   app.<domain>    -> the app server too, while APP_FRONTEND=caddy (go-live before the Vercel front end exists)
+#   :8081 /healthz  -> the managed instance group's autohealing probe (Google's probers only, by firewall)
+# DOMAIN is the one variable to change (prod.env): 34-18-208-219.sslip.io works today with real certificates; a real domain later.
+{
+	{$CADDY_GLOBAL_OPTIONS}
+	email {$ACME_EMAIL}
+	# the app's own logs carry the request lines; Caddy logs only errors
+	log {
+		level ERROR
+	}
+	servers {
+		# Caddy itself is the first hop; nothing in front of it is trusted for X-Forwarded-* (Vercel is handled per request below)
+		trusted_proxies static private_ranges
+	}
+}
+
+(app_upstream) {
+	reverse_proxy app:4000 {
+		# a visitor must never be able to smuggle these through
+		header_up -X-Origin-Secret
+		header_up -X-Real-Ip
+		header_up -X-Vercel-Forwarded-For
+	}
+}
+
+api.{$DOMAIN} {
+	encode zstd gzip
+	# n8n posts its callbacks to the app inside the VM (CALLBACK_BASE_URL); the callback route is not served publicly at all
+	@hooks path /api/hooks/*
+	respond @hooks 404
+
+	# Requests proxied by Vercel carry the shared secret (deploy/vercel: routes transform, env ORIGIN_SECRET). For those - and only
+	# those - the visitor's address is the one Vercel reports in X-Real-IP; otherwise every visitor would share Vercel's address and
+	# share each other's rate limits (sign-in attempts!). Anyone else gets the address they connected from.
+	@vercel header X-Origin-Secret {$ORIGIN_SECRET}
+	handle @vercel {
+		reverse_proxy app:4000 {
+			header_up X-Forwarded-For {http.request.header.X-Real-Ip}
+			header_up -X-Origin-Secret
+			header_up -X-Real-Ip
+			header_up -X-Vercel-Forwarded-For
+		}
+	}
+	handle {
+		import app_upstream
+	}
+}
+
+hooks.{$DOMAIN} {
+	encode zstd gzip
+	@public path /webhook/* /healthz
+	handle @public {
+		reverse_proxy n8n:5678
+	}
+	handle {
+		respond 404
+	}
+}
+
+# app.<domain>: served here only while APP_FRONTEND=caddy (sites/app-caddy.caddy); sites/app-vercel.caddy is empty
+import sites/app-{$APP_FRONTEND}.caddy
+
+# White-label portals (app/docs/WHITE_LABEL.md §5): agencies point their portal host at portal.<domain>; Caddy asks the app before
+# it requests a certificate. Off until PORTAL_CNAME_TARGET is set in app.env — then uncomment this block and add the global option
+#   on_demand_tls { ask http://app:4000/api/portal/tls-allow }
+# https:// {
+# 	tls {
+# 		on_demand
+# 	}
+# 	import app_upstream
+# }
+
+:8081 {
+	# the app's health (it answers 200 only when Postgres answers); n8n restarts itself through its own container health check
+	handle /healthz {
+		rewrite * /api/health
+		reverse_proxy app:4000
+	}
+	handle {
+		respond 404
+	}
+}
