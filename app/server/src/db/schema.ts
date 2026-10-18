@@ -424,11 +424,21 @@ export const runs = pgTable(
     etaMinutes: integer('eta_minutes').notNull().default(0),
     lastStage: text('last_stage'),
     reportCount: integer('report_count').notNull().default(0),
+    /** G4 (app/docs/INTEGRATIONS.md): the API key that started it (null: a person in the app, or "Choose keywords for me") */
+    apiKeyId: uuid('api_key_id').references(() => apiKeys.id, { onDelete: 'set null' }),
+    /** G4: the caller's `Idempotency-Key` and a SHA-256 of the request it came with; a repeat within 24 h answers this run */
+    idempotencyKey: text('idempotency_key'),
+    idempotencyHash: text('idempotency_hash'),
     createdAt: created(),
     acceptedAt: ts('accepted_at'),
     completedAt: ts('completed_at'),
   },
-  (t) => [index('runs_org_created_idx').on(t.orgId, t.createdAt), index('runs_org_request_idx').on(t.orgId, t.requestId), index('runs_site_idx').on(t.siteId)],
+  (t) => [
+    index('runs_org_created_idx').on(t.orgId, t.createdAt),
+    index('runs_org_request_idx').on(t.orgId, t.requestId),
+    index('runs_site_idx').on(t.siteId),
+    index('runs_org_idem_idx').on(t.orgId, t.idempotencyKey).where(sql`${t.idempotencyKey} is not null`),
+  ],
 );
 
 /** Every callback n8n posts (one run can have several: plan, then pages; scheduled reports have no run). */
@@ -836,6 +846,159 @@ export const cmsPublishes = pgTable(
   (t) => [index('cms_publishes_org_created_idx').on(t.orgId, t.createdAt), index('cms_publishes_report_idx').on(t.reportId), index('cms_publishes_site_idx').on(t.siteId, t.createdAt)],
 );
 
+// ---------------------------------------------------------------------------------------------------------------------------
+// G4 (2026-10-17): integrations — app/docs/INTEGRATIONS.md. Every secret column holds a value sealed with MAILBOX_KEY (secretBox).
+// ---------------------------------------------------------------------------------------------------------------------------
+
+/** One connector of a company: an issue tracker (jira / linear / asana, one each) or an export destination (s3 / bigquery). */
+export const integrations = pgTable(
+  'integrations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    name: text('name').notNull(),
+    /** the non-secret settings (site URL, project, bucket, dataset, tables, schedule…) */
+    config: jsonb('config').$type<Record<string, unknown>>().notNull().default({}),
+    /** sealed JSON of the credentials; never returned */
+    secret: text('secret').notNull(),
+    /** e.g. "token …a1b2": shown instead of the secret */
+    secretHint: text('secret_hint').notNull().default(''),
+    status: text('status').notNull().default('untested'),
+    lastError: text('last_error').notNull().default(''),
+    lastCheckedAt: ts('last_checked_at'),
+    lastRunAt: ts('last_run_at'),
+    nextRunAt: ts('next_run_at'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: created(),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+  },
+  (t) => [
+    index('integrations_org_idx').on(t.orgId),
+    // one Jira, one Linear, one Asana per company; several storage destinations are allowed
+    uniqueIndex('integrations_tracker_once_idx').on(t.orgId, t.kind).where(sql`${t.kind} in ('jira', 'linear', 'asana')`),
+    index('integrations_next_run_idx').on(t.nextRunAt),
+  ],
+);
+
+/** One ticket per finding / recommendation per company (the dedupe rule); inserted as `creating` before the remote call. */
+export const issueLinks = pgTable(
+  'issue_links',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    siteId: uuid('site_id').references(() => sites.id, { onDelete: 'set null' }),
+    integrationId: uuid('integration_id').references(() => integrations.id, { onDelete: 'set null' }),
+    kind: text('kind').notNull(),
+    /** finding:<website>:<finding key> | rec:<website>:<recommendation id> */
+    sourceKey: text('source_key').notNull(),
+    sourceTitle: text('source_title').notNull().default(''),
+    remoteId: text('remote_id').notNull().default(''),
+    remoteKey: text('remote_key').notNull().default(''),
+    remoteUrl: text('remote_url').notNull().default(''),
+    remoteStatus: text('remote_status').notNull().default(''),
+    remoteState: text('remote_state').notNull().default('unknown'),
+    /** creating | created | failed */
+    status: text('status').notNull().default('creating'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: created(),
+    syncedAt: ts('synced_at'),
+  },
+  (t) => [uniqueIndex('issue_links_source_idx').on(t.orgId, t.sourceKey), index('issue_links_org_created_idx').on(t.orgId, t.createdAt)],
+);
+
+/** An outbound event endpoint: signed JSON, a Slack channel or a Teams channel, subscribed to event types and websites. */
+export const webhookEndpoints = pgTable(
+  'webhook_endpoints',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    /** json | slack | teams */
+    format: text('format').notNull(),
+    /** the address, sealed (a Slack / Teams address is itself a credential) */
+    urlSealed: text('url_sealed').notNull(),
+    urlHost: text('url_host').notNull(),
+    urlHint: text('url_hint').notNull().default(''),
+    /** json endpoints: the HMAC signing secret we generated, sealed ('' for slack / teams) */
+    secretSealed: text('secret_sealed').notNull().default(''),
+    events: jsonb('events').$type<string[]>().notNull().default([]),
+    /** empty = every website of the company */
+    siteIds: jsonb('site_ids').$type<string[]>().notNull().default([]),
+    enabled: boolean('enabled').notNull().default(true),
+    disabledReason: text('disabled_reason').notNull().default(''),
+    consecutiveFailures: integer('consecutive_failures').notNull().default(0),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: created(),
+    lastSuccessAt: ts('last_success_at'),
+    lastFailureAt: ts('last_failure_at'),
+  },
+  (t) => [index('webhook_endpoints_org_idx').on(t.orgId)],
+);
+
+/** One event to one endpoint, with its attempts: the delivery log and the retry queue in one table (purged after 30 days). */
+export const webhookDeliveries = pgTable(
+  'webhook_deliveries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    endpointId: uuid('endpoint_id')
+      .notNull()
+      .references(() => webhookEndpoints.id, { onDelete: 'cascade' }),
+    eventId: uuid('event_id').notNull(),
+    eventType: text('event_type').notNull(),
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+    /** pending | sent | failed | gave_up */
+    status: text('status').notNull().default('pending'),
+    attempts: integer('attempts').notNull().default(0),
+    nextAttemptAt: ts('next_attempt_at'),
+    lastStatusCode: integer('last_status_code'),
+    lastError: text('last_error').notNull().default(''),
+    createdAt: created(),
+    deliveredAt: ts('delivered_at'),
+  },
+  (t) => [
+    index('webhook_deliveries_org_created_idx').on(t.orgId, t.createdAt),
+    index('webhook_deliveries_due_idx').on(t.status, t.nextAttemptAt),
+    uniqueIndex('webhook_deliveries_once_idx').on(t.endpointId, t.eventId),
+  ],
+);
+
+/** One export of one destination: per table rows, bytes, the object / load job, and what went wrong. */
+export const exportRuns = pgTable(
+  'export_runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    integrationId: uuid('integration_id')
+      .notNull()
+      .references(() => integrations.id, { onDelete: 'cascade' }),
+    trigger: text('trigger').notNull(),
+    /** running | ok | partial | failed */
+    status: text('status').notNull().default('running'),
+    tables: jsonb('tables').$type<Record<string, unknown>[]>().notNull().default([]),
+    error: text('error').notNull().default(''),
+    startedAt: ts('started_at').defaultNow().notNull(),
+    finishedAt: ts('finished_at'),
+  },
+  (t) => [index('export_runs_integration_idx').on(t.integrationId, t.startedAt)],
+);
+
+export type IntegrationRow = typeof integrations.$inferSelect;
+export type IssueLinkRow = typeof issueLinks.$inferSelect;
+export type WebhookEndpointRow = typeof webhookEndpoints.$inferSelect;
+export type WebhookDeliveryRow = typeof webhookDeliveries.$inferSelect;
+export type ExportRunRow = typeof exportRuns.$inferSelect;
 export type CmsConnectionRow = typeof cmsConnections.$inferSelect;
 export type CmsItemRow = typeof cmsItems.$inferSelect;
 export type CmsPublishRow = typeof cmsPublishes.$inferSelect;

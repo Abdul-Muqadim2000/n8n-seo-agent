@@ -10,6 +10,8 @@ import { autoApproveTick, pollTick, senderTick } from './services/outreachJobs';
 import { startCrawlerJobs } from './services/crawlers/jobs';
 import { deliveryTick, retryTick } from './services/reportDelivery';
 import { expireStaleRuns } from './services/runs';
+import { webhookTick } from './services/webhooks';
+import { exportTick } from './services/exports';
 
 async function main() {
   await runMigrations();
@@ -58,6 +60,10 @@ async function main() {
       .catch((err) => app.log.warn({ err: String(err) }, 'scheduled report delivery failed'))
       .then(() => retryTick(app.log).catch((err) => app.log.warn({ err: String(err) }, 'report delivery retry failed')));
   const deliveryTimer = setInterval(() => void delivery(), 5 * 60 * 1000);
+  // G4: event webhooks — every minute the deliveries whose next attempt is due (1 / 5 / 30 / 120 / 720 minutes, then given up)
+  const webhookTimer = setInterval(() => void webhookTick(app.log).catch((err) => app.log.warn({ err: String(err) }, 'webhook retry failed')), 60 * 1000);
+  // G4: scheduled warehouse exports (S3-compatible storage, BigQuery), checked every five minutes
+  const exportTimer = setInterval(() => void exportTick(app.log).catch((err) => app.log.warn({ err: String(err) }, 'export tick failed')), 5 * 60 * 1000);
 
   // v4.13 Link Builder: the sender (every minute), the inbox (every 3 minutes) and automatic approval (every 10 minutes); LINK_BUILDER_JOBS=false stops them
   const lbTimers = config.linkBuilderJobs
@@ -72,6 +78,8 @@ async function main() {
     if (autoStartFirst) clearTimeout(autoStartFirst);
     if (autoStartTimer) clearInterval(autoStartTimer);
     clearInterval(deliveryTimer);
+    clearInterval(webhookTimer);
+    clearInterval(exportTimer);
     clearInterval(failureTimer);
     clearInterval(timer);
     clearInterval(flowTimer);

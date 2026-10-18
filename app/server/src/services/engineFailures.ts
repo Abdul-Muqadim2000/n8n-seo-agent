@@ -1,5 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { db, schema } from '../db';
+import { emitRunsFailed } from './webhooks';
 import { executionFailure, executions } from '../n8n/client';
 
 // Without e-mail, a run that fails inside n8n would only show as failed after the 3-hour timeout (n8n's Error Handler mails the
@@ -19,6 +20,7 @@ export async function checkEngineFailures(): Promise<number> {
   if (!waiting.length) return 0;
   const since = Math.min(...waiting.map((r) => r.createdAt.getTime())) - 60_000;
   let failed = 0;
+  const closed: string[] = [];
   for (const wf of WATCHED) {
     let list;
     try {
@@ -46,8 +48,11 @@ export async function checkEngineFailures(): Promise<number> {
         })
         .where(and(eq(schema.runs.id, run.id), inArray(schema.runs.status, ACTIVE)));
       failed++;
+      closed.push(run.id);
     }
   }
   if (seen.size > 5000) seen.clear();
+  // G4: subscribers hear about it the moment the app does
+  if (closed.length) void emitRunsFailed(closed).catch(() => undefined);
   return failed;
 }

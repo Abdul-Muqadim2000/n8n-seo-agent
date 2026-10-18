@@ -471,6 +471,8 @@ export const AUDIT_CATEGORIES = {
   data: 'Sharing and exports',
   api: 'API keys',
   sso: 'Single sign-on and provisioning',
+  /** G4 (app/docs/INTEGRATIONS.md): webhooks, trackers, exports, and work started through the API */
+  integrations: 'Integrations and API work',
 } as const;
 export type AuditCategory = keyof typeof AUDIT_CATEGORIES;
 
@@ -535,6 +537,16 @@ export const AUDIT_ACTIONS = {
   'scim.user_deleted': { label: 'Deprovisioned a person', category: 'sso' },
   'scim.group_changed': { label: 'Changed a provisioned group', category: 'sso' },
   'scim.group_mapping_changed': { label: 'Mapped a group to a role', category: 'sso' },
+  'integration.webhook_added': { label: 'Added an event endpoint', category: 'integrations' },
+  'integration.webhook_changed': { label: 'Changed an event endpoint', category: 'integrations' },
+  'integration.webhook_removed': { label: 'Removed an event endpoint', category: 'integrations' },
+  'integration.webhook_secret_rotated': { label: 'Made a new webhook signing secret', category: 'integrations' },
+  'integration.connected': { label: 'Connected an integration', category: 'integrations' },
+  'integration.changed': { label: 'Changed an integration', category: 'integrations' },
+  'integration.disconnected': { label: 'Disconnected an integration', category: 'integrations' },
+  'integration.export_started': { label: 'Started a data export', category: 'integrations' },
+  'issue.created': { label: 'Created a ticket in the issue tracker', category: 'integrations' },
+  'run.started_via_api': { label: 'Started an analysis through the API', category: 'integrations' },
 } as const satisfies Record<string, { label: string; category: AuditCategory }>;
 export type AuditAction = keyof typeof AUDIT_ACTIONS;
 export const auditLabel = (a: string): string => (AUDIT_ACTIONS as Record<string, { label: string }>)[a]?.label ?? a;
