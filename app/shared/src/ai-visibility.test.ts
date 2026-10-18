@@ -162,7 +162,10 @@ describe('aiSampleRate / aiPrecisionTable (B8-7)', () => {
     expect(row(50, 'weekly_pulse').headline!).toBeLessThan(row(20, 'weekly_pulse').headline!);
     expect(row(20, 'weekly_pulse').headline!).toBeLessThan(row(20, 'weekly').headline!);
     expect(row(8, 'weekly').perQuestionEnough).toBe(true);   // 4 a question: just at the floor
-    expect(t.rows.map((x) => x.panel)).toEqual([8, 8, 20, 20, 50, 50]);
+    expect(t.rows.map((x) => x.panel)).toEqual([8, 8, 20, 20, 50, 50, 100, 100, 200, 200, 500, 500]);
+    // G6: above 50 questions the pulse is a rotating sample, so a question collects fewer pulse answers — but the headline still narrows
+    expect(row(500, 'weekly_pulse').answersPerQuestion).toBeLessThan(row(50, 'weekly_pulse').answersPerQuestion);
+    expect(row(500, 'weekly_pulse').headline!).toBeLessThan(row(50, 'weekly_pulse').headline!);
   });
   it('a site with no pulse engine gets weekly rows only, and a panel off the list is added', () => {
     const t = aiPrecisionTable({ panel: 12, engines: ['perplexity', 'claude'], pulse: true });

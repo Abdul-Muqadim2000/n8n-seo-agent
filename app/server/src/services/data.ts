@@ -1,4 +1,7 @@
 import {
+  AI_PROMPTS_STORED_DEFAULT,
+  aiPanelFromJson,
+  aiSegmentsFromJson,
   AI_DEFAULT_ENGINES,
   AI_PAGES_DEFAULT,
   AI_PAGES_MAX,
@@ -964,7 +967,7 @@ export async function aiData(org: OrgRow, site: SiteRow): Promise<AiData> {
   const since = new Date(Date.now() - 90 * 864e5).toISOString();
   const [vis, prompts, report, days, growthRows, aiPages, aiTargets, aiProspects, logs, mons] = await Promise.all([
     siteRows<AiVisibilityRow>('aiVisibility', d, { sortBy: 'checked_at:asc', max: 300 }),
-    siteRows<AiPromptRow>('aiPrompts', d, { max: 300 }),
+    siteRows<AiPromptRow>('aiPrompts', d, { max: 1200 }),   // G6: up to 500 tracked + the switched-off and refused ones
     latestReport(org.id, site.id, ['ai_visibility']),
     siteRows<AiDailyRow>('aiDaily', d, { sortBy: 'date:asc', max: 120, extra: [{ columnName: 'checked_at', condition: 'gte', value: since }] }),
     // v4.12: the AI growth loop (AI_GROWTH_SPEC.md)
@@ -978,7 +981,7 @@ export async function aiData(org: OrgRow, site: SiteRow): Promise<AiData> {
   const last = vis[vis.length - 1];
   // n8n's run id is per day (ai_YYYYMMDD_domain): a second run that day shares it, so only the answers of the latest run count
   const answers = last
-    ? (await siteRows<AiAnswerRow>('aiAnswers', d, { extra: [{ columnName: 'run_id', condition: 'eq', value: last.run_id }], max: 1000 })).filter((a) => s(a.checked_at) >= s(last.checked_at))
+    ? (await siteRows<AiAnswerRow>('aiAnswers', d, { extra: [{ columnName: 'run_id', condition: 'eq', value: last.run_id }], max: 3000 })).filter((a) => s(a.checked_at) >= s(last.checked_at))   // G6: a 500-question run stores ~2,500
     : [];
   let latest: AiData['latest'] = null;
   if (last) {
@@ -1051,7 +1054,14 @@ export async function aiData(org: OrgRow, site: SiteRow): Promise<AiData> {
       cluster: s(p.cluster) || s(p.topic),
       volume: nn(p.volume),
       origin: s(p.origin),
+      persona: s(p.persona),
+      market: s(p.market),
+      pinned: b(p.pinned),
+      fitNote: s(p.fit_note),
     })),
+    // G6 (2026-10-18): the latest run's segments (compact in the row, expanded with their ranges here) and the panel it asked
+    segments: last ? aiSegmentsFromJson(s(last.segments_json)) : null,
+    panel: last ? aiPanelFromJson(s(last.panel_json)) : null,
     answers: answers.map((a) => ({
       promptId: s(a.prompt_id),
       prompt: s(a.prompt),
@@ -1371,7 +1381,11 @@ export function monitorsFromRow(r: MonitorsRow | undefined): (MonitorSettings & 
   return {
     aiVisibility: r.ai_visibility == null ? true : b(r.ai_visibility),
     aiEngines: engines.length ? engines : [...AI_DEFAULT_ENGINES],   // Copilot is opt-in (v4.12)
-    aiPromptsMax: n(r.ai_prompts_max) || 20,
+    aiPromptsMax: n(r.ai_prompts_max) || AI_PROMPTS_STORED_DEFAULT,   // G6: a stored row with no size keeps 20 (the engine's rule)
+    aiPersonas: splitList(r.ai_personas),
+    aiMarkets: splitList(r.ai_markets),
+    aiPulseMode: (['sample', 'full'].includes(s(r.ai_pulse_mode)) ? s(r.ai_pulse_mode) : 'auto') as MonitorSettings['aiPulseMode'],
+    aiPulsePerWeek: Math.min(6, Math.max(0, n(r.ai_pulse_per_week))),
     aiPulse: r.ai_pulse == null || (r.ai_pulse as unknown) === '' ? true : b(r.ai_pulse),
     aiGrowth: r.ai_growth == null || (r.ai_growth as unknown) === '' ? true : b(r.ai_growth),
     aiPagesPerMonth: r.ai_pages_month == null || (r.ai_pages_month as unknown) === '' ? AI_PAGES_DEFAULT : Math.min(AI_PAGES_MAX, Math.max(0, n(r.ai_pages_month))),

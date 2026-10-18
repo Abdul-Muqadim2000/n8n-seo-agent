@@ -12,6 +12,7 @@ import { connectedTrackers, createIssue, listIssues } from '../services/issueTra
 import { runExport, tableRowsV1 } from '../services/exports';
 import {
   fileOf,
+  getAiSegments,
   getAudit,
   getCrawlers,
   getReport,
@@ -78,6 +79,7 @@ const ENDPOINTS = [
   'GET /api/v1/websites/:websiteId/audits',
   'GET /api/v1/websites/:websiteId/audits/:auditId',
   'GET /api/v1/websites/:websiteId/crawlers',
+  'GET /api/v1/websites/:websiteId/ai-segments',
   'GET /api/v1/runs',
   'GET /api/v1/runs/:runId',
   'GET /api/v1/reports',
@@ -142,6 +144,13 @@ const TOOLS: Tool[] = [
       "What Googlebot, Bingbot and the AI crawlers (GPTBot, ClaudeBot, PerplexityBot, ChatGPT-User …) actually requested on one verified website, from its own access logs: requests per crawler and day with how many were proved by the vendor's IP list or DNS, spoofed crawlers counted apart, pages Google or AI did not fetch, crawl budget spent on redirects / errors / parameter URLs, pages AI assistants fetched because a person asked, response times. days: 7, 30 or 90.",
     inputSchema: { type: 'object', properties: { websiteId: { type: 'string' }, days: { type: 'integer', enum: [7, 30, 90] } }, required: ['websiteId'] },
     run: (c, a) => getCrawlers(c, a.websiteId, a),
+  },
+  {
+    name: 'get_ai_visibility_segments',
+    description:
+      "How often AI assistants name one verified website, per engine, topic cluster, buyer role, market and funnel stage (and topic x role, engine x topic, market x topic), from its latest weekly AI visibility run: answers counted, the share naming it with the 95% range, 'enough' (12+ answers), share of voice against the businesses named instead, and the changes a Benjamini-Hochberg screen called real; plus the question panel it was measured on. dimension: engine | cluster | persona | market | stage | 'cluster x persona' | 'engine x cluster' | 'market x cluster'.",
+    inputSchema: { type: 'object', properties: { websiteId: { type: 'string' }, dimension: { type: 'string' } }, required: ['websiteId'] },
+    run: (c, a) => getAiSegments(c, a.websiteId, a),
   },
   {
     name: 'list_runs',
@@ -284,6 +293,7 @@ export async function apiV1Routes(app: FastifyInstance) {
     return getAudit(await readCtx(req), p.websiteId, p.auditId, req.query as Args);
   });
   app.get('/api/v1/websites/:websiteId/crawlers', { config: perMinute }, async (req) => getCrawlers(await readCtx(req), (req.params as Args).websiteId, req.query as Args));
+  app.get('/api/v1/websites/:websiteId/ai-segments', { config: perMinute }, async (req) => getAiSegments(await readCtx(req), (req.params as Args).websiteId, req.query as Args));   // G6
   app.get('/api/v1/runs', { config: perMinute }, async (req) => listRuns(await readCtx(req), req.query as Args));
   app.get('/api/v1/runs/:runId', { config: perMinute }, async (req) => getRun(await readCtx(req), (req.params as Args).runId));
   app.get('/api/v1/reports', { config: perMinute }, async (req) => listReports(await readCtx(req), req.query as Args));

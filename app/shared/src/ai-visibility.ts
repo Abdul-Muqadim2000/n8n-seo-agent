@@ -3,6 +3,7 @@
 // refuses a rate under a floor; these are the same formulas and the same floors, so the app never prints a figure more precise than the
 // engine measured it, and the settings page can say what each panel size and cadence buys BEFORE the owner pays for it.
 import { AI_DEFAULT_ENGINES, AI_PROMPTS_MAX, AI_PULSE_ENGINES, aiPulseQuestions, type AiEngine } from './constants';
+import { aiPulsePerWeek } from './ai-panel';
 
 /** under this many answers a headline rate is a straw poll (engine: MIN_RATE_SAMPLES) */
 export const AI_MIN_RATE_SAMPLES = 12;
@@ -13,7 +14,7 @@ export const AI_MONTHLY_ENGINES: readonly AiEngine[] = ['claude'];
 /** the AI Pulse runs Tuesday to Sunday */
 export const AI_PULSE_DAYS_PER_WEEK = 6;
 /** the panel sizes the precision table compares, besides the site's own */
-export const AI_PRECISION_PANELS = [8, 20, 50] as const;
+export const AI_PRECISION_PANELS = [8, 20, 50, 100, 200, 500] as const;   // G6 (2026-10-18): the panel holds up to 500
 
 /** 95% Wilson range of k out of n, in percent rounded to 0.1 — the engine's `wilson` exactly. null without a sample. */
 export function wilsonRange(k: number, n: number, z = 1.96): [number, number] | null {
@@ -150,8 +151,10 @@ export function aiPrecisionTable(o: {
   const rows: AiPrecisionRow[] = [];
   for (const panel of panels) {
     const asked = aiPulseQuestions(panel);
+    // G6: above 50 questions the pulse asks each question on N of its six mornings (a rotating sample), not every morning
+    const perWeek = pulseAvailable ? aiPulsePerWeek({ asked, weeklyEngines: weeklyEngines(engines).length, pulseEngines: pulseEngines(engines).length }).perWeek : 0;
     for (const cadence of (pulseAvailable ? ['weekly', 'weekly_pulse'] : ['weekly']) as AiPrecisionRow['cadence'][]) {
-      const perQ = rate.weeklyPerQuestion + (cadence === 'weekly_pulse' ? rate.pulsePerQuestion : 0);
+      const perQ = rate.weeklyPerQuestion + (cadence === 'weekly_pulse' ? (rate.pulsePerQuestion * perWeek) / AI_PULSE_DAYS_PER_WEEK : 0);
       const answers = Math.round(perQ * asked);
       const qn = Math.round(perQ);
       rows.push({ panel, asked, cadence, answers, headline: halfWidth95(answers), answersPerQuestion: r1(perQ), perQuestion: halfWidth95(qn), perQuestionEnough: qn >= AI_MIN_QUESTION_SAMPLES,

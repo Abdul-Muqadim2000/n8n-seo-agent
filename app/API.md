@@ -167,6 +167,18 @@ details` — details never carry a password, code, token, secret or key (`safeAu
 | POST | /api/orgs/:orgId/sites/:siteId/verify | `verifySiteSchema` (admin) | `VerifyResult` |
 | GET | /api/orgs/:orgId/sites/:siteId/google | | `GoogleConnection` |
 | POST | /api/orgs/:orgId/sites/:siteId/admin | `adminActionSchema` (admin, verified site) | `AdminResult` |
+
+**The AI question panel (G6, 2026-10-18; `n8n/seo-agent/AI_VISIBILITY_SPEC.md` §10).** `action: "ai_prompts"` manages up to 500 questions:
+`add` (≤ 500: a question as text, or `{ prompt, persona, cluster, stage: awareness|consideration|decision, market: "SA-en", pinned }` —
+what the panel manager's CSV import sends, parsed and checked in the browser by `parseAiPanelCsv`), `edit` (`[{ promptId, prompt?,
+persona?, cluster?, stage?, market?, pinned? }]` — new wording is a NEW question and the engine switches the old one off), `remove`
+(switch off), `enable` (switch back on; a question the keyword rule refused becomes the owner's own), `pin` / `unpin` (ids or exact
+texts, ≤ 500 each). `action: "monitors"` takes `aiPromptsMax` 3–500, `aiPersonas` (≤ 6 buyer roles), `aiMarkets` (≤ 5, `CC-lang`),
+`aiPulseMode` (`auto` | `sample` | `full`) and `aiPulsePerWeek` (0 = automatic, 1–6); an empty role or market list is sent to the
+engine as a single space so it clears. `GET …/data/ai` adds `segments` (rates per engine / cluster / persona / market / stage and the
+cross tables, with `ci`, `enough`, `sov`, `delta` / `significant` from the Benjamini–Hochberg screen) and `panel` (size, setting,
+composition, overlap with the previous run, measured and achievable half-widths, executions), and each prompt carries `persona`,
+`market`, `pinned` and `fitNote`.
 | POST | /api/orgs/:orgId/sites/:siteId/ai/indexnow/check | (member, verified site; 20 / 10 min) | `IndexNowCheck` — fetches the site's IndexNow key file (from the latest AI growth run; own host, https) and says whether it is in place |
 | POST | /api/orgs/:orgId/sites/:siteId/backlinks/import | `linkImportSchema` `{ csv, fileName? }` (member, verified site; 16 MB, 20 an hour) — v4.10: a Search Console Links export (Latest links / More sample links / Top linking sites) or another tool's backlink CSV, parsed by `shared/src/link-import.ts` into `seo_link_imports` (the same kind replaces the previous upload); 400 with a plain message when the file holds no links to the site | `LinkImportSummary` |
 
@@ -426,6 +438,7 @@ Company settings → API access. The key is shown **once**; only its SHA-256 is 
 | GET | /api/v1/websites/:websiteId | `WebsiteV1` |
 | GET | /api/v1/websites/:websiteId/audits | `Page<AuditV1>` newest first — `{ id, auditedAt, reportType, healthScore, grade, pagesCrawled, findings, bySeverity, scheduled }` (verified websites) |
 | GET | /api/v1/websites/:websiteId/audits/:auditId?severity=high,critical&status=new | `{ audit, comparedWith, findings: FindingV1[] }` — `FindingV1`: `{ key, category, severity, title, affected, checked, evidence, sampleUrls, impact, impactBasis, status: new \| open \| fixed \| no_longer_seen, previousAffected, notCompared, recheck }`, in the audit's own fix-list order |
+| GET | /api/v1/websites/:websiteId/ai-segments?dimension= | G6: the latest weekly AI visibility run per segment — `segments` (dim, key, questions, answers `n`, named `k`, `rate`, 95% `ci`, `enough` at 12+ answers, `sov`, `leader`, `delta`, `significant`), the Benjamini–Hochberg `family`, `moves`, the `panel` it was measured on and the question counts (tracked / refused / off); `dimension` = engine \| cluster \| persona \| market \| stage \| `cluster x persona` \| `engine x cluster` \| `market x cluster`; verified websites only |
 | GET | /api/v1/websites/:websiteId/crawlers?days=7\|30\|90 | `CrawlerData` — what search and AI crawlers requested, from the site's own logs (gap #6, `docs/LOG_ANALYTICS.md`): the same answer as the app's Crawlers page; verified websites only (403 `website_unverified`) |
 | GET | /api/v1/runs?websiteId=&status=&mode= | `Page<RunV1>` — `{ id, websiteId, mode, title, status, error, createdAt, completedAt, reportCount, cost: { usd, basis, partial, estimated } }` |
 | GET | /api/v1/runs/:runId | `{ run: RunV1 & { input }, reports: ReportV1[] }` |
@@ -435,7 +448,7 @@ Company settings → API access. The key is shown **once**; only its SHA-256 is 
 | POST | /api/v1/publish-check | B3-7, below (scope `publish_check`) |
 | GET | /api/v1/modes | G4: every mode with `{ mode, title, description, websiteRequired, delivers, estimate: { usd, minutes }, inputSchema }` (the form's schema as JSON Schema) |
 | POST | /api/v1/runs | G4: start an analysis (scope `run`) — "Write API" below |
-| POST | /api/v1/mcp | MCP over Streamable HTTP (JSON answers, no streams; API key only): `initialize`, `tools/list`, `tools/call`, `ping` — tools `list_websites`, `list_audits`, `get_audit`, `get_crawler_activity`, `list_runs`, `get_run`, `list_reports`, `get_report`, `publish_check`, `list_modes`, `get_table`, and with scope `run` `preview_run` / `start_run` (G4), each calling the handler of the REST route above. `tools/list` shows only the tools the key may call |
+| POST | /api/v1/mcp | MCP over Streamable HTTP (JSON answers, no streams; API key only): `initialize`, `tools/list`, `tools/call`, `ping` — tools `list_websites`, `list_audits`, `get_audit`, `get_crawler_activity`, `get_ai_visibility_segments` (G6), `list_runs`, `get_run`, `list_reports`, `get_report`, `publish_check`, `list_modes`, `get_table`, and with scope `run` `preview_run` / `start_run` (G4), each calling the handler of the REST route above. `tools/list` shows only the tools the key may call |
 
 Key management (session only, Company settings → API access):
 

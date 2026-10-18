@@ -337,6 +337,16 @@ module.exports = async (ctx) => {
     loadWeekly({ monitors: { ai_prompts_max: 5 }, prompts: [...W['Load AI Prompts'].slice(0, 6), { ...W['Load AI Prompts'][6], pinned: true }] });
     const p = (await run('AI Plan', [{ json: {} }]))[0].json;
     check('a pinned question is asked first and survives a smaller panel', p.prompts[0].prompt_id === W['Load AI Prompts'][6].prompt_id && p.prompts.length === 5, JSON.stringify(p.prompts.map(q => q.prompt_id)));
+    // "Track my site": a NEW website starts at 50 questions with the app's buyer roles / markets / pulse sampling; a stored row keeps its size
+    const MC = require('./table_cols.json').MONITORS;
+    mock('Normalize Input', [{ json: { domain: 'newsite.example', competitors: [], request_id: 'r1', monitor_input: { ai_personas: 'CFO, IT manager', ai_markets: 'SA-en', ai_pulse_mode: 'sample', ai_pulse_per_week: 2 } } }]);
+    mock('Load Monitors (Track)', [{ json: {} }]);
+    const t1 = (await run('Monitor Row (Track)', [{ json: {} }]))[0].json;
+    check('Track my site, new website: 50 questions, the buyer roles, markets and pulse sampling stored, exact columns', t1.ai_prompts_max === 50 && t1.ai_personas === 'CFO, IT manager' && t1.ai_markets === 'SA-en' && t1.ai_pulse_mode === 'sample' && t1.ai_pulse_per_week === 2 && Object.keys(t1).length === MC.length && MC.every(c => c in t1), JSON.stringify(t1));
+    mock('Load Monitors (Track)', [{ json: { site_id: 'site_newsite-example', domain: 'newsite.example', ai_prompts_max: '' } }]);
+    mock('Normalize Input', [{ json: { domain: 'newsite.example', competitors: [], request_id: 'r2', monitor_input: {} } }]);
+    const t2 = (await run('Monitor Row (Track)', [{ json: {} }]))[0].json;
+    check('Track my site, a stored row with no size: keeps 20 (a release never raises a site\'s spend)', t2.ai_prompts_max === 20, t2.ai_prompts_max);
   });
 
   // ===================================================================================================================================

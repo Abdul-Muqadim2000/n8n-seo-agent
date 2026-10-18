@@ -112,3 +112,141 @@ export function estimateAiPanelCost(o: { panel?: number; engines?: readonly stri
     prices: engines.map((e) => ({ engine: e, usd: P[e], basis: AI_PANEL_PRICE_BASIS[e] || 'measured / priced' })),
   };
 }
+
+// ---------------- the segments and the panel a weekly run measured (seo_ai_visibility segments_json / panel_json) ----------------
+
+export type AiSegmentDim = 'engine' | 'cluster' | 'persona' | 'market' | 'stage' | 'cluster x persona' | 'engine x cluster' | 'market x cluster';
+export interface AiSegment {
+  dim: AiSegmentDim | string;
+  key: string;
+  questions: number;
+  /** answers counted (this run's weekly-engine answers + the pulse's answers of the same questions) */
+  n: number;
+  /** answers naming the business */
+  k: number;
+  cited: number;
+  pulseN: number;
+  /** share of answers naming you, %, null without answers; `enough` false under AI_SEGMENT_MIN answers */
+  rate: number | null;
+  /** 95% Wilson range, % */
+  ci: [number, number] | null;
+  enough: boolean;
+  /** yours out of yours plus the businesses named instead, in the weekly answers, % */
+  sov: number | null;
+  leader: string;
+  /** the change against the previous comparable run: a real move only when it cleared the Benjamini-Hochberg cut */
+  delta: number | null;
+  significant: boolean | null;
+}
+export interface AiSegments {
+  rows: AiSegment[];
+  family: { method: string; q: number; tests: number; rejected: number; note: string } | null;
+  moves: { dim: string; key: string; rate: number | null; delta: number; n: number }[];
+  minAnswers: number;
+}
+export interface AiPanelInfo {
+  size: number;
+  setting: number | null;
+  engines: string[];
+  composition: Record<'cluster' | 'persona' | 'market' | 'stage', Record<string, number>>;
+  overlapWithPrevious: { share: number | null; same: boolean | null; common: number } | null;
+  halfWidth: { measured: { headline: number | null; medianCluster: number | null }; achievable: { headline: number | null; cluster: number | null; perWeek: number } } | null;
+  executions: number;
+}
+/** under this many answers a segment rate is "too few answers" (the engine's MIN_RATE_SAMPLES) */
+export const AI_SEGMENT_MIN = 12;
+
+const wilson = (k: number, n: number): [number, number] | null => {
+  if (!n) return null; const z = 1.96, p = k / n, d = 1 + (z * z) / n, c = p + (z * z) / (2 * n), m = z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n));
+  return [Math.max(0, Math.round((1000 * (c - m)) / d) / 10), Math.min(100, Math.round((1000 * (c + m)) / d) / 10)];
+};
+const parseJ = (t: unknown): unknown => { if (t && typeof t === 'object') return t; try { return JSON.parse(String(t ?? '')); } catch { return null; } };
+const rec = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
+const nn = (v: unknown): number | null => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+
+/** The compact segments_json of a stored row (one array per segment, the columns named once) → rows with their ranges. */
+export function aiSegmentsFromJson(json: unknown): AiSegments | null {
+  const x = rec(parseJ(json));
+  if (!Array.isArray(x.rows)) return null;
+  const cols = Array.isArray(x.cols) ? (x.cols as string[]) : ['dim', 'key', 'questions', 'n', 'k', 'cited', 'sov', 'leader', 'pulse_n', 'delta', 'significant'];
+  const min = nn(x.min_answers) ?? AI_SEGMENT_MIN;
+  const rows = (x.rows as unknown[]).map((r): AiSegment => {
+    const o: Record<string, unknown> = Array.isArray(r) ? Object.fromEntries(cols.map((c, i) => [c, (r as unknown[])[i]])) : rec(r);
+    const n = Math.max(0, Number(o.n) || 0), k = Math.max(0, Number(o.k) || 0);
+    return { dim: String(o.dim ?? ''), key: String(o.key ?? ''), questions: Number(o.questions) || 0, n, k, cited: Number(o.cited) || 0, pulseN: Number(o.pulse_n) || 0,
+      rate: n ? Math.round((1000 * k) / n) / 10 : null, ci: wilson(k, n), enough: n >= min, sov: nn(o.sov), leader: String(o.leader ?? ''), delta: nn(o.delta), significant: o.significant == null ? null : o.significant === true };
+  });
+  const f = rec(x.family);
+  return { rows, minAnswers: min, family: x.family ? { method: String(f.method ?? ''), q: Number(f.q) || 0, tests: Number(f.tests) || 0, rejected: Number(f.rejected) || 0, note: String(f.note ?? '') } : null,
+    moves: (Array.isArray(x.moves) ? x.moves : []).map((m) => { const o = rec(m); return { dim: String(o.dim ?? ''), key: String(o.key ?? ''), rate: nn(o.rate), delta: Number(o.delta) || 0, n: Number(o.n) || 0 }; }) };
+}
+/** The panel_json of a stored row → what the app shows (the question ids stay on the server). */
+export function aiPanelFromJson(json: unknown): AiPanelInfo | null {
+  const x = rec(parseJ(json)); if (!Object.keys(x).length) return null;
+  const comp = rec(x.composition), hw = rec(x.half_width), me = rec(hw.measured), ac = rec(hw.achievable), ov = x.overlap_with_previous ? rec(x.overlap_with_previous) : null;
+  const dict = (v: unknown) => Object.fromEntries(Object.entries(rec(v)).map(([k, n]) => [k, Number(n) || 0]));
+  return { size: Number(x.size) || (Array.isArray(x.ids) ? x.ids.length : 0), setting: nn(x.setting), engines: Array.isArray(x.engines) ? (x.engines as unknown[]).map(String) : [],
+    composition: { cluster: dict(comp.cluster), persona: dict(comp.persona), market: dict(comp.market), stage: dict(comp.stage) },
+    overlapWithPrevious: ov ? { share: nn(ov.share), same: ov.same == null ? null : ov.same === true, common: Number(ov.common) || 0 } : null,
+    halfWidth: x.half_width ? { measured: { headline: nn(me.headline), medianCluster: nn(me.median_cluster) }, achievable: { headline: nn(ac.headline), cluster: nn(ac.cluster), perWeek: Number(ac.per_week) || 0 } } : null,
+    executions: Number(x.executions) || 1 };
+}
+
+// ---------------- the CSV import of the panel manager ----------------
+
+export const AI_PANEL_CSV_COLUMNS = ['question', 'buyer role', 'cluster', 'stage', 'market', 'pinned'] as const;
+export interface AiPanelCsvResult { rows: { prompt: string; persona: string; cluster: string; stage: '' | 'awareness' | 'consideration' | 'decision'; market: string; pinned: boolean }[]; errors: { line: number; message: string }[]; skipped: number }
+
+/** One CSV cell list per line (RFC 4180: quotes, doubled quotes, commas and line breaks inside quotes; ; or tab as the separator too). */
+function csvLines(text: string): string[][] {
+  const t = String(text ?? '').replace(/^﻿/, '');
+  const first = t.split(/\r?\n/, 1)[0] ?? '';
+  const sep = (first.match(/\t/g)?.length ?? 0) > (first.match(/,/g)?.length ?? 0) ? '\t' : (first.match(/;/g)?.length ?? 0) > (first.match(/,/g)?.length ?? 0) ? ';' : ',';
+  const out: string[][] = []; let row: string[] = [], cell = '', q = false;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (q) { if (c === '"') { if (t[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; continue; }
+    if (c === '"' && !cell) { q = true; continue; }
+    if (c === sep) { row.push(cell); cell = ''; continue; }
+    if (c === '\n' || c === '\r') { if (c === '\r' && t[i + 1] === '\n') i++; row.push(cell); out.push(row); row = []; cell = ''; continue; }
+    cell += c;
+  }
+  if (cell || row.length) { row.push(cell); out.push(row); }
+  return out.filter((r) => r.some((x) => x.trim()));
+}
+
+/**
+ * The owner's question list as CSV (a spreadsheet export): one question per line; the header names the columns in any order —
+ * question (required), buyer role, cluster, stage (awareness / consideration / decision), market (country-language, e.g. SA-en), pinned
+ * (yes / no). Without a header the first column is the question. At most 500 rows; duplicates (same text) are skipped.
+ */
+export function parseAiPanelCsv(text: string, max = 500): AiPanelCsvResult {
+  const lines = csvLines(text);
+  const errors: AiPanelCsvResult['errors'] = []; const rows: AiPanelCsvResult['rows'] = []; let skipped = 0;
+  if (!lines.length) return { rows, errors: [{ line: 0, message: 'The file is empty' }], skipped };
+  const norm = (h: string) => h.toLowerCase().replace(/[^a-z]+/g, ' ').trim();
+  const head = lines[0].map(norm);
+  const find = (...names: string[]) => head.findIndex((h) => names.includes(h));
+  const hasHead = find('question', 'prompt', 'questions') >= 0;
+  const ix = hasHead ? { q: find('question', 'prompt', 'questions'), p: find('buyer role', 'persona', 'role'), c: find('cluster', 'topic', 'topic cluster'), s: find('stage', 'funnel stage'), m: find('market'), pin: find('pinned', 'pin') }
+    : { q: 0, p: 1, c: 2, s: 3, m: 4, pin: 5 };
+  const seen = new Set<string>();
+  lines.slice(hasHead ? 1 : 0).forEach((cells, i) => {
+    const line = i + (hasHead ? 2 : 1);
+    const get = (j: number) => (j >= 0 ? String(cells[j] ?? '').trim() : '');
+    const prompt = get(ix.q).replace(/\s+/g, ' ');
+    if (!prompt) { skipped++; return; }
+    if (prompt.length < 10) { errors.push({ line, message: `"${prompt}" is shorter than 10 characters` }); return; }
+    if (prompt.length > 300) { errors.push({ line, message: 'The question is longer than 300 characters' }); return; }
+    const key = prompt.toLowerCase(); if (seen.has(key)) { skipped++; return; } seen.add(key);
+    const st = get(ix.s).toLowerCase();
+    if (st && !['awareness', 'consideration', 'decision'].includes(st)) { errors.push({ line, message: `Stage "${get(ix.s)}" is not awareness, consideration or decision` }); return; }
+    const mk = get(ix.m).replace(/[_\s]+/g, '-');
+    const mm = mk ? mk.match(/^([A-Za-z]{2})(?:-([A-Za-z]{2,3}))?$/) : null;
+    if (mk && !mm) { errors.push({ line, message: `Market "${get(ix.m)}" should be a country code and a language, e.g. SA-en` }); return; }
+    if (rows.length >= max) { skipped++; return; }
+    rows.push({ prompt, persona: get(ix.p).slice(0, 40), cluster: get(ix.c).slice(0, 60).toLowerCase(), stage: (st || '') as AiPanelCsvResult['rows'][number]['stage'],
+      market: mm ? mm[1].toUpperCase() + '-' + (mm[2] || 'en').toLowerCase() : '', pinned: /^(y|yes|true|1|pinned)$/i.test(get(ix.pin)) });
+  });
+  return { rows, errors, skipped };
+}

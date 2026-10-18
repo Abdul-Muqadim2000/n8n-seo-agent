@@ -339,6 +339,8 @@ export async function siteRoutes(app: FastifyInstance) {
         // Site Admin keeps a field when it is '' : a single space clears a list
         const m = monitorsBody(a.monitors);
         if (a.monitors.brandNames && !a.monitors.brandNames.length) m.brand_names = ' ';
+        if (a.monitors.aiPersonas && !a.monitors.aiPersonas.length) m.ai_personas = ' ';   // G6
+        if (a.monitors.aiMarkets && !a.monitors.aiMarkets.length) m.ai_markets = ' ';
         body = { ...base, action: 'monitors', monitors: { ...m, ...(a.competitors ? { competitors: a.competitors.join(', ') || ' ' } : {}) } };
         break;
       }
@@ -346,7 +348,10 @@ export async function siteRoutes(app: FastifyInstance) {
         body = { ...base, action: 'prospect', prospect_domain: a.prospectDomain, type: a.type, ...(a.status ? { status: a.status } : {}), ...(a.note !== undefined ? { note: a.note } : {}), ...(a.contactEmail ? { contact_email: a.contactEmail } : {}) };
         break;
       case 'ai_prompts':
-        body = { ...base, action: 'ai_prompts', add: a.add, remove: a.remove };
+        // G6 (2026-10-18): the panel manager — the engine's field names (AI_Prompt_Rows_Admin.js)
+        body = { ...base, action: 'ai_prompts', add: a.add, remove: a.remove, enable: a.enable, pin: a.pin, unpin: a.unpin,
+          edit: a.edit.map((e) => ({ prompt_id: e.promptId, ...(e.prompt ? { prompt: e.prompt } : {}), ...(e.persona !== undefined ? { persona: e.persona } : {}), ...(e.cluster !== undefined ? { cluster: e.cluster } : {}),
+            ...(e.stage ? { stage: e.stage } : {}), ...(e.market ? { market: e.market } : {}), ...(e.pinned !== undefined ? { pinned: e.pinned } : {}) })) };
         break;
       case 'content_groups':
         body = { ...base, action: 'content_groups', content_groups: a.contentGroups };
