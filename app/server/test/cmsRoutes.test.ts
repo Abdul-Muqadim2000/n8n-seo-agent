@@ -132,6 +132,11 @@ describe.skipIf(!DB)('CMS publishing routes (real database)', () => {
     await sqlClient.end({ timeout: 5 });
   });
 
+  const auditEvents = async (action: string) => {
+    const { db, schema } = await import('../src/db');
+    const { and, eq } = await import('drizzle-orm');
+    return db.select().from(schema.auditEvents).where(and(eq(schema.auditEvents.orgId, ids.org1!), eq(schema.auditEvents.action, action)));
+  };
   const site1 = () => `/api/orgs/${ids.org1}/sites/${ids.site1}/cms`;
   const wpBody = { kind: 'wordpress', baseUrl: 'https://blog.example.org', username: 'editor', secret: 'abcd efgh ijkl mnop qrst' };
 
@@ -146,6 +151,17 @@ describe.skipIf(!DB)('CMS publishing routes (real database)', () => {
     ids.wp = res.json().connection.id;
     expect(res.json().connection).toMatchObject({ kind: 'wordpress', hasSecret: true, status: 'untested' });
     expect(res.body).not.toContain('abcd efgh');
+    const ev = await auditEvents('cms.connected');
+    expect(ev.length).toBe(1);
+    expect(JSON.stringify(ev)).not.toMatch(/abcd efgh|secret/i);
+  });
+
+  it('changing a connection is audited, without the secret', async () => {
+    const r = await req('admin', 'PATCH', `${site1()}/connections/${ids.wp}`, { label: 'WordPress' });
+    expect(r.statusCode).toBe(200);
+    const ev = await auditEvents('cms.changed');
+    expect(ev.length).toBe(1);
+    expect(JSON.stringify(ev)).not.toMatch(/abcd efgh|secret/i);
   });
 
   it('the secret is sealed at rest and never returned, to anybody', async () => {
@@ -273,6 +289,7 @@ describe.skipIf(!DB)('CMS publishing routes (real database)', () => {
   it('removing a connection keeps the publishing history', async () => {
     expect((await req('member', 'DELETE', `${site1()}/connections/${ids.wp}`)).statusCode).toBe(403);
     expect((await req('admin', 'DELETE', `${site1()}/connections/${ids.wp}`)).statusCode).toBe(200);
+    expect((await auditEvents('cms.removed')).length).toBe(1);
     const s = (await req('viewer', 'GET', `${site1()}/state`)).json();
     expect(s.items).toEqual([]);
     expect(s.recent.some((r: { connectionLabel: string; status: string }) => r.connectionLabel === 'WordPress' && r.status === 'sent')).toBe(true);

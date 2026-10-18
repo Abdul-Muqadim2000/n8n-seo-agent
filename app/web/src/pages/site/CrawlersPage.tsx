@@ -91,7 +91,7 @@ export function Crawlers({ d, orgId, siteId, domain, admin, member, loading, onU
   const t = d.totals;
   const reading = d.ingests.filter((i) => i.status === 'queued' || i.status === 'processing');
   const top = d.recommendations.find((r) => r.tone !== 'good') ?? d.recommendations[0];
-  const proved = t.verifiedShare != null ? ratioPct(t.verifiedShare, 0) : '–';
+  const proved = t.verifiedShare != null ? ratioPct(t.verifiedShare, 0) : null;
   const title = t.hits
     ? `Googlebot made ${plural(t.googlebot, 'request')}, AI crawlers ${n(t.ai)}, in the last ${d.windowDays} days`
     : `No crawler request in the last ${d.windowDays} days of your logs`;
@@ -103,7 +103,7 @@ export function Crawlers({ d, orgId, siteId, domain, admin, member, loading, onU
         tone="blue"
         eyebrow={<HeroEyebrow tag="Server logs">{`${fmtDay(d.from)} – ${fmtDay(d.to)} · data from ${fmtDay(d.dataFrom)} to ${fmtDay(d.dataTo)}`}</HeroEyebrow>}
         title={title}
-        description={`${proved} of crawler requests were proved to come from the vendor. ${t.spoofed ? `${n(t.spoofed)} more only pretended to be a crawler and are left out of every figure.` : 'Nothing pretended to be a crawler.'}`}
+        description={`${proved != null ? `${proved} of crawler requests were proved to come from the vendor.` : 'No crawler request could be checked against the vendors’ address lists yet.'} ${t.spoofed ? `${n(t.spoofed)} more only pretended to be a crawler and are left out of every figure.` : 'Nothing pretended to be a crawler.'}`}
         aside={top ? <HeroNextStep title={top.title} actions={top.link === 'technical' ? <HeroLink to={`/o/${orgId}/sites/${siteId}/technical`}>Technical health</HeroLink> : top.link === 'ai' ? <HeroLink to={`/o/${orgId}/sites/${siteId}/ai`}>AI visibility</HeroLink> : undefined} /> : undefined}
         stats={
           <>

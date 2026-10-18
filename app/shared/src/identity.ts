@@ -546,6 +546,14 @@ export const AUDIT_ACTIONS = {
   'integration.disconnected': { label: 'Disconnected an integration', category: 'integrations' },
   'integration.export_started': { label: 'Started a data export', category: 'integrations' },
   'issue.created': { label: 'Created a ticket in the issue tracker', category: 'integrations' },
+  'cms.connected': { label: 'Connected a CMS', category: 'integrations' },
+  'cms.changed': { label: 'Changed a CMS connection', category: 'integrations' },
+  'cms.removed': { label: 'Removed a CMS connection', category: 'integrations' },
+  'crawler.push_key_created': { label: 'Made a crawler log push key', category: 'integrations' },
+  'crawler.push_key_revoked': { label: 'Switched crawler log pushes off', category: 'integrations' },
+  'crawler.log_uploaded': { label: 'Uploaded a server log', category: 'integrations' },
+  'crawler.retention_changed': { label: 'Changed how long crawler logs are kept', category: 'integrations' },
+  'crawler.data_deleted': { label: 'Deleted a website\'s crawler log data', category: 'integrations' },
   'run.started_via_api': { label: 'Started an analysis through the API', category: 'integrations' },
 } as const satisfies Record<string, { label: string; category: AuditCategory }>;
 export type AuditAction = keyof typeof AUDIT_ACTIONS;

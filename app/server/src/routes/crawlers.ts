@@ -8,6 +8,7 @@ import { randomToken, safeEqual, sha256 } from '../lib/crypto';
 import { badRequest, HttpError, parse } from '../lib/errors';
 import { crawlerCsv, crawlerData, ingestsOf, toIngestView } from '../services/crawlers/analytics';
 import { queueIngest, spool } from '../services/crawlers/jobs';
+import { audit } from '../services/audit';
 import { pgIso } from '../services/crawlers/pgTime';
 
 /**
@@ -60,6 +61,7 @@ export async function crawlerRoutes(app: FastifyInstance) {
     await sqlClient`
       insert into log_sources (site_id, org_id, retention_days, updated_at) values (${a.site.id}, ${a.org.id}, ${b.retentionDays}, now())
       on conflict (site_id) do update set retention_days = excluded.retention_days, updated_at = now()`;
+    await audit(req, a.org.id, { action: 'crawler.retention_changed', target: { type: 'site', id: a.site.id, label: a.site.domain }, details: { retentionDays: b.retentionDays } });
     return { retentionDays: b.retentionDays };
   });
 
@@ -77,6 +79,7 @@ export async function crawlerRoutes(app: FastifyInstance) {
         push_key_created_at = excluded.push_key_created_at, push_key_created_by = excluded.push_key_created_by, updated_at = now()
       returning push_key_created_at`;
     req.log.info({ site: a.site.id, by: a.user.id }, 'crawler log push key created');
+    await audit(req, a.org.id, { action: 'crawler.push_key_created', target: { type: 'site', id: a.site.id, label: a.site.domain }, details: { prefix } });
     return { token, prefix, endpoint: `${config.appUrl}/api/ingest/logs/${a.site.id}`, header: LOG_PUSH_KEY.header, createdAt: pgIso(row.push_key_created_at) ?? new Date().toISOString() };
   });
 
@@ -85,6 +88,7 @@ export async function crawlerRoutes(app: FastifyInstance) {
     const a = await siteAccess(req, p.orgId, p.siteId, 'admin');
     await sqlClient`update log_sources set push_key_hash = null, push_key_prefix = null, push_key_created_at = null, updated_at = now() where site_id = ${a.site.id}`;
     req.log.info({ site: a.site.id, by: a.user.id }, 'crawler log push key revoked');
+    await audit(req, a.org.id, { action: 'crawler.push_key_revoked', target: { type: 'site', id: a.site.id, label: a.site.domain } });
     return { ok: true };
   });
 
@@ -103,6 +107,7 @@ export async function crawlerRoutes(app: FastifyInstance) {
       tx`delete from log_ingests where site_id = ${a.site.id}`,
     ]);
     req.log.info({ site: a.site.id, by: a.user.id }, 'crawler log data deleted');
+    await audit(req, a.org.id, { action: 'crawler.data_deleted', target: { type: 'site', id: a.site.id, label: a.site.domain }, details: { requests: h.count, files: i.count } });
     return { ok: true, deleted: { requests: h.count, dailyRows: d.count + pd.count, files: i.count } };
   });
 }
@@ -132,6 +137,8 @@ export async function crawlerStreamRoutes(app: FastifyInstance) {
       const name = String((req.query as { name?: string }).name ?? '').replace(/[^\w.\- ()]+/g, '_').slice(0, 200) || 'access.log';
       const spooled = await spool(bodyStream(req), CRAWLER_LIMITS.uploadMaxBytes);
       if (!spooled.bytes) throw badRequest('The file is empty.', undefined, 'empty');
+      // written before the job is queued: the worker starts the moment the row exists
+      await audit(req, a.org.id, { action: 'crawler.log_uploaded', target: { type: 'site', id: a.site.id, label: a.site.domain }, details: { fileName: name, bytes: spooled.bytes } });
       const r = await queueIngest({ orgId: a.org.id, siteId: a.site.id, source: 'upload', fileName: name, createdBy: a.user.id, spooled });
       reply.status(r.duplicate ? 200 : 202);
       return { ingest: toIngestView(r.ingest), duplicate: r.duplicate };
