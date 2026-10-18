@@ -9,8 +9,18 @@
 // that is a competitor's brand or a government portal — exactly what the fit gate refuses when a rung is planned — became a question we
 // ask ChatGPT and then score ourselves against. The stored rungs now go through the same read-path gate R16 built (FITR, _fit_gate.js),
 // and every rung set aside travels with the plan so the report can name it with its reason instead of quietly shortening the list.
+// G6 (2026-10-18, AI_VISIBILITY_SPEC.md §10): the panel holds up to 500 questions (persona, funnel stage, topic cluster, market), the weekly
+// run asks all of it on every enabled engine and is SPLIT ACROSS EXECUTIONS when it is bigger than one execution should carry
+// (AIP.LIMITS.chunk_requests). One run = one run_id, one state row in seo_cache (`ai_run:<site_id>`), one deterministic list of requests;
+// every execution asks only what no earlier execution of the same run has answered (so a repeated or resumed chunk never pays twice), and
+// the last one computes the week over every answer of the run. This node decides, per site, which of three things this execution is:
+// the FIRST chunk of a new run, the NEXT chunk of a run (`continue_run` on the trigger), or the RESUME of a run that went silent (any
+// start of the tracker picks it up instead of starting a second run the same week). A start while a chunk is still running is a twin and
+// does nothing for that site. Each item carries what is left to spend on the run (est_dfs_usd / est_ai_usd: the run ledger reserves it,
+// and the run guard refuses a run the DataForSEO account cannot pay for, with the reason).
 /*__MONITOR_SITES__*/
 /*__COUNTRIES__*/
+/*__AI_PANEL__*/
 /*__SITE_MODEL__*/
 /*__FIT_GATE__*/
 const CONFIG = { max_sites_per_run: 15, max_topics: 8, monthly_engines: ['claude'],   // v4.9: Gemini moved to the weekly set (the real gemini.google.com answer costs $0.004 through the scraper)
@@ -18,11 +28,19 @@ const CONFIG = { max_sites_per_run: 15, max_topics: 8, monthly_engines: ['claude
 const { list, on_demand, want, total } = monitorSites('ai');
 if (!list.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'no site matches "' + want + '"' : (total ? 'AI visibility is switched off for every site' : 'no sites yet (register one through "Track my site" or plan a keyword ladder)') } }];
 const promptRows = rowsOf('Load AI Prompts'), visRows = rowsOf('Load AI Visibility'), ladders = rowsOf('Load Ladders'), daily = rowsOf('Load AI Daily'), cache = rowsOf('Load Cache (AI)'), queries = rowsOf('Load Query History');
+// G6: the answers stored by earlier executions of an unfinished run (this week, not the pulse). Read raw: rowsOf() drops a row carrying
+// `error` (it is meant for a Data Table node that failed), and an answer the gate could not get carries its task error — it is still
+// ASKED, and asking it again in every later execution would never let a run end (a failed task is billed nothing; the report names it).
+let runRows = []; try { runRows = $('Load AI Run Answers').all().map(i => i.json).filter(r => r && r.run_id && r.prompt_id && r.engine); } catch (e) {}
+const continuing = String(trigger.continue_run || '').trim();   // G6: set when the previous chunk started this execution
+const LIVE = new Set(['off', 'refused']);   // G6: a question switched off by the owner or refused by the fit gate is never asked
 const now = new Date(); const iso = now.toISOString(); const month = iso.slice(0, 7);
 const parse = (t, d) => { try { const v = JSON.parse(t || ''); return v == null ? d : v; } catch (e) { return d; } };
 const isoOf = (code) => { const c = Object.values(typeof COUNTRIES === 'object' ? COUNTRIES : {}).find(x => Number(x.code) === Number(code)); return c ? String(c.iso || '').toUpperCase() : ''; };
+const codeOfIso = (iso) => { const c = Object.values(typeof COUNTRIES === 'object' ? COUNTRIES : {}).find(x => String(x.iso || '').toUpperCase() === String(iso || '').toUpperCase()); return c ? Number(c.code) : 0; };
+const skipped = [];   // G6: sites this execution does nothing for, with the reason (a twin start, nothing to continue, a run above the ceiling)
 const QUESTION = /^(how|what|which|who|why|when|where|is|are|can|does|do|should|best|top|cost|price|vs|compare)\b|\?|\b(vs|versus|best|cost|price|how to|which)\b/i;
-return list.slice(0, CONFIG.max_sites_per_run).map(s => {
+const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const label = s.domain.split('.')[0];
   const brand_names = [...new Set([s.domain, s.business_name || '', ...(s.settings.brand_names || []), ...(label.length >= 5 ? [label] : [])].map(x => String(x).trim()).filter(x => x.length >= 3))];   // P34-6: the model's name is a brand name too
   const lrowsAll = ladders.filter(l => normD(l.domain) === s.domain).sort((a, b) => (Number(a.rung) || 0) - (Number(b.rung) || 0));
@@ -30,7 +48,13 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   // D15 (system review 2026-10-11): the plan carries the site's canonical host (the site model, SITE_MODEL_SPEC.md §6), so every URL the run
   // emits is on the host the site really serves; with no model yet the bare domain keeps today's behaviour.
   const site_model = SM.stored(s) || { domain: s.domain, canonical_host: s.domain };
-  const mineAll = promptRows.filter(p => p.site_id === s.site_id && String(p.status || 'active') !== 'off' && p.prompt);
+  // G6: the state of this site's split run, and what this execution is for it
+  const st = AIP.stateOf(cache, s.site_id);
+  const verdict = AIP.stateVerdict(st, iso, continuing);
+  if (continuing && verdict !== 'continue') { skipped.push({ domain: s.domain, why: 'nothing to continue: run ' + continuing + ' is ' + (st && st.run_id === continuing ? st.status : 'not the open run') }); return null; }
+  if (verdict === 'busy') { skipped.push({ domain: s.domain, why: 'run ' + st.run_id + ' is still being asked (chunk ' + (st.chunk || 1) + ', ' + (st.asked || 0) + ' of ' + (st.total || '?') + ' requests, updated ' + String(st.updated_at || '').slice(0, 16) + ' UTC); it continues by itself' }); return null; }
+  const going = verdict === 'continue' || verdict === 'resume';
+  const mineAll = promptRows.filter(p => p.site_id === s.site_id && !LIVE.has(String(p.status || 'active')) && p.prompt);
   const mineVis = visRows.filter(v => v.site_id === s.site_id).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)));
   const prev = mineVis[0] || null;
   // brand names AI uses for competitors (learned by the Answer Analyst: "ClearTax" -> cleartax.in), so a competitor named without its website still counts
@@ -49,20 +73,31 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   // gate's first rule is "names the website itself", and running it over that question would refuse the one question that must stay.
   const fitQ = FITR.rungs(mineAll.filter(p => p.kind !== 'brand'), fitCtx, { where: 'AI question panel', keyword: (p) => p.keyword || p.topic || '', live: (p) => p.source === 'custom' });
   const refusedQ = new Set(fitQ.set_aside.filter(x => x.dropped).map(x => x.prompt_id));
-  const mine = mineAll.filter(p => p.kind === 'brand' || !refusedQ.has(p.prompt_id));   // the stored order is kept: it is the panel's order
+  // G6: pinned questions first (the owner's choice is never cut by a smaller panel), then the stored order (the panel's order)
+  const pin = (p) => p.pinned === true || String(p.pinned) === 'true';
+  const mine = mineAll.filter(p => p.kind === 'brand' || !refusedQ.has(p.prompt_id)).map((p, i) => ({ p, i }))
+    .sort((a, b) => ((pin(b.p) ? 1 : 0) - (pin(a.p) ? 1 : 0)) || a.i - b.i).map(x => x.p);
   const set_aside = [...fit.set_aside, ...fitQ.set_aside];
-  const custom = mine.filter(p => p.source === 'custom'), auto = mine.filter(p => p.source !== 'custom');
+  const custom = mine.filter(p => p.source === 'custom' || pin(p)), auto = mine.filter(p => p.source !== 'custom' && !pin(p));
   const topics =[...new Set([...asked, ...lrows.map(l => String(l.head_keyword || '').toLowerCase().trim()), ...(s.keywords || []), ...lrows.filter(l => Number(l.rung) !== 4).map(l => String(l.keyword || '').toLowerCase().trim())].filter(Boolean))].slice(0, CONFIG.max_topics);
   // full run = the first run of the month (or any on-demand run): every engine + the brand question + discovery + the market-wide index
   const isFull = (v) => String(v.run_kind || '') === 'full' || String(v.run_kind || '') === 'on_demand' || (!v.run_kind && (() => { const e = parse(v.engines_json, {}); return ['gemini', 'claude'].some(k => e[k] && Number(e[k].asked) > 0 && !e[k].carried); })());
   const lastFull = mineVis.find(isFull) || null;
-  const full_due = on_demand || !mineVis.some(v => String(v.checked_at).slice(0, 7) === month && isFull(v));
+  const full_due = going ? !!st.full_due : (on_demand || !mineVis.some(v => String(v.checked_at).slice(0, 7) === month && isFull(v)));
   const carried = lastFull ? { checked_at: lastFull.checked_at, engines: parse(lastFull.engines_json, {}) } : null;
   const room = Math.max(0, s.settings.prompts_max - custom.length);
   const deficit = Math.max(0, room - auto.length);
-  const need = (!auto.length || deficit >= 2) ? deficit : 0;   // top up only when 2+ questions are missing (not every week for one)
+  // G6: questions are written in the FIRST chunk of a run only (a continuation asks the panel the first chunk stored); the Prompt Writer
+  // writes at most writer_batch x writer_jobs_per_run in one run, so a new 500-question panel is written in one week
+  const need = going ? 0 : Math.min(AIP.LIMITS.writer_batch * AIP.LIMITS.writer_jobs_per_run, (!auto.length || deficit >= 2) ? deficit : 0);   // top up only when 2+ questions are missing (not every week for one)
+  const ownMarket = AIP.normMarket(isoOf(Number(s.location_code) || 2840) + '-' + (s.language_code || 'en')) || 'US-en';
+  // the markets the panel covers: the site's own, the ones in its settings, and any market a stored question names (an imported question keeps its market)
+  const markets = AIP.marketsOf({ country_iso: isoOf(Number(s.location_code) || 2840), language_code: s.language_code || 'en', ai_markets: [...s.settings.markets, ...mineAll.map(p => p.market).filter(Boolean)] });
+  const markets_map = Object.fromEntries(markets.map(m => { const [cc, lang] = m.split('-'); return [m, { location_code: m === ownMarket ? (Number(s.location_code) || 2840) : codeOfIso(cc), language_code: lang || 'en', country_iso: cc }]; }).filter(([, v]) => v.location_code));
+  const personas = AIP.personasOf({ ai_personas: s.settings.personas });
   const prompts = [...custom, ...auto].slice(0, s.settings.prompts_max).map(p => ({ prompt_id: p.prompt_id, prompt: p.prompt, kind: p.kind || 'custom', topic: p.topic || '', keyword: p.keyword || '', source: p.source || 'auto',
-    stage: p.stage || '', cluster: p.cluster || p.topic || '', volume: p.volume === '' || p.volume == null ? null : Number(p.volume), origin: p.origin || (p.source === 'custom' ? 'custom' : 'writer'), created_at: p.created_at || '' }));
+    stage: p.stage || '', cluster: p.cluster || p.topic || '', volume: p.volume === '' || p.volume == null ? null : Number(p.volume), origin: p.origin || (p.source === 'custom' ? 'custom' : 'writer'), created_at: p.created_at || '',
+    persona: String(p.persona || '').trim(), market: markets_map[AIP.normMarket(p.market)] ? AIP.normMarket(p.market) : ownMarket, pinned: pin(p) }));
   // search volumes: questions without one (new) every week; all of them on the month's full run (AI Keyword Data, $0.0001 a keyword)
   const volume_keywords = [...new Set(prompts.filter(p => p.kind !== 'brand' && p.keyword && (full_due || p.volume === null || Number.isNaN(p.volume))).map(p => String(p.keyword).toLowerCase().trim()).filter(k => k.length >= 3 && k.length <= 120))].slice(0, 100);
   // real questions people search (Search Console, last weeks): long or question-shaped queries are the closest thing to an AI prompt
@@ -74,19 +109,45 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
     mention_rate: Number(d.mention_rate) || 0, visibility_score: Number(d.visibility_score) || 0, engines: parse(d.engines_json, {}), prompts: parse(d.prompts_json, {}), competitors: parse(d.competitors_json, {}), sources: parse(d.sources_json, {}) }));
   const prevMention = prev ? Number(prev.mention_rate) || 0 : 0, prevSamples = prev ? Number(prev.samples) || Number(prev.answers) || 0 : 0;
   const location_code = Number(s.location_code) || 2840;
+  // ---- G6: this run's identity, what earlier executions of it already asked, and what is left to pay for ----
+  const baseId = 'ai_' + iso.slice(0, 10).replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, '');
+  const run_id = going ? st.run_id : (st && st.run_id && String(st.run_id).indexOf(baseId) === 0 ? baseId + '_x' + $execution.id : baseId);   // a second run the same day gets its own id: its answers are its own
+  const run_checked_at = going ? String(st.started_at || iso) : iso;
+  const doneKeys = going ? [...new Set(runRows.filter(r => r.run_id === run_id && r.prompt_id && r.engine).map(r => AIP.reqKey(r.prompt_id, r.engine)))] : [];
+  const runKind = going ? String(st.run_kind || 'weekly') : (on_demand ? 'on_demand' : full_due ? 'full' : 'weekly');
+  const costNow = AIP.cost({ panel: Math.max(prompts.length + need, AIP.LIMITS.min), engines: s.settings.engines, pulse: s.settings.pulse, pulse_mode: s.settings.pulse_mode, pulse_per_week: s.settings.pulse_per_week });
+  const runCost = full_due ? costNow.run.full : costNow.run.weekly;
+  const spent = going ? { dfs: Number(st.spent_dfs_usd) || 0, ai: Number(st.spent_ai_usd) || 0 } : { dfs: 0, ai: 0 };
+  if (!going && runCost.usd > AIP.LIMITS.max_run_usd) { skipped.push({ domain: s.domain, why: 'this run would cost about $' + runCost.usd.toFixed(2) + ' (' + prompts.length + ' questions x ' + s.settings.engines.length + ' engines), above the $' + AIP.LIMITS.max_run_usd + ' a run the tracker allows; nothing was asked or charged — lower the panel or the engines' }); return null; }
+  // how many requests this run makes in all, and whether this execution can be its last (the database views, GA4, the crawler check and the
+  // metrics run in the last one): an upper bound — the AI Overview is asked once per search phrase, so the real count can only be smaller
+  const engNow = s.settings.engines.filter(e => full_due || !CONFIG.monthly_engines.includes(e));
+  const reqTotal = (prompts.filter(q => q.kind !== 'brand').length + need) * engNow.length + (full_due ? engNow.filter(e => e !== 'copilot' && e !== 'ai_overview').length : 0);
+  const reqLeft = Math.max(0, reqTotal - doneKeys.length);
+  const chunk = { no: going ? (Number(st.chunk) || 1) + 1 : 1, size: AIP.LIMITS.chunk_requests, going, resumed: verdict === 'resume', final_expected: reqLeft <= AIP.LIMITS.chunk_requests,
+    total_est: reqTotal, done: doneKeys.length, executions: (going && Array.isArray(st.executions)) ? st.executions : [], started_at: run_checked_at,
+    // what earlier parts asked and could not be read even when sent again: not asked a third time, named in the week's report
+    unavailable: going ? runRows.filter(r => r.run_id === run_id && r.error).length : 0 };
+  if (chunk.unavailable) chunk.unavailable_note = chunk.unavailable + ' request(s) of this run could not be read in its earlier part(s), even when sent again; they are not asked again and the week counts the answers that came back';
   // pages that must stay fetchable for AI: the ones AI cited last time and the keyword-ladder pages (checked against robots.txt per AI bot)
   const pathOf = (u) => { const m = String(u || '').match(/^https?:\/\/[^\/?#]+(\/[^?#]*)?/i); return m ? (m[1] || '/') : (String(u || '').startsWith('/') ? String(u) : ''); };
   const key_paths = [...new Set([...(prev ? (parse(prev.pages_json, []) || []).map(x => pathOf(x && x.url)) : []), ...lrows.map(l => pathOf(l.target_url))].filter(x => x && x !== '/'))].slice(0, 8);
-  return { json: { site_id: s.site_id, domain: s.domain, canonical_host: site_model.canonical_host || s.domain, country: s.country || '', location_code, language_code: s.language_code || 'en', country_iso: isoOf(location_code), email: s.email || '', callback_url: s.callback_url || '',
-    request_id: s.request_id || '', on_demand, adhoc: !!s.adhoc, business_name: s.business_name || ''   /* P34-6: the site model's name (monitorSites nameOf), not seo_profiles alone */, business_type: s.profile.business_type || '', city: s.profile.city || '', profile: s.profile,
+  return { json: { site_id: s.site_id, domain: s.domain,
+    // G6: the split run (chunk, what is done, what is left to spend), the markets and personas the panel covers, the cost model of this panel
+    chunk, done_keys: doneKeys, markets, markets_map, own_market: ownMarket, personas, pulse_mode: s.settings.pulse_mode, pulse_per_week: s.settings.pulse_per_week,
+    est_dfs_usd: +Math.max(0, runCost.dfs - spent.dfs).toFixed(4), est_ai_usd: +Math.max(0, runCost.ai - spent.ai).toFixed(4), run_cost_est: runCost, cost_model: costNow,
+    spent_before: spent, state_before: going ? st : null, canonical_host: site_model.canonical_host || s.domain, country: s.country || '', location_code, language_code: s.language_code || 'en', country_iso: isoOf(location_code), email: s.email || '', callback_url: s.callback_url || '',
+    request_id: s.request_id || (going ? String(st.request_id || '') : ''), on_demand: going ? !!st.on_demand : on_demand, adhoc: !!s.adhoc,   /* G6: a continuation is the run it continues (scheduled or on demand) */ business_name: s.business_name || ''   /* P34-6: the site model's name (monitorSites nameOf), not seo_profiles alone */, business_type: s.profile.business_type || '', city: s.profile.city || '', profile: s.profile,
     // G10 (2026-10-11 system review): the Answer Analyst can only call a claim wrong against facts on file, so the site model's
     // services, business facts and accreditation status travel with the profile (SITE_MODEL_SPEC.md; with no sheet the analyst
     // reports "not checked", never "no wrong claims")
     services: SM.services(site_model).slice(0, 20), business_facts: SM.facts(site_model).business_facts, accreditation: SM.facts(site_model).accreditation,
     brand_names, competitors, configured_competitors: s.settings.competitors, aliases, topics, engines: s.settings.engines, prompts_max: s.settings.prompts_max, pulse: s.settings.pulse,
-    prompts, full_due, run_kind: on_demand ? 'on_demand' : full_due ? 'full' : 'weekly', monthly_engines: CONFIG.monthly_engines.filter(e => s.settings.engines.includes(e)), carried,
+    prompts, full_due, run_kind: runKind, monthly_engines: CONFIG.monthly_engines.filter(e => s.settings.engines.includes(e)), carried,
     need_prompts: need > 0, prompts_needed: need, need_site_text: need > 0 && !topics.length && !s.business_name, gsc_questions,
-    discovery_due: !!topics.length && (full_due || need > 0), volume_keywords, index_due: full_due, market_due: !!topics.length && (!prev || String(prev.market_month || '') !== month), market_keyword: topics[0] || '',
+    // G6: discovery runs in a run's first execution (it feeds the Prompt Writer); the database views, GA4 and the crawler check in its last
+    discovery_due: !going && !!topics.length && (full_due || need > 0), volume_keywords: going ? [] : volume_keywords, index_due: full_due,
+    market_due: !!topics.length && (!prev || String(prev.market_month || '') !== month), market_keyword: topics[0] || '',
     ga4_property_id: String(s.ga4_property_id || '').replace(/^properties\//, '').trim(), pulse_rows, key_paths,
     // B-G1: what the gate refused, with its reason, so the report names it instead of printing a shorter list (INVARIANTS rule 1)
     set_aside, set_aside_note: FITR.line(set_aside, 'asked of the AI engines or scored against'),
@@ -98,5 +159,15 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
       visibility_score: prev.visibility_score === '' || prev.visibility_score == null ? null : Number(prev.visibility_score), sentiment_score: prev.sentiment_score === '' || prev.sentiment_score == null ? null : Number(prev.sentiment_score),
       engines: parse(prev.engines_json, {}), market_month: prev.market_month || '', market: parse(prev.market_json, null), index: parse(prev.index_json, null), perception: parse(prev.perception_json, null), traffic: parse(prev.traffic_json, null), access: parse(prev.access_json, null),
       competitors: parse(prev.competitors_json, []) } : null,
-    run_id: 'ai_' + iso.slice(0, 10).replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, ''), checked_at: iso } };
-});
+    run_id, checked_at: run_checked_at } };
+}).filter(Boolean);
+// G6: one execution carries at most exec_requests engine requests across all its sites (a scheduled run covers up to 15). The budget goes
+// to the sites in order; a site whose run does not fit is asked in part and continues in its own execution. Only the LAST execution of a
+// site's run asks the database views, reads GA4 and the crawler access and computes the week, so those wait for it.
+{ let budget = AIP.LIMITS.exec_requests;
+  for (const it of planned) { const j = it.json, c = j.chunk; const left = Math.max(0, c.total_est - c.done);
+    c.size = Math.max(0, Math.min(AIP.LIMITS.chunk_requests, budget)); c.final_expected = left <= c.size; budget -= Math.min(left, c.size);
+    if (!c.final_expected) { j.index_due = false; j.market_due = false; j.ga4_property_id = ''; j.key_paths = []; } } }
+if (!planned.length) return [{ json: { nothing_to_do: true, reason: skipped.map(x => x.domain + ': ' + x.why).join(' | ') || 'nothing to do', skipped } }];
+if (skipped.length) planned[0].json.skipped_sites = skipped;
+return planned;

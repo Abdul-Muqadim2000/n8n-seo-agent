@@ -1084,7 +1084,8 @@ await guard('ai visibility', async () => {
   const same2 = (a, b) => a.length === b.length && a.every(k => b.includes(k));
   const ANS = ['site_id', 'domain', 'run_id', 'checked_at', 'prompt_id', 'prompt', 'kind', 'topic', 'engine', 'answered', 'mentioned', 'cited', 'rank', 'our_urls', 'competitors', 'sources', 'excerpt', 'cost', 'error', 'run_kind', 'sentiment', 'brands', 'issues', 'fanout', 'cited_urls'];
   const VIS = ['site_id', 'domain', 'run_id', 'checked_at', 'prompts', 'answers', 'mention_rate', 'citation_rate', 'share_of_voice', 'avg_rank', 'aio_presence', 'aio_citation_rate', 'engines_json', 'competitors_json', 'sources_json', 'pages_json', 'gaps_json', 'market_json', 'market_month', 'cost_usd', 'alerts',
-    'run_kind', 'samples', 'visibility_score', 'mention_lo', 'mention_hi', 'sentiment_score', 'accuracy_issues', 'ai_sessions', 'ai_conversions', 'ai_revenue', 'index_sov', 'ai_impressions', 'perception_json', 'traffic_json', 'access_json', 'index_json', 'clusters_json', 'rival_sources_json'];
+    'run_kind', 'samples', 'visibility_score', 'mention_lo', 'mention_hi', 'sentiment_score', 'accuracy_issues', 'ai_sessions', 'ai_conversions', 'ai_revenue', 'index_sov', 'ai_impressions', 'perception_json', 'traffic_json', 'access_json', 'index_json', 'clusters_json', 'rival_sources_json',
+    'segments_json', 'panel_json', 'chunks'];   // G6 (2026-10-18): the segments, the panel asked, the executions a run took
   const PRC =['prompt_id', 'site_id', 'domain', 'prompt', 'kind', 'topic', 'keyword', 'source', 'status', 'created_at', 'stage', 'cluster', 'volume', 'origin', 'updated_at'];
   const PROS = ['site_id', 'domain', 'prospect_domain', 'type', 'rank', 'spam_score', 'detail', 'source_url', 'target_url', 'status', 'first_seen', 'last_seen', 'won_at', 'outreach_subject', 'outreach_body', 'note',
     'score', 'origin', 'contact_email', 'contact_url', 'contacted_at', 'followup_step', 'followup_subject', 'followup_body', 'verified_at', 'drafted_at'];   // v4.10 columns kept by the AI tracker since v4.12; drafted_at since P34-1
@@ -1165,11 +1166,14 @@ await guard('ai visibility', async () => {
   check('market view on the new endpoint: domains, totals, your position', X.market.top[0].domain === 'mof.gov.ae' && X.market.total_mentions === 2210 && X.market.you === 5, JSON.stringify(X.market).slice(0, 300));
   check('suggested questions: real database questions the panel does not track, with demand', X.suggestions.length === 4 && X.suggestions[0].volume === 1300 && X.suggestions.some(s => s.you_cited), JSON.stringify(X.suggestions));
   check('fan-out searches collected', X.fanout.length > 0 && X.fanout[0].engines.length > 0, JSON.stringify(X.fanout.slice(0, 2)));
-  check('learned brand names for the next runs (with their website only)', X.cache_rows.length === 1 && same2(Object.keys(X.cache_rows[0]), CACHE) && JSON.parse(X.cache_rows[0].value)['Azentio Software'] === 'azentio.com' && !('Zoho Books' in JSON.parse(X.cache_rows[0].value)), JSON.stringify(X.cache_rows));
+  // G6 (2026-10-18): the run's own state row (`ai_run:<site>`, status done) travels with the learned names, so no later start resumes a measured run
+  const XB = X.cache_rows.filter(r => /^ai_brands:/.test(r.key)), XS = X.cache_rows.filter(r => /^ai_run:/.test(r.key));
+  check('learned brand names for the next runs (with their website only)', XB.length === 1 && same2(Object.keys(XB[0]), CACHE) && JSON.parse(XB[0].value)['Azentio Software'] === 'azentio.com' && !('Zoho Books' in JSON.parse(XB[0].value)), JSON.stringify(X.cache_rows));
+  check('G6: the measured run marks its state row done (exact seo_cache columns)', XS.length === 1 && same2(Object.keys(XS[0]), CACHE) && JSON.parse(XS[0].value).status === 'done' && JSON.parse(XS[0].value).run_id === X.run_id, JSON.stringify(XS));
   const vr = await run('AI Vis Rows', mt);
   check('visibility row: exact columns, revenue fields, run kind', same2(Object.keys(vr[0].json), VIS) && vr[0].json.ai_sessions === 163 && vr[0].json.ai_conversions === 12 && vr[0].json.run_kind === 'full' && vr[0].json.mention_lo != null && vr[0].json.samples === XM.samples, JSON.stringify(Object.keys(vr[0].json).filter(k => !VIS.includes(k))));
   const ap = await run('AI Prospect Rows', vr); check('ai_source prospects: exact columns', same2(Object.keys(ap[0].json), PROS), ap[0].json.prospect_domain);
-  const cr = await run('AI Cache Rows', ap); check('cache rows node', cr.length === 1 && cr[0].json.key === 'ai_brands:' + M.SITE, JSON.stringify(cr[0].json));
+  const cr = await run('AI Cache Rows', ap); check('cache rows node', cr.length === 2 && cr[0].json.key === 'ai_brands:' + M.SITE && cr[1].json.key === 'ai_run:' + M.SITE, JSON.stringify(cr.map(x => x.json.key)));
   const bi = await run('AI Brief Input', cr); const facts = JSON.parse(bi[0].json.facts);
   check('brief facts: range, significance note, revenue, access, index, perception', facts.numbers.range_95 && facts.ai_referral_traffic.last_28_days.visits === 163 && facts.crawler_access.issues.length && facts.market_wide_index.your_share_pct != null && facts.perception.wrong_claims.length === 1, bi[0].json.facts.slice(0, 300));
   mock('AI Brief', [{ json: { output: { headline: 'ChatGPT, Gemini and Claude name Northwind ERP for the recommendation questions; PerplexityBot is blocked', summary: 'You appear in ...', actions: [{ priority: 1, action: 'Allow PerplexityBot in Cloudflare', why: 'challenge' }], watch: ['Gemini'] } } }]);
@@ -2214,7 +2218,7 @@ await guard('ai pulse', async () => {
   const M = require('./fixtures_monitors'); const A9 = require('./fixtures_ai49');
   const same2 = (a, b) => a.length === b.length && a.every(k => b.includes(k));
   const ANS = ['site_id', 'domain', 'run_id', 'checked_at', 'prompt_id', 'prompt', 'kind', 'topic', 'engine', 'answered', 'mentioned', 'cited', 'rank', 'our_urls', 'competitors', 'sources', 'excerpt', 'cost', 'error', 'run_kind', 'sentiment', 'brands', 'issues', 'fanout', 'cited_urls'];
-  const DAILY = ['site_id', 'domain', 'date', 'checked_at', 'run_id', 'samples', 'mentioned', 'cited', 'mention_rate', 'citation_rate', 'share_of_voice', 'visibility_score', 'engines_json', 'prompts_json', 'competitors_json', 'sources_json', 'alerts', 'cost_usd'];
+  const DAILY = ['site_id', 'domain', 'date', 'checked_at', 'run_id', 'samples', 'mentioned', 'cited', 'mention_rate', 'citation_rate', 'share_of_voice', 'visibility_score', 'engines_json', 'prompts_json', 'competitors_json', 'sources_json', 'alerts', 'cost_usd', 'sample_json'];   // G6: + the morning's sample
   const PN = { code: 'Pulse__AI_Plan' }, PR = { code: 'Pulse__AI_Requests' }, PP = { code: 'Pulse__Parse_AI_Answers' }, PM = { code: 'Pulse__Pulse_Metrics' };
   const qs = [['Which companies help UAE businesses with e-invoicing before 2027?', 'recommend'], ['How much does e-invoicing cost for a UAE distributor?', 'cost'], ['What should I check before choosing an e-invoicing provider in the UAE?', 'choose'], ['Odoo or Business Central for UAE e-invoicing?', 'compare'],
     ['What happens if my UAE company misses the e-invoicing deadline?', 'problem'], ['Who are the best ERP partners in Dubai for distributors?', 'recommend'], ['Which UAE firms connect an ERP to the Peppol network?', 'recommend'], ['What is Northwind ERP and what does it offer?', 'brand']];
@@ -2278,7 +2282,10 @@ await guard('ai pulse', async () => {
   await run('Admin Action', { body: { action: 'monitors', domain: 'northwind-erp.com', ai_prompts_max: 80, ai_pulse: 'off' } });
   mock('Load Monitors (Admin)', [{ json: { site_id: 'site_northwind-erp-com', domain: 'northwind-erp.com', ai_engines: 'chatgpt', ai_prompts_max: 8 } }]);
   const am = await run('Monitor Row (Admin)', store['Load Monitors (Admin)']);
-  check('Site Admin monitors: exact columns, 50 questions at most, pulse switched off', same2(Object.keys(am[0].json), MC) && am[0].json.ai_prompts_max === 50 && am[0].json.ai_pulse === false, JSON.stringify(am[0].json));
+  check('Site Admin monitors: exact columns, 80 questions kept (G6: up to 500), pulse switched off', same2(Object.keys(am[0].json), MC) && am[0].json.ai_prompts_max === 80 && am[0].json.ai_pulse === false, JSON.stringify(am[0].json));
+  await run('Admin Action', { body: { action: 'monitors', domain: 'northwind-erp.com', ai_prompts_max: 900 } });
+  const amG6 = await run('Monitor Row (Admin)', store['Load Monitors (Admin)']);
+  check('G6: Site Admin monitors: 900 questions is held to 500', amG6[0].json.ai_prompts_max === 500, JSON.stringify(amG6[0].json.ai_prompts_max));
   await run('Admin Action', { body: { action: 'monitors', domain: 'northwind-erp.com', competitors: 'rival.ae' } });
   mock('Load Monitors (Admin)', [{ json: { site_id: 'site_northwind-erp-com', domain: 'northwind-erp.com', ai_pulse: false, ai_prompts_max: 30 } }]); const am2 = await run('Monitor Row (Admin)', store['Load Monitors (Admin)']);
   check('Site Admin monitors: stored pulse / questions kept when not given', am2[0].json.ai_pulse === false && am2[0].json.ai_prompts_max === 30, JSON.stringify(am2[0].json));
@@ -18374,6 +18381,8 @@ await guard('S166 B8-8 B8-9 B8-10 the build carries the three engine fixes in bo
 
 // F-A3 (re-rating 2026-10-17): keyword research — discover, keyword report, verdict, Keyword Check (harness/scenarios_fa3.js)
 await require('./scenarios_fa3')({ H, run, mock, store, guard, reset, begin });
+// G6 (2026-10-18): the AI question panel at enterprise scale — up to 500 questions, split runs, the pulse's rotating sample (harness/scenarios_g6.js)
+await require('./scenarios_g6')({ H, run, mock, store, guard, reset, begin });
 
 // ===================================================================================
 // S180-S183 (2026-10-17, defect-fix agent F-B — re-rating 2026-10-17 part 2, executor B: execs 739 / 767, docs/system-review-2026-10-17/

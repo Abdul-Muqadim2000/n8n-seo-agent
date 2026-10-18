@@ -4,7 +4,7 @@
 // choice; blocking them does not remove a site from AI answers). Issues come with the fix.
 const reqs = $('Access Requests').all().map(i => i.json);
 const resps = $input.all().map(i => i.json || {});
-const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
+const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do && (!p.chunk || p.chunk.final_expected));   // G6: a split run reads crawler access in its last execution only
 const BOTS = [
   { bot: 'OAI-SearchBot', owner: 'ChatGPT search', group: 'answer' }, { bot: 'ChatGPT-User', owner: 'ChatGPT (when a user asks it to open a page)', group: 'answer' },
   { bot: 'PerplexityBot', owner: 'Perplexity', group: 'answer' }, { bot: 'Perplexity-User', owner: 'Perplexity (user fetch)', group: 'answer' },
@@ -19,6 +19,7 @@ const hdr = (r, k) => { const h = r.headers || {}; const key = Object.keys(h).fi
 /*__AI_ACCESS_KIT__*/
 const parseRobots = AK.parse, rulesFor = AK.rulesFor, allowed = AK.allowed;   // B9-9: the one robots.txt matcher (v5/code/_ai_access_kit.js)
 const CHALLENGE = /just a moment|cf-chl|challenge-platform|attention required|access denied|captcha|are you a robot|bot detection|request blocked|forbidden/i;
+if (!plans.length) return [{ json: { skip: true, reason: 'crawler access is read in the last execution of a split run' } }];   // G6: a Code node with no item would stop the run here
 return plans.map(p => {
   const mine = reqs.map((q, i) => ({ q, r: resps[i] || {} })).filter(x => x.q.site_id === p.site_id);
   const robotsX = mine.find(x => x.q.kind === 'robots'), llmsX = mine.find(x => x.q.kind === 'llms');

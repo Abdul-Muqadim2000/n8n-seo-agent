@@ -1,0 +1,246 @@
+// G6 (2026-10-18, n8n/seo-agent/AI_VISIBILITY_SPEC.md §10, docs/AI_PANEL_SCALE_HANDOFF.md): the AI question panel at enterprise scale.
+// Built from the real node inputs of the 2026-10-17 re-rating — execution 776 (the weekly AI visibility run on techand.ai, 49 requests) and
+// 779 (the AI Pulse, 21) — cut into fixtures_live/g6_live.json.gz by capture_g6.py, plus a synthetic 500-question panel (12 topic clusters x
+// 4 buyer roles x 2 markets). Called from scenarios_v5.js just before the report.
+const fs = require('fs'); const path = require('path'); const zlib = require('zlib');
+module.exports = async (ctx) => {
+  const { H, run, mock, store, guard, reset, begin } = ctx;
+  const CD = process.env.CODE_DIR || path.join(__dirname, 'code_v4');
+  const FX = JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(__dirname, 'fixtures_live', 'g6_live.json.gz'))).toString('utf8'));
+  const mkCheck = (SN) => (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 450))); };
+  const items = (arr) => (arr && arr.length ? arr : [{}]).map(j => ({ json: j }));
+  // the panel kit exactly as the build inlined it into a node (the harness reads generated code only)
+  const kitOf = (file, name) => { const src = fs.readFileSync(path.join(CD, file), 'utf8'); const a = src.indexOf('const ' + name + ' = (() => {'); const b = src.indexOf('\n})();', a);
+    if (a < 0 || b < 0) throw new Error(name + ' not inlined in ' + file); return new Function(src.slice(a, b + 6) + '\nreturn ' + name + ';')(); };
+  const AIP = kitOf('AI_Requests.js', 'AIP');
+  const W = FX.weekly, P = FX.pulse;
+  const day = (n) => new Date(Date.now() - n * 864e5).toISOString();
+  // ---- the synthetic enterprise panel: 499 buyer questions + the brand question -------------------------------------------------
+  const CLUSTERS = ['e-invoicing', 'erp implementation', 'vat compliance', 'corporate tax', 'payroll software', 'inventory management', 'crm for b2b', 'business intelligence', 'cloud migration', 'ai consulting', 'procurement automation', 'expense management'];
+  const PERSONAS = ['CFO', 'IT manager', 'founder', 'finance manager'];
+  const MARKETS = ['AE-en', 'SA-en'];
+  const STAGES = ['awareness', 'consideration', 'decision'];
+  const VERBS = ['Which providers offer', 'How should I choose', 'What does it cost to get', 'Who are the best partners for', 'What are the risks of', 'How long does it take to roll out', 'Is it worth paying for', 'What should I ask a vendor about', 'Which tools compare well for', 'How do companies handle'];
+  const synthPanel = (n) => { const out = [{ prompt_id: 'g6_brand', site_id: 'site_techand-ai', domain: 'techand.ai', prompt: 'What is Tech& (techand.ai) and what does it offer?', kind: 'brand', topic: 'brand', keyword: 'techand', source: 'auto', status: 'active', created_at: day(30), stage: 'brand', cluster: 'brand', volume: null, origin: 'writer', updated_at: day(30), persona: '', market: 'AE-en', pinned: false, fit_note: '' }];
+    for (let i = 0; i < n - 1; i++) { const c = CLUSTERS[i % 12], pe = PERSONAS[Math.floor(i / 12) % 4], mk = MARKETS[Math.floor(i / 48) % 2], v = VERBS[Math.floor(i / 96) % 10];
+      out.push({ prompt_id: 'g6_' + String(i).padStart(3, '0'), site_id: 'site_techand-ai', domain: 'techand.ai', prompt: v + ' ' + c + ' as a ' + pe + ' in ' + (mk === 'AE-en' ? 'the UAE' : 'Saudi Arabia') + ' (variant ' + i + ')?', kind: 'recommend', topic: c, keyword: c + ' ' + (mk === 'AE-en' ? 'uae' : 'ksa') + ' ' + i,
+        source: 'auto', status: 'active', created_at: day(30), stage: STAGES[i % 3], cluster: c, volume: (i * 37) % 900, origin: 'writer', updated_at: day(30), persona: pe, market: mk, pinned: false, fit_note: '' }); }
+    return out; };
+  const loadWeekly = (o) => { const x = o || {};
+    mock('Load Sites', items(W['Load Sites'])); mock('Load Ladders', items(W['Load Ladders'])); mock('Load Profiles', items(W['Load Profiles']));
+    mock('Load Monitors', items([{ ...W['Load Monitors'][0], ...(x.monitors || {}) }]));
+    mock('Load AI Prompts', items(x.prompts || W['Load AI Prompts']));
+    // the month's full run is done (so a scheduled start is a WEEKLY run whatever day the harness runs on)
+    mock('Load AI Visibility', items((W['Load AI Visibility'] || []).map((r, i, a) => ({ ...r, checked_at: day(2 + a.length - i), run_kind: i === a.length - 1 ? 'full' : r.run_kind }))));
+    mock('Load AI Daily', items(x.daily || [])); mock('Load Cache (AI)', items([...(W['Load Cache (AI)'] || []), ...(x.cache || [])])); mock('Load Query History', items(x.queries || []));
+    mock('Load AI Run Answers', items(x.runAnswers || []));
+    if (x.trigger) mock('Manual Run', [{ json: x.trigger }]); else delete store['Manual Run'];
+    delete store['Prompt Rows']; delete store['Discovery Requests']; delete store['Run Discovery']; delete store['Analyst Jobs']; delete store['Prompt Jobs']; };
+  const keyOf = (q) => q.prompt_id + '|' + q.engine;
+  const answerRows = (reqs, runId, o) => reqs.filter(q => !/^(market|index)/.test(q.prompt_id)).map((q, i) => ({ site_id: q.site_id, domain: q.domain, run_id: runId, checked_at: new Date().toISOString(), prompt_id: q.prompt_id, prompt: q.prompt, kind: q.kind, topic: q.topic || '', engine: q.engine,
+    answered: !(o && o.fail && i % o.fail === 0), mentioned: i % 7 === 0, cited: i % 21 === 0, rank: i % 7 === 0 ? 2 : 0, our_urls: '', competitors: i % 3 ? 'cleartax.com, zoho.com' : 'cleartax.com', sources: 'mof.gov.ae', excerpt: '', cost: 0.004,
+    error: (o && o.fail && i % o.fail === 0) ? 'task error 50000: Internal Error.' : '', run_kind: 'weekly', sentiment: '', brands: '', issues: '', fanout: '', cited_urls: '' }));
+
+  // ===================================================================================================================================
+  await guard('S200 G6 — the panel kit, the limits and the one cost formula', async () => {
+    reset(); const SN = 'S200 G6 — the panel holds 3-500 questions (a new site starts at 50, a stored row keeps its size), one cost formula prices every panel x engines x pulse setting';
+    begin(SN); const check = mkCheck(SN);
+    check('a site with no monitors row starts at 50 questions', AIP.panelSize(null) === 50 && AIP.panelSize({}) === 50, AIP.panelSize(null));
+    check('a stored row with an empty size keeps the old default of 20 (a release never raises an existing site\'s spend)', AIP.panelSize({ site_id: 's', ai_prompts_max: '' }) === 20 && AIP.panelSize({ site_id: 's', ai_prompts_max: null }) === 20, '');
+    check('a stored size is kept, and held to 3-500', AIP.panelSize({ site_id: 's', ai_prompts_max: 8 }) === 8 && AIP.panelSize({ site_id: 's', ai_prompts_max: 900 }) === 500 && AIP.panelSize({ site_id: 's', ai_prompts_max: 1 }) === 3, '');
+    // the monitors kit (inlined into every monitor) applies the same rule
+    const monSrc = fs.readFileSync(path.join(CD, 'AI_Plan.js'), 'utf8'); const m0 = monSrc.match(/const panelMaxOf = [^\n]+/);
+    const panelMaxOf = m0 ? new Function(m0[0] + '\nreturn panelMaxOf;')() : null;
+    check('_monitor_sites.js panelMaxOf and AIP.panelSize agree on every case', panelMaxOf && [null, {}, { site_id: 's' }, { site_id: 's', ai_prompts_max: '' }, { site_id: 's', ai_prompts_max: 8 }, { site_id: 's', ai_prompts_max: 120 }, { site_id: 's', ai_prompts_max: 900 }, { site_id: 's', ai_prompts_max: 0 }]
+      .every(r => panelMaxOf(r) === AIP.panelSize(r)), '');
+    const c8 = AIP.cost({ panel: 8 }), c500 = AIP.cost({ panel: 500 }), c500all = AIP.cost({ panel: 500, engines: AIP.ENGINES });
+    console.log('   cost 8 ->', JSON.stringify(c8.month), '| 500 ->', JSON.stringify(c500.month), 'N', c500.per_week, c500.pulse_questions_day, '| 500 all engines ->', JSON.stringify(c500all.month));
+    check('8 questions on the six default engines: the v4.9 figures (weekly $0.12 a run of DataForSEO, the pulse every morning)', c8.asked === 7 && c8.run.weekly.dfs === 0.14 && c8.per_week === 6 && c8.pulse_questions_day === 7 && c8.executions === 1, JSON.stringify(c8.run));
+    check('500 questions: 2,495 weekly requests split over 5 executions, the pulse a rotating sample (N < 6 a week), every figure positive', c500.requests.weekly === 2495 && c500.executions === 5 && c500.per_week >= 1 && c500.per_week < 6 && c500.month.total > c8.month.total * 10, JSON.stringify(c500));
+    check('the pulse sample at 500 fits one morning\'s request limit', c500.requests.pulse_day <= AIP.LIMITS.pulse_max_requests, c500.requests.pulse_day);
+    check('the half-widths it buys are printed: weekly headline within ±3 points, the median cluster within ±8', c500.half_width.headline <= 3 && c500.half_width.cluster <= 8, JSON.stringify(c500.half_width));
+    check('every engine on, 500 questions: under the tracker\'s ceiling per run', c500all.run.full.usd < AIP.LIMITS.max_run_usd && c500all.prices.length === 9, JSON.stringify(c500all.run));
+    const cOff = AIP.cost({ panel: 200, pulse: false }); check('pulse off: no pulse money, and the half-widths say what the weekly run alone buys', cOff.month.pulse === 0 && cOff.per_week === 0 && cOff.half_width.headline > 0, JSON.stringify(cOff.half_width));
+    const cFull = AIP.cost({ panel: 500, pulse_mode: 'full' }); check('pulse = full panel on 500 questions: as many mornings as one morning\'s limit allows, and it says so', cFull.pulse_capped && /morning asks at most/.test(cFull.pulse_why) && cFull.requests.pulse_day <= 900, cFull.pulse_why);
+    const cFix = AIP.cost({ panel: 300, pulse_mode: 'sample', pulse_per_week: 2 }); check('the owner\'s N is used', cFix.per_week === 2 && /set by the owner/.test(cFix.pulse_why), cFix.pulse_why);
+  });
+
+  // ===================================================================================================================================
+  await guard('S201 G6 — the live run 776 / 779 asks exactly what it asked', async () => {
+    reset(); const SN = 'S201 G6 — replaying executions 776 and 779 (8 questions) through the new plan and requests: the same 49 / 21 requests, one execution, no split';
+    begin(SN); const check = mkCheck(SN);
+    loadWeekly({ trigger: { ...W['Manual Run'][0] } });
+    const plan = (await run('AI Plan', items(W['Load Cache (AI)'])))[0].json;
+    check('one site, the first and last execution of its run (49 requests fit one)', plan.chunk && plan.chunk.no === 1 && plan.chunk.final_expected && !plan.chunk.going, JSON.stringify(plan.chunk));
+    check('the run id keeps its v4.9 shape (the app pairs answers by it)', /^ai_\d{8}_techand-ai$/.test(plan.run_id), plan.run_id);
+    check('the reservation is this panel\'s exact figure', plan.est_dfs_usd > 0 && plan.est_dfs_usd === AIP.cost({ panel: plan.prompts.length, engines: plan.engines }).run.full.dfs, plan.est_dfs_usd + ' vs ' + JSON.stringify(AIP.cost({ panel: plan.prompts.length, engines: plan.engines }).run.full));
+    const req = (await run('AI Requests', [{ json: {} }])).map(i => i.json);
+    const live = W['AI Requests'];
+    const sig = (r) => r.engine + '|' + r.prompt_id + '|' + JSON.stringify(r.body);
+    const liveQ = live.filter(r => !/^(market|index)/.test(r.prompt_id)), nowQ = req.filter(r => !/^(market|index)/.test(r.prompt_id));
+    check('the same ' + liveQ.length + ' question requests, in the same order, with the same bodies as the live run', nowQ.length === liveQ.length && nowQ.every((r, i) => sig(r) === sig(liveQ[i])), JSON.stringify(nowQ.map(sig).filter((s, i) => s !== sig(liveQ[i] || {})).slice(0, 3)));
+    check('the run\'s chunk record: everything asked now, nothing left', req[0].chunks && req[0].chunks[0].asked_now >= liveQ.length && req[0].chunks[0].left_after === 0 && req[0].chunks[0].final, JSON.stringify(req[0].chunks));
+    // the pulse 779
+    mock('Load Sites', items(P['Load Sites'])); mock('Load Ladders', items(P['Load Ladders'])); mock('Load Monitors', items(P['Load Monitors'])); mock('Load Profiles', items(P['Load Profiles']));
+    mock('Load AI Prompts', items(P['Load AI Prompts'])); mock('Load AI Visibility', items(P['Load AI Visibility'])); mock('Load AI Daily', items(P['Load AI Daily'])); mock('Load Cache (AI)', items(P['Load Cache (AI)']));
+    mock('Manual Run', [{ json: { ...P['Manual Run'][0] } }]);
+    const pp = (await run('AI Plan', items(P['Load Cache (AI)']), { code: 'Pulse__AI_Plan' }))[0].json;
+    check('8 questions: the pulse still asks every question every morning (auto mode, as before)', pp.sample && pp.sample.mode === 'full' && pp.prompts.length === 7 && pp.sample.per_week === 6, JSON.stringify(pp.sample));
+    const preq = (await run('AI Requests', [{ json: {} }], { code: 'Pulse__AI_Requests' })).map(i => i.json);
+    const plive = P['AI Requests'];
+    check('the same 21 pulse requests as execution 779', preq.length === plive.length && preq.every((r, i) => sig(r) === sig(plive[i])), JSON.stringify([preq.length, plive.length]));
+  });
+
+  // ===================================================================================================================================
+  await guard('S202 G6 — a 500-question weekly run split across executions', async () => {
+    reset(); const SN = 'S202 G6 — 500 questions on 5 weekly engines: 2,495 requests asked over 5 executions, each key once, the state carried, the week measured once over all of them';
+    begin(SN); const check = mkCheck(SN);
+    const panel = synthPanel(500);
+    let cache = [], stored = [], trigger = null; const asked = new Set(); let twice = 0; const execs = []; let spent = 0;
+    for (let k = 1; k <= 8; k++) {
+      loadWeekly({ monitors: { ai_prompts_max: 500 }, prompts: panel, cache, runAnswers: stored, trigger });
+      const plan = (await run('AI Plan', [{ json: {} }]))[0].json;
+      if (plan.nothing_to_do) { check('chunk ' + k + ' plans something', false, plan.reason); break; }
+      if (k === 1) {
+        check('chunk 1: a new weekly run of 500 questions, 2,495 requests, not the last part', plan.chunk.no === 1 && !plan.chunk.going && plan.chunk.total_est === 2495 && !plan.chunk.final_expected && plan.prompts.length === 500 && plan.run_kind === 'weekly', JSON.stringify(plan.chunk));
+        check('chunk 1: GA4, the crawler check and the database views wait for the last part', !plan.ga4_property_id && !plan.index_due && !plan.market_due && !(plan.key_paths || []).length, JSON.stringify([plan.ga4_property_id, plan.index_due, plan.market_due]));
+        check('chunk 1: the run reserves the whole run\'s exact figure', plan.est_dfs_usd === AIP.cost({ panel: 500, engines: plan.engines }).run.weekly.dfs, plan.est_dfs_usd);
+        check('every question is asked in its own market (UAE and Saudi Arabia location codes)', plan.markets_map['AE-en'].location_code === 2784 && plan.markets_map['SA-en'] && plan.markets_map['SA-en'].location_code === 2682, JSON.stringify(plan.markets_map));
+      }
+      const req = (await run('AI Requests', [{ json: {} }])).map(i => i.json).filter(r => r.engine);
+      const qreq = req.filter(r => !/^(market|index)/.test(r.prompt_id));
+      for (const r of qreq) { if (asked.has(keyOf(r))) twice++; asked.add(keyOf(r)); }
+      if (k === 1) check('chunk 1 asks 600 requests (the first 120 questions x 5 engines, in panel order)', qreq.length === 600 && qreq[0].prompt_id === 'g6_000' && qreq[599].prompt_id === 'g6_119', [qreq.length, qreq[0].prompt_id, qreq[599].prompt_id].join(' '));
+      if (k === 1) { const sa = qreq.find(r => r.market === 'SA-en'); check('a Saudi question is asked with the Saudi location', sa && sa.body[0].location_code === 2682 || (sa && sa.body[0].web_search_country_iso_code === 'SA'), JSON.stringify(sa && sa.body)); }
+      const rows = answerRows(qreq, plan.run_id, k === 2 ? { fail: 50 } : null);
+      mock('Apply Analysis', items(rows));
+      const ho = (await run('AI Chunk Handoff', [{ json: {} }])).map(i => i.json);
+      const h = ho[0];
+      execs.push(h.state_row ? JSON.parse(h.state_row.value).executions.slice(-1)[0] : '');
+      spent += h.cost_usd || 0;
+      if (!h.final) {
+        check('chunk ' + k + ': the state row (exact seo_cache columns) and the next execution\'s start (continue_run, parent = this execution)', h.state_row && ['key', 'kind', 'site_id', 'value', 'updated_at'].every(c => c in h.state_row) && Object.keys(h.state_row).length === 5 && h.next && h.next.continue_run === plan.run_id && h.next.parent_run_id === 'test-exec' && h.next.domain === 'techand.ai', JSON.stringify(h).slice(0, 300));
+        const st = JSON.parse(h.state_row.value);
+        check('chunk ' + k + ': the state counts what is asked and what is left', st.asked === k * 600 && st.status === 'running' && st.chunk === k && st.total === 2495, JSON.stringify(st));
+        if (k === 2) check('chunk 2: answers the gate could not get are counted apart and said', st.unavailable === 12 && /could not be read/.test(h.note), h.note);
+        check('chunk ' + k + ': its own DataForSEO money is stated for the settle', Math.abs(h.cost_usd - qreq.length * 0.004) < 1e-6, h.cost_usd);
+        // AI Metrics: nothing finishes here — the report path ends
+        const am = (await run('AI Metrics', [{ json: {} }]))[0].json;
+        check('chunk ' + k + ': AI Metrics measures nothing (no site finishes here) and carries no money of its own', am.skip && am.nothing_final && am.cost_usd === undefined, JSON.stringify(am));
+        cache = [...cache.filter(c => c.key !== h.state_row.key), h.state_row]; stored = [...stored, ...rows]; trigger = h.next;
+        continue;
+      }
+      // the last part
+      check('the last part is execution ' + k + ' and it is flagged final from its plan', k === 5 && plan.chunk.final_expected && plan.chunk.going && plan.chunk.no === 5 && plan.ga4_property_id === String((W['Load Sites'][0] || {}).ga4_property_id || '').replace(/^properties\//, '').trim(), JSON.stringify(plan.chunk));
+      check('the last part keeps the run\'s id and start time', plan.run_id === JSON.parse(cache[0].value).run_id && plan.checked_at === JSON.parse(cache[0].value).started_at, plan.run_id);
+      const am = (await run('AI Metrics', [{ json: {} }]))[0].json;
+      check('the week is measured over EVERY answer of the run: 2,495 requests, the 12 that failed left out of the rates', am.metrics && am.metrics.requests === 2495 && am.metrics.samples === 2495 - 12, JSON.stringify(am.metrics && { r: am.metrics.requests, s: am.metrics.samples }));
+      check('the report says the run was asked over 5 executions', am.run_split && am.run_split.executions === 5 && /asked over 5 executions/.test(am.run_split.note), JSON.stringify(am.run_split));
+      check('the ledger settles this execution\'s money; the row and report carry the whole run', Math.abs(am.cost_usd - qreq.length * 0.004) < 1e-6 && Math.abs(am.run_cost_usd - 2495 * 0.004) < 0.01 && am.vis_row.cost_usd === am.run_cost_usd, [am.cost_usd, am.run_cost_usd].join(' '));
+      const done = (am.cache_rows || []).find(c => /^ai_run:/.test(c.key));
+      check('the run\'s state is marked done (no later start resumes a measured run)', done && JSON.parse(done.value).status === 'done', JSON.stringify(done));
+      check('the vis row records 5 executions', am.vis_row.chunks === undefined || am.vis_row.chunks === 5, am.vis_row.chunks);
+      break;
+    }
+    check('every one of the 2,495 requests was asked exactly once across the executions — never twice', asked.size === 2495 && twice === 0, asked.size + ' asked, ' + twice + ' twice');
+  });
+
+  // ===================================================================================================================================
+  await guard('S203 G6 — resume, twin and close of a split run', async () => {
+    reset(); const SN = 'S203 G6 — a split run silent past the tracker\'s time limit is resumed (asking only what is unanswered), a live one is left alone, an old one is closed, a second run the same day gets its own id';
+    begin(SN); const check = mkCheck(SN);
+    const panel = synthPanel(500);
+    loadWeekly({ monitors: { ai_prompts_max: 500 }, prompts: panel });
+    const p1 = (await run('AI Plan', [{ json: {} }]))[0].json;
+    const r1 = (await run('AI Requests', [{ json: {} }])).map(i => i.json).filter(r => r.engine);
+    const half = answerRows(r1.slice(0, 300), p1.run_id);   // the second execution stored 300 answers and then died
+    const st = (min, extra) => ({ key: 'ai_run:site_techand-ai', kind: 'ai', site_id: 'site_techand-ai', updated_at: new Date(Date.now() - min * 60000).toISOString(),
+      value: JSON.stringify({ run_id: p1.run_id, run_kind: 'weekly', site_id: 'site_techand-ai', domain: 'techand.ai', started_at: new Date(Date.now() - (min + 30) * 60000).toISOString(), updated_at: new Date(Date.now() - min * 60000).toISOString(), chunk: 1, status: 'running', asked: 600, total: 2495, spent_dfs_usd: 2.4, spent_ai_usd: 0.1, executions: ['e1'], ...(extra || {}) }) });
+    // silent 2 hours: resumed by a scheduled start
+    loadWeekly({ monitors: { ai_prompts_max: 500 }, prompts: panel, cache: [st(120)], runAnswers: half });
+    const pr = (await run('AI Plan', [{ json: {} }]))[0].json;
+    check('a run silent 2 hours is RESUMED (same run id, the next part), not started again', !pr.nothing_to_do && pr.run_id === p1.run_id && pr.chunk.going && pr.chunk.resumed && pr.chunk.no === 2 && pr.chunk.done === 300, JSON.stringify(pr.chunk));
+    check('the resumed part reserves only what is left of the run', pr.est_dfs_usd === +Math.max(0, AIP.cost({ panel: 500, engines: pr.engines }).run.weekly.dfs - 2.4).toFixed(4), pr.est_dfs_usd);
+    const rr = (await run('AI Requests', [{ json: {} }])).map(i => i.json).filter(r => r.engine);
+    const storedKeys = new Set(half.map(keyOf));
+    check('the resumed part asks none of the 300 answers already stored', rr.length === 600 && rr.every(r => !storedKeys.has(keyOf(r))) && rr[0].prompt_id === 'g6_060', [rr.length, rr[0].prompt_id].join(' '));
+    // silent 10 minutes: a live part — a second start is a twin and does nothing
+    loadWeekly({ monitors: { ai_prompts_max: 500 }, prompts: panel, cache: [st(10)], runAnswers: half });
+    const pb = (await run('AI Plan', [{ json: {} }]))[0].json;
+    check('a run heard from 10 minutes ago is still being asked: a second start does nothing for it, and says why', pb.nothing_to_do && /still being asked/.test(pb.reason), pb.reason);
+    // 8 days old: closed, a new run starts
+    loadWeekly({ monitors: { ai_prompts_max: 500 }, prompts: panel, cache: [st(8 * 1440)], runAnswers: half });
+    const po = (await run('AI Plan', [{ json: {} }]))[0].json;
+    check('a run older than 6 days is closed: a new run starts (part 1)', !po.nothing_to_do && po.chunk.no === 1 && !po.chunk.going, JSON.stringify(po.chunk));
+    // done today: a second run the same day gets its own id, so it never takes the first run's answers for its own
+    loadWeekly({ monitors: { ai_prompts_max: 500 }, prompts: panel, cache: [st(30, { status: 'done' })], runAnswers: half });
+    const pd = (await run('AI Plan', [{ json: {} }]))[0].json;
+    check('a second run the same day gets its own run id', pd.run_id !== p1.run_id && pd.run_id.indexOf(p1.run_id) === 0 && /_xtest-exec$/.test(pd.run_id) && pd.chunk.done === 0, pd.run_id);
+    // a continuation for a run that is not open
+    loadWeekly({ monitors: { ai_prompts_max: 500 }, prompts: panel, cache: [st(30, { status: 'done' })], trigger: { domain: 'techand.ai', site_id: 'site_techand-ai', continue_run: p1.run_id } });
+    const pn = (await run('AI Plan', [{ json: {} }]))[0].json;
+    check('a continuation of a run that is already done does nothing', pn.nothing_to_do && /nothing to continue/.test(pn.reason), pn.reason);
+    // the pulse resumes a stalled run every morning
+    mock('Load Cache (AI)', items([st(120), st(10, {}), { key: 'ai_brands:site_techand-ai', kind: 'ai', value: '{}' }].map((r, i) => i === 1 ? { ...r, key: 'ai_run:site_other-com', value: JSON.stringify({ ...JSON.parse(r.value), site_id: 'site_other-com', domain: 'other.com' }) } : r)));
+    const rs = (await run('AI Run Resume', [{ json: {} }], { code: 'Pulse__AI_Run_Resume' })).map(i => i.json);
+    check('the pulse starts the stalled run again (and not the one still running)', rs.length === 1 && rs[0].continue_run === p1.run_id && rs[0].domain === 'techand.ai' && rs[0].parent_run_id === 'test-exec', JSON.stringify(rs));
+  });
+
+  // ===================================================================================================================================
+  await guard('S204 G6 — the run ledger reserves the panel, the balance refuses what it cannot pay', async () => {
+    reset(); const SN = 'S204 G6 — the run ledger reserves the exact figure of a 500-question run, and the run guard refuses it on an account that cannot pay, with the reason';
+    begin(SN); const check = mkCheck(SN);
+    loadWeekly({ monitors: { ai_prompts_max: 500 }, prompts: synthPanel(500) });
+    const plan = (await run('AI Plan', [{ json: {} }]))[0].json;
+    mock('DFS Balance (AI)', [{ json: { tasks: [{ result: [{ money: { balance: 5.43 } }] }] } }]);
+    const row = (await run('Run Ledger Row (AI)', [{ json: { id: 't', name: 'seo_run_ledger' } }]))[0].json;
+    check('the reservation is the panel\'s own figure, and says so', Math.abs(row.dfs_est_usd - plan.est_dfs_usd) < 1e-9 && Math.abs(row.est_usd - plan.est_ai_usd) < 1e-9 && /priced from their own panel/.test(row.cost_basis), JSON.stringify({ d: row.dfs_est_usd, a: row.est_usd, b: row.cost_basis }));
+    mock('Reserve Run Ledger (AI)', [{ json: { ...row, id: 9 } }]); mock('Load Open Runs (AI)', [{ json: {} }]); mock('Load Catch-up Records (AI)', [{ json: {} }]);
+    const g = (await run('After Run Ledger (AI)', [{ json: {} }]))[0].json;
+    check('$5.43 on the account, a $' + plan.est_dfs_usd + ' run: refused before anything is spent, with the reason', g.run_refused && g.reason === 'account_low' && /too low for this run/.test(g.refusal), JSON.stringify(g).slice(0, 300));
+    mock('DFS Balance (AI)', [{ json: { tasks: [{ result: [{ money: { balance: 80 } }] }] } }]);
+    const row2 = (await run('Run Ledger Row (AI)', [{ json: { id: 't', name: 'seo_run_ledger' } }]))[0].json;
+    mock('Reserve Run Ledger (AI)', [{ json: { ...row2, id: 10 } }]);
+    const g2 = await run('After Run Ledger (AI)', [{ json: {} }]);
+    check('$80 on the account: the run goes ahead', !g2[0].json.run_refused && g2[0].json.site_id === 'site_techand-ai', JSON.stringify(g2[0].json).slice(0, 200));
+    // a continuation part names the part that started it, so the guard never takes it for a twin
+    loadWeekly({ monitors: { ai_prompts_max: 500 }, prompts: synthPanel(500), trigger: { domain: 'techand.ai', continue_run: 'x', parent_run_id: '9001' } });
+    const rowC = (await run('Run Ledger Row (AI)', [{ json: { id: 't', name: 'seo_run_ledger' } }]))[0].json;
+    check('a continuation\'s ledger row is keyed by the part that started it (parent:<execution>)', rowC.key === 'parent:9001', rowC.key);
+  });
+
+  // ===================================================================================================================================
+  await guard('S205 G6 — the pulse\'s stratified rotating sample', async () => {
+    reset(); const SN = 'S205 G6 — 500 questions: every question asked exactly N mornings a week, every topic x buyer group every morning, one morning under its request limit; full mode and the owner\'s N';
+    begin(SN); const check = mkCheck(SN);
+    const panel = synthPanel(500).filter(q => q.kind !== 'brand');
+    const pw = AIP.pulsePerWeek({ asked: 499, weekly_engines: 5, pulse_engines: 3, cluster_size: 41 });
+    check('auto N for 499 questions on 3 pulse engines is between 1 and 5 and states what it buys', pw.per_week >= 1 && pw.per_week < 6 && pw.headline <= 3 && pw.cluster <= 8 && /±/.test(pw.why), JSON.stringify(pw));
+    const base = AIP.pulseDay('2026-10-20');   // a Tuesday
+    const count = new Map(); let minStrata = 1e9, maxReq = 0;
+    for (let d = 0; d < 6; d++) { const s = AIP.pulseSample(panel, { per_week: pw.per_week, day: base + d });
+      for (const q of s.asked) count.set(q.prompt_id, (count.get(q.prompt_id) || 0) + 1);
+      minStrata = Math.min(minStrata, s.covered === s.strata ? s.strata : -1); maxReq = Math.max(maxReq, s.asked.length * 3); }
+    const counts = [...count.values()];
+    check('over the six pulse mornings of a week every question is asked at least N times (N = ' + pw.per_week + ')', count.size === 499 && counts.every(c => c >= pw.per_week), JSON.stringify([count.size, Math.min(...counts), Math.max(...counts)]));
+    check('… and, with strata large enough, exactly N times (no question is favoured)', counts.filter(c => c === pw.per_week).length === 499, Math.max(...counts));
+    check('every topic x buyer group (48) is in every morning\'s sample', minStrata === 48, minStrata);
+    check('no morning passes the 900-request limit', maxReq <= 900, maxReq);
+    check('Tuesday to Sunday are six consecutive pulse days; a Monday shares Tuesday\'s slot', AIP.pulseDay('2026-10-25') - AIP.pulseDay('2026-10-20') === 5 && AIP.pulseDay('2026-10-19') === AIP.pulseDay('2026-10-20') && AIP.pulseDay('2026-10-27') - AIP.pulseDay('2026-10-20') === 6, '');
+    // a small stratum (fewer questions than mornings) is still in every morning — topped up in turn
+    const small = [...panel.slice(0, 60), { ...panel[0], prompt_id: 'tiny_1', cluster: 'tiny cluster', persona: 'COO' }];
+    let tinyDays = 0; for (let d = 0; d < 6; d++) if (AIP.pulseSample(small, { per_week: 1, day: base + d }).asked.some(q => q.prompt_id === 'tiny_1')) tinyDays++;
+    check('a one-question stratum is in all six mornings (topped up), not one', tinyDays === 6, tinyDays);
+    // the real Pulse Plan with the 500-question panel
+    mock('Load Sites', items(P['Load Sites'])); mock('Load Ladders', items(P['Load Ladders'])); mock('Load Profiles', items(P['Load Profiles'])); mock('Load AI Visibility', items(P['Load AI Visibility'])); mock('Load AI Daily', items(P['Load AI Daily'])); mock('Load Cache (AI)', items(P['Load Cache (AI)']));
+    mock('Load Monitors', items([{ ...P['Load Monitors'][0], ai_prompts_max: 500 }])); mock('Load AI Prompts', items(synthPanel(500))); delete store['Manual Run'];
+    const pp = (await run('AI Plan', [{ json: {} }], { code: 'Pulse__AI_Plan' }))[0].json;
+    check('the pulse plan asks this morning\'s rotating sample, and its note says so', pp.sample && pp.sample.mode === 'sample' && pp.prompts.length < 499 && pp.sample.covered === pp.sample.strata && /rotating sample/.test(pp.sample.note) && pp.panel_size === 499, JSON.stringify(pp.sample));
+    check('the pulse reserves this morning\'s exact figure', pp.est_dfs_usd === +(pp.prompts.length * 0.012).toFixed(4), pp.est_dfs_usd);
+    const preq = (await run('AI Requests', [{ json: {} }], { code: 'Pulse__AI_Requests' })).map(i => i.json);
+    check('the morning\'s requests: the sample on the 3 pulse engines, under the limit', preq.length === pp.prompts.length * 3 && preq.length <= 900, preq.length);
+    mock('Load Monitors', items([{ ...P['Load Monitors'][0], ai_prompts_max: 500, ai_pulse_mode: 'full' }]));
+    const pf = (await run('AI Plan', [{ json: {} }], { code: 'Pulse__AI_Plan' }))[0].json;
+    check('pulse = full panel on 500 questions: as much as one morning allows, and the note says why', pf.sample.capped && /one morning asks at most/.test(pf.sample.why) && pf.prompts.length * 3 <= 900, JSON.stringify(pf.sample));
+  });
+};

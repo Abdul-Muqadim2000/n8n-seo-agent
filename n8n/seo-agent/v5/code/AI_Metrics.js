@@ -7,12 +7,23 @@
 // market view, changes that are statistically real, alerts and value-ranked actions. Also the seo_ai_visibility row, 'ai_source' link prospects
 // and the learned brand names (seo_cache).
 /*__AI_STATS__*/
+/*__AI_PANEL__*/
 /*__DRAFTS__*/
 /*__DFS_RETRY__*/
 /*__RIVALS__*/
-const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
+// G6 (2026-10-18, AI_VISIBILITY_SPEC.md §10): a weekly run split across executions is measured ONCE, in its last execution, over every answer
+// of the run — this execution's and the ones earlier executions stored (seo_ai_answers, same run_id). A site whose run continues in another
+// execution is not measured here (AI Chunk Handoff states its money); with no site finishing here the node says so and the report path ends.
+const allPlans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
+const plans = allPlans.filter(p => !p.chunk || p.chunk.final_expected);
+if (!plans.length) return [{ json: { skip: true, nothing_final: true, reason: 'every site of this execution continues its run in another execution; the week is measured in the last one' } }];
 let rows = []; try { rows = $('Apply Analysis').all().map(i => i.json).filter(r => !r.skip && r.engine); } catch (e) {}
 if (!rows.length) { try { rows = $('Parse AI Answers').all().map(i => i.json).filter(r => !r.skip && r.engine); } catch (e) {} }
+{ const seen = new Set(rows.map(r => r.site_id + '|' + r.run_id + '|' + r.prompt_id + '|' + r.engine)); const tb = (v) => v === true || String(v) === 'true';
+  let stored = []; try { stored = $('Load AI Run Answers').all().map(i => i.json).filter(r => r && r.run_id && r.engine && r.prompt_id); } catch (e) {}
+  for (const r of stored) { const p0 = plans.find(p => p.site_id === r.site_id && p.run_id === r.run_id && p.chunk && p.chunk.going); if (!p0) continue;
+    const k = r.site_id + '|' + r.run_id + '|' + r.prompt_id + '|' + r.engine; if (seen.has(k)) continue; seen.add(k);
+    rows.push({ ...r, answered: tb(r.answered), mentioned: tb(r.mentioned), cited: tb(r.cited), rank: Number(r.rank) || 0, cost: Number(r.cost) || 0, _stored: true }); } }
 let reqs = [], resps = []; try { reqs = $('AI Requests').all().map(i => i.json); resps = $('Run AI Requests').all().map(i => i.json || {}); } catch (e) {}
 try { const mg = $('Merge AI Answers').all().map(i => i.json || {}); if (mg.length === resps.length) resps = mg; } catch (e) {}   // D19: with the retry gate the merged answers replace the first, failed ones (same order)
 let prospects = []; try { prospects = $('Load Link Prospects').all().map(i => i.json).filter(x => x && x.prospect_domain); } catch (e) {}
@@ -162,7 +173,7 @@ return plans.map(p => {
   for (const r of Rall) { const q = byQ.get(r.prompt_id) || { prompt: r.prompt, kind: r.kind, topic: r.topic, engines: {}, competitors: new Set(), sources: new Set(), fanout: new Set(), urls: new Map(), n: 0, m: 0 }; q.engines[r.engine] = !r.answered ? (r.error ? 'error' : 'none') : r.cited ? 'cited' : r.mentioned ? 'mentioned' : 'absent';
     if (r.answered) { q.n++; if (r.mentioned) q.m++; list(r.competitors).forEach(d => q.competitors.add(d)); list(r.sources).forEach(d => q.sources.add(d)); String(r.fanout || '').split(' | ').filter(Boolean).forEach(f => q.fanout.add(f));
       for (const c of citedOf(r)) { const x = q.urls.get(c.u) || { u: c.u, t: c.t || '', n: 0, engines: new Set() }; x.n++; x.engines.add(r.engine); if (!x.t && c.t) x.t = c.t; q.urls.set(c.u, x); } } byQ.set(r.prompt_id, q); }
-  for (const d of PR) for (const [id, st] of Object.entries(d.prompts || {})) { const q = byQ.get(id); if (!q) continue; for (const v of Object.values(st || {})) { if (v === 'n' || v === 'e') continue; q.n++; if (v === 'm' || v === 'c') q.m++; } }
+  for (const d of PR) for (const [id, st] of Object.entries(d.prompts || {})) { const q = byQ.get(id); if (!q) continue; for (const v of Object.values(st || {})) { if (v === 'n' || v === 'e') continue; q.n++; if (/^[mcMC]$/.test(v)) q.m++; } }   // G6: upper case = named FIRST — it was not counted as named at all
   for (const e of p.engines) if (MONTHLY.includes(e) && !Rall.some(r => r.engine === e)) for (const q0 of byQ.values()) if (!(e in q0.engines)) q0.engines[e] = 'monthly';   // asked on the month's full run
   const questions = [...byQ.entries()].map(([id, q]) => { const m0 = meta.get(id) || {}; return { prompt_id: id, prompt: q.prompt, kind: q.kind, topic: q.topic, stage: m0.stage || '', cluster: m0.cluster || q.topic || '', volume: m0.volume == null ? null : Number(m0.volume), engines: q.engines,
     won: Object.values(q.engines).some(v => v === 'cited' || v === 'mentioned'), win_rate: q.n ? pct(q.m, q.n) : 0, samples: q.n, competitors: [...q.competitors].slice(0, 6), sources: [...q.sources].filter(h => h !== p.domain).slice(0, 5), fanout: [...q.fanout].slice(0, 6),
@@ -423,14 +434,21 @@ return plans.map(p => {
   if (fanout.length && gaps.length) actions.push({ priority: 3, type: 'fanout', action: 'Answer what AI searches for: "' + fanout.slice(0, 3).map(f => f.query).join('", "') + '"', why: 'Before answering your buyers\' questions the assistants ran these searches; a page that ranks for them is the page they read and cite.' });
   // seo_ai_visibility row (exact columns), ai_source prospects (status kept), learned brand names (seo_cache)
   const J = (o) => JSON.stringify(o);
+  // G6: what THIS execution spent on DataForSEO (the ledger settles each execution's own money) — the earlier executions of a split run
+  // settled theirs; the row and the report carry the whole run
+  const exec_cost = +(Rall.filter(r => !r._stored).reduce((s, r) => s + (Number(r.cost) || 0), 0) + mine.filter(x => /^(market|index_)/.test(x.q.engine)).reduce((s, x) => s + (Number(task0(x.r).cost) || 0), 0) + dreq.reduce((s, q, i) => s + (q.site_id === p.site_id ? dCost(dres[i]) : 0), 0)).toFixed(4);
+  const run_split = p.chunk ? { executions: (p.chunk.executions || []).length + 1, chunk: p.chunk.no, requests: Rall.length, stored_before: Rall.filter(r => r._stored).length, resumed: !!p.chunk.resumed,
+    note: (p.chunk.executions || []).length ? 'This run was asked over ' + ((p.chunk.executions || []).length + 1) + ' executions (' + Rall.filter(r => r._stored).length + ' of its ' + Rall.length + ' answers were stored by the earlier ones' + (p.chunk.resumed ? '; it was resumed after a pause' : '') + '); every figure below counts all of them once.' : '' } : null;
   const vis_row = { site_id: p.site_id, domain: p.domain, run_id: p.run_id, checked_at: p.checked_at, prompts: byQ.size, answers: samples, mention_rate, citation_rate, share_of_voice, avg_rank: ranks.length ? +(ranks.reduce((a, b) => a + b, 0) / ranks.length).toFixed(1) : 0,
     aio_presence, aio_citation_rate, engines_json: J(engines), competitors_json: J(comp), sources_json: J(sources), pages_json: J(our_pages), gaps_json: J(gaps.map(g => ({ prompt_id: g.prompt_id, prompt: g.prompt, kind: g.kind, topic: g.topic, competitors: g.competitors, sources: g.sources, volume: g.volume, stage: g.stage, cluster: g.cluster, fanout: g.fanout, cited_urls: g.cited_urls, engines: g.engines }))), market_json: market ? J(market) : '',
-    market_month: market && !market.carried && !market.error ? p.checked_at.slice(0, 7) : ((prev && prev.market_month) || ''), cost_usd: +(Rall.reduce((s, r) => s + (Number(r.cost) || 0), 0) + mine.filter(x => /^(market|index_)/.test(x.q.engine)).reduce((s, x) => s + (Number(task0(x.r).cost) || 0), 0) + dreq.reduce((s, q, i) => s + (q.site_id === p.site_id ? dCost(dres[i]) : 0), 0)).toFixed(4),
+    market_month: market && !market.carried && !market.error ? p.checked_at.slice(0, 7) : ((prev && prev.market_month) || ''), cost_usd: +(exec_cost + ((p.chunk && p.chunk.going && p.spent_before) ? Number(p.spent_before.dfs) || 0 : 0)).toFixed(4),   // G6: the whole run, every execution of it
     alerts: alerts.map(a => a.level + ': ' + a.text).join(' | '),
     run_kind: p.run_kind || 'weekly', samples, visibility_score, mention_lo, mention_hi, sentiment_score, accuracy_issues: fact_check === 'checked' ? issues.length : null, ai_sessions: traffic && traffic.connected ? traffic.sessions || 0 : null, ai_conversions: traffic && traffic.connected ? traffic.key_events || 0 : null, ai_revenue: traffic && traffic.connected ? Math.round(100 * (traffic.revenue || 0)) / 100 : null,
     index_sov: index && index.sov != null ? index.sov : null, ai_impressions: ai_impressions || null, perception_json: J(perception), traffic_json: traffic ? J(traffic) : '', access_json: acc ? J({ checked_at: acc.checked_at, robots: acc.robots, llms_txt: acc.llms_txt, bots: acc.bots.map(b => ({ bot: b.bot, owner: b.owner, group: b.group, allowed: b.allowed_root, rule: b.rule, blocked_paths: b.blocked_paths })), fetch: acc.fetch, issues: acc.issues, ok: acc.ok }) : '',
     index_json: index ? J({ ...index, suggestions: sugg, fanout, demand: { total: demand_total, named: ai_impressions, lost: lost_demand } }) : J({ suggestions: sugg, fanout, demand: { total: demand_total, named: ai_impressions, lost: lost_demand } }), clusters_json: J(clusters),
-    rival_sources_json: J(rival_store) };   // wave 3 (W3-F): AI Growth reads the rival businesses AI cites from the latest row
+    rival_sources_json: J(rival_store),   // wave 3 (W3-F): AI Growth reads the rival businesses AI cites from the latest row
+    // G6: the segments and the panel (filled in below) and how many executions the run took
+    segments_json: '', panel_json: '', chunks: run_split ? run_split.executions : 1 };   // wave 3 (W3-F): AI Growth reads the rival businesses AI cites from the latest row
   const now = p.checked_at;
   const prospect_rows = sources.filter(s => !['platform', 'authority'].includes(s.kind) && s.citations >= 1).slice(0, 10).map(s => { const old = prospects.find(x => x.site_id === p.site_id && x.prospect_domain === s.domain && x.type === 'ai_source') || {};
     const top = (s.urls || [])[0] || null;   // v4.12: the exact page AI cites on that site (the one to be named on)
@@ -450,6 +468,9 @@ return plans.map(p => {
   const aliases = { ...(p.aliases || {}), ...learned };   // R83: the same names the rival set above was built from (D19: only a name that reads like a business name is learned)
   const aliasKeys = Object.keys(aliases).slice(-200); const aliasesTrim = Object.fromEntries(aliasKeys.map(k => [k, aliases[k]]));
   const cache_rows = Object.keys(aliasesTrim).length !== Object.keys(p.aliases || {}).length || JSON.stringify(aliasesTrim) !== JSON.stringify(p.aliases || {}) ? [{ key: 'ai_brands:' + p.site_id, kind: 'ai', site_id: p.site_id, value: J(aliasesTrim), updated_at: now }] : [];
+  // G6: the run is measured — its state row says so, so no later start resumes it
+  if (p.chunk) { const sb = p.spent_before || {}; cache_rows.push(AIP.stateRow(p.site_id, { run_id: p.run_id, run_kind: p.run_kind, site_id: p.site_id, domain: p.domain, started_at: p.checked_at, updated_at: new Date().toISOString(),
+    chunk: p.chunk.no, status: 'done', asked: Rall.length, total: Rall.length, spent_dfs_usd: vis_row.cost_usd, spent_ai_usd: Number(sb.ai) || 0, executions: [...(p.chunk.executions || []), String($execution.id)].slice(-60) }, new Date().toISOString())); }
   return { json: { ...p, metrics: { asked: RC.length, asked_all: R.length, requests: Rall.length, answered: ans.length, samples, pulse_samples: pulseN, pulse_days: pulseDays, pulse_readings: PR.length, came_back, headline, aio_basis, volume_lookup, errors, error_rate, errors_list: error_list, retried: retry.asked, retry_answered: retry.answered, mentioned, cited, mention_rate, mention_ci: [mention_lo, mention_hi], citation_rate, share_of_voice, visibility_score, avg_rank: vis_row.avg_rank, aio_presence, aio_citation_rate, brand_known, brand, delta,
     // B-L4: when the two runs are not like for like the customer is TOLD, in the place the change would have been
     delta_not_compared, panel, panel_before, delta_basis: prev ? (like.comparable ? 'compared with ' + String(prev.checked_at || '').slice(0, 10) + ' (' + panel_before + ' questions on ' + engText(engBefore) + ')' : like.why) : 'first run (baseline)',
@@ -461,5 +482,5 @@ return plans.map(p => {
     // B8-8 / B8-9: each engine's own change test (or why it was not tested), and the one correction the tested alerts were judged by
     engine_changes, min_engine_samples: MIN_ENGINE_SAMPLES, multiple_tests: { method: multiple_tests.method, alpha: multiple_tests.alpha, tests: multiple_tests.tests, threshold_p: multiple_tests.threshold_p, threshold_z: multiple_tests.threshold_z, rejected: multiple_tests.rejected, results: multiple_tests.results, note: multiple_tests.note },
       sentiment_score, accuracy_issues: fact_check === 'checked' ? issues.length : null, fact_check, index_sov: vis_row.index_sov, ai_impressions, demand_total, lost_demand },
-    engines, competitors: comp, sources, rival_sources, our_pages, questions, gaps, undecided, clusters, fanout, perception, traffic, access: acc, index, suggestions: sugg, market, alerts, actions: actions.slice(0, 10), vis_row, prospect_rows, cache_rows, cost_usd: vis_row.cost_usd, form_url: FORM_URL, api_url: API_URL } };
+    engines, competitors: comp, sources, rival_sources, our_pages, questions, gaps, undecided, clusters, fanout, perception, traffic, access: acc, index, suggestions: sugg, market, alerts, actions: actions.slice(0, 10), vis_row, prospect_rows, cache_rows, cost_usd: exec_cost, run_cost_usd: vis_row.cost_usd, run_split, form_url: FORM_URL, api_url: API_URL } };
 });

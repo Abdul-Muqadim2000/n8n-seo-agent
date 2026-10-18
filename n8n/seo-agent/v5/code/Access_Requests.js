@@ -9,7 +9,7 @@ const UA = {
   PerplexityBot: 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; PerplexityBot/1.0; +https://perplexity.ai/perplexitybot)',
   'Claude-SearchBot': 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Claude-SearchBot/1.0; +https://www.anthropic.com/claude-searchbot)' };
 /*__SITE_MODEL__*/
-const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
+const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do && (!p.chunk || p.chunk.final_expected));   // G6: a split run reads crawler access in its last execution only
 const out = [];
 for (const p of plans) {
   const home = SM.siteUrl({ canonical_host: p.canonical_host, domain: p.domain }, '/');   // the host the site really serves (D15)
