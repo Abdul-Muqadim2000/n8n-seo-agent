@@ -63,7 +63,9 @@ export default function middleware(request: Request): Response {
   headers.set('x-forwarded-host', host);
   headers.set('x-forwarded-proto', 'https');
   const secret = (process.env.ORIGIN_SECRET ?? '').trim();
-  if (secret) headers.set('x-origin-secret', secret);   // a visitor's own x-origin-secret is never in FORWARD
+  // header-safe only: a pasted placeholder (2026-10-18: '••••' from a masked line) made every /api call throw in Headers.set
+  if (/^[\x21-\x7e]+$/.test(secret)) headers.set('x-origin-secret', secret);   // a visitor's own x-origin-secret is never in FORWARD
+  else if (secret) console.error('ORIGIN_SECRET is not a valid header value (printable ASCII only); requests go without it');
   try {
     return rewrite(new URL(url.pathname + url.search, origin), { request: { headers } });
   } catch (e) {

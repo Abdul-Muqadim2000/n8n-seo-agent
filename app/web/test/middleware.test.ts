@@ -55,6 +55,14 @@ describe('/api through the proxy', () => {
     expect(fwd(r, 'x-real-ip')).toBe('203.0.113.7');
     for (const h of ['x-vercel-id', 'x-vercel-oidc-token', 'connection', 'host', 'x-forwarded-for']) expect(over, h).not.toContain(h);   // whole names
   });
+  it('does not crash on a secret that is not a header value (a pasted masked placeholder)', () => {
+    vi.stubEnv('API_ORIGIN', 'https://api.alaventra.com');
+    vi.stubEnv('ORIGIN_SECRET', '\u2022\u2022\u2022\u2022');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const r = middleware(req('https://app.alaventra.com/api/health'));
+    expect(r.headers.get('x-middleware-rewrite')).toBe('https://api.alaventra.com/api/health');
+    expect(fwd(r, 'x-origin-secret')).toBeNull();
+  });
   it('answers 503 without an API origin', () => {
     vi.stubEnv('API_ORIGIN', '');
     expect(middleware(req('https://app.alaventra.com/api/me')).status).toBe(503);
