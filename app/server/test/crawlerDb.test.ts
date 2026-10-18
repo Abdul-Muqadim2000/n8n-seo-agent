@@ -52,6 +52,7 @@ describe.skipIf(!DB)('crawler logs against Postgres', () => {
       },
       payload: opts.raw !== undefined ? opts.raw : (opts.body as object | undefined),
     });
+  const auditOf = async (action: string) => sql<{ details: Record<string, unknown>; target_label: string | null }[]>`select details, target_label from audit_events where org_id = ${ids.orgA} and action = ${action}`;
   const base = (site: string, org = ids.orgA) => `/api/orgs/${org}/sites/${site}/crawlers`;
 
   beforeAll(async () => {
@@ -116,6 +117,7 @@ describe.skipIf(!DB)('crawler logs against Postgres', () => {
     expect(await jobs.drain()).toBe(1);
     const [row] = await sql<{ status: string; format: string; stats: Record<string, number>; spool_path: string }[]>`select status, format, stats, spool_path from log_ingests where id = ${r.json().ingest.id}`;
     expect(row).toMatchObject({ status: 'done', format: 'combined', spool_path: '' });
+    expect((await auditOf('crawler.log_uploaded')).length).toBe(1);
     expect(row.stats).toMatchObject({ lines: 25, malformed: 2, people: 3, bots: 20, verified: 15, spoofed: 3, claimed: 1, unchecked: 1, proxyAddresses: 1, duplicates: 0 });
     // nothing of a person is stored, and no address at all
     const stored = await sql<{ n: string }[]>`select count(*) as n from crawler_hits where site_id = ${ids.siteA}`;
@@ -190,6 +192,9 @@ describe.skipIf(!DB)('crawler logs against Postgres', () => {
     expect(k.statusCode).toBe(200);
     const key = k.json().token as string;
     expect(key).toMatch(/^asl_[A-Za-z0-9_-]{43}$/);
+    const made = await auditOf('crawler.push_key_created');
+    expect(made.length).toBe(1);
+    expect(JSON.stringify(made)).not.toContain(key);
     const [stored] = await sql<{ push_key_hash: string }[]>`select push_key_hash from log_sources where site_id = ${ids.siteA}`;
     expect(stored.push_key_hash).not.toContain(key);
     // Cloudflare's destination test
@@ -220,6 +225,7 @@ describe.skipIf(!DB)('crawler logs against Postgres', () => {
     // revoked: refused from the next push
     expect((await req('owner', 'DELETE', `${base(ids.siteA)}/push-key`)).statusCode).toBe(200);
     expect((await push(ids.siteA, body, key)).statusCode).toBe(401);
+    expect((await auditOf('crawler.push_key_revoked')).length).toBe(1);
   });
 
   it('a broken gzip fails its job with a plain reason and leaves no spool file', async () => {
@@ -256,6 +262,7 @@ describe.skipIf(!DB)('crawler logs against Postgres', () => {
   it('retention: raw rows older than the setting go, the daily totals stay', async () => {
     expect((await req('owner', 'PUT', `${base(ids.siteA)}/settings`, { body: { retentionDays: 14 } })).statusCode).toBe(400);
     expect((await req('owner', 'PUT', `${base(ids.siteA)}/settings`, { body: { retentionDays: 7 } })).json()).toEqual({ retentionDays: 7 });
+    expect((await auditOf('crawler.retention_changed'))[0]?.details).toMatchObject({ retentionDays: 7 });
     await sql`insert into crawler_hits (site_id, at, bot, verification, path, status, line_hash) values (${ids.siteA}, now() - interval '10 days', 'googlebot', 'verified', '/old', 200, ${Buffer.from('old-line-hash-01')})`;
     await sql`insert into crawler_daily (site_id, day, bot, verification, hits) values (${ids.siteA}, current_date - 10, 'googlebot', 'verified', 1) on conflict do nothing`;
     const r = await jobs.cleanup();
@@ -269,6 +276,7 @@ describe.skipIf(!DB)('crawler logs against Postgres', () => {
     const r = await req('owner', 'DELETE', `${base(ids.siteA)}/data`, { body: { confirm: 'techand.example' } });
     expect(r.statusCode).toBe(200);
     expect(r.json().deleted.requests).toBeGreaterThan(0);
+    expect((await auditOf('crawler.data_deleted')).length).toBe(1);
     for (const t of ['crawler_hits', 'crawler_daily', 'crawler_page_daily', 'log_ingests']) expect((await sql.unsafe(`select 1 from ${t} where site_id = $1`, [ids.siteA])).length).toBe(0);
     expect(((await req('viewer', 'GET', base(ids.siteA))).json() as CrawlerData).hasData).toBe(false);
   });
