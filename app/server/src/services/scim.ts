@@ -45,7 +45,7 @@ export interface ScimAuth {
   actor: AuditActor;
 }
 
-const base = () => `${config.appUrl}/api/scim/v2`;
+const base = () => `${config.publicApiUrl}/api/scim/v2`;   // machine-to-machine: straight to this server (PUBLIC_API_URL)
 
 // ------------------------------------------------------------------ tokens (managed in the app)
 

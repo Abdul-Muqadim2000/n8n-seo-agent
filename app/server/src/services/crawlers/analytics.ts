@@ -95,7 +95,7 @@ export async function setupOf(site: SiteRow): Promise<CrawlerSetup> {
       lastPushAt: pgIso(src?.last_push_at),
       pushes24h: num(p?.n),
     },
-    endpoint: `${config.appUrl}/api/ingest/logs/${site.id}`,
+    endpoint: `${config.publicApiUrl}/api/ingest/logs/${site.id}`,
     header: LOG_PUSH_KEY.header,
     limits: { uploadMaxBytes: CRAWLER_LIMITS.uploadMaxBytes, pushMaxBytes: CRAWLER_LIMITS.pushMaxBytes, rollupDays: CRAWLER_LIMITS.rollupDays },
     ranges: rangeStatus(),
