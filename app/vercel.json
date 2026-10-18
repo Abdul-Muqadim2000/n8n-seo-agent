@@ -4,7 +4,6 @@
   "installCommand": "npm ci --no-audit --no-fund",
   "buildCommand": "npm run build -w @seo/web",
   "outputDirectory": "web/dist",
-  "git": { "deploymentEnabled": false },
   "cleanUrls": false,
   "trailingSlash": false,
   "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }],
