@@ -76,16 +76,16 @@ broken by a tidy-up:
 
 Evidence that these hold, at 1440 and 375, light and dark: `../BROWSER_PASS.md`.
 
-## Brand (Ascentra) — for every UI change
+## Brand (Alaventra) — for every UI change
 Full guide: `brand/BRAND.md`; the app's tokens are in `src/index.css` (light + dark).
-- Name: **Ascentra** in all UI copy ("SEO Agent" is only the internal engine name). The logo is always one of the supplied SVGs in
+- Name: **Alaventra** in all UI copy ("SEO Agent" is only the internal engine name). The logo is always one of the supplied SVGs in
   `public/brand/` (`components/layout/Brand.tsx` in the app, `marketing/components/Logo.tsx` on the business site): never live text,
   never redrawn, recoloured, rotated, stretched, outlined or shadowed; never animate single rays (fading / moving / scaling the whole
-  logo is fine). **One exception, approved by the owner on 2026-10-18:** the "wing wave" of `components/brand/AscentraMark.tsx` —
+  logo is fine). **One exception, approved by the owner on 2026-10-18:** the "wing wave" of `components/brand/AlaventraMark.tsx` —
   the supplied path split into its 33 rays unchanged, one colour, a band of *opacity* running from the sun to the wing tip and back to
   the exact mark (static under reduced motion). Only for the loader (`PageLoader`) and large faint decorative marks (home hero,
   `CtaBand`); never on the logo lockups (header, footer, app shell, documents), never a per-ray colour, position, scale or rotation.
-- Colour: tokens only (no hex, no Tailwind palette colours like `blue-500`). Ascentra Blue (`accent`) is the only accent — no second
+- Colour: tokens only (no hex, no Tailwind palette colours like `blue-500`). Alaventra Blue (`accent`) is the only accent — no second
   accent and **no gradients** (`linear-gradient`, `bg-gradient-*`, `from-*` / `to-*`); the neutral `--shimmer` skeleton token and CSS
   masks are the only exceptions. About 70% white / paper, 20% ink, 10% blue. Inside ink bands use the `on-ink` tokens
   (`text-on-ink`, `text-on-ink-2`, `border-line-on-ink`, `text-accent-on-ink`). Check light **and** dark.
@@ -118,7 +118,7 @@ Full guide: `brand/BRAND.md`; the app's tokens are in `src/index.css` (light + d
   `FeatureVisual kind=…` renders the mockup or diagram a registry entry names (`visual` / `diagram`); the platform pages use
   `platform/CapabilityScreen` (adds `screen` and the browser frame). Mockups must fit their card at 375px — reduce columns with
   container queries (`@container`, `@min-[24rem]:…`) instead of a fixed `min-w` that clips.
-- `useSeo({ title, description, path })` on every page: title "<title> — Ascentra", meta description, Open Graph and canonical.
+- `useSeo({ title, description, path })` on every page: title "<title> — Alaventra", meta description, Open Graph and canonical.
 - Motion: `marketing.css` / `platform/platform.css` hold the reveal, draw-in and marquee classes (`mk-*`); each has a static
   `prefers-reduced-motion: reduce` rule — add one for every new animation.
 - **Adding a capability** (every new product functionality gets one, see the root `CLAUDE.md`):

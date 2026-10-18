@@ -238,7 +238,7 @@ async function mcp(ctx: V1Ctx, msg: Rpc): Promise<unknown | null> {
       return ok({
         protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0],
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: 'ascentra', title: `${config.brand} — ${ctx.org.name}`, version: '1.0.0' },
+        serverInfo: { name: 'alaventra', title: `${config.brand} — ${ctx.org.name}`, version: '1.0.0' },
         instructions: ctx.scopes.includes('run')
           ? `Access to ${ctx.org.name}'s SEO data (websites, audits and findings, crawler activity from server logs, analyses, reports, a free publish check) and to starting analyses within the company's monthly budget. Before start_run, call preview_run: it shows the cost and any duplicate warning. Never acknowledge a warning the user has not seen.`
           : `Read-only access to ${ctx.org.name}'s SEO data: websites, technical audits and their findings, crawler activity from server logs, analyses, reports, and a free publish check. This key cannot start a run or change a setting.`,

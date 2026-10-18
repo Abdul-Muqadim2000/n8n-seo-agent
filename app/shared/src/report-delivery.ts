@@ -55,8 +55,8 @@ export const DELIVERY = {
   /** how long to wait between attempts, in minutes */
   retryMinutes: 10,
   /** the header a webhook body is signed with */
-  signatureHeader: 'X-Ascentra-Signature',
-  timestampHeader: 'X-Ascentra-Timestamp',
+  signatureHeader: 'X-Alaventra-Signature',
+  timestampHeader: 'X-Alaventra-Timestamp',
 } as const;
 
 export interface DeliverySettings {

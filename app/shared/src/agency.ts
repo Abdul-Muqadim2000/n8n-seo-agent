@@ -306,7 +306,7 @@ const emailOrEmpty = z
 
 /** what an agency sets (Company settings → Branding) */
 export const brandingSchema = z.object({
-  /** the switch: off = clients see the app as it is (Ascentra) with the agency's name only where it is a fact */
+  /** the switch: off = clients see the app as it is (Alaventra) with the agency's name only where it is a fact */
   whiteLabel: z.boolean().default(false),
   productName: plainName(60).default(''),
   logoUrl: logoOrEmpty.default(''),
@@ -315,7 +315,7 @@ export const brandingSchema = z.object({
   accent: hexOrEmpty.default(''),
   supportEmail: emailOrEmpty.default(''),
   footerText: plainName(200).default(''),
-  /** a small "Powered by Ascentra" line in the portal footer and documents (default off) */
+  /** a small "Powered by Alaventra" line in the portal footer and documents (default off) */
   poweredBy: z.boolean().default(false),
 });
 export type Branding = z.infer<typeof brandingSchema>;
@@ -375,7 +375,7 @@ export function effectiveBrand(agency: { name: string; branding: unknown } | nul
 }
 
 /** the platform's name as it may appear on a client-facing surface: never when white-label is on, unless "powered by" is */
-export const PLATFORM_NAME = 'Ascentra';
+export const PLATFORM_NAME = 'Alaventra';
 export const poweredByLine = (b: PortalBrand | null): string | null => (b ? (b.poweredBy ? `Powered by ${PLATFORM_NAME}` : null) : null);
 
 /**

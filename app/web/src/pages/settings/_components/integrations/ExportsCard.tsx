@@ -45,7 +45,7 @@ function DestinationForm({ onDone }: { onDone: () => void }) {
   const { org } = useOrgCtx();
   const connect = useConnectExport(org.id);
   const [kind, setKind] = useState<Kind>('s3');
-  const [v, setV] = useState<Record<string, string>>({ provider: 'aws', region: '', prefix: 'ascentra', format: 'ndjson', location: 'US', tablePrefix: 'ascentra_' });
+  const [v, setV] = useState<Record<string, string>>({ provider: 'aws', region: '', prefix: 'alaventra', format: 'ndjson', location: 'US', tablePrefix: 'alaventra_' });
   const [tables, setTables] = useState<string[]>(EXPORT_TABLES.map((t) => t.id));
   const [schedule, setSchedule] = useState({ schedule: 'daily', hour: 3, weekday: 0 });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -112,7 +112,7 @@ function DestinationForm({ onDone }: { onDone: () => void }) {
           {text('projectId', 'Google Cloud project id', { placeholder: 'acme-analytics' })}
           {text('datasetId', 'Dataset', { placeholder: 'seo' })}
           {text('location', 'Dataset location', { placeholder: 'US or EU' })}
-          {text('tablePrefix', 'Table name prefix', { hint: 'Tables are named <prefix><table>, e.g. ascentra_rank_history.' })}
+          {text('tablePrefix', 'Table name prefix', { hint: 'Tables are named <prefix><table>, e.g. alaventra_rank_history.' })}
           <Field label="Service-account key (JSON)" className="sm:col-span-2" error={errors.serviceAccountJson} hint="Paste the whole key file. It is stored encrypted and never shown again.">
             {(p) => <Textarea {...p} rows={5} className="font-mono text-xs" value={v.serviceAccountJson ?? ''} onChange={(e) => set('serviceAccountJson', e.target.value)} placeholder={'{ "type": "service_account", "project_id": "…", … }'} />}
           </Field>

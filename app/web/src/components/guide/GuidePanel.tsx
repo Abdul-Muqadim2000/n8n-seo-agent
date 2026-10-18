@@ -109,7 +109,7 @@ function GuideView({ guide, vars, finish, onBack, onOpen }: { guide: Guide; vars
       toast.error('The browser blocked the clipboard. Select the steps and copy them by hand.');
     }
   };
-  const mailto = `mailto:?subject=${encodeURIComponent(filled.title)}&body=${encodeURIComponent(`${text()}\n\n— sent from Ascentra`)}`;
+  const mailto = `mailto:?subject=${encodeURIComponent(filled.title)}&body=${encodeURIComponent(`${text()}\n\n— sent from Alaventra`)}`;
 
   return (
     <>
@@ -409,7 +409,7 @@ function GuideIndex({ onOpen }: { onOpen: (id: string) => void }) {
           <div className="min-w-0">
             <D.Title className="font-display text-[19px] leading-snug font-semibold tracking-[-0.01em] text-ink">Guides</D.Title>
             <p className="mt-1 text-[13px] leading-relaxed text-ink-2">
-              Every job Ascentra asks you to do somewhere else, step by step, with your own values ready to copy. {GUIDES.length} guides.
+              Every job Alaventra asks you to do somewhere else, step by step, with your own values ready to copy. {GUIDES.length} guides.
             </p>
           </div>
         </div>

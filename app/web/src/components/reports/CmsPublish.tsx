@@ -196,7 +196,7 @@ export function CmsPublishPanel({ report }: { report: ReportDetail }) {
           }
         >
           <div className="space-y-3 text-sm text-ink-2">
-            <p>Ascentra then checks the live page, marks it published and starts tracking its position; the weekly posts continue.</p>
+            <p>Alaventra then checks the live page, marks it published and starts tracking its position; the weekly posts continue.</p>
             <Checkbox label="I have read the page and want it public on our website now" checked={ticked} onChange={(e) => setTicked(e.target.checked)} />
           </div>
         </Dialog>

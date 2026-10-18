@@ -1,6 +1,6 @@
 # Identity and governance (G1, 2026-10-17)
 
-Enterprise identity for the Ascentra web app: two-step verification, a customer-visible audit log, session control, single sign-on
+Enterprise identity for the Alaventra web app: two-step verification, a customer-visible audit log, session control, single sign-on
 (OIDC and SAML 2.0) on verified e-mail domains, and SCIM 2.0 provisioning. Market gap #2 of
 `n8n/seo-agent/docs/system-review-2026-10-17/MARKET_BENCHMARK.md` (§4 "Identity & governance": SAML / OIDC SSO, SCIM, MFA, a
 customer-visible audit log — all ✘ before this change).
@@ -73,7 +73,7 @@ are in `shared/src/guides.ts` (area `identity`).
 
 ## 4. SSO configuration
 
-- **Domains**: claim `example.com`, publish `TXT ascentra-sso=<token>` at `example.com`, press Verify. A domain verified by another
+- **Domains**: claim `example.com`, publish `TXT alaventra-sso=<token>` at `example.com`, press Verify. A domain verified by another
   company cannot be claimed. Removing a domain stops SSO and enforcement for it.
 - **OIDC**: issuer URL (discovery at `/.well-known/openid-configuration`), client id, client secret; redirect URI
   `<APP_URL>/api/sso/oidc/callback`; scopes `openid email profile`. The e-mail comes from `email`, else `preferred_username` / `upn`

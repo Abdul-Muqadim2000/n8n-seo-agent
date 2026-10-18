@@ -88,7 +88,7 @@ describe('export: one schema, typed rows, both formats', () => {
   });
 
   it('object names are Hive-style partitions; storage endpoints are the provider’s own', () => {
-    expect(exportObjectKey('ascentra', 'runs', 'r1', new Date('2026-10-17T03:00:00Z'), 'csv')).toBe('ascentra/runs/dt=2026-10-17/runs-r1.csv');
+    expect(exportObjectKey('alaventra', 'runs', 'r1', new Date('2026-10-17T03:00:00Z'), 'csv')).toBe('alaventra/runs/dt=2026-10-17/runs-r1.csv');
     expect(storageEndpoint({ provider: 'aws', region: 'eu-west-1' })).toBe('https://s3.eu-west-1.amazonaws.com');
     expect(storageEndpoint({ provider: 'aws', region: 'mars' })).toBeNull();
     expect(storageEndpoint({ provider: 'other', region: 'auto', endpoint: 'https://10.0.0.5' })).toBeNull();

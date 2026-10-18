@@ -21,16 +21,16 @@ export interface LegalDoc {
 export const privacyDoc: LegalDoc = {
   path: '/privacy',
   title: 'Privacy policy',
-  description: 'How Ascentra collects, uses and protects personal data. Draft, to be reviewed by counsel before launch.',
+  description: 'How Alaventra collects, uses and protects personal data. Draft, to be reviewed by counsel before launch.',
   intro:
-    'This policy explains what personal data Ascentra handles when you visit this website or use the Ascentra app, why we handle it and the choices you have. It is a draft: the structure is in place and the details are still to be written and reviewed.',
+    'This policy explains what personal data Alaventra handles when you visit this website or use the Alaventra app, why we handle it and the choices you have. It is a draft: the structure is in place and the details are still to be written and reviewed.',
   updated: '2026-10-08',
   sections: [
     {
       id: 'who-we-are',
       title: 'Who we are',
       body: [
-        'Ascentra provides software that runs search engine optimisation work for companies: research, content, audits, tracking, AI search visibility and backlinks.',
+        'Alaventra provides software that runs search engine optimisation work for companies: research, content, audits, tracking, AI search visibility and backlinks.',
         '[Legal entity name, registered address and company number — to be completed by counsel.]',
       ],
     },
@@ -38,15 +38,15 @@ export const privacyDoc: LegalDoc = {
       id: 'scope',
       title: 'What this policy covers',
       body: [
-        'This policy covers the public website and the Ascentra app. It does not cover the websites of third parties that Ascentra links to or reads data from.',
-        '[Clarify the roles of Ascentra and its customers for customer data — to be completed by counsel.]',
+        'This policy covers the public website and the Alaventra app. It does not cover the websites of third parties that Alaventra links to or reads data from.',
+        '[Clarify the roles of Alaventra and its customers for customer data — to be completed by counsel.]',
       ],
     },
     {
       id: 'data-we-collect',
       title: 'Information we collect',
       body: [
-        'Depending on how you use Ascentra, this can include:',
+        'Depending on how you use Alaventra, this can include:',
         '• Account details, such as your name, e-mail address and a hash of your password, or your Google account identity if you sign in with Google.',
         '• Company and team details, such as company name, members, roles and invitations.',
         '• Website details you add, such as domains, ownership verification records, business profile and author details.',
@@ -72,7 +72,7 @@ export const privacyDoc: LegalDoc = {
       id: 'sharing',
       title: 'Sharing and service providers',
       body: [
-        'To run analyses, Ascentra sends the necessary parts of a request — for example a keyword, a question or a page address — to the AI and data providers that do the work.',
+        'To run analyses, Alaventra sends the necessary parts of a request — for example a keyword, a question or a page address — to the AI and data providers that do the work.',
         '[List of service providers and categories of recipients — to be completed by counsel.]',
       ],
     },
@@ -90,7 +90,7 @@ export const privacyDoc: LegalDoc = {
       id: 'security',
       title: 'Security',
       body: [
-        'The measures Ascentra uses today — such as argon2id password hashing, roles per company, verified website ownership and isolation of each company’s data — are described on the Security page.',
+        'The measures Alaventra uses today — such as argon2id password hashing, roles per company, verified website ownership and isolation of each company’s data — are described on the Security page.',
       ],
     },
     {
@@ -127,9 +127,9 @@ export const privacyDoc: LegalDoc = {
 export const termsDoc: LegalDoc = {
   path: '/terms',
   title: 'Terms of service',
-  description: 'The terms that govern the use of Ascentra. Draft, to be reviewed by counsel before launch.',
+  description: 'The terms that govern the use of Alaventra. Draft, to be reviewed by counsel before launch.',
   intro:
-    'These terms will govern the use of the Ascentra website and app. They are a draft: the structure is in place and the details are still to be written and reviewed.',
+    'These terms will govern the use of the Alaventra website and app. They are a draft: the structure is in place and the details are still to be written and reviewed.',
   updated: '2026-10-08',
   sections: [
     {
@@ -141,7 +141,7 @@ export const termsDoc: LegalDoc = {
       id: 'accounts',
       title: 'Accounts and companies',
       body: [
-        'People use Ascentra through a company workspace. Each person has a role — owner, admin, member or viewer — that decides what they can do.',
+        'People use Alaventra through a company workspace. Each person has a role — owner, admin, member or viewer — that decides what they can do.',
         '[Responsibilities for accounts, credentials and the people you invite — to be completed by counsel.]',
       ],
     },
@@ -149,7 +149,7 @@ export const termsDoc: LegalDoc = {
       id: 'websites',
       title: 'Websites you connect',
       body: [
-        'Ascentra shows data for a website only after its ownership is verified, through Search Console, a DNS TXT record or a meta tag.',
+        'Alaventra shows data for a website only after its ownership is verified, through Search Console, a DNS TXT record or a meta tag.',
         '[Your confirmation that you are authorised to connect each website and its data — to be completed by counsel.]',
       ],
     },
@@ -162,7 +162,7 @@ export const termsDoc: LegalDoc = {
       id: 'generated-content',
       title: 'Generated content and recommendations',
       body: [
-        'Ascentra prepares content, audits and recommendations with the help of AI. Your team reviews what Ascentra prepares and decides what to publish.',
+        'Alaventra prepares content, audits and recommendations with the help of AI. Your team reviews what Alaventra prepares and decides what to publish.',
         '[Ownership of generated content and the limits of recommendations — to be completed by counsel.]',
       ],
     },
@@ -177,7 +177,7 @@ export const termsDoc: LegalDoc = {
     {
       id: 'third-parties',
       title: 'Third-party services',
-      body: ['Ascentra works with services such as Google Search Console, Google Analytics 4 and AI engines. Their own terms apply to them.', '[Further wording — to be completed by counsel.]'],
+      body: ['Alaventra works with services such as Google Search Console, Google Analytics 4 and AI engines. Their own terms apply to them.', '[Further wording — to be completed by counsel.]'],
     },
     {
       id: 'ip',

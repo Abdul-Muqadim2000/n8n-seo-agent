@@ -25,7 +25,7 @@ client portal"). **Nothing from the brief is left open in code.**
 - Real Postgres (throwaway `gap-g5-db`, fresh databases, migrations 0000-0013): CMS 18, G4 integrations 16, crawlers 12 — all pass.
 - Browser pass `scripts/g5_browser_pass.mjs` against a throwaway stack (own Postgres, `stub_n8n.py`, the API serving the built app on
   :4000; the portal host mapped in Chromium): **69 visits** at 1440 / 390, light / dark — 0 console errors, 0 failed requests, 0
-  overflow, an h1 on every page, no text under AA, and **no "Ascentra" on any client-facing page** (portal sign-in, dashboards,
+  overflow, an h1 on every page, no text under AA, and **no "Alaventra" on any client-facing page** (portal sign-in, dashboards,
   reports, report page, approvals, the guard redirect, the shared report, a client person on the app host). Screenshots and
   `results.json` in `docs/browser-pass/g5/`. Prepared in the database (no real DNS / domain here): the client's website and the portal
   address marked verified. Everything else went through the UI or the API.

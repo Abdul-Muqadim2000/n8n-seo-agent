@@ -3,10 +3,10 @@ import { Link } from 'react-router';
 import { onPortalHost, productName, usePortalBrand } from '@/lib/portal';
 import { cn } from '@/lib/utils';
 
-export const BRAND_NAME = 'Ascentra';
+export const BRAND_NAME = 'Alaventra';
 
 /**
- * Document title in the brand pattern: pageTitle('Overview', 'techand.ai') → "Overview · techand.ai — Ascentra". G5: inside an agency's
+ * Document title in the brand pattern: pageTitle('Overview', 'techand.ai') → "Overview · techand.ai — Alaventra". G5: inside an agency's
  * white-label portal the product name is the agency's (`productName()`), never ours.
  */
 export function pageTitle(...parts: (string | null | undefined | false)[]): string {
@@ -15,11 +15,11 @@ export function pageTitle(...parts: (string | null | undefined | false)[]): stri
   return head ? `${head} — ${name}` : name;
 }
 
-/** The app icon (white mark on Ascentra Blue), for small square spots. Decorative: the name is always next to it. */
+/** The app icon (white mark on Alaventra Blue), for small square spots. Decorative: the name is always next to it. */
 export function BrandMark({ className }: { className?: string }) {
   return (
     <img
-      src="/brand/ascentra-app-icon.svg"
+      src="/brand/alaventra-app-icon.svg"
       alt=""
       aria-hidden
       width={28}
@@ -68,18 +68,18 @@ export function Brand({ to = '/', className }: { to?: string; className?: string
   return (
     <Link to={to} className={cn('inline-flex shrink-0 items-center rounded-md', className)}>
       <img
-        src="/brand/ascentra-logo-header-light.svg"
+        src="/brand/alaventra-logo-header-light.svg"
         alt={BRAND_NAME}
-        width={131}
+        width={140}
         height={28}
         decoding="async"
         draggable={false}
         className="h-7 w-auto select-none dark:hidden"
       />
       <img
-        src="/brand/ascentra-logo-header-dark.svg"
+        src="/brand/alaventra-logo-header-dark.svg"
         alt={BRAND_NAME}
-        width={131}
+        width={140}
         height={28}
         decoding="async"
         draggable={false}

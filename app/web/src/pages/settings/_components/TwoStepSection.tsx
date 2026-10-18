@@ -246,7 +246,7 @@ function RecoveryRow({ s, onCodes }: { s: MfaStatus; onCodes: (c: string[]) => v
 
 /** shown once, right after the codes are made: the server keeps only their hashes */
 export function RecoveryCodesDialog({ codes, onClose }: { codes: string[] | null; onClose: () => void }) {
-  const text = codes ? `Ascentra recovery codes (each works once)\n\n${codes.join('\n')}\n` : '';
+  const text = codes ? `Alaventra recovery codes (each works once)\n\n${codes.join('\n')}\n` : '';
   return (
     <Dialog
       open={!!codes}
@@ -256,7 +256,7 @@ export function RecoveryCodesDialog({ codes, onClose }: { codes: string[] | null
       footer={
         <>
           <CopyButton text={codes?.join('\n') ?? ''} label="Copy all" />
-          <Button variant="secondary" onClick={() => downloadText('ascentra-recovery-codes.txt', text)}>
+          <Button variant="secondary" onClick={() => downloadText('alaventra-recovery-codes.txt', text)}>
             <Download /> Download
           </Button>
           <Button onClick={onClose}>I saved them</Button>

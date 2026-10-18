@@ -16,7 +16,7 @@ import { pgIso } from '../services/crawlers/pgTime';
  *  - `crawlerRoutes`: JSON — the dashboard, the ingest history, CSV exports, retention, the push key, deleting the data;
  *  - `crawlerStreamRoutes`: raw bodies, streamed to disk without ever being held in memory — the upload from the app (session,
  *    member) and the push endpoint for Cloudflare Logpush and log drains (`POST /api/ingest/logs/:siteId`, the site's push key in
- *    `X-Ascentra-Log-Key`). Its own content-type parser hands the request stream through untouched, so a 1 GB file never meets
+ *    `X-Alaventra-Log-Key`). Its own content-type parser hands the request stream through untouched, so a 1 GB file never meets
  *    Fastify's JSON body limit.
  */
 

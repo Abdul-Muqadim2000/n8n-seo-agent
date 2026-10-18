@@ -4,7 +4,7 @@ import { effectiveBrand } from '@seo/shared';
 import { orgById } from './brandOf';
 
 /**
- * G5 (WHITE_LABEL.md §2): the HTML shell served on an agency's portal host. The built index.html names Ascentra in its title, its
+ * G5 (WHITE_LABEL.md §2): the HTML shell served on an agency's portal host. The built index.html names Alaventra in its title, its
  * description, its icons and its social tags; on a portal host the person must not meet our name before the app has loaded, so the
  * shell is rewritten: the agency's name in the title, its logo as the icon (or none), and no Open Graph / Twitter / manifest tags.
  * The script and style tags are untouched (same bundle, same CSP).

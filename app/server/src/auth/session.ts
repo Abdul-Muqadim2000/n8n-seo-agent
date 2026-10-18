@@ -72,7 +72,7 @@ export async function refreshSessionPolicy(userIds: string[]): Promise<void> {
 }
 
 /** a request the browser sent by itself (a poll from a hidden tab) does not count as activity for the idle timeout */
-export const PASSIVE_HEADER = 'x-ascentra-passive';
+export const PASSIVE_HEADER = 'x-alaventra-passive';
 /** activity is written at most once a minute per session */
 const SEEN_EVERY_MS = 60_000;
 /** a readable hint for the sign-in page after an idle sign-out (no secret in it) */

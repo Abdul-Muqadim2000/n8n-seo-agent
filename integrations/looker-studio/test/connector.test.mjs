@@ -1,4 +1,4 @@
-// Runs Code.gs in Node with stand-ins for the Apps Script services, against a stand-in Ascentra read API:
+// Runs Code.gs in Node with stand-ins for the Apps Script services, against a stand-in Alaventra read API:
 //   node integrations/looker-studio/test/connector.test.mjs
 // It checks what the connector sends (the key as a Bearer token, the date range as since / until, the paging) and what it hands
 // Looker Studio (typed fields, values in Looker's date formats, the requested field order). No network, no Google account.
@@ -87,7 +87,7 @@ assert.match(rowCalls[1].url, /cursor=c2/);
 assert.equal(rowCalls[0].opts.followRedirects, false);
 
 // a refused key and a non-https address are said in words
-props.set('ascentra.key', 'asc_' + 'x'.repeat(43));
+props.set('alaventra.key', 'asc_' + 'x'.repeat(43));
 assert.throws(() => sandbox.getData(req), /refused the API key/);
 assert.throws(() => sandbox.getSchema({ configParams: { appUrl: 'http://app.example.com', table: 'rank_history' } }), /https/);
 

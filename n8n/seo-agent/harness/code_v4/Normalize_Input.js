@@ -43,7 +43,7 @@ try { $('Start Form').first(); } catch (e) { __via_webhook = true; }
 const __main = () => {
 // ===================== CONFIG (edit here only) =====================
 const CONFIG = {
-  brand: "Dev SEO",   // from n8n/.env (SEO_BRAND) at build time; shown on reports and e-mails
+  brand: "Alaventra",   // from n8n/.env (SEO_BRAND) at build time; shown on reports and e-mails
   crawl_max_pages: 200,             // DataForSEO on-page crawl size (also used when reading crawled pages)
   crawl_js: false,                  // true = render JavaScript during the crawl (slower, costs more)
   qa_max_rounds: 2,   // one editor pass: live tests showed a second pass inflates length without raising the score                 // how many times the Editor may revise content that fails QA

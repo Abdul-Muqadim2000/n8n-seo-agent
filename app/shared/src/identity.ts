@@ -256,8 +256,8 @@ export function deviceLabel(ua: string | null | undefined): string {
 // ---------------------------------------------------------------------------------------------------------------------------
 
 export const SSO = {
-  /** the DNS TXT record that proves a company controls an e-mail domain: `ascentra-sso=<token>` at the domain itself */
-  txtPrefix: 'ascentra-sso=',
+  /** the DNS TXT record that proves a company controls an e-mail domain: `alaventra-sso=<token>` at the domain itself */
+  txtPrefix: 'alaventra-sso=',
   maxDomains: 20,
   /** an SSO round trip must come back within this */
   flowMinutes: 10,

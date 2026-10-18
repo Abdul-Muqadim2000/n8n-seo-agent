@@ -35,9 +35,9 @@ const overview = (over: Partial<IntegrationsOverview> = {}): IntegrationsOvervie
   ],
   integrations: [
     { id: 'i-1', kind: 'jira', name: 'Jira Cloud', config: { siteUrl: 'https://northwind.atlassian.net', projectKey: 'SEO', projectName: 'Website' }, secretHint: 'token …a1b2', status: 'ok', lastError: '', lastCheckedAt: '2026-10-17T09:00:00.000Z', lastRunAt: null, nextRunAt: null, createdAt: '2026-10-17T08:00:00.000Z' },
-    { id: 'i-2', kind: 's3', name: 'R2', config: { provider: 'r2', bucket: 'nw-seo', prefix: 'ascentra', format: 'ndjson', tables: ['rank_history', 'runs'], schedule: 'daily', hour: 3 }, secretHint: 'key AKID…1234', status: 'ok', lastError: '', lastCheckedAt: null, lastRunAt: '2026-10-17T03:00:00.000Z', nextRunAt: '2026-10-18T03:00:00.000Z', createdAt: '2026-10-17T08:00:00.000Z' },
+    { id: 'i-2', kind: 's3', name: 'R2', config: { provider: 'r2', bucket: 'nw-seo', prefix: 'alaventra', format: 'ndjson', tables: ['rank_history', 'runs'], schedule: 'daily', hour: 3 }, secretHint: 'key AKID…1234', status: 'ok', lastError: '', lastCheckedAt: null, lastRunAt: '2026-10-17T03:00:00.000Z', nextRunAt: '2026-10-18T03:00:00.000Z', createdAt: '2026-10-17T08:00:00.000Z' },
   ],
-  exportRuns: [{ id: 'x-1', integrationId: 'i-2', trigger: 'schedule', status: 'ok', tables: [{ table: 'rank_history', rows: 120, bytes: 9000, object: 'ascentra/rank_history/dt=2026-10-17/rank_history-x-1.ndjson', truncated: false, error: '' }], startedAt: '2026-10-17T03:00:00.000Z', finishedAt: '2026-10-17T03:00:05.000Z', error: '' }],
+  exportRuns: [{ id: 'x-1', integrationId: 'i-2', trigger: 'schedule', status: 'ok', tables: [{ table: 'rank_history', rows: 120, bytes: 9000, object: 'alaventra/rank_history/dt=2026-10-17/rank_history-x-1.ndjson', truncated: false, error: '' }], startedAt: '2026-10-17T03:00:00.000Z', finishedAt: '2026-10-17T03:00:05.000Z', error: '' }],
   issues: [],
   ...over,
 });
@@ -65,7 +65,7 @@ function render(node: ReactNode, role: Role = 'owner', seed?: (qc: QueryClient) 
 describe('Company settings → Integrations', () => {
   it('shows every connector with its state, routing and logs', () => {
     const t = render(<IntegrationsView data={overview()} />);
-    for (const s of ['Alerts and events', '#seo-alerts', 'Slack', 'Signed JSON', 'every website', 'northwind.example', 'answered 410 Gone', 'Delivery log', 'Gave up', 'Issue trackers', 'Jira Cloud', 'Website · token …a1b2', 'Linear', 'Asana', 'Data export', 'nw-seo/ascentra', 'Daily, 03:00 UTC', 'rank_history: 120 rows', 'Looker Studio', 'AI assistants (MCP)'])
+    for (const s of ['Alerts and events', '#seo-alerts', 'Slack', 'Signed JSON', 'every website', 'northwind.example', 'answered 410 Gone', 'Delivery log', 'Gave up', 'Issue trackers', 'Jira Cloud', 'Website · token …a1b2', 'Linear', 'Asana', 'Data export', 'nw-seo/alaventra', 'Daily, 03:00 UTC', 'rank_history: 120 rows', 'Looker Studio', 'AI assistants (MCP)'])
       expect(t, s).toContain(s);
   });
 
@@ -83,7 +83,7 @@ describe('Company settings → Integrations', () => {
   it('the AI-assistant snippets carry this app’s MCP address', () => {
     const s = mcpSnippets('https://app.example.com');
     expect(s.claudeCode).toContain('https://app.example.com/api/v1/mcp');
-    expect(JSON.parse(s.claudeDesktop).mcpServers.ascentra.args).toContain('https://app.example.com/api/v1/mcp');
+    expect(JSON.parse(s.claudeDesktop).mcpServers.alaventra.args).toContain('https://app.example.com/api/v1/mcp');
     expect(JSON.parse(s.openai)).toMatchObject({ type: 'mcp', require_approval: 'always' });
   });
 

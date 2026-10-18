@@ -42,7 +42,7 @@ const STAGES: Stage[] = [
     icon: Plug,
     title: 'Connect your site',
     short: 'Verify ownership, connect Search Console and GA4',
-    body: 'Add the website and prove it is yours — through Search Console, a DNS TXT record or a meta tag. Then add Ascentra’s service account to Search Console and choose your GA4 property.',
+    body: 'Add the website and prove it is yours — through Search Console, a DNS TXT record or a meta tag. Then add Alaventra’s service account to Search Console and choose your GA4 property.',
     points: [
       'Website data appears only after ownership is verified',
       'Search Console and GA4 read through a service account you add as a user',
@@ -56,7 +56,7 @@ const STAGES: Stage[] = [
     icon: Search,
     title: 'Research and choose keywords',
     short: 'A verdict, difficulty for your site and a plan type',
-    body: 'The searches your website already appears for come first — the ones no page of yours answers, and the ones you rank just off page one. Ascentra adds candidates from your pages, your competitors and search data, or you type your own. Each one gets a verdict with its reasons, its difficulty for your site and the plan it takes: Direct, Short or Full.',
+    body: 'The searches your website already appears for come first — the ones no page of yours answers, and the ones you rank just off page one. Alaventra adds candidates from your pages, your competitors and search data, or you type your own. Each one gets a verdict with its reasons, its difficulty for your site and the plan it takes: Direct, Short or Full.',
     points: [
       'Difficulty measured against your own domain, not a generic score',
       'Traffic estimates calibrated against your own impressions and clicks where you rank, and marked measured or modelled',
@@ -71,7 +71,7 @@ const STAGES: Stage[] = [
     icon: ChartNoAxesColumnIncreasing,
     title: 'Climb with ladders and the content engine',
     short: 'Supporting pages first, written in your authors’ names',
-    body: 'Pick a keyword to climb and Ascentra plans the ladder: easier supporting pages first, each linking up to the head term. Every week the content engine writes the next pages — drafted, critiqued, edited and checked.',
+    body: 'Pick a keyword to climb and Alaventra plans the ladder: easier supporting pages first, each linking up to the head term. Every week the content engine writes the next pages — drafted, critiqued, edited and checked.',
     points: ['Two ladders written at once by default, in your priority order', 'Hub, case study, local and video page types', 'Writing pauses when too many drafts wait to be published'],
     visual: <LadderMockup />,
     link: { to: '/platform/keyword-ladders', label: 'Explore keyword ladders' },
@@ -80,8 +80,8 @@ const STAGES: Stage[] = [
     id: 'publish',
     icon: Send,
     title: 'Publish and verify',
-    short: 'Drafts in your CMS; you choose what goes live; Ascentra checks the live page',
-    body: 'Send the page to WordPress, Webflow, Contentful or your own endpoint as a draft, or take the blog package — HTML, Markdown and meta.json. An owner or admin publishes it live. Ascentra notices the new page and checks it live: metadata, schema, images and links.',
+    short: 'Drafts in your CMS; you choose what goes live; Alaventra checks the live page',
+    body: 'Send the page to WordPress, Webflow, Contentful or your own endpoint as a draft, or take the blog package — HTML, Markdown and meta.json. An owner or admin publishes it live. Alaventra notices the new page and checks it live: metadata, schema, images and links.',
     points: [
       'Nothing goes live without an owner or admin choosing it',
       'A page that failed its checks is never sent to your CMS',
@@ -112,7 +112,7 @@ const STAGES: Stage[] = [
 const MODE_POINTS = [
   { icon: SlidersHorizontal, title: 'Per website and per ladder', body: 'Set a default mode for the website, then switch any keyword ladder to Auto or Manual.' },
   { icon: Inbox, title: 'One queue for decisions', body: '“Needs you” collects everything waiting on a person: briefs, pages and choices.' },
-  { icon: Send, title: 'Publishing stays with you', body: 'Auto prepares the work; your team publishes. Ascentra then checks the live page.' },
+  { icon: Send, title: 'Publishing stays with you', body: 'Auto prepares the work; your team publishes. Alaventra then checks the live page.' },
   { icon: Pause, title: 'Pause at any time', body: 'Pause a ladder, change the weekly pace or switch the daily AI Pulse off for a website.' },
 ];
 
@@ -143,7 +143,7 @@ function Hero() {
               From a connected site to a weekly loop.
             </h1>
             <p className="mt-6 max-w-xl animate-fade-up text-pretty text-lg leading-relaxed text-ink-2 sm:text-xl" style={{ animationDelay: '140ms' }}>
-              Connect a website once. Ascentra researches, plans, writes, checks and tracks on a fixed weekly schedule, and asks your team only for the decisions that need a person.
+              Connect a website once. Alaventra researches, plans, writes, checks and tracks on a fixed weekly schedule, and asks your team only for the decisions that need a person.
             </p>
             <div className="mt-9 flex animate-fade-up flex-wrap gap-3" style={{ animationDelay: '210ms' }}>
               <ButtonLink to="/signup" size="lg" className="group">
@@ -270,7 +270,7 @@ function Week() {
     <div id="week" tabIndex={-1} className="scroll-mt-16 outline-none focus-visible:shadow-none lg:scroll-mt-[72px]">
       <Section tone="ink" spacing="lg">
         <SectionHeading
-          eyebrow="A week with Ascentra"
+          eyebrow="A week with Alaventra"
           title="The schedule that runs while you work."
           lead="A daily check of your key pages and of AI answers, a Monday of checks, writing and outreach, and a monthly audit. Paid work that would only repeat an unchanged result is skipped, and a run that was missed still happens — marked as late."
         />
@@ -344,7 +344,7 @@ export default function HowItWorksPage() {
   useSeo({
     title: 'How it works',
     description:
-      'How Ascentra runs your SEO: connect and verify your site, choose keywords, climb with ladders and the content engine, publish and verify, then track and learn on a fixed weekly schedule — with Auto or Manual for every step and the cost shown first.',
+      'How Alaventra runs your SEO: connect and verify your site, choose keywords, climb with ladders and the content engine, publish and verify, then track and learn on a fixed weekly schedule — with Auto or Manual for every step and the cost shown first.',
     path: '/how-it-works',
   });
   return (

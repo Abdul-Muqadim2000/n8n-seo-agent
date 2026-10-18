@@ -329,7 +329,7 @@ export async function testEndpoint(org: OrgRow, id: unknown): Promise<SendResult
   const type = (ep.events[0] as WebhookEvent) ?? 'report.ready';
   const e = envelope(org, null, type, {
     test: true,
-    report: { id: '00000000-0000-0000-0000-000000000000', title: 'Test event — this is what an Ascentra event looks like', stage: 'site_tracker', stageLabel: 'Weekly site report', url: appUrl(`/o/${org.id}/settings/integrations`) },
+    report: { id: '00000000-0000-0000-0000-000000000000', title: 'Test event — this is what an Alaventra event looks like', stage: 'site_tracker', stageLabel: 'Weekly site report', url: appUrl(`/o/${org.id}/settings/integrations`) },
     run: { title: 'Test analysis', url: appUrl(`/o/${org.id}/runs`) },
     alerts: [{ level: 'medium', text: 'Test alert: nothing is wrong.' }],
     findings: [{ title: 'Test finding', severity: 'Low', category: 'Test' }],

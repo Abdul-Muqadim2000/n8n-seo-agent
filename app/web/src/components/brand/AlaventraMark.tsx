@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 import { cn } from '@/lib/utils';
 
-// The 33 rays of the supplied Ascentra mark (public/brand/ascentra-mark-*.svg), split out of its single path unchanged — same
+// The 33 rays of the supplied Alaventra mark (public/brand/alaventra-mark-*.svg), split out of its single path unchanged — same
 // coordinates, same viewBox, nothing redrawn. Path order runs from the short ray on the right, round the "rising sun" at the
 // bottom, up to the longest ray at the wing tip, so a wave in this order travels from the sun into the wing.
 const VIEW_BOX = '-623.18 -603.40 911.07 796.53';
@@ -43,26 +43,26 @@ const RAYS = [
 
 /** wave speeds: `loader` a quick light run for loading states; `ambient` a slow, soft sweep for large faint marks */
 const MOTION: Record<'loader' | 'ambient', CSSProperties> = {
-  loader: { ['--asc-ray-dur' as string]: '1.6s', ['--asc-ray-step' as string]: '40ms', ['--asc-ray-rest' as string]: 0.4 },
-  ambient: { ['--asc-ray-anim' as string]: 'asc-ray-soft', ['--asc-ray-dur' as string]: '9s', ['--asc-ray-step' as string]: '120ms', ['--asc-ray-rest' as string]: 0.32 },
+  loader: { ['--alv-ray-dur' as string]: '1.6s', ['--alv-ray-step' as string]: '40ms', ['--alv-ray-rest' as string]: 0.4 },
+  ambient: { ['--alv-ray-anim' as string]: 'alv-ray-soft', ['--alv-ray-dur' as string]: '9s', ['--alv-ray-step' as string]: '120ms', ['--alv-ray-rest' as string]: 0.32 },
 };
 
 /**
- * The Ascentra mark drawn from the supplied path in `currentColor` (set the colour with a text class: blue or ink on light, white on
+ * The Alaventra mark drawn from the supplied path in `currentColor` (set the colour with a text class: blue or ink on light, white on
  * ink — never per ray). With `wave`, a band of light travels along the rays from the sun to the wing tip; geometry never moves, and
  * under prefers-reduced-motion it is the plain mark. Decorative by default; pass `label` to make it an image.
  */
-export function AscentraMark({ wave, label, className, style }: { wave?: 'loader' | 'ambient'; label?: string; className?: string; style?: CSSProperties }) {
+export function AlaventraMark({ wave, label, className, style }: { wave?: 'loader' | 'ambient'; label?: string; className?: string; style?: CSSProperties }) {
   return (
     <svg
       viewBox={VIEW_BOX}
       fill="currentColor"
-      className={cn('block aspect-[911/797] h-auto', wave && 'asc-mark-wave', className)}
+      className={cn('block aspect-[911/797] h-auto', wave && 'alv-mark-wave', className)}
       style={{ ...(wave ? MOTION[wave] : null), ...style }}
       {...(label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true })}
     >
       {RAYS.map((d, i) => (
-        <path key={i} d={d} className={wave ? 'asc-mark-ray' : undefined} style={wave ? { ['--i' as string]: i } : undefined} />
+        <path key={i} d={d} className={wave ? 'alv-mark-ray' : undefined} style={wave ? { ['--i' as string]: i } : undefined} />
       ))}
     </svg>
   );

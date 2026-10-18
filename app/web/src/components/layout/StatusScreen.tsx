@@ -9,8 +9,8 @@ export function StatusScreen({ code, icon, title, children, actions }: { code?: 
   return (
     <div className="relative flex min-h-dvh flex-col overflow-hidden bg-page">
       {/* the mark as a faint watermark (whole logo, never single rays): ink on light, white on dark */}
-      <img src="/brand/ascentra-mark-ink.svg" alt="" aria-hidden draggable={false} className="pointer-events-none absolute -bottom-32 -right-40 w-[560px] max-w-none select-none opacity-[0.035] dark:hidden" />
-      <img src="/brand/ascentra-mark-white.svg" alt="" aria-hidden draggable={false} className="pointer-events-none absolute -bottom-32 -right-40 hidden w-[560px] max-w-none select-none opacity-[0.05] dark:block" />
+      <img src="/brand/alaventra-mark-ink.svg" alt="" aria-hidden draggable={false} className="pointer-events-none absolute -bottom-32 -right-40 w-[560px] max-w-none select-none opacity-[0.035] dark:hidden" />
+      <img src="/brand/alaventra-mark-white.svg" alt="" aria-hidden draggable={false} className="pointer-events-none absolute -bottom-32 -right-40 hidden w-[560px] max-w-none select-none opacity-[0.05] dark:block" />
       <header className="relative flex items-center justify-between gap-3 px-4 py-4 sm:px-8 sm:py-6">
         <Brand to="/" />
         <ThemeMenu />

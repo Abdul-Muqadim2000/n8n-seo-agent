@@ -39,7 +39,7 @@ export const webhook: CmsConnector = {
   kind: 'webhook',
 
   async test(c) {
-    const res = await post(c, 'cms.test', { event: 'cms.test', version: 1, sent_at: new Date().toISOString(), note: 'A test from Ascentra: answer 2xx. Nothing to publish.' }, `test-${Date.now()}`);
+    const res = await post(c, 'cms.test', { event: 'cms.test', version: 1, sent_at: new Date().toISOString(), note: 'A test from Alaventra: answer 2xx. Nothing to publish.' }, `test-${Date.now()}`);
     if (res.status >= 200 && res.status < 300) return { ok: true, message: `Your endpoint answered ${res.status}. Check the signature on your side with the secret you were shown.`, settings: { account: c.baseUrl.replace(/^https?:\/\//, '').split('/')[0] } };
     return { ok: false, message: `Your endpoint answered ${res.status}${cmsMessage(res) ? `: ${cmsMessage(res)}` : ''}. It must answer 2xx to a signed POST.` };
   },

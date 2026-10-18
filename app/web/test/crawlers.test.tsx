@@ -30,7 +30,7 @@ const setup: CrawlerData['setup'] = {
   retentionDays: 30,
   push: { enabled: false, prefix: null, createdAt: null, lastPushAt: null, pushes24h: 0 },
   endpoint: 'https://app.example/api/ingest/logs/site-1',
-  header: 'X-Ascentra-Log-Key',
+  header: 'X-Alaventra-Log-Key',
   limits: { uploadMaxBytes: 1073741824, pushMaxBytes: 104857600, rollupDays: 400 },
   ranges: [{ id: 'openai-gptbot', label: 'GPTBot', url: 'https://openai.com/gptbot.json', fetchedAt: '2026-10-17T00:00:00Z', creationTime: '2026-09-22T02:00:07', prefixes: 18, error: '' }],
 };
@@ -83,7 +83,7 @@ describe('Crawlers page', () => {
   it('before any log: three ways in, each with its guide, and the setup', () => {
     const t = text(wrap(<Crawlers d={empty} {...props} admin member />));
     expect(t).toContain('See what Google and the AI crawlers really fetch');
-    for (const s of ['Upload an access log', 'Cloudflare Logpush', 'Vercel, Fastly or Akamai', 'Create push key', 'X-Ascentra-Log-Key', 'Keep each crawler request for']) expect(t).toContain(s);
+    for (const s of ['Upload an access log', 'Cloudflare Logpush', 'Vercel, Fastly or Akamai', 'Create push key', 'X-Alaventra-Log-Key', 'Keep each crawler request for']) expect(t).toContain(s);
     expect(t).not.toContain('NaN');
   });
   it('with data: headline, impostors apart, coverage gaps, budget, AI demand, recommendation links', () => {

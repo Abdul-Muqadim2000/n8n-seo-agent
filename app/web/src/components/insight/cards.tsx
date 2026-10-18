@@ -115,7 +115,7 @@ export function MetricCard({
 }
 
 /**
- * SummaryHero: the page's one solid panel (ink by default, or Ascentra Blue) — eyebrow, a headline sentence that says how things
+ * SummaryHero: the page's one solid panel (ink by default, or Alaventra Blue) — eyebrow, a headline sentence that says how things
  * are, a supporting line, 2–4 HeroStats and the primary next step. Children switch to on-dark colours through the surface context.
  */
 export function SummaryHero({
@@ -140,7 +140,7 @@ export function SummaryHero({
   actions?: ReactNode;
   className?: string;
 }) {
-  // G5: in an agency's portal there is no Ascentra watermark, and a brand colour light enough to need dark text cannot carry the
+  // G5: in an agency's portal there is no Alaventra watermark, and a brand colour light enough to need dark text cannot carry the
   // hero's white text: the hero falls back to ink
   const brand = usePortalBrand();
   const light = !!brand?.accent && brandTokens(brand.accent)?.light['accent-ink'] !== '#ffffff';
@@ -150,7 +150,7 @@ export function SummaryHero({
       <section className={cn('relative isolate overflow-hidden rounded-xl p-5 shadow-raised sm:p-6', tone === 'ink' ? 'bg-ink-surface text-on-ink ring-1 ring-line-on-ink' : 'bg-accent text-on-ink dark:bg-accent-soft dark:ring-1 dark:ring-line-on-ink', className)}>
         {/* the whole mark as a quiet watermark (brand: hero graphics / watermarks; never single rays) */}
         {!brand && !onPortalHost() && (
-          <img src="/brand/ascentra-mark-white.svg" alt="" aria-hidden className={cn('pointer-events-none absolute -top-24 -right-20 -z-10 w-[26rem] select-none', tone === 'ink' ? 'opacity-[0.045]' : 'opacity-[0.08]')} />
+          <img src="/brand/alaventra-mark-white.svg" alt="" aria-hidden className={cn('pointer-events-none absolute -top-24 -right-20 -z-10 w-[26rem] select-none', tone === 'ink' ? 'opacity-[0.045]' : 'opacity-[0.08]')} />
         )}
         <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div className="min-w-0 max-w-3xl">

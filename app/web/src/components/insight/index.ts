@@ -1,4 +1,4 @@
-// Ascentra in-app design system: building blocks that turn text-heavy pages into scannable, visual ones (summary hero, metric
+// Alaventra in-app design system: building blocks that turn text-heavy pages into scannable, visual ones (summary hero, metric
 // cards, score rings, insight rows, info tips, collapsibles, motion). Reference page: pages/site/OverviewPage.tsx.
 // Import everything from '@/components/insight'.
 export { IconTile, type IconTileTone } from '@/components/ui/icon-tile';

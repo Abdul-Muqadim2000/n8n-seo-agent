@@ -58,7 +58,7 @@ function PortalAuthPanel() {
       </div>
       <p className="border-t border-line pt-5 text-xs leading-relaxed text-ink-3">
         {b?.footerText ?? (b?.supportEmail ? `Questions? ${b.supportEmail}` : '')}
-        {b?.poweredBy ? <span className="block pt-1">Powered by Ascentra</span> : null}
+        {b?.poweredBy ? <span className="block pt-1">Powered by Alaventra</span> : null}
       </p>
     </aside>
   );
@@ -91,14 +91,14 @@ export function AuthLayout() {
       <aside className="relative hidden overflow-hidden bg-ink-surface text-on-ink [--ring:0_0_0_2px_var(--ink-surface),0_0_0_4px_var(--accent-on-ink)] lg:flex lg:min-h-dvh lg:flex-col lg:justify-between lg:px-12 lg:py-10 xl:px-16 xl:py-12">
         {/* the mark as a faint watermark (whole logo, never single rays) */}
         <img
-          src="/brand/ascentra-mark-white.svg"
+          src="/brand/alaventra-mark-white.svg"
           alt=""
           aria-hidden
           draggable={false}
           className="pointer-events-none absolute -bottom-40 -right-52 w-[620px] max-w-none select-none opacity-[0.045]"
         />
         <Link to="/" className="relative inline-flex w-fit rounded-md">
-          <img src="/brand/ascentra-logo-horizontal-white.svg" alt="Ascentra" width={153} height={40} draggable={false} className="h-10 w-auto select-none" />
+          <img src="/brand/alaventra-logo-horizontal-white.svg" alt="Alaventra" width={163} height={40} draggable={false} className="h-10 w-auto select-none" />
         </Link>
 
         <div className="relative max-w-[460px] py-8">

@@ -8,7 +8,7 @@ describe('D-12: the app names itself, whatever the engine brand is', () => {
     vi.resetModules();
     process.env.SEO_BRAND = 'Dev SEO';
     const { config } = await import('../src/config');
-    expect(config.brand).toBe('Ascentra');
+    expect(config.brand).toBe('Alaventra');
     delete process.env.SEO_BRAND;
     vi.resetModules();
   });

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { ArrowRight, Check } from 'lucide-react';
-import { AscentraMark } from '@/components/brand/AscentraMark';
+import { AlaventraMark } from '@/components/brand/AlaventraMark';
 import { ButtonLink } from '@/components/ui/button';
 import { useMe } from '@/lib/queries';
 import { cn } from '@/lib/utils';
@@ -47,7 +47,7 @@ export function CtaBand({
         <Reveal className="relative isolate overflow-hidden rounded-3xl bg-ink-surface px-6 pb-32 pt-16 text-center text-on-ink sm:px-12 sm:pb-40 sm:pt-24 lg:pb-44">
           <div aria-hidden className="mk-grid-ink pointer-events-none absolute inset-0 -z-10" />
           {/* the mark, its hub on the bottom edge so the rays rise behind the text; a slow wave runs from the sun to the wing tip */}
-          <AscentraMark
+          <AlaventraMark
             wave="ambient"
             className="pointer-events-none absolute bottom-0 left-1/2 -z-10 w-[460px] -translate-x-[68.4%] translate-y-[24.3%] text-white opacity-[0.18] sm:w-[640px] lg:w-[760px]"
           />

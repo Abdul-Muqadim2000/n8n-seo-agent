@@ -176,7 +176,7 @@ function AgencyBrandingTab() {
             </Field>
           </div>
           <SwitchRow
-            title="Show “Powered by Ascentra”"
+            title="Show “Powered by Alaventra”"
             description="A small line in the portal’s footer and on the sign-in page. Off by default."
             checked={draft.poweredBy}
             disabled={!admin}

@@ -13,7 +13,7 @@ const REAL: { icon: LucideIcon; title: string; body: string }[] = [
   {
     icon: Link2,
     title: 'Our own link checks',
-    body: 'Link indexes report live links as lost. Ascentra visits each linking page itself, and a link counts as lost only after two misses, with the reason.',
+    body: 'Link indexes report live links as lost. Alaventra visits each linking page itself, and a link counts as lost only after two misses, with the reason.',
   },
   {
     icon: Radar,
@@ -28,7 +28,7 @@ const REAL: { icon: LucideIcon; title: string; body: string }[] = [
   {
     icon: BadgeCheck,
     title: 'The live page, checked',
-    body: 'When a planned page goes live, Ascentra checks the published page itself: its content, its schema and its images.',
+    body: 'When a planned page goes live, Alaventra checks the published page itself: its content, its schema and its images.',
   },
 ];
 
@@ -51,7 +51,7 @@ const PRINCIPLES: { icon: LucideIcon; title: string; body: string }[] = [
   {
     icon: Sparkles,
     title: 'Built for the AI-search era',
-    body: `Buyers ask AI assistants for a shortlist before they search. Ascentra tracks ${aiEngines.length} AI engines and answer surfaces next to Google, and checks that AI crawlers can read your site.`,
+    body: `Buyers ask AI assistants for a shortlist before they search. Alaventra tracks ${aiEngines.length} AI engines and answer surfaces next to Google, and checks that AI crawlers can read your site.`,
   },
 ];
 
@@ -97,7 +97,7 @@ function Mission() {
             id="mission-title"
             eyebrow="Our mission"
             title="SEO that runs itself, measured by what is real."
-            lead="Most SEO tools report what an index or a model claims. We would rather check. Ascentra measures the things that decide whether a number can be trusted, and says so when it cannot."
+            lead="Most SEO tools report what an index or a model claims. We would rather check. Alaventra measures the things that decide whether a number can be trusted, and says so when it cannot."
           />
         </div>
         <ul className="grid gap-4 sm:grid-cols-2">
@@ -119,7 +119,7 @@ function Mission() {
 function Principles() {
   return (
     <Section tone="page" aria-labelledby="principles-title">
-      <SectionHeading id="principles-title" eyebrow="Principles" title="How we decide what Ascentra does." lead="Four rules behind every capability." />
+      <SectionHeading id="principles-title" eyebrow="Principles" title="How we decide what Alaventra does." lead="Four rules behind every capability." />
       <ol className="mt-14 grid gap-px overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
         {PRINCIPLES.map((p, i) => (
           <Reveal as="li" key={p.title} index={i} className="group relative bg-surface p-6 transition-colors duration-200 ease-brand hover:bg-page sm:p-7">
@@ -236,13 +236,13 @@ export default function AboutPage() {
   useSeo({
     title: 'About',
     description:
-      'Ascentra is enterprise-grade autonomous SEO: one weekly loop for research, content, audits, AI search visibility and backlinks, with your team in control and only real changes reported.',
+      'Alaventra is enterprise-grade autonomous SEO: one weekly loop for research, content, audits, AI search visibility and backlinks, with your team in control and only real changes reported.',
     path: '/about',
   });
   return (
     <>
       <PageHero
-        eyebrow="About Ascentra"
+        eyebrow="About Alaventra"
         title="Enterprise-grade autonomous SEO."
         lead="We build the system that runs SEO as a weekly loop — research, content, audits, AI answers and backlinks — so teams spend their time on the decisions that need a person."
         actions={

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // `transport`), and the SSRF guard itself. The queue around it (claim, backoff, switching an endpoint off) runs against a real
 // Postgres in integrations.pg.test.ts.
 
-vi.mock('../src/config', () => ({ config: { appUrl: 'https://app.example.com', brand: 'Ascentra', isProd: false, mailboxKey: 'a'.repeat(64) } }));
+vi.mock('../src/config', () => ({ config: { appUrl: 'https://app.example.com', brand: 'Alaventra', isProd: false, mailboxKey: 'a'.repeat(64) } }));
 vi.mock('../src/db', () => ({ db: {}, schema: {} }));
 
 const { seal } = await import('../src/lib/secretBox');
@@ -52,15 +52,15 @@ const evt = envelope({ id: 'org-1', name: 'Northwind' }, { id: 'site-1', domain:
 describe('sendTo: one signed POST', () => {
   it('signed JSON: the envelope, HMAC-SHA256 over "<timestamp>.<body>", event and delivery ids in headers', async () => {
     const sent = record({ status: 204 });
-    const res = await sendTo(endpoint('json', 'https://hooks.example.com/ascentra?token=abc', 'whsec_test_secret'), 'dlv-1', evt);
+    const res = await sendTo(endpoint('json', 'https://hooks.example.com/alaventra?token=abc', 'whsec_test_secret'), 'dlv-1', evt);
     expect(res).toEqual({ ok: true, status: 204, error: '' });
     const s = sent[0]!;
-    expect([s.url, s.method]).toEqual(['https://hooks.example.com/ascentra?token=abc', 'POST']);
+    expect([s.url, s.method]).toEqual(['https://hooks.example.com/alaventra?token=abc', 'POST']);
     expect(JSON.parse(s.body)).toMatchObject({ id: evt.id, type: 'report.ready', company: { id: 'org-1' }, website: { domain: 'northwind.example' } });
-    expect(s.headers['X-Ascentra-Event']).toBe('report.ready');
-    expect(s.headers['X-Ascentra-Delivery']).toBe('dlv-1');
-    expect(verifyBody('whsec_test_secret', s.headers['X-Ascentra-Timestamp']!, s.body, s.headers['X-Ascentra-Signature']!)).toBe(true);
-    expect(verifyBody('another secret', s.headers['X-Ascentra-Timestamp']!, s.body, s.headers['X-Ascentra-Signature']!)).toBe(false);
+    expect(s.headers['X-Alaventra-Event']).toBe('report.ready');
+    expect(s.headers['X-Alaventra-Delivery']).toBe('dlv-1');
+    expect(verifyBody('whsec_test_secret', s.headers['X-Alaventra-Timestamp']!, s.body, s.headers['X-Alaventra-Signature']!)).toBe(true);
+    expect(verifyBody('another secret', s.headers['X-Alaventra-Timestamp']!, s.body, s.headers['X-Alaventra-Signature']!)).toBe(false);
   });
 
   it('Slack: the Slack body, unsigned (the address is the credential)', async () => {
@@ -69,7 +69,7 @@ describe('sendTo: one signed POST', () => {
     const body = JSON.parse(sent[0]!.body);
     expect(body.text).toContain('Weekly site report ready');
     expect(Array.isArray(body.blocks)).toBe(true);
-    expect(sent[0]!.headers['X-Ascentra-Signature']).toBeUndefined();
+    expect(sent[0]!.headers['X-Alaventra-Signature']).toBeUndefined();
   });
 
   it('a refusal names the host and the answer, never the address with its token', async () => {
@@ -77,8 +77,8 @@ describe('sendTo: one signed POST', () => {
     const res = await sendTo(endpoint('slack', 'https://hooks.slack.com/services/T1/B2/secretpart', null), 'dlv-3', evt);
     expect(res).toMatchObject({ ok: false, status: 404 });
     expect(res.error).toBe('hooks.slack.com answered 404: no_service');
-    record(new Error('connect ETIMEDOUT https://hooks.example.com/ascentra?token=abc'));
-    const t = await sendTo(endpoint('json', 'https://hooks.example.com/ascentra?token=abc', 'whsec_x_secret'), 'dlv-4', evt);
+    record(new Error('connect ETIMEDOUT https://hooks.example.com/alaventra?token=abc'));
+    const t = await sendTo(endpoint('json', 'https://hooks.example.com/alaventra?token=abc', 'whsec_x_secret'), 'dlv-4', evt);
     expect(t.ok).toBe(false);
     expect(t.error).not.toContain('token=abc');
   });

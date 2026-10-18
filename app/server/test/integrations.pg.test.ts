@@ -193,7 +193,7 @@ describe.skipIf(!DB)('G4 integrations (real database)', () => {
     it('admin only; Slack addresses checked; the signing secret is shown once and the address never', async () => {
       expect((await as('member', 'POST', `/api/orgs/${ids.org1}/webhooks`, { name: 'x', url: 'https://hooks.example.com/a', events: ['run.failed'] })).statusCode).toBe(403);
       expect((await as('admin', 'POST', `/api/orgs/${ids.org1}/webhooks`, { name: 'x', format: 'slack', url: 'https://hooks.example.com/a', events: ['run.failed'] })).statusCode).toBe(400);
-      const r = await as('admin', 'POST', `/api/orgs/${ids.org1}/webhooks`, { name: 'warehouse', url: 'https://hooks.example.com/ascentra?t=secret123', events: ['rank.changed', 'report.ready'], websiteIds: [ids.site1] });
+      const r = await as('admin', 'POST', `/api/orgs/${ids.org1}/webhooks`, { name: 'warehouse', url: 'https://hooks.example.com/alaventra?t=secret123', events: ['rank.changed', 'report.ready'], websiteIds: [ids.site1] });
       expect(r.statusCode).toBe(200);
       expect(r.json().secret).toMatch(/^whsec_/);
       ids.ep1 = r.json().endpoint.id;
@@ -217,12 +217,12 @@ describe.skipIf(!DB)('G4 integrations (real database)', () => {
       });
       expect(cb.statusCode).toBe(200);
       expect(await until(async () => st.sent.filter((s) => s.url.startsWith('https://hooks.example.com/')).length >= 2)).toBe(true);
-      const types = st.sent.map((s) => s.headers['X-Ascentra-Event']).sort();
+      const types = st.sent.map((s) => s.headers['X-Alaventra-Event']).sort();
       expect(types).toEqual(['rank.changed', 'report.ready']);
       const { verifyBody } = await import('../src/services/reportDelivery');
       const s0 = st.sent[0]!;
-      expect(s0.headers['X-Ascentra-Signature']).toMatch(/^sha256=/);
-      expect(verifyBody('nope', s0.headers['X-Ascentra-Timestamp']!, s0.body, s0.headers['X-Ascentra-Signature']!)).toBe(false);
+      expect(s0.headers['X-Alaventra-Signature']).toMatch(/^sha256=/);
+      expect(verifyBody('nope', s0.headers['X-Alaventra-Timestamp']!, s0.body, s0.headers['X-Alaventra-Signature']!)).toBe(false);
       expect(await until(async () => (await as('admin', 'GET', `/api/orgs/${ids.org1}/webhooks`)).json().deliveries.filter((d: { status: string }) => d.status === 'sent').length >= 2)).toBe(true);
     });
 
@@ -320,11 +320,11 @@ describe.skipIf(!DB)('G4 integrations (real database)', () => {
       st.tables.rankHistory = [{ keyword: 'peppol', position: 4, checked_at: '2026-10-12T06:00:00Z', ladder_id: 'lad_1', domain: 'x' }];
       st.sent.length = 0;
       st.answer = () => ({ status: 200, text: '', headers: {} });
-      const body = { kind: 's3', name: 'R2', provider: 'r2', accountId: 'f'.repeat(32), bucket: 'nw-seo', prefix: 'ascentra', accessKeyId: 'AKIDTEST1234', secretAccessKey: 'super-secret-access-key', tables: ['rank_history', 'runs'], format: 'ndjson' };
+      const body = { kind: 's3', name: 'R2', provider: 'r2', accountId: 'f'.repeat(32), bucket: 'nw-seo', prefix: 'alaventra', accessKeyId: 'AKIDTEST1234', secretAccessKey: 'super-secret-access-key', tables: ['rank_history', 'runs'], format: 'ndjson' };
       const c = await as('admin', 'POST', `/api/orgs/${ids.org1}/integrations/exports`, body);
       expect(c.statusCode).toBe(200);
       expect(c.json().secretHint).toBe('key AKID…1234');
-      expect(st.sent[0]!.url).toMatch(/^https:\/\/f{32}\.r2\.cloudflarestorage\.com\/nw-seo\/ascentra\/_ascentra\/dt%3D/);
+      expect(st.sent[0]!.url).toMatch(/^https:\/\/f{32}\.r2\.cloudflarestorage\.com\/nw-seo\/alaventra\/_alaventra\/dt%3D/);
       st.sent.length = 0;
       const run = await as('admin', 'POST', `/api/orgs/${ids.org1}/integrations/${c.json().id}/run`);
       expect(run.json()).toMatchObject({ status: 'ok', trigger: 'manual' });

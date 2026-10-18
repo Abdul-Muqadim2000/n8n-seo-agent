@@ -163,7 +163,7 @@ export function SiteHeader() {
       )}
     >
       <Container className="relative flex h-16 items-center gap-6 lg:h-[72px]">
-        <Link to="/" className="-ml-1 shrink-0 rounded-md p-1" aria-label="Ascentra home">
+        <Link to="/" className="-ml-1 shrink-0 rounded-md p-1" aria-label="Alaventra home">
           <Logo className="h-8 sm:h-9" />
         </Link>
 
@@ -306,9 +306,9 @@ function MobileMenu({ open, onOpenChange, signedIn }: { open: boolean; onOpenCha
         <D.Overlay className="fixed inset-0 z-50 bg-ink-surface/50 animate-fade-in lg:hidden" />
         <D.Content className="mk-sheet fixed inset-x-0 top-0 z-50 flex max-h-dvh flex-col overflow-hidden rounded-b-2xl border-b border-line bg-page shadow-overlay lg:hidden">
           <D.Title className="sr-only">Menu</D.Title>
-          <D.Description className="sr-only">Pages on the Ascentra website</D.Description>
+          <D.Description className="sr-only">Pages on the Alaventra website</D.Description>
           <div className="flex h-16 shrink-0 items-center justify-between border-b border-line px-4 sm:px-6">
-            <Link to="/" onClick={close} className="-ml-1 rounded-md p-1" aria-label="Ascentra home">
+            <Link to="/" onClick={close} className="-ml-1 rounded-md p-1" aria-label="Alaventra home">
               <Logo className="h-8" />
             </Link>
             <D.Close className="-mr-1.5 inline-flex size-10 items-center justify-center rounded-md text-ink-2 transition-colors duration-150 hover:bg-surface-2 hover:text-ink active:bg-surface-3" aria-label="Close menu">

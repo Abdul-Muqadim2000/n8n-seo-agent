@@ -1,4 +1,4 @@
-// Who Ascentra is for: /solutions and /solutions/<slug>, the Solutions menu and the footer. Outcomes are phrased as
+// Who Alaventra is for: /solutions and /solutions/<slug>, the Solutions menu and the footer. Outcomes are phrased as
 // capabilities, never as invented results.
 import { Briefcase, Building, Landmark, Layers, MapPin, type LucideIcon } from 'lucide-react';
 import type { FaqItem } from './features';
@@ -15,23 +15,23 @@ export interface Solution {
   image: ImageKey;
   /** what is hard today */
   pains: { title: string; body: string }[];
-  /** how Ascentra helps, each tied to a capability (feature slug) */
+  /** how Alaventra helps, each tied to a capability (feature slug) */
   helps: { feature: string; title: string; body: string }[];
-  /** what the team can do with Ascentra (capabilities, not promised numbers) */
+  /** what the team can do with Alaventra (capabilities, not promised numbers) */
   outcomes: string[];
   faqs: FaqItem[];
-  /** optional "see it in Ascentra" band on /solutions/<slug>: the product visual of one capability (feature slug) with a short story */
+  /** optional "see it in Alaventra" band on /solutions/<slug>: the product visual of one capability (feature slug) with a short story */
   showcase?: { feature: string; title: string; body: string };
 }
 
 export const solutions: Solution[] = [
   {
     slug: 'agencies',
-    name: 'Ascentra for agencies',
+    name: 'Alaventra for agencies',
     shortName: 'Agencies',
     tagline: 'Run SEO for every client from one account, with verified access and costs you can bill.',
     summary:
-      'Give every client their own workspace, website verification, team and budget. Ascentra runs the weekly loop for each website and turns the work into reports you can send as they are.',
+      'Give every client their own workspace, website verification, team and budget. Alaventra runs the weekly loop for each website and turns the work into reports you can send as they are.',
     icon: Briefcase,
     image: 'loftTeam',
     pains: [
@@ -57,7 +57,7 @@ export const solutions: Solution[] = [
       { q: 'Can clients see their own data?', a: 'Yes. Invite them to their client workspace as a viewer or an approver; they see their websites, reports and recommendations in a portal under your name, and nothing from other clients or from what the work costs you.' },
       { q: 'Can the portal carry our brand and domain?', a: 'Yes. Switch on white-label for your name, logo and colour, add your own address such as seo.youragency.com with two DNS records, and send client e-mails from your own mailbox once its SPF and DKIM check out.' },
       { q: 'How do I keep costs per client in check?', a: 'Every run shows its estimated cost first, and each company has its own budget and spend cap.' },
-      { q: 'Do I need access to each client’s Search Console?', a: 'The client adds Ascentra’s service account as a user, and the website owner proves ownership once.' },
+      { q: 'Do I need access to each client’s Search Console?', a: 'The client adds Alaventra’s service account as a user, and the website owner proves ownership once.' },
     ],
     showcase: {
       feature: 'agency-portal',
@@ -67,11 +67,11 @@ export const solutions: Solution[] = [
   },
   {
     slug: 'in-house-teams',
-    name: 'Ascentra for in-house marketing teams',
+    name: 'Alaventra for in-house marketing teams',
     shortName: 'In-house marketing teams',
     tagline: 'A small team with the output of a full SEO function, and every decision still yours.',
     summary:
-      'Ascentra does the research, writing, audits and monitoring on a weekly schedule, and asks your team only for the decisions that need a person. Everyone sees the same dashboards and the same next steps.',
+      'Alaventra does the research, writing, audits and monitoring on a weekly schedule, and asks your team only for the decisions that need a person. Everyone sees the same dashboards and the same next steps.',
     icon: Building,
     image: 'teamAtDesks',
     pains: [
@@ -96,7 +96,7 @@ export const solutions: Solution[] = [
       'Changes in rankings, links and AI answers reported every Monday',
     ],
     faqs: [
-      { q: 'Do we need SEO expertise to use Ascentra?', a: 'No. Every verdict and recommendation explains itself in plain language, and the pipeline tells you what to do next.' },
+      { q: 'Do we need SEO expertise to use Alaventra?', a: 'No. Every verdict and recommendation explains itself in plain language, and the pipeline tells you what to do next.' },
       { q: 'Can our writers edit the pages?', a: 'Yes. Pages arrive as HTML and Markdown, or as drafts in your WordPress, Webflow or Contentful, so your team edits them before anything goes live.' },
       { q: 'Who on the team can start paid runs?', a: 'Members and above can start runs; viewers can only read. Owners set the budget.' },
     ],
@@ -108,11 +108,11 @@ export const solutions: Solution[] = [
   },
   {
     slug: 'b2b-saas',
-    name: 'Ascentra for B2B and SaaS',
+    name: 'Alaventra for B2B and SaaS',
     shortName: 'B2B and SaaS',
     tagline: 'Win the long, considered searches your buyers make — in Google and in AI answers.',
     summary:
-      'B2B buyers research for weeks and increasingly ask AI assistants for a shortlist. Ascentra tracks the questions they ask, builds the pages that answer them and shows the pipeline value AI referrals bring.',
+      'B2B buyers research for weeks and increasingly ask AI assistants for a shortlist. Alaventra tracks the questions they ask, builds the pages that answer them and shows the pipeline value AI referrals bring.',
     icon: Layers,
     image: 'colleaguesReview',
     pains: [
@@ -125,7 +125,7 @@ export const solutions: Solution[] = [
       { feature: 'ai-growth', title: 'Onto the shortlist, week by week', body: 'The questions you lose become answer pages, new pages reach Bing the same week, and the review and list pages AI cites without you become pitches.' },
       { feature: 'keyword-ladders', title: 'A route to the head term', body: 'Supporting pages on easier, related keywords climb to the category term.' },
       { feature: 'content', title: 'Pages with real expertise', body: 'Author and reviewer, experience notes, case studies and schema on every page.' },
-      { feature: 'backlinks', title: 'Links that count', body: 'Nine link sources, links checked by Ascentra itself and scored prospects.' },
+      { feature: 'backlinks', title: 'Links that count', body: 'Nine link sources, links checked by Alaventra itself and scored prospects.' },
       { feature: 'link-building', title: 'Listed where buyers compare', body: 'G2, Capterra, TrustRadius and the other directories worth being on, checked against your listing — and pitches to the lists that leave you out.' },
     ],
     outcomes: [
@@ -136,8 +136,8 @@ export const solutions: Solution[] = [
     ],
     faqs: [
       { q: 'Which AI engines are covered?', a: 'ChatGPT, Gemini, Perplexity, Claude, Google AI Mode and AI Overviews.' },
-      { q: 'Can we track named competitors?', a: 'Yes. Add competitors to the website settings and Ascentra compares share of voice and links against them.' },
-      { q: 'Does Ascentra write case studies?', a: 'Yes. Enter the facts of a customer project once; Ascentra writes the case study page and later pages can cite it.' },
+      { q: 'Can we track named competitors?', a: 'Yes. Add competitors to the website settings and Alaventra compares share of voice and links against them.' },
+      { q: 'Does Alaventra write case studies?', a: 'Yes. Enter the facts of a customer project once; Alaventra writes the case study page and later pages can cite it.' },
     ],
     showcase: {
       feature: 'ai-visibility',
@@ -147,11 +147,11 @@ export const solutions: Solution[] = [
   },
   {
     slug: 'local-businesses',
-    name: 'Ascentra for local and multi-location businesses',
+    name: 'Alaventra for local and multi-location businesses',
     shortName: 'Local and multi-location',
     tagline: 'Local pages with verified details for every area you serve.',
     summary:
-      'Ascentra writes local pages for the cities and areas you serve, each with your verified name, address and phone, local schema and real proof — and checks that search engines and AI assistants recognise your business.',
+      'Alaventra writes local pages for the cities and areas you serve, each with your verified name, address and phone, local schema and real proof — and checks that search engines and AI assistants recognise your business.',
     icon: MapPin,
     image: 'brightOffice',
     pains: [
@@ -175,9 +175,9 @@ export const solutions: Solution[] = [
       'A brand and entity check with every audit',
     ],
     faqs: [
-      { q: 'Where do the address and phone come from?', a: 'From your business profile in Ascentra. The same verified details appear on every local page.' },
-      { q: 'Can I run several brands?', a: 'Yes. Each brand can be its own company in Ascentra with its own websites, team and budget.' },
-      { q: 'Does Ascentra manage our Google Business Profile?', a: 'No. It checks that your profile and your website agree, as part of the brand and entity check.' },
+      { q: 'Where do the address and phone come from?', a: 'From your business profile in Alaventra. The same verified details appear on every local page.' },
+      { q: 'Can I run several brands?', a: 'Yes. Each brand can be its own company in Alaventra with its own websites, team and budget.' },
+      { q: 'Does Alaventra manage our Google Business Profile?', a: 'No. It checks that your profile and your website agree, as part of the brand and entity check.' },
     ],
     showcase: {
       feature: 'content',
@@ -187,11 +187,11 @@ export const solutions: Solution[] = [
   },
   {
     slug: 'enterprise',
-    name: 'Ascentra for enterprise teams',
+    name: 'Alaventra for enterprise teams',
     shortName: 'Enterprise teams',
     tagline: 'SEO that passes your security review and lands in the tools your company already runs.',
     summary:
-      'Large teams need more than good analysis: sign-in through your identity provider, an audit trail, findings in the engineering backlog, numbers in the data warehouse and releases checked before they ship. Ascentra does the SEO work and fits into all of that.',
+      'Large teams need more than good analysis: sign-in through your identity provider, an audit trail, findings in the engineering backlog, numbers in the data warehouse and releases checked before they ship. Alaventra does the SEO work and fits into all of that.',
     icon: Landmark,
     image: 'openOffice',
     pains: [

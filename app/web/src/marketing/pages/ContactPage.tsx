@@ -35,7 +35,7 @@ const OPTIONS: { topic: ContactTopic; icon: LucideIcon; title: string; body: str
     topic: 'partnerships',
     icon: Handshake,
     title: 'Partnerships',
-    body: 'Agencies, consultants and technology partners who want to work with Ascentra or build on it.',
+    body: 'Agencies, consultants and technology partners who want to work with Alaventra or build on it.',
     cta: 'Start a conversation',
   },
 ];
@@ -188,7 +188,7 @@ const NEXT = [
 ];
 
 export default function ContactPage() {
-  useSeo({ title: 'Contact', description: 'Talk to the Ascentra team about plans, demos, support, partnerships or a security review.', path: '/contact' });
+  useSeo({ title: 'Contact', description: 'Talk to the Alaventra team about plans, demos, support, partnerships or a security review.', path: '/contact' });
   const formRef = useRef<HTMLFormElement>(null);
   const [, setParams] = useSearchParams();
 
@@ -271,14 +271,14 @@ export default function ContactPage() {
             </Reveal>
             <Reveal index={2} className="rounded-xl border border-line bg-page p-6 sm:p-7">
               <IconTile icon={ShieldCheck} size="sm" />
-              <h2 className="mt-4 font-display text-base font-semibold text-ink">Reviewing Ascentra?</h2>
-              <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-2">Choose “Security review or questionnaire” as the topic, or read how Ascentra protects your data first.</p>
+              <h2 className="mt-4 font-display text-base font-semibold text-ink">Reviewing Alaventra?</h2>
+              <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-2">Choose “Security review or questionnaire” as the topic, or read how Alaventra protects your data first.</p>
               <ArrowLink to="/security" className="mt-4 text-[14px]">
-                Security at Ascentra
+                Security at Alaventra
               </ArrowLink>
             </Reveal>
             <Reveal index={3} className="px-1 text-[13.5px] leading-relaxed text-ink-3">
-              Already using Ascentra?{' '}
+              Already using Alaventra?{' '}
               <Link to="/login" className="font-medium text-accent-text underline-offset-4 hover:underline">
                 Sign in
               </Link>{' '}

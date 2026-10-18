@@ -56,7 +56,7 @@ export function reservedHosts(): string[] {
   for (const h of [...ownHosts(), config.portal.cnameTarget].filter(Boolean)) {
     if (!h || h === 'localhost' || /^[\d.:[\]]+$/.test(h)) continue;
     out.add(h);
-    // app.ascentra.app → ascentra.app as well: nobody gets a sibling of the platform's own host
+    // app.alaventra.app → alaventra.app as well: nobody gets a sibling of the platform's own host
     const parts = h.split('.');
     if (parts.length > 2) out.add(parts.slice(-2).join('.'));
   }

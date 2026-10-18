@@ -1,7 +1,7 @@
 /**
- * Ascentra — Looker Studio community connector (G4, app/docs/INTEGRATIONS.md §6).
+ * Alaventra — Looker Studio community connector (G4, app/docs/INTEGRATIONS.md §6).
  *
- * Reads one export table of one website through Ascentra's read API with a company API key:
+ * Reads one export table of one website through Alaventra's read API with a company API key:
  *   GET <app>/api/v1                                   -> who the key belongs to (used to check the key)
  *   GET <app>/api/v1/tables                            -> the tables and their typed columns (the schema)
  *   GET <app>/api/v1/websites                          -> the company's websites (for the configuration list)
@@ -13,7 +13,7 @@
  */
 
 var cc = DataStudioApp.createCommunityConnector();
-var KEY_PROPERTY = 'ascentra.key';
+var KEY_PROPERTY = 'alaventra.key';
 var MAX_PAGES = 400; // 400 pages x 100 rows = the export's own 40,000-row view per request
 
 // ------------------------------------------------------------------ authentication (an API key)
@@ -46,7 +46,7 @@ function isAdminUser() {
 
 function appUrlOf(configParams) {
   var url = String((configParams && configParams.appUrl) || '').trim().replace(/\/+$/, '');
-  if (!/^https:\/\/[^\s/]+$/.test(url)) userError('Enter your Ascentra address, like https://app.your-company.com (https, no path).');
+  if (!/^https:\/\/[^\s/]+$/.test(url)) userError('Enter your Alaventra address, like https://app.your-company.com (https, no path).');
   return url;
 }
 
@@ -69,11 +69,11 @@ function apiGet(configParams, path) {
   } catch (e) {
     body = {};
   }
-  if (status === 401) userError('Ascentra refused the API key (unknown, revoked or expired). Create a new read-only key in Company settings -> API access and reconnect.');
+  if (status === 401) userError('Alaventra refused the API key (unknown, revoked or expired). Create a new read-only key in Company settings -> API access and reconnect.');
   if (status === 403) userError(body.error || 'This key may not read that.');
   if (status === 404) userError(body.error || 'Not found: check the website and the table.');
-  if (status === 429) userError('Too many requests to Ascentra right now (120 a minute per key). Try again in a minute.');
-  if (status < 200 || status >= 300) userError('Ascentra answered ' + status + (body.error ? ': ' + body.error : ''));
+  if (status === 429) userError('Too many requests to Alaventra right now (120 a minute per key). Try again in a minute.');
+  if (status < 200 || status >= 300) userError('Alaventra answered ' + status + (body.error ? ': ' + body.error : ''));
   return body;
 }
 
@@ -82,8 +82,8 @@ function apiGet(configParams, path) {
 function getConfig(request) {
   var config = cc.getConfig();
   var params = (request && request.configParams) || {};
-  config.newInfo().setId('intro').setText('Ascentra: one table of one website per data source. Use a key with only the Read permission.');
-  config.newTextInput().setId('appUrl').setName('Ascentra address').setHelpText('e.g. https://app.your-company.com').setPlaceholder('https://').setIsDynamic(true);
+  config.newInfo().setId('intro').setText('Alaventra: one table of one website per data source. Use a key with only the Read permission.');
+  config.newTextInput().setId('appUrl').setName('Alaventra address').setHelpText('e.g. https://app.your-company.com').setPlaceholder('https://').setIsDynamic(true);
   if (params.appUrl) {
     var sites = apiGet(params, '/api/v1/websites?limit=100').items || [];
     var site = config.newSelectSingle().setId('websiteId').setName('Website').setIsDynamic(true);

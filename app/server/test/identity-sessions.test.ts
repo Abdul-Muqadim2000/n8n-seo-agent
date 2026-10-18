@@ -95,7 +95,7 @@ describe('company idle timeout', () => {
     await owner.c.put(`/api/orgs/${org.id}/security`, { requireMfa: false, mfaTrustGoogle: false, mfaTrustSso: true, idleTimeoutMinutes: 15, auditRetentionDays: 365 });
     await idleFor('poll@sess.test', 5);
     const before = (await db.query.sessions.findFirst({ where: eq(schema.sessions.userId, await userId('poll@sess.test')) }))!.lastSeenAt.getTime();
-    await owner.c.get('/api/me', { 'x-ascentra-passive': '1' });
+    await owner.c.get('/api/me', { 'x-alaventra-passive': '1' });
     const passive = (await db.query.sessions.findFirst({ where: eq(schema.sessions.userId, await userId('poll@sess.test')) }))!.lastSeenAt.getTime();
     expect(passive).toBe(before);
     await owner.c.get('/api/me');

@@ -46,8 +46,8 @@ export const WEBHOOKS = {
   /** an endpoint whose last N deliveries all failed is switched off, with the reason */
   disableAfterFailures: 25,
   logDays: 30,
-  eventHeader: 'X-Ascentra-Event',
-  deliveryHeader: 'X-Ascentra-Delivery',
+  eventHeader: 'X-Alaventra-Event',
+  deliveryHeader: 'X-Alaventra-Delivery',
   /** receivers should refuse a timestamp older than this */
   toleranceSeconds: 300,
 } as const;
@@ -217,7 +217,7 @@ export function eventLines(e: EventEnvelope): { headline: string; lines: string[
   const d = e.data;
   const site = e.website ? ` · ${e.website.domain}` : '';
   const report = obj(d.report);
-  const link = text(report.url) ? { label: 'Open in Ascentra', url: text(report.url) } : text(obj(d.run).url) ? { label: 'Open the run', url: text(obj(d.run).url) } : null;
+  const link = text(report.url) ? { label: 'Open in Alaventra', url: text(report.url) } : text(obj(d.run).url) ? { label: 'Open the run', url: text(obj(d.run).url) } : null;
   switch (e.type) {
     case 'run.completed':
       return { headline: `Finished: ${text(obj(d.run).title)}${site}`, lines: [], link };
@@ -398,8 +398,8 @@ export function findingTicket(f: FindingForTicket, domain: string, link: string)
     p.push('Example pages:');
     for (const u of f.sampleUrls.slice(0, 10)) p.push(`- ${u}`);
   }
-  p.push(f.fix ? `The fix: ${f.fix}` : 'The fix: see the finding in Ascentra.');
-  p.push('When it is fixed, mark it "I fixed this" in Ascentra: the daily key-page watch checks it again the next morning.');
+  p.push(f.fix ? `The fix: ${f.fix}` : 'The fix: see the finding in Alaventra.');
+  p.push('When it is fixed, mark it "I fixed this" in Alaventra: the daily key-page watch checks it again the next morning.');
   return { title: `[SEO] ${f.title}`.slice(0, 250), paragraphs: p, link };
 }
 
@@ -409,8 +409,8 @@ export function recommendationTicket(r: { title: string; body: string; action?: 
   return { title: `[SEO] ${r.title}`.slice(0, 250), paragraphs: p, link };
 }
 
-export const ticketMarkdown = (t: TicketContent): string => [...t.paragraphs, `[Open in Ascentra](${t.link})`].join('\n\n');
-export const ticketPlain = (t: TicketContent): string => [...t.paragraphs, `Open in Ascentra: ${t.link}`].join('\n\n');
+export const ticketMarkdown = (t: TicketContent): string => [...t.paragraphs, `[Open in Alaventra](${t.link})`].join('\n\n');
+export const ticketPlain = (t: TicketContent): string => [...t.paragraphs, `Open in Alaventra: ${t.link}`].join('\n\n');
 
 /** Atlassian Document Format for a Jira description (https://developer.atlassian.com/cloud/jira/platform/apis/document/structure/) */
 export function ticketAdf(t: TicketContent): P {
@@ -429,7 +429,7 @@ export function ticketAdf(t: TicketContent): P {
       content.push(para(line));
     }
   }
-  content.push({ type: 'paragraph', content: [{ type: 'text', text: 'Open in Ascentra', marks: [{ type: 'link', attrs: { href: t.link } }] }] });
+  content.push({ type: 'paragraph', content: [{ type: 'text', text: 'Open in Alaventra', marks: [{ type: 'link', attrs: { href: t.link } }] }] });
   return { type: 'doc', version: 1, content };
 }
 
@@ -458,8 +458,8 @@ const c = (name: string, type: ColType, description: string): ExportColumn => ({
 
 /** Added to every row of every table. */
 export const EXPORT_COMMON: readonly ExportColumn[] = [
-  c('company_id', 'STRING', 'Your company id in Ascentra'),
-  c('website_id', 'STRING', 'The website id in Ascentra (null for analyses without a website)'),
+  c('company_id', 'STRING', 'Your company id in Alaventra'),
+  c('website_id', 'STRING', 'The website id in Alaventra (null for analyses without a website)'),
   c('website_domain', 'STRING', 'The website, e.g. example.com'),
   c('exported_at', 'TIMESTAMP', 'When this export ran (UTC)'),
 ];
@@ -712,7 +712,7 @@ const prefixField = z
   .max(200)
   .regex(/^[A-Za-z0-9!_.*'()/-]*$/, 'Letters, digits and / - _ . only')
   .transform((v) => v.replace(/^\/+|\/+$/g, ''))
-  .default('ascentra');
+  .default('alaventra');
 const tablesField = z.array(z.enum(EXPORT_TABLE_IDS as [string, ...string[]])).min(1, 'Choose at least one table').default([...EXPORT_TABLE_IDS]);
 const scheduleFields = {
   schedule: z.enum(EXPORT_SCHEDULES).default('daily'),
@@ -771,7 +771,7 @@ export const bigQueryDestinationSchema = z.object({
   projectId: z.string().trim().regex(/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/, 'The Google Cloud project id, e.g. acme-analytics'),
   datasetId: z.string().trim().regex(/^[A-Za-z_][A-Za-z0-9_]{0,1023}$/, 'The dataset id: letters, digits and _'),
   location: z.string().trim().max(40).default('US'),
-  tablePrefix: z.string().trim().regex(/^[A-Za-z0-9_]{0,40}$/, 'Letters, digits and _ only').default('ascentra_'),
+  tablePrefix: z.string().trim().regex(/^[A-Za-z0-9_]{0,40}$/, 'Letters, digits and _ only').default('alaventra_'),
   tables: tablesField,
   ...scheduleFields,
   /** the whole JSON key file, as text */

@@ -86,9 +86,9 @@ export const CMS = {
   leaseMinutes: 2,
   /** images sent in one webhook body, and their total size */
   webhookMaxImageBytes: 3 * 1024 * 1024,
-  signatureHeader: 'X-Ascentra-Signature',
-  timestampHeader: 'X-Ascentra-Timestamp',
-  eventHeader: 'X-Ascentra-Event',
+  signatureHeader: 'X-Alaventra-Signature',
+  timestampHeader: 'X-Alaventra-Timestamp',
+  eventHeader: 'X-Alaventra-Event',
 } as const;
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -149,7 +149,7 @@ export function fieldMapProblems(kind: CmsKind, map: CmsFieldMap, remote: readon
       continue;
     }
     if (kind === 'webflow' && (dst === 'name' || dst === 'slug')) {
-      out.push(`${label}: "${f.name}" is filled by Ascentra already (the title and the slug)`);
+      out.push(`${label}: "${f.name}" is filled by Alaventra already (the title and the slug)`);
       continue;
     }
     if (used.has(dst)) out.push(`${f.name} is mapped twice (${used.get(dst)} and ${label})`);

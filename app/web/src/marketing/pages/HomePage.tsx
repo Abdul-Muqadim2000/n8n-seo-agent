@@ -1,6 +1,6 @@
 import { Link } from 'react-router';
 import { ArrowRight, BadgeCheck, Bot, Check, Fingerprint, Globe, Link2, Lock, MessageSquare, Minus, ScrollText, Search, ShieldCheck, Sparkles, Users, Wallet, type LucideIcon } from 'lucide-react';
-import { AscentraMark } from '@/components/brand/AscentraMark';
+import { AlaventraMark } from '@/components/brand/AlaventraMark';
 import { ButtonLink } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
@@ -31,7 +31,7 @@ import { useSeo } from '../useSeo';
 // next to the main CTA: what removes the risk of trying it (facts from pricing.ts and the product)
 const HERO_FACTS = ['Free to set up', 'First site check on day one', 'Cost shown before every run', 'Nothing goes live without your OK'];
 
-// "Why Ascentra": the same SEO jobs done by hand and with Ascentra, in plain words (real capabilities only)
+// "Why Alaventra": the same SEO jobs done by hand and with Alaventra, in plain words (real capabilities only)
 const COMPARE: { job: string; byHand: string; withUs: string }[] = [
   {
     job: 'Knowing what to write',
@@ -60,7 +60,7 @@ const COMPARE: { job: string; byHand: string; withUs: string }[] = [
   },
 ];
 
-// "Every place people look for you": what Ascentra does on each surface (AI engines and links are on the Growth plan)
+// "Every place people look for you": what Alaventra does on each surface (AI engines and links are on the Growth plan)
 const SURFACES: { icon: LucideIcon; name: string; what: string }[] = [
   { icon: Search, name: 'Google search', what: 'Pages written for what your buyers search, with positions checked every week' },
   { icon: Sparkles, name: 'Google AI Overviews and AI Mode', what: 'Checked for your name and your links' },
@@ -77,7 +77,7 @@ const PLATFORM_FACTS: Fact[] = [
   { value: 1000, label: 'pages per crawl, JavaScript included' },
 ];
 
-// what happens when, from sign-up on — work Ascentra does, never a promised Google position
+// what happens when, from sign-up on — work Alaventra does, never a promised Google position
 const TIMELINE = [
   {
     when: 'Day 1',
@@ -113,23 +113,23 @@ const ENTERPRISE = [
 const FAQS: FaqItem[] = [
   {
     q: 'What does SEO actually do for my business?',
-    a: 'SEO gets your website shown when people search Google — or ask ChatGPT — for what you sell. Those visitors are already looking for something like yours, and you do not pay for every click the way you do with ads. Ascentra does the work that gets you there: finding the right searches, writing the pages, fixing the site and tracking the results.',
+    a: 'SEO gets your website shown when people search Google — or ask ChatGPT — for what you sell. Those visitors are already looking for something like yours, and you do not pay for every click the way you do with ads. Alaventra does the work that gets you there: finding the right searches, writing the pages, fixing the site and tracking the results.',
   },
   {
     q: 'How fast will I see results?',
     a: 'You can connect a website, check it and have your first page written on day one, and the weekly schedule starts that same week. Moving up on Google takes longer — usually weeks to a few months, depending on how hard the search is. Nobody can honestly promise a position on Google, and we don’t. What we do promise is that the work starts on day one and every Monday you see what moved.',
   },
   {
-    q: 'Do we need an SEO specialist to use Ascentra?',
+    q: 'Do we need an SEO specialist to use Alaventra?',
     a: 'No. Every verdict, audit finding and recommendation explains itself in plain language, and the pipeline tells you what to do next. Specialists get the detail they need to go further.',
   },
   {
     q: 'What is the difference between Auto and Manual?',
-    a: 'On Auto, Ascentra does the step on schedule. On Manual, the step waits in “Needs you” until someone on your team approves it. You choose per ladder and per website.',
+    a: 'On Auto, Alaventra does the step on schedule. On Manual, the step waits in “Needs you” until someone on your team approves it. You choose per ladder and per website.',
   },
   {
-    q: 'Does Ascentra publish to our website?',
-    a: 'Only when you say so. Written pages go to your WordPress, Webflow or Contentful as drafts; an owner or admin publishes one live with a confirmation. Ascentra then checks the live page and tracks it.',
+    q: 'Does Alaventra publish to our website?',
+    a: 'Only when you say so. Written pages go to your WordPress, Webflow or Contentful as drafts; an owner or admin publishes one live with a confirmation. Alaventra then checks the live page and tracks it.',
   },
   { q: 'Which AI engines do you check?', a: 'ChatGPT, Gemini, Perplexity, Claude, Google AI Mode and AI Overviews — plus Microsoft Copilot and the ChatGPT and Gemini APIs if you want them — with a panel of up to 500 buyer questions by topic, buyer role and market.' },
   {
@@ -186,7 +186,7 @@ function Hero() {
       {/* hairline grid behind the headline, fading out from the top centre (a mask, not a colour gradient) */}
       <div aria-hidden className="mk-grid pointer-events-none absolute inset-x-0 top-0 -z-10 h-[760px]" />
       {/* the brand mark, large and faint behind the headline (ink on light, light on dark), a slow wave running from its sun to its wing tip */}
-      <AscentraMark
+      <AlaventraMark
         wave="ambient"
         className="pointer-events-none absolute -right-40 top-64 -z-10 w-[420px] text-ink opacity-[0.15] sm:-right-24 sm:top-10 sm:w-[560px] lg:-right-10 lg:top-6 lg:w-[720px]"
       />
@@ -209,7 +209,7 @@ function Hero() {
           </div>
           <div className="animate-fade-up" style={{ animationDelay: '140ms' }}>
             <p className="mx-auto mt-6 max-w-2xl text-pretty text-lg leading-relaxed text-ink-2 sm:text-xl">
-              Ascentra is SEO that runs itself. It finds what your buyers search on Google and ask ChatGPT, writes the pages that answer them, fixes what holds your site back — and shows you every week that more people are finding you.
+              Alaventra is SEO that runs itself. It finds what your buyers search on Google and ask ChatGPT, writes the pages that answer them, fixes what holds your site back — and shows you every week that more people are finding you.
             </p>
           </div>
           <div className="mt-9 flex flex-wrap justify-center gap-3 animate-fade-up" style={{ animationDelay: '210ms' }}>
@@ -273,7 +273,7 @@ function Hero() {
               </p>
             </FloatCard>
             <div className="rounded-[20px] border border-line bg-surface p-1.5 shadow-overlay sm:p-2">
-              <BrowserFrame url="app.ascentra.com/overview" label="Product preview" className="[&>div]:shadow-none">
+              <BrowserFrame url="app.alaventra.com/overview" label="Product preview" className="[&>div]:shadow-none">
                 <DashboardMockup />
               </BrowserFrame>
             </div>
@@ -287,7 +287,7 @@ function Hero() {
   );
 }
 
-/** Under the hero, on ink: the engines and tools Ascentra works with, typeset as a quiet wordmark row (names only, no third-party logos). */
+/** Under the hero, on ink: the engines and tools Alaventra works with, typeset as a quiet wordmark row (names only, no third-party logos). */
 function TrustStrip() {
   return (
     <div className="relative overflow-hidden bg-ink-surface pb-16 pt-12 sm:pb-20 sm:pt-14 xl:pt-24">
@@ -309,15 +309,15 @@ function TrustStrip() {
   );
 }
 
-function WhyAscentra() {
+function WhyAlaventra() {
   return (
     <Section tone="surface">
       <div className="grid grid-cols-1 items-start gap-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-20">
         <div className="lg:sticky lg:top-28">
           <SectionHeading
-            eyebrow="Why Ascentra"
+            eyebrow="Why Alaventra"
             title="A great product is half the job. People have to find it."
-            lead="Most buyers start with a Google search or a question to ChatGPT. If you are not in those answers, you do not exist for them. Ascentra puts your business there — and keeps it there, week after week."
+            lead="Most buyers start with a Google search or a question to ChatGPT. If you are not in those answers, you do not exist for them. Alaventra puts your business there — and keeps it there, week after week."
           >
             <ButtonLink to="/signup" size="lg" className="group">
               Get found — start free
@@ -349,15 +349,15 @@ function WhyAscentra() {
         </Reveal>
       </div>
 
-      {/* the same five jobs, by hand and with Ascentra */}
+      {/* the same five jobs, by hand and with Alaventra */}
       <Reveal className="mt-20 sm:mt-24">
         <h3 className="max-w-2xl font-display text-2xl font-semibold tracking-[-0.01em] text-balance text-ink sm:text-[1.75rem]">SEO is five jobs, every week. Here is who does them.</h3>
       </Reveal>
-      <div className="mt-8 overflow-hidden rounded-2xl border border-line" role="table" aria-label="SEO by hand compared with Ascentra">
+      <div className="mt-8 overflow-hidden rounded-2xl border border-line" role="table" aria-label="SEO by hand compared with Alaventra">
         <div role="row" className="hidden grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)_minmax(0,1.15fr)] border-b border-line bg-page md:grid">
           <span role="columnheader" className="px-6 py-4 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3">The job</span>
           <span role="columnheader" className="px-6 py-4 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3">Doing it by hand</span>
-          <span role="columnheader" className="bg-accent-soft px-6 py-4 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-accent-text">With Ascentra</span>
+          <span role="columnheader" className="bg-accent-soft px-6 py-4 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-accent-text">With Alaventra</span>
         </div>
         {COMPARE.map((c, i) => (
           <Reveal
@@ -379,7 +379,7 @@ function WhyAscentra() {
             <span role="cell" className="flex gap-3 bg-accent-soft/60 px-5 pb-5 pt-2 text-[14px] font-medium leading-relaxed text-ink sm:px-6 md:py-5">
               <Check className="mt-1 size-3.5 shrink-0 text-accent-text" strokeWidth={2.75} aria-hidden />
               <span>
-                <span className="sr-only">With Ascentra: </span>
+                <span className="sr-only">With Alaventra: </span>
                 {c.withUs}
               </span>
             </span>
@@ -480,7 +480,7 @@ function LoopBand() {
     <Section tone="surface" bordered>
       <div className="grid grid-cols-1 items-center gap-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,540px)] lg:gap-20">
         <div>
-          <SectionHeading eyebrow="The growth loop" title="Research to results, every week." lead="Ascentra runs the same six steps for every website, every week. Each loop starts from what the last one learned." />
+          <SectionHeading eyebrow="The growth loop" title="Research to results, every week." lead="Alaventra runs the same six steps for every website, every week. Each loop starts from what the last one learned." />
           <ol className="mt-10 grid gap-x-8 gap-y-6 sm:grid-cols-2">
             {LOOP_STEPS.map((s, i) => (
               <Reveal as="li" key={s.label} index={i} className="flex gap-4">
@@ -510,7 +510,7 @@ function AiSpotlight() {
           <SectionHeading
             eyebrow="AI search visibility"
             title="Find out if ChatGPT recommends you — and fix it when it doesn’t."
-            lead="More and more buyers ask an AI assistant for a shortlist before they ever search. Ascentra asks the same questions every day and shows where you are named, linked or missing."
+            lead="More and more buyers ask an AI assistant for a shortlist before they ever search. Alaventra asks the same questions every day and shows where you are named, linked or missing."
           />
           <div className="mt-9">
             <CheckList onInk items={[f.benefits[1], f.benefits[2], f.benefits[3], f.benefits[4]]} />
@@ -541,7 +541,7 @@ function LadderSpotlight() {
           <SectionHeading
             eyebrow="Keyword ladders"
             title="Win the big searches by starting with the easier ones."
-            lead="A brand-new page rarely beats the leaders for a big search on its own. Ascentra plans smaller pages you can win first, writes them in order and links each one up to the big one."
+            lead="A brand-new page rarely beats the leaders for a big search on its own. Alaventra plans smaller pages you can win first, writes them in order and links each one up to the big one."
           />
           <div className="mt-9">
             <CheckList
@@ -569,7 +569,7 @@ function BacklinksSpotlight() {
         align="center"
         eyebrow="Backlinks from every source"
         title="See every site that links to you — and the ones that should."
-        lead="Links from other websites are one of the strongest signals Google uses. Ascentra gathers them from nine sources, visits each linking page itself and finds the sites that should link to you next."
+        lead="Links from other websites are one of the strongest signals Google uses. Alaventra gathers them from nine sources, visits each linking page itself and finds the sites that should link to you next."
       />
       <Reveal className="mt-14 sm:mt-16">
         <LinkSourcesDiagram />
@@ -604,7 +604,7 @@ function EnterpriseBand() {
             lead="Workspaces per company, roles for every person, single sign-on, verified ownership before any data is shown and a budget check before any paid work."
           >
             <ButtonLink to="/security" variant="secondary" icon={<ShieldCheck className="size-4" aria-hidden />} className="max-sm:h-10">
-              Security at Ascentra
+              Security at Alaventra
             </ButtonLink>
             <ArrowLink to="/contact?topic=sales" className="h-9">
               Talk to sales
@@ -731,13 +731,13 @@ function FaqSection() {
 export default function HomePage() {
   useSeo({
     title: 'Get found on Google and ChatGPT — SEO that runs itself',
-    description: 'You built the product; Ascentra brings the traffic. It finds what your buyers search for, writes the pages, fixes your site and tracks Google and AI answers every week.',
+    description: 'You built the product; Alaventra brings the traffic. It finds what your buyers search for, writes the pages, fixes your site and tracks Google and AI answers every week.',
     path: '/',
   });
   return (
     <>
       <Hero />
-      <WhyAscentra />
+      <WhyAlaventra />
       <Timeline />
       <CapabilityGrid />
       <LoopBand />

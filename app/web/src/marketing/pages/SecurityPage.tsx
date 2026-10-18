@@ -77,7 +77,7 @@ const GROUPS: { icon: LucideIcon; title: string; items: string[] }[] = [
     items: [
       'Proof by Search Console ownership, a DNS TXT record or a meta tag',
       'One verified owner per domain',
-      'Proof must come from a person — Ascentra’s own Google access never counts',
+      'Proof must come from a person — Alaventra’s own Google access never counts',
       'A GA4 property is accepted only when it measures the verified domain',
       'An agency portal address is proven with its own DNS record, checked again every few hours, and stops being served when the proof disappears',
       'Certificates are only issued for portal addresses that are verified',
@@ -99,7 +99,7 @@ const GROUPS: { icon: LucideIcon; title: string; items: string[] }[] = [
     title: 'Application safeguards',
     items: [
       'CSRF protection on every request that changes something',
-      'A strict Content-Security-Policy: scripts load only from Ascentra itself',
+      'A strict Content-Security-Policy: scripts load only from Alaventra itself',
       'Report previews open in sandboxed frames, and files are served with a fixed type',
       'Secret tokens are redacted from logs',
       'Rate limits on sign-in, runs, invitations and verification',
@@ -129,23 +129,23 @@ const ROLE_ROWS: { action: string; allowed: [boolean, boolean, boolean, boolean]
 ];
 
 const GOOGLE_STEPS = [
-  { title: 'You add Ascentra as a user', body: 'In Search Console and GA4, you add Ascentra’s service account to the properties you choose — nothing else.' },
-  { title: 'Ascentra reads, read-only', body: 'Search performance, index coverage, sitemaps and traffic. Ascentra asks Google for read access only, so it cannot change your settings.' },
+  { title: 'You add Alaventra as a user', body: 'In Search Console and GA4, you add Alaventra’s service account to the properties you choose — nothing else.' },
+  { title: 'Alaventra reads, read-only', body: 'Search performance, index coverage, sitemaps and traffic. Alaventra asks Google for read access only, so it cannot change your settings.' },
   { title: 'You stay in charge', body: 'Remove the service account in Google at any time to stop access. Error messages never list other customers’ properties.' },
 ];
 
 const FAQS: FaqItem[] = [
   {
-    q: 'Does Ascentra change anything on our website?',
-    a: 'Only what you ask it to. Ascentra reads your website and your Google data. Written pages arrive as a package, or as drafts in the CMS you connected; only an owner or admin can publish one live. CMS credentials are encrypted at rest, never shown again, and the address you connect must be a public https host.',
+    q: 'Does Alaventra change anything on our website?',
+    a: 'Only what you ask it to. Alaventra reads your website and your Google data. Written pages arrive as a package, or as drafts in the CMS you connected; only an owner or admin can publish one live. CMS credentials are encrypted at rest, never shown again, and the address you connect must be a public https host.',
   },
   {
-    q: 'What access does Ascentra need to Google?',
-    a: 'Read-only access to Search Console and GA4, through a service account you add as a user to the properties you choose. To prove ownership with Google, you sign in yourself; Ascentra’s own access never counts as proof.',
+    q: 'What access does Alaventra need to Google?',
+    a: 'Read-only access to Search Console and GA4, through a service account you add as a user to the properties you choose. To prove ownership with Google, you sign in yourself; Alaventra’s own access never counts as proof.',
   },
   {
     q: 'Who can see our data?',
-    a: 'Only the people in your company, according to their role. Other companies on Ascentra never see your websites, runs or reports.',
+    a: 'Only the people in your company, according to their role. Other companies on Alaventra never see your websites, runs or reports.',
   },
   {
     q: 'How do we remove a person or a website?',
@@ -160,7 +160,7 @@ const FAQS: FaqItem[] = [
     a: 'Yes. Owners and admins see sign-ins and failed sign-ins, two-step changes, team and role changes, websites, settings, API keys and sharing, with who, when and from which address, and can export it as CSV. Entries cannot be edited or deleted; you choose how long they are kept.',
   },
   {
-    q: 'Does Ascentra send e-mail in our name?',
+    q: 'Does Alaventra send e-mail in our name?',
     a: 'Only link-building pitches, only from a mailbox you connected, and by default only after a person approved each one. Every e-mail carries your name, company, postal address and an opt-out that is honoured for good; recipients in countries that expect prior consent are held until you confirm it; and an address with no mail server is never written to.',
   },
   {
@@ -176,7 +176,7 @@ function Groups() {
         id="layers-title"
         eyebrow="Protection at every layer"
         title="What protects your account, your company and your data."
-        lead="Plain facts about how Ascentra works today."
+        lead="Plain facts about how Alaventra works today."
       />
       <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {GROUPS.map((g, i) => (
@@ -208,7 +208,7 @@ function GoogleAccess() {
           id="google-title"
           eyebrow="Your Google data"
           title="Read-only access, on the properties you choose."
-          lead="Search Console and GA4 are where your most sensitive search data lives. Ascentra reads them; it never writes to them."
+          lead="Search Console and GA4 are where your most sensitive search data lives. Alaventra reads them; it never writes to them."
         />
         <ol className="relative space-y-4">
           {GOOGLE_STEPS.map((s, i) => (
@@ -314,7 +314,7 @@ function Disclosure() {
           <div className="flex h-full gap-5 rounded-xl border border-line bg-page p-6 sm:p-7">
             <IconTile icon={ShieldCheck} />
             <div>
-              <h2 className="font-display text-lg font-semibold tracking-[-0.01em] text-ink">Reviewing Ascentra for your company?</h2>
+              <h2 className="font-display text-lg font-semibold tracking-[-0.01em] text-ink">Reviewing Alaventra for your company?</h2>
               <p className="mt-2 text-[14px] leading-relaxed text-ink-2">Send your questionnaire or checklist and a person on the team will go through it with you.</p>
               <ArrowLink to="/contact?topic=security" className="mt-4">
                 Start a security review
@@ -344,7 +344,7 @@ export default function SecurityPage() {
   useSeo({
     title: 'Security',
     description:
-      'How Ascentra protects your data: argon2id passwords, Google sign-in with PKCE, four roles, verified website ownership, isolation per company, a strict CSP and budget caps.',
+      'How Alaventra protects your data: argon2id passwords, Google sign-in with PKCE, four roles, verified website ownership, isolation per company, a strict CSP and budget caps.',
     path: '/security',
   });
   return (
@@ -352,7 +352,7 @@ export default function SecurityPage() {
       <PageHero
         eyebrow="Security"
         title="Your data, your websites, your rules."
-        lead="Ascentra works with your Search Console, analytics and content. Here is how that is protected, from sign-in to the reports you download."
+        lead="Alaventra works with your Search Console, analytics and content. Here is how that is protected, from sign-in to the reports you download."
         watermark
         actions={
           <>

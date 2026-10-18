@@ -280,7 +280,7 @@ describe.skipIf(!DB)('CMS publishing routes (real database)', () => {
   });
 
   it('a webhook connection shows its signing secret once', async () => {
-    const res = await req('owner', 'POST', `${site1()}/connections`, { kind: 'webhook', baseUrl: 'https://hooks.example.org/ascentra' });
+    const res = await req('owner', 'POST', `${site1()}/connections`, { kind: 'webhook', baseUrl: 'https://hooks.example.org/alaventra' });
     expect(res.json().signingSecret).toMatch(/^whsec_/);
     const list = await req('owner', 'GET', `${site1()}/connections`);
     expect(list.body).not.toContain(res.json().signingSecret);

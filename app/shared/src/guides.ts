@@ -92,7 +92,7 @@ export const GUIDE_AREAS: { id: GuideArea; label: string; description: string }[
   { id: 'website', label: 'Changes on your website', description: 'Files, pages and tools that live on your side' },
   { id: 'mailbox', label: 'Your mailbox', description: 'Link-building pitches go out from your own address' },
   { id: 'business', label: 'About your business', description: 'What every page is written from and checked against' },
-  { id: 'company', label: 'Your company in Ascentra', description: 'Budget, team and who may do what' },
+  { id: 'company', label: 'Your company in Alaventra', description: 'Budget, team and who may do what' },
   { id: 'security', label: 'Sign-in and security', description: 'Two-step verification, single sign-on and provisioning' },
   { id: 'integrations', label: 'Connecting your tools', description: 'Slack and Teams, Jira / Linear / Asana, your warehouse, Looker Studio and AI assistants' },
   { id: 'agency', label: 'Your agency portal', description: 'Your brand, your domain and your clients’ access' },
@@ -100,7 +100,7 @@ export const GUIDE_AREAS: { id: GuideArea; label: string; description: string }[
 
 const V = {
   domain: { key: 'domain', label: 'Your website', example: 'your-domain.com' },
-  serviceAccount: { key: 'serviceAccount', label: 'The address that reads your Google data', example: 'reader@ascentra-seo.iam.gserviceaccount.com' },
+  serviceAccount: { key: 'serviceAccount', label: 'The address that reads your Google data', example: 'reader@alaventra-seo.iam.gserviceaccount.com' },
   dnsHost: { key: 'dnsHost', label: 'Host / name of the record', example: 'your-domain.com' },
   dnsValue: { key: 'dnsValue', label: 'Value of the record', example: 'seo-agent-verification=abc123def456' },
   metaTag: { key: 'metaTag', label: 'The meta tag', example: '<meta name="seo-agent-verification" content="abc123def456" />' },
@@ -134,11 +134,11 @@ export const GUIDES = [
       {
         title: 'Prove the domain is yours to Google',
         body: 'For a **Domain** property Google gives you one TXT record to add at your DNS provider. For a **URL prefix** property you can instead upload an HTML file, add a meta tag or use an existing Google Analytics tag.',
-        note: 'This is Google’s own check and separate from proving ownership inside Ascentra — but the work is the same kind, and the guide for the DNS record walks through the providers.',
+        note: 'This is Google’s own check and separate from proving ownership inside Alaventra — but the work is the same kind, and the guide for the DNS record walks through the providers.',
       },
       {
         title: 'Give it a few days, then come back',
-        body: 'A brand-new property starts empty and fills over the next two or three days. Everything else in Ascentra works meanwhile.',
+        body: 'A brand-new property starts empty and fills over the next two or three days. Everything else in Alaventra works meanwhile.',
       },
     ],
     done: 'The property for {{domain}} appears in the property switcher, and **Performance** shows rows within a few days.',
@@ -152,7 +152,7 @@ export const GUIDES = [
   {
     id: 'search-console-access',
     area: 'google',
-    title: 'Let Ascentra read your Search Console',
+    title: 'Let Alaventra read your Search Console',
     why: 'This is where clicks, impressions, the searches you already rank for, your sitemaps and index coverage come from. Without it the weekly report, the audits and half the recommendations run blind.',
     where: 'Google Search Console',
     who: 'An owner of the Search Console property',
@@ -176,12 +176,12 @@ export const GUIDES = [
         body: 'Choose **Full** and click **Add**. Full is what lets us read sitemaps and whether your pages are indexed; **Restricted** hides both. Nothing is ever changed, submitted or removed in your account.',
         warn: 'Pick **Full**, not **Owner**: ownership is yours, and we never need it.',
       },
-      { title: 'Come back and press “Check again”', body: 'Ascentra re-reads the connection straight away and shows the property name and permission it found.' },
+      { title: 'Come back and press “Check again”', body: 'Alaventra re-reads the connection straight away and shows the property name and permission it found.' },
     ],
     done: 'The Google data card shows **Connected**, your property and permission **Full**.',
     trouble: [
       { q: 'The Add user button is greyed out', a: 'Only an **owner** of the property can add users. Search Console shows who the owners are on the same page — ask one of them, or send them this guide.' },
-      { q: 'Ascentra says the access is restricted', a: 'Open the same screen, click the three dots next to our address and change the permission from **Restricted** to **Full**.' },
+      { q: 'Alaventra says the access is restricted', a: 'Open the same screen, click the three dots next to our address and change the permission from **Restricted** to **Full**.' },
       { q: 'We have several properties for the same site', a: 'The **Domain** property (no https:// in front of the name) is the one to use: it covers www, the bare domain and every subdomain.' },
     ],
     related: ['search-console-property', 'ga4-access'],
@@ -193,7 +193,7 @@ export const GUIDES = [
     requires: 'google_signin',
     title: 'Prove the website is yours with your Google account',
     why: 'The fastest of the three ways to prove ownership: if your own Google account is already a verified owner in Search Console, there is nothing to add anywhere.',
-    where: 'Ascentra, then Google’s sign-in screen',
+    where: 'Alaventra, then Google’s sign-in screen',
     who: 'Whoever is a verified owner in Search Console',
     minutes: 1,
     vars: [V.domain],
@@ -201,7 +201,7 @@ export const GUIDES = [
       { title: 'Press “Verify with Google”', body: 'You go to Google’s own sign-in screen. Choose the account that is an **owner** of {{domain}} in Search Console.' },
       {
         title: 'Allow the read-only check',
-        body: 'Google asks whether Ascentra may see your Search Console properties. That permission is read-only: we check that your account owns {{domain}} and read nothing else at this point.',
+        body: 'Google asks whether Alaventra may see your Search Console properties. That permission is read-only: we check that your account owns {{domain}} and read nothing else at this point.',
       },
       { title: 'You come back verified', body: 'The website unlocks immediately. The next step is connecting the data itself, which is a separate, equally short job.' },
     ],
@@ -219,7 +219,7 @@ export const GUIDES = [
   {
     id: 'ga4-access',
     area: 'google',
-    title: 'Let Ascentra read your Google Analytics',
+    title: 'Let Alaventra read your Google Analytics',
     why: 'Analytics turns rankings into money: visits from search, which pages they land on, and the sign-ups, leads or sales that follow. It is optional — everything else works without it.',
     where: 'Google Analytics (GA4)',
     who: 'An administrator of the GA4 property',
@@ -242,7 +242,7 @@ export const GUIDES = [
         title: 'Choose the Viewer role and click Add',
         body: 'Viewer can read reports and nothing else: it cannot change settings, edit events or delete anything.',
       },
-      { title: 'Come back and press “Check again”', body: 'Ascentra lists the properties it can now read. Pick the one that measures {{domain}} — the one whose web stream points at your domain is marked and listed first.' },
+      { title: 'Come back and press “Check again”', body: 'Alaventra lists the properties it can now read. Pick the one that measures {{domain}} — the one whose web stream points at your domain is marked and listed first.' },
     ],
     done: 'The Google data card shows **Connected** with your property name under Google Analytics 4.',
     trouble: [
@@ -519,7 +519,7 @@ export const GUIDES = [
   {
     id: 'publish-page',
     area: 'website',
-    title: 'Publish a page Ascentra wrote',
+    title: 'Publish a page Alaventra wrote',
     why: 'A written page earns nothing until it is live. Publishing it as planned — same slug, same links, same images — is what lets the rest of the plan and the rank tracking follow it.',
     where: 'Your CMS',
     minutes: 20,
@@ -548,7 +548,7 @@ export const GUIDES = [
         body: 'Copy the SEO title and the meta description from `meta.json` into your SEO plugin’s fields. The image plan names each image, where it goes and its alt text — add them before publishing, not after.',
       },
       {
-        title: 'Publish, then tell Ascentra',
+        title: 'Publish, then tell Alaventra',
         body: 'Use **I published a page** and paste its address on {{domain}}. We read the live page — title, description, structured data, images, internal links — report anything the CMS dropped, and start tracking its position.',
       },
     ],
@@ -560,37 +560,37 @@ export const GUIDES = [
     related: ['wordpress-application-password', 'webflow-api-token', 'contentful-cma-token', 'cms-webhook', 'indexnow-key-file', 'business-facts'],
     keywords: ['publish', 'cms', 'wordpress', 'article', 'slug'],
   },
-  // ---------------------------------------------------------------- G2: publishing to your CMS from Ascentra
+  // ---------------------------------------------------------------- G2: publishing to your CMS from Alaventra
   {
     id: 'wordpress-application-password',
     area: 'website',
     title: 'Connect WordPress with an application password',
-    why: 'With it Ascentra puts a written page into WordPress for you — as a draft by default — with its slug, excerpt, featured image and SEO fields, and updates the same post when you send it again.',
+    why: 'With it Alaventra puts a written page into WordPress for you — as a draft by default — with its slug, excerpt, featured image and SEO fields, and updates the same post when you send it again.',
     where: 'Your WordPress admin',
     who: 'A WordPress user with the Editor or Administrator role (Administrator if the pages should keep their structured data)',
     minutes: 5,
     vars: [V.domain],
     steps: [
       {
-        title: 'Sign in as the user Ascentra should post as',
-        body: 'Open your WordPress admin and sign in as an **Editor** or **Administrator**. Posts are created under this user. A dedicated user such as `ascentra` keeps the history clear.',
-        note: 'Only Administrators may save structured data (JSON-LD) inside a post on a normal WordPress site. With an Editor, Ascentra leaves it out and tells you to add it through your SEO plugin.',
+        title: 'Sign in as the user Alaventra should post as',
+        body: 'Open your WordPress admin and sign in as an **Editor** or **Administrator**. Posts are created under this user. A dedicated user such as `alaventra` keeps the history clear.',
+        note: 'Only Administrators may save structured data (JSON-LD) inside a post on a normal WordPress site. With an Editor, Alaventra leaves it out and tells you to add it through your SEO plugin.',
       },
       {
         title: 'Create an application password',
-        body: 'Go to **Users → Profile** (or **Users → All users → the user → Edit**), scroll to **Application Passwords**, type `Ascentra` as the name and click **Add New Application Password**.',
+        body: 'Go to **Users → Profile** (or **Users → All users → the user → Edit**), scroll to **Application Passwords**, type `Alaventra` as the name and click **Add New Application Password**.',
         link: { label: 'How application passwords work (WordPress.org)', href: 'https://make.wordpress.org/core/2020/11/05/application-passwords-integration-guide/' },
         warn: 'WordPress shows the password once. Copy it now — if you lose it, revoke it and create another.',
       },
       {
-        title: 'Fill in the connection in Ascentra',
+        title: 'Fill in the connection in Alaventra',
         body: 'In **Website settings → Publishing → Connect a CMS → WordPress**, enter the site address (for example `https://{{domain}}`, not the /wp-admin address), the **user name** (not the e-mail) and the application password. Choose posts or pages, and the categories and tags new posts should get.',
       },
       {
         title: 'Test the connection',
-        body: 'Click **Test connection**. Ascentra signs in, checks the user may create and publish posts, and looks for Yoast SEO or Rank Math fields it can fill.',
+        body: 'Click **Test connection**. Alaventra signs in, checks the user may create and publish posts, and looks for Yoast SEO or Rank Math fields it can fill.',
         choices: [
-          { label: 'Yoast SEO', body: 'The SEO title and meta description go straight into Yoast when the site exposes its fields to the REST API. If it does not, the description goes into the excerpt and Ascentra tells you to paste the title into Yoast.' },
+          { label: 'Yoast SEO', body: 'The SEO title and meta description go straight into Yoast when the site exposes its fields to the REST API. If it does not, the description goes into the excerpt and Alaventra tells you to paste the title into Yoast.' },
           { label: 'Rank Math', body: 'The same: Rank Math’s fields are filled when they are open to the REST API (Rank Math → General Settings → Others → Headless CMS Support), otherwise the excerpt carries the description.' },
           { label: 'No SEO plugin', body: 'The meta description goes into the excerpt, which most themes print as the description.' },
         ],
@@ -609,7 +609,7 @@ export const GUIDES = [
     id: 'webflow-api-token',
     area: 'website',
     title: 'Connect Webflow: an API token and the collection id',
-    why: 'With them Ascentra creates the page as an item of your blog collection — a draft by default — and publishes it only when an owner or admin chooses to.',
+    why: 'With them Alaventra creates the page as an item of your blog collection — a draft by default — and publishes it only when an owner or admin chooses to.',
     where: 'Webflow site settings and the Designer',
     who: 'A Webflow workspace member who can manage the site’s integrations',
     minutes: 5,
@@ -617,9 +617,9 @@ export const GUIDES = [
     steps: [
       {
         title: 'Create a site API token',
-        body: 'Open the site’s **Site settings → Apps & integrations → API access → Generate API token**. Name it `Ascentra` and give it **CMS: read and write**. Copy the token.',
+        body: 'Open the site’s **Site settings → Apps & integrations → API access → Generate API token**. Name it `Alaventra` and give it **CMS: read and write**. Copy the token.',
         link: { label: 'Webflow: site tokens', href: 'https://developers.webflow.com/data/reference/authentication/site-token' },
-        warn: 'Webflow shows the token once. Anyone with it can change your CMS, so paste it only into Ascentra.',
+        warn: 'Webflow shows the token once. Anyone with it can change your CMS, so paste it only into Alaventra.',
       },
       {
         title: 'Find the collection id',
@@ -627,7 +627,7 @@ export const GUIDES = [
       },
       {
         title: 'Connect and test',
-        body: 'In **Website settings → Publishing → Connect a CMS → Webflow**, paste the token and the collection id, then **Test connection**. Ascentra reads the collection’s fields.',
+        body: 'In **Website settings → Publishing → Connect a CMS → Webflow**, paste the token and the collection id, then **Test connection**. Alaventra reads the collection’s fields.',
       },
       {
         title: 'Map the fields once',
@@ -635,8 +635,8 @@ export const GUIDES = [
         note: 'Images are not uploaded to Webflow: add the featured image in the item. The file and its alt text are in the page’s downloads.',
       },
       {
-        title: 'Tell Ascentra the address pattern',
-        body: 'Pages of a collection live under its own path, for example `https://{{domain}}/blog/{slug}`. Enter that pattern so Ascentra can check the live page and track it.',
+        title: 'Tell Alaventra the address pattern',
+        body: 'Pages of a collection live under its own path, for example `https://{{domain}}/blog/{slug}`. Enter that pattern so Alaventra can check the live page and track it.',
       },
     ],
     done: 'The connection shows **Connected** with the collection name, and a page sent as a draft appears in the collection as a draft item.',
@@ -651,7 +651,7 @@ export const GUIDES = [
     id: 'contentful-cma-token',
     area: 'website',
     title: 'Connect Contentful: a content management token',
-    why: 'With it Ascentra creates the page as an entry of your article content type — a draft by default — and publishes the entry only when an owner or admin chooses to.',
+    why: 'With it Alaventra creates the page as an entry of your article content type — a draft by default — and publishes the entry only when an owner or admin chooses to.',
     where: 'Contentful web app',
     who: 'A Contentful user with access to the space and its environment',
     minutes: 8,
@@ -659,7 +659,7 @@ export const GUIDES = [
     steps: [
       {
         title: 'Create a content management token',
-        body: 'In Contentful open **Settings → CMA tokens → Create personal access token**, name it `Ascentra` and copy it. It must be a management token, not a Content Delivery API key.',
+        body: 'In Contentful open **Settings → CMA tokens → Create personal access token**, name it `Alaventra` and copy it. It must be a management token, not a Content Delivery API key.',
         link: { label: 'Contentful: authentication', href: 'https://www.contentful.com/developers/docs/references/authentication/' },
         warn: 'Contentful shows the token once, and it acts with your own permissions. A dedicated user with access to one space only is safer.',
       },
@@ -669,7 +669,7 @@ export const GUIDES = [
       },
       {
         title: 'Connect and test',
-        body: 'In **Website settings → Publishing → Connect a CMS → Contentful**, paste the token and the ids, then **Test connection**. Ascentra reads the content type’s fields and your default locale.',
+        body: 'In **Website settings → Publishing → Connect a CMS → Contentful**, paste the token and the ids, then **Test connection**. Alaventra reads the content type’s fields and your default locale.',
       },
       {
         title: 'Map the fields once',
@@ -677,8 +677,8 @@ export const GUIDES = [
         note: 'A Rich Text field is refused on purpose: it is a document model, not HTML, and converting into it would quietly drop tables and links. Add a Long text field for the article.',
       },
       {
-        title: 'Tell Ascentra the address pattern',
-        body: 'Your front end builds the address of an entry, for example `https://{{domain}}/insights/{slug}`. Enter that pattern so Ascentra can check the live page and track it.',
+        title: 'Tell Alaventra the address pattern',
+        body: 'Your front end builds the address of an entry, for example `https://{{domain}}/insights/{slug}`. Enter that pattern so Alaventra can check the live page and track it.',
       },
     ],
     done: 'The connection shows **Connected** with the content type, and a page sent as a draft appears in Contentful as a draft entry.',
@@ -693,7 +693,7 @@ export const GUIDES = [
     id: 'cms-webhook',
     area: 'website',
     title: 'Receive pages through a signed webhook',
-    why: 'For any stack Ascentra does not connect to directly — another headless CMS, a static site, a bot that opens a pull request — the whole page arrives as signed JSON at an address of yours.',
+    why: 'For any stack Alaventra does not connect to directly — another headless CMS, a static site, a bot that opens a pull request — the whole page arrives as signed JSON at an address of yours.',
     where: 'Your own endpoint',
     who: 'A developer who can deploy a small endpoint',
     minutes: 30,
@@ -704,15 +704,15 @@ export const GUIDES = [
         body: 'It receives a `POST` with a JSON body: the title, the slug, the meta description, the article as HTML and Markdown, the structured data, the images (as base64 when small enough) and whether to keep it a draft or publish it (`mode`).',
       },
       {
-        title: 'Connect it in Ascentra and copy the secret',
-        body: 'In **Website settings → Publishing → Connect a CMS → Webhook**, enter the address. Ascentra shows a signing secret starting `whsec_` **once** — store it with your endpoint.',
+        title: 'Connect it in Alaventra and copy the secret',
+        body: 'In **Website settings → Publishing → Connect a CMS → Webhook**, enter the address. Alaventra shows a signing secret starting `whsec_` **once** — store it with your endpoint.',
       },
       {
         title: 'Check the signature on every request',
         body: 'Compute HMAC-SHA256 with the secret over the timestamp header, a dot and the raw body, and compare it with the signature header in constant time. Refuse anything older than five minutes.',
         copy: [
-          { label: 'Signature header', value: 'X-Ascentra-Signature: sha256=<hex>' },
-          { label: 'Timestamp header', value: 'X-Ascentra-Timestamp: <milliseconds>' },
+          { label: 'Signature header', value: 'X-Alaventra-Signature: sha256=<hex>' },
+          { label: 'Timestamp header', value: 'X-Alaventra-Timestamp: <milliseconds>' },
           { label: 'Signed text', value: '<timestamp>.<raw body>' },
         ],
       },
@@ -722,7 +722,7 @@ export const GUIDES = [
       },
       {
         title: 'Answer with what you did',
-        body: 'Answer `2xx`, ideally with JSON `{"id": "…", "url": "…", "status": "draft"}` (or `"published"`). Ascentra keeps the id and the address and shows them on the page.',
+        body: 'Answer `2xx`, ideally with JSON `{"id": "…", "url": "…", "status": "draft"}` (or `"published"`). Alaventra keeps the id and the address and shows them on the page.',
         note: 'Pages on {{domain}} that you publish are checked live and tracked once you, or this answer, say they are live.',
       },
     ],
@@ -837,7 +837,7 @@ export const GUIDES = [
       },
       {
         title: 'Create the app password',
-        body: 'Open the app passwords page, name it `Ascentra` and create it.',
+        body: 'Open the app passwords page, name it `Alaventra` and create it.',
         link: { label: 'Open app passwords', href: 'https://myaccount.google.com/apppasswords' },
       },
       {
@@ -856,7 +856,7 @@ export const GUIDES = [
         ],
       },
     ],
-    done: 'The mailbox saves with a green test: Ascentra signed in to both sending and reading.',
+    done: 'The mailbox saves with a green test: Alaventra signed in to both sending and reading.',
     trouble: [
       { q: 'The app passwords page says it is not available', a: 'Either 2-Step Verification is off, or a Workspace administrator has switched app passwords off for the organisation. In a Workspace, connecting Gmail with one click avoids the problem entirely.' },
       { q: 'Sign-in fails although the password is right', a: 'Check the address: an app password belongs to one Google account, and it must be the account whose mailbox you are connecting.' },
@@ -950,7 +950,7 @@ export const GUIDES = [
     steps: [
       {
         title: 'See what you have',
-        body: 'Ascentra checks all three when a mailbox is connected and shows what it found. To check yourself, look up {{domain}} on [MXToolbox](https://mxtoolbox.com/SuperTool.aspx) with `spf:{{domain}}`, `dmarc:{{domain}}` and the DKIM selector your host gives you.',
+        body: 'Alaventra checks all three when a mailbox is connected and shows what it found. To check yourself, look up {{domain}} on [MXToolbox](https://mxtoolbox.com/SuperTool.aspx) with `spf:{{domain}}`, `dmarc:{{domain}}` and the DKIM selector your host gives you.',
       },
       {
         title: 'SPF: who may send for you',
@@ -1273,14 +1273,14 @@ export const GUIDES = [
     id: 'slack-webhook',
     area: 'integrations',
     title: 'Send alerts to a Slack channel',
-    why: 'Alerts, failed analyses and finished reports land in the channel your team already reads, instead of waiting for someone to open Ascentra. One address per channel, so alerts and wins can go to different places.',
+    why: 'Alerts, failed analyses and finished reports land in the channel your team already reads, instead of waiting for someone to open Alaventra. One address per channel, so alerts and wins can go to different places.',
     where: 'Slack (api.slack.com) and Company settings → Integrations',
     who: 'Someone allowed to add apps to your Slack workspace',
     minutes: 5,
     steps: [
       {
         title: 'Create a small Slack app',
-        body: 'Open **Your Apps**, press **Create New App** → **From scratch**, name it `Ascentra` and pick your workspace. It needs no other setting.',
+        body: 'Open **Your Apps**, press **Create New App** → **From scratch**, name it `Alaventra` and pick your workspace. It needs no other setting.',
         link: { label: 'Open Slack apps', href: 'https://api.slack.com/apps' },
       },
       {
@@ -1293,7 +1293,7 @@ export const GUIDES = [
         body: 'Slack shows an address starting with `https://hooks.slack.com/services/`. Copy it. Treat it like a password: anyone with it can post in that channel.',
       },
       {
-        title: 'Add it in Ascentra',
+        title: 'Add it in Alaventra',
         body: 'In **Company settings → Integrations → Alerts and events**, press **Add an endpoint**, choose **Slack channel**, paste the address, pick the events, and press **Test**.',
       },
     ],
@@ -1320,7 +1320,7 @@ export const GUIDES = [
       },
       {
         title: 'Use the webhook template',
-        body: 'Pick **Post to a channel when a webhook request is received**, give it a name such as `Ascentra`, confirm the team and channel, and press **Add workflow**.',
+        body: 'Pick **Post to a channel when a webhook request is received**, give it a name such as `Alaventra`, confirm the team and channel, and press **Add workflow**.',
         link: { label: 'Microsoft’s instructions', href: 'https://support.microsoft.com/en-us/office/create-incoming-webhooks-with-workflows-for-microsoft-teams-8ae491c7-0394-4861-ba59-055e33f75498' },
       },
       {
@@ -1328,7 +1328,7 @@ export const GUIDES = [
         body: 'Teams shows an address ending in `logic.azure.com` or `powerplatform.com`. Copy it and keep it private: it lets anyone post in the channel.',
       },
       {
-        title: 'Add it in Ascentra',
+        title: 'Add it in Alaventra',
         body: 'In **Company settings → Integrations → Alerts and events**, press **Add an endpoint**, choose **Microsoft Teams channel**, paste the address, pick the events, and press **Test**.',
       },
     ],
@@ -1341,7 +1341,7 @@ export const GUIDES = [
     id: 'webhook-signature',
     area: 'integrations',
     title: 'Receive events in your own system',
-    why: 'A signed JSON message for every event — finished runs, alerts, new audit findings, ranking moves — so your own tools, Zapier, Make or n8n can act on it. The signature proves the message came from Ascentra.',
+    why: 'A signed JSON message for every event — finished runs, alerts, new audit findings, ranking moves — so your own tools, Zapier, Make or n8n can act on it. The signature proves the message came from Alaventra.',
     where: 'Your own system, then Company settings → Integrations',
     who: 'A developer, or whoever runs your automation tool',
     minutes: 15,
@@ -1358,13 +1358,13 @@ export const GUIDES = [
         title: 'Check the signature',
         body: 'Compute HMAC-SHA256 with the secret over the timestamp header, a dot, and the raw body, and compare it with the signature header. Refuse anything older than five minutes.',
         copy: [
-          { label: 'Headers to read', value: 'X-Ascentra-Signature, X-Ascentra-Timestamp, X-Ascentra-Event, X-Ascentra-Delivery' },
-          { label: 'What is signed', value: '<X-Ascentra-Timestamp>.<raw body>', hint: 'sha256=<hex> in X-Ascentra-Signature' },
+          { label: 'Headers to read', value: 'X-Alaventra-Signature, X-Alaventra-Timestamp, X-Alaventra-Event, X-Alaventra-Delivery' },
+          { label: 'What is signed', value: '<X-Alaventra-Timestamp>.<raw body>', hint: 'sha256=<hex> in X-Alaventra-Signature' },
         ],
       },
       {
         title: 'Answer quickly, de-duplicate on the delivery id',
-        body: 'Answer with any 2xx within 10 seconds and do the work afterwards. A retried event keeps its `X-Ascentra-Delivery` id, so you can ignore one you have already handled.',
+        body: 'Answer with any 2xx within 10 seconds and do the work afterwards. A retried event keeps its `X-Alaventra-Delivery` id, so you can ignore one you have already handled.',
       },
     ],
     done: '**Test** shows “delivered” and your system logged one message with a valid signature.',
@@ -1382,7 +1382,7 @@ export const GUIDES = [
     steps: [
       {
         title: 'Create an API token',
-        body: 'Signed in as the person tickets should be created by, open **API tokens**, press **Create API token**, name it `Ascentra` and copy it.',
+        body: 'Signed in as the person tickets should be created by, open **API tokens**, press **Create API token**, name it `Alaventra` and copy it.',
         link: { label: 'Open Atlassian API tokens', href: 'https://id.atlassian.com/manage-profile/security/api-tokens' },
         warn: 'The token acts as that person. Use an account that should be the reporter of SEO tickets, not a personal admin account.',
       },
@@ -1391,7 +1391,7 @@ export const GUIDES = [
         body: 'The project key is the letters before every ticket number (e.g. `SEO` in SEO-12). The issue type is how the project names its work items: `Task`, `Bug` or `Story`.',
       },
       {
-        title: 'Connect it in Ascentra',
+        title: 'Connect it in Alaventra',
         body: 'In **Company settings → Integrations → Issue trackers**, press **Connect** beside Jira Cloud and fill in your Jira address (like `https://your-company.atlassian.net`), the account e-mail, the token, the key and the type.',
       },
       {
@@ -1411,14 +1411,14 @@ export const GUIDES = [
     id: 'linear-api-key',
     area: 'integrations',
     title: 'Connect Linear',
-    why: 'Each audit finding or recommendation can become one Linear issue in your team, written in Markdown with the evidence and the fix, and its state shows back in Ascentra.',
+    why: 'Each audit finding or recommendation can become one Linear issue in your team, written in Markdown with the evidence and the fix, and its state shows back in Alaventra.',
     where: 'Linear settings and Company settings → Integrations',
     who: 'A member of the Linear team',
     minutes: 3,
     steps: [
       {
         title: 'Create a personal API key',
-        body: 'In Linear open **Settings → Account → Security & access**, then **Personal API keys** → **New API key**, name it `Ascentra` and copy it. It starts with `lin_api_`.',
+        body: 'In Linear open **Settings → Account → Security & access**, then **Personal API keys** → **New API key**, name it `Alaventra` and copy it. It starts with `lin_api_`.',
         link: { label: 'Open Linear settings', href: 'https://linear.app/settings/account/security' },
       },
       {
@@ -1426,7 +1426,7 @@ export const GUIDES = [
         body: 'The letters before every issue number in the team, e.g. `WEB` in WEB-7.',
       },
       {
-        title: 'Connect it in Ascentra',
+        title: 'Connect it in Alaventra',
         body: 'In **Company settings → Integrations → Issue trackers**, press **Connect** beside Linear, paste the key and the team key.',
       },
     ],
@@ -1438,14 +1438,14 @@ export const GUIDES = [
     id: 'asana-pat',
     area: 'integrations',
     title: 'Connect Asana',
-    why: 'Each audit finding or recommendation can become one Asana task in a project, with the evidence and the fix in its description, and its completion shows back in Ascentra.',
+    why: 'Each audit finding or recommendation can become one Asana task in a project, with the evidence and the fix in its description, and its completion shows back in Alaventra.',
     where: 'Asana developer console and Company settings → Integrations',
     who: 'A member of the Asana project',
     minutes: 4,
     steps: [
       {
         title: 'Create a personal access token',
-        body: 'Open the **Developer console**, press **Create new token**, name it `Ascentra`, accept the terms and copy the token.',
+        body: 'Open the **Developer console**, press **Create new token**, name it `Alaventra`, accept the terms and copy the token.',
         link: { label: 'Open the Asana developer console', href: 'https://app.asana.com/0/my-apps' },
       },
       {
@@ -1453,7 +1453,7 @@ export const GUIDES = [
         body: 'Open the project in Asana: its address looks like `app.asana.com/0/1201234567890123/list`. The long number is the project id.',
       },
       {
-        title: 'Connect it in Ascentra',
+        title: 'Connect it in Alaventra',
         body: 'In **Company settings → Integrations → Issue trackers**, press **Connect** beside Asana and paste the token and the project id.',
       },
     ],
@@ -1472,11 +1472,11 @@ export const GUIDES = [
     steps: [
       {
         title: 'Create a bucket (or pick one)',
-        body: 'A private bucket used only for these exports is simplest. Ascentra writes under one folder and never reads or deletes anything.',
+        body: 'A private bucket used only for these exports is simplest. Alaventra writes under one folder and never reads or deletes anything.',
       },
       {
         title: 'Create keys that can only write there',
-        body: 'Ascentra needs permission to put objects in that bucket and nothing else.',
+        body: 'Alaventra needs permission to put objects in that bucket and nothing else.',
         choices: [
           {
             label: 'Amazon S3',
@@ -1496,8 +1496,8 @@ export const GUIDES = [
         ],
       },
       {
-        title: 'Add the destination in Ascentra',
-        body: 'In **Company settings → Integrations → Data export**, press **Add a destination**, choose the storage, the bucket, a folder, NDJSON or CSV, the tables and the schedule, and paste the keys. Ascentra writes one small test file before saving.',
+        title: 'Add the destination in Alaventra',
+        body: 'In **Company settings → Integrations → Data export**, press **Add a destination**, choose the storage, the bucket, a folder, NDJSON or CSV, the tables and the schedule, and paste the keys. Alaventra writes one small test file before saving.',
       },
       {
         title: 'Read the newest folder',
@@ -1520,12 +1520,12 @@ export const GUIDES = [
     steps: [
       {
         title: 'Create a dataset',
-        body: 'In BigQuery, create a dataset such as `seo` in the location you want (US or EU). Ascentra creates its tables inside it.',
+        body: 'In BigQuery, create a dataset such as `seo` in the location you want (US or EU). Alaventra creates its tables inside it.',
         link: { label: 'Open BigQuery', href: 'https://console.cloud.google.com/bigquery' },
       },
       {
-        title: 'Create a service account for Ascentra',
-        body: 'In **IAM & Admin → Service accounts**, create one named `ascentra-export`. Give it **BigQuery Job User** on the project and **BigQuery Data Editor** on the dataset only.',
+        title: 'Create a service account for Alaventra',
+        body: 'In **IAM & Admin → Service accounts**, create one named `alaventra-export`. Give it **BigQuery Job User** on the project and **BigQuery Data Editor** on the dataset only.',
         link: { label: 'Open service accounts', href: 'https://console.cloud.google.com/iam-admin/serviceaccounts' },
       },
       {
@@ -1534,11 +1534,11 @@ export const GUIDES = [
         warn: 'If your organisation blocks key creation, ask an administrator for an exception for this one account, or use the S3-compatible export to Google Cloud Storage instead.',
       },
       {
-        title: 'Add the destination in Ascentra',
-        body: 'In **Company settings → Integrations → Data export**, press **Add a destination**, choose **BigQuery**, fill in the project id and dataset, paste the whole JSON key and choose the tables and schedule. Ascentra checks it can see the dataset before saving.',
+        title: 'Add the destination in Alaventra',
+        body: 'In **Company settings → Integrations → Data export**, press **Add a destination**, choose **BigQuery**, fill in the project id and dataset, paste the whole JSON key and choose the tables and schedule. Alaventra checks it can see the dataset before saving.',
       },
     ],
-    done: '**Run now** shows “Done”, and tables named like `ascentra_rank_history` appear in the dataset.',
+    done: '**Run now** shows “Done”, and tables named like `alaventra_rank_history` appear in the dataset.',
     trouble: [{ q: 'It says the dataset does not exist', a: 'Check the project id and dataset id, and that the service account was given access to that dataset.' }],
     related: ['s3-access-keys', 'looker-studio-connector'],
     keywords: ['bigquery', 'google cloud', 'service account', 'warehouse', 'export', 'json key'],
@@ -1546,12 +1546,12 @@ export const GUIDES = [
   {
     id: 'looker-studio-connector',
     area: 'integrations',
-    title: 'Add Ascentra to Looker Studio',
-    why: 'Chart your rankings, Search Console and GA4 figures, audit findings, AI visibility and backlinks in Looker Studio, beside the rest of your company’s reporting, refreshed from Ascentra.',
-    where: 'Ascentra, Google Apps Script and Looker Studio',
-    who: 'Whoever builds your Looker Studio reports (the first step needs an Ascentra owner or admin)',
+    title: 'Add Alaventra to Looker Studio',
+    why: 'Chart your rankings, Search Console and GA4 figures, audit findings, AI visibility and backlinks in Looker Studio, beside the rest of your company’s reporting, refreshed from Alaventra.',
+    where: 'Alaventra, Google Apps Script and Looker Studio',
+    who: 'Whoever builds your Looker Studio reports (the first step needs an Alaventra owner or admin)',
     minutes: 15,
-    vars: [{ key: 'appUrl', label: 'Your Ascentra address', example: 'https://app.ascentra.example' }],
+    vars: [{ key: 'appUrl', label: 'Your Alaventra address', example: 'https://app.alaventra.example' }],
     steps: [
       {
         title: 'Create a read-only API key',
@@ -1559,13 +1559,13 @@ export const GUIDES = [
       },
       {
         title: 'Install the connector',
-        body: 'Ascentra’s connector is a small Google Apps Script. Create a new project at script.google.com, paste the files from Ascentra’s `integrations/looker-studio` folder, then **Deploy → New deployment → Add-on / Looker Studio connector**, as its README describes.',
+        body: 'Alaventra’s connector is a small Google Apps Script. Create a new project at script.google.com, paste the files from Alaventra’s `integrations/looker-studio` folder, then **Deploy → New deployment → Add-on / Looker Studio connector**, as its README describes.',
         link: { label: 'Open Apps Script', href: 'https://script.google.com/home' },
       },
       {
         title: 'Add it as a data source',
-        body: 'In Looker Studio, **Create → Data source**, search for your deployed connector, paste the API key when asked, and fill in your Ascentra address, the website and the table.',
-        copy: [{ label: 'Ascentra address', value: '{{appUrl}}' }],
+        body: 'In Looker Studio, **Create → Data source**, search for your deployed connector, paste the API key when asked, and fill in your Alaventra address, the website and the table.',
+        copy: [{ label: 'Alaventra address', value: '{{appUrl}}' }],
       },
       {
         title: 'Build the report',
@@ -1584,7 +1584,7 @@ export const GUIDES = [
     where: 'Company settings → API access, and your assistant’s settings',
     who: 'An owner or admin (for the key); anyone for the assistant',
     minutes: 5,
-    vars: [{ key: 'appUrl', label: 'Your Ascentra address', example: 'https://app.ascentra.example' }],
+    vars: [{ key: 'appUrl', label: 'Your Alaventra address', example: 'https://app.alaventra.example' }],
     steps: [
       {
         title: 'Create a key for the assistant',
@@ -1592,11 +1592,11 @@ export const GUIDES = [
         warn: 'A key with **Start analyses** spends from your monthly budget. The assistant is told to preview the cost first and never to accept a duplicate warning you have not seen.',
       },
       {
-        title: 'Add Ascentra to the assistant',
-        body: 'The address is your Ascentra address followed by `/api/v1/mcp`, with the key sent as a Bearer token.',
+        title: 'Add Alaventra to the assistant',
+        body: 'The address is your Alaventra address followed by `/api/v1/mcp`, with the key sent as a Bearer token.',
         copy: [{ label: 'MCP address', value: '{{appUrl}}/api/v1/mcp' }],
         choices: [
-          { label: 'Claude Code', body: 'Run `claude mcp add --transport http ascentra <the MCP address> --header "Authorization: Bearer <your key>"`.' },
+          { label: 'Claude Code', body: 'Run `claude mcp add --transport http alaventra <the MCP address> --header "Authorization: Bearer <your key>"`.' },
           { label: 'Claude Desktop', body: 'Add a server to **claude_desktop_config.json** that runs `npx -y mcp-remote <the MCP address> --header Authorization:<Bearer your key>`; the snippet on the Integrations page is ready to copy.' },
           { label: 'OpenAI API', body: 'Add a tool of type `mcp` with the address and an `Authorization` header to your Responses API call. ChatGPT’s own app connectors accept only OAuth, so a key cannot be pasted there yet.' },
         ],
@@ -1679,9 +1679,9 @@ export const GUIDES = [
     where: 'Your DNS provider',
     who: 'Whoever manages DNS for your domain (often IT)',
     minutes: 10,
-    vars: [V.domain, { key: 'dnsValue', label: 'Value of the record', example: 'ascentra-sso=abc123def456' }],
+    vars: [V.domain, { key: 'dnsValue', label: 'Value of the record', example: 'alaventra-sso=abc123def456' }],
     steps: [
-      { title: 'Add the domain in Ascentra', body: 'Company settings → **Single sign-on** → **Add a domain**: type `{{domain}}` (the part after @ in your colleagues’ addresses). Public mail providers such as gmail.com cannot be claimed.' },
+      { title: 'Add the domain in Alaventra', body: 'Company settings → **Single sign-on** → **Add a domain**: type `{{domain}}` (the part after @ in your colleagues’ addresses). Public mail providers such as gmail.com cannot be claimed.' },
       {
         title: 'Add a TXT record at your DNS provider',
         body: 'Create a record of type **TXT** at the domain itself (host `@`, or `{{domain}}`), with this value. Leave any other TXT records (SPF, Google, Microsoft) as they are.',
@@ -1693,7 +1693,7 @@ export const GUIDES = [
           { label: 'Azure DNS', body: '**DNS zones → {{domain}} → + Record set**, type TXT, name `@`, paste the value, **OK**.' },
         ],
       },
-      { title: 'Check it', body: 'Back in Ascentra press **Check now**. Records usually appear within minutes; some providers take up to an hour.' },
+      { title: 'Check it', body: 'Back in Alaventra press **Check now**. Records usually appear within minutes; some providers take up to an hour.' },
     ],
     done: 'The domain shows **Verified**.',
     trouble: [{ q: 'Another company has verified it', a: 'One domain belongs to one company here. If it is really yours, contact us with proof and we will look into it.' }],
@@ -1706,22 +1706,22 @@ export const GUIDES = [
     title: 'Provision people automatically (SCIM)',
     why: 'Joiners get access without an invitation, and a leaver switched off in your identity provider loses access here at once — no one has to remember to remove them.',
     where: 'Company settings → Single sign-on, then your identity provider',
-    who: 'An administrator of your identity provider, with an owner or admin of your company in Ascentra',
+    who: 'An administrator of your identity provider, with an owner or admin of your company in Alaventra',
     minutes: 15,
-    vars: [{ key: 'scimUrl', label: 'SCIM base URL', example: 'https://app.ascentra.example/api/scim/v2' }],
+    vars: [{ key: 'scimUrl', label: 'SCIM base URL', example: 'https://app.alaventra.example/api/scim/v2' }],
     steps: [
       { title: 'Verify your e-mail domain first', body: 'Provisioning only creates people whose addresses are on your verified domains (see **Prove your e-mail domain**).' },
       { title: 'Create a provisioning token', body: 'Company settings → **Single sign-on** → Provisioning: name it after your provider and **Create token**. Copy it at once: it is shown only once.' },
       {
-        title: 'Point your identity provider at Ascentra',
+        title: 'Point your identity provider at Alaventra',
         body: 'Give it the base URL and the token (as a Bearer / HTTP header token).',
         copy: [{ label: 'SCIM base URL', value: '{{scimUrl}}' }],
         choices: [
-          { label: 'Okta', body: 'In the Ascentra app: **General → App Settings → Provisioning: SCIM**, then **Provisioning → Integration**: SCIM connector base URL = the URL above, unique identifier `userName`, actions Push New Users / Push Profile Updates / Push Groups, authentication **HTTP Header** with the token. Then **To App**: enable Create, Update and Deactivate.' },
+          { label: 'Okta', body: 'In the Alaventra app: **General → App Settings → Provisioning: SCIM**, then **Provisioning → Integration**: SCIM connector base URL = the URL above, unique identifier `userName`, actions Push New Users / Push Profile Updates / Push Groups, authentication **HTTP Header** with the token. Then **To App**: enable Create, Update and Deactivate.' },
           { label: 'Microsoft Entra ID', body: 'Enterprise application → **Provisioning → Get started → Automatic**: Tenant URL = the URL above, Secret token = the token, **Test Connection**, **Save**, then **Start provisioning**.' },
         ],
       },
-      { title: 'Map groups to roles', body: 'Push the groups you use (for example “Ascentra Admins”). They appear under **Groups and roles**: choose the role each gives. A person gets the highest role of their groups; owners are never changed.' },
+      { title: 'Map groups to roles', body: 'Push the groups you use (for example “Alaventra Admins”). They appear under **Groups and roles**: choose the role each gives. A person gets the highest role of their groups; owners are never changed.' },
     ],
     done: 'People you assign in your provider appear in the Team list marked **SCIM**, and switching one off shows them as **Deactivated**.',
     trouble: [
@@ -1735,21 +1735,21 @@ export const GUIDES = [
     id: 'sso-identity-provider',
     area: 'security',
     title: 'Connect your identity provider (single sign-on)',
-    why: 'Your people sign in with the account your IT team already manages, with its MFA and its leaver process — nobody keeps a separate password for Ascentra.',
+    why: 'Your people sign in with the account your IT team already manages, with its MFA and its leaver process — nobody keeps a separate password for Alaventra.',
     where: 'Your identity provider’s admin console, then Company settings → Single sign-on',
-    who: 'An administrator of your identity provider, with an owner or admin of your company in Ascentra',
+    who: 'An administrator of your identity provider, with an owner or admin of your company in Alaventra',
     minutes: 20,
     vars: [
-      { key: 'redirectUri', label: 'Sign-in redirect URI (OIDC)', example: 'https://app.ascentra.example/api/sso/oidc/callback' },
-      { key: 'acsUrl', label: 'ACS URL (SAML)', example: 'https://app.ascentra.example/api/sso/saml/<id>/acs' },
-      { key: 'entityId', label: 'Entity ID / audience (SAML)', example: 'https://app.ascentra.example/api/sso/saml/<id>' },
-      { key: 'metadataUrl', label: 'SP metadata URL (SAML)', example: 'https://app.ascentra.example/api/sso/saml/<id>/metadata' },
+      { key: 'redirectUri', label: 'Sign-in redirect URI (OIDC)', example: 'https://app.alaventra.example/api/sso/oidc/callback' },
+      { key: 'acsUrl', label: 'ACS URL (SAML)', example: 'https://app.alaventra.example/api/sso/saml/<id>/acs' },
+      { key: 'entityId', label: 'Entity ID / audience (SAML)', example: 'https://app.alaventra.example/api/sso/saml/<id>' },
+      { key: 'metadataUrl', label: 'SP metadata URL (SAML)', example: 'https://app.alaventra.example/api/sso/saml/<id>/metadata' },
     ],
     steps: [
       { title: 'Choose OIDC or SAML', body: '**OpenID Connect** is quicker (a client ID and secret). Choose **SAML 2.0** if your IT standard asks for it. Both are equally secure here.' },
       {
         title: 'Create the app in your identity provider',
-        body: 'Create a web application for Ascentra and give it the values below. Assign the people or groups who should use Ascentra.',
+        body: 'Create a web application for Alaventra and give it the values below. Assign the people or groups who should use Alaventra.',
         copy: [
           { label: 'OIDC sign-in redirect URI', value: '{{redirectUri}}' },
           { label: 'SAML ACS URL', value: '{{acsUrl}}' },
@@ -1764,11 +1764,11 @@ export const GUIDES = [
         ],
         note: 'For SAML you can also point your IdP at the metadata URL: {{metadataUrl}}',
       },
-      { title: 'Enter the IdP’s values in Ascentra', body: 'Company settings → **Single sign-on** → Identity provider: paste the issuer, client ID and secret (OIDC) or the entity ID, SSO URL and certificate (SAML), choose whether first sign-ins create accounts and with which role, and **Save**.' },
+      { title: 'Enter the IdP’s values in Alaventra', body: 'Company settings → **Single sign-on** → Identity provider: paste the issuer, client ID and secret (OIDC) or the entity ID, SSO URL and certificate (SAML), choose whether first sign-ins create accounts and with which role, and **Save**.' },
       { title: 'Run a test sign-in', body: 'Press **Test sign-in** and sign in at your provider with an account on your verified domain. Nothing is created; the result appears under **Last test**.' },
       { title: 'Switch it on — and, when ready, require it', body: 'Turn on **Single sign-on is on**. Once everyone has tried it, an owner can turn on **Require single sign-on**: passwords then stop working on your domains (owners keep theirs as the way in if the provider is down).' },
     ],
-    done: 'The last test is green, single sign-on is on, and colleagues reach Ascentra through **Sign in with SSO**.',
+    done: 'The last test is green, single sign-on is on, and colleagues reach Alaventra through **Sign in with SSO**.',
     trouble: [
       { q: 'The test says no e-mail address was sent', a: 'Add the **email** claim (OIDC) or an `email` attribute / EmailAddress Name ID (SAML) in your provider.' },
       { q: '“audience mismatch” or “Recipient”', a: 'The entity ID or ACS URL in your provider differs from ours by a character. Copy them again from this page.' },
@@ -1826,11 +1826,11 @@ export const GUIDES = [
     id: 'crawler-logs-cloudflare',
     area: 'website',
     title: 'Send Cloudflare’s logs automatically (Logpush)',
-    why: 'With Logpush Cloudflare sends every request for {{domain}} to Ascentra within minutes, with the visitor’s real address, so the Crawlers page stays current without anyone uploading files.',
+    why: 'With Logpush Cloudflare sends every request for {{domain}} to Alaventra within minutes, with the visitor’s real address, so the Crawlers page stays current without anyone uploading files.',
     where: 'Cloudflare dashboard',
     who: 'A Cloudflare account member who may edit Logpush jobs (Logs Write)',
     minutes: 10,
-    vars: [V.domain, { key: 'logEndpoint', label: 'Where the logs go', example: 'https://app.ascentra.example/api/ingest/logs/your-website-id' }, { key: 'logHeader', label: 'The header that carries the key', example: 'X-Ascentra-Log-Key' }],
+    vars: [V.domain, { key: 'logEndpoint', label: 'Where the logs go', example: 'https://app.alaventra.example/api/ingest/logs/your-website-id' }, { key: 'logHeader', label: 'The header that carries the key', example: 'X-Alaventra-Log-Key' }],
     steps: [
       {
         title: 'Create a push key here',
@@ -1852,7 +1852,7 @@ export const GUIDES = [
         body: 'Dataset **HTTP requests**. Fields: `ClientIP`, `ClientRequestHost`, `ClientRequestMethod`, `ClientRequestURI`, `ClientRequestUserAgent`, `EdgeStartTimestamp`, `EdgeResponseStatus`, `EdgeResponseBytes`, `OriginResponseDurationMs`, `RayID`. Timestamp format **RFC3339**.',
         note: 'Set the maximum upload size to 100 MB or less. Requests from people are counted and dropped on arrival.',
       },
-      { title: 'Save', body: 'Cloudflare sends a small test file first; Ascentra accepts it, and the job turns on. The Crawlers page shows the time of the last push.' },
+      { title: 'Save', body: 'Cloudflare sends a small test file first; Alaventra accepts it, and the job turns on. The Crawlers page shows the time of the last push.' },
     ],
     done: 'The Crawlers page shows “Last push” a few minutes old and the request counts start to grow.',
     trouble: [
@@ -1866,11 +1866,11 @@ export const GUIDES = [
     id: 'crawler-logs-drain',
     area: 'website',
     title: 'Send logs from Vercel, Fastly or Akamai',
-    why: 'A log drain sends every request for {{domain}} to Ascentra as it happens, so the Crawlers page stays current without uploads.',
+    why: 'A log drain sends every request for {{domain}} to Alaventra as it happens, so the Crawlers page stays current without uploads.',
     where: 'Your CDN or hosting dashboard',
     who: 'Whoever manages the CDN or hosting account',
     minutes: 15,
-    vars: [V.domain, { key: 'logEndpoint', label: 'Where the logs go', example: 'https://app.ascentra.example/api/ingest/logs/your-website-id' }, { key: 'logHeader', label: 'The header that carries the key', example: 'X-Ascentra-Log-Key' }],
+    vars: [V.domain, { key: 'logEndpoint', label: 'Where the logs go', example: 'https://app.alaventra.example/api/ingest/logs/your-website-id' }, { key: 'logHeader', label: 'The header that carries the key', example: 'X-Alaventra-Log-Key' }],
     steps: [
       { title: 'Create a push key here', body: 'On the Crawlers page press **Create push key** and copy it. It is shown once.' },
       {
@@ -1939,7 +1939,7 @@ export const GUIDES = [
         ],
         warn: 'Do not delete the TXT record later: the address is checked again every few hours and stops being served when the proof is gone.',
       },
-      { title: 'Check it', body: 'Back in Ascentra press **Check now**. When both records are found the address shows **Verified** and your clients can open it; the certificate is issued on the first visit.' },
+      { title: 'Check it', body: 'Back in Alaventra press **Check now**. When both records are found the address shows **Verified** and your clients can open it; the certificate is issued on the first visit.' },
     ],
     done: 'The address shows **Verified**, and opening it shows your sign-in page with your logo.',
     trouble: [

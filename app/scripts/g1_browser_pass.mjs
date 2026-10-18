@@ -142,7 +142,7 @@ async function setup() {
   const dom = await api(page, 'POST', `/api/orgs/${org.id}/sso/domains`, { domain: 'northwind-demo.example' });
   await api(page, 'PUT', `/api/orgs/${org.id}/sso/connection`, {
     protocol: 'saml',
-    saml: { entityId: 'http://www.okta.com/exk1northwind', ssoUrl: 'https://northwind.okta.example/app/ascentra/exk1northwind/sso/saml', certificates: [readFileSync('/bp/cert.pem', 'utf8')] },
+    saml: { entityId: 'http://www.okta.com/exk1northwind', ssoUrl: 'https://northwind.okta.example/app/alaventra/exk1northwind/sso/saml', certificates: [readFileSync('/bp/cert.pem', 'utf8')] },
     jitEnabled: true,
     defaultRole: 'member',
   });
@@ -169,7 +169,7 @@ async function prep() {
   };
   const u1 = await scim('POST', '/Users', { userName: 'lena@northwind-demo.example', name: { givenName: 'Lena', familyName: 'Sato' }, emails: [{ primary: true, value: 'lena@northwind-demo.example' }], active: true, externalId: '00u1lena' });
   const u2 = await scim('POST', '/Users', { userName: 'omar@northwind-demo.example', name: { givenName: 'Omar', familyName: 'Haddad' }, emails: [{ primary: true, value: 'omar@northwind-demo.example' }], active: true });
-  const g1 = await scim('POST', '/Groups', { displayName: 'Ascentra Admins', members: [{ value: u1.id }] });
+  const g1 = await scim('POST', '/Groups', { displayName: 'Alaventra Admins', members: [{ value: u1.id }] });
   await scim('POST', '/Groups', { displayName: 'Marketing', members: [{ value: u2.id }] });
   await scim('PATCH', `/Users/${u2.id}`, { schemas: ['urn:ietf:params:scim:api:messages:2.0:PatchOp'], Operations: [{ op: 'Replace', path: 'active', value: 'False' }] });
   await api(page, 'PATCH', `/api/orgs/${s.orgId}/scim/groups/${g1.id}`, { role: 'admin' });

@@ -54,7 +54,7 @@ describe('the agency mark', () => {
     expect(t).toContain('North Insights');
   });
   it('the product name follows the brand in force', () => {
-    expect(productName()).toBe('Ascentra');
+    expect(productName()).toBe('Alaventra');
     setPortalBrand(brand);
     expect(productName()).toBe('North Insights');
   });
@@ -72,9 +72,9 @@ describe('sign-in on a portal', () => {
     );
     expect(t).toContain('North Insights client portal');
     expect(t).toContain('help@north.example.com');
-    expect(t).not.toMatch(/Ascentra|Enterprise-grade autonomous SEO|Keyword ladders/);
+    expect(t).not.toMatch(/Alaventra|Enterprise-grade autonomous SEO|Keyword ladders/);
   });
-  it('says "Powered by Ascentra" only when the agency chose it', () => {
+  it('says "Powered by Alaventra" only when the agency chose it', () => {
     setPortalBrand({ ...brand, poweredBy: true } as PortalBrand);
     const t = shell(
       <Routes>
@@ -83,7 +83,7 @@ describe('sign-in on a portal', () => {
         </Route>
       </Routes>,
     );
-    expect(t).toContain('Powered by Ascentra');
+    expect(t).toContain('Powered by Alaventra');
   });
 });
 
@@ -115,7 +115,7 @@ describe('the client portal', () => {
     );
     for (const s of ['North Insights', 'Overview', 'Recommendations', 'Rankings', 'AI visibility', 'Backlinks', 'Reports', 'Approvals', 'Client viewer', 'acme.example.com'])
       expect(t, s).toContain(s);
-    for (const s of ['Run an analysis', 'Runs', 'Company settings', 'Pipeline', 'Website settings', 'Link building', 'Write a page', 'Ascentra'])
+    for (const s of ['Run an analysis', 'Runs', 'Company settings', 'Pipeline', 'Website settings', 'Link building', 'Write a page', 'Alaventra'])
       expect(t, s).not.toContain(s);
   });
 

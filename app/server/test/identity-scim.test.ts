@@ -202,10 +202,10 @@ describe('groups → roles', () => {
     const s = idp(co.token);
     const a = (await s.post('/Users', userBody('a@scim-groups.test'))).body;
     const b = (await s.post('/Users', userBody('b@scim-groups.test'))).body;
-    const g = await s.post('/Groups', { schemas: ['urn:ietf:params:scim:schemas:core:2.0:Group'], displayName: 'Ascentra Admins', members: [{ value: a.id }] });
+    const g = await s.post('/Groups', { schemas: ['urn:ietf:params:scim:schemas:core:2.0:Group'], displayName: 'Alaventra Admins', members: [{ value: a.id }] });
     expect(g.status).toBe(201);
     expect(g.body.members).toEqual([{ value: a.id, display: 'a@scim-groups.test' }]);
-    expect((await s.get('/Groups?filter=displayName%20eq%20%22Ascentra%20Admins%22&excludedAttributes=members')).body.Resources[0]).not.toHaveProperty('members');
+    expect((await s.get('/Groups?filter=displayName%20eq%20%22Alaventra%20Admins%22&excludedAttributes=members')).body.Resources[0]).not.toHaveProperty('members');
     // no mapping yet: roles unchanged
     expect((await membership(co.org.id, 'a@scim-groups.test'))?.role).toBe('member');
     // the admin maps the group to "admin" (a step-up applies; the session is fresh)

@@ -137,8 +137,8 @@ describe('branding', () => {
     expect(effectiveBrand({ name: 'North Agency', branding: { whiteLabel: true } })!.initials).toBe('NA');
   });
   it('rebrands whole words only', () => {
-    expect(rebrandText('Prepared by Dev SEO for acme. DEV SEO report.', ['Dev SEO', 'Ascentra'], 'North')).toBe('Prepared by North for acme. North report.');
-    expect(rebrandText('Ascentrals and Ascentra', ['Ascentra'], 'North')).toBe('Ascentrals and North');
+    expect(rebrandText('Prepared by Dev SEO for acme. DEV SEO report.', ['Dev SEO', 'Alaventra'], 'North')).toBe('Prepared by North for acme. North report.');
+    expect(rebrandText('Alaventrals and Alaventra', ['Alaventra'], 'North')).toBe('Alaventrals and North');
     expect(rebrandText('an SE report', ['SE'], 'North')).toBe('an SE report');
   });
   it('a display name cannot break the address header', () => {
@@ -163,10 +163,10 @@ describe('portal host', () => {
     expect(normalizeHost('-bad.agency.com')).toBeNull();
   });
   it('refuses the platform\'s own hosts and private names', () => {
-    expect(portalHostProblem('app.ascentra.app', ['ascentra.app'])).toMatch(/platform/);
-    expect(portalHostProblem('ascentra.app', ['ascentra.app'])).toMatch(/platform/);
+    expect(portalHostProblem('app.alaventra.app', ['alaventra.app'])).toMatch(/platform/);
+    expect(portalHostProblem('alaventra.app', ['alaventra.app'])).toMatch(/platform/);
     expect(portalHostProblem('seo.agency.test', [])).toMatch(/public/);
-    expect(portalHostProblem('seo.agency.com', ['ascentra.app'])).toBeNull();
+    expect(portalHostProblem('seo.agency.com', ['alaventra.app'])).toBeNull();
     expect(portalHostProblem(null, [])).toMatch(/Enter/);
   });
   it('the DNS proof names no product', () => {

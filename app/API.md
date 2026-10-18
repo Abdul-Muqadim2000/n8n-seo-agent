@@ -59,7 +59,7 @@ has not used it — `POST /api/auth/step-up` with a factor clears it).
 A session records how it signed in (`password` / `google` / `sso`), whether a second factor was used, its device and IP, and the
 strictest idle timeout of the person's companies (`SecurityPolicy.idleTimeoutMinutes`, refreshed whenever a policy or a membership
 changes). A session idle past it is deleted on its next request (`401 session_idle`, plus a short-lived `signed_out=idle` cookie
-for the sign-in page). Activity is written once a minute; requests with `X-Ascentra-Passive: 1` (the web app's polls from a hidden
+for the sign-in page). Activity is written once a minute; requests with `X-Alaventra-Passive: 1` (the web app's polls from a hidden
 tab) do not count.
 
 | Method | Path | Body | Returns |
@@ -80,7 +80,7 @@ test passes again.
 |---|---|---|---|
 | GET | /api/orgs/:orgId/sso | (admin) | `SsoOverview` (`domains`, `connection` — never the client secret, `sp` — the values to give the IdP, `secretsReady`) |
 | POST | /api/orgs/:orgId/sso/domains | `{ domain }` (admin, step-up; no public mail providers) | `SsoDomainView` with the TXT value; 409 when another company verified it |
-| POST | /api/orgs/:orgId/sso/domains/:id/verify | (admin) | `{ domain, verified, message }` (looks for `TXT ascentra-sso=<token>` at the domain) |
+| POST | /api/orgs/:orgId/sso/domains/:id/verify | (admin) | `{ domain, verified, message }` (looks for `TXT alaventra-sso=<token>` at the domain) |
 | DELETE | /api/orgs/:orgId/sso/domains/:id | (admin, step-up) | `{ ok }` |
 | PUT | /api/orgs/:orgId/sso/connection | `ssoConnectionSchema` (admin, step-up; client secret / certificates omitted = keep) | `SsoConnectionView` |
 | PATCH | /api/orgs/:orgId/sso/connection | `{ enabled?, enforced? }` (admin, step-up; `enforced` owner only) | `SsoConnectionView`; 400 until a test passed / a domain is verified |
@@ -194,7 +194,7 @@ Verified sites only (403 `forbidden` otherwise); another company's website is a 
 | POST | …/crawlers/push-key | (admin; 10 an hour) | `LogPushKeyCreated` `{ token, prefix, endpoint, header, createdAt }` — the key is returned **once**; a new key replaces the old one |
 | DELETE | …/crawlers/push-key | (admin) | `{ ok }` (pushes refused from the next one) |
 | DELETE | …/crawlers/data | `{ confirm: <domain> }` (admin) | `{ ok, deleted: { requests, dailyRows, files } }`; 409 while a file is being read |
-| POST | /api/ingest/logs/:siteId | header `X-Ascentra-Log-Key: asl_…` (or `Authorization: Bearer asl_…`); NDJSON / JSON array, plain or gzip; no session, no CSRF header; 100 MB; 120 a minute per site | 200 `{ ok, ingestId, duplicate }` (also for a batch already received), 200 `{ ok, empty }` for an empty body, 401 `push_key_invalid` for every refusal (unknown or unverified site, wrong or revoked key), 413 too large |
+| POST | /api/ingest/logs/:siteId | header `X-Alaventra-Log-Key: asl_…` (or `Authorization: Bearer asl_…`); NDJSON / JSON array, plain or gzip; no session, no CSRF header; 100 MB; 120 a minute per site | 200 `{ ok, ingestId, duplicate }` (also for a batch already received), 200 `{ ok, empty }` for an empty body, 401 `push_key_invalid` for every refusal (unknown or unverified site, wrong or revoked key), 413 too large |
 
 ## Dashboards (verified sites only; 403 otherwise)
 | Method | Path | Returns |
@@ -327,7 +327,7 @@ Finished reports leave the app on the company's own schedule: `each` (as a repor
 summary at a chosen weekday, day of month and UTC hour. Two channels, both at once if asked: **e-mail** (the report's headline
 figures in the message, its PDF / Word / zip attached up to 12 MB, and links that open it) and a **webhook** (`POST` of JSON with a
 `text` line so Slack, Teams and Discord render it unmapped; with a stored secret every body carries
-`X-Ascentra-Signature: sha256=<hmac over "<timestamp>.<body>">` and `X-Ascentra-Timestamp`). The signing secret is sealed with
+`X-Alaventra-Signature: sha256=<hmac over "<timestamp>.<body>">` and `X-Alaventra-Timestamp`). The signing secret is sealed with
 `MAILBOX_KEY` and **never returned** — the API answers `webhook.hasSecret`; sending `webhook.secret: ''` removes it, leaving the
 field out keeps what is stored. Reading the settings needs membership; changing them, and sending a test, need **owner**.
 
@@ -531,14 +531,14 @@ The endpoint is `POST <APP_URL>/api/v1/mcp` with `Authorization: Bearer asc_…`
 `run` adds `preview_run` and `start_run` (whose instructions tell the assistant to preview first and never to acknowledge a warning
 the user has not seen).
 
-- **Claude Code**: `claude mcp add --transport http ascentra https://app.example.com/api/v1/mcp --header "Authorization: Bearer asc_..."`
+- **Claude Code**: `claude mcp add --transport http alaventra https://app.example.com/api/v1/mcp --header "Authorization: Bearer asc_..."`
 - **Claude Desktop** (`claude_desktop_config.json`, through the `mcp-remote` bridge, which forwards the header):
   ```json
-  { "mcpServers": { "ascentra": { "command": "npx",
-      "args": ["-y", "mcp-remote", "https://app.example.com/api/v1/mcp", "--header", "Authorization:${ASCENTRA_AUTH}"],
-      "env": { "ASCENTRA_AUTH": "Bearer asc_..." } } } }
+  { "mcpServers": { "alaventra": { "command": "npx",
+      "args": ["-y", "mcp-remote", "https://app.example.com/api/v1/mcp", "--header", "Authorization:${ALAVENTRA_AUTH}"],
+      "env": { "ALAVENTRA_AUTH": "Bearer asc_..." } } } }
   ```
-- **OpenAI (Responses API / Agents SDK)**: `tools: [{ "type": "mcp", "server_label": "ascentra", "server_url": "https://app.example.com/api/v1/mcp",
+- **OpenAI (Responses API / Agents SDK)**: `tools: [{ "type": "mcp", "server_label": "alaventra", "server_url": "https://app.example.com/api/v1/mcp",
   "headers": { "Authorization": "Bearer asc_..." }, "require_approval": "always" }]`. ChatGPT's own in-app custom connectors accept
   only OAuth or no authentication, so a company key cannot be pasted there today; use the API, or a read-only key behind your own proxy.
 
@@ -584,13 +584,13 @@ when the engine refuses at the door, its execution fails, or the run expires. Si
             "report": { "id": "…", "title": "…", "stage": "rank_tracker", "url": "https://app…/o/…/reports/…" } } }
 ```
 
-Headers: `X-Ascentra-Event`, `X-Ascentra-Delivery` (stable across retries — de-duplicate on it), `X-Ascentra-Timestamp` (ms) and, for
-signed JSON, `X-Ascentra-Signature: sha256=<hex HMAC-SHA256 of "<timestamp>.<raw body>" with the endpoint's secret>` — the scheme
+Headers: `X-Alaventra-Event`, `X-Alaventra-Delivery` (stable across retries — de-duplicate on it), `X-Alaventra-Timestamp` (ms) and, for
+signed JSON, `X-Alaventra-Signature: sha256=<hex HMAC-SHA256 of "<timestamp>.<raw body>" with the endpoint's secret>` — the scheme
 report delivery uses. Verify it, and refuse a timestamp older than 5 minutes:
 
 ```js
-const ok = 'sha256=' + crypto.createHmac('sha256', secret).update(`${req.headers['x-ascentra-timestamp']}.${rawBody}`).digest('hex');
-if (!crypto.timingSafeEqual(Buffer.from(ok), Buffer.from(req.headers['x-ascentra-signature'] || ''))) return res.status(401).end();
+const ok = 'sha256=' + crypto.createHmac('sha256', secret).update(`${req.headers['x-alaventra-timestamp']}.${rawBody}`).digest('hex');
+if (!crypto.timingSafeEqual(Buffer.from(ok), Buffer.from(req.headers['x-alaventra-signature'] || ''))) return res.status(401).end();
 ```
 
 **Delivery.** 10-second timeout; a 2xx is delivered. Otherwise retried after 1, 5, 30, 120 and 720 minutes, then `gave_up`; a 410 is
@@ -688,7 +688,7 @@ only to their client people (staff reach them through the agency) and, on a port
 
 The ticket: title `[SEO] <finding>`; the audit and its date, severity and category, pages affected of pages checked, why it matters,
 the evidence line, up to 10 example pages, **the fix** (from the audit's own report), the "I fixed this" hint and a link back to the
-finding; a recommendation carries its detail, evidence and action. Jira gets it as ADF with labels `ascentra`, `seo`; Linear as
+finding; a recommendation carries its detail, evidence and action. Jira gets it as ADF with labels `alaventra`, `seo`; Linear as
 Markdown; Asana as plain notes. **One finding = one ticket**: `issue_links` is unique per (company, `finding:<website>:<finding key>`
 or `rec:<website>:<id>`), inserted as `creating` before the vendor call, so two simultaneous pushes reach the vendor once; a failed
 vendor call removes the placeholder. States map to `todo` / `in_progress` / `done` (Jira status category, Linear state type, Asana
@@ -699,7 +699,7 @@ vendor call removes the placeholder. States map to `todo` / `in_progress` / `don
 
 | Method | Path | Body | Returns |
 |---|---|---|---|
-| POST | /api/orgs/:orgId/integrations/exports | `exportDestinationSchema`: `{ kind: 's3', name, provider: aws \| gcs \| r2 \| other, region, accountId (R2), endpoint (other), bucket, prefix, format: ndjson \| csv, tables[], schedule: daily \| weekly \| off, hour (UTC), weekday, accessKeyId, secretAccessKey }` · `{ kind: 'bigquery', name, projectId, datasetId, location, tablePrefix, tables[], schedule, hour, weekday, serviceAccountJson }` | `IntegrationView` — saved only after a test: S3 writes `<prefix>/_ascentra/dt=…/_ascentra-connection-test.txt`; BigQuery reads the dataset. At most 3 destinations |
+| POST | /api/orgs/:orgId/integrations/exports | `exportDestinationSchema`: `{ kind: 's3', name, provider: aws \| gcs \| r2 \| other, region, accountId (R2), endpoint (other), bucket, prefix, format: ndjson \| csv, tables[], schedule: daily \| weekly \| off, hour (UTC), weekday, accessKeyId, secretAccessKey }` · `{ kind: 'bigquery', name, projectId, datasetId, location, tablePrefix, tables[], schedule, hour, weekday, serviceAccountJson }` | `IntegrationView` — saved only after a test: S3 writes `<prefix>/_alaventra/dt=…/_alaventra-connection-test.txt`; BigQuery reads the dataset. At most 3 destinations |
 | PATCH | /api/orgs/:orgId/integrations/:id | `{ name?, tables?, schedule?, hour?, weekday?, format? }` | `IntegrationView` (the credentials and the target need a new connection) |
 | POST | /api/orgs/:orgId/integrations/:id/run | (6 a minute; once per 10 minutes per destination) | `ExportRunView` `{ status: ok \| partial \| failed, tables: [{ table, rows, bytes, object, truncated, error }] }` |
 | GET | /api/orgs/:orgId/integrations/:id/runs | | `{ items: ExportRunView[] }` (30) |

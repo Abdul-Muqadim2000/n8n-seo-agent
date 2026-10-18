@@ -14,7 +14,7 @@ def load_env(path=ENV_FILE):
         env[k] = v
     return env
 ENV = load_env()
-BRAND = ENV.get('SEO_BRAND') or 'Dev SEO'
+BRAND = ENV.get('SEO_BRAND') or 'Alaventra'
 SENDER = ENV.get('SEO_MAIL_FROM') or 'Dev SEO <kinnngahmed@gmail.com>'
 OPS_EMAIL = ENV.get('SEO_OPS_EMAIL') or 'kinnngahmed@gmail.com'
 SA_EMAIL = ENV.get('SEO_GOOGLE_SA_EMAIL') or ''

@@ -6,14 +6,14 @@
     "https://www.googleapis.com/auth/script.external_request"
   ],
   "dataStudio": {
-    "name": "Ascentra",
-    "company": "Ascentra",
-    "logoUrl": "https://YOUR-ASCENTRA-ADDRESS/brand/ascentra-app-icon.png",
-    "companyUrl": "https://YOUR-ASCENTRA-ADDRESS/",
-    "addonUrl": "https://YOUR-ASCENTRA-ADDRESS/platform",
-    "supportUrl": "https://YOUR-ASCENTRA-ADDRESS/contact",
-    "description": "Rankings, weekly Search Console and GA4 figures, audit findings, AI visibility, backlinks and analyses from Ascentra, one website and one table per data source.",
-    "shortDescription": "Your Ascentra SEO data in Looker Studio.",
+    "name": "Alaventra",
+    "company": "Alaventra",
+    "logoUrl": "https://YOUR-ALAVENTRA-ADDRESS/brand/alaventra-app-icon.png",
+    "companyUrl": "https://YOUR-ALAVENTRA-ADDRESS/",
+    "addonUrl": "https://YOUR-ALAVENTRA-ADDRESS/platform",
+    "supportUrl": "https://YOUR-ALAVENTRA-ADDRESS/contact",
+    "description": "Rankings, weekly Search Console and GA4 figures, audit findings, AI visibility, backlinks and analyses from Alaventra, one website and one table per data source.",
+    "shortDescription": "Your Alaventra SEO data in Looker Studio.",
     "authType": [
       "KEY"
     ],

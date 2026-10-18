@@ -24,7 +24,7 @@ export function FeatureVisual({ kind, className }: { kind: VisualKey; className?
   switch (kind) {
     case 'dashboard':
       return (
-        <BrowserFrame url="app.ascentra.com/overview" className={className}>
+        <BrowserFrame url="app.alaventra.com/overview" className={className}>
           <DashboardMockup />
         </BrowserFrame>
       );

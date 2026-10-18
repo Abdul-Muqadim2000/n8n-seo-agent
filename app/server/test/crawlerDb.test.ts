@@ -186,7 +186,7 @@ describe.skipIf(!DB)('crawler logs against Postgres', () => {
 
   it('Cloudflare Logpush: the push key is shown once, a gzip NDJSON batch is accepted, a retried batch is not counted twice', async () => {
     const push = (siteId: string, body: Buffer | string, key?: string, type = 'application/x-ndjson') =>
-      app.inject({ method: 'POST', url: `/api/ingest/logs/${siteId}`, headers: { 'content-type': type, ...(key ? { 'x-ascentra-log-key': key } : {}) }, payload: body });
+      app.inject({ method: 'POST', url: `/api/ingest/logs/${siteId}`, headers: { 'content-type': type, ...(key ? { 'x-alaventra-log-key': key } : {}) }, payload: body });
     expect((await push(ids.siteA, 'x')).statusCode).toBe(401);
     const k = await req('owner', 'POST', `${base(ids.siteA)}/push-key`);
     expect(k.statusCode).toBe(200);

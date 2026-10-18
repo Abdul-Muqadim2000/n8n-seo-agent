@@ -20,13 +20,13 @@ import { WebhooksCard } from './WebhooksCard';
  */
 
 export const mcpSnippets = (appUrl: string) => ({
-  claudeCode: `claude mcp add --transport http ascentra ${appUrl}/api/v1/mcp --header "Authorization: Bearer asc_..."`,
+  claudeCode: `claude mcp add --transport http alaventra ${appUrl}/api/v1/mcp --header "Authorization: Bearer asc_..."`,
   claudeDesktop: JSON.stringify(
-    { mcpServers: { ascentra: { command: 'npx', args: ['-y', 'mcp-remote', `${appUrl}/api/v1/mcp`, '--header', 'Authorization:${ASCENTRA_AUTH}'], env: { ASCENTRA_AUTH: 'Bearer asc_...' } } } },
+    { mcpServers: { alaventra: { command: 'npx', args: ['-y', 'mcp-remote', `${appUrl}/api/v1/mcp`, '--header', 'Authorization:${ALAVENTRA_AUTH}'], env: { ALAVENTRA_AUTH: 'Bearer asc_...' } } } },
     null,
     2,
   ),
-  openai: JSON.stringify({ type: 'mcp', server_label: 'ascentra', server_url: `${appUrl}/api/v1/mcp`, headers: { Authorization: 'Bearer asc_...' }, require_approval: 'always' }, null, 2),
+  openai: JSON.stringify({ type: 'mcp', server_label: 'alaventra', server_url: `${appUrl}/api/v1/mcp`, headers: { Authorization: 'Bearer asc_...' }, require_approval: 'always' }, null, 2),
 });
 
 function Snippet({ label, code }: { label: string; code: string }) {
@@ -54,7 +54,7 @@ export function ConnectToolsCard({ data }: { data: IntegrationsOverview }) {
       >
         <CardBody className="space-y-2 text-sm text-ink-2">
           <p>
-            Ascentra’s Looker Studio connector reads the same tables as the data export, one website at a time, with a read-only API key. Create the key under{' '}
+            Alaventra’s Looker Studio connector reads the same tables as the data export, one website at a time, with a read-only API key. Create the key under{' '}
             <Link to={paths.settings(org.id, 'api')} className="font-medium text-accent-text hover:underline">
               API access
             </Link>{' '}

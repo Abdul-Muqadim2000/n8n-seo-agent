@@ -21,7 +21,7 @@ export function IntegrationsMockup({ className }: { className?: string }) {
             <span className="block text-[10.5px] text-ink-3">#seo-alerts · just now</span>
             <span className="mt-0.5 block font-display text-[13.5px] leading-snug font-semibold">Alert · example.com</span>
             <span className="mt-1 block text-[11.5px] leading-snug text-ink-2">High: /pricing stopped being indexable this morning (noindex added).</span>
-            <span className="mt-1.5 inline-flex rounded-md border border-line px-2 py-0.5 text-[10.5px] font-medium text-accent-text">Open in Ascentra</span>
+            <span className="mt-1.5 inline-flex rounded-md border border-line px-2 py-0.5 text-[10.5px] font-medium text-accent-text">Open in Alaventra</span>
           </span>
         </div>
       </div>

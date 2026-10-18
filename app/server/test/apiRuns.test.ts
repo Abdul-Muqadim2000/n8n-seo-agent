@@ -23,7 +23,7 @@ const st = vi.hoisted(() => ({
   activeRuns: [] as { id: string; mode: string; keyword: string; createdAt: string }[],
 }));
 
-vi.mock('../src/config', () => ({ config: { appUrl: 'https://app.example.com', brand: 'Ascentra', isProd: false, platformAdmins: [] } }));
+vi.mock('../src/config', () => ({ config: { appUrl: 'https://app.example.com', brand: 'Alaventra', isProd: false, platformAdmins: [] } }));
 vi.mock('../src/db', async () => ({ db: {}, schema: await import('../src/db/schema'), sqlClient: {} }));
 vi.mock('../src/services/apiKeys', () => ({
   authenticateKey: vi.fn(async (t: string) => {

@@ -317,7 +317,7 @@ function LoopSection() {
             ))}
           </ol>
           <Reveal className="mt-8">
-            <ArrowLink to="/how-it-works">See a week with Ascentra</ArrowLink>
+            <ArrowLink to="/how-it-works">See a week with Alaventra</ArrowLink>
           </Reveal>
         </div>
         <Reveal index={1}>
@@ -335,7 +335,7 @@ function Integrations() {
         align="center"
         eyebrow="Integrations"
         title="Built on the sources you already trust."
-        lead="Ascentra reads your Google data through a service account you add, asks the AI engines your buyers use and hands finished pages to your CMS."
+        lead="Alaventra reads your Google data through a service account you add, asks the AI engines your buyers use and hands finished pages to your CMS."
       />
       {/* phones get the grouped list only (the chip row would repeat it) */}
       <Reveal className="mt-12 hidden sm:block">

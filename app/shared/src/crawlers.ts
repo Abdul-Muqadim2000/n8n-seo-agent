@@ -179,7 +179,7 @@ export const crawlerSettingsSchema = z.object({
 export type CrawlerSettingsInput = z.infer<typeof crawlerSettingsSchema>;
 
 /** The per-site secret a log push sends (shown once; only its SHA-256 is stored). */
-export const LOG_PUSH_KEY = { prefix: 'asl_', header: 'X-Ascentra-Log-Key', displayLength: 12 } as const;
+export const LOG_PUSH_KEY = { prefix: 'asl_', header: 'X-Alaventra-Log-Key', displayLength: 12 } as const;
 const PUSH_RE = /^asl_[A-Za-z0-9_-]{43}$/;
 export const isLogPushKey = (v: unknown): v is string => typeof v === 'string' && PUSH_RE.test(v);
 

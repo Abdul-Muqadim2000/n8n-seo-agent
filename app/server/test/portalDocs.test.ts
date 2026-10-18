@@ -7,7 +7,7 @@ import { rewriteShell } from '../src/services/portalShell';
 const docx = () =>
   writeZip([
     { name: '[Content_Types].xml', data: Buffer.from('<?xml version="1.0"?><Types/>') },
-    { name: 'word/document.xml', data: Buffer.from('<w:document><w:t>Prepared by Dev SEO</w:t><w:t>Ascentra report</w:t></w:document>') },
+    { name: 'word/document.xml', data: Buffer.from('<w:document><w:t>Prepared by Dev SEO</w:t><w:t>Alaventra report</w:t></w:document>') },
     { name: 'word/footer1.xml', data: Buffer.from('<w:ftr><w:t>dev seo · page 1</w:t></w:ftr>') },
     { name: 'word/media/image1.png', data: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x44, 0x65, 0x76]) },
   ]);
@@ -31,7 +31,7 @@ describe('zip', () => {
 
 describe('rebrandDocument', () => {
   it('replaces the engine brand and ours in every XML part of a Word file, and leaves media alone', () => {
-    const r = rebrandDocument('docx', docx(), ['Dev SEO', 'Ascentra'], 'North & Co');
+    const r = rebrandDocument('docx', docx(), ['Dev SEO', 'Alaventra'], 'North & Co');
     expect(r).toMatchObject({ rewritable: true, changed: true });
     const e = readZip(r.data)!;
     expect(e.find((x) => x.name === 'word/document.xml')!.data.toString()).toBe('<w:document><w:t>Prepared by North &amp; Co</w:t><w:t>North &amp; Co report</w:t></w:document>');
@@ -53,11 +53,11 @@ describe('rebrandDocument', () => {
 
 describe('portal page shell', () => {
   const html = `<!doctype html><html><head>
-    <title>Ascentra</title>
+    <title>Alaventra</title>
     <meta name="description" content="Enterprise-grade autonomous SEO." />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
     <link rel="manifest" href="/site.webmanifest" />
-    <meta property="og:site_name" content="Ascentra" />
+    <meta property="og:site_name" content="Alaventra" />
     <meta name="twitter:image" content="/og-image.png" />
     <script src="/theme-init.js"></script>
   </head><body><div id="root"></div></body></html>`;
@@ -67,6 +67,6 @@ describe('portal page shell', () => {
     expect(out).toContain('<meta name="portal-host" content="1" />');
     expect(out).toContain('<link rel="icon" href="https://north.example.com/logo.svg" />');
     expect(out).toContain('<script src="/theme-init.js"></script>');
-    expect(out).not.toMatch(/Ascentra|favicon|og:|twitter:|manifest/);
+    expect(out).not.toMatch(/Alaventra|favicon|og:|twitter:|manifest/);
   });
 });

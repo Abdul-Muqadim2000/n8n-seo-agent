@@ -78,7 +78,7 @@ async function visit(page, { name, url, size, theme, portal = false, expectFaile
   const platformMentions = portal
     ? await page.evaluate(() => {
         const t = `${document.title} ${document.body.innerText} ${[...document.images].map((i) => `${i.alt} ${i.src}`).join(' ')}`;
-        return (t.match(/ascentra/gi) ?? []).length;
+        return (t.match(/alaventra/gi) ?? []).length;
       })
     : null;
   const file = `${name}-${size}-${theme}.png`;
@@ -209,7 +209,7 @@ async function shots() {
   const st = read();
   for (const size of ['desktop', 'phone']) {
     for (const theme of ['light', 'dark']) {
-      // the agency's own screens, on the app's host (Ascentra's look)
+      // the agency's own screens, on the app's host (Alaventra's look)
       {
         const { ctx, page } = await signIn(browser, APP, 'nora@northagency.com', theme, size);
         await visit(page, { name: 'agency-clients', url: `${APP}/o/${st.agency}/clients`, size, theme });

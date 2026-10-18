@@ -14,8 +14,8 @@ with the client's logo at most (B-R2). This file is the design and the operating
    Agency staff switch between clients from the sidebar; one table lists every client's websites.
 2. **Branding.** The agency sets a product name, a logo (light and dark), one accent colour, a support e-mail and a footer line; a
    client workspace may override the name, the logo and the colour. With **white-label on**, everything a client sees — the portal,
-   report pages, share pages, documents the app serves and e-mails the app sends — carries the agency's brand, and no "Ascentra".
-   A discreet "Powered by Ascentra" line is a setting, **off by default**.
+   report pages, share pages, documents the app serves and e-mails the app sends — carries the agency's brand, and no "Alaventra".
+   A discreet "Powered by Alaventra" line is a setting, **off by default**.
 3. **Client logins.** The agency invites a client's people as **client viewer** (read-only) or **client approver** (also approves
    pages and outreach before they go out). They see a portal of their own websites — dashboards, reports, recommendations,
    approvals — and nothing of the agency or of other clients. Two-step and single-sign-on policies of G1 apply to them.
@@ -103,7 +103,7 @@ https:// {
 }
 ```
 
-Settings (`app/.env`): `PORTAL_CNAME_TARGET` — the host agencies point their CNAME at (e.g. `portals.ascentra.app`, itself pointing
+Settings (`app/.env`): `PORTAL_CNAME_TARGET` — the host agencies point their CNAME at (e.g. `portals.alaventra.app`, itself pointing
 at the proxy); `APP_EXTRA_HOSTS` — other hosts the app answers on (comma-separated); `PORTAL_STRICT_HOSTS` — refuse every other host
 (default on when `APP_URL` is https). A portal host is verified when **both** hold: `TXT _portal-verification.<host>` = `portal-verification=<token>` (no product name in DNS: clients can read it),
 and the host is a CNAME to `PORTAL_CNAME_TARGET` (or, for an apex that cannot CNAME, resolves to the same addresses). Without

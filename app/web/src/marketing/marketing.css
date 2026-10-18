@@ -24,8 +24,8 @@
 
 /* ---------- brand mark watermark: the supplied SVG as a mask over a faded on-ink fill ---------- */
 .mk-watermark {
-  -webkit-mask: url('/brand/ascentra-mark-white.svg') center / contain no-repeat;
-  mask: url('/brand/ascentra-mark-white.svg') center / contain no-repeat;
+  -webkit-mask: url('/brand/alaventra-mark-white.svg') center / contain no-repeat;
+  mask: url('/brand/alaventra-mark-white.svg') center / contain no-repeat;
 }
 
 /* ---------- hero grid: hairlines in the line token, faded out by a mask (no colour gradient) ---------- */
@@ -52,7 +52,7 @@
 
 /* ---------- FAQ (details) ---------- */
 .mk-faq[open] .mk-faq-body {
-  animation: asc-fade-up 320ms var(--brand-ease) both;
+  animation: alv-fade-up 320ms var(--brand-ease) both;
 }
 
 /* ---------- integration marquee ---------- */

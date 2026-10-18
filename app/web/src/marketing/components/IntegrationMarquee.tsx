@@ -2,7 +2,7 @@ import { integrations } from '../content/site';
 import { cn } from '@/lib/utils';
 import { useSectionTone } from './Section';
 
-/** Engines and tools Ascentra works with, as text chips scrolling sideways (CSS only, pauses on hover, static and wrapped under reduced motion). */
+/** Engines and tools Alaventra works with, as text chips scrolling sideways (CSS only, pauses on hover, static and wrapped under reduced motion). */
 export function IntegrationMarquee({ items = integrations, label = 'Works with', className }: { items?: string[]; label?: string; className?: string }) {
   const ink = useSectionTone() === 'ink';
   const chip = cn(

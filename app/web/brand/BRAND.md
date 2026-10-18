@@ -1,6 +1,6 @@
-# Ascentra — Brand Guide v1.0
+# Alaventra — Brand Guide v1.0
 
-Ascentra is enterprise-grade autonomous SEO. This kit holds the logo system, icons, favicons, colours and type for the product and marketing site. Hand this file plus the folder to Claude (or any developer) to rebrand the app.
+Alaventra is enterprise-grade autonomous SEO. The name joins *ala* (Latin for wing) with *venture*: the wing of the mark, moving forward. This kit holds the logo system, icons, favicons, colours and type for the product and marketing site. Hand this file plus the folder to Claude (or any developer) to rebrand the app.
 
 ## 1. The mark
 
@@ -16,22 +16,22 @@ The mark is unchanged from the original artwork, rebuilt as clean vectors (99% p
 
 | File | Use |
 |---|---|
-| `ascentra-logo-horizontal-{ink,blue,white}` | Primary logo. Website nav at ≥ 40px tall, footer, documents, decks. |
-| `ascentra-logo-stacked-{ink,blue,white}` | Square-ish spaces: hero, login screen, merch, event signage. |
-| `ascentra-logo-header-{light,dark}` | **App/product header** at 24–40px tall (blue icon tile + wordmark). Replaces the current "SEO Agent" blue-square header. |
-| `ascentra-mark-{ink,blue,white}` | Mark alone, ≥ 40px wide. Hero graphics, watermarks, loading states. |
-| `ascentra-wordmark-{ink,white}` | Wordmark alone, where the mark already appears nearby. |
+| `alaventra-logo-horizontal-{ink,blue,white}` | Primary logo. Website nav at ≥ 40px tall, footer, documents, decks. |
+| `alaventra-logo-stacked-{ink,blue,white}` | Square-ish spaces: hero, login screen, merch, event signage. |
+| `alaventra-logo-header-{light,dark}` | **App/product header** at 24–40px tall (blue icon tile + wordmark). Replaces the current "SEO Agent" blue-square header. |
+| `alaventra-mark-{ink,blue,white}` | Mark alone, ≥ 40px wide. Hero graphics, watermarks, loading states. |
+| `alaventra-wordmark-{ink,white}` | Wordmark alone, where the mark already appears nearby. |
 
 Every logo comes as SVG (use this on the web) and transparent PNG.
 
-- **Ink** version on white/paper. **Blue** version on white only. **White** version on ink, Ascentra Blue or photography.
+- **Ink** version on white/paper. **Blue** version on white only. **White** version on ink, Alaventra Blue or photography.
 - **Clear space:** keep space equal to the wordmark's cap height ("A" height) clear on every side. For the mark alone: 25% of its height.
 - **Minimum size:** horizontal logo 140px wide; mark 40px wide. Smaller than that, use the header lockup or the app icon.
-- Don't set "ASCENTRA" as live text and call it the logo. Use the SVG.
+- Don't set "ALAVENTRA" as live text and call it the logo. Use the SVG.
 
 ## 3. App icon & favicon (`/icon`, `/favicon`)
 
-- **App icon:** white mark on Ascentra Blue, rounded square (corner radius 22.5%). Alternates: white on ink, blue on white.
+- **App icon:** white mark on Alaventra Blue, rounded square (corner radius 22.5%). Alternates: white on ink, blue on white.
 - **Favicon:** the same tile. At 16–32px the rays are drawn slightly heavier (same 33 rays and lengths) so they stay crisp in browser tabs; that's `favicon.svg`, `favicon.ico` and `favicon-16/32`.
 - `apple-touch-icon.png` and `maskable-icon-512x512.png` are full-bleed squares: iOS and Android round the corners themselves.
 - Paste `favicon/head-snippet.html` into the site `<head>`; copy the favicon files to the web root.
@@ -41,7 +41,7 @@ Every logo comes as SVG (use this on the web) and transparent PNG.
 | Token | Hex | Use |
 |---|---|---|
 | Ink | `#0A0F1F` | Primary text, dark surfaces, mono logo |
-| **Ascentra Blue** | `#2E4BFF` | Primary buttons, links, active tabs, icon tile, chart lines |
+| **Alaventra Blue** | `#2E4BFF` | Primary buttons, links, active tabs, icon tile, chart lines |
 | Blue Deep | `#2238D9` | Hover / pressed |
 | Blue Tint | `#EEF1FF` | Selected states, chart area fill, info badges |
 | Blue on Dark | `#8FA2FF` | Links and accents on ink |
@@ -72,16 +72,16 @@ All three are free (SIL Open Font License) on Google Fonts.
 
 ## 6. Applying it to the product (rebrand checklist)
 
-1. Header: swap the "SEO Agent" icon + text for `ascentra-logo-header-light.svg` (height 32px).
-2. Page title and `<title>`: "Ascentra" (e.g. `Overview · techand.ai — Ascentra`).
-3. Load the fonts and `tokens.css`. Body uses `--asc-font-ui`; H1/H2 and KPI values use `--asc-font-display`.
-4. Page background `--asc-paper`; cards white with `--asc-shadow-card` and `--asc-radius-lg`.
-5. Primary button ("Run an analysis"): `--asc-blue` fill, white text; hover `--asc-blue-deep`.
-6. Links ("All reports →"): `--asc-blue`.
-7. Charts: line `--asc-blue`, area fill `--asc-blue-tint`, grid `--asc-line`.
-8. Deltas: up = `--asc-success`, down = `--asc-danger`; "High" tags = `--asc-warning`.
+1. Header: swap the "SEO Agent" icon + text for `alaventra-logo-header-light.svg` (height 32px).
+2. Page title and `<title>`: "Alaventra" (e.g. `Overview · techand.ai — Alaventra`).
+3. Load the fonts and `tokens.css`. Body uses `--alv-font-ui`; H1/H2 and KPI values use `--alv-font-display`.
+4. Page background `--alv-paper`; cards white with `--alv-shadow-card` and `--alv-radius-lg`.
+5. Primary button ("Run an analysis"): `--alv-blue` fill, white text; hover `--alv-blue-deep`.
+6. Links ("All reports →"): `--alv-blue`.
+7. Charts: line `--alv-blue`, area fill `--alv-blue-tint`, grid `--alv-line`.
+8. Deltas: up = `--alv-success`, down = `--alv-danger`; "High" tags = `--alv-warning`.
 9. Favicon and social meta: `favicon/head-snippet.html`.
-10. Share image: `social/ascentra-og-image.png` (1200×630).
+10. Share image: `social/alaventra-og-image.png` (1200×630).
 
 ## 7. Voice
 

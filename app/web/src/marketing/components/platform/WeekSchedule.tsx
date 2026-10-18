@@ -59,7 +59,7 @@ const runsOn = (day: number): number => (day === 0 ? 1 + MONDAY.length : 2);
 const mins = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3));
 const pct = (t: string) => ((mins(t) - START) / SPAN) * 100;
 
-/** "A week with Ascentra": the automatic runs on a Mon–Sun grid of 05:30–11:30, a time cursor sweeping down and lighting each run
+/** "A week with Alaventra": the automatic runs on a Mon–Sun grid of 05:30–11:30, a time cursor sweeping down and lighting each run
  *  as it passes; the monthly audit underneath; every run described in a list (the only view on phones, with a compact week strip). */
 export function WeekSchedule({ className }: { className?: string }) {
   const ink = useSectionTone() === 'ink';

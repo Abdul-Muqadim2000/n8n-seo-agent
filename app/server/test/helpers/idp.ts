@@ -23,7 +23,7 @@ export interface OidcUser {
 
 export class MockOidcIssuer {
   issuer = 'https://idp.example-okta.test';
-  clientId = 'ascentra-client';
+  clientId = 'alaventra-client';
   clientSecret = 'client-secret-for-tests-only';
   private key!: { publicKey: CryptoKey; privateKey: CryptoKey };
   private kid = 'k1';
@@ -97,7 +97,7 @@ export class MockOidcIssuer {
 
 export class MockSamlIdp {
   entityId = 'http://www.okta.test/exk1fakeidp';
-  ssoUrl = 'https://northwind.okta.test/app/ascentra/sso/saml';
+  ssoUrl = 'https://northwind.okta.test/app/alaventra/sso/saml';
   cert = '';
   privateKey = '';
 

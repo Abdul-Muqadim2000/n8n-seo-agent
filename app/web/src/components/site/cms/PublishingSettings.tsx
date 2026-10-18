@@ -173,7 +173,7 @@ function FieldMapping({ c, admin }: { c: CmsConnectionView; admin: boolean }) {
   if (!remote.length)
     return (
       <Callout tone="info" title="Map the fields after the first test">
-        Test the connection: Ascentra reads the fields of your {c.kind === 'webflow' ? 'collection' : 'content type'}, then you choose which one holds the article.
+        Test the connection: Alaventra reads the fields of your {c.kind === 'webflow' ? 'collection' : 'content type'}, then you choose which one holds the article.
       </Callout>
     );
   const problems = fieldMapProblems(c.kind, map, remote);

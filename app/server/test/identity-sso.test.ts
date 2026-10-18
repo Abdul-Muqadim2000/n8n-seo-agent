@@ -90,10 +90,10 @@ describe('domains', () => {
     expect((await owner.c.post(`/api/orgs/${org.id}/sso/domains`, { domain: 'not a domain' })).status).toBe(400);
     const d = await owner.c.post(`/api/orgs/${org.id}/sso/domains`, { domain: 'https://Shared-Dom.TEST/' });
     expect(d.body).toMatchObject({ domain: 'shared-dom.test', verified: false });
-    expect(d.body.txtValue).toMatch(/^ascentra-sso=/);
+    expect(d.body.txtValue).toMatch(/^alaventra-sso=/);
     const miss = await owner.c.post(`/api/orgs/${org.id}/sso/domains/${d.body.id}/verify`);
     expect(miss.body.verified).toBe(false);
-    txt.set('shared-dom.test', ['ascentra-sso=wrong']);
+    txt.set('shared-dom.test', ['alaventra-sso=wrong']);
     expect((await owner.c.post(`/api/orgs/${org.id}/sso/domains/${d.body.id}/verify`)).body.verified).toBe(false);
     txt.set('shared-dom.test', [d.body.txtValue]);
     expect((await owner.c.post(`/api/orgs/${org.id}/sso/domains/${d.body.id}/verify`)).body.verified).toBe(true);

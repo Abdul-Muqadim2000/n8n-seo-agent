@@ -108,7 +108,7 @@ export function TrackersCard({ data }: { data: IntegrationsOverview }) {
       icon={<ListTodo />}
       title="Issue trackers"
       description="Send an audit finding or a recommendation to Jira, Linear or Asana as a ticket — one ticket per finding, with its state shown back here."
-      info="The ticket carries the finding’s evidence, example pages and the fix, and links back to Ascentra. Pushing the same finding again opens the ticket already made. Any member can create a ticket; only owners and admins connect a tracker."
+      info="The ticket carries the finding’s evidence, example pages and the fix, and links back to Alaventra. Pushing the same finding again opens the ticket already made. Any member can create a ticket; only owners and admins connect a tracker."
     >
       <CardBody className="space-y-3">
         {TRACKER_KINDS.map((kind) => {

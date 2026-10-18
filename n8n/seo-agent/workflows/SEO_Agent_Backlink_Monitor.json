@@ -1839,7 +1839,7 @@
             "parameters": [
               {
                 "name": "User-Agent",
-                "value": "SEOAgentLinkMonitor/4.10 (Dev SEO; backlink monitor; mailto:devaicondeveloper3@gmail.com)"
+                "value": "SEOAgentLinkMonitor/4.10 (Alaventra; backlink monitor; mailto:devaicondeveloper3@gmail.com)"
               },
               {
                 "name": "Accept",
@@ -1938,7 +1938,7 @@
             "parameters": [
               {
                 "name": "User-Agent",
-                "value": "SEOAgentLinkMonitor/4.10 (Dev SEO; backlink monitor; mailto:devaicondeveloper3@gmail.com)"
+                "value": "SEOAgentLinkMonitor/4.10 (Alaventra; backlink monitor; mailto:devaicondeveloper3@gmail.com)"
               }
             ]
           }
@@ -4568,7 +4568,7 @@
       },
       {
         "parameters": {
-          "fromEmail": "Dev SEO <devaicondeveloper3@gmail.com>",
+          "fromEmail": "Alaventra <devaicondeveloper3@gmail.com>",
           "toEmail": "={{ $json.email }}",
           "subject": "={{ $json.subject }}",
           "emailFormat": "html",

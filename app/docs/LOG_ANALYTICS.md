@@ -19,7 +19,7 @@ engine (n8n) is only *read* for the page inventory (`seo_pages`). The page is **
 | Broken IP-list refresh | A vendor answers an empty page / error; an empty list would turn every real crawler into "spoofed" | The refresh refuses an empty, unreadable or >90 % smaller list and keeps the previous one; a dated copy ships with the code |
 | DNS outage | Reverse DNS times out | "No answer" is **unchecked**, never spoofed; at most 2,000 DNS checks per ingest, one per (crawler, address), cached 24 h |
 | Personal data | Access logs hold visitors' IP addresses and URLs | People's requests are counted and **dropped** (no row). No address is stored for anyone: only, for a crawler request that was *not* proved, its /24 (IPv4) or /48 (IPv6) network. Parameter **names** are kept, never values. The raw upload is deleted when its job ends (§5) |
-| Push endpoint abuse | Anyone POSTs fake logs for a site | Per-site push key (`asl_` + 256 bits) in `X-Ascentra-Log-Key`; only its SHA-256 is stored; constant-time compare; one 401 for every refusal (unknown site, unverified site, wrong / revoked key); 120 pushes a minute per site; 100 MB a push |
+| Push endpoint abuse | Anyone POSTs fake logs for a site | Per-site push key (`asl_` + 256 bits) in `X-Alaventra-Log-Key`; only its SHA-256 is stored; constant-time compare; one 401 for every refusal (unknown site, unverified site, wrong / revoked key); 120 pushes a minute per site; 100 MB a push |
 | Cross-company access | Company B reads A's crawler data | Every route resolves the site through the company membership (404 for another company's website), dashboards need a **verified** website, the read API is scoped to the key's company |
 | Double counting | Overlapping uploads (`access.log` and `access.log.1`), a Logpush retry after a timeout | Same file (SHA-256) refused per site; each stored line has a 16-byte line hash with a unique index per site (`ON CONFLICT DO NOTHING`), and a request id (Cloudflare `RayID`, Vercel `requestId`) replaces the line when present |
 | A 1 GB file blocks the server | Buffering or a long synchronous parse | The body is streamed to a spool file (hashed and size-checked on the way); a background worker streams it (gunzip → readline) in batches of 2,000 lines, each batch awaiting one multi-row insert. Measured: **1,000,000 lines in 16.1 s (62,000 lines/s) with a maximum event-loop lag of 45 ms** (`test/crawlerDb.test.ts`, `CRAWLER_PERF_LINES=1000000`, throwaway Postgres 17) |
@@ -36,19 +36,19 @@ hands the request stream through, so Fastify's 1 MB JSON limit never applies and
 file (the rest is reported as not read). Answers 202 with the queued ingest, or 200 `duplicate: true` for a file already read.
 
 ### 2.2 Push (Cloudflare Logpush, log drains)
-`POST /api/ingest/logs/:siteId` with header `X-Ascentra-Log-Key: asl_…` (or `Authorization: Bearer asl_…`). No session, no CSRF
+`POST /api/ingest/logs/:siteId` with header `X-Alaventra-Log-Key: asl_…` (or `Authorization: Bearer asl_…`). No session, no CSRF
 header (like the n8n callback route; a cross-site form cannot set the header). Body: gzip or plain NDJSON, or a JSON array (Vercel's
 "JSON" format) — gzip is detected from the bytes, so `Content-Encoding` does not matter. **Limit 100 MB a push.** Always answers 200
 for an accepted or already-received batch (a sender retrying after a timeout must stop retrying), 401 for any refusal, 413 above the
 limit.
 
 - **Cloudflare Logpush** (HTTP destination, Enterprise plan, https://developers.cloudflare.com/logs/logpush/logpush-job/enable-destinations/http/):
-  `destination_conf = <endpoint>?header_X-Ascentra-Log-Key=<key>` — Cloudflare turns every `header_*` URL parameter into a request
+  `destination_conf = <endpoint>?header_X-Alaventra-Log-Key=<key>` — Cloudflare turns every `header_*` URL parameter into a request
   header. Dataset `http_requests`; fields `ClientIP, ClientRequestHost, ClientRequestMethod, ClientRequestURI, ClientRequestUserAgent,
   EdgeStartTimestamp, EdgeResponseStatus, EdgeResponseBytes, OriginResponseDurationMs, RayID`; timestamps RFC3339 (Unix and UnixNano
   are read too); `max_upload_bytes` ≤ 100 MB. Cloudflare validates the destination with a gzipped `{"content":"tests"}`: accepted and
   skipped.
-- **Vercel** drains (https://vercel.com/docs/drains/using-drains): Custom endpoint, Custom headers `X-Ascentra-Log-Key: <key>`,
+- **Vercel** drains (https://vercel.com/docs/drains/using-drains): Custom endpoint, Custom headers `X-Alaventra-Log-Key: <key>`,
   NDJSON or JSON; the request lives in `proxy.*` (https://vercel.com/docs/drains/reference/logs); build / function lines without a
   `proxy` are skipped; `requestId` collapses several lines of one request.
 - **Fastly** HTTPS logging (https://www.fastly.com/documentation/guides/integrations/logging-endpoints/log-streaming-https/) with a
@@ -150,7 +150,7 @@ Recommendations (most urgent first) link to Technical health (audit: redirects, 
 API: `app/API.md` → "Crawlers". Read API: `GET /api/v1/websites/:websiteId/crawlers?days=` and the MCP tool `get_crawler_activity`.
 
 ## 7. Settings (`app/.env`)
-`CRAWLER_JOBS` (default true), `LOG_SPOOL_DIR` (default `<tmp>/ascentra-logs`; must be local disk of the server that receives the
+`CRAWLER_JOBS` (default true), `LOG_SPOOL_DIR` (default `<tmp>/alaventra-logs`; must be local disk of the server that receives the
 upload — the worker claims only jobs of its own host), `BOT_RANGES_REFRESH` (default true; outbound HTTPS to the vendors above).
 No secret is added: push keys are stored as hashes.
 

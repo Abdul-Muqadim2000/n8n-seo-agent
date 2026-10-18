@@ -199,7 +199,7 @@ const bqError = (res: OutResponse, what: string) => {
 /** One load job: a resumable upload session with the job configuration, then the data, then wait until it is DONE. */
 export async function loadIntoBigQuery(c: BqCfg, key: ServiceAccountKey, t: ExportTable, ndjson: Buffer, opts: { pollMs?: number; maxPolls?: number } = {}): Promise<string> {
   const token = await serviceAccountToken(key, BQ_SCOPE);
-  const jobId = `ascentra_${t.id}_${randomUUID().replace(/-/g, '')}`;
+  const jobId = `alaventra_${t.id}_${randomUUID().replace(/-/g, '')}`;
   const job = {
     jobReference: { projectId: c.projectId, jobId, location: c.location },
     configuration: {
@@ -252,8 +252,8 @@ const secretOf = (row: IntegrationRow): Cfg => {
 async function verify(kind: 's3' | 'bigquery', cfg: Cfg, secret: Cfg): Promise<Cfg> {
   if (kind === 's3') {
     const c = cfg as unknown as S3Cfg;
-    const key = exportObjectKey(c.prefix, '_ascentra', 'connection-test', new Date(), 'ndjson').replace(/\.ndjson$/, '.txt');
-    await putObject(c, secret as unknown as S3Secret, key, Buffer.from(`Ascentra connection test ${new Date().toISOString()}\n`), 'text/plain; charset=utf-8');
+    const key = exportObjectKey(c.prefix, '_alaventra', 'connection-test', new Date(), 'ndjson').replace(/\.ndjson$/, '.txt');
+    await putObject(c, secret as unknown as S3Secret, key, Buffer.from(`Alaventra connection test ${new Date().toISOString()}\n`), 'text/plain; charset=utf-8');
     return { testObject: key };
   }
   const c = cfg as unknown as BqCfg;

@@ -31,7 +31,7 @@ export async function api<T>(path: string, opts: { method?: Method; body?: unkno
   const headers: Record<string, string> = { accept: 'application/json' };
   if (method !== 'GET') headers['x-requested-with'] = 'fetch';
   // G1 idle timeout: what a hidden tab fetches by itself (polling) is not the person being active
-  if (method === 'GET' && typeof document !== 'undefined' && document.visibilityState === 'hidden') headers['x-ascentra-passive'] = '1';
+  if (method === 'GET' && typeof document !== 'undefined' && document.visibilityState === 'hidden') headers['x-alaventra-passive'] = '1';
   if (opts.body !== undefined) headers['content-type'] = 'application/json';
   let res: Response;
   try {

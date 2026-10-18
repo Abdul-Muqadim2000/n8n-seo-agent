@@ -13,9 +13,9 @@ vi.hoisted(() => {
   process.env.PORTAL_JOBS = 'false';
   process.env.LOG_LEVEL = 'silent';
   process.env.PORTAL_STRICT_HOSTS = 'true';
-  process.env.PORTAL_CNAME_TARGET = 'portals.ascentra.app';
-  process.env.APP_EXTRA_HOSTS = 'app.ascentra.app';
-  process.env.SEO_MAIL_FROM = 'Ascentra <reports@ascentra.app>';
+  process.env.PORTAL_CNAME_TARGET = 'portals.alaventra.app';
+  process.env.APP_EXTRA_HOSTS = 'app.alaventra.app';
+  process.env.SEO_MAIL_FROM = 'Alaventra <reports@alaventra.app>';
 });
 vi.mock('../src/db', async () => (await import('./helpers/pg')).pgDbModule());
 
@@ -72,11 +72,11 @@ describe('claiming and proving a portal host', () => {
     // a standard company has no portal
     expect((await owner.post(`/api/orgs/${agency.id}/portal/domains`, { host: HOST })).status).toBe(404);
     await owner.post(`/api/orgs/${agency.id}/agency`);
-    for (const bad of ['app.ascentra.app', 'x.ascentra.app', 'portals.ascentra.app', 'localhost', '10.0.0.1', 'seo.agency.test'])
+    for (const bad of ['app.alaventra.app', 'x.alaventra.app', 'portals.alaventra.app', 'localhost', '10.0.0.1', 'seo.agency.test'])
       expect((await owner.post(`/api/orgs/${agency.id}/portal/domains`, { host: bad })).status, bad).toBe(400);
     const r = await owner.post(`/api/orgs/${agency.id}/portal/domains`, { host: `https://${HOST.toUpperCase()}/login` });
     expect(r.status, r.text).toBe(200);
-    expect(r.body).toMatchObject({ host: HOST, status: 'pending', txtName: `_portal-verification.${HOST}`, cnameTarget: 'portals.ascentra.app' });
+    expect(r.body).toMatchObject({ host: HOST, status: 'pending', txtName: `_portal-verification.${HOST}`, cnameTarget: 'portals.alaventra.app' });
     domainId = r.body.id;
     token = r.body.txtValue;
     // a second claim of the same host by the same agency returns the same row (and token)
@@ -92,7 +92,7 @@ describe('claiming and proving a portal host', () => {
     cname.set(HOST, ['elsewhere.example.net.']);
     v = await owner.post(`/api/orgs/${agency.id}/portal/domains/${domainId}/verify`);
     expect(v.body.check).toMatchObject({ ok: false, cname: 'elsewhere' });
-    cname.set(HOST, ['portals.ascentra.app.']);
+    cname.set(HOST, ['portals.alaventra.app.']);
     v = await owner.post(`/api/orgs/${agency.id}/portal/domains/${domainId}/verify`);
     expect(v.body.check.ok).toBe(true);
     expect(v.body.domain).toMatchObject({ status: 'verified', lastCheckOk: true });
@@ -103,7 +103,7 @@ describe('claiming and proving a portal host', () => {
   it('an apex that cannot be a CNAME may resolve to the same addresses as the target', async () => {
     const { checkPortalDomain } = await import('../src/services/portalHosts');
     txt.set('_portal-verification.northagency.com', ['portal-verification=apex1']);
-    addrs.set('portals.ascentra.app', ['203.0.113.10']);
+    addrs.set('portals.alaventra.app', ['203.0.113.10']);
     addrs.set('northagency.com', ['203.0.113.10']);
     expect((await checkPortalDomain('northagency.com', 'apex1')).ok).toBe(true);
     addrs.set('northagency.com', ['198.51.100.7']);
@@ -139,17 +139,17 @@ describe('serving the portal host', () => {
   it('strict hosts: an unknown host gets a plain 421; ours and the verified portal host are served', async () => {
     const r = await app.inject({ method: 'GET', url: '/api/me', headers: on('phish.example.org') });
     expect(r.statusCode).toBe(421);
-    expect(r.body).not.toMatch(/Ascentra/);
+    expect(r.body).not.toMatch(/Alaventra/);
     expect((await app.inject({ method: 'GET', url: '/api/health', headers: on('phish.example.org') })).statusCode).not.toBe(421);
     expect((await app.inject({ method: 'GET', url: '/api/me', headers: on('localhost:5173') })).statusCode).toBe(200);
-    expect((await app.inject({ method: 'GET', url: '/api/me', headers: on('app.ascentra.app') })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'GET', url: '/api/me', headers: on('app.alaventra.app') })).statusCode).toBe(200);
     expect((await app.inject({ method: 'GET', url: '/api/me', headers: on(HOST) })).statusCode).toBe(200);
   });
 
   it('the TLS ask answers yes for our hosts and verified portal hosts only', async () => {
     const ask = async (d: string) => (await app.inject({ method: 'GET', url: `/api/portal/tls-allow?domain=${encodeURIComponent(d)}`, headers: on('localhost') })).statusCode;
     expect(await ask(HOST)).toBe(200);
-    expect(await ask('app.ascentra.app')).toBe(200);
+    expect(await ask('app.alaventra.app')).toBe(200);
     expect(await ask('phish.example.org')).toBe(404);
     expect(await ask('localhost')).toBe(404);
   });
@@ -160,7 +160,7 @@ describe('serving the portal host', () => {
     expect(JSON.parse(ctx.body)).toMatchObject({ host: HOST, brand: { name: 'North Insights', accent: '#0f766e' } });
     expect((await app.inject({ method: 'GET', url: '/api/portal/context', headers: on('localhost') })).body).toBe('null');
     expect((await app.inject({ method: 'GET', url: '/favicon.ico', headers: on(HOST) })).statusCode).toBe(404);
-    expect((await app.inject({ method: 'GET', url: '/brand/ascentra-mark-white.svg', headers: on(HOST) })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'GET', url: '/brand/alaventra-mark-white.svg', headers: on(HOST) })).statusCode).toBe(404);
   });
 
   it('a person on the portal host reaches only that agency and its clients; the cookie is host-only', async () => {
@@ -235,19 +235,19 @@ describe('branded e-mail', () => {
     expect(put.status, put.text).toBe(200);
     const clientRow = (await db.query.organizations.findFirst({ where: eq(schema.organizations.id, client.id) }))!;
     const s = await senderFor(clientRow);
-    expect(s).toMatchObject({ brandName: 'North Insights', from: '"North Insights" <reports@ascentra.app>', replyTo: 'team@north-agency.com' });
+    expect(s).toMatchObject({ brandName: 'North Insights', from: '"North Insights" <reports@alaventra.app>', replyTo: 'team@north-agency.com' });
     expect(s.buttonColor).toMatch(/^#[0-9a-f]{6}$/);
     expect(s.via).toBeUndefined();
     // a standard company keeps ours
-    expect((await senderFor(null)).brandName).toBe('Ascentra');
+    expect((await senderFor(null)).brandName).toBe('Alaventra');
     // a client person's own account e-mails (verification, password) come from the agency and open its portal address; a person
     // with any other company keeps ours
     const { senderForUser } = await import('../src/services/portalMail');
     const ceo = (await db.query.users.findFirst({ where: eq(schema.users.email, 'ceo@acme.example.com') }))!;
     const own = await senderForUser(ceo.id);
-    expect(own.sender.brandName).toBe('Ascentra'); // the CEO also owns "Side Project"
+    expect(own.sender.brandName).toBe('Alaventra'); // the CEO also owns "Side Project"
     const solo = (await db.query.users.findFirst({ where: eq(schema.users.email, 'owner@north-agency.com') }))!;
-    expect((await senderForUser(solo.id)).sender.brandName).toBe('Ascentra');
+    expect((await senderForUser(solo.id)).sender.brandName).toBe('Alaventra');
     await db.delete(schema.memberships).where(eq(schema.memberships.userId, ceo.id));
     await db.insert(schema.memberships).values({ orgId: client.id, userId: ceo.id, role: 'client_viewer' });
     const branded = await senderForUser(ceo.id);

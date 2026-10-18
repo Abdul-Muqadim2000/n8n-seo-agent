@@ -79,7 +79,7 @@ export function portalPathAllowed(rest: string[]): boolean {
   return false;
 }
 
-/** "Overview · techand.ai — Ascentra" / "Runs · Acme — Ascentra", from the URL the layout already knows. */
+/** "Overview · techand.ai — Alaventra" / "Runs · Acme — Alaventra", from the URL the layout already knows. */
 function shellTitle(pathname: string, org: Org, sites: Site[]): string {
   const rest = pathname.slice(`/o/${org.id}`.length).split('/').filter(Boolean);
   if (rest[0] === 'sites' && rest[1] && rest[1] !== 'new') {
@@ -523,7 +523,7 @@ function PortalSidebar({ onClose }: { onClose: () => void }) {
               </a>
             </p>
           )}
-          {brand.poweredBy && <p>Powered by Ascentra</p>}
+          {brand.poweredBy && <p>Powered by Alaventra</p>}
         </div>
       )}
       <div className="flex shrink-0 items-center gap-1 border-t border-line px-3 py-3 short:py-2">

@@ -52,7 +52,7 @@ const nodeTransport: CmsTransport = (r) =>
     const isHttps = /^https:/i.test(r.url);
     const send = isHttps ? httpsRequest : httpRequest;
     const body = r.body == null ? undefined : Buffer.isBuffer(r.body) ? r.body : Buffer.from(r.body, 'utf8');
-    const headers: Record<string, string> = { 'user-agent': 'Ascentra-Publisher/1.0', accept: 'application/json', ...(r.headers ?? {}) };
+    const headers: Record<string, string> = { 'user-agent': 'Alaventra-Publisher/1.0', accept: 'application/json', ...(r.headers ?? {}) };
     if (body) headers['content-length'] = String(body.length);
     const req = send(
       r.url,

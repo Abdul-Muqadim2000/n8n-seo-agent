@@ -10,7 +10,7 @@ const VALUES = [
   { label: 'Brand value', icon: Megaphone },
 ];
 
-/** Nine link sources flowing into one verified ledger (Ascentra's own link check), which scores SEO, referral and brand value. */
+/** Nine link sources flowing into one verified ledger (Alaventra's own link check), which scores SEO, referral and brand value. */
 export function LinkSourcesDiagram({ className }: { className?: string }) {
   const ink = useSectionTone() === 'ink';
   const chip = cn(
@@ -26,7 +26,7 @@ export function LinkSourcesDiagram({ className }: { className?: string }) {
         <span className={cn('font-display text-base font-semibold', ink ? 'text-on-ink' : 'text-ink')}>One verified ledger</span>
       </div>
       <ul className={cn('mt-4 space-y-2 text-[13px] leading-snug', ink ? 'text-on-ink-2' : 'text-ink-2')}>
-        {['One row per referring site', 'Every link checked by Ascentra', 'Lost only after two misses, with the reason'].map((t) => (
+        {['One row per referring site', 'Every link checked by Alaventra', 'Lost only after two misses, with the reason'].map((t) => (
           <li key={t} className="flex gap-2">
             <CircleCheck className={cn('mt-px size-3.5 shrink-0', ink ? 'text-accent-on-ink' : 'text-accent-text')} aria-hidden />
             {t}
@@ -45,7 +45,7 @@ export function LinkSourcesDiagram({ className }: { className?: string }) {
     );
   };
   return (
-    <figure className={className} aria-label={`Nine link sources — ${linkSources.join(', ')} — merge into one ledger that Ascentra checks itself, scoring SEO, referral and brand value.`}>
+    <figure className={className} aria-label={`Nine link sources — ${linkSources.join(', ')} — merge into one ledger that Alaventra checks itself, scoring SEO, referral and brand value.`}>
       {/* wide: sources → fan-in → ledger → fan-out → values */}
       <div className="hidden h-[440px] grid-cols-[minmax(0,220px)_minmax(48px,1fr)_minmax(0,260px)_minmax(40px,0.6fr)_minmax(0,170px)] items-stretch lg:grid" aria-hidden>
         <ul className="grid h-full grid-cols-1" style={{ gridTemplateRows: `repeat(${linkSources.length}, minmax(0, 1fr))` }}>

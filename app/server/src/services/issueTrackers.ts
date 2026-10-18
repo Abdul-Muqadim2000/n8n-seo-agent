@@ -128,7 +128,7 @@ export const VENDORS: Record<TrackerKind, Vendor> = {
         url: `${s(cfg.siteUrl)}/rest/api/3/issue`,
         method: 'POST',
         headers: jiraAuth(s(cfg.email), token),
-        body: JSON.stringify({ fields: { project: { key: s(cfg.projectKey) }, issuetype: { id: s(cfg.issueTypeId) }, summary: t.title.slice(0, 250), description: ticketAdf(t), labels: ['ascentra', 'seo'] } }),
+        body: JSON.stringify({ fields: { project: { key: s(cfg.projectKey) }, issuetype: { id: s(cfg.issueTypeId) }, summary: t.title.slice(0, 250), description: ticketAdf(t), labels: ['alaventra', 'seo'] } }),
       });
       const key = s(j.key);
       if (!key) throw new VendorError(502, 'Jira did not return the new ticket', 'tracker_error');

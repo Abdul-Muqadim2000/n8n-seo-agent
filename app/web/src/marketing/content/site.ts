@@ -3,13 +3,13 @@ import { features } from './features';
 import { solutions } from './solutions';
 
 export const site = {
-  name: 'Ascentra',
+  name: 'Alaventra',
   descriptor: 'Enterprise-grade autonomous SEO.',
-  salesEmail: 'sales@ascentra.example', // PLACEHOLDER — confirm the real sales address
-  supportEmail: 'support@ascentra.example', // PLACEHOLDER — confirm the real support address
-  partnersEmail: 'partners@ascentra.example', // PLACEHOLDER — confirm the real partnerships address
-  securityEmail: 'security@ascentra.example', // PLACEHOLDER — confirm the real security address
-  copyright: '© 2026 Ascentra',
+  salesEmail: 'sales@alaventra.example', // PLACEHOLDER — confirm the real sales address
+  supportEmail: 'support@alaventra.example', // PLACEHOLDER — confirm the real support address
+  partnersEmail: 'partners@alaventra.example', // PLACEHOLDER — confirm the real partnerships address
+  securityEmail: 'security@alaventra.example', // PLACEHOLDER — confirm the real security address
+  copyright: '© 2026 Alaventra',
 } as const;
 
 export type ContactTopic = 'sales' | 'support' | 'partnerships' | 'security' | 'other';
@@ -64,7 +64,7 @@ export const footerNav: { title: string; links: NavLink[] }[] = [
   },
 ];
 
-/** engines and tools Ascentra works with — shown as text only (no third-party logos) */
+/** engines and tools Alaventra works with — shown as text only (no third-party logos) */
 export const integrations: string[] = [
   'Google Search Console',
   'Google Analytics 4',
@@ -95,7 +95,7 @@ export const integrations: string[] = [
   'Cloudflare',
 ];
 
-/** the six AI engines and answer surfaces Ascentra asks by default */
+/** the six AI engines and answer surfaces Alaventra asks by default */
 export const aiEngines: string[] = ['ChatGPT', 'Gemini', 'Perplexity', 'Claude', 'Google AI Mode', 'AI Overviews'];
 /** G6 (2026-10-18): the engines a website can add (each one priced in its settings) */
 export const aiEnginesOptIn: string[] = ['Microsoft Copilot', 'ChatGPT API', 'Gemini API'];

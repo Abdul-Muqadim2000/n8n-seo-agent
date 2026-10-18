@@ -56,7 +56,7 @@ export const pricingTiers: PricingTier[] = [
       'Up to three pages a week, with the autopilot pipeline and several ladders', // PLACEHOLDER — confirm
       'AI search visibility: up to 500 questions by topic, buyer role and market, and the daily AI Pulse', // PLACEHOLDER — confirm the plan limit (the panel's usage is priced by its size, shown before saving)
       'AI growth every week: new pages to Bing and IndexNow, AI-readiness checks, answer pages and earned media',
-      'Backlinks from every source, with Ascentra’s own link checks',
+      'Backlinks from every source, with Alaventra’s own link checks',
       'Crawler analytics from your server logs: Google and the AI crawlers, each one checked',
       'Link building: prospects, contacts and pitches from your own mailbox',
       'Full SEO reports as PDF or Word',
@@ -133,7 +133,7 @@ export const servicePackages: ServicePackage[] = [
       'Your first technical audit and your first keyword ladder, explained on a call',
     ],
     turnaround: 'Within five working days of getting access', // PLACEHOLDER — confirm
-    needs: 'An admin seat in your Ascentra company, plus whoever can edit DNS or your website for one of the steps.',
+    needs: 'An admin seat in your Alaventra company, plus whoever can edit DNS or your website for one of the steps.',
     cta: { label: 'Ask about setup', to: '/contact?topic=sales' },
   },
   {
@@ -251,7 +251,7 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'AI growth, every week', hint: 'New pages sent to Bing and IndexNow, key pages scored for AI readiness, the questions to win queued', values: [false, true, true] },
       { label: 'Earned media', hint: 'The exact pages AI cites without naming you, with a draft for each', values: [false, true, true] },
       { label: 'Crawler analytics from your server logs', hint: 'Googlebot and the AI crawlers, each checked against its company’s addresses; impostors apart', values: [false, true, true] }, // PLACEHOLDER — confirm
-      { label: 'Backlinks from every source', hint: 'Nine sources, every link checked by Ascentra', values: [false, true, true] }, // PLACEHOLDER — confirm
+      { label: 'Backlinks from every source', hint: 'Nine sources, every link checked by Alaventra', values: [false, true, true] }, // PLACEHOLDER — confirm
       { label: 'Prospects, contacts and outreach drafts from your own mailbox', hint: 'You approve each sequence; sent on weekdays, starting slowly, with your postal address and an opt-out in every e-mail and consent asked where the law expects it', values: [false, true, true] },
       { label: 'Mailbox connected without a password', hint: 'Microsoft 365 or Gmail on their own sign-in screen; an app password works for any other host', values: [false, true, true] },
       { label: 'Listings you can add yourself', hint: 'Directories and marketplaces worth being on, checked and kept up to date', values: [false, true, true] },
@@ -366,7 +366,7 @@ export const pricingFaqs: FaqItem[] = [
   },
   {
     q: 'What is the free-sources backlink mode?',
-    a: 'A backlink check that uses only the free sources — Bing Webmaster Tools, Search Console links, GA4 referrals, the Common Crawl web graph, Wikipedia, Hacker News, news and web search — and Ascentra’s own link check. It leaves out the paid link index, so it costs nothing to run.',
+    a: 'A backlink check that uses only the free sources — Bing Webmaster Tools, Search Console links, GA4 referrals, the Common Crawl web graph, Wikipedia, Hacker News, news and web search — and Alaventra’s own link check. It leaves out the paid link index, so it costs nothing to run.',
   },
   {
     q: 'Can we change plans later?',

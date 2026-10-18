@@ -108,7 +108,7 @@ export const features: Feature[] = [
     shortName: 'Autopilot',
     tagline: 'A weekly growth loop that plans, writes and checks. You approve what matters.',
     summary:
-      'Ascentra runs your SEO as a weekly loop. Each Monday it picks the next posts — a ladder rung first, then pages that are measurably losing traffic, then keywords close to page one, then rising trends — writes them, notices what you published and puts every decision that needs a person in one queue. Each step runs on Auto or waits for you.',
+      'Alaventra runs your SEO as a weekly loop. Each Monday it picks the next posts — a ladder rung first, then pages that are measurably losing traffic, then keywords close to page one, then rising trends — writes them, notices what you published and puts every decision that needs a person in one queue. Each step runs on Auto or waits for you.',
     icon: Workflow,
     benefits: [
       'Blog posts per week set per website, picked in a fixed order: ladder rung, a page losing traffic, striking distance, rising trend',
@@ -124,9 +124,9 @@ export const features: Feature[] = [
     ],
     steps: [
       { title: 'Set the pace', body: 'Choose blog posts per week, the default mode — Auto or Manual — and how many ladders are written at once.' },
-      { title: 'Ascentra picks the work', body: 'Every Monday the next ladder rung comes first, then any page losing traffic, then keywords just off page one, then rising trends.' },
+      { title: 'Alaventra picks the work', body: 'Every Monday the next ladder rung comes first, then any page losing traffic, then keywords just off page one, then rising trends.' },
       { title: 'Write, check, queue', body: 'Pages are written and checked. Anything set to Manual waits in “Needs you” until someone approves it.' },
-      { title: 'Publish and learn', body: 'When a planned page goes live, Ascentra notices, tracks its rank and plans the next step.' },
+      { title: 'Publish and learn', body: 'When a planned page goes live, Alaventra notices, tracks its rank and plans the next step.' },
     ],
     facts: [
       { value: 'Weekly', label: 'cadence, planned every Monday' },
@@ -134,16 +134,16 @@ export const features: Feature[] = [
       { value: 2, label: 'ladders written at once by default' },
     ],
     faqs: [
-      { q: 'What happens on Auto?', a: 'Ascentra writes and prepares the work on schedule without waiting. Every page still shows in the pipeline, and you can pause a ladder at any time.' },
+      { q: 'What happens on Auto?', a: 'Alaventra writes and prepares the work on schedule without waiting. Every page still shows in the pipeline, and you can pause a ladder at any time.' },
       { q: 'What happens on Manual?', a: 'The step waits in “Needs you” until someone on your team approves it. Nothing is written before that.' },
       {
-        q: 'Does Ascentra publish to my site by itself?',
-        a: 'Not by itself. It sends written pages to your WordPress, Webflow or Contentful (or any other stack through a signed webhook) as drafts, and an owner or admin chooses when one goes live. A page that failed its quality check, or still has text left for you to fill in, is never sent. Ascentra then checks the live page and tracks it. If you would rather not, publishing is one of the done-for-you services on the pricing page.',
+        q: 'Does Alaventra publish to my site by itself?',
+        a: 'Not by itself. It sends written pages to your WordPress, Webflow or Contentful (or any other stack through a signed webhook) as drafts, and an owner or admin chooses when one goes live. A page that failed its quality check, or still has text left for you to fill in, is never sent. Alaventra then checks the live page and tracks it. If you would rather not, publishing is one of the done-for-you services on the pricing page.',
       },
       { q: 'Can I change the pace later?', a: 'Yes. Posts per week, the default mode and the ladder limits are website settings you can change at any time.' },
       {
         q: 'What if a scheduled run is missed?',
-        a: 'It still happens. Every quarter of an hour Ascentra looks for runs that were due and did not start, and starts each one once. A Monday run missed on Monday is still that week’s run later in the week, and its report opens by saying it ran late and when it was due, so a late figure is never mistaken for an on-time one.',
+        a: 'It still happens. Every quarter of an hour Alaventra looks for runs that were due and did not start, and starts each one once. A Monday run missed on Monday is still that week’s run later in the week, and its report opens by saying it ran late and when it was due, so a late figure is never mistaken for an on-time one.',
       },
     ],
     related: ['keyword-ladders', 'content', 'site-tracking'],
@@ -163,7 +163,7 @@ export const features: Feature[] = [
     shortName: 'Keyword research',
     tagline: 'Find the keywords worth your time, with a clear verdict for each one.',
     summary:
-      'Ascentra discovers keywords from your site, your competitors and real search data, then gives each one a verdict. It weighs difficulty for your site — not a generic score — along with topic fit and the plan it takes to rank: Direct, Short or Full.',
+      'Alaventra discovers keywords from your site, your competitors and real search data, then gives each one a verdict. It weighs difficulty for your site — not a generic score — along with topic fit and the plan it takes to rank: Direct, Short or Full.',
     icon: Search,
     benefits: [
       'Keyword discovery from your pages, your competitors and search data',
@@ -179,7 +179,7 @@ export const features: Feature[] = [
       'A topic radius with every research run: the topics within reach for your site, the ones that are a stretch and the evidence behind each verdict',
     ],
     steps: [
-      { title: 'Describe the business', body: 'Your website, market and goals set the context for every keyword Ascentra looks at.' },
+      { title: 'Describe the business', body: 'Your website, market and goals set the context for every keyword Alaventra looks at.' },
       { title: 'Discover', body: 'Candidates come from your own Search Console searches, your pages, your competitors, search volumes and trends in your market.' },
       { title: 'Judge', body: 'Each keyword gets reach for your site, topic fit, search intent and a plan type.' },
       { title: 'Act', body: 'Start a ladder, write a single page or keep the keyword for later.' },
@@ -192,13 +192,13 @@ export const features: Feature[] = [
     faqs: [
       {
         q: 'What does “difficulty for your site” mean?',
-        a: 'Generic difficulty scores ignore who is trying to rank. Ascentra compares the competition for a keyword with your own site and tells you whether it is within reach now or only after supporting pages.',
+        a: 'Generic difficulty scores ignore who is trying to rank. Alaventra compares the competition for a keyword with your own site and tells you whether it is within reach now or only after supporting pages.',
       },
       {
         q: 'What are Direct, Short and Full plans?',
         a: 'Direct: one strong page can rank. Short: a few supporting pages come first. Full: a complete ladder of supporting pages that climbs to the keyword.',
       },
-      { q: 'Can I bring my own keywords?', a: 'Yes. Type a keyword and Ascentra checks it, or let it recommend keywords from discovery.' },
+      { q: 'Can I bring my own keywords?', a: 'Yes. Type a keyword and Alaventra checks it, or let it recommend keywords from discovery.' },
       { q: 'Which markets are covered?', a: 'You choose the country for each run; volumes and results come from that market.' },
       {
         q: 'How does my own Search Console data change the research?',
@@ -206,7 +206,7 @@ export const features: Feature[] = [
       },
       {
         q: 'Why are some keywords grouped together?',
-        a: 'When Google answers two searches with the same pages, they want one page, not two. Ascentra compares the results pages it reads and groups searches that share at least three of the same top-ten results, naming the group after its main keyword.',
+        a: 'When Google answers two searches with the same pages, they want one page, not two. Alaventra compares the results pages it reads and groups searches that share at least three of the same top-ten results, naming the group after its main keyword.',
       },
     ],
     related: ['keyword-ladders', 'content', 'site-tracking'],
@@ -214,7 +214,7 @@ export const features: Feature[] = [
     visual: 'keyword-verdict',
     story: {
       title: 'A call you can act on, not another list.',
-      body: 'Most keyword tools hand you thousands of rows and a generic difficulty score. Ascentra makes a call on each keyword, explains it and measures it against your own site, so the next decision is clear: write one page, build a ladder or leave it for later.',
+      body: 'Most keyword tools hand you thousands of rows and a generic difficulty score. Alaventra makes a call on each keyword, explains it and measures it against your own site, so the next decision is clear: write one page, build a ladder or leave it for later.',
     },
   },
   {
@@ -223,7 +223,7 @@ export const features: Feature[] = [
     shortName: 'Keyword ladders',
     tagline: 'Rank for a hard keyword by climbing to it, one supporting page at a time.',
     summary:
-      'Tell Ascentra the keyword you want to rank for. It builds a ladder of easier, related pages that earn relevance first, each linking up to the page for the head term. It writes the rungs in order, tracks every position weekly and keeps ladders from competing with each other.',
+      'Tell Alaventra the keyword you want to rank for. It builds a ladder of easier, related pages that earn relevance first, each linking up to the page for the head term. It writes the rungs in order, tracks every position weekly and keeps ladders from competing with each other.',
     icon: ChartNoAxesColumnIncreasing,
     benefits: [
       'A plan of supporting pages that climbs to your head term',
@@ -241,14 +241,14 @@ export const features: Feature[] = [
       'Two active ladders at a time by default, so effort is not spread thin',
       'No keyword overlap between ladders, so your own pages never compete',
       'A rung you already have a page for is planned as an improvement of that page, with its real address — never as a second page',
-      'Searches Google answers with the same pages become one page, not two: before planning, Ascentra reads the results page for each supporting keyword and groups the ones that share them',
+      'Searches Google answers with the same pages become one page, not two: before planning, Alaventra reads the results page for each supporting keyword and groups the ones that share them',
       'A keyword whose results page could not be read is named in the plan and left in its own group — it is never merged or quietly dropped',
       'How many different websites own the results page for your head term is counted and stated, and a page owned by a few of them is reflected in how realistic the plan says it is',
       'Your topic radius with every plan: which topics are within reach for your site today, which are a stretch and why — the difficulty against the level you already win, a position you already hold, a page you already have, a service you sell',
       'A ladder that has not moved for weeks comes back with a proposal: improve the page you already have, write the easier keyword first, change the order, or stop — with the evidence behind it. It is a suggestion; your plan is never rewritten for you',
     ],
     steps: [
-      { title: 'Choose the keyword', body: 'Pick a recommended keyword or type your own. Ascentra shows the reach for your site and the plan type.' },
+      { title: 'Choose the keyword', body: 'Pick a recommended keyword or type your own. Alaventra shows the reach for your site and the plan type.' },
       { title: 'Get the plan', body: 'See the rungs, the order they are written in and how they link to each other.' },
       { title: 'Climb', body: 'Rungs are written and published one by one, and every position is checked weekly.' },
       { title: 'Reach the top', body: 'When the head term ranks, the ladder is marked as won and the next one moves up.' },
@@ -266,13 +266,13 @@ export const features: Feature[] = [
       },
       {
         q: 'What is the pile-up guard?',
-        a: 'If too many written pages are waiting to be published, Ascentra pauses new writing until you catch up, so drafts do not pile up.',
+        a: 'If too many written pages are waiting to be published, Alaventra pauses new writing until you catch up, so drafts do not pile up.',
       },
       { q: 'How many ladders can I run?', a: 'As many as you plan. By default two are written at once, in your priority order, and you can change the limit.' },
       { q: 'What does Auto or Manual change?', a: 'On Auto, rungs are written on schedule. On Manual, each rung waits for approval in “Needs you”.' },
       {
         q: 'Do you track AI Overviews?',
-        a: 'Yes. Every rank check records whether an AI Overview was on the page and whether it cited your site, with the time it was seen. AI Overviews vary between searches, so Ascentra reports what the check saw rather than claiming the search always looks that way.',
+        a: 'Yes. Every rank check records whether an AI Overview was on the page and whether it cited your site, with the time it was seen. AI Overviews vary between searches, so Alaventra reports what the check saw rather than claiming the search always looks that way.',
       },
       {
         q: 'What is share of voice?',
@@ -280,7 +280,7 @@ export const features: Feature[] = [
       },
       {
         q: 'Why check on a phone too?',
-        a: 'Mobile and desktop results differ for most searches, so a desktop-only position can be one your visitors never see. Ascentra checks your main keywords on both and shows the two side by side.',
+        a: 'Mobile and desktop results differ for most searches, so a desktop-only position can be one your visitors never see. Alaventra checks your main keywords on both and shows the two side by side.',
       },
     ],
     related: ['keyword-research', 'autopilot', 'content'],
@@ -322,7 +322,7 @@ export const features: Feature[] = [
       { title: 'Brief', body: 'Keyword, intent and outline, with facts from your business profile, your case studies and your style guide.' },
       { title: 'Write and critique', body: 'A draft, a critic’s review and an editor’s pass that acts on it.' },
       { title: 'Check', body: 'SEO checks on every page, against a coverage target read off the best page in the results. Every figure is looked up in the source it cites, and anything that is not there is marked for you to confirm. A page that repeats a competitor or one of your own pages goes back for a rewrite.' },
-      { title: 'Publish and verify', body: 'Send the page to your CMS as a draft — or publish it live if you are an owner or admin — or take the package. Ascentra checks the page once it is live and starts tracking it.' },
+      { title: 'Publish and verify', body: 'Send the page to your CMS as a draft — or publish it live if you are an owner or admin — or take the package. Alaventra checks the page once it is live and starts tracking it.' },
     ],
     facts: [
       { value: 3, label: 'passes: writer, critic and editor' },
@@ -344,7 +344,7 @@ export const features: Feature[] = [
         a: 'The spelling of the country each page targets, unless your style guide names one — then that wins everywhere. The report says which rule was used.',
       },
       {
-        q: 'Can Ascentra publish to our CMS?',
+        q: 'Can Alaventra publish to our CMS?',
         a: 'Yes — to WordPress (with Yoast SEO or Rank Math fields when your site exposes them), Webflow and Contentful, and to anything else through a signed webhook. Pages go as drafts by default; only an owner or admin can publish one live, and only after ticking a confirmation. Pages that did not pass the quality check, or still have text to fill in, are refused with the reasons.',
       },
       { q: 'What is the blog package?', a: 'The article as HTML and Markdown, the three images as WebP files, plus a meta.json file with the title, description, slug, schema and the image list — ready for any CMS.' },
@@ -362,7 +362,7 @@ export const features: Feature[] = [
     visual: 'content',
     story: {
       title: 'Pages that show real expertise.',
-      body: 'Readers and search engines look for experience, expertise and trust. Ascentra writes from your business profile, names a real author and reviewer, cites your own case studies, marks every figure it cannot verify for you to confirm — and checks that the finished page is not a rewording of the pages it researched or of a page you already have.',
+      body: 'Readers and search engines look for experience, expertise and trust. Alaventra writes from your business profile, names a real author and reviewer, cites your own case studies, marks every figure it cannot verify for you to confirm — and checks that the finished page is not a rewording of the pages it researched or of a page you already have.',
     },
   },
   {
@@ -371,7 +371,7 @@ export const features: Feature[] = [
     shortName: 'Technical audits',
     tagline: 'Crawl the site, read Search Console and get a fix pack, not just a list of problems.',
     summary:
-      'Ascentra crawls up to 1,000 pages, JavaScript included, and combines what it finds with Search Console index coverage and sitemaps, the Core Web Vitals your real visitors measured and a brand and entity check. The fix list is ordered by the traffic each issue puts at risk, every audit ends with a fix pack your developers can apply, and monthly audits show what changed since the last one.',
+      'Alaventra crawls up to 1,000 pages, JavaScript included, and combines what it finds with Search Console index coverage and sitemaps, the Core Web Vitals your real visitors measured and a brand and entity check. The fix list is ordered by the traffic each issue puts at risk, every audit ends with a fix pack your developers can apply, and monthly audits show what changed since the last one.',
     icon: ScanSearch,
     benefits: [
       'Crawls of 200, 500 or 1,000 pages, with JavaScript rendering',
@@ -411,10 +411,10 @@ export const features: Feature[] = [
     faqs: [
       {
         q: 'Do monthly audits cost money when nothing changed?',
-        a: 'No. Ascentra compares your sitemap with the last audit and skips the crawl when nothing changed, with a full audit at least every 60 days.',
+        a: 'No. Alaventra compares your sitemap with the last audit and skips the crawl when nothing changed, with a full audit at least every 60 days.',
       },
       { q: 'What is in the fix pack?', a: 'A robots.txt, an llms.txt, a redirect list, schema snippets and an internal-links CSV, zipped together.' },
-      { q: 'Does it need access to my server?', a: 'No. Ascentra crawls the public site and reads Search Console through a service account you add as a user.' },
+      { q: 'Does it need access to my server?', a: 'No. Alaventra crawls the public site and reads Search Console through a service account you add as a user.' },
       { q: 'Does it handle JavaScript sites?', a: 'Yes. Pages can be rendered with JavaScript, so content that loads in the browser is audited too.' },
       {
         q: 'Would I know if my pages only work with JavaScript?',
@@ -426,7 +426,7 @@ export const features: Feature[] = [
       },
       {
         q: 'What does the daily check of my key pages look at?',
-        a: 'Every morning Ascentra fetches your most important pages — the home page, the pages in your menu, the pages Search Console brings impressions for and the pages your keyword ladders own — and compares the HTTP status, a redirect that appeared, the noindex tag, the canonical and the title with yesterday’s reading, plus your robots.txt. A change that matters becomes an alert the same day; an unchanged page says nothing. A page it could not read is reported as not checked, never as fine.',
+        a: 'Every morning Alaventra fetches your most important pages — the home page, the pages in your menu, the pages Search Console brings impressions for and the pages your keyword ladders own — and compares the HTTP status, a redirect that appeared, the noindex tag, the canonical and the title with yesterday’s reading, plus your robots.txt. A change that matters becomes an alert the same day; an unchanged page says nothing. A page it could not read is reported as not checked, never as fine.',
       },
       {
         q: 'Can we check a release before it goes live?',
@@ -438,7 +438,7 @@ export const features: Feature[] = [
       },
       {
         q: 'How do you know whether Google has indexed a page?',
-        a: 'Ascentra asks Search Console’s URL Inspection about your key pages: whether the page is in the index and why not, which canonical Google chose against the one your page names, when Google last crawled it, mobile usability and the rich results it detected. Google allows 2,000 of these a day per property, so the pages rotate with the oldest inspection first — and whatever a run did not reach is shown as not checked rather than assumed fine.',
+        a: 'Alaventra asks Search Console’s URL Inspection about your key pages: whether the page is in the index and why not, which canonical Google chose against the one your page names, when Google last crawled it, mobile usability and the rich results it detected. Google allows 2,000 of these a day per property, so the pages rotate with the oldest inspection first — and whatever a run did not reach is shown as not checked rather than assumed fine.',
       },
       {
         q: 'How is the fix list ordered?',
@@ -463,7 +463,7 @@ export const features: Feature[] = [
     shortName: 'Site tracking',
     tagline: 'Search Console, GA4 and Google Trends in one weekly view, with what to do next.',
     summary:
-      'Connect Search Console and GA4 once. Every week Ascentra pulls clicks, impressions, positions and conversions, follows Google Trends for your topics and checks live rankings, then points at striking-distance keywords — the ones close to page one.',
+      'Connect Search Console and GA4 once. Every week Alaventra pulls clicks, impressions, positions and conversions, follows Google Trends for your topics and checks live rankings, then points at striking-distance keywords — the ones close to page one.',
     icon: ChartLine,
     benefits: [
       'Google Search Console and GA4, connected through a service account',
@@ -485,7 +485,7 @@ export const features: Feature[] = [
       'Every connection has a guide: Search Console, Analytics and the property ID, step by step, with your own values ready to copy',
     ],
     steps: [
-      { title: 'Connect', body: 'Add Ascentra’s service account to Search Console and choose your GA4 property.' },
+      { title: 'Connect', body: 'Add Alaventra’s service account to Search Console and choose your GA4 property.' },
       { title: 'Collect', body: 'Search, traffic, trends and live rankings are gathered every week.' },
       { title: 'Compare', body: 'Week over week, with striking-distance keywords called out.' },
       { title: 'Act', body: 'Recommendations and posts flow straight into the pipeline.' },
@@ -496,10 +496,10 @@ export const features: Feature[] = [
       { value: 'Live', label: 'rank checks where Search Console has no data' },
     ],
     faqs: [
-      { q: 'What access does Ascentra need?', a: 'You add Ascentra’s service account as a user in Search Console and GA4. It reads your data; it does not change your settings.' },
+      { q: 'What access does Alaventra need?', a: 'You add Alaventra’s service account as a user in Search Console and GA4. It reads your data; it does not change your settings.' },
       {
         q: 'What if nobody here has done this before?',
-        a: 'Every ask in Ascentra has a “Show me how” button next to it. It opens the job as numbered steps you tick off, with your own values in copy boxes, the page to open, and tabs for the provider or CMS you actually use. If the person who can do it is someone else — whoever manages your DNS, usually — one button sends them the whole thing by e-mail, values filled in, no account needed.',
+        a: 'Every ask in Alaventra has a “Show me how” button next to it. It opens the job as numbered steps you tick off, with your own values in copy boxes, the page to open, and tabs for the provider or CMS you actually use. If the person who can do it is someone else — whoever manages your DNS, usually — one button sends them the whole thing by e-mail, values filled in, no account needed.',
       },
       {
         q: 'What is a striking-distance keyword?',
@@ -511,7 +511,7 @@ export const features: Feature[] = [
         a: 'When the change is real: a fall is only called a fall once it is beyond normal week-to-week variation. On a small site, where a big percentage can be chance, you still get the alert — worded as something to watch, with both weeks’ counts named so you can see how small the numbers are.',
       },
       {
-        q: 'How does Ascentra know I published a planned page?',
+        q: 'How does Alaventra know I published a planned page?',
         a: 'Each week it looks for the page in your sitemap by its slug and title. Once found, the page is checked live and its ranking is tracked from then on.',
       },
       {
@@ -519,7 +519,7 @@ export const features: Feature[] = [
         a: 'That is when Google stopped serving a hundred results on one page, which removed most SEO tools from the counts. Impressions fell and average positions improved on nearly every website without anything changing on the site, so figures either side of that week are not comparable. Charts mark it, along with Google’s ranking updates, the pages you published and the technical fixes you made.',
       },
       {
-        q: 'Can Ascentra tell me whether a change worked?',
+        q: 'Can Alaventra tell me whether a change worked?',
         a: 'It compares the page you changed with the rest of your website over the same weeks, which removes the part of the move that was the season or a Google update, and reports “likely helped”, “possibly helped”, “no clear effect yet” or “can’t tell”. It never claims a change caused a move: a comparison like this narrows the alternatives, it does not prove a cause.',
       },
     ],
@@ -528,7 +528,7 @@ export const features: Feature[] = [
     visual: 'dashboard',
     story: {
       title: 'One weekly view instead of four dashboards.',
-      body: 'Search Console, GA4 and Google Trends each answer a different question. Ascentra reads them together every week, checks live rankings where Search Console is silent and points at the keywords closest to page one.',
+      body: 'Search Console, GA4 and Google Trends each answer a different question. Alaventra reads them together every week, checks live rankings where Search Console is silent and points at the keywords closest to page one.',
     },
   },
   {
@@ -537,7 +537,7 @@ export const features: Feature[] = [
     shortName: 'AI visibility',
     tagline: 'See how often ChatGPT, Gemini, Perplexity, Claude and Google’s AI name and cite you.',
     summary:
-      'Ascentra asks a panel of up to 500 real buyer questions — by topic, buyer role and market — to six AI engines (nine with Copilot and the ChatGPT and Gemini APIs) and records who is named and cited. A daily AI Pulse watches for changes and alerts only when they are statistically real, and GA4 shows the visits and revenue AI answers send you.',
+      'Alaventra asks a panel of up to 500 real buyer questions — by topic, buyer role and market — to six AI engines (nine with Copilot and the ChatGPT and Gemini APIs) and records who is named and cited. A daily AI Pulse watches for changes and alerts only when they are statistically real, and GA4 shows the visits and revenue AI answers send you.',
     icon: Sparkles,
     benefits: [
       'A panel of up to 500 buyer questions, written for each buyer role and market from real AI-answer data, Google’s “People also ask”, your Search Console queries and your competitors’ topics — every one checked so it never names another company or a government service',
@@ -572,14 +572,14 @@ export const features: Feature[] = [
     faqs: [
       {
         q: 'Why ranges instead of one number?',
-        a: 'AI answers vary from one ask to the next. Ascentra asks repeatedly and shows each rate with a 95% range, so you can tell a real change from noise.',
+        a: 'AI answers vary from one ask to the next. Alaventra asks repeatedly and shows each rate with a 95% range, so you can tell a real change from noise.',
       },
       { q: 'What does the daily AI Pulse cost?', a: 'It can be switched on or off per website, and the cost is shown in the settings before you turn it on.' },
       {
         q: 'Can it tell me what AI gets wrong about us?',
         a: 'Yes. The Answer Analyst compares answers with your business profile and lists wrong claims, sentiment and the order brands are named in.',
       },
-      { q: 'Can AI crawlers reach my site?', a: 'Every week Ascentra checks robots.txt for each AI crawler, your llms.txt file and whether your CDN blocks them.' },
+      { q: 'Can AI crawlers reach my site?', a: 'Every week Alaventra checks robots.txt for each AI crawler, your llms.txt file and whether your CDN blocks them.' },
       {
         q: 'Does it do anything about what it finds?',
         a: 'Yes — that is AI growth. Every Monday, after the visibility run, the questions you lose become pages to write or refresh, new pages go to Bing and IndexNow, your key pages are checked for what AI assistants need to quote them, and the pages AI cites without naming you become pitches.',
@@ -632,7 +632,7 @@ export const features: Feature[] = [
       },
       {
         q: 'What is IndexNow, and what do we have to do?',
-        a: 'A shared way to tell search engines that a page changed. Ascentra gives each website its own key; you put one small text file at the root of your site — the guide shows how for your platform — and press “Check the file”. Until it is there, pages still go to Bing through Bing Webmaster Tools.',
+        a: 'A shared way to tell search engines that a page changed. Alaventra gives each website its own key; you put one small text file at the root of your site — the guide shows how for your platform — and press “Check the file”. Until it is there, pages still go to Bing through Bing Webmaster Tools.',
       },
       {
         q: 'What makes a page ready for AI answers?',
@@ -662,7 +662,7 @@ export const features: Feature[] = [
     shortName: 'Crawlers',
     tagline: 'What Googlebot and the AI crawlers really fetched on your site — and which of them were impostors.',
     summary:
-      'Search Console tells you what Google decided. Your server logs tell you what its crawler, and every AI crawler, actually asked for. Upload a log or let Cloudflare or your log drain send it, and Ascentra shows every crawler’s requests, checks each one against the addresses its company publishes, and points at the pages nobody fetched and the requests wasted on redirects and errors.',
+      'Search Console tells you what Google decided. Your server logs tell you what its crawler, and every AI crawler, actually asked for. Upload a log or let Cloudflare or your log drain send it, and Alaventra shows every crawler’s requests, checks each one against the addresses its company publishes, and points at the pages nobody fetched and the requests wasted on redirects and errors.',
     icon: Radar,
     benefits: [
       'Googlebot, Bingbot and Applebot, and the AI crawlers: GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot, Claude-SearchBot, Claude-User, PerplexityBot, Perplexity-User, Google-Agent, Amazonbot, Common Crawl, Bytespider and Meta',
@@ -686,7 +686,7 @@ export const features: Feature[] = [
     faqs: [
       {
         q: 'Why not just trust the user agent?',
-        a: 'Because anyone can write “Googlebot” or “GPTBot” in a request. Ascentra checks the address each request came from against the list Google, Microsoft, Apple, OpenAI, Anthropic, Perplexity, Amazon and Common Crawl publish, or confirms it by DNS. A crawler whose company publishes no way to check it is shown as claimed, not verified.',
+        a: 'Because anyone can write “Googlebot” or “GPTBot” in a request. Alaventra checks the address each request came from against the list Google, Microsoft, Apple, OpenAI, Anthropic, Perplexity, Amazon and Common Crawl publish, or confirms it by DNS. A crawler whose company publishes no way to check it is shown as claimed, not verified.',
       },
       {
         q: 'Which logs can we send?',
@@ -714,13 +714,13 @@ export const features: Feature[] = [
     slug: 'backlinks',
     name: 'Backlinks from every source',
     shortName: 'Backlinks',
-    tagline: 'One link ledger from nine sources, with every link checked by Ascentra itself.',
+    tagline: 'One link ledger from nine sources, with every link checked by Alaventra itself.',
     summary:
-      'Link indexes miss links and sometimes report live ones as lost. Ascentra merges nine sources into one ledger and checks every link itself: a link counts as lost only after two misses, and you see why. Prospects are scored, contacts found and follow-ups scheduled.',
+      'Link indexes miss links and sometimes report live ones as lost. Alaventra merges nine sources into one ledger and checks every link itself: a link counts as lost only after two misses, and you see why. Prospects are scored, contacts found and follow-ups scheduled.',
     icon: Link2,
     benefits: [
       'Nine sources: a commercial index, Bing Webmaster Tools, Search Console links, GA4 referrals, the Common Crawl web graph, Wikipedia, Hacker News, news and web search',
-      'Every link checked by Ascentra: rel, placement, noindex and canonical',
+      'Every link checked by Alaventra: rel, placement, noindex and canonical',
       'Lost only after two misses, with the reason',
       'SEO, referral and brand value for every link',
       'Link-farm pages and search-results pages are written off, so your best links are the ones that really help',
@@ -732,7 +732,7 @@ export const features: Feature[] = [
     ],
     steps: [
       { title: 'Merge', body: 'Nine sources flow into one ledger, one row per referring site.' },
-      { title: 'Check', body: 'Ascentra visits each linking page and reads the link the way a search engine would.' },
+      { title: 'Check', body: 'Alaventra visits each linking page and reads the link the way a search engine would.' },
       { title: 'Value', body: 'Every link gets an SEO, referral and brand value.' },
       { title: 'Grow', body: 'Scored prospects with their contacts, handed to link building for a checked pitch from your own mailbox.' },
     ],
@@ -744,9 +744,9 @@ export const features: Feature[] = [
     faqs: [
       {
         q: 'Why check links yourself?',
-        a: 'Indexes refresh on their own schedule and can report a live, followed link as lost. Ascentra visits the page and confirms before it raises an alert.',
+        a: 'Indexes refresh on their own schedule and can report a live, followed link as lost. Alaventra visits the page and confirms before it raises an alert.',
       },
-      { q: 'Can I import links from other tools?', a: 'Yes. Upload the Search Console links export or a backlink CSV from another tool, and Ascentra merges it into the ledger.' },
+      { q: 'Can I import links from other tools?', a: 'Yes. Upload the Search Console links export or a backlink CSV from another tool, and Alaventra merges it into the ledger.' },
       {
         q: 'Which links are called your best?',
         a: 'Only links that really pass value. A page that sells links, a scraped directory and a search-results page that happens to list you are written off whatever their authority score says, so they never head the list — they stay in the ledger, with the reason, and they are never suggested for outreach or disavowal.',
@@ -756,7 +756,7 @@ export const features: Feature[] = [
         a: 'Everything except the commercial index: Bing Webmaster Tools, Search Console and GA4 data, the Common Crawl graph, Wikipedia, Hacker News, news and web search.',
       },
       {
-        q: 'Does Ascentra send the outreach?',
+        q: 'Does Alaventra send the outreach?',
         a: 'Link building does: it drafts each pitch, checks it, and once you approve it sends it from your own mailbox, with the follow-ups in the same thread. The sending rules — office hours, a gentle start, your postal address and an opt-out in every e-mail, consent where the law asks for it — are on the link-building page.',
       },
     ],
@@ -767,7 +767,7 @@ export const features: Feature[] = [
     story: {
       eyebrow: 'Nine sources, one ledger',
       title: 'Every source sees part of the web. Together they see more.',
-      body: 'Ascentra merges nine sources into one row per referring site, then visits each linking page itself to confirm the link, where it sits on the page and whether search engines can follow it.',
+      body: 'Alaventra merges nine sources into one row per referring site, then visits each linking page itself to confirm the link, where it sits on the page and whether search engines can follow it.',
     },
   },
   {
@@ -776,7 +776,7 @@ export const features: Feature[] = [
     shortName: 'Link building',
     tagline: 'Pitches worth sending, from your own mailbox, to sites that could really link to you.',
     summary:
-      'Every week Ascentra finds the openings — journalist requests, resource pages, broken links, lists that leave you out, podcasts that take guests, directories worth being on — checks each one on its own page, finds a contact on that site’s own domain and drafts a short sequence that points at the right page of yours. You approve it, it goes out from your own mailbox, and the replies come back read, with an answer suggested.',
+      'Every week Alaventra finds the openings — journalist requests, resource pages, broken links, lists that leave you out, podcasts that take guests, directories worth being on — checks each one on its own page, finds a contact on that site’s own domain and drafts a short sequence that points at the right page of yours. You approve it, it goes out from your own mailbox, and the replies come back read, with an answer suggested.',
     icon: Handshake,
     benefits: [
       'New openings every week: journalist requests (public ones and the HARO and Source of Sources digests in your inbox), resource pages, broken links on pages about your topics, your competitors’ broken links, podcasts that take guests and lists that leave you out',
@@ -798,7 +798,7 @@ export const features: Feature[] = [
       { title: 'Find', body: 'Every Monday, new openings from journalists, resource and list pages, broken links, podcasts and directories — each fetched and checked on its own page.' },
       { title: 'Prepare', body: 'A contact on their own site, the page of yours that fits, the link text to ask for and a drafted sequence that passed its checks.' },
       { title: 'Approve', body: 'You read, edit and approve each sequence. An owner can let checked ones go automatically, within daily limits.' },
-      { title: 'Send and follow up', body: 'From your own mailbox, in one thread, stopping the moment they reply. A won link is confirmed by Ascentra’s own link check.' },
+      { title: 'Send and follow up', body: 'From your own mailbox, in one thread, stopping the moment they reply. A won link is confirmed by Alaventra’s own link check.' },
     ],
     facts: [
       { value: 3, label: 'e-mails at most per prospect: a pitch and two follow-ups' },
@@ -807,8 +807,8 @@ export const features: Feature[] = [
     ],
     faqs: [
       {
-        q: 'Does Ascentra place links for us?',
-        a: 'No — and no tool should: Google counts automated link creation as spam. Ascentra does everything around the human yes. It finds the openings, checks them, finds the contact, drafts the pitch and tracks the result; a person approves what is sent, and the other website decides whether to link.',
+        q: 'Does Alaventra place links for us?',
+        a: 'No — and no tool should: Google counts automated link creation as spam. Alaventra does everything around the human yes. It finds the openings, checks them, finds the contact, drafts the pitch and tracks the result; a person approves what is sent, and the other website decides whether to link.',
       },
       {
         q: 'Who gets pitched?',
@@ -845,7 +845,7 @@ export const features: Feature[] = [
     story: {
       eyebrow: 'Why it matters',
       title: 'Links are earned one yes at a time.',
-      body: 'The links that help are the ones a real person chose to add. Ascentra spends the effort where a yes is likely — a site on your topic, a page of yours they will want to link to, a contact who reads the mail — and keeps your mailbox and your name in good standing while it does.',
+      body: 'The links that help are the ones a real person chose to add. Alaventra spends the effort where a yes is likely — a site on your topic, a page of yours they will want to link to, a contact who reads the mail — and keeps your mailbox and your name in good standing while it does.',
     },
   },
   {
@@ -862,7 +862,7 @@ export const features: Feature[] = [
       'A Search Console alert watcher for Google’s notification e-mails',
       'A monthly check-in for manual actions and security issues',
       'One to-do list across audits, search, rankings, AI answers and links — ranked by what each step is worth, not by which part of the system found it',
-      'Every step shows the figure behind it, how confident Ascentra is and how much work it is; a step nothing has measured yet says so instead of being given a score',
+      'Every step shows the figure behind it, how confident Alaventra is and how much work it is; a step nothing has measured yet says so instead of being given a score',
       'Prioritised recommendations you can start with one click',
       'Every number says where it came from, over what period and from how big a sample',
       'A share link for one report: it expires on the day you choose, you can turn it off at any time, and the person you send it to needs no account',
@@ -874,7 +874,7 @@ export const features: Feature[] = [
     ],
     steps: [
       { title: 'Collect', body: 'Search, traffic, AI answers, links and audits feed one picture of each website.' },
-      { title: 'Explain', body: 'What changed, why it matters, how sure Ascentra is — and where each number came from.' },
+      { title: 'Explain', body: 'What changed, why it matters, how sure Alaventra is — and where each number came from.' },
       { title: 'Recommend', body: 'One list of next steps across every area, ranked by impact, confidence and effort — each one ready to run.' },
       { title: 'Share', body: 'Send one report as a link that expires, under your own name and logo, or export it as PDF or Word. Past runs keep their report and files.' },
     ],
@@ -897,11 +897,11 @@ export const features: Feature[] = [
         q: 'Can a shared report carry our branding?',
         a: 'Yes. A shared report shows your business name and logo at the head of the page and in the browser tab, and our name sits in one line in the footer. Both come from the business profile you already fill in for your website, so there is nothing extra to keep up to date; a company that has not added a logo gets its initials instead, and a logo that fails to load never breaks the page.',
       },
-      { q: 'What does the Search Console alert watcher do?', a: 'It reads Google’s Search Console notification e-mails for your websites and turns them into alerts in Ascentra.' },
+      { q: 'What does the Search Console alert watcher do?', a: 'It reads Google’s Search Console notification e-mails for your websites and turns them into alerts in Alaventra.' },
       { q: 'What is the monthly check-in?', a: 'A short checklist for what Google does not expose through its API, such as manual actions and security issues.' },
       {
         q: 'Are recommendations ranked?',
-        a: 'Yes, and it is one list, not one list per area. Every step carries what it is worth — the impact, how confident Ascentra is in the figure behind it, and how much work it is — and the list is ordered by all three. Setup steps that have to happen before anything can be measured come first and say why. A step with no measured figure behind it is put at the bottom with the reason, rather than given a number nobody can defend. Each step can be started as a run with its cost shown first.',
+        a: 'Yes, and it is one list, not one list per area. Every step carries what it is worth — the impact, how confident Alaventra is in the figure behind it, and how much work it is — and the list is ordered by all three. Setup steps that have to happen before anything can be measured come first and say why. A step with no measured figure behind it is put at the bottom with the reason, rather than given a number nobody can defend. Each step can be started as a run with its cost shown first.',
       },
       {
         q: 'Can I see where a number came from?',
@@ -923,7 +923,7 @@ export const features: Feature[] = [
     shortName: 'Guided setup',
     tagline: 'Every step we ask of you, with your own values and the page to open.',
     summary:
-      'SEO work stalls at the same place every time: the part that happens in someone else’s account. Wherever Ascentra needs something from you — a Google permission, a DNS record, a file on your site, a mailbox — the ask carries a guide through that one job, with your own values ready to copy and a way to hand it to whoever can do it.',
+      'SEO work stalls at the same place every time: the part that happens in someone else’s account. Wherever Alaventra needs something from you — a Google permission, a DNS record, a file on your site, a mailbox — the ask carries a guide through that one job, with your own values ready to copy and a way to hand it to whoever can do it.',
     icon: LifeBuoy,
     benefits: [
       'A guide beside every ask: Search Console and Analytics access, proving the domain is yours, the IndexNow file, your links export, letting the AI crawlers in, mailboxes and their SPF, DKIM and DMARC records, publishing a page, applying a fix pack, your business profile and style guide',
@@ -931,13 +931,13 @@ export const features: Feature[] = [
       'Written for the provider you actually use: Cloudflare, GoDaddy, Namecheap or cPanel for DNS; WordPress, Shopify, Wix, Squarespace or Webflow for the website',
       'Tick the steps off as you go — close it, come back tomorrow, and it opens where you stopped',
       'Send the whole guide to the colleague who has to do it, values filled in, with no account needed at their end',
-      'Each one ends with how to tell it worked, what to try when it did not, and the button in Ascentra that checks',
+      'Each one ends with how to tell it worked, what to try when it did not, and the button in Alaventra that checks',
     ],
     steps: [
-      { title: 'Ascentra asks for one thing', body: 'A permission, a record, a file — with the reason it is needed and what it unlocks next.' },
+      { title: 'Alaventra asks for one thing', body: 'A permission, a record, a file — with the reason it is needed and what it unlocks next.' },
       { title: 'Open the guide beside the ask', body: 'That one job as numbered steps, with your values, the page to open and the tab for your provider.' },
       { title: 'Do it, or pass it on', body: 'Tick the steps off yourself, or e-mail the guide to whoever manages your DNS, your website or your mailbox.' },
-      { title: 'Ascentra checks the result', body: 'The button at the end runs the check — verified, connected, file found — so nobody is left guessing whether it worked.' },
+      { title: 'Alaventra checks the result', body: 'The button at the end runs the check — verified, connected, file found — so nobody is left guessing whether it worked.' },
     ],
     facts: [
       { value: 27, label: 'guides, one for each thing we ask of you' },
@@ -951,7 +951,7 @@ export const features: Feature[] = [
       },
       {
         q: 'Our website is run by an agency. Does that work?',
-        a: 'Yes. Every guide can be sent as an e-mail with your values already in it, so the agency gets the exact steps without an account here. You still see in Ascentra whether the job landed, because the same guide ends with the check.',
+        a: 'Yes. Every guide can be sent as an e-mail with your values already in it, so the agency gets the exact steps without an account here. You still see in Alaventra whether the job landed, because the same guide ends with the check.',
       },
       {
         q: 'What if the provider’s screen looks different?',
@@ -968,7 +968,7 @@ export const features: Feature[] = [
     story: {
       eyebrow: 'Why it matters',
       title: 'What stalls the work is never the SEO.',
-      body: 'It is the Google permission nobody has, the DNS record that needs a colleague, the file that has to sit at the root of the site. Ascentra treats that as part of the product: every ask carries its steps, your own values and a way to hand it to the person who can do it.',
+      body: 'It is the Google permission nobody has, the DNS record that needs a colleague, the file that has to sit at the root of the site. Alaventra treats that as part of the product: every ask carries its steps, your own values and a way to hand it to the person who can do it.',
     },
   },
   {
@@ -977,7 +977,7 @@ export const features: Feature[] = [
     shortName: 'Delivery',
     tagline: 'Your reports arrive where you already are — and the ones that are not ready do not.',
     summary:
-      'A report nobody opens is worth nothing. Every finished report can be sent to you as it arrives, or collected into a daily, weekly or monthly summary: by e-mail with its figures and its files, or to a webhook your team already watches. And the report an analysis itself marked as not ready is never sent — it waits in Ascentra with the reason on it.',
+      'A report nobody opens is worth nothing. Every finished report can be sent to you as it arrives, or collected into a daily, weekly or monthly summary: by e-mail with its figures and its files, or to a webhook your team already watches. And the report an analysis itself marked as not ready is never sent — it waits in Alaventra with the reason on it.',
     icon: Send,
     benefits: [
       'As each report arrives, or one summary a day, a week or a month — on the day and at the hour you choose',
@@ -991,7 +991,7 @@ export const features: Feature[] = [
       { title: 'Choose when and where', body: 'A frequency, the people who should receive it, a webhook if your team lives in one — and which reports you actually want.' },
       { title: 'A report finishes', body: 'The work runs on its own schedule: the Monday tracking report, the monthly audit, a page that was written for you.' },
       { title: 'It is checked before it is sent', body: 'Anything the analysis marked as not ready stays here. Everything else goes out with its figures, its files and its link.' },
-      { title: 'You read it where you already were', body: 'In your inbox or your team channel. Open the full report in Ascentra, or forward the link to somebody without an account.' },
+      { title: 'You read it where you already were', body: 'In your inbox or your team channel. Open the full report in Alaventra, or forward the link to somebody without an account.' },
     ],
     facts: [
       { value: 'Four', label: 'schedules: each report, daily, weekly or monthly' },
@@ -1001,11 +1001,11 @@ export const features: Feature[] = [
     faqs: [
       {
         q: 'What does “not ready” actually mean?',
-        a: 'It is the analysis’s own verdict, not a guess by the delivery. A written page that used up its quality rounds and still failed, a keyword plan the engine refused to make, a verdict it could not check because the search results could not be read, a run that was rejected. Each of those is still in Ascentra, with what went wrong on it — it is simply not pushed to anyone as finished work.',
+        a: 'It is the analysis’s own verdict, not a guess by the delivery. A written page that used up its quality rounds and still failed, a keyword plan the engine refused to make, a verdict it could not check because the search results could not be read, a run that was rejected. Each of those is still in Alaventra, with what went wrong on it — it is simply not pushed to anyone as finished work.',
       },
       {
         q: 'Can somebody outside the company read the report?',
-        a: 'Only if you let them. Each delivery can carry a link that opens one report and nothing else: no dashboard, no other report, no settings, read-only, expiring, and revocable at any time. Leave it switched off and the message only links back into Ascentra, where an account is needed.',
+        a: 'Only if you let them. Each delivery can carry a link that opens one report and nothing else: no dashboard, no other report, no settings, read-only, expiring, and revocable at any time. Leave it switched off and the message only links back into Alaventra, where an account is needed.',
       },
       {
         q: 'What arrives at the webhook?',
@@ -1031,7 +1031,7 @@ export const features: Feature[] = [
     shortName: 'Integrations',
     tagline: 'Alerts in Slack or Teams, findings as tickets, your data in your warehouse — and an API your assistant can work with.',
     summary:
-      'Ascentra fits into the tools your team already runs on. Alerts and finished work go to the Slack or Teams channel you choose, an audit finding becomes one ticket in Jira, Linear or Asana, and your rankings, traffic, audits, AI visibility and backlinks land in BigQuery, S3 or Looker Studio. Scripts and AI assistants can read everything and, with your permission, start analyses within your budget.',
+      'Alaventra fits into the tools your team already runs on. Alerts and finished work go to the Slack or Teams channel you choose, an audit finding becomes one ticket in Jira, Linear or Asana, and your rankings, traffic, audits, AI visibility and backlinks land in BigQuery, S3 or Looker Studio. Scripts and AI assistants can read everything and, with your permission, start analyses within your budget.',
     icon: Plug,
     benefits: [
       'Alerts, failed runs, finished reports, new audit findings and ranking moves sent to Slack or Microsoft Teams — each channel gets only the events you pick',
@@ -1042,7 +1042,7 @@ export const features: Feature[] = [
       'An API and an MCP server: assistants like Claude and ChatGPT read your data and, with a key you allow to, start analyses — with the same budget, duplicate and cost checks as the app',
     ],
     steps: [
-      { title: 'Connect a channel or a tracker', body: 'Paste a Slack or Teams address, or a Jira, Linear or Asana token. Ascentra checks it with the tool before anything is saved.' },
+      { title: 'Connect a channel or a tracker', body: 'Paste a Slack or Teams address, or a Jira, Linear or Asana token. Alaventra checks it with the tool before anything is saved.' },
       { title: 'Pick what goes where', body: 'Alerts to one channel, wins to another; tickets on the findings you choose; the tables you want, daily or weekly.' },
       { title: 'Work happens in your tools', body: 'Your team reads the alert where it already works, fixes the ticket in its own tracker and charts the data in its own BI.' },
       { title: 'Every send is logged', body: 'Delivered, retried or held back — each event, ticket and export has a record you can read.' },
@@ -1063,7 +1063,7 @@ export const features: Feature[] = [
       },
       {
         q: 'Where are our tokens kept?',
-        a: 'Encrypted, and never shown again after you paste them — not even to an owner. Ascentra only ever connects to the tool’s own public address, and every message it sends is logged without the secret.',
+        a: 'Encrypted, and never shown again after you paste them — not even to an owner. Alaventra only ever connects to the tool’s own public address, and every message it sends is logged without the secret.',
       },
       {
         q: 'What does the export contain?',
@@ -1076,7 +1076,7 @@ export const features: Feature[] = [
     story: {
       eyebrow: 'Why it matters',
       title: 'SEO work that lives where the rest of the work lives.',
-      body: 'Findings only get fixed when they reach the backlog, and numbers only get trusted when they sit next to the rest of the business’s numbers. Ascentra sends both there, and lets your assistant ask and act without a login.',
+      body: 'Findings only get fixed when they reach the backlog, and numbers only get trusted when they sit next to the rest of the business’s numbers. Alaventra sends both there, and lets your assistant ask and act without a login.',
     },
   },
   {
@@ -1168,8 +1168,8 @@ export const features: Feature[] = [
         a: 'No. Each client is a separate workspace and a client login reaches only its own. Its people see their websites’ dashboards, reports, recommendations and approvals — not your other clients, not what the work costs you, not your settings.',
       },
       {
-        q: 'Will my clients see the Ascentra name?',
-        a: 'Not with white-label on: the portal, report pages, shared reports, the documents they download and the e-mails they get carry your name. A small “Powered by Ascentra” line appears only if you switch it on. PDFs the analyses produce are replaced by a printable page of the report under your brand.',
+        q: 'Will my clients see the Alaventra name?',
+        a: 'Not with white-label on: the portal, report pages, shared reports, the documents they download and the e-mails they get carry your name. A small “Powered by Alaventra” line appears only if you switch it on. PDFs the analyses produce are replaced by a printable page of the report under your brand.',
       },
       {
         q: 'How does the portal get onto our own domain?',

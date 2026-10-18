@@ -148,7 +148,7 @@ function Entry({ e, filter, setFilter }: { e: ChangelogEntry; filter: string | n
 }
 
 export default function ChangelogPage() {
-  useSeo({ title: 'Changelog', description: 'What is new in Ascentra: every release in plain language, newest first.', path: '/changelog' });
+  useSeo({ title: 'Changelog', description: 'What is new in Alaventra: every release in plain language, newest first.', path: '/changelog' });
   const [params, setParams] = useSearchParams();
   const tags = useMemo(allTags, []);
   const raw = params.get('topic');
@@ -178,7 +178,7 @@ export default function ChangelogPage() {
     <>
       <PageHero
         eyebrow="Changelog"
-        title="What’s new in Ascentra."
+        title="What’s new in Alaventra."
         lead="Every release in plain language: what changed, and what it means for your team."
         watermark
         containerClassName="pb-12 sm:pb-16"

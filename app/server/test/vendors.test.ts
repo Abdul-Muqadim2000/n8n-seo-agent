@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 //  BigQuery load jobs   https://cloud.google.com/bigquery/docs/reference/api-uploads (resumable) · rest/v2/jobs/get
 //  Google OAuth (JWT)   https://developers.google.com/identity/protocols/oauth2/service-account#httprest
 
-vi.mock('../src/config', () => ({ config: { appUrl: 'https://app.example.com', brand: 'Ascentra', isProd: false, mailboxKey: 'a'.repeat(64) } }));
+vi.mock('../src/config', () => ({ config: { appUrl: 'https://app.example.com', brand: 'Alaventra', isProd: false, mailboxKey: 'a'.repeat(64) } }));
 vi.mock('../src/db', async () => ({ db: {}, schema: await import('../src/db/schema') }));
 
 const { transport } = await import('../src/lib/netGuard');
@@ -63,7 +63,7 @@ describe('Jira Cloud', () => {
     const made = await VENDORS.jira.create({ ...cfg, issueTypeId: '10001' }, 'tok', ticket);
     expect(made).toMatchObject({ id: '10050', key: 'SEO-42', url: 'https://northwind.atlassian.net/browse/SEO-42', state: 'todo' });
     const body = JSON.parse(sent[0]!.body);
-    expect(body.fields).toMatchObject({ project: { key: 'SEO' }, issuetype: { id: '10001' }, summary: '[SEO] Pages with no H1', labels: ['ascentra', 'seo'] });
+    expect(body.fields).toMatchObject({ project: { key: 'SEO' }, issuetype: { id: '10001' }, summary: '[SEO] Pages with no H1', labels: ['alaventra', 'seo'] });
     expect(body.fields.description.type).toBe('doc');
     expect(body.fields.description.content.map((c: { type: string }) => c.type)).toEqual(['paragraph', 'paragraph', 'bulletList', 'paragraph', 'paragraph']);
   });
@@ -93,7 +93,7 @@ describe('Linear', () => {
     const v = JSON.parse(sent[0]!.body).variables.input;
     expect(v.teamId).toBe('team-uuid');
     expect(v.description).toContain('- https://northwind.example/a');
-    expect(v.description).toContain('[Open in Ascentra](https://app.example.com/o/x/sites/y/technical)');
+    expect(v.description).toContain('[Open in Alaventra](https://app.example.com/o/x/sites/y/technical)');
   });
   it('read: started / completed / canceled', async () => {
     script({ status: 200, json: { data: { issue: { identifier: 'WEB-7', url: 'u', state: { name: 'In Progress', type: 'started' } } } } }, { status: 200, json: { data: { issue: { state: { name: 'Canceled', type: 'canceled' } } } } });
@@ -113,7 +113,7 @@ describe('Asana', () => {
     expect(await VENDORS.asana.create({ projectGid: '1201234567' }, 'pat', ticket)).toEqual({ id: '555', key: '555', url: 'https://app.asana.com/0/1201/555', status: 'Open', state: 'todo' });
     const d = JSON.parse(sent[0]!.body).data;
     expect(d.projects).toEqual(['1201234567']);
-    expect(d.notes).toContain('Open in Ascentra: https://app.example.com/o/x/sites/y/technical');
+    expect(d.notes).toContain('Open in Alaventra: https://app.example.com/o/x/sites/y/technical');
   });
   it('read: completed', async () => {
     script({ status: 200, json: { data: { completed: true, permalink_url: 'u' } } });
@@ -139,10 +139,10 @@ describe('SigV4 (S3-compatible storage)', () => {
     );
   });
   it('encodes object keys the S3 way (= and spaces escaped, / kept)', () => {
-    expect(encodeRfc3986('ascentra/rank_history/dt=2026-10-17/a b.ndjson', true)).toBe('ascentra/rank_history/dt%3D2026-10-17/a%20b.ndjson');
+    expect(encodeRfc3986('alaventra/rank_history/dt=2026-10-17/a b.ndjson', true)).toBe('alaventra/rank_history/dt%3D2026-10-17/a%20b.ndjson');
   });
   it('object URLs: virtual-hosted on AWS, path-style on R2 and Google Cloud Storage', () => {
-    const base = { region: 'eu-west-1', accountId: 'f'.repeat(32), endpoint: '', bucket: 'nw-seo', prefix: 'ascentra', format: 'ndjson' as const };
+    const base = { region: 'eu-west-1', accountId: 'f'.repeat(32), endpoint: '', bucket: 'nw-seo', prefix: 'alaventra', format: 'ndjson' as const };
     expect(objectUrl({ ...base, provider: 'aws' }, 'a/dt=1/x.ndjson')).toBe('https://nw-seo.s3.eu-west-1.amazonaws.com/a/dt%3D1/x.ndjson');
     expect(objectUrl({ ...base, provider: 'r2' }, 'a.ndjson')).toBe(`https://${'f'.repeat(32)}.r2.cloudflarestorage.com/nw-seo/a.ndjson`);
     expect(objectUrl({ ...base, provider: 'gcs' }, 'a.ndjson')).toBe('https://storage.googleapis.com/nw-seo/a.ndjson');
@@ -161,7 +161,7 @@ describe('SigV4 (S3-compatible storage)', () => {
 describe('BigQuery load job', () => {
   const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048, privateKeyEncoding: { type: 'pkcs8', format: 'pem' }, publicKeyEncoding: { type: 'spki', format: 'pem' } });
   const key = { client_email: 'exporter@acme-analytics.iam.gserviceaccount.com', private_key: privateKey };
-  const cfg = { projectId: 'acme-analytics', datasetId: 'seo', location: 'EU', tablePrefix: 'ascentra_' };
+  const cfg = { projectId: 'acme-analytics', datasetId: 'seo', location: 'EU', tablePrefix: 'alaventra_' };
   const t = exportTable('rank_history')!;
   const session = 'https://bigquery.googleapis.com/upload/bigquery/v2/projects/acme-analytics/jobs?uploadType=resumable&upload_id=xyz';
 
@@ -174,13 +174,13 @@ describe('BigQuery load job', () => {
       { status: 200, json: { status: { state: 'DONE' } } },
     );
     const jobId = await loadIntoBigQuery(cfg, key, t, Buffer.from('{"keyword":"x"}\n'), { pollMs: 0 });
-    expect(jobId).toMatch(/^ascentra_rank_history_[0-9a-f]{32}$/);
+    expect(jobId).toMatch(/^alaventra_rank_history_[0-9a-f]{32}$/);
     expect(sent[0]!.url).toBe('https://oauth2.googleapis.com/token');
     expect(sent[0]!.body).toContain('grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer');
     const job = JSON.parse(sent[1]!.body);
     expect(sent[1]!.url).toBe('https://bigquery.googleapis.com/upload/bigquery/v2/projects/acme-analytics/jobs?uploadType=resumable');
     expect(sent[1]!.headers.authorization).toBe('Bearer ya29.test');
-    expect(job.configuration.load).toMatchObject({ destinationTable: { projectId: 'acme-analytics', datasetId: 'seo', tableId: 'ascentra_rank_history' }, sourceFormat: 'NEWLINE_DELIMITED_JSON', writeDisposition: 'WRITE_TRUNCATE' });
+    expect(job.configuration.load).toMatchObject({ destinationTable: { projectId: 'acme-analytics', datasetId: 'seo', tableId: 'alaventra_rank_history' }, sourceFormat: 'NEWLINE_DELIMITED_JSON', writeDisposition: 'WRITE_TRUNCATE' });
     expect(job.configuration.load.schema.fields.map((f: { name: string }) => f.name).slice(0, 5)).toEqual(['company_id', 'website_id', 'website_domain', 'exported_at', 'ladder_id']);
     expect([sent[2]!.method, sent[2]!.url, sent[2]!.body]).toEqual(['PUT', session, '{"keyword":"x"}\n']);
     expect(sent[3]!.url).toBe(`https://bigquery.googleapis.com/bigquery/v2/projects/acme-analytics/jobs/${jobId}?location=EU`);

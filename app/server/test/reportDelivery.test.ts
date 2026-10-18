@@ -52,8 +52,8 @@ describe('the webhook signature', () => {
   });
 
   it('is sent under the agreed headers', () => {
-    expect(DELIVERY.signatureHeader).toBe('X-Ascentra-Signature');
-    expect(DELIVERY.timestampHeader).toBe('X-Ascentra-Timestamp');
+    expect(DELIVERY.signatureHeader).toBe('X-Alaventra-Signature');
+    expect(DELIVERY.timestampHeader).toBe('X-Alaventra-Timestamp');
   });
 });
 

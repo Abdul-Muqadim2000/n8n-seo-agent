@@ -82,7 +82,7 @@ async function guardedSend(req: OutRequest): Promise<OutResponse> {
   return new Promise<OutResponse>((resolve, reject) => {
     const r = send(
       u,
-      { method: req.method, headers: { 'user-agent': `${config.brand.replace(/[^\w .-]/g, '') || 'Ascentra'}-Integrations/1.0`, ...(req.headers ?? {}) }, ...(local ? {} : { lookup: publicLookup as never }), timeout: req.timeoutMs ?? 15_000 },
+      { method: req.method, headers: { 'user-agent': `${config.brand.replace(/[^\w .-]/g, '') || 'Alaventra'}-Integrations/1.0`, ...(req.headers ?? {}) }, ...(local ? {} : { lookup: publicLookup as never }), timeout: req.timeoutMs ?? 15_000 },
       (res) => {
         const chunks: Buffer[] = [];
         let size = 0;

@@ -15,6 +15,19 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-18',
+    title: 'Ascentra is now Alaventra',
+    summary:
+      'Same product, same team, same colours — a new name. Alaventra joins ala, the Latin for wing, with venture: the wing of our mark, moving forward.',
+    highlights: [
+      'New logo and wordmark across the app, this website, reports and e-mails',
+      'Nothing to do on your side: your account, websites, reports, keys and settings are unchanged',
+      'Signed webhooks now carry X-Alaventra-* headers (X-Alaventra-Signature, X-Alaventra-Timestamp …); update a receiver that checks the old names',
+    ],
+    features: [],
+    labels: ['Brand'],
+  },
+  {
+    date: '2026-10-18',
     title: 'AI visibility at enterprise scale: up to 500 questions, by buyer role and market',
     summary:
       'The AI question panel grows from 50 to 500 buyer questions, written for each buyer role and market you choose, and every figure is now shown per topic, buyer role, market and engine — each with its 95% range. Two more engines can be added, and the cost of any panel is shown before you save.',
@@ -48,7 +61,7 @@ export const changelog: ChangelogEntry[] = [
     date: '2026-10-18',
     title: 'Integrations: Slack and Teams alerts, Jira / Linear / Asana tickets, warehouse export, and an API that can start work',
     summary:
-      'Ascentra now works inside your team’s own tools. Alerts and finished work go to the Slack or Teams channels you pick, an audit finding becomes one ticket in your tracker with its state shown back, your data is exported to BigQuery or your storage every day or week, and assistants like Claude and ChatGPT can start analyses — within your budget and with the same checks as the app.',
+      'Alaventra now works inside your team’s own tools. Alerts and finished work go to the Slack or Teams channels you pick, an audit finding becomes one ticket in your tracker with its state shown back, your data is exported to BigQuery or your storage every day or week, and assistants like Claude and ChatGPT can start analyses — within your budget and with the same checks as the app.',
     highlights: [
       'Alerts, finished and failed runs, held-back reports, new audit findings and ranking moves — to Slack, Microsoft Teams or your own systems as signed JSON, routed per channel, retried and logged',
       'Create ticket beside every audit finding and recommendation: one ticket per finding in Jira, Linear or Asana, with the evidence, example pages and the fix',
@@ -91,7 +104,7 @@ export const changelog: ChangelogEntry[] = [
     date: '2026-10-18',
     title: 'Send written pages to your CMS',
     summary:
-      'A written page now goes from its report to WordPress, Webflow or Contentful — or to any other stack through a signed webhook — as a draft by default. Only an owner or admin can publish one live, after confirming it, and Ascentra then checks the live page and starts tracking it.',
+      'A written page now goes from its report to WordPress, Webflow or Contentful — or to any other stack through a signed webhook — as a draft by default. Only an owner or admin can publish one live, after confirming it, and Alaventra then checks the live page and starts tracking it.',
     highlights: [
       'WordPress with an application password: posts or pages, categories and tags, the featured image, and Yoast SEO or Rank Math fields when your site exposes them',
       'Webflow and Contentful: your collection or content type, its fields mapped once',
@@ -139,7 +152,7 @@ export const changelog: ChangelogEntry[] = [
     summary:
       'Every automatic run — the Monday checks, the writing, the monthly audit — used to be lost if the system was down at the moment it was due. Now a run that did not fire starts once the system is back, and says so.',
     highlights: [
-      'Every quarter of an hour Ascentra looks for runs that were due and did not start, and starts each one once',
+      'Every quarter of an hour Alaventra looks for runs that were due and did not start, and starts each one once',
       'A Monday run missed on Monday is still that week’s run later in the week',
       'A run that started late opens its report with “Ran late” and the time it was due, so a late figure is never taken for an on-time one',
     ],
@@ -180,7 +193,7 @@ export const changelog: ChangelogEntry[] = [
     date: '2026-10-15',
     title: 'One search, one page — decided by Google’s own results, not by a label',
     summary:
-      'A keyword ladder used to group its supporting keywords by what they looked like. Two searches that Google answers with exactly the same pages could therefore become two pages of yours, competing with each other. Before planning, Ascentra now reads the results page for each supporting keyword and puts the searches that share them on one page.',
+      'A keyword ladder used to group its supporting keywords by what they looked like. Two searches that Google answers with exactly the same pages could therefore become two pages of yours, competing with each other. Before planning, Alaventra now reads the results page for each supporting keyword and puts the searches that share them on one page.',
     highlights: [
       'The results page is read for each supporting keyword, and the searches that share enough of their top seven results become one page',
       'The grouping holds across difficulty levels, so two keywords Google answers the same way are never split into two pages',
@@ -194,7 +207,7 @@ export const changelog: ChangelogEntry[] = [
     date: '2026-10-15',
     title: 'A page losing traffic now gets refreshed, not just reported',
     summary:
-      'Ascentra used to tell you a page was decaying and leave it there. It now proves the fall before claiming it — and then writes the refresh. A page counts as losing traffic only when the drop is beyond normal variation and the page is genuinely worse off than it was in the same weeks a year earlier, so a quiet season is never mistaken for a decline.',
+      'Alaventra used to tell you a page was decaying and leave it there. It now proves the fall before claiming it — and then writes the refresh. A page counts as losing traffic only when the drop is beyond normal variation and the page is genuinely worse off than it was in the same weeks a year earlier, so a quiet season is never mistaken for a decline.',
     highlights: [
       'Every page with search traffic is compared both with the weeks before and with the same weeks a year earlier',
       'A fall that the same weeks also had last year is named as seasonal and left alone',
@@ -209,13 +222,13 @@ export const changelog: ChangelogEntry[] = [
     date: '2026-10-15',
     title: 'Reports now come to you, and the ones that are not ready stay put',
     summary:
-      'Every finished report used to wait in Ascentra until somebody logged in. You can now have each one sent as it arrives, or collected into a daily, weekly or monthly summary — by e-mail with its figures and files, or to a webhook your team already watches. The reports an analysis marked as not ready are deliberately held back, with the reason stated.',
+      'Every finished report used to wait in Alaventra until somebody logged in. You can now have each one sent as it arrives, or collected into a daily, weekly or monthly summary — by e-mail with its figures and files, or to a webhook your team already watches. The reports an analysis marked as not ready are deliberately held back, with the reason stated.',
     highlights: [
       'Four schedules: as each report arrives, or one summary a day, a week or a month, on the day and hour you choose',
       'E-mail with the report’s own figures in the message, its PDF and documents attached, and both links to open it',
       'A webhook that posts the report as JSON and also reads as a message in Slack, Teams and Discord, signed with your own secret',
       'Each delivery can carry the expiring, revocable share link, so a report reaches a client without an account',
-      'A page that failed its quality check, a plan the engine refused or a verdict it could not check is never sent — it waits in Ascentra with the reason',
+      'A page that failed its quality check, a plan the engine refused or a verdict it could not check is never sent — it waits in Alaventra with the reason',
       'A delivery log showing what went out, what was held back and what failed',
       '“Send it now” on any report, which runs the same check before sending',
     ],
@@ -270,7 +283,7 @@ export const changelog: ChangelogEntry[] = [
     date: '2026-10-14',
     title: 'Every setup step now comes with a guide',
     summary:
-      'Wherever Ascentra asks you for something it cannot get itself — a Google permission, a DNS record, a file on your site, a mailbox, your business details — there is now a “Show me how” button beside the ask. It opens that one job as numbered steps, with your own values ready to copy.',
+      'Wherever Alaventra asks you for something it cannot get itself — a Google permission, a DNS record, a file on your site, a mailbox, your business details — there is now a “Show me how” button beside the ask. It opens that one job as numbered steps, with your own values ready to copy.',
     highlights: [
       'Twenty-seven guides covering everything we ask for: Search Console and Analytics access, proving the domain is yours, the IndexNow file, the links export, letting the AI crawlers in, mailboxes and their SPF, DKIM and DMARC records, publishing a written page, applying a fix pack, your business profile and style guide',
       'Your real values, not examples: the DNS record for your domain, your key file, the address to add in Search Console — each in a copy box',
@@ -316,7 +329,7 @@ export const changelog: ChangelogEntry[] = [
     date: '2026-10-13',
     title: 'Check a release before it goes live, and alerts that only fire on a real change',
     summary:
-      'Your build can now ask Ascentra to check a release candidate — a staging address or a list of URLs — and get a pass or fail it can act on. Traffic and position alerts are tested against your own numbers instead of a fixed percentage, so a small website is no longer told its traffic fell when a handful of searches moved. And a planned page for a search you should not target is set aside with the reason instead of being written.',
+      'Your build can now ask Alaventra to check a release candidate — a staging address or a list of URLs — and get a pass or fail it can act on. Traffic and position alerts are tested against your own numbers instead of a fixed percentage, so a small website is no longer told its traffic fell when a handful of searches moved. And a planned page for a search you should not target is set aside with the reason instead of being written.',
     highlights: [
       'A pre-release check your build pipeline can call: the same page checks — answers, redirect, noindex, robots.txt, canonical, title, H1 — against a staging address or a list of URLs',
       'It answers pass or fail with the URL and the check that failed, so a release can be stopped before it takes a page out of Google',
@@ -399,7 +412,7 @@ export const changelog: ChangelogEntry[] = [
     date: '2026-10-13',
     title: 'Your key pages checked every morning, and fixes verified in a day',
     summary:
-      'A monthly audit cannot see a page that was set to noindex on the 3rd. Ascentra now checks your most important pages every day and tells you the same day when something that matters changes — and when you mark a fix done, that exact issue is re-checked the next morning instead of at the next audit.',
+      'A monthly audit cannot see a page that was set to noindex on the 3rd. Alaventra now checks your most important pages every day and tells you the same day when something that matters changes — and when you mark a fix done, that exact issue is re-checked the next morning instead of at the next audit.',
     highlights: [
       'Every morning your key pages are fetched and compared with yesterday: HTTP status, a redirect that appeared, the noindex tag, the canonical, the title — plus your robots.txt',
       'A page gone, set to noindex, newly blocked or re-canonicalised reaches you the same day, on the alerts page and in your alert channel',
@@ -461,7 +474,7 @@ export const changelog: ChangelogEntry[] = [
     date: '2026-10-12',
     title: 'Numbers you can trust when a data source has a bad minute',
     summary:
-      'Every request Ascentra makes to an outside service is now retried, and a provider error that arrives disguised as a success is sent again by itself. What still fails is named in the report instead of quietly lowering a number.',
+      'Every request Alaventra makes to an outside service is now retried, and a provider error that arrives disguised as a success is sent again by itself. What still fails is named in the report instead of quietly lowering a number.',
     highlights: [
       'Every external request is retried three times, five seconds apart',
       'AI visibility rates count the answers that came back, and the report lists what failed and whether the retry worked',
@@ -489,15 +502,15 @@ export const changelog: ChangelogEntry[] = [
   },
   {
     date: '2026-10-12',
-    title: 'Ascentra knows the pages you already have',
+    title: 'Alaventra knows the pages you already have',
     summary:
-      'Every week Ascentra lists the pages your website has. When a search is already answered by one of them, it says to refresh that page instead of publishing a second one that would compete with it.',
+      'Every week Alaventra lists the pages your website has. When a search is already answered by one of them, it says to refresh that page instead of publishing a second one that would compete with it.',
     highlights: [
-      'A weekly page list per website, built from your sitemap, your Search Console pages and the pages Ascentra already checks — no extra connection and no extra cost',
+      'A weekly page list per website, built from your sitemap, your Search Console pages and the pages Alaventra already checks — no extra connection and no extra cost',
       'A keyword ladder points a rung at the page you already have, with its real address, instead of planning a new one',
       'Keyword research marks the keywords a live page of yours already answers and names that page',
       'The weekly posts and the rank-tracking e-mail stop saying “publish it” when a live page already answers the search',
-      'Two pages for one search split the signals and neither ranks — Ascentra now avoids creating that by itself',
+      'Two pages for one search split the signals and neither ranks — Alaventra now avoids creating that by itself',
     ],
     features: ['keyword-research', 'keyword-ladders', 'content', 'autopilot', 'site-tracking'],
   },
@@ -507,7 +520,7 @@ export const changelog: ChangelogEntry[] = [
     summary:
       'The pile-up guard now sees every page waiting to be published, keyword-ladder pages included, and tells you which ones they are.',
     highlights: [
-      'Every page Ascentra writes — a ladder page, one you asked for, or a weekly post — is recorded the moment it is written',
+      'Every page Alaventra writes — a ladder page, one you asked for, or a weekly post — is recorded the moment it is written',
       'The guard counts each waiting keyword once, whether it came from a ladder or from the weekly posts',
       'When writing pauses, the note and the app name the pages that are waiting',
     ],
@@ -531,7 +544,7 @@ export const changelog: ChangelogEntry[] = [
     date: '2026-10-11',
     title: 'Link building: pitches from your own mailbox, replies read for you',
     summary:
-      'Ascentra now helps you get links, not only list them. Every Monday it finds the openings, checks each one, finds a contact on the site’s own domain and drafts a short sequence that points at the right page of yours — and once you approve it, it goes out from your own mailbox.',
+      'Alaventra now helps you get links, not only list them. Every Monday it finds the openings, checks each one, finds a contact on the site’s own domain and drafts a short sequence that points at the right page of yours — and once you approve it, it goes out from your own mailbox.',
     highlights: [
       'New openings every week: journalist requests, resource pages, broken links, your competitors’ broken links, your own old addresses that now fail (with the redirect to add) and a checklist of the directories worth being on',
       'Every prospect checked on its own page; competitors, link sellers, government portals and off-topic sites set aside with the reason',
@@ -570,8 +583,8 @@ export const changelog: ChangelogEntry[] = [
   },
   {
     date: '2026-10-08',
-    title: 'Business site and Ascentra brand',
-    summary: 'SEO Agent is now Ascentra — enterprise-grade autonomous SEO. Same product, a new look across the app, and a public website that explains every capability.',
+    title: 'Business site and Alaventra brand',
+    summary: 'SEO Agent is now Alaventra — enterprise-grade autonomous SEO. Same product, a new look across the app, and a public website that explains every capability.',
     highlights: [
       'New name, logo, colours and type across the app',
       'Clearer hover, focus and loading states, with motion that respects reduced-motion settings',
@@ -584,7 +597,7 @@ export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-08',
     title: 'Backlinks from every source',
-    summary: 'One link ledger from nine sources, and every link checked by Ascentra itself before it counts as lost.',
+    summary: 'One link ledger from nine sources, and every link checked by Alaventra itself before it counts as lost.',
     highlights: [
       'Bing Webmaster Tools, Search Console links, GA4 referrals, the Common Crawl web graph, Wikipedia, Hacker News, news and web search next to the commercial index',
       'Own link check: rel, placement, noindex and canonical; lost only after two misses, with the reason',

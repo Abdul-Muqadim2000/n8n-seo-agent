@@ -46,7 +46,7 @@ function SolutionCards() {
                 ))}
               </ul>
               <span className="mt-auto inline-flex items-center gap-1.5 pt-7 text-[15px] font-medium text-accent-text">
-                See how Ascentra helps
+                See how Alaventra helps
                 <ArrowRight className="size-4 transition-transform duration-200 ease-brand group-hover:translate-x-1" aria-hidden />
               </span>
             </div>
@@ -104,7 +104,7 @@ function CapabilityMatrix() {
 export default function SolutionsPage() {
   useSeo({
     title: 'Solutions',
-    description: 'Ascentra for agencies, in-house marketing teams, B2B and SaaS companies, local and multi-location businesses and enterprise teams — one weekly SEO loop, shaped to how each team works.',
+    description: 'Alaventra for agencies, in-house marketing teams, B2B and SaaS companies, local and multi-location businesses and enterprise teams — one weekly SEO loop, shaped to how each team works.',
     path: '/solutions',
   });
   return (
@@ -124,7 +124,7 @@ export default function SolutionsPage() {
         <SolutionCards />
       </Section>
       <CapabilityMatrix />
-      <CtaBand title="Not sure where you fit?" lead="Tell us how your team works and a person will show you where Ascentra fits. Or start free and connect your first website." />
+      <CtaBand title="Not sure where you fit?" lead="Tell us how your team works and a person will show you where Alaventra fits. Or start free and connect your first website." />
     </>
   );
 }

@@ -34,7 +34,7 @@ import { SettingsCard } from '../SettingsCard';
 
 const GUIDE: Record<WebhookFormat, string> = { json: 'webhook-signature', slack: 'slack-webhook', teams: 'teams-workflow-webhook' };
 const PLACEHOLDER: Record<WebhookFormat, string> = {
-  json: 'https://hooks.your-company.com/ascentra',
+  json: 'https://hooks.your-company.com/alaventra',
   slack: 'https://hooks.slack.com/services/T…/B…/…',
   teams: 'https://….logic.azure.com/workflows/…',
 };
@@ -147,7 +147,7 @@ export function WebhooksCard({ data }: { data: IntegrationsOverview }) {
       <CardBody className="space-y-5">
         {fresh && (
           <Callout tone="good" title={`Signing secret for ${fresh.name} — copy it now`} action={<Button size="sm" variant="secondary" onClick={() => setFresh(null)}>Done</Button>}>
-            <p className="mb-2">It is shown this once. Your receiver checks the X-Ascentra-Signature header with it.</p>
+            <p className="mb-2">It is shown this once. Your receiver checks the X-Alaventra-Signature header with it.</p>
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <code className="min-w-0 max-w-full break-all rounded-md border bg-surface-2 px-2 py-1 font-mono text-xs">{fresh.secret}</code>
               <CopyButton text={fresh.secret} label="Copy secret" />
@@ -284,7 +284,7 @@ export function WebhooksCard({ data }: { data: IntegrationsOverview }) {
       </CardBody>
       <CardFooter>
         <p className="text-sm text-ink-3">
-          Up to {WEBHOOKS.maxEndpoints} endpoints. Signed JSON carries X-Ascentra-Signature (HMAC-SHA256 of “timestamp.body”), X-Ascentra-Event and X-Ascentra-Delivery; the log keeps {WEBHOOKS.logDays} days.
+          Up to {WEBHOOKS.maxEndpoints} endpoints. Signed JSON carries X-Alaventra-Signature (HMAC-SHA256 of “timestamp.body”), X-Alaventra-Event and X-Alaventra-Delivery; the log keeps {WEBHOOKS.logDays} days.
         </p>
       </CardFooter>
     </SettingsCard>

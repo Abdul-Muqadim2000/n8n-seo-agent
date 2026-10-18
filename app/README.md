@@ -1,6 +1,6 @@
-# Ascentra — web app (multi-company)
+# Alaventra — web app (multi-company)
 
-The web front end of Ascentra (the SEO Agent engine in n8n) and its public business site. Companies sign up (e-mail or Google),
+The web front end of Alaventra (the SEO Agent engine in n8n) and its public business site. Companies sign up (e-mail or Google),
 add their websites, prove ownership, connect Search Console and GA4, give the business and E-E-A-T details the engine needs, start
 weekly tracking, run every analysis from proper forms, and read the results in dashboards with recommendations. The SEO work
 itself stays in the n8n workflows (`../n8n/seo-agent`); this app is the product around them.
@@ -297,11 +297,11 @@ tool by hand; the form says what that means for the schedule, in terms of what n
 
 ## Brand and business site
 
-The product is called **Ascentra** ("Enterprise-grade autonomous SEO"); "SEO Agent" stays only as the internal name of the n8n
+The product is called **Alaventra** ("Enterprise-grade autonomous SEO"); "SEO Agent" stays only as the internal name of the n8n
 engine and of this repository.
 
 - **Brand kit**: `web/brand/BRAND.md` (logo rules, colours, type, voice) and `web/brand/tokens.css` (the kit's raw values). The app's
-  tokens live in `web/src/index.css` (light + dark); components use them through Tailwind classes, never hex. Ascentra Blue is the
+  tokens live in `web/src/index.css` (light + dark); components use them through Tailwind classes, never hex. Alaventra Blue is the
   only accent, no gradients.
 - **Logos and icons**: the supplied SVGs in `web/public/brand/` (horizontal / stacked / header / mark / wordmark in ink, blue, white),
   favicons, `site.webmanifest` and `og-image.png` in `web/public/`. Use the files as they are — never redraw, recolour or animate rays.
@@ -317,7 +317,7 @@ engine and of this repository.
   release), `site.ts` (name, e-mail addresses, navigation, integrations), `images.ts` (every photo). How to add a capability:
   `web/CONVENTIONS.md` → "Business site".
 - **PLACEHOLDER — confirm before launch** (marked `// PLACEHOLDER` in the code): every price, plan limit, the annual discount and the
-  billing answers in `pricing.ts`; the `@ascentra.example` e-mail addresses in `site.ts` (the contact form opens a `mailto:`);
+  billing answers in `pricing.ts`; the `@alaventra.example` e-mail addresses in `site.ts` (the contact form opens a `mailto:`);
   the Unsplash photos in `images.ts`; the privacy policy and terms in `marketing/components/company/legal.ts` (drafts for counsel).
   Copy uses capability facts only — no invented customers, logos, ratings or results.
 

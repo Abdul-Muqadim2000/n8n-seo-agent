@@ -228,7 +228,7 @@ describe('Contentful (Content Management API)', () => {
 });
 
 describe('Generic signed webhook', () => {
-  const wh: ConnCtx = { baseUrl: 'https://hooks.example.org/ascentra', username: '', secret: 'whsec_test', settings: {} };
+  const wh: ConnCtx = { baseUrl: 'https://hooks.example.org/alaventra', username: '', secret: 'whsec_test', settings: {} };
 
   it('signs the body, sends the idempotency key and the whole package, and reads the answer', async () => {
     routes = [on('POST', /hooks\.example\.org/, () => respond(200, { id: 'pr-12', url: 'https://github.com/x/y/pull/12', status: 'draft' }))];

@@ -84,7 +84,7 @@ export function DeliveryTab() {
       <SettingsCard
         icon={<Send />}
         title="When reports go out"
-        description="Reports always appear in Ascentra. This decides whether they are also sent to you."
+        description="Reports always appear in Alaventra. This decides whether they are also sent to you."
         info="A report the analysis itself marked as not ready — a page that failed its quality check, a plan the engine refused, a verdict it could not check — is never sent. It stays here with the reason on it."
         actions={on ? <Badge>{deliveryScheduleLabel(draft)}</Badge> : undefined}
       >
@@ -157,7 +157,7 @@ export function DeliveryTab() {
               onCheckedChange={(v) => set({ shareLinks: v })}
               disabled={!owner}
               title="Add a link anyone can open"
-              description={`Each report also carries an expiring, revocable link (${DELIVERY.shareDays} days) so it can be forwarded to somebody without an Ascentra account.`}
+              description={`Each report also carries an expiring, revocable link (${DELIVERY.shareDays} days) so it can be forwarded to somebody without an Alaventra account.`}
             />
           )}
         </CardBody>
@@ -236,7 +236,7 @@ export function DeliveryTab() {
               ? data?.nextAt
                 ? `Next summary ${fmtAgo(data.nextAt)}.`
                 : 'Each report is sent as soon as it is ready.'
-              : 'Reports stay in Ascentra until you switch a channel on.'}
+              : 'Reports stay in Alaventra until you switch a channel on.'}
           </p>
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => void runTest()} loading={test.isPending} disabled={!anyChannel}>

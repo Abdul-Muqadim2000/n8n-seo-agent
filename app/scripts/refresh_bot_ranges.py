@@ -62,7 +62,7 @@ def main():
     failed = []
     for sid, (url, fmt) in SOURCES.items():
         try:
-            req = urllib.request.Request(url, headers={'User-Agent': 'Ascentra-range-refresh/1.0 (+https://github.com/Abdul-Muqadim2000/n8n-seo-agent)'})
+            req = urllib.request.Request(url, headers={'User-Agent': 'Alaventra-range-refresh/1.0 (+https://github.com/Abdul-Muqadim2000/n8n-seo-agent)'})
             with urllib.request.urlopen(req, timeout=30) as r:
                 created, prefixes = parse(r.read().decode('utf-8', 'replace'), fmt)
             if not prefixes:

@@ -32,7 +32,7 @@
       },
       {
         "parameters": {
-          "fromEmail": "Dev SEO <devaicondeveloper3@gmail.com>",
+          "fromEmail": "Alaventra <devaicondeveloper3@gmail.com>",
           "toEmail": "devaicondeveloper3@gmail.com",
           "subject": "={{ $('Format Alert').first().json.subject }}",
           "emailFormat": "html",

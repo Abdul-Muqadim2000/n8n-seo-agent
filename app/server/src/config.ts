@@ -69,7 +69,7 @@ const Env = z.object({
   MS_OAUTH_CLIENT_SECRET: str(),
   MS_OAUTH_TENANT: str('common'),
 
-  SEO_BRAND: str('Dev SEO'),
+  SEO_BRAND: str('Alaventra'),
   SEO_MAIL_FROM: str(''),
   SEO_SMTP_HOST: str(''),
   SEO_SMTP_PORT: str('465').transform(Number),
@@ -157,8 +157,8 @@ export const config = {
   },
   // D-12 (re-rating 2026-10-17): the app's own name in what it says to customers (MCP server title, account e-mails). It was
   // SEO_BRAND — the engine's report brand, read from n8n/.env and "Dev SEO" by default — so every MCP client of this install was told
-  // it was talking to "Dev SEO". The product is Ascentra (web/src/components/layout/Brand.tsx BRAND_NAME).
-  brand: 'Ascentra',
+  // it was talking to "Dev SEO". The product is Alaventra (web/src/components/layout/Brand.tsx BRAND_NAME).
+  brand: 'Alaventra',
   mail: {
     from: e.SEO_MAIL_FROM || (e.SEO_SMTP_USER ? `${e.SEO_BRAND} <${e.SEO_SMTP_USER}>` : ''),
     host: e.SEO_SMTP_HOST,
@@ -200,7 +200,7 @@ export const config = {
   linkBuilderJobs: e.LINK_BUILDER_JOBS,
   crawlers: {
     jobs: e.CRAWLER_JOBS,
-    spoolDir: e.LOG_SPOOL_DIR || join(tmpdir(), 'ascentra-logs'),
+    spoolDir: e.LOG_SPOOL_DIR || join(tmpdir(), 'alaventra-logs'),
     refreshRanges: e.BOT_RANGES_REFRESH,
   },
   outreachMxCheck: e.OUTREACH_MX_CHECK,

@@ -238,7 +238,7 @@ export function parseRangeFile(body: string, format: 'json' | 'html-json' | 'tex
 export type Fetcher = (url: string) => Promise<{ ok: boolean; status: number; text: () => Promise<string> }>;
 
 /** Fetches every list once; keeps the old one on any doubt. Returns how many lists were updated. */
-export async function refreshRanges(fetcher: Fetcher = (u) => fetch(u, { headers: { 'user-agent': 'Ascentra-range-refresh/1.0' }, signal: AbortSignal.timeout(30_000) })): Promise<{ updated: number; failed: string[] }> {
+export async function refreshRanges(fetcher: Fetcher = (u) => fetch(u, { headers: { 'user-agent': 'Alaventra-range-refresh/1.0' }, signal: AbortSignal.timeout(30_000) })): Promise<{ updated: number; failed: string[] }> {
   if (!active.size) fromSnapshot();
   let updated = 0;
   const failed: string[] = [];

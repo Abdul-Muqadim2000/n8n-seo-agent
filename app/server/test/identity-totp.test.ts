@@ -59,7 +59,7 @@ describe('matchTotp', () => {
     for (const c of ['', '12345', '1234567', 'abcdef', ' 123456']) expect(matchTotp(secret, c, at)).toBeNull();
   });
   it('builds the Key URI an authenticator app reads', () => {
-    const u = otpauthUri('Ascentra', 'dana@northwind.test', 'JBSWY3DPEHPK3PXP');
-    expect(u).toBe('otpauth://totp/Ascentra:dana%40northwind.test?secret=JBSWY3DPEHPK3PXP&issuer=Ascentra&algorithm=SHA1&digits=6&period=30');
+    const u = otpauthUri('Alaventra', 'dana@northwind.test', 'JBSWY3DPEHPK3PXP');
+    expect(u).toBe('otpauth://totp/Alaventra:dana%40northwind.test?secret=JBSWY3DPEHPK3PXP&issuer=Alaventra&algorithm=SHA1&digits=6&period=30');
   });
 });
