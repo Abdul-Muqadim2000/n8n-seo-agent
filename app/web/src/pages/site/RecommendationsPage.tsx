@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/ui/misc';
 import { Segmented } from '@/components/ui/tabs';
 import { CountUp, HeroNextStep, HeroStat, Stagger, SummaryHero, type IconTileTone } from '@/components/insight';
 import { DataGate, FilterChips, Panel, RunAnalysisMenu, ToolButton, useSitePage } from './_components/kit';
+import { useTicketStates } from '@/components/site/TicketButton';
 import { countBy, plural } from './_components/format';
 import { CATEGORY_META, CATEGORY_ORDER, PRIORITY_ORDER, RecommendationButton, RecommendationItem, sortRecommendations } from './_components/recommendations';
 
@@ -18,6 +19,7 @@ type GroupBy = 'worth' | 'priority' | 'category';
 export default function RecommendationsPage() {
   const { org, site } = useSitePage();
   const q = useRecommendations(org.id, site.id);
+  useTicketStates(site.id); // G4: the state of tickets made from these, read back from the tracker
   return (
     <div>
       <PageHeader
@@ -43,6 +45,7 @@ export default function RecommendationsPage() {
 }
 
 function Recommendations({ recs, refetching }: { recs: Recommendation[]; refetching: boolean }) {
+  const { site } = useSitePage();
   const [cat, setCat] = useState<CatFilter>('all');
   const [prio, setPrio] = useState<PrioFilter>('all');
   // REP 3.3: one queue, ordered by what each step is worth. Grouping by priority or area stays available, but the default is the
@@ -175,7 +178,7 @@ function Recommendations({ recs, refetching }: { recs: Recommendation[]; refetch
               >
                 <ul className="divide-y divide-line border-t border-line">
                   {g.items.map((r) => (
-                    <RecommendationItem key={r.id} rec={r} />
+                    <RecommendationItem key={r.id} rec={r} siteId={site.id} />
                   ))}
                 </ul>
               </Panel>
