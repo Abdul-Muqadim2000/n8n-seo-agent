@@ -9,6 +9,7 @@
 /*__AI_STATS__*/
 /*__DRAFTS__*/
 /*__DFS_RETRY__*/
+/*__RIVALS__*/
 const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 let rows = []; try { rows = $('Apply Analysis').all().map(i => i.json).filter(r => !r.skip && r.engine); } catch (e) {}
 if (!rows.length) { try { rows = $('Parse AI Answers').all().map(i => i.json).filter(r => !r.skip && r.engine); } catch (e) {} }
@@ -141,7 +142,18 @@ return plans.map(p => {
   for (const r of ansAll) for (const h of list(r.sources)) { if (h === p.domain || h.endsWith('.' + p.domain)) continue; if (comp.some(c => c.domain === h) || isRival(h)) { asRival(h, 1); continue; } const s = src.get(h) || { domain: h, citations: 0, engines: new Set(), topics: new Set(), urls: new Map() }; s.citations++; s.engines.add(ENG[r.engine] || r.engine); if (r.topic) s.topics.add(r.topic);
     for (const c of citedOf(r)) if (hostOfU(c.u) === h) { const x = s.urls.get(c.u) || { u: c.u, t: c.t || '', n: 0 }; x.n++; if (!x.t && c.t) x.t = c.t; s.urls.set(c.u, x); } src.set(h, s); }
   for (const d of PR) for (const [h, n] of Object.entries(d.sources || {})) { if (h === p.domain || h.endsWith('.' + p.domain)) continue; if (comp.some(c => c.domain === h) || isRival(h)) { asRival(h, Number(n) || 0); continue; } const s = src.get(h) || { domain: h, citations: 0, engines: new Set(), topics: new Set(), urls: new Map() }; s.citations += Number(n) || 0; s.engines.add('daily'); src.set(h, s); }
-  const rival_sources = [...rivalSrc.entries()].filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([domain, citations]) => ({ domain, citations, kind: 'rival' }));
+  // C-2 (re-rating 2026-10-17): a cited site that SELLS your category is a rival too, whatever AI said about it - erp-dubai.ae ("ERPNext
+  // Implementation Partner in UAE & Dubai") and penieltech.com (/blog/odoo-implementation-umm-al-quwain) were labelled "site (PR target)" and
+  // written as ai_source prospects. Judged by the one rule the Link Builder and AI Growth use (RV.providerOf): its cited page's title or address.
+  const vendorWhy = new Map();
+  for (const s of [...src.values()]) { if (kindOf(s.domain) !== 'site') continue; let why = '';
+    for (const x of s.urls.values()) { why = RV.providerOf({ domain: s.domain, title: x.t, url: x.u, topics: p.topics || [], services: p.services || [] }); if (why) break; }
+    if (why) { vendorWhy.set(regD(s.domain), why); asRival(s.domain, s.citations); src.delete(s.domain); } }
+  const rival_sources = [...rivalSrc.entries()].filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([domain, citations]) => vendorWhy.has(domain) ? { domain, citations, kind: 'vendor', why: vendorWhy.get(domain) } : { domain, citations, kind: 'rival' });
+  // what is STORED is the whole set (rival_sources_json): the cited rivals above, every other vendor, and every business AI named (aliases, two or
+  // more answers, configured), so AI Growth, the Backlink Monitor and the Link Builder read the same rivals this run saw - not its top ten
+  const rival_store = [...rival_sources, ...[...vendorWhy.entries()].filter(([d]) => !rival_sources.some(r => r.domain === d)).map(([domain, why]) => ({ domain, citations: rivalSrc.get(domain) || 0, kind: 'vendor', why })),
+    ...[...rivalSet].filter(d => !rival_sources.some(r => r.domain === d) && !vendorWhy.has(d)).map(domain => ({ domain, citations: 0, kind: 'named' }))].slice(0, 120);
   const sources = [...src.values()].sort((a, b) => b.citations - a.citations).slice(0, 15).map(s => ({ domain: s.domain, citations: s.citations, engines: [...s.engines].filter(x => x !== 'daily'), topics: [...s.topics].slice(0, 3), kind: kindOf(s.domain), urls: [...s.urls.values()].sort((a, b) => b.n - a.n).slice(0, 3) }));
   const pages = new Map(); for (const r of ansAll) for (const u of String(r.our_urls || '').split(/\s+/).filter(Boolean)) { const x = pages.get(u) || { url: u, citations: 0, engines: new Set() }; x.citations++; x.engines.add(r.engine); pages.set(u, x); }
   const our_pages = [...pages.values()].sort((a, b) => b.citations - a.citations).slice(0, 10).map(x => ({ url: x.url, citations: x.citations, engines: [...x.engines] }));
@@ -409,7 +421,7 @@ return plans.map(p => {
     run_kind: p.run_kind || 'weekly', samples, visibility_score, mention_lo, mention_hi, sentiment_score, accuracy_issues: fact_check === 'checked' ? issues.length : null, ai_sessions: traffic && traffic.connected ? traffic.sessions || 0 : null, ai_conversions: traffic && traffic.connected ? traffic.key_events || 0 : null, ai_revenue: traffic && traffic.connected ? Math.round(100 * (traffic.revenue || 0)) / 100 : null,
     index_sov: index && index.sov != null ? index.sov : null, ai_impressions: ai_impressions || null, perception_json: J(perception), traffic_json: traffic ? J(traffic) : '', access_json: acc ? J({ checked_at: acc.checked_at, robots: acc.robots, llms_txt: acc.llms_txt, bots: acc.bots.map(b => ({ bot: b.bot, owner: b.owner, group: b.group, allowed: b.allowed_root, rule: b.rule, blocked_paths: b.blocked_paths })), fetch: acc.fetch, issues: acc.issues, ok: acc.ok }) : '',
     index_json: index ? J({ ...index, suggestions: sugg, fanout, demand: { total: demand_total, named: ai_impressions, lost: lost_demand } }) : J({ suggestions: sugg, fanout, demand: { total: demand_total, named: ai_impressions, lost: lost_demand } }), clusters_json: J(clusters),
-    rival_sources_json: J(rival_sources) };   // wave 3 (W3-F): AI Growth reads the rival businesses AI cites from the latest row
+    rival_sources_json: J(rival_store) };   // wave 3 (W3-F): AI Growth reads the rival businesses AI cites from the latest row
   const now = p.checked_at;
   const prospect_rows = sources.filter(s => !['platform', 'authority'].includes(s.kind) && s.citations >= 1).slice(0, 10).map(s => { const old = prospects.find(x => x.site_id === p.site_id && x.prospect_domain === s.domain && x.type === 'ai_source') || {};
     const top = (s.urls || [])[0] || null;   // v4.12: the exact page AI cites on that site (the one to be named on)

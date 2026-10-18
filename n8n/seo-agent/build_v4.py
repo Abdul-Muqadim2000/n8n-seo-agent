@@ -8877,7 +8877,8 @@ def _b80_checks():
         'B7-2: a split Google did not answer and a split it answered with nothing are the same thing again'
     assert "read: false, page: null, control: null" in _pg80, 'B7-1: an unanswered window no longer refuses with a reason'
     # B7-3: brand searches are out of the cannibalisation list, on the write path, not filtered later
-    assert 'filter(m => !isBrand(m.query))' in _pg80, 'B7-3: brand searches are being reported as cannibalisation'
+    assert 'filter(m => actionable(m.query))' in _pg80 and 'const actionable = (q) => !isBrand(q) && !otherOf(q);' in _pg80, \
+        'B7-3 / C-6: brand searches (or searches for another website) are being reported as cannibalisation'
     # B7-3: the action may never ask for another page (D11 by another name)
     assert 'Decide which one answers this search' in _sm80 and 'Two of your pages compete for' in _sm80, 'B7-3: the action is gone'
 
@@ -9893,7 +9894,11 @@ def _b98_catchup():
             'R94: %s - its manual entry "%s" does not feed the schedule\'s own first node, so a catch-up would not run the scheduled path' % (_id98, _e98)
     # ---------- B. the three doors, and RECORD-then-start by graph walk ----------
     assert _by98['Instance Started']['type'] == 'n8n-nodes-base.n8nTrigger' and _by98['Instance Started']['parameters']['events'] == ['init'], 'R94: no Instance Started door'
-    assert _by98['Hourly Sweep']['type'] == 'n8n-nodes-base.scheduleTrigger', 'R94: no hourly sweep'
+    _sw98 = [n for n in _cu98['nodes'] if n['type'] == 'n8n-nodes-base.scheduleTrigger']
+    assert len(_sw98) == 1, 'R94: no sweep schedule'
+    _swn98 = _sw98[0]['name']
+    # C-1 (re-rating 2026-10-17): no wall-clock execution time-out on the sweep (exec 728 was cancelled after the Mac slept 44 min in one node)
+    assert _cu98['settings'].get('executionTimeout') == -1, 'C-1: the catch-up has an execution time-out again - n8n counts it in wall-clock time'
     _st98 = _by98['Start Missed Run']['parameters']
     assert _st98['options'].get('waitForSubWorkflow') is False and _st98['workflowId']['value'] == '={{ $json.workflow_id }}', 'R94: the start waits, or starts a fixed workflow'
     _cc98 = _cu98['connections']
@@ -9906,11 +9911,19 @@ def _b98_catchup():
                 continue
             seen.add(nd); todo.extend(_out98(_cc98, nd))
         return seen
-    for _door98 in ('Instance Started', 'Hourly Sweep', 'Catch-up Run'):
+    for _door98 in ('Instance Started', _swn98, 'Catch-up Run'):
         assert 'Start Missed Run' in _reach98(_door98, None), 'R94: ' + _door98 + ' never reaches the start'
         assert 'Start Missed Run' not in _reach98(_door98, 'Save Catch-up Record'), \
             'R94: ' + _door98 + ' can reach Start Missed Run without passing Save Catch-up Record - the start must come after its record'
-    assert 'Catch-up Payload' in _out98(_cc98, 'Save Catch-up Record'), 'R94: the payload is not built from the saved record'
+    assert _out98(_cc98, 'Save Catch-up Record') == ['Confirm Claim'] and _out98(_cc98, 'Confirm Claim') == ['Catch-up Payload'], \
+        'R94 / C-1: the payload is not built from the saved record read back (Confirm Claim)'
+    # ---------- C-16: the mail watcher's watchdog re-activates only behind its decision, never on a test, and alarms through the Error Handler ----------
+    _wdg98 = _wire98.get('watchdog') or {}
+    assert _wdg98.get('id') == 'SEOagentConsole1', 'C-16: the watchdog does not watch the Search Console mail watcher: ' + str(_wdg98)
+    for _p98 in ('Deactivate Mailbox', 'Activate Mailbox'):
+        assert _p98 in _reach98('Save Catch-up Report', None) and _p98 not in _reach98('Save Catch-up Report', 'Mailbox Down?'), \
+            'C-16: ' + _p98 + ' can run without the watchdog deciding the watcher is down'
+    assert _out98(_cc98, 'Save Watchdog State') == ['Watchdog Alarm'], 'C-16: the alarm does not follow the saved watchdog record'
     # ---------- C. deployment: imported, published, credential, time zone ----------
     _ae98 = open(os.path.join(HERE0, 'apply_env.py'), encoding='utf-8').read()
     _tree98 = _ast98.parse(_ae98)
@@ -11069,29 +11082,28 @@ const changedSince128 = (e) => prevChecks128 ? e.since > prevChecks128 : !(e.at 
 const checkChange = (f) => { if (!prev) return null; const hits = CHECK_CHANGES.filter(e => e.re.test(String(f.title || '')) && changedSince128(e)); return hits.length ? hits[hits.length - 1] : null; };
 const checkVersionOf = (f) => CHECK_CHANGES.filter(e => e.re.test(String(f.title || ''))).map(e => e.since).sort().pop() || '';
 // ---- rule 1, like for like: a crawl that ran JavaScript is not compared with one that did not (or with one that did not record it) ----
-const JS_DEP = /AI crawlers see a different version|after JavaScript|written by JavaScript|not in the first response|built without a real <a href>/i;
-const curJs = !!base.crawl_js;
-const prevJs = prev ? (prev.crawl_js === true || prev.crawl_js === 'true' ? true : (prev.crawl_js === false || prev.crawl_js === 'false') ? false : null) : null;
-const jsMismatch = !!prev && prevJs !== curJs;
-const jsDep = (f) => jsMismatch && (JS_DEP.test(String((f || {}).title || '')) || (f || {}).source === 'render_diff');
-const js_not_compared = jsMismatch ? [...new Set([...[...prevKeys.values()].filter(jsDep), ...cur.filter(jsDep)].map(f => String(f.title || '')))] : [];
-const gone = [...prevKeys.entries()].filter(([k]) => !curKeys.has(k)).filter(([, f]) => !jsDep(f)).map(([k, f]) => { const cc = checkChange(f); return { key: k, title: f.title, category: f.category, severity: f.severity, one_reading: oneReading(f), check_changed: cc ? cc.since.slice(0, 10) + ': ' + cc.what : '' }; }).sort((x, y) => SEV[x.severity] - SEV[y.severity]);""")
+// (C-5, F-C) Audit_Diff.js reads both audits' crawl method (curJs / prevJs / methodSame) and defines JS_DEP / jsDep; reused here:
+// a JavaScript-dependent finding is held out only when the two crawls differ or one is unknown
+const jsMismatch = !!prev && !methodSame;
+const jsDepB = (f) => jsMismatch && jsDep(f);
+const js_not_compared = not_compared_method;   // F-C's list: both sides' JavaScript-dependent findings, held out before the keys were built
+const gone = [...prevKeys.entries()].filter(([k]) => !curKeys.has(k)).filter(([, f]) => !jsDepB(f)).map(([k, f]) => { const cc = checkChange(f); return { key: k, title: f.title, category: f.category, severity: f.severity, one_reading: oneReading(f), check_changed: cc ? cc.since.slice(0, 10) + ': ' + cc.what : '' }; }).sort((x, y) => SEV[x.severity] - SEV[y.severity]);""")
 patch('Audit Diff', "const fixed = gone.filter(f => !f.one_reading).map(({ one_reading, ...f }) => f);",
       "const fixed = gone.filter(f => !f.one_reading && !f.check_changed).map(({ one_reading, check_changed, key, ...f }) => f);\n"
       "const no_longer_reported = gone.filter(f => !f.one_reading && f.check_changed).map(({ one_reading, check_changed, key, ...f }) => ({ ...f, why: 'our check changed (' + check_changed + '), so this is not counted as fixed: nothing on the site has to have changed' }));   // B-5")
 patch('Audit Diff', "const no_longer_seen = gone.filter(f => f.one_reading).map(({ one_reading, ...f }) => ({ ...f, why:",
       "const no_longer_seen = gone.filter(f => f.one_reading).map(({ one_reading, check_changed, key, ...f }) => ({ ...f, why:")
 patch('Audit Diff', "const added = [...curKeys.entries()].filter(([k]) => prev && !prevKeys.has(k)).map(([, f]) => ({ title: f.title, category: f.category, severity: f.severity, ...(oneReading(f) ? { one_reading: true } : {}) })).sort((x, y) => SEV[x.severity] - SEV[y.severity]);",
-      "const added0 = [...curKeys.entries()].filter(([k]) => prev && !prevKeys.has(k)).filter(([, f]) => !jsDep(f)).map(([, f]) => { const cc = checkChange(f); return { title: f.title, category: f.category, severity: f.severity, ...(oneReading(f) ? { one_reading: true } : {}), ...(cc ? { check_changed: cc.since.slice(0, 10) + ': ' + cc.what } : {}) }; }).sort((x, y) => SEV[x.severity] - SEV[y.severity]);\n"
+      "const added0 = [...curKeys.entries()].filter(([k]) => prev && !prevKeys.has(k)).filter(([, f]) => !jsDepB(f)).map(([, f]) => { const cc = checkChange(f); return { title: f.title, category: f.category, severity: f.severity, ...(oneReading(f) ? { one_reading: true } : {}), ...(cc ? { check_changed: cc.since.slice(0, 10) + ': ' + cc.what } : {}) }; }).sort((x, y) => SEV[x.severity] - SEV[y.severity]);\n"
       "const added = added0.filter(f => !f.check_changed);\n"
       "const newly_checked = added0.filter(f => f.check_changed).map(f => ({ ...f, why: 'found by a check that changed since the previous audit (' + f.check_changed + '): it may have been there before' }));   // B-5\n"
       "// the keys the engine does NOT count as fixed, for the app's own lists (seo_audits.not_fixed_json)\n"
       "const not_fixed = gone.filter(f => f.one_reading || f.check_changed).map(f => ({ key: f.key, why: f.check_changed ? 'check changed ' + f.check_changed : 'one outside reading' }))\n"
-      "  .concat(jsMismatch ? [...prevKeys.entries()].filter(([k, f]) => !curKeys.has(k) && jsDep(f)).map(([k]) => ({ key: k, why: 'not compared: the crawl ' + (prevJs == null ? 'of the previous audit did not record whether it ran JavaScript' : (curJs ? 'ran JavaScript this time and not before' : 'did not run JavaScript this time')) })) : []);")
+      "  .concat(jsMismatch ? [...new Set(prevAll.filter(f => jsDepB(f)).map(f => f.finding_key).filter(Boolean))].map((k) => ({ key: k, why: 'not compared: the crawl ' + (prevJs == null ? 'of the previous audit did not record whether it ran JavaScript' : (curJs ? 'ran JavaScript this time and not before' : 'did not run JavaScript this time')) })) : []);")
 patch('Audit Diff', "const open = [...curKeys.entries()].filter(([k]) => prevKeys.has(k)).map(([k, f]) => {",
-      "const open = [...curKeys.entries()].filter(([k]) => prevKeys.has(k)).filter(([, f]) => !jsDep(f)).map(([k, f]) => {")
+      "const open = [...curKeys.entries()].filter(([k]) => prevKeys.has(k)).filter(([, f]) => !jsDepB(f)).map(([k, f]) => {")
 patch('Audit Diff', "  no_longer_seen,\n  summary: fixed.length + ' fixed · ' + added.length + ' new · ' + open.length + ' still open' + (no_longer_seen.length ? ' · ' + no_longer_seen.length + ' no longer seen' : '')",
-      "  no_longer_seen, no_longer_reported, newly_checked, js_not_compared, checks_version: CHECKS_VERSION, previous_checks_version: prevChecks128 || null, crawl_js: curJs, previous_crawl_js: prevJs,\n"
+      "  no_longer_seen, no_longer_reported, newly_checked, js_not_compared, checks_version: CHECKS_VERSION, previous_checks_version: prevChecks128 || null, crawl_js: curJs === true, previous_crawl_js: prevJs,\n"
       "  summary: fixed.length + ' fixed · ' + added.length + ' new · ' + open.length + ' still open' + (no_longer_seen.length ? ' · ' + no_longer_seen.length + ' no longer seen' : '')\n"
       "    + (no_longer_reported.length ? ' · ' + no_longer_reported.length + ' no longer reported (our check changed)' : '') + (newly_checked.length ? ' · ' + newly_checked.length + ' found by a changed check' : '')")
 patch('Audit Diff', "    + (no_longer_seen.length ? '. ' + no_longer_seen.length + ' finding(s) rested on a single outside reading (a results page, an AI answer or a content review) that did not repeat, so they are not counted as fixed' : '')",
@@ -11101,7 +11113,7 @@ patch('Audit Diff', "    + (no_longer_seen.length ? '. ' + no_longer_seen.length
 patch('Audit Diff', "return [{ json: { ...d, audit_id, audited_at, site_id, site_audit: { ...a, audit_id, audited_at, audit_diff, internal_links: internal_links.slice(0, 20) } } }];",
       "return [{ json: { ...d, audit_id, audited_at, site_id, site_audit: { ...a, audit_id, audited_at, audit_diff, internal_links: internal_links.slice(0, 20),\n"
       "  // B-5 + rule 1: what the stored rows need to be compared like for like next time\n"
-      "  findings: (a.findings || []).map(f => ({ ...f, check_version: checkVersionOf(f) })), checks_version: CHECKS_VERSION, crawl_js: curJs, not_fixed: prev ? not_fixed : [] } } }];")
+      "  findings: (a.findings || []).map(f => ({ ...f, check_version: checkVersionOf(f) })), checks_version: CHECKS_VERSION, crawl_js: curJs === true, not_fixed: prev ? not_fixed : [] } } }];")
 patch('Audit Row', "scheduled: !!d.scheduled, request_id: d.request_id || '' } }];",
       "scheduled: !!d.scheduled, request_id: d.request_id || '',\n"
       "  crawl_js: !!a.crawl_js, checks_version: String(a.checks_version || ''), not_fixed_json: JSON.stringify((a.not_fixed || []).slice(0, 60)).slice(0, 4000) } }];   // B-5 + rule 1")

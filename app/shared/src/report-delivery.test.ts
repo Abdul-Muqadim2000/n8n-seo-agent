@@ -39,6 +39,15 @@ describe('deliveryDecision — a report the run marked not ready is never sent',
     expect(d.reason).toBe('');
   });
 
+  // C-11 (re-rating 2026-10-17): the AI Growth dry run landed as `ai_growth`, status progress, "done for you this week" - deliverable
+  it('holds a dry run (C-11): a test changed nothing, so it is never pushed, whatever its status', () => {
+    const d = deliveryDecision({ stage: 'ai_growth', status: 'progress', payload: { domain: 'techand.ai', dry_run: true, subject: '[AI growth · TEST RUN] techand.ai — dry run, nothing was submitted' } });
+    expect(d.deliver).toBe(false);
+    expect(d.code).toBe('test_run');
+    expect(d.reason).toContain('test run');
+    expect(deliveryDecision({ stage: 'ai_growth', status: 'progress', payload: { domain: 'techand.ai' } }).deliver).toBe(true);
+  });
+
   it('holds a page that failed its quality check (R11), and says so in the customer’s words', () => {
     const d = deliveryDecision(ready({ qa_not_ready: true, qa_reasons: ['3 placeholders left', 'word count 3,952 for 2,100'] }));
     expect(d.deliver).toBe(false);

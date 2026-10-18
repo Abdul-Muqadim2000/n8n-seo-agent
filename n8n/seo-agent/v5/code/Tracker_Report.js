@@ -82,9 +82,10 @@ for (const [id, items] of byLadder) {
   const ladDomain = (items[0] || {}).domain || '';
   const prevRowOf = (kw) => RS.prevReading(deskHist, { keyword: kw, domain: ladDomain, before: nowCheck });
   const prevOf = (kw) => { const h = prevRowOf(kw); return h ? Number(h.position) : null; };
-  const rowsK = items.map(it => { const pr = it.deferred ? null : prevRowOf(it.keyword); const cur = Number(it.result.position); const prev = it.deferred ? cur : (pr ? Number(pr.position) : null);
+  // C-4 (re-rating 2026-10-17): the baseline is the newest earlier reading unless the readings around it show it was a one-off (RS.stableReading)
+  const rowsK = items.map(it => { const st = it.deferred ? null : RS.stableReading(deskHist, { keyword: it.keyword, domain: ladDomain, before: nowCheck, cur: it.result.snapshot_json }); const pr = st ? st.row : null; const cur = Number(it.result.position); const prev = it.deferred ? cur : (pr ? Number(pr.position) : null);
     const delta = (cur > 0 && prev > 0) ? prev - cur : (cur > 0 && prev === 0) ? 100 : (cur === 0 && prev > 0) ? -100 : null;
-    return { ...it, current: cur, previous: prev, delta, prev_row: pr, prev_at: pr ? String(pr.checked_at) : '', url: it.result.url || '' }; }).sort((a, b) => a.rung - b.rung || a.page_no - b.page_no);
+    return { ...it, current: cur, previous: prev, delta, prev_row: pr, prev_at: pr ? String(pr.checked_at) : '', outlier: st ? st.outlier : null, url: it.result.url || '' }; }).sort((a, b) => a.rung - b.rung || a.page_no - b.page_no);
   const head = rowsK.find(r => r.rung === 4) || rowsK[0];
   // ---- G6: the results page of each keyword, read back from the row that was just stored ----
   const serpOf = (r) => {
@@ -110,7 +111,7 @@ for (const [id, items] of byLadder) {
   // page that slipped and a page that was simply pushed down by a rewritten results page read identically. The proof was already
   // stored (criterion 2.2): `snapshot_json` keeps the top 10 with their URLs for every check. Nothing extra is bought.
   const changes = new Map(rowsK.map(r => [r.keyword, r.deferred ? RS.churnNone('no check was bought for this keyword this week — it is checked monthly until its page is live')
-    : RS.withNoise(RS.churn(r.prev_row ? r.prev_row.snapshot_json : null, r.result.snapshot_json, { own: ladDomain }), RS.noise(deskHist, { keyword: r.keyword, domain: ladDomain }))]));   // R88: judged against what two readings of one moment show; B6-8: `own` also measures the page without us
+    : { ...RS.withNoise(RS.churn(r.prev_row ? r.prev_row.snapshot_json : null, r.result.snapshot_json, { own: ladDomain }), RS.noise(deskHist, { keyword: r.keyword, domain: ladDomain })), ...(r.outlier ? { outlier: r.outlier } : {}) }]));   // R88: judged against what two readings of one moment show; B6-8: `own` also measures the page without us
   const moveNoteOf = (r) => RS.moveNote(r.delta, changes.get(r.keyword));
   const withMove = (r) => { const n = moveNoteOf(r); return r.keyword + ' (' + posText(r.previous) + ' \u2192 ' + posText(r.current) + (n ? '; ' + n : '') + ')'; };
   // how old the oldest reading this report compares against is, and what Google did in between (criterion 2.12)
@@ -159,6 +160,12 @@ for (const [id, items] of byLadder) {
       reason: g.reason, detail: g.detail, note: g.note, written: !!g.live, dropped: !g.ok, seen: 'this check' });
     if (!g.ok) asideKw.add(r.keyword);
   }
+  // C-12 (re-rating 2026-10-17): a rung whose stored row is already `set_aside` (an earlier check wrote it back with its reason) stays set
+  // aside in this report too - "facts erp" (facts.ae's brand, #3 for the head) was listed as a rung "not published yet" while the Site
+  // Tracker of the same minutes showed it set aside: a monthly rung is not re-gated (no check was bought), so the stored verdict is read
+  for (const r of rowsK) { if (asideKw.has(r.keyword)) continue; const lr = rowOf(r.keyword); if (String(lr.status || r.status || '') !== 'set_aside') continue;
+    asideKw.add(r.keyword); fitAside.push({ ladder_id: id, keyword: r.keyword, rung: r.rung, page_no: r.page_no, status: 'set_aside', target_url: lr.target_url || '',
+      reason: String(lr.status_note || 'set aside by an earlier check').slice(0, 200), detail: '', note: String(lr.status_note || ''), written: false, dropped: true, seen: 'stored' }); }
   // R87: a ladder whose MAIN keyword is set aside — by this check, by the plan, or already on its row — is paused: nothing asks for its
   // rungs (they exist only to climb towards that keyword), the head's row is written back `set_aside` with the reason, and the next step
   // says so and offers a re-plan. Setting the head aside is not dropping the topic: nothing is deleted.
@@ -183,26 +190,31 @@ for (const [id, items] of byLadder) {
   const pending = rungs.find(r => !r.reached) || null;
   const pageOf = (t) => ({ keyword: t.keyword, page_type: t.page_type, target_url: t.target_url, status: t.status });
   let next;
-  const mainNotReady = !!topRow && !mainLive && !mainWritten && ['writing', 'written', 'not_ready'].includes(topRow.status) && !!notReadyOf(topRow.keyword);   // R111
+  // C-7 (re-rating 2026-10-17): the content log decides, not the ladder row's word - a main page whose draft failed its quality check is
+  // "fix the draft" ("it consulting dubai" was told "write the main page" while the Site Tracker and the cadence said "fix it"), and it is
+  // asked before "write the main page", which used to match first and made this branch unreachable
+  const mainNotReady = !!topRow && !mainLive && !mainWritten && !!notReadyOf(topRow.keyword);   // R111
   if (paused) next = { action: 'paused', rung: 4, main_page: mainLive ? 'live' : 'planned', reason: paused.reason,
     text: 'This ladder is paused: its main keyword "' + paused.keyword + '" is not a search this website should target (' + (paused.detail || paused.reason) + ')'
       + (paused.seen === 'this check' ? ', as this week\'s check of its results page showed' : '') + '. None of its pages is written or asked for until you re-plan the ladder towards another main keyword, or tell us the keyword is deliberate; the pages that are already live keep being checked.', pages: [] };
   else if (done) next = { action: 'complete', rung: 4, text: 'The top rung "' + head.keyword + '" has held the top 3 for 4 checks. From now on it is checked once a month with the published pages, so a drop is noticed; keep the pages fresh and the links growing.', pages: [] };
-  else if (topRow && !mainWritten && (mainFirst || allIn)) next = { action: 'write_top', rung: 4, main_page: 'planned',
-    text: (mainFirst ? (rungs.length ? 'This plan writes the main page first: ' : 'The main page is the whole ladder for now: ') : 'Every rung is in the top 10: ') + 'write the main page "' + head.keyword + '"' + (rungs.length && mainFirst ? '; its supporting pages follow once it is live' : '') + '.', pages: [pageOf(topRow)] };
   else if (mainNotReady && (mainFirst || allIn)) next = { action: 'fix_top', rung: 4, main_page: 'not_ready',
     text: 'The main page "' + head.keyword + '" is ' + fixText(topRow.keyword) + '.', pages: [pageOf(topRow)] };
+  else if (topRow && !mainWritten && (mainFirst || allIn)) next = { action: 'write_top', rung: 4, main_page: 'planned',
+    text: (mainFirst ? (rungs.length ? 'This plan writes the main page first: ' : 'The main page is the whole ladder for now: ') : 'Every rung is in the top 10: ') + 'write the main page "' + head.keyword + '"' + (rungs.length && mainFirst ? '; its supporting pages follow once it is live' : '') + '.', pages: [pageOf(topRow)] };
   else if (topRow && mainWritten && !mainLive && (mainFirst || allIn)) next = { action: 'publish_top', rung: 4, main_page: 'written', publish_url: topRow.target_url || '',
     text: 'The main page "' + head.keyword + '" is written but not live yet: publish it' + (topRow.target_url ? ' at ' + topRow.target_url : '') + '. Nothing climbs until it is published' + (rungs.length && mainFirst ? ', and its supporting pages wait for it' : '') + '.', pages: [] };
   else if (pending) {
     const target = rowsK.filter(x => x.rung === pending.rung && !asideKw.has(x.keyword));   // R16: never ask for a page we should not write
     next = { action: 'write_rung_' + pending.rung, rung: pending.rung, main_page: mainLive ? 'live' : mainWritten ? 'written' : 'planned',
       text: 'Work on rung ' + pending.rung + ': ' + (pending.top10 ? pending.top10 + ' of ' + pending.pages + ' pages are in the top 10. ' : 'none of its pages is in the top 10 yet. ') + 'Write or improve: ' + target.map(t => { const c = coveredBy(t);
-        return '"' + t.keyword + '"' + (c ? ' (' + c.url + ' already answers this search — refresh that page, do not publish a second one)' : (['writing', 'written', 'not_ready'].includes(t.status) && writtenOf(t.keyword)) ? ' (already written — publish it)' : (t.status === 'writing' && notReadyOf(t.keyword)) ? ' (' + fixText(t.keyword) + ')' : t.status === 'writing' ? ' (a page run was started for it but no page was written — it is written again)' : ''); }).join(', ') + '.',
+        return '"' + t.keyword + '"' + (() => { const nr = notReadyOf(t.keyword); const st = SM.pageStep({ keyword: t.keyword, covered_url: c ? c.url : '', written: ['writing', 'written', 'not_ready'].includes(t.status) && writtenOf(t.keyword), not_ready: !!nr, reasons: nr ? nr.qa_reasons : '', started: t.status === 'writing' });   // C-7: one page state, the Site Tracker's too
+          return st.text ? ' (' + st.text + ')' : ''; })(); }).join(', ') + '.',
       pages: target.map(t => { const c = coveredBy(t); return c ? { ...pageOf(t), status: 'improve', target_url: c.url, covered_by: c.url } : pageOf(t); }) };
   } else { const cTop = topRow ? coveredBy(topRow) : null;   // D11: the page that answers the main keyword may be one the site already had
     next = { action: 'improve_top', rung: 4, main_page: 'live',
-      text: (allIn ? 'Every rung is in the top 10 and the main page is live' : 'The main page is live') + ': improve the main page "' + head.keyword + '"' + (cTop ? ' — it is ' + cTop.url + ', the page the site already has for this search' : '') + ' (depth, internal links from the rung pages, links from other sites) and keep it fresh.',
+      text: (allIn ? 'Every rung is in the top 10 and the main page is live' : 'The main page is live') + ': improve the main page "' + head.keyword + '"' + (cTop ? ' — it is ' + cTop.url + ', the page the site already has for this search' : '') + (() => { const ru = String((topRow && topRow.url) || ''), rp = topRow ? Number(topRow.current) : 0;   // C-13: the page Google ranks, when it is another one
+        return ru && rp > 0 && ukeyT(ru) !== ukeyT(cTop ? cTop.url : (topRow.target_url || '')) ? '. Google ranks a different page of yours for this search: ' + ru + ' (#' + rp + '). Decide which of the two answers it, improve that one and link the other to it (one search, one page)' : ''; })() + ' (depth, internal links from the rung pages, links from other sites) and keep it fresh.',
       pages: topRow ? [cTop ? { ...pageOf(topRow), status: 'improve', target_url: cTop.url, covered_by: cTop.url } : pageOf(topRow)] : [] }; }
   // won: the main keyword in the top 3 in each of the last 4 checks, this one included (failed checks skipped)
   const histOf = (kw) => deskHist.filter(x => x.ladder_id === id && x.keyword === kw && String(x.checked_at) < nowCheck && validPos(x.position)).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)));
@@ -250,7 +262,7 @@ for (const [id, items] of byLadder) {
     serpRows.map(r => { const s = serps.get(r.keyword), m = mobiles.get(r.keyword);
       const ab = s && s.above.length ? s.above.slice(0, 3).map(a => esc(a.domain) + ' (#' + a.position + ')' + (a.tracked ? ' *' : '')).join(', ') + (s.above.length > 3 ? ' +' + (s.above.length - 3) + ' more' : '') : (s && r.current > 0 && r.current <= 10 ? 'nobody on page 1' : '—');
       const ch = changes.get(r.keyword);
-      const chCell = ch && ch.available ? esc(ch.changed + ' of top ' + ch.depth + ' changed') + ' <span style="color:#64748b;font-size:11px">(' + esc(ch.band) + ')</span>'
+      const chCell = ch && ch.available ? esc(ch.changed + ' of top ' + ch.depth + ' changed') + ' <span style="color:#64748b;font-size:11px">(' + esc(RS.bandWord(ch.band)) + ')</span>'
         : '<span style="color:#64748b;font-size:11px">not available</span>';
       return '<tr><td ' + td + '>' + esc(r.keyword) + '</td><td ' + td + '>' + esc(s ? (s.chips.join(' \u00b7 ') || 'plain results, no features') : 'not checked this week') + '</td><td align="center" ' + td + '>' + (s && s.share_of_voice != null ? s.share_of_voice + '%' : '\u2014') + '</td><td align="center" ' + td + '>' + mobText(m) + '</td><td ' + td + '>' + chCell + '</td><td ' + td + '>' + ab + '</td></tr>'; }).join('') + '</table>' : '';
   const headSerp = serps.get(head.keyword) || null;
@@ -279,7 +291,7 @@ for (const [id, items] of byLadder) {
     (headChange && headChange.available ? '<p style="font-size:12px;color:#334155">' + esc(RS.churnText(headChange)) + '</p>' : '') +
     (updateLine ? '<p style="font-size:12px;color:#b45309">' + esc(updateLine) + '</p>' : '') +
     '<p style="color:#64748b;font-size:12px">Share of voice is an estimate of the clicks page 1 offers, not measured clicks: ' + esc(RS.METHOD) + ' Domains marked * are the competitors on your list. Mobile is checked weekly for the main keywords (only about 13% of sites hold the same position on both devices). ' +
-    'Page movement is measured: the top ten stored for this reading against the top ten stored for the previous one. ' + esc(RS.CHURN.labels_basis) + '.</p>' + costHtml : '';
+    'Page movement is measured: the top ten stored for this reading against the top ten stored for the previous one (or, when that one was a one-off the readings around it contradict, the earlier reading this one matches). ' + esc(RS.CHURN.labels_basis) + '. ' + esc(RS.BAND_TERMS) + '.</p>' + costHtml : '';
   // ---- G12 (2026-10-13): the events of the tracked window (pages that went live, Google updates, data breaks), for the charts ----
   const firstCheck = [...deskHist.filter(x => x.ladder_id === id).map(x => String(x.checked_at)), nowCheck].sort()[0];
   const windowFrom = (String((rowOf(head.keyword) || {}).start_date || head.start_date || '').slice(0, 10) || String(firstCheck).slice(0, 10));
@@ -439,11 +451,11 @@ if (watchMeta && (watchMeta.sites || []).length) {
       const kw = String(sd.keyword).toLowerCase();
       const read = !!sd.row && sd.row.position != null && sd.row.position !== '';
       const current = read ? Number(sd.row.position) : null;
-      const prev = read ? RS.prevReading(deskHist, { keyword: kw, domain: dom, before: String(sd.at || nowCheck) }) : null;   // R88: the ladder report's baseline, one rule
+      const stW = read ? RS.stableReading(deskHist, { keyword: kw, domain: dom, before: String(sd.at || nowCheck), cur: sd.row.snapshot_json }) : null; const prev = stW ? stW.row : null;   // C-4: the same baseline rule   // R88: the ladder report's baseline, one rule
       const previous = prev ? Number(prev.position) : null;
       const delta = (current > 0 && previous > 0) ? previous - current : (current > 0 && previous === 0) ? 100 : (current === 0 && previous > 0) ? -100 : null;
       const change = !read ? RS.churnNone('no live reading of this results page is stored for this keyword yet')
-        : RS.withNoise(RS.churn(prev ? prev.snapshot_json : null, sd.row.snapshot_json, { own: dom }), RS.noise(deskHist, { keyword: kw, domain: dom }));
+        : { ...RS.withNoise(RS.churn(prev ? prev.snapshot_json : null, sd.row.snapshot_json, { own: dom }), RS.noise(deskHist, { keyword: kw, domain: dom })), ...(stW && stW.outlier ? { outlier: stW.outlier } : {}) };
       // B6-6 / B6-8 / B6-10 (2026-10-16): the same three readings the ladder report makes, from the same stored rows
       const kind = RS.moveKind(delta, change);
       const cannibal = read ? RS.cannibal(sd.row.snapshot_json, { keyword: sd.keyword, depth: depthAsked, previous_url: prev ? prev.url : '', previous_at: prev ? prev.checked_at : '' }) : null;
@@ -493,7 +505,7 @@ if (watchMeta && (watchMeta.sites || []).length) {
       : (r.at ? 'read from the reading of ' + String(r.at).slice(0, 10) : 'not read');
     const tableW = rowsW.length ? '<table style="border-collapse:collapse;font-size:13px"><tr><th align="left" ' + td + '>Keyword</th><th ' + td + '>Now</th><th ' + td + '>Before</th><th align="left" ' + td + '>Where this reading came from</th><th ' + td + '>Share of voice</th><th align="left" ' + td + '>Page movement</th><th align="left" ' + td + '>Above you</th></tr>' +
       rowsW.map(r => { const ab = r.above.length ? r.above.slice(0, 3).map(a => esc(a.domain) + ' (#' + a.position + ')' + (a.tracked ? ' *' : '')).join(', ') + (r.above.length > 3 ? ' +' + (r.above.length - 3) + ' more' : '') : (r.current > 0 && r.current <= 10 ? 'nobody on page 1' : '—');
-        const ch = r.change && r.change.available ? esc(r.change.changed + ' of top ' + r.change.depth + ' changed') + ' <span style="color:#64748b;font-size:11px">(' + esc(r.change.band) + ')</span>' : '<span style="color:#64748b;font-size:11px">not available</span>';
+        const ch = r.change && r.change.available ? esc(r.change.changed + ' of top ' + r.change.depth + ' changed') + ' <span style="color:#64748b;font-size:11px">(' + esc(RS.bandWord(r.change.band)) + ')</span>' : '<span style="color:#64748b;font-size:11px">not available</span>';
         return '<tr><td ' + td + '>' + esc(r.keyword) + '</td><td align="center" ' + td + '>' + (r.read ? esc(posText(r.current)) : '<span style="color:#64748b;font-size:11px">not read</span>') + '</td><td align="center" ' + td + '>' +
           (r.previous == null ? 'first reading' : esc(posText(r.previous)) + (r.previous_checked_at ? ' <span style="color:#64748b;font-size:11px">(' + esc(String(r.previous_checked_at).slice(0, 10)) + ')</span>' : '')) + '</td><td ' + td + '>' + esc(howText(r)) +
           '</td><td align="center" ' + td + '>' + (r.share_of_voice != null ? r.share_of_voice + '%' : '—') + '</td><td ' + td + '>' + ch + '</td><td ' + td + '>' + ab + '</td></tr>'; }).join('') + '</table>' : '';
@@ -548,7 +560,7 @@ if (watchMeta && (watchMeta.sites || []).length) {
       heldHtml + asideHtmlW +
       '<p><b>Next step:</b> ' + esc(nextW.text) + '</p>' +
       '<p style="color:#64748b;font-size:12px">Share of voice is an estimate of the clicks page 1 offers, not measured clicks: ' + esc(RS.METHOD) +
-      ' Domains marked * are the competitors on your list. Page movement is measured: the top ten stored for this reading against the top ten stored for the previous one. ' + esc(RS.CHURN.labels_basis) + '.</p>' +
+      ' Domains marked * are the competitors on your list. Page movement is measured: the top ten stored for this reading against the top ten stored for the previous one (or the earlier reading this one matches, when that one was a one-off). ' + esc(RS.CHURN.labels_basis) + '. ' + esc(RS.BAND_TERMS) + '.</p>' +
       costW + LN.block(lineageW);
     out.push({ json: { ladder_id: '', watchlist: true, site_id: sid, domain: site.domain, head_keyword: 'the keywords you asked us to watch',
       email: site.email || '', callback_url: site.callback_url || '', request_id: site.request_id || '',

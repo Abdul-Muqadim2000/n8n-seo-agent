@@ -9,6 +9,7 @@
 /*__MONITOR_SITES__*/
 /*__COUNTRIES__*/
 /*__SITE_MODEL__*/
+/*__RIVALS__*/
 const CONFIG = { max_sites_per_run: 15, first_lookback_days: 30, gap_every_days: 85, bing: __BING_ENABLED__ };   // v4.6: the link gap changes slowly: refreshed quarterly; bing: set at build time when SEO_BING_WEBMASTER_API_KEY is in n8n/.env
 const { list, on_demand, want, total } = monitorSites('backlinks');   // `trigger` comes from the shared snippet
 if (!list.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'no site matches "' + want + '"' : (total ? 'the backlink monitor is switched off for every site' : 'no sites yet (register one through "Track my site" or plan a keyword ladder)') } }];
@@ -30,6 +31,10 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const since_full = lastFull ? dfs(lastFull.checked_at) : dfs(now.getTime() - CONFIG.first_lookback_days * 864e5);
   const kept = lastFull ? (parse(lastFull.competitors_json, []) || []).map(c => c.domain).filter(Boolean) : [];
   const competitors = (s.settings.competitors.length ? s.settings.competitors : kept).slice(0, 3);
+  // C-2 (re-rating 2026-10-17): the businesses AI recommends instead of the site, as the AI Visibility Tracker stored them - never a prospect
+  const ai_rivals = (() => { let vis = [], cacheAi = []; try { vis = $('Load AI Visibility (BL)').all().map(i => i.json).filter(r => r && r.site_id); } catch (e) {}
+    try { cacheAi = $('Load Cache (BL Rivals)').all().map(i => i.json).filter(r => r && r.key); } catch (e) {}
+    return RV.aiRivals({ site_id: s.site_id, own: s.domain, vis_rows: vis, cache_rows: cacheAi }); })();
   const lad = ladders.filter(l => normD(l.domain) === s.domain && l.target_url && (l.status === 'published' || l.page_exists === true || l.page_exists === 'true'));
   const assets = [...lad.sort((a, b) => (Number(b.rung) || 0) - (Number(a.rung) || 0)).map(l => ({ url: l.target_url, title: l.keyword, kind: Number(l.rung) === 4 ? 'hub page' : 'guide' })),
     ...cases.filter(c => c.site_id === s.site_id && c.page_url).map(c => ({ url: c.page_url, title: c.title, kind: 'case study' })),
@@ -55,7 +60,7 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
 // emits is on the host the site really serves; with no model yet the bare domain keeps today's behaviour.
   const site_model = SM.stored(s) || { domain: s.domain, canonical_host: s.domain };
   return { json: { site_id: s.site_id, domain: s.domain, canonical_host: site_model.canonical_host || s.domain, country: s.country || c.name || '', country_name: c.name || s.country || '', country_iso: c.iso, location_code: Number(s.location_code) || 2840, language_code: s.language_code || 'en', email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '',
-    on_demand, adhoc: !!s.adhoc, free_only, mode, since, since_full, stored_timeseries, gap_due, stored_gap, competitors, accreditation: SM.facts(site_model).accreditation,   /* P34-1: an accredited-provider list is never pitched without the accreditation on file */ need_competitors: mode === 'full' && !competitors.length && !/^(true|1|yes|on)$/i.test(String(trigger.free_only ?? '')), business_name: s.business_name || '', brand_names: brand, assets,
+    on_demand, adhoc: !!s.adhoc, free_only, mode, since, since_full, stored_timeseries, gap_due, stored_gap, competitors, ai_rivals, accreditation: SM.facts(site_model).accreditation,   /* P34-1: an accredited-provider list is never pitched without the accreditation on file */ need_competitors: mode === 'full' && !competitors.length && !/^(true|1|yes|on)$/i.test(String(trigger.free_only ?? '')), business_name: s.business_name || '', brand_names: brand, assets,
     brand_query, brand_res, label, topics, ga4_property_id: String(s.ga4_property_id || '').replace(/^properties\//, ''), gsc_property: s.gsc_property || '', bing: CONFIG.bing, link_builder: !!(s.settings || {}).link_builder, import_info,
     ledger_size: myLedger.length, ledger_live: myLedger.filter(x => x.status !== 'lost').length,
     previous: last ? { checked_at: last.checked_at, mode: last.mode, rank: Number(last.rank) || 0, backlinks: Number(last.backlinks) || 0, referring_domains: Number(last.referring_domains) || 0, spam_score: Number(last.spam_score) || 0, broken_backlinks: Number(last.broken_backlinks) || 0,

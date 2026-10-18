@@ -243,8 +243,24 @@ const SM = (() => {
     clicks: num0(p.clicks), impressions: num0(p.impressions), position: num0(p.position), prev_clicks: num0(p.prev_clicks), yoy_clicks: num0(p.yoy_clicks),
     decay_state: S(p.decay_state), decay_pct: num0(p.decay_pct), decay_lost: num0(p.decay_lost), decay_kind: S(p.decay_kind),
     decay_basis: S(p.decay_basis).slice(0, 900), measured_at: S(p.measured_at) }));
+  // ---- C-7 (re-rating 2026-10-17): ONE page state per keyword, read by the Rank Tracker AND the Site Tracker (and so by the cadence) ----
+  // In one morning the Rank Tracker said of "ai consulting" "…/ai-copilot-advisory-uae already answers this search - refresh that page"
+  // while the Site Tracker said "fix the four drafts that failed the quality check and run them again", and of "it consulting dubai"
+  // "write the main page" while the Site Tracker and the cadence said "written today, failed QA, fix it". The order of evidence is one:
+  // a LIVE page of the site that answers the search wins (refresh it; a draft written for the search is retired, never a second page);
+  // then a written draft (publish it); then a draft that failed its quality check (fix it and run it again); then a run that wrote nothing.
+  // in: { keyword, covered_url, written, not_ready, reasons (array or '; ' text), started } -> { state, text } (text: the parenthesis a list uses)
+  const pageStep = (o) => {
+    const c = o || {}, kw = S(c.keyword), why = (Array.isArray(c.reasons) ? c.reasons : S(c.reasons).split(/;\s+/)).map(S).filter(Boolean).slice(0, 2).join('; ').slice(0, 220);
+    if (S(c.covered_url)) return { state: 'covered', text: S(c.covered_url) + ' already answers this search — refresh that page, do not publish a second one'
+      + (c.not_ready || c.written ? '; the draft written for "' + kw + '" is not needed (use its text to refresh that page)' : '') };
+    if (c.written) return { state: 'written', text: 'already written — publish it' };
+    if (c.not_ready) return { state: 'not_ready', text: 'written, but the draft did not pass the quality check' + (why ? ' (' + why + ')' : '') + ' — fix it and run it again; do not publish it as it is' };
+    if (c.started) return { state: 'started', text: 'a page run was started for it but no page was written — it is written again' };
+    return { state: 'planned', text: '' };
+  };
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
-    titleShare, titleGap, canonUrl, isListing, pageScore,
+    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms } };
 })();
 // ---- site-tracking statistics (2026-10-12, FIX_PLAN G28): an alert must mean "this really changed", not "a number moved by 30%".
@@ -1152,10 +1168,23 @@ return sites.map((s, idx) => {
   const basePages = (s.ladder_pages || []).map(p => { const f = found.find(f => kwKey(f.keyword) === kwKey(p.keyword) && (!f.ladder_id || !p.ladder_id || f.ladder_id === p.ladder_id)); return f ? { ...p, url: f.url, status: 'published', page_exists: true, detected: true } : coverLive(p); });
   for (const f of found) if (!basePages.some(p => ukey(p.url) === ukey(f.url))) basePages.push({ url: f.url, keyword: f.keyword, rung: 0, status: 'published', ladder_id: f.ladder_id || '', page_exists: true, detected: true });
   // G25 (2026-10-13): an inspection the quota did not reach, or one that failed, is "not checked" — never "not indexed" (`skipped` / `not_checked`)
-  const pages = basePages.map(p => { const i = insp.find(x => x.url === p.url && !x.skipped && !x.inspect_error) || insp.find(x => x.url === p.url); const asked = !!i && !i.skipped && !i.inspect_error;
+  const pages = basePages.map(p => { const i = insp.find(x => ukey(x.url) === ukey(p.url) && !x.skipped && !x.inspect_error) || insp.find(x => ukey(x.url) === ukey(p.url)); /* C-15: host-agnostic (a promised www URL, an inspected bare-host one) */ const asked = !!i && !i.skipped && !i.inspect_error;
     return { ...p, inspected: asked, indexed: asked ? !!i.indexed : null, verdict: asked ? i.verdict : '', coverage: asked ? i.coverage : '', last_crawl: asked ? i.last_crawl : '', canonical_ok: asked ? i.canonical_ok : null,
       google_canonical: asked ? i.google_canonical : '', mobile_usable: asked ? i.mobile_usable : null, rich_results: asked ? i.rich_results : [],
       inspect_error: asked ? null : (i ? (i.not_checked || i.inspect_error) : (s.gsc_connected ? 'not inspected' : 'Search Console not connected')) }; });
+  // C-15 (re-rating 2026-10-17): ONE row per page. Several ladder rows answered by one existing page, a planned URL on the bare host and the
+  // same page on www, or a page found live beside its ladder row all became the same URL after the rewrites above, so exec 787 listed two
+  // pages twice in the index table and raised each "Page not indexed" alert twice. Rows are merged by host-agnostic URL (the live / inspected
+  // one kept, the other keywords carried as `also_keywords`), before any alert or action is made from them.
+  { const byU = new Map(), rank = (x) => ((x.page_exists || x.status === 'published') ? 2 : 0) + (x.inspected ? 1 : 0);
+    for (const p of pages) { const k = ukey(p.url); const o = byU.get(k);
+      if (!o) { byU.set(k, p); continue; }
+      const [keep, drop] = rank(p) > rank(o) ? [p, o] : [o, p];
+      keep.also_keywords = [...new Set([...(keep.also_keywords || []), ...(drop.also_keywords || []), drop.keyword].filter(x => x && x !== keep.keyword))]; byU.set(k, keep); }
+    pages.splice(0, pages.length, ...byU.values()); }
+  // C-15: a planned page Google itself reports "Submitted and indexed" IS live (/dynamics-365-crm-uae was shown "planned" beside that
+  // verdict): the inspection is the evidence, the ladder row's word is not
+  for (const p of pages) if (!(p.page_exists || p.status === 'published') && p.inspected && p.indexed === true) { p.ladder_status = p.ladder_status || p.status; p.status = 'live (indexed by Google)'; p.page_exists = true; }
   // pages not live yet are reported as such, never as 'not indexed'
   // R1 (2026-10-13): "written, not published yet" only when seo_content_log says the page was written (Site Plan's `written`); a ladder row
   // that merely says `writing` is a promise — a refused page run leaves exactly that, and the note says what happened.
@@ -1263,7 +1292,15 @@ return sites.map((s, idx) => {
       action: 'Fix the draft for "' + keyword + '" and run it again — it did not pass the quality check' + ((reasons || []).length ? ' (' + reasons.slice(0, 2).join('; ').slice(0, 300) + ')' : '') + '. Do not publish it as it is.',
       why: 'The last quality round found what is listed; a page that fails it is a draft to finish, not a page to put live.', api_body: pageBody(keyword, '', page_type || 'Service Page') }); };
   for (const p of pages.filter(p => ['writing', 'written', 'not_ready'].includes(p.ladder_status || p.status) && p.not_ready && !p.written && !p.covered_by).slice(0, 3)) fixDraft(p.keyword, p.url, p.qa_reasons, '');
-  for (const f of (s.needs_fix || []).filter(f => !found.some(x => kwKey(x.keyword) === kwKey(f.keyword))).slice(0, 3)) fixDraft(f.keyword, '', f.reasons, f.page_type);
+  // C-7 (re-rating 2026-10-17): the same page state the Rank Tracker reads (SM.pageStep) - a failed draft for a search a LIVE page of the
+  // site already answers is not "fix it and run it again" (exec 787 said so of "ai consulting" while the Rank Tracker said "…/ai-copilot-
+  // advisory-uae already answers this search - refresh that page"): the draft is retired and the live page refreshed
+  for (const f of (s.needs_fix || []).filter(f => !found.some(x => kwKey(x.keyword) === kwKey(f.keyword))).slice(0, 3)) {
+    const c = covered(f.keyword, ''); const st = SM.pageStep({ keyword: f.keyword, covered_url: c ? c.url : '', not_ready: true, reasons: f.reasons });
+    if (st.state === 'covered') { if (fixed.has(kwKey(f.keyword))) continue; fixed.add(kwKey(f.keyword));
+      actions.push({ priority: 1, type: 'refresh_existing', keyword: f.keyword, url: c.url, action: 'Do not fix or publish the draft for "' + f.keyword + '": ' + st.text + '.',
+        why: 'Two pages for one search split the signals and neither ranks; the live page was found by ' + (c.matched_by === 'query' ? 'Search Console' : 'its address and title') + '.', api_body: pageBody(f.keyword, c.url, 'Guide') }); }
+    else fixDraft(f.keyword, '', f.reasons, f.page_type); }
   for (const p of pages.filter(p => ['writing', 'written', 'not_ready'].includes(p.ladder_status || p.status) && p.written && (p.covered_by || !p.page_exists)).slice(0, 3)) { const c = p.covered_by ? { url: p.covered_by, matched_by: p.covered_match || 'slug' } : covered(p.keyword, p.url);   // R1: only a page the content log says was written
     if (c) actions.push({ priority: 1, type: 'refresh_existing', action: 'Do not publish the new page for "' + p.keyword + '" as a second URL: ' + c.url + ' already answers this search. Use the new text to refresh that page instead.', why: 'Two pages for one search split the signals and neither ranks (the live page was found ' + (c.matched_by === 'query' ? 'in Search Console with ' + c.impressions + ' impressions for this query' : 'in the site\'s page list') + ').', keyword: p.keyword, url: c.url });
     else actions.push({ priority: 1, type: 'publish', action: 'Publish the written page for "' + p.keyword + '" (planned URL ' + p.url + ') and report the link with "I published a page".', why: 'It is written but not live yet; nothing can be indexed or ranked before it is published.', keyword: p.keyword, url: p.url }); }
@@ -1461,7 +1498,7 @@ return sites.map((s, idx) => {
   return { json: { site_id: s.site_id, domain: s.domain, email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', period: R, checked_at: now, first_run: !!s.first_run, on_demand: !!s.on_demand, source: s.source, country: s.country || '',
     site: { canonical_host: model.canonical_host, home_url: SM.siteUrl(model, '/'), business_name: SM.name(model), name_source: model.name_source || '', services: SM.services(model).slice(0, 12), nav_pages: (model.nav_pages || []).slice(0, 8), nap: SM.nap(model), pages_known: SM.pages(model).length, model_updated_at: model.model_updated_at || '' },
     page_inventory: inv ? { pages: inv.total, with_queries: inv.with_queries, changed: inv.changed, by_source: inv.by_source, sitemap_read: inv.sitemap_read } : null,
-    gsc: { connected: !!gsc, property: s.gsc_property || '', permission: s.gsc_permission || '', error: s.gsc_error || null, ...(gsc ? { totals: gsc.totals, deltas: gsc.deltas, daily: gsc.daily, query_count: gsc.query_count, page_count: gsc.page_count ?? null, anonymised: gsc.anonymised || null, brand_split: gsc.brand_split || null, scraper_queries: gsc.scraper_queries || null, rows_read: gsc.rows_read ?? null, paging: gsc.paging || [], truncated: gsc.truncated || [], winners: gsc.winners, losers: gsc.losers, new_queries: gsc.new_queries, lost_queries: gsc.lost_queries, striking: gsc.striking, ctr_gaps: gsc.ctr_gaps, top_pages: gsc.pages.slice(0, 10), decaying_pages: gsc.decaying_pages, not_decay: gsc.not_decay || [], decay_summary: gsc.decay_summary || null, rising_pages: gsc.rising_pages, errors: gsc.errors, cannibal: gsc.cannibal || [], cannibal_summary: gsc.cannibal_summary || null, devices: gsc.devices || null, countries: gsc.countries || null, search_types: gsc.search_types || null, recent: gsc.recent || null, content_groups: gsc.content_groups || null } : {}) },
+    gsc: { connected: !!gsc, property: s.gsc_property || '', permission: s.gsc_permission || '', error: s.gsc_error || null, ...(gsc ? { totals: gsc.totals, deltas: gsc.deltas, daily: gsc.daily, query_count: gsc.query_count, page_count: gsc.page_count ?? null, anonymised: gsc.anonymised || null, brand_split: gsc.brand_split || null, scraper_queries: gsc.scraper_queries || null, other_site_queries: gsc.other_site_queries || null, rows_read: gsc.rows_read ?? null, paging: gsc.paging || [], truncated: gsc.truncated || [], winners: gsc.winners, losers: gsc.losers, new_queries: gsc.new_queries, lost_queries: gsc.lost_queries, striking: gsc.striking, ctr_gaps: gsc.ctr_gaps, top_pages: gsc.pages.slice(0, 10), decaying_pages: gsc.decaying_pages, not_decay: gsc.not_decay || [], decay_summary: gsc.decay_summary || null, rising_pages: gsc.rising_pages, errors: gsc.errors, cannibal: gsc.cannibal || [], cannibal_summary: gsc.cannibal_summary || null, devices: gsc.devices || null, countries: gsc.countries || null, search_types: gsc.search_types || null, recent: gsc.recent || null, content_groups: gsc.content_groups || null } : {}) },
     ga4: ga4 ? { connected: true, property_id: ga4.ga4_property_id, detected: ga4.ga4_detected, property_name: ga4.ga4_property_name, organic: ga4.organic, total: ga4.total, organic_share: ga4.organic_share, channels: ga4.channels, landing: ga4.landing, daily: ga4.daily, errors: ga4.errors } : { connected: false, error: acctErr || ga4Reason || 'no property id given or detected' },
     console: { notices, last_checkin: ck, checkin_due: !!s.checkin_due },
     significance: stat,   // G28: the Poisson z-test behind every traffic alert (clicks / impressions / sessions)
@@ -1476,7 +1513,8 @@ return sites.map((s, idx) => {
     // B-G3 (2026-10-15): the rungs the read-path fit gate set aside, with the reason, so the report can say why the list is shorter
     set_aside: s.set_aside || [], set_aside_note: s.set_aside_note || '',
     tracked, ladder_pages: pages, pending_publish: (s.pending_publish || []).filter(p => !found.some(f => kwKey(f.keyword) === kwKey(p.keyword))),
-    needs_fix: (s.needs_fix || []).filter(p => !found.some(f => kwKey(f.keyword) === kwKey(p.keyword))),   // R111 drafts that failed their last quality round; R59 host_split below: pages Google keeps under the other host
+    needs_fix: (s.needs_fix || []).filter(p => !found.some(f => kwKey(f.keyword) === kwKey(p.keyword)) && !covered(p.keyword, '')),   // C-7: a draft a live page makes unnecessary is retired, not fixed
+    drafts_retired: (s.needs_fix || []).filter(p => !found.some(f => kwKey(f.keyword) === kwKey(p.keyword)) && covered(p.keyword, '')).map(p => ({ keyword: p.keyword, live_url: covered(p.keyword, '').url })),   // R111 drafts that failed their last quality round; R59 host_split below: pages Google keeps under the other host
     host_split: hostSplit, ladder_heads: s.ladder_heads || [], trends, alerts, actions: acts, prev_runs: prevRuns, weeks_tracked: prevRuns.length + 1, service_account_email: cfg.service_account_email || '', form_url: FORM_URL, api_url: API_URL,
     detected_published: found.map(f => ({ keyword: f.keyword, url: f.url, ladder_id: f.ladder_id || '', matched_by: f.matched_by, source: f.source })),
     publish_detection: det ? { checked: true, candidates: det.candidates, sitemap_ok: !!(det.sitemap || {}).ok, sitemap_urls: (det.sitemap || {}).urls || 0, sitemap_error: (det.sitemap || {}).error || '', pages_fetched: det.pages_fetched || 0, found: found.length,
