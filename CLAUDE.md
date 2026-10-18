@@ -60,7 +60,17 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-10-18, fourth re-rating + its fix wave + five enterprise capabilities — latest)
+## Status (2026-10-18 evening, renamed Alaventra + deploy pipeline — latest)
+**Renamed Ascentra → Alaventra** from the owner's kit (`65cbf81`): wordmarks / OG image / manifest / `--alv-*` tokens / `alv-` CSS
+prefix / `AlaventraMark`, every string in `app/` + `integrations/` (webhook headers `X-Alaventra-*`, SSO TXT `alaventra-sso=`),
+`SEO_BRAND=Alaventra` (engine rebuilt). Kept on purpose: Postgres setting `ascentra.audit_purge` (migration 0011's trigger) and the
+`asc_` API-key prefix. **Deploy pipeline, nothing deployed** (`56bd7b7`, `efa7b8d`; read **`DEPLOY.md`**): web on **Vercel**
+(`app/vercel.json`, `app/middleware.ts` proxies `/api` + agency-portal hosts to `API_ORIGIN`), API = `app/Dockerfile`, engine =
+`n8n/deploy/Dockerfile` (n8n + workflows, `seo-release` release step, `deploy_manifest.json` shared with `apply_env.py`), GitHub
+Actions CI / Security / Images (GHCR) / Deploy web, Dependabot. API and engine hosts **not chosen yet** (owner researching; a Heroku
+n8n at seo-n8n-workflow-64e834115c48.herokuapp.com shows its unclaimed `/setup`). Harness now exits 1 on any failure.
+
+## Status (2026-10-18, fourth re-rating + its fix wave + five enterprise capabilities — previous)
 **Re-rated 2026-10-17 on the deployed build: 6 / 10** (area mean 5.88; was 5.54), plus **market position 4.2** and **enterprise readiness
 1.5** against the October 2026 leaders (`n8n/seo-agent/docs/system-review-2026-10-17/`: `RESULTS.md`, `parts/1-4`, `SCORECARD.md` by a
 clean CLI session, `MARKET_BENCHMARK.md` — Search Atlas, Ahrefs, Semrush/Adobe, seoClarity, Conductor, BrightEdge, Botify, Profound…).
