@@ -393,12 +393,17 @@
       "business_name",
       "business_type",
       "city",
+      "clusters",
+      "competitor_offers",
       "count",
       "country",
       "domain",
       "existing",
       "has_brand_prompt",
+      "language",
       "market_questions",
+      "paa_questions",
+      "persona",
       "search_questions",
       "site_text",
       "topics"
@@ -411,7 +416,7 @@
      "node": "Prompt Writer",
      "ref": "$('Any Prompt Jobs?').item.json",
      "streaming": false,
-     "template_chars": 2936
+     "template_chars": 4309
     }
    ],
    "ai_nodes": [
@@ -471,7 +476,7 @@
     "tell": "Tell Caller (AI)?"
    },
    "ledger_load": "Load Run Ledger (AI)",
-   "measured": "AI Metrics",
+   "measured": "AI Metrics|AI Chunk Handoff",
    "mode": "ai_visibility",
    "open_runs": "Load Open Runs (AI)",
    "plan": "AI Plan",
@@ -480,6 +485,7 @@
    "settle": "Settle Run Ledger (AI)",
    "settle_from": [
     "AI Report",
+    "Chunk Part Done",
     "Nothing To Do (AI)",
     "Refuse Run Ledger (AI)"
    ],

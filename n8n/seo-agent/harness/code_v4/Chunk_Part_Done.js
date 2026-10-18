@@ -1,0 +1,2 @@
+// G6: every site of this execution continues its split run in another execution — nothing to measure, report or deliver here.
+return [{ json: { done: true, part: true, note: ($('AI Metrics').first().json || {}).reason || '' } }];

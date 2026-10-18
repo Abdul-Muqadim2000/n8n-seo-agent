@@ -9,6 +9,15 @@
 // that is a competitor's brand or a government portal — exactly what the fit gate refuses when a rung is planned — became a question we
 // ask ChatGPT and then score ourselves against. The stored rungs now go through the same read-path gate R16 built (FITR, _fit_gate.js),
 // and every rung set aside travels with the plan so the report can name it with its reason instead of quietly shortening the list.
+// G6 (2026-10-18, AI_VISIBILITY_SPEC.md §10): the panel holds up to 500 questions (persona, funnel stage, topic cluster, market), the weekly
+// run asks all of it on every enabled engine and is SPLIT ACROSS EXECUTIONS when it is bigger than one execution should carry
+// (AIP.LIMITS.chunk_requests). One run = one run_id, one state row in seo_cache (`ai_run:<site_id>`), one deterministic list of requests;
+// every execution asks only what no earlier execution of the same run has answered (so a repeated or resumed chunk never pays twice), and
+// the last one computes the week over every answer of the run. This node decides, per site, which of three things this execution is:
+// the FIRST chunk of a new run, the NEXT chunk of a run (`continue_run` on the trigger), or the RESUME of a run that went silent (any
+// start of the tracker picks it up instead of starting a second run the same week). A start while a chunk is still running is a twin and
+// does nothing for that site. Each item carries what is left to spend on the run (est_dfs_usd / est_ai_usd: the run ledger reserves it,
+// and the run guard refuses a run the DataForSEO account cannot pay for, with the reason).
 // ---- shared by the monitors (AI Visibility Tracker, Backlink Monitor, Audit Scheduler; inlined by the build): which sites, with which settings ----
 // Sites = the Data Table seo_sites ("Track my site") + every domain with a keyword ladder; settings per site from seo_monitors (defaults: everything on).
 // On demand (Manual Run with { domain | site_id }) one site runs even when its weekly / monthly monitor is off; an untracked domain is checked ad hoc
@@ -21,7 +30,11 @@ const siteIdFor = (d) => 'site_' + d.replace(/[^a-z0-9]+/g, '-');
 const listOf = (v) => (Array.isArray(v) ? v : String(v || '').split(/[\n,;]+/)).map(x => String(x).trim()).filter(Boolean);
 const flag = (v, dflt) => (v === undefined || v === null || v === '') ? dflt : !(v === false || /^(false|0|no|off)$/i.test(String(v)));
 const DEFAULT_ENGINES = ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode'];
-const ALL_ENGINES = [...DEFAULT_ENGINES, 'copilot'];   // v4.12: Copilot (Bing's Copilot Search summary) only when chosen: Bing shows it for few searches (0 of 10 live, 2026-10-10)
+const ALL_ENGINES = [...DEFAULT_ENGINES, 'copilot', 'chatgpt_api', 'gemini_api'];   // G6 (2026-10-18): + the ChatGPT and Gemini APIs (DataForSEO LLM Responses), opt-in
+// G6 (2026-10-18, AI_VISIBILITY_SPEC.md §10): the panel holds 3-500 questions. A site with NO seo_monitors row starts at 50; a row whose
+// field is empty keeps the v4.9 default of 20 (a release never raises an existing site's spend); a stored number is kept. AIP.panelSize
+// (_ai_panel.js) is the same rule — harness S200 holds the two to each other.
+const panelMaxOf = (m) => { if (!m || !m.site_id) return 50; const v = Number(m.ai_prompts_max); if (m.ai_prompts_max === '' || m.ai_prompts_max == null || !Number.isFinite(v) || v <= 0) return 20; return Math.min(500, Math.max(3, Math.round(v))); };   // v4.12: Copilot (Bing's Copilot Search summary) only when chosen: Bing shows it for few searches (0 of 10 live, 2026-10-10)
 // P34-6 (live 2026-10-12): the AI Visibility Tracker and the Backlink Monitor called the business "techand.ai" in every report and in
 // the analyst's fact sheet, because the name was read from seo_profiles only — while AI Growth and the Link Builder read the site model
 // and say "Tech&". The name now comes through the model (SM.name over the stored seo_sites row, SITE_MODEL_SPEC.md), with the business
@@ -50,7 +63,10 @@ function monitorSites(kind) {   // kind: 'ai' | 'backlinks' | 'audit' | 'links' 
     const p = profiles.find(x => x.site_id === s.site_id) || {};
     const engines = [...new Set(listOf(m.ai_engines).map(e => e.toLowerCase()).filter(e => ALL_ENGINES.includes(e)))];
     const settings = { ai_visibility: flag(m.ai_visibility, true), backlinks: flag(m.backlinks, true), audit_monthly: flag(m.audit_monthly, true), engines: engines.length ? engines : DEFAULT_ENGINES,
-      prompts_max: Math.min(50, Math.max(3, Number(m.ai_prompts_max) || 20)), pulse: flag(m.ai_pulse, true), growth: flag(m.ai_growth, true), link_builder: flag(m.link_builder, true),
+      prompts_max: panelMaxOf(m), pulse: flag(m.ai_pulse, true),
+      // G6: who asks (buyer roles), where (extra markets, CC-lang) and how the daily pulse samples the panel ('' auto | sample | full; N a week)
+      personas: listOf(m.ai_personas).slice(0, 6), markets: listOf(m.ai_markets).slice(0, 5), pulse_mode: String(m.ai_pulse_mode || '').toLowerCase().trim(),
+      pulse_per_week: Number.isFinite(Number(m.ai_pulse_per_week)) && Number(m.ai_pulse_per_week) >= 1 ? Math.min(6, Math.round(Number(m.ai_pulse_per_week))) : 0, growth: flag(m.ai_growth, true), link_builder: flag(m.link_builder, true),
       ai_pages_month: m.ai_pages_month === '' || m.ai_pages_month == null || !Number.isFinite(Number(m.ai_pages_month)) ? 2 : Math.min(8, Math.max(0, Math.round(Number(m.ai_pages_month)))), audit_pages: Math.min(1000, Math.max(50, Number(m.audit_pages) || 200)), audit_js: flag(m.audit_js, false),
       competitors: [...new Set([...listOf(m.competitors), ...listOf(trigger.competitors)].map(normD).filter(d => d && d !== s.domain))].slice(0, 5),
       brand_names: [...new Set([...listOf(m.brand_names), ...listOf(trigger.brand_names), p.business_name || '', nameOf(s, p)].map(x => String(x).trim()).filter(Boolean))], stored: !!m.site_id };
@@ -86,6 +102,234 @@ const COUNTRIES = {
   'Brazil':               { code: 2076, iso: 'BR', lang: 'pt', language: 'Portuguese', spelling: 'Brazilian Portuguese', currency: 'BRL' },
   'Mexico':               { code: 2484, iso: 'MX', lang: 'es', language: 'Spanish', spelling: 'Mexican Spanish',    currency: 'MXN' }
 };
+// ---- G6 (2026-10-18, AI_VISIBILITY_SPEC.md §10): the AI question panel at enterprise scale — shared by AI Plan, AI Requests, Prompt Jobs,
+// Prompt Rows, Pulse Plan, AI Metrics and the Site Admin (inlined by the build). Pure functions, no node access: the harness runs them.
+// The money is here too (AIP.cost, section 8: ONE formula for the engine; app/shared/src/cost.ts mirrors it against one table of golden
+// cases). And the rest: the limits, the markets and personas a question carries, the strata the daily sample rotates through,
+// the requests of a run in one deterministic order (so a resumed run never pays for the same answer twice), the state of a run that is
+// split across executions, and the "same question in other words" rule that keeps a 500-question panel from asking one thing ten times.
+const AIP = (() => {
+  const LIMITS = {
+    min: 3, max: 500,                 // questions a site may track (the brand question included)
+    default_new: 50,                  // a site with NO seo_monitors row starts here
+    default_stored: 20,               // a row whose ai_prompts_max is empty keeps the v4.9 default (an existing site is never raised by a release)
+    chunk_requests: 600,              // engine requests one execution of the weekly run asks for one site (about 25 KB an answer: ~30 MB of execution data)
+    exec_requests: 1200,              // and for all its sites together (a scheduled run covers up to 15 sites)
+    pulse_max_requests: 900,          // requests one pulse morning may ask (the v4.9 cap); the daily sample is sized to fit under it
+    full_pulse_max_panel: 50,         // up to this panel the pulse asks every question every day, as before (auto mode)
+    target_headline: 3,               // ± points (95%) the weekly headline rate should reach — the pulse's N is chosen for it
+    target_cluster: 8,                // ± points (95%) the median topic cluster should reach
+    cluster_size_guess: 12,           // questions per cluster when the panel has none yet (the Prompt Writer aims at 8-15)
+    min_segment: 12,                  // answers under which a segment rate is "too few answers" (= MIN_RATE_SAMPLES)
+    stall_minutes: 65,                // a split run silent this long is resumed by the next start of the tracker or the pulse: the tracker's
+                                      // execution limit is 60 minutes, so a part not heard of for 65 is dead, never merely slow (a resume of a
+                                      // live part would ask its questions twice; the run guard refuses that twin too)
+    resume_days: 6,                   // an unfinished run older than this is closed, not resumed (a new week starts a new run)
+    max_run_usd: 150,                 // one weekly / full run above this is refused by the plan, with the reason
+    writer_batch: 40,                 // questions one Prompt Writer job writes (the agent's answer must fit its token budget)
+    writer_jobs_per_run: 14,          // Prompt Writer jobs one run may start (14 x 40 = 560: a new 500-question panel in one run)
+    similar: 0.6,                     // Jaccard over content-word stems at or above which two questions ask the same thing
+  };
+  const S = (v) => String(v == null ? '' : v).trim();
+  const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const hash = (t) => { let h = 5381; for (const c of String(t)) h = ((h * 33) ^ c.charCodeAt(0)) >>> 0; return h; };
+
+  // ---- 1. the panel size a site is held to ----------------------------------------------------------------------------------
+  /** `row` = the site's seo_monitors row, or null when it has none. A stored number is never changed; an empty field keeps 20. */
+  const panelSize = (row) => {
+    if (!row || !S(row.site_id)) return LIMITS.default_new;
+    const v = Number(row.ai_prompts_max);
+    if (row.ai_prompts_max === '' || row.ai_prompts_max == null || !Number.isFinite(v) || v <= 0) return LIMITS.default_stored;
+    return clamp(Math.round(v), LIMITS.min, LIMITS.max);
+  };
+
+  // ---- 2. markets and personas -----------------------------------------------------------------------------------------------
+  /** "ae-EN", "AE en", "ae" -> "AE-en" (country ISO + language); '' when it is not a market */
+  const normMarket = (m, dfltLang) => {
+    const x = S(m).replace(/[_\s]+/g, '-'); const mm = x.match(/^([A-Za-z]{2})(?:-([A-Za-z]{2,3}))?$/);
+    if (!mm) return '';
+    return mm[1].toUpperCase() + '-' + (mm[2] || dfltLang || 'en').toLowerCase();
+  };
+  const listOf = (v) => (Array.isArray(v) ? v : S(v).split(/[\n,;|]+/)).map(S).filter(Boolean);
+  /** the markets a site's panel covers: its own first, then the extra ones in its settings (at most 6) */
+  const marketsOf = (site) => {
+    const own = normMarket(S(site.country_iso) + '-' + S(site.language_code || 'en')) || 'US-en';
+    const extra = listOf(site.ai_markets).map(m => normMarket(m, 'en')).filter(Boolean);
+    return [...new Set([own, ...extra])].slice(0, 8);
+  };
+  // DataForSEO's location code for a country is 2000 + its ISO 3166 numeric code. The main workflow's COUNTRIES table holds 22 countries;
+  // a market outside it (Qatar, Kuwait, Germany …) must still be asked IN that country, never quietly relabelled as the site's own market.
+  const ISO_NUM = { AE: 784, SA: 682, QA: 634, KW: 414, BH: 48, OM: 512, EG: 818, JO: 400, LB: 422, MA: 504, TN: 788, DZ: 12, IQ: 368, TR: 792, IL: 376, PK: 586, IN: 356, BD: 50, LK: 144, NP: 524,
+    US: 840, CA: 124, MX: 484, BR: 76, AR: 32, CL: 152, CO: 170, PE: 604, GB: 826, IE: 372, FR: 250, DE: 276, NL: 528, BE: 56, LU: 442, CH: 756, AT: 40, IT: 380, ES: 724, PT: 620,
+    SE: 752, NO: 578, DK: 208, FI: 246, PL: 616, CZ: 203, SK: 703, HU: 348, RO: 642, BG: 100, GR: 300, HR: 191, SI: 705, RS: 688, UA: 804, EE: 233, LV: 428, LT: 440, CY: 196, MT: 470,
+    ZA: 710, NG: 566, KE: 404, GH: 288, ET: 231, TZ: 834, UG: 800, AU: 36, NZ: 554, SG: 702, MY: 458, ID: 360, TH: 764, VN: 704, PH: 608, HK: 344, TW: 158, JP: 392, KR: 410, CN: 156 };
+  const locationOf = (cc) => { const n = ISO_NUM[S(cc).toUpperCase()]; return n ? 2000 + n : 0; };
+  const PERSONA_MAX = 6;
+  const personasOf = (site) => [...new Set(listOf(site.ai_personas).map(p => p.replace(/\s+/g, ' ').slice(0, 40)))].slice(0, PERSONA_MAX);
+  const stageOf = (s) => { const x = S(s).toLowerCase(); return ['awareness', 'consideration', 'decision', 'brand'].includes(x) ? x : ''; };
+
+  // ---- 3. one question, said another way ----------------------------------------------------------------------------------------
+  const STOP = new Set(('a an and are as at be best by can do does for from get has have how i in is it its me my of on or our should the their them '
+    + 'there these this to top us we what when where which who why will with you your vs versus near me good great right').split(' '));
+  const stem = (w) => w.replace(/(ies)$/, 'y').replace(/(ing|ers|er|es|ed|ly|s)$/, '').slice(0, 7);
+  const stems = (t) => [...new Set(S(t).toLowerCase().replace(/[^a-z0-9؀-ۿ\s]+/g, ' ').split(/\s+/).filter(w => w && !STOP.has(w)).map(stem).filter(w => w.length >= 2))];
+  const jaccard = (a, b) => { const A = new Set(a), B = new Set(b); if (!A.size || !B.size) return 0; let i = 0; for (const x of A) if (B.has(x)) i++; return i / (A.size + B.size - i); };
+  /** do two questions ask the same thing? (same market and persona, and their content words overlap enough) */
+  const sameAsk = (a, b) => {
+    if (S(a.market || '') !== S(b.market || '') && a.market && b.market) return false;
+    if (a.persona && b.persona && S(a.persona).toLowerCase() !== S(b.persona).toLowerCase()) return false;
+    return jaccard(stems(a.prompt), stems(b.prompt)) >= LIMITS.similar;
+  };
+  /** keep the first of every group of questions that ask the same thing; `existing` are kept already. Returns { keep, dup: [{q, like}] } */
+  const dedupe = (cands, existing) => {
+    const kept = (existing || []).map(q => ({ ...q, _s: stems(q.prompt) }));
+    const keep = [], dup = [];
+    for (const q of (cands || [])) {
+      const s = stems(q.prompt);
+      const like = kept.find(k => (S(k.market || '') === S(q.market || '') || !k.market || !q.market)
+        && (!k.persona || !q.persona || S(k.persona).toLowerCase() === S(q.persona).toLowerCase()) && jaccard(k._s, s) >= LIMITS.similar);
+      if (like) { dup.push({ q, like: like.prompt }); continue; }
+      kept.push({ ...q, _s: s }); keep.push(q);
+    }
+    return { keep, dup };
+  };
+
+  // ---- 4. strata and the daily rotating sample ----------------------------------------------------------------------------------
+  const stratumOf = (q) => (S(q.cluster || q.topic).toLowerCase() || 'other') + ' | ' + (S(q.persona).toLowerCase() || 'any buyer');
+  /** the pulse-day counter: Tuesday..Sunday of one ISO week are six consecutive numbers (a Monday shares Tuesday's) */
+  const pulseDay = (iso) => {
+    const t = Date.parse(S(iso).slice(0, 10) + 'T00:00:00Z'); const d = Math.floor((t - Date.UTC(1970, 0, 5)) / 864e5);   // 1970-01-05 was a Monday
+    const w = Math.floor(d / 7), r = ((d % 7) + 7) % 7;
+    return w * 6 + (r === 0 ? 0 : r - 1);
+  };
+  /** the weekly answer counts a panel collects */
+  const halfWidth = (n, p) => { const N = n0(n); if (N <= 0) return null; const z = 1.96, q = p == null ? 0.5 : p; const d = 1 + z * z / N, m = z * Math.sqrt(q * (1 - q) / N + z * z / (4 * N * N)); return Math.round(1000 * m / d) / 10; };
+  /** N: how many pulse mornings a week each question is asked. 'full' = every morning; auto = the smallest N that brings the weekly
+   *  headline to ±target_headline and the median cluster to ±target_cluster (both at 95%, at worst p = 0.5) — capped by what one
+   *  morning may ask. Returns { per_week, why, headline, cluster } with the half-widths it buys. */
+  const pulsePerWeek = (o) => {
+    const asked = Math.max(1, n0(o.asked)); const wE = Math.max(0, n0(o.weekly_engines)); const pE = Math.max(0, n0(o.pulse_engines));
+    const cl = Math.max(1, n0(o.cluster_size) || LIMITS.cluster_size_guess);
+    const capQ = pE ? Math.floor(LIMITS.pulse_max_requests / pE) : asked;   // questions one morning may ask
+    const capN = Math.max(1, Math.min(6, Math.floor(6 * capQ / asked)));
+    const at = (N) => ({ headline: halfWidth(asked * (wE + N * pE)), cluster: halfWidth(Math.min(asked, cl) * (wE + N * pE)) });
+    const mode = S(o.mode).toLowerCase();
+    if (!pE) return { per_week: 0, why: 'no pulse engine is on', ...at(0), capped: false };
+    if (mode === 'full' || (mode !== 'sample' && asked <= LIMITS.full_pulse_max_panel - 1)) {
+      const N = Math.min(6, capN);
+      return { per_week: N, ...at(N), capped: N < 6, why: N < 6 ? 'every question every morning would be ' + (asked * pE) + ' requests; one morning asks at most ' + LIMITS.pulse_max_requests + ', so each question is asked ' + N + ' mornings a week' : 'every question, every pulse morning' };
+    }
+    const fixed = n0(o.per_week);
+    if (fixed >= 1) { const N = Math.min(6, Math.round(fixed), capN); return { per_week: N, ...at(N), capped: N < Math.round(fixed), why: 'set by the owner: each question ' + N + ' morning(s) a week' + (N < Math.round(fixed) ? ' (more would pass the ' + LIMITS.pulse_max_requests + '-request morning limit)' : '') }; }
+    for (let N = 1; N <= capN; N++) { const h = at(N); if (h.headline <= LIMITS.target_headline && h.cluster <= LIMITS.target_cluster) return { per_week: N, ...h, capped: false, why: 'the fewest mornings that bring the weekly rate to ±' + h.headline + ' points and a ' + cl + '-question cluster to ±' + h.cluster + ' (95%)' }; }
+    return { per_week: capN, ...at(capN), capped: true, why: 'the most one morning allows (' + LIMITS.pulse_max_requests + ' requests): a ' + cl + '-question cluster reaches ±' + at(capN).cluster + ' points, not ±' + LIMITS.target_cluster };
+  };
+  /** today's sample: every question asked on `per_week` of the six pulse mornings, slots spread round-robin inside each stratum (with a
+   *  per-stratum offset so the mornings carry the same load), and every stratum present every morning (a stratum too small to be
+   *  covered by its slots gets one extra question that day, chosen in turn). Returns { asked, strata, covered, per_week, extra } */
+  const pulseSample = (prompts, o) => {
+    const N = clamp(Math.round(n0(o.per_week)) || 6, 1, 6); const pd = n0(o.day);
+    const groups = new Map();
+    for (const q of (prompts || [])) { const k = stratumOf(q); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(q); }
+    const asked = []; let extra = 0;
+    for (const [k, qs] of groups) {
+      const sorted = qs.slice().sort((a, b) => (hash(a.prompt_id) - hash(b.prompt_id)) || S(a.prompt_id).localeCompare(S(b.prompt_id)));
+      const off = hash(k) % 6; let got = 0;
+      sorted.forEach((q, i) => { const slot = (off + i) % 6; if (((pd - slot) % 6 + 6) % 6 < N) { asked.push({ ...q, slot, stratum: k }); got++; } });
+      if (!got && sorted.length) { const q = sorted[((pd % sorted.length) + sorted.length) % sorted.length]; asked.push({ ...q, slot: -1, stratum: k, top_up: true }); extra++; }
+    }
+    return { asked, strata: groups.size, covered: new Set(asked.map(q => q.stratum)).size, per_week: N, extra };
+  };
+
+  // ---- 5. the requests of one run, in one order -------------------------------------------------------------------------------
+  const reqKey = (prompt_id, engine) => S(prompt_id) + '|' + S(engine);
+  /** the requests a run still owes: `all` in the run's deterministic order, minus the keys answered by an earlier execution of the same
+   *  run, cut at `limit`. Returns { now, left, done, total, final } — `final` when nothing is left after this execution. */
+  const slice = (all, doneKeys, limit) => {
+    const done = doneKeys instanceof Set ? doneKeys : new Set(doneKeys || []);
+    const owed = (all || []).filter(r => !done.has(reqKey(r.prompt_id, r.engine)));
+    const lim = Math.max(1, n0(limit) || LIMITS.chunk_requests);
+    const now = owed.slice(0, lim);
+    return { now, left: owed.length - now.length, done: (all || []).length - owed.length, total: (all || []).length, final: owed.length <= lim };
+  };
+
+  // ---- 6. a run split across executions: its state row in seo_cache (`ai_run:<site_id>`, kind ai) --------------------------------
+  const stateKey = (site_id) => 'ai_run:' + S(site_id);
+  const parse = (t, d) => { try { const v = typeof t === 'string' ? JSON.parse(t || '') : t; return v == null ? d : v; } catch (e) { return d; } };
+  const stateOf = (cacheRows, site_id) => { const r = (cacheRows || []).find(c => c && c.key === stateKey(site_id)); return r ? parse(r.value, null) : null; };
+  /** what to do with a stored state at `now`: 'continue' (this is its next chunk), 'resume' (silent too long: pick it up), 'busy' (a chunk
+   *  is running right now), 'closed' (finished, or too old to resume) */
+  const stateVerdict = (st, nowIso, continuing) => {
+    if (!st || !st.run_id) return 'closed';
+    if (S(st.status) !== 'running') return 'closed';
+    const now = Date.parse(nowIso) || Date.now();
+    const started = Date.parse(st.started_at) || 0, upd = Date.parse(st.updated_at) || started;
+    if (started && now - started > LIMITS.resume_days * 864e5) return 'closed';
+    if (continuing && S(continuing) === S(st.run_id)) return 'continue';
+    if (now - upd >= LIMITS.stall_minutes * 60000) return 'resume';
+    return 'busy';
+  };
+  const stateRow = (site_id, st, nowIso) => ({ key: stateKey(site_id), kind: 'ai', site_id: S(site_id), value: JSON.stringify(st), updated_at: nowIso });   // exact seo_cache columns
+
+  // ---- 7. the panel's identity: a delta is only a delta between the same questions ---------------------------------------------
+  const panelIds = (ids) => [...new Set((ids || []).map(S).filter(Boolean))].sort();
+  const panelHash = (ids, engines) => { const s = panelIds(ids).join(',') + '#' + [...new Set(engines || [])].sort().join('+'); return (hash(s) >>> 0).toString(36) + '-' + panelIds(ids).length; };
+  /** share of the earlier panel's questions still asked now (0-1), and whether that is the same panel (>= 80%) */
+  const overlap = (now, before) => { const A = new Set(panelIds(now)), B = panelIds(before); if (!B.length || !A.size) return { share: null, same: null, common: 0 };
+    const c = B.filter(x => A.has(x)).length; const share = c / Math.max(A.size, B.length); return { share: Math.round(1000 * share) / 1000, same: share >= 0.8, common: c }; };
+
+  // ---- 8. the money: ONE formula (the app's app/shared/src/cost.ts estimateAiPanelCost mirrors it; both are held to the golden cases in
+  // v5/data/ai_panel_cost_cases.json — harness S200 and app/shared cost.aipanel.test.ts) --------------------------------------------
+  // DataForSEO price per question on each engine (LLM scraper / LLM Responses / SERP, measured 2026-10-02, priced 2026-10-08; the two API
+  // engines of 2026-10-18 are ESTIMATES until their first live call — the settle takes each task's own `cost` either way).
+  const PRICE = { chatgpt: 0.004, gemini: 0.004, perplexity: 0.006, claude: 0.025, ai_overview: 0.002, ai_mode: 0.004, copilot: 0.002, chatgpt_api: 0.012, gemini_api: 0.02 };
+  const PRICE_BASIS = { chatgpt_api: 'estimate: DataForSEO $0.0002 a task + OpenAI tokens + web search (~$0.01); confirm on the first live run', gemini_api: 'estimate: DataForSEO $0.0002 a task + Gemini tokens + Google Search grounding; confirm on the first live run' };
+  const ENGINES = Object.keys(PRICE);
+  const DEFAULT_ENGINES = ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode'];   // copilot and the two API engines are opt-in
+  const MONTHLY_ENGINES = ['claude'];
+  const PULSE_ENGINES = ['chatgpt', 'gemini', 'ai_mode', 'copilot'];
+  const FIXED = { weekly_ai_min: 0.13, brief_ai: 0.03, analyst_job_ai: 0.02, analyst_per_job: 12, analyst_share: 0.35, analyst_cap_base: 24, analyst_cap_max: 60,
+    full_dfs: 0.45, full_ai: 0.3, weeks_per_month: 4.33, pulse_days: 6 };
+  const r4 = (x) => Math.round(x * 10000) / 10000; const r2 = (x) => Math.round(x * 100) / 100;
+  const sumPrice = (list) => list.reduce((t, e) => t + (PRICE[e] || 0), 0);
+  /** the Answer Analyst jobs one weekly run may start (it reads the answers that matter, 12 a job; more for a bigger panel, never past 60) */
+  const analystCap = (panel) => Math.min(FIXED.analyst_cap_max, FIXED.analyst_cap_base + Math.floor(n0(panel) / 25));
+  /** o: { panel, engines, pulse (bool), pulse_mode ('auto'|'sample'|'full'), pulse_per_week, cluster_size }. Every figure is in US dollars;
+   *  `run` is what one execution chain of the weekly tracker spends (weekly / the month's full run), `pulse_day` one pulse morning,
+   *  `month` the site's month (4.33 weekly runs + the full run's extra + 26 pulse mornings). */
+  const cost = (o) => {
+    const x = o || {};
+    const panel = clamp(Math.round(n0(x.panel)) || LIMITS.default_new, LIMITS.min, LIMITS.max);
+    const engines = [...new Set((x.engines && x.engines.length ? x.engines : DEFAULT_ENGINES).filter(e => PRICE[e] != null))];
+    const asked = Math.max(1, panel - 1);                  // the brand question is asked on the month's full run only
+    const wE = engines.filter(e => !MONTHLY_ENGINES.includes(e));
+    const pE = PULSE_ENGINES.filter(e => engines.includes(e));
+    const answers = asked * wE.length;
+    const jobs = Math.min(analystCap(panel), Math.ceil(answers * FIXED.analyst_share / FIXED.analyst_per_job));
+    const weekly = { dfs: r4(asked * sumPrice(wE)), ai: r4(Math.max(FIXED.weekly_ai_min, FIXED.brief_ai + jobs * FIXED.analyst_job_ai)) };
+    weekly.usd = r4(weekly.dfs + weekly.ai);
+    const extra = { dfs: r4((engines.includes('claude') ? panel * PRICE.claude : 0) + sumPrice(wE) + FIXED.full_dfs), ai: FIXED.full_ai };
+    extra.usd = r4(extra.dfs + extra.ai);
+    const full = { dfs: r4(weekly.dfs + extra.dfs), ai: r4(weekly.ai + extra.ai) }; full.usd = r4(full.dfs + full.ai);
+    const on = x.pulse !== false && pE.length > 0;
+    const pw = on ? pulsePerWeek({ asked, weekly_engines: wE.length, pulse_engines: pE.length, cluster_size: x.cluster_size, mode: x.pulse_mode, per_week: x.pulse_per_week }) : { per_week: 0, headline: halfWidth(answers), cluster: halfWidth(Math.min(asked, n0(x.cluster_size) || LIMITS.cluster_size_guess) * wE.length), capped: false, why: on ? '' : 'the daily pulse is off' };
+    const qDay = on ? Math.min(asked, Math.ceil(asked * pw.per_week / FIXED.pulse_days)) : 0;
+    const pulse_day = { dfs: r4(qDay * sumPrice(pE)), ai: 0 }; pulse_day.usd = pulse_day.dfs;
+    const W = FIXED.weeks_per_month;
+    const month = { weekly: r2(W * weekly.usd), full_extra: r2(extra.usd), pulse: r2(W * FIXED.pulse_days * pulse_day.usd) };
+    month.total = r2(month.weekly + month.full_extra + month.pulse);
+    return { panel, asked, engines, weekly_engines: wE, pulse_engines: on ? pE : [], per_week: pw.per_week, pulse_questions_day: qDay, pulse_why: pw.why, pulse_capped: !!pw.capped,
+      requests: { weekly: answers, full: answers + (engines.includes('claude') ? panel : 0) + wE.length, pulse_day: qDay * (on ? pE.length : 0) },
+      executions: Math.max(1, Math.ceil(answers / LIMITS.chunk_requests)), analyst_jobs: jobs,
+      half_width: { headline: pw.headline, cluster: pw.cluster }, run: { weekly, full }, full_extra: extra, pulse_day, month,
+      prices: engines.map(e => ({ engine: e, usd: PRICE[e], basis: PRICE_BASIS[e] || 'measured / priced' })) };
+  };
+
+  return { LIMITS, panelSize, normMarket, locationOf, listOf, marketsOf, personasOf, stageOf, stems, jaccard, sameAsk, dedupe, stratumOf, pulseDay, halfWidth,
+    pulsePerWeek, pulseSample, reqKey, slice, stateKey, stateOf, stateVerdict, stateRow, panelIds, panelHash, overlap, hash,
+    PRICE, PRICE_BASIS, ENGINES, DEFAULT_ENGINES, MONTHLY_ENGINES, PULSE_ENGINES, FIXED, analystCap, cost };
+})();
 // ---- the one site model (G19, 2026-10-12; see SITE_MODEL_SPEC.md; the builders inline this file where a node asks for the SITE_MODEL kit) ----
 // Every workflow reads the same facts about a site through SM: the canonical host, the business name / logo / NAP (seo_profiles ->
 // the homepage Organization / LocalBusiness schema -> Google Business Profile -> the fields the web app sent), the services and nav
@@ -646,11 +890,19 @@ const CONFIG = { max_sites_per_run: 15, max_topics: 8, monthly_engines: ['claude
 const { list, on_demand, want, total } = monitorSites('ai');
 if (!list.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'no site matches "' + want + '"' : (total ? 'AI visibility is switched off for every site' : 'no sites yet (register one through "Track my site" or plan a keyword ladder)') } }];
 const promptRows = rowsOf('Load AI Prompts'), visRows = rowsOf('Load AI Visibility'), ladders = rowsOf('Load Ladders'), daily = rowsOf('Load AI Daily'), cache = rowsOf('Load Cache (AI)'), queries = rowsOf('Load Query History');
+// G6: the answers stored by earlier executions of an unfinished run (this week, not the pulse). Read raw: rowsOf() drops a row carrying
+// `error` (it is meant for a Data Table node that failed), and an answer the gate could not get carries its task error — it is still
+// ASKED, and asking it again in every later execution would never let a run end (a failed task is billed nothing; the report names it).
+let runRows = []; try { runRows = $('Load AI Run Answers').all().map(i => i.json).filter(r => r && r.run_id && r.prompt_id && r.engine); } catch (e) {}
+const continuing = String(trigger.continue_run || '').trim();   // G6: set when the previous chunk started this execution
+const LIVE = new Set(['off', 'refused']);   // G6: a question switched off by the owner or refused by the fit gate is never asked
 const now = new Date(); const iso = now.toISOString(); const month = iso.slice(0, 7);
 const parse = (t, d) => { try { const v = JSON.parse(t || ''); return v == null ? d : v; } catch (e) { return d; } };
 const isoOf = (code) => { const c = Object.values(typeof COUNTRIES === 'object' ? COUNTRIES : {}).find(x => Number(x.code) === Number(code)); return c ? String(c.iso || '').toUpperCase() : ''; };
+const codeOfIso = (iso) => { const c = Object.values(typeof COUNTRIES === 'object' ? COUNTRIES : {}).find(x => String(x.iso || '').toUpperCase() === String(iso || '').toUpperCase()); return c ? Number(c.code) : AIP.locationOf(iso); };   // G6: a market outside COUNTRIES keeps its own country
+const skipped = [];   // G6: sites this execution does nothing for, with the reason (a twin start, nothing to continue, a run above the ceiling)
 const QUESTION = /^(how|what|which|who|why|when|where|is|are|can|does|do|should|best|top|cost|price|vs|compare)\b|\?|\b(vs|versus|best|cost|price|how to|which)\b/i;
-return list.slice(0, CONFIG.max_sites_per_run).map(s => {
+const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const label = s.domain.split('.')[0];
   const brand_names = [...new Set([s.domain, s.business_name || '', ...(s.settings.brand_names || []), ...(label.length >= 5 ? [label] : [])].map(x => String(x).trim()).filter(x => x.length >= 3))];   // P34-6: the model's name is a brand name too
   const lrowsAll = ladders.filter(l => normD(l.domain) === s.domain).sort((a, b) => (Number(a.rung) || 0) - (Number(b.rung) || 0));
@@ -658,7 +910,13 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   // D15 (system review 2026-10-11): the plan carries the site's canonical host (the site model, SITE_MODEL_SPEC.md §6), so every URL the run
   // emits is on the host the site really serves; with no model yet the bare domain keeps today's behaviour.
   const site_model = SM.stored(s) || { domain: s.domain, canonical_host: s.domain };
-  const mineAll = promptRows.filter(p => p.site_id === s.site_id && String(p.status || 'active') !== 'off' && p.prompt);
+  // G6: the state of this site's split run, and what this execution is for it
+  const st = AIP.stateOf(cache, s.site_id);
+  const verdict = AIP.stateVerdict(st, iso, continuing);
+  if (continuing && verdict !== 'continue') { skipped.push({ domain: s.domain, why: 'nothing to continue: run ' + continuing + ' is ' + (st && st.run_id === continuing ? st.status : 'not the open run') }); return null; }
+  if (verdict === 'busy') { skipped.push({ domain: s.domain, why: 'run ' + st.run_id + ' is still being asked (chunk ' + (st.chunk || 1) + ', ' + (st.asked || 0) + ' of ' + (st.total || '?') + ' requests, updated ' + String(st.updated_at || '').slice(0, 16) + ' UTC); it continues by itself' }); return null; }
+  const going = verdict === 'continue' || verdict === 'resume';
+  const mineAll = promptRows.filter(p => p.site_id === s.site_id && !LIVE.has(String(p.status || 'active')) && p.prompt);
   const mineVis = visRows.filter(v => v.site_id === s.site_id).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)));
   const prev = mineVis[0] || null;
   // brand names AI uses for competitors (learned by the Answer Analyst: "ClearTax" -> cleartax.in), so a competitor named without its website still counts
@@ -677,20 +935,31 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   // gate's first rule is "names the website itself", and running it over that question would refuse the one question that must stay.
   const fitQ = FITR.rungs(mineAll.filter(p => p.kind !== 'brand'), fitCtx, { where: 'AI question panel', keyword: (p) => p.keyword || p.topic || '', live: (p) => p.source === 'custom' });
   const refusedQ = new Set(fitQ.set_aside.filter(x => x.dropped).map(x => x.prompt_id));
-  const mine = mineAll.filter(p => p.kind === 'brand' || !refusedQ.has(p.prompt_id));   // the stored order is kept: it is the panel's order
+  // G6: pinned questions first (the owner's choice is never cut by a smaller panel), then the stored order (the panel's order)
+  const pin = (p) => p.pinned === true || String(p.pinned) === 'true';
+  const mine = mineAll.filter(p => p.kind === 'brand' || !refusedQ.has(p.prompt_id)).map((p, i) => ({ p, i }))
+    .sort((a, b) => ((pin(b.p) ? 1 : 0) - (pin(a.p) ? 1 : 0)) || a.i - b.i).map(x => x.p);
   const set_aside = [...fit.set_aside, ...fitQ.set_aside];
-  const custom = mine.filter(p => p.source === 'custom'), auto = mine.filter(p => p.source !== 'custom');
+  const custom = mine.filter(p => p.source === 'custom' || pin(p)), auto = mine.filter(p => p.source !== 'custom' && !pin(p));
   const topics =[...new Set([...asked, ...lrows.map(l => String(l.head_keyword || '').toLowerCase().trim()), ...(s.keywords || []), ...lrows.filter(l => Number(l.rung) !== 4).map(l => String(l.keyword || '').toLowerCase().trim())].filter(Boolean))].slice(0, CONFIG.max_topics);
   // full run = the first run of the month (or any on-demand run): every engine + the brand question + discovery + the market-wide index
   const isFull = (v) => String(v.run_kind || '') === 'full' || String(v.run_kind || '') === 'on_demand' || (!v.run_kind && (() => { const e = parse(v.engines_json, {}); return ['gemini', 'claude'].some(k => e[k] && Number(e[k].asked) > 0 && !e[k].carried); })());
   const lastFull = mineVis.find(isFull) || null;
-  const full_due = on_demand || !mineVis.some(v => String(v.checked_at).slice(0, 7) === month && isFull(v));
+  const full_due = going ? !!st.full_due : (on_demand || !mineVis.some(v => String(v.checked_at).slice(0, 7) === month && isFull(v)));
   const carried = lastFull ? { checked_at: lastFull.checked_at, engines: parse(lastFull.engines_json, {}) } : null;
   const room = Math.max(0, s.settings.prompts_max - custom.length);
   const deficit = Math.max(0, room - auto.length);
-  const need = (!auto.length || deficit >= 2) ? deficit : 0;   // top up only when 2+ questions are missing (not every week for one)
+  // G6: questions are written in the FIRST chunk of a run only (a continuation asks the panel the first chunk stored); the Prompt Writer
+  // writes at most writer_batch x writer_jobs_per_run in one run, so a new 500-question panel is written in one week
+  const need = going ? 0 : Math.min(AIP.LIMITS.writer_batch * AIP.LIMITS.writer_jobs_per_run, (!auto.length || deficit >= 2) ? deficit : 0);   // top up only when 2+ questions are missing (not every week for one)
+  const ownMarket = AIP.normMarket(isoOf(Number(s.location_code) || 2840) + '-' + (s.language_code || 'en')) || 'US-en';
+  // the markets the panel covers: the site's own, the ones in its settings, and any market a stored question names (an imported question keeps its market)
+  const markets = AIP.marketsOf({ country_iso: isoOf(Number(s.location_code) || 2840), language_code: s.language_code || 'en', ai_markets: [...s.settings.markets, ...mineAll.map(p => p.market).filter(Boolean)] });
+  const markets_map = Object.fromEntries(markets.map(m => { const [cc, lang] = m.split('-'); return [m, { location_code: m === ownMarket ? (Number(s.location_code) || 2840) : codeOfIso(cc), language_code: lang || 'en', country_iso: cc }]; }).filter(([, v]) => v.location_code));
+  const personas = AIP.personasOf({ ai_personas: s.settings.personas });
   const prompts = [...custom, ...auto].slice(0, s.settings.prompts_max).map(p => ({ prompt_id: p.prompt_id, prompt: p.prompt, kind: p.kind || 'custom', topic: p.topic || '', keyword: p.keyword || '', source: p.source || 'auto',
-    stage: p.stage || '', cluster: p.cluster || p.topic || '', volume: p.volume === '' || p.volume == null ? null : Number(p.volume), origin: p.origin || (p.source === 'custom' ? 'custom' : 'writer'), created_at: p.created_at || '' }));
+    stage: p.stage || '', cluster: p.cluster || p.topic || '', volume: p.volume === '' || p.volume == null ? null : Number(p.volume), origin: p.origin || (p.source === 'custom' ? 'custom' : 'writer'), created_at: p.created_at || '',
+    persona: String(p.persona || '').trim(), market: markets_map[AIP.normMarket(p.market)] ? AIP.normMarket(p.market) : ownMarket, pinned: pin(p) }));
   // search volumes: questions without one (new) every week; all of them on the month's full run (AI Keyword Data, $0.0001 a keyword)
   const volume_keywords = [...new Set(prompts.filter(p => p.kind !== 'brand' && p.keyword && (full_due || p.volume === null || Number.isNaN(p.volume))).map(p => String(p.keyword).toLowerCase().trim()).filter(k => k.length >= 3 && k.length <= 120))].slice(0, 100);
   // real questions people search (Search Console, last weeks): long or question-shaped queries are the closest thing to an AI prompt
@@ -702,22 +971,50 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
     mention_rate: Number(d.mention_rate) || 0, visibility_score: Number(d.visibility_score) || 0, engines: parse(d.engines_json, {}), prompts: parse(d.prompts_json, {}), competitors: parse(d.competitors_json, {}), sources: parse(d.sources_json, {}) }));
   const prevMention = prev ? Number(prev.mention_rate) || 0 : 0, prevSamples = prev ? Number(prev.samples) || Number(prev.answers) || 0 : 0;
   const location_code = Number(s.location_code) || 2840;
+  // ---- G6: this run's identity, what earlier executions of it already asked, and what is left to pay for ----
+  const baseId = 'ai_' + iso.slice(0, 10).replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, '');
+  const run_id = going ? st.run_id : (st && st.run_id && String(st.run_id).indexOf(baseId) === 0 ? baseId + '_x' + $execution.id : baseId);   // a second run the same day gets its own id: its answers are its own
+  const run_checked_at = going ? String(st.started_at || iso) : iso;
+  const doneKeys = going ? [...new Set(runRows.filter(r => r.run_id === run_id && r.prompt_id && r.engine).map(r => AIP.reqKey(r.prompt_id, r.engine)))] : [];
+  const runKind = going ? String(st.run_kind || 'weekly') : (on_demand ? 'on_demand' : full_due ? 'full' : 'weekly');
+  const costNow = AIP.cost({ panel: Math.max(prompts.length + need, AIP.LIMITS.min), engines: s.settings.engines, pulse: s.settings.pulse, pulse_mode: s.settings.pulse_mode, pulse_per_week: s.settings.pulse_per_week });
+  const runCost = full_due ? costNow.run.full : costNow.run.weekly;
+  const spent = going ? { dfs: Number(st.spent_dfs_usd) || 0, ai: Number(st.spent_ai_usd) || 0 } : { dfs: 0, ai: 0 };
+  if (!going && runCost.usd > AIP.LIMITS.max_run_usd) { skipped.push({ domain: s.domain, why: 'this run would cost about $' + runCost.usd.toFixed(2) + ' (' + prompts.length + ' questions x ' + s.settings.engines.length + ' engines), above the $' + AIP.LIMITS.max_run_usd + ' a run the tracker allows; nothing was asked or charged — lower the panel or the engines' }); return null; }
+  // how many requests this run makes in all, and whether this execution can be its last (the database views, GA4, the crawler check and the
+  // metrics run in the last one): an upper bound — the AI Overview is asked once per search phrase, so the real count can only be smaller
+  const engNow = s.settings.engines.filter(e => full_due || !CONFIG.monthly_engines.includes(e));
+  const reqTotal = (prompts.filter(q => q.kind !== 'brand').length + need) * engNow.length + (full_due ? engNow.filter(e => e !== 'copilot' && e !== 'ai_overview').length : 0);
+  const reqLeft = Math.max(0, reqTotal - doneKeys.length);
+  const chunk = { no: going ? (Number(st.chunk) || 1) + 1 : 1, size: AIP.LIMITS.chunk_requests, going, resumed: verdict === 'resume', final_expected: reqLeft <= AIP.LIMITS.chunk_requests,
+    total_est: reqTotal, done: doneKeys.length, executions: (going && Array.isArray(st.executions)) ? st.executions : [], started_at: run_checked_at,
+    // what earlier parts asked and could not be read even when sent again: not asked a third time, named in the week's report
+    unavailable: going ? runRows.filter(r => r.run_id === run_id && r.error).length : 0 };
+  if (chunk.unavailable) chunk.unavailable_note = chunk.unavailable + ' request(s) of this run could not be read in its earlier part(s), even when sent again; they are not asked again and the week counts the answers that came back';
   // pages that must stay fetchable for AI: the ones AI cited last time and the keyword-ladder pages (checked against robots.txt per AI bot)
   const pathOf = (u) => { const m = String(u || '').match(/^https?:\/\/[^\/?#]+(\/[^?#]*)?/i); return m ? (m[1] || '/') : (String(u || '').startsWith('/') ? String(u) : ''); };
   const key_paths = [...new Set([...(prev ? (parse(prev.pages_json, []) || []).map(x => pathOf(x && x.url)) : []), ...lrows.map(l => pathOf(l.target_url))].filter(x => x && x !== '/'))].slice(0, 8);
-  return { json: { site_id: s.site_id, domain: s.domain, canonical_host: site_model.canonical_host || s.domain, country: s.country || '', location_code, language_code: s.language_code || 'en', country_iso: isoOf(location_code), email: s.email || '', callback_url: s.callback_url || '',
-    request_id: s.request_id || '', on_demand, adhoc: !!s.adhoc, business_name: s.business_name || ''   /* P34-6: the site model's name (monitorSites nameOf), not seo_profiles alone */, business_type: s.profile.business_type || '', city: s.profile.city || '', profile: s.profile,
+  return { json: { site_id: s.site_id, domain: s.domain,
+    // G6: the split run (chunk, what is done, what is left to spend), the markets and personas the panel covers, the cost model of this panel
+    chunk, done_keys: doneKeys, markets, markets_map, own_market: ownMarket, personas, pulse_mode: s.settings.pulse_mode, pulse_per_week: s.settings.pulse_per_week,
+    est_dfs_usd: +Math.max(0, runCost.dfs - spent.dfs).toFixed(4), est_ai_usd: +Math.max(0, runCost.ai - spent.ai).toFixed(4), run_cost_est: runCost, cost_model: costNow,
+    spent_before: spent, state_before: going ? st : null, canonical_host: site_model.canonical_host || s.domain, country: s.country || '', location_code, language_code: s.language_code || 'en', country_iso: isoOf(location_code), email: s.email || '', callback_url: s.callback_url || '',
+    request_id: s.request_id || (going ? String(st.request_id || '') : ''), on_demand: going ? !!st.on_demand : on_demand, adhoc: !!s.adhoc,   /* G6: a continuation is the run it continues (scheduled or on demand) */ business_name: s.business_name || ''   /* P34-6: the site model's name (monitorSites nameOf), not seo_profiles alone */, business_type: s.profile.business_type || '', city: s.profile.city || '', profile: s.profile,
     // G10 (2026-10-11 system review): the Answer Analyst can only call a claim wrong against facts on file, so the site model's
     // services, business facts and accreditation status travel with the profile (SITE_MODEL_SPEC.md; with no sheet the analyst
     // reports "not checked", never "no wrong claims")
     services: SM.services(site_model).slice(0, 20), business_facts: SM.facts(site_model).business_facts, accreditation: SM.facts(site_model).accreditation,
     brand_names, competitors, configured_competitors: s.settings.competitors, aliases, topics, engines: s.settings.engines, prompts_max: s.settings.prompts_max, pulse: s.settings.pulse,
-    prompts, full_due, run_kind: on_demand ? 'on_demand' : full_due ? 'full' : 'weekly', monthly_engines: CONFIG.monthly_engines.filter(e => s.settings.engines.includes(e)), carried,
+    prompts, full_due, run_kind: runKind, monthly_engines: CONFIG.monthly_engines.filter(e => s.settings.engines.includes(e)), carried,
     need_prompts: need > 0, prompts_needed: need, need_site_text: need > 0 && !topics.length && !s.business_name, gsc_questions,
-    discovery_due: !!topics.length && (full_due || need > 0), volume_keywords, index_due: full_due, market_due: !!topics.length && (!prev || String(prev.market_month || '') !== month), market_keyword: topics[0] || '',
+    // G6: discovery runs in a run's first execution (it feeds the Prompt Writer); the database views, GA4 and the crawler check in its last
+    discovery_due: !going && !!topics.length && (full_due || need > 0), volume_keywords: going ? [] : volume_keywords, index_due: full_due,
+    market_due: !!topics.length && (!prev || String(prev.market_month || '') !== month), market_keyword: topics[0] || '',
     ga4_property_id: String(s.ga4_property_id || '').replace(/^properties\//, '').trim(), pulse_rows, key_paths,
     // B-G1: what the gate refused, with its reason, so the report names it instead of printing a shorter list (INVARIANTS rule 1)
     set_aside, set_aside_note: FITR.line(set_aside, 'asked of the AI engines or scored against'),
+    // G6: the gate's context, so the questions the Prompt Writer writes this run are judged by the same rule before they are stored
+    fit_input: { own_domain: s.domain, competitors, brands: aliases, heads: lrowsAll.map(l => l.head_keyword), services: SM.services(site_model), keywords: s.keywords || [] },
     previous: prev ? { checked_at: prev.checked_at, mention_rate: prevMention, samples: prevSamples, mentioned_k: Math.round(prevMention * prevSamples / 100),
       // B-L4 (2026-10-15, INVARIANTS rule 1): the panel is settable from 3 to 50 and a weekly check asks fewer engines than the
       // monthly full one, so the stored row's OWN panel size and run kind travel with its figures. Without them AI Metrics
@@ -725,6 +1022,19 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
       prompts: Number(prev.prompts) || 0, run_kind: String(prev.run_kind || ''), citation_rate: Number(prev.citation_rate), share_of_voice: Number(prev.share_of_voice), avg_rank: Number(prev.avg_rank),
       visibility_score: prev.visibility_score === '' || prev.visibility_score == null ? null : Number(prev.visibility_score), sentiment_score: prev.sentiment_score === '' || prev.sentiment_score == null ? null : Number(prev.sentiment_score),
       engines: parse(prev.engines_json, {}), market_month: prev.market_month || '', market: parse(prev.market_json, null), index: parse(prev.index_json, null), perception: parse(prev.perception_json, null), traffic: parse(prev.traffic_json, null), access: parse(prev.access_json, null),
-      competitors: parse(prev.competitors_json, []) } : null,
-    run_id: 'ai_' + iso.slice(0, 10).replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, ''), checked_at: iso } };
-});
+      competitors: parse(prev.competitors_json, []),
+      // G6: the panel that row asked (its question ids: a delta needs 80% of them in common) and its segments (each segment's change is tested against them)
+      panel: parse(prev.panel_json, null), segments: (() => { const x = parse(prev.segments_json, null); if (!x || !Array.isArray(x.rows)) return null;
+        return { rows: x.rows.map(r => Array.isArray(r) ? { dim: r[0], key: r[1], questions: r[2], n: r[3], k: r[4] } : r) }; })() } : null,
+    run_id, checked_at: run_checked_at } };
+}).filter(Boolean);
+// G6: one execution carries at most exec_requests engine requests across all its sites (a scheduled run covers up to 15). The budget goes
+// to the sites in order; a site whose run does not fit is asked in part and continues in its own execution. Only the LAST execution of a
+// site's run asks the database views, reads GA4 and the crawler access and computes the week, so those wait for it.
+{ let budget = AIP.LIMITS.exec_requests;
+  for (const it of planned) { const j = it.json, c = j.chunk; const left = Math.max(0, c.total_est - c.done);
+    c.size = Math.max(0, Math.min(AIP.LIMITS.chunk_requests, budget)); c.final_expected = left <= c.size; budget -= Math.min(left, c.size);
+    if (!c.final_expected) { j.index_due = false; j.market_due = false; j.ga4_property_id = ''; j.key_paths = []; } } }
+if (!planned.length) return [{ json: { nothing_to_do: true, reason: skipped.map(x => x.domain + ': ' + x.why).join(' | ') || 'nothing to do', skipped } }];
+if (skipped.length) planned[0].json.skipped_sites = skipped;
+return planned;

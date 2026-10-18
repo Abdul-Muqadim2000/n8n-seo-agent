@@ -163,7 +163,11 @@
   "ai_growth",
   "ai_pages_month",
   "link_builder",
-  "stuck_weeks"
+  "stuck_weeks",
+  "ai_personas",
+  "ai_markets",
+  "ai_pulse_mode",
+  "ai_pulse_per_week"
  ],
  "LINK_OUTREACH": [
   "site_id",

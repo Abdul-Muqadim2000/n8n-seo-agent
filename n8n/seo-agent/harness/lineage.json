@@ -13,8 +13,8 @@
    "subject": 16
   },
   "refusal": {
-   "pass": 18,
-   "subject": 35
+   "pass": 20,
+   "subject": 37
   },
   "withheld": {
    "pass": 4,
@@ -410,6 +410,16 @@
    ],
    "workflow": "SEO Agent \u2014 AI Pulse"
   },
+  "SEO Agent \u2014 AI Visibility Tracker / AI Chunk Handoff": {
+   "fails": [],
+   "markup": 0,
+   "node": "AI Chunk Handoff",
+   "refusal": true,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent \u2014 AI Visibility Tracker"
+  },
   "SEO Agent \u2014 AI Visibility Tracker / AI Metrics": {
    "fails": [],
    "like_for_like": {
@@ -421,6 +431,16 @@
    "refusal": true,
    "subject": [
     "like_for_like",
+    "refusal"
+   ],
+   "workflow": "SEO Agent \u2014 AI Visibility Tracker"
+  },
+  "SEO Agent \u2014 AI Visibility Tracker / AI Plan": {
+   "fails": [],
+   "markup": 0,
+   "node": "AI Plan",
+   "refusal": true,
+   "subject": [
     "refusal"
    ],
    "workflow": "SEO Agent \u2014 AI Visibility Tracker"

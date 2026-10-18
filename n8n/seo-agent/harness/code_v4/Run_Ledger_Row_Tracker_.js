@@ -20,8 +20,13 @@ const full = (r) => EST.dfs_full != null && (String(r.mode || '') === 'full' || 
 const free = (r) => r.free_only === true || r.free === true || String(r.mode || '') === 'free';
 const paid = rows.filter(r => !free(r));
 const freeRows = rows.length - paid.length;
-const ai = +(n0(EST.ai) * paid.length).toFixed(4);
-const dfs = +paid.reduce((s, r) => s + (full(r) ? n0(EST.dfs_full) : n0(EST.dfs)), 0).toFixed(4);
+// G6 (2026-10-18): a plan that prices its own sites (the AI Visibility Tracker and the AI Pulse: the exact estimate of THIS panel — up to 500
+// questions on up to 9 engines — minus what earlier executions of a split run already spent) is reserved at that figure, not at a flat per-site
+// one; the run guard's balance floor then refuses a run the account cannot pay for. Every other plan keeps the per-site figure.
+const own = (r, k) => r[k] !== undefined && r[k] !== null && r[k] !== '' && Number.isFinite(Number(r[k]));
+const priced = paid.filter(r => own(r, 'est_dfs_usd') || own(r, 'est_ai_usd')).length;
+const ai = +paid.reduce((s, r) => s + (own(r, 'est_ai_usd') ? n0(r.est_ai_usd) : n0(EST.ai)), 0).toFixed(4);
+const dfs = +paid.reduce((s, r) => s + (own(r, 'est_dfs_usd') ? n0(r.est_dfs_usd) : (full(r) ? n0(EST.dfs_full) : n0(EST.dfs))), 0).toFixed(4);
 // one site in the run: name it, as the main workflow's reservation does (P34-5 reads `domain` to refuse a second heavy crawl of the same site)
 const domain = rows.length === 1 ? String(rows[0].domain || '').toLowerCase() : '';
 // R32: the account balance at the moment this row is reserved, from the free appendix/user_data probe on the ledger chain.
@@ -47,7 +52,8 @@ return [{ json: { run_id: String($execution.id), key: parent_run_id ? 'parent:' 
   cost_mode: MODE, ai_usd: 0, measured_usd: 0, estimated_usd: +(ai + dfs).toFixed(4),
   // R31 (2026-10-14): $0 is never called an estimate - a run that reserves nothing says so, with the reason.
   cost_basis: ((ai + dfs) > 0
-    ? 'reserved: Claude $' + ai.toFixed(4) + ' ESTIMATED (' + paid.length + ' keyword check(s) x the measured per-check price), DataForSEO $' + dfs.toFixed(4) + ' ESTIMATED - nothing measured yet'
+    ? (priced ? 'reserved: Claude $' + ai.toFixed(4) + ' ESTIMATED (' + priced + ' site(s) priced from their own panel and engines' + (paid.length > priced ? ', ' + (paid.length - priced) + ' at the per-site figure' : '') + '), DataForSEO $' + dfs.toFixed(4) + ' ESTIMATED - nothing measured yet'
+      : 'reserved: Claude $' + ai.toFixed(4) + ' ESTIMATED (' + paid.length + ' keyword check(s) x the measured per-check price), DataForSEO $' + dfs.toFixed(4) + ' ESTIMATED - nothing measured yet')
     : 'reserved: nothing - this run spends no model and no paid API money'
     ) + (freeRows ? '; ' + freeRows + ' free-only site(s) reserve nothing (no paid API, no model call)' : ''),
   // B-A5 (2026-10-15, build section 62): filled in by the settle — when it settled, what the account read then, and whether the figure

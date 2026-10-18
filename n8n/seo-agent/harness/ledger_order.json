@@ -119,6 +119,7 @@
    "settle": "Settle Run Ledger (AI)",
    "settle_from": [
     "AI Report",
+    "Chunk Part Done",
     "Nothing To Do (AI)",
     "Refuse Run Ledger (AI)"
    ],

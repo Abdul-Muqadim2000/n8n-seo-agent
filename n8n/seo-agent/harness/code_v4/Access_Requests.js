@@ -267,7 +267,7 @@ const SM = (() => {
     titleShare, titleGap, canonUrl, isListing, pageScore, pageStep,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms } };
 })();
-const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
+const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do && (!p.chunk || p.chunk.final_expected));   // G6: a split run reads crawler access in its last execution only
 const out = [];
 for (const p of plans) {
   const home = SM.siteUrl({ canonical_host: p.canonical_host, domain: p.domain }, '/');   // the host the site really serves (D15)
