@@ -70,8 +70,9 @@ export const createOrgSchema = z.object({
   website: opt(200),
 });
 export const updateOrgSchema = createOrgSchema.partial();
-export const inviteSchema = z.object({ email: emailField, role: z.enum(['admin', 'member', 'viewer']).default('member') });
-export const updateMemberSchema = z.object({ role: z.enum(['admin', 'member', 'viewer']) });
+// G5: client roles are accepted here and checked against the company's kind by the server (inviteRoleProblem)
+export const inviteSchema = z.object({ email: emailField, role: z.enum(['admin', 'member', 'viewer', 'client_approver', 'client_viewer']).default('member') });
+export const updateMemberSchema = z.object({ role: z.enum(['admin', 'member', 'viewer', 'client_approver', 'client_viewer']) });
 export const orgBudgetSchema = z.object({ monthlyBudgetUsd: z.number().min(0).max(100000), disabled: z.boolean().optional() });
 
 // ---------- sites ----------

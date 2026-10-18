@@ -7,6 +7,7 @@
 // Nothing here talks to a database: the server's shareLinks service and the app's Share control both use these rules.
 
 import type { SharedBrand } from './brand';
+import type { PortalBrand } from './agency';
 
 export const SHARE = {
   /** random bytes behind a token (256 bits, base64url -> 43 characters) */
@@ -139,4 +140,6 @@ export interface SharedReport {
   /** B-R2: what the run said about itself when it is not finished work, else null */
   caveat: SharedCaveat | null;
   expiresAt: string;
+  /** G5: the agency's brand when the report belongs to a white-label client workspace (its name replaces ours in the footer) */
+  agencyBrand?: PortalBrand | null;
 }

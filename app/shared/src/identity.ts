@@ -471,6 +471,7 @@ export const AUDIT_CATEGORIES = {
   data: 'Sharing and exports',
   api: 'API keys',
   sso: 'Single sign-on and provisioning',
+  agency: 'Agency and client portal',
 } as const;
 export type AuditCategory = keyof typeof AUDIT_CATEGORIES;
 
@@ -535,6 +536,26 @@ export const AUDIT_ACTIONS = {
   'scim.user_deleted': { label: 'Deprovisioned a person', category: 'sso' },
   'scim.group_changed': { label: 'Changed a provisioned group', category: 'sso' },
   'scim.group_mapping_changed': { label: 'Mapped a group to a role', category: 'sso' },
+  // G5 (app/docs/WHITE_LABEL.md)
+  'agency.enabled': { label: 'Turned on agency mode', category: 'agency' },
+  'agency.client_created': { label: 'Created a client workspace', category: 'agency' },
+  'agency.client_deleted': { label: 'Deleted a client workspace', category: 'agency' },
+  'agency.staff_assigned': { label: 'Gave a team member access to a client', category: 'agency' },
+  'agency.staff_unassigned': { label: 'Removed a team member from a client', category: 'agency' },
+  'agency.client_settings_changed': { label: 'Changed a client workspace setting', category: 'agency' },
+  'agency.overview_exported': { label: 'Exported the client overview', category: 'agency' },
+  'branding.updated': { label: 'Changed the branding', category: 'agency' },
+  'portal.domain_claimed': { label: 'Claimed a portal domain', category: 'agency' },
+  'portal.domain_verified': { label: 'Verified a portal domain', category: 'agency' },
+  'portal.domain_check_failed': { label: 'Portal domain check failed', category: 'agency' },
+  'portal.domain_lapsed': { label: 'Portal domain stopped being served', category: 'agency' },
+  'portal.domain_released': { label: 'Released a portal domain', category: 'agency' },
+  'portal.mail_updated': { label: 'Changed the client e-mail settings', category: 'agency' },
+  'portal.handoff': { label: 'Opened the client portal from the app', category: 'signin' },
+  'approval.requested': { label: 'Asked the client for approval', category: 'agency' },
+  'approval.withdrawn': { label: 'Withdrew an approval request', category: 'agency' },
+  'approval.approved': { label: 'Client approved', category: 'agency' },
+  'approval.changes_requested': { label: 'Client asked for changes', category: 'agency' },
 } as const satisfies Record<string, { label: string; category: AuditCategory }>;
 export type AuditAction = keyof typeof AUDIT_ACTIONS;
 export const auditLabel = (a: string): string => (AUDIT_ACTIONS as Record<string, { label: string }>)[a]?.label ?? a;

@@ -85,6 +85,13 @@
       "when": 1792291323513,
       "tag": "0011_g1_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792312246268,
+      "tag": "0012_g5_white_label",
+      "breakpoints": true
     }
   ]
 }

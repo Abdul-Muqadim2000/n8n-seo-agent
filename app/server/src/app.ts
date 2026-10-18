@@ -12,6 +12,9 @@ import { linkBuilderRoutes } from './routes/linkBuilder';
 import { crawlerRoutes, crawlerStreamRoutes } from './routes/crawlers';
 import { apiV1Routes } from './routes/apiV1';
 import { cmsRoutes } from './routes/cms';
+import { agencyRoutes } from './routes/agency';
+import { hostGate } from './services/portalHosts';
+import { portalIndexHtml } from './services/portalShell';
 import { triesBearer } from '@seo/shared';
 import { adminRoutes } from './routes/admin';
 import { authRoutes } from './routes/auth';
@@ -70,6 +73,19 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.decorateRequest('user', null);
   app.decorateRequest('sessionId', null);
   app.decorateRequest('session', null);
+  app.decorateRequest('portal', null);
+
+  // G5 (app/docs/WHITE_LABEL.md §2): the host decides the tenant before anything else — a verified portal host sets `req.portal`,
+  // a lapsed one (and, with strict hosts, any unknown one) gets a plain 421 and nothing of the app; on a portal host our own icons
+  // and social images are not served (the page names the agency, not us)
+  app.addHook('onRequest', async (req, reply) => {
+    if (!(await hostGate(req, reply))) return reply;
+    if (req.portal && /^\/(favicon[^/]*|apple-touch-icon[^/]*|safari-pinned-tab\.svg|site\.webmanifest|og-image\.png|brand\/.*|maskable-icon[^/]*)(\?|$)/.test(req.url))
+      return reply.status(404).header('cache-control', 'no-store').send('');
+    // the static plugin would answer "/" with the app's own shell: the portal's comes from here
+    if (req.portal && req.method === 'GET' && /^\/(index\.html)?(\?|$)/.test(req.url) && config.webDist)
+      return reply.header('cache-control', 'no-cache').header('content-type', 'text/html; charset=utf-8').send(await portalIndexHtml(resolve(config.webDist), req.portal.orgId));
+  });
 
   app.addHook('onRequest', async (req, reply) => {
     if (!req.url.startsWith('/api/')) return;
@@ -142,6 +158,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(crawlerStreamRoutes);
   await app.register(apiV1Routes);
   await app.register(cmsRoutes);
+  await app.register(agencyRoutes);
 
   // the built React app (production image): static files, and index.html for every client-side route
   const dist = config.webDist ? resolve(config.webDist) : '';
@@ -153,8 +170,10 @@ export async function buildApp(): Promise<FastifyInstance> {
       // hashed bundles never change; everything else (index.html, favicon, theme-init.js) is revalidated
       setHeaders: (res, path) => res.setHeader('cache-control', path.includes('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache'),
     });
-    app.setNotFoundHandler((req, reply) => {
+    app.setNotFoundHandler(async (req, reply) => {
       if (req.url.startsWith('/api/') || req.method !== 'GET') return reply.status(404).send({ error: 'Not found', code: 'not_found' });
+      // G5: on a portal host the page shell names the agency from the first byte (title, icon), never us
+      if (req.portal) return reply.header('cache-control', 'no-cache').header('content-type', 'text/html; charset=utf-8').send(await portalIndexHtml(dist, req.portal.orgId));
       return reply.header('cache-control', 'no-cache').sendFile('index.html');
     });
   } else {

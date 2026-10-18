@@ -32,3 +32,4 @@ export * from './api-v1';
 export * from './identity';
 export * from './cms';
 export * from './crawlers';
+export * from './agency';

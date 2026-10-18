@@ -96,7 +96,7 @@ export async function authRoutes(app: FastifyInstance) {
     }
     else void sendVerification(user, req.log).catch((err) => req.log.error({ err }, 'verification e-mail failed')); // do not make the visitor wait for SMTP
     await createSession(reply, req, user.id);
-    return buildMe(user);
+    return buildMe(user, req.portal?.orgId ?? null);
   });
 
   app.post('/api/auth/login', LIMIT, async (req, reply) => {
@@ -122,7 +122,7 @@ export async function authRoutes(app: FastifyInstance) {
     if (challenge) return challenge;
     await createSession(reply, req, user.id, { method: 'password' });
     await auditUser(req, user, { action: 'auth.login.succeeded', details: { method: 'password', mfa: false } });
-    return buildMe(user);
+    return buildMe(user, req.portal?.orgId ?? null);
   });
 
   app.post('/api/auth/logout', async (req, reply) => {

@@ -95,7 +95,11 @@ vi.mock('../src/services/shareLinks', async () => {
 vi.mock('../src/services/runs', () => ({
   createRun: vi.fn(), filesFor: vi.fn(async () => new Map()), getRunOrThrow: vi.fn(), reportsList: vi.fn(async () => []), toReport: vi.fn(), toRun: vi.fn(),
 }));
-vi.mock('../src/db', () => ({ db: { query: { reports: { findFirst: vi.fn(async () => undefined) }, files: { findFirst: vi.fn(async () => undefined) } } }, schema: {} }));
+// G5: a shared file asks whose company it is (a white-label client workspace's files carry the agency's name): a standard one here
+vi.mock('../src/db', () => ({
+  db: { query: { reports: { findFirst: vi.fn(async () => undefined) }, files: { findFirst: vi.fn(async () => undefined) }, organizations: { findFirst: vi.fn(async () => undefined) } } },
+  schema: { organizations: { id: 'id' } },
+}));
 
 const { runRoutes } = await import('../src/routes/runs');
 const { HttpError } = await import('../src/lib/errors');

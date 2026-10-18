@@ -21,6 +21,9 @@ import {
   type Role,
   type Usage,
   roleAtLeast,
+  inviteRoleProblem,
+  isClientRole,
+  orgKindOf,
 } from '@seo/shared';
 import { isPlatformAdmin, isUuid, orgAccess, requireUser } from '../auth/access';
 import { config } from '../config';
@@ -35,25 +38,13 @@ import { engineCostTable } from '../services/engineCost';
 import { sendMail } from '../lib/mailer';
 import { audit } from '../services/audit';
 import { acceptInvitation } from '../services/invitations';
+import { canDeleteClient, dropAssignments, orgView, toOrg } from '../services/agency';
+import { baseUrlFor, senderFor } from '../services/portalMail';
 import { deliveryOverview, listDeliveries, saveSettings, sendTest } from '../services/reportDelivery';
 import { monthStart } from '../services/runs';
 
-export function toOrg(o: OrgRow, role: Role): Org {
-  return {
-    id: o.id,
-    name: o.name,
-    slug: o.slug,
-    industry: o.industry,
-    size: o.size,
-    website: o.website,
-    monthlyBudgetUsd: o.monthlyBudgetUsd,
-    disabled: o.disabled,
-    onboardingStep: o.onboardingStep,
-    onboardedAt: o.onboardedAt?.toISOString() ?? null,
-    createdAt: o.createdAt.toISOString(),
-    role,
-  };
-}
+// G5: the company answer (with its kind, agency and brand) lives in services/agency.ts
+export { toOrg };
 
 const ONBOARDING_STEPS = ['company', 'website', 'verify', 'business', 'profile', 'tracking', 'launch', 'done'] as const;
 
@@ -92,9 +83,10 @@ export async function orgRoutes(app: FastifyInstance) {
     return toOrg(org, 'owner');
   });
 
+  // G5: a client person reads their workspace (name, agency, brand) for the portal
   app.get('/api/orgs/:orgId', async (req) => {
-    const a = await orgAccess(req, (req.params as { orgId: string }).orgId);
-    return toOrg(a.org, a.role);
+    const a = await orgAccess(req, (req.params as { orgId: string }).orgId, 'client_viewer');
+    return orgView(a.org, a.role);
   });
 
   app.patch('/api/orgs/:orgId', async (req) => {
@@ -112,13 +104,19 @@ export async function orgRoutes(app: FastifyInstance) {
         target: { type: 'company', id: a.org.id, label: o.name },
         details: { before: Object.fromEntries(changed.map((k) => [k, a.org[k]])), after: Object.fromEntries(changed.map((k) => [k, o[k]])) },
       });
-    return toOrg(o, a.role);
+    return orgView(o, a.role);
   });
 
   app.delete('/api/orgs/:orgId', async (req) => {
     const a = await orgAccess(req, (req.params as { orgId: string }).orgId, 'owner');
     const body = parse(z.object({ confirm: z.string() }), req.body ?? {});
     if (body.confirm.trim() !== a.org.name) throw badRequest('Type the company name to confirm', { confirm: 'Does not match the company name' });
+    // G5: an agency goes only after its client workspaces; a client workspace only by the agency's owner
+    if (a.org.kind === 'agency' && (await db.query.organizations.findFirst({ where: eq(schema.organizations.parentOrgId, a.org.id) })))
+      throw conflict('Delete this agency’s client workspaces first.', 'agency_has_clients');
+    if (a.org.kind === 'client' && !(await canDeleteClient(a.user, a.org))) throw forbidden('Only the agency’s owner can delete a client workspace.');
+    if (a.org.kind === 'client' && a.org.parentOrgId)
+      await audit(req, a.org.parentOrgId, { action: 'agency.client_deleted', target: { type: 'company', id: a.org.id, label: a.org.name } });
     // stop the weekly workflows of its verified websites (their history in n8n stays), then remove everything of the company
     // every verified website: its weekly runs, ladders and monitors stop in the engine (history stays)
     const owned = await db.query.sites.findMany({ where: eq(schema.sites.orgId, a.org.id) });
@@ -135,7 +133,7 @@ export async function orgRoutes(app: FastifyInstance) {
       .set({ onboardingStep: body.step, ...(body.done ? { onboardedAt: a.org.onboardedAt ?? new Date() } : {}) })
       .where(eq(schema.organizations.id, a.org.id))
       .returning();
-    return toOrg(o, a.role);
+    return orgView(o, a.role);
   });
 
   app.patch('/api/orgs/:orgId/budget', async (req) => {
@@ -146,7 +144,7 @@ export async function orgRoutes(app: FastifyInstance) {
     const [o] = await db.update(schema.organizations).set({ monthlyBudgetUsd: body.monthlyBudgetUsd }).where(eq(schema.organizations.id, a.org.id)).returning();
     if (o.monthlyBudgetUsd !== a.org.monthlyBudgetUsd)
       await audit(req, a.org.id, { action: 'company.budget_changed', target: { type: 'company', id: a.org.id, label: a.org.name }, details: { before: a.org.monthlyBudgetUsd, after: o.monthlyBudgetUsd } });
-    return toOrg(o, a.role);
+    return orgView(o, a.role);
   });
 
   // R100: the prices the forms show before a run and the budget check holds — the engine's own rolling figures (read from its store,
@@ -293,6 +291,9 @@ export async function orgRoutes(app: FastifyInstance) {
   app.post('/api/orgs/:orgId/invitations', { config: { rateLimit: { max: 30, timeWindow: '10 minutes' } } }, async (req): Promise<Invitation> => {
     const a = await orgAccess(req, (req.params as { orgId: string }).orgId, 'admin');
     const body = parse(inviteSchema, req.body);
+    // G5: client people only into a client workspace (as client roles); staff come to a client by assignment from the agency
+    const roleProblem = inviteRoleProblem(orgKindOf(a.org.kind), body.role);
+    if (roleProblem) throw badRequest(roleProblem, { role: roleProblem });
     const already = await db
       .select({ id: schema.users.id })
       .from(schema.memberships)
@@ -310,17 +311,22 @@ export async function orgRoutes(app: FastifyInstance) {
       .insert(schema.invitations)
       .values({ orgId: a.org.id, email: body.email, role: body.role, tokenHash: sha256(token), invitedBy: a.user.id, expiresAt: new Date(Date.now() + 7 * 864e5) })
       .returning();
-    const inviteUrl = `${config.appUrl}/invite/${token}`;
+    // G5: a white-label client is invited to the agency's portal address, by the agency
+    const inviteUrl = `${await baseUrlFor(a.org)}/invite/${token}`;
+    const sender = await senderFor(a.org);
     await audit(req, a.org.id, { action: 'team.invited', target: { type: 'invitation', id: inv.id, label: body.email }, details: { role: body.role } });
     // D-10: the dialog said "We sent an invitation" on a server with no mail account; say what really happens
     const emailed = config.accountEmails;
     void sendMail(
       {
         to: body.email,
-        subject: `${a.user.name} invited you to ${a.org.name} on ${config.brand}`,
-        lines: [`${a.user.name} invited you to join ${a.org.name} as ${body.role}.`, 'You will see the SEO dashboards, reports and analyses of the company’s websites.'],
+        subject: `${a.user.name} invited you to ${a.org.name} on ${sender.brandName}`,
+        lines: isClientRole(body.role)
+          ? [`${a.user.name} invited you to ${sender.brandName}, the SEO portal of ${a.org.name}.`, body.role === 'client_approver' ? 'You will see your websites’ dashboards and reports, and approve pages and outreach before they go out.' : 'You will see your websites’ dashboards, reports and recommendations.']
+          : [`${a.user.name} invited you to join ${a.org.name} as ${body.role}.`, 'You will see the SEO dashboards, reports and analyses of the company’s websites.'],
         action: { label: 'Accept the invitation', url: inviteUrl },
         footer: 'The invitation works for 7 days.',
+        sender,
       },
       req.log,
     );
@@ -349,6 +355,10 @@ export async function orgRoutes(app: FastifyInstance) {
     if (!target) throw notFound('Member not found');
     if (target.role === 'owner') throw forbidden('The owner’s role cannot be changed.');
     if (target.userId === a.user.id) throw badRequest('You cannot change your own role.');
+    // G5: a client person stays a client person; an agency member's access to a client is changed from the agency's Clients page
+    if (a.org.kind === 'client' && !isClientRole(target.role)) throw badRequest('Agency staff are given access to a client from the agency’s Clients page.');
+    if (isClientRole(target.role) !== isClientRole(body.role) || (a.org.kind !== 'client' && isClientRole(body.role)))
+      throw badRequest(isClientRole(target.role) ? 'Choose client viewer or client approver.' : 'Client roles exist only in client workspaces.');
     await db.update(schema.memberships).set({ role: body.role }).where(and(eq(schema.memberships.orgId, a.org.id), eq(schema.memberships.userId, p.userId)));
     if (target.role !== body.role) {
       const who = await db.query.users.findFirst({ where: eq(schema.users.id, p.userId) });
@@ -366,6 +376,8 @@ export async function orgRoutes(app: FastifyInstance) {
     if (!target) throw notFound('Member not found');
     if (target.role === 'owner') throw forbidden(self ? 'The owner cannot leave the company.' : 'The owner cannot be removed.');
     await db.delete(schema.memberships).where(and(eq(schema.memberships.orgId, a.org.id), eq(schema.memberships.userId, p.userId)));
+    // G5: leaving an agency ends the person's access to its clients as well
+    if (a.org.kind === 'agency') await dropAssignments(a.org.id, p.userId);
     await refreshSessionPolicy([p.userId]);
     const who = await db.query.users.findFirst({ where: eq(schema.users.id, p.userId) });
     await audit(req, a.org.id, { action: self ? 'team.left' : 'team.removed', target: { type: 'user', id: p.userId, label: who?.email ?? null }, details: { role: target.role } });
