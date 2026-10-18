@@ -1,28 +1,37 @@
 import { Link } from 'react-router';
 import { ArrowRight, Check } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { CtaBand, IconTile, Photo, Reveal, Section, SectionHeading } from '../components';
 import { ArrowLink, lowerFirst } from '../components/platform/kit';
 import { capabilityCount, featureBySlug, type Feature } from '../content/features';
 import { solutions } from '../content/solutions';
 import { useSeo } from '../useSeo';
 
+const COUNT_WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'];
+
 function SolutionCards() {
   return (
     <ul className="mt-14 grid gap-5 sm:mt-16 md:grid-cols-2">
-      {solutions.map((s, i) => (
-        <Reveal as="li" key={s.slug} index={i % 2}>
+      {solutions.map((s, i) => {
+        // an odd last card spans both columns on wide screens, photo beside the text, so it does not tower over the others
+        const lone = solutions.length % 2 === 1 && i === solutions.length - 1;
+        return (
+        <Reveal as="li" key={s.slug} index={i % 2} className={cn(lone && 'md:col-span-2')}>
           <Link
             to={`/solutions/${s.slug}`}
-            className="group flex h-full flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-card transition-[transform,box-shadow,border-color] duration-200 ease-brand hover:-translate-y-0.5 hover:border-accent hover:shadow-raised focus-visible:border-accent"
+            className={cn(
+              'group flex h-full flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-card transition-[transform,box-shadow,border-color] duration-200 ease-brand hover:-translate-y-0.5 hover:border-accent hover:shadow-raised focus-visible:border-accent',
+              lone && 'md:grid md:grid-cols-2',
+            )}
           >
             <Photo
               image={s.image}
               ratio="16 / 9"
-              className="rounded-none border-0"
+              className={cn('rounded-none border-0', lone && 'md:h-full')}
               imgClassName="group-hover:scale-[1.04]"
               sizes="(min-width: 768px) 50vw, 100vw"
             />
-            <div className="flex flex-1 flex-col border-t border-line p-6 sm:p-8">
+            <div className={cn('flex flex-1 flex-col border-t border-line p-6 sm:p-8', lone && 'md:border-l md:border-t-0')}>
               <div className="flex items-center gap-3">
                 <IconTile icon={s.icon} size="sm" className="group-hover:bg-accent group-hover:text-accent-ink" />
                 <span className="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3">For {lowerFirst(s.shortName)}</span>
@@ -37,13 +46,14 @@ function SolutionCards() {
                 ))}
               </ul>
               <span className="mt-auto inline-flex items-center gap-1.5 pt-7 text-[15px] font-medium text-accent-text">
-                See how Ascentra helps
+                See how Alaventra helps
                 <ArrowRight className="size-4 transition-transform duration-200 ease-brand group-hover:translate-x-1" aria-hidden />
               </span>
             </div>
           </Link>
         </Reveal>
-      ))}
+        );
+      })}
     </ul>
   );
 }
@@ -54,7 +64,7 @@ function CapabilityMatrix() {
       <div className="flex flex-wrap items-end justify-between gap-6">
         <SectionHeading
           eyebrow="One platform"
-          title="Four starting points, the same weekly loop."
+          title={`${COUNT_WORDS[solutions.length] ?? solutions.length} starting points, the same weekly loop.`}
           lead={`Every team gets all ${capabilityCount} capabilities. These are the ones each team tends to lean on first.`}
         />
         <Reveal>
@@ -94,7 +104,7 @@ function CapabilityMatrix() {
 export default function SolutionsPage() {
   useSeo({
     title: 'Solutions',
-    description: 'Ascentra for agencies, in-house marketing teams, B2B and SaaS companies, and local and multi-location businesses — one weekly SEO loop, shaped to how each team works.',
+    description: 'Alaventra for agencies, in-house marketing teams, B2B and SaaS companies, local and multi-location businesses and enterprise teams — one weekly SEO loop, shaped to how each team works.',
     path: '/solutions',
   });
   return (
@@ -109,12 +119,12 @@ export default function SolutionsPage() {
           size="lg"
           eyebrow="Solutions"
           title="Built for the teams that own organic growth."
-          lead="Agencies running many clients, marketing teams without a full SEO function, B2B companies and businesses with many locations. One platform, shaped to how each team works."
+          lead="Agencies running many clients, marketing teams without a full SEO function, B2B companies, businesses with many locations and enterprise teams. One platform, shaped to how each team works."
         />
         <SolutionCards />
       </Section>
       <CapabilityMatrix />
-      <CtaBand title="Not sure where you fit?" lead="Tell us how your team works and a person will show you where Ascentra fits. Or start free and connect your first website." />
+      <CtaBand title="Not sure where you fit?" lead="Tell us how your team works and a person will show you where Alaventra fits. Or start free and connect your first website." />
     </>
   );
 }

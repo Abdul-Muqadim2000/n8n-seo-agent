@@ -11,11 +11,11 @@ const ROWS: { site: string; sources: string[]; status: { tone: 'good' | 'warning
   { site: 'tools-directory.example', sources: ['Index'], status: { tone: 'warning', label: 'Lost' }, note: 'removed from page · 2 misses', value: 'Low' },
 ];
 
-/** The backlink ledger: one row per referring site with the sources that reported it, Ascentra's own check result and its value (sample data). */
+/** The backlink ledger: one row per referring site with the sources that reported it, Alaventra's own check result and its value (sample data). */
 export function BacklinkLedgerMockup({ className }: { className?: string }) {
   return (
     <Drawn
-      label="A backlink ledger with sample data: five referring sites, the sources that reported each link, whether Ascentra found it live, new or lost after two misses, and its value."
+      label="A backlink ledger with sample data: five referring sites, the sources that reported each link, whether Alaventra found it live, new or lost after two misses, and its value."
       className={cn('rounded-xl border border-line bg-surface p-4 text-ink shadow-overlay sm:p-6', className)}
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -25,7 +25,7 @@ export function BacklinkLedgerMockup({ className }: { className?: string }) {
           </span>
           <span>
             <span className="block text-[13px] font-semibold">Link ledger</span>
-            <span className="block text-[11px] text-ink-3">9 sources · checked by Ascentra</span>
+            <span className="block text-[11px] text-ink-3">9 sources · checked by Alaventra</span>
           </span>
         </span>
         <span className="flex gap-4 font-mono text-[11px] tabular text-ink-3">

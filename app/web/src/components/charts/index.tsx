@@ -306,7 +306,7 @@ export function TimeSeriesChart({
               stroke={colorOf(s, i)}
               strokeWidth={2}
               strokeOpacity={dim(focus, s.key)}
-              // brand: area under the default blue line = Ascentra blue tint; a custom colour keeps its own 10% wash
+              // brand: area under the default blue line = Alaventra blue tint; a custom colour keeps its own 10% wash
               fill={single && !s.color ? 'var(--accent-soft)' : colorOf(s, i)}
               fillOpacity={single ? (s.color ? 0.1 : 0.85) : 0}
               dot={false}

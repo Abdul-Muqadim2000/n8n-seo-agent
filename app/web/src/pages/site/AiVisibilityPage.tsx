@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ArrowRight, BadgeCheck, CheckCircle2, OctagonAlert, Bot, LineChart as LineChartIcon, ExternalLink as ExternalIcon, FileText, Gauge, Globe, Grid3x3, Library, Lightbulb, ListChecks, MessageCircleQuestion, MessagesSquare, ScanSearch, ShieldAlert, ShieldCheck, Sparkles, Trophy } from 'lucide-react';
-import { compactNumber, estimateAiVisibilityCost, formatUsd, titleCase, type AiData, type AiDay, type AiEngineStat, type AiRun } from '@seo/shared';
+import { AI_ENGINE_VALUES, compactNumber, estimateAiVisibilityCost, formatUsd, titleCase, type AiData, type AiDay, type AiEngine, type AiEngineStat, type AiRun } from '@seo/shared';
+import { AiPrecisionTable } from '@/components/site/AiPrecision';
 import { useSiteData } from '@/lib/queries';
 import { cn, fmtAgo, fmtDate } from '@/lib/utils';
 import { ChartCard, Sparkline, TimeSeriesChart, type Series } from '@/components/charts';
@@ -12,7 +13,8 @@ import { Delta, Meter, PageHeader } from '@/components/ui/misc';
 import { CountUp, HeroNextStep, HeroStat, IconTile, MetricCard, ScoreRing, Stagger, SummaryHero } from '@/components/insight';
 import { DataTable, type Column } from '@/components/ui/table';
 import { EngineActionList, RUN_LABEL, runFromApiBody, typeLabel } from './_components/actions';
-import { AnswersExplorer, QuestionGrid, QuestionManager, engineLabel } from './_components/ai';
+import { AnswersExplorer, QuestionGrid, engineLabel } from './_components/ai';
+import { PanelManager, SegmentsSection } from './_components/ai-panel';
 import { AccessPanel, AiTrafficPanel, DiscoveryPanel, GroupsPanel, IndexPanel, PerceptionPanel } from './_components/ai-insights';
 import { AiGrowthSection } from './_components/ai-growth';
 import { Chips, DataGate, FillHeight, MetricSwitch, Kind, Panel, SectionHeading, ToolButton, YesNo, useSitePage } from './_components/kit';
@@ -221,7 +223,7 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
         </div>
       )}
 
-      {d.latest && <GroupsPanel stages={d.latest.stages} clusters={d.latest.clusters} />}
+      {d.segments && d.segments.rows.length > 0 ? <SegmentsSection segments={d.segments} panel={d.panel} /> : d.latest && <GroupsPanel stages={d.latest.stages} clusters={d.latest.clusters} />}
 
       {d.report && d.report.questions.length > 0 && (
         <section>
@@ -238,6 +240,7 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
           <Card className="p-4">
             <EngineTable engines={d.latest.engines} />
           </Card>
+          {L && L.samples > 0 && <MeasuredPrecision run={L} engines={d.latest.engines} />}
         </section>
       )}
 
@@ -296,9 +299,9 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
       </section>
 
       <section>
-        <SectionHeading icon={<ListChecks />} title="Tracked buyer questions" description={can('admin') ? 'Add the questions your buyers ask, or switch off ones that do not fit' : 'The questions asked every week (admins can change them)'} />
+        <SectionHeading icon={<ListChecks />} title="Your question panel" description={can('admin') ? 'Up to 500 buyer questions by topic, buyer role and market: add, import, edit, pin or switch off' : 'The questions asked every week (admins can change them)'} />
         <Card className="p-4">
-          <QuestionManager prompts={d.prompts} />
+          <PanelManager prompts={d.prompts} answers={d.answers} suggestions={d.latest?.index?.suggestions?.map((s) => ({ question: s.question, volume: s.volume })) ?? []} setting={d.panel?.setting ?? null} />
         </Card>
       </section>
     </Stagger>
@@ -386,6 +389,26 @@ function RunsTrend({ runs, daily, loading, className }: { runs: AiRun[]; daily: 
         <EmptyState className="py-10" icon={<LineChartIcon className="size-5" />} title="No runs stored yet" />
       )}
     </ChartCard>
+  );
+}
+
+/**
+ * B8-7: what this panel and cadence can tell apart, from the latest run's own sample (answers over 7 days per buyer question). The
+ * brand question (asked on the month's full run) is not a buyer question and is left out of the count.
+ */
+function MeasuredPrecision({ run, engines }: { run: AiRun; engines: AiEngineStat[] }) {
+  const asked = engines.filter((e) => !e.carried && e.asked > 0);
+  const keys = asked.map((e) => e.key).filter((k): k is AiEngine => AI_ENGINE_VALUES.includes(k as AiEngine));
+  const pulseSamples = engines.reduce((s, e) => s + (e.pulseSamples || 0), 0);
+  const questions = Math.max(1, run.prompts - (run.runKind === 'full' ? 1 : 0));   // the brand question is asked on the month's full run
+  return (
+    <AiPrecisionTable
+      className="mt-3"
+      panel={run.prompts}
+      engines={keys}
+      pulse={pulseSamples > 0}
+      measured={{ samples: run.samples, pulseSamples, questions, checkedAt: run.checkedAt }}
+    />
   );
 }
 

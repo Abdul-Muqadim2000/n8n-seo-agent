@@ -1,4 +1,4 @@
-# Ascentra in-app design spec (D0, 2026-10-09) — for the page agents
+# Alaventra in-app design spec (D0, 2026-10-09) — for the page agents
 
 Goal: every page answers in 5 seconds **how am I doing → what changed → what should I do next**, with more colour inside the
 brand and **zero functional change**. Reference implementation: `app/web/src/pages/site/OverviewPage.tsx` (read it first).
@@ -49,7 +49,7 @@ metric rows). Give `DataGate` a `skeleton` shaped like this anatomy (see `Overvi
   settings → `Callout tone="warning"`. Never move or rename fields.
 
 ## Colour rules
-- Ascentra Blue is the only accent. **No gradients, no new hues, no hex in components.** Colour comes from: the solid blue hero
+- Alaventra Blue is the only accent. **No gradients, no new hues, no hex in components.** Colour comes from: the solid blue hero
   (dark mode switches it to `accent-soft` navy automatically), blue icon tiles (`bg-accent-soft text-accent-text`), the blue
   ramp `SEQ` for intensity, status tokens for meaning (good / warning / serious / critical — always with icon + word), and
   `SERIES_COLORS` in fixed order for chart categories.

@@ -1,5 +1,7 @@
+import { useEngineCal } from '@/lib/engine-cal';
 // The person's controls over the keyword ladders (admins): Auto / Manual, Pause / Resume, the priority order, delete — and the
 // website's pipeline settings. Everything is written to the SEO engine's ladder settings and read by the Monday run.
+import { PRICES } from '@/lib/prices';
 import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { Controller, useForm } from 'react-hook-form';
@@ -188,6 +190,7 @@ export function PipelineSettingsButton({ automation, autoStartEnabled = true }: 
 }
 
 function PipelineSettingsDialog({ automation, autoStartEnabled, onClose }: { automation: SiteAutomation; autoStartEnabled: boolean; onClose: () => void }) {
+  useEngineCal();   // R99 / R100: re-render with the engine's own prices once they arrive
   const { org } = useOrgCtx();
   const { site } = useSiteCtx();
   const save = useUpdateAutomation(org.id, site.id);
@@ -240,7 +243,7 @@ function PipelineSettingsDialog({ automation, autoStartEnabled, onClose }: { aut
         </SettingRow>
         <SettingRow
           title="Choose keywords for me"
-          help="When fewer ladders than your limit are being written, start the next recommended keyword that is easy or reachable for your site. Each new ladder costs about $1.80 plus its weekly pages."
+          help={`When fewer ladders than your limit are being written, start the next recommended keyword that is easy or reachable for your site. Each new ladder costs about ${PRICES.ladderStart()} plus its weekly pages.`}
         >
           <Controller
             name="autoStartLadders"

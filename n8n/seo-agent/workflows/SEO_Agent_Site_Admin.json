@@ -134,6 +134,10 @@
               {
                 "name": "week",
                 "type": "string"
+              },
+              {
+                "name": "qa_reasons",
+                "type": "string"
               }
             ]
           },
@@ -269,6 +273,10 @@
               {
                 "name": "model_updated_at",
                 "type": "string"
+              },
+              {
+                "name": "content_groups_json",
+                "type": "string"
               }
             ]
           },
@@ -363,6 +371,22 @@
               },
               {
                 "name": "stuck_weeks",
+                "type": "number"
+              },
+              {
+                "name": "ai_personas",
+                "type": "string"
+              },
+              {
+                "name": "ai_markets",
+                "type": "string"
+              },
+              {
+                "name": "ai_pulse_mode",
+                "type": "string"
+              },
+              {
+                "name": "ai_pulse_per_week",
                 "type": "number"
               }
             ]
@@ -574,6 +598,22 @@
               {
                 "name": "updated_at",
                 "type": "string"
+              },
+              {
+                "name": "persona",
+                "type": "string"
+              },
+              {
+                "name": "market",
+                "type": "string"
+              },
+              {
+                "name": "pinned",
+                "type": "boolean"
+              },
+              {
+                "name": "fit_note",
+                "type": "string"
               }
             ]
           },
@@ -593,7 +633,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// Site admin: delete | pause | resume | cadence (pages_per_week 0-3) | unpublish (keyword) | monitors (AI visibility / backlinks / monthly audit settings)\n// | prospect (prospect_domain + status contacted / replied / won / rejected / ignored / new, note, contact_email; replied: v4.13) | ai_prompts (add custom questions, switch some off) — by site_id or domain.\n// The table-ensure nodes before this one output table objects, so the request is read from the trigger (live finding 2026-10-02).\nlet t = {}; try { t = (($('Admin Run').first() || {}).json) || {}; } catch (e) { t = ($input.first() || {}).json || {}; }\nif (t.body && typeof t.body === 'object') t = { ...t, ...t.body };\nconst action = String(t.action || '').toLowerCase();\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst domain = normD(t.domain) || String(t.site_id || '').replace(/^site_/, '').replace(/-/g, '.');\nconst site_id = String(t.site_id || '').trim() || (normD(t.domain) ? 'site_' + normD(t.domain).replace(/[^a-z0-9]+/g, '-') : '');\nif (!['delete', 'pause', 'resume', 'cadence', 'unpublish', 'monitors', 'prospect', 'ai_prompts'].includes(action)) throw new Error('action must be delete, pause, resume, cadence, unpublish, monitors, prospect or ai_prompts');\nif (!site_id) throw new Error('site_id or domain is required');\nconst pages = Math.min(3, Math.max(0, Number(t.pages_per_week == null ? t.blogs_per_week : t.pages_per_week) || 0));\nif (action === 'cadence' && t.pages_per_week == null && t.blogs_per_week == null) throw new Error('pages_per_week (0-3) is required for action cadence');\nconst keyword = String(t.keyword || '').trim().toLowerCase().replace(/\\s+/g, ' ');\nif (action === 'unpublish' && !keyword) throw new Error('keyword is required for action unpublish');\nconst prospect_domain = normD(t.prospect_domain);\nconst pstatus = String(t.status || '').toLowerCase();\nif (action === 'prospect' && !prospect_domain) throw new Error('prospect_domain is required for action prospect');\nif (action === 'prospect' && pstatus && !['new', 'contacted', 'replied', 'won', 'rejected', 'ignored'].includes(pstatus)) throw new Error('status must be new, contacted, replied, won, rejected or ignored');\nconst add_prompts = (Array.isArray(t.add) ? t.add : (Array.isArray(t.prompts) ? t.prompts : [])).map(x => String(typeof x === 'object' ? x.prompt : x).trim()).filter(x => x.length >= 10).slice(0, 15);\nconst off_prompts = (Array.isArray(t.remove) ? t.remove : []).map(x => String(x).trim()).filter(Boolean);\nif (action === 'ai_prompts' && !add_prompts.length && !off_prompts.length) throw new Error('add (questions to track) or remove (prompt ids or texts) is required for action ai_prompts');\nconst monitors = (t.monitors && typeof t.monitors === 'object') ? t.monitors : (action === 'monitors' ? t : {});\nreturn [{ json: { action, site_id, domain: normD(t.domain) || '', status: action === 'pause' ? 'paused' : 'active', pages_per_week: pages, cadence_status: pages > 0 ? 'active' : 'off', keyword, prospect_domain, prospect_type: String(t.type || '').toLowerCase(), prospect_status: pstatus, contact_email: /^[^@\\s]+@[^@\\s]+\\.[a-z]{2,}$/i.test(String(t.contact_email || '').trim()) ? String(t.contact_email).trim().toLowerCase() : '', note: t.note == null ? null : String(t.note).slice(0, 500), add_prompts, off_prompts, monitors, updated_at: new Date().toISOString(), request_id: String(t.request_id || '') } }];\n"
+          "jsCode": "// Site admin: delete | pause | resume | cadence (pages_per_week 0-3) | unpublish (keyword) | monitors (AI visibility / backlinks / monthly audit settings)\n// | prospect (prospect_domain + status contacted / replied / won / rejected / ignored / new, note, contact_email; replied: v4.13) | ai_prompts (add custom questions, switch some off) — by site_id or domain.\n// The table-ensure nodes before this one output table objects, so the request is read from the trigger (live finding 2026-10-02).\nlet t = {}; try { t = (($('Admin Run').first() || {}).json) || {}; } catch (e) { t = ($input.first() || {}).json || {}; }\nif (t.body && typeof t.body === 'object') t = { ...t, ...t.body };\nconst action = String(t.action || '').toLowerCase();\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst domain = normD(t.domain) || String(t.site_id || '').replace(/^site_/, '').replace(/-/g, '.');\nconst site_id = String(t.site_id || '').trim() || (normD(t.domain) ? 'site_' + normD(t.domain).replace(/[^a-z0-9]+/g, '-') : '');\nif (!['delete', 'pause', 'resume', 'cadence', 'unpublish', 'monitors', 'prospect', 'ai_prompts', 'content_groups'].includes(action)) throw new Error('action must be delete, pause, resume, cadence, unpublish, monitors, prospect, ai_prompts or content_groups');\nif (!site_id) throw new Error('site_id or domain is required');\nconst pages = Math.min(3, Math.max(0, Number(t.pages_per_week == null ? t.blogs_per_week : t.pages_per_week) || 0));\nif (action === 'cadence' && t.pages_per_week == null && t.blogs_per_week == null) throw new Error('pages_per_week (0-3) is required for action cadence');\nconst keyword = String(t.keyword || '').trim().toLowerCase().replace(/\\s+/g, ' ');\nif (action === 'unpublish' && !keyword) throw new Error('keyword is required for action unpublish');\nconst prospect_domain = normD(t.prospect_domain);\nconst pstatus = String(t.status || '').toLowerCase();\nif (action === 'prospect' && !prospect_domain) throw new Error('prospect_domain is required for action prospect');\nif (action === 'prospect' && pstatus && !['new', 'contacted', 'replied', 'won', 'rejected', 'ignored'].includes(pstatus)) throw new Error('status must be new, contacted, replied, won, rejected or ignored');\n// G6 (2026-10-18): the owner manages the whole panel — add (text, or { prompt, persona, cluster, stage, market, pinned }: up to 500 at once, a\n// CSV import from the app), edit (persona / cluster / stage / market of a stored question; NEW WORDING is a new question and the old one is\n// switched off, so a trend never compares two different questions), remove (switch off), enable (switch back on), pin / unpin\nconst S6 = (v, n) => String(v == null ? '' : v).replace(/\\s+/g, ' ').trim().slice(0, n);\nconst asQ = (x) => (x && typeof x === 'object') ? { prompt: S6(x.prompt, 300), persona: S6(x.persona, 40), cluster: S6(x.cluster, 60).toLowerCase(), stage: S6(x.stage, 20).toLowerCase(), market: S6(x.market, 8), pinned: x.pinned === true || String(x.pinned) === 'true' } : { prompt: S6(x, 300), persona: '', cluster: '', stage: '', market: '', pinned: false };\nconst add_prompts = (Array.isArray(t.add) ? t.add : (Array.isArray(t.prompts) ? t.prompts : [])).map(asQ).filter(x => x.prompt.length >= 10).slice(0, 500);\nconst off_prompts = (Array.isArray(t.remove) ? t.remove : []).map(x => String(x).trim()).filter(Boolean).slice(0, 500);\nconst on_prompts = (Array.isArray(t.enable) ? t.enable : []).map(x => String(x).trim()).filter(Boolean).slice(0, 500);\nconst pin_prompts = (Array.isArray(t.pin) ? t.pin : []).map(x => String(x).trim()).filter(Boolean).slice(0, 500);\nconst unpin_prompts = (Array.isArray(t.unpin) ? t.unpin : []).map(x => String(x).trim()).filter(Boolean).slice(0, 500);\nconst edit_prompts = (Array.isArray(t.edit) ? t.edit : []).filter(x => x && typeof x === 'object' && String(x.prompt_id || '').trim()).map(x => ({ prompt_id: String(x.prompt_id).trim(), ...asQ(x), prompt: S6(x.prompt, 300), pinned: x.pinned === undefined ? undefined : (x.pinned === true || String(x.pinned) === 'true') })).slice(0, 500);\nif (action === 'ai_prompts' && !add_prompts.length && !off_prompts.length && !on_prompts.length && !pin_prompts.length && !unpin_prompts.length && !edit_prompts.length) throw new Error('add (questions to track), edit, remove, enable, pin or unpin (prompt ids or texts) is required for action ai_prompts');\n// B7-5 (W3-D): content_groups = [{ name, pattern }] -- a regular expression per group over the page path (case-insensitive); [] clears them\nconst rawGroups = Array.isArray(t.content_groups) ? t.content_groups : (Array.isArray(t.groups) ? t.groups : null);\nif (action === 'content_groups' && !rawGroups) throw new Error('content_groups (a list of { name, pattern }; an empty list clears the groups) is required for action content_groups');\nconst content_groups = (rawGroups || []).map(g => ({ name: String(g && g.name || '').trim().slice(0, 60), pattern: String(g && g.pattern || '').trim().slice(0, 200) })).filter(g => g.name && g.pattern).slice(0, 12);\nif (action === 'content_groups') for (const g of content_groups) { if (/(\\+|\\*|\\})\\)?[+*{]/.test(g.pattern)) throw new Error('content group \"' + g.name + '\": nested repetition in the pattern is refused'); try { new RegExp(g.pattern, 'i'); } catch (e) { throw new Error('content group \"' + g.name + '\": not a valid regular expression'); } }\nconst content_groups_json = JSON.stringify(content_groups);\nconst monitors = (t.monitors && typeof t.monitors === 'object') ? t.monitors : (action === 'monitors' ? t : {});\nreturn [{ json: { action, site_id, domain: normD(t.domain) || '', status: action === 'pause' ? 'paused' : 'active', pages_per_week: pages, cadence_status: pages > 0 ? 'active' : 'off', keyword, prospect_domain, prospect_type: String(t.type || '').toLowerCase(), prospect_status: pstatus, contact_email: /^[^@\\s]+@[^@\\s]+\\.[a-z]{2,}$/i.test(String(t.contact_email || '').trim()) ? String(t.contact_email).trim().toLowerCase() : '', note: t.note == null ? null : String(t.note).slice(0, 500), add_prompts, off_prompts, on_prompts, pin_prompts, unpin_prompts, edit_prompts, monitors, content_groups_json, updated_at: new Date().toISOString(), request_id: String(t.request_id || '') } }];\n"
         },
         "id": "eb47ded5-1710-5c9d-ab25-141518fc1e1d",
         "name": "Admin Action",
@@ -640,7 +680,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// Site Admin \"monitors\": merges the given settings over the stored seo_monitors row (exact columns). Settings: ai_visibility, ai_engines\n// (chatgpt, perplexity, gemini, claude, ai_overview, ai_mode, copilot), ai_prompts_max (3-50), ai_pulse (daily AI Pulse, v4.9), ai_growth (weekly AI Growth loop) + ai_pages_month (0-8, v4.12), link_builder (weekly Link Builder, v4.13), stuck_weeks (2-26, G32), backlinks, audit_monthly, audit_pages (50-1000), audit_js,\n// competitors (domains), brand_names.\nconst a = $('Admin Action').first().json; const m = a.monitors || {};\nlet old = {}; try { old = $('Load Monitors (Admin)').all().map(i => i.json).find(x => x && x.site_id === a.site_id) || {}; } catch (e) {}\nconst has = (k) => m[k] !== undefined && m[k] !== null && m[k] !== '';\nconst b = (k, dflt) => has(k) ? !/^(false|0|no|off)$/i.test(String(m[k])) : (old[k] === undefined || old[k] === null || old[k] === '' ? dflt : !(old[k] === false || old[k] === 'false'));\nconst list = (v) => (Array.isArray(v) ? v : String(v || '').split(/[\\n,;]+/)).map(x => String(x).trim()).filter(Boolean);\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst ENG = ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode', 'copilot'];\nconst __row = { site_id: a.site_id, domain: a.domain || old.domain || '', ai_visibility: b('ai_visibility', true), ai_engines: has('ai_engines') ? list(m.ai_engines).map(e => e.toLowerCase()).filter(e => ENG.includes(e)).join(', ') : String(old.ai_engines || ''),\n  ai_prompts_max: has('ai_prompts_max') ? Math.min(50, Math.max(3, parseInt(m.ai_prompts_max, 10) || 20)) : (Number(old.ai_prompts_max) || 20), ai_pulse: b('ai_pulse', true), ai_growth: b('ai_growth', true),\n  ai_pages_month: has('ai_pages_month') ? Math.min(8, Math.max(0, parseInt(m.ai_pages_month, 10) || 0)) : (old.ai_pages_month === '' || old.ai_pages_month == null ? null : Number(old.ai_pages_month)), backlinks: b('backlinks', true), audit_monthly: b('audit_monthly', true), link_builder: b('link_builder', true),\n  audit_pages: has('audit_pages') ? Math.min(1000, Math.max(50, parseInt(m.audit_pages, 10) || 200)) : (Number(old.audit_pages) || 200), audit_js: b('audit_js', false),\n  competitors: has('competitors') ? list(m.competitors).map(normD).filter(Boolean).slice(0, 5).join(', ') : String(old.competitors || ''), brand_names: has('brand_names') ? list(m.brand_names).join(', ') : String(old.brand_names || ''),\n  // G32: weeks without a position gain before a ladder is called stuck and gets a re-plan proposal (empty = 8, kept between 2 and 26)\n  stuck_weeks: has('stuck_weeks') ? Math.min(26, Math.max(2, parseInt(m.stuck_weeks, 10) || 8)) : (old.stuck_weeks === '' || old.stuck_weeks == null ? null : Number(old.stuck_weeks)),\n  updated_at: a.updated_at, request_id: a.request_id || '' };\nif (__row.audit_js && __row.audit_pages > 500) __row.audit_pages = 500;   // JavaScript rendering is limited to 500 pages per audit\nreturn [{ json: __row }];\n"
+          "jsCode": "// Site Admin \"monitors\": merges the given settings over the stored seo_monitors row (exact columns). Settings: ai_visibility, ai_engines\n// (chatgpt, perplexity, gemini, claude, ai_overview, ai_mode, copilot, chatgpt_api, gemini_api), ai_prompts_max (3-500, G6), ai_personas / ai_markets\n// (G6: buyer roles and extra markets, CC-lang), ai_pulse_mode ('' auto | sample | full) + ai_pulse_per_week (1-6, empty = auto), ai_pulse (daily AI Pulse, v4.9), ai_growth (weekly AI Growth loop) + ai_pages_month (0-8, v4.12), link_builder (weekly Link Builder, v4.13), stuck_weeks (2-26, G32), backlinks, audit_monthly, audit_pages (50-1000), audit_js,\n// competitors (domains), brand_names.\nconst a = $('Admin Action').first().json; const m = a.monitors || {};\nlet old = {}; try { old = $('Load Monitors (Admin)').all().map(i => i.json).find(x => x && x.site_id === a.site_id) || {}; } catch (e) {}\nconst has = (k) => m[k] !== undefined && m[k] !== null && m[k] !== '';\nconst b = (k, dflt) => has(k) ? !/^(false|0|no|off)$/i.test(String(m[k])) : (old[k] === undefined || old[k] === null || old[k] === '' ? dflt : !(old[k] === false || old[k] === 'false'));\nconst list = (v) => (Array.isArray(v) ? v : String(v || '').split(/[\\n,;]+/)).map(x => String(x).trim()).filter(Boolean);\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst ENG = ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode', 'copilot', 'chatgpt_api', 'gemini_api'];   // G6: + the two model APIs (opt-in)\nconst mkt = (x) => { const mm = String(x || '').trim().replace(/[_\\s]+/g, '-').match(/^([A-Za-z]{2})(?:-([A-Za-z]{2,3}))?$/); return mm ? mm[1].toUpperCase() + '-' + (mm[2] || 'en').toLowerCase() : ''; };\nconst __row = { site_id: a.site_id, domain: a.domain || old.domain || '', ai_visibility: b('ai_visibility', true), ai_engines: has('ai_engines') ? list(m.ai_engines).map(e => e.toLowerCase()).filter(e => ENG.includes(e)).join(', ') : String(old.ai_engines || ''),\n  ai_prompts_max: has('ai_prompts_max') ? Math.min(500, Math.max(3, parseInt(m.ai_prompts_max, 10) || 20)) : (old.ai_prompts_max === '' || old.ai_prompts_max == null ? (old.site_id ? null : 50) : Number(old.ai_prompts_max)), ai_pulse: b('ai_pulse', true), ai_growth: b('ai_growth', true),\n  // G6 (2026-10-18): who asks, where, and how the daily pulse samples the panel — kept as stored unless given\n  ai_personas: has('ai_personas') ? list(m.ai_personas).map(x => x.replace(/\\s+/g, ' ').slice(0, 40)).slice(0, 6).join(', ') : String(old.ai_personas || ''),\n  ai_markets: has('ai_markets') ? [...new Set(list(m.ai_markets).map(mkt).filter(Boolean))].slice(0, 5).join(', ') : String(old.ai_markets || ''),\n  ai_pulse_mode: has('ai_pulse_mode') ? (['auto', 'sample', 'full'].includes(String(m.ai_pulse_mode).toLowerCase()) ? String(m.ai_pulse_mode).toLowerCase().replace('auto', '') : '') : String(old.ai_pulse_mode || ''),\n  ai_pulse_per_week: has('ai_pulse_per_week') ? (parseInt(m.ai_pulse_per_week, 10) >= 1 ? Math.min(6, parseInt(m.ai_pulse_per_week, 10)) : null) : (old.ai_pulse_per_week === '' || old.ai_pulse_per_week == null ? null : Number(old.ai_pulse_per_week)),\n  ai_pages_month: has('ai_pages_month') ? Math.min(8, Math.max(0, parseInt(m.ai_pages_month, 10) || 0)) : (old.ai_pages_month === '' || old.ai_pages_month == null ? null : Number(old.ai_pages_month)), backlinks: b('backlinks', true), audit_monthly: b('audit_monthly', true), link_builder: b('link_builder', true),\n  audit_pages: has('audit_pages') ? Math.min(1000, Math.max(50, parseInt(m.audit_pages, 10) || 200)) : (Number(old.audit_pages) || 200), audit_js: b('audit_js', false),\n  competitors: has('competitors') ? list(m.competitors).map(normD).filter(Boolean).slice(0, 5).join(', ') : String(old.competitors || ''), brand_names: has('brand_names') ? list(m.brand_names).join(', ') : String(old.brand_names || ''),\n  // G32: weeks without a position gain before a ladder is called stuck and gets a re-plan proposal (empty = 8, kept between 2 and 26)\n  stuck_weeks: has('stuck_weeks') ? Math.min(26, Math.max(2, parseInt(m.stuck_weeks, 10) || 8)) : (old.stuck_weeks === '' || old.stuck_weeks == null ? null : Number(old.stuck_weeks)),\n  updated_at: a.updated_at, request_id: a.request_id || '' };\nif (__row.audit_js && __row.audit_pages > 500) __row.audit_pages = 500;   // JavaScript rendering is limited to 500 pages per audit\nreturn [{ json: __row }];\n"
         },
         "id": "8c6bce25-376d-5118-9c48-3d6b4a981aea",
         "name": "Monitor Row (Admin)",
@@ -848,6 +888,46 @@
               {
                 "id": "stuck_weeks",
                 "displayName": "stuck_weeks",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "ai_personas",
+                "displayName": "ai_personas",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "ai_markets",
+                "displayName": "ai_markets",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "ai_pulse_mode",
+                "displayName": "ai_pulse_mode",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "ai_pulse_per_week",
+                "displayName": "ai_pulse_per_week",
                 "required": false,
                 "defaultMatch": false,
                 "display": true,
@@ -1266,7 +1346,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// Site Admin \"ai_prompts\": adds custom buyer questions (source custom, tracked weekly before the automatic ones) and switches questions off\n// (by prompt id or exact text). Exact seo_ai_prompts columns (v4.9: stage, cluster, volume, origin, updated_at); upsert by prompt_id.\nconst a = $('Admin Action').first().json;\nlet rows = []; try { rows = $('Load AI Prompts (Admin)').all().map(i => i.json).filter(x => x && x.site_id === a.site_id); } catch (e) {}\nconst hash = (t) => { let h = 5381; for (const c of String(t)) h = ((h * 33) ^ c.charCodeAt(0)) >>> 0; return h.toString(36); };\nconst norm = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\nconst out = [];\nfor (const q of a.add_prompts) { const id = 'p_' + hash(a.site_id + '|' + norm(q)); const old = rows.find(r => r.prompt_id === id);\n  out.push({ prompt_id: id, site_id: a.site_id, domain: a.domain || (old || {}).domain || '', prompt: q, kind: 'custom', topic: (old || {}).topic || '', keyword: (old || {}).keyword || norm(q).split(' ').slice(0, 5).join(' '), source: 'custom', status: 'active', created_at: (old || {}).created_at || a.updated_at,\n    stage: (old || {}).stage || 'consideration', cluster: (old || {}).cluster || '', volume: (old || {}).volume === undefined || (old || {}).volume === '' ? null : (old || {}).volume, origin: 'custom', updated_at: a.updated_at }); }\nfor (const x of a.off_prompts) for (const r of rows.filter(r => r.prompt_id === x || norm(r.prompt) === norm(x))) out.push({ prompt_id: r.prompt_id, site_id: r.site_id, domain: r.domain, prompt: r.prompt, kind: r.kind, topic: r.topic, keyword: r.keyword, source: r.source, status: 'off', created_at: r.created_at,\n  stage: r.stage || '', cluster: r.cluster || '', volume: r.volume === undefined || r.volume === '' ? null : r.volume, origin: r.origin || '', updated_at: a.updated_at });\nreturn out.length ? out.map(r => ({ json: r })) : [{ json: { skip: true } }];\n"
+          "jsCode": "// Site Admin \"ai_prompts\": adds custom buyer questions (source custom, tracked weekly before the automatic ones) and switches questions off\n// (by prompt id or exact text). Exact seo_ai_prompts columns (v4.9: stage, cluster, volume, origin, updated_at); upsert by prompt_id.\n// G6 (2026-10-18, AI_VISIBILITY_SPEC.md §10): the owner's panel manager — add up to 500 at once (text or { prompt, persona, cluster, stage,\n// market, pinned }: the app's CSV import), edit a stored question's persona / cluster / stage / market / pin in place, give it NEW WORDING\n// (a new question: the old one is switched off so no trend compares two different questions), switch off, switch back on, pin, unpin.\n// A pinned question is asked before every other and is never cut when the panel is made smaller. G6 columns: persona, market, pinned, fit_note.\nconst a = $('Admin Action').first().json;\nlet rows = []; try { rows = $('Load AI Prompts (Admin)').all().map(i => i.json).filter(x => x && x.site_id === a.site_id); } catch (e) {}\nconst hash = (t) => { let h = 5381; for (const c of String(t)) h = ((h * 33) ^ c.charCodeAt(0)) >>> 0; return h.toString(36); };\nconst norm = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9؀-ۿ]+/g, ' ').trim();\nconst STAGES = ['awareness', 'consideration', 'decision'];\nconst mkt = (x) => { const mm = String(x || '').trim().replace(/[_\\s]+/g, '-').match(/^([A-Za-z]{2})(?:-([A-Za-z]{2,3}))?$/); return mm ? mm[1].toUpperCase() + '-' + (mm[2] || 'en').toLowerCase() : ''; };\nconst vol = (v) => v === undefined || v === '' || v == null ? null : v;\nconst pinOf = (v) => v === true || String(v) === 'true';\nconst COLS = (r) => ({ prompt_id: r.prompt_id, site_id: r.site_id, domain: r.domain || a.domain || '', prompt: r.prompt, kind: r.kind || 'custom', topic: r.topic || '', keyword: r.keyword || '', source: r.source || 'custom', status: r.status || 'active', created_at: r.created_at || a.updated_at,\n  stage: r.stage || '', cluster: r.cluster || '', volume: vol(r.volume), origin: r.origin || '', updated_at: a.updated_at, persona: String(r.persona || ''), market: String(r.market || ''), pinned: pinOf(r.pinned), fit_note: String(r.fit_note || '') });\nconst out = new Map();   // one row per prompt id (the last change wins)\nconst put = (r) => out.set(r.prompt_id, COLS(r));\nconst find = (x) => rows.filter(r => r.prompt_id === x || norm(r.prompt) === norm(x));\nconst cur = (r) => out.get(r.prompt_id) || r;\nfor (const q0 of (a.add_prompts || [])) { const q = typeof q0 === 'object' ? q0 : { prompt: String(q0) };\n  const id = 'p_' + hash(a.site_id + '|' + norm(q.prompt)); const old = rows.find(r => r.prompt_id === id) || {};\n  put({ ...old, prompt_id: id, site_id: a.site_id, domain: a.domain || old.domain || '', prompt: q.prompt, kind: 'custom', topic: q.cluster || old.topic || '', keyword: old.keyword || norm(q.prompt).split(' ').slice(0, 5).join(' '), source: 'custom', status: 'active',\n    created_at: old.created_at || a.updated_at, stage: STAGES.includes(q.stage) ? q.stage : (old.stage || 'consideration'), cluster: q.cluster || old.cluster || '', origin: 'custom', persona: q.persona || old.persona || '', market: mkt(q.market) || old.market || '', pinned: q.pinned || pinOf(old.pinned), fit_note: '' }); }\nfor (const e of (a.edit_prompts || [])) for (const r0 of find(e.prompt_id)) { const r = cur(r0);\n  const patch = { persona: e.persona || r.persona, cluster: e.cluster || r.cluster, stage: STAGES.includes(e.stage) ? e.stage : r.stage, market: mkt(e.market) || r.market, pinned: e.pinned === undefined ? pinOf(r.pinned) : e.pinned };\n  if (e.prompt && norm(e.prompt) !== norm(r.prompt)) {   // new wording = a new question; the old one stays in the history, switched off\n    put({ ...r, status: 'off' });\n    const id = 'p_' + hash(a.site_id + '|' + norm(e.prompt));\n    put({ ...r, ...patch, prompt_id: id, prompt: e.prompt, source: 'custom', kind: r.kind === 'brand' ? 'brand' : 'custom', origin: 'custom', status: 'active', created_at: a.updated_at, keyword: norm(e.prompt).split(' ').slice(0, 5).join(' '), volume: null, fit_note: '' });\n  } else put({ ...r, ...patch }); }\nfor (const x of (a.off_prompts || [])) for (const r of find(x)) put({ ...cur(r), status: 'off' });\n// a question the keyword rule refused and the owner switches on becomes the owner's own (source custom): the read path then keeps it and only flags it\nfor (const x of (a.on_prompts || [])) for (const r of find(x)) { const c = cur(r); const was = String(c.status) === 'refused';\n  put({ ...c, status: 'active', source: was ? 'custom' : c.source, fit_note: was ? 'switched on by the owner over the keyword rule: ' + String(c.fit_note || '') : c.fit_note }); }\nfor (const x of (a.pin_prompts || [])) for (const r of find(x)) put({ ...cur(r), pinned: true });\nfor (const x of (a.unpin_prompts || [])) for (const r of find(x)) put({ ...cur(r), pinned: false });\nreturn out.size ? [...out.values()].map(r => ({ json: r })) : [{ json: { skip: true } }];\n"
         },
         "id": "158e4b3b-4e27-5ea3-8a85-3f009b55c741",
         "name": "AI Prompt Rows (Admin)",
@@ -1444,6 +1524,46 @@
               {
                 "id": "updated_at",
                 "displayName": "updated_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "persona",
+                "displayName": "persona",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "market",
+                "displayName": "market",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "pinned",
+                "displayName": "pinned",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "boolean",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "fit_note",
+                "displayName": "fit_note",
                 "required": false,
                 "defaultMatch": false,
                 "display": true,
@@ -1646,6 +1766,31 @@
                 },
                 "renameOutput": true,
                 "outputKey": "ai_prompts"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "loose",
+                    "version": 3
+                  },
+                  "conditions": [
+                    {
+                      "id": "b5861106-451d-53b8-baba-b7214e88aa4f",
+                      "leftValue": "={{ $json.action === 'content_groups' }}",
+                      "rightValue": "",
+                      "operator": {
+                        "type": "boolean",
+                        "operation": "true",
+                        "singleValue": true
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "content_groups"
               }
             ]
           },
@@ -1998,6 +2143,16 @@
                 "type": "string",
                 "canBeUsedToMatch": true,
                 "removed": false
+              },
+              {
+                "id": "content_groups_json",
+                "displayName": "content_groups_json",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
               }
             ],
             "attemptToConvertTypes": true,
@@ -2302,6 +2457,16 @@
                 "type": "string",
                 "canBeUsedToMatch": true,
                 "removed": false
+              },
+              {
+                "id": "qa_reasons",
+                "displayName": "qa_reasons",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
               }
             ],
             "attemptToConvertTypes": true,
@@ -2581,6 +2746,339 @@
       },
       {
         "parameters": {
+          "resource": "row",
+          "operation": "update",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_sites"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "site_id",
+                "condition": "eq",
+                "keyValue": "={{ $json.site_id }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "content_groups_json": "={{ $json.content_groups_json }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "site_id",
+                "displayName": "site_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "domain",
+                "displayName": "domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "gsc_property",
+                "displayName": "gsc_property",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "ga4_property_id",
+                "displayName": "ga4_property_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "country",
+                "displayName": "country",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "location_code",
+                "displayName": "location_code",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "language_code",
+                "displayName": "language_code",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "email",
+                "displayName": "email",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "callback_url",
+                "displayName": "callback_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "keywords",
+                "displayName": "keywords",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "status",
+                "displayName": "status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "source",
+                "displayName": "source",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "created_at",
+                "displayName": "created_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "last_run_at",
+                "displayName": "last_run_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "last_status",
+                "displayName": "last_status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "request_id",
+                "displayName": "request_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "canonical_host",
+                "displayName": "canonical_host",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "business_name",
+                "displayName": "business_name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "logo_url",
+                "displayName": "logo_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "nap_json",
+                "displayName": "nap_json",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "services_json",
+                "displayName": "services_json",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "nav_pages_json",
+                "displayName": "nav_pages_json",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "business_facts",
+                "displayName": "business_facts",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "cta",
+                "displayName": "cta",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "brand_names",
+                "displayName": "brand_names",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "competitors",
+                "displayName": "competitors",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "accreditation",
+                "displayName": "accreditation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "model_updated_at",
+                "displayName": "model_updated_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "content_groups_json",
+                "displayName": "content_groups_json",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "beb0b25a-1122-51c1-9f23-33679331c57b",
+        "name": "Set Content Groups",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          760,
+          880
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
           "jsCode": "// Rows affected by the admin action (0 = no site / row with that id or keyword).\nconst a = $('Admin Action').first().json; const rows = $input.all().map(i => i.json).filter(r => r && typeof r === 'object');\nconst err = rows.find(r => r.error);\nreturn [{ json: { ...a, affected: rows.filter(r => r.site_id || r.ladder_id).length, error: err ? String((err.error.message || err.error.description || err.error)).slice(0, 200) : null } }];\n"
         },
         "id": "4659a5df-3888-5085-91e0-507bbe38ec11",
@@ -2811,6 +3309,24 @@
           [
             {
               "node": "Load AI Prompts (Admin)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Set Content Groups",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Set Content Groups": {
+        "main": [
+          [
+            {
+              "node": "Admin Result",
               "type": "main",
               "index": 0
             }

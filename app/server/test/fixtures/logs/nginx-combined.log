@@ -1,0 +1,25 @@
+66.249.64.5 - - [15/Oct/2026:06:25:01 +0000] "GET / HTTP/1.1" 200 5123 "-" "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)" 0.042
+66.249.64.5 - - [15/Oct/2026:06:25:03 +0000] "GET /services/ai-consulting HTTP/1.1" 200 8812 "-" "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Googlebot/2.1; +http://www.google.com/bot.html) Chrome/130.0.6723.116 Safari/537.36" 0.120
+2001:4860:4801:10::2a - - [15/Oct/2026:06:30:00 +0000] "GET /blog/e-invoicing-uae?utm_source=x&page=2 HTTP/1.1" 200 4000 "-" "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)" 0.050
+66.249.64.6 - - [15/Oct/2026:07:00:00 +0000] "GET /old-page HTTP/1.1" 301 0 "-" "Googlebot/2.1 (+http://www.google.com/bot.html)" 0.003
+66.249.64.6 - - [15/Oct/2026:07:00:01 +0000] "GET /missing HTTP/1.1" 404 120 "-" "Googlebot/2.1 (+http://www.google.com/bot.html)" 0.004
+66.249.64.6 - - [15/Oct/2026:07:00:02 +0000] "GET /api/broken HTTP/1.1" 500 120 "-" "Googlebot/2.1 (+http://www.google.com/bot.html)" 1.500
+132.196.86.10 - - [15/Oct/2026:08:00:00 +0000] "GET /services/ai-consulting HTTP/1.1" 200 8812 "-" "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; GPTBot/1.2; +https://openai.com/gptbot" 0.090
+45.133.1.20 - - [15/Oct/2026:08:01:00 +0000] "GET /wp-login.php HTTP/1.1" 404 300 "-" "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; GPTBot/1.2; +https://openai.com/gptbot" 0.010
+45.133.1.21 - - [15/Oct/2026:08:01:05 +0000] "GET /.env HTTP/1.1" 404 300 "-" "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)" 0.010
+104.208.184.200 - - [15/Oct/2026:09:00:00 +0000] "GET /pricing HTTP/1.1" 200 6000 "-" "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; ChatGPT-User/1.0; +https://openai.com/bot" 0.200
+216.73.216.15 - - [15/Oct/2026:09:05:00 +0000] "GET /pricing HTTP/1.1" 200 6000 "-" "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Claude-User/1.0; +Claude-User@anthropic.com)" 0.180
+216.73.216.16 - - [15/Oct/2026:09:06:00 +0000] "GET /robots.txt HTTP/1.1" 200 90 "-" "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; ClaudeBot/1.0; +claudebot@anthropic.com)" 0.002
+44.208.221.197 - - [15/Oct/2026:09:10:00 +0000] "GET /blog/peppol HTTP/1.1" 200 3000 "-" "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Perplexity-User/1.0; +https://perplexity.ai/perplexity-user)" 0.150
+110.249.201.9 - - [15/Oct/2026:10:00:00 +0000] "GET /blog/ HTTP/1.1" 200 3000 "-" "Mozilla/5.0 (Linux; Android 5.0) AppleWebKit/537.36 (KHTML, like Gecko) Mobile Safari/537.36 (compatible; Bytespider; spider-feedback@bytedance.com)" 0.070
+157.55.39.12 - - [15/Oct/2026:10:30:00 +0000] "GET /sitemap.xml HTTP/1.1" 200 2000 "-" "Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)" 0.005
+40.77.170.1 - - [15/Oct/2026:10:31:00 +0000] "GET / HTTP/1.1" 200 5123 "-" "Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)" 0.040
+172.70.1.5 - - [15/Oct/2026:11:00:00 +0000] "GET /contact HTTP/1.1" 200 2500 "-" "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)" "66.249.64.7" 0.030
+172.70.1.6 - - [15/Oct/2026:11:00:05 +0000] "GET /contact HTTP/1.1" 200 2500 "-" "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)" 0.030
+10.0.0.8 - - [15/Oct/2026:11:01:00 +0000] "GET /about HTTP/1.1" 200 2500 "-" "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)" "66.249.64.7, 203.0.113.9" 0.030
+203.0.113.50 - - [15/Oct/2026:11:30:00 +0000] "GET /services/ai-consulting HTTP/1.1" 200 8812 "https://www.google.com/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36" 0.080
+::ffff:203.0.113.51 - - [15/Oct/2026:11:31:00 +0000] "GET / HTTP/2.0" 200 5123 "-" "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1" 0.020
+this is not a log line
+203.0.113.52 - - [15/Oct/2026:11:32:00 +0000] "\x16\x03\x01\x02\x00\x01\x00\x01\xFC\x03\x03" 400 157 "-" "-"
+203.0.113.53 - - [15/Oct/2026:11:33:00 +0000] "GET /shop HTTP/1.1" 200 900 "-" "Mozilla/5.0 (Linux; Android 13; CUBOT P80) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36" 0.031
+66.249.64.5 - - [15/Oct/2026:12:00:00 +0000] "GET / HTTP/1.1" 200 5123 "-" "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)" 0.042

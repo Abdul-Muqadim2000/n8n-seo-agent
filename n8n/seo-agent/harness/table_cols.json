@@ -163,7 +163,11 @@
   "ai_growth",
   "ai_pages_month",
   "link_builder",
-  "stuck_weeks"
+  "stuck_weeks",
+  "ai_personas",
+  "ai_markets",
+  "ai_pulse_mode",
+  "ai_pulse_per_week"
  ],
  "LINK_OUTREACH": [
   "site_id",
@@ -305,7 +309,8 @@
   "brand_names",
   "competitors",
   "accreditation",
-  "model_updated_at"
+  "model_updated_at",
+  "content_groups_json"
  ],
  "PAGES": [
   "site_id",
@@ -342,7 +347,8 @@
   "status",
   "published_url",
   "published_at",
-  "week"
+  "week",
+  "qa_reasons"
  ],
  "LADDER": [
   "ladder_id",
@@ -399,7 +405,10 @@
   "recheck_requested_at",
   "recheck_at",
   "recheck_rule",
-  "recheck_note"
+  "recheck_note",
+  "evidence",
+  "sample_urls",
+  "check_version"
  ],
  "CHECKIN": [
   "site_id",

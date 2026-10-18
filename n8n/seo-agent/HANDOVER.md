@@ -4,6 +4,28 @@
 
 For whoever continues this work (a new Claude Code session or a developer). Read this first, then `CLAUDE.md` (working rules) and `REVIEW.md` (design per feature: §3c ladder, §3d tracking, §3e cadence + blog package, §3f Search Console in the audit, §3g notices + check-in, §3h E-E-A-T and page types, §3i growth monitors, **§3j no repeated work**, §3m AI visibility, **§3n backlinks from every source**; §5c live-test log; §6 roadmap). Feature specs: `LADDER_FEATURE_SPEC.md`, `TRACKING_FEATURE_SPEC.md`, `MONITORS_FEATURE_SPEC.md`, `AI_VISIBILITY_SPEC.md`, **`BACKLINKS_SPEC.md`**.
 
+## 000. The schedule catch-up and the mail watcher (2026-10-17 re-rating C-1 / C-16)
+**Missed schedules.** `SEOagentCatchUp1` sweeps every 15 minutes (`7,22,37,52 * * * *`) and at every n8n start. A scheduled run that did
+not fire stays due until its next fire (a Monday run missed on Monday is still the week's run on Thursday); it is started once it is 30
+minutes late, at most two a sweep. The sweep has no execution time-out (n8n counts it in wall-clock time, so a sleeping Mac cancelled
+sweep 728), never acts on a plan older than 10 minutes, and retries a fire whose start it recorded but no run followed. A run started late
+says so first in its report (`ran_late`, "Ran late." box, "(ran late — due …)" in the subject). The record of every sweep is the
+`seo_cache` row `catchup:last`; each started fire is `catchup:<workflow id>:<due ISO>`. This does **not** replace an always-on host
+(owner item D25a): while the Mac sleeps nothing runs, the catch-up only makes the week happen once it wakes.
+
+**Is the Search Console mail watcher listening?** The API's `active: true` on `SEOagentConsole1` does not say so: its IMAP trigger drops
+when the Mac wakes without DNS, and n8n's own re-activation fails and is not retried. The catch-up sweep now ends with a watchdog that
+compares the Error Handler's last record of a drop (`seo_ops_alerts`, workflow *SEO Agent — Console Alerts*, node *Mailbox Trigger*)
+with the last time the watcher was (re)armed, and re-activates it through the public API (deactivate + activate) when the drop is newer,
+at most every 30 minutes. After three failed re-activations in a row the sweep fails with the reason, so the Error Handler sends the ops
+alert. To verify:
+1. Read the `seo_cache` row `catchup:watchdog:SEOagentConsole1`: `last_verdict` `listening` or `reactivate`, `last_result` "listening
+   again …" with `reactivated_at`, and `failures` 0. "not listening …" with `last_error` means n8n refused the IMAP connection.
+2. Prove it end to end: send any mail to the watched mailbox (INBOX of the IMAP credential). The trigger reads every new mail, so a
+   `SEO Agent — Console Alerts` execution appears within a minute or two (n8n UI → Executions); a mail that is not a Search Console
+   notice ends at *Ignore*, a real one also lands in `seo_console_alerts`. No execution means it is not listening, whatever the flag says.
+3. `docker logs n8n-n8n-1 | grep -i "Mailbox Trigger"`: the last line must not be "Failed to reactivate trigger node".
+
 ## 00. Start here: the 2026-10-11 system review and fix plan
 Every feature was run for real on techand.ai and scored against the best tools: **5/10 overall** (≈ 7 reachable after Phases 1-4).
 Work through **`docs/system-review-2026-10-11/FIX_PLAN.md`** (80 items with evidence, where to fix, the fix and an acceptance test; 6 phases

@@ -19,10 +19,13 @@ from ladder_common import ledger_mainline, ALERT_WEBHOOK_PLACEHOLDER   # R17 / R
 
 # R9 (2026-10-13, re-rating): the reserve / settle side branch, the same one build_monitors.py's WF.run_ledger builds. It hangs BESIDE the plan
 # node, never in the data path, because a Data Table node answers with the row it wrote rather than with its input.
-def ledger_nodes(N_, C_, mode, tag, plan, ends, pos):
+def ledger_nodes(N_, C_, mode, tag, plan, ends, pos, measured=''):
     x, y = pos
     row = 'Run Ledger Row (' + tag + ')'
-    res_js, set_js = monitor_ledger_js(V5, mode, plan, row, '')
+    # R82 (2026-10-16, re-rating C-6): `measured` names the node(s) carrying this run's own DataForSEO cost ('A|B'; a leading '!' = every
+    # paid call of the workflow, so none having run settles $0). It was always '' here, so the Site Tracker settled its $0.01 reservation
+    # "ESTIMATED" while its SERP checks and Trends lookups reported $0.0310 (row 98).
+    res_js, set_js = monitor_ledger_js(V5, mode, plan, row, measured)
     N_.append(node('Ensure Run Ledger (' + tag + ')', DT_TYPE, DT_VERSION, dt_create_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS), [x, y], onError='continueRegularOutput', executeOnce=True))
     N_.append(node(row, 'n8n-nodes-base.code', 2, {'jsCode': res_js}, [x + 220, y], executeOnce=True))
     N_.append(node('Reserve Run Ledger (' + tag + ')', DT_TYPE, DT_VERSION, dt_insert_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS), [x + 440, y], onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True))
@@ -38,10 +41,16 @@ def ledger_nodes(N_, C_, mode, tag, plan, ends, pos):
     for a_, b_ in ([(plan, 'Ensure Run Ledger (' + tag + ')'), ('Ensure Run Ledger (' + tag + ')', row), (row, 'Reserve Run Ledger (' + tag + ')'),
                     ('Ledger Settle (' + tag + ')', 'Settle Run Ledger (' + tag + ')')] + [(e, 'Ledger Settle (' + tag + ')') for e in ends]):
         link(C_, a_, b_)
-    return {'mode': mode, 'plan': plan, 'reserve': row, 'settle': 'Settle Run Ledger (' + tag + ')', 'settle_from': list(ends), 'measured': '', 'est': LEDGER_EST[mode],
+    return {'mode': mode, 'plan': plan, 'reserve': row, 'settle': 'Settle Run Ledger (' + tag + ')', 'settle_from': list(ends), 'measured': measured, 'est': LEDGER_EST[mode],
             'resume': 'After Run Ledger (' + tag + ')'}   # R17 (2026-10-14): the node that hands the plan's items back to the pipeline
 
 LEDGER_WIRING = {}   # R9: merged into harness/ledger_wiring.json after the last workflow is written
+import monitor_cost   # A9 (2026-10-16, F6): Site Brief's token count (R82) and the callbacks that wait for the settle (R115)
+# R82: the Claude agents of these workflows counted on their main path and priced into their settle (Site Brief was on its reservation)
+COUNTED = {'SEO Agent — Site Tracker': ['Site Brief']}
+# R115 (2026-10-16, re-rating D-19): each callback is posted after its run's settle and carries the settled run_ledger
+CALLBACKS = {'SEO Agent — Site Tracker': [('Has Callback (Site)?', 'POST Site Report')],
+             'SEO Agent — Content Cadence': [('Has Callback (Cadence)?', 'POST Cadence Note')]}
 from env_settings import ENV as _ENV_PW
 # D25b's channel: the watch pushes the serious changes to it as well. R29 / R30 (2026-10-14): this build reads SEO_ALERT_WEBHOOK_URL not at
 # all — neither the value (a secret, and this repository is public) nor whether it is set (that made the generated files depend on the
@@ -56,10 +65,11 @@ GSC_QUERIES_SRC = _rdt('code/_gsc_queries.js').rstrip('\n')   # G9 / D24: scrape
 SERP_OBS_SRC = _rdt('code/_serp_obs.js').rstrip('\n')        # D26: a results-page feature is one observation at one moment, never a fact about the query
 RANK_SERP_SRC = _rdt('code/_rank_serp.js').rstrip('\n')      # G6 (FIX_PLAN 2026-10-12): the whole results page of one rank check (features, page 1, share of voice, snapshot)
 PAGE_WATCH_SRC = _rdt('code/_page_watch.js').rstrip('\n')    # G11 + G25 (FIX_PLAN 2026-10-13): the daily key-page watch and URL Inspection within Google's quota
+WAITING_SRC = _rdt('code/_waiting.js').rstrip('\n')          # F-A1 / A-12 (2026-10-17): the pile-up count and the ladders being written, one rule shared with the ladder mode
 FIT_GATE_SRC = _rdt('code/_fit_gate.js').rstrip('\n')        # R16 (build_v4.py section 53): the fit gate, also over the rungs stored before it existed (fitStored)
 rd = lambda p: (seo_events.inline(_rdt(p)).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SITE_STATS__*/', SITE_STATS_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC)
                 .replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__RANK_SERP__*/', RANK_SERP_SRC).replace('/*__PAGE_WATCH__*/', PAGE_WATCH_SRC)
-                .replace('/*__FIT_GATE__*/', FIT_GATE_SRC))
+                .replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__WAITING__*/', WAITING_SRC))
 NS = uuid.UUID('5e0a9e1e-2a1f-4c0b-9d8e-0000a9e0c0de')
 nid = lambda name: str(uuid.uuid5(NS, 'sitetracker:' + name))
 MAIN_WF = json.load(open(os.path.join(OUT, 'SEO_Agent_v4.json')))[0]
@@ -85,9 +95,22 @@ def link(conns, a, b, out=0):
     outs = conns.setdefault(a, {}).setdefault('main', [])
     while len(outs) <= out: outs.append([])
     outs[out].append({'node': b, 'type': 'main', 'index': 0})
+RAN_LATE_WANT = {'SEO Agent — Page Watch': ['Watch Alerts', 'Watch Ops Channels']}   # F-L (2026-10-18): the nodes that say a late run was late
 def write(wfobj, fname):
+    _rl = monitor_cost.bake_ran_late(wfobj, V5) if any(monitor_cost.RAN_LATE_MARK in str((n.get('parameters') or {}).get('jsCode') or '') for n in wfobj['nodes']) else []
+    assert sorted(_rl) == sorted(RAN_LATE_WANT.get(wfobj.get('name'), [])), 'F-L: ' + str(wfobj.get('name')) + ' baked the ran-late notice into ' + str(_rl)
     # R17 (2026-10-14, FIX_PLAN §3.12): the reserve chain goes on the MAIN path, now that every connection of this workflow is made
-    if wfobj.get('name') in LEDGER_WIRING: ledger_mainline(wfobj, LEDGER_WIRING[wfobj['name']])
+    if wfobj.get('name') in LEDGER_WIRING:
+        _w = LEDGER_WIRING[wfobj['name']]
+        _declared = list(_w['settle_from'])   # R115: the report ends this workflow declared, before ledger_mainline adds the loose ends
+        _table = monitor_cost.count_chain(wfobj, COUNTED[wfobj['name']]) if wfobj['name'] in COUNTED else None
+        ledger_mainline(wfobj, _w)
+        if _table is not None:
+            monitor_cost.bake_calls(wfobj, 'Ledger Settle (' + _w['reserve'][len('Run Ledger Row ('):-1] + ')', _table)
+            assert sorted(c['node'] for c in _table) == sorted(_w['ai_nodes']), 'R82: ' + wfobj['name'] + ' prices ' + str(_table) + ' but sweeps ' + str(_w['ai_nodes'])
+            _w['ai_calls'] = _table
+        for _h, _p in CALLBACKS.get(wfobj['name'], []):
+            monitor_cost.callback_after_settle(wfobj, _w, _h, _p, V5, _declared)
     url_lint.check(wfobj, wfobj.get('name') or fname)   # D15: no node builds a site URL by hand (url_lint.py)
     retry_lint.check(wfobj, wfobj.get('name') or fname)   # G1: every external HTTP node carries the retry rule (retry_lint.py)
     for _n in wfobj['nodes']:   # e-mails retry a transient SMTP / DNS failure (live finding 2026-10-02: EAI_AGAIN smtp.gmail.com)
@@ -343,6 +366,11 @@ for n in N:
     if n['type'] == '@n8n/n8n-nodes-langchain.lmChatAnthropic': assert n.get('credentials'), 'model without credential: ' + n['name']
 _code = {n['name']: n['parameters'].get('jsCode', '') for n in N if n['type'] == 'n8n-nodes-base.code'}
 for _n in ('Match Slugs (Detect)', 'Detect Published'): assert 'const overlapTokens' in _code[_n], _n + ': word rules not inlined'
+# R34 (2026-10-16, build_v4.py section 88): the same plain GET of the site's own pages reads the titles the inventory lacks (bounded, free),
+# and the inventory names the pages still judged by their address only. *Fetch Pages (Detect)* is the one HTTP node for both reads.
+assert "grab('Load Pages (Site)')" in _code['Match Slugs (Detect)'] and 'title_fill_per_site' in _code['Match Slugs (Detect)'] and 'title_fill' in _code['Match Slugs (Detect)'], 'R34: Match Slugs (Detect) does not read the missing titles'
+assert 'SM.titleGap(merged)' in _code['Page Inventory (Site)'] and 'title_unknown' in _code['Page Inventory (Site)'], 'R34: the page inventory does not name the pages without a title'
+assert any(n['name'] == 'Fetch Pages (Detect)' and n.get('retryOnFail') for n in N), 'R34: the title read must keep the retry rule (retry_lint)'
 assert 'function publishedRows(' in _code['Detect Published'], 'Detect Published: published-page rows not inlined'
 assert not any(('/*__OVERLAP__*/' in c_) or ('/*__PUBLISH_ROWS__*/' in c_) for c_ in _code.values()), 'placeholder left in the Site Tracker'
 # FIX_PLAN 2026-10-12: G9 (every Search Console row, the anonymised share, brand vs non-brand, the audit's scraper rule), G28 (a traffic alert
@@ -359,7 +387,8 @@ for _n in ('Inspect Requests', 'Parse Inspection', 'Inspect Rows (Site)', 'Site 
 assert not any('/*__PAGE_WATCH__*/' in c_ for c_ in _code.values()), 'page-watch placeholder left in the Site Tracker'
 assert 'PW.inspectBudget(' in _code['Inspect Requests'] and 'inspect_at' in _code['Inspect Requests'], 'G25: the inspections do not rotate within the quota'
 assert 'index_coverage' in _code['Site Metrics'] and 'page_watch: watch' in _code['Site Metrics'], 'G11 / G25: the weekly item carries neither the index view nor the watch'
-LEDGER_WIRING['SEO Agent — Site Tracker'] = ledger_nodes(N, C, 'site_tracker', 'Site', 'Site Plan', ['Site Report'], at(11, 9))
+LEDGER_WIRING['SEO Agent — Site Tracker'] = ledger_nodes(N, C, 'site_tracker', 'Site', 'Site Plan', ['Site Report'], at(11, 9),
+                                                         measured='!SERP Check (Site) Answers|Google Trends Answers')
 # ---- B-A10 (2026-10-15, INVARIANTS rule 3): the two paid DataForSEO calls of the week go through the in-200 retry gate ----
 # Both reading sides were already honest about a task error inside a 200 (Parse Trends -> `DataForSEO <code>`, Parse Site SERP ->
 # RS.read -> position -1, "check failed" and never "not in the top 50"); what neither had was a second attempt. A trend that
@@ -397,20 +426,21 @@ N.append(node('Set Prospects', DT_TYPE, DT_VERSION, dt_upsert_params_keys(PROSPE
 N.append(node('Load AI Prompts (Admin)', DT_TYPE, DT_VERSION, dt_get_where_params(AI_PROMPTS_TABLE, 'site_id', 'eq', '={{ $json.site_id }}'), [760, 720], **ALOAD))
 N.append(code('AI Prompt Rows (Admin)', rd('code/AI_Prompt_Rows_Admin.js'), [1000, 720]))
 N.append(node('Set AI Prompts', DT_TYPE, DT_VERSION, dt_upsert_params(AI_PROMPTS_TABLE, AI_PROMPTS_COLS, 'prompt_id'), [1240, 720], alwaysOutputData=True, onError='continueRegularOutput'))
-N.append(switch('Admin Route', [('delete', "{{ $json.action === 'delete' }}"), ('status', "{{ $json.action === 'pause' || $json.action === 'resume' }}"), ('cadence', "{{ $json.action === 'cadence' }}"), ('unpublish', "{{ $json.action === 'unpublish' }}"), ('monitors', "{{ $json.action === 'monitors' }}"), ('prospect', "{{ $json.action === 'prospect' }}"), ('ai_prompts', "{{ $json.action === 'ai_prompts' }}")], [480, 0]))
+N.append(switch('Admin Route', [('delete', "{{ $json.action === 'delete' }}"), ('status', "{{ $json.action === 'pause' || $json.action === 'resume' }}"), ('cadence', "{{ $json.action === 'cadence' }}"), ('unpublish', "{{ $json.action === 'unpublish' }}"), ('monitors', "{{ $json.action === 'monitors' }}"), ('prospect', "{{ $json.action === 'prospect' }}"), ('ai_prompts', "{{ $json.action === 'ai_prompts' }}"), ('content_groups', "{{ $json.action === 'content_groups' }}")], [480, 0]))
 N.append(node('Delete Site', DT_TYPE, DT_VERSION, {'resource': 'row', 'operation': 'deleteRows', 'dataTableId': {'__rl': True, 'mode': 'name', 'value': SITES_TABLE}, 'matchType': 'allConditions', 'filters': {'conditions': [{'keyName': 'site_id', 'condition': 'eq', 'keyValue': '={{ $json.site_id }}'}]}, 'options': {}}, [760, -240], alwaysOutputData=True, onError='continueRegularOutput'))
 N.append(node('Set Site Status', DT_TYPE, DT_VERSION, dt_update_params(SITES_TABLE, SITES_COLS, [('site_id', '={{ $json.site_id }}')], {'status': '={{ $json.status }}'}), [760, -80], alwaysOutputData=True, onError='continueRegularOutput'))
 N.append(code('Cadence Row (Admin)', rd('code/Cadence_Row_Admin.js'), [760, 80]))
 N.append(node('Set Cadence', DT_TYPE, DT_VERSION, dt_upsert_params(CADENCE_TABLE, CADENCE_COLS, 'site_id'), [1000, 80], alwaysOutputData=True, onError='continueRegularOutput'))
 N.append(node('Unpublish Log', DT_TYPE, DT_VERSION, dt_update_params(LOG_TABLE, LOG_COLS, [('site_id', '={{ $json.site_id }}'), ('keyword', '={{ $json.keyword }}')], {'status': 'started', 'published_url': '', 'published_at': ''}), [760, 240], alwaysOutputData=True, onError='continueRegularOutput'))
 N.append(node('Unpublish Ladder', DT_TYPE, DT_VERSION, dt_update_params(LADDER_TABLE, LADDER_COLS, [('domain', "={{ $('Admin Action').first().json.domain }}"), ('keyword', "={{ $('Admin Action').first().json.keyword }}")], {'status': 'writing', 'page_exists': 'false'}), [1000, 240], alwaysOutputData=True, onError='continueRegularOutput'))
+N.append(node('Set Content Groups', DT_TYPE, DT_VERSION, dt_update_params(SITES_TABLE, SITES_COLS, [('site_id', '={{ $json.site_id }}')], {'content_groups_json': '={{ $json.content_groups_json }}'}), [760, 880], alwaysOutputData=True, onError='continueRegularOutput'))   # B7-5 (W3-D)
 N.append(code('Admin Result', rd('code/Admin_Result.js'), [1240, 0]))
 N.append(sticky('Note', """## SEO Agent — Site Admin
 Manages a tracked site without the n8n UI. Body: `{ action, site_id | domain, ... }` through the Test Runner (`workflow: SEOagentSiteAdm1`) or an Execute Workflow node:
 `pause` / `resume` set `status` in `seo_sites` (the weekly runs skip paused sites; on-demand runs still work) · `delete` removes the site row (history stays) · `cadence` + `pages_per_week` (0-3) sets the Content Cadence for the site (`seo_cadence`) · `unpublish` + `keyword` reverts a published page to "started" (content log + ladder row) · `monitors` (v4.5) sets the growth monitors (`ai_visibility`, `ai_engines`, `ai_prompts_max` (3-50), `ai_pulse` (daily AI Pulse), `backlinks`, `audit_monthly`, `audit_pages`, `audit_js`, `competitors`, `brand_names`; given fields replace, others kept) · `prospect` + `prospect_domain` + `status` (new / contacted / won / rejected / ignored) and/or `note` updates the link-prospect pipeline · `ai_prompts` + `add` (questions) / `remove` (prompt ids or texts) manages the tracked AI questions.
 **Must be published** (n8n 2.x refuses to execute an unpublished sub-workflow: live finding 2026-10-02).""", [-40, -520], 900, 240, 7))
 for a, b in [('Admin Run', 'Ensure Cadence Table (Admin)'), ('Ensure Cadence Table (Admin)', 'Ensure Log Table (Admin)'), ('Ensure Log Table (Admin)', 'Ensure Sites Table (Admin)'), ('Ensure Sites Table (Admin)', 'Ensure Monitors Table (Admin)'), ('Ensure Monitors Table (Admin)', 'Ensure Prospects Table (Admin)'), ('Ensure Prospects Table (Admin)', 'Ensure AI Prompts Table (Admin)'), ('Ensure AI Prompts Table (Admin)', 'Admin Action'), ('Admin Action', 'Admin Route'), ('Delete Site', 'Admin Result'), ('Set Site Status', 'Admin Result'), ('Cadence Row (Admin)', 'Set Cadence'), ('Set Cadence', 'Admin Result'), ('Unpublish Log', 'Unpublish Ladder'), ('Unpublish Ladder', 'Admin Result')]: link(C, a, b)
-link(C, 'Admin Route', 'Delete Site', 0); link(C, 'Admin Route', 'Set Site Status', 1); link(C, 'Admin Route', 'Cadence Row (Admin)', 2); link(C, 'Admin Route', 'Unpublish Log', 3); link(C, 'Admin Route', 'Load Monitors (Admin)', 4); link(C, 'Admin Route', 'Load Link Prospects (Admin)', 5); link(C, 'Admin Route', 'Load AI Prompts (Admin)', 6)
+link(C, 'Admin Route', 'Delete Site', 0); link(C, 'Admin Route', 'Set Site Status', 1); link(C, 'Admin Route', 'Cadence Row (Admin)', 2); link(C, 'Admin Route', 'Unpublish Log', 3); link(C, 'Admin Route', 'Load Monitors (Admin)', 4); link(C, 'Admin Route', 'Load Link Prospects (Admin)', 5); link(C, 'Admin Route', 'Load AI Prompts (Admin)', 6); link(C, 'Admin Route', 'Set Content Groups', 7); link(C, 'Set Content Groups', 'Admin Result')
 for a, b in [('Load Monitors (Admin)', 'Monitor Row (Admin)'), ('Monitor Row (Admin)', 'Set Monitors'), ('Set Monitors', 'Admin Result'), ('Load Link Prospects (Admin)', 'Prospect Rows (Admin)'), ('Prospect Rows (Admin)', 'Set Prospects'), ('Set Prospects', 'Admin Result'), ('Load AI Prompts (Admin)', 'AI Prompt Rows (Admin)'), ('AI Prompt Rows (Admin)', 'Set AI Prompts'), ('Set AI Prompts', 'Admin Result')]: link(C, a, b)
 write(wf('SEOagentSiteAdm1', 'SEO Agent — Site Admin', N, C), 'SEO_Agent_Site_Admin.json')
 
@@ -448,6 +478,9 @@ N.append(node('Load Monitors (Cadence)', DT_TYPE, DT_VERSION, dt_get_all_params(
 # D11: the website's page inventory, so a search a live page already answers is refreshed, not written as a second page
 N.append(node('Ensure Pages Table (Cadence)', DT_TYPE, DT_VERSION, dt_create_params(PAGES_TABLE, PAGES_COLS), at(13, 2), onError='continueRegularOutput'))
 N.append(node('Load Pages (Cadence)', DT_TYPE, DT_VERSION, dt_get_all_params(PAGES_TABLE), at(14, 2), **LOAD))
+# R90 (2026-10-16, re-rating 2026-10-15): the names AI uses for other companies (seo_cache rows of kind 'ai', key ai_brands:<site_id>), so
+# the fit gate of the stored rungs can recognise another company's brand the way Ladder Pool and Rank Keywords already do
+N.append(node('Load AI Brands (Cadence)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'ai'), at(15, 2), **LOAD))
 N.append(code('Cadence Plan', rd('code/Cadence_Plan.js'), at(10, 0)))
 N.append(iff('Any Pages?', '{{ !$json.nothing_to_do }}', at(11, 0)))
 N.append(iff('Site Notes?', '{{ !!$json.report_only && !$json.dry_run }}', at(12, 1)))
@@ -474,7 +507,7 @@ N.append(code('Cadence Note', urls(rd('code/Cadence_Note.js')), at(19, 0)))
 N.append(iff('Has Email (Cadence)?', '{{ !!$json.email }}', at(20, -1)))
 N.append(node('Send Cadence Note', 'n8n-nodes-base.emailSend', 2.1, {'fromEmail': SENDER, 'toEmail': '={{ $json.email }}', 'subject': '={{ $json.subject }}', 'emailFormat': 'html', 'html': '={{ $json.html }}', 'options': {'appendAttribution': False}}, at(21, -1), credentials=SMTP, onError='continueRegularOutput'))
 N.append(iff('Has Callback (Cadence)?', '{{ !!$json.callback_url }}', at(20, 1)))
-N.append(node('POST Cadence Note', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.callback_url }}', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': "={{ JSON.stringify({ status: 'progress', stage: 'content_cadence', request_id: $json.request_id, site_id: $json.site_id, domain: $json.domain, week: $json.week, pages: $json.pages, upcoming: $json.upcoming, pending_publish: $json.pending_publish, candidates: $json.candidates, paused_reason: $json.paused_reason || '', waiting_publish: $json.waiting_publish || 0, max_waiting: $json.max_waiting || 0, awaiting_approval: $json.awaiting_approval || [], suggestions: $json.suggestions || [], queued_ladders: $json.queued_ladders || [], won_ladders: $json.won_ladders || [], waiting_for_support: $json.waiting_for_support || [] }) }}", 'options': {'timeout': 20000}}, at(21, 1), onError='continueRegularOutput'))
+N.append(node('POST Cadence Note', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.callback_url }}', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': "={{ JSON.stringify({ status: 'progress', stage: 'content_cadence', request_id: $json.request_id, site_id: $json.site_id, domain: $json.domain, week: $json.week, pages: $json.pages, upcoming: $json.upcoming, pending_publish: $json.pending_publish, candidates: $json.candidates, paused_reason: $json.paused_reason || '', waiting_publish: $json.waiting_publish || 0, max_waiting: $json.max_waiting || 0, awaiting_approval: $json.awaiting_approval || [], suggestions: $json.suggestions || [], queued_ladders: $json.queued_ladders || [], won_ladders: $json.won_ladders || [], waiting_for_support: $json.waiting_for_support || [], run_ledger: $json.run_ledger || null }) }}", 'options': {'timeout': 20000}}, at(21, 1), onError='continueRegularOutput'))
 N.append(sticky('Note', f"""## SEO Agent — Content Cadence (v4.3, pipeline rules v4.8)
 Runs **every Monday 10:00** (after the trackers) and on demand through *Manual Run* (`{{ site_id | domain, pages?, dry_run?, force? }}`). For every site with a cadence in `{CADENCE_TABLE}` (set by "Track my site" / API `blogs_per_week`, or Site Admin `cadence`; 1-3 per week) it picks the week's topics in this order: the keyword ladder's next **planned** pages (rung order, with the ladder's internal links), **striking-distance** queries from `{QUERY_TABLE}` (positions 4-20 with impressions: the page that already ranks gets strengthened), **rising** related searches from `{TRENDS_TABLE}`. Keywords written in the last 90 days, written/published ladder pages, brand queries and paused sites are skipped.
 Each pick starts a content run in SEO Agent v4 (`mode: keyword`, `force_content`, internal rate-limit key `cadence:<site>`) that delivers the PDF/Word report **plus the blog package** (article HTML, Markdown, meta.json) by e-mail / callback (`stage: content`). The run is logged in `{LOG_TABLE}` (status started), ladder rows go to *writing*, and one note per site goes out (`stage: content_cadence`): this week's pages and why, what comes next, pages still waiting for a publish link.
@@ -482,7 +515,7 @@ Each pick starts a content run in SEO Agent v4 (`mode: keyword`, `force_content`
 **Pipeline rules (v4.8)** from `{LADDER_SETTINGS_TABLE}` (written by the web app; one row per ladder + a `_site` row with the website defaults; no row = the site's default mode or Auto, active, priority by start date): only **Auto** ladders with status active / queued are written, at most `max_active` (default 2) at a time in **priority** order (ladder 1's pages before ladder 2's; plan type *direct* writes the main page first); the **main page waits** until half of the supporting pages are published or the main keyword ranks 1-30; a ladder whose main keyword held the **top 3 for 4 checks** gets no more pages; with `max_waiting` (default 3) pages written but not published the site is **paused** (`paused_reason: pileup`; on demand `force: true` bypasses it); opportunity posts only when `opportunities` is Auto (else listed as `suggestions`); **Manual** ladders' next pages are listed in `awaiting_approval`. Sites without a page but with news get a *Cadence Status* note (same callback stage).
 The owner publishes in any CMS and reports the URL ("I published a page" in the form, or API `mode: published`): the page is checked live, logged as published, the ladder row gets the real URL, and the Site Tracker inspects indexing and positions from the next Monday. `dry_run: true` only plans. Cost: about $1.20 of AI per page.
 Form: {FORM_URL} · API: {API_URL}""", [-40, -700], 1180, 560))
-for a, b in [('Weekly Schedule', 'Ensure Log Table'), ('Manual Run', 'Ensure Log Table'), ('Ensure Log Table', 'Ensure Cadence Table'), ('Ensure Cadence Table', 'Ensure Trends Table (Cadence)'), ('Ensure Trends Table (Cadence)', 'Ensure Ladder Settings Table'), ('Ensure Ladder Settings Table', 'Ensure AI Targets Table (Cadence)'), ('Ensure AI Targets Table (Cadence)', 'Load Sites'), ('Load Sites', 'Load Cadence'), ('Load Cadence', 'Load Ladders'), ('Load Ladders', 'Load Query History'), ('Load Query History', 'Load Trends'), ('Load Trends', 'Load Content Log'), ('Load Content Log', 'Load Ladder Settings'), ('Load Ladder Settings', 'Load Main Keyword Ranks'), ('Load Main Keyword Ranks', 'Load AI Targets (Cadence)'), ('Load AI Targets (Cadence)', 'Load AI Targets Writing (Cadence)'), ('Load AI Targets Writing (Cadence)', 'Load Monitors (Cadence)'), ('Load Monitors (Cadence)', 'Ensure Pages Table (Cadence)'), ('Ensure Pages Table (Cadence)', 'Load Pages (Cadence)'), ('Load Pages (Cadence)', 'Cadence Plan'), ('Cadence Plan', 'Any Pages?'),
+for a, b in [('Weekly Schedule', 'Ensure Log Table'), ('Manual Run', 'Ensure Log Table'), ('Ensure Log Table', 'Ensure Cadence Table'), ('Ensure Cadence Table', 'Ensure Trends Table (Cadence)'), ('Ensure Trends Table (Cadence)', 'Ensure Ladder Settings Table'), ('Ensure Ladder Settings Table', 'Ensure AI Targets Table (Cadence)'), ('Ensure AI Targets Table (Cadence)', 'Load Sites'), ('Load Sites', 'Load Cadence'), ('Load Cadence', 'Load Ladders'), ('Load Ladders', 'Load Query History'), ('Load Query History', 'Load Trends'), ('Load Trends', 'Load Content Log'), ('Load Content Log', 'Load Ladder Settings'), ('Load Ladder Settings', 'Load Main Keyword Ranks'), ('Load Main Keyword Ranks', 'Load AI Targets (Cadence)'), ('Load AI Targets (Cadence)', 'Load AI Targets Writing (Cadence)'), ('Load AI Targets Writing (Cadence)', 'Load Monitors (Cadence)'), ('Load Monitors (Cadence)', 'Ensure Pages Table (Cadence)'), ('Ensure Pages Table (Cadence)', 'Load Pages (Cadence)'), ('Load Pages (Cadence)', 'Load AI Brands (Cadence)'), ('Load AI Brands (Cadence)', 'Cadence Plan'), ('Cadence Plan', 'Any Pages?'),
              ('Start Content Runs', 'Log Rows'), ('Log Rows', 'Save Content Log'), ('Save Content Log', 'Ladder Marks'), ('Ladder Marks', 'Any Ladder Marks?'), ('Mark Ladder Writing', 'AI Target Marks'), ('AI Target Marks', 'Any AI Marks?'), ('Mark AI Target Writing', 'AI Target Settle'), ('AI Target Settle', 'Any AI Settles?'), ('Settle AI Targets', 'Cadence Note'), ('Cadence Note', 'Has Email (Cadence)?'), ('Cadence Note', 'Has Callback (Cadence)?')]: link(C, a, b)
 link(C, 'Any Pages?', 'Dry Run?', 0); link(C, 'Any Pages?', 'Site Notes?', 1)
 link(C, 'Site Notes?', 'Cadence Status', 0); link(C, 'Site Notes?', 'Nothing To Write', 1)
@@ -500,6 +533,12 @@ LEDGER_WIRING['SEO Agent — Content Cadence'] = ledger_nodes(N, C, 'content_cad
 _cadcode = {n['name']: n['parameters']['jsCode'] for n in N if n['type'] == 'n8n-nodes-base.code'}
 assert 'const fitStored = ' in _cadcode['Cadence Plan'] and 'fitStored(l, { ...fitCtx' in _cadcode['Cadence Plan'] and 'const serpFor = ' in _cadcode['Cadence Plan'], 'R16: the Content Cadence does not run the fit gate over the stored rungs'
 assert not any('/*__FIT_GATE__*/' in c_ for c_ in _cadcode.values()), 'R16: fit-gate placeholder left in the Content Cadence'
+# R87 / R90 / R111 (2026-10-16): one stored reading per position, the ladder's own results pages and the AI brand names reach the gate; a
+# set-aside head pauses its ladder; a draft that failed its quality check is counted by the pile-up guard as needing a fix
+assert 'const RS = (() => {' in _cadcode['Cadence Plan'] and 'RS.serpHosts(h, 10)' in _cadcode['Cadence Plan'] and 'ladderDoms.get(l.ladder_id)' in _cadcode['Cadence Plan'] \
+    and "rowsOf('Load AI Brands (Cadence)')" in _cadcode['Cadence Plan'], 'R90: the cadence judges a stored rung without its ladder\'s results pages or the AI brand names'
+assert 'head_aside' in _cadcode['Cadence Plan'] and 'paused_ladders:' in _cadcode['Cadence Plan'], 'R87: a ladder whose main keyword is set aside is still written'
+assert "const WAITS = new Set(['written', 'not_ready']);" in _cadcode['Cadence Plan'] and 'needs_fix_keywords' in _cadcode['Cadence Plan'], 'R111: a failed draft is not counted, or not labelled, by the pile-up guard'
 assert "status: 'set_aside'" in _cadcode['Ladder Marks'], 'R16: a set-aside rung is not written back to the ladder row'
 for _n in ('Cadence Note', 'Cadence Status'): assert 'Set aside' in _cadcode[_n], _n + ': the set-aside rungs are not reported'
 write(wf('SEOagentCadence1', 'SEO Agent — Content Cadence', N, C), 'SEO_Agent_Content_Cadence.json')

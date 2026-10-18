@@ -646,7 +646,12 @@ patch('Competitor Analysis', "  const rdap = (ages[i]?.events || []).find(e => /
 log('Domain age: free RDAP lookup added as a fallback to DataForSEO WHOIS (covers .ae, .pk, .de and other ccTLDs)')
 
 # ---- smarter competitor-discovery queries (H1s of shallow service pages instead of raw titles) ----
-setcode('Fallback Queries', r"""// Queries used to discover competitors on Google: what this site's key pages are about, taken from H1s/titles of shallow pages.
+setcode('Fallback Queries', r"""// Queries used to discover competitors on Google and to seed the full report's keyword research: what this business sells.
+// R60 (2026-10-16, re-rating of 2026-10-15): the seeds were the H1s of the crawled pages sorted by click depth, and a page no link reaches
+// gets click_depth 0 from a crawler that also starts from the sitemap — so three orphan cards ("ai & automation", "assess & envision",
+// "build & implement") sorted ahead of every real service page and became "Keyword research based on your services". The site's own words
+// come first now: the keywords the owner configured for this site, then the services its site model holds (the ones the linked pages talk
+// about most first), and only then page headings, with pages no link reaches last. Each query says where it came from (`source`).
 const base = $('Schema Findings').first().json;
 const pages = $('Get Crawled Pages').first().json.tasks?.[0]?.result?.[0]?.items || [];
 const brand = String(base.domain || '').split('.')[0].toLowerCase();
@@ -655,22 +660,40 @@ const skip = (u) => /privacy|cookie|terms|security|legal|contact|about|insights|
 const clean = (t) => String(t || '').split(/\s[|\-–—:]\s/)[0].replace(/[^\w\s&\-]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
 const generic = /^(page|home|homepage|welcome|untitled|services?|products?|solutions?|our (services|work|products)|index|overview)\b/;
 const ok = (q) => { const w = q ? q.split(' ').length : 0; return w >= 2 && w <= 7 && !generic.test(q) && !(brand.length > 3 && q.includes(brand)); };
+const bareOf = (d) => String(d || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
+const listOf = (v) => { if (Array.isArray(v)) return v; const s = String(v == null ? '' : v).trim(); if (!s) return [];
+  if (/^\[/.test(s)) { try { const a = JSON.parse(s); return Array.isArray(a) ? a : []; } catch (e) { return []; } } return s.split(/[,;\n]+/); };
+// the stored site row and the site model of THIS site (another site's row never seeds this one)
+let siteRow = {}; try { const r = $('Load Site Row (Model)').first().json || {}; if (r.domain && bareOf(r.domain) === bareOf(base.domain)) siteRow = r; } catch (e) {}
+let model = null; try { const m = $('Restore Site Model').first().json.site_model || null; if (m && (!m.domain || bareOf(m.domain) === bareOf(base.domain))) model = m; } catch (e) {}
+// a page with click depth 0 that is not the homepage was reached only through the sitemap (R117): no link leads a visitor to it
+const unlinked = (p) => !!((p.checks || {}).is_orphan_page) || (p.click_depth === 0 && !isHome(p.url));
+const live = pages.filter(p => p.url && !isHome(p.url) && !skip(p.url) && (p.status_code == null || p.status_code === 200));
+const headOf = (p) => { const m = p.meta || {}; return [clean(((m.htags || {}).h1 || [])[0]), clean(m.title)].join(' '); };
+const linkedText = live.filter(p => !unlinked(p)).map(headOf);
+const toks = (s) => String(s || '').toLowerCase().split(/[^a-z0-9]+/).filter(t => t.length > 2 && !['and', 'for', 'the', 'with', 'microsoft'].includes(t));
+const out = []; const add = (q, source) => { if (q && ok(q) && !out.some(o => o.query === q) && out.length < 3) out.push({ query: q, source }); };
+// 1. the keywords the owner configured for this site
+for (const k of listOf(siteRow.keywords)) add(clean(k), 'your keywords');
+// 2. the services the site model holds, the ones the linked pages talk about most first
+const services = [...new Set([...listOf(model && model.services), ...listOf(siteRow.services_json)].map(clean).filter(Boolean))];
+const svcScore = (s) => { const t = toks(s); if (!t.length) return 0; return linkedText.filter(h => t.every(w => h.includes(w))).length; };
+services.map((s, i) => ({ s, i, n: svcScore(s) })).filter(x => x.n > 0).sort((a, b) => b.n - a.n || a.i - b.i).forEach(x => add(x.s, 'your services'));
+// 3. page headings: linked pages first (shallow, then well linked), a page no link reaches last
 const scored = [];
-pages.filter(p => p.url && !isHome(p.url) && !skip(p.url) && (p.status_code == null || p.status_code === 200)).forEach(p => {
+live.forEach(p => {
   const m = p.meta || {};
   const cands = [clean(((m.htags || {}).h1 || [])[0]), clean(m.title)].filter(ok);
-  if (cands.length) scored.push({ q: cands[0], depth: p.click_depth ?? 9, links: m.inbound_links_count || 0 });
+  if (cands.length) scored.push({ q: cands[0], depth: unlinked(p) ? 99 : (p.click_depth ?? 9), links: m.inbound_links_count || 0 });
 });
 scored.sort((a, b) => a.depth - b.depth || b.links - a.links);
-const queries = [];
-for (const s of scored) { if (!queries.includes(s.q)) queries.push(s.q); if (queries.length >= 3) break; }
-if (!queries.length) {
+for (const s of scored) add(s.q, s.depth >= 99 ? 'a page no link reaches' : 'page heading');
+if (!out.length) {
   const home = pages.find(p => isHome(p.url));
-  const q = clean(home && home.meta && ((((home.meta.htags || {}).h1 || [])[0]) || home.meta.title));
-  if (ok(q)) queries.push(q);
+  add(clean(home && home.meta && ((((home.meta.htags || {}).h1 || [])[0]) || home.meta.title)), 'homepage heading');
 }
-if (!queries.length) return [{ json: { query: brand + ' services' } }];
-return queries.map(q => ({ json: { query: q } }));""")
+if (!out.length) return [{ json: { query: brand + ' services', source: 'the domain name' } }];
+return out.map(q => ({ json: q }));""")
 log('Competitor discovery: queries come from H1s/titles of shallow service pages, skipping generic or brand-only strings')
 
 # ---- topic clusters: same intent, bounded size ----
@@ -742,7 +765,7 @@ GSC_QUERIES_SRC = _rd0('code/_gsc_queries.js').rstrip('\n')   # 2026-10-12 (G9 /
 KW_INPUTS_SRC = _rd0('code/_kw_inputs.js').rstrip('\n')   # 2026-10-13 (G8): the discovery inputs -- Search Console seeds, calibrated traffic potential, SERP-overlap clusters, the live-check cap
 RADIUS_SRC = _rd0('code/_radius.js').rstrip('\n')   # 2026-10-13 (G32): the topic radius -- which topics are within reach, which are a stretch, on what evidence (needs the reach kit in the same node)
 import seo_events   # 2026-10-13 (G12 / G29): the dated event registry and the lineage / annotation / change-test kits, one copy each
-rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC).replace('/*__RADIUS__*/', RADIUS_SRC)   # shared kits (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
+rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC).replace('/*__RADIUS__*/', RADIUS_SRC).replace('/*__WAITING__*/', _rd0('code/_waiting.js').rstrip('\n'))   # shared kits (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
 def set_prompt(name, file): nodes[name]['parameters']['text'] = '=' + rd('prompts/' + file)
 def set_schema(parser_name, schema): nodes[parser_name]['parameters']['inputSchema'] = json.dumps(schema, ensure_ascii=False)
 def get_schema(parser_name): return json.loads(nodes[parser_name]['parameters']['inputSchema'])
@@ -1100,7 +1123,7 @@ add_node('Run Ladder Research', 'n8n-nodes-base.httpRequest', 4.5, DFS_HTTP(), [
 add_node('Ladder Pool', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Ladder_Pool.js')}, [X, LY]); X += 220
 add_node('Ladder Relevance Chunks', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Relevance_Chunks.js')}, [X, LY]); X += 220
 agent_bundle('Ladder Keyword Relevance', 'keyword_relevance.txt', 'Claude — Ladder Relevance', 'claude-sonnet-5-5', 'Claude Sonnet 5.5', 16384, 'low', 'Parser — Ladder Relevance',
-  {'type': 'object', 'properties': {'items': {'type': 'array', 'items': {'type': 'object', 'properties': {'keyword': {'type': 'string'}, 'relevance': {'type': 'number'}, 'intent': {'type': 'string'}, 'page_type': {'type': 'string'}, 'topic': {'type': 'string'}}, 'required': ['keyword', 'relevance']}}}, 'required': ['items']}, [X, LY]); X += 260
+  {'type': 'object', 'properties': {'items': {'type': 'array', 'items': {'type': 'object', 'properties': {'keyword': {'type': 'string'}, 'relevance': {'type': 'number'}, 'intent': {'type': 'string'}, 'page_type': {'type': 'string'}, 'topic': {'type': 'string'}, 'fit_reason': {'type': 'string'}}, 'required': ['keyword', 'relevance']}}}, 'required': ['items']}, [X, LY]); X += 260   # F-A1 / A-11: fit_reason when the pages Google ranks sell what the business does not
 add_node('Ladder Plan', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Ladder_Plan.js')}, [X, LY]); X += 220
 add_node('Build Ladder Report', 'n8n-nodes-base.code', 2, {'jsCode': LEDGER_L + rd('code/Build_Ladder_Report.js')}, [X, LY]); X += 220
 for a, b in [('Ladder Requests', 'Run Ladder Research'), ('Run Ladder Research', 'Ladder Pool'), ('Ladder Pool', 'Ladder Relevance Chunks'), ('Ladder Relevance Chunks', 'Ladder Keyword Relevance'), ('Ladder Keyword Relevance', 'Ladder Plan'), ('Ladder Plan', 'Build Ladder Report')]:
@@ -1398,12 +1421,15 @@ const scSection = (a, num) => {
   const sc = a.search_console || {}, st = a.site_structure || {};
   const e2 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const n2 = (v) => (Number(v) || 0).toLocaleString('en-GB');
-  const p2 = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/, '') || '/';
+  // R59 (2026-10-16): a path alone only where the host is the site's own canonical one. Any other host is printed in full: stripping it
+  // listed "/" twice in the top-page table (14 clicks on https://techand.ai/, 3 on https://www.techand.ai/) and hid the split.
+  const h2 = String(((sc.host_split || {}).canonical_host) || a.canonical_host || '').toLowerCase();
+  const p2 = (u) => { const m = String(u || '').match(/^https?:\/\/([^\/?#]+)(.*)$/i); if (!m) return String(u || '') || '/'; return (!h2 || m[1].toLowerCase() === h2) ? (m[2] || '/') : String(u); };
   let h = `<h2 class="pb">${num}. Search Console &amp; Site Structure</h2>`;
   if (st.crawled_pages != null) {
     const db = st.depth_buckets || {}; const sm = st.sitemap || {};
     h += `<h3>Site structure (from the crawl)</h3><p>${n2(st.crawled_pages)} pages crawled, ${n2(st.indexable_pages)} indexable${st.within_3_clicks_pct != null ? '; ' + st.within_3_clicks_pct + '% of pages are within 3 clicks of the homepage' : ''}.</p>` +
-      `<table class="ct"><tr><th>Clicks from home</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4+</th></tr><tr><td>Pages</td><td>${n2(db[0])}</td><td>${n2(db[1])}</td><td>${n2(db[2])}</td><td>${n2(db[3])}</td><td>${n2(db['4+'])}</td></tr></table>` +
+      `<table class="ct"><tr><th>Clicks from home</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4+</th>${db.unlinked ? '<th>No link reaches it</th>' : ''}</tr><tr><td>Pages</td><td>${n2(db[0])}</td><td>${n2(db[1])}</td><td>${n2(db[2])}</td><td>${n2(db[3])}</td><td>${n2(db['4+'])}</td>${db.unlinked ? '<td>' + n2(db.unlinked) + '</td>' : ''}</tr></table>` +
       ((st.sections || []).length ? `<table class="ct"><tr><th>Section</th><th>Pages crawled</th></tr>` + st.sections.map(s => `<tr><td>${e2(s.section)}</td><td>${n2(s.pages)}</td></tr>`).join('') + `</table>` : '') +
       `<p>XML sitemap: ${sm.status === 200 ? n2(sm.urls) + ' URLs' + (sm.is_index ? ' (index of ' + n2(sm.children) + ' sitemaps)' : '') : 'not readable at ' + e2(sm.url)}${st.indexable_not_in_sitemap ? '; ' + n2(st.indexable_not_in_sitemap) + ' indexable pages missing from it' : ''}${st.sitemap_only ? '; ' + n2(st.sitemap_only) + ' sitemap URLs that no internal link reaches' : ''}${st.sitemap_broken ? '; ' + n2(st.sitemap_broken) + ' sitemap URLs not returning 200' : ''}.</p>`;
   }
@@ -1413,10 +1439,12 @@ const scSection = (a, num) => {
     const t = sc.totals;
     h += `<p>Property <b>${e2(sc.property)}</b> (${e2(sc.permission)}).</p>`;
     if (t) h += `<p>Last 28 days (${e2(t.period.start)} to ${e2(t.period.end)}): <b>${n2(t.clicks)}</b> clicks, <b>${n2(t.impressions)}</b> impressions, CTR ${(t.ctr * 100).toFixed(2)}%, average position ${t.position}; ${n2(sc.pages_with_impressions)} pages and ${n2(sc.queries_with_impressions)} queries with impressions.</p>`;
+    const hs2 = sc.host_split || null;   // R59: the two addresses Google shows, side by side
+    if (hs2 && hs2.found) h += `<p><b>Google shows this site under two addresses.</b> ` + (hs2.hosts || []).map(o => `https://${e2(o.host)}: ${n2(o.pages)} pages, ${n2(o.clicks)} clicks, ${n2(o.impressions)} impressions (${n2(o.impressions_pct)}%)`).join('; ') + `. The site itself names https://${e2(hs2.canonical_host)} as its address (see the www and non-www finding).</p>`;
     h += `<table class="ct"><tr><th>Submitted sitemap</th><th>URLs</th><th>Last read</th><th>Errors</th><th>Warnings</th></tr>` + ((sc.sitemaps || []).length ? sc.sitemaps.map(s => `<tr><td>${e2(s.path)}</td><td>${n2(s.urls)}</td><td>${e2(String(s.downloaded || '').slice(0, 10) || (s.pending ? 'pending' : '—'))}</td><td>${n2(s.errors)}</td><td>${n2(s.warnings)}</td></tr>`).join('') : `<tr><td colspan="5">none submitted${sc.sitemaps_error ? ' (' + e2(sc.sitemaps_error) + ')' : ''}</td></tr>`) + `</table>`;
     const covRows = Object.entries(sc.coverage || {});
     if (covRows.length) h += `<p>Index coverage of ${n2((sc.inspections || []).length)} sampled pages: ` + covRows.map(([k, v]) => `${n2(v)} × ${e2(k)}`).join(', ') + ((sc.rich_results || []).length ? `. Rich results detected: ${e2(sc.rich_results.join(', '))}` : '') + `.</p>`;
-    if ((sc.not_indexed || []).length) h += `<table class="ct"><tr><th>Not indexed</th><th>Reason</th></tr>` + sc.not_indexed.slice(0, 10).map(x => `<tr><td>${e2(p2(x.url))}</td><td>${e2(x.reason)}</td></tr>`).join('') + `</table>`;
+    if ((sc.not_indexed || []).length) h += `<table class="ct"><tr><th>Not indexed</th><th>Reason</th></tr>` + sc.not_indexed.slice(0, 10).map(x => `<tr><td>${e2(p2(x.url))}</td><td>${e2(x.reason)}${x.shown_as ? ' — shown by Google as ' + e2(x.shown_as) + ' (' + n2(x.shown_impressions) + ' impressions)' : ''}</td></tr>`).join('') + `</table>`;
     if ((sc.top_queries || []).length) h += `<table class="ct"><tr><th>Top query</th><th>Clicks</th><th>Impressions</th><th>Position</th></tr>` + sc.top_queries.slice(0, 10).map(q => `<tr><td>${e2(q.query)}</td><td>${n2(q.clicks)}</td><td>${n2(q.impressions)}</td><td>${q.position}</td></tr>`).join('') + `</table>`;
     if ((sc.top_pages || []).length) h += `<table class="ct"><tr><th>Top page</th><th>Clicks</th><th>Impressions</th><th>Position</th></tr>` + sc.top_pages.slice(0, 10).map(q => `<tr><td>${e2(p2(q.page))}</td><td>${n2(q.clicks)}</td><td>${n2(q.impressions)}</td><td>${q.position}</td></tr>`).join('') + `</table>`;
   }
@@ -1763,8 +1791,13 @@ patch('Normalize Input', "  else if (m === 'profile') mode = 'profile';", "  els
 patch('Normalize Input', "const pagesRaw = parseInt(", r"""// ---- v4.5: monitor settings (Track my site / API `monitors`), audit crawl options, scheduled audits ----
 const MI = obj(p2.monitors);
 const monitor_input = {}; for (const k of ['ai_visibility', 'ai_pulse', 'ai_growth', 'link_builder', 'backlinks', 'audit_monthly', 'audit_js']) if (MI[k] !== undefined) monitor_input[k] = !!MI[k] && !/^(false|0|no|off)$/i.test(String(MI[k]));
-if (MI.ai_engines !== undefined) monitor_input.ai_engines = asArray(MI.ai_engines).map(e => String(e).toLowerCase().trim()).filter(e => ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode', 'copilot'].includes(e)).join(', ');
-if (MI.ai_prompts_max !== undefined) monitor_input.ai_prompts_max = Math.min(50, Math.max(3, parseInt(MI.ai_prompts_max, 10) || 20));   // v4.9: up to 50 questions
+if (MI.ai_engines !== undefined) monitor_input.ai_engines = asArray(MI.ai_engines).map(e => String(e).toLowerCase().trim()).filter(e => ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode', 'copilot', 'chatgpt_api', 'gemini_api'].includes(e)).join(', ');   // G6: + the two model APIs
+if (MI.ai_prompts_max !== undefined) monitor_input.ai_prompts_max = Math.min(500, Math.max(3, parseInt(MI.ai_prompts_max, 10) || 20));   // v4.9: up to 50 questions; G6 (2026-10-18): up to 500
+// G6: buyer roles, extra markets (CC-lang) and how the daily pulse samples the panel
+if (MI.ai_personas !== undefined) monitor_input.ai_personas = asArray(MI.ai_personas).map(x => String(x).replace(/\s+/g, ' ').trim().slice(0, 40)).filter(Boolean).slice(0, 6).join(', ');
+if (MI.ai_markets !== undefined) monitor_input.ai_markets = asArray(MI.ai_markets).map(x => String(x).trim()).filter(x => /^[A-Za-z]{2}([-_ ][A-Za-z]{2,3})?$/.test(x)).slice(0, 5).join(', ');
+if (MI.ai_pulse_mode !== undefined) monitor_input.ai_pulse_mode = ['sample', 'full'].includes(String(MI.ai_pulse_mode).toLowerCase()) ? String(MI.ai_pulse_mode).toLowerCase() : '';
+if (MI.ai_pulse_per_week !== undefined) monitor_input.ai_pulse_per_week = parseInt(MI.ai_pulse_per_week, 10) >= 1 ? Math.min(6, parseInt(MI.ai_pulse_per_week, 10)) : '';
 if (MI.ai_pages_month !== undefined) monitor_input.ai_pages_month = Math.min(8, Math.max(0, parseInt(MI.ai_pages_month, 10) || 0));   // v4.12: AI answer / refresh pages a month
 if (MI.audit_pages !== undefined) monitor_input.audit_pages = Math.min(1000, Math.max(50, parseInt(MI.audit_pages, 10) || 200));
 if (MI.brand_names !== undefined) monitor_input.brand_names = asArray(MI.brand_names).join(', ');
@@ -1992,8 +2025,10 @@ add_node('Ensure Ladder Table (Plan)', DT_TYPE, DT_VERSION, dt_create_params(LAD
 add_node('Load Domain Ladders', DT_TYPE, DT_VERSION, dt_get_any_params(LADDER_TABLE, [('domain', DOMAIN_PV), ('domain', "={{ 'www.' + String($('Parse Verdict').first().json.domain || '').toLowerCase() }}")]), [LX22 + 220, LY22], LOAD18)
 add_node('Ensure Ladder Settings Table (Ladder)', DT_TYPE, DT_VERSION, dt_create_params(LADDER_SETTINGS_TABLE, LADDER_SETTINGS_COLS), [LX22 + 440, LY22], {'onError': 'continueRegularOutput', 'executeOnce': True})
 add_node('Load Domain Ladder Settings', DT_TYPE, DT_VERSION, dt_get_any_params(LADDER_SETTINGS_TABLE, [('domain', DOMAIN_PV), ('site_id', "={{ 'site_' + String($('Parse Verdict').first().json.domain || '').toLowerCase().replace(/^www\\./, '').replace(/[^a-z0-9]+/g, '-') }}")]), [LX22 + 660, LY22], LOAD18)
+# R42 (A14): the site's content log, so the ladder report can say the pile-up limit is reached (Ladder_Plan.js `pile_up`)
+add_node('Load Content Log (Ladder)', DT_TYPE, DT_VERSION, dt_get_any_params(LOG_TABLE, [('domain', DOMAIN_PV), ('domain', "={{ 'www.' + String($('Parse Verdict').first().json.domain || '').toLowerCase() }}")]), [LX22 + 880, LY22], LOAD18)
 connect('Ladder Mode?', 'Ensure Ladder Table (Plan)', 0)
-for a, b in [('Ensure Ladder Table (Plan)', 'Load Domain Ladders'), ('Load Domain Ladders', 'Ensure Ladder Settings Table (Ladder)'), ('Ensure Ladder Settings Table (Ladder)', 'Load Domain Ladder Settings'), ('Load Domain Ladder Settings', 'Ladder Requests')]:
+for a, b in [('Ensure Ladder Table (Plan)', 'Load Domain Ladders'), ('Load Domain Ladders', 'Ensure Ladder Settings Table (Ladder)'), ('Ensure Ladder Settings Table (Ladder)', 'Load Domain Ladder Settings'), ('Load Domain Ladder Settings', 'Load Content Log (Ladder)'), ('Load Content Log (Ladder)', 'Ladder Requests')]:
     connect(a, b)
 # ---------- C. ladder: a newly measured reach is stored for discovery and the keyword check ----------
 _lp = pos('Ladder Plan')
@@ -3644,13 +3679,17 @@ IDX_SECTION_JS = r"""// ---- what Google says about each key page (G25, 2026-10-
 const indexSection = (sc) => {
   const e3 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const p3 = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/, '') || '/';
+  // R59 (2026-10-16): Google's canonical is printed with its host whenever the host differs from the page's — as a bare path it read
+  // "/d365-…-rollout-uae" for the page /d365-…-rollout-uae, a canonical identical to the page, while Google had chosen https://techand.ai
+  const h3 = (u) => (String(u || '').match(/^https?:\/\/([^\/?#]+)/i) || [])[1] || '';
+  const p3c = (g, u) => (h3(g) && h3(u) && h3(g).toLowerCase() !== h3(u).toLowerCase()) ? String(g) : p3(g);
   const ic = sc.index_coverage || null;
   if (!ic) return '';
   let h = `<h3>Google's index view of the key pages (URL Inspection)</h3><p>${e3(ic.text)}.</p>`;
   if ((ic.pages || []).length) {
     h += `<table class="ct"><tr><th>Page</th><th>In Google</th><th>State</th><th>Google's canonical</th><th>Last crawl</th><th>Mobile</th><th>Rich results</th></tr>`
       + ic.pages.slice(0, 25).map(p => `<tr><td>${e3(p3(p.url))}</td><td>${p.indexed === true ? '<span class="ok">yes</span>' : p.indexed === false ? '<span class="bad">no</span>' : '—'}</td><td>${e3(p.coverage || p.verdict || '—')}</td>`
-        + `<td>${p.canonical_ok === false ? '<span class="bad">' + e3(p3(p.google_canonical)) + '</span>' : p.canonical_ok === true ? 'same as ours' : '—'}</td>`
+        + `<td>${p.canonical_ok === false ? '<span class="bad">' + e3(p3c(p.google_canonical, p.url)) + '</span>' : p.canonical_ok === true ? 'same as ours' : '—'}</td>`
         + `<td>${e3(String(p.last_crawl || '').slice(0, 10) || '—')}</td><td>${p.mobile_usable === true ? 'ok' : p.mobile_usable === false ? '<span class="bad">issues</span>' : '—'}</td>`
         + `<td>${e3((p.rich_results || []).join(', ') || '—')}</td></tr>`).join('') + `</table>`;
     if (ic.pages.length > 25) h += `<p class="small">${ic.pages.length - 25} more inspected pages are in the data behind this report.</p>`;
@@ -3743,20 +3782,39 @@ LINEAGE_SRC47 = seo_events.LINEAGE_SRC
 setcode('Build Full Report', LINEAGE_SRC47 + '\n' + code('Build Full Report'))
 _LIN47 = """// G29 (2026-10-13): every figure group of this report with its source, period and sample (LN, v5/code/_lineage.js)
 const _sc47 = a.search_console || {};
+// R73 (2026-10-16, re-rating 2026-10-15): each row reads the field the report actually printed. The keyword row read a.keyword_ideas
+// (the keywords are in d.site_keywords: "sample 0 keywords" beside ~60 printed), the backlink row a.backlinks (they are in d.authority:
+// "sample not recorded"), the CrUX row was hard-coded "measured" when the Chrome UX Report had answered "no field data", and the domain
+// age was dated today although every age came from the cache. A row appears only when its figure is in the report.
+const _kwN47 = (() => { const s = new Set(); const k47 = d.site_keywords || {}; const add = (k) => { if (k && k.keyword) s.add(String(k.keyword).toLowerCase()); };
+  for (const l of Object.values(k47.opportunities_by_intent || {})) (l || []).forEach(add);
+  for (const l of Object.values(k47.your_top_by_intent || {})) (l || []).forEach(add);
+  (k47.easy_wins || []).forEach(add); (k47.keyword_gap || []).forEach(add); (k47.striking_distance || []).forEach(add); return s.size; })();
+const _you47 = (((d.authority || {}).rows) || []).find(r => r && r.is_you && r.available !== false) || null;
+const _crux47 = a.crux || d.crux || null;
+const _ps47 = (((d.pagespeed || {}).rows) || []).filter(r => r && r.available !== false && r.score != null);
+let _ages47 = null; try { _ages47 = ($('Domain Ages').first().json || {}).ages || null; } catch (e) { _ages47 = null; }
+const _ageRows47 = (((a.competitor_benchmark || d.competitor_benchmark || {}).rows) || []).filter(r => r && r.domain_age_years != null);
+const _ageStored47 = [...new Set(Object.values(_ages47 || {}).map(x => (String((x || {}).source || '').match(/stored (\\d{4}-\\d{2}-\\d{2})/) || [])[1]).filter(Boolean))].sort();
 const lineage = [
   LN.of('Health score and the findings', 'crawl', { basis: 'modelled', period: LN.asOf(a.audited_at || today), sample: LN.sample(a.pages_crawled, 'pages crawled'),
     note: 'our own 0-100 score: points off per finding by severity (the table below), not a Google figure' }),
   _sc47.connected
     ? LN.of('Clicks, impressions and index coverage', 'gsc', { basis: 'measured', period: 'the last 28 days', sample: LN.sample((_sc47.totals || {}).impressions, 'impressions'), note: 'property ' + String(_sc47.property || '') })
     : LN.unknown('Clicks, impressions and index coverage', String(_sc47.error || 'Search Console is not connected for this site')),
-  LN.of('Searches per month, difficulty, cost per click and traffic estimates', 'kwdata', { basis: 'estimated', period: 'the provider\\'s latest 12-month average',
-    sample: LN.sample((a.keyword_ideas || a.keywords || []).length, 'keywords'), note: 'provider estimates for ' + String(d.country || '') + ', not measurements of your site' }),
-  LN.of('Backlinks and referring domains', 'backlink_index', { basis: 'reported', period: LN.asOf(today), sample: LN.sample((a.backlinks || {}).referring_domains, 'referring domains'),
-    note: 'one crawler\\'s index of the web: it finds much of the web, never all of it' }),
-  LN.of('Core Web Vitals (real users)', 'crux', { basis: 'measured', period: 'the last 28 days of Chrome visits', sample: 'all Chrome visitors Google could aggregate',
-    note: 'where a page or template has too few visits the report says so instead of showing a figure' }),
-  LN.of('Lighthouse scores and speed savings', 'pagespeed', { basis: 'one_sample', period: LN.asOf(today), sample: 'one simulated mobile load per page tested' }),
-  LN.of('Domain age', 'rdap', { basis: 'reported', period: LN.asOf(today), sample: LN.sample(((a.domain_ages || {}).rows || []).length || undefined, 'domains looked up'), note: 'the registry record, cached for a year' }),
+  ...(_kwN47 ? [LN.of('Searches per month, difficulty, cost per click and traffic estimates', 'kwdata', { basis: 'estimated', period: 'the provider\\'s latest 12-month average',
+    sample: LN.sample(_kwN47, 'keywords in section 4'), note: 'provider estimates for ' + String(d.country || '') + ', not measurements of your site' })] : []),
+  ...(_you47 ? [LN.of('Backlinks and referring domains', 'backlink_index', { basis: 'reported', period: LN.asOf(today), sample: LN.sample(_you47.referring_domains, 'referring domains to your site'),
+    note: 'one crawler\\'s index of the web: it finds much of the web, never all of it' })] : []),
+  (_crux47 && _crux47.available !== false)
+    ? LN.of('Core Web Vitals (real users)', 'crux', { basis: 'measured', period: 'the last 28 days of Chrome visits', sample: 'all Chrome visitors Google could aggregate',
+      note: 'where a page or template has too few visits the report says so instead of showing a figure' })
+    : _crux47 ? LN.of('Core Web Vitals (real users)', 'crux', { basis: 'reported', period: 'the last 28 days of Chrome visits', sample: 'no field data',
+      note: 'the Chrome UX Report answered: ' + String(_crux47.not_available || _crux47.note || 'too few real-user visits for field data') })
+    : LN.unknown('Core Web Vitals (real users)', 'the Chrome UX Report was not asked in this run'),
+  ...(_ps47.length ? [LN.of('Lighthouse scores and speed savings', 'pagespeed', { basis: 'one_sample', period: LN.asOf(today), sample: LN.sample(_ps47.length, 'site(s), one simulated mobile load each') })] : []),
+  ...(_ageRows47.length ? [LN.of('Domain age', 'rdap', { basis: 'reported', period: _ageStored47.length ? 'looked up ' + _ageStored47[0] + ' and cached (a registration date does not change)' : LN.asOf(today),
+    sample: LN.sample(_ageRows47.length, 'domains looked up'), note: 'the registry record, cached for a year' })] : []),
 ];
 html += '<h2 class="pb">' + '16a. Where these numbers come from</h2>'
   + '<table class="ct"><tr><th>Figure</th><th>Source</th><th>Period</th><th>Sample</th><th>How it was arrived at</th></tr>'
@@ -3885,11 +3943,20 @@ _eh_add('Alert Delivery', 'n8n-nodes-base.code', 2, {'jsCode': _eh_src('code/Ale
 _eh_add('Save Alert Delivery', DT_TYPE, DT_VERSION, dt_update_params(OPS_ALERTS_TABLE, OPS_ALERTS_COLS, [('alert_key', '={{ $json.alert_key }}')],
     {'delivered': '={{ $json.delivered }}', 'channels': '={{ $json.channels }}', 'notes': '={{ $json.notes }}'}), [2240, _EHY],
     {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
-# every path through the two channel gates reaches it, so a row never stays "pending" for a delivery that can never come. It may run more
-# than once (one branch each); data only accumulates inside an execution, so the last run is the one that saw both channels.
-for _a48, _b48, _o48x in [('Post Alert Webhook', 'Alert Delivery', 0), ('Send Webhook?', 'Alert Delivery', 1),
-                          ('Email Ops', 'Alert Delivery', 0), ('Send Email?', 'Alert Delivery', 1), ('Alert Delivery', 'Save Alert Delivery', 0)]:
+# every path through the two channel gates reaches it, so a row never stays "pending" for a delivery that can never come.
+# R79 (2026-10-16, re-rating C-3, build section 96): it used to have FOUR inputs and so ran twice per failure (once per channel branch), and
+# the retry sweep chained behind it ran twice too — exec 643 re-posted one stale alert at 19:59:50 and again at 19:59:53. A Merge in front
+# of it waits for both branches (webhook side on input 0, e-mail side on input 1), so the delivery is recorded once, after both channels
+# answered, and the sweep runs once per failure.
+_eh_add('Alert Channels Done', 'n8n-nodes-base.merge', 3, {'mode': 'append'}, [1910, _EHY])
+for _a48, _o48x, _i48 in [('Post Alert Webhook', 0, 0), ('Send Webhook?', 1, 0), ('Email Ops', 0, 1), ('Send Email?', 1, 1)]:
+    _outs48 = _ehc.setdefault(_a48, {}).setdefault('main', [])
+    while len(_outs48) <= _o48x: _outs48.append([])
+    _outs48[_o48x] = [t for t in _outs48[_o48x] if t['node'] not in ('Alert Delivery', 'Alert Channels Done')] + [{'node': 'Alert Channels Done', 'type': 'main', 'index': _i48}]
+for _a48, _b48, _o48x in [('Alert Channels Done', 'Alert Delivery', 0), ('Alert Delivery', 'Save Alert Delivery', 0)]:
     _eh_link(_a48, _b48, _o48x)
+assert [s48 for s48, o48 in _ehc.items() for l48 in o48.get('main', []) for t48 in l48 if t48['node'] == 'Alert Delivery'] == ['Alert Channels Done'], \
+    'R79: Alert Delivery must have exactly one input, the merge of both channel branches'
 assert 'R5' in _ehn['Format Alert']['parameters']['jsCode'] and 'tr.error' in _ehn['Format Alert']['parameters']['jsCode'], 'R5: Format Alert cannot read a trigger-mode failure'
 _ehwf['nodes'] = list(_ehn.values())
 _ehnames48 = set(_ehn)
@@ -3926,7 +3993,9 @@ assert 'noFaqSchema' in code('Parse Verdict'), 'R7: Parse Verdict does not strip
 assert 'const rungWords = ' in code('Ladder Plan') and 'pg.target_words = rungWords.words' in code('Ladder Plan') \
     and 'RUNG_WORDS.fallback' in code('Ladder Plan'), 'R8 / R22: a rung page gets a word target, and never 0'
 # R1's consumers: a page counts as written only when the content log says so
-assert "l.status !== 'written'" in rd('code/Cadence_Plan.js') and 'writtenOf' in rd('code/Cadence_Plan.js'), 'R1: the cadence still counts unwritten pages'
+# F-A1 / A-12 (2026-10-17): the pile-up count moved into the shared kit v5/code/_waiting.js (Cadence Plan and Ladder Plan both call it)
+assert 'WAITING.waiting({ log: slog, ladders: lrows' in _rd0('code/Cadence_Plan.js') and 'if (!lg) continue;   // R1' in _rd0('code/_waiting.js') \
+    and "if (!WAITS.has(l.status) || !fresh(l.started_at)) continue;" in _rd0('code/_waiting.js'), 'R1: the cadence still counts unwritten pages'
 assert 'writtenLog' in rd('code/Tracker_Report.js') and 'writtenKw' in rd('code/Site_Plan.js') and 'p.written' in rd('code/Site_Metrics.js'), 'R1: a tracker still reports an unwritten page'
 _rr48 = pos('Release Ladder Row')
 sticky("""### What the re-rating run found (R1 … R9, 2026-10-13)
@@ -4233,7 +4302,9 @@ const __AI_CALLS = __AI_CALLS_JSON__;
 const __chars = (v) => v == null ? 0 : (typeof v === 'string' ? v.length : JSON.stringify(v).length);
 const __at = (o, p) => String(p).split('.').reduce((v, k) => (v == null ? v : v[k]), o);
 const __jsonOf = (n) => { try { return ($(n).all() || []).map(i => (i && i.json) || {}); } catch (e) { return null; } };
-const __qaRounds = () => { try { return Math.max(1, Number($('Content QA').first().json.qa_round) || 1); } catch (e) { return 1; } };
+// R46 (2026-10-16): a `loop` node is the Editor, and it runs once per QA round AFTER the first — QA round N follows N - 1 editor calls, which
+// Content QA states as `editor_rounds`. Live (exec 616) one editor call was priced twice from `qa_round: 2`. At least 1: the node ran.
+const __qaRounds = () => { try { const q = $('Content QA').first().json || {}; const e = Number(q.editor_rounds); return Math.max(1, Number.isFinite(e) && q.editor_rounds != null ? e : (Number(q.qa_round) || 1) - 1); } catch (e) { return 1; } };
 const __costCalls = [];
 for (const c of __AI_CALLS) {
   const answers = __jsonOf(c.node);
@@ -4336,7 +4407,7 @@ return $input.all().map(i => { const j = i.json || {}; const fn = String(j.call 
   if (fn === 'dfsLedger') { const L = CC.dfsLedger(); const added = (j.answers || []).map(a => L.add(a)); return { json: { added, ...L.state } }; }
   if (fn === 'dfsDay') return { json: CC.dfsDay(j.rows || [], j.mine || {}) };
   if (fn === 'tables') return { json: { EST: CC.EST, DFS_EST: CC.DFS_EST, PRICES: CC.PRICES, UNKNOWN: CC.UNKNOWN, CHARS_PER_TOKEN: CC.CHARS_PER_TOKEN,
-    THINK_SHARE: CC.THINK_SHARE, ALPHA: CC.ALPHA, HEADROOM: CC.HEADROOM, KEEP: CC.KEEP, CAP: CC.CAP, FACTOR_KEY: CC.FACTOR_KEY,
+    THINK_SHARE: CC.THINK_SHARE, THINK_SEEN: CC.THINK_SEEN, ALPHA: CC.ALPHA, HEADROOM: CC.HEADROOM, KEEP: CC.KEEP, CAP: CC.CAP, FACTOR_KEY: CC.FACTOR_KEY,
     RECONCILE_TOLERANCE: CC.RECONCILE_TOLERANCE, RECONCILE_FLOOR: CC.RECONCILE_FLOOR } };
   return { json: { error: 'unknown call ' + fn } }; });
 """)
@@ -4801,7 +4872,10 @@ assert 'rivalEntry' in _K58['_outreach_kit'] and 'dr === LK.regDomain(x)' in _K5
 assert 'isRoundup' in _K58['_outreach_kit'] and 'LIST_TYPES.has(type) && isRoundup(o)' in _K58['_outreach_kit'], 'R21: a rival page still passes as a list without being one'
 assert 'theirs || topic >= 0.5' in _K58['_outreach_kit'], 'R21: a competing provider is still refused only through the declared list'
 assert 'rivalHosts' in _K58['LB_Plan'] and 'LK.regDomain(host)' in _K58['LB_Plan'], 'R21: the SERP rivals are not keyed on the registrable domain'
-assert _K58['LB_Assemble'].count('serp_rivals: p.serp_rivals') == 4 and 'fit: o.fit' in _K58['LB_Assemble'], 'R21: a gate call in LB Assemble is still blind to the SERP rivals'
+# W3-F (2026-10-17): the count is of what is really there - four gate calls pass `serp_rivals: p.serp_rivals` and the fifth (the digest re-check) passes it
+# through the local alias `storedRivals = p.serp_rivals`; the old assert counted only the first spelling and expected exactly four
+assert _K58['LB_Assemble'].count('serp_rivals: p.serp_rivals') == 4 and 'const storedRivals = p.serp_rivals' in _K58['LB_Assemble'] \
+    and _K58['LB_Assemble'].count('serp_rivals: storedRivals') == 1 and 'fit: o.fit' in _K58['LB_Assemble'], 'R21: a gate call in LB Assemble is still blind to the SERP rivals'
 assert 'serp_rivals: p.serp_rivals || []' in _K58['LB_Draft_QA'] and 'serp_rivals: c.serp_rivals' in _K58['_draft_qa'], 'R21: the draft gate is blind to the SERP rivals'
 # R20: the report type decides what may be compared, and a change of type is said instead of scored
 assert 'kindOfAudit' in _K58['_annotations'] and 'not comparable' in _K58['_annotations'] and 'lastOf' in _K58['_annotations'], 'R20: the audit marks are still chained across report types'
@@ -5038,7 +5112,7 @@ def _r17_r29_checks():
         _check_ledger_order55(files55[wname55], wiring55); checked55 += 1
     # R32's companion (section 59): Page Watch joined the chain, so it is ten — the nine that spend plus the daily watch, which keeps a
     # $0 row so the guard and the day's reconciliation can see that it ran at all.
-    assert checked55 == 10, 'R17: ' + str(checked55) + ' scheduled workflows checked, expected 10 (the nine of R17 plus Page Watch)'
+    assert checked55 == 11, 'R17: ' + str(checked55) + ' workflows checked, expected 11 (the nine of R17, Page Watch, and the Reply Reader since W3-F)'
     hits55 = _secret_scan55([os.path.join(HERE0, 'workflows'), os.path.join(HERE0, 'harness', 'code_v4')])
     assert not hits55, 'R29: a secret reached the generated files:\n  ' + '\n  '.join(hits55)
     # R30 (2026-10-14): a shape scan only catches the secrets we thought of. The alert channel is checked positively as well — what is
@@ -5124,7 +5198,7 @@ _FAIL56 = ("($json.error || Number($json.status_code) >= 40000 || !Array.isArray
 _MSG56 = "String((((($json.tasks || [])[0] || {}).status_message) || $json.status_message || ($json.error && ($json.error.message || $json.error)) || ''))"
 _TRANSIENT56 = (r"/internal (?:se )?server error|internal error|server error|timeout|timed out|temporar|try again|unavailable|"
                 r"backend|deadline exceeded|connection|socket|econn|eai_again|rate limit|too many requests|\b(?:429|500|502|503|504)\b/i")
-_PERMANENT56 = (r"/permission|forbidden|unauthor|invalid[_ ]grant|credential|not found|no access|invalid field|unknown field|"
+_PERMANENT56 = (r"/permission|forbidden|unauthor|invalid[_ ]grant|credential|not found|no search results|no access|invalid field|unknown field|"
                 r"unsupported|quota|resource_exhausted|insufficient funds|payment|balance/i")
 DFS_FAILED56 = ("{{ !!" + _FAIL56 + " && (!" + _PERMANENT56 + ".test(" + _MSG56 + ") || " + _TRANSIENT56 + ".test(" + _MSG56 + ")) }}")
 
@@ -5578,14 +5652,16 @@ def _r31_checks():
         # the free balance reading, on the chain, before the row is written
         bal59 = wiring59.get('balance') or ''
         assert bal59 in by59, 'R32: ' + wname59 + ' takes no balance reading'
-        assert by59[bal59]['parameters']['url'] == _BALANCE_URL55, 'R32: ' + wname59 + "'s balance node is not the free endpoint"
+        assert wiring59.get('no_dfs') or by59[bal59]['parameters']['url'] == _BALANCE_URL55, 'R32: ' + wname59 + "'s balance node is not the free endpoint"
         assert by59[bal59].get('onError') == 'continueRegularOutput' and by59[bal59].get('alwaysOutputData'), 'R32: ' + wname59 + "'s balance reading can end the run"
         c59 = wf59['connections']
         outs59 = lambda nd: [t['node'] for lst in ((c59.get(nd) or {}).get('main') or []) for t in (lst or [])]
         # B-A9 (2026-10-15, build section 64): the concurrency gate's read of the open runs sits between the balance and the row, for the
         # same reason *Rate Limit* reads the ledger before it inserts — the row this run is about to write must not be in its own count.
         open59 = wiring59.get('open_runs') or ''
-        assert outs59('Ensure Run Ledger (' + tag59 + ')') == [bal59] and outs59(bal59) == [open59] and outs59(open59) == [wiring59['reserve']], \
+        cr59 = wiring59.get('catchup_records') or ''   # R94 follow-up (A14): a scheduled workflow reads the catch-up's records between the open-run read and the row
+        assert outs59('Ensure Run Ledger (' + tag59 + ')') == [bal59] and outs59(bal59) == [open59] and outs59(open59) == ([cr59] if cr59 else [wiring59['reserve']]) \
+            and (not cr59 or outs59(cr59) == [wiring59['reserve']]), \
             'R32 / B-A9: ' + wname59 + "'s balance reading and open-run read are not between the ensure and the row"
         assert "$('" + bal59 + "')" in by59[wiring59['reserve']]['parameters']['jsCode'], 'R32: ' + wname59 + ' does not store the reading on its row'
         # Every end of the run reaches the settle, so the only way to leave a row `reserved` is a run that crashed (which is what
@@ -5800,6 +5876,7 @@ log('The spend guard covers both currencies and the account is a hard floor (202
 # =============================================================================
 
 from ladder_common import LEDGER_WINDOW_MS as LEDGER_WINDOW_MS62
+from monitor_cost import answer_expr as _answer_expr104, fill_count_frames as _fill_frames104   # R47 / R69 / R80 (section 104): one answer expression for every builder
 
 # ---------- A. B-A8: the free token counter, on the main path, behind the three streaming agents ----------
 COUNT_URL62 = 'https://api.anthropic.com/v1/messages/count_tokens'
@@ -5834,9 +5911,10 @@ for _c62 in _STREAM62:
     add_node(_set62, 'n8n-nodes-base.set', 3.4, {'mode': 'manual', 'includeOtherFields': True, 'options': {}, 'assignments': {'assignments': [
         {'id': str(uuid.uuid5(uuid.NAMESPACE_URL, 'ba8:' + _ag62 + ':prompt')), 'name': '__prompt', 'value': _prompt62, 'type': 'string'},
         {'id': str(uuid.uuid5(uuid.NAMESPACE_URL, 'ba8:' + _ag62 + ':answer')), 'name': '__answer',
-         'value': "={{ String($('" + _ag62 + "').first().json.output ?? '') }}", 'type': 'string'}]}},
+         # R47 / R69 / R80 (2026-10-16): the answer as the model returned it — a parsed object as its JSON, never "[object Object]"
+         'value': _answer_expr104("$('" + _ag62 + "').first().json.output"), 'type': 'string'}]}},
         [_px62, _py62 + 260])
-    _mdl62 = json.dumps(_c62['model'])
+    _mdl62 = json.dumps(_c62['model']) + '/*__A28_FRAME__*/'   # A-28 (2026-10-18): the system + tool the agent sends, filled in at WRITE (a later section may change the parser)
     _count_node62(_cp62, '={{ JSON.stringify({ model: ' + _mdl62 + ', messages: [{ role: "user", content: String($json.__prompt || "") }] }) }}',
                   [_px62 + 200, _py62 + 260])
     _count_node62(_ca62, '={{ JSON.stringify({ model: ' + _mdl62 + ', messages: ['
@@ -6051,6 +6129,17 @@ if (Number.isFinite(usd) && usd >= 0) {
   out.run_cost_estimate_state = 'not_available';
   out.run_cost_estimate_basis = 'not available: this run was never priced by the spend guard'
     + (rl ? ' (it reached the guard but carried no estimate)' : ' (the guard did not run for it)');
+}
+// F-L (2026-10-18, re-rating 2026-10-17 C-1 follow-up): a scheduled audit the Audit Scheduler started late carries `ran_late` (CU.lateRun,
+// computed in the scheduler; Normalize Input keeps it for a scheduled request only), and its report says so the way every monitor's
+// Callback Ledger does: `ran_late` on the callback (the app titles it "ran late"), the box first in the HTML, the tag on the subject.
+let __late = null; try { __late = ($('Normalize Input').first().json || {}).ran_late || null; } catch (e) { __late = null; }
+if (__late && __late.late === true) {
+  out.ran_late = __late;
+  const __esc = (x) => String(x == null ? '' : x).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  const __box = '<div class="ran-late" style="border:1px solid #b45309;background:#fffbeb;color:#78350f;padding:10px 14px;margin:0 0 14px;font:14px/1.5 sans-serif"><strong>Ran late.</strong> ' + __esc(__late.text) + '</div>';
+  for (const k of ['html', 'report_html']) if (typeof out[k] === 'string' && out[k]) out[k] = /<body[^>]*>/i.test(out[k]) ? out[k].replace(/<body[^>]*>/i, (b) => b + __box) : __box + out[k];
+  if (typeof out.subject === 'string' && out.subject && !/\(ran late/.test(out.subject)) out.subject = out.subject + ' (ran late — due ' + String(__late.due || '').slice(0, 10) + ')';
 }
 // files ride on the binary, not the json (the PDF and the Word document of a report): a Code node drops them unless they are returned.
 return [{ json: out, binary: item.binary }];"""
@@ -6314,7 +6403,7 @@ def _b64_checks():
             'B-A7: ' + wname64 + ' does not write the retry state back: ' + str(wr64)
         out64[wname64] = {'guard': g64, 'retry': r64, 'writes': wr64, 'if_outputs': if64,
                           'refuse_values': sorted(ref64['columns']['value'].keys())}
-    assert len(out64) == 10, 'B-A7 / B-A9: ' + str(len(out64)) + ' scheduled workflows carry the gate and the sweep, expected 10'
+    assert len(out64) == 11, 'B-A7 / B-A9: ' + str(len(out64)) + ' workflows carry the gate and the sweep, expected 11 (the ten schedules and the Reply Reader since W3-F)'
     json.dump({'monitors': out64, 'n_minutes': 30, 'k_attempts': 3, 'max_attempts': 10, 'per_sweep': 5,
                'error_handler': _ops64['retry'], 'columns': [c for c, _t in _OAC64],
                'page_watch_delivery': {'code': 'Watch Ops Delivery', 'save': 'Save Watch Ops Delivery'}},
@@ -6732,9 +6821,9 @@ for _a70 in ('out.not_compared.push(', 'retried: retryItems.some(', "out.availab
     assert _a70 in code('Ladder Clusters'), 'B2-4 / rule 1: Ladder Clusters is missing ' + _a70
 assert 'serp_not_compared' in code('Ladder Plan') and 'notCompared' in code('Ladder Plan'), 'B2-4 / rule 1: the plan does not carry what could not be compared'
 # the grouping itself, and the rung it decides
-for _a70 in ("k.serp_group ? 'serp|' + k.serp_group", 'const rungMap = new Map(', 'clusterRungs.push({'):
+for _a70 in ("serp_head: k.serp_group && (k.serp_cluster_size || 0) > 1 ? k.serp_group : ''", 'const rungMap = new Map(', 'clusterRungs.push({'):
     assert _a70 in code('Ladder Plan'), 'B2-4: Ladder Plan is missing ' + _a70
-assert "if (String(key).indexOf('serp|') === 0) { groups.push(sorted); continue; }" in code('Ladder Plan'), \
+assert "if (byOf.get(key) !== 'topic label') { groups.push(sorted); continue; }" in code('Ladder Plan'), \
     'B2-4: a group built on shared results pages must not be split into two pages by the topic-label cap'
 # B2-5 in the plan: measured count, stated adjustment, both printed
 for _a70 in ('const serp_diversity = {', 'DIVERSITY_PENALTY', 'score_before: scoreBefore', 'score: dataRefused ? null : scoreAfter'):
@@ -6952,10 +7041,14 @@ const lineage = [
   _ins72.asked
     ? LN.of('What Google says about each key page', 'inspection', { basis: 'measured', period: LN.asOf(today), sample: LN.sample(_ins72.checked, 'of ' + _ins72.asked + ' pages Google answered for'), note: String(_ins72.note || '') })
     : LN.unknown('What Google says about each key page', 'no URL inspection ran for this audit'),
+  // R73 (2026-10-16): the Chrome UX Report is a known source that ANSWERED ("no field data"), not "source not recorded"; and a
+  // technical audit runs no PageSpeed test, so it prints no Lighthouse row (it printed one unconditionally)
   (a.crux && a.crux.available !== false)
     ? LN.of('Core Web Vitals (real users)', 'crux', { basis: 'measured', period: 'the last 28 days of Chrome visits', sample: 'all Chrome visitors Google could aggregate' })
-    : LN.unknown('Core Web Vitals (real users)', String(((a.crux || {}).note) || 'too few Chrome visits for Google to report field data')),
-  LN.of('Lighthouse scores and speed savings', 'pagespeed', { basis: 'one_sample', period: LN.asOf(today), sample: 'one simulated mobile load per page tested' }),
+    : a.crux ? LN.of('Core Web Vitals (real users)', 'crux', { basis: 'reported', period: 'the last 28 days of Chrome visits', sample: 'no field data',
+        note: 'the Chrome UX Report answered: ' + String(a.crux.not_available || a.crux.note || 'too few real-user visits for field data') })
+    : LN.unknown('Core Web Vitals (real users)', 'the Chrome UX Report was not asked in this audit'),
+  ...((((d.pagespeed || {}).rows) || []).some(r => r && r.score != null) ? [LN.of('Lighthouse scores and speed savings', 'pagespeed', { basis: 'one_sample', period: LN.asOf(today), sample: 'one simulated mobile load per page tested' })] : []),
   LN.of('Crawler access for search and AI bots', 'own_check', { basis: 'measured', period: LN.asOf(today), sample: '11 user agents requested', note: 'what the live robots.txt and the server answered us' }),
 ];
 html += `<h2>6a. Where these numbers come from</h2>` + LN.block(lineage, { title: '' });
@@ -7489,9 +7582,9 @@ for _c76 in _NS76:
     add_node(_set76, 'n8n-nodes-base.set', 3.4, {'mode': 'manual', 'includeOtherFields': True, 'options': {}, 'assignments': {'assignments': [
         {'id': str(uuid.uuid5(uuid.NAMESPACE_URL, 'bf1:' + _ag76 + ':prompt')), 'name': '__prompt', 'value': _prompt76, 'type': 'string'},
         {'id': str(uuid.uuid5(uuid.NAMESPACE_URL, 'bf1:' + _ag76 + ':answer')), 'name': '__answer',
-         'value': "={{ String($json.output ?? '') }}", 'type': 'string'}]}},
+         'value': _answer_expr104('$json.output'), 'type': 'string'}]}},   # R47 / R69 / R80: an object as its JSON
         [_px76, _py76 + 300], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
-    _mdl76 = json.dumps(_c76['model'])
+    _mdl76 = json.dumps(_c76['model']) + '/*__A28_FRAME__*/'   # A-28 (2026-10-18): the system + tool the agent sends, filled in at WRITE (a later section may change the parser)
     _own76 = "$('" + _set76 + "')." + ('item' if _multi76 else 'first()') + ".json"
     _count_node62(_cp76, '={{ JSON.stringify({ model: ' + _mdl76 + ', messages: [{ role: "user", content: String($json.__prompt || "") }] }) }}',
                   [_px76 + 200, _py76 + 300])
@@ -7887,7 +7980,7 @@ const TA77 = reachTopic(RI77.ranked === undefined ? null : RI77.ranked, prev.key
   reason_missing: RI77.cached ? 'the reach stored on ' + String(RI77.cached_at || '').slice(0, 10) + ' was kept without the keywords behind it, so this report has no topic evidence to read'
     : 'a keyword report does not buy the list of keywords your site ranks for (the keyword research and the ladder do)' });
 const DIFF77 = prev.domain ? difficultyForYou(KD77, TA77.reach, {}) : null;
-const PLAN77 = DIFF77 ? reachPlan(DIFF77, reachStrong(RI77, null)) : null;
+const PLAN77 = DIFF77 ? reachPlan(DIFF77, reachStrong(RI77, null), reachMeasured(TA77 && TA77.used ? { used: true } : RI77, null)) : null;   // R49: no chance band on a reach no measured ranking supports
 const FORYOU77 = !DIFF77 ? null : { difficulty_for_you: DIFF77, plan_type: PLAN77.plan_type, months: PLAN77.months, months_range: PLAN77.months_range,
   stretch: PLAN77.stretch, chance: PLAN77.chance, reach_used: TA77.reach, reach_basis: TA77.used ? 'topic' : 'site',
   site_reach: TA77.site_reach, topic_reach: TA77.topic_reach, kd_known: KD77 != null,
@@ -8800,7 +8893,8 @@ def _b80_checks():
         'B7-2: a split Google did not answer and a split it answered with nothing are the same thing again'
     assert "read: false, page: null, control: null" in _pg80, 'B7-1: an unanswered window no longer refuses with a reason'
     # B7-3: brand searches are out of the cannibalisation list, on the write path, not filtered later
-    assert 'filter(m => !isBrand(m.query))' in _pg80, 'B7-3: brand searches are being reported as cannibalisation'
+    assert 'filter(m => actionable(m.query))' in _pg80 and 'const actionable = (q) => !isBrand(q) && !otherOf(q);' in _pg80, \
+        'B7-3 / C-6: brand searches (or searches for another website) are being reported as cannibalisation'
     # B7-3: the action may never ask for another page (D11 by another name)
     assert 'Decide which one answers this search' in _sm80 and 'Two of your pages compete for' in _sm80, 'B7-3: the action is gone'
 
@@ -8858,20 +8952,15 @@ assert COUNT_URL62 == _lc84.ANTHROPIC_COUNT_URL, 'B-C2: the free counter endpoin
 # Why each remaining workflow is not counted. One sentence per workflow, not one shared sentence for all of them: the reasons are
 # genuinely different, and a shared one would hide that three of these four need no work beyond someone owning the file.
 _GAP84 = {
-    'SEO_Agent_Reply_Reader.json':
-        'NOT counted, and nothing to count it into: the Reply Reader has no seo_run_ledger row at all - a synchronous reply '
-        'classification reserves nothing and settles nothing, so there is no figure for a measurement to replace. Proved by '
-        '_b84_checks: the workflow contains no Ledger Settle node.',
+    # W3-F (2026-10-17): the Reply Reader left this list - it reserves and settles a run-ledger row now and is counted like the monitors
     'SEO_Agent_Keyword_Check.json':
         'NOT counted: the Keyword Check answers the web app SYNCHRONOUSLY - both Haiku agents sit between the request and Respond '
         "Assess - so the two free count_tokens round-trips per agent would land on the caller's clock rather than on a schedule's, "
         'and that is a decision for whoever owns the response-time budget. build_api.py was also outside build section 84 (four '
         'agents worked in parallel). Neither agent has a thinking budget, so counting them would make them 100% measured. Proved by '
         '_b84_checks: both agents lie on a main path from the webhook to a Respond node.',
-    'SEO_Agent_Site_Tracker.json':
-        'NOT counted only because build_site_tracker.py was outside build section 84 (four agents worked in parallel on one branch). '
-        'Nothing is in the way: Ledger Settle (Site) already carries the empty call table Monitor_Ledger_Settle.js reads, so baking '
-        "Site Brief's table into it is the whole of the work. Proved by _b84_checks: that settle exists and its call table is empty.",
+    # R82 (2026-10-16, section 104): Site Brief is counted now (build_site_tracker.py, monitor_cost.count_chain), so the Site Tracker
+    # left this list — a gap that was paid leaves it for ever (_b76_checks).
 }
 _cw51['count_gap'] = {'why': _WHY_NOT76, 'workflows': sorted(_GAP84), 'reasons': _GAP84,
                       'counted_here': ['SEO_Agent_AI_Growth.json', 'SEO_Agent_AI_Visibility.json',
@@ -8949,20 +9038,22 @@ def _b84_checks():
             assert 'Count Prompt (' + _c['node'] + ')' in _after84, 'B-C2: ' + _c['node'] + "'s counter runs before the run is allowed"
     # ---- the four left behind, each still able to show its reason ----
     _rr84 = _load84('SEO_Agent_Reply_Reader.json')
-    assert not [n for n in _rr84['nodes'] if n['name'].startswith('Ledger Settle (')], \
-        'B-C2: the Reply Reader has a settle now, so its recorded reason ("no ledger row to settle into") is stale'
+    assert [n for n in _rr84['nodes'] if n['name'].startswith('Ledger Settle (')] and \
+        [n for n in _rr84['nodes'] if n['name'].startswith('Count Prompt (')], \
+        'W3-F: the Reply Reader must reserve, count and settle its Haiku call (it left the count gap)'
     _kc84 = _load84('SEO_Agent_Keyword_Check.json')
     _kcc84 = _kc84.get('connections') or {}
     _resp84 = {n['name'] for n in _kc84['nodes'] if n['type'] == 'n8n-nodes-base.respondToWebhook'}
     for _ag84 in ('Keyword Fit', 'Keyword Fit (Text)'):
         assert _resp84 & _reach55(_kcc84, [_ag84], None), \
             'B-C2: ' + _ag84 + ' no longer answers the caller synchronously, so its recorded reason is stale'
+    # R82 (2026-10-16, section 104): the Site Tracker's reason was "nobody owned the file" — it is counted now, and priced from the count
     _st84 = _load84('SEO_Agent_Site_Tracker.json')
     _sj84 = next(n['parameters']['jsCode'] for n in _st84['nodes'] if n['name'] == 'Ledger Settle (Site)')
-    assert 'const AI_CALLS = /*__AI_CALLS__*/[];' in _sj84 and "const CAL = /*__CAL__*/'';" in _sj84, \
-        'B-C2: the Site Tracker settle no longer carries the empty call table, so its recorded reason is stale'
+    assert '/*__AI_CALLS__*/' not in _sj84 and '"node": "Site Brief"' in _sj84 and 'CC.runCost(__costCalls' in _sj84, \
+        'R82: the Site Tracker settle still prices Site Brief from its reservation'
     print('B-C2 (a monitor settles a measurement, not its reservation): %d Claude agent(s) across %d scheduled workflow(s) are '
-          'counted on the main path and priced into their ledger row; 4 stay on the reservation, each with its own recorded reason'
+          'counted on the main path and priced into their ledger row; 3 stay on the reservation (Site Brief left the list, R82), each with its own recorded reason'
           % (_n84, len([a for a in _want84.values() if a])))
 
 
@@ -9149,6 +9240,2036 @@ sticky("""### One AI Overview figure in one place, and a state that advances onl
 log('One AI Overview figure in one place, and a state that advances only on evidence (2026-10-15, FIX_PLAN §3.16 rows B6-9 and B9-6). B6-9: v5/code/Ladder_Pool.js still multiplied the click-through rate by 0.65 when a results page carried an AI Overview - Ahrefs\' APRIL 2025 figure - after B1-3 had replaced it in _kw_inputs.js with the December 2025 per-position study (300,000 keywords, published 2026-02-04: -58.0% at position 1, -50.8% at 2, -46.4% at 3) and B6-1 in _rank_serp.js. Which kit belongs where is B6-1\'s own reasoning: a flat factor all but cancels out of a SHARE, so the share of voice needed the per-position table, while the ladder\'s traffic_potential is an ABSOLUTE top-three estimate and only the keywords whose results page has an AI Overview carried the factor - so the stale number inflated those estimates by 1.35x and moved them up the pre_score order that decides which rungs are planned. Ladder Pool now makes the same KWI.calibrate call the discovery twin Collect_Research.js makes, and the estimate carries traffic_basis / traffic_note / click_loss instead of arriving bare. The class is closed by a build-time scan that refuses the literal 0.65 within 200 characters of an AI Overview in every v5/code kit and every generated Code node, with comments stripped first so the two comments that record WHY the figure was retired survive. B9-6: the write half of "writing was a promise nobody kept" - the Content Cadence marked an AI target writing and stamped written_at when a page run STARTED, whatever the spawn did, and nothing in the system ever set written, so Growth Metrics counted written: 0 every week of its life and a refused or failed run left the question claiming work in progress for ever (R1\'s class in the one table R1 did not cover). AI Target Marks now writes the row back to queued with the error when the content run could not be started and says in the row\'s own reason that nothing exists yet; the new AI Target Settle is the only exit from writing and advances a row only against the seo_content_log row for that same run, which is R1\'s rule exactly (a page counts as written only on a written content-log row); it deliberately does not time a row out, because the 14-day requeue and its alert belong to the read half in AI Growth. The class is closed by deriving state_lint.py\'s work-in-progress registry from the generated workflows instead of hand-writing it from R1\'s one instance: every table a run moves to writing whose state is read back and acted on must declare its way back, and check B then has to find the node that writes it. On its first run the derived registry found a third table, seo_case_studies, and the honest answer is recorded rather than assumed - nothing tests that row\'s state (Brief Context hands a later page url: \'\' unless the status is published, and the Link Builder takes a case study only when it has a page_url), so it is not this defect')
 
 
+# 102. THE VERDICT READS THE WHOLE PAGE BEFORE IT SAYS WHAT THE PAGE LACKS (2026-10-16, re-rating R38 / R52;
+#      docs/system-review-2026-10-15/defects/A_keywords_content.md).
+#
+#      * R38 **a false statement about the customer's own page.** Exec 608 told the owner their article "has no mandate dates, no PINT-AE
+#        or 5-corner explanation, no tables, no lead CTA and no author or date"; it has the dates, three tables and a byline. Three cuts
+#        (9,000 characters in *Collect Client Pages*, 3,500 in the analyzer's prompt, 5,000 in the copywriter's) hid them, the text reader
+#        (Jina, header / aside selectors removed) flattens tables into plain lines and drops bylines anyway, and the analyzer's "in the
+#        excerpt provided" hedge was lost when the verdict restated the gap as fact. Now: *Read Client Page HTML* (a free GET of the pages
+#        the run reads) -> *Collect Client Pages* measures the page's FACTS on the WHOLE page (dates in the text, tables, byline,
+#        publication date, call to action, schema types; `structure_reliable` says whether the HTML was real) and keeps 24,000 characters
+#        of the existing page; the analyzer, the verdict and the copywriter read the facts and the tables as rows; *Check Page Claims*
+#        (new, between *Parse Analysis* and *Keyword Data*) removes any analyzer gap the facts contradict or could not check, and *Merge
+#        Keyword Data* reads the checked analysis. Section 103 closes the verdict's own text.
+#      * R52 the description's "Pages read" printed the client-rendered application's generic title for every menu page (v5/code/Site_Pages.js).
+_PC102 = _rd0('code/_page_claims.js').rstrip('\n')
+assert 'const PC = (() => {' in _PC102
+
+# --- the pages' own HTML: one free GET per page the run reads, in front of Collect Client Pages ---
+_rcp = pos('Read Client Pages')
+add_node('Read Client Page HTML', 'n8n-nodes-base.httpRequest', 4.5, {
+    # only the run's own host is fetched directly (the URL comes from a sitemap the site's owner controls); anything else gets an inert reserved URL and reads as "not read"
+    'url': "={{ (() => { const u = String($('Client Page Requests').all()[$itemIndex].json.url || ''); const h = (u.match(/^https?:\\/\\/([^\\/:?#]+)/i) || [])[1] || ''; const n = (x) => String(x).toLowerCase().replace(/^www\\./, ''); return (h && n(h) === n($('Collect Site URLs').first().json.domain || '')) ? u : 'https://example.com/'; })() }}",
+    'sendHeaders': True,
+    'headerParameters': {'parameters': [
+        {'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEO-Agent/4.14; +https://example.com/bot)'},
+        {'name': 'Accept', 'value': 'text/html,application/xhtml+xml'}]},
+    'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 500}},
+                'response': {'response': {'neverError': True, 'responseFormat': 'text', 'outputPropertyName': 'page_html'}},
+                'timeout': 20000}},
+    [_rcp[0] + 200, _rcp[1] + 160],
+    {'onError': 'continueRegularOutput', 'retryOnFail': True, 'maxTries': 3, 'waitBetweenTries': 5000})
+assert 'example.com' in nodes['Read Client Page HTML']['parameters']['url'] and 'Collect Site URLs' in nodes['Read Client Page HTML']['parameters']['url'], 'R38: the HTML read is not limited to the run\'s own host'
+disconnect('Read Client Pages', 'Collect Client Pages')
+connect('Read Client Pages', 'Read Client Page HTML'); connect('Read Client Page HTML', 'Collect Client Pages')
+setcode('Collect Client Pages', rd('code/Collect_Client_Pages.js'))
+assert "$('Read Client Pages').all()" in code('Collect Client Pages') and 'existing_page_digest' in code('Collect Client Pages'), 'R38: Collect Client Pages does not measure the page'
+assert "slice(0, r.kind === 'existing' ? 9000 : 6000)" not in code('Collect Client Pages'), 'R38: the 9,000 character cut is back'
+
+# --- the analyzer's claims about the client's page are checked against the page's facts ---
+add_node('Check Page Claims', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Check_Page_Claims.js').replace('/*__PAGE_CLAIMS__*/', _PC102)},
+         [pos('Parse Analysis')[0] + 200, pos('Parse Analysis')[1] + 160])
+assert 'const PC = (() => {' in code('Check Page Claims') and '/*__PAGE_CLAIMS__*/' not in code('Check Page Claims')
+_pa_out = [t['node'] for lst in conns.get('Parse Analysis', {}).get('main', []) for t in lst]
+assert _pa_out == ['Keyword Data'], 'R38: Parse Analysis feeds %r, expected only Keyword Data' % (_pa_out,)
+disconnect('Parse Analysis', 'Keyword Data')
+connect('Parse Analysis', 'Check Page Claims'); connect('Check Page Claims', 'Keyword Data')
+_mkd = code('Merge Keyword Data')
+assert _mkd.count("$('Parse Analysis')") == 1, 'R38: Merge Keyword Data reads Parse Analysis %dx' % _mkd.count("$('Parse Analysis')")
+setcode('Merge Keyword Data', _mkd.replace("$('Parse Analysis')", "$('Check Page Claims')"))
+for _n in nodes:   # nothing else may read the unchecked analysis by name (Keyword Data (Retry) reads only the keyword)
+    _blob = json.dumps(nodes[_n]['parameters'])
+    if "$('Parse Analysis')" in _blob and _n not in ('Keyword Data (Retry)',):
+        raise AssertionError('R38: %s still reads the unchecked analysis' % _n)
+assert 'existing_page_facts_text' in nodes['Competitor Analyzer']['parameters']['text'] and '14000' in nodes['Competitor Analyzer']['parameters']['text'], 'R38: the analyzer prompt is not the whole-page one'
+assert '.slice(0, 3500)' not in nodes['Competitor Analyzer']['parameters']['text'], 'R38: the 3,500 character cut is back'
+assert 'existing_page_facts_text' in nodes['Verdict Agent']['parameters']['text'], 'R38: the verdict does not read the page facts'
+assert '16000' in nodes['Copywriter']['parameters']['text'] and '.slice(0, 5000)' not in nodes['Copywriter']['parameters']['text'], 'R38: the copywriter still cuts the page at 5,000 characters'
+
+# --- R52: the titles of the pages read ---
+assert 'pageTitle(' in code('Site Pages') and 'titleCount' in code('Site Pages'), 'R52: Site Pages still prints the reader title'
+
+sticky("""### The verdict reads the whole page before it says what the page lacks (R38, R52)
+**R38 (High).** The report told a customer that their article had *no mandate dates, no tables, no author or date* — it has all three. Three cuts hid them (9,000, 3,500 and 5,000 characters), and the text reader flattens tables and drops bylines whatever the cut. The run now reads the page's own HTML for free (*Read Client Page HTML*), **measures the page's facts on the whole page** (*Collect Client Pages*: dates in the text, tables, byline, publication date, call to action; "NOT CHECKED" when the HTML was only a script shell), the analyzer / verdict / copywriter read those facts, **Check Page Claims** removes any analyzer gap the facts contradict, and *Parse Verdict* does the same to the verdict's own sentences (`v5/code/_page_claims.js`). A claim the page could not be checked for is not made.
+**R52.** *Site Pages* named every menu page by the reader's title; on a client-rendered site that is one generic title. A title the homepage carries, or two pages share, is replaced by the menu link text.""",
+       -1800, -3800, 1180, 360, 3)
+log('The verdict reads the whole page before it says what the page lacks (2026-10-16, re-rating R38 / R52). R38: a keyword report told a customer their own article had "no mandate dates, no PINT-AE or 5-corner explanation, no tables, no lead CTA and no author or date" - it states the dates in its text, has three tables and a byline; three cuts (9,000 characters in Collect Client Pages, 3,500 in the competitor analyzer\'s prompt, 5,000 in the copywriter\'s), a text reader that flattens tables and drops bylines, and an "in the excerpt provided" hedge lost when the verdict restated the analyzer\'s gap as fact. New node Read Client Page HTML (one free GET per page the run reads); Collect Client Pages keeps 24,000 characters of the existing page and measures its facts on the whole page (dates in the text, tables with their rows, byline, publication date, call to action, schema types, with structure_reliable false and "NOT CHECKED" when the HTML was a script shell); the analyzer, verdict and copywriter prompts read those facts; new node Check Page Claims (v5/code/_page_claims.js) removes any analyzer gap the facts contradict or could not check, and Merge Keyword Data reads the checked analysis. R52: Site Pages named each menu page by the reader\'s Title line - one generic title five times on a client-rendered site - and now uses the menu link text, then the first heading, when the reader title is the homepage\'s or is shared')
+
+
+# 103. THE VERDICT'S OWN SENTENCES ARE CHECKED TOO, AND AN ASP IS NOT "FTA-ACCREDITED" (2026-10-16, re-rating R38 second half, R48).
+#      * R38 the analyzer is only one author of a claim about the client's page: the Verdict Agent writes its own reasons and risks. Parse
+#        Verdict now runs every reason and risk through the same kit, sentence by sentence, against `existing_page_digest` and records
+#        what it removed as `page_claims_dropped` (nothing is removed when no digest exists: a page nobody read makes no claim to check).
+#      * R48 the verdict called an ASP "FTA-accredited"; in the UAE the Ministry of Finance accredits e-invoicing service providers and the
+#        Federal Tax Authority administers the tax. The wording came from competitors' pages (their snippets say "FTA-accredited"), so the
+#        prompts say it (verdict.txt, competitor_analyzer.txt, copywriter.txt) and the kit rewrites it in the verdict's reasons, risks and
+#        changes and in the analyzer's output.
+_pv = code('Parse Verdict')
+_a = "verdict.reasons = (Array.isArray(verdict.reasons) ? verdict.reasons : []).map(noFaqSchema);"
+assert _pv.count(_a) == 1
+patch('Parse Verdict', _a, _a + "\n" + _PC102 + """
+// ---- R38 / R48 (2026-10-16): what the verdict says about the client's own page is checked against what was measured on that page ----
+// Exec 608: reasons[3] said "Its visible text has no mandate dates, ... no tables, ... no author or date" about a page that has all three.
+// The Verdict Agent now reads the page's facts; this removes any sentence of its reasons / risks that the digest still contradicts (or that
+// the digest says could not be checked) and says so in `page_claims_dropped`. R48: "FTA-accredited" -> the Ministry of Finance's framework.
+const PCD = prev.existing_page_digest || null;
+const page_claims_dropped = [];
+const pcClean = (arr) => (Array.isArray(arr) ? arr : []).map(x => { const r = PC.filterText(x, PCD, {}); r.dropped.forEach(d => page_claims_dropped.push(d)); return PC.fta(r.text); }).filter(Boolean);
+verdict.risks = pcClean(verdict.risks);
+verdict.reasons = pcClean(verdict.reasons);""")
+_b = "let verdict_changes = Array.isArray(verdict.what_must_change) ? verdict.what_must_change.map(x => noFaqSchema(x)).filter(Boolean) : [];"
+assert code('Parse Verdict').count(_b) == 1
+patch('Parse Verdict', _b, "let verdict_changes = Array.isArray(verdict.what_must_change) ? verdict.what_must_change.map(x => PC.fta(noFaqSchema(x))).filter(Boolean) : [];")
+_c = "    verdict_changes,\n    existing_page_action,"
+assert code('Parse Verdict').count(_c) == 1
+patch('Parse Verdict', _c, "    verdict_changes,\n    page_claims_dropped,\n    existing_page_action,")
+for _a103 in ['const PCD = prev.existing_page_digest', 'PC.filterText(x, PCD', 'PC.fta(noFaqSchema(x))', 'page_claims_dropped,']:
+    assert _a103 in code('Parse Verdict'), 'R38 / R48: Parse Verdict is missing ' + _a103
+for _f in ('verdict.txt', 'competitor_analyzer.txt', 'copywriter.txt'):
+    assert 'Ministry of Finance' in _rd0('prompts/' + _f), 'R48: ' + _f + ' does not name the accrediting body'
+log('The verdict\'s own sentences are checked too, and an ASP is not "FTA-accredited" (2026-10-16, re-rating R38 second half, R48). Parse Verdict runs every reason and risk through the page-claims kit against the existing page\'s digest and lists what it removed as page_claims_dropped; the competitor analyzer\'s output goes through the same kit in Check Page Claims. R48: the verdict called an ASP "FTA-accredited" - in the UAE the Ministry of Finance accredits e-invoicing service providers and the Federal Tax Authority administers the tax; the wording came from competitors\' snippets, so verdict.txt, competitor_analyzer.txt and (for UAE e-invoicing pages) copywriter.txt now say the Ministry, and the kit rewrites any "FTA-accredited" that still comes out of the analyzer, the verdict\'s reasons, risks and changes')
+
+
+# 100. CONTENT QA READS WHAT IT CHECKS (2026-10-16, re-rating 2026-10-15 family F8 — docs/system-review-2026-10-15/defects/
+#      A_keywords_content.md R37 R43 R44 R45). Four ways the quality gate judged something other than the page in front of it:
+#      R37 the source kit read digits only, so "Forty percent … up from 27 ..." (McKinsey's own snippet) vouched for neither 40% nor 27%
+#          and both correct figures were masked as "not carried" — the kit now reads number words and a percentage cut off by the
+#          snippet, on every path that asks it (the figure check and the money mask), and "does not carry" is said only of a whole text;
+#      R43 the draft was scored on the brief's counts and the page to beat on presence, and the two were printed as one quantity ("60%
+#          against 90%" for a draft that uses 20 of 20 terms) — both are presence now, the brief's counts are information, and the
+#          editor's length cut is told which terms it must not cut away;
+#      R44 the page to beat was the highest-coverage result of ANY kind (a guide for agencies, a listicle of other companies) and its
+#          banners and company entries became subtopics — it is now the best page of the kind being written, and subtopics exclude
+#          promotions, headings with no text under them and a list's entries;
+#      R45 a bracket counted only when it started with an upper-case letter, and the writer's [Confirm: …] notes were counted before §9b
+#          and named to nobody — every bracket is counted and named, QA's own marks once.
+# =============================================================================
+for _n100 in ('Content QA', 'Collect Facts', 'Blog Package'):
+    _c100 = code(_n100)
+    assert 'const SRC = (() => {' in _c100 and 'const spelled = (text)' in _c100 and 'cutPct(f, t)' in _c100, \
+        'R37: ' + _n100 + ' does not inline the source kit that reads number words'
+assert "reason: texts.some(t => SRC.cutShort(t)) ? 'not_in_excerpt' : 'absent'" in code('Content QA'), 'R37: the figure check no longer says why a figure is held'
+assert 'SRC.hasFigure(f, t)) return SRC.host(m[1])' in code('Content QA'), 'R37: the money mask stopped asking the same kit as the figure check'
+assert "ok: t.found > 0, present: t.found > 0" in code('Content QA') and 'coverage_compare' in code('Content QA'), \
+    'R43: Content QA measures the draft differently from the page it compares it with'
+assert 'CVG.coverageOf(benchText, termList)' in code('Content QA'), 'R43: the benchmark is no longer measured on the draft\'s own term list'
+assert 'Keep at least one use of each of these terms' in code('Content QA'), 'R43: the length cut is not told which terms coverage counts'
+assert "CVG.best(prev.competitors || [], covTerms, { kind: pageKind, keyword: prev.keyword })" in code('Parse Analysis'), \
+    'R44: Parse Analysis picks the page to beat without the kind of page being written'
+for _n100 in ('Parse Analysis', 'Content QA'):
+    assert 'const kindOf = (p) =>' in code(_n100) and 'const PROMO = ' in code(_n100), 'R44: ' + _n100 + ' carries an older coverage kit'
+assert 'names another company is not a subtopic' in nodes['Strategy Brief']['parameters']['text'], 'R44: the brief prompt lost the subtopic rule'
+assert 'a term counts once it appears' in nodes['Strategy Brief']['parameters']['text'], 'R43: the brief prompt does not say how coverage is measured'
+# R45's rule now lives in the placeholder kit (A-13, section 130): any bracket that starts with a letter, whatever its case, is counted
+assert 'PH.scan(finalBody)' in code('Content QA') and '/*__PLACEHOLDERS__*/' in code('Content QA'), 'R45: the placeholder count does not read the copy after §9b through the kit'
+assert 'const review_notes = phScan.notes' in code('Content QA') and 'open_brackets' in code('Content QA'), \
+    'R45: review notes are counted before §9b, or the open brackets are not named'
+log('Content QA reads what it checks (2026-10-16, re-rating 2026-10-15 family F8: R37 R43 R44 R45). R37: v5/code/_sources.js reads number '
+    'words ("Forty percent", "fifty million dirhams", "a third") and a percentage cut off at the end of a snippet ("up from 27 ...") on the '
+    'text a figure is looked up in — the figure check and the money mask both ask it, Collect Facts and Blog Package inline the same kit — and '
+    '"does not carry" is said only of a whole text ("not in the excerpt the run read" otherwise). R43: draft and page to beat are both measured '
+    'by presence on one term list; the brief\'s counts are reported ("strategy used 7 times (the brief asked for 8)") and never refuse a page; '
+    'the reason names both figures and the measure; the length cut is told which terms to keep. R44: the page to beat is the best result of '
+    'the kind being written (CVG.kindOf: list / guide / service), never a listicle for a service page, and subtopics exclude promotions, '
+    'headings with no text under them and a list\'s entries. R45: every bracket left for a person is counted whatever its case and named, '
+    'with the writer\'s [Confirm: …] notes, counted after §9b; QA\'s own marks are named once.')
+
+
+# 101. THE EDITOR IS PRICED FOR THE CALLS IT MADE (2026-10-16, re-rating 2026-10-15 R46). QA round N follows N - 1 editor calls; the note
+#      said "The editor had 2 round(s)" after one call and every report builder and Run Ledger Settle priced a second one from `qa_round`.
+#      Content QA now states `editor_rounds` and the shared cost loop's `__qaRounds()` reads it (rounds - 1 for an older item).
+# =============================================================================
+_qr101 = "const __qaRounds = () => { try { const q = $('Content QA').first().json || {}; const e = Number(q.editor_rounds);"
+for _n101 in _ends51 + ['Run Ledger Settle']:
+    assert _qr101 in code(_n101), 'R46: ' + _n101 + ' still prices one Editor call per QA round'
+assert "qa_round: round, editor_rounds, meta:" in code('Content QA') and "'The editor had ' + editor_rounds" in code('Content QA'), \
+    'R46: Content QA does not state the editor calls that ran'
+assert [c['node'] for c in _AI_CALLS51 if c.get('loop')] == ['Editor'], 'R46: a node other than the Editor is priced per QA round'
+log('The Editor is priced for the calls it made (2026-10-16, re-rating 2026-10-15 R46): Content QA emits editor_rounds (QA round - 1), its '
+    'not-ready note counts them, and the cost loop of the five report builders and Run Ledger Settle multiplies the Editor by them instead '
+    'of by the QA rounds.')
+
+
+# =============================================================================
+# 96. A RUN THAT KNOWS WHO STARTED IT, A REFUSAL THAT REACHES THE CUSTOMER, AND AN ALERT ROW THAT IS UPDATED (2026-10-16, the third
+#     re-rating's defects R77 / R81 / R116 / R96 (family F4) and R79 / R105 (family F5), plus R95; docs/system-review-2026-10-15/
+#     defects/C_monitors.md and D_app_reporting.md)
+# -----------------------------------------------------------------------------
+#  * R77 (High): an app backlinks request was refused by its OWN front-door run. The gate matched a "twin" on `mode` alone, and the front
+#    door's row (exec 622) was still `reserved` when the Backlink Monitor it had just started (exec 624) read the ledger. Fixed by identity,
+#    not timing: *Monitor Start* passes `parent_run_id` (the front door's own execution id), the child's ledger row names it in its key
+#    (`parent:<id>`), and RG.gate does not count that one run; a genuine twin with another id is still refused.
+#  * R81 part 1: the front door's row of a hand-off settled the per-mode reservation ($0.50 "ESTIMATED") beside the child's measured
+#    figure, so a request was counted twice. *Run Ledger Settle* now settles a hand-off at $0, `dfs_source: handoff`, naming the child.
+#  * R116 / R96: a refusal used to end in the settle chain — a balance read it did not need (5 min 33 s behind another run's DataForSEO
+#    calls), a settle that computed $0.45 and dropped it — and told nobody. It now ends at *Refusal Notice* -> a `rejected` callback to an
+#    on-demand caller (`{stage, status: rejected, error, request_id}`); the refused row is settled by the refusal itself. Built in
+#    ladder_common.ledger_mainline for all ten scheduled workflows and proved there (no path from the refusal reaches the settle chain).
+#  * R79 / R105: OA.keyOf trims after its 160-character slice; every write-back uses the key a row is STORED with (row 4 keeps its trailing
+#    space and is now matched byte for byte); the Error Handler's *Alert Delivery* has ONE input, a merge of both channel branches, so the
+#    retry sweep runs once per failure; a re-sent row records the webhook in `channels`.
+#  * R95: an on-demand AI pulse is stored beside the day's scheduled reading (build_monitors.py: upsert by site + date + run_id).
+# =============================================================================
+assert "parent_run_id: String($execution.id)" in code('Monitor Start'), 'R77: Monitor Start does not tell the monitor which run started it'
+assert '__handoff' in code('Run Ledger Settle') and "dfs_source: 'handoff'" in code('Run Ledger Settle'), \
+    'R81: the front door settles a monitor hand-off as if it had spent the reservation'
+assert 'dfs_source' in nodes['Settle Run Ledger']['parameters']['columns']['value'], 'R81: the settle does not write where the money is'
+from ladder_common import RUN_GUARD_SRC as _RG96, OPS_ALERT_SRC as _OA96, ALERT_RETRY_SRC as _AR96, LEDGER_RESUME_JS as _LR96
+assert 'const parentOf = ' in _RG96 and '!(parent && S(r.run_id) === parent)' in _RG96, 'R77: the gate cannot tell its parent from a twin'
+assert "'parent:' + parent_run_id" in rd('code/Monitor_Ledger_Row.js'), 'R77: the child\'s ledger row does not name its parent'
+assert 'parent_run_id })' in _LR96 and 'callback_url: __S(__trig.callback_url)' in _LR96, 'R77 / R116: the gate does not read its parent or its caller'
+assert ".slice(0, 160).trim()]" in _OA96 and 'storedKey(prior)' in _OA96, 'R79: the alert key is not trimmed once, or a repeat is written under a new key'
+assert 'alert_key: storedKey(r)' in _AR96 and "withChannel(r.channels, 'webhook')" in _AR96, 'R79 / R105: the sweep writes back under a re-trimmed key, or forgets its channel'
+# the harness (S116) reads the Error Handler's merge from ops_alert_wiring.json: which branch enters on which input
+_ow96p = os.path.join(HERE0, 'harness', 'ops_alert_wiring.json')
+_ow96 = json.load(open(_ow96p))
+_mi96 = {s96: t96['index'] for s96, o96 in _ehc.items() for l96 in o96.get('main', []) for t96 in l96 if t96['node'] == 'Alert Channels Done'}
+assert _mi96 == {'Post Alert Webhook': 0, 'Send Webhook?': 0, 'Email Ops': 1, 'Send Email?': 1}, 'R79: the merge in front of Alert Delivery is not fed one branch per input: ' + str(_mi96)
+_ow96['delivery_merge'] = {'node': 'Alert Channels Done', 'type': _ehn['Alert Channels Done']['type'], 'inputs': _mi96, 'feeds': 'Alert Delivery'}
+json.dump(_ow96, open(_ow96p, 'w'), indent=1, sort_keys=True)
+sticky("""### A run that knows who started it, a refusal that reaches the customer, an alert row that is updated (R77 / R81 / R116 / R96 / R79 / R105 / R95)
+**R77.** An on-demand AI visibility or backlinks check is started by this workflow (*Monitor Start*), whose own ledger row has the same mode. The monitor now receives `parent_run_id` (this execution's id), names it in its ledger row (`parent:<id>`) and does not count that run as "another run in flight"; a genuine second run is still refused. **R81.** This run's row then settles **$0, handed off** — the money is on the monitor's row, counted once.
+**R116 / R96.** A refused monitor ends at its own notice: an on-demand caller receives `{stage: rejected, status: rejected, error, request_id}` instead of waiting three hours; no balance read, no settle (the refusal settles its row itself).
+**R79 / R105.** The ops-alert key is trimmed once when it is built; every write-back uses the key the row is stored with, byte for byte; *Alert Delivery* has one input (a merge of both channels), so the retry sweep runs once per failure; a re-sent row records the webhook in `channels`.""",
+       -2600, -4300, 1180, 300, 3)
+log('A run that knows who started it, a refusal that reaches the customer, and an alert row that is updated (2026-10-16, re-rating R77 / R81 / R116 / R96 / R79 / R105 / R95): the on-demand monitor recognises its front-door parent by identity (parent_run_id, child key parent:<id>) and a genuine twin is still refused; the front door settles a hand-off at $0; a refused scheduled run ends at its own notice and an on-demand caller gets a rejected callback; the alert key is trimmed once and written back under the stored key; the Error Handler sweeps once per failure; a same-day on-demand pulse no longer replaces the scheduled reading')
+
+
+# 88. KNOW THE CUSTOMER'S OWN SITE BEFORE ADVISING (2026-10-16, the third re-rating's family F1 — docs/system-review-2026-10-15/
+#     defects/A_keywords_content.md R34 R35 R36 R40 R41 R49 R50 R51 R55 R56 R58). The code lives in v5/code; this section only proves
+#     that every path the dossiers name runs it, because three fixes of 2026-10-15 failed live by reaching one path of several.
+#     R34: SM.titleGap / the coverage count over the whole inventory (Ladder Plan); the Site Tracker's title read is asserted in
+#          build_site_tracker.py. R35/R55/R56: SM.matchPage (synonyms, stems, emirates, listing pages, a preferred page) and
+#          SM.canonUrl in every caller. R36: Search Console's own page in Rank Keywords. R40: KWI.pageGroup in the ladder AND discovery.
+#     R41: the head term's traffic through the click-loss model. R49: reachPlan(…, reachMeasured(…)) in every caller of v5/code.
+#     R50: the Keyword Check names the ladder. R51: the falling pick. R58: no covered topic in "Now".
+_F1 = {
+    'Ladder Plan': ('const KWI = (() =>', 'KWI.pageGroup({', 'reachMeasured(', 'folded.push({', 'const headTraffic', 'SM.titleGap(pageModel)', 'not_planned: notPlanned[r]'),
+    'Rank Keywords': ('KWI.pageGroup({', "c.tier = 'Covered'", 'FALLING_PCT', 'coveredBy(k.keyword, k.gsc)', 'reachMeasured('),
+    'Search Console Seeds (Discovery)': ('SM.canonUrl(model, u)', 'pageTitleShare', 'SM.matchPage(model, kw, rowPage)'),
+    'Client Page Requests': ('SM.matchPage(SITE_MODEL, d.keyword)', 'SM.canonUrl(SITE_MODEL, m.url)'),
+    'Collect Research': ('SC.measured', 'Math.max(-0.7,'),
+    'Ladder Pool': ('Math.max(-0.7,',),
+    'Build Keyword Strategy': ('reachMeasured(RR, p)', 'pipeline.trend_note', 'c.tier_note'),
+}
+for _n88, _need88 in _F1.items():
+    for _s88 in _need88:
+        assert _s88 in code(_n88), 'F1 (R34-R58): %s is missing %s' % (_n88, _s88)
+for _n88 in ('Ladder Plan', 'Rank Keywords', 'Search Console Seeds (Discovery)', 'Client Page Requests', 'Collect Research'):
+    for _s88 in ('const titleShare = ', 'const canonUrl = ', 'const isListing = '):
+        assert _s88 not in code(_n88) or 'const SM = (() => {' in code(_n88), _n88 + ': the site-model kit is half inlined'
+_ASSESS88 = _rd0('code/Assess_Response.js')
+assert 'reachMeasured(topic.used' in _ASSESS88 and 'existing,   // R50' in _ASSESS88, 'R49 / R50: the Keyword Check (build_api.py) lost its fix'
+# R49, every caller in v5/code: a reachPlan(...) call with two arguments would show a chance band on an unmeasured reach again
+import glob as _glob88
+_two88 = []
+for _f88 in sorted(_glob88.glob(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'v5', 'code', '*.js'))):
+    if os.path.basename(_f88) == '_reach.js':
+        continue
+    for _m88 in re.finditer(r'reachPlan\(([^()]*(?:\([^()]*\)[^()]*)*)\)', open(_f88, encoding='utf-8').read()):
+        if re.sub(r'\([^()]*\)', '', _m88.group(1)).count(',') < 2:   # top-level arguments only
+            _two88.append(os.path.basename(_f88))
+assert not _two88, 'R49: reachPlan without the measured flag in ' + ', '.join(sorted(set(_two88)))
+log('Know the customer\'s own site before advising (2026-10-16, family F1: R34 R35 R36 R40 R41 R49 R50 R51 R55 R56 R58): the Site Tracker reads the '
+    'titles its inventory lacks (40 a site a week, free) and names the rest "title unknown"; SM.matchPage reads d365 = dynamics 365, emirate within '
+    'the UAE and light stems, prefers the page Search Console credits and the dedicated page over a listing; discovery calls a ranking page '
+    'off-target only on its own title and prints one host; a search the site ranks for with a page is covered by it; one grouping rule '
+    '(KWI.pageGroup) for ladder and discovery; the head term\'s traffic after the click loss; no chance band on an unmeasured reach; the Keyword '
+    'Check names the ladder; no falling "where to start" without a label; nothing a ladder or a page covers is "Now"')
+
+
+# =============================================================================
+# 90. KNOW THE CUSTOMER'S OWN SITE BEFORE ADVISING: THE HOST GOOGLE SHOWS, THE RANKINGS GOOGLE MEASURED, THE PAGES A LINK REACHES
+#     (2026-10-16, re-rating of 2026-10-15, docs/system-review-2026-10-15/defects/B_technical.md R59 / R61 / R65 / R117)
+#
+#     * R59 (High) — the first-ranked finding of the technical audit AND the full report read "Google serves the bare host" as
+#       "a large share of important pages is not indexed … request indexing": all 16 "not indexed" www pages had impressions on
+#       https://techand.ai in the same Search Console answer (1,374 in 28 days), Google had chosen the bare host as canonical for 3,
+#       and the only sitemap submitted to the property was https://techand.ai/sitemap.xml. *GSC Audit Findings* never looked at the
+#       other host, counted a canonical mismatch twice two different ways (3 and 0), and the report tables stripped the host so "/"
+#       appeared twice and Google's canonical printed as the page itself. Now: one host-split finding with the per-host counts, the
+#       pages Google chose on the other host and the sitemap that was submitted; a page shown under the other host leaves the
+#       not-indexed finding (it stays in the list, with what Google shows instead); "One canonical host" leaves what-works when Google
+#       disagrees; one definition of a canonical mismatch for both counts; the page-watch kit compares the host too.
+#     * R61 (High) — "the site does not rank in Google's top 10 for any keyword" (DataForSEO's database) beside Search Console's 15
+#       queries in the top 10: the finding, the per-intent finding, the traffic estimate and *Key Numbers* now name their source and
+#       carry Google's own count; the competitor comparison stays provider against provider.
+#     * R65 — impact weights read every page row Search Console measured (`page_traffic`), not the top 10; a complete list makes a
+#       missing page a measured zero; every affected URL counts, not only the samples.
+#     * R117 — a page no link reaches got click depth 0 (the crawler starts from the sitemap) and counted as "within 3 clicks".
+# =============================================================================
+_GAF90 = 'GSC Audit Findings'
+patch(_GAF90, "const findings = [], works = []; const CAT = 'Crawlability & Indexing';", r"""// ---- R59 / R61 / R65 / R117 (2026-10-16, build section 90): the host Google shows, the rankings it measured, the pages a link reaches ----
+const __hostOf90 = (u) => (String(u || '').trim().toLowerCase().match(/^https?:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/) || [])[1] || '';
+// the site's own address: the host its homepage canonical tag names, else the stored canonical host, else where the redirect leads, else the crawl's first page
+const __canonHost90 = (() => {
+  const b = (base && typeof base === 'object') ? base : {}; const hp = (((b.probe || {}).measurements || {}).hosts) || {};
+  for (const c of [hp.canonical_tag_host, b.canonical_host, hp.consolidated ? __hostOf90(hp.apex_location) : '', __hostOf90(((plan.pages || [])[0] || {}).url)]) {
+    const h = String(c || '').toLowerCase().replace(/^https?:\/\//, '').replace(/[\/?#].*$/, ''); if (h) return h; }
+  return String(plan.domain || '').toLowerCase(); })();
+// ONE definition of "Google chose another canonical", used by both counts: Google's choice against the page's own canonical (else the URL),
+// host-sensitively — and a difference of host alone is named, because that is the www / non-www split and not a duplicate page
+const canonOk90 = (i) => (!i || !i.google_canonical) ? null : same(i.google_canonical, i.user_canonical || i.url);
+const hostOnly90 = (i) => !!i && !!i.google_canonical && key(i.google_canonical) === key(i.user_canonical || i.url) && __hostOf90(i.google_canonical) !== __hostOf90(i.user_canonical || i.url);
+let host_split90 = null, servedAlt90 = [], canonAll90 = [], rowsByKey90 = new Map();
+const elsewhere90 = (i) => (rowsByKey90.get(key(i.url)) || []).filter(r => __hostOf90(r.page) !== __hostOf90(i.url) && r.impressions > 0);
+const findings = [], works = []; const CAT = 'Crawlability & Indexing';""")
+# R117: a page no link reaches is not "within 3 clicks of the homepage"
+patch(_GAF90, "const depthBuckets = { 0: 0, 1: 0, 2: 0, 3: 0, '4+': 0 }; for (const p of pages) { if (p.depth == null) continue; depthBuckets[p.depth >= 4 ? '4+' : p.depth] += 1; }",
+      r"""// R117 (2026-10-16): the crawler starts from the sitemap as well as the homepage, so a page no link reaches gets click depth 0 — exec 595
+// counted six orphan pages as "within 3 clicks" and printed "Shallow site structure: 100%" beside a High "Orphan pages" finding
+const __home90 = (u) => /^https?:\/\/[^\/]+\/?$/.test(String(u || '').trim());
+const unlinked90 = (p) => p.depth != null && (p.orphan === true || (Number(p.depth) === 0 && !__home90(p.url)));
+const depthBuckets = { 0: 0, 1: 0, 2: 0, 3: 0, '4+': 0, unlinked: 0 }; for (const p of pages) { if (p.depth == null) continue; if (unlinked90(p)) { depthBuckets.unlinked += 1; continue; } depthBuckets[p.depth >= 4 ? '4+' : p.depth] += 1; }""")
+patch(_GAF90, "const within3 = pages.filter(p => p.depth != null && p.depth <= 3).length;",
+      "const within3 = pages.filter(p => p.depth != null && !unlinked90(p) && p.depth <= 3).length;")
+# R65 + R61: every page row for the impact index, and Google's own count of the queries the site ranks for
+patch(_GAF90, "search_console.top_pages = pagesRows.slice(0, 10);", r"""search_console.top_pages = pagesRows.slice(0, 10);
+  // R65 (2026-10-16): the impact of a finding is weighed on EVERY page Search Console measured ([path, clicks, impressions], the hosts
+  // summed); top_pages stays the report's table of ten. Complete = fewer rows than the request asked for, so a page not listed had none.
+  { const m90 = new Map(); for (const r of pagesRows) { const p = String(r.page || '').replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '').replace(/(.)\/$/, '$1') || '/'; const o = m90.get(p) || [p, 0, 0]; o[1] += r.clicks; o[2] += r.impressions; m90.set(p, o); }
+    const lim90 = Number(((((byKind.pages || [])[0] || {}).q || {}).body || {}).rowLimit) || 0;
+    search_console.page_traffic = [...m90.values()].slice(0, 1000); search_console.page_traffic_complete = lim90 > 0 && pagesRows.length < lim90; }
+  // R61 (2026-10-16): what Google's own data says about rankings, so no line of the report says "ranks for no keyword" beside it
+  { const qlim90 = Number(((((byKind.queries || [])[0] || {}).q || {}).body || {}).rowLimit) || 0;
+    const bt90 = GQ.brandTest(plan.domain || base.domain, []);
+    const t10 = queryRows.filter(q => q.position > 0 && q.position <= 10), t30 = queryRows.filter(q => q.position > 0 && q.position <= 30);
+    const INF90 = /^(how|what|why|when|where|who|which|is|are|can|does|do|should)\b|\b(how to|guide|tips|meaning|definition|examples?|explained|checklist|benefits|is changing|what is|vs)\b|\?/;
+    const COM90 = /\b(best|top|services?|company|companies|partners?|consultants?|consulting|agency|agencies|providers?|vendors?|firms?|implementation|upgrade|migration|support|reviews?|compare|comparison|alternatives?)\b/;
+    const TRX90 = /\b(price|prices|pricing|cost|costs|buy|hire|quote|demo|trial|book|contact|near me)\b/;
+    const intentOf90 = (q) => INF90.test(q) ? 'informational' : TRX90.test(q) ? 'transactional' : COM90.test(q) ? 'commercial' : '';
+    const byI = { informational: 0, commercial: 0, transactional: 0 }, exI = { informational: [], commercial: [], transactional: [] };
+    for (const q of t30) { const it = bt90.is(q.query) ? '' : intentOf90(String(q.query || '').toLowerCase()); if (it) { byI[it] += 1; if (exI[it].length < 3) exI[it].push(q.query + ' #' + q.position); } }
+    const sum = (l, f) => l.reduce((n, q) => n + (Number(q[f]) || 0), 0);
+    search_console.rankings = { source: 'Search Console', period: plan.range || null, queries_read: queryRows.length, capped: qlim90 > 0 && allQueryRows.length >= qlim90,
+      top10: t10.length, top10_brand: t10.filter(q => bt90.is(q.query)).length, top10_impressions: sum(t10, 'impressions'), top10_clicks: sum(t10, 'clicks'), top30: t30.length,
+      by_intent_top30: byI, intent_examples: exI,
+      examples: t10.slice().sort((x, y) => y.impressions - x.impressions).slice(0, 5).map(q => ({ query: q.query, position: q.position, impressions: q.impressions, clicks: q.clicks })),
+      note: 'average position per query over the period; Search Console withholds the queries of rare searches, so this is a floor' }; }""")
+# R59: a page Google shows under the other host is not "not indexed"
+patch(_GAF90, "  const notIdx = ok.filter(i => i.indexed === false); search_console.not_indexed = notIdx.map(i => ({ url: i.url, reason: i.coverage }));",
+      r"""  // R59 (2026-10-16): a page Google does not index under this host but SHOWS under the other one (www / bare) is not "not indexed":
+  // Google chose its twin. Exec 595: all 16 "not indexed" www pages had impressions on https://techand.ai (1,374 in 28 days) and the
+  // High "cannot rank at all ... request indexing" was ranked first. They are reported by the host-split finding, with their
+  // impressions; only a page with no impressions under any host stays in the not-indexed finding. The list keeps every page.
+  rowsByKey90 = new Map(); for (const r of pagesRows) { const k = key(r.page); if (!k) continue; const l = rowsByKey90.get(k) || []; l.push(r); rowsByKey90.set(k, l); }
+  const notIdxAll90 = ok.filter(i => i.indexed === false);
+  servedAlt90 = notIdxAll90.filter(i => elsewhere90(i).length);
+  const notIdx = notIdxAll90.filter(i => !elsewhere90(i).length);
+  search_console.not_indexed = notIdxAll90.map(i => { const o = elsewhere90(i); return o.length ? { url: i.url, reason: i.coverage, shown_as: o[0].page, shown_impressions: o.reduce((n, r) => n + r.impressions, 0), shown_clicks: o.reduce((n, r) => n + r.clicks, 0) } : { url: i.url, reason: i.coverage }; });
+  const notIdxCov90 = {}; for (const i of notIdx) { const k = i.coverage || i.verdict || 'unknown'; notIdxCov90[k] = (notIdxCov90[k] || 0) + 1; }""")
+patch(_GAF90, "Object.entries(coverage).filter(([k]) => !/indexed/i.test(k) || /not indexed/i.test(k)).map(([k, v]) => v + ' × ' + k).join(', '), notIdx.map(i => i.url), notIdx.length, share);",
+      "Object.entries(notIdxCov90).filter(([k]) => !/indexed/i.test(k) || /not indexed/i.test(k)).map(([k, v]) => v + ' × ' + k).join(', ') + ', with no impressions under any host' + (servedAlt90.length ? '; ' + servedAlt90.length + ' more are not indexed under this address but shown by Google under the other one (see the www and non-www finding)' : ''), notIdx.map(i => i.url), notIdx.length, share);")
+patch(_GAF90, "    else works.push('All ' + ok.length + ' sampled pages are indexed by Google');",
+      "    else if (!servedAlt90.length) works.push('All ' + ok.length + ' sampled pages are indexed by Google');")
+patch(_GAF90, "    const canon = ok.filter(i => i.indexed && i.google_canonical && !same(i.google_canonical, i.url)); search_console.canonical_mismatch = canon.map(i => ({ url: i.url, google_canonical: i.google_canonical }));",
+      r"""    // R59: index_coverage.canonical_mismatch read 3 and search_console.canonical_mismatch 0 for the same pages (one counted every page
+    // host-sensitively, the other indexed pages only). One definition now; a different HOST of the same page goes to the host-split finding.
+    canonAll90 = ok.filter(i => canonOk90(i) === false);
+    search_console.canonical_mismatch = canonAll90.map(i => ({ url: i.url, google_canonical: i.google_canonical, user_canonical: i.user_canonical || '', indexed: i.indexed, host_only: hostOnly90(i) }));
+    const canon = canonAll90.filter(i => !hostOnly90(i));""")
+patch(_GAF90, "google_canonical: i.google_canonical, canonical_ok: (!i.google_canonical || !i.user_canonical) ? null : same(i.google_canonical, i.user_canonical), mobile_usable: i.mobile_usable, rich_results: i.rich })),",
+      "google_canonical: i.google_canonical, canonical_ok: canonOk90(i), canonical_host_only: hostOnly90(i), mobile_usable: i.mobile_usable, rich_results: i.rich })),")
+patch(_GAF90, "canonical_ok: (!i.google_canonical || !i.user_canonical) ? null : same(i.google_canonical, i.user_canonical), mobile_usable: i.mobile_usable, rich_results: i.rich, not_checked: i.not_checked || '' })),",
+      "canonical_ok: canonOk90(i), mobile_usable: i.mobile_usable, rich_results: i.rich, not_checked: i.not_checked || '' })),")
+# the host-split finding itself: after the inspection findings, inside the measured-on range of R19 (so it carries checked / checked_of)
+patch(_GAF90, "  // ---- R19: how many pages each of those numbers was measured on, said out loud and carried into the stored row and the diff ----",
+      r"""  // ---- R59 (2026-10-16): www and non-www as GOOGLE shows them — the redirect and the homepage tag are what the site says, not what Google does ----
+  {
+    const ch = __canonHost90; const alt = !ch ? '' : (/^www\./.test(ch) ? ch.slice(4) : 'www.' + ch); const bareH = /^www\./.test(ch) ? alt : ch;
+    const fmt90 = (v) => (Number(v) || 0).toLocaleString('en-GB');
+    const hostRows = {}; for (const r of pagesRows) { const h = __hostOf90(r.page); if (!h) continue; const o = hostRows[h] || (hostRows[h] = { host: h, pages: 0, clicks: 0, impressions: 0 }); o.pages += 1; o.clicks += r.clicks; o.impressions += r.impressions; }
+    const C = hostRows[ch] || { host: ch, pages: 0, clicks: 0, impressions: 0 }; const A = hostRows[alt] || { host: alt, pages: 0, clicks: 0, impressions: 0 };
+    const allImpr = Object.values(hostRows).reduce((n, o) => n + o.impressions, 0); const altShare = allImpr ? A.impressions / allImpr : 0;
+    const googleAlt = canonAll90.filter(i => hostOnly90(i) && __hostOf90(i.google_canonical) === alt);
+    const altMaps = (sitemaps || []).filter(s => __hostOf90(s.path) === alt);
+    const split = !!alt && ((A.pages >= 2 && altShare >= 0.2) || googleAlt.length > 0);
+    const shownImpr = servedAlt90.reduce((n, i) => n + elsewhere90(i).reduce((m, r) => m + r.impressions, 0), 0);
+    const shownClicks = servedAlt90.reduce((n, i) => n + elsewhere90(i).reduce((m, r) => m + r.clicks, 0), 0);
+    host_split90 = { found: split, canonical_host: ch, other_host: alt, hosts: [C, A].map(o => ({ ...o, impressions_pct: allImpr ? Math.round(o.impressions / allImpr * 100) : 0 })),
+      google_chose_other: googleAlt.map(i => ({ url: i.url, google_canonical: i.google_canonical })), submitted_sitemaps_other_host: altMaps.map(s => s.path),
+      not_indexed_shown_elsewhere: servedAlt90.length, shown_elsewhere_impressions: shownImpr, shown_elsewhere_clicks: shownClicks };
+    search_console.host_split = host_split90;
+    if (split) {
+      const hp = (((base.probe || {}).measurements || {}).hosts) || {};
+      const server = (Number(hp.apex_status) >= 300 && Number(hp.apex_status) < 400 && __hostOf90(hp.apex_location) === ch && ch !== bareH)
+        ? 'your server redirects (' + hp.apex_status + ') https://' + bareH + ' to https://' + ch + (String(hp.canonical_tag_host || '').toLowerCase() === ch ? ' and the homepage canonical tag names https://' + ch : '')
+        : (Number(hp.www_status) >= 300 && Number(hp.www_status) < 400 && __hostOf90(hp.www_location) === ch && ch === bareH) ? 'your server redirects (' + hp.www_status + ') https://' + alt + ' to https://' + ch : '';
+      const ev = ['Search Console page rows (28 days): https://' + A.host + ' ' + A.pages + ' page(s), ' + fmt90(A.clicks) + ' clicks, ' + fmt90(A.impressions) + ' impressions (' + Math.round(altShare * 100) + '% of page impressions); https://' + C.host + ' ' + C.pages + ' page(s), ' + fmt90(C.clicks) + ' clicks, ' + fmt90(C.impressions) + ' impressions',
+        googleAlt.length ? 'Google chose https://' + alt + ' as the canonical of ' + googleAlt.length + ' inspected page(s) whose own canonical names https://' + ch + ' (' + googleAlt.slice(0, 3).map(i => path(i.url)).join(', ') + ')' : '',
+        altMaps.length ? 'the sitemap submitted to Search Console is ' + altMaps.map(s => s.path).join(', ') : '',
+        servedAlt90.length ? servedAlt90.length + ' key page(s) not indexed under https://' + ch + ' are shown under https://' + alt + ' (' + fmt90(shownImpr) + ' impressions, ' + fmt90(shownClicks) + ' clicks)' : '',
+        server].filter(Boolean).join('; ');
+      const urls90 = [...new Set([...servedAlt90.map(i => i.url), ...googleAlt.map(i => i.url)])];
+      host_split90.evidence = ev;
+      // the redirect probe already reported the two hosts as not consolidated: Google's view is the same problem, so no second finding is
+      // raised — its numbers travel in search_console.host_split and the report's Search Console section prints them beside that finding
+      const probeFlag90 = (((base.probe || {}).findings) || []).some(f => /www and non-www versions are not consolidated|redirect chain or loop between apex and www/i.test(String((f || {}).title || '')));
+      if (probeFlag90) host_split90.folded_into_probe = true;
+      else F('High', 'www and non-www are split in Google: ' + (altShare >= 0.5 ? 'most pages are' : 'part of the site is') + ' shown under https://' + alt + ', not https://' + ch,
+        'Your site names https://' + ch + ' as its address, but Google shows and ranks pages under https://' + alt + '. The pages under https://' + ch + ' then read as "not indexed" while their twins collect the impressions, and links and ranking signals are split between two addresses until one of them wins.',
+        'Make every signal name https://' + ch + ': submit https://' + ch + '/sitemap.xml in Search Console' + (altMaps.length ? ' and remove ' + altMaps.map(s => s.path).join(', ') : '') + ', list only https://' + ch + ' URLs in it, change internal links that still point at https://' + alt + ', keep the redirects, then watch the page rows move to https://' + ch + ' in Search Console over the next weeks. Requesting indexing page by page does not help: Google already knows these pages under the other address. If https://' + alt + ' is the address you want, change the redirect and the canonical tags instead.',
+        ev, urls90, urls90.length || A.pages, (ok.length && urls90.length) ? Math.round(urls90.length / ok.length * 100) : Math.round(altShare * 100));
+      const f90 = findings[findings.length - 1]; if (f90 && /are split in Google/.test(String(f90.title || ''))) { f90.affected_urls = urls90.slice(0, 200); f90.host_split = true; }
+      const nc90 = findings.find(f => f && f.title === 'Pages shown in Google but never clicked');
+      if (nc90) { const n = pagesRows.filter(p => p.impressions >= 50 && p.clicks === 0 && __hostOf90(p.page) === alt).length; if (n) nc90.evidence = String(nc90.evidence || '') + '; ' + n + ' of them are listed under https://' + alt + ', the other address (see the www and non-www finding)'; }
+    }
+  }
+  // ---- R19: how many pages each of those numbers was measured on, said out loud and carried into the stored row and the diff ----""")
+# R61 + R59 at the hand-over: the ranking statements made from DataForSEO's database alone, and the what-works line Google contradicts
+patch(_GAF90, "return [{ json: { ...base, extra_findings: [...(base.extra_findings || []), ...findings], extra_works: [...(base.extra_works || []), ...works], search_console, site_structure } }];",
+      r"""// ---- R61 (2026-10-16): the ranking statements built before Search Console was read (Competitor Analysis, Analyze Keywords) said
+// "does not rank in Google's top 10 for any keyword" from DataForSEO's database alone while Google's own data, read here, showed 15
+// queries in the top 10. They now name both sources; the competitor comparison stays provider against provider.
+const __rk90 = search_console.rankings || null;
+const __n90 = (v) => (Number(v) || 0).toLocaleString('en-GB');
+const __per90 = (__rk90 && __rk90.period && __rk90.period.start) ? __rk90.period.start + ' to ' + __rk90.period.end : 'the last 28 days';
+const __gsc90 = __rk90 ? 'Search Console (measured, ' + __per90 + '): ' + __rk90.top10 + ' quer' + (__rk90.top10 === 1 ? 'y' : 'ies') + ' at an average position in Google\'s top 10 (' + __n90(__rk90.top10_impressions) + ' impressions, ' + __n90(__rk90.top10_clicks) + ' clicks'
+  + (__rk90.top10_brand ? '; ' + __rk90.top10_brand + ' of them for your own name' : '') + ')' + ((__rk90.examples || []).length ? ', e.g. ' + __rk90.examples.slice(0, 3).map(q => '"' + q.query + '" #' + q.position).join(', ') : '') : '';
+const __ex90 = (base.extra_findings || []).map(f => {
+  if (!__rk90 || !f || f.category !== 'Authority') return f;
+  const t = String(f.title || '');
+  if (/does not rank in Google.s top 10 for any keyword/i.test(t) && __rk90.top10 > 0) return { ...f, title: 'Far fewer top-10 rankings than competitors',
+    evidence: String(f.evidence || '').replace(/^Top-10 rankings in /, 'DataForSEO\'s ranking database, top-10 rankings in ') + '; ' + __gsc90,
+    why: 'Google shows the site in its top 10 for very few searches' + (__rk90.top10_brand * 2 >= __rk90.top10 ? ', most of them for its own name,' : '') + ' while the competitors hold hundreds in the same database: a buyer who searches for what you sell finds them first.',
+    reconciled: 'search_console' };
+  const mi = t.match(/^No rankings for (informational|commercial|transactional) searches$/);
+  if (mi && ((__rk90.by_intent_top30 || {})[mi[1]] || 0) > 0) { const n = __rk90.by_intent_top30[mi[1]];
+    return { ...f, severity: 'Low', title: 'Few rankings for ' + mi[1] + ' searches',
+      evidence: String(f.evidence || '').replace(/^You rank for 0 /, 'DataForSEO\'s database holds 0 ') + '; Search Console shows ' + n + ' ' + mi[1] + ' quer' + (n === 1 ? 'y' : 'ies') + ' in the top 30 (' + __per90 + ', e.g. ' + ((__rk90.intent_examples || {})[mi[1]] || []).map(q => '"' + q + '"').join(', ') + ')',
+      why: 'Competitors are found for many more of these searches than you are; the provider\'s database does not see the few you already rank for.', reconciled: 'search_console' }; }
+  if (/^Organic traffic is under 10% of competitors$/.test(t) && search_console.totals) return { ...f,
+    evidence: String(f.evidence || '').replace(/^Estimated monthly organic visits:/, 'Estimated monthly organic visits (DataForSEO\'s estimate, the same for every site compared):') + '; Search Console measured ' + __n90(search_console.totals.clicks) + ' clicks and ' + __n90(search_console.totals.impressions) + ' impressions for your site in ' + __per90,
+    reconciled: 'search_console' };
+  return f;
+});
+const __works90 = (__rk90 && __rk90.top10) ? ['Google\'s own data (Search Console, ' + __per90 + '): ' + __rk90.top10 + ' quer' + (__rk90.top10 === 1 ? 'y' : 'ies') + ' in the top 10' + (__rk90.top10_brand ? ' (' + __rk90.top10_brand + ' for your own name)' : '')] : [];
+// R59: "One canonical host … the canonical tags agree" is what the server says; with Google showing the other host it is not what works
+const __probe90 = (base.probe && host_split90 && host_split90.found) ? { ...base.probe, what_works: (base.probe.what_works || []).filter(w => !/^One canonical host|^www redirects to the main domain/.test(String(w))),
+  measurements: { ...(base.probe.measurements || {}), hosts: { ...(((base.probe.measurements || {}).hosts) || {}), google_split: true, google_other_host: host_split90.other_host } } } : base.probe;
+return [{ json: { ...base, ...(base.probe ? { probe: __probe90 } : {}), extra_findings: [...__ex90, ...findings], extra_works: [...(base.extra_works || []), ...works, ...__works90], search_console, site_structure } }];""")
+# the redirect probe says what it checked: the server and the homepage tag, not Google
+patch('Analyze Probes', "works.push('One canonical host: https://' + domain + ' redirects (' + home.status + ') to https://' + WWW + (canonical_tag_host === WWW ? ', and the canonical tags agree' : ''));",
+      "works.push('One canonical host on the server: https://' + domain + ' redirects (' + home.status + ') to https://' + WWW + (canonical_tag_host === WWW ? ', and the homepage canonical tag names it' : ''));")   # R59: what Google shows is checked against Search Console in GSC Audit Findings (no inline JS comment: the line goes on)
+# R65: the page index is for the impact weights; the report payload the app receives keeps its size
+for _n90 in ('Build Full Report', 'Build Audit Report'):
+    patch(_n90, "    search_console: a.search_console || null,", "    search_console: a.search_console ? (({ page_traffic, page_traffic_complete, ...rest }) => rest)(a.search_console) : null,")
+# R61 in the full report: Key Numbers name their source, and the "does not rank in the top 30" note says what Google measured
+patch('Build Full Report', "<tr><td>Keywords ranking (top 30)</td><td>${num(you.keywords)}</td>", "<tr><td>Keywords ranking (top 30) — DataForSEO&#39;s database</td><td>${num(you.keywords)}</td>")
+patch('Build Full Report', "<tr><td>Keywords in top 10</td><td>${num(you.top10)}</td><td>${num(cb.medians && cb.medians.top10)}</td></tr>",
+      "<tr><td>Keywords in top 10 — DataForSEO&#39;s database</td><td>${num(you.top10)}</td><td>${num(cb.medians && cb.medians.top10)}</td></tr>"
+      "${((a.search_console || d.search_console || {}).rankings) ? '<tr><td>Queries in Google&#39;s top 10 — Search Console, measured (' + num(((a.search_console || d.search_console).rankings.top10_brand)) + ' for your own name)</td><td>' + num((a.search_console || d.search_console).rankings.top10) + '</td><td>not measured for competitors</td></tr>' : ''}")
+patch('Build Full Report', "<tr><td>Estimated monthly organic visits</td><td>${num(you.traffic)}</td>", "<tr><td>Estimated monthly organic visits — DataForSEO&#39;s estimate</td><td>${num(you.traffic)}</td>")
+patch('Build Full Report', "    html += `<div class=\"note\">Your site does not rank in the top 30 for any keyword in ${esc(d.country || 'this market')} yet. The opportunities below show which searches to target, grouped by search intent.</div>`;",
+      r"""    const rk90 = (a.search_console || d.search_console || {}).rankings || null;   // R61 (2026-10-16): the database is not the site's reality
+    html += (rk90 && rk90.top30)
+      ? `<div class="note">DataForSEO's ranking database holds no top-30 ranking for your site in ${esc(d.country || 'this market')}, but Google's own data (Search Console) shows ${num(rk90.top30)} queries at an average position in the top 30 over the last 28 days, ${num(rk90.top10)} of them in the top 10${rk90.top10_brand ? ' (' + num(rk90.top10_brand) + ' for your own name)' : ''} — see section 12b. The opportunities below show which searches to target, grouped by search intent.</div>`
+      : `<div class="note">DataForSEO's ranking database holds no top-30 ranking for your site in ${esc(d.country || 'this market')}${rk90 ? ', and Search Console shows none either' : ''}. The opportunities below show which searches to target, grouped by search intent.</div>`;""")
+_gaf90 = code(_GAF90)
+assert 'host_split90' in _gaf90 and 'search_console.page_traffic' in _gaf90 and 'search_console.rankings' in _gaf90 and 'unlinked90' in _gaf90, \
+    'R59 / R61 / R65 / R117: GSC Audit Findings lost its host split, its page index, its rankings or its unlinked bucket'
+assert 'trafficIndex' in _rd0('code/_impact.js') and 'page_traffic' in _rd0('code/_impact.js') and 'affected_urls' in _rd0('code/_impact.js'), \
+    'R65: _impact.js does not read the full page index or the affected URLs'
+assert 'canonical_host_only' in _rd0('code/_page_watch.js'), 'R59: the page-watch kit no longer names a host-only canonical difference'
+log('Know the customer\'s own site before advising (2026-10-16, re-rating of 2026-10-15, R59 / R61 / R65 / R117 — build section 90). '
+    'R59: GSC Audit Findings reads the www / non-www split from Google\'s own data (page rows per host, the canonical Google chose, the sitemap submitted) and raises one High finding with the per-host counts and the fix (submit the canonical host\'s sitemap, keep the redirects, change internal links) instead of "a large share of important pages is not indexed … request indexing"; a page Google shows under the other host leaves the not-indexed finding and stays in the list with what Google shows instead; "One canonical host" leaves what works when Google disagrees; one definition of a canonical mismatch for index_coverage and search_console; the page-watch kit compares the host; the report tables print a host that differs. '
+    'R61: the "does not rank in Google\'s top 10 for any keyword", "No rankings for <intent> searches" and "Organic traffic under 10%" statements name DataForSEO and carry Search Console\'s measured count; Key Numbers label the provider\'s figures and add Google\'s. '
+    'R65: impact weights use every page row Search Console measured (page_traffic, stripped from the report payload) and every affected URL. '
+    'R117: a page no link reaches is its own depth bucket, never "within 3 clicks"')
+
+# =============================================================================
+# 91. SEEDS AND TOPICS FROM WHAT THE BUSINESS SELLS, LINEAGE THAT MATCHES THE PAGE, A ONE-READING FINDING IS NOT "FIXED"
+#     (2026-10-16, re-rating of 2026-10-15, defects/B_technical.md R60 / R73 / R74)
+#
+#     * R60 (High) — the full report's keyword research was seeded from three orphan card headings and the topic gate judged nothing
+#       (fewer than 12 topic words on file), so "ai mode", "blackbox ai", "character ai", "face swap ai", "mofa attestation dubai" and
+#       "how to check emirates id status with passport number" became easy wins and gap keywords, and ChatGPT was asked about "the best
+#       ai in cloud company". *Fallback Queries* (section 4, rewritten) now seeds from the configured keywords, then the site model's
+#       services; *Analyze Keywords* feeds the gate the site model's services, the configured keywords and the business facts; the
+#       gate refuses a public body's service to a person (`_fit_gate.js` FIT_GOV_SERVICE); *AI Queries* asks about the site's own keyword.
+#     * R73 — the lineage rows read the fields the report printed (section 47 / 72 edited in place).
+#     * R74 — a finding resting on one outside reading is "no longer seen", not "fixed" (v5/code/Audit_Diff.js), and the sample sentence
+#       says when the earlier report did not record its sample.
+# =============================================================================
+patch('Analyze Keywords', "let cacheRowsAK = []; try { cacheRowsAK = $('Load Site Cache').all().map(i => i.json); } catch (e) { cacheRowsAK = []; }",
+      r"""let cacheRowsAK = []; try { cacheRowsAK = $('Load Site Cache').all().map(i => i.json); } catch (e) { cacheRowsAK = []; }
+// R60 (2026-10-16): the topics came from $('Competitor Analysis'), whose item carries no services, no business and no description on the
+// full-report path — so the topic bar saw the three seed headings (~5 words), judged nothing under its 12-word floor and let "ai mode",
+// "character ai" and "mofa attestation dubai" through. The site's own record is read here: the services of its site model, the keywords
+// the owner configured and the business facts — only this site's (another site's row never widens the topics).
+const __topics91 = (() => { const out = []; const bare = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
+  const listOf = (v) => { if (Array.isArray(v)) return v; const s = String(v == null ? '' : v).trim(); if (!s) return []; if (/^\[/.test(s)) { try { const x = JSON.parse(s); return Array.isArray(x) ? x : []; } catch (e) { return []; } } return s.split(/[,;\n]+/); };
+  try { const m = $('Restore Site Model').first().json.site_model || null; if (m && (!m.domain || bare(m.domain) === bare(base.domain))) out.push(...listOf(m.services), String(m.business_facts || '').slice(0, 600)); } catch (e) {}
+  try { const r = $('Load Site Row (Model)').first().json || {}; if (r.domain && bare(r.domain) === bare(base.domain)) out.push(...listOf(r.keywords), ...listOf(r.services_json), String(r.business_facts || '').slice(0, 600)); } catch (e) {}
+  return [...new Set(out.map(x => String(x || '').trim()).filter(Boolean))]; })();""")
+patch('Analyze Keywords', "  topics: [...(base.services || []), String(base.business || '').slice(0, 600), ...seeds, ...(((base.site_description || {}).products_or_services) || []).map(String)],",
+      "  topics: [...(base.services || []), String(base.business || '').slice(0, 600), ...seeds, ...(((base.site_description || {}).products_or_services) || []).map(String), ...__topics91],")
+patch('Analyze Keywords', "protect: [...seeds, ...(base.services || []), String(base.business || '').slice(0, 400)],",
+      "protect: [...seeds, ...(base.services || []), String(base.business || '').slice(0, 400), ...__topics91],")
+# the refusals the report prints: the biggest searches first and up to 100 (with real topics the gate refuses ~60 searches of exec 614's research above 2,900/mo alone), so a refused "ai mode" (49,500/mo) is never cut off by 40 navigational names
+patch('Analyze Keywords', "      refused: refused.filter((r, i, a) => a.findIndex(x => x.keyword === r.keyword) === i).slice(0, 40),",
+      "      refused: refused.filter((r, i, a) => a.findIndex(x => x.keyword === r.keyword) === i).sort((x, y) => (y.volume || 0) - (x.volume || 0)).slice(0, 100),")
+patch('AI Queries', "if (pool[0]) category = pool[0].keyword;\nelse if (seeds[0]) category = seeds[0];\nif (category && !/\\b(company|companies|agency|agencies|services?|providers?|firms?|best|top)\\b/i.test(category)) category = 'best ' + category + ' company';\nif (category && base.country && !category.toLowerCase().includes(String(base.country).toLowerCase())) category = category + ' ' + base.country;",
+      r"""// R60 (2026-10-16): the category question came from the highest-volume commercial keyword of the research pool ("ai in cloud", seeded
+// from orphan headings), so ChatGPT and Perplexity were asked about "the best ai in cloud company" and the report raised three findings
+// on the answer. The site's own words come first: the keywords the owner configured, then the research pool, then the seeds.
+let own91 = [];
+try { const r = $('Load Site Row (Model)').first().json || {}; const bare = (x) => String(x || '').toLowerCase().replace(/^www\./, '');
+  if (r.domain && bare(r.domain) === bare(base.domain)) own91 = String(r.keywords || '').split(/[,;\n]+/).map(s => s.trim().toLowerCase()).filter(s => s && !s.includes(String(base.domain).split('.')[0].toLowerCase())); } catch (e) {}
+if (own91[0]) category = own91[0];
+else if (pool[0]) category = pool[0].keyword;
+else if (seeds[0]) category = seeds[0];
+const place91 = /\b(uae|u\.a\.e|dubai|abu dhabi|sharjah|ajman|ksa|saudi|riyadh|jeddah|qatar|doha|oman|muscat|bahrain|kuwait|gcc|egypt|india|pakistan|uk|usa)\b/i;
+if (category && !/\b(company|companies|agency|agencies|services?|providers?|firms?|partners?|best|top)\b/i.test(category)) category = /\b(software|platforms?|tools?|apps?|systems?|solutions?)\b/i.test(category) ? 'best ' + category : 'best ' + category + ' company';
+if (category && base.country && !category.toLowerCase().includes(String(base.country).toLowerCase()) && !place91.test(category)) category = category + ' ' + base.country;""")
+# R74: the summary says why a finding left the list, and why a number was not compared
+patch('Audit Diff', """  summary: fixed.length + ' fixed · ' + added.length + ' new · ' + open.length + ' still open (compared with the ' + labelOf(curType) + ' of ' + String(prev.audited_at).slice(0, 10) + ')'
+    + (sample_moved ? '. ' + sample_moved + ' finding(s) are not compared as numbers: they were measured on a different number of pages this time (how many is shown with each).' : '')""",
+      r"""  no_longer_seen,
+  summary: fixed.length + ' fixed · ' + added.length + ' new · ' + open.length + ' still open' + (no_longer_seen.length ? ' · ' + no_longer_seen.length + ' no longer seen' : '') + ' (compared with the ' + labelOf(curType) + ' of ' + String(prev.audited_at).slice(0, 10) + ')'
+    + (no_longer_seen.length ? '. ' + no_longer_seen.length + ' finding(s) rested on a single outside reading (a results page, an AI answer or a content review) that did not repeat, so they are not counted as fixed' : '')
+    + (sample_moved ? '. ' + sample_moved + ' finding(s) are not compared as numbers: ' + [open.filter(f => f.sample_changed && f.checked_before).length ? open.filter(f => f.sample_changed && f.checked_before).length + ' were measured on a different number of pages this time' : '',
+        open.filter(f => f.sample_changed && !f.checked_before).length ? open.filter(f => f.sample_changed && !f.checked_before).length + ' were stored last time without the number of pages they were measured on' : ''].filter(Boolean).join(', and ') + ' (shown with each).' : '')""")
+assert "for (const k of listOf(siteRow.keywords)) add(clean(k), 'your keywords');" in code('Fallback Queries'), 'R60: Fallback Queries does not seed from the configured keywords'
+assert '__topics91' in code('Analyze Keywords') and 'own91' in code('AI Queries'), 'R60: the topic gate or the AI category question does not read the site\'s own record'
+assert 'FIT_GOV_SERVICE' in FIT_GATE_SRC, 'R60: the fit gate does not refuse a public body\'s service to a person'
+assert 'no_longer_seen' in code('Audit Diff'), 'R74: the diff calls a single reading that changed "fixed"'
+assert "LN.sample(_kwN47, 'keywords in section 4')" in code('Build Full Report') and "sample: 'no field data'" in code('Build Audit Report'), 'R73: the lineage rows do not read what the report printed'
+log('Seeds and topics from what the business sells, lineage that matches the page, and a one-reading finding that is not "fixed" (2026-10-16, re-rating of 2026-10-15, R60 / R73 / R74 — build section 91). '
+    'R60: Fallback Queries seeds the full report from the configured keywords, then the site model\'s services, then headings of linked pages (a page no link reaches last), each with its source; Analyze Keywords gives the fit gate the site model\'s services, the configured keywords and the business facts, so the topic bar engages; the gate refuses a public body\'s service to a person ("mofa attestation dubai", "how to check emirates id status with passport number"); the refusal list keeps the biggest searches; AI Queries asks the AI engines about the site\'s own keyword. '
+    'R73: the full report\'s and the technical audit\'s lineage rows read the fields the report printed (keywords in section 4, referring domains from the authority block, CrUX "no field data" from the Chrome UX Report, no Lighthouse row without a PageSpeed test, the domain age dated by its cache). '
+    'R74: a finding that rested on one outside reading (a results page, an AI answer, a content review) is "no longer seen", never "fixed", and the diff\'s sample sentence says when the earlier report stored no sample size')
+
+
+# 94. A DRAFT THAT FAILED ITS QUALITY CHECK IS NOT A PAGE TO PUBLISH (2026-10-16, re-rating 2026-10-15 — R111, High; defects
+#     dossier docs/system-review-2026-10-15/defects/D_app_reporting.md; INVARIANTS rule 4).
+#
+#     *Content Log Row* wrote `status: written` whenever the blog package held article text. It never read the quality verdict, although
+#     the verdict was on the package one hop away (*Content QA* decides it, *Originality Check* re-decides it when it invalidates the gate,
+#     *Build Word File* carries it as `qa_not_ready` / `qa_reasons`, *Blog Package* passes it on). Nine readers turn `written` into
+#     "publish it": the weekly site report put "P1 Publish the written page for "ai consulting"" on top with an "I published it" button
+#     (exec 634), the Rank Tracker said "already written — publish it" for two drafts their own quality check had refused (632), the
+#     cadence's pile-up note said "publish them to continue" (638), and the Claude site brief was told to ask for them to be published.
+#     Now: the row says `not_ready` with the last round's reasons in the new `qa_reasons` column, and every engine reader says "fix the
+#     draft and run it again" — Site Plan (`needs_fix`), Site Metrics (`fix_draft`, never `publish`), Brief Input
+#     (`drafts_to_fix_not_publish`), Tracker Report, Cadence Plan (counted by the pile-up guard, named "needs a fix"), AI Target Settle
+#     (never advanced to `written`), Growth Plan (not stalled, not answered); Publish Candidates still watches it. The app's mirror
+#     (`app/server/src/services/cadence.ts`) changed with Cadence_Plan.js. The rows written before this deploy are repaired by
+#     `fix_not_ready_drafts.py` (dry run by default).
+#
+#     Proved offline by harness S110 on exec 616's own verdict and exec 632 / 638's own inputs; the generated workflows are checked by
+#     section 95 below.
+_cl94 = code('Content Log Row')
+assert "page.qa_not_ready === true" in _cl94 and "status: notReady ? 'not_ready' : 'written'" in _cl94 and "qa_reasons: notReady ?" in _cl94, \
+    'R111: Content Log Row writes `written` without reading the page\'s final quality verdict'
+assert "qa_not_ready: !!qa.not_ready" in code('Build Word File') and 'qa_reasons: qa.not_ready_reasons' in code('Build Word File'), \
+    'R111: the final verdict no longer reaches the package under the names Content Log Row reads (qa_not_ready / qa_reasons)'
+from ladder_common import LOG_COLS as _LOGC94
+assert ('qa_reasons', 'string') in _LOGC94, 'R111: seo_content_log has no qa_reasons column (ladder_common.LOG_COLS; sync_tables.py adds it live)'
+for _f94, _n94, _m94 in (('code/Site_Plan.js', 'const needs_fix = blogs.filter(b => b.status === \'not_ready\'', 'Site Plan does not list the failed drafts apart'),
+                         ('code/Site_Metrics.js', "type: 'fix_draft'", 'Site Metrics has no "fix the draft" action'),
+                         ('code/Brief_Input.js', 'drafts_to_fix_not_publish', 'the site brief is not told which drafts failed'),
+                         ('code/Tracker_Report.js', 'const notReadyLog = ', 'the Rank Tracker cannot tell a failed draft from a written page'),
+                         ('code/Cadence_Plan.js', 'needs_fix_keywords', 'the pile-up guard does not name the drafts that need a fix'),
+                         ('code/AI_Target_Settle.js', 'not_ready: 1.5', 'AI Target Settle does not know a failed draft'),
+                         ('code/Growth_Plan.js', 'const draftFailed = ', 'AI Growth would requeue (or count as answered) a question whose draft failed'),
+                         ('code/Publish_Candidates.js', 'qa_failed: ', 'publish detection loses the failed-draft flag')):
+    assert _n94 in rd(_f94), 'R111: ' + _m94 + ' (' + _f94 + ')'
+assert os.path.exists(os.path.join(HERE0, 'fix_not_ready_drafts.py')) and os.path.exists(os.path.join(HERE0, 'test_fix_not_ready_drafts.py')), \
+    'R111: the repair of the rows written before this deploy (fix_not_ready_drafts.py + its test) is missing'
+sticky("""### A draft that failed its quality check is not a page to publish (R111, 2026-10-16)
+*Content Log Row* stores `not_ready` + the last round's reasons (`qa_reasons`) when the page's **final** quality verdict failed; `written` keeps meaning "passed QA, waiting to be published". Every reader says **"fix the draft and run it again"** instead of "publish it": the weekly site report (`fix_draft`), the Rank Tracker, the cadence's pile-up note ("needs a fix", still counted), the site brief, the AI targets. Publish detection still finds one the owner publishes anyway. Rows written before this deploy: `fix_not_ready_drafts.py` (dry run by default).""",
+       -2600, -4100, 1180, 220, 3)
+log('A draft that failed its quality check is not a page to publish (2026-10-16, re-rating 2026-10-15, R111 High): Content Log Row wrote `written` whenever the package held article text and never read the final quality verdict, so nine readers told the owner to publish two drafts their own quality check had refused (exec 634 "P1 Publish the written page for \\"ai consulting\\"", 632 "already written - publish it", 638 "publish them to continue", the site brief). The row is now `not_ready` with the reasons in a new qa_reasons column, and Site Plan / Site Metrics (fix_draft) / Brief Input / Tracker Report / Cadence Plan (counted, "needs a fix") / AI Target Settle / Growth Plan / Publish Candidates and the app\'s cadence mirror read it; fix_not_ready_drafts.py repairs the rows written before (dry run by default)')
+
+
+# 95. THE RANK TRACKER, THE CADENCE AND THE LINK BUILDER READ ONE PICTURE OF THE RESULTS PAGE AND OF OUR OWN PAGES (2026-10-16,
+#     re-rating 2026-10-15 — R87, R88, R90, R91, R93, R92 parts 3-4, R59's Site Tracker path; dossiers C_monitors.md and B_technical.md).
+#
+#     * R87: the Rank Tracker report joined the answer's "above" list and its competitor list, so every domain on page 1 was counted twice
+#       and "e invoicing in uae" (tax.gov.ae #1, mof.gov.ae #2: two government sites of the five the rule reads; it needs three) was set
+#       aside as a government query — and then pursued anyway, because nothing wrote the set-aside back and the cadence queued four rungs.
+#       Now one reading is read one entry per position (RS.serpHosts), a head set aside pauses its ladder everywhere (report, ladder row
+#       via *Tracker Ladder Marks* -> *Mark Set Aside (Tracker)*, plan, cadence, the app's mirror), and the report tells a keyword set
+#       aside BY this check from one set aside before any check.
+#     * R90: "facts erp" was planned for another month because the gate of a stored rung never saw the head's results page (facts.ae #6).
+#       The plan and the cadence give it the ladder's stored results pages, the rung's own stored page, and the names AI uses for other
+#       companies (*Load AI Brands (Tracker)* / *(Cadence)*).
+#     * R88: one keyword, one run, one baseline (RS.prevReading: the newest earlier desktop reading for the site, whoever bought it), and a
+#       change no larger than two readings of one moment show is labelled noise (RS.noise / RS.withNoise), never "high".
+#     * R91: the subject names the depth every check asked for. R93: our pages are named by their real titles (*Load Pages (LB)*), never
+#       by a search query. R92 parts 3-4 and R59 (Site Tracker path): "countries", a ladder target a live page answers is reported as
+#       that page (the Rank Tracker's rule), and a bare-host / www split Google chose raises one alert and one action.
+def _b95_checks():
+    """R87 / R90 / R93 on the GENERATED Rank Tracker, Content Cadence and Link Builder: the new nodes exist and are wired on the path
+    that feeds the node which reads them (R17's lesson: the code can be right while the wiring is not)."""
+    import json as _j95
+    def _wf95(f):
+        return _j95.load(open(os.path.join(HERE0, 'workflows', f), encoding='utf-8'))[0]
+    def _down95(w):
+        d = {}
+        for s_, o_ in (w.get('connections') or {}).items():
+            for l_ in (o_.get('main') or []):
+                for t_ in (l_ or []):
+                    d.setdefault(s_, []).append(t_['node'])
+        return d
+    _rt = _wf95('SEO_Agent_Rank_Tracker.json'); _rtd = _down95(_rt); _rtn = {n['name']: n for n in _rt['nodes']}
+    for _a, _b in (('Load Monitors (Tracker)', 'Load AI Brands (Tracker)'), ('Load AI Brands (Tracker)', 'Tracker Plan'),
+                   ('Tracker Report', 'Tracker Ladder Marks'), ('Tracker Ladder Marks', 'Any Tracker Marks?'), ('Any Tracker Marks?', 'Mark Set Aside (Tracker)')):
+        assert _b in (_rtd.get(_a) or []), 'R87 / R90: %s does not feed %s in the Rank Tracker' % (_a, _b)
+    _v95 = ((_rtn['Mark Set Aside (Tracker)'].get('parameters') or {}).get('columns') or {}).get('value') or {}
+    assert _v95.get('status') == '={{ $json.status }}' and _v95.get('status_note') == '={{ $json.status_note }}', \
+        'R87: Mark Set Aside (Tracker) writes a literal state instead of the one Tracker Ladder Marks built'
+    assert "m.status !== 'set_aside'" in _rtn['Tracker Ladder Marks']['parameters']['jsCode'], 'R87: Tracker Ladder Marks could write a state other than set_aside'
+    _cd = _wf95('SEO_Agent_Content_Cadence.json'); _cdd = _down95(_cd)
+    assert 'Cadence Plan' in (_cdd.get('Load AI Brands (Cadence)') or []) and 'Load AI Brands (Cadence)' in (_cdd.get('Load Pages (Cadence)') or []), \
+        'R90: the AI brand names do not reach the Content Cadence plan'
+    _lb = _wf95('SEO_Agent_Link_Builder.json'); _lbn = {n['name'] for n in _lb['nodes']}
+    assert 'Load Pages (LB)' in _lbn and any('Load Pages (LB)' in (v or []) or k == 'Load Pages (LB)' for k, v in _down95(_lb).items()), \
+        'R93: the Link Builder does not load the page inventory, so a target page is named by a search query'
+    _st = _wf95('SEO_Agent_Site_Tracker.json'); _stc = {n['name']: n['parameters'].get('jsCode', '') for n in _st['nodes'] if n['type'] == 'n8n-nodes-base.code'}
+    for _t95, _m95 in (("stat: 'host_split'", 'R59: a bare-host / www split Google chose raises no alert in the Site Tracker'),
+                       ("type: 'host_split'", 'R59: the host split has no action'),
+                       ("unit === 'country' ? 'countries'", 'R92 part 3: "countrys" again'),
+                       ("status: 'live (existing page)'", 'R92 part 4: a ladder target a live page answers is not reported as that page'),
+                       ("type: 'fix_draft'", 'R111: the Site Tracker still has no "fix the draft" action')):
+        assert _t95 in _stc['Site Metrics'], _m95
+    print('R111 / R87 / R88 / R90 / R91 / R93 / R92 / R59: the content log carries the quality verdict; the Rank Tracker writes back what '
+          'it sets aside and reads one results page per position; the cadence and the Link Builder load what their gates and titles need')
+
+
+sticky("""### One picture of the results page and of our own pages (R87 R88 R90 R91 R93 R92 R59, 2026-10-16)
+**R87:** one results page is read **one entry per position** (the report counted every page-1 domain twice and set "e invoicing in uae" aside as government on two government sites of five); a head that IS set aside **pauses its ladder** — report, ladder row (*Tracker Ladder Marks*), plan, cadence, app. **R90:** a stored rung is judged against its ladder's stored results pages and the AI brand names ("facts erp" / facts.ae). **R88:** one baseline per keyword per run, and a change no larger than two readings of one moment is "noise". **R91:** "top 50". **R93:** our pages by their real titles. **R92 / R59:** "countries", a covered ladder target reported as the live page, the bare-host / www split Google chose named with its fix.""",
+       -2600, -3860, 1180, 220, 3)
+log('One picture of the results page and of our own pages (2026-10-16, re-rating 2026-10-15: R87, R88, R90, R91, R93, R92 parts 3-4, R59 Site Tracker path): the Rank Tracker report counted every domain of page 1 twice and set "e invoicing in uae" aside as a government query on two government sites of five, and nothing wrote a set-aside back, so the cadence queued its rungs; "facts erp" was planned for another month because the gate never saw the head\'s results page; one keyword got two movement figures in one run; the subject said top 100 for top-50 checks; Link Builder pitches named our pages by search queries. RS.serpHosts / prevReading / noise are the one reading rule, a set-aside head pauses its ladder everywhere (Tracker Ladder Marks -> Mark Set Aside), the gates get the ladder\'s stored pages and the AI brand names, and the Site Tracker names a bare-host / www split Google chose')
+
+
+# 98. A SCHEDULE THAT NEVER FIRED, AND A RESTART THAT THREW ITS FIRE AWAY (2026-10-16, re-rating 2026-10-15 R94, High;
+#     docs/system-review-2026-10-15/defects/C_monitors.md). In the 21 days to 2026-10-15 the Rank Tracker, the Site Tracker, AI Growth,
+#     the Content Cadence and the Link Builder had 8 due fires between them and NONE fired; AI Visibility and Backlinks fired 1 of 2,
+#     the AI Pulse 6 of 7 and every one late. Read in n8n's own code: a cron fire lives only in memory (cron@4 arms ONE setTimeout to
+#     the next occurrence), and a restart, a deploy or a re-publish re-arms every schedule for its NEXT future time - so a fire that
+#     was due and not yet delivered is thrown away. The 2026-10-12 16:38 deploy restart dropped all five Monday runs that the Mac's
+#     sleep had pushed past it. staticData / recurrenceRules play no part (a weekly interval of 1 is never recurrence-checked).
+#     * **The catch-up** (build_catchup.py, workflow SEOagentCatchUp1, kit v5/code/_catchup.js): n8n's *Instance Started* event and an
+#       hourly sweep; per schedule the latest due time in GENERIC_TIMEZONE, the workflow's executions with mode `trigger` (n8n's public
+#       API), the catch-up's own records; a missed fire is started ONCE through the workflow's own manual entry with no site - record
+#       first (`catchup:<workflow>:<due ISO>` in seo_cache), then start - within 36 h (weekly / monthly) or 20 h (daily), never before
+#       the catch-up first ran, at most three a sweep, never more than the run guard has room for. A fire the schedule still holds (its
+#       cron was armed before the due time) is LATE, not lost, and is left to the schedule until it is 6 h late: starting it at once
+#       would run the week twice when the delayed timer fires.
+#     * **What this section proves on the generated files** (a fix on one path of several is how three fixes failed live this week):
+#       the ten schedules the catch-up carries are exactly the generated workflows with a Schedule Trigger, each with a manual entry that
+#       feeds the schedule's own first node; every path to *Start Missed Run* passes *Save Catch-up Record* (record-then-start, by graph
+#       walk with the save removed); the start does not wait for the run; the catch-up and every workflow it starts are imported and
+#       published by apply_env.py; the time zone it was built with is the one n8n/compose.yml gives n8n; the credential exists in
+#       sync_credentials.py; and apply_env.py's Monday guard refuses inside the window and lets a deploy through outside it (self-test,
+#       summer and winter time).
+# 99. A TEST RUN THAT SUBMITS TO BING (R94's companion). AI Growth submits to Bing Webmaster and IndexNow, so the re-rating could not run it
+#     at all. `dry_run: true` on its manual entry (only a catch-up test passes it) keeps SubmitUrlBatch and IndexNow unsent - the request
+#     nodes hand on what WOULD have been sent, the IF in front of each submit refuses a dry item, and the report says "DRY RUN - nothing
+#     was submitted" first. Proved here on the generated AI Growth workflow; harness S129 runs the nodes.
+# =============================================================================
+def _b98_catchup():
+    """Runs right after the four sub-builds (the catch-up reads their generated workflows), before every lint that walks workflows/."""
+    import ast as _ast98, datetime as _dt98
+    _r98 = subprocess.run([sys.executable, os.path.join(HERE0, 'build_catchup.py')], cwd=HERE0)
+    assert _r98.returncode == 0, 'build_catchup.py failed'
+    _wd98 = os.path.join(HERE0, 'workflows')
+    _wire98 = json.load(open(os.path.join(HERE0, 'harness', 'catchup_wiring.json'), encoding='utf-8'))
+    _cu98 = json.load(open(os.path.join(_wd98, _wire98['workflow']['file']), encoding='utf-8'))[0]
+    _by98 = {n['name']: n for n in _cu98['nodes']}
+    _out98 = lambda c, nd: [t['node'] for lst in ((c.get(nd) or {}).get('main') or []) for t in (lst or [])]
+    # ---------- A. the schedule table is every generated schedule, each with a manual entry on the schedule's own path ----------
+    _sched98 = {}
+    for _f98 in sorted(os.listdir(_wd98)):
+        if not _f98.endswith('.json') or _f98 in _NOT_GENERATED69 or _f98 == _wire98['workflow']['file']:
+            continue
+        for _w98 in json.load(open(os.path.join(_wd98, _f98), encoding='utf-8')):
+            _t98 = [n for n in _w98['nodes'] if n['type'] == 'n8n-nodes-base.scheduleTrigger']
+            if _t98:
+                _sched98[_w98['id']] = (_w98, _t98[0]['name'])
+    _baked98 = {s['id']: s for s in _wire98['schedules']}
+    assert sorted(_sched98) == sorted(_baked98), 'R94: the catch-up carries %s but the generated schedules are %s' % (sorted(_baked98), sorted(_sched98))
+    for _id98, (_w98, _tn98) in _sched98.items():
+        _c98 = _w98['connections']
+        _e98 = _baked98[_id98]['entry_node']
+        assert sorted(_out98(_c98, _e98)) == sorted(_out98(_c98, _tn98)) and _out98(_c98, _tn98), \
+            'R94: %s - its manual entry "%s" does not feed the schedule\'s own first node, so a catch-up would not run the scheduled path' % (_id98, _e98)
+    # ---------- B. the three doors, and RECORD-then-start by graph walk ----------
+    assert _by98['Instance Started']['type'] == 'n8n-nodes-base.n8nTrigger' and _by98['Instance Started']['parameters']['events'] == ['init'], 'R94: no Instance Started door'
+    _sw98 = [n for n in _cu98['nodes'] if n['type'] == 'n8n-nodes-base.scheduleTrigger']
+    assert len(_sw98) == 1, 'R94: no sweep schedule'
+    _swn98 = _sw98[0]['name']
+    # C-1 (re-rating 2026-10-17): no wall-clock execution time-out on the sweep (exec 728 was cancelled after the Mac slept 44 min in one node)
+    assert _cu98['settings'].get('executionTimeout') == -1, 'C-1: the catch-up has an execution time-out again - n8n counts it in wall-clock time'
+    _st98 = _by98['Start Missed Run']['parameters']
+    assert _st98['options'].get('waitForSubWorkflow') is False and _st98['workflowId']['value'] == '={{ $json.workflow_id }}', 'R94: the start waits, or starts a fixed workflow'
+    _cc98 = _cu98['connections']
+
+    def _reach98(start, blocked):
+        seen, todo = set(), [start]
+        while todo:
+            nd = todo.pop()
+            if nd in seen or nd == blocked:
+                continue
+            seen.add(nd); todo.extend(_out98(_cc98, nd))
+        return seen
+    for _door98 in ('Instance Started', _swn98, 'Catch-up Run'):
+        assert 'Start Missed Run' in _reach98(_door98, None), 'R94: ' + _door98 + ' never reaches the start'
+        assert 'Start Missed Run' not in _reach98(_door98, 'Save Catch-up Record'), \
+            'R94: ' + _door98 + ' can reach Start Missed Run without passing Save Catch-up Record - the start must come after its record'
+    assert _out98(_cc98, 'Save Catch-up Record') == ['Confirm Claim'] and _out98(_cc98, 'Confirm Claim') == ['Catch-up Payload'], \
+        'R94 / C-1: the payload is not built from the saved record read back (Confirm Claim)'
+    # ---------- C-16: the mail watcher's watchdog re-activates only behind its decision, never on a test, and alarms through the Error Handler ----------
+    _wdg98 = _wire98.get('watchdog') or {}
+    assert _wdg98.get('id') == 'SEOagentConsole1', 'C-16: the watchdog does not watch the Search Console mail watcher: ' + str(_wdg98)
+    for _p98 in ('Deactivate Mailbox', 'Activate Mailbox'):
+        assert _p98 in _reach98('Save Catch-up Report', None) and _p98 not in _reach98('Save Catch-up Report', 'Mailbox Down?'), \
+            'C-16: ' + _p98 + ' can run without the watchdog deciding the watcher is down'
+    assert _out98(_cc98, 'Save Watchdog State') == ['Watchdog Alarm'], 'C-16: the alarm does not follow the saved watchdog record'
+    # ---------- C. deployment: imported, published, credential, time zone ----------
+    _ae98 = open(os.path.join(HERE0, 'apply_env.py'), encoding='utf-8').read()
+    _tree98 = _ast98.parse(_ae98)
+    _lists98 = {t.id: [e.value for e in n.value.elts] for n in _tree98.body if isinstance(n, _ast98.Assign) and isinstance(n.value, _ast98.List)
+                for t in n.targets if isinstance(t, _ast98.Name)}
+    assert _wire98['workflow']['file'] in _lists98['WORKFLOWS'] and _wire98['workflow']['id'] in _lists98['PUBLISH'], 'R94: apply_env.py does not import / publish the catch-up'
+    _unpub98 = [i for i in _baked98 if i not in _lists98['PUBLISH']]
+    assert not _unpub98, 'R94: the catch-up would start %s, which apply_env.py does not publish ("Workflow is not active")' % _unpub98
+    _sc98 = open(os.path.join(HERE0, 'sync_credentials.py'), encoding='utf-8').read()
+    assert re.search(r"\('%s', '[^']+', 'httpHeaderAuth', \{'value': 'N8N_API_KEY'\}, \{'name': 'X-N8N-API-KEY'\}\)" % _wire98['credential'], _sc98), \
+        'R94: sync_credentials.py does not write the catch-up credential from N8N_API_KEY'
+    _comp98 = open(os.path.join(HERE0, '..', 'compose.yml'), encoding='utf-8').read()
+    _tzm98 = re.search(r'GENERIC_TIMEZONE: \$\{GENERIC_TIMEZONE:-([A-Za-z_/]+)\}', _comp98)
+    assert _tzm98 and _tzm98.group(1) == _wire98['default_tz'], 'R94: n8n/compose.yml does not set GENERIC_TIMEZONE with the default the catch-up is built with'
+    _ex98 = open(os.path.join(HERE0, '..', '.env.seo.example'), encoding='utf-8').read()
+    assert re.search(r'(?m)^N8N_API_KEY=$', _ex98) and re.search(r'(?m)^GENERIC_TIMEZONE=' + re.escape(_wire98['default_tz']) + '$', _ex98), \
+        'R94: n8n/.env.seo.example does not name N8N_API_KEY / GENERIC_TIMEZONE'
+    # ---------- D. the Monday deploy guard: the function apply_env.py runs, self-tested in isolation ----------
+    _fn98 = next(n for n in _tree98.body if isinstance(n, _ast98.FunctionDef) and n.name == 'deploy_window')
+    _ns98 = {'DEFAULT_TZ': 'America/New_York'}
+    exec(compile(_ast98.Module(body=[_fn98], type_ignores=[]), 'apply_env.py:deploy_window', 'exec'), _ns98)
+    _U98 = lambda *a: _dt98.datetime(*a, tzinfo=_dt98.timezone.utc)
+    _cases98 = {'mon_2026-10-19_12:00Z_summer': (_U98(2026, 10, 19, 12, 0), True), 'mon_2026-10-19_10:59Z_before': (_U98(2026, 10, 19, 10, 59), False),
+                'mon_2026-10-19_16:30Z_after': (_U98(2026, 10, 19, 16, 30), False), 'tue_2026-10-20_12:00Z': (_U98(2026, 10, 20, 12, 0), False),
+                'fri_2026-10-16_12:00Z_today': (_U98(2026, 10, 16, 12, 0), False), 'mon_2026-11-02_16:30Z_winter': (_U98(2026, 11, 2, 16, 30), True),
+                'mon_2026-11-02_11:30Z_winter_before': (_U98(2026, 11, 2, 11, 30), False)}
+    _guard98 = {}
+    for _k98, (_t98, _want98) in _cases98.items():
+        _in98, _a98, _b98 = _ns98['deploy_window'](_t98, 'America/New_York')
+        assert _in98 is _want98, 'R94: apply_env.deploy_window(%s) answered %s, expected %s' % (_k98, _in98, _want98)
+        _guard98[_k98] = {'inside': _in98, 'window_utc': _a98.strftime('%a %H:%M') + '-' + _b98.strftime('%H:%M')}
+    assert "'--force-monday' not in args" in _ae98 and 'sys.exit(' in _ae98.split('deploy_window(tz_name=')[1][:400], 'R94: apply_env.py does not refuse inside the window'
+    # ---------- 99. AI Growth: a dry item never reaches a submission ----------
+    _g98 = json.load(open(os.path.join(_wd98, 'SEO_Agent_AI_Growth.json'), encoding='utf-8'))[0]
+    _gn98 = {n['name']: n for n in _g98['nodes']}
+    _growth98 = {}
+    for _if98, _sub98, _req98 in (('Any Bing Submit?', 'Submit to Bing', 'Bing Submit Requests'), ('Any IndexNow?', 'Submit IndexNow', 'IndexNow Requests')):
+        _lv98 = _gn98[_if98]['parameters']['conditions']['conditions'][0]['leftValue']
+        assert '!$json.dry_run' in _lv98 and '!$json.skip' in _lv98, 'R94: ' + _if98 + ' lets a dry item through: ' + _lv98
+        _feeds98 = sorted(s for s, o in _g98['connections'].items() for i, lst in enumerate(o.get('main') or []) for t in (lst or []) if t['node'] == _sub98)
+        assert _feeds98 == [_if98] and _out98(_g98['connections'], _if98)[0] == _sub98, 'R94: ' + _sub98 + ' is reachable other than through ' + _if98
+        assert 'DRY_RUN' in _gn98[_req98]['parameters']['jsCode'] and 'would_submit' in _gn98[_req98]['parameters']['jsCode'], 'R94: ' + _req98 + ' has no dry-run switch'
+        _growth98[_sub98] = {'gate': _if98, 'expr': _lv98}
+    assert 'dry_run_note' in _gn98['Growth Report']['parameters']['jsCode'], 'R94: the AI Growth report does not say it was a dry run'
+    _wire98.update({'deploy_guard': _guard98, 'growth_dry_run': _growth98, 'record_then_start': True,
+                    'published': sorted(_baked98), 'compose_tz_default': _tzm98.group(1)})
+    json.dump(_wire98, open(os.path.join(HERE0, 'harness', 'catchup_wiring.json'), 'w'), indent=1, sort_keys=True)
+    print('R94: the Schedule Catch-up carries the %d generated schedules (%s), records before it starts, and every target is published; '
+          'apply_env.py refuses a Monday deploy (%d guard cases); AI Growth submits nothing on a dry run' % (len(_baked98), _wire98['tz'], len(_guard98)))
+
+
+log('A schedule that never fired, and a restart that threw its fire away (2026-10-16, re-rating 2026-10-15 R94, High). In the 21 days to 2026-10-15 the Rank Tracker, the Site Tracker, AI Growth, the Content Cadence and the Link Builder had 8 due fires and none fired; the cause, read in n8n\'s own code, is that a cron fire lives only in memory and every restart, deploy or re-publish re-arms the schedule for its next future time, so the 2026-10-12 16:38 deploy restart threw away the five Monday runs the Mac\'s sleep had pushed past it. New workflow SEO Agent - Schedule Catch-up (build_catchup.py, SEOagentCatchUp1; kit v5/code/_catchup.js): n8n\'s Instance Started event plus an hourly sweep read each of the ten schedules\' latest due time in GENERIC_TIMEZONE, the workflow\'s executions with mode trigger through n8n\'s public API (an on-demand run does not count - an owner decision) and the catch-up\'s own seo_cache records, and start a missed fire ONCE through the workflow\'s own manual entry with no site, recording catchup:<workflow>:<due ISO> before the start; only fires due in the last 36 h (weekly / monthly) or 20 h (daily), never before the catch-up first ran, at most three a sweep 60 s apart and never more than the run guard has room for; a fire the schedule still holds is left to it until 6 h late so a week never runs twice. apply_env.py refuses a deploy on Monday 07:00-12:00 in the schedules\' time zone (--force-monday overrides), n8n/compose.yml sets GENERIC_TIMEZONE explicitly (America/New_York, what it was while unset), sync_credentials.py writes the n8n API credential from N8N_API_KEY, and AI Growth gained dry_run: true, which sends nothing to Bing or IndexNow and says so in the report (section 99)')
+
+
+# =============================================================================
+# 104. A COST THE SYSTEM REPORTS ABOUT ITSELF IS WHAT HAPPENED (1): THE ANSWER THE COUNTER COUNTS, THE RETRY THE MODEL MADE, AND THE
+#      CALLBACK THAT WAITS FOR THE SETTLE (2026-10-16, re-rating 2026-10-15 family F6 — R47 = R69 = R80, R57, R82, R101, R115; agent A9;
+#      docs/system-review-2026-10-15/defects/{A_keywords_content,B_technical,C_monitors,D_app_reporting}.md)
+#
+#     **R47 = R69 = R80 — one root cause, 16 agents.** *Prompt For Count (…)* sent the counter `String(output)`. For every agent with an
+#     output parser `output` is an object, so Anthropic's count_tokens was asked to count the 15 characters "[object Object]" and answered
+#     4-6 tokens, which the ledger then called "measured" — 15-67% low on every run that touched one of them (606, 608, 610, 612, 614,
+#     615, 616, 623, 628). The answer is now sent as the run received it, through ONE expression (monitor_cost.answer_expr) in all three
+#     builders — sections 62 and 76 here, WF.count_chain in build_monitors.py — and in the Site Tracker's new chain; `_b104_checks`
+#     reads every *Prompt For Count* of every generated workflow and fails the build on a `String(…output)` without a JSON branch.
+#     And the kit has a net under it (CC.callCost): a count far below what the answer's own characters can hold did not see the answer,
+#     so the call falls back to characters and says why, instead of calling a wrong number measured.
+#
+#     **R57 — a retry the model made was never priced.** Every agent is built `retryOnFail` (maxTries 2): a parser that refuses the
+#     format re-runs the agent, n8n keeps the successful run of the AGENT node, and the cost loop counted `answers.length` — exec 616's
+#     Strategy Brief made two Opus calls and was priced for one. No Code node can read a model node's data (it rides `ai_languageModel`,
+#     the data proxy reads `main`), but `$node['<model node>'].runIndex` is the index of that node's last run — read from the run data
+#     itself (n8n-workflow WorkflowDataProxy, the `runIndex` property; the task runner sends all nodes' run data when a node uses `$node`).
+#     Every call-table row now names its `model_node`, and `calls = max(answers, model runs)` with `retries` in the basis.
+#
+#     **R115 (engine side) — the describe branch.** "Describe my website" posted `run_ledger: null`: the branch carries no report
+#     builder, so nothing priced it before the POST, while *Run Ledger Settle* priced its Haiku call right after. *Build Description Page*
+#     now feeds only the settle chain, and *Describe Ledger* — behind *Run Ledger Settle* — hands the description to *Via Webhook
+#     (Describe)?* with the settled figure. The monitors' callbacks are moved behind their settle by monitor_cost.callback_after_settle()
+#     in their own builders; `_b104_checks` proves the order on every generated workflow.
+# =============================================================================
+import monitor_cost as _mc104
+LCB_SRC104 = _rd0('code/_ledger_cb.js').rstrip('\n')
+
+# ---------- A. R47 / R69 / R80: every counted answer of this workflow is the answer the model returned ----------
+_pfc104 = sorted(nm for nm in nodes if nm.startswith('Prompt For Count ('))
+assert len(_pfc104) == len(_AI_CALLS51) == 11, ('R47: the main workflow counts %d agents, expected the 11 of its call table' % len(_pfc104), _pfc104)
+for _nm104 in _pfc104:
+    _v104 = next(a['value'] for a in nodes[_nm104]['parameters']['assignments']['assignments'] if a['name'] == '__answer')
+    assert _mc104.answer_expr_ok(_v104), 'R47: ' + _nm104 + ' still sends String(output) to the counter: ' + _v104
+
+# ---------- B. R57: a retry the model made is priced ----------
+_mn104 = {}
+for _m104, _n104 in sorted(nodes.items()):
+    if _n104['type'] != '@n8n/n8n-nodes-langchain.lmChatAnthropic':
+        continue
+    for _ag104 in [t['node'] for l in ((conns.get(_m104) or {}).get('ai_languageModel') or [[]]) for t in (l or [])]:
+        assert _ag104 not in _mn104, 'R57: ' + _ag104 + ' has two model nodes, so their runs cannot be read as its calls'
+        _mn104[_ag104] = _m104
+for _m104 in set(_mn104.values()):
+    assert list(_mn104.values()).count(_m104) == 1, 'R57: ' + _m104 + ' feeds two agents, so its runs are not one agent\'s calls'
+_OLD104 = json.dumps(_AI_CALLS51)
+for _c104 in _AI_CALLS51:
+    assert _c104['node'] in _mn104, 'R57: no model node for ' + _c104['node']
+    _c104['model_node'] = _mn104[_c104['node']]
+_NEW104 = json.dumps(_AI_CALLS51)
+_OLD_PUSH104 = """  __costCalls.push({ node: c.node, model: c.model, max_tokens: c.max_tokens, effort: c.effort, streaming: c.streaming,
+    prompt_chars, output_chars, counted, calls: answers.length * (c.loop ? __qaRounds() : 1) });"""
+_NEW_PUSH104 = """  // R57 (2026-10-16, re-rating A-24): a parser that refused the format re-ran the agent (retryOnFail), n8n kept ONE answer and the loop
+  // priced one call — exec 616's Strategy Brief made two Opus calls. The model node records every call as a run of its own.
+  const __base104 = answers.length * (c.loop ? __qaRounds() : 1), __runs104 = __modelRuns(c.model_node);
+  __costCalls.push({ node: c.node, model: c.model, max_tokens: c.max_tokens, effort: c.effort, streaming: c.streaming,
+    prompt_chars, output_chars, counted, calls: Math.max(__base104, __runs104), retries: Math.max(0, __runs104 - __base104) });"""
+_RUNS104 = """
+// R57: how many calls a model node made in THIS execution. A Code node cannot read its data (it rides `ai_languageModel`), but
+// `$node[…].runIndex` is the index of its last run; 0 when the node never ran or the proxy is not there (the offline harness).
+const __modelRuns = (n) => { try { if (!n || typeof $node === 'undefined') return 0; const r = Number($node[n].runIndex); return Number.isFinite(r) && r >= 0 ? r + 1 : 0; } catch (e) { return 0; } };"""
+for _n104 in _ends51 + ['Run Ledger Settle']:
+    _s104 = code(_n104)
+    assert _s104.count(_OLD104) == 1 and _s104.count(_OLD_PUSH104) == 1 and _s104.count(_NEW_COUNTOF76) == 1, \
+        'R57: ' + _n104 + ' does not carry the call table / the pricing push / the counter helper of section 76'
+    setcode(_n104, _s104.replace(_OLD104, _NEW104).replace(_OLD_PUSH104, _NEW_PUSH104).replace(_NEW_COUNTOF76, _NEW_COUNTOF76 + _RUNS104))
+    assert 'Math.max(__base104, __runs104)' in code(_n104) and '"model_node": "' in code(_n104), _n104
+    # R46's helper is not this section's to change: its body must still be the one section 101 asserts
+    assert "const __qaRounds = () => { try { const q = $('Content QA').first().json || {}; const e = Number(q.editor_rounds);" in code(_n104), _n104
+assert 'retries' in COST_SRC and 'were a retry after a failed answer' in COST_SRC, 'R57: the cost kit cannot price a retried call'
+assert 'did not see the answer' in COST_SRC, 'R47: the cost kit takes a count of "[object Object]" as a measurement'
+assert "!k.includes('describe')" in COST_SRC, 'R101: a describe run is still priced describe + describe'
+
+# ---------- C. R115: "Describe my website" posts after the settle and carries what it settled ----------
+_bdp104 = [t['node'] for l in ((conns.get('Build Description Page') or {}).get('main') or []) for t in (l or [])]
+assert sorted(_bdp104) == ['DFS Balance End', 'Via Webhook (Describe)?'], 'R115: Build Description Page feeds ' + str(_bdp104)
+disconnect('Build Description Page', 'Via Webhook (Describe)?')
+_rls104 = pos('Run Ledger Settle')
+add_node('Describe Ledger', 'n8n-nodes-base.code', 2, {'jsCode': _rd0('code/Describe_Ledger.js').replace('/*__LEDGER_CB__*/', LCB_SRC104)},
+         [_rls104[0] + 220, _rls104[1] + 300])
+connect('Run Ledger Settle', 'Describe Ledger')
+connect('Describe Ledger', 'Via Webhook (Describe)?')
+assert '/*__LEDGER_CB__*/' not in code('Describe Ledger') and 'LCB.fromSettle(settled)' in code('Describe Ledger'), 'R115: Describe Ledger has no ledger kit'
+assert [t['node'] for l in conns['Build Description Page']['main'] for t in l] == ['DFS Balance End'], 'R115: the description still reaches the caller beside the settle'
+assert 'ai_measured_usd:' in code('Run Ledger Settle'), 'R115: the settle does not say which part of its Claude money is measured'
+assert "run_ledger: d.run_ledger || null" in code('Build Describe Response'), 'R115: Build Describe Response no longer passes run_ledger on'
+
+log('A cost the system reports about itself is what happened (2026-10-16, re-rating 2026-10-15 R47 = R69 = R80, R57, R101, R115; agent A9). '
+    'The free token counter was sent String(output), so all 16 structured agents were counted as "[object Object]" (4-6 tokens, labelled '
+    'measured, 15-67% low): every builder now sends the answer as the run received it (monitor_cost.answer_expr) and the cost kit refuses a '
+    'count far below what the answer\'s own characters hold. A parser retry (exec 616: two Opus Strategy Brief calls, one priced) is priced '
+    'from the model node\'s own run count ($node[...].runIndex). A describe run is no longer estimated describe + describe. And "Describe my '
+    'website" posts its callback after the settle, carrying the settled run_ledger, as every monitor callback now does.')
+
+
+# =============================================================================
+# 105. A COST THE SYSTEM REPORTS ABOUT ITSELF IS WHAT HAPPENED (2): EVERY PAID CALL IN THE RUN'S COST, NONE PAID FOR NOTHING
+#      (2026-10-16, re-rating 2026-10-15 R68 / R82 audit half, R70; agent A9)
+#
+#     **R68 / R82 — the hand-written list missed the first attempts.** `__LEDGER_NODES` (section 8b, the retries prepended by section
+#     75) held *Fetch GBP (Retry)* but not *Fetch GBP*, and the same for *Run Ladder Research* and *Run Reach Requests*: every audit's
+#     cost missed $0.0108 (595 and 641 settled $0.0265 where $0.0373 moved). The list is now DERIVED: every paid DataForSEO HTTP node a
+#     report builder's run can reach (walking `main` backwards from the builder; the free appendix/user_data probes excluded) is on that
+#     builder's list, and the build fails if one is not. `__dfsOnce` still counts a task once by its id, so a node listed twice or an
+#     attempt and its retry cannot double-charge. The other half — DataForSEO's 40102 "No Search Results." retried and paid again — is
+#     fixed in the kit (v5/code/_dfs_retry.js: a final, valid empty answer) and in the IF gates' copy of RT.PERMANENT (section 56).
+#
+#     **R70 — competitor discovery paid for and thrown away.** With competitors named in the request, *Pick Competitors* takes them as
+#     given ("provided by user") — after *Find Competitors* ($0.012) and three *Fallback SERP* calls ($0.012) had run. Both are skipped
+#     now when the request names a competitor (the same test Pick Competitors applies); *Fallback Queries* still runs on both paths,
+#     because Analyze Keywords and the full report seed their keyword research from it (R60).
+# =============================================================================
+# ---------- A. R70: named competitors skip the paid discovery ----------
+_NAMED105 = ("{{ (Array.isArray($('Schema Findings').first().json.competitors) ? $('Schema Findings').first().json.competitors : [])"
+             ".map(d => String(d || '').toLowerCase().replace(/^www\\./, ''))"
+             ".filter(d => d && d !== String($('Schema Findings').first().json.domain || '').toLowerCase()"
+             " && !d.endsWith('.' + String($('Schema Findings').first().json.domain || '').toLowerCase())).length > 0 }}")
+assert [t['node'] for l in conns['Schema Findings']['main'] for t in l] == ['Find Competitors'], 'R70: Schema Findings no longer feeds Find Competitors'
+assert [t['node'] for l in conns['Find Competitors Answers']['main'] for t in l] == ['Fallback Queries'], 'R70: the competitor answers no longer feed Fallback Queries'
+assert [t['node'] for l in conns['Fallback Queries']['main'] for t in l] == ['Fallback SERP'], 'R70: Fallback Queries no longer feeds Fallback SERP'
+assert "const manual = (base.competitors || []).map(clean).filter(d => d && !isOurs(d));" in code('Pick Competitors') \
+    and "const clean = (d) => String(d || '').toLowerCase().replace(/^www\\./, '');" in code('Pick Competitors'), \
+    'R70: Pick Competitors decides "provided by user" differently from the gate that skips the discovery'
+_fc105, _fq105 = pos('Find Competitors'), pos('Fallback SERP')
+if_node('Competitors Named?', _NAMED105, [_fc105[0] - 220, _fc105[1] - 180])
+if_node('Competitors Named? (SERP)', _NAMED105, [_fq105[0] - 220, _fq105[1] - 180])
+disconnect('Schema Findings', 'Find Competitors')
+connect('Schema Findings', 'Competitors Named?')
+connect('Competitors Named?', 'Fallback Queries', 0)        # named: no discovery, the seeds are still built
+connect('Competitors Named?', 'Find Competitors', 1)        # not named: discover them, as before
+disconnect('Fallback Queries', 'Fallback SERP')
+connect('Fallback Queries', 'Competitors Named? (SERP)')
+connect('Competitors Named? (SERP)', 'Pick Competitors', 0)  # named: Pick Competitors takes them as given
+connect('Competitors Named? (SERP)', 'Fallback SERP', 1)
+# Pick Competitors read the discovery's answers unguarded; on the named path that node never ran
+patch('Pick Competitors', "const labsItems = $('Find Competitors Answers').first().json.tasks?.[0]?.result?.[0]?.items || [];",
+      "// R70 (2026-10-16): with competitors named the discovery is not paid for, so its answers may not exist\n"
+      "let labsItems = []; try { labsItems = $('Find Competitors Answers').first().json.tasks?.[0]?.result?.[0]?.items || []; } catch (e) { labsItems = []; }")
+
+# ---------- B. R68 / R82: every paid DataForSEO node a report builder's run can reach is in that builder's cost ----------
+def _paid105(n):
+    return (n['type'] == 'n8n-nodes-base.httpRequest'
+            and ((n.get('credentials') or {}).get('httpBasicAuth') or {}).get('id') == 'SEOcredDataForSE'
+            and 'appendix/user_data' not in str((n.get('parameters') or {}).get('url') or ''))
+_PAID105 = sorted(nm for nm, n in nodes.items() if _paid105(n))
+_rev105 = {}
+for _s105, _o105 in conns.items():
+    for _l105 in (_o105.get('main') or []):
+        for _t105 in (_l105 or []):
+            _rev105.setdefault(_t105['node'], set()).add(_s105)
+def _anc105(start):
+    seen, stack = set(), [start]
+    while stack:
+        for p in _rev105.get(stack.pop(), ()):
+            if p not in seen: seen.add(p); stack.append(p)
+    return seen
+_LRE105 = re.compile(r"const __LEDGER_NODES = \[([^\]]*)\];")
+_ln105 = sorted(nm for nm in nodes if _LRE105.search(nodes[nm]['parameters'].get('jsCode', '') or ''))
+assert set(_ends51) <= set(_ln105), ('R68: a report builder carries no cost list', _ends51, _ln105)
+_LISTS105 = {}
+for _nm105 in _ln105:
+    _m105 = _LRE105.search(code(_nm105))
+    _listed105 = re.findall(r"'([^']+)'", _m105.group(1))
+    _reach105 = sorted(set(_PAID105) & _anc105(_nm105))
+    _missing105 = [x for x in _reach105 if x not in _listed105]
+    _new105 = _listed105 + _missing105
+    setcode(_nm105, code(_nm105).replace(_m105.group(0), "const __LEDGER_NODES = [" + ', '.join("'" + x + "'" for x in _new105) + "];", 1))
+    assert set(_reach105) <= set(re.findall(r"'([^']+)'", _LRE105.search(code(_nm105)).group(1))), 'R68: ' + _nm105 + ' still misses a paid node'
+    assert "__dfsOnce(t)" in code(_nm105), 'R68: ' + _nm105 + ' would count an attempt and its retry twice'
+    _LISTS105[_nm105] = {'reachable_paid': _reach105, 'added': _missing105}
+# the three first attempts the dossier names: each is reached by at least one builder, and is on that builder's list now
+for _first105 in ('Fetch GBP', 'Run Ladder Research', 'Run Reach Requests'):
+    _by105 = sorted(nm for nm, v in _LISTS105.items() if _first105 in v['reachable_paid'])
+    assert _by105, 'R68: no report builder reaches ' + _first105 + ' — re-check the dossier claim'
+    print('R68: ' + _first105 + ' is reached by ' + ', '.join(_by105))
+assert 'Fetch GBP' in _LISTS105['Build Audit Report']['reachable_paid'], 'R68: the audit no longer reaches Fetch GBP'
+assert 'no search results' in _PERMANENT56, 'R68: the IF gates would still re-send a 40102 "No Search Results." the kit now takes as final'
+assert 'NO_RESULTS' in DFS_RETRY_SRC or 'NO_RESULTS' in _rd0('code/_dfs_retry.js'), 'R68: the retry kit still treats "No Search Results." as retryable'
+_A9_MAIN105 = {'ledger_lists': _LISTS105, 'paid_nodes': _PAID105,
+               'competitors': {'gate': 'Competitors Named?', 'serp_gate': 'Competitors Named? (SERP)', 'expr': _NAMED105,
+                               'schema_findings': [t['node'] for l in conns['Schema Findings']['main'] for t in l],
+                               'gate_true': [t['node'] for t in conns['Competitors Named?']['main'][0]],
+                               'gate_false': [t['node'] for t in conns['Competitors Named?']['main'][1]],
+                               'serp_gate_true': [t['node'] for t in conns['Competitors Named? (SERP)']['main'][0]],
+                               'serp_gate_false': [t['node'] for t in conns['Competitors Named? (SERP)']['main'][1]],
+                               'fallback_queries_from': sorted(s for s, o in conns.items() for l in (o.get('main') or []) for t in (l or []) if t['node'] == 'Fallback Queries')},
+               'describe': {'build_description_page': [t['node'] for l in conns['Build Description Page']['main'] for t in l],
+                            'describe_ledger_from': sorted(s for s, o in conns.items() for l in (o.get('main') or []) for t in (l or []) if t['node'] == 'Describe Ledger'),
+                            'describe_ledger_to': [t['node'] for l in conns['Describe Ledger']['main'] for t in l]},
+               'model_nodes': _mn104}
+log('Every paid call in the run\'s cost, none paid for nothing (2026-10-16, re-rating 2026-10-15 R68 / R82 / R70; agent A9): each report '
+    'builder\'s DataForSEO cost list is now derived from the workflow - every paid node its run can reach (' + ', '.join(sorted({x for v in _LISTS105.values() for x in v['added']}))
+    + ' were missing) - and the build fails on a gap; 40102 "No Search Results." is a final answer, never re-sent; and with competitors '
+    'named in the request, Find Competitors and the three Fallback SERP calls are skipped while Fallback Queries still seeds the keywords.')
+
+
+def _b104_checks():
+    """R47 / R57 / R82 / R115 over EVERY generated workflow (the monitors are written by the sub-builds): every counted answer is the
+    answer, every monitor callback waits for its settle and carries what it settled, the Site Tracker prices Site Brief and its own
+    DataForSEO calls, and the Keyword Check stamps when it settled. Writes harness/a9_cost_wiring.json for S130-S133."""
+    _dir = os.path.join(HERE0, 'workflows')
+    _wfs = {}
+    for _f in sorted(os.listdir(_dir)):
+        if _f.endswith('.json') and _f not in _NOT_GENERATED69:
+            for _w in json.load(open(os.path.join(_dir, _f), encoding='utf-8')):
+                _wfs[_f] = _w
+    _answers = {}
+    for _f, _w in _wfs.items():
+        for _n in _w['nodes']:
+            if _n['name'].startswith('Prompt For Count ('):
+                _v = next(a['value'] for a in _n['parameters']['assignments']['assignments'] if a['name'] == '__answer')
+                assert _mc104.answer_expr_ok(_v), 'R47: ' + _f + ' / ' + _n['name'] + ' still sends String(output) to the counter'
+                _answers.setdefault(_f, {})[_n['name'][len('Prompt For Count ('):-1]] = _v
+    # A-28 / B-8 (2026-10-18): every count body carries what its agent really sends besides the prompt (the formatting instructions as the
+    # system message and the parser's format_final_json_response tool), so the counted prompt is the prompt n8n's tokenUsage billed
+    _frames = {}
+    for _f, _w in _wfs.items():
+        _nb = {n['name']: n for n in _w['nodes']}
+        for _ag in sorted(_answers.get(_f, {})):
+            _fr = _mc104.count_frame(_nb, _w['connections'], _ag)
+            for _cn in ('Count Prompt (' + _ag + ')', 'Count Answer (' + _ag + ')'):
+                assert _cn in _nb, 'A-28: ' + _f + ' has no ' + _cn
+                assert _mc104.count_frame_ok(_nb[_cn]['parameters'].get('jsonBody'), _fr), 'A-28: ' + _f + ' / ' + _cn + ' counts the prompt without the system message and tool its agent sends'
+                assert '}}' not in str(_nb[_cn]['parameters'].get('jsonBody'))[3:-2], 'A-28: ' + _f + ' / ' + _cn + ' has a }} inside its expression'
+            _frames.setdefault(_f, {})[_ag] = 'tool' if _fr else 'none'
+    # the 16 structured agents of R80's list, Site Brief (R82) and the two text agents — each counted, each through the one expression
+    _want = {'SEO_Agent_v4.json': ['Site Describer', 'Competitor Analyzer', 'Strategy Brief', 'Content Reviewer', 'Keyword Seeds',
+                                   'Verdict Agent', 'Keyword Relevance', 'Critic', 'Ladder Keyword Relevance', 'Copywriter', 'Editor'],
+             'SEO_Agent_AI_Visibility.json': ['Prompt Writer', 'Answer Analyst', 'AI Brief'],
+             'SEO_Agent_Backlink_Monitor.json': ['Link Analyst', 'Outreach Writer'],
+             'SEO_Agent_Link_Builder.json': ['Outreach Sequence Writer'], 'SEO_Agent_AI_Growth.json': ['AI Outreach Writer'],
+             'SEO_Agent_Site_Tracker.json': ['Site Brief']}
+    for _f, _ags in _want.items():
+        _miss = [a for a in _ags if a not in _answers.get(_f, {})]
+        assert not _miss, 'R47 / R80 / R82: ' + _f + ' does not count ' + str(_miss)
+    # R57: every monitor settle's call table names the model node whose runs are its calls
+    _lw = json.load(open(os.path.join(HERE0, 'harness', 'ledger_wiring.json'), encoding='utf-8'))
+    _byname = {w['name']: (f, w) for f, w in _wfs.items()}
+    _tables = {}
+    for _wn, _wi in sorted((_lw.get('monitors') or {}).items()):
+        _f, _w = _byname[_wn]
+        _tag = _wi['reserve'][len('Run Ledger Row ('):-1]
+        _src = next((n['parameters']['jsCode'] for n in _w['nodes'] if n['name'] == 'Ledger Settle (' + _tag + ')'), '')
+        _m = re.search(r'const AI_CALLS = (\[.*?\]);\n', _src, re.S)
+        _tbl = json.loads(_m.group(1)) if _m else []
+        _models = {n['name'] for n in _w['nodes'] if n['type'] == '@n8n/n8n-nodes-langchain.lmChatAnthropic'}
+        for _c in _tbl:
+            assert _c.get('model_node') in _models, 'R57: ' + _wn + ' prices ' + _c['node'] + ' without the model node whose runs are its calls'
+        assert '__modelRuns(c.model_node)' in _src or not _tbl, 'R57: ' + _wn + "'s settle does not read the model node's runs"
+        _tables[_wn] = [{'node': _c['node'], 'model_node': _c.get('model_node')} for _c in _tbl]
+    assert [c['node'] for c in _tables.get('SEO Agent — Site Tracker', [])] == ['Site Brief'], 'R82: the Site Tracker does not price Site Brief'
+    # R82: the Site Tracker and the Link Builder settle what their own DataForSEO calls reported
+    assert (_lw['monitors']['SEO Agent — Site Tracker'].get('measured') or '') == '!SERP Check (Site) Answers|Google Trends Answers', 'R82: Site Tracker measured'
+    assert (_lw['monitors']['SEO Agent — Link Builder'].get('measured') or '') == '!Run LB DFS Answers', 'R82: Link Builder measured'
+    for _wn, _paid in (('SEO Agent — Site Tracker', ['Google Trends', 'SERP Check (Site)']), ('SEO Agent — Link Builder', ['Run LB DFS'])):
+        _f, _w = _byname[_wn]
+        _have = sorted(n['name'] for n in _w['nodes'] if n['type'] == 'n8n-nodes-base.httpRequest'
+                       and ((n.get('credentials') or {}).get('httpBasicAuth') or {}).get('id') == 'SEOcredDataForSE'
+                       and 'appendix/user_data' not in str(n['parameters'].get('url')) and not n['name'].endswith('(Retry)'))
+        assert _have == sorted(_paid), 'R82: ' + _wn + "'s measured list says it names every paid call, but the workflow has " + str(_have)
+    # R115: every monitor callback waits for its settle — the order proved on the generated graph
+    _cbs = {}
+    for _wn, _wi in sorted((_lw.get('monitors') or {}).items()):
+        for _cb in (_wi.get('callbacks') or []):
+            _f, _w = _byname[_wn]
+            _facts = _mc104.prove_after_settle(_w, _cb)
+            assert _facts['reachable'] and not _facts['bypass'], 'R115: ' + _wn + ' can post ' + _cb['post'] + ' without passing ' + _cb['join']
+            assert _facts['merge'] and _facts['input1'] == [_cb['settle']], 'R115: ' + _cb['join'] + ' does not wait for ' + _cb['settle'] + ': ' + str(_facts)
+            assert sorted(_facts['input0']) == sorted(_facts['preds']), 'R115: ' + _cb['join'] + "'s first input is not the callback builders: " + str(_facts)
+            _cl = next(n['parameters']['jsCode'] for n in _w['nodes'] if n['name'] == _cb['ledger'])
+            assert 'LCB.fromSettle(settled)' in _cl and "'" + _cb['settle'] + "'" in _cl, 'R115: ' + _cb['ledger'] + ' does not read the settle'
+            _cbs.setdefault(_wn, []).append({**_cb, 'proof': _facts})
+    _want_cb = {'SEO Agent — AI Visibility Tracker', 'SEO Agent — Backlink Monitor', 'SEO Agent — AI Pulse', 'SEO Agent — AI Growth',
+                'SEO Agent — Link Builder', 'SEO Agent — Site Tracker', 'SEO Agent — Content Cadence', 'SEO Agent — Rank Tracker'}
+    assert _want_cb <= set(_cbs), 'R115: these monitors still post before they settle: ' + str(sorted(_want_cb - set(_cbs)))
+    # every OTHER workflow that posts a report callback and keeps a ledger is either moved or recorded here with its reason
+    _gap = {}   # R115 (2026-10-16): the Rank Tracker was the last one — build_ladder_extras.py now calls callback_after_settle() too
+    for _wn, _wi in sorted((_lw.get('monitors') or {}).items()):
+        _f, _w = _byname[_wn]
+        _posts = [n['name'] for n in _w['nodes'] if n['type'] == 'n8n-nodes-base.httpRequest' and 'callback_url' in str(n['parameters'].get('url'))
+                  and not n['name'].startswith('Post Refusal')]
+        if _posts and _wn not in _cbs:
+            assert _wn in _gap, 'R115: ' + _wn + ' posts ' + str(_posts) + ' with no settled run_ledger and no recorded reason'
+    for _wn in _gap:
+        assert _wn not in _cbs, 'R115: ' + _wn + ' is fixed now — take it off the recorded gap'
+    # R81 part 2: the Keyword Check stamps when it settled, so no other run counts it as in flight for ever
+    _kc = _wfs['SEO_Agent_Keyword_Check.json']
+    _sv = next(n for n in _kc['nodes'] if n['name'] == 'Settle Run Ledger (Assess)')['parameters']['columns']['value']
+    assert '$json.settled_at' in str(_sv.get('settled_at')) and '$json.dfs_source' in str(_sv.get('dfs_source')), 'R81: Settle Run Ledger (Assess) drops settled_at / dfs_source'
+    _out = {'answers': _answers, 'count_frames': _frames, 'call_tables': _tables, 'callbacks': _cbs, 'callback_gap': _gap,
+            'assess_settle_columns': sorted(_sv), 'main': _A9_MAIN105,
+            'measured': {w: _lw['monitors'][w].get('measured') or '' for w in sorted(_lw.get('monitors') or {})}}
+    json.dump(_out, open(os.path.join(HERE0, 'harness', 'a9_cost_wiring.json'), 'w'), indent=1, sort_keys=True)
+    print('A9 (F6, cost truth): %d counted answers across %d workflows send the answer the model returned; %d monitor callback(s) wait for '
+          'their settle (%s) and carry its run_ledger; %d recorded gap(s)'
+          % (sum(len(v) for v in _answers.values()), len(_answers), sum(len(v) for v in _cbs.values()), ', '.join(sorted(_cbs)), len(_gap)))
+
+
+
+# =============================================================================
+# 106. ONE COMPETITOR / BRAND / TOPIC GATE FOR EVERY LIST (2026-10-16, re-rating 2026-10-15 family F7 — R39, R54, R83, R86, R89;
+#      dossiers docs/system-review-2026-10-15/defects/A_keywords_content.md and C_monitors.md; harness S134 / S135 / S136).
+#
+#     * R39 / R54: `_radius.js` RAD.tokens dropped every token of two characters, so "ai" was not a word that matters in "ai consulting
+#       dubai" and "supply chain optimization consulting" became a rung on "consult" alone; the cluster step bought a results page for
+#       three keywords the relevance screen then rated 0. Two-letter field words ("ai", "bi", "hr", "it", "ui", "ux" …) count now, places
+#       ("uk", "eu") count as "dubai" always did, and RAD.headFit asks for the head's SUBJECT word, not only its service word or place.
+#       The kit is inlined into Ladder Cluster Requests, Ladder Plan and Rank Keywords — proved below on each generated node.
+#     * R83: the businesses AI names instead of you (every configured competitor, every business named in two or more answers, every
+#       business the Answer Analyst learned a website for — by registrable domain) are never a source to "get featured on" or an
+#       `ai_source` prospect, whatever the 8-row display cut; AI Growth's earned media applies the same set; the report drops a brief's
+#       pitch to one.
+#     * R86: the Link Builder judges the prospect's SITE (the about / contact pages it fetched) as well as its page; the Backlink Monitor's
+#       "best of" list test has closing word boundaries and no bare-number branch.
+#     * R89: the brand / non-brand split matches brand forms as whole tokens ("tech" is never the brand on its own; "tech and" counts only
+#       as the whole query) — in the Site Tracker, the audit's Search Console block and discovery, which inline the same kit.
+# =============================================================================
+for _n106 in ('Ladder Cluster Requests', 'Ladder Plan', 'Rank Keywords'):
+    _c106 = code(_n106)
+    assert "const CORE2 = new Set(['ai'" in _c106 and 'const subjectOf = ' in _c106 and 'onSubject' in _c106, \
+        'R39: %s does not carry the corrected topic radius (two-letter words, subject word)' % _n106
+assert 'RAD.headFit(head, k.keyword).ok' in code('Ladder Cluster Requests'), 'R54: the cluster step no longer filters with the head fit before buying'
+for _n106 in [n for n in nodes if 'const GQ = (() => {' in (nodes[n]['parameters'].get('jsCode') or '')]:
+    assert 'MIN_NAME_RUN = 5' in code(_n106) and 'onlyDomain' in code(_n106), 'R89: %s still matches a brand key as a substring' % _n106
+
+
+def _b106_checks():
+    """R83 / R86 / R89 on the GENERATED monitor workflows (written by the sub-builds after this section is read)."""
+    import json as _j106
+    def _codes106(f):
+        w = _j106.load(open(os.path.join(HERE0, 'workflows', f), encoding='utf-8'))[0]
+        return {n['name']: n['parameters'].get('jsCode', '') for n in w['nodes'] if n['type'] == 'n8n-nodes-base.code'}
+    _ai = _codes106('SEO_Agent_AI_Visibility.json')
+    assert 'const rivalSet = new Set()' in _ai['AI Metrics'] and "isRival(h)) { asRival(h, 1); continue; }" in _ai['AI Metrics'], \
+        'R83: AI Metrics still excludes only the 8 displayed rivals from the sources it pitches'
+    assert 'rival_sources' in _ai['AI Metrics'] and 'pitchesRival' in _ai['AI Report'], 'R83: the rivals are not named apart, or the brief can still pitch one'
+    _gr = _codes106('SEO_Agent_AI_Growth.json')
+    assert "$('Load Cache (Growth)')" in _gr['Earned Media'] and 'rivalOf(e.host)' in _gr['Earned Media'], 'R83: AI Growth\'s earned media still pitches a business AI names instead of you'
+    _lb = _codes106('SEO_Agent_Link_Builder.json')
+    assert 'const siteBy = new Map();' in _lb['LB Assemble'] and '...siteOf(r.prospect_domain)' in _lb['LB Assemble'] and 'function siteOffer(o)' in _lb['LB Assemble'], \
+        'R86: the Link Builder\'s competitor test still reads only the prospect page'
+    _bl = _codes106('SEO_Agent_Backlink_Monitor.json')
+    assert 'const LISTY_RES = [' in _bl['Link Merge'] and 'listy(x.title, x.url)' in _bl['Link Merge'] and 'const LISTY = /' not in _bl['Link Merge'], \
+        'R86: the Backlink Monitor still reads one word in a title as a "best of" list'
+    _st = _codes106('SEO_Agent_Site_Tracker.json')
+    assert 'MIN_NAME_RUN = 5' in _st['Parse GSC'] and 'onlyDomain' in _st['Parse GSC'], 'R89: the Site Tracker still counts "tech" as the brand'
+    print('R39 / R54 / R83 / R86 / R89: one topic radius that sees "ai", no rival pitched from the AI answers or from earned media, a '
+          'competing provider judged by its own site, a list that says it is one, and a brand that is a whole word')
+    return _st
+
+
+log('One competitor / brand / topic gate for every list (2026-10-16, re-rating 2026-10-15 family F7: R39, R54, R83, R86, R89). The topic radius saw no two-letter word, so "ai" did not count in "ai consulting dubai" and a supply-chain rung was planned and its results page bought on "consult" alone; it now counts the field words and asks for the head\'s subject. The businesses AI recommends instead of the customer were pitched as "Get featured on …" and saved as link prospects whenever they fell outside the 8-row display table; the exclusion set is now every rival the run knows, by registrable domain, on the AI visibility and AI Growth paths. The Link Builder judged only the prospect\'s article, so two Dynamics 365 partners in Dubai were ready pitches; it now reads their own site. The Backlink Monitor\'s "best of" test matched "top" inside a domain and "Dynamics 365 … Solutions" as a top-N list. The brand split counted "tech" as the brand.')
+
+
+# =============================================================================
+# 107. AI VISIBILITY SAYS WHAT ITS NUMBERS COUNT, AND ONE PAGE IS ONE ROW (2026-10-16, re-rating 2026-10-15 family F10 — R84, R85 — and
+#      R92 parts 1 / 2 / 5 / 6, plus the AI Pulse's days after A5's two readings a date; harness S135 / S137).
+#
+#     * R84: the header said "8 buyer questions × 6 AI engines · 74 answers" over 7 buyer questions on 5 weekly engines; the alert called
+#       the 33 counted answers "the answers that came back" (46 of 47 did); AI Overview presence put a failed request in its denominator.
+#     * R85: the AI search-volume lookup failed twice and the lineage said "0 questions with a volume"; it is "not read" now, with the reason.
+#     * R92: the anchor sentence and the anchor table are two populations and the sentence says so; Search Console's host variants of one
+#       path are one row on the canonical host; Page Watch drops "#fragments"; the seo_ai_pages upsert key is on the canonical host (and
+#       fix_ai_pages_hosts.py, a dry run by default, repairs the stale bare-host rows).
+#     * The pulse: `pulse_basis.days` counted readings, and the Pulse's baseline was the last 7 rows, not the last 7 days.
+# =============================================================================
+def _b107_checks(_st):
+    import json as _j107
+    def _codes107(f):
+        w = _j107.load(open(os.path.join(HERE0, 'workflows', f), encoding='utf-8'))[0]
+        return {n['name']: n['parameters'].get('jsCode', '') for n in w['nodes'] if n['type'] == 'n8n-nodes-base.code'}
+    _ai = _codes107('SEO_Agent_AI_Visibility.json')
+    for _t107, _m107 in (('const aioRead = aio.filter(r => !r.error);', 'R84: a failed AI Overview request is back in the presence denominator'),
+                         ('const headline = { buyer_questions: buyerQ', 'R84: the headline does not say what its answers count'),
+                         ('const volume_lookup = {', 'R85: a failed volume lookup is not reported'),
+                         ("$('Run Discovery Answers')", 'R85: AI Metrics reads the first discovery attempt, not the merged answers'),
+                         ('const pulseDays = pulseDates.length', 'A5: pulse_basis.days counts readings')):
+        assert _t107 in _ai['AI Metrics'], _m107
+    for _t107 in ('M.headline.text', 'M.volume_lookup.note', 'M.aio_basis'):
+        assert _t107 in _ai['AI Report'], 'R84 / R85: the AI report does not print ' + _t107
+    _pu = _codes107('SEO_Agent_AI_Pulse.json')
+    assert 'const baseDates = new Set(' in _pu['AI Plan'], 'A5: the pulse baseline is still the last 7 rows'
+    _bl = _codes107('SEO_Agent_Backlink_Monitor.json')
+    assert 'top_farm:' in _bl['Parse Backlinks'] and 'left out of both the percentages and the table below' not in _bl['BL Report'], 'R92 part 1: the anchor sentence still contradicts its table'
+    assert 'a.pages_cur = mergeHosts(a.pages_cur)' in _st['Parse GSC'] and 'bRaw ? mergeHosts(bRaw)' in _st['Parse GSC'], 'R92 part 2: Search Console pages are keyed by full URL again'
+    _pw = None
+    for _f107 in os.listdir(os.path.join(HERE0, 'workflows')):
+        if not _f107.endswith('.json'):
+            continue
+        for _w107 in _j107.load(open(os.path.join(HERE0, 'workflows', _f107), encoding='utf-8')):
+            for _n107 in _w107['nodes']:
+                if _n107['name'] == 'Watch Plan':
+                    _pw = _n107['parameters'].get('jsCode', '')
+    assert _pw and ".replace(/#.*$/, '')" in _pw, 'R92 part 5: Page Watch watches menu fragments again'
+    _gr = _codes107('SEO_Agent_AI_Growth.json')
+    assert "const canon = (r) =>" in _gr['AI Page Rows'] and "hostFor.get(r.site_id)" in _gr['AI Page Rows'], 'R92 part 6: the seo_ai_pages upsert key is not on the canonical host'
+    assert os.path.exists(os.path.join(HERE0, 'fix_ai_pages_hosts.py')), 'R92 part 6: the repair script for the stale bare-host rows is missing'
+    print('R84 / R85 / R92 / A5: the AI headline says what it counts, a failed lookup says so, one anchor sentence per population, one '
+          'Search Console row per page, no menu fragments watched, one AI page row per page, and the pulse counts days')
+
+
+log('AI visibility says what its numbers count, and one page is one row (2026-10-16, re-rating 2026-10-15: R84, R85, R92 parts 1/2/5/6, and the AI Pulse\'s days after A5). The AI report\'s header, alert and lineage now name the population the rates are counted over (buyer questions on the weekly engines, this run plus the pulse; Claude and the brand question reported apart); AI Overview presence leaves a failed request out of its denominator; a failed AI search-volume lookup is "not read" with the provider\'s reason. The backlink anchor sentence says the table is the index\'s list and counts the farm anchors it marks; Search Console\'s bare-host and www rows of one path are one row on the canonical host; Page Watch drops "#fragments"; seo_ai_pages is upserted on the canonical host (fix_ai_pages_hosts.py repairs the old rows, dry run by default); the pulse counts days, not readings, and its baseline is the last seven days.')
+
+# 110. THE LEFTOVER HALVES OF THE FIRST WAVE (2026-10-16, agent A14: R50 / R51 / R42 / R111 / R87 / R58 / R40 — the parts the first wave's
+#      agents reported as "needs elsewhere").
+#      * R50 the Keyword Check loads the domain's ladders and content log (build_api.py: Load Ladders (Assess) / Load Content Log (Assess),
+#        before Assess Requests) — Assess_Response.js had read both by name since the first wave and found nothing.
+#      * R51 the relevance prompt (shared by Keyword Relevance and Ladder Keyword Relevance) rates a keyword naming an industry the site does
+#        not list as adjacent (1), never core (2); its output schema is unchanged.
+#      * R42 a ladder run that writes a page while the site already holds its limit of written-but-unpublished pages says so: Ladder Plan
+#        reads the content log (Load Content Log (Ladder), in the ladder path before Ladder Requests) and Build Ladder Report words it.
+#      * R111 / R87 the cadence's status mail and note render `needs_fix` and `paused_ladders`; R58 / R40 the idea response carries
+#        `trend_note`, `tier_note` and `grouped_by`.
+for _f110, _tok110 in (('code/Assess_Response.js', "rowsOf('Load Ladders (Assess)')"), ('code/Assess_Response.js', "rowsOf('Load Content Log (Assess)')"),
+                       ('code/Ladder_Plan.js', "rowsOf('Load Content Log (Ladder)')"), ('code/Ladder_Plan.js', 'const pile_up = '),
+                       ('code/Build_Ladder_Report.js', 'L.pile_up.at_limit'), ('code/Cadence_Status.js', 'paused_ladders'), ('code/Cadence_Note.js', 'paused_ladders'),
+                       ('code/Build_Ideas_Response.js', 'trend_note'), ('code/Build_Ideas_Response.js', 'tier_note')):
+    assert _tok110 in _rd0(_f110), 'A14 / ' + _f110 + ' does not carry ' + _tok110
+_api110 = open(os.path.join(HERE0, 'build_api.py'), encoding='utf-8').read()
+for _n110 in ('Load Ladders (Assess)', 'Load Content Log (Assess)'):
+    assert "_an('" + _n110 + "'" in _api110 and "('" + _n110 + "', " in _api110 or "'" + _n110 + "')" in _api110, 'R50: the Keyword Check does not load ' + _n110
+assert "('Load Content Log (Assess)', 'Assess Requests')" in _api110 or "('Load Ladder Settings (Assess)', 'Assess Requests')" in _api110, 'R50: the loads are not in front of Assess Requests'   # A-1 (2026-10-17): the page inventory and the ladder settings load after the content log
+assert 'Load Content Log (Ladder)' in open(os.path.join(HERE0, 'build_v4.py'), encoding='utf-8').read(), 'R42: the ladder path does not load the content log'
+assert 'never 2' in _rd0('prompts/keyword_relevance.txt') and 'Return ONLY valid JSON: {"items"' in _rd0('prompts/keyword_relevance.txt'), 'R51: the relevance prompt'
+json.dump({'relevance_prompt': _rd0('prompts/keyword_relevance.txt'),
+           'assess_chain': [n for n in ('Load Assess Cache', 'Load Ladders (Assess)', 'Load Content Log (Assess)', 'Assess Requests') if "'" + n + "'" in _api110],
+           'ladder_chain': [n for n in ('Load Domain Ladder Settings', 'Load Content Log (Ladder)', 'Ladder Requests') if "'" + n + "'" in open(os.path.join(HERE0, 'build_v4.py'), encoding='utf-8').read()]},
+          open(os.path.join(HERE0, 'harness', 'a14_wiring.json'), 'w'), indent=1, sort_keys=True)   # harness S143 / S144 read it
+log('The leftover halves of the first wave (2026-10-16, agent A14): the Keyword Check loads the ladders and the content log, so its answer names the ladder and the page that already hold the search (R50); a keyword that names an industry the site does not list is adjacent, never core (R51); a ladder run that writes a page on top of a full pile says "you have N pages waiting (limit L); this writes page N+1" (R42); the cadence mails name the drafts that need a fix and the paused ladders (R111 / R87); the idea response carries the trend, tier and grouping notes (R51 / R58 / R40).')
+
+
+# 111. A SLEEP-DELAYED TIMER MUST NOT RUN THE WEEK TWICE (2026-10-16, agent A14, the R94 follow-up the first wave left open).
+#      The catch-up starts a fire the schedule still holds only after 6 h (late_hours); the delayed timer then fires anyway. The resume
+#      node of every scheduled workflow (ladder_common.LEDGER_RESUME_JS) now computes the due slot of a run started by its OWN Schedule
+#      Trigger (CU.lastDue on the trigger's timestamp) and refuses it, reason `caught_up`, when seo_cache holds `catchup:<workflow>:<due ISO>`
+#      (the key build_catchup.py writes) whose start did not fail. A catch-up start enters through the Execute Workflow Trigger, so the
+#      Schedule Trigger node has no data in it and nothing is checked; a lookup that fails refuses nothing.
+from ladder_common import LEDGER_RESUME_JS as _LR111, RUN_GUARD_SRC as _RG111
+for _t111 in ('__SCHED_JSON__', '__CATCHREC__', 'RG.caughtUp(', 'CU.lastDue(', '/*__CATCHUP__*/', 'caught_up: __caught'):
+    assert _t111 in _LR111, 'R94: the resume node does not carry ' + _t111
+assert "'catchup:' + wf + ':' + due" in _RG111 and "S(v.status) === 'start_failed'" in _RG111 and "refuse('caught_up'" in _RG111, 'R94: the run guard does not read the catch-up record the way the planner writes it'
+assert "prefix = dry ? 'catchup_dry:' : 'catchup:'" in _rd0('code/_catchup.js') and 'iso(due)' in _rd0('code/_catchup.js'), 'R94: the catch-up key format moved - RG.caughtUp must follow it'
+log('A sleep-delayed timer no longer runs the week twice (2026-10-16, agent A14, R94 follow-up): a scheduled run started by its own Schedule Trigger works out its due slot and refuses (reason "caught up", nothing charged) when the catch-up already started that slot; a catch-up start, a manual run and a failed lookup are never refused by it.')
+
+
+# 108. THE TECHNICAL AUDIT COUNTS PAGES, NAMES WHAT IT FLAGS AND READS THE SAME TEXT THE BROWSER SHOWS (2026-10-16, re-rating 2026-10-15
+#      family F9: R62 R63 R64 R71 R72 R76 R118). Seven small, separate causes in the same few nodes, all measured on the 2026-10-16 crawl (exec 648):
+#      R63  the crawl's two 308 redirect items were counted as pages (47, not 45) and judged by every page rule — "No compression", "Missing
+#           canonical", "Missing Open Graph", "Missing Twitter card", "Long or messy URLs" all named a URL that is a redirect with no HTML.
+#      R64  the four extra crawl reports (duplicate titles / descriptions, non-indexable, redirect chains) were requested with the id of the pages
+#           ANSWER (which has none) — 40401 "Task Not Found" on every audit since v3, so no such finding has ever been produced.
+#      R71  "Deprecated HTML tags" came from the crawler's boolean alone: the page's only tag was <u>, which the HTML standard defines.
+#      R72  "1 of 47 pages (20%)": a share of the 5 key pages read twice, printed against the crawl.
+#      R118 "Pages with duplicate content" was a whole-site finding with no page named (third in the fix list); every page item says whether it is one.
+#      R62  hex entities (&#x27;) were not decoded: a false "AI crawlers see a different version" finding, and a review finding about "an unescaped
+#           entity"; the content nodes now decode named, decimal and hex entities in one pass.
+#      R76  the content review never saw an image's alt text, so it said "no badges" over a Microsoft Partner badge.
+ENT_SRC108 = _rd0('code/_entities.js').split('/*__ENT_BEGIN__*/')[1].split('/*__ENT_END__*/')[0].strip()
+
+# --- R64: the extra reports are asked for the CRAWL, by its id (Check Crawl / Save Task ID carry it; the pages answer does not)
+patch('Crawl Extra Requests', "const id = d.crawl_task_id;",
+      "let id = d.crawl_task_id;   // R64: the pages answer has no id — the crawl's id is on Check Crawl / Save Task ID\n"
+      "try { id = id || $('Check Crawl').first().json.crawl_task_id; } catch (e) {}\n"
+      "try { id = id || $('Save Task ID').first().json.crawl_task_id; } catch (e) {}")
+
+# --- R63: a redirect item is not a page
+patch('Build Site Issues', "const pages = $('Get Crawled Pages Answers').first().json.tasks?.[0]?.result?.[0]?.items || [];",
+      "const crawlItems = $('Get Crawled Pages Answers').first().json.tasks?.[0]?.result?.[0]?.items || [];\n"
+      "// R63 (2026-10-16): a redirect response (resource_type \"redirect\", HTTP 3xx) has no HTML and no meta: it is not a page. Counting it made 47 pages of 45, and every page\n"
+      "// rule (compression, canonical, Open Graph, Twitter card, outbound links, URL shape) then judged a response that has none of those things.\n"
+      "const isRedirectItem = (p) => !!p && (p.resource_type === 'redirect' || (Number(p.status_code) >= 300 && Number(p.status_code) < 400));\n"
+      "const pages = crawlItems.filter(p => !isRedirectItem(p));\n"
+      "const redirectItems = crawlItems.filter(isRedirectItem);\n"
+      "// R71: the crawler's \"deprecated\" list includes elements the HTML standard still defines (<u>, <s>, <small>, <b>, <i> ...); only the tags that really are obsolete count\n"
+      "const CONFORMING_TAGS = new Set(['u', 's', 'small', 'b', 'i', 'em', 'strong', 'mark', 'cite', 'q', 'abbr', 'time', 'data', 'wbr', 'bdi', 'bdo', 'ruby', 'rt', 'rp', 'kbd', 'samp', 'var', 'sub', 'sup', 'dfn', 'del', 'ins', 'code', 'pre', 'span', 'div']);\n"
+      "const obsoleteTags = (p) => { const t = p && p.meta && p.meta.deprecated_tags; return Array.isArray(t) ? [...new Set(t.map(x => String(x).toLowerCase().replace(/[<>\\/]/g, '')))].filter(x => x && !CONFORMING_TAGS.has(x)) : null; };")
+patch('Build Site Issues', "for (const c of CATALOG) {\n  const affected = pages.filter(p => {\n    const v = p.checks ? p.checks[c.key] : undefined;\n    if (v === undefined || v === null) return false;\n    return c.invert ? v === false : v === true;\n  });",
+      "for (const c of CATALOG) {\n  const pool = (c.key === 'is_redirect' || c.key === 'has_links_to_redirects') ? redirectItems.concat(pages) : pages;   // R63: only the two redirect checks look at redirect items\n"
+      "  const affected = pool.filter(p => {\n    const v = p.checks ? p.checks[c.key] : undefined;\n    if (v === undefined || v === null) return false;\n"
+      "    if (c.key === 'deprecated_html_tags' && v === true) { const t = obsoleteTags(p); if (t && !t.length) return false; }   // R71\n"
+      "    return c.invert ? v === false : v === true;\n  });\n"
+      "  const redirOnly = (c.key === 'is_redirect' || c.key === 'has_links_to_redirects') && affected.length > 0 && affected.every(isRedirectItem);")
+patch('Build Site Issues', "      evidence: affected.length + ' of ' + total + ' crawled pages',\n      affected_count: affected.length,",
+      "      evidence: c.key === 'has_links_to_redirects' && redirOnly ? affected.length + ' internal URL(s) that redirect are linked from the site (the crawl does not say which page holds each link)'\n"
+      "        : redirOnly ? affected.length + ' of ' + (total + redirectItems.length) + ' crawled URLs redirect' : affected.length + ' of ' + total + ' crawled pages',\n"
+      "      affected_count: affected.length,")
+patch('Build Site Issues', "      sample_urls: affected.slice(0, 10).map(p => p.url),",
+      "      sample_urls: affected.slice(0, 10).map(p => { const ot = c.key === 'deprecated_html_tags' ? obsoleteTags(p) : null; return ot && ot.length ? p.url + ' — <' + ot.join('>, <') + '>' : p.url; }),")
+
+# --- R118: duplicate content names its pages (every page item carries duplicate_content); a count with no page named is Low and says so
+patch('Build Site Issues',
+      "addCount(cnt(pm.duplicate_content), 'Content', 'Medium', 'Pages with duplicate content', 'Near-identical pages compete with each other and dilute ranking signals.', 'Consolidate duplicates with a canonical tag or a 301 redirect, or make each page substantively different.', cnt(pm.duplicate_content) + ' pages with duplicate content');",
+      "const dupPages = pages.filter(p => p.duplicate_content === true);\n"
+      "if (dupPages.length) findings.push({ category: 'Content', severity: 'Medium', title: 'Pages with duplicate content', why: 'Near-identical pages compete with each other and dilute ranking signals.', fix: 'Consolidate duplicates with a canonical tag or a 301 redirect, or make each page substantively different. Check first that they really are the same page: a set of service pages built on one template can be flagged for its layout and not its words.',\n"
+      "  evidence: dupPages.length + ' of ' + total + ' crawled pages are flagged by the crawler as near-identical to another page of the site', affected_count: dupPages.length, affected_pct: Math.round(dupPages.length / total * 100), sample_urls: dupPages.slice(0, 10).map(p => p.url), scope: 'page' });   // R118\n"
+      "else addCount(cnt(pm.duplicate_content), 'Content', 'Low', 'Pages with duplicate content', 'Near-identical pages compete with each other and dilute ranking signals.', 'Consolidate duplicates with a canonical tag or a 301 redirect, or make each page substantively different.', cnt(pm.duplicate_content) + ' pages counted by the crawler as duplicate content; it did not name them, so the pages are not known');")
+
+# --- R72: a share of a sample is not a share of the site (the score takes the pages counted against the whole crawl)
+patch('Build Site Issues', "    const pct = f.affected_pct == null ? 100 : f.affected_pct;",
+      "    let pct = f.affected_pct == null ? 100 : f.affected_pct;\n"
+      "    if (f.affected_of && f.affected_count && f.scope !== 'site') pct = Math.min(pct, Math.round(f.affected_count / total * 100));   // R72: 1 of the 5 key pages read twice is at least 1 of the whole crawl, not 20% of it")
+# ... and the two reports print the denominator the percentage was taken on
+for _n108 in ('Build Audit Report', 'Build Full Report'):
+    patch(_n108, "`${f.affected_count} of ${a.pages_crawled} pages (${f.affected_pct}%)`",
+          "`${f.affected_count} of ${f.affected_of || a.pages_crawled} ${f.affected_of ? (f.affected_unit || 'items') : 'pages'} (${f.affected_pct}%)`")
+
+# --- R62 + R76: the text the content review reads
+patch('Build Content Prompt', "const strip = (s) => String(s || '')\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ').replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n  .replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\\s+/g, ' ').trim();",
+      "const entDecode = " + ENT_SRC108 + ";   // R62: named + decimal + hex entities, one pass (v5/code/_entities.js)\n"
+      "const strip = (s) => entDecode(String(s || '')\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ').replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n  .replace(/<[^>]+>/g, ' ')).replace(/\\s+/g, ' ').trim();\n"
+      "// R76: the alt text of the images (a partner badge, a client logo, a certification mark is usually an image) was thrown away with the tags, so the review said \"no badges\" over a badge\n"
+      "const altsOf = (html) => { const seen = new Set(); const out = []; for (const m of String(html || '').matchAll(/<img\\b[^>]*>/gi)) { const am = m[0].match(/\\balt\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)')/i); const t = am ? entDecode(am[1] ?? am[2] ?? '').replace(/\\s+/g, ' ').trim() : ''; if (t.length < 3 || t.length > 100) continue; const k = t.toLowerCase(); if (seen.has(k)) continue; seen.add(k); out.push(t); if (out.length >= 20) break; } return out; };")
+patch('Build Content Prompt', "  parts.push('=== ' + String(p.kind || 'page').toUpperCase() + ': ' + p.url + ' ===\\n' + text.slice(0, 2500));",
+      "  const alts = altsOf(f.html || f.body || f.data || '');\n"
+      "  parts.push('=== ' + String(p.kind || 'page').toUpperCase() + ': ' + p.url + ' ===\\n' + text.slice(0, 2500) + (alts.length ? '\\nImages on the page (alt text): ' + alts.map(t => '[image: ' + t + ']').join(' ') : ''));")
+patch('Build Content Prompt', ".replace(/!\\[[^\\]]*\\]\\([^)]*\\)/g, '')",
+      ".replace(/!\\[([^\\]]{3,100})\\]\\([^)]*\\)/g, ' [image: $1] ').replace(/!\\[[^\\]]*\\]\\([^)]*\\)/g, '')")
+patch('Analyze HTML', "const strip = (s) => String(s || '')\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ').replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n  .replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')\n  .replace(/&#x27;|&#39;/g, \"'\").replace(/&quot;/g, '\"').replace(/\\s+/g, ' ').trim();",
+      "const entDecode = " + ENT_SRC108 + ";   // R62: named + decimal + hex entities, one pass (v5/code/_entities.js)\n"
+      "const strip = (s) => entDecode(String(s || '')\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ').replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n  .replace(/<[^>]+>/g, ' ')).replace(/\\s+/g, ' ').trim();")
+
+log('Technical audit accuracy (2026-10-16, re-rating 2026-10-15 R62 R63 R64 R71 R72 R76 R118): a crawl redirect (resource_type "redirect" / 3xx) is no longer a page — the audit counts 45 pages, not 47, and only the two redirect checks read redirect items; the four extra crawl reports are requested with the crawl\'s id (Check Crawl / Save Task ID) instead of the pages answer\'s (none), so duplicate titles / descriptions, non-indexable pages and redirect chains can be reported at last; "Deprecated HTML tags" reads the crawler\'s tag list and names only tags the HTML standard made obsolete; a percentage taken on the 5 key pages read twice prints its own denominator ("1 of 5 key pages read twice") and is scored as a share of the whole crawl; "Pages with duplicate content" names the pages the crawler flagged on each page item (a count with no names is Low and says so); the content review decodes named, decimal and hex entities in one pass (the link kit and the two content nodes share one decoder) and sees the alt text of the images')
+
+# 109. WHO THE AUDIT'S RAW FETCH SAYS IT IS (2026-10-16, re-rating 2026-10-15 R119, investigated). Fetch Raw Pages and Fetch Not Crawled sent
+#      "Mozilla/5.0 (compatible; SEOAgentAudit/1.0; +https://www.google.com/bot.html)" — our own product token followed by the info URL of GOOGLE's crawler,
+#      the address the real Googlebot user agent carries. Findings: (1) on techand.ai the three user agents tried (that one, GPTBot's, a bare one) get the same
+#      200 / 219,172 bytes, so no figure the audit printed was wrong; (2) the claim is still false and risky — a request that names Google's bot page while
+#      not coming from Google's network is exactly what a WAF's "fake Googlebot" rule challenges (the reading would then be "not checked", never wrong), and a
+#      customer's logs show us as Google; (3) the diff is described as what "a crawler that does not render" receives, which is true of a plain request
+#      under any name but not of a site that answers named AI bots differently — that is the AI crawler access check's finding (robots.txt per bot, CDN
+#      block test), and the render diff's method now says so. So: the identity is honest, and nothing else changes.
+_UA109 = 'Mozilla/5.0 (compatible; SEOAgentAudit/1.0)'
+_ua_out109 = {}
+for _n109 in ('Fetch Raw Pages', 'Fetch Not Crawled'):
+    _hp109 = nodes[_n109]['parameters']['headerParameters']['parameters']
+    _u109 = [h for h in _hp109 if h['name'] == 'User-Agent']
+    assert len(_u109) == 1 and 'google.com/bot.html' in _u109[0]['value'], 'R119: ' + _n109 + ' no longer carries the expected User-Agent'
+    _u109[0]['value'] = _UA109
+    _ua_out109[_n109] = _UA109
+assert 'google.com/bot.html' not in json.dumps([nodes[n] for n in ('Fetch Raw Pages', 'Fetch Not Crawled')]), 'R119: Google\'s bot page is still named'
+# the wiring the harness checks (S141) and the proof that the R64 / R63 patches are in the generated nodes
+assert "$('Check Crawl')" in code('Crawl Extra Requests') and 'isRedirectItem' in code('Build Site Issues') and 'entDecode' in code('Build Content Prompt') and 'entDecode' in code('Analyze HTML'), 'A11: a patch of build section 108 is missing from the generated code'
+json.dump({'user_agents': _ua_out109, 'crawl_extra_requests_reads': ['Check Crawl', 'Save Task ID'], 'redirect_items_excluded_from_pages': True},
+          open(os.path.join(HERE0, 'harness', 'a11_wiring.json'), 'w'), indent=1, sort_keys=True)
+log('The audit\'s raw fetches (Fetch Raw Pages, Fetch Not Crawled) name themselves "SEOAgentAudit/1.0" and no longer carry the info address of Google\'s crawler (R119, investigated 2026-10-16: techand.ai answers the same 219,172 bytes to Google-style, GPTBot and bare agents, so no printed figure was wrong; the identity was false and a WAF may challenge it); the render diff\'s method states that a site answering named AI bots differently is the AI crawler access check\'s finding')
+
+
+
+# 112. THE TECHNICAL AUDIT, THE THIRD WAVE (2026-10-16, benchmark area 5: B5-4 hreflang, B5-6 response-vs-render across the crawl, B5-12 GA4 key
+#      events in the impact weight, and the R67 report half). Four changes, each with its own honesty rule:
+#      * B5-4  — `Render Diff` reads the hreflang set of every page whose first response it holds (<link rel="alternate" hreflang> and the Link
+#        header) and checks: valid codes, absolute addresses, a self-reference, one address per language, an x-default (Low), return links between
+#        the pages held. SILENT when no page declares any (`render_diff.hreflang` is null, no finding, no report block).
+#      * B5-6  — with a JavaScript crawl the crawl IS the rendered reading of every page: *Render Diff Targets* keeps the 5 pages that go to the
+#        render service and adds up to 20 more that are only fetched raw (*Raw Page Targets* emits them after the rendered ones) and paired with
+#        the crawl. Without JavaScript the crawl is the first response too, so nothing is paired and the report says why.
+#      * B5-12 — *GA4 Key Events Plan -> GA4 Key Events (Audit) -> GA4 Key Events* (between *Not Crawled Check* and *Build Site Issues*) read the key
+#        events per organic landing page (free) when the request carries the GA4 property id; `IMP.rank` adds them to the traffic term (a key
+#        event = ten clicks) and `priority_method` says which weight was used, and why GA4 was not when it was not.
+#      * R67   — both reports print "N AI-review findings are counted here and are not part of the score" under the severity table when
+#        `issue_counts` includes unscored findings (the stored audit row counts only what it stores).
+import retry_lint as _rl112
+_nc112 = pos('Not Crawled Check'); GX, GY = _nc112[0] + 220, _nc112[1]
+disconnect('Not Crawled Check', 'Build Site Issues')
+add_node('GA4 Key Events Plan', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/GA4_Audit_Plan.js')}, [GX, GY])
+if_node('Any GA4 Key Events?', '{{ !$json.skip }}', [GX + 220, GY])
+add_node('GA4 Key Events (Audit)', 'n8n-nodes-base.httpRequest', 4.5, {
+    'method': 'POST', 'url': '={{ $json.url }}', 'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'googleApi',
+    'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.body) }}',
+    'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 150}}, 'timeout': 60000, 'response': {'response': {'neverError': True}}}},
+    [GX + 440, GY - 160], dict(onError='continueRegularOutput', alwaysOutputData=True, credentials=GOOGLE14, **_rl112.RETRY))
+add_node('GA4 Key Events', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/GA4_Audit_Parse.js')}, [GX + 660, GY])
+for _a112, _b112 in [('Not Crawled Check', 'GA4 Key Events Plan'), ('GA4 Key Events Plan', 'Any GA4 Key Events?'),
+                     ('GA4 Key Events (Audit)', 'GA4 Key Events'), ('GA4 Key Events', 'Build Site Issues')]:
+    connect(_a112, _b112)
+connect('Any GA4 Key Events?', 'GA4 Key Events (Audit)', 0); connect('Any GA4 Key Events?', 'GA4 Key Events', 1)
+
+patch('Build Site Issues', "IMP.rank(findings, { total_pages: total, search_console: input.search_console || null,",
+      "IMP.rank(findings, { total_pages: total, search_console: input.search_console || null, ga4_key_events: input.ga4_key_events || null,")
+patch('Build Site Issues', "      priority_method: IMP.method,\n",
+      "      priority_method: IMP.method + ' ' + IMP.weightBasis({ search_console: input.search_console || null, ga4_key_events: input.ga4_key_events || null }).text,\n"
+      "      impact_weight: IMP.weightBasis({ search_console: input.search_console || null, ga4_key_events: input.ga4_key_events || null }),\n")
+
+HREFLANG_SECTION_JS = r"""// ---- B5-4 (2026-10-16): the language versions the site declares. Not printed at all when no page read declares any. ----
+const hreflangSection = (a) => {
+  const hl = a.render_diff && a.render_diff.hreflang; if (!hl) return '';
+  const e6 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const L = { invalid: 'Codes that are not valid', relative: 'Addresses that are not absolute', no_self: 'Pages that do not list themselves', no_return: 'Alternates that do not link back',
+    duplicate: 'One language, two addresses', no_default: 'Sets without an x-default' };
+  const rows = Object.keys(L).map(k => `<tr><td>${L[k]}</td><td>${Number((hl.problems || {})[k]) || 0}</td></tr>`).join('');
+  return `<h3>Language versions (hreflang)</h3><p>${hl.declared_on} of ${hl.pages_read} page(s) read declare hreflang.</p><table class="ct"><tr><th>Check</th><th>Pages</th></tr>${rows}</table><p class="small">${e6(hl.method)}</p>`;
+};
+// ---- R67 (2026-10-16): the severity table counts findings the score does not use; it says so ----
+const unscoredNote = (a) => {
+  const u = (a.findings || []).filter(f => f && f.scoring === false); if (!u.length) return '';
+  const k = u.filter(f => f.source === 'ai_review').length; const n = u.length;
+  const label = k === n ? 'AI-review finding' : 'unscored finding';
+  return `<p class="small">${n} ${label}${n === 1 ? ' is' : 's are'}${k && k < n ? ' (' + k + ' from the AI review)' : ''} counted here and ${n === 1 ? 'is' : 'are'} not part of the score.</p>`;
+};
+"""
+for _rn112 in ('Build Audit Report', 'Build Full Report'):
+    patch(_rn112, "// ---- the known URLs the crawl never reached (B5-5", HREFLANG_SECTION_JS + "// ---- the known URLs the crawl never reached (B5-5")
+    patch(_rn112, "html += uncrawlableSection(a);", "html += uncrawlableSection(a);\nhtml += hreflangSection(a);")
+    patch(_rn112, "${counts[s] || 0}</b></td>`).join('')}</tr></table>\n", "${counts[s] || 0}</b></td>`).join('')}</tr></table>\n${unscoredNote(a)}\n")
+    patch(_rn112, "on any of the ${rdf.pages_checked} key page(s) checked:", "on any of the ${rdf.pages_checked} ${rdf.paired_with_crawl ? '' : 'key '}page(s) checked:")
+    patch(_rn112, "${rdf.rendered_source === 'crawl_js' ? '; the rendered reading came from the JavaScript crawl' : ''}.",
+          "${rdf.rendered_source === 'crawl_js' ? '; the rendered reading came from the JavaScript crawl' : ''}${rdf.paired_with_crawl ? '; ' + rdf.paired_with_crawl + ' of them were paired with the JavaScript crawl instead of being rendered again' : (rdf.crawl_js === false && rdf.paired_note ? '; ' + e3(rdf.paired_note) : '')}.")
+
+assert 'GA4 Key Events Plan' in nodes and 'ga4_key_events' in code('Build Site Issues') and 'IMP.weightBasis' in code('Build Site Issues'), 'B5-12: the GA4 key events are not wired into the impact weight'
+assert 'KE_W' in code('Build Site Issues') and 'raw_extra' in code('Render Diff Targets') and 'raw_extra' in code('Raw Page Targets') and 'hreflangOf' in code('Render Diff'), 'B5-4 / B5-6: the pairing or the hreflang check is missing'
+assert 'unscoredNote(a)' in code('Build Audit Report') and 'unscoredNote(a)' in code('Build Full Report') and 'hreflangSection(a)' in code('Build Audit Report'), 'R67 / B5-4: the report halves are missing'
+assert not _rl112.weak(nodes['GA4 Key Events (Audit)']), 'GA4 Key Events (Audit): the G1 retry rule is missing'
+log('The technical audit, third wave (2026-10-16, benchmark area 5, B5-4 / B5-6 / B5-12 + R67): Render Diff reads the hreflang set of every page it holds (valid codes, absolute addresses, self-reference, one address per language, x-default, return links) and is silent when the site declares none; with a JavaScript crawl up to 25 pages (not 5) are compared, the 5 key pages rendered and up to 20 more fetched raw and paired with the crawl itself, free, and without JavaScript nothing is paired and the report says why; GA4 key events per organic landing page (free, when the request carries the GA4 property id) join the impact weight (one key event = ten clicks) and the fix list says which weight it used and why GA4 was not when it was not; both reports say how many unscored findings the severity table counts and that they are not part of the score')
+
+
+
+# 113. THE PRE-RELEASE CHECK A BUILD CAN USE (2026-10-16, benchmark area 5, B5-7). `SEOagentPreRel1` (built by build_api.py from
+#      v5/code/Prerelease_Validate.js / Prerelease_Verdict.js) takes `fail_on` (only failures of that severity or above fail; the rest are returned
+#      as `below_threshold`) and `expected` (the changes a release makes on purpose; returned as `expected_changes`, and an entry that matched
+#      nothing as `expected_unused`), and docs/PRERELEASE_CI.md holds the CI recipe. Nothing is hidden: an accepted or below-threshold failure is
+#      still in the response. The workflow itself is unchanged in shape (it still writes nothing), so this section only proves the sources.
+_pv113 = rd('code/Prerelease_Validate.js'); _pd113 = rd('code/Prerelease_Verdict.js')
+assert 'fail_on' in _pv113 and 'expected' in _pv113 and 'fail_on' in _pd113 and 'expected_unused' in _pd113 and 'below_threshold' in _pd113, 'B5-7: the pre-release check lost fail_on / expected'
+assert os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'docs', 'PRERELEASE_CI.md')), 'B5-7: docs/PRERELEASE_CI.md (the CI recipe) is missing'
+log('A pre-release check a build can use (2026-10-16, benchmark area 5, B5-7): POST /webhook/seo-prerelease takes fail_on (any | low | medium | high | critical: only failures of that severity or above fail, the rest come back as below_threshold) and expected (the changes the release makes on purpose, "/path" or "/path:check" or {path, check, reason}, returned as expected_changes; an entry that matched nothing as expected_unused), nothing accepted is hidden, and docs/PRERELEASE_CI.md holds a GitHub Actions job and a one-line shell recipe')
+# 116. TWO OF YOUR PAGES ON ONE RESULTS PAGE, AND WHO TOOK THE PLACE (2026-10-16, agent W3-C, benchmark area 6 —
+#      docs/system-review-2026-10-14/BENCH_AREA6_rank_tracking.md; register rows B6-6 and B6-10)
+#
+#      * B6-6 — **the stored reading could not have shown cannibalisation.** The row says "two of the site's own URLs in one stored
+#        snapshot is cannibalisation, observed, and we already store the snapshot". The snapshot was built from `RS.landscape().top`,
+#        which keeps ONE row per domain (the best position it holds), so a second page of the site was thrown away before it was
+#        stored (exec 632: one of its stored readings has nine of ten positions — a domain holding two places lost one). The landscape
+#        now lists every result of ours over the whole depth bought, the snapshot keeps the count (`own_n`) and, when there are two or
+#        more, the URLs (`own`, at most three, trimmed to two before the top ten loses its tail). `RS.cannibal` names both pages with
+#        their positions and the one Google prefers today (the higher in this reading), says when the previous reading ranked the other
+#        page, and is silent when only one page of the site is on the results page. A reading stored before the count existed is
+#        "not checked", never "no cannibalisation".
+#      * B6-10 — **the report said the number fell and not who took the place**, although both stored snapshots name everybody above
+#        us. `RS.outranked` names the domains above the target URL now that were not above it in the previous reading (new on page 1,
+#        or below us then), with both positions; it refuses with the reason when either reading cannot be read, when the page was not
+#        ranking before, or when the page was below the depth the previous reading kept.
+#
+# 117. A MOVE IS THE SITE'S OWN ONLY WHEN IT BEATS THE PAGE'S CHURN, AND ONE SHARE OF VOICE WEIGHTED BY WHAT THE SITE IS SHOWN FOR
+#      (2026-10-16, agent W3-C; rows B6-8 and B6-14)
+#
+#      * B6-8 — **a move of five places was "a drop" whatever the results page did** (the v4.2 rule; B6-2 put the measurement beside it
+#        and left the label). And the B6-2 measurement itself counted OUR move as the page's churn: a fall from #3 to #8 inside the top
+#        ten shifts five other results one place each, so "6 of the top 10 places changed" ("high") came out for every such fall — the
+#        page's own fall could never be called its own. `RS.churn(..., { own })` now also re-ranks the other results among themselves in
+#        both readings (`changed_others`, `band_others`, `mean_move_others`), and `RS.moveKind` calls a move the page's own only when the
+#        others held (fewer than half changed place) and the move is more than twice their average move and more than two places;
+#        "moved with the results page" when it is not; "within what two readings of one moment differ by" (R88's noise); and "not
+#        compared", with no verdict, when the earlier reading cannot be compared. The mail's "Drops to look at" and the subject's count
+#        hold the page's own falls only; the callback's `drops` / `gains` keep every five-place move with its clause (the app reads them),
+#        and the classified `moves` / `move_summary` travel beside them. A stated rule, and it says so.
+#      * B6-14 — **share of voice across keywords was an unweighted mean**, so 40% of a search nobody makes counted as much as 4% of the
+#        head term. *Load Query History (Tracker)* reads `seo_query_history` (newest 5,000 rows by period) and `RS.weightedVoice` weights
+#        each keyword's share by the site's own Search Console impressions in the newest stored 28-day period — first-party and free,
+#        the owner's default weight. It says which weight was used, over how many keywords and impressions, keeps the unweighted figure
+#        beside it, and falls back to the unweighted mean, labelled, when no Search Console data is stored or fewer than two keywords had
+#        impressions. Impressions count only searches where Google showed the site; the note says that a keyword it does not appear for
+#        yet weighs nothing.
+# =============================================================================
+def _b116_checks():
+    """Benchmark area 6, rows B6-6 / B6-8 / B6-10 / B6-14, on the generated Rank Tracker."""
+    import json as _j
+    _wf = _j.load(open(os.path.join(HERE0, 'workflows', 'SEO_Agent_Rank_Tracker.json')))[0]
+    _nodes = {n['name']: n for n in _wf['nodes']}
+    _code = {k: n['parameters'].get('jsCode', '') for k, n in _nodes.items() if n['type'] == 'n8n-nodes-base.code'}
+    for _n in ('Parse Positions', 'Tracker Report'):
+        for _a, _m in (('const own = organic.filter(o => isOurs(o.domain, our))', 'B6-6: the landscape keeps one URL per site, so a second page of ours is never stored'),
+                       ('own_n: land.own.length', 'B6-6: the stored reading does not say how many of our pages it held'),
+                       ('const cannibal = (cur, o) =>', 'B6-6: the cannibalisation reading is missing'),
+                       ('const outranked = (prev, cur, o) =>', 'B6-10: the "who took the place" reading is missing'),
+                       ('band_others:', 'B6-8: the page\'s churn still counts our own move'),
+                       ('const moveKind = (delta, ch) =>', 'B6-8: a move is still called a drop whatever the page did'),
+                       ('const weightedVoice = (items, rows, o) =>', 'B6-14: the share of voice across keywords is still unweighted')):
+            assert _a in _code[_n], _n + ': ' + _m
+    _r = _code['Tracker Report']
+    for _a, _m in (("RS.churn(r.prev_row ? r.prev_row.snapshot_json : null, r.result.snapshot_json, { own: ladDomain })", 'B6-8: the ladder report measures the page with our own move in it'),
+                   ("RS.churn(prev ? prev.snapshot_json : null, sd.row.snapshot_json, { own: dom })", 'B6-8: the tracked-keyword report measures the page with our own move in it'),
+                   ("const ownDrops = movesOf('own', 'drop')", 'B6-8: the mail\'s drops are not the page\'s own'),
+                   ("(ownDrops.length ? ' · ' + ownDrops.length + ' drop(s)' : '')", 'B6-8: the subject still counts every five-place move as a drop'),
+                   ("could not be compared with the results page around them", 'B6-8: a move with no comparable reading is not listed with no verdict'),
+                   ("RS.cannibal(r.result.snapshot_json", 'B6-6: the ladder report does not read cannibalisation'),
+                   ("RS.outranked(r.prev_row ? r.prev_row.snapshot_json : null, r.result.snapshot_json", 'B6-10: the ladder report does not name who took the place'),
+                   ("$('Load Query History (Tracker)')", 'B6-14: the report never reads the Search Console impressions'),
+                   ("share_of_voice: voiceW.value", 'B6-14: the ladder summary share of voice is not the weighted figure'),
+                   ("share_of_voice: voiceWW.value", 'B6-14: the tracked-keyword share of voice is not the weighted figure'),
+                   ("share_of_voice_weight: voiceW.weight", 'B6-14: the summary does not say which weight was used')):
+        assert _a in _r, _m
+    _ld = _nodes.get('Load Query History (Tracker)')
+    assert _ld and _ld['parameters'].get('dataTableId', {}).get('value') == QUERY_TABLE and _ld['parameters'].get('limit') == 5000 \
+        and _ld['parameters'].get('orderByColumn') == 'period_end', 'B6-14: the Rank Tracker does not load seo_query_history, newest first and bounded'
+    _down = {}
+    for _s, _o in (_wf.get('connections') or {}).items():
+        for _l in (_o.get('main') or []):
+            for _t in (_l or []):
+                _down.setdefault(_s, []).append(_t['node'])
+    for _a, _b in (('Load Sites (Tracker)', 'Ensure Query Table (Tracker)'), ('Ensure Query Table (Tracker)', 'Load Query History (Tracker)'),
+                   ('Load Query History (Tracker)', 'Ensure Monitors Table (Tracker)')):
+        assert _b in (_down.get(_a) or []), 'B6-14: %s does not feed %s in the Rank Tracker' % (_a, _b)
+    assert _nodes['Ensure Monitors Table (Tracker)'].get('executeOnce') is True, 'B6-14: the node after 5,000 query rows would run once per row'
+    _post = _nodes['POST Progress']['parameters']['jsonBody']
+    for _f in ('moves: $json.moves', 'move_summary: $json.move_summary', 'own_drops: $json.own_drops'):
+        assert _f in _post, 'B6-8: the callback does not carry ' + _f
+    log('Rank Tracker (B6-6 / B6-8 / B6-10 / B6-14): two of the site\'s own pages on one results page are named with the one Google prefers today, a move is the page\'s own only when it beats the other results\' churn (our own move left out of the yardstick), the domains that moved above the target URL are named, and the share of voice across keywords is weighted by the site\'s Search Console impressions or labelled unweighted')
+
+# 114. A REFRESH RE-CHECKS ITS FACTS; READABILITY AND ANSWER-FIRST ARE MEASURED FOR EVERY PAGE (2026-10-16, FIX_PLAN.md §3.16 rows
+#      B3-4, B3-6, B3-8; docs/system-review-2026-10-14/BENCH_AREA3_content.md and BENCH_AREA4_cadence.md).
+#      B3-8: a page rewritten on top of its live version (the cadence's decay refresh, an AI refresh, any `existing_page_url` run) kept
+#            every figure it carried with its old citation unchecked — Content QA §9b looks a figure up only in a source the run READ,
+#            and no run ever read the sources the live page cites. *Refresh Source Plan* now picks the live page's external links that
+#            sit next to a figure (from the Jina answer *Read Client Pages* already holds, links intact), *Fetch Refresh Sources* re-reads
+#            them (Jina Reader, the competitor pages' reader and retry rule), *Refresh Sources* hands them on, and Content QA checks the
+#            draft against them (§2b) and the live page itself against them (§9c, report only). Not a refresh: one skip item, the IF
+#            routes around the fetch, nothing is fetched and nothing costs anything.
+#      B3-4: the readability band is read off the competitor pages the run holds (v5/code/_coverage.js CVG.readBand), measured as the
+#            draft is, reported with its basis; advice only — it moves the 15 points and never adds a warning. Fallback: the fixed band.
+#      B3-6: the answer position and the question headings are measured on every draft, not only on an AI-answer target.
+# =============================================================================
+_cqp114 = pos('Content QA')
+add_node('Refresh Source Plan', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Refresh_Source_Plan.js')}, [_cqp114[0] - 660, _cqp114[1] + 360])
+if_node('Refresh Sources?', '{{ !!$json.url && !$json.skip }}', [_cqp114[0] - 440, _cqp114[1] + 360])
+_frs114 = copy.deepcopy(nodes['Read Competitor Pages']); _frs114['name'] = 'Fetch Refresh Sources'; _frs114['id'] = nid('Fetch Refresh Sources')
+_frs114['position'] = [_cqp114[0] - 220, _cqp114[1] + 280]
+_frs114['onError'] = 'continueRegularOutput'; _frs114['alwaysOutputData'] = True
+nodes['Fetch Refresh Sources'] = _frs114
+add_node('Refresh Sources', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Refresh_Sources.js')}, [_cqp114[0] - 20, _cqp114[1] + 360])
+disconnect('Parse Critique', 'Content QA')
+connect('Parse Critique', 'Refresh Source Plan'); connect('Refresh Source Plan', 'Refresh Sources?')
+connect('Refresh Sources?', 'Fetch Refresh Sources', 0); connect('Refresh Sources?', 'Refresh Sources', 1)
+connect('Fetch Refresh Sources', 'Refresh Sources'); connect('Refresh Sources', 'Content QA')
+for _k114 in ('retryOnFail', 'maxTries', 'waitBetweenTries'):
+    assert _frs114.get(_k114), 'B3-8: Fetch Refresh Sources lost the retry rule of the reader it copies (' + _k114 + ')'
+assert (_frs114.get('credentials') or {}).get('httpHeaderAuth', {}).get('id') == 'SEOcredJinaReade', 'B3-8: the source re-read has no Jina credential slot'
+assert 'const SRC = (() =>' in code('Refresh Source Plan') and "$('Read Client Pages').all()" in code('Refresh Source Plan'), 'B3-8: the plan does not read the live page with its links'
+assert "$('Parse Critique').first().json" in code('Refresh Sources'), 'B3-8: Refresh Sources must hand Content QA the critique item untouched'
+assert "$('Refresh Sources').first().json" in code('Content QA') and 'const citedFigureCheck = (text, limit)' in code('Content QA'), 'B3-8: Content QA does not check against the re-read sources'
+assert code('Content QA').count('const citedFigureCheck') == 1 and 'citedFigureCheck(String(RS.live_markdown), 20)' in code('Content QA'), 'B3-8: the live page is not checked by the same rule as the draft'
+assert not any(t['node'] == 'Content QA' for lst in conns.get('Parse Critique', {}).get('main', []) for t in lst), 'B3-8: Parse Critique still skips the re-read'
+_qa114 = code('Content QA')
+assert 'CVG.readBand(readPool)' in _qa114 and 'CVG.readability(bodyPlain)' in _qa114 and 'const readBand = (pages) =>' in _qa114, 'B3-4: the readability band is not read off the competitor pages'
+assert 'flesch < 30 && !RBAND.ok' in _qa114, 'B3-4: the competitor band must never add a warning (advice, not a refusal)'
+_atAt114 = _qa114.index('if (AT) {\n  const STOPW')
+assert _qa114.index('const before = h1At >= 0') < _atAt114 and _qa114.index('const qHeads = heads.filter') < _atAt114, 'B3-6: the answer position is still measured only for AI targets'
+assert 'intent, refresh_check,' in _qa114, 'B3-6 / B3-8: content_qa does not carry intent / refresh_check'
+json.dump({'chain': ['Parse Critique', 'Refresh Source Plan', 'Refresh Sources?', 'Fetch Refresh Sources', 'Refresh Sources', 'Content QA'],
+           'connections': {k: [[t['node'] for t in (l or [])] for l in conns[k]['main']] for k in ('Parse Critique', 'Refresh Source Plan', 'Refresh Sources?', 'Fetch Refresh Sources', 'Refresh Sources')},
+           'fetch': {'url': _frs114['parameters']['url'], 'retries': _frs114.get('maxTries'), 'on_error': _frs114.get('onError'), 'credential': _frs114['credentials']['httpHeaderAuth']['id']}},
+          open(os.path.join(HERE0, 'harness', 'w3b_wiring.json'), 'w'), indent=1, sort_keys=True)
+sticky("""## A refresh re-checks its facts (B3-8, 2026-10-16)
+A page rewritten on top of its live version (the cadence's **decay** refresh, an AI refresh, any `existing_page_url` run) used to keep every figure it carried with its old citation unchecked: the figure check looks a number up only in a source the run read, and nobody read the live page's own sources.
+*Refresh Source Plan* picks the live page's external links that sit **next to a figure** (max 8), *Fetch Refresh Sources* re-reads them with Jina, *Refresh Sources* passes them on. **Content QA** checks the draft against them (a missing figure becomes `[Confirm: …]`) and the **live page itself** (`content_qa.refresh_check`, report only). Not a refresh: nothing is fetched.""",
+       _cqp114[0] - 700, _cqp114[1] + 520, 760, 220, 4)
+log('A refresh re-checks its facts, and two content checks that used to be special cases are measured on every page (2026-10-16, benchmark rows B3-8 / B3-4 / B3-6): a run that improves a live page (the cadence\'s decay refresh, an AI refresh, any existing_page_url run) re-reads the sources that page cites next to a figure (Refresh Source Plan -> Fetch Refresh Sources -> Refresh Sources, Jina Reader, at most 8) and Content QA checks the draft against them and reports the live page\'s own figures its sources no longer state (content_qa.refresh_check, a "Before publishing" note); the readability band is read off the competitor pages the run read, measured the same way as the draft (CVG.readBand: median Flesch, 10 points harder to 15 easier, lower edge kept inside 20-60, at least 3 pages of 150+ words), reported with its basis and never a refusal, falling back to the fixed band and saying so; and the Quick answer position and the question headings are checked on every draft (120 words after the H1, 60 for an AI answer target)')
+
+# 115. WHAT THE OWNER READS ABOUT READABILITY (B3-4): the Word report prints the band and where it came from, and the lineage of the
+#      readability figure names its comparison.
+patch('Build Word File', "['Readability', qa.readability ? 'Flesch ' + qa.readability.flesch + ' · ' + qa.readability.avg_sentence_words + ' words per sentence · passive voice ' + qa.readability.passive_pct + '%' : 'N/A'],",
+      "['Readability', qa.readability ? 'Flesch ' + qa.readability.flesch + ' · ' + qa.readability.avg_sentence_words + ' words per sentence · passive voice ' + qa.readability.passive_pct + '%'"
+      " + (qa.readability.band_line ? ' · ' + esc(qa.readability.band_line) : (qa.readability.basis ? ' · ' + esc(qa.readability.basis) : ''))"
+      " + (qa.readability.note ? '<br><span class=\"small\">' + esc(qa.readability.note) + '</span>' : '') : 'N/A'],   // B3-4: the band and its basis")
+patch('Build Word File', "        note: 'counted in the finished draft itself' })",
+      "        note: 'counted in the finished draft itself' + ((qa.readability || {}).basis ? '; ' + qa.readability.basis : '') })   // B3-4: what it was compared with")
+log('The Word report prints the readability band the draft was scored against and its basis (the competitor pages read, or the fixed band when too few could be measured), and the readability lineage names that comparison (B3-4)')
+
+
+# 118. SITE TRACKING, THE THIRD WAVE (2026-10-17, agent W3-D, benchmark area 7: B7-4 Discover / Google News, B7-5 content groups, B7-8 the
+#      latest days from preliminary data, B3-12 the generative-AI report). GSC Requests asks for the `discover` and `googleNews` search types
+#      (one daily series each) and for `dataState: all` over the days after the final window; Parse GSC turns them into search_types /
+#      recent / content_groups; the report prints "no Discover data" as one sentence, the preliminary days apart from every tested figure, and
+#      says once that Search Console's generative-AI report has no API (the Search Analytics `type` / dimension lists name none).
+_gr118 = rd('code/GSC_Requests.js'); _pg118 = rd('code/Parse_GSC.js'); _sr118 = rd('code/Site_Report.js')
+assert "type: 'discover'" in _gr118 and "type: 'googleNews'" in _gr118 and "dataState: 'all'" in _gr118, 'B7-4 / B7-8: GSC Requests lost the Discover / News / preliminary requests'
+assert 'search_types' in _pg118 and 'content_groups' in _pg118 and 'still being collected and might change' in _pg118, 'B7-4/5/8: Parse GSC lost its blocks'
+assert 'generative-AI performance report' in _sr118 and 'Since the report window' in _sr118, 'B3-12 / B7-8: the report lost its lines'
+log('Site tracking, third wave (2026-10-17, B7-4 / B7-5 / B7-8 / B3-12): Discover and Google News are requested as their own search types and printed only where the property has them ("this property has no Discover data" otherwise); content groups (a regular expression per group, set through Site Admin content_groups, stored in seo_sites.content_groups_json) are tested on the same bar as every alert; the days after the final-data window are shown from preliminary data, labelled in Google\'s words and never mixed into a tested figure; the report says the generative-AI performance report has no API.')
+
+# 119. BRAND IN ONE PLACE, THE OWNER'S NOTES AS MARKS, AND A PAGE ON THE WRONG HOST (2026-10-17, agent W3-D: B7-6, B7-7, R92 part 2).
+_sm119 = rd('code/Site_Metrics.js'); _an119 = rd('code/_annotations.js'); _ga119 = rd('code/Parse_GA4.js')
+assert 'brand_series' in _sm119 and 'ai_referrals' in _ga119 and 'direct' in _ga119, 'B7-6: the brand series lost a line'
+assert "mark('note'" in _an119 and 'OWN_NOTES_LINE' in _an119, 'B7-7: the owner notes / annotation line are gone'
+assert 'other_host' in _sr118 and 'path = (u, row)' in _sr118, 'R92 part 2: Site Report path() lost the host rule'
+log('Brand series, notes and hosts (2026-10-17, B7-6 / B7-7 / R92): branded Search Console clicks, GA4 direct sessions and AI-assistant referral sessions are one series set in the weekly report, each with its own source and basis and never added together; the owner\'s dated check-in notes are chart marks and the report says once that Search Console\'s own annotations stay in Search Console; a page row on a non-canonical host prints its full URL.')
+# 122. AI GROWTH, THE THIRD WAVE (2026-10-17, agent W3-F, benchmark area 9: B9-7 a correction target per wrong claim, B9-8 the key pages fetched as the
+#      AI answer fetchers, B9-10 Bing's own AI citation report named). Build-time proof that the pieces are wired, not only present:
+#      * B9-7 - the Growth Plan reads `perception_json` and builds corrections with the fact ON FILE (a claim without one is "needs your fact" and is never
+#        drafted); Earned Media drafts only through the Link Builder's one outreach writer (the AI Outreach Writer's job list, or a hand-over prospect row
+#        when the Link Builder is on) and only for a page whose own text carries the claim; the writer's prompt knows the correction kind and may use only the
+#        fact on file; Growth Metrics prints the draft and never sends it.
+#      * B9-8 - a second fetch of every key page with the four AI answer fetchers' user agents, between the browser fetch and the earned-media step; a page that
+#        answers a browser and refuses the fetchers is a HIGH finding and has its score withheld.
+#      * B9-10 - the report names AI Performance and Topics Portfolio, and says no API returns them.
+# =============================================================================
+def _w3f122_checks():
+    gp, em, gm, gr, rdy = (_rd0('code/' + f) for f in ('Growth_Plan.js', 'Earned_Media.js', 'Growth_Metrics.js', 'Growth_Report.js', 'AI_Readiness.js'))
+    assert "parse(v.perception_json, null)" in gp and "perc.fact_check === 'checked'" in gp and 'fact_on_file' in gp and "status: onFile ? 'ready' : 'needs_fact'" in gp, 'B9-7: the Growth Plan does not build corrections from the checked perception'
+    assert 'needs your fact' in gp, 'B9-7: a claim with no fact on file must say "needs your fact"'
+    assert 'if (c.fact_on_file) {' in em and 'pg.carries_claim === true' in em and "kind: 'correction'" in em, 'B9-7: Earned Media drafts for a claim without its fact or for a page that does not say it'
+    assert "p.link_builder) { status = 'handed_over'" in em, 'B9-7: with the Link Builder on a correction must be handed over, not written a second time (one writer)'
+    assert "$('AI Outreach Writer')" not in em and 'jobs.push(draft_job)' in em, 'B9-7: Earned Media must feed the existing writer through its job list, not call another'
+    assert 'CORRECTION' in _rd0('prompts/ai_outreach.txt') and 'ONLY the fact written after' in _rd0('prompts/ai_outreach.txt'), 'B9-7: the writer prompt does not restrict a correction to the fact on file'
+    assert 'corrections' in gm and "j.kind !== 'correction'" in gm and "(never sent)" in gr, 'B9-7: the corrections do not reach the report as drafts that are never sent'
+    _gw = json.load(open(os.path.join(HERE0, 'workflows', 'SEO_Agent_AI_Growth.json'), encoding='utf-8'))[0]
+    _GROW122 = {n['name'] for n in _gw['nodes']}
+    _gc = _gw['connections']
+    assert 'Fetcher Requests (Growth)' in [x['node'] for l in _gc['Fetch Key Pages']['main'] for x in l], 'B9-8: the fetchers step does not follow the browser fetch'
+    for nm in ('Fetcher Requests (Growth)', 'Any Fetchers (Growth)?', 'Fetch As AI Bots (Growth)'):
+        assert nm in _GROW122, 'B9-8: AI Growth has no node "' + nm + '"'
+    for ua in ('OAI-SearchBot', 'ChatGPT-User', 'PerplexityBot', 'Claude-User'):
+        assert ua in _rd0('code/Growth_Fetcher_Requests.js'), 'B9-8: the key pages are not fetched as ' + ua
+    assert "fetchers_refused.length" in rdy and "level: 'high'" in rdy and 'score = null' in rdy, 'B9-8: a page that answers a browser and refuses the fetchers must be a high finding with no score'
+    assert 'AI Performance' in gr and 'Topics Portfolio' in gr and 'No API returns the AI Performance report' in gr, 'B9-10: the report does not name Bing\'s AI Performance report and Topics Portfolio'
+    log('AI Growth, third wave (2026-10-17, benchmark area 9: B9-7 / B9-8 / B9-10): a wrong claim AI makes about the business becomes a correction target - the claim, the true fact from the profile (a claim with no fact on file says "needs your fact" and nothing is drafted) and the cited pages that carry it, drafted by the one outreach writer (or handed to the Link Builder when it is on) only for a page whose own text says it, and never sent; every key page is fetched a second time as OAI-SearchBot, ChatGPT-User, PerplexityBot and Claude-User, and a page that answers a browser but refuses them is a high finding with its score withheld; the report names Bing Webmaster Tools\' AI Performance report and Topics Portfolio and says plainly that no API returns them')
+
+
+# 123. ONE ROBOTS.TXT MATCHER (2026-10-17, agent W3-F, B9-9). `AI_Access.js` (AI Visibility Tracker) and `Growth_Robots.js` (AI Growth) each carried their own
+#      parser, group selection and longest-rule match; both now inline `v5/code/_ai_access_kit.js` and the build fails if either defines a copy again.
+# =============================================================================
+def _w3f123_checks():
+    kit = _rd0('code/_ai_access_kit.js')
+    for tok in ('const parse = (txt)', 'const rulesFor = (groups, bot)', 'const matches = (pattern, path)', 'const allowed = (rules, path)'):
+        assert tok in kit, 'B9-9: the kit lost ' + tok
+    for f in ('AI_Access.js', 'Growth_Robots.js'):
+        code = _rd0('code/' + f)
+        assert '/*__AI_ACCESS_KIT__*/' in code, 'B9-9: ' + f + ' does not inline the one robots.txt kit'
+        for own in ('function parseRobots', 'const matches = ', 'const rulesFor = (groups, bot) => { const b'):
+            assert own not in code, 'B9-9: ' + f + ' carries its own copy of the robots.txt matcher again (' + own + ')'
+    assert 'AI_ACCESS_KIT' in _rd0('../build_monitors.py'), 'B9-9: build_monitors.py no longer inlines the kit'
+    for gen in ('AI_Access.js', 'Robots_Verdicts_Growth_.js'):
+        fp = os.path.join(HERE0, 'harness', 'code_v4', gen)
+        assert os.path.exists(fp), 'B9-9: the generated node ' + gen + ' is missing'
+        out = open(fp, encoding='utf-8').read()
+        assert out.count('const AK = (() => {') == 1 and '/*__AI_ACCESS_KIT__*/' not in out, 'B9-9: ' + gen + ' was generated without exactly one copy of the kit'
+    log('One robots.txt matcher (2026-10-17, B9-9): the parser, the most-specific-group choice and the longest-rule match live in v5/code/_ai_access_kit.js and are inlined into both the AI Visibility Tracker\'s AI Access node and AI Growth\'s Robots Verdicts node, so the two can no longer answer differently; the build fails if either carries its own copy again')
+
+
+# 126. SMALL LEFTOVERS OF THE DEFECT WAVES (2026-10-17, agent W3-F): `_page_watch.js` decodes entities with the shared expression of `_entities.js` (named, decimal
+#      AND hex, one pass) - the kit is inlined into it between the same markers and the build proves the two copies identical.
+# =============================================================================
+def _w3f126_checks():
+    ent = _rd0('code/_entities.js').split('/*__ENT_BEGIN__*/')[1].split('/*__ENT_END__*/')[0].strip()
+    pw = _rd0('code/_page_watch.js')
+    assert '/*__ENT_BEGIN__*/' in pw, '_page_watch.js: the shared entity decoder is not inlined'
+    assert pw.split('/*__ENT_BEGIN__*/')[1].split('/*__ENT_END__*/')[0].strip() == ent, '_page_watch.js: its entity decoder drifted from v5/code/_entities.js'
+    assert "replace(/&nbsp;|&#160;/gi, ' ').replace(/&amp;/gi, '&')" not in pw, '_page_watch.js: strip decodes only three entities again'
+    log('Page watch decodes every entity (2026-10-17): the title and H1 the daily key-page watch compares are read through the shared decoder (named, decimal and hex, one pass), so "&#x27;" is an apostrophe and not a change of title')
+
+
+# 127. THE REPLY READER HAS A LEDGER ROW (2026-10-17, agent W3-F). Its Haiku call was recorded nowhere. It reserves a seo_run_ledger row on the main path behind the
+#      request check (a bad request reserves nothing) and before the model call, counts the call with the free token counter, and settles beside the answer;
+#      the web app is waiting, so the concurrency gate never refuses it (`no_gate`), and it calls no DataForSEO, so its two balance probes are no-ops.
+# =============================================================================
+def _w3f127_checks():
+    wf = json.load(open(os.path.join(HERE0, 'workflows', 'SEO_Agent_Reply_Reader.json'), encoding='utf-8'))[0]
+    nodes = {n['name']: n for n in wf['nodes']}; conns = wf['connections']
+    for nm in ('Reserve Run Ledger (Reply)', 'Ledger Settle (Reply)', 'Settle Run Ledger (Reply)', 'After Run Ledger (Reply)', 'Count Prompt (Reply Reader)'):
+        assert nm in nodes, 'W3-F: the Reply Reader has no node "' + nm + '"'
+    assert not [n for n in wf['nodes'] if 'dataforseo.com' in str((n.get('parameters') or {}).get('url') or '')], 'W3-F: the Reply Reader must call no DataForSEO (the in-200 ratchet would grow)'
+    outs = lambda nd: [t['node'] for lst in ((conns.get(nd) or {}).get('main') or []) for t in (lst or [])]
+    seen, stack = set(), ['Reply Webhook']
+    while stack:
+        c = stack.pop()
+        if c in seen: continue
+        seen.add(c)
+        if c == 'Reply Reader': break
+        stack.extend(outs(c))
+    # the reservation is behind every path from the webhook to the model: walking main and refusing to pass the reserve must not reach the agent
+    seen2, stack2 = set(), ['Reply Webhook']
+    while stack2:
+        c = stack2.pop()
+        if c in seen2 or c == 'Reserve Run Ledger (Reply)': continue
+        seen2.add(c); stack2.extend(outs(c))
+    assert 'Reply Reader' not in seen2, 'W3-F: the Reply Reader can reach its model call without reserving its ledger row'
+    assert 'Reply OK?' in seen2 and 'Respond Reply Bad Request' in seen2, 'W3-F: a bad request must be answered without a reservation'
+    lw = json.load(open(os.path.join(HERE0, 'harness', 'ledger_wiring.json'), encoding='utf-8'))['monitors']
+    assert lw['SEO Agent — Reply Reader']['no_gate'] is True and lw['SEO Agent — Reply Reader']['mode'] == 'reply_read', 'W3-F: the Reply Reader wiring lost its mode / no_gate'
+    log('Reply Reader ledger (2026-10-17): the Haiku call that classifies a reply is recorded - a seo_run_ledger row is reserved on the main path behind the request check and before the model call, the call is counted with the free token counter and priced through the cost kit, and the row settles beside the answer; the web app is waiting, so the concurrency gate never refuses a reply, and the workflow calls no DataForSEO')
+
+
+# 120. AI VISIBILITY: EVERY ALERT FROM ITS OWN SAMPLE, AND ONE CORRECTION FOR ALL OF THEM (2026-10-17, wave 3, agent W3-E, benchmark area 8:
+#      B8-8 / B8-9 / B8-10 - docs/system-review-2026-10-14/BENCH_AREA8_ai_visibility.md). Three rules in the AI Visibility Tracker and the
+#      AI Pulse were verdicts with no test behind them, or tests with no correction between them:
+#      * B8-8 - "X no longer cites any of your pages" fired on `cited > 0` then `cited === 0` whatever that engine's own sample was (2
+#        citations in 6 Gemini answers, then none in 10). Every engine that cited the site is now judged by `changeOf` on its own answers
+#        (this run + the pulse mornings), and below MIN_ENGINE_SAMPLES on either side it is "too few answers from this engine to tell".
+#      * B8-9 - the tested alerts of one run share one sample and were each judged at 95%, so a quiet week raised a false one often. They
+#        are one family, Holm-adjusted (5% family-wise weekly, 1% on the pulse), and each alert states the threshold it cleared.
+#      * B8-10 - brand recognition was a 2-of-5 majority rule raised as an alert; it is a count with its denominator and a Wilson range.
+#      The kit (`holm`, `pTwo`, `zFor`, `engineChange`) lives in v5/code/_ai_stats.js, inlined into both workflows by build_monitors.py.
+_st120 = rd('code/_ai_stats.js'); _am120 = rd('code/AI_Metrics.js'); _pm120 = rd('code/Pulse_Metrics.js'); _ar120 = rd('code/AI_Report.js')
+for _d120 in ('const holm = (tests, alpha) =>', 'const pTwo = (z) =>', 'const zFor = (p) =>', 'const holmWords = (h, id) =>', 'const engineChange = (kNow, nNow, kBefore, nBefore, o) =>', 'const MIN_ENGINE_SAMPLES ='):
+    assert _d120 in _st120, 'B8-8 / B8-9: _ai_stats.js lost %r' % _d120
+assert "(v.cited || 0) > 0 && engines[e] && engines[e].answered && !engines[e].cited" not in _am120, 'B8-8: the untested "no longer cites" rule is back'
+assert 'engineChange(x.cited || 0, nN, Number(v.cited) || 0, nB)' in _am120, 'B8-8: the per-engine change is not tested on the engine\'s own sample'
+assert 'brand.known * 2 >= brand.answered' not in _am120 and 'Only \' + brand.known' not in _am120, 'B8-10: the brand-recognition majority rule / alert is back'
+assert 'brand.ci = brand.answered ? wilson(brand.known, brand.answered) : null;' in _am120, 'B8-10: brand recognition lost its Wilson range'
+assert 'const multiple_tests = holm(family, 0.05);' in _am120 and 'const multiple_tests = holm(pfam, 0.01);' in _pm120, 'B8-9: a workflow does not correct its tested alerts together'
+assert _am120.index('const multiple_tests = holm(family') < _am120.index('const alerts = [];'), 'B8-9: the weekly alerts are built before the correction they must read'
+assert _pm120.index('const multiple_tests = holm(pfam') < _pm120.index('const alerts = [];'), 'B8-9: the pulse alerts are built before the correction they must read'
+assert 'M.multiple_tests.note' in _ar120 and 'M.engine_changes' in _ar120 and 'M.brand.ci' in _ar120, 'B8-8 / B8-9 / B8-10: the AI visibility report does not print the new evidence'
+log('AI visibility, every alert from its own sample (2026-10-17, benchmark area 8, B8-8 / B8-9 / B8-10): "no longer cites your pages" is a two-proportion test on that engine\'s own answers and says "too few answers from this engine to tell" under %d on either side; the tested alerts of one run (the mention drop, each engine\'s citation drop, each competitor\'s share gain; on the pulse today\'s drop and a business suddenly named) are Holm-adjusted together at 5%% / 1%% family-wise and each states the threshold it cleared; brand recognition is a count with its denominator and a 95%% Wilson range, no majority verdict and no alert' % 12)
+
+
+# 124. A FINDING KEEPS ITS EVIDENCE (2026-10-17, agent W3-G, benchmark area 5 row B5-11 / area 12 G-5). The read API
+#      (`GET /api/v1/websites/:id/audits/:auditId`, app/API.md "Read API v1") answers "why is this finding here?" — but the stored
+#      seo_audit_findings row kept only the title and the count: the evidence line every finding carries (the kit refuses one with
+#      none, B-L lineage) and its example addresses lived only in the PDF. Two columns, written on every audit from now on; older
+#      rows answer `evidence: null` in the API, never "".
+assert ('evidence', 'string') in AUDIT_FINDINGS_COLS and ('sample_urls', 'string') in AUDIT_FINDINGS_COLS, 'B5-11: seo_audit_findings needs evidence + sample_urls (ladder_common.py) — run sync_tables.py after deploying'
+_fr124 = code('Finding Rows')
+assert _fr124.count("recheck_note: '' }));") == 1, 'B5-11: Finding Rows row shape moved'
+setcode('Finding Rows', _fr124.replace("recheck_note: '' }));",
+        "recheck_note: '',\n  evidence: String(f.evidence || '').slice(0, 500), sample_urls: JSON.stringify((Array.isArray(f.sample_urls) ? f.sample_urls : []).filter(u => typeof u === 'string' && /^https?:\\/\\//i.test(u)).slice(0, 5).map(u => u.slice(0, 300))) }));   // B5-11: the read API's evidence"))
+log('Findings keep their evidence (2026-10-17, B5-11): every stored audit finding row carries its evidence line and up to five example addresses, so the read API can show why a finding is there.')
+
+# 128. THE TECHNICAL AUDIT AND THE FULL REPORT TELL THE CUSTOMER WHAT WAS MEASURED (2026-10-17, defect-fix agent F-B, re-rating 2026-10-17
+#      part 2 — executor B, execs 739 / 767, docs/system-review-2026-10-17/parts/2_technical.md). Each change names its finding:
+#      * B-1 (High)  — Render Diff compares like with like (v5/code/Render_Diff.js): a crawl-paired page's counts come from DataForSEO's own
+#        counting and are read only where no counting difference can explain the gap; a first response that carries MORE never scores. Both
+#        reports list only the real differences and say in one line how many figures were not compared, and why.
+#      * B-2 (High)  — the brand: every brand form is listed, a form a search engine reads as another search ("tech&" reads "tech") is not
+#        searched and says why, and GSC Audit Findings judges the brand from Search Console's own brand queries. A results page alone never
+#        raises a High.
+#      * B-3 (High)  — the fit gate (v5/code/_fit_gate.js): a document service a public body provides to a person, a job search, a word too
+#        wide to be a category, and a common word lifted out of a longer service name are refused with their reason on every path that uses
+#        the gate (the full report's gap, easy wins, opportunities — and so the AI questions built from them).
+#      * B-4 (Medium) — a `site:` estimate is never a finding beside the URL Inspection of the same run; the report prints both.
+#      * B-6 (Medium) — the reason a blocker is ranked first names what that class of blocker does (v5/code/_impact.js).
+#      * B-7 (Medium) — "get listed on the directories ChatGPT cited" only names cited pages that are NOT the vendors it recommended.
+#      * B-17 (Medium) — one source per competitor figure: the benchmark table and the medians both use DataForSEO's domain totals; the intent
+#        table says it counts the first rankings read; the unscored-findings line reads as a sentence; the app's summary counts what the list holds.
+_aq128 = code('AI Queries')
+patch('AI Queries', """const queries = [
+  { query: brandName.toLowerCase(), type: 'brand' },
+  { query: 'site:' + base.domain, type: 'index' }
+];""", r"""// ---- B-2 (2026-10-17, re-rating 2026-10-17, exec 767, High): the brand was judged from ONE results page for "tech&" — a form a search
+// engine reads as "tech" — while Search Console in the same run had "techand" #4.5 and "tech & ai" #2.7. Every brand form is listed (the
+// domain's label, the configured brand names, the business name); a form that a search engine reads as another search is not searched and
+// says why; at most two are searched. GSC Audit Findings then judges the brand from Search Console's own brand queries.
+const __sq128 = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const __bare128 = (x) => String(x || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
+const __names128 = [];
+try { const r = $('Load Site Row (Model)').first().json || {}; if (r.domain && __bare128(r.domain) === __bare128(base.domain)) __names128.push(...String(r.brand_names || '').split(/[,;\n]+/), r.business_name); } catch (e) {}
+try { const m = $('Restore Site Model').first().json.site_model || {}; if (!m.domain || __bare128(m.domain) === __bare128(base.domain)) __names128.push(...(Array.isArray(m.brand_names) ? m.brand_names : String(m.brand_names || '').split(/[,;\n]+/)), m.business_name); } catch (e) {}
+__names128.push(brandName);
+const brand_forms = [];
+const __addForm128 = (form, source) => {
+  const f = String(form || '').trim(); if (!f) return; const low = f.toLowerCase(); if (brand_forms.some(b => b.form === low)) return;
+  const letters = __sq128(f); let searched = true, why = '';
+  if (!/^[a-z0-9 .-]+$/i.test(f)) { searched = false; why = 'a search engine drops its symbols and reads it as "' + low.replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim() + '", another search'; }
+  else if (letters.length < 4) { searched = false; why = 'too short to name only this business'; }
+  else { const twin = brand_forms.find(b => b.searched && __sq128(b.form) === letters); if (twin) { searched = false; why = 'the same search as "' + twin.form + '"'; } }
+  brand_forms.push({ form: low, source, searched, why });
+};
+__addForm128(String(base.domain || '').split('.')[0], 'the domain name');
+for (const n of __names128) __addForm128(n, 'the business name');
+const __brandQs128 = brand_forms.filter(b => b.searched).slice(0, 2);
+for (const b of brand_forms.filter(b => b.searched).slice(2)) { b.searched = false; b.why = 'two brand searches are read per report'; }
+const queries = [
+  ...__brandQs128.map(b => ({ query: b.form, type: 'brand' })),
+  { query: 'site:' + base.domain, type: 'index' }
+];""")
+patch('AI Queries', "  .map(q => ({ json: { ...q, brand_name: brandName, category_query: category } }));",
+      "  .map(q => ({ json: { ...q, brand_name: brandName, category_query: category, brand_forms } }));")
+
+# ---- AI Visibility: the brand from every form asked (B-2), the site: estimate as an estimate (B-4), directories that are directories (B-7) ----
+patch('AI Visibility', """      'Get listed where AI answers draw their sources: the directories and review sites cited (' + (r.cited_sources.slice(0, 4).join(', ') || 'see report') + '), plus comparison and "best X" pages that name you.');""",
+      r"""      (() => {   // B-7 (2026-10-17): a cited page that belongs to a vendor the answer recommended is that vendor's own site, not a directory
+        const vend = new Set((r.domains_named || r.domains_mentioned).map(norm)); const lists = r.cited_sources.filter(s => !vend.has(norm(s)) && ![...vend].some(v => matches(s, v)) && !matches(s, ours));
+        return lists.length
+          ? 'Get listed where ' + platform + ' draws its sources: the lists and directories it cited that are not vendors themselves (' + lists.slice(0, 4).join(', ') + '), plus comparison and "best X" pages that name you.'
+          : platform + ' cited only the vendors\' own sites (' + (r.cited_sources.slice(0, 4).join(', ') || 'none named') + '), so there is no list to get onto from this answer: publish a page of your own that answers this question directly (what to look for, how providers compare, where you fit) so the next answer can cite it, and get named on the lists other AI answers cite.';
+      })());""")
+patch('AI Visibility', """const brandRow = rows.find(r => r.type === 'brand');
+if (brandRow) {
+  if (brandRow.your_position == null || brandRow.your_position > 3) {
+    F('High', 'Site does not rank at the top for its own brand name',
+      'Search "' + brandRow.query + '": your position ' + (brandRow.your_position || 'not in top 20'),
+      'If people cannot find you by name, every other channel (ads, referrals, AI) leaks visitors.',
+      'Use one consistent brand name everywhere, add Organization schema with alternateName, and build branded mentions.');
+  } else works.push('Ranks #' + brandRow.your_position + ' for its brand name');
+}""", r"""// B-2 (2026-10-17): every brand search asked, and every form not asked with its reason. A results page read once is one reading: the
+// finding is Medium and says so; GSC Audit Findings replaces it with Search Console's own brand queries where the run has them.
+const brandRows = rows.filter(r => r.type === 'brand');
+const brandForms = (qs[0] || {}).brand_forms || [];
+if (brandRows.length) {
+  const best = brandRows.map(r => r.your_position).filter(p => p != null).sort((x, y) => x - y)[0];
+  const asked = brandRows.map(r => '"' + r.query + '" ' + (r.your_position != null ? '#' + r.your_position : 'not in the top 20')).join('; ');
+  const notAsked = brandForms.filter(b => !b.searched).map(b => '"' + b.form + '" not searched (' + b.why + ')').join('; ');
+  if (best == null || best > 3) {
+    findings.push({ category: 'AI Search Readiness', severity: 'Medium', title: 'Site does not rank at the top for its own brand name',
+      evidence: 'Results pages read once in this run: ' + asked + (notAsked ? '; ' + notAsked : '') + '. One read of a results page is one reading; Search Console\'s own brand queries decide where the run has them.',
+      why: 'If people cannot find you by name, every other channel (ads, referrals, AI) leaks visitors.',
+      fix: 'Use one consistent brand name everywhere, add Organization schema with alternateName, and build branded mentions.',
+      sample_urls: [], affected_count: null, affected_pct: 100, scope: 'site', one_reading: true,
+      brand_check: { asked: brandRows.map(r => ({ query: r.query, position: r.your_position })), not_asked: brandForms.filter(b => !b.searched) } });
+  } else works.push('Ranks #' + best + ' for its own name (' + asked + ')');
+}""")
+patch('AI Visibility', """    findings.push({ category: 'Crawlability & Indexing', severity: 'High', title: 'Far fewer pages indexed than crawled', evidence: 'Google site: estimate ' + indexEstimate + ' vs ' + crawled + ' crawlable pages', why: 'Pages that are not indexed cannot rank. This is an estimate; confirm in Search Console.',""",
+      """    findings.push({ category: 'Crawlability & Indexing', severity: 'Medium', title: 'Far fewer pages indexed than crawled', evidence: 'Google site: estimate ' + indexEstimate + ' vs ' + crawled + ' URLs the crawl reached (a site: count is a rough estimate Google does not stand behind; URL Inspection, where this run has it, replaces it)', why: 'Pages that are not indexed cannot rank. This is an estimate; confirm in Search Console.', estimate_only: true,""")   # B-4: a site: count alone is never High
+patch('AI Visibility', "      index_estimate: indexEstimate,", "      index_estimate: indexEstimate,\n      brand_forms: brandForms,")
+# B-7: the vendors are the domains the answer NAMES in its text; its cited pages (annotations) are a separate list
+patch('AI Visibility', "    domains_mentioned: domainsInText.slice(0, 12),",
+      "    domains_mentioned: domainsInText.slice(0, 12),\n    domains_named: [...new Set((text.match(/\\b([a-z0-9-]+\\.)+[a-z]{2,}\\b/gi) || []).map(norm))].slice(0, 30),")
+# B-3: every refusal is kept with its reason (the stored list was cut at 100, so most of exec 767's refusals had no reason anywhere)
+patch('Analyze Keywords', "sort((x, y) => (y.volume || 0) - (x.volume || 0)).slice(0, 100),", "sort((x, y) => (y.volume || 0) - (x.volume || 0)).slice(0, 250),")
+
+# ---- GSC Audit Findings: the brand and the index from Google's own data (B-2 / B-4) ----
+patch('GSC Audit Findings', "    const bt90 = GQ.brandTest(plan.domain || base.domain, []);",
+      r"""    // B-2 (2026-10-17): the brand test knows every brand form on file (the configured brand names, the business name), not the domain label only
+    const __bn128 = (() => { const out = []; const bare = (x) => String(x || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, ''); const dom = bare(plan.domain || base.domain);
+      try { const r = $('Load Site Row (Model)').first().json || {}; if (r.domain && bare(r.domain) === dom) out.push(...String(r.brand_names || '').split(/[,;\n]+/), r.business_name); } catch (e) {}
+      try { const m = $('Restore Site Model').first().json.site_model || {}; if (!m.domain || bare(m.domain) === dom) out.push(...(Array.isArray(m.brand_names) ? m.brand_names : String(m.brand_names || '').split(/[,;\n]+/)), m.business_name); } catch (e) {}
+      for (const b of (((base.ai_visibility || {}).brand_forms) || [])) out.push(b.form);
+      return [...new Set(out.map(x => String(x || '').trim()).filter(Boolean))]; })();
+    const bt90 = GQ.brandTest(plan.domain || base.domain, __bn128);""")
+patch('GSC Audit Findings', "      by_intent_top30: byI, intent_examples: exI,",
+      "      by_intent_top30: byI, intent_examples: exI,\n"
+      "      brand_keys: bt90.keys, brand_queries: queryRows.filter(q => q.position > 0 && bt90.is(q.query)).sort((x, y) => (y.impressions - x.impressions) || (x.position - y.position)).slice(0, 10).map(q => ({ query: q.query, position: q.position, impressions: q.impressions, clicks: q.clicks })),")
+patch('GSC Audit Findings', "return [{ json: { ...base, ...(base.probe ? { probe: __probe90 } : {}), extra_findings: [...__ex90, ...findings], extra_works: [...(base.extra_works || []), ...works, ...__works90], search_console, site_structure } }];",
+      r"""// ---- B-2 / B-4 (2026-10-17, re-rating 2026-10-17, exec 767): the brand and the index, judged from Google's own data where this run has it ----
+// The brand finding came from one results page ("tech&") beside Search Console's "techand" #4.5 and "tech & ai" #2.7 in the same report, and
+// flipped between "fixed" and "new" from report to report; the index finding put a High on a site: estimate (8) while the URL Inspection of
+// all 45 key pages, in the same run, said 30 are indexed and explained the other 15. Measured data decides; a results page stays a reading.
+const __bq128 = (__rk90 && Array.isArray(__rk90.brand_queries)) ? __rk90.brand_queries.filter(q => (Number(q.impressions) || 0) > 0) : [];
+const __ic128 = search_console.index_coverage || null;
+const __works128 = []; let __avNote128 = null;
+const __ex128 = __ex90.map(f => {
+  if (!f) return f;
+  const t = String(f.title || '');
+  if (t === 'Site does not rank at the top for its own brand name' && __bq128.length) {
+    const main = __bq128[0]; const pos = Number(main.position) || 0;
+    const list = __bq128.slice(0, 4).map(q => '"' + q.query + '" #' + q.position + ' (' + __n90(q.impressions) + ' impressions, ' + __n90(q.clicks) + ' clicks)').join(', ');
+    if (pos > 0 && pos <= 3) { __works128.push('Google\'s own data (Search Console, ' + __per90 + '): the searches for your own name find you at the top — ' + list); return null; }
+    return { ...f, severity: pos > 10 ? 'High' : 'Medium', one_reading: false, reconciled: 'search_console',
+      evidence: 'Search Console (measured, ' + __per90 + '), the searches for your own name: ' + list + '. The results pages read in this run: ' + String(f.evidence || '').replace(/^Results pages read once in this run: /, '').replace(/ One read of a results page is one reading;.*$/, ''),
+      why: 'The search people use most for your name finds you at #' + main.position + ' on average' + (pos > 10 ? ', below the first page' : '') + ': people who already know you have to scroll past other results to reach you.' };
+  }
+  if (/^Far fewer pages indexed than crawled$|^Many more URLs indexed than the crawl found/.test(t) && __ic128 && Number(__ic128.checked) >= 10) {
+    __avNote128 = 'The site: estimate is not used: URL Inspection read ' + __ic128.checked + ' key pages in this run (' + __ic128.indexed + ' indexed, ' + __ic128.not_indexed + ' not, explained in Crawlability & Indexing).';
+    return null;
+  }
+  return f;
+}).filter(Boolean);
+const __av128 = base.ai_visibility ? { ai_visibility: { ...base.ai_visibility, brand_search_console: __bq128.slice(0, 5), ...(__avNote128 ? { index_estimate_note: __avNote128, index_inspection: { checked: __ic128.checked, indexed: __ic128.indexed, not_indexed: __ic128.not_indexed } } : {}) } } : {};
+return [{ json: { ...base, ...__av128, ...(base.probe ? { probe: __probe90 } : {}), extra_findings: [...__ex128, ...findings], extra_works: [...(base.extra_works || []), ...works, ...__works90, ...__works128], search_console, site_structure } }];""")
+
+# ---- Build Full Report: the AI section prints the inspection beside the estimate (B-4); one source per competitor figure (B-17) ----
+patch('Build Full Report', "  if (av.index_estimate != null) html += `<p><b>Google index estimate (site: search):</b> ${num(av.index_estimate)} URLs vs ${num(a.pages_crawled)} pages crawled. Confirm the exact figure in Search Console.</p>`;",
+      "  if (av.index_estimate != null) html += av.index_inspection   // B-4: the measured inspection, not the rough site: count, where the run has it\n"
+      "    ? `<p><b>Google index:</b> URL Inspection read ${num(av.index_inspection.checked)} key pages in this run: ${num(av.index_inspection.indexed)} indexed, ${num(av.index_inspection.not_indexed)} not (see Crawlability &amp; Indexing). The site: search estimate (${num(av.index_estimate)}) is a rough count and is not used.</p>`\n"
+      "    : `<p><b>Google index estimate (site: search):</b> ${num(av.index_estimate)} URLs vs ${num(a.pages_crawled)} pages analysed. A site: count is a rough estimate; confirm the exact figure in Search Console.</p>`;")
+patch('Build Full Report', "  return { domain: dom, is_you: c.is_you, keywords: k.total ?? c.organic_keywords, top10: k.top10 ?? c.top10,",
+      "  return { domain: dom, is_you: c.is_you, keywords: c.organic_keywords ?? k.total, top10: c.top10 ?? k.top10,   // B-17: DataForSEO's domain totals, the figures the medians use\n   ")
+patch('Build Full Report', """<p class="small">Competitors: ${esc(cb.source || '')}. Country: ${esc(d.country || '')}.</p>""",
+      """<p class="small">Competitors: ${esc(cb.source || '')}. Country: ${esc(d.country || '')}. Keywords and Top 10 are DataForSEO's totals for each domain (the same figures the Key Numbers' medians use).</p>""")
+patch('Build Full Report', "  html += `<h3>Current Rankings per Intent (top 30): You vs Competitors</h3><table class=\"ct\"><tr><th>Intent</th>` +",
+      "  html += `<h3>Current Rankings per Intent (top 30): You vs Competitors</h3><p class=\"small\">Counted on the rankings DataForSEO returned for each domain, highest search volume first (${esc(sk.domains.map(x => x.domain + ' ' + num(x.total)).join(', '))} read; up to 300 per domain), so a domain's row can add up to less than its total in section 3.</p><table class=\"ct\"><tr><th>Intent</th>` +")
+for _rn128 in ('Build Audit Report', 'Build Full Report'):
+    patch(_rn128, "  return `<p class=\"small\">${n} ${label}${n === 1 ? ' is' : 's are'}${k && k < n ? ' (' + k + ' from the AI review)' : ''} counted here and ${n === 1 ? 'is' : 'are'} not part of the score.</p>`;",
+          "  return `<p class=\"small\">${n} ${label}${n === 1 ? '' : 's'} counted in this table ${n === 1 ? 'is' : 'are'} not part of the score${k && k < n ? ' (' + k + ' of them from the AI review)' : ''}.</p>`;   // B-17: a sentence")
+    # B-1: the table lists the differences a crawler sees; the figures not compared (two counting methods) and the counts the first response
+    # holds MORE of are summed up in one line instead of 60 rows that read like problems
+    patch(_rn128, "      if (f.state === 'same' || f.state === 'absent') continue;",
+          "      if (f.state === 'same' || f.state === 'absent') continue;\n"
+          "      if (f.state === 'not_compared' || f.state === 'raw_more') { (f.state === 'raw_more' ? rawMore128 : notCmp128).push(p.path + ' ' + f.key); continue; }")
+    patch(_rn128, "  const rows = [];\n  for (const p of (rdf.pages || [])) {", "  const rows = []; const notCmp128 = [], rawMore128 = [];\n  for (const p of (rdf.pages || [])) {")
+    patch(_rn128, "  h += `<p class=\"small\">${e3(rdf.method)} ${rdf.pages_checked} page(s) read twice",
+          "  if (notCmp128.length || rawMore128.length) h += `<p class=\"small\">${notCmp128.length ? notCmp128.length + ' figure(s) on ' + new Set(notCmp128.map(x => x.split(' ')[0])).size + ' page(s) paired with the JavaScript crawl were not compared: the crawl counts links and words its own way and keeps its own robots rule, so those differences are of method, not of content. ' : ''}${rawMore128.length ? rawMore128.length + ' count(s) are higher in the first response than after JavaScript: nothing is hidden from a crawler there. ' : ''}</p>`;\n"
+          "  h += `<p class=\"small\">${e3(rdf.method)} ${rdf.pages_checked} page(s) read twice")
+
+# ---- the audit's measurements: the URLs the crawl reached are not "pages" (B-4, "Pages found by crawling 47" under "45 pages crawled") ----
+patch('Build Audit Report', "  ['Pages found by crawling', ms.crawled_urls != null ? ms.crawled_urls : a.pages_crawled],",
+      "  ['URLs the crawl reached', ms.crawled_urls != null ? (ms.crawled_urls + (Number(ms.crawled_urls) !== Number(a.pages_crawled) ? ' (' + a.pages_crawled + ' pages analysed; the others are redirects or not HTML)' : '')) : a.pages_crawled],")
+
+assert 'brand_forms' in code('AI Queries') and "type: 'brand'" in code('AI Queries'), 'B-2: AI Queries does not list the brand forms'
+assert 'brandRows' in code('AI Visibility') and "severity: 'Medium', title: 'Site does not rank at the top for its own brand name'" in code('AI Visibility'), 'B-2: the brand finding still rests on one High read'
+assert 'brand_queries' in code('GSC Audit Findings') and '__ex128' in code('GSC Audit Findings'), 'B-2 / B-4: Search Console does not judge the brand and the index'
+assert 'const vend = new Set' in code('AI Visibility'), 'B-7: the directory advice still names the vendors'
+assert 'keywords: c.organic_keywords ?? k.total' in code('Build Full Report'), 'B-17: the benchmark table and the medians read different sources'
+assert 'CRAWL_GAP' in code('Render Diff') and "'raw_more'" in code('Render Diff') and "'not_compared'" in code('Render Diff'), 'B-1: Render Diff still compares two rulers'
+assert 'blockerWhy' in code('Build Site Issues'), 'B-6: the blocker reason is still one sentence for every class'
+assert 'FIT_DOC_SERVICE' in FIT_GATE_SRC and 'FIT_JOBS' in FIT_GATE_SRC and 'FIT_COMMON' in FIT_GATE_SRC and 'FIT_WIDE' in FIT_GATE_SRC, 'B-3: the fit gate lacks the document-service / job / common-word / wide-word rules'
+log('The technical audit and the full report say what was measured (2026-10-17, defect-fix agent F-B, re-rating 2026-10-17 B-1 / B-2 / B-3 / B-4 / B-6 / B-7 / B-17): Render Diff compares like with like (a crawl-paired page\'s link and word counts are DataForSEO\'s own and are read only where no counting difference explains the gap; a first response that holds MORE never scores), the brand is judged from every brand form and Search Console\'s own brand queries (a results page alone is never High), the fit gate refuses document services a public body gives a person, job searches, words too wide to be a category and common words lifted out of a longer service name, a site: estimate is never a finding beside the URL Inspection of the same run, the first item\'s reason names what its class of blocker does, the directory advice names only cited pages that are not the recommended vendors, and the benchmark table and the medians read one source')
+# ---- B-5 + INVARIANTS rule 1 (like for like): a finding that left the list because OUR CHECK changed is not "fixed", and a JavaScript crawl
+#      is never compared with a crawl that did not run JavaScript. Exec 767 told the customer "5 fixed" (no compression, missing canonical,
+#      missing Open Graph, deprecated tags, a render difference) when only the engine had changed (R62 / R63 / R71 of 2026-10-16); seo_audits
+#      did not record whether a crawl ran JavaScript at all. Now: CHECK_CHANGES says when each check last changed what it reports, every
+#      audit stores its checks_version and crawl_js, every finding row its check_version, and the diff puts a finding whose check changed
+#      since the previous audit in `no_longer_reported` (gone) or `newly_checked` (appeared), never in fixed / new. The keys the engine did
+#      not count as fixed travel in seo_audits.not_fixed_json, so the app's own lists follow the same decision.
+patch('Audit Diff', "const gone = [...prevKeys.entries()].filter(([k]) => !curKeys.has(k)).map(([, f]) => ({ title: f.title, category: f.category, severity: f.severity, one_reading: oneReading(f) })).sort((x, y) => SEV[x.severity] - SEV[y.severity]);",
+      r"""// ---- B-5 (2026-10-17, re-rating 2026-10-17, exec 767): when each check last changed WHAT it reports. `since` is this build's checks
+// version (sortable); `at` is when that change reached the instance where it is known (rows written before checks_version existed are
+// judged by their audited_at: a change with no known time is taken as newer than every such row). Newest entries last.
+const CHECK_CHANGES = [
+  { re: /AI crawlers see a different version|only appears after JavaScript|written by JavaScript|changes after JavaScript|not in the first response|appear only after JavaScript/i, since: '2026-10-16.2', at: '2026-10-16T18:30:00Z', what: 'the response-versus-render check decodes HTML entities on both sides (R62)' },
+  { re: /no compression|missing canonical|open graph|twitter card/i, since: '2026-10-16.2', at: '2026-10-16T18:30:00Z', what: 'a redirect response is no longer read as a page (R63)' },
+  { re: /deprecated html/i, since: '2026-10-16.2', at: '2026-10-16T18:30:00Z', what: 'only tags browsers dropped count as deprecated (R71)' },
+  { re: /large share of important pages is not indexed|not indexed by google/i, since: '2026-10-16.1', at: '', what: 'a page Google shows under the other www / non-www address is no longer "not indexed" (R59)' },
+  { re: /AI crawlers see a different version|only appears after JavaScript|written by JavaScript|changes after JavaScript|not in the first response|appear only after JavaScript/i, since: '2026-10-17.1', at: '', what: 'the response-versus-render check no longer compares two counting methods (B-1)' },
+  { re: /own brand name/i, since: '2026-10-17.1', at: '', what: 'the brand is judged from every brand form and Search Console\'s own brand queries (B-2)' },
+  { re: /pages indexed than crawled|more urls indexed than the crawl found/i, since: '2026-10-17.1', at: '', what: 'a site: estimate is not a finding beside the URL Inspection of the same run (B-4)' },
+  { re: /keyword gap|low-difficulty keywords|close to page 1|AI Overviews/i, since: '2026-10-17.1', at: '', what: 'the keyword fit gate refuses document services, job searches and words lifted out of longer service names (B-3)' },
+  { re: /recommends other providers/i, since: '2026-10-17.1', at: '', what: 'the directory advice names only cited pages that are not the vendors themselves (B-7)' }
+];
+const CHECKS_VERSION = CHECK_CHANGES.map(e => e.since).sort().pop();
+const prevChecks128 = prev ? String(prev.checks_version || '') : '';
+const changedSince128 = (e) => prevChecks128 ? e.since > prevChecks128 : !(e.at && String(prev.audited_at || '') >= e.at);
+const checkChange = (f) => { if (!prev) return null; const hits = CHECK_CHANGES.filter(e => e.re.test(String(f.title || '')) && changedSince128(e)); return hits.length ? hits[hits.length - 1] : null; };
+const checkVersionOf = (f) => CHECK_CHANGES.filter(e => e.re.test(String(f.title || ''))).map(e => e.since).sort().pop() || '';
+// ---- rule 1, like for like: a crawl that ran JavaScript is not compared with one that did not (or with one that did not record it) ----
+// (C-5, F-C) Audit_Diff.js reads both audits' crawl method (curJs / prevJs / methodSame) and defines JS_DEP / jsDep; reused here:
+// a JavaScript-dependent finding is held out only when the two crawls differ or one is unknown
+const jsMismatch = !!prev && !methodSame;
+const jsDepB = (f) => jsMismatch && jsDep(f);
+const js_not_compared = not_compared_method;   // F-C's list: both sides' JavaScript-dependent findings, held out before the keys were built
+const gone = [...prevKeys.entries()].filter(([k]) => !curKeys.has(k)).filter(([, f]) => !jsDepB(f)).map(([k, f]) => { const cc = checkChange(f); return { key: k, title: f.title, category: f.category, severity: f.severity, one_reading: oneReading(f), check_changed: cc ? cc.since.slice(0, 10) + ': ' + cc.what : '' }; }).sort((x, y) => SEV[x.severity] - SEV[y.severity]);""")
+patch('Audit Diff', "const fixed = gone.filter(f => !f.one_reading).map(({ one_reading, ...f }) => f);",
+      "const fixed = gone.filter(f => !f.one_reading && !f.check_changed).map(({ one_reading, check_changed, key, ...f }) => f);\n"
+      "const no_longer_reported = gone.filter(f => !f.one_reading && f.check_changed).map(({ one_reading, check_changed, key, ...f }) => ({ ...f, why: 'our check changed (' + check_changed + '), so this is not counted as fixed: nothing on the site has to have changed' }));   // B-5")
+patch('Audit Diff', "const no_longer_seen = gone.filter(f => f.one_reading).map(({ one_reading, ...f }) => ({ ...f, why:",
+      "const no_longer_seen = gone.filter(f => f.one_reading).map(({ one_reading, check_changed, key, ...f }) => ({ ...f, why:")
+patch('Audit Diff', "const added = [...curKeys.entries()].filter(([k]) => prev && !prevKeys.has(k)).map(([, f]) => ({ title: f.title, category: f.category, severity: f.severity, ...(oneReading(f) ? { one_reading: true } : {}) })).sort((x, y) => SEV[x.severity] - SEV[y.severity]);",
+      "const added0 = [...curKeys.entries()].filter(([k]) => prev && !prevKeys.has(k)).filter(([, f]) => !jsDepB(f)).map(([, f]) => { const cc = checkChange(f); return { title: f.title, category: f.category, severity: f.severity, ...(oneReading(f) ? { one_reading: true } : {}), ...(cc ? { check_changed: cc.since.slice(0, 10) + ': ' + cc.what } : {}) }; }).sort((x, y) => SEV[x.severity] - SEV[y.severity]);\n"
+      "const added = added0.filter(f => !f.check_changed);\n"
+      "const newly_checked = added0.filter(f => f.check_changed).map(f => ({ ...f, why: 'found by a check that changed since the previous audit (' + f.check_changed + '): it may have been there before' }));   // B-5\n"
+      "// the keys the engine does NOT count as fixed, for the app's own lists (seo_audits.not_fixed_json)\n"
+      "const not_fixed = gone.filter(f => f.one_reading || f.check_changed).map(f => ({ key: f.key, why: f.check_changed ? 'check changed ' + f.check_changed : 'one outside reading' }))\n"
+      "  .concat(jsMismatch ? [...new Set(prevAll.filter(f => jsDepB(f)).map(f => f.finding_key).filter(Boolean))].map((k) => ({ key: k, why: 'not compared: the crawl ' + (prevJs == null ? 'of the previous audit did not record whether it ran JavaScript' : (curJs ? 'ran JavaScript this time and not before' : 'did not run JavaScript this time')) })) : []);")
+patch('Audit Diff', "const open = [...curKeys.entries()].filter(([k]) => prevKeys.has(k)).map(([k, f]) => {",
+      "const open = [...curKeys.entries()].filter(([k]) => prevKeys.has(k)).filter(([, f]) => !jsDepB(f)).map(([k, f]) => {")
+patch('Audit Diff', "  no_longer_seen,\n  summary: fixed.length + ' fixed · ' + added.length + ' new · ' + open.length + ' still open' + (no_longer_seen.length ? ' · ' + no_longer_seen.length + ' no longer seen' : '')",
+      "  no_longer_seen, no_longer_reported, newly_checked, js_not_compared, checks_version: CHECKS_VERSION, previous_checks_version: prevChecks128 || null, crawl_js: curJs === true, previous_crawl_js: prevJs,\n"
+      "  summary: fixed.length + ' fixed · ' + added.length + ' new · ' + open.length + ' still open' + (no_longer_seen.length ? ' · ' + no_longer_seen.length + ' no longer seen' : '')\n"
+      "    + (no_longer_reported.length ? ' · ' + no_longer_reported.length + ' no longer reported (our check changed)' : '') + (newly_checked.length ? ' · ' + newly_checked.length + ' found by a changed check' : '')")
+patch('Audit Diff', "    + (no_longer_seen.length ? '. ' + no_longer_seen.length + ' finding(s) rested on a single outside reading (a results page, an AI answer or a content review) that did not repeat, so they are not counted as fixed' : '')",
+      "    + (no_longer_seen.length ? '. ' + no_longer_seen.length + ' finding(s) rested on a single outside reading (a results page, an AI answer or a content review) that did not repeat, so they are not counted as fixed' : '')\n"
+      "    + (no_longer_reported.length ? '. ' + no_longer_reported.length + ' finding(s) are no longer reported because our check changed since the previous audit, not because the site did: they are not counted as fixed' : '')\n"
+      "    + (js_not_compared.length ? '. ' + js_not_compared.length + ' finding(s) that depend on JavaScript rendering are not compared: ' + (prevJs == null ? 'the previous audit did not record whether its crawl ran JavaScript' : 'this crawl ' + (curJs ? 'ran' : 'did not run') + ' JavaScript and the previous one ' + (prevJs ? 'did' : 'did not')) : '')")
+patch('Audit Diff', "return [{ json: { ...d, audit_id, audited_at, site_id, site_audit: { ...a, audit_id, audited_at, audit_diff, internal_links: internal_links.slice(0, 20) } } }];",
+      "return [{ json: { ...d, audit_id, audited_at, site_id, site_audit: { ...a, audit_id, audited_at, audit_diff, internal_links: internal_links.slice(0, 20),\n"
+      "  // B-5 + rule 1: what the stored rows need to be compared like for like next time\n"
+      "  findings: (a.findings || []).map(f => ({ ...f, check_version: checkVersionOf(f) })), checks_version: CHECKS_VERSION, crawl_js: curJs === true, not_fixed: prev ? not_fixed : [] } } }];")
+patch('Audit Row', "scheduled: !!d.scheduled, request_id: d.request_id || '' } }];",
+      "scheduled: !!d.scheduled, request_id: d.request_id || '',\n"
+      "  crawl_js: !!a.crawl_js, checks_version: String(a.checks_version || ''), not_fixed_json: JSON.stringify((a.not_fixed || []).slice(0, 60)).slice(0, 4000) } }];   // B-5 + rule 1")
+patch('Finding Rows', ".map(u => u.slice(0, 300))) }));", ".map(u => u.slice(0, 300))), check_version: String(f.check_version || '') }));")   # B-5: the column order of ladder_common.py
+assert ('crawl_js', 'boolean') in AUDITS_COLS and ('checks_version', 'string') in AUDITS_COLS and ('not_fixed_json', 'string') in AUDITS_COLS and ('check_version', 'string') in AUDIT_FINDINGS_COLS, \
+    'B-5: seo_audits needs crawl_js / checks_version / not_fixed_json and seo_audit_findings check_version (ladder_common.py) — run sync_tables.py after deploying'
+assert 'no_longer_reported' in code('Audit Diff') and 'jsMismatch' in code('Audit Diff') and 'not_fixed_json' in code('Audit Row'), 'B-5: the diff still calls a changed check "fixed"'
+
+# ---- the app's summary counts what the stored list holds (B-17) ----
+patch('Build Audit Response', "return { audit_id: r.audit_id, audit_diff: a.audit_diff || null,",
+      "return { audit_id: r.audit_id, issue_counts_stored: ((l) => ({ Critical: l.filter(f => f.severity === 'Critical').length, High: l.filter(f => f.severity === 'High').length, Medium: l.filter(f => f.severity === 'Medium').length, Low: l.filter(f => f.severity === 'Low').length, unscored: (a.findings || []).filter(f => f && f.scoring === false).length }))((a.findings || []).filter(f => f && f.scoring !== false && f.severity !== 'Info')), audit_diff: a.audit_diff || null,")
+log('A diff that knows what changed: the engine or the site (2026-10-17, F-B, re-rating 2026-10-17 B-5 + INVARIANTS rule 1): every audit stores its checks_version and whether its crawl ran JavaScript, every finding row the version of its check; a finding that left the list because our check changed since the previous audit is "no longer reported (our check changed)" and one that appeared through a changed check is "found by a changed check", never fixed / new; findings that depend on JavaScript rendering are not compared across a JavaScript and a plain crawl (or a crawl that did not record it); seo_audits.not_fixed_json carries the keys the engine did not count as fixed so the app\'s lists follow; and the callback carries the stored counts so the app\'s summary matches the list')
+
+# ---- B-14 (Low): "URLs are not SEO-friendly" lists only URLs with a reason we can name, and names it per URL (/cookies had none) ----
+patch('Build Site Issues', "for (const c of CATALOG) {\n",
+      "// B-14 (F-B, 2026-10-17, exec 739): the crawler's flag gave no reason and listed /cookies; a URL is listed only with a reason we can name\n"
+      "const urlWhy14 = (u) => { const m = String(u || '').match(/^https?:\\/\\/[^\\/]+([^#]*)$/); const pth = m ? m[1] : String(u || ''); const why = [];\n"
+      "  if (/\\?/.test(pth)) why.push('carries parameters'); if (/[A-Z]/.test(pth.replace(/\\?.*$/, ''))) why.push('has capital letters'); if (/_/.test(pth)) why.push('uses underscores');\n"
+      "  const joined = pth.replace(/\\?.*$/, '').split(/[\\/-]/).filter(sg => sg && sg.length >= 7 && (sg.match(/what|why|how|who|with|and|our|your|the|for|we|do/g) || []).length >= 2);\n"
+      "  if (joined.length) why.push('joins words without hyphens (\"' + joined[0] + '\")'); return why.join(', '); };\n"
+      "for (const c of CATALOG) {\n")
+patch('Build Site Issues', "    if (c.key === 'deprecated_html_tags' && v === true) { const t = obsoleteTags(p); if (t && !t.length) return false; }   // R71",
+      "    if (c.key === 'deprecated_html_tags' && v === true) { const t = obsoleteTags(p); if (t && !t.length) return false; }   // R71\n"
+      "    if (c.key === 'seo_friendly_url' && v === false && !urlWhy14(p.url)) return false;   // B-14")
+patch('Build Site Issues', "return ot && ot.length ? p.url + ' — <' + ot.join('>, <') + '>' : p.url; }),",
+      "return ot && ot.length ? p.url + ' — <' + ot.join('>, <') + '>' : (c.key === 'seo_friendly_url' ? p.url + ' — ' + urlWhy14(p.url) : p.url); }),")
+assert 'urlWhy14' in code('Build Site Issues'), 'B-14: the URL reasons are missing'
+log('Lows of the 2026-10-17 re-rating (F-B): the pre-release check fails a missing description when the caller asks fail_on low (B-13), a sentence that denies a guarantee is not a guarantee claim (B-11), the publish check says how many of its points it granted unmeasured (B-12), "URLs are not SEO-friendly" names its reason per URL and drops a URL it has none for (B-14), and the fix pack links no page the duplicate-content finding names and never cuts an anchor mid-word (B-15)')
+# >>> 130 (F-A3)
+# =============================================================================
+# 130. WHAT THE SITE ALREADY HOLDS, READ BEFORE ANY KEYWORD ADVICE (2026-10-17, re-rating 2026-10-17, fix agent F-A3: A-1 / A-5 / A-6 /
+#      A-23 / A-25; docs/system-review-2026-10-17/parts/1_keywords_content.md). One kit, `v5/code/_own_cover.js` (OWN), answers "does a
+#      page, a keyword ladder or an unpublished draft of this site already hold this search?" for every keyword path:
+#        * discovery (*Rank Keywords*): "erp system dubai" / "erp systems in uae" are the ladder "erp software uae"'s searches in other
+#          words (Covered), and a close variant or the same topic for another place keeps its tier with the ladder named (A-25);
+#        * the verdict / keyword report (*Own Coverage (Run)* after *Prepare Keyword Run*, *Parse Verdict*): the search itself, the
+#          secondary keywords, a "build a page" request, a section request and an amount already on the page (A-5 / A-6 / A-23);
+#        * the Keyword Check (build_api.py): the page inventory and the ladder's own status (A-1 / A-2).
+# =============================================================================
+OWN_COVER_SRC = _rd0('code/_own_cover.js').rstrip('\n')
+assert 'const OWN = (() => {' in OWN_COVER_SRC
+for _n130 in list(nodes):
+    _c130 = nodes[_n130]['parameters'].get('jsCode', '')
+    if '/*__OWN_COVER__*/' in _c130:
+        setcode(_n130, _c130.replace('/*__OWN_COVER__*/', OWN_COVER_SRC))
+assert not any('/*__OWN_COVER__*/' in n['parameters'].get('jsCode', '') for n in nodes.values()), 'own-cover kit placeholder left'
+# A-25: discovery reads its ladders through the fit gate and knows the same search in other words
+assert 'const OWN = (() => {' in code('Rank Keywords') and 'OWN.ladderOf(ownLadD, kw' in code('Rank Keywords') and 'ladder_near: ladderNear(k.keyword)' in code('Rank Keywords'), 'A-25: Rank Keywords lost the ladder note'
+assert ".filter(r => fitStored(r, { ...fitCtx" in code('Rank Keywords'), 'A-25: Rank Keywords reads stored rungs without the fit gate'
+assert 'pipeline.ladder_note' in code('Build Keyword Strategy'), 'A-25: "Where to start" does not print the ladder note'
+# A-5 / A-23: the keyword path (verdict, keyword report, ladder feasibility, page runs) loads the site's ladders, their settings and the
+# content log's drafts right after *Prepare Keyword Run*, and *Own Coverage (Run)* hands them on (gated) with the pages on the topic.
+from ladder_common import LADDER_SETTINGS_TABLE as _LST130, LOG_TABLE as _LOG130, LADDER_TABLE as _LT130, dt_get_where_params as _dgw130, dt_get_any_params as _dga130
+_DOM130 = "={{ String($('Prepare Keyword Run').first().json.domain || '').toLowerCase().replace(/^www\\./, '') }}"
+_SID130 = "={{ 'site_' + String($('Prepare Keyword Run').first().json.domain || '').toLowerCase().replace(/^www\\./, '').replace(/[^a-z0-9]+/g, '-') }}"
+_pk130 = pos('Prepare Keyword Run')
+assert [t['node'] for lst in conns['Prepare Keyword Run']['main'] for t in lst] == ['Has Domain?'], 'A-5: Prepare Keyword Run no longer feeds Has Domain? alone'
+add_node('Load Ladders (Run)', DT_TYPE, DT_VERSION, _dgw130(_LT130, 'domain', 'eq', _DOM130), [_pk130[0] + 60, _pk130[1] + 260], LOAD18)
+add_node('Load Ladder Settings (Run)', DT_TYPE, DT_VERSION, _dga130(_LST130, [('domain', _DOM130), ('site_id', _SID130)]), [_pk130[0] + 260, _pk130[1] + 260], LOAD18)
+add_node('Load Drafts (Run)', DT_TYPE, DT_VERSION, _dgw130(_LOG130, 'domain', 'eq', _DOM130), [_pk130[0] + 460, _pk130[1] + 260], LOAD18)
+add_node('Own Coverage (Run)', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Own_Coverage_Run.js').replace('/*__OWN_COVER__*/', OWN_COVER_SRC)}, [_pk130[0] + 660, _pk130[1] + 260])
+disconnect('Prepare Keyword Run', 'Has Domain?')
+for _a130, _b130 in [('Prepare Keyword Run', 'Load Ladders (Run)'), ('Load Ladders (Run)', 'Load Ladder Settings (Run)'), ('Load Ladder Settings (Run)', 'Load Drafts (Run)'),
+                     ('Load Drafts (Run)', 'Own Coverage (Run)'), ('Own Coverage (Run)', 'Has Domain?')]:
+    connect(_a130, _b130)
+assert 'const OWN = (() => {' in code('Own Coverage (Run)') and 'const SM = (() => {' in code('Own Coverage (Run)') and 'fitStored(r,' in code('Own Coverage (Run)'), 'A-5: Own Coverage (Run) is missing a kit or the gate'
+assert 'own_coverage_text' in nodes['Verdict Agent']['parameters']['text'], 'A-5: the verdict prompt does not read what the site already holds'
+# A-5 / A-6 / A-23: Parse Verdict checks the advice against it (secondary keywords, "build a page", sections, amounts already on the page)
+_pv130 = code('Parse Verdict')
+assert _pv130.count("    secondary_keywords: verdict.secondary_keywords || [],") == 1 and _pv130.count("\nreturn [{\n  json: {\n    ...prev,") == 1, 'A-5: Parse Verdict return moved'
+_pv130 = _pv130.replace("\nreturn [{\n  json: {\n    ...prev,", "\n" + _rd0('code/_verdict_own.js').rstrip('\n') + "\nreturn [{\n  json: {\n    ...prev,")
+_pv130 = _pv130.replace("    secondary_keywords: verdict.secondary_keywords || [],",
+    "    secondary_keywords: OWNV.secondary,\n    secondary_covered: OWNV.covered,   // A-5: the searches the site already holds elsewhere, kept off this page and named\n"
+    "    existing_related: OWNV.related, sections_covered: OWNV.sections, already_on_page: OWNV.already_on_page, keyword_covered: OWNV.keyword_covered, own_coverage_checked: OWNV.checked,")
+setcode('Parse Verdict', SITE_MODEL_SRC + '\n' + OWN_COVER_SRC + '\n' + _pv130)
+assert 'let verdict_changes' in code('Parse Verdict') and 'OWNV.secondary' in code('Parse Verdict'), 'A-5: Parse Verdict did not take the own-coverage check'
+log('What the site already holds, read before any keyword advice (2026-10-17, F-A3): v5/code/_own_cover.js (OWN) answers whether a page, a keyword ladder or an unpublished draft already holds a search - A-25: discovery marks "erp system dubai" / "erp systems in uae" as the ladder "erp software uae"\'s searches in other words (Covered) and keeps a close variant or the same topic for another place in the plan with the ladder named in "Where to start", "Build first" and the tier table; the ladder rows are read back through the fit gate. A-5 / A-6 / A-23: the keyword path loads the ladders, their settings and the content log right after Prepare Keyword Run (Load Ladders / Load Ladder Settings / Load Drafts (Run) -> Own Coverage (Run), gated), the Verdict Agent reads what the site already has on the topic, and Parse Verdict (v5/code/_verdict_own.js) says first when the search itself is a ladder\'s or a draft\'s, names the live pages on the topic before any "build a page", takes the secondary keywords another page / ladder / draft holds off the page and names them, answers a section a rung covers with that rung and its page, and moves an amount the page already states out of the request')
+# <<< 130 (F-A3)
+
+# 131. KEYWORD LADDER PLANNING (2026-10-17, defect-fix agent F-A1; re-rating 2026-10-17 part 1, execs 750 / 751 / 770 / 771: A-2, A-8, A-9,
+#      A-10, A-11, A-12, A-20, A-21). The plan is built by v5/code/Ladder_Plan.js and its inputs; what this section adds is the wiring and the
+#      assertions that the fixes are in the generated code:
+#      * A-9: KWI.serpClusters (v5/code/_kw_inputs.js) compares a keyword left alone with every MEMBER of a group, not only its head, so
+#        "own results page" is only printed when it is true by the pair rule; A-10: the main page's supporting keywords get their results
+#        page read within the same cap (Ladder Cluster Requests `supporting_check`) and are kept only when Google answers them with the main
+#        keyword's pages, else labelled "not compared"; A-8: one keyword, one page across rungs, the main page, the other ladders and the
+#        live pages; A-11: the rung keyword's results-page titles reach the relevance screen (fit_reason) and the kind of page Google ranks
+#        is printed beside a page type it contradicts; A-12: the website's own limits (v5/code/_waiting.js, shared with the Content Cadence)
+#        hold the pages a ladder run was asked to write now; A-21: the main page's run says it re-measured (v5/code/_remeasure.js).
+patch('Normalize Input', "   // R15: the URL the ladder planned for this page\n",
+      "   // R15: the URL the ladder planned for this page\n"
+      "    ladder_measure: (p2.ladder_measure && typeof p2.ladder_measure === 'object' && !Array.isArray(p2.ladder_measure)) ? { keyword: String(p2.ladder_measure.keyword || '').toLowerCase().trim().slice(0, 200),\n"
+      "      score: (p2.ladder_measure.score === null || p2.ladder_measure.score === '' || !Number.isFinite(Number(p2.ladder_measure.score))) ? null : Number(p2.ladder_measure.score),\n"
+      "      checked_at: String(p2.ladder_measure.checked_at || '').slice(0, 40), ai_overview: p2.ladder_measure.ai_overview === true,\n"
+      "      features: Array.isArray(p2.ladder_measure.features) ? p2.ladder_measure.features.slice(0, 12).map(x => String(x).slice(0, 40)) : [] } : null,   // A-21: what the ladder run measured for this keyword\n")
+_pv131 = code('Parse Verdict')
+_ret131 = "\nreturn [{\n  json: {\n    ...prev,\n    verdict: EV56.withheld"
+assert _pv131.count(_ret131) == 1, 'A-21: the Parse Verdict return moved'
+assert _pv131.count("    verdict_evidence: EV56.evidence,\n") == 1, 'A-21: verdict_evidence line moved'
+setcode('Parse Verdict', _pv131.replace(_ret131, "\n" + rd('code/_remeasure.js').rstrip('\n') + "\n" + _ret131)
+        .replace("    verdict_evidence: EV56.evidence,\n", "    verdict_evidence: EV56.evidence,\n    ladder_remeasure,   // A-21\n"))
+assert 'ladder_measure: measureOf(p)' in code('Spawn Page Runs') and 'ladder_remeasure' in code('Parse Verdict') and 'ladder_measure:' in code('Normalize Input'), 'A-21: the re-measure note is not wired'
+# A-9 / A-10 / A-11 / A-8 / A-12 in the generated nodes
+assert 'via: best.via' in code('Ladder Plan') or 'c.attach !== false' in code('Ladder Plan'), 'A-9: the ladder clusters compare only with the head'
+assert 'supporting_check: true' in code('Ladder Cluster Requests') and 'supportingEntries' in code('Ladder Clusters') and 'types_of' in code('Ladder Clusters'), 'A-10 / A-11: the supporting keywords or the page kinds are not read'
+assert 'const one_page = ' in code('Ladder Plan') and 'OWN.claim(kw, ownCtx(' in code('Ladder Plan') and 'const OWN = (() => {' in code('Ladder Plan'), 'A-8: one keyword, one page is not enforced (or not through the one own-coverage rule, OWN)'
+assert 'WAITING.waiting(' in code('Ladder Plan') and 'WAITING.focus(' in code('Ladder Plan') and 'const held = ' in code('Ladder Plan'), 'A-12: the ladder run does not apply the website limits'
+assert 'Google ranks: ' in code('Ladder Relevance Chunks') and 'fit_reason' in nodes['Ladder Keyword Relevance']['parameters']['text'], 'A-11: the relevance screen does not see what Google ranks'
+assert not any('/*__WAITING__*/' in n['parameters'].get('jsCode', '') for n in nodes.values()), 'waiting kit placeholder left'
+# A-20: the ladder row follows the content log the page run has just saved (written / not_ready), only from `writing`
+_sc131 = pos('Save Content Log (Run)')
+add_node('Ladder Row Written', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Ladder_Row_Written.js')}, [_sc131[0] + 220, _sc131[1]])
+if_node('Ladder Row To Follow?', "{{ !$json.skip }}", [_sc131[0] + 440, _sc131[1]])
+add_node('Mark Ladder Row Written', DT_TYPE, DT_VERSION, dt_update_params(LADDER_TABLE, LADDER_COLS,
+    [('ladder_id', '={{ $json.ladder_id }}'), ('keyword', '={{ $json.keyword }}'), ('status', '={{ $json.from_status }}')], {'status': '={{ $json.status }}', 'status_note': '={{ $json.status_note }}'}),
+    [_sc131[0] + 660, _sc131[1]], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+connect('Save Content Log (Run)', 'Ladder Row Written'); connect('Ladder Row Written', 'Ladder Row To Follow?'); connect('Ladder Row To Follow?', 'Mark Ladder Row Written', 0)
+_mlr131 = nodes['Mark Ladder Row Written']['parameters']
+assert [c['keyName'] for c in _mlr131['filters']['conditions']] == ['ladder_id', 'keyword', 'status'], 'A-20: the ladder row update must match ladder_id + keyword + status writing'
+_lw131p = os.path.join(HERE0, 'harness', 'ledger_wiring.json')
+_lw131 = json.load(open(_lw131p)) if os.path.exists(_lw131p) else {}
+_lw131['ladder_written'] = {'from': 'Save Content Log (Run)', 'code': 'Ladder Row Written', 'gate': 'Ladder Row To Follow?', 'update': 'Mark Ladder Row Written', 'table': LADDER_TABLE,
+                            'conditions': [c['keyName'] for c in _mlr131['filters']['conditions']], 'values': sorted(_mlr131['columns']['value'].keys())}
+json.dump(_lw131, open(_lw131p, 'w'), indent=1, sort_keys=True)
+log('Keyword ladder planning (2026-10-17, F-A1: A-2 A-8 A-9 A-10 A-11 A-12 A-20 A-21): one keyword one page across the plan, the other ladders and the live pages; '
+    'clusters compared pair by pair; the main page\'s supporting keywords read and kept only on a shared results page; the kind of page Google ranks and what it sells reach the plan; '
+    'the website\'s ladder and pile-up limits hold a ladder run\'s pages; ladder rows follow the content log; a re-measured keyword says so.')
+
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:
 #     "two fixes have never come back and both are enforced by the build".
@@ -9183,6 +11304,79 @@ from ladder_common import freeze_ids as _freeze69, ids_are_frozen as _frozen69
 # not generated by any builder: the v3 export is this build's INPUT, and the test callback receiver is maintained by hand
 _NOT_GENERATED69 = ('SEO_Agent_v3_original_export.json', 'SEO_Agent_Test_Callback_Receiver.json')
 
+# =============================================================================
+# section 130 (F-A2, re-rating 2026-10-17, docs/system-review-2026-10-17/parts/1_keywords_content.md §8, exec 771): the page a content
+# run writes, and the gate that judges it.
+#   A-13 one placeholder detector (v5/code/_placeholders.js, PH) for Content QA, the app's article view and its delivery rule — the
+#        delivered body said "[Price band: typical Assess & Envision fee in AED]" while QA counted 0;
+#   A-14 every outbound link fetched (new nodes Outbound Link Requests -> Any Outbound Links? -> Fetch Outbound Links -> Outbound Link
+#        Check, between Content QA and Originality Check; v5/code/_outbound.js): two 404s shipped while QA said "verify" three hosts;
+#   A-15 statements about the business's own terms, scope and credentials held against what it says itself (CL.business, _claims.js);
+#   A-16 a competitor's own brand headings are never subtopics (CVG.namesBrand with the fit gate's labels);
+#   A-17 the Quick answer and the source links survive the editor (Content QA §4b restores them; the cut instruction names them);
+#   A-18 the verdict's "skip …" reaches the brief, the writer and the gate (v5/code/_exclusions.js, verdict field topics_to_skip);
+#   A-19 the business's own pages vouch for its own figures ("20+ years").
+# =============================================================================
+PLACEHOLDERS_SRC = _rd0('code/_placeholders.js').rstrip('\n'); CLAIMS_SRC = _rd0('code/_claims.js').rstrip('\n')
+EXCLUSIONS_SRC = _rd0('code/_exclusions.js').rstrip('\n'); OUTBOUND_SRC = _rd0('code/_outbound.js').rstrip('\n')
+_kit130 = lambda s: s.replace('/*__PLACEHOLDERS__*/', PLACEHOLDERS_SRC).replace('/*__CLAIMS__*/', CLAIMS_SRC).replace('/*__EXCLUSIONS__*/', EXCLUSIONS_SRC).replace('/*__OUTBOUND__*/', OUTBOUND_SRC)
+for _n130 in ('Content QA', 'Parse Brief', 'Parse Analysis'):
+    setcode(_n130, _kit130(code(_n130)))
+    assert not any(('/*__%s__*/' % _m) in code(_n130) for _m in ('PLACEHOLDERS', 'CLAIMS', 'EXCLUSIONS', 'OUTBOUND', 'FIT_GATE')), _n130 + ': a kit placeholder is left (section 130)'
+assert 'const PH = (() =>' in code('Content QA') and 'const CL = (() =>' in code('Content QA') and 'const EXC = (() =>' in code('Content QA') and 'const fitLabels' in code('Content QA'), 'A-13 / A-15 / A-16 / A-18: a kit is missing from Content QA'
+assert 'PH.scan(finalBody)' in code('Content QA') and 'PH_RE' not in code('Content QA'), 'A-13: Content QA still counts brackets with its own pattern'
+# A-13: the app's copy of the two patterns (article view + delivery rule) is the engine's, character for character
+_ph_ts130 = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'app', 'shared', 'src', 'placeholders.ts')
+if os.path.exists(_ph_ts130):
+    _pt130 = open(_ph_ts130, encoding='utf-8').read()
+    for _pat130 in ('BRACKET_SRC', 'NOTE_SRC'):
+        _m130 = re.search(r'const ' + _pat130 + r' = ("(?:[^"\\]|\\.)*");', PLACEHOLDERS_SRC)
+        assert _m130 and ('PLACEHOLDER_' + _pat130 + ' = ' + _m130.group(1) + ';') in _pt130, 'A-13: app/shared/src/placeholders.ts and v5/code/_placeholders.js disagree on ' + _pat130
+assert 'CL.business(md, OWN_TEXT' in code('Content QA') and 'ownStat(s)' in code('Content QA'), 'A-15 / A-19: the business claims or the own-figures check are not wired'
+assert "$('Needs Revision?').first().json" in code('Content QA') and 'PROTECTED, never cut' in code('Content QA'), 'A-17: the protected blocks are not restored or not named in the cut'
+assert 'CVG.namesBrand(s, subBest, subOpts)' in code('Content QA') and 'labels: fitLabels' in code('Parse Analysis'), 'A-16: the brand headings are not filtered'
+assert 'EXC.prune(brief.outline' in code('Parse Brief') and 'EXC.check(' in code('Content QA'), 'A-18: the exclusions do not reach the brief or the gate'
+# A-18: the verdict names what to skip, and Parse Verdict carries it on
+_sv130 = get_schema('Parser — Verdict'); _sv130['properties']['topics_to_skip'] = ARR; set_schema('Parser — Verdict', _sv130)
+setcode('Parse Verdict', EXCLUSIONS_SRC + '\n' + code('Parse Verdict'))
+patch('Parse Verdict', "    page_claims_dropped,\n    existing_page_action,",
+      "    page_claims_dropped,\n    verdict_exclusions: EXC.fromVerdict(verdict_changes, verdict.topics_to_skip),   // A-18: what this page must not cover\n    existing_page_action,")
+for _p130 in ('Strategy Brief', 'Copywriter'):
+    assert 'verdict_exclusions' in json.dumps(nodes[_p130]['parameters']), 'A-18: the %s prompt does not print the exclusions' % _p130
+# A-14: the outbound links, fetched on every QA round
+_cq130 = pos('Content QA')
+add_node('Outbound Link Requests', 'n8n-nodes-base.code', 2, {'jsCode': _kit130(_rd0('code/Outbound_Link_Requests.js'))}, [_cq130[0] + 40, _cq130[1] + 360])
+if_node('Any Outbound Links?', "{{ !$json.skip }}", [_cq130[0] + 220, _cq130[1] + 360])
+add_node('Fetch Outbound Links', 'n8n-nodes-base.httpRequest', 4.5, {
+    'method': 'GET', 'url': '={{ $json.url }}', 'sendHeaders': True,
+    'headerParameters': {'parameters': [
+        {'name': 'User-Agent', 'value': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 SEO-Agent-LinkCheck/1.0'},
+        {'name': 'Accept', 'value': 'text/html,application/xhtml+xml,application/pdf,*/*;q=0.8'}]},
+    'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 300}}, 'timeout': 20000,
+                'redirect': {'redirect': {'followRedirects': True, 'maxRedirects': 6}},
+                'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}},
+    [_cq130[0] + 400, _cq130[1] + 300], {'onError': 'continueRegularOutput', **retry_lint.RETRY})
+add_node('Outbound Link Check', 'n8n-nodes-base.code', 2, {'jsCode': _kit130(_rd0('code/Outbound_Link_Check.js'))}, [_cq130[0] + 580, _cq130[1] + 360])
+disconnect('Content QA', 'Originality Check')
+connect('Content QA', 'Outbound Link Requests'); connect('Outbound Link Requests', 'Any Outbound Links?')
+connect('Any Outbound Links?', 'Fetch Outbound Links', 0); connect('Fetch Outbound Links', 'Outbound Link Check')
+connect('Any Outbound Links?', 'Outbound Link Check', 1); connect('Outbound Link Check', 'Originality Check')
+assert [t['node'] for t in conns['Content QA']['main'][0]] == ['Outbound Link Requests'], 'A-14: Content QA must lead to the link check only'
+assert "$('Content QA').first().json" in code('Outbound Link Check') and 'qa.publishable = false' in code('Outbound Link Check'), 'A-14: the link check does not refuse'
+if os.path.isdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'harness')):   # harness S194 reads the wiring and the kit from here
+    json.dump({'connections': {k: conns[k] for k in ('Content QA', 'Outbound Link Requests', 'Any Outbound Links?', 'Fetch Outbound Links', 'Outbound Link Check')},
+               'nodes': [nodes['Fetch Outbound Links']], 'placeholders_kit': PLACEHOLDERS_SRC},
+              open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'harness', 'link_check_wiring.json'), 'w'), indent=1)
+url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+sticky("""### The page and its gate (F-A2, re-rating 2026-10-17)
+**Placeholders (A-13).** One detector (`v5/code/_placeholders.js`): a review note is one of `[Confirm: …]`, `[Owner: …]`, `[Author insight: …]`, `[Image: …]`; every other bracket that starts with a letter is a placeholder. The app reads the same two patterns.
+**Links (A-14).** *Outbound Link Requests* → *Any Outbound Links?* → *Fetch Outbound Links* → *Outbound Link Check* fetch every outbound link on every QA round: 404 / 410 / no such domain / a "not found" page is **dead** and fails the gate (named by URL, with a replacement from this run's sources or "remove it"); a bot check, block or server error is "could not be checked".
+**Claims (A-15 / A-19).** Statements about the business's own terms, scope and credentials are held against its facts, profile, site model and its own pages read in this run; unsupported ones are marked `[Confirm: …]`. Its own figures need no external source.
+**Subtopics (A-16)** never name a company. **Protected blocks (A-17):** the Quick answer and source links survive the editor. **Exclusions (A-18):** the verdict's `topics_to_skip` reach the brief, the writer and the gate.""",
+    _cq130[0] - 40, _cq130[1] + 520, 1000, 300, 4)
+log('The page and its gate (2026-10-17, re-rating F-A2: A-13 ... A-19): one placeholder detector shared with the app (a colon bracket the writer invents is a placeholder, not a note); every outbound link fetched on every QA round, a dead one failing the gate by URL with a replacement or "remove it"; statements about the business\'s own terms, scope and credentials held against what it says itself; competitor brand headings never subtopics; the Quick answer and source links restored when an edit drops them; the verdict\'s exclusions in the brief, the writer prompt and the gate; and the business\'s own pages vouching for its own figures')
+
 
 def _b69_checks():
     """Runs at the very end, after the four sub-builds: both checks need every generated workflow on disk."""
@@ -9195,7 +11389,7 @@ def _b69_checks():
     assert not _u469, ('B-F5: %s mints a random node id (uuid.uuid4). A node id is uuid5(workflow + ":" + node) — use '
                        'ladder_common.node_id / freeze_ids, so that an unchanged rebuild stays byte-identical.' % ', '.join(_u469))
     _wdir69 = os.path.join(HERE0, 'workflows')
-    _SELF_FROZEN69 = ('SEO_Agent_API.json', 'SEO_Agent_Admin_API.json', 'SEO_Agent_Keyword_Check.json', 'SEO_Agent_Prerelease.json')
+    _SELF_FROZEN69 = ('SEO_Agent_API.json', 'SEO_Agent_Admin_API.json', 'SEO_Agent_Keyword_Check.json', 'SEO_Agent_Prerelease.json', 'SEO_Agent_Publish_Check.json')
     _froze69 = 0
     for _f69 in sorted(os.listdir(_wdir69)):
         if not _f69.endswith('.json') or _f69 in _NOT_GENERATED69:
@@ -9239,8 +11433,156 @@ log('A build that invents what it was not told, and a gate that only works one w
 
 
 # =============================================================================
+# F-L (2026-10-18, re-rating 2026-10-17 part 2: B-10 / B-16 / B-18) — the full report's content review, the homepage redirect chain and
+# the article bylines, each judged on what the run actually read.
+# =============================================================================
+# ---- B-18: "Articles have no named human author" was measured on the 2 articles Pick Key Pages sampled (exec 767: "1 of 2"), while 11
+# of techand.ai's 12 /insights/ articles credit "Tech& Team" / "Tech& Technology Team". The sample now takes up to 8 articles (free
+# fetches), and the finding says WHICH kind of byline it saw: a team is a team, not "no author". The page cap rises from 10 to 16 so the
+# home / contact / about / service picks are never pushed out; Build Content Prompt still puts only the first two articles' text in the
+# reviewer's prompt. Also: "about" no longer matches an article whose slug happens to contain "why" (exec 767 read
+# /insights/the-financial-reporting-trap-why-… as the About page).
+patch('Pick Key Pages', "add(pages.find(p => isAbout(p.url) && !isContact(p.url)), 'about');",
+      "add(pages.find(p => isAbout(p.url) && !isContact(p.url) && !isArticle(p.url)), 'about');   // B-18: an article whose slug says \"why\" is not the About page")
+patch('Pick Key Pages', "pages.filter(p => isArticle(p.url)).sort(byImportance).slice(0, 2).forEach(p => add(p, 'article'));",
+      "pages.filter(p => isArticle(p.url)).sort(byImportance).slice(0, 8).forEach(p => add(p, 'article'));   // B-18: 8 articles, not 2 (free fetches)")
+patch('Pick Key Pages', "return pick.slice(0, 10).map(p => ({ json: p }));", "return pick.slice(0, 16).map(p => ({ json: p }));")
+patch('Build Content Prompt', "picked.forEach((p, i) => {\n  if (!p || !p.url) return;",
+      "let __articlesInPrompt = 0;   // B-18: up to 8 articles are fetched for the byline check; only the first two go into the reviewer's prompt\n"
+      "picked.forEach((p, i) => {\n  if (!p || !p.url) return;\n  if (p.kind === 'article' && ++__articlesInPrompt > 2) return;")
+patch('Analyze HTML', """const noAuthor = artNodes.filter(({ n }) => {
+  const a = n && asArr(n.author)[0];
+  const name = a && (typeof a === 'string' ? a : a.name);
+  const isOrg = a && typesOf(a).some(t => /Organization/.test(t));
+  return !name || isOrg || /team|staff|admin|editor/i.test(name);
+});
+if (arts.length && noAuthor.length) F('Content', 'High', 'Articles have no named human author', noAuthor.length + ' of ' + arts.length + ' sampled articles', """,
+      """// B-18 (re-rating 2026-10-17): a byline is a named person, a TEAM (an Organization author, or "Tech& Team" / staff / editorial desk), or
+// nothing at all — and the finding says which it saw, on how many of the site's articles.
+const bylineOf = (n) => { const a = n && asArr(n.author)[0]; const name = String((a && (typeof a === 'string' ? a : a.name)) || '').trim();
+  const isOrg = !!a && typeof a === 'object' && typesOf(a).some(t => /Organization/.test(t));
+  return { name, team: !!name && (isOrg || /\\b(team|staff|admin|editors?|editorial|desk)\\b/i.test(name)) }; };
+const bylines = artNodes.map(x => ({ ...x, by: bylineOf(x.n) }));
+const teamBy = bylines.filter(x => x.by.team), noneBy = bylines.filter(x => !x.by.name);
+const noAuthor = [...teamBy, ...noneBy];
+// the crawl's own article count; when the in-200 gate marked the crawl `unavailable` (__dfs) the count could not be read and is not claimed
+const crawlAns18 = (() => { try { return $('Get Crawled Pages Answers').first().json || {}; } catch (e) { return {}; } })();
+const siteArticles = (crawlAns18.__dfs && crawlAns18.__dfs.unavailable) ? null
+  : (crawlAns18.tasks?.[0]?.result?.[0]?.items || []).filter(p => p && p.url && Number(p.status_code) === 200 && /\\/(insights|blog|news|articles?|guides?)\\/./i.test(p.url)).length;
+const teamNames = [...new Set(teamBy.map(x => x.by.name))].slice(0, 3);
+const authorTitle = !noneBy.length ? 'Articles have no named human author: they are credited to a team, not a person' : 'Articles have no named human author';
+const authorEvidence = [teamBy.length ? teamBy.length + ' of ' + arts.length + ' sampled articles credit a team (' + teamNames.map(t => '"' + t + '"').join(', ') + '), not a named person' : '',
+  noneBy.length ? noneBy.length + ' of ' + arts.length + ' sampled articles name no author at all' : ''].filter(Boolean).join('; ')
+  + (siteArticles == null ? ' (the crawl could not be read, so how many articles the site has is not known)' : siteArticles > arts.length ? ' (' + arts.length + ' of the ' + siteArticles + ' articles the crawl found were read)' : '');
+if (arts.length && noAuthor.length) F('Content', 'High', authorTitle, authorEvidence, """)
+log('B-18 (F-L, 2026-10-18): the byline check reads up to 8 articles, says "a team, not a named person" when that is what it saw, and counts against the articles the crawl found; "about" no longer matches an article slug')
+
+# ---- B-10: the content review said "No pricing, engagement models or timelines" (exec 767, Medium) while six service pages carry
+# "Pricing in UAE" / "Cost Factors" / "What Drives the Cost?" sections. The reviewer read 8 pages, each cut at 2,500 characters, and none of
+# them was a page with such a section (22,000 characters, no "pric" or "cost" anywhere). Two changes: the prompt carries (a) the price /
+# cost / timeline sections further down the pages it read and (b) the site's other pages that have such sections, from the crawl's own
+# headings (free, already in the run), with a rule never to call them missing; and Parse Content Review checks the answer — a "no pricing"
+# finding over a site whose crawl shows pricing sections is rewritten to what the run can stand behind, at Low.
+patch('Build Content Prompt', "const ours = parts.join('\\n\\n').slice(0, 22000);", r"""// B-10 (re-rating 2026-10-17): the sections a reader looks for when judging pricing / timelines, from deeper in the pages read and from
+// the crawl's headings of the pages not read
+const SECT_RE = /\b(pric(?:e|es|ing)|costs?|fees?|budget|quote|timelines?|duration|how long|engagement models?)\b/i;
+const sectText = (html) => { const out = []; const h = String(html || ''); const re = /<h([23])\b[^>]*>([\s\S]*?)<\/h\1>/gi; let m; const marks = [];
+  while ((m = re.exec(h))) marks.push({ at: m.index, end: re.lastIndex, title: strip(m[2]) });
+  marks.forEach((k, j) => { if (!SECT_RE.test(k.title) || out.length >= 4) return; const body = strip(h.slice(k.end, j + 1 < marks.length ? marks[j + 1].at : k.end + 6000)).slice(0, 450);
+    out.push({ heading: k.title.slice(0, 120), text: body }); });
+  return out; };
+const readSections = [];
+picked.forEach((p, i) => { if (!p || !p.url) return; const f = fetched[i] || {}; const ss = sectText(f.html || f.body || f.data || ''); if (ss.length) readSections.push({ url: p.url, sections: ss }); });
+const readUrls = new Set(picked.map(p => p && p.url).filter(Boolean));
+const crawlAns10 = (() => { try { return $('Get Crawled Pages Answers').first().json || {}; } catch (e) { return {}; } })();
+const crawlUnread10 = !!(crawlAns10.__dfs && crawlAns10.__dfs.unavailable);   // the in-200 gate said the crawl could not be read: no outline, and the prompt says so
+const crawlItems10 = crawlUnread10 ? [] : (crawlAns10.tasks?.[0]?.result?.[0]?.items || []);
+const outline = crawlItems10.filter(p => p && p.url && !readUrls.has(p.url) && Number(p.status_code) === 200 && !/\/(insights|blog|news|articles?|guides?)\//i.test(p.url))
+  .map(p => { const ht = (p.meta || {}).htags || {}; return { url: p.url, headings: [...(ht.h2 || []), ...(ht.h3 || [])].map(x => String(x).trim()).filter(x => SECT_RE.test(x)).slice(0, 4) }; })
+  .filter(x => x.headings.length).slice(0, 12);
+const extra10 = (readSections.length ? '\n\n=== SECTIONS FURTHER DOWN THE PAGES ABOVE (price, cost, timeline; each page above is cut at 2,500 characters) ===\n'
+    + readSections.map(r => r.url + '\n' + r.sections.map(s => '## ' + s.heading + ': ' + s.text).join('\n')).join('\n\n') : '')
+  + (outline.length ? '\n\n=== OTHER PAGES OF THIS SITE WITH SUCH SECTIONS (their headings, from the crawl; not read above) ===\n'
+    + outline.map(o => o.url + ': ' + o.headings.map(x => '"' + x + '"').join(', ')).join('\n') : '')
+  + (crawlUnread10 ? '\n\n=== OTHER PAGES OF THIS SITE: the crawl could not be read, so whether other pages carry price or timeline sections is not known ===' : '');
+const room10 = Math.min(extra10.length, 4500);
+const ours = parts.join('\n\n').slice(0, 22000 - room10) + extra10.slice(0, room10);
+const content_sections = { read: readSections.map(r => ({ url: r.url, headings: r.sections.map(s => s.heading), figures: r.sections.some(s => /(?:AED|USD|EUR|GBP|SAR|\$|€|£)\s?\d|\d[\d,.]*\s?(?:AED|USD|dirhams?)/i.test(s.text)) })), outline, outline_unavailable: crawlUnread10 };""")
+patch('Build Content Prompt', "    content_pages_read: parts.length,", "    content_pages_read: parts.length,\n    content_sections,   // B-10: what the run knows about price / timeline sections, for Parse Content Review's check")
+for _nm_fl in ('Content Reviewer', 'Prompt For Count (Content Reviewer)'):
+    _p_fl = nodes[_nm_fl]['parameters']
+    _old_fl = "- Look for: contradicting claims (years of experience vs dates), unproven claims (partner, certified, client base), missing proof (case studies, reviews, named experts), vague service pages, missing pricing or timelines, only high-commitment calls to action, placeholder text, formatting artifacts."
+    _new_fl = (_old_fl + "\n- Pricing, timelines and engagement models: the SECTIONS blocks list such sections further down the pages you read and on other pages "
+               "of the site. Never report one of them as missing when a SECTIONS block lists it; if the sections explain what drives the cost but "
+               "give no figures, say exactly that (for example \"pricing sections list cost factors but no price ranges\"), naming the pages.")
+    if _nm_fl == 'Content Reviewer':
+        assert str(_p_fl['text']).count(_old_fl) == 1, 'B-10: the reviewer prompt rule moved'
+        _p_fl['text'] = _p_fl['text'].replace(_old_fl, _new_fl)
+    else:
+        _as_fl = next(a for a in _p_fl['assignments']['assignments'] if a['name'] == '__prompt')
+        assert str(_as_fl['value']).count(_old_fl) == 1, 'B-10: the counted prompt of the Content Reviewer no longer carries the rule'
+        _as_fl['value'] = _as_fl['value'].replace(_old_fl, _new_fl)
+patch('Parse Content Review', """  for (const f of (cr.findings || [])) {
+    let sev = ['Critical', 'High', 'Medium', 'Low'].includes(f.severity) ? f.severity : 'Medium';""", r"""  // B-10 (re-rating 2026-10-17): a "no pricing" finding over a site whose own pages carry pricing / cost sections is not what the run saw
+  const CS = base.content_sections || { read: [], outline: [] };
+  const PRICE_H = /\b(pric(?:e|es|ing)|costs?|fees?|budget|quote)\b/i, TIME_H = /\b(timelines?|duration|how long)\b/i;
+  const pricePages = [...(CS.read || []), ...(CS.outline || [])].filter(x => (x.headings || []).some(h => PRICE_H.test(h)));
+  const timePages = [...(CS.read || []), ...(CS.outline || [])].filter(x => (x.headings || []).some(h => TIME_H.test(h)));
+  const figuresSeen = (CS.read || []).some(x => x.figures);
+  const claimsNoPrice = (f) => /\b(no|missing|without|lacks?|lacking|absent|not (?:shown|listed|stated|given))\b[^.;]{0,80}\b(pric(?:e|es|ing)|costs?|fees?)\b|\b(pric(?:e|es|ing)|costs?)\b[^.;]{0,40}\b(missing|absent|not (?:shown|listed|stated|given))\b/i.test(String(f.title || '') + ' ' + String(f.evidence || ''));
+  const pathOf10 = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/i, '') || '/';
+  const pricedFinding = (f) => {
+    const list = pricePages.slice(0, 4).map(x => pathOf10(x.url) + ' ("' + (x.headings || []).filter(h => PRICE_H.test(h))[0] + '")').join(', ');
+    const asksTime = /\b(timelines?|durations?|how long)\b/i.test(String(f.title || '') + ' ' + String(f.evidence || ''));
+    return { ...f, severity: 'Low', title: 'Pricing sections explain what drives the cost' + (figuresSeen ? '' : ' but give no price ranges'),
+      evidence: pricePages.length + ' page(s) carry pricing / cost sections: ' + list + (pricePages.length > 4 ? ' and ' + (pricePages.length - 4) + ' more' : '')
+        + (asksTime ? (timePages.length ? '; ' + timePages.length + ' page(s) have a timeline section' : '; no timeline section was seen on the pages read or in the crawl\'s headings') : '')
+        + '. The review read ' + (base.content_pages_read || 0) + ' page(s); the original finding said: ' + String(f.title || '').slice(0, 120),
+      fix: 'Add indicative ranges or worked sizing examples to those pricing sections' + (asksTime && !timePages.length ? ', and typical timelines per engagement' : '') + '.',
+      url: pricePages[0].url, b10_rewritten: true }; };
+  for (const f0 of (cr.findings || [])) {
+    const f = (pricePages.length && claimsNoPrice(f0)) ? pricedFinding(f0) : f0;
+    let sev = ['Critical', 'High', 'Medium', 'Low'].includes(f.severity) ? f.severity : 'Medium';""")
+patch('Parse Content Review', "  (cr.strengths || []).forEach(s => works.push(s));",
+      "  (cr.strengths || []).forEach(s => works.push(s));\n"
+      "  if (pricePages.length && cr.eeat_signals && cr.eeat_signals.pricing_transparency === 'no') cr.eeat_signals.pricing_transparency = 'partial';   // B-10")
+log('B-10 (F-L, 2026-10-18): the content review is shown the price / cost / timeline sections further down the pages it read and the crawl headings of the pages it did not, and a "no pricing" answer over pages that carry pricing sections is rewritten to what the run saw, at Low')
+
+# ---- B-16: http://techand.ai/ -> 308 https://techand.ai/ -> 308 https://www.techand.ai/ is two hops; DataForSEO's redirect-chain report
+# starts on https and answered 0 items, and "What works" said "HTTP correctly redirects to HTTPS". The host probes (no redirects
+# followed) already hold every hop: each address variant is followed through them and two hops or more is a finding.
+patch('Analyze Probes', "else if (R.apex_http && R.apex_http.status >= 300 && R.apex_http.status < 400 && /^https:/i.test(apexHttpLoc)) works.push('HTTP redirects to HTTPS');",
+      r"""// B-16 (re-rating 2026-10-17): follow every homepage address variant through the probes (none of them follows a redirect itself)
+const normU16 = (u) => { const m = String(u || '').trim().match(/^(https?):\/\/([^\/?#]+)(\/[^?#]*)?/i); return m ? m[1].toLowerCase() + '://' + m[2].toLowerCase() + (m[3] || '/') : ''; };
+const byUrl16 = {}; for (const id of ['home', 'www_https', 'www_http', 'apex_http']) if (R[id] && R[id].url) byUrl16[normU16(R[id].url)] = id;
+const chainOf16 = (start) => { const hops = []; const seen = new Set(); let id = start;
+  while (id && R[id] && !seen.has(id)) { seen.add(id); const r = R[id]; if (!(r.status >= 300 && r.status < 400)) break;
+    let loc = h(id, 'location'); if (/^\//.test(loc)) loc = (String(r.url).match(/^https?:\/\/[^\/]+/i) || [''])[0] + loc;
+    if (!loc) break; hops.push({ from: r.url, status: r.status, to: loc }); id = byUrl16[normU16(loc)]; }
+  return hops; };
+const redirect_chains = ['apex_http', 'www_http', 'home', 'www_https'].map(id => ({ start: (R[id] || {}).url || '', hops: chainOf16(id) })).filter(c => c.start && c.hops.length >= 2);
+if (redirect_chains.length) add('Crawlability & Indexing', 'Low', 'Redirect chain on the homepage address',
+  redirect_chains.map(c => c.start + ' ' + c.hops.map(x => '→ ' + x.status + ' ' + x.to).join(' ') + ' (' + c.hops.length + ' hops)').join('; '),
+  'Every extra hop delays the first visit and is one more request for crawlers; links, ads and typed addresses that use these variants take more than one hop to arrive.',
+  'Redirect each variant straight to https://' + canonical_host + '/ in one hop (one 301 per variant, no hop through the other host or scheme).');
+if (R.apex_http && R.apex_http.status >= 300 && R.apex_http.status < 400 && /^https:/i.test(apexHttpLoc)) {
+  const n16 = (redirect_chains.find(c => c.start === R.apex_http.url) || { hops: [] }).hops.length;
+  works.push(n16 >= 2 ? 'HTTP redirects to HTTPS (in ' + n16 + ' hops: see the redirect chain finding)' : 'HTTP redirects to HTTPS');
+}""")
+patch('Analyze Probes', "        homepage_meta,\n", "        homepage_meta,\n        redirect_chains,   // B-16\n")
+patch('Build Site Issues', "ok(dc.test_https_redirect === true, 'HTTP correctly redirects to HTTPS');",
+      "ok(dc.test_https_redirect === true && !((probe.measurements || {}).redirect_chains || []).length, 'HTTP correctly redirects to HTTPS');   // B-16: not \"correctly\" over a chain the probes measured")
+patch('Normalize Input', "    scheduled: !!p2.scheduled,\n", "    scheduled: !!p2.scheduled,\n    // F-L (2026-10-18): the Audit Scheduler's ran-late notice, kept for a scheduled request only (a caller cannot label its own run late)\n    ran_late: (!!p2.scheduled && p2.ran_late && typeof p2.ran_late === 'object' && p2.ran_late.late === true) ? { late: true, via: String(p2.ran_late.via || ''), due: String(p2.ran_late.due || ''), started_at: String(p2.ran_late.started_at || ''), late_min: Number(p2.ran_late.late_min) || 0, kind: String(p2.ran_late.kind || ''), why: String(p2.ran_late.why || '').slice(0, 300), text: String(p2.ran_late.text || '').slice(0, 600) } : null,\n")
+log('C-1 follow-up (F-L, 2026-10-18): a scheduled audit the Audit Scheduler started late carries ran_late through Normalize Input, and Run Cost (Callback) marks its report like every Callback Ledger')
+log('B-16 (F-L, 2026-10-18): the homepage address variants are followed through the host probes and a chain of two hops or more is a Low finding; "HTTP correctly redirects to HTTPS" is not said over one')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
+# A-28 / B-8 (2026-10-18): the count bodies of sections 62 / 76 carry a placeholder where the agent's system message and parser tool go;
+# filled here, after every section that edits a parser schema, so the counted prompt is the one the agent sends today
+_n_frames = _fill_frames104(nodes, conns)
+assert _n_frames == 2 * len(_AI_CALLS51), ('A-28: %d count bodies framed, expected two for each of the %d counted agents' % (_n_frames, len(_AI_CALLS51)))
 w['nodes'] = list(nodes.values())
 w['name'] = 'SEO Agent v4 — Audit, Keywords, Verdict & Content'
 w['active'] = False
@@ -9269,6 +11611,7 @@ import subprocess
 for _s in ('build_api.py', 'build_ladder_extras.py', 'build_site_tracker.py', 'build_monitors.py'):
     _r = subprocess.run([sys.executable, os.path.join(HERE0, _s)], cwd=HERE0)
     assert _r.returncode == 0, _s + ' failed'
+_b98_catchup()   # R94 (sections 98-99): build the Schedule Catch-up (build_catchup.py) from the workflows just written, and prove it
 
 # section 55 (R17 / R29): both checks need every workflow on disk, so they run here, after the sub-builds
 _r17_r29_checks()
@@ -9296,6 +11639,8 @@ _b73_checks()
 _b78_checks()
 # section 82 (B9-1 ... B9-5): benchmark area 9, on the generated AI Growth workflow and its main-path wiring
 _b82_checks()
+# sections 122 / 123 / 126 / 127 (W3-F): AI growth's third wave, the one robots.txt matcher, the page-watch decoder, the Reply Reader's ledger row
+_w3f122_checks(); _w3f123_checks(); _w3f126_checks(); _w3f127_checks()
 
 # section 80 (B7-1 ... B7-3): benchmark area 7, on the generated Site Tracker
 _b80_checks()
@@ -9318,5 +11663,13 @@ _b85_checks()
 
 # section 86 (B6-7): benchmark area 6's structural gap - the keywords the customer named, on the generated Rank Tracker
 _b86_checks()
+# section 95 (R87 / R90 / R93 / R59 / R92 / R111): the new nodes and their wiring, on the generated workflows
+_b95_checks()
+# sections 104-105 (A9, F6): the answer the counter counts, the callbacks that wait for the settle, the Keyword Check's stamp
+_b104_checks()
+# sections 106-107 (F7 / F10 / R92): the gates and the counts, on the generated monitor workflows
+_b107_checks(_b106_checks())
+# sections 116-117 (B6-6 / B6-8 / B6-10 / B6-14): benchmark area 6, on the generated Rank Tracker
+_b116_checks()
 _b69_checks()
 

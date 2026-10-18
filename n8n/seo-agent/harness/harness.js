@@ -15,7 +15,10 @@ const wrap = (arr) => ({
   all: () => arr, first: () => arr[0], last: () => arr[arr.length - 1],
   get item() { return arr[0]; }, get json() { return arr[0] && arr[0].json; }
 });
-const $ = (name) => { if (!store[name]) throw new Error(`Referenced node "${name}" has no data in this run`); return wrap(store[name]); };
+// R38 (2026-10-16): *Check Page Claims* sits between *Parse Analysis* and *Keyword Data*, and *Merge Keyword Data* reads it. A scenario that
+// ran *Parse Analysis* and never that node gets the analysis as it was (the check changes nothing when no page digest exists), so the
+// older scenarios did not each need a line for a node that is a pass-through for them; S124 runs the real node.
+const $ = (name) => { if (!store[name] && name === 'Check Page Claims' && store['Parse Analysis']) return wrap(store['Parse Analysis']); if (!store[name]) throw new Error(`Referenced node "${name}" has no data in this run`); return wrap(store[name]); };
 
 function loadCode(node) {
   // 'legacy:<name>' runs a frozen reference copy from harness/legacy/ (old behaviour to compare against)
@@ -75,6 +78,7 @@ function report() {
     if (!r.ok) fail++;
   }
   console.log(`\n${results.length - fail} passed, ${fail} failed`);
+  if (fail) process.exitCode = 1;   // CI (.github/workflows/ci.yml) fails on any failed check, not on the printed count alone
   save('_results.json', results.map(r => ({ ...r, items: undefined, count: r.items ? r.items.length : 0 })));
 }
 // Scan generated HTML for templating defects

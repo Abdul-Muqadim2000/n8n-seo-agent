@@ -12,11 +12,16 @@ const APP_PATH: Record<string, string> = {
   'technical-audits': 'technical',
   'site-tracking': 'overview',
   'ai-visibility': 'ai-visibility',
+  'ai-growth': 'ai-visibility#ai-growth',
   backlinks: 'backlinks',
+  'link-building': 'links',
+  'crawler-analytics': 'crawlers',
   reports: 'reports',
   'report-delivery': 'settings/delivery',
+  integrations: 'settings/integrations',
   'guided-setup': 'settings/verification',
   enterprise: 'settings/company',
+  'agency-portal': 'clients',
 };
 
 /** a full product page (the dashboard) needs the full content width: pages stack text above it instead of beside it */
@@ -30,7 +35,7 @@ const FLAT = 'rounded-none border-0 shadow-none';
 /** A capability's product visual: its platform screen if it has one, else its registry visual.
  *  `framed` puts product screens in a browser window (diagrams and the already-framed dashboard are shown as they are). */
 export function CapabilityScreen({ feature, framed = false, className }: { feature: Feature; framed?: boolean; className?: string }) {
-  const url = `app.ascentra.com/${APP_PATH[feature.slug] ?? feature.slug}`;
+  const url = `app.alaventra.com/${APP_PATH[feature.slug] ?? feature.slug}`;
   const label = `${feature.name}: product preview`;
   if (feature.screen) {
     const Screen = SCREENS[feature.screen];

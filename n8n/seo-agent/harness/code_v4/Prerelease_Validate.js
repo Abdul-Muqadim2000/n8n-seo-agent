@@ -7,6 +7,14 @@
 // `live_host` is the address the pages will have in production: with it the canonical can be judged, and `noindex` / a robots.txt
 // disallow on the staging host are read as the deliberate staging guard they usually are (a warning that names the live page), not as a
 // failure. Pass `staging: false` (or point the check at the live host) to have them fail.
+// B5-7 (2026-10-16, benchmark area 5; Lumar Protect blocks a build on a threshold, Sitebulb's Release Check keeps a list of planned changes):
+//   `fail_on`   — 'any' (default: every failure fails the build), 'low' | 'medium' | 'high' | 'critical': only failures of that severity or
+//                 above fail; the others are returned as `below_threshold` and never hidden.
+//   `expected`  — the changes this release makes ON PURPOSE, so an intentional release does not fail its own check: strings "/path" (every
+//                 failure on that page) or "/path:check" (one check: page_answers, no_redirect, indexable, robots_allows, canonical, title, h1,
+//                 description), or objects { path | url, check?, reason? }. Matching failures come back as `expected_changes` with the reason;
+//                 an entry that matched nothing is returned as `expected_unused` (the change did not happen, or the list is stale).
+// The recipe for a CI job is in docs/PRERELEASE_CI.md.
 // ---- the daily key-page watch and Google's view of those pages (G11 + G25, 2026-10-13; system review FIX_PLAN.md) ----
 // G11: a monthly audit cannot see a page that went noindex on the 3rd. Every day the key pages are fetched raw and cheaply (one plain GET
 // each, no JavaScript, no paid API) and compared with what we stored: HTTP status, a redirect that appeared, `noindex`, the canonical, the
@@ -26,7 +34,15 @@ const PW = (() => {
   // host-agnostic identity of a URL: crawls, sitemaps and canonicals disagree about www and the trailing slash
   const ukey = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/$/, '') || S(u).toLowerCase();
   const same = (a, b) => !!a && !!b && ukey(a) === ukey(b);
-  const strip = (s) => S(s).replace(/<[^>]*>/g, ' ').replace(/&nbsp;|&#160;/gi, ' ').replace(/&amp;/gi, '&').replace(/\s+/g, ' ').trim();
+  // the shared entity decoder, inlined (v5/code/_entities.js; build section 122 asserts the two stay identical): named, decimal and hex, one pass
+  const entDecode = /*__ENT_BEGIN__*/(() => {
+  const N = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', nbsp: ' ', rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“', ndash: '–', mdash: '—', hellip: '…', copy: '©', reg: '®', trade: '™', bull: '•', middot: '·', laquo: '«', raquo: '»', euro: '€', pound: '£', deg: '°' };
+  return (s) => String(s == null ? '' : s).replace(/&(?:#[xX]([0-9a-fA-F]+)|#(\d+)|([a-zA-Z][a-zA-Z0-9]*));/g, (m, h, d, n) => {
+    if (h !== undefined || d !== undefined) { const cp = h !== undefined ? parseInt(h, 16) : Number(d); if (cp === 160) return ' '; try { return cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : m; } catch (e) { return m; } }
+    const k = n.toLowerCase(); return Object.prototype.hasOwnProperty.call(N, k) ? N[k] : m;
+  });
+})()/*__ENT_END__*/;
+  const strip = (s) => entDecode(S(s).replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim();
 
   // ---- a small, stable fingerprint (FNV-1a, 32 bit): no crypto module is available in the sandbox ----
   const hash = (text) => {
@@ -316,7 +332,7 @@ const PW = (() => {
     const quota = /quota|rate limit|RESOURCE_EXHAUSTED|429/i.test(err);
     const denied = /permission|forbidden|403|unauthor|invalid_grant/i.test(err);
     if (err) return { ok: false, error: err, error_kind: quota ? 'quota' : denied ? 'access' : 'error', indexed: null, verdict: '', coverage: '',
-      robots: '', last_crawl: '', google_canonical: '', user_canonical: '', canonical_ok: null, mobile_usable: null, mobile_issues: [], mobile_verdict: '', mobile_note: '', rich_results: [], rich_verdict: '',
+      robots: '', last_crawl: '', google_canonical: '', user_canonical: '', canonical_ok: null, canonical_host_only: false, mobile_usable: null, mobile_issues: [], mobile_verdict: '', mobile_note: '', rich_results: [], rich_verdict: '',
       not_checked: quota ? 'Google\'s daily URL Inspection quota for this property is used up: not checked today.' : denied ? 'Search Console access is missing for this property: not checked.' : 'The inspection failed: not checked (' + err + ').' };
     // R10 (2026-10-13, re-rating §3.11): Google retired the Mobile Usability report and the API now answers `VERDICT_UNSPECIFIED` with no
     // issue list for every page (45 of 45 live on 2026-10-13). That is NOT CHECKED. The live run read it as "not mobile-friendly" and raised
@@ -333,7 +349,11 @@ const PW = (() => {
       ok: true, error: '', error_kind: '', verdict: S(idx.verdict), indexed: S(idx.verdict) === 'PASS', coverage: S(idx.coverageState),
       indexing_state: S(idx.indexingState), robots: S(idx.robotsTxtState), last_crawl: S(idx.lastCrawlTime),
       google_canonical: S(idx.googleCanonical), user_canonical: S(idx.userCanonical),
-      canonical_ok: (!S(idx.googleCanonical) || !S(idx.userCanonical)) ? null : same(idx.googleCanonical, idx.userCanonical),
+      // R59 (2026-10-16): Google choosing the SAME page on the OTHER host (https://techand.ai/x for our https://www.techand.ai/x) is a
+      // canonical Google did not take — `same` is host-agnostic on purpose (crawls and sitemaps disagree about www), so it called this "same
+      // as ours" and the daily watch could never see the split. The host is compared here, and a host-only difference is named.
+      canonical_ok: (!S(idx.googleCanonical) || !S(idx.userCanonical)) ? null : (same(idx.googleCanonical, idx.userCanonical) && hostOf(idx.googleCanonical) === hostOf(idx.userCanonical)),
+      canonical_host_only: !!S(idx.googleCanonical) && !!S(idx.userCanonical) && same(idx.googleCanonical, idx.userCanonical) && hostOf(idx.googleCanonical) !== hostOf(idx.userCanonical),
       mobile_usable: mobUsable, mobile_issues: mobIssues, mobile_verdict: mobVerdict, mobile_note: mobNote,
       rich_verdict: rich ? S(rich.verdict) : '',
       rich_results: rich && rich.detectedItems ? rich.detectedItems.map(d => S(d.richResultType)).filter(Boolean) : [],
@@ -408,9 +428,24 @@ const liveHost = bare(S(b.live_host));
 const hosts = [...new Set(urls.map(u => hostOf(u)).filter(Boolean))];
 // staging unless the caller says otherwise, or unless every URL is already on the live host
 const staging = b.staging === false ? false : (b.staging === true ? true : !(liveHost && hosts.every(h => bare(h) === liveHost)));
+const CHECK_IDS = ['page_answers', 'no_redirect', 'indexable', 'robots_allows', 'canonical', 'title', 'h1', 'description'];
+const failOn = S(b.fail_on).toLowerCase() || 'any';
+if (!['any', 'low', 'medium', 'high', 'critical'].includes(failOn)) errors.push('fail_on must be one of any, low, medium, high, critical (given "' + failOn.slice(0, 20) + '")');
+const trimPath = (x) => { const p = S(x).replace(/^https?:\/\/[^\/]+/i, '').replace(/[?#].*$/, '').toLowerCase(); return (p.replace(/\/+$/, '') || '/'); };
+const expRaw = Array.isArray(b.expected) ? b.expected : (S(b.expected) ? S(b.expected).split(/[\s,]+/) : []);
+if (expRaw.length > 100) errors.push('expected takes at most 100 entries (' + expRaw.length + ' given)');
+const expected = [];
+for (const e of expRaw.slice(0, 100)) {
+  let path = '', check = '', reason = '';
+  if (e && typeof e === 'object') { path = S(e.path || e.url); check = S(e.check).toLowerCase(); reason = S(e.reason).slice(0, 200); }
+  else { const m = S(e).match(/^(.*?)(?::([a-z0-9_]+))?$/i); path = m ? S(m[1]) : S(e); check = m && m[2] ? S(m[2]).toLowerCase() : ''; if (/^https?$/i.test(path) && m && m[2]) { path = S(e); check = ''; } }
+  if (!path) { errors.push('expected: an entry has no path'); continue; }
+  if (check && !CHECK_IDS.includes(check)) { errors.push('expected: "' + check + '" is not a check (' + CHECK_IDS.join(', ') + ')'); continue; }
+  expected.push({ path: trimPath(path), check, reason });
+}
 if (errors.length) return [{ json: { ok: false, status: 400, verdict: 'error', exit_code: 2, error: errors.join('; '), errors, writes: 'none' } }];
 const checked_at = new Date().toISOString();
-const items = urls.map((url, i) => ({ json: { ok: true, kind: 'page', url, idx: i, host: hostOf(url), live_host: liveHost, staging, checked_at, pages: urls.length, request_id: $execution.id } }));
+const items = urls.map((url, i) => ({ json: { ok: true, kind: 'page', url, idx: i, host: hostOf(url), live_host: liveHost, staging, checked_at, pages: urls.length, request_id: $execution.id, fail_on: failOn, expected } }));
 // one robots.txt per host, so "is this page allowed to be crawled" can be answered from the same fetches
-hosts.forEach((h, j) => items.push({ json: { ok: true, kind: 'robots', url: 'https://' + h + '/robots.txt', idx: urls.length + j, host: h, live_host: liveHost, staging, checked_at, pages: urls.length, request_id: $execution.id } }));
+hosts.forEach((h, j) => items.push({ json: { ok: true, kind: 'robots', url: 'https://' + h + '/robots.txt', idx: urls.length + j, host: h, live_host: liveHost, staging, checked_at, pages: urls.length, request_id: $execution.id, fail_on: failOn, expected } }));
 return items;

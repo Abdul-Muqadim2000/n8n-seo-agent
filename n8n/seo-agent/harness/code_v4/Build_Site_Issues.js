@@ -124,6 +124,21 @@ const IMP = (() => {
   const SEV_ORD = { Critical: 0, High: 1, Medium: 2, Low: 3, Info: 4 };
   // what stops Google indexing a page or sends it somewhere else: these come first whatever else is in the list
   const BLOCKER = /noindex|not indexable|non-indexable|blocked by robots|robots\.txt (blocks|disallow)|disallowed|broken pages|returning 4xx|server errors|canonical (points|to broken|to a redirect|chain)|recursive canonical|soft 404|redirect (loop|chain)|not indexed|index coverage|crawler access|meta refresh|www and non-www|duplicate host|HTTP does not redirect|sitemap is (missing|not)|no sitemap/i;
+  // B-6 (2026-10-17, re-rating 2026-10-17, execs 739 / 767): the reason a blocker is first was one sentence for every class — "Google cannot
+  // index or follow these pages" — printed under the www / non-www split finding whose own text says Google shows and ranks those pages under
+  // the other address and that requesting indexing does not help. The reason now names what THIS class of blocker does.
+  const blockerWhy = (f) => {
+    const t = S((f || {}).title);
+    if (/www and non-www|duplicate host|split in Google/i.test(t)) return 'Google splits these pages between two addresses of the site, so their links and ranking signals are divided';
+    if (/HTTP does not redirect/i.test(t)) return 'the insecure address of these pages is served as a separate page';
+    if (/redirect (loop|chain)/i.test(t)) return 'crawlers are sent through redirects before they reach these pages';
+    if (/canonical/i.test(t)) return 'these pages send Google to another address as the one to index';
+    if (/sitemap/i.test(t)) return 'Google is not given a working list of the pages to crawl';
+    if (/crawler access|blocked by robots|robots\.txt|disallow/i.test(t)) return 'crawlers are told not to read these pages';
+    if (/broken pages|returning 4xx|server errors|soft 404/i.test(t)) return 'these addresses do not answer with a page';
+    if (/not indexed|index coverage/i.test(t)) return 'Google has not indexed these pages';
+    return 'Google cannot index or follow these pages';
+  };
   // items that change nothing a visitor or a crawler acts on: they are worth fixing, never first
   const COSMETIC = /favicon|doctype|charset|deprecated html|readab|text-to-html|alt text|open graph|social (image|card)/i;
   // ---- G18-2 (2026-10-12, measured by the accuracy set): the minor band, folded into one line ----
@@ -140,12 +155,28 @@ const IMP = (() => {
   const MINOR_RULE_MAX = 3;     // a rule on the list above stays in the main list where it sits on pages that earn real traffic
   const S = (v) => String(v == null ? '' : v);
   const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
-  const pathOf = (u) => S(u).replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '') || '/';
+  // host-agnostic by path, trailing slash ignored ("/whatwedo" and "/whatwedo/" are one page)
+  const pathOf = (u) => S(u).replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '').replace(/(.)\/$/, '$1') || '/';
   const fmt = (v) => n0(v).toLocaleString('en-GB');
 
   // clicks + impressions per page from the audit's own Search Console block (28 days)
+  // R65 (2026-10-16, re-rating 2026-10-15): the index held only `top_pages` — the report's top 10 — so a finding on pages Search Console
+  // measured in the same run was priced at the site average ("an estimated 4 clicks and 637 impressions" for six orphan pages that had
+  // 0 clicks and 16 impressions). `page_traffic` is every page row the audit read ([path, clicks, impressions], summed over the hosts);
+  // `top_pages` stays the report's table. With `page_traffic_complete` (fewer rows than the request's limit) a page that is not in the
+  // list had no impressions at all: that is a measurement of zero, not an unknown.
   const trafficIndex = (sc) => {
     const by = new Map();
+    const pt = (sc || {}).page_traffic;
+    if (Array.isArray(pt) && pt.length) {
+      for (const r of pt) {
+        if (!Array.isArray(r)) continue;
+        const p = pathOf(r[0]); if (!p) continue;
+        const cur = by.get(p) || { clicks: 0, impressions: 0 };
+        by.set(p, { clicks: cur.clicks + n0(r[1]), impressions: cur.impressions + n0(r[2]) });
+      }
+      return by;
+    }
     for (const r of ((sc || {}).top_pages || [])) {
       const p = pathOf(r.page || r.url);
       if (!p) continue;
@@ -153,6 +184,26 @@ const IMP = (() => {
       by.set(p, { clicks: cur.clicks + n0(r.clicks), impressions: cur.impressions + n0(r.impressions) });
     }
     return by;
+  };
+
+  // ---- B5-12 (2026-10-16, benchmark area 5; Conductor weights by page views and conversion rate): GA4 key events per page ----
+  // For a lead-generation site an impression is a weak proxy for value; the key events (the visits that did what the site exists for) on the
+  // organic landing pages say which pages earn. When the audit read them (`ga4_key_events`, usable only with at least one key event in the
+  // 28 days) they add to the traffic term: one key event counts as KE_W = 100 points, the same as ten clicks (a click is 10, an impression 1).
+  // Without them the weight is exactly what it was, and the report says which basis it used. Never a guess: a property with no key events is
+  // not a property where every page is worth nothing, so it falls back and says why.
+  const KE_W = 100;
+  const ga4Of = (ctx) => { const g = ctx && ctx.ga4_key_events; return (g && g.connected && g.usable === true && Array.isArray(g.rows) && g.rows.length) ? g : null; };
+  const ga4Index = (g) => { const by = new Map(); for (const r of ((g || {}).rows || [])) { if (!Array.isArray(r)) continue; const p = pathOf(r[0]); const cur = by.get(p) || { ke: 0, sessions: 0 }; by.set(p, { ke: cur.ke + n0(r[1]), sessions: cur.sessions + n0(r[2]) }); } return by; };
+  // which weight the list used, in one sentence (printed in the report next to the method) and as a short code
+  const weightBasis = (ctx) => {
+    const g = ga4Of(ctx); const sc = (ctx && ctx.search_console && ctx.search_console.connected);
+    const gx = ctx && ctx.ga4_key_events;
+    if (g) return { source: sc ? 'search_console_and_ga4_key_events' : 'ga4_key_events',
+      text: 'Weight used: ' + (sc ? 'Search Console clicks and impressions plus ' : '') + 'GA4 key events per organic landing page (' + fmt(g.total_key_events) + ' key events in the last 28 days, one key event counted as ten clicks).' };
+    return { source: sc ? 'search_console' : 'none',
+      text: 'Weight used: ' + (sc ? 'Search Console clicks and impressions only' : 'the pages affected and their place in the site only (no Search Console data)') + ' — GA4 key events were not used: '
+        + S((gx && gx.reason) || 'GA4 was not read in this audit') + '.' };
   };
 
   // G18-2: is this finding minor (foldable)? Derived from the severity and the impact weight alone, so the app can apply the same rule to a
@@ -178,10 +229,15 @@ const IMP = (() => {
     const sc = (ctx && ctx.search_console && ctx.search_console.connected) ? ctx.search_console : null;
     const totals = sc && sc.totals ? sc.totals : null;
     const by = trafficIndex(sc);
+    const complete = !!(sc && sc.page_traffic_complete === true && Array.isArray(sc.page_traffic) && sc.page_traffic.length);
     const knownPages = Math.max(1, n0(sc && sc.pages_with_impressions) || by.size || total);
     const avgClicks = totals ? n0(totals.clicks) / knownPages : 0;
     const avgImpr = totals ? n0(totals.impressions) / knownPages : 0;
     const keyPaths = new Set([...((ctx && ctx.key_pages) || []).map(pathOf), '/']);
+    const ga = ga4Of(ctx);                 // B5-12: null unless GA4 key events were read and there is at least one
+    const gaBy = ga ? ga4Index(ga) : null;
+    const gaComplete = !!(ga && ga.rows_complete === true);
+    const gaAvg = ga ? n0(ga.total_key_events) / Math.max(1, gaBy.size) : 0;
 
     for (const f of list) {
       const sev = SEV_W[f.severity] != null ? SEV_W[f.severity] : 1;
@@ -193,9 +249,13 @@ const IMP = (() => {
       if (sc) {
         if (siteWide && totals) { clicks = n0(totals.clicks); impressions = n0(totals.impressions); measured = knownPages; }
         else {
-          for (const u of (f.sample_urls || [])) {
-            const hit = by.get(pathOf(S(u).split(' — ')[0]));
+          // R65: every affected URL the finding names (affected_urls), not only its 5-10 samples
+          const urls = (Array.isArray(f.affected_urls) && f.affected_urls.length) ? f.affected_urls : (f.sample_urls || []);
+          for (const u of urls) {
+            const raw = S(u).split(' — ')[0].trim();
+            const hit = by.get(pathOf(raw));
             if (hit) { clicks += hit.clicks; impressions += hit.impressions; measured++; }
+            else if (complete && /^https?:\/\/[^\s]+$/i.test(raw)) measured++;   // Search Console listed every page it showed: this one earned nothing
           }
           if (measured && affected > measured) { const k = affected / measured; clicks = Math.round(clicks * k); impressions = Math.round(impressions * k); }
           if (!measured) { clicks = Math.round(avgClicks * affected); impressions = Math.round(avgImpr * affected); }
@@ -205,14 +265,31 @@ const IMP = (() => {
       // 22,860 impressions in the last 28 days" for a property that measured 38 clicks and 5,295 in that period (the mobile-usability
       // finding, 45 of 47 pages). No finding can put more traffic at risk than the whole property has, so every basis — measured,
       // scaled or averaged — is capped at Search Console's own 28-day totals, and the line says when the cap bit.
+      // B5-12: key events of the affected pages, by the same rules as clicks (named pages measured, scaled to the pages affected, the property's
+      // average per landing page otherwise, never more than the property's total)
+      let keyEvents = 0, keMeasured = 0, keCapped = false;
+      if (ga) {
+        if (siteWide) { keyEvents = n0(ga.total_key_events); keMeasured = gaBy.size; }
+        else {
+          const urls = (Array.isArray(f.affected_urls) && f.affected_urls.length) ? f.affected_urls : (f.sample_urls || []);
+          for (const u of urls) {
+            const raw = S(u).split(' \u2014 ')[0].trim(); const hit = gaBy.get(pathOf(raw));
+            if (hit) { keyEvents += hit.ke; keMeasured++; }
+            else if (gaComplete && /^https?:\/\/[^\s]+$/i.test(raw)) keMeasured++;
+          }
+          if (keMeasured && affected > keMeasured) keyEvents = Math.round(keyEvents * affected / keMeasured);
+          if (!keMeasured) keyEvents = Math.round(gaAvg * affected);
+        }
+        if (keyEvents > n0(ga.total_key_events)) { keyEvents = n0(ga.total_key_events); keCapped = true; }
+      }
       let capped = false;
       if (totals) {
         const totC = n0(totals.clicks), totI = n0(totals.impressions);
         if (clicks > totC) { clicks = totC; capped = true; }
         if (impressions > totI) { impressions = totI; capped = true; }
       }
-      const traffic = clicks * 10 + impressions;
-      const trafficFactor = sc ? 1 + Math.log10(1 + traffic) : 1;
+      const traffic = clicks * 10 + impressions + keyEvents * KE_W;
+      const trafficFactor = (sc || ga) ? 1 + Math.log10(1 + traffic) : 1;
       const onKeyPage = siteWide || (f.sample_urls || []).some(u => keyPaths.has(pathOf(S(u).split(' — ')[0])));
       const placeFactor = onKeyPage ? 1.3 : 1;
       const blocker = BLOCKER.test(S(f.title)) && (f.category === 'Crawlability & Indexing' || f.category === 'Security' || f.category === 'Technical');
@@ -225,13 +302,16 @@ const IMP = (() => {
       // High somewhere else just because it touches indexing
       f.impact_band = f.severity === 'Info' ? 0 : (blocker && sev >= SEV_W.Medium) ? 3 : cosmetic ? 1 : 2;
       f.impact_traffic = sc ? { clicks, impressions, estimated: !measured && !siteWide, capped, period_days: 28,
-        property_totals: totals ? { clicks: n0(totals.clicks), impressions: n0(totals.impressions) } : null } : null;
+        property_totals: totals ? { clicks: n0(totals.clicks), impressions: n0(totals.impressions) } : null,
+        ...(ga ? { key_events: keyEvents, key_events_estimated: !keMeasured && !siteWide, key_events_capped: keCapped } : {}) } : (ga ? { clicks: 0, impressions: 0, estimated: false, capped: false, period_days: 28, property_totals: null, key_events: keyEvents, key_events_estimated: !keMeasured && !siteWide, key_events_capped: keCapped } : null);
+      f.impact_source = ga ? (sc ? 'search_console_and_ga4_key_events' : 'ga4_key_events') : (sc ? 'search_console' : 'none');   // B5-12: which weight this finding used
       f.minor = isMinor(f);   // G18-2: folded in the reports and in the app, never removed
       f.impact_basis = [
-        blocker ? 'Google cannot index or follow these pages' : '',
+        blocker ? blockerWhy(f) : '',
         siteWide ? 'the whole website' : affected + ' of ' + total + ' crawled pages',
         sc ? (measured || siteWide ? 'about ' : 'an estimated ') + fmt(clicks) + ' clicks and ' + fmt(impressions) + ' impressions in the last 28 days'
           + (capped ? ' (capped at everything the whole website measured in that period: the pages affected cannot put more at risk)' : '') : 'no Search Console data, so the pages affected and their place in the site decide the order',
+        ga ? (keMeasured || siteWide ? 'about ' : 'an estimated ') + fmt(keyEvents) + ' GA4 key events in the last 28 days' + (keCapped ? ' (capped at the whole website\'s total)' : '') : '',
         onKeyPage && !siteWide ? 'the homepage or a key page is affected' : '',
         f.severity + ' severity',
         cosmetic ? 'cosmetic, so it is never ranked first' : ''
@@ -254,14 +334,22 @@ const IMP = (() => {
       + (next ? ' — impact score ' + f.impact + ' against ' + next.impact + ' for "' + S(next.title) + '"' : '') + '.';
   };
 
-  return { rank, method, firstReason, isMinor, fold, foldNote, MINOR_RULES, MINOR_MAX, MINOR_RULE_MAX, SEV_W, BLOCKER, COSMETIC };
+  return { rank, method, weightBasis, firstReason, isMinor, fold, foldNote, MINOR_RULES, MINOR_MAX, MINOR_RULE_MAX, SEV_W, BLOCKER, COSMETIC };
 })();
 const base = $('Check Crawl').first().json;
 const input = $input.first().json;
 const summary = base.crawl_summary || {};
 const di = summary.domain_info || {};
 const pm = summary.page_metrics || {};
-const pages = $('Get Crawled Pages Answers').first().json.tasks?.[0]?.result?.[0]?.items || [];
+const crawlItems = $('Get Crawled Pages Answers').first().json.tasks?.[0]?.result?.[0]?.items || [];
+// R63 (2026-10-16): a redirect response (resource_type "redirect", HTTP 3xx) has no HTML and no meta: it is not a page. Counting it made 47 pages of 45, and every page
+// rule (compression, canonical, Open Graph, Twitter card, outbound links, URL shape) then judged a response that has none of those things.
+const isRedirectItem = (p) => !!p && (p.resource_type === 'redirect' || (Number(p.status_code) >= 300 && Number(p.status_code) < 400));
+const pages = crawlItems.filter(p => !isRedirectItem(p));
+const redirectItems = crawlItems.filter(isRedirectItem);
+// R71: the crawler's "deprecated" list includes elements the HTML standard still defines (<u>, <s>, <small>, <b>, <i> ...); only the tags that really are obsolete count
+const CONFORMING_TAGS = new Set(['u', 's', 'small', 'b', 'i', 'em', 'strong', 'mark', 'cite', 'q', 'abbr', 'time', 'data', 'wbr', 'bdi', 'bdo', 'ruby', 'rt', 'rp', 'kbd', 'samp', 'var', 'sub', 'sup', 'dfn', 'del', 'ins', 'code', 'pre', 'span', 'div']);
+const obsoleteTags = (p) => { const t = p && p.meta && p.meta.deprecated_tags; return Array.isArray(t) ? [...new Set(t.map(x => String(x).toLowerCase().replace(/[<>\/]/g, '')))].filter(x => x && !CONFORMING_TAGS.has(x)) : null; };
 const probe = input.probe || { findings: [], what_works: [], measurements: {} };
 let extras = { duplicate_title: [], duplicate_description: [], non_indexable: [], redirect_chains: [], errors: [] };
 try { extras = { ...extras, ...($('Collect Crawl Extras').first().json.crawl_extras || {}) }; } catch (e) {}
@@ -315,12 +403,21 @@ const findings = [];
 const whatWorks = [];
 let schema_flag = null;   // R24: the crawl's structured-data flag, reported in `not_assessed` by a technical audit
 
+// B-14 (F-B, 2026-10-17, exec 739): the crawler's flag gave no reason and listed /cookies; a URL is listed only with a reason we can name
+const urlWhy14 = (u) => { const m = String(u || '').match(/^https?:\/\/[^\/]+([^#]*)$/); const pth = m ? m[1] : String(u || ''); const why = [];
+  if (/\?/.test(pth)) why.push('carries parameters'); if (/[A-Z]/.test(pth.replace(/\?.*$/, ''))) why.push('has capital letters'); if (/_/.test(pth)) why.push('uses underscores');
+  const joined = pth.replace(/\?.*$/, '').split(/[\/-]/).filter(sg => sg && sg.length >= 7 && (sg.match(/what|why|how|who|with|and|our|your|the|for|we|do/g) || []).length >= 2);
+  if (joined.length) why.push('joins words without hyphens ("' + joined[0] + '")'); return why.join(', '); };
 for (const c of CATALOG) {
-  const affected = pages.filter(p => {
+  const pool = (c.key === 'is_redirect' || c.key === 'has_links_to_redirects') ? redirectItems.concat(pages) : pages;   // R63: only the two redirect checks look at redirect items
+  const affected = pool.filter(p => {
     const v = p.checks ? p.checks[c.key] : undefined;
     if (v === undefined || v === null) return false;
+    if (c.key === 'deprecated_html_tags' && v === true) { const t = obsoleteTags(p); if (t && !t.length) return false; }   // R71
+    if (c.key === 'seo_friendly_url' && v === false && !urlWhy14(p.url)) return false;   // B-14
     return c.invert ? v === false : v === true;
   });
+  const redirOnly = (c.key === 'is_redirect' || c.key === 'has_links_to_redirects') && affected.length > 0 && affected.every(isRedirectItem);
   // R24 (2026-10-14): a technical audit does not assess structured data, so it emits no Schema finding — the count goes into the
   // one line that speaks about schema there, `not_assessed`.
   if (!isFull && c.cat === 'Schema') { if (affected.length > 0) schema_flag = { pages: affected.length, total }; continue; }
@@ -330,10 +427,11 @@ for (const c of CATALOG) {
     if (sev === 'Critical' && affected.length / total < 0.03 && !affected.some(p => /^https?:\/\/[^\/]+\/?$/.test(p.url))) sev = 'High';
     findings.push({
       category: c.cat, severity: sev, title: c.title, why: c.why, fix: c.fix,
-      evidence: affected.length + ' of ' + total + ' crawled pages',
+      evidence: c.key === 'has_links_to_redirects' && redirOnly ? affected.length + ' internal URL(s) that redirect are linked from the site (the crawl does not say which page holds each link)'
+        : redirOnly ? affected.length + ' of ' + (total + redirectItems.length) + ' crawled URLs redirect' : affected.length + ' of ' + total + ' crawled pages',
       affected_count: affected.length,
       affected_pct: Math.round(affected.length / total * 100),
-      sample_urls: affected.slice(0, 10).map(p => p.url),
+      sample_urls: affected.slice(0, 10).map(p => { const ot = c.key === 'deprecated_html_tags' ? obsoleteTags(p) : null; return ot && ot.length ? p.url + ' — <' + ot.join('>, <') + '>' : (c.key === 'seo_friendly_url' ? p.url + ' — ' + urlWhy14(p.url) : p.url); }),
       scope: 'page'
     });
   }
@@ -484,7 +582,10 @@ const addCount = (n, cat, sev, title, why, fix, evidence) => {
 };
 addCount(cnt(pm.broken_links), 'Crawlability & Indexing', cnt(pm.broken_links) > 20 ? 'High' : 'Medium', 'Broken internal links', 'Links to pages that no longer exist waste crawl budget and send users to dead ends.', 'Export the broken links from the crawl and fix or remove each one; redirect deleted pages to the closest live page.', cnt(pm.broken_links) + ' broken links across ' + total + ' pages');
 addCount(cnt(pm.broken_resources), 'Performance', 'Medium', 'Broken images, scripts or stylesheets', 'Missing resources cause layout breakage and slow the page while the browser waits.', 'Fix or remove references to resources that return errors.', cnt(pm.broken_resources) + ' broken resources referenced');
-addCount(cnt(pm.duplicate_content), 'Content', 'Medium', 'Pages with duplicate content', 'Near-identical pages compete with each other and dilute ranking signals.', 'Consolidate duplicates with a canonical tag or a 301 redirect, or make each page substantively different.', cnt(pm.duplicate_content) + ' pages with duplicate content');
+const dupPages = pages.filter(p => p.duplicate_content === true);
+if (dupPages.length) findings.push({ category: 'Content', severity: 'Medium', title: 'Pages with duplicate content', why: 'Near-identical pages compete with each other and dilute ranking signals.', fix: 'Consolidate duplicates with a canonical tag or a 301 redirect, or make each page substantively different. Check first that they really are the same page: a set of service pages built on one template can be flagged for its layout and not its words.',
+  evidence: dupPages.length + ' of ' + total + ' crawled pages are flagged by the crawler as near-identical to another page of the site', affected_count: dupPages.length, affected_pct: Math.round(dupPages.length / total * 100), sample_urls: dupPages.slice(0, 10).map(p => p.url), scope: 'page' });   // R118
+else addCount(cnt(pm.duplicate_content), 'Content', 'Low', 'Pages with duplicate content', 'Near-identical pages compete with each other and dilute ranking signals.', 'Consolidate duplicates with a canonical tag or a 301 redirect, or make each page substantively different.', cnt(pm.duplicate_content) + ' pages counted by the crawler as duplicate content; it did not name them, so the pages are not known');
 addCount(cnt(pm.redirect_loop), 'Crawlability & Indexing', 'Critical', 'Redirect loops', 'Looping redirects make pages unreachable for users and crawlers.', 'Break the loop so every redirect ends at a live 200 page.', cnt(pm.redirect_loop) + ' redirect loops');
 
 // ===== 3c. Extra On-Page reports (duplicate tags, non-indexable, redirect chains) =====
@@ -597,7 +698,7 @@ const render_merge = renderMerges.length ? { merged: renderMerges.length, items:
 // ===== 5. What works =====
 const ok = (cond, text) => { if (cond) whatWorks.push(text); };
 ok(dc.ssl === true, 'Valid SSL certificate on the main domain' + (exp ? ' (expires ' + exp.slice(0, 10) + ')' : ''));
-ok(dc.test_https_redirect === true, 'HTTP correctly redirects to HTTPS');
+ok(dc.test_https_redirect === true && !((probe.measurements || {}).redirect_chains || []).length, 'HTTP correctly redirects to HTTPS');   // B-16: not "correctly" over a chain the probes measured
 ok(dc.robots_txt === true, 'robots.txt is present');
 ok(dc.http2 === true, 'HTTP/2 is enabled');
 ok(dc.test_page_not_found === true, 'Missing pages return a proper 404');
@@ -647,7 +748,7 @@ for (let i = findings.length - 1; i >= 0; i--) {
 // ===== 6. Order by likely impact (G26, 2026-10-12): severity x the share of pages affected x the clicks and impressions those pages
 // get in Search Console x their place in the site. Index blockers first, cosmetic items never first, notes about missing data last.
 // The severity label is unchanged and stays visible; the scoring below still groups by severity, so no score changes because of the order.
-IMP.rank(findings, { total_pages: total, search_console: input.search_console || null,
+IMP.rank(findings, { total_pages: total, search_console: input.search_console || null, ga4_key_events: input.ga4_key_events || null,
   key_pages: [...(((input.html_analysis || {}).sampled_pages) || []).map(p => (p && p.url) || p), ...(((input.search_console || {}).top_pages) || []).slice(0, 5).map(p => p.page || p.url)].filter(Boolean) });
 
 // ===== 7. Scoring =====
@@ -662,7 +763,8 @@ for (const cat of Object.keys(WEIGHTS)) {
   const list = findings.filter(f => f.category === cat && f.scoring !== false)
     .sort((a, b) => (SEV_ORDER[a.severity] - SEV_ORDER[b.severity]) || ((b.affected_pct || 0) - (a.affected_pct || 0)));
   for (const f of list) {
-    const pct = f.affected_pct == null ? 100 : f.affected_pct;
+    let pct = f.affected_pct == null ? 100 : f.affected_pct;
+    if (f.affected_of && f.affected_count && f.scope !== 'site') pct = Math.min(pct, Math.round(f.affected_count / total * 100));   // R72: 1 of the 5 key pages read twice is at least 1 of the whole crawl, not 20% of it
     const factor = f.scope === 'site' ? 1 : (0.6 + 0.4 * (pct / 100));
     const n = seenSev[f.severity] = (seenSev[f.severity] || 0) + 1;
     score -= (PEN2[f.severity] || 0) * factor * Math.pow(DECAY, n - 1);
@@ -718,7 +820,8 @@ return [{
       score_cap_reason: cap_reason,
       grade, category_scores,
       weights: WEIGHTS,
-      priority_method: IMP.method,
+      priority_method: IMP.method + ' ' + IMP.weightBasis({ search_console: input.search_console || null, ga4_key_events: input.ga4_key_events || null }).text,
+      impact_weight: IMP.weightBasis({ search_console: input.search_console || null, ga4_key_events: input.ga4_key_events || null }),
       priority_first: IMP.firstReason(findings),
       minor_count: IMP.fold(findings).folded,
       minor_note: IMP.foldNote(IMP.fold(findings).folded),

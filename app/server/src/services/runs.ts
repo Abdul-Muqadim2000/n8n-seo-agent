@@ -1,10 +1,11 @@
-import { and, asc, desc, eq, inArray, lt, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, lt, ne, sql } from 'drizzle-orm';
 import {
   buildN8nPayload,
   cleanDomain,
   compactBody,
   estimateRunCost,
   estimateRunMinutes,
+  IDEMPOTENCY,
   MODES,
   n8nSiteId,
   ladderPrefsSchema,
@@ -28,16 +29,23 @@ import { config } from '../config';
 import { db, schema } from '../db';
 import type { OrgRow, ReportRow, RunRow, SiteRow } from '../db/schema';
 import { safeEqual } from '../lib/crypto';
-import { badRequest, forbidden, notFound } from '../lib/errors';
+import { badRequest, forbidden, HttpError, notFound } from '../lib/errors';
 import { insertRows, invalidateSite, siteRows, startRun, updateRows } from '../n8n/client';
 import { assertGa4ForDomain } from './google';
-import { extractFiles } from './files';
+import { extractFiles, shownFileKind } from './files';
 import { applyLadderPrefs, markLadderWon } from './ladderSettings';
 import { deliverReport } from './reportDelivery';
+import { emitForCallback, emitRunsFailed } from './webhooks';
+import { engineCostTable } from './engineCost';
 import { assertBudget, lockCompany } from './spend';
 import { engineCostEstimate, ledgerCost, stageOf, summarize, titleFor } from './summaries';
 
-export const estimateCost = (input: RunInput): number => estimateRunCost(input.mode, input as unknown as Record<string, unknown>);
+/**
+ * R100: what the engine will reserve for this request — its own rolling figures (`engineCostTable`), the shipped table only when
+ * n8n cannot be read. The budget check holds this number, so it must be the engine's, not a mirror of its defaults.
+ */
+export const estimateCost = async (input: RunInput): Promise<number> =>
+  estimateRunCost(input.mode, input as unknown as Record<string, unknown>, (await engineCostTable()).calibration);
 export const etaFor = (input: RunInput): number => estimateRunMinutes(input.mode, input as unknown as Record<string, unknown>);
 
 export function runTitle(input: RunInput, site: SiteRow | null): string {
@@ -97,9 +105,32 @@ export function inputForRole(input: RunInput, role: Role): RunInput {
 export interface CreateRunOptions {
   /** 'auto': started by "Choose keywords for me" on the owner's behalf (its title says so; its reports count as automatic) */
   startedBy?: 'person' | 'auto';
+  /** G4: the API key that asks (stored on the run; the run is still the key creator's, `a.user`) */
+  apiKeyId?: string | null;
+  /** G4: the caller's Idempotency-Key and the hash of its request — checked under the company lock, before the budget */
+  idempotency?: { key: string; hash: string } | null;
 }
 
+/** G4: the run an Idempotency-Key named in the last 24 hours, if any. */
+export async function findIdempotentRun(orgId: string, key: string): Promise<RunRow | null> {
+  return (
+    (await db.query.runs.findFirst({
+      where: and(eq(schema.runs.orgId, orgId), eq(schema.runs.idempotencyKey, key), gt(schema.runs.createdAt, new Date(Date.now() - IDEMPOTENCY.hours * 3_600_000))),
+      orderBy: desc(schema.runs.createdAt),
+    })) ?? null
+  );
+}
+
+/** G4: the same Idempotency-Key with a different request. 422, like Stripe: the key names one request, never two. */
+export const idempotencyMismatch = () =>
+  new HttpError(422, 'This Idempotency-Key was already used for a different request in the last 24 hours. Use a new key for a new run.', 'idempotency_mismatch');
+
 export async function createRun(a: OrgAccess, input: RunInput, opts: CreateRunOptions = {}): Promise<RunRow> {
+  return (await createRunWithMeta(a, input, opts)).run;
+}
+
+/** `createRun`, and whether the run is a replay of an earlier request with the same Idempotency-Key (nothing new was started). */
+export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: CreateRunOptions = {}): Promise<{ run: RunRow; replayed: boolean }> {
   const { org, user } = a;
   const auto = opts.startedBy === 'auto';
   if (org.disabled) throw forbidden('This company is disabled. Contact the platform administrator.');
@@ -130,7 +161,7 @@ export async function createRun(a: OrgAccess, input: RunInput, opts: CreateRunOp
     if (page) input = { ...input, keyword: page.keyword, ladder: page.ladder };
   }
 
-  const estimated = estimateCost(input);
+  const estimated = await estimateCost(input);
   const body = compactBody(
     // ENGINE_EMAILS off: n8n gets no address at all, so it e-mails nothing; every result arrives here through the callback
     buildN8nPayload(input, site ? siteContext(site) : null, { callbackUrl: callbackUrl(org), email: config.engineEmails && input.emailCopy ? user.email : '' }),
@@ -144,8 +175,21 @@ export async function createRun(a: OrgAccess, input: RunInput, opts: CreateRunOp
   }
   // budget checks and the insert under one lock per company, so parallel requests (runs and keyword checks) cannot all pass the same
   // check; the month counts runs and keyword checks, the platform's daily ceiling every company (spend.ts)
-  const run = await db.transaction(async (tx) => {
+  const created = await db.transaction(async (tx) => {
     await lockCompany(tx, org.id);
+    // G4: a repeat of an earlier request (same Idempotency-Key within 24 hours) answers that run and starts nothing. Under the lock,
+    // so two repeats arriving together cannot both miss each other; before the budget, so a replay is answered even when the
+    // budget has since filled up.
+    if (opts.idempotency) {
+      const prior = await tx.query.runs.findFirst({
+        where: and(eq(schema.runs.orgId, org.id), eq(schema.runs.idempotencyKey, opts.idempotency.key), gt(schema.runs.createdAt, new Date(Date.now() - IDEMPOTENCY.hours * 3_600_000))),
+        orderBy: desc(schema.runs.createdAt),
+      });
+      if (prior) {
+        if (prior.idempotencyHash !== opts.idempotency.hash) throw idempotencyMismatch();
+        return { row: prior, replayed: true };
+      }
+    }
     await assertBudget(tx, org, estimated, 'This run');
     const [row] = await tx
       .insert(schema.runs)
@@ -159,10 +203,15 @@ export async function createRun(a: OrgAccess, input: RunInput, opts: CreateRunOp
         input: { ...input, emailCopy: config.engineEmails && input.emailCopy, ...(auto ? { autoStart: true } : {}) } as unknown as Record<string, unknown>,
         estimatedCostUsd: estimated,
         etaMinutes: etaFor(input),
+        apiKeyId: opts.apiKeyId ?? null,
+        idempotencyKey: opts.idempotency?.key ?? null,
+        idempotencyHash: opts.idempotency?.hash ?? null,
       })
       .returning();
-    return row;
+    return { row, replayed: false };
   });
+  if (created.replayed) return { run: created.row, replayed: true };
+  const run = created.row;
 
   const res = await startRun(body, org.id);
   if (!res.ok) {
@@ -171,7 +220,8 @@ export async function createRun(a: OrgAccess, input: RunInput, opts: CreateRunOp
       .set({ status: 'failed', error: res.error, requestId: res.requestId, completedAt: new Date() })
       .where(eq(schema.runs.id, run.id))
       .returning();
-    return failed;
+    void emitRunsFailed([failed.id]).catch(() => undefined);
+    return { run: failed, replayed: false };
   }
   // B-A6 (2026-10-15): the engine recognised a repeat of a request already running, did not start a second run and did not spend
   // again, and answered with the FIRST run's id. Two of our rows would then carry one request id, and a callback matches the newest
@@ -186,7 +236,7 @@ export async function createRun(a: OrgAccess, input: RunInput, opts: CreateRunOp
     });
     if (original) {
       await db.delete(schema.runs).where(eq(schema.runs.id, run.id));
-      return original;
+      return { run: original, replayed: true };
     }
     // the first run is not ours (started outside this app, or already cleaned up): keep this row, it is the only one that can
     // receive the callback — but never claim it started work the engine did not do.
@@ -219,7 +269,7 @@ export async function createRun(a: OrgAccess, input: RunInput, opts: CreateRunOp
       })
       .where(eq(schema.sites.id, site.id));
   }
-  return accepted;
+  return { run: accepted, replayed: false };
 }
 
 /** B-A6: should this start resolve to a run that is already going, instead of keeping a row of its own?
@@ -260,14 +310,23 @@ async function recordPageInEngine(site: SiteRow, input: Extract<RunInput, { mode
     );
 }
 
-/** Runs n8n accepted but never answered (a failed execution only e-mails ops): failed after 3 h or 6x their expected time. */
+/**
+ * R116 (2026-10-16): what an expired run says. The old sentence claimed "the run may have failed in n8n (ops were e-mailed)" — but the
+ * app cannot know an e-mail was sent: the engine's failure watcher (engineFailures.ts) closes a run whose execution FAILED long before
+ * this, so a run that reaches the expiry is one whose execution ended without a word to us (a refusal posted nowhere, a stop, a lost
+ * callback). It says what is known and nothing more.
+ */
+export const STALE_RUN_ERROR =
+  'No result arrived from the SEO engine in time, and the engine did not report a failure for this run. It may have been refused or stopped without a report; start it again, or check its execution in n8n.';
+
+/** Runs n8n accepted but never answered: failed after 3 h or 6x their expected time. */
 export async function expireStaleRuns(): Promise<number> {
   const rows = await db
     .update(schema.runs)
     .set({
       status: 'failed',
       completedAt: new Date(),
-      error: 'No result arrived from the SEO engine in time. The run may have failed in n8n (ops were e-mailed); start it again or check the execution in n8n.',
+      error: STALE_RUN_ERROR,
     })
     .where(
       and(
@@ -276,6 +335,7 @@ export async function expireStaleRuns(): Promise<number> {
       ),
     )
     .returning({ id: schema.runs.id });
+  void emitRunsFailed(rows.map((r) => r.id)).catch(() => undefined);
   return rows.length;
 }
 
@@ -378,6 +438,43 @@ const deliveryLog = {
   error: (o: object, msg: string) => console.error(JSON.stringify({ level: 'error', msg, ...o })),
 };
 
+/** Stages only a schedule produces. Their callbacks reuse the request id of the run that set the work up (the ladder plan, the
+ *  tracking setup), so a run row is found for them although that run did none of the work. */
+export const SCHEDULED_STAGES: readonly string[] = ['rank_tracker', 'content_cadence', 'console_alert'];
+
+/** A report a schedule produced (a weekly or daily run), as opposed to one the matched app run produced. */
+export const isScheduledCallback = (stage: string, body: Record<string, unknown>): boolean => body.on_demand === false || SCHEDULED_STAGES.includes(stage);
+
+/**
+ * D-3 (re-rating 2026-10-17): whether a callback's spend belongs to the run row it matched. A scheduled report never does: the Rank
+ * Tracker's weekly run (exec 785, $0.116) posted one report per ladder with the request id of the run that planned each ladder, and
+ * every one of them was added to that old run — the 2026-10-08 "Ladder: peppol uae" run went 0.1185 → 0.1905 → 0.3065. A run's
+ * cost counts once, on the run that spent it.
+ */
+export const callbackCostCountsForRun = (stage: string, body: Record<string, unknown>): boolean => !isScheduledCallback(stage, body);
+
+/**
+ * How one callback moves its run (pure, so it is tested without a database). A `rejected` callback closes the run as failed with the
+ * engine's own sentence — R116: an on-demand monitor the run guard refused after its "started" note now posts exactly that
+ * (`{stage:'rejected', status:'rejected', error, request_id}`), so the customer reads why instead of waiting for a report that never
+ * comes. A final stage completes it; anything else marks an accepted run as running. A completed run is never reopened.
+ */
+export function runOutcome(
+  runStatus: string,
+  finalStages: readonly string[],
+  stage: string,
+  body: Record<string, unknown>,
+): { status?: string; error?: string | null; completedAt?: Date } {
+  if (stage === 'rejected' || String(body.status ?? '').toLowerCase() === 'rejected') {
+    if (runStatus === 'completed') return {};
+    const why = typeof body.error === 'string' && body.error.trim() ? body.error.trim() : typeof body.validation_error === 'string' && body.validation_error.trim() ? body.validation_error.trim() : 'Rejected by the SEO engine';
+    return { status: 'failed', error: why, completedAt: new Date() };
+  }
+  if (finalStages.includes(stage)) return runStatus === 'completed' ? {} : { status: 'completed', completedAt: new Date(), error: null };
+  if (runStatus === 'accepted' || runStatus === 'submitting') return { status: 'running' };
+  return {};
+}
+
 export async function ingestCallback(
   org: OrgRow,
   body: Record<string, unknown>,
@@ -396,7 +493,7 @@ export async function ingestCallback(
     : null;
 
   const status = String(body.status ?? (stage === 'rejected' ? 'rejected' : 'completed'));
-  const reportId = await db.transaction(async (tx) => {
+  const stored = await db.transaction(async (tx) => {
     const [rep] = await tx
       .insert(schema.reports)
       .values({
@@ -409,11 +506,11 @@ export async function ingestCallback(
         requestId,
         // weekly reports reuse the request id of the run that set tracking up: they are scheduled all the same; a ladder started by
         // "Choose keywords for me" is automatic too (it shows among the Pipeline's automatic runs)
-        scheduled: !run || body.on_demand === false || ['rank_tracker', 'content_cadence', 'console_alert'].includes(stage) || run.input?.autoStart === true,
+        scheduled: !run || isScheduledCallback(stage, body) || run.input?.autoStart === true,
         summary: summarize(stage, body),
         payload,
       })
-      .returning({ id: schema.reports.id });
+      .returning({ id: schema.reports.id, title: schema.reports.title, receivedAt: schema.reports.receivedAt, scheduled: schema.reports.scheduled });
     if (files.length)
       await tx.insert(schema.files).values(
         files.map((f) => ({ id: f.id, orgId: org.id, reportId: rep.id, field: f.field, kind: f.kind, fileName: f.fileName, mimeType: f.mimeType, size: f.size, data: f.data })),
@@ -425,34 +522,35 @@ export async function ingestCallback(
       const patch: Record<string, unknown> = { reportCount: sql`${schema.runs.reportCount} + 1`, lastStage: stage };
       // B-R3: whatever the engine says about money replaces what the app guessed. `ledgerCost` is what the run reported spending
       // (search data + the model calls it priced), `engineCostEstimate` its own calibrated reservation with the sentence behind it.
-      const cost = ledgerCost(body);
+      // D-3: a schedule's spend (and its reservation) is not this run's
+      const ownSpend = callbackCostCountsForRun(stage, body);
+      const cost = ownSpend ? ledgerCost(body) : null;
       if (cost != null) {
         patch.actualCostUsd = sql`coalesce(${schema.runs.actualCostUsd}, 0) + ${cost.usd}`;
         if (cost.estimated) patch.actualCostEstimated = true;
+        if (cost.partial) patch.actualCostPartial = true;
       }
-      const engineEstimate = engineCostEstimate(body);
+      const engineEstimate = ownSpend ? engineCostEstimate(body) : null;
       if (engineEstimate != null) {
         patch.engineCostEstimateUsd = engineEstimate.usd;
         if (engineEstimate.basis) patch.engineCostBasis = engineEstimate.basis.slice(0, 500);
       }
-      if (stage === 'rejected') {
-        if (run.status !== 'completed') Object.assign(patch, { status: 'failed', error: String(body.error ?? 'Rejected by the SEO engine'), completedAt: new Date() });
-      } else if (info?.finalStages.includes(stage)) {
-        if (run.status !== 'completed') Object.assign(patch, { status: 'completed', completedAt: new Date(), error: null });
-      } else if (run.status === 'accepted' || run.status === 'submitting') {
-        patch.status = 'running';
-      }
+      Object.assign(patch, runOutcome(run.status, info?.finalStages ?? [], stage, body));
       await tx.update(schema.runs).set(patch).where(eq(schema.runs.id, run.id));
     }
     if (site && (stage === 'site_tracker_setup' || stage === 'site_tracker') && site.trackingStatus === 'not_started')
       await tx.update(schema.sites).set({ trackingStatus: 'active', trackingStartedAt: new Date() }).where(eq(schema.sites.id, site.id));
-    return rep.id;
+    return rep;
   });
+  const reportId = stored.id;
   if (domain) invalidateSite(domain);
   // B-R1: push it. `deliverReport` decides for itself whether this report may leave the app (a page that failed its quality gate,
   // a refused plan or evidence the engine could not read is held with its reason), and a delivery that goes wrong is logged, never
   // allowed to lose the callback we have just stored.
   void deliverReport(org.id, reportId, deliveryLog).catch(() => undefined);
+  // G4: the company's event webhooks (run.completed / report.ready / alert.raised / audit.finding.new / rank.changed …), derived from
+  // this callback after it is stored — like delivery, an event that goes wrong never loses the callback
+  void emitForCallback(org, site, { id: reportId, title: stored.title, stage, status, receivedAt: stored.receivedAt, scheduled: stored.scheduled, runId: run?.id ?? null }, payload, run).catch(() => undefined);
   // the rank tracker says a ladder is won (main keyword top 3 in 4 checks): its settings row says so, so the cadence stops writing it
   // and the app keeps showing Won once the tracker stops checking it (not for a ladder the person paused)
   let ladderWon: boolean | undefined;
@@ -468,8 +566,9 @@ export async function ingestCallback(
 
 // ---------------- serializers ----------------
 
-export function toRun(r: RunRow, extra: { siteDomain?: string | null; userName?: string | null } = {}): Run {
+export function toRun(r: RunRow, extra: { siteDomain?: string | null; userName?: string | null; apiKeyName?: string | null } = {}): Run {
   return {
+    apiKeyName: r.apiKeyId ? (extra.apiKeyName ?? 'an API key') : null,
     id: r.id,
     orgId: r.orgId,
     siteId: r.siteId,
@@ -486,6 +585,7 @@ export function toRun(r: RunRow, extra: { siteDomain?: string | null; userName?:
     engineCostEstimateUsd: r.engineCostEstimateUsd,
     engineCostBasis: r.engineCostBasis,
     actualCostEstimated: r.actualCostEstimated,
+    actualCostPartial: r.actualCostPartial,
     etaMinutes: r.etaMinutes,
     input: r.input as unknown as RunInput,
     createdAt: r.createdAt.toISOString(),
@@ -504,7 +604,8 @@ export function toReport(r: Pick<ReportRow, 'id' | 'runId' | 'siteId' | 'stage' 
     siteDomain,
     stage: r.stage,
     status: r.status,
-    title: r.title,
+    // D-13: pulse reports stored before 2026-10-18 are titled "AI pulse alert" even on a day with no alert
+    title: r.stage === 'ai_pulse' && r.summary?.alerts === 0 ? r.title.replace(/^AI pulse alert\b/, 'AI pulse') : r.title,
     summary: r.summary,
     receivedAt: r.receivedAt.toISOString(),
     scheduled: r.scheduled,
@@ -521,7 +622,7 @@ export async function filesFor(reportIds: string[]): Promise<Map<string, ReportF
     .where(inArray(schema.files.reportId, reportIds));
   for (const f of rows) {
     const list = m.get(f.reportId) ?? [];
-    list.push({ id: f.id, kind: f.kind as ReportFile['kind'], fileName: f.fileName, mimeType: f.mimeType, size: f.size, field: f.field });
+    list.push({ id: f.id, kind: shownFileKind(f), fileName: f.fileName, mimeType: f.mimeType, size: f.size, field: f.field });
     m.set(f.reportId, list);
   }
   return m;

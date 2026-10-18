@@ -119,6 +119,7 @@
    "settle": "Settle Run Ledger (AI)",
    "settle_from": [
     "AI Report",
+    "Chunk Part Done",
     "Nothing To Do (AI)",
     "Refuse Run Ledger (AI)"
    ],
@@ -331,6 +332,39 @@
     "Tracker Report"
    ],
    "tag": "Tracker"
+  },
+  "SEO Agent \u2014 Reply Reader": {
+   "always_output": [
+    "Ensure Run Ledger (Reply)",
+    "Reserve Run Ledger (Reply)"
+   ],
+   "ensure_out": [
+    "DFS Balance (Reply)"
+   ],
+   "est": {
+    "ai": 0.003,
+    "dfs": 0.0
+   },
+   "plan": "Reply Plan",
+   "plan_out": [
+    "Ensure Run Ledger (Reply)"
+   ],
+   "reserve_out": [
+    "After Run Ledger (Reply)"
+   ],
+   "resume": "After Run Ledger (Reply)",
+   "resume_out": [
+    "Run Allowed? (Reply)"
+   ],
+   "row_out": [
+    "Reserve Run Ledger (Reply)"
+   ],
+   "settle": "Settle Run Ledger (Reply)",
+   "settle_from": [
+    "Refuse Run Ledger (Reply)",
+    "Reply Result"
+   ],
+   "tag": "Reply"
   },
   "SEO Agent \u2014 Site Tracker": {
    "always_output": [

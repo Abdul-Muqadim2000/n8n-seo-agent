@@ -163,7 +163,7 @@ export function SiteHeader() {
       )}
     >
       <Container className="relative flex h-16 items-center gap-6 lg:h-[72px]">
-        <Link to="/" className="-ml-1 shrink-0 rounded-md p-1" aria-label="Ascentra home">
+        <Link to="/" className="-ml-1 shrink-0 rounded-md p-1" aria-label="Alaventra home">
           <Logo className="h-8 sm:h-9" />
         </Link>
 
@@ -173,10 +173,11 @@ export function SiteHeader() {
               {trigger('platform', 'Platform')}
               {open === 'platform' && (
                 <div id={ids.platform} className="absolute inset-x-4 top-full pt-2 sm:inset-x-6 lg:inset-x-8">
-                  <div className="mk-menu-panel grid grid-cols-[minmax(0,1fr)_300px] gap-2 rounded-2xl border border-line bg-surface p-2 shadow-overlay">
+                  {/* never taller than the window: on a short laptop screen the panel scrolls instead of running off the bottom */}
+                  <div className="mk-menu-panel grid max-h-[calc(100dvh-88px)] grid-cols-[minmax(0,1fr)_300px] gap-2 overflow-y-auto overscroll-contain rounded-2xl border border-line bg-surface p-2 shadow-overlay">
                     <div className="p-2">
                       <p className="px-3 pb-2 pt-1 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3">Capabilities</p>
-                      <ul className="grid grid-cols-2 gap-x-2">
+                      <ul className="grid grid-cols-2 gap-x-2 xl:grid-cols-3">
                         {features.map((f) => (
                           <li key={f.slug}>
                             <MenuRow to={`/platform/${f.slug}`} icon={f.icon} title={f.shortName} body={f.tagline} onNavigate={close} />
@@ -305,9 +306,9 @@ function MobileMenu({ open, onOpenChange, signedIn }: { open: boolean; onOpenCha
         <D.Overlay className="fixed inset-0 z-50 bg-ink-surface/50 animate-fade-in lg:hidden" />
         <D.Content className="mk-sheet fixed inset-x-0 top-0 z-50 flex max-h-dvh flex-col overflow-hidden rounded-b-2xl border-b border-line bg-page shadow-overlay lg:hidden">
           <D.Title className="sr-only">Menu</D.Title>
-          <D.Description className="sr-only">Pages on the Ascentra website</D.Description>
+          <D.Description className="sr-only">Pages on the Alaventra website</D.Description>
           <div className="flex h-16 shrink-0 items-center justify-between border-b border-line px-4 sm:px-6">
-            <Link to="/" onClick={close} className="-ml-1 rounded-md p-1" aria-label="Ascentra home">
+            <Link to="/" onClick={close} className="-ml-1 rounded-md p-1" aria-label="Alaventra home">
               <Logo className="h-8" />
             </Link>
             <D.Close className="-mr-1.5 inline-flex size-10 items-center justify-center rounded-md text-ink-2 transition-colors duration-150 hover:bg-surface-2 hover:text-ink active:bg-surface-3" aria-label="Close menu">

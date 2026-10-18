@@ -1,6 +1,8 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
+import { audit } from '../services/audit';
 import type { FastifyInstance } from 'fastify';
 import {
+  outreachItemId,
   approveSchema,
   draftDismissSchema,
   linkBuilderRunSchema,
@@ -31,6 +33,7 @@ import { approve, linkBuildingData, linkSettingsOf, mailboxView, sequenceFor, se
 import { testMailbox } from '../services/mail';
 import { exchangeMailCode, isOauthMailbox, MAIL_PROVIDERS, mailAuthUrl, mailProviderInfo, oauthProviderOf, revokeMailTokens, testOauthMailbox } from '../services/mailOauth';
 import { sendManual } from '../services/outreachJobs';
+import { requireClientApproval } from '../services/approvals';
 
 // v4.13 Link Builder (n8n/seo-agent/LINK_BUILDER_SPEC.md): the company's mailboxes, a website's link-building board, approving / editing /
 // pausing sequences, answering replies in the thread, opt-outs, the listings checklist and "find opportunities now".
@@ -59,6 +62,7 @@ export async function linkBuilderRoutes(app: FastifyInstance) {
     const [row] = await db.insert(schema.mailboxes).values({ ...rest, orgId: org.id, secret: seal(password), sentFolder: t.imap.sentFolder, lastUid: Math.max(0, t.imap.uidNext - 1), uidValidity: t.imap.uidValidity, dns: t.dns as unknown as Record<string, unknown>, createdBy: user.id })
       .onConflictDoNothing().returning();
     if (!row) throw new HttpError(409, `${m.fromEmail} is already connected.`);
+    await audit(req, org.id, { action: 'mailbox.connected', target: { type: 'mailbox', id: row.id, label: m.fromEmail }, details: { method: 'app password', smtpHost: m.smtpHost } });
     return mailboxView(row);
   });
 
@@ -118,6 +122,7 @@ export async function linkBuilderRoutes(app: FastifyInstance) {
       try { revoked = await revokeMailTokens(p4, unseal(mb.oauthRefresh)); } catch (e) { revoked = { ok: false, note: MAIL_PROVIDERS[p4].withdraw }; req.log.warn({ err: String(e) }, 'mailbox token not revoked'); }
     }
     await db.delete(schema.mailboxes).where(eq(schema.mailboxes.id, mb.id));
+    await audit(req, org.id, { action: 'mailbox.removed', target: { type: 'mailbox', id: mb.id, label: mb.fromEmail }, details: { accessWithdrawn: revoked.ok } });
     return { ok: true, revoked: revoked.ok, note: revoked.note };
   });
 
@@ -169,6 +174,7 @@ export async function linkBuilderRoutes(app: FastifyInstance) {
         await db.update(schema.mailboxes).set(common).where(eq(schema.mailboxes.id, existing.id));
       } else {
         await db.insert(schema.mailboxes).values({ ...common, orgId: org.id, fromName: t.email.split('@')[0] ?? t.email, createdBy: req.user.id, startedAt: now });
+        await audit(req, org.id, { action: 'mailbox.connected', target: { type: 'mailbox', label: t.email }, details: { method: provider } });
       }
       req.log.info({ org: org.id, provider }, 'mailbox connected with OAuth');
       return back(`mailbox=connected&address=${encodeURIComponent(t.email)}${reads ? '' : '&reads=0'}`);
@@ -217,7 +223,10 @@ export async function linkBuilderRoutes(app: FastifyInstance) {
   app.post('/api/orgs/:orgId/sites/:siteId/link-building/approve', { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } }, async (req) => {
     const p = req.params as P; const { org, site, user } = await siteAccess(req, p.orgId, p.siteId, 'member');
     requireVerified(site);
-    const q = await approve(org, site, user.id, parse(approveSchema, req.body));
+    const body = parse(approveSchema, req.body);
+    // G5: a client workspace that approves outreach first: this draft needs the client's approval
+    await requireClientApproval(org, 'outreach', outreachItemId(body.prospectDomain, body.type));
+    const q = await approve(org, site, user.id, body);
     return { ok: true, id: q.id };
   });
 

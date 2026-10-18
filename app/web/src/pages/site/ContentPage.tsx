@@ -1,12 +1,14 @@
+import { useEngineCal } from '@/lib/engine-cal';
+import { PRICES } from '@/lib/prices';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { toast } from 'sonner';
-import { BadgeCheck, Briefcase, CalendarClock, CheckCircle2, Clock, ExternalLink as ExternalIcon, FileText, Flame, Inbox, LayoutGrid, PenSquare, Rows3, Target, TrendingDown, TrendingUp, Trophy, Undo2, UserRound, XCircle } from 'lucide-react';
-import { titleCase, type CaseStudy, type ContentData, type ContentItem, type Report } from '@seo/shared';
+import { BadgeCheck, Briefcase, CalendarClock, CheckCircle2, Clock, ExternalLink as ExternalIcon, FileText, Flame, Inbox, LayoutGrid, PenSquare, Rows3, Send, Target, TrendingDown, TrendingUp, Trophy, Undo2, UserRound, XCircle } from 'lucide-react';
+import { cmsKindLabel, titleCase, type CaseStudy, type CmsItemView, type ContentData, type ContentItem, type Report } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { errorMessage } from '@/lib/api';
 import { paths } from '@/lib/paths';
-import { useSiteAdmin, useSiteData } from '@/lib/queries';
+import { useCmsSiteState, useSiteAdmin, useSiteData } from '@/lib/queries';
 import { cn, fmtAgo, fmtDate } from '@/lib/utils';
 import { Badge, StatusBadge, verdictTone } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
@@ -21,9 +23,11 @@ import { DataGate, FilterChips, SrOnly, Kind, Panel, RunAnalysisMenu, SectionHea
 import { HeroMeter } from './_components/pipeline/home';
 import { countBy, daysSince, plural, urlPath } from './_components/format';
 import { FileLinks } from './_components/reports';
+import { PublishCheckPanel } from './_components/publish-check';
 import { verdictLabel } from '@/components/reports/kit';
 
 export default function ContentPage() {
+  useEngineCal();   // R99 / R100: re-render with the engine's own prices once they arrive
   const { org, site } = useSitePage();
   const q = useSiteData(org.id, site.id, 'content');
   return (
@@ -102,6 +106,9 @@ function Content({ d }: { d: ContentData }) {
   const [source, setSource] = useState('all');
   const [unpublish, setUnpublish] = useState<ContentItem | null>(null);
   const reports = useMemo(() => reportsByKeyword(d.generated), [d.generated]);
+  // G2: what each written page is in the website's CMS (a draft, or live), when one is connected
+  const cmsQ = useCmsSiteState(org.id, site.id, !!site.verifiedAt);
+  const cms = useMemo(() => cmsByKeyword(cmsQ.data?.items ?? []), [cmsQ.data]);
   const live = d.items.filter(isLive);
   const waiting = d.items.filter((i) => !isLive(i));
   const stale = waiting.filter((i) => (daysSince(i.startedAt) ?? 0) > 7);
@@ -240,7 +247,7 @@ function Content({ d }: { d: ContentData }) {
                 .filter((i) => !isLive(i))
                 .sort((a, b) => a.startedAt.localeCompare(b.startedAt))
                 .map((i) => (
-                  <PipelineCard key={`${i.keyword}-${i.requestId}`} item={i} report={reports.get(i.keyword.toLowerCase())} onUnpublish={setUnpublish} />
+                  <PipelineCard key={`${i.keyword}-${i.requestId}`} item={i} report={reports.get(i.keyword.toLowerCase())} cms={cms.get(i.keyword.toLowerCase())} onUnpublish={setUnpublish} />
                 ))}
             </BoardColumn>
             <BoardColumn title="Published" icon={<CheckCircle2 />} tone="good" count={shown.filter(isLive).length}>
@@ -248,13 +255,13 @@ function Content({ d }: { d: ContentData }) {
                 .filter(isLive)
                 .sort((a, b) => (b.publishedAt || '').localeCompare(a.publishedAt || ''))
                 .map((i) => (
-                  <PipelineCard key={`${i.keyword}-${i.requestId}`} item={i} report={reports.get(i.keyword.toLowerCase())} onUnpublish={setUnpublish} />
+                  <PipelineCard key={`${i.keyword}-${i.requestId}`} item={i} report={reports.get(i.keyword.toLowerCase())} cms={cms.get(i.keyword.toLowerCase())} onUnpublish={setUnpublish} />
                 ))}
             </BoardColumn>
           </div>
         ) : (
           <Card className="p-4">
-            <PipelineTable rows={shown} reports={reports} onUnpublish={setUnpublish} />
+            <PipelineTable rows={shown} reports={reports} cms={cms} onUnpublish={setUnpublish} />
           </Card>
         )}
       </section>
@@ -266,6 +273,12 @@ function Content({ d }: { d: ContentData }) {
 
       <CaseStudies items={d.caseStudies} />
 
+      {can('member') && (
+        <section>
+          <PublishCheckPanel orgId={org.id} siteId={site.id} />
+        </section>
+      )}
+
       <section>
         <Panel icon={<FileText />} title="Generated pages" description="Keyword reports and finished pages with their downloads (Word, PDF, HTML, Markdown and meta.json)">
           <GeneratedTable reports={d.generated} orgId={org.id} />
@@ -274,6 +287,29 @@ function Content({ d }: { d: ContentData }) {
 
       {unpublish && <UnpublishDialog item={unpublish} onClose={() => setUnpublish(null)} />}
     </Stagger>
+  );
+}
+
+/** G2: keyword → its newest CMS item */
+function cmsByKeyword(items: readonly CmsItemView[]) {
+  const m = new Map<string, CmsItemView>();
+  for (const i of items) {
+    const k = i.keyword.toLowerCase();
+    if (k && (!m.has(k) || m.get(k)!.updatedAt < i.updatedAt)) m.set(k, i);
+  }
+  return m;
+}
+
+/** "Draft in WordPress" / "Live in Webflow", linking to the item when the CMS gave an address. */
+function CmsBadge({ item }: { item: CmsItemView }) {
+  const label = `${item.remoteStatus === 'published' ? 'Live' : 'Draft'} in ${cmsKindLabel(item.kind)}`;
+  const badge = <Badge tone={item.remoteStatus === 'published' ? 'good' : 'neutral'} icon={<Send className="size-3" aria-hidden />}>{label}</Badge>;
+  return item.remoteUrl ? (
+    <a href={item.remoteUrl} target="_blank" rel="noopener noreferrer" aria-label={`${label} (opens the CMS)`} className="rounded-md transition-opacity duration-150 ease-brand hover:opacity-80">
+      {badge}
+    </a>
+  ) : (
+    badge
   );
 }
 
@@ -305,7 +341,7 @@ function SourceLine({ item }: { item: ContentItem }) {
   );
 }
 
-function PipelineCard({ item, report, onUnpublish }: { item: ContentItem; report?: Report; onUnpublish: (i: ContentItem) => void }) {
+function PipelineCard({ item, report, cms, onUnpublish }: { item: ContentItem; report?: Report; cms?: CmsItemView; onUnpublish: (i: ContentItem) => void }) {
   const { org, can, tool } = useSitePage();
   const liveNow = isLive(item);
   const days = daysSince(item.startedAt);
@@ -319,7 +355,10 @@ function PipelineCard({ item, report, onUnpublish }: { item: ContentItem; report
             {item.pageType && <Kind>{item.pageType}</Kind>}
           </div>
         </div>
-        {liveNow ? <StatusBadge tone="good">Live</StatusBadge> : <Badge tone={days != null && days > 7 ? 'warning' : 'accent'} icon={<CalendarClock className="size-3" aria-hidden />}>{days != null ? `${days} ${days === 1 ? 'day' : 'days'} waiting` : 'Waiting'}</Badge>}
+        <span className="flex flex-wrap items-center gap-1.5">
+          {cms && <CmsBadge item={cms} />}
+          {liveNow ? <StatusBadge tone="good">Live</StatusBadge> : <Badge tone={days != null && days > 7 ? 'warning' : 'accent'} icon={<CalendarClock className="size-3" aria-hidden />}>{days != null ? `${days} ${days === 1 ? 'day' : 'days'} waiting` : 'Waiting'}</Badge>}
+        </span>
       </div>
       <div className="mt-2 space-y-1 text-xs text-ink-3">
         <p>Started {fmtDate(item.startedAt)}{liveNow && item.publishedAt ? ` · published ${fmtDate(item.publishedAt)}` : ''}</p>
@@ -364,13 +403,14 @@ function PipelineCard({ item, report, onUnpublish }: { item: ContentItem; report
   );
 }
 
-function PipelineTable({ rows, reports, onUnpublish }: { rows: ContentItem[]; reports: Map<string, Report>; onUnpublish: (i: ContentItem) => void }) {
+function PipelineTable({ rows, reports, cms, onUnpublish }: { rows: ContentItem[]; reports: Map<string, Report>; cms: Map<string, CmsItemView>; onUnpublish: (i: ContentItem) => void }) {
   const { org, can, tool } = useSitePage();
   const columns: Column<ContentItem>[] = [
     { key: 'keyword', header: 'Keyword', sortValue: (r) => r.keyword, cell: (r) => <span className="font-medium text-ink">{r.keyword}</span> },
     { key: 'source', header: 'Source', sortValue: (r) => r.source, cell: (r) => <SourceLine item={r} /> },
     { key: 'pageType', header: 'Page type', hideOnMobile: true, sortValue: (r) => r.pageType, cell: (r) => (r.pageType ? <Kind>{r.pageType}</Kind> : '–') },
     { key: 'status', header: 'Status', sortValue: (r) => (isLive(r) ? 1 : 0), cell: (r) => (isLive(r) ? <StatusBadge tone="good">Live</StatusBadge> : <Badge tone="accent" icon={<CalendarClock className="size-3" aria-hidden />}>Waiting</Badge>) },
+    { key: 'cms', header: 'CMS', hideOnMobile: true, sortValue: (r) => cms.get(r.keyword.toLowerCase())?.remoteStatus ?? '', cell: (r) => { const c = cms.get(r.keyword.toLowerCase()); return c ? <CmsBadge item={c} /> : <span className="text-ink-3">–</span>; } },
     { key: 'startedAt', header: 'Started', sortValue: (r) => r.startedAt, cell: (r) => <span className="text-[13px] text-ink-2">{fmtDate(r.startedAt)}</span> },
     { key: 'publishedAt', header: 'Published', hideOnMobile: true, sortValue: (r) => r.publishedAt || '', cell: (r) => <span className="text-[13px] text-ink-2">{r.publishedAt ? fmtDate(r.publishedAt) : '–'}</span> },
     {
@@ -493,7 +533,7 @@ function CadenceCard({ cadence, on }: { cadence: ContentData['cadence']; on: boo
       <p className="mt-3 text-[13px] leading-relaxed text-ink-2">
         {on
           ? 'Each Monday the engine picks the next pages in this order: the next rung of your keyword ladder, queries in striking distance (positions 4–20), then rising Google Trends searches. Each post arrives as HTML, Markdown and meta.json, ready to publish.'
-          : 'Turn on 1–3 posts a week and the engine writes them every Monday from your ladder, striking-distance queries and rising searches — about $1.20 per post.'}
+          : `Turn on 1–3 posts a week and the engine writes them every Monday from your ladder, striking-distance queries and rising searches — about ${PRICES.page()} per post.`}
       </p>
     </Panel>
   );

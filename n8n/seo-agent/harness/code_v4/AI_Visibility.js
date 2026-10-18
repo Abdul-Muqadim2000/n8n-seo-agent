@@ -64,6 +64,7 @@ const llm = prompts.map((p, i) => {
     answer: text.slice(0, 1200),
     cited_sources: [...new Set(urls.map(hostOf))].slice(0, 10),
     domains_mentioned: domainsInText.slice(0, 12),
+    domains_named: [...new Set((text.match(/\b([a-z0-9-]+\.)+[a-z]{2,}\b/gi) || []).map(norm))].slice(0, 30),
     mentions_you: mentionsYou,
     not_found: notFound && !mentionsYou,
     competitors_mentioned: compDomains.filter(c => domainsInText.some(d => matches(d, c))),
@@ -92,7 +93,12 @@ recs.forEach(r => {
     F('High', platform + ' recommends other providers, not you',
       'For "' + r.prompt.slice(0, 120) + '…" ' + platform + ' listed: ' + r.domains_mentioned.slice(0, 6).join(', ') + (r.competitors_mentioned.length ? ' (including competitors ' + r.competitors_mentioned.join(', ') + ')' : ''),
       'Buyers increasingly ask AI assistants for shortlists; not being named means not being considered.',
-      'Get listed where AI answers draw their sources: the directories and review sites cited (' + (r.cited_sources.slice(0, 4).join(', ') || 'see report') + '), plus comparison and "best X" pages that name you.');
+      (() => {   // B-7 (2026-10-17): a cited page that belongs to a vendor the answer recommended is that vendor's own site, not a directory
+        const vend = new Set((r.domains_named || r.domains_mentioned).map(norm)); const lists = r.cited_sources.filter(s => !vend.has(norm(s)) && ![...vend].some(v => matches(s, v)) && !matches(s, ours));
+        return lists.length
+          ? 'Get listed where ' + platform + ' draws its sources: the lists and directories it cited that are not vendors themselves (' + lists.slice(0, 4).join(', ') + '), plus comparison and "best X" pages that name you.'
+          : platform + ' cited only the vendors\' own sites (' + (r.cited_sources.slice(0, 4).join(', ') || 'none named') + '), so there is no list to get onto from this answer: publish a page of your own that answers this question directly (what to look for, how providers compare, where you fit) so the next answer can cite it, and get named on the lists other AI answers cite.';
+      })());
   } else if (r.mentions_you) works.push(platform + ' includes you when recommending providers in your category');
 });
 const failed = llm.filter(x => !x.ok);
@@ -115,21 +121,29 @@ if (aioWithComp.length) {
 }
 rows.filter(r => r.you_cited).forEach(r => works.push('Cited in Google AI Overview for "' + r.query + '"'));
 
-const brandRow = rows.find(r => r.type === 'brand');
-if (brandRow) {
-  if (brandRow.your_position == null || brandRow.your_position > 3) {
-    F('High', 'Site does not rank at the top for its own brand name',
-      'Search "' + brandRow.query + '": your position ' + (brandRow.your_position || 'not in top 20'),
-      'If people cannot find you by name, every other channel (ads, referrals, AI) leaks visitors.',
-      'Use one consistent brand name everywhere, add Organization schema with alternateName, and build branded mentions.');
-  } else works.push('Ranks #' + brandRow.your_position + ' for its brand name');
+// B-2 (2026-10-17): every brand search asked, and every form not asked with its reason. A results page read once is one reading: the
+// finding is Medium and says so; GSC Audit Findings replaces it with Search Console's own brand queries where the run has them.
+const brandRows = rows.filter(r => r.type === 'brand');
+const brandForms = (qs[0] || {}).brand_forms || [];
+if (brandRows.length) {
+  const best = brandRows.map(r => r.your_position).filter(p => p != null).sort((x, y) => x - y)[0];
+  const asked = brandRows.map(r => '"' + r.query + '" ' + (r.your_position != null ? '#' + r.your_position : 'not in the top 20')).join('; ');
+  const notAsked = brandForms.filter(b => !b.searched).map(b => '"' + b.form + '" not searched (' + b.why + ')').join('; ');
+  if (best == null || best > 3) {
+    findings.push({ category: 'AI Search Readiness', severity: 'Medium', title: 'Site does not rank at the top for its own brand name',
+      evidence: 'Results pages read once in this run: ' + asked + (notAsked ? '; ' + notAsked : '') + '. One read of a results page is one reading; Search Console\'s own brand queries decide where the run has them.',
+      why: 'If people cannot find you by name, every other channel (ads, referrals, AI) leaks visitors.',
+      fix: 'Use one consistent brand name everywhere, add Organization schema with alternateName, and build branded mentions.',
+      sample_urls: [], affected_count: null, affected_pct: 100, scope: 'site', one_reading: true,
+      brand_check: { asked: brandRows.map(r => ({ query: r.query, position: r.your_position })), not_asked: brandForms.filter(b => !b.searched) } });
+  } else works.push('Ranks #' + best + ' for its own name (' + asked + ')');
 }
 
 // Index coverage estimate (site: operator vs crawl)
 const crawled = base.pages_crawled || null;
 if (indexEstimate != null && crawled) {
   if (indexEstimate < crawled * 0.5) {
-    findings.push({ category: 'Crawlability & Indexing', severity: 'High', title: 'Far fewer pages indexed than crawled', evidence: 'Google site: estimate ' + indexEstimate + ' vs ' + crawled + ' crawlable pages', why: 'Pages that are not indexed cannot rank. This is an estimate; confirm in Search Console.', fix: 'Check Search Console → Pages for "Crawled – currently not indexed" and "Discovered – currently not indexed", improve internal links and content depth on those URLs.', sample_urls: [], affected_count: null, affected_pct: 100, scope: 'site' });
+    findings.push({ category: 'Crawlability & Indexing', severity: 'Medium', title: 'Far fewer pages indexed than crawled', evidence: 'Google site: estimate ' + indexEstimate + ' vs ' + crawled + ' URLs the crawl reached (a site: count is a rough estimate Google does not stand behind; URL Inspection, where this run has it, replaces it)', why: 'Pages that are not indexed cannot rank. This is an estimate; confirm in Search Console.', estimate_only: true, fix: 'Check Search Console → Pages for "Crawled – currently not indexed" and "Discovered – currently not indexed", improve internal links and content depth on those URLs.', sample_urls: [], affected_count: null, affected_pct: 100, scope: 'site' });
   } else if (indexEstimate > crawled * 3) {
     findings.push({ category: 'Crawlability & Indexing', severity: 'Medium', title: 'Many more URLs indexed than the crawl found (index bloat)', evidence: 'Google site: estimate ' + indexEstimate + ' vs ' + crawled + ' crawlable pages', why: 'Old, parameter or tag URLs that stay indexed dilute crawl budget and quality signals.', fix: 'Review indexed URLs in Search Console; noindex or remove thin/duplicate URLs and fix the sitemap.', sample_urls: [], affected_count: null, affected_pct: 100, scope: 'site' });
   } else works.push('Google indexes roughly as many pages as the crawl found (' + indexEstimate + ' estimated)');
@@ -143,6 +157,7 @@ return [{
       queries: rows,
       llm_answers: llm,
       index_estimate: indexEstimate,
+      brand_forms: brandForms,
       note: 'AI assistant checks are live answers from ChatGPT (web search on) and Perplexity via the DataForSEO LLM Responses API; each run may differ slightly. Google AI Overview data comes from a live search.'
     },
     extra_findings: [...(base.extra_findings || []), ...findings],

@@ -21,7 +21,11 @@ type Q = typeof db | Tx;
  * What one run counts for. `coalesce` takes the first figure that exists, in the order the app trusts them: the settled cost, the
  * engine's calibrated reservation, then the app's own pre-flight estimate.
  */
-const runCost = sql`coalesce(${schema.runs.actualCostUsd}, ${schema.runs.engineCostEstimateUsd}, ${schema.runs.estimatedCostUsd})`;
+// R102: an actual with no model-call part (search data only) is not the run's cost: it counts for no less than the best whole-run
+// estimate (`countedRunCost` in shared/src/cost.ts is the same rule for the usage page).
+const runCost = sql`case when ${schema.runs.actualCostUsd} is not null and ${schema.runs.actualCostPartial}
+  then greatest(${schema.runs.actualCostUsd}, coalesce(${schema.runs.engineCostEstimateUsd}, ${schema.runs.estimatedCostUsd}))
+  else coalesce(${schema.runs.actualCostUsd}, ${schema.runs.engineCostEstimateUsd}, ${schema.runs.estimatedCostUsd}) end`;
 
 export function monthStart(d = new Date()): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));

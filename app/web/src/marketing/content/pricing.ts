@@ -37,6 +37,7 @@ export const pricingTiers: PricingTier[] = [
       'Search Console, GA4 and Trends tracking, with weekly rank checks',
       'Monday report, alerts and share links',
       'Reports delivered by e-mail or webhook, on your schedule',
+      'Alerts in Slack or Teams, and findings as Jira, Linear or Asana tickets',
       'A step-by-step guide for every setup task',
     ],
   },
@@ -53,12 +54,15 @@ export const pricingTiers: PricingTier[] = [
     features: [
       'Up to 3 websites', // PLACEHOLDER — confirm
       'Up to three pages a week, with the autopilot pipeline and several ladders', // PLACEHOLDER — confirm
-      'AI search visibility: up to 50 questions and the daily AI Pulse',
-      'Backlinks from every source, with Ascentra’s own link checks',
+      'AI search visibility: up to 500 questions by topic, buyer role and market, and the daily AI Pulse', // PLACEHOLDER — confirm the plan limit (the panel's usage is priced by its size, shown before saving)
+      'AI growth every week: new pages to Bing and IndexNow, AI-readiness checks, answer pages and earned media',
+      'Backlinks from every source, with Alaventra’s own link checks',
+      'Crawler analytics from your server logs: Google and the AI crawlers, each one checked',
       'Link building: prospects, contacts and pitches from your own mailbox',
       'Full SEO reports as PDF or Word',
       'Daily key-page check and the pre-release check for your build',
       'Signed webhook deliveries into your own systems',
+      'Daily or weekly export to BigQuery or your storage, and a Looker Studio connector', // PLACEHOLDER — confirm the plan
     ],
   },
   {
@@ -72,6 +76,8 @@ export const pricingTiers: PricingTier[] = [
     features: [
       'Websites and companies to fit your portfolio', // PLACEHOLDER — confirm
       'Multi-company workspaces with roles and invitations',
+      'Agency client portal: client workspaces, client logins and approvals, white-label on your own domain', // PLACEHOLDER — confirm the plan and any per-client price
+      'Single sign-on (SAML 2.0 / OIDC) and SCIM provisioning',
       'Spend caps and budgets per company',
       'Search Console alert watcher and monthly check-ins',
       'Onboarding with your team', // PLACEHOLDER — confirm
@@ -127,7 +133,7 @@ export const servicePackages: ServicePackage[] = [
       'Your first technical audit and your first keyword ladder, explained on a call',
     ],
     turnaround: 'Within five working days of getting access', // PLACEHOLDER — confirm
-    needs: 'An admin seat in your Ascentra company, plus whoever can edit DNS or your website for one of the steps.',
+    needs: 'An admin seat in your Alaventra company, plus whoever can edit DNS or your website for one of the steps.',
     cta: { label: 'Ask about setup', to: '/contact?topic=sales' },
   },
   {
@@ -217,10 +223,11 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Originality check on every page', hint: 'Against the competitor pages researched and your own pages', values: [true, true, true] },
       { label: 'Coverage target from the best competitor', hint: 'With the subtopics that page covers', values: [true, true, true] },
       { label: 'Three images made with every page', hint: 'WebP, with the alt text and file names', values: [true, true, true] },
-      { label: 'Blog package and WordPress drafts', hint: 'HTML, Markdown, meta.json and the images', values: [true, true, true] },
+      { label: 'Blog package and CMS publishing', hint: 'HTML, Markdown, meta.json and the images — or sent to WordPress, Webflow, Contentful or a signed webhook, as drafts by default', values: [true, true, true] },
       { label: 'Your house style, applied and checked', hint: 'How your name is written, British or American spelling, words to avoid and the tone', values: [true, true, true] },
       { label: 'Refreshes instead of duplicates', hint: 'A search one of your live pages already answers is queued as a refresh of that page', values: [true, true, true] },
       { label: 'Live publish check', hint: 'Verifies the page once it is live', values: [true, true, true] },
+      { label: 'Check any page before you publish', hint: 'Paste a page or send it from your build: the same quality verdict, every reason named, free', values: [true, true, true] },
     ],
   },
   {
@@ -238,12 +245,14 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Daily key-page check and pre-release check', hint: 'Your build asks whether a release candidate is safe to publish', values: [true, true, true] },
       { label: 'What only appears after JavaScript', hint: 'Key pages read twice, so content a crawler cannot see is flagged', values: [true, true, true] },
       { label: 'Search Console, GA4 and Trends', values: [true, true, true] },
-      { label: 'AI search visibility', hint: 'ChatGPT, Gemini, Perplexity, Claude, AI Mode, AI Overviews', values: [false, 'Up to 50 questions', 'Up to 50 questions'] }, // PLACEHOLDER — confirm
+      { label: 'AI search visibility', hint: 'ChatGPT, Gemini, Perplexity, Claude, AI Mode, AI Overviews; Copilot and the ChatGPT and Gemini APIs on request', values: [false, 'Up to 500 questions', 'Up to 500 questions'] }, // PLACEHOLDER — confirm the plan limits
+      { label: 'Questions by buyer role and market', hint: 'Rates per topic, buyer role and market with 95% ranges; import your own list as CSV', values: [false, true, true] }, // PLACEHOLDER — confirm
       { label: 'Daily AI Pulse', hint: 'Alerts only on statistically real changes', values: [false, true, true] },
       { label: 'AI growth, every week', hint: 'New pages sent to Bing and IndexNow, key pages scored for AI readiness, the questions to win queued', values: [false, true, true] },
       { label: 'Earned media', hint: 'The exact pages AI cites without naming you, with a draft for each', values: [false, true, true] },
-      { label: 'Backlinks from every source', hint: 'Nine sources, every link checked by Ascentra', values: [false, true, true] }, // PLACEHOLDER — confirm
-      { label: 'Prospects, contacts and outreach drafts from your own mailbox', values: [false, true, true] },
+      { label: 'Crawler analytics from your server logs', hint: 'Googlebot and the AI crawlers, each checked against its company’s addresses; impostors apart', values: [false, true, true] }, // PLACEHOLDER — confirm
+      { label: 'Backlinks from every source', hint: 'Nine sources, every link checked by Alaventra', values: [false, true, true] }, // PLACEHOLDER — confirm
+      { label: 'Prospects, contacts and outreach drafts from your own mailbox', hint: 'You approve each sequence; sent on weekdays, starting slowly, with your postal address and an opt-out in every e-mail and consent asked where the law expects it', values: [false, true, true] },
       { label: 'Mailbox connected without a password', hint: 'Microsoft 365 or Gmail on their own sign-in screen; an app password works for any other host', values: [false, true, true] },
       { label: 'Listings you can add yourself', hint: 'Directories and marketplaces worth being on, checked and kept up to date', values: [false, true, true] },
       { label: 'Journalist requests, podcasts and broken-link reclaim', hint: 'Free sources read every week, matched to your topics', values: [false, true, true] },
@@ -263,6 +272,8 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Reports delivered to you', hint: 'As each one arrives, or a daily, weekly or monthly summary — by e-mail with the figures and files, and to a webhook', values: [true, true, true] },
       { label: 'Reports that are not ready are held back', hint: 'A page that failed its quality check or a verdict the analysis could not make is never sent, and the reason is stated', values: [true, true, true] },
       { label: 'Signed webhook deliveries', hint: 'Every body signed with your own secret, so your systems can tell the message is ours', values: [false, true, true] },
+      { label: 'Alerts and events in Slack or Microsoft Teams', hint: 'Alerts, finished and failed runs, new audit findings and ranking moves, routed per channel', values: [true, true, true] }, // PLACEHOLDER — confirm the plans
+      { label: 'Findings as Jira, Linear or Asana tickets', hint: 'One ticket per finding, with the evidence and the fix; its state shown back', values: [true, true, true] }, // PLACEHOLDER — confirm the plans
       { label: 'Search Console alert watcher and monthly check-ins', values: [false, false, true] }, // PLACEHOLDER — confirm
     ],
   },
@@ -271,11 +282,21 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
     rows: [
       { label: 'Websites', values: ['1', 'Up to 3', 'Custom'] }, // PLACEHOLDER — confirm
       { label: 'Roles and invitations', hint: 'Owner, admin, member and viewer', values: [true, true, true] },
+      { label: 'Two-step verification', hint: 'Authenticator app, passkeys or a security key, and recovery codes; a company can require it for everyone', values: [true, true, true] },
+      { label: 'Signed-in devices and idle sign-out', hint: 'Sign a device out; end idle sessions after the time your company sets', values: [true, true, true] },
+      { label: 'Audit log', hint: 'Sign-ins, team, settings, keys and sharing — who, when and from where; CSV export', values: [true, true, true] }, // PLACEHOLDER — confirm the plans
+      { label: 'Single sign-on (SAML 2.0 and OIDC)', hint: 'Okta, Microsoft Entra ID, Google Workspace or any standard provider, on your verified e-mail domains; can be required', values: [false, false, true] }, // PLACEHOLDER — confirm the plans
+      { label: 'SCIM provisioning', hint: 'People created, updated and switched off from your identity provider; groups mapped to roles', values: [false, false, true] }, // PLACEHOLDER — confirm the plans
       { label: 'Verified website ownership', values: [true, true, true] },
       { label: 'Step-by-step guides for every setup task', hint: 'Your own values, instructions for the provider you use, and a copy you can e-mail to a colleague', values: [true, true, true] },
       { label: 'Cost estimate before every run', hint: 'The analysis engine’s own figure, corrected against what runs really cost, and replaced with the actual cost when the work finishes', values: [true, true, true] },
       { label: 'Spend caps per company', values: [true, true, true] },
+      { label: 'Missed schedules caught up', hint: 'A scheduled run that did not fire starts once the system is back, and its report says it ran late', values: [true, true, true] },
+      { label: 'API and MCP access', hint: 'Read websites, audits, runs, reports and the export tables; start analyses with a key you allow to, within your budget', values: [true, true, true] }, // PLACEHOLDER — confirm the plans
+      { label: 'Warehouse export and Looker Studio', hint: 'Six tables to BigQuery, Amazon S3, Google Cloud Storage or Cloudflare R2, daily or weekly; a Looker Studio connector', values: [false, true, true] }, // PLACEHOLDER — confirm the plans
       { label: 'Multi-company workspaces', values: [false, false, true] }, // PLACEHOLDER — confirm
+      { label: 'Agency client workspaces and client logins', hint: 'A workspace per client, viewer and approver logins, approvals, one table of every client website', values: [false, false, true] }, // PLACEHOLDER — confirm the plans and any per-client price
+      { label: 'White-label portal on your own domain', hint: 'Your name, logo and colour on the portal, reports, documents and e-mails; your own address and sender', values: [false, false, true] }, // PLACEHOLDER — confirm the plans
       { label: 'Onboarding with your team', values: [false, false, true] }, // PLACEHOLDER — confirm
     ],
   },
@@ -329,7 +350,7 @@ export const pricingFaqs: FaqItem[] = [
   },
   {
     q: 'Do you publish the pages to our site?',
-    a: 'The software does not: it prepares the page as HTML, Markdown and meta data for your team. Our publishing service does, as a paid add-on — WordPress, Shopify, Webflow, Squarespace, Ghost or a headless CMS, and for a React or Next.js codebase the page arrives as a pull request your developers merge. Nothing goes live without your approval.', // PLACEHOLDER — confirm the service
+    a: 'The software sends pages to WordPress, Webflow, Contentful or your own endpoint as drafts, and an owner or admin publishes them live with one click — a page that failed its checks is never sent. For any other setup our publishing service does it, as a paid add-on — WordPress, Shopify, Webflow, Squarespace, Ghost or a headless CMS, and for a React or Next.js codebase the page arrives as a pull request your developers merge. Nothing goes live without your approval.', // PLACEHOLDER — confirm the service
   },
   {
     q: 'Can you fix what the audit finds?',
@@ -345,7 +366,7 @@ export const pricingFaqs: FaqItem[] = [
   },
   {
     q: 'What is the free-sources backlink mode?',
-    a: 'A backlink check that uses only the free sources — Bing Webmaster Tools, Search Console links, GA4 referrals, the Common Crawl web graph, Wikipedia, Hacker News, news and web search — and Ascentra’s own link check. It leaves out the paid link index, so it costs nothing to run.',
+    a: 'A backlink check that uses only the free sources — Bing Webmaster Tools, Search Console links, GA4 referrals, the Common Crawl web graph, Wikipedia, Hacker News, news and web search — and Alaventra’s own link check. It leaves out the paid link index, so it costs nothing to run.',
   },
   {
     q: 'Can we change plans later?',

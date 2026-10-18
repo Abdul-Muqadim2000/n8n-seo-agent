@@ -6,7 +6,7 @@ export const LOOP_STEPS: { label: string; icon: LucideIcon; body: string }[] = [
   { label: 'Research', icon: Search, body: 'Keywords, competitors, trends and the questions buyers ask AI assistants.' },
   { label: 'Plan', icon: ListChecks, body: 'Ladders and weekly posts in priority order, with a verdict for every keyword.' },
   { label: 'Write', icon: PenLine, body: 'Pages written, critiqued and edited, with SEO QA and expertise built in.' },
-  { label: 'Publish', icon: Send, body: 'A ready package or a WordPress draft; Ascentra checks the live page.' },
+  { label: 'Publish', icon: Send, body: 'A ready package or a draft in your CMS; Alaventra checks the live page.' },
   { label: 'Track', icon: ChartLine, body: 'Rankings, traffic, AI answers and links, every week.' },
   { label: 'Learn', icon: Lightbulb, body: 'What worked feeds the next plan, and what needs you lands in one queue.' },
 ];
@@ -31,7 +31,7 @@ export function GrowthLoopDiagram({ className, centerTitle = 'Every week', cente
         />
       </svg>
       <div className="absolute inset-[24%] flex flex-col items-center justify-center text-center" aria-hidden>
-        <span className={cn('font-mono text-[10px] uppercase tracking-[0.16em] sm:text-[11px]', ink ? 'text-accent-on-ink' : 'text-accent-text')}>Ascentra</span>
+        <span className={cn('font-mono text-[10px] uppercase tracking-[0.16em] sm:text-[11px]', ink ? 'text-accent-on-ink' : 'text-accent-text')}>Alaventra</span>
         <span className={cn('mt-1 font-display text-lg font-semibold tracking-[-0.01em] sm:text-2xl', ink ? 'text-on-ink' : 'text-ink')}>{centerTitle}</span>
         <span className={cn('mt-1.5 hidden max-w-[22ch] text-[13px] leading-snug sm:block', ink ? 'text-on-ink-2' : 'text-ink-2')}>{centerBody}</span>
       </div>

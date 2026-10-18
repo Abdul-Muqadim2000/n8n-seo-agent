@@ -18,7 +18,12 @@ const RT = (() => {
   const N = (x) => { const v = Number(x); return Number.isFinite(v) ? v : 0; };
   // an answer that can be different next time: the provider's own servers, a timeout, a rate limit. Never a wrong request.
   const TRANSIENT = /internal (?:se )?server error|internal error|server error|timeout|timed out|temporar|try again|unavailable|service unavailable|backend|deadline exceeded|connection|socket|econn|eai_again|rate limit|too many requests|\b(?:429|500|502|503|504)\b/i;
-  const PERMANENT = /permission|forbidden|unauthor|invalid[_ ]grant|credential|not found|no access|invalid field|unknown field|unsupported|quota|resource_exhausted|insufficient funds|payment|balance/i;
+  const PERMANENT = /permission|forbidden|unauthor|invalid[_ ]grant|credential|not found|no search results|no access|invalid field|unknown field|unsupported|quota|resource_exhausted|insufficient funds|payment|balance/i;
+  // R68 (2026-10-16, re-rating B-10): 40102 "No Search Results." is DataForSEO's FINAL answer that the search has no results — the Google
+  // Business Profile lookup for "Tech& Dubai" in execs 595 / 641 — not a failure. It was neither TRANSIENT nor PERMANENT, so it counted as
+  // retryable: *Fetch GBP (Retry)* re-sent it and paid $0.0054 for the same 40102 every audit. It is a valid empty answer now: never
+  // re-sent, never counted as a failure (Entity_Check already reads it as "no listing"), and marked `empty` so a reader can tell.
+  const NO_RESULTS = 40102;
   const errText = (e) => {
     if (!e) return '';
     if (typeof e === 'string') return e.slice(0, 200);
@@ -38,11 +43,14 @@ const RT = (() => {
   const dfs = (r) => {
     const res = r || {};
     if (res.error) return verdict(errText(res.error) || 'the request failed');
+    if (N(res.status_code) === NO_RESULTS) return { ...verdict('', NO_RESULTS), empty: true, permanent: true, said: S(res.status_message) || 'No Search Results.' };
     if (N(res.status_code) >= 40000) return verdict(said(res.status_message, N(res.status_code), 'the search data provider reported an error'), N(res.status_code));
     if (!Array.isArray(res.tasks) || !res.tasks.length) return verdict('no answer from the search data provider');
     const t = res.tasks[0] || {};
     const code = N(t.status_code);
     if (!code) return verdict('no answer from the search data provider');
+    if (code === NO_RESULTS || (code >= 40000 && /no search results/i.test(S(t.status_message))))
+      return { ...verdict('', code), empty: true, permanent: true, said: S(t.status_message) || 'No Search Results.' };
     if (code >= 40000) return verdict(said(t.status_message, code, 'the search data provider reported an error'), code);
     if (code === 20000 && !((t.result || [])[0])) return verdict('the search data provider returned no result', code);
     return verdict('', code);
@@ -140,7 +148,7 @@ const RT = (() => {
       why: 'the earlier figure came from ' + name(b) + ' and this one from ' + name(a) + ', which do not measure the same thing, so ' + what + ' are not compared' };
     return { comparable: true, why: '', kind: a, kind_before: b };
   };
-  return { dfs, google, check, failures, plan, merge, stats, one, note, evidence, comparable, likeForLike, errText, MAX_SAMPLE_DRIFT, TRANSIENT, PERMANENT };
+  return { dfs, google, check, failures, plan, merge, stats, one, note, evidence, comparable, likeForLike, errText, MAX_SAMPLE_DRIFT, TRANSIENT, PERMANENT, NO_RESULTS };
 })();
 // ---- the daily key-page watch and Google's view of those pages (G11 + G25, 2026-10-13; system review FIX_PLAN.md) ----
 // G11: a monthly audit cannot see a page that went noindex on the 3rd. Every day the key pages are fetched raw and cheaply (one plain GET
@@ -161,7 +169,15 @@ const PW = (() => {
   // host-agnostic identity of a URL: crawls, sitemaps and canonicals disagree about www and the trailing slash
   const ukey = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/$/, '') || S(u).toLowerCase();
   const same = (a, b) => !!a && !!b && ukey(a) === ukey(b);
-  const strip = (s) => S(s).replace(/<[^>]*>/g, ' ').replace(/&nbsp;|&#160;/gi, ' ').replace(/&amp;/gi, '&').replace(/\s+/g, ' ').trim();
+  // the shared entity decoder, inlined (v5/code/_entities.js; build section 122 asserts the two stay identical): named, decimal and hex, one pass
+  const entDecode = /*__ENT_BEGIN__*/(() => {
+  const N = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', nbsp: ' ', rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“', ndash: '–', mdash: '—', hellip: '…', copy: '©', reg: '®', trade: '™', bull: '•', middot: '·', laquo: '«', raquo: '»', euro: '€', pound: '£', deg: '°' };
+  return (s) => String(s == null ? '' : s).replace(/&(?:#[xX]([0-9a-fA-F]+)|#(\d+)|([a-zA-Z][a-zA-Z0-9]*));/g, (m, h, d, n) => {
+    if (h !== undefined || d !== undefined) { const cp = h !== undefined ? parseInt(h, 16) : Number(d); if (cp === 160) return ' '; try { return cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : m; } catch (e) { return m; } }
+    const k = n.toLowerCase(); return Object.prototype.hasOwnProperty.call(N, k) ? N[k] : m;
+  });
+})()/*__ENT_END__*/;
+  const strip = (s) => entDecode(S(s).replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim();
 
   // ---- a small, stable fingerprint (FNV-1a, 32 bit): no crypto module is available in the sandbox ----
   const hash = (text) => {
@@ -451,7 +467,7 @@ const PW = (() => {
     const quota = /quota|rate limit|RESOURCE_EXHAUSTED|429/i.test(err);
     const denied = /permission|forbidden|403|unauthor|invalid_grant/i.test(err);
     if (err) return { ok: false, error: err, error_kind: quota ? 'quota' : denied ? 'access' : 'error', indexed: null, verdict: '', coverage: '',
-      robots: '', last_crawl: '', google_canonical: '', user_canonical: '', canonical_ok: null, mobile_usable: null, mobile_issues: [], mobile_verdict: '', mobile_note: '', rich_results: [], rich_verdict: '',
+      robots: '', last_crawl: '', google_canonical: '', user_canonical: '', canonical_ok: null, canonical_host_only: false, mobile_usable: null, mobile_issues: [], mobile_verdict: '', mobile_note: '', rich_results: [], rich_verdict: '',
       not_checked: quota ? 'Google\'s daily URL Inspection quota for this property is used up: not checked today.' : denied ? 'Search Console access is missing for this property: not checked.' : 'The inspection failed: not checked (' + err + ').' };
     // R10 (2026-10-13, re-rating §3.11): Google retired the Mobile Usability report and the API now answers `VERDICT_UNSPECIFIED` with no
     // issue list for every page (45 of 45 live on 2026-10-13). That is NOT CHECKED. The live run read it as "not mobile-friendly" and raised
@@ -468,7 +484,11 @@ const PW = (() => {
       ok: true, error: '', error_kind: '', verdict: S(idx.verdict), indexed: S(idx.verdict) === 'PASS', coverage: S(idx.coverageState),
       indexing_state: S(idx.indexingState), robots: S(idx.robotsTxtState), last_crawl: S(idx.lastCrawlTime),
       google_canonical: S(idx.googleCanonical), user_canonical: S(idx.userCanonical),
-      canonical_ok: (!S(idx.googleCanonical) || !S(idx.userCanonical)) ? null : same(idx.googleCanonical, idx.userCanonical),
+      // R59 (2026-10-16): Google choosing the SAME page on the OTHER host (https://techand.ai/x for our https://www.techand.ai/x) is a
+      // canonical Google did not take — `same` is host-agnostic on purpose (crawls and sitemaps disagree about www), so it called this "same
+      // as ours" and the daily watch could never see the split. The host is compared here, and a host-only difference is named.
+      canonical_ok: (!S(idx.googleCanonical) || !S(idx.userCanonical)) ? null : (same(idx.googleCanonical, idx.userCanonical) && hostOf(idx.googleCanonical) === hostOf(idx.userCanonical)),
+      canonical_host_only: !!S(idx.googleCanonical) && !!S(idx.userCanonical) && same(idx.googleCanonical, idx.userCanonical) && hostOf(idx.googleCanonical) !== hostOf(idx.userCanonical),
       mobile_usable: mobUsable, mobile_issues: mobIssues, mobile_verdict: mobVerdict, mobile_note: mobNote,
       rich_verdict: rich ? S(rich.verdict) : '',
       rich_results: rich && rich.detectedItems ? rich.detectedItems.map(d => S(d.richResultType)).filter(Boolean) : [],
@@ -513,7 +533,8 @@ const PW = (() => {
 // ---- shared Search Console query rules (2026-10-12, FIX_PLAN G9 + D24 / P1-3): inlined by the build (the GSC_QUERIES placeholder) into
 // Parse GSC (the Site Tracker) and GSC Audit Findings (the audit), so the weekly report and the audit judge a query the same way.
 //   * GQ.isScraper(q)  — a query typed by an SEO tool or a scraper, not by a customer (search operators, capital booleans, quoted groups).
-//   * GQ.brandTest(..) — brand vs non-brand, from seo_monitors.brand_names / the site model's names, with the domain label as the fallback.
+//   * GQ.brandTest(..) — brand vs non-brand, from seo_monitors.brand_names / the site model's names, with the domain label as the fallback;
+//                        whole tokens only, never a substring (R89, below).
 //   * GQ.anonymised(..)— what Search Console withholds: the totals minus the sum of the query rows ("anonymised for privacy").
 // D24 (2026-10-11) found scraper queries among techand.ai's top queries; P1-3 (2026-10-12) added the leading minus ("-site:csc.gov.ae") and
 // the lower-case booleans Search Console reports. Prose alone never counts: "erp software and accounting for distributors" has no quotes,
@@ -533,8 +554,63 @@ const GQ = (() => {
     for (const n of (names || [])) { const s = String(n || '').trim(); if (!s) continue; push(/\./.test(s) ? s.split('.')[0] : s); }
     return keys;
   };
-  // a query is a brand query when a brand key appears in it as one run of letters/digits
-  const brandTest = (domain, names) => { const keys = brandKeys(domain, names); const is = (q) => { const s = squash(q); return keys.some(k => s.includes(k)); }; return { keys, is: keys.length ? is : () => false }; };
+  // ---- R89 (2026-10-16, re-rating defect C-13): the brand test squashed the query ("technology and analytics" -> "technologyandanalytics")
+  // and looked for a key INSIDE it, and "Tech&" squashed to the key "tech" — so "technology & data", "tech and software" and
+  // "techandkey com" were all counted as searches for the business (exec 634: "brand = techand, tech"). The outreach kit solved the same
+  // problem for "Tech&" on 2026-10-12 (MIN_NAME_RUN); this is that rule for search queries:
+  //   * a key is matched as WHOLE tokens of the query: one token equal to it ("techand"), or consecutive tokens that join to it with no
+  //     filler word between them ("northwind erp" -> "northwinderp") — never a substring, so "techandkey" is another word; a join
+  //     ACROSS a filler word ("tech and" -> "techand") is the name spoken, and counts only as the whole query ("tech and ai" yes,
+  //     "tech and software" no);
+  //   * a name whose letters are shorter than MIN_NAME_RUN once its punctuation is gone ("Tech&") is never a key on its own: it counts
+  //     only written or spoken as itself ("tech&", "tech and"), and only as the whole query (with the site's own domain ending at most),
+  //     because "tech and software" is a description, not a search for the business.
+  const MIN_NAME_RUN = 5;
+  const FILLER = new Set(['and', 'the', 'of', 'for', 'to', 'in', 'on', 'at', 'a', 'an', 'or', 'by', 'with', 'vs', 'near', 'me', 'from']);
+  const qTokens = (q) => String(q || '').toLowerCase().replace(/&/g, ' and ').split(/[^a-z0-9]+/).filter(Boolean);
+  // A-26: optimal string alignment distance (a swap of two neighbouring letters is one edit: "techadn" = "techand" misspelt once)
+  const FUZZY_MIN = 6;
+  const editDistance = (a, b) => { const m = a.length, n = b.length; const d = Array.from({ length: m + 1 }, (_, i) => [i, ...new Array(n).fill(0)]);
+    for (let j = 0; j <= n; j++) d[0][j] = j;
+    for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) { const c = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + c);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1); }
+    return d[m][n]; };
+  const brandTest = (domain, names) => {
+    const keys = brandKeys(domain, names);
+    const tld = String(domain || '').toLowerCase().split('.').slice(1).filter(Boolean);
+    const long = keys.filter(k => k.length >= MIN_NAME_RUN || !/[^a-z0-9\s.]/i.test(String((names || []).find(n => squash(n) === k) || '')));
+    // the short punctuated names ("Tech&"): their own written / spoken forms, matched as the whole query
+    const spoken = [];
+    for (const n of (names || [])) { const s = String(n || '').trim(); if (!s || /\./.test(s)) continue; const k = squash(s);
+      if (k.length >= MIN_NAME_RUN || !/[^a-z0-9\s]/i.test(s)) continue; const toks = qTokens(s); if (toks.length && !spoken.some(x => x.join(' ') === toks.join(' '))) spoken.push(toks); }
+    const longKeys = long;
+    const is = (q) => {
+      const t = qTokens(q); if (!t.length) return false;
+      const onlyDomain = (rest) => rest.every(x => tld.includes(x) || x === 'com' || x === 'www');
+      for (const k of longKeys) {
+        if (k.length < 4) continue;
+        for (let i = 0; i < t.length; i++) { let j = i, acc = '', filler = false;
+          while (j < t.length && acc.length < k.length) { if (j > i && FILLER.has(t[j])) filler = true; acc += t[j]; j++;
+            // a join across a filler word ("tech and" -> "techand") is the name SPOKEN, so it counts only as the whole query
+            if (acc === k && (!filler || (i === 0 && onlyDomain(t.slice(j))))) return true; } } }
+      for (const sp of spoken) { const rest = t.slice(0, sp.length).join(' ') === sp.join(' ') ? t.slice(sp.length) : null;
+        if (rest && rest.every(x => tld.includes(x) || x === 'com' || x === 'www')) return true; }
+      // A-26 (2026-10-17, exec 764): "techandf cc" — the brand typed with one slip — was taken as a customer search, used as a discovery
+      // seed and reported as a page mismatch ("aim that page at it"). A token (or two adjacent tokens with no filler word between them)
+      // within one edit of a brand key of 6+ letters (two edits from 10 letters), starting with the same two letters, is the brand misspelt.
+      for (const k of longKeys) {
+        if (k.length < FUZZY_MIN) continue;
+        const lim = k.length >= 10 ? 2 : 1;
+        for (let i = 0; i < t.length; i++) {
+          const cands = [t[i]]; if (i + 1 < t.length && !FILLER.has(t[i + 1]) && !FILLER.has(t[i])) cands.push(t[i] + t[i + 1]);
+          for (const w of cands) if (w.length >= 5 && w !== k && w.slice(0, 2) === k.slice(0, 2) && Math.abs(w.length - k.length) <= lim && editDistance(w, k) <= lim) return true;
+        }
+      }
+      return false; };
+    const shown = [...longKeys, ...spoken.map(t => t.join(' '))];
+    return { keys: shown, is: shown.length ? is : () => false };
+  };
   // Search Console never names the queries of rare searches: the dimensionless/date totals hold them, the query rows do not
   const anonymised = (totals, rows) => {
     const t = totals || {}; const sum = (rows || []).reduce((a, r) => ({ clicks: a.clicks + (Number(r.clicks) || 0), impressions: a.impressions + (Number(r.impressions) || 0) }), { clicks: 0, impressions: 0 });
@@ -543,7 +619,23 @@ const GQ = (() => {
     return { clicks: cl, impressions: im, clicks_pct: tc ? Math.round(cl / tc * 1000) / 10 : 0, impressions_pct: ti ? Math.round(im / ti * 1000) / 10 : 0,
       named_clicks: sum.clicks, named_impressions: sum.impressions, note: 'Search Console withholds the queries of rare searches; these clicks and impressions are real but belong to queries it does not name.' };
   };
-  return { isScraper, brandKeys, brandTest, anonymised };
+  // ---- C-6 (re-rating 2026-10-17): a search for ANOTHER website is not a quick win ----
+  // "techandkey com" (411 impressions; techandkey.com is "TechAndKey - Latest Tech News") was correctly not a brand search (R89) and was then
+  // recommended as a striking-distance quick win, a low-CTR "rewrite titles" item and a cannibalisation pair. A navigational search for a
+  // site that is not this one - one name followed by a domain ending ("techandkey com"), or a written domain ("techandkey.com") - is set
+  // aside like a scraper query: counted in the totals, never in a list of things to do. Returns that site, or ''.
+  const NAV_TLD = new Set(['com', 'net', 'org', 'io', 'co', 'ae', 'ai', 'app', 'info', 'biz', 'me', 'dev', 'tech', 'online', 'store', 'site', 'xyz', 'us', 'uk', 'sa', 'in']);
+  const otherSite = (q, domain, keys) => {
+    const s = String(q || '').toLowerCase().trim(); let name = '', tld = '';
+    const m = s.match(/(?:^|\s|www\.)([a-z0-9-]{3,})\.(com|net|org|io|co|ae|ai|app|info|biz|me|dev|tech|online|store|site|xyz)(?:\.[a-z]{2})?(?:\/\S*)?(?:\s|$)/);
+    if (m) { name = m[1].replace(/-/g, ''); tld = m[2]; }
+    else { const t = qTokens(s).filter(x => x !== 'www'); if (t.length !== 2 || !NAV_TLD.has(t[1])) return ''; name = t[0]; tld = t[1]; }
+    if (name.length < 3) return '';
+    const own = String(domain || '').toLowerCase().split('.')[0].replace(/[^a-z0-9]/g, '');
+    if (name === own || (keys || []).some(k => squash(k) === name)) return '';
+    return name + '.' + tld;
+  };
+  return { isScraper, brandKeys, brandTest, anonymised, editDistance, otherSite };
 })();
 // Turns the Search Console answers (sitemaps, search performance, URL inspections) and the sitemap-vs-crawl comparison into audit findings,
 // a "search_console" block and a "site_structure" block for the report; then hands the audit item on to Build Site Issues.
@@ -553,6 +645,20 @@ const first = (name) => { try { return ($(name).first() || {}).json || null; } c
 const gErr = (r) => { if (!r) return 'no response'; const e = r.error; if (!e) return null; if (typeof e === 'string') return e.slice(0, 200); const ctx = (e.context && e.context.data) || {}; const inner = (ctx.error && typeof ctx.error === 'object') ? ctx.error : null; return String((inner && inner.message) || (ctx.error_description ? String(ctx.error || 'error') + ': ' + ctx.error_description : '') || e.message || e.description || e.status || JSON.stringify(e)).slice(0, 200); };
 const same = (a, b) => String(a || '').replace(/\/$/, '').toLowerCase() === String(b || '').replace(/\/$/, '').toLowerCase();
 const path = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/, '') || '/';
+// ---- R59 / R61 / R65 / R117 (2026-10-16, build section 90): the host Google shows, the rankings it measured, the pages a link reaches ----
+const __hostOf90 = (u) => (String(u || '').trim().toLowerCase().match(/^https?:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/) || [])[1] || '';
+// the site's own address: the host its homepage canonical tag names, else the stored canonical host, else where the redirect leads, else the crawl's first page
+const __canonHost90 = (() => {
+  const b = (base && typeof base === 'object') ? base : {}; const hp = (((b.probe || {}).measurements || {}).hosts) || {};
+  for (const c of [hp.canonical_tag_host, b.canonical_host, hp.consolidated ? __hostOf90(hp.apex_location) : '', __hostOf90(((plan.pages || [])[0] || {}).url)]) {
+    const h = String(c || '').toLowerCase().replace(/^https?:\/\//, '').replace(/[\/?#].*$/, ''); if (h) return h; }
+  return String(plan.domain || '').toLowerCase(); })();
+// ONE definition of "Google chose another canonical", used by both counts: Google's choice against the page's own canonical (else the URL),
+// host-sensitively — and a difference of host alone is named, because that is the www / non-www split and not a duplicate page
+const canonOk90 = (i) => (!i || !i.google_canonical) ? null : same(i.google_canonical, i.user_canonical || i.url);
+const hostOnly90 = (i) => !!i && !!i.google_canonical && key(i.google_canonical) === key(i.user_canonical || i.url) && __hostOf90(i.google_canonical) !== __hostOf90(i.user_canonical || i.url);
+let host_split90 = null, servedAlt90 = [], canonAll90 = [], rowsByKey90 = new Map();
+const elsewhere90 = (i) => (rowsByKey90.get(key(i.url)) || []).filter(r => __hostOf90(r.page) !== __hostOf90(i.url) && r.impressions > 0);
 const findings = [], works = []; const CAT = 'Crawlability & Indexing';
 const F = (severity, title, why, fix, evidence, urls, count, pct) => (severity !== 'Info' && !/[A-Za-z0-9]/.test(String(evidence == null ? '' : evidence)))
   ? null   // R10 (2026-10-13): a finding with nothing behind it is not a finding — live, "Pages Google reports as not mobile-friendly" was raised with the evidence "/:  | /whatwedo/ai-automation: " on 45 of 47 pages
@@ -573,8 +679,12 @@ sitemapUrls = [...new Set(sitemapUrls.map(key))].slice(0, 5000);
 const sitemapKnown = smStatus === 200 && sitemapUrls.length > 0;
 // ---- site structure from the crawl ----
 const pages = plan.pages || []; const crawled = new Set(pages.map(p => key(p.url)));
-const depthBuckets = { 0: 0, 1: 0, 2: 0, 3: 0, '4+': 0 }; for (const p of pages) { if (p.depth == null) continue; depthBuckets[p.depth >= 4 ? '4+' : p.depth] += 1; }
-const withDepth = pages.filter(p => p.depth != null).length; const within3 = pages.filter(p => p.depth != null && p.depth <= 3).length;
+// R117 (2026-10-16): the crawler starts from the sitemap as well as the homepage, so a page no link reaches gets click depth 0 — exec 595
+// counted six orphan pages as "within 3 clicks" and printed "Shallow site structure: 100%" beside a High "Orphan pages" finding
+const __home90 = (u) => /^https?:\/\/[^\/]+\/?$/.test(String(u || '').trim());
+const unlinked90 = (p) => p.depth != null && (p.orphan === true || (Number(p.depth) === 0 && !__home90(p.url)));
+const depthBuckets = { 0: 0, 1: 0, 2: 0, 3: 0, '4+': 0, unlinked: 0 }; for (const p of pages) { if (p.depth == null) continue; if (unlinked90(p)) { depthBuckets.unlinked += 1; continue; } depthBuckets[p.depth >= 4 ? '4+' : p.depth] += 1; }
+const withDepth = pages.filter(p => p.depth != null).length; const within3 = pages.filter(p => p.depth != null && !unlinked90(p) && p.depth <= 3).length;
 const sections = {}; for (const p of pages) { const seg = path(p.url).split('/').filter(Boolean)[0] || '(home)'; sections[seg] = (sections[seg] || 0) + 1; }
 const topSections = Object.entries(sections).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, count]) => ({ section: '/' + (name === '(home)' ? '' : name + '/'), pages: count }));
 const indexablePages = pages.filter(p => p.indexable);
@@ -633,7 +743,35 @@ if (!connected) {
   // G9 (2026-10-12): the rule itself now lives in v5/code/_gsc_queries.js (GQ.isScraper), shared with the Site Tracker's Parse GSC.
   const isScraper = GQ.isScraper;
   const scraperRows = allQueryRows.filter(q => isScraper(q.query)); const queryRows = allQueryRows.filter(q => !isScraper(q.query));
-  search_console.top_pages = pagesRows.slice(0, 10); search_console.top_queries = queryRows.slice(0, 10); search_console.pages_with_impressions = pagesRows.length; search_console.queries_with_impressions = queryRows.length;
+  search_console.top_pages = pagesRows.slice(0, 10);
+  // R65 (2026-10-16): the impact of a finding is weighed on EVERY page Search Console measured ([path, clicks, impressions], the hosts
+  // summed); top_pages stays the report's table of ten. Complete = fewer rows than the request asked for, so a page not listed had none.
+  { const m90 = new Map(); for (const r of pagesRows) { const p = String(r.page || '').replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '').replace(/(.)\/$/, '$1') || '/'; const o = m90.get(p) || [p, 0, 0]; o[1] += r.clicks; o[2] += r.impressions; m90.set(p, o); }
+    const lim90 = Number(((((byKind.pages || [])[0] || {}).q || {}).body || {}).rowLimit) || 0;
+    search_console.page_traffic = [...m90.values()].slice(0, 1000); search_console.page_traffic_complete = lim90 > 0 && pagesRows.length < lim90; }
+  // R61 (2026-10-16): what Google's own data says about rankings, so no line of the report says "ranks for no keyword" beside it
+  { const qlim90 = Number(((((byKind.queries || [])[0] || {}).q || {}).body || {}).rowLimit) || 0;
+    // B-2 (2026-10-17): the brand test knows every brand form on file (the configured brand names, the business name), not the domain label only
+    const __bn128 = (() => { const out = []; const bare = (x) => String(x || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, ''); const dom = bare(plan.domain || base.domain);
+      try { const r = $('Load Site Row (Model)').first().json || {}; if (r.domain && bare(r.domain) === dom) out.push(...String(r.brand_names || '').split(/[,;\n]+/), r.business_name); } catch (e) {}
+      try { const m = $('Restore Site Model').first().json.site_model || {}; if (!m.domain || bare(m.domain) === dom) out.push(...(Array.isArray(m.brand_names) ? m.brand_names : String(m.brand_names || '').split(/[,;\n]+/)), m.business_name); } catch (e) {}
+      for (const b of (((base.ai_visibility || {}).brand_forms) || [])) out.push(b.form);
+      return [...new Set(out.map(x => String(x || '').trim()).filter(Boolean))]; })();
+    const bt90 = GQ.brandTest(plan.domain || base.domain, __bn128);
+    const t10 = queryRows.filter(q => q.position > 0 && q.position <= 10), t30 = queryRows.filter(q => q.position > 0 && q.position <= 30);
+    const INF90 = /^(how|what|why|when|where|who|which|is|are|can|does|do|should)\b|\b(how to|guide|tips|meaning|definition|examples?|explained|checklist|benefits|is changing|what is|vs)\b|\?/;
+    const COM90 = /\b(best|top|services?|company|companies|partners?|consultants?|consulting|agency|agencies|providers?|vendors?|firms?|implementation|upgrade|migration|support|reviews?|compare|comparison|alternatives?)\b/;
+    const TRX90 = /\b(price|prices|pricing|cost|costs|buy|hire|quote|demo|trial|book|contact|near me)\b/;
+    const intentOf90 = (q) => INF90.test(q) ? 'informational' : TRX90.test(q) ? 'transactional' : COM90.test(q) ? 'commercial' : '';
+    const byI = { informational: 0, commercial: 0, transactional: 0 }, exI = { informational: [], commercial: [], transactional: [] };
+    for (const q of t30) { const it = bt90.is(q.query) ? '' : intentOf90(String(q.query || '').toLowerCase()); if (it) { byI[it] += 1; if (exI[it].length < 3) exI[it].push(q.query + ' #' + q.position); } }
+    const sum = (l, f) => l.reduce((n, q) => n + (Number(q[f]) || 0), 0);
+    search_console.rankings = { source: 'Search Console', period: plan.range || null, queries_read: queryRows.length, capped: qlim90 > 0 && allQueryRows.length >= qlim90,
+      top10: t10.length, top10_brand: t10.filter(q => bt90.is(q.query)).length, top10_impressions: sum(t10, 'impressions'), top10_clicks: sum(t10, 'clicks'), top30: t30.length,
+      by_intent_top30: byI, intent_examples: exI,
+      brand_keys: bt90.keys, brand_queries: queryRows.filter(q => q.position > 0 && bt90.is(q.query)).sort((x, y) => (y.impressions - x.impressions) || (x.position - y.position)).slice(0, 10).map(q => ({ query: q.query, position: q.position, impressions: q.impressions, clicks: q.clicks })),
+      examples: t10.slice().sort((x, y) => y.impressions - x.impressions).slice(0, 5).map(q => ({ query: q.query, position: q.position, impressions: q.impressions, clicks: q.clicks })),
+      note: 'average position per query over the period; Search Console withholds the queries of rare searches, so this is a floor' }; } search_console.top_queries = queryRows.slice(0, 10); search_console.pages_with_impressions = pagesRows.length; search_console.queries_with_impressions = queryRows.length;
   gscPageKeys = [...new Set(pagesRows.map(p => key(p.page)).filter(Boolean))];
   // B5-5: Search Console's own address for the page, and what it earns — a page Google shows is read before a sitemap-only one
   for (const p of pagesRows) { const k = key(p.page); if (!k) continue; const prevM = knownMeta.get(k);
@@ -660,22 +798,35 @@ if (!connected) {
   // G25: the index picture, with the pages the quota did not reach counted apart and named (PW.coverage never says "fine" about a page nobody asked about)
   const _ib = plan.inspect_budget || null;
   search_console.index_coverage = { ...PW.coverage(insp.map(i => ({ ok: !i.error, error: i.error || '', indexed: i.indexed, verdict: i.verdict, coverage: i.coverage,
-      canonical_ok: (!i.google_canonical || !i.user_canonical) ? null : same(i.google_canonical, i.user_canonical), mobile_usable: i.mobile_usable, rich_results: i.rich, not_checked: i.not_checked || '' })),
+      canonical_ok: canonOk90(i), mobile_usable: i.mobile_usable, rich_results: i.rich, not_checked: i.not_checked || '' })),
       { not_checked: _ib ? _ib.skipped_total : 0, not_checked_reason: _ib && _ib.skipped_total ? 'the audit\'s share of Google\'s daily quota was used up; the weekly run inspects them, oldest first' : '', quota_note: _ib ? _ib.note : '' }),
     candidates: _ib ? _ib.candidates : insp.length, cap: _ib ? _ib.cap : null,
     pages: insp.filter(i => !i.error).slice(0, 100).map(i => ({ url: i.url, indexed: i.indexed, verdict: i.verdict, coverage: i.coverage, last_crawl: i.last_crawl,
-      google_canonical: i.google_canonical, canonical_ok: (!i.google_canonical || !i.user_canonical) ? null : same(i.google_canonical, i.user_canonical), mobile_usable: i.mobile_usable, rich_results: i.rich })),
+      google_canonical: i.google_canonical, canonical_ok: canonOk90(i), canonical_host_only: hostOnly90(i), mobile_usable: i.mobile_usable, rich_results: i.rich })),
     not_checked_pages: [...insp.filter(i => i.error).map(i => ({ url: i.url, reason: i.not_checked || i.error })), ...((_ib && _ib.skipped) || []).map(u => ({ url: u, reason: 'not checked in this audit: the pages rotate through Google\'s daily quota, oldest first' }))].slice(0, 25) };
   const _f19 = findings.length;   // R19: every finding below is measured on the pages Google actually answered for
   const ok = insp.filter(i => !i.error); const coverage = {}; for (const i of ok) coverage[i.coverage || i.verdict || 'unknown'] = (coverage[i.coverage || i.verdict || 'unknown'] || 0) + 1; search_console.coverage = coverage;
-  const notIdx = ok.filter(i => i.indexed === false); search_console.not_indexed = notIdx.map(i => ({ url: i.url, reason: i.coverage }));
+  // R59 (2026-10-16): a page Google does not index under this host but SHOWS under the other one (www / bare) is not "not indexed":
+  // Google chose its twin. Exec 595: all 16 "not indexed" www pages had impressions on https://techand.ai (1,374 in 28 days) and the
+  // High "cannot rank at all ... request indexing" was ranked first. They are reported by the host-split finding, with their
+  // impressions; only a page with no impressions under any host stays in the not-indexed finding. The list keeps every page.
+  rowsByKey90 = new Map(); for (const r of pagesRows) { const k = key(r.page); if (!k) continue; const l = rowsByKey90.get(k) || []; l.push(r); rowsByKey90.set(k, l); }
+  const notIdxAll90 = ok.filter(i => i.indexed === false);
+  servedAlt90 = notIdxAll90.filter(i => elsewhere90(i).length);
+  const notIdx = notIdxAll90.filter(i => !elsewhere90(i).length);
+  search_console.not_indexed = notIdxAll90.map(i => { const o = elsewhere90(i); return o.length ? { url: i.url, reason: i.coverage, shown_as: o[0].page, shown_impressions: o.reduce((n, r) => n + r.impressions, 0), shown_clicks: o.reduce((n, r) => n + r.clicks, 0) } : { url: i.url, reason: i.coverage }; });
+  const notIdxCov90 = {}; for (const i of notIdx) { const k = i.coverage || i.verdict || 'unknown'; notIdxCov90[k] = (notIdxCov90[k] || 0) + 1; }
   if (ok.length) {
     const share = Math.round(notIdx.length / ok.length * 100);
-    if (notIdx.length && share >= 20) F('High', 'A large share of important pages is not indexed by Google', 'Pages that Google has not indexed cannot rank at all, whatever their content.', 'Open each URL in Search Console\'s URL inspection, fix the stated reason (crawled but not indexed usually means thin or duplicate content; discovered but not indexed means too few internal links), then request indexing.', notIdx.length + ' of ' + ok.length + ' sampled pages: ' + Object.entries(coverage).filter(([k]) => !/indexed/i.test(k) || /not indexed/i.test(k)).map(([k, v]) => v + ' × ' + k).join(', '), notIdx.map(i => i.url), notIdx.length, share);
+    if (notIdx.length && share >= 20) F('High', 'A large share of important pages is not indexed by Google', 'Pages that Google has not indexed cannot rank at all, whatever their content.', 'Open each URL in Search Console\'s URL inspection, fix the stated reason (crawled but not indexed usually means thin or duplicate content; discovered but not indexed means too few internal links), then request indexing.', notIdx.length + ' of ' + ok.length + ' sampled pages: ' + Object.entries(notIdxCov90).filter(([k]) => !/indexed/i.test(k) || /not indexed/i.test(k)).map(([k, v]) => v + ' × ' + k).join(', ') + ', with no impressions under any host' + (servedAlt90.length ? '; ' + servedAlt90.length + ' more are not indexed under this address but shown by Google under the other one (see the www and non-www finding)' : ''), notIdx.map(i => i.url), notIdx.length, share);
     else if (notIdx.length) F('Medium', 'Some sampled pages are not indexed by Google', 'These pages cannot rank until Google indexes them.', 'Check the reason in Search Console\'s URL inspection, strengthen internal links to them and request indexing.', (notIdx.map(i => i.coverage).filter(Boolean).filter((v, k, a) => a.indexOf(v) === k).join('; ') || (notIdx.length + ' of ' + ok.length + ' inspected pages are not in Google\'s index (Search Console gave no reason for them)')), notIdx.map(i => i.url), notIdx.length, share);
-    else works.push('All ' + ok.length + ' sampled pages are indexed by Google');
+    else if (!servedAlt90.length) works.push('All ' + ok.length + ' sampled pages are indexed by Google');
     const robotsBlocked = ok.filter(i => /disallow|blocked/i.test(i.robots)); if (robotsBlocked.length) F('High', 'Important pages blocked by robots.txt', 'Google cannot crawl these pages, so it cannot rank them on their content.', 'Remove the Disallow rule that matches them in robots.txt.', robotsBlocked.map(i => i.robots).join(', '), robotsBlocked.map(i => i.url), robotsBlocked.length, Math.round(robotsBlocked.length / ok.length * 100));
-    const canon = ok.filter(i => i.indexed && i.google_canonical && !same(i.google_canonical, i.url)); search_console.canonical_mismatch = canon.map(i => ({ url: i.url, google_canonical: i.google_canonical }));
+    // R59: index_coverage.canonical_mismatch read 3 and search_console.canonical_mismatch 0 for the same pages (one counted every page
+    // host-sensitively, the other indexed pages only). One definition now; a different HOST of the same page goes to the host-split finding.
+    canonAll90 = ok.filter(i => canonOk90(i) === false);
+    search_console.canonical_mismatch = canonAll90.map(i => ({ url: i.url, google_canonical: i.google_canonical, user_canonical: i.user_canonical || '', indexed: i.indexed, host_only: hostOnly90(i) }));
+    const canon = canonAll90.filter(i => !hostOnly90(i));
     if (canon.length) F('Medium', 'Google chose a different canonical URL than the page itself', 'Google treats these pages as duplicates of another URL, so they do not rank on their own.', 'Make each page clearly distinct, set its canonical tag to itself, and link to that version consistently.', canon.map(i => path(i.url) + ' → ' + i.google_canonical).join('; ').slice(0, 300), canon.map(i => i.url), canon.length, Math.round(canon.length / ok.length * 100));
     const notSubmitted = ok.filter(i => /not submitted in sitemap/i.test(i.coverage)); if (notSubmitted.length >= 3) F('Low', 'Indexed pages that are not in the submitted sitemap', 'Google indexed them anyway, but the sitemap is incomplete.', 'Regenerate the sitemap to include every indexable page.', notSubmitted.length + ' sampled pages are "indexed, not submitted in sitemap"', notSubmitted.map(i => i.url), notSubmitted.length, Math.round(notSubmitted.length / ok.length * 100));
     const stale = ok.filter(i => i.indexed && i.last_crawl && (Date.now() - new Date(i.last_crawl).getTime()) / 864e5 > 60); if (stale.length && stale.length / ok.length >= 0.5) F('Low', 'Google crawls important pages rarely', 'Pages Google visits only every few months pick up changes late; it usually means few internal links and little fresh content.', 'Update and interlink key pages regularly; keep the sitemap lastmod dates honest.', stale.length + ' of ' + ok.length + ' sampled pages last crawled over 60 days ago', stale.map(i => i.url), stale.length, Math.round(stale.length / ok.length * 100));
@@ -692,6 +843,47 @@ if (!connected) {
       note: mobChecked ? '' : String(((ok.find(i => i.mobile_note) || {}).mobile_note) || 'Search Console no longer answers mobile usability (Google retired the Mobile Usability report), so it was not checked.') };
     if (mobBad.length && mobEvidence) F('High', 'Pages Google reports as not mobile-friendly', 'Google indexes the mobile version of every page: what its phone crawler cannot use properly cannot rank well.', 'Fix the issues Search Console lists for these URLs (viewport, text size, tap targets, content wider than the screen), then re-inspect them.', mobEvidence, mobBad.map(i => i.url), mobBad.length, Math.round(mobBad.length / ok.length * 100));
     else if (mobChecked && ok.some(i => i.mobile_usable === true)) works.push('Google reports the ' + mobChecked + ' page(s) it still answers about as mobile-friendly');
+  }
+  // ---- R59 (2026-10-16): www and non-www as GOOGLE shows them — the redirect and the homepage tag are what the site says, not what Google does ----
+  {
+    const ch = __canonHost90; const alt = !ch ? '' : (/^www\./.test(ch) ? ch.slice(4) : 'www.' + ch); const bareH = /^www\./.test(ch) ? alt : ch;
+    const fmt90 = (v) => (Number(v) || 0).toLocaleString('en-GB');
+    const hostRows = {}; for (const r of pagesRows) { const h = __hostOf90(r.page); if (!h) continue; const o = hostRows[h] || (hostRows[h] = { host: h, pages: 0, clicks: 0, impressions: 0 }); o.pages += 1; o.clicks += r.clicks; o.impressions += r.impressions; }
+    const C = hostRows[ch] || { host: ch, pages: 0, clicks: 0, impressions: 0 }; const A = hostRows[alt] || { host: alt, pages: 0, clicks: 0, impressions: 0 };
+    const allImpr = Object.values(hostRows).reduce((n, o) => n + o.impressions, 0); const altShare = allImpr ? A.impressions / allImpr : 0;
+    const googleAlt = canonAll90.filter(i => hostOnly90(i) && __hostOf90(i.google_canonical) === alt);
+    const altMaps = (sitemaps || []).filter(s => __hostOf90(s.path) === alt);
+    const split = !!alt && ((A.pages >= 2 && altShare >= 0.2) || googleAlt.length > 0);
+    const shownImpr = servedAlt90.reduce((n, i) => n + elsewhere90(i).reduce((m, r) => m + r.impressions, 0), 0);
+    const shownClicks = servedAlt90.reduce((n, i) => n + elsewhere90(i).reduce((m, r) => m + r.clicks, 0), 0);
+    host_split90 = { found: split, canonical_host: ch, other_host: alt, hosts: [C, A].map(o => ({ ...o, impressions_pct: allImpr ? Math.round(o.impressions / allImpr * 100) : 0 })),
+      google_chose_other: googleAlt.map(i => ({ url: i.url, google_canonical: i.google_canonical })), submitted_sitemaps_other_host: altMaps.map(s => s.path),
+      not_indexed_shown_elsewhere: servedAlt90.length, shown_elsewhere_impressions: shownImpr, shown_elsewhere_clicks: shownClicks };
+    search_console.host_split = host_split90;
+    if (split) {
+      const hp = (((base.probe || {}).measurements || {}).hosts) || {};
+      const server = (Number(hp.apex_status) >= 300 && Number(hp.apex_status) < 400 && __hostOf90(hp.apex_location) === ch && ch !== bareH)
+        ? 'your server redirects (' + hp.apex_status + ') https://' + bareH + ' to https://' + ch + (String(hp.canonical_tag_host || '').toLowerCase() === ch ? ' and the homepage canonical tag names https://' + ch : '')
+        : (Number(hp.www_status) >= 300 && Number(hp.www_status) < 400 && __hostOf90(hp.www_location) === ch && ch === bareH) ? 'your server redirects (' + hp.www_status + ') https://' + alt + ' to https://' + ch : '';
+      const ev = ['Search Console page rows (28 days): https://' + A.host + ' ' + A.pages + ' page(s), ' + fmt90(A.clicks) + ' clicks, ' + fmt90(A.impressions) + ' impressions (' + Math.round(altShare * 100) + '% of page impressions); https://' + C.host + ' ' + C.pages + ' page(s), ' + fmt90(C.clicks) + ' clicks, ' + fmt90(C.impressions) + ' impressions',
+        googleAlt.length ? 'Google chose https://' + alt + ' as the canonical of ' + googleAlt.length + ' inspected page(s) whose own canonical names https://' + ch + ' (' + googleAlt.slice(0, 3).map(i => path(i.url)).join(', ') + ')' : '',
+        altMaps.length ? 'the sitemap submitted to Search Console is ' + altMaps.map(s => s.path).join(', ') : '',
+        servedAlt90.length ? servedAlt90.length + ' key page(s) not indexed under https://' + ch + ' are shown under https://' + alt + ' (' + fmt90(shownImpr) + ' impressions, ' + fmt90(shownClicks) + ' clicks)' : '',
+        server].filter(Boolean).join('; ');
+      const urls90 = [...new Set([...servedAlt90.map(i => i.url), ...googleAlt.map(i => i.url)])];
+      host_split90.evidence = ev;
+      // the redirect probe already reported the two hosts as not consolidated: Google's view is the same problem, so no second finding is
+      // raised — its numbers travel in search_console.host_split and the report's Search Console section prints them beside that finding
+      const probeFlag90 = (((base.probe || {}).findings) || []).some(f => /www and non-www versions are not consolidated|redirect chain or loop between apex and www/i.test(String((f || {}).title || '')));
+      if (probeFlag90) host_split90.folded_into_probe = true;
+      else F('High', 'www and non-www are split in Google: ' + (altShare >= 0.5 ? 'most pages are' : 'part of the site is') + ' shown under https://' + alt + ', not https://' + ch,
+        'Your site names https://' + ch + ' as its address, but Google shows and ranks pages under https://' + alt + '. The pages under https://' + ch + ' then read as "not indexed" while their twins collect the impressions, and links and ranking signals are split between two addresses until one of them wins.',
+        'Make every signal name https://' + ch + ': submit https://' + ch + '/sitemap.xml in Search Console' + (altMaps.length ? ' and remove ' + altMaps.map(s => s.path).join(', ') : '') + ', list only https://' + ch + ' URLs in it, change internal links that still point at https://' + alt + ', keep the redirects, then watch the page rows move to https://' + ch + ' in Search Console over the next weeks. Requesting indexing page by page does not help: Google already knows these pages under the other address. If https://' + alt + ' is the address you want, change the redirect and the canonical tags instead.',
+        ev, urls90, urls90.length || A.pages, (ok.length && urls90.length) ? Math.round(urls90.length / ok.length * 100) : Math.round(altShare * 100));
+      const f90 = findings[findings.length - 1]; if (f90 && /are split in Google/.test(String(f90.title || ''))) { f90.affected_urls = urls90.slice(0, 200); f90.host_split = true; }
+      const nc90 = findings.find(f => f && f.title === 'Pages shown in Google but never clicked');
+      if (nc90) { const n = pagesRows.filter(p => p.impressions >= 50 && p.clicks === 0 && __hostOf90(p.page) === alt).length; if (n) nc90.evidence = String(nc90.evidence || '') + '; ' + n + ' of them are listed under https://' + alt + ', the other address (see the www and non-www finding)'; }
+    }
   }
   // ---- R19: how many pages each of those numbers was measured on, said out loud and carried into the stored row and the diff ----
   const inspection_stats = { asked: insp.length, checked: ok.length, failed: insp.length - ok.length,
@@ -729,4 +921,58 @@ const crawl_coverage = { known_urls: knownUrls.length, crawled_known: knownCrawl
 if (knownUrls.length >= 10 && coveragePct != null && coveragePct < 90) F('Medium', 'The crawl covered only part of the site', 'Every share and count below is a share of the pages that were crawled, not of the whole site; pages nobody crawled can hide the worst problems.', 'Raise the crawl limit for this site (or fix what blocks the crawler: robots.txt rules, bot protection, pages reachable only through scripts), then audit again.', crawl_coverage.text + '; ' + notCrawled.length + ' known URLs were not reached' + (plan.crawl_limit ? ' (crawl limit ' + plan.crawl_limit + ' pages' + (crawlComplete ? '' : ', the crawl did not finish') + ')' : ''), crawl_coverage.sample_not_crawled, notCrawled.length, 100 - coveragePct);
 else if (knownUrls.length >= 10 && coveragePct != null) works.push(crawl_coverage.text);
 const site_structure = { crawl_coverage, crawled_pages: pages.length, indexable_pages: indexablePages.length, depth_buckets: depthBuckets, within_3_clicks_pct: withDepth ? Math.round(within3 / withDepth * 100) : null, sections: topSections, sitemap: { url: plan.sitemap_url, status: smStatus, urls: sitemapUrls.length, is_index: isIndex, children: childCount }, indexable_not_in_sitemap: notInSitemap.length, sitemap_only: sitemapOnly.length, sitemap_broken: sitemapBroken.length, crawl_complete: crawlComplete };
-return [{ json: { ...base, extra_findings: [...(base.extra_findings || []), ...findings], extra_works: [...(base.extra_works || []), ...works], search_console, site_structure } }];
+// ---- R61 (2026-10-16): the ranking statements built before Search Console was read (Competitor Analysis, Analyze Keywords) said
+// "does not rank in Google's top 10 for any keyword" from DataForSEO's database alone while Google's own data, read here, showed 15
+// queries in the top 10. They now name both sources; the competitor comparison stays provider against provider.
+const __rk90 = search_console.rankings || null;
+const __n90 = (v) => (Number(v) || 0).toLocaleString('en-GB');
+const __per90 = (__rk90 && __rk90.period && __rk90.period.start) ? __rk90.period.start + ' to ' + __rk90.period.end : 'the last 28 days';
+const __gsc90 = __rk90 ? 'Search Console (measured, ' + __per90 + '): ' + __rk90.top10 + ' quer' + (__rk90.top10 === 1 ? 'y' : 'ies') + ' at an average position in Google\'s top 10 (' + __n90(__rk90.top10_impressions) + ' impressions, ' + __n90(__rk90.top10_clicks) + ' clicks'
+  + (__rk90.top10_brand ? '; ' + __rk90.top10_brand + ' of them for your own name' : '') + ')' + ((__rk90.examples || []).length ? ', e.g. ' + __rk90.examples.slice(0, 3).map(q => '"' + q.query + '" #' + q.position).join(', ') : '') : '';
+const __ex90 = (base.extra_findings || []).map(f => {
+  if (!__rk90 || !f || f.category !== 'Authority') return f;
+  const t = String(f.title || '');
+  if (/does not rank in Google.s top 10 for any keyword/i.test(t) && __rk90.top10 > 0) return { ...f, title: 'Far fewer top-10 rankings than competitors',
+    evidence: String(f.evidence || '').replace(/^Top-10 rankings in /, 'DataForSEO\'s ranking database, top-10 rankings in ') + '; ' + __gsc90,
+    why: 'Google shows the site in its top 10 for very few searches' + (__rk90.top10_brand * 2 >= __rk90.top10 ? ', most of them for its own name,' : '') + ' while the competitors hold hundreds in the same database: a buyer who searches for what you sell finds them first.',
+    reconciled: 'search_console' };
+  const mi = t.match(/^No rankings for (informational|commercial|transactional) searches$/);
+  if (mi && ((__rk90.by_intent_top30 || {})[mi[1]] || 0) > 0) { const n = __rk90.by_intent_top30[mi[1]];
+    return { ...f, severity: 'Low', title: 'Few rankings for ' + mi[1] + ' searches',
+      evidence: String(f.evidence || '').replace(/^You rank for 0 /, 'DataForSEO\'s database holds 0 ') + '; Search Console shows ' + n + ' ' + mi[1] + ' quer' + (n === 1 ? 'y' : 'ies') + ' in the top 30 (' + __per90 + ', e.g. ' + ((__rk90.intent_examples || {})[mi[1]] || []).map(q => '"' + q + '"').join(', ') + ')',
+      why: 'Competitors are found for many more of these searches than you are; the provider\'s database does not see the few you already rank for.', reconciled: 'search_console' }; }
+  if (/^Organic traffic is under 10% of competitors$/.test(t) && search_console.totals) return { ...f,
+    evidence: String(f.evidence || '').replace(/^Estimated monthly organic visits:/, 'Estimated monthly organic visits (DataForSEO\'s estimate, the same for every site compared):') + '; Search Console measured ' + __n90(search_console.totals.clicks) + ' clicks and ' + __n90(search_console.totals.impressions) + ' impressions for your site in ' + __per90,
+    reconciled: 'search_console' };
+  return f;
+});
+const __works90 = (__rk90 && __rk90.top10) ? ['Google\'s own data (Search Console, ' + __per90 + '): ' + __rk90.top10 + ' quer' + (__rk90.top10 === 1 ? 'y' : 'ies') + ' in the top 10' + (__rk90.top10_brand ? ' (' + __rk90.top10_brand + ' for your own name)' : '')] : [];
+// R59: "One canonical host … the canonical tags agree" is what the server says; with Google showing the other host it is not what works
+const __probe90 = (base.probe && host_split90 && host_split90.found) ? { ...base.probe, what_works: (base.probe.what_works || []).filter(w => !/^One canonical host|^www redirects to the main domain/.test(String(w))),
+  measurements: { ...(base.probe.measurements || {}), hosts: { ...(((base.probe.measurements || {}).hosts) || {}), google_split: true, google_other_host: host_split90.other_host } } } : base.probe;
+// ---- B-2 / B-4 (2026-10-17, re-rating 2026-10-17, exec 767): the brand and the index, judged from Google's own data where this run has it ----
+// The brand finding came from one results page ("tech&") beside Search Console's "techand" #4.5 and "tech & ai" #2.7 in the same report, and
+// flipped between "fixed" and "new" from report to report; the index finding put a High on a site: estimate (8) while the URL Inspection of
+// all 45 key pages, in the same run, said 30 are indexed and explained the other 15. Measured data decides; a results page stays a reading.
+const __bq128 = (__rk90 && Array.isArray(__rk90.brand_queries)) ? __rk90.brand_queries.filter(q => (Number(q.impressions) || 0) > 0) : [];
+const __ic128 = search_console.index_coverage || null;
+const __works128 = []; let __avNote128 = null;
+const __ex128 = __ex90.map(f => {
+  if (!f) return f;
+  const t = String(f.title || '');
+  if (t === 'Site does not rank at the top for its own brand name' && __bq128.length) {
+    const main = __bq128[0]; const pos = Number(main.position) || 0;
+    const list = __bq128.slice(0, 4).map(q => '"' + q.query + '" #' + q.position + ' (' + __n90(q.impressions) + ' impressions, ' + __n90(q.clicks) + ' clicks)').join(', ');
+    if (pos > 0 && pos <= 3) { __works128.push('Google\'s own data (Search Console, ' + __per90 + '): the searches for your own name find you at the top — ' + list); return null; }
+    return { ...f, severity: pos > 10 ? 'High' : 'Medium', one_reading: false, reconciled: 'search_console',
+      evidence: 'Search Console (measured, ' + __per90 + '), the searches for your own name: ' + list + '. The results pages read in this run: ' + String(f.evidence || '').replace(/^Results pages read once in this run: /, '').replace(/ One read of a results page is one reading;.*$/, ''),
+      why: 'The search people use most for your name finds you at #' + main.position + ' on average' + (pos > 10 ? ', below the first page' : '') + ': people who already know you have to scroll past other results to reach you.' };
+  }
+  if (/^Far fewer pages indexed than crawled$|^Many more URLs indexed than the crawl found/.test(t) && __ic128 && Number(__ic128.checked) >= 10) {
+    __avNote128 = 'The site: estimate is not used: URL Inspection read ' + __ic128.checked + ' key pages in this run (' + __ic128.indexed + ' indexed, ' + __ic128.not_indexed + ' not, explained in Crawlability & Indexing).';
+    return null;
+  }
+  return f;
+}).filter(Boolean);
+const __av128 = base.ai_visibility ? { ai_visibility: { ...base.ai_visibility, brand_search_console: __bq128.slice(0, 5), ...(__avNote128 ? { index_estimate_note: __avNote128, index_inspection: { checked: __ic128.checked, indexed: __ic128.indexed, not_indexed: __ic128.not_indexed } } : {}) } } : {};
+return [{ json: { ...base, ...__av128, ...(base.probe ? { probe: __probe90 } : {}), extra_findings: [...__ex128, ...findings], extra_works: [...(base.extra_works || []), ...works, ...__works90, ...__works128], search_console, site_structure } }];

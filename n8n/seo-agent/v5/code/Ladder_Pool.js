@@ -78,7 +78,7 @@ const score = (e) => {
   if (e.avg_rd != null && e.avg_rd > 300) win *= 0.5; else if (e.avg_rd != null && e.avg_rd > 100) win *= 0.7;
   const value = 1 + Math.log10(1 + (e.cpc || 0));
   const iw = W[e.intent] ?? 1;
-  const tr = 1 + Math.min(0.3, Math.max(-0.3, (e.trend_yearly || 0) / 100));
+  const tr = 1 + Math.min(0.3, Math.max(-0.7, (e.trend_yearly || 0) / 100));   // R51 (2026-10-16): the same trend factor as discovery's Collect Research — a decline counts to -70%
   return { traffic_potential, traffic_basis: cal.traffic_basis, traffic_note: cal.traffic_note, modelled_traffic_potential: cal.modelled_traffic_potential,
     click_loss: KWI.lossApplied(e.serp_types).map(f => ({ key: f.key, factor: f.factor, basis: f.basis, source: f.source })),
     winnability: +win.toFixed(2), value_factor: +value.toFixed(2), pre_score: +(traffic_potential * win * value * iw * tr).toFixed(1) };

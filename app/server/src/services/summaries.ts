@@ -51,10 +51,14 @@ export function summarize(stage: string, p: P): Summary {
     case 'full_report': {
       put('healthScore', num(p.health_score));
       put('grade', str(p.grade));
-      const ic = obj(p.issue_counts);
+      // B-17 (F-B, 2026-10-17): count what the stored list holds (the scored findings); issue_counts also counts the unscored
+      // content-review findings, so the summary said High 17 / Medium 18 beside a list of 15 / 15. Older payloads keep issue_counts.
+      const stored = obj(p.issue_counts_stored);
+      const ic = Object.keys(stored).length ? stored : obj(p.issue_counts);
       put('critical', num(ic.Critical));
       put('high', num(ic.High));
       put('medium', num(ic.Medium));
+      if (Object.keys(stored).length) put('unscored', num(stored.unscored));
       put('scoreDelta', num(obj(p.audit_diff).score_delta));
       break;
     }
@@ -84,7 +88,10 @@ export function summarize(stage: string, p: P): Summary {
       const t = obj(obj(g.totals).cur);
       put('clicks', num(t.clicks));
       put('impressions', num(t.impressions));
-      put('clicksPct', num(obj(g.deltas).clicks_pct));
+      // R113: a clicks change the report's own significance test calls not real is not a figure to print beside the count
+      const ct = obj(obj(p.significance).clicks);
+      if (ct.real === false) put('clicksChange', 'within normal variation');
+      else put('clicksPct', num(obj(g.deltas).clicks_pct));
       put('sessions', num(obj(obj(obj(p.ga4).organic).cur).sessions));
       put('actions', len(p.actions));
       put('subject', str(p.subject));
@@ -126,6 +133,7 @@ export function summarize(stage: string, p: P): Summary {
     }
     case 'ai_growth': {
       // v4.12: the weekly AI growth loop
+      if (p.dry_run === true) put('dryRun', true);   // D-4: a test run submitted nothing
       const sub = obj(p.submitted);
       put('submitted', (num(obj(sub.bing).submitted) ?? 0) + (num(obj(sub.indexnow).submitted) ?? 0));
       put('pagesChecked', Array.isArray(p.pages) ? p.pages.length : null);
@@ -197,7 +205,12 @@ export function titleFor(stage: string, p: P): string {
   if (stage === 'content' && kw) return `${p.html ? 'Page' : 'Keyword report'}: ${kw}`;
   if ((stage === 'ladder_plan' || stage === 'rank_tracker') && kw) return `${base}: ${kw}`;
   if (stage === 'published' && kw) return `Publish check: ${kw}`;
-  return dom ? `${base} · ${dom}` : base;
+  // D-13 / C-14 (re-rating 2026-10-17): a pulse with no alert is not titled "AI pulse alert"; the word follows the alerts it carries
+  const named = stage === 'ai_pulse' && len(p.alerts) ? 'AI pulse alert' : base;
+  // D-4 / C-11: a dry run submitted nothing and is a test; C-1: a scheduled run that ran late says so in its title too (the engine's `ran_late`)
+  const tags = [p.dry_run === true || p.dry_run === 'true' ? 'test run, nothing submitted' : '', obj(p.ran_late).late === true ? 'ran late' : ''].filter(Boolean);
+  const t = dom ? `${named} · ${dom}` : named;
+  return tags.length ? `${t} (${tags.join(', ')})` : t;
 }
 
 /**
@@ -212,14 +225,19 @@ export function titleFor(stage: string, p: P): string {
  * them from the text, and the app must not present that as a measurement. A crawl's price is a provider quote in the same way
  * (`dataforseo_estimated_usd`).
  */
-export function ledgerCost(p: P): { usd: number; estimated: boolean } | null {
+export function ledgerCost(p: P): { usd: number; estimated: boolean; partial: boolean } | null {
   const l = obj(p.run_ledger);
   const dfs = num(l.dataforseo_usd);
   const ai = num(l.ai_usd) ?? num(obj(l.ai_cost).usd);
   const direct = num(p.cost_usd);
   if (dfs == null && ai == null && direct == null) return null;
   const estimated = l.ai_cost_estimated === true || obj(l.ai_cost).estimated === true || (num(l.dataforseo_estimated_usd) ?? 0) > 0;
-  return { usd: (dfs ?? 0) + (ai ?? 0) + (direct ?? 0), estimated };
+  // R102 / R115: a ledger with no model-call figure at all ("ai_usd" absent or null) did not report its model calls, so what it
+  // carries is the search data only — partial, never the run's whole cost. `ai_usd: 0` is a real $0 (an audit calls no model) and is
+  // not flagged. A bare `cost_usd` (the old monitor callbacks) is DataForSEO money only, so it is partial too; and it is a fallback,
+  // not an addend: when the ledger has its own search-data figure, `cost_usd` is the same money and must not be counted twice.
+  const partial = ai == null;
+  return { usd: (dfs ?? direct ?? 0) + (ai ?? 0), estimated, partial };
 }
 
 /**

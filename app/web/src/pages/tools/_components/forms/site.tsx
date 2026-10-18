@@ -1,3 +1,4 @@
+import { PRICES } from '@/lib/prices';
 import { useRef, useState } from 'react';
 import { useForm, type DefaultValues } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -116,14 +117,14 @@ export function AuditForm({ initialSiteId, prefill }: ToolFormProps) {
             selected={!full}
             onSelect={() => form.setValue('reportType', 'site_audit', { shouldDirty: true })}
             title="Technical audit"
-            badge={<Badge>about $0.10 · 20 min</Badge>}
+            badge={<Badge>about {PRICES.auditTechnical()} · {estimateEta('audit', { reportType: 'site_audit' })} min</Badge>}
             description="Crawl, speed and caching, indexing and Search Console, structure, schema, brand and entity check, internal links, and a fix pack (robots.txt, llms.txt, redirects, schema)."
           />
           <ChoiceCard
             selected={full}
             onSelect={() => form.setValue('reportType', 'full', { shouldDirty: true })}
             title="Full SEO report"
-            badge={<Badge>about $0.90 · 30 min</Badge>}
+            badge={<Badge>about {PRICES.auditFull()} · {estimateEta('audit', { reportType: 'full' })} min</Badge>}
             description="Everything in the technical audit plus competitor and keyword analysis, backlinks and link gap, AI visibility and domain ages."
           />
         </div>
@@ -199,7 +200,7 @@ export function PublishedForm({ initialSiteId, prefill }: ToolFormProps) {
       >
         <SiteField value={v.siteId} onChange={(id) => form.setValue('siteId', id ?? '', { shouldDirty: true, shouldValidate: true })} error={errMsg(e.siteId)} />
         <TextField label="Page address" reg={form.register('publishedUrl')} error={errMsg(e.publishedUrl)} inputMode="url" placeholder={site ? `https://${site.domain}/…` : 'https://…'} hint={site ? `The live URL on ${site.domain}.` : 'The live URL.'} />
-        <TextField label="Target keyword" reg={form.register('keyword')} error={errMsg(e.keyword)} placeholder="e.g. uae e invoicing penalties" hint="The keyword the page was written for (the one in its report)." />
+        <TextField label="Target keyword" reg={form.register('keyword')} error={errMsg(e.keyword)} placeholder="e.g. dubai accounting software pricing" hint="The keyword the page was written for (the one in its report)." />
         <CheckList items={['Live (HTTP 200) and indexable', 'Title and meta description', 'One H1, canonical', 'Structured data, author and date', 'Images and alt text', 'Internal links to and from it']} />
         <EmailCopyField reg={form.register('emailCopy')} />
       </FormCard>

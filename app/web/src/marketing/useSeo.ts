@@ -36,7 +36,7 @@ export function metaDescription(text: string, max = 160): string {
   return `${cut.slice(0, cut.lastIndexOf(' ')).replace(/[\s,;:—–-]+$/, '')}…`;
 }
 
-/** Page title ("<title> — Ascentra"), meta description (clamped to what search results show), Open Graph title / description / url and the
+/** Page title ("<title> — Alaventra"), meta description (clamped to what search results show), Open Graph title / description / url and the
  *  canonical link. */
 export function useSeo({ title, description, path }: { title: string; description: string; path: string }) {
   useEffect(() => {

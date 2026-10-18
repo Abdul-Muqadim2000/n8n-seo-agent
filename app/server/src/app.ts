@@ -9,6 +9,14 @@ import { readSession } from './auth/session';
 import { config } from './config';
 import { HttpError } from './lib/errors';
 import { linkBuilderRoutes } from './routes/linkBuilder';
+import { crawlerRoutes, crawlerStreamRoutes } from './routes/crawlers';
+import { apiV1Routes } from './routes/apiV1';
+import { integrationRoutes } from './routes/integrations';
+import { cmsRoutes } from './routes/cms';
+import { agencyRoutes } from './routes/agency';
+import { hostGate } from './services/portalHosts';
+import { portalIndexHtml } from './services/portalShell';
+import { triesBearer } from '@seo/shared';
 import { adminRoutes } from './routes/admin';
 import { authRoutes } from './routes/auth';
 import { dataRoutes } from './routes/data';
@@ -16,6 +24,11 @@ import { hookRoutes } from './routes/hooks';
 import { keywordRoutes } from './routes/keywords';
 import { ladderRoutes } from './routes/ladders';
 import { meRoutes } from './routes/me';
+import { mfaRoutes } from './routes/mfa';
+import { securityRoutes } from './routes/security';
+import { sessionRoutes } from './routes/sessions';
+import { ssoRoutes } from './routes/sso';
+import { scimRoutes } from './routes/scim';
 import { orgRoutes } from './routes/orgs';
 import { runRoutes } from './routes/runs';
 import { siteRoutes } from './routes/sites';
@@ -27,7 +40,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   const redact = (url: string) => url.replace(/(\/api\/hooks\/n8n\/)[^/?#]+/, '$1***');
   const serializers = { req: (r: { method: string; url: string; ip?: string }) => ({ method: r.method, url: redact(r.url), ip: r.ip }) };
   const app = Fastify({
-    logger: config.isProd ? { level: 'info', serializers } : { level: 'info', serializers, transport: { target: 'pino-pretty', options: { translateTime: 'HH:MM:ss', ignore: 'pid,hostname' } } },
+    logger: config.isProd || config.logLevel === 'silent' ? { level: config.logLevel, serializers } : { level: config.logLevel, serializers, transport: { target: 'pino-pretty', options: { translateTime: 'HH:MM:ss', ignore: 'pid,hostname' } } },
     // behind a reverse proxy: trust exactly that many hops of X-Forwarded-For (never every hop: the client controls the leftmost)
     trustProxy: config.trustProxy > 0 ? (_addr: string, hop: number) => hop < config.trustProxy : false,
     // 1 MB for people; the n8n callback route allows 40 MB (PDFs and Word files as base64)
@@ -60,22 +73,49 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   app.decorateRequest('user', null);
   app.decorateRequest('sessionId', null);
+  app.decorateRequest('session', null);
+  app.decorateRequest('portal', null);
+
+  // G5 (app/docs/WHITE_LABEL.md §2): the host decides the tenant before anything else — a verified portal host sets `req.portal`,
+  // a lapsed one (and, with strict hosts, any unknown one) gets a plain 421 and nothing of the app; on a portal host our own icons
+  // and social images are not served (the page names the agency, not us)
+  app.addHook('onRequest', async (req, reply) => {
+    if (!(await hostGate(req, reply))) return reply;
+    if (req.portal && /^\/(favicon[^/]*|apple-touch-icon[^/]*|safari-pinned-tab\.svg|site\.webmanifest|og-image\.png|brand\/.*|maskable-icon[^/]*)(\?|$)/.test(req.url))
+      return reply.status(404).header('cache-control', 'no-store').send('');
+    // the static plugin would answer "/" with the app's own shell: the portal's comes from here
+    if (req.portal && req.method === 'GET' && /^\/(index\.html)?(\?|$)/.test(req.url) && config.webDist)
+      return reply.header('cache-control', 'no-cache').header('content-type', 'text/html; charset=utf-8').send(await portalIndexHtml(resolve(config.webDist), req.portal.orgId));
+  });
 
   app.addHook('onRequest', async (req, reply) => {
     if (!req.url.startsWith('/api/')) return;
+    // B5-11: a request to the read API that presents a company API key is authenticated by that key alone - never by the cookie - so
+    // it needs no CSRF header (a cross-site form cannot set Authorization) and its session is not read at all
+    // G1: SCIM is authenticated by its own bearer token only (routes/scim.ts), never by a cookie
+    if ((req.url.startsWith('/api/v1') && triesBearer(req.headers.authorization)) || req.url.startsWith('/api/scim/')) {
+      req.user = null;
+      req.sessionId = null;
+      return;
+    }
     // CSRF: state-changing requests must carry a header a cross-site form cannot set (n8n callbacks authenticate by URL token instead)
-    if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !req.url.startsWith('/api/hooks/') && req.headers['x-requested-with'] !== 'fetch') {
+    // log pushes (Cloudflare Logpush, log drains) authenticate by the site's push key in a header, like n8n callbacks by URL token
+    const machine = req.url.startsWith('/api/hooks/') || req.url.startsWith('/api/ingest/');
+    // G1: the SAML answer is a cross-site form POST from the identity provider, authenticated by its signature and our request id
+    const samlAcs = req.method === 'POST' && /^\/api\/sso\/saml\/[^/]+\/acs(\?|$)/.test(req.url);
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !machine && !samlAcs && req.headers['x-requested-with'] !== 'fetch') {
       throw new HttpError(403, 'Missing X-Requested-With header', 'csrf');
     }
-    if (req.url.startsWith('/api/hooks/') || req.url === '/api/health') return;
+    if (machine || req.url === '/api/health') return;
     const s = await readSession(req, reply);
     req.user = s?.user ?? null;
     req.sessionId = s?.sessionId ?? null;
+    req.session = s?.session ?? null;
   });
 
   app.setErrorHandler((err: FastifyError | HttpError, req, reply) => {
     if (err instanceof HttpError) {
-      return reply.status(err.statusCode).send({ error: err.message, code: err.code, fields: err.fields });
+      return reply.status(err.statusCode).send({ ...err.extra, error: err.message, code: err.code, fields: err.fields });
     }
     const status = (err as FastifyError).statusCode ?? 500;
     if (status === 429) return reply.status(429).send({ error: 'Too many attempts. Please wait a minute and try again.', code: 'rate_limited' });
@@ -101,6 +141,11 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(authRoutes);
   await app.register(meRoutes);
+  await app.register(mfaRoutes);
+  await app.register(securityRoutes);
+  await app.register(sessionRoutes);
+  await app.register(ssoRoutes);
+  await app.register(scimRoutes);
   await app.register(orgRoutes);
   await app.register(siteRoutes);
   await app.register(dataRoutes);
@@ -110,6 +155,12 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(hookRoutes);
   await app.register(adminRoutes);
   await app.register(linkBuilderRoutes);
+  await app.register(crawlerRoutes);
+  await app.register(crawlerStreamRoutes);
+  await app.register(apiV1Routes);
+  await app.register(integrationRoutes);
+  await app.register(cmsRoutes);
+  await app.register(agencyRoutes);
 
   // the built React app (production image): static files, and index.html for every client-side route
   const dist = config.webDist ? resolve(config.webDist) : '';
@@ -121,8 +172,10 @@ export async function buildApp(): Promise<FastifyInstance> {
       // hashed bundles never change; everything else (index.html, favicon, theme-init.js) is revalidated
       setHeaders: (res, path) => res.setHeader('cache-control', path.includes('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache'),
     });
-    app.setNotFoundHandler((req, reply) => {
+    app.setNotFoundHandler(async (req, reply) => {
       if (req.url.startsWith('/api/') || req.method !== 'GET') return reply.status(404).send({ error: 'Not found', code: 'not_found' });
+      // G5: on a portal host the page shell names the agency from the first byte (title, icon), never us
+      if (req.portal) return reply.header('cache-control', 'no-cache').header('content-type', 'text/html; charset=utf-8').send(await portalIndexHtml(dist, req.portal.orgId));
       return reply.header('cache-control', 'no-cache').sendFile('index.html');
     });
   } else {

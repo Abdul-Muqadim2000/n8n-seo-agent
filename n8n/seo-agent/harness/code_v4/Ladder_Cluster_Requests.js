@@ -21,6 +21,8 @@ const KWI = (() => {
     min_impressions: 10,        // a query needs this many impressions in the Search Console period before it seeds anything
     striking_min: 8,            // "striking distance": bottom of page 1 to the end of page 2, where one strong page moves the needle
     striking_max: 20,
+    target_share: 0.75,         // A-22: a page's own slug / title targets a search at this share of its words (SM.MATCH_MIN)
+    off_topic_share: 0.5,       // R35: a ranking page is "about something else" only when its own title / H1 hold less than half of the search's words
     max_seeds: 10,              // how many Search Console queries may be handed to the research as seeds
     period_days: 28,            // the Search Console window the Site Tracker stores (Site_Plan.js ranges.current)
     month_days: 30,
@@ -78,30 +80,82 @@ const KWI = (() => {
       if (impressions < c.min_impressions) { dropped.low_impressions++; continue; }
       // which page, if any, already answers this search: the page inventory first (D11), the page Search Console reports only when
       // the inventory is empty (then it is the best evidence we have, and it is labelled as such)
-      const inv = matchPage(q);
+      const inv = matchPage(q, S(r.page));   // R35: the page Search Console credits wins a tie
       // R12 (2026-10-13, re-rating §3.11): 11 of 25 rows read "no page of yours answers this search" while the same row named a live
       // 200-OK page of the site — one of them ranking #6.2 — because only the slug / title match counted and the URL Search Console
       // itself reports was ignored whenever the inventory was non-empty. A URL on this site is evidence: it is the answering page, with
       // its own label ("the page that gets the impressions does not target this search"), so the report never asks the owner for a second
       // page for a search they already rank for (D11's cannibalisation rule, in the discovery path).
+      // R55 (2026-10-16): Search Console reports the bare host for an sc-domain property while the inventory holds the canonical one,
+      // so one table linked both. Every site URL printed goes through the site's canonical host (`c.canon`, SM.canonUrl); Google's own
+      // URL stays as `gsc_page`.
+      const canon = typeof c.canon === 'function' ? c.canon : (u) => u;
       const rowUrl = S(r.page);
       const rowBare = bare(rowUrl);
       const rowOnSite = !!rowUrl && !!rowBare && (!dom || rowBare === dom || rowBare.endsWith('.' + dom));
+      const pageUrl = rowOnSite ? S(canon(rowUrl)) : rowUrl;
+      // R35 (2026-10-16, re-rating 2026-10-15): a row whose page is on the site is a page that RANKS for the query. It used to be labelled
+      // "the page that gets the impressions does not target this search" whenever the literal word matcher failed — 20 rows, 18 of them
+      // the D365 F&O page for D365 F&O searches. A page is now called off-target only on evidence about the page itself: its own title /
+      // H1 (`c.pageTitleShare`, SM.titleShare) holding less than half of the search's words, and the sentence says what was compared.
+      const evidence = rowOnSite && typeof c.pageTitleShare === 'function' ? c.pageTitleShare(rowUrl, q) : null;
       const row_page = (rowUrl && (c.use_row_page || rowOnSite))
-        ? { url: rowUrl, title: '', matched_by: c.use_row_page ? 'search console page' : 'impressions' } : null;
-      const answered_by = inv ? { url: S(inv.url), title: S(inv.title), matched_by: S(inv.matched_by) || 'inventory' } : row_page;
+        ? { url: pageUrl, title: S(evidence && evidence.title), matched_by: c.use_row_page ? 'search console page' : 'search console' } : null;
+      // A-22 (2026-10-17, re-rating 2026-10-17, exec 764): 17 of 79 rows named a different page than the one Search Console reports for the
+      // query — "dynamics 365 finance and operations pricing dubai" ranks #9.6 with /dynamics-365-finance-and-operations-uae and the owner was
+      // told to improve the VAT article, because the inventory's word match decided first and Google's own page only broke a tie. The page
+      // Google ranks for a search (Search Console's query x page row) IS the answer. The word match is the fallback for a row with no page
+      // of ours, and is labelled as such; where another page targets the search more closely by its words, both are named (`also`), never
+      // swapped. The one exception stays R56: a listing page (the blog index) gets impressions for every article it lists, so the dedicated
+      // page behind it answers, and the listing is named beside it.
+      const listingOf = typeof c.isListing === 'function' ? c.isListing : () => false;
+      const pageScore = typeof c.pageScore === 'function' ? c.pageScore : () => null;
+      const ukey = (u) => bare(u) + S(u).toLowerCase().replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+      const invUrl = inv ? S(canon(S(inv.url))) : '';
+      const invIsRow = !!inv && !!rowUrl && ukey(invUrl) === ukey(pageUrl);
+      const listingRow = rowOnSite && listingOf(rowUrl) && !!inv && !invIsRow && !listingOf(inv.url);
+      let answered_by = null;
+      if (rowOnSite && !listingRow) {
+        answered_by = { ...row_page, basis: 'the page Search Console reports for this search' };
+        if (inv && !invIsRow && S(inv.matched_by) !== 'query') {
+          const own = pageScore(rowUrl, q);
+          if (own == null || (Number(inv.score) || 0) > own + 1e-9) answered_by.also = { url: invUrl, title: S(inv.title), matched_by: S(inv.matched_by), score: inv.score ?? null };
+        }
+      } else if (inv) {
+        answered_by = { url: invUrl, title: S(inv.title), matched_by: S(inv.matched_by) || 'inventory',
+          basis: listingRow ? 'the page about this search behind the listing page Google shows for it' : 'matched by its words: Search Console names no page of yours for this search',
+          ...(inv.listing ? { listing: inv.listing } : listingRow ? { listing: { url: pageUrl, impressions: impressions,
+            note: 'Google currently shows ' + (pageUrl.replace(/^https?:\/\/[^/]+/i, '') || '/') + ' (a listing page) for this search; the page that is about it is ' + (invUrl.replace(/^https?:\/\/[^/]+/i, '') || '/') } } : {}) };
+      } else answered_by = row_page;
       const kinds = [];
-      if (!answered_by) kinds.push('no_page');
-      else if (!inv && answered_by.matched_by === 'impressions') kinds.push('page_mismatch');
+      const ownScore = rowOnSite ? pageScore(rowUrl, q) : null;   // the ranking page's own words (slug or title / H1): a slug that targets the search is not "about something else"
+      const offTopic = !!answered_by && answered_by.matched_by === 'search console' && !invIsRow && !!evidence && evidence.share != null && evidence.share < c.off_topic_share
+        && !(ownScore != null && ownScore + 1e-9 >= c.target_share);
       const striking = position >= c.striking_min && position <= c.striking_max;
+      const lowPos = position > c.striking_max;
+      if (!answered_by) kinds.push('no_page');
+      else if (offTopic) kinds.push('page_mismatch');
+      else if (!inv && lowPos) kinds.push('low_position');
       if (striking) kinds.push('striking');
       const posTxt = position > 0 ? '#' + (Math.round(position * 10) / 10) : 'unreported';
+      const pathTxt = answered_by ? (S(answered_by.url).replace(/^https?:\/\/[^/]+/i, '') || '/') : '';
+      // A-22: the second page is named beside Google's own, never instead of it; a page matched by words alone says so
+      const alsoTxt = answered_by && answered_by.also ? ' — ' + (S(answered_by.also.url).replace(/^https?:\/\/[^/]+/i, '') || '/') + ' matches the words of this search more closely: keep one page for it and link the other to it' : '';
+      // a listing page (the blog index) is what Google shows; the position is ITS position, and the page about the search is named beside it
+      const listPath = answered_by && answered_by.listing ? (S(answered_by.listing.url).replace(/^https?:\/\/[^/]+/i, '') || '/') : '';
+      const rankTxt = listPath ? 'Google shows ' + listPath + ' (a listing page) at ' + posTxt + ' for it; the page about it is ' + pathTxt + ' (link it from ' + listPath + ')'
+        : 'you rank ' + posTxt + ' with ' + pathTxt;
+      const basisTxt = answered_by && answered_by.matched_by !== 'search console' && answered_by.matched_by !== 'search console page' && !answered_by.listing ? ' (matched by its words: Search Console names no page of yours for this search)' : '';
       const why = kinds.indexOf('no_page') >= 0 ? 'no page of yours answers this search'
-        : kinds.indexOf('page_mismatch') >= 0 ? 'the page that gets the impressions does not target this search'
-          + (striking ? ' (you rank ' + posTxt + ' with it — striking distance)' : ' (you rank ' + posTxt + ' with it)')
-          : striking ? 'you rank ' + posTxt + ' — striking distance' : 'a page of yours already answers this search';
+        : kinds.indexOf('page_mismatch') >= 0 ? 'the page that gets the impressions is about something else: ' + (evidence.h1 ? 'its title and H1 share' : 'its title shares') + ' only '
+          + evidence.have + ' of the ' + evidence.of + ' words of this search (missing: ' + evidence.missing.join(', ') + ') — you rank ' + posTxt + ' with ' + pathTxt
+          + (striking ? ' (striking distance)' : '') + (answered_by.also ? '; ' + (S(answered_by.also.url).replace(/^https?:\/\/[^/]+/i, '') || '/') + ' is the page about it by its words — make that page the clear answer and link it from ' + pathTxt : '; aim that page at it or give the search its own')
+        : striking ? rankTxt + ' — striking distance: improve that page' + alsoTxt + basisTxt
+        : lowPos ? (listPath ? 'low position: ' + rankTxt : 'low position on ' + pathTxt + ' (you rank ' + posTxt + ' with it)') + ' — improve that page' + alsoTxt + basisTxt
+        : 'a page of yours already answers this search (' + pathTxt + (position > 0 ? ', you rank ' + posTxt : '') + ')'
+          + (answered_by && answered_by.listing ? ' — Google currently shows ' + (S(answered_by.listing.url).replace(/^https?:\/\/[^/]+/i, '') || '/') + ' for it' : '') + alsoTxt + basisTxt;
       considered.push({ keyword: q, impressions, clicks, position: position > 0 ? Math.round(position * 10) / 10 : null,
-        ctr: impressions ? Math.round(clicks / impressions * 1000) / 10 : 0, page: rowUrl, answered_by, kinds, why,
+        ctr: impressions ? Math.round(clicks / impressions * 1000) / 10 : 0, page: rowOnSite ? pageUrl : rowUrl, gsc_page: rowUrl, on_site: rowOnSite, answered_by, kinds, why,
         period_end: period, period_days: c.period_days, tracked: yes(r.tracked) });
     }
     const wanted = considered.filter(q => q.kinds.length);
@@ -112,7 +166,12 @@ const KWI = (() => {
       pages_known: num(c.pages_known) || 0,
       queries: wanted, no_page: wanted.filter(q => q.kinds.indexOf('no_page') >= 0), striking: wanted.filter(q => q.kinds.indexOf('striking') >= 0),
       mismatch: wanted.filter(q => q.kinds.indexOf('page_mismatch') >= 0),
-      answered: considered.filter(q => !q.kinds.length && q.answered_by).slice(0, 20),
+      low_position: wanted.filter(q => q.kinds.indexOf('low_position') >= 0),
+      // R36 (2026-10-16): EVERY measured search with its page (not only the seeds), so discovery can say "you already rank for this with
+      // <page>" for a keyword the providers also returned, instead of recommending a second page for it
+      measured: considered.filter(q => q.on_site).slice(0, 500).map(q => ({ keyword: q.keyword, impressions: q.impressions, clicks: q.clicks, position: q.position,
+        page: q.page, gsc_page: q.gsc_page, answered_url: q.answered_by ? q.answered_by.url : '' })),
+      answered: considered.filter(q => !q.kinds.length && q.answered_by).slice(0, 60),
       seeds: order.slice(0, c.max_seeds).map(q => q.keyword), dropped,
       min_impressions: c.min_impressions, striking_min: c.striking_min, striking_max: c.striking_max };
   };
@@ -192,8 +251,13 @@ const KWI = (() => {
   // `serpPageTypes` reads the URL and the title of each organic result, with the title first where it is decisive ("best ... ",
   // "how to ...") and the path after it. Nothing is inferred from a domain we have not read, and a result it cannot place is
   // `Other`, counted and never guessed at.
+  // F-A1 / A-11 (2026-10-17, re-rating): a title that says it IS a list ("Top 10 ...", "List of ...", "Top IT Consulting Companies in
+  // Dubai") is a list wherever it is published - the LinkedIn Pulse listicle of exec 770 was counted as a forum post, so the results page
+  // of "dubai it consulting companies" (4 lists of 7) settled nothing and the rung was planned as a service page with no word about it.
+  const LIST_TITLE = /\b(?:top\s*\d+\+?|list of)\b|\btop\s+(?:[\w&.-]+\s+){0,4}(?:companies|firms|agencies|providers|consultants|consultancies|vendors|partners|tools|platforms)\b/i;
   const SHAPES = [
     { type: 'Government or official', test: (u, t, d) => /(^|\.)(gov|gov\.[a-z]{2}|gob|govt)(\.|$)/.test(d) || /\.gov($|\.)/.test(d) },
+    { type: 'Comparison or list', test: (u, t) => LIST_TITLE.test(t) },
     { type: 'Forum or community', test: (u, t, d) => /(^|\.)(reddit|quora|stackexchange|stackoverflow|linkedin|facebook|x|twitter|medium)\./.test(d) || /\/(forum|community|questions|discussion)\//.test(u) },
     { type: 'Directory or marketplace', test: (u, t, d) => /(^|\.)(g2|capterra|getapp|softwareadvice|trustradius|saashub|clutch|crunchbase|yelp|yellowpages|indiamart)\./.test(d) },
     { type: 'Comparison or list', test: (u, t) => /\b(best|top\s*\d+|vs\.?|versus|alternatives?|comparison|compared)\b/i.test(t) || /\/(best|top|vs|alternatives|compare)[-\/]/.test(u) },
@@ -236,6 +300,29 @@ const KWI = (() => {
   };
   const BASIS_TEXT = { calibrated: 'calibrated with your Search Console data', modelled: 'modelled from provider volume', unknown: 'no estimate' };
 
+  // ---- A-24 (2026-10-17, re-rating exec 764): who may stand as a COMPETITOR whose rankings feed keyword discovery ----
+  // Discovery took the top three domains of one results page ("erp consultants dubai"), and #2 was naukrigulf.com "ERP Consultant Jobs
+  // in UAE - 67 Vacancies": its 300 ranked keywords ("flydubai careers", "dubai iranian hospital", "jobs abu dhabi") were 545 of the
+  // 1,168 researched and 224 of the 240 reviewed were rated off-topic. A competitor is a business that sells what the site sells; a job
+  // board, a directory / review marketplace, a list of companies, a government portal, a news site or a forum ranks for the search but
+  // competes for nothing. Each class is read from the result itself (host, title, URL shape — KWI.shapeOf's rules), never guessed.
+  const JOB_HOSTS = /(^|\.)(naukrigulf|naukri|indeed|glassdoor|bayt|monster|monstergulf|foundit|gulftalent|ziprecruiter|jooble|careerjet|simplyhired|wellfound|dubizzle|laimoon|drjobpro|jobsdb|jobstreet|seek|reed|totaljobs|careerbuilder)\./;
+  const NEWS_HOSTS = /(^|\.)(khaleejtimes|gulfnews|thenationalnews|thenational|arabianbusiness|zawya|gulfbusiness|emirates247|wam|bloomberg|reuters|forbes|forbesmiddleeast|cnbc|bbc|cnn|nytimes|theguardian|businessinsider|techcrunch|wired|zdnet|computerweekly|itp|economymiddleeast|wamda)\./;
+  const DIRECTORY_HOSTS = /(^|\.)(clutch|themanifest|goodfirms|sortlist|designrush|techbehemoths|2gis|yellowpages|yelp|g2|capterra|getapp|softwareadvice|trustradius|saashub|crunchbase|trustpilot|upwork|fiverr|softwaresuggest|gartner|peerspot|serchen|dnb|zoominfo|kompass|hidubai|uaeyp)\./;
+  const JOB_TEXT = /\b(jobs?|vacanc(?:y|ies)|careers?|hiring|recruit\w*|salar(?:y|ies))\b/i;
+  /** -> '' (a business: may be a competitor) or the class that rules it out */
+  const competitorClass = (domain, url, title) => {
+    const d = bare(domain || url); if (!d) return 'unknown';
+    if (JOB_HOSTS.test(d) || JOB_TEXT.test(S(title)) || /\/(jobs?|careers?|vacanc\w*)(\/|$|-)/i.test(urlKey(url))) return 'job board';
+    if (NEWS_HOSTS.test(d)) return 'news or media';
+    const shape = shapeOf(S(url) || d, title);
+    if (shape === 'Government or official') return 'government';
+    if (shape === 'Forum or community') return 'forum or social';
+    if (DIRECTORY_HOSTS.test(d) || shape === 'Directory or marketplace') return 'directory or marketplace';
+    if (shape === 'Comparison or list') return 'list of companies';
+    return '';
+  };
+
   // ---- K7: clusters by shared results pages ----
   // entries: [{ keyword, urls: [top-10 urls], weight, volume }]. A head keyword takes every keyword that shares at least
   // min_shared_urls of its own top-10 URLs; the head is the strongest keyword not already in a cluster, so the cluster can be named
@@ -255,16 +342,42 @@ const KWI = (() => {
     const byKw = new Map(); for (const e of list) if (!byKw.has(e.keyword)) byKw.set(e.keyword, e);
     const ranked = [...byKw.values()].sort((a, b) => b.weight - a.weight || (b.volume || 0) - (a.volume || 0) || a.keyword.localeCompare(b.keyword));
     const used = new Set(); const clusters = [];
+    const built = [];
     for (const head of ranked) {
       if (used.has(head.keyword)) continue;
       const hs = new Set(head.urls); const members = [];
       for (const other of ranked) {
         if (other.keyword === head.keyword || used.has(other.keyword)) continue;
         const shared = other.urls.filter(u => hs.has(u));
-        if (shared.length >= need) members.push({ keyword: other.keyword, volume: other.volume, shared_urls: shared.length, shared: shared.slice(0, 3) });
+        if (shared.length >= need) members.push({ keyword: other.keyword, volume: other.volume, shared_urls: shared.length, shared: shared.slice(0, 3), shared_with_head: shared.length });
       }
       if (!members.length) continue;
       used.add(head.keyword); members.forEach(m => used.add(m.keyword));
+      built.push({ head, members });
+    }
+    // F-A1 / A-9 (2026-10-17, re-rating exec 770): a keyword that meets the rule with a MEMBER of a group but not with its head was left
+    // alone and labelled "own results page (no other search Google answers with the same pages)" - "it consulting company dubai" shares
+    // 3 of its top 7 with "it consulting company in dubai" (the plan's own threshold) and only 2 with the group's head. The rule is a
+    // pair rule, so the label could only be true if every pair was compared. A keyword still alone after the heads have taken their
+    // members joins the group of the member it shares the most with (one hop: a keyword that joined this way is never a bridge for the
+    // next one), and says through whom it joined and how much it shares with the head.
+    if (c.attach !== false) {
+      for (const k of ranked) {
+        if (used.has(k.keyword)) continue;
+        const ks = new Set(k.urls); let best = null;
+        for (const g of built) for (const m of [{ keyword: g.head.keyword, urls: g.head.urls }, ...g.members.filter(x => !x.via).map(x => byKw.get(x.keyword))]) {
+          if (!m || !Array.isArray(m.urls)) continue;
+          const shared = m.urls.filter(u => ks.has(u));
+          if (shared.length >= need && (!best || shared.length > best.shared.length)) best = { g, via: m.keyword, shared };
+        }
+        if (!best) continue;
+        const hs = new Set(best.g.head.urls);
+        best.g.members.push({ keyword: k.keyword, volume: k.volume, shared_urls: best.shared.length, shared: best.shared.slice(0, 3),
+          via: best.via === best.g.head.keyword ? '' : best.via, shared_with_head: k.urls.filter(u => hs.has(u)).length });
+        used.add(k.keyword);
+      }
+    }
+    for (const { head, members } of built) {
       members.sort((a, b) => b.shared_urls - a.shared_urls || (b.volume || 0) - (a.volume || 0));
       clusters.push({ head_keyword: head.keyword, keyword_count: members.length + 1, urls_compared: head.urls.length,
         min_shared_urls: need, top_n: depth, min_overlap_pct: depth && (num(c.min_overlap) || 0) > 0 ? Math.round(c.min_overlap * 100) : null,
@@ -272,20 +385,35 @@ const KWI = (() => {
         keywords: [{ keyword: head.keyword, volume: head.volume, shared_urls: head.urls.length, shared: [] }, ...members].slice(0, c.max_cluster_keywords) });
     }
     clusters.sort((a, b) => b.keyword_count - a.keyword_count || b.total_volume - a.total_volume);
-    return { clusters, keywords_compared: ranked.length, min_shared_urls: need, min_urls: c.min_urls, top_n: depth,
+    // every compared keyword's own list, at the depth it was compared at, so a later step can test any pair by the same rule (A-10)
+    const urls_of = {}; for (const e of ranked) urls_of[e.keyword] = e.urls.slice();
+    return { clusters, urls_of, keywords_compared: ranked.length, compared_keywords: ranked.map(e => e.keyword), min_shared_urls: need, min_urls: c.min_urls, top_n: depth,
       min_overlap_pct: depth && (num(c.min_overlap) || 0) > 0 ? Math.round(c.min_overlap * 100) : null,
       clustered: clusters.reduce((n, x) => n + x.keyword_count, 0) };
   };
+  // R40 (2026-10-16, re-rating 2026-10-15): ONE rule for which keywords may share a page, used by the ladder (Ladder Plan) and by
+  // discovery's content plan (Rank Keywords). Exec 610 compared the results pages of all 10 rung keywords, found no two sharing even 2 of
+  // their top 7, and still merged "openai consulting" into "ai consulting firm" because the AI's topic label said so. Now:
+  //   * Google answers it with the same pages as other keywords (a SERP cluster)  -> one page for the cluster ('shared results page');
+  //   * its results page was read and compared and shares with no one             -> its own page ('own results page');
+  //   * its results page could not be read or compared                           -> the AI's topic label + page type ('topic label').
+  // -> { key, by } ; `o` = { keyword, topic, page_type, serp_head (the cluster head, '' when it is not in a cluster), compared }
+  const pageGroup = (o) => { const x = o || {}; const kw = low(x.keyword);
+    if (S(x.serp_head)) return { key: 'serp|' + low(x.serp_head), by: 'shared results page' };
+    if (x.compared) return { key: 'kw|' + kw, by: 'own results page' };
+    return { key: 'topic|' + (low(x.topic) || kw) + '|' + S(x.page_type), by: 'topic label' }; };
   // "one page can serve all three: 'erp software uae' also covers 'erp system uae' (4 of the same top-10 pages), ..."
   const clusterText = (cl) => {
     const c = cl || {}; const others = (c.keywords || []).slice(1);
     if (!others.length) return '';
     const depthTxt = c.top_n ? 'top ' + c.top_n : 'top-10';
     return 'One page can target all ' + c.keyword_count + ': "' + c.head_keyword + '" shares '
-      + others.map(k => k.shared_urls + ' of its ' + depthTxt + ' pages with "' + k.keyword + '"').join(', ')
+      + others.map(k => k.via ? k.shared_urls + ' of the ' + depthTxt + ' pages of "' + k.via + '" with "' + k.keyword + '" (' + (k.shared_with_head ?? 0) + ' with "' + c.head_keyword + '" itself)'
+        : k.shared_urls + ' of its ' + depthTxt + ' pages with "' + k.keyword + '"').join(', ')
       + ' - Google answers these searches with the same pages, so a second page would only split the signals.';
   };
-  return { CFG, CLICK_LOSS, gscSeeds, calibrate, serpClusters, clusterText, featureLoss, lossApplied, lossText, serpPageTypes, shapeOf, liveChecks, ladderChecks, checkCost, urlKey, BASIS_TEXT, helpers: { bare, low, num } };
+  const pageKindOf = (page_type) => OURS[S(page_type)] || '';   // F-A1 / A-11: the kind of page a plan's page type is, in serpPageTypes' words
+  return { CFG, CLICK_LOSS, gscSeeds, calibrate, serpClusters, pageGroup, pageKindOf, clusterText, featureLoss, lossApplied, lossText, serpPageTypes, shapeOf, competitorClass, liveChecks, ladderChecks, checkCost, urlKey, BASIS_TEXT, helpers: { bare, low, num } };
 })();
 // ---- topic radius (G32, 2026-10-13, system review FIX_PLAN.md G32; criterion K12 in CRITERIA_keywords_content.md) ----
 // "Which topics is this website close enough to win, and which are a stretch?" — until now the system answered that per keyword
@@ -307,8 +435,22 @@ const RAD = (() => {
   const STOP = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'for', 'to', 'in', 'on', 'with', 'by', 'at', 'from', 'near', 'me', 'vs', 'is', 'are', 'what', 'how', 'best', 'top', 'your', 'my', 'our', 'service', 'services', 'company', 'companies', 'solution', 'solutions', 'provider', 'providers', 'software', 'system', 'systems']);
   const S = (v) => String(v == null ? '' : v);
   const num = (v) => (v === '' || v == null || typeof v === 'boolean' || !Number.isFinite(Number(v))) ? null : Number(v);
-  const tokens = (s) => { const out = []; for (const t of S(s).toLowerCase().split(/[^a-z0-9]+/)) { if (t.length <= 2 || STOP.has(t)) continue;
-    const w = t.replace(/ies$/, 'y').replace(/(ing|ed|es|s)$/, ''); if (w && !out.includes(w)) out.push(w); } return out; };
+  // R39 (2026-10-16, re-rating defect A-6): every token of two characters or fewer was dropped, so "ai" was not one of the words that
+  // matter in "ai consulting dubai" — the head had two of them ("consult", "dubai"), one shared word was enough, and "supply chain
+  // optimization consulting" became rung 2 of an AI-consulting ladder on "consult" alone (exec 610). A two-letter word that names a
+  // field ("ai", "bi", "hr", "it", "ui", "ux" ...) is now a word that matters; one that names a place ("uk", "eu") counts the way
+  // "dubai" always did. Pronouns and particles ("us", "me", "of", "to") stay out. `_site_model.js` termsOf already kept them.
+  const CORE2 = new Set(['ai', 'bi', 'hr', 'it', 'ui', 'ux', 'ml', 'ar', 'vr', 'xr', 'qa', 'pr', 'crm', 'erp', 'iot', 'uk', 'eu', '3d', '5g']);
+  const tokens = (s) => { const out = []; for (const t of S(s).toLowerCase().split(/[^a-z0-9]+/)) { if (!t || STOP.has(t) || (t.length <= 2 && !CORE2.has(t))) continue;
+    const w = t.length <= 3 ? t : t.replace(/ies$/, 'y').replace(/(ing|ed|es|s)$/, ''); if (w && !out.includes(w)) out.push(w); } return out; };
+  // R39, the second half: a rung has to share the head's SUBJECT, not only the kind of service or the place. "supply chain consulting
+  // dubai" shares "consult" and "dubai" with "ai consulting dubai" — two of its three words, and still another topic. Service-type
+  // words and places are context; when the head has a subject word at all, at least one shared word must be one.
+  const GENERIC = new Set(['consult', 'consultant', 'consultancy', 'consultancie', 'advisory', 'advisor', 'agency', 'firm', 'partner', 'expert', 'specialist', 'implementation', 'implement', 'integration', 'integrator',
+    'development', 'develop', 'developer', 'support', 'training', 'outsourc', 'cost', 'price', 'pric', 'quote', 'online', 'free', 'guide', 'review', 'list', 'example', 'meaning', 'definition', 'near', 'local', 'hire', 'job']);
+  const PLACE = new Set(['uae', 'dubai', 'abu', 'dhabi', 'sharjah', 'ajman', 'emirat', 'ksa', 'saudi', 'riyadh', 'jeddah', 'qatar', 'doha', 'kuwait', 'bahrain', 'oman', 'muscat', 'egypt', 'cairo', 'gcc', 'mena',
+    'middle', 'east', 'uk', 'london', 'usa', 'eu', 'europe', 'india', 'pakistan', 'singapore', 'australia', 'canada', 'germany', 'america']);
+  const subjectOf = (toks) => toks.filter(t => !GENERIC.has(t) && !PLACE.has(t));
   const shared = (a, b) => { const sb = new Set(b); return a.filter(t => sb.has(t)); };
   // what the site sells / already writes about, as one token set per source, so the evidence can name the matching one
   const anchors = (o) => {
@@ -393,13 +535,17 @@ const RAD = (() => {
     const common = shared(h, k);
     const need = Math.max(1, Math.ceil(h.length / 2));
     const q = (list) => list.map(t => '"' + t + '"').join(', ');
-    if (common.length >= need) return { ok: true, shared: common, need, head_words: h, reason: '' };
-    return { ok: false, shared: common, need, head_words: h,
+    const subject = subjectOf(h);
+    const onSubject = !subject.length || common.some(t => subject.includes(t));
+    if (common.length >= need && onSubject) return { ok: true, shared: common, need, head_words: h, subject, reason: '' };
+    if (common.length >= need) return { ok: false, shared: common, need, head_words: h, subject,
+      reason: 'it is not on this ladder\'s topic: it shares only ' + q(common) + ' with "' + S(headKw) + '" — the kind of service or the place, not the subject (' + q(subject) + ')' };
+    return { ok: false, shared: common, need, head_words: h, subject,
       reason: common.length
-        ? 'it is not on this ladder\'s topic: it shares only ' + q(common) + ' with "' + S(headKw) + '" (' + common.length + ' of the ' + h.length + ' words that matter, ' + need + ' needed)'
+        ? 'it is not on this ladder\'s topic: it shares only ' + q(common) + ' with "' + S(headKw) + '" (' + common.length + ' of the ' + h.length + ' words that matter, ' + need + ' needed: ' + q(h) + ')'
         : 'it is not on this ladder\'s topic: it shares none of the words that matter in "' + S(headKw) + '" (' + q(h) + ')' };
   };
-  return { of, pick, rows, line, headFit, LABEL, CFG, tokens };
+  return { of, pick, rows, line, headFit, LABEL, CFG, tokens, subjectOf, CORE2 };
 })();
 // B2-4 (2026-10-15, benchmark area 2, docs/system-review-2026-10-14/BENCH_AREA2_ladders.md gap 5, criterion K7): one results page per
 // rung candidate, so the rungs can be grouped by what Google ACTUALLY answers each search with instead of by the AI's topic label.
@@ -411,7 +557,10 @@ const RAD = (() => {
 // keywords, so KWI.CFG.ladder_serp_checks (24) covers more than twice the pages a plan can hold, at 24 x $0.002 = $0.048 a ladder.
 // Everything below the cap is the pool's own opportunity order, after the same two filters the rungs are chosen by (the fit gate, which
 // `Ladder Pool` already applied, and RAD.headFit, which `Ladder Plan` applies) - so no call is ever bought for a keyword the plan would
-// have thrown away. A `free_only` run, an explicit `ladder_serp_checks: 0` and a pool with fewer than two comparable keywords make no
+// have thrown away. R54 (2026-10-16): exec 610 still bought "transfer pricing consulting", "supply chain consulting uk" and "supply
+// chain consulting meaning" for the "ai consulting dubai" ladder, because RAD.headFit could not see "ai" (R39) and passed them on
+// "consult" alone; the relevance screen rated all three 0 a step later. RAD.tokens now counts "ai" and RAD.headFit asks for the
+// head's subject word, so the same test refuses them HERE, before the call. A `free_only` run, an explicit `ladder_serp_checks: 0` and a pool with fewer than two comparable keywords make no
 // call at all, and the plan says which of those it was.
 const d = $input.first().json;
 const head = String(d.keyword || '').toLowerCase().trim();
@@ -421,14 +570,27 @@ const freeOnly = d.free_only === true;
 // the head term keeps the results page the run already bought (competitors_summary), so it is never re-bought here
 const onTopic = cands.filter(k => String(k.keyword).toLowerCase() !== head).filter(k => { try { return RAD.headFit(head, k.keyword).ok; } catch (e) { return true; } });
 const wanted = onTopic.slice(0, cap);
+// F-A1 / A-10 (2026-10-17, re-rating exec 770): the main page's supporting keywords came from the verdict's list and were grouped with the
+// main keyword on its word alone - of the six on row 33 only one had its results page read, and it shares 0 of the main keyword's top 7.
+// Within the same cap, the supporting keywords the plan would put on the main page are read too, so the plan can keep only those Google
+// answers with the main keyword's own pages and say how it knows (Ladder Plan compares them with the head's results page this run read).
+const lowK = (x) => String(x || '').toLowerCase().trim();
+const seenK = new Set([head, ...wanted.map(k => lowK(k.keyword))]);
+const supporting = [];
+for (const kw of (Array.isArray(d.secondary_keywords) ? d.secondary_keywords : []).slice(0, 10).map(lowK)) {
+  if (!kw || seenK.has(kw) || supporting.length >= 6 || wanted.length + supporting.length >= cap) continue;
+  seenK.add(kw); supporting.push({ keyword: kw, supporting_check: true });
+}
 const plan = { asked: wanted.length, candidates: cands.length, on_topic: onTopic.length, cap, cap_basis: KWI.CFG.ladder_serp_checks === cap
     ? 'the standing cap of ' + KWI.CFG.ladder_serp_checks + ' keywords a ladder may buy a results page for' : 'the cap set for this run (' + cap + ')',
-  cost_usd: KWI.checkCost(wanted.length), price_usd: KWI.CFG.serp_check_usd, top_n: 7, min_overlap: 0.4,
-  left_uncompared: Math.max(0, onTopic.length - wanted.length) };
+  cost_usd: KWI.checkCost(wanted.length + supporting.length), price_usd: KWI.CFG.serp_check_usd, top_n: 7, min_overlap: 0.4,
+  left_uncompared: Math.max(0, onTopic.length - wanted.length), supporting_asked: supporting.length };
 const skip = freeOnly ? 'this run was asked for free sources only, so no results page was bought and the rungs are grouped by topic instead'
   : cap <= 0 ? 'results-page comparison is switched off for this run (ladder_serp_checks 0), so the rungs are grouped by topic instead'
     : wanted.length < 2 ? 'only ' + wanted.length + ' rung candidate(s) are on this ladder\'s topic, and a comparison needs at least two, so nothing was bought'
       : '';
-if (skip) return [{ json: { cluster_check: false, skip_reason: skip, ...plan, asked: 0, cost_usd: 0 } }];
-return wanted.map((k, i) => ({ json: { cluster_check: true, keyword: k.keyword, location_code: d.location_code, language_code: d.language_code || 'en',
-  n: i + 1, of: wanted.length, weight: k.pre_score ?? k.opportunity ?? 0, volume: k.volume ?? null, ...plan } }));
+if (skip) return [{ json: { cluster_check: false, skip_reason: skip, ...plan, asked: 0, supporting_asked: 0, cost_usd: 0 } }];
+return [...wanted.map((k, i) => ({ json: { cluster_check: true, keyword: k.keyword, location_code: d.location_code, language_code: d.language_code || 'en',
+  n: i + 1, of: wanted.length, weight: k.pre_score ?? k.opportunity ?? 0, volume: k.volume ?? null, ...plan } })),
+  ...supporting.map((k, i) => ({ json: { cluster_check: true, supporting_check: true, keyword: k.keyword, location_code: d.location_code, language_code: d.language_code || 'en',
+    n: wanted.length + i + 1, of: wanted.length + supporting.length, weight: 0, volume: null, ...plan } }))];

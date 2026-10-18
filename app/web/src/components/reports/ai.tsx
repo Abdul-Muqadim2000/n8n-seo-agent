@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { AlertTriangle, BadgeCheck, BarChart3, Bot, CalendarClock, CheckCircle2, CircleMinus, Coins, Eye, FileText, Gauge, Globe, Link2, ListOrdered, MessageSquareQuote, MessagesSquare, PieChart, Search, ShieldCheck, Smile, Sparkles, Users, XCircle } from 'lucide-react';
-import { AI_ENGINES, type ReportDetail } from '@seo/shared';
+import { AI_ENGINES, questionWin, type ReportDetail } from '@seo/shared';
 import { fmtDateTime } from '@/lib/utils';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Callout } from '@/components/ui/feedback';
@@ -9,7 +9,7 @@ import { CountUp, HeroStat, InsightItem, MetricCard, Stagger } from '@/component
 import { DataTable, type Column } from '@/components/ui/table';
 import { ShareBars } from '@/components/charts';
 import { ActionList, BriefCard } from './actions';
-import { AlertList, arr, Block, Chips, Empty, Facts, has, n, num, obj, objs, pct, SectionTitle, shortUrl, str, strs, type P } from './kit';
+import { AlertList, arr, Block, Chips, Empty, Facts, has, LedgerCard, n, num, obj, objs, pct, SectionTitle, shortUrl, str, strs, type P } from './kit';
 import { ReportHero, ScoreMark } from './visuals';
 
 const ENGINE_ORDER = AI_ENGINES.map((e) => e.value as string);
@@ -34,6 +34,25 @@ function AnswerCell({ value }: { value: string }) {
     <span className={`inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-md px-1.5 text-xs font-medium ${c.cls}`}>
       {c.icon}
       {c.label}
+    </span>
+  );
+}
+
+/** B8-6: a question's week, with the range and the "too few answers" state the engine sends (`win.ci`, `win.enough`). */
+function WeekWin({ q }: { q: P }) {
+  const w = questionWin({ winRate: num(q.win_rate), samples: num(q.samples) ?? 0, win: has(q.win) ? obj(q.win) : null });
+  if (!w.samples) return <span className="text-xs text-ink-3">–</span>;
+  if (!w.enough || w.rate == null)
+    return (
+      <span className="text-xs text-ink-3" title={w.why}>
+        too few
+        <span className="block">{w.samples} {w.samples === 1 ? 'answer' : 'answers'}</span>
+      </span>
+    );
+  return (
+    <span className="tabular text-[13px] text-ink">
+      {pct(w.rate, 0)}
+      {w.ci && <span className="block text-xs text-ink-3">{`${pct(w.ci[0], 0)}–${pct(w.ci[1], 0)} · ${w.samples} answers`}</span>}
     </span>
   );
 }
@@ -98,13 +117,16 @@ export function AiVisibilityReport({ report }: { report: ReportDetail }) {
             <HeroStat
               label="AI knows your brand"
               value={num(brand.answered) ? `${num(brand.known) ?? 0} / ${num(brand.answered)}` : m.brand_known === true ? 'Yes' : m.brand_known === false ? 'No' : '–'}
-              hint={num(brand.answered) ? 'assistants that describe you correctly' : undefined}
+              // B8-10: a count with its denominator and its range — no verdict from one answer per assistant
+              hint={num(brand.answered) ? `assistants asked directly named you${arr<number>(brand.ci).length === 2 ? ` · 95% range ${pct(arr<number>(brand.ci)[0], 0)}–${pct(arr<number>(brand.ci)[1], 0)}` : ''}` : undefined}
             />
           </>
         }
       />
       {has(p.brief) && <BriefCard brief={obj(p.brief)} />}
       <AlertList alerts={objs(p.alerts)} />
+      {/* B8-9: the alerts that rest on a test were judged together, at one stated threshold */}
+      {(num(obj(m.multiple_tests).tests) ?? 0) > 0 && <p className="text-xs text-ink-3">{str(obj(m.multiple_tests).note)}</p>}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <MetricCard icon={<Sparkles />} label="Google AI Overviews shown" value={pctCount(m.aio_presence)} meta={`on your buyer questions · cite you ${pct(m.aio_citation_rate)}`} />
@@ -121,6 +143,9 @@ export function AiVisibilityReport({ report }: { report: ReportDetail }) {
                 <tr>
                   <th scope="col" className="border-b border-line px-3 py-2 text-left text-xs font-medium text-ink-3">
                     Question
+                  </th>
+                  <th scope="col" className="whitespace-nowrap border-b border-line px-2 py-2 text-right text-xs font-medium text-ink-3" title="Share of the week's answers to the question that name you, with its 95% range">
+                    Week
                   </th>
                   {engineKeys.map((k) => (
                     <th key={k} scope="col" className="whitespace-nowrap border-b border-line px-2 py-2 text-left text-xs font-medium text-ink-3">
@@ -141,6 +166,9 @@ export function AiVisibilityReport({ report }: { report: ReportDetail }) {
                           {q.won === true && <span className="ml-1.5 font-medium text-good-text">· won</span>}
                         </p>
                         {strs(q.competitors).length > 0 && <p className="mt-1 text-xs text-ink-3">Named instead: {strs(q.competitors).slice(0, 4).join(', ')}</p>}
+                      </td>
+                      <td className="px-2 py-2.5 text-right">
+                        <WeekWin q={q} />
                       </td>
                       {engineKeys.map((k) => (
                         <td key={k} className="px-2 py-2.5">
@@ -282,6 +310,7 @@ export function AiVisibilityReport({ report }: { report: ReportDetail }) {
         </Block>
       )}
       {str(market.error) && <Callout tone="warning">Market data was not available: {str(market.error)}</Callout>}
+      <LedgerCard ledger={p.run_ledger} extraCost={num(p.cost_usd)} />
     </Stagger>
   );
 }
@@ -362,6 +391,7 @@ function AiV49Blocks({ p, domain }: { p: P; domain: string }) {
           <ShareBars items={objs(idx.brands).filter((b) => num(b.share) != null).map((b) => ({ label: str(b.domain), value: num(b.share) ?? 0, sub: `${n(b.mentions)}` }))} highlight={domain} />
         </Block>
       )}
+      {objs(obj(p.segments).rows).length > 0 && <AiSegmentBlocks p={p} />}
       {stages.length > 0 && (
         <Block title="By buyer stage" icon={<BadgeCheck />}>
           <p className="text-[13px] text-ink-2">{stages.map((g) => `${str(g.key)}: named ${pct(g.mention_rate, 0)}${str(g.leader) ? ` (leader ${str(g.leader)})` : ''}`).join(' · ')}</p>
@@ -373,6 +403,41 @@ function AiV49Blocks({ p, domain }: { p: P; domain: string }) {
         </Block>
       )}
     </div>
+  );
+}
+
+/** G6 (2026-10-18): the weekly report's segments — topic, buyer role and market, each rate with its 95% range or "too few answers",
+ *  the moves a Benjamini-Hochberg screen called real, and how precise the panel is. Absent on reports before G6. */
+function AiSegmentBlocks({ p }: { p: P }) {
+  const seg = obj(p.segments);
+  const rows = objs(seg.rows);
+  const fam = obj(seg.family);
+  const pan = obj(p.panel);
+  const hw = obj(obj(pan.half_width).measured), ac = obj(obj(pan.half_width).achievable);
+  const line = (dim: string, title: string) => {
+    const r = rows.filter((s) => str(s.dim) === dim).slice(0, 8);
+    if (!r.length) return null;
+    return (
+      <p className="text-[13px] text-ink-2">
+        <span className="font-medium text-ink">{title}: </span>
+        {r.map((s) => (s.enough ? `${str(s.key)} ${num(s.rate)}% (${(s.ci as number[] | undefined)?.join('–') ?? ''}%, ${n(s.n)} answers)` : `${str(s.key)} too few answers (${n(s.n)})`)).join(' · ')}
+      </p>
+    );
+  };
+  return (
+    <Block title="By topic, buyer role and market" description={str(fam.note)} icon={<BarChart3 />}>
+      <div className="space-y-1.5">
+        {line('cluster', 'Topics')}
+        {line('persona', 'Buyer roles')}
+        {line('market', 'Markets')}
+        {objs(seg.moves).length > 0 && (
+          <p className="text-[13px] text-ink-2"><span className="font-medium text-ink">Real moves: </span>{objs(seg.moves).map((x) => `${str(x.dim)} ${str(x.key)} ${num(x.delta)! > 0 ? '+' : ''}${num(x.delta)} pts`).join(' · ')}</p>
+        )}
+        {num(hw.headline) != null && (
+          <p className="text-xs text-ink-3">Measured to ±{num(hw.headline)} points on the headline; this panel can reach ±{num(ac.headline)} on the headline and ±{num(ac.cluster)} on a 12-question topic (95%).</p>
+        )}
+      </div>
+    </Block>
   );
 }
 
@@ -421,6 +486,7 @@ export function AiPulseReport({ report }: { report: ReportDetail }) {
         </Block>
       )}
       <p className="text-xs text-ink-3">The AI pulse asks your tracked questions every day except Monday; Monday's AI visibility report adds these answers to its figures. A message is sent only when a change is beyond normal answer-to-answer variation.</p>
+      <LedgerCard ledger={p.run_ledger} extraCost={num(p.cost_usd)} />
     </Stagger>
   );
 }
@@ -436,16 +502,28 @@ export function AiGrowthReport({ report }: { report: ReportDetail }) {
   const pages = objs(p.pages), earned = objs(p.earned).filter((e) => str(e.kind) !== 'competitor'), targets = objs(p.targets).filter((t) => ['queued', 'writing', 'won'].includes(str(t.status)));
   const alerts = objs(p.alerts).filter((a) => str(a.level) !== 'good'), wins = objs(p.alerts).filter((a) => str(a.level) === 'good');
   const actions = objs(p.actions);
+  // D-4 (re-rating 2026-10-17): a dry run (`dry_run: true`, exec 783) submitted nothing; it must not read as the week's work done
+  const dry = p.dry_run === true;
+  const high = actions.filter((a) => num(a.priority) === 1).length;
   return (
     <Stagger className="space-y-5">
+      {dry && (
+        <Callout tone="warning" title="Dry run: nothing was submitted">
+          {str(p.dry_run_note) || 'A test run: no page was sent to Bing or IndexNow. The weekly run submits.'}
+        </Callout>
+      )}
       <ReportHero
         report={report}
-        title={actions.filter((a) => num(a.priority) === 1).length ? `${actions.filter((a) => num(a.priority) === 1).length} high-value step(s) to get named in AI answers` : 'AI growth: done for you this week'}
-        description="Pages sent to Bing and IndexNow, key pages checked for AI readiness, the pages AI cites without naming you, and the questions queued for an AI answer page."
+        title={dry ? 'AI growth dry run: what this week would do' : high ? `${high} high-value step(s) to get named in AI answers` : 'AI growth: done for you this week'}
+        description={
+          dry
+            ? 'What the weekly run would send to Bing and IndexNow (nothing was sent), key pages checked for AI readiness, the pages AI cites without naming you, and the questions queued for an AI answer page.'
+            : 'Pages sent to Bing and IndexNow, key pages checked for AI readiness, the pages AI cites without naming you, and the questions queued for an AI answer page.'
+        }
         aside={num(p.avg_score) != null ? <ScoreMark score={Math.round(num(p.avg_score)!)} label="Key pages AI-ready" /> : undefined}
         stats={
           <>
-            <HeroStat label="Sent to Bing / IndexNow" value={sent} hint={str(inx.verified) === 'true' || inx.verified === true ? 'IndexNow ready' : 'IndexNow waits for its key file'} />
+            <HeroStat label={dry ? 'Sent to Bing / IndexNow (dry run)' : 'Sent to Bing / IndexNow'} value={sent} hint={str(inx.verified) === 'true' || inx.verified === true ? 'IndexNow ready' : 'IndexNow waits for its key file'} />
             <HeroStat label="Key pages checked" value={pages.length} hint={num(p.avg_score) != null ? `average ${Math.round(num(p.avg_score)!)}/100` : undefined} />
             <HeroStat label="Pages citing others" value={earned.filter((e) => e.mentions_us !== true).length} hint={`${earned.filter((e) => e.draft).length} draft(s)`} />
             <HeroStat label="Questions queued" value={targets.filter((t) => str(t.status) === 'queued').length} />
@@ -522,6 +600,7 @@ export function AiGrowthReport({ report }: { report: ReportDetail }) {
           </ul>
         </Block>
       )}
+      <LedgerCard ledger={p.run_ledger} extraCost={num(p.cost_usd)} />
     </Stagger>
   );
 }

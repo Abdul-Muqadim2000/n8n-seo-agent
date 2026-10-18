@@ -45,14 +45,14 @@
   "why_not": ""
  },
  "SEO_Agent_Reply_Reader.json / Reply Reader": {
-  "counted": false,
+  "counted": true,
   "model": "claude-haiku-4-5-20251001",
-  "why_not": "NOT counted, and nothing to count it into: the Reply Reader has no seo_run_ledger row at all - a synchronous reply classification reserves nothing and settles nothing, so there is no figure for a measurement to replace. Proved by _b84_checks: the workflow contains no Ledger Settle node."
+  "why_not": ""
  },
  "SEO_Agent_Site_Tracker.json / Site Brief": {
-  "counted": false,
+  "counted": true,
   "model": "claude-sonnet-5-5",
-  "why_not": "NOT counted only because build_site_tracker.py was outside build section 84 (four agents worked in parallel on one branch). Nothing is in the way: Ledger Settle (Site) already carries the empty call table Monitor_Ledger_Settle.js reads, so baking Site Brief's table into it is the whole of the work. Proved by _b84_checks: that settle exists and its call table is empty."
+  "why_not": ""
  },
  "SEO_Agent_v4.json / Competitor Analyzer": {
   "counted": true,

@@ -1,4 +1,6 @@
 /*__SITE_MODEL__*/
+/*__SERP_OBS__*/
+/*__RANK_SERP__*/
 // R16 (2026-10-13, FIX_PLAN §3.11): the fit gate also reads the rows stored before it existed. A planned rung that names a competitor
 // ("facts erp" -> facts.ae) or a government portal is set aside: no check is bought for it and the report names it with the reason
 // instead of listing it as a page to write. A rung whose page is already written or published keeps its check (fitStored).
@@ -42,18 +44,32 @@ const competitorsFor = (domain) => {
 };
 // R16: the fit gate's context for one site — its own domain, its declared competitors, and the ladder heads plus the site's services as
 // protected words (so the ladder's own topic can never be read as a brand).
+// R90 (2026-10-16, re-rating 2026-10-15): a stored rung is judged with the evidence the gate needs and the plan never gave it. "facts erp"
+// (rung 2 of "erp software uae") names facts.ae, which stands on the HEAD's own stored results page (#6 on 2026-10-14) — but the plan
+// gave the gate only the declared competitors, `brands: {}` and no results page, and the rung is checked monthly, so it was planned and
+// printed for another month. Now every stored rung of a ladder sees (a) the domains of its ladder's stored results pages (head and rungs,
+// the last `serp_days`, the newest desktop reading of each keyword) as `serp_domains`, (b) its own newest stored page as `serp` (one entry
+// per position, RS.serpHosts), and (c) the names AI uses for other companies (seo_cache ai_brands:<site>). Protected, so the site's own
+// subject can never read as a brand: EVERY ladder head of the site and its services (the gate's own safety valve).
+const SERP_DAYS = 60;
+const aiBrandRows = rowsOf('Load AI Brands (Tracker)');
+const nowIso = new Date().toISOString();
+const storedRead = (domain, kw) => { const h = RS.prevReading(deskHist, { keyword: kw, domain, before: nowIso, withSnapshot: true });
+  return (h && daysSince(h.checked_at) <= SERP_DAYS) ? h : null; };
 const fitCtxFor = (domain, pages) => {
   const d = normD(domain);
   const site = siteRows.find(r => normD(r.domain) === d) || { site_id: 'site_' + d.replace(/[^a-z0-9]+/g, '-'), domain: d };
   const mon = monRows.find(r => r.site_id === site.site_id || normD(r.domain) === d) || {};
   let services = [];
   try { services = SM.from(site, { monitors: mon }).services || []; } catch (e) { services = []; }
-  return { own_domain: d, brands: {}, competitors: competitorsFor(domain),
-    protect: [...new Set([...(pages || []).map(p => String(p.head_keyword || '')), ...services].filter(Boolean))] };
+  const heads = rows.filter(r => normD(r.domain) === d).map(r => String(r.head_keyword || ''));
+  const serp_domains = [...new Set((pages || []).flatMap(p => RS.serpHosts(storedRead(d, p.keyword), 10)))].filter(h => normD(h) !== d);
+  return { own_domain: d, brands: fitLearnedBrands(aiBrandRows.filter(r => String(r.key || '') === 'ai_brands:' + site.site_id)), competitors: competitorsFor(domain), serp_domains,
+    protect: [...new Set([...heads, ...(pages || []).map(p => String(p.head_keyword || '')), ...services].filter(Boolean))] };
 };
 const byLadder = new Map();
 for (const r of rows) { if (!byLadder.has(r.ladder_id)) byLadder.set(r.ladder_id, []); byLadder.get(r.ladder_id).push(r); }
-const checks = []; const skipped = []; const setAside = [];
+const checks = []; const skipped = []; const setAside = []; const pausedLadders = [];
 const serpBody = (p, device) => [{ keyword: p.keyword, location_code: Number(p.location_code), language_code: p.language_code || 'en', depth: 50,
   device, os: device === 'mobile' ? 'android' : 'windows' }];   // the device was never set before G6 (DataForSEO's default is desktop/windows)
 for (const [id, pages] of byLadder) {
@@ -66,13 +82,26 @@ for (const [id, pages] of byLadder) {
   }
   const competitors = competitorsFor(top.domain);
   const fitCtx = fitCtxFor(top.domain, pages);
+  // R87 (2026-10-16): a ladder whose MAIN keyword is set aside is paused — its rungs exist only to climb towards it. Set aside means the
+  // head row says `set_aside` (the Rank Tracker report and the cadence write it back with the reason) or the gate refuses the head now on
+  // its own stored results page. Pages of the ladder that are live keep their weekly check (they are real pages); nothing else is bought.
+  const headRow = pages.find(p => Number(p.rung) === 4) || null;
+  const headFit = headRow ? fitStored(headRow, { ...fitCtx, serp: RS.serpHosts(storedRead(top.domain, headRow.keyword), 10) }) : { ok: true };
+  const headAside = headRow && (String(headRow.status || '') === 'set_aside' || (headFit.flagged && !headFit.ok))
+    ? { ladder_id: id, domain: top.domain, head_keyword: headRow.keyword, reason: String(headRow.status || '') === 'set_aside' ? 'set aside' : headFit.reason,
+        detail: String(headRow.status || '') === 'set_aside' ? String(headRow.status_note || 'its main keyword was set aside') : headFit.detail,
+        note: String(headRow.status || '') === 'set_aside' ? String(headRow.status_note || '') : headFit.note, held: [] } : null;
+  if (headAside) pausedLadders.push(headAside);
   const sorted = [...pages].sort((a, b) => Number(a.rung) - Number(b.rung) || Number(a.page_no) - Number(b.page_no)).slice(0, LIMITS.max_keywords_per_ladder);
   const mobileWanted = [];   // the ladder's main keywords: the top rung and the main page (page 1), at most max_mobile_per_ladder
   for (const p of sorted) {
     if (checks.length >= LIMITS.max_checks_per_run) break;
     const live = Number(p.rung) === 4 || p.status === 'published' || p.page_exists === true || p.page_exists === 'true';
     // R16: a rung stored before the fit gate that nobody should write — no check is bought and the report names it with the reason
-    const fit = fitStored(p, fitCtx);
+    const realPage = p.status === 'published' || p.page_exists === true || p.page_exists === 'true';
+    if (headAside && Number(p.rung) === 4 && String(p.status || '') === 'set_aside') continue;   // R87: a head already set aside is not bought again
+    if (headAside && Number(p.rung) !== 4 && !realPage) { headAside.held.push(p.keyword); continue; }   // R87: paused, so nothing is bought for a page that is not live
+    const fit = fitStored(p, { ...fitCtx, serp: RS.serpHosts(storedRead(p.domain, p.keyword), 10) });
     if (fit.flagged) setAside.push({ ladder_id: id, domain: p.domain, head_keyword: p.head_keyword, rung: Number(p.rung) || 0, page_no: Number(p.page_no) || 0, keyword: p.keyword,
       target_url: p.target_url || '', status: p.status || '', reason: fit.reason, detail: fit.detail, note: fit.note, written: !!fit.live, dropped: !fit.ok });
     if (!fit.ok) continue;
@@ -187,5 +216,5 @@ const watch = { sites: watchSites, limits: { per_site: LIMITS.max_watch_per_site
   carried: watchCarried.slice(0, LIMITS.max_watch_listed), held: watchHeld.slice(0, LIMITS.max_watch_listed), set_aside: watchAside.slice(0, LIMITS.max_watch_listed),
   carried_total: watchCarried.length, held_total: watchHeld.length, set_aside_total: watchAside.length, checked_total: watchChecks.length };
 const all = [...checks, ...watchChecks];
-if (!all.length) return [{ json: { nothing_to_do: true, ladders: byLadder.size, skipped, deferred, set_aside: setAside, watch } }];
-return all.map(c => ({ json: { ...c, skipped_ladders: skipped, deferred_pages: deferred, set_aside_pages: setAside, watch } }));
+if (!all.length) return [{ json: { nothing_to_do: true, ladders: byLadder.size, skipped, deferred, set_aside: setAside, paused_ladders: pausedLadders, watch } }];
+return all.map(c => ({ json: { ...c, skipped_ladders: skipped, deferred_pages: deferred, set_aside_pages: setAside, paused_ladders: pausedLadders, watch } }));

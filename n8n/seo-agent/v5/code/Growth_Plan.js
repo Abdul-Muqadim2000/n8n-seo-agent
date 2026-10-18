@@ -130,7 +130,10 @@ for (const s of sites) {
     // never be queued again. The read path checks the evidence: a content-log row for the same run that really says written or
     // published. Without one, after two weeks the question goes back in the queue and says why. (The write-side release belongs
     // to the cadence — registered as B9-6 for area 4.)
-    const stalled = (() => { if (old.status !== 'writing') return null;
+    // R111 (2026-10-16): a run that left a draft which failed its quality check is not stalled (nothing would be gained by writing the
+    // question again from nothing) and it is not written either — the row stays `writing` and says the draft needs a fix
+    const draftFailed = old.status === 'writing' && String((logByReq.get(String(old.request_id || '')) || {}).status || '') === 'not_ready';
+    const stalled = (() => { if (old.status !== 'writing' || draftFailed) return null;
       const l = logByReq.get(String(old.request_id || ''));
       if (l && ['written', 'published'].includes(String(l.status))) return null;
       const since = old.written_at || old.updated_at || '';
@@ -143,7 +146,7 @@ for (const s of sites) {
     targets.push({ target_id, site_id: s.site_id, domain: dom, prompt_id: pid, question: g.prompt, keyword, kind, page_url: page ? page.url : '', page_type: kind === 'refresh' ? '' : (PT[g.kind] || 'Guide'),
       fanout: (g.fanout || []).slice(0, 8).join(' | '), sources_json: JSON.stringify((g.cited_urls || []).slice(0, 6).map(c => ({ u: c.u, t: c.t || '', n: c.n || 1 }))), competitors: (g.competitors || []).slice(0, 8).join(', '),
       engines: engines.join(', '), stage: g.stage || '', value, status,
-      reason: (stalled ? 'the page run started on ' + stalled.since + ' never produced a page (' + stalled.log + '): queued again. ' : '') + (lostAgain ? 'AI named you for this question and has stopped (won ' + (lostAgain.won_at || 'earlier') + ', lost again in the check of ' + lostAgain.lost_at + '; ' + lostAgain.observed + '). ' : '') + (ladderPage ? 'written as the keyword ladder page "' + ladderPage.keyword + '" (one search, one page)' : status === 'skipped' && kind === 'refresh' ? 'the page is fresh (updated ' + String(pr && pr.updated_on || '').slice(0, 10) + ') and AI-ready (' + (pr && pr.score) + '/100)' : page ? 'refresh ' + page.url + ' (' + page.how + (stale ? '; not updated in 90+ days' : '') + (weak ? '; AI-readiness ' + (pr ? pr.score + '/100' : 'not checked yet') : '') + ')' : 'no page answers it yet'),
+      reason: (draftFailed ? 'the page written for this question did not pass the quality check: fix the draft and run it again (it is not offered as a page that answers the question until it passes). ' : '') + (stalled ? 'the page run started on ' + stalled.since + ' never produced a page (' + stalled.log + '): queued again. ' : '') + (lostAgain ? 'AI named you for this question and has stopped (won ' + (lostAgain.won_at || 'earlier') + ', lost again in the check of ' + lostAgain.lost_at + '; ' + lostAgain.observed + '). ' : '') + (ladderPage ? 'written as the keyword ladder page "' + ladderPage.keyword + '" (one search, one page)' : status === 'skipped' && kind === 'refresh' ? 'the page is fresh (updated ' + String(pr && pr.updated_on || '').slice(0, 10) + ') and AI-ready (' + (pr && pr.score) + '/100)' : page ? 'refresh ' + page.url + ' (' + page.how + (stale ? '; not updated in 90+ days' : '') + (weak ? '; AI-readiness ' + (pr ? pr.score + '/100' : 'not checked yet') : '') + ')' : 'no page answers it yet'),
       created_at: old.created_at || iso, updated_at: iso, request_id: old.request_id || '', written_at: old.written_at || '', won_at: old.won_at || '' });
     if (page) addPage(page.url, 'target', 'answers "' + g.prompt.slice(0, 80) + '"', { question: g.prompt });
   }
@@ -184,16 +187,53 @@ for (const s of sites) {
   for (const p of keyPages) if (!stored.has(keyOf(p.url))) addSub(p.url, 'key page, first submission');
   // ---- the earned-media list: exact pages AI cited in answers that did not name the business (last 8 days, weekly + daily) ----
   const em = new Map();
-  for (const a of answers.filter(a => a.site_id === s.site_id && (a.answered === true || a.answered === 'true') && !(a.mentioned === true || a.mentioned === 'true') && a.kind !== 'brand'))
+  // C-3 (re-rating 2026-10-17): the count is "answers that cited this page" over the answers stored in the last 8 days - weekly runs AND
+  // the daily pulse (670 rows on 2026-10-17) - and the report now says exactly that (earned_basis). It used to say "the answers of the last
+  // weekly AI-visibility run", against which mof.gov.ae's 93 next to that run's 18 looked like a per-site total; and a page cited twice
+  // in one answer counts once.
+  const earnAns = answers.filter(a => a.site_id === s.site_id && (a.answered === true || a.answered === 'true') && !(a.mentioned === true || a.mentioned === 'true') && a.kind !== 'brand');
+  const atsE = earnAns.map(a => String(a.checked_at || '')).filter(Boolean).sort();
+  const earned_basis = { answers: earnAns.length, from: (atsE[0] || '').slice(0, 10), to: (atsE[atsE.length - 1] || '').slice(0, 10), days: 8,
+    runs: new Set(earnAns.map(a => String(a.run_id || ''))).size, pulse: earnAns.filter(a => /pulse/i.test(String(a.run_kind || a.run_id || ''))).length };
+  for (const a of earnAns) {
+    const seenU = new Set();
     // G22 (2026-10-11 system review): a source chip sometimes carries only a fragment of the title ("E", "Best e" live). A title that
     // short is treated as missing, so Earned Media reads the page's own <title> from the copy it fetches anyway; a real title is kept whole.
-    for (const c of parse(a.cited_urls, [])) { if (!c || !c.u || ours(c.u)) continue; const h = hostOf(c.u); const t0 = String(c.t || '').replace(/\s+/g, ' ').trim(); const t = t0.length >= 8 ? t0 : '';
+    for (const c of parse(a.cited_urls, [])) { if (!c || !c.u || ours(c.u) || seenU.has(c.u)) continue; seenU.add(c.u); const h = hostOf(c.u); const t0 = String(c.t || '').replace(/\s+/g, ' ').trim(); const t = t0.length >= 8 ? t0 : '';
       const x = em.get(c.u) || { url: c.u, title: t, host: h, n: 0, engines: new Set(), questions: new Set() }; x.n++; x.engines.add(a.engine); x.questions.add(a.prompt); if (!x.title && t) x.title = t; em.set(c.u, x); }
+  }
   const perHost = new Map();
   const earned = [...em.values()].map(x => ({ url: x.url, title: x.title, host: x.host, citations: x.n, engines: [...x.engines], questions: [...x.questions].slice(0, 3), kind: kindOf(x.host, x.title, x.url, comps) }))
     .sort((a, b) => b.citations * (1 + b.engines.length) - a.citations * (1 + a.engines.length))
     .filter((e, i, all) => !e.title || all.findIndex(x => x.host === e.host && x.title === e.title) === i)   // the same article under two addresses (tracking parameters) once
     .filter(e => { const k = perHost.get(e.host) || 0; perHost.set(e.host, k + 1); return k < 2; }).slice(0, 30);
+  // ---- B9-7 (2026-10-17, benchmark area 9): a wrong claim AI makes about the business is a correction target ----
+  // The Answer Analyst (AI Metrics) stores each wrong claim as "claim → what the facts on file say" in the answer rows' `issues`, and the
+  // list of them in the visibility row's perception_json. A correction needs three things: the claim, the TRUE fact (which must be on file
+  // — the analyst's "correct" half is only used when the profile, the services or the accreditation carry it; otherwise the target says
+  // "needs your fact" and nothing is drafted), and the pages that carry the claim (the third-party pages cited in the answers that made it).
+  // Nothing here is sent; the Earned Media step drafts through the one outreach writer, or hands the page to the Link Builder.
+  const perc = v ? parse(v.perception_json, null) : null;
+  const factsText = [...Object.values(s.profile || {}), ...(SM.services(site_model) || []), String(SM.facts(site_model).accreditation || ''), JSON.stringify(SM.facts(site_model) || {})].map(x => String(x == null ? '' : x)).join(' ').toLowerCase();
+  const wordsOf = (t) => [...new Set((String(t || '').toLowerCase().match(/[a-z0-9]{3,}/g) || []).filter(w => !['the', 'and', 'for', 'with', 'are', 'was', 'not', 'has', 'its', 'that', 'this', 'from', 'than'].includes(w)))];
+  const factOnFile = (fact) => { const ws = wordsOf(fact); if (!ws.length) return false; const hit = ws.filter(w => factsText.includes(w)); const digits = ws.filter(w => /\d/.test(w));
+    return digits.every(w => factsText.includes(w)) && hit.length / ws.length >= 0.6; };
+  const rivalDomains = (() => { const r = v ? parse(v.rival_sources_json, []) : []; return (Array.isArray(r) ? r : []).map(x => String((x && x.domain) || x || '').toLowerCase().replace(/^www\./, '')).filter(d => /\./.test(d)); })();   // R83 leftover: the businesses AI names instead of you, as the AI visibility run stored them
+  const corrections = [];
+  if (perc && perc.fact_check === 'checked') for (const it of (perc.issues || []).slice(0, 6)) {
+    const text = String(it.text || ''); const cut = text.indexOf(' → '); const claim = (cut >= 0 ? text.slice(0, cut) : text).trim(); const trueFact = cut >= 0 ? text.slice(cut + 3).trim() : '';
+    if (!claim) continue;
+    const key = claim.toLowerCase().slice(0, 40);
+    const pagesMap = new Map();
+    for (const a of answers.filter(a => a.site_id === s.site_id && String(a.issues || '').toLowerCase().includes(key)))
+      for (const c of parse(a.cited_urls, [])) { if (!c || !c.u || ours(c.u)) continue; const h = hostOf(c.u); if (GOV.test(h) || rivalDomains.some(d => h === d || h.endsWith('.' + d)) || comps.some(d => h === d || h.endsWith('.' + d))) continue;
+        const x = pagesMap.get(c.u) || { url: c.u, host: h, title: String(c.t || '').slice(0, 140), citations: 0 }; x.citations++; pagesMap.set(c.u, x); }
+    const onFile = !!trueFact && factOnFile(trueFact);
+    corrections.push({ claim: claim.slice(0, 200), true_fact: onFile ? trueFact.slice(0, 200) : '', fact_on_file: onFile, engines: it.engines || [], questions: it.questions || [], is_new: !!it.new,
+      pages: [...pagesMap.values()].sort((a, b) => b.citations - a.citations).slice(0, 3),
+      status: onFile ? 'ready' : 'needs_fact', note: onFile ? '' : 'needs your fact: the profile does not carry the correct answer to this claim' + (trueFact ? ' (the analyst suggested "' + trueFact.slice(0, 80) + '", which nothing on file confirms)' : '') + ' - add it to the business profile; nothing is drafted until then' });
+  }
+  const correction_fetch = [...new Set(corrections.filter(c => c.fact_on_file).flatMap(c => c.pages.map(pg => pg.url)))].slice(0, 4);
   // ---- IndexNow key (stored once per site; the owner hosts https://<domain>/<key>.txt) and the monthly entity check ----
   const kRow = cache.find(c => c.key === 'indexnow:' + s.site_id); const kv = kRow ? parse(kRow.value, {}) : {};
   const indexnow_key = (kv && /^[a-f0-9]{32}$/.test(kv.key || '')) ? kv.key : hex(32);
@@ -213,7 +253,8 @@ for (const s of sites) {
     set_aside, set_aside_note: FITR.line(set_aside, 'turned into a question to win or a page to write'),
     brand_names, competitors: comps.slice(0, 12), ai_pages_month: s.settings.ai_pages_month, run_id: 'grow_' + iso.slice(0, 10).replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, ''), checked_at: iso,
     vis_checked_at: v ? v.checked_at : '', win_min_answers: CONFIG.win_min_answers, won_lost, won_now, stalled_targets, follow_up, follow_up_days: CONFIG.follow_up_days,
-    key_pages: keyPages, audit, submit: [...submit.entries()].slice(0, CONFIG.submit_max).map(([url, why]) => ({ url, why })), targets, earned, earned_fetch: earned.filter(e => e.kind !== 'competitor').slice(0, CONFIG.earned_fetch).map(e => e.url),
+    topics: [...new Set(lrowsAll.map(l => String(l.head_keyword || '')).filter(Boolean))].slice(0, 20),   // C-2: the categories RV.providerOf judges a cited site against
+    key_pages: keyPages, audit, submit: [...submit.entries()].slice(0, CONFIG.submit_max).map(([url, why]) => ({ url, why })), targets, earned, earned_basis, earned_fetch: [...new Set([...earned.filter(e => e.kind !== 'competitor').slice(0, CONFIG.earned_fetch).map(e => e.url), ...correction_fetch])], corrections, rival_sources: rivalDomains,
     indexnow_key, indexnow_new: !kRow, indexnow_verified_at: kv.verified_at || '', entity_due, previous_entity: prevEntity, previous: prevG ? { checked_at: prevG.checked_at, avg_score: Number(prevG.avg_score) || null, earned: parse(prevG.earned_json, []) } : null,
     stored_pages: [...stored.values()].map(p => ({ url: normU(p.url), key: keyOf(p.url), score: Number(p.score) || 0, checked_at: p.checked_at, updated_on: p.updated_on, submitted_at: p.submitted_at, submitted_via: p.submitted_via, bing_crawled_at: p.bing_crawled_at, bing_status: Number(p.bing_status) || 0, kind: p.kind })) } });
 }

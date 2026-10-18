@@ -40,6 +40,12 @@ const months = (v: unknown) => {
   return m.length > 1 && m[0] !== m[m.length - 1] ? `Months ${m[0]}–${m[m.length - 1]}` : `Month ${m[0]}`;
 };
 
+/** a month count inside a plan range like "2-4" */
+const inRange = (m: number, range: string): boolean => {
+  const [a, b] = range.split(/[-\u2013]/).map(Number);
+  return Number.isFinite(a) && m >= a && m <= (Number.isFinite(b) ? b : a);
+};
+
 const statusTone = (s: string): Tone => (s === 'published' || s === 'exists' ? 'good' : s === 'writing' ? 'accent' : 'neutral');
 
 export function LadderReport({ report }: { report: ReportDetail }) {
@@ -112,10 +118,25 @@ export function LadderReport({ report }: { report: ReportDetail }) {
             <HeroStat label="Difficulty" value={num(head.kd) != null ? String(num(head.kd)) : '–'} hint="Keyword difficulty, 0-100" />
             <HeroStat label="Your position" value={num(head.your_position) ? `#${num(head.your_position)}` : <WordValue>Not ranking</WordValue>} hint="Google, today" />
             {!refused && (
+              // D-6 (re-rating 2026-10-17): the hero showed the plan's "2–4 months" in its badge and the writing model's "~5 months" in
+              // this tile. One duration: the plan's modelled range (the badge's), with the model's own guess only as a note beside it.
               <HeroStat
                 label="Time to rank"
-                value={num(feas.time_to_rank_months) != null ? <WordValue>~{num(feas.time_to_rank_months)} months</WordValue> : '–'}
-                hint={`The writing model's own estimate, not measured \u2014 the plan's modelled range and its chance band are below \u00b7 visits / month at top 3: ${n(feas.expected_visits_top3)} (modelled)`}
+                value={
+                  str(p.months) ? (
+                    <WordValue>{str(p.months).replace('-', '\u2013')} months</WordValue>
+                  ) : num(feas.time_to_rank_months) != null ? (
+                    <WordValue>~{num(feas.time_to_rank_months)} months</WordValue>
+                  ) : (
+                    '\u2013'
+                  )
+                }
+                hint={[
+                  str(p.months)
+                    ? `The plan's modelled range, as in the badge${num(feas.time_to_rank_months) != null && !inRange(num(feas.time_to_rank_months)!, str(p.months)) ? ` (the writing model's own guess, not measured: ~${num(feas.time_to_rank_months)} months)` : ''}`
+                    : "The writing model's own estimate, not measured",
+                  `visits / month at top 3: ${n(feas.expected_visits_top3)} (modelled)`,
+                ].join(' \u00b7 ')}
               />
             )}
           </>

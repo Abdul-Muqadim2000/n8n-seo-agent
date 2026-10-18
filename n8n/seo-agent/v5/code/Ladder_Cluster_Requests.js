@@ -10,7 +10,10 @@
 // keywords, so KWI.CFG.ladder_serp_checks (24) covers more than twice the pages a plan can hold, at 24 x $0.002 = $0.048 a ladder.
 // Everything below the cap is the pool's own opportunity order, after the same two filters the rungs are chosen by (the fit gate, which
 // `Ladder Pool` already applied, and RAD.headFit, which `Ladder Plan` applies) - so no call is ever bought for a keyword the plan would
-// have thrown away. A `free_only` run, an explicit `ladder_serp_checks: 0` and a pool with fewer than two comparable keywords make no
+// have thrown away. R54 (2026-10-16): exec 610 still bought "transfer pricing consulting", "supply chain consulting uk" and "supply
+// chain consulting meaning" for the "ai consulting dubai" ladder, because RAD.headFit could not see "ai" (R39) and passed them on
+// "consult" alone; the relevance screen rated all three 0 a step later. RAD.tokens now counts "ai" and RAD.headFit asks for the
+// head's subject word, so the same test refuses them HERE, before the call. A `free_only` run, an explicit `ladder_serp_checks: 0` and a pool with fewer than two comparable keywords make no
 // call at all, and the plan says which of those it was.
 const d = $input.first().json;
 const head = String(d.keyword || '').toLowerCase().trim();
@@ -20,14 +23,27 @@ const freeOnly = d.free_only === true;
 // the head term keeps the results page the run already bought (competitors_summary), so it is never re-bought here
 const onTopic = cands.filter(k => String(k.keyword).toLowerCase() !== head).filter(k => { try { return RAD.headFit(head, k.keyword).ok; } catch (e) { return true; } });
 const wanted = onTopic.slice(0, cap);
+// F-A1 / A-10 (2026-10-17, re-rating exec 770): the main page's supporting keywords came from the verdict's list and were grouped with the
+// main keyword on its word alone - of the six on row 33 only one had its results page read, and it shares 0 of the main keyword's top 7.
+// Within the same cap, the supporting keywords the plan would put on the main page are read too, so the plan can keep only those Google
+// answers with the main keyword's own pages and say how it knows (Ladder Plan compares them with the head's results page this run read).
+const lowK = (x) => String(x || '').toLowerCase().trim();
+const seenK = new Set([head, ...wanted.map(k => lowK(k.keyword))]);
+const supporting = [];
+for (const kw of (Array.isArray(d.secondary_keywords) ? d.secondary_keywords : []).slice(0, 10).map(lowK)) {
+  if (!kw || seenK.has(kw) || supporting.length >= 6 || wanted.length + supporting.length >= cap) continue;
+  seenK.add(kw); supporting.push({ keyword: kw, supporting_check: true });
+}
 const plan = { asked: wanted.length, candidates: cands.length, on_topic: onTopic.length, cap, cap_basis: KWI.CFG.ladder_serp_checks === cap
     ? 'the standing cap of ' + KWI.CFG.ladder_serp_checks + ' keywords a ladder may buy a results page for' : 'the cap set for this run (' + cap + ')',
-  cost_usd: KWI.checkCost(wanted.length), price_usd: KWI.CFG.serp_check_usd, top_n: 7, min_overlap: 0.4,
-  left_uncompared: Math.max(0, onTopic.length - wanted.length) };
+  cost_usd: KWI.checkCost(wanted.length + supporting.length), price_usd: KWI.CFG.serp_check_usd, top_n: 7, min_overlap: 0.4,
+  left_uncompared: Math.max(0, onTopic.length - wanted.length), supporting_asked: supporting.length };
 const skip = freeOnly ? 'this run was asked for free sources only, so no results page was bought and the rungs are grouped by topic instead'
   : cap <= 0 ? 'results-page comparison is switched off for this run (ladder_serp_checks 0), so the rungs are grouped by topic instead'
     : wanted.length < 2 ? 'only ' + wanted.length + ' rung candidate(s) are on this ladder\'s topic, and a comparison needs at least two, so nothing was bought'
       : '';
-if (skip) return [{ json: { cluster_check: false, skip_reason: skip, ...plan, asked: 0, cost_usd: 0 } }];
-return wanted.map((k, i) => ({ json: { cluster_check: true, keyword: k.keyword, location_code: d.location_code, language_code: d.language_code || 'en',
-  n: i + 1, of: wanted.length, weight: k.pre_score ?? k.opportunity ?? 0, volume: k.volume ?? null, ...plan } }));
+if (skip) return [{ json: { cluster_check: false, skip_reason: skip, ...plan, asked: 0, supporting_asked: 0, cost_usd: 0 } }];
+return [...wanted.map((k, i) => ({ json: { cluster_check: true, keyword: k.keyword, location_code: d.location_code, language_code: d.language_code || 'en',
+  n: i + 1, of: wanted.length, weight: k.pre_score ?? k.opportunity ?? 0, volume: k.volume ?? null, ...plan } })),
+  ...supporting.map((k, i) => ({ json: { cluster_check: true, supporting_check: true, keyword: k.keyword, location_code: d.location_code, language_code: d.language_code || 'en',
+    n: wanted.length + i + 1, of: wanted.length + supporting.length, weight: 0, volume: null, ...plan } }))];

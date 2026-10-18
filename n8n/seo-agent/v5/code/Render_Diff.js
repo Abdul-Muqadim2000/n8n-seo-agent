@@ -8,6 +8,8 @@
 //   * a reading that failed is "not checked" with the reason (a bot challenge, an HTTP error, a DNS failure, an empty body) — never
 //     "no difference". A crawl run without JavaScript is not a rendered reading and never stands in for one.
 //   * nothing here can fail the audit.
+//   * R119 (2026-10-16): the first response is read as a plain request under our own audit user agent — it no longer carries Google's bot page. A site that
+//     answers named AI crawlers differently is the AI crawler access check's finding (robots.txt per bot, CDN block test), not this diff's.
 /*__LINK_KIT__*/
 let prev = {};
 try { prev = $('Analyze CrUX').first().json || {}; } catch (e) {}
@@ -121,10 +123,32 @@ const fromCrawl = (url) => {
   const meta = hit.meta || {};
   const nonIdx = (((prev.crawl_extras || {}).non_indexable) || []).find(x => sameUrl(x.url, url));
   const robots = [nonIdx && /noindex/i.test(S(nonIdx.reason)) ? 'noindex' : '', meta.follow === false ? 'nofollow' : ''].filter(Boolean).join(', ');
-  return { ok: true, title: S(meta.title), h1: S((meta.htags || {}).h1 && (meta.htags || {}).h1[0]), h1_count: (((meta.htags || {}).h1) || []).length,
+  // B-1: the crawl's title and heading are decoded once, as readHtml decodes the first response's
+  return { ok: true, title: LK.text(S(meta.title)), h1: LK.text(S((meta.htags || {}).h1 && (meta.htags || {}).h1[0])), h1_count: (((meta.htags || {}).h1) || []).length,
     canonical: S(meta.canonical), robots, links: (num(meta.internal_links_count) || 0) + (num(meta.external_links_count) || 0),
     internal_links: num(meta.internal_links_count) || 0, words: num((meta.content || {}).plain_text_word_count) || 0, js_shell: false };
 };
+
+// ---- B5-4 (2026-10-16, benchmark area 5; Screaming Frog carries 10 hreflang issues, Semrush an International SEO report) ----
+// The hreflang set a page declares, read from the first response we already hold: <link rel="alternate" hreflang="…" href="…"> in the HTML
+// and the same relation in the HTTP Link header. (A set declared only in the XML sitemap is not read here, and the finding says so.)
+const hreflangOf = (html, headers) => {
+  const out = [];
+  for (const m of S(html).matchAll(/[<]link\b[^>]*>/gi)) {
+    const t = m[0];
+    if (!/\brel\s*=\s*["']?alternate\b/i.test(t)) continue;
+    const lang = S(LK.attr(t, 'hreflang')); if (!lang) continue;
+    out.push({ lang, href: S(LK.attr(t, 'href')), from: 'html' });
+  }
+  const H = {}; for (const [k, v] of Object.entries(headers || {})) H[String(k).toLowerCase()] = S(v);
+  for (const part of S(H.link).split(/,\s*(?=<)/)) {
+    const u = part.match(/^<([^>]*)>/); const l = part.match(/hreflang\s*=\s*"?([A-Za-z0-9-]+)"?/i);
+    if (u && l && /rel\s*=\s*"?[^;]*alternate/i.test(part)) out.push({ lang: S(l[1]), href: S(u[1]), from: 'header' });
+  }
+  return out;
+};
+// language[-script][-REGION], or x-default (ISO 639-1/-2 language, ISO 15924 script, ISO 3166-1 alpha-2 or UN M.49 region)
+const hreflangValid = (c) => /^x-default$/i.test(c) || /^[a-z]{2,3}(-[a-z]{4})?(-([a-z]{2}|\d{3}))?$/i.test(c);
 
 // ---- the figures, and what each one is attributed to ----
 const FIGURES = [
@@ -137,31 +161,58 @@ const FIGURES = [
 ];
 const SOURCE_RAW = 'the first response (raw HTML)';
 const SOURCE_REN = 'after JavaScript (rendered page)';
+// B-1 (2026-10-17): text is compared as the decoded text both readers hold (readHtml decodes once; the crawl's figures are decoded once
+// in fromCrawl), never decoded a second time here ("&amp;amp;" is the text "&amp;", R62)
+const normText = (v) => S(v).toLowerCase().replace(/\s+/g, ' ').trim();
 const same = (f, a, b) => f.kind === 'url' ? (sameUrl(a, b) || (!S(a) && !S(b)))
   : f.kind === 'count' ? (Number(a) === Number(b) || (Math.max(Number(a) || 0, Number(b) || 0) > 0 && Math.min(Number(a) || 0, Number(b) || 0) / Math.max(Number(a) || 0, Number(b) || 0) >= 0.8))
-    : S(a).toLowerCase().replace(/\s+/g, ' ') === S(b).toLowerCase().replace(/\s+/g, ' ');
+    : normText(a) === normText(b);
 const grew = (f, rawV, renV) => {   // a count that is materially bigger after JavaScript
   if (f.kind !== 'count') return false;
   const a = Number(rawV) || 0, b = Number(renV) || 0;
   return b >= (f.key === 'links' ? 10 : 150) && (a === 0 || a / b < 0.4);
 };
+// B-1 (2026-10-17, re-rating 2026-10-17, exec 739, High): the 20 pages paired with the JavaScript crawl compared OUR parser's count of every
+// <a> and every word of the first response with DataForSEO's OWN counts after rendering (`internal_links_count + external_links_count` —
+// unique links — and `plain_text_word_count`, the main text without the navigation). Two different rulers: /security read "52 links, 694
+// words" against "29, 439", every one of the 20 pages came out SMALLER after JavaScript — the opposite of what script-written content does —
+// and the audit raised "AI crawlers see a different version of 20 key page(s)" on a server-rendered site whose first response GPTBot and a
+// browser receive byte for byte. Two rules now:
+//   * a count only ever matters in ONE direction: the rendered page having MORE than the first response (that is content a non-rendering
+//     crawler misses). A first response that carries more than the rendered reading hides nothing from any crawler: it is `raw_more`, never
+//     a finding, on every path;
+//   * on a crawl-paired page the two counts come from two different counting methods, so only a gap no counting difference can explain is
+//     read as script-written content: the crawl (which counts unique links and the main text only, i.e. LESS than our parser) must see at
+//     least CRAWL_GAP times what our parser found in the first response. Anything closer is `not_compared`, with the reason, and scores
+//     nothing. Title, main heading and canonical link mean the same thing in both readings and are compared (entities decoded).
+const CRAWL_GAP = 2.5;
+const pairedCount = (f, rawV, renV) => {
+  const a = Number(rawV) || 0, b = Number(renV) || 0;
+  if (b >= (f.key === 'links' ? 10 : 150) && (a === 0 || b >= CRAWL_GAP * a)) return { state: 'js_only', from: SOURCE_REN + ' — the JavaScript crawl counted ' + b + ', at least ' + CRAWL_GAP + ' times the ' + a + ' in the first response, more than its own way of counting can explain' };
+  return { state: 'not_compared', from: 'not compared: the JavaScript crawl counts ' + (f.key === 'links' ? 'unique links' : 'the main text only') + ' and our parser counts ' + (f.key === 'links' ? 'every link' : 'every word') + ' of the first response, so ' + a + ' against ' + b + ' is a difference of method, not of content' };
+};
 
 const pages = [];
 const notChecked = [];
-for (let i = 0; i < targets.length; i++) {
-  const t = targets[i];
-  const renRes = renders[i] || null;
+const hreflangBy = [];   // B5-4: [{ url, path, entries }] for every page whose first response was read
+// B5-6: the pages rendered by the render service come first; with a JavaScript crawl, up to 20 more are read raw and paired with the crawl
+const extras = plan.crawl_js ? ((plan.raw_extra || []).filter(x => x && x.url)) : [];
+const jobs = targets.map((t, i) => ({ t, i, extra: false })).concat(extras.map((t, j) => ({ t, i: targets.length + j, extra: true })));
+for (const job of jobs) {
+  const t = job.t, i = job.i;
+  const renRes = job.extra ? null : (renders[i] || null);
   const rawRes = raws.find(r => r && sameUrl(r.url, t.url)) || raws[i] || null;
   const rawFail = failureOf(rawRes, 'raw request');
-  const renFail = failureOf(renRes, 'render');
+  const renFail = job.extra ? 'it was paired with the JavaScript crawl, not rendered again' : failureOf(renRes, 'render');
   const raw = rawFail ? null : readHtml(S((rawRes || {}).html ?? (rawRes || {}).body ?? (rawRes || {}).data), (rawRes || {}).headers, t.url);
+  if (raw) hreflangBy.push({ url: t.url, path: pathOf(t.url), entries: hreflangOf(S((rawRes || {}).html ?? (rawRes || {}).body ?? (rawRes || {}).data), (rawRes || {}).headers) });
   let rendered = renFail ? null : readHtml(S((renRes || {}).html ?? (renRes || {}).body ?? (renRes || {}).data), (renRes || {}).headers, t.url);
   let rendered_source = rendered ? 'render_service' : '';
   if (!rendered) { const c = fromCrawl(t.url); if (c) { rendered = c; rendered_source = 'crawl_js'; } }
 
   if (!raw || !rendered) {
     const why = [rawFail, rendered ? '' : (renFail + (plan.crawl_js ? ', and the JavaScript crawl has no reading of this page' : ', and the crawl did not render JavaScript, so it cannot stand in'))].filter(Boolean).join('; ');
-    const row = { url: t.url, path: pathOf(t.url), kind: t.kind || 'page', checked: false, not_checked: why || 'neither reading could be used', figures: [], js_only: [], rendered_source };
+    const row = { url: t.url, path: pathOf(t.url), kind: t.kind || 'page', checked: false, not_checked: why || 'neither reading could be used', figures: [], js_only: [], rendered_source, paired_with_crawl: job.extra };
     pages.push(row); notChecked.push(row);
     continue;
   }
@@ -170,9 +221,14 @@ for (let i = 0; i < targets.length; i++) {
     const hasA = f.kind === 'count' ? (Number(a) || 0) > 0 : !!S(a);
     const hasB = f.kind === 'count' ? (Number(b) || 0) > 0 : !!S(b);
     let state = 'same', from = SOURCE_RAW;
+    // B5-6: the crawl keeps the indexing rule it derived, not the meta tag, so the two robots readings are not comparable for a crawl-paired page
+    if (job.extra && f.key === 'robots') return { figure: f.label, key: f.key, raw: a, rendered: b, state: 'not_compared', from: 'not compared (the crawl keeps its own indexing rule)' };
+    // B-1: a crawl-paired count is read only in the one direction its method can support (see pairedCount)
+    if (job.extra && f.kind === 'count') { const pc = (Number(a) || 0) === (Number(b) || 0) ? { state: 'same', from: SOURCE_RAW } : pairedCount(f, a, b); return { figure: f.label, key: f.key, raw: a, rendered: b, state: pc.state, from: pc.from }; }
     if (!hasA && !hasB) { state = 'absent'; from = 'neither reading has it'; }
     else if (!hasA && hasB) { state = 'js_only'; from = SOURCE_REN; }
-    else if (hasA && !hasB) { state = 'raw_only'; from = SOURCE_RAW; }
+    else if (hasA && !hasB) { state = job.extra ? 'not_compared' : 'raw_only'; from = job.extra ? 'not compared: the JavaScript crawl kept no ' + f.label.toLowerCase() + ' for this page' : SOURCE_RAW; }
+    else if (f.kind === 'count' && (Number(a) || 0) > (Number(b) || 0)) { state = same(f, a, b) ? 'same' : 'raw_more'; from = state === 'same' ? SOURCE_RAW : 'the first response has more than the rendered page — nothing is hidden from a crawler that does not run JavaScript'; }
     else if (!same(f, a, b)) { state = grew(f, a, b) ? 'js_only' : 'differs'; from = state === 'js_only' ? SOURCE_REN : 'the two readings differ'; }
     return { figure: f.label, key: f.key, raw: a, rendered: b, state, from };
   });
@@ -181,9 +237,9 @@ for (let i = 0; i < targets.length; i++) {
   const uncRen = (rendered_source === 'render_service' && rendered.uncrawlable && rendered.uncrawlable.count) ? rendered.uncrawlable : null;
   const uncRaw = (raw.uncrawlable && raw.uncrawlable.count) ? raw.uncrawlable : null;
   const unc = uncRen || uncRaw || { count: 0, kinds: [], samples: [] };
-  pages.push({ url: t.url, path: pathOf(t.url), kind: t.kind || 'page', checked: true, not_checked: '', rendered_source,
+  pages.push({ url: t.url, path: pathOf(t.url), kind: t.kind || 'page', checked: true, not_checked: '', rendered_source, paired_with_crawl: job.extra,
     figures, js_only: figures.filter(f => f.state === 'js_only').map(f => f.key),
-    differs: figures.filter(f => f.state === 'differs').map(f => f.key), js_shell: !!raw.js_shell,
+    differs: figures.filter(f => f.state === 'differs').map(f => f.key), not_compared: figures.filter(f => f.state === 'not_compared').map(f => f.key), js_shell: !!raw.js_shell,
     uncrawlable: unc.count, uncrawlable_kinds: unc.kinds, uncrawlable_samples: unc.samples,
     uncrawlable_read_from: unc.count ? (uncRen ? 'the rendered page' : 'the first response') : '' });
 }
@@ -197,14 +253,48 @@ const uncTotal = uncPages.reduce((n, p) => n + (p.uncrawlable || 0), 0);
 const uncrawlable_links = { pages_with: uncPages.length, pages_checked: checked.length, total: uncTotal,
   kinds: [...new Set(uncPages.flatMap(p => p.uncrawlable_kinds || []))], orphan_pages: orphanPages.length,
   method: 'Read from the HTML of the key pages already fetched for this check: <a> tags with no href or a javascript: href that navigate on click, and elements (div, span, li, button, table rows) that carry a page address in an onclick or a data-href. A crawler follows none of them, so the pages behind them are reached only if something else links to them.' };
+// ---- B5-4: the hreflang sets of the pages read, checked against each other. SILENT when no page declares any (a one-language site has nothing to check) ----
+const hlDeclaring = hreflangBy.filter(h => h.entries.length);
+let hreflang = null;
+const hlProblems = { invalid: [], relative: [], no_self: [], no_return: [], duplicate: [], no_default: [] };
+if (hlDeclaring.length) {
+  const held = new Map(hreflangBy.map(h => [normU(h.url), h]));
+  for (const h of hlDeclaring) {
+    const bad = h.entries.filter(e => !hreflangValid(e.lang)); if (bad.length) hlProblems.invalid.push({ ...h, detail: bad.slice(0, 4).map(e => '"' + e.lang + '"').join(', ') });
+    const rel = h.entries.filter(e => !/^https?:\/\//i.test(e.href)); if (rel.length) hlProblems.relative.push({ ...h, detail: rel.slice(0, 3).map(e => e.lang + ' \u2192 ' + (e.href || '(empty)')).join(', ') });
+    if (!h.entries.some(e => sameUrl(e.href, h.url))) hlProblems.no_self.push({ ...h, detail: 'declares ' + h.entries.length + ' alternate(s), none of them this page' });
+    const byLang = new Map(); for (const e of h.entries) { const k = e.lang.toLowerCase(); (byLang.get(k) || byLang.set(k, new Set()).get(k)).add(normU(e.href)); }
+    const dup = [...byLang.entries()].filter(([, v]) => v.size > 1).map(([k]) => k); if (dup.length) hlProblems.duplicate.push({ ...h, detail: 'the same language points at different addresses: ' + dup.slice(0, 4).join(', ') });
+    if (!h.entries.some(e => /^x-default$/i.test(e.lang))) hlProblems.no_default.push({ ...h, detail: 'no x-default' });
+    // return tags, judged only against pages whose own set we hold: a missing return link is a link the other page does not give back
+    const missing = [];
+    for (const e of h.entries) {
+      if (sameUrl(e.href, h.url)) continue;
+      const other = held.get(normU(e.href)); if (!other) continue;
+      if (!other.entries.some(x => sameUrl(x.href, h.url))) missing.push(e.lang + ' \u2192 ' + pathOf(e.href));
+    }
+    if (missing.length) hlProblems.no_return.push({ ...h, detail: 'the alternate does not link back: ' + missing.slice(0, 4).join(', ') });
+  }
+  hreflang = { declared_on: hlDeclaring.length, pages_read: hreflangBy.length, pages: hlDeclaring.map(h => ({ path: h.path, languages: h.entries.map(e => e.lang).slice(0, 30) })).slice(0, 25),
+    problems: Object.fromEntries(Object.entries(hlProblems).map(([k, v]) => [k, v.length])),
+    method: 'Read from the first response of the pages checked above (the link rel=alternate hreflang tags and the Link header): valid language/region codes, absolute addresses, a self-reference, one address per language, an x-default, and return links between the pages whose set we hold. A set declared only in the XML sitemap is not read, and a return link is checked only against pages read in this run.' };
+}
 const render_diff = {
   available: checked.length > 0,
   crawl_js: !!plan.crawl_js,
   uncrawlable_links,
   not_available: checked.length ? '' : (targets.length ? 'no key page could be read twice: ' + (notChecked[0] ? notChecked[0].not_checked : 'both readings failed') : (plan.reason || 'no page to compare')),
   pages, pages_checked: checked.length, pages_not_checked: notChecked.length, pages_with_js_only: withJs.length,
+  // B5-6: how many of the pages were read raw and paired with the JavaScript crawl instead of being rendered again
+  paired_with_crawl: checked.filter(p => p.paired_with_crawl).length, paired_note: plan.raw_pairs_note || '',
+  hreflang,
   cap: plan.cap || 0, rendered_source: checked.length ? checked[0].rendered_source : '',
-  method: 'Each page was read twice: a plain GET of the page (the first response, what a crawler that does not run JavaScript receives) and the same page after its scripts ran. Title, main heading, canonical link, robots meta, links and text length are read from both with the same parser, and URLs are compared without the www. prefix.',
+  // B-1: the method says exactly what was compared, and how, for each of the two kinds of page
+  method: 'Each page was read twice: a plain GET of the page under our own audit user agent (the first response, what a crawler that does not run JavaScript receives from a plain request; a site that answers named AI bots differently is read by the AI crawler access check, not here) and the same page after its scripts ran. '
+    + 'For the ' + (plan.cap || 5) + ' key pages rendered by the render service both readings are HTML and title, main heading, canonical link, robots meta, links and text length are read from both with the same parser. '
+    + (extras.length ? 'With this JavaScript crawl ' + extras.length + ' more pages are paired with the crawl itself (it is already the rendered reading, one free plain request each). The crawl keeps its own figures, not the HTML: title, main heading and canonical link are compared as text (entities decoded); the robots rule is not compared (the crawl keeps the rule it derived); links and words are counted differently (the crawl counts unique links and the main text, our parser every link and every word), so a count is read as script-written content only when the crawl saw at least ' + CRAWL_GAP + ' times what the first response carries, and is otherwise not compared. ' : '')
+    + 'A count only matters when the page after JavaScript has more than the first response: a first response that carries more hides nothing from a crawler. URLs are compared without the www. prefix.',
+  pages_counts_not_compared: checked.filter(p => (p.not_compared || []).some(k => k === 'links' || k === 'words')).length,
   figures: FIGURES.map(f => f.label),
   checked_at: new Date().toISOString()
 };
@@ -216,6 +306,7 @@ const works = [];
 // it to join a crawl-wide symptom to its cause instead of scoring both (build section 65, B5-2).
 const F = (category, severity, title, evidence, why, fix, urls, scoring, figure) => findings.push({ category, severity, title, evidence, why, fix,
   sample_urls: (urls || []).slice(0, 5), affected_count: (urls || []).length || null, affected_pct: checked.length ? Math.round(((urls || []).length / checked.length) * 100) : null,
+  affected_of: checked.length, affected_unit: extras.length ? 'pages read twice' : 'key pages read twice',   // R72: the percentage is a share of the key pages read twice, not of the crawl
   scope: 'page', scoring: scoring !== false, source: 'render_diff', figure: figure || '' });
 const quote = (p, key) => { const f = p.figures.find(x => x.key === key) || {}; return p.path + ': ' + (key === 'links' || key === 'words' ? (Number(f.raw) || 0) + ' in the first response, ' + (Number(f.rendered) || 0) + ' after JavaScript' : '"' + S(f.rendered).slice(0, 70) + '" (the first response has ' + (S(f.raw) ? '"' + S(f.raw).slice(0, 70) + '"' : 'none') + ')'); };
 const only = (key) => checked.filter(p => p.js_only.includes(key));
@@ -267,6 +358,18 @@ if (linksOnly.length) F('Crawlability & Indexing', 'Medium', 'Most links of ' + 
   'Output real <a href> links in the server response for navigation and in-content links (a script may still enhance them).',
   linksOnly.map(p => p.url), true, 'links');
 
+// ---- B5-4: hreflang (only when a page of the site declares it) ----
+if (hreflang) {
+  const HF = (sev, title, key, why, fix) => { const list = hlProblems[key]; if (!list.length) return;
+    F('Technical', sev, title.replace(/\bN\b/, String(list.length)), list.map(h => h.path + ': ' + h.detail).join(' \u00b7 '), why, fix, list.map(h => h.url), true, 'hreflang'); };
+  HF('Medium', 'The hreflang tags of N page(s) use a code Google does not accept', 'invalid', 'A code that is not a valid language (and optional region) is ignored, so the language versions are not tied together and the wrong one can be shown.', 'Use ISO 639-1 language codes with an optional ISO 3166-1 region (en, en-GB, ar-AE) or x-default.');
+  HF('Medium', 'The hreflang addresses of N page(s) are not absolute', 'relative', 'hreflang takes a full URL including the protocol; a relative path is not reliable.', 'Write each alternate as a full address (https://example.com/ar/).');
+  HF('Medium', 'N page(s) with hreflang do not point to themselves', 'no_self', 'Each page of a language set should list itself as well as its alternates, or the set is incomplete.', 'Add a self-referencing hreflang entry on every page of the set.');
+  HF('Medium', 'The hreflang return links of N page(s) are missing on the alternate', 'no_return', 'An alternate that does not link back is ignored: both pages must list each other.', 'Add the reciprocal hreflang entry on the alternate page.');
+  HF('Medium', 'N page(s) give one language two different addresses', 'duplicate', 'When one language points at two addresses Google cannot tell which is meant and may ignore the set.', 'List one address per language and region.');
+  HF('Low', 'N page(s) with hreflang have no x-default', 'no_default', 'x-default tells Google which version to show people whose language is not in the set; it is recommended, not required.', 'Add an alternate link with hreflang x-default pointing at the page you want for everyone else.');
+}
+
 // ---- B5-1 (2026-10-15, benchmark area 5): the links a crawler cannot follow, and the orphan pages they explain ----
 // Three or more on one page, or any on two pages, is a pattern and not a stray widget. The severity follows the harm that is visible in
 // this same audit: Medium where the crawl already reports orphan pages or where most links appear only after JavaScript (the pages behind
@@ -296,7 +399,9 @@ if (notChecked.length) F('Technical', 'Info', 'The response-versus-render check 
   notChecked.map(p => p.url), false, '');
 
 if (checked.length && !withJs.length && !checked.some(p => (p.differs || []).length)) {
-  works.push('Every key page checked (' + checked.length + ') serves its title, heading, canonical, robots rule, links and text in the first response, so crawlers that do not run JavaScript see the same page as Google does');
+  const ncP = checked.filter(p => (p.not_compared || []).length).length;   // B-1: say which figures were not compared on the crawl-paired pages
+  works.push('Every ' + (extras.length ? '' : 'key ') + 'page checked (' + checked.length + ') serves its title, heading, canonical, robots rule, links and text in the first response, so crawlers that do not run JavaScript see the same page as Google does'
+    + (ncP ? ' (on ' + ncP + ' page(s) paired with the JavaScript crawl the robots rule and the link and word counts were compared only as far as the crawl\'s own way of counting allows: see the method)' : ''));
 }
 
 return [{ json: { ...prev, skip: undefined, render_diff,

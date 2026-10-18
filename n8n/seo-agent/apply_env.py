@@ -5,15 +5,44 @@
 3. imports the generated workflows, publishes the standard set (Console Alerts only when SEO_IMAP_PASSWORD is set),
 4. adds the columns a newer build expects to the Data Tables that already exist (sync_tables.py, v4.9),
 5. restarts n8n and waits for it.
-Usage: python3 apply_env.py [--no-build] [--no-restart]"""
+R94 (2026-10-16): it refuses to run inside the Monday window of the weekly schedules (07:00-12:00 in GENERIC_TIMEZONE, i.e. 11:00-16:00 UTC
+in summer): an import re-publishes every workflow and a restart re-arms every schedule for its NEXT time, so a weekly run that is due or
+running late is thrown away. --force-monday overrides it (the Schedule Catch-up then starts what the restart threw away).
+Usage: python3 apply_env.py [--no-build] [--no-restart] [--force-monday]"""
 import json, os, shutil, subprocess, sys, tempfile, time, urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__)); N8N_DIR = os.path.join(HERE, '..'); CONTAINER, PROJECT = 'n8n-n8n-1', 'wo1WpMiHjdduGvfl'
 sys.path.insert(0, HERE); from env_settings import load_env
 from ladder_common import ALERT_WEBHOOK_PLACEHOLDER
-WORKFLOWS = ['SEO_Agent_v4.json', 'SEO_Agent_API.json', 'SEO_Agent_Error_Handler.json', 'SEO_Agent_Rank_Tracker.json', 'SEO_Agent_Site_Tracker.json', 'SEO_Agent_Page_Watch.json', 'SEO_Agent_Site_Admin.json', 'SEO_Agent_Content_Cadence.json', 'SEO_Agent_Console_Alerts.json', 'SEO_Agent_Publish_WordPress.json', 'SEO_Agent_AI_Visibility.json', 'SEO_Agent_AI_Pulse.json', 'SEO_Agent_AI_Growth.json', 'SEO_Agent_Backlink_Monitor.json', 'SEO_Agent_Audit_Scheduler.json', 'SEO_Agent_Admin_API.json', 'SEO_Agent_Keyword_Check.json', 'SEO_Agent_Link_Builder.json', 'SEO_Agent_Link_Builder_API.json', 'SEO_Agent_Reply_Reader.json', 'SEO_Agent_Prerelease.json']
-PUBLISH = ['SEOagentV4Full01', 'SEOagentAPIentry', 'SEOagentErrHandl', 'SEOagentTracker1', 'SEOagentSiteTrk1', 'SEOagentPageWch1', 'SEOagentSiteAdm1', 'SEOagentCadence1', 'SEOagentAIVisib1', 'SEOagentAIPulse1', 'SEOagentAIGrow1', 'SEOagentBacklnk1', 'SEOagentAuditSc1', 'SEOagentAdminAPI', 'SEOagentAssess', 'SEOagentLinkBld1', 'SEOagentLinkBAPI', 'SEOagentReplyRd1', 'SEOagentPreRel1']
+MANIFEST = json.load(open(os.path.join(HERE, 'deploy_manifest.json'), encoding='utf-8'))   # shared with n8n/deploy/release.mjs
+WORKFLOWS, PUBLISH = MANIFEST['workflows'], MANIFEST['publish']
 def sh(cmd, **kw): return subprocess.run(cmd, check=True, text=True, capture_output=True, **kw)
 args = sys.argv[1:]
+# R94 (2026-10-16, defects/C_monitors.md): every n8n restart discards a due fire - the crons re-arm for their next future time, and the
+# import below re-publishes every workflow, which does the same. The weekly runs fall on Monday 07:00-11:00 in the instance's time zone
+# and arrive late while the Mac sleeps (the 2026-10-12 16:38 deploy dropped five of them), so a deploy inside that window is refused.
+DEFAULT_TZ = 'America/New_York'   # what n8n uses with GENERIC_TIMEZONE unset; n8n/compose.yml sets the same default explicitly
+def deploy_window(now_utc=None, tz_name=None):
+    """-> (inside, start_utc, end_utc): Monday 07:00-12:00 in the schedules' time zone (the weekly crons are 07:00-11:00, plus an hour
+    for a run in progress); 11:00-16:00 UTC when the time zone database is not available. Build section 98 self-tests it."""
+    import datetime as _dt
+    now = now_utc or _dt.datetime.now(_dt.timezone.utc)
+    try:
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo(tz_name or DEFAULT_TZ)
+        loc = now.astimezone(tz)
+        start = loc.replace(hour=7, minute=0, second=0, microsecond=0) - _dt.timedelta(days=loc.weekday())
+        end = start.replace(hour=12)
+        a, b = start.astimezone(_dt.timezone.utc), end.astimezone(_dt.timezone.utc)
+    except Exception:
+        monday = (now - _dt.timedelta(days=now.weekday())).replace(minute=0, second=0, microsecond=0)
+        a, b = monday.replace(hour=11), monday.replace(hour=16)
+    return (a <= now < b), a, b
+if __name__ == '__main__' and '--force-monday' not in args:
+    _in94, _a94, _b94 = deploy_window(tz_name=(load_env().get('GENERIC_TIMEZONE') or '').strip() or DEFAULT_TZ)
+    if _in94:
+        sys.exit('R94: refusing to deploy now: Monday ' + _a94.strftime('%H:%M') + '-' + _b94.strftime('%H:%M') + ' UTC is when the weekly '
+                 'schedules fire, and an import or a restart throws away a run that is due or late. Deploy after ' + _b94.strftime('%H:%M')
+                 + ' UTC, or pass --force-monday (the Schedule Catch-up then starts what the restart threw away).')
 if '--no-build' not in args:
     r = subprocess.run([sys.executable, os.path.join(HERE, 'build_v4.py')], cwd=HERE, capture_output=True, text=True)
     if r.returncode != 0: print(r.stdout[-2000:], r.stderr[-2000:]); sys.exit('build failed')

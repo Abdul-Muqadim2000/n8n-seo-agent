@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { buttonClass, ButtonLink } from '@/components/ui/button';
 import { InfoTip, InsightItem } from '@/components/insight';
 import { GuideButton } from '@/components/guide';
+import { TicketButton } from '@/components/site/TicketButton';
 import { PriorityBadge, useSitePage } from './kit';
 
 export const CATEGORY_META: Record<RecommendationCategory, { label: string; icon: ReactNode }> = {
@@ -103,7 +104,7 @@ function CategoryIcon({ category, className }: { category: RecommendationCategor
  * One recommendation as a to-do row (Recommendations page): the category's icon tile, priority and area chips, the title, the
  * evidence (or the explanation when there is none) and, behind "Why it matters", the explanation; the action on the side.
  */
-export function RecommendationItem({ rec }: { rec: Recommendation }) {
+export function RecommendationItem({ rec, siteId }: { rec: Recommendation; siteId?: string }) {
   const meta = CATEGORY_META[rec.category] ?? CATEGORY_META.setup;
   const guide = GUIDE_FOR_RECOMMENDATION[rec.id];
   return (
@@ -121,10 +122,12 @@ export function RecommendationItem({ rec }: { rec: Recommendation }) {
       detail={rec.evidence ? <span className="text-[13px] leading-relaxed [overflow-wrap:anywhere]">{rec.detail}</span> : undefined}
       detailLabel="Why it matters"
       action={
-        rec.action || guide ? (
+        rec.action || guide || siteId ? (
           <div className="flex flex-col items-stretch gap-1.5">
             {rec.action && <RecommendationButton action={rec.action} />}
             {guide && <GuideHelp id={guide} />}
+            {/* G4: the work item in the company's tracker (only once one is connected; setup items are ours to finish, not a ticket) */}
+            {siteId && rec.category !== 'setup' && <TicketButton siteId={siteId} source={{ type: 'recommendation', id: rec.id }} />}
           </div>
         ) : undefined
       }

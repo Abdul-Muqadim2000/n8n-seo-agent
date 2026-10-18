@@ -32,19 +32,41 @@ const RG = (() => {
     const t = ms(r && r.created_at);
     return st === 'reserved' && t > 0 && t < (nowMs || Date.now()) - h * 3600000;
   };
-  // the runs that are genuinely in flight right now, mine excluded
+  // R77 (2026-10-16, re-rating C-1): the run that STARTED this one. An on-demand monitor is spawned by the main workflow's front door, whose
+  // own ledger row carries the same `mode` and is still `reserved` while the child reads the ledger (exec 622 -> 624: the app's backlinks
+  // request was refused by its own parent, 0.6 s after the AI visibility pair 620 -> 623 slipped through on timing alone). The child knows
+  // its parent by identity: the front door passes `parent_run_id` (its own execution id) and the child's row stores it in its key
+  // (`parent:<id>`). A parent is never "another run in flight" — it handed this run its work — but a genuine twin with any other id still is.
+  const parentOf = (row) => { const m = /^parent:(.+)$/.exec(S(row && row.key)); return m ? S(m[1]) : ''; };
+  // the runs that are genuinely in flight right now, mine (and the run that started mine) excluded
   const liveRuns = (rows, o) => {
-    const c = o || {}, nowMs = ms(c.now) || Date.now(), myId = n0(c.my_id), myRun = S(c.run_id);
+    const c = o || {}, nowMs = ms(c.now) || Date.now(), myId = n0(c.my_id), myRun = S(c.run_id), parent = S(c.parent_run_id);
     return (rows || []).filter(r => r && !r.error && S(r.run_id)
       && S(r.mode) !== 'assess' && S(r.status) === 'reserved' && !isStale(r, nowMs, c.stale_hours)
       && (myId > 0 ? n0(r.id) < myId : S(r.run_id) !== myRun)   // row order decides ties, exactly as Rate Limit resolves them
-      && S(r.run_id) !== myRun);
+      && S(r.run_id) !== myRun
+      && !(parent && S(r.run_id) === parent));
   };
   // P34-5: a second heavy crawl of the same site while one is running
   const heavyBusy = (rows, o) => {
     const c = o || {}, dom = S(c.domain).toLowerCase();
     if (!dom || !yesNo(c.heavy)) return null;
     return liveRuns(rows, c).find(r => yesNo(r.heavy) && S(r.domain).toLowerCase() === dom) || null;
+  };
+
+  // R94 follow-up (2026-10-16): did the schedule catch-up already run this slot? `records` are seo_cache rows (key, value as JSON text),
+  // `due` the slot's ISO time. A record whose start FAILED does not count (the planner tries it again); any other status does, exactly as
+  // the planner reads it (_catchup.js: a record that is not start_failed / refused is `caught_up`).
+  const caughtUp = (o) => {
+    const c = o || {}, wf = S(c.workflow_id), due = S(c.due);
+    if (!wf || !due) return null;
+    const key = 'catchup:' + wf + ':' + due;
+    const row = (c.records || []).find(r => r && S(r.key) === key);
+    if (!row) return null;
+    let v = row.value; if (typeof v === 'string') { try { v = JSON.parse(v); } catch (e) { v = {}; } }
+    v = v && typeof v === 'object' ? v : {};
+    if (S(v.status) === 'start_failed') return null;
+    return { key, due, started_at: S(v.started_at), status: S(v.status), entry: S(v.entry) };
   };
 
   const at = (r) => S(r && r.created_at).slice(11, 16);
@@ -55,14 +77,21 @@ const RG = (() => {
     const nowMs = ms(c.now) || Date.now();
     const mode = S(c.mode) || S(mine.mode);
     const where = S(c.where) || mode;
-    const ctx = { now: new Date(nowMs).toISOString(), my_id: n0(mine.id), run_id: S(c.run_id) || S(mine.run_id), stale_hours: c.stale_hours };
+    const parent_run_id = S(c.parent_run_id) || parentOf(mine);
+    const ctx = { now: new Date(nowMs).toISOString(), my_id: n0(mine.id), run_id: S(c.run_id) || S(mine.run_id), stale_hours: c.stale_hours, parent_run_id };
     const live = liveRuns(rows, ctx);
     const stale = (rows || []).filter(r => r && !r.error && isStale(r, nowMs, c.stale_hours)).length;
     const max_open = n0(c.max_open) > 0 ? n0(c.max_open) : MAX_OPEN;
+    const parentOpen = !!parent_run_id && (rows || []).some(r => r && S(r.run_id) === parent_run_id && S(r.status) === 'reserved');
     const basis = live.length + ' other run(s) in flight (' + (live.map(r => S(r.mode) + ' ' + at(r)).join(', ') || 'none') + ')'
-      + (stale ? ', ' + stale + ' stale reservation(s) ignored' : '') + '; the limit is ' + max_open;
+      + (stale ? ', ' + stale + ' stale reservation(s) ignored' : '')
+      + (parentOpen ? ', the run that started this one (execution ' + parent_run_id + ') not counted' : '') + '; the limit is ' + max_open;
     const refuse = (reason, detail) => ({ allowed: false, reason, refusal: detail, open_runs: live.length, open: live.map(r => ({ mode: S(r.mode), run_id: S(r.run_id), at: at(r) })),
-      stale_ignored: stale, max_open, mode, where, basis, checked_at: ctx.now });
+      stale_ignored: stale, max_open, mode, where, basis, checked_at: ctx.now, parent_run_id });
+
+    // 0. R94 follow-up: this is the delayed timer of a slot the catch-up already ran - the week would run twice.
+    if (c.caught_up) return refuse('caught_up', 'The catch-up already ran this scheduled slot (due ' + S(c.caught_up.due) + ', started ' + (S(c.caught_up.started_at) || 'earlier')
+      + '), so this late fire of the same schedule was not run a second time. Nothing was charged and nothing was started.');
 
     // 1. the same monitor is still running. A weekly check that overlaps its own previous run reads the same tables twice, writes the same
     //    rows twice and bills the same APIs twice; the one still going is the one with the data.
@@ -88,10 +117,10 @@ const RG = (() => {
       + '). Nothing was charged and nothing was started: a run that runs out of data credit half way through delivers half a report.');
 
     return { allowed: true, reason: 'ok', refusal: '', open_runs: live.length, open: live.map(r => ({ mode: S(r.mode), run_id: S(r.run_id), at: at(r) })),
-      stale_ignored: stale, max_open, mode, where, basis, checked_at: ctx.now };
+      stale_ignored: stale, max_open, mode, where, basis, checked_at: ctx.now, parent_run_id };
   };
 
-  return { gate, liveRuns, heavyBusy, isStale, STALE_HOURS, MAX_OPEN };
+  return { gate, liveRuns, heavyBusy, isStale, parentOf, caughtUp, STALE_HOURS, MAX_OPEN };
 })();
 // G23 (2026-10-13): the shared cost kit (v5/code/_cost_cal.js) and the stored per-mode calibration this node prices with.
 // Shared cost kit (G23 + the estimate recalibration, 2026-10-13; FIX_PLAN G23, RESULTS §0b / §2.10).
@@ -143,6 +172,14 @@ const CC = (() => {
   // against maxTokensToSample). Share of the budget by effort, from the three Opus nodes of exec 521 (27,365 in / 16,426 out reported as
   // `tokenUsageEstimate` against ~11k tokens of real answer).
   const THINK_SHARE = { low: 0.05, medium: 0.1, high: 0.2 };
+  // B-8 / A-27 (re-rating 2026-10-17): that budget share is right for nothing we can check. On the NON-streaming adaptive-thinking
+  // nodes n8n records the real `tokenUsage`, whose output count INCLUDES the thinking (Anthropic bills thinking as output), and on
+  // execs 760 / 764 / 765 / 767 / 770 it exceeded the counted answer by about 50 tokens a call (Content Reviewer 2,258 vs 2,208;
+  // 3,959 vs 3,909; 1,535 vs 1,484) — while the budget share added 1,638-3,277 per node and put the ledger 19-31% above n8n. Adaptive
+  // thinking at low / medium effort mostly does not think on these tasks. So a non-streaming call is modelled at the thinking it was
+  // SEEN to do, a little above the measured gap; only a streaming call (where n8n reports no usage, so nothing can check it) keeps the
+  // budget share, and its basis says so.
+  const THINK_SEEN = 64;
   const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
   const r4 = (v) => +n0(v).toFixed(4);
   const family = (model) => {
@@ -192,7 +229,26 @@ const CC = (() => {
     const factor = n0(f[fam]) > 0 ? Number(f[fam]) : 1;
     const calls = Math.max(1, Math.round(n0(c.calls) || 1));
     const u = c.usage && (n0(c.usage.promptTokens) || n0(c.usage.completionTokens)) ? c.usage : null;
-    const cnt = u ? null : countUsage(c);
+    let cnt = u ? null : countUsage(c);
+    // R47 / R69 / R80 (2026-10-16, re-rating 2026-10-15): the counter was sent `String(output)`, so every STRUCTURED answer reached it as
+    // the 15 characters "[object Object]" and came back as 4-6 answer tokens labelled "measured" — 16 agents, 15-67% low. The builders
+    // now send the answer as the model wrote it (JSON for a parsed object); this is the net under that fix. A count that saw far fewer
+    // answer tokens than the answer's own characters can hold (under a quarter of the characters-a-token figure, on an answer of more
+    // than 200 characters a call) did not see the answer, so it is not a measurement: the call falls back to characters and says why.
+    let unseen = '';
+    if (cnt) {
+      const cov = Math.max(1, Math.round(n0((c.counted || {}).rounds) || 1));
+      const perChars = n0(c.output_chars) / cov, perCounted = cnt.out_tokens / cov;
+      if (perChars > 200 && perCounted < (perChars / CHARS_PER_TOKEN) * 0.25) {
+        unseen = 'the token counter answered for ' + cnt.out_tokens + ' answer token(s) where the answer holds ' + Math.round(n0(c.output_chars))
+          + ' characters, so it did not see the answer and is not used';
+        cnt = null;
+      }
+    }
+    // R57 (2026-10-16): an agent that n8n re-ran after a failed answer (a parser that refused the format; `retryOnFail`) called its model
+    // twice and kept one answer. `retries` is how many extra model runs the model node itself recorded; they are in `calls` and priced
+    // as repeats of the call the run can see.
+    const retries = Math.max(0, Math.round(n0(c.retries)));
     // how many of this node's `calls` the two counts actually cover, and what ONE of those calls cost in tokens.
     // B-F1 (2026-10-15, build section 76): `counted` carries the TOTAL the counter answered with and `rounds` says how many calls
     // that total covers, because a node may answer once per item — the keyword screen runs once per chunk of 80 candidates, so its
@@ -202,7 +258,8 @@ const CC = (() => {
     const covers = cnt ? Math.max(1, Math.round(n0((c.counted || {}).rounds) || 1)) : 0;
     const rounds = cnt ? Math.min(calls, covers) : 0;
     const perIn = cnt ? cnt.in_tokens / covers : 0, perOut = cnt ? cnt.out_tokens / covers : 0;
-    const budget = c.effort ? Math.round(n0(c.max_tokens) * (THINK_SHARE[String(c.effort)] || 0)) * calls : 0;
+    const seenThink = !!c.effort && !c.streaming;   // B-8 / A-27: a non-streaming call is modelled at the thinking it was seen to do
+    const budget = !c.effort ? 0 : seenThink ? THINK_SEEN * calls : Math.round(n0(c.max_tokens) * (THINK_SHARE[String(c.effort)] || 0)) * calls;
     const think = u ? 0 : budget;
     const inTok = u ? n0(u.promptTokens) : cnt ? Math.round(perIn * calls) : tokensOf(c.prompt_chars) * calls;
     const outTok = u ? n0(u.completionTokens) : (cnt ? Math.round(perOut * calls) : tokensOf(c.output_chars) * calls) + think;
@@ -212,18 +269,21 @@ const CC = (() => {
     // saw, minus the thinking it cannot see; a character-priced call measures nothing.
     const measured_usd = u ? usd : cnt ? price1(Math.round(perIn * rounds), Math.round(perOut * rounds)) : 0;
     const estimated_usd = r4(usd - measured_usd);
-    return { node: String(c.node || ''), model, family: fam, calls, in_tokens: inTok, out_tokens: outTok, think_tokens: think,
+    const retried = retries > 0 ? '; ' + retries + ' of the ' + calls + ' model call(s) were a retry after a failed answer (n8n asked again), priced as a repeat' : '';
+    return { node: String(c.node || ''), model, family: fam, calls, retries, in_tokens: inTok, out_tokens: outTok, think_tokens: think,
       usd, measured_usd, estimated_usd, measured: !!(u || cnt) && estimated_usd <= 0,
-      counted: !!cnt, counted_rounds: rounds, counter: cnt ? cnt.source : '', streaming: !!c.streaming, factor,
-      basis: u ? 'measured: the token usage this call reported'
+      counted: !!cnt, counted_rounds: rounds, counter: cnt ? cnt.source : '', streaming: !!c.streaming, factor, count_unseen: !!unseen,
+      basis: u ? 'measured: the token usage this call reported' + retried
         : cnt ? 'measured: ' + cnt.source + ' counted ' + cnt.in_tokens + ' prompt and ' + cnt.out_tokens + ' answer token(s)'
             + (covers > 1 ? ' across ' + covers + ' call(s)' : '')
             + (calls > rounds ? ', repeated for the ' + (calls - rounds) + ' round(s) the counter did not see' : '')
-            + (think > 0 ? '; the ' + think + ' thinking token(s) it cannot see are modelled from the '
-              + String(c.effort) + ' effort budget' : '')
+            + (think > 0 ? '; the ' + think + ' thinking token(s) it cannot see are modelled ' + (seenThink
+              ? 'at the ' + THINK_SEEN + ' a call n8n\'s reported output was seen to exceed the counted answer by (2026-10-17)'
+              : 'from the ' + String(c.effort) + ' effort budget') : '')
+            + retried
             + (estimated_usd > 0 ? ' ($' + estimated_usd.toFixed(4) + ' of $' + usd.toFixed(4) + ' is modelled)' : '')
         : 'estimated: prompt and answer characters at ' + CHARS_PER_TOKEN + ' characters a token'
-            + (think > 0 ? ' plus the thinking budget' : '') };
+            + (think > 0 ? ' plus the thinking budget' : '') + retried + (unseen ? '; ' + unseen : '') };
   };
 
   // ---- 2. one run's Claude cost ---------------------------------------------------------------------------------------------
@@ -314,7 +374,9 @@ const CC = (() => {
         : m === 'keyword' ? [r.verdict_only ? 'verdict' : (r.include_content ? 'content' : 'report')]
         : m === 'backlinks' ? (r.free_only ? [] : ['backlinks'])
         : (m && EST[m] !== undefined) ? [m] : [];
-      if (r.need_site_description) k.push('describe');
+      // R101 (2026-10-16, re-rating D-5): a describe run keeps `need_site_description` on (Use Cached Description leaves it set for
+      // `site_description`), so its estimate was describe + describe ($0.06 for a $0.03 mode). The extra key is for OTHER modes only.
+      if (r.need_site_description && !k.includes('describe')) k.push('describe');
       return k;
     }
     return m === 'audit' ? (r.include_full_report ? ['full'] : ['crawl'])
@@ -365,17 +427,33 @@ const CC = (() => {
     return { usd: r4(Math.max(capped, recentMax)), source: 'calibrated', floor: r4(recentMax), def, n: st.n };
   };
 
+  // B-9: how many 200-page plain crawls an audit's crawl is. DataForSEO on-page charges per crawled page, and a page rendered with
+  // JavaScript costs 4x (exec 739: $0.36 quoted for 200 pages against $0.09). Pages default to 200, as Normalize Input does.
+  const CRAWL_BASE_PAGES = 200, CRAWL_JS_MULT = 4;
+  const crawlFactor = (d) => { const r = d || {}; const pages = n0(r.crawl_max_pages) > 0 ? n0(r.crawl_max_pages) : CRAWL_BASE_PAGES;
+    const js = r.crawl_js === true || /^(true|yes|1)$/i.test(String(r.crawl_js || ''));
+    return +((pages / CRAWL_BASE_PAGES) * (js ? CRAWL_JS_MULT : 1)).toFixed(4); };
+
   // one request -> what it reserves. `room` is the extra the case-study intake holds back for the page run it spawns.
   const pick = (kind, d, cal) => {
     const keys = keysFor(kind, d);
     let usd = 0, source = 'default', floor = 0;
-    for (const k of keys) { const e = estOf(kind, k, cal); usd += e.usd; floor += e.floor; if (e.source === 'calibrated') source = 'calibrated'; }
+    // B-9 (re-rating 2026-10-17): the crawl figure is one 200-page plain crawl, whatever the request asked for. Exec 739 asked for a
+    // JavaScript crawl ($0.36 quoted for 200 pages, 4x the plain one) and was told $0.11. An audit's crawl is now scaled by the pages it
+    // may crawl and by JavaScript (CC.crawlFactor) — the same formula as the app's app/shared/src/cost.ts `crawlFactor`.
+    const cf = (kind === 'dfs' && String((d || {}).mode) === 'audit') ? crawlFactor(d) : 1;
+    for (const k of keys) { const e = estOf(kind, k, cal); usd += e.usd; floor += e.floor; if (e.source === 'calibrated') source = 'calibrated';
+      if (cf !== 1 && k === 'crawl') usd += e.usd * (cf - 1);
+      if (cf !== 1 && k === 'full') usd += n0(DFS_EST.crawl) * (cf - 1); }
     const room = (kind === 'ai' && String((d || {}).mode) === 'case_study') ? estOf('ai', 'content', cal).usd : 0;
     // `key` is the PRIMARY estimate key and the one the rolling figure is stored under, so what a settle teaches is read back by the next
     // run of the same shape; `label` names every key the request used (a run that also needs a site description adds `describe`, which
     // only makes that mode's figure a shade conservative — the safe direction).
     return { usd: r4(usd), keys, key: keys[0] || '', label: keys.join('+'), source, floor: r4(floor), room: r4(room),
-      basis: keys.length ? (source === 'calibrated' ? 'calibrated from this mode\'s last settled runs (never below $' + r4(floor).toFixed(4) + ', what it recently cost)' : 'the shipped estimate for ' + keys.join(' + ') + ' (no settled run of this mode yet)') : 'this mode spends nothing here' };
+      crawl_factor: cf,
+      basis: (keys.length ? (source === 'calibrated' ? 'calibrated from this mode\'s last settled runs (never below $' + r4(floor).toFixed(4) + ', what it recently cost)' : 'the shipped estimate for ' + keys.join(' + ') + ' (no settled run of this mode yet)') : 'this mode spends nothing here')
+        + (cf !== 1 ? '; the crawl scaled x' + cf + ' (up to ' + (n0((d || {}).crawl_max_pages) || CRAWL_BASE_PAGES) + ' pages'
+          + (crawlFactor({ crawl_max_pages: CRAWL_BASE_PAGES, crawl_js: (d || {}).crawl_js }) > 1 ? ', rendered with JavaScript at 4x a page' : '') + ')' : '') };
   };
 
   // what a settle writes back: the rolling figure moves toward this run's amount, the recent window keeps the floor honest.
@@ -496,6 +574,12 @@ const CC = (() => {
     // a priced figure wins: calls it counted are calls that happened, whatever the node-by-node sweep could see
     if (fig && n0(fig.calls) > 0) return { usd: r4(fig.usd), measured: fig.estimated === false, measured_usd: r4(fig.measured_usd),
       source: 'priced', ran, checked, basis: String(fig.basis || '') };
+    // R82 (2026-10-16, re-rating C-6): a workflow that HAS no Claude node (the AI Pulse, the Rank Tracker) settled its per-mode Claude
+    // reservation ($0.004 a day for the pulse) because the rule below only fired when the workflow had model nodes. `checked: 0`, said
+    // explicitly by a caller that looked, is a measurement too: nothing can have been spent on Claude.
+    if (x.checked != null && Math.round(n0(x.checked)) === 0 && !ran.length) return { usd: 0, measured: true, measured_usd: 0, source: 'none',
+      ran, checked: 0, basis: 'this workflow has no Claude node, so no model call can have run'
+        + (reserved > 0 ? ' and nothing is settled against the $' + reserved.toFixed(4) + ' it reserved' : '') };
     if (checked > 0 && !ran.length) return { usd: 0, measured: true, measured_usd: 0, source: 'none', ran, checked,
       basis: 'no model call ran in this run (all ' + checked + ' Claude node(s) of this workflow were checked)'
         + (reserved > 0 ? ', so nothing is settled against the $' + reserved.toFixed(4) + ' it reserved' : '') };
@@ -561,14 +645,26 @@ const CC = (() => {
       diff_usd: 0, diff_pct: null, within: true, overlapped: [], overlapped_n: 0, from, to,
       start_balance: +start.toFixed(6), end_balance: +end.toFixed(6), source: 'tasks', basis: '' };
     const mineId = String(mine.run_id || '');
+    // R81 parts 2-3 (2026-10-16, re-rating C-5): the request that STARTED this run is not another run. A monitor started by the main
+    // workflow's front door names that run in its own key (`parent:<id>`, Monitor_Ledger_Row / R77); the parent spends nothing itself and
+    // settles $0 as a hand-off (`dfs_source: handoff`, R81 part 1), so neither its row nor any hand-off row can share this run's money.
+    const mineKey = String(mine.key || '');
+    const parentId = mineKey.indexOf('parent:') === 0 ? mineKey.slice(7).trim() : String(x.parent_run_id || '').trim();
+    // when a row CLOSED. A settled row stamps `settled_at`; a refused or released row was closed when it was marked (its `settled_at`
+    // when the refusal stamped one); and a `done` row with no stamp (the Keyword Check settled without one until 2026-10-16, and old
+    // rows never had the column) closed when the table last wrote it (`updatedAt`) — or, failing that, when it was reserved. A row
+    // with no end at all was "open for ever", which named finished runs as "in flight" all day (598, 599, 600, 624).
+    const closedAt = (r) => String(r.settled_at || r.updatedAt || r.updated_at || r.created_at || '');
     // every other row that was open while this run was in flight
     const open = (x.rows || []).filter((r) => {
       if (!r || !r.run_id || r.error || String(r.run_id) === mineId) return false;
+      if (String(r.dfs_source || '') === 'handoff' || (parentId && String(r.run_id) === parentId)) return false;
       const c = String(r.created_at || '');
       if (!c || (to && c >= to)) return false;                       // reserved after this run had already settled
-      if (String(r.status || '') !== 'done') return true;            // still reserved or stale: it was open the whole time
-      const s = String(r.settled_at || '');
-      return !s || !from || s > from;                                // settled, but only after this run reserved: it overlapped
+      const st = String(r.status || '');
+      if (st === 'reserved' || st === '') return true;               // still reserved: it was open the whole time
+      const s = closedAt(r);
+      return !from || s > from;                                      // closed, but only after this run reserved: it overlapped
     });
     out.overlapped = open.map((r) => String(r.run_id)).slice(0, 20);
     out.overlapped_n = open.length;
@@ -617,7 +713,7 @@ const CC = (() => {
     return out;
   };
 
-  return { PRICES, UNKNOWN, CHARS_PER_TOKEN, THINK_SHARE, EST, DFS_EST, ALPHA, HEADROOM, KEEP, CAP, FACTOR_KEY, MODEL_PREFIX,
+  return { PRICES, UNKNOWN, CHARS_PER_TOKEN, THINK_SHARE, THINK_SEEN, crawlFactor, CRAWL_BASE_PAGES, CRAWL_JS_MULT, EST, DFS_EST, ALPHA, HEADROOM, KEEP, CAP, FACTOR_KEY, MODEL_PREFIX,
     RECONCILE_TOLERANCE, RECONCILE_FLOOR, RUN_OVERSPEND, COUNTER, countUsage, dfsLedger, dfsDay, dfsRun, crawlCost, aiRun,
     family, priceOf, tokensOf, callCost, runCost, keysFor, readCal, estOf, pick, calKey, calStat, calRow, monthRow, part, costBasis, split };
 })();

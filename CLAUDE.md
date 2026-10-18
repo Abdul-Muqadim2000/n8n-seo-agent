@@ -3,8 +3,11 @@
 Enterprise SEO automation built as n8n workflows: keyword research, keyword verdicts, long-form content with QA, technical site audits, full SEO reports, AI-visibility checks. Everything lives in `n8n/seo-agent/`; the stack runs locally with Docker Compose from `n8n/`.
 
 ## Read first
+- **`n8n/seo-agent/docs/system-review-2026-10-17/RESUME.md` — START HERE (2026-10-18): the fourth re-rating (6/10, market 4.2, enterprise 1.5), every fix and the five enterprise capabilities merged but NOT deployed, the deploy checklist (§9), the live checks (§5), owner decisions (§6) and launch blockers.**
+- `n8n/seo-agent/docs/system-review-2026-10-15/NEXT_WAVE_BENCHMARK_ROWS.md` — (previous) the 28 open benchmark rows of FIX_PLAN §3.16 that are in reach, grouped into 8 parallel agents (model per agent), the leftovers, the orchestration rules, numbers, deploy and live-check rules. Every R34–R119 defect is already fixed.**
+- `n8n/seo-agent/docs/system-review-2026-10-15/DEFECTS.md` — (done 2026-10-16) to fix the defects: every defect of the third re-rating (5.5/10, 2026-10-16) re-verified with its root cause at file:line, the fix order by family, and an offline + live acceptance test per defect (dossiers in `defects/`). 15 High, 39 Medium, 28 Low, R53 withdrawn, R117–R119 added.** The run itself: `RESULTS.md`, `parts/`, `SCORECARD.md`; register FIX_PLAN §3.17.
 - **`n8n/seo-agent/docs/system-review-2026-10-11/` — the fix plan and its live-check notes (Phases 1-4 done 2026-10-13; see the latest status). `FIX_PLAN.md` is still the register: §3.7-§3.10 hold the defects the live checks found, §5.2 the re-rating protocol.** Whole-system review of 2026-10-11: live run of every feature on techand.ai (`RESULTS.md`, 26 defects with evidence, ≈ $4.3), benchmarks of the best tools with proven data (`CRITERIA_*.md`), the scorecard (`SCORECARD.md`: **5/10 overall**, 13 areas), and **`FIX_PLAN.md`** — 80 items (D defects, G criteria gaps, L Link Builder items, O owner decisions) with evidence, where to fix, the fix, an acceptance test, phases sized into sessions, the re-rating protocol and a scores history. Read its `README.md` first.
-- `app/README.md` — **the web app (v4.7, 2026-10-03)**: multi-company React + TypeScript front end with sign-up / Google login, onboarding, dashboards, every analysis as a form, runs and reports; Fastify + Postgres server in front of n8n. `app/API.md` (every endpoint), `app/web/CONVENTIONS.md` (UI rules). Product name **Ascentra** (brand kit in `app/web/brand/`, public marketing site in `app/web/src/marketing/`, 2026-10-08).
+- `app/README.md` — **the web app (v4.7, 2026-10-03)**: multi-company React + TypeScript front end with sign-up / Google login, onboarding, dashboards, every analysis as a form, runs and reports; Fastify + Postgres server in front of n8n. `app/API.md` (every endpoint), `app/web/CONVENTIONS.md` (UI rules). Product name **Alaventra** (renamed from Ascentra 2026-10-18; brand kit in `app/web/brand/`, public marketing site in `app/web/src/marketing/`). Earlier status sections below still say Ascentra — that was the name then.
 - `n8n/seo-agent/HANDOVER.md` — current state, how to use every mode (with API bodies), what is verified live, open items for the user. Start here.
 - `n8n/seo-agent/REVIEW.md` — findings, every change (per feature: §3c ladder, §3d tracking, §3e cadence + blog package, §3f Search Console audit, §3g notices + check-in, §3h E-E-A-T and page types, §3i growth monitors), the live-test log (section 5c), go-live checklist, roadmap.
 - `n8n/seo-agent/PIPELINE_FEATURE_SPEC.md` — **next work (plan of 2026-10-03, not built)**: Pipeline page with several keyword ladders (cards, ladder detail, Needs you), Auto / Manual for every step, keyword choice (recommended or own, "difficulty for your site", plan types Direct / Short / Full), SEO safety rules (no overlap, on topic, pile-up guard, max 2 active ladders), 4 phases, decisions to confirm.
@@ -37,7 +40,7 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 ## Working rules
 - **Commit after every finished functionality**: when a feature or fix is done and its checks pass (harness / app tests / typecheck / build, whichever apply), commit it and push the current branch to GitHub *before* starting the next one. One functionality per commit, path-scoped (`git add <paths>`); never commit the brand zip, `.env`, `.DS_Store` or `*.pyc`. The repo is **public**: scan the diff for keys / private keys / tokens before every push.
 - **Business pages follow the product**: every functionality added or changed must also be reflected on the marketing site (`app/web/src/marketing/`): its entry in the capability registry (`content/features.ts`), a line in the changelog (`content/changelog.ts`), and every page that lists it (home, platform, solutions, pricing). Real, shipped capabilities only, in customer language (no internal node / table names); no invented customers, quotes, logos or results. Photos come from `content/images.ts` (stock placeholders the user will replace).
-- **Brand (Ascentra, `app/web/brand/BRAND.md`)**: colours only through the tokens in `app/web/src/index.css` (mapped from the brand's `--asc-*`); Ascentra Blue is the only accent, no gradients; Sora for headings / KPI values, Geist for UI, Geist Mono for numbers — self-hosted (the production CSP blocks Google Fonts); logos only from the supplied SVGs in `app/web/public/brand/` (never redrawn, rotated or recoloured).
+- **Brand (Alaventra, `app/web/brand/BRAND.md`)**: colours only through the tokens in `app/web/src/index.css` (mapped from the brand's `--alv-*`; CSS classes / keyframes use the `alv-` prefix); Alaventra Blue is the only accent, no gradients; Sora for headings / KPI values, Geist for UI, Geist Mono for numbers — self-hosted (the production CSP blocks Google Fonts); logos only from the supplied SVGs in `app/web/public/brand/` (never redrawn, rotated or recoloured).
 - **Web app**: no Node on the Mac — run tools in `node:22-bookworm-slim` (`docker run --rm -v "$PWD":/app -w /app node:22-bookworm-slim npx tsc -p web/tsconfig.json`, `npm test`, `npx drizzle-kit generate` in `server/`). After a schema change: `npm run db:generate` (migrations run at server start). Form fields / modes: `shared/src/schemas.ts` + `shared/src/payload.ts` (keep the key order: Normalize Input matches fields fuzzily — `business` before `business_facts`, `email` before `public_email`), then `npm run export:payloads` and harness S23. Integration test: `python3 app/scripts/smoke.py` against the dev stack. Browser checks: Playwright image `mcr.microsoft.com/playwright:v1.55.0-noble` on the `seo-platform-dev_default` network (`http://web:5173`). Dev SMTP is off (`SEO_SMTP_HOST: ''`): verification / reset / invite links are in the server log.
 - Edit prompts/code in `v5/`, wiring in `build_v4.py`; then `cd n8n/seo-agent && python3 build_v4.py` and **check the exit code** (patches are anchored on exact text and assert; don't pipe the build to `tail` without `pipefail`).
 - Run the harness after every change (copy `harness/` into the container as a fresh dir, chown to `node`, run `scenarios_v5.js`).
@@ -57,7 +60,115 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-10-15, the benchmark programme is finished — 13 of 13 areas — latest)
+## Status (2026-10-18 evening, renamed Alaventra + deploy pipeline — latest)
+**Renamed Ascentra → Alaventra** from the owner's kit (`65cbf81`): wordmarks / OG image / manifest / `--alv-*` tokens / `alv-` CSS
+prefix / `AlaventraMark`, every string in `app/` + `integrations/` (webhook headers `X-Alaventra-*`, SSO TXT `alaventra-sso=`),
+`SEO_BRAND=Alaventra` (engine rebuilt). Kept on purpose: Postgres setting `ascentra.audit_purge` (migration 0011's trigger) and the
+`asc_` API-key prefix. **Deploy pipeline, nothing deployed** (`56bd7b7`, `efa7b8d`; read **`DEPLOY.md`**): web on **Vercel**
+(`app/vercel.json`, `app/middleware.ts` proxies `/api` + agency-portal hosts to `API_ORIGIN`), API = `app/Dockerfile`, engine =
+`n8n/deploy/Dockerfile` (n8n + workflows, `seo-release` release step, `deploy_manifest.json` shared with `apply_env.py`), GitHub
+Actions CI / Security / Images (GHCR) / Deploy web, Dependabot. API and engine hosts **not chosen yet** (owner researching; a Heroku
+n8n at seo-n8n-workflow-64e834115c48.herokuapp.com shows its unclaimed `/setup`). Harness now exits 1 on any failure.
+
+## Status (2026-10-18, fourth re-rating + its fix wave + five enterprise capabilities — previous)
+**Re-rated 2026-10-17 on the deployed build: 6 / 10** (area mean 5.88; was 5.54), plus **market position 4.2** and **enterprise readiness
+1.5** against the October 2026 leaders (`n8n/seo-agent/docs/system-review-2026-10-17/`: `RESULTS.md`, `parts/1-4`, `SCORECARD.md` by a
+clean CLI session, `MARKET_BENCHMARK.md` — Search Atlas, Ahrefs, Semrush/Adobe, seoClarity, Conductor, BrightEdge, Botify, Profound…).
+**Then, on `feature/seo-agent-v4.5` (merged, pushed, NOT deployed):** every defect of that run fixed (8 High, ~70 Medium/Low; fixers
+F-B F-A1 F-A2 F-A3 F-C F-D F-L) and five enterprise gaps built: **CMS publishing** (WordPress / Webflow / Contentful / signed webhook,
+migration 0009), **crawler-log + AI-crawler analytics** (0010), **identity** — two-step / passkeys / sessions / audit log / SSO OIDC+SAML /
+SCIM (0011), **integrations + write API** — runs API + MCP run tools, signed webhooks, Slack/Teams, Jira/Linear/Asana, S3/BigQuery,
+Looker Studio (0012), **white-label agency portal** (0013), and the **AI question panel at scale** (3–500 questions, personas / topics /
+markets, split weekly runs, rotating pulse, per-segment stats; `n8n/seo-agent/docs/AI_PANEL_SCALE_HANDOFF.md`). Engine harness **7125 passed,
+0 failed**; app **518 shared / 500 server / 42 web**; real-DB suites crawlers 12 / CMS 18 / integrations 16; combined browser pass (447 visits) `BROWSER_PASS_2026-10-18.md`.
+**Start here: `n8n/seo-agent/docs/system-review-2026-10-17/RESUME.md`** (§9 deploy checklist, §6 owner decisions, §5 live checks).
+**The deploy is the owner's**: `apply_env.py` is refused by the permission classifier as a production deploy (twice, incl. as a scheduled
+job). After it: `MAILBOX_KEY` in `app/.env`, restart the dev server for 0013, the live checks (≈ $0.8), then a fresh re-rating.
+**Not launch-ready yet:** no billing (no Stripe), Privacy/Terms are drafts, no always-on host (Docker on the Mac stopped overnight
+2026-10-18 and was restarted), app SMTP off, keys pasted in chat to rotate, pricing placeholders, DataForSEO $5.43.
+
+## Status (2026-10-17, third wave — the 28 benchmark rows in reach built — previous)
+**Seven agents (W3-A audit, W3-B content, W3-C rank, W3-D site tracking, W3-E AI stats, W3-F AI growth + leftovers, W3-G app layer +
+marketing), 3 at a time; every merge rebuilt in the main worktree with the exact harness count. Harness 6139 -> 6486 passed, 0 failed;
+app typecheck clean, 326 shared / 305 server. Deployed twice 2026-10-16/17 (23 published, new `SEOagentPubCheck`
+`POST /webhook/seo-publish-check`; columns `seo_sites.content_groups_json`, `seo_ai_visibility.rival_sources_json`,
+`seo_audit_findings.evidence` / `sample_urls`; app migration 0008 `api_keys`).** FIX_PLAN §3.16: 21 of 28 rows verified live (several
+only on their honest "nothing to act on" path), 7 fixed in harness (B5-4 B6-6 B6-8 B6-10 B8-6 B8-7 B5-11 — they need a second rank
+reading, a multi-language site, a browser pass or an owner-created API key). New: read API `/api/v1` + MCP `POST /api/v1/mcp` with
+per-company keys, a publish check usable outside a content run, Holm-corrected AI alerts, per-engine tests, content groups, Discover /
+News, own-move vs SERP churn, cannibalisation, corrections for wrong AI claims, readiness as the AI fetchers. DataForSEO **$8.09**.
+Console Alerts' IMAP trigger dropped while the Mac slept and n8n deactivated it (re-activated 2026-10-17). Not in reach / owner: see
+`docs/system-review-2026-10-15/NEXT_WAVE_BENCHMARK_ROWS.md` §1 and §6.
+
+## Status (2026-10-16 evening, second wave — every R34–R119 defect fixed in code — previous)
+**Second wave merged, deployed 18:30 UTC (`52b9044`), live-checked** (`docs/system-review-2026-10-15/LIVE_CHECK_fixes.md` §Second wave;
+FIX_PLAN §3.17: **no defect row left open**). Six agents (A9 engine cost, A10 one gate + AI reporting, A11 audit accuracy, A12 app copy,
+A13 app cost, A14 leftover halves) + orchestrator fixes (Rank Tracker callback behind its settle, engine prices in every app screen via
+`app/web/src/lib/engine-cal.ts`, last customer placeholders). Harness **6139 passed, 0 failed**; app typecheck clean, 301 shared / 305 server.
+Verified live in wave 2: R47/R69/R80 (answers counted ~1,000–1,800 tokens, not "[object Object]"), R50, R62, R63 (45 pages), R64, R67, R68,
+R71, R83, R84, R100, R102, R115 (backlinks + AI visibility callbacks carry the settled ledger: $0.7569 DataForSEO + $0.0967 Claude),
+R118, R119. Not yet live: R37/R43 (a page run, ≈ $1.40), R94 (a real missed Monday fire), R72/R74/R85 (their failure paths did not occur),
+R107 (no browser pass). Repairs run: `fix_not_ready_drafts.py`, `fix_ai_pages_hosts.py` (12 deleted, 6 moved). DataForSEO **$9.13** left
+($2.13 spent 2026-10-16). Docker Desktop stopped by itself at ~18:20 UTC and was restarted (`n8n/` and `app/compose.dev.yml` `up -d`).
+**Still open: the benchmark rows, not defects** — FIX_PLAN §3.16 has 45 open rows (B3-*, B4-*, B5-*, B6-*, B7-*, B8-*, B9-*) and 9 owner
+rows; plus the owner items (D25a always-on host, DataForSEO top-up, business profile + mailbox, key rotation, duplicate ladder
+`lad_mv9wshpdy2jf`, `count_on_demand`). Next: a fresh re-rating (separate run) or a third wave on the 45 benchmark rows.
+
+## Status (2026-10-16 night, the R34–R119 fix wave — previous)
+**Fixed, deployed, live-checked** (`n8n/seo-agent/docs/system-review-2026-10-15/LIVE_CHECK_fixes.md`; FIX_PLAN §3.17 statuses). Seven fixer
+agents in worktrees (A1 site picture, A2 audit picture, A3 app delivery, A4 engine state, A5 run identity + alerts, A6 schedule catch-up,
+A7 content QA, A8 verdict reading), merged one by one, rebuilt in the main worktree, harness **5387 → 5910 passed** (the one failure, S51
+P34-5, is time-of-day: it fails identically on the pre-merge code between 00:00 and ~03:00 UTC), app typecheck clean + 280 shared / 291
+server tests. Deployed twice with `apply_env.py` (22 workflows incl. new **`SEOagentCatchUp1`** schedule catch-up — n8n "Instance
+Started" + hourly sweep, record-then-start in `seo_cache` `catchup:*`, armed 2026-10-16 so it replays nothing older; `GENERIC_TIMEZONE`
+now explicit America/New_York in compose; `apply_env.py` refuses Monday 07:00–12:00 New York unless `--force-monday`; AI Growth takes
+`dry_run: true`). `seo_content_log.qa_reasons` added; `fix_not_ready_drafts.py --apply` marked the two QA-failed drafts `not_ready`.
+**All 15 High are fixed; 13 verified live** (R34 R35 R36 R38 R59 R60 R61 R66 R77 R78 R110 R111 + the R49 keyword-check path), R37 / R43
+(content QA) and R94 (catch-up) fixed in harness and deployed but **not yet run live** (a page run ≈ $1.4; the catch-up's first real test
+is the next missed Monday fire). 42 fixed, 6 partly (R42 R49-verdict now fixed, R50 R51 R81 R92), 27 verified live, $1.24 DataForSEO.
+**Not launched (owner: usage limit)** — briefs ready in the session scratchpad, groups: A9 engine cost (R47=R69=R80, R82, R68, R70, R57,
+R81 parts 2–3, R101, R115), A10 one gate + AI reporting (R39 R54 R83 R84 R85 R86 R89, R92 parts 1/2/5/6), A11 audit accuracy (R62 R63 R64
+R67 R71 R72 R75 R76 R118 R119), A12 app copy (R97 R98 R99 R106 R107 R108 R109), A13 app cost (R100 R102 R114 R115). Plus the agents'
+NEEDS-ELSEWHERE items (FIX_PLAN rows and `LIVE_CHECK_fixes.md`): R50's Keyword Check needs Load Ladders / Content Log (build_api.py),
+R51's relevance prompt, R42's engine ladder-report note, `_cost_cal.js` dfsRun must skip `parent:` / `handoff` rows, A6's "slot already
+caught up" refusal in `_run_guard.js`, `Parse_GSC.js` host stripping, app types / overview "needs a fix" tile.
+
+## Status (2026-10-16, third whole-system re-rating: **5.5 / 10** measured — previous)
+**The re-rating is done and committed** (`n8n/seo-agent/docs/system-review-2026-10-15/`): `RESULTS.md` (master record) + `parts/1`-`4`
+(per-run evidence from four executor agents) + `SCORECARD.md` (scored by a **clean Claude CLI session outside the repo** — no CLAUDE.md,
+no memory, only the rubric, the scorer rules, prior evidence, this run's evidence and a code copy). Executions **594-643** on the deployed
+668-node build, **$2.45 DataForSEO** (balance now **$11.26**) + **$1.41 Claude** (n8n token counts). FIX_PLAN §2 / §6 filled, **§3.17 holds
+R34-R116 (83 defects, 14 High)**, statuses updated (R3/R6/R11/R13/R18/R19/R22/R26 verified live; R16, B-A7, B-A9, B-F1 reopened).
+**Score: area mean 5.54 → 5.5** (2026-10-13: 5.92 → 6). No area rose; five held (content 6, technical 5, backlinks 7, link building 6.5,
+reporting 4.5), eight fell half a point or a point. Part of the fall is **better evidence** (every audit finding checked on the live site:
+7 of 30 false; the schedule history read), part is real: **14 High**. The scorer's single next step: **one correct picture of the
+customer's own site and of the system's own outputs, read by every path before it advises** — nine of the 14 High are that gap
+(R34 ladder blind to a live "AI Consulting" page because 25 of 45 inventory rows have no title; R35/R36 literal query-to-page matching;
+R38 verdict says the client page lacks dates/tables/author it has; R59 a bare-host/www split ranked first as "not indexed"; R60 full-report
+keywords from three card headings with no brand/government gate; R61 "no top-10 keyword" beside "ranks #1 for its brand"; R78 site report
+diffs a full report against a technical audit; R111 "publish it" for drafts QA refused). Fixing that family, proven in a re-run, is ≈ +0.3
+→ back to 6; 6.5 also needs R110 (every monitor report is stored `progress` and the app's delivery rule holds it — weekly reports can never
+be delivered or shared), R94, R83/R86, R37/R45.
+**Three fixes of 2026-10-15 failed on their first live run**: B-A9's gate refused the app's own backlinks check (R77, its parent's ledger
+row settles 81 ms too late); B-A7's retry re-posts one stale alert to the owner's Slack **on every run** (R79: update key trimmed, stored
+key has a trailing space — 12 sends during the rating; **it will keep doing this until fixed or row 4 is closed by hand**); B-F1's count
+sends `"[object Object]"` as every structured answer (R47/R80: "measured" Claude 15-67% low). **A fix is not done until it ran once live.**
+**The weekly loop has never run by itself** (R94): since 2026-10-01 Rank Tracker, Site Tracker, Cadence, Link Builder and AI Growth have
+**no** schedule-started execution; AI Visibility and Backlinks fired once each, the pulse late 6 of 7 days. Established: **every n8n
+restart discards a due fire** (crons re-arm to the next future time; the 2026-10-12 16:38 deploy restart dropped five Monday runs) — so
+**never restart n8n (deploy) on a Monday between 11:00 and ~16:00 UTC** while the weekly runs are due or delayed, and an always-on
+host (D25a) alone will not fix it. Hypothesis: the VM's timers stop while
+the Mac sleeps.
+**Left behind:** ladder `lad_mv9wshpdy2jf` "ai consulting dubai" (`active`; it duplicates the live AI-consulting page — R34; pause or delete),
+4 written unpublished pages (cadence paused on pile-up; two are QA-failed drafts), 24 app reports, a browser-pass test company
+"Northwind Trading" (`15b2c553-…`, unverified `rr1015-newcustomer.example.com`). AI Growth was **not run** (it submits to Bing with no
+dry-run switch); the app inside the owner's company was **not exercised** (a temporary test login was refused by the permission system).
+Toolkit: `n8n/seo-agent/rerate_toolkit.py` (app-shaped requests, Test Runner, balance windows, execution / report / ledger reads;
+never prints a secret) and the executor brief `docs/system-review-2026-10-15/EXECUTOR_BRIEF.md` — reuse both for the next re-rating.
+**Next:** fix from `docs/system-review-2026-10-15/DEFECTS.md` (re-verified 2026-10-16: R43 and R66 raised to High, R102 lowered;
+15 High), family by family — F1 the site picture first; owner: top up DataForSEO, D25a, a business profile, close alert row 4.
+
+## Status (2026-10-15, the benchmark programme is finished — 13 of 13 areas — previous)
 **Seventeen agents today, up to four in parallel, nine deploys. Harness 4505 -> 5191 passed, 0 failed. The instance is current: main
 workflow 659 nodes (519 this morning), AI Growth 102, 21 published.** Everything committed, pushed and deployed; working tree clean.
 **All 13 benchmark areas are done** (`docs/system-review-2026-10-14/BENCH_AREA*.md`, ~150 register rows in `FIX_PLAN.md` §3.16), and

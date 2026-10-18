@@ -1,8 +1,14 @@
 /*__REACH__*/
+/*__FIT_GATE__*/
+/*__SITE_MODEL__*/
+
 // Keyword Check: the answer. Difficulty for this site and plan from the shared reach rules; topic fit, navigational / other brand and the
 // alternatives from the small Claude call (if it failed: fit null, navigational from DataForSEO's intent unless the keyword names the site itself).
 // Alternatives only when the keyword is not realistic or off-topic, never the keyword itself or one the site already targets.
-const CONFIG = { ai_cost_usd: 0.002 };   // Claude Haiku 4.5, ~900 input + ~80 output tokens ($1 / $5 per million)
+// A-28 (re-rating 2026-10-17): $0.002 was a guess (~900 in + ~80 out); n8n's own token usage of execs 749-751 / 761-762 put one Haiku
+// call at $0.0029-0.0033 (the prompt plus the agent's tool and formatting instructions, ~2,000 tokens). Not counted per call: two
+// count_tokens round-trips would land on the caller's clock (section 108), so the figure is the measured upper end, labelled ESTIMATED.
+const CONFIG = { ai_cost_usd: 0.0033 };
 const FIT_UNKNOWN = 'topic check unavailable';   // R3: the same words in the label, the warning and the app (shared/src/keywords.ts)
 const a = $('Assess Result').first().json;
 const out = $input.first().json || {};
@@ -38,7 +44,48 @@ const topic = reachTopic(a.reach_info.ranked === undefined ? null : a.reach_info
   { domain: a.domain, reason_missing: a.reach_info.cached ? 'the reach stored on ' + String(a.reach_info.cached_at || '').slice(0, 10) + ' was kept without the keywords behind it, so this check has no topic evidence to read' : '' });
 const reach = topic.reach;
 const difficulty_for_you = difficultyForYou(a.kd, reach, { navigational, position: a.position });
-const plan = reachPlan(difficulty_for_you, reachStrong(a.reach_info, a.position));
+// R49 (2026-10-16): a chance band only on a reach that rests on a measured ranking (exec 598: method size, 0 top-10 keywords -> "good 50-70%")
+const plan = reachPlan(difficulty_for_you, reachStrong(a.reach_info, a.position), reachMeasured(topic.used ? { used: true } : a.reach_info, a.position));
+// ---- R50 (2026-10-16): the check's own answer names the ladder / page that already holds this search ----
+// The app sends the website's ladder keywords (`existing_keywords`) and used them only to filter the alternatives, so a check on
+// "erp software uae" — the head of an active ladder with a written page — answered "Easy · Direct plan" with no word about it. The same
+// search (one search, one page: equal words or 75%+ in common) is named; when the Keyword Check also loaded the domain's seo_ladders /
+// seo_content_log rows (optional nodes), the ladder id, its status and the page are given too.
+const rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error && Object.keys(r).length); } catch (e) { return []; } };
+const existing = (() => {
+  const kw = String(a.keyword || '').toLowerCase().trim();
+  const same = (x) => { const k = String(x || '').toLowerCase().trim(); return !!k && (k === kw || keywordsOverlap(k, kw)); };
+  const dom = reachDomain(a.domain);
+  // a stored rung the fit gate refuses (a competitor's brand, a government portal) is not "one of your keywords" - same gate as every read path
+  const lad = rowsOf('Load Ladders (Assess)').filter(r => fitStored(r, { own_domain: a.domain, protect: [a.keyword] }).ok).filter(r => !dom || reachDomain(r.domain) === dom).find(r => same(r.keyword) || (Number(r.rung) === 4 && same(r.head_keyword)));
+  const log = rowsOf('Load Content Log (Assess)').filter(r => !dom || reachDomain(r.domain) === dom).find(r => same(r.keyword));
+  const hit = (a.existing_keywords || []).find(same) || (lad && lad.keyword) || (log && log.keyword) || '';
+  // A-1 (2026-10-17, exec 750): a live page of the site that already targets the search (the page inventory seo_pages, SM.matchPage: the
+  // page that gets impressions for it, or 75% of its words in the slug / title) - "business central partner uae" was answered `existing:
+  // null` beside /dynamics-365-business-central-uae ("Certified Microsoft Dynamics 365 Business Central Partner in UAE")
+  const pages = rowsOf('Load Pages (Assess)');
+  const model = pages.length ? SM.withPages(SM.from({ domain: a.domain || '' }, {}), pages) : null;
+  const pm = model ? SM.matchPage(model, kw) : null;
+  const pg = pm && !SM.isListing(pm.url) ? { url: String(pm.url), title: String(pm.title || ''), matched_by: pm.matched_by } : null;
+  // A-2 (exec 751): the ladder's OWN status is its seo_ladder_settings row's (active / paused / ...), never the rung row's (planned /
+  // writing, which is `row_status`). A ladder with no settings row is active (the Content Cadence's own default) - but only when the settings
+  // could be read at all; with nothing readable its status is unknown (null), never the rung row's word.
+  const sets = rowsOf('Load Ladder Settings (Assess)');
+  const lst = lad ? (sets.find(r => String(r.ladder_id || '') === String(lad.ladder_id || '')) || null) : null;
+  const LSTAT = ['active', 'queued', 'paused', 'won', 'stuck', 'archived'];
+  const ladStatus = !lad ? null : lst && LSTAT.includes(String(lst.status || '').trim().toLowerCase()) ? String(lst.status).trim().toLowerCase()
+    : (lst || sets.length) ? 'active' : null;
+  if (!hit && !lad && !log && !pg) return null;
+  if (!hit && !lad && !log) return { keyword: kw, how: 'a page of yours', ladder_id: null, ladder_status: null, rung: null, page_url: pg.url, page_title: pg.title || null, page_status: 'live',
+    matched_by: pg.matched_by, pages_checked: pages.length,
+    note: 'you already have a page for this search: ' + pg.url + (pg.title ? ' ("' + pg.title + '")' : '') + ' - improve that page rather than starting a ladder for a second one' };
+  const page_url = String((log && (log.published_url || log.existing_page_url)) || (lad && lad.target_url) || (pg && pg.url) || '').trim();
+  return { keyword: String(hit || (lad && lad.keyword) || ''), how: String(hit).toLowerCase().trim() === kw ? 'the same keyword' : 'the same search',
+    ladder_id: lad ? String(lad.ladder_id || '') : null, ladder_status: ladStatus, row_status: lad ? String(lad.status || '') : null, rung: lad ? Number(lad.rung) || null : null,
+    page_url: page_url || null, page_status: log ? String(log.status || '') : null, live_page: pg ? pg.url : null, pages_checked: pages.length,
+    note: 'already one of your keywords' + (lad ? ' (ladder ' + lad.ladder_id + (ladStatus ? ', ' + ladStatus : '') + ')' : ' (one of your keyword ladders)')
+      + (page_url ? ' - its page: ' + page_url : '') + ': continue that ladder / improve that page rather than starting a second one for the same search' };
+})();
 const listOf = (v) => (Array.isArray(v) ? v : (typeof v === 'string' ? v.split(/[\n,;]+/) : [])).map(x => String(x == null ? '' : x).toLowerCase().replace(/["“”]/g, '').replace(/\s+/g, ' ').trim()).filter(x => x.length >= 2 && x.length <= 100);
 const need = difficulty_for_you === 'not_realistic' || fit === 0;
 const alternatives = need && aiOk ? [...new Set(listOf(o.alternatives))].filter(x => !keywordsOverlap(x, a.keyword) && !(a.existing_keywords || []).some(e => keywordsOverlap(e, x))).slice(0, 3) : [];
@@ -65,7 +112,9 @@ const body = { ok: true, keyword: a.keyword, country: a.country, volume: a.volum
   reach_basis: topic.used ? 'topic' : 'site', topic_reach: topic.topic_reach, reach_used: reach,
   topic_evidence: { on_topic: topic.on_topic, top10: topic.top10, sample: topic.sample, best: topic.best, examples: topic.examples, other_topics: topic.other_topics, reason: topic.reason },
   reach_note: topic.note,
+  existing,   // R50
   business_source: a.business_source, warnings };
+if (existing) body.label = body.label + (existing.how === 'a page of yours' ? ' · you already have a page for it' : ' · already one of your keywords');
 // ---- R26 (2026-10-14, FIX_PLAN.md §3.12): an answer with no search data may not sound sure ----
 // Live on 2026-10-14 "business central partner uae" and "dynamics 365 partner uae" came back with volume, difficulty, intent and CPC
 // all null — DataForSEO has nothing for them in the UAE — and the answer still read "Reachable for your site · Short ladder ·

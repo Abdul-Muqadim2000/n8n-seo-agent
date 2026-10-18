@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AlertTriangle, Braces, Download, Eye, FileCode, FileJson, FileText, Heading, Image as ImageIcon, Link2, ListChecks, Quote, Share2, Tags } from 'lucide-react';
 import type { ReportFile } from '@seo/shared';
+import { findOpenBrackets, placeholderRe } from '@seo/shared';
 import { fileUrl } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { downloadText } from '@/lib/utils';
@@ -42,13 +43,14 @@ function useThemeTokens(): Tokens {
   return tokens;
 }
 
-const PLACEHOLDER = /\[[A-Z][A-Za-z0-9 &/'’.,()-]{1,48}\]/g;
+// R45 / A-13 (2026-10-17): one detector with the engine's Content QA (@seo/shared placeholders.ts): a review note is Confirm / Owner /
+// Author insight / Image, every other bracket that starts with a letter — "[Price band: … fee in AED]" included — is a placeholder.
+// The preview highlights both: each is something a person must act on before the page goes live.
+const PLACEHOLDER = placeholderRe();
 
-/** Counts [Placeholders] anywhere in the HTML (text and attributes). */
+/** Counts the [placeholders] to fill in anywhere in the HTML (text and attributes) — the engine's own placeholder count. */
 export function findPlaceholders(html: string): { token: string; count: number }[] {
-  const m = new Map<string, number>();
-  for (const x of html.match(PLACEHOLDER) ?? []) m.set(x, (m.get(x) ?? 0) + 1);
-  return [...m.entries()].map(([token, count]) => ({ token, count })).sort((a, b) => b.count - a.count);
+  return findOpenBrackets(html).filter((b) => b.kind === 'placeholder').map(({ token, count }) => ({ token, count }));
 }
 
 /**
@@ -101,7 +103,7 @@ function prepareBody(html: string): string {
     if (!PLACEHOLDER.test(v)) continue;
     const frag = doc.createDocumentFragment();
     let last = 0;
-    v.replace(PLACEHOLDER, (match, offset: number) => {
+    v.replace(PLACEHOLDER, (match: string, _inner: string, offset: number) => {   // the pattern has one group: the offset is the third argument
       if (offset > last) frag.appendChild(doc.createTextNode(v.slice(last, offset)));
       const mark = doc.createElement('mark');
       mark.className = 'ph';

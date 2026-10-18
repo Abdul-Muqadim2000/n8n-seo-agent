@@ -229,7 +229,7 @@ function ManualGa4({ orgId, site, canEdit, compact }: { orgId: string; site: Sit
   const save = () => {
     const v = value.trim();
     if (!/^\d{0,16}$/.test(v)) {
-      setErr('Digits only, for example 543096312');
+      setErr('Digits only, for example 123456789');
       return;
     }
     setErr(null);
@@ -254,7 +254,7 @@ function ManualGa4({ orgId, site, canEdit, compact }: { orgId: string; site: Sit
     >
       {(p) => (
         <div className="flex gap-2">
-          <Input {...p} inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} placeholder="543096312" />
+          <Input {...p} inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} placeholder="123456789" />
           <Button variant="secondary" onClick={save} loading={update.isPending} className="shrink-0">
             Save ID
           </Button>

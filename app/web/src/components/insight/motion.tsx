@@ -14,7 +14,7 @@ export function prefersReducedMotion(): boolean {
  */
 export function Stagger({ as: Tag = 'div', className, children, step = 60 }: { as?: ElementType; className?: string; children: ReactNode; /** ms between children */ step?: number }) {
   return (
-    <Tag className={cn('asc-stagger', className)} style={step !== 60 ? ({ '--stagger-step': `${step}ms` } as CSSProperties) : undefined}>
+    <Tag className={cn('alv-stagger', className)} style={step !== 60 ? ({ '--stagger-step': `${step}ms` } as CSSProperties) : undefined}>
       {children}
     </Tag>
   );

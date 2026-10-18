@@ -1,4 +1,5 @@
 import { and, desc, eq, inArray, lt, type SQL } from 'drizzle-orm';
+import { audit } from '../services/audit';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { isShareToken, MODE_IDS, parseRunInput, SHARE, shareDays, shareRefusal, shareState, shareUrl, type Page, type ReportDetail, type Run } from '@seo/shared';
 import { isUuid, orgAccess } from '../auth/access';
@@ -9,6 +10,9 @@ import { HttpError, notFound, validationError } from '../lib/errors';
 import { deliverReport } from '../services/reportDelivery';
 import { createRun, filesFor, getRunOrThrow, reportsList, toReport, toRun } from '../services/runs';
 import { createShare, listShares, markOpened, revokeShare, sharedFile, sharedReport, shareByToken } from '../services/shareLinks';
+import { payloadFor } from '../services/brandOf';
+import { portalFile, portalFiles, shareFile } from '../services/portalDocs';
+import { baseUrlFor } from '../services/portalMail';
 
 type P = { orgId: string; runId: string; reportId: string; fileId: string; shareId: string; token: string };
 
@@ -17,7 +21,7 @@ type P = { orgId: string; runId: string; reportId: string; fileId: string; share
  * downloads; the content type follows the stored kind (never n8n's MIME, which could say text/html for a .txt). The same handling is
  * used for a company's own files and for the files of a shared report (G15) — one implementation, one set of headers.
  */
-function sendFile(reply: FastifyReply, f: Pick<FileRow, 'kind' | 'fileName' | 'data'>, download: boolean) {
+export function sendFile(reply: FastifyReply, f: Pick<FileRow, 'kind' | 'fileName' | 'data'>, download: boolean) {
   const inline = !download && (f.kind === 'pdf' || f.kind === 'txt' || f.kind === 'md' || f.kind === 'json' || f.kind === 'csv');
   const type = f.kind === 'pdf' ? 'application/pdf' : inline ? 'text/plain; charset=utf-8' : 'application/octet-stream';
   const safeName = f.fileName.replace(/[^\w.\- ]+/g, '_');
@@ -33,14 +37,15 @@ function sendFile(reply: FastifyReply, f: Pick<FileRow, 'kind' | 'fileName' | 'd
 
 async function runWithNames(runId: string): Promise<Run | null> {
   const rows = await db
-    .select({ r: schema.runs, domain: schema.sites.domain, userName: schema.users.name })
+    .select({ r: schema.runs, domain: schema.sites.domain, userName: schema.users.name, keyName: schema.apiKeys.name })
     .from(schema.runs)
     .leftJoin(schema.sites, eq(schema.runs.siteId, schema.sites.id))
     .leftJoin(schema.users, eq(schema.runs.userId, schema.users.id))
+    .leftJoin(schema.apiKeys, eq(schema.runs.apiKeyId, schema.apiKeys.id))
     .where(eq(schema.runs.id, runId))
     .limit(1);
   const x = rows[0];
-  return x ? toRun(x.r, { siteDomain: x.domain, userName: x.userName }) : null;
+  return x ? toRun(x.r, { siteDomain: x.domain, userName: x.userName, apiKeyName: x.keyName }) : null;
 }
 
 export async function runRoutes(app: FastifyInstance) {
@@ -63,14 +68,15 @@ export async function runRoutes(app: FastifyInstance) {
     else if (q.status && ['submitting', 'accepted', 'running', 'completed', 'failed'].includes(q.status)) conds.push(eq(schema.runs.status, q.status));
     if (q.cursor && !Number.isNaN(Date.parse(q.cursor))) conds.push(lt(schema.runs.createdAt, new Date(q.cursor)));
     const rows = await db
-      .select({ r: schema.runs, domain: schema.sites.domain, userName: schema.users.name })
+      .select({ r: schema.runs, domain: schema.sites.domain, userName: schema.users.name, keyName: schema.apiKeys.name })
       .from(schema.runs)
       .leftJoin(schema.sites, eq(schema.runs.siteId, schema.sites.id))
       .leftJoin(schema.users, eq(schema.runs.userId, schema.users.id))
+      .leftJoin(schema.apiKeys, eq(schema.runs.apiKeyId, schema.apiKeys.id))
       .where(and(...conds))
       .orderBy(desc(schema.runs.createdAt))
       .limit(limit + 1);
-    const items = rows.slice(0, limit).map((x) => toRun(x.r, { siteDomain: x.domain, userName: x.userName }));
+    const items = rows.slice(0, limit).map((x) => toRun(x.r, { siteDomain: x.domain, userName: x.userName, apiKeyName: x.keyName }));
     return { items, nextCursor: rows.length > limit ? rows[limit - 1].r.createdAt.toISOString() : null };
   });
 
@@ -83,8 +89,9 @@ export async function runRoutes(app: FastifyInstance) {
     return { run: run!, reports: reports.reverse() };
   });
 
+  // G5: reports are part of the client portal (client viewers and approvers read them; files are rebranded below)
   app.get('/api/orgs/:orgId/reports', async (req) => {
-    const a = await orgAccess(req, (req.params as P).orgId);
+    const a = await orgAccess(req, (req.params as P).orgId, 'client_viewer');
     const q = req.query as { siteId?: string; stage?: string; limit?: string; before?: string };
     return reportsList(a.org.id, {
       siteId: q.siteId && isUuid(q.siteId) ? q.siteId : undefined,
@@ -96,21 +103,26 @@ export async function runRoutes(app: FastifyInstance) {
 
   app.get('/api/orgs/:orgId/reports/:reportId', async (req): Promise<ReportDetail> => {
     const p = req.params as P;
-    const a = await orgAccess(req, p.orgId);
+    const a = await orgAccess(req, p.orgId, 'client_viewer');
     if (!isUuid(p.reportId)) throw notFound('Report not found');
     const row = await db.query.reports.findFirst({ where: and(eq(schema.reports.orgId, a.org.id), eq(schema.reports.id, p.reportId)) });
     if (!row) throw notFound('Report not found');
     const [files, site] = await Promise.all([filesFor([row.id]), row.siteId ? db.query.sites.findFirst({ where: eq(schema.sites.id, row.siteId) }) : Promise.resolve(undefined)]);
-    return { ...toReport(row, files.get(row.id) ?? [], site?.domain ?? null), payload: row.payload };
+    // G5: a client person gets no cost figures, and in a white-label workspace no file we cannot rebrand (the engine's PDF: the
+    // portal offers the branded print view instead)
+    const shown = await portalFiles(a, files.get(row.id) ?? []);
+    return { ...toReport(row, shown, site?.domain ?? null), payload: payloadFor(a.role, row.payload) };
   });
 
   app.get('/api/orgs/:orgId/files/:fileId', async (req, reply) => {
     const p = req.params as P;
-    const a = await orgAccess(req, p.orgId);
+    const a = await orgAccess(req, p.orgId, 'client_viewer');
     if (!isUuid(p.fileId)) throw notFound('File not found');
     const f = await db.query.files.findFirst({ where: and(eq(schema.files.orgId, a.org.id), eq(schema.files.id, p.fileId)) });
     if (!f) throw notFound('File not found');
-    return sendFile(reply, f, (req.query as { download?: string }).download === '1');
+    const branded = await portalFile(a, f);
+    if (!branded) throw notFound('This file is offered as a printable page in your portal.');
+    return sendFile(reply, branded, (req.query as { download?: string }).download === '1');
   });
 
   /**
@@ -139,8 +151,9 @@ export async function runRoutes(app: FastifyInstance) {
     if (body.days != null && body.days !== '' && !Number.isFinite(Number(body.days)))
       throw new HttpError(400, `Choose how many days the link should last (${SHARE.minDays}-${SHARE.maxDays}).`, 'validation', { days: 'Must be a number of days' });
     const { link, token } = await createShare({ org: a.org, user: a.user, reportId: p.reportId, days: body.days == null || body.days === '' ? SHARE.defaultDays : body.days });
+    await audit(req, a.org.id, { action: 'share.created', target: { type: 'report', id: p.reportId, label: null }, details: { shareId: link.id, expiresAt: link.expiresAt } });
     // the token is returned exactly once: it is stored only as a hash
-    return { ...link, url: shareUrl(config.appUrl, token), days: shareDays(body.days == null || body.days === '' ? SHARE.defaultDays : body.days) };
+    return { ...link, url: shareUrl(await baseUrlFor(a.org), token), days: shareDays(body.days == null || body.days === '' ? SHARE.defaultDays : body.days) };
   });
 
   app.get('/api/orgs/:orgId/reports/:reportId/shares', async (req) => {
@@ -154,7 +167,9 @@ export async function runRoutes(app: FastifyInstance) {
     const p = req.params as P;
     const a = await orgAccess(req, p.orgId, 'admin');
     if (!isUuid(p.reportId) || !isUuid(p.shareId)) throw notFound('Share link not found');
-    return revokeShare(a.org.id, p.reportId, p.shareId);
+    const revoked = await revokeShare(a.org.id, p.reportId, p.shareId);
+    await audit(req, a.org.id, { action: 'share.revoked', target: { type: 'report', id: p.reportId, label: null }, details: { shareId: p.shareId } });
+    return revoked;
   });
 
   /** The one report behind a live link. No session, no company id in the URL: the token itself names the report. */
@@ -178,7 +193,9 @@ export async function runRoutes(app: FastifyInstance) {
     if (!isShareToken(p.token) || !isUuid(p.fileId)) throw gone();
     const share = await shareByToken(p.token);
     if (shareState(share) !== 'live') throw gone();
-    const f = await sharedFile(share!, p.fileId);
+    const raw = await sharedFile(share!, p.fileId);
+    // G5: a white-label client workspace's shared files carry the agency's name, never ours
+    const f = raw ? await shareFile(share!.orgId, raw) : null;
     if (!f) throw gone();
     await markOpened(share!.id);
     return sendFile(reply, f, (req.query as { download?: string }).download === '1');

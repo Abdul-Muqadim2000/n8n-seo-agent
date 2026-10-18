@@ -165,7 +165,9 @@ const KIND_ICON: Record<NeedsYouItem['kind'], ReactNode> = {
 /** Older servers: the pages waiting to be published. */
 export function needsYouOf(data: PipelineData): NeedsYouItem[] {
   if (data.needsYou) return data.needsYou;
+  // R111: a draft that failed the quality check is not offered as "publish it" (the server's own Needs-you list words it as a fix)
   return [...(data.queue?.waiting ?? [])]
+    .filter((w) => !(w as { needsFix?: boolean }).needsFix)
     .sort((a, b) => b.days - a.days)
     .map((w) => ({
       id: `publish:${w.keyword}`,
@@ -184,6 +186,8 @@ function useNeedsYouHref() {
   return (a: NonNullable<NeedsYouItem['action']>): string | null => {
     if (a.ladderId) return paths.ladder(org.id, site.id, a.ladderId);
     if (a.runId) return paths.run(org.id, a.runId);
+    // G2: the page's report, where it is sent to the CMS
+    if (a.reportId) return paths.report(org.id, a.reportId);
     if (a.mode) return can('member') ? paths.tool(org.id, a.mode, { siteId: site.id, prefill: a.prefill }) : null;
     if (a.page) return paths.site(org.id, site.id, a.page);
     return null;

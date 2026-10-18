@@ -7,6 +7,8 @@ export class HttpError extends Error {
     message: string,
     public code?: string,
     public fields?: Record<string, string>,
+    /** extra fields of the JSON answer (G1: the step-up methods, the SSO address; G4: the notices a 409 `confirm_needed` refers to) */
+    public extra?: Record<string, unknown>,
   ) {
     super(message);
   }

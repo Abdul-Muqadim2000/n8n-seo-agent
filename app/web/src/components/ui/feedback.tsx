@@ -1,5 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { AlertOctagon, AlertTriangle, CheckCircle2, Info, Loader2, RefreshCw } from 'lucide-react';
+import { AlaventraMark } from '@/components/brand/AlaventraMark';
+import { onPortalHost, usePortalBrand } from '@/lib/portal';
 import { errorMessage } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { Button } from './button';
@@ -14,15 +16,16 @@ export function Spinner({ className, label }: { className?: string; label?: stri
 }
 
 // Start-up shows several loaders in a row (route chunk → sign-in check → company shell), each a new element. A loader that replaces
-// another within 400ms continues its fade and breathing instead of starting over, so the mark never blinks out and back in.
+// another within 400ms continues its fade and wave instead of starting over, so the mark never blinks out and back in.
 const loaderChain = { start: 0, goneAt: -Infinity };
 const LOADER_DELAY = 150;
 
 /**
- * Full-area loader: the Ascentra mark (blue on light, white on dark) breathing gently; fades in after 150ms so quick loads never flash.
+ * Full-area loader: the Alaventra mark (blue on light, white on dark) with a wave of light running from its sun to its wing tip; fades in after 150ms so quick loads never flash.
  * `fullPage` centres it in the whole window (app start, sign-in check, the company shell) instead of the content area.
  */
 export function PageLoader({ label = 'Loading…', fullPage }: { label?: string; fullPage?: boolean }) {
+  const portalLoader = !!usePortalBrand() || onPortalHost();
   const [elapsed] = useState(() => {
     const now = performance.now();
     if (now - loaderChain.goneAt > 400) loaderChain.start = now;
@@ -40,10 +43,12 @@ export function PageLoader({ label = 'Loading…', fullPage }: { label?: string;
       style={{ animationDelay: `${LOADER_DELAY - elapsed}ms` }}
       role="status"
     >
-      <span className="block w-12 animate-pulse" style={{ animationDelay: `${-elapsed}ms` }} aria-hidden>
-        <img src="/brand/ascentra-mark-blue.svg" alt="" width={48} height={42} className="block h-auto w-full dark:hidden" />
-        <img src="/brand/ascentra-mark-white.svg" alt="" width={48} height={42} className="hidden h-auto w-full dark:block" />
-      </span>
+      {/* G5: an agency's portal never shows our mark — a plain spinner in its colour */}
+      {portalLoader ? (
+        <Spinner className="size-8 text-accent-text" />
+      ) : (
+        <AlaventraMark wave="loader" className="w-12 text-accent dark:text-white" style={{ ['--alv-ray-offset' as string]: `${elapsed}ms` }} />
+      )}
       <span className="text-sm text-ink-3">{label}</span>
     </div>
   );

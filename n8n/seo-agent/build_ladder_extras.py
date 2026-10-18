@@ -6,11 +6,14 @@ import url_lint   # D15 (2026-10-11 system review): the canonical-host lint
 import env_settings as _env   # B-F5 (2026-10-15): a build with no n8n/.env must refuse, not bake its fallbacks
 _env.require_settings('build_ladder_extras.py')
 import retry_lint   # G1 (2026-10-11 system review): one retry rule for every external HTTP node
+import monitor_cost   # R115 (2026-10-16): callbacks behind the settle, carrying run_ledger
 import dfs_gate     # B-A10 (2026-10-15): INVARIANTS rule 3 — the in-200 retry gate, one shape for every DataForSEO call
 from ladder_common import (LADDER_TABLE, HISTORY_TABLE, LADDER_COLS, HISTORY_COLS, LOG_TABLE, PAGES_TABLE, PAGES_COLS, SITES_TABLE, SITES_COLS,
                            MONITORS_TABLE, MONITORS_COLS, DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_get_where_params,
                            RUN_LEDGER_TABLE, RUN_LEDGER_COLS, dt_update_params, monitor_ledger_js, LEDGER_EST,   # R9 (2026-10-13)
-                           ledger_mainline)   # R17 (2026-10-14): the reserve chain sits on the MAIN path, before the first paid call
+                           ledger_mainline,   # R17 (2026-10-14): the reserve chain sits on the MAIN path, before the first paid call
+                           CACHE_TABLE,       # R90 (2026-10-16): the names AI uses for other companies (seo_cache ai_brands:<site>)
+                           QUERY_TABLE, QUERY_COLS)   # B6-14 (2026-10-16): the site's Search Console impressions per query weigh the share of voice
 HERE = os.path.dirname(os.path.abspath(__file__))
 V5 = os.path.join(HERE, 'v5'); OUT = os.path.join(HERE, 'workflows'); CODE = os.path.join(HERE, 'harness', 'code_v4')
 _rd0 = lambda p: open(os.path.join(V5, p), encoding='utf-8').read()
@@ -49,7 +52,12 @@ LEDGER_WIRING = {}   # R9: filled in when the Rank Tracker's ledger nodes are ad
 
 def write(wfobj, fname):
     # R17 (2026-10-14, FIX_PLAN §3.12): the reserve chain goes on the MAIN path, now that every connection of this workflow is made
-    if wfobj.get('name') in LEDGER_WIRING: ledger_mainline(wfobj, LEDGER_WIRING[wfobj['name']])
+    if wfobj.get('name') in LEDGER_WIRING:
+        _w = LEDGER_WIRING[wfobj['name']]
+        _declared = list(_w['settle_from'])   # R115: the report ends this workflow declared, before ledger_mainline adds the loose ends
+        ledger_mainline(wfobj, _w)
+        if 'Has Callback (Tracker)?' in {n['name'] for n in wfobj['nodes']}:   # R115 (2026-10-16): the Rank Tracker's callback waits for its settle and carries it
+            monitor_cost.callback_after_settle(wfobj, _w, 'Has Callback (Tracker)?', 'POST Progress', V5, _declared)
     url_lint.check(wfobj, wfobj.get('name') or fname)   # D15: no node builds a site URL by hand (url_lint.py)
     retry_lint.check(wfobj, wfobj.get('name') or fname)   # G1: every external HTTP node carries the retry rule (retry_lint.py)
     for _n in wfobj['nodes']:   # e-mails retry a transient SMTP / DNS failure (live finding 2026-10-02: EAI_AGAIN smtp.gmail.com)
@@ -87,19 +95,35 @@ N.append(node('Load Pages (Tracker)', DT_TYPE, DT_VERSION, dt_get_all_params(PAG
 # same SERP answer. The one site model merges seo_monitors.competitors with the seo_sites model column (SITE_MODEL_SPEC.md).
 N.append(node('Ensure Sites Table (Tracker)', DT_TYPE, DT_VERSION, dt_create_params(SITES_TABLE, SITES_COLS), [1010, 540], onError='continueRegularOutput'))
 N.append(node('Load Sites (Tracker)', DT_TYPE, DT_VERSION, dt_get_all_params(SITES_TABLE), [1120, 540], alwaysOutputData=True, executeOnce=True, onError='continueRegularOutput'))
-N.append(node('Ensure Monitors Table (Tracker)', DT_TYPE, DT_VERSION, dt_create_params(MONITORS_TABLE, MONITORS_COLS), [1010, 680], onError='continueRegularOutput'))
+N.append(node('Ensure Monitors Table (Tracker)', DT_TYPE, DT_VERSION, dt_create_params(MONITORS_TABLE, MONITORS_COLS), [1010, 680], executeOnce=True, onError='continueRegularOutput'))   # B6-14: it now follows the query rows, so once
 N.append(node('Load Monitors (Tracker)', DT_TYPE, DT_VERSION, dt_get_all_params(MONITORS_TABLE), [1120, 680], alwaysOutputData=True, executeOnce=True, onError='continueRegularOutput'))
+# B6-14 (2026-10-16, benchmark area 6): the site's own Search Console impressions per query (seo_query_history, written weekly by the Site
+# Tracker) weigh the share of voice across a ladder's keywords. The table only grows (one row per site, query and week), so the newest
+# rows are enough: Tracker Report keeps the newest 28-day period per domain and says when a site has none.
+_q_load_t = dt_get_all_params(QUERY_TABLE)
+_q_load_t.update({'returnAll': False, 'limit': 5000, 'orderBy': True, 'orderByColumn': 'period_end', 'orderByDirection': 'DESC'})
+N.append(node('Ensure Query Table (Tracker)', DT_TYPE, DT_VERSION, dt_create_params(QUERY_TABLE, QUERY_COLS), [900, 540], executeOnce=True, onError='continueRegularOutput'))
+N.append(node('Load Query History (Tracker)', DT_TYPE, DT_VERSION, _q_load_t, [900, 680], alwaysOutputData=True, executeOnce=True, onError='continueRegularOutput'))
+# R90 (2026-10-16, re-rating 2026-10-15): the fit gate of the stored rungs is given the names AI uses for other companies, as Ladder Pool
+# and Rank Keywords already are (seo_cache rows of kind 'ai', key ai_brands:<site_id>, written by the AI Visibility Tracker)
+N.append(node('Load AI Brands (Tracker)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'ai'), [1120, 820], alwaysOutputData=True, executeOnce=True, onError='continueRegularOutput'))
 N.append(code('Tracker Plan', rd('code/Tracker_Plan.js'), [1120, 100]))
 N.append(iff('Any Checks?', '{{ !$json.nothing_to_do }}', [1340, 100]))
 N.append(node('SERP Check', 'n8n-nodes-base.httpRequest', 4.5, DFS_HTTP, [1560, 0], credentials=DFS, onError='continueRegularOutput', **retry_lint.RETRY))
 N.append(code('Parse Positions', rd('code/Parse_Positions.js'), [1780, 0]))
 N.append(node('Save History', DT_TYPE, DT_VERSION, dt_insert_params(HISTORY_TABLE, HISTORY_COLS), [2000, 0], onError='continueRegularOutput'))
 N.append(code('Tracker Report', tracker_report, [2220, 0], executeOnce=True))
+# R87 (2026-10-16): what the report set aside is written back on its seo_ladders row (status set_aside + the reason), so the Content
+# Cadence and the app stop treating a paused ladder's rungs as pages to write (exec 632 set the head aside, exec 638 queued four rungs)
+N.append(code('Tracker Ladder Marks', rd('code/Tracker_Ladder_Marks.js'), [2440, 300]))
+N.append(iff('Any Tracker Marks?', '{{ !$json.skip }}', [2660, 300]))
+N.append(node('Mark Set Aside (Tracker)', DT_TYPE, DT_VERSION, dt_update_params(LADDER_TABLE, LADDER_COLS, [('ladder_id', '={{ $json.ladder_id }}'), ('keyword', '={{ $json.keyword }}')],
+    {'status': '={{ $json.status }}', 'status_note': '={{ $json.status_note }}'}), [2880, 300], alwaysOutputData=True, onError='continueRegularOutput'))
 N.append(iff('Has Report?', '{{ !$json.nothing_to_do }}', [2440, 0]))
 N.append(iff('Has Email (Tracker)?', '{{ !!$json.email }}', [2660, -100]))
 N.append(node('Send Progress Email', 'n8n-nodes-base.emailSend', 2.1, {'fromEmail': SENDER, 'toEmail': '={{ $json.email }}', 'subject': '={{ $json.subject }}', 'emailFormat': 'html', 'html': '={{ $json.html }}', 'options': {'appendAttribution': False}}, [2880, -100], credentials=SMTP, onError='continueRegularOutput'))
 N.append(iff('Has Callback (Tracker)?', '{{ !!$json.callback_url }}', [2660, 120]))
-N.append(node('POST Progress', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.callback_url }}', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': "={{ JSON.stringify({ status: 'progress', stage: 'rank_tracker', request_id: $json.request_id || null, ladder_id: $json.ladder_id, domain: $json.domain, watchlist: !!$json.watchlist, site_id: $json.site_id || null, not_checked: $json.not_checked || [], set_aside: $json.set_aside || [], head_keyword: $json.head_keyword, checked_at: $json.checked_at, positions: $json.positions, rungs: $json.rungs, gains: $json.gains, drops: $json.drops, serp_summary: $json.serp_summary, next_step: $json.next_step, links_to_add: $json.links_to_add || [], api_body: $json.api_body, done: $json.done, won: !!$json.won, stuck: !!$json.stuck }) }}", 'options': {'timeout': 20000}}, [2880, 120], onError='continueRegularOutput'))
+N.append(node('POST Progress', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.callback_url }}', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': "={{ JSON.stringify({ status: 'progress', stage: 'rank_tracker', request_id: $json.request_id || null, ladder_id: $json.ladder_id, domain: $json.domain, watchlist: !!$json.watchlist, site_id: $json.site_id || null, not_checked: $json.not_checked || [], set_aside: $json.set_aside || [], head_keyword: $json.head_keyword, checked_at: $json.checked_at, positions: $json.positions, rungs: $json.rungs, gains: $json.gains, drops: $json.drops, serp_summary: $json.serp_summary, moves: $json.moves || [], move_summary: $json.move_summary || null, own_gains: $json.own_gains || [], own_drops: $json.own_drops || [], moved_with_page: $json.moved_with_page || [], not_compared_moves: $json.not_compared_moves || [], next_step: $json.next_step, links_to_add: $json.links_to_add || [], api_body: $json.api_body, done: $json.done, won: !!$json.won, stuck: !!$json.stuck, run_ledger: $json.run_ledger || null }) }}", 'options': {'timeout': 20000}}, [2880, 120], onError='continueRegularOutput'))
 N.append(node('Nothing To Track', 'n8n-nodes-base.noOp', 1, {}, [1560, 260]))
 N.append(sticky('Note', f"""## SEO Agent — Rank Tracker
 Runs **weekly (Monday 08:00)** and on demand through *Manual Run* (Execute Workflow Trigger). Reads every ladder from the Data Table `{LADDER_TABLE}` (written by the ladder mode of SEO Agent v4; both tables are created on first use), checks the Google top 50 for each page's primary keyword and the head term (DataForSEO SERP live, about $0.015 per keyword; a 9-page ladder costs about $0.60 per month), appends `{HISTORY_TABLE}`, and sends one progress e-mail / callback per ladder: positions vs the previous check, rungs in the top 10 / top 3, drops of 5+ positions, and the **recommended next rung** with a form link and a ready-to-send API body (recommend-only mode).
@@ -109,13 +133,17 @@ v4.8: the callback carries display-only flags per ladder for the web app (the e-
 The only new spend is the **mobile check** of the ladder's main keywords (top rung + main page, at most 2 a ladder, once a week; a run started by hand inside 6 days reuses the last one): one more depth-50 call each, the measured **$0.015**, so about **$0.13 a month** for a ladder next to the ~$0.60 it costs today. Only 13% of sites hold the same position on both devices (Semrush, 50k keywords), so a desktop-only position is one most visitors never see. A **won** ladder's mobile check follows its monthly rhythm.
 Wording rules: a call that failed stores `unavailable` and leaves every flag null — "check again", exactly as position -1, never "no AI Overview"; an AI Overview Google loads asynchronously comes back without its sources (loading them costs extra, which we do not buy), so "cites you" is then **unknown**, never "no"; the share of voice always travels with the sentence that says it is modelled, not measured clicks.
 **v4.17 (B6-7, 2026-10-15): the keywords YOU named are watched too.** `{SITES_TABLE}.keywords` - the list from the tracking form or "Track my site" - is a second source beside the ladders, reported as its own weekly mail ("[Tracked keywords] ...") with the same depth: position, the reading's date, share of voice, how much the results page itself moved, who is above you. **Read first, buy second:** a results page the weekly site check already read less than 10 days ago is read, not bought again, and a keyword that is also a ladder rung is checked once, with the ladder. What is bought is capped at **10 a website and 30 a run**, oldest reading first (the measured $0.015 each, so at most ~$0.15 a website a week), and every keyword the cap did not reach is named with the cap and its last reading. The same keyword rule that guards the stored rungs runs over the list, so a competitor's brand typed into a form is set aside with its reason instead of being tracked. Its readings are stored under `watch_<site_id>`.
+**B6-6 / B6-8 / B6-10 / B6-14 (2026-10-16):** the stored reading keeps how many of the site's own pages the answer held (`own_n`, and `own` when two or more), so **two of your pages on one results page** are named with the one Google prefers today; a move of 5+ places is called **your page's own** only when the other results held among themselves and the move beats their average move (else "moved with the results page", or "not compared" with no verdict); **who took the place** names the domains above the target URL now that were not above it in the previous reading; the share of voice across keywords is **weighted by the site's own Search Console impressions** (`{QUERY_TABLE}`, newest period) and says so, or is the unweighted mean, labelled.
 Form: {FORM_URL} · API: {API_URL}""", [-40, -560], 1000, 600))
 for a, b in [('Weekly Schedule', 'Ensure Ladder Table'), ('Manual Run', 'Ensure Ladder Table'), ('Ensure Ladder Table', 'Ensure History Table'), ('Ensure History Table', 'Load Ladders'), ('Load Ladders', 'Load History'), ('Load History', 'Load Content Log (Tracker)'), ('Load Content Log (Tracker)', 'Ensure Pages Table (Tracker)'), ('Ensure Pages Table (Tracker)', 'Load Pages (Tracker)'),
                  ('Load Pages (Tracker)', 'Ensure Sites Table (Tracker)'), ('Ensure Sites Table (Tracker)', 'Load Sites (Tracker)'),
-                 ('Load Sites (Tracker)', 'Ensure Monitors Table (Tracker)'), ('Ensure Monitors Table (Tracker)', 'Load Monitors (Tracker)'),
-                 ('Load Monitors (Tracker)', 'Tracker Plan'), ('Tracker Plan', 'Any Checks?'), ('SERP Check', 'Parse Positions'), ('Parse Positions', 'Save History'), ('Save History', 'Tracker Report'), ('Tracker Report', 'Has Report?')]:
+                 ('Load Sites (Tracker)', 'Ensure Query Table (Tracker)'), ('Ensure Query Table (Tracker)', 'Load Query History (Tracker)'),   # B6-14
+                 ('Load Query History (Tracker)', 'Ensure Monitors Table (Tracker)'), ('Ensure Monitors Table (Tracker)', 'Load Monitors (Tracker)'),
+                 ('Load Monitors (Tracker)', 'Load AI Brands (Tracker)'), ('Load AI Brands (Tracker)', 'Tracker Plan'), ('Tracker Plan', 'Any Checks?'),
+                 ('Tracker Report', 'Tracker Ladder Marks'), ('Tracker Ladder Marks', 'Any Tracker Marks?'), ('SERP Check', 'Parse Positions'), ('Parse Positions', 'Save History'), ('Save History', 'Tracker Report'), ('Tracker Report', 'Has Report?')]:
     link(C, a, b)
 link(C, 'Any Checks?', 'SERP Check', 0); link(C, 'Any Checks?', 'Nothing To Track', 1)
+link(C, 'Any Tracker Marks?', 'Mark Set Aside (Tracker)', 0)
 link(C, 'Has Report?', 'Has Email (Tracker)?', 0); link(C, 'Has Report?', 'Has Callback (Tracker)?', 0)
 link(C, 'Has Email (Tracker)?', 'Send Progress Email', 0); link(C, 'Has Callback (Tracker)?', 'POST Progress', 0)
 # G6 (2026-10-12, FIX_PLAN): the two kits the tracker path needs must really be inlined (a left-over placeholder would ship a broken node),
@@ -131,7 +159,16 @@ assert 'const RP = (() => {' in _tracker_nodes['Tracker Report'], 'Tracker Repor
 assert 'RP.propose(' in _tracker_nodes['Tracker Report'] and 'RP.block(replan)' in _tracker_nodes['Tracker Report'], 'Tracker Report: the re-plan proposal is not built or not shown'
 assert 'applied: false' in _tracker_nodes['Tracker Report'], 'G32: a re-plan must say that nothing was applied'
 # R16 (2026-10-13, FIX_PLAN §3.11, build_v4.py section 53): a stored rung that names another company is set aside, not checked and not reported as a page to write
-assert 'const fitStored = ' in _tracker_nodes['Tracker Plan'] and 'fitStored(p, fitCtx)' in _tracker_nodes['Tracker Plan'], 'R16: the Rank Tracker does not run the fit gate over the stored rungs'
+assert 'const fitStored = ' in _tracker_nodes['Tracker Plan'] and 'fitStored(p, { ...fitCtx, serp: RS.serpHosts(' in _tracker_nodes['Tracker Plan'], 'R16 / R90: the Rank Tracker does not run the fit gate over the stored rungs with their stored results page'
+# R90 / R87 (2026-10-16): the gate of the stored rungs sees the ladder's stored results pages, the learned AI brands and a paused head
+assert 'const RS = (() => {' in _tracker_nodes['Tracker Plan'] and 'serp_domains' in _tracker_nodes['Tracker Plan'] and "$('Load AI Brands (Tracker)')" not in _tracker_nodes['Tracker Plan'] and "rowsOf('Load AI Brands (Tracker)')" in _tracker_nodes['Tracker Plan'], 'R90: the plan does not give the gate the ladder\'s stored results pages and the AI brand names'
+assert 'pausedLadders.push(headAside)' in _tracker_nodes['Tracker Plan'] and 'paused_ladders: pausedLadders' in _tracker_nodes['Tracker Plan'], 'R87: a ladder whose head is set aside still buys checks for its rungs'
+assert "RS.serpHosts(r.result, 10)" in _tracker_nodes['Tracker Report'] and '[...(s.above || []), ...(s.competitors || [])]' not in _tracker_nodes['Tracker Report'], 'R87: the report counts every domain of the results page twice again'
+assert "action: 'paused'" in _tracker_nodes['Tracker Report'] and 'ladder_marks' in _tracker_nodes['Tracker Report'] and 'Set aside by this week' in _tracker_nodes['Tracker Report'], 'R87: a set-aside head does not pause its ladder, or the report does not tell a checked keyword from an unchecked one'
+assert "'top page not yet in the top ' + depthAsked" in _tracker_nodes['Tracker Report'] and 'not yet in the top 100' not in _tracker_nodes['Tracker Report'], 'R91: the subject names a depth nobody asked for'
+assert 'RS.stableReading(deskHist, { keyword: it.keyword, domain: ladDomain' in _tracker_nodes['Tracker Report'] and 'RS.stableReading(deskHist, { keyword: kw, domain: dom' in _tracker_nodes['Tracker Report'], 'R88 / C-4: the two reports compare one keyword against different baselines again (both use RS.stableReading)'
+assert "not_ready: !!nr, reasons: nr ? nr.qa_reasons : ''" in _tracker_nodes['Tracker Report'] and 'const pageStep = ' in _tracker_nodes['Tracker Report'], \
+    'R111 / C-7: a failed draft is told "publish it" again (the rung text reads the one page state, SM.pageStep)'
 assert 'const fitStored = ' in _tracker_nodes['Tracker Report'] and 'serp_domains: doms' in _tracker_nodes['Tracker Report'], 'R16: the Rank Tracker report does not judge the rungs against the results page it just read'
 assert 'set_aside_pages' in _tracker_nodes['Tracker Plan'] and 'set_aside_pages' in _tracker_nodes['Tracker Report'] and 'Set aside' in _tracker_nodes['Tracker Report'], 'R16: the set-aside rungs do not reach the report'
 for _c, _t in HISTORY_COLS:
@@ -263,7 +300,10 @@ open(os.path.join(CODE, '_rank_serp.js'), 'w').write(
     # B6-2 (2026-10-15, benchmark area 6): how much the results page itself moved, from the two stored snapshots (S88)
     "    change: RS.churn(j.prev_snapshot === undefined ? null : j.prev_snapshot, j.cur_snapshot === undefined ? RS.pack(snapshot, j.max || 1800) : j.cur_snapshot, j.churn_opts || {}),\n"
     "    change_text: RS.churnText(RS.churn(j.prev_snapshot === undefined ? null : j.prev_snapshot, j.cur_snapshot === undefined ? RS.pack(snapshot, j.max || 1800) : j.cur_snapshot, j.churn_opts || {})),\n"
-    "    move_note: RS.moveNote(j.delta === undefined ? null : j.delta, RS.churn(j.prev_snapshot === undefined ? null : j.prev_snapshot, j.cur_snapshot === undefined ? RS.pack(snapshot, j.max || 1800) : j.cur_snapshot, j.churn_opts || {})) } }; });\n")
+    "    move_note: RS.moveNote(j.delta === undefined ? null : j.delta, RS.churn(j.prev_snapshot === undefined ? null : j.prev_snapshot, j.cur_snapshot === undefined ? RS.pack(snapshot, j.max || 1800) : j.cur_snapshot, j.churn_opts || {})),\n"
+    # B6-6 / B6-8 (2026-10-16, agent W3-C): cannibalisation read from a stored reading, and what a move is called (S155 / S156)
+    "    cannibal: RS.cannibal(j.cur_snapshot === undefined ? RS.pack(snapshot, j.max || 1800) : j.cur_snapshot, j.cannibal_opts || {}),\n"
+    "    move_kind: RS.moveKind(j.delta === undefined ? null : j.delta, RS.churn(j.prev_snapshot === undefined ? null : j.prev_snapshot, j.cur_snapshot === undefined ? RS.pack(snapshot, j.max || 1800) : j.cur_snapshot, j.churn_opts || {})) } }; });\n")
 
 # =============================================================================
 # 2. SEO Agent — Publish to WordPress (optional; stays inactive, called through Execute Workflow)

@@ -14,7 +14,7 @@ export function SiteFooter() {
       <Container className="pb-10 pt-16 sm:pt-20">
         <div className="grid grid-cols-1 gap-12 lg:grid-cols-[minmax(0,1.3fr)_repeat(4,minmax(0,1fr))] lg:gap-8">
           <div className="max-w-sm">
-            <Link to="/" className="-ml-1 inline-block rounded-md p-1" aria-label="Ascentra home">
+            <Link to="/" className="-ml-1 inline-block rounded-md p-1" aria-label="Alaventra home">
               <Logo className="h-9" />
             </Link>
             <p className="mt-5 font-display text-lg font-semibold tracking-[-0.01em] text-ink">{site.descriptor}</p>

@@ -56,6 +56,15 @@ export const GOOGLE_ERRORS: Record<string, string> = {
   google_unverified: 'Your Google account e-mail is not verified.',
   signup_closed: 'Sign-up is by invitation only. Ask your company admin for an invite.',
   google_disabled: 'Google sign-in is not configured on this server.',
+  sso_required: 'Your company signs you in through its identity provider. Use “Sign in with SSO”.',
+  sso_state: 'The single sign-on did not start in this browser, or it took too long. Please try again.',
+  sso_failed: 'Your identity provider’s answer could not be accepted. Try again, or ask your IT team.',
+  sso_domain: 'That address is not on one of your company’s verified domains.',
+  sso_not_provisioned: 'You have no access to this company yet. Ask an admin to invite you.',
+  sso_deactivated: 'Your access has been switched off by your organisation.',
+  sso_none: 'There is no single sign-on for that e-mail domain. Sign in with your password or Google.',
+  sso_email: 'Enter your work e-mail address.',
+  sso_unavailable: 'Single sign-on could not reach your identity provider. Try again in a moment.',
 };
 
 /** An in-app path only: no "//host", no backslashes or control characters (browsers read "/\\evil.com" as another site). */

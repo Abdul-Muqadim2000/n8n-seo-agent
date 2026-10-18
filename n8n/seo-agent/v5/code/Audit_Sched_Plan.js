@@ -33,6 +33,6 @@ cands.forEach((c, i) => {
   else { run = false; why = 'no change since ' + String(c.last_audit.audited_at).slice(0, 10) + ' (next safety audit after ' + CONFIG.safety_net_days + ' days)'; }
   const pages = c.settings.audit_js ? Math.min(500, c.settings.audit_pages) : c.settings.audit_pages;
   out.push({ json: { site_id: c.site_id, domain: c.domain, run, why, days_since_audit: days, fingerprint: fp, cache_row: fp && (run || !prev || prev.fp === fp.fp) ? { key: 'sitemap:' + c.site_id, kind: 'sitemap', site_id: c.site_id, value: JSON.stringify({ ...fp, url: c.sitemap_url, checked_at: now }), updated_at: now } : null,
-    body: run ? { mode: 'audit', domain: c.domain, country: c.country, report_type: 'Site Audit (technical issues only)', email: c.email, callback_url: c.callback_url, request_id: c.request_id || ('aud_' + ym + '_' + c.site_id.replace(/^site_/, '')), client_ip: 'audit:' + c.site_id, crawl_pages: pages, crawl_js: c.settings.audit_js, scheduled: true, audit_reason: why } : null, skipped: c.skipped } });
+    body: run ? { mode: 'audit', domain: c.domain, country: c.country, ga4_property_id: c.ga4_property_id || '', report_type: 'Site Audit (technical issues only)', email: c.email, callback_url: c.callback_url, request_id: c.request_id || ('aud_' + ym + '_' + c.site_id.replace(/^site_/, '')), client_ip: 'audit:' + c.site_id, crawl_pages: pages, crawl_js: c.settings.audit_js, scheduled: true, audit_reason: why } : null, skipped: c.skipped } });
 });
 return out;

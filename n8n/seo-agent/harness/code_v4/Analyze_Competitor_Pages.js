@@ -18,7 +18,12 @@ const RT = (() => {
   const N = (x) => { const v = Number(x); return Number.isFinite(v) ? v : 0; };
   // an answer that can be different next time: the provider's own servers, a timeout, a rate limit. Never a wrong request.
   const TRANSIENT = /internal (?:se )?server error|internal error|server error|timeout|timed out|temporar|try again|unavailable|service unavailable|backend|deadline exceeded|connection|socket|econn|eai_again|rate limit|too many requests|\b(?:429|500|502|503|504)\b/i;
-  const PERMANENT = /permission|forbidden|unauthor|invalid[_ ]grant|credential|not found|no access|invalid field|unknown field|unsupported|quota|resource_exhausted|insufficient funds|payment|balance/i;
+  const PERMANENT = /permission|forbidden|unauthor|invalid[_ ]grant|credential|not found|no search results|no access|invalid field|unknown field|unsupported|quota|resource_exhausted|insufficient funds|payment|balance/i;
+  // R68 (2026-10-16, re-rating B-10): 40102 "No Search Results." is DataForSEO's FINAL answer that the search has no results — the Google
+  // Business Profile lookup for "Tech& Dubai" in execs 595 / 641 — not a failure. It was neither TRANSIENT nor PERMANENT, so it counted as
+  // retryable: *Fetch GBP (Retry)* re-sent it and paid $0.0054 for the same 40102 every audit. It is a valid empty answer now: never
+  // re-sent, never counted as a failure (Entity_Check already reads it as "no listing"), and marked `empty` so a reader can tell.
+  const NO_RESULTS = 40102;
   const errText = (e) => {
     if (!e) return '';
     if (typeof e === 'string') return e.slice(0, 200);
@@ -38,11 +43,14 @@ const RT = (() => {
   const dfs = (r) => {
     const res = r || {};
     if (res.error) return verdict(errText(res.error) || 'the request failed');
+    if (N(res.status_code) === NO_RESULTS) return { ...verdict('', NO_RESULTS), empty: true, permanent: true, said: S(res.status_message) || 'No Search Results.' };
     if (N(res.status_code) >= 40000) return verdict(said(res.status_message, N(res.status_code), 'the search data provider reported an error'), N(res.status_code));
     if (!Array.isArray(res.tasks) || !res.tasks.length) return verdict('no answer from the search data provider');
     const t = res.tasks[0] || {};
     const code = N(t.status_code);
     if (!code) return verdict('no answer from the search data provider');
+    if (code === NO_RESULTS || (code >= 40000 && /no search results/i.test(S(t.status_message))))
+      return { ...verdict('', code), empty: true, permanent: true, said: S(t.status_message) || 'No Search Results.' };
     if (code >= 40000) return verdict(said(t.status_message, code, 'the search data provider reported an error'), code);
     if (code === 20000 && !((t.result || [])[0])) return verdict('the search data provider returned no result', code);
     return verdict('', code);
@@ -140,7 +148,7 @@ const RT = (() => {
       why: 'the earlier figure came from ' + name(b) + ' and this one from ' + name(a) + ', which do not measure the same thing, so ' + what + ' are not compared' };
     return { comparable: true, why: '', kind: a, kind_before: b };
   };
-  return { dfs, google, check, failures, plan, merge, stats, one, note, evidence, comparable, likeForLike, errText, MAX_SAMPLE_DRIFT, TRANSIENT, PERMANENT };
+  return { dfs, google, check, failures, plan, merge, stats, one, note, evidence, comparable, likeForLike, errText, MAX_SAMPLE_DRIFT, TRANSIENT, PERMANENT, NO_RESULTS };
 })();
 // ---- results-page observations (2026-10-11, FIX_PLAN D26): an AI Overview (and every other SERP feature) is what ONE Google query showed at
 // ONE moment — live, the ladder plan said "no AI Overview" and the page run minutes later "cites 11 domains". Inlined by the build
@@ -229,11 +237,18 @@ const avg = competitors.length ? Math.round(competitors.reduce((s, c) => s + c.w
 const STOP = new Set('a an the and or but if then else when while of for to in on at by with from as is are was were be been being it its this that these those they them their there here you your we our us i me my he she his her which who whom whose what where why how all any each few more most other some such no nor not only own same so than too very can will just do does did done have has had having would could should may might must shall into over under again further about above below between through during before after out off up down also because until while both per via etc'.split(' '));
 // generic business words are useless as single terms (they still count inside multi-word phrases)
 const GENERIC = new Set('business businesses company companies help helps helping solution solutions need needs needed project projects team teams time times way ways work works working use used using make makes making get gets getting provide provides providing ensure ensures right best better good great new different important service services year years day days people thing things lot part parts number including based also well like one two three first second many much more most every able high low large small long key main specific several various within across throughout during ahead forward often always free full end top type types level levels example examples case cases result results option options area areas point points plan plans today experience experienced expert experts professional professionals partner partners client clients customer customers organization organizations organisation organisations industry industries process processes system systems software contact learn read'.split(' '));
-const tokens = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9\s'-]/g, ' ').split(/\s+/).filter(w => w && w.length > 2 && !/^\d+$/.test(w)).slice(0, 3500);
+// A-7 (2026-10-17, re-rating exec 760): the coverage target carried "businesses the uae", "ministry finance" and "features like" - the
+// words of one or two letters (in, of) were DROPPED before the phrases were cut, so the words on either side were joined into a phrase no
+// page contains. They stay in place now: a stop word may sit inside a three-word phrase ("ministry of finance") but never starts or ends
+// one, a number is a break (BRK) no phrase spans, and "like" / "including" never end a phrase. Single words still need three letters.
+const BRK = '\u0000';
+const tokens = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9\s'-]/g, ' ').split(/\s+/).filter(Boolean).map(w => /^\d+$/.test(w) ? BRK : w).slice(0, 3500);
+const FRAG = new Set(['like', 'including', 'includes', 'etc', 'such']);
 const grams = (toks) => { const g = new Map(); const add = (s) => g.set(s, (g.get(s) || 0) + 1);
-  for (let i = 0; i < toks.length; i++) { const a = toks[i]; if (!STOP.has(a)) add(a);
-    if (i + 1 < toks.length) { const b = toks[i + 1]; if (!STOP.has(a) && !STOP.has(b)) add(a + ' ' + b);
-      if (i + 2 < toks.length) { const c = toks[i + 2]; if (!STOP.has(a) && !STOP.has(c)) add(a + ' ' + b + ' ' + c); } } }
+  const edge = (w) => w !== BRK && !STOP.has(w) && !FRAG.has(w) && w.length > 1;
+  for (let i = 0; i < toks.length; i++) { const a = toks[i]; if (!edge(a)) continue; if (a.length > 2) add(a);
+    if (i + 1 < toks.length) { const b = toks[i + 1]; if (b === BRK) continue; if (edge(b)) add(a + ' ' + b);
+      if (i + 2 < toks.length) { const c = toks[i + 2]; if (edge(c) && !FRAG.has(b)) add(a + ' ' + b + ' ' + c); } } }
   return g; };
 const docs = competitors.map(c => grams(tokens(c.content_full)));
 const df = new Map(), tf = new Map();

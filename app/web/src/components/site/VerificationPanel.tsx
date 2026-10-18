@@ -204,8 +204,8 @@ export function VerificationPanel({
               ]}
             />
             <div className="overflow-x-auto rounded-lg border border-line-strong bg-surface">
-              <table className="w-full text-sm">
-                <tbody>
+              <table className="w-full text-sm max-sm:block">
+                <tbody className="max-sm:block">
                   <RecordRow label="Type" value={v.dnsRecord.type} />
                   <RecordRow label="Host / name" value={v.dnsRecord.host} copy />
                   <RecordRow label="Value" value={v.dnsRecord.value} copy />
@@ -282,16 +282,17 @@ export function VerificationPanel({
   );
 }
 
+/** Below `sm` the row stacks (label, value, copy) so the value gets the full card width (R106). */
 function RecordRow({ label, value, copy }: { label: string; value: string; copy?: boolean }) {
   return (
-    <tr className="border-b border-line last:border-b-0">
-      <th scope="row" className="w-32 whitespace-nowrap px-3 py-2 text-left text-xs font-medium text-ink-3">
+    <tr className="border-b border-line last:border-b-0 max-sm:block max-sm:py-1.5">
+      <th scope="row" className="w-32 whitespace-nowrap px-3 py-2 text-left text-xs font-medium text-ink-3 max-sm:block max-sm:w-auto max-sm:pb-0">
         {label}
       </th>
-      <td className="px-3 py-2">
+      <td className="px-3 py-2 max-sm:block max-sm:pb-1">
         <code className="break-all font-mono text-[13px] text-ink">{value}</code>
       </td>
-      <td className="w-24 px-3 py-2 text-right">{copy && <CopyButton text={value} />}</td>
+      <td className="w-24 px-3 py-2 text-right max-sm:block max-sm:w-auto max-sm:pt-0 max-sm:text-left">{copy && <CopyButton text={value} />}</td>
     </tr>
   );
 }

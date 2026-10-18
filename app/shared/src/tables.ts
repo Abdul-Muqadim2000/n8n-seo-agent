@@ -11,6 +11,8 @@ export interface LadderRow extends DtRow {
   ladder_id: string; domain: string; head_keyword: string; rung: number; page_no: number; keyword: string; supporting: string;
   page_type: string; target_url: string; page_exists: boolean; status: string; months: string; start_date: string; country: string;
   location_code: number; language_code: string; email: string; callback_url: string; request_id: string;
+  /** R34 (A4, 2026-10-16): why a row is `live (existing page)` and the page that covers it; the planned address it would have had */
+  status_note?: string; covered_by?: string; planned_url?: string;
   /** the word count the ladder's verdict set for this page (0 = unknown); passed to a page run as `ladder_words` (P2-7) */
   target_words?: number;
 }
@@ -34,6 +36,8 @@ export interface SiteRow extends DtRow {
   site_id: string; domain: string; gsc_property: string; ga4_property_id: string; country: string; location_code: number;
   language_code: string; email: string; callback_url: string; keywords: string; status: string; source: string; created_at: string;
   last_run_at: string; last_status: string; request_id: string;
+  /** B7-5 (W3-D): [{ name, pattern }] as JSON text, set through Site Admin `content_groups` */
+  content_groups_json?: string;
 }
 export interface SiteMetricsRow extends DtRow {
   site_id: string; domain: string; period_start: string; period_end: string; checked_at: string; gsc_connected: boolean;
@@ -50,6 +54,8 @@ export interface QueryRow extends DtRow {
 export interface ContentLogRow extends DtRow {
   site_id: string; domain: string; keyword: string; source: string; page_type: string; existing_page_url: string; rung: number;
   ladder_id: string; request_id: string; started_at: string; status: string; published_url: string; published_at: string; week: string;
+  /** R111 (2026-10-16): for status `not_ready` (the last quality round failed), the QA reasons, '; '-joined */
+  qa_reasons?: string;
 }
 export interface TrendRow extends DtRow {
   site_id: string; domain: string; keyword: string; checked_at: string; period_end: string; direction: string; change_pct: number;
@@ -102,12 +108,16 @@ export interface MonitorsRow extends DtRow {
   ai_growth: boolean | null; ai_pages_month: number | null;
   /** v4.13 (empty = on) */
   link_builder: boolean | null;
+  /** G6 (2026-10-18): buyer roles and extra markets (CC-lang) the panel covers; the pulse's sampling ('' auto | sample | full) and mornings a week (empty = auto) */
+  ai_personas?: string; ai_markets?: string; ai_pulse_mode?: string; ai_pulse_per_week?: number | null;
 }
 export interface AiPromptRow extends DtRow {
   prompt_id: string; site_id: string; domain: string; prompt: string; kind: string; topic: string; keyword: string;
   source: string; status: string; created_at: string;
   /** v4.9: buyer stage, topic cluster, monthly AI search volume (null = not looked up yet), where the question came from */
   stage: string; cluster: string; volume: number | null; origin: string; updated_at: string;
+  /** G6 (2026-10-18): buyer role, market (CC-lang), pinned by the owner, and the fit gate's sentence when status is 'refused' */
+  persona?: string; market?: string; pinned?: boolean | null; fit_note?: string;
 }
 export interface AiAnswerRow extends DtRow {
   site_id: string; domain: string; run_id: string; checked_at: string; prompt_id: string; prompt: string; kind: string;
@@ -127,6 +137,8 @@ export interface AiVisibilityRow extends DtRow {
   run_kind: string; samples: number; visibility_score: number; mention_lo: number; mention_hi: number; sentiment_score: number | null;
   accuracy_issues: number; ai_sessions: number | null; ai_conversions: number | null; ai_revenue: number | null; index_sov: number | null;
   ai_impressions: number | null; perception_json: string; traffic_json: string; access_json: string; index_json: string; clusters_json: string;
+  /** G6 (2026-10-18): rates per engine x cluster x buyer role x market x stage (compact: one array per segment), the panel asked, the executions it took */
+  segments_json?: string; panel_json?: string; chunks?: number | null;
 }
 /** v4.12 (n8n/seo-agent/AI_GROWTH_SPEC.md): the AI growth loop's key pages — can AI read and quote them, Bing's crawl, submission */
 export interface AiPageRow extends DtRow {
@@ -149,6 +161,8 @@ export interface AiDailyRow extends DtRow {
   site_id: string; domain: string; date: string; checked_at: string; run_id: string; samples: number; mentioned: number; cited: number;
   mention_rate: number; citation_rate: number; share_of_voice: number; visibility_score: number; engines_json: string; prompts_json: string;
   competitors_json: string; sources_json: string; alerts: string; cost_usd: number;
+  /** G6 (2026-10-18): the morning's rotating sample (mode, N a week, questions asked of the panel, strata covered) */
+  sample_json?: string;
 }
 export interface BacklinkSnapshotRow extends DtRow {
   site_id: string; domain: string; checked_at: string; mode: string; rank: number; backlinks: number; referring_domains: number;
@@ -207,6 +221,21 @@ export interface AuditRow extends DtRow {
   site_id: string; domain: string; audit_id: string; audited_at: string; report_type: string; health_score: number; grade: string;
   pages_crawled: number; findings: number; critical: number; high: number; medium: number; low: number; scheduled: boolean;
   request_id: string;
+  /** B-5 + INVARIANTS rule 1 (F-B, 2026-10-17): whether the crawl ran JavaScript, the version of the engine's checks, and the keys of the
+   * previous audit's findings the engine did NOT count as fixed (a check changed, one outside reading, a JavaScript / plain crawl), as JSON
+   * text `[{ key, why }]`. Rows written before have none. */
+  crawl_js?: boolean | null; checks_version?: string | null; not_fixed_json?: string | null;
+}
+/** B-5: the previous audit's finding keys the engine did not count as fixed, with the reason (empty for rows that carry none) */
+export function notFixedKeys(row: { not_fixed_json?: unknown } | null | undefined): Map<string, string> {
+  const out = new Map<string, string>();
+  const raw = row?.not_fixed_json;
+  if (typeof raw !== 'string' || !raw.trim()) return out;
+  try {
+    const list: unknown = JSON.parse(raw);
+    if (Array.isArray(list)) for (const x of list) if (x && typeof x === 'object' && typeof (x as { key?: unknown }).key === 'string') out.set((x as { key: string }).key, String((x as { why?: unknown }).why ?? ''));
+  } catch { /* a malformed value is no decision */ }
+  return out;
 }
 export interface AuditFindingRow extends DtRow {
   site_id: string; domain: string; audit_id: string; audited_at: string; finding_key: string; category: string; severity: string;
@@ -218,6 +247,10 @@ export interface AuditFindingRow extends DtRow {
    * clicks and impressions of those pages x their place in the site) and the one line that explains it. Rows written before this
    * change have neither, so every reader falls back to the severity order. */
   impact?: number; impact_basis?: string;
+  /** R19: the pages the count was measured on (0 / missing on rows before it was stored) */
+  checked?: number;
+  /** B5-11 (v4.18): the engine's evidence line and up to 5 example addresses (a JSON array as text); rows written before have neither */
+  evidence?: string; sample_urls?: string;
 }
 
 /** v4.8 (PIPELINE_FEATURE_SPEC.md §9.1): one row per keyword ladder; the row with ladder_id '_site' holds the website's defaults
@@ -304,5 +337,7 @@ export const TABLES = {
   linkOutreach: 'seo_link_outreach',
   listings: 'seo_listings',
   linkImpact: 'seo_link_impact',
+  /** the engine's key/value store; the app reads only its `cost:*` rows (the rolling per-mode figures the engine reserves, R100) */
+  cache: 'seo_cache',
 } as const;
 export type TableKey = keyof typeof TABLES;

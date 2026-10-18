@@ -2,7 +2,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { AlertTriangle, CalendarClock, CheckCircle2, CircleX, Link2, Minus, Plus, Power } from 'lucide-react';
-import { AI_ENGINES, compactNumber, titleCase, type AiData } from '@seo/shared';
+import { AI_ENGINES, compactNumber, questionWin, titleCase, type AiData } from '@seo/shared';
 import { errorMessage } from '@/lib/api';
 import { useSiteAdmin } from '@/lib/queries';
 import { cn, fmtAgo, fmtDate } from '@/lib/utils';
@@ -16,7 +16,7 @@ import { urlPath } from './format';
 
 const ENGINE_LABEL: Record<string, string> = Object.fromEntries(AI_ENGINES.map((e) => [e.value, e.label]));
 /** Short engine names for narrow grid headers. */
-const ENGINE_SHORT: Record<string, string> = { ai_overview: 'AI Overview', ai_mode: 'AI Mode', copilot: 'Copilot' };
+const ENGINE_SHORT: Record<string, string> = { ai_overview: 'AI Overview', ai_mode: 'AI Mode', copilot: 'Copilot', chatgpt_api: 'GPT API', gemini_api: 'Gemini API' };
 export const engineLabel = (key: string, fallback?: string) => ENGINE_LABEL[key] ?? fallback ?? titleCase(key);
 const ENGINE_ORDER = AI_ENGINES.map((e) => e.value as string);
 export const sortEngines = (keys: Iterable<string>) => [...new Set(keys)].sort((a, b) => (ENGINE_ORDER.indexOf(a) + 1 || 99) - (ENGINE_ORDER.indexOf(b) + 1 || 99));
@@ -55,16 +55,30 @@ export function GridCell({ value, fill }: { value: string | undefined; /** stret
   );
 }
 
-/** "This week" share of answers that name you, as a heat chip on the same blue scale. */
-function RateCell({ rate, samples }: { rate: number; samples: number }) {
-  const r = Math.round(rate);
+/**
+ * "This week" share of answers that name you, as a heat chip on the same blue scale, with its 95% range (B8-6). Under the engine's
+ * floor (a few answers) it says "too few" instead of printing 0% or 100% as if it were a result.
+ */
+function RateCell({ q }: { q: { winRate: number | null; samples: number; win?: { ci?: unknown; enough?: unknown; why?: unknown } | null } }) {
+  const w = questionWin(q);
+  if (!w.enough || w.rate == null) {
+    return (
+      <span className="inline-flex min-w-[3.25rem] flex-col items-end rounded-md px-2 py-1 tabular ring-1 ring-line ring-inset" title={w.why}>
+        <span className="text-[12px] font-medium text-ink-2">Too few</span>
+        <span className="text-[11px] text-ink-3">{w.samples} {w.samples === 1 ? 'answer' : 'answers'}</span>
+      </span>
+    );
+  }
+  const r = Math.round(w.rate);
+  const range = w.ci ? `${Math.round(w.ci[0])}–${Math.round(w.ci[1])}%` : null;
   return (
     <span
       className={cn('inline-flex min-w-[3.25rem] flex-col items-end rounded-md px-2 py-1 tabular', r >= 50 ? 'bg-accent text-accent-ink' : r > 0 ? 'bg-accent-soft text-accent-text' : 'bg-surface-2 text-ink-2')}
-      title={`${samples} answers`}
+      title={`${w.samples} answers${range ? ` · 95% range ${range}: where the true rate most likely lies` : ''}`}
     >
       <span className="text-[13px] font-semibold">{r}%</span>
-      <span className={cn('text-[11px]', r >= 50 ? 'text-accent-ink/80' : 'text-ink-3')}>{samples} answers</span>
+      {range && <span className={cn('text-[11px]', r >= 50 ? 'text-accent-ink/80' : 'text-ink-3')}>{range}</span>}
+      <span className={cn('text-[11px]', r >= 50 ? 'text-accent-ink/80' : 'text-ink-3')}>{w.samples} answers</span>
     </span>
   );
 }
@@ -90,7 +104,10 @@ export function QuestionGrid({ questions, engineNames }: { questions: readonly Q
   const [filter, setFilter] = useState<'all' | 'lost' | 'won'>('all');
   const engines = useMemo(() => sortEngines(questions.flatMap((q) => Object.keys(q.engines))), [questions]);
   const won = questions.filter((q) => q.won).length;
-  const rows = questions.filter((q) => (filter === 'won' ? q.won : filter === 'lost' ? !q.won : true));
+  const all = questions.filter((q) => (filter === 'won' ? q.won : filter === 'lost' ? !q.won : true));
+  // G6: a 500-question panel is a 500-row grid; it opens on the first 50 and grows on request
+  const [shown, setShown] = useState(50);
+  const rows = all.slice(0, shown);
   return (
     <div className="space-y-3">
       <FilterChips
@@ -136,7 +153,7 @@ export function QuestionGrid({ questions, engineNames }: { questions: readonly Q
                 </th>
                 <td className="px-2 py-2.5 text-right align-top">
                   {q.winRate != null && q.samples ? (
-                    <RateCell rate={q.winRate} samples={q.samples} />
+                    <RateCell q={q} />
                   ) : (
                     <span className="text-xs text-ink-3">–</span>
                   )}
@@ -161,6 +178,15 @@ export function QuestionGrid({ questions, engineNames }: { questions: readonly Q
           </tbody>
         </table>
       </div>
+      {all.length > rows.length && (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink-3">
+          <span>Showing {rows.length} of {all.length} questions</span>
+          <span className="flex gap-1">
+            <Button size="sm" variant="secondary" onClick={() => setShown((n) => n + 100)}>Show 100 more</Button>
+            <Button size="sm" variant="ghost" onClick={() => setShown(all.length)}>Show all</Button>
+          </span>
+        </div>
+      )}
       <GridLegend />
     </div>
   );
@@ -420,7 +446,7 @@ export function QuestionManager({ prompts }: { prompts: readonly Prompt[] }) {
       <p className="text-xs text-ink-3">{active} active {active === 1 ? 'question is' : 'questions are'} asked on every engine each Monday at 07:00, and on ChatGPT, Gemini and Google AI Mode every other day when the daily pulse is on. New ones come from real AI searches and your Search Console queries on the month’s first run.</p>
       {isAdmin && (
         <div className="rounded-xl border border-dashed border-line-strong p-4">
-          <Field label="Add buyer questions" hint="One per line, the way a buyer would ask an assistant, e.g. “Which companies can help us get e-invoicing compliant in the UAE?”" error={error ?? undefined}>
+          <Field label="Add buyer questions" hint="One per line, the way a buyer would ask an assistant, e.g. “Which accounting firms in Dubai handle VAT registration for small businesses?”" error={error ?? undefined}>
             {(p) => <Textarea {...p} rows={3} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Which … should I hire for …?" />}
           </Field>
           <div className="mt-3 flex justify-end">

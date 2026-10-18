@@ -55,6 +55,16 @@ describe('summaries', () => {
     expect(ledgerCost({ run_ledger: { dataforseo_usd: 0.12 } })?.usd).toBeCloseTo(0.12);
     expect(ledgerCost({})).toBeNull();
   });
+
+  // re-rating 2026-10-17: C-14 the on-demand pulse of 2026-10-17 had 0 alerts and was titled "AI pulse alert · techand.ai";
+  // C-11 the AI Growth dry run read as a finished "done for you" report; C-1 a run the catch-up started late said nothing
+  it('titles say what the report is: an alert only with alerts, a test run, a run that ran late', () => {
+    expect(titleFor('ai_pulse', { domain: 'techand.ai', alerts: [], samples: 21 })).toBe('AI pulse · techand.ai');
+    expect(titleFor('ai_pulse', { domain: 'techand.ai', alerts: [{ level: 'medium', text: 'ChatGPT stopped naming you' }] })).toBe('AI pulse alert · techand.ai');
+    expect(titleFor('ai_growth', { domain: 'techand.ai', dry_run: true })).toBe('AI growth · techand.ai (test run, nothing submitted)');
+    expect(titleFor('rank_tracker', { domain: 'techand.ai', ran_late: { late: true, due: '2026-10-19T12:00:00.000Z' } })).toBe('Rank tracker · techand.ai (ran late)');
+    expect(titleFor('backlinks', { domain: 'techand.ai', ran_late: { late: false } })).toBe('Backlink report · techand.ai');
+  });
 });
 
 // B-R3 — the money the app shows is the engine's, not a guess of ours

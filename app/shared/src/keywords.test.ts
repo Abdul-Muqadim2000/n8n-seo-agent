@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { baseRateText, chanceLabel, chanceText, chooseForMe, FIT_UNKNOWN_NOTE, forYouLabel, ladderOverlapsOf, PLAN_CHANCE, planChance, REACH_BASE_RATE, recommendedFromStrategy, toAssessment, toChance, type LadderKeywords } from './keywords';
+import { baseRateText, chanceLabel, chanceText, chooseForMe, FIT_UNKNOWN_NOTE, forYouLabel, ladderOverlapsOf, PLAN_CHANCE, planChance, REACH_BASE_RATE, reachMeasured, recommendedFromStrategy, toAssessment, toChance, UNMEASURED_CHANCE, type LadderKeywords } from './keywords';
 
 // FIX_PLAN G3 (2026-10-11): the 2025 base rate and the chance band per plan, the same words as n8n's _reach.js (reachChance / reachBaseRateText /
 // reachChanceText); the band is marked uncalibrated everywhere until the system has measured its own ladders.
@@ -36,6 +36,23 @@ describe('time to rank: 2025 base rate and the chance band per plan', () => {
     expect(toChance({ band: 'fair', range: [30, 50], label: 'x' }, 'full')).toEqual({ band: 'fair', range: [30, 50] });
     expect(toChance(null, 'full', true)).toEqual({ band: 'slim', range: [5, 15] });
     expect(toChance({ band: 'great' }, 'direct')).toEqual({ band: 'good', range: [50, 70] });
+  });
+  // R49 (2026-10-16): exec 598 showed "good (50-70%)" for a site whose reach was the size tier for 0 top-10 keywords
+  it('no band on a reach that rests on no measured ranking — the same rule and words as n8n’s reachMeasured / reachChance', () => {
+    const unmeasured = { method: 'size', p75: null, sample: 0, top10: 0 };
+    expect(reachMeasured(unmeasured)).toBe(false);
+    expect(reachMeasured(unmeasured, 14)).toBe(true);
+    expect(reachMeasured({ method: 'percentile', sample: 14, top10: 14 })).toBe(true);
+    expect(reachMeasured({ method: 'size', sample: 3, top10: 3 })).toBe(true);
+    expect(reachMeasured({ used: true })).toBe(true);
+    expect(planChance('direct', false, reachMeasured(unmeasured))).toEqual(UNMEASURED_CHANCE);
+    expect(chanceLabel('direct', false, false)).toBe('no estimated chance (no measured ranking to judge it by)');
+    expect(chanceLabel('direct', false, false)).not.toMatch(/50-70/);
+    expect(chanceText('direct', '2-4', false, false)).toMatch(/^No estimated chance: the reach this plan is judged against rests on no measured ranking/);
+    expect(chanceText('direct', '2-4', false, false)).toContain('1.74%');
+    expect(chanceLabel('none', false, false)).toBe('');
+    expect(toChance({ band: 'unmeasured', range: [0, 0], label: 'no estimated chance (no measured ranking to judge it by)' }, 'direct')).toEqual(UNMEASURED_CHANCE);
+    expect(planChance('direct')).toEqual({ band: 'good', range: [50, 70] });
   });
 });
 import { keywordAssessSchema, siteAutomationFormSchema, siteAutomationSchema } from './schemas';

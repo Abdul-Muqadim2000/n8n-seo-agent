@@ -57,16 +57,39 @@ for (const a of acc.values()) {
   const model = (models.find(m => m.site_id === a.site_id) || {}).model || null;
   const brandNames = [...((model && model.brand_names) || []), (model && model.business_name) || '', ...((s.config || {}).brand_names || [])].filter(Boolean);
   const BR = GQ.brandTest(s.domain, brandNames); const isBrand = BR.is;
-  const newQ = queries.filter(q => !prevQ.has(q.query) && q.impressions >= 20 && !isBrand(q.query)).slice(0, 10);
-  const striking = queries.filter(q => q.position >= 4 && q.position <= 20 && q.impressions >= (cfg.striking_min_impressions || 30) && !isBrand(q.query)).slice(0, 15);
-  const ctrGaps = queries.filter(q => q.position > 0 && q.position <= 10 && q.impressions >= (cfg.ctr_gap_min_impressions || 100) && !isBrand(q.query)).map(q => ({ ...q, expected_ctr: EXPECTED_CTR[Math.max(0, Math.min(9, Math.round(q.position) - 1))] })).filter(q => q.ctr < q.expected_ctr * 0.5).sort((x, y) => (y.impressions * (y.expected_ctr - y.ctr)) - (x.impressions * (x.expected_ctr - x.ctr))).slice(0, 10);
-  const prevP = new Map(a.pages_prev.map(r => [r.keys[0], r]));
+  // C-6 (re-rating 2026-10-17): a navigational search for ANOTHER website ("techandkey com", 411 impressions) was a quick win, a "rewrite
+  // the title" item and a cannibalisation pair; it is set aside from every list of things to do (counted in the totals, named apart)
+  const otherOf = (q) => GQ.otherSite(q, s.domain, BR.keys); const actionable = (q) => !isBrand(q) && !otherOf(q);
+  const newQ = queries.filter(q => !prevQ.has(q.query) && q.impressions >= 20 && actionable(q.query)).slice(0, 10);
+  const striking = queries.filter(q => q.position >= 4 && q.position <= 20 && q.impressions >= (cfg.striking_min_impressions || 30) && actionable(q.query)).slice(0, 15);
+  const ctrGaps = queries.filter(q => q.position > 0 && q.position <= 10 && q.impressions >= (cfg.ctr_gap_min_impressions || 100) && actionable(q.query)).map(q => ({ ...q, expected_ctr: EXPECTED_CTR[Math.max(0, Math.min(9, Math.round(q.position) - 1))] })).filter(q => q.ctr < q.expected_ctr * 0.5).sort((x, y) => (y.impressions * (y.expected_ctr - y.ctr)) - (x.impressions * (x.expected_ctr - x.ctr))).slice(0, 10);
+  // ---- R92 part 2 (2026-10-16, re-rating defect C-16): an `sc-domain:` property reports https://techand.ai/ AND https://www.techand.ai/
+  // as two pages, and the report printed two "/" rows (14 clicks and 3). One page is one row: the host variants of a path are merged
+  // onto the site model's canonical host (clicks and impressions summed, the position weighted by impressions). The row keeps the URL on
+  // the canonical host when Google reported one there; when Google only reported the other host, the row keeps THAT full URL, so a
+  // reader printing paths can still show the host differs (A2's rule in the audit), and `hosts` lists every variant with its numbers.
+  const canonHost = String((model && model.canonical_host) || '').toLowerCase().replace(/\.$/, '');
+  const hostOfU = (u) => { const m0 = String(u || '').match(/^https?:\/\/([^\/?#]+)/i); return m0 ? m0[1].toLowerCase() : ''; };
+  const pathKeyU = (u) => String(u || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/#.*$/, '').replace(/\/+$/, '');
+  const mergeHosts = (rowsIn) => { const g = new Map();
+    for (const r of (rowsIn || [])) { const u = String((r.keys || [])[0] || ''); const k = pathKeyU(u); const e = g.get(k) || { variants: [] }; e.variants.push(r); g.set(k, e); }
+    return [...g.values()].map(({ variants }) => { if (variants.length === 1 && (!canonHost || hostOfU(variants[0].keys[0]) === canonHost)) return variants[0];
+      const clicks = variants.reduce((n, r) => n + (Number(r.clicks) || 0), 0), impressions = variants.reduce((n, r) => n + (Number(r.impressions) || 0), 0);
+      const pw = variants.reduce((n, r) => n + (Number(r.position) || 0) * (Number(r.impressions) || 0), 0);
+      const onCanon = variants.find(r => hostOfU(r.keys[0]) === canonHost);
+      const lead = onCanon || [...variants].sort((x, y) => (Number(y.impressions) || 0) - (Number(x.impressions) || 0))[0];
+      return { ...lead, keys: [lead.keys[0], ...(lead.keys || []).slice(1)], clicks, impressions, ctr: impressions ? clicks / impressions : 0,
+        position: impressions ? pw / impressions : (Number(lead.position) || 0),
+        hosts: variants.length > 1 ? variants.map(r => ({ host: hostOfU(r.keys[0]), url: r.keys[0], clicks: Number(r.clicks) || 0, impressions: Number(r.impressions) || 0 })) : undefined,
+        other_host: !onCanon && !!canonHost }; }); };
+  a.pages_cur = mergeHosts(a.pages_cur); a.pages_prev = mergeHosts(a.pages_prev); a.pages_yoy = mergeHosts(a.pages_yoy);
+  const prevP = new Map(a.pages_prev.map(r => [pathKeyU(r.keys[0]), r]));
   // B4-1: the same 28 days a year earlier, per page. `yoy_read` says whether Google answered at all, so a page missing from the
   // year-ago rows is "0 clicks a year ago" when the request worked and "not read" when it did not — the two mean opposite things.
-  const yoyP = new Map(a.pages_yoy.map(r => [r.keys[0], r]));
+  const yoyP = new Map(a.pages_yoy.map(r => [pathKeyU(r.keys[0]), r]));
   const yoy_read = !a.errors.some(e => /^pages_yoy/.test(String(e))) && reqs.concat(moreReqs).some(q => q.site_idx === a.site_idx && q.kind === 'pages_yoy');
-  const pages = a.pages_cur.map(r => { const p = prevP.get(r.keys[0]), y = yoyP.get(r.keys[0]);
-    return { page: r.keys[0], clicks: r.clicks, impressions: r.impressions, ctr: r.ctr, position: +r.position.toFixed(1), prev_clicks: p ? p.clicks : 0, prev_impressions: p ? p.impressions : 0, clicks_delta: r.clicks - (p ? p.clicks : 0),
+  const pages = a.pages_cur.map(r => { const p = prevP.get(pathKeyU(r.keys[0])), y = yoyP.get(pathKeyU(r.keys[0]));
+    return { page: r.keys[0], ...(r.hosts ? { hosts: r.hosts } : {}), ...(r.other_host ? { other_host: true } : {}), clicks: r.clicks, impressions: r.impressions, ctr: r.ctr, position: +r.position.toFixed(1), prev_clicks: p ? p.clicks : 0, prev_impressions: p ? p.impressions : 0, clicks_delta: r.clicks - (p ? p.clicks : 0),
       prev_position: p && p.impressions ? +p.position.toFixed(1) : 0,   // B7-1: the control group's own position move needs both readings; 0 = the page had no impressions then, not position zero
       yoy_clicks: yoy_read ? (y ? y.clicks : 0) : null, yoy_impressions: yoy_read ? (y ? y.impressions : 0) : null }; }).sort((x, y) => y.clicks - x.clicks);
   // B4-1: a page is "decaying" only when the fall survives the two-sample Poisson test AND is not the dip the same weeks had a
@@ -78,7 +101,7 @@ for (const a of acc.values()) {
   const judged = pages.map(p => ({ ...p, decay: ST.decay({ clicks: p.clicks, prev_clicks: p.prev_clicks, yoy_clicks: p.yoy_clicks, impressions: p.impressions, prev_impressions: p.prev_impressions, ...decayCfg }) }));
   const byLost = (x, y) => y.decay.lost - x.decay.lost;
   const decaying = judged.filter(p => p.decay.state === 'decaying').sort(byLost).slice(0, 10)
-    .map(p => ({ page: p.page, clicks: p.clicks, prev_clicks: p.prev_clicks, yoy_clicks: p.yoy_clicks, impressions: p.impressions, prev_impressions: p.prev_impressions, lost: p.decay.lost, pct: p.decay.pct, kind: p.decay.kind, basis: p.decay.basis, state: 'decaying' }));
+    .map(p => ({ page: p.page, ...(p.other_host ? { other_host: true } : {}), clicks: p.clicks, prev_clicks: p.prev_clicks, yoy_clicks: p.yoy_clicks, impressions: p.impressions, prev_impressions: p.prev_impressions, lost: p.decay.lost, pct: p.decay.pct, kind: p.decay.kind, basis: p.decay.basis, state: 'decaying' }));
   const not_decay = judged.filter(p => p.decay.state === 'seasonal' || (p.decay.state === 'watch' && p.decay.lost > 0)).sort(byLost).slice(0, 10)
     .map(p => ({ page: p.page, clicks: p.clicks, prev_clicks: p.prev_clicks, yoy_clicks: p.yoy_clicks, lost: p.decay.lost, pct: p.decay.pct, state: p.decay.state, basis: p.decay.basis }));
   // every page Search Console reported anything for, with its judgement — the Site Tracker stores this in seo_pages so the
@@ -101,7 +124,7 @@ for (const a of acc.values()) {
   // impressions is noise, not a competing page; and URLs differing only by scheme, www, trailing slash or query string are ONE page.
   const cnbMinImp = Number(cfg.cannibal_min_impressions) || 50, cnbMinShare = Number(cfg.cannibal_min_share) || 10;
   const cnbKey = (u) => String(u || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/$/, '');
-  const cannibal = [...qmap.values()].filter(m => !isBrand(m.query)).map(m => {
+  const cannibal = [...qmap.values()].filter(m => actionable(m.query)).map(m => {
     const byPage = new Map();
     for (const r of m.rows) { const u = String(r.keys[1] || ''); if (!u) continue; const k = cnbKey(u);
       const e = byPage.get(k) || { page: u, clicks: 0, impressions: 0, pw: 0 };
@@ -158,7 +181,8 @@ for (const a of acc.values()) {
   const change_tests = testReqs.map(q => {
     const base = { key: q.test_key, url: q.test_url, date: q.change_date, what: q.change_what, keyword: q.change_keyword,
       joint: !!q.change_joint, window_before: q.window_before, window_after: q.window_after };
-    const bRows = a.tests['test_before|' + q.test_key], aRows = a.tests['test_after|' + q.test_key];
+    const bRaw = a.tests['test_before|' + q.test_key], aRaw = a.tests['test_after|' + q.test_key];
+    const bRows = bRaw ? mergeHosts(bRaw) : bRaw, aRows = aRaw ? mergeHosts(aRaw) : aRaw;   // R92 part 2: one page, one row, in both windows
     const bErr = a.test_err['test_before|' + q.test_key], aErr = a.test_err['test_after|' + q.test_key];
     if (!bRows || !aRows) return { ...base, read: false, page: null, control: null,
       reason: 'Search Console did not answer the ' + (!aRows ? 'window after' : 'window before') + ' this change ('
@@ -176,6 +200,63 @@ for (const a of acc.values()) {
       control: { clicks: cA.clicks, prev_clicks: cB.clicks, impressions: cA.impressions, prev_impressions: cB.impressions,
         pages: ctrlA.length, prev_pages: ctrlB.length, moves: moves.slice(0, 300), moves_pages: moves.length } };
   });
+  // ---- B7-4 (W3-D, 2026-10-17): DISCOVER AND GOOGLE NEWS. `type: web` never contains them; a property with no Discover traffic answers with
+  // no rows. That is "this property has no Discover data" -- said as such -- and a request Google did not answer is "not read".
+  // Never an empty section that reads as a measured zero for a property that was not asked.
+  const typeBlock = (kind, label) => {
+    const asked = reqs.some(q => q.site_idx === a.site_idx && q.kind === kind);
+    const failed = a.errors.some(e => String(e).indexOf(kind + ':') === 0);
+    const rows = a[kind] || [];
+    if (!asked) return { read: false, has_data: false, reason: label + ' was not requested this week' };
+    if (failed) return { read: false, has_data: false, reason: 'Search Console did not answer the ' + label + ' request this week, so ' + label + ' is not available' };
+    const c = sum(rows.filter(r => inR(r.keys[0], R.current))), p0 = sum(rows.filter(r => inR(r.keys[0], R.previous)));
+    if (!rows.length || (c.clicks + c.impressions + p0.clicks + p0.impressions) === 0) return { read: true, has_data: false, reason: 'This property has no ' + label + ' data: Search Console returned no ' + label + ' rows for the last 56 days' };
+    return { read: true, has_data: true, reason: '', cur: { clicks: c.clicks, impressions: c.impressions, position: c.position }, prev: { clicks: p0.clicks, impressions: p0.impressions, position: p0.position },
+      change: ST.change(c.clicks, p0.clicks, { min_events: Number(cfg.alert_min_click_events) || 40, min_pct: Number(cfg.alert_min_pct) || 10 }),
+      basis: 'Search Console, search type ' + (kind === 'discover_daily' ? 'discover' : 'googleNews') + ', the last 28 days against the 28 before (' + p0.clicks + ' → ' + c.clicks + ' clicks)' };
+  };
+  const search_types = { discover: typeBlock('discover_daily', 'Discover'), google_news: typeBlock('news_daily', 'Google News') };
+  // ---- B7-8: the days since the final-data window, from PRELIMINARY data. Shown on its own line; never summed into `totals` or tested ----
+  const recent = (() => {
+    const asked = reqs.find(q => q.site_idx === a.site_idx && q.kind === 'recent');
+    if (!asked) return { read: false, reason: 'the days after the report window were not requested' };
+    if (a.errors.some(e => String(e).indexOf('recent:') === 0)) return { read: false, reason: 'Search Console did not answer the request for the latest days' };
+    const rows = (a.recent || []).map(r => ({ date: r.keys[0], clicks: r.clicks, impressions: r.impressions })).filter(r => r.date > (R.current || {}).end).sort((x, y) => String(x.date).localeCompare(String(y.date)));
+    const t = rows.reduce((o, r) => ({ clicks: o.clicks + r.clicks, impressions: o.impressions + r.impressions }), { clicks: 0, impressions: 0 });
+    const winDays = (R.current && R.current.start) ? 28 : 0;
+    return { read: true, start: rows.length ? rows[0].date : asked.body.startDate, end: rows.length ? rows[rows.length - 1].date : asked.body.endDate, days: rows.length, rows, clicks: t.clicks, impressions: t.impressions,
+      window_daily_clicks: winDays ? +(cur.clicks / winDays).toFixed(1) : null,
+      label: 'Preliminary: Google says this data is "still being collected and might change". It is not part of the tested figures above.' };
+  })();
+  // ---- B7-5 (W3-D): CONTENT GROUPS. One regex per group over the page rows already read (path, case-insensitive); each group is tested on
+  // the same bar as every other alert (ST.change). A page can sit in more than one group; the report says so. Pages in no group are
+  // reported as one line, so "the blog against the service pages" always has the rest of the site beside it. ----
+  const content_groups = (() => {
+    const defs = Array.isArray(s.content_groups) ? s.content_groups : [];
+    if (!defs.length) return { configured: false, groups: [], note: 'No content groups are set for this site, so pages are not grouped. Set them in Site Admin (content_groups: a name and a regular expression over the page path).' };
+    const pathOf = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/i, '') || '/';
+    const opts = { min_events: Number(cfg.alert_min_click_events) || 40, min_pct: Number(cfg.alert_min_pct) || 10 };
+    const prevByKey = new Map(a.pages_prev.map(r => [pathKeyU(r.keys[0]), r]));
+    const used = new Set();
+    const groups = defs.map(d => {
+      let re = null, bad = '';
+      if (/(\+|\*|\})\)?[+*{]/.test(d.pattern)) bad = 'pattern refused: nested repetition can hang the run';
+      else { try { re = new RegExp(d.pattern, 'i'); } catch (e) { bad = 'not a valid regular expression'; } }
+      if (!re) return { name: d.name, pattern: d.pattern, valid: false, reason: bad };
+      const cur0 = a.pages_cur.filter(r => re.test(pathOf(r.keys[0])));
+      cur0.forEach(r => used.add(pathKeyU(r.keys[0])));
+      const prow = a.pages_prev.filter(r => re.test(pathOf(r.keys[0])));
+      prow.forEach(r => used.add(pathKeyU(r.keys[0])));
+      const c = sum(cur0), p0 = sum(prow);
+      return { name: d.name, pattern: d.pattern, valid: true, pages: cur0.length, clicks: c.clicks, impressions: c.impressions, position: +c.position.toFixed(1),
+        prev_clicks: p0.clicks, prev_impressions: p0.impressions, change: ST.change(c.clicks, p0.clicks, opts),
+        basis: cur0.length + ' pages whose path matches /' + d.pattern + '/i, Search Console, the last 28 days against the 28 before (' + p0.clicks + ' → ' + c.clicks + ' clicks)' };
+    });
+    const restCur = a.pages_cur.filter(r => !used.has(pathKeyU(r.keys[0]))), restPrev = a.pages_prev.filter(r => !used.has(pathKeyU(r.keys[0])));
+    const rc = sum(restCur), rp = sum(restPrev);
+    return { configured: true, groups, ungrouped: { pages: restCur.length, clicks: rc.clicks, prev_clicks: rp.clicks, change: ST.change(rc.clicks, rp.clicks, opts) },
+      note: 'A page that matches several groups counts in each of them. Each group is judged on the same bar as the site-wide alerts: at least ' + opts.min_events + ' clicks across both periods and a ' + opts.min_pct + '% move that survives the significance test.' };
+  })();
   // ---- G9: what Search Console does not name, and who searched the brand ----
   const anonymised = { current: GQ.anonymised(cur, [...qmapAll.values()].flatMap(m => m.rows)), previous: GQ.anonymised(prev, a.queries_prev) };
   const brandSum = (list, want) => { const picked = list.filter(q => isBrand(q.query) === want); const t = sum(picked.map(q => ({ clicks: q.clicks, impressions: q.impressions, position: q.position }))); return { queries: picked.length, clicks: t.clicks, impressions: t.impressions, ctr: t.ctr, position: t.position, top: picked.slice(0, 5).map(q => ({ query: q.query, clicks: q.clicks, impressions: q.impressions, position: q.position })) }; };
@@ -184,6 +265,9 @@ for (const a of acc.values()) {
     previous: { brand: brandSum(prevList, true), non_brand: brandSum(prevList, false) },
     note: BR.keys.length ? 'Brand = the query contains ' + BR.keys.join(' / ') + '. Non-brand clicks are the ones SEO wins.' : 'No brand name known for this site: every query counts as non-brand.' };
   brand_split.brand_clicks_pct = cur.clicks ? Math.round(brand_split.brand.clicks / cur.clicks * 1000) / 10 : 0;
+  const otherRows = queries.filter(q => otherOf(q.query)).sort((x, y) => y.impressions - x.impressions);
+  const other_site_queries = { count: otherRows.length, clicks: otherRows.reduce((n, q) => n + q.clicks, 0), impressions: otherRows.reduce((n, q) => n + q.impressions, 0),
+    sample: otherRows.slice(0, 3).map(q => ({ query: q.query, site: otherOf(q.query), impressions: q.impressions })) };   // C-6
   const scraper_queries = { count: scraperRows.length, clicks: scraperRows.reduce((n, q) => n + q.clicks, 0), impressions: scraperRows.reduce((n, q) => n + q.impressions, 0), sample: scraperRows.slice(0, 3).map(q => q.query) };
   const paging = Object.entries(a.paging).map(([kind, pg]) => ({ kind, pages: pg.pages, rows: pg.rows, truncated: pg.truncated }));
   const rows_read = paging.reduce((n, x) => n + x.rows, 0); const truncated = paging.filter(x => x.truncated).map(x => x.kind);
@@ -191,7 +275,7 @@ for (const a of acc.values()) {
   out.push({ json: { site_idx: a.site_idx, site_id: a.site_id, errors: a.errors, totals: { cur, prev, yoy: a.yoy || null },
     deltas: { clicks_pct: pct(cur.clicks, prev.clicks), impressions_pct: pct(cur.impressions, prev.impressions), position: (prev.position && cur.position) ? +(prev.position - cur.position).toFixed(1) : null, ctr_pts: +((cur.ctr - prev.ctr) * 100).toFixed(2), yoy_clicks_pct: a.yoy ? pct(cur.clicks, a.yoy.clicks) : null },
     daily, query_count: queries.length, queries: queries.slice(0, 100), winners, losers, new_queries: newQ, lost_queries: lost, striking, ctr_gaps: ctrGaps, pages: pages.slice(0, 20), decaying_pages: decaying, not_decay, decay_summary, page_perf, rising_pages: rising, tracked,
-    anonymised, brand_split, scraper_queries, page_count: pages.length, rows_read, paging, truncated,
-    cannibal, cannibal_summary, devices, countries, change_tests } });   // G9: every row read, the anonymised share, brand vs non-brand, scraper queries apart; B7-2 / B7-3: the device and country splits, and your own pages competing for one search
+    anonymised, brand_split, scraper_queries, other_site_queries, page_count: pages.length, rows_read, paging, truncated,
+    cannibal, cannibal_summary, devices, countries, change_tests, search_types, recent, content_groups } });   // G9: every row read, the anonymised share, brand vs non-brand, scraper queries apart; B7-2 / B7-3: the device and country splits, and your own pages competing for one search
 }
 return out.length ? out : [{ json: { skip: true, reason: 'no Search Console data came back' } }];

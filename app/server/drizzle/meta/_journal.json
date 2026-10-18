@@ -50,6 +50,55 @@
       "when": 1792012267570,
       "tag": "0006_groovy_pretty_boy",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792160793716,
+      "tag": "0007_clumsy_layla_miller",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792179712521,
+      "tag": "0008_classy_trauma",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792255013466,
+      "tag": "0009_cms_publishing",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792274155524,
+      "tag": "0010_crawler_logs",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792291323513,
+      "tag": "0011_g1_identity",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792311299869,
+      "tag": "0012_g4_integrations",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792316010596,
+      "tag": "0013_g5_white_label",
+      "breakpoints": true
     }
   ]
 }

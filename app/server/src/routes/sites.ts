@@ -1,4 +1,5 @@
 import { and, asc, eq, isNotNull, ne } from 'drizzle-orm';
+import { audit } from '../services/audit';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import {
   adminActionSchema,
@@ -93,6 +94,7 @@ export async function verifyWithGoogle(req: FastifyRequest, orgId: string, siteI
   const r = await gscOwnerCheck(userAccessToken, a.site.domain);
   if (!r.owner) return 'not_owner';
   await markVerified(a.site, 'search_console', r.property);
+  await audit(req, a.org.id, { action: 'site.verified', target: { type: 'site', id: a.site.id, label: a.site.domain }, details: { method: 'search_console' } });
   return 'verified';
 }
 
@@ -116,8 +118,9 @@ async function stopInEngine(site: SiteRow, log: FastifyRequest['log']) {
 export { stopInEngine };
 
 export async function siteRoutes(app: FastifyInstance) {
+  // G5: the client portal lists the workspace's websites
   app.get('/api/orgs/:orgId/sites', async (req) => {
-    const a = await orgAccess(req, (req.params as P).orgId);
+    const a = await orgAccess(req, (req.params as P).orgId, 'client_viewer');
     const rows = await db.query.sites.findMany({ where: eq(schema.sites.orgId, a.org.id), orderBy: asc(schema.sites.createdAt) });
     return rows.map(toSite);
   });
@@ -146,12 +149,13 @@ export async function siteRoutes(app: FastifyInstance) {
         verificationToken: randomToken(18),
       })
       .returning();
+    await audit(req, a.org.id, { action: 'site.added', target: { type: 'site', id: site.id, label: site.domain } });
     return toSite(site);
   });
 
   app.get('/api/orgs/:orgId/sites/:siteId', async (req) => {
     const p = req.params as P;
-    const { site } = await siteAccess(req, p.orgId, p.siteId);
+    const { site } = await siteAccess(req, p.orgId, p.siteId, 'client_viewer');
     return toSite(site);
   });
 
@@ -179,6 +183,7 @@ export async function siteRoutes(app: FastifyInstance) {
     if (site.verifiedAt) await stopInEngine(site, req.log);
     await db.delete(schema.sites).where(eq(schema.sites.id, site.id));
     invalidateSite(site.domain);
+    await audit(req, site.orgId, { action: 'site.deleted', target: { type: 'site', id: site.id, label: site.domain }, details: { wasVerified: !!site.verifiedAt } });
     return { ok: true };
   });
 
@@ -208,6 +213,7 @@ export async function siteRoutes(app: FastifyInstance) {
     if (await verifiedElsewhere(site.domain, site.orgId)) throw conflict(`${site.domain} is already verified by another company on this platform.`, 'domain_claimed');
     const r = await verify(method, site.domain, site.verificationToken);
     if (r.verified) await markVerified(site, method);
+    await audit(req, site.orgId, { action: r.verified ? 'site.verified' : 'site.verify_failed', outcome: r.verified ? 'success' : 'failure', target: { type: 'site', id: site.id, label: site.domain }, details: { method } });
     return { verified: r.verified, method, message: r.message };
   });
 
@@ -333,6 +339,8 @@ export async function siteRoutes(app: FastifyInstance) {
         // Site Admin keeps a field when it is '' : a single space clears a list
         const m = monitorsBody(a.monitors);
         if (a.monitors.brandNames && !a.monitors.brandNames.length) m.brand_names = ' ';
+        if (a.monitors.aiPersonas && !a.monitors.aiPersonas.length) m.ai_personas = ' ';   // G6
+        if (a.monitors.aiMarkets && !a.monitors.aiMarkets.length) m.ai_markets = ' ';
         body = { ...base, action: 'monitors', monitors: { ...m, ...(a.competitors ? { competitors: a.competitors.join(', ') || ' ' } : {}) } };
         break;
       }
@@ -340,12 +348,19 @@ export async function siteRoutes(app: FastifyInstance) {
         body = { ...base, action: 'prospect', prospect_domain: a.prospectDomain, type: a.type, ...(a.status ? { status: a.status } : {}), ...(a.note !== undefined ? { note: a.note } : {}), ...(a.contactEmail ? { contact_email: a.contactEmail } : {}) };
         break;
       case 'ai_prompts':
-        body = { ...base, action: 'ai_prompts', add: a.add, remove: a.remove };
+        // G6 (2026-10-18): the panel manager — the engine's field names (AI_Prompt_Rows_Admin.js)
+        body = { ...base, action: 'ai_prompts', add: a.add, remove: a.remove, enable: a.enable, pin: a.pin, unpin: a.unpin,
+          edit: a.edit.map((e) => ({ prompt_id: e.promptId, ...(e.prompt ? { prompt: e.prompt } : {}), ...(e.persona !== undefined ? { persona: e.persona } : {}), ...(e.cluster !== undefined ? { cluster: e.cluster } : {}),
+            ...(e.stage ? { stage: e.stage } : {}), ...(e.market ? { market: e.market } : {}), ...(e.pinned !== undefined ? { pinned: e.pinned } : {}) })) };
+        break;
+      case 'content_groups':
+        body = { ...base, action: 'content_groups', content_groups: a.contentGroups };
         break;
     }
     const r = await siteAdmin(body);
     if (!r.ok) throw new HttpError(502, r.error || 'The SEO engine could not apply the change.', 'admin_failed');
     if (r.affected === 0 && (a.action === 'pause' || a.action === 'resume')) throw new HttpError(409, 'The SEO engine does not track this website yet: start weekly tracking first.', 'not_tracked');
+    if (r.affected === 0 && a.action === 'content_groups') throw new HttpError(409, 'The SEO engine does not track this website yet: start weekly tracking first, then set its content groups.', 'not_tracked');
     if (r.affected === 0 && a.action === 'unpublish') throw notFound(`No page for "${a.keyword}" is recorded for ${site.domain}.`);
     if (r.affected === 0 && a.action === 'prospect') throw notFound(`${a.prospectDomain} is not in the link-prospect list.`);
     // mirror what the app shows about the site

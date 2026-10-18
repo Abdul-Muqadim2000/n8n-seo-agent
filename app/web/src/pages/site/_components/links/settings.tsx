@@ -1,4 +1,6 @@
+import { useEngineCal } from '@/lib/engine-cal';
 // Link building — the website's settings (approve each / automatic, the mailbox) and "Find opportunities now".
+import { PRICES } from '@/lib/prices';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Mail, Search, Settings2, ShieldBan, UserCheck, Zap } from 'lucide-react';
@@ -159,6 +161,7 @@ export function LinkSettingsCard({ d, onRun }: { d: LinkBuildingData; onRun?: ()
 
 /** "Find opportunities now" (admins): full search, or the free check (no e-mails drafted, no DataForSEO). */
 export function RunDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  useEngineCal();   // R99 / R100: re-render with the engine's own prices once they arrive
   const { org, site } = useSitePage();
   const run = useRunLinkBuilder(org.id, site.id);
   const [freeOnly, setFreeOnly] = useState(false);
@@ -201,7 +204,7 @@ export function RunDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
           description="Opportunities, contacts, listings and redirects only: no e-mails drafted and no paid data. Costs nothing."
         />
         <p className="text-[13px] text-ink-3">
-          The full search costs about $0.10 (the e-mail writer; the competitors' broken links once a month). Nothing is sent: pitches wait here for your approval. Takes a few minutes.
+          Across a month the Link Builder costs about {PRICES.linkBuilderMonthly()} (the e-mail writer; the competitors' broken links once a month). Nothing is sent: pitches wait here for your approval. Takes a few minutes.
         </p>
         {run.isError && <Callout tone="critical">{errorMessage(run.error)}</Callout>}
       </div>

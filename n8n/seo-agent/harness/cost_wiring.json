@@ -37,6 +37,8 @@
     "competitors_read",
     "country",
     "existing_page",
+    "existing_page_facts_text",
+    "existing_page_tables",
     "existing_page_text",
     "facts",
     "goal",
@@ -54,7 +56,7 @@
    "model": "claude-sonnet-5-5",
    "node": "Competitor Analyzer",
    "streaming": false,
-   "template_chars": 4016
+   "template_chars": 4953
   },
   {
    "count_answer": "Count Answer (Content Reviewer)",
@@ -92,6 +94,8 @@
     "country",
     "eeat_context",
     "existing_page",
+    "existing_page_facts_text",
+    "existing_page_tables",
     "existing_page_text",
     "goal",
     "keyword",
@@ -102,6 +106,7 @@
     "site_description",
     "spelling",
     "tone",
+    "verdict_exclusions",
     "video_context"
    ],
    "from": [],
@@ -111,7 +116,7 @@
    "model": "claude-opus-5-5",
    "node": "Copywriter",
    "streaming": true,
-   "template_chars": 9555
+   "template_chars": 10487
   },
   {
    "count_answer": "Count Answer (Critic)",
@@ -221,7 +226,7 @@
    "model": "claude-opus-5-5",
    "node": "Editor",
    "streaming": true,
-   "template_chars": 6153
+   "template_chars": 6933
   },
   {
    "count_answer": "Count Answer (Keyword Relevance)",
@@ -248,7 +253,7 @@
    "model": "claude-sonnet-5-5",
    "node": "Keyword Relevance",
    "streaming": false,
-   "template_chars": 2242
+   "template_chars": 3052
   },
   {
    "count_answer": "Count Answer (Ladder Keyword Relevance)",
@@ -275,7 +280,7 @@
    "model": "claude-sonnet-5-5",
    "node": "Ladder Keyword Relevance",
    "streaming": false,
-   "template_chars": 2242
+   "template_chars": 3052
   },
   {
    "count_answer": "Count Answer (Site Describer)",
@@ -343,6 +348,7 @@
     "term_digest",
     "tone",
     "verdict",
+    "verdict_exclusions",
     "verdict_reasons",
     "verdict_score",
     "video_context"
@@ -354,7 +360,7 @@
    "model": "claude-opus-5-5",
    "node": "Strategy Brief",
    "streaming": true,
-   "template_chars": 12497
+   "template_chars": 13292
   },
   {
    "count_answer": "Count Answer (Verdict Agent)",
@@ -370,10 +376,12 @@
     "country",
     "domain",
     "existing_page",
+    "existing_page_facts_text",
     "goal",
     "keyword",
     "keyword_data",
     "language_name",
+    "own_coverage_text",
     "page_type",
     "serp_digest",
     "site_authority"
@@ -385,7 +393,7 @@
    "model": "claude-sonnet-5-5",
    "node": "Verdict Agent",
    "streaming": false,
-   "template_chars": 4379
+   "template_chars": 6229
   }
  ],
  "calibrate": {
@@ -447,15 +455,11 @@
    "SEO_Agent_Link_Builder.json"
   ],
   "reasons": {
-   "SEO_Agent_Keyword_Check.json": "NOT counted: the Keyword Check answers the web app SYNCHRONOUSLY - both Haiku agents sit between the request and Respond Assess - so the two free count_tokens round-trips per agent would land on the caller's clock rather than on a schedule's, and that is a decision for whoever owns the response-time budget. build_api.py was also outside build section 84 (four agents worked in parallel). Neither agent has a thinking budget, so counting them would make them 100% measured. Proved by _b84_checks: both agents lie on a main path from the webhook to a Respond node.",
-   "SEO_Agent_Reply_Reader.json": "NOT counted, and nothing to count it into: the Reply Reader has no seo_run_ledger row at all - a synchronous reply classification reserves nothing and settles nothing, so there is no figure for a measurement to replace. Proved by _b84_checks: the workflow contains no Ledger Settle node.",
-   "SEO_Agent_Site_Tracker.json": "NOT counted only because build_site_tracker.py was outside build section 84 (four agents worked in parallel on one branch). Nothing is in the way: Ledger Settle (Site) already carries the empty call table Monitor_Ledger_Settle.js reads, so baking Site Brief's table into it is the whole of the work. Proved by _b84_checks: that settle exists and its call table is empty."
+   "SEO_Agent_Keyword_Check.json": "NOT counted: the Keyword Check answers the web app SYNCHRONOUSLY - both Haiku agents sit between the request and Respond Assess - so the two free count_tokens round-trips per agent would land on the caller's clock rather than on a schedule's, and that is a decision for whoever owns the response-time budget. build_api.py was also outside build section 84 (four agents worked in parallel). Neither agent has a thinking budget, so counting them would make them 100% measured. Proved by _b84_checks: both agents lie on a main path from the webhook to a Respond node."
   },
   "why": "priced from the run RESERVATION (CC.aiRun), not from this node and not from characters: a monitor settles its reserved Claude figure and labels it ESTIMATED. Counting it needs a per-workflow call table in its own builder (build_monitors.py / build_site_tracker.py / build_api.py), which is not built \u2014 B-F1 covered the main workflow",
   "workflows": [
-   "SEO_Agent_Keyword_Check.json",
-   "SEO_Agent_Reply_Reader.json",
-   "SEO_Agent_Site_Tracker.json"
+   "SEO_Agent_Keyword_Check.json"
   ]
  },
  "count_nonstream": {

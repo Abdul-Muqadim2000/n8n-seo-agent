@@ -1,5 +1,7 @@
 import {
   daysSince,
+  estimateRunCost,
+  formatUsd,
   isWon,
   keywordTokens,
   LADDER_SITE_ROW,
@@ -33,6 +35,7 @@ import { and, desc, eq, gte, inArray, or, sql } from 'drizzle-orm';
 import { db, schema } from '../db';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { rankSeries } from './data';
+import { cachedCalibration } from './engineCost';
 import { actionFromApiBody } from './recommendations';
 import { filesFor, toReport } from './runs';
 
@@ -173,7 +176,30 @@ export interface WaitingPage {
   head: string;
   writtenAt: string | null;
   days: number;
+  /**
+   * R111 (2026-10-16): the draft's last quality round failed (`seo_content_log.status = 'not_ready'`). It still waits — it counts
+   * toward the pile-up guard, labelled "needs a fix" — but it is never offered for publishing: the customer fixes it and runs it again.
+   */
+  needsFix?: boolean;
+  /** the quality check's reasons (`qa_reasons`, '; '-joined in the row), when the engine recorded them */
+  reasons?: string[];
 }
+
+/**
+ * R111: the content-log row that stands for a page right now — the newest one not yet published — and whether its draft failed the
+ * quality check. Old rows only ever say `written` / `started`, so they read exactly as before.
+ */
+export function draftQa(logs: ContentLogRow[]): { needsFix: boolean; reasons: string[] } {
+  const newest = [...logs].sort((a, b) => s(b.started_at).localeCompare(s(a.started_at))).find((l) => s(l.status) !== 'published' && !l.published_url);
+  if (!newest || s(newest.status).toLowerCase() !== 'not_ready') return { needsFix: false, reasons: [] };
+  const raw = (newest as ContentLogRow & { qa_reasons?: unknown }).qa_reasons;
+  const reasons = (Array.isArray(raw) ? raw.map(s) : s(raw).split(';')).map((r) => r.trim()).filter(Boolean);
+  return { needsFix: true, reasons };
+}
+
+/** "“kw” did not pass the quality check (reason; reason)" — one line per draft, for Needs you and the pile-up note. */
+export const fixLine = (w: Pick<WaitingPage, 'keyword' | 'reasons'>): string =>
+  `${q(w.keyword)} did not pass the quality check${w.reasons?.length ? ` (${w.reasons.slice(0, 3).join('; ')})` : ''}`;
 
 export interface LadderBuild {
   cards: LadderCard[];
@@ -324,9 +350,12 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
       let writtenAt: string | null = null;
       let publishedAt: string | null = null;
       let publishedUrl = '';
-      if (status === 'published' || pub) {
+      // R34 (A14): the engine marks a rung whose page the site already has `live (existing page)` with that page in `covered_by`:
+      // it is a live page, not a plan, so it shows as published with that URL
+      const coveredLive = /^live \(existing page\)/i.test(status) ? s(r.covered_by) : '';
+      if (status === 'published' || pub || coveredLive) {
         state = 'published';
-        publishedUrl = s(pub?.published_url) || (status === 'published' ? s(r.target_url) : '');
+        publishedUrl = s(pub?.published_url) || (status === 'published' ? s(r.target_url) : coveredLive);
         const at = pub?.published_at;
         publishedAt = isoOk(at) ? at : null;
         const started = logs.map((l) => s(l.started_at)).filter(isoOk).sort()[0];
@@ -339,7 +368,7 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
       } else {
         const fromLog = logState(logs, reports, runs, now);
         if (fromLog) ({ state, writtenAt } = fromLog);
-        else if (status === 'writing') {
+        else if (status === 'writing' || status === 'written' || status === 'not_ready') {   // A-20 (F-A1): the engine moves the row on when the page run ends
           // marked by the ladder run's own first pages (no content-log row): written with the plan
           const start = s(r.start_date);
           if (isoOk(start) && now - Date.parse(start) < WRITING_WINDOW_MS && !report) state = 'writing';
@@ -382,6 +411,8 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
         volume: m?.volume ?? null,
         kd: m?.kd ?? null,
         supporting: splitList(r.supporting),
+        // R111 (2026-10-16): a draft whose last QA round failed is a page to fix and run again, never one to report as published
+        ...(state === 'waiting' ? ((q) => (q.needsFix ? { needsFix: true, qaReasons: q.reasons } : {}))(draftQa(logs)) : {}),
       };
     });
     const planType = asPlan(st?.plan_type) ?? plan?.planType ?? null;
@@ -407,13 +438,14 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
     for (const p of b.pages)
       if (p.state === 'waiting' && !seenWaiting.has(norm(p.keyword))) {
         seenWaiting.add(norm(p.keyword));
-        waiting.push({ keyword: p.keyword, ladderId: b.id, head: b.head, writtenAt: p.writtenAt, days: daysSince(p.writtenAt, now) });
+        const qa = draftQa(logsBy.get(norm(p.keyword)) ?? []);
+        waiting.push({ keyword: p.keyword, ladderId: b.id, head: b.head, writtenAt: p.writtenAt, days: daysSince(p.writtenAt, now), ...(qa.needsFix ? { needsFix: true, reasons: qa.reasons } : {}) });
       }
   for (const [k, logs] of logsBy) {
     if (!k || ladderKw.has(k) || logs.some((l) => l.published_url || l.status === 'published') || (src.detected ?? []).some((d) => norm(d.keyword) === k)) continue;
     const st = logState(logs, reportsBy.get(k) ?? [], runsBy.get(k) ?? [], now);
     if (st?.state === 'waiting' && now - Date.parse(st.writtenAt ?? '') < 180 * 864e5)
-      waiting.push({ keyword: s(logs[0].keyword), ladderId: null, head: '', writtenAt: st.writtenAt, days: daysSince(st.writtenAt, now) });
+      waiting.push({ keyword: s(logs[0].keyword), ladderId: null, head: '', writtenAt: st.writtenAt, days: daysSince(st.writtenAt, now), ...((qa) => (qa.needsFix ? { needsFix: true, reasons: qa.reasons } : {}))(draftQa(logs)) });
   }
   waiting.sort((a, b) => b.days - a.days);
 
@@ -498,7 +530,9 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
       : [];
     const pageNoOf = (kw: string) => pages.find((p) => norm(p.keyword) === norm(kw))?.pageNo ?? 0;
     const approve = plan ? plan.awaitingApproval.find((a) => a.ladder?.id === b.id) : undefined;
-    const next = nextStep(status, b.mode, pages, mine, sched, counts.waiting, { approve, nextPage: plan?.nextOf.get(b.id), planned: !!plan });
+    // R111: a draft that failed its quality check waits too, but the next step for it is a fix, never "publish"
+    const fixes = pages.filter((p) => p.state === 'waiting' && draftQa(logsBy.get(norm(p.keyword)) ?? []).needsFix).length;
+    const next = nextStep(status, b.mode, pages, mine, sched, counts.waiting, { approve, nextPage: plan?.nextOf.get(b.id), planned: !!plan, fixes });
     const kwCount = new Set([b.head, ...pages.map((p) => p.keyword)].map(norm)).size;
     const monthWrites = mine.filter((m) => Date.parse(m.at!) <= now + 28 * 864e5).length;
     const monthlyCostUsd = round2(LADDER_COSTS.rankCheckEach * kwCount * MONITOR_COSTS.weeksPerMonth + monthWrites * MONITOR_COSTS.blogPostEach);
@@ -609,6 +643,12 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
   return { cards, details, automation, waiting, clicks28d: traffic(allUrls).clicks28d, existingPages, awaiting, pileup };
 }
 
+/** R111: "publish 2 pages", "fix 1 page that failed the quality check", or both. */
+function waitingForYou(publish: number, fix: number): string {
+  const parts = [publish ? `publish ${plural(publish, 'page')}` : '', fix ? `fix ${plural(fix, 'page')} that failed the quality check and run ${fix === 1 ? 'it' : 'them'} again` : ''].filter(Boolean);
+  return `Waiting for you: ${parts.join(', and ')}`;
+}
+
 function nextStep(
   status: LadderStatus,
   mode: LadderMode,
@@ -616,13 +656,15 @@ function nextStep(
   mine: { item: QueueItem; at: string | null }[],
   sched: LadderSchedule,
   waiting: number,
-  m: { approve?: QueueItem; nextPage?: QueueItem; planned: boolean },
+  m: { approve?: QueueItem; nextPage?: QueueItem; planned: boolean; fixes?: number },
 ): LadderCard['next'] {
+  const fixes = Math.min(waiting, m.fixes ?? 0);
+  const waitingText = waitingForYou(waiting - fixes, fixes);
   const pageOf = (kw: string) => pages.find((p) => norm(p.keyword) === norm(kw));
   if (status === 'paused') return { kind: 'wait', text: 'Paused: no new pages until you resume it', at: null };
   if (status === 'queued') return { kind: 'wait', text: 'Queued: it starts when a ladder ahead of it is won, fully written or paused', at: null };
   if (status === 'won') return { kind: 'check', text: 'Won: the rank check keeps an eye on it', at: sched.rankNextAt };
-  if (status === 'needs_you') return { kind: 'publish', text: waiting ? `Waiting for you: publish ${plural(waiting, 'page')}` : 'Waiting for you: publish the waiting pages', at: null };
+  if (status === 'needs_you') return { kind: 'publish', text: waiting ? waitingText : 'Waiting for you: publish the waiting pages', at: null };
   const writing = pages.find((p) => p.state === 'writing');
   if (writing) return { kind: 'write', text: `Writing ${q(writing.keyword)} now`, at: null };
   const firstPlanned = pages.find((p) => p.state === 'planned');
@@ -633,7 +675,7 @@ function nextStep(
     if (ok) return { kind: 'approve', text: `Waiting for your OK to write ${q(ok.keyword)}`, at: null };
   }
   if (mine[0]) return { kind: 'write', text: `Writes page ${pageOf(mine[0].item.keyword)?.pageNo}: ${q(mine[0].item.keyword)}`, at: mine[0].at };
-  if (waiting) return { kind: 'publish', text: `Waiting for you: publish ${plural(waiting, 'page')}`, at: null };
+  if (waiting) return { kind: 'publish', text: waitingText, at: null };
   if (planned)
     return {
       kind: 'write',
@@ -677,12 +719,43 @@ export function ladderNeedsYou(b: LadderBuild): NeedsYouItem[] {
       detail:
         (pile.lastRunAt ? 'Last Monday’s run wrote nothing for this reason. ' : '') +
         // D5: ladder pages count too, so say which pages they are
-        (b.waiting.length ? `Waiting: ${b.waiting.slice(0, 4).map((w) => q(w.keyword)).join(', ')}${b.waiting.length > 4 ? ' and more' : ''}. ` : '') +
-        `No new page is written while ${pile.max === 1 ? 'a page waits' : `${pile.max} or more pages wait`} to be published (the pile-up guard, your limit). Publish them to continue: a page can only rank once it is live, and writing more while these wait only adds cost.`,
+        (b.waiting.length ? `Waiting: ${b.waiting.slice(0, 4).map((w) => (w.needsFix ? `${q(w.keyword)} (needs a fix)` : q(w.keyword))).join(', ')}${b.waiting.length > 4 ? ' and more' : ''}. ` : '') +
+        `No new page is written while ${pile.max === 1 ? 'a page waits' : `${pile.max} or more pages wait`} to be published (the pile-up guard, your limit). ` +
+        (b.waiting.some((w) => w.needsFix)
+          ? 'Publish the ready ones and fix the ones that failed the quality check (then run them again) to continue: a page can only rank once it is live, and writing more while these wait only adds cost.'
+          : 'Publish them to continue: a page can only rank once it is live, and writing more while these wait only adds cost.'),
       action: { label: 'See the pages', page: 'content' },
     });
 
-  const byLadder = group(b.waiting, (w) => w.ladderId ?? '');
+  // R111: drafts that failed their quality check are never offered for publishing — they get a "fix it and run it again" item
+  const fixByLadder = group(b.waiting.filter((w) => w.needsFix), (w) => w.ladderId ?? '');
+  for (const [id, list] of fixByLadder) {
+    const first = [...list].sort((x, y) => y.days - x.days)[0];
+    const card = id ? b.cards.find((c) => c.id === id) : undefined;
+    const page = id ? b.details.get(id)?.pages.find((p) => norm(p.keyword) === norm(first.keyword)) : undefined;
+    out.push({
+      id: `fix:${id || 'other'}`,
+      kind: 'failed',
+      severity: 'warning',
+      title: id ? `Fix ${plural(list.length, 'page')} of ${q(first.head)} before publishing` : `Fix ${plural(list.length, 'draft')} before publishing`,
+      detail: `${list.map(fixLine).join('; ')}. ${list.length === 1 ? 'It is' : 'They are'} not ready to publish: fix ${list.length === 1 ? 'it' : 'them'} and run ${list.length === 1 ? 'it' : 'them'} again.`,
+      action:
+        (id
+          ? actionFromApiBody(
+              {
+                mode: 'keyword',
+                keyword: first.keyword,
+                page_type: page?.pageType || undefined,
+                ...(page ? { ladder_id: id, ladder_rung: page.rung, ladder_head: first.head || card?.head || '', ladder_page_no: page.pageNo } : {}),
+                receive: ['Keyword Report', 'Page Content'],
+              },
+              'Run it again',
+            )
+          : undefined) ?? { label: 'Run it again', mode: 'keyword', prefill: { keyword: first.keyword } },
+      ...(id ? { ladderId: id } : {}),
+    });
+  }
+  const byLadder = group(b.waiting.filter((w) => !w.needsFix), (w) => w.ladderId ?? '');
   const groups = [...byLadder.entries()].map(([id, list]) => ({ id, list: [...list].sort((x, y) => y.days - x.days) })).sort((x, y) => y.list[0].days - x.list[0].days);
   for (const g of groups) {
     const oldest = g.list[0];
@@ -743,7 +816,7 @@ export function ladderNeedsYou(b: LadderBuild): NeedsYouItem[] {
       kind: 'approve',
       severity: 'info',
       title: `Next page ready: ${q(a.keyword)}`,
-      detail: `Page ${pageNo} of your ladder ${q(c.head)}${rung === 4 ? ' (the main page)' : `, rung ${rung}`}. The ladder is Manual: write it now (about $${MONITOR_COSTS.blogPostEach.toFixed(2)}) or leave it for later.`,
+      detail: `Page ${pageNo} of your ladder ${q(c.head)}${rung === 4 ? ' (the main page)' : `, rung ${rung}`}. The ladder is Manual: write it now (about ${formatUsd(estimateRunCost('keyword', {}, cachedCalibration()))}) or leave it for later.`,   // D-2: the Write now form's own figure
       action:
         actionFromApiBody(
           {

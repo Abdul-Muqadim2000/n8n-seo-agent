@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { STAGE_LABELS } from './constants';
+import { AUTOMATIONS, MODES, SCHEDULED_STAGES, STAGE_LABELS } from './constants';
+import { findOpenBrackets } from './placeholders';
 
 /**
  * B-R1 — getting the report out of the app (benchmark programme 2026-10-15, area 12 §4 G-1 and §7).
@@ -54,8 +55,8 @@ export const DELIVERY = {
   /** how long to wait between attempts, in minutes */
   retryMinutes: 10,
   /** the header a webhook body is signed with */
-  signatureHeader: 'X-Ascentra-Signature',
-  timestampHeader: 'X-Ascentra-Timestamp',
+  signatureHeader: 'X-Alaventra-Signature',
+  timestampHeader: 'X-Alaventra-Timestamp',
 } as const;
 
 export interface DeliverySettings {
@@ -160,6 +161,7 @@ export const deliveryOn = (s: DeliverySettings): boolean => s.frequency !== 'off
 
 export type HoldCode =
   | 'not_ready'
+  | 'test_run'
   | 'refused'
   | 'rejected'
   | 'unavailable'
@@ -181,6 +183,32 @@ const hold = (code: HoldCode, reason: string): DeliveryDecision => ({ deliver: f
 
 /** Stages that say a run has *started*, not that a report is ready. */
 const INTERIM_STAGES = new Set(['case_study_started', 'ai_visibility_started', 'backlinks_started', 'site_tracker_setup', 'unknown']);
+
+/**
+ * R110 — the stages that are themselves a report. Every weekly / monitor report node in the engine ends with `status: 'progress'`
+ * (AI_Report, BL_Report, LB_Report, Growth_Report, Pulse_Metrics, Site_Report, Tracker_Report, Cadence_Status / Cadence_Note):
+ * that has been the weekly-report contract since the v4.2 Rank Tracker, 79 stored rows carry it and other API callers may read
+ * it, so the app reads `progress` on one of these stages as a finished report rather than the engine changing its word.
+ */
+export const REPORT_STAGES: ReadonlySet<string> = new Set<string>([
+  ...AUTOMATIONS.map((a) => a.id),
+  ...AUTOMATIONS.map((a) => a.stage),
+  ...SCHEDULED_STAGES,
+  'content_cadence',
+  ...Object.values(MODES).flatMap((m) => m.finalStages),
+]);
+
+const FINISHED_STATUSES = new Set(['completed', 'ok', 'success']);
+
+/**
+ * Whether a callback's status says the report is finished. `completed` / `ok` / `success` always do (and an empty status, which
+ * old rows carry); `progress` does on a report stage (R110); `failed`, `rejected`, `accepted` and anything unknown never do.
+ */
+export function finishedStatus(stage: string, status: string): boolean {
+  const s = (status || '').toLowerCase();
+  if (!s || FINISHED_STATUSES.has(s)) return true;
+  return s === 'progress' && REPORT_STAGES.has(stage) && !INTERIM_STAGES.has(stage);
+}
 
 const isObj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
 const text = (v: unknown): string => (typeof v === 'string' ? v : '');
@@ -206,6 +234,7 @@ export interface DeliveryCandidate {
  *    `serp_features.unavailable`, a homepage it could not read). The report exists so the customer can see *why*; pushing it
  *    would present "we could not look" as a finding.
  *  - **interim** — a "started" callback is an acknowledgement, not a result.
+ *  - **test run** — C-11: a dry run (`dry_run: true`) changed nothing; it is a test, not a report.
  */
 export function deliveryDecision(c: DeliveryCandidate): DeliveryDecision {
   const p = c.payload ?? {};
@@ -214,15 +243,30 @@ export function deliveryDecision(c: DeliveryCandidate): DeliveryDecision {
 
   if (stage === 'rejected' || status === 'rejected')
     return hold('rejected', `The engine refused this run${text(p.error) ? ` (${text(p.error).slice(0, 160)})` : ''}, so there is nothing to send.`);
-  if (status && status !== 'completed' && status !== 'ok' && status !== 'success')
-    return hold('rejected', `This run finished as "${status}", not as a completed report.`);
+  // R110: a "started" note is an acknowledgement whatever status it carries (the engine sends them as `accepted`), so it is
+  // checked before the status — otherwise it is coded `rejected` and a share link calls it "did not produce a report".
   if (INTERIM_STAGES.has(stage)) return hold('interim', 'This is a note that the work started, not the report itself.');
+  if (!finishedStatus(stage, status)) return hold('rejected', `This run finished as "${status}", not as a completed report.`);
   if (text(p.validation_error)) return hold('refused', `The engine refused this run: ${text(p.validation_error).slice(0, 200)}`);
+  // C-11 (re-rating 2026-10-17): a dry run is a test the owner started - AI Growth's `dry_run: true` submitted nothing, so a report titled
+  // "done for you this week" must never be pushed to anyone. It stays in the app, marked as a test.
+  if (p.dry_run === true || p.dry_run === 'true')
+    return hold('test_run', 'This was a test run (dry run): nothing was submitted or changed, so it stays in the app and is not sent.');
 
   // R11 — the quality gate. A page that did not pass is a draft, whatever else the report contains.
   if (p.qa_not_ready === true || p.qa_publishable === false) {
     const why = (Array.isArray(p.qa_reasons) ? p.qa_reasons.map(text).filter(Boolean) : []).slice(0, 2).join('; ');
     return hold('not_ready', `The page did not pass the quality check${why ? ` (${why})` : ''}, so it is waiting in the app rather than going out as finished work.`);
+  }
+  // A-13 (2026-10-17) — a written page that still holds a bracket for a person to fill in or confirm is a draft too, whatever the
+  // gate said: the same detector the engine counts with (placeholders.ts) reads the page that would be sent.
+  const body = text(p.markdown) || text(p.page_markdown);
+  if (body) {
+    const open = findOpenBrackets(body);
+    if (open.length) {
+      const n = open.reduce((s, b) => s + b.count, 0);
+      return hold('not_ready', `The page still has ${n} bracket${n === 1 ? '' : 's'} to fill in or confirm (${open.slice(0, 3).map((b) => b.token.slice(0, 80)).join(', ')}), so it is waiting in the app rather than going out as finished work.`);
+    }
   }
   // R22 / R23 — a ladder the engine would not plan
   if (p.planned === false) return hold('refused', `No plan was made: ${text(isObj(p.refusal).reason) || 'the engine refused this keyword'}.`);
@@ -344,6 +388,7 @@ const FIGURE_LABELS: Record<string, string> = {
   clicks: 'Clicks',
   impressions: 'Impressions',
   clicksPct: 'Clicks change',
+  clicksChange: 'Clicks change',
   sessions: 'Visits',
   actions: 'Actions to take',
   mentionRate: 'AI mention rate',
@@ -458,6 +503,49 @@ export function deliveryWebhookBody(p: DeliveryPayload): Record<string, unknown>
     })),
     held: p.held.map((h) => ({ id: h.reportId, title: h.title, reason: h.reason, code: h.code })),
   };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// 4b. The weekly site report's headline follows its own significance test (R113)
+// ---------------------------------------------------------------------------------------------------------------------------
+
+/** One figure's verdict from the engine's two-sample Poisson test (`significance.<figure>` in the site_tracker payload, G28). */
+export interface ChangeTest {
+  pct?: number | null;
+  real?: boolean | null;
+  significant?: boolean | null;
+  watch?: boolean | null;
+}
+
+const asTest = (v: unknown): ChangeTest | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as ChangeTest) : null);
+
+/**
+ * R113 (2026-10-16): the hero of the weekly site report read "Clicks from Google are up 52% to 32" while the brief right under it said
+ * the same change was "not statistically significant". The headline now follows the test the report itself prints: a clicks change the
+ * test calls not real reads "within normal variation", and the headline leads with a change that IS real (impressions, then organic
+ * visits) when there is one. Without a significance block (Search Console not connected, older reports) it reads as before.
+ */
+export function clicksHeadline(clicks: number | null, pctCh: number | null, significance?: unknown): string {
+  if (clicks == null) return 'Weekly site report';
+  const c = Math.round(clicks).toLocaleString('en-US');
+  const unit = clicks === 1 ? 'click' : 'clicks';
+  const sig = asTest(significance) ? (significance as Record<string, unknown>) : null;
+  const ct = sig ? asTest(sig.clicks) : null;
+  if (ct && ct.real === false) {
+    const label: Record<string, string> = { impressions: 'Impressions in Google', sessions: 'Visits from organic search' };
+    const realKey = ['impressions', 'sessions'].find((k) => {
+      const t = asTest(sig![k]);
+      return !!t && t.real === true && typeof t.pct === 'number' && Math.abs(t.pct) >= 0.5;
+    });
+    const steady = `${c} ${unit} from Google, within normal variation`;
+    if (!realKey) return steady.charAt(0).toUpperCase() + steady.slice(1);
+    const p = asTest(sig![realKey])!.pct as number;
+    return `${label[realKey]} ${p >= 0 ? 'up' : 'down'} ${Math.abs(Math.round(p))}% — a real change · ${steady}`;
+  }
+  if (pctCh == null) return `${c} ${unit} from Google in the last 28 days`;
+  if (pctCh >= 0.5) return `Clicks from Google are up ${Math.round(pctCh)}% to ${c}`;
+  if (pctCh <= -0.5) return `Clicks from Google are down ${Math.abs(Math.round(pctCh))}% to ${c}`;
+  return `Clicks from Google are steady at ${c}`;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------

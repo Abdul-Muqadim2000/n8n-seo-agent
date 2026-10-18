@@ -16,6 +16,7 @@ export * from './keywords';
 export * from './link-import';
 export * from './outreach';
 export * from './draft-qa';
+export * from './placeholders';
 export * from './findings';
 export * from './lineage';
 export * from './annotations';
@@ -24,5 +25,13 @@ export * from './share';
 export * from './brand';
 export * from './queue';
 export * from './report-delivery';
+export * from './ai-visibility';
+export * from './ai-panel';   // G6 (2026-10-18): the AI question panel at scale — the one cost formula (estimateAiPanelCost), mirrored from the engine
 // The setup guides are imported from '@seo/shared/guides', not from here: the catalogue is a sizeable chunk of text and only
 // the help panel (and the recommendation → guide map) needs it, so it stays out of every bundle that imports this barrel.
+export * from './api-v1';
+export * from './integrations';
+export * from './identity';
+export * from './cms';
+export * from './crawlers';
+export * from './agency';

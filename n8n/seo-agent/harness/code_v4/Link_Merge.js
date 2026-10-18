@@ -10,7 +10,13 @@
 // constructor and no DOM. Hosts are compared without "www." (crawls report www. URLs while canonicals often use the bare host).
 const LK = (() => {
   const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr', 'param']);
-  const ent = (s) => String(s || '').replace(/&amp;/gi, '&').replace(/&quot;/gi, '"').replace(/&#0?39;|&apos;/gi, "'").replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&nbsp;|&#160;/gi, ' ').replace(/&#(\d+);/g, (m, d) => { try { return String.fromCodePoint(Number(d)); } catch (e) { return m; } });
+  const ent = (() => {
+    const N = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', nbsp: ' ', rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“', ndash: '–', mdash: '—', hellip: '…', copy: '©', reg: '®', trade: '™', bull: '•', middot: '·', laquo: '«', raquo: '»', euro: '€', pound: '£', deg: '°' };
+    return (s) => String(s == null ? '' : s).replace(/&(?:#[xX]([0-9a-fA-F]+)|#(\d+)|([a-zA-Z][a-zA-Z0-9]*));/g, (m, h, d, n) => {
+      if (h !== undefined || d !== undefined) { const cp = h !== undefined ? parseInt(h, 16) : Number(d); if (cp === 160) return ' '; try { return cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : m; } catch (e) { return m; } }
+      const k = n.toLowerCase(); return Object.prototype.hasOwnProperty.call(N, k) ? N[k] : m;
+    });
+  })();   // R62: named + decimal + hex, one pass (the same body as v5/code/_entities.js)
   const text = (s) => ent(String(s || '').replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<noscript[\s\S]*?<\/noscript>/gi, ' ').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
   const attr = (attrs, name) => { const m = String(attrs || '').match(new RegExp('\\b' + name + '\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\'|([^\\s>]+))', 'i')); return m ? ent(m[1] ?? m[2] ?? m[3] ?? '') : null; };
   const hostOf = (u) => { const m = String(u || '').trim().match(/^(?:[a-z][a-z0-9+.-]*:)?\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i); return m ? m[1].toLowerCase().replace(/^www\./, '').replace(/\.$/, '') : ''; };
@@ -257,7 +263,24 @@ const ymd = (s) => String(s || '').slice(0, 10);
 const SEM = { main: 'content', article: 'content', section: 'content', '': 'body', header: 'nav', nav: 'nav', footer: 'footer', aside: 'sidebar', details: 'body', summary: 'body' };
 const BIG = /(^|\.)(google|youtube|facebook|linkedin|wikipedia|amazon|apple|microsoft|reddit|quora|instagram|twitter|x|tiktok|medium|github|pinterest|blogspot|wordpress|tumblr)\.[a-z.]+$/i;
 const DOC = /\.(pdf|docx?|xlsx?|pptx?|odt|rtf|zip|rar|7z|gz|csv|mp4|mp3|mov|jpe?g|png|gif|webp|svg)(?:[?#]|$)/i;   // documents and media: no links to check, and a 16 MB PDF stalled the live run (2026-10-08)
-const LISTY = /\b(best|top|leading|\d{1,3}\b.*\b(companies|providers|vendors|tools|software|solutions|firms|agencies|platforms)|vs\.?|versus|compar|alternativ|review|list of|directory|ranking)/i;   // a "best X" page, not a product or FAQ page
+// R86 (2026-10-16, re-rating defect C-10): the old LISTY had no closing word boundary and a bare-number branch, so
+// "topdynamicspartners.com" read as "top", a vendor's own SEO title ("Best Dynamics 365 Business Central Partner in UAE - TMR
+// Consulting", "Contact Best Microsoft Dynamics 365 Partner in the UAE | SQIT") read as "best", and "Dynamics 365 … Solutions" read
+// as "Top 10 … solutions" — five of the eight "Best of" lists in exec 626 were vendors' own pages. A list now has to SAY it is one:
+// a count ("Top 10 …", "20 Best …", a title opening with "20 … Partners"), or best / top / leading followed by a PLURAL kind of
+// business ("best e-invoicing tools"), or a comparison / alternatives / directory / ranking word — each as a whole word. A single
+// "best … Partner" is a vendor describing itself.
+const LIST_NOUNS = '(companies|providers|vendors|partners|consultants|consultancies|firms|agencies|tools|platforms|apps|applications|solutions|software|systems|options|alternatives|services|products|asps|integrators|resellers)';
+const LISTY_RES = [
+  /\b(top|best)\s+\d{1,3}\b/,
+  /(^|[^a-z0-9.])\d{1,3}\s+(best|top|leading|great|popular|recommended)\b/,
+  new RegExp('^(the\\s+)?\\d{1,3}\\s+([a-z0-9&.\\-]+\\s+){0,5}' + LIST_NOUNS + '\\b'),
+  new RegExp('\\b(best|top|leading)\\s+([a-z0-9&.\\-]+\\s+){0,5}' + LIST_NOUNS + '\\b'),
+  /\b(vs\.?|versus|compared|comparison|comparisons|alternatives?|list of|directory|rankings?|shortlist|round-?up)\b/
+];
+const listy = (title, url) => { const t = String(title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const u = String(url || '').toLowerCase().replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '').replace(/[\/_.=&+-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return LISTY_RES.some(re => re.test(t) || (u && re.test(u))); };
 const out = [];
 for (const p of plans) {
   const M = new Map(); const now = p.checked_at; const today = ymd(now);
@@ -321,7 +344,7 @@ for (const p of plans) {
       page(e, 'https://' + host + '/wiki/' + encodeURIComponent(String(x.title || '').replace(/ /g, '_')), 'wiki'); if (!e.to_url) e.to_url = x.url; e.anchor = e.anchor || String(x.title || '').slice(0, 160); e.link_type = 'resource'; wiki.pages++; }
     if (r.kind === 'hn') for (const x of (j.hits || [])) { if (!LK.sameSite(LK.hostOf(x.url), p.domain)) continue; const e = get('news.ycombinator.com'); if (!e) continue; seen(e, 'hn', x.created_at); page(e, 'https://news.ycombinator.com/item?id=' + x.objectID, 'hn'); if (!e.to_url) e.to_url = x.url; e.anchor = e.anchor || String(x.title || '').slice(0, 160); e.link_type = 'forum'; hn.stories++; }
     if (r.kind === 'searx_mention' || r.kind === 'searx_list') for (const x of (j.results || []).slice(0, 20)) { const host = LK.hostOf(x.url); if (!host || LK.sameSite(host, p.domain) || LK.domainKind(host, p.domain) !== 'web' || LK.isScraper(host) || DOC.test(x.url) || /^\[pdf\]/i.test(String(x.title || '')) || (p.competitors || []).some(c => LK.sameSite(host, c))) continue;
-      if (r.kind === 'searx_list' && !LISTY.test(String(x.title || '') + ' ' + String(x.url || ''))) continue;
+      if (r.kind === 'searx_list' && !listy(x.title, x.url)) continue;   // R86: the title or the address says it is a list, with whole words
       (r.kind === 'searx_list' ? listPages : mentionPages).push({ url: x.url, domain: LK.refKey(host), title: String(x.title || '').slice(0, 160), source: r.kind === 'searx_list' ? 'web_list' : 'web', topic: r.topic || '' }); }
   }
   for (const [r, resp] of mine(nresps, nreqs)) { const j = json(resp) || {}; for (const a of (j.articles || [])) { const host = LK.hostOf(a.url); if (!host || LK.sameSite(host, p.domain) || DOC.test(a.url) || LK.isScraper(host)) continue;

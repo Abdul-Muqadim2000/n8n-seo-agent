@@ -10,7 +10,7 @@ import { DataTable, type Column } from '@/components/ui/table';
 import { Tab, TabList, TabPanel, Tabs } from '@/components/ui/tabs';
 import { ChartCard, TimeSeriesChart } from '@/components/charts';
 import { FileButton } from './files';
-import { AlertList, Block, CodeBlock, Disclosure, Empty, has, n, num, obj, objs, shortUrl, str, strs, type P } from './kit';
+import { AlertList, Block, CodeBlock, Disclosure, Empty, has, LedgerCard, n, num, obj, objs, shortUrl, str, strs, type P } from './kit';
 import { ChartTitle, HeroFileButton, ReportHero, ScoreMark } from './visuals';
 
 const monthLabel = (m: unknown) => {
@@ -96,6 +96,21 @@ export function BacklinksReport({ report }: { report: ReportDetail }) {
   ];
 
   const sites = num(obj(p.coverage).union) ?? num(s.referring_domains);
+  // R112 (2026-10-16): one count. The merged count (every source, each link checked on its page) is THE count wherever it exists;
+  // DataForSEO's own figure is shown as the index's, with the link-farm pages it includes, and its spam score is not called "High"
+  // when the links behind it are the farms this report already set aside.
+  const union = num(obj(p.coverage).union);
+  const farmCount = objs(p.farms).length;
+  const dfsRd = num(s.referring_domains);
+  const spam = num(s.spam_score);
+  const spamHint =
+    spam == null
+      ? 'Share of links from spammy sites'
+      : spam >= 50 && farmCount > 0
+        ? `the index's figure · the ${farmCount} link-farm link${farmCount === 1 ? '' : 's'} behind it ${farmCount === 1 ? 'is' : 'are'} set aside, not counted`
+        : spam >= 50
+          ? 'High: many links come from spam sites'
+          : "the index's figure: share of links from spammy sites";
   const pdf = report.files.find((f) => f.kind === 'pdf');
   const domain = str(p.domain) || report.siteDomain || 'your site';
 
@@ -125,10 +140,18 @@ export function BacklinksReport({ report }: { report: ReportDetail }) {
         }
         stats={
           <>
-            <HeroStat label="Referring domains" value={num(s.referring_domains) != null ? <CountUp value={num(s.referring_domains)!} format={(v) => n(Math.round(v))} /> : '–'} hint={num(s.referring_domains_nofollow) ? `${num(s.referring_domains_nofollow)} nofollow only` : undefined} />
+            {union != null ? (
+              <HeroStat
+                label="Linking sites (all sources)"
+                value={<CountUp value={union} format={(v) => n(Math.round(v))} />}
+                hint={dfsRd != null ? `DataForSEO's index alone: ${n(dfsRd)}${farmCount ? `, incl. ${n(farmCount)} link-farm link${farmCount === 1 ? '' : 's'} set aside` : ''}` : undefined}
+              />
+            ) : (
+              <HeroStat label="Referring domains (DataForSEO)" value={dfsRd != null ? <CountUp value={dfsRd} format={(v) => n(Math.round(v))} /> : '–'} hint={num(s.referring_domains_nofollow) ? `${num(s.referring_domains_nofollow)} nofollow only` : undefined} />
+            )}
             <HeroStat label="Backlinks" value={num(s.backlinks) != null ? <CountUp value={num(s.backlinks)!} format={(v) => n(Math.round(v))} /> : '–'} />
             <HeroStat label="Links lost" value={<CountUp value={lost.length} />} hint={important.length ? `${important.length} important` : undefined} />
-            <HeroStat label="Spam score" value={num(s.spam_score) != null ? `${num(s.spam_score)}%` : '–'} hint={(num(s.spam_score) ?? 0) >= 50 ? 'High: many links come from spam sites' : 'Share of links from spammy sites'} />
+            <HeroStat label="Spam score (the index's)" value={spam != null ? `${spam}%` : '–'} hint={spamHint} />
           </>
         }
       />
@@ -395,6 +418,7 @@ export function BacklinksReport({ report }: { report: ReportDetail }) {
       )}
 
       {!full && !has(p.gap) && <p className="text-xs text-ink-3">This was the weekly light check (lost, new and spammy links; the valuable links re-checked on their pages). The monthly full report adds every source, the link gap, lists, reclaims and outreach prospects.</p>}
+      <LedgerCard ledger={p.run_ledger} extraCost={num(p.cost_usd)} />
     </Stagger>
   );
 }

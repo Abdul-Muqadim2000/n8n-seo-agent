@@ -4,7 +4,8 @@ import { Bot, TrendingUp, Wrench } from 'lucide-react';
 import { useMe } from '@/lib/queries';
 import { safeNext } from '@/pages/auth/shared';
 import { PageLoader } from '../ui/feedback';
-import { Brand } from './Brand';
+import { onPortalHost, usePortalBrand } from '@/lib/portal';
+import { AgencyLockup, Brand } from './Brand';
 import { ThemeMenu } from './ThemeMenu';
 
 /** Signed-in area: sends visitors to /login?next=<where they wanted to go>. */
@@ -45,21 +46,59 @@ const CAPABILITIES: { icon: ReactNode; title: string; text: string }[] = [
   },
 ];
 
+/** G5: an agency's portal: its mark and its words, nothing of ours (the panel stays the same shape, in neutral surfaces) */
+function PortalAuthPanel() {
+  const b = usePortalBrand();
+  return (
+    <aside className="relative hidden border-r border-line bg-surface lg:flex lg:min-h-dvh lg:flex-col lg:justify-between lg:px-12 lg:py-10 xl:px-16 xl:py-12">
+      {b ? <AgencyLockup name={b.name} logoUrl={b.logoUrl} logoDarkUrl={b.logoDarkUrl} initials={b.initials} /> : <span className="h-7" aria-hidden />}
+      <div className="max-w-[460px] py-8">
+        <p className="font-display text-[30px] font-semibold leading-[1.2] tracking-[-0.02em] text-ink xl:text-[34px]">{b ? `${b.name} client portal` : 'Client portal'}</p>
+        <p className="mt-4 text-[15px] leading-relaxed text-ink-2">Your websites’ search performance, reports and recommendations in one place, and the pages and outreach waiting for your approval.</p>
+      </div>
+      <p className="border-t border-line pt-5 text-xs leading-relaxed text-ink-3">
+        {b?.footerText ?? (b?.supportEmail ? `Questions? ${b.supportEmail}` : '')}
+        {b?.poweredBy ? <span className="block pt-1">Powered by Alaventra</span> : null}
+      </p>
+    </aside>
+  );
+}
+
 /** Auth pages: the brand panel on ink (wide screens) beside the form; one column with the header lockup on phones. */
 export function AuthLayout() {
+  const portal = usePortalBrand();
+  if (portal || onPortalHost())
+    return (
+      <div className="min-h-dvh bg-page lg:grid lg:grid-cols-[minmax(440px,5fr)_7fr]">
+        <PortalAuthPanel />
+        <div className="flex min-h-dvh flex-col">
+          <header className="flex items-center justify-between gap-3 px-4 py-4 sm:px-8 sm:py-6">
+            <Brand to="/" className="lg:hidden" />
+            <div className="ml-auto">
+              <ThemeMenu />
+            </div>
+          </header>
+          <main className="flex flex-1 items-start justify-center px-4 pb-16 pt-2 sm:items-center sm:px-8 sm:pt-0">
+            <div className="w-full max-w-[440px]">
+              <Outlet />
+            </div>
+          </main>
+        </div>
+      </div>
+    );
   return (
     <div className="min-h-dvh bg-page lg:grid lg:grid-cols-[minmax(440px,5fr)_7fr]">
       <aside className="relative hidden overflow-hidden bg-ink-surface text-on-ink [--ring:0_0_0_2px_var(--ink-surface),0_0_0_4px_var(--accent-on-ink)] lg:flex lg:min-h-dvh lg:flex-col lg:justify-between lg:px-12 lg:py-10 xl:px-16 xl:py-12">
         {/* the mark as a faint watermark (whole logo, never single rays) */}
         <img
-          src="/brand/ascentra-mark-white.svg"
+          src="/brand/alaventra-mark-white.svg"
           alt=""
           aria-hidden
           draggable={false}
           className="pointer-events-none absolute -bottom-40 -right-52 w-[620px] max-w-none select-none opacity-[0.045]"
         />
         <Link to="/" className="relative inline-flex w-fit rounded-md">
-          <img src="/brand/ascentra-logo-horizontal-white.svg" alt="Ascentra" width={153} height={40} draggable={false} className="h-10 w-auto select-none" />
+          <img src="/brand/alaventra-logo-horizontal-white.svg" alt="Alaventra" width={163} height={40} draggable={false} className="h-10 w-auto select-none" />
         </Link>
 
         <div className="relative max-w-[460px] py-8">

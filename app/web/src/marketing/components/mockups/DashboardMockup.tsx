@@ -61,15 +61,15 @@ function LineChart() {
   );
 }
 
-/** The Ascentra overview dashboard drawn in code: sidebar, KPI tiles, a clicks chart that draws in, "Needs you" and this week's work (sample data). */
+/** The Alaventra overview dashboard drawn in code: sidebar, KPI tiles, a clicks chart that draws in, "Needs you" and this week's work (sample data). */
 export function DashboardMockup({ className, compact = false }: { className?: string; compact?: boolean }) {
   return (
-    <Drawn label="The Ascentra overview dashboard with sample data: clicks, impressions, average position, AI mention rate, a clicks chart and the work that needs you." className={cn('flex bg-page', className)}>
+    <Drawn label="The Alaventra overview dashboard with sample data: clicks, impressions, average position, AI mention rate, a clicks chart and the work that needs you." className={cn('flex bg-page', className)}>
       {!compact && (
         <aside className="hidden w-[188px] shrink-0 flex-col border-r border-line bg-surface p-3 md:flex">
           <div className="px-2 pb-4 pt-1">
-            <img src="/brand/ascentra-logo-header-light.svg" alt="" width={103} height={22} className="h-[22px] w-auto dark:hidden" />
-            <img src="/brand/ascentra-logo-header-dark.svg" alt="" width={103} height={22} className="hidden h-[22px] w-auto dark:block" />
+            <img src="/brand/alaventra-logo-header-light.svg" alt="" width={110} height={22} className="h-[22px] w-auto dark:hidden" />
+            <img src="/brand/alaventra-logo-header-dark.svg" alt="" width={110} height={22} className="hidden h-[22px] w-auto dark:block" />
           </div>
           <div className="mb-3 rounded-md border border-line px-2.5 py-2">
             <span className="block text-[10px] text-ink-3">Website</span>

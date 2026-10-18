@@ -13,8 +13,8 @@
    "subject": 16
   },
   "refusal": {
-   "pass": 16,
-   "subject": 33
+   "pass": 20,
+   "subject": 37
   },
   "withheld": {
    "pass": 4,
@@ -38,6 +38,16 @@
    "fails": [],
    "markup": 0,
    "node": "Analyze Backlinks",
+   "refusal": true,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Analyze HTML": {
+   "fails": [],
+   "markup": 4,
+   "node": "Analyze HTML",
    "refusal": true,
    "subject": [
     "refusal"
@@ -117,13 +127,23 @@
     "kit": true,
     "travels": true
    },
-   "markup": 274,
+   "markup": 283,
    "node": "Build Audit Report",
    "subject": [
     "lineage",
     "withheld"
    ],
    "withheld": true,
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Build Content Prompt": {
+   "fails": [],
+   "markup": 0,
+   "node": "Build Content Prompt",
+   "refusal": true,
+   "subject": [
+    "refusal"
+   ],
    "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
   },
   "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Build Full Report": {
@@ -133,7 +153,7 @@
     "kit": true,
     "travels": true
    },
-   "markup": 466,
+   "markup": 481,
    "node": "Build Full Report",
    "subject": [
     "lineage",
@@ -165,7 +185,7 @@
     "kit": true,
     "travels": true
    },
-   "markup": 93,
+   "markup": 95,
    "node": "Build Ladder Report",
    "subject": [
     "lineage"
@@ -373,7 +393,7 @@
     "kit": true,
     "travels": true
    },
-   "markup": 22,
+   "markup": 25,
    "node": "Growth Report",
    "subject": [
     "lineage"
@@ -390,6 +410,16 @@
    ],
    "workflow": "SEO Agent \u2014 AI Pulse"
   },
+  "SEO Agent \u2014 AI Visibility Tracker / AI Chunk Handoff": {
+   "fails": [],
+   "markup": 0,
+   "node": "AI Chunk Handoff",
+   "refusal": true,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent \u2014 AI Visibility Tracker"
+  },
   "SEO Agent \u2014 AI Visibility Tracker / AI Metrics": {
    "fails": [],
    "like_for_like": {
@@ -401,6 +431,16 @@
    "refusal": true,
    "subject": [
     "like_for_like",
+    "refusal"
+   ],
+   "workflow": "SEO Agent \u2014 AI Visibility Tracker"
+  },
+  "SEO Agent \u2014 AI Visibility Tracker / AI Plan": {
+   "fails": [],
+   "markup": 0,
+   "node": "AI Plan",
+   "refusal": true,
+   "subject": [
     "refusal"
    ],
    "workflow": "SEO Agent \u2014 AI Visibility Tracker"
@@ -474,7 +514,7 @@
     "kit": true,
     "travels": true
    },
-   "markup": 24,
+   "markup": 25,
    "node": "BL Report",
    "subject": [
     "lineage"

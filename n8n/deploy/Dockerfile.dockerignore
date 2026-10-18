@@ -1,0 +1,6 @@
+# Build context is n8n/: send only what the image copies. Never .env (secrets), the harness, docs or local data.
+**
+!seo-agent/deploy_manifest.json
+!seo-agent/workflows/
+!deploy/entrypoint.sh
+!deploy/release.mjs

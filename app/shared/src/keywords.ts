@@ -68,7 +68,8 @@ export function forYouLabel(difficulty: DifficultyForYou | null, plan: PlanChoic
 /** The 2025 Ahrefs study behind "months, not weeks": 1.74% of new pages reach Google's top 10 within a year, 40.8% of those within a month. */
 export const REACH_BASE_RATE = { year: 2025, source: 'Ahrefs', top10WithinYearPct: 1.74, ofThoseWithinMonthPct: 40.8, url: 'https://ahrefs.com/blog/how-long-does-it-take-to-rank/' } as const;
 
-export type ChanceBand = 'good' | 'fair' | 'low' | 'slim' | 'none';
+/** 'unmeasured' (R49, 2026-10-16): the website's reach rests on no measured ranking, so no band is shown (n8n's reachMeasured). */
+export type ChanceBand = 'good' | 'fair' | 'low' | 'slim' | 'none' | 'unmeasured';
 /** The estimated chance of reaching the top 10 within the plan's months: a band per plan type (stretch = a very hard keyword on a full ladder). */
 export interface PlanChance {
   band: ChanceBand;
@@ -85,16 +86,34 @@ export const PLAN_CHANCE: Record<PlanType | 'stretch' | 'none', PlanChance> = {
 };
 export const CHANCE_NOTE = 'an uncalibrated estimate until this system has measured its own ladders';
 
-/** The chance band of a plan ('none' / null = no ladder). */
-export function planChance(plan: PlanChoice | null | undefined, stretch = false): PlanChance {
+/**
+ * R49 (2026-10-16, the third re-rating): the band was read off the plan type alone, so a website whose reach is only the size tier for
+ * "0 keywords in Google's top 10" was shown "good (50-70%)". The table applies only when the reach rests on a measured ranking — the
+ * same rule as n8n's reachMeasured(): the site's top-10 keywords (percentile, or any at all), a reach measured on the topic, or the site
+ * already ranking 1-20 for the keyword.
+ */
+export const UNMEASURED_CHANCE: PlanChance = { band: 'unmeasured', range: [0, 0] };
+export const UNMEASURED_LABEL = 'no estimated chance (no measured ranking to judge it by)';
+export function reachMeasured(info: { method?: unknown; sample?: unknown; top10?: unknown; used?: unknown } | null | undefined, position?: number | null): boolean {
+  const p = num(position);
+  if (p != null && p >= 1 && p <= 20) return true;
+  const i = info ?? {};
+  if (i.used === true || str(i.method) === 'percentile') return true;
+  return (num(i.top10) ?? 0) > 0 || (num(i.sample) ?? 0) > 0;
+}
+
+/** The chance band of a plan ('none' / null = no ladder; `measured: false` = no band, the reach rests on no measured ranking). */
+export function planChance(plan: PlanChoice | null | undefined, stretch = false, measured = true): PlanChance {
   if (!plan || plan === 'none') return PLAN_CHANCE.none;
+  if (!measured) return UNMEASURED_CHANCE;
   return PLAN_CHANCE[stretch ? 'stretch' : plan];
 }
 
 /** "estimated chance good (50-70%, uncalibrated)" (n8n's reachChance().label); '' for no ladder */
-export function chanceLabel(plan: PlanChoice | null | undefined, stretch = false): string {
-  const c = planChance(plan, stretch);
+export function chanceLabel(plan: PlanChoice | null | undefined, stretch = false, measured = true): string {
+  const c = planChance(plan, stretch, measured);
   if (c.band === 'none') return '';
+  if (c.band === 'unmeasured') return UNMEASURED_LABEL;
   return `estimated chance ${c.band} (${c.range[0]}-${c.range[1]}%, uncalibrated)`;
 }
 
@@ -104,15 +123,18 @@ export function baseRateText(): string {
 }
 
 /** The sentence under a plan's month range (n8n's reachChanceText): the band, that it is uncalibrated, and the base rate it is judged against. */
-export function chanceText(plan: PlanChoice | null | undefined, months: string, stretch = false): string {
-  const c = planChance(plan, stretch);
+export function chanceText(plan: PlanChoice | null | undefined, months: string, stretch = false, measured = true): string {
+  const c = planChance(plan, stretch, measured);
   if (c.band === 'none' || !months) return '';
+  if (c.band === 'unmeasured')
+    return `No estimated chance: the reach this plan is judged against rests on no measured ranking (the search data shows none of your keywords in Google's top 10), so a band would only restate the plan. The only measured figure is the base rate. ${baseRateText()}`;
   return `Estimated chance of reaching the top 10 within ${months} months: ${c.band} (${c.range[0]}-${c.range[1]}%) — ${CHANCE_NOTE}. ${baseRateText()}`;
 }
 
 /** The engine's `chance` object as the app's band (tolerant: unknown shapes fall back to the plan type's band). */
 export function toChance(raw: unknown, plan: PlanChoice | null | undefined, stretch = false): PlanChance {
   const o = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null;
+  if (o && o.band === 'unmeasured') return UNMEASURED_CHANCE;
   const band = o && typeof o.band === 'string' && ['good', 'fair', 'low', 'slim', 'none'].includes(o.band) ? (o.band as ChanceBand) : null;
   const r = o && Array.isArray(o.range) && o.range.length === 2 && o.range.every((x) => Number.isFinite(Number(x))) ? ([Number(o.range[0]), Number(o.range[1])] as const) : null;
   return band && r ? { band, range: r } : planChance(plan, stretch);

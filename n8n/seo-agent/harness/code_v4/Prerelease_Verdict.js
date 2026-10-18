@@ -25,7 +25,15 @@ const PW = (() => {
   // host-agnostic identity of a URL: crawls, sitemaps and canonicals disagree about www and the trailing slash
   const ukey = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/$/, '') || S(u).toLowerCase();
   const same = (a, b) => !!a && !!b && ukey(a) === ukey(b);
-  const strip = (s) => S(s).replace(/<[^>]*>/g, ' ').replace(/&nbsp;|&#160;/gi, ' ').replace(/&amp;/gi, '&').replace(/\s+/g, ' ').trim();
+  // the shared entity decoder, inlined (v5/code/_entities.js; build section 122 asserts the two stay identical): named, decimal and hex, one pass
+  const entDecode = /*__ENT_BEGIN__*/(() => {
+  const N = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', nbsp: ' ', rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“', ndash: '–', mdash: '—', hellip: '…', copy: '©', reg: '®', trade: '™', bull: '•', middot: '·', laquo: '«', raquo: '»', euro: '€', pound: '£', deg: '°' };
+  return (s) => String(s == null ? '' : s).replace(/&(?:#[xX]([0-9a-fA-F]+)|#(\d+)|([a-zA-Z][a-zA-Z0-9]*));/g, (m, h, d, n) => {
+    if (h !== undefined || d !== undefined) { const cp = h !== undefined ? parseInt(h, 16) : Number(d); if (cp === 160) return ' '; try { return cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : m; } catch (e) { return m; } }
+    const k = n.toLowerCase(); return Object.prototype.hasOwnProperty.call(N, k) ? N[k] : m;
+  });
+})()/*__ENT_END__*/;
+  const strip = (s) => entDecode(S(s).replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim();
 
   // ---- a small, stable fingerprint (FNV-1a, 32 bit): no crypto module is available in the sandbox ----
   const hash = (text) => {
@@ -315,7 +323,7 @@ const PW = (() => {
     const quota = /quota|rate limit|RESOURCE_EXHAUSTED|429/i.test(err);
     const denied = /permission|forbidden|403|unauthor|invalid_grant/i.test(err);
     if (err) return { ok: false, error: err, error_kind: quota ? 'quota' : denied ? 'access' : 'error', indexed: null, verdict: '', coverage: '',
-      robots: '', last_crawl: '', google_canonical: '', user_canonical: '', canonical_ok: null, mobile_usable: null, mobile_issues: [], mobile_verdict: '', mobile_note: '', rich_results: [], rich_verdict: '',
+      robots: '', last_crawl: '', google_canonical: '', user_canonical: '', canonical_ok: null, canonical_host_only: false, mobile_usable: null, mobile_issues: [], mobile_verdict: '', mobile_note: '', rich_results: [], rich_verdict: '',
       not_checked: quota ? 'Google\'s daily URL Inspection quota for this property is used up: not checked today.' : denied ? 'Search Console access is missing for this property: not checked.' : 'The inspection failed: not checked (' + err + ').' };
     // R10 (2026-10-13, re-rating §3.11): Google retired the Mobile Usability report and the API now answers `VERDICT_UNSPECIFIED` with no
     // issue list for every page (45 of 45 live on 2026-10-13). That is NOT CHECKED. The live run read it as "not mobile-friendly" and raised
@@ -332,7 +340,11 @@ const PW = (() => {
       ok: true, error: '', error_kind: '', verdict: S(idx.verdict), indexed: S(idx.verdict) === 'PASS', coverage: S(idx.coverageState),
       indexing_state: S(idx.indexingState), robots: S(idx.robotsTxtState), last_crawl: S(idx.lastCrawlTime),
       google_canonical: S(idx.googleCanonical), user_canonical: S(idx.userCanonical),
-      canonical_ok: (!S(idx.googleCanonical) || !S(idx.userCanonical)) ? null : same(idx.googleCanonical, idx.userCanonical),
+      // R59 (2026-10-16): Google choosing the SAME page on the OTHER host (https://techand.ai/x for our https://www.techand.ai/x) is a
+      // canonical Google did not take — `same` is host-agnostic on purpose (crawls and sitemaps disagree about www), so it called this "same
+      // as ours" and the daily watch could never see the split. The host is compared here, and a host-only difference is named.
+      canonical_ok: (!S(idx.googleCanonical) || !S(idx.userCanonical)) ? null : (same(idx.googleCanonical, idx.userCanonical) && hostOf(idx.googleCanonical) === hostOf(idx.userCanonical)),
+      canonical_host_only: !!S(idx.googleCanonical) && !!S(idx.userCanonical) && same(idx.googleCanonical, idx.userCanonical) && hostOf(idx.googleCanonical) !== hostOf(idx.userCanonical),
       mobile_usable: mobUsable, mobile_issues: mobIssues, mobile_verdict: mobVerdict, mobile_note: mobNote,
       rich_verdict: rich ? S(rich.verdict) : '',
       rich_results: rich && rich.detectedItems ? rich.detectedItems.map(d => S(d.richResultType)).filter(Boolean) : [],
@@ -447,32 +459,57 @@ plan.forEach((p, i) => {
     if (!S(sig.h1)) add('h1', 'fail', 'no H1');
     else if (sig.h1s > 1) add('h1', 'warn', sig.h1s + ' H1s');
     else add('h1', 'pass', '"' + S(sig.h1).slice(0, 80) + '"');
-    add('description', S(sig.description) ? 'pass' : 'warn', S(sig.description) ? S(sig.description).slice(0, 80) : 'no meta description', 'low');
+    // B-13 (F-B, 2026-10-17): a caller who asks to fail on low (`fail_on: "low"`) gets a missing description as a failure; otherwise it stays a warning
+    add('description', S(sig.description) ? 'pass' : (S(first.fail_on) === 'low' ? 'fail' : 'warn'), S(sig.description) ? S(sig.description).slice(0, 80) : 'no meta description', 'low');
   }
   pages.push({ url, status: st, checked: true, error: '', noindex: !!sig.noindex, canonical: S(sig.canonical), title: S(sig.title), h1: S(sig.h1), bytes: Number(sig.bytes) || 0, checks });
 });
+// ---- B5-7: `fail_on` and the `expected` list (see Prerelease_Validate.js). Without either the verdict is exactly what it was: any failure fails. ----
+const SEV_RANK = { low: 1, medium: 2, high: 3, critical: 4 };
+const failOn = S(first.fail_on) || 'any';
+const threshold = failOn === 'any' ? 1 : (SEV_RANK[failOn] || 1);
+const expectedList = Array.isArray(first.expected) ? first.expected : [];
+const trimP = (x) => (PW.helpers.pathOf(x).replace(/\/+$/, '') || '/').toLowerCase();
+const used = new Set(); const acceptedFailures = []; const belowThreshold = []; const failList = [];
+for (const f of failures) {
+  const pth = trimP(f.url);
+  const ei = expectedList.findIndex(e => e.path === pth && (!e.check || e.check === f.check));
+  if (ei >= 0) { used.add(ei); acceptedFailures.push({ ...f, expected_reason: S(expectedList[ei].reason) }); continue; }
+  if ((SEV_RANK[f.severity] || 3) < threshold) { belowThreshold.push(f); continue; }
+  failList.push(f);
+}
+// the page's own check list shows what was accepted, so nobody has to cross-read two arrays
+for (const f of [...acceptedFailures, ...belowThreshold]) { const pg = pages.find(p => p.url === f.url); const ck = pg && pg.checks.find(c => c.check === f.check); if (ck) ck.accepted = acceptedFailures.includes(f) ? 'expected_change' : 'below_fail_on'; }
+const expectedUnused = expectedList.filter((e, i) => !used.has(i)).map(e => ({ path: e.path, check: e.check, reason: e.reason, note: 'matched no failure: the change did not happen on this page, or the entry is stale' }));
 // what a release candidate cannot be asked, whatever we do — said once, with the reason (never reported as "fine")
-const cannot = [
+// R75 (2026-10-16): the wording follows the run. On a staging run the reasons are about a staging host; on a production check (`staging: false`)
+// nothing here is about staging — the reasons say why THIS check does not ask, which is by design: it reads only the pages it is given.
+const cannot = staging ? [
   { check: 'index_coverage', reason: 'Search Console can only answer for URLs Google has seen; a staging URL has never been crawled, so indexing, the canonical Google picked and the rich results are checked by the daily watch and the audit after the release' },
   { check: 'real_user_speed', reason: 'the Chrome UX Report has no real visitors for a staging host, so Core Web Vitals are measured after the release' },
   { check: 'positions', reason: 'a position exists only for a live URL' },
+] : [
+  { check: 'index_coverage', reason: 'this check reads only the pages it is given (by design, it asks Google nothing): indexing, the canonical Google picked and the rich results are checked by the daily page watch and the monthly audit' },
+  { check: 'real_user_speed', reason: 'this check reads only the pages it is given (by design): Core Web Vitals from real visitors (the Chrome UX Report) are in the audit and the site check' },
+  { check: 'positions', reason: 'this check reads only the pages it is given (by design): rankings are tracked by the weekly rank tracker, not by a release check' },
 ];
 const counts = { pages: pages.length, pages_read: pages.filter(p => p.checked).length, checks: pages.reduce((n, p) => n + p.checks.length, 0),
-  passed: pages.reduce((n, p) => n + p.checks.filter(c => c.state === 'pass').length, 0), failed: failures.length, warned: warnings.length,
+  passed: pages.reduce((n, p) => n + p.checks.filter(c => c.state === 'pass').length, 0), failed: failList.length, expected_changes: acceptedFailures.length, below_threshold: belowThreshold.length, warned: warnings.length,
   not_checked: notChecked.length + cannot.length };
-const fail = failures.length > 0;
+const fail = failList.length > 0;
 // a run that could read nothing is NOT a pass: CI would take exit code 0 as "the release is fine" when in truth nothing was checked
 const blind = !fail && counts.pages > 0 && counts.pages_read === 0;
 const verdict = fail ? 'fail' : blind ? 'not_checked' : 'pass';
+const extraNote = (acceptedFailures.length ? ', ' + acceptedFailures.length + ' expected change(s) accepted' : '') + (belowThreshold.length ? ', ' + belowThreshold.length + ' below fail_on=' + failOn : '');
 const summary = fail
-  ? counts.failed + ' check(s) failed on ' + [...new Set(failures.map(f => f.url))].length + ' of ' + counts.pages + ' page(s): ' + failures.slice(0, 3).map(f => f.label + ' (' + f.url + ')').join('; ')
+  ? counts.failed + ' check(s) failed on ' + [...new Set(failList.map(f => f.url))].length + ' of ' + counts.pages + ' page(s): ' + failList.slice(0, 3).map(f => f.label + ' (' + f.url + ')').join('; ') + extraNote
   : blind
     ? 'none of the ' + counts.pages + ' page(s) could be read, so nothing was checked: ' + (notChecked.map(n => n.reason)[0] || 'no answer')
     : counts.pages_read + ' of ' + counts.pages + ' page(s) read, ' + counts.passed + ' check(s) passed'
-      + (counts.warned ? ', ' + counts.warned + ' warning(s)' : '') + (counts.not_checked ? ', ' + counts.not_checked + ' not checked' : '');
+      + (counts.warned ? ', ' + counts.warned + ' warning(s)' : '') + extraNote + (counts.not_checked ? ', ' + counts.not_checked + ' not checked' : '');
 return [{ json: { status: 200, body: {
   ok: !fail && !blind, verdict, exit_code: fail ? 1 : blind ? 2 : 0, summary, checked_at, request_id: S(first.request_id),
-  staging, live_host: liveHost, writes: 'none', counts, failures, warnings,
+  staging, live_host: liveHost, writes: 'none', fail_on: failOn, counts, failures: failList, expected_changes: acceptedFailures, below_threshold: belowThreshold, expected_unused: expectedUnused, warnings,
   not_checked: [...notChecked, ...cannot.map(c => ({ url: '', check: c.check, label: c.check, reason: c.reason }))],
   pages, checks_run: Object.keys(CHECKS),
 } } }];

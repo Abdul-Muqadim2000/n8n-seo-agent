@@ -1,7 +1,11 @@
 import { sql } from 'drizzle-orm';
 import {
+  type AnyPgColumn,
+  bigint,
+  bigserial,
   boolean,
   customType,
+  date,
   doublePrecision,
   index,
   integer,
@@ -30,8 +34,215 @@ export const users = pgTable(
     avatarUrl: text('avatar_url'),
     createdAt: created(),
     lastLoginAt: ts('last_login_at'),
+    /** G1: the authenticator-app secret, sealed (lib/secretBox `sealIdentity`); `mfaTotpPending` holds a secret during enrolment */
+    mfaTotpSecret: text('mfa_totp_secret'),
+    mfaTotpPending: text('mfa_totp_pending'),
+    mfaTotpEnabledAt: ts('mfa_totp_enabled_at'),
+    /** the last accepted RFC 6238 time step: a code is accepted once, never again (replay) */
+    mfaTotpLastStep: integer('mfa_totp_last_step'),
   },
   (t) => [uniqueIndex('users_email_idx').on(t.email), uniqueIndex('users_google_sub_idx').on(t.googleSub)],
+);
+
+/** G1: one-time recovery codes (SHA-256 of 80-bit codes; each usable once). */
+export const mfaRecoveryCodes = pgTable(
+  'mfa_recovery_codes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    codeHash: text('code_hash').notNull(),
+    usedAt: ts('used_at'),
+    createdAt: created(),
+  },
+  (t) => [index('mfa_recovery_user_idx').on(t.userId), uniqueIndex('mfa_recovery_hash_idx').on(t.userId, t.codeHash)],
+);
+
+/** G1: passkeys / security keys as a second factor (WebAuthn). */
+export const webauthnCredentials = pgTable(
+  'webauthn_credentials',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** base64url credential id from the authenticator */
+    credentialId: text('credential_id').notNull(),
+    publicKey: bytea('public_key').notNull(),
+    counter: integer('counter').notNull().default(0),
+    transports: jsonb('transports').$type<string[]>().notNull().default([]),
+    deviceType: text('device_type').notNull().default('singleDevice'),
+    backedUp: boolean('backed_up').notNull().default(false),
+    name: text('name').notNull(),
+    createdAt: created(),
+    lastUsedAt: ts('last_used_at'),
+  },
+  (t) => [uniqueIndex('webauthn_credential_idx').on(t.credentialId), index('webauthn_user_idx').on(t.userId)],
+);
+
+/**
+ * G1: short-lived server-side state of a multi-step sign-in — the password-checked sign-in still waiting for its second factor, a
+ * passkey challenge, an OIDC state / nonce / PKCE verifier, a SAML request id, a consumed SAML assertion id. `id` is the SHA-256 of
+ * a random token the browser holds (cookie or RelayState), or of a protocol id; rows expire within minutes.
+ */
+export const authFlows = pgTable(
+  'auth_flows',
+  {
+    id: text('id').primaryKey(),
+    kind: text('kind').notNull(),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    orgId: uuid('org_id'),
+    data: jsonb('data').$type<Record<string, unknown>>().notNull().default({}),
+    attempts: integer('attempts').notNull().default(0),
+    expiresAt: ts('expires_at').notNull(),
+    createdAt: created(),
+  },
+  (t) => [index('auth_flows_expires_idx').on(t.expiresAt)],
+);
+
+/** G1: e-mail domains a company claims for single sign-on, proven by a DNS TXT record; one company per verified domain. */
+export const ssoDomains = pgTable(
+  'sso_domains',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    domain: text('domain').notNull(),
+    verificationToken: text('verification_token').notNull(),
+    verifiedAt: ts('verified_at'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: created(),
+  },
+  (t) => [uniqueIndex('sso_domains_org_domain_idx').on(t.orgId, t.domain), uniqueIndex('sso_domains_verified_idx').on(t.domain).where(sql`${t.verifiedAt} is not null`)],
+);
+
+/** G1: a company's identity provider (one per company): OIDC or SAML 2.0. */
+export const ssoConnections = pgTable(
+  'sso_connections',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    protocol: text('protocol').notNull(),
+    enabled: boolean('enabled').notNull().default(false),
+    enforced: boolean('enforced').notNull().default(false),
+    jitEnabled: boolean('jit_enabled').notNull().default(true),
+    defaultRole: text('default_role').notNull().default('member'),
+    oidcIssuer: text('oidc_issuer'),
+    oidcClientId: text('oidc_client_id'),
+    /** sealed (lib/secretBox `sealIdentity`) */
+    oidcClientSecret: text('oidc_client_secret'),
+    samlEntityId: text('saml_entity_id'),
+    samlSsoUrl: text('saml_sso_url'),
+    /** the IdP's signing certificates, PEM (public) */
+    samlCerts: jsonb('saml_certs').$type<string[]>().notNull().default([]),
+    lastTestAt: ts('last_test_at'),
+    lastTestOk: boolean('last_test_ok'),
+    lastTestMessage: text('last_test_message'),
+    lastLoginAt: ts('last_login_at'),
+    createdAt: created(),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex('sso_connections_org_idx').on(t.orgId)],
+);
+
+/** G1: the IdP's stable subject for a person, so a renamed address still finds them. */
+export const ssoIdentities = pgTable(
+  'sso_identities',
+  {
+    connectionId: uuid('connection_id')
+      .notNull()
+      .references(() => ssoConnections.id, { onDelete: 'cascade' }),
+    subject: text('subject').notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: created(),
+    lastLoginAt: ts('last_login_at'),
+  },
+  (t) => [primaryKey({ columns: [t.connectionId, t.subject] }), index('sso_identities_user_idx').on(t.userId)],
+);
+
+/** G1: SCIM bearer tokens (hashed; shown once), one company each. */
+export const scimTokens = pgTable(
+  'scim_tokens',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    prefix: text('prefix').notNull(),
+    tokenHash: text('token_hash').notNull(),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: created(),
+    lastUsedAt: ts('last_used_at'),
+    revokedAt: ts('revoked_at'),
+  },
+  (t) => [uniqueIndex('scim_tokens_hash_idx').on(t.tokenHash), index('scim_tokens_org_idx').on(t.orgId)],
+);
+
+/** G1: groups pushed by the identity provider; `role` maps a group to a role in the company (null = no effect on roles). */
+export const scimGroups = pgTable(
+  'scim_groups',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    displayName: text('display_name').notNull(),
+    externalId: text('external_id'),
+    role: text('role'),
+    createdAt: created(),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex('scim_groups_org_name_idx').on(t.orgId, t.displayName)],
+);
+
+export const scimGroupMembers = pgTable(
+  'scim_group_members',
+  {
+    groupId: uuid('group_id')
+      .notNull()
+      .references(() => scimGroups.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.groupId, t.userId] }), index('scim_group_members_user_idx').on(t.userId)],
+);
+
+/**
+ * G1: the customer-visible audit log. Append-only in the database itself: a trigger (migration g1_audit) refuses UPDATE, TRUNCATE
+ * and any DELETE except the retention purge (`ascentra.audit_purge`) and the company's own deletion. Written only through
+ * services/audit.ts. `actor_user_id` has no foreign key on purpose: removing a person must not rewrite the history of what they did.
+ */
+export const auditEvents = pgTable(
+  'audit_events',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    at: ts('at').defaultNow().notNull(),
+    action: text('action').notNull(),
+    outcome: text('outcome').notNull().default('success'),
+    /** user / scim / system / platform_admin */
+    actorType: text('actor_type').notNull(),
+    actorUserId: uuid('actor_user_id'),
+    /** the actor as they were at the time (e-mail, token name) */
+    actorLabel: text('actor_label').notNull(),
+    targetType: text('target_type'),
+    targetId: text('target_id'),
+    targetLabel: text('target_label'),
+    ip: text('ip'),
+    userAgent: text('user_agent'),
+    details: jsonb('details').$type<Record<string, unknown>>().notNull().default({}),
+  },
+  (t) => [index('audit_events_org_idx').on(t.orgId, t.id), index('audit_events_org_at_idx').on(t.orgId, t.at), index('audit_events_org_action_idx').on(t.orgId, t.action)],
 );
 
 /** Login sessions: `id` is the SHA-256 of the cookie token, so a database leak does not leak sessions. */
@@ -47,8 +258,19 @@ export const sessions = pgTable(
     lastSeenAt: ts('last_seen_at').defaultNow().notNull(),
     userAgent: text('user_agent'),
     ip: text('ip'),
+    /** G1: how this session was signed in (password / google / sso) and, for SSO, through which company's identity provider */
+    authMethod: text('auth_method').notNull().default('password'),
+    ssoOrgId: uuid('sso_org_id'),
+    /** G1: when a second factor was verified in this session (null = none) */
+    mfaAt: ts('mfa_at'),
+    /** G1: the last proof of presence (sign-in or step-up); security changes need one within MFA.stepUpMinutes */
+    reauthAt: ts('reauth_at'),
+    /** G1: what the device list shows and revokes by — never the session key itself */
+    publicId: uuid('public_id').defaultRandom().notNull(),
+    /** G1: the strictest idle timeout of the person's companies, refreshed when a policy or a membership changes (null = none) */
+    idleTimeoutMinutes: integer('idle_timeout_minutes'),
   },
-  (t) => [index('sessions_user_idx').on(t.userId)],
+  (t) => [index('sessions_user_idx').on(t.userId), uniqueIndex('sessions_public_idx').on(t.publicId)],
 );
 
 /** One-time tokens for e-mail verification and password reset (hashed). */
@@ -87,12 +309,80 @@ export const organizations = pgTable(
     /** when the last scheduled summary went out, so a restart cannot send the same week twice */
     deliveryLastRunAt: ts('delivery_last_run_at'),
     disabled: boolean('disabled').notNull().default(false),
+    /** G1: two-step requirement, idle timeout, audit retention (shared/src/identity.ts `SecurityPolicy`, read with `policyOf`) */
+    securityPolicy: jsonb('security_policy').$type<Record<string, unknown>>().notNull().default({}),
     onboardingStep: text('onboarding_step').notNull().default('company'),
     onboardedAt: ts('onboarded_at'),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: created(),
+    /** G5 (app/docs/WHITE_LABEL.md): standard | agency | client — a client workspace is an ordinary company with its agency as parent */
+    kind: text('kind').notNull().default('standard'),
+    /** a client workspace's agency; an agency with client workspaces cannot be deleted (restrict) */
+    parentOrgId: uuid('parent_org_id').references((): AnyPgColumn => organizations.id, { onDelete: 'restrict' }),
+    /** agency: the whole brand (shared/src/agency.ts `Branding`); client workspace: its override (`ClientBranding`) */
+    branding: jsonb('branding').$type<Record<string, unknown>>().notNull().default({}),
+    /** agency: sender name, reply-to, custom From mailbox and its last SPF / DKIM check (`PortalMailSettings`) */
+    portalMail: jsonb('portal_mail').$type<Record<string, unknown>>().notNull().default({}),
+    /** client workspace: a live publish / an outreach send waits for the client's approval */
+    clientApproval: boolean('client_approval').notNull().default(false),
   },
-  (t) => [uniqueIndex('organizations_slug_idx').on(t.slug), uniqueIndex('organizations_hook_idx').on(t.hookToken)],
+  (t) => [uniqueIndex('organizations_slug_idx').on(t.slug), uniqueIndex('organizations_hook_idx').on(t.hookToken), index('organizations_parent_idx').on(t.parentOrgId)],
+);
+
+/**
+ * G5: a host an agency serves its client portal on (`seo.agency.com`). Proven by a TXT record carrying `token` (a new random token
+ * per claim, bound to this company — WHITE_LABEL.md §2 takeover) plus a CNAME to the app; re-checked, lapsed after repeated failures,
+ * deleted on release. One verified (or lapsed) owner per host.
+ */
+export const portalDomains = pgTable(
+  'portal_domains',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    host: text('host').notNull(),
+    token: text('token').notNull(),
+    /** pending | verified | lapsed */
+    status: text('status').notNull().default('pending'),
+    verifiedAt: ts('verified_at'),
+    lastCheckAt: ts('last_check_at'),
+    lastCheckOk: boolean('last_check_ok'),
+    lastCheckDetail: text('last_check_detail'),
+    failures: integer('failures').notNull().default(0),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: created(),
+  },
+  (t) => [
+    uniqueIndex('portal_domains_org_host_idx').on(t.orgId, t.host),
+    uniqueIndex('portal_domains_live_host_idx').on(t.host).where(sql`${t.status} in ('verified', 'lapsed')`),
+  ],
+);
+
+/** G5: an item the agency asked a client to approve (a written page, an outreach draft) and the client's decision. */
+export const portalApprovals = pgTable(
+  'portal_approvals',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    siteId: uuid('site_id').references(() => sites.id, { onDelete: 'set null' }),
+    /** page | outreach */
+    kind: text('kind').notNull(),
+    /** a report id (page) or `prospect-domain|type` (outreach) */
+    itemId: text('item_id').notNull(),
+    title: text('title').notNull(),
+    /** pending | approved | changes_requested | withdrawn */
+    status: text('status').notNull().default('pending'),
+    note: text('note').notNull().default(''),
+    requestedBy: uuid('requested_by').references(() => users.id, { onDelete: 'set null' }),
+    requestedAt: ts('requested_at').defaultNow().notNull(),
+    decisionNote: text('decision_note'),
+    decidedBy: uuid('decided_by').references(() => users.id, { onDelete: 'set null' }),
+    decidedAt: ts('decided_at'),
+  },
+  (t) => [index('portal_approvals_org_idx').on(t.orgId, t.requestedAt), index('portal_approvals_item_idx').on(t.orgId, t.kind, t.itemId)],
 );
 
 export const memberships = pgTable(
@@ -106,6 +396,11 @@ export const memberships = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     role: text('role').notNull(),
     createdAt: created(),
+    /** G1: switched off by the company's identity provider (SCIM `active: false`): no access until reactivated */
+    deactivatedAt: ts('deactivated_at'),
+    /** G1: how the person came in — owner / invite / jit (first SSO sign-in) / scim */
+    provisionedBy: text('provisioned_by').notNull().default('invite'),
+    scimExternalId: text('scim_external_id'),
   },
   (t) => [primaryKey({ columns: [t.orgId, t.userId] }), index('memberships_user_idx').on(t.userId)],
 );
@@ -191,14 +486,26 @@ export const runs = pgTable(
     engineCostBasis: text('engine_cost_basis'),
     /** true when part of `actualCostUsd` is the engine's own estimate (streaming model calls report no token usage) */
     actualCostEstimated: boolean('actual_cost_estimated').notNull().default(false),
+    /** R102 / R115: true when the settled figure has no model-call part (the callback did not report its model calls): search data only */
+    actualCostPartial: boolean('actual_cost_partial').notNull().default(false),
     etaMinutes: integer('eta_minutes').notNull().default(0),
     lastStage: text('last_stage'),
     reportCount: integer('report_count').notNull().default(0),
+    /** G4 (app/docs/INTEGRATIONS.md): the API key that started it (null: a person in the app, or "Choose keywords for me") */
+    apiKeyId: uuid('api_key_id').references(() => apiKeys.id, { onDelete: 'set null' }),
+    /** G4: the caller's `Idempotency-Key` and a SHA-256 of the request it came with; a repeat within 24 h answers this run */
+    idempotencyKey: text('idempotency_key'),
+    idempotencyHash: text('idempotency_hash'),
     createdAt: created(),
     acceptedAt: ts('accepted_at'),
     completedAt: ts('completed_at'),
   },
-  (t) => [index('runs_org_created_idx').on(t.orgId, t.createdAt), index('runs_org_request_idx').on(t.orgId, t.requestId), index('runs_site_idx').on(t.siteId)],
+  (t) => [
+    index('runs_org_created_idx').on(t.orgId, t.createdAt),
+    index('runs_org_request_idx').on(t.orgId, t.requestId),
+    index('runs_site_idx').on(t.siteId),
+    index('runs_org_idem_idx').on(t.orgId, t.idempotencyKey).where(sql`${t.idempotencyKey} is not null`),
+  ],
 );
 
 /** Every callback n8n posts (one run can have several: plan, then pages; scheduled reports have no run). */
@@ -481,10 +788,452 @@ export const reportDeliveries = pgTable(
   ],
 );
 
+/**
+ * B5-11 / area 12 G-5 (v4.18): a company API key for the read API (`/api/v1`, design note in app/API.md "Read API v1").
+ * The key itself is shown once and never stored: only its SHA-256 (`tokenHash`) and a display prefix (`asc_` + 8 characters).
+ * A key belongs to exactly one company and reads only that company's data; it can never start a run or change anything.
+ */
+export const apiKeys = pgTable(
+  'api_keys',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    prefix: text('prefix').notNull(),
+    tokenHash: text('token_hash').notNull(),
+    /** read | publish_check */
+    scopes: jsonb('scopes').$type<string[]>().notNull().default(['read']),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: created(),
+    expiresAt: ts('expires_at'),
+    lastUsedAt: ts('last_used_at'),
+    revokedAt: ts('revoked_at'),
+  },
+  (t) => [uniqueIndex('api_keys_hash_idx').on(t.tokenHash), index('api_keys_org_idx').on(t.orgId)],
+);
+
+// ---- G2 (2026-10-17): publishing written pages to the customer's CMS (app/docs/CMS_PUBLISHING.md) ----
+/** One CMS a website publishes to (WordPress, Webflow, Contentful or a signed webhook). The secret is sealed (lib/secretBox.ts). */
+export const cmsConnections = pgTable(
+  'cms_connections',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    siteId: uuid('site_id')
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    /** wordpress | webflow | contentful | webhook */
+    kind: text('kind').notNull(),
+    label: text('label').notNull().default(''),
+    baseUrl: text('base_url').notNull().default(''),
+    username: text('username').notNull().default(''),
+    /** AES-256-GCM under MAILBOX_KEY; never sent to the browser, never logged */
+    secret: text('secret').notNull().default(''),
+    /** non-secret settings (shared/src/cms.ts CmsConnectionSettings) */
+    settings: jsonb('settings').$type<Record<string, unknown>>().notNull().default({}),
+    /** untested | ok | error */
+    status: text('status').notNull().default('untested'),
+    statusReason: text('status_reason').notNull().default(''),
+    lastTestedAt: ts('last_tested_at'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: created(),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+  },
+  (t) => [index('cms_connections_site_idx').on(t.siteId), index('cms_connections_org_idx').on(t.orgId)],
+);
+
+/** One page in one CMS: re-publishing the same slug through the same connection updates this item, never a second one. */
+export const cmsItems = pgTable(
+  'cms_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    siteId: uuid('site_id')
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    connectionId: uuid('connection_id')
+      .notNull()
+      .references(() => cmsConnections.id, { onDelete: 'cascade' }),
+    slug: text('slug').notNull(),
+    keyword: text('keyword').notNull().default(''),
+    remoteId: text('remote_id').notNull().default(''),
+    remoteUrl: text('remote_url').notNull().default(''),
+    /** draft | published | unknown */
+    remoteStatus: text('remote_status').notNull().default('unknown'),
+    lastReportId: uuid('last_report_id').references(() => reports.id, { onDelete: 'set null' }),
+    /** images already uploaded for this item (file name -> remote media id / url), so a re-publish does not upload them twice */
+    media: jsonb('media').$type<Record<string, { id: string; url: string }>>().notNull().default({}),
+    /** a publish in progress holds the item until then (a second click meanwhile is refused) */
+    lockUntil: ts('lock_until'),
+    /** when the engine was told the page is live (the "I published a page" run) */
+    engineToldAt: ts('engine_told_at'),
+    createdAt: created(),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex('cms_items_connection_slug_idx').on(t.connectionId, t.slug), index('cms_items_site_idx').on(t.siteId)],
+);
+
+/** Every attempt to send a page to a CMS, and every refusal with its reasons: who, when, where, draft or live, what came back. */
+export const cmsPublishes = pgTable(
+  'cms_publishes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    siteId: uuid('site_id').references(() => sites.id, { onDelete: 'set null' }),
+    connectionId: uuid('connection_id').references(() => cmsConnections.id, { onDelete: 'set null' }),
+    itemId: uuid('item_id').references(() => cmsItems.id, { onDelete: 'set null' }),
+    reportId: uuid('report_id').references(() => reports.id, { onDelete: 'set null' }),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+    /** the connection's kind and label at the time (kept when the connection is removed) */
+    kind: text('kind').notNull().default(''),
+    connectionLabel: text('connection_label').notNull().default(''),
+    keyword: text('keyword').notNull().default(''),
+    /** draft | live | refresh */
+    mode: text('mode').notNull(),
+    /** sent | failed | blocked */
+    status: text('status').notNull(),
+    remoteId: text('remote_id').notNull().default(''),
+    remoteUrl: text('remote_url').notNull().default(''),
+    /** the CMS host or kind, never a secret */
+    target: text('target').notNull().default(''),
+    error: text('error').notNull().default(''),
+    notes: jsonb('notes').$type<string[]>().notNull().default([]),
+    blockers: jsonb('blockers').$type<Record<string, unknown>[]>().notNull().default([]),
+    engineRunId: uuid('engine_run_id').references(() => runs.id, { onDelete: 'set null' }),
+    createdAt: created(),
+  },
+  (t) => [index('cms_publishes_org_created_idx').on(t.orgId, t.createdAt), index('cms_publishes_report_idx').on(t.reportId), index('cms_publishes_site_idx').on(t.siteId, t.createdAt)],
+);
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// G4 (2026-10-17): integrations — app/docs/INTEGRATIONS.md. Every secret column holds a value sealed with MAILBOX_KEY (secretBox).
+// ---------------------------------------------------------------------------------------------------------------------------
+
+/** One connector of a company: an issue tracker (jira / linear / asana, one each) or an export destination (s3 / bigquery). */
+export const integrations = pgTable(
+  'integrations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    name: text('name').notNull(),
+    /** the non-secret settings (site URL, project, bucket, dataset, tables, schedule…) */
+    config: jsonb('config').$type<Record<string, unknown>>().notNull().default({}),
+    /** sealed JSON of the credentials; never returned */
+    secret: text('secret').notNull(),
+    /** e.g. "token …a1b2": shown instead of the secret */
+    secretHint: text('secret_hint').notNull().default(''),
+    status: text('status').notNull().default('untested'),
+    lastError: text('last_error').notNull().default(''),
+    lastCheckedAt: ts('last_checked_at'),
+    lastRunAt: ts('last_run_at'),
+    nextRunAt: ts('next_run_at'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: created(),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+  },
+  (t) => [
+    index('integrations_org_idx').on(t.orgId),
+    // one Jira, one Linear, one Asana per company; several storage destinations are allowed
+    uniqueIndex('integrations_tracker_once_idx').on(t.orgId, t.kind).where(sql`${t.kind} in ('jira', 'linear', 'asana')`),
+    index('integrations_next_run_idx').on(t.nextRunAt),
+  ],
+);
+
+/** One ticket per finding / recommendation per company (the dedupe rule); inserted as `creating` before the remote call. */
+export const issueLinks = pgTable(
+  'issue_links',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    siteId: uuid('site_id').references(() => sites.id, { onDelete: 'set null' }),
+    integrationId: uuid('integration_id').references(() => integrations.id, { onDelete: 'set null' }),
+    kind: text('kind').notNull(),
+    /** finding:<website>:<finding key> | rec:<website>:<recommendation id> */
+    sourceKey: text('source_key').notNull(),
+    sourceTitle: text('source_title').notNull().default(''),
+    remoteId: text('remote_id').notNull().default(''),
+    remoteKey: text('remote_key').notNull().default(''),
+    remoteUrl: text('remote_url').notNull().default(''),
+    remoteStatus: text('remote_status').notNull().default(''),
+    remoteState: text('remote_state').notNull().default('unknown'),
+    /** creating | created | failed */
+    status: text('status').notNull().default('creating'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: created(),
+    syncedAt: ts('synced_at'),
+  },
+  (t) => [uniqueIndex('issue_links_source_idx').on(t.orgId, t.sourceKey), index('issue_links_org_created_idx').on(t.orgId, t.createdAt)],
+);
+
+/** An outbound event endpoint: signed JSON, a Slack channel or a Teams channel, subscribed to event types and websites. */
+export const webhookEndpoints = pgTable(
+  'webhook_endpoints',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    /** json | slack | teams */
+    format: text('format').notNull(),
+    /** the address, sealed (a Slack / Teams address is itself a credential) */
+    urlSealed: text('url_sealed').notNull(),
+    urlHost: text('url_host').notNull(),
+    urlHint: text('url_hint').notNull().default(''),
+    /** json endpoints: the HMAC signing secret we generated, sealed ('' for slack / teams) */
+    secretSealed: text('secret_sealed').notNull().default(''),
+    events: jsonb('events').$type<string[]>().notNull().default([]),
+    /** empty = every website of the company */
+    siteIds: jsonb('site_ids').$type<string[]>().notNull().default([]),
+    enabled: boolean('enabled').notNull().default(true),
+    disabledReason: text('disabled_reason').notNull().default(''),
+    consecutiveFailures: integer('consecutive_failures').notNull().default(0),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: created(),
+    lastSuccessAt: ts('last_success_at'),
+    lastFailureAt: ts('last_failure_at'),
+  },
+  (t) => [index('webhook_endpoints_org_idx').on(t.orgId)],
+);
+
+/** One event to one endpoint, with its attempts: the delivery log and the retry queue in one table (purged after 30 days). */
+export const webhookDeliveries = pgTable(
+  'webhook_deliveries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    endpointId: uuid('endpoint_id')
+      .notNull()
+      .references(() => webhookEndpoints.id, { onDelete: 'cascade' }),
+    eventId: uuid('event_id').notNull(),
+    eventType: text('event_type').notNull(),
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+    /** pending | sent | failed | gave_up */
+    status: text('status').notNull().default('pending'),
+    attempts: integer('attempts').notNull().default(0),
+    nextAttemptAt: ts('next_attempt_at'),
+    lastStatusCode: integer('last_status_code'),
+    lastError: text('last_error').notNull().default(''),
+    createdAt: created(),
+    deliveredAt: ts('delivered_at'),
+  },
+  (t) => [
+    index('webhook_deliveries_org_created_idx').on(t.orgId, t.createdAt),
+    index('webhook_deliveries_due_idx').on(t.status, t.nextAttemptAt),
+    uniqueIndex('webhook_deliveries_once_idx').on(t.endpointId, t.eventId),
+  ],
+);
+
+/** One export of one destination: per table rows, bytes, the object / load job, and what went wrong. */
+export const exportRuns = pgTable(
+  'export_runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    integrationId: uuid('integration_id')
+      .notNull()
+      .references(() => integrations.id, { onDelete: 'cascade' }),
+    trigger: text('trigger').notNull(),
+    /** running | ok | partial | failed */
+    status: text('status').notNull().default('running'),
+    tables: jsonb('tables').$type<Record<string, unknown>[]>().notNull().default([]),
+    error: text('error').notNull().default(''),
+    startedAt: ts('started_at').defaultNow().notNull(),
+    finishedAt: ts('finished_at'),
+  },
+  (t) => [index('export_runs_integration_idx').on(t.integrationId, t.startedAt)],
+);
+
+export type IntegrationRow = typeof integrations.$inferSelect;
+export type IssueLinkRow = typeof issueLinks.$inferSelect;
+export type WebhookEndpointRow = typeof webhookEndpoints.$inferSelect;
+export type WebhookDeliveryRow = typeof webhookDeliveries.$inferSelect;
+export type ExportRunRow = typeof exportRuns.$inferSelect;
+export type CmsConnectionRow = typeof cmsConnections.$inferSelect;
+export type CmsItemRow = typeof cmsItems.$inferSelect;
+export type CmsPublishRow = typeof cmsPublishes.$inferSelect;
+/**
+ * Gap #6 (2026-10-17, app/docs/LOG_ANALYTICS.md): server-log and AI-crawler analytics. One settings row per website: how long raw
+ * crawler lines are kept, and the push key Cloudflare Logpush / a log drain sends (only its SHA-256 is stored; shown once).
+ */
+export const logSources = pgTable('log_sources', {
+  siteId: uuid('site_id')
+    .primaryKey()
+    .references(() => sites.id, { onDelete: 'cascade' }),
+  orgId: uuid('org_id')
+    .notNull()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
+  retentionDays: integer('retention_days').notNull().default(30),
+  pushKeyHash: text('push_key_hash'),
+  pushKeyPrefix: text('push_key_prefix'),
+  pushKeyCreatedAt: ts('push_key_created_at'),
+  pushKeyCreatedBy: uuid('push_key_created_by').references(() => users.id, { onDelete: 'set null' }),
+  lastPushAt: ts('last_push_at'),
+  updatedAt: ts('updated_at').defaultNow().notNull(),
+});
+
+/**
+ * One row per uploaded file or pushed batch: the job the background worker runs (queued → processing → done | failed). The bytes
+ * wait in a spool file on the server that received them (`host`, `spool_path`) and are deleted as soon as the job ends.
+ */
+export const logIngests = pgTable(
+  'log_ingests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    siteId: uuid('site_id')
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    /** upload | push */
+    source: text('source').notNull(),
+    fileName: text('file_name').notNull().default(''),
+    /** queued | processing | done | failed */
+    status: text('status').notNull().default('queued'),
+    host: text('host').notNull().default(''),
+    spoolPath: text('spool_path').notNull().default(''),
+    bytes: bigint('bytes', { mode: 'number' }).notNull().default(0),
+    sha256: text('sha256').notNull(),
+    /** combined | w3c | json | unknown */
+    format: text('format').notNull().default('unknown'),
+    stats: jsonb('stats').$type<Record<string, unknown>>(),
+    error: text('error').notNull().default(''),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: created(),
+    startedAt: ts('started_at'),
+    finishedAt: ts('finished_at'),
+  },
+  (t) => [
+    index('log_ingests_site_created_idx').on(t.siteId, t.createdAt),
+    index('log_ingests_status_idx').on(t.status, t.createdAt),
+    // the same file twice is refused (a retried push answers "already have it"); a failed one may be sent again
+    uniqueIndex('log_ingests_site_sha_idx').on(t.siteId, t.sha256).where(sql`${t.status} <> 'failed'`),
+  ],
+);
+
+/**
+ * One row per crawler request (never a person's): kept `log_sources.retention_days`. No client address is stored — only, for a
+ * request that was not proved, its network (/24 for IPv4, /48 for IPv6), so a spoofer can be blocked. `line_hash` makes the same
+ * line sent twice (an overlapping upload, a retried push) count once.
+ */
+export const crawlerHits = pgTable(
+  'crawler_hits',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    siteId: uuid('site_id')
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    ingestId: uuid('ingest_id').references(() => logIngests.id, { onDelete: 'set null' }),
+    at: ts('at').notNull(),
+    bot: text('bot').notNull(),
+    /** verified | spoofed | claimed | unchecked */
+    verification: text('verification').notNull(),
+    method: text('method').notNull().default('GET'),
+    path: text('path').notNull(),
+    queryKeys: text('query_keys').notNull().default(''),
+    /** page | asset | robots | sitemap */
+    kind: text('kind').notNull().default('page'),
+    status: integer('status').notNull(),
+    bytes: bigint('bytes', { mode: 'number' }),
+    ms: integer('ms'),
+    net: text('net'),
+    lineHash: bytea('line_hash').notNull(),
+  },
+  (t) => [index('crawler_hits_site_at_idx').on(t.siteId, t.at), uniqueIndex('crawler_hits_site_line_idx').on(t.siteId, t.lineHash)],
+);
+
+/** Daily totals per crawler and verification (kept 400 days; additive, so every ingest adds to them). */
+export const crawlerDaily = pgTable(
+  'crawler_daily',
+  {
+    siteId: uuid('site_id')
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    day: date('day', { mode: 'string' }).notNull(),
+    bot: text('bot').notNull(),
+    verification: text('verification').notNull(),
+    hits: integer('hits').notNull().default(0),
+    s2xx: integer('s2xx').notNull().default(0),
+    s3xx: integer('s3xx').notNull().default(0),
+    s4xx: integer('s4xx').notNull().default(0),
+    s5xx: integer('s5xx').notNull().default(0),
+    refused: integer('refused').notNull().default(0),
+    paramHits: integer('param_hits').notNull().default(0),
+    assetHits: integer('asset_hits').notNull().default(0),
+    bytes: bigint('bytes', { mode: 'number' }).notNull().default(0),
+    msSum: bigint('ms_sum', { mode: 'number' }).notNull().default(0),
+    msN: integer('ms_n').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.siteId, t.day, t.bot, t.verification] })],
+);
+
+/** Daily requests per crawler and path, spoofed requests left out (kept 400 days): coverage, first seen, waste by URL. */
+export const crawlerPageDaily = pgTable(
+  'crawler_page_daily',
+  {
+    siteId: uuid('site_id')
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    day: date('day', { mode: 'string' }).notNull(),
+    bot: text('bot').notNull(),
+    path: text('path').notNull(),
+    hits: integer('hits').notNull().default(0),
+    verifiedHits: integer('verified_hits').notNull().default(0),
+    s3xx: integer('s3xx').notNull().default(0),
+    s4xx: integer('s4xx').notNull().default(0),
+    s5xx: integer('s5xx').notNull().default(0),
+    paramHits: integer('param_hits').notNull().default(0),
+    lastStatus: integer('last_status'),
+  },
+  (t) => [primaryKey({ columns: [t.siteId, t.day, t.bot, t.path] }), index('crawler_page_daily_site_bot_path_idx').on(t.siteId, t.bot, t.path)],
+);
+
+/** The vendors' published crawler IP lists as last fetched (one row per list); the server falls back to its dated copy. */
+export const botIpRanges = pgTable('bot_ip_ranges', {
+  sourceId: text('source_id').primaryKey(),
+  url: text('url').notNull(),
+  creationTime: text('creation_time'),
+  prefixes: jsonb('prefixes').$type<string[]>().notNull().default([]),
+  fetchedAt: ts('fetched_at'),
+  checkedAt: ts('checked_at').defaultNow().notNull(),
+  error: text('error').notNull().default(''),
+});
+
+export type LogSourceRow = typeof logSources.$inferSelect;
+export type LogIngestRow = typeof logIngests.$inferSelect;
+export type ApiKeyRow = typeof apiKeys.$inferSelect;
 export type MailboxRow = typeof mailboxes.$inferSelect;
 export type OutreachSequenceRow = typeof outreachSequences.$inferSelect;
 export type OutreachMessageRow = typeof outreachMessages.$inferSelect;
 export type UserRow = typeof users.$inferSelect;
+export type SessionRow = typeof sessions.$inferSelect;
+export type WebauthnCredentialRow = typeof webauthnCredentials.$inferSelect;
+export type AuthFlowRow = typeof authFlows.$inferSelect;
+export type AuditEventRow = typeof auditEvents.$inferSelect;
+export type SsoConnectionRow = typeof ssoConnections.$inferSelect;
+export type SsoDomainRow = typeof ssoDomains.$inferSelect;
+export type ScimGroupRow = typeof scimGroups.$inferSelect;
+export type MembershipRow = typeof memberships.$inferSelect;
+export type PortalDomainRow = typeof portalDomains.$inferSelect;
+export type PortalApprovalRow = typeof portalApprovals.$inferSelect;
 export type OrgRow = typeof organizations.$inferSelect;
 export type SiteRow = typeof sites.$inferSelect;
 export type RunRow = typeof runs.$inferSelect;

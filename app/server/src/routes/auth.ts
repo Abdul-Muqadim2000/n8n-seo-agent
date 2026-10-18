@@ -1,10 +1,12 @@
 import { and, eq, gt, isNull, sql } from 'drizzle-orm';
+import { ssoRequiredError, ssoRequiredFor } from '../services/sso';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { forgotSchema, loginSchema, resetSchema, signupSchema, type AuthProviders } from '@seo/shared';
 import { requireUser } from '../auth/access';
 import { exchangeGoogleCode, G_COOKIE, googleAuthUrl } from '../auth/google';
 import { burnPasswordCheck, hashPassword, verifyPassword } from '../auth/password';
 import { clearSessionCookie, createSession, deleteSession, deleteUserSessions } from '../auth/session';
+import { startMfaChallenge } from '../auth/signin';
 import { consumeToken, issueToken } from '../auth/tokens';
 import { config } from '../config';
 import { db, schema } from '../db';
@@ -12,6 +14,8 @@ import type { UserRow } from '../db/schema';
 import { sha256 } from '../lib/crypto';
 import { badRequest, conflict, forbidden, HttpError, parse } from '../lib/errors';
 import { sendMail } from '../lib/mailer';
+import { senderForUser } from '../services/portalMail';
+import { audit, auditUser } from '../services/audit';
 import { acceptInvitation } from '../services/invitations';
 import { buildMe } from '../services/me';
 import { verifyWithGoogle } from './sites';
@@ -20,13 +24,16 @@ const LIMIT = { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } };
 
 export async function sendVerification(user: UserRow, log: FastifyInstance['log']): Promise<boolean> {
   const token = await issueToken(user.id, 'verify_email', 60 * 24 * 3);
+  // G5: a client person of a white-label agency hears from the agency, and the link opens its portal address
+  const { sender, baseUrl } = await senderForUser(user.id);
   return sendMail(
     {
       to: user.email,
-      subject: `Confirm your e-mail for ${config.brand}`,
+      subject: `Confirm your e-mail for ${sender.brandName}`,
       lines: [`Hi ${user.name},`, 'Please confirm your e-mail address. Analyses and reports start once it is confirmed.'],
-      action: { label: 'Confirm e-mail', url: `${config.appUrl}/verify-email?token=${token}` },
+      action: { label: 'Confirm e-mail', url: `${baseUrl}/verify-email?token=${token}` },
       footer: 'The link works for 3 days. If you did not create an account, ignore this e-mail.',
+      sender,
     },
     log,
   );
@@ -71,6 +78,9 @@ export async function authRoutes(app: FastifyInstance) {
         })
       : null;
     const invitedHere = !!invitation && invitation.email === body.email;
+    // G1: an address on a domain whose company requires single sign-on gets its account from the identity provider
+    const sso = await ssoRequiredFor(body.email, null);
+    if (sso) throw ssoRequiredError(sso);
     if (!config.allowSignup && !invitedHere) throw forbidden('Sign-up is by invitation only. Open the invitation link you received to create your account.');
     const exists = await db.query.users.findFirst({ where: eq(schema.users.email, body.email) });
     if (exists) throw conflict('An account with this e-mail already exists. Sign in instead.', 'email_taken');
@@ -84,26 +94,44 @@ export async function authRoutes(app: FastifyInstance) {
         emailVerifiedAt: invitedHere ? new Date() : null,
       })
       .returning();
-    if (invitedHere && invitation) await acceptInvitation(invitation, user);
+    if (invitedHere && invitation) {
+      await acceptInvitation(invitation, user);
+      await audit(req, invitation.orgId, { action: 'team.joined', actor: { type: 'user', userId: user.id, label: user.email }, target: { type: 'user', id: user.id, label: user.email }, details: { role: invitation.role } });
+    }
     else void sendVerification(user, req.log).catch((err) => req.log.error({ err }, 'verification e-mail failed')); // do not make the visitor wait for SMTP
     await createSession(reply, req, user.id);
-    return buildMe(user);
+    return buildMe(user, req.portal?.orgId ?? null);
   });
 
   app.post('/api/auth/login', LIMIT, async (req, reply) => {
     const body = parse(loginSchema, req.body);
     const user = await db.query.users.findFirst({ where: eq(schema.users.email, body.email) });
+    // G1: checked before any password: a domain that requires single sign-on refuses passwords (owners keep theirs: break-glass)
+    const sso = await ssoRequiredFor(body.email, user?.id ?? null);
+    if (sso) {
+      await burnPasswordCheck(body.password);
+      if (user) await auditUser(req, user, { action: 'auth.login.failed', outcome: 'failure', details: { method: 'password', reason: 'single sign-on required' } });
+      throw ssoRequiredError(sso);
+    }
     if (!user || !user.passwordHash) {
       await burnPasswordCheck(body.password);
       throw new HttpError(401, user ? 'This account signs in with Google. Use "Continue with Google", or set a password with "Forgot password".' : 'Wrong e-mail or password.', 'bad_credentials');
     }
-    if (!(await verifyPassword(user.passwordHash, body.password))) throw new HttpError(401, 'Wrong e-mail or password.', 'bad_credentials');
-    await createSession(reply, req, user.id);
-    return buildMe(user);
+    if (!(await verifyPassword(user.passwordHash, body.password))) {
+      await auditUser(req, user, { action: 'auth.login.failed', outcome: 'failure', details: { method: 'password', reason: 'wrong password' } });
+      throw new HttpError(401, 'Wrong e-mail or password.', 'bad_credentials');
+    }
+    // G1: with two-step verification on, the password only opens the second step
+    const challenge = await startMfaChallenge(reply, user, { method: 'password' });
+    if (challenge) return challenge;
+    await createSession(reply, req, user.id, { method: 'password' });
+    await auditUser(req, user, { action: 'auth.login.succeeded', details: { method: 'password', mfa: false } });
+    return buildMe(user, req.portal?.orgId ?? null);
   });
 
   app.post('/api/auth/logout', async (req, reply) => {
     if (req.sessionId) await deleteSession(req.sessionId);
+    if (req.user) await auditUser(req, req.user, { action: 'auth.logout' });
     clearSessionCookie(reply);
     return { ok: true };
   });
@@ -113,13 +141,15 @@ export async function authRoutes(app: FastifyInstance) {
     const user = await db.query.users.findFirst({ where: eq(schema.users.email, email) });
     if (user) {
       const token = await issueToken(user.id, 'reset_password', 60);
+      const { sender, baseUrl } = await senderForUser(user.id);
       void sendMail(
         {
           to: user.email,
-          subject: `Reset your ${config.brand} password`,
+          subject: `Reset your ${sender.brandName} password`,
           lines: [`Hi ${user.name},`, 'Someone asked to reset the password of your account. Choose a new one with the button below.'],
-          action: { label: 'Choose a new password', url: `${config.appUrl}/reset-password?token=${token}` },
+          action: { label: 'Choose a new password', url: `${baseUrl}/reset-password?token=${token}` },
           footer: 'The link works for one hour. If you did not ask for it, ignore this e-mail; your password stays the same.',
+          sender,
         },
         req.log,
       );
@@ -134,6 +164,8 @@ export async function authRoutes(app: FastifyInstance) {
     // the reset link reached the mailbox, which also confirms the address
     await db.update(schema.users).set({ passwordHash: await hashPassword(body.password), emailVerifiedAt: sql`coalesce(${schema.users.emailVerifiedAt}, now())` }).where(eq(schema.users.id, userId));
     await deleteUserSessions(userId);
+    const who = await db.query.users.findFirst({ where: eq(schema.users.id, userId) });
+    if (who) await auditUser(req, who, { action: 'account.password_reset', details: { signedOutEverywhere: true } });
     return { ok: true };
   });
 
@@ -194,6 +226,11 @@ export async function authRoutes(app: FastifyInstance) {
       return fail('google_failed');
     }
     if (!profile.emailVerified) return fail('google_unverified');
+    // G1: Google sign-in is refused like a password where the company requires its own identity provider
+    if (!req.user) {
+      const existing = (await db.query.users.findFirst({ where: eq(schema.users.googleSub, profile.sub) })) ?? (await db.query.users.findFirst({ where: eq(schema.users.email, profile.email) }));
+      if (await ssoRequiredFor(profile.email, existing?.id ?? null)) return fail('sso_required');
+    }
 
     // already signed in ("Link Google account" on the account page): attach this Google login to the current user
     if (req.user) {
@@ -227,7 +264,10 @@ export async function authRoutes(app: FastifyInstance) {
           .returning();
       }
     }
-    await createSession(reply, req, user.id);
+    // G1: with two-step verification on, Google only opens the second step (/login/mfa asks for the code)
+    if (await startMfaChallenge(reply, user, { method: 'google', next })) return reply.redirect(`/login/mfa${next !== '/' ? `?next=${encodeURIComponent(next)}` : ''}`);
+    await createSession(reply, req, user.id, { method: 'google' });
+    await auditUser(req, user, { action: 'auth.login.succeeded', details: { method: 'google', mfa: false } });
     return reply.redirect(next);
   });
 }

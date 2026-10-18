@@ -1,6 +1,6 @@
-# Ascentra — web app (multi-company)
+# Alaventra — web app (multi-company)
 
-The web front end of Ascentra (the SEO Agent engine in n8n) and its public business site. Companies sign up (e-mail or Google),
+The web front end of Alaventra (the SEO Agent engine in n8n) and its public business site. Companies sign up (e-mail or Google),
 add their websites, prove ownership, connect Search Console and GA4, give the business and E-E-A-T details the engine needs, start
 weekly tracking, run every analysis from proper forms, and read the results in dashboards with recommendations. The SEO work
 itself stays in the n8n workflows (`../n8n/seo-agent`); this app is the product around them.
@@ -104,6 +104,30 @@ decision; there is no override. Rules and their 41 unit tests: `shared/src/repor
 E-mail delivery needs SMTP configured (`SEO_SMTP_*`); it is **not** gated on `ACCOUNT_EMAILS`, which is about verification and reset
 links. Without a mail account the page says so and the webhook still works.
 
+## Publishing to the customer's CMS (G2)
+
+Website settings → **Publishing** connects WordPress (REST API + application password), Webflow (Data API v2, one collection, fields
+mapped once), Contentful (Content Management API, one content type) or a **signed webhook** for any other stack. A written page's report
+then carries **Publish to your CMS**: members send it as a **draft**, owners and admins **publish live** after ticking a confirmation. A page
+the run marked not ready, or one with a bracket still left for a person (the shared `findOpenBrackets` detector), is refused with the list —
+there is no override. Sending again updates the same CMS item; when a page is live the app starts the engine's *I published a page* run,
+so the content log, the ladder row and the pile-up guard follow. Credentials are sealed with `MAILBOX_KEY`; CMS addresses must be public
+https hosts (DNS pinned). Every attempt is in `cms_publishes`; the Content page and the Pipeline's *Needs you* show drafts and live pages.
+Design, threat model, vendor request shapes with their doc links and what is deliberately not built: **`docs/CMS_PUBLISHING.md`**. It
+supersedes the inactive n8n WordPress sub-workflow (`SEOagentWordPres`), which stays untouched.
+
+## Integrations and the write API (G4)
+
+Company settings → **Integrations** (admins): **event endpoints** — Slack, Microsoft Teams or signed JSON, each with its own event types
+(`run.completed`, `run.failed`, `report.ready`, `report.held`, `alert.raised`, `audit.finding.new`, `rank.changed`) and websites, retried
+1/5/30/120/720 minutes, logged in `webhook_deliveries`; **Jira Cloud / Linear / Asana** — connected after the vendor confirmed the token,
+then **Create ticket** beside every audit finding (Technical page) and recommendation, one ticket per finding (`issue_links`), its state
+read back; **data export** — six tables (`EXPORT_TABLES`) daily / weekly to S3-compatible storage (AWS, GCS HMAC, R2; SigV4) or BigQuery
+(load jobs), logged in `export_runs`; the **Looker Studio connector** (`../integrations/looker-studio/`) and MCP client snippets. API keys
+gain the `run` (start analyses: `POST /api/v1/runs`, MCP `start_run`, through the app's own run path with `Idempotency-Key`) and `admin`
+permissions. Every secret is sealed with `MAILBOX_KEY`; every outbound call goes through `server/src/lib/netGuard.ts` (connect-time DNS
+pinning). Design and threat model: **`docs/INTEGRATIONS.md`**; endpoints: `API.md` → "Write API" and "Integrations (G4)".
+
 ## Shared reports, under the customer's own name (B-R2)
 
 A report handed to somebody with no account (`/share/:token`, G15) opens under **their** supplier's mark: the business name and logo
@@ -119,6 +143,19 @@ engine refused, a verdict it could not check — from the same `deliveryDecision
 (an owner may want a colleague to read a draft); the reader is told before the first figure.
 
 A browser pass over the whole app, including this page, is in **`BROWSER_PASS.md`** with its screenshots.
+
+## Agencies and the white-label client portal (G5)
+
+An owner turns a company into an **agency** (Company settings → Agency mode). The agency creates a **client workspace** per client — an ordinary
+company with the agency as parent: its own websites, budget, reports, delivery settings and audit log. Agency owners and admins reach
+every client, members and viewers the clients an admin gave them; the sidebar switches between them and **Clients** shows every client's
+websites in one table (health, rankings movement, clicks, AI visibility, alerts, approvals waiting, spend vs budget) with a CSV export.
+The client's own people are invited as **client viewer** or **client approver** and see a portal of their websites — dashboards,
+reports, recommendations and **Approvals** — and nothing of the agency, of other clients, of costs or settings. With **white-label** on
+(Company settings → Branding) they see the agency's name, logo and colour (adjusted to WCAG AA in light and dark) on every page, shared
+report, rebranded document and e-mail; the portal can live on the agency's own host (**Portal address**: TXT + CNAME, re-checked,
+on-demand TLS through the operator's proxy) and e-mails can come from the agency's own verified mailbox (**Client e-mail**). Design,
+threat model (tenant isolation, domain takeover), operator setup and what is deliberately not built: **`docs/WHITE_LABEL.md`**.
 
 ## Cost figures: one table (B-R3)
 
@@ -174,6 +211,16 @@ The Backlinks page (`pages/site/BacklinksPage.tsx`) shows every referring site f
 - Anchors and most-linked pages (broken ones with the 301 to add), opportunities (unlinked mentions checked on the page, "best of" lists, competitors' new links, the gap from DataForSEO and Common Crawl), and the outreach pipeline with scores, contacts and follow-up drafts.
 
 "Check my backlinks" has a Depth choice: the full check (~$0.50) or free sources only ($0). Engine side: `n8n/seo-agent/BACKLINKS_SPEC.md`.
+
+## Crawlers from server logs (gap #6, 2026-10-17)
+
+The Crawlers page (`pages/site/CrawlersPage.tsx`) shows what Googlebot, Bingbot, Applebot and the AI crawlers (GPTBot, OAI-SearchBot,
+ChatGPT-User, ClaudeBot, Claude-SearchBot, Claude-User, PerplexityBot, Perplexity-User, Google-Agent, Amazonbot, CCBot, Bytespider,
+Meta) actually requested, from the website's own access logs — uploaded (Apache / Nginx, IIS / W3C, CloudFront, JSON lines; gzip; up
+to 1 GB) or pushed by Cloudflare Logpush / a Vercel, Fastly or Akamai log drain to `POST /api/ingest/logs/:siteId` with the site's push
+key. Every crawler is checked against its vendor's published IP list or by forward-confirmed DNS; impostors are counted apart. Only
+crawler requests are stored, never an address. Design, privacy and limits: `docs/LOG_ANALYTICS.md`; routes: `API.md` → "Crawlers";
+code: `server/src/services/crawlers/`, `routes/crawlers.ts`, `shared/src/crawlers.ts`.
 
 ## Pipeline (automation)
 
@@ -250,11 +297,11 @@ tool by hand; the form says what that means for the schedule, in terms of what n
 
 ## Brand and business site
 
-The product is called **Ascentra** ("Enterprise-grade autonomous SEO"); "SEO Agent" stays only as the internal name of the n8n
+The product is called **Alaventra** ("Enterprise-grade autonomous SEO"); "SEO Agent" stays only as the internal name of the n8n
 engine and of this repository.
 
 - **Brand kit**: `web/brand/BRAND.md` (logo rules, colours, type, voice) and `web/brand/tokens.css` (the kit's raw values). The app's
-  tokens live in `web/src/index.css` (light + dark); components use them through Tailwind classes, never hex. Ascentra Blue is the
+  tokens live in `web/src/index.css` (light + dark); components use them through Tailwind classes, never hex. Alaventra Blue is the
   only accent, no gradients.
 - **Logos and icons**: the supplied SVGs in `web/public/brand/` (horizontal / stacked / header / mark / wordmark in ink, blue, white),
   favicons, `site.webmanifest` and `og-image.png` in `web/public/`. Use the files as they are — never redraw, recolour or animate rays.
@@ -270,7 +317,7 @@ engine and of this repository.
   release), `site.ts` (name, e-mail addresses, navigation, integrations), `images.ts` (every photo). How to add a capability:
   `web/CONVENTIONS.md` → "Business site".
 - **PLACEHOLDER — confirm before launch** (marked `// PLACEHOLDER` in the code): every price, plan limit, the annual discount and the
-  billing answers in `pricing.ts`; the `@ascentra.example` e-mail addresses in `site.ts` (the contact form opens a `mailto:`);
+  billing answers in `pricing.ts`; the `@alaventra.example` e-mail addresses in `site.ts` (the contact form opens a `mailto:`);
   the Unsplash photos in `images.ts`; the privacy policy and terms in `marketing/components/company/legal.ts` (drafts for counsel).
   Copy uses capability facts only — no invented customers, logos, ratings or results.
 

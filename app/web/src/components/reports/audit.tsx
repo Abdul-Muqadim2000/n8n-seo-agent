@@ -120,7 +120,12 @@ export function AuditReport({ report }: { report: ReportDetail }) {
       {has(p.site_structure) && <SiteStructure s={obj(p.site_structure)} />}
       {has(p.entity) && <EntityCheck e={obj(p.entity)} domain={domain} siteId={report.siteId} />}
       {!has(p.search_console) && !has(p.audit_diff) && (
-        <Callout tone="info">The PDF and Word reports hold every finding with the affected pages and how to fix them.</Callout>
+        <Callout tone="info">
+          {/* G5: in a white-label portal the engine's PDF is not offered — never point at a document the reader does not have */}
+          {report.files.some((f) => f.kind === 'pdf' || f.kind === 'docx')
+            ? 'The PDF and Word reports hold every finding with the affected pages and how to fix them.'
+            : 'Use Save as PDF at the top of the page to keep a copy of this report.'}
+        </Callout>
       )}
       <LedgerCard ledger={p.run_ledger} />
     </Stagger>

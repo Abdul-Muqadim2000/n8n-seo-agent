@@ -1,3 +1,4 @@
+import { useEngineCal } from '@/lib/engine-cal';
 import { useState, type ReactNode } from 'react';
 import { Link, Navigate, useParams, useSearchParams } from 'react-router';
 import { ArrowLeft, History, Plus, Wand2 } from 'lucide-react';
@@ -5,6 +6,7 @@ import { MODE_CATEGORIES, MODES, type ModeId } from '@seo/shared';
 import { lastSite, useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { useProviders } from '@/lib/queries';
+import { verifyMethods } from '@/lib/verify-copy';
 import { decodePrefill } from '@/lib/utils';
 import { ButtonLink } from '@/components/ui/button';
 import { Callout, EmptyState } from '@/components/ui/feedback';
@@ -33,6 +35,7 @@ const FORMS: Partial<Record<ModeId, (p: ToolFormProps) => ReactNode>> = {
 const SETTINGS_TAB: Partial<Record<ModeId, string>> = { profile: 'settings/profile', track: 'settings/tracking' };
 
 export default function ToolFormPage() {
+  useEngineCal();   // R99 / R100: re-render with the engine's own prices once they arrive
   const providers = useProviders();
   const { mode = '' } = useParams();
   const [params] = useSearchParams();
@@ -151,7 +154,7 @@ export default function ToolFormPage() {
               ))
             }
           >
-            This tool works on your own website. Prove ownership once (Search Console, a DNS record or a meta tag) and every tool opens up.
+            This tool works on your own website. Prove ownership once (with {verifyMethods(!!providers.data?.google)}) and every tool opens up.
           </Callout>
         )}
         {prefilled && (

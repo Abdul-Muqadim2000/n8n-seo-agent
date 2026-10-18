@@ -137,7 +137,7 @@ function PlanCard({ tier, billing, index }: { tier: PricingTier; billing: Billin
       <div className="mt-6">
         <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
           {/* keyed so the figure fades in again when the billing period changes */}
-          <span key={`${billing}-${p.figure}`} className="font-display text-[2.6rem] font-semibold leading-none tracking-[-0.02em] text-ink" style={{ animation: 'asc-fade-up 320ms var(--brand-ease) both' }}>
+          <span key={`${billing}-${p.figure}`} className="font-display text-[2.6rem] font-semibold leading-none tracking-[-0.02em] text-ink" style={{ animation: 'alv-fade-up 320ms var(--brand-ease) both' }}>
             {p.figure}
           </span>
           {p.unit && <span className="text-[14px] text-ink-3">{p.unit}</span>}
@@ -179,8 +179,8 @@ function Plans({ billing, setBilling }: { billing: Billing; setBilling: (b: Bill
       <PageHero
         align="center"
         eyebrow="Pricing"
-        title="Plans that grow with your portfolio."
-        lead="Start free. Every plan writes the pages as well as finding the keywords — and every run shows its cost before it starts."
+        title="Start small. Grow when it works."
+        lead="Setting up is free. Every plan writes the pages, not just a list of keywords — and every run shows its cost before it starts."
         containerClassName="pb-12 sm:pb-14"
       >
         <div className="mt-9 flex justify-center">
@@ -516,7 +516,7 @@ function Costs() {
             id="costs-title"
             eyebrow="Transparent costs"
             title="You see the cost before any work starts."
-            lead="AI and data are the parts of SEO that cost money per run. Ascentra estimates them up front, checks them against your budget and never pays twice for a result that cannot have changed."
+            lead="AI and data are the parts of SEO that cost money per run. Alaventra estimates them up front, checks them against your budget and never pays twice for a result that cannot have changed."
           />
           <ul className="mt-10 space-y-6">
             {costControls.map((c, i) => (
@@ -546,7 +546,7 @@ function PricingFaq() {
           <SectionHeading eyebrow="FAQ" title="Pricing questions." lead="Plans, budgets and what a run costs. For anything else, a person on the team will answer." />
           <Reveal className="mt-8 flex flex-col items-start gap-3">
             <ArrowLink to="/contact?topic=sales">Talk to sales</ArrowLink>
-            <ArrowLink to="/security">Security at Ascentra</ArrowLink>
+            <ArrowLink to="/security">Security at Alaventra</ArrowLink>
           </Reveal>
         </div>
         <Reveal index={1}>
@@ -558,7 +558,7 @@ function PricingFaq() {
 }
 
 export default function PricingPage() {
-  useSeo({ title: 'Pricing', description: 'Ascentra plans for one website to a whole portfolio. Every run shows its cost before it starts, and budgets keep spend where you set it.', path: '/pricing' });
+  useSeo({ title: 'Pricing', description: 'Alaventra plans for one website to a whole portfolio. Every run shows its cost before it starts, and budgets keep spend where you set it.', path: '/pricing' });
   const [billing, setBilling] = useState<Billing>('monthly');
   return (
     <>
@@ -577,7 +577,7 @@ export default function PricingPage() {
         <p className="mt-6 text-[13px] text-on-ink-2">
           Need a security review first?{' '}
           <Link to="/security" className="font-medium text-accent-on-ink underline-offset-4 hover:text-on-ink hover:underline">
-            Read how Ascentra protects your data
+            Read how Alaventra protects your data
           </Link>
         </p>
       </CtaBand>

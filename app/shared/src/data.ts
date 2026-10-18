@@ -7,6 +7,7 @@ import type { ChartAnnotation } from './annotations';
 import type { PageChangeTest } from './change-test';
 import type { Lineage } from './lineage';
 import type { RecommendationScore } from './queue';
+import type { AiPanelInfo, AiSegments } from './ai-panel';
 
 export interface MetricsPoint {
   periodStart: string;
@@ -273,6 +274,8 @@ export interface ContentItem {
   publishedAt: string;
   week: string;
   existingPageUrl: string;
+  /** R111: why a `not_ready` draft failed its last quality round ('; '-joined by the engine); empty on every other row */
+  qaReasons?: string;
 }
 
 export interface CaseStudy {
@@ -318,7 +321,8 @@ export interface AuditPoint {
   scheduled: boolean;
 }
 
-export type FindingStatus = 'new' | 'open' | 'fixed';
+/** `no_longer_seen`: a finding that rested on one outside reading and is not seen now - never counted as fixed (R74). */
+export type FindingStatus = 'new' | 'open' | 'fixed' | 'no_longer_seen';
 export interface Finding {
   key: string;
   category: string;
@@ -472,6 +476,8 @@ export interface AiDay {
   shareOfVoice: number;
   visibilityScore: number;
   alerts: string[];
+  /** R104: the newest reading of the day - when the pulse really ran */
+  checkedAt?: string;
 }
 
 export interface AiTraffic {
@@ -638,7 +644,11 @@ export interface AiData {
       you: { mentions: number; aiSearchVolume: number } | null;
     } | null;
   } | null;
-  prompts: { promptId: string; prompt: string; kind: string; topic: string; keyword: string; source: string; status: string; createdAt: string; stage: string; cluster: string; volume: number | null; origin: string }[];
+  /** G6: persona (buyer role), market (CC-lang), pinned, and the fit gate's sentence for a refused question */
+  prompts: { promptId: string; prompt: string; kind: string; topic: string; keyword: string; source: string; status: string; createdAt: string; stage: string; cluster: string; volume: number | null; origin: string; persona: string; market: string; pinned: boolean; fitNote: string }[];
+  /** G6 (2026-10-18): the latest run's rates per engine / cluster / buyer role / market / stage, and the panel it asked */
+  segments: AiSegments | null;
+  panel: AiPanelInfo | null;
   /** v4.9: the AI Pulse days (last 90) */
   daily: AiDay[];
   answers: {
@@ -892,6 +902,8 @@ export interface SiteSettingsData {
   cadence: { pagesPerWeek: number; status: string } | null;
   profile: ProfileFields | null;
   readiness: ProfileReadiness;
+  /** B7-5: the website's content groups as the engine stores them (seo_sites.content_groups_json); [] when none are set */
+  contentGroups?: { name: string; pattern: string }[];
 }
 
 export type RecommendationCategory = 'search' | 'technical' | 'ai' | 'backlinks' | 'content' | 'rankings' | 'setup';
@@ -938,7 +950,7 @@ export interface OverviewData {
   ai: { latest: AiRun | null; series: { checkedAt: string; mentionRate: number; citationRate: number; shareOfVoice: number }[] };
   backlinks: { latest: BacklinkSnapshot | null; series: { month: string; referringDomains: number; backlinks: number }[] };
   rankings: { ladders: number; keywords: number; top3: number; top10: number; top50: number; movers: { keyword: string; from: number | null; to: number | null }[] };
-  content: { started: number; published: number; pendingPublish: number; pagesPerWeek: number; caseStudies: number };
+  content: { started: number; published: number; pendingPublish: number; /** R111: written drafts that failed the quality check (not counted in pendingPublish) */ needsFix?: number; pagesPerWeek: number; caseStudies: number };
   alerts: { open: number; checkinDue: boolean };
   recommendations: Recommendation[];
   reports: Report[];
@@ -1003,7 +1015,8 @@ export interface PipelineData {
     /** then these, week after week */
     later: QueueItem[];
     /** written, not published yet */
-    waiting: { keyword: string; startedAt: string; days: number }[];
+    /** `needsFix` (R111): the draft did not pass its quality check - fix it and run it again, do not publish it; `reasons` say why */
+    waiting: { keyword: string; startedAt: string; days: number; needsFix?: boolean; reasons?: string[] }[];
     /** opportunity posts while they are set to Manual: what Auto would write, nothing is written on its own (v4.8) */
     suggestions?: QueueItem[];
     /** the coming Monday run writes nothing because too many pages wait to be published (the pile-up guard, v4.8) */
@@ -1100,6 +1113,9 @@ export interface LadderPage {
   volume: number | null;
   kd: number | null;
   supporting: string[];
+  /** R111: written, but the draft did not pass the quality check — fix it and run it again (never "I published it") */
+  needsFix?: boolean;
+  qaReasons?: string[];
 }
 
 export interface LadderOverlap {
@@ -1170,7 +1186,7 @@ export interface NeedsYouItem {
   title: string;
   detail: string;
   /** one button: a page of the website, a tool (with prefill), a run, or a ladder */
-  action: { label: string; page?: string; mode?: import('./constants').ModeId; prefill?: Record<string, unknown>; runId?: string; ladderId?: string } | null;
+  action: { label: string; page?: string; mode?: import('./constants').ModeId; prefill?: Record<string, unknown>; runId?: string; ladderId?: string; /** G2: the page's report (to send it to the CMS) */ reportId?: string } | null;
   ladderId?: string;
   /** approve items: the page the "Write it" dialog starts (with its ladder fields) */
   writeNow?: QueueItem;

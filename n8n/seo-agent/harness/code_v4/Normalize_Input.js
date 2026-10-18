@@ -43,7 +43,7 @@ try { $('Start Form').first(); } catch (e) { __via_webhook = true; }
 const __main = () => {
 // ===================== CONFIG (edit here only) =====================
 const CONFIG = {
-  brand: "Dev SEO",   // from n8n/.env (SEO_BRAND) at build time; shown on reports and e-mails
+  brand: "Alaventra",   // from n8n/.env (SEO_BRAND) at build time; shown on reports and e-mails
   crawl_max_pages: 200,             // DataForSEO on-page crawl size (also used when reading crawled pages)
   crawl_js: false,                  // true = render JavaScript during the crawl (slower, costs more)
   qa_max_rounds: 2,   // one editor pass: live tests showed a second pass inflates length without raising the score                 // how many times the Editor may revise content that fails QA
@@ -270,8 +270,13 @@ const video = video_url ? { url: video_url, provider: ytm ? 'youtube' : vim ? 'v
 // ---- v4.5: monitor settings (Track my site / API `monitors`), audit crawl options, scheduled audits ----
 const MI = obj(p2.monitors);
 const monitor_input = {}; for (const k of ['ai_visibility', 'ai_pulse', 'ai_growth', 'link_builder', 'backlinks', 'audit_monthly', 'audit_js']) if (MI[k] !== undefined) monitor_input[k] = !!MI[k] && !/^(false|0|no|off)$/i.test(String(MI[k]));
-if (MI.ai_engines !== undefined) monitor_input.ai_engines = asArray(MI.ai_engines).map(e => String(e).toLowerCase().trim()).filter(e => ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode', 'copilot'].includes(e)).join(', ');
-if (MI.ai_prompts_max !== undefined) monitor_input.ai_prompts_max = Math.min(50, Math.max(3, parseInt(MI.ai_prompts_max, 10) || 20));   // v4.9: up to 50 questions
+if (MI.ai_engines !== undefined) monitor_input.ai_engines = asArray(MI.ai_engines).map(e => String(e).toLowerCase().trim()).filter(e => ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode', 'copilot', 'chatgpt_api', 'gemini_api'].includes(e)).join(', ');   // G6: + the two model APIs
+if (MI.ai_prompts_max !== undefined) monitor_input.ai_prompts_max = Math.min(500, Math.max(3, parseInt(MI.ai_prompts_max, 10) || 20));   // v4.9: up to 50 questions; G6 (2026-10-18): up to 500
+// G6: buyer roles, extra markets (CC-lang) and how the daily pulse samples the panel
+if (MI.ai_personas !== undefined) monitor_input.ai_personas = asArray(MI.ai_personas).map(x => String(x).replace(/\s+/g, ' ').trim().slice(0, 40)).filter(Boolean).slice(0, 6).join(', ');
+if (MI.ai_markets !== undefined) monitor_input.ai_markets = asArray(MI.ai_markets).map(x => String(x).trim()).filter(x => /^[A-Za-z]{2}([-_ ][A-Za-z]{2,3})?$/.test(x)).slice(0, 5).join(', ');
+if (MI.ai_pulse_mode !== undefined) monitor_input.ai_pulse_mode = ['sample', 'full'].includes(String(MI.ai_pulse_mode).toLowerCase()) ? String(MI.ai_pulse_mode).toLowerCase() : '';
+if (MI.ai_pulse_per_week !== undefined) monitor_input.ai_pulse_per_week = parseInt(MI.ai_pulse_per_week, 10) >= 1 ? Math.min(6, parseInt(MI.ai_pulse_per_week, 10)) : '';
 if (MI.ai_pages_month !== undefined) monitor_input.ai_pages_month = Math.min(8, Math.max(0, parseInt(MI.ai_pages_month, 10) || 0));   // v4.12: AI answer / refresh pages a month
 if (MI.audit_pages !== undefined) monitor_input.audit_pages = Math.min(1000, Math.max(50, parseInt(MI.audit_pages, 10) || 200));
 if (MI.brand_names !== undefined) monitor_input.brand_names = asArray(MI.brand_names).join(', ');
@@ -412,6 +417,10 @@ return [{
     ladder_links,
     ladder_words: Math.max(0, Math.round(Number(p2.ladder_words) || 0)),   // P2-7: the word count the ladder verdict set for this page
     ladder_target_url: /^https?:\/\/\S+$/i.test(String(p2.ladder_target_url || '').trim()) ? String(p2.ladder_target_url).trim().slice(0, 300) : '',   // R15: the URL the ladder planned for this page
+    ladder_measure: (p2.ladder_measure && typeof p2.ladder_measure === 'object' && !Array.isArray(p2.ladder_measure)) ? { keyword: String(p2.ladder_measure.keyword || '').toLowerCase().trim().slice(0, 200),
+      score: (p2.ladder_measure.score === null || p2.ladder_measure.score === '' || !Number.isFinite(Number(p2.ladder_measure.score))) ? null : Number(p2.ladder_measure.score),
+      checked_at: String(p2.ladder_measure.checked_at || '').slice(0, 40), ai_overview: p2.ladder_measure.ai_overview === true,
+      features: Array.isArray(p2.ladder_measure.features) ? p2.ladder_measure.features.slice(0, 12).map(x => String(x).slice(0, 40)) : [] } : null,   // A-21: what the ladder run measured for this keyword
     ai_target,
     force_content: !!p2.force_content,
     publish_wordpress: !!CONFIG.wordpress_publish && !!wordpress_url,
@@ -423,6 +432,8 @@ return [{
     crawl_max_pages: crawl_pages,
     crawl_js: crawl_js_req || CONFIG.crawl_js,
     scheduled: !!p2.scheduled,
+    // F-L (2026-10-18): the Audit Scheduler's ran-late notice, kept for a scheduled request only (a caller cannot label its own run late)
+    ran_late: (!!p2.scheduled && p2.ran_late && typeof p2.ran_late === 'object' && p2.ran_late.late === true) ? { late: true, via: String(p2.ran_late.via || ''), due: String(p2.ran_late.due || ''), started_at: String(p2.ran_late.started_at || ''), late_min: Number(p2.ran_late.late_min) || 0, kind: String(p2.ran_late.kind || ''), why: String(p2.ran_late.why || '').slice(0, 300), text: String(p2.ran_late.text || '').slice(0, 600) } : null,
     monitor_input,
     topics,
     free_only: mode === 'backlinks' && /^(true|1|yes|on)$/i.test(String(p2.free_only ?? '')),

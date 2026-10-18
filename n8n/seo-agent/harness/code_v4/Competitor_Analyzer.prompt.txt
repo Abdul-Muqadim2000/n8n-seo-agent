@@ -22,8 +22,10 @@ STATISTICS COMPETITORS CITE (for awareness, not for copying)
 VERIFIED FACTS WITH SOURCES (may be cited on our page, only with the source URL)
 {{ ($json.facts || []).map(f => '- ' + f.claim + ' [' + f.source + ', ' + f.url + ']').join('\n') || 'none found' }}
 
-THE CLIENT'S CURRENT PAGE ON THIS TOPIC (first part)
-{{ ($json.existing_page_text || '').slice(0, 3500) || 'none' }}
+THE CLIENT'S CURRENT PAGE ON THIS TOPIC
+{{ $json.existing_page_facts_text || '' }}
+{{ $json.existing_page_tables || '' }}
+{{ $json.existing_page_text ? 'TEXT OF THE PAGE (the text reader drops tables, bylines and dates in the page template):\n' + $json.existing_page_text.slice(0, 14000) : 'none' }}
 
 COMPETITOR DATA
 {{ $json.competitor_digest }}
@@ -43,7 +45,7 @@ Return ONLY a valid JSON object (no markdown, no backticks, no extra text) in th
   "trust_signals_needed": ["What proof readers expect on this topic: certifications, case studies, named experts, pricing transparency, guarantees"],
   "competitor_strengths": [{ "domain": "", "strength": "" }],
   "competitor_weaknesses": [{ "domain": "", "weakness": "" }],
-  "existing_page_gaps": ["If the client has a page: what it lacks versus the top pages; else empty"],
+  "existing_page_gaps": ["If the client has a page: what it lacks versus the top pages, judged ONLY on PAGE FACTS and the text above; else empty"],
   "unique_angle": "One clear angle that would make our page the obvious choice",
   "must_include_entities": ["Important terms, brands, concepts, or locations to mention naturally"],
   "faq_opportunities": ["6-8 real questions searchers have — People Also Ask first"],
@@ -54,5 +56,7 @@ Return ONLY a valid JSON object (no markdown, no backticks, no extra text) in th
 
 Rules:
 - Ignore cookie notices, menus and navigation text.
+- About the client's page you may only claim an ABSENCE that PAGE FACTS and the text above prove. Never say the page lacks dates, tables, an author, a publication date or a call to action when PAGE FACTS lists them, and never when it says NOT CHECKED. If the text is marked CUT, say nothing about what is missing from the part you cannot see, and never write "in the excerpt provided" as if it were a finding: leave the claim out.
+- In the UAE e-invoicing context the Ministry of Finance accredits e-invoicing service providers (the Federal Tax Authority administers the tax). Competitors' pages say "FTA-accredited"; do not copy it: write "accredited under the Ministry of Finance's e-invoicing framework".
 - recommended_word_count should be about 20% above the competitor average, rounded to the nearest 100, never below 800 and never above 3500.
 - Write in {{ $json.language_name || 'English' }}.

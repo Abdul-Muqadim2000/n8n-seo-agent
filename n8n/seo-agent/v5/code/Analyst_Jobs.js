@@ -4,14 +4,18 @@
 // different company with the same name). Regex matching cannot see a competitor named without its website, or a wrong fact; this can.
 // 12 answers per job, at most 6 jobs per site and 24 per run (~$0.02 each; the agent runs them one after another, so the cap keeps a
 // many-site run inside the execution time limit — sites past it keep the parser's reading this week).
-const CONFIG = { per_job: 12, max_jobs_per_site: 6, max_jobs_per_run: 24, chars: 1500, min_facts: 2 };   // min_facts (G10): fewer checkable facts than this and the wrong-claim check is reported as "not checked"
+// G6 (2026-10-18): a bigger panel reads more answers — the site's share is the panel's Answer Analyst budget (AIP.analystCap: 24 + 1 per 25
+// questions, at most 60 a run) spread over the executions the run is split into, so a 500-question run reads ~44 jobs' worth in all, not 6.
+// One execution never starts more than 36 (the agent runs them one after another, ~25 s each, inside the execution time limit).
+const CONFIG = { per_job: 12, max_jobs_per_site: 6, max_jobs_per_run: 36, chars: 1500, min_facts: 2 };   // min_facts (G10): fewer checkable facts than this and the wrong-claim check is reported as "not checked"
 const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do && !p.pulse_run);
 let rows = []; try { rows = $('Parse AI Answers').all().map(i => i.json).filter(r => !r.skip && r.engine && r.answered && r._text); } catch (e) {}
 const out = [];
 for (const p of plans) {
   const mine = rows.filter(r => r.site_id === p.site_id);
   const pick = [...mine.filter(r => r.mentioned || r.kind === 'brand'), ...mine.filter(r => !r.mentioned && r.kind !== 'brand' && ['recommend', 'compare', 'choose', 'custom'].includes(r.kind))];
-  const sel = pick.slice(0, CONFIG.per_job * CONFIG.max_jobs_per_site);
+  const cm = p.cost_model || {}; const share = cm.analyst_jobs ? Math.ceil(Number(cm.analyst_jobs) / Math.max(1, Number(cm.executions) || 1)) : CONFIG.max_jobs_per_site;
+  const sel = pick.slice(0, CONFIG.per_job * Math.max(1, Math.min(12, Math.max(CONFIG.max_jobs_per_site, share))));
   const P = p.profile || {};
   // G10 (2026-10-11 system review): the fact sheet the analyst checks the answers against — the business profile (seo_profiles), the
   // facts and services of the site model (SITE_MODEL_SPEC.md) and the accreditation status. A claim can only be called wrong against a

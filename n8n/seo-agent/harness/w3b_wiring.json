@@ -1,0 +1,46 @@
+{
+ "chain": [
+  "Parse Critique",
+  "Refresh Source Plan",
+  "Refresh Sources?",
+  "Fetch Refresh Sources",
+  "Refresh Sources",
+  "Content QA"
+ ],
+ "connections": {
+  "Fetch Refresh Sources": [
+   [
+    "Refresh Sources"
+   ]
+  ],
+  "Parse Critique": [
+   [
+    "Refresh Source Plan"
+   ]
+  ],
+  "Refresh Source Plan": [
+   [
+    "Refresh Sources?"
+   ]
+  ],
+  "Refresh Sources": [
+   [
+    "Content QA"
+   ]
+  ],
+  "Refresh Sources?": [
+   [
+    "Fetch Refresh Sources"
+   ],
+   [
+    "Refresh Sources"
+   ]
+  ]
+ },
+ "fetch": {
+  "credential": "SEOcredJinaReade",
+  "on_error": "continueRegularOutput",
+  "retries": 3,
+  "url": "=https://r.jina.ai/{{ $json.url }}"
+ }
+}

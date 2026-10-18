@@ -6,7 +6,7 @@ import { Container, CtaBand, Eyebrow, GrowthLoopDiagram, IconTile, IntegrationMa
 import { CapabilityMap } from '../components/platform/CapabilityMap';
 import { CapabilityScreen, isWideScreen } from '../components/platform/CapabilityScreen';
 import { ArrowLink, jumpTo, lowerFirst, useScrollSpy } from '../components/platform/kit';
-import { CapabilityCount, featureBySlug, features, type Feature } from '../content/features';
+import { CapabilityCount, capabilityCount, featureBySlug, features, type Feature } from '../content/features';
 import { useSeo } from '../useSeo';
 
 const HERO_FACTS = [`${features.length} capabilities`, 'Auto or Manual for every step', 'Cost shown before every run'];
@@ -16,9 +16,9 @@ const LOOP_MAP: Record<string, string[]> = {
   Research: ['keyword-research', 'ai-visibility'],
   Plan: ['keyword-ladders', 'autopilot'],
   Write: ['content'],
-  Publish: ['content', 'site-tracking'],
-  Track: ['site-tracking', 'ai-visibility', 'backlinks', 'technical-audits'],
-  Learn: ['reports', 'autopilot'],
+  Publish: ['content', 'ai-growth', 'link-building'],
+  Track: ['site-tracking', 'ai-visibility', 'backlinks', 'technical-audits', 'crawler-analytics'],
+  Learn: ['reports', 'report-delivery', 'integrations', 'autopilot'],
 };
 
 const SOURCE_GROUPS: { title: string; items: { name: string; use: string }[] }[] = [
@@ -28,7 +28,8 @@ const SOURCE_GROUPS: { title: string; items: { name: string; use: string }[] }[]
       { name: 'Google Search Console', use: 'clicks, positions, index coverage, sitemaps and links' },
       { name: 'Google Analytics 4', use: 'conversions, and visits and revenue from AI answers' },
       { name: 'Google Trends', use: 'rising topics in your market' },
-      { name: 'Bing Webmaster Tools', use: 'links Bing has found to your site' },
+      { name: 'Bing Webmaster Tools', use: 'links Bing has found to your site, and your new pages sent to it' },
+      { name: 'IndexNow', use: 'changed pages announced the week they change' },
     ],
   },
   {
@@ -48,8 +49,42 @@ const SOURCE_GROUPS: { title: string; items: { name: string; use: string }[] }[]
   {
     title: 'Publishing',
     items: [
-      { name: 'WordPress', use: 'drafts for your team to review' },
+      { name: 'WordPress', use: 'drafts or live posts, with Yoast SEO or Rank Math fields' },
+      { name: 'Webflow and Contentful', use: 'an item or entry, your fields mapped once' },
+      { name: 'Signed webhook', use: 'any other stack, or a bot that opens a pull request' },
       { name: 'HTML, Markdown and meta.json', use: 'a package for any other CMS' },
+    ],
+  },
+  {
+    title: 'Your team’s tools',
+    items: [
+      { name: 'Slack and Microsoft Teams', use: 'alerts, finished work and ranking moves, routed per channel' },
+      { name: 'Jira, Linear and Asana', use: 'one ticket per audit finding or recommendation, its state read back' },
+      { name: 'BigQuery, Amazon S3, Google Cloud Storage and Cloudflare R2', use: 'six tables exported daily or weekly' },
+      { name: 'Looker Studio', use: 'the same tables in your reports' },
+      { name: 'Claude and ChatGPT (MCP)', use: 'ask about your data and start analyses within your budget' },
+    ],
+  },
+  {
+    title: 'Your mailbox',
+    items: [
+      { name: 'Microsoft 365 and Gmail', use: 'pitches sent from your address, connected without a password' },
+      { name: 'Any mail host', use: 'SMTP and IMAP with an app password' },
+      { name: 'Journalist digests', use: 'HARO and Source of Sources requests read from your inbox' },
+    ],
+  },
+  {
+    title: 'Your server logs',
+    items: [
+      { name: 'Apache, Nginx, IIS, CloudFront or JSON', use: 'a log file uploaded from your server' },
+      { name: 'Cloudflare, Vercel, Fastly and Akamai', use: 'logs pushed automatically with a key you create' },
+    ],
+  },
+  {
+    title: 'Sign-in',
+    items: [
+      { name: 'Okta, Microsoft Entra ID and Google Workspace', use: 'single sign-on over SAML 2.0 or OIDC' },
+      { name: 'SCIM 2.0', use: 'people created and switched off by your identity provider' },
     ],
   },
 ];
@@ -74,7 +109,7 @@ function Hero() {
               {CapabilityCount} capabilities. One system.
             </h1>
             <p className="mt-6 max-w-xl animate-fade-up text-pretty text-lg leading-relaxed text-ink-2 sm:text-xl" style={{ animationDelay: '140ms' }}>
-              Research, keyword ladders, content, audits, tracking, AI search visibility and backlinks — each strong on its own, and together one weekly loop your team can trust.
+              Research, keyword ladders, content, audits, tracking, AI search visibility, backlinks and link building — each strong on its own, and together one weekly loop your team can trust.
             </p>
             <div className="mt-9 flex animate-fade-up flex-wrap gap-3" style={{ animationDelay: '210ms' }}>
               <ButtonLink to="/signup" size="lg" className="group">
@@ -252,7 +287,7 @@ function LoopSection() {
         <div>
           <SectionHeading
             eyebrow="The growth loop"
-            title="How the ten fit together."
+            title={`How the ${capabilityCount} fit together.`}
             lead="Every website runs the same six steps every week. Each capability carries one or more of them, and each loop starts from what the last one learned."
           />
           <ol className="mt-10 divide-y divide-line-on-ink border-y border-line-on-ink">
@@ -282,7 +317,7 @@ function LoopSection() {
             ))}
           </ol>
           <Reveal className="mt-8">
-            <ArrowLink to="/how-it-works">See a week with Ascentra</ArrowLink>
+            <ArrowLink to="/how-it-works">See a week with Alaventra</ArrowLink>
           </Reveal>
         </div>
         <Reveal index={1}>
@@ -300,7 +335,7 @@ function Integrations() {
         align="center"
         eyebrow="Integrations"
         title="Built on the sources you already trust."
-        lead="Ascentra reads your Google data through a service account you add, asks the AI engines your buyers use and hands finished pages to your CMS."
+        lead="Alaventra reads your Google data through a service account you add, asks the AI engines your buyers use and hands finished pages to your CMS."
       />
       {/* phones get the grouped list only (the chip row would repeat it) */}
       <Reveal className="mt-12 hidden sm:block">
@@ -329,7 +364,7 @@ export default function PlatformPage() {
   useSeo({
     title: 'Platform',
     // a summary (search results show ~160 characters); the count follows the registry
-    description: `${CapabilityCount} capabilities, one weekly SEO loop: research, keyword ladders, content, audits, tracking, AI search visibility and backlinks, with your team in control.`,
+    description: `${CapabilityCount} capabilities, one weekly SEO loop: research, ladders, content, audits, tracking, AI search, backlinks and link building, with your team in control.`,
     path: '/platform',
   });
   const active = useScrollSpy(features.map((f) => f.slug));

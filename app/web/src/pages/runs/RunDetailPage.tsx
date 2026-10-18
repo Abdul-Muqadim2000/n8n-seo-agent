@@ -112,6 +112,7 @@ export default function RunDetailPage() {
             <span className="text-ink-3">·</span>
             <span>
               {run.userName ? `${run.userName}, ` : ''}
+              {run.apiKeyName ? `via API key “${run.apiKeyName}”, ` : ''}
               {fmtDateTime(run.createdAt)}
             </span>
           </span>
@@ -159,7 +160,7 @@ export default function RunDetailPage() {
             <CardTitle icon={<GitCommitVertical />} title="Timeline" description={reports.length ? `${reports.length} report${reports.length === 1 ? '' : 's'} received; select one to read it below` : 'Reports appear here as the SEO engine sends them'} />
             <div className="px-5 pt-3 pb-5">
               <ol className="relative space-y-1 before:absolute before:top-5 before:bottom-5 before:left-[17px] before:w-0.5 before:rounded-full before:bg-line">
-                <TimelineEvent tone="neutral" icon={<Send />} title="Started" time={run.createdAt} sub={run.userName ? `by ${run.userName}` : undefined} />
+                <TimelineEvent tone="neutral" icon={<Send />} title="Started" time={run.createdAt} sub={run.userName ? `by ${run.userName}${run.apiKeyName ? ` via API key “${run.apiKeyName}”` : ''}` : run.apiKeyName ? `via API key “${run.apiKeyName}”` : undefined} />
                 {run.acceptedAt && <TimelineEvent tone="blue" icon={<CircleDot />} title="Accepted by the SEO engine" time={run.acceptedAt} />}
                 {reports.map((r) => (
                   <li key={r.id} className="relative">
@@ -198,7 +199,7 @@ export default function RunDetailPage() {
             <div className="space-y-5 px-5 pt-3 pb-5">
               <div className="flex flex-wrap gap-1.5">
                 <RunChip icon={<Coins />} title={cost.basis}>
-                  {formatUsd(cost.usd, cost.source === 'measured' ? 3 : 2)} {COST_SOURCE_LABEL[cost.source]}
+                  {formatUsd(cost.usd, cost.source === 'measured' || cost.source === 'partial' ? 3 : 2)} {COST_SOURCE_LABEL[cost.source]}
                 </RunChip>
                 <RunChip icon={<Clock />}>{active ? `about ${run.etaMinutes} min` : fmtMinutes(duration)}</RunChip>
                 <RunChip icon={<FileText />} tone={reports.length ? 'accent' : 'neutral'}>
@@ -219,10 +220,10 @@ export default function RunDetailPage() {
                   },
                   // B-R3: what it cost beats what the engine reserved beats what we guessed, and the label says which one this is
                   {
-                    label: cost.source === 'measured' ? 'Cost' : 'Cost estimate',
+                    label: cost.source === 'measured' ? 'Cost' : cost.source === 'partial' ? 'Cost so far (search data only)' : 'Cost estimate',
                     value: (
                       <span className="tabular">
-                        {formatUsd(cost.usd, cost.source === 'measured' ? 3 : 2)}{' '}
+                        {formatUsd(cost.usd, cost.source === 'measured' || cost.source === 'partial' ? 3 : 2)}{' '}
                         <InfoTip label="Where this figure comes from">{cost.basis}</InfoTip>
                       </span>
                     ),

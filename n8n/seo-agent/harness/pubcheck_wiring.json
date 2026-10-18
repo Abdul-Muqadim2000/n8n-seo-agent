@@ -1,0 +1,69 @@
+{
+ "workflow": "SEOagentPubCheck",
+ "path": "seo-publish-check",
+ "authentication": "headerAuth",
+ "response_mode": "responseNode",
+ "credential": "SEOcredApiHeader",
+ "nodes": [
+  "Publish Check Webhook",
+  "Parse Brief",
+  "Publish Check Valid?",
+  "Content QA",
+  "Originality Check",
+  "Publish Check Verdict",
+  "Respond Publish Check",
+  "Respond Publish Check Bad Request",
+  "Note (Publish Check)"
+ ],
+ "node_types": [
+  "n8n-nodes-base.code",
+  "n8n-nodes-base.if",
+  "n8n-nodes-base.respondToWebhook",
+  "n8n-nodes-base.stickyNote",
+  "n8n-nodes-base.webhook"
+ ],
+ "writes": [],
+ "responses": {
+  "Respond Publish Check": 200,
+  "Respond Publish Check Bad Request": 400
+ },
+ "same_gate_as_content_run": {
+  "Content QA": true,
+  "Originality Check": true
+ },
+ "connections": {
+  "Publish Check Webhook": [
+   [
+    "Parse Brief"
+   ]
+  ],
+  "Parse Brief": [
+   [
+    "Publish Check Valid?"
+   ]
+  ],
+  "Content QA": [
+   [
+    "Originality Check"
+   ]
+  ],
+  "Originality Check": [
+   [
+    "Publish Check Verdict"
+   ]
+  ],
+  "Publish Check Verdict": [
+   [
+    "Respond Publish Check"
+   ]
+  ],
+  "Publish Check Valid?": [
+   [
+    "Content QA"
+   ],
+   [
+    "Respond Publish Check Bad Request"
+   ]
+  ]
+ }
+}

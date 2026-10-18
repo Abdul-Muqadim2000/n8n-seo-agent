@@ -2,5 +2,6 @@
 const d = $('Audit Diff').first().json; const a = d.site_audit || {};
 const keyOf = (f) => String(f.category || '') + '|' + String(f.title || '').toLowerCase().replace(/\d[\d,.%]*/g, '#').replace(/["'“”‘’]/g, '').replace(/\s+/g, ' ').trim();
 const rows = (a.findings || []).filter(f => f.scoring !== false && f.severity !== 'Info').map(f => ({ site_id: d.site_id, domain: a.domain || d.domain, audit_id: d.audit_id, audited_at: d.audited_at, finding_key: keyOf(f), category: f.category || '', severity: f.severity || '', title: String(f.title || '').slice(0, 200), affected_count: Number(f.affected_count) || 0, checked: Number(f.checked) || 0, impact: Number(f.impact) || 0, impact_basis: String(f.impact_basis || '').slice(0, 400),
-  recheck_state: '', recheck_requested_at: '', recheck_at: '', recheck_rule: '', recheck_note: '' }));   // G11: filled when the owner marks it fixed and the daily watch answers
+  recheck_state: '', recheck_requested_at: '', recheck_at: '', recheck_rule: '', recheck_note: '',
+  evidence: String(f.evidence || '').slice(0, 500), sample_urls: JSON.stringify((Array.isArray(f.sample_urls) ? f.sample_urls : []).filter(u => typeof u === 'string' && /^https?:\/\//i.test(u)).slice(0, 5).map(u => u.slice(0, 300))), check_version: String(f.check_version || '') }));   // B5-11: the read API's evidence   // G11: filled when the owner marks it fixed and the daily watch answers
 return rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];

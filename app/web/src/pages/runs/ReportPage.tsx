@@ -1,11 +1,11 @@
 import { Link, useParams } from 'react-router';
-import { ArrowLeft, CalendarClock, ListChecks } from 'lucide-react';
+import { ArrowLeft, CalendarClock, ListChecks, Printer } from 'lucide-react';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { useReport } from '@/lib/queries';
 import { fmtDateTime } from '@/lib/utils';
 import { Badge, StatusBadge } from '@/components/ui/badge';
-import { ButtonLink } from '@/components/ui/button';
+import { Button, ButtonLink } from '@/components/ui/button';
 import { ErrorState, Skeleton } from '@/components/ui/feedback';
 import { PageHeader } from '@/components/ui/misc';
 import { StageIcon, stageLabel } from '@/components/reports/meta';
@@ -15,7 +15,7 @@ import { ShareReport } from '@/components/reports/ShareReport';
 
 export default function ReportPage() {
   const { reportId = '' } = useParams();
-  const { org } = useOrgCtx();
+  const { org, can } = useOrgCtx();
   const q = useReport(org.id, reportId);
 
   if (q.isLoading)
@@ -33,7 +33,7 @@ export default function ReportPage() {
   const r = q.data;
   return (
     <div>
-      <Link to={paths.reports(org.id)} className="group mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-3 transition-colors duration-150 ease-brand hover:text-ink">
+      <Link data-print-hide to={paths.reports(org.id)} className="group mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-3 transition-colors duration-150 ease-brand hover:text-ink">
         <ArrowLeft className="size-4 transition-transform duration-200 ease-brand group-hover:-translate-x-0.5" aria-hidden /> All reports
       </Link>
       <PageHeader
@@ -64,16 +64,20 @@ export default function ReportPage() {
           </span>
         }
         actions={
-          <span className="flex flex-wrap items-center gap-2">
+          <span className="flex flex-wrap items-center gap-2" data-print-hide>
             {/* B-R1: push this one report to the company's own channels, if it is ready to leave the app */}
             <SendReport reportId={r.id} />
             {/* G15: an expiring, read-only link for somebody with no account (admins and owners only) */}
             <ShareReport reportId={r.id} />
-            {r.runId && (
+            {r.runId && can('viewer') && (
               <ButtonLink to={paths.run(org.id, r.runId)} variant="secondary" size="sm" icon={<ListChecks className="size-4" />}>
                 Open the run
               </ButtonLink>
             )}
+            {/* G5: a printable page of the report — in a white-label portal, the PDF a client keeps (the engine's PDF names the engine) */}
+            <Button variant="secondary" size="sm" icon={<Printer className="size-4" />} onClick={() => window.print()} data-print-hide>
+              Save as PDF
+            </Button>
           </span>
         }
       />

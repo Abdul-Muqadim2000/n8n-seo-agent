@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type ElementType, type ReactNode, type RefObject } from 'react';
-import { cn } from '@/lib/utils';
+import { useEffect, useState, type CSSProperties, type ElementType, type ReactNode, type RefObject } from 'react';
 
 const reducedMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
@@ -25,10 +24,11 @@ export function useInView<T extends Element>(ref: RefObject<T | null>, { rootMar
   return seen;
 }
 
-/** Fades and lifts its children in when they scroll into view; `index` staggers siblings (70ms each). Reduced motion: shown at once. */
+/** A plain wrapper kept for layout (`as`, classes): content is visible from the first paint — the marketing site has no entrance
+ *  animation. `index` is accepted for older call sites and ignored. */
 export function Reveal({
   as: Tag = 'div',
-  index = 0,
+  index: _index = 0,
   className,
   style,
   children,
@@ -40,11 +40,10 @@ export function Reveal({
   style?: CSSProperties;
   children?: ReactNode;
   id?: string;
+  role?: string;
 }) {
-  const ref = useRef<HTMLElement>(null);
-  const seen = useInView(ref);
   return (
-    <Tag ref={ref} className={cn('mk-reveal', seen && 'is-visible', className)} style={{ ...style, ['--mk-i' as string]: index }} {...rest}>
+    <Tag className={className} style={style} {...rest}>
       {children}
     </Tag>
   );

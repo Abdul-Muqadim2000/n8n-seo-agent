@@ -81,11 +81,14 @@ for (const p of plans) {
   // stored prospect row brought back the pitches of 2026-10-02 — written before the D12 / D13 gates — as "8 outreach draft(s) written",
   // including one to tax.gov.ae. A draft written now is stamped (drafted_at); Earned Media has already withdrawn the superseded ones.
   const wroteNow = new Map();
-  const prospect_rows = em.prospect_rows.map(r => { const job = em.outreach_jobs.find(j => j.prospect_domain === r.prospect_domain); const d = job ? draftFor(job) : null;
+  const prospect_rows = em.prospect_rows.map(r => { const job = em.outreach_jobs.find(j => j.prospect_domain === r.prospect_domain && j.kind !== 'correction'); const d = job ? draftFor(job) : null;
     if (!(d && d.body)) return r;
     const fresh = DRAFTS.fresh(d, now); wroteNow.set(r.prospect_domain, { subject: fresh.outreach_subject, body: fresh.outreach_body });
     return { ...r, outreach_subject: fresh.outreach_subject, outreach_body: fresh.outreach_body, drafted_at: fresh.drafted_at }; });   // status stays new (the app's prospect statuses: new / contacted / won / rejected / ignored); a stored draft = ready to send
   const earned = em.earned.slice(0, 15).map(e => { const row = prospect_rows.find(r => r.prospect_domain === e.host && r.source_url === e.url); return { ...e, status: row ? row.status : '', contact_email: (row && row.contact_email) || e.contact_email || '', draft: wroteNow.get(e.host) || null }; });
+  // B9-7: the wrong claims AI makes, each with the fact on file and the pages that carry it; a draft only where the one writer wrote one
+  const corrections = (em.corrections || []).map(c => { const job = c.job_n ? em.outreach_jobs.find(j => j.n === c.job_n && j.kind === 'correction') : null; const d = job ? draftFor(job) : null;
+    return { ...c, draft: d && d.body ? { subject: String(d.subject || ''), body: String(d.body) } : null, status: c.status === 'draft_requested' ? (d && d.body ? 'drafted' : 'draft_failed') : c.status }; });
   const drafts_written = wroteNow.size, handed_over = p.link_builder ? em.prospect_rows.filter(r => /Link Builder/.test(String(r.note || ''))).length : 0;
   const newlyWon = prospect_rows.filter(r => r.status === 'won' && r.won_at === now);
   // ---- targets ----
@@ -108,6 +111,18 @@ for (const p of plans) {
   for (const r of pages.filter(r => (r.robots_blocked || []).length)) {
     actions.push({ priority: 1, type: 'robots', action: 'Let the AI search fetchers read ' + r.url + ' (robots.txt)', why: r.issues[0] || ('robots.txt blocks ' + r.robots_blocked.join(', ') + ' (' + r.robots_rule + ').') });
     if (r.score_withheld && ['cited', 'target', 'ladder', 'content', 'home'].includes(r.kind)) alerts.push({ level: 'high', text: 'No AI search fetcher may read ' + r.url + ': ' + r.robots_rule + ' in robots.txt. It cannot be quoted whatever is on it.' });
+  }
+  // B9-8: a page that answers a browser and refuses the AI answer fetchers is a high finding (its score is withheld, never printed)
+  for (const r of pages.filter(r => (r.findings || []).some(f => f.key === 'ai_fetchers_refused'))) {
+    const f = r.findings.find(f => f.key === 'ai_fetchers_refused');
+    actions.push({ priority: 1, type: 'fetchers', action: 'Let the AI answer fetchers read ' + r.url + ' (' + f.bots.join(', ') + ' refused)', why: f.text });
+    alerts.push({ level: 'high', text: f.text.slice(0, 300) + ' ' + r.url });
+  }
+  // B9-7: a wrong claim is either waiting for the owner's fact, or has a correction to review - never sent from here
+  for (const c of corrections) {
+    if (c.status === 'needs_fact') actions.push({ priority: 2, type: 'fact', action: 'Tell us the true answer to a wrong claim AI makes: "' + c.claim.slice(0, 100) + '"', why: c.note });
+    else if (c.status === 'drafted') actions.push({ priority: 2, type: 'correction', action: 'Review the correction drafted for ' + ((c.pages.find(pg => pg.carries_claim) || {}).host || 'the publisher') + ' (it is not sent)', why: 'AI says "' + c.claim.slice(0, 100) + '"; the fact on file: ' + c.true_fact });
+    else if (c.status === 'handed_over') actions.push({ priority: 2, type: 'correction', action: 'Approve the Link Builder\'s correction pitch for "' + c.claim.slice(0, 80) + '"', why: c.note });
   }
   // B9-5: a page AI used to cite and has stopped citing — measured from our own stored weekly checks, and the best refresh there is
   for (const kp of (p.key_pages || []).filter(k => k.decay).slice(0, 2)) actions.push({ priority: 2, type: 'decay', action: 'Refresh ' + kp.url + ' — AI has stopped citing it',
@@ -140,6 +155,6 @@ for (const p of plans) {
     targets: targets.map(t => ({ target_id: t.target_id, question: t.question, kind: t.kind, page_url: t.page_url, status: t.status, value: t.value, reason: t.reason, engines: t.engines, competitors: t.competitors })),
     // B-G2 (2026-10-15): the rungs the read-path fit gate set aside, with the reason, so the report says why the list is shorter
     set_aside: p.set_aside || [], set_aside_note: p.set_aside_note || '',
-    earned, entity, actions: actions.slice(0, 12), alerts, drafts_written, handed_over, page_rows, target_rows: targets, prospect_rows, growth_row, cache_rows } });
+    earned, earned_basis: p.earned_basis || null, corrections, entity, actions: actions.slice(0, 12), alerts, drafts_written, handed_over, page_rows, target_rows: targets, prospect_rows, growth_row, cache_rows } });
 }
 return out.length ? out : [{ json: { skip: true } }];

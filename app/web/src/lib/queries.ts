@@ -1,5 +1,9 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
 import type {
+  ApiKeyCreate,
+  ApiKeyView,
+  PublishCheckInput,
+  PublishCheckResult,
   AdminOrg,
   DeliveryReport,
   AdminResult,
@@ -45,6 +49,35 @@ import type {
   DeliveryRecord,
   DeliverySettings,
   DeliverySettingsInput,
+  AuditEventView,
+  SessionView,
+  SsoOverview,
+  MfaStatus,
+  SecurityPolicy,
+  TotpEnrolment,
+  CmsConnectionCreate,
+  CmsConnectionUpdate,
+  CmsConnectionView,
+  CmsPublishInput,
+  CmsPublishResult,
+  CmsReportState,
+  CmsSiteState,
+  CmsTestResultView,
+  CrawlerData,
+  CrawlerSettingsInput,
+  LogPushKeyCreated,
+  LogUploadAccepted,
+  AgencyClient,
+  AgencyOverviewRow,
+  ApprovalCandidate,
+  ApprovalView,
+  Branding,
+  BrandingResponse,
+  ClientBranding,
+  PortalDomainCheck,
+  PortalDomainView,
+  PortalMailView,
+  StaffAccess,
 } from '@seo/shared';
 import { api, ApiRequestError } from './api';
 
@@ -203,6 +236,33 @@ export function useTestDelivery(orgId: string) {
   });
 }
 
+// ---- B5-11: company API keys (Company settings → API access) ----
+export const useApiKeys = (orgId: string, enabled = true) =>
+  useQuery({ queryKey: [...qk.org(orgId), 'api-keys'], queryFn: () => api<{ items: ApiKeyView[]; max: number }>(`/api/orgs/${orgId}/api-keys`), enabled });
+
+export function useCreateApiKey(orgId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ApiKeyCreate) => api<ApiKeyView & { token: string }>(`/api/orgs/${orgId}/api-keys`, { method: 'POST', body }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'api-keys'] }),
+  });
+}
+
+export function useRevokeApiKey(orgId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (keyId: string) => api<ApiKeyView>(`/api/orgs/${orgId}/api-keys/${keyId}`, { method: 'DELETE' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'api-keys'] }),
+  });
+}
+
+/** B3-7: "Check a page before you publish" — free, synchronous, writes nothing. */
+export function usePublishCheck(orgId: string, siteId: string) {
+  return useMutation({
+    mutationFn: (body: PublishCheckInput) => api<PublishCheckResult>(`/api/orgs/${orgId}/sites/${siteId}/publish-check`, { method: 'POST', body }),
+  });
+}
+
 /** Sends one report now, to the channels already set up. The server still refuses a report the run marked not ready. */
 export function useDeliverReport(orgId: string) {
   const qc = useQueryClient();
@@ -225,8 +285,9 @@ export function useTeamMutation<TBody>(orgId: string, method: 'POST' | 'PATCH' |
   });
 }
 
-export const useInvitation = (token: string) =>
-  useQuery({ queryKey: ['invitation', token], queryFn: () => api<InvitationPreview>(`/api/invitations/${token}`), retry: noRetryOn4xx });
+/** `viewer` (the signed-in user's id, or null) is in the key: the answer depends on who asks (D-11, joined from it already) */
+export const useInvitation = (token: string, viewer: string | null = null) =>
+  useQuery({ queryKey: ['invitation', token, viewer], queryFn: () => api<InvitationPreview>(`/api/invitations/${token}`), retry: noRetryOn4xx, staleTime: 0 });
 
 // ---------- sites ----------
 export const useSites = (orgId: string | undefined) =>
@@ -673,3 +734,364 @@ export function useAdminUpdateOrg() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'orgs'] }),
   });
 }
+
+// ---------- G1 identity: two-step verification, security policy ----------
+type NewCodes = { newRecoveryCodes: string[] | null };
+
+export const useMfaStatus = () => useQuery({ queryKey: ['me', 'mfa'], queryFn: () => api<MfaStatus>('/api/me/mfa') });
+
+/** every identity change refreshes the person's status and their /api/me (mfaEnabled) */
+function useIdentityMutation<TBody, TRes>(fn: (b: TBody) => Promise<TRes>) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: fn, onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }) });
+}
+
+export const useTotpStart = () => useMutation({ mutationFn: () => api<TotpEnrolment>('/api/me/mfa/totp/start', { method: 'POST' }) });
+export const useTotpConfirm = () => useIdentityMutation((code: string) => api<MfaStatus & NewCodes>('/api/me/mfa/totp/confirm', { method: 'POST', body: { code } }));
+export const useTotpDisable = () => useIdentityMutation((_: void) => api<MfaStatus>('/api/me/mfa/totp', { method: 'DELETE' }));
+export const useRegenerateRecoveryCodes = () => useIdentityMutation((_: void) => api<NewCodes>('/api/me/mfa/recovery-codes', { method: 'POST' }));
+export const usePasskeyOptions = () => useMutation({ mutationFn: () => api<Record<string, unknown>>('/api/me/mfa/passkeys/options', { method: 'POST' }) });
+export const usePasskeyRegister = () =>
+  useIdentityMutation((b: { name: string; response: Record<string, unknown> }) => api<MfaStatus & NewCodes>('/api/me/mfa/passkeys', { method: 'POST', body: b }));
+export const usePasskeyRemove = () => useIdentityMutation((id: string) => api<MfaStatus>(`/api/me/mfa/passkeys/${id}`, { method: 'DELETE' }));
+
+export const useSessions = () => useQuery({ queryKey: ['me', 'sessions'], queryFn: () => api<{ items: SessionView[] }>('/api/me/sessions') });
+export const useRevokeSession = () => useIdentityMutation((id: string) => api<{ ok: boolean; signedOutHere: boolean }>(`/api/me/sessions/${id}`, { method: 'DELETE' }));
+export const useRevokeOtherSessions = () => useIdentityMutation((_: void) => api<{ ok: boolean; revoked: number }>('/api/me/sessions/revoke-others', { method: 'POST' }));
+
+export const useSso = (orgId: string, enabled = true) => useQuery({ queryKey: [...qk.org(orgId), 'sso'], queryFn: () => api<SsoOverview>(`/api/orgs/${orgId}/sso`), enabled });
+/** every SSO change answers with fresh state or nothing: refetch the overview */
+export function useSsoMutation<TBody, TRes = unknown>(orgId: string, fn: (b: TBody) => Promise<TRes>) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: fn, onSuccess: () => qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'sso'] }) });
+}
+
+export type AuditFilters = { category?: string; actor?: string; outcome?: string; from?: string; to?: string };
+export type AuditPage = { items: AuditEventView[]; nextCursor: string | null; actors?: { id: string; label: string }[]; retentionDays: number };
+export const auditQs = (f: AuditFilters) => new URLSearchParams(Object.entries(f).filter(([, v]) => v)).toString();
+export function useAuditLog(orgId: string, filters: AuditFilters, enabled = true) {
+  return useInfiniteQuery({
+    queryKey: [...qk.org(orgId), 'audit', filters],
+    queryFn: ({ pageParam }) => {
+      const qs = auditQs({ ...filters, ...(pageParam ? { before: pageParam } : {}) } as AuditFilters);
+      return api<AuditPage>(`/api/orgs/${orgId}/audit${qs ? `?${qs}` : ''}`);
+    },
+    initialPageParam: '',
+    getNextPageParam: (p) => p.nextCursor ?? undefined,
+    enabled,
+  });
+}
+
+export const useSecurityPolicy = (orgId: string) => useQuery({ queryKey: [...qk.org(orgId), 'security'], queryFn: () => api<SecurityPolicy>(`/api/orgs/${orgId}/security`) });
+export function useSaveSecurityPolicy(orgId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (p: SecurityPolicy) => api<SecurityPolicy>(`/api/orgs/${orgId}/security`, { method: 'PUT', body: p }),
+    onSuccess: (p) => {
+      qc.setQueryData([...qk.org(orgId), 'security'], p);
+      qc.invalidateQueries({ queryKey: qk.me });
+    },
+  });
+}
+// ---------- G2: CMS publishing (app/docs/CMS_PUBLISHING.md) ----------
+const cmsKey = (siteId: string) => ['site', siteId, 'cms'] as const;
+
+export const useCmsConnections = (orgId: string, siteId: string) =>
+  useQuery({ queryKey: [...cmsKey(siteId), 'connections'], queryFn: () => api<{ items: CmsConnectionView[] }>(`/api/orgs/${orgId}/sites/${siteId}/cms/connections`), retry: noRetryOn4xx });
+
+/** The website's CMS items and recent attempts (Content page); off when the site is not verified. */
+export const useCmsSiteState = (orgId: string, siteId: string, enabled = true) =>
+  useQuery({ queryKey: [...cmsKey(siteId), 'state'], queryFn: () => api<CmsSiteState>(`/api/orgs/${orgId}/sites/${siteId}/cms/state`), enabled, retry: noRetryOn4xx, staleTime: 30_000 });
+
+export const useCmsReportState = (orgId: string, reportId: string) =>
+  useQuery({ queryKey: [...qk.report(orgId, reportId), 'cms'], queryFn: () => api<CmsReportState>(`/api/orgs/${orgId}/reports/${reportId}/cms`), retry: noRetryOn4xx });
+
+function useCmsInvalidate(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return () => {
+    qc.invalidateQueries({ queryKey: cmsKey(siteId) });
+    qc.invalidateQueries({ queryKey: ['org', orgId, 'report'] });
+  };
+}
+
+export function useCreateCmsConnection(orgId: string, siteId: string) {
+  const done = useCmsInvalidate(orgId, siteId);
+  return useMutation({
+    mutationFn: (body: CmsConnectionCreate) => api<{ connection: CmsConnectionView; signingSecret?: string }>(`/api/orgs/${orgId}/sites/${siteId}/cms/connections`, { method: 'POST', body }),
+    onSuccess: done,
+  });
+}
+
+export function useUpdateCmsConnection(orgId: string, siteId: string) {
+  const done = useCmsInvalidate(orgId, siteId);
+  return useMutation({
+    mutationFn: ({ id, ...body }: CmsConnectionUpdate & { id: string }) => api<CmsConnectionView>(`/api/orgs/${orgId}/sites/${siteId}/cms/connections/${id}`, { method: 'PATCH', body }),
+    onSuccess: done,
+  });
+}
+
+export function useDeleteCmsConnection(orgId: string, siteId: string) {
+  const done = useCmsInvalidate(orgId, siteId);
+  return useMutation({
+    mutationFn: (id: string) => api<{ ok: true }>(`/api/orgs/${orgId}/sites/${siteId}/cms/connections/${id}`, { method: 'DELETE' }),
+    onSuccess: done,
+  });
+}
+
+export function useTestCmsConnection(orgId: string, siteId: string) {
+  const done = useCmsInvalidate(orgId, siteId);
+  return useMutation({
+    mutationFn: (id: string) => api<CmsTestResultView>(`/api/orgs/${orgId}/sites/${siteId}/cms/connections/${id}/test`, { method: 'POST' }),
+    onSuccess: done,
+  });
+}
+
+export function useCmsPublish(orgId: string, reportId: string, siteId: string) {
+  const done = useCmsInvalidate(orgId, siteId);
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CmsPublishInput) => api<CmsPublishResult>(`/api/orgs/${orgId}/reports/${reportId}/cms/publish`, { method: 'POST', body }),
+    onSuccess: (r) => {
+      done();
+      // a live page started the engine's publish check: the website's pipeline and runs change
+      if (r.engine.runId) {
+        qc.invalidateQueries({ queryKey: ['org', orgId, 'runs'] });
+        qc.invalidateQueries({ queryKey: ['site', siteId, 'data'] });
+      }
+    },
+  });
+}
+
+export function useCmsRefresh(orgId: string, reportId: string, siteId: string) {
+  const done = useCmsInvalidate(orgId, siteId);
+  return useMutation({
+    mutationFn: (connectionId: string) => api<CmsPublishResult>(`/api/orgs/${orgId}/reports/${reportId}/cms/refresh`, { method: 'POST', body: { connectionId } }),
+    onSuccess: done,
+  });
+}
+
+// ---------- gap #6: crawlers from the site's own logs (app/docs/LOG_ANALYTICS.md) ----------
+const crawlersKey = (siteId: string) => [...qk.site(siteId), 'crawlers'] as const;
+
+/** The Crawlers page; polls every 5 s while a log file is waiting or being read. */
+export function useCrawlers(orgId: string, siteId: string, days: number) {
+  return useQuery({
+    queryKey: [...crawlersKey(siteId), days],
+    queryFn: () => api<CrawlerData>(`/api/orgs/${orgId}/sites/${siteId}/crawlers?days=${days}`),
+    placeholderData: keepPreviousData,
+    retry: noRetryOn4xx,
+    staleTime: 60_000,
+    refetchInterval: (q) => (q.state.data?.ingests.some((i) => i.status === 'queued' || i.status === 'processing') ? 5000 : false),
+  });
+}
+
+/**
+ * Uploads one log file as a raw stream (never read into memory here or on the server). XMLHttpRequest, not fetch: it reports upload
+ * progress. Same CSRF header as every other change.
+ */
+export function uploadLog(orgId: string, siteId: string, file: File, onProgress: (sent: number, total: number) => void): Promise<LogUploadAccepted> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `/api/orgs/${orgId}/sites/${siteId}/crawlers/upload?name=${encodeURIComponent(file.name)}`);
+    xhr.setRequestHeader('x-requested-with', 'fetch');
+    xhr.setRequestHeader('content-type', 'application/octet-stream');
+    xhr.setRequestHeader('accept', 'application/json');
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(e.loaded, e.total);
+    };
+    xhr.onerror = () => reject(new ApiRequestError(0, 'The upload was interrupted. Check your connection and try again.'));
+    xhr.onload = () => {
+      let data: { error?: string; code?: string; fields?: Record<string, string> } & Partial<LogUploadAccepted> = {};
+      try {
+        data = JSON.parse(xhr.responseText || '{}');
+      } catch {
+        /* keep {} */
+      }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(data as LogUploadAccepted);
+      else reject(new ApiRequestError(xhr.status, data.error || `Upload failed (${xhr.status})`, data.fields ?? {}, data.code));
+    };
+    xhr.send(file);
+  });
+}
+
+export function useUploadLog(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (a: { file: File; onProgress: (sent: number, total: number) => void }) => uploadLog(orgId, siteId, a.file, a.onProgress),
+    onSuccess: () => qc.invalidateQueries({ queryKey: crawlersKey(siteId) }),
+  });
+}
+
+export function useCreatePushKey(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<LogPushKeyCreated>(`/api/orgs/${orgId}/sites/${siteId}/crawlers/push-key`, { method: 'POST' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: crawlersKey(siteId) }),
+  });
+}
+
+export function useRevokePushKey(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<{ ok: boolean }>(`/api/orgs/${orgId}/sites/${siteId}/crawlers/push-key`, { method: 'DELETE' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: crawlersKey(siteId) }),
+  });
+}
+
+export function useCrawlerSettings(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CrawlerSettingsInput) => api<CrawlerSettingsInput>(`/api/orgs/${orgId}/sites/${siteId}/crawlers/settings`, { method: 'PUT', body }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: crawlersKey(siteId) }),
+  });
+}
+
+export function useDeleteCrawlerData(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (confirm: string) => api<{ ok: boolean }>(`/api/orgs/${orgId}/sites/${siteId}/crawlers/data`, { method: 'DELETE', body: { confirm } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: crawlersKey(siteId) }),
+  });
+}
+
+export const crawlerExportUrl = (orgId: string, siteId: string, kind: 'daily' | 'pages' | 'hits', days: number) => `/api/orgs/${orgId}/sites/${siteId}/crawlers/export?kind=${kind}&days=${days}`;
+
+// ---------- G5: agencies, client workspaces and the client portal (app/docs/WHITE_LABEL.md) ----------
+const agencyKey = (orgId: string) => [...qk.org(orgId), 'agency'] as const;
+
+export function useEnableAgency(orgId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<Org>(`/api/orgs/${orgId}/agency`, { method: 'POST' }),
+    onSuccess: (org) => {
+      qc.setQueryData(qk.org(orgId), org);
+      qc.invalidateQueries({ queryKey: qk.me });
+    },
+  });
+}
+
+export const useClients = (orgId: string, enabled = true) =>
+  useQuery({ queryKey: [...agencyKey(orgId), 'clients'], queryFn: () => api<{ clients: AgencyClient[] }>(`/api/orgs/${orgId}/clients`), enabled, retry: noRetryOn4xx });
+
+export function useCreateClient(orgId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { name: string; monthlyBudgetUsd?: number; website?: string }) => api<Org>(`/api/orgs/${orgId}/clients`, { method: 'POST', body }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: agencyKey(orgId) }),
+  });
+}
+
+export const useClientStaff = (orgId: string, clientId: string | null) =>
+  useQuery({
+    queryKey: [...agencyKey(orgId), 'staff', clientId],
+    queryFn: () => api<{ staff: StaffAccess[] }>(`/api/orgs/${orgId}/clients/${clientId}/staff`),
+    enabled: !!clientId,
+  });
+
+export function useAssignStaff(orgId: string, clientId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (b: { userId: string; role: 'admin' | 'member' | 'viewer' | null }) =>
+      api<{ staff: StaffAccess[] }>(`/api/orgs/${orgId}/clients/${clientId}/staff/${b.userId}`, { method: 'PUT', body: { role: b.role } }),
+    onSuccess: (r) => {
+      qc.setQueryData([...agencyKey(orgId), 'staff', clientId], r);
+      qc.invalidateQueries({ queryKey: [...agencyKey(orgId), 'clients'] });
+    },
+  });
+}
+
+export const useAgencyOverview = (orgId: string, enabled = true) =>
+  useQuery({
+    queryKey: [...agencyKey(orgId), 'overview'],
+    queryFn: () => api<{ rows: AgencyOverviewRow[]; generatedAt: string }>(`/api/orgs/${orgId}/agency/overview`),
+    enabled,
+    placeholderData: keepPreviousData,
+  });
+export const agencyOverviewCsvUrl = (orgId: string) => `/api/orgs/${orgId}/agency/overview.csv`;
+
+export const useBranding = (orgId: string) => useQuery({ queryKey: [...qk.org(orgId), 'branding'], queryFn: () => api<BrandingResponse>(`/api/orgs/${orgId}/branding`) });
+
+export function useSaveBranding(orgId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Partial<Branding> | Partial<ClientBranding>) => api<BrandingResponse>(`/api/orgs/${orgId}/branding`, { method: 'PUT', body }),
+    onSuccess: (r) => {
+      qc.setQueryData([...qk.org(orgId), 'branding'], r);
+      qc.invalidateQueries({ queryKey: qk.org(orgId), exact: true });
+    },
+  });
+}
+
+export function useClientSettings(orgId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { clientApproval: boolean }) => api<Org>(`/api/orgs/${orgId}/client-settings`, { method: 'PUT', body }),
+    onSuccess: (org) => {
+      qc.setQueryData(qk.org(orgId), org);
+      qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'branding'] });
+    },
+  });
+}
+
+export const usePortalMail = (orgId: string) => useQuery({ queryKey: [...qk.org(orgId), 'portal-mail'], queryFn: () => api<PortalMailView>(`/api/orgs/${orgId}/portal/mail`) });
+
+export function useSavePortalMail(orgId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { senderName: string; replyTo: string; fromMailboxId: string | null; dkimSelector: string }) =>
+      api<PortalMailView>(`/api/orgs/${orgId}/portal/mail`, { method: 'PUT', body }),
+    onSuccess: (r) => qc.setQueryData([...qk.org(orgId), 'portal-mail'], r),
+  });
+}
+
+export function useCheckPortalMail(orgId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<PortalMailView>(`/api/orgs/${orgId}/portal/mail/check`, { method: 'POST' }),
+    onSuccess: (r) => qc.setQueryData([...qk.org(orgId), 'portal-mail'], r),
+  });
+}
+
+export const usePortalDomains = (orgId: string) =>
+  useQuery({ queryKey: [...qk.org(orgId), 'portal-domains'], queryFn: () => api<{ domains: PortalDomainView[]; cnameTarget: string | null }>(`/api/orgs/${orgId}/portal/domains`) });
+
+export function usePortalDomainMutations(orgId: string) {
+  const qc = useQueryClient();
+  const refresh = () => qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'portal-domains'] });
+  return {
+    claim: useMutation({ mutationFn: (host: string) => api<PortalDomainView>(`/api/orgs/${orgId}/portal/domains`, { method: 'POST', body: { host } }), onSuccess: refresh }),
+    verify: useMutation({
+      mutationFn: (id: string) => api<{ domain: PortalDomainView; check: PortalDomainCheck }>(`/api/orgs/${orgId}/portal/domains/${id}/verify`, { method: 'POST' }),
+      onSuccess: refresh,
+    }),
+    release: useMutation({ mutationFn: (id: string) => api<{ ok: boolean }>(`/api/orgs/${orgId}/portal/domains/${id}`, { method: 'DELETE' }), onSuccess: refresh }),
+  };
+}
+
+const approvalsKey = (orgId: string) => [...qk.org(orgId), 'approvals'] as const;
+export const useApprovals = (orgId: string) =>
+  useQuery({ queryKey: approvalsKey(orgId), queryFn: () => api<{ items: ApprovalView[]; canDecide: boolean }>(`/api/orgs/${orgId}/approvals`), refetchInterval: 60_000 });
+export const useApprovalCandidates = (orgId: string, enabled: boolean) =>
+  useQuery({ queryKey: [...approvalsKey(orgId), 'candidates'], queryFn: () => api<{ items: ApprovalCandidate[] }>(`/api/orgs/${orgId}/approvals/candidates`), enabled });
+
+export function useApprovalMutations(orgId: string) {
+  const qc = useQueryClient();
+  const refresh = () => qc.invalidateQueries({ queryKey: approvalsKey(orgId) });
+  return {
+    request: useMutation({
+      mutationFn: (b: { kind: 'page' | 'outreach'; itemId: string; siteId: string | null; title: string; note: string }) =>
+        api<ApprovalView>(`/api/orgs/${orgId}/approvals`, { method: 'POST', body: b }),
+      onSuccess: refresh,
+    }),
+    decide: useMutation({
+      mutationFn: (b: { id: string; decision: 'approved' | 'changes_requested'; note: string }) =>
+        api<ApprovalView>(`/api/orgs/${orgId}/approvals/${b.id}/decide`, { method: 'POST', body: { decision: b.decision, note: b.note } }),
+      onSuccess: refresh,
+    }),
+    withdraw: useMutation({ mutationFn: (id: string) => api<{ ok: boolean }>(`/api/orgs/${orgId}/approvals/${id}/withdraw`, { method: 'POST' }), onSuccess: refresh }),
+  };
+}
+
+export const usePortalHandoff = () =>
+  useMutation({ mutationFn: (host: string) => api<{ url: string; expiresInSeconds: number }>('/api/portal/handoff', { method: 'POST', body: { host } }) });
+

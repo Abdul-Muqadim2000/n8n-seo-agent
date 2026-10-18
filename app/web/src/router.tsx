@@ -23,6 +23,7 @@ const siteDataPages: RouteObject[] = [
   { path: 'content', lazy: page(() => import('@/pages/site/ContentPage')) },
   { path: 'technical', lazy: page(() => import('@/pages/site/TechnicalPage')) },
   { path: 'ai', lazy: page(() => import('@/pages/site/AiVisibilityPage')) },
+  { path: 'crawlers', lazy: page(() => import('@/pages/site/CrawlersPage')) },
   { path: 'backlinks', lazy: page(() => import('@/pages/site/BacklinksPage')) },
   { path: 'links', lazy: page(() => import('@/pages/site/LinkBuildingPage')) },
   { path: 'alerts', lazy: page(() => import('@/pages/site/AlertsPage')) },
@@ -81,6 +82,8 @@ export const router = createBrowserRouter([
             element: <AuthLayout />,
             children: [
               { path: '/login', lazy: page(() => import('@/pages/auth/LoginPage')) },
+              { path: '/login/mfa', lazy: page(() => import('@/pages/auth/MfaPage')) },
+              { path: '/login/sso', lazy: page(() => import('@/pages/auth/SsoLoginPage')) },
               { path: '/signup', lazy: page(() => import('@/pages/auth/SignupPage')) },
               { path: '/forgot-password', lazy: page(() => import('@/pages/auth/ForgotPasswordPage')) },
             ],
@@ -102,6 +105,8 @@ export const router = createBrowserRouter([
           { path: '/onboarding/:orgId/:step?', lazy: page(() => import('@/pages/onboarding/OnboardingPage')) },
           { path: '/account', lazy: page(() => import('@/pages/settings/AccountPage')) },
           { path: '/admin', lazy: page(() => import('@/pages/settings/PlatformAdminPage')) },
+          // G5: after Google / single sign-on on the app's own address, back to an agency's portal address
+          { path: '/portal-handoff', lazy: page(() => import('@/pages/auth/PortalHandoffPage')) },
           {
             path: '/o/:orgId',
             element: <OrgLayout />,
@@ -115,6 +120,8 @@ export const router = createBrowserRouter([
               { path: 'runs/:runId', lazy: page(() => import('@/pages/runs/RunDetailPage')) },
               { path: 'reports', lazy: page(() => import('@/pages/runs/ReportsPage')) },
               { path: 'reports/:reportId', lazy: page(() => import('@/pages/runs/ReportPage')) },
+              { path: 'clients', lazy: page(() => import('@/pages/agency/ClientsPage')) },
+              { path: 'approvals', lazy: page(() => import('@/pages/portal/ApprovalsPage')) },
               { path: 'settings', element: <Navigate to="company" replace /> },
               { path: 'settings/:tab', lazy: page(() => import('@/pages/settings/OrgSettingsPage')) },
             ],

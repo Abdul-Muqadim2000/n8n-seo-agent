@@ -133,6 +133,7 @@ const AN = (() => {
     google_update: { label: 'Google update', tone: 'warning' },
     data_break: { label: 'Data break', tone: 'warning' },
     link: { label: 'Link won', tone: 'good' },
+    note: { label: 'Your note', tone: 'neutral' },
   };
   const S = (v) => String(v == null ? '' : v);
   const day = (v) => S(v).slice(0, 10);
@@ -190,6 +191,12 @@ const AN = (() => {
       out.push(mark('fix', d, fixed != null && fixed > 0 ? 'Audit fixes: ' + fixed + ' finding' + (fixed === 1 ? '' : 's') + ' gone' + (kind === 'site_audit' ? '' : ' (' + lower + ')') : name,
         { detail, source: 'seo_audits', report_type: kind }));
     }
+    // B7-7 (W3-D): the owner's own dated notes (monthly check-in notes) are marks too; the text is theirs, shown as written
+    for (const nt of (x.notes || [])) {
+      const d = day(nt.date);
+      if (!d || !inRange(from, to, d, d) || !S(nt.text).trim()) continue;
+      out.push(mark('note', d, 'Your note', { detail: S(nt.text).trim().slice(0, 300), source: S(nt.source) || 'seo_console_checkins' }));
+    }
     for (const l of (x.links || [])) {
       const d = day(l.t0 || l.first_seen || l.date);
       if (!d || !inRange(from, to, d, d)) continue;
@@ -218,7 +225,9 @@ const AN = (() => {
       + rows.map(m => '<tr><td ' + td + '>' + esc1(m.date + (m.date_end && m.date_end !== m.date ? ' to ' + m.date_end : '')) + '</td><td ' + td + '>'
         + esc1(m.label) + '</td><td ' + td + '>' + esc1(m.detail || m.kind_label) + '</td></tr>').join('') + '</table>';
   };
-  return { marks, html, inRange, breakBetween, EVENTS, KINDS, UPDATES: EVENTS.google_updates || [], BREAKS: EVENTS.data_breaks || [] };
+  // B7-7: said once in the report. Search Console's own annotations live only in Search Console (the API has no annotations resource).
+  const OWN_NOTES_LINE = "Search Console's own chart annotations stay in Search Console: Google offers no API that returns them. The marks above are your published pages, your audits, your dated notes and the Google updates we track.";
+  return { OWN_NOTES_LINE, marks, html, inRange, breakBetween, EVENTS, KINDS, UPDATES: EVENTS.google_updates || [], BREAKS: EVENTS.data_breaks || [] };
 })();
 const metrics = $('Site Metrics').all().map(i => i.json);
 let briefs = []; try { briefs = $('Site Brief').all().map(i => (i.json && i.json.output && typeof i.json.output === 'object') ? i.json.output : null); } catch (e) { briefs = []; }
@@ -233,8 +242,9 @@ const td = 'style="padding:4px 8px;border:1px solid #cbd5e1;font-size:13px;verti
 const table = (headers, rows, empty) => rows.length ? '<table style="border-collapse:collapse;margin:6px 0;max-width:100%">' + '<tr>' + headers.map(h => '<th ' + th + '>' + esc(h) + '</th>').join('') + '</tr>' + rows.map(r => '<tr>' + r.map(c => '<td ' + td + '>' + c + '</td>').join('') + '</tr>').join('') + '</table>' : '<p style="color:#64748b;font-size:13px">' + esc(empty || 'nothing to show') + '</p>';
 const tile = (label, value, delta, color) => '<td style="padding:8px 12px;border:1px solid #e2e8f0;min-width:110px;vertical-align:top"><div style="font-size:11px;color:#64748b;text-transform:uppercase">' + esc(label) + '</div><div style="font-size:20px;font-weight:700">' + value + '</div><div style="font-size:12px;color:' + (color || '#475569') + '">' + delta + '</div></td>';
 const h3 = (t) => '<h3 style="margin:18px 0 4px;font-size:15px;color:#0f172a">' + esc(t) + '</h3>';
-const path = (u) => { const p = String(u || '').replace(/^https?:\/\/[^\/]+/i, ''); return p || '/'; };
-const link = (u) => u ? '<a href="' + esc(u) + '" style="color:#1d4ed8">' + esc(path(u)) + '</a>' : '—';
+// R92 part 2 (W3-D): a page row whose host is not the canonical one (`other_host` / `hosts`) prints its FULL URL, so a reader can see the host differs
+const path = (u, row) => { if (row && (row.other_host || (row.hosts && row.hosts.length > 1))) return String(u || ''); const p = String(u || '').replace(/^https?:\/\/[^\/]+/i, ''); return p || '/'; };
+const link = (u, row) => u ? '<a href="' + esc(u) + '" style="color:#1d4ed8">' + esc(path(u, row)) + '</a>' : '—';
 const deltaS = (cur, prev) => { const d = cur - prev; return (d > 0 ? '<span style="color:#15803d">+' + n(d) + '</span>' : d < 0 ? '<span style="color:#b91c1c">' + n(d) + '</span>' : '0'); };
 return metrics.map((m, i) => {
   const b = briefs[i] || null; const G = m.gsc, A = m.ga4;
@@ -263,6 +273,7 @@ return metrics.map((m, i) => {
   if (BRK.length) html += '<div style="background:#fffbeb;border-left:4px solid #d97706;padding:8px 12px;margin:8px 0;font-size:13px"><b>These two periods are not directly comparable</b><ul style="margin:4px 0 0;padding-left:18px">'
     + BRK.map(b => '<li>' + esc(b.name) + ' (' + esc(b.start) + ' to ' + esc(b.end) + '): ' + esc(b.detail) + '</li>').join('') + '</ul></div>';
   if (MK.length) html += h3('What happened in this period') + AN.html(MK, { empty: false })
+    + '<p style="font-size:12px;color:#64748b">' + esc(m.annotation_note || AN.OWN_NOTES_LINE) + '</p>'
     + '<p style="font-size:12px;color:#64748b">Every chart in your dashboard is marked with these dates. A Google update inside the period may be part of the cause of a move, which cannot be proven from these numbers.</p>';
   // B7-1 (2026-10-15, benchmark area 7): did the change work, or did the whole site move? Every dated change, read over its OWN
   // 28 days after against the 28 before, against the control group of the site's other pages over exactly the same days. A change
@@ -280,19 +291,53 @@ return metrics.map((m, i) => {
       + '<p style="font-size:12px;color:#64748b">' + esc(CTST.method) + '</p>';
   } else if (CTST && CTST.reason) html += h3('Did it work? Your changes against the rest of the site')
     + '<p style="font-size:13px;color:#b45309">' + esc(CTST.reason) + '</p>';
-  const acts = (b && Array.isArray(b.actions) && b.actions.length) ? b.actions.slice(0, 6).map(a => ({ action: a.action, why: a.why, keyword: a.keyword, url: a.url })) : m.actions.slice(0, 6);
+  // R111 / R59 (2026-10-16): the Site Tracker emits `fix_draft` (a draft whose last quality round failed: fix it and run it again,
+  // never "publish it") and `host_split` (Google serves the bare host and www apart). Either may arrive without a sentence of its own,
+  // so the report words it from its fields instead of printing an empty bullet.
+  const reasonsOf = (a) => (Array.isArray(a.reasons) ? a.reasons : String(a.reasons || '').split(';')).map(x => String(x).trim()).filter(Boolean);
+  const wordAction = (a) => {
+    if (a.action) return a;
+    if (a.type === 'fix_draft') return { ...a, action: 'Fix the draft for "' + (a.keyword || 'this page') + '" and run it again: it did not pass the quality check, so it is not ready to publish', why: a.why || (reasonsOf(a).length ? 'The quality check found: ' + reasonsOf(a).slice(0, 3).join('; ') + '.' : '') };
+    if (a.type === 'host_split') return { ...a, action: 'Make one host the only one Google serves: some pages appear under the bare domain and others under www', why: a.why || 'Redirect the other host to the canonical one, so the two versions stop splitting clicks and indexing.' };
+    return a;
+  };
+  const acts = ((b && Array.isArray(b.actions) && b.actions.length) ? b.actions.slice(0, 6).map(a => ({ action: a.action, why: a.why, keyword: a.keyword, url: a.url, type: a.type, reasons: a.reasons })) : m.actions.slice(0, 6)).map(wordAction).filter(a => a.action);
   const withBody = m.actions.filter(a => a.api_body);
   html += h3('Do this week') + (acts.length ? '<ol style="margin:4px 0;padding-left:20px;font-size:14px">' + acts.map(a => '<li style="margin:4px 0"><b>' + esc(a.action) + '</b>' + (a.why ? '<br><span style="color:#475569;font-size:13px">' + esc(a.why) + '</span>' : '') + '</li>').join('') + '</ol>' : '<p style="font-size:13px;color:#64748b">Nothing urgent this week.</p>');
   if (withBody.length) html += '<p style="font-size:13px">Start the work with one click: open the <a href="' + esc(m.form_url) + '">SEO Assistant form</a> ("I know my keyword") or send one of these to the API (' + esc(m.api_url) + '):</p>' + withBody.slice(0, 3).map(a => '<pre style="background:#f1f5f9;padding:8px;font-size:11px;white-space:pre-wrap">' + esc(JSON.stringify(a.api_body)) + '</pre>').join('');
   // v4.5: the growth monitors' latest results (AI Visibility Tracker Mon 07:00, Backlink Monitor Mon 07:30, Audit Scheduler monthly)
-  const latest2 = (name) => { try { return $(name).all().map(x => x.json).filter(r => r && r.site_id === m.site_id && !r.error).sort((x, y) => String(y.checked_at || y.audited_at).localeCompare(String(x.checked_at || x.audited_at))).slice(0, 2); } catch (e) { return []; } };
-  const [av, av0] = latest2('Load AI Visibility (Site)'), [bl, bl0] = latest2('Load Backlink Snapshots (Site)'), [au, au0] = latest2('Load Audits (Site)');
-  if (av || bl || au) {
+  // R78 (2026-10-16): the block compared the two newest rows of each table whatever their TYPE — a full SEO report against the
+  // technical audit before it ("health 70 ▼13"), a full backlink snapshot against a free_only one that never reads DataForSEO
+  // ("18 referring domains ▲18"). Each row is now compared only with the previous row of the SAME kind, filtered BEFORE the two
+  // newest are taken: an audit with the previous audit of its report_type (the engine's own diff rule, Audit_Diff.js), a backlink
+  // snapshot with the previous one that read the same sources (free_only vs DataForSEO), an AI run with the previous one over the
+  // same engines and the same panel (AI_Metrics.js B-L4). No like-for-like baseline = no arrow.
+  const rowsOf = (name) => { try { return $(name).all().map(x => x.json).filter(r => r && r.site_id === m.site_id && !r.error).sort((x, y) => String(y.checked_at || y.audited_at).localeCompare(String(x.checked_at || x.audited_at))); } catch (e) { return []; } };
+  const AVR = rowsOf('Load AI Visibility (Site)'), BLR = rowsOf('Load Backlink Snapshots (Site)'), AUR = rowsOf('Load Audits (Site)');
+  const av = AVR[0] || null, bl = BLR[0] || null;
+  const engSet = (r) => { let e = {}; try { e = JSON.parse(r.engines_json || '{}') || {}; } catch (x) {} return Object.keys(e).filter(k => k !== 'claude' && !(e[k] || {}).carried).sort().join('+'); };
+  const av0 = av ? (AVR.slice(1).find(r => engSet(r) === engSet(av)) || null) : null;
+  const avPanelOk = av && av0 && (() => { const a = Number(av.prompts) || 0, b = Number(av0.prompts) || 0; return a > 0 && b > 0 && Math.abs(a - b) / Math.max(a, b) <= 0.2; })();
+  const avWhy = av && !(av0 && avPanelOk) && AVR.length > 1 ? (!av0 ? 'not compared: the earlier runs asked a different set of AI engines' : 'not compared: the earlier run asked ' + n(av0.prompts) + ' questions, this one ' + n(av.prompts)) : '';
+  const blKind = (r) => String(r.mode || '') === 'free' ? 'free' : 'index';
+  const bl0 = bl ? (BLR.slice(1).find(r => blKind(r) === blKind(bl)) || null) : null;
+  const AUDIT_LABEL = { site_audit: 'Technical audit', full: 'Full SEO report' };
+  const auAll = []; for (const r of AUR) { const t = String(r.report_type || ''); if (!auAll.includes(t)) auAll.push(t); }
+  const auTypes = auAll.some(Boolean) ? auAll.filter(Boolean) : auAll;   // rows without a type (before v4.5) only when nothing newer has one
+  const auPairs = auTypes.slice(0, 2).map(t => { const list = AUR.filter(r => String(r.report_type || '') === t); return { t, cur: list[0], prev: t ? (list[1] || null) : null }; });
+  if (av || bl || auPairs.length) {
     const dp = (cur, prev) => prev == null ? '' : (cur - prev > 0 ? ' <span style="color:#15803d">▲' + r1(cur - prev) + '</span>' : cur - prev < 0 ? ' <span style="color:#b91c1c">▼' + r1(prev - cur) + '</span>' : '');
     const rows = [];
-    if (av) { let comp = []; try { comp = JSON.parse(av.competitors_json || '[]'); } catch (e) {} rows.push(['<b>AI answers</b> (' + esc(String(av.checked_at).slice(0, 10)) + ')', 'named in ' + r1(av.mention_rate) + '%' + dp(Number(av.mention_rate), av0 ? Number(av0.mention_rate) : null) + ' · pages cited in ' + r1(av.citation_rate) + '% · share of voice ' + r1(av.share_of_voice) + '%' + (comp[0] ? ' (leader: ' + esc(comp[0].domain) + ' ' + comp[0].share + '%)' : '') + (av.alerts ? '<br><span style="color:#b91c1c">' + esc(av.alerts) + '</span>' : '')]); }
-    if (bl) rows.push(['<b>Backlinks</b> (' + esc(String(bl.checked_at).slice(0, 10)) + ', ' + esc(bl.mode) + ')', n(bl.referring_domains) + ' referring domains' + dp(Number(bl.referring_domains), bl0 ? Number(bl0.referring_domains) : null) + ' · ' + n(bl.new_links) + ' new / ' + n(bl.lost_links) + ' lost' + (Number(bl.important_lost) ? ' · <b style="color:#b91c1c">' + bl.important_lost + ' important lost</b>' : '') + (Number(bl.spammy_new) ? ' · ' + bl.spammy_new + ' spammy' : '') + ' · spam score ' + n(bl.spam_score)]);
-    if (au) rows.push(['<b>Technical audit</b> (' + esc(String(au.audited_at).slice(0, 10)) + ')', 'health ' + n(au.health_score) + '/100' + dp(Number(au.health_score), au0 ? Number(au0.health_score) : null) + ' (' + esc(au.grade) + ') · ' + n(au.critical) + ' critical, ' + n(au.high) + ' high, ' + n(au.medium) + ' medium · ' + n(au.pages_crawled) + ' pages crawled']);
+    if (av) { let comp = []; try { comp = JSON.parse(av.competitors_json || '[]'); } catch (e) {} const pv = av0 && avPanelOk ? av0 : null; rows.push(['<b>AI answers</b> (' + esc(String(av.checked_at).slice(0, 10)) + ')', 'named in ' + r1(av.mention_rate) + '%' + dp(Number(av.mention_rate), pv ? Number(pv.mention_rate) : null) + ' · pages cited in ' + r1(av.citation_rate) + '% · share of voice ' + r1(av.share_of_voice) + '%' + (comp[0] ? ' (leader: ' + esc(comp[0].domain) + ' ' + comp[0].share + '%)' : '') + (avWhy ? ' <span style="color:#64748b">(' + esc(avWhy) + ')</span>' : '') + (av.alerts ? '<br><span style="color:#b91c1c">' + esc(av.alerts) + '</span>' : '')]); }
+    if (bl) {
+      // R112: the merged count (every source, each link checked on its page) is THE count, as in the backlinks report itself;
+      // DataForSEO's own figure is the index's, and a free_only check has no index figures at all
+      const free = blKind(bl) === 'free'; const hasU = bl.union_domains !== '' && bl.union_domains != null;
+      const count = hasU ? n(bl.union_domains) + ' linking sites (all sources)' + dp(Number(bl.union_domains), bl0 && bl0.union_domains !== '' && bl0.union_domains != null ? Number(bl0.union_domains) : null)
+        : n(bl.referring_domains) + ' referring domains (DataForSEO)' + dp(Number(bl.referring_domains), bl0 ? Number(bl0.referring_domains) : null);
+      rows.push(['<b>Backlinks</b> (' + esc(String(bl.checked_at).slice(0, 10)) + ', ' + esc(bl.mode) + ')', count + (hasU && !free ? " · DataForSEO's index: " + n(bl.referring_domains) : '') + ' · ' + n(bl.new_links) + ' new / ' + n(bl.lost_links) + ' lost' + (Number(bl.important_lost) ? ' · <b style="color:#b91c1c">' + bl.important_lost + ' important lost</b>' : '') + (Number(bl.spammy_new) ? ' · ' + bl.spammy_new + ' spammy' : '') + (free ? ' · free sources only' : " · spam score " + n(bl.spam_score) + " (the index's)")]);
+    }
+    for (const pr of auPairs) { const au = pr.cur; rows.push(['<b>' + esc(AUDIT_LABEL[pr.t] || 'Audit') + '</b> (' + esc(String(au.audited_at).slice(0, 10)) + ')', 'health ' + n(au.health_score) + '/100' + dp(Number(au.health_score), pr.prev ? Number(pr.prev.health_score) : null) + ' (' + esc(au.grade) + ') · ' + n(au.critical) + ' critical, ' + n(au.high) + ' high, ' + n(au.medium) + ' medium · ' + n(au.pages_crawled) + ' pages crawled']); }
     html += h3('AI search, backlinks and technical health') + table(['Monitor', 'Latest'], rows) + '<p style="font-size:12px;color:#64748b">Details in the AI-visibility, backlink and audit reports (separate e-mails).</p>';
   }
   if (m.tracked.length) html += h3('Tracked keywords') + table(['Keyword', 'Source', 'Search Console avg', 'Before', 'Live Google check', 'Clicks', 'Impr.', 'Ranking page'], m.tracked.map(t => [esc(t.keyword), esc(t.source === 'ladder' ? (t.rung === 4 ? 'ladder top' : 'ladder rung ' + t.rung) : t.source === 'blog' ? 'blog page' : 'your list'),
@@ -323,7 +368,31 @@ return metrics.map((m, i) => {
       (BS ? 'Non-brand (people who did not search your name): <b>' + n(BS.non_brand.clicks) + '</b> clicks from ' + n(BS.non_brand.queries) + ' queries' + (BS.previous.non_brand.clicks ? ' (' + pctS(pct(BS.non_brand.clicks, BS.previous.non_brand.clicks)) + ')' : '') + ' · brand: ' + n(BS.brand.clicks) + ' clicks from ' + n(BS.brand.queries) + ' queries' + (BS.names.length ? ' <span style="color:#64748b">(brand = ' + esc(BS.names.join(', ')) + ')</span>' : '') + '.<br>' : '') +
       (AN ? 'Queries Google does not name (rare searches, withheld for privacy): ' + n(AN.clicks) + ' clicks and ' + n(AN.impressions) + ' impressions, ' + AN.impressions_pct + '% of all impressions.' : '') +
       (G.scraper_queries && G.scraper_queries.count ? '<br>' + n(G.scraper_queries.count) + ' queries came from SEO tools or scrapers (search operators) and are left out of every list above: ' + esc((G.scraper_queries.sample || []).join(', ')) + '.' : '') +
+      // C-6 (re-rating 2026-10-17): searches for another website, named apart and never a quick win
+      (G.other_site_queries && G.other_site_queries.count ? '<br>' + n(G.other_site_queries.count) + ' searches were for another website, not yours, and are left out of every list above: ' + esc((G.other_site_queries.sample || []).map(x => '"' + x.query + '" (' + x.site + ', ' + x.impressions + ' impressions)').join(', ')) + '.' : '') +
       ((G.truncated || []).length ? '<br><span style="color:#b45309">Search Console returned more rows than this run read (' + esc(G.truncated.join(', ')) + '): the figures below cover the ' + n(G.rows_read) + ' rows read.</span>' : '') + '</p>';
+    // B7-6 (W3-D): brand in one place, three sources side by side
+    const BSR = m.brand_series || null;
+    if (BSR) html += h3('Brand demand: three measurements side by side') + table(['Line', 'Source', 'Before → now', 'Basis'],
+        BSR.lines.map(l => l.read ? [esc(l.label), esc(l.source), n(l.prev) + ' → ' + n(l.cur) + ' (' + esc(l.change.text) + ')', esc(l.basis)] : [esc(l.label), esc(l.source), '—', 'Not read: ' + esc(l.reason)]))
+      + '<p style="font-size:12px;color:#64748b">' + esc(BSR.note) + '</p>';
+    // B7-4 (W3-D): Discover and Google News, only where the property has them; otherwise ONE line that says so
+    const STY = G.search_types || null;
+    if (STY) for (const [k, lab] of [['discover', 'Discover'], ['google_news', 'Google News']]) { const b = STY[k]; if (!b) continue;
+      html += b.has_data ? h3(lab + ' (Google, separate from web search)') + '<p style="font-size:13px"><b>' + n(b.cur.clicks) + '</b> clicks and ' + n(b.cur.impressions) + ' impressions, ' + esc(b.change.text) + '. <span style="color:#64748b">' + esc(b.basis) + '</span></p>'
+        : '<p style="font-size:12px;color:#64748b">' + esc(b.reason) + '.</p>'; }
+    // B7-5 (W3-D): content groups, each on the same statistical bar as the site-wide alerts
+    const CG = G.content_groups || null;
+    if (CG && CG.configured) html += h3('How each part of the site is doing') + table(['Group', 'Pages', 'Clicks before → now', 'Verdict'],
+        CG.groups.map(g => g.valid ? [esc(g.name), n(g.pages), n(g.prev_clicks) + ' → ' + n(g.clicks), g.change.real ? esc(g.change.direction === 'down' ? 'Fell: ' : 'Grew: ') + esc(g.change.text) : g.change.watch ? 'Watch: ' + esc(g.change.text) + ' (inside normal variation)' : g.change.measurable ? 'No real change' : 'Too few clicks to judge'] : [esc(g.name), '—', '—', 'Not used: ' + esc(g.reason)])
+          .concat(CG.ungrouped ? [['All other pages', n(CG.ungrouped.pages), n(CG.ungrouped.prev_clicks) + ' → ' + n(CG.ungrouped.clicks), CG.ungrouped.change.real ? esc(CG.ungrouped.change.text) : 'No real change']] : []))
+      + '<p style="font-size:12px;color:#64748b">' + esc(CG.note) + '</p>';
+    // B7-8 (W3-D): the latest days, preliminary, apart from every tested figure
+    const RC = G.recent || null;
+    if (RC && RC.read) html += '<p style="font-size:13px;border-left:4px solid #94a3b8;padding:4px 10px;margin:8px 0"><b>Since the report window</b> (' + esc(RC.start) + ' to ' + esc(RC.end) + ', ' + n(RC.days) + ' day' + (RC.days === 1 ? '' : 's') + '): ' + n(RC.clicks) + ' clicks, ' + n(RC.impressions) + ' impressions'
+      + (RC.window_daily_clicks != null ? ' (the report window averaged ' + RC.window_daily_clicks + ' clicks a day)' : '') + '. <span style="color:#64748b">' + esc(RC.label) + '</span></p>';
+    // B3-12 (W3-D): Google's Search Console report on generative-AI performance has no API
+    html += '<p style="font-size:12px;color:#64748b">Search Console\'s own generative-AI performance report is only in Search Console\'s interface: the Search Analytics API offers no search type or dimension that returns it, so none of its numbers are in this report.</p>';
     // B7-2 (2026-10-15, benchmark area 7): the device and the country, free and first-party. A split Google did not answer prints
     // its reason — an empty table would read as "no phone traffic" (INVARIANTS rule 1).
     const DV = G.devices || null, CO = G.countries || null;
@@ -346,11 +415,11 @@ return metrics.map((m, i) => {
     if (G.ctr_gaps.length) html += h3('Low click-through for the position (rewrite titles)') + table(['Query', 'Position', 'Impressions', 'CTR', 'Expected', 'Page'], G.ctr_gaps.slice(0, 6).map(q => [esc(q.query), posS(q.position), n(q.impressions), (q.ctr * 100).toFixed(1) + '%', Math.round(q.expected_ctr * 100) + '%', link(q.page)]));
     html += h3('Query movers') + '<table style="border-collapse:collapse;width:100%"><tr><td style="vertical-align:top;padding-right:8px;width:50%"><b style="font-size:13px;color:#15803d">Winners</b>' + table(['Query', 'Clicks', 'Position'], G.winners.slice(0, 6).map(q => [esc(q.query), n(q.clicks) + ' (' + deltaS(q.clicks, q.prev_clicks) + ')', posS(q.position) + (q.prev_position ? ' <span style="color:#94a3b8">was ' + posS(q.prev_position) + '</span>' : '')]), 'no clear winners') + '</td><td style="vertical-align:top;width:50%"><b style="font-size:13px;color:#b91c1c">Losers</b>' + table(['Query', 'Clicks', 'Position'], G.losers.slice(0, 6).map(q => [esc(q.query), n(q.clicks) + ' (' + deltaS(q.clicks, q.prev_clicks) + ')', posS(q.position) + (q.prev_position ? ' <span style="color:#94a3b8">was ' + posS(q.prev_position) + '</span>' : '')]), 'no clear losers') + '</td></tr></table>';
     if (G.new_queries.length || G.lost_queries.length) html += '<p style="font-size:13px"><b>New queries:</b> ' + (G.new_queries.slice(0, 8).map(q => esc(q.query) + ' (' + n(q.impressions) + ' impr.)').join(', ') || 'none') + '<br><b>Lost queries:</b> ' + (G.lost_queries.slice(0, 8).map(q => esc(q.query) + ' (' + n(q.prev_clicks) + ' clicks before)').join(', ') || 'none') + '</p>';
-    html += h3('Pages') + table(['Page', 'Clicks', 'Change', 'Impressions', 'Position'], G.top_pages.slice(0, 8).map(p => [link(p.page), n(p.clicks), deltaS(p.clicks, p.prev_clicks), n(p.impressions), posS(p.position)]));
+    html += h3('Pages') + table(['Page', 'Clicks', 'Change', 'Impressions', 'Position'], G.top_pages.slice(0, 8).map(p => [link(p.page, p), n(p.clicks), deltaS(p.clicks, p.prev_clicks), n(p.impressions), posS(p.position)]));
     // B4-1 (2026-10-15, benchmark area 4): every page with clicks is tested against the 28 days before AND the same 28 days a
     // year earlier, so this list is what really decayed — and the line underneath names what was checked and refused, because a
     // report that only prints its hits cannot be told apart from one that found nothing.
-    if (G.decaying_pages.length) html += '<p style="font-size:13px"><b style="color:#b91c1c">Pages losing traffic:</b> ' + G.decaying_pages.slice(0, 5).map(p => esc(path(p.page)) + ' (' + n(p.prev_clicks) + ' → ' + n(p.clicks) + ' clicks, −' + n(p.lost) + (p.kind === 'clickthrough' ? ', still shown as often: title and description first' : '') + ')').join('; ') + '</p>';
+    if (G.decaying_pages.length) html += '<p style="font-size:13px"><b style="color:#b91c1c">Pages losing traffic:</b> ' + G.decaying_pages.slice(0, 5).map(p => esc(path(p.page, p)) + ' (' + n(p.prev_clicks) + ' → ' + n(p.clicks) + ' clicks, −' + n(p.lost) + (p.kind === 'clickthrough' ? ', still shown as often: title and description first' : '') + ')').join('; ') + '</p>';
     if (G.decay_summary && G.decay_summary.tested) { const ds = G.decay_summary;
       html += '<p style="font-size:12px;color:#64748b">Decay check: ' + n(ds.tested) + ' pages tested, <b>' + n(ds.decaying) + '</b> really losing traffic'
         + (ds.seasonal ? ', ' + n(ds.seasonal) + ' down only against the weeks before and not against a year ago (seasonal)' : '')
@@ -365,7 +434,15 @@ return metrics.map((m, i) => {
   if (b && (b.watch || []).length) html += h3('Watch') + '<ul style="font-size:13px;margin:4px 0;padding-left:18px">' + b.watch.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>';
   html += '<p style="color:#64748b;font-size:12px;margin-top:16px">' + (G.connected ? 'A fall in clicks, impressions or sessions is only called a fall when it is beyond normal week-to-week variation (two-sample Poisson test, 95%); a larger move at low volume is shown as "Watch". ' : '') + 'Search Console figures are final up to 3 days ago and are averages across devices and locations; the live Google check is one SERP sample from DataForSEO. Trends are a relative index (100 = peak of the year). Reports run every Monday' + (m.tracked.some(t => t.source === 'ladder') ? '; the keyword ladder gets its own progress e-mail' : '') + '. Reply to this e-mail to pause tracking.</p></div>';
   const hi = m.alerts.filter(a => a.level === 'high').length; const parts = [];
-  if (G.connected) parts.push(n(G.totals.cur.clicks) + ' clicks ' + pctS(G.deltas.clicks_pct)); if (hi) parts.push(hi + ' alert' + (hi > 1 ? 's' : '')); if (found.length) parts.push(found.length + ' page' + (found.length > 1 ? 's' : '') + ' found live'); if (G.connected && G.striking.length) parts.push(G.striking.length + ' quick win' + (G.striking.length > 1 ? 's' : ''));
+  // R113 (2026-10-16): the subject follows the report's own significance test (G28). Clicks 21 -> 32 is "up 52%" in arithmetic and
+  // "not a real change" in the test printed under it, so the subject no longer says "32 clicks ▲ 52%": it leads with a change the test
+  // calls real and says the clicks are within normal variation. Without a significance block (older runs) the subject is unchanged.
+  const SG = m.significance || null, SC = SG && SG.clicks;
+  if (G.connected && SC && SC.real === false) {
+    const realOne = ['impressions', 'sessions'].find(k => SG[k] && SG[k].real === true && SG[k].pct != null);
+    if (realOne) parts.push(realOne + ' ' + pctS(SG[realOne].pct));
+    parts.push(n(G.totals.cur.clicks) + ' clicks (within normal variation)');
+  } else if (G.connected) parts.push(n(G.totals.cur.clicks) + ' clicks ' + pctS(G.deltas.clicks_pct)); if (hi) parts.push(hi + ' alert' + (hi > 1 ? 's' : '')); if (found.length) parts.push(found.length + ' page' + (found.length > 1 ? 's' : '') + ' found live'); if (G.connected && G.striking.length) parts.push(G.striking.length + ' quick win' + (G.striking.length > 1 ? 's' : ''));
   const subject = (G.connected ? '[SEO weekly] ' : '[SEO tracking] ') + m.domain + ' — ' + (parts.length ? parts.join(' · ') : 'connect Google Search Console to see real data');
   const file_name = 'seo-performance-' + m.domain.replace(/[^a-z0-9.]+/g, '-') + '-' + m.period.current.end + '.html';
   const doc = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + esc(subject) + '</title></head><body style="margin:24px">' + html + '</body></html>';

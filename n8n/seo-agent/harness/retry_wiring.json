@@ -1029,6 +1029,34 @@
     "name": "Fetch Not Crawled",
     "retryOnFail": true,
     "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Read Client Page HTML",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "GA4 Key Events (Audit)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Refresh Sources",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Outbound Links",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 AI Growth": [
@@ -1043,6 +1071,13 @@
     "allowed": false,
     "maxTries": 3,
     "name": "Fetch Key Pages",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch As AI Bots (Growth)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    },
@@ -1126,6 +1161,13 @@
    {
     "allowed": false,
     "maxTries": 3,
+    "name": "Post Refusal (Growth)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
     "name": "DFS Balance End (Growth)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
@@ -1164,6 +1206,13 @@
     "allowed": false,
     "maxTries": 3,
     "name": "DFS Balance (Pulse)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Refusal (Pulse)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    },
@@ -1298,6 +1347,13 @@
    {
     "allowed": false,
     "maxTries": 3,
+    "name": "Post Refusal (AI)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
     "name": "DFS Balance End (AI)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
@@ -1324,6 +1380,13 @@
     "allowed": false,
     "maxTries": 3,
     "name": "DFS Balance (Audit)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Refusal (Audit)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    },
@@ -1514,6 +1577,13 @@
    {
     "allowed": false,
     "maxTries": 3,
+    "name": "Post Refusal (BL)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
     "name": "DFS Balance End (BL)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
@@ -1547,6 +1617,13 @@
     "allowed": false,
     "maxTries": 3,
     "name": "DFS Balance (Cadence)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Refusal (Cadence)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    },
@@ -1671,6 +1748,13 @@
    {
     "allowed": false,
     "maxTries": 3,
+    "name": "Post Refusal (LB)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
     "name": "DFS Balance End (LB)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
@@ -1709,6 +1793,13 @@
    {
     "allowed": false,
     "maxTries": 3,
+    "name": "Post Refusal (Watch)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
     "name": "DFS Balance End (Watch)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
@@ -1730,6 +1821,7 @@
     "waitBetweenTries": 5000
    }
   ],
+  "SEO Agent \u2014 Publish Check": [],
   "SEO Agent \u2014 Publish to WordPress": [
    {
     "allowed": true,
@@ -1771,6 +1863,13 @@
    {
     "allowed": false,
     "maxTries": 3,
+    "name": "Post Refusal (Tracker)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
     "name": "DFS Balance End (Tracker)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
@@ -1788,6 +1887,71 @@
     "allowed": false,
     "maxTries": 3,
     "name": "Fetch Reply Pages",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Count Prompt (Reply Reader)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Count Answer (Reply Reader)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Refusal (Reply)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Alert Retry (Reply)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   }
+  ],
+  "SEO Agent \u2014 Schedule Catch-up": [
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Read Workflows (Catch-up)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Read Executions (Catch-up)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Read Mailbox Workflow (Watchdog)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Deactivate Mailbox",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Activate Mailbox",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    }
@@ -1916,7 +2080,28 @@
    {
     "allowed": false,
     "maxTries": 3,
+    "name": "Count Prompt (Site Brief)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Count Answer (Site Brief)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
     "name": "DFS Balance (Site)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Refusal (Site)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    },

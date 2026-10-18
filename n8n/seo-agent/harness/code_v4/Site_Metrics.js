@@ -148,25 +148,71 @@ const SM = (() => {
   // a page of the inventory answers a keyword when it already gets impressions for it, or when at least 75% of the keyword's
   // meaningful words are in its slug or title (D11; keep it even while the inventory is empty).
   const MATCH_MIN = 0.75;
-  const matchPage = (model, keyword) => {
-    const want = termsOf(keyword); if (!want.length) return null;
+  // R35 (2026-10-16, re-rating 2026-10-15): the words were compared literally, so "d365 finance dubai" did not match a page titled
+  // "Dynamics 365 Finance & Operations UAE" and the report told the owner that page "does not target" the search. Three rules, applied
+  // to BOTH sides before anything is compared: the product's own short names are written out (d365 = dynamics 365, f&o = finance and
+  // operations), a word is compared on a light stem (invoice / invoices / invoicing), and an emirate in the SEARCH is covered by a page
+  // about the UAE ("emirate ⊂ uae" — never the other way round: a Dubai page does not answer every UAE search).
+  const SYN = [[/\bd\s?365\b/g, 'dynamics 365'], [/\bdynamics365\b/g, 'dynamics 365'], [/\bf\s?&\s?o\b|\bfno\b/g, 'finance operations'], [/\bunited arab emirates\b/g, 'uae'],
+    [/\babu dhabi\b/g, 'abudhabi'], [/\bras al khaimah\b/g, 'rasalkhaimah'], [/\bumm al quwain\b/g, 'ummalquwain'], [/\bal ain\b/g, 'alain']];
+  const EMIRATES = new Set(['dubai', 'abudhabi', 'sharjah', 'ajman', 'fujairah', 'rasalkhaimah', 'rak', 'ummalquwain', 'alain']);
+  const norm = (s) => { let t = S(s).toLowerCase().replace(/&amp;/g, '&'); for (const [re, to] of SYN) t = t.replace(re, to); return t; };
+  const stem = (t) => t.length >= 5 ? t.replace(/(ings?|ed|es|(?<!s)s)$/, '').replace(/e$/, '') : t;   // business = businesses, invoice = invoicing
+  const matchTerms = (s) => uniq(termsOf(norm(s)).map(stem));
+  // a keyword term is covered by a page's terms: the same stem, or an emirate in the search against a page about the UAE
+  const covers = (set, t) => set.includes(t) || (EMIRATES.has(t) && (set.includes('uae') || set.includes('emirat')));
+  const shareIn = (want, set) => want.length ? want.filter(t => covers(set, t)).length / want.length : 0;
+  // R56: a listing page (the blog / insights index, a category, a tag) gets impressions for every article it lists; when a dedicated
+  // page matches the same search by its own slug or title, the dedicated page is the one that answers it
+  const LISTING = /^\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?(?:insights|blog|blogs|news|articles|resources|posts|updates|knowledge|learn|library|stories|press|media|case-studies)\/?$|\/(?:category|categories|tag|tags|page|author|topics?)\/[^/]+\/?$/i;
+  const isListing = (u) => { const p = pathOf(u).replace(/[?#].*$/, ''); return LISTING.test(p); };
+  const untitled = (model) => pages(model).filter(p => !S(p.title) && !S(p.h1));
+  const matchPage = (model, keyword, prefer) => {   // `prefer`: a URL that wins a tie (the page Search Console itself credits for the search)
+    const prefKey = prefer ? bare(hostOf(prefer)) + pathOf(prefer).replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase() : "";
+    const isPref = (u) => !!prefKey && (bare(hostOf(u)) + pathOf(u).replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase()) === prefKey;
+    const want = matchTerms(keyword); if (!want.length) return null;
     const key = tokensOf(keyword).join(' ');
     const inv = pages(model);
+    const byQuery = [];
     for (const p of inv) {
       const q = (p.queries || []).find(x => tokensOf(x.query || x.keyword || x).join(' ') === key && (Number((x || {}).impressions) || 0) > 0);
-      if (q) return { url: p.url, title: p.title, source: p.source, matched_by: 'query', score: 1, impressions: Number(q.impressions) || 0 };
+      if (q) byQuery.push({ url: p.url, title: p.title, source: p.source, matched_by: 'query', score: 1, impressions: Number(q.impressions) || 0 });
     }
+    byQuery.sort((a, b) => Number(isListing(a.url)) - Number(isListing(b.url)) || b.impressions - a.impressions);
+    const qHit = byQuery[0] || null;
+    const listingOf = (lst, best) => ({ url: lst.url, impressions: lst.impressions,
+      note: 'Google currently shows ' + pathOf(lst.url) + ' (a listing page) for this search; the page that is about it is ' + pathOf(best.url) });
+    if (qHit && !isListing(qHit.url)) { const lst = byQuery.find(x => isListing(x.url)); return lst ? { ...qHit, listing: listingOf(lst, qHit) } : qHit; }
     let best = null;
     for (const p of inv) {
-      const slug = termsOf(pathOf(p.url).replace(/\.[a-z]{2,5}$/i, ''));
-      const title = termsOf(S(p.title) + ' ' + S(p.h1));
-      const inSlug = want.filter(t => slug.includes(t)).length / want.length;
-      const inTitle = want.filter(t => title.includes(t)).length / want.length;
+      if (qHit && isListing(p.url)) continue;   // R56: looking for the dedicated page behind a listing's impressions
+      const slug = matchTerms(pathOf(p.url).replace(/\.[a-z]{2,5}$/i, ''));
+      const title = matchTerms(S(p.title) + ' ' + S(p.h1));
+      const inSlug = shareIn(want, slug);
+      const inTitle = shareIn(want, title);
       const score = Math.max(inSlug, inTitle);
-      if (score + 1e-9 >= MATCH_MIN && (!best || score > best.score)) best = { url: p.url, title: p.title, source: p.source, matched_by: inSlug >= inTitle ? 'slug' : 'title', score: Math.round(score * 100) / 100, impressions: 0 };
+      if (score + 1e-9 >= MATCH_MIN && (!best || score > best.score + 1e-9 || (Math.abs(score - best.score) < 1e-9 && isPref(p.url) && !isPref(best.url)))) best = { url: p.url, title: p.title, source: p.source, matched_by: inSlug >= inTitle ? 'slug' : 'title', score: Math.round(score * 100) / 100, impressions: 0 };
     }
-    return best;
+    if (qHit && best) return { ...best, listing: listingOf(qHit, best) };
+    return qHit || best;
   };
+  // A-22 (2026-10-17): how well ONE page of the inventory targets a search by its own words (slug or title / H1, the matchPage rule), so a
+  // caller that already knows the page Google ranks can ask whether another page targets the search more closely - never to replace it
+  const pageScore = (page, keyword) => { const p = page || {}; const want = matchTerms(keyword); if (!want.length || !S(p.url)) return null;
+    return Math.round(Math.max(shareIn(want, matchTerms(pathOf(p.url).replace(/\.[a-z]{2,5}$/i, ''))), shareIn(want, matchTerms(S(p.title) + ' ' + S(p.h1)))) * 100) / 100; };
+  // R35: how much of a search a page's OWN title / H1 holds (null when the page's title was never read) - the only evidence that may call
+  // a page "about something else"
+  // the words of a spoken / long-tail search that say nothing about the subject ("which ... can help ... in the uae")
+  const FILLER = new Set(['which', 'what', 'how', 'why', 'when', 'where', 'who', 'can', 'could', 'help', 'helps', 'best', 'top', 'near', 'me', 'is', 'are', 'do', 'does', 'should', 'will', 'would', 'get', 'need', 'i', 'we', 'you']);
+  const titleShare = (page, keyword) => { const p = page || {}; if (!S(p.title) && !S(p.h1)) return null;
+    const want = uniq(termsOf(norm(keyword)).filter(t => !FILLER.has(t)).map(stem)); if (!want.length) return null; const set = matchTerms(S(p.title) + ' ' + S(p.h1));
+    return { share: Math.round(shareIn(want, set) * 100) / 100, have: want.filter(t => covers(set, t)).length, of: want.length, missing: want.filter(t => !covers(set, t)) }; };
+  // R34: the pages whose title was never read, so a caller can say what it judged on the address alone instead of reading nothing silently
+  const titleGap = (model) => { const all = pages(model); const u = untitled(model);
+    return { pages: all.length, untitled: u.length, urls: u.slice(0, 12).map(p => p.url),
+      note: u.length ? u.length + ' of the ' + all.length + ' pages of the site have no title on file yet (the weekly site check reads them a batch at a time), so they were judged by their address only' : '' }; };
+  // R55: a URL of the site as the site serves it (canonical host); another site's URL is returned as it is
+  const canonUrl = (model, u) => { const h = hostOf(u); if (!h || bare(h) !== bare((model || {}).domain || (model || {}).canonical_host || '')) return S(u); return siteUrl(model, pathOf(u)); };
   // D11: a stored seo_pages row carries its queries as the JSON string `queries_json`, so both shapes are accepted here
   const queriesOf = (p) => Array.isArray(p.queries) ? p.queries : (jparse(p.queries_json, []) || []);
   const withPages = (model, more) => ({ ...model, pages: (() => { const seen = new Set(); const out = [];
@@ -197,8 +243,25 @@ const SM = (() => {
     clicks: num0(p.clicks), impressions: num0(p.impressions), position: num0(p.position), prev_clicks: num0(p.prev_clicks), yoy_clicks: num0(p.yoy_clicks),
     decay_state: S(p.decay_state), decay_pct: num0(p.decay_pct), decay_lost: num0(p.decay_lost), decay_kind: S(p.decay_kind),
     decay_basis: S(p.decay_basis).slice(0, 900), measured_at: S(p.measured_at) }));
+  // ---- C-7 (re-rating 2026-10-17): ONE page state per keyword, read by the Rank Tracker AND the Site Tracker (and so by the cadence) ----
+  // In one morning the Rank Tracker said of "ai consulting" "…/ai-copilot-advisory-uae already answers this search - refresh that page"
+  // while the Site Tracker said "fix the four drafts that failed the quality check and run them again", and of "it consulting dubai"
+  // "write the main page" while the Site Tracker and the cadence said "written today, failed QA, fix it". The order of evidence is one:
+  // a LIVE page of the site that answers the search wins (refresh it; a draft written for the search is retired, never a second page);
+  // then a written draft (publish it); then a draft that failed its quality check (fix it and run it again); then a run that wrote nothing.
+  // in: { keyword, covered_url, written, not_ready, reasons (array or '; ' text), started } -> { state, text } (text: the parenthesis a list uses)
+  const pageStep = (o) => {
+    const c = o || {}, kw = S(c.keyword), why = (Array.isArray(c.reasons) ? c.reasons : S(c.reasons).split(/;\s+/)).map(S).filter(Boolean).slice(0, 2).join('; ').slice(0, 220);
+    if (S(c.covered_url)) return { state: 'covered', text: S(c.covered_url) + ' already answers this search — refresh that page, do not publish a second one'
+      + (c.not_ready || c.written ? '; the draft written for "' + kw + '" is not needed (use its text to refresh that page)' : '') };
+    if (c.written) return { state: 'written', text: 'already written — publish it' };
+    if (c.not_ready) return { state: 'not_ready', text: 'written, but the draft did not pass the quality check' + (why ? ' (' + why + ')' : '') + ' — fix it and run it again; do not publish it as it is' };
+    if (c.started) return { state: 'started', text: 'a page run was started for it but no page was written — it is written again' };
+    return { state: 'planned', text: '' };
+  };
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
-    helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml } };
+    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep,
+    helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms } };
 })();
 // ---- site-tracking statistics (2026-10-12, FIX_PLAN G28): an alert must mean "this really changed", not "a number moved by 30%".
 // Clicks, impressions and sessions are counts over two periods of the same length, so the honest test is the two-sample Poisson test
@@ -393,7 +456,15 @@ const PW = (() => {
   // host-agnostic identity of a URL: crawls, sitemaps and canonicals disagree about www and the trailing slash
   const ukey = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/$/, '') || S(u).toLowerCase();
   const same = (a, b) => !!a && !!b && ukey(a) === ukey(b);
-  const strip = (s) => S(s).replace(/<[^>]*>/g, ' ').replace(/&nbsp;|&#160;/gi, ' ').replace(/&amp;/gi, '&').replace(/\s+/g, ' ').trim();
+  // the shared entity decoder, inlined (v5/code/_entities.js; build section 122 asserts the two stay identical): named, decimal and hex, one pass
+  const entDecode = /*__ENT_BEGIN__*/(() => {
+  const N = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', nbsp: ' ', rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“', ndash: '–', mdash: '—', hellip: '…', copy: '©', reg: '®', trade: '™', bull: '•', middot: '·', laquo: '«', raquo: '»', euro: '€', pound: '£', deg: '°' };
+  return (s) => String(s == null ? '' : s).replace(/&(?:#[xX]([0-9a-fA-F]+)|#(\d+)|([a-zA-Z][a-zA-Z0-9]*));/g, (m, h, d, n) => {
+    if (h !== undefined || d !== undefined) { const cp = h !== undefined ? parseInt(h, 16) : Number(d); if (cp === 160) return ' '; try { return cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : m; } catch (e) { return m; } }
+    const k = n.toLowerCase(); return Object.prototype.hasOwnProperty.call(N, k) ? N[k] : m;
+  });
+})()/*__ENT_END__*/;
+  const strip = (s) => entDecode(S(s).replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim();
 
   // ---- a small, stable fingerprint (FNV-1a, 32 bit): no crypto module is available in the sandbox ----
   const hash = (text) => {
@@ -683,7 +754,7 @@ const PW = (() => {
     const quota = /quota|rate limit|RESOURCE_EXHAUSTED|429/i.test(err);
     const denied = /permission|forbidden|403|unauthor|invalid_grant/i.test(err);
     if (err) return { ok: false, error: err, error_kind: quota ? 'quota' : denied ? 'access' : 'error', indexed: null, verdict: '', coverage: '',
-      robots: '', last_crawl: '', google_canonical: '', user_canonical: '', canonical_ok: null, mobile_usable: null, mobile_issues: [], mobile_verdict: '', mobile_note: '', rich_results: [], rich_verdict: '',
+      robots: '', last_crawl: '', google_canonical: '', user_canonical: '', canonical_ok: null, canonical_host_only: false, mobile_usable: null, mobile_issues: [], mobile_verdict: '', mobile_note: '', rich_results: [], rich_verdict: '',
       not_checked: quota ? 'Google\'s daily URL Inspection quota for this property is used up: not checked today.' : denied ? 'Search Console access is missing for this property: not checked.' : 'The inspection failed: not checked (' + err + ').' };
     // R10 (2026-10-13, re-rating §3.11): Google retired the Mobile Usability report and the API now answers `VERDICT_UNSPECIFIED` with no
     // issue list for every page (45 of 45 live on 2026-10-13). That is NOT CHECKED. The live run read it as "not mobile-friendly" and raised
@@ -700,7 +771,11 @@ const PW = (() => {
       ok: true, error: '', error_kind: '', verdict: S(idx.verdict), indexed: S(idx.verdict) === 'PASS', coverage: S(idx.coverageState),
       indexing_state: S(idx.indexingState), robots: S(idx.robotsTxtState), last_crawl: S(idx.lastCrawlTime),
       google_canonical: S(idx.googleCanonical), user_canonical: S(idx.userCanonical),
-      canonical_ok: (!S(idx.googleCanonical) || !S(idx.userCanonical)) ? null : same(idx.googleCanonical, idx.userCanonical),
+      // R59 (2026-10-16): Google choosing the SAME page on the OTHER host (https://techand.ai/x for our https://www.techand.ai/x) is a
+      // canonical Google did not take — `same` is host-agnostic on purpose (crawls and sitemaps disagree about www), so it called this "same
+      // as ours" and the daily watch could never see the split. The host is compared here, and a host-only difference is named.
+      canonical_ok: (!S(idx.googleCanonical) || !S(idx.userCanonical)) ? null : (same(idx.googleCanonical, idx.userCanonical) && hostOf(idx.googleCanonical) === hostOf(idx.userCanonical)),
+      canonical_host_only: !!S(idx.googleCanonical) && !!S(idx.userCanonical) && same(idx.googleCanonical, idx.userCanonical) && hostOf(idx.googleCanonical) !== hostOf(idx.userCanonical),
       mobile_usable: mobUsable, mobile_issues: mobIssues, mobile_verdict: mobVerdict, mobile_note: mobNote,
       rich_verdict: rich ? S(rich.verdict) : '',
       rich_results: rich && rich.detectedItems ? rich.detectedItems.map(d => S(d.richResultType)).filter(Boolean) : [],
@@ -761,6 +836,7 @@ const AN = (() => {
     google_update: { label: 'Google update', tone: 'warning' },
     data_break: { label: 'Data break', tone: 'warning' },
     link: { label: 'Link won', tone: 'good' },
+    note: { label: 'Your note', tone: 'neutral' },
   };
   const S = (v) => String(v == null ? '' : v);
   const day = (v) => S(v).slice(0, 10);
@@ -818,6 +894,12 @@ const AN = (() => {
       out.push(mark('fix', d, fixed != null && fixed > 0 ? 'Audit fixes: ' + fixed + ' finding' + (fixed === 1 ? '' : 's') + ' gone' + (kind === 'site_audit' ? '' : ' (' + lower + ')') : name,
         { detail, source: 'seo_audits', report_type: kind }));
     }
+    // B7-7 (W3-D): the owner's own dated notes (monthly check-in notes) are marks too; the text is theirs, shown as written
+    for (const nt of (x.notes || [])) {
+      const d = day(nt.date);
+      if (!d || !inRange(from, to, d, d) || !S(nt.text).trim()) continue;
+      out.push(mark('note', d, 'Your note', { detail: S(nt.text).trim().slice(0, 300), source: S(nt.source) || 'seo_console_checkins' }));
+    }
     for (const l of (x.links || [])) {
       const d = day(l.t0 || l.first_seen || l.date);
       if (!d || !inRange(from, to, d, d)) continue;
@@ -846,7 +928,9 @@ const AN = (() => {
       + rows.map(m => '<tr><td ' + td + '>' + esc1(m.date + (m.date_end && m.date_end !== m.date ? ' to ' + m.date_end : '')) + '</td><td ' + td + '>'
         + esc1(m.label) + '</td><td ' + td + '>' + esc1(m.detail || m.kind_label) + '</td></tr>').join('') + '</table>';
   };
-  return { marks, html, inRange, breakBetween, EVENTS, KINDS, UPDATES: EVENTS.google_updates || [], BREAKS: EVENTS.data_breaks || [] };
+  // B7-7: said once in the report. Search Console's own annotations live only in Search Console (the API has no annotations resource).
+  const OWN_NOTES_LINE = "Search Console's own chart annotations stay in Search Console: Google offers no API that returns them. The marks above are your published pages, your audits, your dated notes and the Google updates we track.";
+  return { OWN_NOTES_LINE, marks, html, inRange, breakBetween, EVENTS, KINDS, UPDATES: EVENTS.google_updates || [], BREAKS: EVENTS.data_breaks || [] };
 })();
 // ---- lineage (G29, 2026-10-13, system review FIX_PLAN.md; CRITERIA_technical_tracking_reporting_ai_links.md 3.11) ----
 // Every number a customer reads has to say where it came from, over what period, and how big the sample was. Before this, the AI
@@ -1074,17 +1158,39 @@ return sites.map((s, idx) => {
       serp_position: sp ? sp.position : null, serp_url: sp ? sp.url : '', serp_checked_at: sp ? sp.checked_at : '', history: hist }; });
   // pages found live this week replace their planned entry (live URL, published) or are added; they were inspected in this run
   const det = detAll.find(x => x.site_id === s.site_id) || null; const found = det ? det.detected : [];
-  const basePages = (s.ladder_pages || []).map(p => { const f = found.find(f => kwKey(f.keyword) === kwKey(p.keyword) && (!f.ladder_id || !p.ladder_id || f.ladder_id === p.ladder_id)); return f ? { ...p, url: f.url, status: 'published', page_exists: true, detected: true } : promised(p); });
+  // R92 part 4 (2026-10-16, re-rating 2026-10-15): ONE rule with the Rank Tracker (Tracker_Report.js `coveredBy`): a ladder target that
+  // a live page of the site already answers (SM.matchPage over this week's inventory) is reported AS that page. Before, this table read
+  // only the ladder row ("/peppol-uae/ | writing | no page was written yet") while the Rank Tracker of the same morning said "the main
+  // page is live: improve …/top-peppol-e-invoicing-software-features…". The planned URL and the ladder row's own state travel with it, so
+  // a page written for that target is still told "do not publish it as a second URL" (D11) below.
+  const coverLive = (p) => { if (!p || p.page_exists || p.status === 'published') return p; const c = covered(p.keyword, p.url); if (!c) return promised(p);
+    return { ...p, url: c.url, planned_url: onHost(p.url), ladder_status: p.status, status: 'live (existing page)', page_exists: true, covered_by: c.url, covered_match: c.matched_by || '' }; };
+  const basePages = (s.ladder_pages || []).map(p => { const f = found.find(f => kwKey(f.keyword) === kwKey(p.keyword) && (!f.ladder_id || !p.ladder_id || f.ladder_id === p.ladder_id)); return f ? { ...p, url: f.url, status: 'published', page_exists: true, detected: true } : coverLive(p); });
   for (const f of found) if (!basePages.some(p => ukey(p.url) === ukey(f.url))) basePages.push({ url: f.url, keyword: f.keyword, rung: 0, status: 'published', ladder_id: f.ladder_id || '', page_exists: true, detected: true });
   // G25 (2026-10-13): an inspection the quota did not reach, or one that failed, is "not checked" — never "not indexed" (`skipped` / `not_checked`)
-  const pages = basePages.map(p => { const i = insp.find(x => x.url === p.url && !x.skipped && !x.inspect_error) || insp.find(x => x.url === p.url); const asked = !!i && !i.skipped && !i.inspect_error;
+  const pages = basePages.map(p => { const i = insp.find(x => ukey(x.url) === ukey(p.url) && !x.skipped && !x.inspect_error) || insp.find(x => ukey(x.url) === ukey(p.url)); /* C-15: host-agnostic (a promised www URL, an inspected bare-host one) */ const asked = !!i && !i.skipped && !i.inspect_error;
     return { ...p, inspected: asked, indexed: asked ? !!i.indexed : null, verdict: asked ? i.verdict : '', coverage: asked ? i.coverage : '', last_crawl: asked ? i.last_crawl : '', canonical_ok: asked ? i.canonical_ok : null,
       google_canonical: asked ? i.google_canonical : '', mobile_usable: asked ? i.mobile_usable : null, rich_results: asked ? i.rich_results : [],
       inspect_error: asked ? null : (i ? (i.not_checked || i.inspect_error) : (s.gsc_connected ? 'not inspected' : 'Search Console not connected')) }; });
+  // C-15 (re-rating 2026-10-17): ONE row per page. Several ladder rows answered by one existing page, a planned URL on the bare host and the
+  // same page on www, or a page found live beside its ladder row all became the same URL after the rewrites above, so exec 787 listed two
+  // pages twice in the index table and raised each "Page not indexed" alert twice. Rows are merged by host-agnostic URL (the live / inspected
+  // one kept, the other keywords carried as `also_keywords`), before any alert or action is made from them.
+  { const byU = new Map(), rank = (x) => ((x.page_exists || x.status === 'published') ? 2 : 0) + (x.inspected ? 1 : 0);
+    for (const p of pages) { const k = ukey(p.url); const o = byU.get(k);
+      if (!o) { byU.set(k, p); continue; }
+      const [keep, drop] = rank(p) > rank(o) ? [p, o] : [o, p];
+      keep.also_keywords = [...new Set([...(keep.also_keywords || []), ...(drop.also_keywords || []), drop.keyword].filter(x => x && x !== keep.keyword))]; byU.set(k, keep); }
+    pages.splice(0, pages.length, ...byU.values()); }
+  // C-15: a planned page Google itself reports "Submitted and indexed" IS live (/dynamics-365-crm-uae was shown "planned" beside that
+  // verdict): the inspection is the evidence, the ladder row's word is not
+  for (const p of pages) if (!(p.page_exists || p.status === 'published') && p.inspected && p.indexed === true) { p.ladder_status = p.ladder_status || p.status; p.status = 'live (indexed by Google)'; p.page_exists = true; }
   // pages not live yet are reported as such, never as 'not indexed'
   // R1 (2026-10-13): "written, not published yet" only when seo_content_log says the page was written (Site Plan's `written`); a ladder row
   // that merely says `writing` is a promise — a refused page run leaves exactly that, and the note says what happened.
-  for (const p of pages) if (!(p.page_exists || p.status === 'published')) { p.inspect_error = (p.status === 'writing' && p.written) ? 'written, not published yet' : p.status === 'writing' ? ('no page was written yet' + (p.status_note ? ': ' + String(p.status_note).slice(0, 160) : '')) : 'planned, not written yet'; p.indexed = null; }
+  // R111 (2026-10-16): a draft whose last quality round failed is neither "written, not published yet" nor "no page was written yet"
+  for (const p of pages) if (!(p.page_exists || p.status === 'published')) { p.inspect_error = (['writing', 'written', 'not_ready'].includes(p.status) && p.written) ? 'written, not published yet' : (['writing', 'written', 'not_ready'].includes(p.status) && p.not_ready) ? ('written, but the draft did not pass the quality check — fix it and run it again' + ((p.qa_reasons || []).length ? ': ' + String(p.qa_reasons[0]).slice(0, 160) : '')) : p.status === 'writing' ? ('no page was written yet' + (p.status_note ? ': ' + String(p.status_note).slice(0, 160) : '')) : 'planned, not written yet'; p.indexed = null; }
+  for (const p of pages) if (p.covered_by && !p.inspected) p.inspect_error = 'not inspected this week; this existing page answers the search the ladder planned ' + (p.planned_url || 'a new page') + ' for';
   // ---- alerts ----
   // G28: `drop` is no longer the test, it is the line between a medium and a high alert. The test is ST.change: enough events in the two
   // periods together (min_events), a change beyond 95% sampling noise (|z| >= 1.96) and a size worth reporting (min_pct).
@@ -1113,6 +1219,21 @@ return sites.map((s, idx) => {
   if (ga4 && ga4.errors.length) alerts.push({ level: 'medium', text: 'Some GA4 requests failed: ' + ga4.errors.slice(0, 3).join('; ') });
   for (const p of pages) if (p.inspected && p.indexed === false && (p.page_exists || p.status === 'published')) alerts.push({ level: p.detected ? 'info' : 'high', text: 'Page not indexed: ' + p.url + ' (' + (p.coverage || p.verdict || 'not indexed') + ')' + (p.detected ? ' — found live this week; request indexing to speed it up' : '') });   // a page that just went live is not alarming yet
   for (const p of pages) if (p.inspected && p.indexed && p.canonical_ok === false) alerts.push({ level: 'medium', text: 'Google picked another canonical for ' + p.url });
+  // R59 (2026-10-16, re-rating 2026-10-15; the Site Tracker's path of the audit's defect): the canonical alert above looks only at INDEXED
+  // pages, and the inspection's `canonical_ok` is host-AGNOSTIC (_page_watch.js) — so a page Google keeps under the bare host while the
+  // site redirects to and names www (exec 634: three pages "Duplicate, Google chose different canonical than user", Google's canonical
+  // https://techand.ai/…) could never raise anything here. Every inspected page of this run is read, not only the ladder pages, and the
+  // split is named for what it is: Google chose the other host, so the fix is the sitemap and the internal links, not "request indexing".
+  const hostSplit = (() => { const own = SM.helpers.bare(model.canonical_host || s.domain); const want = String(model.canonical_host || '').toLowerCase();
+    const rows = insp.filter(x => x && x.url && x.google_canonical && !x.skipped && !x.inspect_error).filter(x => {
+      const hu = String(SM.helpers.hostOf(x.url) || '').toLowerCase(), hg = String(SM.helpers.hostOf(x.google_canonical) || '').toLowerCase();
+      return hu && hg && hu !== hg && SM.helpers.bare(hu) === own && SM.helpers.bare(hg) === own && ukey(x.url) === ukey(x.google_canonical); });
+    const hosts = [...new Set(rows.map(x => String(SM.helpers.hostOf(x.google_canonical)).toLowerCase()))];
+    const origin = (u) => (String(u || '').match(/^https?:\/\/[^\/?#]+/i) || [''])[0];   // an observed URL's own scheme and host, never rebuilt by hand (D15)
+    return rows.length ? { pages: rows.map(x => ({ url: x.url, google_canonical: x.google_canonical, indexed: !!x.indexed, coverage: x.coverage || '' })), google_host: hosts[0], site_host: want || String(SM.helpers.hostOf(rows[0].url)).toLowerCase(),
+      google_home: origin(rows[0].google_canonical), site_home: SM.siteUrl(model, '/').replace(/\/$/, ''), checked: insp.filter(x => !x.skipped && !x.inspect_error).length } : null; })();
+  if (hostSplit) alerts.push({ level: 'medium', stat: 'host_split', text: 'Google keeps ' + hostSplit.pages.length + ' of the ' + hostSplit.checked + ' pages it was asked about under ' + hostSplit.google_home + ' — the other host — although your site serves and names ' + hostSplit.site_home + ' as canonical (Google chose a different canonical than yours): '
+    + hostSplit.pages.slice(0, 3).map(x => x.google_canonical).join(', ') + (hostSplit.pages.length > 3 ? ' and ' + (hostSplit.pages.length - 3) + ' more' : '') + '. Those pages are shown under the other host, not missing from Google.' });
   // G28 follow-up (2026-10-13): the last fixed threshold in the site tracking. Search Console's position is an impression-weighted 28-day
   // average, so "5 places" on 12 impressions is one search, not a drop. ST.position needs min_impressions in BOTH periods before it calls a
   // move real, tests the same keyword's clicks over the same two periods, and the alert says what was tested and how sure it is.
@@ -1163,9 +1284,30 @@ return sites.map((s, idx) => {
   if (!s.gsc_connected) actions.push({ priority: 1, type: 'connect_gsc', action: 'Add ' + sa + ' as a user (Full) of ' + s.domain + ' in Search Console → Settings → Users and permissions.', why: 'Without it the report has no real query, click or index data.', keyword: '', url: '' });
   for (const p of pages.filter(p => p.inspected && p.indexed === false && (p.page_exists || p.status === 'published')).slice(0, 3)) actions.push({ priority: 1, type: 'index', action: 'Request indexing for ' + p.url + ' in Search Console (URL inspection → Request indexing) and link to it from 2-3 existing pages.', why: (p.rung ? 'Ladder rung ' + p.rung + ' for "' + p.keyword + '"' : 'The page for "' + p.keyword + '"') + ' cannot rank until Google indexes it (' + (p.coverage || p.verdict || 'not indexed') + ').', keyword: p.keyword, url: p.url });
   // D11: a page written for a keyword a LIVE page already answers must not go up as a second page — it is folded into the page that exists
-  for (const p of pages.filter(p => p.status === 'writing' && p.written && !p.page_exists).slice(0, 3)) { const c = covered(p.keyword, p.url);   // R1: only a page the content log says was written
+  // R111 (2026-10-16): a draft whose last quality round failed gets `fix_draft` — the reasons, and the body that writes it again —
+  // never `publish` (exec 634 put "P1 Publish the written page for \"ai consulting\"" on top with an "I published it" button)
+  const fixed = new Set();
+  const fixDraft = (keyword, url, reasons, page_type) => { const k = kwKey(keyword); if (!k || fixed.has(k)) return; fixed.add(k);
+    actions.push({ priority: 1, type: 'fix_draft', keyword, url: url || '', reasons: (reasons || []).slice(0, 6),
+      action: 'Fix the draft for "' + keyword + '" and run it again — it did not pass the quality check' + ((reasons || []).length ? ' (' + reasons.slice(0, 2).join('; ').slice(0, 300) + ')' : '') + '. Do not publish it as it is.',
+      why: 'The last quality round found what is listed; a page that fails it is a draft to finish, not a page to put live.', api_body: pageBody(keyword, '', page_type || 'Service Page') }); };
+  for (const p of pages.filter(p => ['writing', 'written', 'not_ready'].includes(p.ladder_status || p.status) && p.not_ready && !p.written && !p.covered_by).slice(0, 3)) fixDraft(p.keyword, p.url, p.qa_reasons, '');
+  // C-7 (re-rating 2026-10-17): the same page state the Rank Tracker reads (SM.pageStep) - a failed draft for a search a LIVE page of the
+  // site already answers is not "fix it and run it again" (exec 787 said so of "ai consulting" while the Rank Tracker said "…/ai-copilot-
+  // advisory-uae already answers this search - refresh that page"): the draft is retired and the live page refreshed
+  for (const f of (s.needs_fix || []).filter(f => !found.some(x => kwKey(x.keyword) === kwKey(f.keyword))).slice(0, 3)) {
+    const c = covered(f.keyword, ''); const st = SM.pageStep({ keyword: f.keyword, covered_url: c ? c.url : '', not_ready: true, reasons: f.reasons });
+    if (st.state === 'covered') { if (fixed.has(kwKey(f.keyword))) continue; fixed.add(kwKey(f.keyword));
+      actions.push({ priority: 1, type: 'refresh_existing', keyword: f.keyword, url: c.url, action: 'Do not fix or publish the draft for "' + f.keyword + '": ' + st.text + '.',
+        why: 'Two pages for one search split the signals and neither ranks; the live page was found by ' + (c.matched_by === 'query' ? 'Search Console' : 'its address and title') + '.', api_body: pageBody(f.keyword, c.url, 'Guide') }); }
+    else fixDraft(f.keyword, '', f.reasons, f.page_type); }
+  for (const p of pages.filter(p => ['writing', 'written', 'not_ready'].includes(p.ladder_status || p.status) && p.written && (p.covered_by || !p.page_exists)).slice(0, 3)) { const c = p.covered_by ? { url: p.covered_by, matched_by: p.covered_match || 'slug' } : covered(p.keyword, p.url);   // R1: only a page the content log says was written
     if (c) actions.push({ priority: 1, type: 'refresh_existing', action: 'Do not publish the new page for "' + p.keyword + '" as a second URL: ' + c.url + ' already answers this search. Use the new text to refresh that page instead.', why: 'Two pages for one search split the signals and neither ranks (the live page was found ' + (c.matched_by === 'query' ? 'in Search Console with ' + c.impressions + ' impressions for this query' : 'in the site\'s page list') + ').', keyword: p.keyword, url: c.url });
     else actions.push({ priority: 1, type: 'publish', action: 'Publish the written page for "' + p.keyword + '" (planned URL ' + p.url + ') and report the link with "I published a page".', why: 'It is written but not live yet; nothing can be indexed or ranked before it is published.', keyword: p.keyword, url: p.url }); }
+  // R59: the host split, as one piece of work — the sitemap Google reads and the internal links, never "request indexing" page by page
+  if (hostSplit) actions.push({ priority: 2, type: 'host_split', keyword: '', url: SM.siteUrl(model, '/'),
+    action: 'Make Google use ' + hostSplit.site_home + ': submit the sitemap on ' + hostSplit.site_home + ' in Search Console (in place of one on ' + hostSplit.google_home + '), change the internal links that still point at ' + hostSplit.google_home + ', keep the redirects, and watch these pages move over.',
+    why: hostSplit.pages.length + ' inspected page(s) are shown by Google under ' + hostSplit.google_home + ' (its chosen canonical), e.g. ' + hostSplit.pages[0].google_canonical + '.' });
   for (const q of ((gsc && gsc.striking) || []).slice(0, 3)) actions.push({ priority: 2, type: 'striking', action: 'Push "' + q.query + '" from #' + r1(q.position) + ' into the top 3: expand ' + (q.page || 'the ranking page') + ' with the missing sub-topics, add an FAQ and 2-3 internal links to it.', why: q.impressions + ' impressions in 28 days at position ' + r1(q.position) + ' (' + q.clicks + ' clicks); a top-3 spot typically triples the clicks.', keyword: q.query, url: q.page || '', api_body: pageBody(q.query, q.page, 'Service Page') });
   for (const q of ((gsc && gsc.ctr_gaps) || []).slice(0, 2)) actions.push({ priority: 2, type: 'ctr', action: 'Rewrite the title and meta description of ' + (q.page || 'the ranking page') + ' for "' + q.query + '" (lead with the outcome and a number).', why: 'Position ' + r1(q.position) + ' with ' + q.impressions + ' impressions but CTR ' + (q.ctr * 100).toFixed(1) + '% vs about ' + Math.round(q.expected_ctr * 100) + '% expected.', keyword: q.query, url: q.page || '' });
   // B4-1 / B4-3 (2026-10-15, benchmark area 4): a decaying page is a TESTED, SEASONALLY CHECKED judgement, it is ranked by the
@@ -1203,11 +1345,29 @@ return sites.map((s, idx) => {
   const annotations = AN.marks({ from: R.previous.start, to: R.current.end,
     published: [...publishedLogs.map(r => ({ published_at: r.published_at, keyword: r.keyword, published_url: r.published_url, source: r.source })),
       ...found.filter(f => !loggedKw.has(kwKey(f.keyword))).map(f => ({ published_at: (det && det.checked_at) || now, keyword: f.keyword, published_url: f.url, source: f.ladder_id ? 'ladder' : 'detected' }))],
+    notes: s.owner_notes || [],   // B7-7: the owner's dated notes
     // R20 (2026-10-14): the report type travels with every audit row, so a full SEO report between two technical audits is marked as a
     // report of another kind instead of chaining its health score to theirs (three invented moves in one day, live on 2026-10-11)
     audits: auditRowsAll.filter(r => r.site_id === s.site_id || normD(r.domain) === s.domain)
       .map(r => ({ audited_at: r.audited_at, report_type: r.report_type || 'site_audit', health_score: r.health_score, findings: r.findings })) });
   const data_breaks = AN.breakBetween(R.previous.start, R.current.end);
+  // ---- B7-6 (W3-D, 2026-10-17): BRAND IN ONE PLACE. Branded Search Console clicks, GA4 direct sessions and AI-assistant referral sessions as
+  // one series set, each line with its own source and basis (SEOTesting's Brand Signals draws the same three on one chart). The lines
+  // are NOT added together: they count different things (searches for the name, visits typed or untracked, visits from AI answers).
+  const brand_series = (() => {
+    const opts = { min_events: Number(cfg.alert_min_click_events) || 40, min_pct: Number(cfg.alert_min_pct) || 10 };
+    const line = (key, label, source, cur, prev, basis, unit) => ({ key, label, source, unit, read: true, cur, prev, change: ST.change(cur, prev, opts), basis });
+    const miss = (key, label, source, reason) => ({ key, label, source, read: false, reason });
+    const L = [];
+    const bs = gsc && gsc.brand_split;
+    L.push(bs && bs.names && bs.names.length ? line('gsc_brand', 'Branded Search Console clicks', 'Search Console', bs.brand.clicks, bs.previous.brand.clicks, 'clicks on searches containing ' + bs.names.slice(0, 4).join(' / ') + '; searches Google withholds are not counted', 'clicks')
+      : miss('gsc_brand', 'Branded Search Console clicks', 'Search Console', gsc ? 'no brand name is known for this site, so branded searches cannot be told apart' : 'Search Console is not connected'));
+    L.push(ga4 && ga4.direct ? line('ga4_direct', 'GA4 direct sessions', 'Google Analytics 4', ga4.direct.cur.sessions, ga4.direct.prev.sessions, "sessions in GA4's Direct channel: people who typed the address or came from a source GA4 could not name, so it is an upper bound on brand demand", 'sessions')
+      : miss('ga4_direct', 'GA4 direct sessions', 'Google Analytics 4', 'Google Analytics is not connected'));
+    L.push(ga4 && ga4.ai_referrals ? line('ga4_ai', 'AI-assistant referral sessions', 'Google Analytics 4', ga4.ai_referrals.cur.sessions, ga4.ai_referrals.prev.sessions, 'sessions whose source is an AI assistant (ChatGPT, Perplexity, Gemini, Copilot, Claude and others) or GA4 medium ai-assistant', 'sessions')
+      : miss('ga4_ai', 'AI-assistant referral sessions', 'Google Analytics 4', ga4 ? 'Google Analytics did not answer the AI-referral request' : 'Google Analytics is not connected'));
+    return { period: 'the last 28 days against the 28 days before', lines: L, note: 'Three measurements of how much people look for the brand, each from its own source. They are shown side by side and never added together.' };
+  })();
   // ---- B7-1 (2026-10-15, benchmark area 7 — docs/system-review-2026-10-14/BENCH_AREA7_site_tracking.md): DID THE CHANGE WORK? ----
   // Since G12 this node has inlined the change-test kit (CT) and shipped its METHOD SENTENCE in every weekly callback
   // (`change_method`) while running no test at all: CT.compare was called by the Link Builder and by nobody else. A published
@@ -1267,7 +1427,7 @@ return sites.map((s, idx) => {
     const splitLineage = (blk, figure, unit) => { if (!blk) return;
       lineage.push(blk.failed ? LN.unknown(figure, blk.reason || 'the ' + unit + ' split was not read this week')
         : LN.of(figure, 'gsc', { period: curRange, basis: 'measured',
-          sample: LN.sample(blk.total || 0, 'clicks across ' + (blk.rows || []).length + ' ' + unit + ((blk.rows || []).length === 1 ? '' : 's')),
+          sample: LN.sample(blk.total || 0, 'clicks across ' + (blk.rows || []).length + ' ' + ((blk.rows || []).length === 1 ? unit : (unit === 'country' ? 'countries' : unit + 's'))),   // R92 part 3: never "countrys"
           ...(blk.read ? {} : { note: blk.reason }) })); };
     splitLineage(gsc.devices, 'Clicks by device', 'device');
     splitLineage(gsc.countries, 'Clicks by country', 'country');
@@ -1275,7 +1435,14 @@ return sites.map((s, idx) => {
     if ((gsc.cannibal || []).length) lineage.push(LN.of('Searches two of your pages compete for', 'gsc', { period: curRange, basis: 'measured',
       sample: LN.sample((gsc.cannibal_summary || {}).queries_checked || 0, 'non-brand searches checked'),
       note: 'both pages really were shown for that search; brand searches are left out' }));
+    // B7-4 / B7-5 / B7-8 (W3-D)
+    const stp = gsc.search_types || {};
+    for (const [k, lab] of [['discover', 'Discover clicks'], ['google_news', 'Google News clicks']]) if (stp[k] && stp[k].has_data) lineage.push(LN.of(lab, 'gsc', { period: curRange, basis: 'measured', sample: LN.sample(stp[k].cur.clicks, 'clicks'), note: 'search type ' + (k === 'discover' ? 'discover' : 'googleNews') + ', separate from web search' }));
+    const cgp = gsc.content_groups || {};
+    if (cgp.configured) lineage.push(LN.of('Clicks by content group', 'gsc', { period: curRange, basis: 'measured', sample: LN.sample((cgp.groups || []).filter(g => g.valid).length, 'content groups'), note: 'a regular expression over page paths; a page can sit in more than one group' }));
+    if (gsc.recent && gsc.recent.read) lineage.push(LN.of('Search clicks since the report window', 'gsc', { period: LN.asOf(now), basis: 'reported', sample: LN.sample(gsc.recent.days, 'days'), note: 'preliminary data (dataState all): still being collected and might change; not part of any tested figure' }));
   } else lineage.push(LN.unknown('Search clicks, impressions and positions', 'Search Console is not connected for this site, so this report carries no measured search data'));
+  lineage.push(LN.of('Brand series (branded clicks, direct sessions, AI referral sessions)', 'ga4', { period: curRange, basis: 'measured', sample: LN.sample(brand_series.lines.filter(l => l.read).length, 'of 3 lines read'), note: 'three sources side by side, never added together' }));
   if (ga4) lineage.push(LN.of('Organic sessions, engaged sessions and key events', 'ga4', { period: curRange, basis: 'measured',
     sample: LN.sample(ga4.organic.cur.sessions, 'organic sessions of ' + (ga4.total && ga4.total.cur ? ga4.total.cur.sessions : 0) + ' from all channels'), note: 'property ' + ga4.ga4_property_id }));
   else lineage.push(LN.unknown('Visits, engagement and key events', 'Google Analytics is not connected for this site'));
@@ -1303,7 +1470,7 @@ return sites.map((s, idx) => {
   const trackedSet = new Set(tracked.map(t => t.keyword));
   const query_rows = [...tracked.map(t => qrow({ query: t.keyword, clicks: t.clicks, impressions: t.impressions, ctr: t.impressions ? t.clicks / t.impressions : 0, position: t.gsc_position || 0, prev_clicks: t.prev_clicks, prev_position: t.gsc_prev_position || 0, page: t.page }, true, t.serp_position)),
     ...((gsc && gsc.queries) || []).filter(q => !trackedSet.has(q.query)).slice(0, 100).map(q => qrow(q, false, null))];
-  const site_row = { ...SM.toRow(model), site_id: s.site_id, domain: s.domain, gsc_property: s.gsc_property || s.gsc_property_hint || '', ga4_property_id: ga4 ? String(ga4.ga4_property_id) : (s.ga4_property_id || ''), country: s.country || '', location_code: Number(s.location_code) || 0, language_code: s.language_code || 'en', email: s.email || '', callback_url: s.callback_url || '',
+  const site_row = { ...SM.toRow(model), content_groups_json: s.content_groups_json || '', site_id: s.site_id, domain: s.domain, gsc_property: s.gsc_property || s.gsc_property_hint || '', ga4_property_id: ga4 ? String(ga4.ga4_property_id) : (s.ga4_property_id || ''), country: s.country || '', location_code: Number(s.location_code) || 0, language_code: s.language_code || 'en', email: s.email || '', callback_url: s.callback_url || '',
     keywords: (s.keywords || []).join(', '), status: s.status || 'active', source: s.source || 'form', created_at: s.created_at || now, last_run_at: now, last_status: (gsc ? 'gsc:ok' : 'gsc:off') + ' ' + (ga4 ? 'ga4:ok' : 'ga4:off') + (alerts.some(a => a.level === 'high') ? ' alerts' : ''), request_id: s.request_id || '' };
   // ---- G25: what Google thinks of the key pages, with what was not checked said out loud ----
   const mine = insp.filter(x => x.site_id === s.site_id || x.site_idx === idx);
@@ -1331,13 +1498,13 @@ return sites.map((s, idx) => {
   return { json: { site_id: s.site_id, domain: s.domain, email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', period: R, checked_at: now, first_run: !!s.first_run, on_demand: !!s.on_demand, source: s.source, country: s.country || '',
     site: { canonical_host: model.canonical_host, home_url: SM.siteUrl(model, '/'), business_name: SM.name(model), name_source: model.name_source || '', services: SM.services(model).slice(0, 12), nav_pages: (model.nav_pages || []).slice(0, 8), nap: SM.nap(model), pages_known: SM.pages(model).length, model_updated_at: model.model_updated_at || '' },
     page_inventory: inv ? { pages: inv.total, with_queries: inv.with_queries, changed: inv.changed, by_source: inv.by_source, sitemap_read: inv.sitemap_read } : null,
-    gsc: { connected: !!gsc, property: s.gsc_property || '', permission: s.gsc_permission || '', error: s.gsc_error || null, ...(gsc ? { totals: gsc.totals, deltas: gsc.deltas, daily: gsc.daily, query_count: gsc.query_count, page_count: gsc.page_count ?? null, anonymised: gsc.anonymised || null, brand_split: gsc.brand_split || null, scraper_queries: gsc.scraper_queries || null, rows_read: gsc.rows_read ?? null, paging: gsc.paging || [], truncated: gsc.truncated || [], winners: gsc.winners, losers: gsc.losers, new_queries: gsc.new_queries, lost_queries: gsc.lost_queries, striking: gsc.striking, ctr_gaps: gsc.ctr_gaps, top_pages: gsc.pages.slice(0, 10), decaying_pages: gsc.decaying_pages, not_decay: gsc.not_decay || [], decay_summary: gsc.decay_summary || null, rising_pages: gsc.rising_pages, errors: gsc.errors, cannibal: gsc.cannibal || [], cannibal_summary: gsc.cannibal_summary || null, devices: gsc.devices || null, countries: gsc.countries || null } : {}) },
+    gsc: { connected: !!gsc, property: s.gsc_property || '', permission: s.gsc_permission || '', error: s.gsc_error || null, ...(gsc ? { totals: gsc.totals, deltas: gsc.deltas, daily: gsc.daily, query_count: gsc.query_count, page_count: gsc.page_count ?? null, anonymised: gsc.anonymised || null, brand_split: gsc.brand_split || null, scraper_queries: gsc.scraper_queries || null, other_site_queries: gsc.other_site_queries || null, rows_read: gsc.rows_read ?? null, paging: gsc.paging || [], truncated: gsc.truncated || [], winners: gsc.winners, losers: gsc.losers, new_queries: gsc.new_queries, lost_queries: gsc.lost_queries, striking: gsc.striking, ctr_gaps: gsc.ctr_gaps, top_pages: gsc.pages.slice(0, 10), decaying_pages: gsc.decaying_pages, not_decay: gsc.not_decay || [], decay_summary: gsc.decay_summary || null, rising_pages: gsc.rising_pages, errors: gsc.errors, cannibal: gsc.cannibal || [], cannibal_summary: gsc.cannibal_summary || null, devices: gsc.devices || null, countries: gsc.countries || null, search_types: gsc.search_types || null, recent: gsc.recent || null, content_groups: gsc.content_groups || null } : {}) },
     ga4: ga4 ? { connected: true, property_id: ga4.ga4_property_id, detected: ga4.ga4_detected, property_name: ga4.ga4_property_name, organic: ga4.organic, total: ga4.total, organic_share: ga4.organic_share, channels: ga4.channels, landing: ga4.landing, daily: ga4.daily, errors: ga4.errors } : { connected: false, error: acctErr || ga4Reason || 'no property id given or detected' },
     console: { notices, last_checkin: ck, checkin_due: !!s.checkin_due },
     significance: stat,   // G28: the Poisson z-test behind every traffic alert (clicks / impressions / sessions)
     index_coverage,       // G25: Google's own view of every key page (URL Inspection within the 2,000-a-day quota, oldest first)
     page_watch: watch,    // G11: the daily key-page watch — what it checks, what changed this week, what it could not read
-    annotations, data_breaks, lineage,   // G12 / G29: the events of the period for every chart, and where each figure came from
+    annotations, annotation_note: AN.OWN_NOTES_LINE, brand_series, data_breaks, lineage,   // G12 / G29: the events of the period for every chart, and where each figure came from
     // B7-1 (2026-10-15, benchmark area 7): the method sentence used to travel alone — the Site Tracker shipped it and ran no test.
     change_method: change_tests.method, change_tests,
     cannibal: (gsc && gsc.cannibal) || [], cannibal_summary: (gsc && gsc.cannibal_summary) || null,   // B7-3
@@ -1345,7 +1512,10 @@ return sites.map((s, idx) => {
     countries: (gsc && gsc.countries) || { read: false, rows: [], reason: 'Search Console is not connected for this site' },
     // B-G3 (2026-10-15): the rungs the read-path fit gate set aside, with the reason, so the report can say why the list is shorter
     set_aside: s.set_aside || [], set_aside_note: s.set_aside_note || '',
-    tracked, ladder_pages: pages, pending_publish: (s.pending_publish || []).filter(p => !found.some(f => kwKey(f.keyword) === kwKey(p.keyword))), ladder_heads: s.ladder_heads || [], trends, alerts, actions: acts, prev_runs: prevRuns, weeks_tracked: prevRuns.length + 1, service_account_email: cfg.service_account_email || '', form_url: FORM_URL, api_url: API_URL,
+    tracked, ladder_pages: pages, pending_publish: (s.pending_publish || []).filter(p => !found.some(f => kwKey(f.keyword) === kwKey(p.keyword))),
+    needs_fix: (s.needs_fix || []).filter(p => !found.some(f => kwKey(f.keyword) === kwKey(p.keyword)) && !covered(p.keyword, '')),   // C-7: a draft a live page makes unnecessary is retired, not fixed
+    drafts_retired: (s.needs_fix || []).filter(p => !found.some(f => kwKey(f.keyword) === kwKey(p.keyword)) && covered(p.keyword, '')).map(p => ({ keyword: p.keyword, live_url: covered(p.keyword, '').url })),   // R111 drafts that failed their last quality round; R59 host_split below: pages Google keeps under the other host
+    host_split: hostSplit, ladder_heads: s.ladder_heads || [], trends, alerts, actions: acts, prev_runs: prevRuns, weeks_tracked: prevRuns.length + 1, service_account_email: cfg.service_account_email || '', form_url: FORM_URL, api_url: API_URL,
     detected_published: found.map(f => ({ keyword: f.keyword, url: f.url, ladder_id: f.ladder_id || '', matched_by: f.matched_by, source: f.source })),
     publish_detection: det ? { checked: true, candidates: det.candidates, sitemap_ok: !!(det.sitemap || {}).ok, sitemap_urls: (det.sitemap || {}).urls || 0, sitemap_error: (det.sitemap || {}).error || '', pages_fetched: det.pages_fetched || 0, found: found.length,
       still_waiting: (det.unmatched || []).length, recorded: found.length ? !detErrors.length : null, error: found.length && detErrors.length ? detErrors.slice(0, 3).join('; ').slice(0, 300) : '' } : { checked: false, candidates: 0, found: 0, reason: detFail ? 'detection failed: ' + detFail.slice(0, 200) : 'no written page waiting for publication' },

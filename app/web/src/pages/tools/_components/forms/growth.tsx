@@ -1,8 +1,9 @@
+import { PRICES } from '@/lib/prices';
 import { useForm, type DefaultValues } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
 import { Bot } from 'lucide-react';
-import { AI_ENGINES, MODES, RUN_SCHEMAS } from '@seo/shared';
+import { AI_ENGINES, RUN_SCHEMAS } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { Badge } from '@/components/ui/badge';
 import { ChoiceCard } from '@/components/ui/field';
@@ -72,14 +73,14 @@ export function LadderForm({ initialSiteId, prefill }: ToolFormProps) {
     >
       <FormCard title="The keyword to win" description="A head term you cannot rank for yet." info="The ladder starts with winnable long-tail pages and climbs to it, with a feasibility verdict, link map and timeline.">
         <SiteField value={v.siteId} onChange={(id) => form.setValue('siteId', id ?? '', { shouldDirty: true, shouldValidate: true })} error={errMsg(e.siteId)} />
-        <TextField label="Head keyword" reg={form.register('keyword')} error={errMsg(e.keyword)} placeholder="e.g. e invoicing in uae" hint="The competitive term you ultimately want to rank for." />
+        <TextField label="Head keyword" reg={form.register('keyword')} error={errMsg(e.keyword)} placeholder="e.g. accounting software dubai" hint="The competitive term you ultimately want to rank for." />
         <CountryField reg={form.register('country')} error={errMsg(e.country)} />
       </FormCard>
 
       <FormCard
         title="Pages to write now"
         description="The easiest rung-1 pages are written right away."
-        info="Each about $1.20 and 10 minutes, delivered as its own report. The rest follow from the plan or the weekly content cadence."
+        info={`Each about ${PRICES.page()} and 10 minutes, delivered as its own report. The rest follow from the plan or the weekly content cadence.`}
       >
         <div role="radiogroup" aria-label="Pages to write now" className="grid gap-2 sm:grid-cols-3">
           {[1, 2, 3].map((n) => (
@@ -88,12 +89,12 @@ export function LadderForm({ initialSiteId, prefill }: ToolFormProps) {
               selected={pagesNow === n}
               onSelect={() => form.setValue('pagesNow', n, { shouldDirty: true })}
               title={`${n} page${n === 1 ? '' : 's'}`}
-              badge={<Badge>+${(n * 1.2).toFixed(2)}</Badge>}
+              badge={<Badge>+{PRICES.pages(n)}</Badge>}
               description={n === 1 ? 'Start small, publish, then continue' : n === 2 ? 'Two rung-1 pages in parallel' : 'A fast start on the first rung'}
             />
           ))}
         </div>
-        <p className="text-[13px] text-ink-3">The plan itself costs about $0.60 (research and feasibility).</p>
+        <p className="text-[13px] text-ink-3">The plan itself costs about {PRICES.plan()} (research and feasibility).</p>
       </FormCard>
 
       <FormCard title="Business context" description={site ? `Leave these empty to use ${site.domain}'s settings.` : 'Used for relevance and for the pages written now.'}>
@@ -209,7 +210,7 @@ export function CaseStudyForm({ initialSiteId, prefill }: ToolFormProps) {
           rows={5}
           max={3000}
           value={v.solution}
-          placeholder="The approach, the steps and the tools. e.g. 2-week discovery, migrated 8 years of data, integrated the e-invoicing provider, trained 25 users."
+          placeholder="The approach, the steps and the tools. e.g. 2-week discovery, migrated 8 years of data, integrated the payments provider, trained 25 users."
           hint="Specific steps and decisions read as real experience."
         />
         <TextField label="Timeline" optional reg={form.register('timeline')} error={errMsg(e.timeline)} placeholder="e.g. 12 weeks, March to June 2026" />
@@ -223,7 +224,7 @@ export function CaseStudyForm({ initialSiteId, prefill }: ToolFormProps) {
           rows={4}
           max={2000}
           value={v.results}
-          placeholder="e.g. Month-end close from 12 to 4 days · 100% of invoices e-invoicing compliant before the deadline · 18 hours a week of manual entry removed."
+          placeholder="e.g. Month-end close from 12 to 4 days · 100% of invoices compliant before the deadline · 18 hours a week of manual entry removed."
           hint={v.results && !hasNumbers ? 'Add at least one number (before → after, %, time or money saved): numbers are what gets cited.' : 'Only figures the client would confirm.'}
         />
         <TextAreaField label="Client quote" optional reg={form.register('quote')} error={errMsg(e.quote)} rows={3} max={600} value={v.quote} placeholder="A sentence or two in the client's words" />
@@ -295,7 +296,7 @@ export function AiVisibilityForm({ initialSiteId, prefill }: ToolFormProps) {
           onChange={(t) => form.setValue('topics', t, { shouldDirty: true, shouldValidate: form.formState.isSubmitted })}
           error={errMsg(e.topics)}
           max={6}
-          placeholder="e.g. e invoicing software uae"
+          placeholder="e.g. accounting software dubai"
           hint="What buyers ask AI about. Leave empty to use your tracked keywords and ladders."
         />
         <DomainTagsField
@@ -347,7 +348,7 @@ export function BacklinksForm({ initialSiteId, prefill }: ToolFormProps) {
       </FormCard>
       <FormCard title="Depth">
         <div className="grid gap-3 sm:grid-cols-2">
-          <ChoiceCard selected={!v.freeOnly} onSelect={() => form.setValue('freeOnly', false, { shouldDirty: true })} title={`Full check (~$${MODES.backlinks.costUsd.toFixed(2)})`} description="Adds DataForSEO's index (link details, new and lost, competitors' new links, the gap), AI link labels and outreach drafts." />
+          <ChoiceCard selected={!v.freeOnly} onSelect={() => form.setValue('freeOnly', false, { shouldDirty: true })} title={`Full check (~${PRICES.backlinksFull()})`} description="Adds DataForSEO's index (link details, new and lost, competitors' new links, the gap), AI link labels and outreach drafts." />
           <ChoiceCard selected={!!v.freeOnly} onSelect={() => form.setValue('freeOnly', true, { shouldDirty: true })} title="Free sources only ($0)" description="Bing, your Search Console export, GA4, Common Crawl, Wikipedia, news and web search, every important link checked on its page." />
         </div>
       </FormCard>

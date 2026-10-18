@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { Activity, BarChart3, ClipboardCheck, Eye, Flame, LineChart, MousePointerClick, Rocket, ScanSearch, Search, Target, TrendingUp, Users } from 'lucide-react';
-import { formatPosition, pctChange, type ReportDetail } from '@seo/shared';
+import { Activity, BarChart3, ClipboardCheck, Eye, Flame, Layers, LineChart, MousePointerClick, Rocket, ScanSearch, Search, Target, TrendingUp, Users } from 'lucide-react';
+import { clicksHeadline, formatPosition, pctChange, type ReportDetail } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { fmtDate } from '@/lib/utils';
@@ -14,18 +14,11 @@ import { DataTable, type Column } from '@/components/ui/table';
 import { Segmented, Tab, TabList, TabPanel, Tabs } from '@/components/ui/tabs';
 import { ChartCard, ShareBars, Sparkline, TimeSeriesChart } from '@/components/charts';
 import { ActionList, ActionRunButton, BriefCard, sortActions } from './actions';
-import { AlertList, Block, Empty, has, n, num, obj, objs, pct, pctRatio, SectionTitle, shortUrl, str, strs, type P } from './kit';
+import { AlertList, Block, Empty, has, LedgerCard, n, num, obj, objs, pct, pctRatio, SectionTitle, shortUrl, str, strs, type P } from './kit';
 import { ChartTitle, PositionPill, ReportHero } from './visuals';
 
-/** The hero's headline: how clicks from Google moved against the 28 days before. */
-function clicksHeadline(clicks: number | null, pctCh: number | null): string {
-  if (clicks == null) return 'Weekly site report';
-  const c = n(clicks);
-  if (pctCh == null) return `${c} ${clicks === 1 ? 'click' : 'clicks'} from Google in the last 28 days`;
-  if (pctCh >= 0.5) return `Clicks from Google are up ${Math.round(pctCh)}% to ${c}`;
-  if (pctCh <= -0.5) return `Clicks from Google are down ${Math.abs(Math.round(pctCh))}% to ${c}`;
-  return `Clicks from Google are steady at ${c}`;
-}
+// The hero's headline (R113): `clicksHeadline` in @seo/shared follows the report's own significance test — a clicks change the test
+// calls not real reads "within normal variation", and a change that is real leads.
 
 type Metric = 'clicks' | 'impressions' | 'position';
 
@@ -60,7 +53,7 @@ export function SiteTrackerReport({ report }: { report: ReportDetail }) {
       <ReportHero
         report={report}
         eyebrow={str(period.start) ? `${fmtDate(str(period.start))} – ${fmtDate(str(period.end))}` : undefined}
-        title={gsc.connected === false ? 'Search Console is not connected' : clicksHeadline(num(cur.clicks), num(deltas.clicks_pct))}
+        title={gsc.connected === false ? 'Search Console is not connected' : clicksHeadline(num(cur.clicks), num(deltas.clicks_pct), p.significance)}
         description={[
           actions.length ? `${actions.length} recommended ${actions.length === 1 ? 'action' : 'actions'}` : 'No new actions this week',
           found ? `${found} written ${found === 1 ? 'page' : 'pages'} found live` : '',
@@ -168,6 +161,8 @@ export function SiteTrackerReport({ report }: { report: ReportDetail }) {
 
       {gsc.connected !== false && <QueryTabs gsc={gsc} />}
 
+      {obj(gsc.content_groups).configured === true && <ContentGroups cg={obj(gsc.content_groups)} />}
+
       <ActionList actions={objs(p.actions)} siteId={report.siteId} />
 
       {objs(p.detected_published).length > 0 && <FoundLive rows={objs(p.detected_published)} siteId={report.siteId} />}
@@ -175,23 +170,33 @@ export function SiteTrackerReport({ report }: { report: ReportDetail }) {
       {pending.length > 0 && (
         <Block title="Written, waiting to be published" description="Nothing can rank before it is published" icon={<Rocket />} iconTone="warning" flush>
           <ul className="divide-y divide-line">
-            {pending.map((x, i) => (
-              <InsightItem
-                key={i}
-                tone="warning"
-                icon={<Rocket />}
-                title={str(x.keyword)}
-                description={`written ${num(x.days) ?? 0} days ago`}
-                action={
-                  can('member') && (
-                    <ButtonLink to={paths.tool(org.id, 'published', { siteId: report.siteId, prefill: { keyword: str(x.keyword) } })} size="sm" variant="secondary">
-                      I published it
-                    </ButtonLink>
-                  )
-                }
-                actionPosition="side"
-              />
-            ))}
+            {pending.map((x, i) => {
+              // R111: a draft whose last quality round failed is never offered for publishing, even if an engine lists it here
+              const fix = str(x.status) === 'not_ready' || x.needs_fix === true;
+              const why = str(x.qa_reasons);
+              return (
+                <InsightItem
+                  key={i}
+                  tone="warning"
+                  icon={<Rocket />}
+                  title={str(x.keyword)}
+                  description={fix ? `did not pass the quality check${why ? `: ${why}` : ''} — fix it and run it again` : `written ${num(x.days) ?? 0} days ago`}
+                  action={
+                    can('member') &&
+                    (fix ? (
+                      <ButtonLink to={paths.tool(org.id, 'keyword', { siteId: report.siteId, prefill: { keyword: str(x.keyword) } })} size="sm" variant="secondary">
+                        Run it again
+                      </ButtonLink>
+                    ) : (
+                      <ButtonLink to={paths.tool(org.id, 'published', { siteId: report.siteId, prefill: { keyword: str(x.keyword) } })} size="sm" variant="secondary">
+                        I published it
+                      </ButtonLink>
+                    ))
+                  }
+                  actionPosition="side"
+                />
+              );
+            })}
           </ul>
         </Block>
       )}
@@ -255,6 +260,7 @@ export function SiteTrackerReport({ report }: { report: ReportDetail }) {
           )}
         </Block>
       )}
+      <LedgerCard ledger={p.run_ledger} extraCost={num(p.cost_usd)} />
     </Stagger>
   );
 }
@@ -297,6 +303,47 @@ function FoundLive({ rows, siteId }: { rows: P[]; siteId: string | null }) {
           </li>
         ))}
       </ul>
+    </Block>
+  );
+}
+
+/**
+ * B7-5: the website's own page groups, each judged on the same bar as the site-wide alerts (the engine's ST.change: enough clicks across
+ * both periods and a move that survives the significance test), with the pages in no group on a line of their own. A group whose
+ * pattern the engine refused is shown with the reason, never silently dropped.
+ */
+function ContentGroups({ cg }: { cg: P }) {
+  const verdict = (c: P) => {
+    if (!Object.keys(c).length) return <span className="text-xs text-ink-3">–</span>;
+    if (c.measurable === false) return <span className="text-xs text-ink-3">too few clicks to judge</span>;
+    if (c.real === true) return <StatusBadge tone={c.direction === 'down' ? 'critical' : 'good'}>{str(c.text)}</StatusBadge>;
+    return <span className="text-[13px] text-ink-2">{str(c.text)}{c.watch === true ? ' · within normal variation' : ''}</span>;
+  };
+  const groups = objs(cg.groups);
+  const rest = obj(cg.ungrouped);
+  return (
+    <Block title="Content groups" description="Your page groups in Google search, the last 28 days against the 28 before" icon={<Layers />}>
+      <ul className="divide-y divide-line">
+        {groups.map((g, i) => (
+          <li key={i} className="flex flex-col gap-1 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <span className="min-w-0">
+              <span className="font-medium text-ink">{str(g.name)}</span> <code className="font-mono text-xs text-ink-3">/{str(g.pattern)}/</code>
+              {g.valid === false ? <span className="block text-xs text-critical-text">{str(g.reason)}</span> : <span className="block text-xs text-ink-3">{num(g.pages) ?? 0} pages · {num(g.clicks) ?? 0} clicks</span>}
+            </span>
+            {g.valid !== false && verdict(obj(g.change))}
+          </li>
+        ))}
+        {Object.keys(rest).length > 0 && (
+          <li className="flex flex-col gap-1 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <span className="min-w-0">
+              <span className="font-medium text-ink">Pages in no group</span>
+              <span className="block text-xs text-ink-3">{num(rest.pages) ?? 0} pages · {num(rest.clicks) ?? 0} clicks</span>
+            </span>
+            {verdict(obj(rest.change))}
+          </li>
+        )}
+      </ul>
+      {str(cg.note) && <p className="mt-3 text-xs text-ink-3">{str(cg.note)}</p>}
     </Block>
   );
 }

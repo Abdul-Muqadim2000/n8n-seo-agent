@@ -42,15 +42,33 @@ const picked = [];
 const add = (url, title) => { const u = String(url || ''); if (!u || picked.some(x => x.url === u)) return; picked.push({ url: u, kind: kindOf(u), title: String(title || '') }); };
 const homeItem = crawled.find(p => pathOf(p.url) === '/' && live(p));
 add(homeItem ? homeItem.url : home, homeItem ? ((homeItem.meta || {}).title || '') : '');
-for (const p of crawled.filter(p => live(p) && pathOf(p.url) !== '/').sort((a, b) => score(b) - score(a))) {
+const ranked = crawled.filter(p => live(p) && pathOf(p.url) !== '/').sort((a, b) => score(b) - score(a));
+for (const p of ranked) {
   if (picked.length >= CAP) break;
   add(p.url, (p.meta || {}).title || '');
+}
+// B5-6 (2026-10-16, benchmark area 5; Sitebulb compares the two readings across a crawl, at template level): when the crawl ran WITH
+// JavaScript it is already a rendered reading of every page it fetched, so it can be paired with a plain GET (free) of up to RAW_CAP pages
+// instead of paying for a render of each. The CAP pages above keep the render path; the others are only fetched raw, and the rendered side
+// is the crawl itself. A crawl run WITHOUT JavaScript is the first response too: pairing it with a raw GET would compare a page with itself.
+const RAW_CAP = Math.max(CAP, Math.min(25, Number(base.render_diff_raw_pages) || 25));
+const extra = [];
+if (base.crawl_js) {
+  const seenX = new Set(picked.map(x => x.url));
+  for (const p of ranked) {
+    if (picked.length + extra.length >= RAW_CAP) break;
+    const u = String(p.url || ''); if (!u || seenX.has(u)) continue;
+    seenX.add(u); extra.push({ url: u, kind: kindOf(u), title: String((p.meta || {}).title || '') });
+  }
 }
 
 // The rendered side: the render service for every page, with the JavaScript crawl as the fallback where the service cannot answer.
 // A crawl run WITHOUT JavaScript is not a rendered reading and never stands in for one — *Render Diff* then says "not checked".
 const crawl_js = !!base.crawl_js;
 const plan = { pages: picked.length, cap: CAP, crawl_js, fallback: crawl_js ? 'the JavaScript crawl' : 'none (the crawl did not render JavaScript)',
-  figures: ['Title', 'Main heading (H1)', 'Canonical link', 'Robots meta', 'Links on the page', 'Text length'] };
+  figures: ['Title', 'Main heading (H1)', 'Canonical link', 'Robots meta', 'Links on the page', 'Text length'],
+  raw_extra: extra, raw_pairs: extra.length, raw_cap: RAW_CAP,
+  raw_pairs_note: crawl_js ? (extra.length ? extra.length + ' more page(s) are paired with the JavaScript crawl: a plain request for the first response against what the crawl saw after its scripts ran' : 'every live page the crawl read is already one of the pages rendered above')
+    : 'the crawl did not run JavaScript, so it is the first response too: pairing it with a plain request would compare a page with itself (run the audit with JavaScript on to compare more pages)' };
 if (!picked.length) return [{ json: { ...prev, skip: true, render_plan: { ...plan, reason: 'the crawl returned no live HTML page to compare' } } }];
 return picked.map((p, i) => ({ json: { ...p, index: i, render_url: 'https://r.jina.ai/' + p.url, render_plan: plan } }));

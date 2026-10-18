@@ -21,8 +21,16 @@ const pages_known = SM.pages(model).length;
 // a brand query is the site's own name, not an SEO win: the site model's names, the business name and the domain label (GQ.brandTest)
 const brandNames = [...((siteModel || {}).brand_names || []), (siteModel || {}).business_name || '', String(base.business_name || '')].filter(Boolean);
 const BR = GQ.brandTest(base.domain || '', brandNames);
+// R35 / R55 (2026-10-16): the evidence about a ranking page is its own title / H1 (SM.titleShare, null when never read), and every
+// site URL is printed on the canonical host (SM.canonUrl)
+const pageKey = (u) => String(u || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/$/, '');
+const pageBy = new Map(SM.pages(model).map(p => [pageKey(p.url), p]));
+const pageTitleShare = (url, q) => { const p = pageBy.get(pageKey(url)); const t = p ? SM.titleShare(p, q) : null; return t ? { ...t, title: p.title || '', h1: p.h1 || '' } : null; };
 const gsc = KWI.gscSeeds(rows, { domain: base.domain || '', isScraper: GQ.isScraper, isBrand: BR.is, pages_known,
-  matchPage: pages_known ? ((kw) => SM.matchPage(model, kw)) : null, use_row_page: !pages_known });
+  matchPage: pages_known ? ((kw, rowPage) => SM.matchPage(model, kw, rowPage)) : null, use_row_page: !pages_known,
+  canon: (u) => SM.canonUrl(model, u), pageTitleShare,
+  // A-22 (2026-10-17): Search Console's own page answers the search; these say whether it is a listing page and how well a page's own words target it
+  isListing: SM.isListing, pageScore: (url, q) => { const p = pageBy.get(pageKey(url)); return p ? SM.pageScore(p, q) : null; } });
 const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
 const seeds0 = (base.seeds || []).map(norm).filter(Boolean);
 const extra = gsc.seeds.filter(k => !seeds0.includes(k));
@@ -34,5 +42,7 @@ return [{ json: { ...base, seeds, gsc_seeds: extra, search_console: {
   page_check: gsc.page_check, pages_known, brand_names: BR.keys, dropped: gsc.dropped,
   min_impressions: gsc.min_impressions, striking_min: gsc.striking_min, striking_max: gsc.striking_max,
   seeded: extra, queries: gsc.queries.slice(0, 60), no_page: gsc.no_page.slice(0, 30), striking: gsc.striking.slice(0, 30), answered: gsc.answered,
-  mismatch: gsc.mismatch.slice(0, 30)   // R12 (2026-10-13): a search a live page of ours already ranks for while targeting something else — improve that page, never a second one
+  mismatch: gsc.mismatch.slice(0, 30),   // R12 (2026-10-13): a search a live page of ours already ranks for while targeting something else — improve that page, never a second one
+  low_position: gsc.low_position.slice(0, 30), measured: gsc.measured,   // R35 / R36 (2026-10-16): a page that ranks low for the search, and every measured search with its page
+  title_gap: SM.titleGap(model)   // R34: the pages whose title is not on file, judged by their address only
 } } }];

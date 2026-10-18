@@ -183,4 +183,22 @@ describe('pipeline notices', () => {
     const n = pipelineNotices('audit', {}, d);
     expect(n.map((x) => x.tone)).toEqual(['warning', 'warning']);
   });
+
+  // R42 (2026-10-16): the live "ai consulting" ladder wrote a 4th waiting page at a limit of 3 and said nothing
+  it('R42: a ladder or a page written while the pile-up limit is reached says how many pages already wait (a tick, never a block)', () => {
+    const waiting = ['erp software uae', 'service industry erp software', 'azure api management monetization'].map((keyword) => ({ keyword, startedAt: '2026-10-13T10:00:00Z', days: 3 }));
+    const full = data({ queue: { ...data().queue, waiting } });
+    const lad = pipelineNotices('ladder', { keyword: 'ai consulting dubai' }, full);
+    const n = lad.find((x) => x.id === 'pileup:ai consulting dubai');
+    expect(n?.tone).toBe('warning');
+    expect(n?.title).toBe('3 pages are already waiting to be published');
+    expect(n?.body).toContain('your limit is 3');
+    expect(n?.body).toContain('page 4 waiting');
+    expect(n?.confirm).toBe('Write it anyway');
+    expect(ids(pipelineNotices('keyword', { keyword: 'ai consulting', receiveContent: true }, full))).toContain('pileup:ai consulting');
+    // under the limit, or a run that writes no page: no notice
+    expect(ids(pipelineNotices('ladder', { keyword: 'ai consulting dubai' }, data({ queue: { ...data().queue, waiting: waiting.slice(0, 2) } })))).not.toContain('pileup:ai consulting dubai');
+    expect(ids(pipelineNotices('keyword', { keyword: 'ai consulting', receiveContent: false }, full))).not.toContain('pileup:ai consulting');
+    expect(ids(pipelineNotices('audit', {}, full)).some((x) => x.startsWith('pileup:'))).toBe(false);
+  });
 });

@@ -1,8 +1,8 @@
 @import 'tailwindcss';
 
-/* Ascentra design tokens (brand: app/web/brand/BRAND.md). Light values on :root; dark values for the OS setting (unless the user
+/* Alaventra design tokens (brand: app/web/brand/BRAND.md). Light values on :root; dark values for the OS setting (unless the user
    picked light) and for an explicit dark pick. Every text/status pair passes WCAG AA on page, surface and surface-2 in both modes.
-   Chart colors follow the dataviz method, re-validated for the brand: series-1 is Ascentra Blue, slot 7 is cyan (violet sat too close
+   Chart colors follow the dataviz method, re-validated for the brand: series-1 is Alaventra Blue, slot 7 is cyan (violet sat too close
    to the brand blue), fixed categorical order, sequential ramp in the brand-blue hue, reserved status colors. */
 
 /* `dark:` follows the app's theme choice: an explicit pick wins, otherwise the OS setting */
@@ -39,7 +39,7 @@
   --ink: #0a0f1f;
   --ink-2: #4a5468;
   --ink-3: #5b6478;
-  /* accent: Ascentra Blue is the only accent */
+  /* accent: Alaventra Blue is the only accent */
   --accent: #2e4bff;
   --accent-hover: #2238d9;
   --accent-ink: #ffffff;
@@ -198,7 +198,7 @@
   --selection: rgba(143, 162, 255, 0.3);
 }
 
-@keyframes asc-fade-in {
+@keyframes alv-fade-in {
   from {
     opacity: 0;
   }
@@ -206,7 +206,7 @@
     opacity: 1;
   }
 }
-@keyframes asc-fade-up {
+@keyframes alv-fade-up {
   from {
     opacity: 0;
     transform: translateY(12px);
@@ -216,7 +216,7 @@
     transform: none;
   }
 }
-@keyframes asc-scale-in {
+@keyframes alv-scale-in {
   from {
     opacity: 0;
     transform: scale(0.96);
@@ -226,7 +226,7 @@
     transform: none;
   }
 }
-@keyframes asc-slide-in-right {
+@keyframes alv-slide-in-right {
   from {
     opacity: 0;
     transform: translateX(16px);
@@ -236,7 +236,7 @@
     transform: none;
   }
 }
-@keyframes asc-shimmer {
+@keyframes alv-shimmer {
   from {
     background-position: 100% 0;
   }
@@ -293,11 +293,11 @@
   --shadow-raised: var(--elevation-raised);
   --shadow-overlay: var(--elevation-overlay);
   --ease-brand: var(--brand-ease);
-  --animate-fade-in: asc-fade-in 200ms var(--brand-ease) both;
-  --animate-fade-up: asc-fade-up 560ms var(--brand-ease) both;
-  --animate-scale-in: asc-scale-in 180ms var(--brand-ease) both;
-  --animate-slide-in-right: asc-slide-in-right 240ms var(--brand-ease) both;
-  --animate-shimmer: asc-shimmer 1.6s linear infinite;
+  --animate-fade-in: alv-fade-in 200ms var(--brand-ease) both;
+  --animate-fade-up: alv-fade-up 560ms var(--brand-ease) both;
+  --animate-scale-in: alv-scale-in 180ms var(--brand-ease) both;
+  --animate-slide-in-right: alv-slide-in-right 240ms var(--brand-ease) both;
+  --animate-shimmer: alv-shimmer 1.6s linear infinite;
 }
 
 html,
@@ -386,24 +386,62 @@ body {
   text-decoration: underline;
 }
 /* Stagger (components/insight): direct children fade up one after another; the delay step is --stagger-step (default 60ms) */
-.asc-stagger > * {
+.alv-stagger > * {
   --stagger-i: 0;
-  animation: asc-fade-up 520ms var(--brand-ease) both;
+  animation: alv-fade-up 520ms var(--brand-ease) both;
   animation-delay: calc(var(--stagger-i, 0) * var(--stagger-step, 60ms));
 }
-.asc-stagger > :nth-child(2) { --stagger-i: 1; }
-.asc-stagger > :nth-child(3) { --stagger-i: 2; }
-.asc-stagger > :nth-child(4) { --stagger-i: 3; }
-.asc-stagger > :nth-child(5) { --stagger-i: 4; }
-.asc-stagger > :nth-child(6) { --stagger-i: 5; }
-.asc-stagger > :nth-child(7) { --stagger-i: 6; }
-.asc-stagger > :nth-child(8) { --stagger-i: 7; }
-.asc-stagger > :nth-child(9) { --stagger-i: 8; }
-.asc-stagger > :nth-child(10) { --stagger-i: 9; }
-.asc-stagger > :nth-child(11) { --stagger-i: 10; }
-.asc-stagger > :nth-child(n + 12) { --stagger-i: 11; }
+.alv-stagger > :nth-child(2) { --stagger-i: 1; }
+.alv-stagger > :nth-child(3) { --stagger-i: 2; }
+.alv-stagger > :nth-child(4) { --stagger-i: 3; }
+.alv-stagger > :nth-child(5) { --stagger-i: 4; }
+.alv-stagger > :nth-child(6) { --stagger-i: 5; }
+.alv-stagger > :nth-child(7) { --stagger-i: 6; }
+.alv-stagger > :nth-child(8) { --stagger-i: 7; }
+.alv-stagger > :nth-child(9) { --stagger-i: 8; }
+.alv-stagger > :nth-child(10) { --stagger-i: 9; }
+.alv-stagger > :nth-child(11) { --stagger-i: 10; }
+.alv-stagger > :nth-child(n + 12) { --stagger-i: 11; }
+/* The brand mark's wave (components/brand/AlaventraMark): a band of light runs along the rays from the sun to the wing tip.
+   Only opacity changes — the rays never move. Speed, spacing and the resting opacity come from the component (--alv-ray-*). */
+.alv-mark-wave .alv-mark-ray {
+  opacity: var(--alv-ray-rest, 0.4);
+  animation: var(--alv-ray-anim, alv-ray) var(--alv-ray-dur, 1.6s) ease-in-out infinite;
+  /* --alv-ray-offset lets a loader that replaces another continue the same wave instead of restarting it */
+  animation-delay: calc(var(--i, 0) * var(--alv-ray-step, 30ms) - var(--alv-ray-offset, 0ms));
+}
+/* loader: a broad band, back to back */
+@keyframes alv-ray {
+  0%,
+  100% {
+    opacity: var(--alv-ray-rest, 0.4);
+  }
+  18% {
+    opacity: 1;
+  }
+  42% {
+    opacity: var(--alv-ray-rest, 0.4);
+  }
+}
+/* ambient: a narrow band sweeps sun to wing tip, then the mark rests until the next beat */
+@keyframes alv-ray-soft {
+  0%,
+  100% {
+    opacity: var(--alv-ray-rest, 0.4);
+  }
+  8% {
+    opacity: 1;
+  }
+  18% {
+    opacity: var(--alv-ray-rest, 0.4);
+  }
+}
 /* reduced motion: every animation and transition is instant, reveals land in their final state */
 @media (prefers-reduced-motion: reduce) {
+  .alv-mark-wave .alv-mark-ray {
+    animation: none;
+    opacity: 1;
+  }
   *,
   *::before,
   *::after {
@@ -413,5 +451,28 @@ body {
     transition-duration: 0.01ms !important;
     transition-delay: 0ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* G5: "Save as PDF" on a report prints the report alone: no navigation, no buttons, light page, cards unbroken where possible */
+@media print {
+  #app-sidebar,
+  [data-print-hide],
+  .lg\:hidden.sticky {
+    display: none !important;
+  }
+  :root {
+    color-scheme: light;
+  }
+  body {
+    background: #fff;
+  }
+  main {
+    max-width: none !important;
+  }
+  section,
+  .shadow-card {
+    break-inside: avoid;
+    box-shadow: none !important;
   }
 }

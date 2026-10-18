@@ -54,7 +54,10 @@ SITES_COLS = [('site_id', 'string'), ('domain', 'string'), ('gsc_property', 'str
               # nav_pages_json are JSON strings; brand_names / competitors are comma-separated.
               ('canonical_host', 'string'), ('business_name', 'string'), ('logo_url', 'string'), ('nap_json', 'string'), ('services_json', 'string'),
               ('nav_pages_json', 'string'), ('business_facts', 'string'), ('cta', 'string'), ('brand_names', 'string'), ('competitors', 'string'),
-              ('accreditation', 'string'), ('model_updated_at', 'string')]
+              ('accreditation', 'string'), ('model_updated_at', 'string'),
+              # B7-5 (W3-D, 2026-10-17): content groups -- a JSON list [{name, pattern}] of regexes over page paths, set through Site Admin
+              # (action content_groups); the Site Tracker reports each group's Search Console clicks with the same statistical bar
+              ('content_groups_json', 'string')]
 # v4.15 (G19): the site's page inventory -- one row per site and URL (sitemap, Search Console, AI Growth key pages, publish detection), filled
 # by D11; `queries_json` holds the Search Console queries the page gets impressions for. SM.matchPage() reads it.
 PAGES_TABLE = 'seo_pages'
@@ -90,7 +93,10 @@ LOG_TABLE = 'seo_content_log'
 TRENDS_TABLE = 'seo_trends'
 CADENCE_TABLE = 'seo_cadence'
 LOG_COLS = [('site_id', 'string'), ('domain', 'string'), ('keyword', 'string'), ('source', 'string'), ('page_type', 'string'), ('existing_page_url', 'string'), ('rung', 'number'), ('ladder_id', 'string'),
-            ('request_id', 'string'), ('started_at', 'string'), ('status', 'string'), ('published_url', 'string'), ('published_at', 'string'), ('week', 'string')]
+            ('request_id', 'string'), ('started_at', 'string'), ('status', 'string'), ('published_url', 'string'), ('published_at', 'string'), ('week', 'string'),
+            # R111 (2026-10-16, re-rating 2026-10-15): a page whose FINAL quality round failed is stored `status: 'not_ready'` (a draft to fix
+            # and run again, never "publish it") and carries the last round's reasons here, '; '-joined (Content_Log_Row.js)
+            ('qa_reasons', 'string')]
 TRENDS_COLS = [('site_id', 'string'), ('domain', 'string'), ('keyword', 'string'), ('checked_at', 'string'), ('period_end', 'string'), ('direction', 'string'), ('change_pct', 'number'), ('peak_date', 'string'),
                ('latest', 'number'), ('average', 'number'), ('rising', 'string'), ('top', 'string')]
 CADENCE_COLS = [('site_id', 'string'), ('domain', 'string'), ('pages_per_week', 'number'), ('status', 'string'), ('updated_at', 'string'), ('request_id', 'string')]
@@ -154,9 +160,14 @@ MONITORS_COLS = [('site_id', 'string'), ('domain', 'string'), ('ai_visibility', 
                  ('ai_pulse', 'boolean'),   # v4.9: daily AI pulse (empty = on)
                  ('ai_growth', 'boolean'), ('ai_pages_month', 'number'),   # v4.12 (AI_GROWTH_SPEC.md): the weekly AI Growth loop (empty = on) and AI answer / refresh pages a month (empty = 2)
                  ('link_builder', 'boolean'),   # v4.13 (LINK_BUILDER_SPEC.md): the weekly Link Builder (empty = on); on, the Backlink Monitor no longer drafts e-mails
-                 ('stuck_weeks', 'number')]   # G32 (2026-10-13): weeks without a position gain before a ladder is called stuck and gets a re-plan proposal (empty = 8, kept 2-26); run sync_tables.py after deploying
+                 ('stuck_weeks', 'number'),   # G32 (2026-10-13): weeks without a position gain before a ladder is called stuck and gets a re-plan proposal (empty = 8, kept 2-26)
+                 # G6 (2026-10-18, AI_VISIBILITY_SPEC.md §10): buyer roles and extra markets the panel covers, and how the daily pulse samples it
+                 ('ai_personas', 'string'), ('ai_markets', 'string'), ('ai_pulse_mode', 'string'), ('ai_pulse_per_week', 'number')]
 AI_PROMPTS_COLS = [('prompt_id', 'string'), ('site_id', 'string'), ('domain', 'string'), ('prompt', 'string'), ('kind', 'string'), ('topic', 'string'), ('keyword', 'string'), ('source', 'string'), ('status', 'string'), ('created_at', 'string'),
-                   ('stage', 'string'), ('cluster', 'string'), ('volume', 'number'), ('origin', 'string'), ('updated_at', 'string')]   # v4.9: buyer stage, topic cluster, monthly search volume, where the question came from
+                   ('stage', 'string'), ('cluster', 'string'), ('volume', 'number'), ('origin', 'string'), ('updated_at', 'string'),
+                   # G6 (2026-10-18): who asks it (buyer role), in which market (CC-lang), pinned by the owner (never retired by the writer),
+                   # and the fit gate's sentence when status is 'refused' (stored, so the panel manager shows what was refused and why)
+                   ('persona', 'string'), ('market', 'string'), ('pinned', 'boolean'), ('fit_note', 'string')]   # v4.9 (the row above): buyer stage, topic cluster, monthly search volume, where the question came from
 AI_ANSWERS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string'), ('checked_at', 'string'), ('prompt_id', 'string'), ('prompt', 'string'), ('kind', 'string'), ('topic', 'string'), ('engine', 'string'),
                    ('answered', 'boolean'), ('mentioned', 'boolean'), ('cited', 'boolean'), ('rank', 'number'), ('our_urls', 'string'), ('competitors', 'string'), ('sources', 'string'), ('excerpt', 'string'), ('cost', 'number'), ('error', 'string'),
                    ('run_kind', 'string'), ('sentiment', 'string'), ('brands', 'string'), ('issues', 'string'), ('fanout', 'string'),
@@ -166,12 +177,18 @@ AI_VIS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string')
                ('market_json', 'string'), ('market_month', 'string'), ('cost_usd', 'number'), ('alerts', 'string'),
                ('run_kind', 'string'), ('samples', 'number'), ('visibility_score', 'number'), ('mention_lo', 'number'), ('mention_hi', 'number'), ('sentiment_score', 'number'), ('accuracy_issues', 'number'),
                ('ai_sessions', 'number'), ('ai_conversions', 'number'), ('ai_revenue', 'number'), ('index_sov', 'number'), ('ai_impressions', 'number'),
-               ('perception_json', 'string'), ('traffic_json', 'string'), ('access_json', 'string'), ('index_json', 'string'), ('clusters_json', 'string')]   # v4.9 (AI_VISIBILITY_SPEC.md)
+               ('perception_json', 'string'), ('traffic_json', 'string'), ('access_json', 'string'), ('index_json', 'string'), ('clusters_json', 'string'),   # v4.9 (AI_VISIBILITY_SPEC.md)
+               ('rival_sources_json', 'string'),   # wave 3 (W3-F via W3-E): the rival businesses' own pages AI cites, read by Growth_Plan.js
+               # G6 (2026-10-18): rates per engine x cluster x persona x market with ranges and BH-corrected changes; the panel this run asked
+               # (question ids, engines, composition, the pulse's sample, achievable half-widths) so the next delta can be refused when it changed;
+               # how many executions the run took
+               ('segments_json', 'string'), ('panel_json', 'string'), ('chunks', 'number')]
 # v4.9: one row per site per day from the AI Pulse (the panel on the fast engines; small aggregates, no answer text)
 AI_DAILY_TABLE = 'seo_ai_daily'
 AI_DAILY_COLS = [('site_id', 'string'), ('domain', 'string'), ('date', 'string'), ('checked_at', 'string'), ('run_id', 'string'), ('samples', 'number'), ('mentioned', 'number'), ('cited', 'number'),
                  ('mention_rate', 'number'), ('citation_rate', 'number'), ('share_of_voice', 'number'), ('visibility_score', 'number'), ('engines_json', 'string'), ('prompts_json', 'string'),
-                 ('competitors_json', 'string'), ('sources_json', 'string'), ('alerts', 'string'), ('cost_usd', 'number')]
+                 ('competitors_json', 'string'), ('sources_json', 'string'), ('alerts', 'string'), ('cost_usd', 'number'),
+                 ('sample_json', 'string')]   # G6 (2026-10-18): the morning's rotating sample — mode, N a week, questions asked of the panel, strata covered
 # v4.12 (AI_GROWTH_SPEC.md): the weekly AI Growth loop — what it does so the site gets named and cited, not only measured.
 # seo_ai_pages: one row per site and key page: can an AI assistant read and quote it (raw HTML without JavaScript, answer in the first 200
 # characters, a visible update date, question headings, sourced figures, size), and is it in Bing's index (Bing Webmaster GetUrlInfo) / submitted.
@@ -242,7 +259,11 @@ LINK_IMPORTS_TABLE = 'seo_link_imports'
 LINK_IMPORTS_COLS = [('site_id', 'string'), ('domain', 'string'), ('import_id', 'string'), ('source', 'string'), ('ref_domain', 'string'), ('from_url', 'string'), ('to_url', 'string'),
                      ('anchor', 'string'), ('links', 'number'), ('last_crawled', 'string'), ('imported_at', 'string')]
 AUDITS_COLS = [('site_id', 'string'), ('domain', 'string'), ('audit_id', 'string'), ('audited_at', 'string'), ('report_type', 'string'), ('health_score', 'number'), ('grade', 'string'), ('pages_crawled', 'number'),
-               ('findings', 'number'), ('critical', 'number'), ('high', 'number'), ('medium', 'number'), ('low', 'number'), ('scheduled', 'boolean'), ('request_id', 'string')]
+               ('findings', 'number'), ('critical', 'number'), ('high', 'number'), ('medium', 'number'), ('low', 'number'), ('scheduled', 'boolean'), ('request_id', 'string'),
+               # B-5 + INVARIANTS rule 1 (F-B, 2026-10-17): whether the crawl ran JavaScript (a JavaScript crawl is never compared like for like
+               # with a plain one), the version of the engine's checks the audit ran (a finding that left the list because a check changed is
+               # not "fixed"), and the keys the engine did not count as fixed, as JSON text, so the app's lists follow (run sync_tables.py)
+               ('crawl_js', 'boolean'), ('checks_version', 'string'), ('not_fixed_json', 'string')]
 AUDIT_FINDINGS_COLS = [('site_id', 'string'), ('domain', 'string'), ('audit_id', 'string'), ('audited_at', 'string'), ('finding_key', 'string'), ('category', 'string'), ('severity', 'string'), ('title', 'string'), ('affected_count', 'number'),
                        # R19 (2026-10-14, FIX_PLAN §3.12): how many pages the count above was measured on. 31 of 45 URL inspections failed in
                        # execution 550, so a finding measured on 14 pages was compared with one measured on 25 and called an improvement.
@@ -254,7 +275,12 @@ AUDIT_FINDINGS_COLS = [('site_id', 'string'), ('domain', 'string'), ('audit_id',
                        # G11 (2026-10-13, FIX_PLAN): "I fixed this" in the app sets recheck_state to `requested` (with recheck_requested_at);
                        # the next daily Page Watch answers it on the site's key pages and writes back `fixed` / `still_open` / `not_checked`
                        # with the rule it used and one sentence of evidence - days instead of waiting for the next monthly audit (1.10).
-                       ('recheck_state', 'string'), ('recheck_requested_at', 'string'), ('recheck_at', 'string'), ('recheck_rule', 'string'), ('recheck_note', 'string')]
+                       ('recheck_state', 'string'), ('recheck_requested_at', 'string'), ('recheck_at', 'string'), ('recheck_rule', 'string'), ('recheck_note', 'string'),
+                       # B5-11 (W3-G, 2026-10-17): the finding's evidence line and up to 5 example addresses (JSON text), so the read API
+                       # (`GET /api/v1/websites/:id/audits/:auditId`) can say WHY a finding is there; rows before this answer null (run sync_tables.py)
+                       ('evidence', 'string'), ('sample_urls', 'string'),
+                       # B-5 (F-B, 2026-10-17): the version of the check that raised the finding (Audit_Diff CHECK_CHANGES); '' on older rows
+                       ('check_version', 'string')]
 
 # ---- the daily key-page watch and Google's view of those pages (G11 + G25, 2026-10-13, FIX_PLAN) ----
 # One row per site and key page: today's raw reading (status, a redirect that appeared, noindex, canonical, title, description, H1s, whether
@@ -369,6 +395,8 @@ LEDGER_EST = {
     # R32's companion (2026-10-14, FIX_PLAN §3.13): the daily key-page watch spends nothing (25 plain GETs, no DataForSEO, no Claude) but
     # kept no row at all, so it was invisible to the guard and to the day's reconciliation. It reserves nothing and settles nothing.
     'page_watch':      {'ai': 0.0,  'dfs': 0.0},
+    # W3-F (2026-10-17): the Reply Reader classifies ONE reply with Haiku (about 1k tokens in, 300 out); the web app calls it per reply and waits
+    'reply_read':      {'ai': 0.003, 'dfs': 0.0},
 }
 
 
@@ -414,30 +442,86 @@ LEDGER_RESUME_JS = """// R17 (2026-10-14, system review FIX_PLAN 3.12): the run 
 // passes (*Rate Limit*) had no counterpart here. The rules are shared with it (v5/code/_run_guard.js): a run of the same monitor still in
 // flight, a heavy crawl of the same site, too many analyses at once, or an account that cannot pay for this run. A refusal costs nothing -
 // it happens after the row exists and before the first paid node, and the row is marked `refused` so it never holds a cent of the day.
+/*__CATCHUP__*/
 /*__RUN_GUARD__*/
 const plan = $('__PLAN__').all();
 let rows = []; try { rows = $('__LEDGER__').all().map(i => i.json).filter(r => r && r.run_id && !r.error); } catch (e) { rows = []; }
 let mine = {}; try { mine = $('__RESERVE__').first().json || {}; } catch (e) { mine = {}; }
 if (mine && mine.error) mine = {};
-const g = RG.gate({ rows, mine, mode: '__MODE__', where: '__WHERE__', run_id: String($execution.id) });
-if (g.allowed) return plan;
+// R77 (2026-10-16, re-rating C-1): the run that started this one, by identity. The front door's own row has the same mode and is still
+// `reserved` when an on-demand monitor reads the ledger, so the mode alone made the child refuse itself (exec 624). The child's row names
+// its parent in its key (Monitor_Ledger_Row: `parent:<id>`), and the trigger item carries it too; a genuine twin is still refused.
+// R116: and the refusal knows who is waiting for it — an on-demand run's trigger carries the caller's callback and request id.
+let __trig = {};
+for (const __n of ['Manual Run', 'Watch Run']) { try { const __t = $(__n).first(); if (__t && __t.json) { __trig = __t.json; break; } } catch (e) {} }
+if (__trig.body && typeof __trig.body === 'object') __trig = { ...__trig, ...__trig.body };
+let __row = {}; try { __row = $('__ROW__').first().json || {}; } catch (e) { __row = {}; }
+const __S = (v) => String(v == null ? '' : v).trim();
+const parent_run_id = RG.parentOf(mine) || RG.parentOf(__row) || __S(__trig.parent_run_id);
+// R94 follow-up (2026-10-16, A14): a run started by its OWN Schedule Trigger whose latest due slot the catch-up already ran (seo_cache
+// `catchup:<workflow id>:<due ISO>`, written before it starts) is the delayed timer of a week that is done - a sleeping Mac delivers a
+// fire hours late, and the catch-up starts it after 6 h, so without this the week ran twice. A catch-up start enters through the Execute
+// Workflow Trigger, so the Schedule Trigger node has no data in it and nothing is checked.
+const __SCHED = __SCHED_JSON__;
+let __caught = null;
+if (__SCHED.trigger && __SCHED.cron) {
+  let __fire = null; try { const __t = $(__SCHED.trigger).first(); __fire = __t && __t.json ? __t.json : null; } catch (e) { __fire = null; }
+  if (__fire) {
+    try {
+      const __ft = Date.parse(String(__fire.timestamp || '')) || Date.now();
+      const __due = CU.lastDue(__SCHED.cron, __SCHED.tz, __ft);
+      let __recs = []; try { __recs = $('__CATCHREC__').all().map(i => i.json).filter(r => r && r.key && !r.error); } catch (e) { __recs = []; }
+      __caught = RG.caughtUp({ records: __recs, workflow_id: __SCHED.wf, due: __due ? new Date(__due).toISOString() : '' });
+    } catch (e) { __caught = null; }   // fail OPEN: a scheduled run is never refused for a lookup that did not work
+  }
+}
+const g = RG.gate({ rows, mine, mode: '__MODE__', where: '__WHERE__', run_id: String($execution.id), caught_up: __caught, parent_run_id });
+if (g.allowed || __NO_GATE__) return plan;   // W3-F: a synchronous caller is waiting (the Reply Reader): it keeps its row but is never refused by what else is running
+let __dom = __S(__trig.domain);
+if (!__dom) { try { __dom = __S((plan[0] && plan[0].json || {}).domain); } catch (e) { __dom = ''; } }
 return [{ json: { run_refused: true, run_id: String($execution.id), refused_at: new Date().toISOString(),
   cost_basis: ('refused before any spending: ' + g.refusal + ' [' + g.basis + ']').slice(0, 400),
   reason: g.reason, refusal: g.refusal, basis: g.basis, open_runs: g.open_runs, open: g.open, max_open: g.max_open,
-  stale_ignored: g.stale_ignored, mode: g.mode, where: g.where } }];
+  stale_ignored: g.stale_ignored, mode: g.mode, where: g.where, parent_run_id,
+  // R116: who to tell. Only a run started by hand (a Manual Run with a callback) has someone waiting; a scheduled refusal has nobody.
+  callback_url: __S(__trig.callback_url), request_id: __S(__trig.request_id), domain: __dom.toLowerCase(),
+  monitor: __S(__trig.monitor) || g.mode, on_demand: !!__S(__trig.callback_url) } }];
 """
 
 # ---- B-A7 / B-A9 (2026-10-15, build section 64): the kits the ledger chain inlines, read once from v5/ ----
 OPS_ALERT_SRC = read_v5('code/_ops_alert.js').rstrip('\n')
 ALERT_RETRY_SRC = read_v5('code/_alert_retry.js').rstrip('\n')
 RUN_GUARD_SRC = read_v5('code/_run_guard.js').rstrip('\n')
+CATCHUP_SRC = read_v5('code/_catchup.js').rstrip('\n')   # R94 follow-up: CU.lastDue, so a scheduled run can name its own due slot
+
+
+def _schedule_of(wfobj):
+    """R94 follow-up: the Schedule Trigger of a workflow as {trigger, cron, tz, wf} (the same five-field cron build_catchup.py plans with), or {}."""
+    trig = [n for n in wfobj['nodes'] if n.get('type') == 'n8n-nodes-base.scheduleTrigger']
+    if not trig:
+        return {}
+    assert len(trig) == 1, 'R94: more than one Schedule Trigger in ' + str(wfobj.get('name'))
+    ivs = trig[0]['parameters']['rule']['interval']; assert len(ivs) == 1, 'R94: a Schedule Trigger with several rules in ' + str(wfobj.get('name'))
+    iv = ivs[0]; f = iv.get('field')
+    if f == 'cronExpression':
+        cron = ' '.join(str(iv['expression']).split()[-5:])
+    elif f == 'weeks':
+        cron = '%d %d * * %s' % (int(iv['triggerAtMinute']), int(iv['triggerAtHour']), ','.join(str(d) for d in (iv.get('triggerAtDay') or [])) or '*')
+    elif f == 'days':
+        cron = '%d %d * * *' % (int(iv['triggerAtMinute']), int(iv['triggerAtHour']))
+    else:
+        raise AssertionError('R94: schedule field "' + str(f) + '" in ' + str(wfobj.get('name')) + ' is not taught to the run guard')
+    from env_settings import ENV
+    tz = (wfobj.get('settings') or {}).get('timezone') or (ENV.get('GENERIC_TIMEZONE') or '').strip() or 'America/New_York'
+    return {'trigger': trig[0]['name'], 'cron': cron, 'tz': tz, 'wf': str(wfobj.get('id'))}
 
 
 def inline_kits(src):
     """Replace the kit markers with the one copy of each kit (the same markers every builder uses)."""
     return (src.replace('/*__OPS_ALERT__*/', OPS_ALERT_SRC)
                .replace('/*__ALERT_RETRY__*/', ALERT_RETRY_SRC)
-               .replace('/*__RUN_GUARD__*/', RUN_GUARD_SRC))
+               .replace('/*__RUN_GUARD__*/', RUN_GUARD_SRC)
+               .replace('/*__CATCHUP__*/', CATCHUP_SRC))
 
 
 def _if_params(nid, expr):
@@ -487,6 +571,16 @@ def _ai_nodes_of(wfobj):
     return sorted(out)
 
 
+def _no_dfs_probe(spec):
+    """W3-F: a workflow that never calls DataForSEO (the Reply Reader) has nothing to read the account balance for. Its two probe nodes keep their
+    names and place on the chain (the reserve and the settle read them by name, and read nothing when they answer empty) but are a no-op Code
+    node, so the workflow holds no DataForSEO call and the in-200 ratchet (harness/in200_baseline.json) does not grow."""
+    for k in ('credentials', 'retryOnFail', 'maxTries', 'waitBetweenTries'): spec.pop(k, None)
+    spec['type'], spec['typeVersion'] = 'n8n-nodes-base.code', 2
+    spec['parameters'] = {'jsCode': 'return [{ json: {} }];   // no DataForSEO in this workflow: no account balance to read'}
+    return spec
+
+
 def ledger_mainline(wfobj, wiring):
     """R17: move everything the plan node used to feed to the far side of the reserve chain, so no paid node of the workflow can run
     before the ledger row exists. Called at WRITE time, when every connection of the workflow is already made, and it is the one place
@@ -521,6 +615,7 @@ def ledger_mainline(wfobj, wiring):
                                'credentials': {'httpBasicAuth': {'id': 'SEOcredDataForSE', 'name': 'DataForSEO'}},
                                'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True,
                                'retryOnFail': True, 'maxTries': 3, 'waitBetweenTries': 5000})
+        if wiring.get('no_dfs'): _no_dfs_probe(wfobj['nodes'][-1])
         eo = conns.setdefault(ensure, {}).setdefault('main', [])
         while not eo: eo.append([])
         assert any(t['node'] == wiring['reserve'] for t in eo[0]), 'R32: ' + ensure + ' does not feed ' + wiring['reserve']
@@ -543,6 +638,20 @@ def ledger_mainline(wfobj, wiring):
         conns.setdefault(openrun, {})['main'] = [[{'node': wiring['reserve'], 'type': 'main', 'index': 0}]]
         nodes[openrun] = wfobj['nodes'][-1]
     wiring['open_runs'] = openrun
+    # ---- R94 follow-up: the catch-up's own records (kind `catchup` in seo_cache), read before the reservation, only for a workflow that has a
+    # Schedule Trigger. The code keeps this workflow's `catchup:<id>:` keys.
+    sched = _schedule_of(wfobj)
+    catchrec = 'Load Catch-up Records (' + tag + ')'
+    if sched and catchrec not in nodes:
+        cx, cy = nodes[openrun]['position']
+        wfobj['nodes'].append({'parameters': dt_get_all_where_params(CACHE_TABLE, [('kind', 'eq', 'catchup')]),
+                               'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + catchrec)), 'name': catchrec,
+                               'type': DT_TYPE, 'typeVersion': DT_VERSION, 'position': [cx + 110, cy + 150],
+                               'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True})
+        nodes[catchrec] = wfobj['nodes'][-1]
+        conns.setdefault(openrun, {})['main'] = [[{'node': catchrec, 'type': 'main', 'index': 0}]]
+        conns.setdefault(catchrec, {})['main'] = [[{'node': wiring['reserve'], 'type': 'main', 'index': 0}]]
+    wiring['catchup_records'] = catchrec if sched else ''
     assert resume not in nodes, 'R17: ' + resume + ' already exists (ledger_mainline ran twice)'
     outs = conns.setdefault(plan, {}).setdefault('main', [])
     while not outs: outs.append([])
@@ -553,7 +662,10 @@ def ledger_mainline(wfobj, wiring):
     x, y = nodes[reserve]['position']
     wfobj['nodes'].append({'parameters': {'jsCode': inline_kits(LEDGER_RESUME_JS)
                                           .replace('__PLAN__', plan).replace('__LEDGER__', openrun).replace('__RESERVE__', reserve)
-                                          .replace('__MODE__', str(wiring['mode'])).replace('__WHERE__', str(wfobj.get('name') or tag))},
+                                          .replace('__ROW__', str(wiring['reserve']))
+                                          .replace('__SCHED_JSON__', _json.dumps(sched)).replace('__CATCHREC__', catchrec)
+                                          .replace('__MODE__', str(wiring['mode'])).replace('__WHERE__', str(wfobj.get('name') or tag))
+                                          .replace('__NO_GATE__', 'true' if wiring.get('no_gate') else 'false')},
                            'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + resume)), 'name': resume,
                            'type': 'n8n-nodes-base.code', 'typeVersion': 2, 'position': [x + 220, y]})
     nodes[resume] = wfobj['nodes'][-1]
@@ -582,6 +694,36 @@ def ledger_mainline(wfobj, wiring):
         nodes[nm]['onError'] = 'continueRegularOutput'
     wiring['resume'] = resume
     wiring['guard'] = {'load': openrun, 'gate': resume, 'if': allow, 'refuse': refuse, 'kit': 'RG'}
+    # ---- R96 / R116 (2026-10-16, re-rating C-20 / D-20, build section 96): what a refusal does after it marks its row ----
+    # R96: the refusal used to fall into the settle chain like any other loose end — *DFS Balance End* (exec 624 waited 5 min 33 s on it
+    # behind another run's DataForSEO calls), *Load Run Ledger*, *Ledger Settle* (which computed "$0.45 estimated, done" for a run that
+    # spent nothing) and *Settle Run Ledger* (whose `status = reserved` filter then matched nothing, so the figure was dropped). The
+    # refused row is already settled by the refusal itself — `refused`, $0, `settled_at`, the reason — so the run ends at its own notice.
+    # R116: and the caller who is waiting for an on-demand run hears why it did not run: `{stage: rejected, status: rejected, error,
+    # request_id}` to the trigger's callback (v5/code/Refusal_Notice.js); a scheduled refusal posts nothing.
+    notice, tell, post = 'Refusal Notice (' + tag + ')', 'Tell Caller (' + tag + ')?', 'Post Refusal (' + tag + ')'
+    assert not any(n in nodes for n in (notice, tell, post)), 'R116: the refusal notice of ' + str(wfobj.get('name')) + ' is already built'
+    rx, ry = nodes[refuse]['position']
+    wfobj['nodes'].append({'parameters': {'jsCode': read_v5('code/Refusal_Notice.js').replace('__RESUME__', resume)},
+                           'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + notice)), 'name': notice,
+                           'type': 'n8n-nodes-base.code', 'typeVersion': 2, 'position': [rx + 220, ry],
+                           'onError': 'continueRegularOutput', 'executeOnce': True})
+    wfobj['nodes'].append({'parameters': _if_params(str(_uuid.uuid5(_LEDGER_NS, tell + ':cond')), '{{ !$json.skip }}'),
+                           'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + tell)), 'name': tell,
+                           'type': 'n8n-nodes-base.if', 'typeVersion': 2.3, 'position': [rx + 440, ry]})
+    wfobj['nodes'].append({'parameters': {'method': 'POST', 'url': '={{ $json.callback_url }}', 'sendBody': True, 'specifyBody': 'json',
+                                          'jsonBody': '={{ JSON.stringify($json.body) }}', 'options': {'timeout': 30000}},
+                           'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + post)), 'name': post,
+                           'type': 'n8n-nodes-base.httpRequest', 'typeVersion': 4.5, 'position': [rx + 660, ry - 100],
+                           'onError': 'continueRegularOutput', 'retryOnFail': True, 'maxTries': 3, 'waitBetweenTries': 5000})
+    for nm in (notice, tell, post): nodes[nm] = next(n for n in wfobj['nodes'] if n['name'] == nm)
+    conns.setdefault(refuse, {})['main'] = [[{'node': notice, 'type': 'main', 'index': 0}]]
+    conns.setdefault(notice, {})['main'] = [[{'node': tell, 'type': 'main', 'index': 0}]]
+    conns.setdefault(tell, {})['main'] = [[{'node': post, 'type': 'main', 'index': 0}], []]
+    wiring['guard'].update({'notice': notice, 'tell': tell, 'post': post, 'post_max_tries': 3})
+    # the refusal IS where a refused row is settled (it writes status, $0, settled_at and the reason), so it is one of the run's settle
+    # ends — and the walk below must not wire its branch into the balance read and the settle code
+    wiring['settle_from'] = sorted(set(wiring.get('settle_from') or []) | {refuse})
     # ---- R31 (2026-10-14, FIX_PLAN §3.13): every end of the run reaches the settle ----
     # The settle hung off the report node only, so a run that found nothing to do (the `Nothing To Do (…)` branch every monitor has)
     # reserved a row and then finished without ever settling it — the row sat `reserved` against the guard until *Release Stale Runs*
@@ -590,7 +732,7 @@ def ledger_mainline(wfobj, wiring):
     # connection is wired into the settle here, in the one place the three builders share.
     settle_code = 'Ledger Settle (' + tag + ')'
     outs_of = lambda nd: [t['node'] for lst in ((conns.get(nd) or {}).get('main') or []) for t in (lst or [])]
-    blocked = set(wiring.get('settle_from') or []) | {settle_code, wiring['settle']}
+    blocked = set(wiring.get('settle_from') or []) | {settle_code, wiring['settle']}   # R96: settle_from holds the refusal, so its branch stays apart
     seen, stack = {resume}, [resume]
     while stack:
         cur = stack.pop()
@@ -606,6 +748,18 @@ def ledger_mainline(wfobj, wiring):
     wiring['settle_from_ends'] = loose   # the branches that used to finish without settling
     _ledger_settle_chain(wfobj, wiring, tag, settle_code, conns, nodes)
     _alert_retry_chain(wfobj, wiring, tag, conns, nodes)
+    # R96: the proof, recorded for the harness (S115) — every node a refusal can reach. None of them may be a DataForSEO call, the balance
+    # read or the settle chain.
+    seen_r, stack_r = {refuse}, [refuse]
+    while stack_r:
+        for t in outs_of(stack_r.pop()):
+            if t not in seen_r: seen_r.add(t); stack_r.append(t)
+    wiring['guard']['refusal_path'] = sorted(seen_r)
+    for n in seen_r:
+        nd = nodes.get(n) or {}
+        assert 'dataforseo.com' not in str((nd.get('parameters') or {}).get('url') or ''), 'R96: the refusal of ' + str(wfobj.get('name')) + ' reaches ' + n
+        assert n not in (wiring.get('balance_end'), wiring.get('ledger_load'), settle_code, wiring['settle']), \
+            'R96: the refusal of ' + str(wfobj.get('name')) + ' reaches the settle chain at ' + n
     return resume
 
 
@@ -689,6 +843,7 @@ def _ledger_settle_chain(wfobj, wiring, tag, settle_code, conns, nodes):
                            'credentials': {'httpBasicAuth': {'id': 'SEOcredDataForSE', 'name': 'DataForSEO'}},
                            'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True,
                            'retryOnFail': True, 'maxTries': 3, 'waitBetweenTries': 5000})
+    if wiring.get('no_dfs'): _no_dfs_probe(wfobj['nodes'][-1])
     wfobj['nodes'].append({'parameters': dt_get_all_where_params(RUN_LEDGER_TABLE, [
                                ('created_at', 'gte', '={{ new Date(Date.now() - ' + str(LEDGER_WINDOW_MS) + ').toISOString() }}')]),
                            'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + load)), 'name': load,

@@ -350,7 +350,8 @@
       "crawl_js": true,
       "competitors": [
         "rival.ae"
-      ]
+      ],
+      "ga4_property_id": "543096312"
     },
     "expect": {
       "mode": "audit",
@@ -383,7 +384,8 @@
       "competitors": [
         "azentio.com",
         "cleartax.com"
-      ]
+      ],
+      "ga4_property_id": "543096312"
     },
     "expect": {
       "include_full_report": false,
@@ -454,6 +456,10 @@
         "ai_engines": "chatgpt, perplexity",
         "ai_prompts_max": 30,
         "ai_pulse": false,
+        "ai_personas": "",
+        "ai_markets": "",
+        "ai_pulse_mode": "auto",
+        "ai_pulse_per_week": 0,
         "ai_growth": true,
         "ai_pages_month": 2,
         "backlinks": false,

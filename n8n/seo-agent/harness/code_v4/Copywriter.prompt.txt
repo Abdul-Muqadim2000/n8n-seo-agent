@@ -4,6 +4,7 @@ PAGE
 Target Keyword: {{ $json.keyword }} · Country: {{ $json.country }} · Page Type: {{ $json.page_type }} · Goal: {{ $json.goal || 'leads' }}
 {{ $json.existing_page ? 'This content replaces the existing page at ' + $json.existing_page.url + '. Keep every true fact from it; improve everything else.' : '' }}
 {{ $json.ai_target ? 'AI ANSWER TARGET: this page must be the one AI assistants cite for "' + $json.ai_target.question + '". Answer that question in the first 40-60 words after the H1 (the Quick answer), give each search the assistants run (' + (($json.ai_target.fanout || []).map(f => '"' + f + '"').join(', ') || 'see the brief') + ') its own question-style H2 answered in its first sentence, keep any comparison neutral (never put this business first), and use only the verified figures with their linked sources.' : '' }}
+{{ ($json.verdict_exclusions || []).length ? 'LEAVE OUT (the verdict on this keyword: these do not match what its buyers want; no section, heading or question about them): ' + $json.verdict_exclusions.map(e => e.topic).join('; ') + '.' : '' }}
 
 WHO YOU ARE WRITING FOR
 {{ $json.content_brief.target_audience || $json.audience || 'Not provided' }}
@@ -20,7 +21,8 @@ Client facts: {{ ($json.content_brief.client_facts || []).join(' · ') || 'none'
 {{ $json.business_facts ? 'Facts given by the client: ' + $json.business_facts : '' }}
 Verified external facts — cite ONLY these numbers, each with its source as a Markdown link [source](url):
 {{ ($json.content_brief.evidence_plan || []).map(e => '- ' + e.fact + ' — ' + e.source_url).join('\n') || 'none — use [Statistic] for any external number' }}
-{{ $json.existing_page_text ? 'CURRENT PAGE TEXT (keep its true facts):\n' + $json.existing_page_text.slice(0, 5000) : '' }}
+{{ $json.existing_page_text ? 'CURRENT PAGE (keep its true facts, dates, figures and named people; the whole page is given' + ($json.existing_page_text.length > 16000 ? ' up to its first 16,000 characters' : '') + '):\n' + ($json.existing_page_facts_text ? $json.existing_page_facts_text + '\n' : '') + ($json.existing_page_tables ? $json.existing_page_tables + '\n' : '') + $json.existing_page_text.slice(0, 16000) : '' }}
+{{ (/united arab emirates/i.test($json.country || '') && /e-?invoic|peppol|\basp\b/i.test(($json.keyword || '') + ' ' + ($json.page_type || ''))) ?'WORDING: in the UAE the Ministry of Finance accredits e-invoicing service providers (the Federal Tax Authority administers the tax). Write "accredited under the Ministry of Finance\'s e-invoicing framework", never "FTA-accredited".' : '' }}
 
 AUTHOR AND PROOF (E-E-A-T)
 {{ $json.eeat_context || '' }}

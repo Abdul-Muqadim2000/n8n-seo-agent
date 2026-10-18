@@ -1,4 +1,5 @@
 import { eq, sql } from 'drizzle-orm';
+import { audit } from '../services/audit';
 import type { FastifyInstance } from 'fastify';
 import { orgBudgetSchema, type AdminOrg } from '@seo/shared';
 import { isPlatformAdmin, isUuid, requireUser } from '../auth/access';
@@ -22,12 +23,16 @@ export async function adminRoutes(app: FastifyInstance) {
   const list = async (orgId?: string): Promise<AdminOrg[]> => {
     const since = monthStart();
     const orgs = orgId ? await db.query.organizations.findMany({ where: eq(schema.organizations.id, orgId) }) : await db.query.organizations.findMany();
+    // a run counts at what it cost (settled), then the engine's estimate, then the app's — never only the app's reservation; a
+    // search-data-only figure counts for no less than the whole-run estimate (the same rule as services/spend.ts and countedRunCost)
     const counts = await db.execute<{ org_id: string; members: number; sites: number; runs: number; est: number }>(sql`
       select o.id as org_id,
         (select count(*)::int from ${schema.memberships} m where m.org_id = o.id) as members,
         (select count(*)::int from ${schema.sites} s where s.org_id = o.id) as sites,
         (select count(*)::int from ${schema.runs} r where r.org_id = o.id and r.created_at >= ${since} and r.status <> 'failed') as runs,
-        (select coalesce(sum(r.estimated_cost_usd), 0)::float from ${schema.runs} r where r.org_id = o.id and r.created_at >= ${since} and r.status <> 'failed')
+        (select coalesce(sum(case when r.actual_cost_usd is not null and r.actual_cost_partial
+            then greatest(r.actual_cost_usd, coalesce(r.engine_cost_estimate_usd, r.estimated_cost_usd))
+            else coalesce(r.actual_cost_usd, r.engine_cost_estimate_usd, r.estimated_cost_usd) end), 0)::float from ${schema.runs} r where r.org_id = o.id and r.created_at >= ${since} and r.status <> 'failed')
           + (select coalesce(sum(k.cost_usd), 0)::float from ${schema.keywordChecks} k where k.org_id = o.id and k.created_at >= ${since} and k.status <> 'failed') as est
       from ${schema.organizations} o`);
     const by = new Map(counts.map((c) => [c.org_id, c]));
@@ -66,6 +71,12 @@ export async function adminRoutes(app: FastifyInstance) {
       .where(eq(schema.organizations.id, orgId))
       .returning({ id: schema.organizations.id });
     if (!rows.length) throw notFound('Company not found');
+    await audit(req, orgId, {
+      action: 'company.admin_changed',
+      actor: { type: 'platform_admin', userId: req.user?.id ?? null, label: req.user?.email ?? 'platform administrator' },
+      target: { type: 'company', id: orgId },
+      details: { monthlyBudgetUsd: body.monthlyBudgetUsd, ...(body.disabled !== undefined ? { disabled: body.disabled } : {}) },
+    });
     return (await list(orgId))[0];
   });
 

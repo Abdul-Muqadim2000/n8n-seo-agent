@@ -17,6 +17,7 @@ import { Select } from '@/components/ui/field';
 import { Delta, PageHeader, scoreTone } from '@/components/ui/misc';
 import { CountUp, DisclosureButton, DistributionBar, HeroStat, IconTile, InfoTip, InsightItem, MetricCard, ScoreRing, Stagger, SummaryHero, type IconTileTone } from '@/components/insight';
 import { DataTable, type Column } from '@/components/ui/table';
+import { TicketButton, useTicketStates } from '@/components/site/TicketButton';
 import { DataGate, FillHeight, FilterChips, Panel, SectionHeading, ToolButton, useSitePage } from './_components/kit';
 import { countBy, dateLabelFormat, diff, plural, sortByDate, timeAxisFormat } from './_components/format';
 import { FileChip, ReportList, isFixPackFile } from './_components/reports';
@@ -106,7 +107,12 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
     );
 
   const sel: AuditPoint = audits.find((a) => a.auditId === d.selectedAuditId) ?? audits[audits.length - 1];
-  const prev: AuditPoint | null = audits.find((a) => a.auditId === d.previousAuditId) ?? (audits.indexOf(sel) > 0 ? audits[audits.indexOf(sel) - 1] : null);
+  // R66: compare only with the audit the server chose — the previous one of the same report type. The old fallback to the list
+  // neighbour is gone: a full report and a technical audit score different findings on different weights, so the neighbour of the
+  // other type is not a baseline (it gave "25 new issues" and "down from 83 to 70").
+  const prev: AuditPoint | null = audits.find((a) => a.auditId === d.previousAuditId) ?? null;
+  // one score scale per chart: the trend lines hold the selected audit's own type only
+  const trend = audits.filter((a) => a.reportType === sel.reportType);
   const st = countBy(d.findings, (f) => f.status);
   const tone = scoreTone(sel.healthScore);
   const fixReport = sortByDate(d.reports, (r) => r.receivedAt, 'desc').find((r) => r.files.some(isFixPackFile));
@@ -124,8 +130,10 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
         title={healthHeadline(sel)}
         description={
           prev
-            ? `Since the audit of ${fmtDate(prev.auditedAt)}: ${plural(st.fixed ?? 0, 'issue')} fixed, ${plural(st.new ?? 0, 'new issue')}, ${st.open ?? 0} still open. Health score ${sel.healthScore >= prev.healthScore ? 'up' : 'down'} from ${prev.healthScore} to ${sel.healthScore}.`
-            : 'The first audit of this website. The next one shows what you fixed.'
+            ? `Since the ${reportTypeLabel(prev.reportType).toLowerCase()} of ${fmtDate(prev.auditedAt)}: ${plural(st.fixed ?? 0, 'issue')} fixed, ${plural(st.new ?? 0, 'new issue')}, ${st.open ?? 0} still open. Health score ${sel.healthScore >= prev.healthScore ? 'up' : 'down'} from ${prev.healthScore} to ${sel.healthScore}.`
+            : audits.some((a) => a !== sel && a.reportType !== sel.reportType)
+              ? `The first ${reportTypeLabel(sel.reportType).toLowerCase()} of this website. It is not compared with the ${/full/i.test(sel.reportType) ? 'technical audits' : 'full SEO reports'}: they check different things and score on different weights.`
+              : 'The first audit of this website. The next one shows what you fixed.'
         }
         aside={
           <div className="flex items-center gap-4 md:flex-col md:gap-2">
@@ -158,7 +166,7 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
           }
           delta={<Delta value={scoreDelta} suffix=" pts" digits={0} />}
           deltaLabel={prev ? `vs ${fmtDate(prev.auditedAt)}` : 'first audit'}
-          sparkline={<Sparkline data={audits.map((a) => ({ healthScore: a.healthScore }))} dataKey="healthScore" />}
+          sparkline={<Sparkline data={trend.map((a) => ({ healthScore: a.healthScore }))} dataKey="healthScore" />}
           info="80 and above is good, 60–79 needs work, below 60 is poor"
           meta={
             <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -172,8 +180,8 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
           icon={<ListChecks />}
           value={<CountUp value={sel.findings} />}
           delta={<Delta value={diff(sel.findings, prev?.findings)} suffix="" digits={0} upIsGood={false} />}
-          deltaLabel={prev ? 'vs previous audit' : undefined}
-          sparkline={<Sparkline data={audits.map((a) => ({ findings: a.findings }))} dataKey="findings" invert />}
+          deltaLabel={prev ? `vs previous ${reportTypeLabel(prev.reportType).toLowerCase()}` : undefined}
+          sparkline={<Sparkline data={trend.map((a) => ({ findings: a.findings }))} dataKey="findings" invert />}
           meta={prev ? `${st.new ?? 0} new · ${st.fixed ?? 0} fixed · ${st.open ?? 0} still open` : 'The next audit shows what you fixed'}
         />
         <MetricCard
@@ -200,7 +208,7 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
           label="Pages crawled"
           icon={<FileSearch />}
           value={<CountUp value={sel.pagesCrawled} />}
-          sparkline={audits.length > 1 ? <Sparkline data={audits.map((a) => ({ pagesCrawled: a.pagesCrawled }))} dataKey="pagesCrawled" /> : undefined}
+          sparkline={trend.length > 1 ? <Sparkline data={trend.map((a) => ({ pagesCrawled: a.pagesCrawled }))} dataKey="pagesCrawled" /> : undefined}
           meta={`${reportTypeLabel(sel.reportType)} · ${sel.scheduled ? 'monthly schedule' : 'run on demand'} · ${fmtDate(sel.auditedAt)}`}
         />
       </div>
@@ -247,21 +255,21 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <ChartCard
           title={<ChartTitle icon={<TrendingUp />}>Health score over time</ChartTitle>}
-          description={`${plural(audits.length, 'audit')} · 80 and above is good`}
+          description={`${plural(trend.length, reportTypeLabel(sel.reportType).toLowerCase())} · 80 and above is good${trend.length < audits.length ? ' · other report types score on other weights and are left out' : ''}`}
           loading={refetching}
           table={{
             columns: [
-              { key: 'auditedAt', label: 'Audit', format: (v) => dateLabelFormat(audits.map((a) => a.auditedAt))(String(v)) },
+              { key: 'auditedAt', label: 'Audit', format: (v) => dateLabelFormat(trend.map((a) => a.auditedAt))(String(v)) },
               { key: 'healthScore', label: 'Score', align: 'right' },
               { key: 'grade', label: 'Grade' },
               { key: 'findings', label: 'Issues', align: 'right' },
               { key: 'pagesCrawled', label: 'Pages', align: 'right' },
             ],
-            rows: [...audits].reverse().map((a) => ({ ...a })),
+            rows: [...trend].reverse().map((a) => ({ ...a })),
           }}
         >
           <FillHeight min={240}>
-            {(h) => <TimeSeriesChart data={audits.map((a) => ({ auditedAt: a.auditedAt, healthScore: a.healthScore }))} xKey="auditedAt" xFormat={timeAxisFormat(audits.map((a) => a.auditedAt))} series={[{ key: 'healthScore', label: 'Health score', format: (v) => `${v}/100` }]} yDomain={[0, 100]} reference={{ y: 80, label: 'Good' }} area height={h} />}
+            {(h) => <TimeSeriesChart data={trend.map((a) => ({ auditedAt: a.auditedAt, healthScore: a.healthScore }))} xKey="auditedAt" xFormat={timeAxisFormat(trend.map((a) => a.auditedAt))} series={[{ key: 'healthScore', label: 'Health score', format: (v) => `${v}/100` }]} yDomain={[0, 100]} reference={{ y: 80, label: 'Good' }} area height={h} />}
           </FillHeight>
         </ChartCard>
         <CategoryChart rows={d.byCategory} loading={refetching} />
@@ -417,12 +425,16 @@ const STATUS_META: Record<FindingStatus, { label: string; node: ReactNode }> = {
   new: { label: 'New', node: <Badge tone="accent" icon={<Sparkles className="size-3" aria-hidden />}>New</Badge> },
   open: { label: 'Open', node: <Badge icon={<Circle className="size-3" aria-hidden />}>Open</Badge> },
   fixed: { label: 'Fixed', node: <Badge tone="good" icon={<CheckCircle2 className="size-3" aria-hidden />}>Fixed</Badge> },
+  no_longer_seen: { label: 'No longer seen', node: <Badge icon={<Circle className="size-3" aria-hidden />}>No longer seen</Badge> },
 };
 
 type SevFilter = Sev | 'all';
 type StatusFilter = FindingStatus | 'all';
 
 function FindingsTable({ findings: all, hasPrevious, auditId }: { findings: Finding[]; hasPrevious: boolean; auditId: string }) {
+  const { site } = useSitePage();
+  // G4: with Jira / Linear / Asana connected, every open finding can become one ticket, and its state shows here
+  const ticketing = useTicketStates(site.id);
   const [sev, setSev] = useState<SevFilter>('all');
   const [status, setStatus] = useState<StatusFilter>('all');
   const [cat, setCat] = useState('all');
@@ -470,6 +482,9 @@ function FindingsTable({ findings: all, hasPrevious, auditId }: { findings: Find
     ...(hasPrevious ? [{ key: 'status', header: 'Status', sortValue: (f: Finding) => ['new', 'open', 'fixed'].indexOf(f.status), cell: (f: Finding) => STATUS_META[f.status]?.node ?? f.status }] : []),
     // G11 (2026-10-13): mark it fixed and the daily key-page watch judges that one finding again the next morning
     { key: 'recheck', header: 'Fix check', sortValue: (f: Finding) => f.recheck?.state ?? '', cell: (f: Finding) => <RecheckCell finding={f} auditId={auditId} /> },
+    ...(ticketing
+      ? [{ key: 'ticket', header: 'Ticket', cell: (f: Finding) => (f.status === 'fixed' || !f.key ? <span className="text-ink-3">—</span> : <TicketButton siteId={site.id} source={{ type: 'finding', auditId, findingKey: f.key }} />) }]
+      : []),
   ];
 
   if (!all.length) return <EmptyState className="py-8" title="No findings stored for this audit" description="Audits before v4.5 stored only their score; run a new audit for the full list." />;

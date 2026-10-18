@@ -1,0 +1,4 @@
+techand.example:443 66.249.64.8 - - [15/Oct/2026:12:10:00 +0200] "GET /faq HTTP/1.1" 200 1000 "-" "Googlebot/2.1 (+http://www.google.com/bot.html)" 45000
+www.techand.example:443 66.249.64.8 - - [15/Oct/2026:12:10:01 +0200] "GET /faq/ HTTP/1.1" 200 1000 "-" "Googlebot/2.1 (+http://www.google.com/bot.html)" 47000
+other.example:443 66.249.64.8 - - [15/Oct/2026:12:10:02 +0200] "GET /x HTTP/1.1" 200 1 "-" "Googlebot/2.1 (+http://www.google.com/bot.html)" 1000
+techand.example:443 17.241.208.170 - - [15/Oct/2026:12:11:00 +0200] "HEAD /faq HTTP/1.1" 200 - "-" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15 (Applebot/0.1; +http://www.apple.com/go/applebot)" 9000

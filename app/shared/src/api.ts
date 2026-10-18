@@ -1,4 +1,5 @@
 // Response shapes of the app's REST API (server/src/routes/*), shared with the React client.
+import type { OrgAgencyInfo, OrgKind, PortalBrand } from './agency';
 import type { ModeId, Role } from './constants';
 import type { MonitorSettings, ProfileFields, RunInput } from './schemas';
 
@@ -18,6 +19,8 @@ export interface User {
   hasPassword: boolean;
   googleLinked: boolean;
   createdAt: string;
+  /** G1: at least one second factor (authenticator app or passkey) is set up */
+  mfaEnabled: boolean;
 }
 
 export interface OrgSummary {
@@ -27,6 +30,11 @@ export interface OrgSummary {
   role: Role;
   onboardingStep: string;
   onboardedAt: string | null;
+  /** G1: the company requires two-step verification */
+  requiresMfa?: boolean;
+  /** G5: standard / agency / client workspace, and the agency a client workspace belongs to */
+  kind?: OrgKind;
+  agencyName?: string | null;
 }
 
 export interface Me {
@@ -59,6 +67,14 @@ export interface Org {
   onboardedAt: string | null;
   createdAt: string;
   role: Role;
+  /** G5 (app/docs/WHITE_LABEL.md): standard company, agency, or an agency's client workspace */
+  kind: OrgKind;
+  /** a client workspace: its agency (the id only for the agency's own staff) */
+  agency: OrgAgencyInfo | null;
+  /** the brand client-facing surfaces of this company use (white-label on), else null (the app's own) */
+  brand: PortalBrand | null;
+  /** a client workspace: a live publish / an outreach send waits for the client's approval */
+  clientApproval: boolean;
 }
 
 export type TrackingStatus = 'not_started' | 'active' | 'paused';
@@ -129,6 +145,8 @@ export interface Run {
   siteDomain: string | null;
   userId: string | null;
   userName: string | null;
+  /** G4: the API key that started it (the run is still the key creator's); null for a run started in the app */
+  apiKeyName?: string | null;
   mode: ModeId;
   title: string;
   status: RunStatus;
@@ -143,6 +161,8 @@ export interface Run {
   engineCostBasis: string | null;
   /** part of `actualCostUsd` is the engine's own estimate (the model calls that stream report no token usage) */
   actualCostEstimated: boolean;
+  /** R102 / R115: `actualCostUsd` is search data only; the run did not report its model calls, so it is not the whole cost */
+  actualCostPartial: boolean;
   etaMinutes: number;
   input: RunInput;
   createdAt: string;
@@ -154,7 +174,8 @@ export interface Run {
 
 export interface ReportFile {
   id: string;
-  kind: 'pdf' | 'docx' | 'doc' | 'html' | 'md' | 'json' | 'zip' | 'csv' | 'txt' | 'other';
+  /** `image` since 2026-10-18 (D-13): a page's hero and in-body images (.webp / .png / .jpg) were listed as a generic "File" */
+  kind: 'pdf' | 'docx' | 'doc' | 'html' | 'md' | 'json' | 'zip' | 'csv' | 'txt' | 'image' | 'other';
   fileName: string;
   mimeType: string;
   size: number;
@@ -194,6 +215,12 @@ export interface Member {
   avatarUrl: string | null;
   role: Role;
   joinedAt: string;
+  /** G1: the member has two-step verification (owners and admins see it; false for viewers' view) */
+  mfaEnabled?: boolean;
+  /** G1: how the person came in (owner / invite / jit = first SSO sign-in / scim) */
+  provisionedBy?: 'owner' | 'invite' | 'jit' | 'scim';
+  /** G1: switched off by the company's identity provider (SCIM); no access until reactivated */
+  deactivated?: boolean;
 }
 
 export interface Invitation {
@@ -205,6 +232,8 @@ export interface Invitation {
   expiresAt: string;
   /** only returned right after creation, so the inviter can copy it */
   inviteUrl?: string;
+  /** D-10: right after creation — whether this server e-mails invitations at all (no mail account = the link is the only way) */
+  emailed?: boolean;
 }
 
 export interface InvitationPreview {
@@ -214,13 +243,19 @@ export interface InvitationPreview {
   inviterName: string | null;
   valid: boolean;
   reason: string | null;
+  /** D-11: the signed-in person already belongs to the invitation's company (they joined from it): where to go */
+  joinedOrgId?: string;
 }
 
 export interface Usage {
   month: string;
   budgetUsd: number;
   estimatedUsd: number;
+  /** runs that reported their whole cost (search data and model calls) */
   actualUsd: number;
+  /** R102: runs that reported search data only; counted in `estimatedUsd` at the best whole-run estimate, never in `actualUsd` */
+  actualPartialUsd: number;
+  actualPartialRuns: number;
   remainingUsd: number;
   runs: number;
   byMode: { mode: ModeId; runs: number; estimatedUsd: number }[];

@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { z } from 'zod';
 
 // Settings come from the environment. In Docker Compose the app reads ../n8n/.env (the SEO_* secrets the n8n stack already uses:
@@ -11,6 +13,8 @@ const str = (def = '') => z.string().optional().transform((v) => (v == null ? de
 
 const Env = z.object({
   NODE_ENV: str('development'),
+  /** pino level (tests: silent) */
+  LOG_LEVEL: str('info'),
   PORT: str('4000').transform(Number),
   HOST: str('0.0.0.0'),
   /** where people open the app (used for links in e-mails and the Google redirect) */
@@ -33,12 +37,22 @@ const Env = z.object({
   /** v4.13 Link Builder: start a run on demand, and read one reply (synchronous) */
   N8N_LINK_BUILDER_PATH: str('/webhook/seo-link-builder'),
   N8N_REPLY_PATH: str('/webhook/seo-reply-read'),
+  /** B3-7: the Publish Check (SEOagentPubCheck): the deterministic half of the content gate over a supplied page, synchronous, free */
+  N8N_PUBLISH_CHECK_PATH: str('/webhook/seo-publish-check'),
   /** v4.13: 32 bytes (64 hex or base64) that encrypt mailbox passwords; without it no mailbox can be connected */
   MAILBOX_KEY: str(''),
+  /** G1: 32 bytes (64 hex or base64) that seal authenticator-app secrets and OIDC client secrets; empty = MAILBOX_KEY is used */
+  IDENTITY_KEY: str(''),
+  /** G1: the name authenticator apps show beside the account (default: SEO_BRAND) */
+  MFA_ISSUER: str(''),
+  /** G1: let an OIDC issuer resolve to a private address (a test IdP in the same Docker network); never in production */
+  SSO_ALLOW_PRIVATE_HOSTS: bool(false),
   /** v4.13: the sender and inbox jobs (off in tests or on a second server) */
   LINK_BUILDER_JOBS: bool(true),
   /** L1: check the recipient's domain for a mail server before the first e-mail; false only for a local mail test with made-up domains */
   OUTREACH_MX_CHECK: bool(true),
+  /** G2: a CMS on localhost / a private address (a local WordPress in development). Ignored in production. */
+  CMS_ALLOW_PRIVATE_HOSTS: bool(false),
   /** the n8n project of the SEO Agent's Data Tables (the app creates seo_ladder_settings there when it is missing) */
   N8N_PROJECT_ID: str('wo1WpMiHjdduGvfl'),
   /** this server as seen from n8n (callbacks), e.g. http://host.docker.internal:4000; https in production */
@@ -55,7 +69,7 @@ const Env = z.object({
   MS_OAUTH_CLIENT_SECRET: str(),
   MS_OAUTH_TENANT: str('common'),
 
-  SEO_BRAND: str('Dev SEO'),
+  SEO_BRAND: str('Alaventra'),
   SEO_MAIL_FROM: str(''),
   SEO_SMTP_HOST: str(''),
   SEO_SMTP_PORT: str('465').transform(Number),
@@ -86,6 +100,22 @@ const Env = z.object({
   /** "Choose keywords for me": the server starts the next recommended ladder for websites that switched it on (every 6 hours);
    * off = the setting is stored but nothing starts on its own */
   AUTO_START_LADDERS: bool(false),
+  /** gap #6 (app/docs/LOG_ANALYTICS.md): the crawler-log worker, retention and IP-list refresh (off on a second server or in tests) */
+  CRAWLER_JOBS: bool(true),
+  /** where uploaded / pushed logs wait until the worker has read them (deleted right after); local disk of this server */
+  LOG_SPOOL_DIR: str(''),
+  /** fetch the vendors' crawler IP lists once a day (off: the dated copy shipped with the code is used) */
+  BOT_RANGES_REFRESH: bool(true),
+  /** G5 (app/docs/WHITE_LABEL.md §5): the host agencies point their portal host's CNAME at; empty = the CNAME is not checked */
+  PORTAL_CNAME_TARGET: str(''),
+  /** G5: more hosts this app answers on besides APP_URL's (comma-separated), e.g. the callback host */
+  APP_EXTRA_HOSTS: str(''),
+  /** G5: refuse requests for any other host (421); default on when APP_URL is https */
+  PORTAL_STRICT_HOSTS: z.string().optional(),
+  /** G5: how often verified portal hosts are re-checked (hours) */
+  PORTAL_DOMAIN_CHECK_HOURS: str('6').transform(Number),
+  /** G5: the portal-host re-check timer (off on a second server or in tests) */
+  PORTAL_JOBS: bool(true),
 });
 
 const parsed = Env.safeParse(process.env);
@@ -98,6 +128,7 @@ const e = parsed.data;
 export const config = {
   env: e.NODE_ENV,
   isProd: e.NODE_ENV === 'production',
+  logLevel: e.LOG_LEVEL || 'info',
   port: e.PORT,
   host: e.HOST,
   appUrl: e.APP_URL,
@@ -114,6 +145,7 @@ export const config = {
     assessPath: e.N8N_ASSESS_PATH,
     linkBuilderPath: e.N8N_LINK_BUILDER_PATH,
     replyPath: e.N8N_REPLY_PATH,
+    publishCheckPath: e.N8N_PUBLISH_CHECK_PATH,
     projectId: e.N8N_PROJECT_ID,
   },
   callbackBaseUrl: e.CALLBACK_BASE_URL,
@@ -123,7 +155,10 @@ export const config = {
     enabled: !!(e.GOOGLE_OAUTH_CLIENT_ID && e.GOOGLE_OAUTH_CLIENT_SECRET),
     redirectUri: `${e.APP_URL}/api/auth/google/callback`,
   },
-  brand: e.SEO_BRAND,
+  // D-12 (re-rating 2026-10-17): the app's own name in what it says to customers (MCP server title, account e-mails). It was
+  // SEO_BRAND — the engine's report brand, read from n8n/.env and "Dev SEO" by default — so every MCP client of this install was told
+  // it was talking to "Dev SEO". The product is Alaventra (web/src/components/layout/Brand.tsx BRAND_NAME).
+  brand: 'Alaventra',
   mail: {
     from: e.SEO_MAIL_FROM || (e.SEO_SMTP_USER ? `${e.SEO_BRAND} <${e.SEO_SMTP_USER}>` : ''),
     host: e.SEO_SMTP_HOST,
@@ -153,6 +188,9 @@ export const config = {
   defaultBudgetUsd: e.DEFAULT_MONTHLY_BUDGET_USD,
   allowSignup: e.ALLOW_SIGNUP,
   mailboxKey: e.MAILBOX_KEY,
+  identityKey: e.IDENTITY_KEY || e.MAILBOX_KEY,
+  mfaIssuer: e.MFA_ISSUER || e.SEO_BRAND,
+  ssoAllowPrivateHosts: e.SSO_ALLOW_PRIVATE_HOSTS,
   // L4: OAuth mailboxes. The redirect URI must be registered in the owner's Google / Azure app exactly as it is built here.
   mailOauth: {
     gmail: { clientId: e.GMAIL_OAUTH_CLIENT_ID, clientSecret: e.GMAIL_OAUTH_CLIENT_SECRET, enabled: !!(e.GMAIL_OAUTH_CLIENT_ID && e.GMAIL_OAUTH_CLIENT_SECRET) },
@@ -160,6 +198,23 @@ export const config = {
     redirectUri: `${e.APP_URL}/api/mailbox-oauth/callback`,
   },
   linkBuilderJobs: e.LINK_BUILDER_JOBS,
+  crawlers: {
+    jobs: e.CRAWLER_JOBS,
+    spoolDir: e.LOG_SPOOL_DIR || join(tmpdir(), 'alaventra-logs'),
+    refreshRanges: e.BOT_RANGES_REFRESH,
+  },
   outreachMxCheck: e.OUTREACH_MX_CHECK,
+  // G2: never in production, whatever the variable says
+  cmsAllowPrivateHosts: e.CMS_ALLOW_PRIVATE_HOSTS && e.NODE_ENV !== 'production',
+  /** the engine's report brand (SEO_BRAND): printed into the documents it produces, replaced in what a white-label client gets */
+  engineBrand: e.SEO_BRAND,
+  portal: {
+    cnameTarget: e.PORTAL_CNAME_TARGET.toLowerCase().replace(/\.$/, ''),
+    extraHosts: e.APP_EXTRA_HOSTS.split(/[\s,]+/).map((x) => x.trim().toLowerCase()).filter(Boolean),
+    strictHosts:
+      e.PORTAL_STRICT_HOSTS != null && e.PORTAL_STRICT_HOSTS !== '' ? /^(1|true|yes|on)$/i.test(e.PORTAL_STRICT_HOSTS) : e.APP_URL.startsWith('https://'),
+    checkHours: Math.max(1, e.PORTAL_DOMAIN_CHECK_HOURS || 6),
+    jobs: e.PORTAL_JOBS,
+  },
 };
 export type Config = typeof config;

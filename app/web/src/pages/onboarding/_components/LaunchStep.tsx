@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Receipt, ShieldAlert } from 'lucide-react';
-import { AI_ENGINES, estimateMonitoringCost, formatUsd, GOALS, MODES, type Run } from '@seo/shared';
+import { AI_ENGINES, estimateMonitoringCost, formatUsd, GOALS, type Run } from '@seo/shared';
+import { useEngineCal } from '@/lib/engine-cal';
+import { runCost, runMinutes } from '@/lib/prices';
 import { EmailVerifyNotice } from '@/components/site/EmailVerifyNotice';
 import { permissionLabel } from '@/components/site/GoogleConnectionPanel';
 import { asCountry } from '@/components/site/helpers';
@@ -26,6 +28,7 @@ const JS_MAX_PAGES = 500;
 
 export function LaunchStep() {
   const { me, org, site, go } = useWizardSite();
+  useEngineCal(org.id);   // re-render with the engine's own prices once they arrive
   const navigate = useNavigate();
   const qc = useQueryClient();
   const verified = !!site.verifiedAt;
@@ -47,8 +50,10 @@ export function LaunchStep() {
 
   const m = plan.monitors;
   const monthly = estimateMonitoringCost({ aiVisibility: m.aiVisibility, backlinks: m.backlinks, auditMonthly: m.auditMonthly, blogsPerWeek: plan.blogsPerWeek, aiPrompts: m.aiPromptsMax, aiEngines: m.aiEngines, aiPulse: m.aiPulse, aiGrowth: m.aiGrowth, aiPages: m.aiPagesPerMonth, linkBuilder: m.linkBuilder });
-  const nowCost =
-    MODES.track.costUsd + (auditNow ? MODES.audit.costUsd : 0) + (aiNow ? MODES.ai_visibility.costUsd : 0);   // blog posts and monitors are spent weekly (see the monthly estimate)
+  // D-2: the runs this step starts, priced and timed exactly as their tool forms and the budget check price them (the engine's own
+  // calibration, read here without the company layout) — not the shipped MODES table, which said $0.09 beside the form's $0.11
+  const auditRun = { reportType: 'site_audit' } as const;
+  const nowCost = runCost('track') + (auditNow ? runCost('audit', auditRun) : 0) + (aiNow ? runCost('ai_visibility') : 0);   // blog posts and monitors are spent weekly (see the monthly estimate)
   const overBudget = usage.data ? nowCost > usage.data.remainingUsd : false;
   const country = plan.country;
 
@@ -232,7 +237,7 @@ export function LaunchStep() {
               onChange={(e) => setAuditNow(e.target.checked)}
               disabled={!verified}
               label="Run a technical audit now"
-              description={`About 20 minutes, about ${formatUsd(MODES.audit.costUsd)}. Health score, issues by priority and a fix pack, without waiting for the 1st of the month.`}
+              description={`About ${runMinutes('audit', auditRun)} minutes, about ${formatUsd(runCost('audit', auditRun))}. Health score, issues by priority and a fix pack, without waiting for the 1st of the month.`}
             />
           </div>
           <div className="rounded-lg border border-line px-4 py-3 transition-colors duration-150 ease-brand hover:border-line-strong has-[:checked]:border-accent-text/50 has-[:checked]:bg-accent-soft/60">
@@ -241,7 +246,7 @@ export function LaunchStep() {
               onChange={(e) => setAiNow(e.target.checked)}
               disabled={!verified}
               label="Take an AI visibility baseline now"
-              description={`About 10 minutes, about ${formatUsd(MODES.ai_visibility.costUsd)}. Where AI assistants name you today, so later changes can be measured against it.`}
+              description={`About ${runMinutes('ai_visibility')} minutes, about ${formatUsd(runCost('ai_visibility'))}. Where AI assistants name you today, so later changes can be measured against it.`}
             />
           </div>
         </fieldset>

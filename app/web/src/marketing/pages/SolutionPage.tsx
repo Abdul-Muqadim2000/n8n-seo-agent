@@ -89,7 +89,7 @@ function Helps({ solution: s }: { solution: Solution }) {
   return (
     <Section tone="page">
       <div className="flex flex-wrap items-end justify-between gap-6">
-        <SectionHeading eyebrow="How Ascentra helps" title="The capabilities that carry the load." lead="Every team gets the whole platform. These are the parts that make the biggest difference for yours." />
+        <SectionHeading eyebrow="How Alaventra helps" title="The capabilities that carry the load." lead="Every team gets the whole platform. These are the parts that make the biggest difference for yours." />
         <Reveal>
           <ArrowLink to="/platform">All {capabilityCount} capabilities</ArrowLink>
         </Reveal>
@@ -115,7 +115,7 @@ function Showcase({ solution: s }: { solution: Solution }) {
     <Section tone="ink" spacing="lg">
       <div className="grid grid-cols-1 items-center gap-14 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-16">
         <div>
-          <SectionHeading eyebrow="See it in Ascentra" title={s.showcase?.title ?? s.tagline} lead={s.showcase?.body ?? s.summary} />
+          <SectionHeading eyebrow="See it in Alaventra" title={s.showcase?.title ?? s.tagline} lead={s.showcase?.body ?? s.summary} />
           <Reveal className="mt-10">
             <p className="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-accent-on-ink">What your team can do</p>
           </Reveal>
@@ -154,7 +154,7 @@ function Others({ solution: s }: { solution: Solution }) {
   return (
     <Section tone="surface" bordered spacing="sm">
       <div className="flex flex-wrap items-end justify-between gap-6">
-        <SectionHeading eyebrow="Other teams" title="Ascentra for other teams." />
+        <SectionHeading eyebrow="Other teams" title="Alaventra for other teams." />
         <Reveal>
           <ArrowLink to="/solutions">All solutions</ArrowLink>
         </Reveal>

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MODES } from './constants';
+import { shareCaveat } from './share';
 import {
   DEFAULT_DELIVERY_SETTINGS,
   DELIVERY,
@@ -9,6 +10,7 @@ import {
   deliveryOn,
   deliveryScheduleLabel,
   deliverySettingsSchema,
+  clicksHeadline,
   deliverySubject,
   deliveryWebhookBody,
   figureLabel,
@@ -35,6 +37,15 @@ describe('deliveryDecision — a report the run marked not ready is never sent',
     expect(d.deliver).toBe(true);
     expect(d.code).toBeNull();
     expect(d.reason).toBe('');
+  });
+
+  // C-11 (re-rating 2026-10-17): the AI Growth dry run landed as `ai_growth`, status progress, "done for you this week" - deliverable
+  it('holds a dry run (C-11): a test changed nothing, so it is never pushed, whatever its status', () => {
+    const d = deliveryDecision({ stage: 'ai_growth', status: 'progress', payload: { domain: 'techand.ai', dry_run: true, subject: '[AI growth · TEST RUN] techand.ai — dry run, nothing was submitted' } });
+    expect(d.deliver).toBe(false);
+    expect(d.code).toBe('test_run');
+    expect(d.reason).toContain('test run');
+    expect(deliveryDecision({ stage: 'ai_growth', status: 'progress', payload: { domain: 'techand.ai' } }).deliver).toBe(true);
   });
 
   it('holds a page that failed its quality check (R11), and says so in the customer’s words', () => {
@@ -88,15 +99,48 @@ describe('deliveryDecision — a report the run marked not ready is never sent',
     expect(deliveryDecision({ stage: 'site_description', status: 'completed', payload: { site_read_failed: true } }).code).toBe('unavailable');
   });
 
-  it('holds a “started” acknowledgement, which is not a report', () => {
-    for (const stage of ['case_study_started', 'ai_visibility_started', 'backlinks_started', 'site_tracker_setup'])
-      expect(deliveryDecision({ stage, status: 'completed', payload: {} }).code).toBe('interim');
+  it('holds a “started” acknowledgement, which is not a report — with the status the engine really sends (R110)', () => {
+    for (const stage of ['case_study_started', 'ai_visibility_started', 'backlinks_started', 'site_tracker_setup']) {
+      const d = deliveryDecision({ stage, status: 'accepted', payload: {} });
+      expect(d.code).toBe('interim');
+      expect(d.deliver).toBe(false);
+    }
   });
 
-  it('delivers a healthy audit, an AI check and a backlink report', () => {
+  it('delivers a healthy audit, an AI check and a backlink report — monitors arrive as `progress` (R110)', () => {
     expect(deliveryDecision({ stage: 'site_audit', status: 'completed', payload: { health_score: 83 } }).deliver).toBe(true);
-    expect(deliveryDecision({ stage: 'ai_visibility', status: 'completed', payload: { metrics: { mention_rate: 0.2 } } }).deliver).toBe(true);
-    expect(deliveryDecision({ stage: 'backlinks', status: 'completed', payload: { summary: { backlinks: 12 } } }).deliver).toBe(true);
+    expect(deliveryDecision({ stage: 'ai_visibility', status: 'progress', payload: { metrics: { mention_rate: 0.2 } } }).deliver).toBe(true);
+    expect(deliveryDecision({ stage: 'backlinks', status: 'progress', payload: { summary: { backlinks: 12 } } }).deliver).toBe(true);
+  });
+
+  it('R110: every weekly / monitor report the engine ends with `progress` is a finished report', () => {
+    for (const stage of ['ai_visibility', 'ai_pulse', 'ai_growth', 'backlinks', 'link_builder', 'rank_tracker', 'site_tracker', 'content_cadence', 'site_audit']) {
+      const d = deliveryDecision({ stage, status: 'progress', payload: {} });
+      expect(d, stage).toEqual({ deliver: true, reason: '', code: null });
+    }
+  });
+
+  it('R110: a mode’s own final stage with `progress` is finished too', () => {
+    for (const stage of [...new Set(Object.values(MODES).flatMap((m) => m.finalStages))].filter((s) => s !== 'site_tracker_setup'))
+      expect(deliveryDecision({ stage, status: 'progress', payload: {} }).deliver, stage).toBe(true);
+  });
+
+  it('R110: still refuses failed, rejected, accepted and unknown statuses — and `progress` on a stage that is not a report', () => {
+    expect(deliveryDecision({ stage: 'content', status: 'failed', payload: {} }).code).toBe('rejected');
+    expect(deliveryDecision({ stage: 'site_tracker', status: 'failed', payload: {} }).code).toBe('rejected');
+    expect(deliveryDecision({ stage: 'site_tracker', status: 'rejected', payload: { error: 'busy' } }).code).toBe('rejected');
+    expect(deliveryDecision({ stage: 'site_tracker', status: 'weird', payload: {} }).code).toBe('rejected');
+    expect(deliveryDecision({ stage: 'content', status: 'accepted', payload: {} }).code).toBe('rejected');
+    expect(deliveryDecision({ stage: 'some_new_stage', status: 'progress', payload: {} }).code).toBe('rejected');
+  });
+
+  it('R110: a monitor report that arrives as `progress` still passes through the readiness rules after the status', () => {
+    expect(deliveryDecision({ stage: 'content', status: 'progress', payload: { qa_not_ready: true } }).code).toBe('not_ready');
+  });
+
+  it('R110: a shared weekly site report carries no caveat; a started note reads as started, not as “no report”', () => {
+    expect(shareCaveat(deliveryDecision({ stage: 'site_tracker', status: 'progress', payload: {} }))).toBeNull();
+    expect(shareCaveat(deliveryDecision({ stage: 'backlinks_started', status: 'accepted', payload: {} }))?.code).toBe('interim');
   });
 });
 
@@ -112,12 +156,12 @@ describe('deliveryDecisionFor — the customer’s own settings, on top of the r
   });
 
   it('holds a stage the company did not choose', () => {
-    const d = deliveryDecisionFor({ stage: 'ai_pulse', status: 'completed', payload: {} }, settings({ ...on, stages: ['site_tracker'] }));
+    const d = deliveryDecisionFor({ stage: 'ai_pulse', status: 'progress', payload: {} }, settings({ ...on, stages: ['site_tracker'] }));
     expect(d.code).toBe('stage_not_chosen');
   });
 
   it('sends a stage the company did choose', () => {
-    expect(deliveryDecisionFor({ stage: 'site_tracker', status: 'completed', payload: {} }, settings({ ...on, stages: ['site_tracker'] })).deliver).toBe(true);
+    expect(deliveryDecisionFor({ stage: 'site_tracker', status: 'progress', payload: {} }, settings({ ...on, stages: ['site_tracker'] })).deliver).toBe(true);
   });
 
   it('still refuses a not-ready report even when every setting says send it', () => {
@@ -300,5 +344,30 @@ describe('the mode list and the delivery rules stay in step', () => {
     const stages = [...new Set([...Object.values(MODES).flatMap((m) => m.startStages ?? []), ...ACKNOWLEDGEMENTS])];
     expect(stages.length).toBeGreaterThan(2);
     for (const stage of stages) expect(deliveryDecision({ stage, status: 'completed', payload: {} }).code, stage).toBe('interim');
+  });
+});
+
+describe('R113 — the weekly site report headline follows its own significance test', () => {
+  // exec 634: clicks 21 → 32 is "up 52%" in arithmetic and "not a real change" in the test printed under it
+  const SIG = {
+    clicks: { pct: 52, real: false, significant: false, watch: true },
+    impressions: { pct: 224, real: true, significant: true },
+    sessions: { pct: 83, real: true, significant: true },
+  };
+
+  it('no "up 52%" for a change the test calls not real; the real change leads', () => {
+    const h = clicksHeadline(32, 52, SIG);
+    expect(h).not.toMatch(/up 52%/);
+    expect(h).toBe('Impressions in Google up 224% — a real change · 32 clicks from Google, within normal variation');
+  });
+
+  it('with no real change anywhere, the clicks read "within normal variation"', () => {
+    expect(clicksHeadline(32, 52, { clicks: SIG.clicks })).toBe('32 clicks from Google, within normal variation');
+  });
+
+  it('a real clicks change and a report without the test (Search Console off, older runs) keep today’s headline', () => {
+    expect(clicksHeadline(32, 52, { ...SIG, clicks: { pct: 52, real: true } })).toBe('Clicks from Google are up 52% to 32');
+    expect(clicksHeadline(32, 52)).toBe('Clicks from Google are up 52% to 32');
+    expect(clicksHeadline(null, null)).toBe('Weekly site report');
   });
 });

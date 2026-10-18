@@ -55,7 +55,7 @@ export default function PlatformAdminPage() {
           <EmptyState
             icon={<Lock className="size-5" />}
             title="You do not have access to this page"
-            description="Platform administration is limited to the operators the server names in PLATFORM_ADMIN_EMAILS."
+            description="Platform administration is limited to the people who run this installation."
             action={<ButtonLink to="/">Go to the dashboard</ButtonLink>}
           />
         </Card>
@@ -330,12 +330,12 @@ export function ResetLinkCard() {
 // G21 (2026-10-13, FIX_PLAN G21): runs delivered / runs started per week — for the runs the app starts and for the nine schedules —
 // with the schedule fires that left no execution behind (D25a: a Mac-hosted stack misses a Monday whenever the machine sleeps) and the
 // channel that carried each ops alert (R6). Internal only: this page is for operators, so it is not on the business site.
-const ratePct = (v: number | null) => (v == null ? '—' : `${v.toFixed(1)}%`);
+const ratePct = (v: number | null) => (v == null ? 'unmeasured' : `${v.toFixed(1)}%`);   // R106: null is "not measured", never 0% or a dash
 type RateTone = 'good' | 'warning' | 'critical' | 'neutral';
 const rateTone = (v: number | null, target: number): RateTone => (v == null ? 'neutral' : v >= target ? 'good' : v >= target - 5 ? 'warning' : 'critical');
 
 function RateCell({ value, target, of }: { value: number | null; target: number; of: string }) {
-  if (value == null) return <span className="text-sm text-muted">not measured</span>;
+  if (value == null) return <span className="text-sm text-muted">unmeasured</span>;
   return (
     <span className="flex items-center gap-2">
       <StatusBadge tone={rateTone(value, target)}>{ratePct(value)}</StatusBadge>

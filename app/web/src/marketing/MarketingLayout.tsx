@@ -23,7 +23,7 @@ function useScrollToTop() {
 export default function MarketingLayout({ children }: { children?: ReactNode }) {
   useScrollToTop();
   return (
-    <div className="flex min-h-dvh flex-col bg-page text-ink">
+    <div className="mk-site flex min-h-dvh flex-col bg-page text-ink">
       <a
         href="#main"
         onClick={(e) => {

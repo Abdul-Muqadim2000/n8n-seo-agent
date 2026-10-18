@@ -10,6 +10,8 @@ import env_settings as _env   # B-F5: a build with no n8n/.env must refuse, not 
 _env.require_settings('build_api.py')
 from ladder_common import (CACHE_TABLE, CACHE_COLS, DT_TYPE, DT_VERSION,
                            dt_create_params, dt_insert_params, dt_get_all_where_params, dt_delete_where_params)
+from ladder_common import LADDER_TABLE as _LADDER_TABLE, LOG_TABLE as _LOG_TABLE   # R50 (A14): the Keyword Check names the ladder / page that already holds the search
+from ladder_common import PAGES_TABLE as _PAGES_TABLE, LADDER_SETTINGS_TABLE as _LSET_TABLE   # A-1 / A-2 (2026-10-17): the page inventory and the ladder's own status
 # B-F5 (2026-10-15): these ids are placeholders — freeze_ids() re-keys every one of them on (workflow, node) before the dump.
 # They are generated in build order rather than at random all the same, so that even a half-built workflow dumped for debugging
 # is the same twice, and so that the build-time lint for a random id (build_v4.py section 69) has nothing to find.
@@ -262,13 +264,15 @@ const raw = $input.first().json || {};
 const b = (raw.body && typeof raw.body === 'object' && !Array.isArray(raw.body)) ? raw.body : {};
 const action = String(b.action || '').toLowerCase();
 const errors = [];
-if (!['delete', 'pause', 'resume', 'cadence', 'unpublish', 'monitors', 'prospect', 'ai_prompts'].includes(action)) errors.push('action must be delete, pause, resume, cadence, unpublish, monitors, prospect or ai_prompts');
+if (!['delete', 'pause', 'resume', 'cadence', 'unpublish', 'monitors', 'prospect', 'ai_prompts', 'content_groups'].includes(action)) errors.push('action must be delete, pause, resume, cadence, unpublish, monitors, prospect, ai_prompts or content_groups');
+if (action === 'content_groups' && !Array.isArray(b.content_groups)) errors.push('content_groups (a list of {name, pattern}; [] clears them) is required for action content_groups');
 if (!b.site_id && !b.domain) errors.push('site_id or domain is required');
 if (action === 'cadence' && b.pages_per_week == null && b.blogs_per_week == null) errors.push('pages_per_week (0-3) is required for action cadence');
 if (action === 'unpublish' && !b.keyword) errors.push('keyword is required for action unpublish');
 if (action === 'prospect' && !b.prospect_domain) errors.push('prospect_domain is required for action prospect');
 if (action === 'prospect' && b.status && !['new', 'contacted', 'replied', 'won', 'rejected', 'ignored'].includes(String(b.status).toLowerCase())) errors.push('status must be new, contacted, replied, won, rejected or ignored');
-if (action === 'ai_prompts' && !(Array.isArray(b.add) && b.add.length) && !(Array.isArray(b.remove) && b.remove.length)) errors.push('add (questions to track) or remove (prompt ids or texts) is required for action ai_prompts');
+if (action === 'ai_prompts' && !['add', 'remove', 'enable', 'pin', 'unpin', 'edit'].some(k => Array.isArray(b[k]) && b[k].length)) errors.push('add (questions to track), edit, remove, enable, pin or unpin (prompt ids or texts) is required for action ai_prompts');   // G6 (2026-10-18): the panel manager
+if (action === 'ai_prompts' && ['add', 'remove', 'enable', 'pin', 'unpin', 'edit'].some(k => Array.isArray(b[k]) && b[k].length > 500)) errors.push('at most 500 questions per change');
 return [{ json: { ok: errors.length === 0, error: errors.join('; '), action, forward: { ...b, action, request_id: String(b.request_id || ('admin-' + $execution.id)) } } }];"""
 admin_hook = {"httpMethod": "POST", "path": "seo-site-admin", "authentication": "headerAuth", "responseMode": "responseNode", "options": {}}
 awf = {"id": "SEOagentAdminAPI", "name": "SEO Agent — Admin API", "active": False, "settings": {"executionOrder": "v1", "errorWorkflow": "SEOagentErrHandl"}, "tags": [],
@@ -316,6 +320,8 @@ _m_c = re.search(r"\nconst COUNTRIES = \{.*?\n\};", _NI, re.S); _m_d = re.search
 assert _m_c and _m_d and _m_o, 'Normalize Input: COUNTRIES / cleanDomain / domainOk not found'
 def _assess_code(f):
     s = _rd5('code/' + f).replace('/*__REACH__*/', _rd5('code/_reach.js').rstrip('\n'))
+    s = s.replace('/*__FIT_GATE__*/', _rd5('code/_fit_gate.js').rstrip('\n'))   # R50 (A14): the stored ladder rows it names pass the same gate every other read path uses
+    s = s.replace('/*__SITE_MODEL__*/', _rd5('code/_site_model.js').rstrip('\n')).replace('/*__OWN_COVER__*/', _rd5('code/_own_cover.js').rstrip('\n'))   # A-1 (2026-10-17): the page inventory match, the same as the main workflow's
     s = s.replace('/*__COUNTRIES__*/', '// ---- countries: copied from the main workflow\'s Normalize Input by build_api.py (DataForSEO location code = 2000 + ISO numeric) ----' + _m_c.group(0))
     s = s.replace('/*__DOMAIN_RULES__*/', '// ---- domain rules: copied from Normalize Input (public hostnames only) ----' + _m_d.group(0) + _m_o.group(0))
     assert '/*__' not in s, f + ': placeholder left'
@@ -361,10 +367,20 @@ _AN = [
   _an('Settle Run Ledger (Assess)', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS, [('run_id', '={{ $execution.id }}'), ('status', 'reserved')],
       {'status': 'done', 'settled_usd': '={{ $json.settled_usd }}', 'ai_usd': '={{ $json.ai_usd }}', 'dfs_usd': '={{ $json.dfs_usd }}',
        'cost_mode': '={{ $json.cost_mode }}', 'measured_usd': '={{ $json.measured_usd }}', 'estimated_usd': '={{ $json.estimated_usd }}',
-       'cost_basis': '={{ $json.cost_basis }}'}), [2740, -400], onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True),
+       'cost_basis': '={{ $json.cost_basis }}',
+       # R81 part 2 (2026-10-16, re-rating C-5): Assess_Ledger_Settle.js stamped `settled_at` and `dfs_source` and this update dropped them,
+       # so every Keyword Check row stayed `done` with no `settled_at` and every other run's settle counted it as in flight for ever
+       'settled_at': '={{ $json.settled_at }}', 'dfs_source': '={{ $json.dfs_source }}'}), [2740, -400], onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True),
   _arespond('Respond Assess Bad Request', "={{ JSON.stringify({ ok: false, error: $json.error, errors: $json.errors }) }}", 400, [660, 320]),
   _an('Ensure Cache Table (Assess)', DT_TYPE, DT_VERSION, dt_create_params(CACHE_TABLE, CACHE_COLS), [660, -100], onError='continueRegularOutput', executeOnce=True),
   _an('Load Assess Cache', DT_TYPE, DT_VERSION, dt_get_any_params(CACHE_TABLE, [('key', "={{ 'reach:' + $('Assess Validate').first().json.site_id }}"), ('key', "={{ 'desc:' + $('Assess Validate').first().json.domain }}")]), [880, -100], **_LOAD),
+  # R50 (2026-10-16, A14): the answer names the ladder / page that already holds the search. Assess_Response.js reads these two nodes by name.
+  _an('Load Ladders (Assess)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_LADDER_TABLE, [('domain', 'eq', "={{ $('Assess Validate').first().json.domain }}")]), [990, -100], **_LOAD),
+  _an('Load Content Log (Assess)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_LOG_TABLE, [('domain', 'eq', "={{ $('Assess Validate').first().json.domain }}")]), [1045, -100], **_LOAD),
+  # A-1 / A-2 (2026-10-17, re-rating exec 750): "business central partner uae" came back `existing: null` beside the live Business Central page
+  # (the check read the ladder table only), and a paused ladder was shown "planned". Assess_Response.js reads these two nodes by name.
+  _an('Load Pages (Assess)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_PAGES_TABLE, [('site_id', 'eq', "={{ $('Assess Validate').first().json.site_id }}")]), [1045, 60], **_LOAD),
+  _an('Load Ladder Settings (Assess)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_LSET_TABLE, [('domain', 'eq', "={{ $('Assess Validate').first().json.domain }}")]), [1045, 220], **_LOAD),
   _acode('Assess Requests', 'Assess_Requests.js', [1100, -100]),
   _an('Run Assess Requests', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.endpoint }}', 'authentication': 'genericCredentialType', 'genericAuthType': 'httpBasicAuth', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.body) }}', 'options': {'timeout': 15000}}, [1320, -100], credentials=_DFS_CRED, onError='continueRegularOutput', **retry_lint.RETRY),
   _acode('Assess Result', 'Assess_Result.js', [1540, -100]),
@@ -387,7 +403,7 @@ def _alink(a, b, out=0):
     outs = _AC.setdefault(a, {}).setdefault('main', [])
     while len(outs) <= out: outs.append([])
     outs[out].append({'node': b, 'type': 'main', 'index': 0})
-for _a, _b in [('Assess Webhook', 'Assess Validate'), ('Assess Validate', 'Assess Valid?'), ('Ensure Cache Table (Assess)', 'Load Assess Cache'), ('Load Assess Cache', 'Assess Requests'), ('Assess Requests', 'Run Assess Requests'),
+for _a, _b in [('Assess Webhook', 'Assess Validate'), ('Assess Validate', 'Assess Valid?'), ('Ensure Cache Table (Assess)', 'Load Assess Cache'), ('Load Assess Cache', 'Load Ladders (Assess)'), ('Load Ladders (Assess)', 'Load Content Log (Assess)'), ('Load Content Log (Assess)', 'Load Pages (Assess)'), ('Load Pages (Assess)', 'Load Ladder Settings (Assess)'), ('Load Ladder Settings (Assess)', 'Assess Requests'), ('Assess Requests', 'Run Assess Requests'),
                ('Run Assess Requests', 'Assess Result'), ('Assess Result', 'DataForSEO OK?'), ('Keyword Fit', 'Fit Parsed?'), ('Keyword Fit (Text)', 'Assess Response'), ('Assess Response', 'Respond Assess'), ('Respond Assess', 'Reach Row (Assess)'), ('Reach Row (Assess)', 'New Reach (Assess)?'),
                ('Ensure Run Ledger (Assess)', 'Run Ledger Row (Assess)'), ('Run Ledger Row (Assess)', 'Reserve Run Ledger (Assess)'), ('Reserve Run Ledger (Assess)', 'Load Run Ledger (Assess)'), ('Load Run Ledger (Assess)', 'Assess Limit'),
                ('Assess Limit', 'Assess Limited?'), ('Respond Assess Limited', 'Mark Run Refused (Assess)'),
@@ -482,7 +498,7 @@ _PN = [
   _an('Prerelease Verdict', 'n8n-nodes-base.code', 2, {'jsCode': _pre_code('Prerelease_Verdict.js')}, [880, -100]),
   _arespond('Respond Prerelease', "={{ JSON.stringify($json.body) }}", 200, [1100, -100]),
   _arespond('Respond Prerelease Bad Request', "={{ JSON.stringify({ ok: false, verdict: 'error', exit_code: 2, error: $json.error, errors: $json.errors, writes: 'none' }) }}", 400, [660, 140]),
-  _an('Note (Pre-release)', 'n8n-nodes-base.stickyNote', 1, {'content': "## SEO Agent — Pre-release Check (G27, v4.16)\n`POST /webhook/seo-prerelease` (header auth: credential **SEO API Key**, header `X-API-Key`), synchronous (a few seconds), **free** — one plain GET per page plus `/robots.txt` per host, no paid API, nothing rendered.\n\nBody: `{ base_url: 'https://staging.example.com', paths: ['/', '/pricing'] }` or `{ urls: ['https://staging.example.com/pricing'] }` (max 25), optional `live_host` (the address the pages will have in production) and `staging: false`.\n\nChecks, the same ones the daily **Page Watch** runs on live key pages: does the page answer 200, does it redirect, is it `noindex`, does `robots.txt` allow it, one canonical pointing at the right page, one `<title>`, one H1, a meta description. On a staging host `noindex` and a robots.txt disallow are the deliberate staging guard, so they are **warnings** naming the live page; `staging: false` makes them failures.\n\n**200** `{ ok, verdict: 'pass' | 'fail', exit_code: 0 | 1, summary, counts, failures: [{url, check, severity, detail}], warnings, not_checked: [{check, reason}], pages }` · **400** field errors (`exit_code: 2`).\nCI in one line: `curl -s -H \"X-API-Key: …\" -H 'Content-Type: application/json' -d @release.json $URL/webhook/seo-prerelease | jq -e '.exit_code == 0'`.\n\n**It writes nothing** (`writes: \"none\"`): no Data Table node, no sub-workflow, so a release candidate never creates ladder rows, content-log rows or audits. What a staging host cannot answer — index coverage (Google has never crawled the URL), real-user speed (no Chrome visitors), positions — comes back as `not_checked` **with the reason**, never as \"fine\".", 'height': 520, 'width': 760, 'color': 4}, [-40, -620]),
+  _an('Note (Pre-release)', 'n8n-nodes-base.stickyNote', 1, {'content': "## SEO Agent — Pre-release Check (G27, v4.16)\n`POST /webhook/seo-prerelease` (header auth: credential **SEO API Key**, header `X-API-Key`), synchronous (a few seconds), **free** — one plain GET per page plus `/robots.txt` per host, no paid API, nothing rendered.\n\nBody: `{ base_url: 'https://staging.example.com', paths: ['/', '/pricing'] }` or `{ urls: ['https://staging.example.com/pricing'] }` (max 25), optional `live_host` (the address the pages will have in production) and `staging: false`.\n\n**CI (B5-7):** `fail_on` (`any` default | `low` | `medium` | `high` | `critical`) makes only failures of that severity or above fail (the rest come back as `below_threshold`); `expected` lists the changes this release makes on purpose (`'/pricing'` or `'/pricing:canonical'`, or `{path, check, reason}`) so an intentional release does not fail its own check (they come back as `expected_changes`; an entry that matched nothing as `expected_unused`). Recipe: `docs/PRERELEASE_CI.md`.\n\nChecks, the same ones the daily **Page Watch** runs on live key pages: does the page answer 200, does it redirect, is it `noindex`, does `robots.txt` allow it, one canonical pointing at the right page, one `<title>`, one H1, a meta description. On a staging host `noindex` and a robots.txt disallow are the deliberate staging guard, so they are **warnings** naming the live page; `staging: false` makes them failures.\n\n**200** `{ ok, verdict: 'pass' | 'fail', exit_code: 0 | 1, summary, counts, failures: [{url, check, severity, detail}], warnings, not_checked: [{check, reason}], pages }` · **400** field errors (`exit_code: 2`).\nCI in one line: `curl -s -H \"X-API-Key: …\" -H 'Content-Type: application/json' -d @release.json $URL/webhook/seo-prerelease | jq -e '.exit_code == 0'`.\n\n**It writes nothing** (`writes: \"none\"`): no Data Table node, no sub-workflow, so a release candidate never creates ladder rows, content-log rows or audits. What a staging host cannot answer — index coverage (Google has never crawled the URL), real-user speed (no Chrome visitors), positions — comes back as `not_checked` **with the reason**, never as \"fine\".", 'height': 520, 'width': 760, 'color': 4}, [-40, -620]),
 ]
 _PC = {}
 def _plink(a, b, out=0):
@@ -522,3 +538,73 @@ _pre_wiring = {'workflow': pwf['id'], 'path': _pre_hook['path'], 'authentication
 if os.path.isdir(os.path.join(_here, 'harness')):
     json.dump(_pre_wiring, open(os.path.join(_here, 'harness', 'prerelease_wiring.json'), 'w'), indent=1)
 print('Pre-release Check workflow written:', len(_PN), 'nodes')
+
+# =============================================================================
+# SEO Agent — Publish Check (B3-7, 2026-10-16, FIX_PLAN.md §3.16; benchmark area 3, BENCH_AREA3_content.md): "is this page
+#     publishable?" without a $0.80 content run. `POST /webhook/seo-publish-check` (same header credential as the API front door),
+#     synchronous, free: the DETERMINISTIC half of the content gate over Markdown the caller supplies — everything but the Claude calls.
+#     One copy of every rule: *Content QA* and *Originality Check* here are the generated main workflow's own node code, copied from
+#     workflows/SEO_Agent_v4.json after build_v4.py wrote it, and asserted byte-identical below. *Parse Brief* builds the context those
+#     nodes read in a content run (Content QA reads `$('Parse Brief')`), with `qa_max_rounds: 1`, so "not ready" here is exactly what a
+#     content run would deliver as "did not pass the quality check". It is a READ: no Data Table node, no sub-workflow, no HTTP node.
+# =============================================================================
+_PCW = json.load(open(os.path.join(os.path.dirname(_out), 'SEO_Agent_v4.json'), encoding='utf-8'))[0]
+_PC_MAIN = {n['name']: n['parameters'].get('jsCode', '') for n in _PCW['nodes'] if n['type'] == 'n8n-nodes-base.code'}
+assert _PC_MAIN.get('Content QA') and _PC_MAIN.get('Originality Check'), 'B3-7: the main workflow has no Content QA / Originality Check to reuse'
+_pc_kit = lambda f: _rd5('code/' + f).replace('/*__COVERAGE__*/', _rd5('code/_coverage.js').rstrip('\n')).replace('/*__SITE_MODEL__*/', _rd5('code/_site_model.js').rstrip('\n')).replace('/*__FIT_GATE__*/', _rd5('code/_fit_gate.js').rstrip('\n'))   # A-16: the fit gate's brand labels for the subtopics
+_PC_BRIEF = _pc_kit('PubCheck_Parse_Brief.js')
+assert '/*__FIT_GATE__*/' not in _PC_BRIEF and 'const fitLabels' in _PC_BRIEF and not _PC_BRIEF.startswith('/*__') and _PC_BRIEF.count('const CVG = (() => {') == 1 and _PC_BRIEF.count('const SM = (() =>') == 1 and 'const CVG = (() => {' in _PC_BRIEF and 'const SM = (() =>' in _PC_BRIEF, 'B3-7: a kit placeholder is left in the publish check'
+def _pcn(name, ntype, ver, params, pos_, **extra):
+    n = {'parameters': params, 'id': str(uuid.uuid5(_NID_NS, 'pubcheck:' + name)), 'name': name, 'type': ntype, 'typeVersion': ver, 'position': pos_}; n.update(extra); return n
+_pc_hook = {"httpMethod": "POST", "path": "seo-publish-check", "authentication": "headerAuth", "responseMode": "responseNode", "options": {}}
+_PCN = [
+  _pcn('Publish Check Webhook', 'n8n-nodes-base.webhook', 2, _pc_hook, [0, 0], webhookId='8c2b4e61-5d0f-4a3e-b7c9-41f6a2d95e07', credentials={"httpHeaderAuth": {"id": "SEOcredApiHeader", "name": "SEO API Key"}}),
+  _pcn('Parse Brief', 'n8n-nodes-base.code', 2, {'jsCode': _PC_BRIEF}, [220, 0]),
+  _pcn('Publish Check Valid?', 'n8n-nodes-base.if', 2.3, {'conditions': {'options': {'caseSensitive': True, 'leftValue': '', 'typeValidation': 'loose', 'version': 3}, 'conditions': [{'id': str(uuid.uuid5(_NID_NS, 'pubcheck:valid:c')), 'leftValue': '={{ $json.ok }}', 'rightValue': '', 'operator': {'type': 'boolean', 'operation': 'true', 'singleValue': True}}], 'combinator': 'and'}, 'looseTypeValidation': True, 'options': {}}, [440, 0]),
+  _pcn('Content QA', 'n8n-nodes-base.code', 2, {'jsCode': _PC_MAIN['Content QA']}, [660, -100]),
+  _pcn('Originality Check', 'n8n-nodes-base.code', 2, {'jsCode': _PC_MAIN['Originality Check']}, [880, -100]),
+  _pcn('Publish Check Verdict', 'n8n-nodes-base.code', 2, {'jsCode': _rd5('code/Publish_Check_Verdict.js')}, [1100, -100]),
+  _pcn('Respond Publish Check', 'n8n-nodes-base.respondToWebhook', 1.1, {'respondWith': 'json', 'responseBody': "={{ JSON.stringify($json.body) }}", 'options': {'responseCode': 200}}, [1320, -100]),
+  _pcn('Respond Publish Check Bad Request', 'n8n-nodes-base.respondToWebhook', 1.1, {'respondWith': 'json', 'responseBody': "={{ JSON.stringify({ ok: false, verdict: 'error', exit_code: 2, error: $json.error, errors: $json.errors, writes: 'none' }) }}", 'options': {'responseCode': 400}}, [660, 140]),
+  _pcn('Note (Publish Check)', 'n8n-nodes-base.stickyNote', 1, {'content': "## SEO Agent — Publish Check (B3-7, v4.17)\n`POST /webhook/seo-publish-check` (header auth: credential **SEO API Key**, header `X-API-Key`), synchronous (a second or two), **free** — no model, no fetch, no row written.\n\nIt runs the **deterministic half of the content gate** over the Markdown you send: *Content QA* and *Originality Check* are the content run's own node code, copied by the build and asserted identical, so a page that fails here is a page a content run would deliver as \"not ready to publish\". *Parse Brief* is named after the node of the content run whose part it plays (Content QA reads `$('Parse Brief')`).\n\nBody: `{ markdown, keyword, domain?, page_type?, target_words?, terms?, competitors?: [{url, content, rank?, title?}], sources?: [{url, text}], internal_links?, business_facts?, currency?, country?, ai_question?, ai_fanout? }`.\n\n**200** `{ ok, publishable, verdict: 'publishable' | 'not_publishable', exit_code: 0 | 1, label, summary, reasons, content_score, score_breakdown, warnings, advice, checks, fixed_markdown, auto_fixes, schema_types, not_checked: [{check, reason}], writes: 'none', cost_usd: 0 }` · **400** field errors (`exit_code: 2`).\nCI in one line: `curl -s -H \"X-API-Key: …\" -H 'Content-Type: application/json' -d @page.json $URL/webhook/seo-publish-check | jq -e '.exit_code == 0'`.\n\nWhat it cannot judge from what was sent (the editor's review — a model call —, figures without their source text, coverage without terms, originality without competitor pages, length without a target) is listed in `not_checked` **with the reason**, never as a pass.", 'height': 560, 'width': 780, 'color': 4}, [-40, -660]),
+]
+_PCC = {}
+def _pclink(a, b, out=0):
+    outs = _PCC.setdefault(a, {}).setdefault('main', [])
+    while len(outs) <= out: outs.append([])
+    outs[out].append({'node': b, 'type': 'main', 'index': 0})
+for _a, _b in [('Publish Check Webhook', 'Parse Brief'), ('Parse Brief', 'Publish Check Valid?'), ('Content QA', 'Originality Check'), ('Originality Check', 'Publish Check Verdict'), ('Publish Check Verdict', 'Respond Publish Check')]:
+    _pclink(_a, _b)
+_pclink('Publish Check Valid?', 'Content QA', 0); _pclink('Publish Check Valid?', 'Respond Publish Check Bad Request', 1)
+_pcnames = {n['name'] for n in _PCN}
+for _s, _o in _PCC.items():
+    assert _s in _pcnames, _s
+    for _lists in _o.values():
+        for _l in _lists:
+            for _t in _l: assert _t['node'] in _pcnames, _t['node']
+_pccode = {n['name']: n['parameters']['jsCode'] for n in _PCN if n['type'] == 'n8n-nodes-base.code'}
+# one copy of every rule: the gate here IS the content run's gate
+assert _pccode['Content QA'] == _PC_MAIN['Content QA'] and _pccode['Originality Check'] == _PC_MAIN['Originality Check'], 'B3-7: the publish check runs a different gate from the content run'
+assert "$('Parse Brief').first().json" in _pccode['Content QA'], 'B3-7: Content QA no longer reads its context from Parse Brief — the publish check would pass it nothing'
+assert 'qa_max_rounds: 1' in _pccode['Parse Brief'] and "writes: 'none'" in _pccode['Publish Check Verdict'] and 'exit_code' in _pccode['Publish Check Verdict'], 'B3-7: the verdict is not machine-readable or allows a second round'
+assert not re.search(r"\b(?:qa|content_qa|v)\s*(?:\.\s*(?:publishable|not_ready|passed|quality_label|not_ready_reasons|quality)|\[\s*['\"](?:publishable|not_ready)['\"]\s*\])\s*=[^=]", _pccode['Publish Check Verdict']), 'B3-7: the verdict node must read the gate, never change it'
+assert not any(n['type'] in (DT_TYPE, 'n8n-nodes-base.executeWorkflow', 'n8n-nodes-base.httpRequest', 'n8n-nodes-base.emailSend') or 'langchain' in n['type'] for n in _PCN), 'B3-7: a publish check must write, fetch and call nothing'
+assert all(n.get('credentials') and n.get('webhookId') for n in _PCN if n['type'] == 'n8n-nodes-base.webhook'), 'publish check: the webhook needs its credential and a webhookId'
+pcwf = {"id": "SEOagentPubCheck", "name": "SEO Agent — Publish Check", "active": False, "settings": {"executionOrder": "v1", "errorWorkflow": "SEOagentErrHandl", "executionTimeout": 60}, "tags": [], "nodes": _PCN, "connections": _PCC}
+url_lint.check(pcwf)   # D15: no node builds a site URL by hand (url_lint.py)
+retry_lint.check(pcwf)   # G1: every external HTTP node carries the retry rule (there is none here)
+json.dump([freeze_ids(pcwf)], open(os.path.join(os.path.dirname(_out), 'SEO_Agent_Publish_Check.json'), 'w'), indent=2, ensure_ascii=False)
+if os.path.isdir(_code):
+    # Content QA / Originality Check are the main workflow's files already (identical code); the two nodes of its own are prefixed so
+    # they never overwrite the content run's *Parse Brief*
+    open(os.path.join(_code, 'PubCheck__Parse_Brief.js'), 'w').write(_pccode['Parse Brief'])
+    open(os.path.join(_code, 'Publish_Check_Verdict.js'), 'w').write(_pccode['Publish Check Verdict'])
+_pc_wiring = {'workflow': pcwf['id'], 'path': _pc_hook['path'], 'authentication': _pc_hook['authentication'], 'response_mode': _pc_hook['responseMode'],
+              'credential': 'SEOcredApiHeader', 'nodes': [n['name'] for n in _PCN], 'node_types': sorted({n['type'] for n in _PCN}),
+              'writes': [n['name'] for n in _PCN if n['type'] in (DT_TYPE, 'n8n-nodes-base.executeWorkflow', 'n8n-nodes-base.emailSend', 'n8n-nodes-base.httpRequest')],
+              'responses': {n['name']: n['parameters']['options']['responseCode'] for n in _PCN if n['type'] == 'n8n-nodes-base.respondToWebhook'},
+              'same_gate_as_content_run': {'Content QA': True, 'Originality Check': True},
+              'connections': {k: [[t['node'] for t in (l or [])] for l in v['main']] for k, v in _PCC.items()}}
+if os.path.isdir(os.path.join(_here, 'harness')):
+    json.dump(_pc_wiring, open(os.path.join(_here, 'harness', 'pubcheck_wiring.json'), 'w'), indent=1)
+print('Publish Check workflow written:', len(_PCN), 'nodes')

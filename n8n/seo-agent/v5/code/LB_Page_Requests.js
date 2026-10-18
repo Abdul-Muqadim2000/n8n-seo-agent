@@ -21,7 +21,7 @@ for (const p of plans) {
   const add = (kind, url, extra = {}) => { if (!/^https?:\/\//i.test(url || '') || out.some(o => o.json.site_id === p.site_id && o.json.url === url && o.json.kind === kind)) return; /* one fetch per purpose */ out.push({ json: { site_id: p.site_id, kind, url: String(url).slice(0, 500), ...extra } }); };
   const linking = new Set(ledger.filter(l => l.site_id === p.site_id && l.status !== 'lost').map(l => l.ref_domain));
   const known = new Set([...outreach.filter(o => o.site_id === p.site_id).map(o => o.prospect_domain + '|' + o.type)]);
-  const comp = new Set(p.competitors.map(c => LK.regDomain(c)));
+  const comp = new Set([...p.competitors, ...(p.ai_rivals || []).map(r => r.domain)].map(c => LK.regDomain(c)));   // C-2: the businesses AI recommends instead of you are not read either - LB Assemble refuses them with the reason (2b)
   const skipD = (d) => !d || LK.sameSite(d, p.domain) || comp.has(LK.regDomain(d)) || BIG.test(d) || LK.isWire(d) || !!OK.badHost(d) || linking.has(LK.refKey(d));   // D13: badHost covers infrastructure, statistics pages, mailbox providers and contact databases (outlook.com, zoominfo.com were read and pitched live)
   // 1. prospects to qualify: new, not yet qualified, best score first (reclaims are fixed on our own site)
   const todo = prospects.filter(x => x.site_id === p.site_id && (x.status || 'new') === 'new' && !['reclaim', 'digest'].includes(x.type) && !known.has(x.prospect_domain + '|' + x.type) && !skipD(x.prospect_domain))

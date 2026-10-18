@@ -72,7 +72,8 @@ export function ReportSummaryLine({ report, className }: { report: Report; class
       break;
     case 'site_tracker':
       parts.push(
-        nm(s, 'clicks') != null && `${compactNumber(nm(s, 'clicks'))} clicks${nm(s, 'clicksPct') != null ? ` (${signed(nm(s, 'clicksPct')!)}%)` : ''}`,
+        // R113: the list line follows the significance test too — a change the test calls not real is "within normal variation"
+        nm(s, 'clicks') != null && `${compactNumber(nm(s, 'clicks'))} clicks${nm(s, 'clicksPct') != null ? ` (${signed(nm(s, 'clicksPct')!)}%)` : tx(s, 'clicksChange') ? ` (${tx(s, 'clicksChange')})` : ''}`,
         nm(s, 'impressions') != null && `${compactNumber(nm(s, 'impressions'))} impressions`,
         nm(s, 'sessions') != null && `${compactNumber(nm(s, 'sessions'))} organic sessions`,
         nm(s, 'actions') ? `${nm(s, 'actions')} actions` : null,
@@ -96,7 +97,7 @@ export function ReportSummaryLine({ report, className }: { report: Report; class
       parts.push(nm(s, 'alerts') ? `${nm(s, 'alerts')} change(s) in today’s AI answers` : 'no change', nm(s, 'mentionRate') != null && `named in ${pctText(nm(s, 'mentionRate'))} of ${nm(s, 'samples') ?? 0} answers`);
       break;
     case 'ai_growth':
-      parts.push(nm(s, 'submitted') ? `${nm(s, 'submitted')} page(s) sent to Bing / IndexNow` : null, nm(s, 'avgScore') != null && `key pages ${nm(s, 'avgScore')}/100 AI-ready`, nm(s, 'earned') ? `${nm(s, 'earned')} page(s) AI cites without you` : null, nm(s, 'targets') ? `${nm(s, 'targets')} question(s) queued` : null);
+      parts.push(s.dryRun === true ? 'dry run: nothing submitted' : nm(s, 'submitted') ? `${nm(s, 'submitted')} page(s) sent to Bing / IndexNow` : null, nm(s, 'avgScore') != null && `key pages ${nm(s, 'avgScore')}/100 AI-ready`, nm(s, 'earned') ? `${nm(s, 'earned')} page(s) AI cites without you` : null, nm(s, 'targets') ? `${nm(s, 'targets')} question(s) queued` : null);
       break;
     case 'backlinks':
       parts.push(

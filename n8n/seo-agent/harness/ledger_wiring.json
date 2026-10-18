@@ -57,9 +57,11 @@
    "ai_usd": "={{ $json.ai_usd }}",
    "cost_basis": "={{ $json.cost_basis }}",
    "cost_mode": "={{ $json.cost_mode }}",
+   "dfs_source": "={{ $json.dfs_source }}",
    "dfs_usd": "={{ $json.dfs_usd }}",
    "estimated_usd": "={{ $json.estimated_usd }}",
    "measured_usd": "={{ $json.measured_usd }}",
+   "settled_at": "={{ $json.settled_at }}",
    "settled_usd": "={{ $json.settled_usd }}",
    "status": "done"
   },
@@ -76,6 +78,22 @@
   "gate": "Ladder Row To Reset?",
   "table": "seo_ladders",
   "update": "Release Ladder Row",
+  "values": [
+   "status",
+   "status_note"
+  ]
+ },
+ "ladder_written": {
+  "code": "Ladder Row Written",
+  "conditions": [
+   "ladder_id",
+   "keyword",
+   "status"
+  ],
+  "from": "Save Content Log (Run)",
+  "gate": "Ladder Row To Follow?",
+  "table": "seo_ladders",
+  "update": "Mark Ladder Row Written",
   "values": [
    "status",
    "status_note"
@@ -149,10 +167,11 @@
      "input": "Any AI Outreach?",
      "max_tokens": 6000,
      "model": "claude-sonnet-5-5",
+     "model_node": "Claude \u2014 AI Outreach Writer",
      "node": "AI Outreach Writer",
      "ref": "$('Any AI Outreach?').item.json",
      "streaming": false,
-     "template_chars": 2633
+     "template_chars": 3196
     }
    ],
    "ai_nodes": [
@@ -170,6 +189,23 @@
    },
    "balance": "DFS Balance (Growth)",
    "balance_end": "DFS Balance End (Growth)",
+   "callbacks": [
+    {
+     "fed_settle_directly": [],
+     "has_callback": "Has Callback (Growth)?",
+     "join": "Ledger Join (Growth)",
+     "ledger": "Callback Ledger (Growth)",
+     "post": "POST Growth Report",
+     "preds": [
+      [
+       "Build Growth Callback",
+       0
+      ]
+     ],
+     "settle": "Ledger Settle (Growth)"
+    }
+   ],
+   "catchup_records": "Load Catch-up Records (Growth)",
    "cost_cal": "Load Cost Factors (Growth)",
    "est": {
     "ai": 0.55,
@@ -180,7 +216,17 @@
     "if": "Run Allowed? (Growth)",
     "kit": "RG",
     "load": "Load Open Runs (Growth)",
-    "refuse": "Refuse Run Ledger (Growth)"
+    "notice": "Refusal Notice (Growth)",
+    "post": "Post Refusal (Growth)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Growth)",
+     "Refusal Notice (Growth)",
+     "Refuse Run Ledger (Growth)",
+     "Tell Caller (Growth)?"
+    ],
+    "refuse": "Refuse Run Ledger (Growth)",
+    "tell": "Tell Caller (Growth)?"
    },
    "ledger_load": "Load Run Ledger (Growth)",
    "measured": "Growth Metrics",
@@ -196,8 +242,7 @@
     "Refuse Run Ledger (Growth)"
    ],
    "settle_from_ends": [
-    "Nothing To Do (Growth)",
-    "Refuse Run Ledger (Growth)"
+    "Nothing To Do (Growth)"
    ]
   },
   "SEO Agent \u2014 AI Pulse": {
@@ -215,7 +260,29 @@
    },
    "balance": "DFS Balance (Pulse)",
    "balance_end": "DFS Balance End (Pulse)",
+   "callbacks": [
+    {
+     "fed_settle_directly": [],
+     "has_callback": "Has Callback (Pulse)?",
+     "join": "Ledger Join (Pulse)",
+     "ledger": "Callback Ledger (Pulse)",
+     "post": "POST Pulse Report",
+     "preds": [
+      [
+       "Any Pulse Alerts?",
+       0
+      ]
+     ],
+     "settle": "Ledger Settle (Pulse)"
+    }
+   ],
+   "catchup_records": "Load Catch-up Records (Pulse)",
    "cost_cal": "Load Cost Factors (Pulse)",
+   "daily_upsert_keys": [
+    "site_id",
+    "date",
+    "run_id"
+   ],
    "est": {
     "ai": 0.004,
     "dfs": 0.08
@@ -225,7 +292,17 @@
     "if": "Run Allowed? (Pulse)",
     "kit": "RG",
     "load": "Load Open Runs (Pulse)",
-    "refuse": "Refuse Run Ledger (Pulse)"
+    "notice": "Refusal Notice (Pulse)",
+    "post": "Post Refusal (Pulse)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Pulse)",
+     "Refusal Notice (Pulse)",
+     "Refuse Run Ledger (Pulse)",
+     "Tell Caller (Pulse)?"
+    ],
+    "refuse": "Refuse Run Ledger (Pulse)",
+    "tell": "Tell Caller (Pulse)?"
    },
    "ledger_load": "Load Run Ledger (Pulse)",
    "measured": "Pulse Metrics",
@@ -241,8 +318,7 @@
     "Refuse Run Ledger (Pulse)"
    ],
    "settle_from_ends": [
-    "Nothing To Do (Pulse)",
-    "Refuse Run Ledger (Pulse)"
+    "Nothing To Do (Pulse)"
    ]
   },
   "SEO Agent \u2014 AI Visibility Tracker": {
@@ -266,10 +342,11 @@
      "input": "AI Brief Input",
      "max_tokens": 8192,
      "model": "claude-sonnet-5-5",
+     "model_node": "Claude \u2014 AI Brief",
      "node": "AI Brief",
      "ref": "$('AI Brief Input').item.json",
      "streaming": false,
-     "template_chars": 1497
+     "template_chars": 1636
     },
     {
      "after": [
@@ -294,6 +371,7 @@
      "input": "Any Analyst Jobs?",
      "max_tokens": 8192,
      "model": "claude-sonnet-5-5",
+     "model_node": "Claude \u2014 Answer Analyst",
      "node": "Answer Analyst",
      "ref": "$('Any Analyst Jobs?').item.json",
      "streaming": false,
@@ -315,12 +393,17 @@
       "business_name",
       "business_type",
       "city",
+      "clusters",
+      "competitor_offers",
       "count",
       "country",
       "domain",
       "existing",
       "has_brand_prompt",
+      "language",
       "market_questions",
+      "paa_questions",
+      "persona",
       "search_questions",
       "site_text",
       "topics"
@@ -329,10 +412,11 @@
      "input": "Any Prompt Jobs?",
      "max_tokens": 8192,
      "model": "claude-sonnet-5-5",
+     "model_node": "Claude \u2014 Prompt Writer",
      "node": "Prompt Writer",
      "ref": "$('Any Prompt Jobs?').item.json",
      "streaming": false,
-     "template_chars": 2936
+     "template_chars": 4309
     }
    ],
    "ai_nodes": [
@@ -352,6 +436,23 @@
    },
    "balance": "DFS Balance (AI)",
    "balance_end": "DFS Balance End (AI)",
+   "callbacks": [
+    {
+     "fed_settle_directly": [],
+     "has_callback": "Has Callback (AI)?",
+     "join": "Ledger Join (AI)",
+     "ledger": "Callback Ledger (AI)",
+     "post": "POST AI Report",
+     "preds": [
+      [
+       "Build AI Callback",
+       0
+      ]
+     ],
+     "settle": "Ledger Settle (AI)"
+    }
+   ],
+   "catchup_records": "Load Catch-up Records (AI)",
    "cost_cal": "Load Cost Factors (AI)",
    "est": {
     "ai": 0.27,
@@ -362,10 +463,20 @@
     "if": "Run Allowed? (AI)",
     "kit": "RG",
     "load": "Load Open Runs (AI)",
-    "refuse": "Refuse Run Ledger (AI)"
+    "notice": "Refusal Notice (AI)",
+    "post": "Post Refusal (AI)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (AI)",
+     "Refusal Notice (AI)",
+     "Refuse Run Ledger (AI)",
+     "Tell Caller (AI)?"
+    ],
+    "refuse": "Refuse Run Ledger (AI)",
+    "tell": "Tell Caller (AI)?"
    },
    "ledger_load": "Load Run Ledger (AI)",
-   "measured": "AI Metrics",
+   "measured": "AI Metrics|AI Chunk Handoff",
    "mode": "ai_visibility",
    "open_runs": "Load Open Runs (AI)",
    "plan": "AI Plan",
@@ -374,12 +485,12 @@
    "settle": "Settle Run Ledger (AI)",
    "settle_from": [
     "AI Report",
+    "Chunk Part Done",
     "Nothing To Do (AI)",
     "Refuse Run Ledger (AI)"
    ],
    "settle_from_ends": [
-    "Nothing To Do (AI)",
-    "Refuse Run Ledger (AI)"
+    "Nothing To Do (AI)"
    ]
   },
   "SEO Agent \u2014 Audit Scheduler": {
@@ -397,6 +508,7 @@
    },
    "balance": "DFS Balance (Audit)",
    "balance_end": "DFS Balance End (Audit)",
+   "catchup_records": "Load Catch-up Records (Audit)",
    "cost_cal": "Load Cost Factors (Audit)",
    "est": {
     "ai": 0.0,
@@ -407,7 +519,17 @@
     "if": "Run Allowed? (Audit)",
     "kit": "RG",
     "load": "Load Open Runs (Audit)",
-    "refuse": "Refuse Run Ledger (Audit)"
+    "notice": "Refusal Notice (Audit)",
+    "post": "Post Refusal (Audit)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Audit)",
+     "Refusal Notice (Audit)",
+     "Refuse Run Ledger (Audit)",
+     "Tell Caller (Audit)?"
+    ],
+    "refuse": "Refuse Run Ledger (Audit)",
+    "tell": "Tell Caller (Audit)?"
    },
    "ledger_load": "Load Run Ledger (Audit)",
    "measured": "",
@@ -421,9 +543,7 @@
     "Audits Started",
     "Refuse Run Ledger (Audit)"
    ],
-   "settle_from_ends": [
-    "Refuse Run Ledger (Audit)"
-   ]
+   "settle_from_ends": []
   },
   "SEO Agent \u2014 Backlink Monitor": {
    "ai_calls": [
@@ -449,6 +569,7 @@
      "input": "Any Link Analyst?",
      "max_tokens": 8192,
      "model": "claude-sonnet-5-5",
+     "model_node": "Claude \u2014 Link Analyst",
      "node": "Link Analyst",
      "ref": "$('Any Link Analyst?').item.json",
      "streaming": false,
@@ -476,6 +597,7 @@
      "input": "Any Outreach?",
      "max_tokens": 8192,
      "model": "claude-sonnet-5-5",
+     "model_node": "Claude \u2014 Outreach Writer",
      "node": "Outreach Writer",
      "ref": "$('Any Outreach?').item.json",
      "streaming": false,
@@ -498,6 +620,23 @@
    },
    "balance": "DFS Balance (BL)",
    "balance_end": "DFS Balance End (BL)",
+   "callbacks": [
+    {
+     "fed_settle_directly": [],
+     "has_callback": "Has Callback (BL)?",
+     "join": "Ledger Join (BL)",
+     "ledger": "Callback Ledger (BL)",
+     "post": "POST BL Report",
+     "preds": [
+      [
+       "Build BL Callback",
+       0
+      ]
+     ],
+     "settle": "Ledger Settle (BL)"
+    }
+   ],
+   "catchup_records": "Load Catch-up Records (BL)",
    "cost_cal": "Load Cost Factors (BL)",
    "est": {
     "ai": 0.05,
@@ -509,7 +648,17 @@
     "if": "Run Allowed? (BL)",
     "kit": "RG",
     "load": "Load Open Runs (BL)",
-    "refuse": "Refuse Run Ledger (BL)"
+    "notice": "Refusal Notice (BL)",
+    "post": "Post Refusal (BL)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (BL)",
+     "Refusal Notice (BL)",
+     "Refuse Run Ledger (BL)",
+     "Tell Caller (BL)?"
+    ],
+    "refuse": "Refuse Run Ledger (BL)",
+    "tell": "Tell Caller (BL)?"
    },
    "ledger_load": "Load Run Ledger (BL)",
    "measured": "Parse Backlinks",
@@ -525,8 +674,7 @@
     "Refuse Run Ledger (BL)"
    ],
    "settle_from_ends": [
-    "Nothing To Do (BL)",
-    "Refuse Run Ledger (BL)"
+    "Nothing To Do (BL)"
    ]
   },
   "SEO Agent \u2014 Content Cadence": {
@@ -543,6 +691,29 @@
    },
    "balance": "DFS Balance (Cadence)",
    "balance_end": "DFS Balance End (Cadence)",
+   "callbacks": [
+    {
+     "fed_settle_directly": [
+      "Cadence Status"
+     ],
+     "has_callback": "Has Callback (Cadence)?",
+     "join": "Ledger Join (Cadence)",
+     "ledger": "Callback Ledger (Cadence)",
+     "post": "POST Cadence Note",
+     "preds": [
+      [
+       "Cadence Note",
+       0
+      ],
+      [
+       "Cadence Status",
+       0
+      ]
+     ],
+     "settle": "Ledger Settle (Cadence)"
+    }
+   ],
+   "catchup_records": "Load Catch-up Records (Cadence)",
    "est": {
     "ai": 0.0,
     "dfs": 0.0
@@ -552,7 +723,17 @@
     "if": "Run Allowed? (Cadence)",
     "kit": "RG",
     "load": "Load Open Runs (Cadence)",
-    "refuse": "Refuse Run Ledger (Cadence)"
+    "notice": "Refusal Notice (Cadence)",
+    "post": "Post Refusal (Cadence)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Cadence)",
+     "Refusal Notice (Cadence)",
+     "Refuse Run Ledger (Cadence)",
+     "Tell Caller (Cadence)?"
+    ],
+    "refuse": "Refuse Run Ledger (Cadence)",
+    "tell": "Tell Caller (Cadence)?"
    },
    "ledger_load": "Load Run Ledger (Cadence)",
    "measured": "",
@@ -574,7 +755,6 @@
     "Nothing To Write",
     "POST Cadence Note",
     "Planned Only",
-    "Refuse Run Ledger (Cadence)",
     "Send Cadence Note"
    ]
   },
@@ -604,6 +784,7 @@
      "input": "Any LB Writing?",
      "max_tokens": 16000,
      "model": "claude-sonnet-5-5",
+     "model_node": "Claude \u2014 Outreach Sequence Writer",
      "node": "Outreach Sequence Writer",
      "ref": "$('Any LB Writing?').item.json",
      "streaming": false,
@@ -625,6 +806,23 @@
    },
    "balance": "DFS Balance (LB)",
    "balance_end": "DFS Balance End (LB)",
+   "callbacks": [
+    {
+     "fed_settle_directly": [],
+     "has_callback": "Has Callback (LB)?",
+     "join": "Ledger Join (LB)",
+     "ledger": "Callback Ledger (LB)",
+     "post": "POST LB Report",
+     "preds": [
+      [
+       "Build LB Callback",
+       0
+      ]
+     ],
+     "settle": "Ledger Settle (LB)"
+    }
+   ],
+   "catchup_records": "Load Catch-up Records (LB)",
    "cost_cal": "Load Cost Factors (LB)",
    "est": {
     "ai": 0.3,
@@ -635,10 +833,20 @@
     "if": "Run Allowed? (LB)",
     "kit": "RG",
     "load": "Load Open Runs (LB)",
-    "refuse": "Refuse Run Ledger (LB)"
+    "notice": "Refusal Notice (LB)",
+    "post": "Post Refusal (LB)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (LB)",
+     "Refusal Notice (LB)",
+     "Refuse Run Ledger (LB)",
+     "Tell Caller (LB)?"
+    ],
+    "refuse": "Refuse Run Ledger (LB)",
+    "tell": "Tell Caller (LB)?"
    },
    "ledger_load": "Load Run Ledger (LB)",
-   "measured": "",
+   "measured": "!Run LB DFS Answers",
    "mode": "link_builder",
    "open_runs": "Load Open Runs (LB)",
    "plan": "LB Plan",
@@ -651,8 +859,7 @@
     "Refuse Run Ledger (LB)"
    ],
    "settle_from_ends": [
-    "Nothing To Do (LB)",
-    "Refuse Run Ledger (LB)"
+    "Nothing To Do (LB)"
    ]
   },
   "SEO Agent \u2014 Page Watch": {
@@ -669,6 +876,7 @@
    },
    "balance": "DFS Balance (Watch)",
    "balance_end": "DFS Balance End (Watch)",
+   "catchup_records": "Load Catch-up Records (Watch)",
    "est": {
     "ai": 0.0,
     "dfs": 0.0
@@ -678,7 +886,17 @@
     "if": "Run Allowed? (Watch)",
     "kit": "RG",
     "load": "Load Open Runs (Watch)",
-    "refuse": "Refuse Run Ledger (Watch)"
+    "notice": "Refusal Notice (Watch)",
+    "post": "Post Refusal (Watch)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Watch)",
+     "Refusal Notice (Watch)",
+     "Refuse Run Ledger (Watch)",
+     "Tell Caller (Watch)?"
+    ],
+    "refuse": "Refuse Run Ledger (Watch)",
+    "tell": "Tell Caller (Watch)?"
    },
    "ledger_load": "Load Run Ledger (Watch)",
    "measured": "",
@@ -694,9 +912,7 @@
     "Save Watch Ops Delivery",
     "Watched"
    ],
-   "settle_from_ends": [
-    "Refuse Run Ledger (Watch)"
-   ]
+   "settle_from_ends": []
   },
   "SEO Agent \u2014 Rank Tracker": {
    "ai_nodes": [],
@@ -712,6 +928,23 @@
    },
    "balance": "DFS Balance (Tracker)",
    "balance_end": "DFS Balance End (Tracker)",
+   "callbacks": [
+    {
+     "fed_settle_directly": [],
+     "has_callback": "Has Callback (Tracker)?",
+     "join": "Ledger Join (Tracker)",
+     "ledger": "Callback Ledger (Tracker)",
+     "post": "POST Progress",
+     "preds": [
+      [
+       "Has Report?",
+       0
+      ]
+     ],
+     "settle": "Ledger Settle (Tracker)"
+    }
+   ],
+   "catchup_records": "Load Catch-up Records (Tracker)",
    "est": {
     "ai": 0.0,
     "dfs": 0.015
@@ -721,7 +954,17 @@
     "if": "Run Allowed? (Tracker)",
     "kit": "RG",
     "load": "Load Open Runs (Tracker)",
-    "refuse": "Refuse Run Ledger (Tracker)"
+    "notice": "Refusal Notice (Tracker)",
+    "post": "Post Refusal (Tracker)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Tracker)",
+     "Refusal Notice (Tracker)",
+     "Refuse Run Ledger (Tracker)",
+     "Tell Caller (Tracker)?"
+    ],
+    "refuse": "Refuse Run Ledger (Tracker)",
+    "tell": "Tell Caller (Tracker)?"
    },
    "ledger_load": "Load Run Ledger (Tracker)",
    "measured": "Tracker Report",
@@ -737,11 +980,128 @@
     "Tracker Report"
    ],
    "settle_from_ends": [
-    "Nothing To Track",
-    "Refuse Run Ledger (Tracker)"
+    "Nothing To Track"
    ]
   },
+  "SEO Agent \u2014 Reply Reader": {
+   "ai_calls": [
+    {
+     "after": [
+      "Reply Result"
+     ],
+     "branch": 0,
+     "count_answer": "Count Answer (Reply Reader)",
+     "count_per_item": true,
+     "count_prompt": "Count Prompt (Reply Reader)",
+     "count_resume": "After Count (Reply Reader)",
+     "count_rounds": 0,
+     "count_set": "Prompt For Count (Reply Reader)",
+     "effort": "",
+     "fields": [
+      "business",
+      "domain",
+      "facts",
+      "link_note",
+      "our_body",
+      "our_subject",
+      "reply_from",
+      "reply_subject",
+      "reply_text",
+      "signer"
+     ],
+     "from": [],
+     "input": "Reply Classify Input",
+     "max_tokens": 1500,
+     "model": "claude-haiku-4-5-20251001",
+     "model_node": "Claude \u2014 Reply Reader",
+     "node": "Reply Reader",
+     "ref": "$('Reply Classify Input').item.json",
+     "streaming": false,
+     "template_chars": 3020
+    }
+   ],
+   "ai_nodes": [
+    "Reply Reader"
+   ],
+   "alert_retry": {
+    "from": "Settle Run Ledger (Reply)",
+    "gate": "Any Alert Retry (Reply)?",
+    "load": "Load Open Alerts (Reply)",
+    "plan": "Alert Retry Plan (Reply)",
+    "post": "Post Alert Retry (Reply)",
+    "result": "Alert Retry Result (Reply)",
+    "save": "Save Alert Retry (Reply)",
+    "table": "seo_ops_alerts"
+   },
+   "balance": "DFS Balance (Reply)",
+   "balance_end": "DFS Balance End (Reply)",
+   "catchup_records": "",
+   "cost_cal": "Load Cost Factors (Reply)",
+   "est": {
+    "ai": 0.003,
+    "dfs": 0.0
+   },
+   "guard": {
+    "gate": "After Run Ledger (Reply)",
+    "if": "Run Allowed? (Reply)",
+    "kit": "RG",
+    "load": "Load Open Runs (Reply)",
+    "notice": "Refusal Notice (Reply)",
+    "post": "Post Refusal (Reply)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Reply)",
+     "Refusal Notice (Reply)",
+     "Refuse Run Ledger (Reply)",
+     "Tell Caller (Reply)?"
+    ],
+    "refuse": "Refuse Run Ledger (Reply)",
+    "tell": "Tell Caller (Reply)?"
+   },
+   "ledger_load": "Load Run Ledger (Reply)",
+   "measured": "",
+   "mode": "reply_read",
+   "no_dfs": true,
+   "no_gate": true,
+   "open_runs": "Load Open Runs (Reply)",
+   "plan": "Reply Plan",
+   "reserve": "Run Ledger Row (Reply)",
+   "resume": "After Run Ledger (Reply)",
+   "settle": "Settle Run Ledger (Reply)",
+   "settle_from": [
+    "Refuse Run Ledger (Reply)",
+    "Reply Result"
+   ],
+   "settle_from_ends": []
+  },
   "SEO Agent \u2014 Site Tracker": {
+   "ai_calls": [
+    {
+     "after": [
+      "Site Report"
+     ],
+     "branch": 0,
+     "count_answer": "Count Answer (Site Brief)",
+     "count_per_item": true,
+     "count_prompt": "Count Prompt (Site Brief)",
+     "count_resume": "After Count (Site Brief)",
+     "count_rounds": 0,
+     "count_set": "Prompt For Count (Site Brief)",
+     "effort": "low",
+     "fields": [
+      "facts"
+     ],
+     "from": [],
+     "input": "Brief Input",
+     "max_tokens": 8192,
+     "model": "claude-sonnet-5-5",
+     "model_node": "Claude \u2014 Site Brief",
+     "node": "Site Brief",
+     "ref": "$('Brief Input').item.json",
+     "streaming": false,
+     "template_chars": 3143
+    }
+   ],
    "ai_nodes": [
     "Site Brief"
    ],
@@ -757,6 +1117,23 @@
    },
    "balance": "DFS Balance (Site)",
    "balance_end": "DFS Balance End (Site)",
+   "callbacks": [
+    {
+     "fed_settle_directly": [],
+     "has_callback": "Has Callback (Site)?",
+     "join": "Ledger Join (Site)",
+     "ledger": "Callback Ledger (Site)",
+     "post": "POST Site Report",
+     "preds": [
+      [
+       "Build Site Callback",
+       0
+      ]
+     ],
+     "settle": "Ledger Settle (Site)"
+    }
+   ],
+   "catchup_records": "Load Catch-up Records (Site)",
    "est": {
     "ai": 0.03,
     "dfs": 0.01
@@ -766,10 +1143,20 @@
     "if": "Run Allowed? (Site)",
     "kit": "RG",
     "load": "Load Open Runs (Site)",
-    "refuse": "Refuse Run Ledger (Site)"
+    "notice": "Refusal Notice (Site)",
+    "post": "Post Refusal (Site)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Site)",
+     "Refusal Notice (Site)",
+     "Refuse Run Ledger (Site)",
+     "Tell Caller (Site)?"
+    ],
+    "refuse": "Refuse Run Ledger (Site)",
+    "tell": "Tell Caller (Site)?"
    },
    "ledger_load": "Load Run Ledger (Site)",
-   "measured": "",
+   "measured": "!SERP Check (Site) Answers|Google Trends Answers",
    "mode": "site_tracker",
    "open_runs": "Load Open Runs (Site)",
    "plan": "Site Plan",
@@ -782,8 +1169,7 @@
     "Site Report"
    ],
    "settle_from_ends": [
-    "Nothing To Track (Site)",
-    "Refuse Run Ledger (Site)"
+    "Nothing To Track (Site)"
    ]
   }
  },

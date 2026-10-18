@@ -33,15 +33,18 @@ plan.forEach((s, idx) => {
     cands.set(kw, { key: kw, keyword: r.keyword, source: 'content_log', log: r, ladder, written_at: String(r.started_at || '') });
   }
   for (const l of LD) {
-    if (l.status !== 'writing') continue;
+    if (!['writing', 'written', 'not_ready'].includes(l.status)) continue;   // A-20: a ladder row follows its content log (written / not_ready) once the page run ends
     const kw = norm(l.keyword); if (!kw || cands.has(kw) || published.has(kw)) continue;
     const log = L.filter(r => norm(r.keyword) === kw).sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0] || null;   // an older log row of the same page (kept in the rows)
     cands.set(kw, { key: kw, keyword: l.keyword, source: 'ladder', log, ladder: l, written_at: String((log && log.started_at) || l.start_date || '') });
   }
+  // R111 (2026-10-16): a draft whose last quality round failed (`not_ready`) is still watched — an owner who publishes it anyway is
+  // found — and carries the flag, so whatever records it can say the page went live without passing the quality check
   const list = [...cands.values()].map(c => {
     const existing = String((c.log && c.log.existing_page_url) || '').trim() || (c.ladder && isTrue(c.ladder.page_exists) ? String(c.ladder.target_url || '').trim() : '');
     const planned = c.ladder && !isTrue(c.ladder.page_exists) ? String(c.ladder.target_url || '').trim() : '';
-    return { ...c, existing_url: /^https?:\/\//i.test(existing) ? existing : '', planned_url: /^https?:\/\//i.test(planned) ? planned : '', ladder_id: (c.log && c.log.ladder_id) || (c.ladder && c.ladder.ladder_id) || '' };
+    return { ...c, existing_url: /^https?:\/\//i.test(existing) ? existing : '', planned_url: /^https?:\/\//i.test(planned) ? planned : '', ladder_id: (c.log && c.log.ladder_id) || (c.ladder && c.ladder.ladder_id) || '',
+      qa_failed: !!(c.log && String(c.log.status || '') === 'not_ready') };
   }).sort((a, b) => String(b.written_at).localeCompare(String(a.written_at))).slice(0, CONFIG.max_candidates_per_site);
   // URLs that already belong to other pages of the site (published pages, pages that existed before) are never claimed by a new page
   const known = [...new Set([...L.flatMap(r => [r.published_url, r.existing_page_url]), ...LD.filter(l => l.status === 'published' || isTrue(l.page_exists)).map(l => l.target_url)].map(u => String(u || '').trim()).filter(u => /^https?:\/\//i.test(u)))];

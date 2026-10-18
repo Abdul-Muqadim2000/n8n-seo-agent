@@ -3,7 +3,7 @@
 // the fetchers are forbidden to read could still be scored "90/100 — AI can read and quote it", and a page nobody may crawl could
 // still be sent to Bing and IndexNow. Google's documented matching rules: the most specific matching group wins, then the longest
 // matching rule, and Allow wins a tie. The same evaluation the AI Visibility Tracker runs on the homepage (v5/code/AI_Access.js),
-// here per key page and per page about to be submitted — the two must agree, and the duplication is registered as B9-8.
+// here per key page and per page about to be submitted. B9-9: both nodes inline the one kit (v5/code/_ai_access_kit.js), so the two cannot disagree.
 // A robots.txt that could not be read is reported as NOT CHECKED: it is never read as "allowed" and never as "blocked".
 const plans = $('Growth Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 let reqs = [], res = [];
@@ -13,19 +13,31 @@ const BOTS = [{ bot: 'OAI-SearchBot', owner: 'ChatGPT search' }, { bot: 'ChatGPT
   { bot: 'Claude-SearchBot', owner: 'Claude search' }, { bot: 'Googlebot', owner: 'Google Search, AI Overviews and AI Mode' }, { bot: 'Bingbot', owner: 'Bing and Microsoft Copilot' }];
 const keyOf = (u) => { const m = String(u || '').trim().match(/^https?:\/\/(?:www\.)?([^\/?#]+)([^?#]*)/i); if (!m) return ''; return m[1].toLowerCase() + ((m[2] || '/').replace(/\/+$/, '') || '/'); };
 const pathOf = (u) => { const m = String(u || '').trim().match(/^https?:\/\/[^\/?#]+([^?#]*)/i); return m ? (m[1] || '/') : '/'; };
-function parseRobots(txt) {
-  const groups = []; let cur = null, lastWasRule = false;
-  for (const raw of String(txt || '').split(/\r?\n/)) { const line = raw.replace(/#.*$/, '').trim(); const m = line.match(/^([a-z-]+)\s*:\s*(.*)$/i); if (!m) continue;
-    const k = m[1].toLowerCase(), v = m[2].trim();
-    if (k === 'user-agent') { if (!cur || lastWasRule) { cur = { agents: [], rules: [] }; groups.push(cur); } cur.agents.push(v.toLowerCase()); lastWasRule = false; }
-    else if ((k === 'allow' || k === 'disallow') && cur) { if (v || k === 'allow') cur.rules.push({ allow: k === 'allow', path: v }); lastWasRule = true; } }
-  return groups;
-}
-const rulesFor = (groups, bot) => { const b = bot.toLowerCase(); const fit = (g) => Math.max(0, ...g.agents.filter(a => a && a !== '*' && (a === b || b.startsWith(a))).map(a => a.length)); const best = Math.max(0, ...groups.map(fit));
-  const own = best ? groups.filter(g => fit(g) === best) : []; return own.length ? own.flatMap(g => g.rules) : groups.filter(g => g.agents.includes('*')).flatMap(g => g.rules); };
-const matches = (pattern, path) => { if (!pattern) return false; const end = pattern.endsWith('$'); const body = (end ? pattern.slice(0, -1) : pattern).replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*'); return new RegExp('^' + body + (end ? '$' : '')).test(path); };
-const allowed = (rules, path) => { let best = null; for (const r of rules) { if (!r.path || !matches(r.path, path)) continue; const len = r.path.length;
-  if (!best || len > best.len || (len === best.len && r.allow && !best.allow)) best = { len, allow: r.allow, path: r.path }; } return best ? { ok: best.allow, rule: (best.allow ? 'Allow: ' : 'Disallow: ') + best.path } : { ok: true, rule: '' }; };
+// B9-9 (2026-10-17, benchmark area 9): ONE robots.txt matcher. Until now `AI_Access.js` (the AI Visibility Tracker, homepage and key paths) and
+// `Growth_Robots.js` (AI Growth, every key page and every page about to be submitted) each carried a copy of the parser, the group selection and
+// the longest-rule match, and two copies of a rule is how two answers start. Google's documented rules: the most specific matching group wins
+// (several groups for the same agent are merged), then the longest matching rule, and Allow wins a tie; `*` matches any run and `$` anchors the end.
+// Inlined into both nodes at build time (build_monitors.py `src()`); build section 123 asserts that neither node defines its own copy.
+const AK = (() => {
+  const parse = (txt) => {
+    const groups = []; let cur = null, lastWasRule = false;
+    for (const raw of String(txt || '').split(/\r?\n/)) { const line = raw.replace(/#.*$/, '').trim(); const m = line.match(/^([a-z-]+)\s*:\s*(.*)$/i); if (!m) continue;
+      const k = m[1].toLowerCase(), v = m[2].trim();
+      if (k === 'user-agent') { if (!cur || lastWasRule) { cur = { agents: [], rules: [] }; groups.push(cur); } cur.agents.push(v.toLowerCase()); lastWasRule = false; }
+      else if ((k === 'allow' || k === 'disallow') && cur) { if (v || k === 'allow') cur.rules.push({ allow: k === 'allow', path: v }); lastWasRule = true; } }
+    return groups;
+  };
+  // the most specific matching group(s) for the bot, else the `*` groups; `group` says which one decided
+  const rulesFor = (groups, bot) => { const b = String(bot).toLowerCase(); const fit = (g) => Math.max(0, ...g.agents.filter(a => a && a !== '*' && (a === b || b.startsWith(a))).map(a => a.length)); const best = Math.max(0, ...groups.map(fit));
+    const own = best ? groups.filter(g => fit(g) === best) : [];
+    return own.length ? { rules: own.flatMap(g => g.rules), group: bot } : { rules: groups.filter(g => g.agents.includes('*')).flatMap(g => g.rules), group: '*' }; };
+  const matches = (pattern, path) => { if (!pattern) return false; const end = pattern.endsWith('$'); const body = (end ? pattern.slice(0, -1) : pattern).replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*'); return new RegExp('^' + body + (end ? '$' : '')).test(path); };
+  const allowed = (rules, path) => { let best = null; for (const r of rules) { if (!r.path || !matches(r.path, path)) continue; const len = r.path.length;
+    if (!best || len > best.len || (len === best.len && r.allow && !best.allow)) best = { len, allow: r.allow, path: r.path }; }
+    return best ? { ok: best.allow, rule: (best.allow ? 'Allow: ' : 'Disallow: ') + best.path } : { ok: true, rule: '' }; };
+  return { parse, rulesFor, matches, allowed };
+})();
+const parseRobots = AK.parse, allowed = AK.allowed, rulesFor = (groups, bot) => AK.rulesFor(groups, bot).rules;   // B9-9: the one robots.txt matcher (v5/code/_ai_access_kit.js)
 const out = [];
 for (const p of plans) {
   const i = reqs.findIndex(q => q && q.site_id === p.site_id);

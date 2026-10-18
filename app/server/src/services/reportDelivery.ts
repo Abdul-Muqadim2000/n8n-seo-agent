@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { and, asc, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
 import {
   DEFAULT_DELIVERY_SETTINGS,
   DELIVERY,
@@ -26,6 +26,7 @@ import type { OrgRow, ReportDeliveryRow, ReportRow } from '../db/schema';
 import { badRequest } from '../lib/errors';
 import { seal, secretsReady, unseal } from '../lib/secretBox';
 import { sendReportMail } from '../lib/mailer';
+import { baseUrlFor, senderFor } from './portalMail';
 import { createShareForDelivery } from './shareLinks';
 
 /**
@@ -123,7 +124,7 @@ export function verifyBody(secret: string, timestamp: string, body: string, sign
 // building one delivery
 // ---------------------------------------------------------------------------------------------------------------------------
 
-const appReportUrl = (orgId: string, reportId: string) => `${config.appUrl}/o/${orgId}/reports/${reportId}`;
+const appReportUrl = (base: string, orgId: string, reportId: string) => `${base}/o/${orgId}/reports/${reportId}`;
 
 type ReportWithFiles = ReportRow & { domain: string | null };
 
@@ -135,10 +136,12 @@ async function itemFor(org: OrgRow, r: ReportWithFiles, wantShare: boolean): Pro
     .orderBy(asc(schema.files.createdAt))
     .limit(20);
   let share: string | null = null;
+  // G5: a white-label client workspace's links open on its agency's portal host
+  const base = await baseUrlFor(org);
   if (wantShare) {
     // G15's own link, created by G15's own service: one report, hashed token, expiring, revocable from the report page
     const made = await createShareForDelivery(org.id, r.id, DELIVERY.shareDays).catch(() => null);
-    if (made) share = shareUrl(config.appUrl, made.token);
+    if (made) share = shareUrl(base, made.token);
   }
   return {
     reportId: r.id,
@@ -149,7 +152,7 @@ async function itemFor(org: OrgRow, r: ReportWithFiles, wantShare: boolean): Pro
     receivedAt: r.receivedAt.toISOString(),
     scheduled: r.scheduled,
     figures: r.summary ?? {},
-    url: appReportUrl(org.id, r.id),
+    url: appReportUrl(base, org.id, r.id),
     shareUrl: share,
     files: files.map((f) => ({ id: f.id, kind: f.kind, fileName: f.fileName, size: f.size })),
   };
@@ -164,7 +167,7 @@ async function recipients(org: OrgRow, s: DeliverySettings): Promise<string[]> {
     .select({ email: schema.users.email })
     .from(schema.memberships)
     .innerJoin(schema.users, eq(schema.memberships.userId, schema.users.id))
-    .where(eq(schema.memberships.orgId, org.id))
+    .where(and(eq(schema.memberships.orgId, org.id), isNull(schema.memberships.deactivatedAt)))
     .limit(DELIVERY.maxRecipients);
   return rows.map((r) => r.email).filter(Boolean);
 }
@@ -210,6 +213,8 @@ async function sendEmail(org: OrgRow, s: DeliverySettings, payload: DeliveryPayl
       footer: 'You receive this because your company turned report delivery on. An owner can change it in Settings → Report delivery.',
       reports: payload.reports,
       attachments,
+      // G5: an agency's client hears from the agency (name, reply-to, its own verified mailbox)
+      sender: await senderFor(org),
     },
     log,
   );

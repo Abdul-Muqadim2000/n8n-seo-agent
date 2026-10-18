@@ -13,6 +13,7 @@ const sites = $('Resolve Properties').all().map(i => i.json);
 const siteModels = (() => { try { return $('Site Model (Site)').all().map(i => i.json).filter(m => m && m.site_id); } catch (e) { return []; } })();
 const grab = (name) => { try { return $(name).all().map(i => i.json).filter(j => j && !j.skip && !j.error); } catch (e) { return []; } };
 const detAll = grab('Detect Published').filter(x => x.site_id);
+const grabAll = (name) => { try { return $(name).all().map(i => i.json || {}); } catch (e) { return []; } };   // R34: Match Slugs' first item carries the per-site state (and `skip` when nothing was fetched)
 const gscAll = grab('Parse GSC');
 const aiPages = grab('Load AI Pages (Site)').filter(r => r.site_id && r.url);
 const stored = grab('Load Pages (Site)').filter(r => r.site_id && r.url);
@@ -71,7 +72,15 @@ return sites.map((s, idx) => {
       return { ...r, ...(fresh || kept) }; })
     .filter(r => !sameRow(r, was.get(ukey(r.url))));
   const bySource = {}; for (const p of merged.pages) bySource[p.source] = (bySource[p.source] || 0) + 1;
-  return { json: { site_id: s.site_id, domain: s.domain, pages: merged.pages, rows, total: merged.pages.length, changed: rows.length, stored: was.size, by_source: bySource,
+  // R34 (2026-10-16): the pages whose title is still not on file are NAMED, with the reason, never left to slug-only matching in silence.
+  // The detection reads them a batch a week (Match Slugs (Detect) `title_fill`); what is left is what SM.titleGap reports to every reader.
+  const gap = SM.titleGap(merged);
+  const fillState = ((((grabAll('Match Slugs (Detect)')[0] || {}).sites) || []).find(x => x && x.site_id === s.site_id) || {}).title_fill || null;
+  const title_unknown = { count: gap.untitled, of: gap.pages, urls: SM.pages(merged).filter(p => !S(p.title) && !S(p.h1)).map(p => p.url).slice(0, 50),
+    note: gap.untitled ? 'title unknown for ' + gap.untitled + ' of ' + gap.pages + ' page(s): their <title> could not be read this week'
+      + (fillState && fillState.left ? ' (' + fillState.left + ' left for the next weekly read, ' + fillState.cap + ' a week)' : ' (the page did not answer, or the weekly read reaches it next time)')
+      + ' — until then a search is matched to them on their address alone' : '' };
+  return { json: { site_id: s.site_id, domain: s.domain, pages: merged.pages, rows, total: merged.pages.length, changed: rows.length, stored: was.size, by_source: bySource, title_unknown,
     measured: perfBy.size, decaying: [...perfBy.values()].filter(p => p.state === 'decaying').length,
     decay_summary: (gsc && gsc.decay_summary) || null,
     sitemap_read: !!(det && (det.sitemap || {}).ok), with_queries: merged.pages.filter(p => (p.queries || []).length).length } };

@@ -3,7 +3,7 @@ import { Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /** A neutral browser window (three dots, address pill) around a product mockup; `caption` sits under it ("Sample data"). */
-export function BrowserFrame({ url = 'app.ascentra.com', children, className, caption, label }: { url?: string; children: ReactNode; className?: string; caption?: ReactNode; label?: string }) {
+export function BrowserFrame({ url = 'app.alaventra.com', children, className, caption, label }: { url?: string; children: ReactNode; className?: string; caption?: ReactNode; label?: string }) {
   return (
     <figure className={cn('w-full', className)} aria-label={label}>
       <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-overlay">

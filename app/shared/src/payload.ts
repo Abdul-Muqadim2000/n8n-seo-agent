@@ -40,6 +40,11 @@ export function monitorsBody(m: Partial<MonitorSettings>): Body {
   if (m.aiEngines !== undefined) out.ai_engines = m.aiEngines.join(', ');
   if (m.aiPromptsMax !== undefined) out.ai_prompts_max = m.aiPromptsMax;
   if (m.aiPulse !== undefined) out.ai_pulse = m.aiPulse;
+  // G6 (2026-10-18): buyer roles, extra markets and the pulse's sampling — '' clears a list in Site Admin only as ' ', which the server adds
+  if (m.aiPersonas !== undefined) out.ai_personas = m.aiPersonas.join(', ');
+  if (m.aiMarkets !== undefined) out.ai_markets = m.aiMarkets.join(', ');
+  if (m.aiPulseMode !== undefined) out.ai_pulse_mode = m.aiPulseMode === 'auto' ? 'auto' : m.aiPulseMode;
+  if (m.aiPulsePerWeek !== undefined) out.ai_pulse_per_week = m.aiPulsePerWeek;   // 0 = chosen for the precision targets (the engine stores it empty)
   if (m.aiGrowth !== undefined) out.ai_growth = m.aiGrowth;
   if (m.aiPagesPerMonth !== undefined) out.ai_pages_month = m.aiPagesPerMonth;
   if (m.backlinks !== undefined) out.backlinks = m.backlinks;
@@ -112,6 +117,8 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
         crawl_pages: input.crawlPages,
         crawl_js: input.crawlJs,
         competitors: input.competitors.length ? input.competitors : (s?.competitors ?? []),
+        // B5-12 (W3-A): the fix list can weigh problems by GA4 key events when the website's property is known
+        ga4_property_id: s?.ga4PropertyId || '',
       };
 
     case 'ladder':

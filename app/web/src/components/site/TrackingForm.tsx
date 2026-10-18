@@ -11,6 +11,8 @@ import { GuideButton } from '@/components/guide';
 import { errorMessage } from '@/lib/api';
 import { applyServerErrors, asCountry, competitorValidator, errorText } from './helpers';
 import { completeMonitors, DEFAULT_MONITORS, MonitoringCost, MonitorSettingsFields } from './MonitorSettingsFields';
+import { aiMeasuredFrom } from './AiPrecision';
+import { useSiteData } from '@/lib/queries';
 
 // "Track my site" (mode `track`): keywords, GA4 property, blog posts per week, competitors and the growth monitors.
 
@@ -69,6 +71,8 @@ export function TrackingForm({
     defaultValues: defaults ?? trackDefaults(site),
   });
   const { register, control, formState, setError, setValue, watch } = form;
+  // B8-7: the precision table reads what the latest AI run measured (a verified website only; none yet = modelled)
+  const ai = useSiteData(site.orgId, site.id, 'ai', undefined, { enabled: !!site.verifiedAt && sections === 'full' });
   const errors = formState.errors;
   const [error, setErr] = useState<unknown>(null);
   const blogsLabel = useId();
@@ -93,7 +97,7 @@ export function TrackingForm({
 
   return (
     <form id={formId} onSubmit={submit} noValidate className="space-y-6">
-      <fieldset disabled={readOnly} className="space-y-5">
+      <fieldset disabled={readOnly} className="min-w-0 space-y-5">
         {showCountry && (
           <Field label="Country" hint="Rankings and trends are checked for this country." error={errors.country?.message}>
             {(p) => (
@@ -130,7 +134,7 @@ export function TrackingForm({
                   max={20}
                   normalize={(s) => s.trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 100)}
                   validate={(s) => (s.length < 2 ? 'Keywords need at least 2 characters' : null)}
-                  placeholder="e invoicing software uae, then Enter"
+                  placeholder="accounting software dubai, then Enter"
                 />
               )}
             </Field>
@@ -145,7 +149,7 @@ export function TrackingForm({
           error={errors.ga4PropertyId?.message}
           className="max-w-sm"
         >
-          {(p) => <Input {...p} inputMode="numeric" placeholder="543096312" {...register('ga4PropertyId')} />}
+          {(p) => <Input {...p} inputMode="numeric" placeholder="123456789" {...register('ga4PropertyId')} />}
         </Field>
 
         <Controller
@@ -209,6 +213,7 @@ export function TrackingForm({
                 onChange={(m) => setValue('monitors', m, { shouldDirty: true, shouldValidate: formState.isSubmitted })}
                 disabled={readOnly}
                 enginesError={errors.monitors?.aiEngines?.message}
+                aiMeasured={aiMeasuredFrom(ai.data)}
               />
             </div>
 

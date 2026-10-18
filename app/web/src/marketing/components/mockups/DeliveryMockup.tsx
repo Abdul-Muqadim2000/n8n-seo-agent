@@ -62,7 +62,7 @@ export function DeliveryMockup({ className }: { className?: string }) {
         <div className="mt-3 flex items-start gap-2 rounded-lg border border-warning-text/20 bg-warning-soft p-3">
           <AlertTriangle className="mt-px size-3.5 shrink-0 text-warning-text" />
           <span className="min-w-0 text-[11px] leading-snug text-ink-2">
-            <span className="font-medium">Not sent — Page: erp software uae.</span> The page did not pass the quality check, so it is waiting in Ascentra rather than going out as finished work.
+            <span className="font-medium">Not sent — Page: erp software uae.</span> The page did not pass the quality check, so it is waiting in Alaventra rather than going out as finished work.
           </span>
         </div>
       </div>

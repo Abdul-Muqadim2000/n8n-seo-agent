@@ -1,4 +1,5 @@
 import { modeCostUsd } from './cost';
+import { AI_PANEL_LIMITS, AI_PANEL_PRICE, AI_PANEL_PULSE_ENGINES, estimateAiPanelCost, type AiPulseMode } from './ai-panel';
 
 // Option lists mirror the n8n form pages and Normalize Input (n8n/seo-agent/v5 + build_v4.py), so every value the app sends
 // is one the workflow already understands. Change them together.
@@ -68,25 +69,32 @@ export const AI_ENGINES = [
   { value: 'ai_mode', label: 'Google AI Mode' },
   /** v4.12: Bing's Copilot Search summary (DataForSEO Bing results) — opt-in: Bing shows it for few searches */
   { value: 'copilot', label: 'Microsoft Copilot (Bing; few searches show it)' },
+  /** G6 (2026-10-18): what an app or agent built on the models answers (DataForSEO LLM Responses with web search) — opt-in */
+  { value: 'chatgpt_api', label: 'ChatGPT API (GPT with web search)' },
+  { value: 'gemini_api', label: 'Gemini API (with Google Search)' },
 ] as const;
 export type AiEngine = (typeof AI_ENGINES)[number]['value'];
 export const AI_ENGINE_VALUES = AI_ENGINES.map((e) => e.value) as unknown as [AiEngine, ...AiEngine[]];
-/** the engines a website starts with (Copilot is opt-in) */
-export const AI_DEFAULT_ENGINES: AiEngine[] = AI_ENGINE_VALUES.filter((e) => e !== 'copilot');
+/** the engines a website starts with (Copilot and the two model APIs are opt-in) */
+export const AI_DEFAULT_ENGINES: AiEngine[] = AI_ENGINE_VALUES.filter((e) => e !== 'copilot' && e !== 'chatgpt_api' && e !== 'gemini_api');
 
 export const PROSPECT_STATUSES = ['new', 'contacted', 'replied', 'won', 'rejected', 'ignored'] as const;   // replied: v4.13 (the app's inbox read a reply)
 export type ProspectStatus = (typeof PROSPECT_STATUSES)[number];
 
 export const CRAWL_PAGE_OPTIONS = [200, 500, 1000] as const;
 
-export const ROLES = ['owner', 'admin', 'member', 'viewer'] as const;
+// G5 (app/docs/WHITE_LABEL.md): the two client roles of an agency's client workspace rank BELOW viewer, so every route that asks for
+// viewer or more refuses them; the client portal opens its few routes to them explicitly (deny by default).
+export const ROLES = ['owner', 'admin', 'member', 'viewer', 'client_approver', 'client_viewer'] as const;
 export type Role = (typeof ROLES)[number];
-export const ROLE_RANK: Record<Role, number> = { viewer: 0, member: 1, admin: 2, owner: 3 };
+export const ROLE_RANK: Record<Role, number> = { client_viewer: -2, client_approver: -1, viewer: 0, member: 1, admin: 2, owner: 3 };
 export const ROLE_LABELS: Record<Role, string> = {
   owner: 'Owner',
   admin: 'Admin',
   member: 'Member',
   viewer: 'Viewer',
+  client_approver: 'Client approver',
+  client_viewer: 'Client viewer',
 };
 export function roleAtLeast(role: Role | null | undefined, min: Role): boolean {
   return !!role && ROLE_RANK[role] >= ROLE_RANK[min];
@@ -318,7 +326,7 @@ export const STAGE_LABELS: Record<string, string> = {
   case_study_started: 'Case study started',
   ai_visibility_started: 'AI visibility started',
   ai_visibility: 'AI visibility report',
-  ai_pulse: 'AI pulse alert',
+  ai_pulse: 'AI pulse',   // D-13: "alert" only when the day has one (titleFor)
   ai_growth: 'AI growth',
   backlinks_started: 'Backlink check started',
   backlinks: 'Backlink report',
@@ -344,12 +352,14 @@ export const MONITOR_COSTS = {
   weeksPerMonth: 4.33,
 };
 
-/** DataForSEO price per question on each AI engine (n8n AI_Requests.js CONFIG.cost, measured 2026-10-02 / priced 2026-10-08). */
-export const AI_ENGINE_COST: Record<AiEngine, number> = { chatgpt: 0.004, gemini: 0.004, perplexity: 0.006, claude: 0.025, ai_overview: 0.002, ai_mode: 0.004, copilot: 0.002 };
+/** DataForSEO price per question on each AI engine — the one table, ./ai-panel.ts (mirrors the engine's AIP.PRICE, golden cases in both). */
+export const AI_ENGINE_COST: Record<AiEngine, number> = { ...AI_PANEL_PRICE };
 /** The engines the daily AI Pulse asks (n8n Pulse_Plan.js CONFIG.pulse_engines), Tuesday to Sunday. */
-export const AI_PULSE_ENGINES: readonly AiEngine[] = ['chatgpt', 'gemini', 'ai_mode', 'copilot'];
-export const AI_PROMPTS_DEFAULT = 20;
-export const AI_PROMPTS_MAX = 50;
+export const AI_PULSE_ENGINES: readonly AiEngine[] = AI_PANEL_PULSE_ENGINES;
+/** G6 (2026-10-18): a NEW website starts with 50 questions; a website whose stored setting is empty keeps 20; up to 500. */
+export const AI_PROMPTS_DEFAULT = AI_PANEL_LIMITS.default_new;
+export const AI_PROMPTS_STORED_DEFAULT = AI_PANEL_LIMITS.default_stored;
+export const AI_PROMPTS_MAX = AI_PANEL_LIMITS.max;
 
 /** Questions the weekly run and the daily pulse ask: the panel without its brand question ("What is <site>?", asked once a month). */
 export function aiPulseQuestions(panel: number): number {
@@ -360,18 +370,10 @@ export function aiPulseQuestions(panel: number): number {
  * Monthly cost of AI visibility for one site (v4.9, n8n/seo-agent/AI_VISIBILITY_SPEC.md §5): the weekly run (every engine but Claude, plus
  * the Answer Analyst and the brief), the month's full run (Claude, the AI-answer database index and question discovery) and the daily pulse.
  */
-export function estimateAiVisibilityCost(o: { prompts?: number; engines?: readonly AiEngine[]; pulse?: boolean } = {}): { weekly: number; fullRun: number; pulse: number; total: number } {
-  const weeks = MONITOR_COSTS.weeksPerMonth;
-  const q = Math.min(AI_PROMPTS_MAX, Math.max(3, o.prompts ?? AI_PROMPTS_DEFAULT));
-  const engines = o.engines && o.engines.length ? o.engines : AI_DEFAULT_ENGINES;
-  const sum = (list: readonly AiEngine[]) => list.reduce((t, e) => t + AI_ENGINE_COST[e], 0);
-  const asked = aiPulseQuestions(q);   // the brand question is asked on the month's full run only (n8n AI_Requests.js)
-  const nonClaude = sum(engines.filter((e) => e !== 'claude'));
-  const weekly = weeks * (asked * nonClaude + 0.13);
-  const fullRun = (engines.includes('claude') ? q * AI_ENGINE_COST.claude : 0) + nonClaude + 0.45 + 0.3;
-  const pulse = o.pulse === false ? 0 : weeks * 6 * asked * sum(AI_PULSE_ENGINES.filter((e) => engines.includes(e)));
-  const r = (x: number) => Math.round(x * 100) / 100;
-  return { weekly: r(weekly), fullRun: r(fullRun), pulse: r(pulse), total: r(weekly + fullRun + pulse) };
+export function estimateAiVisibilityCost(o: { prompts?: number; engines?: readonly AiEngine[]; pulse?: boolean; pulseMode?: AiPulseMode | string; pulsePerWeek?: number | null } = {}): { weekly: number; fullRun: number; pulse: number; total: number } {
+  // G6 (2026-10-18): one formula — ./ai-panel.ts estimateAiPanelCost, the mirror of the engine's AIP.cost (golden cases on both sides)
+  const c = estimateAiPanelCost({ panel: o.prompts ?? AI_PROMPTS_DEFAULT, engines: o.engines && o.engines.length ? o.engines : AI_DEFAULT_ENGINES, pulse: o.pulse, pulseMode: o.pulseMode, pulsePerWeek: o.pulsePerWeek });
+  return { weekly: c.month.weekly, fullRun: c.month.fullExtra, pulse: c.month.pulse, total: c.month.total };
 }
 MONITOR_COSTS.aiVisibilityMonthly = estimateAiVisibilityCost().total;
 
@@ -422,6 +424,11 @@ export interface AutomationInfo {
   runNowMode?: ModeId;
   /** the website settings tab that controls it */
   settingsTab: string;
+  /**
+   * R103 (2026-10-16): when this schedule first existed (its n8n workflow's `createdAt`, UTC, read from the instance on 2026-10-15). A fire
+   * due before it is not a missed fire — the delivery rate counted 57 of its 72 "missed" fires before the workflow was even created.
+   */
+  since?: string;
 }
 
 export const AUTOMATIONS: AutomationInfo[] = [
@@ -432,6 +439,7 @@ export const AUTOMATIONS: AutomationInfo[] = [
     cadence: 'Every Monday · Claude, new questions and the market-wide index on the month’s first run',
     schedule: { kind: 'weekly', weekday: 1, hour: 7, minute: 0 },
     workflow: 'SEOagentAIVisib1',
+    since: '2026-10-02T12:32:00.000Z',
     stage: 'ai_visibility',
     runNowMode: 'ai_visibility',
     settingsTab: 'tracking',
@@ -443,6 +451,7 @@ export const AUTOMATIONS: AutomationInfo[] = [
     cadence: 'Every day except Monday · alerts only when something really changed',
     schedule: { kind: 'daily', weekdays: [0, 2, 3, 4, 5, 6], hour: 6, minute: 30 },
     workflow: 'SEOagentAIPulse1',
+    since: '2026-10-07T22:21:00.000Z',
     stage: 'ai_pulse',
     settingsTab: 'tracking',
   },
@@ -453,6 +462,7 @@ export const AUTOMATIONS: AutomationInfo[] = [
     cadence: 'Every Monday 09:30 · after the AI visibility check, before the content run',
     schedule: { kind: 'weekly', weekday: 1, hour: 9, minute: 30 },
     workflow: 'SEOagentAIGrow1',
+    since: '2026-10-10T15:14:00.000Z',
     stage: 'ai_growth',
     settingsTab: 'tracking',
   },
@@ -463,6 +473,7 @@ export const AUTOMATIONS: AutomationInfo[] = [
     cadence: 'Every Monday · full report on the month’s first run',
     schedule: { kind: 'weekly', weekday: 1, hour: 7, minute: 30 },
     workflow: 'SEOagentBacklnk1',
+    since: '2026-10-02T12:32:00.000Z',
     stage: 'backlinks',
     runNowMode: 'backlinks',
     settingsTab: 'tracking',
@@ -474,6 +485,7 @@ export const AUTOMATIONS: AutomationInfo[] = [
     cadence: 'Every Monday 11:00 · after the backlink monitor and the AI growth loop',
     schedule: { kind: 'weekly', weekday: 1, hour: 11, minute: 0 },
     workflow: 'SEOagentLinkBld1',
+    since: '2026-10-11T00:42:00.000Z',
     stage: 'link_builder',
     settingsTab: 'tracking',
   },
@@ -485,6 +497,7 @@ export const AUTOMATIONS: AutomationInfo[] = [
     cadence: 'Every Monday · main keywords also on a phone · unpublished pages outside the top 50 once a month',
     schedule: { kind: 'weekly', weekday: 1, hour: 8, minute: 0 },
     workflow: 'SEOagentTracker1',
+    since: '2026-10-01T12:06:00.000Z',
     stage: 'rank_tracker',
     settingsTab: 'tracking',
   },
@@ -495,6 +508,7 @@ export const AUTOMATIONS: AutomationInfo[] = [
     cadence: 'Every Monday · trends reused for 25 days',
     schedule: { kind: 'weekly', weekday: 1, hour: 9, minute: 0 },
     workflow: 'SEOagentSiteTrk1',
+    since: '2026-10-01T22:22:00.000Z',
     stage: 'site_tracker',
     runNowMode: 'track',
     settingsTab: 'tracking',
@@ -506,6 +520,7 @@ export const AUTOMATIONS: AutomationInfo[] = [
     cadence: 'Every Monday · as many posts as you set per week',
     schedule: { kind: 'weekly', weekday: 1, hour: 10, minute: 0 },
     workflow: 'SEOagentCadence1',
+    since: '2026-10-01T23:15:00.000Z',
     stage: 'content',
     settingsTab: 'tracking',
   },
@@ -516,11 +531,35 @@ export const AUTOMATIONS: AutomationInfo[] = [
     cadence: '1st of every month · skipped when nothing changed',
     schedule: { kind: 'monthly', day: 1, hour: 6, minute: 0 },
     workflow: 'SEOagentAuditSc1',
+    since: '2026-10-02T12:32:00.000Z',
     stage: 'site_audit',
     runNowMode: 'audit',
     settingsTab: 'tracking',
   },
 ];
+
+/**
+ * R103 (2026-10-16): every n8n schedule the delivery rate measures — the nine automations above plus the tenth, the daily key-page watch
+ * (`SEOagentPageWch1`, build_site_tracker.py: `days`, interval 1, 05:45 in n8n's timezone, every day). Page Watch is not an automation a
+ * website switches on (it has no report stage and no settings tab of its own), so it is not in `AUTOMATIONS`; it is a schedule all the
+ * same, and a schedule that does not fire is a missed fire.
+ */
+export type ScheduleId = AutomationId | 'page_watch';
+export type ScheduleInfo = Omit<AutomationInfo, 'id'> & { id: ScheduleId };
+
+export const PAGE_WATCH_SCHEDULE: ScheduleInfo = {
+  id: 'page_watch',
+  title: 'Key-page watch',
+  summary: 'Reads your key pages and robots.txt every morning and alerts the same day when one went noindex, started redirecting, lost its canonical or changed its title.',
+  cadence: 'Every day 05:45',
+  schedule: { kind: 'daily', weekdays: [0, 1, 2, 3, 4, 5, 6], hour: 5, minute: 45 },
+  workflow: 'SEOagentPageWch1',
+  stage: 'page_watch',
+  settingsTab: 'tracking',
+  since: '2026-10-13T06:16:00.000Z',
+};
+
+export const SCHEDULES: ScheduleInfo[] = [...AUTOMATIONS, PAGE_WATCH_SCHEDULE];
 
 /** The next time a schedule fires after `from`, in the n8n timezone `tz` (DST-safe, no libraries). */
 export function nextScheduledRun(s: AutomationInfo['schedule'], tz: string, from: Date = new Date()): Date {
