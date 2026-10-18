@@ -118,6 +118,18 @@ export const changelog: ChangelogEntry[] = [
     features: ['reports', 'content', 'technical-audits', 'keyword-ladders', 'site-tracking', 'ai-visibility', 'enterprise'],
   },
   {
+    date: '2026-10-16',
+    title: 'A missed schedule still runs',
+    summary:
+      'Every automatic run — the Monday checks, the writing, the monthly audit — used to be lost if the system was down at the moment it was due. Now a run that did not fire starts once the system is back, and says so.',
+    highlights: [
+      'Every quarter of an hour Ascentra looks for runs that were due and did not start, and starts each one once',
+      'A Monday run missed on Monday is still that week’s run later in the week',
+      'A run that started late opens its report with “Ran late” and the time it was due, so a late figure is never taken for an on-time one',
+    ],
+    features: ['autopilot'],
+  },
+  {
     date: '2026-10-15',
     title: 'Rank tracking now follows the keywords you named, not only the ones in a ladder',
     summary:
@@ -501,6 +513,21 @@ export const changelog: ChangelogEntry[] = [
   },
   {
     date: '2026-10-11',
+    title: 'Link building: pitches from your own mailbox, replies read for you',
+    summary:
+      'Ascentra now helps you get links, not only list them. Every Monday it finds the openings, checks each one, finds a contact on the site’s own domain and drafts a short sequence that points at the right page of yours — and once you approve it, it goes out from your own mailbox.',
+    highlights: [
+      'New openings every week: journalist requests, resource pages, broken links, your competitors’ broken links, your own old addresses that now fail (with the redirect to add) and a checklist of the directories worth being on',
+      'Every prospect checked on its own page; competitors, link sellers, government portals and off-topic sites set aside with the reason',
+      'Up to three contacts per site, on that site’s own domain, and the page of yours to point to with the link text to ask for — your brand, the title or the address, never a keyword',
+      'A first e-mail and two follow-ups per prospect, sent on weekdays from your mailbox, starting slowly, with your postal address and an opt-out in every e-mail and a consent check where the law expects one',
+      'Replies read for you: the sequence stops, out of office moves the next step, a “no” is honoured for good, and an answer is suggested',
+      'What each won link did, compared with your other pages over the same weeks',
+    ],
+    features: ['link-building', 'backlinks'],
+  },
+  {
+    date: '2026-10-11',
     title: 'Link farms set aside, replies that stick to the facts',
     summary: 'The backlink check now recognises link-farm networks as a whole, and suggested answers to outreach replies never state anything about your business that you did not put on file.',
     highlights: [
@@ -509,6 +536,21 @@ export const changelog: ChangelogEntry[] = [
       'Your business profile (author, reviewer, address) is read with every reply',
     ],
     features: ['backlinks'],
+  },
+  {
+    date: '2026-10-10',
+    title: 'AI growth: the weekly work that gets you named in AI answers',
+    summary:
+      'AI visibility told you where you stand; AI growth acts on it every Monday — getting new pages indexed, making key pages easy for AI assistants to quote, writing the answers you lose and turning the pages AI cites without you into pitches.',
+    highlights: [
+      'New and updated pages sent to Bing Webmaster Tools every week, and through IndexNow once your key file is up',
+      'An AI-readiness score for your key pages: the answer first, a visible update date, question headings, sourced figures and text that is there before any script runs',
+      'Every lost question becomes one action: a new answer page, a refresh of the page that ranks for it, or the keyword-ladder page for the same search',
+      'An AI answer page of the week from the content cadence, two a month by default',
+      'The exact pages AI cites without naming you, the competitors they name and a drafted pitch for each',
+      'A monthly Wikidata check for your business',
+    ],
+    features: ['ai-growth', 'ai-visibility'],
   },
   {
     date: '2026-10-08',

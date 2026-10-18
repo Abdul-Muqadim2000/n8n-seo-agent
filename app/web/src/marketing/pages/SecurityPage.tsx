@@ -1,4 +1,4 @@
-import { BadgeCheck, Bug, Building2, Check, Fingerprint, KeyRound, Minus, ScrollText, ShieldCheck, Users, Wallet, type LucideIcon } from 'lucide-react';
+import { BadgeCheck, Bug, Building2, Check, Fingerprint, KeyRound, Minus, Plug, ScrollText, ShieldCheck, Users, Wallet, type LucideIcon } from 'lucide-react';
 import { ButtonLink } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { CtaBand, Faq, IconTile, Reveal, Section, SectionHeading } from '../components';
@@ -36,6 +36,7 @@ const GROUPS: { icon: LucideIcon; title: string; items: string[] }[] = [
       'Invitations by link, which admins can revoke',
       'Every request checked against your role on the server, not only in the browser',
       'Signing in with Google to an unconfirmed account removes its old password and sessions',
+      'An agency’s client logins reach only that client’s own workspace — never other clients, costs or settings',
     ],
   },
   {
@@ -78,6 +79,19 @@ const GROUPS: { icon: LucideIcon; title: string; items: string[] }[] = [
       'One verified owner per domain',
       'Proof must come from a person — Ascentra’s own Google access never counts',
       'A GA4 property is accepted only when it measures the verified domain',
+      'An agency portal address is proven with its own DNS record, checked again every few hours, and stops being served when the proof disappears',
+      'Certificates are only issued for portal addresses that are verified',
+    ],
+  },
+  {
+    icon: Plug,
+    title: 'Keys, secrets and connections',
+    items: [
+      'API keys shown once; only a hash is stored, with an expiry, and each can be revoked',
+      'Keys read by default — starting analyses is a separate permission, always inside your budget',
+      'Mailbox passwords and sign-in grants, CMS and tracker tokens, storage keys and webhook addresses encrypted at rest and never shown again',
+      'Outgoing connections only to public https addresses of the tool you connected',
+      'Every webhook signed with your own secret and a timestamp, so your systems can tell it came from us',
     ],
   },
   {
@@ -144,6 +158,10 @@ const FAQS: FaqItem[] = [
   {
     q: 'Is there an audit log?',
     a: 'Yes. Owners and admins see sign-ins and failed sign-ins, two-step changes, team and role changes, websites, settings, API keys and sharing, with who, when and from which address, and can export it as CSV. Entries cannot be edited or deleted; you choose how long they are kept.',
+  },
+  {
+    q: 'Does Ascentra send e-mail in our name?',
+    a: 'Only link-building pitches, only from a mailbox you connected, and by default only after a person approved each one. Every e-mail carries your name, company, postal address and an opt-out that is honoured for good; recipients in countries that expect prior consent are held until you confirm it; and an address with no mail server is never written to.',
   },
   {
     q: 'Can you go through our security questionnaire?',

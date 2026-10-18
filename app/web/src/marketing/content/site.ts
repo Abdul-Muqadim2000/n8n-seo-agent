@@ -70,6 +70,7 @@ export const integrations: string[] = [
   'Google Analytics 4',
   'Google Trends',
   'Bing Webmaster Tools',
+  'IndexNow',
   'ChatGPT',
   'Gemini',
   'Perplexity',
@@ -87,6 +88,11 @@ export const integrations: string[] = [
   'BigQuery',
   'Amazon S3',
   'Looker Studio',
+  'Microsoft 365',
+  'Gmail',
+  'Okta',
+  'Microsoft Entra ID',
+  'Cloudflare',
 ];
 
 /** the six AI engines and answer surfaces Ascentra asks */

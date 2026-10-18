@@ -1,4 +1,4 @@
-import { Activity, ChartLine, ChartNoAxesColumnIncreasing, Info, Link2, PenLine, ScanSearch, Sparkles, type LucideIcon } from 'lucide-react';
+import { Activity, ChartLine, ChartNoAxesColumnIncreasing, Eye, Handshake, Info, Link2, PenLine, Rocket, ScanSearch, Sparkles, type LucideIcon } from 'lucide-react';
 import { Link } from 'react-router';
 import { cn } from '@/lib/utils';
 import { useSectionTone } from '../Section';
@@ -13,7 +13,15 @@ interface Run {
   to: string;
 }
 
-// The real default schedule (the automatic runs behind every website).
+// The real default schedule (the automatic runs behind every website; n8n's schedule triggers, New York time).
+const WATCH: Run = {
+  time: '05:45',
+  when: 'Every day',
+  title: 'Key-page check',
+  body: 'Your most important pages and robots.txt, compared with yesterday. A page that disappears, turns noindex or starts redirecting is an alert the same day.',
+  icon: Eye,
+  to: '/platform/technical-audits',
+};
 const PULSE: Run = {
   time: '06:30',
   when: 'Tuesday to Sunday',
@@ -25,9 +33,11 @@ const PULSE: Run = {
 const MONDAY: Run[] = [
   { time: '07:00', when: 'Monday', title: 'AI visibility', body: 'The full question panel across the AI engines, with share of voice against your competitors.', icon: Sparkles, to: '/platform/ai-visibility' },
   { time: '07:30', when: 'Monday', title: 'Backlinks', body: 'The weekly link watch: new links, spam and links lost after two misses, with the reason.', icon: Link2, to: '/platform/backlinks' },
-  { time: '08:00', when: 'Monday', title: 'Rank tracking', body: 'Every ladder page and head term, checked for its position.', icon: ChartNoAxesColumnIncreasing, to: '/platform/keyword-ladders' },
+  { time: '08:00', when: 'Monday', title: 'Rank tracking', body: 'Every ladder page, head term and keyword you track, checked for its position and the whole results page.', icon: ChartNoAxesColumnIncreasing, to: '/platform/keyword-ladders' },
   { time: '09:00', when: 'Monday', title: 'Site tracking', body: 'Search Console, GA4, Google Trends and live checks, newly published pages, then the Monday report.', icon: ChartLine, to: '/platform/site-tracking' },
-  { time: '10:00', when: 'Monday', title: 'Content cadence', body: 'This week’s posts, picked and written: ladder rung first, then striking distance, then rising trends.', icon: PenLine, to: '/platform/autopilot' },
+  { time: '09:30', when: 'Monday', title: 'AI growth', body: 'New pages sent to Bing and IndexNow, key pages scored for AI readiness, the questions to win queued.', icon: Rocket, to: '/platform/ai-growth' },
+  { time: '10:00', when: 'Monday', title: 'Content cadence', body: 'This week’s posts, picked and written: ladder rung first, then a page losing traffic, striking distance, rising trends — and the AI answer page of the week.', icon: PenLine, to: '/platform/autopilot' },
+  { time: '11:00', when: 'Monday', title: 'Link building', body: 'New openings checked, contacts found and pitches drafted for your approval.', icon: Handshake, to: '/platform/link-building' },
 ];
 const AUDIT: Run = {
   time: '06:00',
@@ -39,15 +49,17 @@ const AUDIT: Run = {
 };
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const START = 6 * 60; // 06:00
-const END = 10 * 60 + 30; // 10:30
+const START = 5 * 60 + 30; // 05:30
+const END = 11 * 60 + 30; // 11:30
 const SPAN = END - START;
-const SWEEP_S = 9; // seconds for the cursor to cross 06:00 → 10:30 (matches platform.css)
-const HOURS = ['06:00', '07:00', '08:00', '09:00', '10:00'];
+const SWEEP_S = 9; // seconds for the cursor to cross 05:30 → 11:30 (matches platform.css)
+const HOURS = ['06:00', '07:00', '08:00', '09:00', '10:00', '11:00'];
+/** runs on a day of the week: Monday has the key-page check and the Monday runs, every other day the key-page check and the pulse */
+const runsOn = (day: number): number => (day === 0 ? 1 + MONDAY.length : 2);
 const mins = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3));
 const pct = (t: string) => ((mins(t) - START) / SPAN) * 100;
 
-/** "A week with Ascentra": the automatic runs on a Mon–Sun grid of 06:00–10:30, a time cursor sweeping down and lighting each run
+/** "A week with Ascentra": the automatic runs on a Mon–Sun grid of 05:30–11:30, a time cursor sweeping down and lighting each run
  *  as it passes; the monthly audit underneath; every run described in a list (the only view on phones, with a compact week strip). */
 export function WeekSchedule({ className }: { className?: string }) {
   const ink = useSectionTone() === 'ink';
@@ -82,7 +94,7 @@ export function WeekSchedule({ className }: { className?: string }) {
     </div>
   );
 
-  const all: Run[] = [PULSE, ...MONDAY, AUDIT];
+  const all: Run[] = [WATCH, PULSE, ...MONDAY, AUDIT];
   return (
     <div ref={ref} className={cn(on && 'is-on', className)} style={{ ['--pf-ring' as string]: ink ? 'var(--accent-on-ink)' : 'var(--accent)' }}>
       {/* wide screens: the week grid (decorative; the list below carries the same information) */}
@@ -92,11 +104,11 @@ export function WeekSchedule({ className }: { className?: string }) {
           {DAYS.map((d, i) => (
             <span key={d} className="flex items-center justify-between gap-2 px-2 pb-3">
               <span className={cn('text-[13px] font-semibold', i === 0 ? (ink ? 'text-on-ink' : 'text-ink') : muted)}>{d}</span>
-              <span className={cn('font-mono text-[10px]', muted)}>{i === 0 ? '5 runs' : '1 run'}</span>
+              <span className={cn('font-mono text-[10px]', muted)}>{runsOn(i)} runs</span>
             </span>
           ))}
         </div>
-        <div className="relative grid h-[396px] grid-cols-[52px_repeat(7,minmax(0,1fr))]">
+        <div className="relative grid h-[528px] grid-cols-[52px_repeat(7,minmax(0,1fr))]">
           {/* hour lines and labels */}
           {HOURS.map((h) => (
             <div key={h} className="pointer-events-none absolute inset-x-0 flex items-start" style={{ top: `${pct(h)}%` }}>
@@ -107,6 +119,7 @@ export function WeekSchedule({ className }: { className?: string }) {
           <span />
           {DAYS.map((d, i) => (
             <div key={d} className={cn('relative border-l', line, i === 0 && (ink ? 'bg-on-ink/[0.04]' : 'bg-accent-soft/40'))}>
+              {runBlock(WATCH, i, false)}
               {i === 0 ? MONDAY.map((r, j) => runBlock(r, j + 1, false)) : runBlock(PULSE, i, true)}
             </div>
           ))}
@@ -140,7 +153,7 @@ export function WeekSchedule({ className }: { className?: string }) {
           >
             <span className={cn('text-[12px] font-semibold', i === 0 ? (ink ? 'text-on-ink' : 'text-ink') : muted)}>{d}</span>
             <span className="flex flex-col gap-1">
-              {Array.from({ length: i === 0 ? 5 : 1 }).map((_, j) => (
+              {Array.from({ length: runsOn(i) }).map((_, j) => (
                 <span key={j} className={cn('size-1.5 rounded-full', ink ? 'bg-accent-on-ink' : 'bg-accent')} />
               ))}
             </span>
@@ -178,7 +191,7 @@ export function WeekSchedule({ className }: { className?: string }) {
           <div className={cn('flex h-full flex-col rounded-xl border border-dashed p-4 sm:p-5', line)}>
             <Info className={cn('size-4', ink ? 'text-accent-on-ink' : 'text-accent-text')} aria-hidden />
             <p className={cn('mt-4 text-[13.5px] leading-relaxed', ink ? 'text-on-ink-2' : 'text-ink-2')}>
-              The default schedule. Each website’s pipeline page shows every run with its next and last time, and the daily AI Pulse can be switched off per website.
+              The default schedule. Each website’s pipeline page shows every run with its next and last time, and the daily AI Pulse can be switched off per website. A run that was missed — the server was down, say — starts once it is back, and its report says it ran late.
             </p>
           </div>
         </li>

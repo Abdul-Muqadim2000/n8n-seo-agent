@@ -16,6 +16,8 @@ import { KeywordVerdictMockup } from './mockups/KeywordVerdictMockup';
 import { LadderMockup } from './mockups/LadderMockup';
 import { WorkspaceMockup } from './mockups/WorkspaceMockup';
 import { AgencyPortalMockup } from './mockups/AgencyPortalMockup';
+import { AiGrowthMockup } from './mockups/AiGrowthMockup';
+import { OutreachMockup } from './mockups/OutreachMockup';
 
 /** Renders the mockup or diagram a feature names in the registry (`feature.visual` / `feature.diagram`). */
 export function FeatureVisual({ kind, className }: { kind: VisualKey; className?: string }) {
@@ -56,5 +58,9 @@ export function FeatureVisual({ kind, className }: { kind: VisualKey; className?
       return <CrawlersMockup className={className} />;
     case 'ai-engines':
       return <AiEnginesDiagram className={className} />;
+    case 'ai-growth':
+      return <AiGrowthMockup className={className} />;
+    case 'outreach':
+      return <OutreachMockup className={className} />;
   }
 }

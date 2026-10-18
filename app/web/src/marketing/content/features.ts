@@ -7,8 +7,10 @@ import {
   ChartLine,
   ChartNoAxesColumnIncreasing,
   FileText,
+  Handshake,
   LifeBuoy,
   Plug,
+  Rocket,
   Send,
   Link2,
   PenLine,
@@ -38,7 +40,9 @@ export type VisualKey =
   | 'link-sources'
   | 'ai-engines'
   | 'crawlers'
-  | 'agency-portal';
+  | 'agency-portal'
+  | 'ai-growth'
+  | 'outreach';
 
 export interface Fact {
   /** a number counts up when it scrolls into view; a string is shown as is */
@@ -115,6 +119,8 @@ export const features: Feature[] = [
       'Notices when a planned page goes live and moves the plan on',
       'A pile-up guard: no new pages while too many wait to be published — every written page counts, ladder pages included, and they are named',
       'The queue never offers a page you already have: a search one of your live pages answers is queued as a refresh of that page',
+      'An AI answer page of the week when a question your buyers ask AI assistants is being lost — on top of the blog posts, two a month by default, never while drafts pile up',
+      'A scheduled run that did not fire — the server was down, say — still runs once it is back, that same week, and its report says it ran late',
     ],
     steps: [
       { title: 'Set the pace', body: 'Choose blog posts per week, the default mode — Auto or Manual — and how many ladders are written at once.' },
@@ -135,6 +141,10 @@ export const features: Feature[] = [
         a: 'Not by itself. It sends written pages to your WordPress, Webflow or Contentful (or any other stack through a signed webhook) as drafts, and an owner or admin chooses when one goes live. A page that failed its quality check, or still has text left for you to fill in, is never sent. Ascentra then checks the live page and tracks it. If you would rather not, publishing is one of the done-for-you services on the pricing page.',
       },
       { q: 'Can I change the pace later?', a: 'Yes. Posts per week, the default mode and the ladder limits are website settings you can change at any time.' },
+      {
+        q: 'What if a scheduled run is missed?',
+        a: 'It still happens. Every quarter of an hour Ascentra looks for runs that were due and did not start, and starts each one once. A Monday run missed on Monday is still that week’s run later in the week, and its report opens by saying it ran late and when it was due, so a late figure is never mistaken for an on-time one.',
+      },
     ],
     related: ['keyword-ladders', 'content', 'site-tracking'],
     image: 'teamPlanning',
@@ -567,8 +577,12 @@ export const features: Feature[] = [
         a: 'Yes. The Answer Analyst compares answers with your business profile and lists wrong claims, sentiment and the order brands are named in.',
       },
       { q: 'Can AI crawlers reach my site?', a: 'Every week Ascentra checks robots.txt for each AI crawler, your llms.txt file and whether your CDN blocks them.' },
+      {
+        q: 'Does it do anything about what it finds?',
+        a: 'Yes — that is AI growth. Every Monday, after the visibility run, the questions you lose become pages to write or refresh, new pages go to Bing and IndexNow, your key pages are checked for what AI assistants need to quote them, and the pages AI cites without naming you become pitches.',
+      },
     ],
-    related: ['backlinks', 'content', 'reports'],
+    related: ['ai-growth', 'content', 'reports'],
     image: 'meetingGesture',
     visual: 'ai-visibility',
     diagram: 'ai-engines',
@@ -576,6 +590,67 @@ export const features: Feature[] = [
       eyebrow: 'One panel, six engines',
       title: 'The same questions, asked everywhere, on a schedule.',
       body: 'Every engine gets the same buyer questions. Answers are read for who is named, who is cited and what is said about you, and every rate carries a 95% range — so a real change stands out from day-to-day noise.',
+    },
+  },
+  {
+    slug: 'ai-growth',
+    name: 'AI growth',
+    shortName: 'AI growth',
+    tagline: 'The weekly work that gets you named and cited in AI answers — not just a score.',
+    summary:
+      'Measuring AI visibility tells you where you stand; AI growth acts on it every Monday. New and updated pages go to Bing and IndexNow, your key pages are checked for what AI assistants need in order to quote them, the questions you lose become pages to write or refresh, and the exact pages AI cites without naming you become pitches.',
+    icon: Rocket,
+    benefits: [
+      'New and updated pages sent to Bing Webmaster Tools every week — the index Microsoft Copilot answers from — and through IndexNow once your key file is up',
+      'An AI-readiness score for your key pages: reachable, indexable, the text there before any script runs, the answer in the first lines, a visible update date, question headings and figures with linked sources',
+      'Schema and llms.txt are reported but never scored, because there is no good evidence they change AI answers',
+      'Every question you lose becomes one action: a new answer page, a refresh of the page that already ranks for it, or the keyword-ladder page for the same search — never two pages for one search',
+      'Answer pages written by the content engine with the answer first, a section for each search the AI runs before it answers, sources AI already trusts and a visible “Updated” date',
+      'Earned media: the exact pages AI cited when it did not name you, the competitors they name, the action that fits each one and a pitch drafted for you to review',
+      'A page that starts naming you is marked won, and you hear about it',
+      'A monthly check of whether Wikidata knows your business, by name and by official website',
+      'No tricks: no special versions of pages for AI crawlers, no lists that rank you first, no hidden instructions to assistants',
+    ],
+    steps: [
+      { title: 'See what you lose', body: 'The weekly AI visibility run names the questions where competitors are named and you are not.' },
+      { title: 'Get indexed where AI looks', body: 'New and updated pages go to Bing and IndexNow, and your key pages are scored for AI readiness.' },
+      { title: 'Win the answer', body: 'Lost questions become answer pages or refreshes, written on the same rules as every page — one search, one page, and no new writing while drafts pile up.' },
+      { title: 'Earn the mention', body: 'The pages AI cites without you become checked pitches that wait for your approval.' },
+    ],
+    facts: [
+      { value: 'Weekly', label: 'every Monday, after the AI visibility run' },
+      { value: 12, label: 'key pages scored for AI readiness each week, at most' },
+      { value: 2, label: 'AI answer pages a month by default, from 0 to 8' },
+    ],
+    faqs: [
+      {
+        q: 'Does sending pages to Bing get us into ChatGPT?',
+        a: 'We do not claim that. Bing’s index is the one Microsoft Copilot answers from; ChatGPT, Gemini, Perplexity and Claude read other indexes. Getting a new page into Bing the same week is a cheap, safe step — the rest of AI growth works on your pages and on the third-party pages those other assistants already quote.',
+      },
+      {
+        q: 'What is IndexNow, and what do we have to do?',
+        a: 'A shared way to tell search engines that a page changed. Ascentra gives each website its own key; you put one small text file at the root of your site — the guide shows how for your platform — and press “Check the file”. Until it is there, pages still go to Bing through Bing Webmaster Tools.',
+      },
+      {
+        q: 'What makes a page ready for AI answers?',
+        a: 'What the evidence supports: the page can be fetched and indexed, its text is in the HTML before any script runs (the AI fetchers run none), the answer comes in the first lines, it shows a visible date it was updated, its headings are the questions people ask and its figures link to their source. Each key page gets a score out of 100 with the reasons, checked again about once a month.',
+      },
+      {
+        q: 'Does AI growth cost extra?',
+        a: 'The checks, the Bing and IndexNow submissions and the Wikidata check are free. Answer pages are written like any other page and their cost is shown in the settings before you switch them on; set AI answer pages to 0 a month and only the drafted pitches remain.',
+      },
+      {
+        q: 'Will you send the pitches for us?',
+        a: 'Each pitch goes through link building: it is checked, waits for your approval by default and is sent from your own mailbox. Nothing is sent without a person’s yes unless an owner allows checked pitches to go automatically, within daily limits.',
+      },
+    ],
+    related: ['ai-visibility', 'content', 'link-building'],
+    image: 'loftPresenter',
+    visual: 'ai-growth',
+    story: {
+      eyebrow: 'Why it matters',
+      title: 'Being measured is not the same as being named.',
+      body: 'AI assistants quote pages they can fetch, read and trust, and they lean on what other websites say about you. AI growth works on both every week: your own pages made easy to quote, and the pages AI already cites brought round to naming you.',
     },
   },
   {
@@ -646,24 +721,17 @@ export const features: Feature[] = [
       'Lost only after two misses, with the reason',
       'SEO, referral and brand value for every link',
       'Link-farm pages and search-results pages are written off, so your best links are the ones that really help',
-      'Scored prospects with contacts, outreach drafts and follow-ups after 7 and 14 days',
-      'Connect Microsoft 365 or Gmail in one click, with no password to store, or any mail host with an app password',
-      'Guides for the parts that happen outside Ascentra: the app password, the SMTP and IMAP settings, your SPF, DKIM and DMARC records, and Google’s own export of your links',
-      'Podcast shows on your topics that take guests, each with a contact on the show’s own website',
-      'Journalist requests from the digests in your own mailbox, matched to your topics and kept to their deadline',
-      'What kind of page earns links in your market — data study, free tool, template or guide — with the competitor pages that prove it',
-      'Two subject lines per batch with the reply rate of each, and no verdict until enough have gone out to mean anything',
+      'Upload Google’s own export of your links, or a backlink file from another tool, and it joins the ledger — with a guide for the export',
+      'The link gap, unlinked mentions of your name and broken links pointing at you, scored as prospects with their contacts',
       'A competitor’s own sister domains and sites off your topics stay out of the prospect list, with the reason shown',
-      'Competitors, government portals, bare homepages and mailbox or data-broker addresses are never pitched',
-      'Every draft is checked before you see it: nothing claimed that your profile does not carry, something quoted from their page, one link to your page, short, with one clear ask',
-      'The whole week as one PDF: every opportunity with the reason it was kept or dropped, the contacts found on their own sites, the page and the link text to ask for, each pitch as it would be sent, the places to list yourself, the redirects to add and what your links did so far',
+      'Prospects go straight to link building, which drafts the pitch and sends it from your own mailbox once you approve it',
       'A free-sources mode that costs nothing to run',
     ],
     steps: [
       { title: 'Merge', body: 'Nine sources flow into one ledger, one row per referring site.' },
       { title: 'Check', body: 'Ascentra visits each linking page and reads the link the way a search engine would.' },
       { title: 'Value', body: 'Every link gets an SEO, referral and brand value.' },
-      { title: 'Grow', body: 'Scored prospects, contacts, checked outreach drafts and follow-up reminders, sent from your own mailbox.' },
+      { title: 'Grow', body: 'Scored prospects with their contacts, handed to link building for a checked pitch from your own mailbox.' },
     ],
     facts: [
       { value: 9, label: 'link sources in one ledger' },
@@ -684,30 +752,12 @@ export const features: Feature[] = [
         q: 'What does the free-sources mode include?',
         a: 'Everything except the commercial index: Bing Webmaster Tools, Search Console and GA4 data, the Common Crawl graph, Wikipedia, Hacker News, news and web search.',
       },
-      { q: 'Does Ascentra send outreach e-mails?', a: 'It drafts outreach and reminds you to follow up after 7 and 14 days. Sending stays with your team, from your own mailbox.' },
       {
-        q: 'Do I have to hand over my mailbox password?',
-        a: 'No. Microsoft 365 and Gmail can be connected on their own sign-in screen, where you grant exactly two things: sending, and (for Microsoft 365) reading the replies to your own pitches. Nothing but a renewable permission is stored, it is encrypted, and it is withdrawn when you disconnect the mailbox. Google treats inbox access as a restricted scope, so a Gmail mailbox sends and you read its replies in Gmail — the app says so before you connect it. An app password still works for any mail host.',
+        q: 'Does Ascentra send the outreach?',
+        a: 'Link building does: it drafts each pitch, checks it, and once you approve it sends it from your own mailbox, with the follow-ups in the same thread. The sending rules — office hours, a gentle start, your postal address and an opt-out in every e-mail, consent where the law asks for it — are on the link-building page.',
       },
-      {
-        q: 'Where do the opportunities come from?',
-        a: 'Pages that already link to your competitors or to a page that no longer exists, lists that leave you out, resource pages on your topics, journalists asking publicly or through the HARO and Source of Sources digests in your own mailbox, podcast shows that say they take guests, and the directories worth being on. Each one is checked on its own page before it reaches you.',
-      },
-      {
-        q: 'What should I build to earn links?',
-        a: 'Each month Ascentra reads the pages your competitors have the most links to and tells you which kind of page earns links in your market — a data study, a free tool, a template or a definitive guide — with those pages and the number of websites linking to each. It is evidence of what works, with the work named; it is never a promise of links.',
-      },
-      {
-        q: 'Do you decide which subject line is better?',
-        a: 'Only once there is enough to read. Every batch gets two subject lines in different styles and they go out in equal numbers; you see the e-mails sent and the replies for each. Under thirty sends per line the page says “not enough sends yet” instead of naming a winner, because at that size a few points of difference is noise.',
-      },
-      {
-        q: 'Who gets pitched, and what is in the draft?',
-        a: 'Only sites that could really link to you: a competitor selling what you sell, a government portal, a page that sells links and a bare homepage are refused with the reason. Every draft then passes an automatic check — it may claim nothing your business profile does not carry, it quotes something from their page, it carries one link to the page it offers, it is short and makes one clear ask. A draft that fails any of these waits for your edit instead of being offered as ready.',
-      },
-      { q: 'What if an address cannot receive mail?', a: 'Before the first e-mail Ascentra checks that the recipient\'s domain has a mail server. If it has none, the address is set aside with the reason instead of being written to — a bounce would only hurt your own mailbox.' },
     ],
-    related: ['ai-visibility', 'technical-audits', 'reports'],
+    related: ['link-building', 'ai-visibility', 'reports'],
     image: 'teamTable',
     visual: 'backlinks',
     diagram: 'link-sources',
@@ -715,6 +765,84 @@ export const features: Feature[] = [
       eyebrow: 'Nine sources, one ledger',
       title: 'Every source sees part of the web. Together they see more.',
       body: 'Ascentra merges nine sources into one row per referring site, then visits each linking page itself to confirm the link, where it sits on the page and whether search engines can follow it.',
+    },
+  },
+  {
+    slug: 'link-building',
+    name: 'Link building',
+    shortName: 'Link building',
+    tagline: 'Pitches worth sending, from your own mailbox, to sites that could really link to you.',
+    summary:
+      'Every week Ascentra finds the openings — journalist requests, resource pages, broken links, lists that leave you out, podcasts that take guests, directories worth being on — checks each one on its own page, finds a contact on that site’s own domain and drafts a short sequence that points at the right page of yours. You approve it, it goes out from your own mailbox, and the replies come back read, with an answer suggested.',
+    icon: Handshake,
+    benefits: [
+      'New openings every week: journalist requests (public ones and the HARO and Source of Sources digests in your inbox), resource pages, broken links on pages about your topics, your competitors’ broken links, podcasts that take guests and lists that leave you out',
+      'Your own old addresses that now return an error, found in the web archive, with the redirect to add so the links still pointing at them count again',
+      'Every prospect checked on its own page first: gone, selling links, off your topics, in another language, a competitor or a government portal — set aside with the reason',
+      'Up to three contacts per site, on that site’s own domain — never a no-reply, privacy or jobs address — each with the page it was found on',
+      'The right page of yours to point to and the link text to ask for: your brand, the page’s title or its address — never a keyword',
+      'A short sequence per prospect: a first e-mail that quotes their page, then two follow-ups four and eight working days later in the same thread',
+      'Every draft checked before you see it: nothing claimed that your profile does not carry, something quoted from their page, one link, short, one clear ask — a draft that fails waits for your edit',
+      'Sent from your own mailbox on weekdays inside its office hours, starting slowly and spaced minutes apart, with your name, company, postal address and a one-line opt-out in every e-mail',
+      'A consent check for the countries that need one, an address with no mail server set aside before anything is sent, and an opt-out list honoured for good',
+      'Replies read for you: interested, a question, out of office until a date, a “no”, a request for payment — with a suggested answer, and their page checked for your link straight away',
+      'Two subject lines tested side by side, with no winner named until enough have gone out to mean anything',
+      'What kind of page earns links in your market — a data study, a free tool, a template or a guide — with the competitor pages that prove it',
+      'A checklist of the directories and marketplaces worth being on, what we found on each and a ready description to paste — you submit, we check',
+      'What each won link did: the page compared with your other pages over the same weeks — “likely helped”, never “caused” — and the whole week as one PDF',
+    ],
+    steps: [
+      { title: 'Find', body: 'Every Monday, new openings from journalists, resource and list pages, broken links, podcasts and directories — each fetched and checked on its own page.' },
+      { title: 'Prepare', body: 'A contact on their own site, the page of yours that fits, the link text to ask for and a drafted sequence that passed its checks.' },
+      { title: 'Approve', body: 'You read, edit and approve each sequence. An owner can let checked ones go automatically, within daily limits.' },
+      { title: 'Send and follow up', body: 'From your own mailbox, in one thread, stopping the moment they reply. A won link is confirmed by Ascentra’s own link check.' },
+    ],
+    facts: [
+      { value: 3, label: 'e-mails at most per prospect: a pitch and two follow-ups' },
+      { value: 'Your mailbox', label: 'every pitch is sent from your own address' },
+      { value: 28, label: 'directories and marketplaces on the listings checklist' },
+    ],
+    faqs: [
+      {
+        q: 'Does Ascentra place links for us?',
+        a: 'No — and no tool should: Google counts automated link creation as spam. Ascentra does everything around the human yes. It finds the openings, checks them, finds the contact, drafts the pitch and tracks the result; a person approves what is sent, and the other website decides whether to link.',
+      },
+      {
+        q: 'Who gets pitched?',
+        a: 'Only sites that could really link to you. A competitor selling what you sell, a government portal, a page that sells links, a bare homepage, a mailbox provider and a contact database are refused with the reason, and a list of accredited providers is only pitched when your profile says you hold that accreditation.',
+      },
+      {
+        q: 'Is it legal to e-mail these people?',
+        a: 'Every e-mail carries your name, company, postal address and a working opt-out, and an opt-out is honoured for good. Recipients where prior consent is expected — Germany, Austria and Saudi Arabia, and named people in the UAE — are held until you tick that you have their consent or already work together, and addresses in the EU and the UK get a line saying where we found them. That is how the product behaves, not legal advice; the consent list can be made stricter.',
+      },
+      {
+        q: 'Do I have to hand over my mailbox password?',
+        a: 'No. Microsoft 365 and Gmail can be connected on their own sign-in screen, where you grant exactly two things: sending, and (for Microsoft 365) reading the replies to your own pitches. Nothing but a renewable permission is stored, it is encrypted, and it is withdrawn when you disconnect the mailbox. Google treats inbox access as a restricted scope, so a Gmail mailbox sends and you read its replies in Gmail — the app says so before you connect it. An app password still works for any mail host.',
+      },
+      {
+        q: 'What happens when someone replies?',
+        a: 'The sequence stops at once, and so does every other one to that website. The reply is read and sorted — interested, a question, out of office, a “no”, a request for payment, a link swap — with a one-line summary and a suggested answer you can edit and send in the same thread. Out of office moves the next step after their return date; a bounce or a “no” puts the address on your opt-out list.',
+      },
+      {
+        q: 'How fast does it send?',
+        a: 'Monday to Friday, inside the hours you set for the mailbox: five first e-mails a day in the first week, ten in the second, then your limit (at most thirty), never more than fifty e-mails a day in all, four to nine minutes apart, as plain text with no tracking. A mailbox pauses itself after repeated bounces.',
+      },
+      {
+        q: 'Will you ever pay for a link?',
+        a: 'No. A reply asking for payment is flagged and not pursued — a paid link has to be marked sponsored and passes no ranking value — and an offer to swap links is flagged too.',
+      },
+      {
+        q: 'Do you decide which subject line is better?',
+        a: 'Only once there is enough to read. Every batch gets two subject lines in different styles and they go out in equal numbers; you see the e-mails sent and the replies for each. Under thirty sends per line the page says “not enough sends yet” instead of naming a winner, because at that size a few points of difference is noise.',
+      },
+    ],
+    related: ['backlinks', 'ai-growth', 'content'],
+    image: 'celebration',
+    visual: 'outreach',
+    story: {
+      eyebrow: 'Why it matters',
+      title: 'Links are earned one yes at a time.',
+      body: 'The links that help are the ones a real person chose to add. Ascentra spends the effort where a yes is likely — a site on your topic, a page of yours they will want to link to, a contact who reads the mail — and keeps your mailbox and your name in good standing while it does.',
     },
   },
   {
