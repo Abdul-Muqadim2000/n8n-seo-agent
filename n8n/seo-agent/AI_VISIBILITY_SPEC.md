@@ -1,5 +1,7 @@
 # AI search visibility v4.9: from 6/10 to best in class
 
+> **G6 (2026-10-18): the panel at enterprise scale — up to 500 questions by buyer role and market, split runs, the rotating daily sample, segments with ranges, two more engines — is §10.**
+>
 > **v4.12 (2026-10-10):** the weekly loop that *acts* on these measurements — Bing / IndexNow, AI-readiness, questions to win, earned media — is in `AI_GROWTH_SPEC.md`.
 
 Built on 2026-10-08 at the user's request: "make it the best in this category". A comparison scored our AI visibility tracker **6/10** against 8–9/10 for Semrush Enterprise and Ahrefs Brand Radar. The reason it gave: "they track far more questions, more often, and tie them to revenue. We ask about 8 questions a week across 6 AI engines."
@@ -146,3 +148,94 @@ Settings:
   - Shopping / product visibility.
   - Candidates for later: a Cloudflare Logpush import for agent analytics, Bing Webmaster AI Performance CSV import, several markets per site (prompts per language).
 - **Multi-site scale.** One weekly execution covers every site. With many sites, the request cap (900) and the 24-job analyst cap apply; a per-site sub-execution is the next step when more than ~15 sites are tracked.
+
+## 10. G6 (2026-10-18): the question panel at enterprise scale
+
+Asked for by the owner after the 2026-10-17 re-rating (area 8 = 7, market position 5; `docs/system-review-2026-10-17/MARKET_BENCHMARK.md`
+§5 #8: "a 20-prompt panel is a sample of one category; enterprise brands run hundreds of prompts by product line, persona and market" —
+seoClarity from 500 prompts across 9 engines, SE Visible up to 1,000 daily, Profound licensed prompt volumes). Handoff, cost table, owner
+steps and live checks: `docs/AI_PANEL_SCALE_HANDOFF.md`. The kit is `v5/code/_ai_panel.js` (AIP); harness S200–S211.
+
+### 10.1 The panel
+- **3–500 questions** (`ai_prompts_max`). A website with no `seo_monitors` row starts at **50**; a row whose size is empty keeps the
+  v4.9 default **20**; a stored size is never changed by a release (`AIP.panelSize` = `_monitor_sites.js panelMaxOf`, S200).
+- Every question carries **persona** (buyer role), **stage** (funnel), **cluster** (topic / product line) and **market** (`CC-lang`).
+  Settings `ai_personas` (≤ 6), `ai_markets` (≤ 5, the site's own market always included; a stored question keeps its own market; a
+  country outside the 22-country table is asked at DataForSEO location 2000 + ISO numeric — `AIP.locationOf`).
+- **Writing** (first execution of a run only): Prompt Jobs splits the gap into **cells** (market × persona, filled towards an equal
+  share), ≤ 40 questions a job, ≤ 14 jobs a run (a new 500-question panel in one run). Sources per cell: LLM Mentions
+  `search_mentions` (up to 4 topics for a big top-up), **People-also-ask** (`serp/google/organic` per topic and market, $0.002), Search
+  Console questions, the site's services / ladders / keywords, and the headings of up to 3 declared competitors' homepages (Jina; topic
+  ideas, never names). With no personas on file a panel above 50 is written for four generic buyer roles.
+- **Dedupe by meaning**: content-word stems, Jaccard ≥ 0.6, within one market and role (`AIP.dedupe`). **Fit gate** on the search
+  phrase AND the wording (`fitGate`, the read path's rule): own brand, another company, a government service, a portal task → stored
+  `status: refused` with the gate's sentence in `fit_note` — never asked, shown in the app.
+- **Owner**: Site Admin `ai_prompts` — add ≤ 500 (text or `{prompt, persona, cluster, stage, market, pinned}`; the app's CSV import),
+  edit in place, **new wording = a new question** (the old one switched off), off / on (a refused one becomes the owner's own), pin / unpin.
+  Pinned questions are asked first and survive a smaller panel.
+
+### 10.2 The weekly run, split across executions
+- The whole panel on every enabled engine, every week. One run = one `run_id` + a state row `seo_cache` `ai_run:<site_id>` (kind `ai`).
+- The run's requests are one deterministic list (questions in panel order × engines in a fixed order). An execution asks only the keys
+  (`prompt_id|engine`) no earlier execution of the run stored (`Load AI Run Answers`: run_kind ≠ pulse, last 6.2 days), at most **600 per
+  site and 1,200 per execution** (~30 MB of execution data). A failed request (after the in-200 retry) is stored and counted, never asked
+  again in the same run.
+- **AI Chunk Handoff** writes the state (chunk, asked / total, money spent, unavailable, executions) and, when the run is not finished,
+  starts the next execution (**Start Next Chunk**, Execute Workflow, `continue_run` + `parent_run_id` = this execution, no wait). The
+  **last** execution reads GA4, crawler access and the database views and **AI Metrics** measures the week over every answer of the run
+  (stored + its own), then marks the state `done`.
+- **Resume**: a state `running` and silent ≥ 65 minutes (the tracker's 60-minute limit + 5) is resumed by any start of the tracker
+  (schedule, catch-up, on demand) and by the pulse every morning (**AI Run Resume** → **Resume AI Run**, after the pulse's own ledger
+  row). A start while a part is still running is a twin and does nothing for that site; a state older than 6 days is closed.
+- **Ledger**: each execution reserves what is LEFT of the run (`AIP.cost` − spent; `Monitor_Ledger_Row` uses the plan's `est_*_usd`) and
+  settles its own measured DataForSEO (`measured='AI Metrics|AI Chunk Handoff'`); a continuation's row is keyed `parent:<execution>`, so
+  the run guard never takes it for a twin; the guard refuses a run the account cannot pay for. A run above `max_run_usd` ($150) is refused
+  by the plan with the reason. AI Requests' cost cap follows the estimate (×1.25, ≥ the v4.9 caps, ≤ $150).
+- Retention: weekly answers 120 days (was 400), pulse answers 21 (was 35) — n8n holds ALL Data Tables in 200 MB by default
+  (`N8N_DATA_TABLES_MAX_SIZE_BYTES`, n8n 2.41.4); a 500-question site stores ~6.9 MB of answers a week.
+
+### 10.3 The daily pulse: a stratified rotating sample
+- Up to 50 questions (auto): every question every morning, as before. Above (or `ai_pulse_mode: sample`): strata = cluster × persona;
+  each question has a slot in its stratum (round-robin, per-stratum offset); it is asked on **N** of the six pulse mornings of every ISO
+  week (a pulse-day counter that skips Mondays), so exactly N times a week; every stratum is in every morning (a stratum too small for its
+  slots gets one question that morning in turn). N = `ai_pulse_per_week`, or the fewest mornings that bring the weekly headline to ±3
+  points and the median cluster to ±8 (95%, p = 0.5), within one morning's 900 requests. `full` asks everything that fits.
+- `seo_ai_daily.sample_json` records the morning's sample; the mail says "N of your M questions (a rotating sample …)".
+
+### 10.4 Statistics
+- **Segments** per engine, cluster, persona, market, stage and cluster × persona, engine × cluster, market × cluster: this run's
+  weekly-engine answers + the pulse answers of the same questions; Wilson 95% range; "too few answers" under 12; share of voice and the
+  leading rival per segment (weekly answers).
+- **Changes per segment** only against a comparable panel, each with ≥ 12 answers a side and ≤ 20% drift in its question count; the family
+  is corrected with **Benjamini–Hochberg (q = 0.10)** — over dozens to hundreds of tests Holm's first step needs p ≤ 0.00025 and would hide
+  every real move; the headline alert family keeps **Holm** (≤ ~10 tests, each interrupts the owner).
+- **Panel identity**: the asked question ids are stored (`panel_json`); under 80% in common there is no delta at all ("a different
+  panel, not a different result"), on top of the size and engine-set checks. The measured and achievable half-widths are printed.
+- Fixed on the way: a pulse answer naming the business FIRST (`M` / `C`) was not counted as named in the weekly per-question win rate.
+
+### 10.5 Engines (DataForSEO sandbox, probed 2026-10-18 from inside the n8n container)
+Working: ChatGPT (LLM scraper + LLM Responses), Gemini (scraper + Responses), Claude (Responses), Perplexity (Responses), Google AI Mode,
+AI Overview, Bing (Copilot summary). **No endpoint (40402)**: Grok, DeepSeek, Meta AI, Mistral, Copilot API, Llama, Qwen, Claude and
+Perplexity scrapers. New opt-in engines: **ChatGPT API** (`gpt-5.4-mini`, web search, est. $0.012) and **Gemini API**
+(`gemini-3.5-flash`, web search, est. $0.02) — what an app or agent built on the models answers. Fields that need one live call:
+handoff §7.
+
+### 10.6 Cost: one formula, one table
+`AIP.cost` (engine) and `estimateAiPanelCost` (`app/shared/src/ai-panel.ts`) are held to the same 20 golden cases
+(`v5/data/ai_panel_cost_cases.json` → harness S211 and `app/shared/src/cost.aipanel.test.ts`; the build refuses a stale table).
+Calibrated: 8 questions $4.32 / month with a $0.084 pulse morning (measured live), 20 questions $9.40; 100 → $28.86, 200 → $56.91,
+500 → $138.36 a month on the six default engines with the automatic pulse (full table in the handoff §4).
+
+### 10.7 App, API, business site
+AI visibility page: segments (bar + 95% whisker on a fixed 0–100 scale, too few answers, BH moves, precision), the panel manager
+(filters, CSV import, edit, pin, off / on, suggestions); settings: size up to 500, buyer roles, markets, pulse sampling, the cost and the
+precision before saving; guides `ai-buyer-roles`, `ai-markets`, `ai-panel-import`; read API `GET /api/v1/websites/:id/ai-segments` +
+MCP `get_ai_visibility_segments`. Business site: the capability, the changelog of 2026-10-18, pricing rows marked PLACEHOLDER.
+
+### 10.8 Not built / open
+- Licensed prompt volumes outside DataForSEO's LLM Mentions (ChatGPT data is US-English only; Profound licenses a panel) — a data
+  purchase, not a feature.
+- A per-morning split of the pulse across executions (one morning asks at most 900 requests; `full` on a big panel is capped and says so).
+- Grok / DeepSeek / Meta AI: no DataForSEO endpoint (re-probe when DataForSEO adds one).
+- The question-volume lookup still covers the panel's search phrases, ≤ 100 a run.
+

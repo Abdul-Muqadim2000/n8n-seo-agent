@@ -78,7 +78,7 @@ export function MonitorSettingsFields({
   const enginesId = useId();
 
   return (
-    <fieldset disabled={disabled} className="divide-y divide-line rounded-xl border border-line px-4">
+    <fieldset disabled={disabled} className="min-w-0 divide-y divide-line rounded-xl border border-line px-4">
       <MonitorRow icon={<Bot />} on={value.aiVisibility}>
       <SwitchRow
         title="AI visibility"
@@ -127,7 +127,7 @@ export function MonitorSettingsFields({
                   </Select>
                 )}
               </Field>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2 [&>*]:min-w-0">
                 <Field label="Buyer roles" optional hint="Who asks: the panel is written for each role (e.g. CFO, IT manager). Empty: the engine picks." labelAction={<GuideButton id="ai-buyer-roles" variant="link" label="Which roles?" />}>
                   {(p) => <TagInput id={p.id} describedBy={p['aria-describedby']} value={value.aiPersonas} onChange={(aiPersonas) => set({ aiPersonas })} max={6} normalize={(s) => s.replace(/\s+/g, ' ').trim().slice(0, 40)} placeholder="A buyer role, then Enter" />}
                 </Field>
@@ -146,7 +146,7 @@ export function MonitorSettingsFields({
                 onChange={(e) => set({ aiPulse: e.target.checked })}
               />
               {value.aiPulse && value.aiPromptsMax > 50 && (
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-2 [&>*]:min-w-0">
                   <Field label="Pulse sampling">
                     {(p) => (
                       <Select {...p} value={value.aiPulseMode} onChange={(e) => set({ aiPulseMode: e.target.value as MonitorSettings['aiPulseMode'] })}>

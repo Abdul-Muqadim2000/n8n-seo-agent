@@ -45,10 +45,10 @@ function RangeBars({ rows, dim }: { rows: AiSegment[]; dim: string }) {
           : `${segLabel(dim, s.key)}: ${s.n} answers — too few for a rate (${AI_SEGMENT_MIN} needed)`;
         return (
           <li key={s.key} tabIndex={0} title={tip} aria-label={tip}
-            className="grid grid-cols-[minmax(0,8.5rem)_1fr_auto] items-center gap-3 rounded-lg px-2 py-1.5 text-sm outline-none transition-colors duration-150 ease-brand hover:bg-surface-2/60 focus-visible:ring-2 focus-visible:ring-accent sm:grid-cols-[minmax(0,12rem)_1fr_auto]">
-            <span className="truncate text-ink-2">{segLabel(dim, s.key)}<span className="ml-1.5 text-xs text-ink-3">{s.questions} q</span></span>
+            className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 rounded-lg px-2 py-1.5 text-sm outline-none transition-colors duration-150 ease-brand hover:bg-surface-2/60 focus-visible:ring-2 focus-visible:ring-accent sm:grid-cols-[minmax(0,12rem)_1fr_15.5rem]">
+            <span className="order-1 truncate text-ink-2">{segLabel(dim, s.key)}<span className="ml-1.5 text-xs text-ink-3">{s.questions} q</span></span>
             {s.enough && s.rate != null && s.ci ? (
-              <span className="relative h-3" aria-hidden>
+              <span className="relative order-3 col-span-2 h-3 sm:order-2 sm:col-span-1" aria-hidden>
                 <span className="absolute inset-y-[3px] left-0 right-0 rounded-full bg-surface-2" />
                 <span className="absolute inset-y-[3px] left-0 rounded-full" style={{ width: `${Math.max(1, s.rate)}%`, background: 'var(--seq-4)' }} />
                 <span className="absolute top-1/2 h-[2px] -translate-y-1/2 bg-ink-2" style={{ left: `${s.ci[0]}%`, width: `${Math.max(0.5, s.ci[1] - s.ci[0])}%` }} />
@@ -56,9 +56,9 @@ function RangeBars({ rows, dim }: { rows: AiSegment[]; dim: string }) {
                 <span className="absolute top-0 h-3 w-[2px] bg-ink-2" style={{ left: `calc(${s.ci[1]}% - 2px)` }} />
               </span>
             ) : (
-              <span className="h-3 rounded-full border border-dashed border-line-strong" aria-hidden />
+              <span className="order-3 col-span-2 h-3 rounded-full border border-dashed border-line-strong sm:order-2 sm:col-span-1" aria-hidden />
             )}
-            <span className="whitespace-nowrap text-right tabular text-[13px] text-ink">
+            <span className="order-2 whitespace-nowrap text-right tabular text-[13px] text-ink sm:order-3">
               {s.enough && s.rate != null ? (
                 <>
                   {s.rate}%<span className="ml-1 text-xs text-ink-3">{s.ci ? `${s.ci[0]}–${s.ci[1]}` : ''} · {compactNumber(s.n)}</span>

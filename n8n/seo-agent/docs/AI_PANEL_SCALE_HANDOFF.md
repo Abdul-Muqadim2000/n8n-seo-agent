@@ -75,9 +75,22 @@ See `AI_VISIBILITY_SPEC.md` §10 for the full spec. Short form:
 | 3 engines (ChatGPT API, Gemini API opt-in) | done — S209; harness 7102 passed, 0 failed | git log "G6 part 3" |
 | 4 statistics at scale | done — S210; harness 7118 passed, 0 failed | git log "G6 part 4" |
 | 5 cost (engine + app, shared cases) | done — S211 (20 golden cases) + app `cost.aipanel.test.ts` (23); shared 507 tests | git log "G6 part 5" |
-| 6 app (panel manager, settings, charts, guides, API/MCP) | todo | |
-| 7 marketing | todo | |
-| 8 tests (harness + app + browser) | todo | |
+| 6 app (panel manager, settings, charts, guides, API/MCP) | done — shared 516, server 500, web 42, typecheck clean | git log "G6 part 6" |
+| 7 marketing | done | git log "G6 part 7" |
+| 8 tests (harness + app + browser) | done — harness **7125 passed, 0 failed**; browser pass 18 visits, 0 issues | git log "G6 part 8" |
+
+**Final counts (2026-10-18):** `build_v4.py --no-env` exit 0; harness **7125 passed, 0 failed** (baseline 6939; G6 adds S200–S211 and
+updates S19 / S27 / the Site Admin checks to the new truth); app typecheck clean in all three workspaces; tests shared **516**
+(+30), server **500** (+6), web **42**; `npm run build -w @seo/web` ok; `npm run export:payloads` regenerated
+`harness/fixtures_platform.json` (S23 passes).
+
+**Browser pass** (`app/scripts/g6_browser_pass.mjs`, throwaway stack g6-db / g6-stub / g6-api, Playwright 1.55 Chromium; screenshots and
+`results.json` in `app/docs/browser-pass/g6/`): the AI visibility page (segments by topic and by buyer role, the refused filter, the CSV
+preview naming every bad line, a pin that reached the Site Admin stand-in as `{action: ai_prompts, pin: [p_g6_1]}`) and the panel
+settings (cost box, buyer roles, pulse sampling) at 1440 × 900 and 390 × 844, light and dark: **18 visits, 0 console errors, 0 failed
+requests, 0 horizontal overflow, an h1 on each, no text under AA contrast.** Found and fixed on the way: the settings fieldset overflowed
+3 px at 390 (a fieldset's min-content width — the pulse-sampling select's longest option) → `min-w-0`; the segment bars collapsed on a
+phone → label and value on one line, the bar full width below.
 
 ## 4. Cost table and the owner steps to raise techand.ai's panel
 
