@@ -4,6 +4,7 @@ import { policyOf, strictestIdle, type AuthMethod, type User } from '@seo/shared
 import { config } from '../config';
 import { db, schema } from '../db';
 import type { SessionRow, UserRow } from '../db/schema';
+import { cookieDomainFor } from '../lib/crossOrigin';
 import { randomToken, sha256 } from '../lib/crypto';
 import { auditUser } from '../services/audit';
 
@@ -45,6 +46,8 @@ export async function createSession(reply: FastifyReply, req: FastifyRequest, us
 function setSessionCookie(reply: FastifyReply, token: string, expiresAt: Date) {
   reply.setCookie(SESSION_COOKIE, token, {
     path: '/',
+    // deploy/gcp: shared by app.<domain> and api.<domain> when COOKIE_DOMAIN is set and this host is inside it (never on a portal host)
+    domain: cookieDomainFor(reply.request.hostname),
     httpOnly: true,
     sameSite: 'lax',
     secure: config.cookieSecure,
@@ -53,7 +56,10 @@ function setSessionCookie(reply: FastifyReply, token: string, expiresAt: Date) {
 }
 
 export function clearSessionCookie(reply: FastifyReply) {
+  const domain = cookieDomainFor(reply.request.hostname);
   reply.clearCookie(SESSION_COOKIE, { path: '/' });
+  // a cookie set with a Domain is only removed by a clear that names the same Domain
+  if (domain) reply.clearCookie(SESSION_COOKIE, { path: '/', domain });
 }
 
 /** G1: the strictest idle timeout among the person's companies (null when none has one) */

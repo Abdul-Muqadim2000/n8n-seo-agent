@@ -80,7 +80,7 @@ export async function crawlerRoutes(app: FastifyInstance) {
       returning push_key_created_at`;
     req.log.info({ site: a.site.id, by: a.user.id }, 'crawler log push key created');
     await audit(req, a.org.id, { action: 'crawler.push_key_created', target: { type: 'site', id: a.site.id, label: a.site.domain }, details: { prefix } });
-    return { token, prefix, endpoint: `${config.appUrl}/api/ingest/logs/${a.site.id}`, header: LOG_PUSH_KEY.header, createdAt: pgIso(row.push_key_created_at) ?? new Date().toISOString() };
+    return { token, prefix, endpoint: `${config.publicApiUrl}/api/ingest/logs/${a.site.id}`, header: LOG_PUSH_KEY.header, createdAt: pgIso(row.push_key_created_at) ?? new Date().toISOString() };
   });
 
   app.delete(`${base}/push-key`, async (req) => {

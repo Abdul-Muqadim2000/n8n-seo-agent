@@ -7,6 +7,7 @@ import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import { readSession } from './auth/session';
 import { config } from './config';
+import { corsHook } from './lib/crossOrigin';
 import { HttpError } from './lib/errors';
 import { linkBuilderRoutes } from './routes/linkBuilder';
 import { crawlerRoutes, crawlerStreamRoutes } from './routes/crawlers';
@@ -86,6 +87,11 @@ export async function buildApp(): Promise<FastifyInstance> {
     // the static plugin would answer "/" with the app's own shell: the portal's comes from here
     if (req.portal && req.method === 'GET' && /^\/(index\.html)?(\?|$)/.test(req.url) && config.webDist)
       return reply.header('cache-control', 'no-cache').header('content-type', 'text/html; charset=utf-8').send(await portalIndexHtml(resolve(config.webDist), req.portal.orgId));
+  });
+
+  // deploy/gcp: the front end on another host of the same site uploads here directly (lib/crossOrigin.ts); its preflight ends here
+  app.addHook('onRequest', async (req, reply) => {
+    if (corsHook(req, reply)) return reply;
   });
 
   app.addHook('onRequest', async (req, reply) => {

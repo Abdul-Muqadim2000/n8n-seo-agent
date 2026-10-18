@@ -79,7 +79,7 @@ import type {
   PortalMailView,
   StaffAccess,
 } from '@seo/shared';
-import { api, ApiRequestError } from './api';
+import { api, ApiRequestError, directCredentials, directUrl } from './api';
 
 // One hook per endpoint (API.md). Query keys: ['me'], ['org', orgId, ...], ['site', siteId, ...].
 
@@ -356,7 +356,7 @@ export function useSiteAdmin(orgId: string, siteId: string) {
 export function useLinkImport(orgId: string, siteId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { csv: string; fileName?: string }) => api<LinkImportSummary>(`/api/orgs/${orgId}/sites/${siteId}/backlinks/import`, { method: 'POST', body }),
+    mutationFn: (body: { csv: string; fileName?: string }) => api<LinkImportSummary>(`/api/orgs/${orgId}/sites/${siteId}/backlinks/import`, { method: 'POST', body, direct: true }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.siteData(siteId, 'backlinks') });
     },
@@ -892,7 +892,9 @@ export function useCrawlers(orgId: string, siteId: string, days: number) {
 export function uploadLog(orgId: string, siteId: string, file: File, onProgress: (sent: number, total: number) => void): Promise<LogUploadAccepted> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', `/api/orgs/${orgId}/sites/${siteId}/crawlers/upload?name=${encodeURIComponent(file.name)}`);
+    // straight to the API server (API_ORIGIN): a log file can be hundreds of MB, more than a proxy in front accepts
+    xhr.open('POST', directUrl(`/api/orgs/${orgId}/sites/${siteId}/crawlers/upload?name=${encodeURIComponent(file.name)}`));
+    xhr.withCredentials = directCredentials() === 'include';
     xhr.setRequestHeader('x-requested-with', 'fetch');
     xhr.setRequestHeader('content-type', 'application/octet-stream');
     xhr.setRequestHeader('accept', 'application/json');
