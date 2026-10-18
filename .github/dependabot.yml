@@ -1,0 +1,26 @@
+# Weekly dependency updates, grouped so a week is a handful of pull requests (each one passes CI before it can merge).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /app
+    schedule: { interval: weekly, day: tuesday, time: '06:00', timezone: Etc/UTC }
+    open-pull-requests-limit: 10
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: docker
+    directory: /app
+    schedule: { interval: weekly, day: tuesday, time: '06:00', timezone: Etc/UTC }
+  - package-ecosystem: docker
+    directory: /n8n/deploy
+    schedule: { interval: weekly, day: tuesday, time: '06:00', timezone: Etc/UTC }
+    ignore:
+      # n8n is pinned (N8N_VERSION here and in n8n/.env): move minor / major on purpose, with a harness run and a live check
+      - dependency-name: n8nio/n8n
+        update-types: [version-update:semver-major, version-update:semver-minor]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly, day: tuesday, time: '06:00', timezone: Etc/UTC }
+    groups:
+      actions:
+        patterns: ['*']

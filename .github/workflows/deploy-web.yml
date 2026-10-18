@@ -1,0 +1,124 @@
+# The web app on Vercel. Pull requests from this repository get a preview (its address is posted on the PR); main goes to
+# production only after CI has passed on that exact commit. Vercel's own Git deployments are off (app/vercel.json), so this is the
+# only path to production. Needs the repository secrets VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID and a Vercel project whose
+# Root Directory is `app` (DEPLOY.md). Without them every job ends with a notice instead of failing.
+name: Deploy web (Vercel)
+
+on:
+  pull_request:
+    paths: ['app/**', '.github/workflows/deploy-web.yml']
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+jobs:
+  preview:
+    name: preview
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
+    environment:
+      name: preview
+      url: ${{ steps.deploy.outputs.url }}
+    concurrency:
+      group: vercel-preview-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - id: ready
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo "::notice::Vercel is not connected yet (VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID): no preview."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else echo "ok=true" >> "$GITHUB_OUTPUT"; fi
+      - if: steps.ready.outputs.ok == 'true'
+        uses: actions/checkout@v4
+      - if: steps.ready.outputs.ok == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - id: deploy
+        if: steps.ready.outputs.ok == 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          npx --yes vercel@44 pull --yes --environment=preview --token="$VERCEL_TOKEN"
+          npx --yes vercel@44 build --token="$VERCEL_TOKEN"
+          url=$(npx --yes vercel@44 deploy --prebuilt --token="$VERCEL_TOKEN")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "### Preview: $url" >> "$GITHUB_STEP_SUMMARY"
+      - if: steps.ready.outputs.ok == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = `**Preview (Vercel):** ${{ steps.deploy.outputs.url }}\n\nCommit ${context.payload.pull_request.head.sha.slice(0, 7)}. The API behind it is the preview environment's \`API_ORIGIN\`.`;
+            const { data: comments } = await github.rest.issues.listComments({ ...context.repo, issue_number: context.issue.number });
+            const mine = comments.find((c) => c.user.type === 'Bot' && c.body.startsWith('**Preview (Vercel):**'));
+            if (mine) await github.rest.issues.updateComment({ ...context.repo, comment_id: mine.id, body });
+            else await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+
+  production:
+    name: production
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+    concurrency:
+      group: vercel-production
+      cancel-in-progress: false
+    steps:
+      - id: ready
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo "::notice::Vercel is not connected yet (VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID): nothing deployed."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else echo "ok=true" >> "$GITHUB_OUTPUT"; fi
+      - if: steps.ready.outputs.ok == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - if: steps.ready.outputs.ok == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - id: deploy
+        if: steps.ready.outputs.ok == 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          npx --yes vercel@44 pull --yes --environment=production --token="$VERCEL_TOKEN"
+          npx --yes vercel@44 build --prod --token="$VERCEL_TOKEN"
+          url=$(npx --yes vercel@44 deploy --prebuilt --prod --token="$VERCEL_TOKEN")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "### Production: $url" >> "$GITHUB_STEP_SUMMARY"
+      # On the production domain (repository variable PRODUCTION_URL, e.g. https://alaventra.com): Vercel's deployment protection
+      # answers 401 on the generated *.vercel.app address, so that one proves nothing
+      - name: Smoke check
+        if: steps.ready.outputs.ok == 'true' && vars.PRODUCTION_URL != ''
+        env:
+          SITE: ${{ vars.PRODUCTION_URL }}
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' "$SITE/")
+          echo "home page: $code"; [ "$code" = 200 ] || { echo "::error::the deployed home page answered $code"; exit 1; }
+          api=$(curl -s -o /dev/null -w '%{http_code}' "$SITE/api/health")
+          echo "api health through the edge: $api"
+          [ "$api" = 200 ] || echo "::warning::/api/health answered $api: check API_ORIGIN in the Vercel production environment"
