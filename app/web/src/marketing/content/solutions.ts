@@ -1,6 +1,6 @@
 // Who Ascentra is for: /solutions and /solutions/<slug>, the Solutions menu and the footer. Outcomes are phrased as
 // capabilities, never as invented results.
-import { Briefcase, Building, Layers, MapPin, type LucideIcon } from 'lucide-react';
+import { Briefcase, Building, Landmark, Layers, MapPin, type LucideIcon } from 'lucide-react';
 import type { FaqItem } from './features';
 import type { ImageKey } from './images';
 
@@ -122,9 +122,11 @@ export const solutions: Solution[] = [
     ],
     helps: [
       { feature: 'ai-visibility', title: 'Visibility in AI answers', body: 'Up to 50 buyer questions across six AI engines, with share of voice against named competitors and AI referral revenue from GA4.' },
+      { feature: 'ai-growth', title: 'Onto the shortlist, week by week', body: 'The questions you lose become answer pages, new pages reach Bing the same week, and the review and list pages AI cites without you become pitches.' },
       { feature: 'keyword-ladders', title: 'A route to the head term', body: 'Supporting pages on easier, related keywords climb to the category term.' },
       { feature: 'content', title: 'Pages with real expertise', body: 'Author and reviewer, experience notes, case studies and schema on every page.' },
       { feature: 'backlinks', title: 'Links that count', body: 'Nine link sources, links checked by Ascentra itself and scored prospects.' },
+      { feature: 'link-building', title: 'Listed where buyers compare', body: 'G2, Capterra, TrustRadius and the other directories worth being on, checked against your listing — and pitches to the lists that leave you out.' },
     ],
     outcomes: [
       'A measured view of how AI engines describe and cite you',
@@ -162,6 +164,7 @@ export const solutions: Solution[] = [
       { feature: 'technical-audits', title: 'Brand and entity check', body: 'Audits confirm your business listing matches your website before it is trusted.' },
       { feature: 'site-tracking', title: 'Tracking per website', body: 'Search Console, GA4 and live rank checks for each website you run — including whether a local pack was on the page and whether your listing was in it.' },
       { feature: 'enterprise', title: 'One account for every brand', body: 'Separate companies for separate brands, with one team and one login.' },
+      { feature: 'link-building', title: 'The local listings that matter', body: 'Google Business Profile, Bing Places, Apple Business and the directories in your country, checked for your listing, with a ready description to paste.' },
       { feature: 'guided-setup', title: 'Set up without an agency', body: 'Search Console, Analytics, the records on your domain: each one is a short guide with your own values, written for the provider you actually use.' },
       { feature: 'report-delivery', title: 'You do not have to remember to look', body: 'The Monday report arrives in your inbox with the numbers in the message — and nothing arrives that the analysis itself flagged as not ready.' },
     ],
@@ -180,6 +183,57 @@ export const solutions: Solution[] = [
       feature: 'content',
       title: 'Local pages with details you have verified.',
       body: 'Each local page carries your verified name, address and phone, LocalBusiness schema and the areas you serve, and is checked again once it is live.',
+    },
+  },
+  {
+    slug: 'enterprise',
+    name: 'Ascentra for enterprise teams',
+    shortName: 'Enterprise teams',
+    tagline: 'SEO that passes your security review and lands in the tools your company already runs.',
+    summary:
+      'Large teams need more than good analysis: sign-in through your identity provider, an audit trail, findings in the engineering backlog, numbers in the data warehouse and releases checked before they ship. Ascentra does the SEO work and fits into all of that.',
+    icon: Landmark,
+    image: 'openOffice',
+    pains: [
+      { title: 'A security review for every tool', body: 'Each new tool needs single sign-on, provisioning, an audit trail and answers to a questionnaire before anyone may use it.' },
+      { title: 'Findings that never reach engineering', body: 'Audit reports sit in a folder while the backlog fills up with everything else.' },
+      { title: 'Numbers in yet another dashboard', body: 'SEO data lives apart from the rest of the business, so it is hard to trust and rarely used.' },
+    ],
+    helps: [
+      { feature: 'enterprise', title: 'Sign-in your IT team approves', body: 'SAML 2.0 or OIDC single sign-on on your verified domains, SCIM provisioning, two-step verification and an audit log nobody can edit.' },
+      { feature: 'integrations', title: 'Findings in the backlog, data in the warehouse', body: 'One Jira, Linear or Asana ticket per finding, six tables to BigQuery or your storage, a Looker Studio connector, alerts in Slack or Teams and an API your assistants can use.' },
+      { feature: 'technical-audits', title: 'Releases checked before they ship', body: 'Your build calls the pre-release check against staging and fails on a noindex, a lost canonical or a page robots.txt now blocks.' },
+      { feature: 'crawler-analytics', title: 'What crawlers really do', body: 'Logs from Cloudflare, Fastly, Akamai, Vercel or your own servers, with every crawler checked against the addresses its company publishes.' },
+      { feature: 'report-delivery', title: 'Reports to the people who decide', body: 'Weekly reports by e-mail or signed webhook on your schedule — and held back, with the reason, when the analysis marked them not ready.' },
+    ],
+    outcomes: [
+      'Single sign-on and provisioning from your identity provider',
+      'Every audit finding one ticket in the tracker your engineers use',
+      'SEO data next to the rest of your numbers, in your own warehouse',
+      'Releases checked for SEO breakage before they go live',
+    ],
+    faqs: [
+      {
+        q: 'Can you go through our security questionnaire?',
+        a: 'Yes. Send it through the contact form with the topic “Security review or questionnaire” and a person on the team will go through it with you. The security page lists how sign-in, access, data isolation and secrets work today.',
+      },
+      {
+        q: 'Can we keep passwords out of it entirely?',
+        a: 'Yes. Once single sign-on is required for your domain, passwords stop working for everyone on it. Owners keep a way in, protected by two-step verification, in case your identity provider is down.',
+      },
+      {
+        q: 'Can our scripts and AI assistants use it?',
+        a: 'Yes, through the API and an MCP server, with keys your company creates. A key reads by default; starting analyses is a separate permission, and every start goes through the same budget and duplicate checks as the app.',
+      },
+      {
+        q: 'Can several brands or business units share one account?',
+        a: 'Yes. Each brand can be its own company with its own websites, team, budget and data, and the same people can switch between them.',
+      },
+    ],
+    showcase: {
+      feature: 'integrations',
+      title: 'Findings where your engineers already work.',
+      body: 'An audit finding becomes one ticket in Jira, Linear or Asana with the evidence and the fix, its state shown back beside the finding — and the same data lands in your warehouse every day or week.',
     },
   },
 ];
