@@ -7,10 +7,11 @@ const GROUPS: { label: string; slugs: string[] }[] = [
   { label: 'Plan', slugs: ['keyword-research', 'keyword-ladders'] },
   { label: 'Create', slugs: ['content', 'autopilot'] },
   { label: 'Measure', slugs: ['technical-audits', 'site-tracking', 'ai-visibility', 'crawler-analytics', 'backlinks'] },
+  { label: 'Grow', slugs: ['ai-growth', 'link-building'] },
   { label: 'Run', slugs: ['reports', 'report-delivery', 'integrations', 'guided-setup', 'enterprise', 'agency-portal'] },
 ];
 
-/** Every capability as one system, in four layers (plan, create, measure, run); each tile jumps to its section on /platform. */
+/** Every capability as one system, in five layers (plan, create, measure, grow, run); each tile jumps to its section on /platform. */
 export function CapabilityMap({ className }: { className?: string }) {
   const bySlug = new Map(features.map((f) => [f.slug, f] as const));
   let n = 0;
