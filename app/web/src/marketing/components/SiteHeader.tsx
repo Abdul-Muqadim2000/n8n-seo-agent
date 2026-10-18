@@ -173,10 +173,11 @@ export function SiteHeader() {
               {trigger('platform', 'Platform')}
               {open === 'platform' && (
                 <div id={ids.platform} className="absolute inset-x-4 top-full pt-2 sm:inset-x-6 lg:inset-x-8">
-                  <div className="mk-menu-panel grid grid-cols-[minmax(0,1fr)_300px] gap-2 rounded-2xl border border-line bg-surface p-2 shadow-overlay">
+                  {/* never taller than the window: on a short laptop screen the panel scrolls instead of running off the bottom */}
+                  <div className="mk-menu-panel grid max-h-[calc(100dvh-88px)] grid-cols-[minmax(0,1fr)_300px] gap-2 overflow-y-auto overscroll-contain rounded-2xl border border-line bg-surface p-2 shadow-overlay">
                     <div className="p-2">
                       <p className="px-3 pb-2 pt-1 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3">Capabilities</p>
-                      <ul className="grid grid-cols-2 gap-x-2">
+                      <ul className="grid grid-cols-2 gap-x-2 xl:grid-cols-3">
                         {features.map((f) => (
                           <li key={f.slug}>
                             <MenuRow to={`/platform/${f.slug}`} icon={f.icon} title={f.shortName} body={f.tagline} onNavigate={close} />

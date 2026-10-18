@@ -33,7 +33,7 @@ const PULSE: Run = {
 const MONDAY: Run[] = [
   { time: '07:00', when: 'Monday', title: 'AI visibility', body: 'The full question panel across the AI engines, with share of voice against your competitors.', icon: Sparkles, to: '/platform/ai-visibility' },
   { time: '07:30', when: 'Monday', title: 'Backlinks', body: 'The weekly link watch: new links, spam and links lost after two misses, with the reason.', icon: Link2, to: '/platform/backlinks' },
-  { time: '08:00', when: 'Monday', title: 'Rank tracking', body: 'Every ladder page and head term, checked for its position.', icon: ChartNoAxesColumnIncreasing, to: '/platform/keyword-ladders' },
+  { time: '08:00', when: 'Monday', title: 'Rank tracking', body: 'Every ladder page, head term and keyword you track, checked for its position and the whole results page.', icon: ChartNoAxesColumnIncreasing, to: '/platform/keyword-ladders' },
   { time: '09:00', when: 'Monday', title: 'Site tracking', body: 'Search Console, GA4, Google Trends and live checks, newly published pages, then the Monday report.', icon: ChartLine, to: '/platform/site-tracking' },
   { time: '09:30', when: 'Monday', title: 'AI growth', body: 'New pages sent to Bing and IndexNow, key pages scored for AI readiness, the questions to win queued.', icon: Rocket, to: '/platform/ai-growth' },
   { time: '10:00', when: 'Monday', title: 'Content cadence', body: 'This week’s posts, picked and written: ladder rung first, then a page losing traffic, striking distance, rising trends — and the AI answer page of the week.', icon: PenLine, to: '/platform/autopilot' },

@@ -7,7 +7,7 @@ import { Drawn, MockBadge } from './parts';
 
 const STEPS: { when: string; title: string }[] = [
   { when: 'Tue', title: 'First e-mail — quotes their resource page' },
-  { when: '+4 working days', title: 'Follow-up 1 — one new useful detail' },
+  { when: '+4 working days', title: 'Follow-up 1 — a new detail' },
   { when: '+8 more', title: 'Follow-up 2 — who is the right person?' },
 ];
 

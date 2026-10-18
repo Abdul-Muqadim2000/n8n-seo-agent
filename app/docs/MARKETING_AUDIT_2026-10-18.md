@@ -83,16 +83,39 @@ See the commit list in §4. Summary:
 
 ## 3. Checks (step 3)
 
-(filled in after the run — see §4)
+All in `node:22-bookworm-slim` with the repo mounted, on the final tree:
+- `npx tsc -p web/tsconfig.json --noEmit` — clean.
+- `npm -w web test` — 7 files, **42 passed**.
+- `npx -w web vite build` — built.
+- Browser pass (`mcr.microsoft.com/playwright:v1.55.0-noble`) against a **throwaway static server** of `app/web/dist` on a private
+  Docker network (SPA fallback, `/api/*` answered 401 as for a visitor; never the `seo-platform-dev-*` containers): **33 routes**
+  (the fixed pages + every `/platform/*` and `/solutions/*` link the footer carries) × 390 / 1440 × light / dark = **132 visits, 0
+  problems** — no console or page errors, no failed requests, no horizontal overflow, exactly one h1, no 404 page. **35 internal links**
+  found on those pages all resolve. The only console lines are the expected 401s of `/api/*` for a signed-out visitor (264).
+- The Platform mega-menu grew to 17 items and ran to 887 px of a 900 px window (it would have run off a 768 px laptop screen): it now
+  shows three columns from 1280 px and can never be taller than the window — bottom at 639 px on 1280×720, 1366×768 and 1440×900.
+- Close-up screenshots checked by eye: both new mockups at 390 (light and dark), the week schedule, the Home grid (every row full),
+  the capability map with its Grow layer, `/solutions` with the odd fifth card laid out across both columns.
 
 ## 4. Commits and results
 
-(filled in as the work lands)
+On `worktree-agent-ad53a4111ec7bf11b`:
+- `4228699` this audit (inventory)
+- `8177d9a` AI growth and link building capability pages + mockups; autopilot catch-up and AI page; backlinks copy corrected; changelog
+- `61c39e1` the real week schedule and sources on `/how-it-works` and `/platform`
+- `30c732b` Home: enterprise band, Bing line, outreach line, bento for any count
+- `6c8b573` Solutions: enterprise teams page, AI growth / link-building help lines, computed counts
+- `82f1fbc` Pricing and security
+- (next) mega-menu fit, two copy fixes found in the browser pass, this file's results
 
 ## 5. For the owner to decide
 
 - Plan placement of AI growth and link building (matrix already puts them on Growth; kept, no new placement invented).
 - Whether the Home hero "New" pill should move from "AI Pulse" (2026-10-08) to a newer release — left untouched because another session
   edits the hero.
+- **Found outside the marketing site, not changed:** the app's "Add your site to Bing Webmaster Tools" guide
+  (`app/shared/src/guides.ts`, id `bing-webmaster`) says "Copilot and ChatGPT search read Bing’s index". The 2026-10-15 benchmark found
+  OpenAI's crawler docs never mention Bing and removed that claim from the AI Growth report; the guide still carries it. The marketing
+  copy here says only Copilot.
 - An Enterprise solution page now exists; it promises nothing beyond the shipped identity / integration / audit-log features, but the
   "Talk to sales" path and its e-mail address are still PLACEHOLDER.
