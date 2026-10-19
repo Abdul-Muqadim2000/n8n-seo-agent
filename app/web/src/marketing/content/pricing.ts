@@ -126,7 +126,7 @@ export const creditPackValidity = '12 months';
 
 /** one line under the packs: buying is a request today, confirmed and invoiced by the team (no card checkout yet) */
 export const creditPacksNote =
-  'Ask for a pack on the Credits page in the app. The Alaventra team confirms it and sends the invoice, and the credits are added to your company. New companies start with 200 welcome credits, valid for 90 days.';
+  'Ask for a pack on the Credits page in the app. The Alaventra team sends the payment details; once the payment is confirmed the credits are added to your company and the invoice is e-mailed to your owners and admins as a PDF. New companies start with 200 welcome credits, valid for 90 days.';
 
 /** "How credits work" on /pricing: each line is how the product works today (app/docs/CREDITS.md §1). */
 export const creditRules: { title: string; body: string }[] = [

@@ -19251,5 +19251,58 @@ await guard('SFL6 C-8 leftover a vendor\'s own storefront is a competing provide
 });
 
 
+await guard('SK1 Site Kickoff: the first weekly cycle on the day tracking starts', async () => {
+  const SN = 'SK1 Site Kickoff (2026-10-19) - a website\'s first weekly cycle starts the day its tracking does: only the jobs it has switched on, in Monday\'s order, never for an untracked or paused site, once (force to repeat), and a dry run starts only what honours dry_run';
+  reset(); begin(SN); const check = W3E.mkCheck(SN);
+  const SITE = { site_id: 'site_techand-ai', domain: 'techand.ai', status: 'active' };
+  const plan = async (body, o = {}) => {
+    const v = (await run('Kickoff Validate', { body }))[0].json; mock('Kickoff Validate', [{ json: v }]);
+    mock('Load Sites (Kickoff)', (o.sites || [SITE]).map(json => ({ json })));
+    mock('Load Monitors (Kickoff)', (o.monitors || []).map(json => ({ json })));
+    mock('Load Cadence (Kickoff)', (o.cadence || []).map(json => ({ json })));
+    mock('Load Kickoff Record', (o.record || []).map(json => ({ json })));
+    return (await run('Kickoff Plan', [{ json: {} }])).map(i => i.json);
+  };
+  const bad = (await run('Kickoff Validate', { body: {} }))[0].json;
+  check('a request without a domain is refused', bad.ok === false && /domain or site_id/.test(bad.error), JSON.stringify(bad));
+  const MON = { site_id: 'site_techand-ai', ai_visibility: true, ai_growth: true, backlinks: true, link_builder: true };
+  const CAD = { site_id: 'site_techand-ai', pages_per_week: 2, status: 'active' };
+  const all = await plan({ domain: 'https://www.techand.ai/' }, { monitors: [MON], cadence: [CAD] });
+  check('everything on: AI visibility, backlinks (full), AI growth, the cadence and the Link Builder, in Monday\'s order, each through its own workflow',
+    JSON.stringify(all.map(j => [j.job, j.workflow_id])) === JSON.stringify([['ai_visibility', 'SEOagentAIVisib1'], ['backlinks', 'SEOagentBacklnk1'], ['ai_growth', 'SEOagentAIGrow1'], ['content_cadence', 'SEOagentCadence1'], ['link_builder', 'SEOagentLinkBld1']])
+    && all.every(j => j.domain === 'techand.ai' && j.site_id === 'site_techand-ai' && j.trigger === 'kickoff') && all[1].light === false && all[4].free_only === false && !all.some(j => j.dry_run), JSON.stringify(all));
+  const off = await plan({ domain: 'techand.ai' }, { monitors: [{ ...MON, ai_visibility: 'false', link_builder: false }], cadence: [{ ...CAD, pages_per_week: 0 }] });
+  check('a job the site switched off is never started (a Manual Run would run it anyway): AI visibility off takes AI growth with it, no posts a week = no cadence',
+    JSON.stringify(off.map(j => j.job)) === JSON.stringify(['backlinks']) && off[0].skipped.length === 4, JSON.stringify(off));
+  const noCad = await plan({ domain: 'techand.ai' }, { monitors: [MON] });
+  check('no cadence row: the cadence is not started (its on-demand default would write pages nobody asked for)', !noCad.some(j => j.job === 'content_cadence'), JSON.stringify(noCad.map(j => j.job)));
+  const untracked = await plan({ domain: 'other.example' }, { monitors: [MON], cadence: [CAD] });
+  check('a website the engine does not track is refused', untracked.length === 1 && untracked[0].nothing_to_do && /not tracked/.test(untracked[0].reason), JSON.stringify(untracked));
+  const paused = await plan({ domain: 'techand.ai' }, { sites: [{ ...SITE, status: 'paused' }], monitors: [MON], cadence: [CAD] });
+  check('a paused website is refused (the cadence\'s on-demand path does not skip paused sites itself)', paused[0].nothing_to_do && /paused/.test(paused[0].reason), JSON.stringify(paused));
+  const REC = { key: 'kickoff:site_techand-ai', kind: 'kickoff', site_id: 'site_techand-ai', updated_at: '2026-10-19T17:00:00Z' };
+  const again = await plan({ domain: 'techand.ai' }, { monitors: [MON], cadence: [CAD], record: [REC] });
+  check('once per website: a second kickoff is refused with when the first was', again[0].nothing_to_do && /already kicked off \(2026-10-19T17:00:00Z\)/.test(again[0].reason), JSON.stringify(again));
+  const forced = await plan({ domain: 'techand.ai', force: true }, { monitors: [MON], cadence: [CAD], record: [REC] });
+  check('force: true starts the cycle again', forced.length === 5 && !forced[0].nothing_to_do, JSON.stringify(forced.map(j => j.job)));
+  const dry = await plan({ domain: 'techand.ai', dry_run: 'true' }, { monitors: [MON], cadence: [CAD], record: [REC] });
+  check('a dry run starts only AI growth and the cadence, with dry_run, and says why the others were not started',
+    JSON.stringify(dry.map(j => j.job)) === JSON.stringify(['ai_growth', 'content_cadence']) && dry.every(j => j.dry_run === true) && dry[0].skipped.filter(x => /dry run/.test(x)).length === 3, JSON.stringify(dry));
+  const some = await plan({ domain: 'techand.ai', jobs: ['ai_growth', 'content_cadence', 'link_builder'] }, { monitors: [MON], cadence: [CAD] });
+  check('jobs: only the named jobs start, still in Monday\'s order (what the customer already ran today is left out, not run twice)',
+    JSON.stringify(some.map(j => j.job)) === JSON.stringify(['ai_growth', 'content_cadence', 'link_builder']) && some[0].skipped.filter(x => /not asked for/.test(x)).length === 2, JSON.stringify(some));
+  const someOff = await plan({ domain: 'techand.ai', jobs: 'link_builder' }, { monitors: [{ ...MON, link_builder: false }], cadence: [CAD] });
+  check('jobs never starts one the site switched off', someOff[0].nothing_to_do === true, JSON.stringify(someOff));
+  const badJobs = (await run('Kickoff Validate', { body: { domain: 'techand.ai', jobs: ['ai_growth', 'rank_tracker'] } }))[0].json;
+  check('an unknown job is refused by name', badJobs.ok === false && /unknown jobs: rank_tracker/.test(badJobs.error), JSON.stringify(badJobs));
+  mock('Kickoff Plan', dry.map(json => ({ json })));
+  const recDry = (await run('Kickoff Record Row', [{ json: {} }]))[0].json;
+  check('a dry run records nothing', recDry.skip_record === true, JSON.stringify(recDry));
+  mock('Kickoff Plan', all.map(json => ({ json })));
+  const rec = (await run('Kickoff Record Row', [{ json: {} }]))[0].json;
+  check('a real kickoff records the website before the first start, with its jobs', rec.key === 'kickoff:site_techand-ai' && rec.kind === 'kickoff' && JSON.parse(rec.value).jobs.length === 5, JSON.stringify(rec));
+  reset();
+});
+
 H.report();
 })();

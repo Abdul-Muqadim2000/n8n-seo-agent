@@ -444,7 +444,7 @@
       },
       {
         "parameters": {
-          "fromEmail": "Alaventra <devaicondeveloper3@gmail.com>",
+          "fromEmail": "Alaventra <noreply@alaventra.com>",
           "toEmail": "={{ $json.email }}",
           "subject": "={{ $json.subject_line }}",
           "emailFormat": "html",

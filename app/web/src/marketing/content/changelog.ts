@@ -14,6 +14,20 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2026-10-20',
+    title: 'Invoices by e-mail',
+    summary:
+      'When your payment for a credit pack is confirmed, the invoice now arrives by e-mail as a PDF, and every invoice stays on your Credits page to download again.',
+    highlights: [
+      'A numbered invoice for every credit purchase, marked paid, with the credits, the price and how long the credits last',
+      'E-mailed to every owner and admin of the company the moment the credits are added, with the PDF attached and the new balance',
+      'An Invoices section on the Credits page lists them all, each with a PDF download',
+      'Credits added for you without a payment, such as credits given back for work that did not go as it should, are announced by e-mail too',
+    ],
+    features: [],
+    labels: ['Billing'],
+  },
+  {
     date: '2026-10-19',
     title: 'Plan prices',
     summary:

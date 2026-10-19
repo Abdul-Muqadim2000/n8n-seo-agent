@@ -56,6 +56,7 @@ const overview = (over: Partial<BillingOverview> = {}): BillingOverview => ({
     { id: 'standard', credits: 2000, discountPct: 0, priceUsd: 100, perCreditUsd: 0.05 },
   ],
   requests: [{ id: 'r1', packId: 'standard', credits: 2000, priceUsd: 100, status: 'pending', note: 'PO-7', requestedBy: 'o@example.org', createdAt: '2026-10-19T08:00:00.000Z', resolvedAt: null }],
+  invoices: [{ id: 'i1', number: 'ALV-2026-0001', issuedAt: '2026-10-02T09:00:00.000Z', credits: 500, amountUsd: 25, description: 'Alaventra credits: 500 credits, valid until 2 Oct 2027', emailedAt: '2026-10-02T09:00:01.000Z', emailedTo: ['o@example.org'] }],
   creditValueUsd: 0.05,
   packExpiryMonths: 12,
   planRolloverMonths: 1,
@@ -84,11 +85,11 @@ function render(node: ReactNode, role: Role = 'owner', data: BillingOverview = o
 describe('Company settings, Credits', () => {
   it('shows the balance, runway, month, websites, lots and packs, in credits', () => {
     const t = render(<CreditsTab />);
-    for (const s of ['Running low', 'Lasts about 5 days at your current use', 'runs out on 24 Oct 2026', 'Available now', 'Held by running analyses', 'Kept for autopilot', 'Your plan adds 2,000 credits a month', 'next credits on 1 Nov 2026', 'northwind.example', 'Paused: out of credits. It resumes when credits are added', 'Usage by feature', 'Usage by day', 'Credit pack', 'Never expires', '150 credits expire on 31 Oct 2026', '$25.00', '$100.00', 'Waiting for confirmation', 'Save limits', 'Keep credits for autopilot', 'Packs last 12 months'])
+    for (const s of ['Running low', 'Lasts about 5 days at your current use', 'runs out on 24 Oct 2026', 'Available now', 'Held by running analyses', 'Kept for autopilot', 'Your plan adds 2,000 credits a month', 'next credits on 1 Nov 2026', 'northwind.example', 'Paused: out of credits. It resumes when credits are added', 'Usage by feature', 'Usage by day', 'Credit pack', 'Never expires', '150 credits expire on 31 Oct 2026', '$25.00', '$100.00', 'Waiting for confirmation', 'ALV-2026-0001', 'e-mailed to o@example.org', 'Save limits', 'Keep credits for autopilot', 'Packs last 12 months'])
       expect(t, s).toContain(s);
   });
 
-  it('no provider cost reaches the page: the only dollars are pack prices', () => {
+  it('no provider cost reaches the page: the only dollars are pack prices (and what an invoice charged, a pack price)', () => {
     const t = render(<CreditsTab />);
     const dollars = t.match(/\$\d[\d,.]*/g) ?? [];
     expect(new Set(dollars)).toEqual(new Set(['$25.00', '$100.00', '$0.05']));

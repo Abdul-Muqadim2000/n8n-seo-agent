@@ -207,6 +207,10 @@ export interface CreditEntry {
     source?: string | null;
     /** usage: credits the run would have used beyond its quote (not charged) */
     absorbed?: number | null;
+    /** a paid grant: the invoice issued for it */
+    invoice?: { id: string; number: string } | null;
+    /** grant / refund / adjust: whether the company was told by e-mail (the addresses), or why not */
+    notified?: { to: string[]; at: string } | { skipped: string } | null;
     lots?: { lotId: string; credits: number }[];
     [k: string]: unknown;
   } | null;
@@ -358,6 +362,8 @@ export const adminCreditSchema = z
     expires: z.union([z.enum(['pack', 'never']), z.number().int().min(1).max(3650)]).default('pack'),
     /** fulfils this purchase request (the customer's "Buy credits") */
     requestId: z.string().uuid().optional(),
+    /** e-mail the company's owners and admins about the credits (a paid grant: with its invoice). An invoice is issued either way. */
+    notify: z.boolean().default(true),
   })
   .refine((b) => b.credits !== 0, { message: 'Enter a number of credits', path: ['credits'] })
   .refine((b) => b.kind === 'adjust' || b.credits > 0, { message: 'Must be more than 0', path: ['credits'] })
