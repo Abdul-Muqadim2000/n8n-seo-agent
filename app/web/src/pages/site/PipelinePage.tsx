@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router';
 import { formatCredits } from '@/lib/credits';
 import { toast } from 'sonner';
 import { MailX, PauseCircle, Play, Workflow } from 'lucide-react';
@@ -31,6 +32,14 @@ export default function PipelinePage() {
   const q = useSiteData(org.id, site.id, 'pipeline', undefined, { refetchInterval: (query) => (query.state.data?.activeRuns?.some((r) => r.mode === 'ladder') ? 30_000 : false) });
   const admin = useSiteAdmin(org.id, site.id);
   const [writing, setWriting] = useState<WriteNowItem | null>(null);
+  // a link to a part of this page (the Overview's "Coming up", a Needs-you item): scroll to it once the page has its data
+  const { hash } = useLocation();
+  const loaded = !!q.data;
+  useEffect(() => {
+    if (!hash || !loaded) return;
+    const t = window.setTimeout(() => document.getElementById(hash.slice(1))?.scrollIntoView({ block: 'start' }), 400);
+    return () => window.clearTimeout(t);
+  }, [hash, loaded]);
 
   if (q.isPending)
     return (

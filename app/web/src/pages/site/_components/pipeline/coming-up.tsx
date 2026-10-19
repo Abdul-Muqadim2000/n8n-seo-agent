@@ -9,7 +9,7 @@ import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { Callout, ErrorState, Skeleton } from '@/components/ui/feedback';
 import { Menu, MenuItem, MenuLabel } from '@/components/ui/overlay';
-import { IconTile } from '@/components/insight';
+import { ActionCard, IconTile } from '@/components/insight';
 import { ApiRequestError, errorMessage } from '@/lib/api';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { formatCredits } from '@/lib/credits';
@@ -60,6 +60,31 @@ export function ComingUp({ cycle, onWrite }: { cycle?: SiteCycleView; onWrite?: 
         <ComingUpPanel view={q.data} cycle={cycle} onWrite={onWrite} />
       )}
     </section>
+  );
+}
+
+/**
+ * The Overview's one line on the next weekly run's plan: what is written on its own and what waits for an OK, linked to the Pipeline.
+ * Nothing shows before the first plan arrives, or for a website that is not verified.
+ */
+export function ComingUpSummary() {
+  const { org } = useOrgCtx();
+  const { site } = useSiteCtx();
+  const q = useComingUp(org.id, site.id, !!site.verifiedAt);
+  const v = q.data;
+  if (!site.verifiedAt || !v?.available || v.closed) return null;
+  const auto = v.items.filter((i) => i.auto && i.decision?.decision !== 'skip').length;
+  const waiting = [...v.items.filter((i) => !i.auto), ...v.suggestions.filter((s) => !v.items.some((i) => i.itemKey === s.itemKey))].filter((i) => !i.decision).length;
+  const day = v.cycleDate ? cycleDayWords(v.cycleDate) : '';
+  const parts = [auto ? `${auto === 1 ? '1 page is' : `${auto} pages are`} written on its own` : 'nothing is written on its own', waiting ? `${waiting} ${waiting === 1 ? 'waits' : 'wait'} for your OK` : ''];
+  return (
+    <ActionCard
+      icon={<CalendarClock />}
+      title={day ? `Coming up on ${day}` : 'Coming up in your next weekly run'}
+      description={`${parts.filter(Boolean).join(', ')}.${v.waitingForKeyword ? ' Choose your keyword to have pages written each week.' : ''}`}
+      meta={waiting ? <Badge tone="accent">Needs your OK</Badge> : undefined}
+      to={`${paths.site(org.id, site.id, 'pipeline')}#coming-up`}
+    />
   );
 }
 

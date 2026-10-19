@@ -20,6 +20,8 @@ import { plotAvgPos, PositionMove, posText } from './_components/positions';
 import { CATEGORY_META, RecommendationButton, sortRecommendations } from './_components/recommendations';
 import { ReportList } from './_components/reports';
 
+import { ComingUpSummary } from './_components/pipeline/coming-up';
+
 export default function OverviewPage() {
   const { org, site } = useSitePage();
   const q = useSiteData(org.id, site.id, 'overview');
@@ -136,6 +138,9 @@ function Overview({ d, refetching }: { d: OverviewData; refetching: boolean }) {
           </>
         }
       />
+
+      {/* keyword-first: the plan of the next weekly run, two days before it (it links to the Pipeline) */}
+      <ComingUpSummary />
 
       {/* site health, AI answers, links and rankings: one card each */}
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
