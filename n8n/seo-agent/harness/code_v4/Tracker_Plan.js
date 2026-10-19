@@ -1083,6 +1083,75 @@ const FITR = {
       + '. They were planned before this rule existed; a page that is already written is kept and only flagged.';
   }
 };
+// ---- 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.4 / §4.5 / §4.8): the website's own calendar ----
+// With one Monday for everyone, a month or a day was the engine's UTC month or day and that rarely mattered. With a 7-day cycle per website
+// (started the day it set up, at 06:00 in ITS time zone), a run after 20:00 New York on the last day of a month is already "next month" in
+// UTC, and a site in Dubai has its Wednesday while New York still has Tuesday. This kit is the one place that answers, for a website:
+//   * which local day / month it is (dayKey / monthKey / weekday), in the website's time zone (`seo_cycles.tz`, else the engine zone);
+//   * what its cycle weekday is (`seo_cycles.cycle_weekday`, 0 = Sunday … 6 = Saturday) and how to say it ("every Wednesday" / "each week");
+//   * what a cycle run is: `trigger: 'cycle'` on a Manual Run (the Cycle Dispatcher's payload, plan §14.2) -> cycleOf(trigger);
+//   * how a weekly report is dated: by its cycle ("Week of Wed 15 Oct"), never by "Monday".
+// Pure: Intl only, no clock unless one is passed, no table access (the caller hands it the seo_cycles rows). ENGINE_TZ is written in at build
+// time from GENERIC_TIMEZONE (America/New_York when unset, the same default n8n/compose.yml and the catch-up use).
+const ST = (() => {
+  const ENGINE_TZ = 'America/New_York';
+  const S = (v) => String(v == null ? '' : v).trim();
+  const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const okTz = (tz) => { const z = S(tz); if (!z || /^__/.test(z)) return false; try { new Intl.DateTimeFormat('en-US', { timeZone: z }).format(0); return true; } catch (e) { return false; } };
+  const engineTz = () => okTz(ENGINE_TZ) ? ENGINE_TZ : 'America/New_York';
+  /** the zone to use: the given one when it is a real IANA zone, else the engine's */
+  const zone = (tz) => okTz(tz) ? S(tz) : engineTz();
+  const msOf = (t) => { if (t instanceof Date) return t.getTime(); if (typeof t === 'number' && Number.isFinite(t)) return t; const v = Date.parse(S(t)); return Number.isFinite(v) ? v : NaN; };
+  const normD = (x) => S(x).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
+  /** the wall-clock parts of instant `t` in zone `tz`: { date: 'YYYY-MM-DD', month: 'YYYY-MM', weekday: 0-6, hour, minute } */
+  const parts = (t, tz) => {
+    const ms = t === undefined || t === null || t === '' ? Date.now() : msOf(t);
+    if (!Number.isFinite(ms)) return null;
+    const f = new Intl.DateTimeFormat('en-US', { timeZone: zone(tz), year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+    const p = {}; for (const x of f.formatToParts(new Date(ms))) p[x.type] = x.value;
+    const date = p.year + '-' + p.month + '-' + p.day;
+    return { date, month: date.slice(0, 7), weekday: SHORT.indexOf(p.weekday), hour: Number(p.hour) % 24, minute: Number(p.minute) };
+  };
+  const dayKey = (t, tz) => { const p = parts(t, tz); return p ? p.date : ''; };
+  const monthKey = (t, tz) => { const p = parts(t, tz); return p ? p.month : ''; };
+  const weekday = (t, tz) => { const p = parts(t, tz); return p ? p.weekday : -1; };
+  /** the weekday of a calendar date 'YYYY-MM-DD' (the date itself, no zone involved) */
+  const weekdayOfDate = (date) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(S(date)); return m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).getUTCDay() : -1; };
+  // ---- the website's cycle row (seo_cycles) ----
+  const cycleRow = (rows, site) => {
+    const s = site || {}, sid = S(s.site_id), dom = normD(s.domain);
+    return (rows || []).find(r => r && typeof r === 'object' && !r.error && ((sid && S(r.site_id) === sid) || (dom && normD(r.domain) === dom))) || null;
+  };
+  const tzOf = (rows, site) => { const r = cycleRow(rows, site); return zone(r && r.tz); };
+  /** the website's cycle weekday (0-6) or null when it has no cycle row (or the row carries none) */
+  const cycleWeekday = (rows, site) => {
+    const r = cycleRow(rows, site); if (!r || r.cycle_weekday === '' || r.cycle_weekday == null) return null;
+    const w = Number(r.cycle_weekday); return Number.isInteger(w) && w >= 0 && w <= 6 ? w : null;
+  };
+  // ---- words ----
+  const dayName = (wd) => (Number.isInteger(wd) && wd >= 0 && wd <= 6) ? DAYS[wd] : '';
+  /** "every Wednesday" when the website's day is known, else "each week" */
+  const everyText = (wd) => dayName(wd) ? 'every ' + dayName(wd) : 'each week';
+  /** "on Wednesday" / "next week" */
+  const onText = (wd) => dayName(wd) ? 'on ' + dayName(wd) : 'next week';
+  /** 'YYYY-MM-DD' -> "Week of Wed 15 Oct" */
+  const weekOf = (date) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(S(date)); if (!m) return ''; return 'Week of ' + SHORT[weekdayOfDate(date)] + ' ' + Number(m[3]) + ' ' + MONTHS[Number(m[2]) - 1]; };
+  // ---- a cycle run (plan §14.2): { trigger: 'cycle', domain, site_id, cycle_key: 'cyc:<site_id>:<YYYY-MM-DD>', job, monthly, scheduled_for, request_id, light? } ----
+  const yes = (v) => v === true || /^(true|1|yes|on)$/i.test(S(v));
+  const keyDate = (key) => { const m = /:(\d{4}-\d{2}-\d{2})$/.exec(S(key)); return m ? m[1] : ''; };
+  const cycleOf = (trigger) => {
+    const t = trigger || {};
+    if (S(t.trigger) !== 'cycle') return null;
+    const key = S(t.cycle_key), date = keyDate(key);
+    return { key, date, job: S(t.job), monthly: yes(t.monthly), light: t.light === undefined || t.light === null || t.light === '' ? null : yes(t.light),
+      scheduled_for: S(t.scheduled_for), request_id: S(t.request_id), tz: okTz(t.tz) ? S(t.tz) : '', preview: yes(t.preview), label: date ? weekOf(date) : '' };
+  };
+  /** the fields a cycle run's callback carries (plan §14.2), or {} for any other run */
+  const callbackFields = (cyc) => cyc && cyc.key ? { trigger: 'cycle', cycle_key: cyc.key, cycle_date: cyc.date, cycle_week: cyc.label, cycle_job: cyc.job } : {};
+  return { ENGINE_TZ, okTz, zone, engineTz, parts, dayKey, monthKey, weekday, weekdayOfDate, cycleRow, tzOf, cycleWeekday, dayName, everyText, onText, weekOf, keyDate, cycleOf, callbackFields, DAYS };
+})();
 // Rank tracker: one SERP check (Google top 50) per tracked keyword: the primary keyword of every ladder page, plus the head term.
 // Reads the ladders and the history from the Data Tables, skips finished ladders and caps the spend per run.
 // v4.6 (no repeated checks): live pages, the head term and any keyword the site already ranks for are checked every week; pages not written /
@@ -1105,13 +1174,32 @@ const LIMITS = { max_keywords_per_ladder: 15, max_checks_per_run: 120, stop_afte
 const daysSince = (iso) => iso ? (Date.now() - new Date(iso).getTime()) / 864e5 : 1e9;
 const deferred = [];
 const rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error && Object.keys(r).length); } catch (e) { return []; } };
-const rows = $('Load Ladders').all().map(i => i.json).filter(r => r && r.ladder_id);
+// ---- 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §2.2 item 3 / §4.5): ONE website ----
+// The Rank Tracker never read its Manual Run: a start with { domain | site_id } checked every ladder of every website. A website's own cycle
+// (`trigger: 'cycle'`, the Cycle Dispatcher) and an on-demand start now check that website only - its ladders and its own keyword list -
+// with the same caps; a cycle run also honours a paused website, as the weekly schedule did. A start that names nothing (no domain, no
+// site) is the old batch run over every website.
+let trigger = {}; try { const t = $('Manual Run').first(); trigger = (t && t.json) || {}; } catch (e) { trigger = {}; }
+if (trigger.body && typeof trigger.body === 'object') trigger = { ...trigger, ...trigger.body };
+const normD0 = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
+const cycle = ST.cycleOf(trigger);
+const want = normD0(trigger.domain) || String(trigger.site_id || '').trim();
+const on_demand = !!want && !cycle;
+const siteRows0 = (() => { try { return $('Load Sites (Tracker)').all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error && r.domain); } catch (e) { return []; } })();
+// the website a start names: by its domain, or by its site id (seo_sites, else the id every engine derives from the domain)
+const wantDomain = !want ? '' : (normD0(trigger.domain) || normD0((siteRows0.find(r => String(r.site_id || '') === want) || {}).domain)
+  || (/^site_/.test(want) ? '' : want));
+const ofSite = (d) => !want || (wantDomain ? normD0(d) === wantDomain : ('site_' + normD0(d).replace(/[^a-z0-9]+/g, '-')) === want);
+const wantRow = want ? siteRows0.find(r => ofSite(r.domain)) || null : null;
+const sitePaused = !!(cycle && wantRow && String(wantRow.status || 'active') === 'paused');
+const one = want ? { domain: wantDomain || (wantRow ? normD0(wantRow.domain) : ''), site_id: (wantRow && wantRow.site_id) || (wantDomain ? 'site_' + wantDomain.replace(/[^a-z0-9]+/g, '-') : want), cycle: !!cycle, on_demand } : null;
+const rows = sitePaused ? [] : $('Load Ladders').all().map(i => i.json).filter(r => r && r.ladder_id && ofSite(r.domain));
 let history = []; try { history = $('Load History').all().map(i => i.json).filter(r => r && r.ladder_id); } catch (e) { history = []; }
 const isMobile = (h) => String((h || {}).device || '') === 'mobile';   // rows written before G6 have no device: they are desktop checks
 const deskHist = history.filter(h => !isMobile(h));
 // G6: who else we watch on these results pages — the one site model (SITE_MODEL_SPEC.md) merges seo_monitors.competitors with the
 // seo_sites model column, so the tracker names the same competitors as the AI and backlink monitors. No rows stored = no competitor list.
-const siteRows = rowsOf('Load Sites (Tracker)').filter(r => r.domain);
+const siteRows = sitePaused ? [] : rowsOf('Load Sites (Tracker)').filter(r => r.domain && ofSite(r.domain));   // 2026-10-19: one website when the start names one
 const monRows = rowsOf('Load Monitors (Tracker)').filter(r => r.site_id || r.domain);
 const normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
 const competitorsFor = (domain) => {
@@ -1189,7 +1277,7 @@ for (const [id, pages] of byLadder) {
       deferred.push({ ladder_id: id, domain: p.domain, head_keyword: p.head_keyword, rung: Number(p.rung), page_no: Number(p.page_no), keyword: p.keyword, page_type: p.page_type || '', target_url: p.target_url || '', status: p.status || '',
         last_position: Number(lastH.position), last_url: lastH.url || '', last_checked: lastH.checked_at, device: 'desktop' }); continue; }
     const base = { ladder_id: id, domain: p.domain, head_keyword: p.head_keyword, rung: Number(p.rung), page_no: Number(p.page_no), keyword: p.keyword, page_type: p.page_type || '', target_url: p.target_url || '', status: p.status || '',
-      location_code: Number(p.location_code), language_code: p.language_code || 'en', email: p.email || '', callback_url: p.callback_url || '', request_id: p.request_id || '', country: p.country || '', won_monthly: won, competitors };
+      location_code: Number(p.location_code), language_code: p.language_code || 'en', email: p.email || '', callback_url: p.callback_url || '', request_id: (cycle && cycle.request_id) || p.request_id || '', country: p.country || '', won_monthly: won, competitors };
     checks.push({ ...base, device: 'desktop', endpoint: 'https://api.dataforseo.com/v3/serp/google/organic/live/advanced', body: serpBody(p, 'desktop') });   // depth 50: ~$0.015 per check (depth 100 measured at $0.028); positions below 50 add little for a ladder
     if (LIMITS.mobile && (Number(p.rung) === 4 || Number(p.page_no) === 1) && mobileWanted.length < LIMITS.max_mobile_per_ladder && !mobileWanted.some(m => m.keyword === p.keyword)) mobileWanted.push(base);
   }
@@ -1277,7 +1365,7 @@ for (const s of siteRows) {
     if (i < room) {
       watchChecks.push({ ladder_id: wid, watch_keyword: true, site_id: sid, domain: d, head_keyword: '', rung: 0, page_no: 0, keyword: c.keyword,
         page_type: '', target_url: '', status: '', location_code: loc, language_code: s.language_code || 'en', email: s.email || '',
-        callback_url: s.callback_url || '', request_id: s.request_id || '', country: s.country || '', won_monthly: false, competitors,
+        callback_url: s.callback_url || '', request_id: (cycle && cycle.request_id) || s.request_id || '', country: s.country || '', won_monthly: false, competitors,
         device: 'desktop', endpoint: 'https://api.dataforseo.com/v3/serp/google/organic/live/advanced',
         body: serpBody({ keyword: c.keyword, location_code: loc, language_code: s.language_code || 'en' }, 'desktop') });
       site.checked++;
@@ -1294,5 +1382,12 @@ const watch = { sites: watchSites, limits: { per_site: LIMITS.max_watch_per_site
   carried: watchCarried.slice(0, LIMITS.max_watch_listed), held: watchHeld.slice(0, LIMITS.max_watch_listed), set_aside: watchAside.slice(0, LIMITS.max_watch_listed),
   carried_total: watchCarried.length, held_total: watchHeld.length, set_aside_total: watchAside.length, checked_total: watchChecks.length };
 const all = [...checks, ...watchChecks];
-if (!all.length) return [{ json: { nothing_to_do: true, ladders: byLadder.size, skipped, deferred, set_aside: setAside, paused_ladders: pausedLadders, watch } }];
-return all.map(c => ({ json: { ...c, skipped_ladders: skipped, deferred_pages: deferred, set_aside_pages: setAside, paused_ladders: pausedLadders, watch } }));
+// 2026-10-19: what this start covered (one website or every one) and, on a cycle run, the cycle - every item carries both
+const scope = one ? { ...one, paused: sitePaused } : { all_sites: true };
+if (!all.length) {
+  const reason = sitePaused ? one.domain + ' is paused, so its weekly cycle checks no position until it is resumed'
+    : (one && !byLadder.size && !watchSites.length) ? 'no keyword ladder and no keyword list for ' + (one.domain || one.site_id) + ', so there is no position to check'
+    : (one ? 'every keyword of ' + (one.domain || one.site_id) + ' was checked recently enough, set aside or deferred' : '');
+  return [{ json: { nothing_to_do: true, ladders: byLadder.size, skipped, deferred, set_aside: setAside, paused_ladders: pausedLadders, watch, scope, cycle, on_demand, domain: one ? one.domain : '', ...(reason ? { reason } : {}) } }];
+}
+return all.map(c => ({ json: { ...c, skipped_ladders: skipped, deferred_pages: deferred, set_aside_pages: setAside, paused_ladders: pausedLadders, watch, scope, cycle, on_demand } }));
