@@ -1,4 +1,6 @@
 import {
+  DEFAULT_AUTOPILOT_LEVEL,
+  cycleNorm,
   LADDER_SETTINGS_COLUMNS,
   LADDER_SITE_ROW,
   n8nSiteId,
@@ -10,8 +12,8 @@ import {
   type SiteAutomationInput,
 } from '@seo/shared';
 import type { SiteRow } from '../db/schema';
-import { badRequest, notFound } from '../lib/errors';
-import { deleteRows, ensureTable, siteRows, upsertRow } from '../n8n/client';
+import { badRequest, conflict, HttpError, notFound } from '../lib/errors';
+import { deleteRows, ensureTable, insertRows, siteRows, upsertRow } from '../n8n/client';
 import { siteAutomation } from './ladders';
 
 // The person's controls over the keyword ladders of a website, written to n8n's seo_ladder_settings (one row per ladder, plus the
@@ -72,6 +74,7 @@ function newLadderRow(site: { domain: string }, ladderId: string, ladders: Ladde
     source: 'app',
     opportunities: '',
     auto_start: false,
+    chosen_by: '',
     created_at: now,
     updated_at: now,
     ...extra,
@@ -167,8 +170,9 @@ export function automationWrite(o: { site: { domain: string }; settings: LadderS
     ...(o.change.maxActiveLadders != null ? { maxActiveLadders: o.change.maxActiveLadders } : {}),
     ...(o.change.maxWaiting != null ? { maxWaiting: o.change.maxWaiting } : {}),
     ...(o.change.autoStartLadders != null ? { autoStartLadders: o.change.autoStartLadders } : {}),
+    ...(o.change.autopilotLevel != null ? { autopilotLevel: o.change.autopilotLevel } : {}),
   };
-  const cols = { mode: o.change.defaultMode, opportunities: o.change.opportunities, max_active: o.change.maxActiveLadders, max_waiting: o.change.maxWaiting, auto_start: o.change.autoStartLadders };
+  const cols = { mode: o.change.defaultMode, opportunities: o.change.opportunities, max_active: o.change.maxActiveLadders, max_waiting: o.change.maxWaiting, auto_start: o.change.autoStartLadders, autopilot_level: o.change.autopilotLevel };
   const exists = o.settings.some((r) => r.ladder_id === LADDER_SITE_ROW);
   if (exists) return { insert: false, automation: next, data: settingsData({ ...cols, updated_at: o.now }) };
   return {
@@ -187,6 +191,8 @@ export function automationWrite(o: { site: { domain: string }; settings: LadderS
       auto_start: next.autoStartLadders,
       max_active: next.maxActiveLadders,
       max_waiting: next.maxWaiting,
+      autopilot_level: next.autopilotLevel ?? DEFAULT_AUTOPILOT_LEVEL,
+      chosen_by: '',
       created_at: o.now,
       updated_at: o.now,
     }),
@@ -265,4 +271,44 @@ export async function markLadderWon(site: SiteRow, ladderId: string): Promise<bo
   if (!w) return false;
   await apply(site, [w]);
   return true;
+}
+
+/**
+ * Keyword-first "Add to my ladder" (SCHEDULING_KEYWORDS_PLAN.md §5.3): a search on a ladder's topic becomes one more planned supporting
+ * page of that ladder (rung 1, after its last page), so the client's own ladder writes it in turn, with the ladder's links, instead of a
+ * page of its own. Pure: the row to insert, or the reason it is refused (the ladder is not the website's; a page of any ladder of the
+ * website is already this search: one search, one page).
+ */
+export function ladderKeywordRow(o: { site: Pick<SiteRow, 'domain' | 'country'>; ladders: LadderRow[]; ladderId: string; keyword: string; now: string }): Record<string, unknown> {
+  const mine = o.ladders.filter((r) => r.ladder_id === o.ladderId);
+  if (!mine.length) throw notFound('Keyword ladder not found');
+  const k = cycleNorm(o.keyword);
+  const dup = o.ladders.find((r) => cycleNorm(r.keyword) === k || cycleNorm(r.head_keyword) === k);
+  if (dup) throw conflict(`"${dup.keyword || o.keyword}" is already a page of your ladder "${dup.head_keyword}": one search needs one page.`, 'duplicate_keyword');
+  const head = mine.find((r) => Number(r.rung) === 4)?.keyword || mine[0].head_keyword || '';
+  return {
+    ladder_id: o.ladderId,
+    domain: o.site.domain,
+    head_keyword: head,
+    rung: 1,
+    page_no: Math.max(0, ...mine.map((r) => Number(r.page_no) || 0)) + 1,
+    keyword: o.keyword.trim().slice(0, 100),
+    supporting: '',
+    page_type: 'Guide',
+    target_url: '',
+    page_exists: false,
+    status: 'planned',
+    months: '',
+    start_date: mine.map((r) => String(r.start_date || '')).filter(Boolean).sort()[0] || o.now,
+    country: mine[0].country || o.site.country,
+  };
+}
+
+/** POST .../ladders/:ladderId/keywords {keyword}: adds the planned page to the ladder in the engine. */
+export async function addKeywordToLadder(site: SiteRow, ladderId: string, keyword: string): Promise<Record<string, unknown>> {
+  const cur = await current(site);
+  const row = ladderKeywordRow({ site, ladders: cur.ladders, ladderId, keyword, now: new Date().toISOString() });
+  const ok = await insertRows('ladders', [row]);
+  if (!ok) throw new HttpError(502, 'The SEO engine did not save the page. Try again in a minute.', 'engine_failed');
+  return row;
 }

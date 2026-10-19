@@ -1,8 +1,23 @@
 import { gte } from 'drizzle-orm';
-import { SCHEDULES, nextScheduledRun, type AutomationInfo, type ScheduleInfo, type AlertDelivery, type DeliveryCount, type DeliveryReport, type DeliveryWeek, type MissedSchedule } from '@seo/shared';
+import {
+  SCHEDULES,
+  cycleOverdue,
+  n8nSiteId,
+  nextScheduledRun,
+  type AutomationInfo,
+  type CycleJobRow,
+  type CycleRow,
+  type ScheduleInfo,
+  type AlertDelivery,
+  type DeliveryCount,
+  type DeliveryReport,
+  type DeliveryWeek,
+  type MissedSchedule,
+} from '@seo/shared';
 import { config } from '../config';
 import { db, schema } from '../db';
 import { executions, rows, type ExecutionSummary } from '../n8n/client';
+import { JOB_LABELS } from './cycles';
 
 // G21 (2026-10-13, system review FIX_PLAN G21; it depends on D25a and on R6): nothing measured whether what should have run did run,
 // or whether what ran reached the customer. The engine's own failure watcher (engineFailures.ts) marks a run failed, and n8n's Error
@@ -18,6 +33,11 @@ import { executions, rows, type ExecutionSummary } from '../n8n/client';
 //     execution exists near that time, and whether that execution succeeded. The fires it left behind are the MISSED SCHEDULES.
 //   * ALERTS, `seo_ops_alerts`, now that R6 writes `delivered` and `channels` back on the row. Before that every row sat at
 //     "pending" and this could not be measured at all.
+//   * 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4 / §8): the weekly work no longer fires on a shared clock. It runs in each website's own
+//     cycle, so its side is measured per website from the Cycle Dispatcher's own records: every job of a cycle due in the week (seo_cycle_jobs)
+//     that finished is delivered; one that gave up after 3 attempts, or is still not done a day after its cycle was due, is MISSED; a
+//     cycle more than a day overdue that never opened (seo_cycles) is missed too. Skipped jobs (switched off, nothing to do) are not counted.
+//     Only the daily schedules (the AI Pulse, Page Watch) are still measured against n8n's executions.
 //
 // The arithmetic is pure (`deliveryReport`) so it can be tested without a database or n8n; `loadDeliveryReport` only fetches.
 
@@ -57,15 +77,17 @@ export function weeksBack(count: number, now: Date): Date[] {
   return Array.from({ length: count }, (_, i) => new Date(thisWeek - (count - 1 - i) * 7 * DAY_MS));
 }
 
-/** Every time a schedule should have fired in [from, to), on n8n's own clock (DST-safe, `nextScheduledRun` does the work). */
+/** Every time a schedule should have fired in [from, to), on n8n's own clock (DST-safe, `nextScheduledRun` does the work). A cycle job has no
+ *  shared clock (it runs in each website's own cycle, measured by `cycleWeek`): none. */
 export function scheduledTimes(s: AutomationInfo['schedule'], tz: string, from: Date, to: Date): Date[] {
   const out: Date[] = [];
+  if (s.kind === 'cycle') return out;
   // nextScheduledRun returns the first fire strictly after its `from`, so stepping from one millisecond before the window
   // includes a fire exactly on the boundary.
   let cursor = new Date(from.getTime() - 1);
   for (let i = 0; i < 400; i++) {
     const next = nextScheduledRun(s, tz, cursor);
-    if (!(next.getTime() > cursor.getTime())) break;
+    if (!next || !(next.getTime() > cursor.getTime())) break;
     if (next.getTime() >= to.getTime()) break;
     out.push(next);
     cursor = next;
@@ -123,6 +145,7 @@ export function scheduledWeek(
   let delivered = 0, failed = 0, started = 0;
   const missed: MissedSchedule[] = [];
   for (const a of automations) {
+    if (a.schedule.kind === 'cycle') continue; // measured per website (cycleWeek)
     const known = scheduledExecs(execs[a.workflow]).map((e) => ({ at: Date.parse(e.startedAt), status: String(e.status) })).filter((e) => Number.isFinite(e.at));
     const existed = measuredFrom(a, created);
     for (const at of scheduledTimes(a.schedule, tz, from, to)) {
@@ -142,6 +165,45 @@ export function scheduledWeek(
   // a schedule that never fired is not "in flight" and not a failure of the engine's logic, it is a missed run, and it counts
   // against the rate, which is the whole point of showing it (D25a).
   return { counts: count({ started, delivered, failed, noReport: 0, stuck: missed.length, inFlight: 0 }), missed };
+}
+
+/** How long after its cycle was due a job that has not finished counts as missed (the engine retries within it). */
+export const CYCLE_JOB_MISSED_HOURS = 24;
+
+/**
+ * The cycle side of one week: every job of a website's cycle that was due in [from, to) (seo_cycle_jobs), and the cycles that should have
+ * opened in the week and did not (seo_cycles, more than a day overdue). `domains` names the websites in the missed list.
+ */
+export function cycleWeek(jobs: CycleJobRow[], cycles: CycleRow[], from: Date, to: Date, now: Date, domains: Map<string, string> = new Map()): { counts: DeliveryCount; missed: MissedSchedule[] } {
+  let delivered = 0, failed = 0, stuck = 0, inFlight = 0, started = 0;
+  const missed: MissedSchedule[] = [];
+  const nameOf = (siteId: string) => domains.get(siteId) || cycles.find((c) => c.site_id === siteId)?.domain || siteId.replace(/^site_/, '');
+  for (const j of jobs) {
+    const job = String(j.job ?? '');
+    if (!job || job === 'cycle') continue;
+    const due = Date.parse(String(j.due_at || j.started_at || ''));
+    if (!Number.isFinite(due) || due < from.getTime() || due >= to.getTime()) continue;
+    const st = String(j.status ?? '');
+    if (st === 'skipped') continue;
+    started++;
+    if (st === 'done') {
+      delivered++;
+      continue;
+    }
+    const late = now.getTime() - due > CYCLE_JOB_MISSED_HOURS * 3_600_000;
+    if (st === 'gave_up' || late) {
+      stuck++;
+      missed.push({ automation: job, title: `${JOB_LABELS[job as keyof typeof JOB_LABELS] ?? job} · ${nameOf(String(j.site_id))}`, workflow: String(j.workflow_id ?? ''), expectedAt: new Date(due).toISOString() });
+    } else inFlight++;
+  }
+  for (const c of cycles) {
+    const due = Date.parse(String(c.next_due_at ?? ''));
+    if (!Number.isFinite(due) || due < from.getTime() || due >= to.getTime() || !cycleOverdue(c, now.getTime())) continue;
+    started++;
+    stuck++;
+    missed.push({ automation: 'cycle', title: `Weekly cycle · ${nameOf(String(c.site_id))}`, workflow: 'SEOagentCycleDsp', expectedAt: new Date(due).toISOString() });
+  }
+  return { counts: count({ started, delivered, failed, noReport: 0, stuck, inFlight }), missed };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -177,7 +239,7 @@ export function scheduleState(
   dataLastAt?: string | null,
   created?: Record<string, string>,
 ): ScheduleState {
-  if (!execs) return { known: false, lastScheduledAt: null, missedAt: null, onDemandAt: null, note: '' };
+  if (!execs || a.schedule.kind === 'cycle') return { known: false, lastScheduledAt: null, missedAt: null, onDemandAt: null, note: '' };
   const grace = SCHEDULE_GRACE_MINUTES * 60_000;
   const fires = scheduledExecs(execs).map((e) => Date.parse(e.startedAt)).filter(Number.isFinite).sort((x, y) => y - x);
   const last = fires.length ? fires[0] : null;
@@ -228,6 +290,8 @@ export interface DeliveryInput {
   notes?: string[];
   /** R103: the workflows' own `createdAt`, when the engine answered (overrides the built-in `since` when it is later) */
   created?: Record<string, string>;
+  /** 2026-10-19: the websites' cycles and their jobs (null = could not be read) */
+  cycles?: { rows: CycleRow[]; jobs: CycleJobRow[]; domains?: Map<string, string> } | null;
 }
 
 /** The whole report, from facts only, no database, no n8n. */
@@ -237,12 +301,16 @@ export function deliveryReport(input: DeliveryInput): DeliveryReport {
   const weeks: DeliveryWeek[] = weeksBack(input.weeks, input.now).map((from) => {
     const to = new Date(from.getTime() + 7 * DAY_MS);
     const onDemand = onDemandWeek(input.runs, from, to, input.now);
-    const { counts: scheduled, missed } = scheduledWeek(automations, input.execs, input.timezone, from, to, input.now, input.created);
+    const daily = scheduledWeek(automations, input.execs, input.timezone, from, to, input.now, input.created);
+    const cyc = input.cycles ? cycleWeek(input.cycles.jobs, input.cycles.rows, from, to, input.now, input.cycles.domains) : null;
+    const scheduled = cyc ? count({ started: daily.counts.started + cyc.counts.started, delivered: daily.counts.delivered + cyc.counts.delivered, failed: daily.counts.failed + cyc.counts.failed, noReport: 0, stuck: daily.counts.stuck + cyc.counts.stuck, inFlight: daily.counts.inFlight + cyc.counts.inFlight }) : daily.counts;
+    const missed = [...daily.missed, ...(cyc?.missed ?? [])].sort((a, b) => a.expectedAt.localeCompare(b.expectedAt));
     const settled = onDemand.settled + scheduled.settled;
     const overallPct = pct(onDemand.delivered + scheduled.delivered, settled);
     return { week: from.toISOString().slice(0, 10), onDemand, scheduled, overallPct, belowTarget: overallPct != null && overallPct < TARGET_PCT, missed };
   });
-  if (!Object.keys(input.execs).length) notes.push('No execution history could be read from the engine, so the scheduled side of every week is unmeasured, not perfect.');
+  if (!Object.keys(input.execs).length) notes.push('No execution history could be read from the engine, so the daily schedules of every week are unmeasured, not perfect.');
+  if (input.cycles === null) notes.push("The websites' weekly cycles could not be read from the engine, so the weekly work of every week is unmeasured, not perfect.");
   // R103: say where the measurement starts, so an empty early week reads as "not measured yet" rather than as perfect or as 0%
   const firstFrom = Math.min(...automations.map((a) => measuredFrom(a, input.created)));
   if (Number.isFinite(firstFrom) && weeksBack(input.weeks, input.now)[0].getTime() < firstFrom)
@@ -261,7 +329,8 @@ export async function loadDeliveryReport(now = new Date()): Promise<DeliveryRepo
   const execs: Record<string, ExecutionSummary[]> = {};
   const notes: string[] = [];
   const failedWorkflows: string[] = [];
-  for (const wf of [...new Set(SCHEDULES.map((a) => a.workflow))]) {
+  const daily = SCHEDULES.filter((a) => a.schedule.kind !== 'cycle');
+  for (const wf of [...new Set(daily.map((a) => a.workflow))]) {
     try {
       const [ok, bad] = await Promise.all([executions(wf, 'success', 150), executions(wf, 'error', 50)]);
       execs[wf] = [...ok, ...bad];
@@ -269,12 +338,24 @@ export async function loadDeliveryReport(now = new Date()): Promise<DeliveryRepo
       failedWorkflows.push(wf);
     }
   }
-  if (failedWorkflows.length) notes.push(`The engine did not answer for ${failedWorkflows.length} of ${new Set(SCHEDULES.map((a) => a.workflow)).size} scheduled workflows, so their weeks are unmeasured rather than perfect.`);
+  if (failedWorkflows.length) notes.push(`The engine did not answer for ${failedWorkflows.length} of ${new Set(daily.map((a) => a.workflow)).size} daily schedules, so their weeks are unmeasured rather than perfect.`);
+  let cycles: DeliveryInput['cycles'] = null;
+  try {
+    const [cycleRows, jobRows, siteRows] = await Promise.all([
+      rows<CycleRow>('cycles', { max: 5000 }),
+      rows<CycleJobRow>('cycleJobs', { sortBy: 'updated_at:desc', max: 20000 }),
+      db.select({ domain: schema.sites.domain }).from(schema.sites),
+    ]);
+    const fromMs = from.getTime();
+    cycles = { rows: cycleRows, jobs: jobRows.filter((j) => Date.parse(String(j.due_at || j.started_at || '')) >= fromMs), domains: new Map(siteRows.map((x) => [n8nSiteId(x.domain), x.domain])) };
+  } catch {
+    cycles = null;
+  }
   let alerts: AlertFact[] = [];
   try {
     alerts = await rows<AlertFact>('opsAlerts', { max: 500 });
   } catch {
     notes.push('The ops-alert table could not be read, so the alert delivery rate is unknown.');
   }
-  return deliveryReport({ now, weeks: WEEKS, runs: runRows.map((r) => ({ ...r, reportCount: Number(r.reportCount ?? 0) })), execs, alerts, timezone: config.n8nTimezone, notes });
+  return deliveryReport({ now, weeks: WEEKS, runs: runRows.map((r) => ({ ...r, reportCount: Number(r.reportCount ?? 0) })), execs, alerts, timezone: config.n8nTimezone, notes, cycles });
 }

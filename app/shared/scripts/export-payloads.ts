@@ -28,7 +28,7 @@ const site: SiteContext = {
 const delivery = { callbackUrl: 'http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform', email: 'owner@northwind-erp.com' };
 const noMail = { ...delivery, email: '' };
 
-type Case = { name: string; mode: keyof typeof RUN_SCHEMAS; input: Record<string, unknown>; site: SiteContext | null; mail?: boolean; expect: Record<string, unknown> };
+type Case = { name: string; mode: keyof typeof RUN_SCHEMAS; input: Record<string, unknown>; site: SiteContext | null; mail?: boolean; expect: Record<string, unknown>; /** fields the server adds to the body (runs.ts) */ extra?: Record<string, unknown> };
 
 const cases: Case[] = [
   {
@@ -86,9 +86,10 @@ const cases: Case[] = [
   {
     name: 'discover with site + audit follow-up',
     mode: 'discover',
+    // keyword-first (R-K6): research from the app never asks for a page on its own pick, whatever the form sent
     input: { siteId: SITE_ID, country: 'United Arab Emirates', siteAudit: true, receiveReport: true, receiveContent: true },
     site,
-    expect: { mode: 'discover', business: site.business, audience: site.customers, business_facts: site.businessFacts, include_audit: true, include_full_report: false, include_content: true, include_seo_report: true, keyword: '' },
+    expect: { mode: 'discover', business: site.business, audience: site.customers, business_facts: site.businessFacts, include_audit: true, include_full_report: false, include_content: false, include_seo_report: true, keyword: '' },
   },
   {
     name: 'discover from a description only',
@@ -125,6 +126,29 @@ const cases: Case[] = [
     input: { siteId: SITE_ID, keyword: 'e invoicing in uae', country: 'United Arab Emirates', pagesNow: 2 },
     site,
     expect: { mode: 'ladder', keyword: 'e invoicing in uae', pages_now: 2, business: site.business, business_facts: site.businessFacts, need_site_description: false },
+  },
+  {
+    name: 'ladder picked from the recommendations, Manual (keyword-first)',
+    mode: 'ladder',
+    input: { siteId: SITE_ID, keyword: 'peppol access point uae', country: 'United Arab Emirates', pagesNow: 1, chosenBy: 'client_picked', ladderMode: 'manual' },
+    site,
+    expect: { mode: 'ladder', keyword: 'peppol access point uae', pages_now: 1, chosen_by: 'client_picked', ladder_mode: 'manual', business: site.business },
+  },
+  {
+    name: 'ladder typed by the client, the website default mode (keyword-first)',
+    mode: 'ladder',
+    input: { siteId: SITE_ID, keyword: 'e invoicing software uae', country: 'United Arab Emirates' },
+    site,
+    expect: { mode: 'ladder', chosen_by: 'client_typed', ladder_mode: '' },
+  },
+  {
+    name: 'track with the time zone, what you sell and the first tracking moment (keyword-first)',
+    mode: 'track',
+    input: { siteId: SITE_ID, country: 'United Arab Emirates', blogsPerWeek: 1, timezone: 'Asia/Dubai', services: ['E-invoicing onboarding', 'Odoo implementation'] },
+    site,
+    // the server adds it: the website's first tracking (sites.trackingStartedAt), kept on every re-save
+    extra: { tracking_started_at: '2026-10-19T08:30:00.000Z' },
+    expect: { mode: 'track', blogs_per_week: 1, timezone: 'Asia/Dubai', services: ['E-invoicing onboarding', 'Odoo implementation'], services_given: true, tracking_started_at: '2026-10-19T08:30:00.000Z' },
   },
   {
     name: 'track with monitors',
@@ -203,7 +227,7 @@ const cases: Case[] = [
 const fixtures = cases.map((c) => {
   const parsed = RUN_SCHEMAS[c.mode].safeParse({ mode: c.mode, ...c.input });
   if (!parsed.success) throw new Error(`${c.name}: ${JSON.stringify(parsed.error.issues)}`);
-  const body = compactBody(buildN8nPayload(parsed.data as never, c.site, c.mail === false ? noMail : delivery));
+  const body = { ...compactBody(buildN8nPayload(parsed.data as never, c.site, c.mail === false ? noMail : delivery)), ...(c.extra ?? {}) };
   return { name: c.name, headers: { 'x-forwarded-for': 'app:7a1c2d3e-org' }, body, expect: c.expect };
 });
 

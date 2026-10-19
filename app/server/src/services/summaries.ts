@@ -174,7 +174,21 @@ export function summarize(stage: string, p: P): Summary {
       put('week', str(p.week));
       put('pages', len(p.pages));
       put('upcoming', len(p.upcoming));
+      // keyword-first (2026-10-19): the level, the first keyword still missing, what waits for an OK, the cycle
+      put('level', num(p.level));
+      put('waitingForKeyword', p.waiting_for_keyword === true ? true : null);
+      put('suggestions', len(p.suggestions));
+      put('cycle', str(p.cycle_date));
       break;
+    case 'cycle_preview': {
+      const items = Array.isArray(p.items) ? (p.items as Record<string, unknown>[]) : [];
+      put('cycle', str(p.cycle_date) ?? str(p.cycle_key));
+      put('level', num(p.level));
+      put('automatic', items.filter((i) => i && i.auto === true).length);
+      put('needsOk', items.filter((i) => i && i.auto !== true).length + (len(p.suggestions) ?? 0));
+      put('waitingForKeyword', p.waiting_for_keyword === true ? true : null);
+      break;
+    }
     case 'site_description':
       put('name', str(obj(p.site_description).business_name) ?? str(obj(p.description).business_name));
       put('summary', str(obj(p.site_description).one_line_summary) ?? str(obj(p.description).one_line_summary));
@@ -208,7 +222,8 @@ export function titleFor(stage: string, p: P): string {
   // D-13 / C-14 (re-rating 2026-10-17): a pulse with no alert is not titled "AI pulse alert"; the word follows the alerts it carries
   const named = stage === 'ai_pulse' && len(p.alerts) ? 'AI pulse alert' : base;
   // D-4 / C-11: a dry run submitted nothing and is a test; C-1: a scheduled run that ran late says so in its title too (the engine's `ran_late`)
-  const tags = [p.dry_run === true || p.dry_run === 'true' ? 'test run, nothing submitted' : '', obj(p.ran_late).late === true ? 'ran late' : ''].filter(Boolean);
+  // a "Coming up" plan is a dry run by design (it plans, writes nothing): it is not a test
+  const tags = [stage !== 'cycle_preview' && (p.dry_run === true || p.dry_run === 'true') ? 'test run, nothing submitted' : '', obj(p.ran_late).late === true ? 'ran late' : ''].filter(Boolean);
   const t = dom ? `${named} · ${dom}` : named;
   return tags.length ? `${t} (${tags.join(', ')})` : t;
 }

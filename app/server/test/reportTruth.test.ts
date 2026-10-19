@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { deliveryDecision, type AuditPoint, type AutomationStatus, type ContentLogRow, type LadderRow } from '@seo/shared';
+import { deliveryDecision, type AuditPoint, type AutomationStatus, type ContentLogRow, type CycleJobRow, type LadderRow } from '@seo/shared';
 import type { SiteRow } from '../src/db/schema';
 import { aiDailySeries, oneReadingFinding, previousOfType } from '../src/services/data';
 import { buildLadders, draftQa, ladderNeedsYou, type LadderSources } from '../src/services/ladders';
-import { cadenceDetail, publishStage, pulseLastRun, waitingPages, withScheduleTruth } from '../src/services/pipeline';
+import { cadenceDetail, publishStage, pulseLastRun, waitingPages, withCycleTruth, withScheduleTruth } from '../src/services/pipeline';
 import { recommend, type SiteBundle } from '../src/services/recommendations';
 import { STALE_RUN_ERROR, runOutcome } from '../src/services/runs';
 import { stageOf, summarize } from '../src/services/summaries';
@@ -184,10 +184,27 @@ describe('R113: the site report\'s list line follows its own significance test',
 describe('R104: the Pipeline\'s last run is the schedule\'s own fire; on-demand runs and missed fires are named', () => {
   const auto = (o: Partial<AutomationStatus>): AutomationStatus => ({ id: 'rank_tracker', state: 'on', reason: null, nextRunAt: '2026-10-19T12:00:00.000Z', lastRunAt: '2026-10-15T19:48:00.000Z', lastResult: '0 ladder pages in the top 10', lastReportId: 'r', monthlyCredits: 0.1, detail: null, ...o });
 
-  it('only an on-demand run since the Monday due time: no last run, "scheduled run missed", and the run named as on demand', () => {
-    const [a] = withScheduleTruth([auto({})], { SEOagentTracker1: [{ id: 'i', workflowId: 'SEOagentTracker1', status: 'success', startedAt: '2026-10-15T19:48:00.000Z', mode: 'integrated' }] }, 'America/New_York', new Date('2026-10-15T20:00:00Z'));
+  // 2026-10-19: the weekly jobs run in each website's own cycle (withCycleTruth, below); the daily AI pulse is still on the engine's clock
+  it('only an on-demand run since the due time of a daily schedule: no last run, "scheduled run missed", and the run named as on demand', () => {
+    const [a] = withScheduleTruth([auto({ id: 'ai_pulse', lastResult: 'Named in 20% of 40 answers' })], { SEOagentAIPulse1: [{ id: 'i', workflowId: 'SEOagentAIPulse1', status: 'success', startedAt: '2026-10-15T19:48:00.000Z', mode: 'integrated' }] }, 'America/New_York', new Date('2026-10-15T20:00:00Z'));
     expect(a.lastRunAt).toBeNull();
-    expect(a.lastResult).toMatch(/^scheduled run missed on 2026-10-12 · last run on demand 2026-10-15 19:48 UTC · 0 ladder pages in the top 10$/);
+    expect(a.lastResult).toMatch(/^scheduled run missed on 2026-10-15 · last run on demand 2026-10-15 19:48 UTC · Named in 20% of 40 answers$/);
+  });
+
+  it('a job of the website\'s cycle is left to the cycle\'s own records by the shared-clock rule (no false "missed")', () => {
+    const [a] = withScheduleTruth([auto({})], { SEOagentTracker1: [] }, 'America/New_York', new Date('2026-10-15T20:00:00Z'));
+    expect([a.lastRunAt, a.lastResult]).toEqual(['2026-10-15T19:48:00.000Z', '0 ladder pages in the top 10']);
+  });
+
+  it("withCycleTruth: the last run is the job's last finish in the website's cycles; a job that gave up is named", () => {
+    const job = (o: Partial<CycleJobRow>): CycleJobRow => ({ key: '', site_id: 'site_techand-ai', cycle_key: 'cyc:site_techand-ai:2026-10-14', job: 'rank_tracker', workflow_id: 'SEOagentTracker1', status: 'done', attempts: 1, run_id: '1', ledger_key: '', monthly: false, reason: '', due_at: '2026-10-14T02:00:00.000Z', started_at: '2026-10-14T02:05:00.000Z', finished_at: '2026-10-14T02:09:00.000Z', updated_at: '', ...o });
+    const [done] = withCycleTruth([auto({ lastRunAt: null, lastResult: null })], [job({})]);
+    expect(done.lastRunAt).toBe('2026-10-14T02:09:00.000Z');
+    const [gave] = withCycleTruth([auto({ lastResult: null })], [job({}), job({ cycle_key: 'cyc:site_techand-ai:2026-10-21', status: 'gave_up', due_at: '2026-10-21T02:00:00.000Z', finished_at: '' })]);
+    expect(gave.lastRunAt).toBe('2026-10-14T02:09:00.000Z');
+    expect(gave.lastResult).toBe('did not run in the cycle of 2026-10-21 after 3 attempts');
+    // no job rows yet: what the app's own rows say stays
+    expect(withCycleTruth([auto({})], [])[0].lastRunAt).toBe('2026-10-15T19:48:00.000Z');
   });
 
   it('without the engine\'s history nothing changes', () => {

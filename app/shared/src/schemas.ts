@@ -14,6 +14,7 @@ import {
   TONES,
 } from './constants';
 import { cleanDomain, domainOk } from './domain';
+import { isValidTimezone } from './cycle-clock';
 
 // ---------- building blocks ----------
 const opt = (max: number) => z.string().trim().max(max, `At most ${max} characters`).default('');
@@ -114,6 +115,15 @@ export const siteBusinessSchema = z.object({
   businessFacts: opt(2000),
   competitors: domainList(3),
   brandNames: stringList(10, 80),
+  /** keyword-first (§5.2): "What do you sell?", the main services or products; sent to the engine with "Track my site" */
+  services: z.array(z.string().trim().min(2, 'At least 2 characters').max(80, 'At most 80 characters')).max(30, 'At most 30').optional(),
+  /** keyword-first (§4.2): the website's IANA time zone (the owner's browser zone in onboarding); its cycles run at 06:00 there */
+  timezone: z
+    .string()
+    .trim()
+    .max(64)
+    .refine((v) => v === '' || isValidTimezone(v), 'Unknown time zone')
+    .optional(),
 });
 export const createSiteSchema = siteBusinessSchema.extend({ domain: domainField });
 export const updateSiteSchema = siteBusinessSchema.partial().extend({
@@ -191,7 +201,8 @@ export const discoverInput = z
     siteAudit: z.boolean().default(false),
     fullReport: z.boolean().default(false),
     receiveReport: z.boolean().default(true),
-    receiveContent: z.boolean().default(false),
+    /** keyword-first (R-K6): research never writes a page on its own pick from the app. Accepted for older callers and always stored false. */
+    receiveContent: z.boolean().default(false).transform((): false => false),
     emailCopy,
   })
   .superRefine((v, ctx) => {
@@ -239,6 +250,11 @@ export const ladderInput = z.object({
   cta: opt(200),
   pagesNow: z.number().int().min(1).max(3).default(1),
   ladderPrefs: ladderPrefsSchema.optional(),
+  /** keyword-first (SCHEDULING_KEYWORDS_PLAN.md §5.1 R-K1): who chose the keyword. A person typing it: client_typed (the default); one of
+   * our recommendations: client_picked; a level-3 announcement the client did not stop: system_announced (set by the server only) */
+  chosenBy: z.enum(['client_typed', 'client_picked', 'system_announced'], { message: 'Unknown choice' }).optional(),
+  /** the mode the ladder starts in: a Manual ladder writes nothing at start (its pages wait for an OK); none = the website's default */
+  ladderMode: z.enum(['auto', 'manual'], { message: 'Choose Auto or Manual' }).optional(),
   emailCopy,
 });
 
@@ -251,6 +267,16 @@ export const trackInput = z.object({
   blogsPerWeek: z.number().int().min(0).max(3).default(0),
   competitors: domainList(3),
   monitors: monitorSettingsSchema.default(monitorSettingsSchema.parse({})),
+  /** keyword-first (§5.2 / §14.5): the website's IANA time zone (the owner's browser zone; its cycles run at 06:00 there). '' = keep the
+   * website's stored zone (or the engine's) */
+  timezone: z
+    .string()
+    .trim()
+    .max(64)
+    .refine((v) => v === '' || isValidTimezone(v), 'Unknown time zone')
+    .optional(),
+  /** "What do you sell?": the main services or products (replace the stored list when given; leave out to keep it) */
+  services: z.array(z.string().trim().min(2, 'At least 2 characters').max(80, 'At most 80 characters')).max(30, 'At most 30').optional(),
   emailCopy,
 });
 
@@ -533,6 +559,8 @@ export const MAX_WAITING_PAGES = { min: 1, max: 10 } as const;
 /** The website's automation defaults (the '_site' row), every field (the settings form). autoStartLadders = "Choose keywords for
  * me" (the '_site' row's auto_start; off by default). */
 export const siteAutomationFormSchema = z.object({
+  /** keyword-first (§5.5): how much the autopilot does on its own (1 only my keywords, 2 + keep my pages healthy, 3 full autopilot) */
+  autopilotLevel: z.union([z.literal(1), z.literal(2), z.literal(3)], { message: 'Choose level 1, 2 or 3' }).optional(),
   defaultMode: ladderMode,
   opportunities: ladderMode,
   autoStartLadders: z.boolean({ message: 'Choose on or off' }),
@@ -554,6 +582,20 @@ export const siteAutomationSchema = siteAutomationFormSchema
   .partial()
   .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to change', path: ['defaultMode'] });
 export type SiteAutomationInput = z.output<typeof siteAutomationSchema>;
+
+// ---------- keyword-first autopilot and the website's cycle (SCHEDULING_KEYWORDS_PLAN.md §14.6) ----------
+/** PATCH .../cycle: the weekday of the website's weekly cycle (0 Sunday - 6 Saturday, in the website's time zone) */
+export const cycleWeekdaySchema = z.object({ weekday: z.number({ message: 'Choose a weekday' }).int('Choose a weekday').min(0, 'Choose a weekday').max(6, 'Choose a weekday') });
+/** POST .../coming-up/decisions */
+export const comingUpDecisionSchema = z.object({
+  itemKey: z.string().trim().min(1, 'Choose an item').max(200),
+  decision: z.enum(['skip', 'approve'], { message: 'Choose Skip or Approve' }),
+  scope: z.enum(['cycle', 'always'], { message: 'Choose this week or always' }).default('cycle'),
+});
+/** POST .../keyword-proposals/:id/swap */
+export const proposalSwapSchema = z.object({ keyword: keywordField });
+/** POST /api/orgs/:orgId/reports/:reportId/feedback ("Not what I wanted") */
+export const contentFeedbackSchema = z.object({ verdict: z.literal('reject', { message: 'Unknown verdict' }), reason: opt(1000) });
 
 // ---------- keyword check (PIPELINE_FEATURE_SPEC.md §5.2) ----------
 /** POST .../sites/:siteId/keywords/assess: one keyword (the SEO engine takes 2-100 characters); the country defaults to the website's. */

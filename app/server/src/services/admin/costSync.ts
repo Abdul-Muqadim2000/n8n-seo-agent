@@ -96,6 +96,9 @@ export interface RunRef {
   orgId: string;
   siteId: string | null;
   userId: string | null;
+  /** keyword-first: a run the system started on the owner's behalf (a level-3 ladder, a research refresh: `input.autoStart`) is
+   *  autopilot spend, like a schedule's, not on-demand */
+  auto?: boolean;
 }
 
 export interface Lookups {
@@ -111,7 +114,10 @@ export interface Lookups {
 }
 
 const NONE: Attribution = { orgId: null, siteId: null, userId: null, runId: null, origin: 'schedule' };
-const fromRun = (r: RunRef): Attribution => ({ orgId: r.orgId, siteId: r.siteId, userId: r.userId, runId: r.id, origin: 'app' });
+const fromRun = (r: RunRef): Attribution => ({ orgId: r.orgId, siteId: r.siteId, userId: r.userId, runId: r.id, origin: r.auto ? 'schedule' : 'app' });
+
+/** keyword-first: a run the system started on the owner's behalf (a level-3 ladder, a keyword research refresh) */
+export const autoRun = (input: Record<string, unknown> | null | undefined): boolean => input?.autoStart === true;
 
 /** when the row's money was spent (its settle), for the "existed / verified by then" rules */
 export const occurredOf = (row: LedgerRow): Date => date(row.settled_at, row.updatedAt, row.created_at, row.createdAt) ?? new Date();
@@ -346,19 +352,19 @@ async function doSync(opts: SyncOptions): Promise<SyncResult> {
     const runsByExec = new Map<string, RunRef>();
     for (let i = 0; i < ids.length; i += 500) {
       const chunk = sql.join(ids.slice(i, i + 500).map((c) => sql`${c}`), sql`, `);
-      const viaCallbacks = await execRows<{ exec: string; id: string; org_id: string; site_id: string | null; user_id: string | null }>(
+      const viaCallbacks = await execRows<{ exec: string; id: string; org_id: string; site_id: string | null; user_id: string | null; auto: boolean | null }>(
         tx,
-        sql`select distinct x.exec, ru.id, ru.org_id, ru.site_id, ru.user_id from (
+        sql`select distinct x.exec, ru.id, ru.org_id, ru.site_id, ru.user_id, (ru.input->>'autoStart') = 'true' as auto from (
               select r.run_id, r.payload->>'execution_id' as exec from ${schema.reports} r where ${countsForRun} and r.payload->>'execution_id' in (${chunk})
               union select r.run_id, r.payload->'run_ledger'->>'run_id' as exec from ${schema.reports} r where ${countsForRun} and r.payload->'run_ledger'->>'run_id' in (${chunk})
             ) x join ${schema.runs} ru on ru.id = x.run_id`,
       );
-      for (const r of viaCallbacks) if (!runsByExec.has(r.exec)) runsByExec.set(r.exec, { id: r.id, orgId: r.org_id, siteId: r.site_id, userId: r.user_id });
-      const viaRequest = await execRows<{ id: string; org_id: string; site_id: string | null; user_id: string | null; request_id: string }>(
+      for (const r of viaCallbacks) if (!runsByExec.has(r.exec)) runsByExec.set(r.exec, { id: r.id, orgId: r.org_id, siteId: r.site_id, userId: r.user_id, auto: r.auto === true });
+      const viaRequest = await execRows<{ id: string; org_id: string; site_id: string | null; user_id: string | null; request_id: string; auto: boolean | null }>(
         tx,
-        sql`select id, org_id, site_id, user_id, request_id from ${schema.runs} where request_id in (${chunk}) order by created_at asc`,
+        sql`select id, org_id, site_id, user_id, request_id, (input->>'autoStart') = 'true' as auto from ${schema.runs} where request_id in (${chunk}) order by created_at asc`,
       );
-      for (const r of viaRequest) if (!runsByExec.has(r.request_id)) runsByExec.set(r.request_id, { id: r.id, orgId: r.org_id, siteId: r.site_id, userId: r.user_id });
+      for (const r of viaRequest) if (!runsByExec.has(r.request_id)) runsByExec.set(r.request_id, { id: r.id, orgId: r.org_id, siteId: r.site_id, userId: r.user_id, auto: r.auto === true });
     }
     const lk: Lookups = { runsByExec, sitesByDomain, sitesByEngineId, orgs, stored };
     const batch = new Map(ledger.map((r) => [str(r.run_id), r]));
@@ -499,7 +505,7 @@ async function doSync(opts: SyncOptions): Promise<SyncResult> {
       );
       if (orphan) {
         const prev = stored.get(orphan.engine_run_id);
-        if (prev) await relink(orphan.engine_run_id, prev, { orgId: r.org_id, siteId: r.site_id, userId: r.user_id, runId: r.id, origin: 'app' });
+        if (prev) await relink(orphan.engine_run_id, prev, { orgId: r.org_id, siteId: r.site_id, userId: r.user_id, runId: r.id, origin: autoRun(r.input) ? 'schedule' : 'app' });
         continue;
       }
       const reports = await tx.select({ stage: schema.reports.stage, payload: schema.reports.payload }).from(schema.reports).where(eq(schema.reports.runId, r.id));
@@ -518,7 +524,8 @@ async function doSync(opts: SyncOptions): Promise<SyncResult> {
           userId: r.user_id,
           domain: r.domain ?? '',
           mode: r.mode,
-          origin: 'app',
+          // keyword-first: a run the system started on the owner's behalf is autopilot spend
+          origin: autoRun(r.input) ? 'schedule' : 'app',
           ...c,
           startedAt: runStart,
           occurredAt: runEnd,

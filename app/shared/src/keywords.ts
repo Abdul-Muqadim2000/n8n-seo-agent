@@ -264,6 +264,15 @@ export interface RecommendedKeywords {
   country: string | null;
   /** best first: within reach, then the discovery's own order; overlapping ones last */
   keywords: RecommendedKeyword[];
+  /** keyword-first (SCHEDULING_KEYWORDS_PLAN.md §5.2, the onboarding poll): research running now, fresh research on file, or none
+   * (GET .../keywords/recommended always sets it) */
+  status?: 'none' | 'running' | 'ready';
+  /** when the running research started, null when none is running */
+  startedAt?: string | null;
+  /** the running research run, null when none is running */
+  runId?: string | null;
+  /** the website's one free research at setup is still available (POST .../research/start is free) */
+  freeResearch?: boolean;
 }
 
 export interface LadderKeywords {

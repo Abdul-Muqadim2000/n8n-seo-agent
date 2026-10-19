@@ -2,7 +2,11 @@ import type { FastifyInstance } from 'fastify';
 import { LADDER_ID_RE, ladderOrderSchema, ladderSettingsSchema, siteAutomationSchema, type LadderCard, type SiteAutomation } from '@seo/shared';
 import { requireVerified, siteAccess } from '../auth/access';
 import { notFound, parse } from '../lib/errors';
-import { deleteLadder, reorderLadders, updateLadderSettings, updateSiteAutomation } from '../services/ladderSettings';
+import { addKeywordToLadder, deleteLadder, reorderLadders, updateLadderSettings, updateSiteAutomation } from '../services/ladderSettings';
+import { mirrorAutopilotLevel } from '../services/autopilot';
+import { audit } from '../services/audit';
+import { invalidateForecast } from '../services/billing';
+import { proposalSwapSchema } from '@seo/shared';
 import { ladderCards } from '../services/pipeline';
 
 type P = { orgId: string; siteId: string; ladderId?: string };
@@ -51,10 +55,32 @@ export async function ladderRoutes(app: FastifyInstance) {
     return reply.status(204).send();
   });
 
-  // the website's defaults (the '_site' row) -> the settings as they are now
+  // keyword-first "Add to my ladder": one more planned page of the ladder -> the ladder's card
+  app.post('/api/orgs/:orgId/sites/:siteId/ladders/:ladderId/keywords', limit, async (req): Promise<LadderCard> => {
+    const a = await guard(req);
+    const ladderId = ladderIdOf(req);
+    const { keyword } = parse(proposalSwapSchema, req.body);
+    await addKeywordToLadder(a.site, ladderId, keyword);
+    await audit(req, a.org.id, { action: 'site.ladder_keyword_added', target: { type: 'site', id: a.site.id, label: a.site.domain }, details: { ladderId, keyword } });
+    const card = (await ladderCards(a.org, a.site)).find((c) => c.id === ladderId);
+    if (!card) throw notFound('Keyword ladder not found');
+    return card;
+  });
+
+  // the website's defaults (the '_site' row) -> the settings as they are now. keyword-first: `autopilotLevel` (1-3) is written to the
+  // engine's `_site` row (which decides) and mirrored on the website; a change is in the audit log and the forecast follows it.
   app.patch('/api/orgs/:orgId/sites/:siteId/automation', limit, async (req): Promise<SiteAutomation> => {
     const a = await guard(req);
     const body = parse(siteAutomationSchema, req.body);
-    return updateSiteAutomation(a.site, body);
+    const out = await updateSiteAutomation(a.site, body);
+    if (body.autopilotLevel != null && body.autopilotLevel !== a.site.autopilotLevel) {
+      await mirrorAutopilotLevel(a.site, body.autopilotLevel);
+      invalidateForecast(a.org.id);
+      await audit(req, a.org.id, { action: 'site.autopilot_level_changed', target: { type: 'site', id: a.site.id, label: a.site.domain }, details: { before: a.site.autopilotLevel, after: body.autopilotLevel } });
+      // an open keyword proposal follows the level (an announcement at 3, a suggestion below); never fails the change itself
+      const level = body.autopilotLevel;
+      void import('../services/autoStart').then((m) => m.relevelProposals(a.org, a.site, level, req.log)).catch((err) => req.log.warn({ err: String(err) }, 'keyword proposals not updated'));
+    }
+    return out;
   });
 }

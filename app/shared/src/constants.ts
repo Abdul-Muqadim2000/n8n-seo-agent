@@ -1,5 +1,7 @@
 import { modeCostUsd } from './cost';
 import { AI_PANEL_LIMITS, AI_PANEL_PRICE, AI_PANEL_PULSE_ENGINES, estimateAiPanelCost, type AiPulseMode } from './ai-panel';
+import { ENGINE_TIMEZONE, isValidTimezone, localDateOf, readCycleIntent, upcomingCycles, type CycleIntent } from './cycle-clock';
+import type { CycleJob } from './cycles';
 
 // Option lists mirror the n8n form pages and Normalize Input (n8n/seo-agent/v5 + build_v4.py), so every value the app sends
 // is one the workflow already understands. Change them together.
@@ -218,7 +220,7 @@ export const MODES: Record<ModeId, ModeInfo> = {
     id: 'track',
     title: 'Track my site',
     summary: 'Weekly Search Console, GA4, Google Trends and live rank checks with actions, plus blog posts per week and growth monitors.',
-    delivers: 'First tracking report in minutes, then every Monday',
+    delivers: 'First tracking report in minutes, then every week on the day tracking started',
     category: 'tracking',
     costUsd: modeCostUsd('track'),
     etaMinutes: 3,
@@ -332,6 +334,8 @@ export const STAGE_LABELS: Record<string, string> = {
   backlinks: 'Backlink report',
   link_builder: 'Link building',
   rejected: 'Rejected',
+  // keyword-first (2026-10-19): the weekly plan, 48 hours before each cycle
+  cycle_preview: 'Coming up plan',
 };
 
 /** Monthly cost of the background monitors per site (HANDOVER.md §1, v4.6 reuse rules; AI visibility: estimateAiVisibilityCost, v4.9). */
@@ -377,7 +381,8 @@ export function estimateAiVisibilityCost(o: { prompts?: number; engines?: readon
 }
 MONITOR_COSTS.aiVisibilityMonthly = estimateAiVisibilityCost().total;
 
-/** v4.12 (n8n/seo-agent/AI_GROWTH_SPEC.md): AI answer / refresh pages a month written by the Monday content run (default 2, at most 8). */
+/** v4.12 (n8n/seo-agent/AI_GROWTH_SPEC.md): AI answer / refresh pages a month (default 2, at most 8). Keyword-first (D4): written on their own
+ *  at autopilot level 3 only; at levels 1 and 2 they are how many AI suggestions a month the weekly plan offers. */
 export const AI_PAGES_DEFAULT = 2;
 export const AI_PAGES_MAX = 8;
 /** Monthly cost of the AI growth loop: the AI pages (a content run each) + the weekly outreach drafts (Claude); Bing / IndexNow submission,
@@ -415,7 +420,17 @@ export interface AutomationInfo {
   summary: string;
   /** how often, in words */
   cadence: string;
-  schedule: { kind: 'weekly'; weekday: number; hour: number; minute: number } | { kind: 'monthly'; day: number; hour: number; minute: number } | { kind: 'daily'; weekdays: number[]; hour: number; minute: number };
+  /**
+   * When it runs. 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4): the weekly work runs inside each website's own 7-day cycle (`cycle`: the job
+   * and its place in the cycle's order; `monthlyOnly`: only in the website's monthly cycle), started by the engine's Cycle Dispatcher on the
+   * website's weekday at 06:00 in its time zone (cycle 0 at setup). `daily` stays on the engine's clock; `skipCycleDay`: the website's own
+   * cycle day is left out (its weekly run asks the same engines). `weekly` / `monthly` are the old shared slots (still understood for history).
+   */
+  schedule:
+    | { kind: 'cycle'; job: Exclude<CycleJob, 'preview' | 'cycle'>; order: number; monthlyOnly?: boolean }
+    | { kind: 'weekly'; weekday: number; hour: number; minute: number }
+    | { kind: 'monthly'; day: number; hour: number; minute: number }
+    | { kind: 'daily'; weekdays: number[]; hour: number; minute: number; skipCycleDay?: boolean };
   /** n8n workflow id */
   workflow: string;
   /** the report stage it delivers */
@@ -436,8 +451,8 @@ export const AUTOMATIONS: AutomationInfo[] = [
     id: 'ai_visibility',
     title: 'AI visibility check',
     summary: 'Asks your buyer questions on ChatGPT, Gemini, Perplexity and Google AI (Claude once a month): mentions with their 95% range, citations, share of voice, how AI describes you, AI visits and revenue (GA4), AI crawler access.',
-    cadence: 'Every Monday · Claude, new questions and the market-wide index on the month\'s first run',
-    schedule: { kind: 'weekly', weekday: 1, hour: 7, minute: 0 },
+    cadence: 'Every week in your website\'s cycle · Claude, new questions and the market-wide index in the monthly cycle',
+    schedule: { kind: 'cycle', job: 'ai_visibility', order: 1 },
     workflow: 'SEOagentAIVisib1',
     since: '2026-10-02T12:32:00.000Z',
     stage: 'ai_visibility',
@@ -447,9 +462,9 @@ export const AUTOMATIONS: AutomationInfo[] = [
   {
     id: 'ai_pulse',
     title: 'AI pulse',
-    summary: 'Asks every tracked question on ChatGPT, Gemini and Google AI Mode each day; the Monday report counts these answers, and you hear about a real drop the same day.',
-    cadence: 'Every day except Monday · alerts only when something really changed',
-    schedule: { kind: 'daily', weekdays: [0, 2, 3, 4, 5, 6], hour: 6, minute: 30 },
+    summary: 'Asks every tracked question on ChatGPT, Gemini and Google AI Mode each day; the weekly report counts these answers, and you hear about a real drop the same day.',
+    cadence: 'Every day except your website\'s cycle day · alerts only when something really changed',
+    schedule: { kind: 'daily', weekdays: [0, 1, 2, 3, 4, 5, 6], hour: 6, minute: 30, skipCycleDay: true },
     workflow: 'SEOagentAIPulse1',
     since: '2026-10-07T22:21:00.000Z',
     stage: 'ai_pulse',
@@ -458,9 +473,9 @@ export const AUTOMATIONS: AutomationInfo[] = [
   {
     id: 'ai_growth',
     title: 'AI growth',
-    summary: 'Sends new and updated pages to Bing and IndexNow, checks your key pages can be read and quoted by AI, lists the exact pages AI cites without naming you (with outreach drafts) and queues the questions to win for the Monday content run.',
-    cadence: 'Every Monday 09:30 · after the AI visibility check, before the content run',
-    schedule: { kind: 'weekly', weekday: 1, hour: 9, minute: 30 },
+    summary: 'Sends new and updated pages to Bing and IndexNow, checks your key pages can be read and quoted by AI, lists the exact pages AI cites without naming you (with outreach drafts) and queues the questions to win for the weekly content run.',
+    cadence: 'Every week in your website\'s cycle · after the AI visibility check, before the content run',
+    schedule: { kind: 'cycle', job: 'ai_growth', order: 5 },
     workflow: 'SEOagentAIGrow1',
     since: '2026-10-10T15:14:00.000Z',
     stage: 'ai_growth',
@@ -470,8 +485,8 @@ export const AUTOMATIONS: AutomationInfo[] = [
     id: 'backlinks',
     title: 'Backlink monitor',
     summary: 'Watches for lost and spammy links every week; once a month a full report with broken-link reclaim, unlinked mentions and outreach drafts (link gap each quarter).',
-    cadence: 'Every Monday · full report on the month\'s first run',
-    schedule: { kind: 'weekly', weekday: 1, hour: 7, minute: 30 },
+    cadence: 'Every week in your website\'s cycle · full report in the monthly cycle',
+    schedule: { kind: 'cycle', job: 'backlinks', order: 2 },
     workflow: 'SEOagentBacklnk1',
     since: '2026-10-02T12:32:00.000Z',
     stage: 'backlinks',
@@ -482,8 +497,8 @@ export const AUTOMATIONS: AutomationInfo[] = [
     id: 'link_builder',
     title: 'Link builder',
     summary: 'Finds new link opportunities (journalist requests, dead links to replace, resource pages, competitors\' lost links), checks each site and finds the right person, picks your page and the link text, and drafts a short e-mail sequence for you to approve and send from your own mailbox; tracks the listings you can add yourself and what each won link did.',
-    cadence: 'Every Monday 11:00 · after the backlink monitor and the AI growth loop',
-    schedule: { kind: 'weekly', weekday: 1, hour: 11, minute: 0 },
+    cadence: 'Every week in your website\'s cycle · after the backlink monitor and the AI growth loop',
+    schedule: { kind: 'cycle', job: 'link_builder', order: 7 },
     workflow: 'SEOagentLinkBld1',
     since: '2026-10-11T00:42:00.000Z',
     stage: 'link_builder',
@@ -494,8 +509,8 @@ export const AUTOMATIONS: AutomationInfo[] = [
     title: 'Rank tracker',
     summary:
       'Checks the live Google position of every keyword-ladder page and the head term, records what the results page showed (AI Overview, snippet, People Also Ask, local pack, video), who ranks above you and your share of voice, and recommends the next rung.',
-    cadence: 'Every Monday · main keywords also on a phone · unpublished pages outside the top 50 once a month',
-    schedule: { kind: 'weekly', weekday: 1, hour: 8, minute: 0 },
+    cadence: 'Every week in your website\'s cycle · main keywords also on a phone · unpublished pages outside the top 50 once a month',
+    schedule: { kind: 'cycle', job: 'rank_tracker', order: 3 },
     workflow: 'SEOagentTracker1',
     since: '2026-10-01T12:06:00.000Z',
     stage: 'rank_tracker',
@@ -505,8 +520,8 @@ export const AUTOMATIONS: AutomationInfo[] = [
     id: 'site_tracker',
     title: 'Weekly site report',
     summary: 'Search Console, GA4, Google Trends and live rank checks of your tracked keywords, with the week\'s actions.',
-    cadence: 'Every Monday · trends reused for 25 days',
-    schedule: { kind: 'weekly', weekday: 1, hour: 9, minute: 0 },
+    cadence: 'Every week in your website\'s cycle · trends reused for 25 days',
+    schedule: { kind: 'cycle', job: 'site_tracker', order: 4 },
     workflow: 'SEOagentSiteTrk1',
     since: '2026-10-01T22:22:00.000Z',
     stage: 'site_tracker',
@@ -515,10 +530,10 @@ export const AUTOMATIONS: AutomationInfo[] = [
   },
   {
     id: 'content_cadence',
-    title: 'Blog posts',
-    summary: 'Writes your weekly posts: the next keyword-ladder page first, then queries close to page one, then rising searches, each a researched, QA-checked page.',
-    cadence: 'Every Monday · as many posts as you set per week',
-    schedule: { kind: 'weekly', weekday: 1, hour: 10, minute: 0 },
+    title: 'Pages for your keywords',
+    summary: 'Writes the next pages of the keywords you chose, each a researched, quality-checked page. What else it writes on its own depends on your autopilot level; everything else waits for your OK in the weekly "Coming up" plan.',
+    cadence: 'Every week in your website\'s cycle · as many pages as you set per week, only once you have chosen a keyword',
+    schedule: { kind: 'cycle', job: 'content_cadence', order: 6 },
     workflow: 'SEOagentCadence1',
     since: '2026-10-01T23:15:00.000Z',
     stage: 'content',
@@ -528,8 +543,8 @@ export const AUTOMATIONS: AutomationInfo[] = [
     id: 'audit',
     title: 'Technical audit',
     summary: 'Re-audits the site when its sitemap changed (or after 60 days): health score, what changed since the last audit, fix pack.',
-    cadence: '1st of every month · skipped when nothing changed',
-    schedule: { kind: 'monthly', day: 1, hour: 6, minute: 0 },
+    cadence: 'In your website\'s monthly cycle (the first cycle on or after the day of the month tracking started) · skipped when nothing changed',
+    schedule: { kind: 'cycle', job: 'audit', order: 8, monthlyOnly: true },
     workflow: 'SEOagentAuditSc1',
     since: '2026-10-02T12:32:00.000Z',
     stage: 'site_audit',
@@ -561,8 +576,19 @@ export const PAGE_WATCH_SCHEDULE: ScheduleInfo = {
 
 export const SCHEDULES: ScheduleInfo[] = [...AUTOMATIONS, PAGE_WATCH_SCHEDULE];
 
-/** The next time a schedule fires after `from`, in the n8n timezone `tz` (DST-safe, no libraries). */
-export function nextScheduledRun(s: AutomationInfo['schedule'], tz: string, from: Date = new Date()): Date {
+/**
+ * The next time a schedule runs after `from` (DST-safe, no libraries). `daily` / `weekly` / `monthly` fire on the engine's clock `tz`. A
+ * `cycle` job runs in the website's own cycle (`site`: its seo_cycles row as an intent, or the app's anchor and zone): its next cycle's
+ * due time, the next MONTHLY cycle for a monthly-only job; null without a site (the job has no shared slot any more). A daily schedule
+ * with `skipCycleDay` leaves out the website's cycle day (its local date in the website's zone on the cycle weekday, Monday when the
+ * website has no cycle yet), as the AI Pulse does.
+ */
+export function nextScheduledRun(s: AutomationInfo['schedule'], tz: string, from: Date = new Date(), site?: CycleIntent | null): Date | null {
+  if (s.kind === 'cycle') {
+    if (!site) return null;
+    const list = upcomingCycles(site, from.getTime(), s.monthlyOnly ? 16 : 2).filter((c) => Date.parse(c.at) > from.getTime() - 1 && (!s.monthlyOnly || c.monthly));
+    return list.length ? new Date(list[0].at) : null;
+  }
   const parts = (d: Date) => {
     const f = new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric', weekday: 'short' }).formatToParts(d);
     const g = (t: string) => f.find((p) => p.type === t)?.value ?? '0';
@@ -577,6 +603,14 @@ export function nextScheduledRun(s: AutomationInfo['schedule'], tz: string, from
     const first = guess - offset(new Date(guess));
     return new Date(guess - offset(new Date(first)));
   };
+  // the website's own cycle day (the AI Pulse leaves it out): its zone and weekday, Monday for a website with no cycle yet
+  const siteRead = s.kind === 'daily' && s.skipCycleDay ? (site ? readCycleIntent(site) : null) : null;
+  const skipDay = (at: Date) => {
+    if (!(s.kind === 'daily' && s.skipCycleDay)) return false;
+    const zone = siteRead?.tz ?? (site && isValidTimezone(site.tz) ? site.tz : ENGINE_TIMEZONE);
+    const wd = siteRead ? siteRead.weekday : 1;
+    return localDateOf(zone, at.getTime()).weekday === wd;
+  };
   const today = parts(from);
   for (let i = 0; i < 70; i++) {
     const day = new Date(Date.UTC(today.y, today.m - 1, today.d + i));
@@ -584,7 +618,7 @@ export function nextScheduledRun(s: AutomationInfo['schedule'], tz: string, from
     const match = s.kind === 'weekly' ? wd === s.weekday : s.kind === 'daily' ? s.weekdays.includes(wd) : d === s.day;
     if (!match) continue;
     const at = wallToUtc(y, m, d, s.hour, s.minute);
-    if (at.getTime() > from.getTime()) return at;
+    if (at.getTime() > from.getTime() && !skipDay(at)) return at;
   }
   return new Date(from.getTime() + 7 * 864e5);
 }

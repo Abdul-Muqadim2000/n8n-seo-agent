@@ -140,9 +140,9 @@ export function ladderStatus(i: LadderStatusInput): { status: LadderStatus; stat
   const head = valid(i.headHistory).pop()?.position ?? null;
 
   if (st === 'paused' || st === 'archived')
-    return { status: 'paused', statusText: `${st === 'archived' ? 'Archived' : 'Paused'}: no new pages are written; positions are still checked every Monday.` };
+    return { status: 'paused', statusText: `${st === 'archived' ? 'Archived' : 'Paused'}: no new pages are written; positions are still checked every week.` };
   if (st === 'won' || isWon(i.headHistory))
-    return { status: 'won', statusText: 'Won: the main keyword has been in the top 3 for 4 checks in a row. No more pages; positions are still checked every Monday.' };
+    return { status: 'won', statusText: 'Won: the main keyword has been in the top 3 for 4 checks in a row. No more pages; positions are still checked every week.' };
   if (st === 'queued' || i.queued) return { status: 'queued', statusText: 'Queued: it starts when a ladder ahead of it is won, fully written or paused.' };
 
   const oldest = Math.max(0, ...waiting.map((p) => daysSince(p.writtenAt, now)));
