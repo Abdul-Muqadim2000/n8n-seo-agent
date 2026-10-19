@@ -1,4 +1,4 @@
-// AI Growth plan (v4.12, AI_GROWTH_SPEC.md; weekly, Monday 09:30 after the AI Visibility Tracker and the Site Tracker, and on demand): the work that
+// AI Growth plan (v4.12, AI_GROWTH_SPEC.md; weekly in each website's own cycle, after the AI Visibility Tracker and the Site Tracker, and on demand): the work that
 // gets a site named and cited in AI answers, not only measured. Per site with AI visibility and the growth loop on:
 //   * key pages to check this week (can an assistant read and quote them: the AI Readiness step) — pages AI cited, the targets' pages, written and
 //     ladder pages, the pages Search Console shows most, the homepage; each page about once a month, never-checked ones first;
@@ -18,9 +18,13 @@
 const CONFIG = { audit_per_week: 12, recheck_days: 25, max_key_pages: 40, submit_max: 50, resubmit_days: 30, recent_days: 8, earned_fetch: 10, max_targets: 6, refresh_after_days: 90,
   win_min_answers: 2, follow_up_days: 45, follow_up_max: 15, decay_runs: 3, stale_writing_days: 14,   // B9-2 / B9-4 / B9-5 / B9-6 (benchmark area 9): what became of a submission, what a win needs, a page AI has stopped citing, and a page run that never produced a page
   stage_weight: { decision: 1, consideration: 0.8, awareness: 0.6 } };
-const { list, on_demand, want, total } = monitorSites('ai');
+// 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.4 / §4.5): a cycle run (`trigger: 'cycle'`) is a scheduled run for one site (AI visibility and AI growth
+// switched off are honoured); the monthly Wikidata check comes only from the `monthly` the Cycle Dispatcher passes. Outside a cycle it is
+// monthly in the WEBSITE's calendar (its time zone, seo_cycles.tz), not the UTC month.
+const { list, on_demand, want, total, cycle, cycle_why } = monitorSites('ai');
 const sites = on_demand ? list : list.filter(s => s.settings.ai_visibility && s.settings.growth);
-if (!sites.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'no site matches "' + want + '"' : (total ? 'the AI growth loop is off for every site' : 'no sites yet') } }];
+if (!sites.length) return [{ json: { nothing_to_do: true, cycle, reason: cycle ? (cycle_why || (list.length ? 'the AI growth loop is switched off for ' + list[0].domain + ', so this cycle job runs nothing' : 'nothing to run for this cycle')) : on_demand ? 'no site matches "' + want + '"' : (total ? 'the AI growth loop is off for every site' : 'no sites yet') } }];
+const cycleRows = rowsOf('Load Cycles');   // 2026-10-19: each website's time zone
 const vis = rowsOf('Load AI Visibility'), answers = rowsOf('Load AI Answers'), prompts = rowsOf('Load AI Prompts'), logs = rowsOf('Load Content Log'), qh = rowsOf('Load Query History'),
   pagesStored = rowsOf('Load AI Pages'), targetsStored = rowsOf('Load AI Targets'), growthRows = rowsOf('Load AI Growth'), cache = rowsOf('Load Cache (Growth)'), ladders = rowsOf('Load Ladders');
 const now = new Date(); const iso = now.toISOString(); const month = iso.slice(0, 7);
@@ -239,7 +243,9 @@ for (const s of sites) {
   const indexnow_key = (kv && /^[a-f0-9]{32}$/.test(kv.key || '')) ? kv.key : hex(32);
   const prevG = growthRows.filter(g => g.site_id === s.site_id).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)))[0] || null;
   const prevEntity = prevG ? parse(prevG.entity_json, null) : null;
-  const entity_due = on_demand || !prevEntity || String(prevEntity.checked_at || '').slice(0, 7) !== month;
+  const siteTz = ST.tzOf(cycleRows, s);
+  const entity_due = on_demand || (cycle ? cycle.monthly
+    : (!prevEntity || !prevEntity.checked_at || ST.monthKey(prevEntity.checked_at, siteTz) !== ST.monthKey(now, siteTz)));
   const label = dom.split('.')[0];
   const brand_names = [...new Set([dom, ...(s.settings.brand_names || []), ...(label.length >= 5 ? [label] : []), s.profile.business_name].map(x => String(x || '').trim()).filter(x => x.length >= 3))];
   // D12: the name a draft signs with comes from the one site model (profile -> homepage Organization / og:site_name -> what the app sent),
@@ -247,7 +253,7 @@ for (const s of sites) {
   // writes: with it on, these prospects go to the Link Builder's qualification and writer (one writer).
   const modelName = SM.name(site_model);
   const business_name = String(s.profile.business_name || '').trim() || (modelName && SM.helpers.bare(modelName) !== dom ? modelName : '');
-  out.push({ json: { site_id: s.site_id, domain: dom, site_host, country: s.country || '', email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', on_demand, business_name, profile: s.profile,
+  out.push({ json: { site_id: s.site_id, domain: dom, site_host, country: s.country || '', email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', on_demand, cycle, business_name, profile: s.profile,
     link_builder: !!s.settings.link_builder, services: SM.services(site_model), accreditation: SM.facts(site_model).accreditation,
     // B-G2: what the gate refused, with its reason, so the report names it instead of printing a shorter list (INVARIANTS rule 1)
     set_aside, set_aside_note: FITR.line(set_aside, 'turned into a question to win or a page to write'),

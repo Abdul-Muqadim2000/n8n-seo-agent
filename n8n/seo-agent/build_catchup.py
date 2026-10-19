@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Builds SEO Agent — Schedule Catch-up (SEOagentCatchUp1): R94 of the 2026-10-15 re-rating (docs/system-review-2026-10-15/defects/C_monitors.md).
 
-Five of the ten schedules had never fired on their own and the rest fired late. n8n keeps a cron fire in memory only: a restart, a deploy
+Five of the ten schedules had never fired on their own and the rest fired late. (Since 2026-10-19 only the two daily crons - the AI Pulse and
+the Page Watch - are left: the weekly workflows and the Audit Scheduler run in each website's own cycle, started by the Cycle Dispatcher.) n8n keeps a cron fire in memory only: a restart, a deploy
 or a re-activation re-arms every schedule for its NEXT future time, so a fire that was due and not yet delivered is thrown away (the
 2026-10-12 16:38 deploy restart dropped five Monday runs), and while the Mac sleeps the VM's timers stop, so fires arrive late.
 
@@ -39,8 +40,12 @@ TZ = (ENV.get('GENERIC_TIMEZONE') or '').strip() or DEFAULT_TZ
 N8N_API = ((ENV.get('SEO_N8N_API_URL') or '').strip() or 'http://localhost:5678/api/v1').rstrip('/')   # n8n's own API, from inside its container
 EXEC_LIMIT = 250   # the public API's page maximum: one page covers far more than the 36 h a catch-up looks back
 CRED = {'httpHeaderAuth': {'id': 'SEOcredN8nApiKey', 'name': 'n8n API (SEO Agent catch-up)'}}   # sync_credentials.py, from N8N_API_KEY
-EXPECTED = ('SEOagentAIVisib1', 'SEOagentBacklnk1', 'SEOagentTracker1', 'SEOagentSiteTrk1', 'SEOagentAIGrow1', 'SEOagentCadence1',
-            'SEOagentLinkBld1', 'SEOagentAuditSc1', 'SEOagentAIPulse1', 'SEOagentPageWch1')
+# 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.8, owner decision D2): the seven weekly workflows and the Audit Scheduler have no cron any more -
+# each website runs them in its own 7-day cycle, and a missed or crashed cycle job is the Cycle Dispatcher's own due row (record-then-start,
+# the most recent missed cycle once). The catch-up keeps the two daily crons. The dispatcher's own 5-minute sweep is durable by itself (its
+# state is in seo_cycles / seo_cycle_jobs, and n8n's Instance Started sweeps it too), so it is never a schedule this planner replays.
+EXPECTED = ('SEOagentAIPulse1', 'SEOagentPageWch1')
+NOT_REPLAYED = ('SEOagentCycleDsp',)   # the Cycle Dispatcher (build_cycle.py): its sweep is not a slot to replay
 # A dry run (a test through *Catch-up Run*) starts only the workflows that honour `dry_run`: AI Growth (no Bing / IndexNow submission,
 # R94) and the Content Cadence (plans, writes nothing). Every other workflow spends for real, so a dry run never starts it.
 DRY_RUN_OK = {'SEOagentAIGrow1': [('Bing Submit Requests', 'DRY_RUN'), ('IndexNow Requests', 'DRY_RUN')],
@@ -96,7 +101,7 @@ def schedules():
             continue
         for wf in json.load(open(os.path.join(OUT, fn), encoding='utf-8')):
             trig = [n for n in wf['nodes'] if n['type'] == 'n8n-nodes-base.scheduleTrigger']
-            if not trig:
+            if not trig or wf['id'] in NOT_REPLAYED:
                 continue
             assert len(trig) == 1, fn + ': more than one Schedule Trigger'
             ivs = trig[0]['parameters']['rule']['interval']
@@ -114,8 +119,8 @@ def schedules():
                         'cron': cron, 'kind': kind_of(cron), 'tz': (wf.get('settings') or {}).get('timezone') or TZ, 'entry_node': entries[0],
                         'trigger_node': trig[0]['name'], 'dry_run_ok': wf['id'] in DRY_RUN_OK})
     ids = sorted(s['id'] for s in out)
-    assert ids == sorted(EXPECTED), 'R94: the scheduled workflows are ' + str(ids) + ', expected the ten of the dossier ' + str(sorted(EXPECTED)) + \
-        ' - a new schedule must be added to EXPECTED here (and to apply_env.PUBLISH)'
+    assert ids == sorted(EXPECTED), 'R94: the scheduled workflows are ' + str(ids) + ', expected the two daily crons ' + str(sorted(EXPECTED)) + \
+        ' - a weekly workflow runs in each website\'s cycle and has no cron (2026-10-19); a new daily schedule must be added to EXPECTED here (and to apply_env.PUBLISH)'
     return out
 
 

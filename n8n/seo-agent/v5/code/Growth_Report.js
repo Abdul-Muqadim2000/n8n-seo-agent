@@ -3,6 +3,9 @@
 // G29 (2026-10-13, FIX_PLAN): every figure group says where it came from, over what period and from how big a sample (LN).
 /*__REPORT_KIT__*/
 /*__LINEAGE__*/
+/*__SITE_TIME__*/
+// 2026-10-19: the cycle a website's run belongs to (Growth Plan carries it; Growth Metrics does not)
+const cycleOf = (sid) => { try { return ($('Growth Plan').all().map(i => i.json || {}).find(p => p.site_id === sid) || {}).cycle || null; } catch (e) { return null; } };
 const KIND = { list: '"Best of" list', article: 'Article', news: 'News', review: 'Review site', forum: 'Forum thread', video: 'Video', social: 'Social post', official: 'Official list', encyclopedia: 'Encyclopedia', competitor: 'Competitor page' };
 // R94 (2026-10-16): a dry run (`dry_run: true` on the Manual Run - a test, never the weekly run) sends nothing to Bing or IndexNow;
 // the request nodes hand on what WOULD have been sent, and the report says so first, instead of "nothing new to send".
@@ -27,7 +30,7 @@ return $('Growth Metrics').all().map(i => i.json).filter(m => !m.skip).map(m => 
     n(m.pages.filter(p => p.status).length) + ' key page(s) checked for AI readiness' + (m.avg_score != null ? ' (average ' + m.avg_score + '/100' + (m.previous_avg_score != null ? ', was ' + m.previous_avg_score : '') + ')' : '')
       + (m.withheld_scores ? ', ' + n(m.withheld_scores) + ' not scored: robots.txt lets no AI search fetcher read them' : ''),
     n(m.earned.length) + ' page(s) AI cites without naming you' + (m.drafts_written ? ', ' + n(m.drafts_written) + ' outreach draft(s) written' : (m.handed_over ? ', ' + n(m.handed_over) + ' handed to the Link Builder (one writer): approve the pitches on the Link building page' : '')),   // P34-1: only the drafts THIS run wrote are counted; the stored ones of earlier runs are not this week's work
-    n(m.targets.filter(t => t.status === 'queued').length) + ' question(s) queued for an AI answer page or refresh' + (m.ai_pages_month > 0 ? ' (' + m.ai_pages_month + ' a month, written by the Monday content run)' : ' (AI pages are off)')];
+    n(m.targets.filter(t => t.status === 'queued').length) + ' question(s) queued for an AI answer page or refresh' + (m.ai_pages_month > 0 ? ' (' + m.ai_pages_month + ' a month, written by ' + (cycleOf(m.site_id) && cycleOf(m.site_id).date ? 'the content run of this website\'s weekly cycle (' + ST.everyText(ST.weekdayOfDate(cycleOf(m.site_id).date)) + ')' : 'the weekly content run') + ')' : ' (AI pages are off)')];
   const DRY = DRY_OF(m.site_id);
   const dry_run_note = DRY ? 'DRY RUN — nothing was submitted: ' + n(DRY.bing) + ' page(s) would have been sent to Bing and ' + n(DRY.indexnow) + ' notified through IndexNow (a test run; the weekly run submits)' : '';
   if (DRY) done.splice(0, 2, '<b>' + dry_run_note + '</b>');

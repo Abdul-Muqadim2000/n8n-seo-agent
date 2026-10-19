@@ -1,4 +1,4 @@
-// AI visibility plan (weekly, Monday 07:00, and on demand): one job per site — the brand names to look for, the competitors (configured, detected,
+// AI visibility plan (weekly, in each website's own cycle, and on demand): one job per site — the brand names to look for, the competitors (configured, detected,
 // and the brand names AI uses for them, learned by the Answer Analyst), the topics, the stored question panel (seo_ai_prompts: stable week to week
 // so the trend means something; up to 50 questions with buyer stage, topic cluster and monthly AI search volume), the engines, the AI Pulse samples
 // of the past days (seo_ai_daily) that join this week's figures, last week's numbers, and what is due this run: the monthly full run (Claude and the
@@ -18,6 +18,10 @@
 // start of the tracker picks it up instead of starting a second run the same week). A start while a chunk is still running is a twin and
 // does nothing for that site. Each item carries what is left to spend on the run (est_dfs_usd / est_ai_usd: the run ledger reserves it,
 // and the run guard refuses a run the DataForSEO account cannot pay for, with the reason).
+// 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.4 / §4.5): a run of a website's weekly cycle (`trigger: 'cycle'`) is a scheduled run for one site: the
+// monthly full run (Claude, the brand question, discovery of every volume, the market-wide index and the market view) comes ONLY from the
+// `monthly` the Cycle Dispatcher passes - never from the UTC month - and the cycle travels with the run (`cycle`), through every continuation
+// of a split run, so only the run's LAST execution settles the cycle's ledger key (Monitor_Ledger_Row).
 /*__MONITOR_SITES__*/
 /*__COUNTRIES__*/
 /*__AI_PANEL__*/
@@ -25,8 +29,8 @@
 /*__FIT_GATE__*/
 const CONFIG = { max_sites_per_run: 15, max_topics: 8, monthly_engines: ['claude'],   // v4.9: Gemini moved to the weekly set (the real gemini.google.com answer costs $0.004 through the scraper)
   gsc_questions: 15, pulse_days: 7 };
-const { list, on_demand, want, total } = monitorSites('ai');
-if (!list.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'no site matches "' + want + '"' : (total ? 'AI visibility is switched off for every site' : 'no sites yet (register one through "Track my site" or plan a keyword ladder)') } }];
+const { list, on_demand, want, total, cycle, cycle_why } = monitorSites('ai');
+if (!list.length) return [{ json: { nothing_to_do: true, cycle, reason: cycle ? (cycle_why || 'nothing to run for this cycle') : on_demand ? 'no site matches "' + want + '"' : (total ? 'AI visibility is switched off for every site' : 'no sites yet (register one through "Track my site" or plan a keyword ladder)') } }];
 const promptRows = rowsOf('Load AI Prompts'), visRows = rowsOf('Load AI Visibility'), ladders = rowsOf('Load Ladders'), daily = rowsOf('Load AI Daily'), cache = rowsOf('Load Cache (AI)'), queries = rowsOf('Load Query History');
 // G6: the answers stored by earlier executions of an unfinished run (this week, not the pulse). Read raw: rowsOf() drops a row carrying
 // `error` (it is meant for a Data Table node that failed), and an answer the gate could not get carries its task error — it is still
@@ -83,7 +87,10 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
   // full run = the first run of the month (or any on-demand run): every engine + the brand question + discovery + the market-wide index
   const isFull = (v) => String(v.run_kind || '') === 'full' || String(v.run_kind || '') === 'on_demand' || (!v.run_kind && (() => { const e = parse(v.engines_json, {}); return ['gemini', 'claude'].some(k => e[k] && Number(e[k].asked) > 0 && !e[k].carried); })());
   const lastFull = mineVis.find(isFull) || null;
-  const full_due = going ? !!st.full_due : (on_demand || !mineVis.some(v => String(v.checked_at).slice(0, 7) === month && isFull(v)));
+  // the monthly full run: a cycle run takes it from the dispatcher (cycle.monthly) and nowhere else; outside a cycle the UTC month rule stays
+  const full_due = going ? !!st.full_due : (on_demand || (cycle ? cycle.monthly : !mineVis.some(v => String(v.checked_at).slice(0, 7) === month && isFull(v))));
+  // the cycle this run belongs to: this start's own (a cycle job, or a continuation that carries it), else the one the split run was started for
+  const runCycle = cycle || (going && st && st.cycle && st.cycle.key ? st.cycle : null);
   const carried = lastFull ? { checked_at: lastFull.checked_at, engines: parse(lastFull.engines_json, {}) } : null;
   const room = Math.max(0, s.settings.prompts_max - custom.length);
   const deficit = Math.max(0, room - auto.length);
@@ -147,7 +154,7 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
     need_prompts: need > 0, prompts_needed: need, need_site_text: need > 0 && !topics.length && !s.business_name, gsc_questions,
     // G6: discovery runs in a run's first execution (it feeds the Prompt Writer); the database views, GA4 and the crawler check in its last
     discovery_due: !going && !!topics.length && (full_due || need > 0), volume_keywords: going ? [] : volume_keywords, index_due: full_due,
-    market_due: !!topics.length && (!prev || String(prev.market_month || '') !== month), market_keyword: topics[0] || '',
+    market_due: !!topics.length && (runCycle ? (going ? !!st.full_due : cycle.monthly) : (!prev || String(prev.market_month || '') !== month)), market_keyword: topics[0] || '',
     ga4_property_id: String(s.ga4_property_id || '').replace(/^properties\//, '').trim(), pulse_rows, key_paths,
     // B-G1: what the gate refused, with its reason, so the report names it instead of printing a shorter list (INVARIANTS rule 1)
     set_aside, set_aside_note: FITR.line(set_aside, 'asked of the AI engines or scored against'),
@@ -164,7 +171,7 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
       // G6: the panel that row asked (its question ids: a delta needs 80% of them in common) and its segments (each segment's change is tested against them)
       panel: parse(prev.panel_json, null), segments: (() => { const x = parse(prev.segments_json, null); if (!x || !Array.isArray(x.rows)) return null;
         return { rows: x.rows.map(r => Array.isArray(r) ? { dim: r[0], key: r[1], questions: r[2], n: r[3], k: r[4] } : r) }; })() } : null,
-    run_id, checked_at: run_checked_at } };
+    run_id, checked_at: run_checked_at, cycle: runCycle } };
 }).filter(Boolean);
 // G6: one execution carries at most exec_requests engine requests across all its sites (a scheduled run covers up to 15). The budget goes
 // to the sites in order; a site whose run does not fit is asked in part and continues in its own execution. Only the LAST execution of a

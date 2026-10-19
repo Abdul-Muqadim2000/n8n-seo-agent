@@ -1182,7 +1182,7 @@ await guard('ai visibility', async () => {
   mock('Render PDF AI', [{ json: {}, binary: { pdf: { data: 'JVBERi0xLjQK', mimeType: 'application/pdf', fileName: 'index.pdf' } } }]);
   await run('Prepare PDF AI', rp); const att = await run('Attach PDF AI', store['Render PDF AI']); const cb = await run('Build AI Callback', att);
   check('callback: stage ai_visibility, PDF, no internal rows / samples / learned names', cb[0].json.stage === 'ai_visibility' && cb[0].json.pdf && !cb[0].json.html && !cb[0].json.cache_rows && !cb[0].json.pulse_rows && !cb[0].json.vis_row && cb[0].json.traffic && cb[0].json.access && cb[0].json.index, Object.keys(cb[0].json).join(','));
-  // ---- second week: same panel (with volumes), last week's row, 6 days of AI Pulse samples, the client no longer named this Monday ----
+  // ---- second week: same panel (with volumes), last week's row, 6 days of AI Pulse samples, the client no longer named this week ----
   const before = new Date(Date.now() - 2 * 3600e3).toISOString();
   const vis1 = [{ json: { ...vr[0].json, checked_at: before } }];
   const daily = [1, 2, 3, 4, 5, 6].map(k => A9.dailyRow('2026-10-0' + k, { mentioned: 11, samples: 18 })).map((d, k) => ({ json: { ...d.json, checked_at: new Date(Date.now() - (90 - k * 10) * 60e3).toISOString() } }));
@@ -1266,6 +1266,18 @@ await guard('backlinks', async () => {
   loadAll({ snaps: sr });
   const p2 = await run('BL Plan', store['Load Case Studies']); const rq2 = await run('BL Requests', p2);
   console.log('   light run ->', JSON.stringify({ mode: p2[0].json.mode, since_last: p2[0].json.since.slice(0, 10), requests: rq2.map(r => r.json.kind), competitors_kept: p2[0].json.competitors }));
+  { // 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.4): the same week as a job of the website's own cycle - the Cycle Dispatcher alone decides full
+    // or light (`monthly`), never the UTC month: the website's monthly cycle is full although this month already had a full run, any other is light
+    const sid = p2[0].json.site_id, dom = p2[0].json.domain;
+    const cyc = (monthly) => ({ trigger: 'cycle', domain: dom, site_id: sid, cycle_key: 'cyc:' + sid + ':2026-10-21', job: 'backlinks', monthly, light: !monthly,
+      scheduled_for: '2026-10-21T10:00:00.000Z', request_id: 'cyc_' + sid.replace(/^site_/, '') + '_20261021_backlinks' });
+    mock('Manual Run', [{ json: cyc(true) }]); const pc1 = (await run('BL Plan', store['Load Case Studies']))[0].json;
+    mock('Manual Run', [{ json: cyc(false) }]); const pc0 = (await run('BL Plan', store['Load Case Studies']))[0].json;
+    delete store['Manual Run'];
+    console.log('   cycle run ->', JSON.stringify({ monthly: [pc1.mode, pc1.on_demand, pc1.request_id], weekly: [pc0.mode, pc0.on_demand] }));
+    if (pc1.mode !== 'full' || pc1.on_demand !== false || pc0.mode !== 'light' || pc0.on_demand !== false || !pc1.cycle || pc1.cycle.key !== 'cyc:' + sid + ':2026-10-21' || pc1.request_id !== cyc(true).request_id)
+      throw new Error('a cycle run must be full exactly on the website\'s monthly cycle and light otherwise, with on_demand false and the cycle\'s request id');
+  }
   const quietLost = JSON.parse(JSON.stringify(M.blLost())); quietLost.tasks[0].result[0].items = []; const quietNew = JSON.parse(JSON.stringify(quietLost));
   mock('Run BL Requests', rq2.map(r => r.json.kind === 'lost' ? quietLost : r.json.kind === 'new' ? quietNew : M.blFor(r.json))); const g2 = await run('Gap Requests', store['Run BL Requests']); delete store['Run Gap Requests'];
   const pb2 = await run('Parse Backlinks', g2); console.log('   light parse ->', JSON.stringify({ deliver: pb2[0].json.deliver, alerts: pb2[0].json.alerts.map(a => a.level), gap: pb2[0].json.gap.length }));
@@ -2414,7 +2426,7 @@ await guard('backlinks v4.10', async () => {
   mock('Render PDF BL', [{ json: {}, binary: { pdf: { data: 'JVBERi0xLjQK', mimeType: 'application/pdf', fileName: 'index.pdf' } } }]);
   await run('Prepare PDF BL', rp); const att = await run('Attach PDF BL', store['Render PDF BL']); const cb = await run('Build BL Callback', att); const CB = cb[0].json;
   check('callback: coverage, best links, wins, lists, competitors\' new links, at risk; no ledger dump, no refdomains, no html', !!CB.coverage && CB.best.length > 0 && Array.isArray(CB.wins) && Array.isArray(CB.lists) && Array.isArray(CB.comp_new) && Array.isArray(CB.at_risk) && CB.ledger_rows === undefined && CB.refdomains === undefined && CB.html === undefined && CB.stage === 'backlinks', Object.keys(CB).join(','));
-  // ---------------- next Monday: the light watch ----------------
+  // ---------------- next week: the light watch ----------------
   const ledger2 = R.ledger_rows.map(r => ({ ...r, updated_at: B.iso(7) }));
   loadAll({ ledger: ledger2, prospects: PR, snaps: snr.map(r => ({ json: { ...r.json, checked_at: B.iso(7) } })) });
   const p2 = await run('BL Plan', store['Load Link Graph'], PLAN); const rq2 = await run('BL Requests', p2);
@@ -2474,9 +2486,20 @@ await guard('backlinks v4.10', async () => {
   await run('Contact Requests', ojf); delete store['Fetch Contacts']; await run('Outreach Input', ojf); delete store['Outreach Writer']; const prf = await run('Prospect Rows', store['Outreach Input']);
   const snf = await run('BL Snapshot Rows', prf); const rpf = await run('BL Report', snf);
   check('free only: Ahrefs DR still read (free); authority cells show "DR 77" alone, never "0 · DR" (live finding 2026-10-08)', drf[0].json.skip !== true && Rf.ledger_rows.find(r => r.ref_domain === 'peppol.org').dr === 77 && />DR 77</.test(rpf[0].json.html) && !/>0 · DR/.test(rpf[0].json.html), JSON.stringify({ dr: drf[0].json.skip, cells: (rpf[0].json.html.match(/>[^<]{0,12}DR \d+</g) || []).slice(0, 4) }));
-  check('free only: snapshot mode "free" (the next Monday run is still the month\'s full DataForSEO run), report says $0', snf[0].json.mode === 'free' && /Free sources only/.test(rpf[0].json.html) && /cost \$0/.test(rpf[0].json.html), JSON.stringify({ mode: snf[0].json.mode }));
+  check('free only: snapshot mode "free" (the next scheduled run is still the month\'s full DataForSEO run), report says $0', snf[0].json.mode === 'free' && /Free sources only/.test(rpf[0].json.html) && /cost \$0/.test(rpf[0].json.html), JSON.stringify({ mode: snf[0].json.mode }));
   loadAll({ snaps: snf }); delete store['Manual Run']; const pNext = await run('BL Plan', store['Load Link Graph'], PLAN);
-  check('after a free run, the scheduled Monday run is still the full DataForSEO run', pNext[0].json.mode === 'full' && !pNext[0].json.free_only, JSON.stringify({ mode: pNext[0].json.mode }));
+  check('after a free run, the next scheduled run (no site named) is still the full DataForSEO run', pNext[0].json.mode === 'full' && !pNext[0].json.free_only, JSON.stringify({ mode: pNext[0].json.mode }));
+  { // 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.4): a job of the website's cycle is never free_only, and its monthly cycle is the full DataForSEO run
+    const sid = pNext[0].json.site_id, dom = pNext[0].json.domain;
+    mock('Manual Run', [{ json: { trigger: 'cycle', domain: dom, site_id: sid, cycle_key: 'cyc:' + sid + ':2026-10-22', job: 'backlinks', monthly: true, light: false, free_only: true, scheduled_for: '2026-10-22T02:00:00.000Z', request_id: 'cyc_x_20261022_backlinks' } }]);
+    const pCyc = (await run('BL Plan', store['Load Link Graph'], PLAN))[0].json;
+    mock('Manual Run', [{ json: { trigger: 'cycle', domain: dom, site_id: sid, cycle_key: 'cyc:' + sid + ':2026-10-29', job: 'backlinks', monthly: false, light: true, scheduled_for: '2026-10-29T02:00:00.000Z', request_id: 'cyc_x_20261029_backlinks' } }]);
+    const pCyc0 = (await run('BL Plan', store['Load Link Graph'], PLAN))[0].json;
+    delete store['Manual Run'];
+    check('cycle (2026-10-19): the website\'s monthly cycle is the full DataForSEO run and never free_only (a free check is the owner asking); the next cycle of the month is light',
+      pCyc.mode === 'full' && pCyc.free_only === false && pCyc.on_demand === false && pCyc0.mode === 'light' && pCyc0.free_only === false && pCyc0.on_demand === false,
+      JSON.stringify({ monthly: [pCyc.mode, pCyc.free_only, pCyc.on_demand], weekly: [pCyc0.mode, pCyc0.free_only] }));
+  }
   { // a paid run 5 days ago, then a free check today (live finding 2026-10-08: "previous" and "changes since" took the free run)
     const paidAt = new Date(Date.now() - 5 * 864e5).toISOString(), paid = { ...snf[0].json, checked_at: paidAt, mode: 'light', rank: 598, referring_domains: 13, spam_score: 8, union_domains: 15 };
     loadAll({ snaps: [snf[0], { json: paid }] }); const pMon = await run('BL Plan', store['Load Link Graph'], PLAN);
@@ -2787,7 +2810,7 @@ await guard('link builder', async () => {
     mock('Load Backlinks', F.ledger().map(j => ({ json: j }))); mock('Load Backlink Snapshots', F.snaps().map(j => ({ json: j }))); mock('Load Content Log', [{ json: {} }]); mock('Load AI Targets', F.targets().map(j => ({ json: j })));
     mock('Load Query History', F.queries().map(j => ({ json: j }))); mock('Load Rank History', F.ranks().map(j => ({ json: j }))); mock('Load Cache (Links)', (o.cache || F.cache()).map(j => ({ json: j }))); };
   const sourceFor = (r) => r.kind === 'press' ? F.bsky(r.topic ? [] : [F.onTopicPost()]) : r.kind === 'wayback' ? F.cdx() : r.kind === 'listing_search' ? F.searx(r.listing_id === 'crunchbase' ? ['https://www.crunchbase.com/organization/techand', 'https://www.crunchbase.com/organization/techandvalues'] : []) : r.kind === 'resource_search' ? F.searx(['https://www.einvoicingbasics.co.uk/resources/', 'https://cleartax.com/ae/resources', 'https://www.youtube.com/watch?v=x']) : {};
-  // ---- (a) the plan: scheduled Monday run ----
+  // ---- (a) the plan: a scheduled run over every site (no site named) ----
   loadAll(); delete store['Manual Run'];
   const P = (await run('LB Plan', store['Load Cache (Links)']))[0].json;
   const pg = (u) => P.pages.find(x => x.url === u) || {};
@@ -5826,7 +5849,7 @@ await guard('crux, impact priority, alert channels and test check-ins', async ()
   check('D25c: the API answer says whether the check-in counts for the month, so the app can keep asking too',
     resp.is_test === true && resp.counts_for_month === false && /note marks it/.test(resp.test_reason), JSON.stringify(resp).slice(0, 220));
 
-  // the Site Tracker's monthly check: a test row never satisfies it (the reminder in the Monday report reads checkin_due)
+  // the Site Tracker's monthly check: a test row never satisfies it (the reminder in the weekly report reads checkin_due)
   const month = new Date().toISOString().slice(0, 7);
   const ckRow = (o) => ({ json: { id: 1, site_id: 'site_northwind-erp-com', domain: 'northwind-erp.com', month, manual_action: false, security_issue: false, notes: '', coverage_json: '{}', not_indexed_total: 4, csv_kind: 'reasons', submitted_at: month + '-02T09:00:00.000Z', source: 'form', is_test: false, ...o } });
   const EMPTY48 = [{ json: {} }];
@@ -5841,7 +5864,7 @@ await guard('crux, impact priority, alert channels and test check-ins', async ()
   const pNoteOnly = await planWith([ckRow({ notes: 'October check-in (test)' })]);   // the live row: marked only in its note, written before the column existed
   const pOld = await planWith([ckRow({ is_test: true }), ckRow({ id: 2, month: '2026-09', notes: 'September, real' })]);
   console.log('   checkin_due ->', JSON.stringify({ test: pTest.checkin_due, real: pReal.checkin_due, note_only: pNoteOnly.checkin_due, test_plus_old_real: pOld.checkin_due }));
-  check('D25c: a test check-in does not satisfy the month — the Monday report keeps asking (checkin_due stays true) and the test row is never reported as the month\'s answer',
+  check('D25c: a test check-in does not satisfy the month — the weekly report keeps asking (checkin_due stays true) and the test row is never reported as the month\'s answer',
     pTest.checkin_due === true && pTest.last_checkin === null && pNoteOnly.checkin_due === true && pOld.checkin_due === true
     && pOld.last_checkin && pOld.last_checkin.month === '2026-09',
     JSON.stringify({ test: [pTest.checkin_due, pTest.last_checkin], note_only: pNoteOnly.checkin_due, old: [pOld.checkin_due, pOld.last_checkin && pOld.last_checkin.month] }));
@@ -10658,7 +10681,7 @@ await guard('B-A7 B-A9 the alert retry, the escalation and the shared concurrenc
 
   // ---------- 8. the wiring: every scheduled workflow sweeps, and the Page Watch records its own delivery ----------
   const MON74 = Object.keys(WIRE74.monitors).sort();
-  check('B-A7: all ten scheduled workflows end by sweeping the alerts nobody has — that is the retry\'s schedule: Page Watch daily at 05:45, the AI Pulse daily at 06:30, six more on Monday morning, the Audit Scheduler monthly',
+  check('B-A7: all ten scheduled workflows end by sweeping the alerts nobody has — that is the retry\'s schedule: Page Watch daily at 05:45, the AI Pulse daily at 06:30, the weekly jobs and the monthly audit in each website\'s own cycle (2026-10-19; it was six on Monday morning and the audit on the 1st)',
     MON74.length === 11 && ['AI Growth', 'AI Pulse', 'AI Visibility Tracker', 'Audit Scheduler', 'Backlink Monitor', 'Content Cadence', 'Link Builder', 'Rank Tracker', 'Site Tracker', 'Page Watch', 'Reply Reader']   // W3-F
       .every(n => MON74.some(m => m.endsWith(n))), JSON.stringify(MON74));
   const badSweep = MON74.filter(w => { const r = WIRE74.monitors[w].retry; return !r.post_full_response && false || !['attempts', 'attempt_log', 'next_attempt_at', 'delivered', 'severity'].every(k => WIRE74.monitors[w].writes.includes(k)); });
@@ -10692,7 +10715,21 @@ await guard('B-A7 B-A9 the alert retry, the escalation and the shared concurrenc
   const crowd = await gate([row74({ id: 1, mode: 'backlinks' }), row74({ id: 2, mode: 'rank_tracker' }), row74({ id: 3, mode: 'content_cadence' })]);
   check('B-A9: more analyses in flight than the limit refuses this one and says the next scheduled run goes ahead as usual',
     crowd.allowed === false && crowd.reason === 'too_many_open' && crowd.open_runs === 3 && crowd.max_open === G74.MAX_OPEN
-    && /the next one goes ahead as usual/.test(crowd.refusal), JSON.stringify([crowd.reason, crowd.open_runs]));
+    && /the next one goes ahead as usual/.test(crowd.refusal) && crowd.retry === false, JSON.stringify([crowd.reason, crowd.open_runs]));
+  // 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §2.2 item 2 / §4.8): the twin rule is per website for a run that names one, and a cycle job's
+  // capacity refusal is retried by the Cycle Dispatcher - it is never "skipped" (that would cost the website its week)
+  const crowdCyc = await gate([row74({ id: 1, mode: 'backlinks' }), row74({ id: 2, mode: 'rank_tracker' }), row74({ id: 3, mode: 'content_cadence' })], { site: 'techand.ai', cycle: true });
+  check('cycle (2026-10-19): a cycle job refused for too many analyses says the dispatcher retries it in a few minutes, never "skipped", and is marked retry',
+    crowdCyc.allowed === false && crowdCyc.reason === 'too_many_open' && crowdCyc.retry === true && /retried by the dispatcher in a few minutes/.test(crowdCyc.refusal)
+    && !/skipped/.test(crowdCyc.refusal) && /techand\.ai/.test(crowdCyc.refusal), JSON.stringify([crowdCyc.reason, crowdCyc.refusal]));
+  const otherSite = await gate([row74({ id: 7, mode: 'ai_visibility', domain: 'example.org', created_at: ago(40) })], { site: 'techand.ai', cycle: true });
+  const sameSite = await gate([row74({ id: 7, mode: 'ai_visibility', domain: 'techand.ai', created_at: ago(40) })], { site: 'www.techand.ai', cycle: true });
+  const batchTwin = await gate([row74({ id: 7, mode: 'ai_visibility', domain: '', created_at: ago(40) })], { site: 'techand.ai', cycle: true });
+  const batchRun = await gate([row74({ id: 7, mode: 'ai_visibility', domain: 'example.org', created_at: ago(40) })]);
+  check('cycle (2026-10-19): two websites\' AI visibility runs are not twins (both go ahead), the same website twice is (refused, retried), a live run over every site is the twin of any run of its mode, and a run that names no site keeps the mode-only rule',
+    otherSite.allowed === true && sameSite.allowed === false && sameSite.reason === 'same_mode' && sameSite.retry === true && /for techand\.ai/.test(sameSite.refusal) && /starts it again in a few minutes/.test(sameSite.refusal)
+    && batchTwin.allowed === false && batchTwin.reason === 'same_mode' && batchRun.allowed === false && batchRun.reason === 'same_mode' && batchRun.retry === false,
+    JSON.stringify({ other: otherSite.allowed, same: [sameSite.reason, sameSite.retry], batch_twin: batchTwin.reason, batch_run: batchRun.reason }));
   const later = await gate([row74({ id: 101, mode: 'backlinks' }), row74({ id: 102, mode: 'rank_tracker' }), row74({ id: 103, mode: 'audit_schedule' })]);
   check('B-A9: only the rows with a LOWER id than this run\'s own count, so row order decides ties and two runs starting together cannot both refuse each other',
     later.allowed === true && later.open_runs === 0, JSON.stringify(later));
@@ -12028,8 +12065,8 @@ await guard('INVARIANTS rule 4 — promises that need their evidence, deliveries
     && no84.ladder_row === null, JSON.stringify([no84.live, no84.log_row, no84.ladder_row]));
   check('rule 4 (paid): and the row the ladder update would have made is skipped, so nothing downstream can mark the rung published either',
     (await run('Published Ladder Row', [{ json: no84 }]))[0].json.skip === true, JSON.stringify(no84.ladder_row));
-  check('rule 4 (paid): the owner is told the truth in the same run — the page could not be fetched, and the Monday check will look again. The row and the message now agree; before this they did not',
-    /could not be fetched/.test(String(no84.summary)) && /Monday/.test(String(no84.summary)) && no84.checks[0].ok === false,
+  check('rule 4 (paid): the owner is told the truth in the same run — the page could not be fetched, and the next weekly check (the website\'s own cycle, never "Monday") will look again. The row and the message now agree; before this they did not',
+    /could not be fetched/.test(String(no84.summary)) && /next weekly report/.test(String(no84.summary)) && !/Monday/.test(String(no84.summary)) && no84.checks[0].ok === false,
     String(no84.summary).slice(0, 180));
 
   mock('Fetch Published Page', { error: 'timeout of 45000ms exceeded', details: {} });
@@ -14184,7 +14221,7 @@ await guard('S96 B6-7 the customer\'s own keyword list', async () => {
     !Pown.some(c => c.watch_keyword && c.keyword === 'corporate tax uae') && !!cOwn && cOwn.source === 'own'
     && /once a week, not once a run/.test(cOwn.reason), JSON.stringify(cOwn));
   const Pweek = await planOf({ keywords: LIST, history: [hrow96(WID96, 'corporate tax uae', 11, ago96(7), TEN96)] });
-  check('B6-7: and a week later it IS bought — a reading of ours from last Monday is exactly seven days old, so the series stays weekly instead of slipping to a fortnight',
+  check('B6-7: and a week later it IS bought — a reading of ours from the last cycle is exactly seven days old, so the series stays weekly instead of slipping to a fortnight',
     Pweek.some(c => c.watch_keyword && c.keyword === 'corporate tax uae'), JSON.stringify(Pweek.filter(c => c.watch_keyword).map(c => c.keyword)));
 
   // ---------- 3. INVARIANTS rule 2: the gate runs over a stored list ----------
@@ -14575,7 +14612,20 @@ await guard('the pages the crawl never reached, and a queue that starts with wha
 const R94 = (() => {
   const FX = require('./fixtures_r94');
   let WIRE = {}; try { WIRE = require('./catchup_wiring.json'); } catch (e) {}
-  const CU_RUN = (node, input) => run(node, input, { code: 'Catchup__' + node.replace(/[^A-Za-z0-9_.-]+/g, '_') });
+  // 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.8): the generated catch-up carries the two daily crons only - the weekly workflows and the Audit
+  // Scheduler run in each website's own cycle. The evidence below is of the weeks of 2026-10-12 and 2026-10-17, when the table held ten
+  // schedules, so the planner (the same pure kit, which still handles weekly and monthly slots) is replayed against THAT table
+  // (fixtures_r94_schedules.json): the GENERATED Catch-up Targets / Catch-up Plan with only their baked table swapped. Everything else is generated.
+  const HIST = require('./fixtures_r94_schedules.json').schedules;
+  const CDIR = process.env.CODE_DIR || require('path').join(__dirname, 'code_v4');
+  const histOf = (file) => { const fs = require('fs'), path = require('path'); const src = fs.readFileSync(path.join(CDIR, file + '.js'), 'utf8');
+    const out = src.replace(/^const SCHEDULES = .*;$/m, () => 'const SCHEDULES = ' + JSON.stringify(HIST) + ';');
+    if (out === src) throw new Error(file + ': no baked schedule table to replay against');
+    fs.writeFileSync(path.join(CDIR, file + '__r94hist.js'), out); return file + '__r94hist'; };
+  let HIST_CODE = {}; try { HIST_CODE = { 'Catch-up Targets': histOf('Catchup__Catch-up_Targets'), 'Catch-up Plan': histOf('Catchup__Catch-up_Plan') }; } catch (e) { console.log('   !! R94: the replay table could not be set up: ' + e.message); }
+  const CU_RUN = (node, input) => run(node, input, { code: HIST_CODE[node] || ('Catchup__' + node.replace(/[^A-Za-z0-9_.-]+/g, '_')) });
+  // the generated nodes, unswapped (the new truth: two daily crons)
+  const CU_GEN = (node, input) => run(node, input, { code: 'Catchup__' + node.replace(/[^A-Za-z0-9_.-]+/g, '_') });
   const ORDER = ['SEOagentAIVisib1', 'SEOagentBacklnk1', 'SEOagentTracker1', 'SEOagentSiteTrk1', 'SEOagentAIGrow1', 'SEOagentCadence1', 'SEOagentLinkBld1', 'SEOagentAuditSc1', 'SEOagentAIPulse1', 'SEOagentPageWch1'];
   const FIVE = ['SEOagentTracker1', 'SEOagentSiteTrk1', 'SEOagentAIGrow1', 'SEOagentCadence1', 'SEOagentLinkBld1'];
   const MODE = { SEOagentAIVisib1: 'ai_visibility', SEOagentBacklnk1: 'backlinks', SEOagentTracker1: 'rank_tracker', SEOagentSiteTrk1: 'site_tracker', SEOagentAIGrow1: 'ai_growth',
@@ -14585,8 +14635,9 @@ const R94 = (() => {
   // plan(o): the whole evidence path as n8n runs it - Entry -> the two API reads (mocked from the fixture as of `now`) -> records / ledger -> Plan
   const plan = async (o) => {
     const now = o.now, cut = Date.parse(now);
+    const RUNX = o.gen ? CU_GEN : CU_RUN;   // o.gen: the GENERATED table (the two daily crons) instead of the replayed one of that week
     mock('Catch-up Entry', [{ json: { entry: o.entry || 'sweep', now, clock_moved: false, dry_run: !!o.dry_run, plan_only: !!o.plan_only } }]);
-    const T = await CU_RUN('Catch-up Targets', [{ json: {} }]);
+    const T = await RUNX('Catch-up Targets', [{ json: {} }]);
     mock('Read Workflows (Catch-up)', T.map(t => { const id = t.json.workflow_id, f = FX[id] || {}, w = (o.wf || {})[id] || {};
       if (w.status) return { json: { statusCode: w.status, headers: {}, body: { message: 'unauthorized' } } };
       return { json: { statusCode: 200, headers: {}, body: { id, name: id, active: w.active !== false, createdAt: f.createdAt, updatedAt: w.updatedAt || o.updatedAt || '2026-10-01T00:00:00.000Z', nodes: [] } } }; }));
@@ -14597,12 +14648,12 @@ const R94 = (() => {
       return { json: { statusCode: 200, headers: {}, body: { data: data.map(e => ({ ...e, workflowId: id, finished: true })), nextCursor: null } } }; }));
     mock('Load Catch-up Records', o.records === undefined ? [ARMED] : (o.records.length ? o.records : [{ json: {} }]));
     mock('Load Run Ledger (Catch-up)', (o.ledger || []).length ? o.ledger.map(r => ({ json: r })) : [{ json: {} }]);
-    return (await CU_RUN('Catch-up Plan', store['Read Executions (Catch-up)']))[0].json;
+    return (await RUNX('Catch-up Plan', store['Read Executions (Catch-up)']))[0].json;
   };
   const row = (p, id) => (p.rows || []).find(r => r.workflow_id === id) || {};
   const missedIds = (p) => (p.rows || []).filter(r => ['start', 'missed_waiting', 'missed_plan_only', 'dry_run_skipped'].includes(r.verdict)).map(r => r.workflow_id).sort();
   const started = (p, id, extra) => rec('catchup:' + id + ':' + row(p, id).due, { workflow_id: id, scheduled_for: row(p, id).due, status: 'started', attempts: 1, started_at: p.now, entry: p.entry, ...(extra || {}) });
-  return { FX, WIRE, CU_RUN, ORDER, FIVE, MODE, rec, ARMED, plan, row, missedIds, started };
+  return { FX, WIRE, CU_RUN, CU_GEN, HIST, ORDER, FIVE, MODE, rec, ARMED, plan, row, missedIds, started };
 })();
 
 await guard('S126 R94 the planner on 2026-10-12', async () => {
@@ -14610,9 +14661,17 @@ await guard('S126 R94 the planner on 2026-10-12', async () => {
   reset(); begin(SN);
   const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
   const { plan, row, missedIds, started, FIVE, ORDER, WIRE, rec, ARMED } = R94;
-  check('R94: the catch-up carries exactly the ten generated schedules, each with its manual entry and its ledger mode, in America/New_York',
-    (WIRE.schedules || []).length === 10 && ORDER.every(id => (WIRE.schedules || []).some(s => s.id === id && s.entry_node && s.mode === R94.MODE[id])) && WIRE.tz === 'America/New_York',
+  // 2026-10-19: the GENERATED table is the two daily crons; the replay below uses the ten-slot table of that week (R94.HIST)
+  check('cycle (2026-10-19): the generated catch-up carries exactly the two daily crons - the AI Pulse every day 06:30 and the Page Watch 05:45 - each with its manual entry and its ledger mode, in America/New_York',
+    (WIRE.schedules || []).length === 2 && ['SEOagentAIPulse1', 'SEOagentPageWch1'].every(id => (WIRE.schedules || []).some(s => s.id === id && s.entry_node && s.mode === R94.MODE[id] && s.kind === 'daily'))
+    && (WIRE.schedules || []).find(s => s.id === 'SEOagentAIPulse1').cron === '30 6 * * *' && WIRE.tz === 'America/New_York',
     JSON.stringify((WIRE.schedules || []).map(s => [s.id, s.cron, s.kind, s.entry_node, s.mode])));
+  check('cycle (2026-10-19): the seven weekly workflows and the Audit Scheduler are in no catch-up table - each website\'s cycle runs them (build section 98)',
+    Object.keys(WIRE.cycle_workflows || {}).length === 8 && ORDER.slice(0, 8).every(id => (WIRE.cycle_workflows || {})[id] && !(WIRE.schedules || []).some(s => s.id === id))
+    && JSON.stringify(WIRE.not_replayed) === JSON.stringify(['SEOagentCycleDsp']), JSON.stringify({ cycle: Object.keys(WIRE.cycle_workflows || {}), not_replayed: WIRE.not_replayed }));
+  check('R94: the replayed table of that week is the ten schedules, each with its manual entry and its ledger mode, in America/New_York',
+    R94.HIST.length === 10 && ORDER.every(id => R94.HIST.some(s => s.id === id && s.entry_node && s.mode === R94.MODE[id])) && R94.HIST.every(s => s.tz === 'America/New_York'),
+    JSON.stringify(R94.HIST.map(s => [s.id, s.cron, s.kind, s.entry_node, s.mode])));
   // ---- (a) the dossier's acceptance test: n8n restarts at 16:38-16:40 UTC (the deploy); the catch-up's init door runs at 16:41 ----
   const P1 = await plan({ entry: 'init', now: '2026-10-12T16:41:00.000Z', updatedAt: '2026-10-12T16:38:30.000Z' });
   console.log('   2026-10-12 16:41 init ->', JSON.stringify(P1.rows.map(r => [r.label, r.verdict, (r.due || '').slice(5, 16)])));
@@ -14773,6 +14832,9 @@ await guard('S128 R94 record then start, the scheduled path', async () => {
   check('R94: ten reads of n8n\'s own API, one per scheduled workflow - the workflow and its executions, no key or secret in any URL',
     T.length === 10 && T.every(t => /^http:\/\/localhost:5678\/api\/v1\/workflows\/SEOagent\w+\?excludePinnedData=true$/.test(t.json.wf_url) && /\/executions\?workflowId=SEOagent\w+&limit=250$/.test(t.json.ex_url))
     && !T.some(t => /key|token|secret/i.test(t.json.wf_url + t.json.ex_url)), JSON.stringify(T[0].json));
+  const TG = await R94.CU_GEN('Catch-up Targets', [{ json: {} }]);
+  check('cycle (2026-10-19): the generated catch-up reads two workflows only - the AI Pulse and the Page Watch, the daily crons left',
+    TG.length === 2 && TG.map(t => t.json.workflow_id).sort().join() === 'SEOagentAIPulse1,SEOagentPageWch1', JSON.stringify(TG.map(t => t.json.workflow_id)));
   // ---- record, then start ----
   const P = await plan({ entry: 'init', now: '2026-10-12T16:41:00.000Z', updatedAt: '2026-10-12T16:38:30.000Z', ex: { SEOagentAIPulse1: { extra: [{ id: 'p11', mode: 'trigger', status: 'success', startedAt: '2026-10-11T10:31:00.000Z' }] } } });
   const SI = await CU_RUN('Catch-up Start Items', [{ json: { id: 3 } }]);
@@ -14813,7 +14875,7 @@ await guard('S128 R94 record then start, the scheduled path', async () => {
     REP.key === 'catchup:last' && RS.schedules.length === 10 && RS.started.length === 2 && RS.started.some(s => s.status === 'start_failed') && RS.counts.start === 2 && RS.entry === 'init',
     JSON.stringify({ key: REP.key, counts: RS.counts, started: RS.started }));
   check('R94 (build section 98): on the generated workflow every path to the start passes the saved record, the start does not wait, and the catch-up and every workflow it starts are published by apply_env.py',
-    WIRE.record_then_start === true && (WIRE.published || []).length === 10 && WIRE.workflow && WIRE.workflow.id === 'SEOagentCatchUp1' && WIRE.credential === 'SEOcredN8nApiKey' && WIRE.compose_tz_default === 'America/New_York',
+    WIRE.record_then_start === true && JSON.stringify(WIRE.published || []) === JSON.stringify(['SEOagentAIPulse1', 'SEOagentPageWch1']) && WIRE.workflow && WIRE.workflow.id === 'SEOagentCatchUp1' && WIRE.credential === 'SEOcredN8nApiKey' && WIRE.compose_tz_default === 'America/New_York',
     JSON.stringify({ rts: WIRE.record_then_start, published: WIRE.published, tz: WIRE.compose_tz_default }));
   const G = WIRE.deploy_guard || {};
   check('R94: apply_env.py refuses a deploy on Monday 07:00-12:00 New York time (11:00-16:00 UTC in summer, 12:00-17:00 in winter) and lets one through outside it - today, Friday, included',
@@ -14861,6 +14923,12 @@ await guard('S129 R94 AI Growth dry run', async () => {
   check('R94: a dry-run catch-up starts only AI Growth (and would start the Cadence), keyed catchup_dry: so production never reads it - the Rank Tracker, Site Tracker and Link Builder, which have no dry-run switch, are reported and not started',
     D.start.map(s => s.workflow_id).join() === 'SEOagentAIGrow1,SEOagentCadence1' && D.start.every(s => s.dry_run === true && s.key.startsWith('catchup_dry:'))
     && ['SEOagentTracker1', 'SEOagentSiteTrk1', 'SEOagentLinkBld1'].every(id => row(D, id).verdict === 'dry_run_skipped'), JSON.stringify(D.rows.map(r => [r.label, r.verdict])));
+  // 2026-10-19: with the GENERATED table (the two daily crons) a dry-run catch-up starts nothing at all - neither the AI Pulse nor the Page Watch
+  // has a dry-run switch, and the weekly workflows that have one (AI Growth, the cadence) are not in the table any more: a website's cycle runs them
+  const DG = await plan({ gen: true, entry: 'manual', dry_run: true, now: '2026-10-19T16:41:00.000Z', updatedAt: '2026-10-19T09:00:00.000Z', records: [ARMED, rec('catchup:instance', { started_at: '2026-10-19T09:00:00.000Z' })] });
+  check('cycle (2026-10-19): on the generated table a dry-run catch-up starts nothing - the two daily crons have no dry-run switch and are reported, AI Growth and the cadence are no schedule of its any more',
+    DG.start.length === 0 && (DG.rows || []).length === 2 && (DG.rows || []).every(r => ['dry_run_skipped', 'fired', 'caught_up', 'before_arm', 'late_pending', 'not_created'].includes(r.verdict))
+    && !(DG.rows || []).some(r => r.workflow_id === 'SEOagentAIGrow1' || r.workflow_id === 'SEOagentCadence1'), JSON.stringify((DG.rows || []).map(r => [r.label, r.verdict])));
   mock('Catch-up Plan', [{ json: D }]);
   const SI = await CU_RUN('Catch-up Start Items', [{ json: {} }]);
   const RR = (await CU_RUN('Catch-up Record Row', [SI[0]]))[0].json;
@@ -17269,35 +17337,40 @@ await guard('S145 R111 R87 the cadence mails name the drafts that need a fix and
 await guard('S146 R94 a sleep-delayed timer must not run the week twice', async () => {
   const SN = 'S146 R94 - a run started by its own Schedule Trigger refuses (caught_up) when the catch-up already started that slot; nothing else is refused by it';
   reset(); begin(SN); const check = a14Check(SN);
-  const DUE = '2026-10-19T11:30:00.000Z';   // Monday 07:30 America/New_York (EDT)
-  const KEY = 'catchup:SEOagentBacklnk1:' + DUE;
+  // 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.8): only the daily crons have a timer left - the AI Pulse (every day 06:30) is the one replayed
+  // here; a weekly workflow has no Schedule Trigger at all (its gate carries no schedule), so no delayed timer of it can ever run a week twice
+  const DUE = '2026-10-19T10:30:00.000Z';   // 06:30 America/New_York (EDT)
+  const KEY = 'catchup:SEOagentAIPulse1:' + DUE;
   const rec = (key, v) => ({ json: { key, kind: 'catchup', site_id: '', value: JSON.stringify(v), updated_at: '2026-10-19T17:40:00.000Z' } });
   const go = async (o) => {
     reset();
-    mock('BL Plan', [{ json: { site_id: 'site_techand-ai', domain: 'techand.ai', mode: 'full' } }]);
-    mock('Load Open Runs (BL)', [{ json: {} }]);
-    mock('Load Catch-up Records (BL)', o.records || [{ json: {} }]);
-    mock('Reserve Run Ledger (BL)', [{ json: { id: 92, run_id: 'test-exec', mode: 'backlinks', status: 'reserved', key: 'schedule:backlinks' } }]);
-    mock('Run Ledger Row (BL)', [{ json: { run_id: 'test-exec', mode: 'backlinks', key: 'schedule:backlinks' } }]);
-    if (o.fire) mock('Weekly Schedule', [{ json: { timestamp: o.fire } }]);
-    return (await run('After Run Ledger (BL)', [{ json: {} }], { code: 'After_Run_Ledger_BL_' }))[0].json;
+    mock('AI Plan', [{ json: { site_id: 'site_techand-ai', domain: 'techand.ai', pulse_run: true } }]);
+    mock('Load Open Runs (Pulse)', [{ json: {} }]);
+    mock('Load Catch-up Records (Pulse)', o.records || [{ json: {} }]);
+    mock('Reserve Run Ledger (Pulse)', [{ json: { id: 92, run_id: 'test-exec', mode: 'ai_pulse', status: 'reserved', key: 'schedule:ai_pulse' } }]);
+    mock('Run Ledger Row (Pulse)', [{ json: { run_id: 'test-exec', mode: 'ai_pulse', key: 'schedule:ai_pulse' } }]);
+    if (o.fire) mock('Daily Schedule', [{ json: { timestamp: o.fire } }]);
+    return (await run('After Run Ledger (Pulse)', [{ json: {} }], { code: 'Pulse__After_Run_Ledger_Pulse_' }))[0].json;
   };
+  const blSrc = require('fs').readFileSync(require('path').join(process.env.CODE_DIR || (__dirname + '/code_v4'), 'After_Run_Ledger_BL_.js'), 'utf8');
+  check('cycle (2026-10-19): the Backlink Monitor\'s gate carries no schedule any more (const __SCHED = {}) - a weekly job is started by its website\'s cycle, never by a timer that could fire late',
+    /const __SCHED = \{\};/.test(blSrc), (blSrc.match(/const __SCHED = [^;]*;/) || [''])[0]);
   const late = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec(KEY, { status: 'started', started_at: '2026-10-19T17:40:00.000Z', entry: 'sweep' })] });
   check('R94: the delayed timer (fires 7 h late) of a slot the catch-up started is refused `caught_up`, nothing started',
-    late.run_refused === true && late.reason === 'caught_up' && /already ran this scheduled slot/.test(late.refusal) && /2026-10-19T11:30:00.000Z/.test(late.refusal), JSON.stringify(late).slice(0, 400));
+    late.run_refused === true && late.reason === 'caught_up' && /already ran this scheduled slot/.test(late.refusal) && late.refusal.indexOf(DUE) >= 0, JSON.stringify(late).slice(0, 400));
   const dur = await go({ fire: '2026-10-19T11:30:02.000Z', records: [{ json: {} }] });
   check('R94: an on-time scheduled run with no catch-up record runs', !dur.run_refused && dur.domain === 'techand.ai', JSON.stringify(dur).slice(0, 300));
   const starting = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec(KEY, { status: 'starting', started_at: '2026-10-19T17:40:00.000Z' })] });
   check('R94: a record still `starting` counts (the planner calls it caught up too)', starting.run_refused === true && starting.reason === 'caught_up', JSON.stringify(starting).slice(0, 300));
   const failed = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec(KEY, { status: 'start_failed', error: 'boom' })] });
   check('R94: a catch-up start that FAILED does not refuse the schedule\'s own fire', !failed.run_refused, JSON.stringify(failed).slice(0, 300));
-  const lastWeek = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec('catchup:SEOagentBacklnk1:2026-10-12T11:30:00.000Z', { status: 'started', started_at: '2026-10-12T17:00:00.000Z' })] });
-  check('R94: last week\'s record does not refuse this week', !lastWeek.run_refused, JSON.stringify(lastWeek).slice(0, 300));
-  const other = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec('catchup:SEOagentAIVisib1:' + DUE, { status: 'started', started_at: '2026-10-19T17:40:00.000Z' })] });
+  const lastWeek = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec('catchup:SEOagentAIPulse1:2026-10-18T10:30:00.000Z', { status: 'started', started_at: '2026-10-18T17:00:00.000Z' })] });
+  check('R94: yesterday\'s record does not refuse today', !lastWeek.run_refused, JSON.stringify(lastWeek).slice(0, 300));
+  const other = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec('catchup:SEOagentPageWch1:' + DUE, { status: 'started', started_at: '2026-10-19T17:40:00.000Z' })] });
   check('R94: another workflow\'s record does not refuse this one', !other.run_refused, JSON.stringify(other).slice(0, 300));
   const viaCatchup = await go({ records: [rec(KEY, { status: 'started', started_at: '2026-10-19T17:40:00.000Z' })] });
   check('R94: the catch-up\'s OWN start (no Schedule Trigger data) is never refused by its own record', !viaCatchup.run_refused, JSON.stringify(viaCatchup).slice(0, 300));
-  const dry = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec('catchup_dry:SEOagentBacklnk1:' + DUE, { status: 'started' })] });
+  const dry = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec('catchup_dry:SEOagentAIPulse1:' + DUE, { status: 'started' })] });
   check('R94: a dry-run record (`catchup_dry:`) is never read by production', !dry.run_refused, JSON.stringify(dry).slice(0, 300));
   reset();
 });
@@ -18383,6 +18456,7 @@ await guard('S166 B8-8 B8-9 B8-10 the build carries the three engine fixes in bo
 await require('./scenarios_fa3')({ H, run, mock, store, guard, reset, begin });
 // G6 (2026-10-18): the AI question panel at enterprise scale — up to 500 questions, split runs, the pulse's rotating sample (harness/scenarios_g6.js)
 await require('./scenarios_g6')({ H, run, mock, store, guard, reset, begin });
+await require('./scenarios_cycle_semantics')({ H, run, mock, store, guard, reset, begin });   // 2026-10-19: the cycle run (trigger: 'cycle'), SCHEDULING_KEYWORDS_PLAN.md §4.5
 
 // ===================================================================================
 // S180-S183 (2026-10-17, defect-fix agent F-B — re-rating 2026-10-17 part 2, executor B: execs 739 / 767, docs/system-review-2026-10-17/
@@ -19163,20 +19237,23 @@ await guard('SFL4 C-12 C-13 Tracker Report on exec 785: a stored set-aside rung 
 await guard('SFL5 C-1 follow-up the Audit Scheduler and the Page Watch say when they ran late', async () => {
   const SN = 'SFL5 C-1 follow-up — F-C put the "ran late" notice on every Callback Ledger; the Audit Scheduler (its audits report through the main workflow) and the Page Watch (its callback is the alert digest) had none';
   reset(); begin(SN); const check = W3E.mkCheck(SN);
-  // the 1st-of-the-month audit (06:00 New York = 10:00 UTC) started by the catch-up six hours later
-  const catchup = { trigger: 'catchup', scheduled_for: '2026-10-01T10:00:00.000Z', why: 'the computer running the engine was asleep at 06:00', started_at: '2026-10-01T16:05:00.000Z' };
+  // 2026-10-19 (owner decision D2): the audit runs in the website's monthly cycle. Its cycle was due 06:00 New York (10:00 UTC) and the Cycle
+  // Dispatcher could only start the audit job six hours later (the engine was down) - the cycle's payload (plan §14.2)
+  const catchup = { trigger: 'cycle', domain: 'northwind-erp.com', site_id: 'site_northwind-erp-com', cycle_key: 'cyc:site_northwind-erp-com:2026-10-01', job: 'audit', monthly: true,
+    scheduled_for: '2026-10-01T10:00:00.000Z', request_id: 'cyc_northwind-erp-com_20261001_audit', why: 'the computer running the engine was asleep at 06:00', started_at: '2026-10-01T16:05:00.000Z' };
   const body0 = { mode: 'audit', domain: 'northwind-erp.com', country: 'United Arab Emirates', report_type: 'Site Audit (technical issues only)', scheduled: true, request_id: 'aud_202610_northwind-erp-com', callback_url: 'https://app.example.com/api/hooks/n8n/x' };
   mock('Audit Schedule Plan', [{ json: { site_id: 'site_northwind-erp-com', domain: 'northwind-erp.com', run: true, why: '60 days since the last audit (safety net)', body: body0 } }]);
   mock('Manual Run', [{ json: catchup }]);
   const late = (await run('Audits To Start', [{ json: {} }]))[0].json;
-  check('Audit Scheduler: a run the catch-up started 6 h after its slot hands `ran_late` to the audit it starts (the slot, the delay, why)',
-    late.body.ran_late && late.body.ran_late.late === true && late.body.ran_late.due === '2026-10-01T10:00:00.000Z' && late.body.ran_late.late_min === 365
-    && /monthly run that was due Thu 1 Oct 2026, 06:00 \(America\/New_York\)/.test(late.body.ran_late.text) && /schedule catch-up started it/.test(late.body.ran_late.text), JSON.stringify(late.body.ran_late));
+  check('Audit Scheduler: a cycle job started 6 h after its cycle was due hands `ran_late` to the audit it starts (the cycle\'s due time, the delay, why)',
+    late.body.ran_late && late.body.ran_late.late === true && late.body.ran_late.via === 'cycle' && late.body.ran_late.due === '2026-10-01T10:00:00.000Z' && late.body.ran_late.late_min === 365
+    && /run of this website's weekly cycle that was due Thu 1 Oct 2026, 06:00 \(America\/New_York\)/.test(late.body.ran_late.text) && /asleep at 06:00/.test(late.body.ran_late.text), JSON.stringify(late.body.ran_late));
   reset();
   mock('Audit Schedule Plan', [{ json: { site_id: 'site_northwind-erp-com', domain: 'northwind-erp.com', run: true, why: 'x', body: body0 } }]);
-  mock('Monthly Schedule', [{ json: { timestamp: '2026-10-01T10:00:20.000Z' } }]);
+  // the audit is the cycle's last job: started 1 h 10 min after the cycle was due, after the other jobs - that is the cycle's normal pace, not late
+  mock('Manual Run', [{ json: { ...catchup, started_at: '2026-10-01T11:10:00.000Z', why: '' } }]);
   const onTime = (await run('Audits To Start', [{ json: {} }]))[0].json;
-  check('Audit Scheduler: the schedule firing on time adds nothing to the audit\'s body', !onTime.body.ran_late && onTime.ran_late.late === false, JSON.stringify(onTime.ran_late));
+  check('Audit Scheduler: a cycle job that starts within the cycle\'s normal span (its jobs run one after the other) adds nothing to the audit\'s body', !onTime.body.ran_late && onTime.ran_late.late === false && onTime.ran_late.via === 'cycle' && onTime.ran_late.late_min === 70, JSON.stringify(onTime.ran_late));
   // Normalize Input keeps it for a scheduled request only
   const niRun = async (b) => (await run('Normalize Input', [{ json: { headers: { 'content-type': 'application/json' }, params: {}, query: {}, body: b } }]))[0].json;
   const ni = await niRun({ ...late.body, client_ip: 'audit:site_northwind-erp-com' });
@@ -19187,7 +19264,7 @@ await guard('SFL5 C-1 follow-up the Audit Scheduler and the Page Watch say when 
   mock('Normalize Input', [{ json: ni }]); mock('Rate Limit', [{ json: { run_cost_estimate_usd: 0.09, run_cost_estimate_basis: 'x' } }]);
   const cb = (await run('Run Cost (Callback)', [{ json: { stage: 'site_audit', subject: 'Technical SEO audit — northwind-erp.com', html: '<html><body><h1>Audit</h1></body></html>' } }]))[0].json;
   check('main workflow: the audit report carries `ran_late` (the app titles it "ran late"), the box first in its HTML, the tag on its subject',
-    cb.ran_late && cb.ran_late.late === true && /<body><div class="ran-late"[^>]*><strong>Ran late\.<\/strong> This is the monthly run that was due/.test(cb.html)
+    cb.ran_late && cb.ran_late.late === true && /<body><div class="ran-late"[^>]*><strong>Ran late\.<\/strong> This is the run of this website's weekly cycle that was due/.test(cb.html)
     && /\(ran late — due 2026-10-01\)$/.test(cb.subject), JSON.stringify({ s: cb.subject, h: cb.html.slice(0, 220) }));
   mock('Normalize Input', [{ json: { ...ni, ran_late: null } }]);
   const cb0 = (await run('Run Cost (Callback)', [{ json: { stage: 'site_audit', subject: 'Technical SEO audit — northwind-erp.com', html: '<html><body><h1>Audit</h1></body></html>' } }]))[0].json;

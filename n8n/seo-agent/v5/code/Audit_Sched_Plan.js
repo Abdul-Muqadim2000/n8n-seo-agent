@@ -4,6 +4,8 @@
 // show: theme, plugins, server, links) · no readable sitemap, or a sitemap index without lastmod dates, and 25+ days (change cannot be
 // detected: monthly as before). Otherwise skip; the weekly Site Tracker keeps watching indexing in
 // Search Console between audits. Each started audit compares itself with the previous one and delivers report + fix pack.
+// 2026-10-19 (owner decision D2): the scheduler runs in each website's monthly cycle (Audit Candidates refuses a cycle that is not monthly); a cycle
+// run is scheduled - the same change rules decide, and the audit carries the cycle's request id.
 const CONFIG = { min_days_between: 25, safety_net_days: 60 };
 const cands = $('Audit Candidates').all().map(i => i.json).filter(c => !c.nothing_to_do);
 const maps = $input.all().map(i => i.json || {});
@@ -24,6 +26,7 @@ cands.forEach((c, i) => {
   const days = c.last_audit ? Math.floor((Date.now() - new Date(c.last_audit.audited_at).getTime()) / 864e5) : null;
   let run, why;
   if (c.on_demand) { run = true; why = 'on demand'; }
+  else if (c.cycle && days == null) { run = true; why = 'never audited (the website\'s first monthly cycle)'; }
   else if (days == null) { run = true; why = 'never audited'; }
   else if (days < CONFIG.min_days_between) { run = false; why = 'audited ' + days + ' days ago'; }
   else if (days >= CONFIG.safety_net_days) { run = true; why = days + ' days since the last audit (safety net)'; }
