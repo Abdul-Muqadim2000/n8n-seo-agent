@@ -19,6 +19,7 @@ import {
   roleAtLeast,
   inviteRoleProblem,
   isClientRole,
+  ROLE_LABELS,
   orgKindOf,
 } from '@seo/shared';
 import { isPlatformAdmin, isUuid, orgAccess, requireUser } from '../auth/access';
@@ -256,11 +257,19 @@ export async function orgRoutes(app: FastifyInstance) {
       {
         to: body.email,
         subject: `${a.user.name} invited you to ${a.org.name} on ${sender.brandName}`,
+        title: `Join ${a.org.name} on ${sender.brandName}`,
+        preheader: `${a.user.name} invited you as ${ROLE_LABELS[body.role].toLowerCase()}. The invitation works for 7 days.`,
         lines: isClientRole(body.role)
           ? [`${a.user.name} invited you to ${sender.brandName}, the SEO portal of ${a.org.name}.`, body.role === 'client_approver' ? 'You will see your websites\' dashboards and reports, and approve pages and outreach before they go out.' : 'You will see your websites\' dashboards, reports and recommendations.']
-          : [`${a.user.name} invited you to join ${a.org.name} as ${body.role}.`, 'You will see the SEO dashboards, reports and analyses of the company\'s websites.'],
+          : [`${a.user.name} invited you to join ${a.org.name} as ${ROLE_LABELS[body.role].toLowerCase()}.`, 'You will see the SEO dashboards, reports and analyses of the company\'s websites.'],
+        details: [
+          { label: 'Company', value: a.org.name },
+          { label: 'Your role', value: ROLE_LABELS[body.role] },
+          { label: 'Invited by', value: a.user.name },
+          { label: 'Valid until', value: inv.expiresAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) },
+        ],
         action: { label: 'Accept the invitation', url: inviteUrl },
-        footer: 'The invitation works for 7 days.',
+        footer: `You received this e-mail because ${a.user.name} invited ${body.email}. If you do not know them, you can ignore it: nothing happens until the invitation is accepted.`,
         sender,
       },
       req.log,

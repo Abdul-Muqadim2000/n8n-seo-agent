@@ -30,6 +30,13 @@
     {
       "source": "/(index.html|theme-init.js|site.webmanifest)",
       "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+    },
+    {
+      "source": "/brand/(.*)",
+      "headers": [
+        { "key": "Cross-Origin-Resource-Policy", "value": "cross-origin" },
+        { "key": "Cache-Control", "value": "public, max-age=86400" }
+      ]
     }
   ]
 }

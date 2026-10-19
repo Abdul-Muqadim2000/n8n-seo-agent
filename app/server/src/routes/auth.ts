@@ -30,6 +30,7 @@ export async function sendVerification(user: UserRow, log: FastifyInstance['log'
     {
       to: user.email,
       subject: `Confirm your e-mail for ${sender.brandName}`,
+      title: 'Confirm your e-mail address',
       lines: [`Hi ${user.name},`, 'Please confirm your e-mail address. Analyses and reports start once it is confirmed.'],
       action: { label: 'Confirm e-mail', url: `${baseUrl}/verify-email?token=${token}` },
       footer: 'The link works for 3 days. If you did not create an account, ignore this e-mail.',
@@ -151,6 +152,7 @@ export async function authRoutes(app: FastifyInstance) {
         {
           to: user.email,
           subject: `Reset your ${sender.brandName} password`,
+          title: 'Reset your password',
           lines: [`Hi ${user.name},`, 'Someone asked to reset the password of your account. Choose a new one with the button below.'],
           action: { label: 'Choose a new password', url: `${baseUrl}/reset-password?token=${token}` },
           footer: 'The link works for one hour. If you did not ask for it, ignore this e-mail; your password stays the same.',
