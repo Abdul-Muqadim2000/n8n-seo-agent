@@ -132,7 +132,7 @@ function WeekdayControl({ cycle }: { cycle: SiteCycleView }) {
         ),
     });
   return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
       <Field label="Move your week to" hint="The next run moves to this weekday, at least 3 days after the last one started." className="sm:w-64">
         {(p) => (
           <Select {...p} value={value} onChange={(e) => setValue(e.target.value)}>
@@ -144,7 +144,7 @@ function WeekdayControl({ cycle }: { cycle: SiteCycleView }) {
           </Select>
         )}
       </Field>
-      <Button size="sm" variant="secondary" loading={set.isPending} disabled={!changed} onClick={save} className="sm:mb-6">
+      <Button size="sm" variant="secondary" loading={set.isPending} disabled={!changed} onClick={save} className="sm:mt-[1.625rem]">
         Change weekday
       </Button>
     </div>
