@@ -29,7 +29,8 @@ const jobs = [
   { job: 'content_cadence', workflow_id: 'SEOagentCadence1', on: !!c && String(c.status || 'active') !== 'off' && Number(c.pages_per_week) > 0, why: 'no blog posts a week are set', dry: true },
   { job: 'link_builder', workflow_id: 'SEOagentLinkBld1', on: flag(m.link_builder, true), why: 'link building is off', dry: false, extra: { free_only: false } },
 ];
-const start = jobs.filter(j => j.on && (!v.dry_run || j.dry));
-const skipped = jobs.filter(j => !j.on).map(j => j.job + ': ' + j.why).concat(v.dry_run ? jobs.filter(j => j.on && !j.dry).map(j => j.job + ': not started in a dry run (it would spend)') : []);
+const only = Array.isArray(v.jobs) && v.jobs.length ? v.jobs : null;   // the caller's subset (what the customer already ran today is left out)
+const start = jobs.filter(j => j.on && (!only || only.includes(j.job)) && (!v.dry_run || j.dry));
+const skipped = jobs.filter(j => !j.on).map(j => j.job + ': ' + j.why).concat(only ? jobs.filter(j => j.on && !only.includes(j.job)).map(j => j.job + ': not asked for') : []).concat(v.dry_run ? jobs.filter(j => j.on && !j.dry).map(j => j.job + ': not started in a dry run (it would spend)') : []);
 if (!start.length) return refuse('nothing to start for ' + domain + (skipped.length ? ' (' + skipped.join('; ') + ')' : ''));
 return start.map((j, i) => ({ json: { ...base, ...(j.extra || {}), ...(v.dry_run ? { dry_run: true } : {}), workflow_id: j.workflow_id, job: j.job, order: i + 1, of: start.length, skipped } }));

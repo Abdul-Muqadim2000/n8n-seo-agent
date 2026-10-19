@@ -19288,6 +19288,13 @@ await guard('SK1 Site Kickoff: the first weekly cycle on the day tracking starts
   const dry = await plan({ domain: 'techand.ai', dry_run: 'true' }, { monitors: [MON], cadence: [CAD], record: [REC] });
   check('a dry run starts only AI growth and the cadence, with dry_run, and says why the others were not started',
     JSON.stringify(dry.map(j => j.job)) === JSON.stringify(['ai_growth', 'content_cadence']) && dry.every(j => j.dry_run === true) && dry[0].skipped.filter(x => /dry run/.test(x)).length === 3, JSON.stringify(dry));
+  const some = await plan({ domain: 'techand.ai', jobs: ['ai_growth', 'content_cadence', 'link_builder'] }, { monitors: [MON], cadence: [CAD] });
+  check('jobs: only the named jobs start, still in Monday\'s order (what the customer already ran today is left out, not run twice)',
+    JSON.stringify(some.map(j => j.job)) === JSON.stringify(['ai_growth', 'content_cadence', 'link_builder']) && some[0].skipped.filter(x => /not asked for/.test(x)).length === 2, JSON.stringify(some));
+  const someOff = await plan({ domain: 'techand.ai', jobs: 'link_builder' }, { monitors: [{ ...MON, link_builder: false }], cadence: [CAD] });
+  check('jobs never starts one the site switched off', someOff[0].nothing_to_do === true, JSON.stringify(someOff));
+  const badJobs = (await run('Kickoff Validate', { body: { domain: 'techand.ai', jobs: ['ai_growth', 'rank_tracker'] } }))[0].json;
+  check('an unknown job is refused by name', badJobs.ok === false && /unknown jobs: rank_tracker/.test(badJobs.error), JSON.stringify(badJobs));
   mock('Kickoff Plan', dry.map(json => ({ json })));
   const recDry = (await run('Kickoff Record Row', [{ json: {} }]))[0].json;
   check('a dry run records nothing', recDry.skip_record === true, JSON.stringify(recDry));
