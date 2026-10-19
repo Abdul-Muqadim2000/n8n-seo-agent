@@ -146,8 +146,11 @@ try:
     check('keyword check: the same keyword within 7 days is the stored answer, free', s == 200 and d.get('cached') is True and d['result'].get('difficultyForYou') == 'easy', d)
     s, d = owner.post(A, {'keyword': 'smoke budget keyword'})
     check('keyword check: over the monthly budget (402) before n8n', s == 402 and d.get('code') == 'budget', d)
+    # credits (app/docs/CREDITS.md): the dollar usage page is gone; the Credits page answers, in credits only
     s, u = owner.get(f'/api/orgs/{O}/usage')
-    check('usage counts keyword checks in the month', s == 200 and u.get('keywordChecks') == {'checks': 1, 'usd': 0.03} and abs(u.get('estimatedUsd', 0) - 0.03) < 1e-9, u)
+    check('the old dollar usage endpoint is gone (404)', s == 404, u)
+    s, u = owner.get(f'/api/orgs/{O}/billing')
+    check('the Credits page answers in credits (no provider cost)', s == 200 and 'balance' in u and not any('usd' in k.lower() and k not in ('creditValueUsd',) for k in u), u)
     sql(f"insert into keyword_checks (org_id, site_id, keyword, country, status, cost_usd) select '{O}', '{S}', 'smoke limit ' || g, 'Germany', 'failed', 0 from generate_series(1, 30) g")
     s, d = owner.post(A, {'keyword': 'smoke limit keyword'})
     check('keyword check: 30 a day per company (429) before n8n', s == 429 and d.get('code') == 'check_limit', d)

@@ -69,6 +69,20 @@ There is no card payment yet. **Buy credits** on the Credits page sends a reques
 platform admins get an e-mail; the Alaventra team invoices it and confirms it in /admin → company, which adds the pack (12 months)
 and records the payment as revenue. The customer can cancel a waiting request.
 
+### Companies that existed before credits (migration 0016, `alignExistingCompanies`)
+
+On the first server start after the deploy, every company that existed before credits is brought onto them exactly as a company
+signing up today is, once (`platform_settings.credits_aligned_at`):
+
+- it gets the **welcome credits** (200, valid 90 days) — never twice (the same `signup:<company>` key a new company's grant uses),
+  never for an agency's client workspace or a disabled company (as for new ones); credits it already had are kept and never expire;
+- it is **enforced** — but only when it starts with credits (balance > 0 after its welcome credits). A company that would start at or
+  below zero (heavy usage counted before) or a client workspace with no credits of its own is **left counted only**, so its schedules
+  are not paused by surprise; each is named in the admin activity log ("credits.aligned") for the platform admin to top up and enforce;
+- it follows the platform settings as they are: welcome credits 0 → none granted; new companies not enforced → nobody enforced.
+
+`POST /api/admin/credits/align` runs the same pass again at any time (idempotent: nothing is granted or changed twice).
+
 ## 2. What the customer sees
 
 - **Settings → Credits**: balance, available now, held, kept for autopilot, status and runway ("lasts about N days", "runs out on
@@ -90,15 +104,16 @@ and records the payment as revenue. The customer can cancel a waiting request.
 | `DELETE /api/orgs/:orgId/billing/requests/:id` | admin + | cancel a waiting request |
 | `GET /api/orgs/:orgId/costs` | viewer + | adds `creditRate` (credits per unit of the cost figures) |
 | `PATCH /api/admin/companies/:id` `{ planMonthlyCredits }` | platform admin | the plan (a new plan's first month is granted at once) |
+| `POST /api/admin/credits/align` · `POST /api/admin/credits/guard` | platform admin | bring companies not on credits onto them (idempotent) · run the guard now |
 | `POST /api/admin/companies/:id/credits` `{ kind: 'grant', credits, paidUsd, expires: 'pack'\|'never'\|days, requestId? }` | platform admin | fulfils a request when `requestId` is given |
 | `GET /api/admin/credit-requests?status=pending\|all`, `POST /api/admin/credit-requests/:id/cancel` | platform admin | the requests |
 
-## 4. Data (migration 0015)
+## 4. Data (migrations 0015, 0016)
 
 `credit_lots` (one per positive ledger entry: source, credits, remaining, expires_at), `credit_purchase_requests`,
 `organizations.credit_limits / plan_monthly_credits / plan_granted_month / credit_alert_level / credit_alert_at`,
 `sites.credits_paused_at / credits_paused_reason`, `runs.quoted_credits`, `platform_settings.credit_packs / pack_expiry_months /
-plan_rollover / signup_expiry_days`. The ledger (`credit_ledger`) stays the one record; the balance is its sum; per company,
+plan_rollover / signup_expiry_days / credits_aligned_at` (0016: when the companies from before credits were brought onto them). The ledger (`credit_ledger`) stays the one record; the balance is its sum; per company,
 balance = Σ lots' remaining − debt.
 
 ## 5. Open — the owner's

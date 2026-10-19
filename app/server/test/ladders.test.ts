@@ -145,7 +145,8 @@ describe('ladder cards: status, next step, priority', () => {
     expect(c.months).toBe('6-9');
     // rank checks: 4 keywords x 4.33 weeks x $0.015, plus the 2 pages written in the next 4 weeks
     // (B-R3: the price of a page comes from the one cost table now, never typed into a test)
-    expect(c.monthlyCostUsd).toBe(Math.round((0.015 * 4 * 4.33 + 2 * MODES.keyword.costUsd) * 100) / 100);
+    // credits (app/docs/CREDITS.md): in credits at the default rate, 60 a dollar of provider cost
+    expect(c.monthlyCredits).toBe(Math.round((0.015 * 4 * 4.33 + 2 * MODES.keyword.costUsd) * 60 * 100) / 100);
     const future = b.details.get('l1')!.timeline.filter((e) => e.future);
     expect(future.map((e) => [e.at, e.text])).toEqual([
       ['2026-10-05T12:00:00.000Z', 'Rank check of 4 keywords'],
@@ -265,7 +266,7 @@ describe('timeline and traffic', () => {
   });
 
   it('cost so far: a plan made outside the app at its list price, the rank checks, the app’s runs for the ladder', () => {
-    expect(d.costSoFarUsd).toBe(Math.round((MODES.ladder.costUsd + 10 * 0.015) * 100) / 100);
+    expect(d.creditsSoFar).toBe(Math.round((MODES.ladder.costUsd + 10 * 0.015) * 60 * 100) / 100);
     const withRuns = buildLadders(
       src({
         ladders: rows,
@@ -276,7 +277,7 @@ describe('timeline and traffic', () => {
       sched(),
       { now: NOW },
     ).details.get('l1')!;
-    expect(withRuns.costSoFarUsd).toBe(Math.round((1.8 + 1.1 + MODES.keyword.costUsd) * 100) / 100);
+    expect(withRuns.creditsSoFar).toBe(Math.round((1.8 + 1.1 + MODES.keyword.costUsd) * 60 * 100) / 100);
     expect([withRuns.planType, withRuns.expectedVisitsTop3, withRuns.pages[0].volume, withRuns.pages[0].kd]).toEqual(['full', 250, 90, 12]);
   });
 });

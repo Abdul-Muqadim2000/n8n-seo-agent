@@ -5,7 +5,7 @@ import { pipelineNotices } from './pipeline-notices';
 const NOW = new Date('2026-10-03T12:00:00Z');
 
 function auto(id: AutomationStatus['id'], state: AutomationStatus['state'], nextRunAt: string | null): AutomationStatus {
-  return { id, state, reason: null, nextRunAt, lastRunAt: '2026-09-29T11:05:00Z', lastResult: 'Named in 0% of 41 answers', lastReportId: 'rep-1', monthlyCostUsd: 1, detail: null };
+  return { id, state, reason: null, nextRunAt, lastRunAt: '2026-09-29T11:05:00Z', lastResult: 'Named in 0% of 41 answers', lastReportId: 'rep-1', monthlyCredits: 60, detail: null };
 }
 
 function data(over: Partial<PipelineData> = {}): PipelineData {
@@ -29,7 +29,7 @@ function data(over: Partial<PipelineData> = {}): PipelineData {
     },
     calendar: [],
     activity: [],
-    monthlyCostUsd: 3,
+    monthlyCredits: 180,
     running: [],
     activeRuns: [],
     written: [
@@ -49,7 +49,7 @@ function data(over: Partial<PipelineData> = {}): PipelineData {
     ladderCards: [],
     needsYou: [],
     thisWeek: [],
-    summary: { publishedThisMonth: 0, top10: 0, clicks28d: 0, spendThisMonthUsd: 0, budgetUsd: 50 },
+    summary: { publishedThisMonth: 0, top10: 0, clicks28d: 0, creditsUsedThisMonth: 0 },
     automation: { defaultMode: 'auto', opportunities: 'auto', autoStartLadders: false, maxActiveLadders: 2, maxWaiting: 3 },
     ...over,
   };
@@ -75,7 +75,7 @@ describe('pipeline notices', () => {
     expect(n.link?.reportId).toBe('rep-1');
   });
 
-  it('backlinks: a manual run is the month’s full report', () => {
+  it('backlinks: a manual run is the month\'s full report', () => {
     const [n] = pipelineNotices('backlinks', {}, data(), { now: NOW });
     expect(n.body).toContain('only watch for lost and spammy links');
     // run on the last day of the month: the next run is in a new month
@@ -160,7 +160,7 @@ describe('pipeline notices', () => {
     expect(off.body).toContain('Weekly blog posts are off');
   });
 
-  it('ladder: a main keyword that is almost the same search as another ladder’s main or page keyword needs a tick', () => {
+  it('ladder: a main keyword that is almost the same search as another ladder\'s main or page keyword needs a tick', () => {
     // near-duplicate of the main keyword
     const [near] = pipelineNotices('ladder', { keyword: 'e invoicing in the uae' }, data({ ladders: [{ ...data().ladders[0], head: 'e invoicing uae' }] }));
     expect(near.id).toBe('ladder-overlap:e invoicing in the uae');

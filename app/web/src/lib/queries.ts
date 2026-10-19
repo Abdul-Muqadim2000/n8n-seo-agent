@@ -1124,7 +1124,7 @@ export const useClients = (orgId: string, enabled = true) =>
 export function useCreateClient(orgId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { name: string; monthlyBudgetUsd?: number; website?: string }) => api<Org>(`/api/orgs/${orgId}/clients`, { method: 'POST', body }),
+    mutationFn: (body: { name: string; website?: string }) => api<Org>(`/api/orgs/${orgId}/clients`, { method: 'POST', body }),
     onSuccess: () => qc.invalidateQueries({ queryKey: agencyKey(orgId) }),
   });
 }

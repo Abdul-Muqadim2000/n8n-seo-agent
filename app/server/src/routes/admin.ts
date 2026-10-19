@@ -37,7 +37,7 @@ import { syncCosts } from '../services/admin/costSync';
 import { periodRange } from '../services/admin/period';
 import { activity, companiesCsv, companyAbsorbed, companyDetail, companyRows, overview, runsPage, userRows } from '../services/admin/reports';
 import { getSettings, saveSettings, settingsRow } from '../services/admin/settings';
-import { creditGuardTick, grantPlanCredits, requestView } from '../services/billing';
+import { alignExistingCompanies, creditGuardTick, grantPlanCredits, requestView } from '../services/billing';
 import { createUser, deleteUser, removeMembership, SET_PASSWORD_HOURS, setMembership, updateUser, userOrThrow } from '../services/admin/users';
 import { deleteCompany } from '../services/companyDelete';
 import { deleteUserSessions } from '../auth/session';
@@ -280,7 +280,7 @@ export async function adminRoutes(app: FastifyInstance) {
     const body = parse(adminDeleteCompanySchema, req.body ?? {});
     if (body.confirm !== org.slug) throw badRequest('Type the company slug to confirm', { confirm: `Type ${org.slug}` });
     if (org.kind === 'agency' && (await db.query.organizations.findFirst({ where: eq(schema.organizations.parentOrgId, org.id) })))
-      throw conflict('Delete this agency’s client workspaces first.', 'agency_has_clients');
+      throw conflict('Delete this agency\'s client workspaces first.', 'agency_has_clients');
     await deleteCompany(org, req.log);
     await adminAudit(req, 'company.deleted', { type: 'company', id: org.id, label: org.name }, { slug: org.slug, kind: org.kind });
     return { ok: true };
@@ -388,6 +388,12 @@ export async function adminRoutes(app: FastifyInstance) {
 
   // credits (app/docs/CREDITS.md): the guard's pass now, instead of at its next 10-minute tick — after confirming a payment, so the
   // company's paused schedules resume at once (also what scripts/credits_e2e.py drives)
+  // credits: bring the companies that are not on credits yet onto them as a new company would be (idempotent; app/docs/CREDITS.md)
+  app.post('/api/admin/credits/align', { config: { rateLimit: { max: 6, timeWindow: '1 minute' } } }, async (req) => {
+    const admin = guard(req);
+    return alignExistingCompanies(req.log, { actor: { userId: admin.id, email: admin.email } });
+  });
+
   app.post('/api/admin/credits/guard', { config: { rateLimit: { max: 6, timeWindow: '1 minute' } } }, async (req) => {
     guard(req);
     const r = await creditGuardTick(req.log);

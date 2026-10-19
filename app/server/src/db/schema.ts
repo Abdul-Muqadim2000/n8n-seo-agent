@@ -1115,7 +1115,7 @@ export const logSources = pgTable('log_sources', {
 });
 
 /**
- * One row per uploaded file or pushed batch: the job the background worker runs (queued → processing → done | failed). The bytes
+ * One row per uploaded file or pushed batch: the job the background worker runs (queued -> processing -> done | failed). The bytes
  * wait in a spool file on the server that received them (`host`, `spool_path`) and are deleted as soon as the job ends.
  */
 export const logIngests = pgTable(
@@ -1352,6 +1352,8 @@ export const platformSettings = pgTable('platform_settings', {
   packExpiryMonths: integer('pack_expiry_months').notNull().default(12),
   planRollover: boolean('plan_rollover').notNull().default(true),
   signupExpiryDays: integer('signup_expiry_days').notNull().default(90),
+  /** credits (0016): when the companies that existed before credits were brought onto them (welcome credits, enforcement), once */
+  creditsAlignedAt: ts('credits_aligned_at'),
 });
 
 /**

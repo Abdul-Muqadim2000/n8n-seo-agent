@@ -145,7 +145,9 @@ describe('keyword check', () => {
       existing_keywords: ['e invoicing in uae', 'peppol uae'],
     });
     const c = r.json();
-    expect(c).toMatchObject({ keyword: 'e invoicing software uae', country: 'United Arab Emirates', cached: false, costUsd: 0.042 });
+    // credits (app/docs/CREDITS.md): the customer reads the check's credits (3x $0.042 at $0.05 a credit), never its provider cost
+    expect(c).toMatchObject({ keyword: 'e invoicing software uae', country: 'United Arab Emirates', cached: false, credits: 2.52 });
+    expect(c).not.toHaveProperty('costUsd');
     expect(c.result).toMatchObject({ difficultyForYou: 'reachable', planType: 'short', months: '4-8', fit: 2, volume: 480, label: 'Reachable for your site · Short ladder · 4-8 months' });
     expect(st.checks.map((x) => [x.status, x.costUsd])).toEqual([['done', 0.042]]);
   });

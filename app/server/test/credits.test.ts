@@ -178,7 +178,7 @@ describe('quotes, holds and what a run is charged', () => {
     const r = await c().post(`/api/orgs/${ids.org}/runs`, verdict);
     expect(r.status).toBe(200);
     const run = (await db.query.runs.findFirst({ where: eq(schema.runs.orgId, ids.org) }))!;
-    expect(run.quotedCredits).toBe(12); // a verdict reserves $0.20 → 12 credits
+    expect(run.quotedCredits).toBe(12); // a verdict reserves $0.20 -> 12 credits
     expect((await c().get(`/api/orgs/${ids.org}/billing`)).body).toMatchObject({ held: 12, available: 188 });
     // the engine settles it at $0.50 — 30 credits — but it was quoted 12: 12 are charged, 18 absorbed
     await db.update(schema.runs).set({ status: 'completed', completedAt: new Date() }).where(eq(schema.runs.id, run.id));
@@ -210,7 +210,7 @@ describe('quotes, holds and what a run is charged', () => {
     // a later event of the failed run is recorded at 0
     await sync([engineRow({ id: 'q-e3', key: `parent:q-e2`, mode: 'verdict', usd: 0.2 })]);
     const later = (await db.query.creditLedger.findFirst({ where: eq(schema.creditLedger.refKey, 'cost:engine:q-e3') }))!;
-    expect(later.credits === 0 || later.credits === -0).toBe(true);
+    expect(Math.abs(later.credits)).toBe(0);
     expect(later.note).toMatch(/^Not charged: the run failed/);
   });
 
@@ -385,5 +385,61 @@ describe('the admin\'s credit book (the Credits / USD switch)', () => {
     expect(o.credits.book.used).toBeCloseTo(companies.reduce((t, x) => t + (x.credits.book as unknown as { used: number }).used, 0), 2);
     // a customer never reads the book
     expect((await c.get(`/api/admin/companies/${org.id}`)).status).toBe(403);
+  });
+});
+
+describe('companies from before credits are brought onto them (once, carefully)', () => {
+  it('welcome credits and enforcement as a new company gets them; never twice; a company that would start at or below zero, a client workspace or a disabled one is left counted only', async () => {
+    const legacy = { creditValueUsd: 0.05, markup: 3, signupCredits: 0, enforceForNewCompanies: false };
+    const now = { ...legacy, signupCredits: 200, enforceForNewCompanies: true };
+    // before credits: companies got nothing and were not enforced
+    await db.update(schema.platformSettings).set({ ...legacy, creditsAlignedAt: null });
+    const a = await company('old-a@align.test', 'Old A');
+    const b = await company('old-b@align.test', 'Old B');
+    const d = await company('old-d@align.test', 'Old D');
+    await db.update(schema.organizations).set({ disabled: true }).where(eq(schema.organizations.id, d.org.id));
+    const [client] = await db.insert(schema.organizations).values({ name: 'Old Client', slug: 'old-client-align', hookToken: 'hook-old-client-align', monthlyBudgetUsd: 25, kind: 'client', parentOrgId: a.org.id }).returning();
+    // B used 500 credits of work before credits were enforced
+    await addCreditEntry(db, { orgId: b.org.id, kind: 'usage', credits: -500, note: 'old usage', ref: { origin: 'autopilot' } });
+    for (const o of [a.org.id, b.org.id, d.org.id]) expect((await orgRow(o)).creditsEnforced).toBe(false);
+    expect(await lots(a.org.id)).toEqual([]);
+
+    // the deploy: today's settings, then the pass at server start
+    await db.update(schema.platformSettings).set(now);
+    const r = await billing.alignExistingCompanies(log, { auto: true });
+    expect(r.ran).toBe(true);
+    const ids = (xs: { id: string }[]) => xs.map((x) => x.id);
+    expect(ids(r.granted)).toEqual(expect.arrayContaining([a.org.id, b.org.id]));
+    expect(ids(r.granted)).not.toContain(client.id); // a client workspace's credits come from its agency, as for new ones
+    expect(ids(r.granted)).not.toContain(d.org.id); // disabled
+    expect(ids(r.enforced)).toContain(a.org.id);
+    expect(r.leftCountedOnly).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: b.org.id, balance: -300, reason: expect.stringMatching(/would pause its schedules/) }),
+        expect.objectContaining({ id: client.id, reason: expect.stringMatching(/client workspace/) }),
+        expect.objectContaining({ id: d.org.id }),
+      ]),
+    );
+    // A: 200 welcome credits valid 90 days, enforced; B: its welcome credits paid its debt first, left counted only
+    expect((await orgRow(a.org.id)).creditsEnforced).toBe(true);
+    const [lotA] = await lots(a.org.id);
+    expect(lotA).toMatchObject({ source: 'signup', credits: 200, remaining: 200 });
+    expect(Math.round((lotA.expiresAt!.getTime() - Date.now()) / DAY)).toBe(90);
+    expect((await orgRow(b.org.id)).creditsEnforced).toBe(false);
+    expect(await creditBalance(db, b.org.id)).toBe(-300);
+    expect((await lots(b.org.id))[0]).toMatchObject({ credits: 200, remaining: 0 });
+    expect((await orgRow(client.id)).creditsEnforced).toBe(false);
+    // companies that were already on credits keep what they had (their welcome credits are never granted again)
+    expect(ids(r.granted)).not.toContain((await db.query.organizations.findFirst({ where: eq(schema.organizations.name, 'New Co') }))!.id);
+    // recorded for the admin
+    const logged = await db.query.adminAudit.findFirst({ where: eq(schema.adminAudit.action, 'credits.aligned') });
+    expect(logged).toMatchObject({ actorEmail: 'system', targetType: 'platform' });
+
+    // once: the next server start does nothing; an admin's re-run grants and changes nothing twice
+    expect((await billing.alignExistingCompanies(log, { auto: true })).ran).toBe(false);
+    const again = (await boss.post('/api/admin/credits/align')).body;
+    expect(again).toMatchObject({ ran: true, granted: [], enforced: [] });
+    expect((await lots(a.org.id)).filter((l) => l.source === 'signup')).toHaveLength(1);
+    expect((await signUp(app, 'nosy@align.test')).c ? (await (await signUp(app, 'nosy2@align.test')).c.post('/api/admin/credits/align')).status : 0).toBe(403);
   });
 });

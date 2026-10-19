@@ -41,6 +41,7 @@ import { actionFromApiBody } from './recommendations';
 import { filesFor, toReport } from './runs';
 import { quoteCredits } from './billing';
 import { customerError } from '../lib/customerError';
+import { creditsOfUsd } from './admin/settings';
 
 // Keyword ladders on the Pipeline page (PIPELINE_FEATURE_SPEC.md §4, §6, §8): one card per ladder and its detail (the climb,
 // timeline, results), built from the n8n Data Tables of the website (seo_ladders, seo_rank_history, seo_content_log,
@@ -538,7 +539,8 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
     const next = nextStep(status, b.mode, pages, mine, sched, counts.waiting, { approve, nextPage: plan?.nextOf.get(b.id), planned: !!plan, fixes });
     const kwCount = new Set([b.head, ...pages.map((p) => p.keyword)].map(norm)).size;
     const monthWrites = mine.filter((m) => Date.parse(m.at!) <= now + 28 * 864e5).length;
-    const monthlyCostUsd = round2(LADDER_COSTS.rankCheckEach * kwCount * MONITOR_COSTS.weeksPerMonth + monthWrites * MONITOR_COSTS.blogPostEach);
+    // credits (app/docs/CREDITS.md): the month's rank checks and pages at the platform's credit rate
+    const monthlyCredits = creditsOfUsd(LADDER_COSTS.rankCheckEach * kwCount * MONITOR_COSTS.weeksPerMonth + monthWrites * MONITOR_COSTS.blogPostEach);
     const mainRow = b.rows.find((r) => n(r.rung) === 4) ?? b.rows[b.rows.length - 1];
 
     const card: LadderCard = {
@@ -559,7 +561,7 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
       top3: ranked.filter((p) => p <= 3).length,
       next,
       months: s(mainRow?.months) || (b.plan?.months ?? ''),
-      monthlyCostUsd,
+      monthlyCredits,
       overlaps: overlaps.get(b.id) ?? [],
     };
     cards.push(card);
@@ -596,7 +598,7 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
     const keywords = new Set(pages.map((p) => norm(p.keyword)));
     const cadencePages = src.logs.filter((l) => s(l.request_id).startsWith('cad_') && (s(l.ladder_id) === b.id || keywords.has(norm(l.keyword)))).length;
     const checks = src.history.filter((h) => h.ladder_id === b.id).length;
-    const costSoFarUsd = round2(
+    const creditsSoFar = creditsOfUsd(
       appRuns.reduce((t, r) => t + r.costUsd, 0) +
         (appRuns.some((r) => r.mode === 'ladder') ? 0 : MODES.ladder.costUsd) +
         cadencePages * MONITOR_COSTS.blogPostEach +
@@ -609,7 +611,7 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
       timeline: ev,
       traffic: traffic(new Set(pages.filter((p) => p.publishedUrl).map((p) => urlKey(p.publishedUrl)))),
       reports: [],
-      costSoFarUsd,
+      creditsSoFar,
       expectedVisitsTop3: samePlan?.expectedVisitsTop3 ?? null,
       // G12 / G29 (2026-10-13): the chart marks, the page-change readings and the lineage are added by ladderDetailData, which holds
       // the content log, the query history and the audits this build does not

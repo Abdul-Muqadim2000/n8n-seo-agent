@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Activity, ArrowRight, CheckCircle2, Hand, Hourglass, Inbox, Loader2, PenSquare, Plus, TrendingUp } from 'lucide-react';
 import { normKeyword, type LadderCard, type PipelineData, type SiteAutomation } from '@seo/shared';
-import { creditsLabel } from '@/lib/credits';
+import { formatCredits } from '@/lib/credits';
 import { ButtonLink } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/feedback';
@@ -218,7 +218,7 @@ function LadderCardView({ card: c, rank, controls }: { card: LadderCard; rank: n
           </Fact>
           <Fact label="Credits" className="col-span-2 sm:col-span-1">
             <span className="text-[13px] text-ink">
-              <span className="font-semibold">{creditsLabel(c.monthlyCostUsd)}</span>
+              <span className="font-semibold">{formatCredits(c.monthlyCredits)}</span>
               <span className="text-ink-3"> a month</span>
             </span>
           </Fact>

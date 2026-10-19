@@ -216,12 +216,12 @@ export function refusalMessage(c: CreditCheck, what: string, limits: CreditLimit
   const w = what.toLowerCase();
   const need = formatCredits(c.needed);
   if (c.reason === 'on_demand_limit')
-    return `${what} (about ${need}) would go over your company's on-demand limit of ${formatCredits(limits.onDemandMonthly ?? 0)} this month (${formatCredits(used)} used${c.held > 0 ? `, ${formatCredits(c.held)} held by analyses still running` : ''}). An owner can raise the limit in Settings → Credits.`;
+    return `${what} (about ${need}) would go over your company's on-demand limit of ${formatCredits(limits.onDemandMonthly ?? 0)} this month (${formatCredits(used)} used${c.held > 0 ? `, ${formatCredits(c.held)} held by analyses still running` : ''}). An owner can raise the limit in Settings > Credits.`;
   if (c.reason === 'reserve')
-    return `${what} needs about ${need}, but ${formatCredits(c.reserved)} of your balance is kept for your websites' automatic work for the rest of the month. Buy credits in Settings → Credits, or let on-demand analyses use those credits there.`;
+    return `${what} needs about ${need}, but ${formatCredits(c.reserved)} of your balance is kept for your websites' automatic work for the rest of the month. Buy credits in Settings > Credits, or let on-demand analyses use those credits there.`;
   return c.available > 0 || c.held > 0
-    ? `Not enough credits for ${w}: it needs about ${need} and ${formatCredits(c.available)} ${c.available === 1 ? 'is' : 'are'} available${c.held > 0 ? ` (${formatCredits(c.held)} more are held by analyses still running)` : ''}. Buy credits in Settings → Credits.`
-    : `Your company has no credits left for ${w} (it needs about ${need}). Buy credits in Settings → Credits.`;
+    ? `Not enough credits for ${w}: it needs about ${need} and ${formatCredits(c.available)} ${c.available === 1 ? 'is' : 'are'} available${c.held > 0 ? ` (${formatCredits(c.held)} more are held by analyses still running)` : ''}. Buy credits in Settings > Credits.`
+    : `Your company has no credits left for ${w} (it needs about ${need}). Buy credits in Settings > Credits.`;
 }
 
 /** The check inside the transaction that holds the company's lock: throws 402 with the credits it needs. */
@@ -506,9 +506,82 @@ async function owners(orgId: string): Promise<string[]> {
 const NOTICE: Record<Exclude<CreditStatus, 'ok'>, { subject: string; line: (st: CreditState) => string }> = {
   low: { subject: 'Your credits will run out within a week', line: (st) => `You have ${formatCredits(st.available)} available and use about ${formatCredits(st.dailyBurn)} a day, so they last about ${Math.floor(st.available / st.dailyBurn)} more days.` },
   critical: { subject: 'Your credits run out in the next few days', line: (st) => `You have ${formatCredits(st.available)} available and use about ${formatCredits(st.dailyBurn)} a day. When they run out, your websites' automatic work pauses until credits are added.` },
-  empty: { subject: 'You are out of credits', line: () => 'Your company has no credits left. New analyses are refused and your websites’ automatic work pauses until credits are added.' },
+  empty: { subject: 'You are out of credits', line: () => 'Your company has no credits left. New analyses are refused and your websites\' automatic work pauses until credits are added.' },
   paused: { subject: 'Automatic work is paused: out of credits', line: (st) => `The automatic work of ${st.sites.filter((x) => x.pausedForCredits).map((x) => x.domain).join(', ')} is paused. It resumes by itself as soon as credits are added; nothing is lost but the weeks it misses.` },
 };
+
+export interface AlignResult {
+  /** false when it had already run (the automatic pass runs once) */
+  ran: boolean;
+  granted: { id: string; name: string; credits: number }[];
+  enforced: { id: string; name: string; balance: number }[];
+  /** left counted only, with why: an admin decides */
+  leftCountedOnly: { id: string; name: string; balance: number; reason: string }[];
+}
+
+/**
+ * Brings the companies that existed before credits onto them, exactly as a company signing up today is (app/docs/CREDITS.md §1): the
+ * welcome credits (never twice — the same `signup:<company>` key a new company's grant uses; never to an agency's client workspace or a
+ * disabled company, as for new ones) and credits enforced. Careful by design:
+ *   - it follows the platform settings as they are: no welcome credits when they are 0, no enforcement when new companies are not
+ *     enforced;
+ *   - a company is enforced only when it starts with credits (balance > 0 after its welcome credits): one that would start at or below
+ *     zero is left counted only and named in the admin log, because enforcing it would pause its websites' schedules at once;
+ *   - every step is idempotent, so it can run again (POST /api/admin/credits/align) without granting or changing anything twice.
+ * `auto` = the pass at server start: it runs once (`platform_settings.credits_aligned_at`) and is written to the admin log as "system".
+ */
+export async function alignExistingCompanies(log: Log, opts: { auto?: boolean; actor?: { userId: string | null; email: string }; now?: Date } = {}): Promise<AlignResult> {
+  const now = opts.now ?? new Date();
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('alaventra.credits_align'))`);
+    const s = await settingsRow(tx);
+    const out: AlignResult = { ran: false, granted: [], enforced: [], leftCountedOnly: [] };
+    if (opts.auto && s.creditsAlignedAt) return out;
+    out.ran = true;
+    const orgs = await tx.query.organizations.findMany({ where: sql`${schema.organizations.createdAt} <= ${tsv(now)}` });
+    for (const org of orgs) {
+      if (s.signupCredits > 0 && org.kind !== 'client' && !org.disabled) {
+        const row = await addCreditEntry(tx, {
+          orgId: org.id,
+          kind: 'grant',
+          credits: s.signupCredits,
+          paidUsd: 0,
+          note: 'Welcome credits',
+          ref: { source: 'signup' },
+          refKey: `signup:${org.id}`,
+          lot: { source: 'signup', expiresAt: s.signupExpiryDays > 0 ? new Date(now.getTime() + s.signupExpiryDays * DAY) : null },
+        });
+        if (row) out.granted.push({ id: org.id, name: org.name, credits: row.credits });
+      }
+      if (s.enforceForNewCompanies && !org.creditsEnforced) {
+        const balance = await creditBalance(tx, org.id);
+        if (balance > 0) {
+          await tx.update(schema.organizations).set({ creditsEnforced: true }).where(eq(schema.organizations.id, org.id));
+          out.enforced.push({ id: org.id, name: org.name, balance });
+        } else
+          out.leftCountedOnly.push({
+            id: org.id,
+            name: org.name,
+            balance,
+            reason: org.kind === 'client' ? 'an agency client workspace with no credits of its own' : 'no credits to start with: enforcing would pause its schedules at once',
+          });
+      }
+    }
+    if (opts.auto) await tx.update(schema.platformSettings).set({ creditsAlignedAt: now }).where(eq(schema.platformSettings.id, 1));
+    await tx.insert(schema.adminAudit).values({
+      actorUserId: opts.actor?.userId ?? null,
+      actorEmail: opts.actor?.email ?? 'system',
+      action: 'credits.aligned',
+      targetType: 'platform',
+      targetId: null,
+      targetLabel: 'existing companies brought onto credits',
+      details: { granted: out.granted, enforced: out.enforced, leftCountedOnly: out.leftCountedOnly, signupCredits: s.signupCredits, enforceForNewCompanies: s.enforceForNewCompanies },
+    });
+    if (out.granted.length || out.enforced.length || out.leftCountedOnly.length)
+      log.info({ granted: out.granted.length, enforced: out.enforced.length, leftCountedOnly: out.leftCountedOnly.length }, 'existing companies brought onto credits');
+    return out;
+  });
+}
 
 type GuardResult = { granted: number; expired: number; paused: number; resumed: number; notices: number };
 let guardInFlight: Promise<GuardResult> | null = null;
@@ -561,7 +634,7 @@ async function guardPass(log: Log, now: Date): Promise<GuardResult> {
         if ((worse && level !== 'ok') || resumed) {
           const n = level !== 'ok' && worse ? NOTICE[level as Exclude<CreditStatus, 'ok'>] : null;
           const subject = n ? n.subject : 'Automatic work has resumed';
-          const line = n ? n.line(st) : 'Credits were added, so your websites’ automatic work runs again from its next scheduled time.';
+          const line = n ? n.line(st) : 'Credits were added, so your websites\' automatic work runs again from its next scheduled time.';
           for (const to of await owners(org.id)) {
             await sendMail({ to, subject: `${subject} · ${org.name}`, lines: [line], action: { label: 'Open Credits', url: `${config.appUrl}/o/${org.id}/settings/credits` } }, log).catch(() => false);
             out.notices++;

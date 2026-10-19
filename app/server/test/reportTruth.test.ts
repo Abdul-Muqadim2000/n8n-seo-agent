@@ -182,7 +182,7 @@ describe('R113 — the site report\'s list line follows its own significance tes
 });
 
 describe('R104 — the Pipeline\'s last run is the schedule\'s own fire; on-demand runs and missed fires are named', () => {
-  const auto = (o: Partial<AutomationStatus>): AutomationStatus => ({ id: 'rank_tracker', state: 'on', reason: null, nextRunAt: '2026-10-19T12:00:00.000Z', lastRunAt: '2026-10-15T19:48:00.000Z', lastResult: '0 ladder pages in the top 10', lastReportId: 'r', monthlyCostUsd: 0.1, detail: null, ...o });
+  const auto = (o: Partial<AutomationStatus>): AutomationStatus => ({ id: 'rank_tracker', state: 'on', reason: null, nextRunAt: '2026-10-19T12:00:00.000Z', lastRunAt: '2026-10-15T19:48:00.000Z', lastResult: '0 ladder pages in the top 10', lastReportId: 'r', monthlyCredits: 0.1, detail: null, ...o });
 
   it('only an on-demand run since the Monday due time: no last run, "scheduled run missed", and the run named as on demand', () => {
     const [a] = withScheduleTruth([auto({})], { SEOagentTracker1: [{ id: 'i', workflowId: 'SEOagentTracker1', status: 'success', startedAt: '2026-10-15T19:48:00.000Z', mode: 'integrated' }] }, 'America/New_York', new Date('2026-10-15T20:00:00Z'));

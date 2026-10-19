@@ -423,7 +423,7 @@ function CheckResult({ check, ladders, onChoose, onCheck }: { check: KeywordChec
         primary
         footer={
           <p className="mt-3 text-xs text-ink-3">
-            {check.cached ? `Checked on ${fmtDate(check.createdAt)}: shown again for free.` : `Checked just now (${creditsLabel(check.costUsd)}).`}
+            {check.cached ? `Checked on ${fmtDate(check.createdAt)}: shown again for free.` : `Checked just now (${formatCredits(check.credits)}).`}
             {r.reach != null && ` Your website already wins searches up to difficulty ${r.reach}.`}
             {r.fit === 2 ? ' On your topic.' : r.fit === 1 ? ' Related to your business.' : r.fit == null ? ' The topic check was not available this time.' : ''}
           </p>

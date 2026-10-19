@@ -44,7 +44,7 @@ import {
 import { config } from '../config';
 import { db } from '../db';
 import { monthStartUtc, usageSince } from './billing';
-import { settingsRow } from './admin/settings';
+import { creditsOfUsd, settingsRow } from './admin/settings';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { notFound } from '../lib/errors';
 import { executions, rows as n8nRows, siteRows, type ExecutionSummary } from '../n8n/client';
@@ -496,7 +496,7 @@ export async function sitePageInventory(
 
 async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: PipelineData; ladders: LadderBuild; rows: { logs: ContentLogRow[]; queries: QueryRow[]; audits: AuditPoint[] } }> {
   const d = site.domain;
-  const [x, ladders, queries, trends, logs, history, settingsRows, app, spent, cadenceReport, recentReports, running, aiTargets, sitePages] = await Promise.all([
+  const [x, ladders, queries, trends, logs, history, settingsRows, app, , cadenceReport, recentReports, running, aiTargets, sitePages] = await Promise.all([
     loadBundle(org, site),
     siteRows<LadderRow>('ladders', d, { max: 1000 }),
     siteRows<QueryRow>('queryHistory', d, { sortBy: 'period_end:desc', max: 4000 }),
@@ -507,7 +507,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     // created by n8n in Phase 2: missing (or unreadable) means every ladder runs with the defaults
     siteRows<LadderSettingsRow>('ladderSettings', d, { max: 500 }).catch(() => [] as LadderSettingsRow[]),
     ladderAppSources(org, site),
-    monthSpend(org.id),
+    settingsRow(), // credits: refreshes the cached credit rate the builders below price in (services/admin/settings.ts)
     latestReport(org.id, site.id, ['content_cadence']),
     reportsList(org.id, { siteId: site.id, limit: 60 }),
     scheduledRunning(),
@@ -541,7 +541,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
   const cadenceLogs = logs.filter((l) => String(l.request_id || '').startsWith('cad_'));
   const snap = x.search.snapshot;
 
-  const base = (id: AutomationId, on: boolean, reason: string | null, extra: Partial<AutomationStatus>): AutomationStatus => {
+  const base = (id: AutomationId, on: boolean, reason: string | null, { monthlyUsd, ...extra }: Partial<Omit<AutomationStatus, 'monthlyCredits'>> & { monthlyUsd?: number }): AutomationStatus => {
     const info = AUTOMATIONS.find((a) => a.id === id)!;
     const state: AutomationStatus['state'] = !verified || status === 'not_started' ? 'needs_setup' : status === 'paused' ? 'paused' : on ? 'on' : 'off';
     return {
@@ -554,7 +554,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       lastReportId: null,
       detail: null,
       ...extra,
-      monthlyCostUsd: Math.round((extra.monthlyCostUsd ?? 0) * 100) / 100,
+      monthlyCredits: creditsOfUsd(monthlyUsd ?? 0), // the builders below give the month's provider cost; the customer reads credits
     };
   };
 
@@ -572,28 +572,28 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       lastRunAt: lastIso(lastAi?.checkedAt, aiReport?.receivedAt),
       lastResult: lastAi ? `Named in ${formatPercent(lastAi.mentionRate, 0)} of ${lastAi.answers} answers · share of voice ${formatPercent(lastAi.shareOfVoice, 0)}` : null,
       lastReportId: aiReport?.id ?? null,
-      monthlyCostUsd: m?.aiVisibility === false ? 0 : (() => { const c = estimateAiVisibilityCost({ prompts: m?.aiPromptsMax, engines: m?.aiEngines, pulse: m?.aiPulse }); return c.weekly + c.fullRun; })(),
+      monthlyUsd: m?.aiVisibility === false ? 0 : (() => { const c = estimateAiVisibilityCost({ prompts: m?.aiPromptsMax, engines: m?.aiEngines, pulse: m?.aiPulse }); return c.weekly + c.fullRun; })(),
       detail: m ? `${m.aiPromptsMax} questions · ${m.aiEngines.length} engines` : `${AI_PROMPTS_DEFAULT} questions · 6 engines (defaults)`,
     }),
     base('ai_pulse', (m?.aiVisibility ?? true) && (m?.aiPulse ?? true), m?.aiVisibility === false ? 'AI visibility is switched off' : 'The daily pulse is switched off in the monitor settings', {
       lastRunAt: pulseLastRun(x.ai.daily as { date: string; checkedAt?: string }[]),
       lastResult: x.ai.daily.length ? (() => { const dd = x.ai.daily[x.ai.daily.length - 1]; return `Named in ${formatPercent(dd.mentionRate, 0)} of ${dd.samples} answers${dd.alerts.length ? ` · ${dd.alerts.length} alert(s)` : ''}`; })() : null,
       lastReportId: reportOf(['ai_pulse'])?.id ?? null,
-      monthlyCostUsd: m?.aiVisibility === false || m?.aiPulse === false ? 0 : estimateAiVisibilityCost({ prompts: m?.aiPromptsMax, engines: m?.aiEngines, pulse: true }).pulse,
+      monthlyUsd: m?.aiVisibility === false || m?.aiPulse === false ? 0 : estimateAiVisibilityCost({ prompts: m?.aiPromptsMax, engines: m?.aiEngines, pulse: true }).pulse,
       detail: `ChatGPT, Gemini and Google AI Mode · ${pulseQuestions} questions a day`,
     }),
     base('ai_growth', (m?.aiVisibility ?? true) && (m?.aiGrowth ?? true), m?.aiVisibility === false ? 'AI visibility is switched off' : 'The AI growth loop is switched off in the monitor settings', {
       lastRunAt: lastIso(x.ai.growth?.checkedAt, reportOf(['ai_growth'])?.receivedAt),
       lastResult: x.ai.growth ? `${x.ai.growth.submitted.bing.submitted + x.ai.growth.submitted.indexnow.submitted} page(s) sent to Bing / IndexNow · ${x.ai.growth.pagesChecked} checked${x.ai.growth.avgScore != null ? ` (avg ${x.ai.growth.avgScore}/100)` : ''} · ${x.ai.growth.earned.length} pages AI cites without you` : null,
       lastReportId: reportOf(['ai_growth'])?.id ?? null,
-      monthlyCostUsd: m?.aiVisibility === false || m?.aiGrowth === false ? 0 : estimateAiGrowthCost({ pages: m?.aiPagesPerMonth }).total,
+      monthlyUsd: m?.aiVisibility === false || m?.aiGrowth === false ? 0 : estimateAiGrowthCost({ pages: m?.aiPagesPerMonth }).total,
       detail: `${m?.aiPagesPerMonth ?? 2} AI answer page(s) a month · Bing / IndexNow · earned-media drafts`,
     }),
     base('link_builder', m?.linkBuilder ?? true, 'The Link Builder is switched off in the monitor settings', {
       lastRunAt: reportOf(['link_builder'])?.receivedAt ?? null,
       lastResult: (() => { const r = reportOf(['link_builder']); const sm = (r?.summary ?? {}) as Record<string, unknown>; return r ? `${Number(sm.drafted) || 0} pitch(es) drafted · ${Number(sm.press) || 0} journalist request(s) · ${Number(sm.listingsMissing) || 0} listing(s) missing` : null; })(),
       lastReportId: reportOf(['link_builder'])?.id ?? null,
-      monthlyCostUsd: m?.linkBuilder === false ? 0 : MONITOR_COSTS.linkBuilderMonthly,
+      monthlyUsd: m?.linkBuilder === false ? 0 : MONITOR_COSTS.linkBuilderMonthly,
       detail: 'Up to 10 drafted sequences a week · sent from your mailbox after approval',
     }),
     base('backlinks', m?.backlinks ?? true, 'Switched off in the monitor settings', {
@@ -601,7 +601,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       // R112: the merged count (every source) where the snapshot has one, never DataForSEO's index count shown as "the" count
       lastResult: lastBl ? `${lastBl.unionDomains ?? lastBl.referringDomains} ${lastBl.unionDomains != null ? 'linking sites (all sources)' : 'referring domains (DataForSEO)'} · ${lastBl.lostLinks} lost · ${lastBl.newLinks} new` : null,
       lastReportId: blReport?.id ?? null,
-      monthlyCostUsd: m?.backlinks === false ? 0 : MONITOR_COSTS.backlinksMonthly,
+      monthlyUsd: m?.backlinks === false ? 0 : MONITOR_COSTS.backlinksMonthly,
       detail: x.backlinks.prospects.length ? `${x.backlinks.prospects.filter((p) => p.status === 'new').length} new link prospects` : null,
     }),
     base('rank_tracker', x.rankings.ladders.length > 0, 'No keyword ladder yet: plan one with "Rank my site for a keyword"', {
@@ -610,28 +610,28 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
         ? `${x.rankings.ladders.reduce((t, l) => t + l.rungs.filter((r) => r.latestPosition != null && r.latestPosition > 0 && r.latestPosition <= 10).length, 0)} ladder pages in the top 10`
         : null,
       lastReportId: rtReport?.id ?? null,
-      monthlyCostUsd: x.rankings.ladders.length ? 0.1 : 0,
+      monthlyUsd: x.rankings.ladders.length ? 0.1 : 0,
       detail: x.rankings.ladders.length ? `${x.rankings.ladders.length} ladder(s) · ${x.rankings.ladders.reduce((t, l) => t + l.pages, 0)} pages` : null,
     }),
     base('site_tracker', true, null, {
       lastRunAt: lastIso(x.settings.tracking.lastRunAt, stReport?.receivedAt),
       lastResult: snap?.gsc.current ? `${snap.gsc.current.clicks} clicks · ${snap.gsc.current.impressions} impressions (28 days)` : x.settings.tracking.lastStatus,
       lastReportId: stReport?.id ?? null,
-      monthlyCostUsd: MONITOR_COSTS.siteTrackerMonthly,
+      monthlyUsd: MONITOR_COSTS.siteTrackerMonthly,
       detail: `${x.settings.tracking.keywords.length} tracked keywords${x.settings.tracking.gscProperty ? ' · Search Console' : ''}${x.settings.tracking.ga4PropertyId ? ' · GA4' : ''}`,
     }),
     base('content_cadence', pagesPerWeek > 0, 'Blog posts per week is 0', {
       lastRunAt: lastIso(cadenceLogs[0]?.started_at, cadenceReport?.report.receivedAt),
       lastResult: cadenceLogs.length ? `${cadenceLogs.length} post(s) written by the cadence · ${cadenceLogs.filter((l) => l.status === 'published').length} published` : null,
       lastReportId: cadenceReport?.report.id ?? null,
-      monthlyCostUsd: pagesPerWeek * MONITOR_COSTS.weeksPerMonth * MONITOR_COSTS.blogPostEach,
+      monthlyUsd: pagesPerWeek * MONITOR_COSTS.weeksPerMonth * MONITOR_COSTS.blogPostEach,
       detail: pagesPerWeek ? `${pagesPerWeek} post(s) every Monday` : null,
     }),
     base('audit', m?.auditMonthly ?? true, 'Switched off in the monitor settings', {
       lastRunAt: lastIso(lastAudit?.auditedAt, auReport?.receivedAt),
       lastResult: lastAudit ? `Health ${lastAudit.healthScore}/100 (${lastAudit.grade}) · ${lastAudit.findings} findings` : null,
       lastReportId: auReport?.id ?? null,
-      monthlyCostUsd: m?.auditMonthly === false ? 0 : MONITOR_COSTS.auditMonthly,
+      monthlyUsd: m?.auditMonthly === false ? 0 : MONITOR_COSTS.auditMonthly,
       detail: m ? `up to ${m.auditPages} pages${m.auditJs ? ' · JavaScript' : ''}` : 'up to 200 pages',
     }),
   ];
@@ -765,7 +765,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     },
     calendar,
     activity: recentReports.filter((r) => r.scheduled).slice(0, 15),
-    monthlyCostUsd: Math.round(automations.filter((a) => a.state === 'on').reduce((t, a) => t + a.monthlyCostUsd, 0) * 100) / 100,
+    monthlyCredits: Math.round(automations.filter((a) => a.state === 'on').reduce((t, a) => t + a.monthlyCredits, 0) * 100) / 100,
     // a schedule run covers this website only while its automation is on for it
     running: runningHere,
     activeRuns: ownRuns,
@@ -779,9 +779,6 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       top10,
       clicks28d: build.clicks28d,
       creditsUsedThisMonth: creditsUsed,
-      // deprecated (credits, app/docs/CREDITS.md): provider cost; the pipeline page reads `creditsUsedThisMonth`
-      spendThisMonthUsd: Math.round(spent * 100) / 100,
-      budgetUsd: 0,
     },
     automation: build.automation,
     detected: detectedFeed(app.detected ?? [], build.cards),

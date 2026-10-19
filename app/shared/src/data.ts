@@ -452,8 +452,6 @@ export interface AiRun {
   aioCitationRate: number;
   /** credits (app/docs/CREDITS.md): the credits this run used, from its provider cost at the platform's settings */
   credits: number;
-  /** @deprecated provider cost — pages read `credits`; removed once none reads it */
-  costUsd: number;
   alerts: string[];
   /** v4.9 (0 / null on runs before v4.9) */
   runKind: string;
@@ -718,8 +716,6 @@ export interface BacklinkSnapshot {
   spammyNew: number;
   /** credits (app/docs/CREDITS.md): the credits this check used, from its provider cost at the platform's settings */
   credits: number;
-  /** @deprecated provider cost — pages read `credits`; removed once none reads it */
-  costUsd: number;
   /** v4.10: referring sites from every source (null before v4.10) */
   unionDomains: number | null;
   bestLinks: number | null;
@@ -976,7 +972,8 @@ export interface AutomationStatus {
   /** one line about the last run, e.g. "29 clicks · +53%" */
   lastResult: string | null;
   lastReportId: string | null;
-  monthlyCostUsd: number;
+  /** credits (app/docs/CREDITS.md): about how many credits a month, at the platform's credit rate */
+  monthlyCredits: number;
   /** extra facts, e.g. "8 questions · 6 engines" */
   detail: string | null;
 }
@@ -1033,7 +1030,8 @@ export interface PipelineData {
   };
   calendar: { at: string; automation: import('./constants').AutomationId }[];
   activity: Report[];
-  monthlyCostUsd: number;
+  /** credits (app/docs/CREDITS.md): about how many credits a month, at the platform's credit rate */
+  monthlyCredits: number;
   /** automatic runs n8n's schedule started and is still executing (they cover every website, this one included) */
   running: { automation: import('./constants').AutomationId; startedAt: string }[];
   /** this website's runs started in the app that have not finished */
@@ -1154,7 +1152,8 @@ export interface LadderCard {
   next: { kind: 'write' | 'publish' | 'approve' | 'check' | 'wait' | 'none'; text: string; at: string | null };
   /** expected months from the plan, e.g. "9-12", '' when unknown */
   months: string;
-  monthlyCostUsd: number;
+  /** credits (app/docs/CREDITS.md): about how many credits a month, at the platform's credit rate */
+  monthlyCredits: number;
   overlaps: LadderOverlap[];
 }
 
@@ -1175,7 +1174,8 @@ export interface LadderDetail extends LadderCard {
   /** clicks / impressions of the ladder's published pages (Search Console, by page URL) */
   traffic: { points: { periodEnd: string; clicks: number; impressions: number }[]; clicks28d: number; impressions28d: number };
   reports: Report[];
-  costSoFarUsd: number;
+  /** about how many credits this ladder has used so far (its runs, its pages, its rank checks) */
+  creditsSoFar: number;
   expectedVisitsTop3: number | null;
   /** G12: the events marked on this ladder's charts — its pages going live, audit fixes, Google updates, data breaks */
   annotations: ChartAnnotation[];
@@ -1214,11 +1214,7 @@ export interface PipelineSummary {
   /** clicks of all ladder pages, last 28 days */
   clicks28d: number;
   /** credits (app/docs/CREDITS.md): the credits the company used this calendar month (autopilot + on-demand) */
-  creditsUsedThisMonth?: number;
-  /** @deprecated provider cost — the web switches to `creditsUsedThisMonth`; removed once no page reads it */
-  spendThisMonthUsd: number;
-  /** @deprecated the platform's dollar guard (0 unless a platform admin) — removed once no page reads it */
-  budgetUsd: number;
+  creditsUsedThisMonth: number;
 }
 
 export interface SiteAutomation {

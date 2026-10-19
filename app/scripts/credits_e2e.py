@@ -14,13 +14,14 @@ sync, never above its quote) → a schedule's work as autopilot → credits kept
 → a failed run not charged → out of credits: the guard pauses the website's schedules (the stand-in's Site Admin sees it) → Buy credits
 → the admin confirms it → the guard resumes them → the activity and its CSV → and a sweep of every customer answer for provider cost.
 The test company, its people and the admin are deleted at the end and the platform settings restored."""
-import argparse, json, secrets, subprocess, sys, time, urllib.request
+import argparse, json, re, secrets, subprocess, sys, time, urllib.request
 from api import Api
 
 p = argparse.ArgumentParser()
 p.add_argument('--base', default='http://localhost:4000')
 p.add_argument('--stub', default='http://localhost:18099')
 p.add_argument('--db', default='seo-platform-dev-db-1')
+p.add_argument('--dbname', default='seo')
 p.add_argument('--admin', default='credits-admin@example.org')
 args = p.parse_args()
 TAG = secrets.token_hex(3)
@@ -34,7 +35,7 @@ def check(label, cond, detail=''):
 
 
 def sql(q):
-    r = subprocess.run(['docker', 'exec', args.db, 'psql', '-U', 'seo', '-d', 'seo', '-tAc', q], capture_output=True, text=True)
+    r = subprocess.run(['docker', 'exec', args.db, 'psql', '-U', 'seo', '-d', args.dbname, '-tAc', q], capture_output=True, text=True)
     if r.returncode:
         raise RuntimeError(r.stderr)
     return r.stdout.strip()
@@ -146,7 +147,7 @@ try:
     started = stub('GET', '/__started')['data'][-1]
     rid = sql(f"select request_id from runs where id = '{run['id']}'")
     exec1 = f'e2e-{TAG}-1'
-    hook = urllib.request.Request(started['callback_url'].replace('http://server:4000', args.base).replace('http://host.docker.internal:4000', args.base),
+    hook = urllib.request.Request(re.sub(r'^https?://[^/]+', args.base, started['callback_url']),  # the engine's callback, sent from here
                                   data=json.dumps({'status': 'completed', 'stage': 'content', 'request_id': rid, 'execution_id': exec1, 'keyword': 'crm', 'run_ledger': {'dataforseo_usd': 0.04, 'ai_usd': 0.06, 'run_id': exec1}}).encode(),
                                   method='POST', headers={'content-type': 'application/json'})
     with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(hook, timeout=20) as h:

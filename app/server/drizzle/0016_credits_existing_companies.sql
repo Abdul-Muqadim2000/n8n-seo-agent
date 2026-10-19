@@ -1,0 +1,1 @@
+ALTER TABLE "platform_settings" ADD COLUMN "credits_aligned_at" timestamp with time zone;

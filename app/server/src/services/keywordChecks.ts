@@ -21,6 +21,7 @@ import { namesProviderCost } from '../lib/customerError';
 import { assessCall, siteRows, type AssessCallResult } from '../n8n/client';
 import { dropCheck, findRecentCheck, finishCheck, reserveCheck } from './keywordCheckStore';
 import { latestReport } from './runs';
+import { creditsOfUsd } from './admin/settings';
 
 // The "New keyword ladder" flow (PIPELINE_FEATURE_SPEC.md §5): the keyword check of one typed keyword (n8n's Keyword Check,
 // SEOagentAssess — paid: DataForSEO ~$0.02-0.05 a check) and the recommended keywords from the website's latest keyword strategy
@@ -91,7 +92,7 @@ export function interpretAssess(res: AssessCallResult): AssessOutcome {
 const providerFree = (why: string): string => (namesProviderCost(why) ? '' : why);
 
 export function toKeywordCheck(row: KeywordCheckRow, cached: boolean): KeywordCheck {
-  return { id: row.id, siteId: row.siteId, keyword: row.keyword, country: row.country, result: toAssessment(row.result), costUsd: row.costUsd, createdAt: row.createdAt.toISOString(), cached };
+  return { id: row.id, siteId: row.siteId, keyword: row.keyword, country: row.country, result: toAssessment(row.result), credits: cached ? 0 : creditsOfUsd(row.costUsd), createdAt: row.createdAt.toISOString(), cached };
 }
 
 /** The website's ladder keywords (main and pages) from n8n; none when n8n cannot be read (the check still works). */

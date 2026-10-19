@@ -223,7 +223,8 @@ export interface KeywordCheck {
   keyword: string;
   country: string;
   result: KeywordAssessment;
-  costUsd: number;
+  /** credits (app/docs/CREDITS.md): what this check used (0 for a stored answer shown again) */
+  credits: number;
   createdAt: string;
   /** the stored answer of a check of the last 7 days: nothing was charged */
   cached: boolean;

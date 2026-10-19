@@ -1,19 +1,27 @@
 import { eq, sql } from 'drizzle-orm';
-import { creditPacksSchema, DEFAULT_CREDIT_PACKS, DEFAULT_PLATFORM_SETTINGS, type PlatformSettings } from '@seo/shared';
+import { creditPacksSchema, creditRate, DEFAULT_CREDIT_PACKS, DEFAULT_PLATFORM_SETTINGS, type PlatformSettings } from '@seo/shared';
 import { db, schema } from '../../db';
 import type { PlatformSettingsRow } from '../../db/schema';
 
 type Q = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
+// credits (app/docs/CREDITS.md): the credit rate as last read, for code that builds customer answers synchronously (the pipeline and
+// ladder builders); every settings read refreshes it, so a caller that awaited settingsRow() first has the current one
+let lastRate = creditRate(DEFAULT_PLATFORM_SETTINGS);
+const remember = (r: PlatformSettingsRow) => ((lastRate = creditRate(r)), r);
+export const cachedCreditRate = () => lastRate;
+/** credits for a cost figure at the cached rate (2 decimals) */
+export const creditsOfUsd = (usd: number) => Math.round(usd * lastRate * 100) / 100;
+
 /** The single settings row (migration 0014 writes it; recreated with the defaults if somebody removed it). */
 export async function settingsRow(q: Q = db): Promise<PlatformSettingsRow> {
   const row = await q.query.platformSettings.findFirst({ where: eq(schema.platformSettings.id, 1) });
-  if (row) return row;
+  if (row) return remember(row);
   await q
     .insert(schema.platformSettings)
     .values({ id: 1, ...DEFAULT_PLATFORM_SETTINGS })
     .onConflictDoNothing();
-  return (await q.query.platformSettings.findFirst({ where: eq(schema.platformSettings.id, 1) }))!;
+  return remember((await q.query.platformSettings.findFirst({ where: eq(schema.platformSettings.id, 1) }))!);
 }
 
 export const toSettings = (r: PlatformSettingsRow): PlatformSettings => ({
@@ -40,5 +48,5 @@ export async function saveSettings(body: Omit<PlatformSettings, 'updatedAt' | 'u
     .set({ ...body, updatedAt: sql`now()`, updatedBy: actorEmail })
     .where(eq(schema.platformSettings.id, 1))
     .returning();
-  return toSettings(r);
+  return toSettings(remember(r));
 }

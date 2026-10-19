@@ -15,6 +15,9 @@ import { useCancelCreditRequest, useRequestCredits } from '@/lib/queries';
 import { fmtAgo, fmtDate } from '@/lib/utils';
 import { SettingsCard } from '../SettingsCard';
 
+/** a pack's price, as the customer pays it: "$1,000.00" (formatUsd has no thousands separator) */
+const price = (usd: number) => '$' + usd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 // Buying credits (app/docs/CREDITS.md §1 "Buying credits"): there is no card payment yet. An owner or admin asks for a pack; the
 // Alaventra team confirms it, sends the invoice and adds the credits. Pack prices are the only dollars a customer sees.
 
@@ -59,12 +62,12 @@ export function BuyCreditsCard({ b, id }: { b: BillingOverview; id?: string }) {
               </div>
               <p className="mt-3 font-display text-2xl leading-none font-semibold tracking-[-0.01em] text-ink">{formatCredits(p.credits, { unit: false })}</p>
               <p className="mt-1 text-[13px] text-ink-3">credits</p>
-              <p className="mt-3 font-mono text-[15px] font-medium tabular text-ink">{formatUsd(p.priceUsd)}</p>
+              <p className="mt-3 font-mono text-[15px] font-medium tabular text-ink">{price(p.priceUsd)}</p>
               <p className="text-xs text-ink-3">
                 <span className="font-mono tabular">{perCredit(p)}</span> a credit
               </p>
               {admin && (
-                <Button className="mt-4" size="sm" variant="secondary" onClick={() => setPack(p)} disabled={waiting.length >= 3} aria-label={`Buy ${formatCredits(p.credits)} for ${formatUsd(p.priceUsd)}`}>
+                <Button className="mt-4" size="sm" variant="secondary" onClick={() => setPack(p)} disabled={waiting.length >= 3} aria-label={`Buy ${formatCredits(p.credits)} for ${price(p.priceUsd)}`}>
                   Buy
                 </Button>
               )}
@@ -84,7 +87,7 @@ export function BuyCreditsCard({ b, id }: { b: BillingOverview; id?: string }) {
                   </IconTile>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-ink">
-                      {formatCredits(r.credits)} · <span className="font-mono tabular">{formatUsd(r.priceUsd)}</span>
+                      {formatCredits(r.credits)} · <span className="font-mono tabular">{price(r.priceUsd)}</span>
                     </p>
                     <p className="truncate text-xs text-ink-3">
                       Asked {fmtAgo(r.createdAt)}
@@ -142,7 +145,7 @@ function BuyDialog({ pack, onClose }: { pack: PricedPack | null; onClose: () => 
       open={!!pack}
       onOpenChange={(o) => !o && close()}
       title={pack ? `Buy ${formatCredits(pack.credits)}` : 'Buy credits'}
-      description={pack ? `${formatUsd(pack.priceUsd)}, invoiced to ${org.name}.` : undefined}
+      description={pack ? `${price(pack.priceUsd)}, invoiced to ${org.name}.` : undefined}
       footer={
         <>
           <Button variant="secondary" onClick={close}>

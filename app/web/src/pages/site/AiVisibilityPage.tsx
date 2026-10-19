@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ArrowRight, BadgeCheck, CheckCircle2, OctagonAlert, Bot, LineChart as LineChartIcon, ExternalLink as ExternalIcon, FileText, Gauge, Globe, Grid3x3, Library, Lightbulb, ListChecks, MessageCircleQuestion, MessagesSquare, ScanSearch, ShieldAlert, ShieldCheck, Sparkles, Trophy } from 'lucide-react';
 import { AI_ENGINE_VALUES, compactNumber, estimateAiVisibilityCost, titleCase, type AiData, type AiDay, type AiEngine, type AiEngineStat, type AiRun } from '@seo/shared';
-import { creditsLabel, quoteLabel } from '@/lib/credits';
+import { formatCredits, quoteLabel } from '@/lib/credits';
 import { AiPrecisionTable } from '@/components/site/AiPrecision';
 import { useSiteData } from '@/lib/queries';
 import { cn, fmtAgo, fmtDate } from '@/lib/utils';
@@ -352,8 +352,8 @@ function RunsTrend({ runs, daily, loading, className }: { runs: AiRun[]; daily: 
         : m === 'score'
           ? [{ key: 'visibilityScore', label: 'Visibility score', format: (v) => `${v.toFixed(0)}/100` }]
           : [pctS('aioPresence', 'AI Overview shown'), pctS('aioCitationRate', 'You cited in AI Overviews')];
-  // credits (app/docs/CREDITS.md): a run's `costUsd` is shown as the credits it used (column "Credits"), never as dollars
-  const rows = runs.map((r) => ({ checkedAt: r.checkedAt, mentionRate: r.mentionRate, citationRate: r.citationRate, shareOfVoice: r.shareOfVoice, aioPresence: r.aioPresence, aioCitationRate: r.aioCitationRate, visibilityScore: r.visibilityScore, prompts: r.prompts, answers: r.answers, costUsd: r.costUsd }));
+  // credits (app/docs/CREDITS.md): a run shows the credits it used (the server sends credits, never dollars)
+  const rows = runs.map((r) => ({ checkedAt: r.checkedAt, mentionRate: r.mentionRate, citationRate: r.citationRate, shareOfVoice: r.shareOfVoice, aioPresence: r.aioPresence, aioCitationRate: r.aioCitationRate, visibilityScore: r.visibilityScore, prompts: r.prompts, answers: r.answers, credits: r.credits }));
   const dayRows = daily.map((x) => ({ checkedAt: `${x.date}T12:00:00.000Z`, mentionRate: x.mentionRate, citationRate: x.citationRate, visibilityScore: x.visibilityScore, answers: x.samples }));
   const data = m === 'daily' ? dayRows : m === 'score' ? rows.filter((r) => r.visibilityScore != null) : rows;
   const options: { value: TMetric; label: string }[] = [
@@ -378,7 +378,7 @@ function RunsTrend({ runs, daily, loading, className }: { runs: AiRun[]; daily: 
           ...(m === 'daily' ? [] : [{ key: 'shareOfVoice', label: 'SoV', align: 'right' as const, format: (v: unknown) => pct(Number(v)) }, { key: 'aioPresence', label: 'AIO shown', align: 'right' as const, format: (v: unknown) => pct(Number(v)) }]),
           { key: 'visibilityScore', label: 'Score', align: 'right', format: (v) => (v == null ? '–' : Number(v).toFixed(0)) },
           { key: 'answers', label: 'Answers', align: 'right' },
-          ...(m === 'daily' ? [] : [{ key: 'costUsd', label: 'Credits', align: 'right' as const, format: (v: unknown) => creditsLabel(Number(v), { unit: false }) }]),
+          ...(m === 'daily' ? [] : [{ key: 'credits', label: 'Credits', align: 'right' as const, format: (v: unknown) => formatCredits(Number(v), { unit: false }) }]),
         ],
         rows: [...data].reverse(),
       }}
