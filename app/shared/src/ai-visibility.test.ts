@@ -57,12 +57,17 @@ describe('estimateAiVisibilityCost', () => {
 
 describe('the AI pulse schedule', () => {
   const pulse = AUTOMATIONS.find((a) => a.id === 'ai_pulse')!;
-  it('runs every day except Monday at 06:30, in n8n\'s time zone', () => {
+  it('runs every day at 06:30 in n8n\'s time zone, except the website\'s own cycle day (2026-10-19, plan §4.8)', () => {
     expect(pulse.workflow).toBe('SEOagentAIPulse1');
-    // Sunday 2026-10-11 07:00 UTC -> next run Tuesday 13th 06:30 UTC (Monday is skipped)
-    expect(nextScheduledRun(pulse.schedule, 'UTC', new Date('2026-10-11T07:00:00Z')).toISOString()).toBe('2026-10-13T06:30:00.000Z');
+    expect(pulse.schedule).toEqual({ kind: 'daily', weekdays: [0, 1, 2, 3, 4, 5, 6], hour: 6, minute: 30, skipCycleDay: true });
+    // a website with no cycle yet keeps the old Monday skip: Sunday 2026-10-11 07:00 UTC -> Tuesday 13th 06:30 UTC
+    expect(nextScheduledRun(pulse.schedule, 'UTC', new Date('2026-10-11T07:00:00Z'))?.toISOString()).toBe('2026-10-13T06:30:00.000Z');
     // Saturday 05:00 -> the same day 06:30
-    expect(nextScheduledRun(pulse.schedule, 'UTC', new Date('2026-10-10T05:00:00Z')).toISOString()).toBe('2026-10-10T06:30:00.000Z');
+    expect(nextScheduledRun(pulse.schedule, 'UTC', new Date('2026-10-10T05:00:00Z'))?.toISOString()).toBe('2026-10-10T06:30:00.000Z');
+    // a Thursday website (anchored Thursday 2026-10-15 in Dubai): Monday is sampled, Thursday is its weekly run's day
+    const thursday = { anchorAt: '2026-10-15T08:00:00.000Z', tz: 'Asia/Dubai' };
+    expect(nextScheduledRun(pulse.schedule, 'UTC', new Date('2026-10-11T07:00:00Z'), thursday)?.toISOString()).toBe('2026-10-12T06:30:00.000Z');
+    expect(nextScheduledRun(pulse.schedule, 'UTC', new Date('2026-10-14T07:00:00Z'), thursday)?.toISOString()).toBe('2026-10-16T06:30:00.000Z');
   });
 });
 
@@ -85,10 +90,13 @@ describe('AI growth (v4.12)', () => {
     const base = { aiVisibility: true, backlinks: false, auditMonthly: false, blogsPerWeek: 0 };
     expect(estimateMonitoringCost({ ...base, aiGrowth: true, aiPages: 2 }) - estimateMonitoringCost({ ...base, aiGrowth: false })).toBeCloseTo(estimateAiGrowthCost().total, 1);
   });
-  it('the weekly AI growth automation runs Monday 09:30, after the AI check and before the content run', () => {
+  it('the weekly AI growth job runs in the website\'s cycle, after the AI check and before the content run', () => {
     const g = AUTOMATIONS.find((a) => a.id === 'ai_growth')!;
     expect(g.workflow).toBe('SEOagentAIGrow1');
-    expect(g.schedule).toEqual({ kind: 'weekly', weekday: 1, hour: 9, minute: 30 });
+    expect(g.schedule).toEqual({ kind: 'cycle', job: 'ai_growth', order: 5 });
+    const order = (id: string) => (AUTOMATIONS.find((a) => a.id === id)!.schedule as { order: number }).order;
+    expect(order('ai_visibility')).toBeLessThan(order('ai_growth'));
+    expect(order('ai_growth')).toBeLessThan(order('content_cadence'));
   });
   it('a page written for an AI target reaches n8n as ai_target ({ u, t } sources)', () => {
     const body = buildN8nPayload(

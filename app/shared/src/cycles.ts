@@ -13,7 +13,8 @@ export const CYCLE_JOBS = [
   { job: 'link_builder', workflowId: 'SEOagentLinkBld1' },
   { job: 'audit', workflowId: 'SEOagentAuditSc1' },
 ] as const;
-export type CycleJob = (typeof CYCLE_JOBS)[number]['job'] | 'preview';
+/** `cycle` is the dispatcher's marker row of a cycle itself (key `<cycle_key>:cycle`), not a job that runs. */
+export type CycleJob = (typeof CYCLE_JOBS)[number]['job'] | 'preview' | 'cycle';
 
 /** A cycle starts at this local time in the website's time zone (cycle 0 starts at setup). */
 export const CYCLE_LOCAL_TIME = '06:00';
@@ -112,6 +113,12 @@ export interface CyclePreviewItem {
   auto: boolean;
   est_usd: number;
   ai_target?: { question: string; kind: string; target_id: string; fanout: string[]; sources: unknown[]; competitors: string[] } | null;
+  /** the AI target this item answers (AI pages) */
+  target_id?: string;
+  /** an item the client approved for this cycle */
+  approved?: boolean;
+  /** ladder items: who chose the ladder's keyword */
+  chosen_by?: ChosenBy | '';
 }
 
 /** The `cycle_preview` callback body (beside the usual callback fields). */
@@ -127,6 +134,20 @@ export interface CyclePreview {
   paused_reason: string;
   items: CyclePreviewItem[];
   suggestions: CyclePreviewItem[];
+  /** the cycle's local date (YYYY-MM-DD) */
+  cycle_date?: string;
+  trigger?: 'cycle';
+  /** why the cycle writes nothing ('' when it writes) */
+  reason?: string;
+  /** the fit gate's refusals: never written, never suggested */
+  refused?: { keyword: string; source: string; reason: string; detail: string; note?: string; target_id?: string }[];
+  /** what the client skipped */
+  skipped?: { item_key: string; keyword: string; source: string; scope: 'always' | 'cycle' }[];
+  /** R-K7: the cycle's budget */
+  budget?: { pages_per_week: number; spent: number; room: number; window_start?: string; spent_keywords?: { keyword: string; how: string }[] };
+  /** the engine's price of one page (USD) and where it comes from: internal, never shown to a customer */
+  est_page_usd?: number;
+  est_basis?: string;
 }
 
 /** One row of the engine's `seo_skips`, written by the app. */
@@ -142,3 +163,195 @@ export interface SkipRow {
 }
 export const skipKey = (siteId: string, scope: 'cycle' | 'always', cycle: string, item: string): string =>
   `${siteId}:${scope === 'always' ? 'always' : cycle}:${item}`;
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// App API shapes (app/API.md "Cycle, Coming up, keyword proposals, research, feedback"). The clock itself is in cycle-clock.ts.
+// Prices reach customers in credits only; reasons are customer words (never an execution id, a table or a provider).
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+/** One job of a cycle as the app shows it. */
+export interface CycleJobView {
+  job: Exclude<CycleJob, 'cycle'>;
+  /** "AI visibility", "Backlinks" ... */
+  label: string;
+  /** 'waiting': not started yet in this cycle */
+  status: CycleJobStatus | 'waiting';
+  attempts: number;
+  monthly: boolean;
+  reason: string;
+  dueAt: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+}
+
+/** One cycle of a website and its jobs. */
+export interface CycleSummary {
+  cycleKey: string;
+  /** the local date */
+  date: string;
+  monthly: boolean;
+  cycle0: boolean;
+  /** running | done | skipped (covered by the next one) */
+  status: 'running' | 'done' | 'skipped';
+  jobs: CycleJobView[];
+}
+
+/** GET /api/orgs/:orgId/sites/:siteId/cycle */
+export interface SiteCycleView {
+  /** whether the engine has written the website's cycle row (false before tracking starts, or until the engine adopts it) */
+  known: boolean;
+  status: 'active' | 'paused' | 'off' | 'not_started';
+  timezone: string;
+  /** 0-6, Sunday 0, in `timezone`; null before tracking starts */
+  weekday: number | null;
+  weekdayName: string | null;
+  localTime: string;
+  anchorAt: string | null;
+  monthlyDay: number | null;
+  nextDueAt: string | null;
+  nextPreviewAt: string | null;
+  lastCycleAt: string | null;
+  /** the cycle being worked on, with its jobs in order */
+  current: CycleSummary | null;
+  /** earlier cycles, newest first (up to 8) */
+  recent: CycleSummary[];
+  /** the coming cycles (the first one may be due now) */
+  upcoming: import('./cycle-clock').CycleOccurrence[];
+  /** a cycle is more than CYCLE_OVERDUE_HOURS late */
+  overdue: boolean;
+  /** owners and admins may change the weekday */
+  canChangeWeekday: boolean;
+}
+
+/** PATCH /api/orgs/:orgId/sites/:siteId/cycle */
+export interface CycleWeekdayResult {
+  weekday: number;
+  weekdayName: string;
+  /** the next cycle on the new weekday, at least CYCLE_SPACING_DAYS after the last one started (the engine recomputes it within 5 minutes) */
+  nextDueAt: string | null;
+  timezone: string;
+}
+
+/** One item of the "Coming up" plan as the app shows it. */
+export interface ComingUpItem {
+  itemKey: string;
+  keyword: string;
+  source: TopicSource;
+  pageType: string;
+  existingPageUrl: string;
+  ladderId: string;
+  rung: number;
+  why: string;
+  /** true: written in the cycle unless skipped; false: written only after an approval */
+  auto: boolean;
+  credits: number;
+  aiTarget: { targetId: string; question: string; kind: 'answer' | 'refresh'; fanout: string[]; sources: { url: string; title: string }[]; competitors: string[] } | null;
+  /** the client's decision on it, if any (the newest) */
+  decision: { decision: 'skip' | 'approve'; scope: 'cycle' | 'always'; by: string; at: string } | null;
+  /** Skip: every item; Approve: the items that wait for an OK */
+  canSkip: boolean;
+  canApprove: boolean;
+}
+
+/** GET /api/orgs/:orgId/sites/:siteId/coming-up */
+export interface ComingUpView {
+  /** false before the first plan arrives (48 hours before cycle 1) */
+  available: boolean;
+  cycleKey: string;
+  cycleDate: string;
+  scheduledFor: string | null;
+  receivedAt: string | null;
+  level: AutopilotLevel;
+  pagesPerWeek: number;
+  waitingForKeyword: boolean;
+  pausedReason: '' | 'pileup' | 'site_paused';
+  reason: string;
+  /** written on their own in the cycle (auto) and the ladder pages waiting for an OK (not auto) */
+  items: ComingUpItem[];
+  /** what waits for the client's OK */
+  suggestions: ComingUpItem[];
+  /** refused by the topic check, with the reason */
+  refused: { keyword: string; source: string; reason: string; detail: string }[];
+  /** the credits the automatic items use */
+  autoCredits: number;
+  /** whether the person asking may decide (owner, admin, member) */
+  canDecide: boolean;
+  /** the plan is for a cycle that already started: decisions are closed */
+  closed: boolean;
+}
+
+/** POST /api/orgs/:orgId/sites/:siteId/coming-up/decisions */
+export interface ComingUpDecisionResult {
+  item: ComingUpItem;
+  /** the seo_skips key written */
+  key: string;
+}
+
+export type KeywordProposalStatus = 'pending' | 'approved' | 'swapped' | 'skipped' | 'started' | 'expired' | 'failed';
+
+/** A keyword the system proposes: at levels 1-2 a suggestion that waits for the client; at level 3 an announcement that starts at `startAt`. */
+export interface KeywordProposalView {
+  id: string;
+  siteId: string;
+  keyword: string;
+  status: KeywordProposalStatus;
+  /** level 3: when it starts unless changed or skipped; null = a suggestion */
+  startAt: string | null;
+  level: AutopilotLevel;
+  why: string;
+  /** what made room: fewer ladders than the limit ('room'), a won ladder ('won'), a ladder with no pages left ('done') */
+  occasion: 'room' | 'won' | 'done';
+  searches: number | null;
+  difficulty: string | null;
+  /** plain words: "Good chance", "Takes a few months", "Hard for your website now" */
+  chance: string;
+  planType: string | null;
+  months: string;
+  /** about this many credits a page */
+  creditsPerPage: number;
+  /** the run that started its ladder, once started */
+  runId: string | null;
+  /** the keyword typed instead (swap) */
+  swappedFor: string | null;
+  /** why it did not start (failed / expired) */
+  note: string;
+  createdAt: string;
+  decidedAt: string | null;
+  decidedBy: string | null;
+}
+
+/** GET /api/orgs/:orgId/sites/:siteId/keyword-proposals */
+export interface KeywordProposalList {
+  pending: KeywordProposalView[];
+  recent: KeywordProposalView[];
+  level: AutopilotLevel;
+  /** the platform switch (AUTO_START_LADDERS): when off, nothing is proposed or started by the system */
+  enabled: boolean;
+}
+
+/** GET .../keywords/recommended `status` (the onboarding poll) */
+export type ResearchStatus = 'none' | 'running' | 'ready';
+
+/** POST /api/orgs/:orgId/sites/:siteId/research/start */
+export interface ResearchStartResult {
+  status: ResearchStatus;
+  /** the discovery run, when one is going or was started */
+  runId: string | null;
+  startedAt: string | null;
+  /** the run is the website's one free research at setup */
+  free: boolean;
+  /** started now (false: one was already going, or the research is fresh) */
+  started: boolean;
+}
+
+/** POST /api/orgs/:orgId/reports/:reportId/feedback */
+export interface ContentFeedbackResult {
+  id: string;
+  verdict: 'reject';
+  /** this rejection dropped the website's level to 1 (the auto-pause) */
+  levelDropped: boolean;
+  level: AutopilotLevel;
+}
+
+/** Plain words for a keyword's difficulty for the website (plan §5.2). Not realistic has none: it is not shown. */
+export const CHANCE_WORDS: Record<string, string> = { easy: 'Good chance', reachable: 'Takes a few months', hard: 'Hard for your website now', very_hard: 'Hard for your website now' };

@@ -161,6 +161,11 @@ const KIND_ICON: Record<NeedsYouItem['kind'], ReactNode> = {
   failed: <XCircle className="size-4" />,
   connection: <PlugZap className="size-4" />,
   pileup: <Layers className="size-4" />,
+  // keyword-first kinds (A1 added them to the shared type; A2 gives them their own icons)
+  keyword: <Hand className="size-4" />,
+  proposal: <Hand className="size-4" />,
+  recheck: <XCircle className="size-4" />,
+  level: <Layers className="size-4" />,
 };
 
 /** Older servers: the pages waiting to be published. */

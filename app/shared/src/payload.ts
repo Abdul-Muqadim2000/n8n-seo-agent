@@ -21,6 +21,9 @@ export interface SiteContext {
   competitors: string[];
   brandNames: string[];
   ga4PropertyId: string;
+  /** keyword-first: the website's IANA time zone ('' = the engine's) and what it sells */
+  timezone?: string;
+  services?: string[];
 }
 
 export interface Delivery {
@@ -96,7 +99,8 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
     }
 
     case 'discover': {
-      const receive = [input.receiveReport ? 'Keyword Report' : null, input.receiveContent ? 'Page Content' : null].filter(Boolean);
+      // keyword-first (R-K6): research from the app never asks for a page on its own pick (the engine refuses it for app callers too)
+      const receive = [input.receiveReport ? 'Keyword Report' : null].filter(Boolean);
       const features = [input.siteAudit ? 'Site Audit' : null, input.fullReport ? 'Full SEO Report' : null].filter(Boolean);
       return {
         ...head('discover', '', input.country, dom, d, input.business || s?.business || '', input.customers || s?.customers || ''),
@@ -129,6 +133,10 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
         tone: input.tone,
         cta: input.cta || s?.cta || '',
         pages_now: input.pagesNow,
+        // keyword-first (R-K1): who chose the keyword (none = the person typed it) and the mode it starts in (a Manual ladder writes
+        // nothing at start). Exact keys, read by Normalize Input as they are; after the fuzzy-matched head.
+        chosen_by: input.chosenBy ?? 'client_typed',
+        ...(input.ladderMode ? { ladder_mode: input.ladderMode } : {}),
       };
 
     case 'track':
@@ -139,6 +147,10 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
         blogs_per_week: input.blogsPerWeek,
         competitors: input.competitors.length ? input.competitors : (s?.competitors ?? []),
         monitors: monitorsBody({ ...input.monitors, brandNames: input.monitors.brandNames.length ? input.monitors.brandNames : (s?.brandNames ?? []) }),
+        // keyword-first (§14.5): the website's zone and what it sells (key present = replace the stored list); the server adds
+        // `tracking_started_at` (the website's first tracking, kept on every re-save). Exact keys, after the fuzzy-matched head.
+        ...(input.timezone || s?.timezone ? { timezone: input.timezone || s?.timezone || '' } : {}),
+        ...(input.services !== undefined ? { services: input.services } : s?.services?.length ? { services: s.services } : {}),
       };
 
     case 'published':
