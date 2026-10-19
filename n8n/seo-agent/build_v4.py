@@ -1865,6 +1865,39 @@ assert "'Load Site (Track)'" in rd('code/Site_Row_Track.js') and 'declared_servi
 assert "('declared_services', 'string')" in open(os.path.join(HERE0, 'ladder_common.py'), encoding='utf-8').read(), 'keyword-first: seo_sites has no declared_services column'
 assert 'declared_services:' in rd('code/_site_model.js') and "'declared_services'];" in rd('code/_site_model.js'), 'keyword-first: the site model does not write declared_services back (SM.toRow)'
 log('Keyword-first, Track my site and the request (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5.2 / §14): Normalize Input takes chosen_by, ladder_mode, services (+ services_given) and timezone by their exact keys; Track my site reads the stored row first (Load Site (Track)) so a re-save keeps a paused site paused, and stores the declared services (seo_sites.declared_services), which the site model merges into its services and writes back unchanged')
+# ---------- E4 (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §4.7 / §14.1 / §14.5): "Track my site" creates the website's cycle ----------
+# The Site Kickoff answered 409 not_tracked until this path had written seo_sites, so an app calling it right after `track` raced it. The
+# cycle row is now ensured here, after the seo_sites row (and the cadence / monitor rows) are saved and before the Site Tracker starts, by
+# the cycle kit's one row builder (CYC.cycleRow, which the kickoff uses too): a new row anchored at `tracking_started_at` (the kickoff's
+# window, CYC.anchorOf; else now), in the request's `timezone` (else the engine's), cycle 0 due at once with skip_jobs = site_tracker; an
+# existing row keeps its anchor, weekday, due times and status. Normalize Input takes `tracking_started_at` by its exact key (no pick()
+# word is a substring of it, so the fuzzy matcher cannot take it for another field).
+from ladder_common import CYCLES_TABLE as CYT_E4, CYCLES_COLS as CYC_COLS_E4, CATCHUP_SRC as CATCHUP_E4
+from env_settings import ENV as _ENV_E4
+TZ_E4 = (_ENV_E4.get('GENERIC_TIMEZONE') or '').strip() or 'America/New_York'   # the engine's zone, read the way build_cycle.py reads it
+patch('Normalize Input', "const KF_TZ = (() => {",
+      "const KF_TRACK_START = (() => { const v = String(p2.tracking_started_at == null ? '' : p2.tracking_started_at).trim(); if (!v || v.length > 40) return ''; const t = Date.parse(v); return Number.isFinite(t) ? new Date(t).toISOString() : ''; })();   // E4: the app's trackingStartedAt (the cycle's anchor; its window is checked by the cycle kit)\n"
+      "const KF_TZ = (() => {")
+patch('Normalize Input', "    timezone: KF_TZ,", "    timezone: KF_TZ,\n    tracking_started_at: KF_TRACK_START,")
+_TRACK_WORDS_E4 = set(re.findall(r"pick\(p2, '([^']+)'\)", code('Normalize Input')))
+assert _TRACK_WORDS_E4 and not any(w in 'tracking started at' for w in _TRACK_WORDS_E4), 'E4: a pick() word is a substring of tracking_started_at: ' + str(sorted(w for w in _TRACK_WORDS_E4 if w in 'tracking started at'))
+_tcp_src = rd('code/Track_Cycle_Plan.js').replace('/*__CATCHUP__*/', CATCHUP_E4).replace('/*__CYCLE__*/', _rd0('code/_cycle.js').rstrip('\n')).replace('__TZ__', TZ_E4)
+assert '/*__' not in _tcp_src and "'__TZ__'" not in _tcp_src and 'const CYC = (() => {' in _tcp_src and 'const CU = (() => {' in _tcp_src, 'E4: Track Cycle Plan kits not inlined'
+_smt = pos('Save Monitors (Track)')
+disconnect('Save Monitors (Track)', 'Tracker Payload (Track)')
+add_node('Ensure Cycles Table (Track)', DT_TYPE, DT_VERSION, dt_create_params(CYT_E4, CYC_COLS_E4), [_smt[0] + 220, _smt[1] - 180], {'onError': 'continueRegularOutput', 'executeOnce': True})
+add_node('Load Cycle (Track)', DT_TYPE, DT_VERSION, dt_get_where_params(CYT_E4, 'site_id', 'eq', SITE18), [_smt[0] + 440, _smt[1] - 180], LOAD18)
+add_node('Track Cycle Plan', 'n8n-nodes-base.code', 2, {'jsCode': _tcp_src}, [_smt[0] + 660, _smt[1] - 180])
+if_node('Cycle To Save (Track)?', "{{ $json.write === true }}", [_smt[0] + 880, _smt[1] - 180])
+add_node('Track Cycle Row', 'n8n-nodes-base.code', 2, {'jsCode': "// the website's seo_cycles row as Track Cycle Plan built it, exact columns (upserted by site_id; a Data Table save maps every input field)\nconst COLS = "
+         + json.dumps([c for c, _t in CYC_COLS_E4]) + ";\nconst r = $('Track Cycle Plan').first().json.row || {};\nreturn [{ json: Object.fromEntries(COLS.map(c => [c, r[c]])) }];"}, [_smt[0] + 1100, _smt[1] - 300])
+add_node('Save Cycle (Track)', DT_TYPE, DT_VERSION, dt_upsert_params(CYT_E4, CYC_COLS_E4, 'site_id'), [_smt[0] + 1320, _smt[1] - 300], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+for a, b in [('Save Monitors (Track)', 'Ensure Cycles Table (Track)'), ('Ensure Cycles Table (Track)', 'Load Cycle (Track)'), ('Load Cycle (Track)', 'Track Cycle Plan'),
+             ('Track Cycle Plan', 'Cycle To Save (Track)?'), ('Track Cycle Row', 'Save Cycle (Track)'), ('Save Cycle (Track)', 'Tracker Payload (Track)')]:
+    connect(a, b)
+connect('Cycle To Save (Track)?', 'Track Cycle Row', 0); connect('Cycle To Save (Track)?', 'Tracker Payload (Track)', 1)
+assert "$('Site Row (Track)')" in code('Tracker Payload (Track)'), 'E4: Tracker Payload (Track) must read Site Row (Track) by name (a Data Table save sits before it now)'
+log('"Track my site" creates the website\'s cycle (2026-10-19, agent E4): after the seo_sites, cadence and monitor rows are saved, Track Cycle Plan ensures the seo_cycles row with the cycle kit\'s one row builder (CYC.cycleRow, shared with the Site Kickoff): a new row anchored at tracking_started_at (within the last 6 days and at most 1 h ahead, else now) in the request\'s timezone (else ' + TZ_E4 + '), cycle 0 due at once, skip_jobs site_tracker; an existing row keeps its anchor, weekday, due times and status (a paused site stays paused), only an empty zone (or an adopted row\'s engine zone) is filled; Normalize Input takes tracking_started_at by its exact key; the site_tracker_setup answer carries the cycle')
 # ---------- D. audit: brand & entity check (between the Search Console step and the scoring) ----------
 patch('Analyze Probes', "        sitemap_urls: locs.length,\n", "        sitemap_urls: locs.length,\n        robots_txt: robotsText.slice(0, 20000),\n        ai_crawlers_blocked: aiBlocked,\n        llms_txt_present: llms.status === 200 && llms.body.length > 100 && !/<html/i.test(llms.body),\n")
 SITE_AUDIT19 = "={{ 'site_' + String($('Check Crawl').first().json.domain || 'none').toLowerCase().replace(/[^a-z0-9]+/g, '-') }}"
@@ -11793,8 +11826,16 @@ def _b140_cycle():
     _codes140 = {n['name']: n['parameters']['options']['responseCode'] for n in _ko140['nodes'] if n['type'] == 'n8n-nodes-base.respondToWebhook'}
     assert _codes140 == {'Respond Kickoff Bad Request': 400, 'Respond Kickoff Refused': 409, 'Respond Kickoff Dry Run': 200, 'Respond Kickoff Accepted': 202, 'Respond Kickoff Failed': 500}, \
         'cycle: the kickoff\'s answers changed: ' + str(_codes140)
-    assert 'CYC.newCycleRow(' in _kb140['Kickoff Plan']['parameters']['jsCode'] and 'CYC.validTz(' in _kb140['Kickoff Validate']['parameters']['jsCode'], \
-        'cycle: the kickoff does not build its row with the kit (the dispatcher\'s adoption uses the same newCycleRow)'
+    assert 'CYC.cycleRow(' in _kb140['Kickoff Plan']['parameters']['jsCode'] and 'CYC.validTz(' in _kb140['Kickoff Validate']['parameters']['jsCode'] and 'CYC.anchorOf(' in _kb140['Kickoff Validate']['parameters']['jsCode'], \
+        'cycle: the kickoff does not build its row with the kit (CYC.cycleRow, which "Track my site" uses too; the dispatcher\'s adoption uses its newCycleRow)'
+    # E4 (2026-10-19): "Track my site" writes the same row with the same builder, after seo_sites is saved and before the Site Tracker starts
+    _tcp140 = nodes['Track Cycle Plan']['parameters']['jsCode']
+    assert 'CYC.cycleRow(' in _tcp140 and 'CYC.anchorOf(' in _tcp140 and "skip_jobs: ['site_tracker']" in _tcp140, 'cycle: Track my site does not ensure its cycle row with the kit\'s builder'
+    _tsv140 = nodes['Save Cycle (Track)']['parameters']
+    assert _tsv140['operation'] == 'upsert' and _tsv140['dataTableId']['value'] == 'seo_cycles' and _tsv140['filters']['conditions'][0]['keyName'] == 'site_id', 'cycle: Track my site does not upsert seo_cycles by site_id'
+    _tr140 = _reach140(conns, 'Save Site (Track)', None)
+    assert 'Track Cycle Plan' in _tr140 and 'Start Site Tracker' in _reach140(conns, 'Track Cycle Plan', None) and 'Track Cycle Plan' not in _reach140(conns, 'Start Site Tracker', None), \
+        'cycle: Track my site must ensure the cycle row after seo_sites is saved and before the Site Tracker starts'
     assert 'Respond Kickoff Dry Run' in _out140(_kc140, 'Kickoff Dry Run?') and 'Kickoff Cycle Row' in _out140(_kc140, 'Kickoff Dry Run?') \
         and 'Save Kickoff Cycle' not in _reach140(_kc140, 'Kickoff Dry Run?', 'Kickoff Cycle Row'), 'cycle: a dry run can write the row'
     # ---------- E. the deploy guard: one rule, both deploy paths, self-tested on the shared cases ----------

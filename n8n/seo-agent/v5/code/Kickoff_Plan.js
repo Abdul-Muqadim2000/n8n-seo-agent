@@ -22,7 +22,8 @@ const existing = rowsOf('Load Cycles (Kickoff)').find(r => String(r.site_id || '
 if (existing && !v.force && !v.dry_run)
   return refuse('already_started', domain + ' already has its cycle (anchored ' + (existing.anchor_at || '?') + ', next due ' + (existing.next_due_at || '?') + '); send force: true to start cycle 0 again', { domain, site_id });
 const now = Date.now(), anchor = v.anchor_at ? Date.parse(v.anchor_at) : now, tz = v.tz || TZ;
-const row = CYC.newCycleRow({ site_id, domain, tz, anchor, now, skip_jobs: v.skip_jobs, adopted: false });
+// the one row builder "Track my site" uses too (CYC.cycleRow): the kickoff always writes a fresh row (a new website, or `force`)
+const row = CYC.cycleRow({ existing, force: true, site_id, domain, tz, anchor, now, skip_jobs: v.skip_jobs, engine_tz: TZ }).row;
 const cycle_key = CYC.cycleKey(site_id, CYC.local(tz, anchor).date);
 return [{ json: { refused: false, dry_run: !!v.dry_run, force: !!v.force, site_id, domain, cycle_key, next_due_at: row.next_due_at, request_id: v.request_id, row,
   exists: !!existing, replaces: existing ? { anchor_at: String(existing.anchor_at || ''), current_key: String(existing.current_key || ''), next_due_at: String(existing.next_due_at || '') } : null } }];

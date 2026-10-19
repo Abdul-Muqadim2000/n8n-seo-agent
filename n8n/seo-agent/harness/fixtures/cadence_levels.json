@@ -1,5 +1,5 @@
 {
- "_doc": "Shared fixtures for the Content Cadence keyword-first rules (SCHEDULING_KEYWORDS_PLAN.md \u00a75.1, \u00a75.5, \u00a75.7, \u00a79 KF, \u00a714). Both suites run every case: the engine harness through the real Cadence Plan node (harness/scenarios_keyword_first.js) and the app mirror (app/server/src/services/cadence.ts, its tests). Language-neutral and self-contained: every row a case needs is in `tables`, every time is absolute, and `now` is the clock to freeze. Tables are the Data Tables the cadence loads: sites=seo_sites, cadence=seo_cadence, ladders=seo_ladders, ladder_settings=seo_ladder_settings (the `_site` row carries autopilot_level; empty = 2), content_log=seo_content_log, query_history=seo_query_history, trends=seo_trends, pages=seo_pages, ai_targets=seo_ai_targets (status queued), skips=seo_skips, monitors=seo_monitors. `trigger` is the Manual Run input ({} = the batch run; trigger \"cycle\" = the Cycle Dispatcher, with cycle_key and scheduled_for; preview true = the 48-hour \"Coming up\" plan). `level` is the effective autopilot level. expect.picks: the pages written, in order (keyword + source); expect.suggestions: the suggestions, in order; expect.waiting_for_keyword: the R-K2 status; expect.refused: every fit-gate refusal (keyword + reason), any order. Optional: expect.items (a preview plan, with auto), expect.awaiting (keywords waiting for approval), expect.skipped (item keys the client skipped), expect.budget_spent (R-K7: pages already spent in the cycle). The fit gate is the engine's fitGate (v5/code/_fit_gate.js): an app mirror must apply the same rules or call it.",
+ "_doc": "Shared fixtures for the Content Cadence keyword-first rules (SCHEDULING_KEYWORDS_PLAN.md \u00a75.1, \u00a75.5, \u00a75.7, \u00a79 KF, \u00a714). Both suites run every case: the engine harness through the real Cadence Plan node (harness/scenarios_keyword_first.js) and the app mirror (app/server/src/services/cadence.ts, its tests). Language-neutral and self-contained: every row a case needs is in `tables`, every time is absolute, and `now` is the clock to freeze. Tables are the Data Tables the cadence loads: sites=seo_sites, cadence=seo_cadence, ladders=seo_ladders, ladder_settings=seo_ladder_settings (the `_site` row carries autopilot_level; empty = 2), content_log=seo_content_log, query_history=seo_query_history, trends=seo_trends, pages=seo_pages, ai_targets=seo_ai_targets (status queued), skips=seo_skips, monitors=seo_monitors. `trigger` is the Manual Run input ({} = the batch run; trigger \"cycle\" = the Cycle Dispatcher, with cycle_key and scheduled_for; preview true = the 48-hour \"Coming up\" plan). `level` is the effective autopilot level. expect.picks: the pages written, in order (keyword + source); expect.suggestions: the suggestions, in order; expect.waiting_for_keyword: the R-K2 status; expect.refused: every fit-gate refusal (keyword + reason), any order. Optional: expect.items (a preview plan, with auto), expect.awaiting (keywords waiting for approval), expect.skipped (item keys the client skipped), expect.budget_spent (R-K7: pages already spent in the cycle), expect.approved_not_written (the approvals not written in this run, each with its reason: pileup | budget | covered_by_live_page). The fit gate is the engine's fitGate (v5/code/_fit_gate.js): an app mirror must apply the same rules or call it.",
  "contract": "app/shared/src/cycles.ts",
  "cases": [
   {
@@ -3059,6 +3059,339 @@
     "refused": [],
     "skipped": [
      "crm implementation partner uae"
+    ]
+   }
+  },
+  {
+   "name": "approve_while_waiting_for_keyword",
+   "doc": "An approval is the client's choice (E4, 2026-10-19): at level 2 with no ladder the site waits for its first keyword and writes nothing the system would choose, but an item the client approved for this cycle IS written - within pages_per_week (1: the other approval waits, listed in approved_not_written with the reason budget) and never past a skip (the striking query is approved AND skipped: the skip wins).",
+   "level": 2,
+   "now": "2026-10-21T10:00:00.000Z",
+   "trigger": {
+    "trigger": "cycle",
+    "domain": "techand.ai",
+    "site_id": "site_techand-ai",
+    "cycle_key": "cyc:site_techand-ai:2026-10-21",
+    "scheduled_for": "2026-10-21T09:00:00.000Z",
+    "job": "content_cadence",
+    "monthly": false
+   },
+   "tables": {
+    "sites": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "country": "United Arab Emirates",
+      "status": "active",
+      "email": "",
+      "callback_url": "https://hooks.example.com/cb",
+      "services_json": "[\"CRM implementation services\", \"CRM consulting for sales teams\", \"CRM data migration\", \"Customer support desk setup\", \"Sales pipeline automation\", \"CRM training and adoption\"]",
+      "declared_services": "",
+      "competitors": "",
+      "brand_names": ""
+     }
+    ],
+    "cadence": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "pages_per_week": 1,
+      "status": "active"
+     }
+    ],
+    "ladders": [],
+    "ladder_settings": [
+     {
+      "ladder_id": "_site",
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "mode": "auto",
+      "opportunities": "",
+      "max_active": 2,
+      "max_waiting": 3,
+      "autopilot_level": 2
+     }
+    ],
+    "content_log": [],
+    "query_history": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "period_end": "2026-10-18",
+      "query": "crm consulting dubai",
+      "position": 7,
+      "impressions": 400,
+      "clicks": 6,
+      "page": "https://techand.ai/crm-consulting/"
+     }
+    ],
+    "trends": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "keyword": "crm",
+      "direction": "rising",
+      "rising": "crm automation for sales teams (+70%)",
+      "change_pct": 70,
+      "checked_at": "2026-10-19T09:00:00.000Z"
+     }
+    ],
+    "pages": [
+     {
+      "site_id": "site_techand-ai",
+      "url": "https://techand.ai/crm-implementation/",
+      "title": "CRM implementation",
+      "h1": "",
+      "source": "gsc",
+      "decay_state": "decaying",
+      "decay_lost": 120,
+      "prev_clicks": 200,
+      "clicks": 80,
+      "decay_kind": "visibility",
+      "decay_basis": "Search Console clicks, 28 days against the 28 before (200 -> 80).",
+      "queries_json": "[{\"query\": \"crm implementation partner uae\", \"impressions\": 900, \"clicks\": 40, \"position\": 8}]"
+     }
+    ],
+    "ai_targets": [],
+    "skips": [
+     {
+      "key": "site_techand-ai:cyc:site_techand-ai:2026-10-21:crm implementation partner uae",
+      "site_id": "site_techand-ai",
+      "cycle_key": "cyc:site_techand-ai:2026-10-21",
+      "item_key": "crm implementation partner uae",
+      "decision": "approve",
+      "scope": "cycle",
+      "by": "owner",
+      "created_at": "2026-10-20T08:00:00.000Z"
+     },
+     {
+      "key": "site_techand-ai:cyc:site_techand-ai:2026-10-21:crm automation for sales teams",
+      "site_id": "site_techand-ai",
+      "cycle_key": "cyc:site_techand-ai:2026-10-21",
+      "item_key": "crm automation for sales teams",
+      "decision": "approve",
+      "scope": "cycle",
+      "by": "owner",
+      "created_at": "2026-10-20T08:00:00.000Z"
+     },
+     {
+      "key": "site_techand-ai:cyc:site_techand-ai:2026-10-21:crm consulting dubai",
+      "site_id": "site_techand-ai",
+      "cycle_key": "cyc:site_techand-ai:2026-10-21",
+      "item_key": "crm consulting dubai",
+      "decision": "approve",
+      "scope": "cycle",
+      "by": "owner",
+      "created_at": "2026-10-20T08:00:00.000Z"
+     },
+     {
+      "key": "site_techand-ai:cyc:site_techand-ai:2026-10-21:crm consulting dubai",
+      "site_id": "site_techand-ai",
+      "cycle_key": "cyc:site_techand-ai:2026-10-21",
+      "item_key": "crm consulting dubai",
+      "decision": "skip",
+      "scope": "cycle",
+      "by": "owner",
+      "created_at": "2026-10-20T08:00:00.000Z"
+     }
+    ],
+    "monitors": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "ai_visibility": false,
+      "ai_growth": true,
+      "ai_pages_month": ""
+     }
+    ]
+   },
+   "expect": {
+    "picks": [
+     {
+      "keyword": "crm automation for sales teams",
+      "source": "trend"
+     }
+    ],
+    "suggestions": [],
+    "waiting_for_keyword": true,
+    "refused": [],
+    "skipped": [
+     "crm consulting dubai"
+    ],
+    "approved_not_written": [
+     {
+      "keyword": "crm implementation partner uae",
+      "reason": "budget"
+     }
+    ]
+   }
+  },
+  {
+   "name": "approve_while_waiting_pileup",
+   "doc": "The pile-up guard holds an approval too: three written pages wait for publication (limit 3), so nothing is written, and the approval is listed in approved_not_written with the reason pileup.",
+   "level": 2,
+   "now": "2026-10-21T10:00:00.000Z",
+   "trigger": {
+    "trigger": "cycle",
+    "domain": "techand.ai",
+    "site_id": "site_techand-ai",
+    "cycle_key": "cyc:site_techand-ai:2026-10-21",
+    "scheduled_for": "2026-10-21T09:00:00.000Z",
+    "job": "content_cadence",
+    "monthly": false
+   },
+   "tables": {
+    "sites": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "country": "United Arab Emirates",
+      "status": "active",
+      "email": "",
+      "callback_url": "https://hooks.example.com/cb",
+      "services_json": "[\"CRM implementation services\", \"CRM consulting for sales teams\", \"CRM data migration\", \"Customer support desk setup\", \"Sales pipeline automation\", \"CRM training and adoption\"]",
+      "declared_services": "",
+      "competitors": "",
+      "brand_names": ""
+     }
+    ],
+    "cadence": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "pages_per_week": 1,
+      "status": "active"
+     }
+    ],
+    "ladders": [],
+    "ladder_settings": [
+     {
+      "ladder_id": "_site",
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "mode": "auto",
+      "opportunities": "",
+      "max_active": 2,
+      "max_waiting": 3,
+      "autopilot_level": 2
+     }
+    ],
+    "content_log": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "keyword": "crm pipeline stages",
+      "source": "ladder",
+      "ladder_id": "",
+      "request_id": "r-0",
+      "started_at": "2026-10-12T09:00:00.000Z",
+      "status": "written",
+      "published_url": ""
+     },
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "keyword": "crm for real estate dubai",
+      "source": "ladder",
+      "ladder_id": "",
+      "request_id": "r-1",
+      "started_at": "2026-10-13T09:00:00.000Z",
+      "status": "written",
+      "published_url": ""
+     },
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "keyword": "crm data cleanup",
+      "source": "ladder",
+      "ladder_id": "",
+      "request_id": "r-2",
+      "started_at": "2026-10-14T09:00:00.000Z",
+      "status": "written",
+      "published_url": ""
+     }
+    ],
+    "query_history": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "period_end": "2026-10-18",
+      "query": "crm consulting dubai",
+      "position": 7,
+      "impressions": 400,
+      "clicks": 6,
+      "page": "https://techand.ai/crm-consulting/"
+     }
+    ],
+    "trends": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "keyword": "crm",
+      "direction": "rising",
+      "rising": "crm automation for sales teams (+70%)",
+      "change_pct": 70,
+      "checked_at": "2026-10-19T09:00:00.000Z"
+     }
+    ],
+    "pages": [
+     {
+      "site_id": "site_techand-ai",
+      "url": "https://techand.ai/crm-implementation/",
+      "title": "CRM implementation",
+      "h1": "",
+      "source": "gsc",
+      "decay_state": "decaying",
+      "decay_lost": 120,
+      "prev_clicks": 200,
+      "clicks": 80,
+      "decay_kind": "visibility",
+      "decay_basis": "Search Console clicks, 28 days against the 28 before (200 -> 80).",
+      "queries_json": "[{\"query\": \"crm implementation partner uae\", \"impressions\": 900, \"clicks\": 40, \"position\": 8}]"
+     }
+    ],
+    "ai_targets": [],
+    "skips": [
+     {
+      "key": "site_techand-ai:cyc:site_techand-ai:2026-10-21:crm implementation partner uae",
+      "site_id": "site_techand-ai",
+      "cycle_key": "cyc:site_techand-ai:2026-10-21",
+      "item_key": "crm implementation partner uae",
+      "decision": "approve",
+      "scope": "cycle",
+      "by": "owner",
+      "created_at": "2026-10-20T08:00:00.000Z"
+     }
+    ],
+    "monitors": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "ai_visibility": false,
+      "ai_growth": true,
+      "ai_pages_month": ""
+     }
+    ]
+   },
+   "expect": {
+    "picks": [],
+    "suggestions": [
+     {
+      "keyword": "crm automation for sales teams",
+      "source": "trend"
+     },
+     {
+      "keyword": "crm consulting dubai",
+      "source": "striking"
+     }
+    ],
+    "waiting_for_keyword": true,
+    "refused": [],
+    "approved_not_written": [
+     {
+      "keyword": "crm implementation partner uae",
+      "reason": "pileup"
+     }
     ]
    }
   },
