@@ -91,6 +91,7 @@ module.exports = async (ctx) => {
       if (e.items) check(c.name + ': the preview plan (items with auto)', eq((f.items || []).map(x => ({ keyword: x.keyword, source: x.source, auto: x.auto })), e.items), JSON.stringify(f.items));
       if (e.awaiting) check(c.name + ': waiting for approval', eq((f.awaiting_approval || []).map(x => x.keyword), e.awaiting), JSON.stringify(f.awaiting_approval));
       if (e.skipped) check(c.name + ': skipped by the client', eq((f.skipped || []).map(x => x.item_key).sort(), [...e.skipped].sort()), JSON.stringify(f.skipped));
+      if (e.approved_not_written) check(c.name + ': approvals not written, with their reasons', eq((f.approved_not_written || []).map(x => ({ keyword: x.keyword, reason: x.reason })), e.approved_not_written), JSON.stringify(f.approved_not_written));
       if (e.budget_spent != null) check(c.name + ': R-K7 pages already spent in the cycle = ' + e.budget_spent, (f.budget || {}).spent === e.budget_spent, JSON.stringify(f.budget));
       // ---- KF3: the invariants every run must hold, whatever the case ----
       const refusedK = new Set((f.refused || []).map(x => cycleNormOf(x.keyword)));
