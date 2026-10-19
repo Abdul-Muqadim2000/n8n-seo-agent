@@ -273,7 +273,7 @@ function FoundLive({ rows, siteId }: { rows: P[]; siteId: string | null }) {
   return (
     <Block
       title={list.length === 1 ? 'We found your page live' : `We found ${list.length} of your pages live`}
-      description="Nobody had to report them: they count as published and their positions are checked every Monday from now on."
+      description="Nobody had to report them: they count as published and their positions are checked each week from now on."
       icon={<ScanSearch />}
       iconTone="good"
     >

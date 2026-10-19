@@ -457,7 +457,7 @@ export const GUIDES = [
         body: 'You should see the key as plain text, over https, with no redirect and no page design around it.',
         warn: 'A "404 not found", a login screen or your site\'s styled 404 page all mean the file is not at the root yet.',
       },
-      { title: 'Press "Check the file" here', body: 'We fetch it and compare it with the key. From then on the Monday AI growth run submits your new and updated pages automatically.' },
+      { title: 'Press "Check the file" here', body: 'We fetch it and compare it with the key. From then on the weekly AI growth run submits your new and updated pages automatically.' },
     ],
     done: 'The panel says IndexNow is ready, and the next weekly run reports how many pages it sent.',
     trouble: [
@@ -552,7 +552,7 @@ export const GUIDES = [
         body: 'Use **I published a page** and paste its address on {{domain}}. We read the live page (title, description, structured data, images, internal links), report anything the CMS dropped, and start tracking its position.',
       },
     ],
-    done: 'The page shows as published in the content list, and the rank tracker begins reporting its position the following Monday.',
+    done: 'The page shows as published in the content list, and the rank tracker begins reporting its position from the next weekly check.',
     trouble: [
       { q: 'My editor strips the HTML', a: 'Paste into a code / raw block rather than the visual editor. Visual editors routinely drop headings, link attributes and structured data.' },
       { q: 'The check says images are missing', a: 'The names in the package are a plan, not uploaded files. Add your own images, keep the alt text, and run the check again.' },

@@ -1,4 +1,5 @@
 import { useEngineCal } from '@/lib/engine-cal';
+import { useCycleDay } from '@/lib/cycle-day';
 import { PRICES } from '@/lib/prices';
 import { creditsLabel, formatCredits, toCredits } from '@/lib/credits';
 import { useId, type ReactNode } from 'react';
@@ -72,6 +73,8 @@ export function MonitorSettingsFields({
   aiMeasured?: AiMeasuredSample | null;
 }) {
   useEngineCal();   // R99 / R100: re-render with the engine's own prices once they arrive
+  const day = useCycleDay();
+  const everyDay = day.name ? `Every ${day.name}` : 'Each week';
   const set = (patch: Partial<MonitorSettings>) => onChange({ ...value, ...patch });
   const enginesId = useId();
 
@@ -80,7 +83,7 @@ export function MonitorSettingsFields({
       <MonitorRow icon={<Bot />} on={value.aiVisibility}>
       <SwitchRow
         title="AI visibility"
-        description="Your buyer questions asked on AI assistants and Google's AI answers: whether you are named or cited, who is named instead, how AI describes you, which sources it trusts, whether AI crawlers can read your site and what AI visits are worth (GA4). Full run every Monday."
+        description={`Your buyer questions asked on AI assistants and Google's AI answers: whether you are named or cited, who is named instead, how AI describes you, which sources it trusts, whether AI crawlers can read your site and what AI visits are worth (GA4). Full run ${day.every}.`}
         checked={value.aiVisibility}
         onCheckedChange={(v) => set({ aiVisibility: v })}
         disabled={disabled}
@@ -138,7 +141,7 @@ export function MonitorSettingsFields({
               </div>
               <Checkbox
                 label="Daily AI pulse"
-                description={`Asks your questions on ${AI_PULSE_ENGINES.filter((e) => value.aiEngines.includes(e)).map((e) => AI_ENGINES.find((x) => x.value === e)!.label).join(', ') || 'the fast engines'} each day except Monday (about ${creditsLabel(estimateAiVisibilityCost({ prompts: value.aiPromptsMax, engines: value.aiEngines, pulse: true, pulseMode: value.aiPulseMode, pulsePerWeek: value.aiPulsePerWeek }).pulse)} a month). Up to 50 questions it asks every one every morning; a bigger panel is asked as a rotating sample that covers every topic and buyer role each morning. AI answers change between asks: daily answers give steadier numbers and a same-day alert when something really changes.`}
+                description={`Asks your questions on ${AI_PULSE_ENGINES.filter((e) => value.aiEngines.includes(e)).map((e) => AI_ENGINES.find((x) => x.value === e)!.label).join(', ') || 'the fast engines'} each day except ${day.name ?? 'the day of your weekly run'} (about ${creditsLabel(estimateAiVisibilityCost({ prompts: value.aiPromptsMax, engines: value.aiEngines, pulse: true, pulseMode: value.aiPulseMode, pulsePerWeek: value.aiPulsePerWeek }).pulse)} a month). Up to 50 questions it asks every one every morning; a bigger panel is asked as a rotating sample that covers every topic and buyer role each morning. AI answers change between asks: daily answers give steadier numbers and a same-day alert when something really changes.`}
                 checked={value.aiPulse}
                 disabled={disabled || !AI_PULSE_ENGINES.some((e) => value.aiEngines.includes(e))}
                 onChange={(e) => set({ aiPulse: e.target.checked })}
@@ -171,13 +174,13 @@ export function MonitorSettingsFields({
               <div className="space-y-3 rounded-lg border border-line p-3">
                 <Checkbox
                   label="AI growth (weekly)"
-                  description="Every Monday: sends new and updated pages to Bing and IndexNow, checks your key pages can be read and quoted by AI, lists the pages AI cites without naming you (with outreach drafts) and queues the questions to win."
+                  description={`${everyDay}: sends new and updated pages to Bing and IndexNow, checks your key pages can be read and quoted by AI, lists the pages AI cites without naming you (with outreach drafts) and queues the questions to win.`}
                   checked={value.aiGrowth}
                   disabled={disabled}
                   onChange={(e) => set({ aiGrowth: e.target.checked })}
                 />
                 {value.aiGrowth && (
-                  <Field label="AI answer pages a month" hint={`Written by the Monday content run for the questions AI answers without you: a new answer page or a refresh of your page. About ${PRICES.page()} each, on top of the blog posts.`} className="max-w-xs">
+                  <Field label="AI answer pages a month" hint={`Suggested by the weekly content run for the questions AI answers without you: a new answer page or a refresh of your page. Written when you approve one, or on its own on full autopilot, at about ${PRICES.page()} each, on top of the pages for your keyword.`} className="max-w-xs">
                     {(p) => (
                       <Select {...p} value={value.aiPagesPerMonth} disabled={disabled} onChange={(e) => set({ aiPagesPerMonth: Number(e.target.value) })}>
                         {[...new Set([0, 1, 2, 3, 4, 6, 8, value.aiPagesPerMonth])].sort((x, y) => x - y).filter((n) => n <= AI_PAGES_MAX).map((n) => (
@@ -209,7 +212,7 @@ export function MonitorSettingsFields({
       <MonitorRow icon={<Send />} on={value.linkBuilder}>
       <SwitchRow
         title="Link builder"
-        description="Every Monday: new link opportunities (journalist requests, dead links to replace, resource pages, lists that leave you out), the right person and the right page of yours, and short e-mail sequences for you to approve. Nothing is sent without your approval, and only from your own mailbox."
+        description={`${everyDay}: new link opportunities (journalist requests, dead links to replace, resource pages, lists that leave you out), the right person and the right page of yours, and short e-mail sequences for you to approve. Nothing is sent without your approval, and only from your own mailbox.`}
         checked={value.linkBuilder}
         onCheckedChange={(v) => set({ linkBuilder: v })}
         disabled={disabled}

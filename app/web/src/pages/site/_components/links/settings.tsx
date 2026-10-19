@@ -1,4 +1,5 @@
 import { useEngineCal } from '@/lib/engine-cal';
+import { useCycleDay } from '@/lib/cycle-day';
 // Link building, the website's settings (approve each / automatic, the mailbox) and "Find opportunities now".
 import { PRICES } from '@/lib/prices';
 import { useEffect, useState } from 'react';
@@ -19,6 +20,7 @@ import { MoreLink, Panel, useSitePage } from '../kit';
 
 export function LinkSettingsCard({ d, onRun }: { d: LinkBuildingData; onRun?: () => void }) {
   const { org, site, can } = useSitePage();
+  const day = useCycleDay(site);
   const update = useUpdateLinkSettings(org.id, site.id);
   const admin = can('admin');
   const owner = can('owner');
@@ -54,7 +56,7 @@ export function LinkSettingsCard({ d, onRun }: { d: LinkBuildingData; onRun?: ()
         footer={
           admin ? (
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span>{d.lastRun ? `Last search ${fmtDate(d.lastRun)} · next Monday 11:00` : 'Runs every Monday at 11:00'}</span>
+              <span>{d.lastRun ? `Last search ${fmtDate(d.lastRun)} · runs ${day.every}` : `Runs ${day.every}`}</span>
               <Button size="sm" disabled={!dirty || (mode === 'auto' && !maxOk)} loading={update.isPending} onClick={save}>
                 Save settings
               </Button>
@@ -140,7 +142,7 @@ export function LinkSettingsCard({ d, onRun }: { d: LinkBuildingData; onRun?: ()
             <div className="flex flex-col gap-3 rounded-lg bg-surface-2 p-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0 text-[13px]">
                 <p className="font-medium text-ink">Find opportunities now</p>
-                <p className="mt-0.5 text-ink-3">Runs the weekly search for this website now instead of waiting for Monday.</p>
+                <p className="mt-0.5 text-ink-3">Runs the weekly search for this website now instead of waiting for {day.name ?? 'the weekly run'}.</p>
               </div>
               <Button size="sm" variant="secondary" icon={<Search className="size-3.5" />} onClick={onRun}>
                 Find opportunities now

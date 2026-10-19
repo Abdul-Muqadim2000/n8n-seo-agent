@@ -7,6 +7,7 @@ import { ExternalLink, KeyValue, Meter } from '@/components/ui/misc';
 import { IconTile } from '@/components/insight';
 import { Dialog } from '@/components/ui/overlay';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
+import { useCycleDay } from '@/lib/cycle-day';
 import { paths } from '@/lib/paths';
 import { cn, fmtDate } from '@/lib/utils';
 import { Chips, Panel } from '../kit';
@@ -23,10 +24,10 @@ const RUNG_HINT: Record<number, string> = {
 };
 
 /** One line under the keyword: where the page stands. */
-function pageLine(p: LadderPage): string {
+function pageLine(p: LadderPage, onDay: string): string {
   switch (p.state) {
     case 'published':
-      if (p.position == null) return 'First Google check next Monday';
+      if (p.position == null) return `First Google check ${onDay}`;
       return p.position > 0 ? `Google position ${positionWords(p.position).replace('#', '')}` : positionWords(p.position);
     case 'waiting': {
       const d = daysSince(p.writtenAt);
@@ -46,6 +47,7 @@ function pageLine(p: LadderPage): string {
 
 export function Climb({ ladder, onWrite }: { ladder: LadderDetail; onWrite: (i: WriteNowItem) => void }) {
   const [open, setOpen] = useState<LadderPage | null>(null);
+  const day = useCycleDay();
   const columns = useMemo(() => {
     const m = new Map<number, LadderPage[]>();
     for (const p of ladder.pages ?? []) {
@@ -113,7 +115,7 @@ export function Climb({ ladder, onWrite }: { ladder: LadderDetail; onWrite: (i: 
                             <ArrowRight className="mt-0.5 size-3.5 shrink-0 text-ink-3 transition-[translate,color] duration-200 ease-brand group-hover/page:translate-x-0.5 group-hover/page:text-accent-text" aria-hidden />
                           </span>
                           <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-ink-3">
-                            {pageLine(p)}
+                            {pageLine(p, day.on)}
                             {p.state === 'published' && <PositionChange change={p.previousPosition != null && p.position != null && p.position > 0 && p.previousPosition > 0 ? p.previousPosition - p.position : null} />}
                           </span>
                         </button>
@@ -134,6 +136,7 @@ export function Climb({ ladder, onWrite }: { ladder: LadderDetail; onWrite: (i: 
 function PagePanel({ page: p, ladder, onClose, onWrite }: { page: LadderPage; ladder: LadderDetail; onClose: () => void; onWrite: (i: WriteNowItem) => void }) {
   const { org, can } = useOrgCtx();
   const { site } = useSiteCtx();
+  const day = useCycleDay(site);
   const canWrite = can('member') && (p.state === 'planned' || p.state === 'gated');
   const history = sortByDate(p.history ?? [], (h) => h.checkedAt);
   const write = () => {
@@ -187,7 +190,7 @@ function PagePanel({ page: p, ladder, onClose, onWrite }: { page: LadderPage; la
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
           <PageStateBadge state={p.state} />
-          <span className="text-[13px] text-ink-3">{pageLine(p)}</span>
+          <span className="text-[13px] text-ink-3">{pageLine(p, day.on)}</span>
         </div>
         {p.state === 'gated' && (
           <p className="text-[13px] leading-snug text-ink-2">

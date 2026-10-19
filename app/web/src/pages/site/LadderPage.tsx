@@ -31,6 +31,7 @@ import { PageHeader } from '@/components/ui/misc';
 import { CountUp, HeroNextStep, HeroStat, IconTile, Stagger, SummaryHero } from '@/components/insight';
 import { ApiRequestError } from '@/lib/api';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
+import { useCycleDay } from '@/lib/cycle-day';
 import { paths } from '@/lib/paths';
 import { useLadder } from '@/lib/queries';
 import { cn, fmtAgo, fmtDate, fmtDay } from '@/lib/utils';
@@ -257,6 +258,7 @@ const EVENT_ICON: Record<LadderTimelineEvent['kind'], ReactNode> = {
 };
 
 function Timeline({ events }: { events: LadderTimelineEvent[] }) {
+  const day = useCycleDay();
   const past = sortByDate(
     events.filter((e) => !e.future),
     (e) => e.at,
@@ -288,7 +290,7 @@ function Timeline({ events }: { events: LadderTimelineEvent[] }) {
     </li>
   );
   return (
-    <Panel icon={<CalendarClock />} title="Timeline" description="What happened so far and what comes next on the Mondays ahead.">
+    <Panel icon={<CalendarClock />} title="Timeline" description={`What happened so far and what comes next ${day.name ? `on the ${day.name}s ahead` : 'in the weeks ahead'}.`}>
       {!events.length ? (
         <p className="text-sm text-ink-3">Nothing yet: the plan, written pages, publishing and Google milestones show up here.</p>
       ) : (
@@ -323,6 +325,7 @@ const score = (p: LadderPage) => (ranked(p.position) ? p.position : ranked(p.bes
 
 function PositionResults({ ladder: l }: { ladder: LadderDetail }) {
   const lines = useMemo(() => resultLines(l), [l]);
+  const day = useCycleDay();
   // every check "not in the top 50": a chart of lines on the floor says nothing
   if (!lines.some((x) => x.history.some((h) => h.position > 0))) {
     const checks = [...new Set(lines.flatMap((x) => x.history.map((h) => String(h.checkedAt).slice(0, 10))))].sort();
@@ -335,7 +338,7 @@ function PositionResults({ ladder: l }: { ladder: LadderDetail }) {
           description={
             checks.length
               ? `Checked ${checks.length === 1 ? 'once' : `on ${checks.length} days`} since ${fmtDate(checks[0])}. Pages usually need a few weeks after they go live; the easy pages show up first. The chart starts with the first page in the top 50.`
-              : 'The rank check runs every Monday. Positions show up here once the ladder\'s pages are checked.'
+              : `The rank check runs ${day.every}. Positions show up here once the ladder's pages are checked.`
           }
         />
       </Panel>

@@ -51,7 +51,7 @@ export const AUTO_ICON: Record<AutomationId, ReactNode> = {
 const dtf = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(undefined, o);
 /** "Mon 5 Oct, 17:00" */
 export const fmtWhen = (iso: string) => dtf({ weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
-/** "Monday 5 October" */
+/** "Wednesday 7 October" */
 export const fmtDayHead = (iso: string) => dtf({ weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(iso));
 /** "Mon 5 Oct" */
 export const fmtShortDay = (iso: string) => dtf({ weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(iso));
