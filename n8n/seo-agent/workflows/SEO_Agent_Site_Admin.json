@@ -1817,6 +1817,72 @@
           "dataTableId": {
             "__rl": true,
             "mode": "name",
+            "value": "seo_cycles"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "site_id",
+                "condition": "eq",
+                "keyValue": "={{ $('Admin Action').first().json.site_id }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "6d2b72b6-d852-527c-b5c2-379a70bc3c09",
+        "name": "Delete Cycle (Admin)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          620,
+          -400
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput",
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "deleteRows",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_cycle_jobs"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "site_id",
+                "condition": "eq",
+                "keyValue": "={{ $('Admin Action').first().json.site_id }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "de438a10-7f56-5603-b2e2-c913c3384b68",
+        "name": "Delete Cycle Jobs (Admin)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          690,
+          -320
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput",
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "deleteRows",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
             "value": "seo_sites"
           },
           "matchType": "allConditions",
@@ -1825,7 +1891,7 @@
               {
                 "keyName": "site_id",
                 "condition": "eq",
-                "keyValue": "={{ $json.site_id }}"
+                "keyValue": "={{ $('Admin Action').first().json.site_id }}"
               }
             ]
           },
@@ -1840,7 +1906,8 @@
           -240
         ],
         "alwaysOutputData": true,
-        "onError": "continueRegularOutput"
+        "onError": "continueRegularOutput",
+        "executeOnce": true
       },
       {
         "parameters": {
@@ -3290,7 +3357,7 @@
         "main": [
           [
             {
-              "node": "Delete Site",
+              "node": "Delete Cycle (Admin)",
               "type": "main",
               "index": 0
             }
@@ -3340,6 +3407,28 @@
           [
             {
               "node": "Set Content Groups",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Delete Cycle (Admin)": {
+        "main": [
+          [
+            {
+              "node": "Delete Cycle Jobs (Admin)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Delete Cycle Jobs (Admin)": {
+        "main": [
+          [
+            {
+              "node": "Delete Site",
               "type": "main",
               "index": 0
             }
