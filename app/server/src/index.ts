@@ -63,7 +63,7 @@ async function main() {
       .catch((err) => app.log.warn({ err: String(err) }, 'scheduled report delivery failed'))
       .then(() => retryTick(app.log).catch((err) => app.log.warn({ err: String(err) }, 'report delivery retry failed')));
   const deliveryTimer = setInterval(() => void delivery(), 5 * 60 * 1000);
-  // G4: event webhooks — every minute the deliveries whose next attempt is due (1 / 5 / 30 / 120 / 720 minutes, then given up)
+  // G4: event webhooks, every minute the deliveries whose next attempt is due (1 / 5 / 30 / 120 / 720 minutes, then given up)
   const webhookTimer = setInterval(() => void webhookTick(app.log).catch((err) => app.log.warn({ err: String(err) }, 'webhook retry failed')), 60 * 1000);
   // G4: scheduled warehouse exports (S3-compatible storage, BigQuery), checked every five minutes
   const exportTimer = setInterval(() => void exportTick(app.log).catch((err) => app.log.warn({ err: String(err) }, 'export tick failed')), 5 * 60 * 1000);
@@ -80,7 +80,7 @@ async function main() {
   // admin panel: what every run cost (engine ledger -> cost_events) and the credits it used, every 10 minutes; ADMIN_COST_SYNC=false stops it
   const stopCostSync = config.admin.costSync ? startCostSync(app.log) : () => undefined;
   // credits (app/docs/CREDITS.md): plan credits, expiry, pausing / resuming schedules, low-balance notices
-  // credits (app/docs/CREDITS.md): the companies from before credits get what a new company gets — once, before the guard's first pass
+  // credits (app/docs/CREDITS.md): the companies from before credits get what a new company gets, once, before the guard's first pass
   await alignExistingCompanies(app.log, { auto: true }).catch((err) => app.log.error({ err: String(err) }, 'bringing existing companies onto credits failed'));
   const stopCreditGuard = config.admin.creditGuard ? startCreditGuard(app.log) : () => undefined;
   const stop = async () => {

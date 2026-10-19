@@ -55,7 +55,7 @@ function Capacity({ data, cards }: { data: PipelineData; cards: LadderCard[] }) 
   const opportunities = (data.automation?.opportunities ?? 'auto') === 'auto';
   const maxActive = data.automation?.maxActiveLadders ?? 2;
   const cadence = data.automations.find((a) => a.id === 'content_cadence');
-  const users = [...ladders.map((l) => `“${l.head}”`), ...(opportunities ? ['opportunity posts'] : [])];
+  const users = [...ladders.map((l) => `"${l.head}"`), ...(opportunities ? ['opportunity posts'] : [])];
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-4 shadow-card sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 items-start gap-3.5 text-[13px]">
@@ -266,7 +266,7 @@ function Monitoring({ data }: { data: PipelineData }) {
                     <CalendarClock className="size-3.5" aria-hidden />
                     Next
                   </dt>
-                  <dd className="min-w-0 text-ink">{validDate(a.nextRunAt) ? `${fmtWhen(a.nextRunAt)} · ${inDays(a.nextRunAt)}` : (a.reason ?? '–')}</dd>
+                  <dd className="min-w-0 text-ink">{validDate(a.nextRunAt) ? `${fmtWhen(a.nextRunAt)} · ${inDays(a.nextRunAt)}` : (a.reason ?? '-')}</dd>
                 </div>
                 <div className="flex items-start gap-2">
                   <dt className="flex w-12 shrink-0 items-center gap-1 text-ink-3">

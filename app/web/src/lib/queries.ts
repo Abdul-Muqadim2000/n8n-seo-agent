@@ -138,8 +138,8 @@ export function useMe() {
     staleTime: 60_000,
     retry: noRetryOn4xx,
     // with the API down (a 503), the failed query must stay failed: by default every component that starts reading it retries it,
-    // which puts it back to pending — RootRoute then swaps the home page for its loader, the header unmounts, the retry fails and
-    // the header mounts again: an endless loop of /api/me behind "Loading…" (alaventra.com, 2026-10-18). A reload or an explicit
+    // which puts it back to pending, RootRoute then swaps the home page for its loader, the header unmounts, the retry fails and
+    // the header mounts again: an endless loop of /api/me behind "Loading..." (alaventra.com, 2026-10-18). A reload or an explicit
     // refetch still tries again.
     retryOnMount: false,
   });
@@ -300,7 +300,7 @@ export function useTestDelivery(orgId: string) {
   });
 }
 
-// ---- B5-11: company API keys (Company settings → API access) ----
+// ---- B5-11: company API keys (Company settings -> API access) ----
 export const useApiKeys = (orgId: string, enabled = true) =>
   useQuery({ queryKey: [...qk.org(orgId), 'api-keys'], queryFn: () => api<{ items: ApiKeyView[]; max: number }>(`/api/orgs/${orgId}/api-keys`), enabled });
 
@@ -320,7 +320,7 @@ export function useRevokeApiKey(orgId: string) {
   });
 }
 
-/** B3-7: "Check a page before you publish" — free, synchronous, writes nothing. */
+/** B3-7: "Check a page before you publish", free, synchronous, writes nothing. */
 export function usePublishCheck(orgId: string, siteId: string) {
   return useMutation({
     mutationFn: (body: PublishCheckInput) => api<PublishCheckResult>(`/api/orgs/${orgId}/sites/${siteId}/publish-check`, { method: 'POST', body }),
@@ -566,7 +566,7 @@ export interface Suppression {
   reason: string;
   createdAt: string;
 }
-/** POST …/mailboxes/:id/test */
+/** POST .../mailboxes/:id/test */
 export interface MailboxTestResult {
   ok: boolean;
   smtp: { ok: boolean; error: string | null };

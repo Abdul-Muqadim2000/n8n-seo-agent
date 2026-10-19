@@ -193,7 +193,7 @@ try:
     s, reps = owner.get(f'/api/orgs/{O}/reports')
     check('the stored report is listed for the company', s == 200 and len(reps) == 1 and reps[0]['scheduled'], reps)
     s, reps2 = stranger.get(f"/api/orgs/{org2['id']}/reports")
-    check('…and not for another company', s == 200 and reps2 == [], reps2)
+    check('...and not for another company', s == 200 and reps2 == [], reps2)
 
     # password reset and logout
     s, d = owner.post('/api/auth/forgot', {'email': owner_email})

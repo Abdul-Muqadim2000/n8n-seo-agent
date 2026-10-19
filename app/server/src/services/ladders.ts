@@ -50,14 +50,14 @@ import { creditsOfUsd } from './admin/settings';
 // Page states (LadderPageState):
 // - published: the content log has the page's address (the publish check), or the ladder row says published;
 // - writing: a run of the app for the keyword is going, or the page started less than 3 hours ago (content log row, or the ladder
-//   row marked "writing" by the ladder run itself) and no page has arrived since — the app's own runs expire after 3 hours;
+//   row marked "writing" by the ladder run itself) and no page has arrived since, the app's own runs expire after 3 hours;
 // - waiting: started longer ago, or its page arrived: written, not published. A page whose latest run failed and never arrived is
 //   planned again (it was not written; the failed run shows under Needs you);
 // - gated: the main page of a Short / Full ladder while fewer than half of its supporting pages are live and the main keyword is not
 //   in the top 30 (§6.2), as the Content Cadence holds it back (Cadence_Plan.js, since Phase 2); MAIN_PAGE_GATE turns the rule off;
 // - planned: the rest.
 // Ladders without a seo_ladder_settings row take the website's default mode (the '_site' row, else Auto) and are active, in
-// start-date order; beyond the website's limit of active Auto ladders they are Queued — the same rules as Cadence_Plan.js. What the
+// start-date order; beyond the website's limit of active Auto ladders they are Queued, the same rules as Cadence_Plan.js. What the
 // Monday runs write (the dated pages, Queued, the pile-up guard, Manual ladders' next pages) comes from the cadence mirror
 // (cadence.ts) through LadderSchedule; without it (older callers, tests) the same rules run on the page states here.
 
@@ -74,7 +74,7 @@ const n = (v: unknown): number => (Number.isFinite(Number(v)) ? Number(v) : 0);
 const s = (v: unknown): string => (v == null ? '' : String(v));
 const round2 = (x: number) => Math.round(x * 100) / 100;
 const plural = (k: number, one: string, many = one + 's') => `${k} ${k === 1 ? one : many}`;
-const q = (k: string) => `“${k}”`;
+const q = (k: string) => `"${k}"`;
 const isoOk = (v: unknown): v is string => typeof v === 'string' && v !== '' && !Number.isNaN(Date.parse(v));
 /** host-agnostic page address: no protocol, no www., no query, no trailing slash */
 export const urlKey = (u: string) =>
@@ -181,8 +181,8 @@ export interface WaitingPage {
   writtenAt: string | null;
   days: number;
   /**
-   * R111 (2026-10-16): the draft's last quality round failed (`seo_content_log.status = 'not_ready'`). It still waits — it counts
-   * toward the pile-up guard, labelled "needs a fix" — but it is never offered for publishing: the customer fixes it and runs it again.
+   * R111 (2026-10-16): the draft's last quality round failed (`seo_content_log.status = 'not_ready'`). It still waits, it counts
+   * toward the pile-up guard, labelled "needs a fix", but it is never offered for publishing: the customer fixes it and runs it again.
    */
   needsFix?: boolean;
   /** the quality check's reasons (`qa_reasons`, '; '-joined in the row), when the engine recorded them */
@@ -190,7 +190,7 @@ export interface WaitingPage {
 }
 
 /**
- * R111: the content-log row that stands for a page right now — the newest one not yet published — and whether its draft failed the
+ * R111: the content-log row that stands for a page right now, the newest one not yet published, and whether its draft failed the
  * quality check. Old rows only ever say `written` / `started`, so they read exactly as before.
  */
 export function draftQa(logs: ContentLogRow[]): { needsFix: boolean; reasons: string[] } {
@@ -201,7 +201,7 @@ export function draftQa(logs: ContentLogRow[]): { needsFix: boolean; reasons: st
   return { needsFix: true, reasons };
 }
 
-/** "“kw” did not pass the quality check (reason; reason)" — one line per draft, for Needs you and the pile-up note. */
+/** ""kw" did not pass the quality check (reason; reason)", one line per draft, for Needs you and the pile-up note. */
 export const fixLine = (w: Pick<WaitingPage, 'keyword' | 'reasons'>): string =>
   `${q(w.keyword)} did not pass the quality check${w.reasons?.length ? ` (${w.reasons.slice(0, 3).join('; ')})` : ''}`;
 
@@ -214,7 +214,7 @@ export interface LadderBuild {
   waiting: WaitingPage[];
   /** clicks of all published ladder pages, latest Search Console period */
   clicks28d: number;
-  /** ladder pages that improve a page the website already has: `${ladderId}|${keyword}` → its address */
+  /** ladder pages that improve a page the website already has: `${ladderId}|${keyword}` -> its address */
   existingPages: Map<string, string>;
   /** Manual ladders' next pages (the cadence mirror's; else the first planned page) */
   awaiting: QueueItem[];
@@ -366,7 +366,7 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
         writtenAt = started ?? report?.receivedAt ?? null;
       } else if (status === 'set_aside') {
         // R16 (2026-10-13): the keyword rule refused this planned page (a competitor's brand, a government portal, an off-topic
-        // search). n8n wrote `set_aside` on the row with the reason in its weekly note, and the Monday runs skip it — so the app
+        // search). n8n wrote `set_aside` on the row with the reason in its weekly note, and the Monday runs skip it, so the app
         // must not show it as a page that is coming, and must not offer "Write now" for it.
         state = 'set_aside';
       } else {
@@ -638,7 +638,7 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
           {
             keyword: p.keyword,
             source: 'ladder' as const,
-            why: `Keyword ladder “${b.head}”, ${p.rung === 4 ? 'the main page' : `rung ${p.rung}`}: the next planned page towards the main keyword`,
+            why: `Keyword ladder "${b.head}", ${p.rung === 4 ? 'the main page' : `rung ${p.rung}`}: the next planned page towards the main keyword`,
             pageType: p.pageType || 'Service Page',
             existingPageUrl: existingPages.get(`${b.id}|${norm(p.keyword)}`) ?? '',
             ladder: { id: b.id, rung: p.rung, head: s(row.head_keyword) || b.head, pageNo: p.pageNo },
@@ -721,9 +721,9 @@ export function ladderNeedsYou(b: LadderBuild, cs: { creditValueUsd: number; mar
       severity: 'warning',
       title: pile.now
         ? `Weekly posts stopped: ${plural(pile.waiting, 'written page')} waiting for publication`
-        : `Last Monday’s posts were skipped: ${plural(pile.waiting, 'written page')} waited for publication`,
+        : `Last Monday's posts were skipped: ${plural(pile.waiting, 'written page')} waited for publication`,
       detail:
-        (pile.lastRunAt ? 'Last Monday’s run wrote nothing for this reason. ' : '') +
+        (pile.lastRunAt ? 'Last Monday\'s run wrote nothing for this reason. ' : '') +
         // D5: ladder pages count too, so say which pages they are
         (b.waiting.length ? `Waiting: ${b.waiting.slice(0, 4).map((w) => (w.needsFix ? `${q(w.keyword)} (needs a fix)` : q(w.keyword))).join(', ')}${b.waiting.length > 4 ? ' and more' : ''}. ` : '') +
         `No new page is written while ${pile.max === 1 ? 'a page waits' : `${pile.max} or more pages wait`} to be published (the pile-up guard, your limit). ` +
@@ -733,7 +733,7 @@ export function ladderNeedsYou(b: LadderBuild, cs: { creditValueUsd: number; mar
       action: { label: 'See the pages', page: 'content' },
     });
 
-  // R111: drafts that failed their quality check are never offered for publishing — they get a "fix it and run it again" item
+  // R111: drafts that failed their quality check are never offered for publishing, they get a "fix it and run it again" item
   const fixByLadder = group(b.waiting.filter((w) => w.needsFix), (w) => w.ladderId ?? '');
   for (const [id, list] of fixByLadder) {
     const first = [...list].sort((x, y) => y.days - x.days)[0];

@@ -227,7 +227,7 @@ const reasonList = (v: unknown): string[] => (Array.isArray(v) ? v.map(s) : s(v)
 
 export function engineActions(list: unknown, source: EngineAction['source'], receivedAt: string): EngineAction[] {
   return arr(list)
-    // R111: a `fix_draft` action is kept even when the engine sent no sentence for it — the app words it from the keyword and reasons
+    // R111: a `fix_draft` action is kept even when the engine sent no sentence for it, the app words it from the keyword and reasons
     .filter((a) => a && typeof a === 'object' && (a.action || a.text || (s(a.type) === 'fix_draft' && a.keyword)))
     .map((a) => ({
       source,
@@ -304,7 +304,7 @@ export async function trackerSnapshot(org: OrgRow, site: SiteRow): Promise<Track
 // ---------------- G12 / G29: chart annotations, change tests and lineage ----------------
 
 /**
- * G12 (2026-10-13, FIX_PLAN; criteria 3.5 / 2.12): the events a chart is marked with, from rows the app already stores — pages that
+ * G12 (2026-10-13, FIX_PLAN; criteria 3.5 / 2.12): the events a chart is marked with, from rows the app already stores, pages that
  * went live, technical audits with the findings they cleared, and the dated registry of Google updates and data breaks
  * (`shared/src/annotations.ts`, generated from `n8n/seo-agent/v5/data/seo_events.json`). A window where nothing happened gets none.
  */
@@ -315,8 +315,8 @@ export function chartAnnotations(input: { from?: string | null; to?: string | nu
     published: (input.log ?? [])
       .filter((r) => s(r.published_at))
       .map((r) => ({ publishedAt: s(r.published_at), keyword: s(r.keyword), url: s(r.published_url), source: s(r.source) })),
-    // R66: the marks compare each audit with the one before it, so they are fed one report type only — the technical audits. A full
-    // report scores other findings on other weights; between two technical audits it would print "health 83 → 70" that never happened.
+    // R66: the marks compare each audit with the one before it, so they are fed one report type only, the technical audits. A full
+    // report scores other findings on other weights; between two technical audits it would print "health 83 -> 70" that never happened.
     audits: (input.audits ?? []).filter((a) => s(a.report_type) !== 'full').map((a) => ({ auditedAt: s(a.audited_at), healthScore: nn(a.health_score), findings: nn(a.findings) })),
   });
 }
@@ -351,7 +351,7 @@ export async function searchData(org: OrgRow, site: SiteRow): Promise<SearchData
   ]);
   const seen = new Set<string>();
   const latestTrends = trends.filter((t) => (seen.has(t.keyword) ? false : (seen.add(t.keyword), true))).map(toTrend);
-  // the Site Tracker inserts a row per run: a re-run for the same period stores the period again — keep the newest check
+  // the Site Tracker inserts a row per run: a re-run for the same period stores the period again, keep the newest check
   const qs = latestPer(queries, (q) => `${s(q.query).toLowerCase()}|${s(q.period_end)}`);
   const ms = latestPer(metrics, (m) => s(m.period_end)).sort(byDate((m) => s(m.period_end)));
   const periods = [...new Set(qs.map((q) => s(q.period_end)))].filter(Boolean).sort().reverse();
@@ -599,7 +599,7 @@ export async function rankingsData(site: SiteRow): Promise<RankingsData> {
     };
   });
   keywords.sort((a, c) => (a.latestPosition || 999) - (c.latestPosition || 999));
-  // G29: a position is one results page at one moment and the share of voice is modelled — the page says so next to the numbers
+  // G29: a position is one results page at one moment and the share of voice is modelled, the page says so next to the numbers
   const desk = desktopRows(history);
   const lineageList: Lineage[] = [
     desk.length
@@ -614,7 +614,7 @@ export async function rankingsData(site: SiteRow): Promise<RankingsData> {
       period: lineageAsOf(s(desk[desk.length - 1]?.checked_at)),
       sample: lineageSample(desk.filter((r) => sov(r) != null).length, 'checks with a reading'),
       basis: 'modelled',
-      note: 'our share of the clicks page one offers, modelled from the position and the results-page features — not measured clicks',
+      note: 'our share of the clicks page one offers, modelled from the position and the results-page features, not measured clicks',
     }),
     history.some((r) => isMobile(r))
       ? lineage('Mobile position', 'serp', { period: lineageAsOf(s(history.filter(isMobile).pop()?.checked_at)), sample: lineageSample(history.filter(isMobile).length, 'mobile checks'), basis: 'one_sample' })
@@ -730,9 +730,9 @@ const toAudit = (r: AuditRow): AuditPoint => ({
 });
 
 /**
- * R66 (2026-10-16): the audit an audit is compared with — the one before it **of the same report type**, the engine's own rule
+ * R66 (2026-10-16): the audit an audit is compared with, the one before it **of the same report type**, the engine's own rule
  * (v5/code/Audit_Diff.js, D2). A full report scores Authority / Schema / AI / content findings a technical audit never looks at, on
- * other weights, so its neighbour of the other type gave "25 new issues" and "health down 83 → 70" that never happened. Rows with no
+ * other weights, so its neighbour of the other type gave "25 new issues" and "health down 83 -> 70" that never happened. Rows with no
  * report type (written before v4.5) are compared with nothing, as the engine does. Relative to the SELECTED audit, not the latest.
  */
 export function previousOfType<T extends { reportType: string }>(points: T[], idx: number): T | null {
@@ -742,7 +742,7 @@ export function previousOfType<T extends { reportType: string }>(points: T[], id
   return null;
 }
 
-/** G26: the impact weight of a stored finding — null for the audits written before the column existed (they keep the severity order). */
+/** G26: the impact weight of a stored finding, null for the audits written before the column existed (they keep the severity order). */
 const impactOf = (f: AuditFindingRow): number | null => {
   const v: unknown = f.impact;
   return v == null || v === '' ? null : n(v);
@@ -761,7 +761,7 @@ export function oneReadingFinding(f: { title?: unknown; category?: unknown; sour
 export async function technicalData(org: OrgRow, site: SiteRow, auditId?: string): Promise<TechnicalData> {
   const d = site.domain;
   // G11 + G25 (2026-10-13, FIX_PLAN): the daily key-page watch and what Search Console says about those pages live in seo_page_watch,
-  // written by the engine (`SEO Agent — Page Watch` every morning, the weekly URL Inspection rotation). The app only reads them.
+  // written by the engine (`SEO Agent, Page Watch` every morning, the weekly URL Inspection rotation). The app only reads them.
   const [audits, reports, watchRows] = await Promise.all([
     siteRows<AuditRow>('audits', d, { sortBy: 'audited_at:asc', max: 500 }),
     reportsList(org.id, { siteId: site.id, stages: ['site_audit', 'full_report'], limit: 12 }),
@@ -795,7 +795,7 @@ export async function technicalData(org: OrgRow, site: SiteRow, auditId?: string
     ...prev
       .filter((f) => !curKeys.has(f.finding_key))
       // R74 (A2, 2026-10-16): a finding that rested on ONE outside reading (a results page, an AI answer, a model-written content
-      // review) and is not seen now is "no longer seen", never "fixed" — the engine's own diff (Audit_Diff.js) keeps it out of
+      // review) and is not seen now is "no longer seen", never "fixed", the engine's own diff (Audit_Diff.js) keeps it out of
       // `fixed`; the app derives "fixed" itself, so it applies the same rule and does not list it as fixed
       .filter((f) => !oneReadingFinding(f, selected?.reportType ?? '') && !notFixed.has(f.finding_key))
       .map((f) => ({ key: s(f.finding_key), category: s(f.category), severity: s(f.severity), title: s(f.title), affectedCount: 0, previousCount: n(f.affected_count), status: 'fixed' as const, impact: impactOf(f), impactBasis: s(f.impact_basis), recheck: recheckOf(f) })),
@@ -831,10 +831,10 @@ export async function technicalData(org: OrgRow, site: SiteRow, auditId?: string
 // ---------------- AI visibility ----------------
 
 /**
- * The AI Pulse days, one point per date. Since R95 (A5, 2026-10-16) `seo_ai_daily` can hold TWO rows for one date — the scheduled
- * reading and an on-demand one (keyed site_id + date + run_id) — so the rows of a date are pooled: samples, mentioned and cited are
+ * The AI Pulse days, one point per date. Since R95 (A5, 2026-10-16) `seo_ai_daily` can hold TWO rows for one date, the scheduled
+ * reading and an on-demand one (keyed site_id + date + run_id), so the rows of a date are pooled: samples, mentioned and cited are
  * summed and the rates recomputed from the sums (the engine's own `pct`, a percentage to one decimal); share of voice and the
- * visibility score are sample-weighted. `checkedAt` (R104) is the newest reading of the day — when the pulse really ran.
+ * visibility score are sample-weighted. `checkedAt` (R104) is the newest reading of the day, when the pulse really ran.
  */
 export function aiDailySeries(days: AiDailyRow[]): AiDay[] {
   const pct = (a: number, b: number) => (b ? Math.round((1000 * a) / b) / 10 : 0);
@@ -959,7 +959,7 @@ function toIndex(x: P | null): AiIndex | null {
     platforms: arr<string>(x.platforms).map(String),
     sov: nn(x.sov),
     answersCitingYou: n(x.answers_citing_you),
-    brands: arr(x.brands).map((y) => ({ key: s(y.key), label: s(y.domain) || (y.name ? `“${s(y.name)}” by name` : s(y.key)), you: b(y.you), mentions: n(y.mentions), aiSearchVolume: n(y.ai_search_volume), share: nn(y.share) })),
+    brands: arr(x.brands).map((y) => ({ key: s(y.key), label: s(y.domain) || (y.name ? `"${s(y.name)}" by name` : s(y.key)), you: b(y.you), mentions: n(y.mentions), aiSearchVolume: n(y.ai_search_volume), share: nn(y.share) })),
     questions: arr(x.questions).map((q) => ({ question: s(q.question), volume: n(q.volume), platform: s(q.platform) })),
     suggestions: arr(x.suggestions).map((q) => ({ question: s(q.question), volume: n(q.volume), platform: s(q.platform), youCited: b(q.you_cited) })),
     fanout: arr(x.fanout).map((f) => ({ query: s(f.query), count: n(f.count), engines: arr<string>(f.engines).map(String), questions: arr<string>(f.questions).map(String) })),
@@ -1280,7 +1280,7 @@ export async function backlinksData(org: OrgRow, site: SiteRow): Promise<Backlin
         firstSeen: s(p.first_seen),
         lastSeen: s(p.last_seen),
         wonAt: s(p.won_at),
-        // P34-1: a draft written before the current outreach gates (or one with no date) is superseded — never offered again
+        // P34-1: a draft written before the current outreach gates (or one with no date) is superseded, never offered again
         outreachSubject: prospectDraft(p)?.subject ?? '',
         outreachBody: prospectDraft(p)?.body ?? '',
         note: draftSuperseded(p)
@@ -1426,7 +1426,7 @@ export async function settingsData(org: OrgRow, site: SiteRow): Promise<SiteSett
   };
 }
 
-/** B7-5: seo_sites.content_groups_json → the groups (anything unreadable is "none set", never an error on the settings page) */
+/** B7-5: seo_sites.content_groups_json -> the groups (anything unreadable is "none set", never an error on the settings page) */
 export function contentGroupsOf(raw: unknown): { name: string; pattern: string }[] {
   try {
     const v = typeof raw === 'string' && raw ? JSON.parse(raw) : [];

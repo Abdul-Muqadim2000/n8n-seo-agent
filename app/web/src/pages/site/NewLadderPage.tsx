@@ -221,7 +221,7 @@ function Recommended({ recommended, preset, onChoose, onCheckOwn }: { recommende
     const k = chooseForMe(list);
     if (!k) return setNothingToPick(true);
     onChoose(fromRecommended(k, country, 'chosen'));
-    toast.success(`We chose “${k.keyword}”`, { description: 'The easiest suggestion for your website that no ladder covers yet. Review it before you start.' });
+    toast.success(`We chose "${k.keyword}"`, { description: 'The easiest suggestion for your website that no ladder covers yet. Review it before you start.' });
   };
 
   return (
@@ -362,7 +362,7 @@ function CheckPanel({ initialKeyword, initialCountry, ladders, onChoose }: { ini
 
       {assess.isPending && (
         <Card className="flex flex-wrap items-center gap-3 p-5" aria-live="polite">
-          <Spinner label={`Checking “${keyword}” on Google… ${elapsed} s`} />
+          <Spinner label={`Checking "${keyword}" on Google... ${elapsed} s`} />
           <span className="text-[13px] text-ink-3">Usually 5-20 seconds: search volume, difficulty, your current position and the topic.</span>
         </Card>
       )}
@@ -398,7 +398,7 @@ function CheckResult({ check, ladders, onChoose, onCheck }: { check: KeywordChec
   return (
     <div className="max-w-3xl space-y-4" aria-live="polite">
       {notRealistic && (
-        <Callout tone="critical" title={`“${c.keyword}” is not realistic for your website`}>
+        <Callout tone="critical" title={`"${c.keyword}" is not realistic for your website`}>
           {r.navigational
             ? 'People who search it are looking for one particular company or website: a page of yours would not be what they want.'
             : 'The check advises against a ladder for it.'}{' '}
@@ -441,7 +441,7 @@ function CheckResult({ check, ladders, onChoose, onCheck }: { check: KeywordChec
                 <li key={a} className="min-w-0">
                   <Card className="flex h-full flex-col p-4">
                     <p className="break-words text-sm font-medium text-ink">{a}</p>
-                    {over.length > 0 && <WarnLine className="mt-2">Your ladder “{over[0].head}” covers it already.</WarnLine>}
+                    {over.length > 0 && <WarnLine className="mt-2">Your ladder "{over[0].head}" covers it already.</WarnLine>}
                     <div className="mt-auto pt-3">
                       <Button size="sm" variant="secondary" icon={<Search className="size-3.5" />} onClick={() => onCheck(a)} disabled={!can('member')}>
                         Check this one
@@ -550,7 +550,7 @@ function ReviewStep({
               </p>
               {chosen.months && (
                 <p className="mt-1">
-                  Expected: about <span className="font-medium text-ink">{chosen.months.replace('-', '–')} months</span> until the main keyword ranks. Most pages need a few months on Google; the easy ones move first.
+                  Expected: about <span className="font-medium text-ink">{chosen.months.replace('-', ' to ')} months</span> until the main keyword ranks. Most pages need a few months on Google; the easy ones move first.
                 </p>
               )}
               {chosen.stretch && <p className="mt-1">Very hard for your website today: the climb is long; an easier keyword first usually brings visits sooner.</p>}
@@ -628,7 +628,7 @@ function ReviewStep({
             </>
           ) : (
             <p className="text-[13px] leading-snug text-ink-2">
-              It follows the website’s defaults: {automation.defaultMode === 'manual' ? 'Manual (each page waits for an OK)' : 'Auto (its pages are written on Mondays)'}, after the current ladders. An
+              It follows the website's defaults: {automation.defaultMode === 'manual' ? 'Manual (each page waits for an OK)' : 'Auto (its pages are written on Mondays)'}, after the current ladders. An
               admin can change both on the Pipeline page.
             </p>
           )}
@@ -662,7 +662,7 @@ function ReviewStep({
               { label: 'Goal', value: goal },
               { label: 'Tone', value: site.tone },
               { label: 'Call to action', value: site.cta || <span className="text-ink-3">Not set</span> },
-              { label: 'Business facts', value: site.businessFacts ? `${site.businessFacts.slice(0, 180)}${site.businessFacts.length > 180 ? '…' : ''}` : <span className="text-ink-3">Not set</span> },
+              { label: 'Business facts', value: site.businessFacts ? `${site.businessFacts.slice(0, 180)}${site.businessFacts.length > 180 ? '...' : ''}` : <span className="text-ink-3">Not set</span> },
             ]}
           />
           {admin && (
@@ -685,7 +685,7 @@ function ReviewStep({
             className="text-[13px]"
             items={[
               { label: 'Keyword', value: chosen.keyword },
-              { label: 'Plan', value: plan ? `${PLAN_CHOICE_LABEL[plan]}${chosen.months ? `, ${chosen.months.replace('-', '–')} months` : ''}` : 'Chosen when planned' },
+              { label: 'Plan', value: plan ? `${PLAN_CHOICE_LABEL[plan]}${chosen.months ? `, ${chosen.months.replace('-', ' to ')} months` : ''}` : 'Chosen when planned' },
               { label: 'Writing', value: mode === 'manual' ? 'Manual' : 'Auto' },
               { label: 'Now', value: <span className="font-display text-base font-semibold text-accent-text">{quoteLabel(cost)}</span> },
             ]}
@@ -754,7 +754,7 @@ function StartStep({ chosen, data, choices, onBack }: { chosen: ChosenKeyword; d
             navigate(paths.run(org.id, run.id));
             return;
           }
-          toast.success(`Planning your ladder “${chosen.keyword}”`, { description: 'It shows on the Pipeline in about 5-8 minutes; the first pages follow as reports.' });
+          toast.success(`Planning your ladder "${chosen.keyword}"`, { description: 'It shows on the Pipeline in about 5-8 minutes; the first pages follow as reports.' });
           navigate(paths.site(org.id, site.id, 'pipeline'));
         },
         onError: setError,
@@ -777,7 +777,7 @@ function StartStep({ chosen, data, choices, onBack }: { chosen: ChosenKeyword; d
           items={[
             { label: 'Main keyword', value: <span className="font-medium">{chosen.keyword}</span> },
             { label: 'Country', value: chosen.country },
-            { label: 'Plan', value: plan ? `${PLAN_CHOICE_LABEL[plan]}${chosen.months ? `, about ${chosen.months.replace('-', '–')} months` : ''}` : 'Chosen when it is planned' },
+            { label: 'Plan', value: plan ? `${PLAN_CHOICE_LABEL[plan]}${chosen.months ? `, about ${chosen.months.replace('-', ' to ')} months` : ''}` : 'Chosen when it is planned' },
             { label: 'Pages written now', value: String(choices.pagesNow) },
             { label: 'Writing', value: mode === 'manual' ? 'Manual: each next page waits for your OK' : 'Auto: its next pages are written on Mondays' },
             ...(admin && (data?.ladderCards.length ?? 0) > 0 ? [{ label: 'Priority', value: choices.first ? 'Number 1 (written first)' : 'After your current ladders' }] : []),
@@ -814,7 +814,7 @@ function StartStep({ chosen, data, choices, onBack }: { chosen: ChosenKeyword; d
           <div>
             <p className="text-xs text-ink-3">Price now</p>
             <p className="font-display text-2xl font-semibold tracking-[-0.01em] text-ink">about {quoteLabel(cost)}</p>
-            <p className="text-xs text-ink-3">Uses credits from your company’s balance; held while it runs, never charged more</p>
+            <p className="text-xs text-ink-3">Uses credits from your company's balance; held while it runs, never charged more</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" icon={<ArrowLeft className="size-4" />} onClick={onBack} disabled={start.isPending}>

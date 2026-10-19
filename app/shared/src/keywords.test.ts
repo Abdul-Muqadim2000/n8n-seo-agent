@@ -8,7 +8,7 @@ describe('time to rank: 2025 base rate and the chance band per plan', () => {
     expect(REACH_BASE_RATE.year).toBe(2025);
     expect(REACH_BASE_RATE.top10WithinYearPct).toBe(1.74);
     expect(REACH_BASE_RATE.ofThoseWithinMonthPct).toBe(40.8);
-    expect(baseRateText()).toBe("Base rate (Ahrefs, 2025): only 1.74% of new pages reach Google's top 10 within a year, and 40.8% of those do so within a month — the rest take months.");
+    expect(baseRateText()).toBe("Base rate (Ahrefs, 2025): only 1.74% of new pages reach Google's top 10 within a year, and 40.8% of those do so within a month. The rest take months.");
     expect(baseRateText()).not.toContain('5.7');
   });
   it('one band per plan type, a stretch band for very hard keywords, none without a ladder', () => {
@@ -19,26 +19,26 @@ describe('time to rank: 2025 base rate and the chance band per plan', () => {
     expect(planChance('none')).toEqual({ band: 'none', range: [0, 0] });
     expect(planChance(null)).toEqual(PLAN_CHANCE.none);
   });
-  it('chanceLabel matches n8n’s reachChance().label and says uncalibrated', () => {
+  it('chanceLabel matches n8n\'s reachChance().label and says uncalibrated', () => {
     expect(chanceLabel('direct')).toBe('estimated chance good (50-70%, uncalibrated)');
     expect(chanceLabel('full', true)).toBe('estimated chance slim (5-15%, uncalibrated)');
     expect(chanceLabel('none')).toBe('');
     expect(chanceLabel(null)).toBe('');
   });
-  it('chanceText matches n8n’s reachChanceText: band, uncalibrated, base rate', () => {
+  it('chanceText matches n8n\'s reachChanceText: band, uncalibrated, base rate', () => {
     expect(chanceText('short', '4-8')).toBe(
-      "Estimated chance of reaching the top 10 within 4-8 months: fair (30-50%) — an uncalibrated estimate until this system has measured its own ladders. Base rate (Ahrefs, 2025): only 1.74% of new pages reach Google's top 10 within a year, and 40.8% of those do so within a month — the rest take months.",
+      "Estimated chance of reaching the top 10 within 4-8 months: fair (30-50%): an uncalibrated estimate until this system has measured its own ladders. Base rate (Ahrefs, 2025): only 1.74% of new pages reach Google's top 10 within a year, and 40.8% of those do so within a month. The rest take months.",
     );
     expect(chanceText('none', '')).toBe('');
     expect(chanceText('direct', '')).toBe('');
   });
-  it('toChance reads the engine’s object and falls back to the plan’s band', () => {
+  it('toChance reads the engine\'s object and falls back to the plan\'s band', () => {
     expect(toChance({ band: 'fair', range: [30, 50], label: 'x' }, 'full')).toEqual({ band: 'fair', range: [30, 50] });
     expect(toChance(null, 'full', true)).toEqual({ band: 'slim', range: [5, 15] });
     expect(toChance({ band: 'great' }, 'direct')).toEqual({ band: 'good', range: [50, 70] });
   });
   // R49 (2026-10-16): exec 598 showed "good (50-70%)" for a site whose reach was the size tier for 0 top-10 keywords
-  it('no band on a reach that rests on no measured ranking — the same rule and words as n8n’s reachMeasured / reachChance', () => {
+  it('no band on a reach that rests on no measured ranking: the same rule and words as n8n\'s reachMeasured / reachChance', () => {
     const unmeasured = { method: 'size', p75: null, sample: 0, top10: 0 };
     expect(reachMeasured(unmeasured)).toBe(false);
     expect(reachMeasured(unmeasured, 14)).toBe(true);
@@ -78,7 +78,7 @@ describe('recommended keywords from the keyword strategy', () => {
     ],
   };
 
-  it('one card per search, within reach first, the discovery’s order next, overlapping ladders last', () => {
+  it('one card per search, within reach first, the discovery\'s order next, overlapping ladders last', () => {
     const list = recommendedFromStrategy(payload, ladders);
     expect(list.map((k) => [k.keyword, k.difficultyForYou, k.source, k.overlaps.length])).toEqual([
       ['odoo partner uae', 'easy', 'priority', 0],
@@ -93,7 +93,7 @@ describe('recommended keywords from the keyword strategy', () => {
     expect(start.why).toBe('High buyer intent with 0.12 CPC ratio');
     expect(start.label).toBe('Hard for your site · Full ladder · 9-15 months');
     expect(list.find((k) => k.keyword === 'uae e-invoicing')!.overlaps).toEqual([{ ladderId: 'lad_inv', head: 'e invoicing in uae', keyword: 'e invoicing in uae' }]);
-    expect(list.find((k) => k.keyword === 'odoo implementation uae')!.why).toBe('Topic “Odoo”: 6 related searches on one page');
+    expect(list.find((k) => k.keyword === 'odoo implementation uae')!.why).toBe('Topic "Odoo": 6 related searches on one page');
     // "Later" topics are not ladder candidates
     expect(list.some((k) => k.keyword === 'payroll software uae')).toBe(false);
   });
@@ -129,8 +129,8 @@ describe('overlap with ladders', () => {
   });
 });
 
-describe('the keyword check’s answer', () => {
-  it('maps the engine’s answer (labels as n8n words them)', () => {
+describe('the keyword check\'s answer', () => {
+  it('maps the engine\'s answer (labels as n8n words them)', () => {
     const a = toAssessment({
       ok: true,
       keyword: 'e invoicing software uae',
@@ -157,7 +157,7 @@ describe('the keyword check’s answer', () => {
   it('not realistic: no months, alternatives kept; unknown values are null', () => {
     const a = toAssessment({ keyword: 'cleartax login', difficulty_for_you: 'not_realistic', plan_type: 'none', months: '', fit: 'x', navigational: true, alternatives: ['E invoicing software UAE', 'e invoicing software uae', 'fta e invoicing'], position: 0 });
     expect(a).toMatchObject({ difficultyForYou: 'not_realistic', planType: 'none', months: '', fit: null, position: null, navigational: true });
-    // R3 (2026-10-13, the re-rating run): a topic check that could not be read has to show in the label, not only in `warnings` — live, the
+    // R3 (2026-10-13, the re-rating run): a topic check that could not be read has to show in the label, not only in `warnings`, live, the
     // Keyword Check shipped `fit: null` for "business central partner uae" and the app displayed the difficulty as if the topic had been checked
     expect(a.label).toBe('Not realistic for your site \u00b7 ' + FIT_UNKNOWN_NOTE);
     expect(toAssessment({ keyword: 'x', fit: 2, difficulty_for_you: 'reachable', plan_type: 'short', months: '4-8' }).label).not.toContain(FIT_UNKNOWN_NOTE);
@@ -165,7 +165,7 @@ describe('the keyword check’s answer', () => {
     expect(a.alternatives).toEqual(['e invoicing software uae', 'fta e invoicing']);
     expect(toAssessment({})).toMatchObject({ keyword: '', volume: null, difficultyForYou: null, planType: null, label: '' });
   });
-  it('forYouLabel matches n8n’s reachLabel', () => {
+  it('forYouLabel matches n8n\'s reachLabel', () => {
     expect(forYouLabel('easy', 'direct', '2-4')).toBe('Easy for your site · Direct plan · 2-4 months');
     expect(forYouLabel('very_hard', 'full', '9-15', true)).toBe('Very hard for your site · Full ladder (stretch) · 9-15 months');
     expect(forYouLabel('not_realistic', 'none', '')).toBe('Not realistic for your site');

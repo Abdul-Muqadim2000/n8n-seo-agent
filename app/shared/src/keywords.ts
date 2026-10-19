@@ -63,7 +63,7 @@ export function forYouLabel(difficulty: DifficultyForYou | null, plan: PlanChoic
   return [DIFFICULTY_LABEL[difficulty], PLAN_CHOICE_LABEL[plan] + (stretch ? ' (stretch)' : ''), months ? `${months} months` : ''].filter(Boolean).join(' · ');
 }
 
-// ---------- time to rank (FIX_PLAN G3, 2026-10-11; n8n's REACH_BASE_RATE / REACH_CHANCE in v5/code/_reach.js — keep both the same) ----------
+// ---------- time to rank (FIX_PLAN G3, 2026-10-11; n8n's REACH_BASE_RATE / REACH_CHANCE in v5/code/_reach.js, keep both the same) ----------
 
 /** The 2025 Ahrefs study behind "months, not weeks": 1.74% of new pages reach Google's top 10 within a year, 40.8% of those within a month. */
 export const REACH_BASE_RATE = { year: 2025, source: 'Ahrefs', top10WithinYearPct: 1.74, ofThoseWithinMonthPct: 40.8, url: 'https://ahrefs.com/blog/how-long-does-it-take-to-rank/' } as const;
@@ -88,7 +88,7 @@ export const CHANCE_NOTE = 'an uncalibrated estimate until this system has measu
 
 /**
  * R49 (2026-10-16, the third re-rating): the band was read off the plan type alone, so a website whose reach is only the size tier for
- * "0 keywords in Google's top 10" was shown "good (50-70%)". The table applies only when the reach rests on a measured ranking — the
+ * "0 keywords in Google's top 10" was shown "good (50-70%)". The table applies only when the reach rests on a measured ranking, the
  * same rule as n8n's reachMeasured(): the site's top-10 keywords (percentile, or any at all), a reach measured on the topic, or the site
  * already ranking 1-20 for the keyword.
  */
@@ -119,7 +119,7 @@ export function chanceLabel(plan: PlanChoice | null | undefined, stretch = false
 
 /** The base rate in one sentence (n8n's reachBaseRateText). */
 export function baseRateText(): string {
-  return `Base rate (${REACH_BASE_RATE.source}, ${REACH_BASE_RATE.year}): only ${REACH_BASE_RATE.top10WithinYearPct}% of new pages reach Google's top 10 within a year, and ${REACH_BASE_RATE.ofThoseWithinMonthPct}% of those do so within a month — the rest take months.`;
+  return `Base rate (${REACH_BASE_RATE.source}, ${REACH_BASE_RATE.year}): only ${REACH_BASE_RATE.top10WithinYearPct}% of new pages reach Google's top 10 within a year, and ${REACH_BASE_RATE.ofThoseWithinMonthPct}% of those do so within a month. The rest take months.`;
 }
 
 /** The sentence under a plan's month range (n8n's reachChanceText): the band, that it is uncalibrated, and the base rate it is judged against. */
@@ -128,7 +128,7 @@ export function chanceText(plan: PlanChoice | null | undefined, months: string, 
   if (c.band === 'none' || !months) return '';
   if (c.band === 'unmeasured')
     return `No estimated chance: the reach this plan is judged against rests on no measured ranking (the search data shows none of your keywords in Google's top 10), so a band would only restate the plan. The only measured figure is the base rate. ${baseRateText()}`;
-  return `Estimated chance of reaching the top 10 within ${months} months: ${c.band} (${c.range[0]}-${c.range[1]}%) — ${CHANCE_NOTE}. ${baseRateText()}`;
+  return `Estimated chance of reaching the top 10 within ${months} months: ${c.band} (${c.range[0]}-${c.range[1]}%): ${CHANCE_NOTE}. ${baseRateText()}`;
 }
 
 /** The engine's `chance` object as the app's band (tolerant: unknown shapes fall back to the plan type's band). */
@@ -178,7 +178,7 @@ export interface KeywordAssessment {
 }
 
 /**
- * R3 (2026-10-13, the re-rating run): a topic check that could not be read has to show in the label, not only in `warnings` — live, the
+ * R3 (2026-10-13, the re-rating run): a topic check that could not be read has to show in the label, not only in `warnings`, live, the
  * Keyword Check shipped `fit: null` for "business central partner uae" and the app displayed "Reachable for your site" as if the topic
  * had been checked. The engine already appends this note; the app adds it when an older engine did not.
  */
@@ -216,7 +216,7 @@ export function toAssessment(raw: Record<string, unknown>): KeywordAssessment {
   };
 }
 
-/** A keyword check of a website, as stored by the app (POST …/keywords/assess). */
+/** A keyword check of a website, as stored by the app (POST .../keywords/assess). */
 export interface KeywordCheck {
   id: string;
   siteId: string | null;
@@ -327,7 +327,7 @@ export function recommendedFromStrategy(payload: Record<string, unknown>, ladder
     const tier = str(t.tier).toLowerCase();
     if (tier && tier !== 'now' && tier !== 'next') continue;
     const n = num(t.keyword_count);
-    add(t, 'content_plan', str(t.primary_keyword), [str(t.topic) && `Topic “${str(t.topic)}”`, n ? `${n} related searches on one page` : ''].filter(Boolean).join(': '));
+    add(t, 'content_plan', str(t.primary_keyword), [str(t.topic) && `Topic "${str(t.topic)}"`, n ? `${n} related searches on one page` : ''].filter(Boolean).join(': '));
   }
   return items
     .sort(

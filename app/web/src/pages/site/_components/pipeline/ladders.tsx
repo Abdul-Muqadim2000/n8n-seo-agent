@@ -100,7 +100,7 @@ function PlanningCard({ run }: { run: PipelineData['activeRuns'][number] }) {
           <Loader2 className="animate-spin" aria-hidden />
         </IconTile>
         <div className="min-w-0">
-          <p className="font-display text-base font-semibold leading-snug tracking-[-0.01em] text-ink">Planning your ladder “{run.keyword}”</p>
+          <p className="font-display text-base font-semibold leading-snug tracking-[-0.01em] text-ink">Planning your ladder "{run.keyword}"</p>
           <p className="mt-0.5 text-[13px] text-ink-3">About 5-8 minutes; started {fmtAgo(run.createdAt)}. The plan shows here when it is ready, the first pages follow as reports.</p>
         </div>
       </div>
@@ -228,8 +228,8 @@ function LadderCardView({ card: c, rank, controls }: { card: LadderCard; rank: n
         <div className="space-y-1 border-t border-line bg-warning-soft/40 px-5 py-3">
           {c.overlaps.map((o) => (
             <WarnLine key={o.ladderId}>
-              Overlap: shares {o.keywords.length === 1 ? 'a keyword' : `${o.keywords.length} keywords`} with the ladder “{o.head}” ({o.keywords.slice(0, 3).join(', ')}
-              {o.keywords.length > 3 ? ', …' : ''}). Two pages for one search compete with each other.
+              Overlap: shares {o.keywords.length === 1 ? 'a keyword' : `${o.keywords.length} keywords`} with the ladder "{o.head}" ({o.keywords.slice(0, 3).join(', ')}
+              {o.keywords.length > 3 ? ', ...' : ''}). Two pages for one search compete with each other.
             </WarnLine>
           ))}
         </div>
