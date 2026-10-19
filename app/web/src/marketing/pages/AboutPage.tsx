@@ -46,7 +46,7 @@ const PRINCIPLES: { icon: LucideIcon; title: string; body: string }[] = [
   {
     icon: Wallet,
     title: 'No wasted spend',
-    body: 'The cost of every run is shown before it starts, budgets are checked first, and nothing is paid for twice when the answer cannot have changed.',
+    body: 'Every analysis shows its price in credits before it starts and never uses more, limits are checked first, and nothing is charged twice when the answer cannot have changed.',
   },
   {
     icon: Sparkles,

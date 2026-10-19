@@ -29,9 +29,9 @@ export const solutions: Solution[] = [
     slug: 'agencies',
     name: 'Alaventra for agencies',
     shortName: 'Agencies',
-    tagline: 'Run SEO for every client from one account, with verified access and costs you can bill.',
+    tagline: 'Run SEO for every client from one account, with verified access and credits tracked per client.',
     summary:
-      'Give every client their own workspace, website verification, team and budget. Alaventra runs the weekly loop for each website and turns the work into reports you can send as they are.',
+      'Give every client their own workspace, website verification, team and credits. Alaventra runs the weekly loop for each website and turns the work into reports you can send as they are.',
     icon: Briefcase,
     image: 'loftTeam',
     pains: [
@@ -41,7 +41,7 @@ export const solutions: Solution[] = [
     ],
     helps: [
       { feature: 'agency-portal', title: 'A portal for every client, under your name', body: 'A workspace per client, one table of every client website, client logins with approvals, and your brand on your own address.' },
-      { feature: 'enterprise', title: 'One workspace per client', body: 'Each client company has its own websites, team, budget and data, with roles for your staff and theirs.' },
+      { feature: 'enterprise', title: 'One workspace per client', body: 'Each client company has its own websites, team, credits and data, with roles for your staff and theirs.' },
       { feature: 'reports', title: 'Reports ready to send', body: 'Full SEO reports as PDF or Word, and a Monday report for every website.' },
       { feature: 'integrations', title: 'Client data in your own BI', body: 'Every client’s rankings, traffic, audits and AI visibility exported to BigQuery or your storage, or charted in Looker Studio.' },
       { feature: 'ai-visibility', title: 'AI visibility per client', body: 'Mention rate and share of voice against each client’s own competitors, with ranges.' },
@@ -49,14 +49,14 @@ export const solutions: Solution[] = [
     ],
     outcomes: [
       'Every client website on the same weekly loop',
-      'The cost of each run shown before it starts, per client',
+      'The price in credits of each analysis shown before it starts, per client',
       'Client-ready reports without rebuilding them each month',
       'Client access through roles, down to read-only viewers',
     ],
     faqs: [
-      { q: 'Can clients see their own data?', a: 'Yes. Invite them to their client workspace as a viewer or an approver; they see their websites, reports and recommendations in a portal under your name, and nothing from other clients or from what the work costs you.' },
+      { q: 'Can clients see their own data?', a: 'Yes. Invite them to their client workspace as a viewer or an approver; they see their websites, reports and recommendations in a portal under your name, and nothing from other clients or from your credits.' },
       { q: 'Can the portal carry our brand and domain?', a: 'Yes. Switch on white-label for your name, logo and colour, add your own address such as seo.youragency.com with two DNS records, and send client e-mails from your own mailbox once its SPF and DKIM check out.' },
-      { q: 'How do I keep costs per client in check?', a: 'Every run shows its estimated cost first, and each company has its own budget and spend cap.' },
+      { q: 'How do I keep each client’s spending in check?', a: 'Every analysis shows its price in credits first and is never charged more. Each client company has its own credits and its own monthly limits for analyses and for the automatic work.' },
       { q: 'Do I need access to each client’s Search Console?', a: 'The client adds Alaventra’s service account as a user, and the website owner proves ownership once.' },
     ],
     showcase: {
@@ -98,7 +98,7 @@ export const solutions: Solution[] = [
     faqs: [
       { q: 'Do we need SEO expertise to use Alaventra?', a: 'No. Every verdict and recommendation explains itself in plain language, and the pipeline tells you what to do next.' },
       { q: 'Can our writers edit the pages?', a: 'Yes. Pages arrive as HTML and Markdown, or as drafts in your WordPress, Webflow or Contentful, so your team edits them before anything goes live.' },
-      { q: 'Who on the team can start paid runs?', a: 'Members and above can start runs; viewers can only read. Owners set the budget.' },
+      { q: 'Who on the team can start analyses that use credits?', a: 'Members and above can start runs; viewers can only read. Owners set the credit limits.' },
     ],
     showcase: {
       feature: 'autopilot',
@@ -176,7 +176,7 @@ export const solutions: Solution[] = [
     ],
     faqs: [
       { q: 'Where do the address and phone come from?', a: 'From your business profile in Alaventra. The same verified details appear on every local page.' },
-      { q: 'Can I run several brands?', a: 'Yes. Each brand can be its own company in Alaventra with its own websites, team and budget.' },
+      { q: 'Can I run several brands?', a: 'Yes. Each brand can be its own company in Alaventra with its own websites, team and credits.' },
       { q: 'Does Alaventra manage our Google Business Profile?', a: 'No. It checks that your profile and your website agree, as part of the brand and entity check.' },
     ],
     showcase: {
@@ -223,11 +223,11 @@ export const solutions: Solution[] = [
       },
       {
         q: 'Can our scripts and AI assistants use it?',
-        a: 'Yes, through the API and an MCP server, with keys your company creates. A key reads by default; starting analyses is a separate permission, and every start goes through the same budget and duplicate checks as the app.',
+        a: 'Yes, through the API and an MCP server, with keys your company creates. A key reads by default; starting analyses is a separate permission, and every start goes through the same credit and duplicate checks as the app.',
       },
       {
         q: 'Can several brands or business units share one account?',
-        a: 'Yes. Each brand can be its own company with its own websites, team, budget and data, and the same people can switch between them.',
+        a: 'Yes. Each brand can be its own company with its own websites, team, credits and data, and the same people can switch between them.',
       },
     ],
     showcase: {

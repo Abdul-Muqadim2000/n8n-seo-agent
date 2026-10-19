@@ -14,11 +14,11 @@ const SITES = [
   { d: 'help.yourbrand.com', how: 'Meta tag' },
 ];
 
-/** A company workspace: members with roles, verified websites and the monthly budget with the next run's estimate (sample data). */
+/** A company workspace: members with roles, verified websites and the company's credits with the next analysis's price (sample data). */
 export function WorkspaceMockup({ className }: { className?: string }) {
   return (
     <Drawn
-      label="A company workspace with sample data: four members with the roles owner, admin, member and viewer, three verified websites and a monthly budget with the cost estimate of the next run."
+      label="A company workspace with sample data: four members with the roles owner, admin, member and viewer, three verified websites and the company's credits available with the price of the next analysis."
       className={cn('rounded-xl border border-line bg-surface p-4 text-ink shadow-overlay sm:p-6', className)}
     >
       <span className="flex items-center justify-between gap-3 rounded-lg border border-line bg-page px-3 py-2">
@@ -64,15 +64,15 @@ export function WorkspaceMockup({ className }: { className?: string }) {
       </div>
       <div className="mk-pop mt-3 rounded-lg border border-line p-3" style={{ ['--mk-i' as string]: 8 }}>
         <span className="flex items-baseline justify-between text-[11.5px]">
-          <span className="font-semibold">Budget this month</span>
-          <span className="font-mono text-ink-2 tabular">$184 of $400</span>
+          <span className="font-semibold">Credits available</span>
+          <span className="font-mono text-ink-2 tabular">1,240 of 2,580</span>
         </span>
         <span className="mt-2 block h-2 overflow-hidden rounded-full bg-surface-2">
-          <span className="mk-grow-x block h-full w-[46%] rounded-full bg-accent" />
+          <span className="mk-grow-x block h-full w-[48%] rounded-full bg-accent" />
         </span>
         <span className="mt-2.5 flex items-center justify-between gap-2 text-[11px] text-ink-3">
-          <span>Next run: keyword check</span>
-          <span className="font-mono tabular">est. $0.12</span>
+          <span>Next analysis: keyword check</span>
+          <span className="font-mono tabular">12 credits</span>
         </span>
       </div>
       <p className="mt-3 text-right font-mono text-[11px] text-ink-3">Sample data</p>

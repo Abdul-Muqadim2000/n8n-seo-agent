@@ -117,6 +117,7 @@ export const router = createBrowserRouter([
               { path: 'costs', lazy: page(() => import('@/pages/admin/CostsPage')) },
               { path: 'activity', lazy: page(() => import('@/pages/admin/ActivityPage')) },
               { path: 'settings', lazy: page(() => import('@/pages/admin/SettingsPage')) },
+              { path: 'credit-requests', lazy: page(() => import('@/pages/admin/CreditRequestsPage')) },
             ],
           },
           // G5: after Google / single sign-on on the app's own address, back to an agency's portal address

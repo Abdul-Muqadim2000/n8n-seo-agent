@@ -65,7 +65,8 @@ describe('what is written', () => {
     expect((await new Client(app).post('/api/auth/login', { email: 'mem@audit.test', password: 'not it at all 1' })).status).toBe(401);
     expect((await new Client(app, { ip: '203.0.113.9' }).post('/api/auth/login', { email: 'mem@audit.test', password: PW })).status).toBe(200);
     await owner.c.patch(`/api/orgs/${org.id}/members/${memberId}`, { role: 'viewer' });
-    await owner.c.patch(`/api/orgs/${org.id}/budget`, { monthlyBudgetUsd: 40 });
+    // credits (app/docs/CREDITS.md): the dollar guard is the platform admin's; an owner's attempt is refused and changes nothing
+    expect((await owner.c.patch(`/api/orgs/${org.id}/budget`, { monthlyBudgetUsd: 40 })).status).toBe(403);
     await owner.c.put(`/api/orgs/${org.id}/security`, { requireMfa: false, mfaTrustGoogle: false, mfaTrustSso: true, idleTimeoutMinutes: 60, auditRetentionDays: 730 });
 
     const r = await log(owner.c, org.id);
@@ -77,7 +78,7 @@ describe('what is written', () => {
     expect(by('auth.login.succeeded')[0]).toMatchObject({ ip: '203.0.113.9', outcome: 'success' });
     expect(by('auth.login.succeeded')[0].userAgent).toContain('Chrome');
     expect(by('team.role_changed')[0]).toMatchObject({ targetLabel: 'mem@audit.test', details: { before: 'member', after: 'viewer' } });
-    expect(by('company.budget_changed')[0].details).toEqual({ before: 25, after: 40 });
+    expect(by('company.budget_changed')).toEqual([]);
     expect(by('company.security_changed')[0].details).toEqual({ before: { idleTimeoutMinutes: null, auditRetentionDays: 365 }, after: { idleTimeoutMinutes: 60, auditRetentionDays: 730 } });
     // newest first
     const ids = r.body.items.map((e: { id: string }) => Number(e.id));

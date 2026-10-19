@@ -2,7 +2,7 @@
 // in the URL (`?period=`) and a way back to the app. Only for the people in PLATFORM_ADMIN_EMAILS; everyone else gets "no access".
 import { useEffect, useRef, type ComponentType } from 'react';
 import { Link, NavLink, Outlet, useLocation, useSearchParams } from 'react-router';
-import { Activity, ArrowLeft, Building2, LayoutDashboard, ListChecks, Lock, Receipt, Settings, Shield, Users } from 'lucide-react';
+import { Activity, ArrowLeft, Building2, Inbox, LayoutDashboard, ListChecks, Lock, Receipt, Settings, Shield, Users } from 'lucide-react';
 import { ADMIN_PERIODS, type AdminPeriod } from '@seo/shared';
 import { Brand, BrandMark } from '@/components/layout/Brand';
 import { ThemeMenu } from '@/components/layout/ThemeMenu';
@@ -15,10 +15,12 @@ import { useMe } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 import { StandaloneShell } from '@/pages/settings/_components/StandaloneShell';
 import { adminPaths, parsePeriod, PERIOD_LABELS, PERIOD_SHORT, withPeriod } from './lib';
+import { UnitsToggle } from './_components/units';
 
 const NAV: { to: string; label: string; icon: ComponentType<{ className?: string }>; end?: boolean }[] = [
   { to: adminPaths.overview, label: 'Overview', icon: LayoutDashboard, end: true },
   { to: adminPaths.companies, label: 'Companies', icon: Building2 },
+  { to: adminPaths.creditRequests, label: 'Credit requests', icon: Inbox },
   { to: adminPaths.users, label: 'Users', icon: Users },
   { to: adminPaths.runs, label: 'Runs', icon: ListChecks },
   { to: adminPaths.costs, label: 'Costs & billing', icon: Receipt },
@@ -118,6 +120,7 @@ function AdminShell() {
           </span>
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
             <PeriodPicker />
+            <UnitsToggle className="hidden sm:inline-flex" />
             <ButtonLink to="/" variant="ghost" size="sm" icon={<ArrowLeft className="size-4" aria-hidden />} aria-label="Back to app" className="px-2 sm:px-3">
               <span className="hidden sm:inline">Back to app</span>
             </ButtonLink>

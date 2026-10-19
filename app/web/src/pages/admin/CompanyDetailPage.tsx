@@ -4,8 +4,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { ArrowLeft, Ban, ChevronDown, Coins, Pencil, Play, Plus, RotateCcw, SlidersHorizontal, Trash2, TrendingUp, Wallet } from 'lucide-react';
-import { ADMIN_ROLES, ROLE_LABELS, type AdminCompanyDetail, type AdminMember, type AdminModeCost, type AdminSiteRow, type CreditEntry } from '@seo/shared';
+import { ArrowLeft, Ban, CalendarClock, ChevronDown, Coins, Inbox, Pencil, Play, Plus, RotateCcw, SlidersHorizontal, Trash2, TrendingUp, Wallet } from 'lucide-react';
+import { ADMIN_ROLES, CREDIT_SOURCE_LABEL, ROLE_LABELS, type AdminCompanyDetail, type AdminMember, type AdminModeCost, type AdminPurchaseRequest, type AdminSiteRow, type CreditEntry, type CreditLot } from '@seo/shared';
 import { CountUp, MetricCard, Stagger } from '@/components/insight';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
@@ -16,14 +16,16 @@ import { Dialog, Menu, MenuItem, MenuSeparator } from '@/components/ui/overlay';
 import { type Column } from '@/components/ui/table';
 import { Switch } from '@/components/ui/tabs';
 import { ApiRequestError, errorMessage } from '@/lib/api';
-import { useAdminCompany, useAdminCompanyCredits, useAdminDeleteCompany, useAdminRemoveMembership, useAdminSetMembership, useAdminUpdateCompany, useMe } from '@/lib/queries';
+import { useAdminCompany, useAdminCompanyCredits, useAdminCreditRequests, useAdminDeleteCompany, useAdminRemoveMembership, useAdminSetMembership, useAdminSettings, useAdminUpdateCompany, useCancelAdminCreditRequest, useMe } from '@/lib/queries';
 import { fmtAgo, fmtDate, fmtDateTime } from '@/lib/utils';
 import { pageTitle } from '@/components/layout/Brand';
 import { useDocumentTitle } from '@/components/layout/useDocumentTitle';
 import { useAdminPeriod } from './AdminLayout';
-import { AdminCard, CompanyStatus, FlushTable, ConfirmDialog, CostSplitCell, CreditDialog, DailyCostChart, Money, Num, RowTile, SplitLine, type CreditKind } from './_components/kit';
+import { AdminCard, CompanyStatus, FlushTable, ConfirmDialog, CostSplitCell, CreditDialog, DailyCostChart, Money, Num, RowTile, SplitLine, type CreditKind, type CreditRequestPreset } from './_components/kit';
+import { useAdminCompanyAbsorbed, useAdminCompanyLots } from './_components/creditQueries';
 import { RunsTable } from './_components/runs';
-import { adminPaths, credits, marginPct, modeLabel, money, PERIOD_LABELS, signedCredits, withPeriod } from './lib';
+import { adminPaths, credits, marginPct, modeLabel, money, nextFirstOfMonth, PERIOD_LABELS, signedCredits, signedMoney, withPeriod } from './lib';
+import { CreditBookCard, useAdminUnits } from './_components/units';
 
 const KIND_LABEL: Record<CreditEntry['kind'], string> = { grant: 'Grant', adjust: 'Adjustment', usage: 'Usage', refund: 'Refund', plan: 'Plan credits', expire: 'Expired' };
 
@@ -65,7 +67,7 @@ function BackLink() {
   );
 }
 
-type Dlg = { type: 'credit'; kind: CreditKind } | { type: 'edit' } | { type: 'toggle' } | { type: 'enforce' } | { type: 'delete' } | null;
+type Dlg = { type: 'credit'; kind: CreditKind; request?: CreditRequestPreset } | { type: 'edit' } | { type: 'toggle' } | { type: 'enforce' } | { type: 'delete' } | null;
 
 function CompanyDetail({ c, loading }: { c: AdminCompanyDetail; loading: boolean }) {
   const [period] = useAdminPeriod();
@@ -74,16 +76,24 @@ function CompanyDetail({ c, loading }: { c: AdminCompanyDetail; loading: boolean
   const ledger = useAdminCompanyCredits(c.id);
   const entries = ledger.data ?? c.creditEntries;
   const m = c.money;
+  const [units] = useAdminUnits();
+  // the Credits / USD switch: an entry's dollars at the credit value in force when it was written (usage stores it), else today's
+  const cvNow = c.credits.book?.creditValueUsd ?? 0;
+  const usdOf = (e: CreditEntry, n: number) => n * (typeof e.ref?.creditValueUsd === 'number' ? e.ref.creditValueUsd : cvNow);
 
   const ledgerCols: Column<CreditEntry>[] = [
     { key: 'at', header: 'When', sortValue: (e) => e.createdAt, cell: (e) => <Num className="whitespace-nowrap text-ink-2">{fmtDateTime(e.createdAt)}</Num> },
     { key: 'kind', header: 'Kind', sortValue: (e) => e.kind, cell: (e) => <Badge tone={e.kind === 'grant' ? 'accent' : 'neutral'}>{KIND_LABEL[e.kind]}</Badge> },
     {
       key: 'credits',
-      header: 'Credits',
+      header: units === 'usd' ? 'Credits ($ list)' : 'Credits',
       align: 'right',
       sortValue: (e) => e.credits,
-      cell: (e) => <Num className={e.credits < 0 ? 'text-ink-2' : 'text-good-text'}>{signedCredits(e.credits)}</Num>,
+      cell: (e) => (
+        <Num className={e.credits < 0 ? 'text-ink-2' : 'text-good-text'} title={units === 'usd' ? `${signedCredits(e.credits)} credits` : undefined}>
+          {units === 'usd' ? signedMoney(usdOf(e, e.credits)) : signedCredits(e.credits)}
+        </Num>
+      ),
     },
     { key: 'paid', header: 'Paid', align: 'right', sortValue: (e) => e.paidUsd, cell: (e) => (e.paidUsd ? <Money value={e.paidUsd} /> : <Num className="text-ink-3">–</Num>) },
     {
@@ -97,14 +107,14 @@ function CompanyDetail({ c, loading }: { c: AdminCompanyDetail; loading: boolean
       ),
     },
     { key: 'actor', header: 'By', hideOnMobile: true, cell: (e) => <span className="text-[13px] text-ink-2">{e.actor ?? (e.kind === 'usage' ? 'run' : '–')}</span> },
-    { key: 'after', header: 'Balance after', align: 'right', sortValue: (e) => e.balanceAfter, cell: (e) => <Num>{credits(e.balanceAfter)}</Num> },
+    { key: 'after', header: 'Balance after', align: 'right', sortValue: (e) => e.balanceAfter, cell: (e) => <Num>{units === 'usd' ? money(e.balanceAfter * cvNow, { digits: 2 }) : credits(e.balanceAfter)}</Num> },
   ];
 
   const modeCols: Column<AdminModeCost>[] = [
     { key: 'mode', header: 'Mode', sortValue: (r) => modeLabel(r.mode), cell: (r) => <span className="text-[13px]">{modeLabel(r.mode)}</span> },
     { key: 'runs', header: 'Runs', align: 'right', sortValue: (r) => r.runs, cell: (r) => <Num>{r.runs}</Num> },
     { key: 'cost', header: 'Cost', align: 'right', sortValue: (r) => r.cost.totalUsd, cell: (r) => <CostSplitCell cost={r.cost} /> },
-    { key: 'credits', header: 'Credits', align: 'right', sortValue: (r) => r.credits, cell: (r) => <Num>{credits(r.credits)}</Num>, hideOnMobile: true },
+    { key: 'credits', header: units === 'usd' ? 'Credits ($ list)' : 'Credits', align: 'right', sortValue: (r) => r.credits, cell: (r) => <Num>{units === 'usd' ? money(r.credits * cvNow, { digits: 2 }) : credits(r.credits)}</Num>, hideOnMobile: true },
   ];
 
   const siteCols: Column<AdminSiteRow>[] = [
@@ -170,13 +180,20 @@ function CompanyDetail({ c, loading }: { c: AdminCompanyDetail; loading: boolean
             label="Credits balance"
             icon={<Coins />}
             tone={c.credits.balance < 0 ? 'critical' : 'blue'}
-            value={<CountUp value={c.credits.balance} format={credits} />}
+            value={units === 'usd' ? <CountUp value={c.credits.book?.remainingListUsd ?? 0} format={(v) => money(v, { digits: 2 })} /> : <CountUp value={c.credits.balance} format={credits} />}
             meta={
               <SplitLine
-                items={[
-                  { label: 'granted', value: credits(c.credits.grantedInPeriod) },
-                  { label: 'used', value: credits(c.credits.usedInPeriod) },
-                ]}
+                items={
+                  units === 'usd'
+                    ? [
+                        { label: 'bought', value: money(c.credits.book?.boughtUsd ?? 0, { digits: 2 }) },
+                        { label: 'used', value: money(c.credits.book?.usedListUsd ?? 0, { digits: 2 }) },
+                      ]
+                    : [
+                        { label: 'granted', value: credits(c.credits.grantedInPeriod) },
+                        { label: 'used', value: credits(c.credits.usedInPeriod) },
+                      ]
+                }
               />
             }
           />
@@ -214,12 +231,21 @@ function CompanyDetail({ c, loading }: { c: AdminCompanyDetail; loading: boolean
             <p className="text-sm font-medium text-ink">Enforce credits</p>
             <p className="mt-0.5 text-[13px] leading-snug text-ink-3">
               {c.credits.enforced
-                ? 'On: a run is refused when the balance cannot cover it. The monthly budget still applies on top.'
-                : 'Off: credits are counted for every run, but a run is never refused for a low balance. Only the monthly budget can stop it.'}
+                ? 'On: an analysis is refused when the balance cannot cover it, and the websites’ schedules pause when credits run out (they resume when credits are added). The dollar budget does not apply.'
+                : 'Off: credits are counted for every run, but nothing is refused or paused for a low balance. The monthly dollar budget (provider cost) and the company’s own credit limits can still stop a run.'}
             </p>
           </div>
           <Switch checked={c.credits.enforced} onCheckedChange={() => setDlg({ type: 'enforce' })} label="Enforce credits" />
         </Card>
+
+        <WaitingRequests c={c} onConfirm={(r) => setDlg({ type: 'credit', kind: 'grant', request: r })} />
+
+        {c.credits.book && <CreditBookCard book={c.credits.book} description={units === 'usd' ? undefined : `${PERIOD_LABELS[period]}: every credit that came in, went out and is left.`} />}
+
+        <div className="grid gap-4 xl:grid-cols-2">
+          <PlanCard c={c} />
+          <AbsorbedCard c={c} />
+        </div>
 
         <DailyCostChart daily={c.daily} loading={loading} description={`${PERIOD_LABELS[period]}: this company’s cost by provider and the payments recorded.`} />
 
@@ -234,6 +260,8 @@ function CompanyDetail({ c, loading }: { c: AdminCompanyDetail; loading: boolean
           {ledger.isError && <Callout tone="warning" className="mx-5 mb-3">Showing the latest entries only: {errorMessage(ledger.error)}</Callout>}
           <FlushTable rows={entries} columns={ledgerCols} rowKey={(e) => e.id} initialSort={{ key: 'at', dir: 'desc' }} pageSize={15} empty="No credit has moved yet." />
         </AdminCard>
+
+        <LotsCard c={c} />
 
         <AdminCard title="Websites" description={`${c.sites_.length} website${c.sites_.length === 1 ? '' : 's'}`} bodyClassName="px-0 pb-0 pt-3">
           <FlushTable rows={c.sites_} columns={siteCols} rowKey={(s) => s.id} initialSort={{ key: 'cost', dir: 'desc' }} empty="No website yet." />
@@ -252,12 +280,234 @@ function CompanyDetail({ c, loading }: { c: AdminCompanyDetail; loading: boolean
         </AdminCard>
       </Stagger>
 
-      {dlg?.type === 'credit' && <CreditDialog company={c} kind={dlg.kind} onClose={close} />}
+      {dlg?.type === 'credit' && <CreditDialog company={c} kind={dlg.kind} request={dlg.request} onClose={close} />}
       {dlg?.type === 'edit' && <EditCompanyDialog c={c} onClose={close} />}
       {dlg?.type === 'toggle' && <ToggleDialog c={c} onClose={close} />}
       {dlg?.type === 'enforce' && <EnforceDialog c={c} onClose={close} />}
       {dlg?.type === 'delete' && <DeleteDialog c={c} onClose={close} />}
     </>
+  );
+}
+
+// ---------- credits: the plan, waiting requests, lots, what runs used beyond their quotes ----------
+function PlanCard({ c }: { c: AdminCompanyDetail }) {
+  const update = useAdminUpdateCompany();
+  const settings = useAdminSettings();
+  const current = c.planMonthlyCredits ?? 0;
+  const [value, setValue] = useState(String(current));
+  const n = Number(value);
+  const valid = value.trim() !== '' && Number.isInteger(n) && n >= 0 && n <= 10_000_000;
+  const dirty = valid && n !== current;
+  const next = nextFirstOfMonth();
+  const cv = settings.data?.creditValueUsd;
+  const save = () =>
+    update.mutate(
+      { id: c.id, planMonthlyCredits: n },
+      {
+        onSuccess: () => toast.success(n > 0 ? `${c.name}: ${credits(n)} plan credits a month` : `${c.name}: no plan`),
+      },
+    );
+  return (
+    <AdminCard
+      title="Plan"
+      description="Credits granted on the 1st of every month. 0 = no plan."
+      actions={<CalendarClock className="size-4 text-ink-3" aria-hidden />}
+    >
+      <div className="flex flex-wrap items-end gap-3">
+        <Field label="Monthly credits" className="w-44" error={value.trim() !== '' && !valid ? 'A whole number from 0' : undefined}>
+          {(p) => (
+            <Input
+              {...p}
+              type="number"
+              inputMode="numeric"
+              min={0}
+              step={1}
+              className="font-mono"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && dirty) save();
+              }}
+            />
+          )}
+        </Field>
+        <Button onClick={save} loading={update.isPending} disabled={!dirty}>
+          Save plan
+        </Button>
+        {dirty && (
+          <Button variant="ghost" onClick={() => setValue(String(current))}>
+            Discard
+          </Button>
+        )}
+      </div>
+      <div className="mt-3 space-y-1 text-[13px] leading-snug text-ink-3">
+        {current > 0 ? (
+          <p>
+            Now <Num className="text-ink-2">{credits(current)}</Num> credits a month
+            {cv != null && <> (list value {money(current * cv, { digits: 2 })})</>} · next credits on <Num className="text-ink-2">{fmtDate(next.toISOString())}</Num>.
+          </p>
+        ) : (
+          <p>No plan: the company runs on its welcome credits and the packs it buys.</p>
+        )}
+        <p>
+          A new plan’s first month is granted at once (once per calendar month); a changed amount applies from the next 1st. Unused plan credits{' '}
+          {settings.data ? (settings.data.planRollover ? 'roll over one month, then expire.' : 'expire at the end of their month.') : 'follow the rollover setting.'}
+        </p>
+      </div>
+      {update.isError && <Callout tone="critical" className="mt-3">{errorMessage(update.error)}</Callout>}
+    </AdminCard>
+  );
+}
+
+function AbsorbedCard({ c }: { c: AdminCompanyDetail }) {
+  const [period] = useAdminPeriod();
+  const q = useAdminCompanyAbsorbed(c.id, period);
+  const a = q.data;
+  return (
+    <AdminCard title="Absorbed over quotes" description={`${PERIOD_LABELS[period]}: credits runs would have used beyond their quote. Not charged; the cost is ours.`}>
+      {q.isPending ? (
+        <Skeleton className="h-16" />
+      ) : q.isError || !a ? (
+        <Callout tone="warning">Could not read it: {errorMessage(q.error)}</Callout>
+      ) : (
+        <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+          <div>
+            <p className="font-display text-2xl leading-none font-semibold text-ink">{credits(a.credits)}</p>
+            <p className="mt-1.5 text-xs text-ink-3">credits · {a.runs} run{a.runs === 1 ? '' : 's'} capped</p>
+          </div>
+          <div>
+            <p className="font-display text-2xl leading-none font-semibold text-ink">{money(a.listUsd)}</p>
+            <p className="mt-1.5 text-xs text-ink-3">at the credit value</p>
+          </div>
+          <div>
+            <p className="font-display text-2xl leading-none font-semibold text-ink">{money(a.costUsd)}</p>
+            <p className="mt-1.5 text-xs text-ink-3">≈ provider cost (÷ {a.markup})</p>
+          </div>
+        </div>
+      )}
+    </AdminCard>
+  );
+}
+
+function WaitingRequests({ c, onConfirm }: { c: AdminCompanyDetail; onConfirm: (r: CreditRequestPreset) => void }) {
+  const q = useAdminCreditRequests('pending');
+  const cancel = useCancelAdminCreditRequest();
+  const [cancelling, setCancelling] = useState<AdminPurchaseRequest | null>(null);
+  const rows = (q.data ?? []).filter((r) => r.orgId === c.id);
+  if (!rows.length) return null;
+  const cols: Column<AdminPurchaseRequest>[] = [
+    { key: 'pack', header: 'Pack', cell: (r) => <span className="text-[13px]"><Num>{credits(r.credits)}</Num> credits <span className="font-mono text-[11px] text-ink-3">{r.packId}</span></span> },
+    { key: 'price', header: 'Price', align: 'right', cell: (r) => <Money value={r.priceUsd} digits={2} /> },
+    {
+      key: 'by',
+      header: 'Requested by',
+      hideOnMobile: true,
+      cell: (r) => (
+        <span className="block min-w-[140px] text-[13px] text-ink-2">
+          {r.requestedBy ?? '–'}
+          {r.note && <span className="block text-xs text-ink-3">{r.note}</span>}
+        </span>
+      ),
+    },
+    { key: 'when', header: 'When', hideOnMobile: true, cell: (r) => <Num className="whitespace-nowrap text-ink-2">{fmtAgo(r.createdAt)}</Num> },
+    {
+      key: 'actions',
+      header: <span className="sr-only">Actions</span>,
+      align: 'right',
+      cell: (r) => (
+        <div className="flex justify-end gap-1.5">
+          <Button size="sm" onClick={() => onConfirm(r)}>
+            Confirm and add credits
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setCancelling(r)}>
+            Cancel
+          </Button>
+        </div>
+      ),
+    },
+  ];
+  return (
+    <AdminCard
+      title={`Credit request${rows.length === 1 ? '' : 's'} waiting`}
+      description="Invoice the pack, then confirm it here once paid: the credits are added and the payment is recorded as revenue."
+      actions={<Inbox className="size-4 text-ink-3" aria-hidden />}
+      bodyClassName="px-0 pb-0 pt-3"
+    >
+      <FlushTable rows={rows} columns={cols} rowKey={(r) => r.id} empty="Nothing waiting." />
+      <ConfirmDialog
+        open={!!cancelling}
+        onClose={() => {
+          setCancelling(null);
+          cancel.reset();
+        }}
+        title={cancelling ? `Cancel the ${credits(cancelling.credits)}-credit request?` : ''}
+        description="The customer sees it as cancelled and can ask again. No credits are added."
+        confirmLabel="Cancel request"
+        danger
+        pending={cancel.isPending}
+        error={cancel.error}
+        onConfirm={() =>
+          cancelling &&
+          cancel.mutate(cancelling.id, {
+            onSuccess: () => {
+              toast.success('Request cancelled');
+              setCancelling(null);
+            },
+          })
+        }
+      />
+    </AdminCard>
+  );
+}
+
+function LotsCard({ c }: { c: AdminCompanyDetail }) {
+  const q = useAdminCompanyLots(c.id);
+  const now = Date.now();
+  const state = (l: CreditLot) => (l.expiresAt && new Date(l.expiresAt).getTime() <= now ? 'expired' : l.remaining <= 0 ? 'used' : 'live');
+  const cols: Column<CreditLot>[] = [
+    {
+      key: 'source',
+      header: 'Source',
+      cell: (l) => (
+        <span className="block min-w-[150px] text-[13px]">
+          {CREDIT_SOURCE_LABEL[l.source] ?? l.source}
+          {l.note && <span className="block text-xs text-ink-3">{l.note}</span>}
+        </span>
+      ),
+    },
+    { key: 'credits', header: 'Credits', align: 'right', cell: (l) => <Num>{credits(l.credits)}</Num> },
+    { key: 'remaining', header: 'Remaining', align: 'right', cell: (l) => <Num className={l.remaining > 0 ? 'text-ink' : 'text-ink-3'}>{credits(l.remaining)}</Num> },
+    {
+      key: 'expires',
+      header: 'Expires',
+      cell: (l) => {
+        const s = state(l);
+        return (
+          <span className="flex flex-wrap items-center gap-1.5 whitespace-nowrap">
+            <Num className="text-ink-2">{l.expiresAt ? fmtDate(l.expiresAt) : 'Never'}</Num>
+            {s === 'expired' && <Badge tone="neutral">Expired</Badge>}
+            {s === 'used' && <Badge tone="neutral">Used up</Badge>}
+          </span>
+        );
+      },
+    },
+    { key: 'added', header: 'Added', hideOnMobile: true, cell: (l) => <Num className="whitespace-nowrap text-ink-2">{fmtDate(l.createdAt)}</Num> },
+  ];
+  return (
+    <AdminCard
+      title="Credit lots"
+      description="Where the balance comes from. Lots still holding credits first, in the order they are used (soonest to expire first); then used-up or expired lots of the last 90 days."
+      bodyClassName="px-0 pb-0 pt-3"
+    >
+      {q.isError && <Callout tone="warning" className="mx-5 mb-3">Could not read the lots: {errorMessage(q.error)}</Callout>}
+      {q.isPending ? (
+        <div className="px-5 pb-5">
+          <Skeleton className="h-24" />
+        </div>
+      ) : (
+        <FlushTable rows={q.data ?? []} columns={cols} rowKey={(l) => l.id} pageSize={10} empty="No credits have arrived yet." />
+      )}
+    </AdminCard>
   );
 }
 

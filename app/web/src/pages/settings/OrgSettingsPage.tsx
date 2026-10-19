@@ -1,39 +1,31 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import type { z } from 'zod';
 import { toast } from 'sonner';
-import { eachDayOfInterval, endOfMonth, format, isValid, min as minDate, parseISO } from 'date-fns';
-import { Activity, Briefcase, Building2, CalendarDays, ChartNoAxesColumn, Clock, Globe, Mail, PiggyBank, Play, Plus, Search, Settings, Trash2, UserPlus, Users, Wallet } from 'lucide-react';
+import { Briefcase, Building2, CalendarDays, Clock, Globe, Mail, Plus, Settings, Trash2, UserPlus, Users } from 'lucide-react';
 import {
   COMPANY_SIZES,
-  compactNumber,
   createOrgSchema,
-  formatUsd,
   inviteSchema,
-  MODES,
   ROLE_LABELS,
   CLIENT_ROLES,
   isClientRole,
   type Invitation,
   type OrgKind,
-  type ModeId,
   type Member,
   type Role,
-  type Usage,
 } from '@seo/shared';
-import { BarsChart, ChartCard } from '@/components/charts';
 import { applyServerErrors } from '@/components/site/helpers';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { Card, CardBody, CardFooter } from '@/components/ui/card';
 import { Callout, EmptyState, ErrorState, Skeleton } from '@/components/ui/feedback';
 import { ChoiceCard, Field, Input, Select } from '@/components/ui/field';
-import { Avatar, CopyButton, Meter, PageHeader } from '@/components/ui/misc';
-import { CountUp, IconTile, MetricCard, ScoreRing, Stagger } from '@/components/insight';
-import { ModeGlyph } from '@/components/reports/meta';
+import { Avatar, CopyButton, PageHeader } from '@/components/ui/misc';
+import { IconTile, Stagger } from '@/components/insight';
 import { Dialog } from '@/components/ui/overlay';
 import { DataTable, type Column } from '@/components/ui/table';
 import { LinkTabs } from '@/components/ui/tabs';
@@ -41,8 +33,8 @@ import { GuideButton } from '@/components/guide';
 import { ApiRequestError, errorMessage } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
-import { qk, useDeleteOrg, useMembers, useProviders, useSetBudget, useTeamMutation, useUpdateOrg, useUsage } from '@/lib/queries';
-import { fmtAgo, fmtDate, fmtDay } from '@/lib/utils';
+import { qk, useDeleteOrg, useMembers, useProviders, useTeamMutation, useUpdateOrg } from '@/lib/queries';
+import { fmtAgo, fmtDate } from '@/lib/utils';
 import { RoleChip, ROLE_ICON, SettingsCard } from './_components/SettingsCard';
 import { DeliveryTab } from './_components/DeliveryTab';
 import { MailboxesTab } from './_components/MailboxesTab';
@@ -52,11 +44,12 @@ import { SecurityTab } from './_components/SecurityTab';
 import { AuditTab } from './_components/AuditTab';
 import { SsoTab } from './_components/SsoTab';
 import { BrandingTab, ClientMailTab, PortalDomainTab } from './_components/AgencyTabs';
+import { CreditsTab } from './_components/credits/CreditsTab';
 
 const TABS = [
   { id: 'company', label: 'Company', description: 'Your company’s details, websites and setup.' },
   { id: 'team', label: 'Team', description: 'Who can see and change your company’s SEO work.' },
-  { id: 'usage', label: 'Usage & budget', description: 'What this month’s analyses cost, and the monthly budget that caps them.' },
+  { id: 'credits', label: 'Credits', description: 'Your credit balance, what your websites and analyses use, buying credits and your own limits.' },
   { id: 'delivery', label: 'Report delivery', description: 'Where your finished reports are sent, and on what schedule.' },
   { id: 'mailboxes', label: 'Mailboxes', description: 'The mailboxes link-building pitches go out from, and your opt-out list.' },
   { id: 'api', label: 'API access', description: 'Keys that let a script, a BI tool or an AI assistant read your data — and, if you allow it, start analyses.' },
@@ -72,7 +65,7 @@ const TABS = [
 const tabShown = (t: (typeof TABS)[number], kind: OrgKind) => !('kinds' in t) || (t.kinds as readonly OrgKind[]).includes(kind);
 
 const ROLE_DESCRIPTIONS: Record<Role, string> = {
-  owner: 'Everything, including the budget and deleting the company.',
+  owner: 'Everything, including the credit limits and deleting the company.',
   admin: 'Websites, website settings and the team. Starts analyses.',
   member: 'Starts analyses and sees every dashboard and report.',
   viewer: 'Sees dashboards and reports. Cannot start analyses.',
@@ -85,6 +78,8 @@ const sizeLabel = (s: string) => (s === 'Just me' ? s : `${s.replace('-', '–')
 export default function OrgSettingsPage() {
   const { tab } = useParams();
   const { org } = useOrgCtx();
+  // the tab was "Usage & budget" until credits replaced the dollar budget: old links land on Credits
+  if (tab === 'usage') return <Navigate to={paths.settings(org.id, 'credits')} replace />;
   const current = TABS.find((t) => t.id === tab && tabShown(t, org.kind));
   if (!current) return <Navigate to={paths.settings(org.id, 'company')} replace />;
   return (
@@ -93,7 +88,7 @@ export default function OrgSettingsPage() {
       <LinkTabs className="mb-6" items={TABS.filter((t) => tabShown(t, org.kind)).map((t) => ({ to: paths.settings(org.id, t.id), label: t.label }))} />
       {current.id === 'company' && <CompanyTab />}
       {current.id === 'team' && <TeamTab />}
-      {current.id === 'usage' && <UsageTab />}
+      {current.id === 'credits' && <CreditsTab />}
       {current.id === 'delivery' && <DeliveryTab />}
       {current.id === 'mailboxes' && <MailboxesTab />}
       {current.id === 'api' && <ApiKeysTab />}
@@ -713,293 +708,5 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o:
         </form>
       )}
     </Dialog>
-  );
-}
-
-// ---------------- usage ----------------
-
-const usdAxis = (v: number) => formatUsd(v, 0);
-
-function monthLabel(month: string): string {
-  const d = parseISO(`${month}-01`);
-  return isValid(d) ? format(d, 'MMMM yyyy') : month;
-}
-
-/** Every day of the month so far (days without runs show as zero, so gaps are visible). */
-function dailyRows(u: Usage) {
-  const start = parseISO(`${u.month}-01`);
-  if (!isValid(start)) return u.daily;
-  const end = minDate([endOfMonth(start), new Date()]);
-  if (end < start) return u.daily;
-  const by = new Map(u.daily.map((d) => [d.date, d]));
-  return eachDayOfInterval({ start, end }).map((day) => {
-    const key = format(day, 'yyyy-MM-dd');
-    const d = by.get(key);
-    return { date: key, runs: d?.runs ?? 0, estimatedUsd: d?.estimatedUsd ?? 0 };
-  });
-}
-
-function UsageTab() {
-  const { org, sites, can } = useOrgCtx();
-  const usage = useUsage(org.id);
-  const daily = useMemo(() => (usage.data ? dailyRows(usage.data) : []), [usage.data]);
-
-  if (usage.isPending)
-    return (
-      <div className="space-y-5" aria-busy>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-28" />
-          ))}
-        </div>
-        <div className="grid gap-5 lg:grid-cols-2">
-          <Skeleton className="h-72" />
-          <Skeleton className="h-72" />
-        </div>
-      </div>
-    );
-  if (usage.isError)
-    return (
-      <Card>
-        <ErrorState error={usage.error} onRetry={() => usage.refetch()} title="Could not load usage" />
-      </Card>
-    );
-
-  const u = usage.data;
-  const pct = u.budgetUsd > 0 ? Math.round((u.estimatedUsd / u.budgetUsd) * 100) : u.estimatedUsd > 0 ? 100 : 0;
-  const tone = pct >= 90 ? 'critical' : pct >= 70 ? 'warning' : 'accent';
-  const tracked = sites.filter((s) => s.trackingStatus === 'active').length;
-  const checks = u.keywordChecks ?? { checks: 0, usd: 0 };
-  const byMode = [
-    ...u.byMode.map((m) => ({ label: MODES[m.mode]?.title ?? m.mode, runs: m.runs, estimatedUsd: m.estimatedUsd })),
-    // keyword checks of the "New keyword ladder" flow count in the budget too
-    ...(checks.checks ? [{ label: 'Keyword checks', runs: checks.checks, estimatedUsd: checks.usd }] : []),
-  ].sort((a, b) => b.estimatedUsd - a.estimatedUsd);
-
-  return (
-    <Stagger className="space-y-5">
-      <p className="inline-flex h-7 items-center gap-1.5 rounded-md border border-line bg-surface px-2.5 text-[13px] font-medium text-ink-2 shadow-card">
-        <CalendarDays className="size-3.5 text-accent-text" aria-hidden />
-        {monthLabel(u.month)}
-      </p>
-      <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          label="Spent this month"
-          icon={<Wallet />}
-          tone={tone === 'accent' ? 'blue' : tone}
-          visual={
-            <span className="flex items-center gap-3">
-              <ScoreRing label="Share of the monthly budget used" value={Math.min(pct, 100)} tone={tone} display={`${pct}%`} valueText={`${pct}% of the budget used`} size={60} />
-              <span className="font-display text-[26px] leading-none font-semibold tracking-[-0.01em] text-ink">
-                <CountUp value={u.estimatedUsd} format={(v) => formatUsd(v)} />
-              </span>
-            </span>
-          }
-          meta={
-            <>
-              {pct}% of the {formatUsd(u.budgetUsd)} budget · measured so far {formatUsd(u.actualUsd)}
-              {u.actualPartialRuns > 0 && (
-                <span title="These runs reported their search-data costs only, not their model calls, so their whole cost is counted at the engine's estimate.">
-                  {' '}
-                  · search data only {formatUsd(u.actualPartialUsd, 3)} ({u.actualPartialRuns} {u.actualPartialRuns === 1 ? 'run' : 'runs'})
-                </span>
-              )}
-            </>
-          }
-        />
-        <MetricCard
-          label="Left this month"
-          icon={<PiggyBank />}
-          value={<CountUp value={u.remainingUsd} format={(v) => formatUsd(v)} />}
-          sparkline={
-            <span className="flex h-full items-center">
-              <Meter value={u.budgetUsd > 0 ? (u.remainingUsd / u.budgetUsd) * 100 : 0} tone={tone} label="Share of the monthly budget left" />
-            </span>
-          }
-          meta="Runs that would go over the budget are refused."
-        />
-        <MetricCard
-          label="Analyses this month"
-          icon={<Play />}
-          value={<CountUp value={u.runs} format={compactNumber} />}
-          meta={`Runs started from the app (failed runs are not counted)${checks.checks ? `, plus ${checks.checks} keyword check${checks.checks === 1 ? '' : 's'} (${formatUsd(checks.usd)})` : ''}.`}
-          to={paths.runs(org.id)}
-        />
-        <MetricCard
-          label="Monitoring per month"
-          icon={<Activity />}
-          value={<CountUp value={u.monitoringMonthlyUsd} format={(v) => formatUsd(v)} />}
-          meta={`Estimate for weekly tracking and monitors of ${tracked} tracked ${tracked === 1 ? 'website' : 'websites'}; not counted in the budget.`}
-        />
-      </div>
-
-      {pct >= 90 && (
-        <Callout tone={pct >= 100 ? 'critical' : 'warning'} title={pct >= 100 ? 'The monthly budget is used up' : 'The monthly budget is almost used up'}>
-          New analyses are refused once they would go over {formatUsd(u.budgetUsd)}. {can('owner') ? 'Raise the budget below.' : 'Ask the owner of your company to raise it.'}
-        </Callout>
-      )}
-
-      {u.runs === 0 && !checks.checks ? (
-        <Card>
-          <EmptyState
-            icon={<Wallet className="size-5" />}
-            title="No analyses this month yet"
-            description="Spend by analysis type and by day appears here as soon as someone starts an analysis."
-            action={can('member') ? <ButtonLink to={paths.tools(org.id)}>Run an analysis</ButtonLink> : undefined}
-          />
-        </Card>
-      ) : (
-        <div className="grid gap-5 lg:grid-cols-2">
-          <ChartCard
-            title={<ChartTitle icon={<ChartNoAxesColumn />}>Spend by analysis</ChartTitle>}
-            description="Estimated cost this month"
-            loading={usage.isFetching}
-            table={{
-              columns: [
-                { key: 'label', label: 'Analysis' },
-                { key: 'runs', label: 'Runs', align: 'right' },
-                { key: 'estimatedUsd', label: 'Estimated spend', align: 'right', format: (v) => formatUsd(Number(v)) },
-              ],
-              rows: byMode,
-            }}
-          >
-            <SpendBars rows={byMode} />
-          </ChartCard>
-          <ChartCard
-            title={<ChartTitle icon={<CalendarDays />}>Daily spend</ChartTitle>}
-            description="Estimated cost per day"
-            loading={usage.isFetching}
-            table={{
-              columns: [
-                { key: 'date', label: 'Day', format: (v) => fmtDate(String(v)) },
-                { key: 'runs', label: 'Runs', align: 'right' },
-                { key: 'estimatedUsd', label: 'Estimated spend', align: 'right', format: (v) => formatUsd(Number(v)) },
-              ],
-              rows: daily.filter((d) => d.runs > 0),
-            }}
-          >
-            <BarsChart
-              data={daily}
-              categoryKey="date"
-              series={[{ key: 'estimatedUsd', label: 'Estimated spend', format: (v) => formatUsd(v) }]}
-              valueFormat={usdAxis}
-              categoryFormat={(v) => fmtDay(String(v))}
-            />
-          </ChartCard>
-        </div>
-      )}
-
-      <BudgetCard usage={u} />
-    </Stagger>
-  );
-}
-
-/** A chart card title with its icon tile (as on the site dashboards). */
-function ChartTitle({ icon, children }: { icon: ReactNode; children: ReactNode }) {
-  return (
-    <span className="flex items-center gap-3">
-      <IconTile size="sm">{icon}</IconTile>
-      <span className="min-w-0">{children}</span>
-    </span>
-  );
-}
-
-/** The mode a "spend by analysis" row is about (rows carry the tool's title), for its icon. */
-const modeByTitle = (label: string) => (Object.keys(MODES) as ModeId[]).find((id) => MODES[id].title === label);
-
-/** Spend by analysis as ranked bars: icon, name, runs, the amount and a bar against the biggest item. */
-function SpendBars({ rows }: { rows: { label: string; runs: number; estimatedUsd: number }[] }) {
-  const max = Math.max(0, ...rows.map((r) => r.estimatedUsd));
-  return (
-    <ul className="space-y-3.5 pt-1" aria-label="Estimated spend by analysis">
-      {rows.map((r) => {
-        const mode = modeByTitle(r.label);
-        const w = max > 0 ? Math.max(2, (r.estimatedUsd / max) * 100) : 0;
-        return (
-          <li key={r.label} className="flex items-center gap-3">
-            {mode ? <ModeGlyph mode={mode} size="sm" /> : (
-              <IconTile size="sm">
-                <Search />
-              </IconTile>
-            )}
-            <div className="min-w-0 flex-1">
-              <div className="flex items-baseline justify-between gap-3 text-[13px]">
-                <span className="min-w-0 truncate font-medium text-ink">{r.label}</span>
-                <span className="shrink-0 tabular text-ink-2">
-                  <span className="font-medium text-ink">{formatUsd(r.estimatedUsd)}</span>
-                  <span className="text-ink-3">
-                    {' '}
-                    · {r.runs} {r.runs === 1 ? 'run' : 'runs'}
-                  </span>
-                </span>
-              </div>
-              <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-surface-2" aria-hidden>
-                <div className="h-full rounded-full bg-accent transition-[width] duration-700 ease-brand" style={{ width: `${w}%` }} />
-              </div>
-            </div>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-function BudgetCard({ usage }: { usage: Usage }) {
-  const { org, can } = useOrgCtx();
-  const owner = can('owner');
-  const setBudget = useSetBudget(org.id);
-  const [value, setValue] = useState(String(org.monthlyBudgetUsd));
-  const [err, setErr] = useState<string | null>(null);
-
-  const save = () => {
-    const n = Number(value);
-    if (!value.trim() || !Number.isFinite(n) || n < 0 || n > 100000) {
-      setErr('Enter an amount between 0 and 100,000');
-      return;
-    }
-    setErr(null);
-    setBudget.mutate(
-      { monthlyBudgetUsd: Math.round(n * 100) / 100 },
-      { onSuccess: (o) => toast.success(`Monthly budget set to ${formatUsd(o.monthlyBudgetUsd)}`), onError: (e) => setErr(errorMessage(e)) },
-    );
-  };
-
-  return (
-    <SettingsCard
-      className="max-w-3xl"
-      icon={<Wallet />}
-      title="Monthly budget"
-      description="Caps what analyses started from the app may cost each calendar month (estimates). Weekly monitoring is shown above as a separate estimate."
-    >
-      <CardBody>
-        {owner ? (
-          <Field
-            label="Budget per month (USD)"
-            hint={`Used this month: ${formatUsd(usage.estimatedUsd)}.`}
-            labelAction={<GuideButton id="budget" variant="link" label="How should I set this?" />}
-            error={err ?? undefined}
-            className="max-w-sm"
-          >
-            {(p) => (
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink-3" aria-hidden>
-                    $
-                  </span>
-                  <Input {...p} type="number" inputMode="decimal" min={0} max={100000} step={1} value={value} onChange={(e) => setValue(e.target.value)} className="pl-7" />
-                </div>
-                <Button onClick={save} loading={setBudget.isPending} disabled={Number(value) === org.monthlyBudgetUsd}>
-                  Save
-                </Button>
-              </div>
-            )}
-          </Field>
-        ) : (
-          <p className="text-sm text-ink-2">
-            The budget is <span className="font-medium text-ink">{formatUsd(org.monthlyBudgetUsd)}</span> per month. Only the owner of {org.name} can change it.
-          </p>
-        )}
-      </CardBody>
-    </SettingsCard>
   );
 }

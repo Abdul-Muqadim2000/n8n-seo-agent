@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { and, desc, eq, inArray, isNotNull, lte, sql } from 'drizzle-orm';
 import {
   bigQuerySchema,
+  creditsFor,
   decodeCursor,
   exportColumns,
   exportDestinationPatchSchema,
@@ -18,6 +19,7 @@ import {
   toCsv,
   toNdjson,
   type ExportTable,
+  type RunCredits,
   type PageV1,
   type StorageProvider,
 } from '@seo/shared';
@@ -30,6 +32,9 @@ import { seal, unseal } from '../lib/secretBox';
 import { encodeRfc3986, sha256Hex, signRequest } from '../lib/sigv4';
 import { siteRows } from '../n8n/client';
 import { integrationOf, requireSecrets, toExportRunView, toIntegrationView } from './integrations';
+import { settingsRow } from './admin/settings';
+import { creditsForRuns } from './runCredits';
+import { customerError } from '../lib/customerError';
 
 /**
  * G4 (2026-10-17) — the warehouse / BI export. Design note: app/docs/INTEGRATIONS.md §6.
@@ -64,13 +69,23 @@ async function siteTableRows(org: Pick<OrgRow, 'id'>, site: SiteRow, t: ExportTa
       .where(and(eq(schema.runs.orgId, org.id), eq(schema.runs.siteId, site.id)))
       .orderBy(desc(schema.runs.createdAt))
       .limit(max);
-    return rows.map((r) => exportRow(t, runRow(r), common));
+    const credits = await creditsForRuns(org.id, rows);
+    return rows.map((r) => exportRow(t, runRow(r, credits.get(r.id) ?? null), common));
   }
   const rows = await siteRows<Record<string, unknown>>(t.source, site.domain, { max, sortBy: `${t.dateColumn}:asc` });
+  if (t.id === 'ai_visibility') {
+    // credits (app/docs/CREDITS.md): the engine stores what a run cost at the providers (`cost_usd`): exported as credits only
+    const st = await settingsRow();
+    return rows.map((r) => {
+      const { cost_usd: cost, ...rest } = r;
+      return exportRow(t, { ...rest, credits: creditsFor(Number(cost) || 0, st) }, common);
+    });
+  }
   return rows.map((r) => exportRow(t, r, common));
 }
 
-const runRow = (r: typeof schema.runs.$inferSelect): Record<string, unknown> => ({
+/** credits (app/docs/CREDITS.md): a run's credits, never its provider cost; its error as the customer reads it */
+const runRow = (r: typeof schema.runs.$inferSelect, credits: RunCredits | null): Record<string, unknown> => ({
   run_id: r.id,
   mode: r.mode,
   title: r.title,
@@ -78,12 +93,10 @@ const runRow = (r: typeof schema.runs.$inferSelect): Record<string, unknown> => 
   started_by: r.apiKeyId ? 'api_key' : (r.input as Record<string, unknown>)?.autoStart === true ? 'auto' : 'person',
   created_at: r.createdAt,
   completed_at: r.completedAt,
-  estimated_cost_usd: r.estimatedCostUsd,
-  actual_cost_usd: r.actualCostUsd,
-  cost_estimated: r.actualCostEstimated,
-  cost_partial: r.actualCostPartial,
+  credits_quoted: credits?.quoted ?? null,
+  credits_charged: credits?.charged ?? null,
   report_count: r.reportCount,
-  error: r.error,
+  error: customerError(r.error),
 });
 
 /** Every row of one table for the whole company (its verified websites; runs also without a website). */
@@ -102,7 +115,8 @@ async function companyRows(org: OrgRow, t: ExportTable, exportedAt: string): Pro
       .where(and(eq(schema.runs.orgId, org.id), sql`${schema.runs.siteId} is null`))
       .orderBy(desc(schema.runs.createdAt))
       .limit(max + 1 - out.length);
-    out.push(...rows.map((r) => exportRow(t, runRow(r), { companyId: org.id, websiteId: null, websiteDomain: null, exportedAt })));
+    const credits = await creditsForRuns(org.id, rows);
+    out.push(...rows.map((r) => exportRow(t, runRow(r, credits.get(r.id) ?? null), { companyId: org.id, websiteId: null, websiteDomain: null, exportedAt })));
   }
   return { rows: out.slice(0, max), truncated: out.length > max };
 }

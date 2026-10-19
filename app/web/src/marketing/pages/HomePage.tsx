@@ -29,7 +29,7 @@ import { solutions } from '../content/solutions';
 import { useSeo } from '../useSeo';
 
 // next to the main CTA: what removes the risk of trying it (facts from pricing.ts and the product)
-const HERO_FACTS = ['Free to set up', 'First site check on day one', 'Cost shown before every run', 'Nothing goes live without your OK'];
+const HERO_FACTS = ['Free to set up', 'First site check on day one', 'Price shown before every run', 'Nothing goes live without your OK'];
 
 // "Why Alaventra": the same SEO jobs done by hand and with Alaventra, in plain words (real capabilities only)
 const COMPARE: { job: string; byHand: string; withUs: string }[] = [
@@ -104,7 +104,7 @@ const TIMELINE = [
 const ENTERPRISE = [
   { icon: Users, title: 'Roles and invitations', body: 'Owner, admin, member and viewer, per company. Invite with a link; sign in with Google or e-mail.' },
   { icon: BadgeCheck, title: 'Verified ownership', body: 'Data appears only after you prove a website is yours: Search Console, a DNS TXT record or a meta tag.' },
-  { icon: Wallet, title: 'Budget caps', body: 'Every run shows its cost before it starts; budgets are checked first and owners set spend caps.' },
+  { icon: Wallet, title: 'Credits and limits', body: 'Every analysis shows its price in credits before it starts and never uses more; owners set monthly limits.' },
   { icon: Lock, title: 'Data isolation', body: 'Each company’s websites, runs and reports are kept apart, and access follows your role.' },
   { icon: Fingerprint, title: 'Single sign-on and SCIM', body: 'Okta, Microsoft Entra ID, Google Workspace or any SAML 2.0 / OIDC provider — required if you like — and accounts provisioned from it.' },
   { icon: ScrollText, title: 'Two-step and an audit log', body: 'Authenticator apps, passkeys or security keys, required company-wide if you choose, and a log of who did what that nobody can edit.' },
@@ -133,8 +133,8 @@ const FAQS: FaqItem[] = [
   },
   { q: 'Which AI engines do you check?', a: 'ChatGPT, Gemini, Perplexity, Claude, Google AI Mode and AI Overviews — plus Microsoft Copilot and the ChatGPT and Gemini APIs if you want them — with a panel of up to 500 buyer questions by topic, buyer role and market.' },
   {
-    q: 'How do you keep costs under control?',
-    a: 'Every run shows its estimated cost before it starts, budgets are checked before any work begins and owners set spend caps. Results that cannot have changed are reused instead of paid for again.',
+    q: 'How do you keep spending under control?',
+    a: 'Everything is paid in credits. Every analysis shows its price before it starts, is never charged more and is free if it fails; owners set monthly limits and can keep credits aside for the automatic work. Results that cannot have changed are reused instead of charged again.',
   },
   { q: 'Is our data kept separate?', a: 'Yes. Every company’s websites, runs and reports are isolated, and website data appears only after ownership is verified.' },
 ];
@@ -601,7 +601,7 @@ function EnterpriseBand() {
           <SectionHeading
             eyebrow="Enterprise-ready"
             title="Built for companies with more than one website."
-            lead="Workspaces per company, roles for every person, single sign-on, verified ownership before any data is shown and a budget check before any paid work."
+            lead="Workspaces per company, roles for every person, single sign-on, verified ownership before any data is shown and a credit check before any work."
           >
             <ButtonLink to="/security" variant="secondary" icon={<ShieldCheck className="size-4" aria-hidden />} className="max-sm:h-10">
               Security at Alaventra
@@ -669,7 +669,7 @@ function PricingTeaser() {
         align="center"
         eyebrow="Pricing"
         title="Start small. Grow when it works."
-        lead={`Free to set up, with plans from ${pricingTiers[0].price} a month. Every run shows its cost before it starts, and budgets keep spend where you set it.`}
+        lead={`Free to set up, with plans from ${pricingTiers[0].price} a month. Every run shows its price in credits before it starts, and your limits keep spending where you set it.`}
       />
       <div className="mx-auto mt-14 grid max-w-5xl gap-4 lg:grid-cols-3">
         {pricingTiers.map((t, i) => (

@@ -1,4 +1,5 @@
 import {
+  creditsFor,
   AI_PROMPTS_STORED_DEFAULT,
   aiPanelFromJson,
   aiSegmentsFromJson,
@@ -95,6 +96,7 @@ import {
 } from '@seo/shared';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { siteRows } from '../n8n/client';
+import { settingsRow } from './admin/settings';
 import { indexCoverage, recheckOf, watchView } from './pageWatch';
 import { callbackUrl, latestReport, reportsList } from './runs';
 
@@ -863,7 +865,10 @@ export function aiDailySeries(days: AiDailyRow[]): AiDay[] {
     });
 }
 
-const toAiRun = (r: AiVisibilityRow): AiRun => ({
+// credits (app/docs/CREDITS.md): a run's provider cost becomes `credits` here, at the platform's settings; `costUsd` stays (deprecated)
+// until no page reads it
+type CreditSettings = { creditValueUsd: number; markup: number };
+const toAiRun = (r: AiVisibilityRow, cs: CreditSettings): AiRun => ({
   runId: s(r.run_id),
   checkedAt: s(r.checked_at),
   prompts: n(r.prompts),
@@ -874,6 +879,7 @@ const toAiRun = (r: AiVisibilityRow): AiRun => ({
   avgRank: n(r.avg_rank),
   aioPresence: n(r.aio_presence),
   aioCitationRate: n(r.aio_citation_rate),
+  credits: creditsFor(n(r.cost_usd), cs),
   costUsd: n(r.cost_usd),
   alerts: splitList(r.alerts),
   runKind: s(r.run_kind),
@@ -1037,8 +1043,9 @@ export async function aiData(org: OrgRow, site: SiteRow): Promise<AiData> {
     };
   }
   const rp = report?.payload;
+  const cs = await settingsRow();
   return {
-    runs: vis.map(toAiRun),
+    runs: vis.map((r) => toAiRun(r, cs)),
     latest,
     daily: aiDailySeries(days),
     prompts: prompts.map((p) => ({
@@ -1125,7 +1132,7 @@ const toLink = (l: P): BacklinkLink => ({
   title: s(l.title),
 });
 
-const toSnapshot = (r: BacklinkSnapshotRow): BacklinkSnapshot => ({
+const toSnapshot = (r: BacklinkSnapshotRow, cs: CreditSettings): BacklinkSnapshot => ({
   checkedAt: s(r.checked_at),
   mode: s(r.mode),
   rank: n(r.rank),
@@ -1138,6 +1145,7 @@ const toSnapshot = (r: BacklinkSnapshotRow): BacklinkSnapshot => ({
   lostLinks: n(r.lost_links),
   importantLost: n(r.important_lost),
   spammyNew: n(r.spammy_new),
+  credits: creditsFor(n(r.cost_usd), cs),
   costUsd: n(r.cost_usd),
   unionDomains: nn(r.union_domains),
   bestLinks: nn(r.best_links),
@@ -1233,8 +1241,9 @@ export async function backlinksData(org: OrgRow, site: SiteRow): Promise<Backlin
   const latestAt = new Map<string, string>();
   for (const r of imports) if (s(r.imported_at) > (latestAt.get(s(r.source)) ?? '')) latestAt.set(s(r.source), s(r.imported_at));
   const graphRow = graphSummary.sort((a, c) => s(c.checked_at).localeCompare(s(a.checked_at)))[0];
+  const cs = await settingsRow();
   return {
-    snapshots: snaps.map(toSnapshot),
+    snapshots: snaps.map((r) => toSnapshot(r, cs)),
     latest: last
       ? {
           lost: arr(safeJson(last.lost_json, [])).map((l) => ({ ...toLink(l), reason: s(l.reason) || undefined, pending: l.pending === true ? true : undefined })),

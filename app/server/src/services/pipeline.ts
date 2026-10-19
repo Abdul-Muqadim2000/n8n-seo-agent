@@ -42,6 +42,9 @@ import {
   type TrendRow,
 } from '@seo/shared';
 import { config } from '../config';
+import { db } from '../db';
+import { monthStartUtc, usageSince } from './billing';
+import { settingsRow } from './admin/settings';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { notFound } from '../lib/errors';
 import { executions, rows as n8nRows, siteRows, type ExecutionSummary } from '../n8n/client';
@@ -512,6 +515,8 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     siteRows<AiTargetRow>('aiTargets', d, { max: 100 }).catch(() => [] as AiTargetRow[]),
     sitePageInventory(d),   // D11: the website's page inventory (the cadence never writes a second page for a search a live page answers)
   ]);
+  const used = await usageSince(db, org.id, monthStartUtc()).catch(() => null);
+  const creditsUsed = used ? Math.round((used.autopilot + used.onDemand) * 100) / 100 : 0;
   const ownRuns = activeRuns(app.runs);
   const verified = !!site.verifiedAt;
   const engineTracked = x.settings.tracking.tracked && x.settings.tracking.status !== 'paused';
@@ -738,7 +743,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     { ladders, history, logs, queries, settings: settingsRows, ...app },
     { ...cadenceSchedule(weeks, cadenceOn), cadenceRuns, rankNextAt: on('rank_tracker')?.nextRunAt ?? null, lastRunPileup },
   );
-  const needsYou = sortNeedsYou([...connectionNeeds(site, x, status), ...failedRuns(app.runs), ...refusedPlans(recentReports), ...ladderNeedsYou(build)]);
+  const needsYou = sortNeedsYou([...connectionNeeds(site, x, status), ...failedRuns(app.runs), ...refusedPlans(recentReports), ...ladderNeedsYou(build, await settingsRow())]);
   const thisWeek = thisWeekItems({ automations, calendar, running: runningHere, queue, plan: week0, x, build, tz });
   const month = new Date().toISOString().slice(0, 7);
   const top10 = build.cards.reduce((t, c) => t + c.top10, 0);
@@ -773,8 +778,10 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       publishedThisMonth: logs.filter((l) => String(l.published_at || '').startsWith(month)).length,
       top10,
       clicks28d: build.clicks28d,
+      creditsUsedThisMonth: creditsUsed,
+      // deprecated (credits, app/docs/CREDITS.md): provider cost; the pipeline page reads `creditsUsedThisMonth`
       spendThisMonthUsd: Math.round(spent * 100) / 100,
-      budgetUsd: org.monthlyBudgetUsd,
+      budgetUsd: 0,
     },
     automation: build.automation,
     detected: detectedFeed(app.detected ?? [], build.cards),

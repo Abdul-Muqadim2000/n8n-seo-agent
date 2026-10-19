@@ -243,7 +243,7 @@ function PipelineSettingsDialog({ automation, autoStartEnabled, onClose }: { aut
         </SettingRow>
         <SettingRow
           title="Choose keywords for me"
-          help={`When fewer ladders than your limit are being written, start the next recommended keyword that is easy or reachable for your site. Each new ladder costs about ${PRICES.ladderStart()} plus its weekly pages.`}
+          help={`When fewer ladders than your limit are being written, start the next recommended keyword that is easy or reachable for your site. Each new ladder uses about ${PRICES.ladderStart()} plus its weekly pages.`}
         >
           <Controller
             name="autoStartLadders"

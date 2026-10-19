@@ -16,6 +16,7 @@ import SettingsPage from '@/pages/admin/SettingsPage';
 import UserDetailPage from '@/pages/admin/UserDetailPage';
 import UsersPage from '@/pages/admin/UsersPage';
 import * as F from './adminFixtures';
+import { setAdminUnits } from '@/pages/admin/_components/units';
 
 // The platform admin panel renders every page from answers shaped like the contract (shared/src/admin.ts), and keeps everyone who is
 // not a platform admin out — the server enforces it too.
@@ -90,6 +91,27 @@ describe('platform admin panel', () => {
     const t = text(render(`/admin/companies/${c.id}`, <CompanyDetailPage />, true, 'companies/:companyId'));
     for (const s of ['Add credits', 'Enforce credits', 'Credit ledger', 'Invoice 2026-114', 'Members', 'Sara Haddad', 'Recent runs', 'Cost by mode']) expect(t).toContain(s);
     expect(t).not.toContain('NaN');
+  });
+
+  it('credit book: the Credits / USD switch turns every credit figure into the dollars behind it (paid, list value, cost to us, owed)', () => {
+    const c = F.companies[0]!;
+    setAdminUnits('credits');
+    let t = text(render(`/admin/companies/${c.id}`, <CompanyDetailPage />, true, 'companies/:companyId'));
+    for (const s of ['Credit book', 'Bought', 'Given free', 'Used', 'Remaining now', 'Credits USD']) expect(t).toContain(s);
+    expect(t).not.toContain('cost us');
+    const o = text(render('/admin', <OverviewPage />));
+    expect(o).toContain('Credit book, all companies');
+    expect(o).toContain('893.6'); // credits outstanding, in credits
+    setAdminUnits('usd');
+    t = text(render(`/admin/companies/${c.id}`, <CompanyDetailPage />, true, 'companies/:companyId'));
+    for (const s of ['paid', 'at list price', 'cost us', 'margin', 'owed at list price', 'will cost us', 'Margin on the credits used']) expect(t).toContain(s);
+    const usdO = text(render('/admin', <OverviewPage />));
+    expect(usdO).toContain('$44.68'); // 893.6 credits × $0.05 owed at list price
+    expect(usdO).toContain('$100.00'); // bought
+    const cos = text(render('/admin/companies', <CompaniesPage />));
+    expect(cos).toContain('Credits left / used ($)');
+    expect(t + usdO + cos).not.toContain('NaN');
+    setAdminUnits('credits');
   });
 
   it('users and a person: companies with roles, sign-in methods, cost of their runs', () => {

@@ -10,7 +10,7 @@ import { Card } from '@/components/ui/card';
 import { Delta, ExternalLink, Meter } from '@/components/ui/misc';
 import { CountUp, HeroStat, IconTile, Stagger } from '@/components/insight';
 import { DataTable, type Column } from '@/components/ui/table';
-import { Block, Empty, LedgerCard, arr, num, obj, objs, shortUrl, str, type P } from './kit';
+import { Block, Empty, CreditsCard, arr, num, obj, objs, shortUrl, str, type P } from './kit';
 import { modeTitle, prefillFromApiBody } from './meta';
 import { PositionPill, ReportHero, ScoreMark } from './visuals';
 
@@ -245,9 +245,8 @@ export function RankTrackerReport({ report }: { report: ReportDetail }) {
           </div>
         )
       )}
-      <LedgerCard
-        ledger={p.run_ledger}
-        extraCost={num(p.cost_usd)}
+      <CreditsCard
+        p={p}
         shared="What the whole weekly rank check used: every ladder and the watch list are checked in one run, and each ladder's report shows that same figure. It is not this ladder's own cost, and it is counted once."
       />
     </Stagger>

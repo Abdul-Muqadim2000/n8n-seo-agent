@@ -49,7 +49,7 @@ export function CapabilityMap({ className }: { className?: string }) {
       </ol>
       <p className="mt-2 flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2.5 text-[12.5px] text-ink-2">
         <span className="mk-pulse size-1.5 shrink-0 rounded-full bg-accent" aria-hidden />
-        One weekly loop, with the cost shown before every run
+        One weekly loop, with the price shown before every run
       </p>
     </nav>
   );

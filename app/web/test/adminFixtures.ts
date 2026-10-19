@@ -1,5 +1,6 @@
 // Answers shaped exactly like the admin contract (shared/src/admin.ts), with realistic numbers: the render test uses them, and the
 // browser pass bundles this file (esbuild) to serve /api/admin/* while the server side is being built.
+import { emptyCreditBook, type CreditBook } from '@seo/shared';
 import type {
   AdminActivityRow,
   AdminCompanyDetail,
@@ -16,6 +17,19 @@ import type {
   Me,
   PlatformSettings,
 } from '@seo/shared';
+
+/** a credit book from its credit figures, with the dollars worked out at $0.05 a credit and 3× (what the server does) */
+export function book(o: { bought?: number; boughtUsd?: number; free?: number; used?: number; remaining?: number }): CreditBook {
+  const cv = 0.05;
+  const used = o.used ?? 0;
+  const remaining = o.remaining ?? 0;
+  return {
+    ...emptyCreditBook(cv, 3),
+    bought: o.bought ?? 0, boughtUsd: o.boughtUsd ?? 0, free: o.free ?? 0, freeListUsd: (o.free ?? 0) * cv,
+    used, usedListUsd: used * cv, usedCostUsd: (used * cv) / 3, usedAutopilot: used * 0.7, usedOnDemand: used * 0.3,
+    remaining, remainingListUsd: remaining * cv, remainingCostUsd: (remaining * cv) / 3,
+  };
+}
 
 const r4 = (n: number) => Math.round(n * 10000) / 10000;
 const split = (c: number, d: number, est = 0): CostSplit => ({ claudeUsd: r4(c), dataforseoUsd: r4(d), totalUsd: r4(c + d), claudeEstimatedUsd: r4(est) });
@@ -55,7 +69,7 @@ export const companies: AdminCompanyRow[] = ORGS.map((o, i) => ({
   runs: o.runs,
   failedRuns: o.failed,
   lastRunAt: o.runs ? `2026-10-18T1${i}:24:00Z` : null,
-  credits: { balance: o.bal, grantedInPeriod: o.rev ? o.rev * 10 + 100 : 0, usedInPeriod: o.used, enforced: o.enforced },
+  credits: { balance: o.bal, grantedInPeriod: o.rev ? o.rev * 10 + 100 : 0, usedInPeriod: o.used, enforced: o.enforced, book: book({ bought: o.rev ? o.rev * 20 : 0, boughtUsd: o.rev, used: o.used, remaining: o.bal }) },
   money: money(split(o.c, o.d, o.est), o.rev, o.used),
 }));
 
@@ -85,7 +99,7 @@ export const overview: AdminOverview = {
   runs: { started: 179, failed: 8, inFlight: 2 },
   money: money(cost, revenue, 1456.4),
   unattributed,
-  credits: { outstanding: 893.6, grantedInPeriod: 2240, usedInPeriod: 1456.4 },
+  credits: { outstanding: 893.6, grantedInPeriod: 2240, usedInPeriod: 1456.4, book: book({ bought: 2000, boughtUsd: 100, free: 240, used: 1456.4, remaining: 893.6 }) },
   daily,
   bills: [
     {

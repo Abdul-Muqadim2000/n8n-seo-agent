@@ -36,6 +36,7 @@ import { badRequest, conflict, forbidden, HttpError, notFound, validationError }
 import { seal, secretsReady, unseal } from '../../lib/secretBox';
 import { requireClientApproval } from '../approvals';
 import { createRun } from '../runs';
+import { customerError } from '../../lib/customerError';
 import { connectorFor, CmsError, type ConnCtx, type ImageWithBytes, type RemoteItem } from './connectors';
 import { CmsHttpError } from './http';
 
@@ -389,7 +390,7 @@ async function tellEngine(a: OrgAccess, site: SiteRow, page: CmsPage, url: strin
   if (!input.success) return { told: false, runId: null, note: 'The engine was not told: the page address could not be used. Use "I published a page".' };
   try {
     const run = await createRun(a, input.data);
-    if (run.status === 'failed') return { told: false, runId: run.id, note: `The engine could not be told right now (${run.error ?? 'the engine did not answer'}). "Check if it is live" tries again.` };
+    if (run.status === 'failed') return { told: false, runId: run.id, note: `The engine could not be told right now (${customerError(run.error) ?? 'the engine did not answer'}). "Check if it is live" tries again.` };
     return { told: true, runId: run.id, note: `The engine is checking ${url} now: it marks the page published, starts tracking it and the weekly posts continue.` };
   } catch (e) {
     log?.warn({ err: String((e as Error).message) }, 'cms: engine not told');

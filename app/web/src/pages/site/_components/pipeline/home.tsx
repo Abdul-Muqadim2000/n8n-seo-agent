@@ -22,13 +22,14 @@ import {
   Workflow,
   XCircle,
 } from 'lucide-react';
-import { AUTOMATIONS, compactNumber, formatUsd, MODES, type LadderCard, type NeedsYouItem, type PipelineData, type PipelineStage, type ThisWeekItem } from '@seo/shared';
+import { AUTOMATIONS, compactNumber, formatCredits, MODES, type LadderCard, type NeedsYouItem, type PipelineData, type PipelineStage, type ThisWeekItem } from '@seo/shared';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { CollapsePanel, CountUp, DisclosureButton, HeroNextStep, HeroStat, IconTile, InsightItem, SummaryHero, useSurface } from '@/components/insight';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
+import { useBilling } from '@/lib/queries';
 import { cn, fmtAgo } from '@/lib/utils';
 import { Panel } from '../kit';
 import { plural } from '../format';
@@ -259,7 +260,7 @@ export function NeedsYou({ items, onWrite }: { items: NeedsYouItem[]; onWrite?: 
 }
 
 // ---------- the hero ----------
-/** A thin bar on the hero (on-dark colours); `alert`: warning / critical fills when it is nearly full (a budget). */
+/** A thin bar on the hero (on-dark colours); `alert`: warning / critical fills when it is nearly full. */
 export function HeroMeter({ value, label, alert }: { value: number; label: string; alert?: boolean }) {
   const v = Math.max(0, Math.min(100, value));
   const surface = useSurface();
@@ -280,14 +281,17 @@ function heroTitle(status: PipelineData['tracking']['status'], needs: NeedsYouIt
 
 /**
  * The page's summary: how the pipeline stands this week (headline from what needs the person and the next run), the month's
- * numbers (published, top 10, clicks, spend against the budget) and the first thing to do.
+ * numbers (published, top 10, clicks, the company's credits this month) and the first thing to do.
  */
 export function PipelineHero({ data, needs, cards, onWrite }: { data: PipelineData; needs: NeedsYouItem[]; cards: LadderCard[]; onWrite?: (i: WriteNowItem) => void }) {
   const { site } = useSiteCtx();
+  const { org } = useOrgCtx();
+  // credits (app/docs/CREDITS.md): the company's credits this month (autopilot + on-demand), never a dollar spend or budget
+  const billing = useBilling(org.id);
+  const b = billing.data;
   const week = useMemo(() => sortedWeek(data), [data]);
   const next = week[0];
   const s = data.summary;
-  const share = s && s.budgetUsd > 0 ? (s.spendThisMonthUsd / s.budgetUsd) * 100 : 0;
   const first = needs[0];
   const line = [
     next ? `Next automatic run: ${next.title}, ${fmtWhen(next.at)}` : 'No automatic run in the next seven days',
@@ -328,23 +332,19 @@ export function PipelineHero({ data, needs, cards, onWrite }: { data: PipelineDa
             <HeroStat label="Pages published this month" value={<CountUp value={s.publishedThisMonth} />} hint="Ladder pages and blog posts that went live" />
             <HeroStat label="Keywords in the top 10" value={<CountUp value={s.top10} />} hint="Ladder pages and main keywords on page one of Google" />
             <HeroStat label="Clicks from ladder pages" value={<CountUp value={s.clicks28d} format={compactNumber} />} hint="Last 28 days, from Search Console" />
-            <HeroStat
-              label="Spent this month"
-              value={<CountUp value={s.spendThisMonthUsd} format={formatUsd} />}
-              hint={
-                s.budgetUsd > 0 ? (
-                  <>
-                    <HeroMeter value={share} label="Share of the monthly budget spent" alert />
-                    <span className="mt-1.5 flex items-center gap-1">
-                      {share >= 70 && <AlertTriangle className="size-3 shrink-0" aria-hidden />}
-                      of {formatUsd(s.budgetUsd)} monthly budget ({Math.round(share)}%)
-                    </span>
-                  </>
-                ) : (
-                  'No monthly budget set'
-                )
-              }
-            />
+            {b && (
+              <HeroStat
+                label="Credits used this month"
+                value={<CountUp value={b.month.autopilotUsed + b.month.onDemandUsed} format={(n) => formatCredits(n, { unit: false })} />}
+                hint={
+                  <span className="flex flex-wrap items-center gap-1">
+                    {['low', 'critical', 'empty', 'paused'].includes(b.status) && <AlertTriangle className="size-3 shrink-0" aria-hidden />}
+                    Autopilot {formatCredits(b.month.autopilotUsed, { unit: false })} · on-demand {formatCredits(b.month.onDemandUsed, { unit: false })}
+                    {b.enforced ? ` · ${formatCredits(Math.max(0, b.available))} available` : ''}
+                  </span>
+                }
+              />
+            )}
           </>
         ) : undefined
       }

@@ -7,6 +7,7 @@ import {
   IDEMPOTENCY,
   MODES,
   MODE_IDS,
+  modeCostUsd,
   NOTICE_MODES,
   parseRunInput,
   pipelineNotices,
@@ -30,7 +31,7 @@ import { pipelineData } from './pipeline';
 import { createRunWithMeta, estimateCost, findIdempotentRun } from './runs';
 import { creatorMembership } from './apiKeys';
 import { audit } from './audit';
-import { monthSpend } from './spend';
+import { engineCostTable } from './engineCost';
 import { creditCheck, quoteCredits, type CreditCheck } from './billing';
 import { settingsRow } from './admin/settings';
 
@@ -113,7 +114,7 @@ export interface StartAnswer {
   status: 200 | 201;
   replayed: boolean;
   body:
-    | { dryRun: true; mode: ModeId; estimate: { usd: number; minutes: number }; notices: PipelineNotice[]; needsAcknowledge: string[]; budget: { spentUsd: number; budgetUsd: number; remainingUsd: number }; credits: CreditCheck }
+    | { dryRun: true; mode: ModeId; estimate: { credits: number; minutes: number }; notices: PipelineNotice[]; needsAcknowledge: string[]; credits: CreditCheck }
     | { run: RunV1 & { input: Record<string, unknown> }; notices: PipelineNotice[] };
 }
 
@@ -137,26 +138,27 @@ export async function startRunV1(ctx: V1Ctx, rawBody: unknown, idempotencyKey: s
 
   // the forms' own duplicate warnings, on the same pipeline data the page reads
   const estimate = await estimateCost(input);
+  // credits (app/docs/CREDITS.md): the caller reads the quote, never the provider estimate behind it
+  const quoted = quoteCredits(estimate, await settingsRow());
   let notices: PipelineNotice[] = [];
   if (site?.verifiedAt && NOTICE_MODES.includes(input.mode)) {
     const data = await pipelineData(ctx.org, site).catch(() => null);
-    notices = pipelineNotices(input.mode, input as never, data, { costLabel: estimate > 0 ? formatCredits(quoteCredits(estimate, await settingsRow())) : undefined });
+    notices = pipelineNotices(input.mode, input as never, data, { costLabel: estimate > 0 ? formatCredits(quoted) : undefined });
   }
   const open = unconfirmed(notices, extras.data.acknowledge);
 
   if (extras.data.dryRun) {
-    const spent = await monthSpend(ctx.org.id);
     return {
       status: 200,
       replayed: false,
       body: {
         dryRun: true,
         mode: input.mode,
-        estimate: { usd: estimate, minutes: estimateRunMinutes(input.mode, input as unknown as Record<string, unknown>) },
+        estimate: { credits: quoted, minutes: estimateRunMinutes(input.mode, input as unknown as Record<string, unknown>) },
         notices,
         needsAcknowledge: open.map((n) => n.id),
-        budget: { spentUsd: round(spent), budgetUsd: ctx.org.monthlyBudgetUsd, remainingUsd: round(Math.max(0, ctx.org.monthlyBudgetUsd - spent)) },
-        // admin panel: whether the company's credits would let it start (`enough` is false only when credits are enforced and short)
+        // whether the company's credits would let it start (`enough` is false when the balance, the credits kept for the schedules or
+        // the company's own on-demand limit would refuse it — the same check the start makes)
         credits: await creditCheck(db, ctx.org, estimate),
       },
     };
@@ -181,15 +183,18 @@ export async function startRunV1(ctx: V1Ctx, rawBody: unknown, idempotencyKey: s
       actor: { type: 'user', userId: actor.user.id, label: ctx.key ? `${actor.user.email} via API key ${ctx.key.name} (${ctx.key.prefix}…)` : actor.user.email },
       target: { type: 'run', id: run.id, label: run.title },
       outcome: run.status === 'failed' ? 'failure' : 'success',
-      details: { mode: input.mode, estimatedUsd: estimate, via: ctx.key ? 'api_key' : 'session', status: run.status },
+      // credits (app/docs/CREDITS.md): the audit log is read by the company: its quote, never the provider estimate
+      details: { mode: input.mode, quotedCredits: run.quotedCredits ?? quoted, via: ctx.key ? 'api_key' : 'session', status: run.status },
     });
   return { status: replayed ? 200 : 201, replayed, body: { run: full.run, notices } };
 }
 
-const round = (n: number) => Math.round(n * 100) / 100;
-
-/** What each mode needs, for a caller (or an assistant) deciding what to send: the forms' schemas as JSON Schema. */
-export function modesV1() {
+/**
+ * What each mode needs, for a caller (or an assistant) deciding what to send: the forms' schemas as JSON Schema, and what a run of it
+ * is quoted at in credits (the engine's own calibrated figure for a default run, as the forms show it).
+ */
+export async function modesV1() {
+  const [s, cal] = await Promise.all([settingsRow(), engineCostTable()]);
   return {
     items: MODE_IDS.map((id) => {
       const m = MODES[id];
@@ -205,7 +210,7 @@ export function modesV1() {
         description: m.summary,
         websiteRequired: !!m.siteBound,
         delivers: m.delivers,
-        estimate: { usd: m.costUsd, minutes: estimateRunMinutes(id, { mode: id }) },
+        estimate: { credits: quoteCredits(modeCostUsd(id, cal.calibration), s), minutes: estimateRunMinutes(id, { mode: id }) },
         inputSchema,
       };
     }),

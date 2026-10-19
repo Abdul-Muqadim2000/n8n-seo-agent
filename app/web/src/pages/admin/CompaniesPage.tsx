@@ -11,6 +11,7 @@ import { fmtDate } from '@/lib/utils';
 import { useAdminPeriod } from './AdminLayout';
 import { AdminPageHeader, CompanyStatus, CostSplitCell, MarginValue, Money, Num, RowTile } from './_components/kit';
 import { adminPaths, credits, money, PERIOD_LABELS, sumSplits, withPeriod } from './lib';
+import { useAdminUnits } from './_components/units';
 
 export default function AdminCompaniesPage() {
   const [period] = useAdminPeriod();
@@ -22,6 +23,7 @@ export default function AdminCompaniesPage() {
     return { cost, revenue: rows.reduce((t, r) => t + r.money.revenueUsd, 0), margin: rows.reduce((t, r) => t + r.money.marginUsd, 0) };
   }, [rows]);
 
+  const [units] = useAdminUnits();
   const columns: Column<AdminCompanyRow>[] = [
     {
       key: 'name',
@@ -56,15 +58,25 @@ export default function AdminCompaniesPage() {
     },
     {
       key: 'credits',
-      header: 'Credits left / used',
+      header: units === 'usd' ? 'Credits left / used ($)' : 'Credits left / used',
       align: 'right',
       sortValue: (r) => r.credits.balance,
-      cell: (r) => (
-        <span className="inline-flex flex-col items-end leading-tight">
-          <Num className={r.credits.balance < 0 ? 'text-critical-text' : undefined}>{credits(r.credits.balance)}</Num>
-          <Num className="mt-0.5 text-[11px] text-ink-3">{credits(r.credits.usedInPeriod)} used</Num>
-        </span>
-      ),
+      // credits (app/docs/CREDITS.md): the Credits / USD switch — left at list price, used at list price and what that work cost us
+      cell: (r) =>
+        units === 'usd' ? (
+          <span className="inline-flex flex-col items-end leading-tight">
+            <Num className={r.credits.balance < 0 ? 'text-critical-text' : undefined}>{money(r.credits.book?.remainingListUsd ?? 0, { digits: 2 })}</Num>
+            <Num className="mt-0.5 text-[11px] text-ink-3">{money(r.credits.book?.usedListUsd ?? 0, { digits: 2 })} used · cost {money(r.credits.book?.usedCostUsd ?? 0, { digits: 2 })}</Num>
+            {(r.credits.book?.boughtUsd ?? 0) > 0 && <Num className="mt-0.5 text-[11px] text-good-text">{money(r.credits.book!.boughtUsd, { digits: 2 })} bought</Num>}
+          </span>
+        ) : (
+          <span className="inline-flex flex-col items-end leading-tight">
+            <Num className={r.credits.balance < 0 ? 'text-critical-text' : undefined}>{credits(r.credits.balance)}</Num>
+            <Num className="mt-0.5 text-[11px] text-ink-3">{credits(r.credits.usedInPeriod)} used</Num>
+            {(r.credits.book?.bought ?? 0) > 0 && <Num className="mt-0.5 text-[11px] text-good-text">{credits(r.credits.book!.bought)} bought</Num>}
+            {(r.planMonthlyCredits ?? 0) > 0 && <Num className="mt-0.5 text-[11px] text-ink-3">plan {credits(r.planMonthlyCredits)} / month</Num>}
+          </span>
+        ),
     },
     { key: 'cost', header: 'Cost to us', align: 'right', sortValue: (r) => r.money.cost.totalUsd, cell: (r) => <CostSplitCell cost={r.money.cost} /> },
     { key: 'revenue', header: 'Revenue', align: 'right', sortValue: (r) => r.money.revenueUsd, cell: (r) => <Money value={r.money.revenueUsd} /> },

@@ -509,7 +509,7 @@ export const AUDIT_ACTIONS = {
   'site.deleted': { label: 'Deleted a website', category: 'websites' },
   'company.created': { label: 'Created the company', category: 'settings' },
   'company.updated': { label: 'Changed company details', category: 'settings' },
-  'company.budget_changed': { label: 'Changed the monthly budget', category: 'settings' },
+  'company.budget_changed': { label: 'Changed the platform spending guard', category: 'settings' },
   'company.credit_limits_changed': { label: 'Changed the credit limits', category: 'settings' },
   'company.credits_requested': { label: 'Asked for credits', category: 'settings' },
   'company.delivery_changed': { label: 'Changed report delivery', category: 'settings' },

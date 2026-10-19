@@ -1,14 +1,14 @@
 import { and, desc, eq, inArray, lt, type SQL } from 'drizzle-orm';
 import { audit } from '../services/audit';
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import { isShareToken, MODE_IDS, parseRunInput, SHARE, shareDays, shareRefusal, shareState, shareUrl, type Page, type ReportDetail, type Run } from '@seo/shared';
+import { isClientRole, isShareToken, MODE_IDS, parseRunInput, SHARE, shareDays, shareRefusal, shareState, shareUrl, type Page, type ReportDetail, type Run } from '@seo/shared';
 import { isUuid, orgAccess } from '../auth/access';
 import { config } from '../config';
 import { db, schema } from '../db';
 import type { FileRow } from '../db/schema';
 import { HttpError, notFound, validationError } from '../lib/errors';
 import { deliverReport } from '../services/reportDelivery';
-import { createRun, filesFor, getRunOrThrow, reportsList, toReport, toRun } from '../services/runs';
+import { createRun, creditsForRuns, filesFor, getRunOrThrow, reportCredits, reportsList, toReport, toRun } from '../services/runs';
 import { createShare, listShares, markOpened, revokeShare, sharedFile, sharedReport, shareByToken } from '../services/shareLinks';
 import { payloadFor } from '../services/brandOf';
 import { portalFile, portalFiles, shareFile } from '../services/portalDocs';
@@ -45,7 +45,9 @@ async function runWithNames(runId: string): Promise<Run | null> {
     .where(eq(schema.runs.id, runId))
     .limit(1);
   const x = rows[0];
-  return x ? toRun(x.r, { siteDomain: x.domain, userName: x.userName, apiKeyName: x.keyName }) : null;
+  if (!x) return null;
+  const credits = await creditsForRuns(x.r.orgId, [x.r]);
+  return toRun(x.r, { siteDomain: x.domain, userName: x.userName, apiKeyName: x.keyName, credits: credits.get(x.r.id)! });
 }
 
 export async function runRoutes(app: FastifyInstance) {
@@ -76,7 +78,10 @@ export async function runRoutes(app: FastifyInstance) {
       .where(and(...conds))
       .orderBy(desc(schema.runs.createdAt))
       .limit(limit + 1);
-    const items = rows.slice(0, limit).map((x) => toRun(x.r, { siteDomain: x.domain, userName: x.userName, apiKeyName: x.keyName }));
+    // credits (app/docs/CREDITS.md): one ledger read for the page, not one per run
+    const page = rows.slice(0, limit);
+    const credits = await creditsForRuns(a.org.id, page.map((x) => x.r));
+    const items = page.map((x) => toRun(x.r, { siteDomain: x.domain, userName: x.userName, apiKeyName: x.keyName, credits: credits.get(x.r.id)! }));
     return { items, nextCursor: rows.length > limit ? rows[limit - 1].r.createdAt.toISOString() : null };
   });
 
@@ -111,7 +116,9 @@ export async function runRoutes(app: FastifyInstance) {
     // G5: a client person gets no cost figures, and in a white-label workspace no file we cannot rebrand (the engine's PDF: the
     // portal offers the branded print view instead)
     const shown = await portalFiles(a, files.get(row.id) ?? []);
-    return { ...toReport(row, shown, site?.domain ?? null), payload: payloadFor(a.role, row.payload) };
+    // credits (app/docs/CREDITS.md): nobody gets the provider cost; the company's own people get the credits the work used
+    const credits = isClientRole(a.role) ? null : await reportCredits(a.org.id, row);
+    return { ...toReport(row, shown, site?.domain ?? null), payload: payloadFor(a.role, row.payload, credits) };
   });
 
   app.get('/api/orgs/:orgId/files/:fileId', async (req, reply) => {

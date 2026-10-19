@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { CostSource } from './cost';
+import type { RunCredits } from './api';
 
 /**
  * B5-11 / area 12 G-5 (v4.18): the read API over a company's own data, and B3-7 "is this page publishable?" as an endpoint.
@@ -32,7 +32,7 @@ export const API_KEY = {
 
 /**
  * G4 (2026-10-17, app/docs/INTEGRATIONS.md): `run` and `admin` are WRITE permissions, chosen at creation and never implied by the
- * others. `run` starts analyses (they cost money, inside the company's budget) and pushes findings to the company's issue tracker;
+ * others. `run` starts analyses (they use credits, within the company's balance and limits) and pushes findings to the company's issue tracker;
  * `admin` manages the event webhooks and starts exports. A key acts as the person who made it, re-checked on every request.
  */
 export const API_SCOPES = ['read', 'publish_check', 'run', 'admin'] as const;
@@ -40,14 +40,14 @@ export type ApiScope = (typeof API_SCOPES)[number];
 export const API_SCOPE_LABELS: Record<ApiScope, string> = {
   read: 'Read websites, audits and findings, runs, reports, files and the export tables',
   publish_check: 'Check a page before it is published (free, writes nothing)',
-  run: 'Start analyses within the monthly budget, and create tickets in your issue tracker',
+  run: 'Start analyses with your credits, and create tickets in your issue tracker',
   admin: 'Manage event webhooks and start data exports',
 };
 /** the short words the key list shows */
 export const API_SCOPE_SHORT: Record<ApiScope, string> = { read: 'read', publish_check: 'publish check', run: 'start runs', admin: 'admin' };
 /** the role the key's creator must still hold for a key to use the scope (re-checked on every request) */
 export const API_SCOPE_ROLE: Record<ApiScope, 'viewer' | 'member' | 'admin'> = { read: 'viewer', publish_check: 'member', run: 'member', admin: 'admin' };
-/** scopes that change something or spend money: shown with a warning when a key is created */
+/** scopes that change something or use credits: shown with a warning when a key is created */
 export const API_WRITE_SCOPES: readonly ApiScope[] = ['run', 'admin'];
 
 /** `Idempotency-Key`: what a caller may send (Stripe's shape: an opaque string the caller generates, e.g. a UUID) */
@@ -221,7 +221,8 @@ export interface RunV1 {
   createdAt: string;
   completedAt: string | null;
   reportCount: number;
-  cost: { usd: number; basis: 'measured' | 'engine_estimate' | 'app_estimate'; partial: boolean; estimated: boolean; note: string };
+  /** credits (app/docs/CREDITS.md): quoted, charged, state, capped — as the app's own Run (the provider cost is never sent) */
+  credits: RunCredits;
 }
 
 export interface ReportFileV1 {
@@ -246,9 +247,6 @@ export interface ReportV1 {
   ready: { ok: boolean; code: string | null; reason: string | null };
   files: ReportFileV1[];
 }
-
-export const costBasisV1 = (source: CostSource): RunV1['cost']['basis'] =>
-  source === 'measured' || source === 'partial' ? 'measured' : source === 'engine' ? 'engine_estimate' : 'app_estimate';
 
 // ---------------------------------------------------------------------------------------------------------------------------
 // 4. Findings of one audit, compared with the previous audit of the same type
@@ -414,7 +412,6 @@ export interface PublishCheckResult {
   not_checked?: { check: string; reason: string }[];
   basis?: string;
   writes?: string;
-  cost_usd?: number;
   error?: string;
   errors?: string[];
 }

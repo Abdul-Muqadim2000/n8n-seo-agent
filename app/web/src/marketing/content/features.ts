@@ -410,7 +410,7 @@ export const features: Feature[] = [
     ],
     faqs: [
       {
-        q: 'Do monthly audits cost money when nothing changed?',
+        q: 'Do monthly audits use credits when nothing changed?',
         a: 'No. Alaventra compares your sitemap with the last audit and skips the crawl when nothing changed, with a full audit at least every 60 days.',
       },
       { q: 'What is in the fix pack?', a: 'A robots.txt, an llms.txt, a redirect list, schema snippets and an internal-links CSV, zipped together.' },
@@ -544,7 +544,7 @@ export const features: Feature[] = [
       'Rates per topic, buyer role, market and engine, each with its 95% range — and “too few answers” where a group has not been asked enough to say',
       'Import your own question list as CSV, pin the questions that matter, edit, re-word or switch any question off',
       'ChatGPT, Gemini, Perplexity, Claude, Google AI Mode and AI Overviews, with Microsoft Copilot and the ChatGPT and Gemini APIs on request',
-      'A big panel is asked in full every week and as a rotating sample every morning, so every topic and buyer role is in every daily reading — and the cost and the precision it buys are shown before you save',
+      'A big panel is asked in full every week and as a rotating sample every morning, so every topic and buyer role is in every daily reading — and the credits it uses a month and the precision it buys are shown before you save',
       'Mention rate, citation rate and share of voice against competitors, with 95% ranges',
       'A daily AI Pulse that alerts only on statistically real changes',
       'Visits, key events and revenue from AI referrals in GA4',
@@ -574,7 +574,7 @@ export const features: Feature[] = [
         q: 'Why ranges instead of one number?',
         a: 'AI answers vary from one ask to the next. Alaventra asks repeatedly and shows each rate with a 95% range, so you can tell a real change from noise.',
       },
-      { q: 'What does the daily AI Pulse cost?', a: 'It can be switched on or off per website, and the cost is shown in the settings before you turn it on.' },
+      { q: 'What does the daily AI Pulse use?', a: 'It can be switched on or off per website, and the credits it uses a month are shown in the settings before you turn it on.' },
       {
         q: 'Can it tell me what AI gets wrong about us?',
         a: 'Yes. The Answer Analyst compares answers with your business profile and lists wrong claims, sentiment and the order brands are named in.',
@@ -639,8 +639,8 @@ export const features: Feature[] = [
         a: 'What the evidence supports: the page can be fetched and indexed, its text is in the HTML before any script runs (the AI fetchers run none), the answer comes in the first lines, it shows a visible date it was updated, its headings are the questions people ask and its figures link to their source. Each key page gets a score out of 100 with the reasons, checked again about once a month.',
       },
       {
-        q: 'Does AI growth cost extra?',
-        a: 'The checks, the Bing and IndexNow submissions and the Wikidata check are free. Answer pages are written like any other page and their cost is shown in the settings before you switch them on; set AI answer pages to 0 a month and only the drafted pitches remain.',
+        q: 'Does AI growth use extra credits?',
+        a: 'The checks, the Bing and IndexNow submissions and the Wikidata check use no credits. Answer pages are written like any other page and the credits they use a month are shown in the settings before you switch them on; set AI answer pages to 0 a month and only the drafted pitches remain.',
       },
       {
         q: 'Will you send the pitches for us?',
@@ -728,7 +728,7 @@ export const features: Feature[] = [
       'The link gap, unlinked mentions of your name and broken links pointing at you, scored as prospects with their contacts',
       'A competitor’s own sister domains and sites off your topics stay out of the prospect list, with the reason shown',
       'Prospects go straight to link building, which drafts the pitch and sends it from your own mailbox once you approve it',
-      'A free-sources mode that costs nothing to run',
+      'A free-sources mode that uses no credits',
     ],
     steps: [
       { title: 'Merge', body: 'Nine sources flow into one ledger, one row per referring site.' },
@@ -739,7 +739,7 @@ export const features: Feature[] = [
     facts: [
       { value: 9, label: 'link sources in one ledger' },
       { value: 2, label: 'misses before a link counts as lost' },
-      { value: 0, prefix: '$', label: 'to run the free-sources mode' },
+      { value: 0, label: 'credits to run the free-sources mode' },
     ],
     faqs: [
       {
@@ -901,7 +901,7 @@ export const features: Feature[] = [
       { q: 'What is the monthly check-in?', a: 'A short checklist for what Google does not expose through its API, such as manual actions and security issues.' },
       {
         q: 'Are recommendations ranked?',
-        a: 'Yes, and it is one list, not one list per area. Every step carries what it is worth — the impact, how confident Alaventra is in the figure behind it, and how much work it is — and the list is ordered by all three. Setup steps that have to happen before anything can be measured come first and say why. A step with no measured figure behind it is put at the bottom with the reason, rather than given a number nobody can defend. Each step can be started as a run with its cost shown first.',
+        a: 'Yes, and it is one list, not one list per area. Every step carries what it is worth — the impact, how confident Alaventra is in the figure behind it, and how much work it is — and the list is ordered by all three. Setup steps that have to happen before anything can be measured come first and say why. A step with no measured figure behind it is put at the bottom with the reason, rather than given a number nobody can defend. Each step can be started as a run with its price in credits shown first.',
       },
       {
         q: 'Can I see where a number came from?',
@@ -1031,7 +1031,7 @@ export const features: Feature[] = [
     shortName: 'Integrations',
     tagline: 'Alerts in Slack or Teams, findings as tickets, your data in your warehouse — and an API your assistant can work with.',
     summary:
-      'Alaventra fits into the tools your team already runs on. Alerts and finished work go to the Slack or Teams channel you choose, an audit finding becomes one ticket in Jira, Linear or Asana, and your rankings, traffic, audits, AI visibility and backlinks land in BigQuery, S3 or Looker Studio. Scripts and AI assistants can read everything and, with your permission, start analyses within your budget.',
+      'Alaventra fits into the tools your team already runs on. Alerts and finished work go to the Slack or Teams channel you choose, an audit finding becomes one ticket in Jira, Linear or Asana, and your rankings, traffic, audits, AI visibility and backlinks land in BigQuery, S3 or Looker Studio. Scripts and AI assistants can read everything and, with your permission, start analyses using your company’s credits.',
     icon: Plug,
     benefits: [
       'Alerts, failed runs, finished reports, new audit findings and ranking moves sent to Slack or Microsoft Teams — each channel gets only the events you pick',
@@ -1039,7 +1039,7 @@ export const features: Feature[] = [
       'Any audit finding or recommendation sent to Jira, Linear or Asana as one ticket with the evidence, the example pages and the fix — and its state shown back next to the finding',
       'Rankings, weekly Search Console and GA4 figures, audit findings, AI visibility, backlinks and analyses exported every day or week to BigQuery, Amazon S3, Google Cloud Storage or Cloudflare R2',
       'A Looker Studio connector for the same tables, read with a read-only key',
-      'An API and an MCP server: assistants like Claude and ChatGPT read your data and, with a key you allow to, start analyses — with the same budget, duplicate and cost checks as the app',
+      'An API and an MCP server: assistants like Claude and ChatGPT read your data and, with a key you allow to, start analyses — with the same credit, duplicate and price checks as the app',
     ],
     steps: [
       { title: 'Connect a channel or a tracker', body: 'Paste a Slack or Teams address, or a Jira, Linear or Asana token. Alaventra checks it with the tool before anything is saved.' },
@@ -1054,8 +1054,8 @@ export const features: Feature[] = [
     ],
     faqs: [
       {
-        q: 'Can an AI assistant spend our money?',
-        a: 'Only with a key you created for that, and only inside your monthly budget. A key can read by default; starting analyses is a separate permission. Every start goes through the same checks as the app: the cost estimate, the budget, and the warning when the work duplicates something already planned or running — which the assistant must show you rather than accept on its own.',
+        q: 'Can an AI assistant spend our credits?',
+        a: 'Only with a key you created for that, and only within your company’s credits and limits. A key can read by default; starting analyses is a separate permission. Every start goes through the same checks as the app: the price in credits, your balance and limits, and the warning when the work duplicates something already planned or running — which the assistant must show you rather than accept on its own.',
       },
       {
         q: 'Will the same finding be ticketed twice?',
@@ -1067,7 +1067,7 @@ export const features: Feature[] = [
       },
       {
         q: 'What does the export contain?',
-        a: 'Six tables with a documented schema: rank history, weekly Search Console and GA4 figures, audit findings, AI visibility, backlinks, and analyses with their cost. Each export is a full copy, so a re-run replaces instead of duplicating.',
+        a: 'Six tables with a documented schema: rank history, weekly Search Console and GA4 figures, audit findings, AI visibility, backlinks, and the analyses you ran. Each export is a full copy, so a re-run replaces instead of duplicating.',
       },
     ],
     related: ['report-delivery', 'enterprise', 'technical-audits'],
@@ -1083,9 +1083,9 @@ export const features: Feature[] = [
     slug: 'enterprise',
     name: 'Enterprise platform',
     shortName: 'Enterprise',
-    tagline: 'Workspaces, roles, single sign-on, an audit log and spend caps for every company you run.',
+    tagline: 'Workspaces, roles, single sign-on, an audit log and credit limits for every company you run.',
     summary:
-      'Run every company and website from one account. Invite your team with roles — or let your identity provider sign them in and provision them — require two-step verification, see who did what in the audit log, prove you own each website before its data is shown and cap spend per company. Each company’s data is kept apart from every other.',
+      'Run every company and website from one account. Invite your team with roles — or let your identity provider sign them in and provision them — require two-step verification, see who did what in the audit log, prove you own each website before its data is shown and set credit limits per company. Each company’s data is kept apart from every other.',
     icon: Building2,
     benefits: [
       'Multi-company workspaces with four roles: owner, admin, member and viewer',
@@ -1096,16 +1096,16 @@ export const features: Feature[] = [
       'An audit log of sign-ins, team, settings, keys and sharing that nobody can edit, with CSV export',
       'Signed-in devices you can sign out, and idle sign-out after the time your company sets',
       'Website ownership verified through Search Console, a DNS TXT record or a meta tag',
-      'A cost estimate before every run, budget guards and spend caps',
+      'The price in credits before every analysis, credits per company and the limits you set',
       'Data isolation per company',
       'API keys per company: shown once, with an expiry, revocable at any time, read-only unless you allow a key to start analyses, and never able to reach another company’s data',
-      'No repeated paid work: results are reused where nothing changed',
+      'No repeated work: results are reused where nothing changed',
     ],
     steps: [
       { title: 'Create a workspace', body: 'One company per brand or client, each with its own websites and data.' },
       { title: 'Verify your websites', body: 'Prove ownership through Search Console, DNS or a meta tag.' },
       { title: 'Invite the team', body: 'Give each person the role they need, from viewer to owner.' },
-      { title: 'Set the budget', body: 'See costs before every run and cap spend per company.' },
+      { title: 'Set the limits', body: 'See the price in credits before every analysis and set each company’s credit limits.' },
     ],
     facts: [
       { value: 4, label: 'roles: owner, admin, member and viewer' },
@@ -1113,11 +1113,11 @@ export const features: Feature[] = [
       { value: 1, label: 'verified owner per domain' },
     ],
     faqs: [
-      { q: 'Can one person manage several companies?', a: 'Yes. Agencies and groups switch between companies; each has its own websites, team, budget and data.' },
+      { q: 'Can one person manage several companies?', a: 'Yes. Agencies and groups switch between companies; each has its own websites, team, credits and data.' },
       { q: 'How is website ownership verified?', a: 'Through Search Console ownership, a DNS TXT record or a meta tag. Each domain has one verified owner.' },
       {
-        q: 'How are costs kept under control?',
-        a: 'Every run shows its estimated cost before it starts, budgets are checked before work begins and owners set spend caps. Results that cannot have changed are reused instead of paid for again.',
+        q: 'How is spending kept under control?',
+        a: 'Every analysis shows its price in credits before it starts and is never charged more. Owners set monthly limits for analyses and for the automatic work, and can keep credits aside for each website’s automatic work. Results that cannot have changed are reused instead of charged again.',
       },
       { q: 'Is our data visible to other companies?', a: 'No. Each company’s websites, runs and reports are isolated, and access depends on your role in that company.' },
       {
@@ -1131,7 +1131,7 @@ export const features: Feature[] = [
     visual: 'workspace',
     story: {
       title: 'Control for every company and website you run.',
-      body: 'Each company has its own websites, team, budget and data. Website data appears only after ownership is proven, and every run shows its cost before any paid work begins.',
+      body: 'Each company has its own websites, team, credits and data. Website data appears only after ownership is proven, and every analysis shows its price in credits before any work begins.',
     },
   },
   {
@@ -1143,9 +1143,9 @@ export const features: Feature[] = [
       'Agencies keep every client in a workspace of its own, see every client website in one table, and give each client a portal of their websites — dashboards, reports, recommendations and the pages waiting for their approval. With white-label on, the portal, the reports, the documents and the e-mails your clients get carry your name, your logo, your colour and your own address.',
     icon: Briefcase,
     benefits: [
-      'A workspace per client — its own websites, budget, reports and logins — and your team switching between them',
-      'One table of every client website: health, rankings movement, clicks, AI visibility, alerts, approvals waiting and spend against budget, with a CSV export',
-      'Client logins as viewer or approver: their websites, reports and recommendations, and nothing of your other clients, your costs or your settings',
+      'A workspace per client — its own websites, credits, reports and logins — and your team switching between them',
+      'One table of every client website: health, rankings movement, clicks, AI visibility, alerts, approvals waiting and credits used, with a CSV export',
+      'Client logins as viewer or approver: their websites, reports and recommendations, and nothing of your other clients, your credits or your settings',
       'Client approval before a page goes live or an outreach e-mail is sent, when you want it',
       'Your name, logo and colour in place of ours — with every text kept readable to WCAG AA in light and dark mode — and “Powered by” off unless you switch it on',
       'The portal on your own address, such as seo.youragency.com, proven with a DNS record and checked again every few hours',
@@ -1153,7 +1153,7 @@ export const features: Feature[] = [
     ],
     steps: [
       { title: 'Turn on agency mode', body: 'The owner switches the company to an agency. Owners and admins reach every client; members see the clients you assign.' },
-      { title: 'Create a workspace per client', body: 'Its own websites, budget and reports. Verify the client’s website and start tracking as usual.' },
+      { title: 'Create a workspace per client', body: 'Its own websites, credits and reports. Verify the client’s website and start tracking as usual.' },
       { title: 'Brand it and give it your address', body: 'Your name, logo and colour, then two DNS records for your portal address and, if you like, your own sender.' },
       { title: 'Invite the client', body: 'As a viewer, or as an approver who signs off pages and outreach before they go out.' },
     ],
@@ -1165,7 +1165,7 @@ export const features: Feature[] = [
     faqs: [
       {
         q: 'Can one client see another client’s data?',
-        a: 'No. Each client is a separate workspace and a client login reaches only its own. Its people see their websites’ dashboards, reports, recommendations and approvals — not your other clients, not what the work costs you, not your settings.',
+        a: 'No. Each client is a separate workspace and a client login reaches only its own. Its people see their websites’ dashboards, reports, recommendations and approvals — not your other clients, not your credits, not your settings.',
       },
       {
         q: 'Will my clients see the Alaventra name?',

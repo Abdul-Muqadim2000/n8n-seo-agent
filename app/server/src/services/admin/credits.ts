@@ -1,5 +1,5 @@
 import { desc, eq, sql } from 'drizzle-orm';
-import { type CreditEntry, type CreditSource } from '@seo/shared';
+import { emptyCreditBook, type CreditBook, type CreditEntry, type CreditSource } from '@seo/shared';
 import { db, schema } from '../../db';
 import type { CreditEntryRow, OrgRow } from '../../db/schema';
 import { settingsRow } from './settings';
@@ -217,3 +217,66 @@ export async function allBalances(): Promise<Map<string, number>> {
   return new Map(rows.map((r) => [r.org_id, r2(Number(r.b))]));
 }
 
+
+/**
+ * The admin panel's credit book (shared/src/admin.ts `CreditBook`) per company over a window: bought / free / plan / used / refunded /
+ * expired / adjusted / absorbed, each with its dollars, and the balance now. Usage is valued at the credit value stored on each debit;
+ * the cost of the used work is the provider cost of the events those debits came from (each event once, re-pricing ignored), so
+ * capped and failed work count at what they really cost us. The null key holds deleted companies' entries.
+ */
+export async function creditBooks(from: Date | null, to: Date, s: { creditValueUsd: number; markup: number }): Promise<Map<string | null, CreditBook>> {
+  const cv = s.creditValueUsd;
+  const win = sql`created_at < ${tsv(to)} ${from ? sql`and created_at >= ${tsv(from)}` : sql``}`;
+  const rows = await execRows<Record<string, number | string | null>>(db, sql`
+    with l as (select org_id, kind, credits, paid_usd, ref, coalesce((ref->>'creditValueUsd')::float, ${cv}::float) as cv,
+                 coalesce(ref->>'origin', case when ref->>'runId' is not null then 'on_demand' else 'autopilot' end) as origin
+               from ${schema.creditLedger} where ${win})
+    select org_id,
+      coalesce(sum(credits) filter (where kind = 'grant' and paid_usd > 0), 0)::float as bought,
+      coalesce(sum(paid_usd) filter (where kind = 'grant'), 0)::float as bought_usd,
+      coalesce(sum(credits) filter (where kind = 'grant' and paid_usd = 0), 0)::float as free,
+      coalesce(sum(credits * cv) filter (where kind = 'grant' and paid_usd = 0), 0)::float as free_list,
+      coalesce(sum(credits) filter (where kind = 'plan'), 0)::float as plan,
+      coalesce(sum(credits * cv) filter (where kind = 'plan'), 0)::float as plan_list,
+      coalesce(-sum(credits) filter (where kind = 'usage'), 0)::float as used,
+      coalesce(-sum(credits * cv) filter (where kind = 'usage'), 0)::float as used_list,
+      coalesce(-sum(credits) filter (where kind = 'usage' and origin = 'autopilot'), 0)::float as used_auto,
+      coalesce(-sum(credits) filter (where kind = 'usage' and origin = 'on_demand'), 0)::float as used_od,
+      coalesce(sum(credits) filter (where kind = 'refund'), 0)::float as refunded,
+      coalesce(-sum(credits) filter (where kind = 'expire'), 0)::float as expired,
+      coalesce(-sum(credits * cv) filter (where kind = 'expire'), 0)::float as expired_list,
+      coalesce(sum(credits) filter (where kind = 'adjust'), 0)::float as adjusted,
+      coalesce(sum((ref->>'absorbed')::float) filter (where kind = 'usage'), 0)::float as absorbed,
+      coalesce(sum((ref->>'absorbed')::float * cv) filter (where kind = 'usage'), 0)::float as absorbed_list
+    from l group by org_id`);
+  const costs = await execRows<{ org_id: string | null; usd: number }>(db, sql`
+    select x.org_id, coalesce(sum(e.claude_usd + e.dataforseo_usd), 0)::float as usd from (
+      select distinct org_id, substring(ref_key from 6) as ek from ${schema.creditLedger}
+      where kind = 'usage' and ref_key ~ '^cost:(engine|run|kc):[^:]+$' and ${win}
+    ) x join ${schema.costEvents} e on e.event_key = x.ek group by x.org_id`);
+  const costOf = new Map(costs.map((c) => [c.org_id, Number(c.usd)]));
+  const balances = await allBalances();
+  const n = (v: unknown) => Number(v ?? 0);
+  const r4 = (v: number) => Math.round(v * 10000) / 10000;
+  const out = new Map<string | null, CreditBook>();
+  const book = (org: string | null, r?: Record<string, number | string | null>): CreditBook => {
+    const remaining = org ? (balances.get(org) ?? 0) : 0;
+    const b = emptyCreditBook(cv, s.markup);
+    if (r)
+      Object.assign(b, {
+        bought: r2(n(r.bought)), boughtUsd: r2(n(r.bought_usd)), free: r2(n(r.free)), freeListUsd: r4(n(r.free_list)), plan: r2(n(r.plan)), planListUsd: r4(n(r.plan_list)),
+        used: r2(Math.max(0, n(r.used))), usedListUsd: r4(Math.max(0, n(r.used_list))), usedAutopilot: r2(Math.max(0, n(r.used_auto))), usedOnDemand: r2(Math.max(0, n(r.used_od))),
+        refunded: r2(n(r.refunded)), expired: r2(n(r.expired)), expiredListUsd: r4(n(r.expired_list)), adjusted: r2(n(r.adjusted)),
+        absorbed: r2(n(r.absorbed)), absorbedListUsd: r4(n(r.absorbed_list)),
+      });
+    b.usedCostUsd = r4(costOf.get(org) ?? 0);
+    b.remaining = r2(remaining);
+    b.remainingListUsd = r4(remaining * cv);
+    b.remainingCostUsd = r4(s.markup > 0 ? (remaining * cv) / s.markup : 0);
+    return b;
+  };
+  for (const r of rows) out.set((r.org_id as string | null) ?? null, book((r.org_id as string | null) ?? null, r));
+  // a company with a balance but no movement in the window still has its remaining credits
+  for (const org of balances.keys()) if (!out.has(org)) out.set(org, book(org));
+  return out;
+}

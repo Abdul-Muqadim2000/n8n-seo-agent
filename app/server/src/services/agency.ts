@@ -4,7 +4,6 @@ import {
   brandingOf,
   brandTokens,
   clientBrandingOf,
-  clientSafePayload,
   effectiveBrand,
   isClientRole,
   isStaffRole,
@@ -29,8 +28,8 @@ import { randomToken, slugify } from '../lib/crypto';
 import { badRequest, conflict, forbidden, notFound } from '../lib/errors';
 import { audit } from './audit';
 import { agencyOf, brandForOrg } from './brandOf';
-import { monthStart, orgSpendSince } from './spend';
-import { applyNewCompanyCredits } from './admin/credits';
+import { applyNewCompanyCredits, creditBalance } from './admin/credits';
+import { monthStartUtc, usageSince } from './billing';
 
 /**
  * G5 (app/docs/WHITE_LABEL.md): agencies and their client workspaces. A client workspace is an ordinary company with a parent; the
@@ -39,7 +38,7 @@ import { applyNewCompanyCredits } from './admin/credits';
 
 export { agencyOf, brandForOrg, orgById, payloadFor } from './brandOf';
 
-export function toOrg(o: OrgRow, role: Role, ctx: { agency?: OrgRow | null; brand?: PortalBrand | null } = {}): Org {
+export function toOrg(o: OrgRow, role: Role, ctx: { agency?: OrgRow | null; brand?: PortalBrand | null; platformAdmin?: boolean } = {}): Org {
   const kind = orgKindOf(o.kind);
   return {
     id: o.id,
@@ -48,8 +47,9 @@ export function toOrg(o: OrgRow, role: Role, ctx: { agency?: OrgRow | null; bran
     industry: o.industry,
     size: o.size,
     website: o.website,
-    // a client person never sees what the agency budgets for them
-    monthlyBudgetUsd: isClientRole(role) ? 0 : o.monthlyBudgetUsd,
+    // credits (app/docs/CREDITS.md): the dollar budget is the platform's own guard in provider cost — 0 for everyone but a platform
+    // admin (a company's limits are in Settings → Credits)
+    monthlyBudgetUsd: ctx.platformAdmin && !isClientRole(role) ? o.monthlyBudgetUsd : 0,
     disabled: o.disabled,
     onboardingStep: o.onboardingStep,
     onboardedAt: o.onboardedAt?.toISOString() ?? null,
@@ -63,9 +63,9 @@ export function toOrg(o: OrgRow, role: Role, ctx: { agency?: OrgRow | null; bran
 }
 
 /** the full answer for GET /api/orgs/:id (with the agency and the brand) */
-export async function orgView(o: OrgRow, role: Role): Promise<Org> {
+export async function orgView(o: OrgRow, role: Role, platformAdmin = false): Promise<Org> {
   const agency = await agencyOf(o);
-  return toOrg(o, role, { agency, brand: await brandForOrg(o) });
+  return toOrg(o, role, { agency, brand: await brandForOrg(o), platformAdmin });
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -141,6 +141,12 @@ async function roleIn(a: OrgAccess, client: OrgRow): Promise<Role> {
   return (m?.role as Role) ?? 'viewer';
 }
 
+/** credits (app/docs/CREDITS.md): a client workspace's balance and what it used this calendar month (autopilot + on-demand) */
+async function creditsOf(orgId: string, now = new Date()): Promise<{ creditBalance: number; creditsUsedThisMonth: number }> {
+  const [balance, used] = await Promise.all([creditBalance(db, orgId), usageSince(db, orgId, monthStartUtc(now))]);
+  return { creditBalance: balance, creditsUsedThisMonth: Math.round((used.autopilot + used.onDemand) * 100) / 100 };
+}
+
 export async function listClients(a: OrgAccess): Promise<AgencyClient[]> {
   const clients = await visibleClients(a);
   if (!clients.length) return [];
@@ -162,8 +168,7 @@ export async function listClients(a: OrgAccess): Promise<AgencyClient[]> {
       sites: siteCounts.get(c.id) ?? 0,
       clientPeople: p.filter((x) => isClientRole(x.role)).length,
       staff: p.filter((x) => isStaffRole(x.role)).length,
-      monthlyBudgetUsd: c.monthlyBudgetUsd,
-      spentUsd: Math.round((await orgSpendSince(db, c.id)).total * 100) / 100,
+      ...(await creditsOf(c.id)),
       clientApproval: c.clientApproval,
       role: await roleIn(a, c),
     });
@@ -171,11 +176,10 @@ export async function listClients(a: OrgAccess): Promise<AgencyClient[]> {
   return out;
 }
 
-export async function createClient(req: FastifyRequest, a: OrgAccess, body: { name: string; monthlyBudgetUsd?: number; website: string }): Promise<OrgRow> {
+export async function createClient(req: FastifyRequest, a: OrgAccess, body: { name: string; website: string }): Promise<OrgRow> {
   requireAgency(a, 'admin');
-  const budget = body.monthlyBudgetUsd ?? config.defaultBudgetUsd;
-  // the agency owner sets budgets anyway; an admin stays within what an owner could set on their own
-  if (budget > config.ownerBudgetMaxUsd) throw badRequest(`A client's monthly budget can be up to $${config.ownerBudgetMaxUsd}; for more, ask the platform administrator.`, { monthlyBudgetUsd: `At most $${config.ownerBudgetMaxUsd}` });
+  // credits (app/docs/CREDITS.md): a client workspace is limited by its credits; the dollar guard is the platform's default, never asked
+  const budget = config.defaultBudgetUsd;
   const base = slugify(body.name);
   let slug = base;
   for (let i = 0; i < 5 && (await db.query.organizations.findFirst({ where: eq(schema.organizations.slug, slug) })); i++) slug = `${base}-${randomToken(3).toLowerCase().replace(/[^a-z0-9]/g, '')}`;
@@ -197,7 +201,7 @@ export async function createClient(req: FastifyRequest, a: OrgAccess, body: { na
     .returning();
   // admin panel: credit enforcement as the platform settings say for new companies (a client workspace gets no sign-up credits)
   await applyNewCompanyCredits(db, o);
-  await audit(req, a.org.id, { action: 'agency.client_created', target: { type: 'company', id: o.id, label: o.name }, details: { monthlyBudgetUsd: budget } });
+  await audit(req, a.org.id, { action: 'agency.client_created', target: { type: 'company', id: o.id, label: o.name }, details: {} });
   await audit(req, o.id, { action: 'company.created', target: { type: 'company', id: o.id, label: o.name }, details: { agency: a.org.name } });
   return o;
 }
@@ -312,12 +316,13 @@ export async function agencyOverview(a: OrgAccess, now = new Date()): Promise<Ag
     .from(schema.portalApprovals)
     .where(and(inArray(schema.portalApprovals.orgId, ids), eq(schema.portalApprovals.status, 'pending')))
     .groupBy(schema.portalApprovals.orgId, schema.portalApprovals.siteId);
-  const spend = new Map<string, number>();
-  for (const c of clients) spend.set(c.id, Math.round((await orgSpendSince(db, c.id, monthStart(now))).total * 100) / 100);
+  const credits = new Map<string, { creditBalance: number; creditsUsedThisMonth: number }>();
+  for (const c of clients) credits.set(c.id, await creditsOf(c.id, now));
   const rows: AgencyOverviewRow[] = [];
   for (const c of clients) {
     const own = sites.filter((s) => s.orgId === c.id);
-    const base = { clientId: c.id, clientName: c.name, spentUsd: spend.get(c.id) ?? 0, budgetUsd: c.monthlyBudgetUsd };
+    const cr = credits.get(c.id);
+    const base = { clientId: c.id, clientName: c.name, creditsUsedMonth: cr?.creditsUsedThisMonth ?? 0, creditBalance: cr?.creditBalance ?? 0 };
     if (!own.length) {
       rows.push({
         ...base,

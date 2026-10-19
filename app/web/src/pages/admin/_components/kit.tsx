@@ -11,6 +11,7 @@ import {
   creditsFor,
   type AdminCompanyRow,
   type AdminDailyPoint,
+  type CreditPurchaseRequest,
   type CostCertainty,
   type CostSplit,
   type ProviderBill,
@@ -23,7 +24,7 @@ import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Callout } from '@/components/ui/feedback';
-import { Field, Input, Textarea } from '@/components/ui/field';
+import { Field, Input, Select, Textarea } from '@/components/ui/field';
 import { Dialog } from '@/components/ui/overlay';
 import { PageHeader } from '@/components/ui/misc';
 import { pageTitle } from '@/components/layout/Brand';
@@ -32,7 +33,7 @@ import { runCost } from '@/lib/prices';
 import { ApiRequestError, errorMessage } from '@/lib/api';
 import { useAdminCompanyCredit, useAdminSettings } from '@/lib/queries';
 import { cn, fmtDateTime, fmtDay } from '@/lib/utils';
-import { axisUsd, balanceAfter, credits, cumulative, estimatedShare, initials, marginPct, money, ratioLabel, signedCredits } from '../lib';
+import { axisUsd, balanceAfter, credits, cumulative, estimatedShare, expiresValue, initials, marginPct, money, ratioLabel, signedCredits, type ExpiryChoice } from '../lib';
 
 export function AdminPageHeader({ title, description, actions, icon, eyebrow }: { title: string; description?: ReactNode; actions?: ReactNode; icon?: ReactNode; eyebrow?: ReactNode }) {
   useDocumentTitle(pageTitle(title, 'Platform admin'));
@@ -362,26 +363,49 @@ const CREDIT_COPY: Record<CreditKind, { title: string; action: string; descripti
 };
 type CreditValues = z.input<typeof adminCreditSchema>;
 
-export function CreditDialog({ company, kind, onClose }: { company: Pick<AdminCompanyRow, 'id' | 'name' | 'credits'>; kind: CreditKind; onClose: () => void }) {
+/** A customer's "Buy credits" request the dialog fulfils: the grant is pre-filled with its pack and price, and sends its id. */
+export type CreditRequestPreset = Pick<CreditPurchaseRequest, 'id' | 'packId' | 'credits' | 'priceUsd' | 'requestedBy' | 'note'>;
+
+export function CreditDialog({
+  company,
+  kind,
+  onClose,
+  request,
+}: {
+  /** the balance is shown when known (the requests page does not read it) */
+  company: Pick<AdminCompanyRow, 'id' | 'name'> & { credits?: Pick<AdminCompanyRow['credits'], 'balance'> };
+  kind: CreditKind;
+  onClose: () => void;
+  request?: CreditRequestPreset;
+}) {
   const save = useAdminCompanyCredit();
   const settings = useAdminSettings();
-  const copy = CREDIT_COPY[kind];
+  const copy = request ? { title: 'Confirm a credit request', action: 'Confirm and add credits', description: 'Adds the pack the customer asked for and records the payment as revenue. Confirm it once the invoice is paid.' } : CREDIT_COPY[kind];
   const form = useForm<CreditValues, unknown, z.output<typeof adminCreditSchema>>({
     resolver: zodResolver(adminCreditSchema),
-    defaultValues: { kind, paidUsd: 0, note: '' },
+    defaultValues: request
+      ? { kind: 'grant', credits: request.credits, paidUsd: request.priceUsd, note: `${request.packId} pack${request.note ? ` · ${request.note}` : ''}`.slice(0, 500), expires: 'pack', requestId: request.id }
+      : { kind, paidUsd: 0, note: '', expires: 'pack' },
   });
+  const [expiry, setExpiry] = useState<ExpiryChoice>('pack');
+  const [days, setDays] = useState(90);
+  useEffect(() => {
+    form.setValue('expires', expiresValue(expiry, days), { shouldValidate: form.formState.isSubmitted });
+  }, [expiry, days, form]);
+  const balance = company.credits?.balance;
   const amount = Number(form.watch('credits'));
   const paid = Number(form.watch('paidUsd') ?? 0);
   const has = Number.isFinite(amount) && amount !== 0;
-  const after = has ? balanceAfter(company.credits.balance, kind, amount) : null;
+  const after = has && balance != null ? balanceAfter(balance, kind, amount) : null;
   const pageCredits = settings.data ? creditsFor(runCost('keyword'), settings.data) : null;
-  const pages = has && pageCredits ? Math.floor((after ?? 0) / pageCredits) : null;
+  const pages = after != null && pageCredits ? Math.floor(after / pageCredits) : null;
+  const packMonths = settings.data?.packExpiryMonths ?? 12;
   const submit = form.handleSubmit((v) =>
     save.mutate(
       { id: company.id, ...v },
       {
         onSuccess: (entry) => {
-          toast.success(`${company.name}: ${signedCredits(entry?.credits ?? v.credits)} credits · balance ${credits(entry?.balanceAfter ?? after)}`);
+          toast.success(`${company.name}: ${signedCredits(entry?.credits ?? v.credits)} credits · balance ${credits(entry?.balanceAfter ?? after)}${request ? ' · request fulfilled' : ''}`);
           onClose();
         },
         onError: (e) => {
@@ -409,6 +433,12 @@ export function CreditDialog({ company, kind, onClose }: { company: Pick<AdminCo
       }
     >
       <form id="admin-credit-form" onSubmit={submit} noValidate className="space-y-4">
+        {request && (
+          <Callout tone="info">
+            {request.requestedBy ?? 'The customer'} asked for the {credits(request.credits)}-credit pack ({money(request.priceUsd, { digits: 2 })}). Confirming adds the credits and marks the
+            request fulfilled.
+          </Callout>
+        )}
         <div className={cn('grid gap-4', kind === 'grant' && 'sm:grid-cols-2')}>
           <Field label="Credits" error={err.credits?.message} hint={kind === 'adjust' ? 'Negative to take credits away.' : undefined}>
             {(p) => <Input {...p} type="number" inputMode="decimal" step="any" autoFocus className="font-mono" {...form.register('credits', { valueAsNumber: true })} />}
@@ -419,22 +449,46 @@ export function CreditDialog({ company, kind, onClose }: { company: Pick<AdminCo
             </Field>
           )}
         </div>
+        {kind === 'grant' && (
+          <div className={cn('grid gap-4', expiry === 'days' && 'sm:grid-cols-2')}>
+            <Field label="Expires" error={expiry === 'days' ? undefined : err.expires?.message} hint={expiry === 'never' ? 'For corrections and goodwill: these credits never expire.' : undefined}>
+              {(p) => (
+                <Select {...p} value={expiry} onChange={(e) => setExpiry(e.target.value as ExpiryChoice)}>
+                  <option value="pack">Pack expiry ({packMonths} month{packMonths === 1 ? '' : 's'})</option>
+                  <option value="never">Never</option>
+                  <option value="days">After a number of days</option>
+                </Select>
+              )}
+            </Field>
+            {expiry === 'days' && (
+              <Field label="Days" error={err.expires?.message}>
+                {(p) => (
+                  <Input {...p} type="number" inputMode="numeric" min={1} max={3650} step={1} className="font-mono" value={Number.isFinite(days) ? days : ''} onChange={(e) => setDays(e.target.value === '' ? Number.NaN : Number(e.target.value))} />
+                )}
+              </Field>
+            )}
+          </div>
+        )}
         <Field label="Note" optional error={err.note?.message}>
           {(p) => <Textarea {...p} rows={2} placeholder={kind === 'grant' ? 'Invoice 2026-114, bank transfer' : 'Why'} {...form.register('note')} />}
         </Field>
         <div className="rounded-lg border border-line bg-surface-2/60 px-4 py-3 text-sm">
+          {balance != null && (
+            <div className="mb-1 flex items-center justify-between gap-3">
+              <span className="text-ink-3">Balance now</span>
+              <Num>{credits(balance)}</Num>
+            </div>
+          )}
           <div className="flex items-center justify-between gap-3">
-            <span className="text-ink-3">Balance now</span>
-            <Num>{credits(company.credits.balance)}</Num>
-          </div>
-          <div className="mt-1 flex items-center justify-between gap-3">
             <span className="text-ink-3">This change</span>
             <Num>{has ? signedCredits(kind === 'adjust' ? amount : Math.abs(amount)) : '–'}</Num>
           </div>
-          <div className="mt-1 flex items-center justify-between gap-3 border-t border-line pt-1.5 font-medium">
-            <span className="text-ink">Balance after</span>
-            <Num className={cn('text-ink', after != null && after < 0 && 'text-critical-text')}>{after == null ? '–' : credits(after)}</Num>
-          </div>
+          {balance != null && (
+            <div className="mt-1 flex items-center justify-between gap-3 border-t border-line pt-1.5 font-medium">
+              <span className="text-ink">Balance after</span>
+              <Num className={cn('text-ink', after != null && after < 0 && 'text-critical-text')}>{after == null ? '–' : credits(after)}</Num>
+            </div>
+          )}
           {pages != null && pageCredits != null && (
             <p className="mt-2 text-xs text-ink-3">
               Balance after ≈ {pages.toLocaleString('en-US')} written pages at {credits(pageCredits)} credits each (a page costs us about {money(runCost('keyword'), { digits: 2 })}).

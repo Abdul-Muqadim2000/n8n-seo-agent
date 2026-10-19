@@ -3,7 +3,8 @@ import { Navigate, useNavigate, useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Building2, CalendarClock, FolderTree, KeyRound, PauseCircle, PenSquare, PlayCircle, Radar, Settings, ShieldAlert, Plus, Trash2 } from 'lucide-react';
-import { cleanDomain, CONTENT_GROUPS_MAX, contentGroupSchema, formatUsd, type AdminResult, type ContentGroup, type MonitorSettings, type SiteSettingsData } from '@seo/shared';
+import { cleanDomain, CONTENT_GROUPS_MAX, contentGroupSchema, type AdminResult, type ContentGroup, type MonitorSettings, type SiteSettingsData } from '@seo/shared';
+import { creditsLabel, quoteLabel } from '@/lib/credits';
 import { EmailVerifyNotice } from '@/components/site/EmailVerifyNotice';
 import { competitorValidator } from '@/components/site/helpers';
 import { completeMonitors, MonitoringCost, MonitorSettingsFields } from '@/components/site/MonitorSettingsFields';
@@ -33,7 +34,7 @@ import { fmtAgo, fmtDate } from '@/lib/utils';
 const TABS = [
   { id: 'business', label: 'Business details', description: 'What the engine knows about your business. Every page, report and AI-visibility question starts here.' },
   { id: 'verification', label: 'Verification & Google', description: 'Ownership of the website and the Search Console and GA4 connection.' },
-  { id: 'tracking', label: 'Tracking & monitors', description: 'Weekly tracking, blog posts per week and the growth monitors, with their cost.' },
+  { id: 'tracking', label: 'Tracking & monitors', description: 'Weekly tracking, blog posts per week and the growth monitors, with the credits they use.' },
   { id: 'profile', label: 'Author & profile', description: 'The author, reviewer and business details behind every byline, author box and schema.' },
   { id: 'publishing', label: 'Publishing', description: 'Your CMS: written pages go to it as drafts from their report, and live only when an owner or admin chooses.' },
   { id: 'danger', label: 'Delete', description: 'Remove this website from your company.' },
@@ -280,7 +281,7 @@ function TrackingSettings({ data, admin }: { data: SiteSettingsData; admin: bool
         <CardHeader
           icon={<HeaderTile icon={<KeyRound />} />}
           title="Keywords and Google Analytics"
-          description={`Saving runs the tracker once with these settings and sends a fresh report (about ${formatUsd(0.1)}). Blog posts and monitors stay as set above.`}
+          description={`Saving runs the tracker once with these settings and sends a fresh report (about ${quoteLabel(0.1)}). Blog posts and monitors stay as set above.`}
         />
         <CardBody>
           <TrackingForm
@@ -390,7 +391,7 @@ function CadenceCard({ current, status, admin }: { current: number; status: stri
         <p className="text-sm text-ink-2">
           {n ? (
             <>
-              About <span className="font-medium text-ink">{formatUsd(blogMonthlyCost(n))}</span> a month. Topics come from your keyword plan, queries close to page one and
+              About <span className="font-medium text-ink">{creditsLabel(blogMonthlyCost(n))}</span> a month. Topics come from your keyword plan, queries close to page one and
               rising trends.
             </>
           ) : (

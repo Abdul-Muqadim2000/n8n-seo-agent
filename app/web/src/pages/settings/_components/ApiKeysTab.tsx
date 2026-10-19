@@ -18,7 +18,7 @@ import { SettingsCard } from './SettingsCard';
 /**
  * B5-11 (v4.18) — the company's API keys (app/API.md "Read API v1"); G4 (2026-10-17) added the write permissions.
  * A key reads this company's websites, audits and findings, runs, reports and files, and can run the free publish check. Only a key
- * given "start runs" can start an analysis (inside the monthly budget), and only one given "admin" can manage webhooks and exports;
+ * given "start runs" can start an analysis (it uses the company's credits), and only one given "admin" can manage webhooks and exports;
  * either acts as the person who made it. The key is shown once, right after it is made; afterwards only its first characters are.
  */
 
@@ -115,7 +115,7 @@ export function ApiKeysTab() {
           </fieldset>
           {scopes.some((s) => API_WRITE_SCOPES.includes(s)) && (
             <Callout tone="warning" title="This key can change things">
-              {scopes.includes('run') && <p>It can start analyses that cost money, inside the company’s monthly budget, and create tickets in your issue tracker. Every run it starts shows the key’s name.</p>}
+              {scopes.includes('run') && <p>It can start analyses, which use the company’s credits, and create tickets in your issue tracker. Every run it starts shows the key’s name.</p>}
               {scopes.includes('admin') && <p>It can add and remove event webhooks and start data exports.</p>}
               <p>It acts as you: if you leave the company or lose the role, it stops working for these.</p>
             </Callout>
@@ -139,7 +139,7 @@ export function ApiKeysTab() {
         </CardFooter>
       </SettingsCard>
 
-      <SettingsCard icon={<ShieldCheck />} title="Your keys" description="A key reads only this company's data. Only a key with “start runs” can spend money, and only within the monthly budget.">
+      <SettingsCard icon={<ShieldCheck />} title="Your keys" description="A key reads only this company's data. Only a key with “start runs” can use the company’s credits.">
         <CardBody>
           {data.items.length ? (
             <DataTable rows={data.items} columns={columns} rowKey={(k) => k.id} pageSize={20} />

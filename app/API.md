@@ -3,9 +3,9 @@
 All endpoints live under `/api` on the app server (`app/server`). Request and response types are in `app/shared/src` (`api.ts`,
 `data.ts`, `schemas.ts`). Sessions are an httpOnly cookie (`sid`); every request that changes something must send the header
 `X-Requested-With: fetch` (CSRF guard — the web client's `api()` helper does this). Errors are `{ error, fields?, code? }` with the
-HTTP status (400 validation with `fields`, 401 signed out, 402 over budget, 403 role / unverified, 404, 409 conflict, 502 n8n down).
+HTTP status (400 validation with `fields`, 401 signed out, 402 not enough credits / over a limit, 403 role / unverified, 404, 409 conflict, 502 n8n down).
 
-Roles: `viewer` (read) < `member` (start runs) < `admin` (sites, team, site settings) < `owner` (budget, delete company).
+Roles: `viewer` (read) < `member` (start runs) < `admin` (sites, team, site settings) < `owner` (credit limits, delete company).
 
 ## Auth and account
 | Method | Path | Body | Returns |
@@ -126,7 +126,9 @@ the group's members at once. `GET /api/orgs/:orgId/members` adds `provisionedBy`
 Append-only per company (a database trigger refuses UPDATE / TRUNCATE and any DELETE but the daily retention purge and the
 company's own deletion). Owners and admins only; another company's log is a 404. Each event: `id, at, action, label, category,
 outcome, actorType (user / scim / system / platform_admin), actorId, actorLabel, targetType, targetId, targetLabel, ip, userAgent,
-details` — details never carry a password, code, token, secret or key (`safeAuditDetails`).
+details` — details never carry a password, code, token, secret or key (`safeAuditDetails`), and the company never reads a provider
+cost or a dollar budget in them (`customerAuditDetails`: keys ending in `Usd` or naming a budget are left out, a
+`company.budget_changed` row shows no details; `run.started_via_api` records `quotedCredits`).
 
 | Method | Path | Query | Returns |
 |---|---|---|---|
@@ -141,8 +143,7 @@ details` — details never carry a password, code, token, secret or key (`safeAu
 | PATCH | /api/orgs/:orgId | `updateOrgSchema` (admin) | `Org` |
 | DELETE | /api/orgs/:orgId | `{ confirm: <company name> }` (owner) | `{ ok }` (stops tracking of its sites in n8n, deletes the company's data in the app) |
 | PATCH | /api/orgs/:orgId/onboarding | `{ step, done? }` (admin) | `Org` |
-| PATCH | /api/orgs/:orgId/budget | `{ monthlyBudgetUsd }` (owner) | `Org` |
-| GET | /api/orgs/:orgId/usage | | `Usage` |
+| PATCH | /api/orgs/:orgId/budget | `{ monthlyBudgetUsd }` (**platform admin only**; anyone else 403 "Limits are in Settings → Credits.") | `Org` |
 | GET | /api/orgs/:orgId/delivery | | `{ settings: DeliverySettings, nextAt, mailReady, signingReady, recent: DeliveryRecord[] }` |
 | PUT | /api/orgs/:orgId/delivery | `DeliverySettings` (+ `webhook.secret`; owner) | the same shape |
 | POST | /api/orgs/:orgId/delivery/test | (owner) | `{ delivered, outcomes: [{ channel, ok, target, error }] }` |
@@ -219,7 +220,7 @@ Verified sites only (403 `forbidden` otherwise); another company's website is a 
 | `ladderCards` | `LadderCard[]` in priority order (settings priority, then oldest first): status (Planning, Writing, Climbing, Won, Paused, Queued beyond 2 active Auto ladders, Stuck, Needs you) with a plain line, page counts by state, main keyword position / change / series, pages in the top 10 / 3, next step with its date, expected months, monthly cost, overlaps with other ladders |
 | `needsYou` | `NeedsYouItem[]`, most urgent first: connection (tracking, Search Console, reports delivered elsewhere), pile-up of unpublished pages, pages to publish per ladder (oldest first, opens "I published a page"), failed runs of the last 7 days, ladder plans of the last 7 days that planned nothing (`planned: false`, "See why" opens the run), duplicate / overlapping ladders, the next page of each Manual ladder |
 | `thisWeek` | `ThisWeekItem[]`: the schedule runs of the next 7 days in time order (and any running now) with what each touches, e.g. the blog posts with their ladder |
-| `summary` | pages published this month, ladder keywords in the top 10, clicks of ladder pages (latest 28-day period), the company's spend this month and its budget |
+| `summary` | pages published this month, ladder keywords in the top 10, clicks of ladder pages (latest 28-day period), `creditsUsedThisMonth` (credits, autopilot + on-demand); `spendThisMonthUsd` / `budgetUsd` are deprecated (provider cost; `budgetUsd` is 0) and go once no page reads them |
 | `automation` | `SiteAutomation`: the website's defaults (`_site` row of `seo_ladder_settings`; without it Auto, opportunities Auto, no auto-start, 2 active ladders, pile-up at 3); changed with `PATCH …/automation` |
 | `autoStartEnabled` | the server runs "Choose keywords for me" (`AUTO_START_LADDERS=true`); false = the setting is stored, nothing starts on its own |
 | `detected` | `DetectedPage[]` (Phase 4, newest first, one per address): written pages the weekly site report found live by itself (`site_tracker` callback `detected_published`) — shown as "We found your page live at …" in the recent activity; such a page counts as published in its ladder (timeline event `published` with `detected: true`) even before n8n's rows say so. Empty until the n8n part is deployed |
@@ -302,8 +303,8 @@ studies' services), existing_keywords (its ladders' main and page keywords) }`).
    without a keyword → 502 "… Try again in a few minutes" (row kept as `failed`, cost 0: counted in the daily limit only, DataForSEO may
    have charged part of it).
 
-Keyword checks count in the company's spend everywhere runs do: the budget check of runs and checks (`services/spend.ts`), `GET …/usage`
-(`keywordChecks: { checks, usd }`, in `estimatedUsd` and the daily totals), the platform admin list and the platform's daily ceiling.
+Keyword checks count everywhere runs do: the credit check and the company's credits (`services/billing.ts`, settled into the credit
+ledger by the cost sync), the platform's dollar guard (`services/spend.ts`), the platform admin list and the platform's daily ceiling.
 
 ## Runs, reports, files
 | Method | Path | Body | Returns |
@@ -349,6 +350,50 @@ Plain `http` is accepted only for `localhost` / `127.0.0.1`, for a developer tes
 A failed attempt is retried every 10 minutes up to 3 times by the same timer that sends the summaries (every 5 minutes); a summary
 is not replayed, because by then its window has moved.
 
+### Credits (2026-10-19, `app/docs/CREDITS.md`, `shared/src/billing.ts`)
+
+Customers see **credits**, never what work costs at the providers: no dollar figure of provider cost, no Claude / DataForSEO split and
+no engine cost-basis text in any answer of this API, the read / write API v1, MCP, webhooks, exports or audit log. Dollars appear only
+in pack prices (`BillingOverview.packs`, purchase requests) and under `/api/admin/*`. Google Ads CPC in keyword data (`cpc`) is
+keyword data and stays.
+
+| Method | Path | Who | Returns |
+|---|---|---|---|
+| GET | /api/orgs/:orgId/billing | viewer + | `BillingOverview` — balance, held, kept for autopilot, available, status and runway, this month autopilot vs on-demand, per-website forecast, usage by feature / day, lots with expiry, packs, requests, limits |
+| GET | /api/orgs/:orgId/billing/activity?origin=all\|autopilot\|on_demand\|account&cursor=&limit= | viewer + | `CreditActivityPage` (`rows: CreditActivityRow[]`, `nextCursor`) |
+| GET | /api/orgs/:orgId/billing/activity.csv | admin + | the same rows as CSV |
+| PUT | /api/orgs/:orgId/billing/limits | owner | `CreditLimits` `{ onDemandMonthly, autopilotMonthly, reserveForAutopilot }` |
+| POST | /api/orgs/:orgId/billing/requests | admin + | `{ packId, note }` → a pack request (at most 3 waiting) |
+| DELETE | /api/orgs/:orgId/billing/requests/:id | admin + | cancels a waiting request |
+| GET | /api/orgs/:orgId/costs | viewer + | the cost table plus `creditRate` (credits per unit of its figures) — what the forms turn into quotes |
+
+**A run** (`Run.credits`, `RunV1.credits`, `RunCredits` in `shared/src/api.ts`): `{ quoted, charged, state, capped }` —
+`quoted` the whole credits it was quoted at start (`runs.quoted_credits`; an older run is quoted from its estimate, same rounding);
+`charged` = −Σ the company's ledger `usage` entries with `ref.runId` = the run (a failed run's `failed:<run id>` return included),
+null before any; `capped` when an entry recorded `ref.absorbed` (it used more than its quote and was charged the quote); `state`:
+`free` (costs nothing), `held` (submitting / accepted / running — its quote is held), `charged` (completed and charged),
+`not_charged` (failed — nothing is charged), `quoted` (finished, the charge not settled yet; the cost sync runs every 10 minutes).
+A page of runs reads the ledger once. **Removed from `Run`:** `estimatedCostUsd`, `actualCostUsd`, `engineCostEstimateUsd`,
+`engineCostBasis`, `actualCostEstimated`, `actualCostPartial` (the database keeps them; the admin panel's `AdminRunRow` shows them).
+
+**A run's error** as every customer reads it (`Run.error`, `RunV1.error`, webhooks, the runs export, "Needs you"): a text naming a
+dollar amount, USD, DataForSEO, Claude, Anthropic or the search-data account (e.g. the engine's `account_low` refusal) reads "This
+analysis could not start right now because of a temporary capacity limit. It was not charged. Please try again later."
+(`server/src/lib/customerError.ts`); the raw text stays in `runs.error` for the admin panel.
+
+**A report payload** served to a customer (`GET /api/orgs/:orgId/reports/:reportId`, `GET /api/v1/reports/:reportId`) goes through
+`customerSafePayload` (`shared/src/agency.ts`): every cost / ledger / budget / price / balance key at any depth (`run_ledger`,
+`cost_usd`, `*_usd`, `run_cost_estimate_*`, `cost_basis`, `by_node`, `ai_nodes`, `ai_cost*`, `dataforseo_*`, `dfs_*`) is removed —
+`cpc`, `cpc_usd` and `primary_cpc` are kept — and `credits_used` (the run's charged credits; for a schedule's report, the usage entries
+of the engine execution that wrote it; null when unknown) and `credits_state` (as above, null when unknown) are added. A client person
+gets the same strip without the credits. The stored payload is untouched.
+
+**Dashboards:** `AiRun.credits` and `BacklinkSnapshot.credits` (the run's cost at the platform's credit settings); their `costUsd`
+is deprecated and goes once no page reads it. `KeywordCheck.costUsd` is still sent (the web shows it in credits).
+
+**Org:** `monthlyBudgetUsd` is 0 for everyone but a platform admin (it is the platform's own guard in provider cost). `GET
+/api/orgs/:orgId/usage` and its `Usage` type were removed (the Credits page replaces them).
+
 ### Cost figures (B-R3, `shared/src/cost.ts`)
 
 One table of per-mode prices, mirroring the engine's calibrated defaults (`n8n/seo-agent/v5/code/_cost_cal.js`). `MODES[].costUsd`
@@ -356,8 +401,9 @@ and `estimateRunCost()` both read it, so the mode list, the forms and the budget
 `runCostEstimate()` prefers `actualCostUsd` (what the run reported spending), then `engineCostEstimateUsd`
 (`run_cost_estimate_usd` on a callback, with `run_cost_estimate_basis`), then the app's table — and every figure is shown with which
 of the three it is. `ledgerCost` now counts the model calls (`run_ledger.ai_usd` / `ai_cost.usd`) as well as the search data, and
-carries `estimated` when any part of it is the engine's own estimate. The company's monthly spend and `GET …/usage` count a run at
-the same `coalesce(actual, engine, app)`, so a finished run stops being held against the budget at what was reserved for it.
+carries `estimated` when any part of it is the engine's own estimate. The platform's dollar guard counts a run at the same
+`coalesce(actual, engine, app)`, so a finished run stops being held against it at what was reserved for it. These are provider-cost
+figures: the app turns them into credits before a customer sees them (above), and only `/api/admin/*` answers them in dollars.
 
 ### Share links (G15, `shared/src/share.ts`, criterion REP 3.7)
 An expiring, revocable, **read-only** link to **one report**, for somebody with no account (the page is `/share/:token`).
@@ -440,13 +486,13 @@ Company settings → API access. The key is shown **once**; only its SHA-256 is 
 | GET | /api/v1/websites/:websiteId/audits/:auditId?severity=high,critical&status=new | `{ audit, comparedWith, findings: FindingV1[] }` — `FindingV1`: `{ key, category, severity, title, affected, checked, evidence, sampleUrls, impact, impactBasis, status: new \| open \| fixed \| no_longer_seen, previousAffected, notCompared, recheck }`, in the audit's own fix-list order |
 | GET | /api/v1/websites/:websiteId/ai-segments?dimension= | G6: the latest weekly AI visibility run per segment — `segments` (dim, key, questions, answers `n`, named `k`, `rate`, 95% `ci`, `enough` at 12+ answers, `sov`, `leader`, `delta`, `significant`), the Benjamini–Hochberg `family`, `moves`, the `panel` it was measured on and the question counts (tracked / refused / off); `dimension` = engine \| cluster \| persona \| market \| stage \| `cluster x persona` \| `engine x cluster` \| `market x cluster`; verified websites only |
 | GET | /api/v1/websites/:websiteId/crawlers?days=7\|30\|90 | `CrawlerData` — what search and AI crawlers requested, from the site's own logs (gap #6, `docs/LOG_ANALYTICS.md`): the same answer as the app's Crawlers page; verified websites only (403 `website_unverified`) |
-| GET | /api/v1/runs?websiteId=&status=&mode= | `Page<RunV1>` — `{ id, websiteId, mode, title, status, error, createdAt, completedAt, reportCount, cost: { usd, basis, partial, estimated } }` |
+| GET | /api/v1/runs?websiteId=&status=&mode= | `Page<RunV1>` — `{ id, websiteId, mode, title, status, error, createdAt, completedAt, reportCount, credits: RunCredits }` (see "Credits" below; `cost` was removed 2026-10-19) |
 | GET | /api/v1/runs/:runId | `{ run: RunV1 & { input }, reports: ReportV1[] }` |
 | GET | /api/v1/reports?websiteId=&stage= | `Page<ReportV1>` — `{ id, runId, websiteId, stage, status, title, summary, receivedAt, scheduled, ready: { ok, code, reason }, files }` |
-| GET | /api/v1/reports/:reportId | `ReportV1 & { payload }` (the callback as stored — what the app's report page renders) |
+| GET | /api/v1/reports/:reportId | `ReportV1 & { payload }` (the callback as the app's report page renders it: every provider-cost key removed, plus `credits_used` / `credits_state` — see "Credits") |
 | GET | /api/v1/files/:fileId | the file, with the same headers and sandbox as the app's file route |
 | POST | /api/v1/publish-check | B3-7, below (scope `publish_check`) |
-| GET | /api/v1/modes | G4: every mode with `{ mode, title, description, websiteRequired, delivers, estimate: { usd, minutes }, inputSchema }` (the form's schema as JSON Schema) |
+| GET | /api/v1/modes | G4: every mode with `{ mode, title, description, websiteRequired, delivers, estimate: { credits, minutes }, inputSchema }` (the form's schema as JSON Schema; `credits` = a default run's quote) |
 | POST | /api/v1/runs | G4: start an analysis (scope `run`) — "Write API" below |
 | POST | /api/v1/mcp | MCP over Streamable HTTP (JSON answers, no streams; API key only): `initialize`, `tools/list`, `tools/call`, `ping` — tools `list_websites`, `list_audits`, `get_audit`, `get_crawler_activity`, `get_ai_visibility_segments` (G6), `list_runs`, `get_run`, `list_reports`, `get_report`, `publish_check`, `list_modes`, `get_table`, and with scope `run` `preview_run` / `start_run` (G4), each calling the handler of the REST route above. `tools/list` shows only the tools the key may call |
 
@@ -470,8 +516,8 @@ the **company's own verified websites** or left out — a check is never run in 
 The app forwards it to `POST {N8N_BASE_URL}/webhook/seo-publish-check` (`X-API-Key`, synchronous, 30 s) — the deterministic half of
 the content run's own gate (*Content QA* + *Originality Check*: no model call, no fetch, **no row written, $0**) — and answers n8n's
 200 unchanged: `{ ok, publishable, verdict, exit_code 0|1, label, summary, reasons[], content_score, score_bar, score_breakdown,
-warnings[], advice[], checks, fixed_markdown, auto_fixes[], schema_types[], not_checked[{ check, reason }], basis, writes: 'none',
-cost_usd: 0 }`. n8n's 400 is passed on as 400 `{ ok: false, verdict: 'error', exit_code: 2, error, errors[] }`; n8n down or the
+warnings[], advice[], checks, fixed_markdown, auto_fixes[], schema_types[], not_checked[{ check, reason }], basis, writes: 'none' }`
+(the engine's `cost_usd` is not passed on; the check uses no credits). n8n's 400 is passed on as 400 `{ ok: false, verdict: 'error', exit_code: 2, error, errors[] }`; n8n down or the
 workflow off is 502 `engine_unavailable` ("nothing was checked"). `exit_code` is meant for a CI step: 0 publish, 1 do not, 2 the
 request was wrong.
 
@@ -482,9 +528,10 @@ form posts** (`shared/src/schemas.ts` `RUN_SCHEMAS`, chosen by `mode`; `GET /api
 with `websiteId` accepted for `siteId` and the website's country filled in when `country` is left out, plus two fields of its own:
 
 - `acknowledge: string[]` — ids of the duplicate warnings the caller accepts;
-- `dryRun: true` — answer the estimate, the warnings and the budget, start nothing.
+- `dryRun: true` — answer the quote in credits, the warnings and the credit check, start nothing.
 
-Every start runs the **app's own run path** (`createRunWithMeta`): the company's advisory lock, the monthly budget (402 `budget`), the
+Every start runs the **app's own run path** (`createRunWithMeta`): the company's advisory lock, the credit check (402 `credits` with
+`reason` balance / reserve / on_demand_limit; a company without credit enforcement: the platform's own guard, 402 `budget`), the
 platform's daily ceiling (429 `platform_capacity`), the engine's front door, the ladder-page and tracking bookkeeping. The forms'
 duplicate warnings (`pipelineNotices`: the same run already going, a page already written for the keyword, a ladder for the same
 search, the schedule doing it anyway…) are computed on the server from the same pipeline data; one the form asks a person to tick is
@@ -500,9 +547,9 @@ the company lock, before the budget, so two concurrent repeats cannot both start
 | Answer | When | Body |
 |---|---|---|
 | 201 | started | `{ run: RunV1 & { input }, notices }` |
-| 200 | `dryRun`, or a replay | `{ dryRun: true, mode, estimate: { usd, minutes }, notices, needsAcknowledge, budget: { spentUsd, budgetUsd, remainingUsd } }` / the run |
+| 200 | `dryRun`, or a replay | `{ dryRun: true, mode, estimate: { credits, minutes }, notices, needsAcknowledge, credits: { enforced, needed, available, held, reserved, enough, reason } }` / the run |
 | 400 | `validation` (with `fields`, the forms' messages) | |
-| 402 / 429 | `budget` / `platform_capacity` / `rate_limited` | |
+| 402 / 429 | `credits` / `budget` / `platform_capacity` / `rate_limited` | |
 | 403 | `scope_missing`, `key_owner_gone`, `website_unverified` (`forbidden`) | |
 | 404 | the website is not this company's | |
 | 409 | `confirm_needed` | `{ notices: PipelineNotice[], needsAcknowledge: string[] }` |
@@ -513,7 +560,7 @@ The run row exists even when the engine refuses at the door (status `failed` wit
 
 ```bash
 KEY=asc_...   # Company settings -> API access, with "Start analyses"
-# what would it cost, and does it duplicate anything?
+# what would it be quoted in credits, and does it duplicate anything?
 curl -s https://app.example.com/api/v1/runs -H "Authorization: Bearer $KEY" -H 'content-type: application/json' \
   -d '{"mode":"audit","websiteId":"<website id>","reportType":"site_audit","dryRun":true}'
 # start it (safe to retry with the same key)
@@ -573,8 +620,10 @@ endpoints a company; `websiteIds` must be the company's own (empty = every websi
 
 **Events** (`WEBHOOK_EVENTS`): `run.completed`, `run.failed`, `report.ready`, `report.held`, `alert.raised`, `audit.finding.new`,
 `rank.changed` — derived in the app from the callback it just stored (`eventsFor`, `shared/src/integrations.ts`), plus `run.failed`
-when the engine refuses at the door, its execution fails, or the run expires. Signed-JSON body (Slack and Teams get their own format,
-`slackMessage` / `teamsMessage`):
+when the engine refuses at the door, its execution fails, or the run expires. `run.completed` / `run.failed` carry `data.run` =
+`{ id, websiteId, mode, title, status, error, createdAt, completedAt, credits: { quoted, charged, state }, url }` — credits, never a
+cost (`costUsd` was removed 2026-10-19; `charged` is usually still null on `run.completed`, the charge settles within ~10 minutes), and
+the customer's error sentence (see "Credits"). Signed-JSON body (Slack and Teams get their own format, `slackMessage` / `teamsMessage`):
 
 ```json
 { "id": "6c0e…", "type": "rank.changed", "createdAt": "2026-10-17T08:00:00.000Z",
@@ -630,20 +679,22 @@ A **client workspace** is an ordinary company with `kind: 'client'` and its agen
 Roles there come from the agency (owners / admins: every client; members / viewers: clients they were assigned to) and from the
 client's own people (`client_approver`, `client_viewer`, ranked **below** viewer, so every route that asks for viewer or more answers
 them 403). `GET /api/orgs/:orgId` answers `kind`, `agency` (`{ name }`, plus `id` for agency staff), `brand` (`PortalBrand` when
-white-label is on, else null), `clientApproval`; a client person gets `monthlyBudgetUsd: 0`. `GET /api/me` lists client workspaces
+white-label is on, else null), `clientApproval`; `monthlyBudgetUsd` is 0 for everyone but a platform admin. `GET /api/me` lists client workspaces
 only to their client people (staff reach them through the agency) and, on a portal host, only that agency and its clients.
 - `POST /api/orgs/:orgId/agency` (owner) → `Org` with `kind: 'agency'`. Audited `agency.enabled`.
 - `GET /api/orgs/:orgId/clients` (agency staff) → `{ clients: AgencyClient[] }` (assigned ones only for members / viewers).
-- `POST /api/orgs/:orgId/clients` (agency admin, 30/h) `{ name, monthlyBudgetUsd?, website? }` → the client workspace (`Org`); budget ≤
-  `OWNER_BUDGET_MAX_USD`. Deleting one is `DELETE /api/orgs/:clientId` by the **agency's owner**; an agency with clients answers 409
+- `POST /api/orgs/:orgId/clients` (agency admin, 30/h) `{ name, website? }` → the client workspace (`Org`); no dollar budget is asked
+  (the workspace is limited by its credits; the row keeps the platform's default guard). `AgencyClient` carries `creditBalance` and
+  `creditsUsedThisMonth` (no `monthlyBudgetUsd` / `spentUsd`). Audited `agency.client_created` with no budget. Deleting one is `DELETE /api/orgs/:clientId` by the **agency's owner**; an agency with clients answers 409
   `agency_has_clients`.
 - `GET /api/orgs/:orgId/clients/:clientId/staff` (agency admin) → `{ staff: StaffAccess[] }`; `PUT …/staff/:userId` `{ role: 'admin' |
   'member' | 'viewer' | null }` assigns / removes an agency member (owners and admins reach every client already: 400). Leaving the agency
   removes the person's assignments; a SCIM-deactivated agency membership switches every client off (403 `membership_deactivated`).
 - `GET /api/orgs/:orgId/agency/overview` (agency staff) → `{ rows: AgencyOverviewRow[], generatedAt }`: per client website the latest
-  health score, rank gains / drops, clicks change, AI visibility, alerts of the last 14 days, approvals waiting, this month's spend and the
-  budget — from the app's own database (no engine call). `GET …/agency/overview.csv` (agency admin, 20/min): the same rows, formula-safe,
-  audited `agency.overview_exported`.
+  health score, rank gains / drops, clicks change, AI visibility, alerts of the last 14 days, approvals waiting, the client workspace's
+  credits used this month (`creditsUsedMonth`) and its balance (`creditBalance`) — from the app's own database (no engine call).
+  `GET …/agency/overview.csv` (agency admin, 20/min): the same rows, formula-safe (columns `credits_used_month`, `credit_balance`
+  replace `spent_usd_month`, `budget_usd_month`), audited `agency.overview_exported`.
 - Invitations into a client workspace accept only `client_viewer` / `client_approver`; client roles anywhere else answer 400
   (`inviteRoleProblem`). A white-label client's invitation link and e-mail use the agency's portal host and sender.
 - `GET /api/orgs/:orgId/branding` (admin of an agency or client workspace) → `BrandingResponse` (`branding`, the computed `contrast`
@@ -709,7 +760,9 @@ vendor call removes the placeholder. States map to `todo` / `in_progress` / `don
 
 Tables (`EXPORT_TABLES`, `shared/src/integrations.ts` — the one schema; every row adds `company_id`, `website_id`, `website_domain`,
 `exported_at`): `rank_history` (n8n `seo_rank_history`), `site_metrics` (`seo_site_metrics`), `audit_findings` (`seo_audit_findings`),
-`ai_visibility` (`seo_ai_visibility`), `backlinks` (`seo_backlinks`), `runs` (the app's runs with their cost). Values are typed
+`ai_visibility` (`seo_ai_visibility`; `credits` replaces `cost_usd`), `backlinks` (`seo_backlinks`), `runs` (the app's runs with
+their credits: `credits_quoted`, `credits_charged` replace `estimated_cost_usd`, `actual_cost_usd`, `cost_estimated`, `cost_partial`;
+`error` as the customer reads it). Values are typed
 (`STRING`, `INTEGER`, `FLOAT`, `BOOLEAN`, `TIMESTAMP`, `DATE`); a value the engine did not store is `null`, never 0. Objects:
 `<prefix>/<table>/dt=YYYY-MM-DD/<table>-<export run id>.<ndjson|csv>` — a full snapshot per run, read the newest `dt`. CSV is RFC 4180
 with a header row; a text cell starting with `= + - @` gets a leading `'` (CSV injection). BigQuery: table `<tablePrefix><table>`,

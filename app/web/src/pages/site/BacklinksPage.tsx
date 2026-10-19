@@ -139,7 +139,7 @@ function Backlinks({ d, refetching }: { d: BacklinksData; refetching: boolean })
       {L && (
         <SummaryHero
           tone="blue"
-          eyebrow={<HeroEyebrow tag="Backlinks">{L.mode === 'free' ? `Free-sources check of ${fmtDate(L.checkedAt)} (no DataForSEO, $0); changes ${since}.` : `${titleCase(L.mode || 'light')} check of ${fmtDate(L.checkedAt)}; changes ${since}.`}</HeroEyebrow>}
+          eyebrow={<HeroEyebrow tag="Backlinks">{L.mode === 'free' ? `Free-sources check of ${fmtDate(L.checkedAt)} (no DataForSEO, no credits used); changes ${since}.` : `${titleCase(L.mode || 'light')} check of ${fmtDate(L.checkedAt)}; changes ${since}.`}</HeroEyebrow>}
           title={`${compactNumber(referring)} referring ${referring === 1 ? 'site' : 'sites'} — ${compactNumber(L.newLinks)} new, ${compactNumber(L.lostLinks)} lost since the last check`}
           description={union != null ? `Merged from every source we can read, each important link checked on its page. DataForSEO alone sees ${D ? compactNumber(D.referringDomains) : '–'}${D && D !== L ? ` (check of ${fmtDate(D.checkedAt)})` : ''}.` : `${compactNumber(D?.referringDomainsNofollow ?? 0)} of them nofollow only.`}
           actions={

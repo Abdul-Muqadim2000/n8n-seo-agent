@@ -576,3 +576,96 @@ describe('companies and the CSV', () => {
     expect(acts[0]).toMatchObject({ action: 'company.updated', actor: 'boss@admin.test', target: { type: 'company', id: org.id } });
   });
 });
+
+describe('credits in the panel: lots, requests, packs, plans (2026-10-19)', () => {
+  const DAY = 86_400_000;
+  it('the new routes are for platform admins only', async () => {
+    const u = await signUp(app, 'nosy2@user.test');
+    const id = '00000000-0000-4000-8000-000000000000';
+    for (const url of [`/api/admin/companies/${id}/lots`, `/api/admin/companies/${id}/absorbed`, '/api/admin/credit-requests']) {
+      expect((await u.c.get(url)).status, url).toBe(403);
+      expect((await new Client(app).get(url)).status, url).toBe(401);
+    }
+    expect((await boss.get(`/api/admin/companies/${id}/lots`)).status).toBe(404);
+  });
+
+  it('lots: a grant with requestId fulfils the request; the lot is a 12-month pack, listed first among live lots by expiry', async () => {
+    const { c, org } = await company('lots@credits.test', 'Lots Co');
+    const req = (await c.post(`/api/orgs/${org.id}/billing/requests`, { packId: 'standard', note: 'PO 77' })).body;
+    expect(req).toMatchObject({ status: 'pending', credits: 2000 });
+    const waiting = (await boss.get('/api/admin/credit-requests')).body;
+    expect(waiting).toContainEqual(expect.objectContaining({ id: req.id, orgId: org.id, orgName: 'Lots Co' }));
+    const url = `/api/admin/companies/${org.id}/credits`;
+    const g = await boss.post(url, { kind: 'grant', credits: req.credits, paidUsd: req.priceUsd, expires: 'pack', requestId: req.id });
+    expect(g.status).toBe(200);
+    // a short grant (10 days) and a never-expiring one
+    expect((await boss.post(url, { kind: 'grant', credits: 50, expires: 10, note: 'Trial top-up' })).status).toBe(200);
+    expect((await boss.post(url, { kind: 'grant', credits: 25, expires: 'never', note: 'Goodwill' })).status).toBe(200);
+    const lots = (await boss.get(`/api/admin/companies/${org.id}/lots`)).body as { source: string; credits: number; remaining: number; expiresAt: string | null; note: string }[];
+    const pack = lots.find((l) => l.source === 'pack')!;
+    expect(pack).toMatchObject({ credits: 2000, remaining: 2000 });
+    const days = (new Date(pack.expiresAt!).getTime() - Date.now()) / DAY;
+    expect(days).toBeGreaterThan(360);
+    expect(days).toBeLessThan(370);
+    // the order credits are used in: soonest expiry first, never-expiring last
+    expect(lots.map((l) => l.note)).toEqual(['Trial top-up', expect.any(String), 'Goodwill']);
+    expect(lots[0]!.source).toBe('grant');
+    expect(lots[2]!.expiresAt).toBeNull();
+    const all = (await boss.get('/api/admin/credit-requests?status=all')).body as { id: string; status: string }[];
+    expect(all.find((x) => x.id === req.id)!.status).toBe('fulfilled');
+    expect((await boss.get('/api/admin/credit-requests')).body.some((x: { id: string }) => x.id === req.id)).toBe(false);
+    // once fulfilled it is neither fulfilled again nor cancellable
+    expect((await boss.post(url, { kind: 'grant', credits: 2000, paidUsd: 100, requestId: req.id })).status).toBe(409);
+    expect((await boss.post(`/api/admin/credit-requests/${req.id}/cancel`)).status).toBe(404);
+    // a waiting one is cancelled by the admin
+    const r2 = (await c.post(`/api/orgs/${org.id}/billing/requests`, { packId: 'starter' })).body;
+    expect((await boss.post(`/api/admin/credit-requests/${r2.id}/cancel`)).body).toMatchObject({ id: r2.id, status: 'cancelled', orgId: org.id });
+  });
+
+  it('absorbed over quotes: the credits runs did not pay beyond their quote, in credits and dollars', async () => {
+    const { addCreditEntry } = await import('../src/services/admin/credits');
+    const { org } = await company('absorbed@credits.test', 'Absorbed Co');
+    const empty = (await boss.get(`/api/admin/companies/${org.id}/absorbed`)).body;
+    expect(empty).toMatchObject({ period: 'month', credits: 0, listUsd: 0, runs: 0 });
+    await addCreditEntry(db, { orgId: org.id, kind: 'usage', credits: -12, note: 'Used', ref: { creditValueUsd: 0.05, origin: 'on_demand', absorbed: 4 }, refKey: 'cost:test:absorbed1' });
+    await addCreditEntry(db, { orgId: org.id, kind: 'usage', credits: -8, note: 'Used', ref: { creditValueUsd: 0.05, origin: 'on_demand' }, refKey: 'cost:test:absorbed2' });
+    const a = (await boss.get(`/api/admin/companies/${org.id}/absorbed?period=all`)).body;
+    expect(a).toMatchObject({ period: 'all', credits: 4, listUsd: 0.2, runs: 1 });
+    expect(a.costUsd).toBeCloseTo(0.2 / a.markup, 4);
+  });
+
+  it('settings: packs with a discount round-trip; a bad pack id is refused; a save without changes logs nothing', async () => {
+    const s = (await boss.get('/api/admin/settings')).body;
+    const body = { creditValueUsd: s.creditValueUsd, markup: s.markup, signupCredits: s.signupCredits, enforceForNewCompanies: s.enforceForNewCompanies };
+    const packs = [
+      { id: 'starter', credits: 500, discountPct: 0 },
+      { id: 'bulk', credits: 10000, discountPct: 10 },
+    ];
+    const saved = (await boss.put('/api/admin/settings', { ...body, creditPacks: packs, packExpiryMonths: 6, planRollover: false, signupExpiryDays: 30 })).body;
+    expect(saved).toMatchObject({ creditPacks: packs, packExpiryMonths: 6, planRollover: false, signupExpiryDays: 30 });
+    expect((await boss.get('/api/admin/settings')).body).toMatchObject({ creditPacks: packs, packExpiryMonths: 6, planRollover: false, signupExpiryDays: 30 });
+    const bad = await boss.put('/api/admin/settings', { ...body, creditPacks: [{ id: 'Big Pack!', credits: 500, discountPct: 0 }] });
+    expect(bad.status).toBe(400);
+    expect((await boss.put('/api/admin/settings', { ...body, creditPacks: [{ id: 'x', credits: 500, discountPct: 60 }] })).status).toBe(400);
+    const before = (await boss.get('/api/admin/activity?limit=1')).body[0];
+    await boss.put('/api/admin/settings', { ...body, creditPacks: packs, packExpiryMonths: 6, planRollover: false, signupExpiryDays: 30 });
+    expect((await boss.get('/api/admin/activity?limit=1')).body[0].id).toBe(before.id);
+    // back to the defaults for the tests after this one
+    await boss.put('/api/admin/settings', { ...body, creditPacks: s.creditPacks, packExpiryMonths: s.packExpiryMonths, planRollover: s.planRollover, signupExpiryDays: s.signupExpiryDays });
+  });
+
+  it('a plan: its first month is granted at once, and only once a month whatever the PATCHes', async () => {
+    const { org } = await company('plan@panel.test', 'Plan Panel Co');
+    const r = await boss.patch(`/api/admin/companies/${org.id}`, { planMonthlyCredits: 1000 });
+    expect(r.status).toBe(200);
+    expect(r.body.planMonthlyCredits).toBe(1000);
+    const planLots = async () => ((await boss.get(`/api/admin/companies/${org.id}/lots`)).body as { source: string; credits: number }[]).filter((l) => l.source === 'plan');
+    expect(await planLots()).toEqual([expect.objectContaining({ credits: 1000 })]);
+    await boss.patch(`/api/admin/companies/${org.id}`, { planMonthlyCredits: 1000 });
+    await boss.patch(`/api/admin/companies/${org.id}`, { planMonthlyCredits: 1500 });
+    await boss.patch(`/api/admin/companies/${org.id}`, { planMonthlyCredits: 0 });
+    await boss.patch(`/api/admin/companies/${org.id}`, { planMonthlyCredits: 800 });
+    expect(await planLots()).toHaveLength(1);
+    expect((await boss.get(`/api/admin/companies/${org.id}`)).body.planMonthlyCredits).toBe(800);
+  });
+});

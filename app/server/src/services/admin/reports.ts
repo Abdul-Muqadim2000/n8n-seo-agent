@@ -1,6 +1,8 @@
 import { sql, type SQL } from 'drizzle-orm';
 import {
   emptyCostSplit,
+  addCreditBooks,
+  emptyCreditBook,
   type AdminActivityRow,
   type AdminCompanyDetail,
   type AdminCompanyRow,
@@ -20,7 +22,7 @@ import { isPlatformAdmin } from '../../auth/access';
 import { db, schema } from '../../db';
 import type { UserRow } from '../../db/schema';
 import { anthropicBill, dataforseoBill } from './bills';
-import { allBalances, creditTotals, listCreditEntries } from './credits';
+import { allBalances, creditBooks, creditTotals, listCreditEntries } from './credits';
 import { daysOf, type PeriodRange } from './period';
 import { settingsRow } from './settings';
 import { execRows, tsv } from './sqlRows';
@@ -92,6 +94,7 @@ export async function companyRows(r: PeriodRange, opts: { q?: string; ids?: stri
   const s = await settingsRow();
   const credits = await creditTotals(r.from, r.to, s.creditValueUsd);
   const balances = await allBalances();
+  const books = await creditBooks(r.from, r.to, s);
   return orgs
     .map((o): AdminCompanyRow => {
       const c = by.get(o.id);
@@ -110,7 +113,7 @@ export async function companyRows(r: PeriodRange, opts: { q?: string; ids?: stri
         runs: Number(c?.runs ?? 0),
         failedRuns: Number(c?.failed ?? 0),
         lastRunAt: iso(c?.last_run),
-        credits: { balance: balances.get(o.id) ?? 0, grantedInPeriod: cr.granted, usedInPeriod: cr.used, enforced: !!o.credits_enforced },
+        credits: { balance: balances.get(o.id) ?? 0, grantedInPeriod: cr.granted, usedInPeriod: cr.used, enforced: !!o.credits_enforced, book: books.get(o.id) ?? emptyCreditBook(s.creditValueUsd, s.markup) },
         money: moneyOf(split, cr.paid, cr.listValueUsd),
         planMonthlyCredits: Number(o.plan_monthly_credits ?? 0),
       };
@@ -460,7 +463,13 @@ export async function overview(r: PeriodRange): Promise<AdminOverview> {
     money: moneyOf(all, paid, listValue),
     unattributed,
     deletedCompanies: { cost: toSplit(gone), revenueUsd: r2(deleted.paid), creditsGranted: r2(deleted.granted) },
-    credits: { outstanding: r2(outstanding), grantedInPeriod: r2(granted), usedInPeriod: r2(used) },
+    credits: {
+      outstanding: r2(outstanding),
+      grantedInPeriod: r2(granted),
+      usedInPeriod: r2(used),
+      // every company's book together, deleted companies' movements included (their remaining is 0: their credits went with them)
+      book: [...(await creditBooks(r.from, r.to, s)).values()].reduce((t, b) => addCreditBooks(t, b), emptyCreditBook(s.creditValueUsd, s.markup)),
+    },
     daily: await daily(r),
     bills: [anthropic, dataforseo],
     sources: { engineLedger: { ok: s.ledgerSyncOk, lastSyncAt: s.ledgerSyncedAt?.toISOString() ?? null, rows: s.ledgerRows, note: ledgerNote } },
@@ -497,3 +506,35 @@ export function companiesCsv(rows: AdminCompanyRow[]): string {
     ]),
   );
 }
+
+// ---------- credits absorbed over quotes (2026-10-19, app/docs/CREDITS.md §1 "quoted, held, charged") ----------
+/** What a company's on-demand runs would have used beyond their quotes in the period: credits we did not charge (ours). */
+export interface AdminAbsorbed {
+  period: PeriodRange['period'];
+  /** credits not charged */
+  credits: number;
+  /** those credits at the credit value of the day each was recorded (list price) */
+  listUsd: number;
+  /** what they cost us at the providers ≈ listUsd ÷ the markup now */
+  costUsd: number;
+  /** usage entries capped at their quote */
+  runs: number;
+  creditValueUsd: number;
+  markup: number;
+}
+
+export async function companyAbsorbed(r: PeriodRange, orgId: string): Promise<AdminAbsorbed> {
+  const s = await settingsRow();
+  const [row] = await execRows<{ credits: number; list_usd: number; runs: number }>(
+    db,
+    sql`select coalesce(sum((ref->>'absorbed')::float), 0)::float as credits,
+          coalesce(sum((ref->>'absorbed')::float * coalesce((ref->>'creditValueUsd')::float, ${s.creditValueUsd}::float)), 0)::float as list_usd,
+          count(*)::int as runs
+        from ${schema.creditLedger}
+        where org_id = ${orgId}::uuid and kind = 'usage' and (ref->>'absorbed') is not null and (ref->>'absorbed')::float > 0 and ${within(sql`created_at`, r)}`,
+  );
+  const credits = r2(Number(row?.credits ?? 0));
+  const listUsd = r4(Number(row?.list_usd ?? 0));
+  return { period: r.period, credits, listUsd, costUsd: s.markup > 0 ? r4(listUsd / s.markup) : 0, runs: Number(row?.runs ?? 0), creditValueUsd: s.creditValueUsd, markup: s.markup };
+}
+

@@ -11,7 +11,7 @@ import { ChartCard, TimeSeriesChart } from '@/components/charts';
 import { CountUp, HeroStat, Stagger } from '@/components/insight';
 import { absolutePageUrl, ArticleViewer, findPlaceholders } from './article';
 import { CmsPublishPanel } from './CmsPublish';
-import { Block, Bullets, Chips, Facts, has, LedgerCard, n, num, obj, objs, str, strs, usd, verdictLabel, type P } from './kit';
+import { Block, Bullets, Chips, Facts, has, CreditsCard, n, num, obj, objs, str, strs, usd, verdictLabel, type P } from './kit';
 import { keywordPrefill } from './meta';
 import { ChartTitle, ReportHero, ScoreMark, TickGrid, WordValue } from './visuals';
 
@@ -274,7 +274,7 @@ export function ContentReport({ report }: { report: ReportDetail }) {
         )
       )}
 
-      <LedgerCard ledger={p.run_ledger} />
+      <CreditsCard p={p} />
     </Stagger>
   );
 }

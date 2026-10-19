@@ -2,25 +2,25 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { Bell, Briefcase, Building2, Download, Globe, Plus, ShieldCheck, Users, Wallet } from 'lucide-react';
-import { formatUsd, ROLE_LABELS, type AgencyClient, type AgencyOverviewRow, type Role } from '@seo/shared';
+import { formatCredits, ROLE_LABELS, type AgencyClient, type AgencyOverviewRow, type Role } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardBody } from '@/components/ui/card';
 import { Callout, EmptyState, ErrorState, Skeleton } from '@/components/ui/feedback';
 import { Field, Input, Select } from '@/components/ui/field';
-import { Meter, PageHeader, scoreTone, StatTile } from '@/components/ui/misc';
+import { PageHeader, scoreTone, StatTile } from '@/components/ui/misc';
 import { Dialog } from '@/components/ui/overlay';
 import { DataTable, type Column } from '@/components/ui/table';
 import { ApiRequestError, errorMessage } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { agencyOverviewCsvUrl, useAgencyOverview, useAssignStaff, useClients, useClientStaff, useCreateClient, useEnableAgency } from '@/lib/queries';
-import { fmtAgo } from '@/lib/utils';
+import { cn, fmtAgo } from '@/lib/utils';
 
 /**
  * G5 (app/docs/WHITE_LABEL.md §1.6): an agency's clients — every client website in one table (health, rankings movement, clicks,
- * AI visibility, alerts, approvals waiting, spend against budget), the client workspaces with who of the agency can open them, and
+ * AI visibility, alerts, approvals waiting, credits used and left), the client workspaces with who of the agency can open them, and
  * a new client. A standard company sees what agency mode is and, as its owner, turns it on.
  */
 export default function ClientsPage() {
@@ -42,7 +42,7 @@ function AgencyIntro() {
           description={
             org.kind === 'client'
               ? 'Client workspaces belong to an agency; the agency manages its clients from its own Clients page.'
-              : 'An agency holds a workspace per client — its own websites, budget and people — with your team switching between them, one table of every client website, client logins, your brand and your own portal address.'
+              : 'An agency holds a workspace per client — its own websites, credits and people — with your team switching between them, one table of every client website, client logins, your brand and your own portal address.'
           }
           action={
             org.kind === 'standard' && can('owner') ? (
@@ -72,15 +72,16 @@ function AgencyClients() {
   const totals = useMemo(() => {
     const byClient = new Map<string, AgencyOverviewRow>();
     for (const r of rows) if (!byClient.has(r.clientId)) byClient.set(r.clientId, r);
-    const spend = [...byClient.values()].reduce((t, r) => t + r.spentUsd, 0);
-    const budget = [...byClient.values()].reduce((t, r) => t + r.budgetUsd, 0);
+    // credits (app/docs/CREDITS.md): each client workspace's credits, never what its work cost at the providers
+    const used = [...byClient.values()].reduce((t, r) => t + r.creditsUsedMonth, 0);
+    const balance = [...byClient.values()].reduce((t, r) => t + r.creditBalance, 0);
     return {
       clients: byClient.size,
       sites: rows.filter((r) => r.siteId).length,
       alerts: rows.reduce((t, r) => t + r.alerts14d, 0),
       approvals: rows.reduce((t, r) => t + r.approvalsWaiting, 0),
-      spend,
-      budget,
+      used,
+      balance,
     };
   }, [rows]);
 
@@ -158,17 +159,15 @@ function AgencyClients() {
       ),
     },
     {
-      key: 'spend',
-      header: 'Spend this month',
+      key: 'credits',
+      header: 'Credits this month',
       align: 'right',
       hideOnMobile: true,
-      sortValue: (r) => (r.budgetUsd ? r.spentUsd / r.budgetUsd : 0),
+      sortValue: (r) => r.creditsUsedMonth,
       cell: (r) => (
-        <span className="inline-flex w-32 flex-col items-end gap-1">
-          <span className="tabular text-[13px]">
-            {formatUsd(r.spentUsd)} <span className="text-ink-3">of {formatUsd(r.budgetUsd, 0)}</span>
-          </span>
-          <Meter value={r.budgetUsd ? (r.spentUsd / r.budgetUsd) * 100 : 0} tone={r.budgetUsd && r.spentUsd / r.budgetUsd > 0.9 ? 'warning' : 'accent'} label={`Spend of ${r.clientName}`} />
+        <span className="inline-flex w-36 flex-col items-end gap-0.5">
+          <span className="tabular text-[13px]">{formatCredits(r.creditsUsedMonth)} used</span>
+          <span className={cn('tabular text-xs', r.creditBalance <= 0 ? 'text-warning-text' : 'text-ink-3')}>{formatCredits(r.creditBalance)} left</span>
         </span>
       ),
     },
@@ -199,7 +198,7 @@ function AgencyClients() {
         <StatTile label="Clients" value={String(totals.clients)} icon={<Building2 className="size-4" />} />
         <StatTile label="Websites" value={String(totals.sites)} icon={<Globe className="size-4" />} />
         <StatTile label="Alerts, last 14 days" value={String(totals.alerts)} icon={<Bell className="size-4" />} hint={totals.approvals ? `${totals.approvals} waiting for client approval` : undefined} />
-        <StatTile label="Spend this month" value={formatUsd(totals.spend)} icon={<Wallet className="size-4" />} hint={`of ${formatUsd(totals.budget, 0)} in budgets`} />
+        <StatTile label="Credits used this month" value={formatCredits(totals.used, { unit: false })} icon={<Wallet className="size-4" />} hint={`${formatCredits(totals.balance)} left across clients`} />
       </div>
       {overview.isError ? (
         <Card>
@@ -274,7 +273,6 @@ function NewClientDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
   const { org } = useOrgCtx();
   const create = useCreateClient(org.id);
   const [name, setName] = useState('');
-  const [budget, setBudget] = useState('25');
   const [website, setWebsite] = useState('');
   const close = (o: boolean) => {
     onOpenChange(o);
@@ -286,7 +284,7 @@ function NewClientDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
   };
   const submit = () =>
     create.mutate(
-      { name: name.trim(), monthlyBudgetUsd: Number(budget) || 0, website: website.trim() },
+      { name: name.trim(), website: website.trim() },
       {
         onSuccess: (c) => {
           toast.success(`${c.name} created`);
@@ -300,7 +298,7 @@ function NewClientDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
       open={open}
       onOpenChange={close}
       title="New client"
-      description="A workspace of its own: websites, budget, reports and the client’s logins. Your owners and admins reach it at once."
+      description="A workspace of its own: websites, credits, reports and the client’s logins. Your owners and admins reach it at once."
       footer={
         <>
           <Button variant="secondary" onClick={() => close(false)}>
@@ -323,9 +321,6 @@ function NewClientDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
       >
         <Field label="Client name" error={fields.name}>
           {(p) => <Input {...p} value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme Trading" autoFocus maxLength={120} />}
-        </Field>
-        <Field label="Monthly budget (USD)" hint="The most this client’s analyses may cost a month." error={fields.monthlyBudgetUsd}>
-          {(p) => <Input {...p} type="number" min={0} step={1} value={budget} onChange={(e) => setBudget(e.target.value)} />}
         </Field>
         <Field label="Website" optional hint="You add and verify the website inside the workspace.">
           {(p) => <Input {...p} value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="acme.com" />}

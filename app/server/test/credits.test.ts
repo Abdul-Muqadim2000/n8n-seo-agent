@@ -353,5 +353,37 @@ describe('Buy credits: the request, the admin\'s confirmation', () => {
     expect(b.requests.map((x: { status: string }) => x.status)).toEqual(['cancelled', 'fulfilled']);
     const row = (await boss.get(`/api/admin/companies/${org.id}`)).body;
     expect(row.money.revenueUsd).toBe(100);
+    // the admin's credit book: 2,000 bought for $100, 200 welcome credits given free, 2,200 left — owed at list $110, costing us ~$36.67
+    expect(row.credits.book).toMatchObject({
+      bought: 2000, boughtUsd: 100, free: 200, freeListUsd: 10, used: 0, remaining: 2200, remainingListUsd: 110, creditValueUsd: 0.05, markup: 3,
+    });
+    expect(row.credits.book.remainingCostUsd).toBeCloseTo(36.6667, 3);
+  });
+});
+
+describe('the admin\'s credit book (the Credits / USD switch)', () => {
+  it('used credits at list price beside what the work really cost us; autopilot / on-demand; absorbed; the platform total adds every company', async () => {
+    const { c, org } = await company('book@credits.test', 'Book Co');
+    await trackedSite(org.id, 'book.test');
+    await c.put(`/api/orgs/${org.id}/billing/limits`, { reserveForAutopilot: false }); // the website's schedules would otherwise keep the welcome credits
+    // an on-demand verdict quoted 12, settled at $0.50 (30 credits): 12 charged, 18 absorbed; a schedule at $0.10: 6 credits
+    const r = await c.post(`/api/orgs/${org.id}/runs`, verdict);
+    expect(r.status).toBe(200);
+    const run = (await db.query.runs.findFirst({ where: eq(schema.runs.orgId, org.id) }))!;
+    await db.update(schema.runs).set({ status: 'completed', completedAt: new Date() }).where(eq(schema.runs.id, run.id));
+    await callback(org.id, run.id, run.requestId!, 'b-e1');
+    await sync([engineRow({ id: 'b-e1', key: `app:${org.id}`, mode: 'verdict', usd: 0.5 }), engineRow({ id: 'b-s1', key: 'schedule:ai_pulse', mode: 'ai_pulse', usd: 0.1, domain: 'book.test' })]);
+    const b = (await boss.get(`/api/admin/companies/${org.id}`)).body.credits.book;
+    expect(b).toMatchObject({ used: 18, usedOnDemand: 12, usedAutopilot: 6, absorbed: 18, free: 200, bought: 0, boughtUsd: 0, remaining: 182 });
+    expect(b.usedListUsd).toBeCloseTo(0.9, 6); // 18 credits at $0.05
+    expect(b.usedCostUsd).toBeCloseTo(0.6, 6); // $0.50 + $0.10 of provider cost behind them (the capped part included)
+    expect(b.absorbedListUsd).toBeCloseTo(0.9, 6);
+    expect(b.remainingListUsd).toBeCloseTo(9.1, 6);
+    const o = (await boss.get('/api/admin/overview')).body;
+    const companies = (await boss.get('/api/admin/companies')).body as { credits: { book: { remaining: number; bought: number } } }[];
+    expect(o.credits.book.remaining).toBeCloseTo(companies.reduce((t, x) => t + x.credits.book.remaining, 0), 2);
+    expect(o.credits.book.used).toBeCloseTo(companies.reduce((t, x) => t + (x.credits.book as unknown as { used: number }).used, 0), 2);
+    // a customer never reads the book
+    expect((await c.get(`/api/admin/companies/${org.id}`)).status).toBe(403);
   });
 });

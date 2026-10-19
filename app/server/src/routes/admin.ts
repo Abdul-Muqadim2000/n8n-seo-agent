@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, gt, or, sql } from 'drizzle-orm';
 import { audit } from '../services/audit';
 import type { FastifyInstance } from 'fastify';
 import { orgBudgetSchema, type AdminOrg } from '@seo/shared';
@@ -27,15 +27,17 @@ import {
   type AdminCreatedUser,
   type CreditEntry,
   type AdminPurchaseRequest,
+  type CreditLot,
+  type CreditSource,
 } from '@seo/shared';
 import { conflict, HttpError } from '../lib/errors';
 import { adminAudit } from '../services/admin/audit';
 import { addCreditEntry, creditBalance, listCreditEntries } from '../services/admin/credits';
 import { syncCosts } from '../services/admin/costSync';
 import { periodRange } from '../services/admin/period';
-import { activity, companiesCsv, companyDetail, companyRows, overview, runsPage, userRows } from '../services/admin/reports';
+import { activity, companiesCsv, companyAbsorbed, companyDetail, companyRows, overview, runsPage, userRows } from '../services/admin/reports';
 import { getSettings, saveSettings, settingsRow } from '../services/admin/settings';
-import { grantPlanCredits, requestView } from '../services/billing';
+import { creditGuardTick, grantPlanCredits, requestView } from '../services/billing';
 import { createUser, deleteUser, removeMembership, SET_PASSWORD_HOURS, setMembership, updateUser, userOrThrow } from '../services/admin/users';
 import { deleteCompany } from '../services/companyDelete';
 import { deleteUserSessions } from '../auth/session';
@@ -226,6 +228,8 @@ export async function adminRoutes(app: FastifyInstance) {
         .update(schema.creditPurchaseRequests)
         .set({ status: 'fulfilled', resolvedAt: new Date(), resolvedBy: admin.email, ledgerId: row.id })
         .where(eq(schema.creditPurchaseRequests.id, request.id));
+    // credits added: a company whose schedules the guard paused gets them back now, not at its next pass
+    if (row.credits > 0) void creditGuardTick(req.log).catch((err) => req.log.warn({ err: String(err) }, 'credit guard after a grant failed'));
     const balance = await creditBalance(db, org.id);
     await adminAudit(req, `credits.${body.kind === 'grant' ? 'granted' : body.kind === 'refund' ? 'refunded' : 'adjusted'}`, { type: 'company', id: org.id, label: org.name }, {
       credits: row.credits,
@@ -235,6 +239,39 @@ export async function adminRoutes(app: FastifyInstance) {
     });
     const entries = await listCreditEntries(org.id, 50);
     return entries.find((e) => e.id === row.id) ?? { ...entries[0], id: row.id };
+  });
+
+  // the company's credit lots as the credits page shows them: the ones still holding credits first (soonest to expire first, the order
+  // they are used in), then the used-up or expired ones of the last 90 days, newest first
+  app.get('/api/admin/companies/:id/lots', async (req): Promise<CreditLot[]> => {
+    guard(req);
+    const org = await orgOrThrow((req.params as { id: string }).id);
+    const L = schema.creditLots;
+    const rows = await db.query.creditLots.findMany({
+      where: and(eq(L.orgId, org.id), or(gt(L.remaining, 0), gte(L.createdAt, new Date(Date.now() - 90 * 86_400_000)))),
+      orderBy: desc(L.createdAt),
+      limit: 300,
+    });
+    const live = (l: (typeof rows)[number]) => l.remaining > 0 && (!l.expiresAt || l.expiresAt.getTime() > Date.now());
+    const exp = (l: (typeof rows)[number]) => l.expiresAt?.getTime() ?? Number.POSITIVE_INFINITY;
+    return rows
+      .sort((a, b) => Number(live(b)) - Number(live(a)) || (live(a) ? exp(a) - exp(b) || a.createdAt.getTime() - b.createdAt.getTime() : b.createdAt.getTime() - a.createdAt.getTime()))
+      .map((l) => ({
+        id: l.id,
+        source: l.source as CreditSource,
+        credits: l.credits,
+        remaining: l.remaining,
+        expiresAt: l.expiresAt?.toISOString() ?? null,
+        createdAt: l.createdAt.toISOString(),
+        note: l.note,
+      }));
+  });
+
+  // credits runs would have used beyond their quote and were not charged (ref.absorbed on usage entries): ours, in credits and dollars
+  app.get('/api/admin/companies/:id/absorbed', async (req) => {
+    guard(req);
+    const org = await orgOrThrow((req.params as { id: string }).id);
+    return companyAbsorbed(periodOf(req.query), org.id);
   });
 
   app.delete('/api/admin/companies/:id', async (req) => {
@@ -349,6 +386,15 @@ export async function adminRoutes(app: FastifyInstance) {
     return r;
   });
 
+  // credits (app/docs/CREDITS.md): the guard's pass now, instead of at its next 10-minute tick — after confirming a payment, so the
+  // company's paused schedules resume at once (also what scripts/credits_e2e.py drives)
+  app.post('/api/admin/credits/guard', { config: { rateLimit: { max: 6, timeWindow: '1 minute' } } }, async (req) => {
+    guard(req);
+    const r = await creditGuardTick(req.log);
+    await adminAudit(req, 'credits.guard_run', { type: 'platform', id: null, label: 'credit guard' }, { ...r });
+    return r;
+  });
+
   app.get('/api/admin/settings', async (req) => {
     guard(req);
     return getSettings();
@@ -359,7 +405,8 @@ export async function adminRoutes(app: FastifyInstance) {
     const body = parse(platformSettingsSchema, req.body ?? {});
     const before = await getSettings();
     const after = await saveSettings(body, admin.email);
-    const changed = (Object.keys(body) as (keyof typeof body)[]).filter((k) => before[k] !== after[k]);
+    // compared as JSON: the packs are a list, and a list read back is never the same object (every save looked like a pack change)
+    const changed = (Object.keys(body) as (keyof typeof body)[]).filter((k) => JSON.stringify(before[k]) !== JSON.stringify(after[k]));
     if (changed.length)
       await adminAudit(req, 'settings.changed', { type: 'platform', id: null, label: 'platform settings' }, {
         before: Object.fromEntries(changed.map((k) => [k, before[k]])),

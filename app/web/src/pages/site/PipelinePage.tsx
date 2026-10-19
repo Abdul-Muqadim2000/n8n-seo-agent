@@ -1,7 +1,7 @@
 import { useState } from 'react';
+import { creditsLabel } from '@/lib/credits';
 import { toast } from 'sonner';
 import { MailX, PauseCircle, Play, Workflow } from 'lucide-react';
-import { formatUsd } from '@seo/shared';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { Callout, ErrorState, Skeleton } from '@/components/ui/feedback';
@@ -69,7 +69,7 @@ export default function PipelinePage() {
         actions={
           <>
             {status === 'active' ? <StatusBadge tone="good">Autopilot on</StatusBadge> : status === 'paused' ? <StatusBadge tone="warning">Paused</StatusBadge> : <Badge>Not started</Badge>}
-            <span className="text-[13px] text-ink-3">about {formatUsd(d.monthlyCostUsd)} / month</span>
+            <span className="text-[13px] text-ink-3">about {creditsLabel(d.monthlyCostUsd)} a month</span>
             {can('admin') && d.tracking.verified && <PipelineSettingsButton automation={d.automation} autoStartEnabled={d.autoStartEnabled !== false} />}
             {can('admin') && status === 'active' && (
               <Button variant="secondary" size="sm" icon={<PauseCircle className="size-4" />} loading={admin.isPending} onClick={() => pauseResume('pause')}>

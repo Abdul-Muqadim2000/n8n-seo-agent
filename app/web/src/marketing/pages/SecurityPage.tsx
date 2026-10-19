@@ -8,7 +8,7 @@ import type { FaqItem } from '../content/features';
 import { site } from '../content/site';
 import { useSeo } from '../useSeo';
 
-// Every line on this page describes how the app works today (app/server: auth, sessions, CSP, CSRF, roles, budgets).
+// Every line on this page describes how the app works today (app/server: auth, sessions, CSP, CSRF, roles, credits).
 // No certifications, audits, hosting or data-residency claims.
 
 const GROUPS: { icon: LucideIcon; title: string; items: string[] }[] = [
@@ -36,7 +36,7 @@ const GROUPS: { icon: LucideIcon; title: string; items: string[] }[] = [
       'Invitations by link, which admins can revoke',
       'Every request checked against your role on the server, not only in the browser',
       'Signing in with Google to an unconfirmed account removes its old password and sessions',
-      'An agency’s client logins reach only that client’s own workspace — never other clients, costs or settings',
+      'An agency’s client logins reach only that client’s own workspace — never other clients, credits or settings',
     ],
   },
   {
@@ -88,7 +88,7 @@ const GROUPS: { icon: LucideIcon; title: string; items: string[] }[] = [
     title: 'Keys, secrets and connections',
     items: [
       'API keys shown once; only a hash is stored, with an expiry, and each can be revoked',
-      'Keys read by default — starting analyses is a separate permission, always inside your budget',
+      'Keys read by default — starting analyses is a separate permission, always within your credits and limits',
       'Mailbox passwords and sign-in grants, CMS and tracker tokens, storage keys and webhook addresses encrypted at rest and never shown again',
       'Outgoing connections only to public https addresses of the tool you connected',
       'Every webhook signed with your own secret and a timestamp, so your systems can tell it came from us',
@@ -109,10 +109,10 @@ const GROUPS: { icon: LucideIcon; title: string; items: string[] }[] = [
     icon: Wallet,
     title: 'Spend controls',
     items: [
-      'A cost estimate before every run',
-      'Company budgets checked before any paid work — under a lock, so runs started together cannot overshoot',
-      'A platform-wide daily spend limit above every budget',
-      'Results reused where nothing has changed, so nothing is paid for twice',
+      'The price in credits before every analysis, held while it runs and never exceeded',
+      'Credits and limits checked before any work — under a lock, so analyses started together cannot overshoot',
+      'A platform-wide daily ceiling above every company’s limits',
+      'Results reused where nothing has changed, so nothing is charged twice',
     ],
   },
 ];
@@ -125,7 +125,7 @@ const ROLE_ROWS: { action: string; allowed: [boolean, boolean, boolean, boolean]
   { action: 'Invite people and change their roles', allowed: [true, true, false, false] },
   { action: 'Set up single sign-on, provisioning and two-step rules; read the audit log', allowed: [true, true, false, false] },
   { action: 'Require single sign-on', allowed: [true, false, false, false] },
-  { action: 'Set the budget and delete the company', allowed: [true, false, false, false] },
+  { action: 'Set the credit limits and delete the company', allowed: [true, false, false, false] },
 ];
 
 const GOOGLE_STEPS = [
@@ -344,7 +344,7 @@ export default function SecurityPage() {
   useSeo({
     title: 'Security',
     description:
-      'How Alaventra protects your data: argon2id passwords, Google sign-in with PKCE, four roles, verified website ownership, isolation per company, a strict CSP and budget caps.',
+      'How Alaventra protects your data: argon2id passwords, Google sign-in with PKCE, four roles, verified website ownership, isolation per company, a strict CSP and credit limits.',
     path: '/security',
   });
   return (

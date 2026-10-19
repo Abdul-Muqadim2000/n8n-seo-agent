@@ -166,16 +166,28 @@ Contract `shared/src/admin.ts`, server `server/src/services/admin/`, endpoints i
   verified before the money was spent; app runs and keyword checks the ledger does not
   cover count from the app's own settled figures; never both for one run. Without the engine (it is not reachable from a laptop) the
   panel still works from the app's runs and says so.
-- **Credits** (the customer-facing unit): a run uses `cost × markup ÷ creditValueUsd` credits (Settings; default $0.10 a credit, ×3),
-  debited once per cost event; admins grant (recording the payment as revenue), adjust and refund. Costs from before the deploy of
-  migration 0014 debit nothing. **Enforcement is off by default** for every company (credits are counted, never block); switch it on
-  per company, or for new companies in Settings (with optional sign-up credits). With it on, a run or keyword check the balance cannot
-  cover is refused with "Your company has no credits left for this run …".
+- **Credits** (the customer-facing unit, see "Credits" below): a run uses `cost × markup ÷ creditValueUsd` credits (Settings; default
+  $0.05 a credit, ×3), debited once per cost event; admins grant (recording the payment as revenue, or fulfilling a pack request),
+  adjust and refund, and set each company's plan credits. Costs from before the deploy of migration 0014 debit nothing. A new company
+  gets 200 welcome credits (90 days) with credits enforced; enforcement can still be switched per company.
 - **People**: create (no password: a 72-hour set-password link to hand over), rename, mark verified, **suspend** (no sign-in by any
   method, sessions ended: "This account is suspended. Contact support."), revoke sessions, add to / remove from companies, delete (refused
   while the person is the only owner of a company with other members). An admin cannot suspend or delete themselves or the last admin.
 - **Billed vs attributed**: set `ANTHROPIC_ADMIN_API_KEY` (an `sk-ant-admin…` key) to read Claude's real bill, and the engine's
   `SEO_DATAFORSEO_LOGIN` / `SEO_DATAFORSEO_PASSWORD` for the live DataForSEO balance; both optional (`.env.example`).
+
+## Credits (2026-10-19)
+Customers never see what their work costs us at the providers: everything is priced in **credits** (list price $0.05; work uses 3× its
+provider cost — internal, never on a customer screen). One balance pays for **autopilot** (a website's schedules, forecast per month)
+and **on-demand** analyses (quoted in whole credits before they start, held while they run, charged what they used and never more;
+a failed run is free). Credits come in lots used soonest-expiring first (packs 12 months, plan credits roll over one month, welcome
+credits 90 days); companies set an on-demand limit, an autopilot limit and "Keep credits for autopilot"; at zero, analyses are refused
+(402) and the guard pauses the websites' schedules, resuming them when credits arrive. Buying is a request the Alaventra team confirms
+and invoices (no card payment yet). The rule book, the numbers, the code locations and the owner's open items: **`docs/CREDITS.md`**.
+UI rule: `web/CONVENTIONS.md` → "Credits, never cost" (`web/src/lib/credits.ts`).
+Endpoints: `GET /api/orgs/:orgId/billing`, `GET …/billing/activity` (+ `.csv`), `PUT …/billing/limits`, `POST` / `DELETE
+…/billing/requests[/:id]`, `GET …/costs` (`creditRate`); admin: `PATCH /api/admin/companies/:id` (`planMonthlyCredits`),
+`POST /api/admin/companies/:id/credits`, `GET /api/admin/credit-requests` (details in `API.md` and `docs/CREDITS.md` §3).
 
 ## Cost figures: one table (B-R3)
 

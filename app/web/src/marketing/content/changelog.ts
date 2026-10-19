@@ -14,6 +14,22 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2026-10-19',
+    title: 'Credits',
+    summary:
+      'Everything Alaventra does is now priced in credits, from one balance per company: the work it runs on its own for each website every week and the analyses you start. Every analysis shows its price before it starts, holds it while it runs and is charged what it really used — never more, and nothing if it fails.',
+    highlights: [
+      'A Credits page in your company settings: balance, what is held by running analyses, how long it will last, this month’s use split between automatic work and analyses you started, the forecast for each website, every lot of credits with its expiry, and the activity with a CSV export',
+      'Every price in the app — forms, settings, the pipeline, ladders and runs — is shown in credits',
+      'A monthly limit for the analyses people start, another for the automatic work, and “Keep credits for autopilot” so a busy week of analyses never pauses a website’s weekly work',
+      'When credits run out, new analyses are refused with the reason and each website’s automatic work pauses; it resumes by itself when credits are added. Owners and admins are told by e-mail when credits run low, run out and when work resumes',
+      'Credits are used soonest-expiring first: packs last 12 months, a plan’s monthly credits roll over for one month, and a new company starts with 200 welcome credits valid for 90 days',
+      'Buy a pack from the Credits page — 500, 2,000, 5,000 or 20,000 credits; the Alaventra team confirms the request and sends the invoice',
+    ],
+    features: [],
+    labels: ['Billing'],
+  },
+  {
     date: '2026-10-18',
     title: 'Ascentra is now Alaventra',
     summary:

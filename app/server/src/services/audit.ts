@@ -78,6 +78,16 @@ export async function auditUser(req: FastifyRequest | null, user: UserRow, e: Au
   }
 }
 
+/**
+ * credits (app/docs/CREDITS.md): the company reads its audit log — a detail that names a provider cost or the platform's dollar guard
+ * (keys ending in Usd / _usd, or naming a budget; every detail of a `company.budget_changed` row) is left out of what it reads and
+ * exports. Older rows carry them (`run.started_via_api` had `estimatedUsd`, `agency.client_created` had `monthlyBudgetUsd`).
+ */
+export function customerAuditDetails(action: string, d: Record<string, unknown> | null | undefined): Record<string, unknown> {
+  if (!d || action === 'company.budget_changed') return {};
+  return Object.fromEntries(Object.entries(d).filter(([k]) => !/usd$/i.test(k) && !/budget/i.test(k)));
+}
+
 export const toAuditView = (r: AuditEventRow): AuditEventView => ({
   id: String(r.id),
   at: r.at.toISOString(),
@@ -93,7 +103,7 @@ export const toAuditView = (r: AuditEventRow): AuditEventView => ({
   targetLabel: r.targetLabel,
   ip: r.ip,
   userAgent: r.userAgent,
-  details: r.details ?? {},
+  details: customerAuditDetails(r.action, r.details),
 });
 
 function filters(orgId: string, q: Omit<AuditQuery, 'limit'>): SQL {

@@ -1,6 +1,6 @@
 // Pure helpers of the platform admin panel (/admin): the period in the URL, money / credit formatting, and the few figures the panel
 // derives itself. No React here, so every rule is unit-tested (test/adminPanel.test.ts).
-import { ADMIN_PERIODS, MODES, creditsFor, formatUsd, type AdminDailyPoint, type PlatformSettings, type AdminModeCost, type AdminPeriod, type AdminRunRow, type CostSplit, type ModeId } from '@seo/shared';
+import { ADMIN_PERIODS, MODES, creditRate, creditsFor, formatUsd, pricePack, type AdminDailyPoint, type CreditPack, type PlatformSettings, type AdminModeCost, type AdminPeriod, type AdminRunRow, type CostSplit, type ModeId } from '@seo/shared';
 
 export const DEFAULT_PERIOD: AdminPeriod = 'month';
 
@@ -36,6 +36,7 @@ export const adminPaths = {
   costs: '/admin/costs',
   activity: '/admin/activity',
   settings: '/admin/settings',
+  creditRequests: '/admin/credit-requests',
 };
 
 const MINUS = '−';
@@ -188,3 +189,47 @@ export function cumulative(daily: AdminDailyPoint[]): AdminDailyPoint[] {
     return { date: p.date, claudeUsd: r4(c), dataforseoUsd: r4(d), revenueUsd: r4(r), runs: n };
   });
 }
+
+// ---------- credits (2026-10-19, app/docs/CREDITS.md) ----------
+/** GET /api/admin/companies/:id/absorbed (server/src/services/admin/reports.ts `AdminAbsorbed`) */
+export interface AdminAbsorbed {
+  period: AdminPeriod;
+  credits: number;
+  listUsd: number;
+  costUsd: number;
+  runs: number;
+  creditValueUsd: number;
+  markup: number;
+}
+
+/** A pack's price at these settings and the margin it earns: markup × (1 − discount) times the provider cost. */
+export function packEconomics(p: CreditPack, s: Pick<PlatformSettings, 'creditValueUsd' | 'markup'>) {
+  const priced = pricePack(p, s.creditValueUsd);
+  const discount = Math.min(50, Math.max(0, Number(p.discountPct) || 0));
+  const multiple = Math.round(s.markup * (1 - discount / 100) * 100) / 100;
+  return { priceUsd: priced.priceUsd, perCreditUsd: priced.perCreditUsd, multiple, belowMarkup: multiple < s.markup - 1e-9 };
+}
+
+/** "2.7×" — a margin multiple without trailing zeros */
+export function multipleLabel(m: number): string {
+  return `${Number.isFinite(m) ? Number(m.toFixed(2)) : '–'}×`;
+}
+
+/** "60 credits per $1 of provider cost; a credit sells for $0.05 and costs us $0.0167" */
+export function rateSentence(s: Pick<PlatformSettings, 'creditValueUsd' | 'markup'>): string {
+  const rate = creditRate(s);
+  const per = Number(rate.toFixed(2)).toLocaleString('en-US');
+  return `${per} credits per $1 of provider cost; a credit sells for ${money(s.creditValueUsd)} and costs us ${money(s.markup > 0 ? s.creditValueUsd / s.markup : 0)}`;
+}
+
+/** The date the next plan credits arrive: the 1st of next month (UTC). */
+export function nextFirstOfMonth(now: Date = new Date()): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+}
+
+/** What a grant's expiry choice sends (adminCreditSchema.expires): 'pack', 'never' or a number of days. */
+export type ExpiryChoice = 'pack' | 'never' | 'days';
+export function expiresValue(choice: ExpiryChoice, days: number): 'pack' | 'never' | number {
+  return choice === 'days' ? (Number.isFinite(days) ? Math.round(days) : Number.NaN) : choice;
+}
+

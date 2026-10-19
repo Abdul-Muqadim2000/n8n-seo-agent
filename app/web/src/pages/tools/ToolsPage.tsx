@@ -1,9 +1,10 @@
 import { useEngineCal } from '@/lib/engine-cal';
 import { PRICES, runCost, runMinutes } from '@/lib/prices';
+import { quoteLabel } from '@/lib/credits';
 import type { ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { ArrowRight, CheckCircle2, Clock, Coins, Compass, Globe, History, Lock, PackageCheck, PenLine, Plus, Radar, Settings, Sparkles, Telescope, TriangleAlert, Wrench } from 'lucide-react';
-import { formatUsd, MODE_CATEGORIES, MODES, type ModeId, type ModeInfo, type Site } from '@seo/shared';
+import { MODE_CATEGORIES, MODES, type ModeId, type ModeInfo, type Site } from '@seo/shared';
 import { lastSite, useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { cn } from '@/lib/utils';
@@ -16,13 +17,13 @@ import { PageHeader } from '@/components/ui/misc';
 import { CountUp, HeroLink, HeroNextStep, HeroStat, IconTile, Stagger, SummaryHero } from '@/components/insight';
 import { CATEGORY_ICON, ModeGlyph } from '@/components/reports/meta';
 
-/** Typical cost per mode as a range where the options change it. Every figure comes from the shared cost table (R99). */
+/** Typical price per mode in credits, as a range where the options change it. Every figure comes from the shared cost table (R99). */
 const COST_TEXT: Partial<Record<ModeId, () => string>> = {
   keyword: () => `${PRICES.report()} report · ${PRICES.page()} with the page`,
   discover: () => `from ${PRICES.research()}`,
   audit: () => `${PRICES.auditTechnical()} · full report ${PRICES.auditFull()}`,
   ladder: () => `from ${PRICES.ladderStart()} (plan + 1 page)`,
-  track: () => 'setup is free; the weekly monitors are priced in your tracking settings',
+  track: () => 'setup is free; the weekly monitors show their credits in your tracking settings',
 };
 const SETTINGS_TAB: Partial<Record<ModeId, string>> = { profile: 'settings/profile', track: 'settings/tracking' };
 /**
@@ -76,7 +77,7 @@ export default function ToolsPage() {
       <PageHeader
         icon={<Wrench />}
         title="Run an analysis"
-        description="Pick the website, then a tool. Each run gets its own page with live progress, the reports and every file; costs count against your company's monthly budget."
+        description="Pick the website, then a tool. Each run gets its own page with live progress, the reports and every file; each one uses credits from your company's balance."
         actions={
           <ButtonLink to={paths.runs(org.id)} variant="secondary" size="sm" icon={<History className="size-4" />}>
             Your runs
@@ -257,7 +258,7 @@ function ToolCard({ info, site, recommended }: { info: ModeInfo; site: Site | nu
   const tab = SETTINGS_TAB[info.id];
   const verified = !!site?.verifiedAt;
   const usd = runCost(info.id);   // D-2: the form's own figure, not the shipped MODES[].costUsd
-  const cost = COST_TEXT[info.id]?.() ?? (usd > 0 ? `about ${formatUsd(usd)}` : 'Free');
+  const cost = COST_TEXT[info.id]?.() ?? (usd > 0 ? `about ${quoteLabel(usd)}` : 'Free');   // credits (app/docs/CREDITS.md): the quote
 
   let action;
   let opens = false; // the action is a link (styling only: hover lift, glyph highlight)

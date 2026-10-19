@@ -5,7 +5,7 @@ import {
   CalendarClock,
   ChartLine,
   ChartNoAxesColumnIncreasing,
-  CircleDollarSign,
+  Coins,
   Inbox,
   Pause,
   Plug,
@@ -117,10 +117,10 @@ const MODE_POINTS = [
 ];
 
 const COST_POINTS = [
-  { icon: Calculator, title: 'An estimate before every run', body: 'Every form shows the run’s estimated cost and time before you start it.' },
-  { icon: Wallet, title: 'Budgets checked first', body: 'Budgets are checked before any paid work begins, and owners set each company’s spend cap.' },
-  { icon: RefreshCcw, title: 'Nothing paid for twice', body: 'Results that cannot have changed are reused. Audits are skipped when the sitemap has not changed.' },
-  { icon: CircleDollarSign, title: 'Free where it can be', body: 'A free-sources mode for backlinks costs nothing to run, and the daily AI Pulse is optional per website.' },
+  { icon: Calculator, title: 'The price before every analysis', body: 'Every form shows the analysis’s price in credits and its time before you start it — and it is never charged more.' },
+  { icon: Wallet, title: 'Limits checked first', body: 'Credits and limits are checked before any work begins, and owners set each company’s monthly limits.' },
+  { icon: RefreshCcw, title: 'Nothing charged twice', body: 'Results that cannot have changed are reused. Audits are skipped when the sitemap has not changed.' },
+  { icon: Coins, title: 'Free where it can be', body: 'A free-sources mode for backlinks uses no credits, and the daily AI Pulse is optional per website.' },
 ];
 
 function Hero() {
@@ -272,7 +272,7 @@ function Week() {
         <SectionHeading
           eyebrow="A week with Alaventra"
           title="The schedule that runs while you work."
-          lead="A daily check of your key pages and of AI answers, a Monday of checks, writing and outreach, and a monthly audit. Paid work that would only repeat an unchanged result is skipped, and a run that was missed still happens — marked as late."
+          lead="A daily check of your key pages and of AI answers, a Monday of checks, writing and outreach, and a monthly audit. Work that would only repeat an unchanged result is skipped, and a run that was missed still happens — marked as late."
         />
         <WeekSchedule className="mt-14 sm:mt-16" />
       </Section>
@@ -327,9 +327,9 @@ function Cost() {
         </Reveal>
         <div>
           <SectionHeading
-            eyebrow="Cost control"
-            title="You see the cost before anything runs."
-            lead="Every run that costs money is estimated first, checked against your budget and never paid for twice when its result cannot have changed."
+            eyebrow="Credits"
+            title="You see the price before anything runs."
+            lead="Every analysis is priced in credits first, checked against your company’s credits and limits, never charged more than that price and never charged twice when its result cannot have changed."
           />
           <div className="mt-12">
             <PointList items={COST_POINTS} />
@@ -344,7 +344,7 @@ export default function HowItWorksPage() {
   useSeo({
     title: 'How it works',
     description:
-      'How Alaventra runs your SEO: connect and verify your site, choose keywords, climb with ladders and the content engine, publish and verify, then track and learn on a fixed weekly schedule — with Auto or Manual for every step and the cost shown first.',
+      'How Alaventra runs your SEO: connect and verify your site, choose keywords, climb with ladders and the content engine, publish and verify, then track and learn on a fixed weekly schedule — with Auto or Manual for every step and the price in credits shown first.',
     path: '/how-it-works',
   });
   return (

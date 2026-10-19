@@ -12,7 +12,7 @@ import { Container } from './Section';
 export const onInkOutline = 'border border-line-on-ink text-on-ink hover:bg-on-ink/10 hover:text-on-ink';
 
 // what removes the risk of saying yes, under the buttons (same promises as the home hero)
-const CTA_FACTS = ['Free to set up', 'First site check on day one', 'Cost shown before every run', 'Nothing goes live without your OK'];
+const CTA_FACTS = ['Free to set up', 'First site check on day one', 'Price shown before every run', 'Nothing goes live without your OK'];
 
 /**
  * Closing ink band, the bookend of the home hero: hairline grid, centred headline, primary + secondary CTA, the promises that remove
@@ -20,7 +20,7 @@ const CTA_FACTS = ['Free to set up', 'First site check on day one', 'Cost shown 
  */
 export function CtaBand({
   title = 'Your product is ready. Let’s get it found.',
-  lead = 'Connect your website in minutes and get your first site check today. You see the cost of every run before it starts, and nothing goes live without your OK.',
+  lead = 'Connect your website in minutes and get your first site check today. You see the price of every run in credits before it starts, and nothing goes live without your OK.',
   primary = { label: 'Start free', to: '/signup' },
   secondary = { label: 'Book a demo', to: '/contact?topic=sales' },
   facts = CTA_FACTS,

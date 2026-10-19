@@ -6,7 +6,6 @@ import {
   idempotencyKeyOk,
   apiKeyState,
   bearerKey,
-  costBasisV1,
   decodeCursor,
   encodeCursor,
   filterFindings,
@@ -81,9 +80,6 @@ describe('B5-11 pages and cursors', () => {
     expect(p1.items).toEqual([1, 2]);
     const p3 = pageOf(all, decodeCursor(pageOf(all, decodeCursor(p1.nextCursor), 2).nextCursor), 2);
     expect(p3).toEqual({ items: [5], nextCursor: null });
-  });
-  it('cost basis words', () => {
-    expect([costBasisV1('measured'), costBasisV1('partial'), costBasisV1('engine'), costBasisV1('app')]).toEqual(['measured', 'measured', 'engine_estimate', 'app_estimate']);
   });
 });
 

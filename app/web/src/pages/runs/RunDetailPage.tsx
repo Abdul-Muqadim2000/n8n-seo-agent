@@ -1,7 +1,7 @@
 import { useEffect, useMemo, type ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { ArrowLeft, Check, CheckCircle2, CircleDot, ClipboardList, Clock, Coins, ExternalLink as ExternalIcon, FileText, Flag, GitCommitVertical, Inbox, Loader2, Play, RotateCcw, Send, XCircle } from 'lucide-react';
-import { COST_SOURCE_LABEL, formatUsd, MODES, runCostEstimate, type Report, type Run } from '@seo/shared';
+import { formatCredits, MODES, type Report, type Run, type RunCredits } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { useReport, useRun } from '@/lib/queries';
@@ -15,7 +15,21 @@ import { KeyValue, PageHeader } from '@/components/ui/misc';
 import { ReportView } from '@/components/reports/ReportView';
 import { ReportSummaryLine } from '@/components/reports/ReportSummaryLine';
 import { ModeIcon, StageGlyph, stageLabel } from '@/components/reports/meta';
-import { fmtMinutes, inputRows, isActive, minutesBetween, retryPrefill, RunChip, RunProgress, useNow } from '@/components/reports/run';
+import { fmtMinutes, inputRows, isActive, minutesBetween, retryPrefill, RUN_CREDIT_STATE_LABEL, RUN_CREDITS_TIP, runCreditsFigure, RunChip, RunProgress, useNow } from '@/components/reports/run';
+
+/** "Quoted 12 credits · charged 9 credits", "Not charged: it failed", "Quoted 12 credits · held while it runs", "Free" */
+function creditsLine(c: RunCredits): string {
+  if (c.state === 'not_charged') return 'Not charged: it failed';
+  if (c.state === 'free') return 'Free';
+  const quoted = c.quoted != null ? `Quoted ${formatCredits(c.quoted)}` : '';
+  const rest =
+    c.state === 'charged' && c.charged != null
+      ? `charged ${formatCredits(c.charged)}${c.capped ? ' (capped at the quote)' : ''}`
+      : c.state === 'held'
+        ? 'held while it runs'
+        : 'charge not settled yet';
+  return [quoted, rest].filter(Boolean).join(' · ');
+}
 
 const NOTICE_STAGES = new Set(['case_study_started', 'ai_visibility_started', 'backlinks_started', 'site_tracker_setup']);
 
@@ -88,7 +102,6 @@ export default function RunDetailPage() {
       { replace: true },
     );
   const selected = reports.find((r) => r.id === selectedId) ?? null;
-  const cost = runCostEstimate(run);
   const duration = minutesBetween(run.createdAt, run.completedAt ?? (active ? now : null));
 
   return (
@@ -198,8 +211,8 @@ export default function RunDetailPage() {
             <CardTitle icon={<ClipboardList />} title="Details" />
             <div className="space-y-5 px-5 pt-3 pb-5">
               <div className="flex flex-wrap gap-1.5">
-                <RunChip icon={<Coins />} title={cost.basis}>
-                  {formatUsd(cost.usd, cost.source === 'measured' || cost.source === 'partial' ? 3 : 2)} {COST_SOURCE_LABEL[cost.source]}
+                <RunChip icon={<Coins />} title={RUN_CREDITS_TIP}>
+                  {formatCredits(runCreditsFigure(run.credits))} {RUN_CREDIT_STATE_LABEL[run.credits.state]}
                 </RunChip>
                 <RunChip icon={<Clock />}>{active ? `about ${run.etaMinutes} min` : fmtMinutes(duration)}</RunChip>
                 <RunChip icon={<FileText />} tone={reports.length ? 'accent' : 'neutral'}>
@@ -218,13 +231,12 @@ export default function RunDetailPage() {
                       'None (research only)'
                     ),
                   },
-                  // B-R3: what it cost beats what the engine reserved beats what we guessed, and the label says which one this is
+                  // credits (app/docs/CREDITS.md): the quote, what was charged, and the rule behind them — never a provider cost
                   {
-                    label: cost.source === 'measured' ? 'Cost' : cost.source === 'partial' ? 'Cost so far (search data only)' : 'Cost estimate',
+                    label: 'Credits',
                     value: (
                       <span className="tabular">
-                        {formatUsd(cost.usd, cost.source === 'measured' || cost.source === 'partial' ? 3 : 2)}{' '}
-                        <InfoTip label="Where this figure comes from">{cost.basis}</InfoTip>
+                        {creditsLine(run.credits)} <InfoTip label="How credits are charged">{RUN_CREDITS_TIP}</InfoTip>
                       </span>
                     ),
                   },

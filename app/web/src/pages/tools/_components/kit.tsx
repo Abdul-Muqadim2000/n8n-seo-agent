@@ -8,7 +8,7 @@ import {
   cleanDomain,
   COUNTRIES,
   domainOk,
-  formatUsd,
+  formatCredits,
   GOALS,
   MODES,
   NOTICE_MODES,
@@ -20,13 +20,13 @@ import {
   type NoticeInput,
   type PipelineNotice,
   type Site,
-  type Usage,
 } from '@seo/shared';
 import { ApiRequestError, errorMessage } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
-import { useProviders, useSiteData, useUsage } from '@/lib/queries';
+import { useBilling, useProviders, useSiteData } from '@/lib/queries';
 import { paths } from '@/lib/paths';
-import { quoteLabel } from '@/lib/credits';
+import { quoteCredits, quoteLabel } from '@/lib/credits';
+import { CreditRefusal, isCreditRefusal } from '@/components/site/CreditRefusal';
 import { useStartRun } from '@/lib/queries';
 import { cn, fmtAgo } from '@/lib/utils';
 import { StatusBadge } from '@/components/ui/badge';
@@ -137,7 +137,7 @@ export function useRunSubmit<TIn extends FieldValues, TOut>(form: UseFormReturn<
 }
 
 export function SubmitError({ error, siteId }: { error: unknown; siteId?: string | null }) {
-  const { org, can } = useOrgCtx();
+  const { org } = useOrgCtx();
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (error) ref.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -145,30 +145,9 @@ export function SubmitError({ error, siteId }: { error: unknown; siteId?: string
   if (!error) return null;
   let body: ReactNode = <Callout tone="critical" title="The run did not start">{errorMessage(error)}</Callout>;
   if (error instanceof ApiRequestError) {
-    // 2026-10-18: a company with credit enforcement on and too few credits (the server's text says how many it needs and has)
-    if (error.status === 402 && error.code === 'credits')
-      body = (
-        <Callout tone="critical" title="Not enough credits for this run">
-          {error.message}
-        </Callout>
-      );
-    else if (error.status === 402)
-      body = (
-        <Callout
-          tone="critical"
-          title="This run would go over the monthly budget"
-          action={
-            can('owner') && (
-              <ButtonLink to={paths.settings(org.id, 'usage')} variant="secondary" size="sm">
-                Raise the budget
-              </ButtonLink>
-            )
-          }
-        >
-          {error.message}
-          {!can('owner') && ' Ask a company owner to raise the budget.'}
-        </Callout>
-      );
+    // credits (app/docs/CREDITS.md): a 402 is a credit refusal (not enough credits, kept for autopilot, over the on-demand limit) or
+    // the platform's usage limit; the server's sentence is already in credits
+    if (isCreditRefusal(error)) body = <CreditRefusal orgId={org.id} error={error} />;
     else if (error.status === 403 && /e-?mail/i.test(error.message))
       body = (
         <Callout
@@ -347,13 +326,13 @@ export function PipelineNotices({ notices, acked, onToggle, onUsePlan, siteId }:
   );
 }
 
-/** "about $1.20" / "Free"; counts between amounts (never through "Free") when the options change the estimate. */
+/** "12 credits" (the quote) / "Free"; counts between amounts (never through "Free") when the options change the estimate. */
 function CostValue({ usd }: { usd: number }) {
   if (usd <= 0) return <>{costLabel(usd)}</>;
   return <CountUp value={usd} format={(n) => costLabel(Math.max(0.01, n))} />;
 }
 
-/** The blue intro above the form: what the run delivers, the extras chosen below, the cost estimate and the time. */
+/** The blue intro above the form: what the run delivers, the extras chosen below, its price in credits and the time. */
 function ToolIntro({ mode, cost, eta, extras }: { mode: ModeId; cost: number; eta: number; extras: string[] }) {
   const info = MODES[mode];
   return (
@@ -372,7 +351,7 @@ function ToolIntro({ mode, cost, eta, extras }: { mode: ModeId; cost: number; et
         <ul className="flex flex-wrap items-center gap-2" aria-label="This run">
           <li className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-on-ink px-3 text-accent shadow-card dark:text-ink-surface">
             <Coins className="size-4 shrink-0" aria-hidden />
-            <span className="sr-only">Estimated cost: </span>
+            <span className="sr-only">Price: </span>
             <span className="font-display text-[15px] font-semibold tracking-[-0.01em]">
               <CostValue usd={cost} />
             </span>
@@ -395,64 +374,68 @@ function ToolIntro({ mode, cost, eta, extras }: { mode: ModeId; cost: number; et
 }
 
 /**
- * This month's budget with this run on top: used (solid blue), this run (light blue), the rest; a warning line when the run
- * would go over it (the server refuses such runs; this only says so in advance).
+ * credits (app/docs/CREDITS.md): what on-demand analyses may use now (all rules applied: balance, credits kept for autopilot, the
+ * company's on-demand limit), this run's quote on top, and what is left after it — a warning line when the quote is more than that
+ * (the server refuses such runs; this only says so in advance). A company whose credits are not enforced and that set no on-demand
+ * limit has nothing to meter: it sees what it used this month.
  */
-function BudgetMeter({ usage, cost }: { usage: Usage | undefined; cost: number }) {
-  const { org, can } = useOrgCtx();
-  if (!usage || usage.budgetUsd <= 0) return null;
-  const budget = usage.budgetUsd;
-  const used = usage.estimatedUsd;
-  const usedPct = Math.min(100, (used / budget) * 100);
-  const runPct = Math.max(0, Math.min(100 - usedPct, (cost / budget) * 100));
-  const over = cost > 0 && used + cost > budget;
-  const left = Math.max(0, budget - used - cost);
+function CreditsMeter({ cost }: { cost: number }) {
+  const { org } = useOrgCtx();
+  const billing = useBilling(org.id);
+  const b = billing.data;
+  if (!b) return null;
+  const used = b.month.autopilotUsed + b.month.onDemandUsed;
+  if (!b.enforced && b.limits.onDemandMonthly == null)
+    return (
+      <p className="mt-5 rounded-lg border border-line bg-surface-2/40 p-3.5 text-xs text-ink-3">
+        Credits used this month: <span className="tabular font-medium text-ink-2">{formatCredits(used)}</span>
+      </p>
+    );
+  const quote = quoteCredits(cost);
+  const avail = Math.max(0, b.onDemandAvailable);
+  const over = quote > avail;
+  const left = Math.max(0, avail - quote);
+  const runPct = avail > 0 ? Math.min(100, (quote / avail) * 100) : quote > 0 ? 100 : 0;
+  const leftPct = Math.max(0, 100 - runPct);
   return (
     <div className="mt-5 rounded-lg border border-line bg-surface-2/40 p-3.5">
       <div className="flex items-baseline justify-between gap-3 text-xs">
         <span className="inline-flex items-center gap-0.5 font-medium text-ink-2">
-          Monthly budget
-          <InfoTip label="About the monthly budget">Runs that would go over the budget are refused. Weekly monitoring is counted separately.</InfoTip>
+          Credits
+          <InfoTip label="About credits for analyses">
+            An analysis holds its price while it runs and is charged what it really uses, never more; a run that fails is not charged.
+            {b.reservedForAutopilot > 0 ? ` ${formatCredits(b.reservedForAutopilot)} are kept for your websites' autopilot this month and are not counted here.` : ''}
+          </InfoTip>
         </span>
-        <span className="tabular text-ink-3">
-          {formatUsd(used)} of {formatUsd(budget)} used
-        </span>
+        <span className="tabular text-ink-3">{formatCredits(avail)} available for analyses</span>
       </div>
       <div
         className="mt-2 flex h-2 w-full gap-0.5 overflow-hidden rounded-full bg-surface-3"
         role="meter"
-        aria-label="Monthly budget used, with this run"
+        aria-label="Credits available for analyses, with this run"
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-valuenow={Math.round(usedPct + runPct)}
-        aria-valuetext={`${formatUsd(used)} used, this run ${costLabel(cost)}, of ${formatUsd(budget)}`}
+        aria-valuenow={Math.round(runPct)}
+        aria-valuetext={`${formatCredits(avail)} available, this one about ${formatCredits(quote)}, ${over ? 'more than is available' : `${formatCredits(left)} left after it`}`}
       >
-        {usedPct > 0 && <span className="h-full rounded-l-full bg-accent transition-[width] duration-500 ease-brand" style={{ width: `${usedPct}%` }} />}
-        {runPct > 0 && <span className={cn('h-full bg-accent/40 dark:bg-accent-text/55 transition-[width] duration-500 ease-brand', usedPct <= 0 && 'rounded-l-full')} style={{ width: `${runPct}%` }} />}
+        {runPct > 0 && <span className={cn('h-full rounded-l-full transition-[width] duration-500 ease-brand', over ? 'bg-warning' : 'bg-accent/40 dark:bg-accent-text/55')} style={{ width: `${runPct}%` }} />}
+        {leftPct > 0 && <span className={cn('h-full bg-accent transition-[width] duration-500 ease-brand', runPct <= 0 && 'rounded-l-full')} style={{ width: `${leftPct}%` }} />}
       </div>
       <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-3" aria-hidden>
         <li className="inline-flex items-center gap-1.5">
-          <span className="size-2.5 rounded-[3px] bg-accent" />
-          Used
-        </li>
-        <li className="inline-flex items-center gap-1.5">
           <span className="size-2.5 rounded-[3px] bg-accent/40 dark:bg-accent-text/55" />
-          This run
+          This one: about {formatCredits(quote)}
         </li>
-        <li className="ml-auto tabular">{over ? 'Over budget' : `${formatUsd(left)} left after it`}</li>
+        <li className="ml-auto tabular">{over ? 'Not enough' : `${formatCredits(left)} left after it`}</li>
       </ul>
       {over && (
         <p className="mt-2.5 flex items-start gap-1.5 text-xs leading-snug text-warning-text">
           <AlertTriangle className="mt-px size-3.5 shrink-0" aria-hidden />
           <span>
-            This run would go over the monthly budget.{' '}
-            {can('owner') ? (
-              <Link to={paths.settings(org.id, 'usage')} className="font-medium underline underline-offset-2">
-                Raise the budget
-              </Link>
-            ) : (
-              'Ask a company owner to raise the budget.'
-            )}
+            This run needs more credits than are available for analyses.{' '}
+            <Link to={paths.settings(org.id, 'credits')} className="font-medium underline underline-offset-2">
+              Open Credits
+            </Link>
           </span>
         </p>
       )}
@@ -464,7 +447,6 @@ function BudgetMeter({ usage, cost }: { usage: Usage | undefined; cost: number }
 export function ToolShell({ mode, site, cost, eta, emailCopy, extras = [], onSubmit, pending, error, submitLabel = 'Start the run', blocked: blockedBy, values = {}, onUsePlan, children }: ShellProps) {
   const { org, can, me } = useOrgCtx();
   const providers = useProviders();
-  const usage = useUsage(org.id);
   const showEmail = emailCopy && !!providers.data?.engineEmails;
   const readOnly = !can('member');
   const pipe = usePipelineNotices(mode, site, values, cost);
@@ -500,11 +482,11 @@ export function ToolShell({ mode, site, cost, eta, emailCopy, extras = [], onSub
               </span>
             ))}
           </SummaryRow>
-          <SummaryRow icon={<Coins />} label="Estimated cost">
+          <SummaryRow icon={<Coins />} label="Price">
             <span className="font-display text-xl font-semibold tracking-[-0.01em] text-ink">
               <CostValue usd={cost} />
             </span>
-            {cost > 0 && <span className="block text-xs text-ink-3">Counted against your company's monthly budget</span>}
+            {cost > 0 && <span className="block text-xs text-ink-3">Held while it runs; charged what it uses, never more</span>}
           </SummaryRow>
           <SummaryRow icon={<Clock />} label="Time">
             <span className="text-ink-2">{etaLabel(eta)}</span>
@@ -526,7 +508,7 @@ export function ToolShell({ mode, site, cost, eta, emailCopy, extras = [], onSub
             </SummaryRow>
           )}
         </dl>
-        <BudgetMeter usage={usage.data} cost={cost} />
+        <CreditsMeter cost={cost} />
         {withButton && (
           <Button type="submit" size="lg" className="mt-5 w-full" loading={pending} disabled={disabled} icon={<Play className="size-4" />}>
             {submitLabel}

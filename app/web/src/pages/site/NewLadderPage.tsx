@@ -1,5 +1,7 @@
 import { useEngineCal } from '@/lib/engine-cal';
-import { PRICES } from '@/lib/prices';
+import { PRICES, runCost } from '@/lib/prices';
+import { creditsLabel, formatCredits, quoteCredits, quoteLabel } from '@/lib/credits';
+import { CreditRefusal, isCreditRefusal } from '@/components/site/CreditRefusal';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
@@ -7,8 +9,6 @@ import { Activity, ArrowLeft, ArrowRight, Building2, CalendarClock, CheckCircle2
 import {
   chooseForMe,
   COUNTRIES,
-  estimateRunCost,
-  formatUsd,
   GOALS,
   ladderOverlapsOf,
   MONITOR_COSTS,
@@ -35,7 +35,7 @@ import { isCountry } from '@/components/reports/meta';
 import { ApiRequestError, errorMessage } from '@/lib/api';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
-import { useAssessKeyword, useRecommendedKeywords, useSiteData, useStartRun } from '@/lib/queries';
+import { useAssessKeyword, useBilling, useRecommendedKeywords, useSiteData, useStartRun } from '@/lib/queries';
 import { fmtDate } from '@/lib/utils';
 import { IconTile } from '@/components/insight';
 import { PipelineNotices, SubmitError, usePipelineNotices, validGoal, validTone } from '@/pages/tools/_components/kit';
@@ -44,7 +44,7 @@ import { WarnLine } from './_components/pipeline/home';
 import { fromCheck, fromRecommended, KeywordCard, Stepper, type ChosenKeyword } from './_components/pipeline/new-ladder';
 
 // "New keyword ladder" (PIPELINE_FEATURE_SPEC.md §5.1): 1 choose the main keyword (recommended by the website's keyword research, or
-// one the person has in mind, checked for about $0.05), 2 review the plan (plan type, the checks, Auto / Manual, priority, pages to
+// one the person has in mind, checked for a few credits), 2 review the plan (plan type, the checks, Auto / Manual, priority, pages to
 // write now, the business details used), 3 start the ladder run. The plan arrives on the Pipeline page in about 5-8 minutes.
 
 const DEFAULT_AUTOMATION: SiteAutomation = { defaultMode: 'auto', opportunities: 'auto', autoStartLadders: false, maxActiveLadders: 2, maxWaiting: 3 };
@@ -204,7 +204,7 @@ function Recommended({ recommended, preset, onChoose, onCheckOwn }: { recommende
         <EmptyState
           icon={<Search className="size-5" />}
           title={r?.reportId ? 'Your keyword research found nothing to suggest' : `No keyword suggestions for ${site.domain} yet`}
-          description={`Keyword research finds the searches your buyers use and rates each one for your website: easy, reachable or hard. It takes about 10 minutes and costs about ${PRICES.research()}. Or check a keyword you already have in mind.`}
+          description={`Keyword research finds the searches your buyers use and rates each one for your website: easy, reachable or hard. It takes about 10 minutes and uses about ${PRICES.research()}. Or check a keyword you already have in mind.`}
           action={
             <>
               <FindKeywordsLink variant="primary" />
@@ -228,7 +228,7 @@ function Recommended({ recommended, preset, onChoose, onCheckOwn }: { recommende
     <div className="space-y-4">
       {r.stale && (
         <Callout tone="warning" title="These suggestions are getting old" action={<FindKeywordsLink label="Find fresh keywords" />}>
-          They come from your keyword research of {fmtDate(r.receivedAt)}. Searches and your website have changed since; fresh research costs about {PRICES.research()}.
+          They come from your keyword research of {fmtDate(r.receivedAt)}. Searches and your website have changed since; fresh research uses about {PRICES.research()}.
         </Callout>
       )}
       <div className="flex flex-col gap-3 rounded-xl border border-accent/30 bg-accent-soft/50 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -354,7 +354,7 @@ function CheckPanel({ initialKeyword, initialCountry, ladders, onChoose }: { ini
         <p className="mt-3 flex items-start gap-1.5 text-[13px] leading-snug text-ink-3">
           <Coins className="mt-0.5 size-3.5 shrink-0" aria-hidden />
           <span>
-            A check costs <span className="font-medium text-ink-2">about {PRICES.check()}</span> (counted in your monthly budget) and takes up to 20 seconds. A keyword you checked in the last 7 days is shown again for
+            A check uses <span className="font-medium text-ink-2">about {PRICES.check()}</span> from your company's balance and takes up to 20 seconds. A keyword you checked in the last 7 days is shown again for
             free.
           </span>
         </p>
@@ -373,30 +373,9 @@ function CheckPanel({ initialKeyword, initialCountry, ladders, onChoose }: { ini
 }
 
 function CheckError({ error }: { error: unknown }) {
-  const { org, can } = useOrgCtx();
-  if (error instanceof ApiRequestError && error.status === 402 && error.code === 'credits')
-    return (
-      <Callout tone="critical" title="Not enough credits for this check">
-        {error.message}
-      </Callout>
-    );
-  if (error instanceof ApiRequestError && error.status === 402)
-    return (
-      <Callout
-        tone="critical"
-        title="This check would go over the monthly budget"
-        action={
-          can('owner') && (
-            <ButtonLink to={paths.settings(org.id, 'usage')} variant="secondary" size="sm">
-              Raise the budget
-            </ButtonLink>
-          )
-        }
-      >
-        {error.message}
-        {!can('owner') && ' Ask a company owner to raise the budget.'}
-      </Callout>
-    );
+  const { org } = useOrgCtx();
+  // credits (app/docs/CREDITS.md): a 402 names the rule that refused the check; the server's sentence is in credits
+  if (error instanceof ApiRequestError && isCreditRefusal(error)) return <CreditRefusal orgId={org.id} error={error} />;
   if (error instanceof ApiRequestError && (error.status === 429 || error.status === 409))
     return (
       <Callout tone="warning" title={error.status === 409 ? 'Already being checked' : 'No more checks today'}>
@@ -444,7 +423,7 @@ function CheckResult({ check, ladders, onChoose, onCheck }: { check: KeywordChec
         primary
         footer={
           <p className="mt-3 text-xs text-ink-3">
-            {check.cached ? `Checked on ${fmtDate(check.createdAt)}: shown again for free.` : `Checked just now (${formatUsd(check.costUsd)}).`}
+            {check.cached ? `Checked on ${fmtDate(check.createdAt)}: shown again for free.` : `Checked just now (${creditsLabel(check.costUsd)}).`}
             {r.reach != null && ` Your website already wins searches up to difficulty ${r.reach}.`}
             {r.fit === 2 ? ' On your topic.' : r.fit === 1 ? ' Related to your business.' : r.fit == null ? ' The topic check was not available this time.' : ''}
           </p>
@@ -473,7 +452,7 @@ function CheckResult({ check, ladders, onChoose, onCheck }: { check: KeywordChec
               );
             })}
           </ul>
-          <p className="mt-2 text-xs text-ink-3">Each check costs about {PRICES.check()}.</p>
+          <p className="mt-2 text-xs text-ink-3">Each check uses about {PRICES.check()}.</p>
         </section>
       )}
     </div>
@@ -482,7 +461,7 @@ function CheckResult({ check, ladders, onChoose, onCheck }: { check: KeywordChec
 
 // ---------------- step 2: review ----------------
 
-/** about how many pages a plan type tracks (one live Google check each every Monday, about $0.015) */
+/** about how many pages a plan type tracks (one live Google check each every Monday; RANK_CHECK_USD is its cost, shown in credits) */
 const PAGES_OF: Record<string, number> = { direct: 4, short: 6, full: 12 };
 const RANK_CHECK_USD = 0.015;
 
@@ -523,18 +502,22 @@ function ReviewStep({
   const { org, can } = useOrgCtx();
   const { site } = useSiteCtx();
   const admin = can('admin');
-  const cost = estimateRunCost('ladder', { pagesNow: choices.pagesNow });
+  const cost = runCost('ladder', { pagesNow: choices.pagesNow });   // the engine's calibrated figure, as the server quotes it
   const notices = usePipelineNotices('ladder', site, { keyword: chosen.keyword }, cost);
   const automation = data?.automation ?? DEFAULT_AUTOMATION;
   const mode = choices.mode ?? automation.defaultMode;
   const cards = data?.ladderCards ?? [];
   const active = cards.filter((c) => c.mode === 'auto' && !['paused', 'won', 'queued'].includes(c.status) && c.counts.planned > 0).length;
-  const spent = data?.summary.spendThisMonthUsd ?? null;
-  const budget = data?.summary.budgetUsd ?? org.monthlyBudgetUsd;
-  const over = spent != null && spent + cost > budget;
+  // credits (app/docs/CREDITS.md): the quote against what on-demand analyses may use now (only when the company is metered)
+  const billing = useBilling(org.id);
+  const bill = billing.data;
+  const metered = !!bill && (bill.enforced || bill.limits.onDemandMonthly != null);
+  const available = bill ? Math.max(0, bill.onDemandAvailable) : null;
+  const quote = quoteCredits(cost);
+  const over = metered && available != null && quote > available;
   const plan = chosen.planType && chosen.planType !== 'none' ? chosen.planType : null;
-  const monthly = Math.round((PAGES_OF[plan ?? 'short'] ?? 6) * RANK_CHECK_USD * MONITOR_COSTS.weeksPerMonth * 100) / 100;
-  const blocked = notices.unconfirmed.length ? 'Tick the box in the warning above to continue.' : over ? 'This would go over the monthly budget.' : null;
+  const monthly = (PAGES_OF[plan ?? 'short'] ?? 6) * RANK_CHECK_USD * MONITOR_COSTS.weeksPerMonth;   // a cost figure, shown with creditsLabel
+  const blocked = notices.unconfirmed.length ? 'Tick the box in the warning above to continue.' : over ? 'Not enough credits for this now.' : null;
   const goal = GOALS.find((g) => g.value === site.goal)?.label ?? site.goal;
   const nav = (
     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -601,20 +584,18 @@ function ReviewStep({
           {over ? (
             <Callout
               tone="critical"
-              title="This would go over your monthly budget"
+              title="Not enough credits"
               action={
-                can('owner') && (
-                  <ButtonLink to={paths.settings(org.id, 'usage')} variant="secondary" size="sm">
-                    Raise the budget
-                  </ButtonLink>
-                )
+                <ButtonLink to={paths.settings(org.id, 'credits')} variant="secondary" size="sm">
+                  Open Credits
+                </ButtonLink>
               }
             >
-              About {formatUsd(cost)} now, and {formatUsd(spent)} of {formatUsd(budget)} is used this month. Write fewer pages now, or {can('owner') ? 'raise the budget' : 'ask an owner to raise the budget'}.
+              About {formatCredits(quote)} now, and {formatCredits(available)} {available === 1 ? 'is' : 'are'} available for analyses. Write fewer pages now, or {can('admin') ? 'add credits' : 'ask an owner or admin to add credits'}.
             </Callout>
           ) : (
-            <CheckLine ok title="Budget">
-              About {formatUsd(cost)} now{spent != null ? `; ${formatUsd(spent)} of your ${formatUsd(budget)} is used this month` : ''}. After that about {formatUsd(monthly)} a month for its weekly rank checks; its
+            <CheckLine ok title="Credits">
+              About {formatCredits(quote)} now{metered && available != null ? `; ${formatCredits(available)} available for analyses` : ''}. After that about {creditsLabel(monthly)} a month for its weekly rank checks; its
               pages use your weekly posts.
             </CheckLine>
           )}
@@ -653,7 +634,7 @@ function ReviewStep({
           )}
         </Section>
 
-        <Section icon={<PenSquare />} title="Pages to write now" description={`The plan costs about ${PRICES.plan()}; each page written now adds about ${PRICES.page()} and 10 minutes and arrives as its own report. The rest follow on Mondays.`}>
+        <Section icon={<PenSquare />} title="Pages to write now" description={`The plan uses about ${PRICES.plan()}; each page written now adds about ${PRICES.page()} and 10 minutes and arrives as its own report. The rest follow on Mondays.`}>
           <div role="radiogroup" aria-label="Pages to write now" className="grid gap-2 sm:grid-cols-3">
             {([1, 2, 3] as const).map((n) => (
               <ChoiceCard
@@ -661,7 +642,7 @@ function ReviewStep({
                 selected={choices.pagesNow === n}
                 onSelect={() => setChoices({ ...choices, pagesNow: n })}
                 title={`${n} page${n === 1 ? '' : 's'}`}
-                badge={<Badge>{formatUsd(estimateRunCost('ladder', { pagesNow: n }))} in total</Badge>}
+                badge={<Badge>{quoteLabel(runCost('ladder', { pagesNow: n }))} in total</Badge>}
                 description={n === 1 ? (plan === 'direct' ? 'The main page first' : 'Start small: publish it, then continue') : n === 2 ? 'Two pages in parallel' : 'A fast start'}
               />
             ))}
@@ -706,7 +687,7 @@ function ReviewStep({
               { label: 'Keyword', value: chosen.keyword },
               { label: 'Plan', value: plan ? `${PLAN_CHOICE_LABEL[plan]}${chosen.months ? `, ${chosen.months.replace('-', '–')} months` : ''}` : 'Chosen when planned' },
               { label: 'Writing', value: mode === 'manual' ? 'Manual' : 'Auto' },
-              { label: 'Now', value: <span className="font-display text-base font-semibold text-accent-text">{formatUsd(cost)}</span> },
+              { label: 'Now', value: <span className="font-display text-base font-semibold text-accent-text">{quoteLabel(cost)}</span> },
             ]}
           />
           {blocked && <p className="text-xs text-ink-3">{blocked}</p>}
@@ -741,7 +722,7 @@ function StartStep({ chosen, data, choices, onBack }: { chosen: ChosenKeyword; d
   const [error, setError] = useState<unknown>(null);
   const automation = data?.automation ?? DEFAULT_AUTOMATION;
   const mode = choices.mode ?? automation.defaultMode;
-  const cost = estimateRunCost('ladder', { pagesNow: choices.pagesNow });
+  const cost = runCost('ladder', { pagesNow: choices.pagesNow });
   const admin = can('admin');
   // only what differs from what the engine does anyway (the website's default mode, after the current ladders); admins only
   const prefs = admin ? { ...(choices.mode && choices.mode !== automation.defaultMode ? { mode: choices.mode } : {}), ...(choices.first ? { first: true } : {}) } : {};
@@ -831,9 +812,9 @@ function StartStep({ chosen, data, choices, onBack }: { chosen: ChosenKeyword; d
         </div>
         <div className="mt-5 flex flex-wrap items-end justify-between gap-3 border-t border-line pt-4">
           <div>
-            <p className="text-xs text-ink-3">Cost now</p>
-            <p className="font-display text-2xl font-semibold tracking-[-0.01em] text-ink">about {formatUsd(cost)}</p>
-            <p className="text-xs text-ink-3">Counted in your company’s monthly budget</p>
+            <p className="text-xs text-ink-3">Price now</p>
+            <p className="font-display text-2xl font-semibold tracking-[-0.01em] text-ink">about {quoteLabel(cost)}</p>
+            <p className="text-xs text-ink-3">Uses credits from your company’s balance; held while it runs, never charged more</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" icon={<ArrowLeft className="size-4" />} onClick={onBack} disabled={start.isPending}>

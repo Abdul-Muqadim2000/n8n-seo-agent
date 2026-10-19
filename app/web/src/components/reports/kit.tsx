@@ -1,11 +1,11 @@
 import { Component, useId, useState, type ErrorInfo, type ReactNode } from 'react';
-import { AlertTriangle, BellRing, Bot, CheckCircle2, ChevronDown, CircleMinus, Clock, Coins, Receipt, XCircle } from 'lucide-react';
-import { compactNumber, formatUsd, ledgerBreakdown } from '@seo/shared';
-import { cn, downloadText, fmtDateTime } from '@/lib/utils';
+import { AlertTriangle, BellRing, CheckCircle2, ChevronDown, CircleMinus, Coins, XCircle } from 'lucide-react';
+import { compactNumber, formatCredits, formatUsd } from '@seo/shared';
+import { cn, downloadText } from '@/lib/utils';
 import { StatusBadge, verdictTone, type Tone } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { CopyButton, KeyValue, Meter, scoreTone } from '@/components/ui/misc';
-import { CollapsePanel, Collapsible, IconTile, InfoTip, InsightItem, type IconTileTone } from '@/components/insight';
+import { CopyButton, Meter, scoreTone } from '@/components/ui/misc';
+import { CollapsePanel, IconTile, InfoTip, InsightItem, type IconTileTone } from '@/components/insight';
 
 // Helpers shared by every report renderer. Callback payloads are untyped JSON from n8n, so every read goes through a guard
 // (a malformed field renders as "–" or an empty list instead of crashing the page).
@@ -284,78 +284,56 @@ export function JsonViewer({ value, title = 'Raw data', defaultOpen }: { value: 
   );
 }
 
-/** The run ledger every completed callback carries: DataForSEO spend, AI calls, duration (the breakdown behind "Details"). */
-export function LedgerCard({
-  ledger,
-  extraCost,
+/** credits (app/docs/CREDITS.md): what a served payload's `credits_state` means, in the customer's words */
+const CREDIT_STATE: Record<string, string> = {
+  charged: 'charged',
+  held: 'held while it runs',
+  not_charged: 'not charged: it failed',
+  quoted: 'not settled yet',
+  free: 'free',
+};
+
+/**
+ * credits (app/docs/CREDITS.md): what the work behind a report used, in credits — the server puts `credits_used` / `credits_state` on
+ * every payload it serves and strips the run ledger and every provider cost, so this card is all a customer sees of it. Nothing
+ * when the charge is not known (a client portal, a schedule's report the cost sync has not reached).
+ */
+export function CreditsCard({
+  p,
   shared,
 }: {
-  ledger: unknown;
-  extraCost?: number | null;
+  p: Record<string, unknown>;
   /** D-3: the figure is a whole run's that posted several reports (the weekly rank check posts one per ladder): say so, once */
   shared?: string;
 }) {
-  const l = obj(ledger);
-  if (!has(l) && extraCost == null) return null;
-  const byNode = Object.entries(obj(l.by_node))
-    .map(([k, v]) => ({ k, v: num(v) ?? 0 }))
-    .sort((a, b) => b.v - a.v);
-  const aiNodes = strs(l.ai_nodes);
-  const cost = ledgerBreakdown(l, extraCost);
+  const used = num(p.credits_used);
+  const state = str(p.credits_state);
+  if (used == null && !state) return null;
+  const sentence =
+    state === 'not_charged'
+      ? 'Not charged: the analysis failed.'
+      : state === 'free'
+        ? 'This report used no credits.'
+        : state === 'held'
+          ? `Held${used != null && used > 0 ? ` (${formatCredits(used)} so far)` : ''} while the analysis runs; it is charged what it used, never more than its quote.`
+          : used != null
+            ? `${shared ? 'The whole run' : 'This report'} used ${formatCredits(used)}.`
+            : 'The credits this report used are not settled yet.';
   return (
     <Block
-      title={shared ? 'Run ledger: the whole run' : 'Run ledger'}
-      icon={<Receipt />}
+      title="Credits"
+      icon={<Coins />}
       iconTone="neutral"
-      description={shared ?? 'What this run used.'}
-      info="Search data is what the data provider charged; model calls are priced from the usage the run reported. Each line says whether its figure is measured or estimated, and a run that did not report its model calls shows search data only."
+      description={shared ?? sentence}
+      info="Held at its quote while it runs; charged what it used, never more."
     >
       <Facts
-        cols="sm:grid-cols-3 lg:grid-cols-6"
+        cols="sm:grid-cols-3"
         items={[
-          {
-            icon: <Coins />,
-            label: 'Search data (DataForSEO)',
-            value: cost.data.usd != null ? `${usd(cost.data.usd, 3)}` : null,
-            hint: [cost.data.usd != null && cost.data.state !== 'measured' ? cost.data.state : '', num(l.dataforseo_calls) != null ? plural(num(l.dataforseo_calls)!, 'API call') : ''].filter(Boolean).join(' · ') || undefined,
-            info: cost.data.note,
-          },
-          {
-            icon: <Bot />,
-            label: 'Model calls (Claude)',
-            value: cost.model.usd != null ? usd(cost.model.usd, 3) : 'Not reported',
-            hint: cost.model.usd != null && cost.model.usd > 0 && cost.model.state !== 'measured' ? cost.model.state : undefined,
-            info: cost.model.note,
-          },
-          {
-            icon: <Coins />,
-            label: cost.partial ? 'Total (search data only)' : 'Total',
-            value: cost.total != null ? usd(cost.total, 3) : null,
-            info: cost.partial ? 'This run did not report its model calls, so this is not the whole cost.' : undefined,
-          },
-          { icon: <Bot />, label: 'AI steps', value: num(l.ai_calls) != null ? String(l.ai_calls) : null },
-          { icon: <Clock />, label: 'Duration', value: num(l.duration_min) != null ? `${num(l.duration_min)} min` : null },
-          { icon: <CheckCircle2 />, label: 'Finished', value: str(l.finished_at) ? fmtDateTime(str(l.finished_at)) : null },
+          { icon: <Coins />, label: 'Credits', value: state === 'not_charged' ? '0 credits' : used != null ? formatCredits(used) : '–', hint: CREDIT_STATE[state] ?? undefined },
         ]}
       />
-      {(byNode.length > 0 || aiNodes.length > 0) && (
-        <Collapsible className="mt-3" label="Cost by step and AI steps" openLabel="Hide the breakdown">
-          <div className="grid gap-4 pt-3 md:grid-cols-2">
-            {byNode.length > 0 && (
-              <div>
-                <SectionTitle>Data calls by step</SectionTitle>
-                <KeyValue items={byNode.map((x) => ({ label: x.k, value: <span className="tabular">{usd(x.v, 4)}</span> }))} />
-              </div>
-            )}
-            {aiNodes.length > 0 && (
-              <div>
-                <SectionTitle>AI steps</SectionTitle>
-                <Chips items={aiNodes} />
-              </div>
-            )}
-          </div>
-        </Collapsible>
-      )}
+      {shared && <p className="mt-3 text-[13px] text-ink-2">{sentence}</p>}
     </Block>
   );
 }

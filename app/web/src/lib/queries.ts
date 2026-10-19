@@ -43,7 +43,6 @@ import type {
   SiteVerificationInfo,
   TechnicalData,
   OutreachStep,
-  Usage,
   VerifyResult,
   DeliveryRecord,
   DeliverySettings,
@@ -271,17 +270,6 @@ export function useCancelAdminCreditRequest() {
   });
 }
 
-export function useSetBudget(orgId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: { monthlyBudgetUsd: number }) => api<Org>(`/api/orgs/${orgId}/budget`, { method: 'PATCH', body }),
-    onSuccess: (org) => {
-      qc.setQueryData(qk.org(orgId), org);
-      qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'usage'] });
-    },
-  });
-}
-
 // B-R1: where this company's finished reports are pushed, and the log of what went out (or was held, with the reason).
 export interface DeliveryOverview {
   settings: DeliverySettings;
@@ -347,8 +335,6 @@ export function useDeliverReport(orgId: string) {
     onSuccess: () => qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'delivery'] }),
   });
 }
-
-export const useUsage = (orgId: string) => useQuery({ queryKey: [...qk.org(orgId), 'usage'], queryFn: () => api<Usage>(`/api/orgs/${orgId}/usage`) });
 
 export const useMembers = (orgId: string) =>
   useQuery({ queryKey: [...qk.org(orgId), 'members'], queryFn: () => api<{ members: Member[]; invitations: Invitation[] }>(`/api/orgs/${orgId}/members`) });

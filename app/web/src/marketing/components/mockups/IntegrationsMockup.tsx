@@ -8,7 +8,7 @@ import { Drawn } from './parts';
 export function IntegrationsMockup({ className }: { className?: string }) {
   return (
     <Drawn
-      label="Sample integrations: an alert about a key page posted in a team channel, an audit finding turned into ticket SEO-42 shown as in progress, last night's export of six tables to a warehouse, and an AI assistant previewing a technical audit with its cost before starting it."
+      label="Sample integrations: an alert about a key page posted in a team channel, an audit finding turned into ticket SEO-42 shown as in progress, last night's export of six tables to a warehouse, and an AI assistant previewing a technical audit with its price in credits before starting it."
       className={cn('@container overflow-hidden rounded-xl border border-line bg-surface text-ink shadow-overlay', className)}
     >
       <div className="border-b border-line px-4 pt-4 pb-3.5 @min-[26rem]:px-5">
@@ -41,7 +41,7 @@ export function IntegrationsMockup({ className }: { className?: string }) {
         <li className="mk-pop flex items-center gap-2.5 px-4 py-3 @min-[26rem]:px-5" style={{ ['--mk-i' as string]: 2 }}>
           <Bot className="size-3.5 shrink-0 text-ink-3" />
           <span className="min-w-0 flex-1 truncate text-[11.5px]">Assistant: preview a technical audit</span>
-          <span className="font-mono text-[11px] text-ink-2">$0.09 · 6 min</span>
+          <span className="font-mono text-[11px] text-ink-2">6 credits · 6 min</span>
         </li>
         <li className="mk-pop flex items-center gap-2.5 px-4 py-3 @min-[26rem]:px-5" style={{ ['--mk-i' as string]: 3 }}>
           <BellRing className="size-3.5 shrink-0 text-ink-3" />

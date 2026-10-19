@@ -94,7 +94,7 @@ export function LadderForm({ initialSiteId, prefill }: ToolFormProps) {
             />
           ))}
         </div>
-        <p className="text-[13px] text-ink-3">The plan itself costs about {PRICES.plan()} (research and feasibility).</p>
+        <p className="text-[13px] text-ink-3">The plan itself uses about {PRICES.plan()} (research and feasibility).</p>
       </FormCard>
 
       <FormCard title="Business context" description={site ? `Leave these empty to use ${site.domain}'s settings.` : 'Used for relevance and for the pages written now.'}>
@@ -348,8 +348,8 @@ export function BacklinksForm({ initialSiteId, prefill }: ToolFormProps) {
       </FormCard>
       <FormCard title="Depth">
         <div className="grid gap-3 sm:grid-cols-2">
-          <ChoiceCard selected={!v.freeOnly} onSelect={() => form.setValue('freeOnly', false, { shouldDirty: true })} title={`Full check (~${PRICES.backlinksFull()})`} description="Adds DataForSEO's index (link details, new and lost, competitors' new links, the gap), AI link labels and outreach drafts." />
-          <ChoiceCard selected={!!v.freeOnly} onSelect={() => form.setValue('freeOnly', true, { shouldDirty: true })} title="Free sources only ($0)" description="Bing, your Search Console export, GA4, Common Crawl, Wikipedia, news and web search, every important link checked on its page." />
+          <ChoiceCard selected={!v.freeOnly} onSelect={() => form.setValue('freeOnly', false, { shouldDirty: true })} title={`Full check (about ${PRICES.backlinksFull()})`} description="Adds DataForSEO's index (link details, new and lost, competitors' new links, the gap), AI link labels and outreach drafts." />
+          <ChoiceCard selected={!!v.freeOnly} onSelect={() => form.setValue('freeOnly', true, { shouldDirty: true })} title="Free sources only (no credits)" description="Bing, your Search Console export, GA4, Common Crawl, Wikipedia, news and web search, every important link checked on its page." />
         </div>
       </FormCard>
       <FormCard title="Competitors" description="The link gap compares your links with theirs.">

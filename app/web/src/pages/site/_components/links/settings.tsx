@@ -204,7 +204,7 @@ export function RunDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
           description="Opportunities, contacts, listings and redirects only: no e-mails drafted and no paid data. Costs nothing."
         />
         <p className="text-[13px] text-ink-3">
-          Across a month the Link Builder costs about {PRICES.linkBuilderMonthly()} (the e-mail writer; the competitors' broken links once a month). Nothing is sent: pitches wait here for your approval. Takes a few minutes.
+          Across a month the Link Builder uses about {PRICES.linkBuilderMonthly()} (the e-mail writer; the competitors' broken links once a month). Nothing is sent: pitches wait here for your approval. Takes a few minutes.
         </p>
         {run.isError && <Callout tone="critical">{errorMessage(run.error)}</Callout>}
       </div>

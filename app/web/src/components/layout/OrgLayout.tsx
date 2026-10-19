@@ -39,6 +39,7 @@ import { ApiRequestError } from '@/lib/api';
 import { lastSite, makeCan, OrgContext, rememberSite, useOrgCtx, type OrgContextValue } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { useLogout, useMe, useOrg, useSites } from '@/lib/queries';
+import { CreditBanner, CreditPill } from '@/pages/settings/_components/credits/CreditsShell';
 import { cn } from '@/lib/utils';
 import { ErrorState, PageLoader } from '../ui/feedback';
 import { Avatar } from '../ui/misc';
@@ -214,6 +215,8 @@ export function OrgLayout() {
         </aside>
         <main className="min-w-0" inert={mobileOpen || undefined}>
           <div className="mx-auto w-full max-w-[1280px] px-4 pb-12 pt-6 sm:px-6 lg:px-10 lg:pb-16 lg:pt-9">
+            {/* credits running low / out / schedules paused (never in a client's portal) */}
+            {!portal && <CreditBanner />}
             <Outlet />
           </div>
         </main>
@@ -323,6 +326,8 @@ function Sidebar({ onClose }: { onClose: () => void }) {
             )}
           </Menu>
         </div>
+        {/* the company's credit balance, toned by its status */}
+        <CreditPill className="mt-2" />
       </div>
 
       <nav

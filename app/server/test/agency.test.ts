@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { createClientSchema } from '@seo/shared';
 
 // G5 (app/docs/WHITE_LABEL.md) — agencies and their client workspaces through the real app on a real Postgres: the role matrix
 // (inherited, assigned, client people), isolation in every direction (client ↔ client, client → agency, other agency, a person who
@@ -69,15 +70,17 @@ describe('agency mode and client workspaces', () => {
   it('admins create client workspaces; members cannot; a standard company has no clients', async () => {
     member = await join(owner, agency.id, 'member@north.agency', 'member');
     expect((await member.post(`/api/orgs/${agency.id}/clients`, { name: 'Acme' })).status).toBe(403);
-    const a = await admin.post(`/api/orgs/${agency.id}/clients`, { name: 'Acme Trading', monthlyBudgetUsd: 40 });
+    const a = await admin.post(`/api/orgs/${agency.id}/clients`, { name: 'Acme Trading' });
     expect(a.status, a.text).toBe(200);
-    expect(a.body).toMatchObject({ kind: 'client', name: 'Acme Trading', agency: { id: agency.id, name: 'North Agency' }, monthlyBudgetUsd: 40 });
+    // credits (app/docs/CREDITS.md): no dollar budget is asked or shown; the workspace is limited by its credits
+    expect(a.body).toMatchObject({ kind: 'client', name: 'Acme Trading', agency: { id: agency.id, name: 'North Agency' }, monthlyBudgetUsd: 0 });
     clientA = a.body;
     clientB = (await owner.post(`/api/orgs/${agency.id}/clients`, { name: 'Beta Foods' })).body;
     outsider = (await signUp(app, 'boss@other.co')).c;
     outsiderOrg = (await outsider.post('/api/orgs', { name: 'Other Co' })).body;
     expect((await outsider.post(`/api/orgs/${outsiderOrg.id}/clients`, { name: 'X' })).status).toBe(404);
-    expect((await admin.post(`/api/orgs/${agency.id}/clients`, { name: 'Big', monthlyBudgetUsd: 5000 })).status).toBe(400);
+    // a dollar budget sent by an old client is not part of the form any more (the platform's default guard is kept on the row)
+    expect(createClientSchema.parse({ name: 'Big', monthlyBudgetUsd: 5000 })).not.toHaveProperty('monthlyBudgetUsd');
   });
 
   it('a client workspace is reached through the agency: owners and admins inherit, members only when assigned', async () => {
@@ -177,8 +180,9 @@ describe('reports for client people', () => {
     pdfId = f1.id;
     docxId = f2.id;
 
+    // credits (app/docs/CREDITS.md): the agency's own people get no provider cost either, only the credits the work used
     const staff = (await admin.get(`/api/orgs/${clientA.id}/reports/${reportId}`)).body;
-    expect(staff.payload.run_cost_usd).toBe(1.25);
+    expect(staff.payload).toEqual({ health_score: 71, findings: [{ title: 'Missing H1' }], credits_used: null, credits_state: null });
     const client = (await viewerA.get(`/api/orgs/${clientA.id}/reports/${reportId}`)).body;
     expect(client.payload).toEqual({ health_score: 71, findings: [{ title: 'Missing H1' }] });
     // white-label off: the files are the engine's, for everyone
@@ -270,7 +274,7 @@ describe('the overview', () => {
     await db.insert(schema.reports).values({ orgId: clientA.id, siteId: siteA.id, stage: 'console_alert', status: 'success', title: 'Alert', summary: {}, payload: {} });
     const all = (await admin.get(`/api/orgs/${agency.id}/agency/overview`)).body.rows;
     expect(all.map((r: { domain: string }) => r.domain).sort()).toEqual(['acme.example.com', 'beta.example.com']);
-    expect(all.find((r: { domain: string }) => r.domain === 'acme.example.com')).toMatchObject({ healthScore: 83, rankGains: 4, rankDrops: 1, alerts14d: 1, verified: true, budgetUsd: 40 });
+    expect(all.find((r: { domain: string }) => r.domain === 'acme.example.com')).toMatchObject({ healthScore: 83, rankGains: 4, rankDrops: 1, alerts14d: 1, verified: true, creditsUsedMonth: 0, creditBalance: 0 });
     expect((await member.get(`/api/orgs/${agency.id}/agency/overview`)).body.rows.map((r: { clientId: string }) => r.clientId)).toEqual([clientA.id]);
     expect((await member.get(`/api/orgs/${agency.id}/agency/overview.csv`)).status).toBe(403);
     await db.update(schema.organizations).set({ name: '=cmd|calc' }).where(eq(schema.organizations.id, clientB.id));

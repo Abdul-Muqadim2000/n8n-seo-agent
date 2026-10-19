@@ -31,6 +31,46 @@ export interface CostSplit {
   claudeEstimatedUsd: number;
 }
 
+/**
+ * Every credit movement of a company (or the platform) over a period, each with the dollars behind it — what the admin panel's
+ * Credits / USD switch shows (app/docs/CREDITS.md). Credits at their list value use the credit value in force when each was used.
+ */
+export interface CreditBook {
+  /** bought: credits of grants that recorded a payment (packs), and the payments */
+  bought: number;
+  boughtUsd: number;
+  /** given without a payment (welcome credits, promotions, goodwill), at list value */
+  free: number;
+  freeListUsd: number;
+  /** plan months granted (their payment is invoiced outside the panel), at list value */
+  plan: number;
+  planListUsd: number;
+  /** used by work (net of re-pricing and failed-run returns), at list value, and what that work cost us at the providers */
+  used: number;
+  usedListUsd: number;
+  usedCostUsd: number;
+  /** autopilot / on-demand split of `used` */
+  usedAutopilot: number;
+  usedOnDemand: number;
+  /** given back by an admin refund */
+  refunded: number;
+  /** expired unused */
+  expired: number;
+  expiredListUsd: number;
+  /** admin corrections (net, signed) */
+  adjusted: number;
+  /** what runs would have used beyond their quotes: not charged, the cost was ours */
+  absorbed: number;
+  absorbedListUsd: number;
+  /** the balance NOW (whatever the period), at list value — what customers can still spend — and what serving it will cost us */
+  remaining: number;
+  remainingListUsd: number;
+  remainingCostUsd: number;
+  /** the rates the dollars were worked out with */
+  creditValueUsd: number;
+  markup: number;
+}
+
 /** Credits for one company over a period, plus its balance now. */
 export interface CreditSummary {
   /** now, whatever the period: granted − used − adjusted down, all time */
@@ -38,7 +78,8 @@ export interface CreditSummary {
   grantedInPeriod: number;
   usedInPeriod: number;
   /** true: runs are refused when the balance cannot cover them; false: credits are counted but never block a run */
-  enforced: boolean;
+  enforced: boolean;  /** the period's movements with their dollars (the Credits / USD switch) */
+  book: CreditBook;
 }
 
 export interface MoneySummary {
@@ -91,7 +132,7 @@ export interface AdminOverview {
   unattributed: CostSplit;
   /** the part of `unattributed` that belonged to companies since deleted, and the revenue they had paid (kept as history) */
   deletedCompanies?: { cost: CostSplit; revenueUsd: number; creditsGranted: number };
-  credits: { outstanding: number; grantedInPeriod: number; usedInPeriod: number };
+  credits: { outstanding: number; grantedInPeriod: number; usedInPeriod: number; book: CreditBook };
   daily: AdminDailyPoint[];
   bills: ProviderBill[];
   /** where the cost figures came from and how fresh they are, in one sentence each */
@@ -386,6 +427,18 @@ export interface AdminCostSyncResult {
 }
 
 export const emptyCostSplit = (): CostSplit => ({ claudeUsd: 0, dataforseoUsd: 0, totalUsd: 0, claudeEstimatedUsd: 0 });
+
+export const emptyCreditBook = (creditValueUsd = 0, markup = 0): CreditBook => ({
+  bought: 0, boughtUsd: 0, free: 0, freeListUsd: 0, plan: 0, planListUsd: 0, used: 0, usedListUsd: 0, usedCostUsd: 0, usedAutopilot: 0, usedOnDemand: 0,
+  refunded: 0, expired: 0, expiredListUsd: 0, adjusted: 0, absorbed: 0, absorbedListUsd: 0, remaining: 0, remainingListUsd: 0, remainingCostUsd: 0, creditValueUsd, markup,
+});
+
+/** two books together (the platform's total); the rates are the first's */
+export function addCreditBooks(a: CreditBook, b: CreditBook): CreditBook {
+  const out = { ...a };
+  for (const k of Object.keys(a) as (keyof CreditBook)[]) if (k !== 'creditValueUsd' && k !== 'markup') out[k] = Math.round((a[k] + b[k]) * 10000) / 10000;
+  return out;
+}
 
 /** A customer's "Buy credits" request, as the panel lists it (fulfilled with a grant that records the payment). */
 export interface AdminPurchaseRequest extends CreditPurchaseRequest {

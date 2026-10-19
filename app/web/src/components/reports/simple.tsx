@@ -9,7 +9,7 @@ import { buttonClass } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
 import { ExternalLink, KeyValue } from '@/components/ui/misc';
 import { CountUp, HeroStat, InsightItem, ProgressBar, ScoreRing, Stagger } from '@/components/insight';
-import { Block, Bullets, CheckRow, Chips, CodeBlock, Disclosure, Empty, Facts, has, inAppWording, JsonViewer, LedgerCard, n, num, obj, objs, shortUrl, str, strs, type P } from './kit';
+import { Block, Bullets, CheckRow, Chips, CodeBlock, Disclosure, Empty, Facts, has, inAppWording, JsonViewer, CreditsCard, n, num, obj, objs, shortUrl, str, strs, type P } from './kit';
 import { keywordPrefill, stageLabel } from './meta';
 import { ReportHero, ScoreMark, StatusMark, WordValue } from './visuals';
 
@@ -541,7 +541,7 @@ export function DescriptionReport({ report }: { report: ReportDetail }) {
           </div>
         </Block>
       )}
-      <LedgerCard ledger={p.run_ledger} />
+      <CreditsCard p={p} />
     </Stagger>
   );
 }
@@ -593,7 +593,7 @@ export function GenericReport({ report }: { report: ReportDetail }) {
           <KeyValue items={summary.map(([k, v]) => ({ label: k.replace(/([A-Z])/g, ' $1').toLowerCase(), value: typeof v === 'boolean' ? (v ? 'yes' : 'no') : String(v) }))} />
         </Block>
       )}
-      <LedgerCard ledger={p.run_ledger} />
+      <CreditsCard p={p} />
       <JsonViewer value={p} defaultOpen={!summary.length && !text} />
     </Stagger>
   );

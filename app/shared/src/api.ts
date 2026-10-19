@@ -152,17 +152,12 @@ export interface Run {
   status: RunStatus;
   requestId: string | null;
   error: string | null;
-  /** what the app reserved before the run (shared/src/cost.ts); only ever an estimate */
-  estimatedCostUsd: number;
-  /** what the run reported spending, once it finished */
-  actualCostUsd: number | null;
-  /** B-R3: the engine's own calibrated figure for this run, which the app shows in preference to its own */
-  engineCostEstimateUsd: number | null;
-  engineCostBasis: string | null;
-  /** part of `actualCostUsd` is the engine's own estimate (the model calls that stream report no token usage) */
-  actualCostEstimated: boolean;
-  /** R102 / R115: `actualCostUsd` is search data only; the run did not report its model calls, so it is not the whole cost */
-  actualCostPartial: boolean;
+  /**
+   * credits (app/docs/CREDITS.md): what the run is quoted, holds and is charged, in credits — the customer's only figure for it. The
+   * provider cost behind it (the old `estimatedCostUsd` / `actualCostUsd` / engine estimate fields) stays in the database and the
+   * platform admin panel (`AdminRunRow`); it is never sent to a customer.
+   */
+  credits: RunCredits;
   etaMinutes: number;
   input: RunInput;
   createdAt: string;
@@ -170,6 +165,25 @@ export interface Run {
   completedAt: string | null;
   reportCount: number;
   lastStage: string | null;
+}
+
+/**
+ * credits (app/docs/CREDITS.md) of one run:
+ *   free         it costs nothing
+ *   held         still going: its quote is held, so no other analysis can spend the same credits
+ *   charged      settled at what it really used (never more than its quote)
+ *   not_charged  it failed: nothing is charged (credits taken before it failed are given back)
+ *   quoted       finished, its charge not settled yet (the cost sync runs every 10 minutes)
+ */
+export type RunCreditState = 'free' | 'quoted' | 'held' | 'charged' | 'not_charged';
+export interface RunCredits {
+  /** the whole credits it was quoted before it started (the most it can be charged); null when unknown */
+  quoted: number | null;
+  /** what it was charged (the usage entries of the run, a failed run's return included); null before any */
+  charged: number | null;
+  state: RunCreditState;
+  /** it used more than its quote and was charged the quote */
+  capped: boolean;
 }
 
 export interface ReportFile {
@@ -245,24 +259,6 @@ export interface InvitationPreview {
   reason: string | null;
   /** D-11: the signed-in person already belongs to the invitation's company (they joined from it): where to go */
   joinedOrgId?: string;
-}
-
-export interface Usage {
-  month: string;
-  budgetUsd: number;
-  estimatedUsd: number;
-  /** runs that reported their whole cost (search data and model calls) */
-  actualUsd: number;
-  /** R102: runs that reported search data only; counted in `estimatedUsd` at the best whole-run estimate, never in `actualUsd` */
-  actualPartialUsd: number;
-  actualPartialRuns: number;
-  remainingUsd: number;
-  runs: number;
-  byMode: { mode: ModeId; runs: number; estimatedUsd: number }[];
-  daily: { date: string; runs: number; estimatedUsd: number }[];
-  monitoringMonthlyUsd: number;
-  /** keyword checks this month (the "New keyword ladder" flow): counted in estimatedUsd and in the daily totals, not in runs */
-  keywordChecks: { checks: number; usd: number };
 }
 
 export interface AdminOrg {

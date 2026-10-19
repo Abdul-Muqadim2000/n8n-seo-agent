@@ -9,7 +9,9 @@ import { Badge, RunStatusBadge, StatusBadge } from '@/components/ui/badge';
 import { DataTable, type Column } from '@/components/ui/table';
 import { fmtDateTime } from '@/lib/utils';
 import { CertaintyBadge, CostSplitCell, FlushTable, Num } from './kit';
-import { adminPaths, credits, modeLabel } from '../lib';
+import { adminPaths, credits, modeLabel, money } from '../lib';
+import { useAdminUnits } from './units';
+import { useAdminSettings } from '@/lib/queries';
 
 const RUN_STATUSES: readonly string[] = ['submitting', 'accepted', 'running', 'completed', 'failed'];
 
@@ -48,6 +50,8 @@ function ErrorText({ text }: { text: string }) {
 }
 
 export function RunsTable({ rows, flush, hideCompany, empty, pageSize = 1000 }: { rows: AdminRunRow[]; flush?: boolean; hideCompany?: boolean; empty?: ReactNode; pageSize?: number }) {
+  const [units] = useAdminUnits();
+  const cv = useAdminSettings().data?.creditValueUsd ?? null;
   const columns: Column<AdminRunRow>[] = [
     { key: 'at', header: 'Started', hideOnMobile: true, sortValue: (r) => r.createdAt, cell: (r) => <Num className="whitespace-nowrap text-ink-2">{fmtDateTime(r.createdAt)}</Num> },
     ...(hideCompany
@@ -105,7 +109,14 @@ export function RunsTable({ rows, flush, hideCompany, empty, pageSize = 1000 }: 
       ),
     },
     { key: 'cost', header: 'Cost', align: 'right', sortValue: (r) => r.cost?.totalUsd ?? -1, cell: (r) => <CostSplitCell cost={r.cost} /> },
-    { key: 'credits', header: 'Credits', align: 'right', sortValue: (r) => r.credits ?? -1, cell: (r) => <Num>{credits(r.credits)}</Num> },
+    // credits (app/docs/CREDITS.md): the Credits / USD switch — what the run was billed at list price (the cost column beside it is ours)
+    {
+      key: 'credits',
+      header: units === 'usd' ? 'Billed ($)' : 'Credits',
+      align: 'right',
+      sortValue: (r) => r.credits ?? -1,
+      cell: (r) => <Num title={r.credits != null ? `${credits(r.credits)} credits` : undefined}>{units === 'usd' && cv != null ? (r.credits == null ? '–' : money(r.credits * cv)) : credits(r.credits)}</Num>,
+    },
   ];
   const props = { rows, columns, rowKey: (r: AdminRunRow) => r.id, pageSize, empty: empty ?? 'No runs match.' };
   return flush ? <FlushTable {...props} /> : <DataTable {...props} />;

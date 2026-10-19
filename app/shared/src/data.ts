@@ -450,6 +450,9 @@ export interface AiRun {
   avgRank: number;
   aioPresence: number;
   aioCitationRate: number;
+  /** credits (app/docs/CREDITS.md): the credits this run used, from its provider cost at the platform's settings */
+  credits: number;
+  /** @deprecated provider cost — pages read `credits`; removed once none reads it */
   costUsd: number;
   alerts: string[];
   /** v4.9 (0 / null on runs before v4.9) */
@@ -713,6 +716,9 @@ export interface BacklinkSnapshot {
   lostLinks: number;
   importantLost: number;
   spammyNew: number;
+  /** credits (app/docs/CREDITS.md): the credits this check used, from its provider cost at the platform's settings */
+  credits: number;
+  /** @deprecated provider cost — pages read `credits`; removed once none reads it */
   costUsd: number;
   /** v4.10: referring sites from every source (null before v4.10) */
   unionDomains: number | null;
@@ -1207,7 +1213,11 @@ export interface PipelineSummary {
   top10: number;
   /** clicks of all ladder pages, last 28 days */
   clicks28d: number;
+  /** credits (app/docs/CREDITS.md): the credits the company used this calendar month (autopilot + on-demand) */
+  creditsUsedThisMonth?: number;
+  /** @deprecated provider cost — the web switches to `creditsUsedThisMonth`; removed once no page reads it */
   spendThisMonthUsd: number;
+  /** @deprecated the platform's dollar guard (0 unless a platform admin) — removed once no page reads it */
   budgetUsd: number;
 }
 

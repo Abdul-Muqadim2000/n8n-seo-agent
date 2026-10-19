@@ -13,7 +13,7 @@ import {
   staffAssignSchema,
   type PortalContext,
 } from '@seo/shared';
-import { isUuid, orgAccess, requireRecentAuth, requireUser } from '../auth/access';
+import { isPlatformAdmin, isUuid, orgAccess, requireRecentAuth, requireUser } from '../auth/access';
 import { config } from '../config';
 import { db, schema } from '../db';
 import { eq } from 'drizzle-orm';
@@ -45,7 +45,7 @@ export async function agencyRoutes(app: FastifyInstance) {
   app.post('/api/orgs/:orgId/agency', async (req) => {
     const a = await orgAccess(req, (req.params as P).orgId, 'owner');
     const o = await enableAgency(req, a);
-    return orgView(o, a.role);
+    return orgView(o, a.role, isPlatformAdmin(a.user));
   });
 
   app.get('/api/orgs/:orgId/clients', async (req) => {
@@ -59,7 +59,7 @@ export async function agencyRoutes(app: FastifyInstance) {
     requireAgency(a, 'admin');
     const body = parse(createClientSchema, req.body);
     const o = await createClient(req, a, body);
-    return toOrg(o, a.role, { agency: a.org });
+    return toOrg(o, a.role, { agency: a.org, platformAdmin: isPlatformAdmin(a.user) });
   });
 
   app.get('/api/orgs/:orgId/clients/:clientId/staff', async (req) => {
@@ -128,7 +128,7 @@ export async function agencyRoutes(app: FastifyInstance) {
     const [o] = await db.update(schema.organizations).set({ clientApproval: body.clientApproval }).where(eq(schema.organizations.id, a.org.id)).returning();
     if (o.clientApproval !== a.org.clientApproval)
       await audit(req, a.org.parentOrgId ?? a.org.id, { action: 'agency.client_settings_changed', target: { type: 'company', id: a.org.id, label: a.org.name }, details: { clientApproval: { before: a.org.clientApproval, after: o.clientApproval } } });
-    return orgView(o, a.role);
+    return orgView(o, a.role, isPlatformAdmin(a.user));
   });
 
   // ---------- client e-mail (agency) ----------

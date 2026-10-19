@@ -10,6 +10,8 @@ export interface PricingTier {
   period: string;
   /** monthly price in USD when billed monthly; absent for a custom price (/pricing computes the annual price from it) */
   monthly?: number;
+  /** credits the plan adds every month (monthly price ÷ the $0.05 list price of a credit); absent for a custom plan */
+  monthlyCredits?: number;
   description: string;
   cta: { label: string; to: string };
   highlighted?: boolean;
@@ -25,6 +27,7 @@ export const pricingTiers: PricingTier[] = [
     price: '$39', // PLACEHOLDER — confirm
     period: 'per month', // PLACEHOLDER — confirm
     monthly: 39, // PLACEHOLDER — confirm (keep equal to `price`)
+    monthlyCredits: 780, // PLACEHOLDER — confirm (= monthly price ÷ $0.05)
     description: 'One website, the whole loop: research, a page a week, monthly audits and the Monday report.',
     // ?plan= is ignored by the sign-up page today; it records which plan the visitor came from
     cta: { label: 'Start free', to: '/signup?plan=starter' },
@@ -47,6 +50,7 @@ export const pricingTiers: PricingTier[] = [
     price: '$129', // PLACEHOLDER — confirm
     period: 'per month', // PLACEHOLDER — confirm
     monthly: 129, // PLACEHOLDER — confirm (keep equal to `price`)
+    monthlyCredits: 2580, // PLACEHOLDER — confirm (= monthly price ÷ $0.05)
     description: 'Everything the engine does, on up to three websites — including AI answers and backlinks.',
     cta: { label: 'Start free', to: '/signup?plan=growth' },
     highlighted: true,
@@ -78,7 +82,7 @@ export const pricingTiers: PricingTier[] = [
       'Multi-company workspaces with roles and invitations',
       'Agency client portal: client workspaces, client logins and approvals, white-label on your own domain', // PLACEHOLDER — confirm the plan and any per-client price
       'Single sign-on (SAML 2.0 / OIDC) and SCIM provisioning',
-      'Spend caps and budgets per company',
+      'Credits and credit limits per company',
       'Search Console alert watcher and monthly check-ins',
       'Onboarding with your team', // PLACEHOLDER — confirm
     ],
@@ -91,9 +95,74 @@ export const annualDiscount = 0.2; // PLACEHOLDER — confirm
 /** Monthly-equivalent price when billed annually, rounded to whole dollars. */
 export const annualMonthly = (monthly: number): number => Math.round(monthly * (1 - annualDiscount));
 
-/** one line under the plans: AI and data usage is shown before every run */
+/** one line under the plans: the work is paid in credits */
 export const pricingUsageNote =
-  'Your plan covers the pages and the checks listed above. Anything extra you start by hand shows its cost before it runs and is capped by the budget you set, so the bill cannot run away.'; // PLACEHOLDER — confirm the billing model (plan-included usage vs usage on top)
+  'The work itself is paid in credits. Each plan adds its credits on the 1st of every month, and you can buy a pack whenever you need more. Every analysis shows its price in credits before it starts and never uses more.'; // PLACEHOLDER — confirm the billing model (plan credits vs the plan's own limits)
+
+/**
+ * Credits (app/docs/CREDITS.md). Customer words only: a credit, its list price, what uses credits and the rules around them.
+ * Never name what a run costs Alaventra, a markup or a margin on this page.
+ */
+export const creditListPriceUsd = 0.05; // PLACEHOLDER — confirm
+
+export interface CreditPackOffer {
+  credits: number;
+  /** shown as is */
+  price: string;
+}
+
+/** The packs a company can ask for on its Credits page — list price, no discount (DEFAULT_CREDIT_PACKS in shared/src/billing.ts). */
+export const creditPacks: CreditPackOffer[] = [
+  { credits: 500, price: '$25' }, // PLACEHOLDER — confirm
+  { credits: 2000, price: '$100' }, // PLACEHOLDER — confirm
+  { credits: 5000, price: '$250' }, // PLACEHOLDER — confirm
+  { credits: 20000, price: '$1,000' }, // PLACEHOLDER — confirm
+];
+
+/** how long a pack's credits last */
+export const creditPackValidity = '12 months'; // PLACEHOLDER — confirm
+
+/** one line under the packs: buying is a request today, confirmed and invoiced by the team (no card checkout yet) */
+export const creditPacksNote =
+  'Ask for a pack on the Credits page in the app. The Alaventra team confirms it and sends the invoice, and the credits are added to your company. New companies start with 200 welcome credits, valid for 90 days.'; // PLACEHOLDER — confirm (welcome credits and their expiry)
+
+/** "How credits work" on /pricing — each line is how the product works today (app/docs/CREDITS.md §1). */
+export const creditRules: { title: string; body: string }[] = [
+  {
+    title: 'One balance for everything',
+    body: 'The weekly work Alaventra does on its own for each website and the analyses you start yourself both use credits from your company’s balance.',
+  },
+  {
+    title: 'The price before it starts',
+    body: 'Every analysis shows its price in credits before you press start. Those credits are held while it runs, so two analyses can never spend the same ones.',
+  },
+  {
+    title: 'Never more than the price shown',
+    body: 'An analysis is charged the credits it really used, never more than the price you saw. If it fails, it is free.',
+  },
+  {
+    title: 'Limits you set',
+    body: 'Owners can set a monthly limit for the analyses people start, another for the automatic work, and keep enough credits aside for each website’s automatic work this month.',
+  },
+  {
+    title: 'When credits run out',
+    body: 'New analyses are refused and each website’s automatic work pauses — and picks up again by itself as soon as credits are added. Owners and admins are told before it happens.',
+  },
+  {
+    title: 'Soonest-expiring first',
+    body: 'Packs last 12 months. A plan’s monthly credits roll over for one month. Credits are always used soonest-expiring first, so none are wasted.',
+  },
+];
+
+/**
+ * Typical usage, in credits — computed from the shipped figures in app/docs/CREDITS.md §5 (2026-10-19), always shown as "about".
+ * Re-check when the engine's calibrated figures move.
+ */
+export const creditExamples: { label: string; credits: string }[] = [
+  { label: 'A keyword verdict', credits: 'about 12 credits' },
+  { label: 'A written page, checked and ready to publish', credits: 'about 51 credits' },
+  { label: 'One website with every monitor on, including the daily AI Pulse, for a month', credits: 'about 1,530 credits' },
+];
 
 /**
  * "Done for you" — the work a person on our team does, on top of any plan. The software does not do these: somebody has to be given
@@ -281,6 +350,7 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
     group: 'Platform and control',
     rows: [
       { label: 'Websites', values: ['1', 'Up to 3', 'Custom'] }, // PLACEHOLDER — confirm
+      { label: 'Credits included every month', hint: 'Added on the 1st; unused ones roll over one month. Packs of extra credits last 12 months', values: ['780', '2,580', 'Custom'] }, // PLACEHOLDER — confirm (= monthly price ÷ $0.05)
       { label: 'Roles and invitations', hint: 'Owner, admin, member and viewer', values: [true, true, true] },
       { label: 'Two-step verification', hint: 'Authenticator app, passkeys or a security key, and recovery codes; a company can require it for everyone', values: [true, true, true] },
       { label: 'Signed-in devices and idle sign-out', hint: 'Sign a device out; end idle sessions after the time your company sets', values: [true, true, true] },
@@ -289,10 +359,10 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'SCIM provisioning', hint: 'People created, updated and switched off from your identity provider; groups mapped to roles', values: [false, false, true] }, // PLACEHOLDER — confirm the plans
       { label: 'Verified website ownership', values: [true, true, true] },
       { label: 'Step-by-step guides for every setup task', hint: 'Your own values, instructions for the provider you use, and a copy you can e-mail to a colleague', values: [true, true, true] },
-      { label: 'Cost estimate before every run', hint: 'The analysis engine’s own figure, corrected against what runs really cost, and replaced with the actual cost when the work finishes', values: [true, true, true] },
-      { label: 'Spend caps per company', values: [true, true, true] },
+      { label: 'Price in credits before every analysis', hint: 'Held while it runs, charged what it really used and never more; an analysis that fails is free', values: [true, true, true] },
+      { label: 'Credit limits per company', hint: 'A monthly limit for analyses people start, one for automatic work, and credits kept for each website’s automatic work', values: [true, true, true] },
       { label: 'Missed schedules caught up', hint: 'A scheduled run that did not fire starts once the system is back, and its report says it ran late', values: [true, true, true] },
-      { label: 'API and MCP access', hint: 'Read websites, audits, runs, reports and the export tables; start analyses with a key you allow to, within your budget', values: [true, true, true] }, // PLACEHOLDER — confirm the plans
+      { label: 'API and MCP access', hint: 'Read websites, audits, runs, reports and the export tables; start analyses with a key you allow to, using your company’s credits', values: [true, true, true] }, // PLACEHOLDER — confirm the plans
       { label: 'Warehouse export and Looker Studio', hint: 'Six tables to BigQuery, Amazon S3, Google Cloud Storage or Cloudflare R2, daily or weekly; a Looker Studio connector', values: [false, true, true] }, // PLACEHOLDER — confirm the plans
       { label: 'Multi-company workspaces', values: [false, false, true] }, // PLACEHOLDER — confirm
       { label: 'Agency client workspaces and client logins', hint: 'A workspace per client, viewer and approver logins, approvals, one table of every client website', values: [false, false, true] }, // PLACEHOLDER — confirm the plans and any per-client price
@@ -311,38 +381,66 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
   },
 ];
 
-/** "Transparent costs" on /pricing — each line is how the product works today. */
+/** "Credits well spent" on /pricing — each line is how the product works today. */
 export const costControls: { title: string; body: string }[] = [
   {
-    title: 'A cost estimate before every run',
-    body: 'Every analysis shows what it will cost and how long it takes before you press start.',
+    title: 'The price and the time first',
+    body: 'Every analysis shows its price in credits and how long it takes before you press start.',
   },
   {
-    title: 'Budget caps per company',
-    body: 'Owners set the budget. Runs are checked against it before any paid work begins, so a cap holds even when several people start runs at once.',
+    title: 'Limits that hold',
+    body: 'Owners set the company’s credit limits. Analyses are checked against them before any work begins, so a limit holds even when several people start analyses at once.',
   },
   {
-    title: 'Spend limits',
-    body: 'A platform-wide daily spend limit sits above every company budget, and the AI question panel shows its cost per website so you can size it.',
+    title: 'Sized before you save',
+    body: 'The AI question panel and every automatic job show what they use in credits a month for each website, so you can size them.',
   },
   {
-    title: 'No repeated paid work',
+    title: 'No repeated work',
     body: 'Results that cannot have changed are reused: an audit is skipped when the sitemap is unchanged, with a full audit at least every 60 days.',
   },
   {
-    title: 'A $0 mode for backlinks',
-    body: 'Run backlink checks from the free sources only — Bing Webmaster Tools, Search Console links, GA4 referrals, Common Crawl and more.',
+    title: 'A free mode for backlinks',
+    body: 'Run backlink checks from the free sources only — Bing Webmaster Tools, Search Console links, GA4 referrals, Common Crawl and more — for no credits at all.',
   },
 ];
 
 export const pricingFaqs: FaqItem[] = [
   {
     q: 'What does “Start free” include?',
-    a: 'Creating an account, setting up your company, adding websites and verifying them costs nothing. Paid work starts only when an analysis runs, and every run shows its cost first.', // PLACEHOLDER — confirm
+    a: 'Creating an account, setting up your company, adding websites and verifying them costs nothing, and a new company gets 200 welcome credits to try the work itself. Credits are used only when an analysis or an automatic job runs, and every analysis shows its price first.', // PLACEHOLDER — confirm
   },
   {
-    q: 'How are AI and data costs handled?',
-    a: 'Each run estimates its AI and data usage before it starts and is checked against your company’s budget. Owners set the budget and can lower or raise it at any time.', // PLACEHOLDER — confirm billing model
+    q: 'What is a credit?',
+    a: 'The unit everything in Alaventra is priced in. Research, writing, audits, AI answer checks and backlink checks each use credits; a credit lists at $0.05 in a pack. As a guide, a keyword verdict uses about 12 credits and a written page about 51.', // PLACEHOLDER — confirm the list price
+  },
+  {
+    q: 'What uses credits?',
+    a: 'Two things, from the same balance: the automatic work for each website — the weekly report, AI visibility and the daily AI Pulse, AI growth, backlinks, link building, the monthly audit and the scheduled blog posts — and the analyses you or your team start in the app, through the API or from an AI assistant. Each website shows what its automatic work will use a month, and the Credits page splits what was used between the two.',
+  },
+  {
+    q: 'Will I be charged more than the price shown?',
+    a: 'No. An analysis shows its price in credits before it starts and holds that price while it runs. When it finishes it is charged the credits it really used — sometimes fewer, never more.',
+  },
+  {
+    q: 'What if an analysis fails?',
+    a: 'It is free. Any credits it had used are given back.',
+  },
+  {
+    q: 'What happens when credits run out?',
+    a: 'New analyses are refused with the reason, and each website’s automatic work pauses. Nothing is lost: it picks up again by itself as soon as credits are added or a new month starts. Owners and admins get an e-mail when credits are running low, again when they run out, and when the work resumes.',
+  },
+  {
+    q: 'Do credits expire?',
+    a: 'Packs last 12 months. A plan’s monthly credits roll over for one month, then expire. Welcome credits last 90 days. Credits are always used soonest-expiring first, and the Credits page lists every lot with its expiry date.', // PLACEHOLDER — confirm the expiry periods
+  },
+  {
+    q: 'Can I limit what we spend?',
+    a: 'Yes. Owners can set a monthly limit for the analyses people start and a separate one for the automatic work, and can keep enough credits aside for each website’s automatic work this month so a busy week of analyses never pauses it.',
+  },
+  {
+    q: 'How do I buy more credits?',
+    a: 'Choose a pack on the Credits page in the app — 500, 2,000, 5,000 or 20,000 credits. The Alaventra team confirms the request and sends the invoice, and the credits are added to your company for 12 months. You can cancel a request while it is waiting.', // PLACEHOLDER — confirm the packs and the invoicing
   },
   {
     q: 'Can you set it up for us?',
@@ -366,7 +464,7 @@ export const pricingFaqs: FaqItem[] = [
   },
   {
     q: 'What is the free-sources backlink mode?',
-    a: 'A backlink check that uses only the free sources — Bing Webmaster Tools, Search Console links, GA4 referrals, the Common Crawl web graph, Wikipedia, Hacker News, news and web search — and Alaventra’s own link check. It leaves out the paid link index, so it costs nothing to run.',
+    a: 'A backlink check that uses only the free sources — Bing Webmaster Tools, Search Console links, GA4 referrals, the Common Crawl web graph, Wikipedia, Hacker News, news and web search — and Alaventra’s own link check. It leaves out the paid link index, so it uses no credits.',
   },
   {
     q: 'Can we change plans later?',

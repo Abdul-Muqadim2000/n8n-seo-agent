@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { clientSafePayload, effectiveBrand, isClientRole, type PortalBrand, type Role } from '@seo/shared';
+import { clientSafePayload, customerSafePayload, effectiveBrand, isClientRole, type PayloadCredits, type PortalBrand, type Role } from '@seo/shared';
 import { db, schema } from '../db';
 import type { OrgRow } from '../db/schema';
 
@@ -29,7 +29,11 @@ export async function brandForOrg(org: OrgRow | null): Promise<PortalBrand | nul
   return null;
 }
 
-/** a report payload as a client person gets it: no cost, ledger or budget figures */
-export function payloadFor(role: Role, payload: Record<string, unknown>): Record<string, unknown> {
-  return isClientRole(role) ? clientSafePayload(payload) : payload;
+/**
+ * A report payload as a person of the company gets it. credits (app/docs/CREDITS.md): no cost, ledger or budget figure for anybody
+ * (the platform admin panel keeps them); the company's own people see the credits the work used, a client person not even that (what
+ * the agency's work uses is the agency's business).
+ */
+export function payloadFor(role: Role, payload: Record<string, unknown>, credits: PayloadCredits | null = null): Record<string, unknown> {
+  return isClientRole(role) ? clientSafePayload(payload) : customerSafePayload(payload, credits);
 }

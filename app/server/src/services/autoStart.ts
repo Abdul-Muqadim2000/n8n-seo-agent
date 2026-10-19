@@ -25,6 +25,7 @@ import { recentChecks } from './keywordCheckStore';
 import { recommendedKeywords } from './keywordChecks';
 import { pipelineData } from './pipeline';
 import { createRun } from './runs';
+import { customerError } from '../lib/customerError';
 
 // "Choose keywords for me" (PIPELINE_FEATURE_SPEC.md §7): for a website that switched it on (the '_site' row's auto_start), when fewer
 // Auto ladders are being written than its limit, start the next recommended keyword that is easy or reachable for the website — on
@@ -177,7 +178,7 @@ export async function autoStartForSite(org: OrgRow, site: SiteRow, deps: AutoSta
   if (!parsed.success) return { runId: null, keyword: decision.start.keyword, reason: `the website's settings are incomplete (${parsed.error.issues[0]?.path.join('.') || 'input'})` };
   try {
     const run = await deps.start({ user: owner, org, role: 'owner' }, parsed.data);
-    return { runId: run.id, keyword: decision.start.keyword, reason: run.status === 'failed' ? `the SEO engine did not accept it: ${run.error ?? ''}` : decision.reason };
+    return { runId: run.id, keyword: decision.start.keyword, reason: run.status === 'failed' ? `the SEO engine did not accept it: ${customerError(run.error) ?? ''}` : decision.reason };
   } catch (err) {
     if (err instanceof HttpError && (err.statusCode === 402 || err.statusCode === 429)) return { runId: null, keyword: decision.start.keyword, reason: err.statusCode === 402 ? (err.code === 'credits' ? 'the company has no credits left for it' : 'it would go over the monthly budget') : err.message };
     throw err;

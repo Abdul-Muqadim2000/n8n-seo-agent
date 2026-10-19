@@ -1,5 +1,6 @@
 import { useEngineCal } from '@/lib/engine-cal';
 import { PRICES } from '@/lib/prices';
+import { creditsLabel, formatCredits, toCredits } from '@/lib/credits';
 import { useId, type ReactNode } from 'react';
 import { Bot, Gauge, Link2, Send, Wallet } from 'lucide-react';
 import {
@@ -8,12 +9,9 @@ import {
   AI_PULSE_ENGINES,
   CRAWL_PAGE_OPTIONS,
   AI_PAGES_MAX,
-  estimateAiGrowthCost,
+  autopilotRows,
   estimateAiPanelCost,
   estimateAiVisibilityCost,
-  estimateMonitoringCost,
-  formatUsd,
-  MONITOR_COSTS,
   monitorSettingsSchema,
   type AiEngine,
   type MonitorSettings,
@@ -27,7 +25,7 @@ import { cn } from '@/lib/utils';
 import { IconTile } from '@/components/ui/icon-tile';
 
 // The growth monitors of a website (seo_monitors): AI visibility, backlink monitor and the monthly technical audit, with a live
-// monthly cost estimate (MONITOR_COSTS, measured on live runs).
+// monthly estimate in credits (credits (app/docs/CREDITS.md): the schedules' rows of shared autopilotRows, priced with the company's rate).
 
 export const DEFAULT_MONITORS: MonitorSettings = monitorSettingsSchema.parse({});
 
@@ -140,7 +138,7 @@ export function MonitorSettingsFields({
               </div>
               <Checkbox
                 label="Daily AI pulse"
-                description={`Asks your questions on ${AI_PULSE_ENGINES.filter((e) => value.aiEngines.includes(e)).map((e) => AI_ENGINES.find((x) => x.value === e)!.label).join(', ') || 'the fast engines'} each day except Monday (about ${formatUsd(estimateAiVisibilityCost({ prompts: value.aiPromptsMax, engines: value.aiEngines, pulse: true, pulseMode: value.aiPulseMode, pulsePerWeek: value.aiPulsePerWeek }).pulse)} a month). Up to 50 questions it asks every one every morning; a bigger panel is asked as a rotating sample that covers every topic and buyer role each morning. AI answers change between asks: daily answers give steadier numbers and a same-day alert when something really changes.`}
+                description={`Asks your questions on ${AI_PULSE_ENGINES.filter((e) => value.aiEngines.includes(e)).map((e) => AI_ENGINES.find((x) => x.value === e)!.label).join(', ') || 'the fast engines'} each day except Monday (about ${creditsLabel(estimateAiVisibilityCost({ prompts: value.aiPromptsMax, engines: value.aiEngines, pulse: true, pulseMode: value.aiPulseMode, pulsePerWeek: value.aiPulsePerWeek }).pulse)} a month). Up to 50 questions it asks every one every morning; a bigger panel is asked as a rotating sample that covers every topic and buyer role each morning. AI answers change between asks: daily answers give steadier numbers and a same-day alert when something really changes.`}
                 checked={value.aiPulse}
                 disabled={disabled || !AI_PULSE_ENGINES.some((e) => value.aiEngines.includes(e))}
                 onChange={(e) => set({ aiPulse: e.target.checked })}
@@ -281,20 +279,23 @@ export function MonitorSettingsFields({
   );
 }
 
-/** G6 (2026-10-18): what this panel costs and buys, BEFORE it is saved — the one formula the engine reserves with (estimateAiPanelCost). */
+/**
+ * G6 (2026-10-18): what this panel uses and buys, BEFORE it is saved — the one formula the engine reserves with (estimateAiPanelCost).
+ * credits (app/docs/CREDITS.md): every figure in credits; no per-task provider price or price basis is shown.
+ */
 function AiPanelCost({ value }: { value: MonitorSettings }) {
   const c = estimateAiPanelCost({ panel: value.aiPromptsMax, engines: value.aiEngines, pulse: value.aiPulse, pulseMode: value.aiPulseMode, pulsePerWeek: value.aiPulsePerWeek });
   const est = c.prices.filter((p) => /estimate/.test(p.basis));
   return (
     <div className="rounded-lg border border-line bg-surface-2/50 p-3 text-[13px] leading-snug text-ink-2" aria-live="polite">
-      <p className="font-medium text-ink">This panel: {formatUsd(c.month.total)} a month</p>
+      <p className="font-medium text-ink">This panel: about {creditsLabel(c.month.total)} a month</p>
       <ul className="mt-1 space-y-0.5">
-        <li>Weekly run: {c.requests.weekly.toLocaleString('en-GB')} answers, {formatUsd(c.run.weekly.usd)}{c.executions > 1 ? ` (asked in ${c.executions} parts)` : ''}; the month&apos;s full run (Claude, the brand question, the market-wide index) {formatUsd(c.run.full.usd)}</li>
-        <li>{c.perWeek ? `Daily pulse: ${c.pulseQuestionsDay} questions a morning${c.perWeek < 6 ? `, each asked ${c.perWeek}× a week` : ''}, ${formatUsd(c.pulseDay.usd)} a morning` : 'Daily pulse: off'}</li>
+        <li>Weekly run: {c.requests.weekly.toLocaleString('en-GB')} answers, {creditsLabel(c.run.weekly.usd)}{c.executions > 1 ? ` (asked in ${c.executions} parts)` : ''}; the month&apos;s full run (Claude, the brand question, the market-wide index) {creditsLabel(c.run.full.usd)}</li>
+        <li>{c.perWeek ? `Daily pulse: ${c.pulseQuestionsDay} questions a morning${c.perWeek < 6 ? `, each asked ${c.perWeek}× a week` : ''}, ${creditsLabel(c.pulseDay.usd)} a morning` : 'Daily pulse: off'}</li>
         <li>Precision at 95%: ±{c.halfWidth.headline} points on the headline, ±{c.halfWidth.cluster} on a 12-question topic</li>
       </ul>
       {c.pulseCapped && <p className="mt-1 text-xs text-ink-3">{c.pulseWhy}.</p>}
-      {est.length > 0 && <p className="mt-1 text-xs text-ink-3">{est.map((p) => AI_ENGINES.find((e) => e.value === p.engine)?.label ?? p.engine).join(' and ')}: priced at an estimate until the first run measures it.</p>}
+      {est.length > 0 && <p className="mt-1 text-xs text-ink-3">{est.map((p) => AI_ENGINES.find((e) => e.value === p.engine)?.label ?? p.engine).join(' and ')}: an estimate until the first run measures it.</p>}
     </div>
   );
 }
@@ -311,27 +312,15 @@ function MonitorRow({ icon, on, children }: { icon: ReactNode; on: boolean; chil
   );
 }
 
-/** Monthly cost estimate with its breakdown (MONITOR_COSTS) for the chosen monitors and blog posts per week. */
+/**
+ * The schedules' monthly estimate with its breakdown, in credits (credits (app/docs/CREDITS.md)): the rows of shared `autopilotRows` —
+ * the same rows the Credits page's forecast and the server's reserve for the schedules use — each turned into credits.
+ */
 export function MonitoringCost({ monitors, blogsPerWeek, className }: { monitors: MonitorSettings; blogsPerWeek: number; className?: string }) {
-  const c = MONITOR_COSTS;
-  const total = estimateMonitoringCost({ aiVisibility: monitors.aiVisibility, backlinks: monitors.backlinks, auditMonthly: monitors.auditMonthly, blogsPerWeek, aiPrompts: monitors.aiPromptsMax, aiEngines: monitors.aiEngines, aiPulse: monitors.aiPulse, aiGrowth: monitors.aiGrowth, aiPages: monitors.aiPagesPerMonth, linkBuilder: monitors.linkBuilder });
-  const growth = estimateAiGrowthCost({ pages: monitors.aiPagesPerMonth, growth: monitors.aiGrowth });
-  const ai = estimateAiVisibilityCost({ prompts: monitors.aiPromptsMax, engines: monitors.aiEngines, pulse: monitors.aiPulse, pulseMode: monitors.aiPulseMode, pulsePerWeek: monitors.aiPulsePerWeek });
-  const rows: { label: string; detail: string; on: boolean; usd: number }[] = [
-    { label: 'Weekly site report', detail: 'Search Console, GA4, Google Trends, live rank checks', on: true, usd: c.siteTrackerMonthly },
-    { label: 'AI visibility', detail: `${monitors.aiPromptsMax} questions weekly, Claude and the market-wide index monthly`, on: monitors.aiVisibility, usd: ai.weekly + ai.fullRun },
-    { label: 'Daily AI pulse', detail: (() => { const c = estimateAiPanelCost({ panel: monitors.aiPromptsMax, engines: monitors.aiEngines, pulse: monitors.aiPulse, pulseMode: monitors.aiPulseMode, pulsePerWeek: monitors.aiPulsePerWeek }); return c.perWeek >= 6 ? `${c.pulseQuestionsDay} questions a day on the fast engines` : `${c.pulseQuestionsDay} questions a day (each one ${c.perWeek}× a week) on the fast engines`; })(), on: monitors.aiVisibility && monitors.aiPulse && ai.pulse > 0, usd: ai.pulse },
-    { label: 'AI growth', detail: `${monitors.aiPagesPerMonth} AI answer page${monitors.aiPagesPerMonth === 1 ? '' : 's'} a month, outreach drafts; Bing / IndexNow and page checks free`, on: monitors.aiVisibility && monitors.aiGrowth, usd: growth.total },
-    { label: 'Backlink monitor', detail: 'weekly watch, monthly full report', on: monitors.backlinks, usd: c.backlinksMonthly },
-    { label: 'Link builder', detail: 'up to 10 drafted sequences a week; opportunity search, contacts and checks free', on: monitors.linkBuilder, usd: c.linkBuilderMonthly },
-    { label: 'Monthly technical audit', detail: `up to ${monitors.auditPages} pages`, on: monitors.auditMonthly, usd: c.auditMonthly },
-    {
-      label: 'Blog posts',
-      detail: blogsPerWeek ? `${blogsPerWeek} a week × ${c.weeksPerMonth} weeks × ${formatUsd(c.blogPostEach)}` : 'none',
-      on: blogsPerWeek > 0,
-      usd: blogsPerWeek * c.weeksPerMonth * c.blogPostEach,
-    },
-  ];
+  useEngineCal();   // re-render with the company's credit rate once it arrives
+  const rows = autopilotRows(monitors, blogsPerWeek);
+  const totalUsd = rows.reduce((t, r) => t + r.usd, 0);
+  const total = toCredits(totalUsd);
   return (
     <div className={cn('rounded-xl border border-line bg-surface', className)}>
       <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-4">
@@ -339,36 +328,36 @@ export function MonitoringCost({ monitors, blogsPerWeek, className }: { monitors
           <IconTile size="sm">
             <Wallet />
           </IconTile>
-          Estimated monthly cost
+          Estimated credits a month
         </h4>
         <p className="font-display text-2xl font-semibold tracking-[-0.01em] text-ink" aria-live="polite">
-          {formatUsd(total)}
-          <span className="ml-1 text-sm font-normal text-ink-3">/ month</span>
+          {formatCredits(total, { unit: false })}
+          <span className="ml-1 text-sm font-normal text-ink-3">credits / month</span>
         </p>
       </div>
       <div className="overflow-x-auto px-4 pb-3 pt-2">
         <table className="w-full text-sm">
-          <caption className="sr-only">Monthly cost by monitor</caption>
+          <caption className="sr-only">Credits a month by schedule</caption>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.label} className="border-b border-line last:border-b-0">
+              <tr key={r.id} className="border-b border-line last:border-b-0">
                 <td className="py-2 pr-3">
                   <span className={cn('block', r.on ? 'text-ink' : 'text-ink-3')}>{r.label}</span>
                   <span className="block text-xs text-ink-3">{r.detail}</span>
-                  {r.on && total > 0 && (
+                  {r.on && totalUsd > 0 && (
                     <span className="mt-1.5 block h-1 overflow-hidden rounded-full bg-surface-2" aria-hidden>
-                      <span className="block h-full rounded-full bg-accent transition-[width] duration-500 ease-brand" style={{ width: `${Math.max(2, Math.min(100, (r.usd / total) * 100))}%` }} />
+                      <span className="block h-full rounded-full bg-accent transition-[width] duration-500 ease-brand" style={{ width: `${Math.max(2, Math.min(100, (r.usd / totalUsd) * 100))}%` }} />
                     </span>
                   )}
                 </td>
-                <td className={cn('whitespace-nowrap py-2 text-right tabular', r.on ? 'text-ink' : 'text-ink-3')}>{r.on ? formatUsd(r.usd) : 'Off'}</td>
+                <td className={cn('whitespace-nowrap py-2 text-right tabular', r.on ? 'text-ink' : 'text-ink-3')}>{r.on ? creditsLabel(r.usd) : 'Off'}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
       <p className="border-t border-line px-4 py-3 text-xs leading-relaxed text-ink-3">
-        Estimates from live runs. The real cost is usually lower because data that has not changed is reused. Analyses you start yourself are billed separately.
+        Estimates in credits, from live runs; usually less is used because data that has not changed is reused. Settings → Credits shows what was really used. Analyses you start yourself use credits separately.
       </p>
     </div>
   );

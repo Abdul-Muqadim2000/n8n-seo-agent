@@ -203,6 +203,9 @@ export interface BillingOverview {
   packs: PricedPack[];
   requests: CreditPurchaseRequest[];
   creditValueUsd: number;
+  /** months a bought pack lasts, and months a plan's unused credits roll over (0 = none) */
+  packExpiryMonths: number;
+  planRolloverMonths: number;
   /** how payment works today: 'request' = a request the Alaventra team confirms and invoices */
   checkout: 'request';
 }

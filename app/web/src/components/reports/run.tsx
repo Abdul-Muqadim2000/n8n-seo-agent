@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Check, Coins, Loader2, Mail } from 'lucide-react';
-import { COST_SOURCE_LABEL, formatUsd, GOALS, PAGE_TYPES, runCostEstimate, type ModeId, type Run } from '@seo/shared';
+import { formatCredits, GOALS, PAGE_TYPES, type ModeId, type Run, type RunCredits } from '@seo/shared';
 import { cn, fmtBytes } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { Meter } from '@/components/ui/misc';
@@ -221,19 +221,40 @@ export function retryPrefill(input: Record<string, unknown>): Record<string, unk
   return out;
 }
 
+/** credits (app/docs/CREDITS.md): what a run's credit state means, in the customer's words */
+export const RUN_CREDIT_STATE_LABEL: Record<RunCredits['state'], string> = {
+  free: 'free',
+  quoted: 'quote',
+  held: 'held while it runs',
+  charged: 'charged',
+  not_charged: 'not charged: it failed',
+};
+export const RUN_CREDITS_TIP = 'Held at its quote while it runs; charged what it used, never more.';
+
+/** The credits figure of a run: what it was charged once settled, else its quote; 0 for a run that failed. */
+export function runCreditsFigure(c: RunCredits): number | null {
+  if (c.state === 'not_charged') return 0;
+  if (c.state === 'charged' && c.charged != null) return c.charged;
+  return c.quoted;
+}
+
 /**
- * B-R3: one figure, and whose it is. `runCostEstimate` picks what the run cost, then the engine's own calibrated estimate, then
- * ours — so a list, the run page and the budget can never show three different numbers for the same run.
+ * credits (app/docs/CREDITS.md): one figure in credits and what it is — the quote held while the run goes, what it was charged once it
+ * settled (never more than the quote), nothing for a run that failed. A run's provider cost is never shown to a customer.
  */
 export function CostLine({ run }: { run: Run }) {
-  const cost = runCostEstimate(run);
+  const c = run.credits;
+  const figure = runCreditsFigure(c);
   return (
     <span className="inline-flex flex-col items-end gap-1 tabular">
-      <span className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-xs font-medium text-ink-2" title={cost.basis}>
+      <span className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-xs font-medium text-ink-2" title={RUN_CREDITS_TIP}>
         <Coins className="size-3 text-ink-3" aria-hidden />
-        {formatUsd(cost.usd, cost.source === 'measured' || cost.source === 'partial' ? 3 : 2)}
+        {formatCredits(figure)}
       </span>
-      <span className="block text-xs text-ink-3">{COST_SOURCE_LABEL[cost.source]}</span>
+      <span className="block text-xs text-ink-3">
+        {RUN_CREDIT_STATE_LABEL[c.state]}
+        {c.capped ? ' · capped at the quote' : ''}
+      </span>
     </span>
   );
 }

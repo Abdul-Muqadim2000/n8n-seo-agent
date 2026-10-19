@@ -1,7 +1,8 @@
 import {
   daysSince,
   estimateRunCost,
-  formatUsd,
+  DEFAULT_PLATFORM_SETTINGS,
+  formatCredits,
   isWon,
   keywordTokens,
   LADDER_SITE_ROW,
@@ -38,6 +39,8 @@ import { rankSeries } from './data';
 import { cachedCalibration } from './engineCost';
 import { actionFromApiBody } from './recommendations';
 import { filesFor, toReport } from './runs';
+import { quoteCredits } from './billing';
+import { customerError } from '../lib/customerError';
 
 // Keyword ladders on the Pipeline page (PIPELINE_FEATURE_SPEC.md §4, §6, §8): one card per ladder and its detail (the climb,
 // timeline, results), built from the n8n Data Tables of the website (seo_ladders, seo_rank_history, seo_content_log,
@@ -705,7 +708,8 @@ export function sortNeedsYou(items: NeedsYouItem[]): NeedsYouItem[] {
 }
 
 /** Pages to publish (per ladder, oldest first), the pile-up guard, duplicate / overlapping ladders, steps of Manual ladders. */
-export function ladderNeedsYou(b: LadderBuild): NeedsYouItem[] {
+/** `cs`: the platform's credit settings (the "write it now" quote is in credits); the shipped defaults when the caller has none */
+export function ladderNeedsYou(b: LadderBuild, cs: { creditValueUsd: number; markup: number } = DEFAULT_PLATFORM_SETTINGS): NeedsYouItem[] {
   const out: NeedsYouItem[] = [];
   const pile = b.pileup;
   if (pile)
@@ -816,7 +820,7 @@ export function ladderNeedsYou(b: LadderBuild): NeedsYouItem[] {
       kind: 'approve',
       severity: 'info',
       title: `Next page ready: ${q(a.keyword)}`,
-      detail: `Page ${pageNo} of your ladder ${q(c.head)}${rung === 4 ? ' (the main page)' : `, rung ${rung}`}. The ladder is Manual: write it now (about ${formatUsd(estimateRunCost('keyword', {}, cachedCalibration()))}) or leave it for later.`,   // D-2: the Write now form's own figure
+      detail: `Page ${pageNo} of your ladder ${q(c.head)}${rung === 4 ? ' (the main page)' : `, rung ${rung}`}. The ladder is Manual: write it now (about ${formatCredits(quoteCredits(estimateRunCost('keyword', {}, cachedCalibration()), cs))}) or leave it for later.`,   // D-2: the Write now form's own figure, as its quote in credits (app/docs/CREDITS.md)
       action:
         actionFromApiBody(
           {
@@ -927,7 +931,7 @@ export async function ladderAppSources(org: OrgRow, site: SiteRow): Promise<Pick
       mode: r.mode,
       status: r.status,
       title: r.title,
-      error: r.error,
+      error: customerError(r.error),
       keyword: s(r.keyword),
       ladderId: s(r.ladderId),
       costUsd: r.act ?? r.est,

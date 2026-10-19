@@ -9,6 +9,7 @@ import {
   webhookEndpointPatchSchema,
   webhookEndpointSchema,
   type CallbackFacts,
+  type RunCredits,
   type EventEnvelope,
   type WebhookDeliveryView,
   type WebhookEndpointView,
@@ -23,6 +24,8 @@ import { HttpError, notFound, parse } from '../lib/errors';
 import { outbound, safeError } from '../lib/netGuard';
 import { seal, secretsReady, unseal } from '../lib/secretBox';
 import { signBody } from './reportDelivery';
+import { creditsForRuns } from './runCredits';
+import { customerError } from '../lib/customerError';
 
 /**
  * G4 (2026-10-17) — event webhooks: several endpoints per company, each subscribed to event types and websites, delivered as
@@ -261,16 +264,20 @@ export async function emit(org: Pick<OrgRow, 'id' | 'name'>, site: Pick<SiteRow,
   return inserted.length;
 }
 
-export const runSummary = (r: Pick<RunRow, 'id' | 'orgId' | 'siteId' | 'mode' | 'title' | 'status' | 'error' | 'createdAt' | 'completedAt' | 'actualCostUsd' | 'estimatedCostUsd'>) => ({
+/**
+ * A run as an event carries it. credits (app/docs/CREDITS.md): its credits (quoted, charged — null until the charge settles — and the
+ * state), never its provider cost; an error naming a dollar balance or a provider reads as a capacity limit.
+ */
+export const runSummary = (r: Pick<RunRow, 'id' | 'orgId' | 'siteId' | 'mode' | 'title' | 'status' | 'error' | 'createdAt' | 'completedAt'>, credits: RunCredits | null) => ({
   id: r.id,
   websiteId: r.siteId,
   mode: r.mode,
   title: r.title,
   status: r.status,
-  error: r.error,
+  error: customerError(r.error),
   createdAt: r.createdAt.toISOString(),
   completedAt: r.completedAt ? r.completedAt.toISOString() : null,
-  costUsd: r.actualCostUsd ?? r.estimatedCostUsd,
+  credits: credits ? { quoted: credits.quoted, charged: credits.charged, state: credits.state } : null,
   url: appUrl(`/o/${r.orgId}/runs/${r.id}`),
 });
 
@@ -283,13 +290,14 @@ export async function emitForCallback(
   runBefore: RunRow | null,
 ): Promise<number> {
   const runAfter = runBefore ? ((await db.query.runs.findFirst({ where: eq(schema.runs.id, runBefore.id) })) ?? null) : null;
+  const credits = runAfter ? (await creditsForRuns(org.id, [runAfter]).catch(() => null))?.get(runAfter.id) ?? null : null;
   const facts: CallbackFacts = {
     stage: report.stage,
     status: report.status,
     payload,
     report: { ...report, receivedAt: report.receivedAt.toISOString(), websiteId: site?.id ?? null, url: appUrl(`/o/${org.id}/reports/${report.id}`) },
     runBefore: runBefore ? { status: runBefore.status } : null,
-    runAfter: runAfter ? runSummary(runAfter) : null,
+    runAfter: runAfter ? runSummary(runAfter, credits) : null,
   };
   return emit(org, site, eventsFor(facts));
 }
@@ -303,7 +311,10 @@ export async function emitRunsFailed(runIds: string[]): Promise<void> {
     .innerJoin(schema.organizations, eq(schema.runs.orgId, schema.organizations.id))
     .leftJoin(schema.sites, eq(schema.runs.siteId, schema.sites.id))
     .where(and(inArray(schema.runs.id, runIds.slice(0, 200)), eq(schema.runs.status, 'failed')));
-  for (const x of rows) await emit(x.org, x.site, [{ type: 'run.failed', data: { run: runSummary(x.r), error: x.r.error } }]).catch(() => undefined);
+  for (const x of rows) {
+    const credits = (await creditsForRuns(x.org.id, [x.r]).catch(() => null))?.get(x.r.id) ?? null;
+    await emit(x.org, x.site, [{ type: 'run.failed', data: { run: runSummary(x.r, credits), error: customerError(x.r.error) } }]).catch(() => undefined);
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------

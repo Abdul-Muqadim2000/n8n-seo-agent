@@ -141,7 +141,8 @@ export interface CallbackFacts {
   payload: P;
   report: { id: string; title: string; stage: string; status: string; receivedAt: string; scheduled: boolean; runId: string | null; websiteId: string | null; url: string };
   runBefore: { status: string } | null;
-  runAfter: { id: string; mode: string; title: string; status: string; error: string | null; completedAt: string | null; url: string } | null;
+  /** credits (app/docs/CREDITS.md): the run's credits ride along (`credits`), never its provider cost */
+  runAfter: { id: string; mode: string; title: string; status: string; error: string | null; completedAt: string | null; url: string; credits?: { quoted: number | null; charged: number | null; state: string } | null } | null;
 }
 
 const ALERT_SKIP_LEVELS = new Set(['info', 'ok', 'good', 'success']);
@@ -564,7 +565,7 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
       c('ai_sessions', 'INTEGER', 'GA4 visits from AI assistants'),
       c('ai_conversions', 'INTEGER', 'GA4 key events from AI assistants'),
       c('ai_revenue', 'FLOAT', 'GA4 revenue from AI assistants'),
-      c('cost_usd', 'FLOAT', 'What the run cost'),
+      c('credits', 'FLOAT', 'Credits the run used'),
       c('alerts', 'STRING', 'Alert lines, " | "-separated'),
     ],
   },
@@ -604,7 +605,7 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   },
   {
     id: 'runs',
-    label: 'Analyses and their cost',
+    label: 'Analyses and their credits',
     source: 'runs',
     grain: 'One analysis',
     dateColumn: 'created_at',
@@ -616,10 +617,9 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
       c('started_by', 'STRING', 'person, api_key or auto'),
       c('created_at', 'TIMESTAMP', 'When it started'),
       c('completed_at', 'TIMESTAMP', 'When it finished'),
-      c('estimated_cost_usd', 'FLOAT', 'What was reserved before it ran'),
-      c('actual_cost_usd', 'FLOAT', 'What it reported spending (null until it settles)'),
-      c('cost_estimated', 'BOOLEAN', 'Part of the actual cost is the engine’s own estimate (model calls that report no usage)'),
-      c('cost_partial', 'BOOLEAN', 'The actual cost has no model-call part: search data only'),
+      // credits (app/docs/CREDITS.md): the provider cost columns (estimated_cost_usd, actual_cost_usd, cost_estimated, cost_partial) are gone
+      c('credits_quoted', 'FLOAT', 'Credits it was quoted before it started (the most it can be charged)'),
+      c('credits_charged', 'FLOAT', 'Credits it was charged (null until the charge settles; 0 for a run that failed)'),
       c('report_count', 'INTEGER', 'Reports it produced'),
       c('error', 'STRING', 'Why it failed'),
     ],

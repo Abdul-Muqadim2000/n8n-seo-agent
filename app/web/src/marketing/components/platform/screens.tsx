@@ -178,15 +178,15 @@ const CHANGES: { tone: 'good' | 'warning' | 'accent'; label: string; text: strin
   { tone: 'accent', label: 'New', text: 'Cited in AI Overviews for 2 more buyer questions' },
 ];
 const NEXT = [
-  { t: 'Refresh “invoice approval workflow”', c: 'est. $0.40' },
-  { t: 'Reclaim the lost link with an outreach draft', c: 'est. $0.05' },
+  { t: 'Refresh “invoice approval workflow”', c: 'about 24 credits' },
+  { t: 'Reclaim the lost link with an outreach draft', c: 'about 3 credits' },
 ];
 
 /** The Monday report: headline numbers, what changed and the next steps, exportable as PDF or Word (sample data). */
 export function ReportMockup({ className }: { className?: string }) {
   return (
     <Drawn
-      label="A Monday report with sample data: clicks, average position and AI mention rate with their changes; three changes of the week; two recommended next steps with their estimated cost; export as PDF or Word."
+      label="A Monday report with sample data: clicks, average position and AI mention rate with their changes; three changes of the week; two recommended next steps with their price in credits; export as PDF or Word."
       className={cn(shell, className)}
     >
       <ScreenHead
@@ -358,18 +358,18 @@ const REUSED = [
   { t: 'Homepage description', d: 'read this month' },
 ];
 
-/** Starting a paid run: the estimate, what is reused instead of paid again and the budget left (sample data). */
+/** Starting an analysis: its price in credits, what is reused instead of charged again and the credits available (sample data). */
 export function CostMockup({ className }: { className?: string }) {
   return (
     <Drawn
-      label="Starting a full SEO report with sample data: an estimated cost and time, two results reused from earlier runs and not paid again, and the monthly budget with what is left."
+      label="Starting a full SEO report with sample data: its price in credits and an estimated time, two results reused from earlier runs and not charged again, and the credits the company has available."
       className={cn(shell, className)}
     >
       <ScreenHead icon={FileText} title="Full SEO report" meta="yourbrand.com · ready to start" />
       <dl className="mt-4 grid grid-cols-2 gap-2">
         <div className="mk-pop rounded-lg border border-line bg-page px-3 py-2.5" style={pop(0)}>
-          <dt className="text-[10.5px] text-ink-3">Estimated cost</dt>
-          <dd className="mt-1 font-display text-lg font-semibold tabular">$1.10</dd>
+          <dt className="text-[10.5px] text-ink-3">Price</dt>
+          <dd className="mt-1 font-display text-lg font-semibold tabular">38 credits</dd>
         </div>
         <div className="mk-pop rounded-lg border border-line bg-page px-3 py-2.5" style={pop(1)}>
           <dt className="text-[10.5px] text-ink-3">Estimated time</dt>
@@ -379,7 +379,7 @@ export function CostMockup({ className }: { className?: string }) {
       <div className={cn(sub, 'mt-3 p-3')}>
         <span className="flex items-center gap-1.5 text-[11.5px] font-semibold">
           <RefreshCcw className="size-3.5 text-ink-3" />
-          Reused, not paid again
+          Reused, not charged again
         </span>
         <ul className="mt-2 space-y-1.5">
           {REUSED.map((r, i) => (
@@ -395,11 +395,11 @@ export function CostMockup({ className }: { className?: string }) {
       </div>
       <div className="mk-pop mt-3 rounded-lg border border-line p-3" style={pop(4)}>
         <span className="flex items-baseline justify-between text-[11.5px]">
-          <span className="font-semibold">Budget this month</span>
-          <span className="font-mono text-ink-2 tabular">$184 of $400</span>
+          <span className="font-semibold">Credits available</span>
+          <span className="font-mono text-ink-2 tabular">1,240 of 2,580</span>
         </span>
         <span className="mt-2 block h-2 overflow-hidden rounded-full bg-surface-2">
-          <span className="mk-grow-x block h-full w-[46%] rounded-full bg-accent" />
+          <span className="mk-grow-x block h-full w-[48%] rounded-full bg-accent" />
         </span>
       </div>
       <div className="mk-pop mt-4 flex items-center justify-end gap-2" style={pop(5)}>

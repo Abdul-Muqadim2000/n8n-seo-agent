@@ -1,8 +1,9 @@
 // Pipeline home: the always-on part (opportunity posts and monitoring) and the weekly capacity the ladders share.
 import type { ReactNode } from 'react';
 import { AlertTriangle, Bot, CalendarClock, ChevronRight, Circle, FileText, Flame, History, Lightbulb, PenSquare, Play, RefreshCw, Settings, Target, TrendingDown, TrendingUp } from 'lucide-react';
-import { AUTOMATIONS, formatUsd, type AutomationStatus, type LadderCard, type PipelineData, type QueueItem } from '@seo/shared';
+import { AUTOMATIONS, type AutomationStatus, type LadderCard, type PipelineData, type QueueItem } from '@seo/shared';
 import { PRICES } from '@/lib/prices';
+import { creditsLabel } from '@/lib/credits';
 import { Badge, StatusBadge, type Tone } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
@@ -253,7 +254,7 @@ function Monitoring({ data }: { data: PipelineData }) {
                   </div>
                   <p className="mt-0.5 text-xs text-ink-3">
                     {info.cadence}
-                    {a.monthlyCostUsd > 0 && a.state === 'on' && <span className="text-ink-2"> · ≈ {formatUsd(a.monthlyCostUsd)}/month</span>}
+                    {a.monthlyCostUsd > 0 && a.state === 'on' && <span className="text-ink-2"> · about {creditsLabel(a.monthlyCostUsd)} a month</span>}
                   </p>
                 </div>
               </div>

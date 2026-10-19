@@ -9,7 +9,7 @@ import { ArrowLink, jumpTo, lowerFirst, useScrollSpy } from '../components/platf
 import { CapabilityCount, capabilityCount, featureBySlug, features, type Feature } from '../content/features';
 import { useSeo } from '../useSeo';
 
-const HERO_FACTS = [`${features.length} capabilities`, 'Auto or Manual for every step', 'Cost shown before every run'];
+const HERO_FACTS = [`${features.length} capabilities`, 'Auto or Manual for every step', 'Price shown before every run'];
 
 /** which capabilities carry each step of the weekly loop */
 const LOOP_MAP: Record<string, string[]> = {
@@ -62,7 +62,7 @@ const SOURCE_GROUPS: { title: string; items: { name: string; use: string }[] }[]
       { name: 'Jira, Linear and Asana', use: 'one ticket per audit finding or recommendation, its state read back' },
       { name: 'BigQuery, Amazon S3, Google Cloud Storage and Cloudflare R2', use: 'six tables exported daily or weekly' },
       { name: 'Looker Studio', use: 'the same tables in your reports' },
-      { name: 'Claude and ChatGPT (MCP)', use: 'ask about your data and start analyses within your budget' },
+      { name: 'Claude and ChatGPT (MCP)', use: 'ask about your data and start analyses with your company’s credits' },
     ],
   },
   {

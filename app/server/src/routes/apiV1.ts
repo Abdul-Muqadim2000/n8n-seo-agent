@@ -154,7 +154,7 @@ const TOOLS: Tool[] = [
   },
   {
     name: 'list_runs',
-    description: "The company's analyses, newest first, with status and cost (and whether the cost is measured or estimated).",
+    description: "The company's analyses, newest first, with their status and credits (quoted, charged, and whether credits are held while one runs).",
     inputSchema: { type: 'object', properties: { websiteId: { type: 'string' }, status: { type: 'string' }, mode: { type: 'string' }, ...listArgs } },
     run: (c, a) => listRuns(c, a),
   },
@@ -195,7 +195,7 @@ const TOOLS: Tool[] = [
   {
     name: 'get_table',
     description:
-      'Rows of one export table for one verified website, oldest first: rank_history (keyword positions), site_metrics (weekly Search Console / GA4), audit_findings, ai_visibility, backlinks, runs (analyses and their cost). Filter by date with since / until (ISO).',
+      'Rows of one export table for one verified website, oldest first: rank_history (keyword positions), site_metrics (weekly Search Console / GA4), audit_findings, ai_visibility, backlinks, runs (analyses and their credits). Filter by date with since / until (ISO).',
     inputSchema: {
       type: 'object',
       properties: { websiteId: { type: 'string' }, table: { type: 'string', enum: ['rank_history', 'site_metrics', 'audit_findings', 'ai_visibility', 'backlinks', 'runs'] }, since: { type: 'string' }, until: { type: 'string' }, ...listArgs },
@@ -204,12 +204,12 @@ const TOOLS: Tool[] = [
     run: async (c, a) => tableRowsV1(c.org, await siteOf(c, a.websiteId), a.table, a),
   },
   // ---- G4: starting work (scope "run") ----
-  { name: 'list_modes', description: 'Every analysis that can be started, with what it delivers, its estimated cost and minutes, and the JSON Schema of its input.', inputSchema: { type: 'object', properties: {} }, run: async () => modesV1() },
+  { name: 'list_modes', description: 'Every analysis that can be started, with what it delivers, what it is quoted in credits, its minutes, and the JSON Schema of its input.', inputSchema: { type: 'object', properties: {} }, run: async () => modesV1() },
   {
     name: 'preview_run',
     scope: 'run',
     description:
-      'Before starting an analysis: its estimated cost and time, the budget left this month, and any warning that it duplicates work already planned or running (each with an id). Starts nothing, costs nothing.',
+      'Before starting an analysis: its quote in credits and its time, whether the company\'s credits allow it now, and any warning that it duplicates work already planned or running (each with an id). Starts nothing, uses no credits.',
     inputSchema: { type: 'object', properties: runArgs, required: ['input'] },
     run: async (c, a) => (await startRunV1(c, { ...obj(a.input), acknowledge: a.acknowledge, dryRun: true }, undefined)).body,
   },
@@ -217,7 +217,7 @@ const TOOLS: Tool[] = [
     name: 'start_run',
     scope: 'run',
     description:
-      "Starts an analysis (it costs money, within the company's monthly budget; the same checks as the app's form). If it duplicates planned or running work it is refused with the warnings: read them, then pass their ids in acknowledge. Pass the same idempotencyKey when you retry, so a retry never starts a second run. Follow it with get_run.",
+      "Starts an analysis (it uses the company's credits: held at its quote while it runs, charged what it used and never more; the same checks as the app's form). If it duplicates planned or running work it is refused with the warnings: read them, then pass their ids in acknowledge. Pass the same idempotencyKey when you retry, so a retry never starts a second run. Follow it with get_run.",
     inputSchema: { type: 'object', properties: { ...runArgs, idempotencyKey: { type: 'string', description: 'any unique string, e.g. a UUID; reuse it to retry safely' } }, required: ['input'] },
     run: async (c, a) => (await startRunV1(c, { ...obj(a.input), acknowledge: a.acknowledge }, a.idempotencyKey == null ? undefined : String(a.idempotencyKey))).body,
   },
@@ -240,7 +240,7 @@ async function mcp(ctx: V1Ctx, msg: Rpc): Promise<unknown | null> {
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: 'alaventra', title: `${config.brand} — ${ctx.org.name}`, version: '1.0.0' },
         instructions: ctx.scopes.includes('run')
-          ? `Access to ${ctx.org.name}'s SEO data (websites, audits and findings, crawler activity from server logs, analyses, reports, a free publish check) and to starting analyses within the company's monthly budget. Before start_run, call preview_run: it shows the cost and any duplicate warning. Never acknowledge a warning the user has not seen.`
+          ? `Access to ${ctx.org.name}'s SEO data (websites, audits and findings, crawler activity from server logs, analyses, reports, a free publish check) and to starting analyses with the company's credits. Before start_run, call preview_run: it shows the quote in credits and any duplicate warning. Never acknowledge a warning the user has not seen.`
           : `Read-only access to ${ctx.org.name}'s SEO data: websites, technical audits and their findings, crawler activity from server logs, analyses, reports, and a free publish check. This key cannot start a run or change a setting.`,
       });
     }

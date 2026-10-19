@@ -21,6 +21,7 @@ import {
   type ReportFile,
   type Role,
   type Run,
+  type RunCredits,
   type RunInput,
   type SiteContext,
 } from '@seo/shared';
@@ -39,6 +40,7 @@ import { emitForCallback, emitRunsFailed } from './webhooks';
 import { engineCostTable } from './engineCost';
 import { assertBudget, assertPlatformCapacity, lockCompany } from './spend';
 import { assertCredits, siteForecasts } from './billing';
+import { customerError } from '../lib/customerError';
 import { suspendedError } from '../auth/session';
 import { engineCostEstimate, ledgerCost, stageOf, summarize, titleFor } from './summaries';
 
@@ -574,9 +576,12 @@ export async function ingestCallback(
   return { reportId, runId: run?.id ?? null, stage, ...(ladderWon !== undefined ? { ladderWon } : {}), ...(prefsApplied !== undefined ? { prefsApplied } : {}) };
 }
 
+// credits of a run: services/runCredits.ts (re-exported here for the routes)
+export { chargesByRun, creditsForRuns, reportCredits, runCreditsOf, type RunCharge } from './runCredits';
+
 // ---------------- serializers ----------------
 
-export function toRun(r: RunRow, extra: { siteDomain?: string | null; userName?: string | null; apiKeyName?: string | null } = {}): Run {
+export function toRun(r: RunRow, extra: { siteDomain?: string | null; userName?: string | null; apiKeyName?: string | null; credits: RunCredits }): Run {
   return {
     apiKeyName: r.apiKeyId ? (extra.apiKeyName ?? 'an API key') : null,
     id: r.id,
@@ -589,13 +594,9 @@ export function toRun(r: RunRow, extra: { siteDomain?: string | null; userName?:
     title: r.title,
     status: r.status as Run['status'],
     requestId: r.requestId,
-    error: r.error,
-    estimatedCostUsd: r.estimatedCostUsd,
-    actualCostUsd: r.actualCostUsd,
-    engineCostEstimateUsd: r.engineCostEstimateUsd,
-    engineCostBasis: r.engineCostBasis,
-    actualCostEstimated: r.actualCostEstimated,
-    actualCostPartial: r.actualCostPartial,
+    // credits: an engine refusal naming a dollar balance or a provider reads as a capacity limit (the raw text stays in the database)
+    error: customerError(r.error),
+    credits: extra.credits,
     etaMinutes: r.etaMinutes,
     input: r.input as unknown as RunInput,
     createdAt: r.createdAt.toISOString(),

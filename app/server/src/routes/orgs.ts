@@ -1,12 +1,10 @@
-import { and, asc, desc, eq, gt, gte, inArray, isNull, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNull } from 'drizzle-orm';
 import { refreshSessionPolicy } from '../auth/session';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
-  countedRunCost,
   creditRate,
   createOrgSchema,
-  estimateMonitoringCost,
   MODE_IDS,
   modeCostUsd,
   type CostTableInfo,
@@ -14,13 +12,10 @@ import {
   updateMemberSchema,
   updateOrgSchema,
   type Invitation,
-  type MonitorsRow,
   type InvitationPreview,
   type Member,
-  type ModeId,
   type Org,
   type Role,
-  type Usage,
   roleAtLeast,
   inviteRoleProblem,
   isClientRole,
@@ -32,8 +27,6 @@ import { db, schema } from '../db';
 import type { OrgRow } from '../db/schema';
 import { randomToken, sha256, slugify } from '../lib/crypto';
 import { badRequest, conflict, forbidden, notFound, parse } from '../lib/errors';
-import { siteRows } from '../n8n/client';
-import { monitorsFromRow } from '../services/data';
 import { engineCostTable } from '../services/engineCost';
 import { sendMail } from '../lib/mailer';
 import { audit } from '../services/audit';
@@ -41,7 +34,6 @@ import { acceptInvitation } from '../services/invitations';
 import { canDeleteClient, dropAssignments, orgView, toOrg } from '../services/agency';
 import { baseUrlFor, senderFor } from '../services/portalMail';
 import { deliveryOverview, listDeliveries, saveSettings, sendTest } from '../services/reportDelivery';
-import { monthStart } from '../services/runs';
 import { applyNewCompanyCredits } from '../services/admin/credits';
 import { settingsRow } from '../services/admin/settings';
 import { deleteCompany } from '../services/companyDelete';
@@ -85,13 +77,13 @@ export async function orgRoutes(app: FastifyInstance) {
       return o;
     });
     await audit(req, org.id, { action: 'company.created', target: { type: 'company', id: org.id, label: org.name } });
-    return toOrg(org, 'owner');
+    return toOrg(org, 'owner', { platformAdmin: isPlatformAdmin(user) });
   });
 
   // G5: a client person reads their workspace (name, agency, brand) for the portal
   app.get('/api/orgs/:orgId', async (req) => {
     const a = await orgAccess(req, (req.params as { orgId: string }).orgId, 'client_viewer');
-    return orgView(a.org, a.role);
+    return orgView(a.org, a.role, isPlatformAdmin(a.user));
   });
 
   app.patch('/api/orgs/:orgId', async (req) => {
@@ -109,7 +101,7 @@ export async function orgRoutes(app: FastifyInstance) {
         target: { type: 'company', id: a.org.id, label: o.name },
         details: { before: Object.fromEntries(changed.map((k) => [k, a.org[k]])), after: Object.fromEntries(changed.map((k) => [k, o[k]])) },
       });
-    return orgView(o, a.role);
+    return orgView(o, a.role, isPlatformAdmin(a.user));
   });
 
   app.delete('/api/orgs/:orgId', async (req) => {
@@ -134,18 +126,19 @@ export async function orgRoutes(app: FastifyInstance) {
       .set({ onboardingStep: body.step, ...(body.done ? { onboardedAt: a.org.onboardedAt ?? new Date() } : {}) })
       .where(eq(schema.organizations.id, a.org.id))
       .returning();
-    return orgView(o, a.role);
+    return orgView(o, a.role, isPlatformAdmin(a.user));
   });
 
+  // credits (app/docs/CREDITS.md): the dollar budget is the platform's own guard in provider cost — set by a platform admin only; a
+  // company's own spending limits are its credit limits (PUT /api/orgs/:orgId/billing/limits)
   app.patch('/api/orgs/:orgId/budget', async (req) => {
     const a = await orgAccess(req, (req.params as { orgId: string }).orgId, 'owner');
+    if (!isPlatformAdmin(a.user)) throw forbidden('Limits are in Settings → Credits.');
     const body = parse(z.object({ monthlyBudgetUsd: z.number().min(0).max(100000) }), req.body);
-    if (body.monthlyBudgetUsd > config.ownerBudgetMaxUsd && !isPlatformAdmin(a.user))
-      throw badRequest(`Owners can set up to $${config.ownerBudgetMaxUsd} a month; for more, ask the platform administrator.`, { monthlyBudgetUsd: `At most $${config.ownerBudgetMaxUsd}` });
     const [o] = await db.update(schema.organizations).set({ monthlyBudgetUsd: body.monthlyBudgetUsd }).where(eq(schema.organizations.id, a.org.id)).returning();
     if (o.monthlyBudgetUsd !== a.org.monthlyBudgetUsd)
       await audit(req, a.org.id, { action: 'company.budget_changed', target: { type: 'company', id: a.org.id, label: a.org.name }, details: { before: a.org.monthlyBudgetUsd, after: o.monthlyBudgetUsd } });
-    return orgView(o, a.role);
+    return orgView(o, a.role, isPlatformAdmin(a.user));
   });
 
   // R100: the prices the forms show before a run and the budget check holds — the engine's own rolling figures (read from its store,
@@ -159,69 +152,8 @@ export async function orgRoutes(app: FastifyInstance) {
     return { ...info, creditRate: rate, modes: Object.fromEntries(MODE_IDS.map((m) => [m, modeCostUsd(m, info.calibration)])) };
   });
 
-  app.get('/api/orgs/:orgId/usage', async (req): Promise<Usage> => {
-    const a = await orgAccess(req, (req.params as { orgId: string }).orgId);
-    const since = monthStart();
-    const runs = await db
-      .select({ mode: schema.runs.mode, own: schema.runs.estimatedCostUsd, engine: schema.runs.engineCostEstimateUsd, act: schema.runs.actualCostUsd, partial: schema.runs.actualCostPartial, status: schema.runs.status, createdAt: schema.runs.createdAt })
-      .from(schema.runs)
-      .where(and(eq(schema.runs.orgId, a.org.id), gte(schema.runs.createdAt, since), ne(schema.runs.status, 'failed')));
-    const byMode = new Map<string, { runs: number; est: number }>();
-    const daily = new Map<string, { runs: number; est: number }>();
-    // B-R3: a run counts at what it cost, else at the engine's own calibrated figure, else at ours - the same order as the budget
-    // check in spend.ts and as the figure shown on the run itself, so the three can never disagree.
-    // R102: a run that reported search data only never counts for less than the best whole-run estimate, and is not "actual".
-    const costOf = (r: { own: number; engine: number | null; act: number | null; partial: boolean }) => countedRunCost({ actual: r.act, partial: r.partial, engine: r.engine, own: r.own });
-    for (const r of runs) {
-      const m = byMode.get(r.mode) ?? { runs: 0, est: 0 };
-      m.runs += 1;
-      m.est += costOf(r);
-      byMode.set(r.mode, m);
-      const day = r.createdAt.toISOString().slice(0, 10);
-      const d = daily.get(day) ?? { runs: 0, est: 0 };
-      d.runs += 1;
-      d.est += costOf(r);
-      daily.set(day, d);
-    }
-    // keyword checks (the "New keyword ladder" flow) count in the month and per day, not as runs
-    const checks = await db
-      .select({ usd: schema.keywordChecks.costUsd, createdAt: schema.keywordChecks.createdAt })
-      .from(schema.keywordChecks)
-      .where(and(eq(schema.keywordChecks.orgId, a.org.id), gte(schema.keywordChecks.createdAt, since), ne(schema.keywordChecks.status, 'failed')));
-    for (const c of checks) {
-      const day = c.createdAt.toISOString().slice(0, 10);
-      const d = daily.get(day) ?? { runs: 0, est: 0 };
-      d.est += c.usd;
-      daily.set(day, d);
-    }
-    const checksUsd = checks.reduce((t, c) => t + c.usd, 0);
-    const tracked = await db.query.sites.findMany({ where: and(eq(schema.sites.orgId, a.org.id), eq(schema.sites.trackingStatus, 'active')) });
-    // the background monitors as saved for each tracked (verified) site; defaults (everything on) when none are saved
-    const monitoring = await Promise.all(
-      tracked
-        .filter((s) => s.verifiedAt)
-        .map(async (s) => {
-          const m = monitorsFromRow((await siteRows<MonitorsRow>('monitors', s.domain, { max: 5 }).catch(() => []))[0]);
-          return estimateMonitoringCost({ aiVisibility: m?.aiVisibility ?? true, backlinks: m?.backlinks ?? true, auditMonthly: m?.auditMonthly ?? true, blogsPerWeek: s.blogsPerWeek, aiPrompts: m?.aiPromptsMax, aiEngines: m?.aiEngines, aiPulse: m?.aiPulse, linkBuilder: m?.linkBuilder ?? true });
-        }),
-    );
-    const estimated = runs.reduce((t, r) => t + costOf(r), 0) + checksUsd;
-    const round = (x: number) => Math.round(x * 100) / 100;
-    return {
-      month: since.toISOString().slice(0, 7),
-      budgetUsd: a.org.monthlyBudgetUsd,
-      estimatedUsd: round(estimated),
-      actualUsd: round(runs.reduce((t, r) => t + (r.partial ? 0 : (r.act ?? 0)), 0)),
-      actualPartialUsd: round(runs.reduce((t, r) => t + (r.partial ? (r.act ?? 0) : 0), 0)),
-      actualPartialRuns: runs.filter((r) => r.partial && r.act != null).length,
-      remainingUsd: round(Math.max(0, a.org.monthlyBudgetUsd - estimated)),
-      runs: runs.length,
-      byMode: [...byMode.entries()].map(([mode, v]) => ({ mode: mode as ModeId, runs: v.runs, estimatedUsd: round(v.est) })).sort((x, y) => y.estimatedUsd - x.estimatedUsd),
-      daily: [...daily.entries()].map(([date, v]) => ({ date, runs: v.runs, estimatedUsd: round(v.est) })).sort((x, y) => x.date.localeCompare(y.date)),
-      monitoringMonthlyUsd: round(monitoring.reduce((t, x) => t + x, 0)),
-      keywordChecks: { checks: checks.length, usd: round(checksUsd) },
-    };
-  });
+  // credits (app/docs/CREDITS.md): GET /api/orgs/:orgId/usage (the month in provider dollars) was removed 2026-10-19 — the Credits page
+  // (GET /api/orgs/:orgId/billing) replaced it
 
   // ---------- B-R1: report delivery ----------
   // Where this company's finished reports are pushed. Reading it needs membership (a viewer may see where reports go); changing it

@@ -12,6 +12,15 @@ import { auditQs, useAuditLog, type AuditFilters } from '@/lib/queries';
 import { fmtDateTime } from '@/lib/utils';
 import { SettingsCard } from './SettingsCard';
 
+/**
+ * credits (app/docs/CREDITS.md): no provider cost and no dollar budget in what a company reads. The server leaves them out already;
+ * this also hides them on a row an older server sent (`estimatedUsd`, `monthlyBudgetUsd`, a budget change's before / after).
+ */
+function shownDetails(e: AuditEventView): Record<string, unknown> {
+  if (e.action === 'company.budget_changed') return {};
+  return Object.fromEntries(Object.entries(e.details ?? {}).filter(([k]) => !/usd$/i.test(k) && !/budget/i.test(k)));
+}
+
 const ACTOR_KIND: Record<string, string> = { scim: 'Provisioning', system: 'System', platform_admin: 'Platform administrator' };
 
 /**
@@ -160,11 +169,11 @@ export function AuditTab() {
             <dd className="break-all text-xs text-ink-2">{open.userAgent ?? '—'}</dd>
             <dt className="text-ink-3">Action</dt>
             <dd className="font-mono text-xs text-ink-2">{open.action}</dd>
-            {Object.keys(open.details).length > 0 && (
+            {Object.keys(shownDetails(open)).length > 0 && (
               <>
                 <dt className="text-ink-3">Details</dt>
                 <dd>
-                  <pre className="max-h-64 overflow-auto rounded-md border border-line bg-surface-2 p-2 font-mono text-xs text-ink-2">{JSON.stringify(open.details, null, 2)}</pre>
+                  <pre className="max-h-64 overflow-auto rounded-md border border-line bg-surface-2 p-2 font-mono text-xs text-ink-2">{JSON.stringify(shownDetails(open), null, 2)}</pre>
                 </dd>
               </>
             )}

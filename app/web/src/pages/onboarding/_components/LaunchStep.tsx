@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Receipt, ShieldAlert } from 'lucide-react';
-import { AI_ENGINES, estimateMonitoringCost, formatUsd, GOALS, type Run } from '@seo/shared';
+import { AI_ENGINES, autopilotMonthlyUsd, formatCredits, GOALS, type Run } from '@seo/shared';
 import { useEngineCal } from '@/lib/engine-cal';
 import { runCost, runMinutes } from '@/lib/prices';
+import { creditsLabel, quoteCredits, quoteLabel } from '@/lib/credits';
+import { CreditRefusal, isCreditRefusal } from '@/components/site/CreditRefusal';
 import { EmailVerifyNotice } from '@/components/site/EmailVerifyNotice';
 import { permissionLabel } from '@/components/site/GoogleConnectionPanel';
 import { asCountry } from '@/components/site/helpers';
@@ -16,9 +18,9 @@ import { Callout, Skeleton } from '@/components/ui/feedback';
 import { Checkbox } from '@/components/ui/field';
 import { IconTile } from '@/components/insight';
 import { GuideButton } from '@/components/guide';
-import { errorMessage } from '@/lib/api';
+import { ApiRequestError, errorMessage } from '@/lib/api';
 import { paths } from '@/lib/paths';
-import { qk, useGoogleConnection, useOnboardingStep, useSiteData, useStartRun, useUsage } from '@/lib/queries';
+import { qk, useBilling, useGoogleConnection, useOnboardingStep, useSiteData, useStartRun } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 import { sizeLabel } from './CompanyStep';
 import { StepFrame } from './WizardShell';
@@ -34,7 +36,7 @@ export function LaunchStep() {
   const verified = !!site.verifiedAt;
   const settings = useSiteData(org.id, site.id, 'settings', undefined, { enabled: verified });
   const google = useGoogleConnection(org.id, site.id, verified);
-  const usage = useUsage(org.id);
+  const billing = useBilling(org.id);
   const startRun = useStartRun(org.id);
   const onboarding = useOnboardingStep(org.id);
   const [auditNow, setAuditNow] = useState(true);
@@ -49,12 +51,18 @@ export function LaunchStep() {
   }, [site, settings.data]);
 
   const m = plan.monitors;
-  const monthly = estimateMonitoringCost({ aiVisibility: m.aiVisibility, backlinks: m.backlinks, auditMonthly: m.auditMonthly, blogsPerWeek: plan.blogsPerWeek, aiPrompts: m.aiPromptsMax, aiEngines: m.aiEngines, aiPulse: m.aiPulse, aiGrowth: m.aiGrowth, aiPages: m.aiPagesPerMonth, linkBuilder: m.linkBuilder });
+  // credits (app/docs/CREDITS.md): the schedules' month from the same rows as the settings card and the Credits page (autopilotRows)
+  const monthly = autopilotMonthlyUsd(m, plan.blogsPerWeek);
   // D-2: the runs this step starts, priced and timed exactly as their tool forms and the budget check price them (the engine's own
   // calibration, read here without the company layout) — not the shipped MODES table, which said $0.09 beside the form's $0.11
   const auditRun = { reportType: 'site_audit' } as const;
-  const nowCost = runCost('track') + (auditNow ? runCost('audit', auditRun) : 0) + (aiNow ? runCost('ai_visibility') : 0);   // blog posts and monitors are spent weekly (see the monthly estimate)
-  const overBudget = usage.data ? nowCost > usage.data.remainingUsd : false;
+  // credits (app/docs/CREDITS.md): each run is quoted (and held) on its own, so starting now uses the sum of their quotes; blog posts
+  // and monitors are autopilot (see the monthly estimate)
+  const nowCredits = quoteCredits(runCost('track')) + (auditNow ? quoteCredits(runCost('audit', auditRun)) : 0) + (aiNow ? quoteCredits(runCost('ai_visibility')) : 0);
+  const b = billing.data;
+  const metered = !!b && (b.enforced || b.limits.onDemandMonthly != null);
+  const available = b ? Math.max(0, b.onDemandAvailable) : 0;
+  const overCredits = metered && nowCredits > available;
   const country = plan.country;
 
   const finishOnboarding = async () => {
@@ -223,8 +231,8 @@ export function LaunchStep() {
               Monthly audit: {m.auditMonthly ? `on · up to ${m.auditJs ? Math.min(m.auditPages, JS_MAX_PAGES) : m.auditPages} pages${m.auditJs ? ' with JavaScript' : ''}` : 'off'}
             </span>
           </Row>
-          <Row label="Estimated cost" step="tracking" go={go} highlight>
-            <span className="font-semibold">{formatUsd(monthly)} / month</span>
+          <Row label="Estimated credits" step="tracking" go={go} highlight>
+            <span className="font-semibold">{creditsLabel(monthly)} a month</span>
             <span className="text-ink-3"> for weekly tracking, monitors and blog posts</span>
           </Row>
         </dl>
@@ -237,7 +245,7 @@ export function LaunchStep() {
               onChange={(e) => setAuditNow(e.target.checked)}
               disabled={!verified}
               label="Run a technical audit now"
-              description={`About ${runMinutes('audit', auditRun)} minutes, about ${formatUsd(runCost('audit', auditRun))}. Health score, issues by priority and a fix pack, without waiting for the 1st of the month.`}
+              description={`About ${runMinutes('audit', auditRun)} minutes, about ${quoteLabel(runCost('audit', auditRun))}. Health score, issues by priority and a fix pack, without waiting for the 1st of the month.`}
             />
           </div>
           <div className="rounded-lg border border-line px-4 py-3 transition-colors duration-150 ease-brand hover:border-line-strong has-[:checked]:border-accent-text/50 has-[:checked]:bg-accent-soft/60">
@@ -246,27 +254,27 @@ export function LaunchStep() {
               onChange={(e) => setAiNow(e.target.checked)}
               disabled={!verified}
               label="Take an AI visibility baseline now"
-              description={`About ${runMinutes('ai_visibility')} minutes, about ${formatUsd(runCost('ai_visibility'))}. Where AI assistants name you today, so later changes can be measured against it.`}
+              description={`About ${runMinutes('ai_visibility')} minutes, about ${quoteLabel(runCost('ai_visibility'))}. Where AI assistants name you today, so later changes can be measured against it.`}
             />
           </div>
         </fieldset>
 
-        {/* cost note */}
+        {/* credits note */}
         <div className="flex items-start gap-3 rounded-lg border border-line bg-surface-2 px-4 py-3 text-[13px] leading-relaxed text-ink-2">
           <IconTile size="sm">
             <Receipt />
           </IconTile>
           <div className="min-w-0 flex-1 pt-0.5">
             <p>
-              <span className="font-semibold text-ink">Starting now costs about {formatUsd(nowCost)}</span>
-              {usage.data && <> · {formatUsd(usage.data.remainingUsd)} left in this month’s budget of {formatUsd(usage.data.budgetUsd)}</>}.
+              <span className="font-semibold text-ink">Starting now uses about {formatCredits(nowCredits)}</span>
+              {metered && <> · {formatCredits(available)} available</>}.
             </p>
-            {usage.data && usage.data.budgetUsd > 0 && <BudgetBar used={usage.data.estimatedUsd} add={nowCost} budget={usage.data.budgetUsd} />}
+            {metered && <CreditsBar available={available} add={nowCredits} />}
           </div>
         </div>
-        {overBudget && (
-          <Callout tone="warning" title="This is more than this month’s remaining budget">
-            Runs that would go over the budget are refused. {org.role === 'owner' ? 'Raise it in Company settings → Usage' : 'Ask the owner of your company to raise it'}, or
+        {overCredits && (
+          <Callout tone="warning" title="Not enough credits to start all of this now">
+            Analyses that need more credits than are available are refused. {org.role === 'owner' || org.role === 'admin' ? 'Add credits in Company settings → Credits' : 'Ask an owner or admin of your company to add credits'}, or
             untick the extras above.
           </Callout>
         )}
@@ -298,7 +306,7 @@ export function LaunchStep() {
           </Callout>
         )}
         <EmailVerifyNotice me={me} action="Tracking and audits" />
-        {error != null && <Callout tone="critical">{errorMessage(error)}</Callout>}
+        {error != null && (error instanceof ApiRequestError && isCreditRefusal(error) ? <CreditRefusal orgId={org.id} error={error} /> : <Callout tone="critical">{errorMessage(error)}</Callout>)}
       </div>
     </StepFrame>
   );
@@ -318,21 +326,21 @@ function Row({ label, step, go, children, highlight }: { label: string; step: St
   );
 }
 
-/** This month's budget: spent so far (solid blue) and what starting now adds (light blue). */
-function BudgetBar({ used, add, budget }: { used: number; add: number; budget: number }) {
-  const usedPct = Math.min(100, (used / budget) * 100);
-  const addPct = Math.max(0, Math.min(100 - usedPct, (add / budget) * 100));
+/** credits (app/docs/CREDITS.md): what starting now holds (light blue) out of the credits available for analyses; the rest (solid blue) stays. */
+function CreditsBar({ available, add }: { available: number; add: number }) {
+  const addPct = available > 0 ? Math.min(100, (add / available) * 100) : add > 0 ? 100 : 0;
+  const restPct = Math.max(0, 100 - addPct);
   return (
     <div
       className="mt-2 flex h-2 w-full max-w-sm gap-0.5 overflow-hidden rounded-full bg-surface-3"
       role="meter"
-      aria-label="Monthly budget used, with what starting now adds"
+      aria-label="Credits available for analyses, with what starting now uses"
       aria-valuemin={0}
       aria-valuemax={100}
-      aria-valuenow={Math.round(usedPct + addPct)}
+      aria-valuenow={Math.round(addPct)}
     >
-      {usedPct > 0 && <span className="h-full rounded-l-full bg-accent" style={{ width: `${usedPct}%` }} />}
-      {addPct > 0 && <span className={cn('h-full bg-accent/40 dark:bg-accent-text/55', usedPct <= 0 && 'rounded-l-full')} style={{ width: `${addPct}%` }} />}
+      {addPct > 0 && <span className="h-full rounded-l-full bg-accent/40 dark:bg-accent-text/55" style={{ width: `${addPct}%` }} />}
+      {restPct > 0 && <span className={cn('h-full bg-accent', addPct <= 0 && 'rounded-l-full')} style={{ width: `${restPct}%` }} />}
     </div>
   );
 }

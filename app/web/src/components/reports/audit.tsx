@@ -13,7 +13,7 @@ import { DataTable, type Column } from '@/components/ui/table';
 import { Segmented } from '@/components/ui/tabs';
 import { BarsChart, ChartCard, ShareBars } from '@/components/charts';
 import { FileButton } from './files';
-import { Block, CodeBlock, Disclosure, Empty, Facts, has, LedgerCard, n, num, obj, objs, pctRatio, SectionTitle, sevTone, shortUrl, str, strs, type P } from './kit';
+import { Block, CodeBlock, Disclosure, Empty, Facts, has, CreditsCard, n, num, obj, objs, pctRatio, SectionTitle, sevTone, shortUrl, str, strs, type P } from './kit';
 import { ChartTitle, HeroFileButton, PositionPill, ReportHero, ScoreMark } from './visuals';
 
 const SEVERITIES = ['Critical', 'High', 'Medium', 'Low', 'Info'] as const;
@@ -127,7 +127,7 @@ export function AuditReport({ report }: { report: ReportDetail }) {
             : 'Use Save as PDF at the top of the page to keep a copy of this report.'}
         </Callout>
       )}
-      <LedgerCard ledger={p.run_ledger} />
+      <CreditsCard p={p} />
     </Stagger>
   );
 }

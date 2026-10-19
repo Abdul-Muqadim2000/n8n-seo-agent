@@ -1101,7 +1101,7 @@ export const GUIDES = [
         body: 'Marketplaces, directories, review sites and Wikipedia rank for everything and compete with nobody. A giant twenty times your size makes every gap look hopeless and hides the real ones.',
         warn: 'Use the bare domain — `competitor.com`, not a long URL with https:// and a path.',
       },
-      { title: 'Stay at three', body: 'Three is what the reports compare. More dilutes every number and costs more to check.' },
+      { title: 'Stay at three', body: 'Three is what the reports compare. More dilutes every number and uses more credits to check.' },
     ],
     done: 'The link gap and the AI share of voice start naming sites you recognise as rivals.',
     related: ['brand-names', 'keywords-to-track'],
@@ -1224,26 +1224,43 @@ export const GUIDES = [
   {
     id: 'budget',
     area: 'company',
-    title: 'Set the monthly budget',
-    why: 'Research calls and writing cost real money per run. The budget is a hard cap: when a run would take you past it, it is refused rather than quietly charged.',
-    where: 'Company settings → Usage and budget',
-    who: 'The company owner',
+    title: 'Credits: see them, limit them, top them up',
+    why: 'Everything Alaventra does is paid in credits from one balance: the automatic work each website gets every week and the analyses your team starts. Knowing where they go — and setting limits — means the work never stops by surprise.',
+    where: 'Company settings → Credits',
+    who: 'Anyone can look; the owner sets the limits; an owner or admin buys packs',
     minutes: 5,
     steps: [
       {
-        title: 'Know what costs what',
-        body: 'Writing a page is the expensive part; keyword research, audits and the AI checks are cents. Every form shows its estimate before you start, and the schedules show what a month of monitoring costs per website.',
+        title: 'See what you have and where it goes',
+        body: 'The **Credits** page shows the balance, what running analyses are holding, how long the credits will last at your pace, and this month’s use split between **autopilot** (the websites’ schedules) and **on-demand** (analyses people start). Each website shows what its automatic work will use a month.',
       },
-      { title: 'Set the cap you are comfortable with', body: 'The budget is per company per month. The usage page shows what has been spent, what is left and what the schedules will add before the month ends.' },
       {
-        title: 'Know what happens at the cap',
-        body: 'A run that would cross it is refused with a clear message, and nothing half-finished is left behind — no page is promised that nobody wrote.',
+        title: 'Know how an analysis is charged',
+        body: 'Every form shows its price in credits before you start. That price is held while it runs; when it finishes it is charged what it really used, **never more**. An analysis that fails is free.',
       },
-      { title: 'Revisit after the first full month', body: 'The estimates correct themselves against what runs actually cost, so the second month’s forecast is the realistic one.' },
+      {
+        title: 'Set your limits',
+        body: 'Under **Limits**, set a monthly limit for **on-demand** analyses and another for **autopilot**. Leave **Keep credits for autopilot** on so a busy week of analyses cannot use the credits the websites’ schedules need for the rest of the month.',
+      },
+      {
+        title: 'Buy a pack before you run low',
+        body: 'Press **Buy credits** and pick a pack. The Alaventra team confirms the request and sends the invoice; the credits are added for 12 months. You can cancel a request while it is waiting.',
+        note: 'Credits are used soonest-expiring first: welcome credits, then a plan’s monthly credits (they roll over one month), then packs.',
+      },
+      {
+        title: 'Know what happens at zero',
+        body: 'New analyses are refused with the reason, and each website’s automatic work pauses. It resumes by itself as soon as credits are added or a new month starts. Owners and admins get an e-mail when credits run low, run out and when the work resumes.',
+      },
     ],
-    done: 'The budget meter shows a month of planned work fitting inside the cap.',
+    done: 'The Credits page shows a runway that covers the month, with your limits set and the autopilot forecast for every website fitting inside them.',
+    trouble: [
+      {
+        q: 'An analysis was refused although there are credits left',
+        a: 'Part of the balance is kept for the websites’ automatic work this month, or the on-demand limit is reached. The message names which; raise the limit, add credits or switch **Keep credits for autopilot** off.',
+      },
+    ],
     related: ['invite-team'],
-    keywords: ['budget', 'cost', 'spend', 'usage', 'limit'],
+    keywords: ['credits', 'balance', 'budget', 'cost', 'price', 'spend', 'usage', 'limit', 'pack', 'top up', 'buy'],
   },
   {
     id: 'invite-team',
@@ -1256,7 +1273,7 @@ export const GUIDES = [
     steps: [
       {
         title: 'Pick the right role',
-        body: '**Viewer** reads dashboards and reports. **Member** can also start analyses. **Admin** manages websites, settings and the team. **Owner** additionally controls the budget and can delete the company.',
+        body: '**Viewer** reads dashboards and reports. **Member** can also start analyses. **Admin** manages websites, settings and the team. **Owner** additionally sets the credit limits and can delete the company.',
       },
       { title: 'Send the invitation', body: 'Enter the address and the role. They get a link that joins them straight to this company.' },
       {
@@ -1513,7 +1530,7 @@ export const GUIDES = [
     id: 'bigquery-service-account',
     area: 'integrations',
     title: 'Export to BigQuery',
-    why: 'Six tables — rankings, weekly Search Console and GA4 figures, audit findings, AI visibility, backlinks and analyses with their cost — are loaded into your own BigQuery dataset on a schedule, with a documented schema.',
+    why: 'Six tables — rankings, weekly Search Console and GA4 figures, audit findings, AI visibility, backlinks and the analyses you ran — are loaded into your own BigQuery dataset on a schedule, with a documented schema.',
     where: 'Google Cloud console and Company settings → Integrations',
     who: 'Someone with IAM rights in your Google Cloud project',
     minutes: 15,
@@ -1580,7 +1597,7 @@ export const GUIDES = [
     id: 'mcp-assistant',
     area: 'integrations',
     title: 'Connect Claude or ChatGPT to your SEO data',
-    why: 'Ask an AI assistant about your websites, audits, rankings and reports — and, if you allow it, let it start analyses for you, inside your monthly budget and with the same checks as the app.',
+    why: 'Ask an AI assistant about your websites, audits, rankings and reports — and, if you allow it, let it start analyses for you, using your company’s credits and with the same checks as the app.',
     where: 'Company settings → API access, and your assistant’s settings',
     who: 'An owner or admin (for the key); anyone for the assistant',
     minutes: 5,
@@ -1589,7 +1606,7 @@ export const GUIDES = [
       {
         title: 'Create a key for the assistant',
         body: 'In **Company settings → API access**, create a key. Tick only **Read** for questions; tick **Start analyses** as well if the assistant may start runs.',
-        warn: 'A key with **Start analyses** spends from your monthly budget. The assistant is told to preview the cost first and never to accept a duplicate warning you have not seen.',
+        warn: 'A key with **Start analyses** uses your company’s credits. The assistant is told to show you the price in credits first and never to accept a duplicate warning you have not seen.',
       },
       {
         title: 'Add Alaventra to the assistant',
@@ -2005,7 +2022,7 @@ export const GUIDES = [
     id: 'invite-clients',
     area: 'agency',
     title: 'Give a client access to their portal',
-    why: 'Your client follows their own websites — dashboards, reports, recommendations — and approves pages and outreach before they go out, without seeing your other clients or your costs.',
+    why: 'Your client follows their own websites — dashboards, reports, recommendations — and approves pages and outreach before they go out, without seeing your other clients or your credits.',
     where: 'The client’s workspace → Company settings → Team',
     minutes: 3,
     steps: [

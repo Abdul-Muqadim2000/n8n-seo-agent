@@ -11,7 +11,7 @@ import { KeyValue } from '@/components/ui/misc';
 import { DataTable, type Column } from '@/components/ui/table';
 import { ShareBars } from '@/components/charts';
 import { DifficultyBadge, PlanBadge } from '@/components/site/keyword';
-import { Block, Bullets, Chips, Facts, has, LedgerCard, n, num, obj, objs, plural, SectionTitle, shortUrl, str, strs, usd, type P } from './kit';
+import { Block, Bullets, Chips, Facts, has, CreditsCard, n, num, obj, objs, plural, SectionTitle, shortUrl, str, strs, usd, type P } from './kit';
 import { isCountry, keywordPrefill } from './meta';
 import { KdMeter, PositionPill, ReportHero, VolumeBar } from './visuals';
 
@@ -489,7 +489,7 @@ export function KeywordStrategyReport({ report }: { report: ReportDetail }) {
         </Block>
       )}
 
-      <LedgerCard ledger={p.run_ledger} />
+      <CreditsCard p={p} />
     </Stagger>
   );
 }

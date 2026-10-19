@@ -66,8 +66,8 @@ export function ConnectToolsCard({ data }: { data: IntegrationsOverview }) {
       <SettingsCard
         icon={<Bot />}
         title="AI assistants (MCP)"
-        description="Ask Claude or ChatGPT about your SEO data, and let them start analyses within your budget."
-        info="A key with only “Read” lets an assistant read. A key with “Start analyses” also lets it start runs: it must preview the cost first and may not accept a duplicate warning you have not seen. Every run it starts shows the key’s name."
+        description="Ask Claude or ChatGPT about your SEO data, and let them start analyses with the company’s credits."
+        info="A key with only “Read” lets an assistant read. A key with “Start analyses” also lets it start runs: it must preview the price in credits first and may not accept a duplicate warning you have not seen. Every run it starts shows the key’s name."
         actions={<GuideButton id="mcp-assistant" vars={{ appUrl: data.appUrl }} />}
       >
         <CardBody className="space-y-4">

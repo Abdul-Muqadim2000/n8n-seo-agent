@@ -189,7 +189,7 @@ export function SiteHeader() {
                       <div>
                         <p className="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-accent-on-ink">How it works</p>
                         <p className="mt-3 font-display text-lg font-semibold leading-snug">One weekly loop from research to results.</p>
-                        <p className="mt-2 text-[13px] leading-relaxed text-on-ink-2">Every step on Auto or waiting for you, with the cost shown before any paid work.</p>
+                        <p className="mt-2 text-[13px] leading-relaxed text-on-ink-2">Every step on Auto or waiting for you, with the price in credits shown before any work.</p>
                         <ol className="mt-5 grid grid-cols-2 gap-x-3 gap-y-2">
                           {LOOP_STEPS.map((st, i) => (
                             <li key={st.label} className="flex items-center gap-2 text-[13px] text-on-ink">

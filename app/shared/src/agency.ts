@@ -7,6 +7,7 @@
 import { z } from 'zod';
 import { brandInitials, brandLogoUrl } from './brand';
 import { ROLE_RANK, type Role } from './constants';
+import type { RunCreditState } from './api';
 
 // ---------------------------------------------------------------------------------------------------------------------------
 // Tenancy
@@ -513,9 +514,10 @@ export const senderDisplayName = (v: string): string => v.replace(/["\\\r\n<>]/g
 // Clients, staff, overview
 // ---------------------------------------------------------------------------------------------------------------------------
 
+// credits (app/docs/CREDITS.md): no dollar budget is asked for any more — a client workspace is limited by its credits (Settings →
+// Credits); the server keeps the platform's default dollar guard on the row
 export const createClientSchema = z.object({
   name: plainName(120).refine((v) => v.length >= 2, 'Enter the client’s name'),
-  monthlyBudgetUsd: z.number().min(0).max(100000).optional(),
   website: z.string().trim().max(200).default(''),
 });
 export const staffAssignSchema = z.object({ role: z.enum(ASSIGNABLE_ROLES).nullable() });
@@ -528,8 +530,9 @@ export interface AgencyClient {
   sites: number;
   clientPeople: number;
   staff: number;
-  monthlyBudgetUsd: number;
-  spentUsd: number;
+  /** credits (app/docs/CREDITS.md): the workspace's credit balance, and the credits it used this calendar month (UTC) */
+  creditBalance: number;
+  creditsUsedThisMonth: number;
   clientApproval: boolean;
   /** what the signed-in person can do there */
   role: Role;
@@ -561,8 +564,9 @@ export interface AgencyOverviewRow {
   aiMentionRate: number | null;
   alerts14d: number;
   approvalsWaiting: number;
-  spentUsd: number;
-  budgetUsd: number;
+  /** credits (app/docs/CREDITS.md): what the client workspace used this calendar month, and its balance */
+  creditsUsedMonth: number;
+  creditBalance: number;
 }
 
 export const OVERVIEW_CSV_COLUMNS = [
@@ -579,8 +583,8 @@ export const OVERVIEW_CSV_COLUMNS = [
   'ai_mention_rate',
   'alerts_14d',
   'approvals_waiting',
-  'spent_usd_month',
-  'budget_usd_month',
+  'credits_used_month',
+  'credit_balance',
 ] as const;
 
 export function overviewCsvRow(r: AgencyOverviewRow, cell: (v: unknown) => string): string {
@@ -598,8 +602,8 @@ export function overviewCsvRow(r: AgencyOverviewRow, cell: (v: unknown) => strin
     r.aiMentionRate,
     r.alerts14d,
     r.approvalsWaiting,
-    r.spentUsd,
-    r.budgetUsd,
+    r.creditsUsedMonth,
+    r.creditBalance,
   ]
     .map(cell)
     .join(',');
@@ -658,9 +662,16 @@ export interface ApprovalCandidate {
 // What a client person sees
 // ---------------------------------------------------------------------------------------------------------------------------
 
-/** key names that carry what something cost us: never shown to a client person (the agency's price is its own business) */
+/**
+ * Key names that carry what something cost us. Never shown to a customer — credits (app/docs/CREDITS.md): since 2026-10-19 not to the
+ * company's own people either, only to the platform admin panel. Beside the cost / ledger / budget words: the engine's run ledger and
+ * its parts (`by_node`, `ai_nodes`, `ai_cost*`, `dataforseo_*`, `dfs_*`, `run_cost_estimate_*`, `cost_basis`). Google Ads CPC
+ * (`cpc`, `cpc_usd`, `primary_cpc`) is keyword data, not our cost: always kept.
+ */
 const COST_KEY = /(^|_)(costs?|usd|spend|spent|budget|ledger|price|prices|billing|balance)(_|$)|(Cost|Usd|Spend|Budget|Ledger|Price|Balance)s?$|^cost/i;
-export const isCostKey = (k: string): boolean => COST_KEY.test(k);
+const PROVIDER_KEY = /^(run_ledger|by_node|ai_nodes|ai_cost.*|ai_usd|dataforseo.*|dfs_.*|run_cost.*|cost_basis)$/i;
+const KEEP_KEY = /cpc/i;
+export const isCostKey = (k: string): boolean => !KEEP_KEY.test(k) && (COST_KEY.test(k) || PROVIDER_KEY.test(k));
 
 /** a report payload without its cost / ledger / budget keys, at any depth up to 6 */
 export function clientSafePayload<T>(v: T, depth = 0): T {
@@ -672,6 +683,22 @@ export function clientSafePayload<T>(v: T, depth = 0): T {
     out[k] = clientSafePayload(x, depth + 1);
   }
   return out as T;
+}
+
+/** credits (app/docs/CREDITS.md): what a report's work used, as a served payload carries it */
+export interface PayloadCredits {
+  /** the credits the run behind the report was charged (the analysis as a whole when it posted several reports); null when unknown */
+  used: number | null;
+  /** the run's credit state; null for a report with no run (a schedule's report) whose charge is not known */
+  state: RunCreditState | null;
+}
+
+/**
+ * A report payload as every customer gets it — the company's own people, API / MCP callers and client people alike: no provider cost
+ * at any depth (`clientSafePayload`), plus `credits_used` / `credits_state` (null when unknown). The stored payload is untouched.
+ */
+export function customerSafePayload(payload: Record<string, unknown>, credits: PayloadCredits | null = null): Record<string, unknown> {
+  return { ...clientSafePayload(payload ?? {}), credits_used: credits?.used ?? null, credits_state: credits?.state ?? null };
 }
 
 /** the context a page gets from the host it was opened on (null = the app's own host) */

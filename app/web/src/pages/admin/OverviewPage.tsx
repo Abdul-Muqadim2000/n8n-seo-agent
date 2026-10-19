@@ -1,12 +1,13 @@
 import { Link } from 'react-router';
-import { AlertTriangle, Building2, CheckCircle2, Coins, LayoutDashboard, Play, TrendingUp, Users, Wallet } from 'lucide-react';
+import { AlertTriangle, Building2, CheckCircle2, Coins, Inbox, LayoutDashboard, Play, TrendingUp, Users, Wallet } from 'lucide-react';
 import type { AdminCompanyRow } from '@seo/shared';
 import { CountUp, MetricCard, Stagger } from '@/components/insight';
+import { CreditBookCard, useAdminUnits } from './_components/units';
 import { Card } from '@/components/ui/card';
 import { ErrorState, Skeleton } from '@/components/ui/feedback';
 import { type Column } from '@/components/ui/table';
 import { fmtAgo, fmtDate } from '@/lib/utils';
-import { useAdminOverview } from '@/lib/queries';
+import { useAdminCreditRequests, useAdminOverview } from '@/lib/queries';
 import { useAdminPeriod } from './AdminLayout';
 import { AdminCard, AdminPageHeader, CompanyStatus, CostSplitCell, DailyCostChart, EstimatedTip, FlushTable, MarginValue, Money, Num, ProviderBillCard, RowTile, SplitLine } from './_components/kit';
 import { adminPaths, credits, estimatedShare, marginPct, money, PERIOD_LABELS, withPeriod } from './lib';
@@ -30,8 +31,11 @@ export function OverviewSkeleton() {
 
 export default function AdminOverviewPage() {
   const [period] = useAdminPeriod();
+  const [units] = useAdminUnits();
   const q = useAdminOverview(period);
   const o = q.data;
+  const requests = useAdminCreditRequests('pending');
+  const waiting = requests.data ?? [];
 
   const top: Column<AdminCompanyRow>[] = [
     {
@@ -108,14 +112,21 @@ export default function AdminOverviewPage() {
             <MetricCard
               label="Credits outstanding"
               icon={<Coins />}
-              value={<CountUp value={o.credits.outstanding} format={credits} />}
-              info="The sum of every company’s balance now: credits granted and not yet used."
+              value={units === 'usd' ? <CountUp value={o.credits.book?.remainingListUsd ?? 0} format={(v) => money(v, { digits: 2 })} /> : <CountUp value={o.credits.outstanding} format={credits} />}
+              info={units === 'usd' ? 'Every company’s balance now at list price: what customers can still spend. Serving it will cost us about a third of it.' : 'The sum of every company’s balance now: credits granted and not yet used.'}
               meta={
                 <SplitLine
-                  items={[
-                    { label: 'granted', value: credits(o.credits.grantedInPeriod) },
-                    { label: 'used', value: credits(o.credits.usedInPeriod) },
-                  ]}
+                  items={
+                    units === 'usd'
+                      ? [
+                          { label: 'bought', value: money(o.credits.book?.boughtUsd ?? 0, { digits: 2 }) },
+                          { label: 'used', value: money(o.credits.book?.usedListUsd ?? 0, { digits: 2 }) },
+                        ]
+                      : [
+                          { label: 'granted', value: credits(o.credits.grantedInPeriod) },
+                          { label: 'used', value: credits(o.credits.usedInPeriod) },
+                        ]
+                  }
                 />
               }
             />
@@ -150,13 +161,15 @@ export default function AdminOverviewPage() {
             />
           </div>
 
+          {o.credits.book && <CreditBookCard book={o.credits.book} title="Credit book, all companies" />}
+
           <DailyCostChart daily={o.daily} loading={q.isPlaceholderData} />
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {o.bills.map((b) => (
               <ProviderBillCard key={b.provider} bill={b} attributedSplit={b.provider === 'anthropic' ? { estimatedUsd: o.money.cost.claudeEstimatedUsd } : undefined} />
             ))}
-            <Card className="flex min-w-0 flex-col p-4 md:col-span-2 xl:col-span-1">
+            <Card className="flex min-w-0 flex-col p-4">
               <span className="text-[13px] font-medium text-ink-2">Not tied to a company</span>
               <span className="mt-3 font-display text-xl font-semibold text-ink">{money(o.unattributed.totalUsd)}</span>
               <span className="mt-1 font-mono text-[11px] text-ink-3">
@@ -166,6 +179,28 @@ export default function AdminOverviewPage() {
                 Engine spend on deleted websites, test runs and the engine’s own checks. Counted in “attributed” on the provider cards, not in any company’s cost.
               </p>
             </Card>
+            <MetricCard
+              label="Credit requests waiting"
+              icon={<Inbox />}
+              tone={waiting.length ? 'warning' : 'blue'}
+              to={withPeriod(adminPaths.creditRequests, period)}
+              value={requests.isError ? '–' : <CountUp value={waiting.length} format={(v) => Math.round(v).toLocaleString('en-US')} />}
+              info="Packs customers asked for with “Buy credits”. Invoice each one, then confirm it: the credits are added and the payment counts as revenue."
+              meta={
+                requests.isError ? (
+                  'Could not read the requests'
+                ) : waiting.length ? (
+                  <SplitLine
+                    items={[
+                      { label: 'worth', value: money(waiting.reduce((t, r) => t + r.priceUsd, 0), { digits: 2 }) },
+                      { label: 'oldest', value: fmtAgo(waiting.reduce((a, r) => (r.createdAt < a ? r.createdAt : a), waiting[0]!.createdAt)) },
+                    ]}
+                  />
+                ) : (
+                  'Nothing to confirm'
+                )
+              }
+            />
           </div>
 
           <AdminCard

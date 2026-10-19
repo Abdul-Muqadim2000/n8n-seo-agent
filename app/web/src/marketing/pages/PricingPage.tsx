@@ -5,11 +5,15 @@ import {
   Check,
   Clock,
   ChevronsLeftRight,
-  CircleDollarSign,
+  CalendarClock,
+  Coins,
   Gauge,
+  Hand,
   Info,
+  Layers,
   Link2,
   Minus,
+  PauseCircle,
   Recycle,
   Rocket,
   ShieldCheck,
@@ -29,6 +33,11 @@ import {
   annualDiscount,
   annualMonthly,
   costControls,
+  creditExamples,
+  creditPackValidity,
+  creditPacks,
+  creditPacksNote,
+  creditRules,
   pricingFaqs,
   pricingMatrix,
   pricingTiers,
@@ -46,12 +55,17 @@ type Billing = 'monthly' | 'annual';
 const usd = (n: number) => `$${n.toLocaleString('en-US')}`;
 const discountLabel = `Save ${Math.round(annualDiscount * 100)}%`;
 
-const ALL_PLANS = ['Search Console, GA4 and Trends tracking', 'A cost estimate before every run', 'Roles and invitations', 'Monthly audits with a fix pack'];
+const ALL_PLANS = ['Search Console, GA4 and Trends tracking', 'The price in credits before every analysis', 'Roles and invitations', 'Monthly audits with a fix pack'];
 
 /** The jobs one subscription covers — each is a capability on /platform, not a claim about another product. */
 const REPLACES = ['Keyword research', 'Rank tracking', 'Site crawler', 'Content writing with SEO QA', 'AI answer tracking', 'Backlink index', 'Outreach'];
 
 const COST_ICONS: LucideIcon[] = [Calculator, Wallet, Gauge, Recycle, Link2];
+
+/** one icon per line of `creditRules`, in order */
+const CREDIT_ICONS: LucideIcon[] = [Layers, Calculator, ShieldCheck, Hand, PauseCircle, CalendarClock];
+
+const credits = (n: number) => n.toLocaleString('en-US');
 
 /** Price for a tier in the chosen billing period: the big figure, the line under it and the struck-through monthly price. */
 function priceFor(t: PricingTier, billing: Billing) {
@@ -149,6 +163,17 @@ function PlanCard({ tier, billing, index }: { tier: PricingTier; billing: Billin
           )}
         </p>
         <p className="mt-2.5 text-[13px] text-ink-3">{p.note}</p>
+        {tier.monthlyCredits !== undefined ? (
+          <p className="mt-3 flex items-center gap-2 text-[13px] font-medium text-ink">
+            <Coins className="size-3.5 text-accent-text" aria-hidden />
+            Includes <span className="font-mono tabular">{credits(tier.monthlyCredits)}</span> credits a month
+          </p>
+        ) : (
+          <p className="mt-3 flex items-center gap-2 text-[13px] font-medium text-ink">
+            <Coins className="size-3.5 text-accent-text" aria-hidden />
+            Credits to fit your portfolio
+          </p>
+        )}
       </div>
 
       <ButtonLink to={tier.cta.to} size="lg" variant={hi ? 'primary' : 'secondary'} className="mt-7 w-full">
@@ -180,7 +205,7 @@ function Plans({ billing, setBilling }: { billing: Billing; setBilling: (b: Bill
         align="center"
         eyebrow="Pricing"
         title="Start small. Grow when it works."
-        lead="Setting up is free. Every plan writes the pages, not just a list of keywords — and every run shows its cost before it starts."
+        lead="Setting up is free. Every plan writes the pages, not just a list of keywords — and every analysis shows its price in credits before it starts."
         containerClassName="pb-12 sm:pb-14"
       >
         <div className="mt-9 flex justify-center">
@@ -220,8 +245,8 @@ function Plans({ billing, setBilling }: { billing: Billing; setBilling: (b: Bill
               <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
               <span>
                 {pricingUsageNote}{' '}
-                <a href="#costs" className="font-medium text-accent-text underline-offset-4 hover:underline">
-                  How costs work
+                <a href="#credits" className="font-medium text-accent-text underline-offset-4 hover:underline">
+                  How credits work
                 </a>
                 {' · '}
                 <a href="#done-for-you" className="font-medium text-accent-text underline-offset-4 hover:underline">
@@ -236,6 +261,64 @@ function Plans({ billing, setBilling }: { billing: Billing; setBilling: (b: Bill
   );
 }
 
+/** "How credits work": the rules in customer words, what typical work uses and the packs (prices and packs are placeholders). */
+function Credits() {
+  return (
+    <Section tone="surface" bordered id="credits" aria-labelledby="credits-title">
+      <SectionHeading
+        id="credits-title"
+        eyebrow="How credits work"
+        title="One balance. The price before every analysis."
+        lead="Everything Alaventra does for you is paid in credits — the work it runs on its own each week and the analyses you start. Your plan adds credits every month, and packs top them up when you need more."
+      />
+      <ul className="mt-12 grid gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
+        {creditRules.map((r, i) => (
+          <Reveal as="li" key={r.title} index={i} className="flex gap-4">
+            <IconTile icon={CREDIT_ICONS[i] ?? Check} size="sm" />
+            <span>
+              <span className="block font-display text-[15px] font-semibold text-ink">{r.title}</span>
+              <span className="mt-1 block text-[14px] leading-relaxed text-ink-2">{r.body}</span>
+            </span>
+          </Reveal>
+        ))}
+      </ul>
+
+      <div className="mt-14 grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <Reveal className="rounded-xl border border-line bg-page p-6 sm:p-7">
+          <h3 className="font-display text-[17px] font-semibold tracking-[-0.01em] text-ink">What typical work uses</h3>
+          <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-3">Every analysis shows its own price before it starts; these are a guide.</p>
+          <dl className="mt-5 divide-y divide-line border-t border-line">
+            {creditExamples.map((e) => (
+              <div key={e.label} className="flex flex-col gap-1 py-3.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
+                <dt className="text-[14px] leading-snug text-ink-2">{e.label}</dt>
+                <dd className="shrink-0 font-mono text-[13.5px] font-medium text-ink tabular">{e.credits}</dd>
+              </div>
+            ))}
+          </dl>
+        </Reveal>
+        <Reveal index={1} className="rounded-xl border border-line bg-page p-6 sm:p-7">
+          <h3 id="packs-title" className="font-display text-[17px] font-semibold tracking-[-0.01em] text-ink">
+            Credit packs
+          </h3>
+          <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-3">On top of any plan. Each pack lasts {creditPackValidity}.</p>
+          <ul className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {creditPacks.map((pk) => (
+              <li key={pk.credits} className="rounded-lg border border-line bg-surface px-4 py-3.5 shadow-card">
+                <span className="block font-display text-[19px] font-semibold leading-none tracking-[-0.01em] text-ink tabular">{credits(pk.credits)}</span>
+                <span className="mt-1 block text-[12px] text-ink-3">credits</span>
+                <span className="mt-3 block font-mono text-[14px] font-medium text-ink tabular">{pk.price}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-5 flex items-start gap-2 text-[13px] leading-relaxed text-ink-3">
+            <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+            <span>{creditPacksNote}</span>
+          </p>
+        </Reveal>
+      </div>
+    </Section>
+  );
+}
 
 const SERVICE_ICONS: Record<ServicePackage['id'], LucideIcon> = { setup: Rocket, publishing: Upload, fixes: Wrench, managed: Sparkles };
 
@@ -443,18 +526,18 @@ function Comparison({ billing }: { billing: Billing }) {
   );
 }
 
-/** Sample run estimate as the app shows it before a run starts, plus two runs that cost nothing (sample data). */
+/** Sample analysis price as the app shows it before it starts, plus two runs that use no credits (sample data). */
 function CostMockup() {
   return (
     <Drawn
-      label="Sample data: a keyword check estimated at 12 cents before it starts, within a monthly budget of 400 dollars with 184 dollars used; a monthly audit skipped because the sitemap has not changed; and a backlink check from free sources at zero cost."
+      label="Sample data: a keyword check priced at 12 credits before it starts, with 1,240 of the company's 2,580 credits available this month; a monthly audit skipped because the sitemap has not changed; and a backlink check from free sources using no credits."
       className="relative"
     >
       <div className="rounded-xl border border-line bg-surface p-5 shadow-overlay sm:p-6">
         <div className="flex items-center justify-between gap-3">
           <span className="flex items-center gap-2.5">
             <span className="inline-flex size-8 items-center justify-center rounded-lg bg-accent-soft text-accent-text">
-              <CircleDollarSign className="size-4" />
+              <Coins className="size-4" />
             </span>
             <span>
               <span className="block text-[13px] font-semibold text-ink">Keyword check</span>
@@ -462,13 +545,13 @@ function CostMockup() {
             </span>
           </span>
           <MockBadge tone="good" icon={ShieldCheck}>
-            Within budget
+            Within your limits
           </MockBadge>
         </div>
         <dl className="mt-5 grid grid-cols-2 gap-3">
           <div className="mk-pop rounded-lg border border-line bg-page px-3.5 py-3" style={{ ['--mk-i' as string]: 0 }}>
-            <dt className="text-[11px] text-ink-3">Estimated cost</dt>
-            <dd className="mt-1 font-mono text-[20px] font-medium tracking-[-0.02em] text-ink tabular">$0.12</dd>
+            <dt className="text-[11px] text-ink-3">Price</dt>
+            <dd className="mt-1 font-mono text-[20px] font-medium tracking-[-0.02em] text-ink tabular">12 credits</dd>
           </div>
           <div className="mk-pop rounded-lg border border-line bg-page px-3.5 py-3" style={{ ['--mk-i' as string]: 1 }}>
             <dt className="text-[11px] text-ink-3">Estimated time</dt>
@@ -479,11 +562,11 @@ function CostMockup() {
         </dl>
         <div className="mk-pop mt-4" style={{ ['--mk-i' as string]: 2 }}>
           <span className="flex items-baseline justify-between text-[11.5px]">
-            <span className="font-medium text-ink">Company budget this month</span>
-            <span className="font-mono text-ink-2 tabular">$184 of $400</span>
+            <span className="font-medium text-ink">Credits available</span>
+            <span className="font-mono text-ink-2 tabular">1,240 of 2,580</span>
           </span>
           <span className="mt-2 block h-2 overflow-hidden rounded-full bg-surface-2">
-            <span className="mk-grow-x block h-full w-[46%] rounded-full bg-accent" />
+            <span className="mk-grow-x block h-full w-[48%] rounded-full bg-accent" />
           </span>
         </div>
         <span className="mt-5 flex h-9 w-full items-center justify-center rounded-lg bg-accent text-[13px] font-medium text-accent-ink">Start run</span>
@@ -498,7 +581,7 @@ function CostMockup() {
               <span className="block text-[12.5px] font-medium text-ink">{r.t}</span>
               <span className="block truncate text-[11.5px] text-ink-3">{r.d}</span>
             </span>
-            <span className="shrink-0 font-mono text-[13px] font-medium text-good-text tabular">$0.00</span>
+            <span className="shrink-0 font-mono text-[13px] font-medium text-good-text tabular">0 credits</span>
           </div>
         ))}
       </div>
@@ -514,9 +597,9 @@ function Costs() {
         <div>
           <SectionHeading
             id="costs-title"
-            eyebrow="Transparent costs"
-            title="You see the cost before any work starts."
-            lead="AI and data are the parts of SEO that cost money per run. Alaventra estimates them up front, checks them against your budget and never pays twice for a result that cannot have changed."
+            eyebrow="Credits well spent"
+            title="You see the price before any work starts."
+            lead="Research, writing and AI answer checks are the parts of SEO that use credits. Alaventra prices them up front, checks them against your limits and never charges twice for a result that cannot have changed."
           />
           <ul className="mt-10 space-y-6">
             {costControls.map((c, i) => (
@@ -543,7 +626,7 @@ function PricingFaq() {
     <Section tone="surface" bordered>
       <div className="grid grid-cols-1 gap-12 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-20">
         <div>
-          <SectionHeading eyebrow="FAQ" title="Pricing questions." lead="Plans, budgets and what a run costs. For anything else, a person on the team will answer." />
+          <SectionHeading eyebrow="FAQ" title="Pricing questions." lead="Plans, credits and what an analysis uses. For anything else, a person on the team will answer." />
           <Reveal className="mt-8 flex flex-col items-start gap-3">
             <ArrowLink to="/contact?topic=sales">Talk to sales</ArrowLink>
             <ArrowLink to="/security">Security at Alaventra</ArrowLink>
@@ -558,11 +641,12 @@ function PricingFaq() {
 }
 
 export default function PricingPage() {
-  useSeo({ title: 'Pricing', description: 'Alaventra plans for one website to a whole portfolio. Every run shows its cost before it starts, and budgets keep spend where you set it.', path: '/pricing' });
+  useSeo({ title: 'Pricing', description: 'Alaventra plans for one website to a whole portfolio, paid in credits. Every analysis shows its price before it starts and never uses more.', path: '/pricing' });
   const [billing, setBilling] = useState<Billing>('monthly');
   return (
     <>
       <Plans billing={billing} setBilling={setBilling} />
+      <Credits />
       <Services />
       <Comparison billing={billing} />
       <Costs />
@@ -570,7 +654,7 @@ export default function PricingPage() {
       <CtaBand
         className="pt-20 sm:pt-28"
         title="Running SEO for many companies?"
-        lead="Enterprise brings multi-company workspaces, budgets and spend caps per company, alert watching and onboarding with your team."
+        lead="Enterprise brings multi-company workspaces, credits and limits per company, alert watching and onboarding with your team."
         primary={{ label: 'Talk to sales', to: '/contact?topic=sales' }}
         secondary={{ label: 'Start free', to: '/signup' }}
       >

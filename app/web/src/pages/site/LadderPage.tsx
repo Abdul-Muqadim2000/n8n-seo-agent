@@ -21,7 +21,8 @@ import {
   TrendingUp,
   Trophy,
 } from 'lucide-react';
-import { CHANGE_TEST_METHOD, CHANGE_VERDICT_TONES, compactNumber, formatUsd, type LadderDetail, type LadderPage, type LadderTimelineEvent } from '@seo/shared';
+import { CHANGE_TEST_METHOD, CHANGE_VERDICT_TONES, compactNumber, type LadderDetail, type LadderPage, type LadderTimelineEvent } from '@seo/shared';
+import { creditsLabel } from '@/lib/credits';
 import { AnnotationLegend, ChartCard, LineageNote, Sparkline, TimeSeriesChart } from '@/components/charts';
 import { Badge } from '@/components/ui/badge';
 import { ButtonLink } from '@/components/ui/button';
@@ -161,7 +162,7 @@ function Ladder({ ladder: l, back }: { ladder: LadderDetail; back: ReactNode }) 
             <>
               {l.statusText && <span className="block">{l.statusText}</span>}
               <span className={l.statusText ? 'mt-1 block' : 'block'}>
-                Cost so far {formatUsd(l.costSoFarUsd)} · about {formatUsd(l.monthlyCostUsd)} a month from now on
+                Credits used so far {creditsLabel(l.costSoFarUsd)} · about {creditsLabel(l.monthlyCostUsd)} a month from now on
                 {l.expectedVisitsTop3 ? ` · about ${compactNumber(l.expectedVisitsTop3)} visits a month once the main keyword is in the top 3` : ''}
               </span>
             </>

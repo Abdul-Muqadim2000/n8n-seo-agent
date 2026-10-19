@@ -189,7 +189,7 @@ describe('what a client person sees', () => {
     expect(p).toEqual({ health_score: 80, engine: { findings: [{ title: 'x' }] }, keyword: 'price of erp' });
   });
   it('the overview CSV is formula-safe and lines up with its header', () => {
-    const r: AgencyOverviewRow = { clientId: 'c', clientName: '=HYPERLINK("x")', siteId: 's', domain: 'acme.com', verified: true, tracking: 'active', healthScore: 81, healthAt: '2026-10-01', rankGains: 3, rankDrops: 1, clicksPct: 12.5, aiVisibility: 40, aiMentionRate: 0.2, alerts14d: 0, approvalsWaiting: 2, spentUsd: 3.2, budgetUsd: 25 };
+    const r: AgencyOverviewRow = { clientId: 'c', clientName: '=HYPERLINK("x")', siteId: 's', domain: 'acme.com', verified: true, tracking: 'active', healthScore: 81, healthAt: '2026-10-01', rankGains: 3, rankDrops: 1, clicksPct: 12.5, aiVisibility: 40, aiMentionRate: 0.2, alerts14d: 0, approvalsWaiting: 2, creditsUsedMonth: 64, creditBalance: 436 };
     const line = overviewCsvRow(r, csvCell);
     expect(line.startsWith(`"'=HYPERLINK`)).toBe(true);
     expect(line.split('","').length).toBe(OVERVIEW_CSV_COLUMNS.length);

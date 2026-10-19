@@ -239,7 +239,7 @@ export async function assertCredits(tx: Tx, org: OrgRow, estimatedUsd: number, w
 // The Credits page
 // ---------------------------------------------------------------------------------------------------------------------------------
 
-const lotView = (l: typeof schema.creditLots.$inferSelect): CreditLot => ({
+export const lotView = (l: typeof schema.creditLots.$inferSelect): CreditLot => ({
   id: l.id,
   source: l.source as CreditSource,
   credits: l.credits,
@@ -348,6 +348,8 @@ export async function billingOverview(org: OrgRow, now = new Date()): Promise<Bi
     packs: packsOf(s).map((p) => pricePack(p, s.creditValueUsd)),
     requests: requests.map(requestView),
     creditValueUsd: s.creditValueUsd,
+    packExpiryMonths: s.packExpiryMonths,
+    planRolloverMonths: s.planRollover ? 1 : 0,
     checkout: 'request',
   };
 }
@@ -508,8 +510,23 @@ const NOTICE: Record<Exclude<CreditStatus, 'ok'>, { subject: string; line: (st: 
   paused: { subject: 'Automatic work is paused: out of credits', line: (st) => `The automatic work of ${st.sites.filter((x) => x.pausedForCredits).map((x) => x.domain).join(', ')} is paused. It resumes by itself as soon as credits are added; nothing is lost but the weeks it misses.` },
 };
 
-/** One pass over every company that has credits to watch. Never throws; returns what it did. */
-export async function creditGuardTick(log: Log, now = new Date()): Promise<{ granted: number; expired: number; paused: number; resumed: number; notices: number }> {
+type GuardResult = { granted: number; expired: number; paused: number; resumed: number; notices: number };
+let guardInFlight: Promise<GuardResult> | null = null;
+
+/** One pass over every company that has credits to watch. Never throws; returns what it did. Single-flight: a pass asked for while
+ *  another runs (the timer, an admin's "run now", a grant) waits for that one and then runs its own, so two never act at once. */
+export async function creditGuardTick(log: Log, now?: Date): Promise<GuardResult> {
+  while (guardInFlight) await guardInFlight.catch(() => undefined);
+  const p = guardPass(log, now ?? new Date());
+  guardInFlight = p;
+  try {
+    return await p;
+  } finally {
+    if (guardInFlight === p) guardInFlight = null;
+  }
+}
+
+async function guardPass(log: Log, now: Date): Promise<GuardResult> {
   const out = { granted: 0, expired: 0, paused: 0, resumed: 0, notices: 0 };
   out.granted = await grantPlanCredits(now).catch((e) => (log.warn({ err: String(e) }, 'plan credits failed'), 0));
   out.expired = await expireLots(now).catch((e) => (log.warn({ err: String(e) }, 'credit expiry failed'), 0));

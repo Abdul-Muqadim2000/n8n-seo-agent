@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { creditsFor, type AdminRunRow } from '@seo/shared';
+import { bookLines, creditOrUsd } from '@/pages/admin/_components/units';
+import { book } from './adminFixtures';
 import {
   actionLabel,
   aggregateByMode,
@@ -161,5 +163,22 @@ describe('activity rows', () => {
     expect(detailText({ a: 1 })).toBe('{"a":1}');
     expect(detailText(null)).toBe('–');
     expect(detailText(false)).toBe('false');
+  });
+});
+
+describe('credit book lines (the admin Credits / USD switch)', () => {
+  it('every line carries its credits and the dollars that mean something for it; margin = list value of the usage less its cost', () => {
+    const lines = bookLines(book({ bought: 2000, boughtUsd: 100, free: 200, used: 300, remaining: 1900 }));
+    const by = (l: string) => lines.find((x) => x.label === l)!;
+    expect(by('Bought')).toMatchObject({ credits: 2000, usd: [{ label: 'paid', value: 100 }] });
+    expect(by('Given free').usd[0]).toMatchObject({ label: 'list value', value: 10 });
+    const used = by('Used').usd;
+    expect(used.map((u) => u.label)).toEqual(['at list price', 'cost us', 'margin']);
+    expect(used[0].value).toBeCloseTo(15, 6);
+    expect(used[1].value).toBeCloseTo(5, 6);
+    expect(used[2].value).toBeCloseTo(10, 6);
+    expect(by('Remaining now').usd.map((u) => u.value)).toEqual([95, 95 / 3]);
+    expect(creditOrUsd('credits', 1234.5, 61.73)).toBe('1,234.5 cr');
+    expect(creditOrUsd('usd', 1234.5, 61.725)).toBe('$61.73');
   });
 });

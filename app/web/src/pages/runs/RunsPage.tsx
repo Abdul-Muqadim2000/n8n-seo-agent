@@ -132,7 +132,7 @@ function RunList({ filters, filtered }: { filters: RunFilters; filtered: boolean
                 Duration
               </th>
               <th scope="col" className="hidden border-b border-line px-3 py-2.5 text-right font-medium lg:table-cell">
-                Est. cost
+                Credits
               </th>
               <th scope="col" className="border-b border-line px-4 py-2.5 text-right font-medium">
                 Reports

@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import {
-  costBasisV1,
+  customerSafePayload,
   decodeCursor,
   deliveryDecision,
   encodeCursor,
@@ -11,16 +11,15 @@ import {
   pageLimit,
   pageOf,
   publishCheckSchema,
-  runCostEstimate,
   type ApiScope,
   type AuditDetailV1,
   type AuditFindingRow,
   type AuditRow,
   type AuditV1,
-  type ModeId,
   type PageV1,
   type PublishCheckResult,
   type ReportV1,
+  type RunCredits,
   type RunV1,
   type WebsiteV1,
 } from '@seo/shared';
@@ -32,6 +31,8 @@ import { HttpError, notFound, validationError } from '../lib/errors';
 import { publishCheckCall, siteRows } from '../n8n/client';
 import { aiData, oneReadingFinding, previousOfType } from './data';
 import { filesFor } from './runs';
+import { creditsForRuns, reportCredits } from './runCredits';
+import { customerError } from '../lib/customerError';
 import { crawlerData } from './crawlers/analytics';
 
 /**
@@ -211,29 +212,26 @@ export async function getCrawlers(ctx: V1Ctx, websiteId: unknown, q: Q = {}) {
 
 // ---------------- runs ----------------
 
-export function toRunV1(r: RunRow): RunV1 {
-  const c = runCostEstimate({
-    mode: r.mode as ModeId,
-    input: r.input as Record<string, unknown>,
-    estimatedCostUsd: r.estimatedCostUsd,
-    actualCostUsd: r.actualCostUsd,
-    engineCostEstimateUsd: r.engineCostEstimateUsd,
-    engineCostBasis: r.engineCostBasis,
-    actualCostEstimated: r.actualCostEstimated,
-    actualCostPartial: r.actualCostPartial,
-  });
+/** credits (app/docs/CREDITS.md): a run as an API / MCP caller reads it — its credits, never what it cost at the providers */
+export function toRunV1(r: RunRow, credits: RunCredits): RunV1 {
   return {
     id: r.id,
     websiteId: r.siteId,
     mode: r.mode,
     title: r.title,
     status: r.status,
-    error: r.error,
+    error: customerError(r.error),
     createdAt: r.createdAt.toISOString(),
     completedAt: r.completedAt ? r.completedAt.toISOString() : null,
     reportCount: r.reportCount,
-    cost: { usd: c.usd, basis: costBasisV1(c.source), partial: c.source === 'partial', estimated: c.estimated, note: c.basis },
+    credits,
   };
+}
+
+/** a page of runs with their credits (one ledger read) */
+export async function runsV1(orgId: string, rows: RunRow[]): Promise<RunV1[]> {
+  const credits = await creditsForRuns(orgId, rows);
+  return rows.map((r) => toRunV1(r, credits.get(r.id)!));
 }
 
 const RUN_STATUSES = ['submitting', 'accepted', 'running', 'completed', 'failed'];
@@ -253,7 +251,7 @@ export async function listRuns(ctx: V1Ctx, q: Q = {}): Promise<PageV1<RunV1>> {
     .where(and(...conds))
     .orderBy(desc(ms(schema.runs.createdAt)), desc(schema.runs.id))
     .limit(limit + 1);
-  return { items: rows.slice(0, limit).map(toRunV1), nextCursor: nextCursor(rows, limit, (r) => r.createdAt) };
+  return { items: await runsV1(ctx.org.id, rows.slice(0, limit)), nextCursor: nextCursor(rows, limit, (r) => r.createdAt) };
 }
 
 export async function getRun(ctx: V1Ctx, runId: unknown): Promise<{ run: RunV1 & { input: Record<string, unknown> }; reports: ReportV1[] }> {
@@ -261,7 +259,7 @@ export async function getRun(ctx: V1Ctx, runId: unknown): Promise<{ run: RunV1 &
   const run = await db.query.runs.findFirst({ where: and(eq(schema.runs.orgId, ctx.org.id), eq(schema.runs.id, runId)) });
   if (!run) throw notFound('Run not found');
   const reports = await reportRows(ctx, [eq(schema.reports.runId, run.id)], 100);
-  return { run: { ...toRunV1(run), input: run.input }, reports: reports.slice(0, 100).map(toReportV1Row).reverse() };
+  return { run: { ...(await runsV1(ctx.org.id, [run]))[0], input: run.input }, reports: reports.slice(0, 100).map(toReportV1Row).reverse() };
 }
 
 // ---------------- reports ----------------
@@ -337,7 +335,8 @@ export async function getReport(ctx: V1Ctx, reportId: unknown): Promise<ReportV1
   if (!r) throw notFound('Report not found');
   const full = await db.query.reports.findFirst({ where: and(eq(schema.reports.orgId, ctx.org.id), eq(schema.reports.id, reportId)) });
   if (!full) throw notFound('Report not found');
-  return { ...toReportV1Row(r), payload: full.payload };
+  // credits (app/docs/CREDITS.md): no provider cost at any depth; the credits the work used instead
+  return { ...toReportV1Row(r), payload: customerSafePayload(full.payload, await reportCredits(ctx.org.id, full)) };
 }
 
 export async function fileOf(ctx: V1Ctx, fileId: unknown) {
@@ -380,5 +379,7 @@ export async function publishCheck(ctx: V1Ctx, body: unknown, site: SiteRow | nu
   if (res.status === 400) return { status: 400, body: { ok: false, publishable: false, verdict: 'error', exit_code: 2, error: str(res.json.error) || 'The engine refused the request', errors: Array.isArray(res.json.errors) ? res.json.errors.map(str) : [] } };
   if (res.status !== 200 || typeof res.json.publishable !== 'boolean')
     throw new HttpError(502, 'The page check gave no verdict, so nothing was checked. Try again in a few minutes.', 'engine_unavailable');
-  return { status: 200, body: res.json as unknown as PublishCheckResult };
+  // credits (app/docs/CREDITS.md): the engine reports what the check cost (`cost_usd`, $0): never passed on
+  const { cost_usd: _cost, ...answer } = res.json as Record<string, unknown>;
+  return { status: 200, body: answer as unknown as PublishCheckResult };
 }

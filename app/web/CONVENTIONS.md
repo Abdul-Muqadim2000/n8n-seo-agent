@@ -50,6 +50,21 @@ state that asks for something, add or reuse a guide in the same change.
 - Tests: `shared/src/guides.test.ts` (ids, placeholders declared and used, https links, closed markup, plain-text export, search).
   Run the browser check in `app/scripts/` style against the dev stack when the panel itself changes.
 
+## Credits, never cost
+
+**Rule: a customer never sees what work costs us at the providers.** Everything they use is priced in credits (rules and numbers:
+`../docs/CREDITS.md`).
+- No provider cost — no dollar cost of a run, no Claude / DataForSEO split, no engine cost basis — on any customer screen, export,
+  webhook, API / MCP answer or error message. The platform admin panel (`/admin`) is the only place that shows costs, revenue and
+  margin.
+- Turn a cost figure into credits **only** through `src/lib/credits.ts`: `quoteLabel(cost)` for an analysis about to start (its
+  quote, whole credits, the server's own rounding), `creditsLabel(cost)` for monthly figures, forecasts, breakdowns and usage. Never
+  multiply by a rate in a component.
+- Dollars appear only for prices the customer pays: plans, credit packs and the done-for-you services (and in the platform admin).
+- **A new customer screen that renders `formatUsd` of a cost is a bug**, and so is the word "budget" for what is now a credit limit.
+- The public website follows the same rule: prices in credits, "about N credits" for examples, never "markup", "margin" or "provider
+  cost".
+
 ## Cost figures
 
 **Rule: never write a per-mode price into a component, a test or a second table.** `shared/src/cost.ts` is the one table (it mirrors

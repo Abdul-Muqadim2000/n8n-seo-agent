@@ -23,7 +23,7 @@ import { CountUp, HeroStat, IconTile, InsightItem, Stagger } from '@/components/
 import { DifficultyBadge, PlanBadge } from '@/components/site/keyword';
 import { ExternalLink } from '@/components/ui/misc';
 import { DataTable, type Column } from '@/components/ui/table';
-import { Block, Bullets, Facts, has, LedgerCard, n, num, obj, objs, SectionTitle, shortUrl, str, strs, usd, verdictLabel, type P } from './kit';
+import { Block, Bullets, Facts, has, CreditsCard, n, num, obj, objs, SectionTitle, shortUrl, str, strs, usd, verdictLabel, type P } from './kit';
 import { isCountry, keywordPrefill } from './meta';
 import { PositionPill, ReportHero, ScoreMark, StatusMark, WordValue } from './visuals';
 
@@ -231,7 +231,7 @@ export function LadderReport({ report }: { report: ReportDetail }) {
         </Callout>
       )}
 
-      <LedgerCard ledger={p.run_ledger} />
+      <CreditsCard p={p} />
     </Stagger>
   );
 }

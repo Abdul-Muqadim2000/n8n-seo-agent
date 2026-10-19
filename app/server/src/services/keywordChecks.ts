@@ -17,6 +17,7 @@ import { requireVerified } from '../auth/access';
 import { config } from '../config';
 import type { KeywordCheckRow, OrgRow, SiteRow } from '../db/schema';
 import { badRequest, forbidden, HttpError } from '../lib/errors';
+import { namesProviderCost } from '../lib/customerError';
 import { assessCall, siteRows, type AssessCallResult } from '../n8n/client';
 import { dropCheck, findRecentCheck, finishCheck, reserveCheck } from './keywordCheckStore';
 import { latestReport } from './runs';
@@ -75,16 +76,19 @@ export function interpretAssess(res: AssessCallResult): AssessOutcome {
     const fields: Record<string, string> = {};
     if (str(errs.keyword)) fields.keyword = 'Use 2-100 characters';
     if (str(errs.country)) fields.country = 'Choose one of the listed countries';
-    const why = str(j.error).slice(0, 200);
+    const why = providerFree(str(j.error).slice(0, 200));
     return { ok: false, reachedEngine: false, error: new HttpError(400, `The SEO engine could not check this keyword${why ? `: ${why}` : ''}.`, 'validation', Object.keys(fields).length ? fields : undefined) };
   }
   if (res.status === 429)
     return { ok: false, reachedEngine: false, error: new HttpError(429, "The SEO engine's daily limit of keyword checks is reached. Try again tomorrow, or pick one of the recommended keywords (they are free).", 'engine_limit') };
   if (res.status === 404) return { ok: false, reachedEngine: false, error: new HttpError(502, 'The keyword check is not switched on in the SEO engine (workflow SEOagentAssess). Nothing was charged.', 'engine_off') };
   if (res.status === 401 || res.status === 403) return { ok: false, reachedEngine: false, error: new HttpError(502, "The SEO engine refused the app's key. Nothing was charged.", 'engine_key') };
-  const why = str(j.error).slice(0, 160);
+  const why = providerFree(str(j.error).slice(0, 160));
   return { ok: false, reachedEngine: true, error: new HttpError(502, `Could not check this keyword right now${why ? ` (${why})` : ''}. Try again in a few minutes.`, 'engine_failed') };
 }
+
+/** credits (app/docs/CREDITS.md): an engine reason that names a dollar balance or a provider is left out of the customer's message */
+const providerFree = (why: string): string => (namesProviderCost(why) ? '' : why);
 
 export function toKeywordCheck(row: KeywordCheckRow, cached: boolean): KeywordCheck {
   return { id: row.id, siteId: row.siteId, keyword: row.keyword, country: row.country, result: toAssessment(row.result), costUsd: row.costUsd, createdAt: row.createdAt.toISOString(), cached };

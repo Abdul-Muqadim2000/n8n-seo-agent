@@ -59,7 +59,7 @@ export const privacyDoc: LegalDoc = {
       id: 'how-we-use',
       title: 'How we use information',
       body: [
-        'We use information to provide the service you ask for: to run analyses, produce reports, keep your account secure, show costs and enforce budgets, and answer your messages.',
+        'We use information to provide the service you ask for: to run analyses, produce reports, keep your account secure, show prices in credits and enforce your company’s credits and limits, and answer your messages.',
         '[Purposes and any further uses — to be completed by counsel.]',
       ],
     },
@@ -170,7 +170,7 @@ export const termsDoc: LegalDoc = {
       id: 'fees',
       title: 'Plans, fees and usage',
       body: [
-        'Every run shows its estimated cost before it starts, and runs are checked against the budget your company sets.',
+        'The work is paid in credits. Every analysis shows its price in credits before it starts, is never charged more than that price and is not charged if it fails; work is checked against your company’s credits and the limits it sets.',
         '[Plans, billing, taxes, renewals and refunds — to be completed by counsel.]',
       ],
     },

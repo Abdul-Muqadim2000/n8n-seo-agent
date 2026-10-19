@@ -52,7 +52,13 @@ vi.mock('../src/services/apiV1', async (orig) => {
 });
 vi.mock('../src/services/pipeline', () => ({ pipelineData: vi.fn(async () => ({ activeRuns: st.activeRuns, automations: [], running: [], pages: [], ladderCards: [], queue: { next: [], later: [], waiting: [] } })) }));
 vi.mock('../src/services/spend', () => ({ monthSpend: vi.fn(async () => 5) }));
-vi.mock('../src/services/billing', () => ({ creditCheck: vi.fn(async () => ({ enforced: true, needed: 4, available: 1, held: 0, reserved: 0, enough: false, reason: 'balance' })) }));
+vi.mock('../src/services/billing', () => ({
+  creditCheck: vi.fn(async () => ({ enforced: true, needed: 4, available: 1, held: 0, reserved: 0, enough: false, reason: 'balance' })),
+  // the real rounding: $0.12 × 60 credits per dollar = 7.2 → 8 whole credits
+  quoteCredits: vi.fn((usd: number) => (usd > 0 ? Math.max(1, Math.ceil(Math.round(usd * 60 * 100) / 100 - 1e-9)) : 0)),
+}));
+vi.mock('../src/services/admin/settings', () => ({ settingsRow: vi.fn(async () => ({ creditValueUsd: 0.05, markup: 3 })) }));
+vi.mock('../src/services/engineCost', () => ({ engineCostTable: vi.fn(async () => ({ calibration: null })) }));
 vi.mock('../src/services/runs', () => ({
   estimateCost: vi.fn(async () => 0.12),
   findIdempotentRun: vi.fn(async () => (st.priorIdem ? { id: 'run-prior' } : null)),
@@ -149,12 +155,15 @@ describe('POST /api/v1/runs', () => {
     expect(st.created).toHaveLength(1);
   });
 
-  it('dryRun shows the estimate, the warnings and the budget, and starts nothing', async () => {
+  it('dryRun shows the quote in credits, the warnings and the credit check, and starts nothing (no dollar figure)', async () => {
     st.activeRuns = [{ id: 'run-going', mode: 'audit', keyword: '', createdAt: '2026-10-17T08:00:00.000Z' }];
     const r = await post(RUN_KEY, { ...audit, dryRun: true });
     expect(r.statusCode).toBe(200);
-    expect(r.json()).toMatchObject({ dryRun: true, mode: 'audit', estimate: { usd: 0.12 }, needsAcknowledge: ['active:run-going'], budget: { spentUsd: 5, budgetUsd: 25, remainingUsd: 20 } });
-    // admin panel: the dry run says whether the company's credits would let it start
+    expect(r.json()).toMatchObject({ dryRun: true, mode: 'audit', estimate: { credits: 8 }, needsAcknowledge: ['active:run-going'] });
+    // credits (app/docs/CREDITS.md): no provider cost and no dollar budget in the answer
+    expect(r.json().budget).toBeUndefined();
+    expect(JSON.stringify(r.json())).not.toMatch(/usd/i);
+    // the dry run says whether the company's credits would let it start
     expect(r.json().credits).toEqual({ enforced: true, needed: 4, available: 1, held: 0, reserved: 0, enough: false, reason: 'balance' });
     expect(st.created).toEqual([]);
   });
@@ -212,7 +221,7 @@ describe('MCP run tools', () => {
 
   it('preview_run is a dry run', async () => {
     const r = (await mcp(RUN_KEY, 'tools/call', { name: 'preview_run', arguments: { input: audit } })).json();
-    expect(r.result.structuredContent).toMatchObject({ dryRun: true, estimate: { usd: 0.12 } });
+    expect(r.result.structuredContent).toMatchObject({ dryRun: true, estimate: { credits: 8 } });
     expect(st.created).toEqual([]);
   });
 
@@ -221,5 +230,9 @@ describe('MCP run tools', () => {
     const items = r.result.structuredContent.items as { mode: string; inputSchema: { properties?: Record<string, unknown> } | null }[];
     expect(items.map((i) => i.mode)).toEqual(expect.arrayContaining(['audit', 'keyword', 'ladder', 'ai_visibility']));
     expect(Object.keys(items.find((i) => i.mode === 'audit')!.inputSchema!.properties!)).toEqual(expect.arrayContaining(['mode', 'siteId']));
+    // credits: each mode's quote in whole credits, never its provider cost
+    const est = (items.find((i) => i.mode === 'audit') as unknown as { estimate: Record<string, number> }).estimate;
+    expect(Object.keys(est).sort()).toEqual(['credits', 'minutes']);
+    expect(est.credits).toBeGreaterThan(0);
   });
 });

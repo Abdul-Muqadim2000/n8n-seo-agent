@@ -38,6 +38,7 @@ DOMAIN = os.environ.get('PROFILE_DOMAIN', '')
 ROWS = {name: [] for name in TABLES}
 LOCK = threading.Lock()
 PUBLISH_CHECKS = []
+STARTED = []
 SEQ = [1]
 
 if DOMAIN:
@@ -110,6 +111,9 @@ class H(BaseHTTPRequestHandler):
             with LOCK:
                 data = [r for r in ROWS.get(t, []) if matches(r, filters_of(q))]
             return self._send({'data': data, 'nextCursor': None})
+        if parts == ['__started']:
+            with LOCK:
+                return self._send({'data': STARTED[-50:]})
         if parts == ['__publish_checks']:
             with LOCK:
                 return self._send({'data': PUBLISH_CHECKS[-20:]})
@@ -133,6 +137,13 @@ class H(BaseHTTPRequestHandler):
                                'label': 'stub', 'summary': 'stub verdict', 'reasons': [] if ok else ['The page has %d words; the target is 300' % words],
                                'content_score': 84 if ok else 51, 'score_bar': 80, 'warnings': [], 'advice': [], 'checks': {},
                                'not_checked': [{'check': 'editor_review', 'reason': 'a model call'}], 'basis': 'stub', 'writes': 'none', 'cost_usd': 0})
+        # credits e2e (2026-10-19, scripts/credits_e2e.py): a stand-in for the engine's front door — it accepts the run like the API entry
+        # workflow (202, a request id), and keeps the body so the test can answer through the run's callback URL, as the engine would
+        if parts == ['webhook', 'seo-keyword-check']:
+            with LOCK:
+                STARTED.append(body)
+                rid = 'stub-run-%d' % len(STARTED)
+            return self._send({'status': 'accepted', 'request_id': rid, 'estimated_minutes': 1}, 202)
         # G6 (2026-10-18): a stand-in for Site Admin (the real one is n8n's SEOagentAdminAPI): it keeps the body, so a browser pass can see
         # what the panel manager sent, and answers in the contract's shape
         if parts == ['webhook', 'seo-site-admin']:

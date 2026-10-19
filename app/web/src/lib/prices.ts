@@ -8,7 +8,7 @@ const estimateRunCost = (m: ModeId, v: Record<string, unknown> = {}) => est(m, v
 
 /**
  * D-2 (re-rating 2026-10-17): the price and the time of one run, for every screen that names a mode — the tools cards, the
- * onboarding launch step, the queue — computed exactly as the tool form and the budget check compute them. `MODES[].costUsd` is the
+ * onboarding launch step, the queue — computed exactly as the tool form and the server's credit check compute them. `MODES[].costUsd` is the
  * shipped table and `MODES[].etaMinutes` the bare base time; neither may be shown as a run's price or duration.
  */
 export const runCost = (mode: ModeId, values: Record<string, unknown> = {}): number => estimateRunCost(mode, values);
@@ -19,32 +19,32 @@ export const runMinutes = (mode: ModeId, values: Record<string, unknown> = {}): 
  * calibration) so one run shows one figure on every screen, in credits. Never type a price literal into a component (R99, CONVENTIONS.md).
  */
 // credits (app/docs/CREDITS.md): every sentence names the price in credits — an analysis at its quote, a monthly figure as is
-const usd = (n: number) => quoteLabel(n);
+const quote = (n: number) => quoteLabel(n);
 const perMonth = (n: number) => creditsLabel(n);
 
 export const PRICES = {
   /** one written page (a content run) */
-  page: () => usd(keyCost('content')),
+  page: () => quote(keyCost('content')),
   /** a keyword report without the page */
-  report: () => usd(keyCost('report')),
+  report: () => quote(keyCost('report')),
   /** one keyword check (difficulty for your site) */
-  check: () => usd(keyCost('assess')),
+  check: () => quote(keyCost('assess')),
   /** the ladder plan alone (research and feasibility) */
-  plan: () => usd(keyCost('ladder')),
+  plan: () => quote(keyCost('ladder')),
   /** plan + the first page: the cheapest way to start a ladder */
-  ladderStart: () => usd(estimateRunCost('ladder', { pagesNow: 1 })),
+  ladderStart: () => quote(estimateRunCost('ladder', { pagesNow: 1 })),
   /** keyword research on its own (no follow-up report) */
-  research: () => usd(estimateRunCost('discover', { receiveReport: false })),
+  research: () => quote(estimateRunCost('discover', { receiveReport: false })),
   /** the follow-ups keyword discovery can start */
-  followTechnical: () => usd(keyCost('site_audit') + keyCost('crawl')),
-  followFull: () => usd(keyCost('full')),
+  followTechnical: () => quote(keyCost('site_audit') + keyCost('crawl')),
+  followFull: () => quote(keyCost('full')),
   /** the standalone audit forms */
-  auditTechnical: () => usd(estimateRunCost('audit', { reportType: 'site_audit' })),
-  auditFull: () => usd(estimateRunCost('audit', { reportType: 'full' })),
+  auditTechnical: () => quote(estimateRunCost('audit', { reportType: 'site_audit' })),
+  auditFull: () => quote(estimateRunCost('audit', { reportType: 'full' })),
   /** the full backlink check (the monthly run) */
-  backlinksFull: () => usd(keyCost('backlinks')),
+  backlinksFull: () => quote(keyCost('backlinks')),
   /** the Link Builder over a month */
   linkBuilderMonthly: () => perMonth(MONITOR_COSTS.linkBuilderMonthly),
-  /** extra cost of writing `n` pages now */
-  pages: (n: number) => usd(n * keyCost('content')),
+  /** the extra credits of writing `n` pages now */
+  pages: (n: number) => quote(n * keyCost('content')),
 };

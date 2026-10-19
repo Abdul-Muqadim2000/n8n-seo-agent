@@ -2,13 +2,14 @@ import { useEffect, useId, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
-import { cleanDomain, COUNTRIES, formatUsd, MONITOR_COSTS, trackInput, type MonitorSettings, type Site } from '@seo/shared';
+import { cleanDomain, COUNTRIES, MONITOR_COSTS, trackInput, type MonitorSettings, type Site } from '@seo/shared';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
 import { ChoiceCard, Field, Input, Select } from '@/components/ui/field';
 import { TagInput } from '@/components/ui/tag-input';
 import { GuideButton } from '@/components/guide';
 import { errorMessage } from '@/lib/api';
+import { creditsLabel } from '@/lib/credits';
 import { applyServerErrors, asCountry, competitorValidator, errorText } from './helpers';
 import { completeMonitors, DEFAULT_MONITORS, MonitoringCost, MonitorSettingsFields } from './MonitorSettingsFields';
 import { aiMeasuredFrom } from './AiPrecision';
@@ -199,7 +200,7 @@ export function TrackingForm({
                     onSelect={() => setValue('blogsPerWeek', n, { shouldDirty: true })}
                     disabled={readOnly}
                     title={n === 0 ? 'None' : `${n} a week`}
-                    description={n === 0 ? 'Tracking only' : `about ${formatUsd(blogMonthlyCost(n), 0)} / month`}
+                    description={n === 0 ? 'Tracking only' : `about ${creditsLabel(blogMonthlyCost(n))} a month`}
                   />
                 ))}
               </div>
