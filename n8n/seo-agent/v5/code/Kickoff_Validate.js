@@ -18,13 +18,14 @@ const unknown = [...new Set([...jobs, ...skip].filter(j => !CYC.NAMES.includes(j
 if (unknown.length) errors.push('unknown jobs: ' + unknown.join(', ') + ' (known: ' + CYC.NAMES.join(', ') + ')');
 const tz = String(b.tz ?? b.timezone ?? '').trim();
 if (tz && !CYC.validTz(tz)) errors.push('unknown time zone "' + tz + '" (an IANA name such as Europe/London is expected)');
+// the window is the cycle kit's (CYC.anchorOf, the same rule "Track my site" applies to tracking_started_at): the kickoff refuses, Track falls back to now
 let anchor_at = '';
 if (b.anchor_at != null && String(b.anchor_at).trim() !== '') {
-  const t = Date.parse(String(b.anchor_at)), now = Date.now();
-  if (!Number.isFinite(t)) errors.push('anchor_at "' + String(b.anchor_at).slice(0, 40) + '" is not a date (ISO 8601 expected)');
-  else if (t < now - 6 * 86400000) errors.push('anchor_at is ' + Math.floor((now - t) / 86400000) + ' days old: cycle 0 starts at the anchor, so it must be within the last 6 days (leave it out to start now)');
-  else if (t > now + 3600000) errors.push('anchor_at is in the future: cycle 0 starts at the anchor, at most an hour from now');
-  else anchor_at = new Date(t).toISOString();
+  const A = CYC.anchorOf(b.anchor_at, Date.now());
+  if (A.problem === 'not_a_date') errors.push('anchor_at "' + String(b.anchor_at).slice(0, 40) + '" is not a date (ISO 8601 expected)');
+  else if (A.problem === 'too_old') errors.push('anchor_at is ' + A.days + ' days old: cycle 0 starts at the anchor, so it must be within the last ' + CYC.ANCHOR.past_days + ' days (leave it out to start now)');
+  else if (A.problem === 'future') errors.push('anchor_at is in the future: cycle 0 starts at the anchor, at most an hour from now');
+  else anchor_at = new Date(A.at).toISOString();
 }
 // the old `jobs` (start only these) is the same statement as "skip every other one", for cycle 0 only
 const skip_jobs = [...new Set([...skip, ...(jobs.length ? CYC.NAMES.filter(j => !jobs.includes(j)) : [])])].filter(j => CYC.NAMES.includes(j));
