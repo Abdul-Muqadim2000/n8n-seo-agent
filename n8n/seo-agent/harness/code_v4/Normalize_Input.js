@@ -292,6 +292,7 @@ const KF_CHOSEN = ['client_typed', 'client_picked', 'system_announced'].includes
 const KF_LADDER_MODE = ['auto', 'manual'].includes(String(p2.ladder_mode || '').trim().toLowerCase()) ? String(p2.ladder_mode).trim().toLowerCase() : '';
 const KF_SERVICES_GIVEN = Array.isArray(p2.services) || typeof p2.services === 'string';
 const KF_SERVICES = (Array.isArray(p2.services) ? p2.services : String(p2.services || '').split(/[\n,;]+/)).map(x => String(x == null ? '' : x).replace(/\s+/g, ' ').trim().slice(0, 80)).filter(x => x.length >= 2).filter((x, i, a) => a.findIndex(y => y.toLowerCase() === x.toLowerCase()) === i).slice(0, 30);
+const KF_TRACK_START = (() => { const v = String(p2.tracking_started_at == null ? '' : p2.tracking_started_at).trim(); if (!v || v.length > 40) return ''; const t = Date.parse(v); return Number.isFinite(t) ? new Date(t).toISOString() : ''; })();   // E4: the app's trackingStartedAt (the cycle's anchor; its window is checked by the cycle kit)
 const KF_TZ = (() => { const t = String(p2.timezone || '').trim(); if (!t || t.length > 64 || !/^[A-Za-z][A-Za-z0-9_+\-]*(\/[A-Za-z0-9_+\-]+)*$/.test(t)) return ''; try { new Intl.DateTimeFormat('en-US', { timeZone: t }); return t; } catch (e) { return ''; } })();
 const ladder_links = Array.isArray(p2.ladder_links) ? p2.ladder_links.filter(l => l && l.url).slice(0, 20) : [];
 const wordpress_url = String(p2.wordpress_url || '').trim();
@@ -421,6 +422,7 @@ return [{
     services: KF_SERVICES,
     services_given: KF_SERVICES_GIVEN,
     timezone: KF_TZ,
+    tracking_started_at: KF_TRACK_START,
     chosen_keyword_reason: String(p2.chosen_keyword_reason || '').slice(0, 300),
     ladder_id: String(p2.ladder_id || (mode === 'ladder' ? 'lad_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) : '')),
     ladder_rung: (p2.ladder_rung != null && p2.ladder_rung !== '') ? Number(p2.ladder_rung) : null,

@@ -42,7 +42,9 @@
 //     against `pages_per_week`. The cycle starts at the cycle run's `scheduled_for`; a run outside a cycle counts the last 6 days.
 //   * skips (seo_skips, written by the app): `skip` (scope `always`, or `cycle` for this cycle's key) -> not written, not suggested;
 //     `approve` for this cycle -> a needs-OK item is written in this cycle, within `pages_per_week`, after the ladder pages and before the
-//     other automatic items. item_key = cycleNorm(keyword), the same normalisation as cycles.ts.
+//     other automatic items. item_key = cycleNorm(keyword), the same normalisation as cycles.ts. An approval is the CLIENT's choice, so it is
+//     written even while the site waits for its first keyword at levels 1-2 (2026-10-19, agent E4): R-K2 stops what the system would choose,
+//     not what the client asked for. Skips still beat approvals, the budget still applies, and the pile-up guard still holds everything.
 //   * `trigger: 'cycle'` (the Cycle Dispatcher, plan §14.2): one site, scheduled semantics (pauses and an `off` cadence honoured, no `pages`
 //     override, no `force`), request ids dated by the cycle. `preview: true` (the dispatcher's `preview` job, 48 h before a cycle) plans exactly
 //     what that cycle would write and WRITES NOTHING: one item per site (`preview: true`, `dry_run: true`) that the Cadence Preview node turns
@@ -2090,7 +2092,9 @@ for (const s of list) {
   const autoOpps = [...okOpps.filter(autoFor), ...(aiAuto2 ? [aiAuto2] : [])];
   // the needs-OK candidates the client may approve: the other opportunities, the AI targets, and the next pages of Manual / not-chosen ladders
   const needOk = [...okOpps.filter(o => !autoFor(o)), ...aiQueue.filter(o => o !== aiAuto2 && !(level === 3 && o === aiCand0))];
-  const approvable = [...needOk, ...[...manualL, ...unchosenL].flatMap(x => x.eligible.filter(l => !isSkipped(l.keyword)).map(l => ladderCand(x, l)))];
+  // while the site waits for its first keyword the level's automatic items are shown as suggestions (sugPool below), so the client may
+  // approve them too: they are approvable then (E4, 2026-10-19)
+  const approvable = [...needOk, ...(waiting_for_keyword ? autoOpps : []), ...[...manualL, ...unchosenL].flatMap(x => x.eligible.filter(l => !isSkipped(l.keyword)).map(l => ladderCand(x, l)))];
   const approvedSeen = new Set();
   const approved = approvable.filter(o => { const k = cycleNorm(o.keyword); if (!approvedKeys.has(k) || approvedSeen.has(k)) return false; approvedSeen.add(k); return true; })
     .map(o => ({ ...o, approved: true, why: o.why + '; approved by you for this cycle' }));
@@ -2136,8 +2140,11 @@ for (const s of list) {
   const room = Math.max(0, pages - spent);
   const budget = { pages_per_week: pages, spent, room, window_start: new Date(windowStart).toISOString(), window: isCycle && Number.isFinite(schedT) ? 'this cycle (from its due time)' : 'the last ' + CONFIG.cycle_window_days + ' days',
     spent_keywords: [...spentKeys.entries()].slice(0, 10).map(([k, how]) => ({ keyword: k, how })) };
-  const blocked = !!paused_reason || waiting_for_keyword;   // R-K2: at levels 1 and 2 nothing at all is written before the first chosen keyword
-  const picks = blocked ? [] : uniq.slice(0, room);
+  const blocked = !!paused_reason || waiting_for_keyword;   // R-K2: at levels 1 and 2 nothing the SYSTEM chooses is written before the first chosen keyword
+  // ... but an item the client approved for this cycle is the client's own choice: it is written while the site waits for its first keyword,
+  // within the budget (pages_per_week), skips first (an approved item that is also skipped never reached `approved`). The pile-up guard holds it.
+  const pickable = paused_reason ? [] : waiting_for_keyword ? uniq.filter(x => x.approved) : uniq;
+  const picks = pickable.slice(0, room);
   // v4.12: the AI page of the week ON TOP of the pages a week — level 3 only, within the month's allowance, one a week, never while the
   // pile-up guard holds, and never for a site set to 0 pages a week
   for (const p of picks) if (p.source === 'ladder' && !p.ai_target) { const t = aiTargets.find(x => x.site_id === s.site_id && x.status === 'queued' && x.kind !== 'refresh' && (sameSearch(x.keyword, p.keyword) || sameSearch(p.keyword, x.keyword))); if (t) { p.ai_target = aiTargetOf(t); p.target_id = t.target_id; p.why += ' — written to answer "' + t.question + '" in AI answers'; } }
@@ -2152,8 +2159,8 @@ for (const s of list) {
       if (coverOf(o)) { if (!covered.some(c => norm(c.keyword) === k)) { const c = coverOf(o); covered.push({ keyword: o.keyword, source: o.source, url: c.url, matched_by: c.matched_by }); } return false; }   // D11: never suggest a second page for a search a live page answers
       return true; })
     .slice(0, CONFIG.suggestions).map(o => itemOf(o, false));
-  const fromUniq = blocked ? 0 : Math.min(room, uniq.length);   // the AI page (v4.12) is not one of uniq
-  const upcoming = uniq.slice(fromUniq, fromUniq + CONFIG.upcoming).map(x => ({ keyword: x.keyword, source: x.source, why: x.why }));
+  const pickedU = new Set(picks.map(p => norm(p.keyword)));   // the AI page (v4.12) is not one of uniq
+  const upcoming = uniq.filter(x => !pickedU.has(norm(x.keyword))).slice(0, CONFIG.upcoming).map(x => ({ keyword: x.keyword, source: x.source, why: x.why }));
   const pending = waiting.filter(w => !w.needs_fix).map(w => ({ keyword: w.keyword, started_at: w.written_at, days: Math.round((now - new Date(w.written_at || nowIso)) / 864e5) })).filter(p => p.days >= CONFIG.publish_reminder_days);   // D5: ladder pages are in `waiting` too; R111: a failed draft is never a publish reminder
   const needs_fix = waiting.filter(w => w.needs_fix).map(w => ({ keyword: w.keyword, written_at: w.written_at, reasons: w.reasons || [] }));   // R111
   const awaitOf = (x, why) => { const l = x.eligible.find(r => !isSkipped(r.keyword) && !approvedSeen.has(cycleNorm(r.keyword))); if (!l) return null;
@@ -2161,7 +2168,9 @@ for (const s of list) {
       item_key: cycleNorm(l.keyword), est_usd: EST_PAGE_USD, chosen_by: x.chosen_by, ...(why ? { why } : {}) }; };
   const awaiting_approval = [...manualL.map(x => awaitOf(x, '')), ...unchosenL.map(x => awaitOf(x, x.chosen_by === 'system_announced'
       ? 'a keyword we announced: its pages are written on their own only at full autopilot (level 3)' : 'a ladder whose keyword you did not choose (' + (x.chosen_by || 'unknown') + '): its pages wait for your OK'))].filter(Boolean);
-  const approved_not_written = blocked ? approved.map(o => ({ keyword: o.keyword, source: o.source, reason: waiting_for_keyword ? 'waiting_for_keyword' : paused_reason })) : [];
+  // an approval that is not written this cycle, with the reason: the pile-up guard, the budget, or a live page already answering its search
+  const approved_not_written = approved.filter(o => !pickedU.has(norm(o.keyword))).map(o => ({ keyword: o.keyword, source: o.source,
+    reason: paused_reason || (covered.some(c => norm(c.keyword) === norm(o.keyword)) ? 'covered_by_live_page' : 'budget') }));
   const facts = { set_aside, refused, covered_by_live_pages: covered.slice(0, 10), paused_reason, waiting_publish: waitingKw.size,
     needs_fix, needs_fix_keywords: needs_fix.map(w => w.keyword),   // R111: of the waiting pages, the drafts that failed their quality check
     paused_ladders: info.filter(x => x.head_aside).map(x => ({ ladder_id: x.id, head: x.head, reason: x.head_aside.reason })),   // R87
@@ -2181,7 +2190,7 @@ for (const s of list) {
   // ---- preview: ONE item per site, what the cycle would write — nothing is started, logged or marked ----
   if (preview) {
     const items = [...picks.map(p => itemOf(p, true)), ...awaiting_approval.map(a => itemOf({ ...a, source: 'ladder', why: a.why || 'the next page of your ladder "' + a.head + '": it waits for your OK' }, false))];
-    const reasonP = waiting_for_keyword ? 'waiting for your first keyword: choose the keyword you want to be found for, nothing is written until then'
+    const reasonP = waiting_for_keyword ? 'waiting for your first keyword: choose the keyword you want to be found for' + (picks.length ? '; until then only what you approved is written' : ', nothing is written until then')
       : paused_reason ? waitingKw.size + ' written pages are waiting to be published (limit ' + cfg.max_waiting + '): nothing new is written until they are'
       : !pages ? 'no pages a week are set for this website' : !picks.length ? 'nothing to write automatically in this cycle' : '';
     out.push({ json: { preview: true, dry_run: true, site_id: s.site_id, domain: s.domain, email: s.email || '', callback_url: s.callback_url || '', country: s.country || '',

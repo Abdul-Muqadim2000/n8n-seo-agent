@@ -355,6 +355,8 @@ const CYC = (() => {
   const hhmm = (v) => { const m = /^(\d{1,2}):(\d{2})$/.exec(S(v)); return m && +m[1] < 24 && +m[2] < 60 ? { h: +m[1], mi: +m[2], text: pad(+m[1]) + ':' + m[2] } : null; };
   const dueAt = (tz, date, time) => { const p = ymd(date), t = hhmm(time) || hhmm(DEFAULTS.local_time); return CU.zonedToUtc(tz, p.y, p.mo, p.d, t.h, t.mi); };
   const cycleKey = (siteId, date) => 'cyc:' + S(siteId) + ':' + S(date);
+  // the site id every engine derives from a domain (Track my site, _monitor_sites.js's virtual sites, the Rank Tracker)
+  const siteIdOf = (d) => 'site_' + normD(d).replace(/[^a-z0-9]+/g, '-');
   const dateOfKey = (key) => { const m = /^cyc:.+:(\d{4}-\d{2}-\d{2})$/.exec(S(key)); return m ? m[1] : ''; };
   // §14.2: cyc_<site_id without site_>_<YYYYMMDD>_<job> - one id per website, cycle and job (the same on a retry)
   const requestId = (siteId, date, job) => 'cyc_' + S(siteId).replace(/^site_/, '') + '_' + S(date).replace(/-/g, '') + '_' + S(job);
@@ -389,6 +391,47 @@ const CYC = (() => {
       monthly_day: Math.min(28, A.d), next_due_at: iso(anchor), next_preview_at: '', current_key: '', status: 'active',
       skip_jobs: listOf(c.skip_jobs).filter(j => NAMES.includes(j)).join(','), last_cycle_at: '', last_monthly_key: '', adopted: !!c.adopted, updated_at: iso(now) };
   };
+  // ---- the anchor a request may set (2026-10-19, agent E4): cycle 0 is due AT the anchor, so it must be recent. The window is one rule for
+  // the two writers of a cycle row: Site Kickoff refuses an anchor outside it (400), "Track my site" falls back to now and says why.
+  const ANCHOR = { past_days: 6, ahead_hours: 1 };
+  const anchorOf = (v, nowMs) => {
+    const now = ms(nowMs) || Date.now(), s = S(v);
+    if (!s) return { ok: false, given: false, at: now, problem: '', why: 'no tracking start was sent, so the cycle is anchored now' };
+    const t = Date.parse(s);
+    if (!Number.isFinite(t)) return { ok: false, given: true, at: now, problem: 'not_a_date', why: 'the tracking start "' + s.slice(0, 40) + '" is not a date (ISO 8601 expected), so the cycle is anchored now' };
+    if (t < now - ANCHOR.past_days * DAY) return { ok: false, given: true, at: now, problem: 'too_old', days: Math.floor((now - t) / DAY), why: 'the tracking start is ' + Math.floor((now - t) / DAY) + ' days old (cycle 0 starts at the anchor, so it must be within the last ' + ANCHOR.past_days + ' days), so the cycle is anchored now' };
+    if (t > now + ANCHOR.ahead_hours * H) return { ok: false, given: true, at: now, problem: 'future', why: 'the tracking start is more than ' + ANCHOR.ahead_hours + ' h in the future (cycle 0 starts at the anchor), so the cycle is anchored now' };
+    return { ok: true, given: true, at: t, problem: '', why: 'anchored at the tracking start the request sent (' + iso(t) + ')' };
+  };
+  // ---- a website's cycle row, ensured: the ONE builder behind Site Kickoff and "Track my site" (plan §4.7 / §14.3), so the two never drift.
+  // o: { existing, site_id, domain, tz, anchor, now, skip_jobs, force }
+  //  * no row, or `force` (the kickoff's restart): a new row (newCycleRow: anchor, zone, cycle 0 due at the anchor, skip_jobs). A cycle that
+  //    is paused or switched off keeps that status through a restart: a restart is not a resume.
+  //  * a row: its anchor, weekday, local time, monthly day, due times, current cycle and status are KEPT (a re-save never moves a website's
+  //    week, and a paused website stays paused); an empty zone is filled with a valid one, and so is the engine zone of an ADOPTED row (the
+  //    dispatcher guessed it, nobody chose it); an empty domain is filled. A row adopted for rank tracking only (a domain with ladders and no
+  //    seo_sites row) is kept the same way: once the seo_sites row exists the dispatcher runs it as a normal cycle, from the same anchor.
+  // -> { row, write, created, changed: [fields], why }
+  const cycleRow = (o) => {
+    const c = o || {}, now = ms(c.now) || Date.now(), ex = c.existing && typeof c.existing === 'object' && S(c.existing.site_id) ? c.existing : null;
+    const tz = validTz(c.tz) ? S(c.tz) : '';
+    if (!ex || c.force) {
+      const row = newCycleRow({ site_id: c.site_id, domain: c.domain, tz: tz || S(c.engine_tz) || DEFAULTS.engine_tz, anchor: ms(c.anchor) || now, now, skip_jobs: c.skip_jobs, adopted: false });
+      const kept = ex && /^(paused|off)$/i.test(S(ex.status)) ? S(ex.status).toLowerCase() : '';
+      if (kept) row.status = kept;
+      return { row, write: true, created: !ex, changed: Object.keys(row), why: (ex ? 'cycle 0 starts again from the new anchor (force)' : 'the website\'s first cycle row: cycle 0 is due at ' + row.anchor_at + ' in ' + row.tz)
+        + (kept ? '; its cycle stays ' + kept + ' (a restart is not a resume)' : '') };
+    }
+    const row = cycleRowOf(ex), changed = [];
+    if (!S(ex.domain) && normD(c.domain)) { row.domain = normD(c.domain); changed.push('domain'); }
+    const guessed = !!yes(ex.adopted) && S(ex.tz) === (S(c.engine_tz) || DEFAULTS.engine_tz);
+    if (tz && (!S(ex.tz) || !validTz(ex.tz) || (guessed && tz !== S(ex.tz)))) { row.tz = tz; changed.push('tz'); }
+    if (changed.length) row.updated_at = iso(now);
+    return { row, write: changed.length > 0, created: false, changed,
+      why: 'the website already has its cycle (anchored ' + S(ex.anchor_at) + ', next due ' + (S(ex.next_due_at) || '?') + '): its anchor, weekday and due times are kept'
+        + (S(ex.status) && S(ex.status).toLowerCase() !== 'active' ? ', and it stays ' + S(ex.status).toLowerCase() : '')
+        + (changed.includes('tz') ? '; its time zone is now ' + row.tz + (S(ex.tz) ? ' (the ' + S(ex.tz) + ' it was adopted in was the engine\'s guess)' : ' (it had none)') : '') };
+  };
   // ---- the chain of due cycles of one website: cycle 0 at the anchor, then the weekday rule, then every 7 local days ----
   // `first` is the earliest cycle not yet started; the most recent due one at `now` is found by walking forward (bounded).
   const chainFrom = (rd, cfg) => {
@@ -416,6 +459,10 @@ const CYC = (() => {
   // the jobs of one cycle in order, each on or off with the plain reason
   const jobsFor = (o) => {
     const c = o || {}, st = c.settings || {}, zero = !!c.zero, monthly = !!c.monthly, skip = new Set(zero ? (c.skip_jobs || []) : []);
+    // a rank-tracking-only cycle (a domain with keyword ladders and no seo_sites row): its ladders' rank check is the one job it has
+    if (c.rank_only) return JOBS.map(j => { const on = j.job === 'rank_tracker' && !!st.has_ladder;
+      return { ...j, on, why: on ? '' : j.job === 'rank_tracker' ? 'there is no keyword ladder to check any more'
+        : 'this domain has keyword ladders but is not tracked ("Track my site" was never set up), so its cycle runs only their rank check', extra: {} }; });
     const why = {
       ai_visibility: st.ai_visibility ? '' : 'AI visibility is switched off for this website',
       backlinks: st.backlinks ? '' : 'the backlink monitor is switched off for this website',
@@ -549,7 +596,8 @@ const CYC = (() => {
     const siteOf = new Map(sites.map(s => [S(s.site_id), s]));
     const monOf = new Map(clean(c.monitors).filter(m => S(m.site_id)).map(m => [S(m.site_id), m]));
     const cadOf = new Map(clean(c.cadence).filter(m => S(m.site_id)).map(m => [S(m.site_id), m]));
-    const ladderDomains = new Set(clean(c.ladders).map(l => normD(l.domain)).filter(Boolean));
+    const ladderRowDomains = new Set(clean(c.ladders).map(l => normD(l.domain)).filter(Boolean));   // domains with ladder rungs (the dispatcher hands in the fit-gated ones)
+    const ladderDomains = new Set(ladderRowDomains);
     for (const s of clean(c.ladder_settings)) if (S(s.ladder_id) && S(s.ladder_id) !== '_site' && !/^(deleted|archived)$/i.test(S(s.status))) ladderDomains.add(normD(s.domain));
     // run ids another job's ledger row owns: an execution that belongs to someone else is never taken for ours
     const claimedBy = new Map(); for (const r of ledger) if (S(r.run_id) && S(r.key)) claimedBy.set(S(r.run_id), S(r.key));
@@ -601,7 +649,19 @@ const CYC = (() => {
     for (const s of sites) {
       if (cyc.has(S(s.site_id)) || S(s.status).toLowerCase() === 'paused') continue;
       const row = newCycleRow({ site_id: s.site_id, domain: s.domain, tz: engineTz, anchor: now, now, adopted: true });
-      cyc.set(S(s.site_id), { ...row, __new: true }); adopted.push({ site_id: S(s.site_id), domain: normD(s.domain), anchor_at: row.anchor_at, tz: row.tz });
+      cyc.set(S(s.site_id), { ...row, __new: true }); adopted.push({ site_id: S(s.site_id), domain: normD(s.domain), anchor_at: row.anchor_at, tz: row.tz, rank_only: false });
+    }
+    // ... and a domain with keyword ladders but no seo_sites row (a ladder started through the API, or before "Track my site"): the Monday
+    // Rank Tracker used to check every ladder; with no cron left, it gets a RANK-TRACKING-ONLY cycle (2026-10-19, agent E4). Anchored now, in
+    // the engine zone, adopted. Only the rank check ever runs for it (jobsFor rank_only); the Rank Tracker takes the e-mail and callback from
+    // the ladder rows, as it always did. When "Track my site" writes its seo_sites row, the same row is its normal cycle, same anchor.
+    const siteDomains = new Set(sites.map(s => normD(s.domain)));
+    const cycDomains = new Set(cycles.map(r => normD(r.domain)).filter(Boolean));
+    for (const d of [...ladderRowDomains].sort()) {
+      const sid = siteIdOf(d);
+      if (siteDomains.has(d) || cyc.has(sid) || cycDomains.has(d)) continue;
+      const row = newCycleRow({ site_id: sid, domain: d, tz: engineTz, anchor: now, now, adopted: true });
+      cyc.set(sid, { ...row, __new: true }); adopted.push({ site_id: sid, domain: d, anchor_at: row.anchor_at, tz: row.tz, rank_only: true });
     }
 
     // ---- 3. each website's cycle ----
@@ -616,12 +676,15 @@ const CYC = (() => {
       const next = { ...cycleRowOf(raw), domain, tz: rd.tz, cycle_weekday: rd.weekday, local_time: rd.local_time, monthly_day: rd.monthly_day };
       const finish = () => { const before = raw.__new ? null : cycleRowOf(raw);
         if (!before || CYCLE_FIELDS.some(f => S(before[f]) !== S(next[f])) || normD(before.domain) !== domain) cycleRows.push(cycleRowOf({ ...next, updated_at: nowIso })); };
-      const st = { monitors: monOf.get(siteId) || {}, cadence: cadOf.get(siteId) || null, has_ladder: ladderDomains.has(domain) };
+      // no seo_sites row, but keyword ladders: a rank-tracking-only cycle (the monitors are off by definition: nobody set them up)
+      const rankOnly = !site && ladderRowDomains.has(domain);
+      out.rank_only = rankOnly;
+      const st = rankOnly ? { monitors: {}, cadence: null, has_ladder: true } : { monitors: monOf.get(siteId) || {}, cadence: cadOf.get(siteId) || null, has_ladder: ladderDomains.has(domain) };
       const settings = settingsOf(st);
       // the cycle that is due now, if any (most recent only; the 12-hour gap)
       const mr = mostRecent(rd, now, cfg);
       let opened = null, skippedCycle = null;
-      const paused = !site ? 'it is no longer tracked by the engine (no seo_sites row)' : S(site.status).toLowerCase() === 'paused' ? 'the website is paused'
+      const paused = !site && !rankOnly ? 'it is no longer tracked by the engine (no seo_sites row, and no keyword ladder to rank-check)' : site && S(site.status).toLowerCase() === 'paused' ? 'the website is paused'
         : rd.status === 'paused' ? 'its cycle is paused' : rd.status === 'off' ? 'its cycle is switched off' : '';
       if (mr.due && !paused) {
         const k = cycleKey(siteId, mr.due.date);
@@ -678,11 +741,11 @@ const CYC = (() => {
         if (S(r.site_id) === siteId && S(r.job) === 'cycle' && S(r.status) === 'running' && S(r.cycle_key) !== ck) put({ ...r, status: 'done', finished_at: nowIso, reason: S(r.reason) + '; closed when ' + ck + ' started' });
       }
       if (paused) { say('paused', (out.domain || siteId) + ': ' + paused + ', so nothing starts' + (mr.due ? ' (a cycle has been due since ' + iso(mr.due.at) + '; it runs once on resume)' : ''));
-        out.jobs = ck ? jobsFor({ settings, zero: zeroNow, monthly: monthlyNow, skip_jobs: rd.skip_jobs }).map(j => { const r = byKey.get(ck + ':' + j.job); return { job: j.job, verdict: r ? S(r.status) : 'paused', reason: r ? S(r.reason) : paused }; }) : [];
+        out.jobs = ck ? jobsFor({ settings, zero: zeroNow, monthly: monthlyNow, skip_jobs: rd.skip_jobs, rank_only: rankOnly }).map(j => { const r = byKey.get(ck + ':' + j.job); return { job: j.job, verdict: r ? S(r.status) : 'paused', reason: r ? S(r.reason) : paused }; }) : [];
         finish(); continue; }
       if (!ck) { say('not_due', 'cycle 0 is due ' + next.next_due_at); finish(); continue; }
       // ---- the jobs of the current cycle, in order: a job starts only when every earlier one is done, skipped or gave up ----
-      const list = jobsFor({ settings, zero: zeroNow, monthly: monthlyNow, skip_jobs: rd.skip_jobs });
+      const list = jobsFor({ settings, zero: zeroNow, monthly: monthlyNow, skip_jobs: rd.skip_jobs, rank_only: rankOnly });
       let blocker = '';
       for (const j of list) {
         const key = ck + ':' + j.job, r = byKey.get(key), lk = ledgerKey(ck, j.job);
@@ -796,7 +859,7 @@ const CYC = (() => {
     return { busy, inflight, due, ignored_stale: ignored, minutes: Math.round(win / MIN), reason };
   };
 
-  return { plan, deployWindow, outcome, refusalOf, refusedSince, settingsOf, jobsFor, payload, newCycleRow, read, nextAfter, mostRecent, local, validTz, dueAt,
+  return { plan, deployWindow, outcome, refusalOf, refusedSince, settingsOf, jobsFor, payload, newCycleRow, cycleRow, anchorOf, ANCHOR, siteIdOf, read, nextAfter, mostRecent, local, validTz, dueAt,
     dateAdd, weekdayOf, cycleKey, dateOfKey, requestId, ledgerKey, periodKey, monthlyDayOf, jobRow, cycleRowOf, JOBS, PREVIEW, BY_JOB, NAMES, DEFAULTS, TERMINAL, LIVE, DEAD, CAPACITY };
 })();
 const TZ = 'America/New_York';
@@ -815,7 +878,8 @@ const existing = rowsOf('Load Cycles (Kickoff)').find(r => String(r.site_id || '
 if (existing && !v.force && !v.dry_run)
   return refuse('already_started', domain + ' already has its cycle (anchored ' + (existing.anchor_at || '?') + ', next due ' + (existing.next_due_at || '?') + '); send force: true to start cycle 0 again', { domain, site_id });
 const now = Date.now(), anchor = v.anchor_at ? Date.parse(v.anchor_at) : now, tz = v.tz || TZ;
-const row = CYC.newCycleRow({ site_id, domain, tz, anchor, now, skip_jobs: v.skip_jobs, adopted: false });
+// the one row builder "Track my site" uses too (CYC.cycleRow): the kickoff always writes a fresh row (a new website, or `force`)
+const row = CYC.cycleRow({ existing, force: true, site_id, domain, tz, anchor, now, skip_jobs: v.skip_jobs, engine_tz: TZ }).row;
 const cycle_key = CYC.cycleKey(site_id, CYC.local(tz, anchor).date);
 return [{ json: { refused: false, dry_run: !!v.dry_run, force: !!v.force, site_id, domain, cycle_key, next_due_at: row.next_due_at, request_id: v.request_id, row,
   exists: !!existing, replaces: existing ? { anchor_at: String(existing.anchor_at || ''), current_key: String(existing.current_key || ''), next_due_at: String(existing.next_due_at || '') } : null } }];
