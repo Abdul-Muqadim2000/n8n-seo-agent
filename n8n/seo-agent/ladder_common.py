@@ -497,12 +497,20 @@ if (__SCHED.trigger && __SCHED.cron) {
     } catch (e) { __caught = null; }   // fail OPEN: a scheduled run is never refused for a lookup that did not work
   }
 }
-const g = RG.gate({ rows, mine, mode: '__MODE__', where: '__WHERE__', run_id: String($execution.id), caught_up: __caught, parent_run_id });
+// 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.8): the twin rule is per website for a run that names one - a cycle job or an on-demand start
+// (trigger `domain`, or `site_id` with the domain on this run's row). A run that names none (the daily batch pulse / page watch) keeps the
+// mode-only rule. A cycle job's capacity refusal is retried by the Cycle Dispatcher, so its wording says so instead of "skipped".
+const __site = __S(__trig.domain) || (__S(__trig.site_id) ? __S((mine && mine.domain) || (__row && __row.domain)) : '');   // RG.gate normalises the host
+const __cycle = __S(__trig.trigger) === 'cycle';
+const g = RG.gate({ rows, mine, mode: '__MODE__', where: '__WHERE__', run_id: String($execution.id), site: __site, cycle: __cycle, caught_up: __caught, parent_run_id });
 if (g.allowed || __NO_GATE__) return plan;   // W3-F: a synchronous caller is waiting (the Reply Reader): it keeps its row but is never refused by what else is running
 let __dom = __S(__trig.domain);
 if (!__dom) { try { __dom = __S((plan[0] && plan[0].json || {}).domain); } catch (e) { __dom = ''; } }
 return [{ json: { run_refused: true, run_id: String($execution.id), refused_at: new Date().toISOString(),
-  cost_basis: ('refused before any spending: ' + g.refusal + ' [' + g.basis + ']').slice(0, 400),
+  // 2026-10-19: the reason code first, so the Cycle Dispatcher (which reads only the ledger row) tells a capacity refusal it retries
+  // (`same_mode`, `heavy_busy`, `too_many_open`) from one it does not (`account_low`, `caught_up`)
+  cost_basis: ('refused before any spending (' + g.reason + '): ' + g.refusal + ' [' + g.basis + ']').slice(0, 400),
+  retry: !!g.retry, cycle_key: __cycle ? __S(__trig.cycle_key) : '', site: g.site || '',
   reason: g.reason, refusal: g.refusal, basis: g.basis, open_runs: g.open_runs, open: g.open, max_open: g.max_open,
   stale_ignored: g.stale_ignored, mode: g.mode, where: g.where, parent_run_id,
   // R116: who to tell. Only a run started by hand (a Manual Run with a callback) has someone waiting; a scheduled refusal has nobody.
@@ -536,6 +544,20 @@ def _schedule_of(wfobj):
     from env_settings import ENV
     tz = (wfobj.get('settings') or {}).get('timezone') or (ENV.get('GENERIC_TIMEZONE') or '').strip() or 'America/New_York'
     return {'trigger': trig[0]['name'], 'cron': cron, 'tz': tz, 'wf': str(wfobj.get('id'))}
+
+
+def engine_tz():
+    """The engine's own time zone (n8n's GENERIC_TIMEZONE; America/New_York when unset, as n8n/compose.yml and the catch-up default it)."""
+    from env_settings import ENV
+    return (ENV.get('GENERIC_TIMEZONE') or '').strip() or 'America/New_York'
+
+
+def site_time_src():
+    """2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.8): the website-calendar kit (ST, v5/code/_site_time.js) with the engine zone written in.
+    Every builder inlines it through the `/*__SITE_TIME__*/` marker (inside _monitor_sites.js for the monitors, directly elsewhere)."""
+    s = read_v5('code/_site_time.js').rstrip('\n').replace('__ENGINE_TZ__', engine_tz())
+    assert '__ENGINE_TZ__' not in s
+    return s
 
 
 def inline_kits(src):
