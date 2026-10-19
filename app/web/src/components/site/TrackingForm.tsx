@@ -14,8 +14,11 @@ import { applyServerErrors, asCountry, competitorValidator, errorText } from './
 import { completeMonitors, DEFAULT_MONITORS, MonitoringCost, MonitorSettingsFields } from './MonitorSettingsFields';
 import { aiMeasuredFrom } from './AiPrecision';
 import { useSiteData } from '@/lib/queries';
+import { siteWeekdayName, todayWeekdayName } from '@/lib/cycle-day';
 
-// "Track my site" (mode `track`): keywords, GA4 property, blog posts per week, competitors and the growth monitors.
+// "Track my site" (mode `track`): keywords to watch, GA4 property, pages a week for the client's keywords, competitors and the growth
+// monitors. Keyword-first (2026-10-19): pages are written only for keywords the client chose (their keyword ladders); the keywords here
+// are only watched.
 
 export const trackFormSchema = trackInput.omit({ mode: true, siteId: true, emailCopy: true }).superRefine((v, ctx) => {
   if (v.monitors.aiVisibility && !v.monitors.aiEngines.length)
@@ -77,6 +80,8 @@ export function TrackingForm({
   const errors = formState.errors;
   const [error, setErr] = useState<unknown>(null);
   const blogsLabel = useId();
+  // the website's weekly day: its own once tracking runs, else today (the cycle starts the day tracking starts)
+  const weekday = siteWeekdayName(site) ?? todayWeekdayName();
 
   useEffect(() => {
     if (!onValuesChange) return;
@@ -119,9 +124,9 @@ export function TrackingForm({
           name="keywords"
           render={({ field, fieldState }) => (
             <Field
-              label="Keywords to track"
+              label="Other keywords to watch (we check your position, we don't write for them)"
               optional
-              hint="Up to 20 search terms you want to rank for. We check your live Google position for each every week. Everything Search Console reports is tracked anyway."
+              hint="Up to 20 searches. We check your live Google position for each every week; pages are written only for the keywords you choose to be found for. Everything Search Console reports is tracked anyway."
               labelAction={<GuideButton id="keywords-to-track" vars={{ domain: site.domain }} variant="link" label="How do I choose these?" />}
               error={errorText(fieldState.error)}
             >
@@ -185,12 +190,12 @@ export function TrackingForm({
           <>
             <div>
               <p id={blogsLabel} className="mb-1 text-[13px] font-medium text-ink">
-                Blog posts per week
+                Pages a week for your keyword
               </p>
               <p className="mb-3 text-[13px] leading-relaxed text-ink-3">
-                Each post is a full, researched page: keyword and competitor research, a written and quality-checked article with its three images and schema. It arrives
-                every Monday as HTML and Markdown (plus the image files and a meta.json) for you to review and publish. Topics come from your keyword plan, queries close to page one and
-                rising trends.
+                Each page is a full, researched page for a keyword you chose: research of the keyword and the pages that rank, a written and quality-checked article with its
+                three images and schema. It arrives every {weekday} as HTML and Markdown (plus the image files and a meta.json) for you to review and publish. Nothing is
+                written until you choose a keyword.
               </p>
               <div role="radiogroup" aria-labelledby={blogsLabel} className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                 {BLOG_OPTIONS.map((n) => (
@@ -200,7 +205,7 @@ export function TrackingForm({
                     onSelect={() => setValue('blogsPerWeek', n, { shouldDirty: true })}
                     disabled={readOnly}
                     title={n === 0 ? 'None' : `${n} a week`}
-                    description={n === 0 ? 'Tracking only' : `about ${creditsLabel(blogMonthlyCost(n))} a month`}
+                    description={n === 0 ? 'Tracking only, no pages' : `about ${creditsLabel(blogMonthlyCost(n))} a month`}
                   />
                 ))}
               </div>
