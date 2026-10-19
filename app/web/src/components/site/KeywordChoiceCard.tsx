@@ -24,7 +24,7 @@ export function searchesWords(volume: number | null | undefined): string {
   return `About ${compactNumber(volume)} ${volume === 1 ? 'person searches' : 'people search'} this a month`;
 }
 
-const PLAN_PAGES: Record<Exclude<PlanChoice, 'none'>, string> = { direct: '3-4 pages', short: '4-6 pages', full: 'up to about 13 pages' };
+const PLAN_PAGES: Record<Exclude<PlanChoice, 'none'>, string> = { direct: '3-4 pages', short: '4-6 pages', full: '9-13 pages' };
 
 /** "About 5 pages over 3-6 months", '' when there is no plan. */
 export function planWords(plan: PlanChoice | null | undefined, months: string | null | undefined): string {

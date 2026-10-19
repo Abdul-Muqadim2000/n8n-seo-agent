@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { CalendarClock, Receipt, ShieldAlert } from 'lucide-react';
-import { AI_ENGINES, AUTOPILOT_LEVELS, autopilotMonthlyUsd, autopilotRows, formatCredits, GOALS, MONITOR_COSTS, TONES, type Run } from '@seo/shared';
+import { AI_ENGINES, AUTOPILOT_LEVELS, autopilotMonthlyUsd, autopilotRows, formatCredits, GOALS, MONITOR_COSTS, type Run } from '@seo/shared';
 import { useEngineCal } from '@/lib/engine-cal';
 import { runCost } from '@/lib/prices';
 import { creditsLabel, quoteCredits, quoteLabel } from '@/lib/credits';
@@ -24,6 +24,7 @@ import { browserTimezone, siteWeekdayName, todayWeekdayName } from '@/lib/cycle-
 import { cn } from '@/lib/utils';
 import { sizeLabel } from './CompanyStep';
 import { StepFrame } from './WizardShell';
+import { launchRequests } from './launch-plan';
 import { clearTrackingDraft, readKeywordDraft, readTrackingDraft, useWizardSite, type KeywordPick, type StepId } from './wizard';
 
 const JS_MAX_PAGES = 500;
@@ -102,51 +103,20 @@ export function LaunchStep() {
     setError(null);
     setBusy('launch');
     try {
-      const run = await startRun.mutateAsync({
-        mode: 'track',
-        siteId: site.id,
-        country,
-        keywords: plan.keywords,
-        ga4PropertyId: plan.ga4PropertyId,
-        blogsPerWeek: plan.blogsPerWeek,
-        competitors: plan.competitors,
-        monitors: plan.monitors,
-        // keyword-first: the owner's own time zone (the website's weekly day and 06:00 are in it) and what the website sells
-        timezone: browserTimezone() || site.timezone || '',
-        ...(site.services?.length ? { services: site.services } : {}),
-        emailCopy: true,
-      });
+      const req = launchRequests({ site, plan, picks, level, timezone: browserTimezone() });
+      const run = await startRun.mutateAsync(req.track);
       if (run.status === 'failed') throw new Error(run.error || 'The SEO engine did not accept the request. Try again in a minute.');
       // the autopilot level (the website's own setting); the first cycle reads it
       try {
-        await automation.mutateAsync({ autopilotLevel: level });
+        await automation.mutateAsync(req.automation);
       } catch (e) {
         toast.error('The autopilot level was not saved', { description: `${errorMessage(e)} Set it again in Website settings, Autopilot.` });
       }
       // the chosen keyword(s): one keyword ladder each; "Ask me before each page" writes nothing at start (the server's rule for Manual)
       const started: string[] = [];
-      for (const p of picks) {
-        const ok = await extraRun(
-          {
-            mode: 'ladder',
-            siteId: site.id,
-            keyword: p.keyword,
-            country,
-            business: '',
-            customers: '',
-            businessFacts: '',
-            cta: '',
-            goal: GOALS.some((g) => g.value === site.goal) ? site.goal : 'leads',
-            tone: TONES.find((t) => t === site.tone) ?? TONES[0],
-            pagesNow: 1,
-            chosenBy: p.chosenBy,
-            ladderMode: p.mode,
-            ladderPrefs: { mode: p.mode },
-            emailCopy: false,
-          },
-          `plan for "${p.keyword}"`,
-        );
-        if (ok) started.push(p.keyword);
+      for (const body of req.ladders) {
+        const ok = await extraRun(body, `plan for "${String(body.keyword)}"`);
+        if (ok) started.push(String(body.keyword));
       }
       await finishOnboarding();
       clearTrackingDraft(site.id);
@@ -324,8 +294,8 @@ export function LaunchStep() {
           </IconTile>
           <div className="min-w-0 flex-1 pt-0.5">
             <p>
-              <span className="font-semibold text-ink">Starting now uses about {formatCredits(nowCredits)}</span>
-              {metered && <> · {formatCredits(available)} available</>}.
+              <span className="font-semibold text-ink">What you start now uses about {formatCredits(nowCredits)}</span>
+              {metered && <> · {formatCredits(available)} available</>}. The weekly checks are counted in the monthly estimate.
             </p>
             {metered && <CreditsBar available={available} add={nowCredits} />}
           </div>

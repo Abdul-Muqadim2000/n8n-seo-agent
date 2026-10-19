@@ -111,7 +111,7 @@ describe('onboarding outside the company layout (D-1)', () => {
   });
 
   it('every other onboarding step renders outside the layout too', () => {
-    for (const step of ['website', 'verify', 'business', 'profile', 'launch']) {
+    for (const step of ['website', 'verify', 'business', 'profile', 'keyword', 'launch']) {
       const { html } = renderOnboarding(step);
       expect(html, step).not.toContain('useOrgCtx');
       expect(html.length, step).toBeGreaterThan(500);
