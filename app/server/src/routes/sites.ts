@@ -227,7 +227,7 @@ export async function siteRoutes(app: FastifyInstance) {
     const g = (await siteRows<AiGrowthRow>('aiGrowth', site.domain, { sortBy: 'checked_at:desc', max: 1 }))[0];
     const keyUrl = String(safeJson<Record<string, Record<string, unknown>>>(g?.submitted_json ?? '', {}).indexnow?.key_url ?? '');
     const m = keyUrl.match(/^https:\/\/([^/]+)\/([a-f0-9]{32})\.txt$/);
-    if (!m) throw notFound('No IndexNow key yet: the first AI growth run (Mondays 09:30) makes it.');
+    if (!m) throw notFound('No IndexNow key yet: the first weekly AI growth run of this website makes it.');
     const host = m[1].toLowerCase();
     if (host !== site.domain && host !== `www.${site.domain}`) throw badRequest('The key file must be on your own website.');
     const r = await fetchPublicText(keyUrl, 4096).catch(() => null);
