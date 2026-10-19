@@ -405,7 +405,7 @@ async function doSync(opts: SyncOptions): Promise<SyncResult> {
                 kind: 'usage',
                 credits: -delta,
                 note: `Re-priced: the engine settled this ${str(row.mode).replace(/_/g, ' ') || 'run'} again`,
-                ref: { runId: now.runId, engineRunId, mode: str(row.mode) || null, domain: str(row.domain) || null },
+                ref: { runId: now.runId, engineRunId, mode: str(row.mode) || null, domain: str(row.domain) || null, creditValueUsd: s.creditValueUsd },
                 refKey: `cost:${prev.eventKey}:${settledAt}`,
                 at: occurredOf(row),
               });
@@ -578,7 +578,7 @@ async function doSync(opts: SyncOptions): Promise<SyncResult> {
         kind: 'usage',
         credits: -credits,
         note: e.mode ? `Used by ${e.mode.replace(/_/g, ' ')}${e.domain ? ` · ${e.domain}` : ''}` : 'Used',
-        ref: { runId: e.run_id, engineRunId: e.engine_run_id, mode: e.mode || null, domain: e.domain || null },
+        ref: { runId: e.run_id, engineRunId: e.engine_run_id, mode: e.mode || null, domain: e.domain || null, creditValueUsd: s.creditValueUsd },
         refKey: `cost:${e.event_key}`,
         at: date(e.occurred_at) ?? undefined,
       });

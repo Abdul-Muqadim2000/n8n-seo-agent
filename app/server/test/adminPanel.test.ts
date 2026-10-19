@@ -135,6 +135,26 @@ describe('settings and credits', () => {
     const acts = (await boss.get('/api/admin/activity')).body.map((x: { action: string }) => x.action);
     expect(acts).toEqual(expect.arrayContaining(['credits.granted', 'credits.adjusted', 'credits.refunded']));
   });
+
+  it('a refund is not negative usage, and list value keeps the credit value of the day each credit was used', async () => {
+    const { addCreditEntry } = await import('../src/services/admin/credits');
+    const { org } = await company('owner@listvalue.test', 'List Value Co');
+    await boss.post(`/api/admin/companies/${org.id}/credits`, { kind: 'grant', credits: 100, paidUsd: 10 });
+    await boss.post(`/api/admin/companies/${org.id}/credits`, { kind: 'refund', credits: 5 });
+    let row = (await boss.get(`/api/admin/companies/${org.id}`)).body;
+    expect(row.credits.usedInPeriod).toBe(0);
+    expect(row.money.listValueUsd).toBe(0);
+    // 30 credits used at $0.10 a credit
+    await addCreditEntry(db, { orgId: org.id, kind: 'usage', credits: -30, note: 'Used', ref: { creditValueUsd: 0.1 }, refKey: 'cost:test:listvalue' });
+    row = (await boss.get(`/api/admin/companies/${org.id}`)).body;
+    expect(row.credits.usedInPeriod).toBe(30);
+    expect(row.money.listValueUsd).toBe(3);
+    const s = (await boss.get('/api/admin/settings')).body;
+    await boss.put('/api/admin/settings', { creditValueUsd: 0.05, markup: s.markup, signupCredits: s.signupCredits, enforceForNewCompanies: s.enforceForNewCompanies });
+    row = (await boss.get(`/api/admin/companies/${org.id}`)).body;
+    expect(row.money.listValueUsd).toBe(3);
+    await boss.put('/api/admin/settings', { creditValueUsd: s.creditValueUsd, markup: s.markup, signupCredits: s.signupCredits, enforceForNewCompanies: s.enforceForNewCompanies });
+  });
 });
 
 describe('the cost sync', () => {

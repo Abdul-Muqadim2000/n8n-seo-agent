@@ -90,12 +90,14 @@ export default function AdminUserDetailPage() {
           value={c.role}
           disabled={setRole.isPending}
           className="h-8 text-[13px]"
-          onChange={(e) =>
+          onChange={(e) => {
+            // read the choice now: the controlled select falls back to the stored role before the answer arrives
+            const role = e.target.value as AdminRole;
             setRole.mutate(
-              { userId: user.id, orgId: c.id, role: e.target.value as AdminRole },
-              { onSuccess: () => toast.success(`${user.name} is now ${roleLabel(e.target.value)} in ${c.name}`), onError: (err) => toast.error(errorMessage(err)) },
-            )
-          }
+              { userId: user.id, orgId: c.id, role },
+              { onSuccess: () => toast.success(`${user.name} is now ${roleLabel(role)} in ${c.name}`), onError: (err) => toast.error(errorMessage(err)) },
+            );
+          }}
         >
           {ADMIN_ROLES.map((r) => (
             <option key={r} value={r}>

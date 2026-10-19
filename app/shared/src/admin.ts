@@ -149,8 +149,9 @@ export interface CreditEntry {
   credits: number; // signed: grants positive, usage negative
   paidUsd: number; // revenue recorded with a grant (0 for free / promotional credits and for every other kind)
   note: string;
-  /** usage: the run / engine row it came from */
-  ref: { runId?: string | null; engineRunId?: string | null; mode?: string | null; domain?: string | null } | null;
+  /** usage: the run / engine row it came from, and `creditValueUsd` = the credit value in force when it was debited (its list value
+   *  never moves with a later price change) */
+  ref: { runId?: string | null; engineRunId?: string | null; mode?: string | null; domain?: string | null; creditValueUsd?: number | null } | null;
   actor: string | null; // admin e-mail for grant / adjust / refund
   balanceAfter: number;
 }

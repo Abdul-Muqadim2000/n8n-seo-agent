@@ -45,10 +45,11 @@ export const addSplit = (a: CostSplit, b: CostSplit): CostSplit => ({
   claudeEstimatedUsd: r4(a.claudeEstimatedUsd + b.claudeEstimatedUsd),
 });
 
-export function moneyOf(cost: CostSplit, revenueUsd: number, creditsUsed: number, creditValueUsd: number): MoneySummary {
+/** `listValueUsd`: the usage at the credit value in force when each debit was made (creditTotals) */
+export function moneyOf(cost: CostSplit, revenueUsd: number, listValueUsd: number): MoneySummary {
   const revenue = r2(revenueUsd);
   const margin = r4(revenue - cost.totalUsd);
-  return { cost, revenueUsd: revenue, marginUsd: margin, marginPct: revenue > 0 ? Math.round((margin / revenue) * 1000) / 10 : null, listValueUsd: r2(creditsUsed * creditValueUsd) };
+  return { cost, revenueUsd: revenue, marginUsd: margin, marginPct: revenue > 0 ? Math.round((margin / revenue) * 1000) / 10 : null, listValueUsd: r2(Math.max(0, listValueUsd)) };
 }
 
 /** the credits really debited for one cost event (its debit, plus any re-pricing of it), from credit_ledger — never recomputed at
@@ -88,13 +89,13 @@ export async function companyRows(r: PeriodRange, opts: { q?: string; ids?: stri
   );
   const by = new Map(counts.map((c) => [c.org_id, c]));
   const cost = await costByOrg(r);
-  const credits = await creditTotals(r.from, r.to);
-  const balances = await allBalances();
   const s = await settingsRow();
+  const credits = await creditTotals(r.from, r.to, s.creditValueUsd);
+  const balances = await allBalances();
   return orgs
     .map((o): AdminCompanyRow => {
       const c = by.get(o.id);
-      const cr = credits.get(o.id) ?? { granted: 0, used: 0, paid: 0 };
+      const cr = credits.get(o.id) ?? { granted: 0, used: 0, paid: 0, listValueUsd: 0 };
       const split = cost.get(o.id) ?? emptyCostSplit();
       return {
         id: o.id,
@@ -110,7 +111,7 @@ export async function companyRows(r: PeriodRange, opts: { q?: string; ids?: stri
         failedRuns: Number(c?.failed ?? 0),
         lastRunAt: iso(c?.last_run),
         credits: { balance: balances.get(o.id) ?? 0, grantedInPeriod: cr.granted, usedInPeriod: cr.used, enforced: !!o.credits_enforced },
-        money: moneyOf(split, cr.paid, cr.used, s.creditValueUsd),
+        money: moneyOf(split, cr.paid, cr.listValueUsd),
       };
     })
     .sort((a, b) => b.money.cost.totalUsd - a.money.cost.totalUsd || a.name.localeCompare(b.name));
@@ -420,20 +421,22 @@ export async function overview(r: PeriodRange): Promise<AdminOverview> {
   let all = emptyCostSplit();
   for (const v of cost.values()) all = addSplit(all, v);
   const unattributed = cost.get(null) ?? emptyCostSplit();
-  const credits = await creditTotals(r.from, r.to);
+  const s = await settingsRow();
+  const credits = await creditTotals(r.from, r.to, s.creditValueUsd);
   let granted = 0;
   let used = 0;
   let paid = 0;
+  let listValue = 0;
   for (const c of credits.values()) {
     granted += c.granted;
     used += c.used;
     paid += c.paid;
+    listValue += c.listValueUsd;
   }
-  const deleted = credits.get(null) ?? { granted: 0, used: 0, paid: 0 };
+  const deleted = credits.get(null) ?? { granted: 0, used: 0, paid: 0, listValueUsd: 0 };
   const [gone] = await execRows<CostAgg>(db, sql`select ${COST_COLS} from ${schema.costEvents} where detached_from is not null and ${within(sql`occurred_at`, r)}`);
   const balances = await allBalances();
   const outstanding = [...balances.values()].reduce((a, b) => a + b, 0);
-  const s = await settingsRow();
   const [earliest] = await execRows<{ at: string | null }>(db, sql`select min(occurred_at) as at from ${schema.costEvents}`);
   const [anthropic, dataforseo] = await Promise.all([
     anthropicBill(r, all.claudeUsd, earliest?.at ? new Date(earliest.at) : null),
@@ -453,7 +456,7 @@ export async function overview(r: PeriodRange): Promise<AdminOverview> {
     companies: { total: Number(o.total), newInPeriod: Number(o.new_), disabled: Number(o.disabled), withEnforcedCredits: Number(o.enforced) },
     sites: Number(st.sites),
     runs: { started: Number(st.started), failed: Number(st.failed), inFlight: Number(st.inflight) },
-    money: moneyOf(all, paid, used, s.creditValueUsd),
+    money: moneyOf(all, paid, listValue),
     unattributed,
     deletedCompanies: { cost: toSplit(gone), revenueUsd: r2(deleted.paid), creditsGranted: r2(deleted.granted) },
     credits: { outstanding: r2(outstanding), grantedInPeriod: r2(granted), usedInPeriod: r2(used) },

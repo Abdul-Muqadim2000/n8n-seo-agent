@@ -297,12 +297,14 @@ function MembersCard({ c }: { c: AdminCompanyDetail }) {
           value={u.role}
           disabled={setRole.isPending}
           className="h-8 text-[13px]"
-          onChange={(e) =>
+          onChange={(e) => {
+            // read the choice now: the controlled select falls back to the stored role before the answer arrives
+            const role = e.target.value as (typeof ADMIN_ROLES)[number];
             setRole.mutate(
-              { userId: u.userId, orgId: c.id, role: e.target.value as (typeof ADMIN_ROLES)[number] },
-              { onSuccess: () => toast.success(`${u.name} is now ${ROLE_LABELS[e.target.value as keyof typeof ROLE_LABELS] ?? e.target.value}`), onError: (err) => toast.error(errorMessage(err)) },
-            )
-          }
+              { userId: u.userId, orgId: c.id, role },
+              { onSuccess: () => toast.success(`${u.name} is now ${ROLE_LABELS[role as keyof typeof ROLE_LABELS] ?? role}`), onError: (err) => toast.error(errorMessage(err)) },
+            );
+          }}
         >
           {ADMIN_ROLES.map((r) => (
             <option key={r} value={r}>

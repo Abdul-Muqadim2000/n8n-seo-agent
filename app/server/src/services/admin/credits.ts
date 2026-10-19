@@ -150,18 +150,31 @@ export async function applyNewCompanyCredits(q: Q, org: Pick<OrgRow, 'id' | 'kin
     await addCreditEntry(q, { orgId: org.id, kind: 'grant', credits: s.signupCredits, paidUsd: 0, note: 'Sign-up credits', refKey: `signup:${org.id}` });
 }
 
-/** credits granted / used in a window, per company: used = usage debits net of refunds (both signed, so used is positive). The
- *  null key holds the entries of deleted companies (their revenue stays in the platform's totals). */
-export async function creditTotals(from: Date | null, to: Date): Promise<Map<string | null, { granted: number; used: number; paid: number }>> {
-  const rows = await execRows<{ org_id: string | null; granted: number; used: number; paid: number }>(db, sql`
+/** credits granted / used in a window, per company. `used` = what runs used (usage debits, re-pricing included; never below 0) — an
+ *  admin's refund gives credits back to the balance but is not "negative usage". `listValueUsd` = each usage debit at the credit value
+ *  in force when it was debited (stored on the entry), so a later price change never restates past usage; entries written before the
+ *  value was stored fall back to `currentCreditValueUsd`. The null key holds the entries of deleted companies (their revenue stays in
+ *  the platform's totals). */
+export async function creditTotals(
+  from: Date | null,
+  to: Date,
+  currentCreditValueUsd: number,
+): Promise<Map<string | null, { granted: number; used: number; paid: number; listValueUsd: number }>> {
+  const rows = await execRows<{ org_id: string | null; granted: number; used: number; paid: number; list_value: number }>(db, sql`
     select org_id,
       coalesce(sum(credits) filter (where kind = 'grant'), 0)::float as granted,
-      (-coalesce(sum(credits) filter (where kind in ('usage', 'refund')), 0))::float as used,
-      coalesce(sum(paid_usd) filter (where kind = 'grant'), 0)::float as paid
+      (-coalesce(sum(credits) filter (where kind = 'usage'), 0))::float as used,
+      coalesce(sum(paid_usd) filter (where kind = 'grant'), 0)::float as paid,
+      (-coalesce(sum(credits * coalesce((ref->>'creditValueUsd')::float, ${currentCreditValueUsd}::float)) filter (where kind = 'usage'), 0))::float as list_value
     from ${schema.creditLedger}
     where created_at < ${tsv(to)} ${from ? sql`and created_at >= ${tsv(from)}` : sql``}
     group by org_id`);
-  return new Map(rows.map((r) => [r.org_id, { granted: r2(Number(r.granted)), used: r2(Number(r.used)), paid: Number(r.paid) }]));
+  return new Map(
+    rows.map((r) => [
+      r.org_id,
+      { granted: r2(Number(r.granted)), used: r2(Math.max(0, Number(r.used))), paid: Number(r.paid), listValueUsd: r2(Math.max(0, Number(r.list_value))) },
+    ]),
+  );
 }
 
 export async function allBalances(): Promise<Map<string, number>> {

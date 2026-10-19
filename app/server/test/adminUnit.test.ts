@@ -82,8 +82,8 @@ describe('money', () => {
   it('margin = revenue − cost; no revenue, no percentage', () => {
     const cost = toSplit({ claude: 1, claude_est: 0.4, dfs: 0.5 });
     expect(cost).toEqual({ claudeUsd: 1, dataforseoUsd: 0.5, totalUsd: 1.5, claudeEstimatedUsd: 0.4 });
-    expect(moneyOf(cost, 6, 45, 0.1)).toEqual({ cost, revenueUsd: 6, marginUsd: 4.5, marginPct: 75, listValueUsd: 4.5 });
-    expect(moneyOf(cost, 0, 0, 0.1).marginPct).toBeNull();
+    expect(moneyOf(cost, 6, 4.5)).toEqual({ cost, revenueUsd: 6, marginUsd: 4.5, marginPct: 75, listValueUsd: 4.5 });
+    expect(moneyOf(cost, 0, 0).marginPct).toBeNull();
   });
 });
 
