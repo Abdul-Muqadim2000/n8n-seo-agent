@@ -12,6 +12,8 @@ const remember = (r: PlatformSettingsRow) => ((lastRate = creditRate(r)), r);
 export const cachedCreditRate = () => lastRate;
 /** credits for a cost figure at the cached rate (2 decimals) */
 export const creditsOfUsd = (usd: number) => Math.round(usd * lastRate * 100) / 100;
+/** a price shown before the work ("about N credits"): whole credits, rounded up, as a run is quoted (billing.ts quoteCredits) */
+export const wholeCreditsOfUsd = (usd: number) => (usd > 0 ? Math.max(1, Math.ceil(creditsOfUsd(usd) - 1e-9)) : 0);
 
 /** The single settings row (migration 0014 writes it; recreated with the defaults if somebody removed it). */
 export async function settingsRow(q: Q = db): Promise<PlatformSettingsRow> {

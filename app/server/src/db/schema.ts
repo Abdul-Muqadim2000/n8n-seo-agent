@@ -471,6 +471,21 @@ export const sites = pgTable(
     creditsPausedAt: ts('credits_paused_at'),
     /** 'balance' | 'autopilot_limit' */
     creditsPausedReason: text('credits_paused_reason'),
+    /** keyword-first (0018, SCHEDULING_KEYWORDS_PLAN.md §14.6): the website's IANA time zone ('' = the engine's, America/New_York); its
+     *  cycles run at 06:00 there. Captured from the owner's browser in onboarding, sent with "Track my site". */
+    timezone: text('timezone').notNull().default(''),
+    /** "What do you sell?": the main services or products, sent with "Track my site" (the engine stores them as declared_services) */
+    services: jsonb('services').$type<string[]>().notNull().default([]),
+    /** the cycle's weekday (0 Sunday - 6) as the app last set or read it: a mirror of seo_cycles.cycle_weekday for the screens; null = the
+     *  weekday tracking started on */
+    cycleWeekday: integer('cycle_weekday'),
+    /** how much the autopilot does on its own (1 only my keywords, 2 + keep my pages healthy, 3 full autopilot); written to the engine's
+     *  `_site` row (seo_ladder_settings.autopilot_level), which decides */
+    autopilotLevel: integer('autopilot_level').notNull().default(2),
+    /** when the auto-pause (REJECT_LIMIT rejected pages) last dropped the level to 1, and from which level (the notice shows it until the
+     *  level is raised again) */
+    autopilotDroppedAt: ts('autopilot_dropped_at'),
+    autopilotDroppedFrom: integer('autopilot_dropped_from'),
     createdAt: created(),
     updatedAt: ts('updated_at').defaultNow().notNull(),
   },
@@ -1459,6 +1474,144 @@ export const adminAudit = pgTable(
   },
   (t) => [index('admin_audit_at_idx').on(t.at)],
 );
+
+// ---- keyword-first autopilot (0018, n8n/seo-agent/docs/SCHEDULING_KEYWORDS_PLAN.md §5.6 / §5.7 / §14.6) ----
+
+/**
+ * The next keyword the system proposes for a website (services/autoStart.ts). Levels 1-2: a suggestion (`startAt` null) that waits for the
+ * client; level 3: an announcement that starts at `startAt` (PROPOSAL_WAIT_HOURS after it was made) unless the client changes or skips it.
+ * `keywordNorm` is unique per website: a keyword is proposed once, ever (a skipped one never comes back). At most one open proposal
+ * (pending / starting) per website. Both are database rules, so a timer that runs twice, or on two servers, cannot propose twice.
+ */
+export const keywordProposals = pgTable(
+  'keyword_proposals',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    siteId: uuid('site_id')
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    keyword: text('keyword').notNull(),
+    keywordNorm: text('keyword_norm').notNull(),
+    /** the recommendation it came from (searches, difficulty, plan, months, why, the research report id) */
+    details: jsonb('details').$type<Record<string, unknown>>().notNull().default({}),
+    /** pending | starting | started | approved | swapped | skipped | expired | failed */
+    status: text('status').notNull().default('pending'),
+    level: integer('level').notNull().default(2),
+    /** room | won | done */
+    occasion: text('occasion').notNull().default('room'),
+    startAt: ts('start_at'),
+    /** when the open proposal was claimed for a start (status starting): a claim older than 15 minutes with no run is released */
+    claimedAt: ts('claimed_at'),
+    runId: uuid('run_id').references(() => runs.id, { onDelete: 'set null' }),
+    swappedFor: text('swapped_for'),
+    note: text('note').notNull().default(''),
+    emailedAt: ts('emailed_at'),
+    createdAt: created(),
+    decidedAt: ts('decided_at'),
+    decidedBy: uuid('decided_by').references(() => users.id, { onDelete: 'set null' }),
+  },
+  (t) => [
+    uniqueIndex('keyword_proposals_site_keyword_idx').on(t.siteId, t.keywordNorm),
+    uniqueIndex('keyword_proposals_site_open_idx').on(t.siteId).where(sql`${t.status} in ('pending', 'starting')`),
+    index('keyword_proposals_due_idx').on(t.status, t.startAt),
+  ],
+);
+
+/** The latest "Coming up" plan of each cycle of a website (the engine's `cycle_preview` callback, 48 h before the cycle). */
+export const cyclePreviews = pgTable(
+  'cycle_previews',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    siteId: uuid('site_id')
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    cycleKey: text('cycle_key').notNull(),
+    scheduledFor: ts('scheduled_for'),
+    /** the callback body as the engine sent it (CyclePreview, cycles.ts) */
+    body: jsonb('body').$type<Record<string, unknown>>().notNull(),
+    reportId: uuid('report_id').references(() => reports.id, { onDelete: 'set null' }),
+    receivedAt: ts('received_at').defaultNow().notNull(),
+    /** when the weekly "Coming up" e-mail went out for it (once per cycle) */
+    emailedAt: ts('emailed_at'),
+  },
+  (t) => [uniqueIndex('cycle_previews_site_cycle_idx').on(t.siteId, t.cycleKey), index('cycle_previews_site_received_idx').on(t.siteId, t.receivedAt)],
+);
+
+/** "Not what I wanted" on a written page. REJECT_LIMIT of the last REJECT_WINDOW automatic non-ladder pages drop the level to 1. */
+export const contentFeedback = pgTable(
+  'content_feedback',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    siteId: uuid('site_id').references(() => sites.id, { onDelete: 'cascade' }),
+    reportId: uuid('report_id')
+      .notNull()
+      .references(() => reports.id, { onDelete: 'cascade' }),
+    keyword: text('keyword').notNull().default(''),
+    /** the page's source (ladder, decay, striking, trend, ai_answer, ai_refresh, app) */
+    source: text('source').notNull().default(''),
+    /** the page was written by the autopilot on its own (not a ladder page, not a page the client asked for) */
+    automatic: boolean('automatic').notNull().default(false),
+    verdict: text('verdict').notNull().default('reject'),
+    reason: text('reason').notNull().default(''),
+    by: uuid('by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: created(),
+  },
+  (t) => [uniqueIndex('content_feedback_report_idx').on(t.reportId), index('content_feedback_site_idx').on(t.siteId, t.createdAt)],
+);
+
+/**
+ * D3: the one free keyword research of a website at setup. Keyed by the DOMAIN, not the website row: deleting a website and adding it
+ * again, or adding it in another company, never earns a second free research.
+ */
+export const freeResearchGrants = pgTable('free_research_grants', {
+  domain: text('domain').primaryKey(),
+  orgId: uuid('org_id').references(() => organizations.id, { onDelete: 'set null' }),
+  siteId: uuid('site_id').references(() => sites.id, { onDelete: 'set null' }),
+  runId: uuid('run_id').references(() => runs.id, { onDelete: 'set null' }),
+  createdAt: created(),
+});
+
+/**
+ * §5.6: a queued ladder planned more than QUEUED_RECHECK_DAYS ago gets one fresh keyword check when it becomes active. One row per
+ * website and ladder (so it is checked once, whatever the timers do); `paused` when the verdict fell and the ladder was paused.
+ */
+export const ladderRechecks = pgTable(
+  'ladder_rechecks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    siteId: uuid('site_id')
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    ladderId: text('ladder_id').notNull(),
+    keyword: text('keyword').notNull(),
+    /** pending | done | failed */
+    status: text('status').notNull().default('pending'),
+    /** the check's verdict: difficulty, fit */
+    result: jsonb('result').$type<Record<string, unknown>>().notNull().default({}),
+    paused: boolean('paused').notNull().default(false),
+    reason: text('reason').notNull().default(''),
+    createdAt: created(),
+    checkedAt: ts('checked_at'),
+  },
+  (t) => [uniqueIndex('ladder_rechecks_site_ladder_idx').on(t.siteId, t.ladderId)],
+);
+
+export type KeywordProposalRow = typeof keywordProposals.$inferSelect;
+export type CyclePreviewRow = typeof cyclePreviews.$inferSelect;
+export type ContentFeedbackRow = typeof contentFeedback.$inferSelect;
+export type LadderRecheckRow = typeof ladderRechecks.$inferSelect;
 
 export type CreditEntryRow = typeof creditLedger.$inferSelect;
 export type CostEventRow = typeof costEvents.$inferSelect;

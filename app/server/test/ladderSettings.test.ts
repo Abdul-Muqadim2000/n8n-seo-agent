@@ -43,6 +43,7 @@ describe('ladder settings: one ladder (PATCH)', () => {
       source: 'app',
       opportunities: '',
       auto_start: false,
+      chosen_by: '',
       priority: 2,
       created_at: NOW,
       updated_at: NOW,
@@ -100,10 +101,13 @@ describe('ladder settings: order, won, website defaults', () => {
   it('website defaults: a new _site row holds every value; an existing one only the changes', () => {
     const n = automationWrite({ site, settings: [], change: { maxActiveLadders: 3 }, now: NOW });
     expect(n.insert).toBe(true);
-    expect(n.automation).toEqual({ defaultMode: 'auto', opportunities: 'auto', autoStartLadders: false, maxActiveLadders: 3, maxWaiting: 3 });
-    expect(n.data).toMatchObject({ ladder_id: '_site', site_id: 'site_techand-ai', domain: 'techand.ai', mode: 'auto', opportunities: 'auto', auto_start: false, max_active: 3, max_waiting: 3 });
+    expect(n.automation).toEqual({ autopilotLevel: 2, defaultMode: 'auto', opportunities: 'auto', autoStartLadders: false, maxActiveLadders: 3, maxWaiting: 3 });
+    expect(n.data).toMatchObject({ ladder_id: '_site', site_id: 'site_techand-ai', domain: 'techand.ai', mode: 'auto', opportunities: 'auto', auto_start: false, max_active: 3, max_waiting: 3, autopilot_level: 2 });
     const e = automationWrite({ site, settings: [row('_site', { mode: 'manual', opportunities: 'auto', max_active: 2, max_waiting: 3 })], change: { opportunities: 'manual', maxWaiting: 5 }, now: NOW });
-    expect([e.insert, e.data, e.automation]).toEqual([false, { opportunities: 'manual', max_waiting: 5, updated_at: NOW }, { defaultMode: 'manual', opportunities: 'manual', autoStartLadders: false, maxActiveLadders: 2, maxWaiting: 5 }]);
+    expect([e.insert, e.data, e.automation]).toEqual([false, { opportunities: 'manual', max_waiting: 5, updated_at: NOW }, { autopilotLevel: 2, defaultMode: 'manual', opportunities: 'manual', autoStartLadders: false, maxActiveLadders: 2, maxWaiting: 5 }]);
+    // keyword-first: the level is one more column of the same row (an existing row: only that column)
+    const l = automationWrite({ site, settings: [row('_site', { mode: 'manual' })], change: { autopilotLevel: 3 }, now: NOW });
+    expect([l.data, l.automation.autopilotLevel]).toEqual([{ autopilot_level: 3, updated_at: NOW }, 3]);
   });
 
   it('a ladder that is not one of the website\'s is a 404', () => {

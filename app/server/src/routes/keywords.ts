@@ -2,7 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { keywordAssessSchema, type KeywordCheck, type RecommendedKeywords } from '@seo/shared';
 import { requireVerified, siteAccess } from '../auth/access';
 import { parse } from '../lib/errors';
-import { assessKeyword, recommendedKeywords } from '../services/keywordChecks';
+import { assessKeyword } from '../services/keywordChecks';
+import { recommendedWithStatus } from '../services/research';
 
 type P = { orgId: string; siteId: string };
 
@@ -24,6 +25,7 @@ export async function keywordRoutes(app: FastifyInstance) {
     const p = req.params as P;
     const a = await siteAccess(req, p.orgId, p.siteId);
     requireVerified(a.site);
-    return recommendedKeywords(a.org, a.site);
+    // keyword-first: with the research state (none / running / ready), for the onboarding poll
+    return recommendedWithStatus(a.org, a.site);
   });
 }

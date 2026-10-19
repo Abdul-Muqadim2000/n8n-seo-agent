@@ -77,6 +77,8 @@ vi.mock('../src/n8n/client', () => ({
   siteRows: vi.fn(async (table: string) => (table === 'ladders' ? st.ladders : table === 'caseStudies' ? [{ service: 'Peppol onboarding' }, { service: 'Peppol onboarding' }, { service: 'ERP rollout' }] : [])),
 }));
 vi.mock('../src/services/runs', () => ({ latestReport: vi.fn(async () => st.strategy) }));
+// keyword-first: the research state of GET .../recommended (no discovery run, the free research still available)
+vi.mock('../src/db', async () => ({ db: { query: { runs: { findFirst: vi.fn(async () => null) }, freeResearchGrants: { findFirst: vi.fn(async () => null) } } }, schema: await vi.importActual('../src/db/schema') }));
 
 const { keywordRoutes } = await import('../src/routes/keywords');
 const { HttpError } = await import('../src/lib/errors');
@@ -236,7 +238,7 @@ describe('keyword check', () => {
 describe('recommended keywords', () => {
   it('none without a keyword strategy report', async () => {
     const r = await app.inject({ method: 'GET', url: base + '/keywords/recommended' });
-    expect(r.json()).toEqual({ reportId: null, receivedAt: null, ageDays: null, stale: false, reach: null, country: null, keywords: [] });
+    expect(r.json()).toEqual({ reportId: null, receivedAt: null, ageDays: null, stale: false, reach: null, country: null, keywords: [], status: 'none', startedAt: null, runId: null, freeResearch: true });
   });
 
   it('the latest report\'s keywords, best first, overlaps with the website\'s ladders marked; stale after 90 days', async () => {
@@ -253,7 +255,7 @@ describe('recommended keywords', () => {
       },
     };
     let r = (await app.inject({ method: 'GET', url: base + '/keywords/recommended' })).json();
-    expect(r).toMatchObject({ reportId: 'rep-1', ageDays: 10, stale: false, reach: 30, country: 'United Arab Emirates' });
+    expect(r).toMatchObject({ reportId: 'rep-1', ageDays: 10, stale: false, reach: 30, country: 'United Arab Emirates', status: 'ready', startedAt: null });
     expect(r.keywords.map((k: { keyword: string; overlaps: unknown[] }) => [k.keyword, k.overlaps.length])).toEqual([
       ['odoo partner uae', 0],
       ['uae e-invoicing', 1],
@@ -262,5 +264,7 @@ describe('recommended keywords', () => {
     st.strategy.report.receivedAt = new Date(Date.now() - 91 * 864e5).toISOString();
     r = (await app.inject({ method: 'GET', url: base + '/keywords/recommended' })).json();
     expect(r.stale).toBe(true);
+    // research older than 90 days is no research to choose from: the onboarding poll reads "none"
+    expect(r.status).toBe('none');
   });
 });

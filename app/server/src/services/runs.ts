@@ -6,6 +6,7 @@ import {
   estimateRunCost,
   estimateRunMinutes,
   IDEMPOTENCY,
+  isCycleRequestId,
   MODES,
   n8nSiteId,
   ladderPrefsSchema,
@@ -87,6 +88,8 @@ export function siteContext(site: SiteRow): SiteContext {
     competitors: site.competitors,
     brandNames: site.brandNames,
     ga4PropertyId: site.ga4PropertyId,
+    timezone: site.timezone,
+    services: site.services,
   };
 }
 
@@ -102,8 +105,19 @@ export { monthSpend, monthStart } from './spend';
  * only, a member's choices are dropped and the website's defaults apply, as for any ladder.
  */
 export function inputForRole(input: RunInput, role: Role): RunInput {
-  if (input.mode === 'ladder' && input.ladderPrefs && !roleAtLeast(role, 'admin')) return { ...input, ladderPrefs: undefined };
+  if (input.mode === 'ladder' && (input.ladderPrefs || input.ladderMode) && !roleAtLeast(role, 'admin')) return { ...input, ladderPrefs: undefined, ladderMode: undefined };
   return input;
+}
+
+/**
+ * Keyword-first (SCHEDULING_KEYWORDS_PLAN.md §5.1 R-K1 / §14.5): who chose a new ladder's keyword and the mode it starts in. A person
+ * never sends `system_announced` (only the server's level-3 announcement starts such a ladder); none = the person typed it. The start
+ * mode is the admin's "Auto / Manual" choice of the flow (`ladderPrefs.mode`) when no `ladderMode` is given.
+ */
+export function ladderChoice(input: RunInput, auto: boolean): RunInput {
+  if (input.mode !== 'ladder') return input;
+  const chosenBy = input.chosenBy === 'system_announced' && !auto ? 'client_typed' : (input.chosenBy ?? (auto ? 'system_announced' : 'client_typed'));
+  return { ...input, chosenBy, ladderMode: input.ladderMode ?? input.ladderPrefs?.mode };
 }
 
 export interface CreateRunOptions {
@@ -113,6 +127,14 @@ export interface CreateRunOptions {
   apiKeyId?: string | null;
   /** G4: the caller's Idempotency-Key and the hash of its request, checked under the company lock, before the budget */
   idempotency?: { key: string; hash: string } | null;
+  /** keyword-first: the keyword proposal this ladder run starts (kept on the run's input, so a restart can find the run it made) */
+  proposalId?: string;
+  /**
+   * D3 (research/start): the website's one free keyword research at setup. The run holds and is charged nothing (quoted at 0 credits,
+   * which caps every charge of it at 0) and skips the company's own credit and budget checks; the platform's daily ceiling still applies.
+   * Only services/research.ts passes it, after claiming the domain's grant.
+   */
+  free?: boolean;
 }
 
 /** G4: the run an Idempotency-Key named in the last 24 hours, if any. */
@@ -158,7 +180,7 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
   if (site && input.mode === 'track' && input.ga4PropertyId) await assertGa4ForDomain(input.ga4PropertyId, site.domain);
   if (site && input.mode === 'published' && !urlOnDomain(input.publishedUrl, site.domain))
     throw badRequest(`The published page must be on ${site.domain}`, { publishedUrl: `Must be a page on ${site.domain}` });
-  input = inputForRole(input, a.role);
+  input = ladderChoice(inputForRole(input, a.role), auto);
 
   // a typed keyword that is a planned page of one of the website's ladders is written as that ladder page (linked to the ladder,
   // tracked, marked "writing" so the Content Cadence moves on), exactly like "Write now" on the Pipeline page
@@ -168,10 +190,13 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
   }
 
   const estimated = await estimateCost(input);
+  // the website's first tracking, kept on every re-save: the anchor of its weekly cycle (the engine accepts it within the last 6 days)
+  const trackingStartedAt = site && input.mode === 'track' ? (site.trackingStartedAt ?? new Date()) : null;
   const body = compactBody(
     // ENGINE_EMAILS off: n8n gets no address at all, so it e-mails nothing; every result arrives here through the callback
     buildN8nPayload(input, site ? siteContext(site) : null, { callbackUrl: callbackUrl(org), email: config.engineEmails && input.emailCopy ? user.email : '' }),
   );
+  if (trackingStartedAt) body.tracking_started_at = trackingStartedAt.toISOString();
   if (input.mode === 'keyword' && input.ladder && site) {
     // the ladder's links and, since P2-7, the word count its verdict set for this page (the engine clamps the brief to `ladder_words`)
     const { links, targetWords, targetUrl } = await ladderLinks(site.domain, input.ladder.id, input.ladder.rung, input.keyword);
@@ -199,9 +224,11 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
     }
     // credits (app/docs/CREDITS.md): a company whose credits are enforced is held by its credits (balance, the credits kept for its
     // schedules, its own on-demand limit); the dollar budget is the platform's own guard for the others. Both under the company's lock.
-    if (!org.creditsEnforced) await assertBudget(tx, org, estimated, 'This run');
+    // D3: the website's one free research at setup skips the company's own checks (the platform's daily ceiling still applies)
+    if (opts.free) await assertPlatformCapacity(tx, estimated);
+    else if (!org.creditsEnforced) await assertBudget(tx, org, estimated, 'This run');
     else await assertPlatformCapacity(tx, estimated);
-    const quoted = await assertCredits(tx, org, estimated, 'This run');
+    const quoted = opts.free ? 0 : await assertCredits(tx, org, estimated, 'This run');
     const [row] = await tx
       .insert(schema.runs)
       .values({
@@ -209,11 +236,12 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
         siteId: site?.id ?? null,
         userId: user.id,
         mode: input.mode,
-        title: auto && input.mode === 'ladder' ? `Started automatically: ${input.keyword}` : runTitle(input, site),
+        title: auto && input.mode === 'ladder' ? `Started automatically: ${input.keyword}` : auto && input.mode === 'discover' ? `Keyword research refresh${site ? ` · ${site.domain}` : ''}` : runTitle(input, site),
         status: 'submitting',
-        input: { ...input, emailCopy: config.engineEmails && input.emailCopy, ...(auto ? { autoStart: true } : {}) } as unknown as Record<string, unknown>,
+        input: { ...input, emailCopy: config.engineEmails && input.emailCopy, ...(auto ? { autoStart: true } : {}), ...(opts.proposalId ? { proposalId: opts.proposalId } : {}), ...(opts.free ? { freeResearch: true } : {}) } as unknown as Record<string, unknown>,
         estimatedCostUsd: estimated,
-        quotedCredits: quoted > 0 ? quoted : null,
+        // a free run is quoted 0 (the cost sync caps every charge of a run at its quote), so it is never charged
+        quotedCredits: opts.free ? 0 : quoted > 0 ? quoted : null,
         etaMinutes: etaFor(input),
         apiKeyId: opts.apiKeyId ?? null,
         idempotencyKey: opts.idempotency?.key ?? null,
@@ -271,7 +299,9 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
       .update(schema.sites)
       .set({
         trackingStatus: 'active',
-        trackingStartedAt: site.trackingStartedAt ?? new Date(),
+        trackingStartedAt: trackingStartedAt ?? site.trackingStartedAt ?? new Date(),
+        ...(input.timezone ? { timezone: input.timezone } : {}),
+        ...(input.services !== undefined ? { services: input.services } : {}),
         keywords: input.keywords.length ? input.keywords : site.keywords,
         blogsPerWeek: input.blogsPerWeek,
         ga4PropertyId: input.ga4PropertyId || site.ga4PropertyId,
@@ -452,10 +482,11 @@ const deliveryLog = {
 
 /** Stages only a schedule produces. Their callbacks reuse the request id of the run that set the work up (the ladder plan, the
  *  tracking setup), so a run row is found for them although that run did none of the work. */
-export const SCHEDULED_STAGES: readonly string[] = ['rank_tracker', 'content_cadence', 'console_alert'];
+export const SCHEDULED_STAGES: readonly string[] = ['rank_tracker', 'content_cadence', 'console_alert', 'cycle_preview'];
 
-/** A report a schedule produced (a weekly or daily run), as opposed to one the matched app run produced. */
-export const isScheduledCallback = (stage: string, body: Record<string, unknown>): boolean => body.on_demand === false || SCHEDULED_STAGES.includes(stage);
+/** A report a schedule produced (a weekly or daily run, or a job of the website's cycle), as opposed to one the matched app run produced. */
+export const isScheduledCallback = (stage: string, body: Record<string, unknown>): boolean =>
+  body.on_demand === false || SCHEDULED_STAGES.includes(stage) || String(body.trigger ?? '') === 'cycle' || isCycleRequestId(body.request_id);
 
 /**
  * D-3 (re-rating 2026-10-17): whether a callback's spend belongs to the run row it matched. A scheduled report never does: the Rank
@@ -500,7 +531,8 @@ export async function ingestCallback(
 
   const domain = cleanDomain(body.domain);
   const site = domain ? ((await db.query.sites.findFirst({ where: and(eq(schema.sites.orgId, org.id), eq(schema.sites.domain, domain)) })) ?? null) : null;
-  const run = requestId
+  // a job of the website's cycle (`cyc_<site>_<date>_<job>`, the Cycle Dispatcher's) belongs to no app run: it is a scheduled report of the website
+  const run = requestId && !isCycleRequestId(requestId)
     ? ((await db.query.runs.findFirst({ where: and(eq(schema.runs.orgId, org.id), eq(schema.runs.requestId, requestId)), orderBy: desc(schema.runs.createdAt) })) ?? null)
     : null;
 
@@ -552,6 +584,10 @@ export async function ingestCallback(
     }
     if (site && (stage === 'site_tracker_setup' || stage === 'site_tracker') && site.trackingStatus === 'not_started')
       await tx.update(schema.sites).set({ trackingStatus: 'active', trackingStartedAt: new Date() }).where(eq(schema.sites.id, site.id));
+    // keyword-first: "Track my site" reports the cycle it made or kept; the website keeps its weekday for the screens
+    const cyc = stage === 'site_tracker_setup' && body.cycle && typeof body.cycle === 'object' ? (body.cycle as Record<string, unknown>) : null;
+    const wd = cyc && cyc.cycle_weekday !== '' && cyc.cycle_weekday != null ? Number(cyc.cycle_weekday) : NaN;
+    if (site && Number.isInteger(wd) && wd >= 0 && wd <= 6 && wd !== site.cycleWeekday) await tx.update(schema.sites).set({ cycleWeekday: wd }).where(eq(schema.sites.id, site.id));
     return rep;
   });
   const reportId = stored.id;
@@ -573,7 +609,17 @@ export async function ingestCallback(
   let prefsApplied: boolean | undefined;
   const prefs = ladderPrefsOf(stage, body, run);
   if (prefs && site?.verifiedAt) prefsApplied = await applyLadderPrefs(site, prefs.ladderId, prefs.prefs).catch(() => false);
+  // keyword-first: the "Coming up" plan is kept (and e-mailed once a week); a cadence report may make a queued ladder active (its keyword
+  // is checked again when it was planned long ago); a won or finished ladder makes room for the next keyword. None of it may lose the
+  // callback just stored, so each is logged and swallowed.
+  if (site?.verifiedAt) void afterCallback(org, site, stage, payload, reportId).catch((err) => deliveryLog.error({ err: String(err), stage }, 'keyword-first follow-up failed'));
   return { reportId, runId: run?.id ?? null, stage, ...(ladderWon !== undefined ? { ladderWon } : {}), ...(prefsApplied !== undefined ? { prefsApplied } : {}) };
+}
+
+/** The keyword-first follow-ups of a callback (services/autopilot.ts), loaded lazily: that module imports this one. */
+async function afterCallback(org: OrgRow, site: SiteRow, stage: string, payload: Record<string, unknown>, reportId: string): Promise<void> {
+  const m = await import('./autopilot');
+  await m.afterCallback(org, site, stage, payload, reportId);
 }
 
 // credits of a run: services/runCredits.ts (re-exported here for the routes)

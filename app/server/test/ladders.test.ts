@@ -181,8 +181,9 @@ describe('ladder cards: status, next step, priority', () => {
   });
 
   it('site automation: the "_site" row of the settings, or the defaults', () => {
-    expect(siteAutomation([])).toEqual({ defaultMode: 'auto', opportunities: 'auto', autoStartLadders: false, maxActiveLadders: 2, maxWaiting: 3 });
-    expect(siteAutomation([settings({ ladder_id: '_site', mode: 'manual', opportunities: 'manual', auto_start: true, max_active: 1, max_waiting: 0 })])).toEqual({
+    expect(siteAutomation([])).toEqual({ autopilotLevel: 2, defaultMode: 'auto', opportunities: 'auto', autoStartLadders: false, maxActiveLadders: 2, maxWaiting: 3 });
+    expect(siteAutomation([settings({ ladder_id: '_site', mode: 'manual', opportunities: 'manual', auto_start: true, max_active: 1, max_waiting: 0, autopilot_level: 3 })])).toEqual({
+      autopilotLevel: 3,
       defaultMode: 'manual',
       opportunities: 'manual',
       autoStartLadders: true,
@@ -368,11 +369,11 @@ describe('cards and Needs you from the cadence mirror', () => {
       ['needs_you', 'publish'],
     ]);
     expect(b.cards.every((c) => !b.details.get(c.id)!.timeline.some((e) => e.future))).toBe(true);
-    expect(ladderNeedsYou(b).find((i) => i.kind === 'pileup')?.title).toBe('Weekly posts stopped: 3 written pages waiting for publication');
+    expect(ladderNeedsYou(b).find((i) => i.kind === 'pileup')?.title).toBe('Weekly pages stopped: 3 written pages waiting for publication');
     expect(ladderNeedsYou(b).find((i) => i.kind === 'pileup')?.detail).toContain('Waiting: "x one", "x two", "x three".');
     const last = build({}, MONDAYS.slice(0, 2), { lastRunPileup: { at: ago(5), waiting: 3, max: 3 } });
     const item = ladderNeedsYou(last).find((i) => i.kind === 'pileup')!;
-    expect([item.title, item.detail.startsWith('Last Monday\'s run wrote nothing')]).toEqual(['Last Monday\'s posts were skipped: 3 written pages waited for publication', true]);
+    expect([item.title, item.detail.startsWith('Last week\'s run wrote nothing')]).toEqual(['Last week\'s pages were skipped: 3 written pages waited for publication', true]);
     expect(last.cards[0].status).toBe('planning');
   });
 

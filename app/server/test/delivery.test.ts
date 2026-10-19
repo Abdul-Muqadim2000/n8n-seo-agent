@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { AUTOMATIONS, SCHEDULES, type AutomationInfo } from '@seo/shared';
-import { SCHEDULE_GRACE_MINUTES, STUCK_MINUTES, TARGET_PCT, alertDelivery, deliveryReport, onDemandWeek, scheduleState, scheduledTimes, scheduledWeek, weekStart, weeksBack } from '../src/services/delivery';
+import { AUTOMATIONS, SCHEDULES, type AutomationInfo, type CycleJobRow, type CycleRow } from '@seo/shared';
+import { CYCLE_JOB_MISSED_HOURS, SCHEDULE_GRACE_MINUTES, STUCK_MINUTES, TARGET_PCT, alertDelivery, cycleWeek, deliveryReport, onDemandWeek, scheduleState, scheduledTimes, scheduledWeek, weekStart, weeksBack } from '../src/services/delivery';
 
 // G21 (2026-10-13, system review FIX_PLAN G21): the delivery rate, did what should have run, run, and did it reach the customer?
 // Nothing measured either before this. The arithmetic is tested on its own: a week where every schedule fired and every run was
@@ -252,7 +252,8 @@ describe('R103 delivery rate: schedules are counted from the day they existed, a
 });
 
 describe('R104 the Pipeline: the last SCHEDULED fire, a missed due time, and on-demand runs named as such', () => {
-  const RT = AUTOMATIONS.find((a) => a.id === 'rank_tracker')!;
+  // the shared-clock rule, on a weekly slot (since 2026-10-19 the weekly jobs run in each website's own cycle: cycleWeek, below)
+  const RT = { ...AUTOMATIONS.find((a) => a.id === 'rank_tracker')!, schedule: { kind: 'weekly' as const, weekday: 1, hour: 8, minute: 0 } };
   // Monday 2026-10-12 08:00 New York = 12:00 UTC
   const MON = '2026-10-12T12:00:00.000Z';
 
@@ -275,5 +276,56 @@ describe('R104 the Pipeline: the last SCHEDULED fire, a missed due time, and on-
   it('no execution history from the engine: nothing is claimed either way', () => {
     const st = scheduleState(RT, undefined, TZ, new Date('2026-10-15T19:14:00Z'), '2026-10-12T19:48:00.000Z');
     expect(st).toMatchObject({ known: false, lastScheduledAt: null, missedAt: null, onDemandAt: null, note: '' });
+  });
+});
+
+// 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §8): the weekly work runs in each website's own cycle, so its side of the rate is read from the
+// Cycle Dispatcher's records per website: a finished job is delivered, a job that gave up (or is still not done a day after its cycle was
+// due) is missed, a cycle more than a day overdue that never opened is missed, a skipped job is not counted.
+describe("2026-10-19 delivery rate: the websites' own cycles", () => {
+  const from = MONDAY('2026-10-12T00:00:00Z'), to = MONDAY('2026-10-19T00:00:00Z'), now = MONDAY('2026-10-18T12:00:00Z');
+  const job = (o: Partial<CycleJobRow>): CycleJobRow => ({ key: '', site_id: 'site_techand-ai', cycle_key: 'cyc:site_techand-ai:2026-10-14', job: 'ai_visibility', workflow_id: 'SEOagentAIVisib1', status: 'done', attempts: 1, run_id: '', ledger_key: '', monthly: false, reason: '', due_at: '2026-10-14T02:00:00.000Z', started_at: '', finished_at: '', updated_at: '', ...o });
+  const cyc = (o: Partial<CycleRow>): CycleRow => ({ site_id: 'site_northwind-com', domain: 'northwind.com', anchor_at: '2026-10-01T10:00:00.000Z', tz: 'UTC', cycle_weekday: 3, local_time: '06:00', monthly_day: 1, next_due_at: '2026-10-15T06:00:00.000Z', next_preview_at: '', current_key: '', status: 'active', skip_jobs: '', last_cycle_at: '', last_monthly_key: '', adopted: false, updated_at: '', ...o });
+
+  it('the weekly jobs are not counted against a shared clock any more; the daily schedules still are', () => {
+    const weekly = AUTOMATIONS.filter((a) => a.schedule.kind === 'cycle');
+    expect(weekly.map((a) => a.id).sort()).toEqual(['ai_growth', 'ai_visibility', 'audit', 'backlinks', 'content_cadence', 'link_builder', 'rank_tracker', 'site_tracker']);
+    for (const a of weekly) expect(scheduledTimes(a.schedule, TZ, from, to)).toEqual([]);
+    expect(scheduledWeek(weekly, {}, TZ, from, to, now)).toMatchObject({ missed: [], counts: { started: 0 } });
+  });
+
+  it('done is delivered, gave up is missed (with the job and the website), skipped is not counted, a job still inside its day is in flight', () => {
+    const r = cycleWeek(
+      [
+        job({}),
+        job({ job: 'backlinks', status: 'skipped' }),
+        job({ job: 'rank_tracker', status: 'gave_up', due_at: '2026-10-14T02:10:00.000Z' }),
+        job({ job: 'cycle', status: 'running' }),
+        job({ job: 'audit', status: 'running', due_at: new Date(now.getTime() - (CYCLE_JOB_MISSED_HOURS - 1) * 3_600_000).toISOString() }),
+        job({ job: 'link_builder', status: 'failed', due_at: new Date(now.getTime() - (CYCLE_JOB_MISSED_HOURS + 1) * 3_600_000).toISOString() }),
+        job({ due_at: '2026-10-08T02:00:00.000Z' }), // another week
+      ],
+      [],
+      from,
+      to,
+      now,
+      new Map([['site_techand-ai', 'techand.ai']]),
+    );
+    expect(r.counts).toMatchObject({ started: 4, delivered: 1, stuck: 2, inFlight: 1, settled: 3, ratePct: 33.3 });
+    expect(r.missed.map((m) => m.title)).toEqual(['Rank tracking · techand.ai', 'Link building · techand.ai']);
+  });
+
+  it('a cycle more than a day overdue that never opened is a missed cycle; a paused one and a fresh one are not', () => {
+    const r = cycleWeek([], [cyc({}), cyc({ site_id: 'site_paused-com', domain: 'paused.com', status: 'paused' }), cyc({ site_id: 'site_fresh-com', domain: 'fresh.com', next_due_at: '2026-10-18T06:00:00.000Z' })], from, to, now);
+    expect(r.missed).toEqual([{ automation: 'cycle', title: 'Weekly cycle · northwind.com', workflow: 'SEOagentCycleDsp', expectedAt: '2026-10-15T06:00:00.000Z' }]);
+    expect(r.counts).toMatchObject({ started: 1, stuck: 1 });
+  });
+
+  it('the whole report adds the cycles to the scheduled side, and says when they could not be read', () => {
+    const rep = deliveryReport({ now, weeks: 1, timezone: TZ, automations: [], execs: { x: [] }, alerts: [], runs: [], cycles: { rows: [], jobs: [job({}), job({ job: 'backlinks', status: 'gave_up' })] } });
+    expect(rep.weeks[0].scheduled).toMatchObject({ started: 2, delivered: 1, stuck: 1, ratePct: 50 });
+    expect(rep.weeks[0].missed).toHaveLength(1);
+    const blind = deliveryReport({ now, weeks: 1, timezone: TZ, automations: [], execs: { x: [] }, alerts: [], runs: [], cycles: null });
+    expect(blind.notes.join(' ')).toMatch(/weekly cycles could not be read/);
   });
 });

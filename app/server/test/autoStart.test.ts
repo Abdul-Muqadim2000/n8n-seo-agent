@@ -1,16 +1,14 @@
-import { describe, expect, it, vi } from 'vitest';
-import type { LadderCard, PipelineData, RecommendedKeyword, RecommendedKeywords, SiteAutomation } from '@seo/shared';
-import { HttpError } from '../src/lib/errors';
-import { activeAutoLadders, autoStartDecision, autoStartForSite, type AutoStartDeps, type AutoStartState } from '../src/services/autoStart';
+import { describe, expect, it } from 'vitest';
+import type { LadderCard, RecommendedKeyword, RecommendedKeywords } from '@seo/shared';
+import { activeAutoLadders, announcementMail, proposalDecision, type ProposalState } from '../src/services/autoStart';
 
-// "Choose keywords for me": which keyword starts, and when nothing does. Everything the decision reads is passed in; the job around it
-// runs with fake dependencies (no database, no n8n, no paid run).
+// The next keyword, proposed by the system (SCHEDULING_KEYWORDS_PLAN.md §5.6 / §5.7): which keyword is proposed, when nothing is, and when
+// the research is refreshed first. The decision is pure (every input is passed in); the store, the timer and the client's decisions run
+// end to end on a real Postgres in keywordFirst.test.ts.
 
-const NOW = Date.parse('2026-10-03T12:00:00Z');
-const daysAgo = (d: number) => new Date(NOW - d * 864e5).toISOString();
-const AUTOMATION: SiteAutomation = { defaultMode: 'auto', opportunities: 'auto', autoStartLadders: true, maxActiveLadders: 2, maxWaiting: 3 };
+const NOW = Date.parse('2026-10-20T12:00:00Z');
 const counts = (planned: number, total = 6) => ({ total, published: total - planned, waiting: 0, writing: 0, planned });
-const card = (id: string, o: Partial<LadderCard> = {}): AutoStartState['cards'][number] => ({ id, mode: 'auto', status: 'writing', counts: counts(3), ...o });
+const card = (id: string, o: Partial<LadderCard> = {}): ProposalState['cards'][number] => ({ id, head: id, mode: 'auto', status: 'writing', counts: counts(3), ...o });
 const rec = (keyword: string, o: Partial<RecommendedKeyword> = {}): RecommendedKeyword => ({
   keyword,
   volume: 200,
@@ -26,160 +24,84 @@ const rec = (keyword: string, o: Partial<RecommendedKeyword> = {}): RecommendedK
   overlaps: [],
   ...o,
 });
-const recommended = (keywords: RecommendedKeyword[], o: Partial<RecommendedKeywords> = {}): RecommendedKeywords => ({ reportId: 'rep-1', receivedAt: daysAgo(10), ageDays: 10, stale: false, reach: 30, country: 'United Arab Emirates', keywords, ...o });
+const recommended = (keywords: RecommendedKeyword[], o: Partial<RecommendedKeywords> = {}): RecommendedKeywords => ({ reportId: 'rep-1', receivedAt: new Date(NOW - 10 * 864e5).toISOString(), ageDays: 10, stale: false, reach: 30, country: 'United Arab Emirates', keywords, ...o });
 
-const state = (o: Partial<AutoStartState> = {}): AutoStartState => ({
-  automation: AUTOMATION,
+const state = (o: Partial<ProposalState> = {}): ProposalState => ({
+  enabled: true,
+  level: 2,
+  maxActive: 2,
   cards: [card('lad_a')],
   ladders: [{ id: 'lad_a', head: 'e invoicing in uae', keywords: ['peppol uae', 'e invoicing in uae'] }],
-  recommended: recommended([rec('hard one', { difficultyForYou: 'hard', planType: 'full' }), rec('odoo partner uae'), rec('erp dubai', { difficultyForYou: 'reachable', planType: 'short' })]),
-  previous: [],
+  recommended: recommended([rec('hard one', { difficultyForYou: 'hard', planType: 'full' }), rec('odoo partner uae', { why: 'Buyers compare partners' }), rec('erp dubai', { difficultyForYou: 'reachable', planType: 'short' })]),
+  proposedBefore: [],
+  open: false,
   ladderRunActive: false,
-  pileup: false,
-  trackingPaused: false,
+  researchRunning: false,
+  paused: false,
   fitOf: new Map(),
-  now: NOW,
   ...o,
 });
 
-describe('auto-start: the decision', () => {
-  it('starts the first recommended keyword that is easy or reachable when a slot is free', () => {
-    const d = autoStartDecision(state());
-    expect(d.start?.keyword).toBe('odoo partner uae');
-    expect(d.reason).toMatch(/Easy for your site/);
+describe('keyword proposals: the decision', () => {
+  it('proposes the first recommended keyword that is easy or reachable when there is room, with why', () => {
+    const d = proposalDecision(state());
+    expect(d).toMatchObject({ action: 'propose', pick: { keyword: 'odoo partner uae' }, occasion: 'room', why: 'Buyers compare partners.' });
   });
 
-  it('off, paused, a ladder being planned, the pile-up guard: nothing starts', () => {
-    expect(autoStartDecision(state({ automation: { ...AUTOMATION, autoStartLadders: false } }))).toEqual({ start: null, reason: '"Choose keywords for me" is off' });
-    expect(autoStartDecision(state({ trackingPaused: true })).start).toBeNull();
-    expect(autoStartDecision(state({ ladderRunActive: true })).reason).toMatch(/being planned/);
-    expect(autoStartDecision(state({ pileup: true })).reason).toMatch(/wait to be published/);
+  it('the platform switch, a pause, an open proposal, a ladder being planned, research running: nothing', () => {
+    expect(proposalDecision(state({ enabled: false }))).toMatchObject({ action: 'none', why: expect.stringMatching(/AUTO_START_LADDERS/) });
+    expect(proposalDecision(state({ paused: true })).action).toBe('none');
+    expect(proposalDecision(state({ open: true })).why).toMatch(/already waits/);
+    expect(proposalDecision(state({ ladderRunActive: true })).why).toMatch(/being planned/);
+    expect(proposalDecision(state({ researchRunning: true })).why).toMatch(/research is running/);
   });
 
-  it('counts only Auto ladders with pages left that are not paused, won or queued', () => {
-    const cards = [
-      card('a'),
-      card('b', { status: 'needs_you' }),
-      card('c', { mode: 'manual' }),
-      card('d', { status: 'paused' }),
-      card('e', { status: 'won' }),
-      card('f', { status: 'queued' }),
-      card('g', { counts: counts(0) }),
-      card('h', { status: 'planning', counts: counts(6, 6) }),
-    ];
-    expect(activeAutoLadders(cards)).toBe(3);
-    expect(autoStartDecision(state({ cards: cards.slice(0, 2) })).reason).toMatch(/2 Auto ladders with pages to write \(the limit is 2\)/);
-    expect(autoStartDecision(state({ cards: [cards[0], cards[7]] })).start).toBeNull();
-    expect(autoStartDecision(state({ cards: cards.slice(2, 7) })).start?.keyword).toBe('odoo partner uae');
-    expect(autoStartDecision(state({ cards: [], automation: { ...AUTOMATION, maxActiveLadders: 1 } })).start?.keyword).toBe('odoo partner uae');
+  it('room: fewer Auto ladders with pages to write than the limit and none queued', () => {
+    const cards = [card('a'), card('b', { status: 'needs_you' }), card('c', { mode: 'manual' }), card('d', { status: 'paused' }), card('e', { status: 'won' }), card('g', { counts: counts(0) })];
+    expect(activeAutoLadders(cards)).toBe(2);
+    expect(proposalDecision(state({ cards: cards.slice(0, 2) })).why).toMatch(/2 Auto ladders with pages to write \(the limit is 2\)/);
+    expect(proposalDecision(state({ cards: [card('a'), card('q', { status: 'queued' })] })).why).toMatch(/wait for a free place|waits for a free place/);
+    expect(proposalDecision(state({ cards: [] })).action).toBe('propose');
   });
 
-  it('at most one automatic start a week; never a keyword started automatically before (or the same search)', () => {
-    expect(autoStartDecision(state({ previous: [{ keyword: 'old one', at: daysAgo(6) }] })).reason).toMatch(/less than 7 days ago/);
-    expect(autoStartDecision(state({ previous: [{ keyword: 'old one', at: daysAgo(8) }] })).start?.keyword).toBe('odoo partner uae');
-    expect(autoStartDecision(state({ previous: [{ keyword: 'Odoo partner UAE', at: daysAgo(30) }] })).start?.keyword).toBe('erp dubai');
-    expect(autoStartDecision(state({ previous: [{ keyword: 'odoo partners in the uae', at: daysAgo(30) }] })).start?.keyword).toBe('erp dubai');
+  it('a won ladder or one with no pages left is the occasion, and says so', () => {
+    const won = proposalDecision(state({ cards: [card('a', { status: 'won', counts: counts(0) })] }));
+    expect(won).toMatchObject({ action: 'propose', occasion: 'won', why: expect.stringMatching(/^Your ladder reached the top 3/) });
+    const done = proposalDecision(state({ cards: [card('a', { counts: counts(0) })] }));
+    expect(done).toMatchObject({ action: 'propose', occasion: 'done', why: expect.stringMatching(/no pages left/) });
   });
 
-  it('skips keywords a ladder covers now, off-topic keywords (a check said fit 0) and plans that are not realistic', () => {
-    const ladders = [{ id: 'lad_o', head: 'odoo partner uae', keywords: [] }];
-    expect(autoStartDecision(state({ ladders })).start?.keyword).toBe('erp dubai');
-    expect(autoStartDecision(state({ fitOf: new Map([['odoo partner uae', 0]]) })).start?.keyword).toBe('erp dubai');
-    expect(autoStartDecision(state({ fitOf: new Map([['odoo partner uae', null]]) })).start?.keyword).toBe('odoo partner uae');
-    const r = recommended([rec('cleartax login', { difficultyForYou: 'easy', planType: 'none' }), rec('vat software', { difficultyForYou: 'very_hard', planType: 'full' }), rec('x y z', { difficultyForYou: null, planType: null })]);
-    expect(autoStartDecision(state({ recommended: r })).reason).toMatch(/no recommended keyword is easy or reachable/);
+  it('never a keyword proposed before (any outcome, any spelling), one a ladder covers, off topic (fit 0), or with no plan', () => {
+    expect(proposalDecision(state({ proposedBefore: ['Odoo Partner UAE'] }))).toMatchObject({ pick: { keyword: 'erp dubai' } });
+    const covered = recommended([rec('peppol uae'), rec('e invoicing uae'), rec('odoo partner uae')]);
+    expect(proposalDecision(state({ recommended: covered }))).toMatchObject({ pick: { keyword: 'odoo partner uae' } });
+    expect(proposalDecision(state({ fitOf: new Map([['odoo partner uae', 0]]) }))).toMatchObject({ pick: { keyword: 'erp dubai' } });
+    expect(proposalDecision(state({ recommended: recommended([rec('x one', { planType: 'none' }), rec('x two', { difficultyForYou: 'not_realistic' })]) })).action).toBe('none');
   });
 
-  it('needs keyword research of the last 90 days', () => {
-    expect(autoStartDecision(state({ recommended: recommended([], { reportId: null, ageDays: null }) })).reason).toMatch(/no keyword research/);
-    expect(autoStartDecision(state({ recommended: recommended([rec('odoo partner uae')], { ageDays: 91, stale: true }) })).reason).toMatch(/older than 90 days/);
-    expect(autoStartDecision(state({ recommended: recommended([rec('odoo partner uae')], { ageDays: 90 }) })).start?.keyword).toBe('odoo partner uae');
-  });
-});
-
-describe('auto-start: one website', () => {
-  const org = { id: 'org-1', disabled: false, monthlyBudgetUsd: 25 } as never;
-  const site = {
-    id: '7a1c2d3e-4f50-4a61-8b72-93a4b5c6d7e8',
-    domain: 'techand.ai',
-    country: 'United Arab Emirates',
-    business: 'E-invoicing consulting',
-    customers: 'finance teams',
-    businessFacts: 'FTA accredited',
-    goal: 'leads',
-    tone: 'Professional and direct',
-    cta: 'Book a call',
-    verifiedAt: new Date(),
-    trackingStatus: 'active',
-  } as never;
-  const pipeline = (o: Partial<PipelineData> = {}) =>
-    ({
-      automation: AUTOMATION,
-      ladderCards: [card('lad_a')],
-      ladders: [{ id: 'lad_a', head: 'e invoicing in uae', pages: 2, published: 0, planned: [], keywords: ['peppol uae', 'e invoicing in uae'] }],
-      activeRuns: [],
-      queue: { paused: null },
-      tracking: { status: 'active' },
-      ...o,
-    }) as unknown as PipelineData;
-  const deps = (o: Partial<AutoStartDeps> = {}): AutoStartDeps & { started: unknown[] } => {
-    const started: unknown[] = [];
-    return {
-      started,
-      pipeline: async () => pipeline(),
-      recommended: async () => recommended([rec('odoo partner uae')]),
-      previous: async () => [],
-      fits: async () => new Map(),
-      owner: async () => ({ id: 'owner-1', email: 'owner@example.org' }) as never,
-      start: vi.fn(async (a, input) => (started.push({ a, input }), { id: 'run-1', status: 'accepted', error: null }) as never),
-      ...o,
-    };
-  };
-
-  it('starts a ladder run as the owner with the website\'s business details, one page, no e-mail, no preferences', async () => {
-    const d = deps();
-    const r = await autoStartForSite(org, site, d, NOW);
-    expect(r).toMatchObject({ runId: 'run-1', keyword: 'odoo partner uae' });
-    expect(d.started).toHaveLength(1);
-    const { a, input } = d.started[0] as { a: { role: string; user: { id: string } }; input: Record<string, unknown> };
-    expect([a.role, a.user.id]).toEqual(['owner', 'owner-1']);
-    expect(input).toEqual({
-      mode: 'ladder',
-      siteId: '7a1c2d3e-4f50-4a61-8b72-93a4b5c6d7e8',
-      keyword: 'odoo partner uae',
-      country: 'United Arab Emirates',
-      business: 'E-invoicing consulting',
-      customers: 'finance teams',
-      businessFacts: 'FTA accredited',
-      goal: 'leads',
-      tone: 'Professional and direct',
-      cta: 'Book a call',
-      pagesNow: 1,
-      emailCopy: false,
-    });
-  });
-
-  it('over the budget (402): skipped, nothing else thrown; other errors surface', async () => {
-    const over = deps({ start: async () => Promise.reject(new HttpError(402, 'over', 'budget')) });
-    expect(await autoStartForSite(org, site, over, NOW)).toEqual({ runId: null, keyword: 'odoo partner uae', reason: 'it would go over the monthly budget' });
-    // admin panel: out of credits is said as such, not as a budget
-    const broke = deps({ start: async () => Promise.reject(new HttpError(402, 'no credits', 'credits')) });
-    expect((await autoStartForSite(org, site, broke, NOW)).reason).toBe('the company has no credits left for it');
-    const broken = deps({ start: async () => Promise.reject(new Error('db down')) });
-    await expect(autoStartForSite(org, site, broken, NOW)).rejects.toThrow('db down');
-  });
-
-  it('nothing starts: a ladder run going, the pile-up guard, no owner, a disabled company, an unknown country', async () => {
-    for (const p of [pipeline({ activeRuns: [{ id: 'r', mode: 'ladder', keyword: 'x', createdAt: daysAgo(0) }] }), pipeline({ queue: { paused: { reason: 'pileup', waiting: 3, max: 3 } } as never })]) {
-      const d = deps({ pipeline: async () => p });
-      expect((await autoStartForSite(org, site, d, NOW)).runId).toBeNull();
-      expect(d.started).toHaveLength(0);
+  it('no research, or research older than 90 days: levels 1-2 propose nothing (a recommendation offers the research); level 3 refreshes it (autopilot)', () => {
+    for (const r of [recommended([], { reportId: null, ageDays: null }), recommended([rec('odoo partner uae')], { ageDays: 91 })]) {
+      expect(proposalDecision(state({ recommended: r })).action).toBe('none');
+      expect(proposalDecision(state({ recommended: r, level: 1 })).action).toBe('none');
+      expect(proposalDecision(state({ recommended: r, level: 3 })).action).toBe('research');
     }
-    const noOwner = deps({ owner: async () => null });
-    expect(await autoStartForSite(org, site, noOwner, NOW)).toMatchObject({ runId: null, reason: 'the company has no owner' });
-    expect((await autoStartForSite({ ...(org as object), disabled: true } as never, site, deps(), NOW)).reason).toBe('the company is disabled');
-    const narnia = deps();
-    expect((await autoStartForSite(org, { ...(site as object), country: 'Narnia' } as never, narnia, NOW)).reason).toMatch(/settings are incomplete \(country\)/);
-    expect(narnia.started).toHaveLength(0);
+  });
+
+  it('the announcement e-mail: plain words, the date it starts, the credits a page; no dollar figure', () => {
+    const m = announcementMail({
+      site: { domain: 'techand.ai' },
+      p: { id: 'p', siteId: 's', keyword: 'crm consulting', status: 'pending', startAt: '2026-10-22T12:00:00.000Z', level: 3, why: 'You offer CRM implementation.', occasion: 'room', searches: 320, difficulty: 'easy', chance: 'Good chance', planType: 'direct', months: '2-4', creditsPerPage: 51, runId: null, swappedFor: null, note: '', createdAt: '', decidedAt: null, decidedBy: null },
+      url: 'https://app.test/x',
+    });
+    expect(m.subject).toBe('We will start "crm consulting" for techand.ai');
+    expect(m.lines.join(' ')).toMatch(/starts on Thu, 22 Oct 2026 12:00 UTC unless you change it/);
+    expect(m.lines.join(' ')).toMatch(/about 51 credits/);
+    expect(m.details).toEqual([
+      { label: 'Keyword', value: 'crm consulting' },
+      { label: 'Searches a month', value: 'about 320' },
+      { label: 'Your chances', value: 'Good chance' },
+      { label: 'Time to rank', value: '2-4 months' },
+    ]);
+    expect(JSON.stringify(m)).not.toMatch(/\$|USD|—|…/);
   });
 });

@@ -10,6 +10,9 @@ const n8n = vi.hoisted(() => ({
   settings: [] as LadderSettingsRow[],
   upserts: [] as { table: string; filters: unknown[]; data: Record<string, unknown> }[],
   deletes: [] as { table: string; filters: unknown[] }[],
+  inserts: [] as { table: string; rows: Record<string, unknown>[] }[],
+  mirror: [] as Record<string, unknown>[],
+  audits: [] as Record<string, unknown>[],
 }));
 
 vi.mock('../src/auth/access', () => ({
@@ -21,8 +24,13 @@ vi.mock('../src/n8n/client', () => ({
   upsertRow: vi.fn(async (table: string, filters: unknown[], data: Record<string, unknown>) => void n8n.upserts.push({ table, filters, data })),
   deleteRows: vi.fn(async (table: string, filters: unknown[]) => (n8n.deletes.push({ table, filters }), true)),
   ensureTable: vi.fn(async () => 'tbl'),
+  insertRows: vi.fn(async (table: string, rows: Record<string, unknown>[]) => (n8n.inserts.push({ table, rows }), true)),
   invalidateSite: vi.fn(),
 }));
+// keyword-first: the level is mirrored on the website, the change is audited, the forecast follows it
+vi.mock('../src/db', async () => ({ db: { update: () => ({ set: (v: Record<string, unknown>) => ({ where: async () => void n8n.mirror.push(v) }) }) }, schema: await vi.importActual('../src/db/schema') }));
+vi.mock('../src/services/audit', () => ({ audit: vi.fn(async (_r: unknown, _o: unknown, e: Record<string, unknown>) => void n8n.audits.push(e)) }));
+vi.mock('../src/services/billing', () => ({ invalidateForecast: vi.fn() }));
 vi.mock('../src/services/pipeline', () => ({
   ladderCards: vi.fn(async () => [{ id: 'lad_mine', head: 'e invoicing in uae', mode: 'manual', status: 'planning', priority: 1 }]),
 }));
@@ -45,10 +53,13 @@ beforeEach(() => {
   n8n.settings = [];
   n8n.upserts = [];
   n8n.deletes = [];
+  n8n.inserts = [];
+  n8n.mirror = [];
+  n8n.audits = [];
 });
 
 const base = '/api/orgs/00000000-0000-0000-0000-000000000001/sites/00000000-0000-0000-0000-000000000002';
-const send = (method: 'PATCH' | 'PUT' | 'DELETE', url: string, payload?: unknown) => app.inject({ method, url: base + url, payload: payload as object });
+const send = (method: 'PATCH' | 'PUT' | 'DELETE' | 'POST', url: string, payload?: unknown) => app.inject({ method, url: base + url, payload: payload as object });
 
 describe('ladder routes', () => {
   it('a ladder of another website (or no ladder) is a 404 and nothing is written', async () => {
@@ -95,7 +106,7 @@ describe('ladder routes', () => {
     for (const body of [{ maxActiveLadders: 6 }, { maxWaiting: 0 }, { defaultMode: 'x' }, {}]) expect((await send('PATCH', '/automation', body)).statusCode).toBe(400);
     const r = await send('PATCH', '/automation', { maxActiveLadders: 3, opportunities: 'manual' });
     expect(r.statusCode).toBe(200);
-    expect(r.json()).toEqual({ defaultMode: 'auto', opportunities: 'manual', autoStartLadders: false, maxActiveLadders: 3, maxWaiting: 3 });
+    expect(r.json()).toEqual({ autopilotLevel: 2, defaultMode: 'auto', opportunities: 'manual', autoStartLadders: false, maxActiveLadders: 3, maxWaiting: 3 });
     expect(n8n.upserts[0]).toMatchObject({ filters: [{ value: '_site' }, { value: 'techand.ai' }], data: { ladder_id: '_site', max_active: 3, opportunities: 'manual', max_waiting: 3, mode: 'auto' } });
   });
 
@@ -110,5 +121,32 @@ describe('ladder routes', () => {
     expect(r.json()).toMatchObject({ autoStartLadders: false, defaultMode: 'manual', maxActiveLadders: 3 });
     expect(Object.keys(n8n.upserts[0].data).sort()).toEqual(['auto_start', 'updated_at']);
     expect(n8n.upserts[0].data.auto_start).toBe(false);
+  });
+
+  it("PATCH automation: the autopilot level (1-3) is the _site row's autopilot_level, mirrored on the website and audited", async () => {
+    for (const body of [{ autopilotLevel: 0 }, { autopilotLevel: 4 }, { autopilotLevel: '3' }]) expect((await send('PATCH', '/automation', body)).statusCode).toBe(400);
+    expect(n8n.upserts).toEqual([]);
+    const r = await send('PATCH', '/automation', { autopilotLevel: 3 });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toMatchObject({ autopilotLevel: 3, defaultMode: 'auto' });
+    expect(n8n.upserts[0].data).toMatchObject({ ladder_id: '_site', autopilot_level: 3 });
+    expect(n8n.mirror[0]).toMatchObject({ autopilotLevel: 3, autopilotDroppedAt: null });
+    expect(n8n.audits[0]).toMatchObject({ action: 'site.autopilot_level_changed', details: { after: 3 } });
+    // an existing row: only that column changes
+    n8n.settings = [{ ladder_id: '_site', domain: 'techand.ai', mode: 'manual', autopilot_level: 3 } as LadderSettingsRow];
+    n8n.upserts = [];
+    expect((await send('PATCH', '/automation', { autopilotLevel: 1 })).json()).toMatchObject({ autopilotLevel: 1, defaultMode: 'manual' });
+    expect(Object.keys(n8n.upserts[0].data).sort()).toEqual(['autopilot_level', 'updated_at']);
+  });
+
+  it('POST ladders/:id/keywords ("Add to my ladder"): one more planned page of that ladder; a search already planned is refused', async () => {
+    const r = await send('POST', '/ladders/lad_mine/keywords', { keyword: 'Peppol access point UAE' });
+    expect(r.statusCode).toBe(200);
+    expect(n8n.inserts).toEqual([{ table: 'ladders', rows: [expect.objectContaining({ ladder_id: 'lad_mine', domain: 'techand.ai', head_keyword: 'e invoicing in uae', rung: 1, page_no: 3, keyword: 'peppol access point uae', status: 'planned', page_exists: false })] }]);
+    expect(n8n.audits[0]).toMatchObject({ action: 'site.ladder_keyword_added' });
+    expect((await send('POST', '/ladders/lad_mine/keywords', { keyword: 'Peppol UAE' })).statusCode).toBe(409);
+    expect((await send('POST', '/ladders/lad_other/keywords', { keyword: 'anything new' })).statusCode).toBe(404);
+    expect((await send('POST', '/ladders/lad_mine/keywords', { keyword: 'x' })).statusCode).toBe(400);
+    expect(n8n.inserts).toHaveLength(1);
   });
 });

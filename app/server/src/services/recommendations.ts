@@ -19,6 +19,9 @@ import {
   type SiteSettingsData,
   type TechnicalData,
   urlOnHost,
+  RECOMMENDATIONS_MAX_AGE_DAYS,
+  fitTopic,
+  normKeyword,
   impactFromAuditWeight,
   impactFromClicks,
   impactFromPoints,
@@ -49,10 +52,12 @@ export interface SiteBundle {
   reportsElsewhere: boolean;
   /** v4.13 Link Builder: pitches waiting, a mailbox, replies waiting, listings competitors have */
   links?: { drafted: number; mailbox: boolean; repliesWaiting: number; listingsMissing: { name: string; competitors: string[] }[] };
+  /** keyword-first: when the website's latest keyword research arrived (null: none yet) */
+  researchAt?: string | null;
 }
 
 export async function loadBundle(org: OrgRow, site: SiteRow): Promise<SiteBundle> {
-  const [search, rankings, content, technical, ai, backlinks, alerts, settings, rank, links] = await Promise.all([
+  const [search, rankings, content, technical, ai, backlinks, alerts, settings, rank, links, research] = await Promise.all([
     searchData(org, site),
     rankingsData(site),
     contentData(org, site),
@@ -63,6 +68,7 @@ export async function loadBundle(org: OrgRow, site: SiteRow): Promise<SiteBundle
     settingsData(org, site),
     latestReport(org.id, site.id, ['rank_tracker']),
     linkSummary(org, site),
+    latestReport(org.id, site.id, ['keyword_strategy']).catch(() => null),
   ]);
   const reportsElsewhere = settings.tracking.tracked && settings.tracking.status === 'active' && !settings.tracking.reportsToThisApp;
   let rankNext: EngineAction | null = null;
@@ -80,7 +86,7 @@ export async function loadBundle(org: OrgRow, site: SiteRow): Promise<SiteBundle
       apiBody: (rank.payload.api_body as Record<string, unknown>) ?? null,
     };
   }
-  return { search, rankings, content, technical, ai, backlinks, alerts, settings, rankNext, reportsElsewhere, links };
+  return { search, rankings, content, technical, ai, backlinks, alerts, settings, rankNext, reportsElsewhere, links, researchAt: research?.report.receivedAt ?? null };
 }
 
 const PAGE_TYPES = new Set<string>(PAGE_TYPE_VALUES);
@@ -130,12 +136,23 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
     out.push({ ...r, score: scoreOf(input) });
   };
   const tracked = site.trackingStatus === 'active' || x.settings.tracking.tracked;
+  // keyword-first (§5.3): a search on the topic of one of the website's ladders can join that ladder ("Add to my ladder") instead of
+  // being a page of its own: the ladder whose head and pages carry at least half of the keyword's own words, and none of its pages already is it
+  const ladderFor = (kw: string): RecommendationAction | undefined => {
+    let best: { l: (typeof x.rankings.ladders)[number]; share: number } | null = null;
+    for (const l of x.rankings.ladders) {
+      if (l.rungs.some((r) => normKeyword(r.keyword) === normKeyword(kw)) || normKeyword(l.headKeyword) === normKeyword(kw)) return undefined;
+      const t = fitTopic(kw, [l.headKeyword, ...l.rungs.map((r) => r.keyword)], { topic_min_words: 1 });
+      if (t.ok && t.share != null && t.share >= 0.5 && (!best || t.share > best.share)) best = { l, share: t.share };
+    }
+    return best ? { label: 'Add to my ladder', addToLadder: { ladderId: best.l.ladderId, head: best.l.headKeyword, keyword: kw } } : undefined;
+  };
 
   // ---------- setup ----------
   if (!tracked)
     add({ id: 'setup:tracking', category: 'setup', priority: 'high', title: 'Start weekly tracking', detail: 'Weekly Search Console, GA4, Google Trends and live rank checks with actions, plus AI-visibility and backlink monitors. Everything on this dashboard fills from it.', action: { label: 'Set up tracking', page: 'settings/tracking' } });
   if (x.reportsElsewhere)
-    add({ id: 'setup:delivery', category: 'setup', priority: 'high', title: 'Send the weekly reports to this dashboard', detail: 'The SEO engine already tracks this site, but its weekly reports still go to an address set up before this app. Save the tracking settings once and every Monday report, alert and page lands here.', action: { label: 'Open tracking settings', page: 'settings/tracking' } });
+    add({ id: 'setup:delivery', category: 'setup', priority: 'high', title: 'Send the weekly reports to this dashboard', detail: 'The SEO engine already tracks this site, but its weekly reports still go to an address set up before this app. Save the tracking settings once and every weekly report, alert and page lands here.', action: { label: 'Open tracking settings', page: 'settings/tracking' } });
   const snap = x.search.snapshot;
   if (tracked && (snap ? !snap.gsc.connected : !x.settings.tracking.gscProperty))
     add({ id: 'setup:gsc', category: 'setup', priority: 'high', title: 'Connect Google Search Console', detail: 'Without Search Console the tracker cannot see clicks, impressions, queries or index status. Add the service account as a user of your property.', evidence: snap?.gsc.error ?? undefined, action: { label: 'Connect', page: 'settings/verification' } });
@@ -184,6 +201,7 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
       detail: q.page ? `It already ranks with ${q.page.replace(/^https?:\/\/(www\.)?/, '')}. Improving that page (depth, intent match, internal links) is the fastest win.` : 'It already earns impressions; a focused page can win clicks.',
       evidence: `position ${fmtPos(q.position)} · ${q.impressions} impressions · ${q.clicks} clicks in the last period`,
       action: { label: q.page ? 'Improve the page' : 'Write the page', mode: 'keyword', prefill: { keyword: q.query, ...(q.page && urlOnHost(q.page, site.domain) ? { existingPageUrl: q.page } : {}), receiveReport: true, receiveContent: true } },
+      ...(q.page ? {} : (() => { const a = ladderFor(q.query); return a ? { secondary: a } : {}; })()),
     }, {
       // the impressions and the CTR are this site's own; the CTR it could reach is a published benchmark, so the whole figure is modelled
       impact: impactFromClicks(Math.max(0, (onPage1 ? CTR_AT.top3 : CTR_AT.page1) - q.ctr) * q.impressions * TO_MONTH),
@@ -346,17 +364,24 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
   }
   for (const c of x.content.items.filter((c) => c.status !== 'published' && c.status !== 'not_ready' && c.startedAt && now - Date.parse(c.startedAt) > 3 * 864e5).slice(0, 4))
     add({ id: `content:publish:${c.keyword}`, category: 'content', priority: 'high', title: `Publish the page for "${c.keyword}"`, detail: 'It is written but not live; nothing can rank before it is published. Then report the URL so tracking and link suggestions start.', evidence: `written ${Math.round((now - Date.parse(c.startedAt)) / 864e5)} days ago`, action: { label: 'I published it', mode: 'published', prefill: { keyword: c.keyword } } });
-  if (tracked && (x.content.cadence?.pagesPerWeek ?? 0) === 0)
-    add({ id: 'content:cadence', category: 'content', priority: 'low', title: 'Turn on weekly blog posts', detail: 'The content cadence writes researched pages every Monday from your ladder, striking-distance queries and rising searches.', action: { label: 'Set posts per week', page: 'settings/tracking' } });
+  // keyword-first (SCHEDULING_KEYWORDS_PLAN.md §5.3): nothing is written without a keyword the client chose, so the first step is the keyword
+  const ladderCount = x.rankings.ladders.length;
+  const researchAge = x.researchAt ? (now - Date.parse(x.researchAt)) / 864e5 : null;
+  if (!ladderCount && (researchAge == null || researchAge > RECOMMENDATIONS_MAX_AGE_DAYS))
+    add({ id: 'keyword:research', category: 'content', priority: 'high', title: 'Start keyword research', detail: researchAge == null ? 'We look at your website, your services and your market and suggest the keywords you have a real chance with. You then choose the one you want to be found for; nothing is written before you do.' : `Your last keyword research is more than ${RECOMMENDATIONS_MAX_AGE_DAYS} days old. Fresh research shows what people search for now before you choose a keyword.`, action: { label: 'Find keywords', page: 'pipeline/new' } });
+  else if (!ladderCount)
+    add({ id: 'keyword:first', category: 'content', priority: 'high', title: 'Choose your first keyword', detail: 'Your keyword research is ready. Pick the keyword you want to be found for (or type your own): its pages are then written every week. Nothing is written before you choose.', action: { label: 'Choose a keyword', page: 'pipeline/new' } });
+  if (tracked && ladderCount && (x.content.cadence?.pagesPerWeek ?? 0) === 0)
+    add({ id: 'content:cadence', category: 'content', priority: 'low', title: 'Turn on weekly pages for your keywords', detail: 'Your keyword ladders have pages to write, but pages a week is 0, so they wait. Set how many pages a week we write for your keywords.', action: { label: 'Set pages a week', page: 'settings/tracking' } });
   for (const tr of x.search.trends.filter((t) => /ris|up/i.test(t.direction) && t.changePct >= 50).slice(0, 2))
-    add({ id: `content:trend:${tr.keyword}`, category: 'content', priority: 'medium', title: `Rising search: "${tr.keyword}" (+${Math.round(tr.changePct)}%)`, detail: tr.rising.length ? `Rising related searches: ${tr.rising.slice(0, 3).join(', ')}.` : 'Demand is growing; a timely page can capture it.', action: { label: 'Write a page', mode: 'keyword', prefill: { keyword: tr.keyword } } });
+    add({ id: `content:trend:${tr.keyword}`, category: 'content', priority: 'medium', title: `Rising search: "${tr.keyword}" (+${Math.round(tr.changePct)}%)`, detail: tr.rising.length ? `Rising related searches: ${tr.rising.slice(0, 3).join(', ')}.` : 'Demand is growing; a timely page can capture it.', action: { label: 'Write a page', mode: 'keyword', prefill: { keyword: tr.keyword } }, ...(() => { const a = ladderFor(tr.keyword); return a ? { secondary: a } : {}; })() });
 
   // ---------- rankings ----------
   for (const l of x.rankings.ladders) {
     const next = l.rungs.find((r) => r.status === 'planned');
     const lastDone = [...l.rungs].reverse().find((r) => r.status !== 'planned');
     if (next && lastDone)
-      add({ id: `rank:next:${l.ladderId}`, category: 'rankings', priority: 'medium', title: `Next rung of "${l.headKeyword}": ${next.keyword}`, detail: `Rung ${next.rung} of the ladder (${next.pageType || 'page'}). Each published rung adds internal links and topical authority for the head term. The pipeline writes it with the ladder's links and marks it, so the Monday cadence moves on.`, evidence: `${l.published} of ${l.pages} pages published`, action: { label: 'Open the ladder', page: `pipeline/ladders/${l.ladderId}` } });
+      add({ id: `rank:next:${l.ladderId}`, category: 'rankings', priority: 'medium', title: `Next rung of "${l.headKeyword}": ${next.keyword}`, detail: `Rung ${next.rung} of the ladder (${next.pageType || 'page'}). Each published rung adds internal links and topical authority for the head term. The pipeline writes it with the ladder's links and marks it, so the weekly pages move on.`, evidence: `${l.published} of ${l.pages} pages published`, action: { label: 'Open the ladder', page: `pipeline/ladders/${l.ladderId}` } });
   }
   for (const k of x.rankings.keywords.filter((k) => k.previousPosition && k.latestPosition != null && (k.latestPosition === 0 || k.latestPosition - k.previousPosition >= 5)).slice(0, 3))
     add({ id: `rank:drop:${k.keyword}`, category: 'rankings', priority: 'medium', title: `"${k.keyword}" dropped`, detail: 'Check the ranking page and what moved above it.', evidence: `position ${k.previousPosition} to ${k.latestPosition === 0 ? 'out of the top 50' : k.latestPosition}`, action: { label: 'Refresh the page', mode: 'keyword', prefill: { keyword: k.keyword, ...(k.url && urlOnHost(k.url, site.domain) ? { existingPageUrl: k.url } : {}) } } });

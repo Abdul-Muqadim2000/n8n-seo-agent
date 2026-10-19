@@ -1,170 +1,291 @@
-import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, lte, sql } from 'drizzle-orm';
 import {
-  cleanDomain,
+  CHANCE_WORDS,
+  DEFAULT_AUTOPILOT_LEVEL,
+  PROPOSAL_WAIT_HOURS,
+  RECOMMENDATIONS_MAX_AGE_DAYS,
+  cycleNorm,
+  discoverInput,
+  estimateRunCost,
   isWithinReach,
   keywordsOverlap,
-  LADDER_SITE_ROW,
   ladderInput,
   ladderOverlapsOf,
   normKeyword,
-  RECOMMENDATIONS_MAX_AGE_DAYS,
+  type AutopilotLevel,
+  type KeywordProposalList,
+  type KeywordProposalStatus,
+  type KeywordProposalView,
   type LadderCard,
   type LadderKeywords,
-  type LadderSettingsRow,
   type PipelineData,
   type RecommendedKeyword,
   type RecommendedKeywords,
-  type SiteAutomation,
 } from '@seo/shared';
 import type { OrgAccess } from '../auth/access';
+import { config } from '../config';
 import { db, schema } from '../db';
-import type { OrgRow, RunRow, SiteRow, UserRow } from '../db/schema';
-import { HttpError } from '../lib/errors';
-import { rows } from '../n8n/client';
-import { recentChecks } from './keywordCheckStore';
-import { recommendedKeywords } from './keywordChecks';
-import { pipelineData } from './pipeline';
-import { createRun } from './runs';
+import type { KeywordProposalRow, OrgRow, RunRow, SiteRow, UserRow } from '../db/schema';
+import { badRequest, conflict, HttpError, notFound } from '../lib/errors';
+import { sendMail } from '../lib/mailer';
 import { customerError } from '../lib/customerError';
+import { wholeCreditsOfUsd as creditsOfUsd } from './admin/settings';
+import { cachedCalibration } from './engineCost';
+import { billingContacts } from './invoices';
+import { recentChecks } from './keywordCheckStore';
+import { assessKeyword, recommendedKeywords } from './keywordChecks';
+import { pipelineData } from './pipeline';
+import { baseUrlFor, senderFor } from './portalMail';
+import { createRun } from './runs';
 
-// "Choose keywords for me" (PIPELINE_FEATURE_SPEC.md §7): for a website that switched it on (the '_site' row's auto_start), when fewer
-// Auto ladders are being written than its limit, start the next recommended keyword that is easy or reachable for the website, on
-// the company owner's behalf, through the same run path as a person (createRun: the locked budget check, the platform's daily
-// ceiling). Off unless the server runs with AUTO_START_LADDERS=true (index.ts timer, every 6 hours). Never automatic: going over the
-// budget (402 -> skipped), a keyword a ladder covers, a keyword started automatically before, more than one start a week per website.
+// The next keyword, proposed by the system (SCHEDULING_KEYWORDS_PLAN.md §5.6 / §5.7, owner decisions D5 / D13 / D14 / D15). "Choose
+// keywords for me" became exactly this: when a website has room (fewer active ladders than its limit and none queued: a ladder was won,
+// has no pages left, or there is none yet), the best recommended keyword (easy or reachable for the website, a plan, no overlap with its
+// ladders, not off topic, never proposed before) becomes a PROPOSAL:
+//   * levels 1-2: a suggestion that waits for the client (Start this ladder / Show me others / Not now);
+//   * level 3: an announcement that starts PROPOSAL_WAIT_HOURS later unless the client changes or skips it (an e-mail goes out, D15).
+// The client may approve it (starts now, chosen_by client_picked), swap it for a typed keyword (keyword check first, then starts as
+// client_typed), or skip it (never proposed again for this website; the next one is proposed). A due announcement starts as
+// system_announced, on the owner's behalf, through the same run path as a person (createRun: the locked credit check, the platform's
+// ceiling) and counts as autopilot spend. Never for a paused or credit-paused website, never above max_active, never while a ladder run is
+// going. Idempotent across timer ticks, two servers and restarts by database rules: one open proposal per website, one proposal per
+// keyword per website, and a claim (pending -> starting) before any start. AUTO_START_LADDERS is the platform's kill switch.
 
-export const AUTO_START = {
-  everyMs: 6 * 3600_000,
-  /** the first pass after the server starts */
-  firstAfterMs: 5 * 60_000,
-  /** at most one automatic start per website in this many days */
-  minDaysBetween: 7,
+export const PROPOSALS = {
+  /** the timer: due starts every tick, new proposals every `proposeEvery` */
+  tickMs: 10 * 60_000,
+  firstAfterMs: 2 * 60_000,
+  proposeEveryMs: 6 * 3600_000,
+  /** a claim older than this with no run is released (a crash between the claim and the start) */
+  staleClaimMs: 15 * 60_000,
+  /** level 3: a research refresh at most this often (D3's research is the onboarding one) */
+  researchEveryDays: RECOMMENDATIONS_MAX_AGE_DAYS,
 } as const;
 
-export interface AutoStartState {
-  automation: SiteAutomation;
-  cards: Pick<LadderCard, 'id' | 'mode' | 'status' | 'counts'>[];
-  /** every ladder of the website with its main and page keywords */
-  ladders: LadderKeywords[];
-  recommended: RecommendedKeywords;
-  /** keywords started automatically before for this website (any outcome) */
-  previous: { keyword: string; at: string }[];
-  /** a ladder run of the website is going (being planned) */
-  ladderRunActive: boolean;
-  /** the pile-up guard holds: pages wait to be published, so nothing new is written */
-  pileup: boolean;
-  trackingPaused: boolean;
-  /** topic fit of keywords the website checked recently (normalised keyword -> 0 / 1 / 2 / null) */
-  fitOf: Map<string, number | null>;
-  now: number;
-}
-
-export type AutoStartDecision = { start: RecommendedKeyword; reason: string } | { start: null; reason: string };
-
-const skip = (reason: string): AutoStartDecision => ({ start: null, reason });
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
+const OPEN: KeywordProposalStatus[] = ['pending'];
 
-/** Auto ladders that still have pages to write and are not paused, won or queued (the ones the weekly posts go to). */
-export function activeAutoLadders(cards: AutoStartState['cards']): number {
+/** Auto ladders that still have pages to write and are not paused, won or queued (the ones the weekly pages go to). */
+export function activeAutoLadders(cards: Pick<LadderCard, 'mode' | 'status' | 'counts'>[]): number {
   return cards.filter((c) => c.mode === 'auto' && !['paused', 'won', 'queued'].includes(c.status) && c.counts.planned > 0).length;
 }
 
-/** Whether to start a ladder now, and which keyword. Pure: every input is in `s`. */
-export function autoStartDecision(s: AutoStartState): AutoStartDecision {
-  if (!s.automation.autoStartLadders) return skip('"Choose keywords for me" is off');
-  if (s.trackingPaused) return skip('the pipeline is paused');
-  if (s.ladderRunActive) return skip('a keyword ladder is being planned right now');
-  const last = s.previous.map((p) => Date.parse(p.at)).filter(Number.isFinite).sort((a, b) => b - a)[0];
-  if (last && s.now - last < AUTO_START.minDaysBetween * 864e5) return skip(`a ladder was started automatically less than ${AUTO_START.minDaysBetween} days ago`);
-  if (s.pileup) return skip('pages wait to be published: nothing new is started until they are live');
+export interface ProposalState {
+  /** AUTO_START_LADDERS */
+  enabled: boolean;
+  level: AutopilotLevel;
+  maxActive: number;
+  cards: Pick<LadderCard, 'id' | 'head' | 'mode' | 'status' | 'counts'>[];
+  /** every ladder of the website with its main and page keywords */
+  ladders: LadderKeywords[];
+  recommended: RecommendedKeywords;
+  /** every keyword ever proposed for the website (any status): never proposed twice */
+  proposedBefore: string[];
+  /** an open proposal exists */
+  open: boolean;
+  /** a ladder run of the website is going (being planned) */
+  ladderRunActive: boolean;
+  /** a keyword research run of the website is going */
+  researchRunning: boolean;
+  /** the website is paused (by a person or by the credit guard), or the company is disabled */
+  paused: boolean;
+  /** topic fit of keywords the website checked recently (normalised keyword -> 0 / 1 / 2 / null) */
+  fitOf: Map<string, number | null>;
+}
+
+export type ProposalDecision =
+  | { action: 'propose'; pick: RecommendedKeyword; occasion: 'room' | 'won' | 'done'; why: string }
+  | { action: 'research'; why: string }
+  | { action: 'none'; why: string };
+
+const none = (why: string): ProposalDecision => ({ action: 'none', why });
+
+/** What to do for one website now (pure). */
+export function proposalDecision(s: ProposalState): ProposalDecision {
+  if (!s.enabled) return none('keyword proposals are switched off for the platform (AUTO_START_LADDERS)');
+  if (s.paused) return none('the website is paused');
+  if (s.open) return none('a proposal already waits for the client');
+  if (s.ladderRunActive) return none('a keyword ladder is being planned right now');
+  if (s.researchRunning) return none('keyword research is running');
   const active = activeAutoLadders(s.cards);
-  if (active >= s.automation.maxActiveLadders) return skip(`${plural(active, 'Auto ladder')} with pages to write (the limit is ${s.automation.maxActiveLadders})`);
+  const queued = s.cards.filter((c) => c.status === 'queued').length;
+  if (queued) return none(`${plural(queued, 'ladder')} already wait${queued === 1 ? 's' : ''} for a free place`);
+  if (active >= s.maxActive) return none(`${plural(active, 'Auto ladder')} with pages to write (the limit is ${s.maxActive})`);
+  const occasion: 'room' | 'won' | 'done' = s.cards.some((c) => c.status === 'won') ? 'won' : s.cards.some((c) => c.mode === 'auto' && c.counts.planned === 0 && c.status !== 'paused') ? 'done' : 'room';
   const r = s.recommended;
-  if (!r.reportId) return skip('no keyword research for this website yet');
-  if (r.ageDays == null || r.ageDays > RECOMMENDATIONS_MAX_AGE_DAYS) return skip(`the keyword research is older than ${RECOMMENDATIONS_MAX_AGE_DAYS} days`);
-  const startedBefore = (k: string) => s.previous.some((p) => normKeyword(p.keyword) === normKeyword(k) || keywordsOverlap(p.keyword, k));
+  const stale = !r.reportId || r.ageDays == null || r.ageDays > RECOMMENDATIONS_MAX_AGE_DAYS;
+  // a research refresh is autopilot spend: only at full autopilot (it is in level 3's forecast); levels 1-2 are offered it as a recommendation
+  if (stale) return s.level === 3 ? { action: 'research', why: !r.reportId ? 'no keyword research yet' : `the keyword research is older than ${RECOMMENDATIONS_MAX_AGE_DAYS} days` } : none(!r.reportId ? 'no keyword research for this website yet' : `the keyword research is older than ${RECOMMENDATIONS_MAX_AGE_DAYS} days`);
+  const before = new Set(s.proposedBefore.map(cycleNorm));
+  const heads = s.ladders.map((l) => l.head);
   const pick = r.keywords.find(
     (k) =>
       isWithinReach(k.difficultyForYou) &&
       k.planType !== 'none' &&
-      // the ladders as they are now (the list may be older than the newest ladder)
       !ladderOverlapsOf(k.keyword, s.ladders).length &&
+      !heads.some((h) => keywordsOverlap(h, k.keyword)) &&
       s.fitOf.get(normKeyword(k.keyword)) !== 0 &&
-      !startedBefore(k.keyword),
+      !before.has(cycleNorm(k.keyword)),
   );
-  if (!pick) return skip('no recommended keyword is easy or reachable for the website and free of overlaps');
-  return { start: pick, reason: `${pick.label || 'within reach'}: the first recommended keyword no ladder covers` };
+  if (!pick) return none('no recommended keyword is easy or reachable for the website, on its topic and free of overlaps');
+  const why =
+    (occasion === 'won' ? 'Your ladder reached the top 3, so there is room for the next keyword. ' : occasion === 'done' ? 'Your ladder has no pages left to write, so there is room for the next keyword. ' : '') +
+    (pick.why ? `${pick.why.replace(/\.$/, '')}.` : `${CHANCE_WORDS[pick.difficultyForYou ?? ''] ?? 'Within reach'} for your website.`);
+  return { action: 'propose', pick, occasion, why };
+}
+
+// ---------------- the store ----------------
+
+/** The price of one ladder page in credits, about (the engine's own calibrated figure when known). */
+export const creditsPerPage = (): number => creditsOfUsd(estimateRunCost('keyword', { receiveContent: true, receiveReport: true }, cachedCalibration()));
+
+export function toProposal(r: KeywordProposalRow, decidedByEmail: string | null = null): KeywordProposalView {
+  const d = r.details as Record<string, unknown>;
+  const diff = typeof d.difficultyForYou === 'string' ? d.difficultyForYou : null;
+  const st = (r.status === 'starting' ? 'pending' : r.status) as KeywordProposalStatus;
+  return {
+    id: r.id,
+    siteId: r.siteId,
+    keyword: r.keyword,
+    status: st,
+    startAt: r.startAt?.toISOString() ?? null,
+    level: (r.level === 1 || r.level === 3 ? r.level : 2) as AutopilotLevel,
+    why: typeof d.why === 'string' ? d.why : '',
+    occasion: r.occasion === 'won' || r.occasion === 'done' ? r.occasion : 'room',
+    searches: typeof d.volume === 'number' ? d.volume : null,
+    difficulty: diff,
+    chance: CHANCE_WORDS[diff ?? ''] ?? '',
+    planType: typeof d.planType === 'string' ? d.planType : null,
+    months: typeof d.months === 'string' ? d.months : '',
+    creditsPerPage: creditsPerPage(),
+    runId: r.runId,
+    swappedFor: r.swappedFor,
+    note: r.note,
+    createdAt: r.createdAt.toISOString(),
+    decidedAt: r.decidedAt?.toISOString() ?? null,
+    decidedBy: decidedByEmail,
+  };
+}
+
+/** GET .../keyword-proposals: the open ones and the last 20 others. */
+export async function listProposals(site: SiteRow): Promise<KeywordProposalList> {
+  const list = await db
+    .select({ p: schema.keywordProposals, email: schema.users.email })
+    .from(schema.keywordProposals)
+    .leftJoin(schema.users, eq(schema.keywordProposals.decidedBy, schema.users.id))
+    .where(eq(schema.keywordProposals.siteId, site.id))
+    .orderBy(desc(schema.keywordProposals.createdAt))
+    .limit(40);
+  const views = list.map((x) => toProposal(x.p, x.email));
+  return {
+    pending: views.filter((v) => v.status === 'pending'),
+    recent: views.filter((v) => v.status !== 'pending').slice(0, 20),
+    level: (site.autopilotLevel === 1 || site.autopilotLevel === 3 ? site.autopilotLevel : DEFAULT_AUTOPILOT_LEVEL) as AutopilotLevel,
+    enabled: config.autoStartLadders,
+  };
+}
+
+/** Records a proposal; null when the website already has an open one or this keyword was proposed before (the unique indexes). */
+export async function insertProposal(o: { org: OrgRow; site: SiteRow; pick: RecommendedKeyword; occasion: 'room' | 'won' | 'done'; why: string; level: AutopilotLevel; now: number; reportId: string | null }): Promise<KeywordProposalRow | null> {
+  const startAt = o.level === 3 ? new Date(o.now + PROPOSAL_WAIT_HOURS * 3_600_000) : null;
+  const rows = await db
+    .insert(schema.keywordProposals)
+    .values({
+      orgId: o.org.id,
+      siteId: o.site.id,
+      keyword: o.pick.keyword,
+      keywordNorm: cycleNorm(o.pick.keyword),
+      details: { volume: o.pick.volume, kd: o.pick.kd, difficultyForYou: o.pick.difficultyForYou, planType: o.pick.planType, months: o.pick.months, label: o.pick.label, why: o.why, source: o.pick.source, pageType: o.pick.pageType, reportId: o.reportId },
+      status: 'pending',
+      level: o.level,
+      occasion: o.occasion,
+      startAt,
+    })
+    .onConflictDoNothing()
+    .returning();
+  return rows[0] ?? null;
 }
 
 // ---------------- the job ----------------
 
-export interface AutoStartDeps {
+type Log = { info: (o: object, m: string) => void; warn: (o: object, m: string) => void; error?: (o: object, m: string) => void };
+
+export interface ProposalDeps {
   pipeline: (org: OrgRow, site: SiteRow) => Promise<PipelineData>;
   recommended: (org: OrgRow, site: SiteRow) => Promise<RecommendedKeywords>;
-  previous: (siteId: string) => Promise<{ keyword: string; at: string }[]>;
   fits: (siteId: string) => Promise<Map<string, number | null>>;
   owner: (orgId: string) => Promise<UserRow | null>;
-  start: (a: OrgAccess, input: ReturnType<typeof ladderInput.parse>) => Promise<RunRow>;
+  start: (a: OrgAccess, input: Parameters<typeof createRun>[1], opts: Parameters<typeof createRun>[2]) => Promise<RunRow>;
+  announce: (org: OrgRow, site: SiteRow, p: KeywordProposalRow, log: Log) => Promise<void>;
 }
 
-const defaultDeps: AutoStartDeps = {
+async function ownerOf(orgId: string): Promise<UserRow | null> {
+  const r = await db
+    .select({ u: schema.users })
+    .from(schema.memberships)
+    .innerJoin(schema.users, eq(schema.memberships.userId, schema.users.id))
+    .where(and(eq(schema.memberships.orgId, orgId), eq(schema.memberships.role, 'owner'), isNull(schema.memberships.deactivatedAt)))
+    .orderBy(asc(schema.memberships.createdAt))
+    .limit(1);
+  return r[0]?.u ?? null;
+}
+
+async function fitsOf(siteId: string): Promise<Map<string, number | null>> {
+  const m = new Map<string, number | null>();
+  for (const c of await recentChecks(siteId, 30)) {
+    const k = normKeyword(c.keyword);
+    const f = (c.result as { fit?: unknown }).fit;
+    if (!m.has(k)) m.set(k, f === 0 || f === 1 || f === 2 ? f : null);
+  }
+  return m;
+}
+
+/** The e-mail of a level-3 announcement (pure). */
+export function announcementMail(o: { site: Pick<SiteRow, 'domain'>; p: KeywordProposalView; url: string }): { subject: string; title: string; lines: string[]; details: { label: string; value: string }[] } {
+  const when = o.p.startAt ? new Date(o.p.startAt).toUTCString().replace(/:\d\d GMT$/, ' UTC') : 'in two days';
+  return {
+    subject: `We will start "${o.p.keyword}" for ${o.site.domain}`,
+    title: `Your next keyword: "${o.p.keyword}"`,
+    lines: [
+      `You chose full autopilot for ${o.site.domain}, so we picked the next keyword for you. ${o.p.why}`.trim(),
+      `It starts on ${when} unless you change it. Approve it to start now, pick a different keyword, or skip it and we will propose another one.`,
+      `Each page of its plan uses about ${o.p.creditsPerPage} credits.`,
+    ],
+    details: [
+      { label: 'Keyword', value: o.p.keyword },
+      ...(o.p.searches != null ? [{ label: 'Searches a month', value: `about ${o.p.searches}` }] : []),
+      ...(o.p.chance ? [{ label: 'Your chances', value: o.p.chance }] : []),
+      ...(o.p.months ? [{ label: 'Time to rank', value: `${o.p.months} months` }] : []),
+    ],
+  };
+}
+
+async function announce(org: OrgRow, site: SiteRow, p: KeywordProposalRow, log: Log): Promise<void> {
+  const [claimed] = await db.update(schema.keywordProposals).set({ emailedAt: new Date() }).where(and(eq(schema.keywordProposals.id, p.id), isNull(schema.keywordProposals.emailedAt))).returning({ id: schema.keywordProposals.id });
+  if (!claimed) return;
+  const to = await billingContacts(org.id);
+  const url = `${await baseUrlFor(org)}/o/${org.id}/sites/${site.id}/pipeline`;
+  const m = announcementMail({ site, p: toProposal(p), url });
+  const sender = await senderFor(org);
+  const mlog = { info: log.info, error: log.error ?? log.warn };
+  for (const addr of to)
+    await sendMail({ to: addr, subject: m.subject, title: m.title, lines: m.lines, details: m.details, action: { label: 'Review the keyword', url }, sender, footer: `You receive this e-mail because ${site.domain} is on full autopilot in ${sender.brandName}.` }, mlog).catch(() => false);
+}
+
+const defaultDeps: ProposalDeps = {
   pipeline: pipelineData,
   recommended: (org, site) => recommendedKeywords(org, site),
-  previous: async (siteId) => {
-    const list = await db
-      .select({ keyword: sql<string | null>`${schema.runs.input}->>'keyword'`, at: schema.runs.createdAt })
-      .from(schema.runs)
-      .where(and(eq(schema.runs.siteId, siteId), eq(schema.runs.mode, 'ladder'), sql`${schema.runs.input}->>'autoStart' = 'true'`))
-      .orderBy(desc(schema.runs.createdAt))
-      .limit(200);
-    return list.map((r) => ({ keyword: r.keyword ?? '', at: r.at.toISOString() }));
-  },
-  fits: async (siteId) => {
-    const m = new Map<string, number | null>();
-    for (const c of await recentChecks(siteId, 30)) {
-      const k = normKeyword(c.keyword);
-      const f = (c.result as { fit?: unknown }).fit;
-      if (!m.has(k)) m.set(k, f === 0 || f === 1 || f === 2 ? f : null);
-    }
-    return m;
-  },
-  owner: async (orgId) => {
-    const r = await db
-      .select({ u: schema.users })
-      .from(schema.memberships)
-      .innerJoin(schema.users, eq(schema.memberships.userId, schema.users.id))
-      .where(and(eq(schema.memberships.orgId, orgId), eq(schema.memberships.role, 'owner')))
-      .orderBy(asc(schema.memberships.createdAt))
-      .limit(1);
-    return r[0]?.u ?? null;
-  },
-  start: (a, input) => createRun(a, input, { startedBy: 'auto' }),
+  fits: fitsOf,
+  owner: ownerOf,
+  start: (a, input, opts) => createRun(a, input, opts),
+  announce,
 };
 
-/** One website: decide, and start the ladder run on the owner's behalf. */
-export async function autoStartForSite(org: OrgRow, site: SiteRow, deps: AutoStartDeps = defaultDeps, now = Date.now()): Promise<{ runId: string | null; keyword: string | null; reason: string }> {
-  if (org.disabled) return { runId: null, keyword: null, reason: 'the company is disabled' };
-  if (!site.verifiedAt) return { runId: null, keyword: null, reason: 'the website is not verified' };
-  const [data, recommended, previous, fitOf] = await Promise.all([deps.pipeline(org, site), deps.recommended(org, site), deps.previous(site.id), deps.fits(site.id)]);
-  const decision = autoStartDecision({
-    automation: data.automation,
-    cards: data.ladderCards,
-    ladders: data.ladders.map((l) => ({ id: l.id, head: l.head, keywords: l.keywords ?? l.planned.map((p) => p.keyword) })),
-    recommended,
-    previous,
-    ladderRunActive: data.activeRuns.some((r) => r.mode === 'ladder'),
-    pileup: !!data.queue.paused,
-    trackingPaused: data.tracking.status === 'paused' || site.trackingStatus === 'paused',
-    fitOf,
-    now,
-  });
-  if (!decision.start) return { runId: null, keyword: null, reason: decision.reason };
-  const owner = await deps.owner(org.id);
-  if (!owner) return { runId: null, keyword: decision.start.keyword, reason: 'the company has no owner' };
-  const parsed = ladderInput.safeParse({
+const ladderBody = (site: SiteRow, keyword: string, chosenBy: 'client_typed' | 'client_picked' | 'system_announced') =>
+  ladderInput.safeParse({
     mode: 'ladder',
     siteId: site.id,
-    keyword: decision.start.keyword,
+    keyword,
     country: site.country,
     business: site.business.slice(0, 500),
     customers: site.customers.slice(0, 300),
@@ -173,42 +294,251 @@ export async function autoStartForSite(org: OrgRow, site: SiteRow, deps: AutoSta
     tone: site.tone,
     cta: site.cta.slice(0, 200),
     pagesNow: 1,
+    chosenBy,
     emailCopy: false,
   });
-  if (!parsed.success) return { runId: null, keyword: decision.start.keyword, reason: `the website's settings are incomplete (${parsed.error.issues[0]?.path.join('.') || 'input'})` };
+
+const levelOfSite = (site: Pick<SiteRow, 'autopilotLevel'>): AutopilotLevel => (site.autopilotLevel === 1 || site.autopilotLevel === 3 ? site.autopilotLevel : DEFAULT_AUTOPILOT_LEVEL);
+const pausedSite = (org: OrgRow, site: SiteRow) => org.disabled || !site.verifiedAt || site.trackingStatus === 'paused' || !!site.creditsPausedAt;
+
+/** One website: decide, and record a proposal (or, at level 3 with stale research, start the research refresh). */
+export async function proposeForSite(org: OrgRow, site: SiteRow, deps: ProposalDeps = defaultDeps, now = Date.now(), log?: Log): Promise<{ proposalId: string | null; keyword: string | null; reason: string; researchRunId?: string }> {
+  if (pausedSite(org, site)) return { proposalId: null, keyword: null, reason: 'the website is paused or not verified' };
+  const [data, recommended, fitOf, proposed] = await Promise.all([
+    deps.pipeline(org, site),
+    deps.recommended(org, site),
+    deps.fits(site.id),
+    db.select({ k: schema.keywordProposals.keyword, status: schema.keywordProposals.status }).from(schema.keywordProposals).where(eq(schema.keywordProposals.siteId, site.id)),
+  ]);
+  const level = levelOfSite(site);
+  const decision = proposalDecision({
+    enabled: config.autoStartLadders,
+    level,
+    maxActive: data.automation.maxActiveLadders,
+    cards: data.ladderCards,
+    ladders: data.ladders.map((l) => ({ id: l.id, head: l.head, keywords: l.keywords ?? l.planned.map((p) => p.keyword) })),
+    recommended,
+    proposedBefore: proposed.map((p) => p.k),
+    open: proposed.some((p) => p.status === 'pending' || p.status === 'starting'),
+    ladderRunActive: data.activeRuns.some((r) => r.mode === 'ladder'),
+    researchRunning: data.activeRuns.some((r) => r.mode === 'discover'),
+    paused: data.tracking.status === 'paused',
+    fitOf,
+  });
+  if (decision.action === 'none') return { proposalId: null, keyword: null, reason: decision.why };
+  if (decision.action === 'research') {
+    // level 3: the research refresh (autopilot spend), at most once per refresh period, never while one runs
+    const last = await db.query.runs.findFirst({ where: and(eq(schema.runs.siteId, site.id), eq(schema.runs.mode, 'discover')), orderBy: desc(schema.runs.createdAt) });
+    if (last && now - last.createdAt.getTime() < 7 * 864e5) return { proposalId: null, keyword: null, reason: `${decision.why}; a research run started less than 7 days ago` };
+    const owner = await deps.owner(org.id);
+    if (!owner) return { proposalId: null, keyword: null, reason: 'the company has no owner' };
+    const input = discoverInput.parse({ mode: 'discover', siteId: site.id, country: site.country, business: site.business.slice(0, 500), customers: site.customers.slice(0, 300), businessFacts: site.businessFacts.slice(0, 2000), goal: site.goal, emailCopy: false });
+    try {
+      const run = await deps.start({ user: owner, org, role: 'owner' }, input, { startedBy: 'auto' });
+      return { proposalId: null, keyword: null, reason: `${decision.why}: research started`, researchRunId: run.id };
+    } catch (err) {
+      if (err instanceof HttpError && (err.statusCode === 402 || err.statusCode === 429)) return { proposalId: null, keyword: null, reason: `${decision.why}; the research could not start (${err.statusCode === 402 ? 'no credits left' : 'limit reached'})` };
+      throw err;
+    }
+  }
+  const row = await insertProposal({ org, site, pick: decision.pick, occasion: decision.occasion, why: decision.why, level, now, reportId: recommended.reportId });
+  if (!row) return { proposalId: null, keyword: decision.pick.keyword, reason: 'another proposal was recorded at the same moment' };
+  if (level === 3 && log) await deps.announce(org, site, row, log).catch((err) => log.warn({ err: String(err) }, 'announcement e-mail failed'));
+  return { proposalId: row.id, keyword: row.keyword, reason: decision.why };
+}
+
+/** Claims one open proposal (pending -> starting) so nothing else starts it. null when it was taken, decided, or not this website's. */
+async function claim(id: string, siteId: string): Promise<KeywordProposalRow | null> {
+  const [r] = await db
+    .update(schema.keywordProposals)
+    .set({ status: 'starting', claimedAt: new Date() })
+    .where(and(eq(schema.keywordProposals.id, id), eq(schema.keywordProposals.siteId, siteId), eq(schema.keywordProposals.status, 'pending')))
+    .returning();
+  return r ?? null;
+}
+const release = (id: string, set: Partial<typeof schema.keywordProposals.$inferInsert> = {}) => db.update(schema.keywordProposals).set({ status: 'pending', ...set }).where(and(eq(schema.keywordProposals.id, id), eq(schema.keywordProposals.status, 'starting')));
+const finish = (id: string, set: Partial<typeof schema.keywordProposals.$inferInsert>) => db.update(schema.keywordProposals).set(set).where(eq(schema.keywordProposals.id, id));
+
+/** Whether a ladder may start on this website now; the reason when it may not (the rules every start obeys). */
+async function startBlock(org: OrgRow, site: SiteRow, deps: ProposalDeps): Promise<string | null> {
+  if (!config.autoStartLadders) return 'keyword proposals are switched off for the platform';
+  if (pausedSite(org, site)) return 'the website is paused';
+  const data = await deps.pipeline(org, site);
+  if (data.tracking.status === 'paused') return 'the website is paused';
+  if (data.activeRuns.some((r) => r.mode === 'ladder')) return 'a keyword ladder is being planned right now';
+  const active = activeAutoLadders(data.ladderCards);
+  if (active >= data.automation.maxActiveLadders) return `${plural(active, 'Auto ladder')} already have pages to write (the limit is ${data.automation.maxActiveLadders})`;
+  return null;
+}
+
+/** Starts every due level-3 announcement (start_at passed), on the owner's behalf. */
+export async function startDueProposals(log: Log, deps: ProposalDeps = defaultDeps, now = Date.now()): Promise<number> {
+  // a crash between a claim and its start: a run made for it is found by its proposal id, else the claim is released
+  const stale = await db.select().from(schema.keywordProposals).where(and(eq(schema.keywordProposals.status, 'starting'), lt(schema.keywordProposals.claimedAt, new Date(now - PROPOSALS.staleClaimMs))));
+  for (const p of stale) {
+    const run = await db.query.runs.findFirst({ where: and(eq(schema.runs.siteId, p.siteId), sql`${schema.runs.input}->>'proposalId' = ${p.id}`) });
+    const by = String((run?.input as Record<string, unknown> | undefined)?.chosenBy ?? '');
+    if (run) await finish(p.id, { status: by === 'client_picked' ? 'approved' : by === 'client_typed' ? 'swapped' : 'started', runId: run.id, ...(by === 'client_typed' ? { swappedFor: String((run.input as Record<string, unknown>).keyword ?? '') } : {}) });
+    else if (!p.decidedAt) await release(p.id);
+  }
+  if (!config.autoStartLadders) return 0;
+  const due = await db
+    .select()
+    .from(schema.keywordProposals)
+    .where(and(eq(schema.keywordProposals.status, 'pending'), isNotNull(schema.keywordProposals.startAt), lte(schema.keywordProposals.startAt, new Date(now))))
+    .orderBy(asc(schema.keywordProposals.startAt))
+    .limit(50);
+  let started = 0;
+  for (const p of due) {
+    try {
+      const site = await db.query.sites.findFirst({ where: eq(schema.sites.id, p.siteId) });
+      const org = site ? await db.query.organizations.findFirst({ where: eq(schema.organizations.id, site.orgId) }) : null;
+      if (!site || !org) continue;
+      // the level was lowered since: the announcement becomes a suggestion that waits for the client
+      if (levelOfSite(site) !== 3) {
+        await db.update(schema.keywordProposals).set({ startAt: null, level: levelOfSite(site) }).where(and(eq(schema.keywordProposals.id, p.id), eq(schema.keywordProposals.status, 'pending')));
+        continue;
+      }
+      const c = await claim(p.id, site.id);
+      if (!c) continue;
+      const block = await startBlock(org, site, deps);
+      if (block) {
+        await release(p.id, { note: `Waiting: ${block}` });
+        continue;
+      }
+      const owner = await deps.owner(org.id);
+      const parsed = ladderBody(site, p.keyword, 'system_announced');
+      if (!owner || !parsed.success) {
+        await finish(p.id, { status: 'failed', note: !owner ? 'The company has no owner to start it for' : "The website's details are incomplete" });
+        continue;
+      }
+      try {
+        const run = await deps.start({ user: owner, org, role: 'owner' }, parsed.data, { startedBy: 'auto', proposalId: p.id });
+        await finish(p.id, run.status === 'failed' ? { status: 'failed', runId: run.id, note: customerError(run.error) ?? 'The SEO engine did not accept it' } : { status: 'started', runId: run.id, note: '' });
+        if (run.status !== 'failed') started++;
+        log.info({ site: site.domain, keyword: p.keyword, run: run.id }, 'announced keyword started');
+      } catch (err) {
+        if (err instanceof HttpError && (err.statusCode === 402 || err.statusCode === 429)) await release(p.id, { note: err.statusCode === 402 ? 'Waiting: no credits left for it' : 'Waiting: a limit was reached' });
+        else {
+          await release(p.id);
+          throw err;
+        }
+      }
+    } catch (err) {
+      log.warn({ proposal: p.id, err: String(err) }, 'announced keyword did not start');
+    }
+  }
+  return started;
+}
+
+/** Every verified, tracked, unpaused website: propose where there is room. */
+export async function proposeEverywhere(log: Log, deps: ProposalDeps = defaultDeps): Promise<number> {
+  if (!config.autoStartLadders) return 0;
+  const sites = await db.query.sites.findMany({ where: and(isNotNull(schema.sites.verifiedAt), eq(schema.sites.trackingStatus, 'active'), isNull(schema.sites.creditsPausedAt)) });
+  let made = 0;
+  for (const site of sites) {
+    try {
+      const org = await db.query.organizations.findFirst({ where: eq(schema.organizations.id, site.orgId) });
+      if (!org || org.disabled) continue;
+      const r = await proposeForSite(org, site, deps, Date.now(), log);
+      if (r.proposalId) made++;
+      if (r.proposalId || r.researchRunId) log.info({ site: site.domain, keyword: r.keyword, reason: r.reason }, r.proposalId ? 'keyword proposed' : 'keyword research refresh started');
+    } catch (err) {
+      log.warn({ site: site.domain, err: String(err) }, 'keyword proposal failed');
+    }
+  }
+  return made;
+}
+
+/** The timer (index.ts): due starts every tick, new proposals every PROPOSALS.proposeEveryMs. */
+export function startProposalJobs(log: Log): () => void {
+  let lastPropose = 0;
+  const tick = async () => {
+    await startDueProposals(log).catch((err) => log.warn({ err: String(err) }, 'starting announced keywords failed'));
+    if (Date.now() - lastPropose >= PROPOSALS.proposeEveryMs) {
+      lastPropose = Date.now();
+      await proposeEverywhere(log).catch((err) => log.warn({ err: String(err) }, 'keyword proposals failed'));
+    }
+  };
+  const first = setTimeout(() => void tick(), PROPOSALS.firstAfterMs);
+  const t = setInterval(() => void tick(), PROPOSALS.tickMs);
+  return () => {
+    clearTimeout(first);
+    clearInterval(t);
+  };
+}
+
+// ---------------- the client's decisions (POST .../keyword-proposals/:id/approve | skip | swap) ----------------
+
+async function proposalOf(site: SiteRow, id: string): Promise<KeywordProposalRow> {
+  const p = await db.query.keywordProposals.findFirst({ where: and(eq(schema.keywordProposals.id, id), eq(schema.keywordProposals.siteId, site.id)) });
+  if (!p) throw notFound('Proposal not found');
+  if (p.status !== 'pending' && p.status !== 'starting') throw conflict(`This proposal was already ${p.status === 'skipped' ? 'skipped' : p.status === 'swapped' ? 'replaced by another keyword' : 'started'}.`, 'proposal_decided');
+  if (p.status === 'starting') throw conflict('This keyword is being started right now.', 'proposal_starting');
+  return p;
+}
+
+/** Approve: start it now, as the client's own pick. */
+export async function approveProposal(a: OrgAccess & { site: SiteRow }, id: string, deps: Pick<ProposalDeps, 'start'> = defaultDeps): Promise<{ proposal: KeywordProposalView; run: RunRow }> {
+  const p = await proposalOf(a.site, id);
+  const parsed = ladderBody(a.site, p.keyword, 'client_picked');
+  if (!parsed.success) throw badRequest("The website's details are incomplete: fill them in its settings first");
+  const c = await claim(p.id, a.site.id);
+  if (!c) throw conflict('This proposal was decided a moment ago.', 'proposal_decided');
   try {
-    const run = await deps.start({ user: owner, org, role: 'owner' }, parsed.data);
-    return { runId: run.id, keyword: decision.start.keyword, reason: run.status === 'failed' ? `the SEO engine did not accept it: ${customerError(run.error) ?? ''}` : decision.reason };
+    const run = await deps.start(a, parsed.data, { proposalId: p.id });
+    const [row] = await db.update(schema.keywordProposals).set({ status: 'approved', runId: run.id, decidedAt: new Date(), decidedBy: a.user.id, note: '' }).where(eq(schema.keywordProposals.id, p.id)).returning();
+    return { proposal: toProposal(row, a.user.email), run };
   } catch (err) {
-    if (err instanceof HttpError && (err.statusCode === 402 || err.statusCode === 429)) return { runId: null, keyword: decision.start.keyword, reason: err.statusCode === 402 ? (err.code === 'credits' ? 'the company has no credits left for it' : 'it would go over the monthly budget') : err.message };
+    await release(p.id);
     throw err;
   }
 }
 
-/** Every verified website whose '_site' settings row has auto_start on. */
-export async function runAutoStart(log: { info: (o: object, m: string) => void; warn: (o: object, m: string) => void }): Promise<number> {
-  const on = await rows<LadderSettingsRow>('ladderSettings', {
-    filters: [
-      { columnName: 'ladder_id', condition: 'eq', value: LADDER_SITE_ROW },
-      { columnName: 'auto_start', condition: 'eq', value: true },
-    ],
-    max: 1000,
-    fresh: true,
-  }).catch(() => [] as LadderSettingsRow[]);
-  const domains = [...new Set(on.map((r) => cleanDomain(r.domain)).filter(Boolean))];
-  if (!domains.length) return 0;
-  const sites = await db.query.sites.findMany({ where: and(isNotNull(schema.sites.verifiedAt), inArray(schema.sites.domain, domains)) });
-  let started = 0;
-  for (const site of sites) {
-    try {
-      const org = await db.query.organizations.findFirst({ where: eq(schema.organizations.id, site.orgId) });
-      if (!org) continue;
-      const r = await autoStartForSite(org, site);
-      if (r.runId) started++;
-      log.info({ site: site.domain, keyword: r.keyword, run: r.runId, reason: r.reason }, r.runId ? 'ladder started automatically' : 'no ladder started automatically');
-    } catch (err) {
-      log.warn({ site: site.domain, err: String(err) }, 'automatic ladder start failed');
-    }
+/** Skip: never proposed again for this website; the next one is proposed. */
+export async function skipProposal(a: OrgAccess & { site: SiteRow }, id: string, deps: ProposalDeps = defaultDeps, log?: Log): Promise<{ proposal: KeywordProposalView; next: KeywordProposalView | null }> {
+  const p = await proposalOf(a.site, id);
+  const [row] = await db
+    .update(schema.keywordProposals)
+    .set({ status: 'skipped', decidedAt: new Date(), decidedBy: a.user.id })
+    .where(and(eq(schema.keywordProposals.id, p.id), eq(schema.keywordProposals.status, 'pending')))
+    .returning();
+  if (!row) throw conflict('This proposal was decided a moment ago.', 'proposal_decided');
+  const r = await proposeForSite(a.org, a.site, deps, Date.now(), log).catch(() => null);
+  const next = r?.proposalId ? await db.query.keywordProposals.findFirst({ where: eq(schema.keywordProposals.id, r.proposalId) }) : null;
+  return { proposal: toProposal(row, a.user.email), next: next ? toProposal(next) : null };
+}
+
+/** Swap: the client types a different keyword; it is checked first (a keyword check), then started as the client's own. */
+export async function swapProposal(a: OrgAccess & { site: SiteRow }, id: string, keyword: string, deps: Pick<ProposalDeps, 'start'> & { check?: typeof assessKeyword } = defaultDeps): Promise<{ proposal: KeywordProposalView; run: RunRow }> {
+  const p = await proposalOf(a.site, id);
+  const k = keyword.trim();
+  if (k.length < 2 || k.length > 100) throw badRequest('Use 2-100 characters', { keyword: 'Use 2-100 characters' });
+  const check = await (deps.check ?? assessKeyword)(a, { keyword: k });
+  const res = check.result;
+  if (res.difficultyForYou === 'not_realistic' || res.fit === 0)
+    throw new HttpError(
+      409,
+      res.fit === 0 ? 'This keyword looks outside your business, so it is not started. Pick one of the alternatives, or another keyword.' : 'This keyword is not realistic for your website now, so it is not started. Pick one of the alternatives, or another keyword.',
+      'keyword_not_suitable',
+      undefined,
+      { check },
+    );
+  const parsed = ladderBody(a.site, k, 'client_typed');
+  if (!parsed.success) throw badRequest("The website's details are incomplete: fill them in its settings first");
+  const c = await claim(p.id, a.site.id);
+  if (!c) throw conflict('This proposal was decided a moment ago.', 'proposal_decided');
+  try {
+    const run = await deps.start(a, parsed.data, { proposalId: p.id });
+    const [row] = await db.update(schema.keywordProposals).set({ status: 'swapped', swappedFor: k, runId: run.id, decidedAt: new Date(), decidedBy: a.user.id, note: '' }).where(eq(schema.keywordProposals.id, p.id)).returning();
+    return { proposal: toProposal(row, a.user.email), run };
+  } catch (err) {
+    await release(p.id);
+    throw err;
   }
-  return started;
+}
+
+/** A website's open proposals (for Needs you), newest first. */
+export async function openProposals(siteId: string): Promise<KeywordProposalRow[]> {
+  return db.select().from(schema.keywordProposals).where(and(eq(schema.keywordProposals.siteId, siteId), inArray(schema.keywordProposals.status, OPEN))).orderBy(desc(schema.keywordProposals.createdAt));
 }
