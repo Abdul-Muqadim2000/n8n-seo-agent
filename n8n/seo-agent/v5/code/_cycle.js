@@ -148,10 +148,12 @@ const CYC = (() => {
       return { ...j, on: !reason, why: reason, extra: j.job === 'backlinks' ? { light: !monthly } : {} };
     });
   };
-  // the §14.2 payload of a cycle run, exactly: the job's Manual Run reads `trigger: 'cycle'` and runs scheduled semantics for one site
+  // the §14.2 payload of a cycle run, exactly (+ tz, agreed with E2): the job's Manual Run reads `trigger: 'cycle'` and runs scheduled
+  // semantics for one site
   const payload = (o) => {
     const c = o || {}, p = { trigger: 'cycle', domain: normD(c.domain), site_id: S(c.site_id), cycle_key: S(c.cycle_key), job: S(c.job), monthly: !!c.monthly,
       scheduled_for: iso(ms(c.scheduled_for)), request_id: requestId(c.site_id, dateOfKey(c.cycle_key), c.job) };
+    if (S(c.tz)) p.tz = S(c.tz);   // the website's zone: the job's ran-late notice names the slot in it
     if (c.job === 'backlinks') p.light = !c.monthly;
     if (c.job === 'preview') p.preview = true;
     return p;
@@ -185,7 +187,12 @@ const CYC = (() => {
     const run = (c.runs || {})[S(row.workflow_id)] || {};
     const execOf = (id) => run.ok ? (run.data || []).find(x => S(x.id) === S(id)) : null;
     const done = rows.filter(r => S(r.status) === 'done');
-    if (done.length) { const d = done[done.length - 1];
+    // AI Visibility may settle the final key at $0 when it hands over to a chain that resumes, and that chain settles it again later: a
+    // `:part<n>` row NEWER than the last settled final row means the job is still going (a key settling twice is fine: done stays done)
+    const lastDone = done.length ? done[done.length - 1] : null;
+    const resumed = lastDone ? parts.filter(p => ms(p.created_at) > ms(lastDone.created_at)) : [];
+    if (resumed.length) { parts.splice(0, parts.length, ...resumed); rows.splice(0, rows.length); }
+    else if (done.length) { const d = lastDone;
       return { state: 'done', run_id: S(d.run_id), finished_at: S(d.settled_at) || iso(now), reason: 'finished: its ledger row ' + lk + ' settled' + (S(d.settled_at) ? ' at ' + S(d.settled_at) : '') + ' (execution ' + S(d.run_id) + ')' + (S(d.dfs_source) === 'handoff' ? ', handed off' : '') }; }
     const live = rows.filter(r => S(r.status) === 'reserved' && !isStale(r, now, cfg.stale_hours));
     if (live.length) { const l = live[live.length - 1], x = execOf(l.run_id);
@@ -282,6 +289,7 @@ const CYC = (() => {
       else if (ev.state === 'refused') {
         const since = refusedSince(ledger, lk) || ms(ev.refused_at) || now;
         if (ev.code === 'account_low') { put({ ...r, status: 'gave_up', run_id: ev.run_id || r.run_id, finished_at: nowIso, reason: 'gave up: ' + ev.reason + ' - topping up the search-data account is the fix; retrying would be refused the same way' }); gaveUp.push(r.key); }
+        else if (ev.code === 'caught_up') { put({ ...r, status: 'gave_up', run_id: ev.run_id || r.run_id, finished_at: nowIso, reason: 'gave up: ' + ev.reason + ' - the run guard says this slot already ran, so it is not retried' }); gaveUp.push(r.key); }
         else if (!CAPACITY.has(ev.code)) {
           const att = Number(r.attempts) || 1;
           if (att >= cfg.max_attempts) { put({ ...r, status: 'gave_up', run_id: ev.run_id || r.run_id, finished_at: nowIso, reason: 'gave up after ' + att + ' attempt(s): ' + ev.reason }); gaveUp.push(r.key); }
@@ -411,7 +419,7 @@ const CYC = (() => {
         const attempt = !r ? 1 : S(r.status) === 'failed' ? (Number(r.attempts) || 1) + 1 : (Number(r.attempts) || 1);
         const dueCycle = ms(marker && marker.due_at) || (opened && opened.due.at) || ms(ckDate ? dueAt(rd.tz, ckDate, rd.local_time) : 0) || now;
         v.verdict = r ? (S(r.status) === 'failed' ? 'failed_retry' : 'refused_retry') : 'start'; v.reason = r ? S(r.reason) : 'next in the cycle';
-        cands.push({ v, site: out, siteId, domain, job: j, key, cycle_key: ck, attempt, monthly: monthlyNow, due: dueCycle, ledger_key: lk, prior: r || null,
+        cands.push({ v, site: out, siteId, domain, tz: rd.tz, job: j, key, cycle_key: ck, attempt, monthly: monthlyNow, due: dueCycle, ledger_key: lk, prior: r || null,
           scheduled_for: dueCycle, extra: j.extra });
         blocker = j.label;
       }
@@ -437,7 +445,7 @@ const CYC = (() => {
         } else {
           const attempt = !pr ? 1 : S(pr.status) === 'failed' ? (Number(pr.attempts) || 1) + 1 : (Number(pr.attempts) || 1);
           pv.verdict = pr ? (S(pr.status) === 'failed' ? 'failed_retry' : 'refused_retry') : 'start'; pv.reason = pr ? S(pr.reason) : 'the next cycle is due ' + iso(nextDue);
-          cands.push({ v: pv, site: out, siteId, domain, job: PREVIEW, key: pkey, cycle_key: nk, attempt, monthly: periodKey(nextDate, rd.monthly_day) !== S(next.last_monthly_key),
+          cands.push({ v: pv, site: out, siteId, domain, tz: rd.tz, job: PREVIEW, key: pkey, cycle_key: nk, attempt, monthly: periodKey(nextDate, rd.monthly_day) !== S(next.last_monthly_key),
             due: pAt, ledger_key: plk, prior: pr || null, scheduled_for: nextDue, extra: {} });
         }
       }
@@ -465,7 +473,7 @@ const CYC = (() => {
     const starts = start.map(({ k, __would }) => ({ would: !!__would, key: k.key, site_id: k.siteId, cycle_key: k.cycle_key, job: k.job.job, workflow_id: k.job.workflow_id,
       attempts: k.attempt, ledger_key: k.ledger_key, monthly: !!k.monthly, due_at: iso(k.due), retry_of: k.prior ? S(k.prior.reason).slice(0, 300) : '',
       why: (k.prior ? (S(k.prior.status) === 'failed' ? 'attempt ' + k.attempt + ' (the last one failed)' : 'again after a capacity refusal (attempt ' + k.attempt + ')') : 'next in the cycle') + ' - ' + k.job.label + ' for ' + k.domain,
-      payload: payload({ domain: k.domain, site_id: k.siteId, cycle_key: k.cycle_key, job: k.job.job, monthly: k.monthly, scheduled_for: k.scheduled_for }), plan_now: nowIso }));
+      payload: payload({ domain: k.domain, site_id: k.siteId, cycle_key: k.cycle_key, job: k.job.job, monthly: k.monthly, scheduled_for: k.scheduled_for, tz: k.tz }), plan_now: nowIso }));
     const realStarts = starts.filter(s => !s.would), wouldStarts = starts.filter(s => s.would);
     // ---- 5. what to write: only rows that changed (a sweep every 5 minutes writes nothing on a quiet day) ----
     const jobRows = [...touch].map(k => byKey.get(k)).filter(r => !orig.has(r.key) || !sameJob(r, orig.get(r.key))).map(r => jobRow(r));

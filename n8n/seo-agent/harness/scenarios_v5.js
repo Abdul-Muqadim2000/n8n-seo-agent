@@ -14815,11 +14815,8 @@ await guard('S128 R94 record then start, the scheduled path', async () => {
   check('R94 (build section 98): on the generated workflow every path to the start passes the saved record, the start does not wait, and the catch-up and every workflow it starts are published by apply_env.py',
     WIRE.record_then_start === true && (WIRE.published || []).length === 10 && WIRE.workflow && WIRE.workflow.id === 'SEOagentCatchUp1' && WIRE.credential === 'SEOcredN8nApiKey' && WIRE.compose_tz_default === 'America/New_York',
     JSON.stringify({ rts: WIRE.record_then_start, published: WIRE.published, tz: WIRE.compose_tz_default }));
-  const G = WIRE.deploy_guard || {};
-  check('R94: apply_env.py refuses a deploy on Monday 07:00-12:00 New York time (11:00-16:00 UTC in summer, 12:00-17:00 in winter) and lets one through outside it - today, Friday, included',
-    G['mon_2026-10-19_12:00Z_summer'] && G['mon_2026-10-19_12:00Z_summer'].inside === true && G['mon_2026-10-19_12:00Z_summer'].window_utc === 'Mon 11:00-16:00'
-    && G['mon_2026-11-02_16:30Z_winter'].inside === true && G['mon_2026-11-02_16:30Z_winter'].window_utc === 'Mon 12:00-17:00'
-    && G['fri_2026-10-16_12:00Z_today'].inside === false && G['tue_2026-10-20_12:00Z'].inside === false && G['mon_2026-10-19_16:30Z_after'].inside === false, JSON.stringify(G));
+  check('R94 (2026-10-19): the Monday 07:00-12:00 deploy guard is gone with the Monday crons - the cycle\'s guard replaced it (deploy_guard.py, scenarios_cycle.js CY12 / CY23)',
+    !WIRE.deploy_guard, JSON.stringify(WIRE.deploy_guard || null));
   reset();
 });
 
@@ -19252,57 +19249,70 @@ await guard('SFL6 C-8 leftover a vendor\'s own storefront is a competing provide
 
 
 await guard('SK1 Site Kickoff: the first weekly cycle on the day tracking starts', async () => {
-  const SN = 'SK1 Site Kickoff (2026-10-19) - a website\'s first weekly cycle starts the day its tracking does: only the jobs it has switched on, in Monday\'s order, never for an untracked or paused site, once (force to repeat), and a dry run starts only what honours dry_run';
+  const SN = 'SK1 Site Kickoff (2026-10-19, rewritten for the per-website cycle) - it writes the website\'s seo_cycles row (anchor, the owner\'s time zone, cycle 0 due now, what the app already ran) instead of starting jobs; untracked, paused and already-started websites are refused (409); a dry run writes nothing';
   reset(); begin(SN); const check = W3E.mkCheck(SN);
   const SITE = { site_id: 'site_techand-ai', domain: 'techand.ai', status: 'active' };
+  const COLS = (() => { try { return require('./cycle_wiring.json').cycles_cols; } catch (e) { return null; } })();
+  const validate = async (body) => (await run('Kickoff Validate', { body }))[0].json;
   const plan = async (body, o = {}) => {
-    const v = (await run('Kickoff Validate', { body }))[0].json; mock('Kickoff Validate', [{ json: v }]);
+    const v = await validate(body); mock('Kickoff Validate', [{ json: v }]);
     mock('Load Sites (Kickoff)', (o.sites || [SITE]).map(json => ({ json })));
-    mock('Load Monitors (Kickoff)', (o.monitors || []).map(json => ({ json })));
-    mock('Load Cadence (Kickoff)', (o.cadence || []).map(json => ({ json })));
-    mock('Load Kickoff Record', (o.record || []).map(json => ({ json })));
-    return (await run('Kickoff Plan', [{ json: {} }])).map(i => i.json);
+    mock('Load Cycles (Kickoff)', (o.cycles && o.cycles.length ? o.cycles : [{}]).map(json => ({ json })));
+    return (await run('Kickoff Plan', [{ json: {} }]))[0].json;
   };
-  const bad = (await run('Kickoff Validate', { body: {} }))[0].json;
-  check('a request without a domain is refused', bad.ok === false && /domain or site_id/.test(bad.error), JSON.stringify(bad));
-  const MON = { site_id: 'site_techand-ai', ai_visibility: true, ai_growth: true, backlinks: true, link_builder: true };
-  const CAD = { site_id: 'site_techand-ai', pages_per_week: 2, status: 'active' };
-  const all = await plan({ domain: 'https://www.techand.ai/' }, { monitors: [MON], cadence: [CAD] });
-  check('everything on: AI visibility, backlinks (full), AI growth, the cadence and the Link Builder, in Monday\'s order, each through its own workflow',
-    JSON.stringify(all.map(j => [j.job, j.workflow_id])) === JSON.stringify([['ai_visibility', 'SEOagentAIVisib1'], ['backlinks', 'SEOagentBacklnk1'], ['ai_growth', 'SEOagentAIGrow1'], ['content_cadence', 'SEOagentCadence1'], ['link_builder', 'SEOagentLinkBld1']])
-    && all.every(j => j.domain === 'techand.ai' && j.site_id === 'site_techand-ai' && j.trigger === 'kickoff') && all[1].light === false && all[4].free_only === false && !all.some(j => j.dry_run), JSON.stringify(all));
-  const off = await plan({ domain: 'techand.ai' }, { monitors: [{ ...MON, ai_visibility: 'false', link_builder: false }], cadence: [{ ...CAD, pages_per_week: 0 }] });
-  check('a job the site switched off is never started (a Manual Run would run it anyway): AI visibility off takes AI growth with it, no posts a week = no cadence',
-    JSON.stringify(off.map(j => j.job)) === JSON.stringify(['backlinks']) && off[0].skipped.length === 4, JSON.stringify(off));
-  const noCad = await plan({ domain: 'techand.ai' }, { monitors: [MON] });
-  check('no cadence row: the cadence is not started (its on-demand default would write pages nobody asked for)', !noCad.some(j => j.job === 'content_cadence'), JSON.stringify(noCad.map(j => j.job)));
-  const untracked = await plan({ domain: 'other.example' }, { monitors: [MON], cadence: [CAD] });
-  check('a website the engine does not track is refused', untracked.length === 1 && untracked[0].nothing_to_do && /not tracked/.test(untracked[0].reason), JSON.stringify(untracked));
-  const paused = await plan({ domain: 'techand.ai' }, { sites: [{ ...SITE, status: 'paused' }], monitors: [MON], cadence: [CAD] });
-  check('a paused website is refused (the cadence\'s on-demand path does not skip paused sites itself)', paused[0].nothing_to_do && /paused/.test(paused[0].reason), JSON.stringify(paused));
-  const REC = { key: 'kickoff:site_techand-ai', kind: 'kickoff', site_id: 'site_techand-ai', updated_at: '2026-10-19T17:00:00Z' };
-  const again = await plan({ domain: 'techand.ai' }, { monitors: [MON], cadence: [CAD], record: [REC] });
-  check('once per website: a second kickoff is refused with when the first was', again[0].nothing_to_do && /already kicked off \(2026-10-19T17:00:00Z\)/.test(again[0].reason), JSON.stringify(again));
-  const forced = await plan({ domain: 'techand.ai', force: true }, { monitors: [MON], cadence: [CAD], record: [REC] });
-  check('force: true starts the cycle again', forced.length === 5 && !forced[0].nothing_to_do, JSON.stringify(forced.map(j => j.job)));
-  const dry = await plan({ domain: 'techand.ai', dry_run: 'true' }, { monitors: [MON], cadence: [CAD], record: [REC] });
-  check('a dry run starts only AI growth and the cadence, with dry_run, and says why the others were not started',
-    JSON.stringify(dry.map(j => j.job)) === JSON.stringify(['ai_growth', 'content_cadence']) && dry.every(j => j.dry_run === true) && dry[0].skipped.filter(x => /dry run/.test(x)).length === 3, JSON.stringify(dry));
-  const some = await plan({ domain: 'techand.ai', jobs: ['ai_growth', 'content_cadence', 'link_builder'] }, { monitors: [MON], cadence: [CAD] });
-  check('jobs: only the named jobs start, still in Monday\'s order (what the customer already ran today is left out, not run twice)',
-    JSON.stringify(some.map(j => j.job)) === JSON.stringify(['ai_growth', 'content_cadence', 'link_builder']) && some[0].skipped.filter(x => /not asked for/.test(x)).length === 2, JSON.stringify(some));
-  const someOff = await plan({ domain: 'techand.ai', jobs: 'link_builder' }, { monitors: [{ ...MON, link_builder: false }], cadence: [CAD] });
-  check('jobs never starts one the site switched off', someOff[0].nothing_to_do === true, JSON.stringify(someOff));
-  const badJobs = (await run('Kickoff Validate', { body: { domain: 'techand.ai', jobs: ['ai_growth', 'rank_tracker'] } }))[0].json;
-  check('an unknown job is refused by name', badJobs.ok === false && /unknown jobs: rank_tracker/.test(badJobs.error), JSON.stringify(badJobs));
-  mock('Kickoff Plan', dry.map(json => ({ json })));
-  const recDry = (await run('Kickoff Record Row', [{ json: {} }]))[0].json;
-  check('a dry run records nothing', recDry.skip_record === true, JSON.stringify(recDry));
-  mock('Kickoff Plan', all.map(json => ({ json })));
-  const rec = (await run('Kickoff Record Row', [{ json: {} }]))[0].json;
-  check('a real kickoff records the website before the first start, with its jobs', rec.key === 'kickoff:site_techand-ai' && rec.kind === 'kickoff' && JSON.parse(rec.value).jobs.length === 5, JSON.stringify(rec));
+  const bad = await validate({});
+  check('a request without a domain is refused (400)', bad.ok === false && /domain or site_id/.test(bad.error), JSON.stringify(bad));
+  const badTz = await validate({ domain: 'techand.ai', tz: 'Mars/Olympus' });
+  check('an unknown time zone is refused by name (400): the owner\'s zone decides every due time', badTz.ok === false && /unknown time zone "Mars\/Olympus"/.test(badTz.error), JSON.stringify(badTz));
+  const badJobs = await validate({ domain: 'techand.ai', jobs: ['ai_growth', 'weekly_magic'], skip_jobs: 'nonsense' });
+  check('an unknown job, in jobs or in skip_jobs, is refused by name', badJobs.ok === false && /unknown jobs: weekly_magic, nonsense/.test(badJobs.error), JSON.stringify(badJobs));
+  const old = await validate({ domain: 'techand.ai', anchor_at: new Date(Date.now() - 9 * 86400000).toISOString() });
+  const future = await validate({ domain: 'techand.ai', anchor_at: new Date(Date.now() + 3 * 3600000).toISOString() });
+  const junk = await validate({ domain: 'techand.ai', anchor_at: 'next tuesday' });
+  check('an anchor 9 days old, 3 hours ahead, or not a date is refused: cycle 0 starts at the anchor', old.ok === false && /9 days old/.test(old.error) && future.ok === false && /in the future/.test(future.error)
+    && junk.ok === false && /is not a date/.test(junk.error), JSON.stringify([old.error, future.error, junk.error]));
+  const anchor = new Date(Date.now() - 2 * 3600000).toISOString();
+  const okv = await validate({ domain: 'https://www.techand.ai/', anchor_at: anchor, timezone: 'Europe/London', jobs: ['ai_growth', 'content_cadence', 'link_builder'], skip_jobs: ['audit'] });
+  check('a good body: the domain normalised, the anchor kept, `timezone` accepted for tz, and the old `jobs` (only these) mapped onto skip_jobs with the explicit ones',
+    okv.ok && okv.domain === 'techand.ai' && okv.anchor_at === anchor && okv.tz === 'Europe/London'
+    && JSON.stringify(okv.skip_jobs) === JSON.stringify(['audit', 'ai_visibility', 'backlinks', 'rank_tracker', 'site_tracker']), JSON.stringify(okv));
+  const p = await plan({ domain: 'techand.ai', anchor_at: anchor, tz: 'Europe/London', skip_jobs: ['ai_visibility'] });
+  const loc = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' }).formatToParts(new Date(anchor)).reduce((m, x) => (m[x.type] = x.value, m), {});
+  const wd = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(loc.weekday), ld = loc.year + '-' + loc.month + '-' + loc.day;
+  check('the row: anchored at the given time, in the owner\'s zone, its local weekday, cycles at 06:00, monthly day = its day (at most 28), cycle 0 due at the anchor, nothing started yet',
+    !p.refused && p.row.anchor_at === anchor && p.row.tz === 'Europe/London' && p.row.cycle_weekday === wd && p.row.local_time === '06:00' && p.row.monthly_day === Math.min(28, +loc.day)
+    && p.row.next_due_at === anchor && p.row.current_key === '' && p.row.last_cycle_at === '' && p.row.status === 'active' && p.row.skip_jobs === 'ai_visibility' && p.row.adopted === false,
+    JSON.stringify(p.row));
+  check('the answer names cycle 0 by the website\'s local date and its due time (202 { site_id, cycle_key, next_due_at })', p.cycle_key === 'cyc:site_techand-ai:' + ld && p.next_due_at === anchor && p.site_id === 'site_techand-ai',
+    JSON.stringify({ k: p.cycle_key, ld }));
+  const now0 = await plan({ domain: 'techand.ai' });
+  check('no anchor and no zone: anchored now in the engine\'s zone (America/New_York)', Math.abs(Date.parse(now0.row.anchor_at) - Date.now()) < 60000 && now0.row.tz === 'America/New_York', JSON.stringify(now0.row));
+  const untracked = await plan({ domain: 'other.example' });
+  check('a website the engine does not track is refused with code not_tracked (409), and told it can send again once tracking exists', untracked.refused && untracked.code === 'not_tracked' && /send again once its tracking row exists|can be sent again/.test(untracked.reason), JSON.stringify(untracked));
+  const paused = await plan({ domain: 'techand.ai' }, { sites: [{ ...SITE, status: 'paused' }] });
+  check('a paused website is refused (code paused)', paused.refused && paused.code === 'paused', JSON.stringify(paused));
+  const EXIST = { site_id: 'site_techand-ai', domain: 'techand.ai', anchor_at: '2026-10-19T17:00:00.000Z', current_key: 'cyc:site_techand-ai:2026-10-19', next_due_at: '2026-10-26T10:00:00.000Z', status: 'active' };
+  const again = await plan({ domain: 'techand.ai' }, { cycles: [EXIST] });
+  check('once per website: a second kickoff is refused with when the cycle was anchored and when it is next due (code already_started)',
+    again.refused && again.code === 'already_started' && /anchored 2026-10-19T17:00:00.000Z, next due 2026-10-26T10:00:00.000Z/.test(again.reason), JSON.stringify(again));
+  const forced = await plan({ domain: 'techand.ai', force: true }, { cycles: [EXIST] });
+  check('force: true writes a new cycle 0 from the new anchor and says what it replaces', !forced.refused && forced.exists && forced.replaces.current_key === 'cyc:site_techand-ai:2026-10-19' && forced.row.current_key === '' && forced.row.last_cycle_at === '',
+    JSON.stringify(forced.replaces));
+  const dry = await plan({ domain: 'techand.ai', dry_run: 'true' }, { cycles: [EXIST] });
+  check('a dry run is not refused for an existing cycle: it answers with the row it would write and says one exists', !dry.refused && dry.dry_run === true && dry.exists === true && dry.row.site_id === 'site_techand-ai', JSON.stringify(dry));
+  mock('Load Cycles (Kickoff)', [{ json: { error: { message: 'Could not find the data table' } } }]);
+  const unread = (await run('Kickoff Plan', [{ json: {} }]))[0].json;
+  check('a cycle table that cannot be read is refused (code unreadable) - nothing is written on a guess', unread.refused && unread.code === 'unreadable', JSON.stringify(unread));
+  mock('Kickoff Plan', [{ json: p }]);
+  const row = (await run('Kickoff Cycle Row', [{ json: {} }]))[0].json;
+  check('the row written is exactly the seo_cycles columns (a Data Table upsert maps every input field)', !!COLS && JSON.stringify(Object.keys(row)) === JSON.stringify(COLS) && row.site_id === 'site_techand-ai', JSON.stringify(Object.keys(row)));
+  const saved = (await run('Kickoff Saved', [{ json: { id: 3, ...row } }]))[0].json;
+  const failed = (await run('Kickoff Saved', [{ json: { error: { message: 'Data table not found' } } }]))[0].json;
+  check('the 202 is given only after the row is saved; a failed save is answered 500 with the reason (nothing will start)',
+    saved.saved === true && !('row' in saved) && saved.cycle_key === p.cycle_key && failed.saved === false && /could not be saved \(Data table not found\)/.test(failed.error), JSON.stringify([saved, failed]));
   reset();
 });
+await require('./scenarios_cycle')({ H, run, mock, store, guard, reset, begin });   // CY1-CY24 (2026-10-19): the per-website cycle - kit, Cycle Dispatcher nodes, kickoff row, deploy guard
 
 H.report();
 })();
