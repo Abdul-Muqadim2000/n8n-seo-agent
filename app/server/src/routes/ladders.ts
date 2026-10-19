@@ -77,6 +77,9 @@ export async function ladderRoutes(app: FastifyInstance) {
       await mirrorAutopilotLevel(a.site, body.autopilotLevel);
       invalidateForecast(a.org.id);
       await audit(req, a.org.id, { action: 'site.autopilot_level_changed', target: { type: 'site', id: a.site.id, label: a.site.domain }, details: { before: a.site.autopilotLevel, after: body.autopilotLevel } });
+      // an open keyword proposal follows the level (an announcement at 3, a suggestion below); never fails the change itself
+      const level = body.autopilotLevel;
+      void import('../services/autoStart').then((m) => m.relevelProposals(a.org, a.site, level, req.log)).catch((err) => req.log.warn({ err: String(err) }, 'keyword proposals not updated'));
     }
     return out;
   });

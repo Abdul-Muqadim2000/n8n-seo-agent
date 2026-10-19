@@ -308,9 +308,9 @@ export function autopilotNeedsYou(o: AutopilotNeedsInput): NeedsYouItem[] {
 export async function afterCallback(org: OrgRow, site: SiteRow, stage: string, payload: Record<string, unknown>, reportId: string, log: Log = consoleLog): Promise<void> {
   if (stage === 'cycle_preview') await onPreview(org, site, payload, reportId, log).catch((err) => log.error({ err: String(err), site: site.domain }, '"Coming up" plan not kept'));
   if (stage === 'content_cadence' || stage === 'cycle_preview') await recheckActivated(org, site, payload, reportId, log).catch((err) => log.error({ err: String(err), site: site.domain }, 'queued ladder re-check failed'));
-  // a won ladder (or a cadence report naming one) makes room for the next keyword
+  // a won ladder (or a cadence report naming one) makes room for the next keyword; fresh keyword research gives one to propose
   const won = wonLadderOf(stage, payload) || (stage === 'content_cadence' && wonOf(payload).length ? wonOf(payload)[0] : null);
-  if (won) {
+  if (won || stage === 'keyword_strategy') {
     const m = await import('./autoStart');
     await m.proposeForSite(org, site, undefined, Date.now(), { ...log, warn: log.warn ?? log.error }).catch((err) => log.error({ err: String(err), site: site.domain }, 'next keyword not proposed'));
   }

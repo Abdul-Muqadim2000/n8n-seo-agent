@@ -538,6 +538,27 @@ export async function swapProposal(a: OrgAccess & { site: SiteRow }, id: string,
   }
 }
 
+/**
+ * The level changed (PATCH .../automation): an open proposal follows it. Lowered below 3, an announcement becomes a suggestion that waits
+ * for the client (no start time); raised to 3, a waiting suggestion is announced (starts PROPOSAL_WAIT_HOURS from now, with its e-mail).
+ * Then the website is looked at again, so a level-3 website with room gets its announcement now rather than at the next timer pass.
+ */
+export async function relevelProposals(org: OrgRow, site: SiteRow, level: AutopilotLevel, log: Log, deps: ProposalDeps = defaultDeps, now = Date.now()): Promise<void> {
+  const open = await db.select().from(schema.keywordProposals).where(and(eq(schema.keywordProposals.siteId, site.id), eq(schema.keywordProposals.status, 'pending')));
+  for (const p of open) {
+    if (level < 3) await db.update(schema.keywordProposals).set({ level, startAt: null }).where(and(eq(schema.keywordProposals.id, p.id), eq(schema.keywordProposals.status, 'pending')));
+    else if (!p.startAt) {
+      const [row] = await db
+        .update(schema.keywordProposals)
+        .set({ level, startAt: new Date(now + PROPOSAL_WAIT_HOURS * 3_600_000) })
+        .where(and(eq(schema.keywordProposals.id, p.id), eq(schema.keywordProposals.status, 'pending')))
+        .returning();
+      if (row) await deps.announce(org, site, row, log).catch((err) => log.warn({ err: String(err) }, 'announcement e-mail failed'));
+    }
+  }
+  if (!open.length) await proposeForSite(org, { ...site, autopilotLevel: level }, deps, now, log).catch((err) => log.warn({ err: String(err), site: site.domain }, 'keyword proposal failed'));
+}
+
 /** A website's open proposals (for Needs you), newest first. */
 export async function openProposals(siteId: string): Promise<KeywordProposalRow[]> {
   return db.select().from(schema.keywordProposals).where(and(eq(schema.keywordProposals.siteId, siteId), inArray(schema.keywordProposals.status, OPEN))).orderBy(desc(schema.keywordProposals.createdAt));

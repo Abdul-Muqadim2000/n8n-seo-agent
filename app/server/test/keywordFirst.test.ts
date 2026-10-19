@@ -494,4 +494,99 @@ describe('keyword proposals', () => {
     await db.insert(schema.keywordProposals).values({ ...row, keyword: 'y', keywordNorm: 'y', status: 'pending' });
     await expect(db.insert(schema.keywordProposals).values({ ...row, keyword: 'z', keywordNorm: 'z', status: 'pending' })).rejects.toThrow();
   });
+
+  it('the level follows into an open proposal: raised to 3 a suggestion is announced (e-mail), lowered it waits for the client again', async () => {
+    const co = await company('relevel@kf.test', 'Relevel Co');
+    const s = await site(co.org.id, 'relevel-kf.com', { trackingStatus: 'active', autopilotLevel: 2 });
+    await strategy(co.org.id, s.id, [{ keyword: 'crm consulting', difficulty_for_you: 'easy', plan_type: 'direct' }]);
+    const org = (await db.query.organizations.findFirst({ where: eq(schema.organizations.id, co.org.id) }))!;
+    await proposeForSite(org, s, undefined, Date.now(), log);
+    await co.c.patch(`${base(co, s.id)}/automation`, { autopilotLevel: 3 });
+    await flush();
+    let p = (await co.c.get(`${base(co, s.id)}/keyword-proposals`)).body.pending[0];
+    expect(p).toMatchObject({ keyword: 'crm consulting', level: 3 });
+    expect(Date.parse(p.startAt)).toBeGreaterThan(Date.now() + 47 * 3_600_000);
+    expect(t.mails.map((m) => m.subject)).toEqual(['We will start "crm consulting" for relevel-kf.com']);
+    await co.c.patch(`${base(co, s.id)}/automation`, { autopilotLevel: 1 });
+    await flush();
+    p = (await co.c.get(`${base(co, s.id)}/keyword-proposals`)).body.pending[0];
+    expect(p).toMatchObject({ level: 1, startAt: null });
+  });
+});
+
+describe('a queued ladder that becomes active long after it was planned is checked again (§5.6)', () => {
+  it('queued in the last plan, active now, planned 70 days ago, its keyword fell: paused, recorded once, and the client is asked', async () => {
+    const co = await company('recheck@kf.test', 'Recheck Co');
+    const s = await site(co.org.id, 'recheck-kf.com', { trackingStatus: 'active' });
+    const planned = new Date(Date.now() - 70 * DAY).toISOString();
+    t.tables.ladders = [
+      ...(t.tables.ladders ?? []),
+      { ladder_id: 'lad_old', domain: 'recheck-kf.com', head_keyword: 'crm consulting dubai', keyword: 'crm consulting dubai', rung: 4, page_no: 9, status: 'planned', start_date: planned },
+      { ladder_id: 'lad_old', domain: 'recheck-kf.com', head_keyword: 'crm consulting dubai', keyword: 'crm consulting cost', rung: 1, page_no: 1, status: 'planned', start_date: planned },
+      { ladder_id: 'lad_new', domain: 'recheck-kf.com', head_keyword: 'crm training', keyword: 'crm training', rung: 4, page_no: 9, status: 'planned', start_date: new Date().toISOString() },
+    ];
+    const org = await hookOf(co.org.id);
+    const cadence = (queued: string[], won: string[] = []) => ({ stage: 'content_cadence', status: 'progress', domain: 'recheck-kf.com', trigger: 'cycle', queued_ladders: queued.map((ladder_id) => ({ ladder_id })), won_ladders: won.map((ladder_id) => ({ ladder_id })) });
+    await ingestCallback(org, cadence(['lad_old', 'lad_new']));
+    await flush();
+    t.assess = { difficulty_for_you: 'not_realistic', fit: 2 };
+    await ingestCallback(org, cadence([]));
+    await new Promise((r) => setTimeout(r, 300));
+    const rows = await db.query.ladderRechecks.findMany({ where: eq(schema.ladderRechecks.siteId, s.id) });
+    // only the ladder planned long ago is checked; the fresh one is not
+    expect(rows.map((r) => [r.ladderId, r.status, r.paused])).toEqual([['lad_old', 'done', true]]);
+    expect(rows[0].reason).toBe('its keyword is no longer realistic for your website');
+    expect(t.tables.ladderSettings.find((r) => r.ladder_id === 'lad_old' && r.domain === 'recheck-kf.com')).toMatchObject({ status: 'paused' });
+    // the same plan again: checked once, ever
+    await ingestCallback(org, cadence([]));
+    await new Promise((r) => setTimeout(r, 200));
+    expect((await db.query.ladderRechecks.findMany({ where: eq(schema.ladderRechecks.siteId, s.id) })).length).toBe(1);
+    t.assess = { difficulty_for_you: 'easy', fit: 2 };
+  });
+});
+
+describe('autopilot spend: a cycle job\'s ledger row and a run the system started', () => {
+  it('a cycle:<key>:<job> row is the website\'s autopilot spend; a level-3 ladder run (autoStart) too; a person\'s run is on demand', async () => {
+    const { syncCosts } = await import('../src/services/admin/costSync');
+    const co = await company('spend@kf.test', 'Spend Co');
+    const s = await site(co.org.id, 'spend-kf.com', { trackingStatus: 'active', verifiedAt: new Date(Date.now() - 10 * DAY) });
+    await db.update(schema.organizations).set({ createdAt: new Date(Date.now() - 10 * DAY) }).where(eq(schema.organizations.id, co.org.id));
+    await db.update(schema.platformSettings).set({ creditsSince: new Date(0) });
+    const sid = n8nSiteId('spend-kf.com');
+    const [auto] = await db.insert(schema.runs).values({ orgId: co.org.id, siteId: s.id, mode: 'ladder', title: 'x', status: 'completed', requestId: 'exec-auto-1', input: { autoStart: true }, quotedCredits: 100 }).returning();
+    const [mine] = await db.insert(schema.runs).values({ orgId: co.org.id, siteId: s.id, mode: 'verdict', title: 'y', status: 'completed', requestId: 'exec-person-1', input: {}, quotedCredits: 100 }).returning();
+    const row = (id: string, key: string, mode: string) => ({ run_id: id, key, mode, status: 'done', domain: 'spend-kf.com', ai_usd: 0, dfs_usd: 0.1, measured_usd: 0.1, estimated_usd: 0, settled_at: new Date(Date.now() - 5 * 60_000).toISOString(), created_at: new Date(Date.now() - 7 * 60_000).toISOString() });
+    await syncCosts({ readLedger: async () => [row('exec-cycle-1', `cycle:cyc:${sid}:2026-10-21:ai_visibility`, 'ai_visibility'), row('exec-auto-1', `app:${co.org.id}`, 'ladder'), row('exec-person-1', `app:${co.org.id}`, 'verdict')], full: true });
+    const events = await db.query.costEvents.findMany({ where: eq(schema.costEvents.orgId, co.org.id) });
+    const originOf = (exec: string) => events.find((e) => e.engineRunId === exec)?.origin;
+    expect([originOf('exec-cycle-1'), originOf('exec-auto-1'), originOf('exec-person-1')]).toEqual(['schedule', 'schedule', 'app']);
+    expect(events.find((e) => e.engineRunId === 'exec-cycle-1')).toMatchObject({ siteId: s.id, runId: null });
+    expect(events.find((e) => e.engineRunId === 'exec-auto-1')?.runId).toBe(auto.id);
+    expect(events.find((e) => e.engineRunId === 'exec-person-1')?.runId).toBe(mine.id);
+    const usage = await db.query.creditLedger.findMany({ where: and(eq(schema.creditLedger.orgId, co.org.id), eq(schema.creditLedger.kind, 'usage')) });
+    const origins = usage.map((u) => (u.ref as Record<string, unknown>).origin).sort();
+    expect(origins).toEqual(['autopilot', 'autopilot', 'on_demand']);
+  });
+});
+
+describe('the Pipeline reads the website\'s cycle and the autopilot', () => {
+  it('a tracked website with no keyword: the cycle, level 2 waiting for its first keyword, and the one Needs-you item that asks for it', async () => {
+    const co = await company('pipe@kf.test', 'Pipe Co');
+    const s = await site(co.org.id, 'pipe-kf.com', { trackingStatus: 'active', trackingStartedAt: new Date(Date.now() - DAY), timezone: 'Asia/Dubai', blogsPerWeek: 1 });
+    t.tables.cadence = [...(t.tables.cadence ?? []), { site_id: n8nSiteId('pipe-kf.com'), domain: 'pipe-kf.com', pages_per_week: 1, status: 'active' }];
+    const r = await co.c.get(`${base(co, s.id)}/data/pipeline`);
+    expect(r.status).toBe(200);
+    const d = r.body;
+    expect(d.cycle).toMatchObject({ known: false, timezone: 'Asia/Dubai', status: 'active' });
+    expect(d.autopilot).toMatchObject({ level: 2, waitingForKeyword: true, dropped: null });
+    expect(d.autopilot.reason).toMatch(/^waiting for your first keyword/);
+    expect(d.needsYou.find((n: { id: string }) => n.id === 'keyword:first')).toMatchObject({ kind: 'keyword', severity: 'warning', action: { page: 'pipeline/new' } });
+    expect(d.queue.next).toEqual([]);
+    // the weekly jobs are dated by the website's own cycle (06:00 in Dubai = 02:00 UTC), never a shared Monday
+    const weekly = d.automations.filter((a: { id: string; nextRunAt: string | null }) => ['ai_visibility', 'backlinks', 'site_tracker'].includes(a.id));
+    expect(weekly.every((a: { nextRunAt: string | null }) => !!a.nextRunAt && new Date(a.nextRunAt).getUTCHours() === 2)).toBe(true);
+    // the pages a week are not forecast before a keyword is chosen
+    expect(d.automations.find((a: { id: string }) => a.id === 'content_cadence')).toMatchObject({ monthlyCredits: 0, detail: '1 page(s) a week, once you have chosen a keyword' });
+    expect(JSON.stringify(d)).not.toMatch(/every Monday|Monday's|Mondays/);
+  });
 });
