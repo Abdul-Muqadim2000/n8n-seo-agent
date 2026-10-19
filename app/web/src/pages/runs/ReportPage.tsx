@@ -12,6 +12,7 @@ import { StageIcon, stageLabel } from '@/components/reports/meta';
 import { ReportView } from '@/components/reports/ReportView';
 import { SendReport } from '@/components/reports/SendReport';
 import { ShareReport } from '@/components/reports/ShareReport';
+import { NotWhatIWanted } from '@/components/reports/ContentFeedback';
 
 export default function ReportPage() {
   const { reportId = '' } = useParams();
@@ -66,6 +67,8 @@ export default function ReportPage() {
         actions={
           <span className="flex flex-wrap items-center gap-2" data-print-hide>
             {/* B-R1: push this one report to the company's own channels, if it is ready to leave the app */}
+            {/* keyword-first: "Not what I wanted" on a written page (it feeds the autopilot's auto-pause) */}
+            <NotWhatIWanted report={r} />
             <SendReport reportId={r.id} />
             {/* G15: an expiring, read-only link for somebody with no account (admins and owners only) */}
             <ShareReport reportId={r.id} />

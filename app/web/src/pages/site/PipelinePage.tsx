@@ -17,6 +17,9 @@ import { PipelineSettingsButton } from './_components/pipeline/controls';
 import { LadderCards } from './_components/pipeline/ladders';
 import { Calendar, RecentActivity } from './_components/pipeline/schedule';
 import { WriteNowDialog, type WriteNowItem } from './_components/pipeline/WriteNowDialog';
+import { ComingUp } from './_components/pipeline/coming-up';
+import { KeywordProposals } from './_components/pipeline/proposals';
+import { YourWeek } from './_components/pipeline/your-week';
 
 // The website's Pipeline (PIPELINE_FEATURE_SPEC.md §4.1): this week's runs, what needs the person, one card per keyword ladder,
 // the always-on part (opportunity posts, monitoring, the weekly capacity), how a ladder works, the next four weeks and what ran.
@@ -65,7 +68,7 @@ export default function PipelinePage() {
       <PageHeader
         icon={<Workflow />}
         title="Pipeline"
-        description={`Everything that runs on its own for ${site.domain}: your keyword ladders, the always-on posts and checks, and what happens when. You publish the pages; the rest runs every week.`}
+        description={`Everything that runs on its own for ${site.domain}: the pages for the keywords you chose, the checks, and what happens when. You publish the pages; the rest runs every week.`}
         actions={
           <>
             {status === 'active' ? <StatusBadge tone="good">Autopilot on</StatusBadge> : status === 'paused' ? <StatusBadge tone="warning">Paused</StatusBadge> : <Badge>Not started</Badge>}
@@ -98,7 +101,7 @@ export default function PipelinePage() {
               )
             }
           >
-            Weekly tracking switches the pipeline on: Search Console and GA4 reports, rank checks, AI-visibility and backlink checks, monthly audits and your weekly posts.
+            Weekly tracking switches the pipeline on: Search Console and GA4 reports, rank checks, AI-visibility and backlink checks, monthly audits and the weekly pages for your keyword.
           </Callout>
         )}
         {status !== 'not_started' && !d.tracking.reportsToThisApp && (
@@ -113,7 +116,7 @@ export default function PipelinePage() {
               )
             }
           >
-            The SEO engine tracked this site before it joined the platform. Save the tracking settings once and every Monday report, post and alert lands here.
+            The SEO engine tracked this site before it joined the platform. Save the tracking settings once and every weekly report, page and alert lands here.
           </Callout>
         )}
         {!d.tracking.engineEmails && (
@@ -130,6 +133,24 @@ export default function PipelinePage() {
           <ThisWeek data={d} />
         </div>
 
+        <KeywordProposals />
+
+        <ComingUp
+          cycle={d.cycle}
+          onWrite={(it) =>
+            setWriting({
+              keyword: it.keyword,
+              why: it.why,
+              pageType: it.pageType,
+              existingPageUrl: it.existingPageUrl,
+              ladder: null,
+              aiTarget: it.aiTarget ? { ...it.aiTarget } : null,
+              source: it.source,
+              credits: it.credits,
+            })
+          }
+        />
+
         <LadderCards cards={cards} automation={d.automation} planning={(d.activeRuns ?? []).filter((r) => r.mode === 'ladder')} />
 
         <AlwaysOn data={d} cards={cards} onWrite={setWriting} />
@@ -137,7 +158,10 @@ export default function PipelinePage() {
         <HowItWorks data={d} cards={cards} />
 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:items-start">
-          <Calendar data={d} />
+          <div className="min-w-0 space-y-4">
+            <YourWeek cycle={d.cycle} />
+            <Calendar data={d} />
+          </div>
           <RecentActivity data={d} />
         </div>
       </Stagger>
