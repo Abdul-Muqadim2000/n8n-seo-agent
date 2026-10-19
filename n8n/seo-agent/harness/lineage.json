@@ -9,8 +9,8 @@
    "subject": 6
   },
   "lineage": {
-   "pass": 13,
-   "subject": 16
+   "pass": 14,
+   "subject": 17
   },
   "refusal": {
    "pass": 20,
@@ -590,6 +590,20 @@
    ],
    "workflow": "SEO Agent \u2014 Content Cadence"
   },
+  "SEO Agent \u2014 Content Cadence / Cadence Preview": {
+   "fails": [],
+   "lineage": {
+    "calls": true,
+    "kit": true,
+    "travels": true
+   },
+   "markup": 9,
+   "node": "Cadence Preview",
+   "subject": [
+    "lineage"
+   ],
+   "workflow": "SEO Agent \u2014 Content Cadence"
+  },
   "SEO Agent \u2014 Content Cadence / Cadence Status": {
    "fails": [
     "lineage"
@@ -599,7 +613,7 @@
     "kit": false,
     "travels": false
    },
-   "markup": 7,
+   "markup": 8,
    "node": "Cadence Status",
    "subject": [
     "lineage"

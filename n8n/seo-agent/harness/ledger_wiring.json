@@ -694,6 +694,7 @@
    "callbacks": [
     {
      "fed_settle_directly": [
+      "Cadence Preview",
       "Cadence Status"
      ],
      "has_callback": "Has Callback (Cadence)?",
@@ -703,6 +704,10 @@
      "preds": [
       [
        "Cadence Note",
+       0
+      ],
+      [
+       "Cadence Preview",
        0
       ],
       [

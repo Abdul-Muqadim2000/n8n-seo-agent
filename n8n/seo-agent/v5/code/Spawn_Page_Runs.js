@@ -3,6 +3,9 @@
 const d = $input.first().json; const L = d.ladder || {};
 const GOAL = { leads: 'Get leads and enquiries', sales: 'Sell online', traffic: 'Rank and educate (traffic)', brand: 'Build the brand' };
 const n = Math.min(3, Math.max(1, Number(d.pages_now) || 1));
+// keyword-first R-K7 (2026-10-19): a ladder started in Manual mode writes nothing at start (Ladder Plan holds its pages and empties write_now);
+// a plan that says it held its pages starts no page run, whatever pages_now asked for
+if ((L.limits || {}).manual_hold === true || (L.held && Array.isArray(L.held.pages) && L.held.pages.length)) return [];
 // F-A1 / A-21 (2026-10-17): the main page's run reads the head keyword's results page again; it is told what THIS run measured, so it can
 // say that it re-measured and why its number moved (Parse Verdict, v5/code/_remeasure.js) instead of printing a second score silently
 const headKw = String((L.head || {}).keyword || d.keyword || '').toLowerCase().trim();

@@ -17,6 +17,7 @@ from ladder_common import PAGE_WATCH_TABLE, PAGE_WATCH_COLS, AUDIT_FINDINGS_TABL
 from ladder_common import RUN_LEDGER_TABLE, RUN_LEDGER_COLS, dt_update_params, monitor_ledger_js, LEDGER_EST   # R9 (2026-10-13): every scheduled run reserves and settles a ledger row
 from ladder_common import ledger_mainline, ALERT_WEBHOOK_PLACEHOLDER   # R17 / R29 (2026-10-14)
 from ladder_common import site_time_src, CYCLES_TABLE   # 2026-10-19: the website's calendar (ST) and its cycle row (seo_cycles)
+from ladder_common import SKIPS_TABLE, SKIPS_COLS   # keyword-first (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5.7): the client's skips / approvals on the "Coming up" plan
 
 # R9 (2026-10-13, re-rating): the reserve / settle side branch, the same one build_monitors.py's WF.run_ledger builds. It hangs BESIDE the plan
 # node, never in the data path, because a Data Table node answers with the row it wrote rather than with its input.
@@ -485,7 +486,17 @@ N.append(node('Load Pages (Cadence)', DT_TYPE, DT_VERSION, dt_get_all_params(PAG
 # R90 (2026-10-16, re-rating 2026-10-15): the names AI uses for other companies (seo_cache rows of kind 'ai', key ai_brands:<site_id>), so
 # the fit gate of the stored rungs can recognise another company's brand the way Ladder Pool and Rank Keywords already do
 N.append(node('Load AI Brands (Cadence)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'ai'), at(15, 2), **LOAD))
-N.append(code('Cadence Plan', rd('code/Cadence_Plan.js'), at(10, 0)))
+# keyword-first (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5.5-§5.7 / §14): the client's decisions on the "Coming up" plan (seo_skips, written by
+# the app: skip this cycle / always, approve for this cycle) and the engine's own cost calibration (seo_cache kind 'cost'), so every item and
+# suggestion carries the price the run guard itself would reserve for that page (CC.pick, v5/code/_cost_cal.js)
+N.append(node('Ensure Skips Table (Cadence)', DT_TYPE, DT_VERSION, dt_create_params(SKIPS_TABLE, SKIPS_COLS), at(12, 3), onError='continueRegularOutput'))
+N.append(node('Load Skips (Cadence)', DT_TYPE, DT_VERSION, dt_get_all_params(SKIPS_TABLE), at(12, 4), **LOAD))
+N.append(node('Load Cost (Cadence)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'cost'), at(12, 5), **LOAD))
+_COST_SRC = _rdt('code/_cost_cal.js').rstrip('\n')
+N.append(code('Cadence Plan', rd('code/Cadence_Plan.js').replace('/*__COST_CAL__*/', _COST_SRC), at(10, 0)))
+# a preview (the dispatcher's `preview` job, 48 h before a cycle) leaves the plan here: nothing is started, logged or marked, one callback goes out
+N.append(iff('Preview?', '{{ $json.preview === true }}', at(10, 1)))
+N.append(code('Cadence Preview', rd('code/Cadence_Preview.js'), at(19, 3)))
 N.append(iff('Any Pages?', '{{ !$json.nothing_to_do }}', at(11, 0)))
 N.append(iff('Site Notes?', '{{ !!$json.report_only && !$json.dry_run }}', at(12, 1)))
 N.append(node('Nothing To Write', 'n8n-nodes-base.noOp', 1, {}, at(13, 2)))
@@ -511,16 +522,19 @@ N.append(code('Cadence Note', urls(rd('code/Cadence_Note.js')), at(19, 0)))
 N.append(iff('Has Email (Cadence)?', '{{ !!$json.email }}', at(20, -1)))
 N.append(node('Send Cadence Note', 'n8n-nodes-base.emailSend', 2.1, {'fromEmail': SENDER, 'toEmail': '={{ $json.email }}', 'subject': '={{ $json.subject }}', 'emailFormat': 'html', 'html': '={{ $json.html }}', 'options': {'appendAttribution': False}}, at(21, -1), credentials=SMTP, onError='continueRegularOutput'))
 N.append(iff('Has Callback (Cadence)?', '{{ !!$json.callback_url }}', at(20, 1)))
-N.append(node('POST Cadence Note', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.callback_url }}', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': "={{ JSON.stringify({ status: 'progress', stage: 'content_cadence', request_id: $json.request_id, site_id: $json.site_id, domain: $json.domain, week: $json.week, pages: $json.pages, upcoming: $json.upcoming, pending_publish: $json.pending_publish, candidates: $json.candidates, paused_reason: $json.paused_reason || '', waiting_publish: $json.waiting_publish || 0, max_waiting: $json.max_waiting || 0, awaiting_approval: $json.awaiting_approval || [], suggestions: $json.suggestions || [], queued_ladders: $json.queued_ladders || [], won_ladders: $json.won_ladders || [], waiting_for_support: $json.waiting_for_support || [], run_ledger: $json.run_ledger || null, ...($json.trigger === 'cycle' ? { trigger: 'cycle', cycle_key: $json.cycle_key || null, cycle_date: $json.cycle_date || null, cycle_week: $json.cycle_week || null } : {}) }) }}", 'options': {'timeout': 20000}}, at(21, 1), onError='continueRegularOutput'))
+N.append(node('POST Cadence Note', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.callback_url }}', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': "={{ JSON.stringify($json.stage === 'cycle_preview' ? { ...($json.callback_body || {}), status: 'progress', stage: 'cycle_preview', request_id: $json.request_id, run_ledger: $json.run_ledger || null } : { status: 'progress', stage: 'content_cadence', request_id: $json.request_id, site_id: $json.site_id, domain: $json.domain, week: $json.week, pages: $json.pages, upcoming: $json.upcoming, pending_publish: $json.pending_publish, candidates: $json.candidates, paused_reason: $json.paused_reason || '', waiting_publish: $json.waiting_publish || 0, max_waiting: $json.max_waiting || 0, awaiting_approval: $json.awaiting_approval || [], suggestions: $json.suggestions || [], queued_ladders: $json.queued_ladders || [], won_ladders: $json.won_ladders || [], waiting_for_support: $json.waiting_for_support || [], level: $json.level || 2, waiting_for_keyword: !!$json.waiting_for_keyword, scheduled_for: $json.scheduled_for || '', reason: $json.reason || '', budget: $json.budget || null, refused: $json.refused || [], skipped: $json.skipped || [], approved_items: $json.approved_items || [], set_aside: $json.set_aside || [], est_page_usd: $json.est_page_usd || 0, run_ledger: $json.run_ledger || null, ...($json.trigger === 'cycle' ? { trigger: 'cycle', cycle_key: $json.cycle_key || null, cycle_date: $json.cycle_date || null, cycle_week: $json.cycle_week || null } : {}) }) }}", 'options': {'timeout': 20000}}, at(21, 1), onError='continueRegularOutput'))
 N.append(sticky('Note', f"""## SEO Agent — Content Cadence (v4.3, pipeline rules v4.8)
-Runs **once a week in each website's own cycle** (job 6, after the trackers; *Manual Run* `{{ trigger: 'cycle', domain, site_id, cycle_key, job, monthly, scheduled_for, request_id }}`) and on demand through *Manual Run* (`{{ site_id | domain, pages?, dry_run?, force? }}`). For every site with a cadence in `{CADENCE_TABLE}` (set by "Track my site" / API `blogs_per_week`, or Site Admin `cadence`; 1-3 per week) it picks the week's topics in this order: the keyword ladder's next **planned** pages (rung order, with the ladder's internal links), **striking-distance** queries from `{QUERY_TABLE}` (positions 4-20 with impressions: the page that already ranks gets strengthened), **rising** related searches from `{TRENDS_TABLE}`. Keywords written in the last 90 days, written/published ladder pages, brand queries and paused sites are skipped.
+Runs **once a week in each website's own cycle** (job 6, after the trackers; *Manual Run* `{{ trigger: 'cycle', domain, site_id, cycle_key, job, monthly, scheduled_for, request_id }}`) and on demand through *Manual Run* (`{{ site_id | domain, pages?, dry_run?, force? }}`); 48 h before each cycle the dispatcher's `preview` job runs it with `preview: true`: it plans exactly what the cycle would write, writes nothing, and posts stage `cycle_preview` (the "Coming up" plan). For every site with a cadence in `{CADENCE_TABLE}` (set by "Track my site" / API `blogs_per_week`, or Site Admin `cadence`; 1-3 per week) it picks the week's topics in this order: the keyword ladder's next **planned** pages (rung order, with the ladder's internal links), **striking-distance** queries from `{QUERY_TABLE}` (positions 4-20 with impressions: the page that already ranks gets strengthened), **rising** related searches from `{TRENDS_TABLE}`. Keywords written in the last 90 days, written/published ladder pages, brand queries and paused sites are skipped.
 Each pick starts a content run in SEO Agent v4 (`mode: keyword`, `force_content`, internal rate-limit key `cadence:<site>`) that delivers the PDF/Word report **plus the blog package** (article HTML, Markdown, meta.json) by e-mail / callback (`stage: content`). The run is logged in `{LOG_TABLE}` (status started), ladder rows go to *writing*, and one note per site goes out (`stage: content_cadence`): this week's pages and why, what comes next, pages still waiting for a publish link.
 **An AI target says `writing` only while a run is on record, and `written` only when a page is (B9-6, INVARIANTS rule 4).** *AI Target Marks* marks a `{AI_TARGETS_TABLE}` row `writing` with the run's id and the plain reason that nothing exists yet; a spawn that **failed** puts the row back to `queued` with its error, so the question is picked again instead of claiming work in progress for ever. *AI Target Settle* is the only exit: a row moves to `written` against a `{LOG_TABLE}` row for that same run saying `written` or `published` — R1's rule, in the one table R1 did not cover. A row with no such log row is left alone; AI Growth queues the question again after 14 days with its reason and a medium alert.
-**Pipeline rules (v4.8)** from `{LADDER_SETTINGS_TABLE}` (written by the web app; one row per ladder + a `_site` row with the website defaults; no row = the site's default mode or Auto, active, priority by start date): only **Auto** ladders with status active / queued are written, at most `max_active` (default 2) at a time in **priority** order (ladder 1's pages before ladder 2's; plan type *direct* writes the main page first); the **main page waits** until half of the supporting pages are published or the main keyword ranks 1-30; a ladder whose main keyword held the **top 3 for 4 checks** gets no more pages; with `max_waiting` (default 3) pages written but not published the site is **paused** (`paused_reason: pileup`; on demand `force: true` bypasses it); opportunity posts only when `opportunities` is Auto (else listed as `suggestions`); **Manual** ladders' next pages are listed in `awaiting_approval`. Sites without a page but with news get a *Cadence Status* note (same callback stage).
+**Pipeline rules (v4.8)** from `{LADDER_SETTINGS_TABLE}` (written by the web app; one row per ladder + a `_site` row with the website defaults; no row = the site's default mode or Auto, active, priority by start date): only **Auto** ladders with status active / queued are written, at most `max_active` (default 2) at a time in **priority** order (ladder 1's pages before ladder 2's; plan type *direct* writes the main page first); the **main page waits** until half of the supporting pages are published or the main keyword ranks 1-30; a ladder whose main keyword held the **top 3 for 4 checks** gets no more pages; with `max_waiting` (default 3) pages written but not published the site is **paused** (`paused_reason: pileup`; on demand `force: true` bypasses it); **Manual** ladders' next pages are listed in `awaiting_approval`. Sites without a page but with news get a *Cadence Status* note (same callback stage).
+**Keyword-first (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5):** the website's `autopilot_level` (`_site` row, 1-3, default 2) decides what runs on its own: 1 = the ladder pages of ladders the client chose (`chosen_by` client_*; `system_announced` only at 3); 2 = also refreshes of the client's existing pages in topic (decay, striking distance with a page, AI refresh); 3 = also new topics (rising trends, AI answer pages on top by `ai_pages_month`). Levels 1-2 write **nothing** before the first chosen ladder ("Waiting for your first keyword"). The fit gate runs on every non-ladder candidate; everything not automatic is a priced **suggestion**. `pages_per_week` bounds everything (0 = nothing), and pages a ladder start or an earlier run of the same cycle wrote count against it (R-K7). The client's skips / approvals come from `{SKIPS_TABLE}`. `preview: true` (48 h before a cycle) writes nothing and sends one `cycle_preview` callback (*Cadence Preview*).
 The owner publishes in any CMS and reports the URL ("I published a page" in the form, or API `mode: published`): the page is checked live, logged as published, the ladder row gets the real URL, and the Site Tracker inspects indexing and positions from the next Monday. `dry_run: true` only plans. Cost: about $1.20 of AI per page.
 Form: {FORM_URL} · API: {API_URL}""", [-40, -700], 1180, 560))
-for a, b in [('Manual Run', 'Ensure Log Table'), ('Ensure Log Table', 'Ensure Cadence Table'), ('Ensure Cadence Table', 'Ensure Trends Table (Cadence)'), ('Ensure Trends Table (Cadence)', 'Ensure Ladder Settings Table'), ('Ensure Ladder Settings Table', 'Ensure AI Targets Table (Cadence)'), ('Ensure AI Targets Table (Cadence)', 'Load Sites'), ('Load Sites', 'Load Cadence'), ('Load Cadence', 'Load Ladders'), ('Load Ladders', 'Load Query History'), ('Load Query History', 'Load Trends'), ('Load Trends', 'Load Content Log'), ('Load Content Log', 'Load Ladder Settings'), ('Load Ladder Settings', 'Load Main Keyword Ranks'), ('Load Main Keyword Ranks', 'Load AI Targets (Cadence)'), ('Load AI Targets (Cadence)', 'Load AI Targets Writing (Cadence)'), ('Load AI Targets Writing (Cadence)', 'Load Monitors (Cadence)'), ('Load Monitors (Cadence)', 'Ensure Pages Table (Cadence)'), ('Ensure Pages Table (Cadence)', 'Load Pages (Cadence)'), ('Load Pages (Cadence)', 'Load AI Brands (Cadence)'), ('Load AI Brands (Cadence)', 'Cadence Plan'), ('Cadence Plan', 'Any Pages?'),
+for a, b in [('Manual Run', 'Ensure Log Table'), ('Ensure Log Table', 'Ensure Cadence Table'), ('Ensure Cadence Table', 'Ensure Trends Table (Cadence)'), ('Ensure Trends Table (Cadence)', 'Ensure Ladder Settings Table'), ('Ensure Ladder Settings Table', 'Ensure AI Targets Table (Cadence)'), ('Ensure AI Targets Table (Cadence)', 'Load Sites'), ('Load Sites', 'Load Cadence'), ('Load Cadence', 'Load Ladders'), ('Load Ladders', 'Load Query History'), ('Load Query History', 'Load Trends'), ('Load Trends', 'Load Content Log'), ('Load Content Log', 'Load Ladder Settings'), ('Load Ladder Settings', 'Load Main Keyword Ranks'), ('Load Main Keyword Ranks', 'Load AI Targets (Cadence)'), ('Load AI Targets (Cadence)', 'Load AI Targets Writing (Cadence)'), ('Load AI Targets Writing (Cadence)', 'Load Monitors (Cadence)'), ('Load Monitors (Cadence)', 'Ensure Skips Table (Cadence)'), ('Ensure Skips Table (Cadence)', 'Load Skips (Cadence)'), ('Load Skips (Cadence)', 'Load Cost (Cadence)'), ('Load Cost (Cadence)', 'Ensure Pages Table (Cadence)'), ('Ensure Pages Table (Cadence)', 'Load Pages (Cadence)'), ('Load Pages (Cadence)', 'Load AI Brands (Cadence)'), ('Load AI Brands (Cadence)', 'Cadence Plan'), ('Cadence Plan', 'Preview?'),
              ('Start Content Runs', 'Log Rows'), ('Log Rows', 'Save Content Log'), ('Save Content Log', 'Ladder Marks'), ('Ladder Marks', 'Any Ladder Marks?'), ('Mark Ladder Writing', 'AI Target Marks'), ('AI Target Marks', 'Any AI Marks?'), ('Mark AI Target Writing', 'AI Target Settle'), ('AI Target Settle', 'Any AI Settles?'), ('Settle AI Targets', 'Cadence Note'), ('Cadence Note', 'Has Email (Cadence)?'), ('Cadence Note', 'Has Callback (Cadence)?')]: link(C, a, b)
+link(C, 'Preview?', 'Cadence Preview', 0); link(C, 'Preview?', 'Any Pages?', 1)
+link(C, 'Cadence Preview', 'Has Email (Cadence)?'); link(C, 'Cadence Preview', 'Has Callback (Cadence)?')
 link(C, 'Any Pages?', 'Dry Run?', 0); link(C, 'Any Pages?', 'Site Notes?', 1)
 link(C, 'Site Notes?', 'Cadence Status', 0); link(C, 'Site Notes?', 'Nothing To Write', 1)
 link(C, 'Cadence Status', 'Has Email (Cadence)?'); link(C, 'Cadence Status', 'Has Callback (Cadence)?')
@@ -545,7 +559,68 @@ assert 'head_aside' in _cadcode['Cadence Plan'] and 'paused_ladders:' in _cadcod
 assert "const WAITS = new Set(['written', 'not_ready']);" in _cadcode['Cadence Plan'] and 'needs_fix_keywords' in _cadcode['Cadence Plan'], 'R111: a failed draft is not counted, or not labelled, by the pile-up guard'
 assert "status: 'set_aside'" in _cadcode['Ladder Marks'], 'R16: a set-aside rung is not written back to the ladder row'
 for _n in ('Cadence Note', 'Cadence Status'): assert 'Set aside' in _cadcode[_n], _n + ': the set-aside rungs are not reported'
+# keyword-first (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5.1 / §5.5 / §14): the rules that exist because the cadence wrote a page nobody chose
+_cp19 = _cadcode['Cadence Plan']
+assert 'if (!pages && !aiQuota) continue' not in _cp19, 'R-K3: a site set to 0 pages a week still gets AI pages written'
+assert "const AUTO_SOURCES = { 1: ['ladder'], 2: ['ladder', 'decay', 'striking', 'ai_refresh'], 3: ['ladder', 'decay', 'striking', 'ai_refresh', 'trend', 'ai_answer'] };" in _cp19, \
+    'keyword-first: the levels differ from app/shared/src/cycles.ts AUTO_SOURCES'
+assert "const waiting_for_keyword = level < 3 && !clientLadders.length;" in _cp19 and 'const blocked = !!paused_reason || waiting_for_keyword;' in _cp19, 'R-K2: levels 1-2 write before the first chosen keyword'
+assert "x.chosen_ok" in _cp19 and "chosen_by === 'system_announced' && level === 3" in _cp19, 'R-K1: a ladder nobody chose is written'
+assert 'const g = gateOf(o);' in _cp19 and _cp19.count('refuse(o, g)') >= 2, 'R-K4: a non-ladder candidate (opportunity or AI target) skips the fit gate'
+assert 'const room = Math.max(0, pages - spent);' in _cp19 and 'uniq.slice(0, room)' in _cp19, 'R-K7: pages a ladder start wrote are not counted against the cycle'
+assert "rowsOf('Load Skips (Cadence)')" in _cp19 and 'approvedKeys' in _cp19, "keyword-first: the client's skips / approvals are not read"
+assert "const aiPick = level === 3 && pages > 0" in _cp19, 'keyword-first: the AI page on top is written below level 3 or with 0 pages a week'
+assert 'const CC = (() => {' in _cp19 and '/*__COST_CAL__*/' not in _cp19, "keyword-first: the price of a page is not the engine's own estimate"
+_post19 = next(n for n in N if n['name'] == 'POST Cadence Note')['parameters']['jsonBody']
+for _f19 in ("stage: 'cycle_preview'", 'waiting_for_keyword:', 'level:', 'cycle_key:', 'suggestions:'):
+    assert _f19 in _post19, 'keyword-first: the cadence callback lacks ' + _f19
 write(wf('SEOagentCadence1', 'SEO Agent — Content Cadence', N, C), 'SEO_Agent_Content_Cadence.json')
+# keyword-first (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §14): the contract the app shares. app/shared/src/cycles.ts is the source; the cadence
+# mirrors its item-key normalisation, its levels and the sources each level writes on its own, character for character. The build compares them
+# and writes what it read to harness/cycles_contract.json, so the harness (which runs in a container without app/) holds the node to the same text.
+def _cycles_contract():
+    ts_path = os.path.join(HERE, '..', '..', 'app', 'shared', 'src', 'cycles.ts')
+    ts = open(ts_path, encoding='utf-8').read()
+    m = re.search(r"export const cycleNorm = \(s: string\): string => (.+?);\n", ts)
+    assert m, 'cycles.ts: cycleNorm not found'
+    norm_body = m.group(1).strip()
+    blk = re.search(r"export const AUTO_SOURCES[^=]*= \{(.*?)\};", ts, re.S)
+    assert blk, 'cycles.ts: AUTO_SOURCES not found'
+    auto = {k: [x.strip().strip("'") for x in v.split(',') if x.strip()] for k, v in re.findall(r"(\d):\s*\[([^\]]*)\]", blk.group(1))}
+    lvl = re.search(r"export const DEFAULT_AUTOPILOT_LEVEL: AutopilotLevel = (\d);", ts)
+    chosen = re.search(r"export type ChosenBy = ([^;]+);", ts)
+    assert lvl and chosen, 'cycles.ts: DEFAULT_AUTOPILOT_LEVEL / ChosenBy not found'
+    return {'_doc': 'Written by build_site_tracker.py from app/shared/src/cycles.ts (the engine-app contract, SCHEDULING_KEYWORDS_PLAN.md §14). The harness (scenarios_keyword_first.js) holds Cadence Plan to it; do not edit by hand.',
+            'source': 'app/shared/src/cycles.ts', 'cycle_norm_body': norm_body, 'auto_sources': auto, 'default_level': int(lvl.group(1)),
+            'chosen_by': sorted(re.findall(r"'([a-z_]+)'", chosen.group(1)))}
+_cc19 = _cycles_contract()
+assert ("const cycleNorm = (s) => " + _cc19['cycle_norm_body'] + ";") in _cp19, 'keyword-first: Cadence Plan cycleNorm differs from cycles.ts (' + _cc19['cycle_norm_body'] + ')'
+_auto19 = re.search(r"const AUTO_SOURCES = \{(.*?)\};", _cp19)
+assert _auto19 and {k: [x.strip().strip("'") for x in v.split(',') if x.strip()] for k, v in re.findall(r"(\d):\s*\[([^\]]*)\]", _auto19.group(1))} == _cc19['auto_sources'], 'keyword-first: Cadence Plan AUTO_SOURCES differs from cycles.ts'
+assert 'DEFAULT_LEVEL = ' + str(_cc19['default_level']) + ';' in _cp19, 'keyword-first: the default autopilot level differs from cycles.ts'
+assert _cc19['chosen_by'] == sorted(['client_typed', 'client_picked', 'system_announced']), 'keyword-first: cycles.ts ChosenBy changed: ' + str(_cc19['chosen_by'])
+json.dump(_cc19, open(os.path.join(HERE, 'harness', 'cycles_contract.json'), 'w'), indent=1)
+# and the preview path, on the GENERATED workflow (after ledger_mainline / the callback move): a preview reaches its callback and e-mail and
+# can never reach anything that starts, logs or marks a page
+_cw19 = json.load(open(os.path.join(OUT, 'SEO_Agent_Content_Cadence.json')))[0]
+_down19 = {}
+for _s19, _o19 in _cw19['connections'].items():
+    for _l19 in (_o19.get('main') or []):
+        for _t19 in (_l19 or []): _down19.setdefault(_s19, []).append(_t19['node'])
+def _reach19(start, stop=()):
+    seen, stack = {start}, [start]
+    while stack:
+        cur = stack.pop()
+        for nx in _down19.get(cur, []):
+            if nx not in seen and nx not in stop: seen.add(nx); stack.append(nx)
+    return seen
+_pv19 = _cw19['connections']['Preview?']['main']
+assert [t['node'] for t in _pv19[0]] == ['Cadence Preview'] and [t['node'] for t in _pv19[1]] == ['Any Pages?'], 'keyword-first: Preview? does not split the preview from the writing path'
+_r19 = _reach19('Cadence Preview')
+for _bad19 in ('Start Content Runs', 'Log Rows', 'Save Content Log', 'Ladder Marks', 'Mark Ladder Writing', 'AI Target Marks', 'Mark AI Target Writing', 'Settle AI Targets', 'Cadence Note'):
+    assert _bad19 not in _r19, 'keyword-first: a preview reaches ' + _bad19 + ' (it must write nothing)'
+assert 'POST Cadence Note' in _r19 and 'Send Cadence Note' in _r19, 'keyword-first: the preview reaches neither its callback nor its e-mail'
+assert 'Preview?' in _reach19('Cadence Plan') and 'Start Content Runs' not in _reach19('Cadence Plan', stop={'Preview?'}), 'keyword-first: Preview? is not the one way from the plan to the writing path'
 
 # =============================================================================
 # SEO Agent — Console Alerts: watches the agent's mailbox (IMAP) for Google Search Console notification e-mails — manual actions, security
