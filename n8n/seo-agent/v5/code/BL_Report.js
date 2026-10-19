@@ -8,6 +8,7 @@
 // because a backlink count is only ever one index's view of the web and the values are modelled, not measured.
 /*__REPORT_KIT__*/
 /*__LINEAGE__*/
+/*__SITE_TIME__*/
 const sites = $('Parse Backlinks').all().map(i => i.json);
 let rows = []; try { rows = $('Prospect Rows').all().map(i => i.json).filter(r => !r.skip); } catch (e) {}
 let stored = []; try { stored = $('Load Link Prospects').all().map(i => i.json).filter(x => x && x.prospect_domain); } catch (e) {}
@@ -108,7 +109,7 @@ return sites.filter(s => s.deliver).map(s => {
   if (full || drafts.length) html += h3('Outreach — this month\'s drafts') + (drafts.length ? drafts.map(r => draftBox(r, r.outreach_subject, r.outreach_body, (TYPE[r.type] || r.type) + ' · score ' + (r.score || 0))).join('') : p_('No new drafts this month.', true));
   if (follows.length) html += h3('Follow-ups due') + follows.map(r => draftBox(r, r.followup_subject, r.followup_body, 'follow-up ' + r.followup_step)).join('');
   if (full) html += h3('Prospect pipeline') + p_(esc(counts) + (won.length ? ' · <b>won this month: ' + esc(won.map(w => w.prospect_domain).join(', ')) + '</b>' : '')) + p_('Mark a prospect as contacted / won / rejected in the app (Backlinks → Outreach) or with Site Admin action "prospect". Contacted prospects get follow-up drafts after 7 and 14 days; "won" is set when the link is found on the page. Full list: prospects.csv.', true);
-  html += h3('How this works') + p_('Every Monday the monitor checks for lost and new links and re-checks the valuable ones on their pages (alert e-mail only when something important happened); the first run of each month is the full report. Cost this run: $' + s.cost_usd.toFixed(2) + '.', true) +
+  html += h3('How this works') + p_((s.cycle && s.cycle.date ? 'In this website\'s weekly cycle (' + ST.everyText(ST.weekdayOfDate(s.cycle.date)) + ')' : 'Each week') + ' the monitor checks for lost and new links and re-checks the valuable ones on their pages (alert e-mail only when something important happened); ' + (s.cycle ? 'the website\'s monthly cycle' : 'the first run of each month') + ' is the full report. Cost this run: $' + s.cost_usd.toFixed(2) + '.', true) +
     p_('Data: DataForSEO Backlinks; Bing Webmaster Tools; Google Search Console (your upload); Google Analytics 4; the <a href="https://commoncrawl.org/web-graphs" style="color:#1d4ed8">Common Crawl web graph</a>; Wikipedia; Hacker News (Algolia); news from the <a href="https://www.gdeltproject.org/" style="color:#1d4ed8">GDELT Project</a>' + (drCol ? '; <a href="https://ahrefs.com/" style="color:#1d4ed8">Domain Rating by Ahrefs</a>' : '') + '.', true);
   // G29: the same figures with their source, period and sample
   const srcNames = SRC.filter(([k]) => (C.per_source || {})[k]).map(([, label]) => label);
