@@ -11,10 +11,14 @@ tunnel. It is apply_env.py for a remote instance: no `docker exec`, no restart.
   --create-missing      a workflow or credential the remote does not have yet is imported through IAP SSH with n8n's CLI
                         (the public API cannot create a record with a fixed id; the workflows reference each other by id)
   --n8n-url URL         default http://localhost:15678
-  --force-monday        deploy inside the Monday window of the weekly schedules anyway (see apply_env.py, R94)
+  --force               deploy while a website's cycle job is in flight or due anyway (the deploy guard, below); --force-monday,
+                        the flag of the old Monday rule, is the same flag
 
 What it does, in order (each step says what it found):
- 1. refuses inside the Monday 07:00-12:00 window of the schedules' time zone (an update re-arms schedules; R94), unless --force-monday
+ 1. the deploy guard (n8n/seo-agent/deploy_guard.py, shared with apply_env.py; SCHEDULING_KEYWORDS_PLAN.md §4.8): refuses while a Cycle
+    Dispatcher job is starting or running, or a website's cycle or "Coming up" preview is due in the next 15 minutes - read from
+    seo_cycle_jobs / seo_cycles through the remote n8n's public API. An update re-publishes workflows and can kill a running job (the
+    dispatcher retries it, at the cost of one attempt). Tables that cannot be read refuse too, with the reason. --force overrides, loudly
  2. builds with the owner's settings (build_v4.py, exit code checked) unless --no-build
  3. for each workflow of deploy_manifest.json: substitutes the alert webhook (R29: the real URL only ever exists in memory and on
     the instance), then PUT /api/v1/workflows/<id> when the content differs. n8n 2.41.4 makes a PUT on a published workflow live at
@@ -73,17 +77,8 @@ def literal(path, *names):
     return out
 
 
-def deploy_window(now, tz_name):
-    """apply_env.py's R94 rule: Monday 07:00-12:00 in the schedules' time zone (11:00-16:00 UTC without a tz database)."""
-    try:
-        from zoneinfo import ZoneInfo
-        loc = now.astimezone(ZoneInfo(tz_name))
-        start = loc.replace(hour=7, minute=0, second=0, microsecond=0) - dt.timedelta(days=loc.weekday())
-        a, b = start.astimezone(dt.timezone.utc), start.replace(hour=12).astimezone(dt.timezone.utc)
-    except Exception:
-        monday = (now - dt.timedelta(days=now.weekday())).replace(minute=0, second=0, microsecond=0)
-        a, b = monday.replace(hour=11), monday.replace(hour=16)
-    return a <= now < b, a, b
+sys.path.insert(0, ENGINE)
+import deploy_guard   # the one deploy guard, shared with apply_env.py (build section 131 self-tests it)
 
 
 ENV = load_env()
@@ -119,13 +114,16 @@ def main():
     say = print
     say('deploy_engine: %s -> %s (%s)' % (os.path.relpath(ENGINE, REPO), URL, 'APPLY' if APPLY else 'dry run'))
     if not KEY: sys.exit('no n8n API key: N8N_API_KEY in ' + ENV_FILE + ' or N8N_REMOTE_API_KEY in the environment')
-    inside, a, b = deploy_window(dt.datetime.now(dt.timezone.utc), (ENV.get('GENERIC_TIMEZONE') or 'America/New_York').strip())
-    if inside and '--force-monday' not in args:
-        sys.exit('R94: refusing - Monday %s-%s UTC is when the weekly schedules fire. Deploy after %s UTC or pass --force-monday.'
-                 % (a.strftime('%H:%M'), b.strftime('%H:%M'), b.strftime('%H:%M')))
-    st, health = api('GET', '/workflows?limit=1')
+    try:
+        st, health = api('GET', '/workflows?limit=1')
+    except Exception as e:   # urllib.error.URLError: nothing listens on the tunnel's port
+        st = 'no answer (%s)' % str(e)[:120]
     if st != 200:
         sys.exit('the remote n8n public API answered %s at %s (tunnel open? deploy/gcp/tunnel.sh; key valid there?)' % (st, URL))
+    # 1. the deploy guard, read from the remote instance's own cycle tables (never prints the key)
+    refusal = deploy_guard.check(api, args, now=dt.datetime.now(dt.timezone.utc), say=say)
+    if refusal:
+        sys.exit(refusal)
 
     # 2. build
     if '--no-build' not in args:

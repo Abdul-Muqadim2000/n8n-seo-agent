@@ -9907,7 +9907,7 @@ def _b98_catchup():
     # ---------- A. the schedule table is every generated schedule, each with a manual entry on the schedule's own path ----------
     _sched98, _allwf98 = {}, {}
     for _f98 in sorted(os.listdir(_wd98)):
-        if not _f98.endswith('.json') or _f98 in _NOT_GENERATED69 or _f98 == _wire98['workflow']['file']:
+        if not _f98.endswith('.json') or _f98 in _NOT_GENERATED69 or _f98 == _wire98['workflow']['file'] or _f98 == _CYCLE_FILE140:   # section 140: the dispatcher's sweep is never caught up
             continue
         for _w98 in json.load(open(os.path.join(_wd98, _f98), encoding='utf-8')):
             _t98 = [n for n in _w98['nodes'] if n['type'] == 'n8n-nodes-base.scheduleTrigger']
@@ -9985,7 +9985,6 @@ def _b98_catchup():
     # the lists live in deploy_manifest.json since 2026-10-18, read by both deploy paths: apply_env.py (local) and the engine image's
     # release step (n8n/deploy/release.mjs) - so the check reads the manifest and proves both still read it
     _ae98 = open(os.path.join(HERE0, 'apply_env.py'), encoding='utf-8').read()
-    _tree98 = _ast98.parse(_ae98)   # still read below: deploy_window's Monday rule
     _rel98 = open(os.path.join(HERE0, '..', 'deploy', 'release.mjs'), encoding='utf-8').read()
     assert "json.load(open(os.path.join(HERE, 'deploy_manifest.json')" in _ae98 and "MANIFEST['workflows'], MANIFEST['publish']" in _ae98, \
         'R94: apply_env.py no longer takes its import / publish lists from deploy_manifest.json'
@@ -10005,21 +10004,9 @@ def _b98_catchup():
     _ex98 = open(os.path.join(HERE0, '..', '.env.seo.example'), encoding='utf-8').read()
     assert re.search(r'(?m)^N8N_API_KEY=$', _ex98) and re.search(r'(?m)^GENERIC_TIMEZONE=' + re.escape(_wire98['default_tz']) + '$', _ex98), \
         'R94: n8n/.env.seo.example does not name N8N_API_KEY / GENERIC_TIMEZONE'
-    # ---------- D. the Monday deploy guard: the function apply_env.py runs, self-tested in isolation ----------
-    _fn98 = next(n for n in _tree98.body if isinstance(n, _ast98.FunctionDef) and n.name == 'deploy_window')
-    _ns98 = {'DEFAULT_TZ': 'America/New_York'}
-    exec(compile(_ast98.Module(body=[_fn98], type_ignores=[]), 'apply_env.py:deploy_window', 'exec'), _ns98)
-    _U98 = lambda *a: _dt98.datetime(*a, tzinfo=_dt98.timezone.utc)
-    _cases98 = {'mon_2026-10-19_12:00Z_summer': (_U98(2026, 10, 19, 12, 0), True), 'mon_2026-10-19_10:59Z_before': (_U98(2026, 10, 19, 10, 59), False),
-                'mon_2026-10-19_16:30Z_after': (_U98(2026, 10, 19, 16, 30), False), 'tue_2026-10-20_12:00Z': (_U98(2026, 10, 20, 12, 0), False),
-                'fri_2026-10-16_12:00Z_today': (_U98(2026, 10, 16, 12, 0), False), 'mon_2026-11-02_16:30Z_winter': (_U98(2026, 11, 2, 16, 30), True),
-                'mon_2026-11-02_11:30Z_winter_before': (_U98(2026, 11, 2, 11, 30), False)}
-    _guard98 = {}
-    for _k98, (_t98, _want98) in _cases98.items():
-        _in98, _a98, _b98 = _ns98['deploy_window'](_t98, 'America/New_York')
-        assert _in98 is _want98, 'R94: apply_env.deploy_window(%s) answered %s, expected %s' % (_k98, _in98, _want98)
-        _guard98[_k98] = {'inside': _in98, 'window_utc': _a98.strftime('%a %H:%M') + '-' + _b98.strftime('%H:%M')}
-    assert "'--force-monday' not in args" in _ae98 and 'sys.exit(' in _ae98.split('deploy_window(tz_name=')[1][:400], 'R94: apply_env.py does not refuse inside the window'
+    # ---------- D. the deploy guard: since 2026-10-19 it is the per-website cycle's (deploy_guard.py, shared by apply_env.py and
+    # deploy/gcp/deploy_engine.py), self-tested in section 140 on harness/deploy_window_cases.json. The Monday 07:00-12:00 rule is gone
+    # with the Monday crons; its flag --force-monday still overrides the new guard. ----------
     # ---------- 99. AI Growth: a dry item never reaches a submission ----------
     _g98 = json.load(open(os.path.join(_wd98, 'SEO_Agent_AI_Growth.json'), encoding='utf-8'))[0]
     _gn98 = {n['name']: n for n in _g98['nodes']}
@@ -10032,13 +10019,14 @@ def _b98_catchup():
         assert 'DRY_RUN' in _gn98[_req98]['parameters']['jsCode'] and 'would_submit' in _gn98[_req98]['parameters']['jsCode'], 'R94: ' + _req98 + ' has no dry-run switch'
         _growth98[_sub98] = {'gate': _if98, 'expr': _lv98}
     assert 'dry_run_note' in _gn98['Growth Report']['parameters']['jsCode'], 'R94: the AI Growth report does not say it was a dry run'
-    _wire98.update({'deploy_guard': _guard98, 'growth_dry_run': _growth98, 'record_then_start': True,
+    _wire98.pop('deploy_guard', None)   # section 140 holds the deploy guard's self-test now (harness/cycle_wiring.json)
+    _wire98.update({'growth_dry_run': _growth98, 'record_then_start': True,
                     'published': sorted(_baked98), 'compose_tz_default': _tzm98.group(1),
                     # 2026-10-19: the weekly workflows that run in each website's cycle (no cron; Manual Run -> plan), for the harness
                     'cycle_workflows': _cycwf98, 'daily_crons': list(_CYCLE_DAILY98), 'not_replayed': list(_CYCLE_NOT_REPLAYED98)})
     json.dump(_wire98, open(os.path.join(HERE0, 'harness', 'catchup_wiring.json'), 'w'), indent=1, sort_keys=True)
     print('R94: the Schedule Catch-up carries the %d generated schedules (%s), records before it starts, and every target is published; '
-          'apply_env.py refuses a Monday deploy (%d guard cases); AI Growth submits nothing on a dry run' % (len(_baked98), _wire98['tz'], len(_guard98)))
+          'AI Growth submits nothing on a dry run' % (len(_baked98), _wire98['tz']))
     print('cycle (2026-10-19): %d weekly workflows carry no cron and are started by the website\'s cycle through Manual Run; the catch-up keeps %s' % (len(_cycwf98), ', '.join(_CYCLE_DAILY98)))
 
 
@@ -11662,7 +11650,184 @@ import subprocess
 for _s in ('build_api.py', 'build_ladder_extras.py', 'build_site_tracker.py', 'build_monitors.py'):
     _r = subprocess.run([sys.executable, os.path.join(HERE0, _s)], cwd=HERE0)
     assert _r.returncode == 0, _s + ' failed'
+# =============================================================================
+# 140. THE WEEK BELONGS TO THE WEBSITE (2026-10-19, docs/SCHEDULING_KEYWORDS_PLAN.md §4, agent E1 "Cycle core"). Seven Monday crons ran every
+#     customer at once: a client who set up on Tuesday waited six days for the first weekly cycle, Monday morning in New York carried the whole
+#     load, and every restart in that window threw a due fire away (R94). Now each website has its own 7-day cycle from the moment its
+#     tracking starts: cycle 0 at setup, then 06:00 in the website's own time zone on its own weekday, monthly work on its own monthly date.
+#     * **The kit** (v5/code/_cycle.js, CYC): pure - no clock, no network, no table - so the harness replays any date (scenarios_cycle.js
+#       CY1-CY24). Due times from stored intent through the catch-up's own Intl rule (CU.zonedToUtc), the most recent missed cycle once,
+#       the 12-hour gap, the job order and the dependency rule, outcomes read off the run ledger (`cycle:<cycle_key>:<job>` settled = done;
+#       capacity refusals retried without an attempt for 24 h; three attempts for a failure; account too low = gave up), capped starts that
+#       never go into a refusal the run guard would give, adoption of a tracked website with no row, the plan-only switch, retention.
+#     * **The dispatcher** (build_cycle.py, SEOagentCycleDsp): Instance Started + a sweep every 5 minutes + a test door; RECORD the job row,
+#       read the claim back, THEN start the job's own Manual Run with the §14.2 payload. Built inactive, imported, not published.
+#     * **Site Kickoff** writes the seo_cycles row instead of starting jobs (build_monitors.py 5c).
+#     * **The deploy guard** (deploy_guard.py, both deploy paths): no Monday window any more; refuse while a dispatcher job is in flight or a
+#       cycle / preview is due in the next 15 minutes, read from the tables; refuse when they cannot be read; --force (alias --force-monday).
+#     What this section proves on the GENERATED files: the three doors; every path from a door to the start passes the saved record AND the
+#     claim read back; the outcomes and skips are written before any start; the start does not wait and takes the workflow id from the
+#     saved record; no execution time-out; built inactive, imported and not published, every target published; the job order equals the
+#     app's contract (app/shared/src/cycles.ts); the kickoff no longer starts anything and answers only after its row is saved; and the deploy
+#     guard's answers on every case of harness/deploy_window_cases.json, plus its refusal / override / unreadable behaviour.
+# =============================================================================
+_CYCLE_FILE140 = 'SEO_Agent_Cycle_Dispatcher.json'
+
+
+def _b140_cycle():
+    """Runs right after the catch-up (build_cycle.py reads the generated target workflows), before every lint that walks workflows/."""
+    _r140 = subprocess.run([sys.executable, os.path.join(HERE0, 'build_cycle.py')] + (['--no-env'] if '--no-env' in sys.argv[1:] else []), cwd=HERE0)
+    assert _r140.returncode == 0, 'build_cycle.py failed'
+    _wd140 = os.path.join(HERE0, 'workflows')
+    _wire140 = json.load(open(os.path.join(HERE0, 'harness', 'cycle_wiring.json'), encoding='utf-8'))
+    _w140 = json.load(open(os.path.join(_wd140, _CYCLE_FILE140), encoding='utf-8'))[0]
+    _by140 = {n['name']: n for n in _w140['nodes']}
+    _cc140 = _w140['connections']
+    _out140 = lambda c, nd: [t['node'] for lst in ((c.get(nd) or {}).get('main') or []) for t in (lst or [])]
+
+    def _reach140(c, start, blocked):
+        seen, todo = set(), [start]
+        while todo:
+            nd = todo.pop()
+            if nd in seen or nd == blocked:
+                continue
+            seen.add(nd); todo.extend(_out140(c, nd))
+        return seen
+    # ---------- A. the doors, the settings, inactive ----------
+    assert _w140['id'] == 'SEOagentCycleDsp' and _w140['active'] is False, 'cycle: the dispatcher must be built inactive (the owner activates it, plan §10 step 5)'
+    _st140 = _w140['settings']
+    assert _st140.get('executionTimeout') == -1 and _st140.get('errorWorkflow') == 'SEOagentErrHandl' and _st140.get('saveDataSuccessExecution') == 'none', \
+        'cycle: the dispatcher needs no time-out (C-1: wall-clock), the Error Handler (the gave-up alarm) and no saved successes (every 5 minutes): ' + str(_st140)
+    assert _by140['Instance Started']['type'] == 'n8n-nodes-base.n8nTrigger' and _by140['Instance Started']['parameters']['events'] == ['init'], 'cycle: no Instance Started door'
+    _sw140 = [n for n in _w140['nodes'] if n['type'] == 'n8n-nodes-base.scheduleTrigger']
+    assert len(_sw140) == 1, 'cycle: the dispatcher must have exactly one sweep schedule'
+    _iv140 = _sw140[0]['parameters']['rule']['interval']
+    assert len(_iv140) == 1 and _iv140[0].get('field') == 'cronExpression' and _iv140[0].get('expression') == _wire140['sweep_cron'] == '3-58/5 * * * *', \
+        'cycle: the sweep must be the explicit cron 3-58/5 * * * * (offset from the catch-up): ' + str(_iv140)
+    assert _by140['Cycle Run']['type'] == 'n8n-nodes-base.executeWorkflowTrigger' and _by140['Cycle Run']['parameters'].get('inputSource') == 'passthrough', 'cycle: no test door'
+    _plan140 = _by140['Cycle Plan']['parameters']['jsCode']
+    for _k140 in ('const CU = (() =>', 'const RG = (() =>', 'const CYC = (() =>', "let mode = 'plan_only'", 'CYC.plan('):
+        assert _k140 in _plan140, 'cycle: Cycle Plan lacks ' + _k140
+    assert "dry_run && Number.isFinite(Date.parse" in _by140['Cycle Entry']['parameters']['jsCode'], 'cycle: the clock may move only on a dry run'
+    # ---------- B. RECORD, read the claim back, THEN start - by graph walk ----------
+    _doors140 = ('Instance Started', _sw140[0]['name'], 'Cycle Run')
+    for _d140 in _doors140:
+        assert 'Start Cycle Job' in _reach140(_cc140, _d140, None), 'cycle: ' + _d140 + ' never reaches the start'
+        for _gate140 in ('Save Cycle Record', 'Confirm Cycle Claim', 'Cycle Payload', 'Cycle Recorded?', 'Cycle Plan'):
+            assert 'Start Cycle Job' not in _reach140(_cc140, _d140, _gate140), \
+                'cycle: ' + _d140 + ' can reach Start Cycle Job without passing ' + _gate140 + ' - the start must come after its saved record and the claim read back'
+        for _w8 in ('Save Cycle Rows', 'Save Cycle Job Rows'):   # what the plan learnt is written before anything starts
+            assert _w8 in _reach140(_cc140, _d140, None)
+        assert 'Cycle Start Items' not in _reach140(_cc140, _d140, 'Cycle Job Rows'), 'cycle: the starts can begin before the outcome rows are handed to their save'
+        assert 'Cycle Start Items' not in _reach140(_cc140, _d140, 'Cycle Release Rows'), 'cycle: a retry can start before the dead run\'s reservation is released (it would be refused as its own twin)'
+    _rel140 = _by140['Release Dead Runs']['parameters']
+    assert _rel140['operation'] == 'update' and _rel140['dataTableId']['value'] == 'seo_run_ledger' and _rel140['columns']['value'] == {'status': 'stale'} \
+        and [(c['keyName'], c['keyValue']) for c in _rel140['filters']['conditions']] == [('run_id', '={{ $json.run_id }}'), ('status', 'reserved')], \
+        'cycle: Release Dead Runs must only mark a still-reserved row of the dead run stale: ' + str(_rel140)
+    assert _out140(_cc140, 'Cycle Record Row') == ['Save Cycle Record'] and _out140(_cc140, 'Save Cycle Record') == ['Confirm Cycle Claim'] \
+        and _out140(_cc140, 'Confirm Cycle Claim') == ['Cycle Payload'] and _out140(_cc140, 'Cycle Payload') == ['Cycle Recorded?'], 'cycle: the record-then-start chain is broken'
+    assert _out140(_cc140, 'Cycle Recorded?')[0] == 'Start Cycle Job', 'cycle: the recorded branch does not lead to the start'
+    _start140 = _by140['Start Cycle Job']['parameters']
+    assert _start140['options'].get('waitForSubWorkflow') is False and _start140['workflowId']['value'] == "={{ $('Cycle Record Row').first().json.workflow_id }}", \
+        'cycle: the start waits for the job, or does not take the workflow from the saved record: ' + str(_start140)
+    _cpay140 = _by140['Cycle Payload']['parameters']['jsCode']
+    assert 'CU.stalePlan(' in _cpay140 and "String(back.run_id || '') !== String(rec.run_id || '')" in _cpay140 and 'return [{ json: { ...s.payload } }]' in _cpay140, \
+        'cycle: the payload node lost a refusal (stale plan, claim) or no longer sends the plan\'s payload exactly'
+    assert "run_id: 'dsp:' + String($execution.id)" in _by140['Cycle Record Row']['parameters']['jsCode'], 'cycle: the record row carries no claim'
+    assert _out140(_cc140, 'Save Cycle Report') == ['Cycle Alarm'] and not _out140(_cc140, 'Cycle Alarm'), 'cycle: the gave-up alarm must be the last node, after the report is saved'
+    _cfg140 = _by140['Save Cycle Record']['parameters']
+    assert _cfg140['operation'] == 'upsert' and _cfg140['dataTableId']['value'] == 'seo_cycle_jobs' and _cfg140['filters']['conditions'][0]['keyName'] == 'key', 'cycle: the record is not an upsert by key'
+    assert _by140['Save Cycle Rows']['parameters']['filters']['conditions'][0]['keyName'] == 'site_id', 'cycle: seo_cycles is not upserted by site_id'
+    # ---------- C. jobs, targets, deployment, credential ----------
+    _kit140 = [(j['job'], j['workflow_id']) for j in _wire140['jobs']]
+    assert [j for j, _w in _kit140] == ['ai_visibility', 'backlinks', 'rank_tracker', 'site_tracker', 'ai_growth', 'content_cadence', 'link_builder', 'audit'], \
+        'cycle: the job order is not today\'s Monday order (plan §4.3): ' + str(_kit140)
+    if _wire140.get('cycles_ts_jobs') is not None:
+        assert [(j['job'], j['workflow_id']) for j in _wire140['cycles_ts_jobs']] == _kit140, 'cycle: app/shared/src/cycles.ts CYCLE_JOBS and the kit disagree'
+    _man140 = json.load(open(os.path.join(HERE0, 'deploy_manifest.json'), encoding='utf-8'))
+    assert _CYCLE_FILE140 in _man140['workflows'], 'cycle: deploy_manifest.json does not import the dispatcher'
+    assert 'SEOagentCycleDsp' not in _man140['publish'] and 'SEOagentCycleDsp' not in (_man140.get('publish_when_imap') or []), \
+        'cycle: the dispatcher is in the publish list - it must stay inactive until the owner activates it (plan §10)'
+    _unpub140 = sorted({w for _j, w in _kit140} - set(_man140['publish']))
+    assert not _unpub140, 'cycle: the dispatcher would start %s, which the deploy does not publish ("Workflow is not active")' % _unpub140
+    _sc140 = open(os.path.join(HERE0, 'sync_credentials.py'), encoding='utf-8').read()
+    assert "('%s', " % _wire140['credential'] in _sc140, 'cycle: sync_credentials.py does not write the n8n API credential'
+    for _id140, _t140 in _wire140['targets'].items():
+        assert _t140['entry_node'], 'cycle: ' + _id140 + ' has no Manual Run'
+    # ---------- D. Site Kickoff writes the cycle row and starts nothing ----------
+    _ko140 = json.load(open(os.path.join(_wd140, 'SEO_Agent_Site_Kickoff.json'), encoding='utf-8'))[0]
+    _kb140 = {n['name']: n for n in _ko140['nodes']}; _kc140 = _ko140['connections']
+    assert not [n['name'] for n in _ko140['nodes'] if n['type'] == 'n8n-nodes-base.executeWorkflow'], 'cycle: Site Kickoff still starts jobs itself'
+    _ksv140 = _kb140['Save Kickoff Cycle']['parameters']
+    assert _ksv140['operation'] == 'upsert' and _ksv140['dataTableId']['value'] == 'seo_cycles' and _ksv140['filters']['conditions'][0]['keyName'] == 'site_id', 'cycle: the kickoff does not upsert seo_cycles by site_id'
+    assert 'Respond Kickoff Accepted' in _reach140(_kc140, 'Site Kickoff API', None) and 'Respond Kickoff Accepted' not in _reach140(_kc140, 'Site Kickoff API', 'Save Kickoff Cycle'), \
+        'cycle: the kickoff can answer 202 without saving the row'
+    _codes140 = {n['name']: n['parameters']['options']['responseCode'] for n in _ko140['nodes'] if n['type'] == 'n8n-nodes-base.respondToWebhook'}
+    assert _codes140 == {'Respond Kickoff Bad Request': 400, 'Respond Kickoff Refused': 409, 'Respond Kickoff Dry Run': 200, 'Respond Kickoff Accepted': 202, 'Respond Kickoff Failed': 500}, \
+        'cycle: the kickoff\'s answers changed: ' + str(_codes140)
+    assert 'CYC.newCycleRow(' in _kb140['Kickoff Plan']['parameters']['jsCode'] and 'CYC.validTz(' in _kb140['Kickoff Validate']['parameters']['jsCode'], \
+        'cycle: the kickoff does not build its row with the kit (the dispatcher\'s adoption uses the same newCycleRow)'
+    assert 'Respond Kickoff Dry Run' in _out140(_kc140, 'Kickoff Dry Run?') and 'Kickoff Cycle Row' in _out140(_kc140, 'Kickoff Dry Run?') \
+        and 'Save Kickoff Cycle' not in _reach140(_kc140, 'Kickoff Dry Run?', 'Kickoff Cycle Row'), 'cycle: a dry run can write the row'
+    # ---------- E. the deploy guard: one rule, both deploy paths, self-tested on the shared cases ----------
+    import deploy_guard as _dg140
+    _cases140 = json.load(open(os.path.join(HERE0, 'harness', 'deploy_window_cases.json'), encoding='utf-8'))
+    _guard140 = {}
+    for _c140 in _cases140['cases']:
+        _r140 = _dg140.deploy_window(_c140['jobs'], _c140['cycles'], _cases140['now'], _c140.get('minutes') or 15)
+        _wt140 = _c140['want']
+        assert _r140['busy'] is _wt140['busy'] and [j['key'] for j in _r140['inflight']] == _wt140['inflight'] and len(_r140['due']) == _wt140['due'] \
+            and len(_r140['ignored_stale']) == _wt140.get('ignored', 0), 'cycle: deploy_guard.deploy_window("%s") answered %s, expected %s' % (_c140['name'], _r140, _wt140)
+        _guard140[_c140['name']] = _r140
+    _ae140 = open(os.path.join(HERE0, 'apply_env.py'), encoding='utf-8').read()
+    _de140 = open(os.path.join(HERE0, '..', '..', 'deploy', 'gcp', 'deploy_engine.py'), encoding='utf-8').read()
+    assert 'deploy_guard.check(n8n_api, args)' in _ae140 and 'sys.exit(_refusal)' in _ae140 and 'def deploy_window' not in _ae140, 'cycle: apply_env.py does not run the shared deploy guard'
+    assert 'deploy_guard.check(api, args' in _de140 and 'sys.exit(refusal)' in _de140 and 'def deploy_window' not in _de140, 'cycle: deploy_engine.py does not run the shared deploy guard'
+    assert _ae140.index('deploy_guard.check(') < _ae140.index("if '--no-build' not in args:"), 'cycle: apply_env.py builds or imports before it asks the guard'
+    assert _de140.index('deploy_guard.check(') < _de140.index('# 2. build'), 'cycle: deploy_engine.py builds before it asks the guard'
+    assert set(_dg140.FORCE_FLAGS) == {'--force', '--force-monday'}, 'cycle: --force and the old --force-monday must both override the guard'
+    _idle140 = {'seo_cycle_jobs': [], 'seo_cycles': []}
+    _busy140 = {'seo_cycle_jobs': [{'key': 'cyc:site_a:2026-10-21:backlinks', 'job': 'backlinks', 'status': 'running', 'updated_at': '2026-10-21T13:58:00.000Z'}], 'seo_cycles': []}
+
+    def _api140(tables, fail=None, missing=False):
+        def call(method, path):
+            if fail == 'raise':
+                raise OSError('connection refused')
+            if fail:
+                return fail, None
+            if path.startswith('/data-tables?'):
+                return 200, {'data': [] if missing else [{'id': 't1', 'name': 'seo_cycle_jobs'}, {'id': 't2', 'name': 'seo_cycles'}], 'nextCursor': None}
+            tid = path.split('/')[2]
+            return 200, {'data': tables['seo_cycle_jobs' if tid == 't1' else 'seo_cycles'], 'nextCursor': None}
+        return call
+    _now140 = _dg140._ms('2026-10-21T14:00:00.000Z')
+    _said140 = []
+    _chk140 = {
+        'idle': _dg140.check(_api140(_idle140), [], now=_now140, say=_said140.append),
+        'busy': _dg140.check(_api140(_busy140), [], now=_now140, say=_said140.append),
+        'busy_force': _dg140.check(_api140(_busy140), ['--force'], now=_now140, say=_said140.append),
+        'busy_force_monday': _dg140.check(_api140(_busy140), ['--force-monday'], now=_now140, say=_said140.append),
+        'unreadable_401': _dg140.check(_api140(_idle140, fail=401), [], now=_now140, say=_said140.append),
+        'unreachable': _dg140.check(_api140(_idle140, fail='raise'), [], now=_now140, say=_said140.append),
+        'unreadable_force': _dg140.check(_api140(_idle140, fail=401), ['--force'], now=_now140, say=_said140.append),
+        'fresh_instance_no_tables': _dg140.check(_api140(_idle140, missing=True), [], now=_now140, say=_said140.append)}
+    assert _chk140['idle'] is None and _chk140['fresh_instance_no_tables'] is None, 'cycle: the guard refused an idle instance: ' + str(_chk140)
+    assert _chk140['busy'] and 'refusing now' in _chk140['busy'] and 'cyc:site_a:2026-10-21:backlinks' in _chk140['busy'], 'cycle: the guard let a deploy through over a running job'
+    assert _chk140['busy_force'] is None and _chk140['busy_force_monday'] is None and sum('DEPLOY GUARD OVERRIDDEN' in s for s in _said140) == 3, \
+        'cycle: --force / --force-monday must override, loudly'
+    assert _chk140['unreadable_401'] and 'could not be read' in _chk140['unreadable_401'] and _chk140['unreachable'] and 'could not be reached' in _chk140['unreachable'] \
+        and _chk140['unreadable_force'] is None, 'cycle: a guard that cannot read the tables must refuse (unless --force) and say why: ' + str(_chk140)
+    _wire140.update({'record_then_start': True, 'deploy_guard': {k: {'busy': v['busy'], 'inflight': [j['key'] for j in v['inflight']], 'due': len(v['due']),
+                     'ignored': len(v['ignored_stale']), 'reason': v['reason']} for k, v in _guard140.items()},
+                     'guard_check': {k: (v is None) for k, v in _chk140.items()}, 'kickoff_codes': _codes140, 'published_targets': sorted({w for _j, w in _kit140})})
+    json.dump(_wire140, open(os.path.join(HERE0, 'harness', 'cycle_wiring.json'), 'w'), indent=1, sort_keys=True)
+    print('cycle (section 140): the Cycle Dispatcher records, reads its claim back, then starts (%d jobs, inactive, not published); Site Kickoff '
+          'writes seo_cycles and starts nothing; the deploy guard answers %d shared cases and refuses when it cannot read' % (len(_kit140), len(_guard140)))
+
+
+
 _b98_catchup()   # R94 (sections 98-99): build the Schedule Catch-up (build_catchup.py) from the workflows just written, and prove it
+_b140_cycle()    # section 140: the Cycle Dispatcher (build_cycle.py), the Site Kickoff's cycle row and the deploy guard, proved on the files
 
 # section 55 (R17 / R29): both checks need every workflow on disk, so they run here, after the sub-builds
 _r17_r29_checks()

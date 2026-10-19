@@ -24,7 +24,8 @@
     "SEO_Agent_Prerelease.json",
     "SEO_Agent_Schedule_Catchup.json",
     "SEO_Agent_Publish_Check.json",
-    "SEO_Agent_Site_Kickoff.json"
+    "SEO_Agent_Site_Kickoff.json",
+    "SEO_Agent_Cycle_Dispatcher.json"
   ],
   "publish": [
     "SEOagentV4Full01",
