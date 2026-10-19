@@ -208,9 +208,12 @@ function Plans({ billing, setBilling }: { billing: Billing; setBilling: (b: Bill
         lead="Setting up is free. Every plan writes the pages for you, and every analysis shows its price in credits before it starts."
         containerClassName="pb-12 sm:pb-14"
       >
-        <div className="mt-9 flex justify-center">
-          <BillingToggle value={billing} onChange={setBilling} />
-        </div>
+        {/* no annual discount today (annualDiscount 0): the switch would change nothing, so it is not shown */}
+        {annualDiscount > 0 && (
+          <div className="mt-9 flex justify-center">
+            <BillingToggle value={billing} onChange={setBilling} />
+          </div>
+        )}
       </PageHero>
       <section className="bg-page pb-20 sm:pb-28" aria-label="Plans">
         <Container>
@@ -530,7 +533,7 @@ function Comparison({ billing }: { billing: Billing }) {
 function CostMockup() {
   return (
     <Drawn
-      label="Sample data: a keyword check priced at 12 credits before it starts, with 1,240 of the company's 2,580 credits available this month; a monthly audit skipped because the sitemap has not changed; and a backlink check from free sources using no credits."
+      label="Sample data: a keyword check priced at 12 credits before it starts, with 1,240 of the company's 5,980 credits available this month; a monthly audit skipped because the sitemap has not changed; and a backlink check from free sources using no credits."
       className="relative"
     >
       <div className="rounded-xl border border-line bg-surface p-5 shadow-overlay sm:p-6">
@@ -563,7 +566,7 @@ function CostMockup() {
         <div className="mk-pop mt-4" style={{ ['--mk-i' as string]: 2 }}>
           <span className="flex items-baseline justify-between text-[11.5px]">
             <span className="font-medium text-ink">Credits available</span>
-            <span className="font-mono text-ink-2 tabular">1,240 of 2,580</span>
+            <span className="font-mono text-ink-2 tabular">1,240 of 5,980</span>
           </span>
           <span className="mt-2 block h-2 overflow-hidden rounded-full bg-surface-2">
             <span className="mk-grow-x block h-full w-[48%] rounded-full bg-accent" />
