@@ -108,6 +108,10 @@ const force = on_demand && (trigger.force === true || lc(trigger.force) === 'tru
 const cycle_key = isCycle ? String(trigger.cycle_key || '').trim() : '';
 const cycle_date = (cycle_key.match(/(\d{4}-\d{2}-\d{2})$/) || [])[1] || '';
 const scheduled_for = isCycle ? String(trigger.scheduled_for || '') : '';
+// the cycle run's own request id (plan §14.2: cyc_<site>_<YYYYMMDD>_<job>, from the dispatcher): the id of this run's note / status / preview
+// callback, so the app files it under the cycle. The pages it starts keep their own cad_ ids (each is a run of its own; R-K7 counts them by it).
+// The fields read from the Manual Run input for a cycle: trigger, domain | site_id, cycle_key, scheduled_for, preview | job, request_id.
+const cycle_request_id = isCycle ? String(trigger.request_id || '').trim().slice(0, 120) : '';
 const now = new Date(); const nowIso = now.toISOString(); const week = cycle_date || nowIso.slice(0, 10);
 const schedT = Date.parse(scheduled_for);
 // R-K7: where this cycle's budget starts — the cycle run's own due time, or (outside a cycle) the last six days
@@ -133,7 +137,7 @@ const itemOf = (p, auto) => ({ item_key: cycleNorm(p.keyword), keyword: p.keywor
   ...(p.target_id ? { target_id: p.target_id } : {}), ...(p.approved ? { approved: true } : {}), ...(p.chosen_by != null && p.source === 'ladder' ? { chosen_by: p.chosen_by } : {}) });
 for (const s of pausedSites) {
   if (preview) out.push({ json: { preview: true, dry_run: true, site_id: s.site_id, domain: s.domain, email: s.email || '', callback_url: s.callback_url || '', country: s.country || '',
-    request_id: 'prev_' + (cycle_date || week).replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, ''), cycle_key, cycle_date, scheduled_for, trigger: trigger_kind,
+    request_id: cycle_request_id || 'prev_' + (cycle_date || week).replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, ''), cycle_key, cycle_date, scheduled_for, trigger: trigger_kind,
     level: levelOf(settings.find(r => String(r.ladder_id) === '_site' && (r.site_id === s.site_id || normD(r.domain) === s.domain))), pages_per_week: 0, waiting_for_keyword: false,
     paused_reason: 'site_paused', reason: 'the website is paused, so its next cycle writes nothing', items: [], suggestions: [], est_ai_usd: 0, est_dfs_usd: 0, est_page_usd: EST_PAGE_USD, est_basis, week } });
   else out.push({ json: { nothing_to_do: true, site_id: s.site_id, domain: s.domain, reason: 'the website ' + s.domain + ' is paused: its cycle writes nothing (resume it through Site Admin)', paused_reason: 'site_paused', cycle_key, dry_run } });
@@ -422,7 +426,7 @@ for (const s of list) {
     decay: { decaying: decayRows.length, queued: decayCands.length, skipped: decay_skipped,
       pages: decayCands.map(x => ({ url: x.row.url, keyword: x.q.query, lost: x.lost, kind: String(x.row.decay_kind || ''), basis: String(x.row.decay_basis || '') })) }, waiting_keywords: waiting.map(w => w.keyword).slice(0, 20), max_waiting: cfg.max_waiting, pileup_forced: pileup && force, opportunities: cfg.opportunities, awaiting_approval, suggestions,
     // keyword-first (2026-10-19): the level, whether the site still waits for its first keyword, the cycle, the budget, the client's decisions
-    level, auto_sources: AUTO_SOURCES[level], waiting_for_keyword, client_ladders: clientLadders.length, cycle_key, cycle_date, scheduled_for, trigger: trigger_kind, budget,
+    cycle_request_id, level, auto_sources: AUTO_SOURCES[level], waiting_for_keyword, client_ladders: clientLadders.length, cycle_key, cycle_date, scheduled_for, trigger: trigger_kind, budget,
     skipped, approved_items: approved.map(o => ({ keyword: o.keyword, source: o.source, item_key: cycleNorm(o.keyword) })), approved_not_written, est_page_usd: EST_PAGE_USD, est_basis,
     not_chosen_ladders: unchosenL.map(x => ({ ladder_id: x.id, head: x.head, chosen_by: x.chosen_by })),
     ai_pages: { per_month: aiQuota, used_this_month: aiUsed, this_week: !!aiPick, next: aiCand ? { keyword: aiCand.keyword, source: aiCand.source, target_id: aiCand.target_id, why: aiCand.why } : null, queued: aiQueue.length, on_top: level === 3 },
@@ -437,7 +441,7 @@ for (const s of list) {
       : paused_reason ? waitingKw.size + ' written pages are waiting to be published (limit ' + cfg.max_waiting + '): nothing new is written until they are'
       : !pages ? 'no pages a week are set for this website' : !picks.length ? 'nothing to write automatically in this cycle' : '';
     out.push({ json: { preview: true, dry_run: true, site_id: s.site_id, domain: s.domain, email: s.email || '', callback_url: s.callback_url || '', country: s.country || '',
-      request_id: 'prev_' + week.replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, ''), pages_per_week: pages, items, reason: reasonP, upcoming, pending_publish: pending, candidates: uniq.length, week,
+      request_id: cycle_request_id || 'prev_' + week.replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, ''), pages_per_week: pages, items, reason: reasonP, upcoming, pending_publish: pending, candidates: uniq.length, week,
       est_ai_usd: 0, est_dfs_usd: 0, ...facts } });   // a preview spends nothing: the run ledger reserves 0 for it
     continue;
   }
@@ -457,7 +461,7 @@ for (const s of list) {
       : (pages && !room && spent) ? 'this cycle\'s ' + pages + ' page' + (pages === 1 ? '' : 's') + ' a week ' + (spent === 1 ? 'is' : 'are') + ' already used: ' + budget.spent_keywords.map(x => '"' + x.keyword + '" (' + x.how + ')').join(', ')
       : dropped.length ? 'nothing to write automatically this week; ' + dropped.length + ' planned page(s) set aside: ' + dropped.slice(0, 3).map(x => x.note).join(' | ')
       : 'nothing to write automatically this week';
-    out.push({ json: { nothing_to_do: true, report_only: true, reason, site_id: s.site_id, domain: s.domain, email: s.email || '', callback_url: s.callback_url || '', country: s.country || '', request_id: ridOf(0),
+    out.push({ json: { nothing_to_do: true, report_only: true, reason, site_id: s.site_id, domain: s.domain, email: s.email || '', callback_url: s.callback_url || '', country: s.country || '', request_id: cycle_request_id || ridOf(0),
       pages_per_week: pages, upcoming, pending_publish: pending, candidates: uniq.length, dry_run, week, ...facts } });
   }
 }

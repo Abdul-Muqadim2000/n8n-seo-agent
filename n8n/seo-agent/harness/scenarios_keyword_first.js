@@ -156,6 +156,12 @@ module.exports = async (ctx) => {
     const r = await planCase(c); mock('Cadence Plan', r.out.map(json => ({ json })));
     const note = (await run('Cadence Note', [{ json: {} }])).map(i => i.json)[0] || {};
     console.log('   note ->', JSON.stringify({ level: note.level, wfk: note.waiting_for_keyword, cycle: note.cycle_key, pages: (note.pages || []).length, suggestions: (note.suggestions || []).map(s => s.keyword) }));
+    check('a cycle run with no request id of its own: the note keeps the first page\'s id', note.request_id === note.pages[0].request_id, note.request_id);
+    const rc = await planCase({ ...c, trigger: { ...c.trigger, request_id: 'cyc_techand-ai_20261021_content_cadence' } }); mock('Cadence Plan', rc.out.map(json => ({ json })));
+    const noteC = (await run('Cadence Note', [{ json: {} }])).map(i => i.json)[0] || {};
+    check('the cycle run\'s own request id (cyc_...) is the note\'s, while each page keeps its own cad_ id', noteC.request_id === 'cyc_techand-ai_20261021_content_cadence' && noteC.pages.every(p => /^cad_20261021_/.test(p.request_id)), JSON.stringify({ n: noteC.request_id, p: (noteC.pages || []).map(p => p.request_id) }));
+    const pr = await planCase({ ...FX.cases.find(x => x.name === 'preview_waiting'), trigger: { ...FX.cases.find(x => x.name === 'preview_waiting').trigger, request_id: 'cyc_techand-ai_20261023_preview' } });
+    check('a preview and a status item carry the cycle run\'s request id', pr.out.length === 1 && pr.out[0].request_id === 'cyc_techand-ai_20261023_preview', JSON.stringify(pr.out.map(j => j.request_id)));
     check('the weekly note: level 2, not waiting, the cycle key and date, the budget', note.level === 2 && note.waiting_for_keyword === false && note.cycle_key === c.trigger.cycle_key && note.cycle_date === '2026-10-21' && note.trigger === 'cycle' && note.budget && note.budget.pages_per_week === 3, JSON.stringify(note).slice(0, 400));
     check('its pages carry their item key and say whether they were automatic or approved', note.pages.length === 3 && note.pages.every(p => p.item_key === cycleNormOf(p.keyword) && p.auto === true && p.approved === false && p.est_usd > 0), JSON.stringify(note.pages));
     check('its suggestions are CyclePreviewItems (source, AI target, price), so "Write it" can carry them', note.suggestions.length === 3 && note.suggestions.every(s => s.item_key && s.source && 'ai_target' in s && s.auto === false) && note.suggestions[0].ai_target && note.suggestions[0].ai_target.kind === 'answer', JSON.stringify(note.suggestions));
